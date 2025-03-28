@@ -11,7 +11,10 @@
     </view>
     <view class="header-actions">
       <view class="search-icon-fixed" hover-class="icon-hover" bindtap="toggleSearch">
-        <text class="icon">🔍</text>
+        <view class="search-icon-svg">
+          <view class="search-circle"></view>
+          <view class="search-handle"></view>
+        </view>
       </view>
     </view>
   </view>
