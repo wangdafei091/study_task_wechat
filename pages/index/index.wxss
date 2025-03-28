@@ -7,6 +7,134 @@ page {
   padding: 0;
 }
 
+/* 搜索按钮和面板 */
+.search-toggle {
+  position: absolute;
+  top: 20rpx;
+  right: 30rpx;
+  width: 60rpx;
+  height: 60rpx;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.1);
+}
+
+.search-icon {
+  font-size: 32rpx;
+}
+
+.search-panel {
+  margin: 20rpx 30rpx;
+  padding: 24rpx;
+  position: relative;
+}
+
+.search-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20rpx;
+}
+
+.search-close {
+  width: 40rpx;
+  height: 40rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32rpx;
+  color: #999999;
+}
+
+.search-input-container {
+  background: #F0F0F0;
+  border-radius: 36rpx;
+  padding: 12rpx 24rpx;
+  margin-bottom: 20rpx;
+}
+
+.search-input {
+  height: 60rpx;
+  width: 100%;
+  font-size: 28rpx;
+}
+
+.filter-container {
+  margin-bottom: 20rpx;
+}
+
+.filter-section {
+  margin-bottom: 16rpx;
+}
+
+.filter-title {
+  font-size: 26rpx;
+  color: #333333;
+  margin-bottom: 12rpx;
+}
+
+.filter-options {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.filter-option {
+  padding: 8rpx 20rpx;
+  background: #F0F0F0;
+  border-radius: 24rpx;
+  font-size: 24rpx;
+  color: #666666;
+  margin-right: 16rpx;
+  margin-bottom: 12rpx;
+  display: flex;
+  align-items: center;
+}
+
+.filter-icon {
+  margin-right: 8rpx;
+}
+
+.filter-option.active {
+  background: #E3F2FD;
+  color: #4285F4;
+}
+
+.filter-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16rpx;
+}
+
+.filter-clear {
+  padding: 8rpx 24rpx;
+  border: 1rpx solid #DDDDDD;
+  border-radius: 24rpx;
+  font-size: 24rpx;
+  color: #666666;
+}
+
+.search-results {
+  margin-top: 24rpx;
+  border-top: 1rpx solid #EEEEEE;
+  padding-top: 20rpx;
+}
+
+.search-results-list {
+  max-height: 600rpx;
+  overflow: auto;
+}
+
+.no-results {
+  text-align: center;
+  padding: 60rpx 0;
+  color: #999999;
+  font-size: 28rpx;
+}
+
 /* 奖励进度部分 */
 .reward-progress {
   margin: 20rpx 30rpx;
@@ -209,6 +337,13 @@ page {
   margin-bottom: 120rpx;
 }
 
+.empty-task-list {
+  text-align: center;
+  padding: 60rpx 0;
+  color: #999999;
+  font-size: 28rpx;
+}
+
 /* 添加任务按钮 */
 .add-task-button {
   position: fixed;
@@ -231,4 +366,11 @@ page {
 /* 底部导航占位 */
 .bottom-nav-placeholder {
   height: 100rpx;
+}
+
+/* 卡片通用样式 */
+.card {
+  background: #FFFFFF;
+  border-radius: 12rpx;
+  box-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.05);
 } 

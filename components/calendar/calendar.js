@@ -14,6 +14,14 @@ Component({
     currentWeek: {
       type: Array,
       value: []
+    },
+    currentMonth: {
+      type: Array,
+      value: []
+    },
+    viewMode: {
+      type: String,
+      value: 'week' // 'week' 或 'month'
     }
   },
 
@@ -30,7 +38,8 @@ Component({
   methods: {
     selectDate(e) {
       const index = e.currentTarget.dataset.index;
-      this.triggerEvent('selectDate', { index });
+      const date = e.currentTarget.dataset.date;
+      this.triggerEvent('selectDate', { index, date });
     },
     
     prevWeek() {
@@ -39,6 +48,19 @@ Component({
     
     nextWeek() {
       this.triggerEvent('changeWeek', { direction: 'next' });
+    },
+    
+    prevMonth() {
+      this.triggerEvent('changeMonth', { direction: 'prev' });
+    },
+    
+    nextMonth() {
+      this.triggerEvent('changeMonth', { direction: 'next' });
+    },
+    
+    toggleViewMode() {
+      const newMode = this.data.viewMode === 'week' ? 'month' : 'week';
+      this.triggerEvent('toggleViewMode', { mode: newMode });
     }
   }
 }) 

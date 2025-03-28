@@ -2,11 +2,14 @@
 <view class="calendar-container">
   <!-- 月份标题和切换 -->
   <view class="calendar-header">
-    <view class="calendar-arrow" bindtap="prevWeek">
+    <view class="calendar-arrow" bindtap="{{viewMode === 'week' ? 'prevWeek' : 'prevMonth'}}">
       <text class="iconfont">〈</text>
     </view>
-    <view class="calendar-title">{{selectedDate}}</view>
-    <view class="calendar-arrow" bindtap="nextWeek">
+    <view class="calendar-title" bindtap="toggleViewMode">
+      {{selectedDate}} 
+      <text class="view-mode-indicator">{{viewMode === 'week' ? '周' : '月'}}</text>
+    </view>
+    <view class="calendar-arrow" bindtap="{{viewMode === 'week' ? 'nextWeek' : 'nextMonth'}}">
       <text class="iconfont">〉</text>
     </view>
   </view>
@@ -18,11 +21,26 @@
     </block>
   </view>
   
-  <!-- 日期格子 -->
-  <view class="date-grid">
+  <!-- 周视图 -->
+  <view class="date-grid" wx:if="{{viewMode === 'week'}}">
     <block wx:for="{{currentWeek}}" wx:key="day">
       <view class="date-item {{item.isToday ? 'today' : ''}} {{item.isSelected ? 'selected' : ''}}" 
-            data-index="{{index}}" bindtap="selectDate">
+            data-index="{{index}}" 
+            data-date="{{item.year}}-{{item.month}}-{{item.date}}"
+            bindtap="selectDate">
+        <view class="date-number">{{item.date}}</view>
+        <view class="date-indicator" wx:if="{{item.hasTask}}"></view>
+      </view>
+    </block>
+  </view>
+  
+  <!-- 月视图 -->
+  <view class="month-grid" wx:if="{{viewMode === 'month'}}">
+    <block wx:for="{{currentMonth}}" wx:key="day">
+      <view class="date-item {{item.isToday ? 'today' : ''}} {{item.isSelected ? 'selected' : ''}} {{item.isCurrentMonth ? '' : 'other-month'}}" 
+            data-index="{{index}}" 
+            data-date="{{item.year}}-{{item.month}}-{{item.date}}"
+            bindtap="selectDate">
         <view class="date-number">{{item.date}}</view>
         <view class="date-indicator" wx:if="{{item.hasTask}}"></view>
       </view>

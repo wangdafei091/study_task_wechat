@@ -5,9 +5,103 @@
     selectedDate="{{selectedDate}}"
     weekDays="{{weekDays}}"
     currentWeek="{{currentWeek}}"
+    currentMonth="{{currentMonth}}"
+    viewMode="{{calendarViewMode}}"
     bind:selectDate="selectDate"
     bind:changeWeek="changeWeek"
+    bind:changeMonth="changeMonth"
+    bind:toggleViewMode="toggleViewMode"
   />
+  
+  <!-- 搜索按钮 -->
+  <view class="search-toggle" bindtap="toggleSearch">
+    <text class="search-icon">🔍</text>
+  </view>
+  
+  <!-- 搜索面板 -->
+  <view class="search-panel card" wx:if="{{showSearch}}">
+    <view class="search-header">
+      <view class="section-title">搜索任务</view>
+      <view class="search-close" bindtap="toggleSearch">×</view>
+    </view>
+    
+    <view class="search-input-container">
+      <input class="search-input" 
+        placeholder="输入关键词搜索任务" 
+        value="{{searchQuery}}"
+        bindinput="inputSearch" 
+        confirm-type="search" />
+    </view>
+    
+    <!-- 过滤器区域 -->
+    <view class="filter-container">
+      <view class="filter-section">
+        <view class="filter-title">任务类型</view>
+        <view class="filter-options">
+          <view class="filter-option {{searchFilters.type === 'clock' ? 'active' : ''}}" 
+                data-type="type" data-value="clock" bindtap="selectFilter">
+            <text class="filter-icon">⏰</text>
+            <text>生活习惯</text>
+          </view>
+          <view class="filter-option {{searchFilters.type === 'bag' ? 'active' : ''}}" 
+                data-type="type" data-value="bag" bindtap="selectFilter">
+            <text class="filter-icon">📚</text>
+            <text>整理收纳</text>
+          </view>
+          <view class="filter-option {{searchFilters.type === 'study' ? 'active' : ''}}" 
+                data-type="type" data-value="study" bindtap="selectFilter">
+            <text class="filter-icon">📝</text>
+            <text>学习任务</text>
+          </view>
+        </view>
+      </view>
+      
+      <view class="filter-section">
+        <view class="filter-title">完成状态</view>
+        <view class="filter-options">
+          <view class="filter-option {{searchFilters.status === '0' ? 'active' : ''}}" 
+                data-type="status" data-value="0" bindtap="selectFilter">待完成</view>
+          <view class="filter-option {{searchFilters.status === '1' ? 'active' : ''}}" 
+                data-type="status" data-value="1" bindtap="selectFilter">已完成</view>
+        </view>
+      </view>
+      
+      <view class="filter-section">
+        <view class="filter-title">时间范围</view>
+        <view class="filter-options">
+          <view class="filter-option {{searchFilters.dateRange === 'today' ? 'active' : ''}}" 
+                data-type="dateRange" data-value="today" bindtap="selectFilter">今天</view>
+          <view class="filter-option {{searchFilters.dateRange === 'week' ? 'active' : ''}}" 
+                data-type="dateRange" data-value="week" bindtap="selectFilter">本周</view>
+          <view class="filter-option {{searchFilters.dateRange === 'month' ? 'active' : ''}}" 
+                data-type="dateRange" data-value="month" bindtap="selectFilter">本月</view>
+        </view>
+      </view>
+      
+      <view class="filter-actions">
+        <view class="filter-clear" bindtap="clearFilters">清除筛选</view>
+      </view>
+    </view>
+    
+    <!-- 搜索结果 -->
+    <view class="search-results" wx:if="{{searchResults.length > 0}}">
+      <view class="section-title">搜索结果 ({{searchResults.length}})</view>
+      <view class="search-results-list">
+        <block wx:for="{{searchResults}}" wx:key="id">
+          <task-item 
+            task="{{item}}"
+            bind:complete="completeTask"
+            bind:detail="goToTaskDetail"
+            bind:edit="editTask"
+          />
+        </block>
+      </view>
+    </view>
+    
+    <view class="no-results" wx:elif="{{searchQuery && searchResults.length === 0}}">
+      没有找到匹配的任务
+    </view>
+  </view>
   
   <!-- 奖励进度部分 -->
   <view class="reward-progress card">
@@ -55,7 +149,7 @@
         <view class="chart-bar-group">
           <view class="chart-label">生活习惯</view>
           <view class="chart-bar-container">
-            <view class="chart-bar clock" style="width: {{stats.typeCounts.clock / stats.totalTasks * 100}}">
+            <view class="chart-bar clock" style="width: {{stats.typeCounts.clock / stats.totalTasks * 100}}%">
               <text wx:if="{{stats.typeCounts.clock > 0}}">{{stats.typeCounts.clock}}</text>
             </view>
           </view>
@@ -63,7 +157,7 @@
         <view class="chart-bar-group">
           <view class="chart-label">整理收纳</view>
           <view class="chart-bar-container">
-            <view class="chart-bar bag" style="width: {{stats.typeCounts.bag / stats.totalTasks * 100}}">
+            <view class="chart-bar bag" style="width: {{stats.typeCounts.bag / stats.totalTasks * 100}}%">
               <text wx:if="{{stats.typeCounts.bag > 0}}">{{stats.typeCounts.bag}}</text>
             </view>
           </view>
@@ -71,7 +165,7 @@
         <view class="chart-bar-group">
           <view class="chart-label">学习任务</view>
           <view class="chart-bar-container">
-            <view class="chart-bar study" style="width: {{stats.typeCounts.study / stats.totalTasks * 100}}">
+            <view class="chart-bar study" style="width: {{stats.typeCounts.study / stats.totalTasks * 100}}%">
               <text wx:if="{{stats.typeCounts.study > 0}}">{{stats.typeCounts.study}}</text>
             </view>
           </view>
@@ -112,6 +206,10 @@
           bind:edit="editTask"
         />
       </block>
+      
+      <view class="empty-task-list" wx:if="{{tasks.length === 0}}">
+        暂无任务，点击右下角"+"按钮添加
+      </view>
     </view>
   </view>
   
