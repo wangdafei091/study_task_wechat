@@ -1,0 +1,301 @@
+/* pages/rewards/rewards.wxss */
+.container {
+  padding: 30rpx;
+  background-color: #F8F9FA;
+  min-height: 100vh;
+}
+
+/* 奖励进度部分 */
+.progress-section {
+  background-color: #FFFFFF;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  margin-bottom: 20rpx;
+}
+
+.progress-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 20rpx;
+}
+
+.level-info, .points-info {
+  text-align: center;
+}
+
+.level-title, .points-title {
+  font-size: 24rpx;
+  color: #666666;
+  margin-bottom: 8rpx;
+}
+
+.level-value, .points-value {
+  font-size: 36rpx;
+  color: #333333;
+  font-weight: 500;
+}
+
+.progress-bar-container {
+  display: flex;
+  align-items: center;
+  margin-bottom: 16rpx;
+}
+
+.progress-bar {
+  flex: 1;
+  height: 16rpx;
+  background-color: #E8E8E8;
+  border-radius: 8rpx;
+  overflow: hidden;
+  margin-right: 16rpx;
+}
+
+.progress-fill {
+  height: 100%;
+  background-color: #4285F4;
+  border-radius: 8rpx;
+}
+
+.progress-text {
+  font-size: 24rpx;
+  color: #666666;
+  min-width: 60rpx;
+  text-align: right;
+}
+
+.rewards-overview {
+  font-size: 24rpx;
+  color: #666666;
+  text-align: center;
+}
+
+/* 奖励列表部分 */
+.rewards-list {
+  background-color: #FFFFFF;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  margin-bottom: 20rpx;
+}
+
+.section-title {
+  font-size: 30rpx;
+  color: #333333;
+  font-weight: 500;
+  margin-bottom: 20rpx;
+}
+
+.rewards-grid {
+  display: flex;
+  flex-wrap: wrap;
+  margin: -8rpx;
+}
+
+.reward-item {
+  width: calc(50% - 16rpx);
+  margin: 8rpx;
+  background-color: #F8F9FA;
+  border-radius: 16rpx;
+  padding: 20rpx;
+  text-align: center;
+  position: relative;
+  box-sizing: border-box;
+}
+
+.locked {
+  opacity: 0.6;
+}
+
+.unlocked {
+  border: 2rpx solid #4285F4;
+}
+
+.claimed {
+  border: 2rpx solid #34A853;
+}
+
+.reward-icon {
+  font-size: 48rpx;
+  margin-bottom: 12rpx;
+}
+
+.reward-name {
+  font-size: 28rpx;
+  color: #333333;
+  margin-bottom: 8rpx;
+}
+
+.reward-points {
+  font-size: 24rpx;
+  color: #666666;
+  margin-bottom: 8rpx;
+}
+
+.reward-status {
+  font-size: 22rpx;
+  color: #999999;
+}
+
+.unlocked .reward-status text {
+  color: #4285F4;
+}
+
+.claimed .reward-status text {
+  color: #34A853;
+}
+
+/* 奖励规则部分 */
+.rewards-rules {
+  background-color: #FFFFFF;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  margin-bottom: 20rpx;
+}
+
+.rules-content {
+  color: #666666;
+}
+
+.rule-item {
+  display: flex;
+  margin-bottom: 16rpx;
+}
+
+.rule-bullet {
+  margin-right: 16rpx;
+}
+
+.rule-text {
+  flex: 1;
+}
+
+/* 奖励详情弹窗 */
+.reward-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1000;
+}
+
+.modal-mask {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+}
+
+.modal-content {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background-color: #FFFFFF;
+  border-radius: 24rpx 24rpx 0 0;
+  padding: 30rpx;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30rpx;
+}
+
+.modal-header text {
+  font-size: 32rpx;
+  color: #333333;
+  font-weight: 500;
+}
+
+.close-btn {
+  font-size: 36rpx;
+  color: #999999;
+}
+
+.reward-detail {
+  text-align: center;
+  padding: 20rpx 0 40rpx;
+}
+
+.reward-icon.large {
+  font-size: 80rpx;
+  margin-bottom: 20rpx;
+}
+
+.reward-status-text {
+  margin-top: 16rpx;
+  font-size: 28rpx;
+}
+
+.status-locked {
+  color: #999999;
+}
+
+.status-unlocked {
+  color: #4285F4;
+}
+
+.status-claimed {
+  color: #34A853;
+}
+
+.progress-to-unlock {
+  margin-top: 30rpx;
+  text-align: center;
+}
+
+.progress-to-unlock text {
+  font-size: 24rpx;
+  color: #666666;
+  margin-bottom: 8rpx;
+  display: block;
+}
+
+.mini-progress {
+  height: 12rpx;
+  background-color: #E8E8E8;
+  border-radius: 6rpx;
+  overflow: hidden;
+  margin: 0 auto;
+  width: 60%;
+}
+
+.mini-progress-fill {
+  height: 100%;
+  background-color: #4285F4;
+  border-radius: 6rpx;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: space-between;
+}
+
+.btn-cancel, .btn-claim {
+  width: 45%;
+  height: 80rpx;
+  border-radius: 8rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28rpx;
+}
+
+.btn-cancel {
+  background-color: #FFFFFF;
+  border: 2rpx solid #CCCCCC;
+  color: #666666;
+}
+
+.btn-claim {
+  background-color: #4285F4;
+  color: #FFFFFF;
+}
+
+.btn-claim[disabled] {
+  background-color: #CCCCCC;
+  color: #FFFFFF;
+} 

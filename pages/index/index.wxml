@@ -11,11 +11,73 @@
   
   <!-- 奖励进度部分 -->
   <view class="reward-progress card">
-    <view class="reward-title">今日奖品进度</view>
+    <view class="progress-header">
+      <view class="reward-title">今日奖品进度</view>
+      <view class="stats-toggle" bindtap="toggleStats">
+        <text class="stats-text">统计</text>
+        <text class="stats-icon">📊</text>
+      </view>
+    </view>
     <progress-bar
       current="{{rewardProgress.current}}"
       total="{{rewardProgress.total}}"
     />
+  </view>
+  
+  <!-- 统计面板 -->
+  <view class="stats-panel card" wx:if="{{showStats}}">
+    <view class="section-title">学习任务统计</view>
+    
+    <!-- 主要统计数据 -->
+    <view class="stats-grid">
+      <view class="stats-item">
+        <view class="stats-value">{{stats.totalTasks}}</view>
+        <view class="stats-label">总任务数</view>
+      </view>
+      <view class="stats-item">
+        <view class="stats-value">{{stats.completedTasks}}</view>
+        <view class="stats-label">已完成</view>
+      </view>
+      <view class="stats-item">
+        <view class="stats-value">{{stats.completionRate}}%</view>
+        <view class="stats-label">完成率</view>
+      </view>
+      <view class="stats-item">
+        <view class="stats-value">{{stats.streak}}</view>
+        <view class="stats-label">连续天数</view>
+      </view>
+    </view>
+    
+    <!-- 任务类型分布 -->
+    <view class="stats-chart">
+      <view class="chart-title">任务类型分布</view>
+      <view class="chart-bars">
+        <view class="chart-bar-group">
+          <view class="chart-label">生活习惯</view>
+          <view class="chart-bar-container">
+            <view class="chart-bar clock" style="width: {{stats.typeCounts.clock / stats.totalTasks * 100}}">
+              <text wx:if="{{stats.typeCounts.clock > 0}}">{{stats.typeCounts.clock}}</text>
+            </view>
+          </view>
+        </view>
+        <view class="chart-bar-group">
+          <view class="chart-label">整理收纳</view>
+          <view class="chart-bar-container">
+            <view class="chart-bar bag" style="width: {{stats.typeCounts.bag / stats.totalTasks * 100}}">
+              <text wx:if="{{stats.typeCounts.bag > 0}}">{{stats.typeCounts.bag}}</text>
+            </view>
+          </view>
+        </view>
+        <view class="chart-bar-group">
+          <view class="chart-label">学习任务</view>
+          <view class="chart-bar-container">
+            <view class="chart-bar study" style="width: {{stats.typeCounts.study / stats.totalTasks * 100}}">
+              <text wx:if="{{stats.typeCounts.study > 0}}">{{stats.typeCounts.study}}</text>
+            </view>
+          </view>
+        </view>
+      </view>
+    </view>
   </view>
   
   <!-- 即将到期任务提醒 -->

@@ -38,7 +38,20 @@ Page({
         status: 1,
         hasImage: true
       }
-    ]
+    ],
+    // 统计数据
+    stats: {
+      totalTasks: 0,
+      completedTasks: 0,
+      completionRate: 0,
+      streak: 0, // 连续完成天数
+      typeCounts: {
+        clock: 0,
+        bag: 0,
+        study: 0
+      }
+    },
+    showStats: false // 是否显示统计面板
   },
   onLoad: function () {
     this.initWeekDays()
@@ -67,6 +80,73 @@ Page({
         }
       })
     }
+
+    // 从本地存储加载任务数据
+    this.loadTaskData();
+  },
+  
+  onShow: function() {
+    // 页面显示时重新加载任务数据和统计信息
+    this.loadTaskData();
+  },
+
+  // 加载任务数据
+  loadTaskData: function() {
+    // 从本地存储或全局状态获取任务
+    const app = getApp();
+    const storedTasks = app.globalData.tasks;
+    
+    if (storedTasks && storedTasks.length > 0) {
+      this.setData({
+        tasks: storedTasks
+      });
+    }
+
+    // 更新统计数据
+    this.updateStats();
+  },
+
+  // 更新统计数据
+  updateStats: function() {
+    const tasks = this.data.tasks;
+    const completedTasks = tasks.filter(task => task.status === 1).length;
+    
+    // 计算任务类型统计
+    const typeCounts = {
+      clock: 0,
+      bag: 0,
+      study: 0
+    };
+    
+    tasks.forEach(task => {
+      if (typeCounts.hasOwnProperty(task.type)) {
+        typeCounts[task.type]++;
+      }
+    });
+    
+    // 计算连续完成天数（模拟数据，实际应根据历史记录计算）
+    const streak = 3;
+    
+    const stats = {
+      totalTasks: tasks.length,
+      completedTasks: completedTasks,
+      completionRate: tasks.length > 0 ? Math.round((completedTasks / tasks.length) * 100) : 0,
+      streak: streak,
+      typeCounts: typeCounts
+    };
+    
+    this.setData({
+      stats: stats,
+      'rewardProgress.current': completedTasks,
+      'rewardProgress.total': tasks.length
+    });
+  },
+
+  // 显示统计面板
+  toggleStats: function() {
+    this.setData({
+      showStats: !this.data.showStats
+    });
   },
   
   // 获取用户信息
@@ -170,16 +250,17 @@ Page({
       tasks: tasksCopy
     })
     
-    // 更新奖励进度
-    let current = this.data.rewardProgress.current
-    const total = this.data.rewardProgress.total
+    // 更新全局数据
+    app.globalData.tasks = tasksCopy;
     
-    if (current < total) {
-      current++
-      this.setData({
-        'rewardProgress.current': current
-      })
-    }
+    // 保存到本地存储
+    wx.setStorage({
+      key: 'tasks',
+      data: tasksCopy
+    });
+    
+    // 更新统计信息
+    this.updateStats();
   },
 
   // 编辑任务

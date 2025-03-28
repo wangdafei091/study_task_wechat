@@ -13,10 +13,125 @@ page {
   padding: 24rpx;
 }
 
+.progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16rpx;
+}
+
 .reward-title {
   font-size: 30rpx;
   color: #333333;
+}
+
+.stats-toggle {
+  display: flex;
+  align-items: center;
+  padding: 8rpx 16rpx;
+  background: #F0F7FF;
+  border-radius: 16rpx;
+}
+
+.stats-text {
+  font-size: 24rpx;
+  color: #4285F4;
+  margin-right: 8rpx;
+}
+
+.stats-icon {
+  font-size: 24rpx;
+}
+
+/* 统计面板 */
+.stats-panel {
+  margin: 0 30rpx 20rpx;
+  padding: 24rpx;
+}
+
+.section-title {
+  font-size: 30rpx;
+  color: #333333;
+  font-weight: 500;
+  margin-bottom: 20rpx;
+}
+
+.stats-grid {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 30rpx;
+}
+
+.stats-item {
+  width: 25%;
+  text-align: center;
+}
+
+.stats-value {
+  font-size: 40rpx;
+  color: #333333;
+  font-weight: 500;
+  margin-bottom: 8rpx;
+}
+
+.stats-label {
+  font-size: 24rpx;
+  color: #666666;
+}
+
+.stats-chart {
+  border-top: 1rpx solid #EEEEEE;
+  padding-top: 20rpx;
+}
+
+.chart-title {
+  font-size: 28rpx;
+  color: #333333;
+  margin-bottom: 20rpx;
+}
+
+.chart-bars {
+  margin-bottom: 10rpx;
+}
+
+.chart-bar-group {
   margin-bottom: 16rpx;
+}
+
+.chart-label {
+  font-size: 24rpx;
+  color: #666666;
+  margin-bottom: 8rpx;
+}
+
+.chart-bar-container {
+  height: 36rpx;
+  background: #F0F0F0;
+  border-radius: 18rpx;
+  overflow: hidden;
+}
+
+.chart-bar {
+  height: 100%;
+  min-width: 36rpx;
+  color: #FFFFFF;
+  font-size: 22rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: width 0.3s ease;
+}
+
+.chart-bar.clock {
+  background: #4285F4;
+}
+
+.chart-bar.bag {
+  background: #FBBC05;
+}
+
+.chart-bar.study {
+  background: #34A853;
 }
 
 /* 即将到期任务提醒 */
