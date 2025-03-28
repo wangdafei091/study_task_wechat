@@ -1,0 +1,87 @@
+/* components/calendar/calendar.wxss */
+.calendar-container {
+  background: #FFFFFF;
+  padding: 30rpx 30rpx 40rpx;
+  position: relative;
+}
+
+.calendar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30rpx;
+}
+
+.calendar-title {
+  font-size: 32rpx;
+  font-weight: 500;
+  color: #333333;
+}
+
+.calendar-arrow {
+  width: 60rpx;
+  height: 60rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #666666;
+}
+
+.week-days {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 20rpx;
+}
+
+.week-day {
+  width: calc(100% / 7);
+  text-align: center;
+  font-size: 28rpx;
+  color: #666666;
+}
+
+.date-grid {
+  display: flex;
+  justify-content: space-between;
+}
+
+.date-item {
+  width: calc(100% / 7 - 10rpx);
+  height: 80rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.date-number {
+  font-size: 28rpx;
+  color: #333333;
+  margin-bottom: 8rpx;
+}
+
+.date-indicator {
+  width: 8rpx;
+  height: 8rpx;
+  background: #4285F4;
+  border-radius: 50%;
+}
+
+.today {
+  background: #4285F4;
+  border-radius: 50%;
+}
+
+.today .date-number {
+  color: #FFFFFF;
+}
+
+.today .date-indicator {
+  background: #FFFFFF;
+}
+
+.selected {
+  border: 2rpx solid #4285F4;
+  border-radius: 50%;
+} 

@@ -1,0 +1,34 @@
+<!--components/taskItem/taskItem.wxml-->
+<view class="task-item card" bindtap="onTaskTap">
+  <view class="task-status {{task.status === 1 ? 'completed' : ''}}">
+    <view class="task-checkbox" catchtap="onCheckboxTap">
+      <text wx:if="{{task.status === 1}}" class="iconfont icon-check">✓</text>
+    </view>
+  </view>
+  <view class="task-icon">
+    <block wx:if="{{task.type === 'clock'}}">
+      <view class="icon-circle clock">
+        <text class="iconfont">{{icons.clock}}</text>
+      </view>
+    </block>
+    <block wx:elif="{{task.type === 'bag'}}">
+      <view class="icon-circle bag">
+        <text class="iconfont">{{icons.bag}}</text>
+      </view>
+    </block>
+    <block wx:elif="{{task.type === 'study'}}">
+      <view class="icon-circle study">
+        <text class="iconfont">{{icons.study}}</text>
+      </view>
+    </block>
+  </view>
+  <view class="task-content">
+    <view class="task-title {{task.status === 1 ? 'completed-text' : ''}}">{{task.title}}</view>
+    <view class="task-image" wx:if="{{task.hasImage}}">
+      <text class="iconfont icon-image">🖼️</text>
+    </view>
+  </view>
+  <view class="task-edit" catchtap="onEditTap">
+    <text class="iconfont icon-edit">✎</text>
+  </view>
+</view> 

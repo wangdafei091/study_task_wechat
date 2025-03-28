@@ -1,0 +1,7 @@
+{
+  "usingComponents": {
+    "calendar": "/components/calendar/calendar",
+    "progress-bar": "/components/progressBar/progressBar",
+    "task-item": "/components/taskItem/taskItem"
+  }
+} 

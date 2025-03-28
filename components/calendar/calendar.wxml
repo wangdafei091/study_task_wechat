@@ -1,0 +1,31 @@
+<!--components/calendar/calendar.wxml-->
+<view class="calendar-container">
+  <!-- 月份标题和切换 -->
+  <view class="calendar-header">
+    <view class="calendar-arrow" bindtap="prevWeek">
+      <text class="iconfont">〈</text>
+    </view>
+    <view class="calendar-title">{{selectedDate}}</view>
+    <view class="calendar-arrow" bindtap="nextWeek">
+      <text class="iconfont">〉</text>
+    </view>
+  </view>
+  
+  <!-- 星期名称 -->
+  <view class="week-days">
+    <block wx:for="{{weekDays}}" wx:key="index">
+      <view class="week-day">{{item}}</view>
+    </block>
+  </view>
+  
+  <!-- 日期格子 -->
+  <view class="date-grid">
+    <block wx:for="{{currentWeek}}" wx:key="day">
+      <view class="date-item {{item.isToday ? 'today' : ''}} {{item.isSelected ? 'selected' : ''}}" 
+            data-index="{{index}}" bindtap="selectDate">
+        <view class="date-number">{{item.date}}</view>
+        <view class="date-indicator" wx:if="{{item.hasTask}}"></view>
+      </view>
+    </block>
+  </view>
+</view> 

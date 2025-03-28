@@ -1,0 +1,36 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/task/task",
+    "pages/create/create",
+    "pages/rewards/rewards"
+  ],
+  "window": {
+    "backgroundTextStyle": "light",
+    "navigationBarBackgroundColor": "#4285F4",
+    "navigationBarTitleText": "学习任务",
+    "navigationBarTextStyle": "white"
+  },
+  "tabBar": {
+    "color": "#888888",
+    "selectedColor": "#4285F4",
+    "backgroundColor": "#FFFFFF",
+    "borderStyle": "black",
+    "list": [
+      {
+        "pagePath": "pages/index/index",
+        "text": "任务日历",
+        "iconPath": "assets/icons/calendar.png",
+        "selectedIconPath": "assets/icons/calendar-active.png"
+      },
+      {
+        "pagePath": "pages/rewards/rewards",
+        "text": "奖池",
+        "iconPath": "assets/icons/reward.png",
+        "selectedIconPath": "assets/icons/reward-active.png"
+      }
+    ]
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+} 

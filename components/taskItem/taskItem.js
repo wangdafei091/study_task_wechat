@@ -1,0 +1,54 @@
+Component({
+  /**
+   * 组件的属性列表
+   */
+  properties: {
+    task: {
+      type: Object,
+      value: {
+        id: 0,
+        type: '',
+        title: '',
+        status: 0,
+        hasImage: false
+      }
+    }
+  },
+
+  /**
+   * 组件的初始数据
+   */
+  data: {
+    icons: {
+      clock: '⏰',
+      bag: '📚',
+      study: '📝'
+    }
+  },
+
+  /**
+   * 组件的方法列表
+   */
+  methods: {
+    // 点击复选框完成任务
+    onCheckboxTap: function(e) {
+      this.triggerEvent('complete', {
+        taskId: this.properties.task.id
+      });
+    },
+
+    // 点击任务项进入详情
+    onTaskTap: function(e) {
+      this.triggerEvent('detail', {
+        taskId: this.properties.task.id
+      });
+    },
+
+    // 点击编辑按钮
+    onEditTap: function(e) {
+      this.triggerEvent('edit', {
+        taskId: this.properties.task.id
+      });
+    }
+  }
+}) 

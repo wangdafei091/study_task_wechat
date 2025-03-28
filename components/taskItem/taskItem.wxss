@@ -1,0 +1,89 @@
+/* components/taskItem/taskItem.wxss */
+.task-item {
+  display: flex;
+  align-items: center;
+  margin-bottom: 20rpx;
+  padding: 24rpx;
+}
+
+.task-status {
+  margin-right: 16rpx;
+}
+
+.task-checkbox {
+  width: 40rpx;
+  height: 40rpx;
+  border: 2rpx solid #CCCCCC;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #FFFFFF;
+}
+
+.completed .task-checkbox {
+  background: #34A853;
+  border-color: #34A853;
+}
+
+.task-icon {
+  margin-right: 16rpx;
+}
+
+.icon-circle {
+  width: 60rpx;
+  height: 60rpx;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #FFFFFF;
+  font-size: 32rpx;
+}
+
+.clock {
+  background: #4285F4;
+}
+
+.bag {
+  background: #FBBC05;
+}
+
+.study {
+  background: #34A853;
+}
+
+.task-content {
+  flex: 1;
+}
+
+.task-title {
+  font-size: 30rpx;
+  color: #333333;
+  margin-bottom: 8rpx;
+}
+
+.completed-text {
+  color: #999999;
+  text-decoration: line-through;
+}
+
+.task-image {
+  color: #4285F4;
+  font-size: 24rpx;
+}
+
+.task-edit {
+  width: 40rpx;
+  height: 40rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #999999;
+}
+
+.card {
+  background-color: #FFFFFF;
+  border-radius: 16rpx;
+  box-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.05);
+} 

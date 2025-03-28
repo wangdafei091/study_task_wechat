@@ -1,0 +1,22 @@
+/* components/progressBar/progressBar.wxss */
+.progress-container {
+  display: flex;
+  align-items: center;
+}
+
+.progress-bar {
+  flex: 1;
+  overflow: hidden;
+  margin-right: 16rpx;
+}
+
+.progress-fill {
+  transition: width 0.3s ease;
+}
+
+.progress-text {
+  font-size: 26rpx;
+  color: #666666;
+  min-width: 60rpx;
+  text-align: right;
+} 
