@@ -153,7 +153,7 @@
         <view class="chart-bar-group">
           <view class="chart-label">生活习惯</view>
           <view class="chart-bar-container">
-            <view class="chart-bar clock" style="width: {{stats.typeCounts.clock / stats.totalTasks * 100}}%">
+            <view class="chart-bar clock" style="width: {{stats.typeCounts.clock / stats.totalTasks * 100}}">
               <text wx:if="{{stats.typeCounts.clock > 0}}">{{stats.typeCounts.clock}}</text>
             </view>
           </view>
@@ -161,7 +161,7 @@
         <view class="chart-bar-group">
           <view class="chart-label">整理收纳</view>
           <view class="chart-bar-container">
-            <view class="chart-bar bag" style="width: {{stats.typeCounts.bag / stats.totalTasks * 100}}%">
+            <view class="chart-bar bag" style="width: {{stats.typeCounts.bag / stats.totalTasks * 100}}">
               <text wx:if="{{stats.typeCounts.bag > 0}}">{{stats.typeCounts.bag}}</text>
             </view>
           </view>
@@ -169,7 +169,7 @@
         <view class="chart-bar-group">
           <view class="chart-label">学习任务</view>
           <view class="chart-bar-container">
-            <view class="chart-bar study" style="width: {{stats.typeCounts.study / stats.totalTasks * 100}}%">
+            <view class="chart-bar study" style="width: {{stats.typeCounts.study / stats.totalTasks * 100}}">
               <text wx:if="{{stats.typeCounts.study > 0}}">{{stats.typeCounts.study}}</text>
             </view>
           </view>
@@ -203,12 +203,17 @@
     
     <view class="task-list">
       <block wx:for="{{tasks}}" wx:key="id">
-        <task-item 
-          task="{{item}}"
-          bind:complete="completeTask"
-          bind:detail="goToTaskDetail"
-          bind:edit="editTask"
-        />
+        <view class="task-wrapper">
+          <view class="task-note" wx:if="{{item.type === 'study'}}">
+            <text class="note-text">📷 需要上传作业照片</text>
+          </view>
+          <task-item 
+            task="{{item}}"
+            bind:complete="completeTask"
+            bind:detail="goToTaskDetail"
+            bind:edit="editTask"
+          />
+        </view>
       </block>
       
       <view class="empty-task-list" wx:if="{{tasks.length === 0}}">
@@ -218,8 +223,8 @@
   </view>
   
   <!-- 添加任务按钮 -->
-  <view class="add-task-button" bindtap="createNewTask">
-    <text class="iconfont">+</text>
+  <view class="add-task-button" bindtap="createNewTask" hover-class="button-hover">
+    <text class="iconfont">＋</text>
   </view>
   
   <!-- 底部导航占位 -->

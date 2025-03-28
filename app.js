@@ -66,7 +66,8 @@ App({
         images: ['https://example.com/image1.jpg'],
         date: '2025-03-28',
         time: '16:00',
-        reminder: false
+        reminder: false,
+        reflection: '这次作业我学会了分数的加减法，感觉比以前更清楚了。'
       }
     ]
   },

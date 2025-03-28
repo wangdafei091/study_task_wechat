@@ -15,7 +15,8 @@ Page({
       images: [],
       date: '',
       time: '',
-      reminder: false
+      reminder: false,
+      reflection: '' // 学习心得
     },
     taskTypes: [
       { id: 'clock', name: '生活习惯', icon: '⏰' },
@@ -41,24 +42,31 @@ Page({
    * 加载任务数据
    */
   loadTaskData: function () {
-    // 这里应该从服务器或本地存储获取任务数据
-    // 目前使用模拟数据
-    const mockTask = {
-      id: this.data.taskId,
-      type: 'clock',
-      title: '独立刷牙',
-      description: '早晚各刷一次牙，每次2分钟',
-      status: 0,
-      hasImage: true,
-      images: ['https://example.com/image1.jpg'],
-      date: '2024-03-27',
-      time: '08:00',
-      reminder: true
+    const app = getApp();
+    const allTasks = app.globalData.tasks || [];
+    const task = allTasks.find(task => task.id === this.data.taskId);
+    
+    if (task) {
+      // 确保反射字段存在
+      if (task.type === 'study' && !task.hasOwnProperty('reflection')) {
+        task.reflection = '';
+      }
+      
+      this.setData({
+        task: task
+      });
+    } else {
+      wx.showToast({
+        title: '未找到任务',
+        icon: 'none',
+        duration: 2000,
+        success: () => {
+          setTimeout(() => {
+            wx.navigateBack();
+          }, 2000);
+        }
+      });
     }
-
-    this.setData({
-      task: mockTask
-    })
   },
 
   /**
@@ -220,5 +228,14 @@ Page({
         }
       }
     })
-  }
+  },
+
+  /**
+   * 输入学习心得
+   */
+  inputReflection: function (e) {
+    this.setData({
+      'task.reflection': e.detail.value
+    })
+  },
 }) 

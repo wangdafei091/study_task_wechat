@@ -317,6 +317,7 @@ page {
 /* 任务列表部分 */
 .task-list-container {
   margin: 0 30rpx;
+  padding-bottom: 160rpx; /* 增加底部填充，避免最后一项被按钮遮挡 */
 }
 
 .task-list-header {
@@ -342,7 +343,7 @@ page {
 }
 
 .task-list {
-  margin-bottom: 120rpx;
+  width: 100%;
 }
 
 .empty-task-list {
@@ -355,20 +356,28 @@ page {
 /* 添加任务按钮 */
 .add-task-button {
   position: fixed;
-  bottom: 120rpx;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 100rpx;
-  height: 100rpx;
+  bottom: 140rpx; /* 保持与导航栏的距离 */
+  right: 40rpx; /* 改为右侧显示而不是居中 */
+  left: auto; /* 取消左侧定位 */
+  transform: none; /* 不需要水平居中了 */
+  width: 110rpx; /* 稍微缩小尺寸 */
+  height: 110rpx;
   background: #4285F4;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   color: #FFFFFF;
-  font-size: 50rpx;
-  box-shadow: 0 4rpx 16rpx rgba(66, 133, 244, 0.4);
+  font-size: 55rpx;
+  box-shadow: 0 6rpx 20rpx rgba(66, 133, 244, 0.5);
   z-index: 100;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* 添加按钮的按下效果 */
+.add-task-button:active {
+  transform: scale(0.95);
+  box-shadow: 0 3rpx 10rpx rgba(66, 133, 244, 0.4);
 }
 
 /* 底部导航占位 */
@@ -381,4 +390,30 @@ page {
   background: #FFFFFF;
   border-radius: 12rpx;
   box-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.05);
+}
+
+.task-wrapper {
+  width: 100%;
+  margin-bottom: 16rpx;
+}
+
+.task-note {
+  font-size: 24rpx;
+  color: #4285F4;
+  background-color: #E3F2FD;
+  padding: 6rpx 16rpx;
+  border-radius: 8rpx;
+  margin-bottom: 8rpx;
+  display: inline-block;
+}
+
+.note-text {
+  font-size: 24rpx;
+}
+
+/* 添加按钮的悬停效果 */
+.button-hover {
+  opacity: 0.9;
+  transform: scale(0.95);
+  box-shadow: 0 3rpx 10rpx rgba(66, 133, 244, 0.4);
 } 

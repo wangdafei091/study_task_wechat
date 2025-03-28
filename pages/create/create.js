@@ -15,7 +15,8 @@ Page({
       images: [],
       date: '',
       time: '',
-      reminder: false
+      reminder: false,
+      reflection: '' // 学习心得
     },
     taskTypes: [
       { id: 'clock', name: '生活习惯', icon: '⏰' },
@@ -119,10 +120,19 @@ Page({
    */
   selectType: function (e) {
     const type = e.currentTarget.dataset.type;
-    this.setData({
+    const updates = {
       'task.type': type,
       showTypeSelector: false
-    });
+    };
+    
+    // 如果不是学习任务类型，清空图片和心得
+    if (type !== 'study') {
+      updates['task.images'] = [];
+      updates['task.hasImage'] = false;
+      updates['task.reflection'] = '';
+    }
+    
+    this.setData(updates);
   },
 
   /**
@@ -167,6 +177,15 @@ Page({
   toggleReminder: function (e) {
     this.setData({
       'task.reminder': e.detail.value
+    });
+  },
+
+  /**
+   * 输入学习心得
+   */
+  inputReflection: function (e) {
+    this.setData({
+      'task.reflection': e.detail.value
     });
   },
 
@@ -216,49 +235,58 @@ Page({
    * 保存任务
    */
   saveTask: function () {
-    // 校验必填字段
-    if (!this.data.task.title) {
+    const task = this.data.task;
+    
+    // 验证表单必填项
+    if (!task.title.trim()) {
       wx.showToast({
         title: '请输入任务标题',
         icon: 'none'
       });
       return;
     }
-
-    // 生成任务ID（实际应用中可能由服务器生成）
-    const taskId = new Date().getTime();
-    const newTask = { ...this.data.task, id: taskId };
-
-    // 获取全局数据
-    const app = getApp();
-    const tasks = app.globalData.tasks || [];
-
-    // 添加新任务
-    tasks.unshift(newTask);
     
-    // 更新全局数据
-    app.globalData.tasks = tasks;
-
+    if (!task.date || !task.time) {
+      wx.showToast({
+        title: '请选择任务时间',
+        icon: 'none'
+      });
+      return;
+    }
+    
+    // 学习任务类型需要上传作业照片
+    if (task.type === 'study' && task.images.length === 0) {
+      wx.showToast({
+        title: '请上传作业照片',
+        icon: 'none'
+      });
+      return;
+    }
+    
+    // 生成任务ID
+    const app = getApp();
+    const allTasks = app.globalData.tasks || [];
+    const maxId = allTasks.length > 0 ? Math.max(...allTasks.map(t => t.id)) : 0;
+    task.id = maxId + 1;
+    
+    // 添加到全局任务列表
+    allTasks.push(task);
+    app.globalData.tasks = allTasks;
+    
     // 保存到本地存储
     wx.setStorage({
       key: 'tasks',
-      data: tasks,
+      data: allTasks,
       success: () => {
         wx.showToast({
           title: '保存成功',
           icon: 'success',
-          duration: 2000,
+          duration: 1500,
           success: () => {
             setTimeout(() => {
               wx.navigateBack();
-            }, 2000);
+            }, 1500);
           }
-        });
-      },
-      fail: () => {
-        wx.showToast({
-          title: '保存失败',
-          icon: 'none'
         });
       }
     });

@@ -1,5 +1,5 @@
 <!--components/taskItem/taskItem.wxml-->
-<view class="task-item card" bindtap="onTaskTap">
+<view class="task-item card" catchtap="onTaskTap">
   <view class="task-status {{task.status === 1 ? 'completed' : ''}}">
     <view class="task-checkbox" catchtap="onCheckboxTap">
       <text wx:if="{{task.status === 1}}" class="iconfont icon-check">✓</text>

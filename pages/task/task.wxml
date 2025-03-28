@@ -85,9 +85,9 @@
     </view>
   </view>
 
-  <!-- 图片列表 -->
-  <view class="task-section">
-    <view class="section-title">相关图片</view>
+  <!-- 图片列表，仅学习任务类型显示 -->
+  <view class="task-section" wx:if="{{task.type === 'study'}}">
+    <view class="section-title">作业照片</view>
     <view class="image-list">
       <view class="image-grid">
         <block wx:for="{{task.images}}" wx:key="*this">
@@ -103,6 +103,16 @@
         </view>
       </view>
     </view>
+  </view>
+
+  <!-- 学习心得，仅学习任务类型显示 -->
+  <view class="task-section" wx:if="{{task.type === 'study'}}">
+    <view class="section-title">学习心得</view>
+    <textarea class="task-textarea" 
+              value="{{task.reflection}}" 
+              placeholder="分享你的学习心得体会..." 
+              disabled="{{!isEdit}}"
+              bindinput="inputReflection" />
   </view>
 
   <!-- 底部按钮 -->
