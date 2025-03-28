@@ -5,24 +5,14 @@ Page({
     userInfo: {},
     hasUserInfo: false,
     canIUse: wx.canIUse('button.open-type.getUserInfo'),
-    currentWeek: [],
-    currentMonth: [],
-    calendarViewMode: 'week', // 'week' 或 'month'
-    selectedDate: '',
-    selectedMonthStr: '',
-    weekDays: ['日', '一', '二', '三', '四', '五', '六'],
-    currentDateStr: '', // 当前日期字符串，用于显示在顶部导航
-    motivationalPhrases: [
-      '今天也要加油哦！✨',
-      '你真棒，继续努力！🌟',
-      '坚持就是胜利！💪',
-      '完成任务赢奖励！🎁',
-      '小小努力，大大进步！📈',
-      '你是最棒的小英雄！🦸‍♂️',
-      '每天进步一点点！🌱',
-      '今天也要开心学习！😊'
-    ],
     currentMotivation: '', // 当前显示的激励语
+    motivationalPhrases: [
+      '坚持每一天，成就更好的自己！',
+      '小习惯，大改变！',
+      '今天的努力，是明天的礼物！',
+      '一步一个脚印，慢慢变优秀！',
+      '做最好的自己，每天进步一点点！'
+    ],
     rewardProgress: {
       current: 2,
       total: 3
@@ -76,22 +66,22 @@ Page({
       type: '',
       status: '',
       dateRange: ''
+    },
+    
+    // 任务进度
+    taskProgress: {
+      clock: 0,
+      bag: 0,
+      study: 0
     }
   },
+  
   onLoad: function () {
-    this.initWeekDays()
-    this.initMonthDays()
-    this.setCurrentDate()
-    
     // 设置当前日期字符串
     const now = new Date()
     const year = now.getFullYear()
     const month = now.getMonth() + 1
     const day = now.getDate()
-    const weekDay = this.data.weekDays[now.getDay()]
-    this.setData({
-      currentDateStr: `${month}月${day}日 星期${weekDay}`
-    })
     
     // 随机选择一条激励语
     this.setRandomMotivation()
@@ -143,32 +133,6 @@ Page({
 
     // 更新统计数据
     this.updateStats();
-    // 更新日历任务标记
-    this.updateCalendarTasks();
-  },
-
-  // 更新日历任务标记
-  updateCalendarTasks: function() {
-    const tasks = this.data.tasks;
-    const currentWeek = [...this.data.currentWeek];
-    const currentMonth = [...this.data.currentMonth];
-    
-    // 更新周视图任务标记
-    currentWeek.forEach(day => {
-      const dayStr = `${day.year}-${day.month.toString().padStart(2, '0')}-${day.date.toString().padStart(2, '0')}`;
-      day.hasTask = tasks.some(task => task.date === dayStr);
-    });
-    
-    // 更新月视图任务标记
-    currentMonth.forEach(day => {
-      const dayStr = `${day.year}-${day.month.toString().padStart(2, '0')}-${day.date.toString().padStart(2, '0')}`;
-      day.hasTask = tasks.some(task => task.date === dayStr);
-    });
-    
-    this.setData({
-      currentWeek,
-      currentMonth
-    });
   },
 
   // 更新统计数据
@@ -205,6 +169,9 @@ Page({
       'rewardProgress.current': completedTasks,
       'rewardProgress.total': tasks.length
     });
+    
+    // 更新任务进度圆环
+    this.updateTaskProgress();
   },
 
   // 显示统计面板
@@ -225,366 +192,20 @@ Page({
   
   // 导航到用户个人资料页面
   navigateToUserProfile: function() {
-    // 这里可以根据需要导航到用户个人资料页面
-    // 由于目前可能没有这个页面，所以暂时只显示一个提示
     wx.showToast({
       title: '用户资料功能开发中',
       icon: 'none',
       duration: 1500
     });
   },
-  
-  // 初始化周视图
-  initWeekDays: function () {
-    const now = new Date()
-    const currentDay = now.getDay() // 0 是周日
-    const currentDate = now.getDate()
-    
-    const week = []
-    for (let i = 0; i < 7; i++) {
-      const dayOffset = i - currentDay
-      const date = new Date(now)
-      date.setDate(currentDate + dayOffset)
-      
-      week.push({
-        date: date.getDate(),
-        day: i,
-        month: date.getMonth() + 1,
-        year: date.getFullYear(),
-        isToday: i === currentDay,
-        hasTask: i === 1 || i === 2 || i === 4,
-        isSelected: i === currentDay
-      })
-    }
-    
+
+  // 设置随机激励语
+  setRandomMotivation: function() {
+    const phrases = this.data.motivationalPhrases
+    const randomIndex = Math.floor(Math.random() * phrases.length)
     this.setData({
-      currentWeek: week
+      currentMotivation: phrases[randomIndex]
     })
-  },
-  
-  // 初始化月视图
-  initMonthDays: function () {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth();
-    const today = now.getDate();
-    
-    // 获取当月第一天是星期几
-    const firstDay = new Date(year, month, 1).getDay();
-    
-    // 获取当月的天数
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    
-    // 获取上个月的天数
-    const daysInPrevMonth = new Date(year, month, 0).getDate();
-    
-    const days = [];
-    
-    // 添加上个月的日期
-    for (let i = firstDay - 1; i >= 0; i--) {
-      const prevMonthDay = daysInPrevMonth - i;
-      const prevMonth = month === 0 ? 12 : month;
-      const prevYear = month === 0 ? year - 1 : year;
-      
-      days.push({
-        date: prevMonthDay,
-        day: days.length % 7,
-        month: prevMonth,
-        year: prevYear,
-        isCurrentMonth: false,
-        isToday: false,
-        hasTask: false
-      });
-    }
-    
-    // 添加当月的日期
-    for (let i = 1; i <= daysInMonth; i++) {
-      days.push({
-        date: i,
-        day: days.length % 7,
-        month: month + 1,
-        year: year,
-        isCurrentMonth: true,
-        isToday: i === today,
-        hasTask: false,
-        isSelected: i === today
-      });
-    }
-    
-    // 添加下个月的日期填充网格（确保总数能被7整除）
-    const remainingDays = 7 - (days.length % 7);
-    if (remainingDays < 7) {
-      const nextMonth = month === 11 ? 1 : month + 2;
-      const nextYear = month === 11 ? year + 1 : year;
-      
-      for (let i = 1; i <= remainingDays; i++) {
-        days.push({
-          date: i,
-          day: days.length % 7,
-          month: nextMonth,
-          year: nextYear,
-          isCurrentMonth: false,
-          isToday: false,
-          hasTask: false
-        });
-      }
-    }
-    
-    this.setData({
-      currentMonth: days
-    });
-  },
-  
-  // 设置当前选中日期
-  setCurrentDate: function () {
-    const now = new Date()
-    const year = now.getFullYear()
-    const month = now.getMonth() + 1
-    const weekNumber = this.getWeekOfMonth(now)
-    
-    this.setData({
-      selectedDate: `${year}年${month}月第${weekNumber}周`,
-      selectedMonthStr: `${year}年${month}月`
-    })
-  },
-  
-  // 获取当前是本月第几周
-  getWeekOfMonth: function (date) {
-    const firstDayOfMonth = new Date(date.getFullYear(), date.getMonth(), 1);
-    const dayOfWeek = firstDayOfMonth.getDay();
-    return Math.ceil((date.getDate() + dayOfWeek) / 7);
-  },
-  
-  // 选择日期
-  selectDate: function (e) {
-    const index = e.detail.index;
-    const date = e.detail.date;
-    
-    if (this.data.calendarViewMode === 'week') {
-      const weekCopy = [...this.data.currentWeek];
-      weekCopy.forEach((day, i) => {
-        day.isSelected = i === index;
-      });
-      
-      this.setData({
-        currentWeek: weekCopy
-      });
-    } else {
-      const monthCopy = [...this.data.currentMonth];
-      monthCopy.forEach((day, i) => {
-        day.isSelected = i === index;
-      });
-      
-      this.setData({
-        currentMonth: monthCopy
-      });
-    }
-    
-    // 这里可以加载对应日期的任务
-    this.loadTasksByDate(date);
-  },
-  
-  // 加载指定日期的任务
-  loadTasksByDate: function(dateStr) {
-    // 从全部任务中筛选出指定日期的任务
-    const allTasks = app.globalData.tasks || [];
-    const dayTasks = allTasks.filter(task => task.date === dateStr);
-    
-    this.setData({
-      tasks: dayTasks.length > 0 ? dayTasks : []
-    });
-  },
-  
-  // 切换周视图
-  changeWeek: function (e) {
-    const direction = e.detail.direction;
-    const currentWeek = [...this.data.currentWeek];
-    const offset = direction === 'prev' ? -7 : 7;
-    
-    // 以当前周的第一天为基准
-    const firstDay = new Date(
-      currentWeek[0].year,
-      currentWeek[0].month - 1,
-      currentWeek[0].date
-    );
-    
-    // 调整日期
-    firstDay.setDate(firstDay.getDate() + offset);
-    
-    // 重新生成周数据
-    const week = [];
-    for (let i = 0; i < 7; i++) {
-      const date = new Date(firstDay);
-      date.setDate(date.getDate() + i);
-      
-      const now = new Date();
-      const isToday = date.getDate() === now.getDate() && 
-                     date.getMonth() === now.getMonth() && 
-                     date.getFullYear() === now.getFullYear();
-      
-      week.push({
-        date: date.getDate(),
-        day: i,
-        month: date.getMonth() + 1,
-        year: date.getFullYear(),
-        isToday: isToday,
-        hasTask: false,
-        isSelected: i === 0
-      });
-    }
-    
-    // 更新周视图标题
-    const year = firstDay.getFullYear();
-    const month = firstDay.getMonth() + 1;
-    const weekNumber = this.getWeekOfMonth(firstDay);
-    
-    this.setData({
-      currentWeek: week,
-      selectedDate: `${year}年${month}月第${weekNumber}周`
-    });
-    
-    // 更新任务标记
-    this.updateCalendarTasks();
-  },
-  
-  // 切换月视图
-  changeMonth: function (e) {
-    const direction = e.detail.direction;
-    const currentMonth = [...this.data.currentMonth];
-    
-    // 找到当月的第一天
-    let currentMonthDay = null;
-    for (const day of currentMonth) {
-      if (day.isCurrentMonth) {
-        currentMonthDay = day;
-        break;
-      }
-    }
-    
-    if (!currentMonthDay) return;
-    
-    // 创建日期对象并调整月份
-    const date = new Date(currentMonthDay.year, currentMonthDay.month - 1, 1);
-    if (direction === 'prev') {
-      date.setMonth(date.getMonth() - 1);
-    } else {
-      date.setMonth(date.getMonth() + 1);
-    }
-    
-    // 重新生成月视图数据
-    const year = date.getFullYear();
-    const month = date.getMonth();
-    const today = new Date();
-    
-    // 获取当月第一天是星期几
-    const firstDay = new Date(year, month, 1).getDay();
-    
-    // 获取当月的天数
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    
-    // 获取上个月的天数
-    const daysInPrevMonth = new Date(year, month, 0).getDate();
-    
-    const days = [];
-    
-    // 添加上个月的日期
-    for (let i = firstDay - 1; i >= 0; i--) {
-      const prevMonthDay = daysInPrevMonth - i;
-      const prevMonth = month === 0 ? 12 : month;
-      const prevYear = month === 0 ? year - 1 : year;
-      
-      days.push({
-        date: prevMonthDay,
-        day: days.length % 7,
-        month: prevMonth,
-        year: prevYear,
-        isCurrentMonth: false,
-        isToday: false,
-        hasTask: false
-      });
-    }
-    
-    // 添加当月的日期
-    for (let i = 1; i <= daysInMonth; i++) {
-      const isToday = i === today.getDate() && 
-                     month === today.getMonth() && 
-                     year === today.getFullYear();
-      
-      days.push({
-        date: i,
-        day: days.length % 7,
-        month: month + 1,
-        year: year,
-        isCurrentMonth: true,
-        isToday: isToday,
-        hasTask: false,
-        isSelected: isToday
-      });
-    }
-    
-    // 添加下个月的日期填充网格（确保总数能被7整除）
-    const remainingDays = 7 - (days.length % 7);
-    if (remainingDays < 7) {
-      const nextMonth = month === 11 ? 1 : month + 2;
-      const nextYear = month === 11 ? year + 1 : year;
-      
-      for (let i = 1; i <= remainingDays; i++) {
-        days.push({
-          date: i,
-          day: days.length % 7,
-          month: nextMonth,
-          year: nextYear,
-          isCurrentMonth: false,
-          isToday: false,
-          hasTask: false
-        });
-      }
-    }
-    
-    this.setData({
-      currentMonth: days,
-      selectedMonthStr: `${year}年${month + 1}月`
-    });
-    
-    // 更新当前选中的月份标题
-    if (this.data.calendarViewMode === 'month') {
-      this.setData({
-        selectedDate: `${year}年${month + 1}月`
-      });
-    }
-    
-    // 更新任务标记
-    this.updateCalendarTasks();
-  },
-  
-  // 切换日历视图模式
-  toggleViewMode: function (e) {
-    const mode = e.detail.mode;
-    let selectedDate = this.data.selectedDate;
-    
-    if (mode === 'month') {
-      // 切换到月视图，更新标题为当前月
-      selectedDate = this.data.selectedMonthStr;
-    } else {
-      // 切换到周视图，从月视图回到周视图时，标题显示当前周
-      const now = new Date();
-      const year = now.getFullYear();
-      const month = now.getMonth() + 1;
-      const weekNumber = this.getWeekOfMonth(now);
-      
-      selectedDate = `${year}年${month}月第${weekNumber}周`;
-      
-      // 重置周视图选中状态
-      this.initWeekDays();
-    }
-    
-    this.setData({
-      calendarViewMode: mode,
-      selectedDate: selectedDate
-    });
-    
-    // 重新加载任务
-    this.loadTaskData();
   },
   
   // 打开/关闭搜索面板
@@ -639,18 +260,93 @@ Page({
     this.performSearch();
   },
   
-  // 清除搜索过滤器
-  clearFilters: function() {
-    this.setData({
-      searchFilters: {
-        type: '',
-        status: '',
-        dateRange: ''
+  // 更新任务进度
+  updateTaskProgress: function() {
+    const tasks = this.data.tasks;
+    const typeProgress = {
+      clock: 0,
+      bag: 0,
+      study: 0
+    };
+
+    // 计算各类型任务的完成情况
+    Object.keys(typeProgress).forEach(type => {
+      const typeTasks = tasks.filter(t => t.type === type);
+      const completedCount = typeTasks.filter(task => task.status === 1).length;
+      typeProgress[type] = typeTasks.length > 0 
+        ? Math.round((completedCount / typeTasks.length) * 100) 
+        : 0;
+    });
+
+    // 使用动画更新进度
+    this.animateProgress(typeProgress);
+  },
+
+  // 动画更新进度
+  animateProgress: function(targetProgress) {
+    const currentProgress = { ...this.data.taskProgress };
+    const steps = 30; // 动画步数
+    const interval = 16; // 每步时间间隔（ms）
+    let step = 0;
+
+    const animate = () => {
+      if (step >= steps) {
+        this.setData({ taskProgress: targetProgress });
+        return;
       }
+
+      const progress = {};
+      Object.keys(targetProgress).forEach(type => {
+        const start = currentProgress[type] || 0;
+        const end = targetProgress[type];
+        // 使用二次缓动函数使动画更自然
+        const t = step / steps;
+        const easeOutQuad = 1 - (1 - t) * (1 - t);
+        progress[type] = Math.round(start + (end - start) * easeOutQuad);
+      });
+
+      this.setData({ taskProgress: progress });
+      step++;
+      setTimeout(animate, interval);
+    };
+
+    animate();
+  },
+  
+  // 圆环点击事件处理
+  onRingTap: function(e) {
+    const type = e.currentTarget.dataset.type;
+    const typeNames = {
+      bag: '整理收纳',
+      clock: '生活习惯',
+      study: '学习任务'
+    };
+    
+    // 获取该类型的任务
+    const tasks = this.data.tasks.filter(task => task.type === type);
+    const completedTasks = tasks.filter(task => task.status === 1);
+    
+    wx.showToast({
+      title: `${typeNames[type]}任务: ${completedTasks.length}/${tasks.length}`,
+      icon: 'none',
+      duration: 1500
     });
     
-    // 执行搜索
-    this.performSearch();
+    // 如果有任务存在，可以导航到该类型的任务列表
+    if (tasks.length > 0) {
+      // 这里可以根据需求导航到任务列表并筛选特定类型
+      // 例如：wx.navigateTo({ url: `/pages/taskList/taskList?type=${type}` });
+      
+      // 当前先简单地显示相应信息
+      setTimeout(() => {
+        wx.showModal({
+          title: typeNames[type] + '任务',
+          content: `总任务数: ${tasks.length}个\n已完成: ${completedTasks.length}个\n完成率: ${tasks.length > 0 ? Math.round((completedTasks.length / tasks.length) * 100) : 0}%`,
+          showCancel: false,
+          confirmText: '我知道了'
+        });
+      }, 500);
+    }
   },
   
   // 执行搜索
@@ -780,15 +476,6 @@ Page({
     const taskId = e.detail.taskId
     wx.navigateTo({
       url: `/pages/task/task?id=${taskId}&edit=1`
-    })
-  },
-
-  // 设置随机激励语
-  setRandomMotivation: function() {
-    const phrases = this.data.motivationalPhrases
-    const randomIndex = Math.floor(Math.random() * phrases.length)
-    this.setData({
-      currentMotivation: phrases[randomIndex]
     })
   }
 }) 

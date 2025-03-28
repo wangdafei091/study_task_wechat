@@ -1,0 +1,25 @@
+<!--components/circleProgress/circleProgress.wxml-->
+<view class="circle-progress-container" style="width: {{size}}rpx; height: {{size}}rpx;">
+  <!-- 背景圆环 -->
+  <canvas 
+    canvas-id="{{bgCanvasId}}" 
+    class="progress-canvas" 
+    style="width: {{canvasWidth}}px; height: {{canvasHeight}}px;"
+  ></canvas>
+  
+  <!-- 进度圆环 -->
+  <canvas 
+    canvas-id="{{activeCanvasId}}" 
+    class="progress-canvas" 
+    style="width: {{canvasWidth}}px; height: {{canvasHeight}}px;"
+  ></canvas>
+  
+  <!-- 中间文字 -->
+  <view 
+    class="progress-text" 
+    wx:if="{{showText}}" 
+    style="color: {{fontColor}}; font-size: {{fontSize}}rpx;"
+  >
+    {{percent}}%
+  </view>
+</view> 

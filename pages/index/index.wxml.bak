@@ -17,78 +17,9 @@
         </view>
       </view>
     </view>
-  </view>
-
-  <!-- 进度圆环区域 (替换日历) -->
-  <view class="progress-rings-container">
-    <!-- 中间圆环（生活习惯 - 较大） -->
-    <view class="ring-center">
-      <view class="progress-ring clock {{taskProgress.clock === 100 ? 'completed' : ''}}" 
-            hover-class="ring-hover"
-            bindtap="onRingTap"
-            data-type="clock"
-            style="--progress: {{taskProgress.clock}}%">
-        <view class="ring-bg"></view>
-        <view class="ring-progress"></view>
-        <view class="ring-content">
-          <block wx:if="{{taskProgress.clock === 100}}">
-            <text class="ring-complete">完成</text>
-          </block>
-          <block wx:else>
-            <text class="ring-value">{{taskProgress.clock}}%</text>
-          </block>
-          <text class="ring-label">生活习惯</text>
-        </view>
-        <view class="complete-badge" wx:if="{{taskProgress.clock === 100}}">✓</view>
-      </view>
-    </view>
-    
-    <view class="side-rings">
-      <!-- 左侧圆环（整理收纳 - 较小） -->
-      <view class="ring-left">
-        <view class="progress-ring bag {{taskProgress.bag === 100 ? 'completed' : ''}}" 
-              hover-class="ring-hover"
-              bindtap="onRingTap"
-              data-type="bag"
-              style="--progress: {{taskProgress.bag}}%">
-          <view class="ring-bg"></view>
-          <view class="ring-progress"></view>
-          <view class="ring-content">
-            <block wx:if="{{taskProgress.bag === 100}}">
-              <text class="ring-complete">完成</text>
-            </block>
-            <block wx:else>
-              <text class="ring-value">{{taskProgress.bag}}%</text>
-            </block>
-            <text class="ring-label">整理收纳</text>
-          </view>
-          <view class="complete-badge" wx:if="{{taskProgress.bag === 100}}">✓</view>
-        </view>
-      </view>
-      
-      <!-- 右侧圆环（学习任务 - 较小） -->
-      <view class="ring-right">
-        <view class="progress-ring study {{taskProgress.study === 100 ? 'completed' : ''}}" 
-              hover-class="ring-hover"
-              bindtap="onRingTap"
-              data-type="study"
-              style="--progress: {{taskProgress.study}}%">
-          <view class="ring-bg"></view>
-          <view class="ring-progress"></view>
-          <view class="ring-content">
-            <block wx:if="{{taskProgress.study === 100}}">
-              <text class="ring-complete">完成</text>
-            </block>
-            <block wx:else>
-              <text class="ring-value">{{taskProgress.study}}%</text>
-            </block>
-            <text class="ring-label">学习任务</text>
-          </view>
-          <view class="complete-badge" wx:if="{{taskProgress.study === 100}}">✓</view>
-        </view>
-      </view>
-    </view>
-  </view>
+    bind:changeMonth="changeMonth"
+    bind:toggleViewMode="toggleViewMode"
+  />
   
   <!-- 搜索面板 -->
   <view class="search-panel card" wx:if="{{showSearch}}">

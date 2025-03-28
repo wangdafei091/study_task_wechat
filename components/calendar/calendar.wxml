@@ -1,48 +1,63 @@
 <!--components/calendar/calendar.wxml-->
-<view class="calendar-container">
-  <!-- 月份标题和切换 -->
-  <view class="calendar-header">
-    <view class="calendar-arrow" bindtap="{{viewMode === 'week' ? 'prevWeek' : 'prevMonth'}}">
-      <text class="iconfont">〈</text>
+<view class="calendar-container" style="{{containerPadding}}">
+  <!-- 标题和月份导航 -->
+  <view class="calendar-header {{isLandscape ? 'calendar-header-landscape' : ''}}">
+    <view class="month-title-container">
+      <block wx:if="{{viewMode === 'month'}}">
+        <view class="prev-btn" bindtap="prevMonth">
+          <text class="iconfont icon-left"></text>
+        </view>
+        <view class="month-title">当前月份</view>
+        <view class="next-btn" bindtap="nextMonth">
+          <text class="iconfont icon-right"></text>
+        </view>
+      </block>
+      <block wx:else>
+        <view class="prev-btn" bindtap="prevWeek">
+          <text class="iconfont icon-left"></text>
+        </view>
+        <view class="month-title">当前周</view>
+        <view class="next-btn" bindtap="nextWeek">
+          <text class="iconfont icon-right"></text>
+        </view>
+      </block>
     </view>
-    <view class="calendar-title" bindtap="toggleViewMode">
-      {{selectedDate}} 
-      <text class="view-mode-indicator">{{viewMode === 'week' ? '周' : '月'}}</text>
-    </view>
-    <view class="calendar-arrow" bindtap="{{viewMode === 'week' ? 'nextWeek' : 'nextMonth'}}">
-      <text class="iconfont">〉</text>
+    <view class="view-mode-toggle" bindtap="toggleViewMode">
+      <text>{{viewMode === 'week' ? '查看月' : '查看周'}}</text>
     </view>
   </view>
-  
-  <!-- 星期名称 -->
-  <view class="week-days">
+
+  <!-- 星期标题 -->
+  <view class="weekdays-row {{isLandscape ? 'weekdays-row-landscape' : ''}}">
     <block wx:for="{{weekDays}}" wx:key="index">
-      <view class="week-day">{{item}}</view>
+      <view class="weekday-item" style="{{itemStyle}}">{{item}}</view>
     </block>
   </view>
-  
+
   <!-- 周视图 -->
-  <view class="date-grid" wx:if="{{viewMode === 'week'}}">
-    <block wx:for="{{currentWeek}}" wx:key="day">
-      <view class="date-item {{item.isToday ? 'today' : ''}} {{item.isSelected ? 'selected' : ''}}" 
-            data-index="{{index}}" 
-            data-date="{{item.year}}-{{item.month}}-{{item.date}}"
-            bindtap="selectDate">
-        <view class="date-number">{{item.date}}</view>
-        <view class="date-indicator" wx:if="{{item.hasTask}}"></view>
+  <view wx:if="{{viewMode === 'week'}}" class="week-container {{isLandscape ? 'week-container-landscape' : ''}}">
+    <block wx:for="{{currentWeek}}" wx:key="index">
+      <view 
+        class="date-item {{item.isToday ? 'today' : ''}} {{item.isSelected ? 'selected' : ''}} {{item.isCurrentMonth ? '' : 'other-month'}}" 
+        style="{{itemStyle}}"
+        data-index="{{index}}" 
+        data-date="{{item.date}}" 
+        bindtap="selectDate">
+        <text class="date-number">{{item.day}}</text>
       </view>
     </block>
   </view>
-  
+
   <!-- 月视图 -->
-  <view class="month-grid" wx:if="{{viewMode === 'month'}}">
-    <block wx:for="{{currentMonth}}" wx:key="day">
-      <view class="date-item {{item.isToday ? 'today' : ''}} {{item.isSelected ? 'selected' : ''}} {{item.isCurrentMonth ? '' : 'other-month'}}" 
-            data-index="{{index}}" 
-            data-date="{{item.year}}-{{item.month}}-{{item.date}}"
-            bindtap="selectDate">
-        <view class="date-number">{{item.date}}</view>
-        <view class="date-indicator" wx:if="{{item.hasTask}}"></view>
+  <view wx:else class="month-container {{isLandscape ? 'month-container-landscape' : ''}}">
+    <block wx:for="{{currentMonth}}" wx:key="index">
+      <view 
+        class="date-item {{item.isToday ? 'today' : ''}} {{item.isSelected ? 'selected' : ''}} {{item.isCurrentMonth ? '' : 'other-month'}}" 
+        style="{{itemStyle}}"
+        data-index="{{index}}" 
+        data-date="{{item.date}}" 
+        bindtap="selectDate">
+        <text class="date-number">{{item.day}}</text>
       </view>
     </block>
   </view>

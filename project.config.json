@@ -42,6 +42,7 @@
   },
   "compileType": "miniprogram",
   "libVersion": "2.19.6",
+  "minLibVersion": "2.14.0",
   "appid": "wx693c5877e3ab108f",
   "projectname": "学习任务",
   "condition": {},

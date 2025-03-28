@@ -1,0 +1,27 @@
+/* components/circleProgress/circleProgress.wxss */
+.circle-progress-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.progress-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.progress-text {
+  position: relative;
+  z-index: 5;
+  text-align: center;
+  font-weight: 500;
+}
+
+/* 暗黑模式适配 */
+@media (prefers-color-scheme: dark) {
+  .progress-text {
+    color: #F1F1F1 !important;
+  }
+} 
