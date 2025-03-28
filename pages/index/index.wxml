@@ -14,7 +14,11 @@
   />
   
   <!-- 搜索按钮 -->
-  <view class="search-toggle" bindtap="toggleSearch">
+  <view class="search-toggle {{isDragging ? 'dragging' : ''}}" 
+        bindtouchstart="onSearchTouchStart"
+        bindtouchmove="onSearchTouchMove"
+        bindtouchend="onSearchTouchEnd"
+        style="top: {{searchButtonPosition.y}}rpx; right: {{searchButtonPosition.x}}rpx;">
     <text class="search-icon">🔍</text>
   </view>
   

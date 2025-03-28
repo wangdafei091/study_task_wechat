@@ -64,12 +64,30 @@ Page({
       type: '',
       status: '',
       dateRange: ''
+    },
+    // 搜索按钮拖动相关
+    searchButtonPosition: {
+      x: 20,
+      y: 95
+    },
+    isDragging: false,
+    dragStartPosition: {
+      x: 0,
+      y: 0
     }
   },
   onLoad: function () {
     this.initWeekDays()
     this.initMonthDays()
     this.setCurrentDate()
+    
+    // 初始化搜索按钮位置
+    const position = wx.getStorageSync('searchButtonPosition');
+    if (position) {
+      this.setData({
+        searchButtonPosition: position
+      });
+    }
     
     if (app.globalData.userInfo) {
       this.setData({
@@ -551,13 +569,116 @@ Page({
     this.loadTaskData();
   },
   
-  // 显示/隐藏搜索面板
+  // 打开/关闭搜索面板
   toggleSearch: function() {
+    console.log("点击了搜索按钮, isDragging:", this.data.isDragging);
+    if (!this.data.isDragging) {
+      const newShowSearch = !this.data.showSearch;
+      
+      this.setData({
+        showSearch: newShowSearch,
+        searchQuery: '',
+        searchFilters: {
+          type: '',
+          status: '',
+          dateRange: ''
+        }
+      });
+      
+      if (newShowSearch) {
+        // 如果是打开搜索，则清空搜索结果
+        this.setData({
+          searchResults: []
+        });
+      }
+      
+      console.log("搜索面板状态更新为:", newShowSearch);
+    }
+  },
+  
+  // 搜索按钮触摸开始
+  onSearchTouchStart: function(e) {
+    this.touchStartTime = Date.now();
+    this.touchStartPos = {
+      x: e.touches[0].clientX,
+      y: e.touches[0].clientY
+    };
+    
+    const touch = e.touches[0];
     this.setData({
-      showSearch: !this.data.showSearch,
-      searchQuery: '',
-      searchResults: []
+      isDragging: false,
+      dragStartPosition: {
+        x: touch.clientX,
+        y: touch.clientY
+      }
     });
+  },
+  
+  // 搜索按钮触摸移动
+  onSearchTouchMove: function(e) {
+    const touch = e.touches[0];
+    const deltaX = Math.abs(touch.clientX - this.touchStartPos.x);
+    const deltaY = Math.abs(touch.clientY - this.touchStartPos.y);
+    
+    // 如果移动距离超过5px，则认为是在拖动
+    if (deltaX > 5 || deltaY > 5) {
+      this.setData({
+        isDragging: true
+      });
+    }
+    
+    if (!this.data.isDragging) return;
+    
+    const moveDeltaX = touch.clientX - this.data.dragStartPosition.x;
+    const moveDeltaY = touch.clientY - this.data.dragStartPosition.y;
+    
+    // 计算新位置
+    const newX = this.data.searchButtonPosition.x + moveDeltaX;
+    const newY = this.data.searchButtonPosition.y + moveDeltaY;
+    
+    // 获取屏幕宽高
+    const systemInfo = wx.getSystemInfoSync();
+    const maxX = systemInfo.windowWidth - 56; // 搜索按钮宽度
+    const maxY = systemInfo.windowHeight - 56; // 搜索按钮高度
+    
+    // 限制在屏幕范围内
+    const constrainedX = Math.max(0, Math.min(maxX, newX));
+    const constrainedY = Math.max(40, Math.min(maxY, newY));
+    
+    this.setData({
+      searchButtonPosition: {
+        x: constrainedX,
+        y: constrainedY
+      },
+      dragStartPosition: {
+        x: touch.clientX,
+        y: touch.clientY
+      }
+    });
+  },
+  
+  // 搜索按钮触摸结束
+  onSearchTouchEnd: function(e) {
+    // 计算触摸时长
+    const touchDuration = Date.now() - this.touchStartTime;
+    
+    // 如果触摸时间短且未拖动，则视为点击
+    if (touchDuration < 200 && !this.data.isDragging) {
+      this.toggleSearch();
+    }
+    
+    // 如果是拖动状态，保存新位置
+    if (this.data.isDragging) {
+      // 保存位置到本地存储
+      wx.setStorageSync('searchButtonPosition', this.data.searchButtonPosition);
+    }
+    
+    // 延迟一小段时间再设置isDragging为false
+    setTimeout(() => {
+      this.setData({
+        isDragging: false
+      });
+    }, 50);
   },
   
   // 输入搜索关键词
@@ -611,10 +732,17 @@ Page({
     const allTasks = app.globalData.tasks || [];
     
     // 首先基于关键词搜索
-    let results = allTasks.filter(task => 
-      task.title.toLowerCase().includes(query) || 
-      (task.description && task.description.toLowerCase().includes(query))
-    );
+    let results = [];
+    
+    if (query) {
+      results = allTasks.filter(task => 
+        task.title.toLowerCase().includes(query) || 
+        (task.description && task.description.toLowerCase().includes(query))
+      );
+    } else {
+      // 如果没有查询词但有过滤条件，则搜索所有任务
+      results = [...allTasks];
+    }
     
     // 应用类型过滤
     if (filters.type) {
@@ -645,6 +773,7 @@ Page({
         endOfWeek.setHours(23, 59, 59, 999);
         
         results = results.filter(task => {
+          if (!task.date) return false;
           const taskDate = new Date(task.date);
           return taskDate >= startOfWeek && taskDate <= endOfWeek;
         });
@@ -654,11 +783,14 @@ Page({
         const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
         
         results = results.filter(task => {
+          if (!task.date) return false;
           const taskDate = new Date(task.date);
           return taskDate >= startOfMonth && taskDate <= endOfMonth;
         });
       }
     }
+    
+    console.log('搜索结果:', results);
     
     // 更新搜索结果
     this.setData({

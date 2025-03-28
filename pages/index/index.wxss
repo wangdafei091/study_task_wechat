@@ -9,22 +9,30 @@ page {
 
 /* 搜索按钮和面板 */
 .search-toggle {
-  position: absolute;
-  top: 20rpx;
-  right: 30rpx;
-  width: 60rpx;
-  height: 60rpx;
-  background: rgba(255, 255, 255, 0.8);
+  position: fixed;
+  width: 56rpx;
+  height: 56rpx;
+  background: rgba(255, 255, 255, 0.9);
+  border: 2rpx solid rgba(66, 133, 244, 0.6);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 10;
   box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.1);
+  pointer-events: auto;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  touch-action: none; /* 防止触摸事件被浏览器默认处理 */
+}
+
+.search-toggle.dragging {
+  transform: scale(1.1);
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.2);
 }
 
 .search-icon {
   font-size: 32rpx;
+  color: #4285F4;
 }
 
 .search-panel {
