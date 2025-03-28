@@ -1,10 +1,18 @@
 /**index.wxss**/
-page {
-  background: #F8F9FA;
-}
-
 .container {
   padding: 0;
+  /* 主题颜色变量 */
+  --primary-color: #4285F4;
+  --primary-light: #E3F2FD;
+  --primary-dark: #1A73E8;
+  --text-primary: #333333;
+  --text-secondary: #666666;
+  --text-hint: #999999;
+  --surface: #FFFFFF;
+  --border-light: #EEEEEE;
+  --shadow-light: 0 2rpx 8rpx rgba(0, 0, 0, 0.03);
+  --shadow-medium: 0 4rpx 12rpx rgba(66, 133, 244, 0.2);
+  background: #F8F9FA;
 }
 
 /* 顶部导航栏 */
@@ -13,11 +21,11 @@ page {
   justify-content: space-between;
   align-items: center;
   padding: 24rpx 30rpx;
-  background: #FFFFFF;
+  background: var(--surface);
   position: sticky;
   top: 0;
   z-index: 10;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.05);
+  box-shadow: var(--shadow-light);
   margin-bottom: 15rpx;
 }
 
@@ -62,7 +70,7 @@ page {
   left: 0;
   width: 24rpx;
   height: 24rpx;
-  border: 3rpx solid #4285F4;
+  border: 3rpx solid var(--primary-color);
   border-radius: 50%;
   transition: all 0.3s;
 }
@@ -73,7 +81,7 @@ page {
   right: 4rpx;
   width: 16rpx;
   height: 3rpx;
-  background: #4285F4;
+  background: var(--primary-color);
   transform: rotate(45deg);
   transform-origin: right center;
   border-radius: 4rpx;
@@ -86,12 +94,12 @@ page {
 }
 
 .icon-hover .search-circle {
-  border-color: #1A73E8;
+  border-color: var(--primary-dark);
   transform: scale(1.05);
 }
 
 .icon-hover .search-handle {
-  background-color: #1A73E8;
+  background-color: var(--primary-dark);
   width: 18rpx;
 }
 
@@ -100,9 +108,9 @@ page {
   height: 70rpx;
   border-radius: 50%;
   overflow: hidden;
-  border: 2rpx solid #EEEEEE;
-  background-color: #4285F4;
-  color: white;
+  border: 2rpx solid var(--border-light);
+  background-color: var(--primary-color);
+  color: var(--surface);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -116,7 +124,7 @@ page {
   padding: 24rpx;
   position: relative;
   border-radius: 16rpx;
-  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-light);
   z-index: 9;
 }
 
@@ -134,7 +142,7 @@ page {
   align-items: center;
   justify-content: center;
   font-size: 32rpx;
-  color: #999999;
+  color: var(--text-hint);
 }
 
 .search-input-container {
@@ -160,7 +168,7 @@ page {
 
 .filter-title {
   font-size: 26rpx;
-  color: #333333;
+  color: var(--text-primary);
   margin-bottom: 12rpx;
 }
 
@@ -174,7 +182,7 @@ page {
   background: #F0F0F0;
   border-radius: 24rpx;
   font-size: 24rpx;
-  color: #666666;
+  color: var(--text-secondary);
   margin-right: 16rpx;
   margin-bottom: 12rpx;
   display: flex;
@@ -186,8 +194,8 @@ page {
 }
 
 .filter-option.active {
-  background: #E3F2FD;
-  color: #4285F4;
+  background: var(--primary-light);
+  color: var(--primary-color);
 }
 
 .filter-actions {
@@ -198,15 +206,15 @@ page {
 
 .filter-clear {
   padding: 8rpx 24rpx;
-  border: 1rpx solid #DDDDDD;
+  border: 1rpx solid var(--border-light);
   border-radius: 24rpx;
   font-size: 24rpx;
-  color: #666666;
+  color: var(--text-secondary);
 }
 
 .search-results {
   margin-top: 24rpx;
-  border-top: 1rpx solid #EEEEEE;
+  border-top: 1rpx solid var(--border-light);
   padding-top: 20rpx;
 }
 
@@ -218,13 +226,13 @@ page {
 .no-results {
   text-align: center;
   padding: 60rpx 0;
-  color: #999999;
+  color: var(--text-hint);
   font-size: 28rpx;
 }
 
 /* 奖励进度部分 */
 .reward-progress {
-  margin: 20rpx 30rpx;
+  margin: 16rpx 30rpx;
   padding: 24rpx;
 }
 
@@ -236,21 +244,22 @@ page {
 }
 
 .reward-title {
-  font-size: 30rpx;
-  color: #333333;
+  font-size: 32rpx;
+  color: var(--text-primary);
+  font-weight: 600;
 }
 
 .stats-toggle {
   display: flex;
   align-items: center;
   padding: 8rpx 16rpx;
-  background: #F0F7FF;
+  background: var(--primary-light);
   border-radius: 16rpx;
 }
 
 .stats-text {
   font-size: 24rpx;
-  color: #4285F4;
+  color: var(--primary-color);
   margin-right: 8rpx;
 }
 
@@ -260,14 +269,14 @@ page {
 
 /* 统计面板 */
 .stats-panel {
-  margin: 0 30rpx 20rpx;
+  margin: 16rpx 30rpx;
   padding: 24rpx;
 }
 
 .section-title {
-  font-size: 30rpx;
-  color: #333333;
-  font-weight: 500;
+  font-size: 32rpx;
+  color: var(--text-primary);
+  font-weight: 600;
   margin-bottom: 20rpx;
 }
 
@@ -283,15 +292,15 @@ page {
 }
 
 .stats-value {
-  font-size: 40rpx;
-  color: #333333;
-  font-weight: 500;
+  font-size: 38rpx;
+  color: var(--text-primary);
+  font-weight: 600;
   margin-bottom: 8rpx;
 }
 
 .stats-label {
   font-size: 24rpx;
-  color: #666666;
+  color: var(--text-secondary);
 }
 
 .stats-chart {
@@ -300,8 +309,9 @@ page {
 }
 
 .chart-title {
-  font-size: 28rpx;
-  color: #333333;
+  font-size: 30rpx;
+  color: var(--text-primary);
+  font-weight: 500;
   margin-bottom: 20rpx;
 }
 
@@ -315,7 +325,7 @@ page {
 
 .chart-label {
   font-size: 24rpx;
-  color: #666666;
+  color: var(--text-secondary);
   margin-bottom: 8rpx;
 }
 
@@ -329,7 +339,7 @@ page {
 .chart-bar {
   height: 100%;
   min-width: 36rpx;
-  color: #FFFFFF;
+  color: var(--surface);
   font-size: 22rpx;
   display: flex;
   align-items: center;
@@ -338,7 +348,7 @@ page {
 }
 
 .chart-bar.clock {
-  background: #4285F4;
+  background: var(--primary-color);
 }
 
 .chart-bar.bag {
@@ -351,11 +361,13 @@ page {
 
 /* 即将到期任务提醒 */
 .upcoming-task {
-  margin: 0 30rpx 20rpx;
+  margin: 16rpx 30rpx;
   padding: 24rpx;
   display: flex;
   align-items: center;
   background-color: #FFF9E6;
+  border-radius: 16rpx;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.03);
 }
 
 .upcoming-icon {
@@ -374,14 +386,14 @@ page {
 }
 
 .upcoming-title {
-  font-size: 28rpx;
-  color: #333333;
-  font-weight: 500;
+  font-size: 30rpx;
+  color: var(--text-primary);
+  font-weight: 600;
 }
 
 .upcoming-desc {
   font-size: 24rpx;
-  color: #666666;
+  color: var(--text-secondary);
 }
 
 .upcoming-arrow {
@@ -390,12 +402,12 @@ page {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #999999;
+  color: var(--text-hint);
 }
 
 /* 任务列表部分 */
 .task-list-container {
-  margin: 0 30rpx;
+  margin: 16rpx 30rpx;
   padding-bottom: 160rpx; /* 增加底部填充，避免最后一项被按钮遮挡 */
 }
 
@@ -408,8 +420,8 @@ page {
 
 .task-list-title {
   font-size: 32rpx;
-  color: #333333;
-  font-weight: 500;
+  color: var(--text-primary);
+  font-weight: 600;
 }
 
 .task-list-toggle {
@@ -418,7 +430,7 @@ page {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #666666;
+  color: var(--text-secondary);
 }
 
 .task-list {
@@ -428,27 +440,27 @@ page {
 .empty-task-list {
   text-align: center;
   padding: 60rpx 0;
-  color: #999999;
+  color: var(--text-hint);
   font-size: 28rpx;
 }
 
 /* 添加任务按钮 */
 .add-task-button {
   position: fixed;
-  bottom: 140rpx; /* 保持与导航栏的距离 */
-  right: 40rpx; /* 改为右侧显示而不是居中 */
-  left: auto; /* 取消左侧定位 */
-  transform: none; /* 不需要水平居中了 */
-  width: 110rpx; /* 稍微缩小尺寸 */
+  bottom: 140rpx; 
+  right: 40rpx;
+  left: auto;
+  transform: none;
+  width: 110rpx;
   height: 110rpx;
-  background: #4285F4;
+  background: var(--primary-color);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #FFFFFF;
+  color: var(--surface);
   font-size: 55rpx;
-  box-shadow: 0 6rpx 20rpx rgba(66, 133, 244, 0.5);
+  box-shadow: var(--shadow-medium);
   z-index: 100;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
@@ -456,7 +468,7 @@ page {
 /* 添加按钮的按下效果 */
 .add-task-button:active {
   transform: scale(0.95);
-  box-shadow: 0 3rpx 10rpx rgba(66, 133, 244, 0.4);
+  box-shadow: 0 2rpx 6rpx rgba(66, 133, 244, 0.2);
 }
 
 /* 底部导航占位 */
@@ -466,9 +478,11 @@ page {
 
 /* 卡片通用样式 */
 .card {
-  background: #FFFFFF;
-  border-radius: 12rpx;
-  box-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.05);
+  background: var(--surface);
+  border-radius: 16rpx;
+  box-shadow: var(--shadow-light);
+  margin: 16rpx 30rpx;
+  padding: 24rpx;
 }
 
 .task-wrapper {
@@ -478,8 +492,8 @@ page {
 
 .task-note {
   font-size: 24rpx;
-  color: #4285F4;
-  background-color: #E3F2FD;
+  color: var(--primary-color);
+  background-color: var(--primary-light);
   padding: 6rpx 16rpx;
   border-radius: 8rpx;
   margin-bottom: 8rpx;
@@ -490,9 +504,9 @@ page {
   font-size: 24rpx;
 }
 
-/* 添加按钮的悬停效果 */
+/* 按钮的悬停效果 */
 .button-hover {
   opacity: 0.9;
   transform: scale(0.95);
-  box-shadow: 0 3rpx 10rpx rgba(66, 133, 244, 0.4);
+  box-shadow: 0 2rpx 6rpx rgba(66, 133, 244, 0.2);
 } 
