@@ -7,38 +7,81 @@ page {
   padding: 0;
 }
 
-/* 搜索按钮和面板 */
-.search-toggle {
-  position: fixed;
-  width: 56rpx;
-  height: 56rpx;
-  background: rgba(255, 255, 255, 0.9);
-  border: 2rpx solid rgba(66, 133, 244, 0.6);
-  border-radius: 50%;
+/* 顶部导航栏 */
+.header-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24rpx 30rpx;
+  background: #FFFFFF;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.05);
+  margin-bottom: 15rpx;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+}
+
+.header-title {
+  font-size: 34rpx;
+  font-weight: 500;
+  color: #FF8C00;
+  margin-left: 16rpx;
+  letter-spacing: 1rpx;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+}
+
+.search-icon-fixed {
+  width: 70rpx;
+  height: 70rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 10;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.1);
-  pointer-events: auto;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-  touch-action: none; /* 防止触摸事件被浏览器默认处理 */
+  color: #666666;
+  border-radius: 50%;
+  transition: all 0.2s;
 }
 
-.search-toggle.dragging {
-  transform: scale(1.1);
-  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.2);
+.search-icon-fixed .icon {
+  font-size: 36rpx;
 }
 
-.search-icon {
+.icon-hover {
+  background: rgba(0, 0, 0, 0.05);
+  transform: scale(0.95);
+}
+
+.user-avatar {
+  width: 70rpx;
+  height: 70rpx;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 2rpx solid #EEEEEE;
+  background-color: #4285F4;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-size: 32rpx;
-  color: #4285F4;
+  font-weight: 500;
 }
 
+/* 搜索面板 */
 .search-panel {
-  margin: 20rpx 30rpx;
+  margin: 0 30rpx 20rpx;
   padding: 24rpx;
   position: relative;
+  border-radius: 16rpx;
+  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.1);
+  z-index: 9;
 }
 
 .search-header {

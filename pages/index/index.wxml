@@ -1,5 +1,21 @@
 <!--pages/index/index.wxml-->
 <view class="container">
+  <!-- 顶部导航栏 -->
+  <view class="header-container">
+    <view class="header-left">
+      <view class="user-avatar" bindtap="navigateToUserProfile">
+        <text wx:if="{{userInfo.nickName}}">{{userInfo.nickName[0]}}</text>
+        <text wx:else>小</text>
+      </view>
+      <view class="header-title">{{currentMotivation}}</view>
+    </view>
+    <view class="header-actions">
+      <view class="search-icon-fixed" hover-class="icon-hover" bindtap="toggleSearch">
+        <text class="icon">🔍</text>
+      </view>
+    </view>
+  </view>
+
   <!-- 顶部日历部分 -->
   <calendar 
     selectedDate="{{selectedDate}}"
@@ -12,15 +28,6 @@
     bind:changeMonth="changeMonth"
     bind:toggleViewMode="toggleViewMode"
   />
-  
-  <!-- 搜索按钮 -->
-  <view class="search-toggle {{isDragging ? 'dragging' : ''}}" 
-        bindtouchstart="onSearchTouchStart"
-        bindtouchmove="onSearchTouchMove"
-        bindtouchend="onSearchTouchEnd"
-        style="top: {{searchButtonPosition.y}}rpx; right: {{searchButtonPosition.x}}rpx;">
-    <text class="search-icon">🔍</text>
-  </view>
   
   <!-- 搜索面板 -->
   <view class="search-panel card" wx:if="{{showSearch}}">

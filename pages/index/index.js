@@ -11,6 +11,18 @@ Page({
     selectedDate: '',
     selectedMonthStr: '',
     weekDays: ['日', '一', '二', '三', '四', '五', '六'],
+    currentDateStr: '', // 当前日期字符串，用于显示在顶部导航
+    motivationalPhrases: [
+      '今天也要加油哦！✨',
+      '你真棒，继续努力！🌟',
+      '坚持就是胜利！💪',
+      '完成任务赢奖励！🎁',
+      '小小努力，大大进步！📈',
+      '你是最棒的小英雄！🦸‍♂️',
+      '每天进步一点点！🌱',
+      '今天也要开心学习！😊'
+    ],
+    currentMotivation: '', // 当前显示的激励语
     rewardProgress: {
       current: 2,
       total: 3
@@ -64,16 +76,6 @@ Page({
       type: '',
       status: '',
       dateRange: ''
-    },
-    // 搜索按钮拖动相关
-    searchButtonPosition: {
-      x: 20,
-      y: 95
-    },
-    isDragging: false,
-    dragStartPosition: {
-      x: 0,
-      y: 0
     }
   },
   onLoad: function () {
@@ -81,13 +83,18 @@ Page({
     this.initMonthDays()
     this.setCurrentDate()
     
-    // 初始化搜索按钮位置
-    const position = wx.getStorageSync('searchButtonPosition');
-    if (position) {
-      this.setData({
-        searchButtonPosition: position
-      });
-    }
+    // 设置当前日期字符串
+    const now = new Date()
+    const year = now.getFullYear()
+    const month = now.getMonth() + 1
+    const day = now.getDate()
+    const weekDay = this.data.weekDays[now.getDay()]
+    this.setData({
+      currentDateStr: `${month}月${day}日 星期${weekDay}`
+    })
+    
+    // 随机选择一条激励语
+    this.setRandomMotivation()
     
     if (app.globalData.userInfo) {
       this.setData({
@@ -214,6 +221,17 @@ Page({
       userInfo: e.detail.userInfo,
       hasUserInfo: true
     })
+  },
+  
+  // 导航到用户个人资料页面
+  navigateToUserProfile: function() {
+    // 这里可以根据需要导航到用户个人资料页面
+    // 由于目前可能没有这个页面，所以暂时只显示一个提示
+    wx.showToast({
+      title: '用户资料功能开发中',
+      icon: 'none',
+      duration: 1500
+    });
   },
   
   // 初始化周视图
@@ -571,114 +589,24 @@ Page({
   
   // 打开/关闭搜索面板
   toggleSearch: function() {
-    console.log("点击了搜索按钮, isDragging:", this.data.isDragging);
-    if (!this.data.isDragging) {
-      const newShowSearch = !this.data.showSearch;
-      
-      this.setData({
-        showSearch: newShowSearch,
-        searchQuery: '',
-        searchFilters: {
-          type: '',
-          status: '',
-          dateRange: ''
-        }
-      });
-      
-      if (newShowSearch) {
-        // 如果是打开搜索，则清空搜索结果
-        this.setData({
-          searchResults: []
-        });
-      }
-      
-      console.log("搜索面板状态更新为:", newShowSearch);
-    }
-  },
-  
-  // 搜索按钮触摸开始
-  onSearchTouchStart: function(e) {
-    this.touchStartTime = Date.now();
-    this.touchStartPos = {
-      x: e.touches[0].clientX,
-      y: e.touches[0].clientY
-    };
-    
-    const touch = e.touches[0];
-    this.setData({
-      isDragging: false,
-      dragStartPosition: {
-        x: touch.clientX,
-        y: touch.clientY
-      }
-    });
-  },
-  
-  // 搜索按钮触摸移动
-  onSearchTouchMove: function(e) {
-    const touch = e.touches[0];
-    const deltaX = Math.abs(touch.clientX - this.touchStartPos.x);
-    const deltaY = Math.abs(touch.clientY - this.touchStartPos.y);
-    
-    // 如果移动距离超过5px，则认为是在拖动
-    if (deltaX > 5 || deltaY > 5) {
-      this.setData({
-        isDragging: true
-      });
-    }
-    
-    if (!this.data.isDragging) return;
-    
-    const moveDeltaX = touch.clientX - this.data.dragStartPosition.x;
-    const moveDeltaY = touch.clientY - this.data.dragStartPosition.y;
-    
-    // 计算新位置
-    const newX = this.data.searchButtonPosition.x + moveDeltaX;
-    const newY = this.data.searchButtonPosition.y + moveDeltaY;
-    
-    // 获取屏幕宽高
-    const systemInfo = wx.getSystemInfoSync();
-    const maxX = systemInfo.windowWidth - 56; // 搜索按钮宽度
-    const maxY = systemInfo.windowHeight - 56; // 搜索按钮高度
-    
-    // 限制在屏幕范围内
-    const constrainedX = Math.max(0, Math.min(maxX, newX));
-    const constrainedY = Math.max(40, Math.min(maxY, newY));
+    const newShowSearch = !this.data.showSearch;
     
     this.setData({
-      searchButtonPosition: {
-        x: constrainedX,
-        y: constrainedY
-      },
-      dragStartPosition: {
-        x: touch.clientX,
-        y: touch.clientY
+      showSearch: newShowSearch,
+      searchQuery: '',
+      searchFilters: {
+        type: '',
+        status: '',
+        dateRange: ''
       }
     });
-  },
-  
-  // 搜索按钮触摸结束
-  onSearchTouchEnd: function(e) {
-    // 计算触摸时长
-    const touchDuration = Date.now() - this.touchStartTime;
     
-    // 如果触摸时间短且未拖动，则视为点击
-    if (touchDuration < 200 && !this.data.isDragging) {
-      this.toggleSearch();
-    }
-    
-    // 如果是拖动状态，保存新位置
-    if (this.data.isDragging) {
-      // 保存位置到本地存储
-      wx.setStorageSync('searchButtonPosition', this.data.searchButtonPosition);
-    }
-    
-    // 延迟一小段时间再设置isDragging为false
-    setTimeout(() => {
+    if (newShowSearch) {
+      // 如果是打开搜索，则清空搜索结果
       this.setData({
-        isDragging: false
+        searchResults: []
       });
-    }, 50);
+    }
   },
   
   // 输入搜索关键词
@@ -852,6 +780,15 @@ Page({
     const taskId = e.detail.taskId
     wx.navigateTo({
       url: `/pages/task/task?id=${taskId}&edit=1`
+    })
+  },
+
+  // 设置随机激励语
+  setRandomMotivation: function() {
+    const phrases = this.data.motivationalPhrases
+    const randomIndex = Math.floor(Math.random() * phrases.length)
+    this.setData({
+      currentMotivation: phrases[randomIndex]
     })
   }
 }) 
