@@ -277,6 +277,22 @@
   padding: 24rpx;
 }
 
+/* 任务列表下方的统计面板 */
+.task-stats-panel {
+  margin: 10rpx 0 20rpx;
+  background-color: #f9f9ff;
+  border-radius: 12rpx;
+  box-shadow: 0 2rpx 6rpx rgba(0, 0, 0, 0.05);
+  animation: fadeIn 0.3s ease;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+/* 关闭状态的统计面板 */
+.task-stats-panel.closing {
+  animation: fadeOut 0.3s ease forwards;
+}
+
 .section-title {
   font-size: 28rpx;
   color: var(--text-primary);
@@ -435,6 +451,16 @@
   align-items: center;
   justify-content: center;
   color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.task-list-toggle .stats-icon {
+  font-size: 28rpx;
+  color: var(--primary-color);
+}
+
+.task-list-toggle:active {
+  transform: scale(0.95);
 }
 
 .task-list {
@@ -945,5 +971,31 @@
   
   .progress-ring.small .ring-value {
     font-size: 22rpx;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10rpx);
+    max-height: 0;
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    max-height: 1000rpx;
+  }
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+    max-height: 1000rpx;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-10rpx);
+    max-height: 0;
   }
 } 

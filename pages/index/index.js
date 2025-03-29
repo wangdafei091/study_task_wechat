@@ -60,6 +60,7 @@ Page({
       }
     },
     showStats: false, // 是否显示统计面板
+    statsClosing: false, // 统计面板是否正在关闭中
 
     // 搜索相关
     showSearch: false,
@@ -238,11 +239,30 @@ Page({
     this.adjustRingSize();
   },
 
-  // 显示统计面板
+  // 显示/隐藏统计面板
   toggleStats: function() {
-    this.setData({
-      showStats: !this.data.showStats
-    });
+    const currentState = this.data.showStats;
+    
+    if (currentState) {
+      // 当前是显示状态，添加一个关闭中的状态，用于触发CSS动画
+      this.setData({
+        statsClosing: true
+      });
+      
+      // 动画结束后再隐藏元素
+      setTimeout(() => {
+        this.setData({
+          showStats: false,
+          statsClosing: false
+        });
+      }, 280); // 略小于动画时间
+    } else {
+      // 当前是隐藏状态，直接显示
+      this.setData({
+        showStats: true,
+        statsClosing: false
+      });
+    }
   },
   
   // 获取用户信息
@@ -613,33 +633,60 @@ Page({
     }
   },
 
-  // 完成任务
+  // 完成或取消完成任务
   completeTask: function (e) {
-    const taskId = e.detail.taskId
-    const tasksCopy = [...this.data.tasks]
+    const taskId = e.detail.taskId;
+    const tasksCopy = [...this.data.tasks];
+    let task = tasksCopy.find(t => t.id === taskId);
+    
+    if (!task) return;
+    
+    // 切换任务状态：如果是已完成(1)则变为未完成(0)，反之亦然
+    const newStatus = task.status === 1 ? 0 : 1;
+    
+    // 如果是取消完成任务，添加确认对话框
+    if (newStatus === 0) {
+      wx.showModal({
+        title: '取消完成',
+        content: '确定要将此任务标记为未完成吗？',
+        success: (res) => {
+          if (res.confirm) {
+            this.updateTaskStatus(taskId, newStatus);
+          }
+        }
+      });
+    } else {
+      // 如果是标记为完成，直接更新
+      this.updateTaskStatus(taskId, newStatus);
+    }
+  },
+  
+  // 更新任务状态
+  updateTaskStatus: function(taskId, status) {
+    const tasksCopy = [...this.data.tasks];
     
     tasksCopy.forEach(task => {
       if (task.id === taskId) {
-        task.status = 1
+        task.status = status;
       }
-    })
+    });
     
     this.setData({
       tasks: tasksCopy
-    })
+    });
     
     // 更新全局数据
     const allTasks = app.globalData.tasks || [];
     allTasks.forEach(task => {
       if (task.id === taskId) {
-        task.status = 1;
+        task.status = status;
       }
     });
     app.globalData.tasks = allTasks;
     
     // 保存到本地存储
     wx.setStorage({
-      key: 'tasks',
+      key: 'taskData',  // 修改为与loadTaskData中相同的键名
       data: allTasks
     });
     
@@ -648,6 +695,13 @@ Page({
     
     // 重新计算圆环大小
     this.adjustRingSize();
+    
+    // 显示操作结果提示
+    wx.showToast({
+      title: status === 1 ? '已完成任务' : '已取消完成',
+      icon: 'success',
+      duration: 1500
+    });
   },
 
   // 根据任务数量动态调整圆环大小
