@@ -184,6 +184,9 @@
     <progress-bar
       current="{{rewardProgress.current}}"
       total="{{rewardProgress.total}}"
+      showChick="{{true}}"
+      useGradient="{{true}}"
+      barHeight="{{24}}"
     />
   </view>
   

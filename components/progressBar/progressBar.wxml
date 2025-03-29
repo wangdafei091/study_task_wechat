@@ -1,7 +1,46 @@
 <!--components/progressBar/progressBar.wxml-->
 <view class="progress-container">
-  <view class="progress-bar" style="height: {{barHeight}}rpx; background-color: {{backgroundColor}}; border-radius: {{borderRadius}}rpx;">
-    <view class="progress-fill" style="width: {{percentage}}%; height: {{barHeight}}rpx; background-color: {{activeColor}}; border-radius: {{borderRadius}}rpx;"></view>
+  <view class="progress-wrapper">
+    <!-- 主进度条 -->
+    <view class="progress-bar" style="height: {{barHeight}}rpx; background-color: {{backgroundColor}}; border-radius: {{borderRadius}}rpx;">
+      <!-- 阶段节点标记 -->
+      <block wx:if="{{useGradient}}">
+        <view class="stage-node node-25" data-stage="1"><view class="node-dot"></view></view>
+        <view class="stage-node node-50" data-stage="2"><view class="node-dot"></view></view>
+        <view class="stage-node node-75" data-stage="3"><view class="node-dot"></view></view>
+      </block>
+      
+      <!-- 渐变填充 -->
+      <view class="progress-fill" 
+            style="width: {{percentage}}%; height: {{barHeight}}rpx; border-radius: {{borderRadius}}rpx; background: {{stageColors[gradientStage]}};">
+      </view>
+      
+      <!-- 终点图标 -->
+      <view class="goal-icon">🎁</view>
+      
+      <!-- 小黄鸡角色 -->
+      <view wx:if="{{showChick}}" 
+            class="chick-character {{chickState}} {{chickJumping ? 'jumping' : ''}} {{chickAnimation ? chickAnimation : ''}}" 
+            style="left: {{percentage}}%;" 
+            bindtap="onTapChick">
+        
+        <!-- 小鸡表情 -->
+        <view class="chick-emoticon {{emoticonShowing ? 'show' : ''}}">
+          {{currentEmoticon}}
+        </view>
+        
+        <!-- 小鸡角色 -->
+        <view class="chick-wrapper">
+          <!-- 基础小鸡 -->
+          <text class="chick-emoji">🐥</text>
+        </view>
+        
+        <!-- 鼓励语气泡 -->
+        <view class="encouragement-bubble {{chickSpeaking ? 'show' : ''}}">
+          <text>{{currentEncouragement}}</text>
+        </view>
+      </view>
+    </view>
   </view>
   <view class="progress-text" wx:if="{{showText}}">{{current}}/{{total}}</view>
 </view> 

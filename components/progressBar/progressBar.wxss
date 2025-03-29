@@ -4,14 +4,24 @@
   align-items: center;
 }
 
-.progress-bar {
+.progress-wrapper {
   flex: 1;
-  overflow: hidden;
+  position: relative;
+  padding: 8rpx 0;
   margin-right: 16rpx;
 }
 
+.progress-bar {
+  position: relative;
+  width: 100%;
+  overflow: visible;
+}
+
 .progress-fill {
-  transition: width 0.3s ease;
+  transition: width 0.5s cubic-bezier(0.22, 0.61, 0.36, 1);
+  background: linear-gradient(to right, #6dabff, #4285F4);
+  position: relative;
+  z-index: 2;
 }
 
 .progress-text {
@@ -19,4 +29,228 @@
   color: #666666;
   min-width: 60rpx;
   text-align: right;
+}
+
+/* 阶段节点样式 */
+.stage-node {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 2rpx;
+  height: 24rpx;
+  background-color: rgba(255, 255, 255, 0.7);
+  z-index: 3;
+}
+
+.node-dot {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 8rpx;
+  height: 8rpx;
+  border-radius: 50%;
+  background-color: white;
+  box-shadow: 0 0 4rpx rgba(0, 0, 0, 0.2);
+}
+
+.node-25 {
+  left: 25%;
+}
+
+.node-50 {
+  left: 50%;
+}
+
+.node-75 {
+  left: 75%;
+}
+
+/* 小黄鸡角色样式 */
+.chick-character {
+  position: absolute;
+  bottom: -16rpx;
+  transform: translateX(-50%);
+  z-index: 10;
+  transition: left 0.5s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.chick-wrapper {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.chick-emoji {
+  font-size: 38rpx;
+  display: block;
+  filter: drop-shadow(0 2rpx 4rpx rgba(0, 0, 0, 0.2));
+  z-index: 2;
+  position: relative;
+}
+
+/* 表情泡泡 */
+.chick-emoticon {
+  position: absolute;
+  top: -20rpx;
+  right: -10rpx;
+  font-size: 24rpx;
+  opacity: 0;
+  transform: scale(0);
+  transition: all 0.3s;
+  z-index: 11;
+}
+
+.chick-emoticon.show {
+  opacity: 1;
+  transform: scale(1);
+  animation: pulsate 1s ease-in-out;
+}
+
+/* 小黄鸡状态动画 */
+.chick-character.walking .chick-emoji {
+  animation: chickWalk 1.2s infinite;
+}
+
+.chick-character.running .chick-emoji {
+  animation: chickRun 0.6s infinite;
+}
+
+.chick-character.celebrating .chick-emoji {
+  animation: chickCelebrate 1s infinite;
+}
+
+.chick-character.jumping .chick-emoji {
+  animation: chickJump 0.5s;
+}
+
+/* 特殊动画 */
+.chick-character.spin {
+  animation: chickSpin 0.8s ease-in-out;
+}
+
+.chick-character.flip {
+  animation: chickFlip 0.8s ease-in-out;
+}
+
+.chick-character.dance {
+  animation: chickDance 0.8s ease-in-out;
+}
+
+.chick-character.stageup {
+  animation: chickStageUp 0.8s ease-in-out;
+}
+
+.chick-character.jump {
+  animation: chickSpecialJump 0.8s ease-in-out;
+}
+
+/* 黄鸡动画关键帧 */
+@keyframes chickWalk {
+  0%, 100% { transform: translateX(-50%) translateY(0) rotate(0deg); }
+  25% { transform: translateX(-50%) translateY(-2rpx) rotate(5deg); }
+  50% { transform: translateX(-50%) translateY(0) rotate(0deg); }
+  75% { transform: translateX(-50%) translateY(-2rpx) rotate(-5deg); }
+}
+
+@keyframes chickRun {
+  0%, 100% { transform: translateX(-50%) translateY(0) rotate(5deg); }
+  50% { transform: translateX(-50%) translateY(-4rpx) rotate(-5deg); }
+}
+
+@keyframes chickCelebrate {
+  0%, 100% { transform: translateX(-50%) translateY(0) scale(1) rotate(0deg); }
+  25% { transform: translateX(-50%) translateY(-8rpx) scale(1.2) rotate(-10deg); }
+  50% { transform: translateX(-50%) translateY(-2rpx) scale(1.1) rotate(0deg); }
+  75% { transform: translateX(-50%) translateY(-8rpx) scale(1.2) rotate(10deg); }
+}
+
+@keyframes chickJump {
+  0%, 100% { transform: translateX(-50%) translateY(0) scale(1); }
+  50% { transform: translateX(-50%) translateY(-15rpx) scale(1.1); }
+}
+
+/* 特殊动画关键帧 */
+@keyframes chickSpin {
+  0% { transform: translateX(-50%) rotate(0deg); }
+  100% { transform: translateX(-50%) rotate(360deg); }
+}
+
+@keyframes chickFlip {
+  0% { transform: translateX(-50%) scaleX(1); }
+  50% { transform: translateX(-50%) scaleX(-1); }
+  100% { transform: translateX(-50%) scaleX(1); }
+}
+
+@keyframes chickDance {
+  0%, 100% { transform: translateX(-50%) skew(0deg); }
+  25% { transform: translateX(-55%) skew(10deg); }
+  50% { transform: translateX(-50%) skew(0deg); }
+  75% { transform: translateX(-45%) skew(-10deg); }
+}
+
+@keyframes chickSpecialJump {
+  0%, 100% { transform: translateX(-50%) translateY(0) scale(1); }
+  50% { transform: translateX(-50%) translateY(-25rpx) scale(1.2); }
+}
+
+@keyframes chickStageUp {
+  0% { transform: translateX(-50%) translateY(0) scale(1); filter: brightness(1); }
+  50% { transform: translateX(-50%) translateY(-30rpx) scale(1.3); filter: brightness(1.3); }
+  100% { transform: translateX(-50%) translateY(0) scale(1); filter: brightness(1); }
+}
+
+@keyframes pulsate {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.3); }
+}
+
+/* 鼓励语气泡 */
+.encouragement-bubble {
+  position: absolute;
+  bottom: 120%;
+  right: -20rpx;
+  background: #FFFDE7;
+  border-radius: 12rpx;
+  padding: 8rpx 14rpx;
+  font-size: 24rpx;
+  white-space: nowrap;
+  opacity: 0;
+  transform: scale(0.8) translateY(10rpx);
+  transition: all 0.3s;
+  pointer-events: none;
+  box-shadow: 0 4rpx 10rpx rgba(0, 0, 0, 0.1);
+  color: #FF8F00;
+  border: 1rpx solid #FFE082;
+  z-index: 11;
+  max-width: 200rpx;
+  text-align: center;
+}
+
+.encouragement-bubble:after {
+  content: '';
+  position: absolute;
+  bottom: -8rpx;
+  right: 20rpx;
+  width: 0;
+  height: 0;
+  border-left: 8rpx solid transparent;
+  border-right: 8rpx solid transparent;
+  border-top: 8rpx solid #FFFDE7;
+}
+
+.encouragement-bubble.show {
+  opacity: 1;
+  transform: scale(1) translateY(0);
+}
+
+/* 终点图标 */
+.goal-icon {
+  position: absolute;
+  top: 50%;
+  right: -8rpx;
+  transform: translateY(-50%);
+  font-size: 30rpx;
+  z-index: 5;
 } 

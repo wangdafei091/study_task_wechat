@@ -14,8 +14,8 @@ Page({
       '做最好的自己，每天进步一点点！'
     ],
     rewardProgress: {
-      current: 2,
-      total: 3
+      current: 60,
+      total: 100
     },
     upcomingTask: {
       name: '新冠语文课',
