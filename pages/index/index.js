@@ -291,7 +291,16 @@ Page({
 
     const animate = () => {
       if (step >= steps) {
-        this.setData({ taskProgress: targetProgress });
+        // 确保最终值为整数，尤其是100%
+        const finalProgress = {};
+        Object.keys(targetProgress).forEach(type => {
+          finalProgress[type] = Math.round(targetProgress[type]);
+          // 确保100值是精确的100，不是99.99或100.01
+          if (finalProgress[type] > 99 && finalProgress[type] < 101) {
+            finalProgress[type] = 100;
+          }
+        });
+        this.setData({ taskProgress: finalProgress });
         return;
       }
 
@@ -302,7 +311,10 @@ Page({
         // 使用二次缓动函数使动画更自然
         const t = step / steps;
         const easeOutQuad = 1 - (1 - t) * (1 - t);
-        progress[type] = Math.round(start + (end - start) * easeOutQuad);
+        const current = Math.round(start + (end - start) * easeOutQuad);
+        
+        // 如果接近100%，确保精确值
+        progress[type] = (current > 99 && current < 101 && end >= 100) ? 100 : current;
       });
 
       this.setData({ taskProgress: progress });
