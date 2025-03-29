@@ -292,6 +292,58 @@ Component({
           }, 800);
         }, 800);
       }, 1000);
+    },
+    
+    // 播放指定类型的动画效果
+    playAnimation: function(animationType) {
+      // 确保当前没有动画在执行
+      if (this.data.chickAnimation) {
+        return;
+      }
+      
+      let animation = '';
+      let encouragement = '';
+      
+      // 根据动画类型设置不同的动画效果和鼓励语
+      switch(animationType) {
+        case 'search':
+          animation = 'flip';
+          encouragement = '让我来找找看！';
+          this.setData({ chickState: 'running' });
+          break;
+        case 'stats':
+          animation = 'dance';
+          encouragement = '看看我们的成果！';
+          break;
+        case 'complete':
+          animation = 'spin';
+          encouragement = '太棒了，完成了！';
+          this.setData({ chickState: 'celebrating' });
+          break;
+        default:
+          animation = 'jump';
+          encouragement = '加油加油！';
+      }
+      
+      this.setData({
+        chickSpeaking: true,
+        currentEncouragement: encouragement,
+        chickAnimation: animation
+      });
+      
+      // 设置动画结束后恢复状态
+      setTimeout(() => {
+        this.setData({
+          chickAnimation: ''
+        });
+      }, 800);
+      
+      // 鼓励语持续时间
+      setTimeout(() => {
+        this.setData({
+          chickSpeaking: false
+        });
+      }, 2000);
     }
   }
 }) 

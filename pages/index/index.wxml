@@ -92,7 +92,7 @@
   </view>
   
   <!-- 搜索面板 -->
-  <view class="search-panel card" wx:if="{{showSearch}}">
+  <view class="search-panel card {{searchClosing ? 'closing' : ''}}" wx:if="{{showSearch || searchClosing}}">
     <view class="search-header">
       <view class="section-title">搜索任务</view>
       <view class="search-close" bindtap="toggleSearch">×</view>
@@ -112,17 +112,20 @@
         <view class="filter-title">任务类型</view>
         <view class="filter-options">
           <view class="filter-option {{searchFilters.type === 'clock' ? 'active' : ''}}" 
-                data-type="type" data-value="clock" bindtap="selectFilter">
+                data-type="type" data-value="clock" bindtap="selectFilter"
+                animation="{{filterAnimation.type.clock}}">
             <text class="filter-icon">⏰</text>
             <text>生活习惯</text>
           </view>
           <view class="filter-option {{searchFilters.type === 'bag' ? 'active' : ''}}" 
-                data-type="type" data-value="bag" bindtap="selectFilter">
+                data-type="type" data-value="bag" bindtap="selectFilter"
+                animation="{{filterAnimation.type.bag}}">
             <text class="filter-icon">📚</text>
             <text>整理收纳</text>
           </view>
           <view class="filter-option {{searchFilters.type === 'study' ? 'active' : ''}}" 
-                data-type="type" data-value="study" bindtap="selectFilter">
+                data-type="type" data-value="study" bindtap="selectFilter"
+                animation="{{filterAnimation.type.study}}">
             <text class="filter-icon">📝</text>
             <text>学习任务</text>
           </view>
@@ -133,9 +136,11 @@
         <view class="filter-title">完成状态</view>
         <view class="filter-options">
           <view class="filter-option {{searchFilters.status === '0' ? 'active' : ''}}" 
-                data-type="status" data-value="0" bindtap="selectFilter">待完成</view>
+                data-type="status" data-value="0" bindtap="selectFilter"
+                animation="{{filterAnimation.status['0']}}">待完成</view>
           <view class="filter-option {{searchFilters.status === '1' ? 'active' : ''}}" 
-                data-type="status" data-value="1" bindtap="selectFilter">已完成</view>
+                data-type="status" data-value="1" bindtap="selectFilter"
+                animation="{{filterAnimation.status['1']}}">已完成</view>
         </view>
       </view>
       
@@ -143,11 +148,14 @@
         <view class="filter-title">时间范围</view>
         <view class="filter-options">
           <view class="filter-option {{searchFilters.dateRange === 'today' ? 'active' : ''}}" 
-                data-type="dateRange" data-value="today" bindtap="selectFilter">今天</view>
+                data-type="dateRange" data-value="today" bindtap="selectFilter"
+                animation="{{filterAnimation.dateRange.today}}">今天</view>
           <view class="filter-option {{searchFilters.dateRange === 'week' ? 'active' : ''}}" 
-                data-type="dateRange" data-value="week" bindtap="selectFilter">本周</view>
+                data-type="dateRange" data-value="week" bindtap="selectFilter"
+                animation="{{filterAnimation.dateRange.week}}">本周</view>
           <view class="filter-option {{searchFilters.dateRange === 'month' ? 'active' : ''}}" 
-                data-type="dateRange" data-value="month" bindtap="selectFilter">本月</view>
+                data-type="dateRange" data-value="month" bindtap="selectFilter"
+                animation="{{filterAnimation.dateRange.month}}">本月</view>
         </view>
       </view>
       
@@ -166,6 +174,7 @@
             bind:complete="completeTask"
             bind:detail="goToTaskDetail"
             bind:edit="editTask"
+            style="--delay: {{item.animationDelay}}"
           />
         </block>
       </view>
@@ -182,6 +191,7 @@
       <view class="reward-title">今日奖品进度</view>
     </view>
     <progress-bar
+      id="progressBar"
       current="{{rewardProgress.current}}"
       total="{{rewardProgress.total}}"
       showChick="{{true}}"

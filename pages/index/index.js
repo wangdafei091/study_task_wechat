@@ -21,32 +21,7 @@ Page({
       name: '新冠语文课',
       timeRemaining: 2
     },
-    tasks: [
-      {
-        id: 1,
-        type: 'clock',
-        title: '独立刷牙',
-        status: 0, // 0-未完成，1-已完成
-        hasImage: false,
-        duration: 10 // 耗时10分钟
-      },
-      {
-        id: 2,
-        type: 'bag',
-        title: '整理书包',
-        status: 0,
-        hasImage: false,
-        duration: 20 // 耗时20分钟
-      },
-      {
-        id: 3,
-        type: 'study',
-        title: '数学作业',
-        status: 1,
-        hasImage: true,
-        duration: 60 // 耗时60分钟
-      }
-    ],
+    tasks: [],
     // 统计数据
     stats: {
       totalTasks: 0,
@@ -69,8 +44,10 @@ Page({
     searchFilters: {
       type: '',
       status: '',
-      dateRange: 'today'
+      dateRange: ''
     },
+    searchClosing: false,
+    filterAnimation: {}, // 用于存储筛选器动画数据
     
     // 任务进度
     taskProgress: {
@@ -243,6 +220,14 @@ Page({
   toggleStats: function() {
     const currentState = this.data.showStats;
     
+    // 如果当前是隐藏状态（即将显示统计），触发小黄鸡动画
+    if (!currentState) {
+      const progressBar = this.selectComponent('#progressBar');
+      if (progressBar) {
+        progressBar.playAnimation('stats');
+      }
+    }
+    
     if (currentState) {
       // 当前是显示状态，添加一个关闭中的状态，用于触发CSS动画
       this.setData({
@@ -296,22 +281,41 @@ Page({
   toggleSearch: function() {
     const newShowSearch = !this.data.showSearch;
     
+    if (!newShowSearch) {
+      // 当前是显示状态，需要添加关闭动画
+      this.setData({
+        searchClosing: true
+      });
+      
+      // 动画结束后再隐藏元素
+      setTimeout(() => {
+        this.setData({
+          showSearch: false,
+          searchClosing: false
+        });
+      }, 250); // 与CSS动画时长匹配
+      
+      return;
+    }
+    
+    // 触发小黄鸡动画效果
+    if (newShowSearch) {
+      const progressBar = this.selectComponent('#progressBar');
+      if (progressBar) {
+        progressBar.playAnimation('search');
+      }
+    }
+    
     this.setData({
       showSearch: newShowSearch,
       searchQuery: '',
+      searchResults: [],
       searchFilters: {
         type: '',
         status: '',
         dateRange: 'today'
       }
     });
-    
-    if (newShowSearch) {
-      // 如果是打开搜索，则清空搜索结果
-      this.setData({
-        searchResults: []
-      });
-    }
   },
   
   // 输入搜索关键词
@@ -335,10 +339,34 @@ Page({
   // 选择搜索过滤器
   selectFilter: function(e) {
     const { type, value } = e.currentTarget.dataset;
+    const previousValue = this.data.searchFilters[type];
+    
+    // 如果选择了相同值，则取消选择
+    const newValue = previousValue === value ? '' : value;
+    
+    // 创建动画效果
+    const animation = wx.createAnimation({
+      duration: 200,
+      timingFunction: 'ease-out'
+    });
+    
+    // 设置动画：轻微缩放效果，改为背景色变化
+    animation.scale(1.02).backgroundColor('rgba(66, 133, 244, 0.15)').step();
+    animation.scale(1.0).backgroundColor('rgba(66, 133, 244, 0.1)').step();
+    
+    // 应用动画到对应元素（通过自定义属性）
+    const animationData = {};
+    animationData[`filterAnimation.${type}.${value}`] = animation.export();
     
     this.setData({
-      [`searchFilters.${type}`]: value
+      [`searchFilters.${type}`]: newValue,
+      ...animationData
     });
+    
+    // 轻微振动反馈
+    if (wx.vibrateShort) {
+      wx.vibrateShort({ type: 'light' });
+    }
     
     // 执行搜索
     this.performSearch();
@@ -463,21 +491,11 @@ Page({
       }
     }, 300);
     
-    // 可以选择性实现奖励领取逻辑
-    setTimeout(() => {
-      wx.showModal({
-        title: '奖励已到达！',
-        content: '你已完成今日任务目标，可以领取设置的奖励啦！',
-        confirmText: '太棒了',
-        showCancel: false,
-        success: (res) => {
-          if (res.confirm) {
-            console.log('用户确认领取奖励');
-            // 这里可以添加奖励领取逻辑
-          }
-        }
-      });
-    }, 1000);
+    // 触发小黄鸡的庆祝动画
+    const progressBar = this.selectComponent('#progressBar');
+    if (progressBar) {
+      progressBar.playAnimation('complete');
+    }
   },
   
   // 执行搜索
@@ -547,9 +565,24 @@ Page({
     
     console.log('搜索结果:', results);
     
-    // 更新搜索结果
+    // 使用动画呈现搜索结果
+    this.animateSearchResults(results);
+  },
+  
+  // 搜索结果动画显示
+  animateSearchResults: function(results) {
+    if (results.length === 0) {
+      this.setData({ searchResults: [] });
+      return;
+    }
+    
+    // 先一次性设置所有结果，但通过CSS动画和不同的延迟显示动画效果
     this.setData({
-      searchResults: results
+      searchResults: results.map((item, index) => ({
+        ...item,
+        // 添加动画延迟属性，索引越大延迟越长
+        animationDelay: `${index * 50}ms`
+      }))
     });
   },
   
@@ -668,77 +701,53 @@ Page({
     }
   },
 
-  // 完成或取消完成任务
-  completeTask: function (e) {
-    const taskId = e.detail.taskId;
-    const tasksCopy = [...this.data.tasks];
-    let task = tasksCopy.find(t => t.id === taskId);
+  // 完成任务
+  completeTask: function(e) {
+    const id = e.detail.taskId;
+    console.log('完成任务:', id);
     
-    if (!task) return;
-    
-    // 切换任务状态：如果是已完成(1)则变为未完成(0)，反之亦然
-    const newStatus = task.status === 1 ? 0 : 1;
-    
-    // 如果是取消完成任务，添加确认对话框
-    if (newStatus === 0) {
-      wx.showModal({
-        title: '取消完成',
-        content: '确定要将此任务标记为未完成吗？',
-        success: (res) => {
-          if (res.confirm) {
-            this.updateTaskStatus(taskId, newStatus);
-          }
+    // 更新任务状态
+    const tasks = this.data.tasks.map(task => {
+      if (task.id === id) {
+        // 如果当前状态是0(未完成)，则设置为1(已完成)
+        const newStatus = task.status === 0 ? 1 : 0;
+        
+        // 如果是刚完成任务，触发小黄鸡庆祝动画
+        if (newStatus === 1) {
+          setTimeout(() => {
+            const progressBar = this.selectComponent('#progressBar');
+            if (progressBar) {
+              progressBar.playAnimation('complete');
+            }
+          }, 300);
         }
-      });
-    } else {
-      // 如果是标记为完成，直接更新
-      this.updateTaskStatus(taskId, newStatus);
-    }
-  },
-  
-  // 更新任务状态
-  updateTaskStatus: function(taskId, status) {
-    const tasksCopy = [...this.data.tasks];
-    
-    tasksCopy.forEach(task => {
-      if (task.id === taskId) {
-        task.status = status;
+        
+        return { ...task, status: newStatus };
       }
+      return task;
     });
     
-    this.setData({
-      tasks: tasksCopy
-    });
+    this.setData({ tasks });
     
-    // 更新全局数据
-    const allTasks = app.globalData.tasks || [];
-    allTasks.forEach(task => {
-      if (task.id === taskId) {
-        task.status = status;
-      }
-    });
-    app.globalData.tasks = allTasks;
-    
-    // 保存到本地存储
-    wx.setStorage({
-      key: 'taskData',  // 修改为与loadTaskData中相同的键名
-      data: allTasks
-    });
+    // 更新全局任务数据
+    app.globalData.tasks = tasks;
     
     // 更新统计信息
     this.updateStats();
     
-    // 重新计算圆环大小
+    // 调整圆环大小
     this.adjustRingSize();
     
-    // 显示操作结果提示
+    // 保存数据
+    this.saveTaskData();
+    
+    // 显示提示
     wx.showToast({
-      title: status === 1 ? '已完成任务' : '已取消完成',
-      icon: 'success',
-      duration: 1500
+      title: tasks.find(t => t.id === id).status === 1 ? '任务已完成' : '已取消完成',
+      icon: 'success'
     });
   },
-
+  
   // 根据任务数量动态调整圆环大小
   adjustRingSize: function() {
     const tasks = this.data.tasks;
@@ -810,5 +819,55 @@ Page({
         typeRingSizes: typeRingSizes
       });
     }
+  },
+
+  // 清除搜索过滤器
+  clearFilters: function() {
+    // 应用动画到所有当前选中的筛选器
+    const animation = wx.createAnimation({
+      duration: 200,
+      timingFunction: 'ease-in'
+    });
+    
+    // 更平滑的动画效果
+    animation.scale(0.98).opacity(0.7).step();
+    animation.scale(1.0).opacity(1.0).step();
+    
+    const animationData = animation.export();
+    const currentFilters = this.data.searchFilters;
+    const filterAnimation = {};
+    
+    // 为所有当前选中的筛选器添加动画
+    if (currentFilters.type) {
+      filterAnimation[`filterAnimation.type.${currentFilters.type}`] = animationData;
+    }
+    if (currentFilters.status !== '') {
+      filterAnimation[`filterAnimation.status.${currentFilters.status}`] = animationData;
+    }
+    if (currentFilters.dateRange) {
+      filterAnimation[`filterAnimation.dateRange.${currentFilters.dateRange}`] = animationData;
+    }
+    
+    // 首先应用动画
+    this.setData(filterAnimation);
+    
+    // 轻微振动反馈
+    if (wx.vibrateShort) {
+      wx.vibrateShort({ type: 'light' });
+    }
+    
+    // 稍微延迟后清除过滤器
+    setTimeout(() => {
+      this.setData({
+        searchFilters: {
+          type: '',
+          status: '',
+          dateRange: ''
+        }
+      });
+      
+      // 执行搜索
+      this.performSearch();
+    }, 200);
   }
 }) 

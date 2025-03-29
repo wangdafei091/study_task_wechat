@@ -143,12 +143,41 @@
 
 /* 搜索面板 */
 .search-panel {
-  margin: 0 30rpx 20rpx;
+  margin: 16rpx 30rpx;
   padding: 24rpx;
   position: relative;
   border-radius: 16rpx;
   box-shadow: var(--shadow-light);
   z-index: 9;
+  transform-origin: top right;
+  animation: searchPanelShow 0.3s ease-out forwards;
+  will-change: transform, opacity;
+}
+
+@keyframes searchPanelShow {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.search-panel.closing {
+  animation: searchPanelHide 0.25s ease-in forwards;
+}
+
+@keyframes searchPanelHide {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.98);
+  }
 }
 
 .search-header {
@@ -246,11 +275,39 @@
   overflow: auto;
 }
 
+.search-results-list .task-item {
+  animation: resultItemFadeIn 0.3s ease-out both;
+  animation-delay: var(--delay, 0ms);
+  opacity: 0;
+  will-change: opacity, transform;
+}
+
+@keyframes resultItemFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(5rpx);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .no-results {
   text-align: center;
   padding: 60rpx 0;
   color: var(--text-hint);
   font-size: 28rpx;
+  animation: fadeIn 0.3s ease-out forwards;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 /* 奖励进度部分 */
