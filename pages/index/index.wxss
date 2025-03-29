@@ -21,12 +21,18 @@
   justify-content: space-between;
   align-items: center;
   padding: 16rpx 24rpx;
-  background: var(--surface);
+  background: linear-gradient(to bottom, #ffffff, #fefeff);
   position: sticky;
   top: 0;
   z-index: 10;
-  box-shadow: var(--shadow-light);
+  box-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.03);
   margin-bottom: 10rpx;
+  transition: all 0.3s ease;
+}
+
+.header-container.compact {
+  padding: 10rpx 24rpx;
+  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.05);
 }
 
 .header-left {
@@ -44,6 +50,11 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  transition: color 0.3s ease;
+}
+
+.header-title:active {
+  color: #E67E00;
 }
 
 .header-actions {
@@ -280,12 +291,13 @@
 /* 任务列表下方的统计面板 */
 .task-stats-panel {
   margin: 10rpx 0 20rpx;
-  background-color: #f9f9ff;
+  background: linear-gradient(to bottom, #f9f9ff, #f5f5fc);
   border-radius: 12rpx;
-  box-shadow: 0 2rpx 6rpx rgba(0, 0, 0, 0.05);
+  box-shadow: 0 2rpx 16rpx rgba(0, 0, 0, 0.04);
   animation: fadeIn 0.3s ease;
   overflow: hidden;
   transition: all 0.3s ease;
+  border: 1rpx solid rgba(0, 0, 0, 0.03);
 }
 
 /* 关闭状态的统计面板 */
@@ -298,6 +310,7 @@
   color: var(--text-primary);
   font-weight: 600;
   margin-bottom: 20rpx;
+  letter-spacing: 0.3rpx;
 }
 
 .stats-grid {
@@ -309,6 +322,11 @@
 .stats-item {
   width: 25%;
   text-align: center;
+  transition: transform 0.2s ease;
+}
+
+.stats-item:active {
+  transform: scale(0.95);
 }
 
 .stats-value {
@@ -316,15 +334,17 @@
   color: var(--text-primary);
   font-weight: 600;
   margin-bottom: 8rpx;
+  transition: color 0.3s ease;
 }
 
 .stats-label {
   font-size: 24rpx;
   color: var(--text-secondary);
+  transition: color 0.3s ease;
 }
 
 .stats-chart {
-  border-top: 1rpx solid #EEEEEE;
+  border-top: 1rpx solid rgba(0, 0, 0, 0.05);
   padding-top: 20rpx;
 }
 
@@ -333,6 +353,7 @@
   color: var(--text-primary);
   font-weight: 500;
   margin-bottom: 20rpx;
+  letter-spacing: 0.3rpx;
 }
 
 .chart-bars {
@@ -351,9 +372,10 @@
 
 .chart-bar-container {
   height: 36rpx;
-  background: #F0F0F0;
+  background: rgba(0, 0, 0, 0.05);
   border-radius: 18rpx;
   overflow: hidden;
+  box-shadow: inset 0 1rpx 3rpx rgba(0, 0, 0, 0.05);
 }
 
 .chart-bar {
@@ -364,19 +386,19 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: width 0.3s ease;
+  transition: width 0.5s cubic-bezier(0.075, 0.82, 0.165, 1);
 }
 
 .chart-bar.clock {
-  background: var(--primary-color);
+  background: linear-gradient(to right, #3b7af0, #4285F4);
 }
 
 .chart-bar.bag {
-  background: #FBBC05;
+  background: linear-gradient(to right, #f0b503, #FBBC05);
 }
 
 .chart-bar.study {
-  background: #34A853;
+  background: linear-gradient(to right, #34a853, #36a853);
 }
 
 /* 即将到期任务提醒 */
@@ -436,35 +458,35 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20rpx;
+  padding: 8rpx 10rpx;
+  border-radius: 8rpx;
 }
 
 .task-list-title {
   font-size: 28rpx;
   color: var(--text-primary);
   font-weight: 600;
+  letter-spacing: 0.3rpx;
 }
 
 .task-list-toggle {
   width: 40rpx;
   height: 40rpx;
+  background: rgba(66, 133, 244, 0.1);
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-secondary);
-  cursor: pointer;
-}
-
-.task-list-toggle .stats-icon {
-  font-size: 28rpx;
-  color: var(--primary-color);
+  transition: all 0.3s;
 }
 
 .task-list-toggle:active {
-  transform: scale(0.95);
+  transform: scale(0.9);
+  background: rgba(66, 133, 244, 0.2);
 }
 
-.task-list {
-  width: 100%;
+.stats-icon {
+  font-size: 24rpx;
 }
 
 .empty-task-list {
@@ -541,116 +563,85 @@
   box-shadow: 0 2rpx 6rpx rgba(66, 133, 244, 0.2);
 }
 
-/* 进度圆环容器 */
+/* 进度圆环部分 */
 .progress-rings-container {
-  margin: 8rpx 15rpx;
-  padding: 12rpx 15rpx;
-  position: relative;
+  margin: 10rpx 30rpx;
+  padding: 20rpx 15rpx;
+  background: linear-gradient(to bottom, #ffffff, #fafbfd);
+  border-radius: 16rpx;
+  box-shadow: var(--shadow-light);
   display: flex;
   flex-direction: column;
   align-items: center;
-  background: linear-gradient(to bottom right, #ffffff, #f8faff);
-  border-radius: 16rpx;
-  box-shadow: 0 6rpx 20rpx rgba(0, 0, 0, 0.06);
-  transition: all 0.3s ease;
+  transition: all 0.3s;
 }
 
-/* 圆环共享标题 */
+.progress-rings-container.compact {
+  margin-top: 12rpx;
+}
+
 .rings-title {
-  font-size: 26rpx;
-  font-weight: 500;
+  font-size: 28rpx;
+  font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: 10rpx;
-  text-align: center;
+  margin-bottom: 16rpx;
+  letter-spacing: 0.5rpx;
 }
 
-/* 横向排列圆环 */
 .rings-row {
   display: flex;
-  flex-direction: row;
-  justify-content: space-evenly;
-  align-items: center;
+  justify-content: space-around;
   width: 100%;
+  margin-top: 10rpx;
 }
 
-/* 每个圆环项目 */
 .ring-item {
   display: flex;
   flex-direction: column;
   align-items: center;
-  margin: 0 8rpx;
+  margin: 0 10rpx;
+  transition: transform 0.2s ease;
 }
 
-/* 圆环项目下方标签 */
-.ring-item-label {
-  font-size: 24rpx;
-  color: var(--text-secondary);
-  margin-top: 6rpx;
-  font-weight: 500;
+.ring-item:active {
+  transform: scale(0.95);
 }
 
-/* 圆环大小统一设置 - 中等尺寸(默认) */
+/* 基础圆环样式 */
 .progress-ring {
-  width: 130rpx;
-  height: 130rpx;
   position: relative;
-  border-radius: 50%;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  transition: transform 0.3s ease, width 0.3s ease, height 0.3s ease;
-  transform: rotate(-90deg);
-}
-
-.progress-ring:active {
-  transform: rotate(-90deg) scale(0.98);
-}
-
-/* 根据任务数量动态调整圆环大小 */
-/* 任务数少/时长长 - 显示大尺寸圆环 */
-.progress-ring.large {
   width: 160rpx;
   height: 160rpx;
-}
-
-/* 中大尺寸圆环 - 用于中等时长 */
-.progress-ring.medium-large {
-  width: 145rpx;
-  height: 145rpx;
-}
-
-/* 中等尺寸圆环 - 默认 */
-.progress-ring.medium {
-  width: 130rpx;
-  height: 130rpx;
-}
-
-/* 任务数多/时长短 - 显示小尺寸圆环 */
-.progress-ring.small {
-  width: 110rpx;
-  height: 110rpx;
+  border-radius: 50%;
+  margin-bottom: 10rpx;
+  transition: all 0.3s ease;
+  transform: rotate(-90deg);
 }
 
 /* 圆环背景 */
 .ring-bg {
   position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
   border-radius: 50%;
-  border: 5rpx solid rgba(238, 238, 238, 0.6);
-  box-shadow: inset 0 1rpx 3rpx rgba(0, 0, 0, 0.05);
+  border: 8rpx solid rgba(0, 0, 0, 0.05);
+  box-sizing: border-box;
 }
 
 /* 圆环进度条 */
 .ring-progress {
   position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
   border-radius: 50%;
-  border: 5rpx solid transparent;
+  border: 8rpx solid transparent;
   border-top-color: currentColor;
-  transition: all 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-  filter: drop-shadow(0 1rpx 2rpx rgba(0, 0, 0, 0.1));
+  box-sizing: border-box;
+  transition: transform 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
 /* 圆环内容 */
@@ -659,7 +650,6 @@
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%) rotate(90deg);
-  text-align: center;
   width: 100%;
   display: flex;
   flex-direction: column;
@@ -667,248 +657,89 @@
   justify-content: center;
 }
 
-/* 根据任务数量调整圆环内文字大小 */
 .ring-value {
-  font-size: 30rpx;
-  font-weight: 600;
-  color: #333;
-  display: block;
-  letter-spacing: -1rpx;
-  text-shadow: 0 1rpx 2rpx rgba(0, 0, 0, 0.05);
-  transition: font-size 0.3s ease;
-}
-
-.progress-ring.large .ring-value {
-  font-size: 36rpx;
-}
-
-.progress-ring.medium-large .ring-value {
   font-size: 34rpx;
-}
-
-.progress-ring.medium .ring-value {
-  font-size: 28rpx;
-}
-
-.progress-ring.small .ring-value {
-  font-size: 26rpx;
-}
-
-/* 完成标记尺寸调整 */
-.ring-complete {
-  font-size: 36rpx;
   font-weight: 600;
-  color: #333;
-  display: block;
-  letter-spacing: 1rpx;
-  animation: fade-in 0.5s ease-out;
+  color: var(--text-primary);
   transition: font-size 0.3s ease;
 }
 
-.progress-ring.large .ring-complete {
-  font-size: 42rpx;
+.ring-label {
+  font-size: 22rpx;
+  color: var(--text-secondary);
+  margin-top: 4rpx;
 }
 
-.progress-ring.medium-large .ring-complete {
-  font-size: 38rpx;
-}
-
-.progress-ring.medium .ring-complete {
-  font-size: 32rpx;
-}
-
-.progress-ring.small .ring-complete {
-  font-size: 30rpx;
-}
-
-/* 圆环颜色与文字颜色呼应 */
-.progress-ring.clock .ring-value,
-.progress-ring.clock .ring-complete {
-  color: #34A853;
-}
-
-.progress-ring.bag .ring-value,
-.progress-ring.bag .ring-complete {
-  color: #4285F4;
-}
-
-.progress-ring.study .ring-value,
-.progress-ring.study .ring-complete {
-  color: #FBBC05;
+.ring-item-label {
+  font-size: 24rpx;
+  color: var(--text-secondary);
+  margin-top: 8rpx;
+  font-weight: 500;
+  letter-spacing: 0.3rpx;
 }
 
 /* 圆环颜色 */
 .progress-ring.clock {
-  color: #34A853;
-}
-
-.progress-ring.clock .ring-progress {
-  border-top-color: #34A853;
-  filter: drop-shadow(0 0 2rpx rgba(52, 168, 83, 0.5));
-}
-
-.progress-ring.bag {
-  color: #4285F4;
-}
-
-.progress-ring.bag .ring-progress {
-  border-top-color: #4285F4;
-  filter: drop-shadow(0 0 2rpx rgba(66, 133, 244, 0.5));
+  color: var(--primary-color);
 }
 
 .progress-ring.study {
-  color: #FBBC05;
+  color: var(--success-color);
 }
 
-.progress-ring.study .ring-progress {
-  border-top-color: #FBBC05;
-  filter: drop-shadow(0 0 2rpx rgba(251, 188, 5, 0.5));
+.progress-ring.bag {
+  color: var(--warning-color);
 }
 
-/* 根据任务数量调整边框宽度 */
-.ring-bg, .ring-progress {
-  transition: border-width 0.3s ease;
+/* 圆环大小调整 */
+.progress-ring.large {
+  width: 160rpx;
+  height: 160rpx;
 }
 
-.progress-ring.large .ring-bg, 
-.progress-ring.large .ring-progress {
-  border-width: 6rpx;
+.progress-ring.medium {
+  width: 130rpx;
+  height: 130rpx;
 }
 
-.progress-ring.medium-large .ring-bg, 
-.progress-ring.medium-large .ring-progress {
-  border-width: 5rpx;
+.progress-ring.small {
+  width: 110rpx;
+  height: 110rpx;
 }
 
-.progress-ring.medium .ring-bg, 
-.progress-ring.medium .ring-progress {
-  border-width: 4rpx;
+/* 圆环悬停效果 */
+.ring-hover {
+  transform: rotate(-90deg) scale(0.95);
 }
 
-.progress-ring.small .ring-bg, 
-.progress-ring.small .ring-progress {
-  border-width: 3rpx;
+/* 修复进度显示 */
+.progress-ring[style*="--progress"] .ring-progress {
+  transform: rotate(calc(var(--progress) * 3.6deg));
 }
 
-/* 完成状态 */
-.progress-ring.completed {
-  animation: ring-complete 0.6s ease-out;
-}
-
+/* 已完成的圆环样式 */
 .progress-ring.completed .ring-progress {
   border-color: currentColor;
-  border-width: 5rpx;
-  border-style: solid;
-  -webkit-transform: none;
-  transform: none;
-}
-
-/* 圆环进度样式 - 修复闭环问题 */
-.progress-ring[style*="--progress"] .ring-progress {
-  border-color: transparent;
-  border-top-color: currentColor;
-  -webkit-transform: rotate(calc(var(--progress) * 3.6deg));
-  transform: rotate(calc(var(--progress) * 3.6deg));
-  -webkit-transition: border 0.3s, transform 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-  transition: border 0.3s, transform 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-}
-
-/* 100%特殊处理 */
-.progress-ring.completed .ring-progress,
-.progress-ring[style*="--progress: 100%"] .ring-progress {
-  border-width: 5rpx;
-  border-style: solid;
-  border-color: currentColor;
-  -webkit-transform: rotate(0deg);
   transform: rotate(0deg);
-  -webkit-transition: border 0.3s, transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-  transition: border 0.3s, transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
-/* 调整圆环标签文字大小 */
-.ring-item-label {
-  font-size: 24rpx;
-  color: var(--text-secondary);
-  margin-top: 6rpx;
-  font-weight: 500;
-  transition: font-size 0.3s ease, margin-top 0.3s ease;
+.ring-complete {
+  font-size: 36rpx;
+  color: var(--success-color);
+  font-weight: 600;
 }
 
-.large .ring-item-label {
-  font-size: 26rpx;
-  margin-top: 8rpx;
-}
-
-.medium-large .ring-item-label {
-  font-size: 24rpx;
-  margin-top: 4rpx;
-}
-
-.medium .ring-item-label {
-  font-size: 22rpx;
-  margin-top: 4rpx;
-}
-
-.small .ring-item-label {
-  font-size: 22rpx;
-  margin-top: 4rpx;
-}
-
-/* 圆环点击效果 */
-.ring-hover {
-  transform: rotate(-90deg) scale(0.95) !important;
-  transition: all 0.2s !important;
-}
-
-.ring-hover .ring-bg {
-  box-shadow: inset 0 2rpx 5rpx rgba(0, 0, 0, 0.1);
-}
-
-.ring-hover .ring-progress {
-  filter: brightness(1.1) drop-shadow(0 0 3rpx rgba(0, 0, 0, 0.15));
-}
-
-/* 为小屏幕设备优化圆环大小 */
-@media screen and (max-width: 320px) {
-  .progress-ring {
-    width: 120rpx;
-    height: 120rpx;
-  }
-  
-  .ring-value {
-    font-size: 28rpx;
-  }
-  
-  .ring-complete {
-    font-size: 32rpx;
-  }
-  
-  .ring-item-label {
-    font-size: 22rpx;
-  }
-}
-
-/* 为竖屏模式稍微调整间距 */
-@media screen and (orientation: portrait) {
-  .rings-row {
-    padding: 0 10rpx;
-  }
-}
-
-/* 横屏模式调整 */
+/* 横屏模式适配 */
 @media screen and (orientation: landscape) {
   .progress-rings-container {
-    padding: 8rpx 12rpx;
     flex-direction: row;
-    align-items: center;
+    padding: 15rpx;
   }
   
   .rings-title {
     margin-bottom: 0;
-    margin-right: 12rpx;
-    text-align: left;
+    margin-right: 15rpx;
     width: 20%;
-    font-size: 24rpx;
   }
   
   .rings-row {
@@ -920,57 +751,14 @@
     height: 140rpx;
   }
   
-  .progress-ring.medium-large {
+  .progress-ring.medium {
     width: 120rpx;
     height: 120rpx;
   }
   
-  .progress-ring.medium {
+  .progress-ring.small {
     width: 100rpx;
     height: 100rpx;
-  }
-  
-  .progress-ring.small {
-    width: 80rpx;
-    height: 80rpx;
-  }
-  
-  /* 横屏模式下减小边框粗细 */
-  .progress-ring.large .ring-bg, 
-  .progress-ring.large .ring-progress {
-    border-width: 5rpx;
-  }
-  
-  .progress-ring.medium-large .ring-bg, 
-  .progress-ring.medium-large .ring-progress {
-    border-width: 4rpx;
-  }
-  
-  .progress-ring.medium .ring-bg, 
-  .progress-ring.medium .ring-progress {
-    border-width: 3rpx;
-  }
-  
-  .progress-ring.small .ring-bg, 
-  .progress-ring.small .ring-progress {
-    border-width: 2rpx;
-  }
-  
-  /* 调整文字大小 */
-  .progress-ring.large .ring-value {
-    font-size: 30rpx;
-  }
-  
-  .progress-ring.medium-large .ring-value {
-    font-size: 28rpx;
-  }
-  
-  .progress-ring.medium .ring-value {
-    font-size: 24rpx;
-  }
-  
-  .progress-ring.small .ring-value {
-    font-size: 22rpx;
   }
 }
 

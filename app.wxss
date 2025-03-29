@@ -3,7 +3,7 @@ page {
   height: 100%;
   font-size: 28rpx;
   line-height: 1.6;
-  background-color: #F8F9FA;
+  background: linear-gradient(to bottom, #F8F9FA, #F3F6FA);
   color: #333333;
   font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica, 'PingFang SC', 'Microsoft YaHei', Arial, sans-serif;
   
@@ -12,7 +12,7 @@ page {
   --primary-color: #4285F4;
   --primary-light: #E3F2FD;
   --primary-dark: #1A73E8;
-  --success-color: #34A853;
+  --success-color: #36a853; /* 微调绿色，稍柔和 */
   --warning-color: #FBBC05;
   --error-color: #EA4335;
   
@@ -32,9 +32,9 @@ page {
   --border-medium: #DDDDDD;
   
   /* 阴影样式（统一使用rpx） */
-  --shadow-light: 0 2rpx 8rpx rgba(0, 0, 0, 0.03);
-  --shadow-medium: 0 4rpx 12rpx rgba(66, 133, 244, 0.2);
-  --shadow-dark: 0 8rpx 16rpx rgba(0, 0, 0, 0.08);
+  --shadow-light: 0 2rpx 8rpx rgba(0, 0, 0, 0.04), 0 4rpx 16rpx rgba(0, 0, 0, 0.02);
+  --shadow-medium: 0 4rpx 12rpx rgba(66, 133, 244, 0.15), 0 6rpx 20rpx rgba(0, 0, 0, 0.03);
+  --shadow-dark: 0 8rpx 16rpx rgba(0, 0, 0, 0.08), 0 12rpx 24rpx rgba(0, 0, 0, 0.04);
   
   /* 字体大小 */
   --font-size-xs: 24rpx;
@@ -543,11 +543,17 @@ page {
 
 /* 卡片容器 */
 .card {
-  background-color: var(--bg-surface);
+  background: linear-gradient(to bottom, #ffffff, #fafbfd);
   border-radius: var(--radius-lg);
   padding: var(--spacing-md);
   margin-bottom: var(--spacing-md);
   box-shadow: var(--shadow-light);
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.card:active {
+  transform: scale(0.985);
+  box-shadow: 0 1rpx 4rpx rgba(0, 0, 0, 0.03);
 }
 
 /* 按钮样式 */
@@ -617,4 +623,66 @@ page {
 .z-20 { z-index: 20; }
 .z-50 { z-index: 50; }
 .z-100 { z-index: 100; }
-.z-999 { z-index: 999; } 
+.z-999 { z-index: 999; }
+
+/* 添加动画效果 */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10rpx);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(10rpx);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease forwards;
+}
+
+.animate-fadeOut {
+  animation: fadeOut 0.3s ease forwards;
+}
+
+.animate-scaleIn {
+  animation: scaleIn 0.3s ease forwards;
+}
+
+.animate-pulse {
+  animation: pulse 1s ease-in-out;
+} 
