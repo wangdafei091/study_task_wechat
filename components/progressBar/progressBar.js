@@ -51,10 +51,10 @@ Component({
     chickSpeaking: false,   // 小鸡是否在说话
     gradientStage: 0,       // 当前渐变阶段: 0-3
     stageColors: [
-      'linear-gradient(to right, #6dabff, #4285F4)', // 0-25% 蓝色
-      'linear-gradient(to right, #4fb06d, #34A853)', // 25-50% 绿色
-      'linear-gradient(to right, #fbbc04, #f8a527)', // 50-75% 橙色
-      'linear-gradient(to right, #b56ffa, #a142f4)'  // 75-100% 紫色
+      'linear-gradient(to right, #5DADE2, #3498DB)', // 0-25% 天蓝色
+      'linear-gradient(to right, #58D68D, #2ECC71)', // 25-50% 翠绿色
+      'linear-gradient(to right, #F4D03F, #F39C12)', // 50-75% 金黄色
+      'linear-gradient(to right, #D7BDE2, #9B59B6)'  // 75-100% 淡紫色
     ],
     stageTitles: ['起步', '前进', '冲刺', '终点'],
     nodeReached: false,     // 是否刚刚到达新阶段
@@ -74,6 +74,7 @@ Component({
     currentEncouragement: '', // 当前鼓励语
     tapsCount: 0,            // 点击次数
     chickAnimation: '',      // 特殊动画类型
+    isComplete: false,       // 是否已完成
   },
 
   /**
@@ -92,6 +93,11 @@ Component({
       
       // 是否刚到达新阶段
       const isNewStage = stage > prevStage;
+      
+      // 检查是否完成
+      const wasComplete = this.data.isComplete;
+      const isComplete = percentage >= 100;
+      const justCompleted = isComplete && !wasComplete;
       
       // 更新小鸡状态和外观
       let chickState = 'walking';
@@ -121,12 +127,19 @@ Component({
         chickState: chickState,
         gradientStage: stage,
         nodeReached: isNewStage,
-        currentStageTitle: this.data.stageTitles[stage]
+        currentStageTitle: this.data.stageTitles[stage],
+        isComplete: isComplete
       });
       
       // 如果刚到达新阶段，显示提示
       if (isNewStage) {
         this.showStageHint();
+      }
+      
+      // 如果刚刚完成
+      if (justCompleted) {
+        this.triggerEvent('complete'); // 触发完成事件
+        this.showCompletionMessage();
       }
     }
   },
@@ -226,6 +239,48 @@ Component({
           nodeReached: false
         });
       }, 3000);
+    },
+    
+    // 显示完成信息
+    showCompletionMessage: function() {
+      // 使用鼓励语气泡显示完成信息
+      const emoticons = ['🎉', '🎊', '🏆', '⭐', '👑', '💎'];
+      const randomEmoticon = emoticons[Math.floor(Math.random() * emoticons.length)];
+      
+      const completionMessage = `${randomEmoticon} 太棒了！任务完成！${randomEmoticon}`;
+      
+      this.setData({ 
+        chickSpeaking: true,
+        currentEncouragement: completionMessage,
+        nodeReached: true
+      });
+      
+      // 让小鸡做一个特殊的庆祝动画
+      setTimeout(() => {
+        this.setData({
+          chickAnimation: 'spin'
+        });
+        
+        setTimeout(() => {
+          this.setData({
+            chickAnimation: 'flip'
+          });
+          
+          setTimeout(() => {
+            this.setData({
+              chickAnimation: 'jump',
+              chickSpeaking: false,
+              nodeReached: false
+            });
+            
+            setTimeout(() => {
+              this.setData({
+                chickAnimation: ''
+              });
+            }, 800);
+          }, 800);
+        }, 800);
+      }, 1000);
     }
   }
 }) 

@@ -2,7 +2,7 @@
 <view class="progress-container">
   <view class="progress-wrapper">
     <!-- 主进度条 -->
-    <view class="progress-bar" style="height: {{barHeight}}rpx; background-color: {{backgroundColor}}; border-radius: {{borderRadius}}rpx;">
+    <view class="progress-bar {{isComplete ? 'progress-complete' : ''}}" style="height: {{barHeight}}rpx; background-color: {{backgroundColor}}; border-radius: {{borderRadius}}rpx;">
       <!-- 阶段节点标记 -->
       <block wx:if="{{useGradient}}">
         <view class="stage-node node-25" data-stage="1"><view class="node-dot"></view></view>
@@ -15,12 +15,14 @@
             style="width: {{percentage}}%; height: {{barHeight}}rpx; border-radius: {{borderRadius}}rpx; background: {{stageColors[gradientStage]}};">
       </view>
       
-      <!-- 终点图标 -->
-      <view class="goal-icon">🎁</view>
+      <!-- 终点区域 -->
+      <view class="goal-area {{isComplete ? 'goal-complete' : ''}}">
+        <view class="goal-icon">🎁</view>
+      </view>
       
       <!-- 小黄鸡角色 -->
       <view wx:if="{{showChick}}" 
-            class="chick-character {{chickState}} {{chickJumping ? 'jumping' : ''}} {{chickAnimation ? chickAnimation : ''}}" 
+            class="chick-character {{chickState}} {{chickAnimation ? chickAnimation : ''}}" 
             style="left: {{percentage}}%;" 
             bindtap="onTapChick">
         
@@ -37,5 +39,11 @@
       </view>
     </view>
   </view>
-  <view class="progress-text" wx:if="{{showText}}">{{current}}/{{total}}</view>
+  
+  <!-- 进度文本 -->
+  <view class="progress-text" wx:if="{{showText}}">
+    <text class="progress-current">{{current}}</text>
+    <text class="progress-separator">/</text>
+    <text class="progress-total">{{total}}</text>
+  </view>
 </view> 

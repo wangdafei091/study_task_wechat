@@ -445,6 +445,41 @@ Page({
     }
   },
   
+  // 奖励完成事件处理
+  onRewardComplete: function() {
+    // 显示奖励完成祝贺
+    wx.showToast({
+      title: '🎉 恭喜获得奖励！',
+      icon: 'none',
+      duration: 2000
+    });
+    
+    // 震动效果增强体验
+    setTimeout(() => {
+      if (wx.vibrateShort) {
+        wx.vibrateShort({
+          type: 'medium'
+        });
+      }
+    }, 300);
+    
+    // 可以选择性实现奖励领取逻辑
+    setTimeout(() => {
+      wx.showModal({
+        title: '奖励已到达！',
+        content: '你已完成今日任务目标，可以领取设置的奖励啦！',
+        confirmText: '太棒了',
+        showCancel: false,
+        success: (res) => {
+          if (res.confirm) {
+            console.log('用户确认领取奖励');
+            // 这里可以添加奖励领取逻辑
+          }
+        }
+      });
+    }, 1000);
+  },
+  
   // 执行搜索
   performSearch: function() {
     const query = this.data.searchQuery.toLowerCase().trim();
