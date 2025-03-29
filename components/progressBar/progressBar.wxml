@@ -16,8 +16,13 @@
       </view>
       
       <!-- 终点区域 -->
-      <view class="goal-area {{isComplete ? 'goal-complete' : ''}}">
+      <view class="goal-area {{isComplete ? 'goal-complete' : ''}}" wx:if="{{!rewardImage}}">
         <view class="goal-icon">🎁</view>
+      </view>
+      
+      <!-- 使用自定义奖品图片 -->
+      <view class="goal-area-image {{isComplete ? 'goal-complete' : ''}}" wx:else>
+        <image class="reward-image" src="{{rewardImage}}" mode="aspectFill"></image>
       </view>
       
       <!-- 小黄鸡角色 -->
@@ -38,12 +43,5 @@
         </view>
       </view>
     </view>
-  </view>
-  
-  <!-- 进度文本 -->
-  <view class="progress-text" wx:if="{{showText}}">
-    <text class="progress-current">{{current}}</text>
-    <text class="progress-separator">/</text>
-    <text class="progress-total">{{total}}</text>
   </view>
 </view> 

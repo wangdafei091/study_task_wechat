@@ -13,7 +13,7 @@ Component({
     },
     showText: {
       type: Boolean,
-      value: true
+      value: false
     },
     barHeight: {
       type: Number,
@@ -38,6 +38,14 @@ Component({
     useGradient: {
       type: Boolean,
       value: true
+    },
+    rewardImage: {
+      type: String,
+      value: ''
+    },
+    rewardName: {
+      type: String,
+      value: '奖品'
     }
   },
 
@@ -155,13 +163,19 @@ Component({
         return;
       }
       
-      // 随机选择一条鼓励语
-      const randomIndex = Math.floor(Math.random() * this.data.encouragements.length);
-      const encouragement = this.data.encouragements[randomIndex];
-      
       // 根据点击次数增加不同的动画效果
       const tapsCount = this.data.tapsCount + 1;
       let animation = '';
+      let encouragement = '';
+      
+      // 如果已经完成，固定显示鼓励语
+      if (this.data.isComplete) {
+        encouragement = "是不是很棒～";
+      } else {
+        // 随机选择一条鼓励语
+        const randomIndex = Math.floor(Math.random() * this.data.encouragements.length);
+        encouragement = this.data.encouragements[randomIndex];
+      }
       
       if (tapsCount % 10 === 0) {
         // 每10次点击有特殊动画
@@ -243,11 +257,8 @@ Component({
     
     // 显示完成信息
     showCompletionMessage: function() {
-      // 使用鼓励语气泡显示完成信息
-      const emoticons = ['🎉', '🎊', '🏆', '⭐', '👑', '💎'];
-      const randomEmoticon = emoticons[Math.floor(Math.random() * emoticons.length)];
-      
-      const completionMessage = `${randomEmoticon} 太棒了！任务完成！${randomEmoticon}`;
+      // 使用固定的鼓励语
+      const completionMessage = "Oh,yeah!成功啦！";
       
       this.setData({ 
         chickSpeaking: true,
