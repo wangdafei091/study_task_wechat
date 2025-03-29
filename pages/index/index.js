@@ -73,7 +73,8 @@ Page({
       clock: 0,
       bag: 0,
       study: 0
-    }
+    },
+    ringSize: 'medium' // 新增圆环尺寸类名
   },
   
   onLoad: function () {
@@ -133,6 +134,9 @@ Page({
 
     // 更新统计数据
     this.updateStats();
+    
+    // 根据任务数量调整圆环大小
+    this.adjustRingSize();
   },
 
   // 更新统计数据
@@ -489,5 +493,38 @@ Page({
     wx.navigateTo({
       url: `/pages/task/task?id=${taskId}&edit=1`
     })
+  },
+
+  // 根据任务数量动态调整圆环大小
+  adjustRingSize: function() {
+    const tasks = this.data.tasks;
+    
+    // 获取各类型任务数量
+    const taskCounts = {
+      clock: tasks.filter(t => t.type === 'clock').length,
+      bag: tasks.filter(t => t.type === 'bag').length,
+      study: tasks.filter(t => t.type === 'study').length
+    };
+    
+    // 计算总任务数
+    const totalTasks = tasks.length;
+    
+    // 根据任务数量确定圆环大小
+    let ringSize;
+    if (totalTasks <= 3) {
+      // 少量任务显示大尺寸圆环
+      ringSize = 'large';
+    } else if (totalTasks <= 8) {
+      // 中等数量任务显示标准尺寸
+      ringSize = 'medium';
+    } else {
+      // 大量任务显示小尺寸
+      ringSize = 'small';
+    }
+    
+    // 设置圆环尺寸类名
+    this.setData({
+      ringSize: ringSize
+    });
   }
 }) 

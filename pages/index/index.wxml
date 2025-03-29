@@ -20,7 +20,7 @@
   </view>
 
   <!-- 进度圆环区域 -->
-  <view class="progress-rings-container">
+  <view class="progress-rings-container {{ringSize}}">
     <!-- 共享标题区域 -->
     <view class="rings-title">任务完成进度</view>
     
@@ -28,7 +28,7 @@
     <view class="rings-row">
       <!-- 生活习惯圆环 -->
       <view class="ring-item">
-        <view class="progress-ring clock {{taskProgress.clock === 100 ? 'completed' : ''}}" 
+        <view class="progress-ring clock {{taskProgress.clock === 100 ? 'completed' : ''}} {{ringSize}}" 
               hover-class="ring-hover"
               bindtap="onRingTap"
               data-type="clock"
@@ -49,7 +49,7 @@
       
       <!-- 整理收纳圆环 -->
       <view class="ring-item">
-        <view class="progress-ring bag {{taskProgress.bag === 100 ? 'completed' : ''}}" 
+        <view class="progress-ring bag {{taskProgress.bag === 100 ? 'completed' : ''}} {{ringSize}}" 
               hover-class="ring-hover"
               bindtap="onRingTap"
               data-type="bag"
@@ -70,7 +70,7 @@
       
       <!-- 学习任务圆环 -->
       <view class="ring-item">
-        <view class="progress-ring study {{taskProgress.study === 100 ? 'completed' : ''}}" 
+        <view class="progress-ring study {{taskProgress.study === 100 ? 'completed' : ''}} {{ringSize}}" 
               hover-class="ring-hover"
               bindtap="onRingTap"
               data-type="study"
