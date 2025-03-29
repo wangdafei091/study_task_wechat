@@ -8,33 +8,59 @@ page {
   font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica, 'PingFang SC', 'Microsoft YaHei', Arial, sans-serif;
   
   /* CSS变量定义，统一样式单位为rpx */
-  /* 颜色系统 */
+  /* 优化色彩系统 */
   --primary-color: #4285F4;
-  --primary-light: #E3F2FD;
-  --primary-dark: #1A73E8;
-  --success-color: #36a853; /* 微调绿色，稍柔和 */
+  --primary-color-light: #5A96F5;
+  --primary-color-dark: #3B76DB;
+  --primary-bg-light: rgba(66, 133, 244, 0.08);
+  --primary-bg-medium: rgba(66, 133, 244, 0.12);
+  
+  --success-color: #36a853;
+  --success-color-light: #42B561;
+  --success-color-dark: #2E9046;
+  --success-bg-light: rgba(54, 168, 83, 0.08);
+  
   --warning-color: #FBBC05;
+  --warning-color-light: #FDC82E;
+  --warning-color-dark: #E8AB00;
+  --warning-bg-light: rgba(251, 188, 5, 0.08);
+  
   --error-color: #EA4335;
+  --error-color-light: #F05749;
+  --error-color-dark: #D53A2D;
   
   /* 文字颜色 */
   --text-primary: #333333;
   --text-secondary: #666666;
+  --text-tertiary: #888888;
   --text-hint: #999999;
   --text-light: #FFFFFF;
   
   /* 背景色 */
   --bg-primary: #F8F9FA;
+  --bg-secondary: #F3F6FA;
   --bg-surface: #FFFFFF;
   --bg-card: #FFFFFF;
+  --bg-disabled: #F5F5F5;
   
   /* 边框样式 */
   --border-light: #EEEEEE;
   --border-medium: #DDDDDD;
+  --border-focus: rgba(66, 133, 244, 0.4);
+  
+  /* 统一圆角半径 */
+  --radius-xs: 6rpx;
+  --radius-sm: 8rpx;
+  --radius-md: 12rpx;
+  --radius-lg: 16rpx;
+  --radius-xl: 24rpx;
+  --radius-circle: 50%;
   
   /* 阴影样式（统一使用rpx） */
   --shadow-light: 0 2rpx 8rpx rgba(0, 0, 0, 0.04), 0 4rpx 16rpx rgba(0, 0, 0, 0.02);
-  --shadow-medium: 0 4rpx 12rpx rgba(66, 133, 244, 0.15), 0 6rpx 20rpx rgba(0, 0, 0, 0.03);
-  --shadow-dark: 0 8rpx 16rpx rgba(0, 0, 0, 0.08), 0 12rpx 24rpx rgba(0, 0, 0, 0.04);
+  --shadow-medium: 0 4rpx 12rpx rgba(66, 133, 244, 0.1), 0 6rpx 20rpx rgba(0, 0, 0, 0.03);
+  --shadow-dark: 0 8rpx 16rpx rgba(0, 0, 0, 0.06), 0 12rpx 24rpx rgba(0, 0, 0, 0.04);
+  --shadow-focus: 0 0 0 3rpx rgba(66, 133, 244, 0.2);
   
   /* 字体大小 */
   --font-size-xs: 24rpx;
@@ -42,12 +68,13 @@ page {
   --font-size-md: 28rpx;
   --font-size-lg: 32rpx;
   --font-size-xl: 36rpx;
+  --font-size-xxl: 44rpx;
   
-  /* 圆角大小 */
-  --radius-sm: 8rpx;
-  --radius-md: 12rpx;
-  --radius-lg: 16rpx;
-  --radius-circle: 50%;
+  /* 字重 */
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
   
   /* 间距 */
   --spacing-xs: 8rpx;
@@ -548,7 +575,7 @@ page {
   padding: var(--spacing-md);
   margin-bottom: var(--spacing-md);
   box-shadow: var(--shadow-light);
-  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+  transition: all var(--transition-fast);
 }
 
 .card:active {
@@ -556,17 +583,57 @@ page {
   box-shadow: 0 1rpx 4rpx rgba(0, 0, 0, 0.03);
 }
 
-/* 按钮样式 */
+/* 按钮基础样式 */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-sm) var(--spacing-lg);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-medium);
+  text-align: center;
+  transition: all var(--transition-fast);
+  position: relative;
+  overflow: hidden;
+}
+
+/* 主要按钮样式 */
 .btn-primary {
   background-color: var(--primary-color);
   color: var(--text-light);
-  border-radius: var(--radius-sm);
-  padding: var(--spacing-sm) var(--spacing-lg);
-  font-size: var(--font-size-md);
-  line-height: 1.6;
-  text-align: center;
 }
 
+.btn-primary:active {
+  background-color: var(--primary-color-dark);
+  transform: scale(0.98);
+}
+
+/* 次要按钮样式 */
+.btn-secondary {
+  background-color: var(--primary-bg-light);
+  color: var(--primary-color);
+}
+
+.btn-secondary:active {
+  background-color: var(--primary-bg-medium);
+  transform: scale(0.98);
+}
+
+/* 按钮大小 */
+.btn-small {
+  padding: 10rpx 20rpx;
+  font-size: var(--font-size-sm);
+  border-radius: var(--radius-sm);
+}
+
+.btn-large {
+  padding: var(--spacing-md) var(--spacing-xl);
+  font-size: var(--font-size-lg);
+  border-radius: var(--radius-lg);
+}
+
+/* 圆形按钮 */
 .btn-circle {
   width: 100rpx;
   height: 100rpx;
@@ -578,6 +645,12 @@ page {
   justify-content: center;
   font-size: 50rpx;
   box-shadow: 0 4rpx 16rpx rgba(66, 133, 244, 0.4);
+  transition: all var(--transition-fast);
+}
+
+.btn-circle:active {
+  transform: scale(0.95) translateY(2rpx);
+  box-shadow: 0 2rpx 8rpx rgba(66, 133, 244, 0.3);
 }
 
 /* 适配全面屏底部安全区域 */

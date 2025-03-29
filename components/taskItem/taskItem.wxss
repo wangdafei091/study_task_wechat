@@ -2,28 +2,187 @@
 .task-item {
   display: flex;
   align-items: center;
+  padding: 24rpx 20rpx;
   margin-bottom: 20rpx;
-  padding: 24rpx;
+  background: linear-gradient(to bottom, #ffffff, #fafbfd);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-light);
+  position: relative;
+  transition: all var(--transition-fast);
+  border: 1rpx solid rgba(0, 0, 0, 0.02);
+  overflow: hidden;
+}
+
+.task-item:active {
+  transform: scale(0.985);
+  box-shadow: 0 1rpx 4rpx rgba(0, 0, 0, 0.03);
+}
+
+.task-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 10rpx;
+  bottom: 10rpx;
+  width: 6rpx;
+  border-radius: 6rpx;
+  transition: all var(--transition-fast);
+}
+
+.task-item.type-clock::before {
+  background-color: var(--primary-color);
+}
+
+.task-item.type-bag::before {
+  background-color: var(--warning-color);
+}
+
+.task-item.type-study::before {
+  background-color: var(--success-color);
+}
+
+.task-checkbox {
+  width: 42rpx;
+  height: 42rpx;
+  border-radius: var(--radius-circle);
+  border: 2rpx solid #DDDDDD;
+  margin-right: 20rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background-color: #FFFFFF;
+  transition: all var(--transition-fast);
+  position: relative;
+}
+
+.task-item:active .task-checkbox {
+  transform: scale(0.9);
+}
+
+.task-checkbox.checked {
+  background-color: var(--success-color);
+  border-color: var(--success-color);
+}
+
+.checkbox-icon {
+  color: #FFFFFF;
+  font-size: 26rpx;
+  font-weight: var(--font-weight-bold);
+  opacity: 0;
+  transform: scale(0.5);
+  transition: all var(--transition-fast);
+}
+
+.checkbox-icon.checked {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.task-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.task-title {
+  font-size: var(--font-size-md);
+  color: var(--text-primary);
+  margin-bottom: 6rpx;
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: all var(--transition-fast);
+}
+
+.task-item.completed .task-title {
+  color: var(--text-tertiary);
+  text-decoration: line-through;
+}
+
+.task-info {
+  display: flex;
+  align-items: center;
+  font-size: var(--font-size-xs);
+  color: var(--text-hint);
+}
+
+.task-type {
+  margin-right: 12rpx;
+  padding: 4rpx 10rpx;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  background-color: var(--bg-disabled);
+  color: var(--text-secondary);
+}
+
+.task-type.type-clock {
+  background-color: var(--primary-bg-light);
+  color: var(--primary-color);
+}
+
+.task-type.type-bag {
+  background-color: var(--warning-bg-light);
+  color: var(--warning-color);
+}
+
+.task-type.type-study {
+  background-color: var(--success-bg-light);
+  color: var(--success-color);
+}
+
+.task-actions {
+  display: flex;
+  align-items: center;
+}
+
+.task-action {
+  width: 50rpx;
+  height: 50rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 10rpx;
+  border-radius: var(--radius-circle);
+  transition: all var(--transition-fast);
+  color: var(--text-hint);
+}
+
+.task-action:active {
+  background-color: rgba(0, 0, 0, 0.05);
+  transform: scale(0.92);
+}
+
+.task-item.completed {
+  opacity: 0.8;
+  background: linear-gradient(to bottom, #fafafa, #f8f8f8);
 }
 
 .task-status {
   margin-right: 16rpx;
-}
-
-.task-checkbox {
-  width: 40rpx;
-  height: 40rpx;
-  border: 2rpx solid #CCCCCC;
-  border-radius: 50%;
   display: flex;
   align-items: center;
-  justify-content: center;
-  color: #FFFFFF;
 }
 
-.completed .task-checkbox {
-  background: #34A853;
-  border-color: #34A853;
+.task-status-text {
+  font-size: 24rpx;
+  color: #34A853;
+  margin-left: 10rpx;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 0.2;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
 }
 
 .task-icon {
@@ -51,16 +210,6 @@
 
 .study {
   background: #34A853;
-}
-
-.task-content {
-  flex: 1;
-}
-
-.task-title {
-  font-size: 30rpx;
-  color: #333333;
-  margin-bottom: 8rpx;
 }
 
 .completed-text {

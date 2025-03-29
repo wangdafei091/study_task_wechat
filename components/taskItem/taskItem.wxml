@@ -1,34 +1,25 @@
 <!--components/taskItem/taskItem.wxml-->
-<view class="task-item card" catchtap="onTaskTap">
-  <view class="task-status {{task.status === 1 ? 'completed' : ''}}">
-    <view class="task-checkbox" catchtap="onCheckboxTap" hover-class="checkbox-hover">
-      <text wx:if="{{task.status === 1}}" class="iconfont icon-check">✓</text>
-    </view>
+<view class="task-item {{task.status == 1 ? 'completed' : ''}} type-{{task.type}}" bindtap="onTaskTap">
+  <!-- 任务勾选框 -->
+  <view class="task-checkbox {{task.status == 1 ? 'checked' : ''}}" catchtap="onCheckboxTap">
+    <text class="checkbox-icon {{task.status == 1 ? 'checked' : ''}}">✓</text>
   </view>
-  <view class="task-icon">
-    <block wx:if="{{task.type === 'clock'}}">
-      <view class="icon-circle clock">
-        <text class="iconfont">{{icons.clock}}</text>
-      </view>
-    </block>
-    <block wx:elif="{{task.type === 'bag'}}">
-      <view class="icon-circle bag">
-        <text class="iconfont">{{icons.bag}}</text>
-      </view>
-    </block>
-    <block wx:elif="{{task.type === 'study'}}">
-      <view class="icon-circle study">
-        <text class="iconfont">{{icons.study}}</text>
-      </view>
-    </block>
-  </view>
+  
+  <!-- 任务内容 -->
   <view class="task-content">
-    <view class="task-title {{task.status === 1 ? 'completed-text' : ''}}">{{task.title}}</view>
-    <view class="task-image" wx:if="{{task.hasImage}}">
-      <text class="iconfont icon-image">🖼️</text>
+    <view class="task-title">{{task.title}}</view>
+    <view class="task-info">
+      <view class="task-type type-{{task.type}}">
+        <block wx:if="{{task.type == 'clock'}}">习惯</block>
+        <block wx:elif="{{task.type == 'bag'}}">整理</block>
+        <block wx:elif="{{task.type == 'study'}}">学习</block>
+      </view>
+      <text wx:if="{{task.duration}}" class="task-duration">{{task.duration}}分钟</text>
     </view>
   </view>
-  <view class="task-edit" catchtap="onEditTap">
-    <text class="iconfont icon-edit">✎</text>
+  
+  <!-- 任务操作 -->
+  <view class="task-actions">
+    <view class="task-action" catchtap="onEditTap">✎</view>
   </view>
 </view> 
