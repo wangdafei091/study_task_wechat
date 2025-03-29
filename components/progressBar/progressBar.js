@@ -74,8 +74,6 @@ Component({
     currentEncouragement: '', // 当前鼓励语
     tapsCount: 0,            // 点击次数
     chickAnimation: '',      // 特殊动画类型
-    emoticonShowing: false,  // 表情显示
-    currentEmoticon: ''      // 当前表情
   },
 
   /**
@@ -107,13 +105,12 @@ Component({
         chickState = 'walking';
         setTimeout(() => {
           this.setData({ 
-            chickJumping: true,
+            chickJumping: false, // 不再使用jumping类，避免动画冲突
             chickAnimation: 'stageup'
           });
           setTimeout(() => {
             this.setData({ 
-              chickJumping: false,
-              chickAnimation: ''
+              chickAnimation: '' // 只需清除chickAnimation
             });
           }, 800);
         }, 100);
@@ -130,7 +127,6 @@ Component({
       // 如果刚到达新阶段，显示提示
       if (isNewStage) {
         this.showStageHint();
-        this.showRandomEmoticon();
       }
     }
   },
@@ -141,6 +137,11 @@ Component({
   methods: {
     // 点击小鸡时触发的动作
     onTapChick: function() {
+      // 如果当前已有动画在执行，不触发新动画
+      if (this.data.chickAnimation || this.data.chickJumping) {
+        return;
+      }
+      
       // 随机选择一条鼓励语
       const randomIndex = Math.floor(Math.random() * this.data.encouragements.length);
       const encouragement = this.data.encouragements[randomIndex];
@@ -163,7 +164,7 @@ Component({
       }
       
       this.setData({
-        chickJumping: true,
+        chickJumping: false, // 确保不会同时应用两种跳跃动画
         chickSpeaking: true,
         currentEncouragement: encouragement,
         tapsCount: tapsCount,
@@ -173,7 +174,6 @@ Component({
       // 设置动画结束后恢复状态
       setTimeout(() => {
         this.setData({
-          chickJumping: false,
           chickAnimation: ''
         });
       }, 800);
@@ -207,32 +207,25 @@ Component({
     
     // 显示阶段提示
     showStageHint: function() {
-      // 使用鼓励语气泡显示阶段提示
-      const stageMessage = `进入${this.data.currentStageTitle}阶段啦！`;
-      
-      this.setData({ 
-        chickSpeaking: true,
-        currentEncouragement: stageMessage
-      });
-      
-      setTimeout(() => {
-        this.setData({ chickSpeaking: false });
-      }, 3000);
-    },
-    
-    // 显示随机表情
-    showRandomEmoticon: function() {
+      // 选择一个表情符号添加到阶段提示语前
       const emoticons = ['❤️', '✨', '🎉', '👏', '🌟', '💪'];
       const randomEmoticon = emoticons[Math.floor(Math.random() * emoticons.length)];
       
-      this.setData({
-        emoticonShowing: true,
-        currentEmoticon: randomEmoticon
+      // 使用鼓励语气泡显示阶段提示
+      const stageMessage = `${randomEmoticon} 进入${this.data.currentStageTitle}阶段啦！`;
+      
+      this.setData({ 
+        chickSpeaking: true,
+        currentEncouragement: stageMessage,
+        nodeReached: true
       });
       
       setTimeout(() => {
-        this.setData({ emoticonShowing: false });
-      }, 1500);
+        this.setData({ 
+          chickSpeaking: false,
+          nodeReached: false
+        });
+      }, 3000);
     }
   }
 }) 

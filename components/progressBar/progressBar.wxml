@@ -24,11 +24,6 @@
             style="left: {{percentage}}%;" 
             bindtap="onTapChick">
         
-        <!-- 小鸡表情 -->
-        <view class="chick-emoticon {{emoticonShowing ? 'show' : ''}}">
-          {{currentEmoticon}}
-        </view>
-        
         <!-- 小鸡角色 -->
         <view class="chick-wrapper">
           <!-- 基础小鸡 -->
@@ -36,7 +31,7 @@
         </view>
         
         <!-- 鼓励语气泡 -->
-        <view class="encouragement-bubble {{chickSpeaking ? 'show' : ''}}">
+        <view class="encouragement-bubble {{chickSpeaking ? 'show' : ''}} {{nodeReached ? 'highlight' : ''}}">
           <text>{{currentEncouragement}}</text>
         </view>
       </view>

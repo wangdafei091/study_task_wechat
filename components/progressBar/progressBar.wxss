@@ -70,9 +70,11 @@
 .chick-character {
   position: absolute;
   bottom: -16rpx;
-  transform: translateX(-50%);
+  left: 0;
+  margin-left: 0;
   z-index: 10;
   transition: left 0.5s cubic-bezier(0.22, 0.61, 0.36, 1);
+  transform-origin: bottom center;
 }
 
 .chick-wrapper {
@@ -80,6 +82,7 @@
   display: flex;
   justify-content: center;
   align-items: center;
+  transform: translateX(-50%);
 }
 
 .chick-emoji {
@@ -90,25 +93,7 @@
   position: relative;
 }
 
-/* 表情泡泡 */
-.chick-emoticon {
-  position: absolute;
-  top: -20rpx;
-  right: -10rpx;
-  font-size: 24rpx;
-  opacity: 0;
-  transform: scale(0);
-  transition: all 0.3s;
-  z-index: 11;
-}
-
-.chick-emoticon.show {
-  opacity: 1;
-  transform: scale(1);
-  animation: pulsate 1s ease-in-out;
-}
-
-/* 小黄鸡状态动画 */
+/* 小黄鸡状态动画 - 只应用于emoji而非整个角色 */
 .chick-character.walking .chick-emoji {
   animation: chickWalk 1.2s infinite;
 }
@@ -125,53 +110,53 @@
   animation: chickJump 0.5s;
 }
 
-/* 特殊动画 */
-.chick-character.spin {
+/* 特殊动画 - 应用于整个wrapper */
+.chick-character.spin .chick-wrapper {
   animation: chickSpin 0.8s ease-in-out;
 }
 
-.chick-character.flip {
+.chick-character.flip .chick-wrapper {
   animation: chickFlip 0.8s ease-in-out;
 }
 
-.chick-character.dance {
+.chick-character.dance .chick-wrapper {
   animation: chickDance 0.8s ease-in-out;
 }
 
-.chick-character.stageup {
+.chick-character.stageup .chick-wrapper {
   animation: chickStageUp 0.8s ease-in-out;
 }
 
-.chick-character.jump {
+.chick-character.jump .chick-wrapper {
   animation: chickSpecialJump 0.8s ease-in-out;
 }
 
-/* 黄鸡动画关键帧 */
+/* 黄鸡动画关键帧 - 针对emoji */
 @keyframes chickWalk {
-  0%, 100% { transform: translateX(-50%) translateY(0) rotate(0deg); }
-  25% { transform: translateX(-50%) translateY(-2rpx) rotate(5deg); }
-  50% { transform: translateX(-50%) translateY(0) rotate(0deg); }
-  75% { transform: translateX(-50%) translateY(-2rpx) rotate(-5deg); }
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  25% { transform: translateY(-2rpx) rotate(5deg); }
+  50% { transform: translateY(0) rotate(0deg); }
+  75% { transform: translateY(-2rpx) rotate(-5deg); }
 }
 
 @keyframes chickRun {
-  0%, 100% { transform: translateX(-50%) translateY(0) rotate(5deg); }
-  50% { transform: translateX(-50%) translateY(-4rpx) rotate(-5deg); }
+  0%, 100% { transform: translateY(0) rotate(5deg); }
+  50% { transform: translateY(-4rpx) rotate(-5deg); }
 }
 
 @keyframes chickCelebrate {
-  0%, 100% { transform: translateX(-50%) translateY(0) scale(1) rotate(0deg); }
-  25% { transform: translateX(-50%) translateY(-8rpx) scale(1.2) rotate(-10deg); }
-  50% { transform: translateX(-50%) translateY(-2rpx) scale(1.1) rotate(0deg); }
-  75% { transform: translateX(-50%) translateY(-8rpx) scale(1.2) rotate(10deg); }
+  0%, 100% { transform: translateY(0) scale(1) rotate(0deg); }
+  25% { transform: translateY(-8rpx) scale(1.2) rotate(-10deg); }
+  50% { transform: translateY(-2rpx) scale(1.1) rotate(0deg); }
+  75% { transform: translateY(-8rpx) scale(1.2) rotate(10deg); }
 }
 
 @keyframes chickJump {
-  0%, 100% { transform: translateX(-50%) translateY(0) scale(1); }
-  50% { transform: translateX(-50%) translateY(-15rpx) scale(1.1); }
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-15rpx) scale(1.1); }
 }
 
-/* 特殊动画关键帧 */
+/* 特殊动画关键帧 - 针对wrapper */
 @keyframes chickSpin {
   0% { transform: translateX(-50%) rotate(0deg); }
   100% { transform: translateX(-50%) rotate(360deg); }
@@ -199,11 +184,6 @@
   0% { transform: translateX(-50%) translateY(0) scale(1); filter: brightness(1); }
   50% { transform: translateX(-50%) translateY(-30rpx) scale(1.3); filter: brightness(1.3); }
   100% { transform: translateX(-50%) translateY(0) scale(1); filter: brightness(1); }
-}
-
-@keyframes pulsate {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.3); }
 }
 
 /* 鼓励语气泡 */
@@ -243,6 +223,23 @@
 .encouragement-bubble.show {
   opacity: 1;
   transform: scale(1) translateY(0);
+}
+
+/* 到达新阶段时的高亮气泡效果 */
+.encouragement-bubble.highlight {
+  animation: bubbleEnhance 2s ease-in-out;
+  background: linear-gradient(to bottom, #FFF8E1, #FFFDE7);
+  box-shadow: 0 4rpx 15rpx rgba(255, 196, 0, 0.3);
+  border: 1rpx solid #FFCA28;
+}
+
+@keyframes bubbleEnhance {
+  0% { transform: scale(1) translateY(0); box-shadow: 0 4rpx 10rpx rgba(0, 0, 0, 0.1); }
+  10% { transform: scale(1.05) translateY(-2rpx); box-shadow: 0 8rpx 20rpx rgba(255, 196, 0, 0.4); }
+  20% { transform: scale(1) translateY(0); box-shadow: 0 4rpx 10rpx rgba(0, 0, 0, 0.1); }
+  30% { transform: scale(1.03) translateY(-1rpx); box-shadow: 0 6rpx 15rpx rgba(255, 196, 0, 0.3); }
+  40% { transform: scale(1) translateY(0); box-shadow: 0 4rpx 10rpx rgba(0, 0, 0, 0.1); }
+  100% { transform: scale(1) translateY(0); box-shadow: 0 4rpx 10rpx rgba(0, 0, 0, 0.1); }
 }
 
 /* 终点图标 */
