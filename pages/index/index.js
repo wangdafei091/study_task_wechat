@@ -27,21 +27,24 @@ Page({
         type: 'clock',
         title: '独立刷牙',
         status: 0, // 0-未完成，1-已完成
-        hasImage: false
+        hasImage: false,
+        duration: 10 // 耗时10分钟
       },
       {
         id: 2,
         type: 'bag',
         title: '整理书包',
         status: 0,
-        hasImage: false
+        hasImage: false,
+        duration: 20 // 耗时20分钟
       },
       {
         id: 3,
         type: 'study',
         title: '数学作业',
         status: 1,
-        hasImage: true
+        hasImage: true,
+        duration: 60 // 耗时60分钟
       }
     ],
     // 统计数据
@@ -65,7 +68,7 @@ Page({
     searchFilters: {
       type: '',
       status: '',
-      dateRange: ''
+      dateRange: 'today'
     },
     
     // 任务进度
@@ -74,108 +77,165 @@ Page({
       bag: 0,
       study: 0
     },
-    ringSize: 'medium' // 新增圆环尺寸类名
+    ringSize: 'medium', // 新增圆环尺寸类名
+    typeRingSizes: {}   // 各类型圆环大小
   },
   
-  onLoad: function () {
+  /**
+   * 生命周期函数--监听页面加载
+   */
+  onLoad: function (options) {
+    // 默认任务列表
+    const app = getApp();
+    
     // 设置当前日期字符串
-    const now = new Date()
-    const year = now.getFullYear()
-    const month = now.getMonth() + 1
-    const day = now.getDate()
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1;
+    const day = now.getDate();
     
-    // 随机选择一条激励语
-    this.setRandomMotivation()
+    // 设置随机的鼓励语
+    this.setRandomMotivation();
     
+    // 从全局数据或本地存储获取任务列表
+    if (app.globalData.tasks && app.globalData.tasks.length > 0) {
+      this.setData({
+        tasks: app.globalData.tasks
+      });
+    } else {
+      // 从本地存储加载任务数据
+      this.loadTaskData();
+    }
+    
+    // 初始化各类别任务完成率
+    this.updateStats();
+    
+    // 根据任务总耗时调整圆环大小
+    this.adjustRingSize();
+    
+    // 检查用户信息
     if (app.globalData.userInfo) {
       this.setData({
         userInfo: app.globalData.userInfo,
         hasUserInfo: true
-      })
+      });
     } else if (this.data.canIUse) {
+      // 由于 getUserInfo 是网络请求，可能会在 Page.onLoad 之后才返回
+      // 所以此处加入 callback 以防止这种情况
       app.userInfoReadyCallback = res => {
         this.setData({
           userInfo: res.userInfo,
           hasUserInfo: true
-        })
-      }
-    } else {
-      wx.getUserInfo({
-        success: res => {
-          app.globalData.userInfo = res.userInfo
-          this.setData({
-            userInfo: res.userInfo,
-            hasUserInfo: true
-          })
-        }
-      })
+        });
+      };
     }
-
-    // 从本地存储加载任务数据
-    this.loadTaskData();
   },
   
-  onShow: function() {
-    // 页面显示时重新加载任务数据和统计信息
-    this.loadTaskData();
-  },
-
-  // 加载任务数据
-  loadTaskData: function() {
-    // 从本地存储或全局状态获取任务
-    const app = getApp();
-    const storedTasks = app.globalData.tasks;
-    
-    if (storedTasks && storedTasks.length > 0) {
-      this.setData({
-        tasks: storedTasks
-      });
-    }
-
-    // 更新统计数据
+  /**
+   * 生命周期函数--监听页面显示
+   */
+  onShow: function () {
+    // 重新计算任务统计数据
     this.updateStats();
     
-    // 根据任务数量调整圆环大小
+    // 调整圆环大小
     this.adjustRingSize();
   },
 
-  // 更新统计数据
-  updateStats: function() {
-    const tasks = this.data.tasks;
-    const completedTasks = tasks.filter(task => task.status === 1).length;
-    
-    // 计算任务类型统计
-    const typeCounts = {
-      clock: 0,
-      bag: 0,
-      study: 0
-    };
-    
-    tasks.forEach(task => {
-      if (typeCounts.hasOwnProperty(task.type)) {
-        typeCounts[task.type]++;
+  // 从本地存储加载任务数据
+  loadTaskData: function() {
+    const app = getApp();
+    wx.getStorage({
+      key: 'taskData',
+      success: (res) => {
+        if (res.data && res.data.length > 0) {
+          // 确保每个任务都有duration属性
+          const tasks = res.data.map(task => {
+            if (!task.hasOwnProperty('duration')) {
+              // 根据任务类型设置默认持续时间
+              switch(task.type) {
+                case 'clock': 
+                  task.duration = 10; // 生活习惯类默认10分钟
+                  break;
+                case 'bag':
+                  task.duration = 20; // 整理收纳类默认20分钟
+                  break;
+                case 'study':
+                  task.duration = 60; // 学习任务默认60分钟
+                  break;
+                default:
+                  task.duration = 30; // 其他类型默认30分钟
+              }
+            }
+            return task;
+          });
+          
+          this.setData({ tasks });
+          app.globalData.tasks = tasks;
+          
+          // 更新统计和圆环尺寸
+          this.updateStats();
+          this.adjustRingSize();
+        }
+      },
+      fail: () => {
+        // 如果本地没有存储数据，使用默认任务列表
+        app.globalData.tasks = this.data.tasks;
+        this.saveTaskData();
       }
     });
+  },
+  
+  // 保存任务数据到本地存储
+  saveTaskData: function() {
+    const app = getApp();
+    const tasks = this.data.tasks;
     
-    // 计算连续完成天数（模拟数据，实际应根据历史记录计算）
-    const streak = 3;
+    // 更新全局数据
+    app.globalData.tasks = tasks;
     
-    const stats = {
-      totalTasks: tasks.length,
-      completedTasks: completedTasks,
-      completionRate: tasks.length > 0 ? Math.round((completedTasks / tasks.length) * 100) : 0,
-      streak: streak,
-      typeCounts: typeCounts
+    // 存储到本地
+    wx.setStorage({
+      key: 'taskData',
+      data: tasks,
+      success: () => {
+        console.log('任务数据保存成功');
+      },
+      fail: (error) => {
+        console.error('保存任务数据失败：', error);
+      }
+    });
+  },
+
+  // 更新统计信息
+  updateStats: function() {
+    const tasks = this.data.tasks;
+    const completedTasks = tasks.filter(task => task.status === 1);
+    const totalTasks = tasks.length;
+    
+    // 计算各类型任务的完成百分比
+    const calculateProgress = (type) => {
+      const typeTotal = tasks.filter(task => task.type === type).length;
+      if (typeTotal === 0) return 0;
+      
+      const typeCompleted = tasks.filter(task => task.type === type && task.status === 1).length;
+      return Math.round((typeCompleted / typeTotal) * 100);
     };
     
+    // 更新进度圆环数据
     this.setData({
-      stats: stats,
-      'rewardProgress.current': completedTasks,
-      'rewardProgress.total': tasks.length
+      'taskProgress.clock': calculateProgress('clock'),
+      'taskProgress.bag': calculateProgress('bag'),
+      'taskProgress.study': calculateProgress('study'),
+      'stats.completedTasks': completedTasks.length,
+      'stats.totalTasks': totalTasks,
+      'stats.completionRate': totalTasks > 0 ? Math.round((completedTasks.length / totalTasks) * 100) : 0,
+      'rewardProgress.current': completedTasks.length,
+      'rewardProgress.total': totalTasks
     });
     
-    // 更新任务进度圆环
-    this.updateTaskProgress();
+    // 调整圆环大小
+    this.adjustRingSize();
   },
 
   // 显示统计面板
@@ -222,7 +282,7 @@ Page({
       searchFilters: {
         type: '',
         status: '',
-        dateRange: ''
+        dateRange: 'today'
       }
     });
     
@@ -447,12 +507,112 @@ Page({
   },
   
   // 创建新任务
-  createNewTask: function () {
+  createNewTask: function() {
     wx.navigateTo({
-      url: '/pages/create/create'
-    })
+      url: '/pages/task-edit/task-edit',
+      events: {
+        // 监听页面返回的任务数据
+        taskAdded: (data) => {
+          if (data && data.task) {
+            // 确保任务有duration属性
+            if (!data.task.hasOwnProperty('duration')) {
+              // 根据任务类型设置默认持续时间
+              switch(data.task.type) {
+                case 'clock': 
+                  data.task.duration = 10; // 生活习惯类默认10分钟
+                  break;
+                case 'bag':
+                  data.task.duration = 20; // 整理收纳类默认20分钟
+                  break;
+                case 'study':
+                  data.task.duration = 60; // 学习任务默认60分钟
+                  break;
+                default:
+                  data.task.duration = 30; // 其他类型默认30分钟
+              }
+            }
+            
+            // 添加新任务
+            const tasks = this.data.tasks;
+            tasks.push(data.task);
+            
+            this.setData({
+              tasks: tasks
+            });
+            
+            // 保存数据并更新统计
+            this.saveTaskData();
+            this.updateStats();
+            
+            // 调整圆环大小
+            this.adjustRingSize();
+            
+            wx.showToast({
+              title: '任务添加成功',
+              icon: 'success'
+            });
+          }
+        }
+      }
+    });
   },
   
+  // 编辑任务
+  editTask: function(e) {
+    const taskId = e.detail;
+    const taskToEdit = this.data.tasks.find(task => task.id === taskId);
+    
+    if (taskToEdit) {
+      wx.navigateTo({
+        url: '/pages/task-edit/task-edit?mode=edit',
+        events: {
+          // 监听页面返回的任务数据
+          taskUpdated: (data) => {
+            if (data && data.task) {
+              // 确保任务有duration属性
+              if (!data.task.hasOwnProperty('duration')) {
+                // 保留原来的duration，或者根据任务类型设置默认值
+                data.task.duration = taskToEdit.duration || (() => {
+                  switch(data.task.type) {
+                    case 'clock': return 10;
+                    case 'bag': return 20;
+                    case 'study': return 60;
+                    default: return 30;
+                  }
+                })();
+              }
+              
+              // 更新任务
+              const tasks = this.data.tasks.map(task => 
+                task.id === data.task.id ? data.task : task
+              );
+              
+              this.setData({
+                tasks: tasks
+              });
+              
+              // 保存数据并更新统计
+              this.saveTaskData();
+              this.updateStats();
+              
+              // 调整圆环大小
+              this.adjustRingSize();
+              
+              wx.showToast({
+                title: '任务更新成功',
+                icon: 'success'
+              });
+            }
+          }
+        },
+        success: (res) => {
+          // 传递任务数据给编辑页
+          res.eventChannel.emit('editTask', { task: taskToEdit });
+        }
+      });
+    }
+  },
+
   // 完成任务
   completeTask: function (e) {
     const taskId = e.detail.taskId
@@ -485,46 +645,81 @@ Page({
     
     // 更新统计信息
     this.updateStats();
-  },
-
-  // 编辑任务
-  editTask: function (e) {
-    const taskId = e.detail.taskId
-    wx.navigateTo({
-      url: `/pages/task/task?id=${taskId}&edit=1`
-    })
+    
+    // 重新计算圆环大小
+    this.adjustRingSize();
   },
 
   // 根据任务数量动态调整圆环大小
   adjustRingSize: function() {
     const tasks = this.data.tasks;
     
-    // 获取各类型任务数量
+    // 计算当日任务总耗时（分钟）
+    const totalDuration = tasks.reduce((sum, task) => {
+      // 只计算未完成的任务耗时
+      return task.status === 0 ? sum + (task.duration || 0) : sum;
+    }, 0);
+    
+    // 获取各类型任务数量和耗时
     const taskCounts = {
-      clock: tasks.filter(t => t.type === 'clock').length,
-      bag: tasks.filter(t => t.type === 'bag').length,
-      study: tasks.filter(t => t.type === 'study').length
+      clock: 0,
+      bag: 0,
+      study: 0
     };
     
-    // 计算总任务数
-    const totalTasks = tasks.length;
+    const typeDurations = {
+      clock: 0,
+      bag: 0,
+      study: 0
+    };
     
-    // 根据任务数量确定圆环大小
+    tasks.forEach(task => {
+      if (taskCounts.hasOwnProperty(task.type)) {
+        // 只计算未完成的任务
+        if (task.status === 0) {
+          taskCounts[task.type]++;
+          typeDurations[task.type] += (task.duration || 0);
+        }
+      }
+    });
+    
+    // 根据任务总耗时确定圆环大小
     let ringSize;
-    if (totalTasks <= 3) {
-      // 少量任务显示大尺寸圆环
+    
+    if (totalDuration >= 120) {  // 2小时或以上
       ringSize = 'large';
-    } else if (totalTasks <= 8) {
-      // 中等数量任务显示标准尺寸
+    } else if (totalDuration >= 60) {  // 1-2小时
+      ringSize = 'medium-large';
+    } else if (totalDuration >= 30) {  // 30-60分钟
       ringSize = 'medium';
     } else {
-      // 大量任务显示小尺寸
-      ringSize = 'small';
+      ringSize = 'small';  // 基础大小，小于30分钟
     }
     
-    // 设置圆环尺寸类名
-    this.setData({
-      ringSize: ringSize
+    // 为每个类型设置单独的圆环大小
+    const typeRingSizes = {};
+    
+    Object.keys(typeDurations).forEach(type => {
+      const duration = typeDurations[type];
+      
+      if (duration >= 90) {
+        typeRingSizes[type] = 'large';
+      } else if (duration >= 45) {
+        typeRingSizes[type] = 'medium-large';
+      } else if (duration >= 20) {
+        typeRingSizes[type] = 'medium';
+      } else {
+        typeRingSizes[type] = 'small';
+      }
     });
+    
+    // 只有当尺寸真正变化时才更新状态
+    if (this.data.ringSize !== ringSize || 
+        JSON.stringify(this.data.typeRingSizes || {}) !== JSON.stringify(typeRingSizes)) {
+      this.setData({
+        ringSize: ringSize,
+        typeRingSizes: typeRingSizes
+      });
+    }
   }
 }) 
