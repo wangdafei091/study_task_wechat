@@ -37,11 +37,10 @@ Component({
       });
     },
 
-    // 点击任务项进入详情
+    // 点击任务项进入详情(已禁用)
     onTaskTap: function(e) {
-      this.triggerEvent('detail', {
-        taskId: this.properties.task.id
-      });
+      // 不再触发详情页跳转
+      // 此方法保留是为了兼容性，但不执行任何操作
     },
 
     // 点击编辑按钮

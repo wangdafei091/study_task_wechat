@@ -215,10 +215,5 @@ Page({
       key: 'rewards',
       data: rewards
     });
-
-    wx.showToast({
-      title: '奖励已领取',
-      icon: 'success'
-    });
   }
 })

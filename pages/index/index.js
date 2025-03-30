@@ -475,13 +475,6 @@ Page({
   
   // 奖励完成事件处理
   onRewardComplete: function() {
-    // 显示奖励完成祝贺
-    wx.showToast({
-      title: '🎉 恭喜获得奖励！',
-      icon: 'none',
-      duration: 2000
-    });
-    
     // 震动效果增强体验
     setTimeout(() => {
       if (wx.vibrateShort) {
@@ -588,10 +581,12 @@ Page({
   
   // 前往任务详情
   goToTaskDetail: function (e) {
-    const taskId = e.detail.taskId
-    wx.navigateTo({
-      url: `/pages/task/task?id=${taskId}`
-    })
+    // 已禁用：不再跳转到任务详情页
+    // const taskId = e.detail.taskId
+    // wx.navigateTo({
+    //   url: `/pages/task/task?id=${taskId}`
+    // })
+    console.log('任务详情功能已禁用');
   },
   
   // 创建新任务
@@ -741,11 +736,7 @@ Page({
     // 保存数据
     this.saveTaskData();
     
-    // 显示提示
-    wx.showToast({
-      title: tasks.find(t => t.id === id).status === 1 ? '任务已完成' : '已取消完成',
-      icon: 'success'
-    });
+    // 注释: 已移除完成任务提示，让用户体验更加流畅
   },
   
   // 根据任务数量动态调整圆环大小

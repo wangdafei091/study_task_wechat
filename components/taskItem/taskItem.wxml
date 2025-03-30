@@ -1,5 +1,5 @@
 <!--components/taskItem/taskItem.wxml-->
-<view class="task-item {{task.status == 1 ? 'completed' : ''}} type-{{task.type}}" bindtap="onTaskTap">
+<view class="task-item {{task.status == 1 ? 'completed' : ''}} type-{{task.type}}">
   <!-- 任务勾选框 -->
   <view class="task-checkbox {{task.status == 1 ? 'checked' : ''}}" catchtap="onCheckboxTap">
     <text class="checkbox-icon {{task.status == 1 ? 'checked' : ''}}">✓</text>
