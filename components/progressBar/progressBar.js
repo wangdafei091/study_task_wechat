@@ -83,6 +83,7 @@ Component({
     tapsCount: 0,            // 点击次数
     chickAnimation: '',      // 特殊动画类型
     isComplete: false,       // 是否已完成
+    showFireworks: false     // 是否显示礼花效果
   },
 
   /**
@@ -258,12 +259,14 @@ Component({
     // 显示完成信息
     showCompletionMessage: function() {
       // 使用固定的鼓励语
-      const completionMessage = "Oh,yeah!成功啦！";
+      const completionMessage = "哇！任务全部完成啦！";
       
+      // 显示庆祝文字
       this.setData({ 
         chickSpeaking: true,
         currentEncouragement: completionMessage,
-        nodeReached: true
+        nodeReached: true,
+        showFireworks: true // 显示礼花效果
       });
       
       // 让小鸡做一个特殊的庆祝动画
@@ -284,14 +287,32 @@ Component({
               nodeReached: false
             });
             
+            // 礼花效果持续时间更长
             setTimeout(() => {
               this.setData({
-                chickAnimation: ''
+                chickAnimation: '',
+                showFireworks: false // 5秒后关闭礼花效果
               });
-            }, 800);
+            }, 5000);
           }, 800);
         }, 800);
       }, 1000);
+      
+      // 触发震动增强体验
+      if (wx.vibrateShort) {
+        try {
+          wx.vibrateShort({ type: 'medium' });
+          // 连续震动模拟庆祝效果
+          setTimeout(() => {
+            wx.vibrateShort({ type: 'light' });
+          }, 300);
+          setTimeout(() => {
+            wx.vibrateShort({ type: 'light' });
+          }, 600);
+        } catch (e) {
+          console.log('震动失败', e);
+        }
+      }
     },
     
     // 播放指定类型的动画效果

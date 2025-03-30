@@ -25,6 +25,25 @@
         <image class="reward-image" src="{{rewardImage}}" mode="aspectFill"></image>
       </view>
       
+      <!-- 庆祝礼花效果 -->
+      <view class="celebration-effects {{isComplete && showFireworks ? 'show-fireworks' : ''}}">
+        <view class="firework firework-1"></view>
+        <view class="firework firework-2"></view>
+        <view class="firework firework-3"></view>
+        <view class="firework firework-4"></view>
+        <view class="firework firework-5"></view>
+        <view class="confetti-container">
+          <view class="confetti confetti-1"></view>
+          <view class="confetti confetti-2"></view>
+          <view class="confetti confetti-3"></view>
+          <view class="confetti confetti-4"></view>
+          <view class="confetti confetti-5"></view>
+          <view class="confetti confetti-6"></view>
+          <view class="confetti confetti-7"></view>
+          <view class="confetti confetti-8"></view>
+        </view>
+      </view>
+      
       <!-- 小黄鸡角色 -->
       <view wx:if="{{showChick}}" 
             class="chick-character {{chickState}} {{chickAnimation ? chickAnimation : ''}}" 
