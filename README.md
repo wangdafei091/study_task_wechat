@@ -13,6 +13,102 @@
 7. **统计分析**：展示任务完成率、类型分布等数据
 8. **数据持久化**：任务和奖励数据保存到本地存储
 9. **任务搜索筛选**：支持关键词搜索和多条件筛选（类型、状态、时间范围）
+10. **头部收缩功能**：滚动时自动收缩头部区域，优化内容显示空间
+11. **动态圆环尺寸**：根据任务持续时间智能调整圆环大小，提升视觉体验
+
+## 功能详细说明
+
+### 头部收缩功能
+当用户向下滚动页面时，头部区域（包括日历和进度条）会自动收缩，为任务列表提供更多显示空间。向上滚动时，头部区域会重新展开。
+
+**使用方法**：
+- 默认情况下自动启用
+- 在页面滚动时自动触发收缩/展开
+- 适合在任务较多时提供更好的浏览体验
+
+### 动态圆环尺寸调整
+系统根据任务持续时间自动调整圆形进度指示器大小，更直观地反映任务重要性和时长。
+
+**调整规则**：
+- 总耗时2小时以上: 大尺寸圆环(160rpx)
+- 总耗时1-2小时: 中大尺寸圆环(145rpx)
+- 总耗时30-60分钟: 中等尺寸圆环(130rpx)
+- 总耗时30分钟以下: 小尺寸圆环(110rpx)
+
+每种任务类型独立计算尺寸，任务完成后自动重新计算圆环尺寸，保持视觉平衡。
+
+## 数据结构设计
+
+### 任务对象属性
+```javascript
+{
+  id: String,          // 任务唯一标识符
+  title: String,       // 任务标题
+  description: String, // 任务描述
+  type: String,        // 任务类型: 'clock'(生活习惯)、'bag'(整理收纳)、'study'(学习任务)
+  status: Number,      // 状态: 0(未完成)、1(已完成)
+  date: String,        // 任务日期，格式'YYYY-MM-DD'
+  duration: Number,    // 预计持续时间(分钟)
+  startTime: String,   // 开始时间，格式'HH:MM'
+  endTime: String,     // 结束时间，格式'HH:MM'
+  images: Array,       // 任务相关图片路径数组
+  createTime: Number,  // 创建时间戳
+  updateTime: Number   // 更新时间戳
+}
+```
+
+### 奖励对象属性
+```javascript
+{
+  id: String,          // 奖励唯一标识符
+  name: String,        // 奖励名称
+  description: String, // 奖励描述
+  points: Number,      // 所需积分
+  icon: String,        // 奖励图标（emoji或图片路径）
+  isUnlocked: Boolean, // 是否已解锁
+  claimTime: Number    // 领取时间戳（如已领取）
+}
+```
+
+## 主要组件API
+
+### 圆形进度指示器 (circleProgress)
+**属性**：
+- `percent`: Number - 进度百分比(0-100)
+- `size`: Number - 组件大小，单位rpx，默认120
+- `strokeWidth`: Number - 线条宽度，单位rpx，默认6
+- `activeColor`: String - 进度条颜色，默认'#4285F4'
+- `backgroundColor`: String - 背景颜色，默认'#E8E8E8'
+- `showText`: Boolean - 是否显示百分比文本，默认true
+- `fontColor`: String - 文本颜色，默认'#333333'
+- `fontSize`: Number - 字体大小，单位rpx，默认28
+- `isLandscape`: Boolean - 是否处于横屏模式，默认false
+- `deviceType`: Object - 设备类型信息对象
+
+**使用示例**：
+```html
+<circle-progress percent="{{taskProgress.study}}" 
+                 size="{{typeRingSizes.study || 130}}"
+                 active-color="#4285F4">
+</circle-progress>
+```
+
+### 日历组件 (calendar)
+**属性**：
+- `selectedDate`: String - 当前选中日期，格式'YYYY-MM-DD'
+- `displayMode`: String - 显示模式，'week'或'month'
+- `tasks`: Array - 任务数据数组
+- `isLandscape`: Boolean - 是否处于横屏模式
+- `deviceType`: Object - 设备类型信息对象
+
+**方法**：
+- `switchMode(mode)` - 切换显示模式
+- `selectDate(date)` - 选择指定日期
+- `nextPeriod()` - 切换到下一周/月
+- `prevPeriod()` - 切换到上一周/月
+
+**事件**：
+- `dateSelect` - 日期选择事件，返回所选日期
 
 ## 页面结构
 - **首页**：日历视图、任务列表、奖励进度条、统计分析、搜索功能
@@ -24,6 +120,141 @@
 - 微信小程序原生开发
 - WXML + WXSS + JavaScript
 - 微信小程序本地存储
+
+## 安装与开发
+### 开发环境要求
+- 微信开发者工具最新版
+- 微信基础库版本: 2.14.0+
+
+### 启动步骤
+1. 克隆代码仓库
+```bash
+git clone <仓库地址>
+```
+
+2. 使用微信开发者工具打开项目目录
+3. 点击"编译"按钮运行项目
+
+### 开发指南
+1. **代码规范**
+   - 变量命名使用驼峰式
+   - 组件文件使用小写加连字符
+   - JS代码使用2个空格缩进
+   - CSS类名使用连字符命名法(kebab-case)
+
+2. **开发流程**
+   - 功能开发在feature分支进行
+   - 修复bug在hotfix分支进行
+   - 提交前运行代码检查
+   - 提交信息格式: `[类型]: 简短描述`
+
+3. **贡献指南**
+   - Fork项目并创建功能分支
+   - 完成开发后提交Pull Request
+   - 详细描述你的变更和测试方法
+   - 确保代码通过所有测试
+
+## 代码示例
+
+### 创建新任务
+```javascript
+const app = getApp();
+
+// 创建新任务
+function createTask(taskData) {
+  // 生成唯一ID
+  const id = 'task_' + Date.now();
+  
+  // 构建任务对象
+  const task = {
+    id: id,
+    title: taskData.title || '新任务',
+    description: taskData.description || '',
+    type: taskData.type || 'study',
+    status: 0, // 默认未完成
+    date: taskData.date || formatDate(new Date()),
+    duration: taskData.duration || 30,
+    startTime: taskData.startTime || '09:00',
+    endTime: taskData.endTime || '09:30',
+    images: [],
+    createTime: Date.now(),
+    updateTime: Date.now()
+  };
+  
+  // 获取现有任务列表
+  let tasks = app.globalData.tasks || [];
+  tasks.push(task);
+  
+  // 更新全局数据和本地存储
+  app.globalData.tasks = tasks;
+  wx.setStorage({
+    key: 'taskData',
+    data: tasks
+  });
+  
+  return task;
+}
+
+// 格式化日期
+function formatDate(date) {
+  const year = date.getFullYear();
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  const day = date.getDate().toString().padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+```
+
+### 完成任务
+```javascript
+function completeTask(taskId) {
+  let tasks = app.globalData.tasks || [];
+  const taskIndex = tasks.findIndex(t => t.id === taskId);
+  
+  if (taskIndex > -1) {
+    // 更新任务状态为已完成
+    tasks[taskIndex].status = 1;
+    tasks[taskIndex].updateTime = Date.now();
+    
+    // 更新数据
+    app.globalData.tasks = tasks;
+    wx.setStorage({
+      key: 'taskData',
+      data: tasks,
+      success: () => {
+        console.log('任务状态更新成功');
+      }
+    });
+    
+    // 计算并更新积分
+    updatePoints(tasks[taskIndex].duration);
+    
+    return true;
+  }
+  
+  return false;
+}
+
+// 更新积分
+function updatePoints(duration) {
+  // 根据任务时长计算积分
+  const points = Math.ceil(duration / 10); // 每10分钟1积分
+  let currentPoints = wx.getStorageSync('userPoints') || 0;
+  
+  // 更新积分
+  currentPoints += points;
+  wx.setStorage({
+    key: 'userPoints',
+    data: currentPoints
+  });
+  
+  // 检查奖励解锁
+  checkRewards(currentPoints);
+}
+```
+
+## 效果展示
+<img src="path_to_screenshot1.png" width="300" alt="首页任务列表" />
+<img src="path_to_screenshot2.png" width="300" alt="统计分析面板" />
 
 ## 兼容性说明
 - 最低支持微信基础库版本：2.14.0
@@ -101,6 +332,10 @@
 - 针对低端设备提供性能优化方案
 - 减少不必要的渲染和计算，优化动画性能
 - 智能降级策略，在低性能设备上降低特效复杂度
+- 使用setTimeout分批处理大量数据，避免阻塞主线程
+- 页面滚动时延迟非关键渲染，提高滚动流畅度
+- 图片懒加载，减少初始加载时间
+- setData优化，减少数据传输量和更新频率
 
 ## 目录结构
 
@@ -123,6 +358,65 @@
 │   └── unit.js             # 单位转换和屏幕适配工具
 ```
 
+## 用户详细指南
+
+### 使用流程
+1. **初次使用**
+   - 打开小程序，首页显示任务日历和今日任务列表
+   - 可以看到顶部日历视图，默认为周视图
+   - 底部为奖励进度条和任务列表
+
+2. **创建任务**
+   - 点击底部"+"按钮打开新建任务页面
+   - 填写任务名称、描述、类型等信息
+   - 选择日期和时间段
+   - 点击"保存"按钮完成创建
+
+3. **查看和管理任务**
+   - 在首页点击任务项进入任务详情页
+   - 可以编辑任务信息、上传图片
+   - 点击"完成"按钮标记任务为已完成状态
+   - 完成任务后获得相应积分
+
+4. **使用日历**
+   - 点击日历标题可以切换周视图/月视图
+   - 左右滑动日历可以切换上/下周或月
+   - 点击日期可以查看当天任务
+
+5. **查看统计分析**
+   - 点击首页的"统计"按钮打开统计面板
+   - 查看任务完成率、类型分布等数据
+   - 查看连续完成天数等成就
+
+6. **搜索和筛选任务**
+   - 点击首页的"搜索"按钮打开搜索面板
+   - 输入关键词搜索特定任务
+   - 使用筛选条件按类型、状态、时间范围筛选
+
+7. **获取和使用奖励**
+   - 点击底部导航的"奖池"进入奖励页面
+   - 查看所有可用奖励和所需积分
+   - 当积分达到要求时，奖励会自动解锁
+   - 点击已解锁的奖励可以领取
+
+### 奖励系统说明
+1. **积分获取方式**
+   - 完成任务获得积分，根据任务持续时间计算
+   - 基本规则：每10分钟任务时长可获得1积分
+   - 连续完成任务可获得额外奖励积分
+
+2. **奖励等级**
+   - 初级奖励：需要10-30积分
+   - 中级奖励：需要31-60积分
+   - 高级奖励：需要61-100积分
+   - 特殊奖励：需要100积分以上
+
+3. **奖励领取规则**
+   - 积分达到要求后，奖励自动解锁
+   - 点击已解锁奖励可以领取
+   - 领取后积分会相应减少
+   - 部分奖励有使用期限限制
+
 ## 界面设计说明
 1. **配色方案**：
    - 主色调：蓝色 (#4285F4)
@@ -142,20 +436,35 @@
    - 悬浮的添加任务按钮
    - 搜索功能入口和筛选面板
 
-## 使用说明
-1. 在微信开发者工具中打开项目
-2. 编译运行即可预览效果
-3. 点击底部"+"按钮可以新建任务
-4. 点击任务可以查看任务详情
-5. 点击首页的"统计"按钮可以查看任务统计数据
-6. 点击首页的"搜索"按钮可以搜索和筛选任务
-7. 点击日历标题可以切换周视图/月视图
-8. 点击底部导航的"奖池"可以查看和领取奖励
-
 ## 数据存储
 - 使用微信小程序的本地存储(Storage)功能保存数据
 - 任务数据存储在'tasks'键下
 - 奖励数据存储在'rewards'键下
+- 用户积分存储在'userPoints'键下
+- 应用配置存储在'appConfig'键下
+
+## 性能与优化
+- 首屏加载优化：减少初始渲染内容，优先显示关键UI
+- 列表渲染优化：使用虚拟列表技术处理大量任务数据
+- 动画性能优化：使用transform代替位置属性，减少重排
+- 数据存储优化：批量读写本地存储，减少IO操作
+- 异步操作管理：合理使用Promise和async/await处理异步流程
+
+## 未来开发计划
+1. **近期计划** (预计1-2个版本)
+   - 添加任务提醒和通知功能
+   - 实现任务复制和批量操作
+   - 完善任务历史记录查看
+
+2. **中期计划** (预计3-4个版本)
+   - 添加用户登录和数据同步
+   - 实现深色模式支持
+   - 添加任务标签和归档功能
+
+3. **长期计划**
+   - 开发学习计划模板功能
+   - 添加社交分享和挑战功能
+   - 实现学习数据分析和建议
 
 ## 更新日志
 - 2024-03-31: 添加基于任务持续时间的动态圆环尺寸调整功能，优化圆环视觉效果
@@ -164,9 +473,18 @@
 - 2024-03-28: 添加新建任务页面、奖池页面和统计分析功能
 - 2024-03-27: 项目初始化，完成首页设计和任务详情页
 
-## 待实现功能
-1. 用户登录和信息同步
-2. 任务提醒和通知功能
-3. 任务复制和批量操作
-4. 任务历史记录查看
-5. 深色模式支持 
+## 常见问题解答
+1. **如何备份我的任务数据？**
+   目前数据仅保存在本地，建议定期截图重要任务信息。未来版本将添加云端备份功能。
+
+2. **为什么有些任务不显示在日历上？**
+   请确保任务设置了正确的日期，且日历当前查看的是相应的月份或周。
+
+3. **积分系统如何计算？**
+   基本规则是每10分钟任务时长获得1积分，连续完成任务可获得额外奖励。
+
+4. **如何删除已完成的任务？**
+   在任务详情页面，点击右上角的"更多"按钮，选择"删除任务"选项。
+
+5. **如何修改任务完成状态？**
+   在任务详情页面，可以通过切换"完成状态"开关来修改。 
