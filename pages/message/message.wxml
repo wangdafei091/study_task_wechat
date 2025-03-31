@@ -1,0 +1,83 @@
+<!--pages/message/message.wxml-->
+<view class="container">
+  <!-- 顶部标题 -->
+  <view class="header">
+    <view class="title">消息中心</view>
+    <view class="action-buttons">
+      <view class="action-button" bindtap="markAllAsRead" wx:if="{{unreadCount > 0}}">全部已读</view>
+    </view>
+  </view>
+
+  <!-- 分类标签 -->
+  <view class="tab-container">
+    <view class="tab {{activeTab === 'all' ? 'active' : ''}}" 
+          data-tab="all" 
+          bindtap="switchTab">
+      全部
+      <view class="tab-badge" wx:if="{{unreadCount > 0}}">{{unreadCount}}</view>
+    </view>
+    <view class="tab {{activeTab === 'task' ? 'active' : ''}}" 
+          data-tab="task" 
+          bindtap="switchTab">
+      任务
+      <view class="tab-badge" wx:if="{{taskUnreadCount > 0}}">{{taskUnreadCount}}</view>
+    </view>
+    <view class="tab {{activeTab === 'achievement' ? 'active' : ''}}" 
+          data-tab="achievement" 
+          bindtap="switchTab">
+      成就
+      <view class="tab-badge" wx:if="{{achievementUnreadCount > 0}}">{{achievementUnreadCount}}</view>
+    </view>
+    <view class="tab {{activeTab === 'system' ? 'active' : ''}}" 
+          data-tab="system" 
+          bindtap="switchTab">
+      系统
+      <view class="tab-badge" wx:if="{{systemUnreadCount > 0}}">{{systemUnreadCount}}</view>
+    </view>
+  </view>
+
+  <!-- 消息列表 -->
+  <scroll-view class="message-list" scroll-y="{{true}}" bindscrolltolower="loadMoreMessages">
+    <!-- 没有消息时的提示 -->
+    <view class="no-messages" wx:if="{{filteredMessages.length === 0}}">
+      <view class="no-messages-icon">📩</view>
+      <view class="no-messages-text">暂无{{activeTab === 'all' ? '' : activeTabName}}消息</view>
+    </view>
+    
+    <!-- 消息列表 -->
+    <block wx:for="{{filteredMessages}}" wx:key="id">
+      <!-- 日期分割线 -->
+      <view class="date-divider" wx:if="{{item.showDateDivider}}">
+        {{item.dateDivider}}
+      </view>
+      
+      <!-- 消息项 -->
+      <view class="message-item {{item.isRead ? '' : 'unread'}}" 
+            bindtap="viewMessageDetail" 
+            data-id="{{item.id}}"
+            bind:longpress="showMessageOptions"
+            data-index="{{index}}">
+        <!-- 左滑删除区域 -->
+        <view class="delete-area" catchtap="deleteMessage" data-id="{{item.id}}">删除</view>
+        
+        <!-- 消息内容区域 -->
+        <view class="item-content">
+          <view class="message-icon-container">
+            <text class="message-type-icon">{{item.icon || '📝'}}</text>
+            <view class="message-unread-dot" wx:if="{{!item.isRead}}"></view>
+          </view>
+          <view class="message-content">
+            <view class="message-title">{{item.title}}</view>
+            <view class="message-summary">{{item.summary}}</view>
+            <view class="message-time">{{item.timeDisplay}}</view>
+          </view>
+        </view>
+      </view>
+    </block>
+    
+    <!-- 加载更多提示 -->
+    <view class="load-more" wx:if="{{hasMoreMessages}}">
+      <view class="load-more-text">加载更多...</view>
+    </view>
+  </scroll-view>
+</view> 

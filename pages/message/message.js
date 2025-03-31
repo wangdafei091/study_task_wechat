@@ -1,0 +1,514 @@
+// pages/message/message.js
+Page({
+  /**
+   * 页面的初始数据
+   */
+  data: {
+    messages: [],         // 所有消息
+    filteredMessages: [], // 过滤后的消息
+    unreadCount: 0,       // 未读消息总数
+    taskUnreadCount: 0,   // 任务类未读消息数
+    achievementUnreadCount: 0, // 成就类未读消息数
+    systemUnreadCount: 0, // 系统类未读消息数
+    activeTab: 'all',     // 当前选中的标签
+    activeTabName: '',    // 当前标签名称
+    hasMoreMessages: false, // 是否有更多消息
+    pageSize: 20,         // 每页显示消息数量
+    currentPage: 1        // 当前页码
+  },
+
+  /**
+   * 生命周期函数--监听页面加载
+   */
+  onLoad: function (options) {
+    // 加载消息数据
+    this.loadMessageData();
+  },
+
+  /**
+   * 生命周期函数--监听页面显示
+   */
+  onShow: function () {
+    // 刷新消息数据
+    this.loadMessageData();
+  },
+
+  /**
+   * 加载消息数据
+   */
+  loadMessageData: function() {
+    wx.getStorage({
+      key: 'messageData',
+      success: (res) => {
+        if (res.data && res.data.length > 0) {
+          // 处理消息
+          this.processMessages(res.data);
+        } else {
+          // 如果没有消息，设置默认示例消息
+          this.setDefaultMessages();
+        }
+      },
+      fail: () => {
+        // 加载失败，设置默认消息
+        this.setDefaultMessages();
+      }
+    });
+  },
+
+  /**
+   * 处理消息数据，添加日期分隔符和计算未读数量
+   */
+  processMessages: function(messages) {
+    // 按时间降序排序
+    messages.sort((a, b) => b.timestamp - a.timestamp);
+    
+    // 添加日期分隔符
+    let lastDate = '';
+    const processedMessages = messages.map(msg => {
+      const date = this.formatDate(msg.timestamp);
+      const showDateDivider = date !== lastDate;
+      lastDate = date;
+      
+      return {
+        ...msg,
+        timeDisplay: this.formatMessageTime(msg.timestamp),
+        showDateDivider,
+        dateDivider: date
+      };
+    });
+    
+    // 计算各类型未读消息数量
+    const unreadCount = processedMessages.filter(msg => !msg.isRead).length;
+    const taskUnreadCount = processedMessages.filter(msg => !msg.isRead && msg.type === 'task').length;
+    const achievementUnreadCount = processedMessages.filter(msg => !msg.isRead && msg.type === 'achievement').length;
+    const systemUnreadCount = processedMessages.filter(msg => !msg.isRead && msg.type === 'system').length;
+    
+    // 更新数据
+    this.setData({
+      messages: processedMessages,
+      unreadCount,
+      taskUnreadCount,
+      achievementUnreadCount,
+      systemUnreadCount,
+      hasMoreMessages: processedMessages.length > this.data.pageSize
+    });
+    
+    // 根据当前标签过滤消息
+    this.filterMessagesByTab();
+  },
+
+  /**
+   * 根据当前标签过滤消息
+   */
+  filterMessagesByTab: function() {
+    const { messages, activeTab, pageSize, currentPage } = this.data;
+    
+    let filtered = [];
+    if (activeTab === 'all') {
+      filtered = messages;
+    } else {
+      filtered = messages.filter(msg => msg.type === activeTab);
+    }
+    
+    // 分页加载
+    const paged = filtered.slice(0, pageSize * currentPage);
+    
+    let tabName = '';
+    switch(activeTab) {
+      case 'task': tabName = '任务'; break;
+      case 'achievement': tabName = '成就'; break;
+      case 'system': tabName = '系统'; break;
+      default: tabName = '';
+    }
+    
+    this.setData({
+      filteredMessages: paged,
+      activeTabName: tabName,
+      hasMoreMessages: filtered.length > paged.length
+    });
+  },
+
+  /**
+   * 设置默认示例消息
+   */
+  setDefaultMessages: function() {
+    const now = Date.now();
+    const yesterday = now - 86400000;  // 昨天
+    const twoDaysAgo = now - 172800000; // 前天
+    const threeMonthsAgo = now - 7776000000; // 90天前
+    
+    const messages = [
+      {
+        id: 'msg_1',
+        type: 'task',
+        title: '任务即将到期',
+        summary: '您有一个"语文作业"任务将在1小时后到期，请及时完成。',
+        timestamp: now - 3600000, // 1小时前
+        isRead: false,
+        icon: '⏰'
+      },
+      {
+        id: 'msg_2',
+        type: 'achievement',
+        title: '完成连续学习3天',
+        summary: '恭喜你已经连续学习3天了，再接再厉！',
+        timestamp: yesterday,
+        isRead: true,
+        icon: '🏆'
+      },
+      {
+        id: 'msg_3',
+        type: 'system',
+        title: '新功能上线',
+        summary: '消息中心功能已上线，现在可以接收任务提醒和成就通知了。',
+        timestamp: twoDaysAgo,
+        isRead: true,
+        icon: '🔔'
+      },
+      {
+        id: 'msg_4',
+        type: 'task',
+        title: '新任务提醒',
+        summary: '您有新的任务"数学作业"已添加到今日计划中。',
+        timestamp: twoDaysAgo - 7200000, // 前天再减2小时
+        isRead: true,
+        icon: '📝'
+      },
+      {
+        id: 'msg_5',
+        type: 'achievement',
+        title: '完成首个任务',
+        summary: '恭喜您完成了第一个任务！继续加油！',
+        timestamp: threeMonthsAgo,
+        isRead: true,
+        icon: '🎉'
+      }
+    ];
+    
+    // 保存到本地存储
+    wx.setStorage({
+      key: 'messageData',
+      data: messages
+    });
+    
+    // 处理消息
+    this.processMessages(messages);
+  },
+
+  /**
+   * 切换标签
+   */
+  switchTab: function(e) {
+    const tab = e.currentTarget.dataset.tab;
+    
+    this.setData({
+      activeTab: tab,
+      currentPage: 1 // 切换标签时重置页码
+    });
+    
+    // 根据新标签过滤消息
+    this.filterMessagesByTab();
+  },
+
+  /**
+   * 查看消息详情
+   */
+  viewMessageDetail: function(e) {
+    const messageId = e.currentTarget.dataset.id;
+    const messages = this.data.messages;
+    const messageIndex = messages.findIndex(m => m.id === messageId);
+    
+    if (messageIndex > -1) {
+      // 标记该消息为已读
+      if (!messages[messageIndex].isRead) {
+        messages[messageIndex].isRead = true;
+        
+        // 更新未读数量
+        const unreadCount = this.data.unreadCount - 1;
+        let taskUnreadCount = this.data.taskUnreadCount;
+        let achievementUnreadCount = this.data.achievementUnreadCount;
+        let systemUnreadCount = this.data.systemUnreadCount;
+        
+        // 根据消息类型更新对应的未读数量
+        switch(messages[messageIndex].type) {
+          case 'task': taskUnreadCount--; break;
+          case 'achievement': achievementUnreadCount--; break;
+          case 'system': systemUnreadCount--; break;
+        }
+        
+        this.setData({
+          messages,
+          unreadCount,
+          taskUnreadCount,
+          achievementUnreadCount,
+          systemUnreadCount
+        });
+        
+        // 更新过滤后的消息列表
+        this.filterMessagesByTab();
+        
+        // 更新本地存储
+        wx.setStorage({
+          key: 'messageData',
+          data: messages
+        });
+      }
+      
+      // 根据消息类型处理不同的导航逻辑
+      const message = messages[messageIndex];
+      switch (message.type) {
+        case 'task':
+          // 如果有关联任务ID，导航到该任务详情
+          if (message.taskId) {
+            wx.navigateTo({
+              url: `/pages/task/task?id=${message.taskId}`
+            });
+          } else {
+            // 显示消息内容
+            wx.showModal({
+              title: message.title,
+              content: message.summary,
+              showCancel: false
+            });
+          }
+          break;
+        case 'achievement':
+          // 导航到奖励页面
+          wx.switchTab({
+            url: '/pages/rewards/rewards'
+          });
+          break;
+        default:
+          // 显示消息内容
+          wx.showModal({
+            title: message.title,
+            content: message.summary,
+            showCancel: false
+          });
+      }
+    }
+  },
+
+  /**
+   * 标记所有消息为已读
+   */
+  markAllAsRead: function() {
+    const messages = this.data.messages.map(msg => ({
+      ...msg,
+      isRead: true
+    }));
+    
+    this.setData({
+      messages,
+      unreadCount: 0,
+      taskUnreadCount: 0,
+      achievementUnreadCount: 0,
+      systemUnreadCount: 0
+    });
+    
+    // 更新过滤后的消息列表
+    this.filterMessagesByTab();
+    
+    // 更新本地存储
+    wx.setStorage({
+      key: 'messageData',
+      data: messages,
+      success: () => {
+        wx.showToast({
+          title: '全部已读',
+          icon: 'success',
+          duration: 1500
+        });
+      }
+    });
+  },
+
+  /**
+   * 删除消息
+   */
+  deleteMessage: function(e) {
+    const messageId = e.currentTarget.dataset.id;
+    
+    wx.showModal({
+      title: '删除消息',
+      content: '确定要删除这条消息吗？',
+      success: (res) => {
+        if (res.confirm) {
+          const messages = this.data.messages.filter(msg => msg.id !== messageId);
+          
+          // 重新计算未读数量
+          const unreadCount = messages.filter(msg => !msg.isRead).length;
+          const taskUnreadCount = messages.filter(msg => !msg.isRead && msg.type === 'task').length;
+          const achievementUnreadCount = messages.filter(msg => !msg.isRead && msg.type === 'achievement').length;
+          const systemUnreadCount = messages.filter(msg => !msg.isRead && msg.type === 'system').length;
+          
+          this.setData({
+            messages,
+            unreadCount,
+            taskUnreadCount,
+            achievementUnreadCount,
+            systemUnreadCount
+          });
+          
+          // 更新过滤后的消息列表
+          this.filterMessagesByTab();
+          
+          // 更新本地存储
+          wx.setStorage({
+            key: 'messageData',
+            data: messages,
+            success: () => {
+              wx.showToast({
+                title: '删除成功',
+                icon: 'success',
+                duration: 1500
+              });
+            }
+          });
+        }
+      }
+    });
+  },
+
+  /**
+   * 显示消息操作选项
+   */
+  showMessageOptions: function(e) {
+    const index = e.currentTarget.dataset.index;
+    const message = this.data.filteredMessages[index];
+    
+    wx.showActionSheet({
+      itemList: [message.isRead ? '标记为未读' : '标记为已读', '删除'],
+      success: (res) => {
+        if (res.tapIndex === 0) {
+          // 切换已读/未读状态
+          this.toggleReadStatus(message.id);
+        } else if (res.tapIndex === 1) {
+          // 删除消息
+          this.deleteMessage({ currentTarget: { dataset: { id: message.id } } });
+        }
+      }
+    });
+  },
+
+  /**
+   * 切换消息已读/未读状态
+   */
+  toggleReadStatus: function(messageId) {
+    const messages = this.data.messages;
+    const messageIndex = messages.findIndex(m => m.id === messageId);
+    
+    if (messageIndex > -1) {
+      // 切换已读状态
+      const newIsRead = !messages[messageIndex].isRead;
+      messages[messageIndex].isRead = newIsRead;
+      
+      // 更新未读数量
+      let unreadChange = newIsRead ? -1 : 1;
+      let unreadCount = this.data.unreadCount + unreadChange;
+      let taskUnreadCount = this.data.taskUnreadCount;
+      let achievementUnreadCount = this.data.achievementUnreadCount;
+      let systemUnreadCount = this.data.systemUnreadCount;
+      
+      // 根据消息类型更新对应的未读数量
+      switch(messages[messageIndex].type) {
+        case 'task': taskUnreadCount += unreadChange; break;
+        case 'achievement': achievementUnreadCount += unreadChange; break;
+        case 'system': systemUnreadCount += unreadChange; break;
+      }
+      
+      this.setData({
+        messages,
+        unreadCount,
+        taskUnreadCount,
+        achievementUnreadCount,
+        systemUnreadCount
+      });
+      
+      // 更新过滤后的消息列表
+      this.filterMessagesByTab();
+      
+      // 更新本地存储
+      wx.setStorage({
+        key: 'messageData',
+        data: messages,
+        success: () => {
+          wx.showToast({
+            title: newIsRead ? '已标记为已读' : '已标记为未读',
+            icon: 'success',
+            duration: 1500
+          });
+        }
+      });
+    }
+  },
+
+  /**
+   * 加载更多消息
+   */
+  loadMoreMessages: function() {
+    if (this.data.hasMoreMessages) {
+      this.setData({
+        currentPage: this.data.currentPage + 1
+      });
+      
+      this.filterMessagesByTab();
+    }
+  },
+
+  /**
+   * 格式化消息时间显示
+   */
+  formatMessageTime: function(timestamp) {
+    const now = new Date();
+    const msgDate = new Date(timestamp);
+    const diffMinutes = Math.floor((now - msgDate) / (60 * 1000));
+    
+    if (diffMinutes < 1) {
+      return '刚刚';
+    } else if (diffMinutes < 60) {
+      return `${diffMinutes}分钟前`;
+    } else if (diffMinutes < 24 * 60) {
+      const hours = Math.floor(diffMinutes / 60);
+      return `${hours}小时前`;
+    } else if (diffMinutes < 30 * 24 * 60) {
+      const days = Math.floor(diffMinutes / (24 * 60));
+      return `${days}天前`;
+    } else {
+      const year = msgDate.getFullYear();
+      const month = (msgDate.getMonth() + 1).toString().padStart(2, '0');
+      const day = msgDate.getDate().toString().padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+  },
+
+  /**
+   * 格式化日期
+   */
+  formatDate: function(timestamp) {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffDays = Math.floor((now - date) / (24 * 60 * 60 * 1000));
+    
+    if (diffDays === 0) {
+      return '今天';
+    } else if (diffDays === 1) {
+      return '昨天';
+    } else if (diffDays === 2) {
+      return '前天';
+    } else if (diffDays < 7) {
+      const weekdays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+      return weekdays[date.getDay()];
+    } else {
+      const year = date.getFullYear();
+      const month = (date.getMonth() + 1).toString().padStart(2, '0');
+      const day = date.getDate().toString().padStart(2, '0');
+      
+      if (year === now.getFullYear()) {
+        return `${month}月${day}日`;
+      } else {
+        return `${year}年${month}月${day}日`;
+      }
+    }
+  }
+}) 

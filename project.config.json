@@ -41,7 +41,7 @@
     "minifyWXSS": true
   },
   "compileType": "miniprogram",
-  "libVersion": "2.19.6",
+  "libVersion": "3.0.2",
   "minLibVersion": "2.14.0",
   "appid": "wx9d400fd6fcb1e263",
   "projectname": "学习任务",

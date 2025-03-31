@@ -3,7 +3,8 @@
     "pages/index/index",
     "pages/task/task",
     "pages/create/create",
-    "pages/rewards/rewards"
+    "pages/rewards/rewards",
+    "pages/message/message"
   ],
   "window": {
     "backgroundTextStyle": "light",

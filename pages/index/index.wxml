@@ -10,11 +10,55 @@
       <view class="header-title">{{currentMotivation}}</view>
     </view>
     <view class="header-actions">
-      <view class="search-icon-fixed" hover-class="icon-hover" bindtap="toggleSearch">
-        <view class="search-icon-svg">
-          <view class="search-circle"></view>
-          <view class="search-handle"></view>
+      <view class="message-icon-wrapper" hover-class="icon-hover" bindtap="toggleMessagePreview">
+        <view class="message-icon">
+          <image src="/assets/icons/message/message.svg" mode="aspectFit"></image>
         </view>
+        <view class="unread-badge" wx:if="{{unreadCount > 0}}">
+          <text wx:if="{{unreadCount <= 99}}">{{unreadCount}}</text>
+          <text wx:else>99+</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 消息预览覆盖层 -->
+  <view class="message-preview-panel card {{messagePreviewClosing ? 'closing' : ''}}" 
+        wx:if="{{showMessagePreview || messagePreviewClosing}}">
+    <view class="message-preview-header">
+      <view class="section-title">消息中心</view>
+      <view class="message-preview-close" bindtap="toggleMessagePreview">×</view>
+    </view>
+    
+    <view class="no-messages" wx:if="{{!messages || messages.length === 0}}">
+      <view class="no-messages-icon">📩</view>
+      <view class="no-messages-text">暂无消息</view>
+    </view>
+    
+    <scroll-view class="message-list" scroll-y="{{true}}" wx:else>
+      <view class="message-item {{item.isRead ? '' : 'unread'}}" 
+            wx:for="{{messages}}" 
+            wx:key="id"
+            bindtap="viewMessageDetail"
+            data-id="{{item.id}}">
+        <view class="message-icon-container">
+          <text class="message-type-icon">{{item.icon || '📝'}}</text>
+          <view class="message-unread-dot" wx:if="{{!item.isRead}}"></view>
+        </view>
+        <view class="message-content">
+          <view class="message-title">{{item.title}}</view>
+          <view class="message-summary">{{item.summary}}</view>
+          <view class="message-time">{{item.timeDisplay}}</view>
+        </view>
+      </view>
+    </scroll-view>
+    
+    <view class="message-preview-actions">
+      <view class="mark-all-read" bindtap="markAllAsRead" wx:if="{{unreadCount > 0}}">
+        全部已读
+      </view>
+      <view class="view-all-messages" bindtap="navigateToMessageCenter">
+        查看全部
       </view>
     </view>
   </view>

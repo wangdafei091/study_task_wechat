@@ -56,7 +56,13 @@ Page({
       study: 0
     },
     ringSize: 'medium', // 新增圆环尺寸类名
-    typeRingSizes: {}   // 各类型圆环大小
+    typeRingSizes: {},   // 各类型圆环大小
+
+    // 消息中心相关
+    showMessagePreview: false, // 是否显示消息预览
+    messagePreviewClosing: false, // 消息预览是否正在关闭中
+    messages: [], // 消息列表
+    unreadCount: 0, // 未读消息数量
   },
   
   /**
@@ -90,6 +96,9 @@ Page({
     
     // 根据任务总耗时调整圆环大小
     this.adjustRingSize();
+
+    // 加载消息数据
+    this.loadMessageData();
     
     // 检查用户信息
     if (app.globalData.userInfo) {
@@ -118,6 +127,9 @@ Page({
     
     // 调整圆环大小
     this.adjustRingSize();
+
+    // 刷新消息数据
+    this.loadMessageData();
   },
 
   // 从本地存储加载任务数据
@@ -860,5 +872,236 @@ Page({
       // 执行搜索
       this.performSearch();
     }, 200);
-  }
+  },
+
+  // 显示/隐藏消息预览
+  toggleMessagePreview: function() {
+    const currentState = this.data.showMessagePreview;
+    
+    if (currentState) {
+      // 当前是显示状态，添加一个关闭中的状态，用于触发CSS动画
+      this.setData({
+        messagePreviewClosing: true
+      });
+      
+      // 动画结束后再隐藏元素
+      setTimeout(() => {
+        this.setData({
+          showMessagePreview: false,
+          messagePreviewClosing: false
+        });
+      }, 280); // 略小于动画时间
+    } else {
+      // 当前是隐藏状态，直接显示
+      this.setData({
+        showMessagePreview: true,
+        messagePreviewClosing: false,
+        showSearch: false, // 确保搜索面板关闭
+        showStats: false   // 确保统计面板关闭
+      });
+    }
+  },
+
+  // 从本地存储加载消息数据
+  loadMessageData: function() {
+    wx.getStorage({
+      key: 'messageData',
+      success: (res) => {
+        if (res.data && res.data.length > 0) {
+          // 处理消息时间显示
+          const messages = res.data.map(msg => {
+            return {
+              ...msg,
+              timeDisplay: this.formatMessageTime(msg.timestamp)
+            };
+          });
+          
+          // 计算未读消息数量
+          const unreadCount = messages.filter(msg => !msg.isRead).length;
+          
+          this.setData({ 
+            messages,
+            unreadCount
+          });
+        } else {
+          // 如果没有消息，设置默认示例消息
+          this.setDefaultMessages();
+        }
+      },
+      fail: () => {
+        // 加载失败，设置默认示例消息
+        this.setDefaultMessages();
+      }
+    });
+  },
+  
+  // 设置默认示例消息
+  setDefaultMessages: function() {
+    const now = Date.now();
+    const messages = [
+      {
+        id: 'msg_' + (now - 3600000),
+        type: 'task',
+        title: '任务即将到期',
+        summary: '您有一个"语文作业"任务将在1小时后到期',
+        timestamp: now - 3600000,
+        isRead: false,
+        icon: '⏰'
+      },
+      {
+        id: 'msg_' + (now - 86400000),
+        type: 'achievement',
+        title: '完成连续学习3天',
+        summary: '恭喜你已经连续学习3天了，再接再厉！',
+        timestamp: now - 86400000,
+        isRead: true,
+        icon: '🏆'
+      },
+      {
+        id: 'msg_' + (now - 172800000),
+        type: 'system',
+        title: '新功能上线',
+        summary: '消息中心功能已上线，现在可以接收任务提醒和成就通知了',
+        timestamp: now - 172800000,
+        isRead: true,
+        icon: '🔔'
+      }
+    ];
+    
+    // 计算未读消息数量
+    const unreadCount = messages.filter(msg => !msg.isRead).length;
+    
+    // 格式化消息时间显示
+    const formattedMessages = messages.map(msg => {
+      return {
+        ...msg,
+        timeDisplay: this.formatMessageTime(msg.timestamp)
+      };
+    });
+    
+    this.setData({
+      messages: formattedMessages,
+      unreadCount
+    });
+    
+    // 保存到本地存储
+    wx.setStorage({
+      key: 'messageData',
+      data: messages
+    });
+  },
+  
+  // 格式化消息时间显示
+  formatMessageTime: function(timestamp) {
+    const now = new Date();
+    const msgDate = new Date(timestamp);
+    const diffMinutes = Math.floor((now - msgDate) / (60 * 1000));
+    
+    if (diffMinutes < 1) {
+      return '刚刚';
+    } else if (diffMinutes < 60) {
+      return `${diffMinutes}分钟前`;
+    } else if (diffMinutes < 24 * 60) {
+      const hours = Math.floor(diffMinutes / 60);
+      return `${hours}小时前`;
+    } else if (diffMinutes < 30 * 24 * 60) {
+      const days = Math.floor(diffMinutes / (24 * 60));
+      return `${days}天前`;
+    } else {
+      const year = msgDate.getFullYear();
+      const month = (msgDate.getMonth() + 1).toString().padStart(2, '0');
+      const day = msgDate.getDate().toString().padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+  },
+  
+  // 查看消息详情
+  viewMessageDetail: function(e) {
+    const messageId = e.currentTarget.dataset.id;
+    const messages = this.data.messages;
+    const messageIndex = messages.findIndex(m => m.id === messageId);
+    
+    if (messageIndex > -1) {
+      // 标记该消息为已读
+      if (!messages[messageIndex].isRead) {
+        messages[messageIndex].isRead = true;
+        const unreadCount = this.data.unreadCount - 1;
+        
+        this.setData({
+          messages,
+          unreadCount
+        });
+        
+        // 更新本地存储
+        wx.setStorage({
+          key: 'messageData',
+          data: messages
+        });
+      }
+      
+      // 根据消息类型处理不同的导航逻辑
+      const message = messages[messageIndex];
+      switch (message.type) {
+        case 'task':
+          // 如果有关联任务ID，导航到该任务详情
+          if (message.taskId) {
+            wx.navigateTo({
+              url: `/pages/task/task?id=${message.taskId}`
+            });
+          }
+          break;
+        case 'achievement':
+          // 导航到奖励页面
+          wx.switchTab({
+            url: '/pages/rewards/rewards'
+          });
+          break;
+        default:
+          // 显示消息内容
+          wx.showModal({
+            title: message.title,
+            content: message.summary,
+            showCancel: false
+          });
+      }
+    }
+  },
+  
+  // 标记所有消息为已读
+  markAllAsRead: function() {
+    const messages = this.data.messages.map(msg => ({
+      ...msg,
+      isRead: true
+    }));
+    
+    this.setData({
+      messages,
+      unreadCount: 0
+    });
+    
+    // 更新本地存储
+    wx.setStorage({
+      key: 'messageData',
+      data: messages,
+      success: () => {
+        wx.showToast({
+          title: '全部已读',
+          icon: 'success',
+          duration: 1500
+        });
+      }
+    });
+  },
+  
+  // 导航到消息中心完整页面
+  navigateToMessageCenter: function() {
+    // 关闭消息预览
+    this.toggleMessagePreview();
+    
+    // 导航到消息中心页面
+    // 注意：这个页面目前还不存在，需要创建
+    wx.navigateTo({
+      url: '/pages/message/message'
+    });
+  },
 }) 
