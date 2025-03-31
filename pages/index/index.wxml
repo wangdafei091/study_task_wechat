@@ -23,8 +23,9 @@
   </view>
 
   <!-- 消息预览覆盖层 -->
-  <view class="message-preview-panel card {{messagePreviewClosing ? 'closing' : ''}}" 
-        wx:if="{{showMessagePreview || messagePreviewClosing}}">
+  <view class="message-preview-panel card" 
+        wx:if="{{showMessagePreview}}"
+        animation="{{messageAnimation}}">
     <view class="message-preview-header">
       <view class="section-title">消息中心</view>
       <view class="message-preview-close" bindtap="toggleMessagePreview">×</view>

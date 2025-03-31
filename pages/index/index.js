@@ -63,6 +63,7 @@ Page({
     messagePreviewClosing: false, // 消息预览是否正在关闭中
     messages: [], // 消息列表
     unreadCount: 0, // 未读消息数量
+    messageAnimation: null, // 消息预览动画实例
   },
   
   /**
@@ -99,6 +100,13 @@ Page({
 
     // 加载消息数据
     this.loadMessageData();
+    
+    // 初始化消息预览动画实例
+    this.messageAnimation = wx.createAnimation({
+      duration: 250,
+      timingFunction: 'ease-out',
+      delay: 0
+    });
     
     // 检查用户信息
     if (app.globalData.userInfo) {
@@ -879,26 +887,38 @@ Page({
     const currentState = this.data.showMessagePreview;
     
     if (currentState) {
-      // 当前是显示状态，添加一个关闭中的状态，用于触发CSS动画
+      // 创建关闭动画
+      this.messageAnimation.opacity(0).scale(0.95).translateY(-10).step();
+      
       this.setData({
-        messagePreviewClosing: true
+        messageAnimation: this.messageAnimation.export()
       });
       
       // 动画结束后再隐藏元素
       setTimeout(() => {
         this.setData({
-          showMessagePreview: false,
-          messagePreviewClosing: false
+          showMessagePreview: false
         });
-      }, 280); // 略小于动画时间
+      }, 250);
     } else {
-      // 当前是隐藏状态，直接显示
+      // 重置动画初始状态
+      this.messageAnimation.opacity(0).scale(0.95).translateY(-10).step({ duration: 0 });
+      
       this.setData({
         showMessagePreview: true,
-        messagePreviewClosing: false,
+        messageAnimation: this.messageAnimation.export(),
         showSearch: false, // 确保搜索面板关闭
         showStats: false   // 确保统计面板关闭
       });
+      
+      // 添加一个短暂延时，确保视图更新后再开始动画
+      setTimeout(() => {
+        this.messageAnimation.opacity(1).scale(1).translateY(0).step();
+        
+        this.setData({
+          messageAnimation: this.messageAnimation.export()
+        });
+      }, 30);
     }
   },
 
