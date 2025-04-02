@@ -96,8 +96,7 @@
 }
 
 .task-item.completed .task-title {
-  color: var(--text-tertiary);
-  text-decoration: line-through;
+  color: var(--text-primary);
 }
 
 .task-info {
@@ -154,8 +153,8 @@
 }
 
 .task-item.completed {
-  opacity: 0.8;
-  background: linear-gradient(to bottom, #fafafa, #f8f8f8);
+  opacity: 1;
+  background: linear-gradient(to bottom, #ffffff, #fafbfd);
 }
 
 .task-status {

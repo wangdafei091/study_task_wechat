@@ -9,7 +9,7 @@
   "window": {
     "backgroundTextStyle": "light",
     "navigationBarBackgroundColor": "#4285F4",
-    "navigationBarTitleText": "学习任务",
+    "navigationBarTitleText": "小CEO日程表",
     "navigationBarTextStyle": "white"
   },
   "tabBar": {
