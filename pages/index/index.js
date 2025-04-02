@@ -611,6 +611,11 @@ Page({
   
   // 创建新任务
   createNewTask: function() {
+    // 震动反馈
+    if (wx.vibrateShort) {
+      wx.vibrateShort({ type: 'light' });
+    }
+    
     wx.navigateTo({
       url: '/pages/task-edit/task-edit',
       events: {

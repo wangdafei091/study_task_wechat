@@ -348,7 +348,11 @@
   </view>
   
   <!-- 添加任务按钮 -->
-  <view class="add-task-button" bindtap="createNewTask" hover-class="button-hover">
+  <view class="add-task-button" 
+        bindtap="createNewTask" 
+        hover-class="button-hover" 
+        aria-label="添加新任务" 
+        aria-role="button">
     <text class="iconfont">＋</text>
   </view>
   
