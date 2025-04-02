@@ -735,9 +735,9 @@ Page({
     });
   },
   
-  // 创建新任务（保留原有方法作为备用）
+  // 创建新任务（保留原有方法作为备用，确保兼容性）
   createNewTask: function() {
-    // 这里直接调用toggleFloatMenu，切换浮动菜单
+    // 将行为改为打开浮动菜单
     this.toggleFloatMenu();
   },
   
