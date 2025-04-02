@@ -26,7 +26,7 @@
               <view class="task-template {{selectedTemplate === item.id ? 'active' : ''}}" 
                     bindtap="selectTemplate" data-id="{{item.id}}">
                 <view class="template-icon">{{item.icon}}</view>
-                <text class="template-name">{{item.name}}</text>
+                <text class="template-name">{{item.shortName || item.name}}</text>
               </view>
             </block>
             <view class="task-template custom" bindtap="selectCustomTask">
@@ -37,12 +37,26 @@
         </scroll-view>
       </view>
       
-      <!-- 任务名称 -->
-      <view class="form-item">
+      <!-- 已选模板时显示任务名称（只读） -->
+      <view class="form-item" wx:if="{{!customMode}}">
+        <view class="item-label">任务名称</view>
+        <view class="task-title-display">{{task.title}}</view>
+      </view>
+      
+      <!-- 自定义模式下显示可编辑的任务名称输入框 -->
+      <view class="form-item" wx:if="{{customMode}}">
         <view class="item-label">任务名称</view>
         <input class="input" value="{{task.title}}" bindinput="inputTitle" 
           placeholder="请输入任务名称" maxlength="20" />
         <view class="char-count">{{task.title.length}}/20</view>
+      </view>
+      
+      <!-- 任务简称(新增) -->
+      <view class="form-item" wx:if="{{customMode && task.title}}">
+        <view class="item-label">任务简称 <text class="tip">(显示在常用任务中，4字以内)</text></view>
+        <input class="input short-name-input" value="{{task.shortName}}" bindinput="inputShortName" 
+          placeholder="简称，如：数学、阅读" maxlength="4" />
+        <view class="char-count">{{task.shortName.length}}/4</view>
       </view>
       
       <!-- 任务描述 -->

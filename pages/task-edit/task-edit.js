@@ -10,6 +10,7 @@ Page({
     task: {
       id: '', // 编辑模式下有值
       title: '',
+      shortName: '', // 新增：任务简称(4字以内)
       description: '',
       type: '', // 任务类型
       taskType: '', // 主任务类型(study/habit)
@@ -302,8 +303,25 @@ Page({
    * 输入任务名称
    */
   inputTitle: function(e) {
+    const title = e.detail.value;
+    // 自动提取前4个字作为简称(如果简称为空)
+    let shortName = this.data.task.shortName || '';
+    if (!shortName && title) {
+      shortName = title.substring(0, 4);
+    }
+    
     this.setData({
-      'task.title': e.detail.value
+      'task.title': title,
+      'task.shortName': shortName
+    });
+  },
+
+  /**
+   * 输入任务简称
+   */
+  inputShortName: function(e) {
+    this.setData({
+      'task.shortName': e.detail.value
     });
   },
 
@@ -911,6 +929,7 @@ Page({
       { 
         id: 'math_homework', 
         name: '数学作业', 
+        shortName: '数学',
         icon: '📐', 
         description: '完成数学练习册', 
         duration: 45, 
@@ -919,6 +938,7 @@ Page({
       { 
         id: 'reading', 
         name: '阅读练习', 
+        shortName: '阅读',
         icon: '📚', 
         description: '阅读一篇文章并做笔记', 
         duration: 30, 
@@ -927,6 +947,7 @@ Page({
       { 
         id: 'english_words', 
         name: '英语单词', 
+        shortName: '英语',
         icon: '🔤', 
         description: '背诵英语单词', 
         duration: 20, 
@@ -935,6 +956,7 @@ Page({
       { 
         id: 'writing', 
         name: '写作文', 
+        shortName: '作文',
         icon: '✏️', 
         description: '完成一篇作文', 
         duration: 60, 
@@ -947,6 +969,7 @@ Page({
       { 
         id: 'tidy_desk', 
         name: '整理书桌', 
+        shortName: '整理',
         icon: '🧹', 
         description: '整理书桌和学习用品', 
         duration: 15, 
@@ -955,6 +978,7 @@ Page({
       { 
         id: 'wash_dishes', 
         name: '洗碗', 
+        shortName: '洗碗',
         icon: '🍽️', 
         description: '清洗并整理餐具', 
         duration: 10, 
@@ -963,6 +987,7 @@ Page({
       { 
         id: 'exercise', 
         name: '做运动', 
+        shortName: '运动',
         icon: '🏃', 
         description: '进行体育锻炼', 
         duration: 30, 
@@ -971,6 +996,7 @@ Page({
       { 
         id: 'make_bed', 
         name: '整理床铺', 
+        shortName: '床铺',
         icon: '🛏️', 
         description: '整理床铺被褥', 
         duration: 5, 
@@ -1017,6 +1043,7 @@ Page({
         selectedTemplate: templateId,
         customMode: false,
         'task.title': template.name,
+        'task.shortName': template.shortName || template.name.substring(0, 4), // 设置简称
         'task.description': template.description || '',
         'task.duration': template.duration,
         'task.points': template.points,
@@ -1074,10 +1101,18 @@ Page({
       return;
     }
     
+    // 确保简称不超过4字符
+    let shortName = task.shortName || '';
+    if (!shortName) {
+      // 如果没有简称，使用任务名前4个字
+      shortName = task.title.substring(0, 4);
+    }
+    
     // 创建新模板
     const newTemplate = {
       id: 'custom_' + Date.now(),
       name: task.title,
+      shortName: shortName,  // 保存简称
       icon: this.data.taskType === 'study' ? '📚' : '⏰',
       description: task.description,
       duration: task.duration,
