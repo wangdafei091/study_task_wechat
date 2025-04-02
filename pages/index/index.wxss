@@ -822,23 +822,30 @@
 
 /* 添加任务按钮 */
 .add-task-button {
-  position: fixed;
-  bottom: calc(140rpx + env(safe-area-inset-bottom) / 2); /* 安全区域适配 */
-  right: 40rpx;
-  left: auto;
-  transform: none;
+  position: relative;
   width: 110rpx;
   height: 110rpx;
-  background: linear-gradient(135deg, var(--primary-color), var(--primary-dark)); /* 渐变背景 */
+  background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--surface);
   font-size: 55rpx;
-  box-shadow: 0 4rpx 12rpx rgba(66, 133, 244, 0.3), 0 8rpx 24rpx rgba(66, 133, 244, 0.15); /* 双层阴影 */
-  z-index: 100;
-  transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.3s ease; /* 微弹效果 */
+  box-shadow: 0 4rpx 12rpx rgba(66, 133, 244, 0.3), 0 8rpx 24rpx rgba(66, 133, 244, 0.15);
+  transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.3s ease;
+  z-index: 10;
+}
+
+/* 图标动画 */
+.icon-add, .icon-close {
+  transition: transform 0.3s ease;
+  display: block;
+  line-height: 1;
+}
+
+.icon-close {
+  transform: rotate(45deg) scale(1.2);
 }
 
 /* 添加按钮的按下效果 */
@@ -853,22 +860,122 @@
   box-shadow: 0 6rpx 16rpx rgba(66, 133, 244, 0.35);
 }
 
-/* 点击波纹效果 */
-.add-task-button::after {
-  content: '';
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.3);
-  transform: scale(0);
-  opacity: 1;
-  transition: all 0.4s ease-out;
+/* 底部导航占位 */
+.bottom-nav-placeholder {
+  height: 100rpx;
 }
 
-.add-task-button:active::after {
-  transform: scale(1.5);
+/* 浮动菜单容器 */
+.fab-container {
+  position: fixed;
+  bottom: calc(140rpx + env(safe-area-inset-bottom) / 2);
+  right: 40rpx;
+  z-index: 100;
+}
+
+/* 浮动菜单 */
+.float-menu {
+  position: absolute;
+  bottom: 60rpx;
+  right: 5rpx;
+  width: 110rpx;
+  height: 110rpx;
+  display: flex;
+  justify-content: center;
+  opacity: 1;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.float-menu.active {
+  pointer-events: auto;
+}
+
+/* 扇形排列定位 - 修正为真正的扇形布局 */
+.float-menu-item {
+  position: absolute;
+  bottom: 0;
+  right: 5rpx;
+  width: 100rpx;
+  height: 100rpx;
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.2);
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transform-origin: center;
   opacity: 0;
+  transform: scale(0.5);
+  z-index: 2;
+}
+
+/* 添加背景模糊效果 */
+.fab-container::before {
+  content: '';
+  position: absolute;
+  bottom: 20rpx;
+  right: 20rpx;
+  width: 300rpx;
+  height: 300rpx;
+  background: rgba(255,255,255,0.4);
+  border-radius: 50%;
+  filter: blur(15rpx);
+  opacity: 0;
+  transform: scale(0.8);
+  transition: all 0.3s ease;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.fab-container.menu-active::before {
+  opacity: 0.8;
+  transform: scale(1);
+}
+
+/* 学习型任务按钮 - 左上方45度 */
+.float-menu-item.study-task {
+  background: linear-gradient(135deg, #4285F4, #1A73E8);
+  transition-delay: 0.05s;
+}
+
+.float-menu.active .float-menu-item.study-task {
+  transform: scale(1) translate(-110rpx, -110rpx);
+  opacity: 1;
+}
+
+/* 习惯型任务按钮 - 左上方90度 */
+.float-menu-item.habit-task {
+  background: linear-gradient(135deg, #FF9800, #F57C00);
+  transition-delay: 0.1s;
+}
+
+.float-menu.active .float-menu-item.habit-task {
+  transform: scale(1) translate(-40rpx, -150rpx);
+  opacity: 1;
+}
+
+/* 移除不必要的旋转，直接使用简单的平移 */
+.float-menu-item.study-task .menu-icon,
+.float-menu-item.study-task .menu-label,
+.float-menu-item.habit-task .menu-icon,
+.float-menu-item.habit-task .menu-label {
+  transform: none;
+}
+
+/* 菜单图标 */
+.menu-icon {
+  font-size: 36rpx;
+  margin-bottom: 6rpx;
+  color: #FFFFFF;
+}
+
+/* 菜单标签 */
+.menu-label {
+  font-size: 20rpx;
+  color: white;
+  font-weight: 500;
 }
 
 /* 横屏模式适配 */
@@ -879,9 +986,30 @@
   }
 }
 
-/* 底部导航占位 */
-.bottom-nav-placeholder {
-  height: 100rpx;
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10rpx);
+    max-height: 0;
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    max-height: 1000rpx;
+  }
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+    max-height: 1000rpx;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-10rpx);
+    max-height: 0;
+  }
 }
 
 /* 卡片通用样式 */
@@ -1079,7 +1207,7 @@
   font-weight: 600;
 }
 
-/* 横屏模式适配 */
+/* 横屏模式适配 - 进度圆环部分 */
 @media screen and (orientation: landscape) {
   .progress-rings-container {
     flex-direction: row;
@@ -1109,31 +1237,5 @@
   .progress-ring.small {
     width: 100rpx;
     height: 100rpx;
-  }
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(-10rpx);
-    max-height: 0;
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-    max-height: 1000rpx;
-  }
-}
-
-@keyframes fadeOut {
-  from {
-    opacity: 1;
-    transform: translateY(0);
-    max-height: 1000rpx;
-  }
-  to {
-    opacity: 0;
-    transform: translateY(-10rpx);
-    max-height: 0;
   }
 } 

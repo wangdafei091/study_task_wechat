@@ -64,6 +64,9 @@ Page({
     messages: [], // 消息列表
     unreadCount: 0, // 未读消息数量
     messageAnimation: null, // 消息预览动画实例
+
+    // 浮动菜单状态
+    showFloatMenu: false,
   },
   
   /**
@@ -609,35 +612,44 @@ Page({
     console.log('任务详情功能已禁用');
   },
   
-  // 创建新任务
-  createNewTask: function() {
+  // 切换浮动菜单
+  toggleFloatMenu: function() {
     // 震动反馈
     if (wx.vibrateShort) {
       wx.vibrateShort({ type: 'light' });
     }
     
+    this.setData({
+      showFloatMenu: !this.data.showFloatMenu
+    });
+  },
+  
+  // 创建学习型任务
+  createStudyTask: function() {
+    // 震动反馈
+    if (wx.vibrateShort) {
+      wx.vibrateShort({ type: 'medium' });
+    }
+    
+    // 关闭浮动菜单
+    this.setData({
+      showFloatMenu: false
+    });
+    
+    // 跳转到创建页面，并传入类型参数
     wx.navigateTo({
-      url: '/pages/task-edit/task-edit',
+      url: '/pages/task-edit/task-edit?type=study&precision=second',
       events: {
         // 监听页面返回的任务数据
         taskAdded: (data) => {
           if (data && data.task) {
+            // 标记为学习型任务，精确到秒
+            data.task.taskType = 'study';
+            data.task.timePrecision = 'second';
+            
             // 确保任务有duration属性
             if (!data.task.hasOwnProperty('duration')) {
-              // 根据任务类型设置默认持续时间
-              switch(data.task.type) {
-                case 'clock': 
-                  data.task.duration = 10; // 生活习惯类默认10分钟
-                  break;
-                case 'bag':
-                  data.task.duration = 20; // 整理收纳类默认20分钟
-                  break;
-                case 'study':
-                  data.task.duration = 60; // 学习任务默认60分钟
-                  break;
-                default:
-                  data.task.duration = 30; // 其他类型默认30分钟
-              }
+              data.task.duration = 60; // 学习任务默认60分钟
             }
             
             // 添加新任务
@@ -656,13 +668,77 @@ Page({
             this.adjustRingSize();
             
             wx.showToast({
-              title: '任务添加成功',
+              title: '学习任务添加成功',
               icon: 'success'
             });
           }
         }
       }
     });
+  },
+  
+  // 创建习惯型任务
+  createHabitTask: function() {
+    // 震动反馈
+    if (wx.vibrateShort) {
+      wx.vibrateShort({ type: 'medium' });
+    }
+    
+    // 关闭浮动菜单
+    this.setData({
+      showFloatMenu: false
+    });
+    
+    // 跳转到创建页面，并传入类型参数
+    wx.navigateTo({
+      url: '/pages/task-edit/task-edit?type=habit&precision=day',
+      events: {
+        // 监听页面返回的任务数据
+        taskAdded: (data) => {
+          if (data && data.task) {
+            // 标记为习惯型任务，精确到天
+            data.task.taskType = 'habit';
+            data.task.timePrecision = 'day';
+            
+            // 默认类型为clock(生活习惯)
+            if (!data.task.type) {
+              data.task.type = 'clock';
+            }
+            
+            // 确保任务有duration属性
+            if (!data.task.hasOwnProperty('duration')) {
+              data.task.duration = 15; // 习惯任务默认15分钟
+            }
+            
+            // 添加新任务
+            const tasks = this.data.tasks;
+            tasks.push(data.task);
+            
+            this.setData({
+              tasks: tasks
+            });
+            
+            // 保存数据并更新统计
+            this.saveTaskData();
+            this.updateStats();
+            
+            // 调整圆环大小
+            this.adjustRingSize();
+            
+            wx.showToast({
+              title: '习惯任务添加成功',
+              icon: 'success'
+            });
+          }
+        }
+      }
+    });
+  },
+  
+  // 创建新任务（保留原有方法作为备用）
+  createNewTask: function() {
+    // 这里直接调用toggleFloatMenu，切换浮动菜单
+    this.toggleFloatMenu();
   },
   
   // 编辑任务
