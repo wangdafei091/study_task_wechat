@@ -133,6 +133,9 @@ Page({
    * 生命周期函数--监听页面显示
    */
   onShow: function () {
+    // 从本地存储重新加载任务数据
+    this.loadTaskData();
+    
     // 重新计算任务统计数据
     this.updateStats();
     
@@ -636,44 +639,9 @@ Page({
       showFloatMenu: false
     });
     
-    // 跳转到创建页面，并传入类型参数
+    // 跳转到任务编辑页面，并传入类型参数
     wx.navigateTo({
-      url: '/pages/task-edit/task-edit?type=study&precision=second',
-      events: {
-        // 监听页面返回的任务数据
-        taskAdded: (data) => {
-          if (data && data.task) {
-            // 标记为学习型任务，精确到秒
-            data.task.taskType = 'study';
-            data.task.timePrecision = 'second';
-            
-            // 确保任务有duration属性
-            if (!data.task.hasOwnProperty('duration')) {
-              data.task.duration = 60; // 学习任务默认60分钟
-            }
-            
-            // 添加新任务
-            const tasks = this.data.tasks;
-            tasks.push(data.task);
-            
-            this.setData({
-              tasks: tasks
-            });
-            
-            // 保存数据并更新统计
-            this.saveTaskData();
-            this.updateStats();
-            
-            // 调整圆环大小
-            this.adjustRingSize();
-            
-            wx.showToast({
-              title: '学习任务添加成功',
-              icon: 'success'
-            });
-          }
-        }
-      }
+      url: '/pages/task-edit/task-edit?taskType=study&precision=second'
     });
   },
   
@@ -689,49 +657,9 @@ Page({
       showFloatMenu: false
     });
     
-    // 跳转到创建页面，并传入类型参数
+    // 跳转到任务编辑页面，并传入类型参数
     wx.navigateTo({
-      url: '/pages/task-edit/task-edit?type=habit&precision=day',
-      events: {
-        // 监听页面返回的任务数据
-        taskAdded: (data) => {
-          if (data && data.task) {
-            // 标记为习惯型任务，精确到天
-            data.task.taskType = 'habit';
-            data.task.timePrecision = 'day';
-            
-            // 默认类型为clock(生活习惯)
-            if (!data.task.type) {
-              data.task.type = 'clock';
-            }
-            
-            // 确保任务有duration属性
-            if (!data.task.hasOwnProperty('duration')) {
-              data.task.duration = 15; // 习惯任务默认15分钟
-            }
-            
-            // 添加新任务
-            const tasks = this.data.tasks;
-            tasks.push(data.task);
-            
-            this.setData({
-              tasks: tasks
-            });
-            
-            // 保存数据并更新统计
-            this.saveTaskData();
-            this.updateStats();
-            
-            // 调整圆环大小
-            this.adjustRingSize();
-            
-            wx.showToast({
-              title: '习惯任务添加成功',
-              icon: 'success'
-            });
-          }
-        }
-      }
+      url: '/pages/task-edit/task-edit?taskType=habit&precision=day'
     });
   },
   
@@ -743,56 +671,11 @@ Page({
   
   // 编辑任务
   editTask: function(e) {
-    const taskId = e.detail;
-    const taskToEdit = this.data.tasks.find(task => task.id === taskId);
+    const taskId = e.detail.taskId || e.detail;
     
-    if (taskToEdit) {
+    if (taskId) {
       wx.navigateTo({
-        url: '/pages/task-edit/task-edit?mode=edit',
-        events: {
-          // 监听页面返回的任务数据
-          taskUpdated: (data) => {
-            if (data && data.task) {
-              // 确保任务有duration属性
-              if (!data.task.hasOwnProperty('duration')) {
-                // 保留原来的duration，或者根据任务类型设置默认值
-                data.task.duration = taskToEdit.duration || (() => {
-                  switch(data.task.type) {
-                    case 'clock': return 10;
-                    case 'bag': return 20;
-                    case 'study': return 60;
-                    default: return 30;
-                  }
-                })();
-              }
-              
-              // 更新任务
-              const tasks = this.data.tasks.map(task => 
-                task.id === data.task.id ? data.task : task
-              );
-              
-              this.setData({
-                tasks: tasks
-              });
-              
-              // 保存数据并更新统计
-              this.saveTaskData();
-              this.updateStats();
-              
-              // 调整圆环大小
-              this.adjustRingSize();
-              
-              wx.showToast({
-                title: '任务更新成功',
-                icon: 'success'
-              });
-            }
-          }
-        },
-        success: (res) => {
-          // 传递任务数据给编辑页
-          res.eventChannel.emit('editTask', { task: taskToEdit });
-        }
+        url: `/pages/task-edit/task-edit?mode=edit&taskId=${taskId}`
       });
     }
   },
