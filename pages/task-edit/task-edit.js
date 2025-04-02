@@ -6,7 +6,6 @@ Page({
     mode: 'create', // 'create' 或 'edit'
     taskType: 'study', // 'study' 或 'habit'
     precision: 'second', // 'second' 或 'day'
-    currentStep: 1, // 当前处于第几步
     task: {
       id: '', // 编辑模式下有值
       title: '',
@@ -236,67 +235,46 @@ Page({
   },
 
   /**
-   * 下一步
+   * 验证任务数据
    */
-  nextStep: function() {
-    // 验证当前步骤数据
-    if (!this.validateCurrentStep()) {
-      return;
+  validateTask: function() {
+    const { task } = this.data;
+    
+    // 验证基本信息
+    if (!task.title.trim()) {
+      wx.showToast({
+        title: '请输入任务名称',
+        icon: 'none'
+      });
+      return false;
     }
     
-    this.setData({
-      currentStep: 2
-    });
-  },
-
-  /**
-   * 返回上一步
-   */
-  prevStep: function() {
-    this.setData({
-      currentStep: 1
-    });
+    // 验证日期和时间
+    if (!task.date) {
+      wx.showToast({
+        title: '请选择执行日期',
+        icon: 'none'
+      });
+      return false;
+    }
+    
+    // 对于学习型任务，验证时间
+    if (this.data.taskType === 'study' && !task.time) {
+      wx.showToast({
+        title: '请选择执行时间',
+        icon: 'none'
+      });
+      return false;
+    }
+    
+    return true;
   },
 
   /**
    * 验证当前步骤
    */
   validateCurrentStep: function() {
-    const { task, currentStep } = this.data;
-    
-    if (currentStep === 1) {
-      // 验证第一步数据
-      if (!task.title.trim()) {
-        wx.showToast({
-          title: '请输入任务名称',
-          icon: 'none'
-        });
-        return false;
-      }
-      return true;
-    } else if (currentStep === 2) {
-      // 验证第二步数据
-      if (!task.date) {
-        wx.showToast({
-          title: '请选择执行日期',
-          icon: 'none'
-        });
-        return false;
-      }
-      
-      // 对于学习型任务，验证时间
-      if (this.data.taskType === 'study' && !task.time) {
-        wx.showToast({
-          title: '请选择执行时间',
-          icon: 'none'
-        });
-        return false;
-      }
-      
-      return true;
-    }
-    
-    return true;
+    return this.validateTask();
   },
 
   /**
@@ -823,16 +801,9 @@ Page({
   },
 
   /**
-   * 保存任务
+   * 保存任务到存储
    */
-  saveTask: function() {
-    // 最终验证
-    if (!this.validateCurrentStep()) {
-      return;
-    }
-    
-    const { mode, task } = this.data;
-    
+  saveTaskToStorage: function(task, mode) {
     // 获取现有任务数据
     wx.getStorage({
       key: 'taskData',
@@ -841,23 +812,12 @@ Page({
         
         if (mode === 'create') {
           // 创建新任务
-          const newTask = {
-            ...task,
-            id: 'task_' + Date.now(),
-            status: 0,
-            createTime: Date.now(),
-            updateTime: Date.now()
-          };
-          
-          tasks.push(newTask);
+          tasks.push(task);
         } else {
           // 更新现有任务
           const index = tasks.findIndex(t => t.id === task.id);
           if (index !== -1) {
-            tasks[index] = {
-              ...task,
-              updateTime: Date.now()
-            };
+            tasks[index] = task;
           }
         }
         
@@ -886,14 +846,7 @@ Page({
       },
       fail: () => {
         // 如果没有现有数据，创建新数组
-        const tasks = mode === 'create' ? 
-          [{
-            ...task,
-            id: 'task_' + Date.now(),
-            status: 0,
-            createTime: Date.now(),
-            updateTime: Date.now()
-          }] : [];
+        const tasks = mode === 'create' ? [task] : [];
         
         wx.setStorage({
           key: 'taskData',
@@ -911,6 +864,35 @@ Page({
         });
       }
     });
+  },
+
+  /**
+   * 保存任务
+   */
+  saveTask: function() {
+    // 先进行完整数据验证
+    if (!this.validateTask()) {
+      return;
+    }
+    
+    const { task, mode, customDurationValue, isCustomDuration } = this.data;
+    
+    // 确保自定义时长被正确处理
+    if (isCustomDuration && customDurationValue) {
+      task.duration = parseInt(customDurationValue) || 30;
+    }
+    
+    // 生成任务ID（仅创建模式）
+    if (mode === 'create') {
+      task.id = 'task_' + Date.now();
+      task.createTime = Date.now();
+    }
+    
+    // 更新任务最后修改时间
+    task.updateTime = Date.now();
+    
+    // 保存任务到存储
+    this.saveTaskToStorage(task, mode);
   },
 
   /**

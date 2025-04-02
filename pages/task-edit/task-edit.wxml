@@ -2,21 +2,10 @@
 <view class="container">
   <!-- 主内容区 -->
   <view class="content">
-    <!-- 步骤指示器 -->
-    <view class="step-indicator" wx:if="{{mode === 'create'}}">
-      <view class="step {{currentStep === 1 ? 'active' : ''}}">
-        <view class="step-dot"></view>
-        <view class="step-text">基本信息</view>
-      </view>
-      <view class="step-line"></view>
-      <view class="step {{currentStep === 2 ? 'active' : ''}}">
-        <view class="step-dot"></view>
-        <view class="step-text">时间和奖励</view>
-      </view>
-    </view>
+    <!-- 移除步骤指示器部分 -->
     
-    <!-- 第一步：基本信息 -->
-    <view class="form-section" wx:if="{{currentStep === 1 || mode === 'edit'}}">
+    <!-- 合并所有表单内容到一个section -->
+    <view class="form-section">
       <!-- 常用任务模板 -->
       <view class="form-item">
         <view class="item-label">常用任务</view>
@@ -71,10 +60,7 @@
       <view class="save-template-section" wx:if="{{customMode && task.title}}">
         <button class="btn-save-template" bindtap="saveAsTemplate">保存为常用任务</button>
       </view>
-    </view>
-    
-    <!-- 第二步：时间和奖励 -->
-    <view class="form-section" wx:if="{{currentStep === 2 || mode === 'edit'}}">
+
       <!-- 执行日期 -->
       <view class="form-item">
         <view class="item-label">执行日期</view>
@@ -186,14 +172,8 @@
     <!-- 底部按钮区 -->
     <view class="button-group">
       <block wx:if="{{mode === 'create'}}">
-        <block wx:if="{{currentStep === 1}}">
-          <button class="btn btn-primary" bindtap="nextStep">下一步</button>
-          <button class="btn btn-secondary" bindtap="cancelTask">取消</button>
-        </block>
-        <block wx:else>
-          <button class="btn btn-primary" bindtap="saveTask">保存任务</button>
-          <button class="btn btn-secondary" bindtap="prevStep">上一步</button>
-        </block>
+        <button class="btn btn-primary" bindtap="saveTask">保存任务</button>
+        <button class="btn btn-secondary" bindtap="cancelTask">取消</button>
       </block>
       <block wx:if="{{mode === 'edit'}}">
         <button class="btn btn-primary" bindtap="saveTask">保存修改</button>
