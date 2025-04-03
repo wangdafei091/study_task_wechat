@@ -50,6 +50,234 @@
   padding: 30rpx;
 }
 
+/* 卡片区域通用样式 */
+.card-section {
+  background-color: #FFFFFF;
+  border-radius: 16rpx;
+  padding: 30rpx;
+  margin-bottom: 30rpx;
+  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.08);
+}
+
+.card-title {
+  display: flex;
+  align-items: center;
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #333333;
+  margin-bottom: 24rpx;
+  padding-bottom: 16rpx;
+  border-bottom: 1rpx solid #EAEAEA;
+}
+
+.card-icon {
+  font-size: 36rpx;
+  margin-right: 12rpx;
+}
+
+/* 近期任务负荷卡片样式 */
+.task-load-card {
+  background-color: #FFFFFF;
+}
+
+.task-load-preview {
+  background-color: #F7F8FA;
+  border-radius: 12rpx;
+  padding: 20rpx;
+  margin-bottom: 24rpx;
+}
+
+.load-stats {
+  display: flex;
+  justify-content: space-between;
+  font-size: 26rpx;
+  color: #666666;
+  margin-bottom: 16rpx;
+}
+
+.load-bar-container {
+  width: 100%;
+  height: 14rpx;
+  background-color: #E8E8E8;
+  border-radius: 7rpx;
+  overflow: hidden;
+  margin-bottom: 8rpx;
+}
+
+.load-bar {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+.load-bar-progress {
+  height: 100%;
+  position: absolute;
+  left: 0;
+  top: 0;
+  background-color: #4285F4;
+  border-radius: 7rpx;
+}
+
+.load-bar.light .load-bar-progress {
+  background-color: #4CAF50;
+}
+
+.load-bar.heavy .load-bar-progress {
+  background-color: #FF5252;
+}
+
+.load-message {
+  font-size: 24rpx;
+  color: #4285F4;
+  text-align: right;
+}
+
+.load-message.light {
+  color: #4CAF50;
+}
+
+.load-message.heavy {
+  color: #FF5252;
+}
+
+/* 任务管理卡片样式 */
+.task-management-card {
+  background-color: #FFFFFF;
+}
+
+/* 积分奖励卡片样式 */
+.reward-card {
+  background-color: #FFFFFF;
+}
+
+/* 奖励建议样式 */
+.reward-suggestion {
+  background-color: #F7F8FA;
+  border-radius: 12rpx;
+  padding: 20rpx;
+  margin: 20rpx 0;
+}
+
+.suggestion-title {
+  font-size: 28rpx;
+  font-weight: 500;
+  color: #333333;
+  margin-bottom: 16rpx;
+}
+
+.suggestion-item {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10rpx;
+}
+
+.suggestion-icon {
+  font-size: 24rpx;
+  margin-right: 8rpx;
+  color: #4285F4;
+}
+
+.suggestion-text {
+  font-size: 24rpx;
+  color: #666666;
+}
+
+.suggestion-note {
+  font-size: 24rpx;
+  color: #4285F4;
+  margin-top: 16rpx;
+  font-style: italic;
+  padding-left: 30rpx;
+}
+
+/* 可兑换奖励样式 */
+.available-rewards {
+  margin-top: 20rpx;
+}
+
+.rewards-title {
+  font-size: 28rpx;
+  font-weight: 500;
+  color: #333333;
+  margin-bottom: 16rpx;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.user-points {
+  font-size: 26rpx;
+  color: #4285F4;
+  font-weight: bold;
+}
+
+.rewards-container {
+  width: 100%;
+  white-space: nowrap;
+}
+
+.rewards-list {
+  display: inline-flex;
+  padding: 10rpx 0;
+}
+
+.reward-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 150rpx;
+  height: 180rpx;
+  background-color: #F7F8FA;
+  border-radius: 12rpx;
+  margin-right: 20rpx;
+  box-sizing: border-box;
+  padding: 15rpx;
+  position: relative;
+}
+
+.reward-item.locked {
+  opacity: 0.6;
+}
+
+.reward-item.locked::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.15);
+  border-radius: 12rpx;
+}
+
+.reward-item.available {
+  background-color: #ECF4FF;
+  border: 1rpx solid #4285F4;
+}
+
+.reward-icon {
+  font-size: 48rpx;
+  margin-bottom: 12rpx;
+}
+
+.reward-name {
+  font-size: 24rpx;
+  color: #333333;
+  margin-bottom: 8rpx;
+}
+
+.reward-points {
+  font-size: 22rpx;
+  color: #4285F4;
+  font-weight: 500;
+}
+
+.reward-item.more {
+  background-color: #F0F1F3;
+}
+
 /* 任务模板列表样式 */
 .task-template-container {
   width: 100%;
@@ -119,14 +347,6 @@
 }
 
 /* 表单部分 */
-.form-section {
-  background-color: #FFFFFF;
-  border-radius: 16rpx;
-  padding: 30rpx;
-  margin-bottom: 30rpx;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.05);
-}
-
 .form-item {
   margin-bottom: 40rpx;
 }
@@ -391,83 +611,6 @@
   margin-left: 10rpx;
   font-size: 28rpx;
   color: #666666;
-}
-
-/* 任务负载预览 */
-.task-load-preview {
-  margin-top: 40rpx;
-  padding: 20rpx;
-  background-color: #F7F8FA;
-  border-radius: 8rpx;
-}
-
-.load-title {
-  display: flex;
-  align-items: center;
-  margin-bottom: 16rpx;
-}
-
-.load-icon {
-  font-size: 32rpx;
-  margin-right: 10rpx;
-}
-
-.load-stats {
-  display: flex;
-  justify-content: space-between;
-  font-size: 24rpx;
-  color: #666666;
-  margin-bottom: 16rpx;
-}
-
-.load-bar-container {
-  height: 16rpx;
-  background-color: #E0E0E0;
-  border-radius: 8rpx;
-  overflow: hidden;
-  margin-bottom: 10rpx;
-}
-
-.load-bar {
-  height: 100%;
-  background-color: #91CAF9;
-  border-radius: 8rpx;
-}
-
-.load-bar.light {
-  background-color: #91CAF9;
-}
-
-.load-bar.normal {
-  background-color: #4285F4;
-}
-
-.load-bar.heavy {
-  background-color: #FF5252;
-}
-
-.load-bar-progress {
-  height: 100%;
-  width: 0;
-  transition: width 0.5s;
-}
-
-.load-message {
-  font-size: 24rpx;
-  color: #666666;
-  text-align: center;
-}
-
-.load-message.light {
-  color: #91CAF9;
-}
-
-.load-message.normal {
-  color: #4285F4;
-}
-
-.load-message.heavy {
-  color: #FF5252;
 }
 
 /* 底部按钮组 */

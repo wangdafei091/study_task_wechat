@@ -16,7 +16,6 @@ Page({
       tags: [], // 标签ID数组
       date: '', // 执行日期
       time: '', // 执行时间(仅学习型)
-      duration: 0, // 任务时长(分钟)
       points: 0, // 积分
       repeat: {
         type: 'none', // 重复类型
@@ -34,8 +33,6 @@ Page({
     timeNow: '', // 当前时间，用于时间选择器最小值
     isCustomPoints: false, // 是否使用自定义积分
     customPointsValue: '8', // 自定义积分值
-    isCustomDuration: false, // 是否使用自定义时长
-    customDurationValue: '', // 自定义时长值
     taskLoad: {
       status: 'normal', // 'light', 'normal', 'heavy'
       totalTasks: 0,
@@ -52,7 +49,20 @@ Page({
       { id: 'clock', name: '生活习惯', icon: '⏰', parent: 'habit' },
       { id: 'bag', name: '整理收纳', icon: '📚', parent: 'habit' },
       { id: 'study', name: '学习任务', icon: '📝', parent: 'study' }
-    ]
+    ],
+    availableRewards: [
+      { id: 'game', name: '游戏时间', icon: '🎮', points: 10 },
+      { id: 'icecream', name: '冰淇淋', icon: '🍦', points: 15 },
+      { id: 'phone', name: '手机时间', icon: '📱', points: 20 },
+      { id: 'toy', name: '新玩具', icon: '🧸', points: 30 },
+      { id: 'movie', name: '看电影', icon: '🎬', points: 25 }
+    ],
+    pointSuggestions: [
+      { duration: 30, points: '1-2' },
+      { duration: 60, points: '3-5' },
+      { duration: 61, points: '5-10' }
+    ],
+    userPoints: 0 // 用户当前积分
   },
 
   /**
@@ -93,7 +103,6 @@ Page({
     const precision = options.precision || (taskType === 'study' ? 'second' : 'day');
     
     // 根据任务类型设置默认值
-    let defaultDuration = taskType === 'study' ? 45 : 15;
     let defaultPoints = taskType === 'study' ? 3 : 2;
     let defaultType = taskType === 'study' ? 'study' : 'clock';
     
@@ -105,7 +114,6 @@ Page({
       // 根据任务类型设置默认值
       'task.taskType': taskType,
       'task.type': defaultType,
-      'task.duration': defaultDuration,
       'task.points': defaultPoints,
       'task.precision': precision
     });
@@ -131,11 +139,6 @@ Page({
           // 检查是否使用自定义积分值
           const isCustomPoints = ![1, 2, 3, 5].includes(completeTask.points);
           
-          // 检查是否使用自定义时长
-          const isCustomDuration = completeTask.taskType === 'study' ? 
-            ![30, 45, 60].includes(completeTask.duration) : 
-            ![5, 15, 30].includes(completeTask.duration);
-          
           that.setData({
             mode: 'edit',
             taskType: completeTask.taskType || 'study',
@@ -144,9 +147,7 @@ Page({
             customMode: true,
             selectedTemplate: '',
             isCustomPoints: isCustomPoints,
-            customPointsValue: isCustomPoints ? completeTask.points.toString() : '8',
-            isCustomDuration: isCustomDuration,
-            customDurationValue: isCustomDuration ? completeTask.duration.toString() : ''
+            customPointsValue: isCustomPoints ? completeTask.points.toString() : '8'
           });
         } else {
           wx.showToast({
@@ -399,68 +400,10 @@ Page({
   },
 
   /**
-   * 选择预设时长
-   */
-  selectDuration: function(e) {
-    const duration = parseInt(e.currentTarget.dataset.duration);
-    
-    this.setData({
-      'task.duration': duration,
-      isCustomDuration: false
-    });
-    
-    // 更新任务负载预测
-    this.updateTaskLoadPreview();
-  },
-
-  /**
-   * 启用自定义时长
-   */
-  enableCustomDuration: function() {
-    const duration = this.data.task.duration || (this.data.taskType === 'study' ? 45 : 15);
-    
-    this.setData({
-      isCustomDuration: true,
-      customDurationValue: duration.toString()
-    });
-  },
-
-  /**
-   * 设置自定义时长
-   */
-  setCustomDuration: function(e) {
-    let value = e.detail.value;
-    
-    // 确保输入为有效数字
-    if (value === '' || isNaN(value)) {
-      value = this.data.taskType === 'study' ? '45' : '15';
-    }
-    
-    // 限制最大值为240分钟(4小时)
-    if (parseInt(value) > 240) {
-      value = '240';
-    }
-    
-    // 限制最小值为1分钟
-    if (parseInt(value) < 1) {
-      value = '1';
-    }
-    
-    this.setData({
-      customDurationValue: value,
-      'task.duration': parseInt(value)
-    });
-    
-    // 更新任务负载预测
-    this.updateTaskLoadPreview();
-  },
-
-  /**
-   * 选择预设积分
+   * 选择预设积分值
    */
   selectPresetPoints: function(e) {
     const points = parseInt(e.currentTarget.dataset.points);
-    
     this.setData({
       'task.points': points,
       isCustomPoints: false
@@ -468,56 +411,34 @@ Page({
   },
 
   /**
-   * 启用自定义积分
+   * 启用自定义积分输入
    */
   enableCustomPoints: function() {
-    // 如果当前未选中自定义，则启用
-    if (!this.data.isCustomPoints) {
-      this.setData({
-        isCustomPoints: true,
-        'task.points': parseInt(this.data.customPointsValue) || 1
-      });
-    }
+    this.setData({
+      isCustomPoints: true,
+      customPointsValue: this.data.task.points.toString()
+    });
   },
 
   /**
-   * 输入自定义积分
+   * 自定义积分值输入
    */
   inputCustomPoints: function(e) {
-    let value = e.detail.value;
-    
-    // 确保输入为有效数字
-    if (value === '' || isNaN(value)) {
-      value = '1';
-    }
-    
-    // 限制最大值为100
-    if (parseInt(value) > 100) {
-      value = '100';
-    }
-    
-    // 限制最小值为1
-    if (parseInt(value) < 1) {
-      value = '1';
-    }
-    
+    const value = e.detail.value;
+    // 更新自定义积分值
     this.setData({
-      customPointsValue: value,
-      'task.points': parseInt(value)
+      customPointsValue: value
     });
-  },
-
-  /**
-   * 确认自定义积分
-   */
-  confirmCustomPoints: function() {
-    // 确保值有效
-    let points = parseInt(this.data.customPointsValue) || 1;
     
-    this.setData({
-      'task.points': points,
-      customPointsValue: points.toString()
-    });
+    // 如果输入的是有效数字，更新任务积分
+    if (value !== '') {
+      const points = parseInt(value);
+      if (!isNaN(points) && points >= 0) {
+        this.setData({
+          'task.points': points
+        });
+      }
+    }
   },
 
   /**

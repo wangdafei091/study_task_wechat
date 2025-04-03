@@ -2,10 +2,51 @@
 <view class="container">
   <!-- 主内容区 -->
   <view class="content">
-    <!-- 移除步骤指示器部分 -->
     
-    <!-- 合并所有表单内容到一个section -->
-    <view class="form-section">
+    <!-- 卡片区域1：近期任务负荷 -->
+    <view class="card-section task-load-card">
+      <view class="card-title">
+        <text class="card-icon">📊</text>
+        <text>任务安排概览</text>
+      </view>
+      
+      <view class="task-load-preview">
+        <view class="load-stats">
+          <text>今日任务: {{taskLoad.totalTasks}}个</text>
+          <text>总时间: {{taskLoad.totalMinutes}}分钟</text>
+        </view>
+        <view class="load-bar-container">
+          <view class="load-bar {{taskLoad.status}}">
+            <view class="load-bar-progress" style="width: {{taskLoad.percentage}}%"></view>
+          </view>
+        </view>
+        <view class="load-message {{taskLoad.status}}">{{taskLoad.message}}</view>
+      </view>
+    </view>
+    
+    <!-- 卡片区域2：任务管理区域 -->
+    <view class="card-section task-management-card">
+      <view class="card-title">
+        <text class="card-icon">📝</text>
+        <text>任务管理</text>
+      </view>
+      
+      <!-- 执行日期选择 -->
+      <view class="form-item">
+        <view class="item-label">执行日期</view>
+        <picker mode="date" value="{{task.date}}" start="{{dateNow}}" bindchange="selectDate">
+          <view class="picker {{task.date ? '' : 'placeholder'}}">
+            {{task.date || '请选择执行日期'}}
+          </view>
+        </picker>
+        <!-- 快速日期选择 -->
+        <view class="quick-select">
+          <view class="quick-item" bindtap="quickSelectDate" data-type="today">今天</view>
+          <view class="quick-item" bindtap="quickSelectDate" data-type="tomorrow">明天</view>
+          <view class="quick-item" bindtap="quickSelectDate" data-type="weekend">周末</view>
+        </view>
+      </view>
+      
       <!-- 常用任务模板 -->
       <view class="form-item">
         <view class="item-label">常用任务</view>
@@ -55,26 +96,10 @@
           placeholder="简单描述任务内容和要求" maxlength="100" />
         <view class="char-count">{{task.description.length}}/100</view>
       </view>
-
+      
       <!-- 保存为模板按钮 -->
       <view class="save-template-section" wx:if="{{customMode && task.title}}">
         <button class="btn-save-template" bindtap="saveAsTemplate">保存为常用任务</button>
-      </view>
-
-      <!-- 执行日期 -->
-      <view class="form-item">
-        <view class="item-label">执行日期</view>
-        <picker mode="date" value="{{task.date}}" start="{{dateNow}}" bindchange="selectDate">
-          <view class="picker {{task.date ? '' : 'placeholder'}}">
-            {{task.date || '请选择执行日期'}}
-          </view>
-        </picker>
-        <!-- 快速日期选择 -->
-        <view class="quick-select">
-          <view class="quick-item" bindtap="quickSelectDate" data-type="today">今天</view>
-          <view class="quick-item" bindtap="quickSelectDate" data-type="tomorrow">明天</view>
-          <view class="quick-item" bindtap="quickSelectDate" data-type="weekend">周末</view>
-        </view>
       </view>
       
       <!-- 执行时间(仅学习任务) -->
@@ -92,44 +117,18 @@
           <view class="quick-item" bindtap="quickSelectTime" data-period="evening">晚上</view>
         </view>
       </view>
-      
-      <!-- 任务时长 -->
-      <view class="form-item">
-        <view class="item-label">执行时长</view>
-        <!-- 学习任务时长选择 -->
-        <view class="duration-select" wx:if="{{taskType === 'study'}}">
-          <view class="duration-item {{!isCustomDuration && task.duration === 30 ? 'active' : ''}}" 
-            bindtap="selectDuration" data-duration="30">30分钟</view>
-          <view class="duration-item {{!isCustomDuration && task.duration === 45 ? 'active' : ''}}" 
-            bindtap="selectDuration" data-duration="45">45分钟</view>
-          <view class="duration-item {{!isCustomDuration && task.duration === 60 ? 'active' : ''}}" 
-            bindtap="selectDuration" data-duration="60">60分钟</view>
-          <view class="duration-item {{isCustomDuration ? 'active' : ''}}" 
-            bindtap="enableCustomDuration">自定义</view>
-        </view>
-        
-        <!-- 习惯任务时长选择 -->
-        <view class="duration-select" wx:if="{{taskType === 'habit'}}">
-          <view class="duration-item {{!isCustomDuration && task.duration === 5 ? 'active' : ''}}" 
-            bindtap="selectDuration" data-duration="5">5分钟</view>
-          <view class="duration-item {{!isCustomDuration && task.duration === 15 ? 'active' : ''}}" 
-            bindtap="selectDuration" data-duration="15">15分钟</view>
-          <view class="duration-item {{!isCustomDuration && task.duration === 30 ? 'active' : ''}}" 
-            bindtap="selectDuration" data-duration="30">30分钟</view>
-          <view class="duration-item {{isCustomDuration ? 'active' : ''}}" 
-            bindtap="enableCustomDuration">自定义</view>
-        </view>
-        
-        <!-- 自定义时长输入 -->
-        <view class="custom-input" wx:if="{{isCustomDuration}}">
-          <input type="number" value="{{customDurationValue}}" bindinput="setCustomDuration" />
-          <text class="unit">分钟</text>
-        </view>
+    </view>
+    
+    <!-- 卡片区域3：积分奖励设计 -->
+    <view class="card-section reward-card">
+      <view class="card-title">
+        <text class="card-icon">🏆</text>
+        <text>积分奖励设计</text>
       </view>
       
       <!-- 积分奖励 -->
       <view class="form-item">
-        <view class="item-label">积分奖励</view>
+        <view class="item-label">完成奖励</view>
         <view class="point-select">
           <view class="point-item {{!isCustomPoints && task.points === 1 ? 'active' : ''}}" 
             bindtap="selectPresetPoints" data-points="1">1分</view>
@@ -150,22 +149,22 @@
         </view>
       </view>
       
-      <!-- 任务负载提示 -->
-      <view class="task-load-preview">
-        <view class="load-title">
-          <text class="load-icon">📊</text>
-          <text>当天任务负载</text>
+      <!-- 奖励建议 -->
+      <view class="reward-suggestion">
+        <view class="suggestion-title">积分推荐规则：</view>
+        <view class="suggestion-item">
+          <text class="suggestion-icon">🏆</text>
+          <text class="suggestion-text">简单任务: 1-2积分</text>
         </view>
-        <view class="load-stats">
-          <text>总任务数: {{taskLoad.totalTasks}}个</text>
-          <text>总时间: {{taskLoad.totalMinutes}}分钟</text>
+        <view class="suggestion-item">
+          <text class="suggestion-icon">🏆</text>
+          <text class="suggestion-text">中等任务: 3-5积分</text>
         </view>
-        <view class="load-bar-container">
-          <view class="load-bar {{taskLoad.status}}">
-            <view class="load-bar-progress" style="width: {{taskLoad.percentage}}%"></view>
-          </view>
+        <view class="suggestion-item">
+          <text class="suggestion-icon">🏆</text>
+          <text class="suggestion-text">困难任务: 5-10积分</text>
         </view>
-        <view class="load-message {{taskLoad.status}}">{{taskLoad.message}}</view>
+        <view class="suggestion-note">根据任务难度选择合适的积分值，完成后即可获得</view>
       </view>
     </view>
     
