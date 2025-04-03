@@ -166,95 +166,230 @@
     
     <!-- 卡片区域2：任务管理区域 -->
     <view class="card-section task-management-card">
+      <!-- 卡片标题区域 -->
       <view class="card-title">
         <text class="card-icon">📝</text>
         <text>任务管理</text>
       </view>
       
-      <!-- 执行日期选择 -->
-      <view class="form-item">
-        <view class="item-label">执行日期</view>
-        <picker mode="date" value="{{task.date}}" start="{{dateNow}}" bindchange="selectDate">
-          <view class="picker {{task.date ? '' : 'placeholder'}}">
-            {{task.date || '请选择执行日期'}}
+      <!-- 常用任务区域 -->
+      <view class="section-block">
+        <view class="section-label">常用任务</view>
+        
+        <!-- 学习任务 (仅学习型入口显示) -->
+        <block wx:if="{{taskType === 'study'}}">
+          <view class="task-template-grid">
+            <block wx:for="{{studyTemplates}}" wx:key="id" wx:if="{{index < 7}}">
+              <view class="task-template study {{selectedTemplate === item.id ? 'active' : ''}}" 
+                    bindtap="selectTemplate" data-id="{{item.id}}" data-type="study">
+                <view class="template-name">{{item.shortName || item.name}}</view>
+              </view>
+            </block>
+            <!-- 自定义学习任务按钮 -->
+            <view class="task-template custom study" bindtap="selectCustomTask" data-type="study">
+              <view class="template-name">自定义</view>
+            </view>
           </view>
-        </picker>
-        <!-- 快速日期选择 -->
-        <view class="quick-select">
-          <view class="quick-item" bindtap="quickSelectDate" data-type="today">今天</view>
-          <view class="quick-item" bindtap="quickSelectDate" data-type="tomorrow">明天</view>
-          <view class="quick-item" bindtap="quickSelectDate" data-type="weekend">周末</view>
+        </block>
+        
+        <!-- 习惯任务 (仅习惯型入口显示) -->
+        <block wx:if="{{taskType === 'habit'}}">
+          <!-- 生活习惯分类 -->
+          <view class="template-category">生活习惯</view>
+          <view class="task-template-grid">
+            <block wx:for="{{habitTemplates}}" wx:key="id" wx:if="{{index < 7}}">
+              <view class="task-template clock {{selectedTemplate === item.id ? 'active' : ''}}" 
+                    bindtap="selectTemplate" data-id="{{item.id}}" data-type="clock">
+                <view class="template-name">{{item.shortName || item.name}}</view>
+              </view>
+            </block>
+            <!-- 自定义习惯任务按钮 -->
+            <view class="task-template custom clock" bindtap="selectCustomTask" data-type="clock">
+              <view class="template-name">自定义</view>
+            </view>
+          </view>
+          
+          <!-- 整理收纳分类 -->
+          <view class="template-category">整理收纳</view>
+          <view class="task-template-grid">
+            <block wx:for="{{cleaningTemplates}}" wx:key="id" wx:if="{{index < 7}}">
+              <view class="task-template bag {{selectedTemplate === item.id ? 'active' : ''}}" 
+                    bindtap="selectTemplate" data-id="{{item.id}}" data-type="bag">
+                <view class="template-name">{{item.shortName || item.name}}</view>
+              </view>
+            </block>
+            <!-- 自定义整理收纳任务按钮 -->
+            <view class="task-template custom bag" bindtap="selectCustomTask" data-type="bag">
+              <view class="template-name">自定义</view>
+            </view>
+          </view>
+        </block>
+      </view>
+      
+      <!-- 任务信息区域 -->
+      <view class="section-block task-info-section {{selectedTemplateType}}">
+        <view class="section-header">
+          <view class="section-label">任务信息</view>
+          <view class="task-type-indicator" wx:if="{{selectedTemplateType}}">
+            {{selectedTemplateType === 'study' ? '学习任务' : 
+             (selectedTemplateType === 'clock' ? '生活习惯' : 
+             (selectedTemplateType === 'bag' ? '整理收纳' : ''))}}
+          </view>
+        </view>
+        
+        <!-- 任务名称 -->
+        <view class="form-item">
+          <view class="item-label">任务名称</view>
+          <view class="task-info-display" wx:if="{{selectedTemplate && !customMode}}">
+            {{task.title}}
+            <text class="edit-button" bindtap="enableCustomMode">编辑</text>
+          </view>
+          <input class="input" wx:else value="{{task.title}}" bindinput="inputTitle" 
+            placeholder="请输入任务名称" maxlength="20" />
+          <view class="char-count" wx:if="{{customMode}}">{{task.title.length}}/20</view>
+        </view>
+        
+        <!-- 积分和难度 -->
+        <view class="form-item half-width-container">
+          <view class="half-width-item">
+            <view class="item-label">积分</view>
+            <view class="task-info-display points" wx:if="{{selectedTemplate && !customMode}}">
+              <text class="point-value">{{task.points}}</text>
+              <text class="point-label">分</text>
+            </view>
+            <input class="input" wx:else type="number" value="{{task.points}}" bindinput="inputPoints" 
+              placeholder="1-10" maxlength="2" />
+          </view>
+          
+          <view class="half-width-item">
+            <view class="item-label">难度</view>
+            <view class="task-info-display difficulty" wx:if="{{selectedTemplate && !customMode}}">
+              <text class="difficulty-stars">{{task.difficulty === '简单' ? '⭐' : 
+                                           (task.difficulty === '困难' ? '⭐⭐⭐' : '⭐⭐')}}</text>
+              <text class="difficulty-text">{{task.difficulty}}</text>
+            </view>
+            <picker wx:else bindchange="selectDifficulty" value="{{difficultyIndex}}" range="{{difficultyOptions}}">
+              <view class="picker">{{difficultyOptions[difficultyIndex]}}</view>
+            </picker>
+          </view>
+        </view>
+        
+        <!-- 任务描述 -->
+        <view class="form-item">
+          <view class="item-label">任务描述 <text class="optional">选填</text></view>
+          <view class="task-info-display description" wx:if="{{selectedTemplate && !customMode && task.description}}">
+            {{task.description}}
+          </view>
+          <textarea class="textarea" wx:else value="{{task.description}}" bindinput="inputDescription" 
+            placeholder="简单描述任务内容和要求" maxlength="100" />
+          <view class="char-count" wx:if="{{customMode}}">{{task.description.length}}/100</view>
+        </view>
+        
+        <!-- 保存为常用任务(仅自定义模式) -->
+        <view class="save-template-section" wx:if="{{customMode && task.title}}">
+          <button class="btn-save-template" bindtap="saveAsTemplate">保存为常用任务</button>
         </view>
       </view>
       
-      <!-- 常用任务模板 -->
-      <view class="form-item">
-        <view class="item-label">常用任务</view>
-        <scroll-view scroll-x class="task-template-container">
-          <view class="task-template-list">
-            <block wx:for="{{taskTemplates}}" wx:key="id">
-              <view class="task-template {{selectedTemplate === item.id ? 'active' : ''}}" 
-                    bindtap="selectTemplate" data-id="{{item.id}}">
-                <view class="template-icon">{{item.icon}}</view>
-                <text class="template-name">{{item.shortName || item.name}}</text>
+      <!-- 执行设置区域 -->
+      <view class="section-block">
+        <view class="section-label">执行方式</view>
+        
+        <!-- 执行模式选择 -->
+        <view class="execution-mode">
+          <view class="mode-option {{repeatMode === 'once' ? 'active' : ''}}" 
+                bindtap="switchMode" data-mode="once">
+            一次性任务
+          </view>
+          <view class="mode-option {{repeatMode === 'repeat' ? 'active' : ''}}" 
+                bindtap="switchMode" data-mode="repeat">
+            周期性任务
+          </view>
+        </view>
+        
+        <!-- 一次性任务设置 -->
+        <view class="execution-settings" wx:if="{{repeatMode === 'once'}}">
+          <view class="form-item">
+            <view class="item-label">执行日期</view>
+            <picker mode="date" value="{{task.date}}" start="{{dateNow}}" bindchange="selectDate">
+              <view class="picker {{task.date ? '' : 'placeholder'}}">
+                {{task.date || '请选择执行日期'}}
               </view>
-            </block>
-            <view class="task-template custom" bindtap="selectCustomTask">
-              <view class="template-icon">➕</view>
-              <text class="template-name">自定义</text>
+            </picker>
+            
+            <!-- 快速日期选择 -->
+            <view class="quick-select">
+              <view class="quick-item" bindtap="quickSelectDate" data-type="today">今天</view>
+              <view class="quick-item" bindtap="quickSelectDate" data-type="tomorrow">明天</view>
+              <view class="quick-item" bindtap="quickSelectDate" data-type="weekend">周末</view>
             </view>
           </view>
-        </scroll-view>
-      </view>
-      
-      <!-- 已选模板时显示任务名称（只读） -->
-      <view class="form-item" wx:if="{{!customMode}}">
-        <view class="item-label">任务名称</view>
-        <view class="task-title-display">{{task.title}}</view>
-      </view>
-      
-      <!-- 自定义模式下显示可编辑的任务名称输入框 -->
-      <view class="form-item" wx:if="{{customMode}}">
-        <view class="item-label">任务名称</view>
-        <input class="input" value="{{task.title}}" bindinput="inputTitle" 
-          placeholder="请输入任务名称" maxlength="20" />
-        <view class="char-count">{{task.title.length}}/20</view>
-      </view>
-      
-      <!-- 任务简称(新增) -->
-      <view class="form-item" wx:if="{{customMode && task.title}}">
-        <view class="item-label">任务简称 <text class="tip">(显示在常用任务中，4字以内)</text></view>
-        <input class="input short-name-input" value="{{task.shortName}}" bindinput="inputShortName" 
-          placeholder="简称，如：数学、阅读" maxlength="4" />
-        <view class="char-count">{{task.shortName.length}}/4</view>
-      </view>
-      
-      <!-- 任务描述 -->
-      <view class="form-item">
-        <view class="item-label">任务描述 <text class="optional">选填</text></view>
-        <textarea class="textarea" value="{{task.description}}" bindinput="inputDescription" 
-          placeholder="简单描述任务内容和要求" maxlength="100" />
-        <view class="char-count">{{task.description.length}}/100</view>
-      </view>
-      
-      <!-- 保存为模板按钮 -->
-      <view class="save-template-section" wx:if="{{customMode && task.title}}">
-        <button class="btn-save-template" bindtap="saveAsTemplate">保存为常用任务</button>
-      </view>
-      
-      <!-- 执行时间(仅学习任务) -->
-      <view class="form-item" wx:if="{{taskType === 'study'}}">
-        <view class="item-label">执行时间</view>
-        <picker mode="time" value="{{task.time}}" start="{{timeNow}}" bindchange="selectTime">
-          <view class="picker {{task.time ? '' : 'placeholder'}}">
-            {{task.time || '请选择执行时间'}}
+          
+          <!-- 学习任务才显示执行时间 -->
+          <view class="form-item" wx:if="{{taskType === 'study'}}">
+            <view class="item-label">执行时间</view>
+            <picker mode="time" value="{{task.time}}" start="{{timeNow}}" bindchange="selectTime">
+              <view class="picker {{task.time ? '' : 'placeholder'}}">
+                {{task.time || '请选择执行时间'}}
+              </view>
+            </picker>
           </view>
-        </picker>
-        <!-- 快速时间选择 -->
-        <view class="quick-select">
-          <view class="quick-item" bindtap="quickSelectTime" data-period="morning">上午</view>
-          <view class="quick-item" bindtap="quickSelectTime" data-period="afternoon">下午</view>
-          <view class="quick-item" bindtap="quickSelectTime" data-period="evening">晚上</view>
+        </view>
+        
+        <!-- 周期性任务设置 -->
+        <view class="execution-settings" wx:if="{{repeatMode === 'repeat'}}">
+          <view class="form-item">
+            <view class="item-label">开始日期</view>
+            <picker mode="date" value="{{task.repeat.startDate}}" start="{{dateNow}}" bindchange="selectStartDate">
+              <view class="picker {{task.repeat.startDate ? '' : 'placeholder'}}">
+                {{task.repeat.startDate || '请选择开始日期'}}
+              </view>
+            </picker>
+          </view>
+          
+          <view class="form-item">
+            <view class="item-label">结束日期 <text class="optional">选填</text></view>
+            <picker mode="date" value="{{task.repeat.endDate}}" start="{{task.repeat.startDate || dateNow}}" bindchange="selectEndDate">
+              <view class="picker {{task.repeat.endDate ? '' : 'placeholder'}}">
+                {{task.repeat.endDate || '不设置结束日期'}}
+              </view>
+            </picker>
+          </view>
+          
+          <view class="form-item">
+            <view class="item-label">重复频率</view>
+            <view class="frequency-options">
+              <view class="frequency-item {{task.repeat.type === 'daily' ? 'active' : ''}}" 
+                    bindtap="selectFrequency" data-type="daily">每天</view>
+              <view class="frequency-item {{task.repeat.type === 'weekly' ? 'active' : ''}}" 
+                    bindtap="selectFrequency" data-type="weekly">每周</view>
+              <view class="frequency-item {{task.repeat.type === 'workdays' ? 'active' : ''}}" 
+                    bindtap="selectFrequency" data-type="workdays">工作日</view>
+              <view class="frequency-item {{task.repeat.type === 'custom' ? 'active' : ''}}" 
+                    bindtap="selectFrequency" data-type="custom">自定义</view>
+            </view>
+          </view>
+          
+          <!-- 自定义重复频率 -->
+          <view class="form-item" wx:if="{{task.repeat.type === 'custom'}}">
+            <view class="item-label">选择重复日</view>
+            <view class="weekday-selector">
+              <view class="weekday-item {{task.repeat.days.includes('0') ? 'active' : ''}}" 
+                    bindtap="toggleWeekday" data-day="0">日</view>
+              <view class="weekday-item {{task.repeat.days.includes('1') ? 'active' : ''}}" 
+                    bindtap="toggleWeekday" data-day="1">一</view>
+              <view class="weekday-item {{task.repeat.days.includes('2') ? 'active' : ''}}" 
+                    bindtap="toggleWeekday" data-day="2">二</view>
+              <view class="weekday-item {{task.repeat.days.includes('3') ? 'active' : ''}}" 
+                    bindtap="toggleWeekday" data-day="3">三</view>
+              <view class="weekday-item {{task.repeat.days.includes('4') ? 'active' : ''}}" 
+                    bindtap="toggleWeekday" data-day="4">四</view>
+              <view class="weekday-item {{task.repeat.days.includes('5') ? 'active' : ''}}" 
+                    bindtap="toggleWeekday" data-day="5">五</view>
+              <view class="weekday-item {{task.repeat.days.includes('6') ? 'active' : ''}}" 
+                    bindtap="toggleWeekday" data-day="6">六</view>
+            </view>
+          </view>
         </view>
       </view>
     </view>

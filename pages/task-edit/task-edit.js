@@ -27,12 +27,23 @@ Page({
       updateTime: 0
     },
     taskTemplates: [], // 任务模板列表
+    studyTemplates: [], // 学习任务模板
+    habitTemplates: [], // 生活习惯模板
+    cleaningTemplates: [], // 整理收纳模板
     selectedTemplate: '', // 已选任务模板
+    selectedTemplateType: '', // 选择的模板类型
     customMode: true, // 是否为自定义模式
     dateNow: '', // 当前日期，用于日期选择器最小值
     timeNow: '', // 当前时间，用于时间选择器最小值
     isCustomPoints: false, // 是否使用自定义积分
     customPointsValue: '8', // 自定义积分值
+    
+    // 难度选项
+    difficultyOptions: ['简单', '普通', '困难'],
+    difficultyIndex: 1,
+    
+    // 重复模式
+    repeatMode: 'once', // 'once' 或 'repeat'
     taskLoad: {
       status: 'normal', // 'light', 'normal', 'heavy'
       totalTasks: 0,
@@ -109,8 +120,8 @@ Page({
       this.initCreateMode(options);
     }
     
-    // 加载任务模板
-    this.loadTaskTemplates();
+    // 加载任务模板（按类型分类）
+    this.loadTemplatesByCategory();
     
     // 更新任务负载预测
     this.updateTaskLoadPreview();
@@ -263,7 +274,7 @@ Page({
   /**
    * 验证任务数据
    */
-  validateTask: function() {
+  validateTaskData: function() {
     const { task } = this.data;
     
     // 验证基本信息
@@ -300,32 +311,15 @@ Page({
    * 验证当前步骤
    */
   validateCurrentStep: function() {
-    return this.validateTask();
+    return this.validateTaskData();
   },
 
   /**
-   * 输入任务名称
+   * 输入任务标题
    */
   inputTitle: function(e) {
-    const title = e.detail.value;
-    // 自动提取前4个字作为简称(如果简称为空)
-    let shortName = this.data.task.shortName || '';
-    if (!shortName && title) {
-      shortName = title.substring(0, 4);
-    }
-    
     this.setData({
-      'task.title': title,
-      'task.shortName': shortName
-    });
-  },
-
-  /**
-   * 输入任务简称
-   */
-  inputShortName: function(e) {
-    this.setData({
-      'task.shortName': e.detail.value
+      'task.title': e.detail.value
     });
   },
 
@@ -335,6 +329,15 @@ Page({
   inputDescription: function(e) {
     this.setData({
       'task.description': e.detail.value
+    });
+  },
+
+  /**
+   * 输入任务简称
+   */
+  inputShortName: function(e) {
+    this.setData({
+      'task.shortName': e.detail.value
     });
   },
 
@@ -365,40 +368,34 @@ Page({
   quickSelectDate: function(e) {
     const type = e.currentTarget.dataset.type;
     const now = new Date();
-    const year = now.getFullYear();
-    const month = (now.getMonth() + 1).toString().padStart(2, '0');
-    const day = now.getDate().toString().padStart(2, '0');
+    let date = '';
     
-    let dateStr = '';
+    // 格式化日期函数
+    const formatDate = (date) => {
+      const year = date.getFullYear();
+      const month = (date.getMonth() + 1).toString().padStart(2, '0');
+      const day = date.getDate().toString().padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
     
     if (type === 'today') {
-      dateStr = `${year}-${month}-${day}`;
+      date = formatDate(now);
     } else if (type === 'tomorrow') {
       const tomorrow = new Date(now);
-      tomorrow.setDate(now.getDate() + 1);
-      const tYear = tomorrow.getFullYear();
-      const tMonth = (tomorrow.getMonth() + 1).toString().padStart(2, '0');
-      const tDay = tomorrow.getDate().toString().padStart(2, '0');
-      dateStr = `${tYear}-${tMonth}-${tDay}`;
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      date = formatDate(tomorrow);
     } else if (type === 'weekend') {
-      // 计算本周末(周六)的日期
-      const day = now.getDay(); // 0是周日，6是周六
-      const daysToWeekend = day === 6 ? 0 : 6 - day;
-      const weekend = new Date(now);
-      weekend.setDate(now.getDate() + daysToWeekend);
-      const wYear = weekend.getFullYear();
-      const wMonth = (weekend.getMonth() + 1).toString().padStart(2, '0');
-      const wDay = weekend.getDate().toString().padStart(2, '0');
-      dateStr = `${wYear}-${wMonth}-${wDay}`;
+      // 获取本周周六
+      const daysToSaturday = 6 - now.getDay();
+      const saturday = new Date(now);
+      saturday.setDate(saturday.getDate() + (daysToSaturday === 0 ? 7 : daysToSaturday));
+      date = formatDate(saturday);
     }
     
-    if (dateStr) {
+    if (date) {
       this.setData({
-        'task.date': dateStr
+        'task.date': date
       });
-      
-      // 更新任务负载预测
-      this.updateTaskLoadPreview();
     }
   },
 
@@ -749,63 +746,71 @@ Page({
   /**
    * 保存任务到存储
    */
-  saveTaskToStorage: function(task, mode) {
-    // 获取现有任务数据
+  saveTaskToStorage: function(taskData) {
+    // 获取现有任务
     wx.getStorage({
       key: 'taskData',
-      success: res => {
+      success: (res) => {
         let tasks = res.data || [];
         
-        if (mode === 'create') {
-          // 创建新任务
-          tasks.push(task);
-        } else {
-          // 更新现有任务
-          const index = tasks.findIndex(t => t.id === task.id);
-          if (index !== -1) {
-            tasks[index] = task;
+        // 编辑模式下查找并更新任务
+        if (this.data.mode === 'edit') {
+          const index = tasks.findIndex(t => t.id === taskData.id);
+          if (index > -1) {
+            tasks[index] = taskData;
+          } else {
+            tasks.push(taskData);
           }
+        } 
+        // 创建模式下直接添加
+        else {
+          tasks.push(taskData);
         }
         
-        // 保存任务数据
+        // 保存任务
         wx.setStorage({
           key: 'taskData',
           data: tasks,
           success: () => {
             wx.showToast({
-              title: mode === 'create' ? '任务创建成功' : '任务更新成功',
+              title: this.data.mode === 'edit' ? '任务已更新' : '任务已创建',
               icon: 'success'
             });
             
+            // 延迟返回上一页
             setTimeout(() => {
               wx.navigateBack();
             }, 1500);
           },
-          fail: err => {
+          fail: () => {
             wx.showToast({
               title: '保存失败，请重试',
               icon: 'none'
             });
-            console.error('保存任务失败:', err);
           }
         });
       },
       fail: () => {
-        // 如果没有现有数据，创建新数组
-        const tasks = mode === 'create' ? [task] : [];
-        
+        // 没有现有任务，创建新数组
         wx.setStorage({
           key: 'taskData',
-          data: tasks,
+          data: [taskData],
           success: () => {
             wx.showToast({
-              title: '任务创建成功',
+              title: '任务已创建',
               icon: 'success'
             });
             
+            // 延迟返回上一页
             setTimeout(() => {
               wx.navigateBack();
             }, 1500);
+          },
+          fail: () => {
+            wx.showToast({
+              title: '保存失败，请重试',
+              icon: 'none'
+            });
           }
         });
       }
@@ -816,29 +821,16 @@ Page({
    * 保存任务
    */
   saveTask: function() {
-    // 先进行完整数据验证
-    if (!this.validateTask()) {
+    // 验证必填信息
+    if (!this.validateTaskData()) {
       return;
     }
     
-    const { task, mode, customDurationValue, isCustomDuration } = this.data;
+    // 准备任务数据
+    const taskData = this.prepareTaskData();
     
-    // 确保自定义时长被正确处理
-    if (isCustomDuration && customDurationValue) {
-      task.duration = parseInt(customDurationValue) || 30;
-    }
-    
-    // 生成任务ID（仅创建模式）
-    if (mode === 'create') {
-      task.id = 'task_' + Date.now();
-      task.createTime = Date.now();
-    }
-    
-    // 更新任务最后修改时间
-    task.updateTime = Date.now();
-    
-    // 保存任务到存储
-    this.saveTaskToStorage(task, mode);
+    // 保存到存储
+    this.saveTaskToStorage(taskData);
   },
 
   /**
@@ -849,16 +841,16 @@ Page({
   },
 
   /**
-   * 加载任务模板
+   * 按类型加载任务模板
    */
-  loadTaskTemplates: function() {
+  loadTemplatesByCategory: function() {
     // 学习任务模板
     const studyTemplates = [
       { 
         id: 'math_homework', 
         name: '数学作业', 
         shortName: '数学',
-        icon: '📐', 
+        difficulty: '普通',
         description: '完成数学练习册', 
         duration: 45, 
         points: 3 
@@ -867,7 +859,7 @@ Page({
         id: 'reading', 
         name: '阅读练习', 
         shortName: '阅读',
-        icon: '📚', 
+        difficulty: '简单',
         description: '阅读一篇文章并做笔记', 
         duration: 30, 
         points: 2 
@@ -876,7 +868,7 @@ Page({
         id: 'english_words', 
         name: '英语单词', 
         shortName: '英语',
-        icon: '🔤', 
+        difficulty: '普通',
         description: '背诵英语单词', 
         duration: 20, 
         points: 2 
@@ -885,20 +877,20 @@ Page({
         id: 'writing', 
         name: '写作文', 
         shortName: '作文',
-        icon: '✏️', 
+        difficulty: '困难',
         description: '完成一篇作文', 
         duration: 60, 
         points: 5 
       }
     ];
 
-    // 习惯任务模板
+    // 生活习惯模板
     const habitTemplates = [
       { 
         id: 'tidy_desk', 
         name: '整理书桌', 
         shortName: '整理',
-        icon: '🧹', 
+        difficulty: '简单',
         description: '整理书桌和学习用品', 
         duration: 15, 
         points: 2 
@@ -907,7 +899,7 @@ Page({
         id: 'wash_dishes', 
         name: '洗碗', 
         shortName: '洗碗',
-        icon: '🍽️', 
+        difficulty: '简单',
         description: '清洗并整理餐具', 
         duration: 10, 
         points: 1 
@@ -916,44 +908,69 @@ Page({
         id: 'exercise', 
         name: '做运动', 
         shortName: '运动',
-        icon: '🏃', 
+        difficulty: '普通',
         description: '进行体育锻炼', 
         duration: 30, 
         points: 3 
-      },
+      }
+    ];
+    
+    // 整理收纳模板
+    const cleaningTemplates = [
       { 
         id: 'make_bed', 
         name: '整理床铺', 
         shortName: '床铺',
-        icon: '🛏️', 
+        difficulty: '简单',
         description: '整理床铺被褥', 
         duration: 5, 
         points: 1 
+      },
+      { 
+        id: 'clean_room', 
+        name: '打扫房间', 
+        shortName: '打扫',
+        difficulty: '普通',
+        description: '清扫房间卫生', 
+        duration: 20, 
+        points: 2 
       }
     ];
     
-    // 根据任务类型加载不同的模板
-    const templates = this.data.taskType === 'study' ? studyTemplates : habitTemplates;
-    
-    // 获取并添加用户自定义的常用模板
+    // 获取自定义模板并添加到相应分类
     wx.getStorage({
       key: 'customTemplates',
       success: (res) => {
         if (res.data) {
-          // 过滤获取当前任务类型的自定义模板
-          const customTemplates = res.data.filter(
-            t => t.taskType === this.data.taskType
-          );
-          // 将自定义模板添加到列表前面
-          this.setData({ 
-            taskTemplates: [...customTemplates, ...templates].slice(0, 8) // 限制展示数量
+          const customTemplates = res.data || [];
+          
+          // 根据类型将自定义模板添加到不同分类中
+          const customStudy = customTemplates.filter(t => t.type === 'study');
+          const customClock = customTemplates.filter(t => t.type === 'clock');
+          const customBag = customTemplates.filter(t => t.type === 'bag');
+          
+          // 更新数据
+          this.setData({
+            studyTemplates: [...customStudy, ...studyTemplates],
+            habitTemplates: [...customClock, ...habitTemplates],
+            cleaningTemplates: [...customBag, ...cleaningTemplates]
           });
         } else {
-          this.setData({ taskTemplates: templates });
+          // 没有自定义模板，直接使用默认模板
+          this.setData({
+            studyTemplates: studyTemplates,
+            habitTemplates: habitTemplates,
+            cleaningTemplates: cleaningTemplates
+          });
         }
       },
       fail: () => {
-        this.setData({ taskTemplates: templates });
+        // 获取失败，使用默认模板
+        this.setData({
+          studyTemplates: studyTemplates,
+          habitTemplates: habitTemplates,
+          cleaningTemplates: cleaningTemplates
+        });
       }
     });
   },
@@ -963,54 +980,153 @@ Page({
    */
   selectTemplate: function(e) {
     const templateId = e.currentTarget.dataset.id;
-    const template = this.data.taskTemplates.find(t => t.id === templateId);
+    const templateType = e.currentTarget.dataset.type;
+    
+    // 根据类型查找模板
+    let template = null;
+    if (templateType === 'study') {
+      template = this.data.studyTemplates.find(t => t.id === templateId);
+    } else if (templateType === 'clock') {
+      template = this.data.habitTemplates.find(t => t.id === templateId);
+    } else if (templateType === 'bag') {
+      template = this.data.cleaningTemplates.find(t => t.id === templateId);
+    }
     
     if (template) {
       // 使用模板数据填充表单
+      const difficultyIndex = this.getDifficultyIndex(template.difficulty);
+      
       this.setData({
         selectedTemplate: templateId,
+        selectedTemplateType: templateType,
         customMode: false,
         'task.title': template.name,
-        'task.shortName': template.shortName || template.name.substring(0, 4), // 设置简称
+        'task.shortName': template.shortName || template.name.substring(0, 4),
         'task.description': template.description || '',
-        'task.duration': template.duration,
         'task.points': template.points,
-        // 设置相应的选择状态
-        isCustomDuration: ![5, 15, 30, 45, 60].includes(template.duration),
-        isCustomPoints: ![1, 2, 3, 5].includes(template.points)
+        'task.type': templateType,
+        'task.difficulty': template.difficulty || '普通',
+        difficultyIndex: difficultyIndex
       });
       
-      // 如果是自定义时长和积分，设置对应的值
-      if (this.data.isCustomDuration) {
-        this.setData({ customDurationValue: template.duration.toString() });
-      }
-      
-      if (this.data.isCustomPoints) {
-        this.setData({ customPointsValue: template.points.toString() });
-      }
-      
-      // 更新任务负载预测
-      this.updateTaskLoadPreview();
-      
       // 给用户提示
-      wx.showToast({
-        title: '已应用模板',
-        icon: 'success',
-        duration: 1000
+      wx.vibrateShort({
+        type: 'light'
       });
     }
   },
 
   /**
+   * 根据难度名称获取索引
+   */
+  getDifficultyIndex: function(difficultyName) {
+    const index = this.data.difficultyOptions.indexOf(difficultyName);
+    return index > -1 ? index : 1; // 默认返回普通(索引1)
+  },
+
+  /**
    * 选择自定义任务
    */
-  selectCustomTask: function() {
+  selectCustomTask: function(e) {
+    // 获取任务类型（如果有传入）
+    const taskType = e.currentTarget.dataset.type || 
+                    (this.data.taskType === 'study' ? 'study' : 'clock');
+    
     this.setData({
       selectedTemplate: '',
+      selectedTemplateType: taskType,
       customMode: true,
       'task.title': '',
+      'task.shortName': '',
       'task.description': '',
-      // 保留默认值，不清空
+      'task.type': taskType,
+      difficultyIndex: 1,
+      'task.difficulty': '普通',
+      'task.points': taskType === 'study' ? 3 : 2  // 默认积分：学习3分，习惯2分
+    });
+  },
+
+  /**
+   * 启用自定义编辑模式
+   */
+  enableCustomMode: function() {
+    this.setData({
+      customMode: true
+    });
+    
+    wx.showToast({
+      title: '已切换到编辑模式',
+      icon: 'none',
+      duration: 1000
+    });
+  },
+
+  /**
+   * 切换任务执行模式
+   */
+  switchMode: function(e) {
+    const mode = e.currentTarget.dataset.mode;
+    
+    // 如果是周期性任务但还没有设置重复类型，设置默认值
+    if (mode === 'repeat' && (!this.data.task.repeat || !this.data.task.repeat.type)) {
+      this.setData({
+        'task.repeat': {
+          type: 'daily',
+          days: ['0', '1', '2', '3', '4', '5', '6'], // 默认每天
+          startDate: this.data.task.date || this.data.dateNow,
+          endDate: ''
+        }
+      });
+    }
+    
+    this.setData({
+      repeatMode: mode
+    });
+  },
+
+  /**
+   * 选择重复频率
+   */
+  selectFrequency: function(e) {
+    const type = e.currentTarget.dataset.type;
+    
+    // 根据类型设置默认的重复日
+    let days = [];
+    if (type === 'daily') {
+      days = ['0', '1', '2', '3', '4', '5', '6']; // 每天
+    } else if (type === 'weekly') {
+      // 选择当前是周几
+      const today = new Date().getDay().toString();
+      days = [today];
+    } else if (type === 'workdays') {
+      days = ['1', '2', '3', '4', '5']; // 工作日
+    } else if (type === 'custom') {
+      days = this.data.task.repeat.days || []; // 保留已选择的日期
+    }
+    
+    this.setData({
+      'task.repeat.type': type,
+      'task.repeat.days': days
+    });
+  },
+
+  /**
+   * 切换周重复日
+   */
+  toggleWeekday: function(e) {
+    const day = e.currentTarget.dataset.day;
+    let days = [...(this.data.task.repeat.days || [])];
+    
+    // 如果已包含，则移除
+    const index = days.indexOf(day);
+    if (index > -1) {
+      days.splice(index, 1);
+    } else {
+      days.push(day);
+    }
+    
+    this.setData({
+      'task.repeat.days': days
     });
   },
 
@@ -1070,7 +1186,7 @@ Page({
               icon: 'success'
             });
             // 刷新模板列表
-            this.loadTaskTemplates();
+            this.loadTemplatesByCategory();
           }
         });
       },
@@ -1084,7 +1200,7 @@ Page({
               icon: 'success'
             });
             // 刷新模板列表
-            this.loadTaskTemplates();
+            this.loadTemplatesByCategory();
           }
         });
       }
@@ -1699,5 +1815,53 @@ Page({
     });
     
     return Array.from(repeatedTypes);
+  },
+
+  /**
+   * 输入积分
+   */
+  inputPoints: function(e) {
+    let value = parseInt(e.detail.value);
+    // 检查是否是有效数字且在合理范围内
+    if (isNaN(value) || value < 1) {
+      value = 1;
+    } else if (value > 10) {
+      value = 10;
+    }
+    
+    this.setData({
+      'task.points': value
+    });
+  },
+
+  /**
+   * 选择难度
+   */
+  selectDifficulty: function(e) {
+    const index = e.detail.value;
+    const difficulty = this.data.difficultyOptions[index];
+    
+    this.setData({
+      difficultyIndex: index,
+      'task.difficulty': difficulty
+    });
+  },
+
+  /**
+   * 选择开始日期（周期任务）
+   */
+  selectStartDate: function(e) {
+    this.setData({
+      'task.repeat.startDate': e.detail.value
+    });
+  },
+
+  /**
+   * 选择结束日期（周期任务）
+   */
+  selectEndDate: function(e) {
+    this.setData({
+      'task.repeat.endDate': e.detail.value
+    });
   },
 }) 
