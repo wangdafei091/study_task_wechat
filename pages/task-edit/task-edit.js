@@ -62,7 +62,29 @@ Page({
       { duration: 60, points: '3-5' },
       { duration: 61, points: '5-10' }
     ],
-    userPoints: 0 // 用户当前积分
+    userPoints: 0, // 用户当前积分
+    activeView: 'day', // 当前激活的视图: 'day', 'week', 'month'
+    overviewDay: '', // 日视图当前日期
+    weekRange: '', // 周视图日期范围
+    monthTitle: '', // 月视图标题
+    dayData: {
+      totalTasks: 0,
+      totalMinutes: 0,
+      status: 'light',
+      percentage: 0,
+      message: '暂无任务',
+      tasks: []
+    },
+    weekData: {
+      totalTasks: 0,
+      avgTasksPerDay: 0,
+      days: []
+    },
+    monthData: {
+      totalTasks: 0,
+      completedTasks: 0,
+      weeks: []
+    }
   },
 
   /**
@@ -92,6 +114,9 @@ Page({
     
     // 更新任务负载预测
     this.updateTaskLoadPreview();
+    
+    // 初始化任务概览数据
+    this.initTaskOverview();
   },
 
   /**
@@ -1064,5 +1089,567 @@ Page({
         });
       }
     });
+  },
+
+  /**
+   * 初始化任务概览数据
+   */
+  initTaskOverview: function() {
+    // 设置当前日期为默认日期
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1;
+    const day = now.getDate();
+    const dateStr = `${year}-${month < 10 ? '0' + month : month}-${day < 10 ? '0' + day : day}`;
+    
+    this.setData({
+      overviewDay: dateStr,
+      monthTitle: `${year}年${month}月`
+    });
+    
+    // 计算周日期范围
+    this.calculateWeekRange(now);
+    
+    // 加载各视图数据
+    this.loadDayViewData(dateStr);
+    this.loadWeekViewData(now);
+    this.loadMonthViewData(year, month);
+  },
+
+  /**
+   * 切换视图类型
+   */
+  switchView: function(e) {
+    const view = e.currentTarget.dataset.view;
+    this.setData({
+      activeView: view
+    });
+  },
+
+  /**
+   * 前一天
+   */
+  prevDay: function() {
+    const currentDate = new Date(this.data.overviewDay);
+    currentDate.setDate(currentDate.getDate() - 1);
+    const dateStr = this.formatDate(currentDate);
+    
+    this.setData({
+      overviewDay: dateStr
+    });
+    
+    this.loadDayViewData(dateStr);
+  },
+
+  /**
+   * 后一天
+   */
+  nextDay: function() {
+    const currentDate = new Date(this.data.overviewDay);
+    currentDate.setDate(currentDate.getDate() + 1);
+    const dateStr = this.formatDate(currentDate);
+    
+    this.setData({
+      overviewDay: dateStr
+    });
+    
+    this.loadDayViewData(dateStr);
+  },
+
+  /**
+   * 前一周
+   */
+  prevWeek: function() {
+    const startDate = new Date(this.data.weekData.days[0].date);
+    startDate.setDate(startDate.getDate() - 7);
+    
+    this.calculateWeekRange(startDate);
+    this.loadWeekViewData(startDate);
+  },
+
+  /**
+   * 后一周
+   */
+  nextWeek: function() {
+    const startDate = new Date(this.data.weekData.days[0].date);
+    startDate.setDate(startDate.getDate() + 7);
+    
+    this.calculateWeekRange(startDate);
+    this.loadWeekViewData(startDate);
+  },
+
+  /**
+   * 前一月
+   */
+  prevMonth: function() {
+    const [year, month] = this.data.monthTitle.match(/(\d+)年(\d+)月/).slice(1).map(Number);
+    let newYear = year;
+    let newMonth = month - 1;
+    
+    if (newMonth < 1) {
+      newMonth = 12;
+      newYear--;
+    }
+    
+    this.setData({
+      monthTitle: `${newYear}年${newMonth}月`
+    });
+    
+    this.loadMonthViewData(newYear, newMonth);
+  },
+
+  /**
+   * 后一月
+   */
+  nextMonth: function() {
+    const [year, month] = this.data.monthTitle.match(/(\d+)年(\d+)月/).slice(1).map(Number);
+    let newYear = year;
+    let newMonth = month + 1;
+    
+    if (newMonth > 12) {
+      newMonth = 1;
+      newYear++;
+    }
+    
+    this.setData({
+      monthTitle: `${newYear}年${newMonth}月`
+    });
+    
+    this.loadMonthViewData(newYear, newMonth);
+  },
+
+  /**
+   * 计算周日期范围
+   */
+  calculateWeekRange: function(date) {
+    const startDate = new Date(date);
+    // 调整到当周周日
+    const day = startDate.getDay();
+    startDate.setDate(startDate.getDate() - day);
+    
+    const endDate = new Date(startDate);
+    endDate.setDate(endDate.getDate() + 6);
+    
+    const startStr = this.formatDate(startDate);
+    const endStr = this.formatDate(endDate);
+    
+    this.setData({
+      weekRange: `${startStr} ~ ${endStr}`
+    });
+  },
+
+  /**
+   * 日期格式化
+   */
+  formatDate: function(date) {
+    const year = date.getFullYear();
+    const month = date.getMonth() + 1;
+    const day = date.getDate();
+    return `${year}-${month < 10 ? '0' + month : month}-${day < 10 ? '0' + day : day}`;
+  },
+
+  /**
+   * 获取星期几
+   */
+  getWeekday: function(dateStr) {
+    const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
+    const date = new Date(dateStr);
+    return weekdays[date.getDay()];
+  },
+
+  /**
+   * 从日历中选择日期
+   */
+  selectDateFromCalendar: function(e) {
+    const date = e.currentTarget.dataset.date;
+    if (!date) return;
+    
+    // 设置任务日期为所选日期
+    this.setData({
+      'task.date': date,
+      overviewDay: date
+    });
+    
+    // 更新日视图数据
+    this.loadDayViewData(date);
+    
+    // 更新任务负载预测
+    this.updateTaskLoadPreview();
+  },
+
+  /**
+   * 选择概览日期
+   */
+  selectOverviewDate: function() {
+    wx.showToast({
+      title: '长按可选择日期',
+      icon: 'none'
+    });
+  },
+
+  /**
+   * 加载日视图数据
+   */
+  loadDayViewData: function(dateStr) {
+    // 获取存储的任务数据
+    wx.getStorage({
+      key: 'taskData',
+      success: res => {
+        const tasks = res.data || [];
+        
+        // 过滤出该日期的任务
+        const dayTasks = tasks.filter(t => t.date === dateStr);
+        
+        // 计算该日期的任务总时长
+        const totalMinutes = dayTasks.reduce((sum, t) => sum + (t.duration || 0), 0);
+        
+        // 识别重复任务
+        const repeatedTasks = this.identifyRepeatedTasks(tasks, dateStr);
+        
+        // 按开始时间排序
+        dayTasks.sort((a, b) => {
+          if (!a.startTime) return 1;
+          if (!b.startTime) return -1;
+          return a.startTime.localeCompare(b.startTime);
+        });
+        
+        // 为任务添加重复标记
+        const tasksWithMark = dayTasks.map(task => {
+          return {
+            ...task,
+            isRepeated: repeatedTasks.includes(task.id)
+          };
+        });
+        
+        // 分析负载状态
+        let status = 'light';
+        let message = '任务量较轻松';
+        
+        // 根据小朋友年龄段计算推荐负载上限
+        const app = getApp();
+        const ageGroup = app?.globalData?.ageGroup || '6-8';
+        let recommendedLimit = 90; // 默认90分钟
+        
+        switch (ageGroup) {
+          case '3-5':
+            recommendedLimit = 60; // 3-5岁 最多1小时
+            break;
+          case '6-8':
+            recommendedLimit = 90; // 6-8岁 最多1.5小时
+            break;
+          case '9-12':
+            recommendedLimit = 120; // 9-12岁 最多2小时
+            break;
+        }
+        
+        // 计算负载百分比
+        const percentage = Math.min(Math.round((totalMinutes / recommendedLimit) * 100), 100);
+        
+        if (totalMinutes < recommendedLimit * 0.7) {
+          status = 'light';
+          message = '任务量较轻松';
+        } else if (totalMinutes <= recommendedLimit * 1.2) {
+          status = 'normal';
+          message = '任务量适中';
+        } else {
+          status = 'heavy';
+          message = '任务量偏多';
+        }
+        
+        this.setData({
+          'dayData.totalTasks': dayTasks.length,
+          'dayData.totalMinutes': totalMinutes,
+          'dayData.status': status,
+          'dayData.percentage': percentage,
+          'dayData.message': message,
+          'dayData.tasks': tasksWithMark
+        });
+      },
+      fail: () => {
+        // 若无数据则设置为空
+        this.setData({
+          'dayData.totalTasks': 0,
+          'dayData.totalMinutes': 0,
+          'dayData.status': 'light',
+          'dayData.percentage': 0,
+          'dayData.message': '暂无任务',
+          'dayData.tasks': []
+        });
+      }
+    });
+  },
+
+  /**
+   * 加载周视图数据
+   */
+  loadWeekViewData: function(startDate) {
+    // 获取存储的任务数据
+    wx.getStorage({
+      key: 'taskData',
+      success: res => {
+        const tasks = res.data || [];
+        const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
+        const today = this.formatDate(new Date());
+        
+        // 计算周视图的7天数据
+        const days = [];
+        let totalTasks = 0;
+        
+        for (let i = 0; i < 7; i++) {
+          const date = new Date(startDate);
+          date.setDate(date.getDate() - date.getDay() + i);
+          const dateStr = this.formatDate(date);
+          
+          // 过滤出该日期的任务
+          const dayTasks = tasks.filter(t => t.date === dateStr);
+          const taskCount = dayTasks.length;
+          totalTasks += taskCount;
+          
+          // 按任务类型分组计算比例
+          const tasksByType = [];
+          const typeMap = {};
+          
+          dayTasks.forEach(task => {
+            const type = task.type || 'study';
+            if (!typeMap[type]) {
+              typeMap[type] = {
+                type: type,
+                count: 0,
+                minutes: 0,
+                percentage: 0
+              };
+            }
+            
+            typeMap[type].count++;
+            typeMap[type].minutes += (task.duration || 0);
+          });
+          
+          // 计算总时长
+          const totalMinutes = Object.values(typeMap).reduce((sum, t) => sum + t.minutes, 0);
+          
+          // 计算各类型任务的比例
+          Object.values(typeMap).forEach(t => {
+            t.percentage = totalMinutes > 0 ? (t.minutes / totalMinutes) * 100 : 0;
+          });
+          
+          days.push({
+            date: dateStr,
+            day: date.getDate(),
+            weekday: weekdays[date.getDay()],
+            isToday: dateStr === today,
+            totalTasks: taskCount,
+            tasksByType: Object.values(typeMap)
+          });
+        }
+        
+        this.setData({
+          'weekData.totalTasks': totalTasks,
+          'weekData.avgTasksPerDay': Math.round(totalTasks / 7 * 10) / 10,
+          'weekData.days': days
+        });
+      },
+      fail: () => {
+        // 若无数据则设置为空
+        this.setData({
+          'weekData.totalTasks': 0,
+          'weekData.avgTasksPerDay': 0,
+          'weekData.days': []
+        });
+      }
+    });
+  },
+
+  /**
+   * 加载月视图数据
+   */
+  loadMonthViewData: function(year, month) {
+    // 获取存储的任务数据
+    wx.getStorage({
+      key: 'taskData',
+      success: res => {
+        const tasks = res.data || [];
+        const today = this.formatDate(new Date());
+        
+        // 获取当月第一天是周几
+        const firstDay = new Date(year, month - 1, 1).getDay();
+        
+        // 获取当月总天数
+        const lastDate = new Date(year, month, 0).getDate();
+        
+        // 计算上个月最后几天
+        const prevMonthLastDate = new Date(year, month - 1, 0).getDate();
+        
+        // 构建月历数据
+        const weeks = [];
+        let week = [];
+        let totalTasks = 0;
+        let completedTasks = 0;
+        
+        // 添加上个月末尾的几天
+        for (let i = 0; i < firstDay; i++) {
+          const day = prevMonthLastDate - firstDay + i + 1;
+          let prevMonth = month - 1;
+          let prevYear = year;
+          
+          if (prevMonth < 1) {
+            prevMonth = 12;
+            prevYear--;
+          }
+          
+          const dateStr = `${prevYear}-${prevMonth < 10 ? '0' + prevMonth : prevMonth}-${day < 10 ? '0' + day : day}`;
+          
+          // 获取该日期的任务
+          const dateTasks = tasks.filter(t => t.date === dateStr);
+          const repeatedTypes = this.getRepeatedTaskTypes(tasks, dateStr);
+          
+          week.push({
+            date: dateStr,
+            day: day,
+            isCurrentMonth: false,
+            isToday: dateStr === today,
+            taskCount: dateTasks.length,
+            heatLevel: this.calculateHeatLevel(dateTasks),
+            repeatedTasks: repeatedTypes
+          });
+        }
+        
+        // 添加当月的天数
+        for (let i = 1; i <= lastDate; i++) {
+          const dateStr = `${year}-${month < 10 ? '0' + month : month}-${i < 10 ? '0' + i : i}`;
+          
+          // 获取该日期的任务
+          const dateTasks = tasks.filter(t => t.date === dateStr);
+          const repeatedTypes = this.getRepeatedTaskTypes(tasks, dateStr);
+          
+          // 累计任务总数和已完成数
+          totalTasks += dateTasks.length;
+          completedTasks += dateTasks.filter(t => t.status === 1).length;
+          
+          week.push({
+            date: dateStr,
+            day: i,
+            isCurrentMonth: true,
+            isToday: dateStr === today,
+            taskCount: dateTasks.length,
+            heatLevel: this.calculateHeatLevel(dateTasks),
+            repeatedTasks: repeatedTypes
+          });
+          
+          // 一周结束或月末
+          if (week.length === 7 || i === lastDate) {
+            // 如果一周未满7天，添加下个月开始的几天
+            while (week.length < 7) {
+              const nextDay = week.length - firstDay + 1;
+              let nextMonth = month + 1;
+              let nextYear = year;
+              
+              if (nextMonth > 12) {
+                nextMonth = 1;
+                nextYear++;
+              }
+              
+              const dateStr = `${nextYear}-${nextMonth < 10 ? '0' + nextMonth : nextMonth}-${nextDay < 10 ? '0' + nextDay : nextDay}`;
+              
+              // 获取该日期的任务
+              const dateTasks = tasks.filter(t => t.date === dateStr);
+              const repeatedTypes = this.getRepeatedTaskTypes(tasks, dateStr);
+              
+              week.push({
+                date: dateStr,
+                day: nextDay,
+                isCurrentMonth: false,
+                isToday: dateStr === today,
+                taskCount: dateTasks.length,
+                heatLevel: this.calculateHeatLevel(dateTasks),
+                repeatedTasks: repeatedTypes
+              });
+            }
+            
+            weeks.push(week);
+            week = [];
+          }
+        }
+        
+        this.setData({
+          'monthData.totalTasks': totalTasks,
+          'monthData.completedTasks': completedTasks,
+          'monthData.weeks': weeks
+        });
+      },
+      fail: () => {
+        // 若无数据则设置为空
+        this.setData({
+          'monthData.totalTasks': 0,
+          'monthData.completedTasks': 0,
+          'monthData.weeks': []
+        });
+      }
+    });
+  },
+
+  /**
+   * 计算热力图级别
+   * 根据任务数量和总时长计算热力值
+   */
+  calculateHeatLevel: function(tasks) {
+    if (!tasks || tasks.length === 0) return 0;
+    
+    // 计算任务总时长
+    const totalMinutes = tasks.reduce((sum, t) => sum + (t.duration || 0), 0);
+    
+    // 根据任务时长和数量综合计算热力值
+    const countFactor = Math.min(tasks.length / 5, 1);
+    const timeFactor = Math.min(totalMinutes / 180, 1);
+    
+    // 热力值为时长因子和数量因子的加权平均
+    return (timeFactor * 0.7 + countFactor * 0.3).toFixed(2);
+  },
+
+  /**
+   * 识别重复任务
+   * 返回重复任务的ID数组
+   */
+  identifyRepeatedTasks: function(allTasks, dateStr) {
+    const repeatedIds = [];
+    const targetDateTasks = allTasks.filter(t => t.date === dateStr);
+    
+    targetDateTasks.forEach(task => {
+      // 查找不同日期但标题相同的任务
+      const similarTasks = allTasks.filter(t => 
+        t.id !== task.id && 
+        t.title === task.title &&
+        t.date !== dateStr
+      );
+      
+      if (similarTasks.length > 0) {
+        repeatedIds.push(task.id);
+      }
+    });
+    
+    return repeatedIds;
+  },
+
+  /**
+   * 获取重复任务类型
+   * 返回重复任务的类型数组
+   */
+  getRepeatedTaskTypes: function(allTasks, dateStr) {
+    const repeatedTypes = new Set();
+    const targetDateTasks = allTasks.filter(t => t.date === dateStr);
+    
+    targetDateTasks.forEach(task => {
+      // 查找不同日期但标题相同的任务
+      const similarTasks = allTasks.filter(t => 
+        t.id !== task.id && 
+        t.title === task.title &&
+        t.date !== dateStr
+      );
+      
+      if (similarTasks.length > 0) {
+        repeatedTypes.add(task.type || 'study');
+      }
+    });
+    
+    return Array.from(repeatedTypes);
   },
 }) 
