@@ -7,7 +7,7 @@
     <view class="card-section task-overview-card">
       <view class="card-title">
         <text class="card-icon">📊</text>
-        <text>任务安排概览</text>
+        <text>能力成长计划</text>
       </view>
       
       <!-- 视图切换栏 -->
@@ -47,15 +47,17 @@
               <view class="task-item {{item.type}} {{item.isRepeated ? 'repeated' : ''}}">
                 <view class="task-time">{{item.startTime}}</view>
                 <view class="task-content">
-                  <view class="task-title">{{item.title}}</view>
-                  <view class="task-duration">{{item.duration}}分钟</view>
-                  <view class="repeat-indicator" wx:if="{{item.isRepeated}}">重复任务</view>
+                  <view class="task-header">
+                    <text class="task-title">{{item.title}}</text>
+                    <text class="task-duration-text">{{item.duration}}分钟</text>
+                  </view>
+                  <view class="repeat-indicator" wx:if="{{item.isRepeated}}"></view>
                 </view>
               </view>
             </block>
           </view>
           <view class="empty-state" wx:else>
-            <text>当天暂无任务安排</text>
+            <text class="empty-state-text">当天暂无成长计划</text>
           </view>
         </view>
       </view>
