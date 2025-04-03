@@ -149,12 +149,18 @@ Page({
   // 从本地存储加载任务数据
   loadTaskData: function() {
     const app = getApp();
+    
+    // 获取今天的日期字符串，确保格式一致（YYYY-MM-DD）
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}-${today.getDate().toString().padStart(2, '0')}`;
+    console.log('今日日期:', todayStr);
+    
     wx.getStorage({
       key: 'taskData',
       success: (res) => {
         if (res.data && res.data.length > 0) {
           // 确保每个任务都有duration属性
-          const tasks = res.data.map(task => {
+          const allTasks = res.data.map(task => {
             if (!task.hasOwnProperty('duration')) {
               // 根据任务类型设置默认持续时间
               switch(task.type) {
@@ -174,8 +180,23 @@ Page({
             return task;
           });
           
-          this.setData({ tasks });
-          app.globalData.tasks = tasks;
+          // 筛选今天的任务
+          const todayTasks = allTasks.filter(task => {
+            // 确保日期格式一致性
+            if (!task.date) return false;
+            
+            // 如果任务的日期等于今天的日期，则包括该任务
+            return task.date === todayStr;
+          });
+          
+          console.log('所有任务数:', allTasks.length);
+          console.log('今日任务数:', todayTasks.length);
+          
+          // 设置任务列表为今日任务
+          this.setData({ tasks: todayTasks });
+          
+          // 全局任务数据保存所有任务
+          app.globalData.tasks = allTasks;
           
           // 更新统计和圆环尺寸
           this.updateStats();
@@ -213,17 +234,27 @@ Page({
 
   // 更新统计信息
   updateStats: function() {
-    const tasks = this.data.tasks;
+    const tasks = this.data.tasks; // 现在只包含今日任务
+    const allTasks = app.globalData.tasks || []; // 所有任务
+    
+    // 计算完成任务数量
     const completedTasks = tasks.filter(task => task.status === 1);
-    const totalTasks = tasks.length;
+    const totalTasks = tasks.length; // 今日任务总数
     
     // 计算各类型任务的完成百分比
     const calculateProgress = (type) => {
-      const typeTotal = tasks.filter(task => task.type === type).length;
-      if (typeTotal === 0) return 0;
+      const typeTasks = tasks.filter(task => task.type === type);
+      if (typeTasks.length === 0) return 0;
       
-      const typeCompleted = tasks.filter(task => task.type === type && task.status === 1).length;
-      return Math.round((typeCompleted / typeTotal) * 100);
+      const typeCompleted = typeTasks.filter(task => task.status === 1).length;
+      return Math.round((typeCompleted / typeTasks.length) * 100);
+    };
+    
+    // 计算各类型任务数量
+    const countTasksByType = {
+      clock: tasks.filter(task => task.type === 'clock').length,
+      bag: tasks.filter(task => task.type === 'bag').length,
+      study: tasks.filter(task => task.type === 'study').length
     };
     
     // 更新进度圆环数据
@@ -235,7 +266,8 @@ Page({
       'stats.totalTasks': totalTasks,
       'stats.completionRate': totalTasks > 0 ? Math.round((completedTasks.length / totalTasks) * 100) : 0,
       'rewardProgress.current': completedTasks.length,
-      'rewardProgress.total': totalTasks
+      'rewardProgress.total': totalTasks,
+      'stats.typeCounts': countTasksByType
     });
     
     // 调整圆环大小

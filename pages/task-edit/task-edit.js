@@ -818,19 +818,138 @@ Page({
   },
 
   /**
+   * 准备任务数据
+   */
+  prepareTaskData: function() {
+    const { task, mode, taskType, difficultyOptions, difficultyIndex } = this.data;
+    
+    // 准备基础任务数据
+    const now = Date.now();
+    
+    // 确保日期格式正确 YYYY-MM-DD
+    let formattedDate = task.date;
+    if (formattedDate) {
+      const dateParts = formattedDate.split('-');
+      if (dateParts.length === 3) {
+        formattedDate = `${dateParts[0]}-${dateParts[1].padStart(2, '0')}-${dateParts[2].padStart(2, '0')}`;
+        console.log('格式化后的日期:', formattedDate);
+      }
+    }
+    
+    const taskData = {
+      id: task.id || 'task_' + now,
+      title: task.title.trim(),
+      shortName: task.shortName || task.title.substring(0, 4),
+      description: task.description || '',
+      type: task.type || (taskType === 'study' ? 'study' : 'clock'),
+      taskType: taskType || 'study',
+      tags: task.tags || [],
+      date: formattedDate, // 使用格式化后的日期
+      // 根据任务类型和时间设置开始时间和结束时间
+      startTime: task.time || '',
+      // 计算结束时间，基于开始时间和持续时间
+      endTime: task.time ? this.calculateEndTime(task.time, task.duration || 30) : '',
+      // 使用任务模板中的持续时间或默认值
+      duration: task.duration || 30,
+      status: task.status || 0,
+      points: task.points || 1,
+      difficulty: difficultyOptions[difficultyIndex] || '普通',
+      images: task.images || [],
+      createTime: task.createTime || now,
+      updateTime: now
+    };
+    
+    // 根据重复模式设置任务重复属性
+    if (this.data.repeatMode === 'repeat') {
+      // 确保开始日期和结束日期格式也正确
+      let formattedStartDate = task.repeat.startDate;
+      let formattedEndDate = task.repeat.endDate;
+      
+      if (formattedStartDate) {
+        const startDateParts = formattedStartDate.split('-');
+        if (startDateParts.length === 3) {
+          formattedStartDate = `${startDateParts[0]}-${startDateParts[1].padStart(2, '0')}-${startDateParts[2].padStart(2, '0')}`;
+        }
+      }
+      
+      if (formattedEndDate) {
+        const endDateParts = formattedEndDate.split('-');
+        if (endDateParts.length === 3) {
+          formattedEndDate = `${endDateParts[0]}-${endDateParts[1].padStart(2, '0')}-${endDateParts[2].padStart(2, '0')}`;
+        }
+      }
+      
+      taskData.repeat = {
+        type: task.repeat.type || 'daily',
+        days: task.repeat.days || [],
+        startDate: formattedStartDate || task.date,
+        endDate: formattedEndDate || ''
+      };
+    } else {
+      taskData.repeat = {
+        type: 'none',
+        days: [],
+        startDate: '',
+        endDate: ''
+      };
+    }
+    
+    return taskData;
+  },
+
+  /**
+   * 根据开始时间和持续时间计算结束时间
+   */
+  calculateEndTime: function(startTime, durationMinutes) {
+    if (!startTime) return '';
+    
+    // 解析开始时间
+    const [hours, minutes] = startTime.split(':').map(Number);
+    
+    // 计算结束时间
+    let endHours = hours;
+    let endMinutes = minutes + durationMinutes;
+    
+    // 处理进位
+    if (endMinutes >= 60) {
+      endHours += Math.floor(endMinutes / 60);
+      endMinutes = endMinutes % 60;
+    }
+    
+    // 处理24小时制
+    if (endHours >= 24) {
+      endHours = endHours % 24;
+    }
+    
+    // 格式化为HH:MM格式
+    return `${endHours.toString().padStart(2, '0')}:${endMinutes.toString().padStart(2, '0')}`;
+  },
+
+  /**
    * 保存任务
    */
   saveTask: function() {
+    console.log('保存任务按钮点击');
     // 验证必填信息
     if (!this.validateTaskData()) {
+      console.log('数据验证失败');
       return;
     }
     
-    // 准备任务数据
-    const taskData = this.prepareTaskData();
-    
-    // 保存到存储
-    this.saveTaskToStorage(taskData);
+    try {
+      // 准备任务数据
+      const taskData = this.prepareTaskData();
+      console.log('准备任务数据', taskData);
+      
+      // 保存到存储
+      this.saveTaskToStorage(taskData);
+    } catch(error) {
+      console.error('保存任务失败:', error);
+      wx.showToast({
+        title: '保存失败，请重试',
+        icon: 'none'
+      });
+    }
   },
 
   /**
@@ -1407,9 +1526,9 @@ Page({
    */
   formatDate: function(date) {
     const year = date.getFullYear();
-    const month = date.getMonth() + 1;
-    const day = date.getDate();
-    return `${year}-${month < 10 ? '0' + month : month}-${day < 10 ? '0' + day : day}`;
+    const month = (date.getMonth() + 1).toString().padStart(2, '0'); // 确保月份是两位数
+    const day = date.getDate().toString().padStart(2, '0'); // 确保日期是两位数
+    return `${year}-${month}-${day}`;
   },
 
   /**

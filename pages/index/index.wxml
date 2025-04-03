@@ -356,17 +356,17 @@
     <view class="float-menu {{showFloatMenu ? 'active' : ''}}">
       <view class="float-menu-item study-task" 
             bindtap="createStudyTask"
-            aria-label="创建学习型任务" 
+            aria-label="创建学习任务" 
             aria-role="button">
         <text class="menu-icon">📚</text>
-        <text class="menu-label">学习型</text>
+        <text class="menu-label">学习</text>
       </view>
       <view class="float-menu-item habit-task" 
             bindtap="createHabitTask"
-            aria-label="创建习惯型任务" 
+            aria-label="创建习惯任务" 
             aria-role="button">
         <text class="menu-icon">⏰</text>
-        <text class="menu-label">习惯型</text>
+        <text class="menu-label">习惯</text>
       </view>
     </view>
     
