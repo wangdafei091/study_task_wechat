@@ -849,6 +849,13 @@
 /* 视图内容区域 */
 .view-content {
   padding: 10rpx 0;
+  transition: opacity 0.3s ease;
+  opacity: 1;
+}
+
+.view-content[hidden] {
+  opacity: 0;
+  pointer-events: none;
 }
 
 /* 日期选择器 */
@@ -1068,6 +1075,19 @@
   flex-direction: column;
   align-items: center;
   position: relative;
+  padding: 5rpx;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.day-column:active {
+  transform: scale(1.05);
+  opacity: 0.9;
+}
+
+/* 可点击提示 - 为有任务的日期添加微妙指示 */
+.day-column .day-tasks-wrapper:not(:empty) {
+  box-shadow: 0 0 0 1rpx rgba(0, 0, 0, 0.05);
 }
 
 .day-tasks-wrapper {
@@ -1202,13 +1222,19 @@
 
 .date-cell {
   flex: 1;
-  position: relative;
+  height: 80rpx;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  border-radius: 8rpx;
-  margin: 0 3rpx;
+  justify-content: space-between;
+  padding: 5rpx 0;
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+.date-cell:active {
+  transform: scale(1.05);
+  opacity: 0.9;
 }
 
 .date-cell.other-month {

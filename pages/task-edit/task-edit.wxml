@@ -81,7 +81,8 @@
           <!-- 周柱状图 -->
           <view class="week-chart">
             <block wx:for="{{weekData.days}}" wx:key="date">
-              <view class="day-column {{item.isToday ? 'today' : ''}} {{item.date === task.date ? 'selected' : ''}}">
+              <view class="day-column {{item.isToday ? 'today' : ''}} {{item.date === task.date ? 'selected' : ''}}" 
+                    bindtap="switchToDayViewFromWeek" data-date="{{item.date}}">
                 <view class="day-tasks-wrapper">
                   <block wx:for="{{item.tasksByType}}" wx:for-item="typeTask" wx:key="type">
                     <view class="task-bar {{typeTask.type}}" style="height: {{typeTask.percentage}}%"></view>
@@ -142,7 +143,7 @@
                 <view class="week-row">
                   <block wx:for="{{week}}" wx:key="date">
                     <view class="date-cell {{item.isCurrentMonth ? '' : 'other-month'}} {{item.isToday ? 'today' : ''}} {{item.date === task.date ? 'selected' : ''}}" 
-                          data-date="{{item.date}}" bindtap="selectDateFromCalendar">
+                          data-date="{{item.date}}" bindtap="switchToDayViewFromMonth">
                       <text class="date-number">{{item.day}}</text>
                       <view class="task-indicators" wx:if="{{item.taskCount > 0}}">
                         <view class="heat-indicator" style="opacity: {{item.heatLevel}}"></view>

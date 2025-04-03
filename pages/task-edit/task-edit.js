@@ -1219,6 +1219,54 @@ Page({
   },
 
   /**
+   * 从周视图点击日期跳转到日视图
+   */
+  switchToDayViewFromWeek: function(e) {
+    const date = e.currentTarget.dataset.date;
+    if (!date) return;
+    
+    // 设置为日视图
+    this.setData({
+      activeView: 'day',
+      overviewDay: date
+    });
+    
+    // 加载该日期的任务数据
+    this.loadDayViewData(date);
+    
+    // 轻微的反馈效果
+    wx.vibrateShort({
+      type: 'light'
+    });
+  },
+
+  /**
+   * 从月视图点击日期跳转到日视图
+   */
+  switchToDayViewFromMonth: function(e) {
+    const date = e.currentTarget.dataset.date;
+    if (!date) return;
+    
+    // 设置任务日期为所选日期（原来的功能保留）
+    this.setData({
+      'task.date': date,
+      activeView: 'day',
+      overviewDay: date
+    });
+    
+    // 更新日视图数据
+    this.loadDayViewData(date);
+    
+    // 更新任务负载预测
+    this.updateTaskLoadPreview();
+    
+    // 轻微的反馈效果
+    wx.vibrateShort({
+      type: 'light'
+    });
+  },
+
+  /**
    * 计算周日期范围
    */
   calculateWeekRange: function(date) {
