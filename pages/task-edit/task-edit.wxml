@@ -299,19 +299,16 @@
         <!-- 一次性任务设置 -->
         <view class="execution-settings" wx:if="{{repeatMode === 'once'}}">
           <view class="form-item">
-            <view class="item-label">执行日期</view>
-            <picker mode="date" value="{{task.date}}" start="{{dateNow}}" bindchange="selectDate">
-              <view class="picker {{task.date ? '' : 'placeholder'}}">
-                {{task.date || '请选择执行日期'}}
-              </view>
-            </picker>
-            
-            <!-- 快速日期选择 -->
-            <view class="quick-select">
-              <view class="quick-item" bindtap="quickSelectDate" data-type="today">今天</view>
-              <view class="quick-item" bindtap="quickSelectDate" data-type="tomorrow">明天</view>
-              <view class="quick-item" bindtap="quickSelectDate" data-type="weekend">周末</view>
-            </view>
+            <!-- 使用新的日期选择器组件 -->
+            <date-picker 
+              label="执行日期" 
+              value="{{task.date}}" 
+              minDate="{{dateNow}}"
+              placeholder="请选择执行日期"
+              quickOptions="{{dateQuickOptions}}"
+              bindchange="selectDate"
+              bindquickOptionChange="handleQuickDateOption"
+            ></date-picker>
           </view>
           
           <!-- 学习任务才显示执行时间 -->
@@ -328,21 +325,21 @@
         <!-- 周期性任务设置 -->
         <view class="execution-settings" wx:if="{{repeatMode === 'repeat'}}">
           <view class="form-item">
-            <view class="item-label">开始日期</view>
-            <picker mode="date" value="{{task.repeat.startDate}}" start="{{dateNow}}" bindchange="selectStartDate">
-              <view class="picker {{task.repeat.startDate ? '' : 'placeholder'}}">
-                {{task.repeat.startDate || '请选择开始日期'}}
-              </view>
-            </picker>
-          </view>
-          
-          <view class="form-item">
-            <view class="item-label">结束日期 <text class="optional">选填</text></view>
-            <picker mode="date" value="{{task.repeat.endDate}}" start="{{task.repeat.startDate || dateNow}}" bindchange="selectEndDate">
-              <view class="picker {{task.repeat.endDate ? '' : 'placeholder'}}">
-                {{task.repeat.endDate || '不设置结束日期'}}
-              </view>
-            </picker>
+            <!-- 使用日期选择器 - 范围模式 -->
+            <date-picker 
+              mode="range"
+              startLabel="开始日期"
+              endLabel="结束日期 (选填)"
+              startDate="{{task.repeat.startDate}}"
+              endDate="{{task.repeat.endDate}}"
+              minDate="{{dateNow}}"
+              startPlaceholder="请选择开始日期"
+              endPlaceholder="不设置结束日期"
+              bindstartChange="selectStartDate"
+              bindendChange="selectEndDate"
+              rangeQuickOptions="{{dateRangeQuickOptions}}"
+              bindrangeQuickOptionChange="handleRangeDateOption"
+            ></date-picker>
           </view>
           
           <view class="form-item">

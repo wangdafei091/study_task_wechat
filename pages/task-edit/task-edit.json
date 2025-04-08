@@ -1,6 +1,7 @@
 {
   "navigationBarTitleText": "任务编辑",
   "usingComponents": {
-    "card": "/components/card/card"
+    "card": "/components/card/card",
+    "date-picker": "/components/date-picker/date-picker"
   }
 } 

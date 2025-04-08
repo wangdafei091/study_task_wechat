@@ -95,7 +95,19 @@ Page({
       totalTasks: 0,
       completedTasks: 0,
       weeks: []
-    }
+    },
+    // 日期选择器快速选项
+    dateQuickOptions: [
+      { label: '今天', value: 'today' },
+      { label: '明天', value: 'tomorrow' },
+      { label: '周末', value: 'weekend' }
+    ],
+    
+    // 日期范围选择器快速选项
+    dateRangeQuickOptions: [
+      { label: '本周', value: 'week' },
+      { label: '本月', value: 'month' }
+    ],
   },
 
   /**
@@ -359,6 +371,30 @@ Page({
   selectTime: function(e) {
     this.setData({
       'task.time': e.detail.value
+    });
+  },
+
+  /**
+   * 处理日期选择器的快速日期选项事件
+   */
+  handleQuickDateOption: function(e) {
+    const { date } = e.detail;
+    this.setData({
+      'task.date': date
+    });
+    
+    // 更新任务负载预测
+    this.updateTaskLoadPreview();
+  },
+  
+  /**
+   * 处理日期选择器的日期范围快速选项事件
+   */
+  handleRangeDateOption: function(e) {
+    const { startDate, endDate } = e.detail;
+    this.setData({
+      'task.repeat.startDate': startDate,
+      'task.repeat.endDate': endDate
     });
   },
 
@@ -1970,8 +2006,10 @@ Page({
    * 选择开始日期（周期任务）
    */
   selectStartDate: function(e) {
+    // 兼容新旧两种事件格式
+    const startDate = e.detail.startDate || e.detail.value;
     this.setData({
-      'task.repeat.startDate': e.detail.value
+      'task.repeat.startDate': startDate
     });
   },
 
@@ -1979,8 +2017,10 @@ Page({
    * 选择结束日期（周期任务）
    */
   selectEndDate: function(e) {
+    // 兼容新旧两种事件格式
+    const endDate = e.detail.endDate || e.detail.value;
     this.setData({
-      'task.repeat.endDate': e.detail.value
+      'task.repeat.endDate': endDate
     });
   },
 }) 
