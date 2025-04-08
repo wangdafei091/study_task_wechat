@@ -1,0 +1,121 @@
+<!-- 日期选择器组件 -->
+<view class="date-picker-component {{customClass}}" style="{{customStyle}}">
+  <!-- 单日期选择模式 -->
+  <block wx:if="{{mode === 'single'}}">
+    <view class="date-picker-container">
+      <!-- 日期选择器标签 -->
+      <view class="date-picker-label" wx:if="{{label}}">{{label}}</view>
+      
+      <!-- 微信原生日期选择器 -->
+      <picker 
+        wx:if="{{useNativePicker}}" 
+        mode="date" 
+        value="{{value || ''}}" 
+        start="{{minDate}}" 
+        end="{{maxDate}}" 
+        bindchange="onDateChange"
+      >
+        <view class="date-picker-field {{value ? '' : 'placeholder'}}">
+          <text class="date-value">{{value || placeholder}}</text>
+          <text class="date-picker-arrow">▼</text>
+        </view>
+      </picker>
+      
+      <!-- 自定义显示字段（不使用原生选择器时） -->
+      <view 
+        wx:else 
+        class="date-picker-field {{value ? '' : 'placeholder'}}" 
+        bindtap="showCalendar"
+      >
+        <text class="date-value">{{value || placeholder}}</text>
+        <text class="date-picker-arrow">▼</text>
+      </view>
+      
+      <!-- 快速选择按钮 -->
+      <view class="quick-options" wx:if="{{showQuickOptions && quickOptions.length > 0}}">
+        <block wx:for="{{quickOptions}}" wx:key="value">
+          <view 
+            class="quick-option-item {{currentQuickOption === item.value ? 'active' : ''}}" 
+            bindtap="onQuickOptionTap" 
+            data-value="{{item.value}}"
+          >
+            {{item.label}}
+          </view>
+        </block>
+      </view>
+    </view>
+  </block>
+  
+  <!-- 日期范围选择模式 -->
+  <block wx:if="{{mode === 'range'}}">
+    <view class="date-range-container">
+      <!-- 开始日期 -->
+      <view class="date-range-item">
+        <view class="date-picker-label" wx:if="{{startLabel}}">{{startLabel}}</view>
+        <picker 
+          wx:if="{{useNativePicker}}" 
+          mode="date" 
+          value="{{startDate || ''}}" 
+          start="{{minDate}}" 
+          end="{{maxDate || endDate}}" 
+          bindchange="onStartDateChange"
+        >
+          <view class="date-picker-field {{startDate ? '' : 'placeholder'}}">
+            <text class="date-value">{{startDate || startPlaceholder}}</text>
+            <text class="date-picker-arrow">▼</text>
+          </view>
+        </picker>
+        <view 
+          wx:else 
+          class="date-picker-field {{startDate ? '' : 'placeholder'}}" 
+          bindtap="showStartCalendar"
+        >
+          <text class="date-value">{{startDate || startPlaceholder}}</text>
+          <text class="date-picker-arrow">▼</text>
+        </view>
+      </view>
+      
+      <!-- 分隔符 -->
+      <view class="date-range-separator">至</view>
+      
+      <!-- 结束日期 -->
+      <view class="date-range-item">
+        <view class="date-picker-label" wx:if="{{endLabel}}">{{endLabel}}</view>
+        <picker 
+          wx:if="{{useNativePicker}}" 
+          mode="date" 
+          value="{{endDate || ''}}" 
+          start="{{startDate || minDate}}" 
+          end="{{maxDate}}" 
+          bindchange="onEndDateChange"
+        >
+          <view class="date-picker-field {{endDate ? '' : 'placeholder'}}">
+            <text class="date-value">{{endDate || endPlaceholder}}</text>
+            <text class="date-picker-arrow">▼</text>
+          </view>
+        </picker>
+        <view 
+          wx:else 
+          class="date-picker-field {{endDate ? '' : 'placeholder'}}" 
+          bindtap="showEndCalendar"
+        >
+          <text class="date-value">{{endDate || endPlaceholder}}</text>
+          <text class="date-picker-arrow">▼</text>
+        </view>
+      </view>
+    </view>
+    
+    <!-- 范围模式的快速选择按钮 -->
+    <view class="quick-options range-quick-options" wx:if="{{showQuickOptions && rangeQuickOptions.length > 0}}">
+      <block wx:for="{{rangeQuickOptions}}" wx:key="value">
+        <view 
+          class="quick-option-item {{currentRangeQuickOption === item.value ? 'active' : ''}}" 
+          bindtap="onRangeQuickOptionTap" 
+          data-value="{{item.value}}"
+        >
+          {{item.label}}
+        </view>
+      </block>
+    </view>
+  </block>
+</view> 

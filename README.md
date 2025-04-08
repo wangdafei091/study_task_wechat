@@ -141,6 +141,68 @@
 </card>
 ```
 
+### 日期选择器组件 (date-picker)
+**属性**：
+- **基本属性**
+  - `mode`: String - 选择器模式，可选值'single'(单日期)、'range'(日期范围)，默认'single'
+  - `value`: String - 当前选中日期，格式'YYYY-MM-DD'，仅在single模式下使用
+  - `label`: String - 日期选择器标签，可选
+  - `placeholder`: String - 日期选择器占位符，默认"请选择日期"
+
+- **范围选择相关**
+  - `startDate`: String - 范围开始日期，仅在range模式下使用
+  - `endDate`: String - 范围结束日期，仅在range模式下使用
+  - `startLabel`: String - 开始日期标签，默认"开始日期"
+  - `endLabel`: String - 结束日期标签，默认"结束日期"
+  - `startPlaceholder`: String - 开始日期占位符，默认"请选择开始日期"
+  - `endPlaceholder`: String - 结束日期占位符，默认"请选择结束日期"
+
+- **限制范围**
+  - `minDate`: String - 最小可选日期，格式'YYYY-MM-DD'
+  - `maxDate`: String - 最大可选日期，格式'YYYY-MM-DD'
+
+- **快速选项**
+  - `quickOptions`: Array - 单日期模式快速选项配置，默认提供"今天"、"明天"、"周末"
+  - `rangeQuickOptions`: Array - 范围模式快速选项配置，默认提供"本周"、"本月"、"上月"
+
+- **样式相关**
+  - `customClass`: String - 自定义样式类
+  - `customStyle`: String - 自定义内联样式
+
+- **功能开关**
+  - `useNativePicker`: Boolean - 是否使用原生选择器，默认true
+  - `showQuickOptions`: Boolean - 是否显示快速选项，默认true
+
+**事件**：
+- `change`: 日期变更事件 (单日期模式)
+- `startChange`: 开始日期变更事件 (范围模式)
+- `endChange`: 结束日期变更事件 (范围模式)
+- `rangeChange`: 日期范围变更事件 (范围模式)
+- `quickOptionChange`: 快速选项变更事件 (单日期模式)
+- `rangeQuickOptionChange`: 快速选项变更事件 (范围模式)
+- `showCalendar`: 自定义日历显示事件 (不使用原生选择器时)
+
+**使用示例**：
+```html
+<!-- 单日期选择器 -->
+<date-picker 
+  label="执行日期" 
+  value="{{date}}" 
+  minDate="{{minDate}}"
+  bindchange="onDateChange"
+></date-picker>
+
+<!-- 日期范围选择器 -->
+<date-picker 
+  mode="range"
+  startLabel="开始日期"
+  endLabel="结束日期"
+  startDate="{{startDate}}"
+  endDate="{{endDate}}"
+  bindrangeChange="onRangeChange"
+></date-picker>
+```
+
 ### 日历组件 (calendar)
 **属性**：
 - `selectedDate`: String - 当前选中日期，格式'YYYY-MM-DD'
