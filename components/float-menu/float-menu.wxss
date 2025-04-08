@@ -1,0 +1,270 @@
+/* 浮动菜单容器 */
+.float-menu-container {
+  position: fixed;
+  bottom: calc(140rpx + env(safe-area-inset-bottom) / 2);
+  right: 40rpx;
+  z-index: 100;
+}
+
+/* 底部左侧位置 */
+.float-menu-container.position-bottom-left {
+  right: auto;
+  left: 40rpx;
+}
+
+/* 顶部右侧位置 */
+.float-menu-container.position-top-right {
+  bottom: auto;
+  top: calc(140rpx + env(safe-area-inset-top) / 2);
+  right: 40rpx;
+}
+
+/* 顶部左侧位置 */
+.float-menu-container.position-top-left {
+  bottom: auto;
+  top: calc(140rpx + env(safe-area-inset-top) / 2);
+  right: auto;
+  left: 40rpx;
+}
+
+/* 主按钮 */
+.main-button {
+  position: relative;
+  width: 110rpx;
+  height: 110rpx;
+  background: linear-gradient(135deg, #4285F4, #1A73E8);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #FFFFFF;
+  font-size: 55rpx;
+  box-shadow: 0 4rpx 12rpx rgba(66, 133, 244, 0.3), 0 8rpx 24rpx rgba(66, 133, 244, 0.15);
+  transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.3s ease;
+  z-index: 10;
+}
+
+/* 图标动画 */
+.icon-add, .icon-close {
+  transition: transform 0.3s ease;
+  display: block;
+  line-height: 1;
+}
+
+.icon-close {
+  transform: rotate(45deg) scale(1.2);
+}
+
+/* 主按钮的按下效果 */
+.main-button:active {
+  transform: scale(0.92);
+  box-shadow: 0 2rpx 6rpx rgba(66, 133, 244, 0.2);
+}
+
+/* 主按钮悬停效果 */
+.button-hover {
+  transform: scale(1.05);
+  box-shadow: 0 6rpx 16rpx rgba(66, 133, 244, 0.35);
+}
+
+/* 浮动菜单 */
+.float-menu {
+  position: absolute;
+  bottom: 60rpx;
+  right: 5rpx;
+  width: 110rpx;
+  height: 110rpx;
+  display: flex;
+  justify-content: center;
+  opacity: 1;
+  pointer-events: none;
+  z-index: -1;
+  transition-property: opacity, transform;
+  transition-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition-duration: 300ms;
+}
+
+.float-menu.active {
+  pointer-events: auto;
+}
+
+/* 根据位置调整菜单定位 */
+.float-menu.position-bottom-left {
+  right: auto;
+  left: 5rpx;
+}
+
+.float-menu.position-top-right {
+  bottom: auto;
+  top: 60rpx;
+  right: 5rpx;
+}
+
+.float-menu.position-top-left {
+  bottom: auto;
+  top: 60rpx;
+  right: auto;
+  left: 5rpx;
+}
+
+/* 浮动菜单项 */
+.float-menu-item {
+  position: absolute;
+  bottom: 0;
+  right: 5rpx;
+  width: 100rpx;
+  height: 100rpx;
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.2);
+  transition-property: all;
+  transition-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition-duration: 300ms;
+  transform-origin: center;
+  opacity: 0;
+  transform: scale(0.5);
+  z-index: 2;
+}
+
+/* 添加背景模糊效果 */
+.float-menu-container::before {
+  content: '';
+  position: absolute;
+  bottom: 20rpx;
+  right: 20rpx;
+  width: 300rpx;
+  height: 300rpx;
+  background: rgba(255,255,255,0.4);
+  border-radius: 50%;
+  filter: blur(15rpx);
+  opacity: 0;
+  transform: scale(0.8);
+  transition: all 0.3s ease;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.float-menu-container .main-button.active + .float-menu::before,
+.float-menu-container.active::before {
+  opacity: 0.8;
+  transform: scale(1);
+}
+
+/* 默认菜单项样式 - 学习型按钮 */
+.float-menu-item.study-task {
+  background: linear-gradient(135deg, #4285F4, #1A73E8);
+  transition-delay: 0.05s;
+}
+
+/* 默认菜单项样式 - 习惯型按钮 */
+.float-menu-item.habit-task {
+  background: linear-gradient(135deg, #FF9800, #F57C00);
+  transition-delay: 0.1s;
+}
+
+/* 菜单项动画 - 右下角位置(默认) */
+.float-menu.position-bottom-right.active .float-menu-item:nth-child(1) {
+  transform: scale(1) translate(-110rpx, -110rpx);
+  opacity: 1;
+}
+
+.float-menu.position-bottom-right.active .float-menu-item:nth-child(2) {
+  transform: scale(1) translate(-40rpx, -150rpx);
+  opacity: 1;
+}
+
+.float-menu.position-bottom-right.active .float-menu-item:nth-child(3) {
+  transform: scale(1) translate(40rpx, -150rpx);
+  opacity: 1;
+}
+
+/* 菜单项动画 - 左下角位置 */
+.float-menu.position-bottom-left.active .float-menu-item:nth-child(1) {
+  transform: scale(1) translate(110rpx, -110rpx);
+  opacity: 1;
+}
+
+.float-menu.position-bottom-left.active .float-menu-item:nth-child(2) {
+  transform: scale(1) translate(40rpx, -150rpx);
+  opacity: 1;
+}
+
+.float-menu.position-bottom-left.active .float-menu-item:nth-child(3) {
+  transform: scale(1) translate(-40rpx, -150rpx);
+  opacity: 1;
+}
+
+/* 菜单项动画 - 右上角位置 */
+.float-menu.position-top-right.active .float-menu-item:nth-child(1) {
+  transform: scale(1) translate(-110rpx, 110rpx);
+  opacity: 1;
+}
+
+.float-menu.position-top-right.active .float-menu-item:nth-child(2) {
+  transform: scale(1) translate(-40rpx, 150rpx);
+  opacity: 1;
+}
+
+.float-menu.position-top-right.active .float-menu-item:nth-child(3) {
+  transform: scale(1) translate(40rpx, 150rpx);
+  opacity: 1;
+}
+
+/* 菜单项动画 - 左上角位置 */
+.float-menu.position-top-left.active .float-menu-item:nth-child(1) {
+  transform: scale(1) translate(110rpx, 110rpx);
+  opacity: 1;
+}
+
+.float-menu.position-top-left.active .float-menu-item:nth-child(2) {
+  transform: scale(1) translate(40rpx, 150rpx);
+  opacity: 1;
+}
+
+.float-menu.position-top-left.active .float-menu-item:nth-child(3) {
+  transform: scale(1) translate(-40rpx, 150rpx);
+  opacity: 1;
+}
+
+/* 菜单图标 */
+.menu-icon {
+  font-size: 36rpx;
+  margin-bottom: 6rpx;
+  color: #FFFFFF;
+}
+
+/* 菜单标签 */
+.menu-label {
+  font-size: 20rpx;
+  color: white;
+  font-weight: 500;
+}
+
+/* 横屏模式适配 */
+@media screen and (orientation: landscape) {
+  .float-menu-container {
+    bottom: 80rpx;
+    right: 80rpx;
+  }
+  
+  .float-menu-container.position-bottom-left {
+    right: auto;
+    left: 80rpx;
+  }
+  
+  .float-menu-container.position-top-right {
+    bottom: auto;
+    top: 80rpx;
+    right: 80rpx;
+  }
+  
+  .float-menu-container.position-top-left {
+    bottom: auto;
+    top: 80rpx;
+    right: auto;
+    left: 80rpx;
+  }
+} 

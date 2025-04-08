@@ -1,0 +1,28 @@
+<view class="float-menu-container {{containerClass}}" style="z-index: {{zIndex}};">
+  <!-- 浮动菜单项 -->
+  <view class="float-menu {{isOpen ? 'active' : ''}} position-{{position}}">
+    <block wx:for="{{menuItems}}" wx:key="id">
+      <view 
+        class="float-menu-item {{item.type || ''}}" 
+        style="{{item.style || ''}}; width: {{itemSize}}rpx; height: {{itemSize}}rpx; transition-duration: {{animationDuration}}ms;"
+        data-index="{{index}}"
+        bindtap="handleItemTap"
+        aria-label="{{item.ariaLabel || item.label}}" 
+        aria-role="button">
+        <text class="menu-icon">{{item.icon}}</text>
+        <text class="menu-label">{{item.label}}</text>
+      </view>
+    </block>
+  </view>
+  
+  <!-- 主按钮 -->
+  <view 
+    class="main-button {{mainButtonClass}} {{isOpen ? 'active' : ''}}" 
+    style="{{mainButtonStyle}}; transition-duration: {{animationDuration}}ms;"
+    bindtap="toggleMenu"
+    hover-class="button-hover" 
+    aria-label="菜单" 
+    aria-role="button">
+    <text class="{{isOpen ? 'icon-close' : 'icon-add'}}">{{isOpen ? closeIcon : defaultIcon}}</text>
+  </view>
+</view> 

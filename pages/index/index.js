@@ -67,6 +67,24 @@ Page({
 
     // 浮动菜单状态
     showFloatMenu: false,
+    
+    // 浮动菜单项配置
+    menuItems: [
+      {
+        id: 'study',
+        type: 'study-task',
+        icon: '📚',
+        label: '学习',
+        ariaLabel: '创建学习任务'
+      },
+      {
+        id: 'habit',
+        type: 'habit-task',
+        icon: '⏰',
+        label: '习惯',
+        ariaLabel: '创建习惯任务'
+      }
+    ]
   },
   
   /**
@@ -1118,6 +1136,30 @@ Page({
     // 注意：这个页面目前还不存在，需要创建
     wx.navigateTo({
       url: '/pages/message/message'
+    });
+  },
+
+  // 处理菜单项点击
+  handleMenuItemTap: function(e) {
+    const item = e.detail.item;
+    
+    // 根据菜单项ID执行不同的操作
+    switch(item.id) {
+      case 'study':
+        this.createStudyTask();
+        break;
+      case 'habit':
+        this.createHabitTask();
+        break;
+      default:
+        console.log('未知菜单项:', item.id);
+    }
+  },
+  
+  // 处理菜单状态变化
+  handleMenuStateChange: function(e) {
+    this.setData({
+      showFloatMenu: e.detail.isOpen
     });
   },
 }) 

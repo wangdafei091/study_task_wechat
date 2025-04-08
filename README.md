@@ -634,4 +634,67 @@ function updatePoints(duration) {
 
 - 添加任务标签系统，便于分类管理
 - 增强任务统计功能，提供更多数据分析
-- 优化执行方式设置，提供更多灵活选项 
+- 优化执行方式设置，提供更多灵活选项
+
+## 组件说明
+
+### 浮动菜单组件 (Float Menu)
+
+新添加了一个可高度自定义的浮动菜单组件，用于在页面底部或顶部显示弹出式的菜单选项。
+
+#### 主要特性：
+
+- 支持多种位置定位（右下角、左下角、右上角、左上角）
+- 可配置的菜单项（图标、标签、样式）
+- 支持自定义主题颜色和尺寸
+- 动画效果可配置
+- 支持无障碍访问
+
+#### 使用方法：
+
+1. 在页面的 JSON 中引入组件
+```json
+{
+  "usingComponents": {
+    "float-menu": "/components/float-menu/float-menu"
+  }
+}
+```
+
+2. 在页面 WXML 中使用组件
+```xml
+<float-menu 
+  menuItems="{{menuItems}}"
+  position="bottom-right"
+  bind:itemtap="handleMenuItemTap"
+/>
+```
+
+3. 配置菜单项和事件处理
+```javascript
+Page({
+  data: {
+    menuItems: [
+      {
+        id: 'study',
+        type: 'study-task',
+        icon: '📚',
+        label: '学习'
+      },
+      {
+        id: 'habit',
+        type: 'habit-task',
+        icon: '⏰',
+        label: '习惯'
+      }
+    ]
+  },
+  
+  handleMenuItemTap(e) {
+    const item = e.detail.item;
+    // 处理菜单项点击...
+  }
+})
+```
+
+更多详细用法请参考：[浮动菜单组件文档](/components/float-menu/README.md) 

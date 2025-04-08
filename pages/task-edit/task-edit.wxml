@@ -129,12 +129,12 @@
           <!-- 月日历热力图 -->
           <view class="month-calendar">
             <view class="weekday-labels">
-              <block wx:for="{{['日', '一', '二', '三', '四', '五', '六']}}" wx:key="*this">
+              <block wx:for="{{['日', '一', '二', '三', '四', '五', '六']}}" wx:key="index">
                 <text class="weekday-label">{{item}}</text>
               </block>
             </view>
             <view class="calendar-grid">
-              <block wx:for="{{monthData.weeks}}" wx:for-item="week" wx:key="*this">
+              <block wx:for="{{monthData.weeks}}" wx:for-item="week" wx:key="index">
                 <view class="week-row">
                   <block wx:for="{{week}}" wx:key="date">
                     <view class="date-cell {{item.isCurrentMonth ? '' : 'other-month'}} {{item.isToday ? 'today' : ''}} {{item.date === task.date ? 'selected' : ''}}" 
@@ -145,7 +145,7 @@
                         <text class="task-count-label">{{item.taskCount}}</text>
                       </view>
                       <view class="repeat-indicators">
-                        <block wx:for="{{item.repeatedTasks}}" wx:for-item="repeatedType" wx:key="type">
+                        <block wx:for="{{item.repeatedTasks}}" wx:for-item="repeatedType" wx:for-index="typeIndex" wx:key="typeIndex">
                           <view class="repeat-dot {{repeatedType}}"></view>
                         </block>
                       </view>
@@ -436,4 +436,7 @@
       </block>
     </view>
   </view>
+  
+  <!-- 底部安全区域占位 -->
+  <view class="safe-area-inset-bottom"></view>
 </view> 

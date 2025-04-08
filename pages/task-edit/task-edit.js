@@ -91,16 +91,16 @@ Page({
       avgTasksPerDay: 0,
       days: []
     },
-    monthData: {
-      totalTasks: 0,
-      completedTasks: 0,
-      weeks: []
-    },
+    monthData: null,
     // 日期选择器快速选项
     dateQuickOptions: [
       { label: '今天', value: 'today' },
       { label: '明天', value: 'tomorrow' },
-      { label: '周末', value: 'weekend' }
+      { label: '后天', value: 'afterTomorrow' },
+      { label: '本周末', value: 'weekend' },
+      { label: '下周一', value: 'nextMonday' },
+      { label: '本周', value: 'week' },
+      { label: '本月', value: 'month' }
     ],
     
     // 日期范围选择器快速选项
@@ -108,6 +108,33 @@ Page({
       { label: '本周', value: 'week' },
       { label: '本月', value: 'month' }
     ],
+    
+    // 菜单项配置(移除这段)
+    menuItems: [
+      {
+        id: 'clock',
+        type: 'habit-task',
+        icon: '⏰',
+        label: '习惯',
+        ariaLabel: '添加生活习惯'
+      },
+      {
+        id: 'bag',
+        type: '',
+        icon: '🧹',
+        label: '整理',
+        ariaLabel: '添加整理任务',
+        style: 'background: linear-gradient(135deg, #FFC107, #FF9800);'
+      },
+      {
+        id: 'save',
+        type: '',
+        icon: '💾',
+        label: '保存',
+        ariaLabel: '保存任务',
+        style: 'background: linear-gradient(135deg, #4CAF50, #2E7D32);'
+      }
+    ]
   },
 
   /**
@@ -2022,5 +2049,30 @@ Page({
     this.setData({
       'task.repeat.endDate': endDate
     });
+  },
+
+  // 处理菜单项点击
+  handleMenuItemTap: function(e) {
+    const item = e.detail.item;
+    
+    // 根据菜单项ID执行不同的操作
+    switch(item.id) {
+      case 'clock':
+        this.selectTaskType('habit');
+        break;
+      case 'bag':
+        this.selectCustomTask('bag');
+        break;
+      case 'save':
+        this.saveTask();
+        break;
+      default:
+        console.log('未知菜单项:', item.id);
+    }
+  },
+  
+  // 处理菜单状态变化
+  handleMenuStateChange: function(e) {
+    console.log('菜单状态变化:', e.detail.isOpen);
   },
 }) 

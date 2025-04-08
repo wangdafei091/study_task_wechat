@@ -1687,4 +1687,10 @@
 
 .repeat-dot.bag {
   background-color: #FBBC04;
+}
+
+/* 底部安全区域 */
+.safe-area-inset-bottom {
+  height: calc(env(safe-area-inset-bottom) + 20rpx);
+  width: 100%;
 } 
