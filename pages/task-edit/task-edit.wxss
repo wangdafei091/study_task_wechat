@@ -51,12 +51,13 @@
   padding: 0; /* 移除所有内边距，与主页保持一致 */
 }
 
-/* 卡片区域通用样式 */
+/* 下面这些卡片相关的通用样式现在由组件提供 */
+/* 
 .card-section {
   background-color: #FFFFFF;
   border-radius: 16rpx;
   padding: 30rpx;
-  margin: 16rpx 30rpx; /* 使用与主页卡片完全相同的边距 */
+  margin: 16rpx 30rpx;
   box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.08);
 }
 
@@ -75,6 +76,7 @@
   font-size: 36rpx;
   margin-right: 12rpx;
 }
+*/
 
 /* 区域块样式 */
 .section-block {
@@ -512,89 +514,18 @@
 
 /* 近期任务负荷卡片样式 */
 .task-load-card {
-  background-color: #FFFFFF;
-  margin: 16rpx 30rpx; /* 使用与主页卡片完全相同的边距 */
-  border-radius: 16rpx;
-  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.08);
-}
-
-.task-load-preview {
-  background-color: #F7F8FA;
-  border-radius: 12rpx;
-  padding: 20rpx;
-  margin-bottom: 24rpx;
-}
-
-.load-stats {
-  display: flex;
-  justify-content: space-between;
-  font-size: 26rpx;
-  color: #666666;
-  margin-bottom: 16rpx;
-}
-
-.load-bar-container {
-  width: 100%;
-  height: 14rpx;
-  background-color: #E8E8E8;
-  border-radius: 7rpx;
-  overflow: hidden;
-  margin-bottom: 8rpx;
-}
-
-.load-bar {
-  width: 100%;
-  height: 100%;
-  position: relative;
-}
-
-.load-bar-progress {
-  height: 100%;
-  position: absolute;
-  left: 0;
-  top: 0;
-  background-color: #4285F4;
-  border-radius: 7rpx;
-}
-
-.load-bar.light .load-bar-progress {
-  background-color: #4CAF50;
-}
-
-.load-bar.heavy .load-bar-progress {
-  background-color: #FF5252;
-}
-
-.load-message {
-  font-size: 24rpx;
-  color: #4285F4;
-  text-align: right;
-}
-
-.load-message.light {
-  color: #4CAF50;
-}
-
-.load-message.heavy {
-  color: #FF5252;
+  /* 这些样式可以保留，它们会通过customClass应用到卡片组件 */
 }
 
 /* 任务管理卡片样式 */
 .task-management-card {
-  background-color: #FFFFFF;
-  border-radius: 16rpx;
-  padding: 0;
-  margin: 16rpx 30rpx; /* 使用与主页卡片完全相同的边距 */
-  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.08);
+  /* 保留特殊样式，其他由组件提供的样式可以移除 */
   overflow: hidden;
 }
 
 /* 积分奖励卡片样式 */
 .reward-card {
-  background-color: #FFFFFF;
-  margin: 16rpx 30rpx; /* 使用与主页卡片完全相同的边距 */
-  border-radius: 16rpx;
-  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.08);
+  /* 保留特殊样式，其他由组件提供的样式可以移除 */
 }
 
 /* 奖励建议样式 */
@@ -1255,8 +1186,7 @@
 
 /* 任务安排概览卡片样式 */
 .task-overview-card {
-  background-color: #FFFFFF;
-  margin: 16rpx 30rpx; /* 使用与主页卡片完全相同的边距 */
+  /* 保留特殊样式，其他由组件提供的样式可以移除 */
 }
 
 /* 视图切换标签 */

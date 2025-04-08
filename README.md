@@ -119,6 +119,28 @@
 </circle-progress>
 ```
 
+### 卡片组件 (card)
+**属性**：
+- `title`: String - 卡片标题，可选
+- `icon`: String - 标题前的图标，可选
+- `noPadding`: Boolean - 是否取消内边距，默认false
+- `customClass`: String - 自定义样式类，用于扩展样式
+- `customStyle`: String - 自定义内联样式
+
+**插槽**：
+- 默认插槽 - 卡片内容区域
+- `action` - 标题右侧操作区域插槽
+
+**使用示例**：
+```html
+<card title="任务概览" icon="📊" custom-class="task-overview-card">
+  <view>这里是卡片内容</view>
+  <view slot="action">
+    <text class="action-text">更多</text>
+  </view>
+</card>
+```
+
 ### 日历组件 (calendar)
 **属性**：
 - `selectedDate`: String - 当前选中日期，格式'YYYY-MM-DD'

@@ -4,12 +4,7 @@
   <view class="content">
     
     <!-- 卡片区域1：近期任务负荷 -->
-    <view class="card-section task-overview-card">
-      <view class="card-title">
-        <text class="card-icon">📊</text>
-        <text>能力成长计划</text>
-      </view>
-      
+    <card title="能力成长计划" icon="📊" customClass="task-overview-card">
       <!-- 视图切换栏 -->
       <view class="view-tabs">
         <view class="tab-item {{activeView === 'day' ? 'active' : ''}}" bindtap="switchView" data-view="day">日视图</view>
@@ -162,16 +157,10 @@
           </view>
         </view>
       </view>
-    </view>
+    </card>
     
     <!-- 卡片区域2：任务管理区域 -->
-    <view class="card-section task-management-card">
-      <!-- 卡片标题区域 -->
-      <view class="card-title">
-        <text class="card-icon">📝</text>
-        <text>任务管理</text>
-      </view>
-      
+    <card title="任务管理" icon="📝" customClass="task-management-card" noPadding="true">
       <!-- 常用任务区域 -->
       <view class="section-block">
         <view class="section-label">常用任务</view>
@@ -392,15 +381,10 @@
           </view>
         </view>
       </view>
-    </view>
+    </card>
     
     <!-- 卡片区域3：积分奖励设计 -->
-    <view class="card-section reward-card">
-      <view class="card-title">
-        <text class="card-icon">🏆</text>
-        <text>积分奖励设计</text>
-      </view>
-      
+    <card title="积分奖励设计" icon="🏆" customClass="reward-card">
       <!-- 积分奖励 -->
       <view class="form-item">
         <view class="item-label">完成奖励</view>
@@ -441,7 +425,7 @@
         </view>
         <view class="suggestion-note">根据任务难度选择合适的积分值，完成后即可获得</view>
       </view>
-    </view>
+    </card>
     
     <!-- 底部按钮区 -->
     <view class="button-group">

@@ -1,4 +1,6 @@
 {
   "navigationBarTitleText": "任务编辑",
-  "usingComponents": {}
+  "usingComponents": {
+    "card": "/components/card/card"
+  }
 } 

@@ -1,0 +1,17 @@
+<!-- 卡片组件 -->
+<view class="card-component {{customClass}} {{noPadding ? 'no-padding' : ''}}" style="{{customStyle}}">
+  <!-- 卡片标题区域（如果提供了标题则显示） -->
+  <view class="card-title" wx:if="{{title}}">
+    <text class="card-icon" wx:if="{{icon}}">{{icon}}</text>
+    <text class="card-title-text">{{title}}</text>
+    <!-- 标题右侧操作区插槽 -->
+    <view class="card-action">
+      <slot name="action"></slot>
+    </view>
+  </view>
+  
+  <!-- 卡片内容区域 -->
+  <view class="card-content">
+    <slot></slot>
+  </view>
+</view> 
