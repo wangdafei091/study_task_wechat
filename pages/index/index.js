@@ -116,9 +116,6 @@ Page({
     // 初始化各类别任务完成率
     this.updateStats();
     
-    // 根据任务总耗时调整圆环大小
-    this.adjustRingSize();
-
     // 加载消息数据
     this.loadMessageData();
     
@@ -157,9 +154,6 @@ Page({
     // 重新计算任务统计数据
     this.updateStats();
     
-    // 调整圆环大小
-    this.adjustRingSize();
-
     // 刷新消息数据
     this.loadMessageData();
   },
@@ -218,7 +212,6 @@ Page({
           
           // 更新统计和圆环尺寸
           this.updateStats();
-          this.adjustRingSize();
         }
       },
       fail: () => {
@@ -287,9 +280,6 @@ Page({
       'rewardProgress.total': totalTasks,
       'stats.typeCounts': countTasksByType
     });
-    
-    // 调整圆环大小
-    this.adjustRingSize();
   },
 
   // 显示/隐藏统计面板
@@ -764,9 +754,6 @@ Page({
     // 更新统计信息
     this.updateStats();
     
-    // 调整圆环大小
-    this.adjustRingSize();
-    
     // 保存数据
     this.saveTaskData();
     
@@ -1161,5 +1148,66 @@ Page({
     this.setData({
       showFloatMenu: e.detail.isOpen
     });
+  },
+
+  // 计算任务进度
+  calculateTaskProgress: function() {
+    const tasks = this.data.tasks;
+    const completedTasks = tasks.filter(task => task.status === 1);
+    const totalTasks = tasks.length; // 今日任务总数
+    
+    // 计算各类型任务的完成百分比
+    const calculateProgress = (type) => {
+      const typeTasks = tasks.filter(task => task.type === type);
+      if (typeTasks.length === 0) return 0;
+      
+      const typeCompleted = typeTasks.filter(task => task.status === 1).length;
+      return Math.round((typeCompleted / typeTasks.length) * 100);
+    };
+    
+    // 计算各类型任务数量
+    const countTasksByType = {
+      clock: tasks.filter(task => task.type === 'clock').length,
+      bag: tasks.filter(task => task.type === 'bag').length,
+      study: tasks.filter(task => task.type === 'study').length
+    };
+    
+    // 更新进度圆环数据
+    this.setData({
+      'taskProgress.clock': calculateProgress('clock'),
+      'taskProgress.bag': calculateProgress('bag'),
+      'taskProgress.study': calculateProgress('study'),
+      'stats.completedTasks': completedTasks.length,
+      'stats.totalTasks': totalTasks,
+      'stats.completionRate': totalTasks > 0 ? Math.round((completedTasks.length / totalTasks) * 100) : 0,
+      'rewardProgress.current': completedTasks.length,
+      'rewardProgress.total': totalTasks,
+      'stats.typeCounts': countTasksByType
+    });
+  },
+
+  updateDailyTasks: function(date) {
+    // 获取所有任务
+    const allTasks = app.globalData.tasks || [];
+    
+    // 筛选出选定日期的任务
+    const selectedDate = date || this.data.selectedDate || formatDate(new Date());
+    const todayTasks = allTasks.filter(task => task.date === selectedDate);
+    
+    // 按开始时间排序
+    todayTasks.sort((a, b) => {
+      if (a.startTime && b.startTime) {
+        return a.startTime.localeCompare(b.startTime);
+      }
+      return 0;
+    });
+    
+    this.setData({
+      tasks: todayTasks,
+      selectedDate: selectedDate
+    });
+    
+    // 计算任务进度
+    this.calculateTaskProgress();
   },
 }) 

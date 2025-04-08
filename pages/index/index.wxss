@@ -1120,6 +1120,8 @@
   border-top-color: currentColor;
   box-sizing: border-box;
   transition: transform 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  /* 默认不显示 */
+  opacity: 0;
 }
 
 /* 圆环内容 */
@@ -1156,17 +1158,17 @@
   letter-spacing: 0.3rpx;
 }
 
-/* 圆环颜色 */
+/* 圆环颜色 - 优化版本 */
 .progress-ring.clock {
-  color: var(--primary-color);
+  color: #4285F4;
 }
 
 .progress-ring.study {
-  color: var(--success-color);
+  color: #34A853;
 }
 
 .progress-ring.bag {
-  color: var(--warning-color);
+  color: #FBBC05;
 }
 
 /* 圆环大小调整 */
@@ -1193,18 +1195,142 @@
 /* 修复进度显示 */
 .progress-ring[style*="--progress"] .ring-progress {
   transform: rotate(calc(var(--progress) * 3.6deg));
+  transition: transform 1s cubic-bezier(0.34, 1.56, 0.64, 1);
+  /* 只有当进度大于0时才显示 */
+  opacity: 1;
 }
 
-/* 已完成的圆环样式 */
+/* 特殊处理进度为0的情况 */
+.progress-ring[style*="--progress:0"] .ring-progress,
+.progress-ring[style*="--progress: 0"] .ring-progress {
+  opacity: 0;
+}
+
+/* 已完成的圆环样式 - 增强版 */
 .progress-ring.completed .ring-progress {
+  opacity: 1;
   border-color: currentColor;
   transform: rotate(0deg);
+  box-shadow: 0 0 10rpx currentColor;
+}
+
+.progress-ring.completed.clock {
+  box-shadow: 0 0 15rpx rgba(66, 133, 244, 0.4);
+}
+
+.progress-ring.completed.study {
+  box-shadow: 0 0 15rpx rgba(52, 168, 83, 0.4);
+}
+
+.progress-ring.completed.bag {
+  box-shadow: 0 0 15rpx rgba(251, 188, 5, 0.4);
 }
 
 .ring-complete {
   font-size: 36rpx;
   color: var(--success-color);
   font-weight: 600;
+  transform: translateY(2rpx);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40rpx;
+  height: 40rpx;
+}
+
+/* 增加完成动画效果 */
+@keyframes ringComplete {
+  0% {
+    transform: translate(-50%, -50%) rotate(90deg) scale(0.8);
+    opacity: 0.5;
+  }
+  50% {
+    transform: translate(-50%, -50%) rotate(90deg) scale(1.1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) rotate(90deg) scale(1);
+    opacity: 1;
+  }
+}
+
+.progress-ring.completed .ring-content {
+  animation: ringComplete 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+/* 增加脉冲发光效果 */
+@keyframes pulseGlow {
+  0% {
+    box-shadow: 0 0 5rpx rgba(var(--ring-color-rgb), 0.3);
+  }
+  50% {
+    box-shadow: 0 0 15rpx rgba(var(--ring-color-rgb), 0.6);
+  }
+  100% {
+    box-shadow: 0 0 5rpx rgba(var(--ring-color-rgb), 0.3);
+  }
+}
+
+.progress-ring.completed.clock {
+  --ring-color-rgb: 66, 133, 244;
+  animation: pulseGlow 2s infinite;
+}
+
+.progress-ring.completed.study {
+  --ring-color-rgb: 52, 168, 83;
+  animation: pulseGlow 2s infinite;
+}
+
+.progress-ring.completed.bag {
+  --ring-color-rgb: 251, 188, 5;
+  animation: pulseGlow 2s infinite;
+}
+
+/* 内部渐变效果 */
+.ring-inner {
+  position: absolute;
+  top: 16rpx;
+  left: 16rpx;
+  right: 16rpx;
+  bottom: 16rpx;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(255,255,255,0.8), rgba(255,255,255,0.2));
+  opacity: 0.2;
+  pointer-events: none;
+}
+
+.progress-ring.completed .ring-inner {
+  background: radial-gradient(circle, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.1) 70%);
+  opacity: 0.4;
+}
+
+/* 进度圆环的辅助线 */
+.ring-mark {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.ring-mark::before,
+.ring-mark::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100%;
+  height: 1rpx;
+  background-color: rgba(0, 0, 0, 0.03);
+  transform-origin: center;
+}
+
+.ring-mark::before {
+  transform: translate(-50%, -50%);
+}
+
+.ring-mark::after {
+  transform: translate(-50%, -50%) rotate(90deg);
 }
 
 /* 横屏模式适配 - 进度圆环部分 */
