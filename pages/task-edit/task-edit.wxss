@@ -6,6 +6,7 @@
   flex-direction: column;
   min-height: 100vh;
   background-color: #F6F8FA;
+  padding: 0; /* 匹配首页容器，移除内边距 */
 }
 
 /* 顶部导航栏 */
@@ -47,7 +48,7 @@
 /* 主内容区 */
 .content {
   flex: 1;
-  padding: 30rpx;
+  padding: 0; /* 移除所有内边距，与主页保持一致 */
 }
 
 /* 卡片区域通用样式 */
@@ -55,7 +56,7 @@
   background-color: #FFFFFF;
   border-radius: 16rpx;
   padding: 30rpx;
-  margin-bottom: 30rpx;
+  margin: 16rpx 30rpx; /* 使用与主页卡片完全相同的边距 */
   box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.08);
 }
 
@@ -512,6 +513,9 @@
 /* 近期任务负荷卡片样式 */
 .task-load-card {
   background-color: #FFFFFF;
+  margin: 16rpx 30rpx; /* 使用与主页卡片完全相同的边距 */
+  border-radius: 16rpx;
+  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.08);
 }
 
 .task-load-preview {
@@ -580,7 +584,7 @@
   background-color: #FFFFFF;
   border-radius: 16rpx;
   padding: 0;
-  margin-bottom: 30rpx;
+  margin: 16rpx 30rpx; /* 使用与主页卡片完全相同的边距 */
   box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.08);
   overflow: hidden;
 }
@@ -588,6 +592,9 @@
 /* 积分奖励卡片样式 */
 .reward-card {
   background-color: #FFFFFF;
+  margin: 16rpx 30rpx; /* 使用与主页卡片完全相同的边距 */
+  border-radius: 16rpx;
+  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.08);
 }
 
 /* 奖励建议样式 */
@@ -1249,7 +1256,7 @@
 /* 任务安排概览卡片样式 */
 .task-overview-card {
   background-color: #FFFFFF;
-  margin-bottom: 30rpx;
+  margin: 16rpx 30rpx; /* 使用与主页卡片完全相同的边距 */
 }
 
 /* 视图切换标签 */
