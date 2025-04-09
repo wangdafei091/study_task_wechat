@@ -98,25 +98,44 @@
 
 ## 主要组件API
 
-### 圆形进度指示器 (circleProgress)
+### 进度圆环组件 (progressRing)
 **属性**：
 - `percent`: Number - 进度百分比(0-100)
-- `size`: Number - 组件大小，单位rpx，默认120
-- `strokeWidth`: Number - 线条宽度，单位rpx，默认6
-- `activeColor`: String - 进度条颜色，默认'#4285F4'
-- `backgroundColor`: String - 背景颜色，默认'#E8E8E8'
+- `size`: String/Number - 组件大小，可选值'large'/'medium'/'small'或具体rpx数值，默认'medium'
+- `type`: String - 圆环类型，可选值'default'/'clock'/'study'/'bag'等，默认'default'
+- `color`: String - 自定义颜色（当type为default时使用），默认'#4285F4'
 - `showText`: Boolean - 是否显示百分比文本，默认true
-- `fontColor`: String - 文本颜色，默认'#333333'
-- `fontSize`: Number - 字体大小，单位rpx，默认28
-- `isLandscape`: Boolean - 是否处于横屏模式，默认false
-- `deviceType`: Object - 设备类型信息对象
+- `centerContent`: String - 自定义中心内容文本（不使用插槽时），默认''
+- `enableHover`: Boolean - 是否启用悬停效果，默认true
+- `borderWidth`: Number - 边框宽度，单位rpx，默认8
+
+**事件**：
+- `tap` - 点击事件，返回`{type, percent}`对象
+
+**插槽**：
+- 默认插槽 - 可用于自定义圆环中心内容
 
 **使用示例**：
 ```html
-<circle-progress percent="{{taskProgress.study}}" 
-                 size="{{typeRingSizes.study || 130}}"
-                 active-color="#4285F4">
-</circle-progress>
+<!-- 基本用法 -->
+<progress-ring 
+  type="study"
+  percent="{{taskProgress.study}}"
+  size="large"
+  bind:tap="onRingTap">
+</progress-ring>
+
+<!-- 自定义颜色和内容 -->
+<progress-ring 
+  type="default"
+  color="#FF5252"
+  percent="85"
+  size="160"
+  borderWidth="10">
+  <view class="custom-content">
+    <text class="icon">📊</text>
+  </view>
+</progress-ring>
 ```
 
 ### 卡片组件 (card)
@@ -455,7 +474,7 @@ function updatePoints(duration) {
 ├── app.wxss                # 全局样式文件
 ├── components              # 组件目录
 │   ├── calendar            # 日历组件(增强适配)
-│   ├── circleProgress      # 圆形进度指示器(新增)
+│   ├── progressRing        # 进度圆环组件
 │   ├── progressBar         # 线性进度条组件
 │   └── taskItem            # 任务项组件
 ├── pages                   # 页面目录

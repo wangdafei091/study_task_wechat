@@ -1,0 +1,22 @@
+<!--components/progressRing/progressRing.wxml-->
+<view class="progress-ring {{type}} {{sizeClass}} {{isComplete ? 'completed' : ''}}" 
+      hover-class="{{enableHover ? 'ring-hover' : ''}}"
+      bindtap="onRingTap"
+      style="--progress: {{progress}}; {{size !== 'large' && size !== 'medium' && size !== 'small' ? 'width:' + size + 'rpx; height:' + size + 'rpx;' : ''}}; color: {{type === 'default' ? color : ''}}; --border-width: {{borderWidth}}rpx;">
+  <view class="ring-bg"></view>
+  <view class="ring-progress"></view>
+  <view class="ring-mark"></view>
+  <view class="ring-inner"></view>
+  <view class="ring-content">
+    <block wx:if="{{isComplete}}">
+      <text class="ring-complete">✓</text>
+    </block>
+    <block wx:elif="{{showText}}">
+      <text class="ring-value">{{progress}}%</text>
+    </block>
+    <block wx:elif="{{centerContent}}">
+      <text class="ring-custom-content">{{centerContent}}</text>
+    </block>
+    <slot></slot>
+  </view>
+</view> 

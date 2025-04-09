@@ -505,7 +505,11 @@ Page({
   
   // 圆环点击事件处理
   onRingTap: function(e) {
-    const type = e.currentTarget.dataset.type;
+    // 兼容原始实现和新组件实现
+    // 如果是从新组件传递过来的，e.detail中会有type
+    // 如果是从旧的实现传递过来的，从dataset中获取type
+    const type = e.detail && e.detail.type ? e.detail.type : e.currentTarget.dataset.type;
+    
     const typeNames = {
       bag: '整理收纳',
       clock: '生活习惯',
