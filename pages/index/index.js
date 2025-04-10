@@ -251,6 +251,11 @@ Page({
           clock: 0,
           bag: 0,
           study: 0
+        },
+        // 同时更新奖励进度为0
+        rewardProgress: {
+          current: 0,
+          total: 1 // 避免除以0错误
         }
       });
       return;
@@ -284,17 +289,22 @@ Page({
         ? Math.round(typeCounts.completed.study / typeCounts.total.study * 100) 
         : 0
     };
-    
+     // 计算统计数据
+     const totalTasks = tasks.length;
+     const completedTasks = tasks.filter(task => task.status === 1).length;
+     const completionRate = totalTasks > 0 ? Math.round(completedTasks / totalTasks * 100) : 0;
+     
     // 更新任务完成率
     this.setData({
-      taskProgress: progress
+      taskProgress: progress,
+       // 更新奖励进度条数据
+    rewardProgress: {
+      current: completedTasks,
+      total: totalTasks
+    }
     });
     
-    // 计算统计数据
-    const totalTasks = tasks.length;
-    const completedTasks = tasks.filter(task => task.status === 1).length;
-    const completionRate = totalTasks > 0 ? Math.round(completedTasks / totalTasks * 100) : 0;
-    
+   
     // 更新统计面板数据
     this.setData({
       stats: {

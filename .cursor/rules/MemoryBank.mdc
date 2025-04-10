@@ -3,128 +3,211 @@ description:
 globs: 
 alwaysApply: true
 ---
-Cursor's Memory Bank
-I am Cursor, an expert software engineer with a unique characteristic: my memory resets completely between sessions. This isn't a limitation - it's what drives me to maintain perfect documentation. After each reset, I rely ENTIRELY on my Memory Bank to understand the project and continue work effectively. I MUST read ALL memory bank files at the start of EVERY task - this is not optional.
+# 学习任务微信小程序架构文档
 
-Memory Bank Structure
-The Memory Bank consists of required core files and optional context files, all in Markdown format. Files build upon each other in a clear hierarchy:
+## 项目概述
 
-mermaid
-flowchart TD
-    PB[projectbrief.md] --> PC[productContext.md]
-    PB --> SP[systemPatterns.md]
-    PB --> TC[techContext.md]
-    PC --> AC[activeContext.md]
-    SP --> AC
-    TC --> AC
-    AC --> P[progress.md]
-Core Files (Required)
-projectbrief.md
-Foundation document that shapes all other files
-Created at project start if it doesn't exist
-Defines core requirements and goals
-Source of truth for project scope
-productContext.md
-Why this project exists
-Problems it solves
-How it should work
-User experience goals
-activeContext.md
-Current work focus
-Recent changes
-Next steps
-Active decisions and considerations
-systemPatterns.md
-System architecture
-Key technical decisions
-Design patterns in use
-Component relationships
-techContext.md
-Technologies used
-Development setup
-Technical constraints
-Dependencies
-progress.md
-What works
-What's left to build
-Current status
-Known issues
-Additional Context
-Create additional files/folders within memory-bank/ when they help organize:
+学习任务微信小程序是一个专为帮助小朋友养成良好学习习惯而设计的任务管理工具。系统提供日历视图、任务记录、进度跟踪、统计分析和奖励系统等功能，界面设计简约清爽。
 
-Complex feature documentation
-Integration specifications
-API documentation
-Testing strategies
-Deployment procedures
-Core Workflows
-Plan Mode
-mermaid
-flowchart TD
-    Start[Start] --> ReadFiles[Read Memory Bank]
-    ReadFiles --> CheckFiles{Files Complete?}
-    CheckFiles -->|No| Plan[Create Plan]
-    Plan --> Document[Document in Chat]
-    CheckFiles -->|Yes| Verify[Verify Context]
-    Verify --> Strategy[Develop Strategy]
-    Strategy --> Present[Present Approach]
-Act Mode
-mermaid
-flowchart TD
-    Start[Start] --> Context[Check Memory Bank]
-    Context --> Update[Update Documentation]
-    Update --> Rules[Update .cursorrules if needed]
-    Rules --> Execute[Execute Task]
-    Execute --> Document[Document Changes]
-Documentation Updates
-Memory Bank updates occur when:
+## 系统架构图
 
-Discovering new project patterns
-After implementing significant changes
-When user requests with update memory bank (MUST review ALL files)
-When context needs clarification
-mermaid
+```mermaid
 flowchart TD
-    Start[Update Process]
-    subgraph Process
-        P1[Review ALL Files]
-        P2[Document Current State]
-        P3[Clarify Next Steps]
-        P4[Update .cursorrules]
-        P1 --> P2 --> P3 --> P4
+    A[App] --> B[全局状态管理]
+    A --> C[页面路由]
+    
+    B --> D[任务数据]
+    B --> E[用户信息]
+    B --> F[系统配置]
+    
+    C --> G[index首页]
+    C --> H[task-edit任务编辑]
+    C --> I[task任务详情]
+    C --> J[rewards奖励页面]
+    C --> K[history历史记录]
+    C --> L[message消息中心]
+    
+    G --> M[任务列表组件]
+    G --> N[进度环组件]
+    G --> O[搜索组件]
+    G --> P[消息预览组件]
+    
+    H --> Q[任务表单组件]
+    H --> R[日期选择器组件]
+    H --> S[任务安排概览组件]
+    
+    subgraph 工具类
+    T[dateUtils]
+    U[taskUtils]
+    V[uiUtils]
+    W[feedbackUtils]
+    X[unit]
     end
-    Start --> Process
-Note: When triggered by update memory bank, I MUST review every memory bank file, even if some don't require updates. Focus particularly on activeContext.md and progress.md as they track current state.
+    
+    M --> T
+    M --> U
+    N --> V
+    N --> W
+    H --> T
+    H --> U
+```
 
-Project Intelligence (.cursorrules)
-The .cursorrules file is my learning journal for each project. It captures important patterns, preferences, and project intelligence that help me work more effectively. As I work with you and the project, I'll discover and document key insights that aren't obvious from the code alone.
+## 核心组件架构
 
-mermaid
+```mermaid
+flowchart LR
+    A[页面] --> B[自定义组件]
+    
+    B --> C[progressRing圆环组件]
+    B --> D[progressBar进度条组件]
+    B --> E[taskItem任务项组件]
+    B --> F[calendar日历组件]
+    B --> G[float-menu浮动菜单]
+    B --> H[date-picker日期选择器]
+    B --> I[card卡片容器]
+    B --> J[recentTasks最近任务]
+    
+    C --> K((UI交互))
+    D --> K
+    E --> K
+    F --> K
+    G --> K
+    
+    K --> L{事件系统}
+    L --> M[页面方法]
+```
+
+## 数据流图
+
+```mermaid
 flowchart TD
-    Start{Discover New Pattern}
-    subgraph Learn [Learning Process]
-        D1[Identify Pattern]
-        D2[Validate with User]
-        D3[Document in .cursorrules]
-    end
-    subgraph Apply [Usage]
-        A1[Read .cursorrules]
-        A2[Apply Learned Patterns]
-        A3[Improve Future Work]
-    end
-    Start --> Learn
-    Learn --> Apply
-What to Capture
-Critical implementation paths
-User preferences and workflow
-Project-specific patterns
-Known challenges
-Evolution of project decisions
-Tool usage patterns
-The format is flexible - focus on capturing valuable insights that help me work more effectively with you and the project. Think of .cursorrules as a living document that grows smarter as we work together.
+    A[用户操作] --> B[页面事件处理]
+    B --> C{数据更新}
+    C --> D[本地存储]
+    C --> E[页面状态]
+    E --> F[组件渲染]
+    D --> G[应用启动] 
+    G --> H[全局数据]
+    H --> E
+```
 
-REMEMBER: After every memory reset, I begin completely fresh. The Memory Bank is my only link to previous work. It must be maintained with precision and clarity, as my effectiveness depends entirely on its accuracy.
+## 业务域模型
 
-Response Format
-Use Chinese
+```mermaid
+classDiagram
+    class Task {
+        +String id
+        +String title
+        +String description
+        +String type
+        +String date
+        +String time
+        +Number duration
+        +Boolean completed
+        +Number status
+        +String createTime
+    }
+    
+    class User {
+        +String id
+        +String nickName
+        +Object userInfo
+    }
+    
+    class Reward {
+        +String id
+        +String name
+        +Number points
+        +Boolean unlocked
+    }
+    
+    class Message {
+        +String id
+        +String title
+        +String content
+        +String createTime
+        +Boolean isRead
+    }
+    
+    Task "n" -- "1" User : belongs to
+    Reward "n" -- "1" User : belongs to
+    Message "n" -- "1" User : belongs to
+```
 
+## 技术栈与模式
+
+### 微信小程序基础设施
+- 页面管理
+- 组件系统
+- 本地存储
+- 视图渲染
+
+### 设计模式
+- 组件化设计：将UI拆分为可复用组件
+- 数据驱动视图：setData方法更新页面数据
+- 全局状态管理：通过App.globalData共享数据
+- 代理模式：增强wx原生API功能
+- 观察者模式：事件监听和回调
+
+### 工具类体系
+- dateUtils：日期处理工具类，提供日期格式化、比较、计算等功能
+- taskUtils：任务处理工具类，提供任务统计、过滤、排序等功能
+- uiUtils：UI工具类，提供动画、样式计算等功能
+- feedbackUtils：反馈工具类，提供震动、声音等反馈方法
+- unit：单位转换工具，处理rpx与px的转换
+
+## 关键文件功能
+
+### app.js
+- 应用入口
+- 全局状态管理
+- 数据初始化
+- 系统适配处理
+
+### pages/index/index.js
+- 首页功能实现
+- 任务管理核心逻辑
+- 进度圆环交互
+- 消息预览功能
+
+### pages/task-edit/task-edit.js
+- 任务创建和编辑
+- 日期时间选择
+- 任务类型配置
+- 重复任务设置
+
+### components/progressRing
+- 圆环进度组件
+- 支持多种尺寸和类型
+- 动画效果
+- 交互响应
+
+## 核心功能流程
+
+1. 任务创建流程
+2. 任务完成流程
+3. 进度更新流程
+4. 奖励解锁流程
+5. 搜索筛选流程
+
+## 开发规范
+
+1. 变量命名使用驼峰式
+2. 组件文件使用小写加连字符
+3. JS代码使用2个空格缩进
+4. CSS类名使用连字符命名法(kebab-case)
+5. 函数命名规则：动词+名词
+
+## 适配策略
+
+1. 屏幕尺寸适配：使用rpx单位和flex布局
+2. 字体大小适配：基于系统设置动态调整
+3. 暗黑模式支持：CSS变量实现主题切换
+4. 横竖屏适配：监听方向变化调整布局
+
+## 主要挑战与解决方案
+
+1. **圆环进度问题**: 使用固定尺寸的圆环组件，提供一致的视觉体验
+2. **任务管理复杂性**: 抽象任务处理逻辑到taskUtils工具类，提高代码复用性
+3. **搜索性能优化**: 实现高效的过滤算法和动态添加搜索结果
+4. **动画流畅性**: 使用CSS动画和微信小程序动画API结合提升用户体验 
