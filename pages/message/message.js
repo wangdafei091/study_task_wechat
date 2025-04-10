@@ -21,6 +21,13 @@ Page({
    * 生命周期函数--监听页面加载
    */
   onLoad: function (options) {
+    // 如果有指定标签，就切换到该标签
+    if (options && options.tab) {
+      this.setData({
+        activeTab: options.tab
+      });
+    }
+    
     // 加载消息数据
     this.loadMessageData();
   },

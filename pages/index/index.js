@@ -19,8 +19,12 @@ Page({
     },
     upcomingTask: {
       name: '新冠语文课',
-      timeRemaining: 2
+      timeRemaining: 2,
+      id: ''
     },
+    showUpcomingTask: true, // 是否显示即将到期任务
+    isUpcomingLongPress: false, // 是否处于长按状态
+    showUpcomingOptions: false, // 是否显示选项泡泡
     tasks: [],
     // 统计数据
     stats: {
@@ -1180,4 +1184,168 @@ Page({
     // 计算任务进度
     this.calculateTaskProgress();
   },
+
+  // 长按即将到期任务 - 触摸开始
+  onUpcomingTaskTouchStart: function() {
+    // 记录开始长按的时间
+    this.longPressStartTime = Date.now();
+    
+    // 设置定时器，750ms后触发长按效果
+    this.longPressTimer = setTimeout(() => {
+      // 播放振动反馈
+      if (wx.vibrateShort) {
+        wx.vibrateShort({ type: 'heavy' });
+      }
+      
+      // 显示长按状态
+      this.setData({
+        isUpcomingLongPress: true
+      });
+      
+      // 添加动画后显示选项
+      setTimeout(() => {
+        this.setData({
+          showUpcomingOptions: true
+        });
+      }, 100);
+      
+    }, 750);
+  },
+
+  // 触摸结束事件
+  onUpcomingTaskTouchEnd: function() {
+    // 清除长按定时器
+    clearTimeout(this.longPressTimer);
+    
+    // 如果不是长按状态，且触摸时间短，则认为是点击进入任务详情
+    if (!this.data.isUpcomingLongPress && (Date.now() - this.longPressStartTime < 500)) {
+      this.onUpcomingTaskTap();
+    }
+  },
+  
+  // 触摸移动事件
+  onUpcomingTaskTouchMove: function() {
+    // 如果手指移动，取消长按效果
+    clearTimeout(this.longPressTimer);
+  },
+  
+  // 点击即将到期任务
+  onUpcomingTaskTap: function() {
+    if (this.data.upcomingTask && this.data.upcomingTask.id) {
+      wx.navigateTo({
+        url: `/pages/task/task?id=${this.data.upcomingTask.id}`
+      });
+    }
+  },
+
+  // 处理选项点击
+  handleUpcomingOption: function(e) {
+    const action = e.currentTarget.dataset.action;
+    
+    // 轻微振动反馈
+    if (wx.vibrateShort) {
+      wx.vibrateShort({ type: 'light' });
+    }
+    
+    // 先关闭选项卡
+    this.setData({
+      showUpcomingOptions: false,
+      isUpcomingLongPress: false
+    });
+    
+    // 延迟执行操作，让视觉效果更流畅
+    setTimeout(() => {
+      switch(action) {
+        case 'viewTask':
+          // 查看任务详情
+          if (this.data.upcomingTask && this.data.upcomingTask.id) {
+            wx.navigateTo({
+              url: `/pages/task/task?id=${this.data.upcomingTask.id}`
+            });
+          }
+          break;
+          
+        case 'viewMessages':
+          // 跳转到消息中心的任务标签
+          wx.navigateTo({
+            url: '/pages/message/message?tab=task'
+          });
+          break;
+          
+        case 'dismiss':
+          // 不再提醒
+          this.dismissUpcomingTask();
+          
+          // 显示一个友好的确认反馈
+          wx.showToast({
+            title: '已暂时隐藏提醒',
+            icon: 'success',
+            duration: 1500
+          });
+          break;
+      }
+    }, 200);
+  },
+  
+  // 消除即将到期任务提醒
+  dismissUpcomingTask: function() {
+    this.setData({
+      showUpcomingTask: false
+    });
+    
+    // 保存隐藏状态到本地存储
+    wx.setStorage({
+      key: 'upcomingTaskHidden',
+      data: {
+        isHidden: true,
+        taskId: this.data.upcomingTask.id,
+        timestamp: Date.now()
+      }
+    });
+  },
+  
+  // 标记即将到期任务的消息为已读
+  markUpcomingMessageAsRead: function() {
+    if (!this.data.upcomingTask || !this.data.upcomingTask.id) return;
+    
+    // 获取所有消息
+    wx.getStorage({
+      key: 'messageData',
+      success: (res) => {
+        if (!res.data) return;
+        
+        // 查找对应任务ID的消息
+        const messages = res.data;
+        const taskId = this.data.upcomingTask.id;
+        let updated = false;
+        
+        for (let i = 0; i < messages.length; i++) {
+          if (messages[i].type === 'task' && 
+              messages[i].taskId === taskId && 
+              !messages[i].isRead) {
+            messages[i].isRead = true;
+            updated = true;
+          }
+        }
+        
+        // 如果有更新，保存回存储
+        if (updated) {
+          wx.setStorage({
+            key: 'messageData',
+            data: messages,
+            success: () => {
+              wx.showToast({
+                title: '已标记为已读',
+                icon: 'success',
+                duration: 1500
+              });
+              
+              // 更新本地消息数据
+              this.loadMessageData();
+            }
+          });
+        }
+      }
+    });
+  }
 }) 

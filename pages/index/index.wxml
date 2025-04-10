@@ -218,16 +218,39 @@
   </view>
   
   <!-- 即将到期任务提醒 -->
-  <view class="upcoming-task card">
-    <view class="upcoming-icon">
-      <text class="iconfont icon-clock">⏰</text>
+  <view class="upcoming-task-wrapper" wx:if="{{showUpcomingTask}}">
+    <view class="upcoming-task card {{isUpcomingLongPress ? 'long-press' : ''}}"
+          bindtouchstart="onUpcomingTaskTouchStart"
+          bindtouchend="onUpcomingTaskTouchEnd"
+          bindtouchmove="onUpcomingTaskTouchMove">
+      <view class="upcoming-icon">
+        <text class="iconfont icon-clock">⏰</text>
+      </view>
+      <view class="upcoming-content">
+        <view class="upcoming-title">即将到期</view>
+        <view class="upcoming-desc">{{upcomingTask.name}}将在 {{upcomingTask.timeRemaining}} 小时后开始</view>
+      </view>
+      <view class="upcoming-arrow">
+        <text class="iconfont icon-right">〉</text>
+      </view>
     </view>
-    <view class="upcoming-content">
-      <view class="upcoming-title">即将到期</view>
-      <view class="upcoming-desc">{{upcomingTask.name}}将在 {{upcomingTask.timeRemaining}} 小时后开始</view>
-    </view>
-    <view class="upcoming-arrow">
-      <text class="iconfont icon-right">〉</text>
+    
+    <!-- 长按出现的选项卡 -->
+    <view class="option-bubble-container" wx:if="{{showUpcomingOptions}}">
+      <view class="option-bubble" bindtap="handleUpcomingOption" data-action="viewTask">
+        <view class="option-icon">📝</view>
+        <view class="option-text">查看任务</view>
+      </view>
+      
+      <view class="option-bubble" bindtap="handleUpcomingOption" data-action="viewMessages">
+        <view class="option-icon">📬</view>
+        <view class="option-text">消息中心</view>
+      </view>
+      
+      <view class="option-bubble option-bubble-dismiss" bindtap="handleUpcomingOption" data-action="dismiss">
+        <view class="option-icon">🔕</view>
+        <view class="option-text">不再提醒</view>
+      </view>
     </view>
   </view>
   
