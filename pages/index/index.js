@@ -548,10 +548,8 @@ Page({
   
   // 圆环点击事件处理
   onRingTap: function(e) {
-    // 兼容原始实现和新组件实现
-    // 如果是从新组件传递过来的，e.detail中会有type
-    // 如果是从旧的实现传递过来的，从dataset中获取type
-    const type = e.detail && e.detail.type ? e.detail.type : e.currentTarget.dataset.type;
+    // 从组件传递过来的事件中获取类型
+    const type = e.detail.type;
     
     const typeNames = {
       bag: '整理收纳',
@@ -571,9 +569,6 @@ Page({
     
     // 如果有任务存在，可以导航到该类型的任务列表
     if (tasks.length > 0) {
-      // 这里可以根据需求导航到任务列表并筛选特定类型
-      // 例如：wx.navigateTo({ url: `/pages/taskList/taskList?type=${type}` });
-      
       // 当前先简单地显示相应信息
       setTimeout(() => {
         wx.showModal({
