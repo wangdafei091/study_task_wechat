@@ -323,6 +323,9 @@ Page({
         }
       }
     });
+
+    // 检查并更新即将到期任务
+    this.checkUpcomingTasks();
   },
 
   // 显示/隐藏统计面板
@@ -1180,82 +1183,34 @@ Page({
     this.calculateTaskProgress();
   },
 
-  // 长按即将到期任务 - 触摸开始
-  onUpcomingTaskTouchStart: function() {
-    // 记录开始长按的时间
-    this.longPressStartTime = Date.now();
-    
-    // 设置定时器，750ms后触发长按效果
-    this.longPressTimer = setTimeout(() => {
-      // 播放振动反馈
-      if (wx.vibrateShort) {
-        wx.vibrateShort({ type: 'heavy' });
-      }
-      
-      // 显示长按状态
-      this.setData({
-        isUpcomingLongPress: true
-      });
-      
-      // 添加动画后显示选项
-      setTimeout(() => {
-        this.setData({
-          showUpcomingOptions: true
-        });
-      }, 100);
-      
-    }, 750);
-  },
-
-  // 触摸结束事件
-  onUpcomingTaskTouchEnd: function() {
-    // 清除长按定时器
-    clearTimeout(this.longPressTimer);
-    
-    // 如果不是长按状态，且触摸时间短，则认为是点击进入任务详情
-    if (!this.data.isUpcomingLongPress && (Date.now() - this.longPressStartTime < 500)) {
-      this.onUpcomingTaskTap();
-    }
-  },
-  
-  // 触摸移动事件
-  onUpcomingTaskTouchMove: function() {
-    // 如果手指移动，取消长按效果
-    clearTimeout(this.longPressTimer);
-  },
-  
   // 点击即将到期任务
-  onUpcomingTaskTap: function() {
-    if (this.data.upcomingTask && this.data.upcomingTask.id) {
+  onUpcomingTaskTap: function(e) {
+    const taskId = e && e.detail ? e.detail.taskId : this.data.upcomingTask.id;
+    if (taskId) {
       wx.navigateTo({
-        url: `/pages/task/task?id=${this.data.upcomingTask.id}`
+        url: `/pages/task/task?id=${taskId}`
       });
     }
   },
 
   // 处理选项点击
   handleUpcomingOption: function(e) {
-    const action = e.currentTarget.dataset.action;
+    const action = e.detail.action;
     
     // 轻微振动反馈
     if (wx.vibrateShort) {
       wx.vibrateShort({ type: 'light' });
     }
     
-    // 先关闭选项卡
-    this.setData({
-      showUpcomingOptions: false,
-      isUpcomingLongPress: false
-    });
-    
     // 延迟执行操作，让视觉效果更流畅
     setTimeout(() => {
       switch(action) {
         case 'viewTask':
           // 查看任务详情
-          if (this.data.upcomingTask && this.data.upcomingTask.id) {
+          const taskId = e.detail.taskId || this.data.upcomingTask.id;
+          if (taskId) {
             wx.navigateTo({
-              url: `/pages/task/task?id=${this.data.upcomingTask.id}`
+              url: `/pages/task/task?id=${taskId}`
             });
           }
           break;
@@ -1269,7 +1224,7 @@ Page({
           
         case 'dismiss':
           // 不再提醒
-          this.dismissUpcomingTask();
+          // dismissUpcomingTask已由组件触发，无需额外处理
           
           // 显示一个友好的确认反馈
           wx.showToast({
@@ -1283,7 +1238,7 @@ Page({
   },
   
   // 消除即将到期任务提醒
-  dismissUpcomingTask: function() {
+  dismissUpcomingTask: function(e) {
     this.setData({
       showUpcomingTask: false
     });
@@ -1342,5 +1297,70 @@ Page({
         }
       }
     });
+  },
+
+  // 检查并更新即将到期任务
+  checkUpcomingTasks: function() {
+    const now = new Date();
+    // 使用全局任务而不是当前页面的任务列表，以便捕获所有任务
+    const allTasks = app.globalData.tasks || [];
+    const upcomingTasks = [];
+    
+    // 筛选未完成且有截止时间的任务
+    allTasks.forEach(task => {
+      if (task.status === 0 && task.date) {
+        // 确保任务有开始时间，没有则使用默认值
+        const startTime = task.startTime || '08:00';
+        
+        try {
+          // 创建任务日期时间对象
+          const taskTime = new Date(`${task.date}T${startTime}`);
+          
+          // 计算时间差（小时）
+          const diffHours = (taskTime - now) / (1000 * 60 * 60);
+          
+          // 只考虑未来24小时内的任务
+          if (diffHours > 0 && diffHours < 24) {
+            upcomingTasks.push({
+              ...task,
+              timeRemaining: Math.round(diffHours * 10) / 10 // 保留一位小数
+            });
+          }
+        } catch (error) {
+          console.error('解析任务日期时间出错:', error, task);
+        }
+      }
+    });
+    
+    // 如果没有即将到期的任务，隐藏提示
+    if (upcomingTasks.length === 0) {
+      this.setData({
+        showUpcomingTask: false
+      });
+      return;
+    }
+    
+    // 按剩余时间排序
+    upcomingTasks.sort((a, b) => a.timeRemaining - b.timeRemaining);
+    
+    // 获取隐藏状态
+    const hiddenState = wx.getStorageSync('upcomingTaskHidden') || {};
+    const shouldShow = !hiddenState.isHidden || 
+                      (hiddenState.timestamp && (now - hiddenState.timestamp > 3600000)); // 1小时后重新显示
+    
+    // 检查是否应该显示提醒（如果任务ID不同，或者是1小时后自动重新显示）
+    const isNewTask = !hiddenState.taskId || hiddenState.taskId !== upcomingTasks[0].id;
+    
+    if (upcomingTasks.length > 0 && (shouldShow || isNewTask)) {
+      // 更新即将到期任务数据
+      this.setData({
+        upcomingTask: {
+          id: upcomingTasks[0].id,
+          name: upcomingTasks[0].title || upcomingTasks[0].name,
+          timeRemaining: upcomingTasks[0].timeRemaining
+        },
+        showUpcomingTask: true
+      });
+    }
   }
 }) 

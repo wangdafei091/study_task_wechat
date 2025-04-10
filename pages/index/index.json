@@ -3,6 +3,7 @@
     "progress-bar": "/components/progressBar/progressBar",
     "task-item": "/components/taskItem/taskItem",
     "float-menu": "/components/float-menu/float-menu",
-    "progress-ring": "/components/progressRing/progressRing"
+    "progress-ring": "/components/progressRing/progressRing",
+    "upcoming-task": "/components/upcomingTask/upcomingTask"
   }
 } 
