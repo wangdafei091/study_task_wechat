@@ -9,12 +9,12 @@
 3. **课程提醒**：显示即将到来的课程和剩余时间
 4. **奖励系统**：完成任务获得积分，达到一定积分解锁不同奖励
 5. **图片上传**：支持为任务添加图片
-6. **任务分类**：不同类型任务有不同标识
+6. **任务分类**：支持三种任务类型：学习任务(study)、生活习惯(clock)、整理收纳(bag)
 7. **统计分析**：展示任务完成率、类型分布等数据
 8. **数据持久化**：任务和奖励数据保存到本地存储
 9. **任务搜索筛选**：支持关键词搜索和多条件筛选（类型、状态、时间范围）
 10. **头部收缩功能**：滚动时自动收缩头部区域，优化内容显示空间
-11. **动态圆环尺寸**：根据任务持续时间智能调整圆环大小，提升视觉体验
+11. **固定圆环尺寸**：使用固定尺寸的圆环，提供一致的视觉体验
 12. **任务安排概览**：支持按日、按周、按月查看任务安排，优化重复任务的视觉展示，帮助用户了解小朋友的工作负载情况
 
 ## 功能详细说明
@@ -27,16 +27,17 @@
 - 在页面滚动时自动触发收缩/展开
 - 适合在任务较多时提供更好的浏览体验
 
-### 动态圆环尺寸调整
-系统根据任务持续时间自动调整圆形进度指示器大小，更直观地反映任务重要性和时长。
+### 圆环进度指示器
+系统使用固定尺寸的圆形进度指示器，直观地展示不同类型任务的完成情况。
 
-**调整规则**：
-- 总耗时2小时以上: 大尺寸圆环(160rpx)
-- 总耗时1-2小时: 中大尺寸圆环(145rpx)
-- 总耗时30-60分钟: 中等尺寸圆环(130rpx)
-- 总耗时30分钟以下: 小尺寸圆环(110rpx)
+**显示特点**：
+- 使用大尺寸圆环(160rpx)提供清晰的进度展示
+- 不同任务类型使用不同颜色标识，增强视觉区分度
 
-每种任务类型独立计算尺寸，任务完成后自动重新计算圆环尺寸，保持视觉平衡。
+**任务类型颜色**:
+- 学习任务(study): 蓝色 #4285F4
+- 生活习惯(clock): 绿色 #34A853
+- 整理收纳(bag): 橙色 #FBBC04
 
 ### 任务安排概览功能
 任务编辑页面的任务安排概览功能提供多时间维度的任务计划查看，方便家长了解孩子近期的学习任务安排情况。
@@ -55,6 +56,9 @@
 3. 使用左右箭头按钮可切换日期、周次或月份
 4. 点击日视图中的任务可查看详情
 5. 在月视图中点击日期单元格可快速选择该日期作为任务执行日期
+6. 日视图显示当日任务详情，包括任务时间、标题、持续时间和重复任务标记
+7. 周视图以柱状图形式展示一周内每天的任务分布，按类型区分颜色
+8. 月视图以热力图形式展示月度任务分布，颜色深浅表示任务量多少
 
 **视觉设计**：
 - 使用简约设计，减少图标使用，通过颜色和形状传达信息
@@ -62,6 +66,7 @@
 - 生活习惯任务使用绿色系(#34A853)
 - 整理收纳任务使用橙色系(#FBBC04)
 - 任务负载状态以颜色区分：轻松(绿色)、适中(蓝色)、繁重(红色)
+- 重复任务使用特殊标记以便于识别
 
 ## 数据结构设计
 
@@ -79,7 +84,9 @@
   endTime: String,     // 结束时间，格式'HH:MM'
   images: Array,       // 任务相关图片路径数组
   createTime: Number,  // 创建时间戳
-  updateTime: Number   // 更新时间戳
+  updateTime: Number,  // 更新时间戳
+  points: Number,      // 完成任务可获得的积分值
+  isRepeated: Boolean  // 是否为重复任务（在不同日期有相同标题的任务）
 }
 ```
 
@@ -102,7 +109,7 @@
 **属性**：
 - `percent`: Number - 进度百分比(0-100)
 - `size`: String/Number - 组件大小，可选值'large'/'medium'/'small'或具体rpx数值，默认'medium'
-- `type`: String - 圆环类型，可选值'default'/'clock'/'study'/'bag'等，默认'default'
+- `type`: String - 圆环类型，可选值'study'(学习任务)/'clock'(生活习惯)/'bag'(整理收纳)/'default'，默认'default'
 - `color`: String - 自定义颜色（当type为default时使用），默认'#4285F4'
 - `showText`: Boolean - 是否显示百分比文本，默认true
 - `centerContent`: String - 自定义中心内容文本（不使用插槽时），默认''
@@ -225,19 +232,30 @@
 ### 日历组件 (calendar)
 **属性**：
 - `selectedDate`: String - 当前选中日期，格式'YYYY-MM-DD'
-- `displayMode`: String - 显示模式，'week'或'month'
-- `tasks`: Array - 任务数据数组
-- `isLandscape`: Boolean - 是否处于横屏模式
+- `weekDays`: Array - 星期标题数组，默认值['日', '一', '二', '三', '四', '五', '六']
+- `currentWeek`: Array - 当前周数据数组
+- `currentMonth`: Array - 当前月数据数组
+- `viewMode`: String - 显示模式，'week'或'month'，默认'week'
+- `isLandscape`: Boolean - 是否处于横屏模式，默认false
 - `deviceType`: Object - 设备类型信息对象
 
 **方法**：
-- `switchMode(mode)` - 切换显示模式
-- `selectDate(date)` - 选择指定日期
-- `nextPeriod()` - 切换到下一周/月
-- `prevPeriod()` - 切换到上一周/月
+- `updateStyles(deviceType, isLandscape)` - 根据设备类型和屏幕方向更新样式
+- `selectDate(e)` - 选择日期的事件处理函数
+- `prevMonth()` - 切换到上一个月
+- `nextMonth()` - 切换到下一个月
+- `prevWeek()` - 切换到上一周
+- `nextWeek()` - 切换到下一周
+- `toggleViewMode()` - 切换视图模式（周/月）
 
 **事件**：
-- `dateSelect` - 日期选择事件，返回所选日期
+- `selectDate` - 日期选择事件，返回所选日期和索引
+- `viewModeChange` - 视图模式变更事件，返回新的视图模式
+
+**样式适配**：
+- 根据设备屏幕大小自动调整日历元素尺寸
+- 支持横屏模式下的布局优化
+- 支持暗黑模式
 
 ## 页面结构
 - **首页**：日历视图、任务列表、奖励进度条、统计分析、搜索功能
@@ -307,7 +325,9 @@ function createTask(taskData) {
     endTime: taskData.endTime || '09:30',
     images: [],
     createTime: Date.now(),
-    updateTime: Date.now()
+    updateTime: Date.now(),
+    points: 0,
+    isRepeated: false
   };
   
   // 获取现有任务列表
@@ -449,13 +469,8 @@ function updatePoints(duration) {
   - 自动适应不同屏幕尺寸，调整显示大小和线宽
   - 横屏模式下智能缩放，确保良好显示效果
   - 支持各类主题颜色和暗黑模式
-  - 动态尺寸调整功能：根据任务持续时间自动调整圆环大小
-    - 总耗时2小时以上: 大尺寸圆环(160rpx)
-    - 总耗时1-2小时: 中大尺寸圆环(145rpx)
-    - 总耗时30-60分钟: 中等尺寸圆环(130rpx)
-    - 总耗时30分钟以下: 小尺寸圆环(110rpx)
-  - 各任务类型独立尺寸计算，根据各类型总耗时动态调整
-  - 任务完成后自动重新计算圆环尺寸，保持视觉平衡
+  - 使用固定尺寸的圆环设计，提供一致的视觉体验
+  - 各任务类型使用独特颜色，提升识别度和用户体验
 
 ### 性能优化
 - 针对低端设备提供性能优化方案
@@ -579,28 +594,31 @@ function updatePoints(duration) {
 - 数据存储优化：批量读写本地存储，减少IO操作
 - 异步操作管理：合理使用Promise和async/await处理异步流程
 
-## 未来开发计划
-1. **近期计划** (预计1-2个版本)
-   - 添加任务提醒和通知功能
-   - 实现任务复制和批量操作
-   - 完善任务历史记录查看
+## 最近优化
 
-2. **中期计划** (预计3-4个版本)
-   - 添加用户登录和数据同步
-   - 实现深色模式支持
-   - 添加任务标签和归档功能
+### 圆环大小优化
+我们最近对应用进行了优化，移除了基于任务时长动态调整圆环大小的逻辑，改为使用固定尺寸的圆环。这个改变带来了几个显著的好处：
 
-3. **长期计划**
-   - 开发学习计划模板功能
-   - 添加社交分享和挑战功能
-   - 实现学习数据分析和建议
+1. **视觉一致性**：所有圆环现在采用统一尺寸，提供更加一致的视觉体验
+2. **简化代码**：移除了复杂的尺寸计算逻辑，使代码更加简洁和易于维护
+3. **性能提升**：减少了不必要的计算和重绘，提高了应用性能
+4. **用户体验优化**：避免了圆环大小变化可能带来的视觉干扰，使界面更加稳定
+
+这个优化不影响圆环的基本功能和外观，仍然保留了不同任务类型的颜色区分和完成进度显示。
+
+### 组件化改进
+在优化过程中，我们加强了组件化开发方式：
+
+1. **进度圆环组件**：使用标准化的参数接口，支持自定义颜色、大小和内容
+2. **统一事件处理**：改进了事件处理机制，使组件更易于集成
+3. **提升可复用性**：组件设计更加模块化，便于在其他地方重用
 
 ## 更新日志
-- 2024-03-31: 添加基于任务持续时间的动态圆环尺寸调整功能，优化圆环视觉效果
-- 2024-03-30: 实现头部收缩功能，增强用户体验
-- 2024-03-29: 增加日历月视图功能和任务搜索筛选功能
-- 2024-03-28: 添加新建任务页面、奖池页面和统计分析功能
-- 2024-03-27: 项目初始化，完成首页设计和任务详情页
+- 2024-05-09: 优化圆环尺寸设计，移除动态调整逻辑，提升界面一致性和性能
+- 2024-03-31: 实现头部收缩功能，增强用户体验
+- 2024-03-30: 增加日历月视图功能和任务搜索筛选功能
+- 2024-03-29: 添加新建任务页面、奖池页面和统计分析功能
+- 2024-03-28: 项目初始化，完成首页设计和任务详情页
 
 ## 常见问题解答
 1. **如何备份我的任务数据？**
@@ -717,3 +735,663 @@ Page({
 ```
 
 更多详细用法请参考：[浮动菜单组件文档](/components/float-menu/README.md) 
+
+# 组件使用指南
+
+本项目包含多个可复用的组件，涵盖进度展示、日期选择、卡片布局等功能。以下是各组件的详细使用指南。
+
+## 1. 进度圆环组件 (progressRing)
+
+圆环形进度指示器，用于直观展示任务完成状态。
+
+### 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|-------|------|-------|------|
+| percent | Number | 0 | 进度百分比(0-100) |
+| size | String/Number | 'medium' | 组件大小，可选值'large'/'medium'/'small'或具体rpx数值 |
+| type | String | 'default' | 圆环类型，可选值'study'/'clock'/'bag'/'default' |
+| color | String | '#4285F4' | 自定义颜色（当type为default时使用） |
+| showText | Boolean | true | 是否显示百分比文本 |
+| centerContent | String | '' | 自定义中心内容文本 |
+| enableHover | Boolean | true | 是否启用悬停效果 |
+| borderWidth | Number | 8 | 边框宽度(rpx) |
+
+### 事件
+
+| 事件名 | 说明 | 返回值 |
+|-------|------|-------|
+| tap | 点击事件 | {type, percent} |
+
+### 使用示例
+
+```html
+<!-- 基本用法 -->
+<progress-ring 
+  type="study"
+  percent="{{taskProgress.study}}"
+  size="large"
+  bind:tap="onRingTap">
+</progress-ring>
+
+<!-- 自定义样式 -->
+<progress-ring 
+  type="default"
+  color="#FF5252"
+  percent="85"
+  size="160"
+  borderWidth="10">
+  <!-- 使用插槽自定义内容 -->
+  <view class="custom-content">
+    <text class="icon">📊</text>
+  </view>
+</progress-ring>
+```
+
+## 2. 进度条组件 (progressBar)
+
+线性进度条，支持可爱的小鸡动画效果，适用于展示整体任务进度。
+
+### 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|-------|------|-------|------|
+| current | Number | 0 | 当前进度值 |
+| total | Number | 100 | 总进度值 |
+| showText | Boolean | false | 是否显示文本 |
+| barHeight | Number | 16 | 进度条高度(rpx) |
+| activeColor | String | '#4285F4' | 进度条颜色 |
+| backgroundColor | String | '#E8E8E8' | 背景颜色 |
+| borderRadius | Number | 8 | 圆角大小(rpx) |
+| showChick | Boolean | true | 是否显示小鸡动画 |
+| useGradient | Boolean | true | 是否使用渐变色 |
+| rewardImage | String | '' | 奖品图片路径 |
+| rewardName | String | '奖品' | 奖品名称 |
+
+### 事件
+
+| 事件名 | 说明 | 返回值 |
+|-------|------|-------|
+| complete | 完成事件 | 无 |
+
+### 使用示例
+
+```html
+<!-- 基本用法 -->
+<progress-bar
+  current="{{rewardProgress.current}}"
+  total="{{rewardProgress.total}}"
+  showChick="{{true}}"
+  useGradient="{{true}}"
+  barHeight="{{28}}"
+  borderRadius="{{14}}"
+  bind:complete="onRewardComplete"
+/>
+
+<!-- 自定义奖品 -->
+<progress-bar
+  current="{{30}}"
+  total="{{50}}"
+  barHeight="{{20}}"
+  rewardImage="/assets/images/toy.png"
+  rewardName="玩具车"
+/>
+```
+
+## 3. 浮动菜单组件 (float-menu)
+
+创建浮动菜单按钮，点击后展开菜单选项，适用于快速操作入口。
+
+### 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|-------|------|-------|------|
+| menuItems | Array | [] | 菜单项配置数组 |
+| position | String | 'bottom-right' | 菜单位置，可选值:'bottom-right', 'bottom-left', 'top-right', 'top-left' |
+| zIndex | Number | 100 | 菜单层级 |
+| mainButtonClass | String | '' | 主按钮样式类 |
+| defaultIcon | String | '＋' | 默认图标 |
+| closeIcon | String | '×' | 关闭图标 |
+| themeColor | String | '' | 主题颜色 |
+| buttonSize | Number | 110 | 主按钮尺寸(rpx) |
+| itemSize | Number | 100 | 菜单项尺寸(rpx) |
+| disableVibrate | Boolean | false | 是否禁用震动反馈 |
+| animationDuration | Number | 300 | 显示动画持续时间(毫秒) |
+
+### 事件
+
+| 事件名 | 说明 | 返回值 |
+|-------|------|-------|
+| itemtap | 菜单项点击事件 | {index, item} |
+| statechange | 菜单状态变化事件 | {isOpen} |
+
+### 菜单项格式
+
+每个菜单项(menuItems数组中的元素)可以包含以下属性：
+
+```javascript
+{
+  id: 'study',       // 唯一标识
+  type: 'study-task', // 类型标识
+  icon: '📚',        // 图标
+  label: '学习'      // 显示文本
+}
+```
+
+### 使用示例
+
+```html
+<float-menu 
+  menuItems="{{menuItems}}"
+  position="bottom-right"
+  bind:itemtap="handleMenuItemTap"
+  bind:statechange="handleMenuStateChange"
+/>
+```
+
+```javascript
+Page({
+  data: {
+    menuItems: [
+      {
+        id: 'study',
+        type: 'study-task',
+        icon: '📚',
+        label: '学习'
+      },
+      {
+        id: 'habit',
+        type: 'habit-task',
+        icon: '⏰',
+        label: '习惯'
+      },
+      {
+        id: 'organize',
+        type: 'organize-task',
+        icon: '📦',
+        label: '整理'
+      }
+    ]
+  },
+  
+  handleMenuItemTap(e) {
+    const item = e.detail.item;
+    console.log('点击了菜单项:', item);
+    
+    // 根据菜单项类型执行不同操作
+    switch(item.type) {
+      case 'study-task':
+        this.createStudyTask();
+        break;
+      case 'habit-task':
+        this.createHabitTask();
+        break;
+      case 'organize-task':
+        this.createOrganizeTask();
+        break;
+    }
+  },
+  
+  handleMenuStateChange(e) {
+    console.log('菜单状态变化:', e.detail.isOpen);
+  }
+})
+```
+
+## 4. 任务项组件 (taskItem)
+
+展示单个任务的组件，包含任务标题、类型、状态等信息。
+
+### 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|-------|------|-------|------|
+| task | Object | {} | 任务对象 |
+
+### 事件
+
+| 事件名 | 说明 | 返回值 |
+|-------|------|-------|
+| complete | 完成任务事件 | {taskId} |
+| edit | 编辑任务事件 | {taskId} |
+
+### 使用示例
+
+```html
+<block wx:for="{{tasks}}" wx:key="id">
+  <task-item 
+    task="{{item}}"
+    bind:complete="completeTask"
+    bind:edit="editTask"
+  />
+</block>
+```
+
+## 5. 卡片组件 (card)
+
+通用卡片容器，提供统一的样式和布局。
+
+### 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|-------|------|-------|------|
+| title | String | '' | 卡片标题 |
+| icon | String | '' | 标题前的图标 |
+| noPadding | Boolean | false | 是否取消内边距 |
+| customClass | String | '' | 自定义样式类 |
+| customStyle | String | '' | 自定义内联样式 |
+
+### 插槽
+
+| 插槽名 | 说明 |
+|-------|------|
+| 默认插槽 | 卡片内容区域 |
+| action | 标题右侧操作区域 |
+
+### 使用示例
+
+```html
+<card title="任务概览" icon="📊" custom-class="task-overview-card">
+  <view>这里是卡片内容</view>
+  <view slot="action">
+    <text class="action-text" bindtap="viewMore">更多</text>
+  </view>
+</card>
+```
+
+## 6. 日期选择器组件 (date-picker)
+
+灵活的日期选择组件，支持单日期和日期范围选择模式。
+
+### 属性
+
+**基本属性**
+| 属性名 | 类型 | 默认值 | 说明 |
+|-------|------|-------|------|
+| mode | String | 'single' | 选择器模式，可选值:'single'(单日期)、'range'(日期范围) |
+| value | String | '' | 当前选中日期，格式'YYYY-MM-DD'，仅在single模式下使用 |
+| label | String | '' | 日期选择器标签 |
+| placeholder | String | '请选择日期' | 日期选择器占位符 |
+
+**范围选择相关**
+| 属性名 | 类型 | 默认值 | 说明 |
+|-------|------|-------|------|
+| startDate | String | '' | 范围开始日期，仅在range模式下使用 |
+| endDate | String | '' | 范围结束日期，仅在range模式下使用 |
+| startLabel | String | '开始日期' | 开始日期标签 |
+| endLabel | String | '结束日期' | 结束日期标签 |
+| startPlaceholder | String | '请选择开始日期' | 开始日期占位符 |
+| endPlaceholder | String | '请选择结束日期' | 结束日期占位符 |
+
+**限制范围**
+| 属性名 | 类型 | 默认值 | 说明 |
+|-------|------|-------|------|
+| minDate | String | '' | L最小可选日期，格式'YYYY-MM-DD' |
+| maxDate | String | '' | 最大可选日期，格式'YYYY-MM-DD' |
+
+**其他配置**
+| 属性名 | 类型 | 默认值 | 说明 |
+|-------|------|-------|------|
+| quickOptions | Array | [...] | 单日期模式快速选项配置 |
+| rangeQuickOptions | Array | [...] | 范围模式快速选项配置 |
+| customClass | String | '' | 自定义样式类 |
+| customStyle | String | '' | 自定义内联样式 |
+| useNativePicker | Boolean | true | 是否使用原生选择器 |
+| showQuickOptions | Boolean | true | 是否显示快速选项 |
+
+### 事件
+
+| 事件名 | 说明 | 返回值 |
+|-------|------|-------|
+| change | 日期变更事件 (单日期模式) | {value} |
+| startChange | 开始日期变更事件 (范围模式) | {startDate} |
+| endChange | 结束日期变更事件 (范围模式) | {endDate} |
+| rangeChange | 日期范围变更事件 (范围模式) | {startDate, endDate} |
+| quickOptionChange | 快速选项变更事件 (单日期模式) | {option, date} |
+| rangeQuickOptionChange | 快速选项变更事件 (范围模式) | {option, startDate, endDate} |
+
+### 使用示例
+
+```html
+<!-- 单日期选择器 -->
+<date-picker 
+  label="执行日期" 
+  value="{{date}}" 
+  minDate="{{minDate}}"
+  bindchange="onDateChange"
+/>
+
+<!-- 日期范围选择器 -->
+<date-picker 
+  mode="range"
+  startLabel="开始日期"
+  endLabel="结束日期"
+  startDate="{{startDate}}"
+  endDate="{{endDate}}"
+  bindrangeChange="onRangeChange"
+/>
+
+<!-- 带快速选项的日期选择器 -->
+<date-picker 
+  label="截止日期" 
+  value="{{dueDate}}"
+  quickOptions="{{[
+    { label: '今天', value: 'today' },
+    { label: '明天', value: 'tomorrow' },
+    { label: '下周', value: 'nextWeek' }
+  ]}}"
+  bindquickOptionChange="onQuickOptionChange"
+/>
+```
+
+## 7. 日历组件 (calendar)
+
+展示日期的日历组件，支持周视图和月视图切换。
+
+### 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|-------|------|-------|------|
+| selectedDate | String | '' | 当前选中日期，格式'YYYY-MM-DD' |
+| weekDays | Array | ['日', '一', '二', '三', '四', '五', '六'] | 星期标题数组 |
+| currentWeek | Array | [] | 当前周数据数组 |
+| currentMonth | Array | [] | 当前月数据数组 |
+| viewMode | String | 'week' | 显示模式，'week'或'month' |
+| isLandscape | Boolean | false | 是否处于横屏模式 |
+| deviceType | Object | {} | 设备类型信息对象 |
+
+### 事件
+
+| 事件名 | 说明 | 返回值 |
+|-------|------|-------|
+| selectDate | 日期选择事件 | {index, date} |
+| changeWeek | 切换周事件 | {direction} |
+| changeMonth | 切换月事件 | {direction} |
+| toggleViewMode | 视图模式切换事件 | {mode} |
+
+### 使用示例
+
+```html
+<calendar
+  selectedDate="{{selectedDate}}"
+  currentWeek="{{currentWeek}}"
+  currentMonth="{{currentMonth}}"
+  viewMode="{{calendarViewMode}}"
+  isLandscape="{{isLandscape}}"
+  deviceType="{{deviceType}}"
+  bind:selectDate="onSelectDate"
+  bind:changeWeek="onChangeWeek"
+  bind:changeMonth="onChangeMonth"
+  bind:toggleViewMode="onToggleViewMode"
+/>
+```
+
+```javascript
+Page({
+  data: {
+    selectedDate: '2024-05-10',
+    currentWeek: [], // 由日期计算填充
+    currentMonth: [], // 由日期计算填充
+    calendarViewMode: 'week',
+    isLandscape: false,
+    deviceType: {
+      isSmallScreen: false,
+      isLargeScreen: false,
+      isExtraLargeScreen: false
+    }
+  },
+  
+  onLoad() {
+    // 初始化日历数据
+    this.initCalendarData();
+    // 检测设备屏幕尺寸
+    this.checkDeviceType();
+  },
+  
+  // 初始化日历数据
+  initCalendarData() {
+    const now = new Date();
+    const selectedDate = this.formatDate(now);
+    const currentWeek = this.calculateWeekDays(now);
+    const currentMonth = this.calculateMonthDays(now);
+    
+    this.setData({
+      selectedDate,
+      currentWeek,
+      currentMonth
+    });
+  },
+  
+  // 日期选择处理
+  onSelectDate(e) {
+    const { date } = e.detail;
+    this.setData({ selectedDate: date });
+    // 加载选定日期的任务
+    this.loadTasksByDate(date);
+  },
+  
+  // 切换周
+  onChangeWeek(e) {
+    const { direction } = e.detail;
+    const offset = direction === 'prev' ? -7 : 7;
+    
+    // 获取当前周的第一天
+    const firstDay = new Date(this.data.currentWeek[0].date);
+    // 计算新的一周
+    firstDay.setDate(firstDay.getDate() + offset);
+    
+    const newWeek = this.calculateWeekDays(firstDay);
+    this.setData({ currentWeek: newWeek });
+  },
+  
+  // 其他日历相关方法...
+})
+```
+
+## 组件组合使用示例
+
+以下是一个任务管理页面的组件组合使用示例：
+
+```html
+<view class="container">
+  <!-- 日历组件 -->
+  <calendar
+    selectedDate="{{selectedDate}}"
+    currentWeek="{{currentWeek}}"
+    currentMonth="{{currentMonth}}"
+    viewMode="{{calendarViewMode}}"
+    bind:selectDate="onSelectDate"
+    bind:toggleViewMode="onToggleViewMode"
+  />
+  
+  <!-- 进度概览区域 -->
+  <card title="任务进度" icon="📊">
+    <view class="progress-rings">
+      <!-- 学习任务进度 -->
+      <view class="ring-item">
+        <progress-ring 
+          type="study"
+          percent="{{taskProgress.study}}"
+          size="large"
+          bind:tap="onRingTap"
+          data-type="study">
+        </progress-ring>
+        <text class="ring-label">学习</text>
+      </view>
+      
+      <!-- 生活习惯进度 -->
+      <view class="ring-item">
+        <progress-ring 
+          type="clock"
+          percent="{{taskProgress.clock}}"
+          size="large"
+          bind:tap="onRingTap"
+          data-type="clock">
+        </progress-ring>
+        <text class="ring-label">习惯</text>
+      </view>
+      
+      <!-- 整理收纳进度 -->
+      <view class="ring-item">
+        <progress-ring 
+          type="bag"
+          percent="{{taskProgress.bag}}"
+          size="large"
+          bind:tap="onRingTap"
+          data-type="bag">
+        </progress-ring>
+        <text class="ring-label">整理</text>
+      </view>
+    </view>
+  </card>
+  
+  <!-- 奖励进度 -->
+  <card title="奖励进度" icon="🎁">
+    <progress-bar
+      current="{{rewardProgress.current}}"
+      total="{{rewardProgress.total}}"
+      showChick="{{true}}"
+      useGradient="{{true}}"
+      bind:complete="onRewardComplete"
+    />
+  </card>
+  
+  <!-- 任务列表 -->
+  <card title="今日任务" custom-class="task-list-card">
+    <block wx:if="{{tasks.length > 0}}">
+      <block wx:for="{{tasks}}" wx:key="id">
+        <task-item 
+          task="{{item}}"
+          bind:complete="completeTask"
+          bind:edit="editTask"
+        />
+      </block>
+    </block>
+    <view wx:else class="empty-tasks">
+      暂无任务，点击右下角"+"添加
+    </view>
+  </card>
+  
+  <!-- 浮动菜单 -->
+  <float-menu 
+    menuItems="{{menuItems}}"
+    position="bottom-right"
+    bind:itemtap="handleMenuItemTap"
+  />
+</view>
+```
+
+```javascript
+Page({
+  data: {
+    // 日历相关数据
+    selectedDate: '',
+    currentWeek: [],
+    currentMonth: [],
+    calendarViewMode: 'week',
+    
+    // 任务进度数据
+    taskProgress: {
+      study: 0,
+      clock: 0,
+      bag: 0
+    },
+    
+    // 奖励进度
+    rewardProgress: {
+      current: 0,
+      total: 10
+    },
+    
+    // 任务数据
+    tasks: [],
+    
+    // 浮动菜单配置
+    menuItems: [
+      { id: 'study', type: 'study-task', icon: '📚', label: '学习' },
+      { id: 'habit', type: 'habit-task', icon: '⏰', label: '习惯' },
+      { id: 'organize', type: 'organize-task', icon: '📦', label: '整理' }
+    ]
+  },
+  
+  onLoad() {
+    // 初始化数据
+    this.initializeData();
+  },
+  
+  // 初始化数据
+  initializeData() {
+    // 设置当前日期
+    const now = new Date();
+    const todayStr = this.formatDate(now);
+    
+    // 初始化日历数据
+    const currentWeek = this.calculateWeekDays(now);
+    const currentMonth = this.calculateMonthDays(now);
+    
+    this.setData({
+      selectedDate: todayStr,
+      currentWeek,
+      currentMonth
+    });
+    
+    // 加载任务数据
+    this.loadTasks();
+  },
+  
+  // 加载任务数据
+  loadTasks() {
+    // 从本地存储或API获取任务数据
+    // 然后更新任务进度
+    this.updateTaskProgress();
+  },
+  
+  // 更新任务进度
+  updateTaskProgress() {
+    // 根据任务计算各类型进度
+    // ...
+  },
+  
+  // 处理任务完成
+  completeTask(e) {
+    const { taskId } = e.detail;
+    // 更新任务完成状态
+    // ...
+    
+    // 更新进度
+    this.updateTaskProgress();
+  },
+  
+  // 处理菜单项点击
+  handleMenuItemTap(e) {
+    const item = e.detail.item;
+    
+    switch(item.type) {
+      case 'study-task':
+        this.navigateToCreateTask('study');
+        break;
+      case 'habit-task':
+        this.navigateToCreateTask('clock');
+        break;
+      case 'organize-task':
+        this.navigateToCreateTask('bag');
+        break;
+    }
+  },
+  
+  // 跳转到创建任务页面
+  navigateToCreateTask(type) {
+    wx.navigateTo({
+      url: `/pages/task-edit/task-edit?type=${type}&date=${this.data.selectedDate}`
+    });
+  }
+})
+```
+
+以上就是各组件的详细使用指南和示例。在使用这些组件时，可以根据实际需求组合使用，并通过属性和事件进行自定义配置。
+
+## 更多信息
+
+完整的组件源码和更多示例可以在项目的 `components` 目录下查找。每个组件目录下通常包含 `.js`、`.wxml`、`.wxss` 和 `.json` 文件，分别定义了组件的逻辑、结构、样式和配置。
+
+对于某些复杂组件，可能还会有单独的 README.md 文件提供更详细的使用指南，如 [浮动菜单组件文档](/components/float-menu/README.md)。 

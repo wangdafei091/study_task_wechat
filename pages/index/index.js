@@ -55,8 +55,6 @@ Page({
       bag: 0,
       study: 0
     },
-    ringSize: 'medium', // 新增圆环尺寸类名
-    typeRingSizes: {},   // 各类型圆环大小
 
     // 消息中心相关
     showMessagePreview: false, // 是否显示消息预览
@@ -245,40 +243,71 @@ Page({
 
   // 更新统计信息
   updateStats: function() {
-    const tasks = this.data.tasks; // 现在只包含今日任务
-    const allTasks = app.globalData.tasks || []; // 所有任务
+    const tasks = this.data.tasks;
     
-    // 计算完成任务数量
-    const completedTasks = tasks.filter(task => task.status === 1);
-    const totalTasks = tasks.length; // 今日任务总数
+    if (!tasks || tasks.length === 0) {
+      this.setData({
+        taskProgress: {
+          clock: 0,
+          bag: 0,
+          study: 0
+        }
+      });
+      return;
+    }
     
-    // 计算各类型任务的完成百分比
-    const calculateProgress = (type) => {
-      const typeTasks = tasks.filter(task => task.type === type);
-      if (typeTasks.length === 0) return 0;
-      
-      const typeCompleted = typeTasks.filter(task => task.status === 1).length;
-      return Math.round((typeCompleted / typeTasks.length) * 100);
+    // 按类型统计任务完成率
+    const typeCounts = {
+      total: { clock: 0, bag: 0, study: 0 },
+      completed: { clock: 0, bag: 0, study: 0 }
     };
     
-    // 计算各类型任务数量
-    const countTasksByType = {
-      clock: tasks.filter(task => task.type === 'clock').length,
-      bag: tasks.filter(task => task.type === 'bag').length,
-      study: tasks.filter(task => task.type === 'study').length
+    tasks.forEach(task => {
+      if (typeCounts.total.hasOwnProperty(task.type)) {
+        typeCounts.total[task.type]++;
+        
+        if (task.status === 1) {
+          typeCounts.completed[task.type]++;
+        }
+      }
+    });
+    
+    // 计算各类型完成率百分比
+    const progress = {
+      clock: typeCounts.total.clock > 0 
+        ? Math.round(typeCounts.completed.clock / typeCounts.total.clock * 100) 
+        : 0,
+      bag: typeCounts.total.bag > 0 
+        ? Math.round(typeCounts.completed.bag / typeCounts.total.bag * 100) 
+        : 0,
+      study: typeCounts.total.study > 0 
+        ? Math.round(typeCounts.completed.study / typeCounts.total.study * 100) 
+        : 0
     };
     
-    // 更新进度圆环数据
+    // 更新任务完成率
     this.setData({
-      'taskProgress.clock': calculateProgress('clock'),
-      'taskProgress.bag': calculateProgress('bag'),
-      'taskProgress.study': calculateProgress('study'),
-      'stats.completedTasks': completedTasks.length,
-      'stats.totalTasks': totalTasks,
-      'stats.completionRate': totalTasks > 0 ? Math.round((completedTasks.length / totalTasks) * 100) : 0,
-      'rewardProgress.current': completedTasks.length,
-      'rewardProgress.total': totalTasks,
-      'stats.typeCounts': countTasksByType
+      taskProgress: progress
+    });
+    
+    // 计算统计数据
+    const totalTasks = tasks.length;
+    const completedTasks = tasks.filter(task => task.status === 1).length;
+    const completionRate = totalTasks > 0 ? Math.round(completedTasks / totalTasks * 100) : 0;
+    
+    // 更新统计面板数据
+    this.setData({
+      stats: {
+        totalTasks: totalTasks,
+        completedTasks: completedTasks,
+        completionRate: completionRate,
+        streak: this.data.streak || 0,
+        typeCounts: {
+          clock: typeCounts.total.clock,
+          bag: typeCounts.total.bag,
+          study: typeCounts.total.study
+        }
+      }
     });
   },
 
@@ -764,79 +793,6 @@ Page({
     // 注释: 已移除完成任务提示，让用户体验更加流畅
   },
   
-  // 根据任务数量动态调整圆环大小
-  adjustRingSize: function() {
-    const tasks = this.data.tasks;
-    
-    // 计算当日任务总耗时（分钟）
-    const totalDuration = tasks.reduce((sum, task) => {
-      // 只计算未完成的任务耗时
-      return task.status === 0 ? sum + (task.duration || 0) : sum;
-    }, 0);
-    
-    // 获取各类型任务数量和耗时
-    const taskCounts = {
-      clock: 0,
-      bag: 0,
-      study: 0
-    };
-    
-    const typeDurations = {
-      clock: 0,
-      bag: 0,
-      study: 0
-    };
-    
-    tasks.forEach(task => {
-      if (taskCounts.hasOwnProperty(task.type)) {
-        // 只计算未完成的任务
-        if (task.status === 0) {
-          taskCounts[task.type]++;
-          typeDurations[task.type] += (task.duration || 0);
-        }
-      }
-    });
-    
-    // 根据任务总耗时确定圆环大小
-    let ringSize;
-    
-    if (totalDuration >= 120) {  // 2小时或以上
-      ringSize = 'large';
-    } else if (totalDuration >= 60) {  // 1-2小时
-      ringSize = 'medium-large';
-    } else if (totalDuration >= 30) {  // 30-60分钟
-      ringSize = 'medium';
-    } else {
-      ringSize = 'small';  // 基础大小，小于30分钟
-    }
-    
-    // 为每个类型设置单独的圆环大小
-    const typeRingSizes = {};
-    
-    Object.keys(typeDurations).forEach(type => {
-      const duration = typeDurations[type];
-      
-      if (duration >= 90) {
-        typeRingSizes[type] = 'large';
-      } else if (duration >= 45) {
-        typeRingSizes[type] = 'medium-large';
-      } else if (duration >= 20) {
-        typeRingSizes[type] = 'medium';
-      } else {
-        typeRingSizes[type] = 'small';
-      }
-    });
-    
-    // 只有当尺寸真正变化时才更新状态
-    if (this.data.ringSize !== ringSize || 
-        JSON.stringify(this.data.typeRingSizes || {}) !== JSON.stringify(typeRingSizes)) {
-      this.setData({
-        ringSize: ringSize,
-        typeRingSizes: typeRingSizes
-      });
-    }
-  },
-
   // 清除搜索过滤器
   clearFilters: function() {
     // 应用动画到所有当前选中的筛选器
