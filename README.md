@@ -190,6 +190,7 @@ git clone <仓库地址>
 │   ├── unit.js             # 单位转换和屏幕适配工具
 │   ├── dateUtils.js        # 日期处理工具
 │   ├── taskUtils.js        # 任务处理工具
+│   ├── messageManager.js   # 消息管理工具
 │   ├── uiUtils.js          # UI工具类
 │   └── feedbackUtils.js    # 反馈工具类
 ├── assets                  # 静态资源目录
@@ -394,261 +395,153 @@ git clone <仓库地址>
 
 ## 工具类文档
 
-### 1. 日期处理工具 (dateUtils.js)
+### 1. dateUtils.js
 
-提供日期相关的通用方法，如格式化日期、日期计算等。
-
-#### 主要方法
-
-| 方法名 | 参数 | 返回值 | 说明 |
-|-------|------|-------|------|
-| formatDate | date:Date | String | 将日期格式化为YYYY-MM-DD |
-| formatTime | date:Date | String | 将时间格式化为HH:MM |
-| getTodayString | 无 | String | 获取今天的日期字符串 |
-| getTomorrowString | 无 | String | 获取明天的日期字符串 |
-| getYesterdayString | 无 | String | 获取昨天的日期字符串 |
-| isToday | date:Date/String | Boolean | 判断是否为今天 |
-| isTomorrow | date:Date/String | Boolean | 判断是否为明天 |
-| isYesterday | date:Date/String | Boolean | 判断是否为昨天 |
-| getDaysBetween | date1:Date/String, date2:Date/String | Number | 获取两个日期之间的天数差 |
-| formatDateFriendly | date:Date/String | String | 格式化为友好显示（今天、明天等） |
-
-#### 使用示例
-
-```javascript
-const dateUtils = require('../../utils/dateUtils');
-
-// 获取今天的日期
-const today = dateUtils.getTodayString(); // 返回 "2024-05-10"
-
-// 格式化日期
-const dateStr = dateUtils.formatDate(new Date()); // 返回 "2024-05-10"
-```
-
-### 2. 任务处理工具 (taskUtils.js)
-
-提供任务相关的操作和计算方法。
+日期处理工具类，提供日期格式化、计算和比较功能。
 
 #### 主要方法
 
 | 方法名 | 参数 | 返回值 | 说明 |
 |-------|------|-------|------|
-| createTaskObject | taskData:Object | Object | 创建标准格式的任务对象 |
-| generateTaskId | 无 | String | 生成唯一的任务ID |
-| calculateCompletionRate | tasks:Array | Number | 计算任务完成率(0-100) |
-| filterTasks | tasks:Array, filters:Object | Array | 按条件筛选任务 |
-| sortTasks | tasks:Array, sortBy:String, ascending:Boolean | Array | 排序任务列表 |
-| groupTasksByDate | tasks:Array | Object | 按日期分组任务 |
-| isTaskOverdue | task:Object | Boolean | 判断任务是否已逾期 |
-| getTaskDueStatus | task:Object | String | 获取任务到期状态(overdue/today/tomorrow/upcoming/future) |
-| getNextRepeatDate | task:Object | String | 根据重复设置计算下一个任务日期 |
-| createRepeatTask | originalTask:Object | Object | 创建重复任务的新实例 |
+| formatDate | date, format | String | 将日期格式化为指定格式的字符串 |
+| getTodayString | 无 | String | 获取今天的日期字符串(YYYY-MM-DD) |
+| getTomorrowString | 无 | String | 获取明天的日期字符串(YYYY-MM-DD) |
+| getDaysBetween | dateStr1, dateStr2 | Number | 计算两个日期之间的天数差 |
+| getWeekday | dateStr | String | 获取日期对应的星期几(中文) |
+| isToday | dateStr | Boolean | 判断日期是否为今天 |
+| isSameDay | date1, date2 | Boolean | 判断两个日期是否是同一天 |
 
-#### 使用示例
+### 2. taskUtils.js
 
-```javascript
-const taskUtils = require('../../utils/taskUtils');
-
-// 创建新任务
-const newTask = taskUtils.createTaskObject({
-  title: '完成数学作业',
-  type: 'study',
-  date: '2024-05-10'
-});
-
-// 检查任务状态
-const dueStatus = taskUtils.getTaskDueStatus(task);
-if (dueStatus === 'upcoming') {
-  console.log('这是一个即将到期的任务');
-}
-
-// 判断任务是否逾期
-if (taskUtils.isTaskOverdue(task)) {
-  console.log('这个任务已经逾期');
-}
-```
-
-### 3. 反馈工具类 (feedbackUtils.js)
-
-提供统一的用户反馈方法，如震动、声音、提示等。
+任务处理工具类，提供任务统计、过滤、排序等功能。
 
 #### 主要方法
 
 | 方法名 | 参数 | 返回值 | 说明 |
 |-------|------|-------|------|
-| vibrateFeedback | type:String | 无 | 提供震动反馈，可选值:'light', 'medium', 'heavy' |
-| soundFeedback | type:String | 无 | 播放声音反馈，可选值:'success', 'error', 'alert', 'click' |
-| showToast | options:Object | 无 | 显示统一的消息提示 |
-| taskCompletionFeedback | isComplete:Boolean | 无 | 完成任务的综合反馈 |
-| operationFeedback | 无 | 无 | 操作确认的反馈 |
+| calculateCompletionRate | tasks | Number | 计算任务完成率(0-100) |
+| getTaskStats | tasks | Object | 获取任务统计信息(总数、完成数、未完成数等) |
+| filterTasks | tasks, filters | Array | 根据条件筛选任务 |
+| sortTasks | tasks, sortBy, ascending | Array | 按指定条件排序任务 |
+| generateTaskId | 无 | String | 生成任务唯一ID |
+| createTaskObject | taskData | Object | 创建标准格式的任务对象 |
+| isTaskOverdue | task | Boolean | 判断任务是否已逾期 |
+| getTaskDueStatus | task | String | 获取任务到期状态 |
 
-#### 使用示例
+### 3. messageManager.js
 
-```javascript
-const feedbackUtils = require('../../utils/feedbackUtils');
+消息管理工具类，提供消息的创建、更新、删除和查询功能。
 
-// 轻微震动反馈
-feedbackUtils.vibrateFeedback('light');
+#### 主要方法
 
-// 完成任务的综合反馈
-feedbackUtils.taskCompletionFeedback(true);
+| 方法名 | 参数 | 返回值 | 说明 |
+|-------|------|-------|------|
+| createTaskMessage | task, type | Object | 创建任务相关消息(新建/更新/完成/即将到期) |
+| addMessage | message | void | 添加消息到本地存储 |
+| updateTaskMessages | task | void | 更新与任务相关的消息内容 |
+| removeTaskMessages | taskId | void | 删除与任务相关的所有消息 |
+| getAllMessages | callback | void | 获取所有消息并通过回调返回 |
+| getUnreadCount | callback | void | 获取未读消息数量 |
+| markAsRead | messageId | void | 标记指定消息为已读 |
+| markAllAsRead | 无 | void | 标记所有消息为已读 |
+| formatMessageTime | timestamp | String | 格式化消息时间为友好显示(如"刚刚"、"5分钟前") |
 
-// 显示提示消息
-feedbackUtils.showToast({
-  title: '任务已完成',
-  icon: 'success',
-  duration: 1500,
-  vibrate: true
-});
-```
+### 4. uiUtils.js
 
-## 用户指南
+UI工具类，提供动画效果、样式计算等功能。
 
-### 使用流程
-1. **初次使用**
-   - 打开小程序，首页显示任务日历和今日任务列表
-   - 可以看到顶部日历视图，默认为周视图
-   - 底部为奖励进度条和任务列表
+#### 主要方法
 
-2. **创建任务**
-   - 点击底部"+"按钮打开新建任务页面
-   - 填写任务名称、描述、类型等信息
-   - 选择日期和时间段
-   - 点击"保存"按钮完成创建
+| 方法名 | 参数 | 返回值 | 说明 |
+|-------|------|-------|------|
+| createAnimation | options | Animation | 创建微信小程序动画实例 |
+| fadeIn | view, duration | void | 为视图元素创建淡入动画 |
+| fadeOut | view, duration | void | 为视图元素创建淡出动画 |
+| shake | view, intensity | void | 为视图元素创建抖动动画 |
+| colorGradient | startColor, endColor, steps | Array | 计算两个颜色之间的渐变色值 |
 
-3. **查看和管理任务**
-   - 在首页点击任务项进入任务详情页
-   - 可以编辑任务信息、上传图片
-   - 点击"完成"按钮标记任务为已完成状态
-   - 完成任务后获得相应积分
+### 5. feedbackUtils.js
 
-4. **查看统计与奖励**
-   - 点击首页的"统计"按钮查看任务完成情况
-   - 点击底部导航的"奖池"进入奖励页面
-   - 使用积分解锁和领取奖励
+反馈工具类，提供触觉、声音等反馈方法。
 
-## 项目配置
+#### 主要方法
 
-### 小程序配置 (app.json)
-```json
-{
-  "pages": [
-    "pages/index/index",
-    "pages/task/task",
-    "pages/task-edit/task-edit",
-    "pages/rewards/rewards"
-  ],
-  "window": {
-    "backgroundTextStyle": "light",
-    "navigationBarBackgroundColor": "#fff",
-    "navigationBarTitleText": "学习任务管理",
-    "navigationBarTextStyle": "black"
-  },
-  "tabBar": {
-    "color": "#999999",
-    "selectedColor": "#4285F4",
-    "backgroundColor": "#ffffff",
-    "list": [
-      {
-        "pagePath": "pages/index/index",
-        "text": "任务",
-        "iconPath": "assets/images/task.png",
-        "selectedIconPath": "assets/images/task_selected.png"
-      },
-      {
-        "pagePath": "pages/rewards/rewards",
-        "text": "奖励",
-        "iconPath": "assets/images/rewards.png",
-        "selectedIconPath": "assets/images/rewards_selected.png"
-      }
-    ]
-  },
-  "style": "v2",
-  "sitemapLocation": "sitemap.json"
-}
-```
+| 方法名 | 参数 | 返回值 | 说明 |
+|-------|------|-------|------|
+| vibrateShort | type | void | 短振动反馈(支持'light'/'medium'/'heavy') |
+| vibrateLong | 无 | void | 长振动反馈 |
+| playSound | soundType | void | 播放内置声音(如'success'/'error') |
+| playCustomSound | soundPath | void | 播放自定义声音 |
 
-## 适配方案
+## 数据联动机制
 
-### 基础库兼容性检查
-- 最低支持微信基础库版本：2.14.0
-- 推荐微信客户端版本：7.0.0 及以上
-- 对于低版本用户会提供基础库版本检查，引导用户升级微信版本
+系统采用了集中式的数据联动机制，确保用户界面上的各个部分能够保持同步，实现无缝的用户体验。
 
-### 设备适配方案
-- 支持市面上常见设备，包括各类iPhone机型和Android手机
-- 通过自适应单位和弹性布局确保在不同尺寸设备上显示正常
-- 针对全面屏设备进行安全区域适配
+### 任务与圆环进度联动
 
-### 单位与尺寸
-- 采用rpx作为主要布局单位，确保在不同屏幕尺寸下显示一致性
-- 增强型单位转换工具，处理rpx、px等单位不一致问题
-- 对于字体大小，支持跟随系统字体大小调整，方便视力障碍用户使用
+当任务的状态发生变化时(如完成、取消完成)，系统会自动更新首页的圆环进度显示。这一过程由统一的`updateTaskProgress`方法控制，确保所有数据保持一致性：
 
-### 弹性布局方案
-- 采用flexbox布局方案，自动适应不同屏幕尺寸和方向
-- 针对小屏(宽度320px)、标准屏和大屏设备差异化样式
-- 支持横屏模式下的布局优化
-- 通过CSS变量统一管理布局尺寸
+1. **任务完成**：用户点击完成任务后，系统会更新任务状态，并通过`updateTaskProgress`方法重新计算并更新圆环进度。
+2. **任务编辑**：编辑任务后(如修改类型)，系统会重新计算对应类型的任务完成率。
+3. **任务删除**：删除任务后，系统会自动调整圆环进度以反映当前任务情况。
 
-### UI一致性保障
-- 统一卡片样式，包括边距(margin: 16rpx 30rpx)和内边距(padding: 24rpx)
-- 所有主要界面元素（包括消息预览、搜索面板、奖励进度、即将到期任务提醒等）保持一致的视觉风格
-- 自定义组件的样式与全局样式保持协调，确保整体UI的统一性
-- 通过基于原子设计的组件库，实现样式的一致性和可维护性
+### 任务与消息中心联动
 
-## 常见问题
+任务的每次操作都会触发相应的消息通知，这些通知会自动显示在消息中心和首页的消息预览中：
 
-1. **如何备份我的任务数据？**
-   目前数据仅保存在本地，建议定期截图重要任务信息。未来版本将添加云端备份功能。
+1. **任务创建**：创建新任务时，系统自动生成"新任务提醒"消息。
+2. **任务编辑**：编辑任务时，系统更新相关消息内容并生成"任务已更新"消息。
+3. **任务完成**：完成任务时，系统自动生成"任务已完成"消息。
+4. **任务删除**：删除任务时，系统自动删除与该任务相关的所有消息。
+5. **即将到期**：系统会定期检查即将到期的任务，并自动生成提醒消息。
 
-2. **为什么有些任务不显示在日历上？**
-   请确保任务设置了正确的日期，且日历当前查看的是相应的月份或周。
+所有这些消息操作由`messageManager.js`工具类集中管理，确保各个页面的消息显示保持一致。
 
-3. **积分系统如何计算？**
-   基本规则是每10分钟任务时长获得1积分，连续完成任务可获得额外奖励。
+### 存储与全局状态同步
 
-4. **如何删除已完成的任务？**
-   在任务详情页面，点击右上角的"更多"按钮，选择"删除任务"选项。
+系统采用多层次的数据存储机制，确保数据的持久性和一致性：
 
-5. **如何修改任务完成状态？**
-   在任务详情页面，可以通过切换"完成状态"开关来修改。
+1. **页面状态**：各页面通过`setData`维护自身的UI状态。
+2. **全局状态**：重要数据存储在`app.globalData`中，作为应用内共享。
+3. **持久化存储**：关键数据通过`wx.setStorage`存储到本地，确保应用重启后数据不丢失。
+
+关键数据更新过程：
+- 任务数据变更 → 更新页面状态 → 更新全局状态 → 保存到本地存储
+- 完成任务 → 更新任务状态 → 更新进度圆环 → 创建完成消息 → 保存到本地存储
 
 ## 更新日志
 
 ### 2025-04-22 数据联动优化
-- 增加了`messageManager.js`工具类，集中管理消息相关逻辑
+- 新增`messageManager.js`工具类，集中管理消息相关逻辑
 - 优化任务圆环更新，统一使用`updateTaskProgress`方法
 - 改进消息与任务的数据同步机制
 - 任务变更操作（完成、编辑、删除）现在会自动同步更新相关消息
-- 统一了首页消息预览与消息中心的数据来源
-- 优化了即将到期任务的提醒机制，使用消息管理器创建通知
+- 统一首页消息预览与消息中心的数据来源
+- 优化即将到期任务的提醒机制，使用消息管理器创建通知
 
-### 数据联动机制
+### 2025-04-10 消息中心与任务提醒
+- 新增即将到期任务提醒功能和消息中心通知系统
+- 添加任务操作反馈机制，提升用户体验
+- 优化消息展示和时间格式化
 
-系统中的数据联动关系主要包括：
+### 2025-04-09 界面优化与性能提升
+- 优化圆环尺寸设计，移除动态调整逻辑，提升界面一致性和性能
+- 实现头部收缩功能，增强用户体验
+- 优化任务列表渲染性能
 
-1. **任务状态变更与圆环进度**
-   - 任务完成状态变更时，自动更新任务圆环进度
-   - 统一使用`updateTaskProgress`方法确保数据一致性
-   - 更新同时会触发全局数据同步
+### 2025-03-30 功能扩展
+- 增加日历月视图功能
+- 添加任务搜索筛选功能
+- 优化任务编辑界面
 
-2. **任务操作与消息中心**
-   - 任务创建：自动生成"新任务提醒"消息
-   - 任务编辑：更新相关消息内容，保持消息与任务信息同步
-   - 任务完成：自动生成"任务完成"通知
-   - 任务删除：自动删除与该任务相关的所有消息
+### 2025-03-29 核心功能实现
+- 添加新建任务页面
+- 实现奖池页面和积分系统
+- 添加统计分析功能
 
-3. **即将到期任务与消息通知**
-   - 系统定期检查未来24小时内即将开始的任务
-   - 自动生成"任务即将到期"提醒消息
-   - 在首页展示最紧急的任务提醒
-   - 同时在消息中心中添加相应通知
-
-4. **全局数据与本地存储**
-   - 用户操作会同时更新内存中的全局数据和本地存储
-   - 确保数据在应用重启后能正确恢复
-   - 使用统一的数据更新方法避免不一致
+### 2025-03-28 项目初始化
+- 项目初始化
+- 完成首页设计和任务详情页
 
 ## 贡献指南
 
