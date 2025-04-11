@@ -341,34 +341,84 @@
             <view class="item-label">重复频率</view>
             <view class="frequency-options">
               <view class="frequency-item {{task.repeat.type === 'daily' ? 'active' : ''}}" 
-                    bindtap="selectFrequency" data-type="daily">每天</view>
+                    bindtap="selectFrequency" data-type="daily">
+                <text class="icon">📅</text>
+                <text class="label">每天</text>
+              </view>
               <view class="frequency-item {{task.repeat.type === 'weekly' ? 'active' : ''}}" 
-                    bindtap="selectFrequency" data-type="weekly">每周</view>
+                    bindtap="selectFrequency" data-type="weekly">
+                <text class="icon">🔄</text>
+                <text class="label">每周</text>
+              </view>
               <view class="frequency-item {{task.repeat.type === 'workdays' ? 'active' : ''}}" 
-                    bindtap="selectFrequency" data-type="workdays">工作日</view>
+                    bindtap="selectFrequency" data-type="workdays">
+                <text class="icon">💼</text>
+                <text class="label">工作日</text>
+              </view>
               <view class="frequency-item {{task.repeat.type === 'custom' ? 'active' : ''}}" 
-                    bindtap="selectFrequency" data-type="custom">自定义</view>
+                    bindtap="selectFrequency" data-type="custom">
+                <text class="icon">⚙️</text>
+                <text class="label">自定义</text>
+              </view>
             </view>
           </view>
           
           <!-- 自定义重复频率 -->
-          <view class="form-item" wx:if="{{task.repeat.type === 'custom'}}">
-            <view class="item-label">选择重复日</view>
+          <view class="form-item custom-repeat" wx:if="{{task.repeat.type === 'custom'}}">
+            <view class="item-label">选择重复日 <text class="required">*</text></view>
             <view class="weekday-selector">
               <view class="weekday-item {{task.repeat.days.includes('0') ? 'active' : ''}}" 
-                    bindtap="toggleWeekday" data-day="0">日</view>
+                    bindtap="toggleWeekday" data-day="0">
+                <text class="day">日</text>
+              </view>
               <view class="weekday-item {{task.repeat.days.includes('1') ? 'active' : ''}}" 
-                    bindtap="toggleWeekday" data-day="1">一</view>
+                    bindtap="toggleWeekday" data-day="1">
+                <text class="day">一</text>
+              </view>
               <view class="weekday-item {{task.repeat.days.includes('2') ? 'active' : ''}}" 
-                    bindtap="toggleWeekday" data-day="2">二</view>
+                    bindtap="toggleWeekday" data-day="2">
+                <text class="day">二</text>
+              </view>
               <view class="weekday-item {{task.repeat.days.includes('3') ? 'active' : ''}}" 
-                    bindtap="toggleWeekday" data-day="3">三</view>
+                    bindtap="toggleWeekday" data-day="3">
+                <text class="day">三</text>
+              </view>
               <view class="weekday-item {{task.repeat.days.includes('4') ? 'active' : ''}}" 
-                    bindtap="toggleWeekday" data-day="4">四</view>
+                    bindtap="toggleWeekday" data-day="4">
+                <text class="day">四</text>
+              </view>
               <view class="weekday-item {{task.repeat.days.includes('5') ? 'active' : ''}}" 
-                    bindtap="toggleWeekday" data-day="5">五</view>
+                    bindtap="toggleWeekday" data-day="5">
+                <text class="day">五</text>
+              </view>
               <view class="weekday-item {{task.repeat.days.includes('6') ? 'active' : ''}}" 
-                    bindtap="toggleWeekday" data-day="6">六</view>
+                    bindtap="toggleWeekday" data-day="6">
+                <text class="day">六</text>
+              </view>
+            </view>
+          </view>
+          
+          <!-- 重复任务预览 -->
+          <view class="repeat-preview" wx:if="{{task.repeat.type !== 'none'}}">
+            <view class="preview-header">
+              <text class="icon">📋</text>
+              <text class="label">重复规则预览</text>
+            </view>
+            <view class="preview-content">
+              <text wx:if="{{task.repeat.type === 'daily'}}">每天重复一次</text>
+              <text wx:elif="{{task.repeat.type === 'weekly'}}">每周重复一次</text>
+              <text wx:elif="{{task.repeat.type === 'workdays'}}">每个工作日（周一至周五）重复</text>
+              <text wx:elif="{{task.repeat.type === 'custom' && task.repeat.days.length > 0}}">
+                每周 <text wx:for="{{task.repeat.days}}" wx:key="index" wx:for-item="day">
+                  {{day === 0 ? '日' : day === 1 ? '一' : day === 2 ? '二' : day === 3 ? '三' : day === 4 ? '四' : day === 5 ? '五' : '六'}}
+                  <text wx:if="{{index < task.repeat.days.length - 1}}">、</text>
+                </text> 重复
+              </text>
+              <view class="date-range">
+                <text>从 {{task.repeat.startDate}} 开始</text>
+                <text wx:if="{{task.repeat.endDate}}">，至 {{task.repeat.endDate}} 结束</text>
+                <text wx:else>，持续进行</text>
+              </view>
             </view>
           </view>
         </view>
@@ -434,4 +484,111 @@
   
   <!-- 底部安全区域占位 -->
   <view class="safe-area-inset-bottom"></view>
-</view> 
+</view>
+
+<wxss>
+/* 重复任务相关样式 */
+.frequency-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  margin-top: 16rpx;
+}
+
+.frequency-item {
+  flex: 1;
+  min-width: 160rpx;
+  height: 80rpx;
+  background: #f5f5f5;
+  border-radius: 8rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0 16rpx;
+  transition: all 0.3s;
+}
+
+.frequency-item.active {
+  background: #e6f7ff;
+  border: 1rpx solid #1890ff;
+}
+
+.frequency-item .icon {
+  font-size: 32rpx;
+  margin-bottom: 4rpx;
+}
+
+.frequency-item .label {
+  font-size: 24rpx;
+  color: #333;
+}
+
+.custom-repeat {
+  margin-top: 24rpx;
+}
+
+.weekday-selector {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 16rpx;
+}
+
+.weekday-item {
+  width: 80rpx;
+  height: 80rpx;
+  border-radius: 50%;
+  background: #f5f5f5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s;
+}
+
+.weekday-item.active {
+  background: #1890ff;
+  color: #fff;
+}
+
+.weekday-item .day {
+  font-size: 28rpx;
+}
+
+.repeat-preview {
+  margin-top: 32rpx;
+  background: #f9f9f9;
+  border-radius: 8rpx;
+  padding: 16rpx;
+}
+
+.preview-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 12rpx;
+}
+
+.preview-header .icon {
+  margin-right: 8rpx;
+}
+
+.preview-header .label {
+  font-size: 28rpx;
+  color: #666;
+}
+
+.preview-content {
+  font-size: 26rpx;
+  color: #333;
+  line-height: 1.6;
+}
+
+.date-range {
+  margin-top: 8rpx;
+  color: #666;
+}
+
+.required {
+  color: #ff4d4f;
+  margin-left: 4rpx;
+}
+</wxss> 

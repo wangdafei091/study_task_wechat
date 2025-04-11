@@ -780,11 +780,49 @@ Page({
   },
 
   /**
+   * 验证周期性任务设置
+   * @returns {boolean} 是否验证通过
+   */
+  validateRepeatTask() {
+    const task = this.data.task;
+    
+    if (!task.repeat.startDate) {
+      wx.showToast({
+        title: '请选择开始日期',
+        icon: 'none'
+      });
+      return false;
+    }
+    
+    if (task.repeat.endDate) {
+      const startDate = new Date(task.repeat.startDate);
+      const endDate = new Date(task.repeat.endDate);
+      if (endDate < startDate) {
+        wx.showToast({
+          title: '结束日期不能早于开始日期',
+          icon: 'none'
+        });
+        return false;
+      }
+    }
+    
+    if (task.repeat.type === 'custom' && (!task.repeat.days || task.repeat.days.length === 0)) {
+      wx.showToast({
+        title: '请选择重复日期',
+        icon: 'none'
+      });
+      return false;
+    }
+    
+    return true;
+  },
+
+  /**
    * 保存任务
    */
   saveTask: function() {
     const that = this;
-    const taskData = { ...this.data.task };
+    const taskData = this.data.task;
     
     // 验证必填字段
     if (!taskData.title) {
@@ -795,10 +833,12 @@ Page({
       return;
     }
     
-    // 设置正确的日期格式
-    const now = new Date();
-    const todayStr = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
-    taskData.date = todayStr;
+    // 如果是周期性任务，进行额外验证
+    if (this.data.repeatMode === 'repeat') {
+      if (!this.validateRepeatTask()) {
+        return;
+      }
+    }
     
     // 如果是学习类任务，验证时间
     if (taskData.type === 'study') {
@@ -809,37 +849,59 @@ Page({
         });
         return;
       }
-      // 计算持续时间
-      this.calculateDuration();
+      
+      // 验证时间顺序
+      const [startHour, startMinute] = taskData.startTime.split(':').map(Number);
+      const [endHour, endMinute] = taskData.endTime.split(':').map(Number);
+      if (startHour > endHour || (startHour === endHour && startMinute >= endMinute)) {
+        wx.showToast({
+          title: '结束时间必须晚于开始时间',
+          icon: 'none'
+        });
+        return;
+      }
     }
     
-    // 如果是习惯类任务，移除时间相关属性
-    if (taskData.type === 'clock') {
-      delete taskData.startTime;
-      delete taskData.endTime;
-      delete taskData.duration;
-    }
+    // 显示加载提示
+    wx.showLoading({
+      title: '保存中...',
+      mask: true
+    });
     
     // 保存任务
     if (that.data.mode === 'create') {
-      taskManager.createTask(taskData, () => {
-        wx.showToast({
-          title: '创建成功',
-          icon: 'success'
-        });
-        setTimeout(() => {
-          wx.navigateBack();
-        }, 1500);
+      taskManager.createTask(taskData, (newTask) => {
+        wx.hideLoading();
+        if (newTask) {
+          // 显示成功提示
+          wx.showToast({
+            title: '创建成功',
+            icon: 'success',
+            duration: 2000
+          });
+          
+          // 延迟返回上一页
+          setTimeout(() => {
+            wx.navigateBack();
+          }, 2000);
+        }
       });
     } else {
-      taskManager.editTask(taskData.id, taskData, () => {
-        wx.showToast({
-          title: '保存成功',
-          icon: 'success'
-        });
-        setTimeout(() => {
-          wx.navigateBack();
-        }, 1500);
+      taskManager.editTask(taskData.id, taskData, (updatedTask) => {
+        wx.hideLoading();
+        if (updatedTask) {
+          // 显示成功提示
+          wx.showToast({
+            title: '更新成功',
+            icon: 'success',
+            duration: 2000
+          });
+          
+          // 延迟返回上一页
+          setTimeout(() => {
+            wx.navigateBack();
+          }, 2000);
+        }
       });
     }
   },
@@ -1088,45 +1150,61 @@ Page({
    */
   selectFrequency: function(e) {
     const type = e.currentTarget.dataset.type;
-    
-    // 根据类型设置默认的重复日
-    let days = [];
-    if (type === 'daily') {
-      days = ['0', '1', '2', '3', '4', '5', '6']; // 每天
-    } else if (type === 'weekly') {
-      // 选择当前是周几
-      const today = new Date().getDay().toString();
-      days = [today];
-    } else if (type === 'workdays') {
-      days = ['1', '2', '3', '4', '5']; // 工作日
-    } else if (type === 'custom') {
-      days = this.data.task.repeat.days || []; // 保留已选择的日期
-    }
-    
     this.setData({
       'task.repeat.type': type,
-      'task.repeat.days': days
+      'task.repeat.days': type === 'custom' ? [] : null
+    });
+    
+    // 提供用户反馈
+    let message = '';
+    switch (type) {
+      case 'daily':
+        message = '任务将每天重复';
+        break;
+      case 'weekly':
+        message = '任务将每周重复';
+        break;
+      case 'workdays':
+        message = '任务将在工作日重复';
+        break;
+      case 'custom':
+        message = '请选择重复的日期';
+        break;
+    }
+    
+    wx.showToast({
+      title: message,
+      icon: 'none'
     });
   },
 
   /**
-   * 切换周重复日
+   * 切换重复日期
    */
   toggleWeekday: function(e) {
     const day = e.currentTarget.dataset.day;
-    let days = [...(this.data.task.repeat.days || [])];
-    
-    // 如果已包含，则移除
+    const days = this.data.task.repeat.days || [];
     const index = days.indexOf(day);
-    if (index > -1) {
-      days.splice(index, 1);
-    } else {
+    
+    if (index === -1) {
       days.push(day);
+    } else {
+      days.splice(index, 1);
     }
     
     this.setData({
       'task.repeat.days': days
     });
+    
+    // 提供用户反馈
+    if (days.length > 0) {
+      const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
+      const selectedDays = days.map(d => weekdays[d]).join('、');
+      wx.showToast({
+        title: `已选择：周${selectedDays}`,
+        icon: 'none'
+      });
+    }
   },
 
   /**

@@ -101,8 +101,14 @@ const taskManager = {
     };
     
     this.getAllTasks(allTasks => {
-      // 添加到任务列表
-      allTasks.push(newTask);
+      if (task.repeat && task.repeat.type !== 'none') {
+        // 处理周期性任务
+        const repeatTasks = this._generateRepeatTasks(newTask);
+        allTasks.push(...repeatTasks);
+      } else {
+        // 添加单次任务
+        allTasks.push(newTask);
+      }
       
       // 保存任务数据
       this._saveTaskData(allTasks, () => {
@@ -116,6 +122,75 @@ const taskManager = {
         if (callback) callback(newTask);
       });
     });
+  },
+  
+  /**
+   * 生成重复任务
+   * @param {Object} task 原始任务对象
+   * @returns {Array} 生成的重复任务数组
+   */
+  _generateRepeatTasks(task) {
+    const tasks = [];
+    const startDate = new Date(task.repeat.startDate);
+    const endDate = task.repeat.endDate ? new Date(task.repeat.endDate) : null;
+    
+    // 根据重复类型生成任务
+    switch (task.repeat.type) {
+      case 'daily':
+        // 每天重复
+        for (let date = startDate; (!endDate || date <= endDate); date.setDate(date.getDate() + 1)) {
+          tasks.push(this._createRepeatTaskInstance(task, date));
+        }
+        break;
+        
+      case 'weekly':
+        // 每周重复
+        for (let date = startDate; (!endDate || date <= endDate); date.setDate(date.getDate() + 7)) {
+          tasks.push(this._createRepeatTaskInstance(task, date));
+        }
+        break;
+        
+      case 'workdays':
+        // 工作日重复
+        for (let date = startDate; (!endDate || date <= endDate); date.setDate(date.getDate() + 1)) {
+          const day = date.getDay();
+          if (day >= 1 && day <= 5) { // 周一到周五
+            tasks.push(this._createRepeatTaskInstance(task, date));
+          }
+        }
+        break;
+        
+      case 'custom':
+        // 自定义重复
+        for (let date = startDate; (!endDate || date <= endDate); date.setDate(date.getDate() + 1)) {
+          const day = date.getDay().toString();
+          if (task.repeat.days.includes(day)) {
+            tasks.push(this._createRepeatTaskInstance(task, date));
+          }
+        }
+        break;
+    }
+    
+    return tasks;
+  },
+  
+  /**
+   * 创建重复任务实例
+   * @param {Object} originalTask 原始任务
+   * @param {Date} date 任务日期
+   * @returns {Object} 新的任务实例
+   */
+  _createRepeatTaskInstance(originalTask, date) {
+    const dateStr = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
+    
+    return {
+      ...originalTask,
+      id: `task_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+      date: dateStr,
+      createTime: Date.now(),
+      parentTaskId: originalTask.id, // 记录原始任务ID
+      status: 0 // 新创建的任务默认未完成
+    };
   },
   
   /**
