@@ -214,20 +214,49 @@ Page({
       content: '确定要删除这个任务吗？',
       success: (res) => {
         if (res.confirm) {
-          // 这里应该从服务器或本地存储删除任务
-          wx.showToast({
-            title: '删除成功',
-            icon: 'success',
-            duration: 2000,
+          const messageManager = require('../../utils/messageManager.js');
+          const app = getApp();
+          const allTasks = app.globalData.tasks || [];
+          
+          // 获取任务ID
+          const taskId = this.data.task.id;
+          
+          // 从数组中删除任务
+          const updatedTasks = allTasks.filter(task => task.id !== taskId);
+          
+          // 更新全局数据
+          app.globalData.tasks = updatedTasks;
+          
+          // 保存到本地存储
+          wx.setStorage({
+            key: 'taskData',
+            data: updatedTasks,
             success: () => {
-              setTimeout(() => {
-                wx.navigateBack()
-              }, 2000)
+              // 删除与任务相关的消息
+              messageManager.removeTaskMessages(taskId);
+              
+              wx.showToast({
+                title: '删除成功',
+                icon: 'success',
+                duration: 2000,
+                success: () => {
+                  setTimeout(() => {
+                    wx.navigateBack();
+                  }, 2000)
+                }
+              });
+            },
+            fail: () => {
+              wx.showToast({
+                title: '删除失败',
+                icon: 'none',
+                duration: 2000
+              });
             }
-          })
+          });
         }
       }
-    })
+    });
   },
 
   /**

@@ -116,7 +116,7 @@ Page({
     }
     
     // 初始化各类别任务完成率
-    this.updateStats();
+    this.updateTaskProgress();
     
     // 加载消息数据
     this.loadMessageData();
@@ -154,7 +154,7 @@ Page({
     this.loadTaskData();
     
     // 重新计算任务统计数据
-    this.updateStats();
+    this.updateTaskProgress();
     
     // 刷新消息数据
     this.loadMessageData();
@@ -213,7 +213,7 @@ Page({
           app.globalData.tasks = allTasks;
           
           // 更新统计和圆环尺寸
-          this.updateStats();
+          this.updateTaskProgress();
         }
       },
       fail: () => {
@@ -245,10 +245,11 @@ Page({
     });
   },
 
-  // 更新统计信息
-  updateStats: function() {
+  // 更新统计信息（统一任务进度更新方法，替代原来的updateStats和calculateTaskProgress）
+  updateTaskProgress: function() {
     const tasks = this.data.tasks;
     
+    // 处理空任务列表情况
     if (!tasks || tasks.length === 0) {
       this.setData({
         taskProgress: {
@@ -256,16 +257,26 @@ Page({
           bag: 0,
           study: 0
         },
-        // 同时更新奖励进度为0
         rewardProgress: {
           current: 0,
-          total: 1 // 避免除以0错误
+          total: 1
+        },
+        stats: {
+          totalTasks: 0,
+          completedTasks: 0,
+          completionRate: 0,
+          streak: this.data.stats?.streak || 0,
+          typeCounts: {
+            clock: 0,
+            bag: 0,
+            study: 0
+          }
         }
       });
       return;
     }
     
-    // 按类型统计任务完成率
+    // 按类型统计任务
     const typeCounts = {
       total: { clock: 0, bag: 0, study: 0 },
       completed: { clock: 0, bag: 0, study: 0 }
@@ -281,7 +292,7 @@ Page({
       }
     });
     
-    // 计算各类型完成率百分比
+    // 计算各类型完成率
     const progress = {
       clock: typeCounts.total.clock > 0 
         ? Math.round(typeCounts.completed.clock / typeCounts.total.clock * 100) 
@@ -293,29 +304,24 @@ Page({
         ? Math.round(typeCounts.completed.study / typeCounts.total.study * 100) 
         : 0
     };
-     // 计算统计数据
-     const totalTasks = tasks.length;
-     const completedTasks = tasks.filter(task => task.status === 1).length;
-     const completionRate = totalTasks > 0 ? Math.round(completedTasks / totalTasks * 100) : 0;
-     
-    // 更新任务完成率
+    
+    // 计算总体统计数据
+    const totalTasks = tasks.length;
+    const completedTasks = tasks.filter(task => task.status === 1).length;
+    const completionRate = totalTasks > 0 ? Math.round(completedTasks / totalTasks * 100) : 0;
+    
+    // 一次性更新所有数据
     this.setData({
       taskProgress: progress,
-       // 更新奖励进度条数据
-    rewardProgress: {
-      current: completedTasks,
-      total: totalTasks
-    }
-    });
-    
-   
-    // 更新统计面板数据
-    this.setData({
+      rewardProgress: {
+        current: completedTasks,
+        total: totalTasks > 0 ? totalTasks : 1
+      },
       stats: {
         totalTasks: totalTasks,
         completedTasks: completedTasks,
         completionRate: completionRate,
-        streak: this.data.streak || 0,
+        streak: this.data.stats?.streak || 0,
         typeCounts: {
           clock: typeCounts.total.clock,
           bag: typeCounts.total.bag,
@@ -323,7 +329,17 @@ Page({
         }
       }
     });
-
+    
+    // 更新App全局数据
+    const app = getApp();
+    if (app.globalData) {
+      app.globalData.taskProgress = progress;
+      app.globalData.rewardProgress = {
+        current: completedTasks,
+        total: totalTasks > 0 ? totalTasks : 1
+      };
+    }
+    
     // 检查并更新即将到期任务
     this.checkUpcomingTasks();
   },
@@ -482,71 +498,6 @@ Page({
     
     // 执行搜索
     this.performSearch();
-  },
-  
-  // 更新任务进度
-  updateTaskProgress: function() {
-    const tasks = this.data.tasks;
-    const typeProgress = {
-      clock: 0,
-      bag: 0,
-      study: 0
-    };
-
-    // 计算各类型任务的完成情况
-    Object.keys(typeProgress).forEach(type => {
-      const typeTasks = tasks.filter(t => t.type === type);
-      const completedCount = typeTasks.filter(task => task.status === 1).length;
-      typeProgress[type] = typeTasks.length > 0 
-        ? Math.round((completedCount / typeTasks.length) * 100) 
-        : 0;
-    });
-
-    // 使用动画更新进度
-    this.animateProgress(typeProgress);
-  },
-
-  // 动画更新进度
-  animateProgress: function(targetProgress) {
-    const currentProgress = { ...this.data.taskProgress };
-    const steps = 30; // 动画步数
-    const interval = 16; // 每步时间间隔（ms）
-    let step = 0;
-
-    const animate = () => {
-      if (step >= steps) {
-        // 确保最终值为整数，尤其是100%
-        const finalProgress = {};
-        Object.keys(targetProgress).forEach(type => {
-          finalProgress[type] = Math.round(targetProgress[type]);
-          // 确保100值是精确的100，不是99.99或100.01
-          if (finalProgress[type] > 99 && finalProgress[type] < 101) {
-            finalProgress[type] = 100;
-          }
-        });
-        this.setData({ taskProgress: finalProgress });
-        return;
-      }
-
-      const progress = {};
-      Object.keys(targetProgress).forEach(type => {
-        const start = currentProgress[type] || 0;
-        const end = targetProgress[type];
-        // 使用二次缓动函数使动画更自然
-        const t = step / steps;
-        const easeOutQuad = 1 - (1 - t) * (1 - t);
-        const current = Math.round(start + (end - start) * easeOutQuad);
-        
-        // 如果接近100%，确保精确值
-        progress[type] = (current > 99 && current < 101 && end >= 100) ? 100 : current;
-      });
-
-      this.setData({ taskProgress: progress });
-      step++;
-      setTimeout(animate, interval);
-    };
-
-    animate();
   },
   
   // 圆环点击事件处理
@@ -770,20 +721,27 @@ Page({
     const id = e.detail.taskId;
     console.log('完成任务:', id);
     
+    // 获取任务管理器
+    const messageManager = require('../../utils/messageManager.js');
+    
     // 更新任务状态
     const tasks = this.data.tasks.map(task => {
       if (task.id === id) {
         // 如果当前状态是0(未完成)，则设置为1(已完成)
         const newStatus = task.status === 0 ? 1 : 0;
         
-        // 如果是刚完成任务，触发小黄鸡庆祝动画
+        // 如果是刚完成任务，触发动画和创建消息
         if (newStatus === 1) {
+          // 触发庆祝动画
           setTimeout(() => {
             const progressBar = this.selectComponent('#progressBar');
             if (progressBar) {
               progressBar.playAnimation('complete');
             }
           }, 300);
+          
+          // 创建完成任务消息
+          messageManager.createTaskMessage(task, 'completed');
         }
         
         return { ...task, status: newStatus };
@@ -794,15 +752,14 @@ Page({
     this.setData({ tasks });
     
     // 更新全局任务数据
+    const app = getApp();
     app.globalData.tasks = tasks;
     
     // 更新统计信息
-    this.updateStats();
+    this.updateTaskProgress();
     
     // 保存数据
     this.saveTaskData();
-    
-    // 注释: 已移除完成任务提示，让用户体验更加流畅
   },
   
   // 清除搜索过滤器
@@ -897,90 +854,38 @@ Page({
 
   // 从本地存储加载消息数据
   loadMessageData: function() {
-    wx.getStorage({
-      key: 'messageData',
-      success: (res) => {
-        if (res.data && res.data.length > 0) {
-          // 处理消息时间显示
-          const messages = res.data.map(msg => {
-            return {
-              ...msg,
-              timeDisplay: this.formatMessageTime(msg.timestamp)
-            };
-          });
-          
-          // 计算未读消息数量
-          const unreadCount = messages.filter(msg => !msg.isRead).length;
-          
-          this.setData({ 
-            messages,
-            unreadCount
-          });
-        } else {
-          // 如果没有消息，设置默认示例消息
-          this.setDefaultMessages();
-        }
-      },
-      fail: () => {
-        // 加载失败，设置默认示例消息
-        this.setDefaultMessages();
-      }
+    const messageManager = require('../../utils/messageManager.js');
+    
+    messageManager.getAllMessages(messages => {
+      // 处理消息时间显示
+      const processedMessages = messages.map(msg => {
+        return {
+          ...msg,
+          timeDisplay: messageManager.formatMessageTime(msg.timestamp)
+        };
+      });
+      
+      // 计算未读消息数量
+      const unreadCount = processedMessages.filter(msg => !msg.isRead).length;
+      
+      this.setData({ 
+        messages: processedMessages,
+        unreadCount
+      });
     });
   },
   
   // 设置默认示例消息
   setDefaultMessages: function() {
-    const now = Date.now();
-    const messages = [
-      {
-        id: 'msg_' + (now - 3600000),
-        type: 'task',
-        title: '任务即将到期',
-        summary: '您有一个"语文作业"任务将在1小时后到期',
-        timestamp: now - 3600000,
-        isRead: false,
-        icon: '⏰'
-      },
-      {
-        id: 'msg_' + (now - 86400000),
-        type: 'achievement',
-        title: '完成连续学习3天',
-        summary: '恭喜你已经连续学习3天了，再接再厉！',
-        timestamp: now - 86400000,
-        isRead: true,
-        icon: '🏆'
-      },
-      {
-        id: 'msg_' + (now - 172800000),
-        type: 'system',
-        title: '新功能上线',
-        summary: '消息中心功能已上线，现在可以接收任务提醒和成就通知了',
-        timestamp: now - 172800000,
-        isRead: true,
-        icon: '🔔'
-      }
-    ];
-    
-    // 计算未读消息数量
-    const unreadCount = messages.filter(msg => !msg.isRead).length;
-    
-    // 格式化消息时间显示
-    const formattedMessages = messages.map(msg => {
-      return {
-        ...msg,
-        timeDisplay: this.formatMessageTime(msg.timestamp)
-      };
-    });
+    const messageManager = require('../../utils/messageManager.js');
+    const defaultMessages = messageManager.getDefaultMessages();
     
     this.setData({
-      messages: formattedMessages,
-      unreadCount
-    });
-    
-    // 保存到本地存储
-    wx.setStorage({
-      key: 'messageData',
-      data: messages
+      messages: defaultMessages.map(msg => ({
+        ...msg,
+        timeDisplay: messageManager.formatMessageTime(msg.timestamp)
+      })),
+      unreadCount: defaultMessages.filter(msg => !msg.isRead).length
     });
   },
   
@@ -1299,12 +1204,12 @@ Page({
     });
   },
 
-  // 检查并更新即将到期任务
+  // 检查即将到期任务
   checkUpcomingTasks: function() {
     const now = new Date();
-    // 使用全局任务而不是当前页面的任务列表，以便捕获所有任务
-    const allTasks = app.globalData.tasks || [];
+    const allTasks = this.data.tasks || [];
     const upcomingTasks = [];
+    const messageManager = require('../../utils/messageManager.js');
     
     // 筛选未完成且有截止时间的任务
     allTasks.forEach(task => {
@@ -1332,35 +1237,59 @@ Page({
       }
     });
     
-    // 如果没有即将到期的任务，隐藏提示
-    if (upcomingTasks.length === 0) {
-      this.setData({
-        showUpcomingTask: false
-      });
-      return;
-    }
-    
     // 按剩余时间排序
     upcomingTasks.sort((a, b) => a.timeRemaining - b.timeRemaining);
     
     // 获取隐藏状态
-    const hiddenState = wx.getStorageSync('upcomingTaskHidden') || {};
-    const shouldShow = !hiddenState.isHidden || 
-                      (hiddenState.timestamp && (now - hiddenState.timestamp > 3600000)); // 1小时后重新显示
-    
-    // 检查是否应该显示提醒（如果任务ID不同，或者是1小时后自动重新显示）
-    const isNewTask = !hiddenState.taskId || hiddenState.taskId !== upcomingTasks[0].id;
-    
-    if (upcomingTasks.length > 0 && (shouldShow || isNewTask)) {
-      // 更新即将到期任务数据
-      this.setData({
-        upcomingTask: {
-          id: upcomingTasks[0].id,
-          name: upcomingTasks[0].title || upcomingTasks[0].name,
-          timeRemaining: upcomingTasks[0].timeRemaining
-        },
-        showUpcomingTask: true
-      });
+    try {
+      const hiddenStateStr = wx.getStorageSync('upcomingTaskHidden');
+      const hiddenState = hiddenStateStr ? JSON.parse(hiddenStateStr) : {};
+      const shouldShow = !hiddenState.isHidden || 
+                       (hiddenState.timestamp && (now - hiddenState.timestamp > 3600000)); // 1小时后重新显示
+      
+      // 检查是否应该显示提醒
+      const isNewTask = !hiddenState.taskId || hiddenState.taskId !== (upcomingTasks[0] || {}).id;
+      
+      // 更新首页显示
+      if (upcomingTasks.length > 0 && (shouldShow || isNewTask)) {
+        this.setData({
+          upcomingTask: {
+            id: upcomingTasks[0].id,
+            name: upcomingTasks[0].title || upcomingTasks[0].name,
+            timeRemaining: upcomingTasks[0].timeRemaining,
+            isDismissible: true
+          },
+          showUpcomingTask: true
+        });
+        
+        // 使用消息管理器创建通知
+        upcomingTasks.forEach(task => {
+          messageManager.createTaskMessage(task, 'upcoming');
+        });
+      } else {
+        this.setData({
+          showUpcomingTask: false
+        });
+      }
+    } catch (error) {
+      console.error('读取隐藏状态失败:', error);
+      // 如果读取失败，默认显示
+      if (upcomingTasks.length > 0) {
+        this.setData({
+          upcomingTask: {
+            id: upcomingTasks[0].id,
+            name: upcomingTasks[0].title || upcomingTasks[0].name,
+            timeRemaining: upcomingTasks[0].timeRemaining,
+            isDismissible: true
+          },
+          showUpcomingTask: true
+        });
+        
+        // 创建通知
+        upcomingTasks.forEach(task => {
+          messageManager.createTaskMessage(task, 'upcoming');
+        });
+      }
     }
   }
 }) 

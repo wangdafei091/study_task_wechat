@@ -44,21 +44,10 @@ Page({
    * 加载消息数据
    */
   loadMessageData: function() {
-    wx.getStorage({
-      key: 'messageData',
-      success: (res) => {
-        if (res.data && res.data.length > 0) {
-          // 处理消息
-          this.processMessages(res.data);
-        } else {
-          // 如果没有消息，设置默认示例消息
-          this.setDefaultMessages();
-        }
-      },
-      fail: () => {
-        // 加载失败，设置默认消息
-        this.setDefaultMessages();
-      }
+    const messageManager = require('../../utils/messageManager.js');
+    
+    messageManager.getAllMessages(messages => {
+      this.processMessages(messages);
     });
   },
 
@@ -222,56 +211,27 @@ Page({
    */
   viewMessageDetail: function(e) {
     const messageId = e.currentTarget.dataset.id;
-    const messages = this.data.messages;
-    const messageIndex = messages.findIndex(m => m.id === messageId);
+    const messageManager = require('../../utils/messageManager.js');
+    const messageIndex = this.data.messages.findIndex(m => m.id === messageId);
     
     if (messageIndex > -1) {
       // 标记该消息为已读
-      if (!messages[messageIndex].isRead) {
-        messages[messageIndex].isRead = true;
-        
-        // 更新未读数量
-        const unreadCount = this.data.unreadCount - 1;
-        let taskUnreadCount = this.data.taskUnreadCount;
-        let achievementUnreadCount = this.data.achievementUnreadCount;
-        let systemUnreadCount = this.data.systemUnreadCount;
-        
-        // 根据消息类型更新对应的未读数量
-        switch(messages[messageIndex].type) {
-          case 'task': taskUnreadCount--; break;
-          case 'achievement': achievementUnreadCount--; break;
-          case 'system': systemUnreadCount--; break;
-        }
-        
-        this.setData({
-          messages,
-          unreadCount,
-          taskUnreadCount,
-          achievementUnreadCount,
-          systemUnreadCount
-        });
-        
-        // 更新过滤后的消息列表
-        this.filterMessagesByTab();
-        
-        // 更新本地存储
-        wx.setStorage({
-          key: 'messageData',
-          data: messages
-        });
-      }
+      messageManager.markAsRead(messageId);
+      
+      // 重新加载消息数据
+      setTimeout(() => {
+        this.loadMessageData();
+      }, 300);
       
       // 根据消息类型处理不同的导航逻辑
-      const message = messages[messageIndex];
+      const message = this.data.messages[messageIndex];
       switch (message.type) {
         case 'task':
-          // 如果有关联任务ID，导航到该任务详情
           if (message.taskId) {
             wx.navigateTo({
               url: `/pages/task/task?id=${message.taskId}`
             });
           } else {
-            // 显示消息内容
             wx.showModal({
               title: message.title,
               content: message.summary,
@@ -286,7 +246,6 @@ Page({
           });
           break;
         default:
-          // 显示消息内容
           wx.showModal({
             title: message.title,
             content: message.summary,
@@ -300,34 +259,17 @@ Page({
    * 标记所有消息为已读
    */
   markAllAsRead: function() {
-    const messages = this.data.messages.map(msg => ({
-      ...msg,
-      isRead: true
-    }));
+    const messageManager = require('../../utils/messageManager.js');
+    messageManager.markAllAsRead();
     
-    this.setData({
-      messages,
-      unreadCount: 0,
-      taskUnreadCount: 0,
-      achievementUnreadCount: 0,
-      systemUnreadCount: 0
+    wx.showToast({
+      title: '全部已读',
+      icon: 'success',
+      duration: 1500
     });
     
-    // 更新过滤后的消息列表
-    this.filterMessagesByTab();
-    
-    // 更新本地存储
-    wx.setStorage({
-      key: 'messageData',
-      data: messages,
-      success: () => {
-        wx.showToast({
-          title: '全部已读',
-          icon: 'success',
-          duration: 1500
-        });
-      }
-    });
+    // 刷新消息数据
+    this.loadMessageData();
   },
 
   /**
@@ -389,7 +331,7 @@ Page({
       success: (res) => {
         if (res.tapIndex === 0) {
           // 切换已读/未读状态
-          this.toggleReadStatus(message.id);
+          this.toggleMessageReadStatus({ currentTarget: { dataset: { id: message.id } } });
         } else if (res.tapIndex === 1) {
           // 删除消息
           this.deleteMessage({ currentTarget: { dataset: { id: message.id } } });
@@ -399,55 +341,65 @@ Page({
   },
 
   /**
-   * 切换消息已读/未读状态
+   * 切换消息已读状态
    */
-  toggleReadStatus: function(messageId) {
-    const messages = this.data.messages;
-    const messageIndex = messages.findIndex(m => m.id === messageId);
+  toggleMessageReadStatus: function(e) {
+    const messageId = e.currentTarget.dataset.id;
+    const messageManager = require('../../utils/messageManager.js');
+    const message = this.data.messages.find(m => m.id === messageId);
     
-    if (messageIndex > -1) {
-      // 切换已读状态
-      const newIsRead = !messages[messageIndex].isRead;
-      messages[messageIndex].isRead = newIsRead;
-      
-      // 更新未读数量
-      let unreadChange = newIsRead ? -1 : 1;
-      let unreadCount = this.data.unreadCount + unreadChange;
-      let taskUnreadCount = this.data.taskUnreadCount;
-      let achievementUnreadCount = this.data.achievementUnreadCount;
-      let systemUnreadCount = this.data.systemUnreadCount;
-      
-      // 根据消息类型更新对应的未读数量
-      switch(messages[messageIndex].type) {
-        case 'task': taskUnreadCount += unreadChange; break;
-        case 'achievement': achievementUnreadCount += unreadChange; break;
-        case 'system': systemUnreadCount += unreadChange; break;
+    if (message) {
+      if (message.isRead) {
+        // 已读变未读
+        this.setMessageReadStatus(messageId, false);
+        wx.showToast({
+          title: '已标记为未读',
+          icon: 'success',
+          duration: 1500
+        });
+      } else {
+        // 未读变已读
+        messageManager.markAsRead(messageId);
+        
+        // 重新加载消息数据
+        setTimeout(() => {
+          this.loadMessageData();
+        }, 300);
+        
+        wx.showToast({
+          title: '已标记为已读',
+          icon: 'success',
+          duration: 1500
+        });
       }
-      
-      this.setData({
-        messages,
-        unreadCount,
-        taskUnreadCount,
-        achievementUnreadCount,
-        systemUnreadCount
-      });
-      
-      // 更新过滤后的消息列表
-      this.filterMessagesByTab();
-      
-      // 更新本地存储
-      wx.setStorage({
-        key: 'messageData',
-        data: messages,
-        success: () => {
-          wx.showToast({
-            title: newIsRead ? '已标记为已读' : '已标记为未读',
-            icon: 'success',
-            duration: 1500
+    }
+  },
+
+  /**
+   * 设置消息已读状态
+   */
+  setMessageReadStatus: function(messageId, isRead) {
+    wx.getStorage({
+      key: 'messageData',
+      success: (res) => {
+        let messages = res.data || [];
+        const messageIndex = messages.findIndex(m => m.id === messageId);
+        
+        if (messageIndex > -1) {
+          messages[messageIndex].isRead = isRead;
+          
+          // 保存更新后的消息
+          wx.setStorage({
+            key: 'messageData',
+            data: messages,
+            success: () => {
+              // 更新本地数据
+              this.loadMessageData();
+            }
           });
         }
-      });
-    }
+      }
+    });
   },
 
   /**

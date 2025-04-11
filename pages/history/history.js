@@ -200,17 +200,27 @@ Page({
       content: `确定要删除选中的${this.data.selectedTasks.length}个任务记录吗？`,
       success: (res) => {
         if (res.confirm) {
-          // 删除选中的任务
+          const messageManager = require('../../utils/messageManager.js');
+          const app = getApp();
           const allTasks = app.globalData.tasks || [];
-          const updatedTasks = allTasks.filter(task => !this.data.selectedTasks.includes(task.id));
+          const selectedTaskIds = this.data.selectedTasks;
           
+          // 删除选中的任务
+          const updatedTasks = allTasks.filter(task => !selectedTaskIds.includes(task.id));
+          
+          // 更新全局数据
           app.globalData.tasks = updatedTasks;
           
           // 保存到本地存储
           wx.setStorage({
-            key: 'tasks',
+            key: 'taskData',
             data: updatedTasks,
             success: () => {
+              // 删除与任务相关的消息
+              selectedTaskIds.forEach(taskId => {
+                messageManager.removeTaskMessages(taskId);
+              });
+              
               wx.showToast({
                 title: '删除成功',
                 icon: 'success'

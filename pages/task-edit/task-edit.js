@@ -807,9 +807,38 @@ Page({
   },
 
   /**
+   * 保存任务
+   */
+  saveTask: function() {
+    console.log('保存任务按钮点击');
+    // 验证必填信息
+    if (!this.validateTaskData()) {
+      console.log('数据验证失败');
+      return;
+    }
+    
+    try {
+      // 准备任务数据
+      const taskData = this.prepareTaskData();
+      console.log('准备任务数据', taskData);
+      
+      // 保存到存储
+      this.saveTaskToStorage(taskData);
+    } catch(error) {
+      console.error('保存任务失败:', error);
+      wx.showToast({
+        title: '保存失败，请重试',
+        icon: 'none'
+      });
+    }
+  },
+
+  /**
    * 保存任务到存储
    */
   saveTaskToStorage: function(taskData) {
+    const messageManager = require('../../utils/messageManager.js');
+    
     // 获取现有任务
     wx.getStorage({
       key: 'taskData',
@@ -821,13 +850,23 @@ Page({
           const index = tasks.findIndex(t => t.id === taskData.id);
           if (index > -1) {
             tasks[index] = taskData;
+            
+            // 更新相关消息
+            messageManager.updateTaskMessages(taskData);
+            
+            // 可能需要创建一个编辑提醒消息
+            messageManager.createTaskMessage(taskData, 'edited');
           } else {
             tasks.push(taskData);
+            // 创建新任务消息
+            messageManager.createTaskMessage(taskData, 'new');
           }
         } 
         // 创建模式下直接添加
         else {
           tasks.push(taskData);
+          // 创建新任务消息
+          messageManager.createTaskMessage(taskData, 'new');
         }
         
         // 保存任务
@@ -839,6 +878,12 @@ Page({
               title: this.data.mode === 'edit' ? '任务已更新' : '任务已创建',
               icon: 'success'
             });
+            
+            // 更新App全局数据
+            const app = getApp();
+            if (app.globalData) {
+              app.globalData.tasks = tasks;
+            }
             
             // 延迟返回上一页
             setTimeout(() => {
@@ -863,6 +908,15 @@ Page({
               title: '任务已创建',
               icon: 'success'
             });
+            
+            // 创建新任务消息
+            messageManager.createTaskMessage(taskData, 'new');
+            
+            // 更新App全局数据
+            const app = getApp();
+            if (app.globalData) {
+              app.globalData.tasks = [taskData];
+            }
             
             // 延迟返回上一页
             setTimeout(() => {
@@ -986,33 +1040,6 @@ Page({
     
     // 格式化为HH:MM格式
     return `${endHours.toString().padStart(2, '0')}:${endMinutes.toString().padStart(2, '0')}`;
-  },
-
-  /**
-   * 保存任务
-   */
-  saveTask: function() {
-    console.log('保存任务按钮点击');
-    // 验证必填信息
-    if (!this.validateTaskData()) {
-      console.log('数据验证失败');
-      return;
-    }
-    
-    try {
-      // 准备任务数据
-      const taskData = this.prepareTaskData();
-      console.log('准备任务数据', taskData);
-      
-      // 保存到存储
-      this.saveTaskToStorage(taskData);
-    } catch(error) {
-      console.error('保存任务失败:', error);
-      wx.showToast({
-        title: '保存失败，请重试',
-        icon: 'none'
-      });
-    }
   },
 
   /**
