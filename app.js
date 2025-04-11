@@ -1,8 +1,12 @@
 // app.js
 const unitUtils = require('./utils/unit.js');
+const taskManager = require('./utils/taskManager.js');
 
 App({
   onLaunch: function () {
+    // 初始化事件总线
+    this.initEventBus();
+    
     // 检查基础库版本兼容性
     this.checkCompatibility()
     
@@ -33,6 +37,46 @@ App({
     
     // 监听字体大小变化
     this.setupFontSizeChangeListener()
+  },
+  
+  // 初始化事件总线
+  initEventBus: function() {
+    this.globalData.eventBus = {
+      listeners: {},
+      
+      // 注册事件监听
+      on: function(event, callback) {
+        if (!this.listeners[event]) {
+          this.listeners[event] = [];
+        }
+        this.listeners[event].push(callback);
+      },
+      
+      // 移除事件监听
+      off: function(event, callback) {
+        if (!this.listeners[event]) return;
+        
+        if (callback) {
+          // 移除特定回调
+          this.listeners[event] = this.listeners[event].filter(cb => cb !== callback);
+        } else {
+          // 移除所有该事件的回调
+          delete this.listeners[event];
+        }
+      },
+      
+      // 触发事件
+      emit: function(event, data) {
+        const callbacks = this.listeners[event] || [];
+        callbacks.forEach(callback => {
+          try {
+            callback(data);
+          } catch (error) {
+            console.error(`事件处理出错: ${event}`, error);
+          }
+        });
+      }
+    };
   },
   
   // 监听设备方向变化
@@ -419,13 +463,20 @@ App({
 
   // 从本地存储加载数据
   loadTaskData: function() {
-    // 加载任务数据
-    const tasks = wx.getStorageSync('tasks') || this.getDefaultTasks()
-    this.globalData.tasks = tasks
+    // 使用任务管理器获取所有任务
+    taskManager.getAllTasks(allTasks => {
+      // 数据已在taskManager中处理并更新到app.globalData.tasks
+      console.log(`加载了 ${allTasks.length} 个任务`);
+      
+      // 通知事件总线
+      if (this.globalData.eventBus) {
+        this.globalData.eventBus.emit('taskDataChanged', allTasks);
+      }
+    });
 
     // 加载奖励数据
-    const rewards = wx.getStorageSync('rewards') || this.getDefaultRewards()
-    this.globalData.rewards = rewards
+    const rewards = wx.getStorageSync('rewards') || this.getDefaultRewards();
+    this.globalData.rewards = rewards;
   },
 
   // 默认任务数据

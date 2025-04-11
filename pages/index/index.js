@@ -1,4 +1,6 @@
 const app = getApp()
+const taskManager = require('../../utils/taskManager.js');
+const messageManager = require('../../utils/messageManager.js');
 
 Page({
   data: {
@@ -93,33 +95,16 @@ Page({
    * 生命周期函数--监听页面加载
    */
   onLoad: function (options) {
-    // 默认任务列表
-    const app = getApp();
+    console.log('首页加载');
     
     // 设置当前日期字符串
     const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth() + 1;
-    const day = now.getDate();
     
     // 设置随机的鼓励语
     this.setRandomMotivation();
     
-    // 从全局数据或本地存储获取任务列表
-    if (app.globalData.tasks && app.globalData.tasks.length > 0) {
-      this.setData({
-        tasks: app.globalData.tasks
-      });
-    } else {
-      // 从本地存储加载任务数据
-      this.loadTaskData();
-    }
-    
-    // 初始化各类别任务完成率
-    this.updateTaskProgress();
-    
-    // 加载消息数据
-    this.loadMessageData();
+    // 加载任务数据
+    this.loadTaskData();
     
     // 初始化消息预览动画实例
     this.messageAnimation = wx.createAnimation({
@@ -144,576 +129,140 @@ Page({
         });
       };
     }
+    
+    // 注册事件监听
+    this.registerEventListeners();
+  },
+  
+  /**
+   * 注册事件监听
+   */
+  registerEventListeners: function() {
+    if (app.globalData.eventBus) {
+      // 监听任务数据变化
+      app.globalData.eventBus.on('taskDataChanged', this.handleTaskDataChanged.bind(this));
+      
+      // 监听消息数据变化
+      app.globalData.eventBus.on('messageDataChanged', this.handleMessageDataChanged.bind(this));
+    }
+  },
+  
+  /**
+   * 处理任务数据变化事件
+   */
+  handleTaskDataChanged: function(allTasks) {
+    // 刷新今日任务
+    taskManager.getTodayTasks(todayTasks => {
+      this.setData({ tasks: todayTasks });
+      this.updateTaskProgress(todayTasks);
+      this.checkUpcomingTasks();
+    });
+  },
+  
+  /**
+   * 处理消息数据变化事件
+   */
+  handleMessageDataChanged: function(messages) {
+    // 更新消息显示
+    const unreadCount = messages.filter(msg => !msg.isRead).length;
+    
+    this.setData({ 
+      messages,
+      unreadCount
+    });
   },
   
   /**
    * 生命周期函数--监听页面显示
    */
   onShow: function () {
-    // 从本地存储重新加载任务数据
+    // 刷新任务数据
     this.loadTaskData();
-    
-    // 重新计算任务统计数据
-    this.updateTaskProgress();
     
     // 刷新消息数据
     this.loadMessageData();
   },
+  
+  /**
+   * 生命周期函数--监听页面卸载
+   */
+  onUnload: function() {
+    // 解除事件监听
+    if (app.globalData.eventBus) {
+      app.globalData.eventBus.off('taskDataChanged');
+      app.globalData.eventBus.off('messageDataChanged');
+    }
+  },
 
-  // 从本地存储加载任务数据
+  // 从任务管理器加载任务数据
   loadTaskData: function() {
-    const app = getApp();
-    
-    // 获取今天的日期字符串，确保格式一致（YYYY-MM-DD）
-    const today = new Date();
-    const todayStr = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}-${today.getDate().toString().padStart(2, '0')}`;
-    console.log('今日日期:', todayStr);
-    
-    wx.getStorage({
-      key: 'taskData',
-      success: (res) => {
-        if (res.data && res.data.length > 0) {
-          // 确保每个任务都有duration属性
-          const allTasks = res.data.map(task => {
-            if (!task.hasOwnProperty('duration')) {
-              // 根据任务类型设置默认持续时间
-              switch(task.type) {
-                case 'clock': 
-                  task.duration = 10; // 生活习惯类默认10分钟
-                  break;
-                case 'bag':
-                  task.duration = 20; // 整理收纳类默认20分钟
-                  break;
-                case 'study':
-                  task.duration = 60; // 学习任务默认60分钟
-                  break;
-                default:
-                  task.duration = 30; // 其他类型默认30分钟
-              }
-            }
-            return task;
-          });
-          
-          // 筛选今天的任务
-          const todayTasks = allTasks.filter(task => {
-            // 确保日期格式一致性
-            if (!task.date) return false;
-            
-            // 如果任务的日期等于今天的日期，则包括该任务
-            return task.date === todayStr;
-          });
-          
-          console.log('所有任务数:', allTasks.length);
-          console.log('今日任务数:', todayTasks.length);
-          
-          // 设置任务列表为今日任务
-          this.setData({ tasks: todayTasks });
-          
-          // 全局任务数据保存所有任务
-          app.globalData.tasks = allTasks;
-          
-          // 更新统计和圆环尺寸
-          this.updateTaskProgress();
-        }
-      },
-      fail: () => {
-        // 如果本地没有存储数据，使用默认任务列表
-        app.globalData.tasks = this.data.tasks;
-        this.saveTaskData();
-      }
+    // 获取今日任务
+    taskManager.getTodayTasks(todayTasks => {
+      this.setData({ tasks: todayTasks });
+      
+      // 更新任务进度统计和即将到期任务
+      this.updateTaskProgress(todayTasks);
+      this.checkUpcomingTasks();
     });
   },
   
-  // 保存任务数据到本地存储
-  saveTaskData: function() {
-    const app = getApp();
-    const tasks = this.data.tasks;
-    
-    // 更新全局数据
-    app.globalData.tasks = tasks;
-    
-    // 存储到本地
-    wx.setStorage({
-      key: 'taskData',
-      data: tasks,
-      success: () => {
-        console.log('任务数据保存成功');
-      },
-      fail: (error) => {
-        console.error('保存任务数据失败：', error);
-      }
+  // 从消息管理器加载消息数据
+  loadMessageData: function() {
+    messageManager.getAllMessages(messages => {
+      // 计算未读消息数量
+      const unreadCount = messages.filter(msg => !msg.isRead).length;
+      
+      this.setData({ 
+        messages,
+        unreadCount
+      });
     });
   },
-
-  // 更新统计信息（统一任务进度更新方法，替代原来的updateStats和calculateTaskProgress）
-  updateTaskProgress: function() {
-    const tasks = this.data.tasks;
+  
+  // 更新任务进度统计
+  updateTaskProgress: function(tasks) {
+    // 使用任务管理器计算进度
+    const progressData = taskManager.calculateTaskProgress(tasks);
     
-    // 处理空任务列表情况
-    if (!tasks || tasks.length === 0) {
-      this.setData({
-        taskProgress: {
-          clock: 0,
-          bag: 0,
-          study: 0
-        },
-        rewardProgress: {
-          current: 0,
-          total: 1
-        },
-        stats: {
-          totalTasks: 0,
-          completedTasks: 0,
-          completionRate: 0,
-          streak: this.data.stats?.streak || 0,
-          typeCounts: {
-            clock: 0,
-            bag: 0,
-            study: 0
-          }
-        }
-      });
-      return;
-    }
-    
-    // 按类型统计任务
-    const typeCounts = {
-      total: { clock: 0, bag: 0, study: 0 },
-      completed: { clock: 0, bag: 0, study: 0 }
-    };
-    
-    tasks.forEach(task => {
-      if (typeCounts.total.hasOwnProperty(task.type)) {
-        typeCounts.total[task.type]++;
-        
-        if (task.status === 1) {
-          typeCounts.completed[task.type]++;
-        }
-      }
-    });
-    
-    // 计算各类型完成率
-    const progress = {
-      clock: typeCounts.total.clock > 0 
-        ? Math.round(typeCounts.completed.clock / typeCounts.total.clock * 100) 
-        : 0,
-      bag: typeCounts.total.bag > 0 
-        ? Math.round(typeCounts.completed.bag / typeCounts.total.bag * 100) 
-        : 0,
-      study: typeCounts.total.study > 0 
-        ? Math.round(typeCounts.completed.study / typeCounts.total.study * 100) 
-        : 0
-    };
-    
-    // 计算总体统计数据
-    const totalTasks = tasks.length;
-    const completedTasks = tasks.filter(task => task.status === 1).length;
-    const completionRate = totalTasks > 0 ? Math.round(completedTasks / totalTasks * 100) : 0;
-    
-    // 一次性更新所有数据
+    // 更新UI
     this.setData({
-      taskProgress: progress,
-      rewardProgress: {
-        current: completedTasks,
-        total: totalTasks > 0 ? totalTasks : 1
-      },
+      taskProgress: progressData.taskProgress,
+      rewardProgress: progressData.rewardProgress,
       stats: {
-        totalTasks: totalTasks,
-        completedTasks: completedTasks,
-        completionRate: completionRate,
-        streak: this.data.stats?.streak || 0,
-        typeCounts: {
-          clock: typeCounts.total.clock,
-          bag: typeCounts.total.bag,
-          study: typeCounts.total.study
-        }
+        ...progressData.stats,
+        streak: this.data.stats?.streak || 0 // 保留现有连续天数
       }
     });
     
-    // 更新App全局数据
-    const app = getApp();
-    if (app.globalData) {
-      app.globalData.taskProgress = progress;
-      app.globalData.rewardProgress = {
-        current: completedTasks,
-        total: totalTasks > 0 ? totalTasks : 1
-      };
-    }
-    
-    // 检查并更新即将到期任务
-    this.checkUpcomingTasks();
+    // 更新全局进度数据
+    app.globalData.taskProgress = progressData.taskProgress;
+    app.globalData.rewardProgress = progressData.rewardProgress;
   },
-
-  // 显示/隐藏统计面板
-  toggleStats: function() {
-    const currentState = this.data.showStats;
-    
-    // 如果当前是隐藏状态（即将显示统计），触发小黄鸡动画
-    if (!currentState) {
-      const progressBar = this.selectComponent('#progressBar');
-      if (progressBar) {
-        progressBar.playAnimation('stats');
-      }
-    }
-    
-    if (currentState) {
-      // 当前是显示状态，添加一个关闭中的状态，用于触发CSS动画
-      this.setData({
-        statsClosing: true
-      });
-      
-      // 动画结束后再隐藏元素
-      setTimeout(() => {
+  
+  // 检查即将到期任务
+  checkUpcomingTasks: function() {
+    // 使用任务管理器检查即将到期任务
+    taskManager.checkUpcomingTasks(upcomingTasks => {
+      if (upcomingTasks && upcomingTasks.length > 0) {
+        // 使用消息管理器处理提醒显示逻辑
+        messageManager.getUpcomingTaskNotifications(upcomingTasks, (taskInfo, shouldShow) => {
+          if (shouldShow && taskInfo) {
+            this.setData({
+              upcomingTask: taskInfo,
+              showUpcomingTask: true
+            });
+          } else {
+            this.setData({
+              showUpcomingTask: false
+            });
+          }
+        });
+      } else {
         this.setData({
-          showStats: false,
-          statsClosing: false
-        });
-      }, 280); // 略小于动画时间
-    } else {
-      // 当前是隐藏状态，直接显示
-      this.setData({
-        showStats: true,
-        statsClosing: false
-      });
-    }
-  },
-  
-  // 获取用户信息
-  getUserInfo: function (e) {
-    app.globalData.userInfo = e.detail.userInfo
-    this.setData({
-      userInfo: e.detail.userInfo,
-      hasUserInfo: true
-    })
-  },
-  
-  // 导航到用户个人资料页面
-  navigateToUserProfile: function() {
-    wx.showToast({
-      title: '用户资料功能开发中',
-      icon: 'none',
-      duration: 1500
-    });
-  },
-
-  // 设置随机激励语
-  setRandomMotivation: function() {
-    const phrases = this.data.motivationalPhrases
-    const randomIndex = Math.floor(Math.random() * phrases.length)
-    this.setData({
-      currentMotivation: phrases[randomIndex]
-    })
-  },
-  
-  // 打开/关闭搜索面板
-  toggleSearch: function() {
-    const newShowSearch = !this.data.showSearch;
-    
-    if (!newShowSearch) {
-      // 当前是显示状态，需要添加关闭动画
-      this.setData({
-        searchClosing: true
-      });
-      
-      // 动画结束后再隐藏元素
-      setTimeout(() => {
-        this.setData({
-          showSearch: false,
-          searchClosing: false
-        });
-      }, 250); // 与CSS动画时长匹配
-      
-      return;
-    }
-    
-    // 触发小黄鸡动画效果
-    if (newShowSearch) {
-      const progressBar = this.selectComponent('#progressBar');
-      if (progressBar) {
-        progressBar.playAnimation('search');
-      }
-    }
-    
-    this.setData({
-      showSearch: newShowSearch,
-      searchQuery: '',
-      searchResults: [],
-      searchFilters: {
-        type: '',
-        status: '',
-        dateRange: 'today'
-      }
-    });
-  },
-  
-  // 输入搜索关键词
-  inputSearch: function(e) {
-    this.setData({
-      searchQuery: e.detail.value
-    });
-    
-    // 如果输入为空，清空搜索结果
-    if (!e.detail.value.trim()) {
-      this.setData({
-        searchResults: []
-      });
-      return;
-    }
-    
-    // 否则执行搜索
-    this.performSearch();
-  },
-  
-  // 选择搜索过滤器
-  selectFilter: function(e) {
-    const { type, value } = e.currentTarget.dataset;
-    const previousValue = this.data.searchFilters[type];
-    
-    // 如果选择了相同值，则取消选择
-    const newValue = previousValue === value ? '' : value;
-    
-    // 创建动画效果
-    const animation = wx.createAnimation({
-      duration: 200,
-      timingFunction: 'ease-out'
-    });
-    
-    // 设置动画：轻微缩放效果，改为背景色变化
-    animation.scale(1.02).backgroundColor('rgba(66, 133, 244, 0.15)').step();
-    animation.scale(1.0).backgroundColor('rgba(66, 133, 244, 0.1)').step();
-    
-    // 应用动画到对应元素（通过自定义属性）
-    const animationData = {};
-    animationData[`filterAnimation.${type}.${value}`] = animation.export();
-    
-    this.setData({
-      [`searchFilters.${type}`]: newValue,
-      ...animationData
-    });
-    
-    // 轻微振动反馈
-    if (wx.vibrateShort) {
-      wx.vibrateShort({ type: 'light' });
-    }
-    
-    // 执行搜索
-    this.performSearch();
-  },
-  
-  // 圆环点击事件处理
-  onRingTap: function(e) {
-    // 从组件传递过来的事件中获取类型
-    const type = e.detail.type;
-    
-    const typeNames = {
-      bag: '整理收纳',
-      clock: '生活习惯',
-      study: '学习任务'
-    };
-    
-    // 获取该类型的任务
-    const tasks = this.data.tasks.filter(task => task.type === type);
-    const completedTasks = tasks.filter(task => task.status === 1);
-    
-    wx.showToast({
-      title: `${typeNames[type]}任务: ${completedTasks.length}/${tasks.length}`,
-      icon: 'none',
-      duration: 1500
-    });
-    
-    // 如果有任务存在，可以导航到该类型的任务列表
-    if (tasks.length > 0) {
-      // 当前先简单地显示相应信息
-      setTimeout(() => {
-        wx.showModal({
-          title: typeNames[type] + '任务',
-          content: `总任务数: ${tasks.length}个\n已完成: ${completedTasks.length}个\n完成率: ${tasks.length > 0 ? Math.round((completedTasks.length / tasks.length) * 100) : 0}%`,
-          showCancel: false,
-          confirmText: '我知道了'
-        });
-      }, 500);
-    }
-  },
-  
-  // 奖励完成事件处理
-  onRewardComplete: function() {
-    // 震动效果增强体验
-    setTimeout(() => {
-      if (wx.vibrateShort) {
-        wx.vibrateShort({
-          type: 'medium'
+          showUpcomingTask: false
         });
       }
-    }, 300);
-    
-    // 触发小黄鸡的庆祝动画
-    const progressBar = this.selectComponent('#progressBar');
-    if (progressBar) {
-      progressBar.playAnimation('complete');
-    }
-  },
-  
-  // 执行搜索
-  performSearch: function() {
-    const query = this.data.searchQuery.toLowerCase().trim();
-    const filters = this.data.searchFilters;
-    const allTasks = app.globalData.tasks || [];
-    
-    // 首先基于关键词搜索
-    let results = [];
-    
-    if (query) {
-      results = allTasks.filter(task => 
-        task.title.toLowerCase().includes(query) || 
-        (task.description && task.description.toLowerCase().includes(query))
-      );
-    } else {
-      // 如果没有查询词但有过滤条件，则搜索所有任务
-      results = [...allTasks];
-    }
-    
-    // 应用类型过滤
-    if (filters.type) {
-      results = results.filter(task => task.type === filters.type);
-    }
-    
-    // 应用状态过滤
-    if (filters.status !== '') {
-      const statusValue = parseInt(filters.status);
-      results = results.filter(task => task.status === statusValue);
-    }
-    
-    // 应用日期范围过滤
-    if (filters.dateRange) {
-      const now = new Date();
-      
-      if (filters.dateRange === 'today') {
-        const today = new Date().toISOString().split('T')[0];
-        results = results.filter(task => task.date === today);
-      } else if (filters.dateRange === 'week') {
-        // 本周范围
-        const startOfWeek = new Date(now);
-        startOfWeek.setDate(now.getDate() - now.getDay());
-        startOfWeek.setHours(0, 0, 0, 0);
-        
-        const endOfWeek = new Date(startOfWeek);
-        endOfWeek.setDate(startOfWeek.getDate() + 6);
-        endOfWeek.setHours(23, 59, 59, 999);
-        
-        results = results.filter(task => {
-          if (!task.date) return false;
-          const taskDate = new Date(task.date);
-          return taskDate >= startOfWeek && taskDate <= endOfWeek;
-        });
-      } else if (filters.dateRange === 'month') {
-        // 本月范围
-        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-        
-        results = results.filter(task => {
-          if (!task.date) return false;
-          const taskDate = new Date(task.date);
-          return taskDate >= startOfMonth && taskDate <= endOfMonth;
-        });
-      }
-    }
-    
-    console.log('搜索结果:', results);
-    
-    // 使用动画呈现搜索结果
-    this.animateSearchResults(results);
-  },
-  
-  // 搜索结果动画显示
-  animateSearchResults: function(results) {
-    if (results.length === 0) {
-      this.setData({ searchResults: [] });
-      return;
-    }
-    
-    // 先一次性设置所有结果，但通过CSS动画和不同的延迟显示动画效果
-    this.setData({
-      searchResults: results.map((item, index) => ({
-        ...item,
-        // 添加动画延迟属性，索引越大延迟越长
-        animationDelay: `${index * 50}ms`
-      }))
     });
-  },
-  
-  // 前往任务详情
-  goToTaskDetail: function (e) {
-    // 已禁用：不再跳转到任务详情页
-    // const taskId = e.detail.taskId
-    // wx.navigateTo({
-    //   url: `/pages/task/task?id=${taskId}`
-    // })
-    console.log('任务详情功能已禁用');
-  },
-  
-  // 切换浮动菜单
-  toggleFloatMenu: function() {
-    // 震动反馈
-    if (wx.vibrateShort) {
-      wx.vibrateShort({ type: 'light' });
-    }
-    
-    this.setData({
-      showFloatMenu: !this.data.showFloatMenu
-    });
-  },
-  
-  // 创建学习型任务
-  createStudyTask: function() {
-    // 震动反馈
-    if (wx.vibrateShort) {
-      wx.vibrateShort({ type: 'medium' });
-    }
-    
-    // 关闭浮动菜单
-    this.setData({
-      showFloatMenu: false
-    });
-    
-    // 跳转到任务编辑页面，并传入类型参数
-    wx.navigateTo({
-      url: '/pages/task-edit/task-edit?taskType=study&precision=second'
-    });
-  },
-  
-  // 创建习惯型任务
-  createHabitTask: function() {
-    // 震动反馈
-    if (wx.vibrateShort) {
-      wx.vibrateShort({ type: 'medium' });
-    }
-    
-    // 关闭浮动菜单
-    this.setData({
-      showFloatMenu: false
-    });
-    
-    // 跳转到任务编辑页面，并传入类型参数
-    wx.navigateTo({
-      url: '/pages/task-edit/task-edit?taskType=habit&precision=day'
-    });
-  },
-  
-  // 创建新任务（保留原有方法作为备用，确保兼容性）
-  createNewTask: function() {
-    // 将行为改为打开浮动菜单
-    this.toggleFloatMenu();
-  },
-  
-  // 编辑任务
-  editTask: function(e) {
-    const taskId = e.detail.taskId || e.detail;
-    
-    if (taskId) {
-      wx.navigateTo({
-        url: `/pages/task-edit/task-edit?mode=edit&taskId=${taskId}`
-      });
-    }
   },
 
   // 完成任务
@@ -721,97 +270,70 @@ Page({
     const id = e.detail.taskId;
     console.log('完成任务:', id);
     
-    // 获取任务管理器
-    const messageManager = require('../../utils/messageManager.js');
+    // 获取当前任务状态
+    const task = this.data.tasks.find(t => t.id === id);
+    if (!task) return;
     
-    // 更新任务状态
-    const tasks = this.data.tasks.map(task => {
-      if (task.id === id) {
-        // 如果当前状态是0(未完成)，则设置为1(已完成)
-        const newStatus = task.status === 0 ? 1 : 0;
-        
-        // 如果是刚完成任务，触发动画和创建消息
-        if (newStatus === 1) {
-          // 触发庆祝动画
-          setTimeout(() => {
-            const progressBar = this.selectComponent('#progressBar');
-            if (progressBar) {
-              progressBar.playAnimation('complete');
-            }
-          }, 300);
-          
-          // 创建完成任务消息
-          messageManager.createTaskMessage(task, 'completed');
-        }
-        
-        return { ...task, status: newStatus };
+    // 新状态是当前状态的反转
+    const newStatus = task.status === 0 ? 1 : 0;
+    
+    // 使用任务管理器更新任务状态
+    taskManager.updateTaskStatus(id, newStatus, updatedTask => {
+      if (updatedTask && newStatus === 1) {
+        // 如果是完成任务，触发庆祝动画
+        setTimeout(() => {
+          const progressBar = this.selectComponent('#progressBar');
+          if (progressBar) {
+            progressBar.playAnimation('complete');
+          }
+        }, 300);
       }
-      return task;
     });
-    
-    this.setData({ tasks });
-    
-    // 更新全局任务数据
-    const app = getApp();
-    app.globalData.tasks = tasks;
-    
-    // 更新统计信息
-    this.updateTaskProgress();
-    
-    // 保存数据
-    this.saveTaskData();
   },
   
-  // 清除搜索过滤器
-  clearFilters: function() {
-    // 应用动画到所有当前选中的筛选器
-    const animation = wx.createAnimation({
-      duration: 200,
-      timingFunction: 'ease-in'
+  // 设置随机的鼓励语
+  setRandomMotivation: function() {
+    const phrases = this.data.motivationalPhrases;
+    const randomIndex = Math.floor(Math.random() * phrases.length);
+    this.setData({
+      currentMotivation: phrases[randomIndex]
+    });
+  },
+  
+  // 跳转到任务编辑页面
+  navigateToTaskEdit: function(e) {
+    const type = e.detail.type || 'study';
+    wx.navigateTo({
+      url: `/pages/task-edit/task-edit?mode=create&taskType=${type}`
+    });
+  },
+  
+  // 跳转到编辑特定任务
+  editTask: function(e) {
+    const taskId = e.detail.taskId;
+    wx.navigateTo({
+      url: `/pages/task-edit/task-edit?mode=edit&taskId=${taskId}`
+    });
+  },
+  
+  // 跳转到任务详情页面
+  viewTaskDetail: function(e) {
+    const taskId = e.currentTarget.dataset.id;
+    wx.navigateTo({
+      url: `/pages/task/task?id=${taskId}`
+    });
+  },
+  
+  // 跳转到消息中心
+  navigateToMessageCenter: function() {
+    wx.navigateTo({
+      url: '/pages/message/message'
     });
     
-    // 更平滑的动画效果
-    animation.scale(0.98).opacity(0.7).step();
-    animation.scale(1.0).opacity(1.0).step();
-    
-    const animationData = animation.export();
-    const currentFilters = this.data.searchFilters;
-    const filterAnimation = {};
-    
-    // 为所有当前选中的筛选器添加动画
-    if (currentFilters.type) {
-      filterAnimation[`filterAnimation.type.${currentFilters.type}`] = animationData;
-    }
-    if (currentFilters.status !== '') {
-      filterAnimation[`filterAnimation.status.${currentFilters.status}`] = animationData;
-    }
-    if (currentFilters.dateRange) {
-      filterAnimation[`filterAnimation.dateRange.${currentFilters.dateRange}`] = animationData;
-    }
-    
-    // 首先应用动画
-    this.setData(filterAnimation);
-    
-    // 轻微振动反馈
-    if (wx.vibrateShort) {
-      wx.vibrateShort({ type: 'light' });
-    }
-    
-    // 稍微延迟后清除过滤器
-    setTimeout(() => {
-      this.setData({
-        searchFilters: {
-          type: '',
-          status: '',
-          dateRange: ''
-        }
-      });
-      
-      // 执行搜索
-      this.performSearch();
-    }, 200);
+    // 关闭消息预览
+    this.toggleMessagePreview();
   },
-
+  
   // 显示/隐藏消息预览
   toggleMessagePreview: function() {
     const currentState = this.data.showMessagePreview;
@@ -851,94 +373,17 @@ Page({
       }, 30);
     }
   },
-
-  // 从本地存储加载消息数据
-  loadMessageData: function() {
-    const messageManager = require('../../utils/messageManager.js');
-    
-    messageManager.getAllMessages(messages => {
-      // 处理消息时间显示
-      const processedMessages = messages.map(msg => {
-        return {
-          ...msg,
-          timeDisplay: messageManager.formatMessageTime(msg.timestamp)
-        };
-      });
-      
-      // 计算未读消息数量
-      const unreadCount = processedMessages.filter(msg => !msg.isRead).length;
-      
-      this.setData({ 
-        messages: processedMessages,
-        unreadCount
-      });
-    });
-  },
-  
-  // 设置默认示例消息
-  setDefaultMessages: function() {
-    const messageManager = require('../../utils/messageManager.js');
-    const defaultMessages = messageManager.getDefaultMessages();
-    
-    this.setData({
-      messages: defaultMessages.map(msg => ({
-        ...msg,
-        timeDisplay: messageManager.formatMessageTime(msg.timestamp)
-      })),
-      unreadCount: defaultMessages.filter(msg => !msg.isRead).length
-    });
-  },
-  
-  // 格式化消息时间显示
-  formatMessageTime: function(timestamp) {
-    const now = new Date();
-    const msgDate = new Date(timestamp);
-    const diffMinutes = Math.floor((now - msgDate) / (60 * 1000));
-    
-    if (diffMinutes < 1) {
-      return '刚刚';
-    } else if (diffMinutes < 60) {
-      return `${diffMinutes}分钟前`;
-    } else if (diffMinutes < 24 * 60) {
-      const hours = Math.floor(diffMinutes / 60);
-      return `${hours}小时前`;
-    } else if (diffMinutes < 30 * 24 * 60) {
-      const days = Math.floor(diffMinutes / (24 * 60));
-      return `${days}天前`;
-    } else {
-      const year = msgDate.getFullYear();
-      const month = (msgDate.getMonth() + 1).toString().padStart(2, '0');
-      const day = msgDate.getDate().toString().padStart(2, '0');
-      return `${year}-${month}-${day}`;
-    }
-  },
   
   // 查看消息详情
   viewMessageDetail: function(e) {
     const messageId = e.currentTarget.dataset.id;
-    const messages = this.data.messages;
-    const messageIndex = messages.findIndex(m => m.id === messageId);
+    const message = this.data.messages.find(m => m.id === messageId);
     
-    if (messageIndex > -1) {
+    if (message) {
       // 标记该消息为已读
-      if (!messages[messageIndex].isRead) {
-        messages[messageIndex].isRead = true;
-        const unreadCount = this.data.unreadCount - 1;
-        
-        this.setData({
-          messages,
-          unreadCount
-        });
-        
-        // 更新本地存储
-        wx.setStorage({
-          key: 'messageData',
-          data: messages
-        });
-      }
+      messageManager.markAsRead(messageId);
       
       // 根据消息类型处理不同的导航逻辑
-      const message = messages[messageIndex];
       switch (message.type) {
         case 'task':
           // 如果有关联任务ID，导航到该任务详情
@@ -967,127 +412,15 @@ Page({
   
   // 标记所有消息为已读
   markAllAsRead: function() {
-    const messages = this.data.messages.map(msg => ({
-      ...msg,
-      isRead: true
-    }));
-    
-    this.setData({
-      messages,
-      unreadCount: 0
-    });
-    
-    // 更新本地存储
-    wx.setStorage({
-      key: 'messageData',
-      data: messages,
-      success: () => {
-        wx.showToast({
-          title: '全部已读',
-          icon: 'success',
-          duration: 1500
-        });
-      }
+    messageManager.markAllAsRead(() => {
+      wx.showToast({
+        title: '全部已读',
+        icon: 'success',
+        duration: 1500
+      });
     });
   },
   
-  // 导航到消息中心完整页面
-  navigateToMessageCenter: function() {
-    // 关闭消息预览
-    this.toggleMessagePreview();
-    
-    // 导航到消息中心页面
-    // 注意：这个页面目前还不存在，需要创建
-    wx.navigateTo({
-      url: '/pages/message/message'
-    });
-  },
-
-  // 处理菜单项点击
-  handleMenuItemTap: function(e) {
-    const item = e.detail.item;
-    
-    // 根据菜单项ID执行不同的操作
-    switch(item.id) {
-      case 'study':
-        this.createStudyTask();
-        break;
-      case 'habit':
-        this.createHabitTask();
-        break;
-      default:
-        console.log('未知菜单项:', item.id);
-    }
-  },
-  
-  // 处理菜单状态变化
-  handleMenuStateChange: function(e) {
-    this.setData({
-      showFloatMenu: e.detail.isOpen
-    });
-  },
-
-  // 计算任务进度
-  calculateTaskProgress: function() {
-    const tasks = this.data.tasks;
-    const completedTasks = tasks.filter(task => task.status === 1);
-    const totalTasks = tasks.length; // 今日任务总数
-    
-    // 计算各类型任务的完成百分比
-    const calculateProgress = (type) => {
-      const typeTasks = tasks.filter(task => task.type === type);
-      if (typeTasks.length === 0) return 0;
-      
-      const typeCompleted = typeTasks.filter(task => task.status === 1).length;
-      return Math.round((typeCompleted / typeTasks.length) * 100);
-    };
-    
-    // 计算各类型任务数量
-    const countTasksByType = {
-      clock: tasks.filter(task => task.type === 'clock').length,
-      bag: tasks.filter(task => task.type === 'bag').length,
-      study: tasks.filter(task => task.type === 'study').length
-    };
-    
-    // 更新进度圆环数据
-    this.setData({
-      'taskProgress.clock': calculateProgress('clock'),
-      'taskProgress.bag': calculateProgress('bag'),
-      'taskProgress.study': calculateProgress('study'),
-      'stats.completedTasks': completedTasks.length,
-      'stats.totalTasks': totalTasks,
-      'stats.completionRate': totalTasks > 0 ? Math.round((completedTasks.length / totalTasks) * 100) : 0,
-      'rewardProgress.current': completedTasks.length,
-      'rewardProgress.total': totalTasks,
-      'stats.typeCounts': countTasksByType
-    });
-  },
-
-  updateDailyTasks: function(date) {
-    // 获取所有任务
-    const allTasks = app.globalData.tasks || [];
-    
-    // 筛选出选定日期的任务
-    const selectedDate = date || this.data.selectedDate || formatDate(new Date());
-    const todayTasks = allTasks.filter(task => task.date === selectedDate);
-    
-    // 按开始时间排序
-    todayTasks.sort((a, b) => {
-      if (a.startTime && b.startTime) {
-        return a.startTime.localeCompare(b.startTime);
-      }
-      return 0;
-    });
-    
-    this.setData({
-      tasks: todayTasks,
-      selectedDate: selectedDate
-    });
-    
-    // 计算任务进度
-    this.calculateTaskProgress();
-  },
-
   // 点击即将到期任务
   onUpcomingTaskTap: function(e) {
     const taskId = e && e.detail ? e.detail.taskId : this.data.upcomingTask.id;
@@ -1097,8 +430,8 @@ Page({
       });
     }
   },
-
-  // 处理选项点击
+  
+  // 处理即将到期任务选项点击
   handleUpcomingOption: function(e) {
     const action = e.detail.action;
     
@@ -1129,7 +462,7 @@ Page({
           
         case 'dismiss':
           // 不再提醒
-          // dismissUpcomingTask已由组件触发，无需额外处理
+          this.dismissUpcomingTask();
           
           // 显示一个友好的确认反馈
           wx.showToast({
@@ -1144,152 +477,193 @@ Page({
   
   // 消除即将到期任务提醒
   dismissUpcomingTask: function(e) {
-    this.setData({
-      showUpcomingTask: false
-    });
+    const taskId = this.data.upcomingTask.id;
     
-    // 保存隐藏状态到本地存储
-    wx.setStorage({
-      key: 'upcomingTaskHidden',
-      data: {
-        isHidden: true,
-        taskId: this.data.upcomingTask.id,
-        timestamp: Date.now()
-      }
+    // 使用消息管理器处理隐藏逻辑
+    messageManager.dismissUpcomingTask(taskId, success => {
+      this.setData({
+        showUpcomingTask: false
+      });
     });
   },
   
   // 标记即将到期任务的消息为已读
   markUpcomingMessageAsRead: function() {
-    if (!this.data.upcomingTask || !this.data.upcomingTask.id) return;
+    const taskId = this.data.upcomingTask.id;
+    if (!taskId) return;
     
-    // 获取所有消息
-    wx.getStorage({
-      key: 'messageData',
-      success: (res) => {
-        if (!res.data) return;
+    // 使用消息管理器标记任务相关消息为已读
+    messageManager.markTaskMessagesAsRead(taskId, success => {
+      if (success) {
+        wx.showToast({
+          title: '已标记为已读',
+          icon: 'success',
+          duration: 1500
+        });
         
-        // 查找对应任务ID的消息
-        const messages = res.data;
-        const taskId = this.data.upcomingTask.id;
-        let updated = false;
-        
-        for (let i = 0; i < messages.length; i++) {
-          if (messages[i].type === 'task' && 
-              messages[i].taskId === taskId && 
-              !messages[i].isRead) {
-            messages[i].isRead = true;
-            updated = true;
-          }
-        }
-        
-        // 如果有更新，保存回存储
-        if (updated) {
-          wx.setStorage({
-            key: 'messageData',
-            data: messages,
-            success: () => {
-              wx.showToast({
-                title: '已标记为已读',
-                icon: 'success',
-                duration: 1500
-              });
-              
-              // 更新本地消息数据
-              this.loadMessageData();
-            }
-          });
-        }
+        // 刷新未读消息数量
+        this.loadMessageData();
       }
     });
   },
-
-  // 检查即将到期任务
-  checkUpcomingTasks: function() {
-    const now = new Date();
-    const allTasks = this.data.tasks || [];
-    const upcomingTasks = [];
-    const messageManager = require('../../utils/messageManager.js');
+  
+  // 浮动菜单相关
+  onMenuTap: function() {
+    this.setData({
+      showFloatMenu: !this.data.showFloatMenu
+    });
+  },
+  
+  onMenuItemTap: function(e) {
+    const item = e.detail.item;
     
-    // 筛选未完成且有截止时间的任务
-    allTasks.forEach(task => {
-      if (task.status === 0 && task.date) {
-        // 确保任务有开始时间，没有则使用默认值
-        const startTime = task.startTime || '08:00';
-        
-        try {
-          // 创建任务日期时间对象
-          const taskTime = new Date(`${task.date}T${startTime}`);
-          
-          // 计算时间差（小时）
-          const diffHours = (taskTime - now) / (1000 * 60 * 60);
-          
-          // 只考虑未来24小时内的任务
-          if (diffHours > 0 && diffHours < 24) {
-            upcomingTasks.push({
-              ...task,
-              timeRemaining: Math.round(diffHours * 10) / 10 // 保留一位小数
-            });
-          }
-        } catch (error) {
-          console.error('解析任务日期时间出错:', error, task);
-        }
+    // 隐藏菜单
+    this.setData({
+      showFloatMenu: false
+    });
+    
+    // 根据选项处理
+    if (item && item.type) {
+      this.navigateToTaskEdit({ detail: { type: item.id } });
+    }
+  },
+  
+  // 触发进度圆环点击
+  onRingTap: function(e) {
+    // 切换显示统计信息
+    this.toggleStats();
+  },
+  
+  // 显示/隐藏统计信息
+  toggleStats: function() {
+    if (this.data.showStats) {
+      this.setData({ statsClosing: true });
+      
+      // 动画结束后隐藏
+      setTimeout(() => {
+        this.setData({
+          showStats: false,
+          statsClosing: false
+        });
+      }, 300);
+      
+    } else {
+      this.setData({
+        showStats: true,
+        showSearch: false, // 确保搜索面板关闭
+        showMessagePreview: false // 确保消息预览关闭
+      });
+    }
+  },
+  
+  // 显示/隐藏搜索面板
+  toggleSearch: function() {
+    if (this.data.showSearch) {
+      this.setData({ searchClosing: true });
+      
+      // 动画结束后隐藏
+      setTimeout(() => {
+        this.setData({
+          showSearch: false,
+          searchClosing: false
+        });
+      }, 300);
+      
+    } else {
+      this.setData({
+        showSearch: true,
+        showStats: false, // 确保统计面板关闭
+        showMessagePreview: false // 确保消息预览关闭
+      });
+    }
+  },
+  
+  // 更新搜索输入
+  updateSearchQuery: function(e) {
+    this.setData({
+      searchQuery: e.detail.value
+    });
+  },
+  
+  // 执行搜索
+  performSearch: function() {
+    const query = this.data.searchQuery.toLowerCase().trim();
+    const filters = this.data.searchFilters;
+    
+    // 从全局获取所有任务
+    taskManager.getAllTasks(allTasks => {
+      // 基于关键词搜索
+      let results = [];
+      
+      if (query) {
+        results = allTasks.filter(task => 
+          task.title.toLowerCase().includes(query) || 
+          (task.description && task.description.toLowerCase().includes(query))
+        );
+      } else {
+        // 如果没有查询词但有过滤条件，则搜索所有任务
+        results = [...allTasks];
+      }
+      
+      // 应用类型过滤
+      if (filters.type) {
+        results = results.filter(task => task.type === filters.type);
+      }
+      
+      // 应用状态过滤
+      if (filters.status !== '') {
+        const statusValue = parseInt(filters.status);
+        results = results.filter(task => task.status === statusValue);
+      }
+      
+      // 应用日期范围过滤
+      if (filters.dateRange) {
+        // 处理日期范围过滤逻辑...
+      }
+      
+      // 显示结果
+      this.setData({
+        searchResults: results
+      });
+    });
+  },
+  
+  // 更新搜索过滤器
+  updateSearchFilter: function(e) {
+    const { type, value } = e.currentTarget.dataset;
+    
+    this.setData({
+      [`searchFilters.${type}`]: value
+    });
+    
+    // 实时更新搜索结果
+    this.performSearch();
+  },
+  
+  // 清除搜索过滤器
+  clearSearchFilters: function() {
+    this.setData({
+      searchFilters: {
+        type: '',
+        status: '',
+        dateRange: ''
       }
     });
     
-    // 按剩余时间排序
-    upcomingTasks.sort((a, b) => a.timeRemaining - b.timeRemaining);
-    
-    // 获取隐藏状态
-    try {
-      const hiddenStateStr = wx.getStorageSync('upcomingTaskHidden');
-      const hiddenState = hiddenStateStr ? JSON.parse(hiddenStateStr) : {};
-      const shouldShow = !hiddenState.isHidden || 
-                       (hiddenState.timestamp && (now - hiddenState.timestamp > 3600000)); // 1小时后重新显示
-      
-      // 检查是否应该显示提醒
-      const isNewTask = !hiddenState.taskId || hiddenState.taskId !== (upcomingTasks[0] || {}).id;
-      
-      // 更新首页显示
-      if (upcomingTasks.length > 0 && (shouldShow || isNewTask)) {
-        this.setData({
-          upcomingTask: {
-            id: upcomingTasks[0].id,
-            name: upcomingTasks[0].title || upcomingTasks[0].name,
-            timeRemaining: upcomingTasks[0].timeRemaining,
-            isDismissible: true
-          },
-          showUpcomingTask: true
-        });
-        
-        // 使用消息管理器创建通知
-        upcomingTasks.forEach(task => {
-          messageManager.createTaskMessage(task, 'upcoming');
-        });
-      } else {
-        this.setData({
-          showUpcomingTask: false
-        });
-      }
-    } catch (error) {
-      console.error('读取隐藏状态失败:', error);
-      // 如果读取失败，默认显示
-      if (upcomingTasks.length > 0) {
-        this.setData({
-          upcomingTask: {
-            id: upcomingTasks[0].id,
-            name: upcomingTasks[0].title || upcomingTasks[0].name,
-            timeRemaining: upcomingTasks[0].timeRemaining,
-            isDismissible: true
-          },
-          showUpcomingTask: true
-        });
-        
-        // 创建通知
-        upcomingTasks.forEach(task => {
-          messageManager.createTaskMessage(task, 'upcoming');
-        });
-      }
-    }
+    // 实时更新搜索结果
+    this.performSearch();
+  },
+
+  // 处理菜单项点击事件
+  handleMenuItemTap: function(e) {
+    // 内部调用我们现有的onMenuItemTap
+    this.onMenuItemTap(e);
+  },
+
+  // 处理菜单状态变化事件
+  handleMenuStateChange: function(e) {
+    this.setData({
+      showFloatMenu: e.detail.isOpen
+    });
   }
 }) 
