@@ -14,22 +14,28 @@ const taskManager = {
       key: 'taskData',
       success: (res) => {
         if (res.data && res.data.length > 0) {
-          // 确保每个任务都有duration属性
+          // 确保每个学习类任务都有开始时间和结束时间
           const allTasks = res.data.map(task => {
-            if (!task.hasOwnProperty('duration')) {
-              // 根据任务类型设置默认持续时间
-              switch(task.type) {
-                case 'clock': 
-                  task.duration = 10; // 生活习惯类默认10分钟
-                  break;
-                case 'bag':
-                  task.duration = 20; // 整理收纳类默认20分钟
-                  break;
-                case 'study':
-                  task.duration = 60; // 学习任务默认60分钟
-                  break;
-                default:
-                  task.duration = 30; // 其他类型默认30分钟
+            if (task.type === 'study') {
+              // 如果没有开始时间，设置默认值
+              if (!task.startTime) {
+                task.startTime = '08:00';
+              }
+              // 如果没有结束时间，根据开始时间和持续时间计算
+              if (!task.endTime && task.duration) {
+                const [hours, minutes] = task.startTime.split(':').map(Number);
+                let endMinutes = minutes + task.duration;
+                let endHours = hours + Math.floor(endMinutes / 60);
+                endMinutes = endMinutes % 60;
+                task.endTime = `${endHours.toString().padStart(2, '0')}:${endMinutes.toString().padStart(2, '0')}`;
+              }
+              // 计算持续时间
+              if (task.startTime && task.endTime) {
+                const [startHours, startMinutes] = task.startTime.split(':').map(Number);
+                const [endHours, endMinutes] = task.endTime.split(':').map(Number);
+                const startTotalMinutes = startHours * 60 + startMinutes;
+                const endTotalMinutes = endHours * 60 + endMinutes;
+                task.duration = endTotalMinutes - startTotalMinutes;
               }
             }
             return task;
@@ -62,6 +68,9 @@ const taskManager = {
       const today = new Date();
       const todayStr = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}-${today.getDate().toString().padStart(2, '0')}`;
       
+      console.log('Today date:', todayStr);
+      console.log('All tasks:', allTasks);
+      
       // 筛选今天的任务
       const todayTasks = allTasks.filter(task => {
         // 确保日期格式一致性
@@ -70,6 +79,8 @@ const taskManager = {
         // 如果任务的日期等于今天的日期，则包括该任务
         return task.date === todayStr;
       });
+      
+      console.log('Filtered tasks:', todayTasks);
       
       callback(todayTasks);
     });
@@ -277,7 +288,6 @@ const taskManager = {
       const emptyStats = {
         taskProgress: {
           clock: 0,
-          bag: 0,
           study: 0
         },
         rewardProgress: {
@@ -291,7 +301,6 @@ const taskManager = {
           streak: 0,
           typeCounts: {
             clock: 0,
-            bag: 0,
             study: 0
           }
         }
@@ -303,8 +312,8 @@ const taskManager = {
     
     // 按类型统计任务
     const typeCounts = {
-      total: { clock: 0, bag: 0, study: 0 },
-      completed: { clock: 0, bag: 0, study: 0 }
+      total: { clock: 0, study: 0 },
+      completed: { clock: 0, study: 0 }
     };
     
     tasks.forEach(task => {
@@ -321,9 +330,6 @@ const taskManager = {
     const progress = {
       clock: typeCounts.total.clock > 0 
         ? Math.round(typeCounts.completed.clock / typeCounts.total.clock * 100) 
-        : 0,
-      bag: typeCounts.total.bag > 0 
-        ? Math.round(typeCounts.completed.bag / typeCounts.total.bag * 100) 
         : 0,
       study: typeCounts.total.study > 0 
         ? Math.round(typeCounts.completed.study / typeCounts.total.study * 100) 
@@ -349,7 +355,6 @@ const taskManager = {
         streak: 0, // 需要另外计算连续完成天数
         typeCounts: {
           clock: typeCounts.total.clock,
-          bag: typeCounts.total.bag,
           study: typeCounts.total.study
         }
       }

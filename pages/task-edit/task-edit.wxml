@@ -197,21 +197,7 @@
               <view class="template-name">自定义</view>
             </view>
           </view>
-          
-          <!-- 整理收纳分类 -->
-          <view class="template-category">整理收纳</view>
-          <view class="task-template-grid">
-            <block wx:for="{{cleaningTemplates}}" wx:key="id" wx:if="{{index < 7}}">
-              <view class="task-template bag {{selectedTemplate === item.id ? 'active' : ''}}" 
-                    bindtap="selectTemplate" data-id="{{item.id}}" data-type="bag">
-                <view class="template-name">{{item.shortName || item.name}}</view>
-              </view>
-            </block>
-            <!-- 自定义整理收纳任务按钮 -->
-            <view class="task-template custom bag" bindtap="selectCustomTask" data-type="bag">
-              <view class="template-name">自定义</view>
-            </view>
-          </view>
+
         </block>
       </view>
       
@@ -311,12 +297,21 @@
             ></date-picker>
           </view>
           
-          <!-- 学习任务才显示执行时间 -->
+          <!-- 学习任务才显示开始时间和结束时间 -->
           <view class="form-item" wx:if="{{taskType === 'study'}}">
-            <view class="item-label">执行时间</view>
-            <picker mode="time" value="{{task.time}}" start="{{timeNow}}" bindchange="selectTime">
-              <view class="picker {{task.time ? '' : 'placeholder'}}">
-                {{task.time || '请选择执行时间'}}
+            <view class="item-label">开始时间</view>
+            <picker mode="time" value="{{task.startTime}}" bindchange="selectStartTime">
+              <view class="picker {{task.startTime ? '' : 'placeholder'}}">
+                {{task.startTime || '请选择开始时间'}}
+              </view>
+            </picker>
+          </view>
+          
+          <view class="form-item" wx:if="{{taskType === 'study'}}">
+            <view class="item-label">结束时间</view>
+            <picker mode="time" value="{{task.endTime}}" bindchange="selectEndTime">
+              <view class="picker {{task.endTime ? '' : 'placeholder'}}">
+                {{task.endTime || '请选择结束时间'}}
               </view>
             </picker>
           </view>

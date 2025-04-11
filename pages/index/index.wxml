@@ -101,7 +101,7 @@
           size="large"
           bind:tap="onRingTap">
         </progress-ring>
-        <text class="ring-item-label">整理</text>
+        <text class="ring-item-label">兴趣</text>
       </view>
     </view>
   </view>
@@ -131,12 +131,6 @@
                 animation="{{filterAnimation.type.clock}}">
             <text class="filter-icon">⏰</text>
             <text>生活习惯</text>
-          </view>
-          <view class="filter-option {{searchFilters.type === 'bag' ? 'active' : ''}}" 
-                data-type="type" data-value="bag" bindtap="selectFilter"
-                animation="{{filterAnimation.type.bag}}">
-            <text class="filter-icon">📚</text>
-            <text>整理收纳</text>
           </view>
           <view class="filter-option {{searchFilters.type === 'study' ? 'active' : ''}}" 
                 data-type="type" data-value="study" bindtap="selectFilter"
@@ -268,14 +262,6 @@
             <view class="chart-bar-container">
               <view class="chart-bar clock" style="width: {{stats.typeCounts.clock / stats.totalTasks * 100}}%">
                 <text wx:if="{{stats.typeCounts.clock > 0}}">{{stats.typeCounts.clock}}</text>
-              </view>
-            </view>
-          </view>
-          <view class="chart-bar-group">
-            <view class="chart-label">整理收纳</view>
-            <view class="chart-bar-container">
-              <view class="chart-bar bag" style="width: {{stats.typeCounts.bag / stats.totalTasks * 100}}%">
-                <text wx:if="{{stats.typeCounts.bag > 0}}">{{stats.typeCounts.bag}}</text>
               </view>
             </view>
           </view>

@@ -1,3 +1,6 @@
+const app = getApp();
+const taskManager = require('../../utils/taskManager.js');
+
 Page({
   /**
    * 页面的初始数据
@@ -15,7 +18,8 @@ Page({
       taskType: '', // 主任务类型(study/habit)
       tags: [], // 标签ID数组
       date: '', // 执行日期
-      time: '', // 执行时间(仅学习型)
+      startTime: '', // 开始时间(仅学习型)
+      endTime: '', // 结束时间(仅学习型)
       points: 0, // 积分
       repeat: {
         type: 'none', // 重复类型
@@ -29,7 +33,6 @@ Page({
     taskTemplates: [], // 任务模板列表
     studyTemplates: [], // 学习任务模板
     habitTemplates: [], // 生活习惯模板
-    cleaningTemplates: [], // 整理收纳模板
     selectedTemplate: '', // 已选任务模板
     selectedTemplateType: '', // 选择的模板类型
     customMode: true, // 是否为自定义模式
@@ -58,7 +61,6 @@ Page({
     showTagSelector: false, // 是否显示标签选择器
     taskTypes: [
       { id: 'clock', name: '生活习惯', icon: '⏰', parent: 'habit' },
-      { id: 'bag', name: '整理收纳', icon: '📚', parent: 'habit' },
       { id: 'study', name: '学习任务', icon: '📝', parent: 'study' }
     ],
     availableRewards: [
@@ -179,16 +181,15 @@ Page({
     
     // 根据任务类型设置默认值
     let defaultPoints = taskType === 'study' ? 3 : 2;
-    let defaultType = taskType === 'study' ? 'study' : 'clock';
     
     this.setData({
       mode: 'create',
       taskType: taskType,
       precision: precision,
       customMode: true,
-      // 根据任务类型设置默认值
+      // 确保任务类型正确设置
+      'task.type': taskType === 'study' ? 'study' : 'clock',
       'task.taskType': taskType,
-      'task.type': defaultType,
       'task.points': defaultPoints,
       'task.precision': precision
     });
@@ -335,9 +336,17 @@ Page({
     }
     
     // 对于学习型任务，验证时间
-    if (this.data.taskType === 'study' && !task.time) {
+    if (this.data.taskType === 'study' && !task.startTime) {
       wx.showToast({
-        title: '请选择执行时间',
+        title: '请选择开始时间',
+        icon: 'none'
+      });
+      return false;
+    }
+    
+    if (this.data.taskType === 'study' && !task.endTime) {
+      wx.showToast({
+        title: '请选择结束时间',
         icon: 'none'
       });
       return false;
@@ -393,12 +402,52 @@ Page({
   },
 
   /**
-   * 选择时间
+   * 选择开始时间
    */
-  selectTime: function(e) {
+  selectStartTime: function(e) {
+    const startTime = e.detail.value;
     this.setData({
-      'task.time': e.detail.value
+      'task.startTime': startTime
     });
+    // 如果结束时间已设置，重新计算持续时间
+    if (this.data.task.endTime) {
+      this.calculateDuration();
+    }
+  },
+
+  /**
+   * 选择结束时间
+   */
+  selectEndTime: function(e) {
+    const endTime = e.detail.value;
+    this.setData({
+      'task.endTime': endTime
+    });
+    // 如果开始时间已设置，重新计算持续时间
+    if (this.data.task.startTime) {
+      this.calculateDuration();
+    }
+  },
+
+  /**
+   * 计算任务持续时间
+   */
+  calculateDuration: function() {
+    const task = this.data.task;
+    if (task.startTime && task.endTime) {
+      const [startHours, startMinutes] = task.startTime.split(':').map(Number);
+      const [endHours, endMinutes] = task.endTime.split(':').map(Number);
+      
+      const startTotalMinutes = startHours * 60 + startMinutes;
+      const endTotalMinutes = endHours * 60 + endMinutes;
+      
+      const duration = endTotalMinutes - startTotalMinutes;
+      if (duration > 0) {
+        this.setData({
+          'task.duration': duration
+        });
+      }
+    }
   },
 
   /**
@@ -479,7 +528,8 @@ Page({
     
     if (timeStr) {
       this.setData({
-        'task.time': timeStr
+        'task.startTime': timeStr.split(':')[0],
+        'task.endTime': timeStr.split(':')[1]
       });
     }
   },
@@ -690,119 +740,42 @@ Page({
    * 更新任务负载预测
    */
   updateTaskLoadPreview: function() {
-    const app = getApp();
-    const { task, taskType } = this.data;
+    const taskManager = require('../../utils/taskManager.js');
+    const that = this;
     
-    // 获取现有任务
-    wx.getStorage({
-      key: 'taskData',
-      success: res => {
-        const tasks = res.data || [];
-        
-        // 计算当前任务量
-        let totalTasks = tasks.filter(t => {
-          // 只统计选定日期的任务
-          if (!task.date) return false;
-          
-          const taskDate = new Date(t.date);
-          const selectedDate = new Date(task.date);
-          return taskDate.toDateString() === selectedDate.toDateString() && t.status === 0;
-        }).length;
-        
-        // 计算总时长
-        let totalMinutes = tasks.reduce((sum, t) => {
-          if (!task.date) return sum;
-          
-          const taskDate = new Date(t.date);
-          const selectedDate = new Date(task.date);
-          if (taskDate.toDateString() === selectedDate.toDateString() && t.status === 0) {
-            return sum + (t.duration || 0);
-          }
-          return sum;
-        }, 0);
-        
-        // 加上当前编辑的任务
-        if (task.date) {
-          // 编辑模式下，不重复计算
-          if (this.data.mode === 'create') {
-            totalTasks += 1;
-            totalMinutes += task.duration || 0;
-          } else {
-            // 编辑模式下，检查是否是同一天的任务
-            const existingTask = tasks.find(t => t.id === task.id);
-            if (existingTask) {
-              const oldTaskDate = new Date(existingTask.date);
-              const newTaskDate = new Date(task.date);
-              
-              // 如果日期变了，需要重新计算
-              if (oldTaskDate.toDateString() !== newTaskDate.toDateString()) {
-                totalTasks += 1;
-                totalMinutes += task.duration || 0;
-              } else {
-                // 如果只是修改了时长，计算差值
-                totalMinutes = totalMinutes - (existingTask.duration || 0) + (task.duration || 0);
-              }
-            }
-          }
+    taskManager.getTodayTasks(todayTasks => {
+      let totalMinutes = 0;
+      
+      // 只计算学习类任务的持续时间
+      todayTasks.forEach(task => {
+        if (task.type === 'study' && task.duration) {
+          totalMinutes += task.duration;
         }
-        
-        // 分析负载状态
-        let status = 'normal';
-        let message = '任务量适中';
-        
-        // 根据小朋友年龄段计算推荐负载上限
-        // 这里使用简单逻辑，实际应该从用户配置获取
-        const ageGroup = app?.globalData?.ageGroup || '6-8';
-        let recommendedLimit = 90; // 默认90分钟
-        
-        switch (ageGroup) {
-          case '3-5':
-            recommendedLimit = 60; // 3-5岁 最多1小时
-            break;
-          case '6-8':
-            recommendedLimit = 90; // 6-8岁 最多1.5小时
-            break;
-          case '9-12':
-            recommendedLimit = 120; // 9-12岁 最多2小时
-            break;
-        }
-        
-        // 计算负载百分比
-        const percentage = Math.min(Math.round((totalMinutes / recommendedLimit) * 100), 100);
-        
-        if (totalMinutes < recommendedLimit * 0.7) {
-          status = 'light';
-          message = '任务量较轻松';
-        } else if (totalMinutes <= recommendedLimit * 1.2) {
-          status = 'normal';
-          message = '任务量适中';
-        } else {
-          status = 'heavy';
-          message = '任务量偏多';
-        }
-        
-        this.setData({
-          taskLoad: {
-            status: status,
-            totalTasks: totalTasks,
-            totalMinutes: totalMinutes,
-            percentage: percentage,
-            message: message
-          }
-        });
-      },
-      fail: () => {
-        // 如果没有任务数据，只计算当前任务
-        this.setData({
-          taskLoad: {
-            status: 'light',
-            totalTasks: 1,
-            totalMinutes: task.duration || 0,
-            percentage: 10,
-            message: '任务量轻松'
-          }
-        });
+      });
+      
+      // 计算当前任务的持续时间（如果是学习类任务）
+      if (that.data.task.type === 'study' && that.data.task.duration) {
+        totalMinutes += that.data.task.duration;
       }
+      
+      // 计算任务负载状态
+      let status = 'light';
+      let message = '任务量适中';
+      
+      if (totalMinutes > 240) {
+        status = 'heavy';
+        message = '任务量较重';
+      } else if (totalMinutes < 60) {
+        status = 'light';
+        message = '任务量较轻';
+      }
+      
+      that.setData({
+        'taskLoad.totalMinutes': totalMinutes,
+        'taskLoad.status': status,
+        'taskLoad.message': message,
+        'taskLoad.percentage': Math.min(Math.floor((totalMinutes / 240) * 100), 100)
+      });
     });
   },
 
@@ -810,243 +783,65 @@ Page({
    * 保存任务
    */
   saveTask: function() {
-    console.log('保存任务按钮点击');
-    // 验证必填信息
-    if (!this.validateTaskData()) {
-      console.log('数据验证失败');
+    const that = this;
+    const taskData = { ...this.data.task };
+    
+    // 验证必填字段
+    if (!taskData.title) {
+      wx.showToast({
+        title: '请输入任务名称',
+        icon: 'none'
+      });
       return;
     }
     
-    try {
-      // 准备任务数据
-      const taskData = this.prepareTaskData();
-      console.log('准备任务数据', taskData);
-      
-      // 保存到存储
-      this.saveTaskToStorage(taskData);
-    } catch(error) {
-      console.error('保存任务失败:', error);
-      wx.showToast({
-        title: '保存失败，请重试',
-        icon: 'none'
+    // 设置正确的日期格式
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
+    taskData.date = todayStr;
+    
+    // 如果是学习类任务，验证时间
+    if (taskData.type === 'study') {
+      if (!taskData.startTime || !taskData.endTime) {
+        wx.showToast({
+          title: '请选择开始时间和结束时间',
+          icon: 'none'
+        });
+        return;
+      }
+      // 计算持续时间
+      this.calculateDuration();
+    }
+    
+    // 如果是习惯类任务，移除时间相关属性
+    if (taskData.type === 'clock') {
+      delete taskData.startTime;
+      delete taskData.endTime;
+      delete taskData.duration;
+    }
+    
+    // 保存任务
+    if (that.data.mode === 'create') {
+      taskManager.createTask(taskData, () => {
+        wx.showToast({
+          title: '创建成功',
+          icon: 'success'
+        });
+        setTimeout(() => {
+          wx.navigateBack();
+        }, 1500);
+      });
+    } else {
+      taskManager.editTask(taskData.id, taskData, () => {
+        wx.showToast({
+          title: '保存成功',
+          icon: 'success'
+        });
+        setTimeout(() => {
+          wx.navigateBack();
+        }, 1500);
       });
     }
-  },
-
-  /**
-   * 保存任务到存储
-   */
-  saveTaskToStorage: function(taskData) {
-    const messageManager = require('../../utils/messageManager.js');
-    
-    // 获取现有任务
-    wx.getStorage({
-      key: 'taskData',
-      success: (res) => {
-        let tasks = res.data || [];
-        
-        // 编辑模式下查找并更新任务
-        if (this.data.mode === 'edit') {
-          const index = tasks.findIndex(t => t.id === taskData.id);
-          if (index > -1) {
-            tasks[index] = taskData;
-            
-            // 更新相关消息
-            messageManager.updateTaskMessages(taskData);
-            
-            // 可能需要创建一个编辑提醒消息
-            messageManager.createTaskMessage(taskData, 'edited');
-          } else {
-            tasks.push(taskData);
-            // 创建新任务消息
-            messageManager.createTaskMessage(taskData, 'new');
-          }
-        } 
-        // 创建模式下直接添加
-        else {
-          tasks.push(taskData);
-          // 创建新任务消息
-          messageManager.createTaskMessage(taskData, 'new');
-        }
-        
-        // 保存任务
-        wx.setStorage({
-          key: 'taskData',
-          data: tasks,
-          success: () => {
-            wx.showToast({
-              title: this.data.mode === 'edit' ? '任务已更新' : '任务已创建',
-              icon: 'success'
-            });
-            
-            // 更新App全局数据
-            const app = getApp();
-            if (app.globalData) {
-              app.globalData.tasks = tasks;
-            }
-            
-            // 延迟返回上一页
-            setTimeout(() => {
-              wx.navigateBack();
-            }, 1500);
-          },
-          fail: () => {
-            wx.showToast({
-              title: '保存失败，请重试',
-              icon: 'none'
-            });
-          }
-        });
-      },
-      fail: () => {
-        // 没有现有任务，创建新数组
-        wx.setStorage({
-          key: 'taskData',
-          data: [taskData],
-          success: () => {
-            wx.showToast({
-              title: '任务已创建',
-              icon: 'success'
-            });
-            
-            // 创建新任务消息
-            messageManager.createTaskMessage(taskData, 'new');
-            
-            // 更新App全局数据
-            const app = getApp();
-            if (app.globalData) {
-              app.globalData.tasks = [taskData];
-            }
-            
-            // 延迟返回上一页
-            setTimeout(() => {
-              wx.navigateBack();
-            }, 1500);
-          },
-          fail: () => {
-            wx.showToast({
-              title: '保存失败，请重试',
-              icon: 'none'
-            });
-          }
-        });
-      }
-    });
-  },
-
-  /**
-   * 准备任务数据
-   */
-  prepareTaskData: function() {
-    const { task, mode, taskType, difficultyOptions, difficultyIndex } = this.data;
-    
-    // 准备基础任务数据
-    const now = Date.now();
-    
-    // 确保日期格式正确 YYYY-MM-DD
-    let formattedDate = task.date;
-    if (formattedDate) {
-      const dateParts = formattedDate.split('-');
-      if (dateParts.length === 3) {
-        formattedDate = `${dateParts[0]}-${dateParts[1].padStart(2, '0')}-${dateParts[2].padStart(2, '0')}`;
-        console.log('格式化后的日期:', formattedDate);
-      }
-    }
-    
-    const taskData = {
-      id: task.id || 'task_' + now,
-      title: task.title.trim(),
-      shortName: task.shortName || task.title.substring(0, 4),
-      description: task.description || '',
-      type: task.type || (taskType === 'study' ? 'study' : 'clock'),
-      taskType: taskType || 'study',
-      tags: task.tags || [],
-      date: formattedDate, // 使用格式化后的日期
-      // 根据任务类型和时间设置开始时间和结束时间
-      startTime: task.time || '',
-      // 计算结束时间，基于开始时间和持续时间
-      endTime: task.time ? this.calculateEndTime(task.time, task.duration || 30) : '',
-      // 使用任务模板中的持续时间或默认值
-      duration: task.duration || 30,
-      status: task.status || 0,
-      points: task.points || 1,
-      difficulty: difficultyOptions[difficultyIndex] || '普通',
-      images: task.images || [],
-      createTime: task.createTime || now,
-      updateTime: now
-    };
-    
-    // 根据重复模式设置任务重复属性
-    if (this.data.repeatMode === 'repeat') {
-      // 确保开始日期和结束日期格式也正确
-      let formattedStartDate = task.repeat.startDate;
-      let formattedEndDate = task.repeat.endDate;
-      
-      if (formattedStartDate) {
-        const startDateParts = formattedStartDate.split('-');
-        if (startDateParts.length === 3) {
-          formattedStartDate = `${startDateParts[0]}-${startDateParts[1].padStart(2, '0')}-${startDateParts[2].padStart(2, '0')}`;
-        }
-      }
-      
-      if (formattedEndDate) {
-        const endDateParts = formattedEndDate.split('-');
-        if (endDateParts.length === 3) {
-          formattedEndDate = `${endDateParts[0]}-${endDateParts[1].padStart(2, '0')}-${endDateParts[2].padStart(2, '0')}`;
-        }
-      }
-      
-      taskData.repeat = {
-        type: task.repeat.type || 'daily',
-        days: task.repeat.days || [],
-        startDate: formattedStartDate || task.date,
-        endDate: formattedEndDate || ''
-      };
-    } else {
-      taskData.repeat = {
-        type: 'none',
-        days: [],
-        startDate: '',
-        endDate: ''
-      };
-    }
-    
-    return taskData;
-  },
-
-  /**
-   * 根据开始时间和持续时间计算结束时间
-   */
-  calculateEndTime: function(startTime, durationMinutes) {
-    if (!startTime) return '';
-    
-    // 解析开始时间
-    const [hours, minutes] = startTime.split(':').map(Number);
-    
-    // 计算结束时间
-    let endHours = hours;
-    let endMinutes = minutes + durationMinutes;
-    
-    // 处理进位
-    if (endMinutes >= 60) {
-      endHours += Math.floor(endMinutes / 60);
-      endMinutes = endMinutes % 60;
-    }
-    
-    // 处理24小时制
-    if (endHours >= 24) {
-      endHours = endHours % 24;
-    }
-    
-    // 格式化为HH:MM格式
-    return `${endHours.toString().padStart(2, '0')}:${endMinutes.toString().padStart(2, '0')}`;
-  },
-
-  /**
-   * 取消操作返回上一页
-   */
-  cancelTask: function() {
-    wx.navigateBack();
   },
 
   /**
@@ -1121,11 +916,7 @@ Page({
         description: '进行体育锻炼', 
         duration: 30, 
         points: 3 
-      }
-    ];
-    
-    // 整理收纳模板
-    const cleaningTemplates = [
+      },
       { 
         id: 'make_bed', 
         name: '整理床铺', 
@@ -1146,6 +937,7 @@ Page({
       }
     ];
     
+    
     // 获取自定义模板并添加到相应分类
     wx.getStorage({
       key: 'customTemplates',
@@ -1156,20 +948,20 @@ Page({
           // 根据类型将自定义模板添加到不同分类中
           const customStudy = customTemplates.filter(t => t.type === 'study');
           const customClock = customTemplates.filter(t => t.type === 'clock');
-          const customBag = customTemplates.filter(t => t.type === 'bag');
+         
           
           // 更新数据
           this.setData({
             studyTemplates: [...customStudy, ...studyTemplates],
-            habitTemplates: [...customClock, ...habitTemplates],
-            cleaningTemplates: [...customBag, ...cleaningTemplates]
+            habitTemplates: [...customClock, ...habitTemplates]
+           
           });
         } else {
           // 没有自定义模板，直接使用默认模板
           this.setData({
             studyTemplates: studyTemplates,
-            habitTemplates: habitTemplates,
-            cleaningTemplates: cleaningTemplates
+            habitTemplates: habitTemplates
+           
           });
         }
       },
@@ -1177,8 +969,8 @@ Page({
         // 获取失败，使用默认模板
         this.setData({
           studyTemplates: studyTemplates,
-          habitTemplates: habitTemplates,
-          cleaningTemplates: cleaningTemplates
+          habitTemplates: habitTemplates
+          
         });
       }
     });
@@ -1197,9 +989,7 @@ Page({
       template = this.data.studyTemplates.find(t => t.id === templateId);
     } else if (templateType === 'clock') {
       template = this.data.habitTemplates.find(t => t.id === templateId);
-    } else if (templateType === 'bag') {
-      template = this.data.cleaningTemplates.find(t => t.id === templateId);
-    }
+    } 
     
     if (template) {
       // 使用模板数据填充表单
