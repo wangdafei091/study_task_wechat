@@ -150,6 +150,14 @@ const taskManager = {
     maxDate.setDate(maxDate.getDate() + 365);
     const effectiveEndDate = endDate ? (endDate > maxDate ? maxDate : endDate) : maxDate;
     
+    // 确保开始日期不早于今天
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (startDate < today) {
+      console.log('[TaskManager] 开始日期早于今天，调整为今天');
+      startDate.setTime(today.getTime());
+    }
+    
     console.log('[TaskManager] 任务时间范围:', {
       start: startDate.toISOString(),
       end: effectiveEndDate.toISOString(),
