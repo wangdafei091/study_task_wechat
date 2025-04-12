@@ -469,11 +469,26 @@ Page({
    * 处理日期选择器的日期范围快速选项事件
    */
   handleRangeDateOption: function(e) {
+    console.log('[TaskEdit] 处理日期范围快速选项:', e.detail);
     const { startDate, endDate } = e.detail;
-    this.setData({
-      'task.repeat.startDate': startDate,
-      'task.repeat.endDate': endDate
-    });
+    
+    // 如果选择了本周或本月，且没有设置开始日期，则使用当天作为开始日期
+    const today = this.data.dateNow;
+    const finalStartDate = startDate || today;
+    
+    // 确保开始日期不早于当天
+    if (finalStartDate < today) {
+      console.log('[TaskEdit] 开始日期早于当天，自动调整为当天');
+      this.setData({
+        'task.repeat.startDate': today,
+        'task.repeat.endDate': endDate
+      });
+    } else {
+      this.setData({
+        'task.repeat.startDate': finalStartDate,
+        'task.repeat.endDate': endDate
+      });
+    }
   },
 
   /**
