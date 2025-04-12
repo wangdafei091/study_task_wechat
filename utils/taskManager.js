@@ -68,19 +68,29 @@ const taskManager = {
       const today = new Date();
       const todayStr = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}-${today.getDate().toString().padStart(2, '0')}`;
       
-      console.log('Today date:', todayStr);
-      console.log('All tasks:', allTasks);
+      console.log('[TaskManager] 获取今日任务:', {
+        today: todayStr,
+        totalTasks: allTasks.length
+      });
       
       // 筛选今天的任务
       const todayTasks = allTasks.filter(task => {
-        // 确保日期格式一致性
         if (!task.date) return false;
         
-        // 如果任务的日期等于今天的日期，则包括该任务
+        // 如果是重复任务，检查是否匹配今天的日期
+        if (task.repeat && task.repeat.type !== 'none') {
+          const taskDate = new Date(task.date);
+          const taskDateStr = `${taskDate.getFullYear()}-${(taskDate.getMonth() + 1).toString().padStart(2, '0')}-${taskDate.getDate().toString().padStart(2, '0')}`;
+          return taskDateStr === todayStr;
+        }
+        
         return task.date === todayStr;
       });
       
-      console.log('Filtered tasks:', todayTasks);
+      console.log('[TaskManager] 今日任务筛选结果:', {
+        todayTasks: todayTasks.length,
+        tasks: todayTasks.map(t => ({ id: t.id, title: t.title, date: t.date }))
+      });
       
       callback(todayTasks);
     });
@@ -130,47 +140,60 @@ const taskManager = {
    * @returns {Array} 生成的重复任务数组
    */
   _generateRepeatTasks(task) {
+    console.log('[TaskManager] 开始生成重复任务:', task.title);
     const tasks = [];
     const startDate = new Date(task.repeat.startDate);
     const endDate = task.repeat.endDate ? new Date(task.repeat.endDate) : null;
+    
+    // 添加时间限制：最多生成未来365天的任务
+    const maxDate = new Date();
+    maxDate.setDate(maxDate.getDate() + 365);
+    const effectiveEndDate = endDate ? (endDate > maxDate ? maxDate : endDate) : maxDate;
+    
+    console.log('[TaskManager] 任务时间范围:', {
+      start: startDate.toISOString(),
+      end: effectiveEndDate.toISOString(),
+      type: task.repeat.type
+    });
     
     // 根据重复类型生成任务
     switch (task.repeat.type) {
       case 'daily':
         // 每天重复
-        for (let date = startDate; (!endDate || date <= endDate); date.setDate(date.getDate() + 1)) {
-          tasks.push(this._createRepeatTaskInstance(task, date));
+        for (let date = new Date(startDate); date <= effectiveEndDate; date.setDate(date.getDate() + 1)) {
+          tasks.push(this._createRepeatTaskInstance(task, new Date(date)));
         }
         break;
         
       case 'weekly':
         // 每周重复
-        for (let date = startDate; (!endDate || date <= endDate); date.setDate(date.getDate() + 7)) {
-          tasks.push(this._createRepeatTaskInstance(task, date));
+        for (let date = new Date(startDate); date <= effectiveEndDate; date.setDate(date.getDate() + 7)) {
+          tasks.push(this._createRepeatTaskInstance(task, new Date(date)));
         }
         break;
         
       case 'workdays':
         // 工作日重复
-        for (let date = startDate; (!endDate || date <= endDate); date.setDate(date.getDate() + 1)) {
+        for (let date = new Date(startDate); date <= effectiveEndDate; date.setDate(date.getDate() + 1)) {
           const day = date.getDay();
           if (day >= 1 && day <= 5) { // 周一到周五
-            tasks.push(this._createRepeatTaskInstance(task, date));
+            tasks.push(this._createRepeatTaskInstance(task, new Date(date)));
           }
         }
         break;
         
       case 'custom':
         // 自定义重复
-        for (let date = startDate; (!endDate || date <= endDate); date.setDate(date.getDate() + 1)) {
+        for (let date = new Date(startDate); date <= effectiveEndDate; date.setDate(date.getDate() + 1)) {
           const day = date.getDay().toString();
           if (task.repeat.days.includes(day)) {
-            tasks.push(this._createRepeatTaskInstance(task, date));
+            tasks.push(this._createRepeatTaskInstance(task, new Date(date)));
           }
         }
         break;
     }
     
+    console.log('[TaskManager] 生成重复任务完成，共生成:', tasks.length, '个任务');
     return tasks;
   },
   

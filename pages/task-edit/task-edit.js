@@ -405,6 +405,7 @@ Page({
    * 选择开始时间
    */
   selectStartTime: function(e) {
+    console.log('[TaskEdit] 选择开始时间:', e.detail.value);
     const startTime = e.detail.value;
     this.setData({
       'task.startTime': startTime
@@ -419,6 +420,7 @@ Page({
    * 选择结束时间
    */
   selectEndTime: function(e) {
+    console.log('[TaskEdit] 选择结束时间:', e.detail.value);
     const endTime = e.detail.value;
     this.setData({
       'task.endTime': endTime

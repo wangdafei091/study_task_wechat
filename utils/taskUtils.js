@@ -473,6 +473,69 @@ const groupTasksByDate = function(tasks) {
   return groupedTasks;
 };
 
+/**
+ * 获取任务统计信息
+ * @param {Array} tasks - 任务列表
+ * @returns {Object} 统计信息
+ */
+const getTaskStatistics = function(tasks) {
+  console.log('[TaskUtils] 开始统计任务数据，任务数量:', tasks.length);
+  const stats = {
+    total: 0,
+    completed: 0,
+    pending: 0,
+    overdue: 0,
+    repeat: 0,
+    today: 0,
+    week: 0,
+    month: 0
+  };
+
+  // 使用Set来存储已统计的重复任务ID
+  const countedRepeatTasks = new Set();
+
+  tasks.forEach(task => {
+    stats.total++;
+    
+    if (task.status === 'completed') {
+      stats.completed++;
+    } else {
+      stats.pending++;
+      
+      // 检查是否逾期
+      if (task.dueDate && new Date(task.dueDate) < new Date()) {
+        stats.overdue++;
+      }
+    }
+
+    // 统计重复任务
+    if (task.repeat && !countedRepeatTasks.has(task.repeat.parentId)) {
+      stats.repeat++;
+      countedRepeatTasks.add(task.repeat.parentId);
+    }
+
+    // 统计时间范围内的任务
+    const taskDate = new Date(task.dueDate);
+    const today = new Date();
+    const weekStart = new Date(today);
+    weekStart.setDate(today.getDate() - today.getDay());
+    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+
+    if (taskDate.toDateString() === today.toDateString()) {
+      stats.today++;
+    }
+    if (taskDate >= weekStart && taskDate <= today) {
+      stats.week++;
+    }
+    if (taskDate >= monthStart && taskDate <= today) {
+      stats.month++;
+    }
+  });
+
+  console.log('[TaskUtils] 任务统计完成:', stats);
+  return stats;
+};
+
 module.exports = {
   calculateCompletionRate,
   getTaskStats,
@@ -484,5 +547,6 @@ module.exports = {
   getTaskDueStatus,
   getNextRepeatDate,
   createRepeatTask,
-  groupTasksByDate
+  groupTasksByDate,
+  getTaskStatistics
 }; 
