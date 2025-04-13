@@ -83,7 +83,8 @@ Component({
       // 根据type设置对应的样式类
       const typeMap = {
         'study': 'study',
-        'habit': 'habit'
+        'habit': 'habit',
+        'interest': 'interest'
       };
       
       this.setData({
@@ -91,6 +92,7 @@ Component({
       });
       
       console.log('模板选择器组件已载入，类型:', this.data.type, '样式类:', this.data.typeClass);
+      console.log('应用新设计：无边框 + 极淡背景色 + 点击缩放动效 + 匹配任务类型的文字颜色');
     }
   }
 }); 
