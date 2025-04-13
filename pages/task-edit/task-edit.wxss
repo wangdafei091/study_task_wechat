@@ -301,13 +301,13 @@
 }
 
 .point-value {
-  font-size: 28rpx;
+  font-size: 32rpx;
   font-weight: 500;
   color: #4285F4;
 }
 
 .point-label {
-  font-size: 22rpx;
+  font-size: 24rpx;
   color: #666666;
   margin-left: 4rpx;
 }
@@ -521,11 +521,6 @@
 .task-management-card {
   /* 保留特殊样式，其他由组件提供的样式可以移除 */
   overflow: hidden;
-}
-
-/* 积分奖励卡片样式 */
-.reward-card {
-  /* 保留特殊样式，其他由组件提供的样式可以移除 */
 }
 
 /* 奖励建议样式 */
@@ -990,22 +985,22 @@
   color: #666666;
 }
 
-/* 底部按钮组 */
+/* 底部按钮区样式 */
 .button-group {
   display: flex;
-  gap: 30rpx;
-  margin-top: 60rpx;
-  margin-bottom: 40rpx;
+  justify-content: space-between;
+  padding: 30rpx;
+  background-color: #FFFFFF;
 }
 
 .btn {
   flex: 1;
   height: 88rpx;
+  line-height: 88rpx;
+  text-align: center;
   border-radius: 44rpx;
-  font-size: 30rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  font-size: 32rpx;
+  margin: 0 20rpx;
 }
 
 .btn-primary {
@@ -1014,8 +1009,14 @@
 }
 
 .btn-secondary {
-  background-color: #F0F1F3;
+  background-color: #F5F5F5;
   color: #666666;
+}
+
+/* 底部安全区域占位 */
+.safe-area-inset-bottom {
+  height: 68rpx;
+  background-color: #FFFFFF;
 }
 
 /* 标签选择器弹窗 */
@@ -1687,10 +1688,4 @@
 
 .repeat-dot.bag {
   background-color: #FBBC04;
-}
-
-/* 底部安全区域 */
-.safe-area-inset-bottom {
-  height: calc(env(safe-area-inset-bottom) + 20rpx);
-  width: 100%;
 } 

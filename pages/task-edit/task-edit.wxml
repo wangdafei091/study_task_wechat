@@ -224,29 +224,15 @@
           <view class="char-count" wx:if="{{customMode}}">{{task.title.length}}/20</view>
         </view>
         
-        <!-- 积分和难度 -->
-        <view class="form-item half-width-container">
-          <view class="half-width-item">
-            <view class="item-label">积分</view>
-            <view class="task-info-display points" wx:if="{{selectedTemplate && !customMode}}">
-              <text class="point-value">{{task.points}}</text>
-              <text class="point-label">分</text>
-            </view>
-            <input class="input" wx:else type="number" value="{{task.points}}" bindinput="inputPoints" 
-              placeholder="1-10" maxlength="2" />
+        <!-- 积分 -->
+        <view class="form-item">
+          <view class="item-label">积分</view>
+          <view class="task-info-display points" wx:if="{{selectedTemplate && !customMode}}">
+            <text class="point-value">{{task.points}}</text>
+            <text class="point-label">分</text>
           </view>
-          
-          <view class="half-width-item">
-            <view class="item-label">难度</view>
-            <view class="task-info-display difficulty" wx:if="{{selectedTemplate && !customMode}}">
-              <text class="difficulty-stars">{{task.difficulty === '简单' ? '⭐' : 
-                                           (task.difficulty === '困难' ? '⭐⭐⭐' : '⭐⭐')}}</text>
-              <text class="difficulty-text">{{task.difficulty}}</text>
-            </view>
-            <picker wx:else bindchange="selectDifficulty" value="{{difficultyIndex}}" range="{{difficultyOptions}}">
-              <view class="picker">{{difficultyOptions[difficultyIndex]}}</view>
-            </picker>
-          </view>
+          <input class="input" wx:else type="number" value="{{task.points}}" bindinput="inputPoints" 
+            placeholder="1-10" maxlength="2" />
         </view>
         
         <!-- 任务描述 -->
@@ -444,50 +430,6 @@
       </view>
     </card>
     
-    <!-- 卡片区域3：积分奖励设计 -->
-    <card title="积分奖励设计" icon="🏆" customClass="reward-card">
-      <!-- 积分奖励 -->
-      <view class="form-item">
-        <view class="item-label">完成奖励</view>
-        <view class="point-select">
-          <view class="point-item {{!isCustomPoints && task.points === 1 ? 'active' : ''}}" 
-            bindtap="selectPresetPoints" data-points="1">1分</view>
-          <view class="point-item {{!isCustomPoints && task.points === 2 ? 'active' : ''}}" 
-            bindtap="selectPresetPoints" data-points="2">2分</view>
-          <view class="point-item {{!isCustomPoints && task.points === 3 ? 'active' : ''}}" 
-            bindtap="selectPresetPoints" data-points="3">3分</view>
-          <view class="point-item {{!isCustomPoints && task.points === 5 ? 'active' : ''}}" 
-            bindtap="selectPresetPoints" data-points="5">5分</view>
-          <view class="point-item {{isCustomPoints ? 'active' : ''}}" 
-            bindtap="enableCustomPoints">自定义</view>
-        </view>
-        
-        <!-- 自定义积分输入 -->
-        <view class="custom-input" wx:if="{{isCustomPoints}}">
-          <input type="number" value="{{customPointsValue}}" bindinput="inputCustomPoints" />
-          <text class="unit">分</text>
-        </view>
-      </view>
-      
-      <!-- 奖励建议 -->
-      <view class="reward-suggestion">
-        <view class="suggestion-title">积分推荐规则：</view>
-        <view class="suggestion-item">
-          <text class="suggestion-icon">🏆</text>
-          <text class="suggestion-text">简单任务: 1-2积分</text>
-        </view>
-        <view class="suggestion-item">
-          <text class="suggestion-icon">🏆</text>
-          <text class="suggestion-text">中等任务: 3-5积分</text>
-        </view>
-        <view class="suggestion-item">
-          <text class="suggestion-icon">🏆</text>
-          <text class="suggestion-text">困难任务: 5-10积分</text>
-        </view>
-        <view class="suggestion-note">根据任务难度选择合适的积分值，完成后即可获得</view>
-      </view>
-    </card>
-    
     <!-- 底部按钮区 -->
     <view class="button-group">
       <block wx:if="{{mode === 'create'}}">
@@ -504,110 +446,3 @@
   <!-- 底部安全区域占位 -->
   <view class="safe-area-inset-bottom"></view>
 </view>
-
-<wxss>
-/* 重复任务相关样式 */
-.frequency-options {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12rpx;
-  margin-top: 16rpx;
-}
-
-.frequency-item {
-  flex: 1;
-  min-width: 160rpx;
-  height: 80rpx;
-  background: #f5f5f5;
-  border-radius: 8rpx;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 0 16rpx;
-  transition: all 0.3s;
-}
-
-.frequency-item.active {
-  background: #e6f7ff;
-  border: 1rpx solid #1890ff;
-}
-
-.frequency-item .icon {
-  font-size: 32rpx;
-  margin-bottom: 4rpx;
-}
-
-.frequency-item .label {
-  font-size: 24rpx;
-  color: #333;
-}
-
-.custom-repeat {
-  margin-top: 24rpx;
-}
-
-.weekday-selector {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 16rpx;
-}
-
-.weekday-item {
-  width: 80rpx;
-  height: 80rpx;
-  border-radius: 50%;
-  background: #f5f5f5;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.3s;
-}
-
-.weekday-item.active {
-  background: #1890ff;
-  color: #fff;
-}
-
-.weekday-item .day {
-  font-size: 28rpx;
-}
-
-.repeat-preview {
-  margin-top: 32rpx;
-  background: #f9f9f9;
-  border-radius: 8rpx;
-  padding: 16rpx;
-}
-
-.preview-header {
-  display: flex;
-  align-items: center;
-  margin-bottom: 12rpx;
-}
-
-.preview-header .icon {
-  margin-right: 8rpx;
-}
-
-.preview-header .label {
-  font-size: 28rpx;
-  color: #666;
-}
-
-.preview-content {
-  font-size: 26rpx;
-  color: #333;
-  line-height: 1.6;
-}
-
-.date-range {
-  margin-top: 8rpx;
-  color: #666;
-}
-
-.required {
-  color: #ff4d4f;
-  margin-left: 4rpx;
-}
-</wxss> 

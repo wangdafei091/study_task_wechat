@@ -41,10 +41,6 @@ Page({
     isCustomPoints: false, // 是否使用自定义积分
     customPointsValue: '8', // 自定义积分值
     
-    // 难度选项
-    difficultyOptions: ['简单', '普通', '困难'],
-    difficultyIndex: 1,
-    
     // 重复模式
     repeatMode: 'once', // 'once' 或 'repeat'
     taskLoad: {
@@ -933,7 +929,6 @@ Page({
         id: 'math_homework', 
         name: '数学作业', 
         shortName: '数学',
-        difficulty: '普通',
         description: '完成数学练习册', 
         duration: 45, 
         points: 3 
@@ -942,7 +937,6 @@ Page({
         id: 'reading', 
         name: '阅读练习', 
         shortName: '阅读',
-        difficulty: '简单',
         description: '阅读一篇文章并做笔记', 
         duration: 30, 
         points: 2 
@@ -951,7 +945,6 @@ Page({
         id: 'english_words', 
         name: '英语单词', 
         shortName: '英语',
-        difficulty: '普通',
         description: '背诵英语单词', 
         duration: 20, 
         points: 2 
@@ -960,7 +953,6 @@ Page({
         id: 'writing', 
         name: '写作文', 
         shortName: '作文',
-        difficulty: '困难',
         description: '完成一篇作文', 
         duration: 60, 
         points: 5 
@@ -973,7 +965,6 @@ Page({
         id: 'tidy_desk', 
         name: '整理书桌', 
         shortName: '整理',
-        difficulty: '简单',
         description: '整理书桌和学习用品', 
         duration: 15, 
         points: 2 
@@ -982,7 +973,6 @@ Page({
         id: 'wash_dishes', 
         name: '洗碗', 
         shortName: '洗碗',
-        difficulty: '简单',
         description: '清洗并整理餐具', 
         duration: 10, 
         points: 1 
@@ -991,7 +981,6 @@ Page({
         id: 'exercise', 
         name: '做运动', 
         shortName: '运动',
-        difficulty: '普通',
         description: '进行体育锻炼', 
         duration: 30, 
         points: 3 
@@ -1000,7 +989,6 @@ Page({
         id: 'make_bed', 
         name: '整理床铺', 
         shortName: '床铺',
-        difficulty: '简单',
         description: '整理床铺被褥', 
         duration: 5, 
         points: 1 
@@ -1009,49 +997,15 @@ Page({
         id: 'clean_room', 
         name: '打扫房间', 
         shortName: '打扫',
-        difficulty: '普通',
         description: '清扫房间卫生', 
         duration: 20, 
         points: 2 
       }
     ];
-    
-    
-    // 获取自定义模板并添加到相应分类
-    wx.getStorage({
-      key: 'customTemplates',
-      success: (res) => {
-        if (res.data) {
-          const customTemplates = res.data || [];
-          
-          // 根据类型将自定义模板添加到不同分类中
-          const customStudy = customTemplates.filter(t => t.type === 'study');
-          const customClock = customTemplates.filter(t => t.type === 'clock');
-         
-          
-          // 更新数据
-          this.setData({
-            studyTemplates: [...customStudy, ...studyTemplates],
-            habitTemplates: [...customClock, ...habitTemplates]
-           
-          });
-        } else {
-          // 没有自定义模板，直接使用默认模板
-          this.setData({
-            studyTemplates: studyTemplates,
-            habitTemplates: habitTemplates
-           
-          });
-        }
-      },
-      fail: () => {
-        // 获取失败，使用默认模板
-        this.setData({
-          studyTemplates: studyTemplates,
-          habitTemplates: habitTemplates
-          
-        });
-      }
+
+    this.setData({
+      studyTemplates: studyTemplates,
+      habitTemplates: habitTemplates
     });
   },
 
@@ -1072,8 +1026,6 @@ Page({
     
     if (template) {
       // 使用模板数据填充表单
-      const difficultyIndex = this.getDifficultyIndex(template.difficulty);
-      
       this.setData({
         selectedTemplate: templateId,
         selectedTemplateType: templateType,
@@ -1082,9 +1034,7 @@ Page({
         'task.shortName': template.shortName || template.name.substring(0, 4),
         'task.description': template.description || '',
         'task.points': template.points,
-        'task.type': templateType,
-        'task.difficulty': template.difficulty || '普通',
-        difficultyIndex: difficultyIndex
+        'task.type': templateType
       });
       
       // 给用户提示
@@ -1092,14 +1042,6 @@ Page({
         type: 'light'
       });
     }
-  },
-
-  /**
-   * 根据难度名称获取索引
-   */
-  getDifficultyIndex: function(difficultyName) {
-    const index = this.data.difficultyOptions.indexOf(difficultyName);
-    return index > -1 ? index : 1; // 默认返回普通(索引1)
   },
 
   /**
@@ -1118,8 +1060,6 @@ Page({
       'task.shortName': '',
       'task.description': '',
       'task.type': taskType,
-      difficultyIndex: 1,
-      'task.difficulty': '普通',
       'task.points': taskType === 'study' ? 3 : 2  // 默认积分：学习3分，习惯2分
     });
   },

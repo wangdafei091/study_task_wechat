@@ -16,29 +16,32 @@ const taskManager = {
         if (res.data && res.data.length > 0) {
           // 确保每个学习类任务都有开始时间和结束时间
           const allTasks = res.data.map(task => {
-            if (task.type === 'study') {
+            // 移除难度字段
+            const { difficulty, ...taskWithoutDifficulty } = task;
+            
+            if (taskWithoutDifficulty.type === 'study') {
               // 如果没有开始时间，设置默认值
-              if (!task.startTime) {
-                task.startTime = '08:00';
+              if (!taskWithoutDifficulty.startTime) {
+                taskWithoutDifficulty.startTime = '08:00';
               }
               // 如果没有结束时间，根据开始时间和持续时间计算
-              if (!task.endTime && task.duration) {
-                const [hours, minutes] = task.startTime.split(':').map(Number);
-                let endMinutes = minutes + task.duration;
+              if (!taskWithoutDifficulty.endTime && taskWithoutDifficulty.duration) {
+                const [hours, minutes] = taskWithoutDifficulty.startTime.split(':').map(Number);
+                let endMinutes = minutes + taskWithoutDifficulty.duration;
                 let endHours = hours + Math.floor(endMinutes / 60);
                 endMinutes = endMinutes % 60;
-                task.endTime = `${endHours.toString().padStart(2, '0')}:${endMinutes.toString().padStart(2, '0')}`;
+                taskWithoutDifficulty.endTime = `${endHours.toString().padStart(2, '0')}:${endMinutes.toString().padStart(2, '0')}`;
               }
               // 计算持续时间
-              if (task.startTime && task.endTime) {
-                const [startHours, startMinutes] = task.startTime.split(':').map(Number);
-                const [endHours, endMinutes] = task.endTime.split(':').map(Number);
+              if (taskWithoutDifficulty.startTime && taskWithoutDifficulty.endTime) {
+                const [startHours, startMinutes] = taskWithoutDifficulty.startTime.split(':').map(Number);
+                const [endHours, endMinutes] = taskWithoutDifficulty.endTime.split(':').map(Number);
                 const startTotalMinutes = startHours * 60 + startMinutes;
                 const endTotalMinutes = endHours * 60 + endMinutes;
-                task.duration = endTotalMinutes - startTotalMinutes;
+                taskWithoutDifficulty.duration = endTotalMinutes - startTotalMinutes;
               }
             }
-            return task;
+            return taskWithoutDifficulty;
           });
           
           // 回调返回所有任务
