@@ -96,15 +96,15 @@
           <view class="chart-legend">
             <view class="legend-item">
               <view class="color-indicator study"></view>
-              <text>学习任务</text>
+              <text>学习</text>
             </view>
             <view class="legend-item">
-              <view class="color-indicator clock"></view>
-              <text>生活习惯</text>
+              <view class="color-indicator habit"></view>
+              <text>习惯</text>
             </view>
             <view class="legend-item">
-              <view class="color-indicator bag"></view>
-              <text>整理收纳</text>
+              <view class="color-indicator interest"></view>
+              <text>兴趣</text>
             </view>
           </view>
         </view>
@@ -161,30 +161,34 @@
     
     <!-- 卡片区域2：任务管理区域 -->
     <card title="任务管理" icon="📝" customClass="task-management-card" noPadding="true">
-      <!-- 常用任务区域 -->
-      <view class="section-block">
-        <!-- 学习任务 (仅学习型入口显示) -->
-        <block wx:if="{{taskType === 'study'}}">
-          <template-selector 
-            templates="{{studyTemplates}}" 
-            selectedId="{{selectedTemplate}}"
-            type="study"
-            bind:select="handleTemplateSelect"
-            bind:custom="handleCustomSelect">
-          </template-selector>
-        </block>
-        
-        <!-- 习惯任务 (仅习惯型入口显示) -->
-        <block wx:if="{{taskType === 'habit'}}">
-          <template-selector 
-            templates="{{habitTemplates}}" 
-            selectedId="{{selectedTemplate}}"
-            type="habit"
-            title="生活习惯"
-            bind:select="handleTemplateSelect"
-            bind:custom="handleCustomSelect">
-          </template-selector>
-        </block>
+      <!-- 常用任务区域 - 优化布局结构 -->
+      <view class="section-block task-templates-container">
+        <!-- 学习任务和生活习惯模板合并在一起显示，使用内联标签 -->
+        <view class="template-categories">
+          <view class="category-group">
+            <text class="category-label">学习任务</text>
+            <template-selector 
+              templates="{{studyTemplates}}" 
+              selectedId="{{selectedTemplate}}"
+              type="study"
+              title=""
+              bind:select="handleTemplateSelect"
+              bind:custom="handleCustomSelect">
+            </template-selector>
+          </view>
+          
+          <view class="category-group">
+            <text class="category-label">生活习惯</text>
+            <template-selector 
+              templates="{{habitTemplates}}" 
+              selectedId="{{selectedTemplate}}"
+              type="habit"
+              title=""
+              bind:select="handleTemplateSelect"
+              bind:custom="handleCustomSelect">
+            </template-selector>
+          </view>
+        </view>
       </view>
       
       <!-- 任务信息区域 -->
@@ -192,9 +196,9 @@
         <view class="section-header">
           <view class="section-label">任务信息</view>
           <view class="task-type-indicator" wx:if="{{selectedTemplateType}}">
-            {{selectedTemplateType === 'study' ? '学习任务' : 
-             (selectedTemplateType === 'clock' ? '生活习惯' : 
-             (selectedTemplateType === 'bag' ? '整理收纳' : ''))}}
+            {{selectedTemplateType === 'study' ? '学习' : 
+             (selectedTemplateType === 'habit' ? '习惯' : 
+             (selectedTemplateType === 'interest' ? '兴趣' : ''))}}
           </view>
         </view>
         

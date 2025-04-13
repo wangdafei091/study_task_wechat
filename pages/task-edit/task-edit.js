@@ -56,8 +56,8 @@ Page({
     selectedTags: [], // 已选标签
     showTagSelector: false, // 是否显示标签选择器
     taskTypes: [
-      { id: 'clock', name: '生活习惯', icon: '⏰', parent: 'habit' },
-      { id: 'study', name: '学习任务', icon: '📝', parent: 'study' }
+      { id: 'habit', name: '习惯', icon: '⏰', parent: 'habit' },
+      { id: 'study', name: '学习', icon: '📝', parent: 'study' }
     ],
     availableRewards: [
       { id: 'game', name: '游戏时间', icon: '🎮', points: 10 },
@@ -110,18 +110,18 @@ Page({
     // 菜单项配置(移除这段)
     menuItems: [
       {
-        id: 'clock',
+        id: 'habit',
         type: 'habit-task',
         icon: '⏰',
         label: '习惯',
-        ariaLabel: '添加生活习惯'
+        ariaLabel: '添加习惯'
       },
       {
-        id: 'bag',
+        id: 'interest',
         type: '',
         icon: '🧹',
-        label: '整理',
-        ariaLabel: '添加整理任务',
+        label: '兴趣',
+        ariaLabel: '添加兴趣任务',
         style: 'background: linear-gradient(135deg, #FFC107, #FF9800);'
       },
       {
@@ -184,7 +184,7 @@ Page({
       precision: precision,
       customMode: true,
       // 确保任务类型正确设置
-      'task.type': taskType === 'study' ? 'study' : 'clock',
+      'task.type': taskType === 'study' ? 'study' : 'habit',
       'task.taskType': taskType,
       'task.points': defaultPoints,
       'task.precision': precision
@@ -1028,7 +1028,7 @@ Page({
         
         // 按任务类型分类
         const customStudyTemplates = customTemplates.filter(t => t.taskType === 'study');
-        const customHabitTemplates = customTemplates.filter(t => t.taskType === 'habit' || t.taskType === 'clock');
+        const customHabitTemplates = customTemplates.filter(t => t.taskType === 'habit' || t.taskType === 'habit');
         
         // 合并自定义模板和预设模板
         that.setData({
@@ -1043,38 +1043,81 @@ Page({
   },
 
   /**
-   * 选择任务模板
+   * 处理模板选择事件
    */
-  selectTemplate: function(e) {
-    const templateId = e.currentTarget.dataset.id;
-    const templateType = e.currentTarget.dataset.type;
+  handleTemplateSelect: function(e) {
+    const templateId = e.detail.templateId;
+    const template = e.detail.template;
+    const templateType = e.detail.type; // 获取选中模板的类型
     
-    // 根据类型查找模板
-    let template = null;
-    if (templateType === 'study') {
-      template = this.data.studyTemplates.find(t => t.id === templateId);
-    } else if (templateType === 'clock') {
-      template = this.data.habitTemplates.find(t => t.id === templateId);
-    } 
+    console.log('选择模板:', templateId, '名称:', template.name, '类型:', templateType);
     
-    if (template) {
-      // 使用模板数据填充表单
+    // 根据模板类型设置任务类型
+    const taskTypeValue = templateType === 'study' ? 'study' : 'habit';
+    const taskType = templateType === 'study' ? 'study' : 'habit';
+    
+    this.setData({
+      taskType: taskType, // 更新任务类型
+      selectedTemplate: templateId,
+      selectedTemplateType: templateType,
+      customMode: false,
+      'task.title': template.name,
+      'task.shortName': template.shortName || template.name.substring(0, 4),
+      'task.description': template.description || '',
+      'task.points': template.points,
+      'task.type': taskTypeValue,
+      'task.taskType': taskType
+    });
+    
+    // 根据类型设置不同属性
+    if (taskType === 'study') {
+      // 学习任务设置默认时间
+      if (!this.data.task.startTime) {
+        const now = new Date();
+        const hours = now.getHours().toString().padStart(2, '0');
+        const minutes = now.getMinutes().toString().padStart(2, '0');
+        
+        // 使用模板持续时间或默认30分钟
+        const duration = template.duration || 30;
+        let endMinutes = parseInt(minutes) + duration;
+        let endHours = parseInt(hours) + Math.floor(endMinutes / 60);
+        endMinutes = endMinutes % 60;
+        
+        this.setData({
+          'task.startTime': `${hours}:${minutes}`,
+          'task.endTime': `${endHours.toString().padStart(2, '0')}:${endMinutes.toString().padStart(2, '0')}`,
+          'task.duration': duration
+        });
+        
+        console.log('设置学习任务默认时间:', this.data.task.startTime, '-', this.data.task.endTime);
+      }
+    } else {
+      // 习惯任务清除时间设置
       this.setData({
-        selectedTemplate: templateId,
-        selectedTemplateType: templateType,
-        customMode: false,
-        'task.title': template.name,
-        'task.shortName': template.shortName || template.name.substring(0, 4),
-        'task.description': template.description || '',
-        'task.points': template.points,
-        'task.type': templateType
+        'task.startTime': '',
+        'task.endTime': '',
+        'task.duration': 0
       });
       
-      // 给用户提示
-      wx.vibrateShort({
-        type: 'light'
-      });
+      console.log('清除习惯任务时间设置');
     }
+    
+    // 处理重复任务设置
+    this.ensureRepeatTaskSettings();
+    
+    // 添加详细日志
+    console.log('任务模板选择完成', {
+      id: templateId,
+      title: template.name,
+      type: templateType,
+      taskType: taskType,
+      pointsValue: template.points
+    });
+    
+    // 提供反馈
+    wx.vibrateShort({
+      type: 'light'
+    });
   },
 
   /**
@@ -1083,7 +1126,7 @@ Page({
   selectCustomTask: function(e) {
     // 获取任务类型（如果有传入）
     const taskType = e.currentTarget.dataset.type || 
-                    (this.data.taskType === 'study' ? 'study' : 'clock');
+                    (this.data.taskType === 'study' ? 'study' : 'habit');
     
     this.setData({
       selectedTemplate: '',
@@ -1978,11 +2021,11 @@ Page({
     
     // 根据菜单项ID执行不同的操作
     switch(item.id) {
-      case 'clock':
+      case 'habit':
         this.selectTaskType('habit');
         break;
-      case 'bag':
-        this.selectCustomTask('bag');
+      case 'interest':
+        this.selectCustomTask('interest');
         break;
       case 'save':
         this.saveTask();
@@ -1998,44 +2041,75 @@ Page({
   },
 
   /**
-   * 处理模板选择事件
-   */
-  handleTemplateSelect: function(e) {
-    const templateId = e.detail.templateId;
-    const template = e.detail.template;
-    
-    this.setData({
-      selectedTemplate: templateId,
-      selectedTemplateType: this.data.taskType === 'study' ? 'study' : 'clock',
-      customMode: false,
-      'task.title': template.name,
-      'task.shortName': template.shortName || template.name.substring(0, 4),
-      'task.description': template.description || '',
-      'task.points': template.points,
-      'task.type': this.data.taskType === 'study' ? 'study' : 'clock'
-    });
-    
-    console.log('选择了模板:', templateId, template.name);
-  },
-
-  /**
    * 处理自定义选择事件
    */
   handleCustomSelect: function(e) {
-    const taskType = e.detail.type;
+    const type = e.detail.type;
+    
+    console.log('选择自定义模板，类型:', type);
+    
+    // 设置对应的任务类型
+    const taskType = type === 'study' ? 'study' : 'habit';
+    const taskTypeValue = type === 'study' ? 'study' : 'habit';
     
     this.setData({
+      taskType: taskType,
       selectedTemplate: '',
-      selectedTemplateType: taskType === 'study' ? 'study' : 'clock',
+      selectedTemplateType: type,
       customMode: true,
       'task.title': '',
       'task.shortName': '',
       'task.description': '',
-      'task.type': taskType === 'study' ? 'study' : 'clock',
-      'task.points': taskType === 'study' ? 3 : 2
+      'task.type': taskTypeValue,
+      'task.taskType': taskType,
+      'task.points': type === 'study' ? 3 : 2
     });
     
-    console.log('选择了自定义模板，类型:', taskType);
+    // 根据类型设置默认属性
+    if (type === 'study') {
+      // 学习任务设置默认时间
+      const now = new Date();
+      const hours = now.getHours().toString().padStart(2, '0');
+      const minutes = now.getMinutes().toString().padStart(2, '0');
+      
+      // 默认30分钟
+      let endMinutes = parseInt(minutes) + 30;
+      let endHours = parseInt(hours) + Math.floor(endMinutes / 60);
+      endMinutes = endMinutes % 60;
+      
+      this.setData({
+        'task.startTime': `${hours}:${minutes}`,
+        'task.endTime': `${endHours.toString().padStart(2, '0')}:${endMinutes.toString().padStart(2, '0')}`,
+        'task.duration': 30,
+        'task.precision': 'second'
+      });
+      
+      console.log('设置自定义学习任务默认时间:', this.data.task.startTime, '-', this.data.task.endTime);
+    } else {
+      // 生活习惯任务默认设置
+      this.setData({
+        'task.startTime': '',
+        'task.endTime': '',
+        'task.duration': 0,
+        'task.precision': 'day'
+      });
+      
+      console.log('设置自定义生活习惯任务配置');
+    }
+    
+    // 处理重复任务设置
+    this.ensureRepeatTaskSettings();
+    
+    // 添加详细日志
+    console.log('自定义任务设置完成', {
+      type: type,
+      taskType: taskType,
+      customMode: true,
+      timestamp: new Date().toISOString()
+    });
+    
+    // 提供反馈
+    wx.vibrateShort({ type: 'light' });
   },
 
   /**
@@ -2101,13 +2175,13 @@ Page({
     this.setData({
       taskType: 'habit',
       selectedTemplate: templateId,
-      selectedTemplateType: 'clock',
+      selectedTemplateType: 'habit',
       customMode: false,
       'task.title': template.name,
       'task.shortName': template.shortName || template.name.substring(0, 4),
       'task.description': template.description || '',
       'task.points': template.points,
-      'task.type': 'clock',
+      'task.type': 'habit',
       'task.taskType': 'habit',
       'task.precision': 'day',
       'task.startTime': '',
@@ -2171,12 +2245,12 @@ Page({
     this.setData({
       taskType: 'habit',
       selectedTemplate: '',
-      selectedTemplateType: 'clock',
+      selectedTemplateType: 'habit',
       customMode: true,
       'task.title': '',
       'task.shortName': '',
       'task.description': '',
-      'task.type': 'clock',
+      'task.type': 'habit',
       'task.taskType': 'habit',
       'task.precision': 'day',
       'task.points': 2,
