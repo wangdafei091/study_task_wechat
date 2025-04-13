@@ -1053,7 +1053,10 @@ Page({
     const template = e.detail.template;
     const templateType = e.detail.type; // 获取选中模板的类型
     
-    console.log('选择模板:', templateId, '名称:', template.name, '类型:', templateType);
+    // 添加详细日志调试事件内容
+    console.log('Template select event detail:', e.detail);
+    console.log('选择模板:', templateId, '名称:', template.name, '类型值:', templateType);
+    console.log('当前taskType:', this.data.taskType, 'selectedTemplateType:', this.data.selectedTemplateType);
     
     // 根据模板类型设置任务类型
     const taskTypeValue = templateType === 'study' ? 'study' : 'habit';
@@ -1071,6 +1074,12 @@ Page({
       'task.type': taskTypeValue,
       'task.taskType': taskType
     });
+    
+    // 添加数据更新后的日志
+    console.log('更新后 - taskType:', taskType, 'selectedTemplateType:', templateType);
+    
+    // 检查任务类型显示状态
+    this.checkTaskTypeDisplay();
     
     // 根据类型设置不同属性
     if (taskType === 'study') {
@@ -1147,6 +1156,8 @@ Page({
    * 启用自定义编辑模式
    */
   enableCustomMode: function() {
+    console.log('切换到自定义编辑模式 - 使用平滑过渡动画');
+    
     this.setData({
       customMode: true
     });
@@ -2049,7 +2060,11 @@ Page({
   handleCustomSelect: function(e) {
     const type = e.detail.type;
     
+    // 添加详细日志
+    console.log('Custom select event detail:', e.detail);
     console.log('选择自定义模板，类型:', type);
+    console.log('当前taskType:', this.data.taskType, 'selectedTemplateType:', this.data.selectedTemplateType);
+    console.log('启用平滑过渡效果，优化表单元素显示/隐藏');
     
     // 设置对应的任务类型
     const taskType = type === 'study' ? 'study' : 'habit';
@@ -2067,6 +2082,12 @@ Page({
       'task.taskType': taskType,
       'task.points': type === 'study' ? 3 : 2
     });
+    
+    // 添加数据更新后的日志
+    console.log('更新后 - taskType:', taskType, 'selectedTemplateType:', type);
+    
+    // 检查任务类型显示状态
+    this.checkTaskTypeDisplay();
     
     // 根据类型设置默认属性
     if (type === 'study') {
@@ -2288,5 +2309,27 @@ Page({
         }
       });
     }
+  },
+
+  /**
+   * 检查任务类型显示状态
+   * 用于调试任务类型指示器的显示问题
+   */
+  checkTaskTypeDisplay: function() {
+    console.log('任务类型指示器状态检查:');
+    console.log('- selectedTemplateType:', this.data.selectedTemplateType);
+    console.log('- taskType:', this.data.taskType);
+    console.log('- task.type:', this.data.task.type);
+    console.log('- task.taskType:', this.data.task.taskType);
+    console.log('- customMode:', this.data.customMode);
+    
+    // 显示指示器条件
+    const shouldShowIndicator = !!this.data.selectedTemplateType;
+    console.log('- 指示器是否应显示:', shouldShowIndicator);
+    console.log('- 指示器显示的文本:', 
+      this.data.selectedTemplateType === 'study' ? '学习' : 
+      (this.data.selectedTemplateType === 'habit' ? '习惯' : 
+      (this.data.selectedTemplateType === 'interest' ? '兴趣' : '未知'))
+    );
   },
 }) 
