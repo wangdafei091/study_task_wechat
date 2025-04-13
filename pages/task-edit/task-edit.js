@@ -846,6 +846,15 @@ Page({
       return;
     }
     
+    // 检查积分范围
+    if (isNaN(taskData.points) || taskData.points < 1) {
+      console.log('积分值无效或过小，设置为默认值1:', taskData.points);
+      taskData.points = 1;
+    } else if (taskData.points > 10) {
+      console.log('积分值过大，限制为最大值10:', taskData.points);
+      taskData.points = 10;
+    }
+    
     // 如果是周期性任务，进行额外验证
     if (this.data.repeatMode === 'repeat') {
       if (!this.validateRepeatTask()) {
@@ -1920,12 +1929,8 @@ Page({
    */
   inputPoints: function(e) {
     let value = parseInt(e.detail.value);
-    // 检查是否是有效数字且在合理范围内
-    if (isNaN(value) || value < 1) {
-      value = 1;
-    } else if (value > 10) {
-      value = 10;
-    }
+    // 不再检查范围，直接保存用户输入的值
+    console.log('用户输入积分值:', value);
     
     this.setData({
       'task.points': value
