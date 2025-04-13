@@ -139,7 +139,10 @@ Page({
    * 生命周期函数--监听页面加载
    */
   onLoad: function(options) {
-    console.log('Page onLoad with options:', options);
+    console.log('任务编辑页面加载', options);
+    
+    // 记录常用任务标题添加
+    console.log('常用任务区域添加标题，提升用户界面一致性');
     
     // 设置页面标题
     wx.setNavigationBarTitle({

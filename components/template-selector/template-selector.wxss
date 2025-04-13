@@ -59,7 +59,7 @@
 
 /* 调整文字样式，让文字大小与系统一致 */
 .template-name {
-  font-size: 28rpx; /* 与标题字体大小一致 */
+  font-size: 24rpx; /* 小于标题字体大小 */
   font-weight: normal;
   text-align: center;
   white-space: nowrap;
@@ -127,7 +127,7 @@
 
 .task-template.custom .template-name {
   color: #666666;
-  font-size: 28rpx;
+  font-size: 24rpx;
   display: flex;
   align-items: center;
 }

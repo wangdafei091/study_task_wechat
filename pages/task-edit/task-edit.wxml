@@ -163,6 +163,8 @@
     <card title="任务管理" icon="📝" customClass="task-management-card" noPadding="true">
       <!-- 常用任务区域 - 优化布局结构 -->
       <view class="section-block task-templates-container">
+        <!-- 添加常用任务标题 -->
+        <view class="section-label">常用任务</view>
         <!-- 学习任务和生活习惯模板合并在一起显示，使用内联标签 -->
         <view class="template-categories">
           <view class="category-group">
