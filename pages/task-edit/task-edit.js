@@ -1927,4 +1927,45 @@ Page({
   handleMenuStateChange: function(e) {
     console.log('菜单状态变化:', e.detail.isOpen);
   },
+
+  /**
+   * 处理模板选择事件
+   */
+  handleTemplateSelect: function(e) {
+    const templateId = e.detail.templateId;
+    const template = e.detail.template;
+    
+    this.setData({
+      selectedTemplate: templateId,
+      selectedTemplateType: this.data.taskType === 'study' ? 'study' : 'clock',
+      customMode: false,
+      'task.title': template.name,
+      'task.shortName': template.shortName || template.name.substring(0, 4),
+      'task.description': template.description || '',
+      'task.points': template.points,
+      'task.type': this.data.taskType === 'study' ? 'study' : 'clock'
+    });
+    
+    console.log('选择了模板:', templateId, template.name);
+  },
+
+  /**
+   * 处理自定义选择事件
+   */
+  handleCustomSelect: function(e) {
+    const taskType = e.detail.type;
+    
+    this.setData({
+      selectedTemplate: '',
+      selectedTemplateType: taskType === 'study' ? 'study' : 'clock',
+      customMode: true,
+      'task.title': '',
+      'task.shortName': '',
+      'task.description': '',
+      'task.type': taskType === 'study' ? 'study' : 'clock',
+      'task.points': taskType === 'study' ? 3 : 2
+    });
+    
+    console.log('选择了自定义模板，类型:', taskType);
+  },
 }) 

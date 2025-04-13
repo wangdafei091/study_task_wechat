@@ -190,6 +190,7 @@
 ├── app.js # 应用入口
 ├── app.json # 应用配置
 ├── app.wxss # 全局样式
+├── components/ # 组件目录
 │   ├── calendar/ # 日历组件
 │   ├── card/ # 卡片容器组件
 │   ├── date-picker/ # 日期选择器
@@ -198,6 +199,7 @@
 │   ├── progressRing/ # 圆环进度组件
 │   ├── recentTasks/ # 最近任务组件
 │   ├── taskItem/ # 任务项组件
+│   ├── template-selector/ # 任务模板选择器组件
 │   └── upcomingTask/ # 即将开始任务组件
 ├── pages/ # 页面文件
 ├── utils/ # 工具类
@@ -209,6 +211,36 @@
 │   ├── uiUtils.js # UI工具
 │   └── unit.js # 单位转换工具
 └── assets/ # 静态资源
+
+## 核心组件
+1. template-selector (任务模板选择器)
+   - 功能：展示和选择常用任务模板
+   - 接口：
+     - 输入属性：templates, selectedId, type, showCustom, maxDisplay等
+     - 输出事件：select(选择模板), custom(自定义模板)
+   - 样式：支持study/clock/bag三种主题样式
+   - 交互：点击选择/自定义模板，触觉反馈
+   - 生命周期：attached时设置typeClass
+   - 日志：组件载入时记录日志
+   - 全局注册：app.json的usingComponents
+
+2. card (卡片容器)
+   - 功能：通用卡片容器
+   - 接口：title, icon, customClass, noPadding等
+   - 样式：圆角卡片，带标题和内容区
+   - 交互：展示内容，无特殊交互
+   - 生命周期：标准组件生命周期
+   - 插槽：默认内容插槽
+   - 自定义样式：通过customClass传入
+
+3. date-picker (日期选择器)
+   - 功能：选择单个日期或日期范围
+   - 模式：单日期/日期范围
+   - 快捷选项：今天/明天/后天等
+   - 范围限制：minDate/maxDate
+   - 事件：日期选择/快捷选项选择
+   - 样式：适配应用整体风格
+   - 交互：选择日期/范围，选择快捷选项
 
 ## 核心工具类
 1. dateUtils
@@ -240,3 +272,14 @@
    - 消息显示
    - 消息分析
    - 消息导出
+
+## 开发规范
+1. 组件开发规范
+   - 标准目录结构：js/json/wxml/wxss四个文件
+   - 标准化接口设计：清晰的输入属性和输出事件
+   - 生命周期管理：合理使用组件生命周期
+   - 样式隔离：避免样式污染
+   - 事件命名：on[Event]或handle[Event]
+   - 注释规范：组件/方法/属性都有注释
+   - 日志记录：关键操作记录日志
+   - 错误处理：合理处理异常情况

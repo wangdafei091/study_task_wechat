@@ -33,6 +33,9 @@
       }
     ]
   },
+  "usingComponents": {
+    "template-selector": "/components/template-selector/template-selector"
+  },
   "style": "v2",
   "sitemapLocation": "sitemap.json"
 } 

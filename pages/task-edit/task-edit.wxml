@@ -163,41 +163,27 @@
     <card title="任务管理" icon="📝" customClass="task-management-card" noPadding="true">
       <!-- 常用任务区域 -->
       <view class="section-block">
-        <view class="section-label">常用任务</view>
-        
         <!-- 学习任务 (仅学习型入口显示) -->
         <block wx:if="{{taskType === 'study'}}">
-          <view class="task-template-grid">
-            <block wx:for="{{studyTemplates}}" wx:key="id" wx:if="{{index < 7}}">
-              <view class="task-template study {{selectedTemplate === item.id ? 'active' : ''}}" 
-                    bindtap="selectTemplate" data-id="{{item.id}}" data-type="study">
-                <view class="template-name">{{item.shortName || item.name}}</view>
-              </view>
-            </block>
-            <!-- 自定义学习任务按钮 -->
-            <view class="task-template custom study" bindtap="selectCustomTask" data-type="study">
-              <view class="template-name">自定义</view>
-            </view>
-          </view>
+          <template-selector 
+            templates="{{studyTemplates}}" 
+            selectedId="{{selectedTemplate}}"
+            type="study"
+            bind:select="handleTemplateSelect"
+            bind:custom="handleCustomSelect">
+          </template-selector>
         </block>
         
         <!-- 习惯任务 (仅习惯型入口显示) -->
         <block wx:if="{{taskType === 'habit'}}">
-          <!-- 生活习惯分类 -->
-          <view class="template-category">生活习惯</view>
-          <view class="task-template-grid">
-            <block wx:for="{{habitTemplates}}" wx:key="id" wx:if="{{index < 7}}">
-              <view class="task-template clock {{selectedTemplate === item.id ? 'active' : ''}}" 
-                    bindtap="selectTemplate" data-id="{{item.id}}" data-type="clock">
-                <view class="template-name">{{item.shortName || item.name}}</view>
-              </view>
-            </block>
-            <!-- 自定义习惯任务按钮 -->
-            <view class="task-template custom clock" bindtap="selectCustomTask" data-type="clock">
-              <view class="template-name">自定义</view>
-            </view>
-          </view>
-
+          <template-selector 
+            templates="{{habitTemplates}}" 
+            selectedId="{{selectedTemplate}}"
+            type="habit"
+            title="生活习惯"
+            bind:select="handleTemplateSelect"
+            bind:custom="handleCustomSelect">
+          </template-selector>
         </block>
       </view>
       
