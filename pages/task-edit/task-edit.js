@@ -1084,22 +1084,29 @@ Page({
    */
   switchMode: function(e) {
     const mode = e.currentTarget.dataset.mode;
+    const previousMode = this.data.repeatMode || 'none';
     
-    // 如果是周期性任务但还没有设置重复类型，设置默认值
-    if (mode === 'repeat' && (!this.data.task.repeat || !this.data.task.repeat.type)) {
-      this.setData({
-        'task.repeat': {
-          type: 'daily',
-          days: ['0', '1', '2', '3', '4', '5', '6'], // 默认每天
-          startDate: this.data.task.date || this.data.dateNow,
-          endDate: ''
-        }
-      });
-    }
+    console.log('切换执行模式:', mode, '上一模式:', previousMode);
     
     this.setData({
       repeatMode: mode
     });
+    
+    // 日志记录任务状态变化
+    const taskTitle = this.data.task.title || '未命名任务';
+    const taskType = this.data.taskType || 'unknown';
+    console.log('任务状态变更:', {
+      taskId: this.data.taskId,
+      title: taskTitle,
+      type: taskType,
+      previousMode: previousMode,
+      currentMode: mode,
+      hasRepeatSettings: !!this.data.task.repeat,
+      timestamp: new Date().toISOString()
+    });
+    
+    // 使用公共函数确保重复任务设置正确
+    this.ensureRepeatTaskSettings();
   },
 
   /**
@@ -1967,5 +1974,180 @@ Page({
     });
     
     console.log('选择了自定义模板，类型:', taskType);
+  },
+
+  /**
+   * 处理学习任务模板选择
+   */
+  handleStudyTemplateSelect: function(e) {
+    const templateId = e.detail.templateId;
+    const template = e.detail.template;
+    
+    console.log('选择了学习任务模板:', templateId, template.name);
+    
+    // 更新任务类型和模板选择
+    this.setData({
+      taskType: 'study',
+      selectedTemplate: templateId,
+      selectedTemplateType: 'study',
+      customMode: false,
+      'task.title': template.name,
+      'task.shortName': template.shortName || template.name.substring(0, 4),
+      'task.description': template.description || '',
+      'task.points': template.points,
+      'task.type': 'study',
+      'task.taskType': 'study',
+      'task.precision': 'second'
+    });
+    
+    // 设置默认时间(如果未设置)
+    if (!this.data.task.startTime) {
+      const now = new Date();
+      const hours = now.getHours().toString().padStart(2, '0');
+      const minutes = now.getMinutes().toString().padStart(2, '0');
+      
+      // 使用模板持续时间或默认30分钟
+      const duration = template.duration || 30;
+      let endMinutes = minutes + duration;
+      let endHours = hours + Math.floor(endMinutes / 60);
+      endMinutes = endMinutes % 60;
+      
+      this.setData({
+        'task.startTime': `${hours}:${minutes}`,
+        'task.endTime': `${endHours.toString().padStart(2, '0')}:${endMinutes.toString().padStart(2, '0')}`,
+        'task.duration': duration
+      });
+    }
+    
+    // 处理重复任务设置
+    this.ensureRepeatTaskSettings();
+    
+    // 提供反馈
+    wx.vibrateShort({ type: 'light' });
+  },
+
+  /**
+   * 处理习惯任务模板选择
+   */
+  handleHabitTemplateSelect: function(e) {
+    const templateId = e.detail.templateId;
+    const template = e.detail.template;
+    
+    console.log('选择了生活习惯模板:', templateId, template.name);
+    
+    // 更新任务类型和模板选择
+    this.setData({
+      taskType: 'habit',
+      selectedTemplate: templateId,
+      selectedTemplateType: 'clock',
+      customMode: false,
+      'task.title': template.name,
+      'task.shortName': template.shortName || template.name.substring(0, 4),
+      'task.description': template.description || '',
+      'task.points': template.points,
+      'task.type': 'clock',
+      'task.taskType': 'habit',
+      'task.precision': 'day',
+      'task.startTime': '',
+      'task.endTime': '',
+      'task.duration': 0
+    });
+    
+    // 处理重复任务设置
+    this.ensureRepeatTaskSettings();
+    
+    // 提供反馈
+    wx.vibrateShort({ type: 'light' });
+  },
+
+  /**
+   * 处理学习任务自定义选择
+   */
+  handleStudyCustomSelect: function(e) {
+    console.log('选择自定义学习任务');
+    
+    this.setData({
+      taskType: 'study',
+      selectedTemplate: '',
+      selectedTemplateType: 'study',
+      customMode: true,
+      'task.title': '',
+      'task.shortName': '',
+      'task.description': '',
+      'task.type': 'study',
+      'task.taskType': 'study',
+      'task.precision': 'second',
+      'task.points': 3
+    });
+    
+    // 设置默认时间
+    const now = new Date();
+    const hours = now.getHours().toString().padStart(2, '0');
+    const minutes = now.getMinutes().toString().padStart(2, '0');
+    
+    // 默认30分钟
+    let endMinutes = minutes + 30;
+    let endHours = hours + Math.floor(endMinutes / 60);
+    endMinutes = endMinutes % 60;
+    
+    this.setData({
+      'task.startTime': `${hours}:${minutes}`,
+      'task.endTime': `${endHours.toString().padStart(2, '0')}:${endMinutes.toString().padStart(2, '0')}`,
+      'task.duration': 30
+    });
+    
+    // 处理重复任务设置
+    this.ensureRepeatTaskSettings();
+  },
+
+  /**
+   * 处理习惯任务自定义选择
+   */
+  handleHabitCustomSelect: function(e) {
+    console.log('选择自定义生活习惯');
+    
+    this.setData({
+      taskType: 'habit',
+      selectedTemplate: '',
+      selectedTemplateType: 'clock',
+      customMode: true,
+      'task.title': '',
+      'task.shortName': '',
+      'task.description': '',
+      'task.type': 'clock',
+      'task.taskType': 'habit',
+      'task.precision': 'day',
+      'task.points': 2,
+      'task.startTime': '',
+      'task.endTime': '',
+      'task.duration': 0
+    });
+    
+    // 处理重复任务设置
+    this.ensureRepeatTaskSettings();
+  },
+
+  /**
+   * 确保重复任务设置正确
+   */
+  ensureRepeatTaskSettings: function() {
+    // 如果当前是重复模式且没有设置重复类型
+    if (this.data.repeatMode === 'repeat' && (!this.data.task.repeat || !this.data.task.repeat.type)) {
+      // 根据当前任务类型设置默认重复类型
+      const defaultRepeatType = this.data.taskType === 'study' ? 'weekly' : 'daily';
+      
+      // 记录日志
+      console.log('设置默认重复类型:', defaultRepeatType, '任务类型:', this.data.taskType);
+      
+      // 更新重复任务设置
+      this.setData({
+        'task.repeat': {
+          type: defaultRepeatType,
+          days: defaultRepeatType === 'daily' ? ['0', '1', '2', '3', '4', '5', '6'] : [],
+          startDate: this.data.task.date || this.data.dateNow,
+          endDate: this.data.task.repeat ? this.data.task.repeat.endDate || '' : ''
+        }
+      });
+    }
   },
 }) 
