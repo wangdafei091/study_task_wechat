@@ -74,8 +74,8 @@
       <!-- 生活习惯圆环 -->
       <view class="ring-item">
         <progress-ring 
-          type="clock"
-          percent="{{taskProgress.clock}}"
+          type="habit"
+          percent="{{taskProgress.habit}}"
           size="large"
           bind:tap="onRingTap">
         </progress-ring>
@@ -96,8 +96,8 @@
       <!-- 整理收纳圆环 -->
       <view class="ring-item">
         <progress-ring 
-          type="bag"
-          percent="{{taskProgress.bag}}"
+          type="interest"
+          percent="{{taskProgress.interest}}"
           size="large"
           bind:tap="onRingTap">
         </progress-ring>
@@ -126,9 +126,9 @@
       <view class="filter-section">
         <view class="filter-title">任务类型</view>
         <view class="filter-options">
-          <view class="filter-option {{searchFilters.type === 'clock' ? 'active' : ''}}" 
-                data-type="type" data-value="clock" bindtap="selectFilter"
-                animation="{{filterAnimation.type.clock}}">
+          <view class="filter-option {{searchFilters.type === 'habit' ? 'active' : ''}}" 
+                data-type="type" data-value="habit" bindtap="selectFilter"
+                animation="{{filterAnimation.type.habit}}">
             <text class="filter-icon">⏰</text>
             <text>生活习惯</text>
           </view>
@@ -260,8 +260,8 @@
           <view class="chart-bar-group">
             <view class="chart-label">生活习惯</view>
             <view class="chart-bar-container">
-              <view class="chart-bar clock" style="width: {{stats.typeCounts.clock / stats.totalTasks * 100}}%">
-                <text wx:if="{{stats.typeCounts.clock > 0}}">{{stats.typeCounts.clock}}</text>
+              <view class="chart-bar habit" style="width: {{stats.typeCounts.habit / stats.totalTasks * 100}}%">
+                <text wx:if="{{stats.typeCounts.habit > 0}}">{{stats.typeCounts.habit}}</text>
               </view>
             </view>
           </view>

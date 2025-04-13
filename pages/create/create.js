@@ -7,7 +7,7 @@ Page({
   data: {
     task: {
       id: 0, // 将在提交时生成
-      type: 'clock',
+      type: 'habit',
       title: '',
       description: '',
       status: 0, // 默认未完成
@@ -19,9 +19,9 @@ Page({
       reflection: '' // 学习心得
     },
     taskTypes: [
-      { id: 'clock', name: '生活习惯', icon: '⏰' },
-      { id: 'bag', name: '整理收纳', icon: '📚' },
-      { id: 'study', name: '学习任务', icon: '📝' }
+      { id: 'habit', name: '习惯', icon: '⏰' },
+      { id: 'interest', name: '兴趣', icon: '📚' },
+      { id: 'study', name: '学习', icon: '📝' }
     ],
     showTypeSelector: false,
     dateNow: '',

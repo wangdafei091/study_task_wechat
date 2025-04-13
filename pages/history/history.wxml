@@ -62,8 +62,8 @@
             <text class="checkbox-icon">{{selectedTasks.includes(item.id) ? '☑' : '□'}}</text>
           </view>
           <view class="task-icon">
-            <text class="icon-text" wx:if="{{item.type === 'clock'}}">⏰</text>
-            <text class="icon-text" wx:elif="{{item.type === 'bag'}}">📚</text>
+            <text class="icon-text" wx:if="{{item.type === 'habit'}}">⏰</text>
+            <text class="icon-text" wx:elif="{{item.type === 'interest'}}">📚</text>
             <text class="icon-text" wx:elif="{{item.type === 'study'}}">📝</text>
           </view>
           <view class="task-content">
@@ -125,11 +125,11 @@
           <text class="type-icon">📋</text>
           <text class="type-text">全部</text>
         </view>
-        <view class="filter-option type-option {{filterType === 'clock' ? 'active' : ''}}" bindtap="selectType" data-type="clock">
+        <view class="filter-option type-option {{filterType === 'habit' ? 'active' : ''}}" bindtap="selectType" data-type="habit">
           <text class="type-icon">⏰</text>
           <text class="type-text">生活习惯</text>
         </view>
-        <view class="filter-option type-option {{filterType === 'bag' ? 'active' : ''}}" bindtap="selectType" data-type="bag">
+        <view class="filter-option type-option {{filterType === 'interest' ? 'active' : ''}}" bindtap="selectType" data-type="interest">
           <text class="type-icon">📚</text>
           <text class="type-text">整理收纳</text>
         </view>

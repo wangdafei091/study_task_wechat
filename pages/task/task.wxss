@@ -74,11 +74,11 @@
   margin-right: 16rpx;
 }
 
-.clock {
+.habit {
   background: #4285F4;
 }
 
-.bag {
+.interest {
   background: #FBBC05;
 }
 

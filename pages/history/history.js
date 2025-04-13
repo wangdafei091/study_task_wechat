@@ -14,13 +14,13 @@ Page({
     allTimeCount: 0,
     completionRate: 0,
     filterPeriod: 'all', // 'today', 'week', 'month', 'all'
-    filterType: '', // 'clock', 'bag', 'study', ''
+    filterType: '', // 'habit', 'interest', 'study', ''
     selectedTasks: [],
     isMultiSelect: false,
     showFilterMenu: false,
     taskTypes: [
-      { id: 'clock', name: '生活习惯', icon: '⏰' },
-      { id: 'bag', name: '整理收纳', icon: '📚' },
+      { id: 'habit', name: '生活习惯', icon: '⏰' },
+      { id: 'interest', name: '兴趣', icon: '📚' },
       { id: 'study', name: '学习任务', icon: '📝' }
     ],
     dateRange: {

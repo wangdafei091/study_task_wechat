@@ -396,7 +396,7 @@ const taskManager = {
     if (!tasks || tasks.length === 0) {
       const emptyStats = {
         taskProgress: {
-          clock: 0,
+          habit: 0,
           study: 0
         },
         rewardProgress: {
@@ -409,8 +409,8 @@ const taskManager = {
           completionRate: 0,
           streak: 0,
           typeCounts: {
-            clock: 0,
-            study: 0
+            habit: 0,
+            sthabitudy: 0
           }
         }
       };
@@ -421,8 +421,8 @@ const taskManager = {
     
     // 按类型统计任务
     const typeCounts = {
-      total: { clock: 0, study: 0 },
-      completed: { clock: 0, study: 0 }
+      total: { habit: 0, study: 0 },
+      completed: { habit: 0, study: 0 }
     };
     
     tasks.forEach(task => {
@@ -437,8 +437,8 @@ const taskManager = {
     
     // 计算各类型完成率
     const progress = {
-      clock: typeCounts.total.clock > 0 
-        ? Math.round(typeCounts.completed.clock / typeCounts.total.clock * 100) 
+      habit: typeCounts.total.habit > 0 
+        ? Math.round(typeCounts.completed.habit / typeCounts.total.habit * 100) 
         : 0,
       study: typeCounts.total.study > 0 
         ? Math.round(typeCounts.completed.study / typeCounts.total.study * 100) 
@@ -463,7 +463,7 @@ const taskManager = {
         completionRate: completionRate,
         streak: 0, // 需要另外计算连续完成天数
         typeCounts: {
-          clock: typeCounts.total.clock,
+          habit: typeCounts.total.habit,
           study: typeCounts.total.study
         }
       }

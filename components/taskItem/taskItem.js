@@ -20,8 +20,8 @@ Component({
    */
   data: {
     icons: {
-      clock: '⏰',
-      bag: '📚',
+      habit: '⏰',
+      interest: '📚',
       study: '📝'
     }
   },

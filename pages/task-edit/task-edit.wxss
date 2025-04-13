@@ -96,10 +96,32 @@
 }
 
 /* 任务模板分类 */
-.template-category {
+.template-categories {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+.category-group {
+  margin-bottom: 8rpx;
+}
+
+.category-label {
   font-size: 26rpx;
+  font-weight: 500;
   color: #666666;
-  margin: 15rpx 0 10rpx 10rpx;
+  margin-bottom: 12rpx;
+  display: block;
+}
+
+/* 任务模板容器 */
+.task-templates-container {
+  padding: 20rpx 30rpx;
+}
+
+/* 清除旧的任务模板样式 */
+.template-category {
+  margin: 10rpx 0 6rpx 0;
 }
 
 /* 任务模板卡片容器 */
@@ -153,11 +175,11 @@
   background-color: #4285F4;
 }
 
-.task-template.clock:before {
+.task-template.habit:before {
   background-color: #34A853;
 }
 
-.task-template.bag:before {
+.task-template.interest:before {
   background-color: #FBBC04;
 }
 
@@ -193,11 +215,11 @@
   background-color: #4285F4;
 }
 
-.task-template.active.clock:after {
+.task-template.active.habit:after {
   background-color: #34A853;
 }
 
-.task-template.active.bag:after {
+.task-template.active.interest:after {
   background-color: #FBBC04;
 }
 
@@ -213,11 +235,11 @@
   color: #4285F4;
 }
 
-.task-template.active.clock .template-name {
+.task-template.active.habit .template-name {
   color: #34A853;
 }
 
-.task-template.active.bag .template-name {
+.task-template.active.interest .template-name {
   color: #FBBC04;
 }
 
@@ -253,11 +275,11 @@
   border-color: rgba(66, 133, 244, 0.5);
 }
 
-.task-template.custom.clock {
+.task-template.custom.habit {
   border-color: rgba(52, 168, 83, 0.5);
 }
 
-.task-template.custom.bag {
+.task-template.custom.interest {
   border-color: rgba(251, 188, 4, 0.5);
 }
 
@@ -284,12 +306,12 @@
   background-color: #E8F0FE;
 }
 
-.task-info-section.clock .task-type-indicator {
+.task-info-section.habit .task-type-indicator {
   color: #34A853;
   background-color: #E6F4EA;
 }
 
-.task-info-section.bag .task-type-indicator {
+.task-info-section.interest .task-type-indicator {
   color: #FBBC04;
   background-color: #FEF7E0;
 }
@@ -338,11 +360,11 @@
   border-left-color: #4285F4;
 }
 
-.task-info-section.clock {
+.task-info-section.habit {
   border-left-color: #34A853;
 }
 
-.task-info-section.bag {
+.task-info-section.interest {
   border-left-color: #FBBC04;
 }
 
@@ -1143,11 +1165,11 @@
   border-color: #4285f4;
 }
 
-.clock {
+.habit {
   border-color: #fbbc05;
 }
 
-.bag {
+.interest {
   border-color: #34a853;
 }
 
@@ -1306,11 +1328,11 @@
   background-color: #4285F4;
 }
 
-.task-item.clock:before {
+.task-item.habit:before {
   background-color: #34A853;
 }
 
-.task-item.bag:before {
+.task-item.interest:before {
   background-color: #FBBC04;
 }
 
@@ -1359,11 +1381,11 @@
   border-color: rgba(66, 133, 244, 0.3);
 }
 
-.task-item.clock .task-content:before {
+.task-item.habit .task-content:before {
   border-color: rgba(52, 168, 83, 0.3);
 }
 
-.task-item.bag .task-content:before {
+.task-item.interest .task-content:before {
   border-color: rgba(251, 188, 4, 0.3);
 }
 
@@ -1399,11 +1421,11 @@
   box-shadow: 0 0 0 2rpx #FFFFFF, 0 0 0 4rpx rgba(66, 133, 244, 0.4);
 }
 
-.task-item.repeated.clock:before {
+.task-item.repeated.habit:before {
   box-shadow: 0 0 0 2rpx #FFFFFF, 0 0 0 4rpx rgba(52, 168, 83, 0.4);
 }
 
-.task-item.repeated.bag:before {
+.task-item.repeated.interest:before {
   box-shadow: 0 0 0 2rpx #FFFFFF, 0 0 0 4rpx rgba(251, 188, 4, 0.4);
 }
 
@@ -1489,11 +1511,11 @@
   background-color: #4285F4;
 }
 
-.task-bar.clock {
+.task-bar.habit {
   background-color: #34A853;
 }
 
-.task-bar.bag {
+.task-bar.interest {
   background-color: #FBBC04;
 }
 
@@ -1555,11 +1577,11 @@
   background-color: #4285F4;
 }
 
-.color-indicator.clock {
+.color-indicator.habit {
   background-color: #34A853;
 }
 
-.color-indicator.bag {
+.color-indicator.interest {
   background-color: #FBBC04;
 }
 
@@ -1682,10 +1704,10 @@
   background-color: #4285F4;
 }
 
-.repeat-dot.clock {
+.repeat-dot.habit {
   background-color: #34A853;
 }
 
-.repeat-dot.bag {
+.repeat-dot.interest {
   background-color: #FBBC04;
 } 

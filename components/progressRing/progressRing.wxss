@@ -21,7 +21,7 @@
   box-sizing: border-box;
 }
 /* 为不同类型的圆环设置匹配的背景色 */
-.progress-ring.clock .ring-bg {
+.progress-ring.habit .ring-bg {
   border-color: rgba(66, 133, 244, 0.1);
 }
 
@@ -29,7 +29,7 @@
   border-color: rgba(52, 168, 83, 0.1);
 }
 
-.progress-ring.bag .ring-bg {
+.progress-ring.interest .ring-bg {
   border-color: rgba(251, 188, 5, 0.1);
 }
 /* 圆环进度条 */
@@ -121,7 +121,7 @@
   color: #4285F4;
 }
 
-.progress-ring.clock {
+.progress-ring.habit {
   color: #4285F4;
 }
 
@@ -129,7 +129,7 @@
   color: #34A853;
 }
 
-.progress-ring.bag {
+.progress-ring.interest {
   color: #FBBC05;
 }
 
@@ -175,7 +175,7 @@
   box-shadow: 0 0 10rpx currentColor;
 }
 
-.progress-ring.completed.clock {
+.progress-ring.completed.habit {
   --ring-color-rgb: 66, 133, 244;
   box-shadow: 0 0 15rpx rgba(66, 133, 244, 0.4);
 }
@@ -185,7 +185,7 @@
   box-shadow: 0 0 15rpx rgba(52, 168, 83, 0.4);
 }
 
-.progress-ring.completed.bag {
+.progress-ring.completed.interest {
   --ring-color-rgb: 251, 188, 5;
   box-shadow: 0 0 15rpx rgba(251, 188, 5, 0.4);
 }
@@ -236,9 +236,9 @@
   }
 }
 
-.progress-ring.completed.clock,
+.progress-ring.completed.habit,
 .progress-ring.completed.study,
-.progress-ring.completed.bag {
+.progress-ring.completed.interest {
   animation: pulseGlow 2s infinite;
 }
 

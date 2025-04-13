@@ -83,9 +83,7 @@ Component({
       // 根据type设置对应的样式类
       const typeMap = {
         'study': 'study',
-        'habit': 'clock',
-        'clock': 'clock',
-        'bag': 'bag'
+        'habit': 'habit'
       };
       
       this.setData({

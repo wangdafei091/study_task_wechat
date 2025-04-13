@@ -10,8 +10,8 @@
     <view class="task-title">{{task.title}}</view>
     <view class="task-info">
       <view class="task-type type-{{task.type}}">
-        <block wx:if="{{task.type == 'clock'}}">习惯</block>
-        <block wx:elif="{{task.type == 'bag'}}">整理</block>
+        <block wx:if="{{task.type == 'habit'}}">习惯</block>
+        <block wx:elif="{{task.type == 'interest'}}">兴趣</block>
         <block wx:elif="{{task.type == 'study'}}">学习</block>
       </view>
       <text wx:if="{{task.duration}}" class="task-duration">{{task.duration}}分钟</text>

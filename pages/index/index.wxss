@@ -700,11 +700,11 @@
   transition: width 0.5s cubic-bezier(0.075, 0.82, 0.165, 1);
 }
 
-.chart-bar.clock {
+.chart-bar.habit {
   background: linear-gradient(to right, #3b7af0, #4285F4);
 }
 
-.chart-bar.bag {
+.chart-bar.interest {
   background: linear-gradient(to right, #f0b503, #FBBC05);
 }
 

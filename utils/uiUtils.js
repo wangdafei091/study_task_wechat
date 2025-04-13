@@ -251,8 +251,8 @@ const slideOutAnimation = function(page, animationKey, direction = 'bottom', dis
  */
 const formatTaskTypeIcon = function(type) {
   const iconMap = {
-    'clock': 'icon-time',
-    'bag': 'icon-backpack',
+    'habit': 'icon-time',
+    'interest': 'icon-backpack',
     'study': 'icon-study',
     'default': 'icon-task'
   };

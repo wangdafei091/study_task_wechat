@@ -758,4 +758,87 @@ page {
 
 .animate-pulse {
   animation: pulse 1s ease-in-out;
-} 
+}
+
+/* 暗黑模式适配 */
+@media (prefers-color-scheme: dark) {
+  page {
+    background: linear-gradient(to bottom, #1f1f1f, #121212);
+    color: #f0f0f0;
+    
+    /* 重定义暗黑模式下的CSS变量 */
+    --primary-color: #5A96F5;
+    --primary-color-light: #6BA5FF;
+    --primary-color-dark: #3B76DB;
+    --primary-bg-light: rgba(66, 133, 244, 0.15);
+    --primary-bg-medium: rgba(66, 133, 244, 0.25);
+    
+    --success-color: #42B561;
+    --success-color-light: #50C26F;
+    --success-color-dark: #2E9046;
+    --success-bg-light: rgba(54, 168, 83, 0.15);
+    
+    --warning-color: #FDC82E;
+    --warning-color-light: #FDDC5C;
+    --warning-color-dark: #E8AB00;
+    --warning-bg-light: rgba(251, 188, 5, 0.15);
+    
+    --error-color: #F05749;
+    --error-color-light: #F26B5E;
+    --error-color-dark: #D53A2D;
+    
+    /* 文字颜色 */
+    --text-primary: #f0f0f0;
+    --text-secondary: #d0d0d0;
+    --text-tertiary: #a0a0a0;
+    --text-hint: #808080;
+    --text-light: #FFFFFF;
+    
+    /* 背景色 */
+    --bg-primary: #121212;
+    --bg-secondary: #1f1f1f;
+    --bg-surface: #282828;
+    --bg-card: #2d2d2d;
+    --bg-disabled: #3d3d3d;
+    
+    /* 边框样式 */
+    --border-light: #3d3d3d;
+    --border-medium: #4d4d4d;
+    --border-focus: rgba(90, 150, 245, 0.5);
+    
+    /* 阴影样式（针对暗色模式优化） */
+    --shadow-light: 0 2rpx 8rpx rgba(0, 0, 0, 0.2), 0 4rpx 16rpx rgba(0, 0, 0, 0.14);
+    --shadow-medium: 0 4rpx 12rpx rgba(0, 0, 0, 0.25), 0 6rpx 20rpx rgba(0, 0, 0, 0.2);
+    --shadow-dark: 0 8rpx 16rpx rgba(0, 0, 0, 0.3), 0 12rpx 24rpx rgba(0, 0, 0, 0.25);
+    --shadow-focus: 0 0 0 3rpx rgba(90, 150, 245, 0.3);
+  }
+  
+  /* 卡片容器暗色模式 */
+  .card {
+    background: linear-gradient(to bottom, #2d2d2d, #252525);
+    box-shadow: var(--shadow-light);
+  }
+  
+  /* 按钮暗色模式 */
+  .btn-secondary {
+    background-color: var(--primary-bg-light);
+    color: var(--primary-color-light);
+  }
+  
+  /* 修改部分特定颜色类，确保在暗色模式下足够明显 */
+  .primary-color {
+    color: var(--primary-color-light);
+  }
+  
+  .success-color {
+    color: var(--success-color-light);
+  }
+  
+  .warning-color {
+    color: var(--warning-color-light);
+  }
+  
+  .error-color {
+    color: var(--error-color-light);
+  }
+}

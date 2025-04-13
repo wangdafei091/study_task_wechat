@@ -35,8 +35,8 @@ Page({
       completionRate: 0,
       streak: 0, // 连续完成天数
       typeCounts: {
-        clock: 0,
-        bag: 0,
+        habit: 0,
+        interest: 0,
         study: 0
       }
     },
@@ -57,8 +57,8 @@ Page({
     
     // 任务进度
     taskProgress: {
-      clock: 0,
-      bag: 0,
+      habit: 0,
+      interest: 0,
       study: 0
     },
 

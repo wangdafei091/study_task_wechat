@@ -484,7 +484,7 @@ App({
     return [
       {
         id: 1,
-        type: 'clock',
+        type: 'habit',
         title: '独立刷牙',
         description: '早晚各刷一次牙，每次2分钟',
         status: 0, 
@@ -496,7 +496,7 @@ App({
       },
       {
         id: 2,
-        type: 'bag',
+        type: 'interest',
         title: '整理书包',
         description: '检查明天所需的课本和学习用品',
         status: 0,

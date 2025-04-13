@@ -177,11 +177,11 @@
               <block wx:if="{{utils.hasTaskType(item.tasks, 'study')}}">
                 <view class="type-indicator study"></view>
               </block>
-              <block wx:if="{{utils.hasTaskType(item.tasks, 'clock')}}">
-                <view class="type-indicator clock"></view>
+              <block wx:if="{{utils.hasTaskType(item.tasks, 'habit')}}">
+                <view class="type-indicator habit"></view>
               </block>
-              <block wx:if="{{utils.hasTaskType(item.tasks, 'bag')}}">
-                <view class="type-indicator bag"></view>
+              <block wx:if="{{utils.hasTaskType(item.tasks, 'interest')}}">
+                <view class="type-indicator interest"></view>
               </block>
             </view>
           </view>

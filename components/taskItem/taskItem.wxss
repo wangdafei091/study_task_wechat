@@ -29,11 +29,11 @@
   transition: all var(--transition-fast);
 }
 
-.task-item.type-clock::before {
+.task-item.type-habit::before {
   background-color: var(--primary-color);
 }
 
-.task-item.type-bag::before {
+.task-item.type-interest::before {
   background-color: var(--warning-color);
 }
 
@@ -115,12 +115,12 @@
   color: var(--text-secondary);
 }
 
-.task-type.type-clock {
+.task-type.type-habit {
   background-color: var(--primary-bg-light);
   color: var(--primary-color);
 }
 
-.task-type.type-bag {
+.task-type.type-interest {
   background-color: var(--warning-bg-light);
   color: var(--warning-color);
 }
@@ -199,11 +199,11 @@
   font-size: 32rpx;
 }
 
-.clock {
+.habit {
   background: #4285F4;
 }
 
-.bag {
+.interest {
   background: #FBBC05;
 }
 

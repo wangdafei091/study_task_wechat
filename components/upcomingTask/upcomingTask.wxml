@@ -7,7 +7,7 @@
         bindtouchend="touchEndUpcoming"
         bindtouchmove="touchMoveUpcoming">
     <view class="upcoming-icon">
-      <text class="iconfont icon-clock">⏰</text>
+      <text class="iconfont icon-habit">⏰</text>
     </view>
     <view class="upcoming-content">
       <view class="upcoming-title">即将到期</view>

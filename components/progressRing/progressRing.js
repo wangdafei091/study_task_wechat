@@ -17,7 +17,7 @@ Component({
       type: String,
       value: 'medium'
     },
-    // 圆环类型，可选值：default/clock/study/bag等
+    // 圆环类型，可选值：default/habit/study/interest
     type: {
       type: String,
       value: 'default'

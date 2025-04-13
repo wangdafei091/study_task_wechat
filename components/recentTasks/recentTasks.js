@@ -379,8 +379,8 @@ Component({
     // 获取任务类型对应的文本
     getTaskTypeName: function(type) {
       const typeMap = {
-        'clock': '习惯',
-        'bag': '整理',
+        'habit': '习惯',
+        'interest': '兴趣',
         'study': '学习'
       };
       return typeMap[type] || '任务';
