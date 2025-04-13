@@ -1003,9 +1003,33 @@ Page({
       }
     ];
 
+    // 首先设置预设的模板
     this.setData({
       studyTemplates: studyTemplates,
       habitTemplates: habitTemplates
+    });
+    
+    // 加载自定义模板并合并
+    const that = this;
+    wx.getStorage({
+      key: 'customTemplates',
+      success: function(res) {
+        console.log('加载自定义模板:', res.data);
+        const customTemplates = res.data || [];
+        
+        // 按任务类型分类
+        const customStudyTemplates = customTemplates.filter(t => t.taskType === 'study');
+        const customHabitTemplates = customTemplates.filter(t => t.taskType === 'habit' || t.taskType === 'clock');
+        
+        // 合并自定义模板和预设模板
+        that.setData({
+          studyTemplates: [...customStudyTemplates, ...studyTemplates],
+          habitTemplates: [...customHabitTemplates, ...habitTemplates]
+        });
+      },
+      fail: function(err) {
+        console.log('未找到自定义模板或加载失败:', err);
+      }
     });
   },
 
@@ -1177,12 +1201,15 @@ Page({
   saveAsTemplate: function() {
     const { task } = this.data;
     
+    console.log('开始保存任务模板:', task.title);
+    
     // 校验必要信息
     if (!task.title.trim()) {
       wx.showToast({
         title: '请先填写任务名称',
         icon: 'none'
       });
+      console.log('保存模板失败: 任务名称为空');
       return;
     }
     
@@ -1191,6 +1218,7 @@ Page({
     if (!shortName) {
       // 如果没有简称，使用任务名前4个字
       shortName = task.title.substring(0, 4);
+      console.log('自动生成简称:', shortName);
     }
     
     // 创建新模板
@@ -1207,41 +1235,70 @@ Page({
       createTime: Date.now()
     };
     
+    console.log('新建模板对象:', newTemplate);
+    
     // 获取现有模板
     wx.getStorage({
       key: 'customTemplates',
       success: (res) => {
         let templates = res.data || [];
-        // 最多保留10个自定义模板，先进先出
-        if (templates.length >= 10) {
-          templates.pop();
+        console.log('已加载现有模板数量:', templates.length);
+        
+        // 检查是否已存在同名模板
+        const existingIndex = templates.findIndex(t => t.name === newTemplate.name && t.taskType === newTemplate.taskType);
+        if (existingIndex !== -1) {
+          console.log('发现同名模板，更新该模板');
+          templates.splice(existingIndex, 1); // 移除已存在的同名模板
         }
+        
+        // 最多保留100个自定义模板，按创建时间排序
         templates.unshift(newTemplate);
+        if (templates.length > 100) {
+          const removedTemplate = templates.pop();
+          console.log('模板数量超过100个，移除最旧模板:', removedTemplate.name);
+        }
         
         wx.setStorage({
           key: 'customTemplates',
           data: templates,
           success: () => {
+            console.log('模板保存成功，当前模板总数:', templates.length);
             wx.showToast({
               title: '已保存为模板',
               icon: 'success'
             });
             // 刷新模板列表
             this.loadTemplatesByCategory();
+          },
+          fail: (err) => {
+            console.error('模板保存失败:', err);
+            wx.showToast({
+              title: '保存模板失败',
+              icon: 'none'
+            });
           }
         });
       },
       fail: () => {
+        console.log('首次创建模板存储');
         wx.setStorage({
           key: 'customTemplates',
           data: [newTemplate],
           success: () => {
+            console.log('模板保存成功，当前模板总数: 1');
             wx.showToast({
               title: '已保存为模板',
               icon: 'success'
             });
             // 刷新模板列表
             this.loadTemplatesByCategory();
+          },
+          fail: (err) => {
+            console.error('模板保存失败:', err);
+            wx.showToast({
+              title: '保存模板失败',
+              icon: 'none'
+            });
           }
         });
       }
