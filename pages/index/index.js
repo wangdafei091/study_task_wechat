@@ -77,16 +77,16 @@ Page({
       {
         id: 'study',
         type: 'study-task',
-        icon: '📚',
-        label: '学习',
-        ariaLabel: '创建学习任务'
+        icon: '📊',
+        label: '分析',
+        ariaLabel: '查看统计分析'
       },
       {
         id: 'habit',
         type: 'habit-task',
         icon: '⏰',
-        label: '习惯',
-        ariaLabel: '创建习惯任务'
+        label: '任务',
+        ariaLabel: '创建任务'
       }
     ]
   },
@@ -523,8 +523,14 @@ Page({
     });
     
     // 根据选项处理
-    if (item && item.type) {
-      this.navigateToTaskEdit({ detail: { type: item.id } });
+    if (item && item.id === 'habit') {
+      console.log('[首页] 点击任务菜单项，跳转到任务编辑页面');
+      wx.navigateTo({
+        url: `/pages/task-edit/task-edit?mode=create`
+      });
+    } else if (item && item.id === 'study') {
+      console.log('[首页] 点击分析菜单项，暂无功能');
+      // 分析功能暂时清除，未来将添加统计分析功能
     }
   },
   
