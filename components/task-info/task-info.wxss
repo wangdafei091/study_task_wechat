@@ -53,24 +53,27 @@
 }
 
 .task-info-display {
-  padding: 20rpx;
+  padding: 0 20rpx;
   background-color: var(--bg-card);
   border-radius: var(--radius-md);
   font-size: 30rpx;
   color: var(--text-primary);
   position: relative;
-  min-height: 24rpx;
+  height: 80rpx;
+  line-height: 80rpx;
+  box-sizing: border-box;
 }
 
 .task-info-display.points {
   display: flex;
   align-items: center;
+  justify-content: flex-start;
 }
 
 .task-info-display .point-value {
-  font-size: 40rpx;
+  font-size: 30rpx;
   font-weight: 500;
-  color: var(--success-color);
+  color: var(--text-primary);
   margin-right: 8rpx;
 }
 
@@ -133,4 +136,11 @@
   color: var(--primary-color);
   font-size: 28rpx;
   font-weight: 500;
+}
+
+.task-info-display.description {
+  height: auto;
+  min-height: 180rpx;
+  line-height: 1.5;
+  padding: 20rpx;
 } 
