@@ -365,8 +365,10 @@ Page({
    * 输入任务标题
    */
   inputTitle: function(e) {
+    console.log('更新任务标题:', e.detail ? e.detail.value : e.target.value);
+    const value = e.detail ? e.detail.value : e.target.value;
     this.setData({
-      'task.title': e.detail.value
+      'task.title': value
     });
   },
 
@@ -374,8 +376,10 @@ Page({
    * 输入任务描述
    */
   inputDescription: function(e) {
+    console.log('更新任务描述:', e.detail ? e.detail.value : e.target.value);
+    const value = e.detail ? e.detail.value : e.target.value;
     this.setData({
-      'task.description': e.detail.value
+      'task.description': value
     });
   },
 
@@ -1049,9 +1053,12 @@ Page({
    * 处理模板选择事件
    */
   handleTemplateSelect: function(e) {
-    const templateId = e.detail.templateId;
+    console.log('选择模板:', e.detail);
+    const templateId = e.detail.id;
+    const templateType = e.detail.type;
+    
+    // 其余代码不变
     const template = e.detail.template;
-    const templateType = e.detail.type; // 获取选中模板的类型
     
     // 添加详细日志调试事件内容
     console.log('Template select event detail:', e.detail);
@@ -1985,12 +1992,14 @@ Page({
    * 输入积分
    */
   inputPoints: function(e) {
-    let value = parseInt(e.detail.value);
-    // 不再检查范围，直接保存用户输入的值
-    console.log('用户输入积分值:', value);
+    console.log('更新任务积分:', e.detail ? e.detail.value : e.target.value);
+    const value = e.detail ? e.detail.value : e.target.value;
+    // 确保积分为数字且在合理范围内
+    let points = parseInt(value) || 0;
+    points = Math.max(1, Math.min(10, points));
     
     this.setData({
-      'task.points': value
+      'task.points': points
     });
   },
 
@@ -2058,6 +2067,9 @@ Page({
    * 处理自定义选择事件
    */
   handleCustomSelect: function(e) {
+    console.log('选择自定义任务:', e.detail);
+    
+    // 其余代码不变
     const type = e.detail.type;
     
     // 添加详细日志
@@ -2331,5 +2343,26 @@ Page({
       (this.data.selectedTemplateType === 'habit' ? '习惯' : 
       (this.data.selectedTemplateType === 'interest' ? '兴趣' : '未知'))
     );
+  },
+
+  // 日视图任务完成事件处理
+  onDayTaskComplete: function(e) {
+    console.log('日视图任务完成:', e.detail.taskId);
+    // 这里可以添加任务完成的处理逻辑
+    // 由于这是概览，可能仅需跳转到相应页面或显示提示
+    wx.showToast({
+      title: '请在任务页面完成',
+      icon: 'none'
+    });
+  },
+  
+  // 日视图任务编辑事件处理
+  onDayTaskEdit: function(e) {
+    console.log('日视图任务编辑:', e.detail.taskId);
+    const taskId = e.detail.taskId;
+    // 跳转到任务编辑页面
+    wx.navigateTo({
+      url: '/pages/task-edit/task-edit?id=' + taskId + '&mode=edit'
+    });
   },
 }) 

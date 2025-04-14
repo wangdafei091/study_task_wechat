@@ -234,4 +234,48 @@
   background-color: #FFFFFF;
   border-radius: 16rpx;
   box-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.05);
+}
+
+.task-time {
+  min-width: 80rpx;
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  margin-right: 15rpx;
+  font-weight: var(--font-weight-medium);
+}
+
+.task-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6rpx;
+}
+
+.task-duration-text {
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+  margin-left: 10rpx;
+  flex-shrink: 0;
+}
+
+.repeat-indicator {
+  width: 8rpx;
+  height: 8rpx;
+  border-radius: var(--radius-circle);
+  background-color: var(--primary-color);
+  position: absolute;
+  top: 10rpx;
+  right: 10rpx;
+}
+
+.task-item.repeated {
+  position: relative;
+}
+
+.task-item.repeated::after {
+  content: "🔄";
+  position: absolute;
+  top: 10rpx;
+  right: 10rpx;
+  font-size: 20rpx;
 } 

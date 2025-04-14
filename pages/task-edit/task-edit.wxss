@@ -355,7 +355,7 @@
 /* 任务信息区域样式 */
 .task-info-section {
   border-left: 6rpx solid transparent;
-  transition: border-color 0.3s ease;
+  transition: all 0.3s ease-in-out;
 }
 
 .task-info-section.study {
@@ -383,6 +383,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  transition: opacity 0.2s ease-in-out;
 }
 
 /* 多行文本显示框 */
@@ -405,11 +406,14 @@
 
 /* 表单项布局 */
 .form-item {
-  margin-bottom: 24rpx;
+  margin-bottom: 40rpx;
+  transition: height 0.3s ease-in-out, opacity 0.3s ease-in-out;
+  position: relative;
+  min-height: 90rpx; /* 确保最小高度稳定 */
 }
 
 .form-item:last-child {
-  margin-bottom: 0;
+  margin-bottom: 20rpx;
 }
 
 .item-label {
@@ -431,7 +435,15 @@
   text-align: right;
   font-size: 24rpx;
   color: #999999;
-  margin-top: 6rpx;
+  margin-top: 8rpx;
+  transition: opacity 0.3s ease-in-out;
+  height: 30rpx; /* 固定高度 */
+  opacity: 0;
+}
+
+/* 显示字数统计时淡入 */
+.form-item.custom-mode .char-count {
+  opacity: 1;
 }
 
 /* 横向两列布局 */
@@ -727,6 +739,15 @@
 /* 保存模板按钮 */
 .save-template-section {
   margin: 30rpx 0;
+  height: 0;
+  overflow: hidden;
+  transition: height 0.3s ease-in-out, opacity 0.3s ease-in-out;
+  opacity: 0;
+}
+
+.save-template-section.visible {
+  height: 80rpx;
+  opacity: 1;
 }
 
 .btn-save-template {
@@ -740,6 +761,7 @@
   align-items: center;
   justify-content: center;
   font-weight: normal;
+  transition: all 0.2s ease-in-out;
 }
 
 /* 表单部分 */
@@ -869,6 +891,7 @@
   font-size: 28rpx;
   box-sizing: border-box;
   color: #333333;
+  transition: opacity 0.2s ease-in-out;
 }
 
 .short-name-input {
@@ -884,6 +907,7 @@
   font-size: 28rpx;
   box-sizing: border-box;
   color: #333333;
+  transition: opacity 0.2s ease-in-out;
 }
 
 .char-count {
@@ -1712,4 +1736,24 @@
 
 .repeat-dot.interest {
   background-color: #FBBC04;
+}
+
+.task-time-wrapper {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 16rpx;
+  position: relative;
+}
+
+.task-time-wrapper .task-time {
+  width: 80rpx;
+  font-size: 24rpx;
+  color: #666;
+  margin-right: 20rpx;
+  margin-top: 24rpx;
+  flex-shrink: 0;
+}
+
+.task-time-wrapper taskItem {
+  flex: 1;
 } 

@@ -12,6 +12,18 @@ Component({
         status: 0,
         hasImage: false
       }
+    },
+    showActions: {
+      type: Boolean,
+      value: true
+    },
+    showTime: {
+      type: Boolean,
+      value: false
+    },
+    showCheckbox: {
+      type: Boolean,
+      value: true
     }
   },
 
@@ -32,6 +44,7 @@ Component({
   methods: {
     // 点击复选框完成任务
     onCheckboxTap: function(e) {
+      console.log('任务完成状态切换:', this.properties.task.id);
       this.triggerEvent('complete', {
         taskId: this.properties.task.id
       });
@@ -45,6 +58,7 @@ Component({
 
     // 点击编辑按钮
     onEditTap: function(e) {
+      console.log('任务编辑点击:', this.properties.task.id);
       this.triggerEvent('edit', {
         taskId: this.properties.task.id
       });

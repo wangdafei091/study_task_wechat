@@ -1,0 +1,30 @@
+/* components/task-templates/task-templates.wxss */
+
+.task-templates-container {
+  padding: 24rpx;
+  background-color: #fff;
+}
+
+.section-label {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 20rpx;
+}
+
+.template-categories {
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+
+.category-group {
+  margin-bottom: 10rpx;
+}
+
+.category-label {
+  font-size: 26rpx;
+  color: #666;
+  margin-bottom: 16rpx;
+  display: block;
+} 

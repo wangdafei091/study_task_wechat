@@ -1,0 +1,32 @@
+<!-- components/task-templates/task-templates.wxml -->
+<view class="task-templates-container">
+  <!-- 添加常用任务标题 -->
+  <view class="section-label">常用任务</view>
+  
+  <!-- 学习任务和生活习惯模板合并在一起显示，使用内联标签 -->
+  <view class="template-categories">
+    <view class="category-group">
+      <text class="category-label">学习任务</text>
+      <template-selector 
+        templates="{{studyTemplates}}" 
+        selectedId="{{selectedTemplate}}"
+        type="study"
+        title=""
+        bind:select="onTemplateSelect"
+        bind:custom="onCustomSelect">
+      </template-selector>
+    </view>
+    
+    <view class="category-group">
+      <text class="category-label">生活习惯</text>
+      <template-selector 
+        templates="{{habitTemplates}}" 
+        selectedId="{{selectedTemplate}}"
+        type="habit"
+        title=""
+        bind:select="onTemplateSelect"
+        bind:custom="onCustomSelect">
+      </template-selector>
+    </view>
+  </view>
+</view> 

@@ -39,15 +39,15 @@
           <view class="day-tasks" wx:if="{{dayData.tasks.length > 0}}">
             <view class="time-axis"></view>
             <block wx:for="{{dayData.tasks}}" wx:key="id">
-              <view class="task-item {{item.type}} {{item.isRepeated ? 'repeated' : ''}}">
+              <view class="task-time-wrapper">
                 <view class="task-time">{{item.startTime}}</view>
-                <view class="task-content">
-                  <view class="task-header">
-                    <text class="task-title">{{item.title}}</text>
-                    <text class="task-duration-text">{{item.duration}}分钟</text>
-                  </view>
-                  <view class="repeat-indicator" wx:if="{{item.isRepeated}}"></view>
-                </view>
+                <taskItem 
+                  task="{{item}}" 
+                  showActions="{{false}}" 
+                  showCheckbox="{{false}}"
+                  bind:complete="onDayTaskComplete"
+                  bind:edit="onDayTaskEdit"
+                ></taskItem>
               </view>
             </block>
           </view>
@@ -161,87 +161,34 @@
     
     <!-- 卡片区域2：任务管理区域 -->
     <card title="任务管理" icon="📝" customClass="task-management-card" noPadding="true">
-      <!-- 常用任务区域 - 优化布局结构 -->
+      <!-- 常用任务区域 - 使用自定义组件 -->
       <view class="section-block task-templates-container">
-        <!-- 添加常用任务标题 -->
-        <view class="section-label">常用任务</view>
-        <!-- 学习任务和生活习惯模板合并在一起显示，使用内联标签 -->
-        <view class="template-categories">
-          <view class="category-group">
-            <text class="category-label">学习任务</text>
-            <template-selector 
-              templates="{{studyTemplates}}" 
-              selectedId="{{selectedTemplate}}"
-              type="study"
-              title=""
-              bind:select="handleTemplateSelect"
-              bind:custom="handleCustomSelect">
-            </template-selector>
-          </view>
-          
-          <view class="category-group">
-            <text class="category-label">生活习惯</text>
-            <template-selector 
-              templates="{{habitTemplates}}" 
-              selectedId="{{selectedTemplate}}"
-              type="habit"
-              title=""
-              bind:select="handleTemplateSelect"
-              bind:custom="handleCustomSelect">
-            </template-selector>
-          </view>
-        </view>
+        <task-templates
+          studyTemplates="{{studyTemplates}}"
+          habitTemplates="{{habitTemplates}}"
+          selectedTemplate="{{selectedTemplate}}"
+          bind:templateSelect="handleTemplateSelect"
+          bind:customSelect="handleCustomSelect"
+        ></task-templates>
       </view>
       
       <!-- 任务信息区域 -->
       <view class="section-block task-info-section {{selectedTemplateType}}">
-        <view class="section-header">
-          <view class="section-label">任务信息</view>
-          <view class="task-type-indicator" wx:if="{{selectedTemplateType}}">
-            {{selectedTemplateType === 'study' ? '学习' : 
-             (selectedTemplateType === 'habit' ? '习惯' : 
-             (selectedTemplateType === 'interest' ? '兴趣' : ''))}}
-          </view>
-        </view>
-        
-        <!-- 任务名称 -->
-        <view class="form-item">
-          <view class="item-label">任务名称</view>
-          <view class="task-info-display" wx:if="{{selectedTemplate && !customMode}}">
-            {{task.title}}
-            <text class="edit-button" bindtap="enableCustomMode">编辑</text>
-          </view>
-          <input class="input" wx:else value="{{task.title}}" bindinput="inputTitle" 
-            placeholder="请输入任务名称" maxlength="20" />
-          <view class="char-count" wx:if="{{customMode}}">{{task.title.length}}/20</view>
-        </view>
-        
-        <!-- 积分 -->
-        <view class="form-item">
-          <view class="item-label">积分</view>
-          <view class="task-info-display points" wx:if="{{selectedTemplate && !customMode}}">
-            <text class="point-value">{{task.points}}</text>
-            <text class="point-label">分</text>
-          </view>
-          <input class="input" wx:else type="number" value="{{task.points}}" bindinput="inputPoints" 
-            placeholder="1-10" maxlength="2" />
-        </view>
-        
-        <!-- 任务描述 -->
-        <view class="form-item">
-          <view class="item-label">任务描述 <text class="optional">选填</text></view>
-          <view class="task-info-display description" wx:if="{{selectedTemplate && !customMode && task.description}}">
-            {{task.description}}
-          </view>
-          <textarea class="textarea" wx:else value="{{task.description}}" bindinput="inputDescription" 
-            placeholder="简单描述任务内容和要求" maxlength="100" />
-          <view class="char-count" wx:if="{{customMode}}">{{task.description.length}}/100</view>
-        </view>
-        
-        <!-- 保存为常用任务(仅自定义模式) -->
-        <view class="save-template-section" wx:if="{{customMode && task.title}}">
-          <button class="btn-save-template" bindtap="saveAsTemplate">保存为常用任务</button>
-        </view>
+        <task-info
+          title="任务信息"
+          taskType="{{selectedTemplateType}}"
+          task="{{task}}"
+          customMode="{{customMode}}"
+          isTemplateMode="{{true}}"
+          editable="{{true}}"
+          showDescription="{{true}}"
+          showSaveTemplate="{{true}}"
+          bind:titleInput="inputTitle"
+          bind:pointsInput="inputPoints"
+          bind:descriptionInput="inputDescription"
+          bind:enableCustomMode="enableCustomMode"
+          bind:saveAsTemplate="saveAsTemplate"
+        ></task-info>
       </view>
       
       <!-- 执行设置区域 -->

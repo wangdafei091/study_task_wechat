@@ -1,0 +1,6 @@
+{
+  "component": true,
+  "usingComponents": {
+    "template-selector": "/components/template-selector/template-selector"
+  }
+} 

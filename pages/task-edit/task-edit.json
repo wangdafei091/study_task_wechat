@@ -3,6 +3,9 @@
   "usingComponents": {
     "card": "/components/card/card",
     "date-picker": "/components/date-picker/date-picker",
-    "template-selector": "/components/template-selector/template-selector"
+    "template-selector": "/components/template-selector/template-selector",
+    "task-info": "/components/task-info/task-info",
+    "task-templates": "/components/task-templates/task-templates",
+    "taskItem": "/components/taskItem/taskItem"
   }
 } 

@@ -1,25 +1,31 @@
 <!--components/taskItem/taskItem.wxml-->
-<view class="task-item {{task.status == 1 ? 'completed' : ''}} type-{{task.type}}">
+<view class="task-item {{task.status == 1 ? 'completed' : ''}} type-{{task.type}} {{task.isRepeated ? 'repeated' : ''}}">
+  <!-- 显示任务时间 -->
+  <view class="task-time" wx:if="{{showTime && task.startTime}}">{{task.startTime}}</view>
+  
   <!-- 任务勾选框 -->
-  <view class="task-checkbox {{task.status == 1 ? 'checked' : ''}}" catchtap="onCheckboxTap">
+  <view class="task-checkbox {{task.status == 1 ? 'checked' : ''}}" catchtap="onCheckboxTap" wx:if="{{showCheckbox}}">
     <text class="checkbox-icon {{task.status == 1 ? 'checked' : ''}}">✓</text>
   </view>
   
   <!-- 任务内容 -->
   <view class="task-content">
-    <view class="task-title">{{task.title}}</view>
+    <view class="task-header">
+      <text class="task-title">{{task.title}}</text>
+      <text wx:if="{{task.duration}}" class="task-duration-text">{{task.duration}}分钟</text>
+    </view>
     <view class="task-info">
       <view class="task-type type-{{task.type}}">
         <block wx:if="{{task.type == 'habit'}}">习惯</block>
         <block wx:elif="{{task.type == 'interest'}}">兴趣</block>
         <block wx:elif="{{task.type == 'study'}}">学习</block>
       </view>
-      <text wx:if="{{task.duration}}" class="task-duration">{{task.duration}}分钟</text>
     </view>
+    <view class="repeat-indicator" wx:if="{{task.isRepeated}}"></view>
   </view>
   
   <!-- 任务操作 -->
-  <view class="task-actions">
+  <view class="task-actions" wx:if="{{showActions}}">
     <view class="task-action" catchtap="onEditTap">✎</view>
   </view>
 </view> 
