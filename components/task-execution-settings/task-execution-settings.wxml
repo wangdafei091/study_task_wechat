@@ -1,0 +1,102 @@
+<!-- components/task-execution-settings/task-execution-settings.wxml -->
+<view class="task-execution-settings">
+  <view class="section-label" wx:if="{{showSectionLabel}}">执行方式</view>
+  
+  <!-- 执行模式选择 -->
+  <view class="execution-mode">
+    <view class="mode-option {{repeatMode === 'once' ? 'active' : ''}}" 
+          bindtap="onSwitchMode" data-mode="once">
+      一次性任务
+    </view>
+    <view class="mode-option {{repeatMode === 'repeat' ? 'active' : ''}}" 
+          bindtap="onSwitchMode" data-mode="repeat">
+      周期性任务
+    </view>
+  </view>
+  
+  <!-- 一次性任务设置 -->
+  <view class="execution-settings" wx:if="{{repeatMode === 'once'}}">
+    <view class="form-item">
+      <!-- 使用日期选择器组件 -->
+      <date-picker 
+        label="执行日期" 
+        value="{{task.date}}" 
+        minDate="{{minDate}}"
+        placeholder="请选择执行日期"
+        quickOptions="{{dateQuickOptions}}"
+        bindchange="onSelectDate"
+        bindquickOptionChange="onQuickDateOptionChange"
+      ></date-picker>
+    </view>
+    
+    <!-- 学习任务才显示开始时间和结束时间 -->
+    <view class="form-item" wx:if="{{taskType === 'study'}}">
+      <view class="item-label">开始时间</view>
+      <picker mode="time" value="{{task.startTime}}" bindchange="onSelectStartTime">
+        <view class="picker {{task.startTime ? '' : 'placeholder'}}">
+          {{task.startTime || '请选择开始时间'}}
+        </view>
+      </picker>
+    </view>
+    
+    <view class="form-item" wx:if="{{taskType === 'study'}}">
+      <view class="item-label">结束时间</view>
+      <picker mode="time" value="{{task.endTime}}" bindchange="onSelectEndTime">
+        <view class="picker {{task.endTime ? '' : 'placeholder'}}">
+          {{task.endTime || '请选择结束时间'}}
+        </view>
+      </picker>
+    </view>
+  </view>
+  
+  <!-- 周期性任务设置 -->
+  <view class="execution-settings" wx:if="{{repeatMode === 'repeat'}}">
+    <view class="form-item">
+      <!-- 使用日期选择器 - 范围模式 -->
+      <date-picker 
+        mode="range"
+        startLabel="开始日期"
+        endLabel="结束日期 (选填)"
+        startDate="{{task.repeat.startDate}}"
+        endDate="{{task.repeat.endDate}}"
+        minDate="{{minDate}}"
+        startPlaceholder="请选择开始日期"
+        endPlaceholder="不设置结束日期"
+        bindstartChange="onSelectStartDate"
+        bindendChange="onSelectEndDate"
+        rangeQuickOptions="{{dateRangeQuickOptions}}"
+        bindrangeQuickOptionChange="onRangeDateOptionChange"
+      ></date-picker>
+    </view>
+    
+    <!-- 添加时间设置 -->
+    <view class="form-item" wx:if="{{taskType === 'study'}}">
+      <view class="item-label">开始时间</view>
+      <picker mode="time" value="{{task.startTime}}" bindchange="onSelectStartTime">
+        <view class="picker {{task.startTime ? '' : 'placeholder'}}">
+          {{task.startTime || '请选择开始时间'}}
+        </view>
+      </picker>
+    </view>
+    
+    <view class="form-item" wx:if="{{taskType === 'study'}}">
+      <view class="item-label">结束时间</view>
+      <picker mode="time" value="{{task.endTime}}" bindchange="onSelectEndTime">
+        <view class="picker {{task.endTime ? '' : 'placeholder'}}">
+          {{task.endTime || '请选择结束时间'}}
+        </view>
+      </picker>
+    </view>
+    
+    <!-- 使用周期选择器组件 -->
+    <repeat-selector
+      repeatType="{{task.repeat.type}}"
+      selectedDays="{{task.repeat.days}}"
+      startDate="{{task.repeat.startDate}}"
+      endDate="{{task.repeat.endDate}}"
+      showPreview="{{true}}"
+      bind:frequencyChange="onFrequencyChange"
+      bind:daysChange="onDaysChange"
+    ></repeat-selector>
+  </view>
+</view> 

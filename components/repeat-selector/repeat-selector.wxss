@@ -1,0 +1,117 @@
+/* components/repeat-selector/repeat-selector.wxss */
+
+.repeat-selector {
+  width: 100%;
+}
+
+.form-item {
+  margin-bottom: 24rpx;
+}
+
+.item-label {
+  font-size: 28rpx;
+  color: #333;
+  margin-bottom: 16rpx;
+  font-weight: 500;
+}
+
+.required {
+  color: #ff4d4f;
+  margin-left: 4rpx;
+}
+
+.frequency-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+}
+
+.frequency-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 150rpx;
+  height: 150rpx;
+  border-radius: 12rpx;
+  background-color: #f5f7fa;
+  transition: all 0.3s;
+  position: relative;
+  overflow: hidden;
+}
+
+.frequency-item.active {
+  background-color: rgba(67, 133, 244, 0.1);
+  border: 2rpx solid #4385f4;
+}
+
+.frequency-item .icon {
+  font-size: 44rpx;
+  margin-bottom: 12rpx;
+}
+
+.frequency-item .label {
+  font-size: 26rpx;
+  color: #333;
+}
+
+.weekday-selector {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 12rpx;
+}
+
+.weekday-item {
+  width: 80rpx;
+  height: 80rpx;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #f5f7fa;
+  transition: all 0.3s;
+}
+
+.weekday-item.active {
+  background-color: #4385f4;
+  color: #fff;
+}
+
+.weekday-item .day {
+  font-size: 28rpx;
+}
+
+.repeat-preview {
+  margin-top: 24rpx;
+  padding: 24rpx;
+  background-color: #f8f9fa;
+  border-radius: 12rpx;
+}
+
+.preview-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 16rpx;
+}
+
+.preview-header .icon {
+  margin-right: 8rpx;
+}
+
+.preview-header .label {
+  font-size: 28rpx;
+  font-weight: 500;
+  color: #333;
+}
+
+.preview-content {
+  font-size: 26rpx;
+  color: #666;
+  line-height: 1.6;
+}
+
+.date-range {
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  color: #999;
+} 

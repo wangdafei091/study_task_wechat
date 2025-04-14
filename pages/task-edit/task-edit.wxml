@@ -193,179 +193,24 @@
       
       <!-- 执行设置区域 -->
       <view class="section-block">
-        <view class="section-label">执行方式</view>
-        
-        <!-- 执行模式选择 -->
-        <view class="execution-mode">
-          <view class="mode-option {{repeatMode === 'once' ? 'active' : ''}}" 
-                bindtap="switchMode" data-mode="once">
-            一次性任务
-          </view>
-          <view class="mode-option {{repeatMode === 'repeat' ? 'active' : ''}}" 
-                bindtap="switchMode" data-mode="repeat">
-            周期性任务
-          </view>
-        </view>
-        
-        <!-- 一次性任务设置 -->
-        <view class="execution-settings" wx:if="{{repeatMode === 'once'}}">
-          <view class="form-item">
-            <!-- 使用新的日期选择器组件 -->
-            <date-picker 
-              label="执行日期" 
-              value="{{task.date}}" 
-              minDate="{{dateNow}}"
-              placeholder="请选择执行日期"
-              quickOptions="{{dateQuickOptions}}"
-              bindchange="selectDate"
-              bindquickOptionChange="handleQuickDateOption"
-            ></date-picker>
-          </view>
-          
-          <!-- 学习任务才显示开始时间和结束时间 -->
-          <view class="form-item" wx:if="{{taskType === 'study'}}">
-            <view class="item-label">开始时间</view>
-            <picker mode="time" value="{{task.startTime}}" bindchange="selectStartTime">
-              <view class="picker {{task.startTime ? '' : 'placeholder'}}">
-                {{task.startTime || '请选择开始时间'}}
-              </view>
-            </picker>
-          </view>
-          
-          <view class="form-item" wx:if="{{taskType === 'study'}}">
-            <view class="item-label">结束时间</view>
-            <picker mode="time" value="{{task.endTime}}" bindchange="selectEndTime">
-              <view class="picker {{task.endTime ? '' : 'placeholder'}}">
-                {{task.endTime || '请选择结束时间'}}
-              </view>
-            </picker>
-          </view>
-        </view>
-        
-        <!-- 周期性任务设置 -->
-        <view class="execution-settings" wx:if="{{repeatMode === 'repeat'}}">
-          <view class="form-item">
-            <!-- 使用日期选择器 - 范围模式 -->
-            <date-picker 
-              mode="range"
-              startLabel="开始日期"
-              endLabel="结束日期 (选填)"
-              startDate="{{task.repeat.startDate}}"
-              endDate="{{task.repeat.endDate}}"
-              minDate="{{dateNow}}"
-              startPlaceholder="请选择开始日期"
-              endPlaceholder="不设置结束日期"
-              bindstartChange="selectStartDate"
-              bindendChange="selectEndDate"
-              rangeQuickOptions="{{dateRangeQuickOptions}}"
-              bindrangeQuickOptionChange="handleRangeDateOption"
-            ></date-picker>
-          </view>
-          
-          <!-- 添加时间设置 -->
-          <view class="form-item" wx:if="{{taskType === 'study'}}">
-            <view class="item-label">开始时间</view>
-            <picker mode="time" value="{{task.startTime}}" bindchange="selectStartTime">
-              <view class="picker {{task.startTime ? '' : 'placeholder'}}">
-                {{task.startTime || '请选择开始时间'}}
-              </view>
-            </picker>
-          </view>
-          
-          <view class="form-item" wx:if="{{taskType === 'study'}}">
-            <view class="item-label">结束时间</view>
-            <picker mode="time" value="{{task.endTime}}" bindchange="selectEndTime">
-              <view class="picker {{task.endTime ? '' : 'placeholder'}}">
-                {{task.endTime || '请选择结束时间'}}
-              </view>
-            </picker>
-          </view>
-          
-          <view class="form-item">
-            <view class="item-label">重复频率</view>
-            <view class="frequency-options">
-              <view class="frequency-item {{task.repeat.type === 'daily' ? 'active' : ''}}" 
-                    bindtap="selectFrequency" data-type="daily">
-                <text class="icon">📅</text>
-                <text class="label">每天</text>
-              </view>
-              <view class="frequency-item {{task.repeat.type === 'weekly' ? 'active' : ''}}" 
-                    bindtap="selectFrequency" data-type="weekly">
-                <text class="icon">🔄</text>
-                <text class="label">每周</text>
-              </view>
-              <view class="frequency-item {{task.repeat.type === 'workdays' ? 'active' : ''}}" 
-                    bindtap="selectFrequency" data-type="workdays">
-                <text class="icon">💼</text>
-                <text class="label">工作日</text>
-              </view>
-              <view class="frequency-item {{task.repeat.type === 'custom' ? 'active' : ''}}" 
-                    bindtap="selectFrequency" data-type="custom">
-                <text class="icon">⚙️</text>
-                <text class="label">自定义</text>
-              </view>
-            </view>
-          </view>
-          
-          <!-- 自定义重复频率 -->
-          <view class="form-item custom-repeat" wx:if="{{task.repeat.type === 'custom'}}">
-            <view class="item-label">选择重复日 <text class="required">*</text></view>
-            <view class="weekday-selector">
-              <view class="weekday-item {{task.repeat.days.includes('0') ? 'active' : ''}}" 
-                    bindtap="toggleWeekday" data-day="0">
-                <text class="day">日</text>
-              </view>
-              <view class="weekday-item {{task.repeat.days.includes('1') ? 'active' : ''}}" 
-                    bindtap="toggleWeekday" data-day="1">
-                <text class="day">一</text>
-              </view>
-              <view class="weekday-item {{task.repeat.days.includes('2') ? 'active' : ''}}" 
-                    bindtap="toggleWeekday" data-day="2">
-                <text class="day">二</text>
-              </view>
-              <view class="weekday-item {{task.repeat.days.includes('3') ? 'active' : ''}}" 
-                    bindtap="toggleWeekday" data-day="3">
-                <text class="day">三</text>
-              </view>
-              <view class="weekday-item {{task.repeat.days.includes('4') ? 'active' : ''}}" 
-                    bindtap="toggleWeekday" data-day="4">
-                <text class="day">四</text>
-              </view>
-              <view class="weekday-item {{task.repeat.days.includes('5') ? 'active' : ''}}" 
-                    bindtap="toggleWeekday" data-day="5">
-                <text class="day">五</text>
-              </view>
-              <view class="weekday-item {{task.repeat.days.includes('6') ? 'active' : ''}}" 
-                    bindtap="toggleWeekday" data-day="6">
-                <text class="day">六</text>
-              </view>
-            </view>
-          </view>
-          
-          <!-- 重复任务预览 -->
-          <view class="repeat-preview" wx:if="{{task.repeat.type !== 'none'}}">
-            <view class="preview-header">
-              <text class="icon">📋</text>
-              <text class="label">重复规则预览</text>
-            </view>
-            <view class="preview-content">
-              <text wx:if="{{task.repeat.type === 'daily'}}">每天重复一次</text>
-              <text wx:elif="{{task.repeat.type === 'weekly'}}">每周重复一次</text>
-              <text wx:elif="{{task.repeat.type === 'workdays'}}">每个工作日（周一至周五）重复</text>
-              <text wx:elif="{{task.repeat.type === 'custom' && task.repeat.days.length > 0}}">
-                每周 <text wx:for="{{task.repeat.days}}" wx:key="index" wx:for-item="day">
-                  {{day === 0 ? '日' : day === 1 ? '一' : day === 2 ? '二' : day === 3 ? '三' : day === 4 ? '四' : day === 5 ? '五' : '六'}}
-                  <text wx:if="{{index < task.repeat.days.length - 1}}">、</text>
-                </text> 重复
-              </text>
-              <view class="date-range">
-                <text>从 {{task.repeat.startDate}} 开始</text>
-                <text wx:if="{{task.repeat.endDate}}">，至 {{task.repeat.endDate}} 结束</text>
-                <text wx:else>，持续进行</text>
-              </view>
-            </view>
-          </view>
-        </view>
+        <task-execution-settings
+          taskType="{{taskType}}"
+          repeatMode="{{repeatMode}}"
+          task="{{task}}"
+          minDate="{{dateNow}}"
+          dateQuickOptions="{{dateQuickOptions}}"
+          dateRangeQuickOptions="{{dateRangeQuickOptions}}"
+          bind:modeChange="switchMode"
+          bind:dateChange="selectDate"
+          bind:startDateChange="selectStartDate"
+          bind:endDateChange="selectEndDate"
+          bind:startTimeChange="selectStartTime"
+          bind:endTimeChange="selectEndTime"
+          bind:quickDateChange="handleQuickDateOption"
+          bind:rangeDateChange="handleRangeDateOption"
+          bind:frequencyChange="selectFrequency"
+          bind:daysChange="updateRepeatDays"
+        ></task-execution-settings>
       </view>
     </card>
     

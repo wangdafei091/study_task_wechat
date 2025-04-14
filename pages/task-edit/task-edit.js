@@ -1269,6 +1269,28 @@ Page({
   },
 
   /**
+   * 更新重复日设置（用于组件事件处理）
+   */
+  updateRepeatDays: function(e) {
+    console.log('更新重复日:', e.detail.days);
+    
+    this.setData({
+      'task.repeat.days': e.detail.days
+    });
+    
+    const days = e.detail.days;
+    if (days.length > 0) {
+      const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
+      const selectedDays = days.map(d => weekdays[d]).join('、');
+      
+      wx.showToast({
+        title: `已选择：周${selectedDays}`,
+        icon: 'none'
+      });
+    }
+  },
+
+  /**
    * 保存当前任务为模板
    */
   saveAsTemplate: function() {
