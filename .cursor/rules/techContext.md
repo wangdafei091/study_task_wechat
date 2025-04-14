@@ -187,42 +187,57 @@
    - 系统恢复
 
 ## 项目结构
-├── app.js # 应用入口
-├── app.json # 应用配置
-├── app.wxss # 全局样式
-├── components/ # 组件目录
-│   ├── calendar/ # 日历组件
-│   ├── card/ # 卡片容器组件
-│   ├── date-picker/ # 日期选择器
-│   ├── float-menu/ # 浮动菜单
-│   ├── progressBar/ # 进度条组件
-│   ├── progressRing/ # 圆环进度组件
-│   ├── recentTasks/ # 最近任务组件
-│   ├── taskItem/ # 任务项组件
-│   ├── template-selector/ # 任务模板选择器组件
-│   └── upcomingTask/ # 即将开始任务组件
-├── pages/ # 页面文件
-├── utils/ # 工具类
-│   ├── dateUtils.js # 日期处理工具
+├── app.js                 # 应用入口
+├── app.json               # 应用配置
+├── app.wxss              # 全局样式
+├── components/           # 组件目录
+│   ├── calendar/        # 日历组件
+│   ├── card/           # 卡片容器组件
+│   ├── date-picker/    # 日期选择器
+│   ├── float-menu/     # 浮动菜单
+│   ├── progressBar/    # 进度条组件
+│   ├── progressRing/   # 圆环进度组件
+│   ├── recentTasks/    # 最近任务组件
+│   ├── repeat-selector/ # 重复任务选择器
+│   ├── task-execution-settings/ # 任务执行设置
+│   ├── task-info/      # 任务信息组件
+│   ├── task-templates/ # 任务模板组件
+│   ├── taskItem/       # 任务项组件
+│   ├── template-selector/ # 模板选择器组件
+│   └── upcomingTask/   # 即将开始任务组件
+├── pages/               # 页面文件
+│   ├── index/          # 首页(任务日历)
+│   ├── task-edit/      # 任务编辑页
+│   ├── task/           # 任务详情页
+│   ├── create/         # 创建任务页
+│   ├── rewards/        # 奖励页面
+│   └── message/        # 消息页面
+├── utils/              # 工具类
+│   ├── dateUtils.js    # 日期处理工具
 │   ├── feedbackUtils.js # 反馈工具
 │   ├── messageManager.js # 消息管理
-│   ├── taskManager.js # 任务管理
-│   ├── taskUtils.js # 任务工具
-│   ├── uiUtils.js # UI工具
-│   └── unit.js # 单位转换工具
-└── assets/ # 静态资源
+│   ├── taskManager.js  # 任务管理
+│   ├── taskUtils.js    # 任务工具
+│   ├── uiUtils.js      # UI工具
+│   └── unit.js         # 单位转换工具
+└── assets/             # 静态资源
 
 ## 核心组件
 1. template-selector (任务模板选择器)
    - 功能：展示和选择常用任务模板
+   - 特点：支持多种任务类型样式
+   - 全局组件：已在app.json中注册为全局组件
    - 接口：
-     - 输入属性：templates, selectedId, type, showCustom, maxDisplay等
+     - 输入属性：templates, selectedId, type, showCustom, maxDisplay, customText, title
      - 输出事件：select(选择模板), custom(自定义模板)
-   - 样式：支持study/clock/bag三种主题样式
+   - 样式：支持study/habit/interest三种主题样式
    - 交互：点击选择/自定义模板，触觉反馈
    - 生命周期：attached时设置typeClass
    - 日志：组件载入时记录日志
-   - 全局注册：app.json的usingComponents
+   - 性能优化：移除不必要的边框和背景，使用极淡色背景
+   - 状态设计：通过CSS类控制不同状态样式
+   - 复用策略：全局注册，可在多处使用
+   - 详细代码：位于components/template-selector/目录
 
 2. card (卡片容器)
    - 功能：通用卡片容器
@@ -233,7 +248,20 @@
    - 插槽：默认内容插槽
    - 自定义样式：通过customClass传入
 
-3. date-picker (日期选择器)
+3. progressRing (进度环组件)
+   - 功能：圆环形进度显示
+   - 特点：支持多种任务类型样式
+   - 接口：
+     - 输入属性：percent, size, type, color, showText, centerContent, enableHover, borderWidth
+     - 输出事件：tap(点击事件)
+   - 样式：支持default/habit/study/interest样式
+   - 尺寸选项：large/medium/small或自定义数值
+   - 交互：点击事件，动画效果
+   - 生命周期：监听percent和size变化
+   - 状态管理：isComplete标识完成状态
+   - 性能优化：待实现渲染性能优化
+
+4. date-picker (日期选择器)
    - 功能：选择单个日期或日期范围
    - 模式：单日期/日期范围
    - 快捷选项：今天/明天/后天等

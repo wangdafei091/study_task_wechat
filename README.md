@@ -122,6 +122,16 @@
    - 支持优先级设置
    - 支持进度追踪
 
+3. **兴趣类任务（🎨）**
+   - 包括各类兴趣爱好
+   - 默认持续时间：30分钟
+   - 支持进度追踪
+   - 支持重复设置
+   - 支持自定义提醒
+   - 支持优先级设置
+   - 支持分类管理
+   - 支持完成记录
+
 ### 任务类型变更历史
 
 - 2024-04-01：将"整理收纳"类型合并到"习惯"类型中
@@ -130,6 +140,7 @@
 - 2024-04-10：优化任务完成状态管理
 - 2024-04-12：优化任务类型展示和分类
 - 2024-04-12：改进任务执行模式切换功能和日志记录
+- 2024-04-15：实现模板选择器通用组件化
 
 ## 开发环境
 
@@ -156,10 +167,20 @@
 │   ├── progressBar/    # 进度条组件
 │   ├── progressRing/   # 圆环进度组件
 │   ├── recentTasks/    # 最近任务组件
+│   ├── repeat-selector/ # 重复任务选择器
+│   ├── task-execution-settings/ # 任务执行设置
+│   ├── task-info/      # 任务信息组件
+│   ├── task-templates/ # 任务模板组件
 │   ├── taskItem/       # 任务项组件
 │   ├── template-selector/ # 模板选择器组件
 │   └── upcomingTask/   # 即将开始任务组件
 ├── pages/               # 页面文件
+│   ├── index/          # 首页(任务日历)
+│   ├── task-edit/      # 任务编辑页
+│   ├── task/           # 任务详情页
+│   ├── create/         # 创建任务页
+│   ├── rewards/        # 奖励页面
+│   └── message/        # 消息页面
 ├── utils/              # 工具类
 │   ├── dateUtils.js    # 日期处理工具
 │   ├── feedbackUtils.js # 反馈工具
@@ -170,6 +191,54 @@
 │   └── unit.js         # 单位转换工具
 └── assets/             # 静态资源
 ```
+
+## 关键组件
+
+1. **模板选择器组件 (template-selector)**
+   - 功能：展示和选择常用任务模板
+   - 全局组件：已在app.json中注册
+   - 接口：
+     ```javascript
+     {
+       // 输入属性
+       templates: Array,  // 模板数据列表
+       selectedId: String, // 已选模板ID
+       type: String,      // 任务类型(study/habit/interest)
+       showCustom: Boolean, // 是否显示自定义按钮
+       maxDisplay: Number,  // 最大显示数量
+       customText: String,  // 自定义按钮文本
+       title: String,       // 组件标题
+       
+       // 输出事件
+       events: {
+         select: {templateId, template}, // 选择模板事件
+         custom: {type}                  // 自定义模板事件
+       }
+     }
+     ```
+
+2. **进度环组件 (progressRing)**
+   - 功能：圆环形进度显示
+   - 特点：支持多种任务类型样式
+   - 接口：
+     ```javascript
+     {
+       // 输入属性
+       percent: Number,   // 百分比进度(0-100)
+       size: String,      // 圆环大小(large/medium/small或具体数值)
+       type: String,      // 圆环类型(default/habit/study/interest)
+       color: String,     // 自定义颜色
+       showText: Boolean, // 是否显示文本
+       centerContent: String, // 自定义中心内容
+       enableHover: Boolean, // 是否启用悬停效果
+       borderWidth: Number, // 边框宽度
+       
+       // 输出事件
+       events: {
+         tap: {type, percent} // 点击事件
+       }
+     }
+     ```
 
 ## 开发规范
 
@@ -204,6 +273,16 @@
    - 返回值说明
 
 ## 更新日志
+
+### v1.1.2 (2024-04-15)
+- 将任务模板选择器抽取为独立组件
+- 实现template-selector通用组件
+- 支持多种任务类型样式定制
+- 提供选择和自定义两种交互模式
+- 添加全局组件注册配置
+- 优化组件接口设计
+- 添加组件生命周期钩子
+- 实现组件日志记录功能
 
 ### v1.1.1 (2024-04-12)
 - 优化任务类型展示和分类
