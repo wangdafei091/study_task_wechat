@@ -25,7 +25,7 @@ Component({
     },
     customText: {
       type: String,
-      value: '自定义'
+      value: '新增常用任务'
     },
     title: {
       type: String,
