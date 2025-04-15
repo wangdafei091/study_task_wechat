@@ -108,7 +108,8 @@ Component({
         type: this.data.type,
         title: this.data.title,
         selectedId: this.data.selectedId,
-        templates: this.data.templates.length
+        templates: this.data.templates.length,
+        maxDisplay: this.data.maxDisplay
       });
       console.log('应用新设计：无边框 + 极淡背景色 + 点击缩放动效 + 匹配任务类型的文字颜色');
     }

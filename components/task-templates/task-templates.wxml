@@ -12,6 +12,7 @@
         selectedId="{{selectedTemplate}}"
         type="study"
         title=""
+        maxDisplay="20"
         bind:select="onTemplateSelect"
         bind:custom="onCustomSelect">
       </template-selector>
@@ -24,6 +25,7 @@
         selectedId="{{selectedTemplate}}"
         type="habit"
         title=""
+        maxDisplay="20"
         bind:select="onTemplateSelect"
         bind:custom="onCustomSelect">
       </template-selector>
