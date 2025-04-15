@@ -12,19 +12,19 @@
   <!-- 任务名称 -->
   <view class="form-item">
     <view class="item-label">{{titleLabel || '任务名称'}}</view>
-    <view class="task-info-display" wx:if="{{isTemplateMode && !customMode}}">
+    <view class="task-info-display" wx:if="{{isTemplateMode}}">
       {{task.title}}
       <text class="edit-button" bindtap="enableCustomMode" wx:if="{{editable}}">编辑</text>
     </view>
     <input class="input" wx:else value="{{task.title}}" bindinput="onTitleInput" 
       placeholder="{{titlePlaceholder || '请输入任务名称'}}" maxlength="{{titleMaxLength || 20}}" disabled="{{!editable}}" />
-    <view class="char-count" wx:if="{{customMode}}">{{task.title.length}}/{{titleMaxLength || 20}}</view>
+    <view class="char-count" wx:if="{{!isTemplateMode}}">{{task.title.length}}/{{titleMaxLength || 20}}</view>
   </view>
   
   <!-- 积分 -->
   <view class="form-item">
     <view class="item-label">{{pointsLabel || '积分'}}</view>
-    <view class="task-info-display points" wx:if="{{isTemplateMode && !customMode}}">
+    <view class="task-info-display points" wx:if="{{isTemplateMode}}">
       <text class="point-value">{{task.points}}</text>
       <text class="point-label">分</text>
     </view>
@@ -35,16 +35,16 @@
   <!-- 任务描述，仅在showDescription为true时显示 -->
   <view class="form-item" wx:if="{{showDescription}}">
     <view class="item-label">{{descriptionLabel || '任务描述'}} <text class="optional">选填</text></view>
-    <view class="task-info-display description" wx:if="{{isTemplateMode && !customMode && task.description}}">
+    <view class="task-info-display description" wx:if="{{isTemplateMode && task.description}}">
       {{task.description}}
     </view>
     <textarea class="textarea" wx:else value="{{task.description}}" bindinput="onDescriptionInput" 
       placeholder="{{descriptionPlaceholder || '简单描述任务内容和要求'}}" maxlength="{{descriptionMaxLength || 100}}" disabled="{{!editable}}" />
-    <view class="char-count" wx:if="{{customMode}}">{{task.description.length}}/{{descriptionMaxLength || 100}}</view>
+    <view class="char-count" wx:if="{{!isTemplateMode}}">{{task.description.length}}/{{descriptionMaxLength || 100}}</view>
   </view>
   
-  <!-- 保存为常用任务(仅自定义模式) -->
-  <view class="save-template-section" wx:if="{{customMode && task.title && showSaveTemplate}}">
+  <!-- 保存为常用任务按钮(简化显示逻辑) -->
+  <view class="save-template-section" wx:if="{{shouldShowSaveButton && task.title}}">
     <button class="btn-save-template" bindtap="onSaveAsTemplate">保存为常用任务</button>
   </view>
 </view> 

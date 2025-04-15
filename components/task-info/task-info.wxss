@@ -139,13 +139,47 @@
   font-size: 28rpx;
   font-weight: 500;
   box-sizing: border-box;
+  text-align: center;
   transition: all 0.2s ease;
 }
 
-.task-info-section .btn-save-template:active {
-  background-color: #EAEAEA !important;
-  color: #555555 !important;
-  transform: scale(0.98);
+/* 根据任务类型设置按钮颜色 */
+.task-info-section.study .btn-save-template {
+  border: 1px solid rgba(76, 175, 80, 0.7);
+  color: rgba(76, 175, 80, 0.9);
+  background-color: rgba(76, 175, 80, 0.1);
+}
+
+.task-info-section.habit .btn-save-template {
+  border: 1px solid rgba(33, 150, 243, 0.7);
+  color: rgba(33, 150, 243, 0.9);
+  background-color: rgba(33, 150, 243, 0.1);
+}
+
+.task-info-section.interest .btn-save-template {
+  border: 1px solid rgba(255, 152, 0, 0.7);
+  color: rgba(255, 152, 0, 0.9);
+  background-color: rgba(255, 152, 0, 0.1);
+}
+
+.task-info-section.interest .btn-save-template:active {
+  background-color: rgba(255, 152, 0, 0.2) !important;
+}
+
+.task-info-section.habit .btn-save-template:active {
+  background-color: rgba(33, 150, 243, 0.2) !important;
+}
+
+.task-info-section.study .btn-save-template:active {
+  background-color: rgba(76, 175, 80, 0.2) !important;
+}
+
+.task-info-section.study .btn-save-template.active {
+  background-color: rgba(76, 175, 80, 0.2) !important;
+}
+
+.task-info-section.habit .btn-save-template.active {
+  background-color: rgba(33, 150, 243, 0.2) !important;
 }
 
 .task-info-display.description {
@@ -153,4 +187,13 @@
   min-height: 180rpx;
   line-height: 1.5;
   padding: 20rpx;
+}
+
+.task-info-section .btn-save-template:active {
+  transform: scale(0.98);
+  opacity: 0.9;
+}
+
+.task-info-section.interest .btn-save-template:active {
+  background-color: rgba(255, 152, 0, 0.2) !important;
 } 

@@ -28,13 +28,13 @@ Component({
       type: Boolean,
       value: false
     },
-    // 当前是否自定义模式
-    customMode: {
-      type: Boolean,
-      value: true
-    },
-    // 是否显示保存为模板按钮
+    // 是否显示保存为模板按钮(保留向后兼容)
     showSaveTemplate: {
+      type: Boolean,
+      value: false
+    },
+    // 是否应该显示保存按钮(简化逻辑)
+    shouldShowSaveButton: {
       type: Boolean,
       value: false
     },
@@ -108,11 +108,13 @@ Component({
   methods: {
     // 启用自定义模式
     enableCustomMode: function() {
-      // 记录日志
-      console.log('[task-info] 启用自定义模式');
+      // 增强日志记录
+      console.log('[task-info] 用户点击编辑按钮，触发启用编辑模式');
       
-      this.setData({ customMode: true });
-      this.triggerEvent('modechange', { customMode: true });
+      // 触发事件通知页面，从模板进入编辑模式
+      this.triggerEvent('enableCustomMode', {
+        fromTemplate: true
+      });
     },
 
     // 标题输入处理
@@ -177,10 +179,10 @@ Component({
 
     // 保存为模板
     onSaveAsTemplate: function() {
-      // 记录日志
-      console.log('[task-info] 触发保存为模板事件');
-      console.log('[task-info] 按钮样式状态检查完成');
-      console.log('[task-info] 按钮样式更新 - 文字居中与颜色协调优化');
+      // 增强日志记录
+      console.log('[task-info] 保存为常用任务按钮被点击');
+      console.log('[task-info] 当前任务信息:', this.data.task);
+      console.log('[task-info] 任务类型:', this.data.taskType);
       
       this.triggerEvent('savetemplate', {
         task: this.data.task
