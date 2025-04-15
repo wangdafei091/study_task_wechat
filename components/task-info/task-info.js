@@ -38,6 +38,11 @@ Component({
       type: Boolean,
       value: false
     },
+    // 是否来自模板编辑模式
+    fromTemplate: {
+      type: Boolean,
+      value: false
+    },
     // 是否显示描述字段
     showDescription: {
       type: Boolean,
@@ -119,6 +124,18 @@ Component({
 
     // 标题输入处理
     onTitleInput: function(e) {
+      // 判断是否是从模板进入编辑模式
+      // 当前不是模板模式(isTemplateMode为false)，但任务处于编辑状态且任务名称已有值时
+      // 这很可能是从模板编辑模式切换过来的
+      if (!this.properties.isTemplateMode && this.properties.task.isEditing && this.properties.task.title) {
+        console.log('[task-info] 检测到从模板编辑模式，任务名称不可修改');
+        // 保持原有标题不变
+        this.setData({
+          'task.title': this.properties.task.title
+        });
+        return;
+      }
+      
       const title = e.detail.value;
       
       // 更新本地task数据

@@ -16,9 +16,12 @@
       {{task.title}}
       <text class="edit-button" bindtap="enableCustomMode" wx:if="{{editable}}">编辑</text>
     </view>
+    <view class="task-info-display" wx:elif="{{!isTemplateMode && task.isEditing && task.title}}">
+      {{task.title}}
+    </view>
     <input class="input" wx:else value="{{task.title}}" bindinput="onTitleInput" 
       placeholder="{{titlePlaceholder || '请输入任务名称'}}" maxlength="{{titleMaxLength || 20}}" disabled="{{!editable}}" />
-    <view class="char-count" wx:if="{{!isTemplateMode}}">{{task.title.length}}/{{titleMaxLength || 20}}</view>
+    <view class="char-count" wx:if="{{!isTemplateMode && !task.isEditing}}">{{task.title.length}}/{{titleMaxLength || 20}}</view>
   </view>
   
   <!-- 积分 -->

@@ -1275,9 +1275,8 @@ Page({
       console.log('[task-edit] 自动生成简称:', shortName);
     }
     
-    // 创建新模板
-    const newTemplate = {
-      id: 'custom_' + Date.now(),
+    // 创建模板对象
+    let templateObj = {
       name: task.title,
       shortName: shortName,
       icon: this.data.taskType === 'study' ? '📚' : '⏰',
@@ -1285,11 +1284,18 @@ Page({
       duration: task.duration || 30,
       points: task.points,
       taskType: this.data.taskType,
-      isCustom: true,
-      createTime: Date.now()
+      isCustom: true
     };
     
-    console.log('[task-edit] 新建模板对象:', newTemplate);
+    // 如果是从模板编辑，保留原模板ID；否则创建新ID
+    if (isFromTemplateEdit) {
+      templateObj.id = this.data.selectedTemplate;
+      console.log('[task-edit] 更新现有模板:', templateObj.id);
+    } else {
+      templateObj.id = 'custom_' + Date.now();
+      templateObj.createTime = Date.now();
+      console.log('[task-edit] 创建新模板:', templateObj.id);
+    }
     
     // 显示加载状态
     wx.showLoading({
@@ -1304,15 +1310,34 @@ Page({
         let templates = res.data || [];
         console.log('[task-edit] 已加载现有模板数量:', templates.length);
         
-        // 检查是否已存在同名模板
-        const existingIndex = templates.findIndex(t => t.name === newTemplate.name && t.taskType === newTemplate.taskType);
-        if (existingIndex !== -1) {
-          console.log('[task-edit] 发现同名模板，更新该模板');
-          templates.splice(existingIndex, 1); // 移除已存在的同名模板
+        if (isFromTemplateEdit) {
+          // 从模板编辑模式：通过ID查找并更新
+          const templateIndex = templates.findIndex(t => t.id === templateObj.id);
+          if (templateIndex !== -1) {
+            // 保留原有的createTime
+            templateObj.createTime = templates[templateIndex].createTime;
+            // 更新模板
+            templates[templateIndex] = templateObj;
+            console.log('[task-edit] 更新了现有模板');
+          } else {
+            // 未找到原模板，作为新模板处理
+            templateObj.createTime = Date.now();
+            templates.unshift(templateObj);
+            console.log('[task-edit] 原模板未找到，添加为新模板');
+          }
+        } else {
+          // 自定义创建模式：检查是否有同名模板
+          const existingIndex = templates.findIndex(t => t.name === templateObj.name && t.taskType === templateObj.taskType);
+          if (existingIndex !== -1) {
+            console.log('[task-edit] 发现同名模板，更新该模板');
+            templates.splice(existingIndex, 1); // 移除已存在的同名模板
+          }
+          
+          // 将新模板添加到列表前端
+          templates.unshift(templateObj);
         }
         
-        // 将新模板添加到列表前端
-        templates.unshift(newTemplate);
+        // 确保模板数量不超过100
         if (templates.length > 100) {
           const removedTemplate = templates.pop();
           console.log('[task-edit] 模板数量超过100个，移除最旧模板:', removedTemplate.name);
@@ -1351,7 +1376,7 @@ Page({
         console.log('[task-edit] 首次创建模板存储');
         wx.setStorage({
           key: 'customTemplates',
-          data: [newTemplate],
+          data: [templateObj],
           success: () => {
             wx.hideLoading();
             wx.showToast({
