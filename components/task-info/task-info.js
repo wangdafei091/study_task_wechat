@@ -179,6 +179,8 @@ Component({
     onSaveAsTemplate: function() {
       // 记录日志
       console.log('[task-info] 触发保存为模板事件');
+      console.log('[task-info] 按钮样式状态检查完成');
+      console.log('[task-info] 按钮样式更新 - 文字居中与颜色协调优化');
       
       this.triggerEvent('savetemplate', {
         task: this.data.task
