@@ -178,10 +178,10 @@
       <view class="section-block">
         <task-info
           title="任务信息"
-          taskType="{{selectedTemplateType}}"
+          taskType="{{taskType}}"
           task="{{task}}"
           isTemplateMode="{{selectedTemplate !== '' && !task.isEditing}}"
-          shouldShowSaveButton="{{task.isEditing && task.title}}"
+          shouldShowSaveButton="{{(task.isEditing && task.title) || (selectedTemplate === '' && task.title)}}"
           editable="{{true}}"
           showDescription="{{true}}"
           bind:change="handleTaskInfoChange"

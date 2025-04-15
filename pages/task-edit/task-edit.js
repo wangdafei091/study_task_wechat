@@ -7,7 +7,7 @@ Page({
    */
   data: {
     mode: 'create', // 'create' 或 'edit'
-    taskType: 'study', // 'study' 或 'habit'
+    taskType: '', // 'study' 或 'habit'
     precision: 'second', // 'second' 或 'day'
     task: {
       id: '', // 编辑模式下有值
@@ -174,27 +174,31 @@ Page({
    * 初始化创建模式
    */
   initCreateMode: function(options) {
-    // 设置任务类型(从首页传入)
-    const taskType = options.taskType || 'study';
-    const precision = options.precision || (taskType === 'study' ? 'second' : 'day');
+    // 只有在明确指定taskType时才设置，否则维持当前值
+    if (options.taskType) {
+      const precision = options.precision || (options.taskType === 'study' ? 'second' : 'day');
+      let defaultPoints = options.taskType === 'study' ? 3 : 2;
+      
+      this.setData({
+        taskType: options.taskType,
+        precision: precision,
+        'task.type': options.taskType,
+        'task.taskType': options.taskType,
+        'task.points': defaultPoints,
+        'task.precision': precision
+      });
+      
+      console.log('[TaskEdit] 初始化创建模式，设置任务类型:', options.taskType);
+    } else {
+      console.log('[TaskEdit] 初始化创建模式，保持当前任务类型:', this.data.taskType);
+    }
     
-    // 根据任务类型设置默认值
-    let defaultPoints = taskType === 'study' ? 3 : 2;
-    
+    // 与taskType无关的设置
     this.setData({
       mode: 'create',
-      taskType: taskType,
-      precision: precision,
       selectedTemplate: '', // 确保没有选中的模板
-      // 确保任务类型正确设置
-      'task.type': taskType === 'study' ? 'study' : 'habit',
-      'task.taskType': taskType,
-      'task.points': defaultPoints,
-      'task.precision': precision,
       'task.isEditing': false // 初始为非编辑状态
     });
-    
-    console.log('[TaskEdit] 初始化创建模式，任务类型:', taskType);
   },
 
   /**
@@ -939,7 +943,8 @@ Page({
         shortName: '数学',
         description: '完成数学练习册', 
         duration: 45, 
-        points: 3 
+        points: 3,
+        taskType: 'study' // 添加taskType属性
       },
       { 
         id: 'reading', 
@@ -947,7 +952,8 @@ Page({
         shortName: '阅读',
         description: '阅读一篇文章并做笔记', 
         duration: 30, 
-        points: 2 
+        points: 2,
+        taskType: 'study' // 添加taskType属性
       },
       { 
         id: 'english_words', 
@@ -955,7 +961,8 @@ Page({
         shortName: '英语',
         description: '背诵英语单词', 
         duration: 20, 
-        points: 2 
+        points: 2,
+        taskType: 'study' // 添加taskType属性
       },
       { 
         id: 'writing', 
@@ -963,7 +970,8 @@ Page({
         shortName: '作文',
         description: '完成一篇作文', 
         duration: 60, 
-        points: 5 
+        points: 5,
+        taskType: 'study' // 添加taskType属性
       }
     ];
 
@@ -975,7 +983,8 @@ Page({
         shortName: '整理',
         description: '整理书桌和学习用品', 
         duration: 15, 
-        points: 2 
+        points: 2,
+        taskType: 'habit' // 添加taskType属性
       },
       { 
         id: 'wash_dishes', 
@@ -983,7 +992,8 @@ Page({
         shortName: '洗碗',
         description: '清洗并整理餐具', 
         duration: 10, 
-        points: 1 
+        points: 1,
+        taskType: 'habit' // 添加taskType属性
       },
       { 
         id: 'exercise', 
@@ -991,7 +1001,8 @@ Page({
         shortName: '运动',
         description: '进行体育锻炼', 
         duration: 30, 
-        points: 3 
+        points: 3,
+        taskType: 'habit' // 添加taskType属性
       },
       { 
         id: 'make_bed', 
@@ -999,7 +1010,8 @@ Page({
         shortName: '床铺',
         description: '整理床铺被褥', 
         duration: 5, 
-        points: 1 
+        points: 1,
+        taskType: 'habit' // 添加taskType属性
       },
       { 
         id: 'clean_room', 
@@ -1007,7 +1019,8 @@ Page({
         shortName: '打扫',
         description: '清扫房间卫生', 
         duration: 20, 
-        points: 2 
+        points: 2,
+        taskType: 'habit' // 添加taskType属性
       }
     ];
 
@@ -1076,6 +1089,9 @@ Page({
       });
     }
     
+    // 添加更详细的日志，跟踪任务类型值
+    console.log('[TaskEdit] 模板选择后 - taskType:', this.data.taskType, 'selectedTemplateType:', this.data.selectedTemplateType, 'task.taskType:', this.data.task.taskType);
+    
     // 如果是重复模式，确保任务设置正确
     if (this.data.repeatMode === 'repeat') {
       this.ensureRepeatTaskSettings();
@@ -1085,6 +1101,11 @@ Page({
     wx.vibrateShort({ type: 'light' });
     
     console.log('[TaskEdit] 已选择模板，显示只读视图，不显示保存为常用任务按钮');
+    
+    // 添加最终状态日志，验证修复效果
+    console.log('[TaskEdit] 模板选择完成 - 最终taskType:', this.data.taskType, 
+                'templateType:', template.taskType, 
+                'task.taskType:', this.data.task.taskType);
   },
 
   /**
@@ -2478,6 +2499,9 @@ Page({
       'task.isEditing': true // 自定义模式下设置为编辑状态
     });
     
+    // 添加日志记录值
+    console.log('[TaskEdit] 自定义学习任务 - taskType:', this.data.taskType, 'selectedTemplateType:', this.data.selectedTemplateType);
+    
     // 处理重复任务设置
     this.ensureRepeatTaskSettings();
   },
@@ -2504,6 +2528,9 @@ Page({
       'task.duration': 0,
       'task.isEditing': true // 自定义模式下设置为编辑状态
     });
+    
+    // 添加日志记录值
+    console.log('[TaskEdit] 自定义生活习惯 - taskType:', this.data.taskType, 'selectedTemplateType:', this.data.selectedTemplateType);
     
     // 处理重复任务设置
     this.ensureRepeatTaskSettings();

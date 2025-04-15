@@ -16,7 +16,11 @@ Component({
     // 任务类型
     taskType: {
       type: String,
-      value: ''
+      value: '',
+      observer: function(newVal, oldVal) {
+        // 添加属性变化的日志
+        console.log('[task-info] taskType变化:', oldVal, '->', newVal);
+      }
     },
     // 是否可编辑
     editable: {
