@@ -2359,4 +2359,77 @@ Page({
       url: '/pages/task-edit/task-edit?id=' + taskId + '&mode=edit'
     });
   },
+
+  /**
+   * 处理编辑模板简称
+   */
+  handleEditShortName: function(e) {
+    console.log('[task-edit] 编辑模板简称:', e.detail);
+    const { templateId, newShortName, type } = e.detail;
+    
+    // 获取原有模板数据
+    wx.getStorage({
+      key: 'customTemplates',
+      success: (res) => {
+        let templates = res.data || [];
+        const templateIndex = templates.findIndex(t => t.id === templateId);
+        
+        if (templateIndex !== -1) {
+          // 更新简称
+          templates[templateIndex].shortName = newShortName;
+          
+          // 保存更新后的模板
+          wx.setStorage({
+            key: 'customTemplates',
+            data: templates,
+            success: () => {
+              console.log('[task-edit] 模板简称更新成功:', newShortName);
+              wx.showToast({
+                title: '简称已更新',
+                icon: 'success'
+              });
+              
+              // 刷新模板列表
+              this.loadTemplatesByCategory();
+            }
+          });
+        }
+      }
+    });
+  },
+
+  /**
+   * 处理删除模板
+   */
+  handleDeleteTemplate: function(e) {
+    console.log('[task-edit] 删除模板:', e.detail);
+    const { templateId, type } = e.detail;
+    
+    // 获取原有模板数据
+    wx.getStorage({
+      key: 'customTemplates',
+      success: (res) => {
+        let templates = res.data || [];
+        
+        // 过滤掉要删除的模板
+        templates = templates.filter(t => t.id !== templateId);
+        
+        // 保存更新后的模板
+        wx.setStorage({
+          key: 'customTemplates',
+          data: templates,
+          success: () => {
+            console.log('[task-edit] 模板删除成功');
+            wx.showToast({
+              title: '已删除',
+              icon: 'success'
+            });
+            
+            // 刷新模板列表
+            this.loadTemplatesByCategory();
+          }
+        });
+      }
+    });
+  },
 }) 

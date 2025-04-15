@@ -14,7 +14,9 @@
         title=""
         maxDisplay="20"
         bind:select="onTemplateSelect"
-        bind:custom="onCustomSelect">
+        bind:custom="onCustomSelect"
+        bind:editShortName="onEditShortName"
+        bind:deleteTemplate="onDeleteTemplate">
       </template-selector>
     </view>
     
@@ -27,7 +29,9 @@
         title=""
         maxDisplay="20"
         bind:select="onTemplateSelect"
-        bind:custom="onCustomSelect">
+        bind:custom="onCustomSelect"
+        bind:editShortName="onEditShortName"
+        bind:deleteTemplate="onDeleteTemplate">
       </template-selector>
     </view>
   </view>

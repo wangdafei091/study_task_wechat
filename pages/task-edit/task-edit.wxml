@@ -169,6 +169,8 @@
           selectedTemplate="{{selectedTemplate}}"
           bind:templateSelect="handleTemplateSelect"
           bind:customSelect="handleCustomSelect"
+          bind:editShortName="handleEditShortName"
+          bind:deleteTemplate="handleDeleteTemplate"
         ></task-templates>
       </view>
       

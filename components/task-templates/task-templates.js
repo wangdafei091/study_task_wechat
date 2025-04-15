@@ -41,6 +41,22 @@ Component({
     onCustomSelect(e) {
       console.log('选择自定义模板:', e.detail);
       this.triggerEvent('customSelect', e.detail);
+    },
+
+    /**
+     * 处理编辑简称事件
+     */
+    onEditShortName(e) {
+      console.log('编辑模板简称:', e.detail);
+      this.triggerEvent('editShortName', e.detail);
+    },
+
+    /**
+     * 处理删除模板事件
+     */
+    onDeleteTemplate(e) {
+      console.log('删除模板:', e.detail);
+      this.triggerEvent('deleteTemplate', e.detail);
     }
   }
 }) 

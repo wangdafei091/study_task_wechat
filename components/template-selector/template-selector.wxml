@@ -7,7 +7,9 @@
     <!-- 显示模板列表 -->
     <block wx:for="{{templates}}" wx:key="id" wx:if="{{index < maxDisplay}}">
       <view class="task-template {{typeClass}} {{selectedId === item.id ? 'active' : ''}}" 
-            bindtap="selectTemplate" data-id="{{item.id}}">
+            bindtap="selectTemplate" 
+            bindlongpress="{{item.isCustom ? 'handleLongPress' : ''}}"
+            data-id="{{item.id}}">
         <view class="template-name">{{item.shortName || item.name}}</view>
       </view>
     </block>
