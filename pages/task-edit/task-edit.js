@@ -362,25 +362,21 @@ Page({
   },
 
   /**
-   * 输入任务标题
+   * 处理任务信息变更事件
    */
-  inputTitle: function(e) {
-    console.log('更新任务标题:', e.detail ? e.detail.value : e.target.value);
-    const value = e.detail ? e.detail.value : e.target.value;
-    this.setData({
-      'task.title': value
-    });
-  },
-
-  /**
-   * 输入任务描述
-   */
-  inputDescription: function(e) {
-    console.log('更新任务描述:', e.detail ? e.detail.value : e.target.value);
-    const value = e.detail ? e.detail.value : e.target.value;
-    this.setData({
-      'task.description': value
-    });
+  handleTaskInfoChange: function(e) {
+    console.log('[task-edit] 接收任务信息变更:', e.detail);
+    
+    // 获取变更信息
+    const { field, value } = e.detail;
+    
+    // 直接更新对应字段，信任组件已经做过验证
+    const data = {};
+    data[`task.${field}`] = value;
+    this.setData(data);
+    
+    // 记录变更日志
+    console.log(`[task-edit] 已更新任务${field}:`, value);
   },
 
   /**
@@ -844,23 +840,8 @@ Page({
     const that = this;
     const taskData = this.data.task;
     
-    // 验证必填字段
-    if (!taskData.title) {
-      wx.showToast({
-        title: '请输入任务名称',
-        icon: 'none'
-      });
-      return;
-    }
-    
-    // 检查积分范围
-    if (isNaN(taskData.points) || taskData.points < 1) {
-      console.log('积分值无效或过小，设置为默认值1:', taskData.points);
-      taskData.points = 1;
-    } else if (taskData.points > 10) {
-      console.log('积分值过大，限制为最大值10:', taskData.points);
-      taskData.points = 10;
-    }
+    // 注意：基本任务信息(标题、积分、描述)的验证已在task-info组件内完成
+    // 此处仅验证编辑页面特有的字段
     
     // 如果是周期性任务，进行额外验证
     if (this.data.repeatMode === 'repeat') {
@@ -1293,7 +1274,10 @@ Page({
   /**
    * 保存当前任务为模板
    */
-  saveAsTemplate: function() {
+  saveAsTemplate: function(e) {
+    // 添加日志记录
+    console.log('[task-edit] 保存为模板事件触发', e ? e.detail : '直接调用');
+    
     const { task } = this.data;
     
     console.log('开始保存任务模板:', task.title);
@@ -2013,18 +1997,6 @@ Page({
   /**
    * 输入积分
    */
-  inputPoints: function(e) {
-    console.log('更新任务积分:', e.detail ? e.detail.value : e.target.value);
-    const value = e.detail ? e.detail.value : e.target.value;
-    // 确保积分为数字且在合理范围内
-    let points = parseInt(value) || 0;
-    points = Math.max(1, Math.min(10, points));
-    
-    this.setData({
-      'task.points': points
-    });
-  },
-
   /**
    * 选择难度
    */

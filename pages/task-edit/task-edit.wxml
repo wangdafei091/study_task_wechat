@@ -173,7 +173,7 @@
       </view>
       
       <!-- 任务信息区域 -->
-      <view class="section-block task-info-section {{selectedTemplateType}}">
+      <view class="section-block">
         <task-info
           title="任务信息"
           taskType="{{selectedTemplateType}}"
@@ -183,11 +183,9 @@
           editable="{{true}}"
           showDescription="{{true}}"
           showSaveTemplate="{{true}}"
-          bind:titleInput="inputTitle"
-          bind:pointsInput="inputPoints"
-          bind:descriptionInput="inputDescription"
+          bind:change="handleTaskInfoChange"
           bind:enableCustomMode="enableCustomMode"
-          bind:saveAsTemplate="saveAsTemplate"
+          bind:savetemplate="saveAsTemplate"
         ></task-info>
       </view>
       
