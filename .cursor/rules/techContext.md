@@ -229,11 +229,11 @@
    - 全局组件：已在app.json中注册为全局组件
    - 接口：
      - 输入属性：templates, selectedId, type, showCustom, maxDisplay, customText, title
-     - 输出事件：select(选择模板), custom(自定义模板)
+     - 输出事件：select(选择模板), custom(自定义模板), editShortName(编辑简称), deleteTemplate(删除模板)
    - 样式：支持study/habit/interest三种主题样式
-   - 交互：点击选择/自定义模板，触觉反馈
+   - 交互：点击选择/自定义模板，触觉反馈，长按编辑
    - 生命周期：attached时设置typeClass
-   - 日志：组件载入时记录日志
+   - 日志：组件载入和各操作时记录日志
    - 性能优化：移除不必要的边框和背景，使用极淡色背景
    - 状态设计：通过CSS类控制不同状态样式
    - 复用策略：全局注册，可在多处使用
@@ -252,7 +252,8 @@
    - 功能：圆环形进度显示
    - 特点：支持多种任务类型样式
    - 接口：
-     - 输入属性：percent, size, type, color, showText, centerContent, enableHover, borderWidth
+     - 输入属性：percent(输入的百分比), size, type, color, showText, centerContent(简单文本内容), enableHover, borderWidth
+     - 内部数据：progress(处理后的百分比值), isComplete(是否完成)
      - 输出事件：tap(点击事件)
    - 样式：支持default/habit/study/interest样式
    - 尺寸选项：large/medium/small或自定义数值
@@ -260,6 +261,7 @@
    - 生命周期：监听percent和size变化
    - 状态管理：isComplete标识完成状态
    - 性能优化：待实现渲染性能优化
+   - 限制：目前centerContent仅支持简单文本，尚未实现slot插槽机制
 
 4. date-picker (日期选择器)
    - 功能：选择单个日期或日期范围
@@ -311,3 +313,58 @@
    - 注释规范：组件/方法/属性都有注释
    - 日志记录：关键操作记录日志
    - 错误处理：合理处理异常情况
+
+## 技术架构
+
+### 组件化架构
+1. 核心组件
+   - progressRing：圆环进度组件，支持多种任务类型样式，可自定义大小、颜色和边框宽度，提供动画效果
+   - progressBar：进度条组件，支持水平和垂直方向，可自定义颜色和样式
+   - template-selector：任务模板选择器，支持多种任务类型，提供选择和自定义功能，支持长按编辑
+   - taskItem：任务项组件，展示任务信息，支持完成状态切换和详情查看
+   - date-picker：日期选择器，支持日期范围选择和特定日期禁用
+   - repeat-selector：重复任务选择器，支持多种重复模式
+
+2. 通用容器组件
+   - card：卡片容器组件，提供统一的边距、阴影和圆角样式
+   - float-menu：浮动菜单组件，支持自定义菜单项和图标
+   - custom-input-modal：自定义输入弹窗，支持表单验证和自定义样式
+
+3. 业务组件
+   - task-execution-settings：任务执行设置组件，管理任务执行模式和参数
+   - task-info：任务信息展示组件，显示任务详细信息
+   - task-templates：任务模板组件，管理常用任务模板
+   - upcomingTask：即将开始任务提醒组件，显示最近任务信息
+   - recentTasks：最近任务组件，展示最近完成或创建的任务
+
+### 适配性优化实现
+1. 统一单位系统
+   - 通过unitUtils工具自动转换px和rpx单位
+   - 增强wx.createSelectorQuery方法，对样式返回值进行单位处理
+   - 增强Page.setData方法，自动处理样式值中的px单位
+   - 实现适配不同设备像素比的自动转换
+
+2. 高度适配系统
+   - 通过getViewportInfo获取设备视口信息
+   - 使用getContentHeight计算内容区域可用高度
+   - 考虑状态栏、导航栏和安全区域
+   - 支持底部标签栏和自定义导航栏的高度计算
+   - 为横屏模式提供专门的高度计算逻辑
+
+3. 设备类型识别
+   - 通过getDeviceType识别设备类型
+   - 根据屏幕尺寸自动分类为小屏、中屏、大屏和超大屏
+   - 为不同设备类型提供差异化的UI配置
+   - 横竖屏切换自动适配
+
+4. 事件总线系统
+   - 实现全局事件总线用于组件间通信
+   - 支持事件注册、移除和触发
+   - 提供错误处理机制
+   - 实现组件生命周期与事件系统的集成
+
+5. 兼容性处理
+   - 检查基础库版本兼容性
+   - 为老版本提供降级处理
+   - 实现版本号比较函数
+   - 为不支持的功能提供替代方案
