@@ -85,7 +85,7 @@ Component({
     // 积分占位符
     pointsPlaceholder: {
       type: String,
-      value: '1-10'
+      value: '请输入积分'
     },
     // 描述标签
     descriptionLabel: {
@@ -159,13 +159,11 @@ Component({
     onPointsInput: function(e) {
       let points = parseInt(e.detail.value);
       
-      // 验证积分范围
+      // 验证积分范围，只检查是否为NaN
       if (isNaN(points)) {
         points = 0;
-      } else if (points > 10) {
-        points = 10;
         // 记录日志
-        console.log('[task-info] 积分已限制为最大值10');
+        console.log('[task-info] 积分输入非数字，设置为默认值0');
       }
       
       // 更新本地task数据

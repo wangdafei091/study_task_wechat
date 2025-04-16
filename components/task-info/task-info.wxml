@@ -32,7 +32,7 @@
       <text class="point-label">分</text>
     </view>
     <input class="input" wx:else type="number" value="{{task.points}}" bindinput="onPointsInput" 
-      placeholder="{{pointsPlaceholder || '1-10'}}" maxlength="2" disabled="{{!editable}}" />
+      placeholder="{{pointsPlaceholder || '请输入积分'}}" maxlength="2" disabled="{{!editable}}" />
   </view>
   
   <!-- 任务描述，仅在showDescription为true时显示 -->
