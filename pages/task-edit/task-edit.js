@@ -1376,12 +1376,12 @@ Page({
             // 刷新模板列表
             this.loadTemplatesByCategory();
             
-            // 如果是从模板编辑，保存后重置为只读状态
-            if (isFromTemplateEdit) {
-              this.setData({
-                'task.isEditing': false
-              });
-            }
+            // 保存后重置为只读状态，无论是从模板编辑还是自定义创建
+            this.setData({
+              'task.isEditing': false,
+              selectedTemplate: templateObj.id // 设置为选中状态，确保按钮隐藏
+            });
+            console.log('[task-edit] 保存模板后重置编辑状态为false，设置selectedTemplate:', templateObj.id);
           },
           fail: (err) => {
             wx.hideLoading();
@@ -1407,12 +1407,12 @@ Page({
             // 刷新模板列表
             this.loadTemplatesByCategory();
             
-            // 如果是从模板编辑，保存后重置为只读状态
-            if (isFromTemplateEdit) {
-              this.setData({
-                'task.isEditing': false
-              });
-            }
+            // 保存后重置为只读状态，无论是从模板编辑还是自定义创建
+            this.setData({
+              'task.isEditing': false,
+              selectedTemplate: templateObj.id // 设置为选中状态，确保按钮隐藏
+            });
+            console.log('[task-edit] 保存模板后重置编辑状态为false，设置selectedTemplate:', templateObj.id);
           },
           fail: (err) => {
             wx.hideLoading();
