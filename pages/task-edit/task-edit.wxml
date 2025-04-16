@@ -18,9 +18,17 @@
           <!-- 日期选择器 -->
           <view class="date-selector">
             <view class="arrow" bindtap="prevDay">◀</view>
-            <view class="current-date" bindtap="selectOverviewDate">{{overviewDay}}</view>
+            <view class="current-date" bindtap="selectOverviewDate" bindlongtap="showCalendarPicker">{{overviewDay}}</view>
             <view class="arrow" bindtap="nextDay">▶</view>
           </view>
+          
+          <!-- 日历选择器组件 -->
+          <calendar-picker 
+            show="{{showCalendar}}" 
+            selectedDate="{{overviewDay}}"
+            bind:close="closeCalendarPicker"
+            bind:confirm="confirmCalendarDate"
+          ></calendar-picker>
           
           <!-- 负载状态 -->
           <view class="load-stats">
@@ -181,7 +189,7 @@
           taskType="{{taskType}}"
           task="{{task}}"
           isTemplateMode="{{selectedTemplate !== '' && !task.isEditing}}"
-          shouldShowSaveButton="{{(task.isEditing && task.title) || (selectedTemplate === '' && task.title)}}"
+          shouldShowSaveButton="{{task.title && (task.isEditing || customMode)}}"
           editable="{{true}}"
           showDescription="{{true}}"
           bind:change="handleTaskInfoChange"

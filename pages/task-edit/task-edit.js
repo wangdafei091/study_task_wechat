@@ -1076,7 +1076,8 @@ Page({
       'task.points': points,
       'task.taskType': template.taskType,
       'task.precision': template.precision || 'day',
-      'task.isEditing': false // 初始为非编辑模式
+      'task.isEditing': false, // 初始为非编辑模式
+      customMode: false        // 退出自定义模式
     });
     
     // 根据任务类型设置相应属性
@@ -1110,11 +1111,14 @@ Page({
     console.log('[TaskEdit] 已选择模板，显示只读视图，不显示保存为常用任务按钮');
     
     // 添加最终状态日志，验证修复效果
-    console.log('[TaskEdit] 模板选择完成 - 最终状态:',  {
+    console.log('[TaskEdit] 模板选择完成 - 最终状态:', {
       title: this.data.task.title,
       description: this.data.task.description,
       points: this.data.task.points,
-      taskType: this.data.taskType
+      taskType: this.data.taskType,
+      isEditing: this.data.task.isEditing,
+      customMode: this.data.customMode,
+      selectedTemplate: this.data.selectedTemplate
     });
   },
 
@@ -1133,6 +1137,11 @@ Page({
       this.selectCustomHabit();
     }
     
+    // 确保设置为自定义模式
+    this.setData({
+      customMode: true
+    });
+    
     // 如果有标签选择器，刷新标签
     if (this.loadTags) {
       this.loadTags();
@@ -1146,9 +1155,13 @@ Page({
     wx.vibrateShort({ type: 'light' });
     
     // 记录当前任务状态
-    console.log('[TaskEdit] 自定义任务状态 - 类型:', this.data.taskType, 
-                'task.taskType:', this.data.task.taskType, 
-                'task.title:', this.data.task.title || '未设置');
+    console.log('[TaskEdit] 自定义任务状态:', {
+      taskType: this.data.taskType,
+      taskTitle: this.data.task.title || '未设置',
+      isEditing: this.data.task.isEditing,
+      customMode: true,
+      selectedTemplate: this.data.selectedTemplate
+    });
   },
   
   /**
@@ -1158,10 +1171,14 @@ Page({
     const fromTemplate = e && e.detail && e.detail.fromTemplate;
     console.log('[TaskEdit] 从模板视图切换到编辑模式', fromTemplate ? '(由模板编辑触发)' : '');
     
-    // 设置为编辑模式，但保留选中的模板ID（表示这是一个模板编辑）
+    // 设置为编辑模式，并启用自定义模式
     this.setData({
-      'task.isEditing': true // 启用编辑状态
+      'task.isEditing': true, // 启用编辑状态
+      customMode: true        // 启用自定义模式
     });
+    
+    // 记录更详细的状态信息
+    console.log('[TaskEdit] 编辑模式状态更新: isEditing=true, customMode=true, selectedTemplate=', this.data.selectedTemplate);
     
     // 添加轻微振动反馈
     wx.vibrateShort({ type: 'light' });
@@ -1433,9 +1450,10 @@ Page({
             // 保存后重置为只读状态，无论是从模板编辑还是自定义创建
             this.setData({
               'task.isEditing': false,
+              customMode: false,       // 退出自定义模式
               selectedTemplate: templateObj.id // 设置为选中状态，确保按钮隐藏
             });
-            console.log('[TaskEdit] 保存模板后重置编辑状态为false，设置selectedTemplate:', templateObj.id);
+            console.log('[TaskEdit] 保存模板后状态重置: isEditing=false, customMode=false, selectedTemplate=', templateObj.id);
           },
           fail: (err) => {
             wx.hideLoading();
@@ -1468,9 +1486,10 @@ Page({
             // 保存后重置为只读状态，无论是从模板编辑还是自定义创建
             this.setData({
               'task.isEditing': false,
+              customMode: false,       // 退出自定义模式
               selectedTemplate: templateObj.id // 设置为选中状态，确保按钮隐藏
             });
-            console.log('[TaskEdit] 保存模板后重置编辑状态为false，设置selectedTemplate:', templateObj.id);
+            console.log('[TaskEdit] 保存模板后状态重置: isEditing=false, customMode=false, selectedTemplate=', templateObj.id);
           },
           fail: (err) => {
             wx.hideLoading();
@@ -2622,7 +2641,8 @@ Page({
       'task.startTime': '',
       'task.endTime': '',
       'task.duration': 0,
-      'task.isEditing': true // 自定义模式下设置为编辑状态
+      'task.isEditing': true, // 自定义模式下设置为编辑状态
+      customMode: true        // 明确设置为自定义模式
     });
     
     // 添加日志记录值
@@ -2652,7 +2672,8 @@ Page({
       'task.startTime': '',
       'task.endTime': '',
       'task.duration': 0,
-      'task.isEditing': true // 自定义模式下设置为编辑状态
+      'task.isEditing': true, // 自定义模式下设置为编辑状态
+      customMode: true        // 明确设置为自定义模式
     });
     
     // 添加日志记录值
