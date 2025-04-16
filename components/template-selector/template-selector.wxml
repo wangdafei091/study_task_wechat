@@ -10,7 +10,7 @@
             bindtap="selectTemplate" 
             bindlongpress="{{item.isCustom ? 'handleLongPress' : ''}}"
             data-id="{{item.id}}">
-        <view class="template-name">{{item.shortName || item.name}}</view>
+        <view class="template-name">{{item.shortName || item.title || item.name}}</view>
       </view>
     </block>
     

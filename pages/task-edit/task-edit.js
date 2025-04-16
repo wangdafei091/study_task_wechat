@@ -9,6 +9,7 @@ Page({
     mode: 'create', // 'create' 或 'edit'
     taskType: '', // 'study' 或 'habit'
     precision: 'second', // 'second' 或 'day'
+    showCalendar: false, // 是否显示日历选择器
     task: {
       id: '', // 编辑模式下有值
       title: '',
@@ -139,10 +140,10 @@ Page({
    * 生命周期函数--监听页面加载
    */
   onLoad: function(options) {
-    console.log('任务编辑页面加载', options);
+    console.log('[TaskEdit] 任务编辑页面加载', options);
     
     // 记录常用任务标题添加
-    console.log('常用任务区域添加标题，提升用户界面一致性');
+    console.log('[TaskEdit] 常用任务区域添加标题，提升用户界面一致性');
     
     // 设置页面标题
     wx.setNavigationBarTitle({
@@ -155,12 +156,15 @@ Page({
     
     // 判断模式(创建/编辑)
     if (options.mode === 'edit' && options.taskId) {
+      console.log('[TaskEdit] 进入编辑模式，taskId:', options.taskId);
       this.initEditMode(options.taskId);
     } else {
+      console.log('[TaskEdit] 进入创建模式，taskType:', options.taskType);
       this.initCreateMode(options);
     }
     
     // 加载任务模板（按类型分类）
+    console.log('[TaskEdit] 开始加载任务模板...');
     this.loadTemplatesByCategory();
     
     // 更新任务负载预测
@@ -932,124 +936,116 @@ Page({
   },
 
   /**
-   * 按类型加载任务模板
+   * 加载按类型分类的模板
    */
   loadTemplatesByCategory: function() {
-    // 学习任务模板
-    const studyTemplates = [
-      { 
-        id: 'math_homework', 
-        name: '数学作业', 
-        shortName: '数学',
-        description: '完成数学练习册', 
-        duration: 45, 
-        points: 3,
-        taskType: 'study' // 添加taskType属性
-      },
-      { 
-        id: 'reading', 
-        name: '阅读练习', 
-        shortName: '阅读',
-        description: '阅读一篇文章并做笔记', 
-        duration: 30, 
-        points: 2,
-        taskType: 'study' // 添加taskType属性
-      },
-      { 
-        id: 'english_words', 
-        name: '英语单词', 
-        shortName: '英语',
-        description: '背诵英语单词', 
-        duration: 20, 
-        points: 2,
-        taskType: 'study' // 添加taskType属性
-      },
-      { 
-        id: 'writing', 
-        name: '写作文', 
-        shortName: '作文',
-        description: '完成一篇作文', 
-        duration: 60, 
-        points: 5,
-        taskType: 'study' // 添加taskType属性
-      }
-    ];
-
-    // 生活习惯模板
-    const habitTemplates = [
-      { 
-        id: 'tidy_desk', 
-        name: '整理书桌', 
-        shortName: '整理',
-        description: '整理书桌和学习用品', 
-        duration: 15, 
-        points: 2,
-        taskType: 'habit' // 添加taskType属性
-      },
-      { 
-        id: 'wash_dishes', 
-        name: '洗碗', 
-        shortName: '洗碗',
-        description: '清洗并整理餐具', 
-        duration: 10, 
-        points: 1,
-        taskType: 'habit' // 添加taskType属性
-      },
-      { 
-        id: 'exercise', 
-        name: '做运动', 
-        shortName: '运动',
-        description: '进行体育锻炼', 
-        duration: 30, 
-        points: 3,
-        taskType: 'habit' // 添加taskType属性
-      },
-      { 
-        id: 'make_bed', 
-        name: '整理床铺', 
-        shortName: '床铺',
-        description: '整理床铺被褥', 
-        duration: 5, 
-        points: 1,
-        taskType: 'habit' // 添加taskType属性
-      },
-      { 
-        id: 'clean_room', 
-        name: '打扫房间', 
-        shortName: '打扫',
-        description: '清扫房间卫生', 
-        duration: 20, 
-        points: 2,
-        taskType: 'habit' // 添加taskType属性
-      }
-    ];
-
-    // 首先设置预设的模板
-    this.setData({
-      studyTemplates: studyTemplates,
-      habitTemplates: habitTemplates
-    });
-    
-    // 加载自定义模板并合并
     const that = this;
+    console.log('[TaskEdit] 开始加载模板（按类型分类）');
+    
+    // 从本地存储加载自定义模板
     wx.getStorage({
       key: 'customTemplates',
       success: function(res) {
-        console.log('加载自定义模板:', res.data);
-        const customTemplates = res.data || [];
+        const templates = res.data || [];
+        console.log('[TaskEdit] 成功加载自定义模板，数量:', templates.length);
         
-        // 按任务类型分类
-        const customStudyTemplates = customTemplates.filter(t => t.taskType === 'study');
-        const customHabitTemplates = customTemplates.filter(t => t.taskType === 'habit' || t.taskType === 'habit');
+        if (templates.length === 0) {
+          console.log('[TaskEdit] 已加载模板但数量为0，初始化默认模板');
+          that.initializeDefaultTemplates();
+          return;
+        }
         
-        // 合并自定义模板和预设模板
-        that.setData({
-          studyTemplates: [...customStudyTemplates, ...studyTemplates],
-          habitTemplates: [...customHabitTemplates, ...habitTemplates]
+        // 记录模板的isCustom属性，用于调试
+        templates.forEach((t, i) => {
+          if (i < 3) { // 只记录前3个模板
+            console.log(`[TaskEdit] 模板[${i}] - ID: ${t.id}, 标题: ${t.title || t.name}, isCustom: ${t.isCustom}`);
+          }
         });
+        
+        // 迁移模板数据结构，统一字段命名
+        const migratedTemplates = that.migrateTemplateStructure(templates);
+        console.log('[TaskEdit] 模板迁移后数量:', migratedTemplates.length);
+        
+        // 记录迁移前后的前几个模板，方便对比
+        if (templates.length > 0) {
+          console.log('[TaskEdit] 迁移前的前3个模板:', 
+            templates.slice(0, 3).map(t => ({ id: t.id, title: t.title || t.name, createTime: t.createTime })));
+        }
+        
+        if (migratedTemplates.length > 0) {
+          console.log('[TaskEdit] 迁移后的前3个模板:', 
+            migratedTemplates.slice(0, 3).map(t => ({ 
+              id: t.id, 
+              title: t.title, 
+              createTime: t.createTime,
+              isCustom: t.isCustom
+            })));
+        }
+        
+        // 检查是否有变更，如果有则保存回本地存储
+        const templatesJson = JSON.stringify(templates);
+        const migratedJson = JSON.stringify(migratedTemplates);
+        if (templatesJson !== migratedJson) {
+          console.log('[TaskEdit] 检测到模板数据结构变更，保存迁移后的数据');
+          wx.setStorage({
+            key: 'customTemplates',
+            data: migratedTemplates,
+            success: function() {
+              console.log('[TaskEdit] 迁移后的模板数据保存成功');
+            },
+            fail: function(err) {
+              console.error('[TaskEdit] 迁移后的模板数据保存失败:', err);
+            }
+          });
+        }
+        
+        // 确保模板按创建/更新时间排序（新的在前）
+        const sortedTemplates = [...migratedTemplates].sort((a, b) => {
+          // 优先使用updateTime，如果没有则使用createTime
+          const timeA = a.updateTime || a.createTime || 0;
+          const timeB = b.updateTime || b.createTime || 0;
+          return timeB - timeA; // 降序排列，最新的在前
+        });
+        
+        console.log('[TaskEdit] 模板已按时间排序');
+        
+        // 记录排序后的前几个模板
+        if (sortedTemplates.length > 0) {
+          console.log('[TaskEdit] 排序后的前3个模板:', 
+            sortedTemplates.slice(0, 3).map(t => ({
+              id: t.id,
+              title: t.title,
+              time: t.updateTime || t.createTime,
+              isCustom: t.isCustom
+            })));
+        }
+        
+        // 按类型分类模板
+        const customStudyTemplates = sortedTemplates.filter(t => t.taskType === 'study');
+        const customHabitTemplates = sortedTemplates.filter(t => t.taskType === 'habit');
+        
+        console.log('[TaskEdit] 学习模板数量:', customStudyTemplates.length, '习惯模板数量:', customHabitTemplates.length);
+        console.log('[TaskEdit] 学习模板示例:', customStudyTemplates.length > 0 ? 
+          JSON.stringify({
+            id: customStudyTemplates[0].id,
+            title: customStudyTemplates[0].title,
+            time: customStudyTemplates[0].updateTime || customStudyTemplates[0].createTime,
+            isCustom: customStudyTemplates[0].isCustom
+          }) : '无');
+        
+        // 设置模板
+        that.setData({
+          studyTemplates: customStudyTemplates,
+          habitTemplates: customHabitTemplates
+        });
+        
+        console.log('[TaskEdit] 模板加载完成并设置到页面数据中');
       },
       fail: function(err) {
-        console.log('未找到自定义模板或加载失败:', err);
+        console.log('[TaskEdit] 未找到自定义模板或加载失败:', err);
+        // 如果失败了(可能是首次使用)，尝试初始化默认模板
+        console.log('[TaskEdit] 可能是首次使用，初始化默认模板');
+        that.initializeDefaultTemplates();
       }
     });
   },
@@ -1060,15 +1056,24 @@ Page({
   handleTemplateSelect: function(e) {
     const { template } = e.detail;
     console.log('[TaskEdit] 选择模板:', template);
+    console.log('[TaskEdit] 选择模板详情 - ID:', template.id, '名称:', template.title || template.name, '任务类型:', template.taskType);
+    
+    // 兼容两种命名方案，优先使用title/name
+    const title = template.title || template.name || '';
+    const shortName = template.shortName || '';
+    const description = template.description || template.desc || '';
+    const points = template.points || (template.taskType === 'study' ? 3 : 2);
+    
+    console.log('[TaskEdit] 处理后的模板数据 - 标题:', title, '简称:', shortName, '描述:', description, '积分:', points);
     
     // 设置选中模板，并更新任务信息，默认为非编辑模式
     this.setData({
       selectedTemplate: template.id,
       selectedTemplateType: template.taskType,
-      'task.title': template.name,
-      'task.shortName': template.shortName || '',
-      'task.description': template.description || '',
-      'task.points': template.points || 1,
+      'task.title': title,
+      'task.shortName': shortName,
+      'task.description': description,
+      'task.points': points,
       'task.taskType': template.taskType,
       'task.precision': template.precision || 'day',
       'task.isEditing': false // 初始为非编辑模式
@@ -1081,12 +1086,14 @@ Page({
         'task.type': 'study',
         'task.icon': template.icon || '📚'
       });
+      console.log('[TaskEdit] 设置为学习任务类型，图标:', template.icon || '📚');
     } else if (template.taskType === 'habit') {
       this.setData({
         taskType: 'habit',
         'task.type': 'habit',
         'task.icon': template.icon || '⏰'
       });
+      console.log('[TaskEdit] 设置为习惯任务类型，图标:', template.icon || '⏰');
     }
     
     // 添加更详细的日志，跟踪任务类型值
@@ -1103,9 +1110,12 @@ Page({
     console.log('[TaskEdit] 已选择模板，显示只读视图，不显示保存为常用任务按钮');
     
     // 添加最终状态日志，验证修复效果
-    console.log('[TaskEdit] 模板选择完成 - 最终taskType:', this.data.taskType, 
-                'templateType:', template.taskType, 
-                'task.taskType:', this.data.task.taskType);
+    console.log('[TaskEdit] 模板选择完成 - 最终状态:',  {
+      title: this.data.task.title,
+      description: this.data.task.description,
+      points: this.data.task.points,
+      taskType: this.data.taskType
+    });
   },
 
   /**
@@ -1116,14 +1126,17 @@ Page({
     console.log('[TaskEdit] 选择自定义任务, 类型:', type);
     
     if (type === 'study') {
+      console.log('[TaskEdit] 创建自定义学习任务');
       this.selectCustomStudy();
     } else if (type === 'habit') {
+      console.log('[TaskEdit] 创建自定义习惯任务');
       this.selectCustomHabit();
     }
     
     // 如果有标签选择器，刷新标签
     if (this.loadTags) {
       this.loadTags();
+      console.log('[TaskEdit] 刷新标签选择器');
     }
     
     // 自定义模式下允许保存为常用任务
@@ -1131,6 +1144,11 @@ Page({
     
     // 添加轻微振动反馈
     wx.vibrateShort({ type: 'light' });
+    
+    // 记录当前任务状态
+    console.log('[TaskEdit] 自定义任务状态 - 类型:', this.data.taskType, 
+                'task.taskType:', this.data.task.taskType, 
+                'task.title:', this.data.task.title || '未设置');
   },
   
   /**
@@ -1270,13 +1288,13 @@ Page({
    */
   saveAsTemplate: function(e) {
     // 增强日志记录
-    console.log('[task-edit] 保存为常用任务被触发', e ? e.detail : '直接调用');
+    console.log('[TaskEdit] 保存为常用任务被触发', e ? e.detail : '直接调用');
     
     const { task } = this.data;
     const isFromTemplateEdit = this.data.selectedTemplate !== '' && task.isEditing;
     
-    console.log('[task-edit] 来源:', isFromTemplateEdit ? '模板编辑' : '自定义创建');
-    console.log('[task-edit] 当前任务信息:', task);
+    console.log('[TaskEdit] 来源:', isFromTemplateEdit ? '模板编辑' : '自定义创建');
+    console.log('[TaskEdit] 当前任务信息:', task);
     
     // 校验必要信息
     if (!task.title || !task.title.trim()) {
@@ -1284,7 +1302,7 @@ Page({
         title: '请先填写任务名称',
         icon: 'none'
       });
-      console.log('[task-edit] 保存模板失败: 任务名称为空');
+      console.log('[TaskEdit] 保存模板失败: 任务名称为空');
       return;
     }
     
@@ -1293,17 +1311,17 @@ Page({
     if (!shortName) {
       // 如果没有简称，使用任务名前4个字
       shortName = task.title.substring(0, 4);
-      console.log('[task-edit] 自动生成简称:', shortName);
+      console.log('[TaskEdit] 自动生成简称:', shortName);
     }
     
     // 创建模板对象
     let templateObj = {
-      name: task.title,
+      title: task.title,
       shortName: shortName,
       icon: this.data.taskType === 'study' ? '📚' : '⏰',
-      description: task.description,
+      description: task.description || '',
       duration: task.duration || 30,
-      points: task.points,
+      points: task.points || (this.data.taskType === 'study' ? 3 : 2),
       taskType: this.data.taskType,
       isCustom: true
     };
@@ -1311,11 +1329,12 @@ Page({
     // 如果是从模板编辑，保留原模板ID；否则创建新ID
     if (isFromTemplateEdit) {
       templateObj.id = this.data.selectedTemplate;
-      console.log('[task-edit] 更新现有模板:', templateObj.id);
+      console.log('[TaskEdit] 更新现有模板:', templateObj.id);
     } else {
-      templateObj.id = 'custom_' + Date.now();
+      // 使用统一的UUID生成方法
+      templateObj.id = this.generateUUID();
       templateObj.createTime = Date.now();
-      console.log('[task-edit] 创建新模板:', templateObj.id);
+      console.log('[TaskEdit] 创建新模板，ID:', templateObj.id, '创建时间:', templateObj.createTime);
     }
     
     // 显示加载状态
@@ -1329,7 +1348,13 @@ Page({
       key: 'customTemplates',
       success: (res) => {
         let templates = res.data || [];
-        console.log('[task-edit] 已加载现有模板数量:', templates.length);
+        console.log('[TaskEdit] 已加载现有模板数量:', templates.length);
+        
+        // 记录保存前的模板顺序
+        if (templates.length > 0) {
+          console.log('[TaskEdit] 保存前的前3个模板:', 
+            templates.slice(0, 3).map(t => ({ id: t.id, title: t.title, createTime: t.createTime })));
+        }
         
         if (isFromTemplateEdit) {
           // 从模板编辑模式：通过ID查找并更新
@@ -1337,31 +1362,60 @@ Page({
           if (templateIndex !== -1) {
             // 保留原有的createTime
             templateObj.createTime = templates[templateIndex].createTime;
+            // 设置updateTime来标记更新时间
+            templateObj.updateTime = Date.now();
             // 更新模板
             templates[templateIndex] = templateObj;
-            console.log('[task-edit] 更新了现有模板');
+            console.log('[TaskEdit] 更新了现有模板, index:', templateIndex);
+            
+            // 将更新的模板移到列表前面
+            if (templateIndex > 0) {
+              // 先移除该模板
+              const updatedTemplate = templates.splice(templateIndex, 1)[0];
+              // 再插入到列表头部
+              templates.unshift(updatedTemplate);
+              console.log('[TaskEdit] 将更新的模板移到列表前面');
+            }
           } else {
             // 未找到原模板，作为新模板处理
             templateObj.createTime = Date.now();
             templates.unshift(templateObj);
-            console.log('[task-edit] 原模板未找到，添加为新模板');
+            console.log('[TaskEdit] 原模板未找到，添加为新模板');
           }
         } else {
           // 自定义创建模式：检查是否有同名模板
-          const existingIndex = templates.findIndex(t => t.name === templateObj.name && t.taskType === templateObj.taskType);
+          const existingIndex = templates.findIndex(t => 
+            // 使用title字段进行比较，而不是name
+            (t.title === templateObj.title) && 
+            (t.taskType === templateObj.taskType)
+          );
+          
           if (existingIndex !== -1) {
-            console.log('[task-edit] 发现同名模板，更新该模板');
-            templates.splice(existingIndex, 1); // 移除已存在的同名模板
+            console.log('[TaskEdit] 发现同名模板，索引:', existingIndex, '标题:', templates[existingIndex].title);
+            // 保留原有ID和创建时间，但更新内容
+            templateObj.id = templates[existingIndex].id;
+            templateObj.createTime = templates[existingIndex].createTime;
+            templateObj.updateTime = Date.now();
+            // 移除已存在的同名模板
+            templates.splice(existingIndex, 1);
+            console.log('[TaskEdit] 已移除同名模板，准备添加更新版本');
           }
           
           // 将新模板添加到列表前端
           templates.unshift(templateObj);
+          console.log('[TaskEdit] 新模板已添加到列表头部');
         }
         
         // 确保模板数量不超过100
         if (templates.length > 100) {
           const removedTemplate = templates.pop();
-          console.log('[task-edit] 模板数量超过100个，移除最旧模板:', removedTemplate.name);
+          console.log('[TaskEdit] 模板数量超过100个，移除最旧模板:', removedTemplate.title || removedTemplate.name);
+        }
+        
+        // 记录保存后的模板顺序
+        if (templates.length > 0) {
+          console.log('[TaskEdit] 保存后的前3个模板:', 
+            templates.slice(0, 3).map(t => ({ id: t.id, title: t.title, createTime: t.createTime })));
         }
         
         wx.setStorage({
@@ -1381,11 +1435,11 @@ Page({
               'task.isEditing': false,
               selectedTemplate: templateObj.id // 设置为选中状态，确保按钮隐藏
             });
-            console.log('[task-edit] 保存模板后重置编辑状态为false，设置selectedTemplate:', templateObj.id);
+            console.log('[TaskEdit] 保存模板后重置编辑状态为false，设置selectedTemplate:', templateObj.id);
           },
           fail: (err) => {
             wx.hideLoading();
-            console.error('[task-edit] 模板保存失败:', err);
+            console.error('[TaskEdit] 模板保存失败:', err);
             wx.showToast({
               title: '保存模板失败',
               icon: 'none'
@@ -1394,7 +1448,11 @@ Page({
         });
       },
       fail: () => {
-        console.log('[task-edit] 首次创建模板存储');
+        console.log('[TaskEdit] 首次创建模板存储');
+        
+        // 确保新模板有createTime
+        templateObj.createTime = Date.now();
+        
         wx.setStorage({
           key: 'customTemplates',
           data: [templateObj],
@@ -1412,11 +1470,11 @@ Page({
               'task.isEditing': false,
               selectedTemplate: templateObj.id // 设置为选中状态，确保按钮隐藏
             });
-            console.log('[task-edit] 保存模板后重置编辑状态为false，设置selectedTemplate:', templateObj.id);
+            console.log('[TaskEdit] 保存模板后重置编辑状态为false，设置selectedTemplate:', templateObj.id);
           },
           fail: (err) => {
             wx.hideLoading();
-            console.error('[task-edit] 模板保存失败:', err);
+            console.error('[TaskEdit] 模板保存失败:', err);
             wx.showToast({
               title: '保存模板失败',
               icon: 'none'
@@ -1424,6 +1482,74 @@ Page({
           }
         });
       }
+    });
+  },
+
+  /**
+   * 生成UUID用于模板ID
+   */
+  generateUUID: function() {
+    return 'template_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+  },
+
+  /**
+   * 迁移模板数据结构，统一字段命名
+   */
+  migrateTemplateStructure: function(templates) {
+    console.log('[TaskEdit] 开始迁移模板数据结构，统一字段命名');
+    
+    return templates.map(template => {
+      // 克隆模板对象
+      const updated = { ...template };
+      
+      // 确保有ID
+      if (!updated.id) {
+        updated.id = this.generateUUID();
+        console.log('[TaskEdit] 模板迁移 - 添加ID:', updated.id);
+      }
+      
+      // 处理title/name字段
+      if (template.name && !template.title) {
+        updated.title = template.name;
+        console.log('[TaskEdit] 模板迁移 - 从name字段创建title字段:', template.name);
+      }
+      
+      // 处理description/desc字段
+      if (template.desc && !template.description) {
+        updated.description = template.desc;
+        console.log('[TaskEdit] 模板迁移 - 从desc字段创建description字段:', template.desc);
+      }
+      
+      // 确保有积分字段
+      if (!updated.points) {
+        updated.points = template.taskType === 'study' ? 3 : 2;
+        console.log('[TaskEdit] 模板迁移 - 添加默认积分:', updated.points);
+      }
+      
+      // 确保有简称
+      if (!updated.shortName) {
+        updated.shortName = updated.title ? updated.title.substring(0, 4) : '';
+        console.log('[TaskEdit] 模板迁移 - 添加默认简称:', updated.shortName);
+      }
+      
+      // 确保有createTime字段
+      if (!updated.createTime) {
+        // 如果没有创建时间，设置一个默认值（早于当前时间）
+        // 使用一个较早的时间，确保新创建的模板会排在前面
+        updated.createTime = Date.now() - (templates.length * 1000);
+        console.log('[TaskEdit] 模板迁移 - 添加默认创建时间:', updated.createTime);
+      }
+      
+      // 确保有isCustom标志，默认设为true允许长按操作
+      if (updated.isCustom === undefined) {
+        updated.isCustom = true;
+        console.log('[TaskEdit] 模板迁移 - 添加isCustom标志为true，允许长按操作');
+      }
+      
+      // 标记为迁移后的模板
+      updated.migrated = true;
+      
+      return updated;
     });
   },
 
@@ -2480,7 +2606,7 @@ Page({
    * 选择自定义学习任务
    */
   selectCustomStudy: function() {
-    console.log('选择自定义学习任务');
+    console.log('[TaskEdit] 选择自定义学习任务');
     
     this.setData({
       taskType: 'study',
@@ -2510,7 +2636,7 @@ Page({
    * 选择自定义生活习惯
    */
   selectCustomHabit: function() {
-    console.log('选择自定义生活习惯');
+    console.log('[TaskEdit] 选择自定义生活习惯');
     
     this.setData({
       taskType: 'habit',
@@ -2534,5 +2660,158 @@ Page({
     
     // 处理重复任务设置
     this.ensureRepeatTaskSettings();
+  },
+
+  /**
+   * 显示日历选择器
+   */
+  showCalendarPicker: function() {
+    // 触感反馈
+    wx.vibrateShort({ type: 'medium' });
+    
+    // 记录日志
+    console.log('[TaskEdit] 长按日期，显示日历选择器');
+    
+    this.setData({ showCalendar: true });
+  },
+
+  /**
+   * 关闭日历选择器
+   */
+  closeCalendarPicker: function() {
+    // 记录日志
+    console.log('[TaskEdit] 关闭日历选择器');
+    
+    this.setData({ showCalendar: false });
+  },
+
+  /**
+   * 确认日历选择的日期
+   */
+  confirmCalendarDate: function(e) {
+    const { date } = e.detail;
+    
+    // 记录日志
+    console.log('[TaskEdit] 确认选择日期:', date);
+    
+    // 更新页面数据
+    this.setData({
+      overviewDay: date,
+      showCalendar: false
+    });
+    
+    // 加载该日期的任务数据
+    this.loadDayViewData(date);
+  },
+
+  /**
+   * 初始化默认模板
+   */
+  initializeDefaultTemplates: function() {
+    console.log('[TaskEdit] 开始初始化默认模板');
+    const that = this;
+    
+    // 定义默认模板
+    const defaultTemplates = [
+      // 学习任务模板
+      {
+        id: 'default_study_1',
+        taskType: 'study',
+        title: '单词记忆',
+        shortName: '单词',
+        description: '记忆英语单词10个', // 使用description替代desc
+        points: 3,
+        star: false,
+        isCustom: true  // 添加isCustom标志，允许长按操作
+      },
+      {
+        id: 'default_study_2',
+        taskType: 'study',
+        title: '阅读文章',
+        shortName: '阅读',
+        description: '阅读一篇英语文章',
+        points: 3,
+        star: false,
+        isCustom: true  // 添加isCustom标志，允许长按操作
+      },
+      {
+        id: 'default_study_3',
+        taskType: 'study',
+        title: '听力训练',
+        shortName: '听力',
+        description: '英语听力练习15分钟',
+        points: 3,
+        star: false,
+        isCustom: true  // 添加isCustom标志，允许长按操作
+      },
+      
+      // 习惯任务模板
+      {
+        id: 'default_habit_1',
+        taskType: 'habit',
+        title: '做运动',
+        shortName: '运动',
+        description: '进行15分钟的运动',
+        points: 2,
+        star: false,
+        isCustom: true  // 添加isCustom标志，允许长按操作
+      },
+      {
+        id: 'default_habit_2',
+        taskType: 'habit',
+        title: '整理床铺',
+        shortName: '整理',
+        description: '保持床铺整洁',
+        points: 2,
+        star: false,
+        isCustom: true  // 添加isCustom标志，允许长按操作
+      },
+      {
+        id: 'default_habit_3',
+        taskType: 'habit',
+        title: '打扫房间',
+        shortName: '打扫',
+        description: '清扫房间保持整洁',
+        points: 2,
+        star: false,
+        isCustom: true  // 添加isCustom标志，允许长按操作
+      }
+    ];
+    
+    // 保存默认模板到本地存储
+    wx.setStorage({
+      key: 'customTemplates',
+      data: defaultTemplates,
+      success: function() {
+        console.log('[TaskEdit] 默认模板初始化成功，数量:', defaultTemplates.length);
+        
+        // 分类并设置模板数据
+        const studyTemplates = defaultTemplates.filter(t => t.taskType === 'study');
+        const habitTemplates = defaultTemplates.filter(t => t.taskType === 'habit');
+        
+        console.log('[TaskEdit] 默认学习模板数量:', studyTemplates.length, '默认习惯模板数量:', habitTemplates.length);
+        console.log('[TaskEdit] 默认模板数据示例:', JSON.stringify(defaultTemplates[0]).substring(0, 100) + '...');
+        
+        that.setData({
+          studyTemplates: studyTemplates,
+          habitTemplates: habitTemplates
+        });
+        
+        console.log('[TaskEdit] 默认模板已设置到页面数据中');
+      },
+      fail: function(err) {
+        console.error('[TaskEdit] 默认模板初始化失败:', err);
+        // 即使存储失败，也设置内存中的默认模板以确保用户体验
+        const studyTemplates = defaultTemplates.filter(t => t.taskType === 'study');
+        const habitTemplates = defaultTemplates.filter(t => t.taskType === 'habit');
+        
+        that.setData({
+          studyTemplates: studyTemplates,
+          habitTemplates: habitTemplates
+        });
+        
+        console.log('[TaskEdit] 默认模板设置到内存中（存储失败但保证用户体验）');
+      }
+    });
   },
 }) 

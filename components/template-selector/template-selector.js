@@ -52,8 +52,9 @@ Component({
       const template = this.data.templates.find(t => t.id === templateId);
       
       if (template) {
-        // 记录日志
-        console.log('模板选择 - templateId:', templateId, 'template:', template, 'componentType:', this.data.type);
+        // 记录日志，优先使用title字段
+        const templateName = template.title || template.name || '未命名模板';
+        console.log('[template-selector] 模板选择 - ID:', templateId, '名称:', templateName, '类型:', this.data.type);
         
         // 触发选择事件，确保传递组件的type属性
         this.triggerEvent('select', {
@@ -70,11 +71,43 @@ Component({
     },
 
     /**
+     * 处理自定义选择事件
+     */
+    onCustomSelect(e) {
+      console.log('[template-selector] 选择自定义模板:', e.detail);
+      this.triggerEvent('customSelect', e.detail);
+    },
+
+    /**
+     * 处理模板选择事件
+     */
+    onTemplateSelect(e) {
+      console.log('[template-selector] 选择模板:', e.detail);
+      this.triggerEvent('templateSelect', e.detail);
+    },
+
+    /**
+     * 处理编辑简称事件
+     */
+    onEditShortName(e) {
+      console.log('[template-selector] 编辑模板简称:', e.detail);
+      this.triggerEvent('editShortName', e.detail);
+    },
+
+    /**
+     * 处理删除模板事件
+     */
+    onDeleteTemplate(e) {
+      console.log('[template-selector] 删除模板:', e.detail);
+      this.triggerEvent('deleteTemplate', e.detail);
+    },
+
+    /**
      * 选择自定义模板
      */
     selectCustom() {
       // 记录日志
-      console.log('选择自定义 - 组件类型:', this.data.type);
+      console.log('[template-selector] 选择自定义 - 组件类型:', this.data.type);
       
       this.triggerEvent('custom', {
         type: this.data.type
@@ -93,12 +126,28 @@ Component({
       const templateId = e.currentTarget.dataset.id;
       const template = this.data.templates.find(t => t.id === templateId);
       
+      console.log('[template-selector] 长按事件触发，模板ID:', templateId);
+      console.log('[template-selector] 找到模板:', template ? '是' : '否');
+      
+      if (template) {
+        console.log('[template-selector] 模板isCustom属性:', template.isCustom, '类型:', typeof template.isCustom);
+        console.log('[template-selector] 完整模板数据:', template);
+      }
+      
       if (template && template.isCustom) {
         // 提供触感反馈
         wx.vibrateShort({ type: 'medium' });
         
-        // 记录日志
-        console.log('[template-selector] 长按自定义模板:', template.name);
+        // 记录日志，优先使用title字段
+        const templateName = template.title || template.name || '未命名模板';
+        console.log('[template-selector] 长按自定义模板:', templateName);
+        console.log('[template-selector] 模板详情:', {
+          id: template.id,
+          title: template.title,
+          name: template.name,
+          shortName: template.shortName,
+          taskType: template.taskType
+        });
         
         // 显示操作菜单
         wx.showActionSheet({
@@ -113,6 +162,8 @@ Component({
             }
           }
         });
+      } else {
+        console.log('[template-selector] 长按未触发操作菜单，可能原因：模板为空或不是自定义模板');
       }
     },
 
@@ -120,12 +171,15 @@ Component({
      * 修改模板简称
      */
     editShortName(template) {
+      // 获取模板名称，优先使用title字段
+      const templateName = template.title || template.name || '未命名模板';
+      
       // 弹出输入框让用户输入新简称
       wx.showModal({
         title: '修改简称',
         content: '请输入新的简称（最多4个字符）',
         editable: true,
-        placeholderText: template.shortName || template.name.substring(0, 4),
+        placeholderText: template.shortName || templateName.substring(0, 4),
         success: (res) => {
           if (res.confirm && res.content) {
             // 限制最多4个字符
@@ -147,9 +201,12 @@ Component({
      * 确认删除模板
      */
     confirmDelete(template) {
+      // 获取模板名称，优先使用title字段
+      const templateName = template.title || template.name || '未命名模板';
+      
       wx.showModal({
         title: '确认删除',
-        content: `确定要删除常用任务"${template.name}"吗？`,
+        content: `确定要删除常用任务"${templateName}"吗？`,
         success: (res) => {
           if (res.confirm) {
             // 触发删除事件
@@ -180,15 +237,14 @@ Component({
         typeClass: typeMap[this.data.type] || 'study'
       });
       
-      console.log('模板选择器组件已载入，类型:', this.data.type, '样式类:', this.data.typeClass);
-      console.log('组件properties:', {
+      console.log('[template-selector] 组件已载入，类型:', this.data.type, '样式类:', this.data.typeClass);
+      console.log('[template-selector] 组件属性:', {
         type: this.data.type,
         title: this.data.title,
         selectedId: this.data.selectedId,
         templates: this.data.templates.length,
         maxDisplay: this.data.maxDisplay
       });
-      console.log('应用新设计：无边框 + 极淡背景色 + 点击缩放动效 + 匹配任务类型的文字颜色');
     }
   }
 }); 
