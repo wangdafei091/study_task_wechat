@@ -1,0 +1,42 @@
+<!-- components/custom-input-modal/custom-input-modal.wxml -->
+<view class="custom-modal {{show ? 'show' : ''}}" catchtap="preventBubble">
+  <!-- 背景遮罩 -->
+  <view class="modal-mask" catchtap="handleCancel"></view>
+  
+  <!-- 弹窗容器 -->
+  <view class="modal-container">
+    <!-- 弹窗标题 -->
+    <view class="modal-header">
+      <text class="modal-title">{{title}}</text>
+    </view>
+    
+    <!-- 弹窗内容 -->
+    <view class="modal-content" wx:if="{{content}}">
+      <text>{{content}}</text>
+    </view>
+    
+    <!-- 输入框 -->
+    <view class="modal-input-container">
+      <input 
+        class="modal-input" 
+        value="{{inputValue}}" 
+        bindinput="handleInput" 
+        bindfocus="handleFocus"
+        bindblur="handleBlur"
+        placeholder="{{placeholder}}"
+        placeholder-style="color: #999999;"
+        maxlength="{{maxLength}}"
+        focus="{{isFocused}}"
+        selection-start="0"
+        selection-end="0"
+      />
+      <view class="input-counter" wx:if="{{maxLength > 0}}">{{inputValue.length}}/{{maxLength}}</view>
+    </view>
+    
+    <!-- 按钮区域 -->
+    <view class="modal-footer">
+      <button class="modal-btn cancel-btn" catchtap="handleCancel">{{cancelText}}</button>
+      <button class="modal-btn confirm-btn" catchtap="handleConfirm">{{confirmText}}</button>
+    </view>
+  </view>
+</view> 

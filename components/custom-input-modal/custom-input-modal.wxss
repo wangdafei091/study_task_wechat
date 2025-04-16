@@ -1,0 +1,136 @@
+/* components/custom-input-modal/custom-input-modal.wxss */
+
+/* 弹窗基础样式 */
+.custom-modal {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 0.3s, visibility 0.3s;
+}
+
+/* 显示状态 */
+.custom-modal.show {
+  visibility: visible;
+  opacity: 1;
+}
+
+/* 背景遮罩 */
+.modal-mask {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background-color: rgba(0, 0, 0, 0.6);
+}
+
+/* 弹窗容器 */
+.modal-container {
+  position: relative;
+  width: 85%;
+  max-width: 600rpx;
+  background-color: #fff;
+  border-radius: 12rpx;
+  overflow: hidden;
+  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.1);
+  transform: scale(1);
+  transition: transform 0.3s;
+  z-index: 10000;
+}
+
+.custom-modal.show .modal-container {
+  transform: scale(1);
+}
+
+/* 弹窗头部 */
+.modal-header {
+  padding: 30rpx 30rpx 20rpx;
+  text-align: center;
+  border-bottom: 1rpx solid #f2f2f2;
+}
+
+.modal-title {
+  font-size: 34rpx;
+  font-weight: 500;
+  color: #333;
+}
+
+/* 弹窗内容 */
+.modal-content {
+  padding: 30rpx;
+  font-size: 28rpx;
+  color: #666;
+  line-height: 1.5;
+  text-align: center;
+}
+
+/* 输入框容器 */
+.modal-input-container {
+  padding: 0 30rpx 30rpx;
+  position: relative;
+}
+
+/* 输入框样式 */
+.modal-input {
+  width: 100%;
+  height: 80rpx;
+  border: 1rpx solid #e0e0e0;
+  border-radius: 8rpx;
+  background-color: #f9f9f9;
+  padding: 0 20rpx;
+  font-size: 28rpx;
+  color: #333;
+  box-sizing: border-box;
+}
+
+/* 字符计数器 */
+.input-counter {
+  position: absolute;
+  right: 40rpx;
+  bottom: 40rpx;
+  font-size: 24rpx;
+  color: #999;
+}
+
+/* 按钮区域 */
+.modal-footer {
+  display: flex;
+  border-top: 1rpx solid #f2f2f2;
+}
+
+/* 按钮样式 */
+.modal-btn {
+  flex: 1;
+  height: 90rpx;
+  line-height: 90rpx;
+  text-align: center;
+  font-size: 32rpx;
+  border-radius: 0;
+  margin: 0;
+  padding: 0;
+  background-color: #fff;
+}
+
+.modal-btn::after {
+  display: none;
+}
+
+/* 取消按钮 */
+.cancel-btn {
+  color: #666;
+  border-right: 1rpx solid #f2f2f2;
+}
+
+/* 确认按钮 */
+.confirm-btn {
+  color: #07c160;
+  font-weight: 500;
+} 

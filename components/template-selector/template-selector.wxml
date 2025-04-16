@@ -19,4 +19,16 @@
       <view class="template-name">{{customText}}</view>
     </view>
   </view>
+  
+  <!-- 自定义输入弹窗组件 -->
+  <custom-input-modal
+    show="{{showEditModal}}"
+    title="修改简称"
+    content="请输入新的简称"
+    placeholder="{{editingTemplate.shortName || (editingTemplate.title ? editingTemplate.title.substring(0, 4) : '')}}"
+    value="{{editingTemplate.shortName || ''}}"
+    maxLength="4"
+    bind:confirm="handleEditConfirm"
+    bind:cancel="handleEditCancel"
+  ></custom-input-modal>
 </view> 

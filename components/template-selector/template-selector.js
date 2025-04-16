@@ -37,7 +37,9 @@ Component({
    * 组件的初始数据
    */
   data: {
-    typeClass: 'study' // 默认使用学习样式
+    typeClass: 'study', // 默认使用学习样式
+    showEditModal: false, // 是否显示编辑弹窗
+    editingTemplate: {}   // 当前正在编辑的模板
   },
 
   /**
@@ -154,8 +156,8 @@ Component({
           itemList: ['修改简称', '删除常用任务'],
           success: (res) => {
             if (res.tapIndex === 0) {
-              // 修改简称
-              this.editShortName(template);
+              // 修改简称 - 使用自定义弹窗
+              this.showEditModal(template);
             } else if (res.tapIndex === 1) {
               // 删除任务
               this.confirmDelete(template);
@@ -168,32 +170,48 @@ Component({
     },
 
     /**
-     * 修改模板简称
+     * 显示编辑简称弹窗
      */
-    editShortName(template) {
-      // 获取模板名称，优先使用title字段
-      const templateName = template.title || template.name || '未命名模板';
+    showEditModal(template) {
+      console.log('[template-selector] 显示编辑简称弹窗:', template.title || template.name);
       
-      // 弹出输入框让用户输入新简称
-      wx.showModal({
-        title: '修改简称',
-        content: '请输入新的简称（最多4个字符）',
-        editable: true,
-        placeholderText: template.shortName || templateName.substring(0, 4),
-        success: (res) => {
-          if (res.confirm && res.content) {
-            // 限制最多4个字符
-            const newShortName = res.content.substring(0, 4);
-            
-            // 触发事件，将修改传递给父组件
-            this.triggerEvent('editShortName', {
-              templateId: template.id,
-              newShortName: newShortName,
-              template: template,
-              type: this.data.type
-            });
-          }
-        }
+      this.setData({
+        editingTemplate: template,
+        showEditModal: true
+      });
+    },
+
+    /**
+     * 处理编辑确认
+     */
+    handleEditConfirm(e) {
+      console.log('[template-selector] 编辑确认:', e.detail.value);
+      
+      // 限制最多4个字符
+      const newShortName = e.detail.value.substring(0, 4);
+      
+      // 关闭弹窗
+      this.setData({
+        showEditModal: false
+      });
+      
+      // 触发事件，将修改传递给父组件
+      this.triggerEvent('editShortName', {
+        templateId: this.data.editingTemplate.id,
+        newShortName: newShortName,
+        template: this.data.editingTemplate,
+        type: this.data.type
+      });
+    },
+
+    /**
+     * 处理编辑取消
+     */
+    handleEditCancel() {
+      console.log('[template-selector] 编辑取消');
+      
+      this.setData({
+        showEditModal: false
       });
     },
 

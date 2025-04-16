@@ -1,4 +1,6 @@
 {
   "component": true,
-  "usingComponents": {}
+  "usingComponents": {
+    "custom-input-modal": "../custom-input-modal/custom-input-modal"
+  }
 } 
