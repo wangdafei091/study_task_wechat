@@ -17,16 +17,24 @@
   <!-- 一次性任务设置 -->
   <view class="execution-settings" wx:if="{{repeatMode === 'once'}}">
     <view class="form-item">
-      <!-- 使用日期选择器组件 -->
-      <date-picker 
-        label="执行日期" 
-        value="{{task.date}}" 
-        minDate="{{minDate}}"
-        placeholder="请选择执行日期"
-        quickOptions="{{dateQuickOptions}}"
-        bindchange="onSelectDate"
-        bindquickOptionChange="onQuickDateOptionChange"
-      ></date-picker>
+      <!-- 日期选择输入框（点击显示日历） -->
+      <view class="date-input-field" bindtap="showDateCalendar">
+        <view class="date-input-label">执行日期</view>
+        <view class="date-input-value {{task.date ? '' : 'placeholder'}}">
+          {{task.date ? (task.date + ' ' + (task.startTime ? task.startTime : '')) : '请选择执行日期'}}
+        </view>
+        <view class="date-input-icon">▼</view>
+      </view>
+      
+      <!-- 快速日期选项 -->
+      <view class="quick-select" wx:if="{{dateQuickOptions.length > 0}}">
+        <block wx:for="{{dateQuickOptions}}" wx:key="value">
+          <view class="quick-item {{selectedDateOption === item.value ? 'selected' : ''}}" 
+                bindtap="onQuickDateSelect" data-value="{{item.value}}">
+            {{item.label}}
+          </view>
+        </block>
+      </view>
     </view>
     
     <!-- 学习任务才显示开始时间和结束时间 -->
@@ -37,6 +45,22 @@
           {{task.startTime || '请选择开始时间'}}
         </view>
       </picker>
+      
+      <!-- 快速选择时间选项 -->
+      <view class="quick-select" wx:if="{{supportQuickTimeOptions}}">
+        <view class="quick-item {{selectedTimeOption === 'morning' ? 'selected' : ''}}" 
+              bindtap="onQuickTimeSelect" data-period="morning">
+          上午
+        </view>
+        <view class="quick-item {{selectedTimeOption === 'afternoon' ? 'selected' : ''}}" 
+              bindtap="onQuickTimeSelect" data-period="afternoon">
+          下午
+        </view>
+        <view class="quick-item {{selectedTimeOption === 'evening' ? 'selected' : ''}}" 
+              bindtap="onQuickTimeSelect" data-period="evening">
+          晚上
+        </view>
+      </view>
     </view>
     
     <view class="form-item" wx:if="{{taskType === 'study'}}">
@@ -52,21 +76,24 @@
   <!-- 周期性任务设置 -->
   <view class="execution-settings" wx:if="{{repeatMode === 'repeat'}}">
     <view class="form-item">
-      <!-- 使用日期选择器 - 范围模式 -->
-      <date-picker 
-        mode="range"
-        startLabel="开始日期"
-        endLabel="结束日期 (选填)"
-        startDate="{{task.repeat.startDate}}"
-        endDate="{{task.repeat.endDate}}"
-        minDate="{{minDate}}"
-        startPlaceholder="请选择开始日期"
-        endPlaceholder="不设置结束日期"
-        bindstartChange="onSelectStartDate"
-        bindendChange="onSelectEndDate"
-        rangeQuickOptions="{{dateRangeQuickOptions}}"
-        bindrangeQuickOptionChange="onRangeDateOptionChange"
-      ></date-picker>
+      <!-- 日期范围选择输入框（点击显示日历） -->
+      <view class="date-input-field" bindtap="showRangeCalendar">
+        <view class="date-input-label">日期范围</view>
+        <view class="date-input-value {{task.repeat.startDate ? '' : 'placeholder'}}">
+          {{task.repeat.startDate ? (task.repeat.startDate + (task.repeat.endDate ? ' 至 ' + task.repeat.endDate : '')) : '请选择日期范围'}}
+        </view>
+        <view class="date-input-icon">▼</view>
+      </view>
+      
+      <!-- 快速日期范围选项 -->
+      <view class="quick-select" wx:if="{{dateRangeQuickOptions.length > 0}}">
+        <block wx:for="{{dateRangeQuickOptions}}" wx:key="value">
+          <view class="quick-item {{selectedRangeDateOption === item.value ? 'selected' : ''}}" 
+                bindtap="onQuickRangeDateSelect" data-value="{{item.value}}">
+            {{item.label}}
+          </view>
+        </block>
+      </view>
     </view>
     
     <!-- 添加时间设置 -->
@@ -77,6 +104,22 @@
           {{task.startTime || '请选择开始时间'}}
         </view>
       </picker>
+      
+      <!-- 快速选择时间选项 -->
+      <view class="quick-select" wx:if="{{supportQuickTimeOptions}}">
+        <view class="quick-item {{selectedTimeOption === 'morning' ? 'selected' : ''}}" 
+              bindtap="onQuickTimeSelect" data-period="morning">
+          上午
+        </view>
+        <view class="quick-item {{selectedTimeOption === 'afternoon' ? 'selected' : ''}}" 
+              bindtap="onQuickTimeSelect" data-period="afternoon">
+          下午
+        </view>
+        <view class="quick-item {{selectedTimeOption === 'evening' ? 'selected' : ''}}" 
+              bindtap="onQuickTimeSelect" data-period="evening">
+          晚上
+        </view>
+      </view>
     </view>
     
     <view class="form-item" wx:if="{{taskType === 'study'}}">
@@ -99,4 +142,27 @@
       bind:daysChange="onDaysChange"
     ></repeat-selector>
   </view>
+  
+  <!-- 日历选择器组件 -->
+  <calendar-picker 
+    show="{{showCalendar}}" 
+    mode="{{calendarMode}}"
+    value="{{task.date}}"
+    startDate="{{task.repeat.startDate}}"
+    endDate="{{task.repeat.endDate}}"
+    time="{{task.startTime}}"
+    startTime="{{task.startTime}}"
+    endTime="{{task.endTime}}"
+    minDate="{{minDate}}"
+    enableTimeSelection="{{enableTimeSelection}}"
+    enableModeSwitch="{{false}}"
+    showQuickOptions="{{true}}"
+    enableSlideSelect="{{calendarMode === 'range'}}"
+    singleQuickOptions="{{dateQuickOptions}}"
+    rangeQuickOptions="{{dateRangeQuickOptions}}"
+    bind:confirm="onCalendarConfirm"
+    bind:cancel="onCalendarCancel"
+    bind:close="hideCalendar"
+    bind:quickChange="onCalendarQuickChange"
+  ></calendar-picker>
 </view> 

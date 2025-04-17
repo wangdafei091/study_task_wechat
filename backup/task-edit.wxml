@@ -213,8 +213,6 @@
           bind:endDateChange="selectEndDate"
           bind:startTimeChange="selectStartTime"
           bind:endTimeChange="selectEndTime"
-          bind:durationChange="handleDurationChange"
-          bind:createRepeatSettings="handleCreateRepeatSettings"
           bind:quickDateChange="handleQuickDateOption"
           bind:rangeDateChange="handleRangeDateOption"
           bind:frequencyChange="selectFrequency"

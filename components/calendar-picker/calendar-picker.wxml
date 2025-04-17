@@ -1,0 +1,121 @@
+<!-- components/calendar-picker/calendar-picker.wxml -->
+<view class="cal-picker-container {{show ? 'cal-show' : ''}}" bindtap="onClickMask" style="{{themeColorStyle}}">
+  <view class="cal-picker-mask"></view>
+  
+  <view class="cal-picker-content" animation="{{animation}}" catchtap="preventDefault">
+    <!-- 日历头部 -->
+    <view class="cal-header">
+      <view class="cal-mode-switch" wx:if="{{enableModeSwitch}}">
+        <view class="cal-mode-option {{mode === 'single' ? 'cal-active' : ''}}" 
+              bindtap="switchMode" data-mode="single">
+          单个日期
+        </view>
+        <view class="cal-mode-option {{mode === 'range' ? 'cal-active' : ''}}" 
+              bindtap="switchMode" data-mode="range">
+          日期范围
+        </view>
+      </view>
+
+      <!-- 显示当前选择状态 -->
+      <view class="cal-selected-display">
+        <text wx:if="{{mode === 'single'}}">{{selectedDateDisplay}}</text>
+        <block wx:else>
+          <text>{{selectedStartDisplay}} 至 {{selectedEndDisplay || '请选择'}}</text>
+        </block>
+      </view>
+      
+      <!-- 月份导航 -->
+      <view class="cal-month-nav">
+        <view class="cal-nav-btn" bindtap="prevMonth">
+          <text class="cal-nav-arrow">◀</text>
+        </view>
+        <view class="cal-month-title" bindtap="jumpToToday">
+          {{currentYear}}年{{currentMonth}}月
+        </view>
+        <view class="cal-nav-btn" bindtap="nextMonth">
+          <text class="cal-nav-arrow">▶</text>
+        </view>
+      </view>
+    </view>
+    
+    <!-- 星期标题行 -->
+    <view class="cal-weekdays">
+      <block wx:for="{{weekdays}}" wx:key="index">
+        <view class="cal-weekday {{index === 0 || index === 6 ? 'cal-weekend' : ''}}">
+          {{item}}
+        </view>
+      </block>
+    </view>
+    
+    <!-- 日期网格 - 支持手势滑动 -->
+    <view class="cal-days-grid" 
+          bindtouchstart="onTouchStart" 
+          bindtouchmove="onTouchMove" 
+          bindtouchend="onTouchEnd">
+      <block wx:for="{{days}}" wx:key="fullDate">
+        <view class="cal-day-cell {{item.isCurrentMonth ? '' : 'cal-other-month'}} {{item.isToday ? 'cal-today' : ''}} {{item.isSelected ? 'cal-selected' : ''}} {{item.isStart ? 'cal-range-start' : ''}} {{item.isEnd ? 'cal-range-end' : ''}} {{item.isInRange ? 'cal-in-range' : ''}} {{item.isDisabled ? 'cal-disabled' : ''}}"
+              data-date="{{item.fullDate}}" 
+              bindtap="onSelectDate">
+          <view class="cal-day-content">
+            <text class="cal-day-number">{{item.day}}</text>
+            <view class="cal-day-marker" wx:if="{{item.hasMarker}}"></view>
+          </view>
+        </view>
+      </block>
+    </view>
+    
+    <!-- 快捷选项 -->
+    <view class="cal-quick-options" wx:if="{{showQuickOptions}}">
+      <block wx:for="{{currentQuickOptions}}" wx:key="value">
+        <view class="cal-quick-option {{selectedQuickOption === item.value ? 'cal-quick-selected' : ''}}" 
+              bindtap="onQuickOptionTap" 
+              data-value="{{item.value}}">
+          {{item.label}}
+        </view>
+      </block>
+    </view>
+    
+    <!-- 时间选择器 -->
+    <view class="cal-time-section" wx:if="{{enableTimeSelection}}">
+      <view class="cal-time-title">时间选择</view>
+      
+      <view class="cal-time-pickers">
+        <!-- 单日期模式的时间选择 -->
+        <block wx:if="{{mode === 'single'}}">
+          <picker mode="time" value="{{selectedTime}}" bindchange="onTimeChange">
+            <view class="cal-time-picker">
+              <text>{{selectedTime || '选择时间'}}</text>
+            </view>
+          </picker>
+        </block>
+        
+        <!-- 日期范围模式的时间选择 -->
+        <block wx:else>
+          <view class="cal-range-time">
+            <view class="cal-time-label">开始</view>
+            <picker mode="time" value="{{startTime}}" bindchange="onStartTimeChange">
+              <view class="cal-time-picker">
+                <text>{{startTime || '开始时间'}}</text>
+              </view>
+            </picker>
+          </view>
+          
+          <view class="cal-range-time">
+            <view class="cal-time-label">结束</view>
+            <picker mode="time" value="{{endTime}}" bindchange="onEndTimeChange">
+              <view class="cal-time-picker">
+                <text>{{endTime || '结束时间'}}</text>
+              </view>
+            </picker>
+          </view>
+        </block>
+      </view>
+    </view>
+    
+    <!-- 底部操作按钮 -->
+    <view class="cal-footer">
+      <view class="cal-btn cal-cancel-btn" bindtap="onCancel">取消</view>
+      <view class="cal-btn cal-confirm-btn" bindtap="onConfirm">确认</view>
+    </view>
+  </view>
+</view> 

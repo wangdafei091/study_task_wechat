@@ -1,0 +1,342 @@
+/* components/calendar-picker/calendar-picker.wxss */
+
+/* 样式变量 */
+page {
+  --cal-theme-color: #4285F4;
+  --cal-bg-color: #FFFFFF;
+  --cal-text-color: #333333;
+  --cal-secondary-color: #808080;
+  --cal-border-color: #E0E0E0;
+  --cal-today-color: #4285F4;
+  --cal-selected-color: #4285F4;
+  --cal-selected-text-color: #FFFFFF;
+  --cal-range-bg-color: rgba(66, 133, 244, 0.1);
+  --cal-disabled-color: #CCCCCC;
+  --cal-weekend-color: #FF5252;
+}
+
+/* 容器样式 */
+.cal-picker-container {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  top: 0;
+  z-index: 999;
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.cal-picker-container.cal-show {
+  visibility: visible;
+  opacity: 1;
+}
+
+.cal-picker-mask {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 1;
+}
+
+.cal-picker-content {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background-color: var(--cal-bg-color);
+  border-radius: 24rpx 24rpx 0 0;
+  overflow: hidden;
+  padding: 30rpx;
+  z-index: 2;
+  transform: translateY(100%);
+  transition: transform 0.3s;
+}
+
+.cal-picker-container.cal-show .cal-picker-content {
+  transform: translateY(0);
+}
+
+/* 头部样式 */
+.cal-header {
+  padding-bottom: 20rpx;
+}
+
+.cal-mode-switch {
+  display: flex;
+  margin-bottom: 20rpx;
+  border-radius: 8rpx;
+  overflow: hidden;
+  border: 1px solid var(--cal-theme-color);
+}
+
+.cal-mode-option {
+  flex: 1;
+  text-align: center;
+  padding: 15rpx 0;
+  font-size: 28rpx;
+  color: var(--cal-theme-color);
+}
+
+.cal-mode-option.cal-active {
+  background-color: var(--cal-theme-color);
+  color: white;
+}
+
+.cal-selected-display {
+  text-align: center;
+  font-size: 30rpx;
+  margin: 20rpx 0;
+  color: var(--cal-text-color);
+  font-weight: bold;
+}
+
+.cal-month-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20rpx 0;
+}
+
+.cal-month-title {
+  font-size: 32rpx;
+  font-weight: bold;
+  color: var(--cal-text-color);
+}
+
+.cal-nav-btn {
+  width: 70rpx;
+  height: 70rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background-color: #F5F5F5;
+}
+
+.cal-nav-arrow {
+  font-size: 24rpx;
+}
+
+/* 星期标题行 */
+.cal-weekdays {
+  display: flex;
+  border-bottom: 1px solid var(--cal-border-color);
+  padding-bottom: 10rpx;
+}
+
+.cal-weekday {
+  flex: 1;
+  text-align: center;
+  font-size: 28rpx;
+  color: var(--cal-secondary-color);
+  padding: 15rpx 0;
+}
+
+.cal-weekend {
+  color: var(--cal-weekend-color);
+}
+
+/* 日期网格 */
+.cal-days-grid {
+  display: flex;
+  flex-wrap: wrap;
+  padding: 10rpx 0;
+  margin-bottom: 20rpx;
+}
+
+.cal-day-cell {
+  width: 14.28%;
+  height: 80rpx;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cal-day-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.cal-day-number {
+  font-size: 28rpx;
+  color: var(--cal-text-color);
+}
+
+.cal-day-marker {
+  width: 8rpx;
+  height: 8rpx;
+  border-radius: 50%;
+  background-color: var(--cal-theme-color);
+  margin-top: 4rpx;
+}
+
+/* 日期状态样式 */
+.cal-other-month .cal-day-number {
+  color: var(--cal-disabled-color);
+}
+
+.cal-today {
+  position: relative;
+}
+
+.cal-today .cal-day-number {
+  color: var(--cal-today-color);
+  font-weight: bold;
+}
+
+.cal-today::after {
+  content: '';
+  position: absolute;
+  bottom: 12rpx;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 8rpx;
+  height: 8rpx;
+  border-radius: 50%;
+  background-color: var(--cal-today-color);
+}
+
+.cal-selected, .cal-range-start, .cal-range-end {
+  background-color: var(--cal-selected-color);
+  border-radius: 8rpx;
+}
+
+.cal-selected .cal-day-number, 
+.cal-range-start .cal-day-number, 
+.cal-range-end .cal-day-number {
+  color: var(--cal-selected-text-color);
+}
+
+.cal-in-range {
+  background-color: var(--cal-range-bg-color);
+}
+
+.cal-range-start {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.cal-range-end {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.cal-disabled .cal-day-number {
+  color: var(--cal-disabled-color);
+}
+
+/* 快捷选项样式 */
+.cal-quick-options {
+  display: flex;
+  flex-wrap: wrap;
+  padding: 10rpx 0;
+  gap: 20rpx;
+  margin-bottom: 20rpx;
+}
+
+.cal-quick-option {
+  padding: 10rpx 20rpx;
+  border-radius: 30rpx;
+  font-size: 26rpx;
+  background-color: #F5F5F5;
+  color: var(--cal-text-color);
+}
+
+.cal-quick-selected {
+  background-color: var(--cal-theme-color);
+  color: white;
+}
+
+/* 时间选择器样式 */
+.cal-time-section {
+  padding: 20rpx 0;
+  border-top: 1px solid var(--cal-border-color);
+}
+
+.cal-time-title {
+  font-size: 30rpx;
+  color: var(--cal-text-color);
+  margin-bottom: 20rpx;
+}
+
+.cal-time-pickers {
+  display: flex;
+  justify-content: space-around;
+}
+
+.cal-time-picker {
+  border: 1px solid var(--cal-border-color);
+  border-radius: 8rpx;
+  padding: 15rpx 30rpx;
+  font-size: 28rpx;
+  color: var(--cal-text-color);
+}
+
+.cal-range-time {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.cal-time-label {
+  font-size: 26rpx;
+  color: var(--cal-secondary-color);
+  margin-bottom: 10rpx;
+}
+
+/* 底部按钮样式 */
+.cal-footer {
+  display: flex;
+  justify-content: space-between;
+  padding-top: 20rpx;
+  border-top: 1px solid var(--cal-border-color);
+}
+
+.cal-btn {
+  flex: 1;
+  text-align: center;
+  padding: 20rpx 0;
+  font-size: 32rpx;
+  border-radius: 8rpx;
+  margin: 0 10rpx;
+}
+
+.cal-cancel-btn {
+  background-color: #F5F5F5;
+  color: var(--cal-text-color);
+}
+
+.cal-confirm-btn {
+  background-color: var(--cal-theme-color);
+  color: white;
+}
+
+/* 动画效果 */
+@keyframes calSlideUp {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes calFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+} 
