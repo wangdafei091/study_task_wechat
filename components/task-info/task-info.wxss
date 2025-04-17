@@ -1,6 +1,10 @@
 /* components/task-info/task-info.wxss */
 .task-info-section {
   margin-bottom: 24rpx;
+  --text-primary: #333333;
+  --text-secondary: #666666;
+  --bg-input: #FFFFFF;
+  --bg-card: #FFFFFF;
 }
 
 .section-header {
@@ -13,7 +17,7 @@
 .section-label {
   font-size: 32rpx;
   font-weight: 500;
-  color: var(--text-primary);
+  color: #333333;
 }
 
 .task-type-indicator {
@@ -54,10 +58,10 @@
 
 .task-info-display {
   padding: 0 20rpx;
-  background-color: var(--bg-card);
+  background-color: #FFFFFF;
   border-radius: var(--radius-md);
   font-size: 30rpx;
-  color: var(--text-primary);
+  color: #333333;
   position: relative;
   height: 80rpx;
   line-height: 80rpx;
