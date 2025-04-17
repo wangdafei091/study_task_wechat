@@ -1,0 +1,212 @@
+<!--pages/task-edit/task-edit.wxml-->
+<view class="container">
+  <!-- 主内容区 -->
+  <view class="content">
+    
+    <!-- 卡片区域1：近期任务负荷 -->
+    <card title="能力成长计划" icon="📊" customClass="task-overview-card">
+      <!-- 视图切换栏 -->
+      <view class="view-tabs">
+        <view class="tab-item {{activeView === 'day' ? 'active' : ''}}" bindtap="switchView" data-view="day">日视图</view>
+        <view class="tab-item {{activeView === 'week' ? 'active' : ''}}" bindtap="switchView" data-view="week">周视图</view>
+        <view class="tab-item {{activeView === 'month' ? 'active' : ''}}" bindtap="switchView" data-view="month">月视图</view>
+      </view>
+      
+      <!-- 日视图 -->
+      <view class="view-content" hidden="{{activeView !== 'day'}}">
+        <view class="day-view">
+          <!-- 日期选择器 -->
+          <view class="date-selector">
+            <view class="arrow" bindtap="prevDay">◀</view>
+            <view class="current-date" bindtap="selectOverviewDate" bindlongtap="showCalendarPicker">{{overviewDay}}</view>
+            <view class="arrow" bindtap="nextDay">▶</view>
+          </view>
+          
+          <!-- 日历选择器组件 -->
+          <calendar-picker 
+            show="{{showCalendar}}" 
+            selectedDate="{{overviewDay}}"
+            bind:close="closeCalendarPicker"
+            bind:confirm="confirmCalendarDate"
+          ></calendar-picker>
+          
+          <!-- 负载状态 -->
+          <view class="load-stats">
+            <text>任务数: {{dayData.totalTasks}}个</text>
+            <text>总时间: {{dayData.totalMinutes}}分钟</text>
+          </view>
+          
+          <view class="load-bar-container">
+            <view class="load-bar {{dayData.status}}">
+              <view class="load-bar-progress" style="width: {{dayData.percentage}}%"></view>
+            </view>
+          </view>
+          <view class="load-message {{dayData.status}}">{{dayData.message}}</view>
+          
+          <!-- 日视图任务列表 -->
+          <view class="day-tasks" wx:if="{{dayData.tasks.length > 0}}">
+            <view class="time-axis"></view>
+            <block wx:for="{{dayData.tasks}}" wx:key="id">
+              <view class="task-time-wrapper">
+                <view class="task-time">{{item.startTime}}</view>
+                <taskItem 
+                  task="{{item}}" 
+                  showActions="{{false}}" 
+                  showCheckbox="{{false}}"
+                  bind:complete="onDayTaskComplete"
+                  bind:edit="onDayTaskEdit"
+                ></taskItem>
+              </view>
+            </block>
+          </view>
+          <view class="empty-state" wx:else>
+            <text class="empty-state-text">当天暂无成长计划</text>
+          </view>
+        </view>
+      </view>
+      
+      <!-- 周视图 -->
+      <view class="view-content" hidden="{{activeView !== 'week'}}">
+        <view class="week-view">
+          <!-- 周选择器 -->
+          <view class="date-selector">
+            <view class="arrow" bindtap="prevWeek">◀</view>
+            <view class="current-date">{{weekRange}}</view>
+            <view class="arrow" bindtap="nextWeek">▶</view>
+          </view>
+          
+          <!-- 周任务统计 -->
+          <view class="week-stats">
+            <text>周任务: {{weekData.totalTasks}}个</text>
+            <text>平均每天: {{weekData.avgTasksPerDay}}个</text>
+          </view>
+          
+          <!-- 周柱状图 -->
+          <view class="week-chart">
+            <block wx:for="{{weekData.days}}" wx:key="date">
+              <view class="day-column {{item.isToday ? 'today' : ''}} {{item.date === task.date ? 'selected' : ''}}" 
+                    bindtap="switchToDayViewFromWeek" data-date="{{item.date}}">
+                <view class="day-tasks-wrapper">
+                  <block wx:for="{{item.tasksByType}}" wx:for-item="typeTask" wx:key="type">
+                    <view class="task-bar {{typeTask.type}}" style="height: {{typeTask.percentage}}%"></view>
+                  </block>
+                </view>
+                <view class="column-label">
+                  <text class="weekday">{{item.weekday}}</text>
+                  <text class="day-num">{{item.day}}</text>
+                  <text class="task-count" wx:if="{{item.totalTasks > 0}}">{{item.totalTasks}}</text>
+                </view>
+              </view>
+            </block>
+          </view>
+          
+          <!-- 类型图例 -->
+          <view class="chart-legend">
+            <view class="legend-item">
+              <view class="color-indicator study"></view>
+              <text>学习</text>
+            </view>
+            <view class="legend-item">
+              <view class="color-indicator habit"></view>
+              <text>习惯</text>
+            </view>
+            <view class="legend-item">
+              <view class="color-indicator interest"></view>
+              <text>兴趣</text>
+            </view>
+          </view>
+        </view>
+      </view>
+      
+      <!-- 月视图 -->
+      <view class="view-content" hidden="{{activeView !== 'month'}}">
+        <view class="month-view">
+          <!-- 月份选择器 -->
+          <view class="date-selector">
+            <view class="arrow" bindtap="prevMonth">◀</view>
+            <view class="current-date">{{monthTitle}}</view>
+            <view class="arrow" bindtap="nextMonth">▶</view>
+          </view>
+          
+          <!-- 月任务统计 -->
+          <view class="month-stats">
+            <text>月任务总数: {{monthData.totalTasks}}个</text>
+            <text>已完成: {{monthData.completedTasks}}个</text>
+          </view>
+          
+          <!-- 月日历热力图 -->
+          <view class="month-calendar">
+            <view class="weekday-labels">
+              <block wx:for="{{['日', '一', '二', '三', '四', '五', '六']}}" wx:key="index">
+                <text class="weekday-label">{{item}}</text>
+              </block>
+            </view>
+            <view class="calendar-grid">
+              <block wx:for="{{monthData.weeks}}" wx:for-item="week" wx:key="index">
+                <view class="week-row">
+                  <block wx:for="{{week}}" wx:key="date">
+                    <view class="date-cell {{item.isCurrentMonth ? '' : 'other-month'}} {{item.isToday ? 'today' : ''}} {{item.date === task.date ? 'selected' : ''}}" 
+                          data-date="{{item.date}}" bindtap="switchToDayViewFromMonth">
+                      <text class="date-number">{{item.day}}</text>
+                      <view class="task-indicators" wx:if="{{item.taskCount > 0}}">
+                        <view class="heat-indicator" style="opacity: {{item.heatLevel}}"></view>
+                        <text class="task-count-label">{{item.taskCount}}</text>
+                      </view>
+                      <view class="repeat-indicators">
+                        <block wx:for="{{item.repeatedTasks}}" wx:for-item="repeatedType" wx:for-index="typeIndex" wx:key="typeIndex">
+                          <view class="repeat-dot {{repeatedType}}"></view>
+                        </block>
+                      </view>
+                    </view>
+                  </block>
+                </view>
+              </block>
+            </view>
+          </view>
+        </view>
+      </view>
+    </card>
+    
+    <!-- 热力图卡片，调整标题包含月份导航 -->
+    <card customClass="task-heatmap-card">
+      <view class="heatmap-header">
+        <view class="heatmap-title">
+          <text class="main-title">任务分布</text>
+          <text class="month-title">{{heatmapMonth}}</text>
+        </view>
+        <view class="month-nav">
+          <view class="nav-btn prev" bindtap="prevHeatmapMonth">
+            <text class="nav-icon">◀</text>
+          </view>
+          <view class="nav-btn next" bindtap="nextHeatmapMonth">
+            <text class="nav-icon">▶</text>
+          </view>
+        </view>
+      </view>
+      <view class="card-subtitle">任务颜色越深，代表当日任务越多</view>
+      <task-heatmap 
+        id="taskHeatmap"
+        tasks="{{allTasks}}" 
+        currentYear="{{heatmapYear}}"
+        currentMonth="{{heatmapMonthIndex}}"
+        bind:dayClick="onHeatmapDayClick"
+        bind:monthChange="onHeatmapMonthChange">
+      </task-heatmap>
+    </card>
+    
+    <!-- 底部按钮区 -->
+    <view class="button-group">
+      <block wx:if="{{mode === 'create'}}">
+        <button class="btn btn-primary" bindtap="saveTask">保存任务</button>
+        <button class="btn btn-secondary" bindtap="cancelTask">取消</button>
+      </block>
+      <block wx:if="{{mode === 'edit'}}">
+        <button class="btn btn-primary" bindtap="saveTask">保存修改</button>
+        <button class="btn btn-secondary" bindtap="cancelTask">取消</button>
+      </block>
+    </view>
+  </view>
+  
+  <!-- 底部安全区域占位 -->
+  <view class="safe-area-inset-bottom"></view>
+</view>

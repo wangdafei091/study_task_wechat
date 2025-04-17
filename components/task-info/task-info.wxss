@@ -44,6 +44,43 @@
   margin-bottom: 24rpx;
 }
 
+/* 水平布局样式 */
+.form-item.horizontal {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 24rpx;
+}
+
+.item-label.fixed-width {
+  width: 150rpx;
+  flex-shrink: 0;
+  margin-bottom: 0;
+  padding-top: 20rpx;
+}
+
+.input-container {
+  flex: 1;
+  position: relative;
+}
+
+.points-input-container {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.points-input {
+  width: calc(100% - 60rpx);
+  max-width: 240rpx;
+}
+
+.points-unit {
+  margin-left: 10rpx;
+  font-size: 28rpx;
+  color: var(--text-secondary);
+  line-height: 80rpx;
+}
+
 .item-label {
   font-size: 28rpx;
   color: var(--text-secondary);

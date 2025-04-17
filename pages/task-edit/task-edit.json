@@ -6,8 +6,7 @@
     "template-selector": "/components/template-selector/template-selector",
     "task-info": "/components/task-info/task-info",
     "task-templates": "/components/task-templates/task-templates",
-    "taskItem": "/components/taskItem/taskItem",
-    "task-execution-settings": "/components/task-execution-settings/task-execution-settings",
-    "repeat-selector": "/components/repeat-selector/repeat-selector"
+    "repeat-selector": "/components/repeat-selector/repeat-selector",
+    "task-heatmap": "/components/task-heatmap/task-heatmap"
   }
 } 

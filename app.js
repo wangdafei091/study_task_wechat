@@ -106,14 +106,11 @@ App({
   
   // 监听系统主题变化
   setupThemeChangeListener: function() {
-    if (typeof wx.onThemeChange === 'function') {
-      wx.onThemeChange((res) => {
-        this.globalData.systemTheme = res.theme; // light或dark
-        
-        // 通知页面主题已变化
-        this.globalEvent('themeChange', res);
-      });
-    }
+    // 移除主题监听功能，统一使用亮色主题
+    console.log('[App] 使用统一亮色主题，忽略系统主题变化');
+    
+    // 设置默认亮色主题
+    this.globalData.systemTheme = 'light';
   },
   
   // 监听字体大小变化

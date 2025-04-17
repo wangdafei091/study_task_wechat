@@ -9,33 +9,40 @@
     </view>
   </view>
   
-  <!-- 任务名称 -->
-  <view class="form-item">
-    <view class="item-label">{{titleLabel || '任务名称'}}</view>
-    <view class="task-info-display" wx:if="{{isTemplateMode}}">
-      {{task.title}}
-      <text class="edit-button" bindtap="enableCustomMode" wx:if="{{editable}}">编辑</text>
+  <!-- 任务名称 - 改为水平布局 -->
+  <view class="form-item horizontal">
+    <view class="item-label fixed-width">{{titleLabel || '任务名称'}}</view>
+    <view class="input-container">
+      <view class="task-info-display" wx:if="{{isTemplateMode}}">
+        {{task.title}}
+        <text class="edit-button" bindtap="enableCustomMode" wx:if="{{editable}}">编辑</text>
+      </view>
+      <view class="task-info-display" wx:elif="{{!isTemplateMode && task.isEditing && task.title}}">
+        {{task.title}}
+      </view>
+      <input class="input" wx:else value="{{task.title}}" bindinput="onTitleInput" 
+        placeholder="{{titlePlaceholder || '请输入任务名称'}}" maxlength="{{titleMaxLength || 20}}" disabled="{{!editable}}" />
+      <view class="char-count" wx:if="{{!isTemplateMode && !task.isEditing}}">{{task.title.length}}/{{titleMaxLength || 20}}</view>
     </view>
-    <view class="task-info-display" wx:elif="{{!isTemplateMode && task.isEditing && task.title}}">
-      {{task.title}}
-    </view>
-    <input class="input" wx:else value="{{task.title}}" bindinput="onTitleInput" 
-      placeholder="{{titlePlaceholder || '请输入任务名称'}}" maxlength="{{titleMaxLength || 20}}" disabled="{{!editable}}" />
-    <view class="char-count" wx:if="{{!isTemplateMode && !task.isEditing}}">{{task.title.length}}/{{titleMaxLength || 20}}</view>
   </view>
   
-  <!-- 积分 -->
-  <view class="form-item">
-    <view class="item-label">{{pointsLabel || '积分'}}</view>
-    <view class="task-info-display points" wx:if="{{isTemplateMode}}">
-      <text class="point-value">{{task.points}}</text>
-      <text class="point-label">分</text>
+  <!-- 积分 - 改为水平布局 -->
+  <view class="form-item horizontal">
+    <view class="item-label fixed-width">{{pointsLabel || '积分'}}</view>
+    <view class="input-container">
+      <view class="task-info-display points" wx:if="{{isTemplateMode}}">
+        <text class="point-value">{{task.points}}</text>
+        <text class="point-label">分</text>
+      </view>
+      <view class="points-input-container" wx:else>
+        <input class="input points-input" type="number" value="{{task.points}}" bindinput="onPointsInput" 
+          placeholder="{{pointsPlaceholder || '请输入积分'}}" maxlength="2" disabled="{{!editable}}" />
+        <text class="points-unit">分</text>
+      </view>
     </view>
-    <input class="input" wx:else type="number" value="{{task.points}}" bindinput="onPointsInput" 
-      placeholder="{{pointsPlaceholder || '请输入积分'}}" maxlength="2" disabled="{{!editable}}" />
   </view>
   
-  <!-- 任务描述，仅在showDescription为true时显示 -->
+  <!-- 任务描述，仅在showDescription为true时显示 - 保持垂直布局 -->
   <view class="form-item" wx:if="{{showDescription}}">
     <view class="item-label">{{descriptionLabel || '任务描述'}} <text class="optional">选填</text></view>
     <view class="task-info-display description" wx:if="{{isTemplateMode && task.description}}">

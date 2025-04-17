@@ -1,0 +1,407 @@
+Component({
+  properties: {
+    tasks: {
+      type: Array,
+      value: [],
+      observer: function(newVal) {
+        if (newVal && newVal.length > 0) {
+          console.log('[TaskHeatmap] 任务数据已更新，重新计算热力图');
+          this.calculateHeatMap();
+        }
+      }
+    },
+    // 添加外部控制月份的属性
+    currentMonth: {
+      type: Number,
+      value: new Date().getMonth(),
+      observer: function(newVal) {
+        if (this.data.currentMonth !== newVal) {
+          console.log('[TaskHeatmap] 月份更新:', newVal);
+          this.setData({ currentMonth: newVal });
+          this.generateCalendar();
+        }
+      }
+    },
+    currentYear: {
+      type: Number,
+      value: new Date().getFullYear(),
+      observer: function(newVal) {
+        if (this.data.currentYear !== newVal) {
+          console.log('[TaskHeatmap] 年份更新:', newVal);
+          this.setData({ currentYear: newVal });
+          this.generateCalendar();
+        }
+      }
+    }
+  },
+  
+  data: {
+    days: [],
+    weekDays: ['日', '一', '二', '三', '四', '五', '六'],
+    monthTitle: '',
+    // 浮层相关数据
+    showTooltip: false,
+    tooltipLeft: 0,
+    tooltipTop: 0,
+    tooltipDate: '',
+    tooltipCount: 0,
+    tooltipCompleted: 0,
+    tooltipPending: 0,
+    tooltipTimeout: null
+  },
+  
+  lifetimes: {
+    attached() {
+      console.log('[TaskHeatmap] 组件挂载');
+      const now = new Date();
+      this.setData({
+        currentYear: this.properties.currentYear || now.getFullYear(),
+        currentMonth: this.properties.currentMonth || now.getMonth()
+      });
+      this.generateCalendar();
+      
+      // 初始化完成后，通知父组件当前月份信息
+      this.triggerMonthChange();
+    },
+    
+    detached() {
+      // 清除可能存在的定时器
+      if (this.data.tooltipTimeout) {
+        clearTimeout(this.data.tooltipTimeout);
+      }
+    }
+  },
+  
+  methods: {
+    // 生成日历数据
+    generateCalendar() {
+      console.log('[TaskHeatmap] 生成日历数据');
+      const { currentYear, currentMonth } = this.data;
+      const days = [];
+      
+      // 获取当月第一天是星期几
+      const firstDay = new Date(currentYear, currentMonth, 1).getDay();
+      // 获取当月最后一天
+      const lastDate = new Date(currentYear, currentMonth + 1, 0).getDate();
+      
+      // 上个月的最后几天
+      const prevMonthLastDate = new Date(currentYear, currentMonth, 0).getDate();
+      for(let i = 0; i < firstDay; i++) {
+        const prevMonthDay = prevMonthLastDate - firstDay + i + 1;
+        let prevMonth = currentMonth - 1;
+        let yearOfPrevMonth = currentYear;
+        
+        if (prevMonth < 0) {
+          prevMonth = 11;
+          yearOfPrevMonth--;
+        }
+        
+        days.push({
+          date: `${yearOfPrevMonth}-${String(prevMonth + 1).padStart(2, '0')}-${String(prevMonthDay).padStart(2, '0')}`,
+          count: 0,
+          level: 0,
+          isCurrentMonth: false,
+          day: prevMonthDay,
+          completed: 0,
+          pending: 0
+        });
+      }
+      
+      // 当前月的天数
+      for(let i = 1; i <= lastDate; i++) {
+        days.push({
+          date: `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`,
+          count: 0,
+          level: 0,
+          isCurrentMonth: true,
+          day: i,
+          isToday: this.isToday(currentYear, currentMonth, i),
+          completed: 0,
+          pending: 0
+        });
+      }
+      
+      // 下个月的前几天，确保总共只有5行*7列=35个单元格
+      const remainingDays = 35 - days.length; // 改为5行7列，减少一行
+      if (remainingDays > 0) {
+        for(let i = 1; i <= remainingDays; i++) {
+          let nextMonth = currentMonth + 1;
+          let yearOfNextMonth = currentYear;
+          
+          if (nextMonth > 11) {
+            nextMonth = 0;
+            yearOfNextMonth++;
+          }
+          
+          days.push({
+            date: `${yearOfNextMonth}-${String(nextMonth + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`,
+            count: 0,
+            level: 0,
+            isCurrentMonth: false,
+            day: i,
+            completed: 0,
+            pending: 0
+          });
+        }
+      }
+      
+      console.log(`[TaskHeatmap] 日历生成完成，共${days.length}个日期单元格`);
+      
+      // 设置月份标题
+      const monthNames = ['一月', '二月', '三月', '四月', '五月', '六月', 
+                        '七月', '八月', '九月', '十月', '十一月', '十二月'];
+      
+      this.setData({
+        days,
+        monthTitle: `${monthNames[currentMonth]} ${currentYear}`
+      });
+      
+      // 计算任务热力
+      this.calculateHeatMap();
+      
+      // 通知父组件月份变化
+      this.triggerMonthChange();
+    },
+    
+    // 触发月份变化事件
+    triggerMonthChange() {
+      const { currentYear, currentMonth, monthTitle } = this.data;
+      const monthNames = ['一月', '二月', '三月', '四月', '五月', '六月', 
+                        '七月', '八月', '九月', '十月', '十一月', '十二月'];
+      
+      this.triggerEvent('monthChange', {
+        year: currentYear,
+        month: currentMonth,
+        title: monthTitle,
+        monthName: monthNames[currentMonth]
+      });
+    },
+    
+    // 检查是否为今天
+    isToday(year, month, day) {
+      const today = new Date();
+      return today.getFullYear() === year && 
+             today.getMonth() === month && 
+             today.getDate() === day;
+    },
+    
+    // 格式化日期为更友好的格式
+    formatDateDisplay(dateStr) {
+      if (!dateStr) return '';
+      
+      const parts = dateStr.split('-');
+      if (parts.length !== 3) return dateStr;
+      
+      const monthNames = ['一月', '二月', '三月', '四月', '五月', '六月', 
+                        '七月', '八月', '九月', '十月', '十一月', '十二月'];
+      const month = parseInt(parts[1], 10);
+      const day = parseInt(parts[2], 10);
+      
+      return `${month}月${day}日`;
+    },
+    
+    // 计算热力图
+    calculateHeatMap() {
+      console.log('[TaskHeatmap] 计算热力图');
+      const { days } = this.data;
+      const tasks = this.properties.tasks || [];
+      
+      if (tasks.length === 0) {
+        console.log('[TaskHeatmap] 无任务数据');
+        return;
+      }
+      
+      // 统计每天的任务数量和完成情况
+      const taskCountMap = {};
+      const completedMap = {};
+      const pendingMap = {};
+      
+      tasks.forEach(task => {
+        if (task.date) {
+          // 初始化统计数据
+          if (!taskCountMap[task.date]) {
+            taskCountMap[task.date] = 0;
+            completedMap[task.date] = 0;
+            pendingMap[task.date] = 0;
+          }
+          
+          // 增加总任务数
+          taskCountMap[task.date]++;
+          
+          // 根据任务状态计算完成/待办
+          if (task.status === 1) {
+            completedMap[task.date]++;
+          } else {
+            pendingMap[task.date]++;
+          }
+        }
+      });
+      
+      // 找出最大任务数，用于计算热力等级
+      let maxCount = 0;
+      Object.values(taskCountMap).forEach(count => {
+        maxCount = Math.max(maxCount, count);
+      });
+      
+      console.log(`[TaskHeatmap] 最大任务数: ${maxCount}`);
+      
+      // 更新每天的任务数和热力等级
+      const updatedDays = days.map(day => {
+        const count = taskCountMap[day.date] || 0;
+        const completed = completedMap[day.date] || 0;
+        const pending = pendingMap[day.date] || 0;
+        
+        // 计算热力等级：0-4共5级
+        let level = 0;
+        if (count > 0) {
+          level = Math.min(4, Math.ceil((count / maxCount) * 4));
+        }
+        
+        return {
+          ...day,
+          count,
+          level,
+          completed,
+          pending
+        };
+      });
+      
+      this.setData({ days: updatedDays });
+    },
+    
+    // 隐藏提示框
+    hideTooltip() {
+      // 先清除可能存在的定时器
+      if (this.data.tooltipTimeout) {
+        clearTimeout(this.data.tooltipTimeout);
+      }
+      
+      this.setData({ showTooltip: false });
+    },
+    
+    // 点击日期（短按）
+    onDayClick(e) {
+      const { day } = e.currentTarget.dataset;
+      console.log('[TaskHeatmap] 点击日期:', day);
+      
+      // 如果浮层已显示，点击时隐藏
+      if (this.data.showTooltip) {
+        this.hideTooltip();
+        return;
+      }
+      
+      // 触发事件，让父组件处理
+      this.triggerEvent('dayClick', {
+        date: day.date,
+        count: day.count,
+        isCurrentMonth: day.isCurrentMonth,
+        completed: day.completed,
+        pending: day.pending
+      });
+      
+      // 判断是否有任务，显示浮层
+      if (day.count > 0) {
+        this.showDayTooltip(e);
+      }
+    },
+    
+    // 长按日期
+    onDayLongPress(e) {
+      const { day } = e.currentTarget.dataset;
+      console.log('[TaskHeatmap] 长按日期:', day);
+      
+      // 显示浮层
+      this.showDayTooltip(e);
+      
+      // 触发轻微震动
+      wx.vibrateShort({
+        type: 'light'
+      });
+    },
+    
+    // 显示日期浮层
+    showDayTooltip(e) {
+      const { day, index } = e.currentTarget.dataset;
+      
+      // 获取日期单元格的位置信息
+      const query = this.createSelectorQuery();
+      query.select(`#day-${index}`).boundingClientRect();
+      query.selectViewport().scrollOffset();
+      query.exec((res) => {
+        if (!res || !res[0]) return;
+        
+        const rect = res[0];
+        const scrollTop = res[1].scrollTop;
+        
+        // 计算提示框位置（居中显示在日期单元格上方）
+        const tooltipLeft = rect.left + rect.width / 2;
+        const tooltipTop = rect.top - 10; // 距离单元格顶部10px
+        
+        // 格式化日期显示
+        const displayDate = this.formatDateDisplay(day.date);
+        
+        this.setData({
+          tooltipLeft,
+          tooltipTop,
+          tooltipDate: displayDate,
+          tooltipCount: day.count,
+          tooltipCompleted: day.completed,
+          tooltipPending: day.pending,
+          showTooltip: true
+        });
+        
+        // 设置自动隐藏定时器
+        if (this.data.tooltipTimeout) {
+          clearTimeout(this.data.tooltipTimeout);
+        }
+        
+        const tooltipTimeout = setTimeout(() => {
+          this.hideTooltip();
+        }, 3000); // 3秒后自动隐藏
+        
+        this.setData({ tooltipTimeout });
+      });
+    },
+    
+    // 切换到上个月
+    prevMonth() {
+      let { currentYear, currentMonth } = this.data;
+      currentMonth--;
+      if (currentMonth < 0) {
+        currentMonth = 11;
+        currentYear--;
+      }
+      console.log('[TaskHeatmap] 切换到上个月:', currentYear, currentMonth+1);
+      this.setData({
+        currentYear,
+        currentMonth
+      });
+      this.generateCalendar();
+    },
+    
+    // 切换到下个月
+    nextMonth() {
+      let { currentYear, currentMonth } = this.data;
+      currentMonth++;
+      if (currentMonth > 11) {
+        currentMonth = 0;
+        currentYear++;
+      }
+      console.log('[TaskHeatmap] 切换到下个月:', currentYear, currentMonth+1);
+      this.setData({
+        currentYear,
+        currentMonth
+      });
+      this.generateCalendar();
+    },
+    
+    // 获取当前月份信息
+    getCurrentMonth() {
+      return {
+        year: this.data.currentYear,
+        month: this.data.currentMonth,
+        title: this.data.monthTitle
+      };
+    }
+  }
+}); 

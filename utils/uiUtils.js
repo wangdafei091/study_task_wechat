@@ -1,64 +1,30 @@
 /**
  * uiUtils.js - UI交互工具类
  * 
- * 提供通用UI相关的方法，如主题切换、动画效果等
+ * 提供通用UI相关的方法，如动画效果等
  */
 
 /**
- * 设置主题样式
- * @param {String} theme - 主题类型，可选值：'light', 'dark', 'auto'
+ * 设置主题样式 (已简化为仅亮色主题)
  */
-const setTheme = function(theme = 'auto') {
-  let finalTheme = theme;
+const setTheme = function() {
+  // 移除主题选择功能，统一使用亮色主题
+  wx.setNavigationBarColor({
+    frontColor: '#000000',
+    backgroundColor: '#ffffff'
+  });
   
-  // 如果是自动模式，则根据系统主题设置
-  if (theme === 'auto') {
-    try {
-      const systemInfo = wx.getSystemInfoSync();
-      finalTheme = systemInfo.theme || 'light';
-    } catch (e) {
-      console.error('获取系统信息失败', e);
-      finalTheme = 'light';
-    }
-  }
-  
-  // 存储主题设置
-  wx.setStorageSync('app_theme', theme);
-  
-  // 设置页面主题样式
-  if (finalTheme === 'dark') {
-    wx.setNavigationBarColor({
-      frontColor: '#ffffff',
-      backgroundColor: '#333333'
-    });
-  } else {
-    wx.setNavigationBarColor({
-      frontColor: '#000000',
-      backgroundColor: '#ffffff'
-    });
-  }
-  
-  return finalTheme;
+  // 返回亮色主题标识
+  return 'light';
 };
 
 /**
- * 获取当前主题
+ * 获取当前主题 (已简化为仅亮色主题)
  * @returns {String} 当前主题类型
  */
 const getCurrentTheme = function() {
-  try {
-    const storedTheme = wx.getStorageSync('app_theme') || 'auto';
-    
-    if (storedTheme === 'auto') {
-      const systemInfo = wx.getSystemInfoSync();
-      return systemInfo.theme || 'light';
-    }
-    
-    return storedTheme;
-  } catch (e) {
-    console.error('获取主题设置失败', e);
-    return 'light';
-  }
+  // 简化为仅返回亮色主题
+  return 'light';
 };
 
 /**
@@ -69,7 +35,7 @@ const getCurrentTheme = function() {
  */
 const toggleComponent = function(page, componentName, status) {
   if (typeof page !== 'object' || !page.setData) {
-    console.error('无效的页面实例');
+    console.log('[uiUtils] 无效的页面实例');
     return;
   }
   
@@ -133,7 +99,7 @@ const scrollToElement = function(selector, context, offset = 0) {
       }
     });
   } catch (e) {
-    console.error('滚动到元素失败', e);
+    console.log('[uiUtils] 滚动到元素失败', e);
   }
 };
 
