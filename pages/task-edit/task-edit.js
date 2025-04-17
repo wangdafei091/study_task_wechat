@@ -1102,7 +1102,8 @@ Page({
    * 处理模板选择事件
    */
   handleTemplateSelect: function(e) {
-    const { template } = e.detail;
+    // 适配新的组件接口，确保能正确读取模板信息
+    const template = e.detail.template || e.detail;
     console.log('[TaskEdit] 选择模板:', template);
     console.log('[TaskEdit] 选择模板详情 - ID:', template.id, '名称:', template.title || template.name, '任务类型:', template.taskType);
     
@@ -1174,7 +1175,8 @@ Page({
    * 处理选择自定义任务事件
    */
   handleCustomSelect: function(e) {
-    const { type } = e.detail;
+    // 适配新的组件接口
+    const type = e.detail.type || e.detail;
     console.log('[TaskEdit] 选择自定义任务, 类型:', type);
     
     if (type === 'study') {
@@ -2316,85 +2318,43 @@ Page({
    * 处理自定义选择事件
    */
   handleCustomSelect: function(e) {
-    console.log('选择自定义任务:', e.detail);
+    // 适配新的组件接口
+    const type = e.detail.type || e.detail;
+    console.log('[TaskEdit] 选择自定义任务, 类型:', type);
     
-    // 其余代码不变
-    const type = e.detail.type;
-    
-    // 添加详细日志
-    console.log('Custom select event detail:', e.detail);
-    console.log('选择自定义模板，类型:', type);
-    console.log('当前taskType:', this.data.taskType, 'selectedTemplateType:', this.data.selectedTemplateType);
-    console.log('启用平滑过渡效果，优化表单元素显示/隐藏');
-    
-    // 设置对应的任务类型
-    const taskType = type === 'study' ? 'study' : 'habit';
-    const taskTypeValue = type === 'study' ? 'study' : 'habit';
-    
-    this.setData({
-      taskType: taskType,
-      selectedTemplate: '',
-      selectedTemplateType: type,
-      customMode: true,
-      'task.title': '',
-      'task.shortName': '',
-      'task.description': '',
-      'task.type': taskTypeValue,
-      'task.taskType': taskType,
-      'task.points': type === 'study' ? 3 : 2
-    });
-    
-    // 添加数据更新后的日志
-    console.log('更新后 - taskType:', taskType, 'selectedTemplateType:', type);
-    
-    // 检查任务类型显示状态
-    this.checkTaskTypeDisplay();
-    
-    // 根据类型设置默认属性
     if (type === 'study') {
-      // 学习任务设置默认时间
-      const now = new Date();
-      const hours = now.getHours().toString().padStart(2, '0');
-      const minutes = now.getMinutes().toString().padStart(2, '0');
-      
-      // 默认30分钟
-      let endMinutes = parseInt(minutes) + 30;
-      let endHours = parseInt(hours) + Math.floor(endMinutes / 60);
-      endMinutes = endMinutes % 60;
-      
-      this.setData({
-        'task.startTime': `${hours}:${minutes}`,
-        'task.endTime': `${endHours.toString().padStart(2, '0')}:${endMinutes.toString().padStart(2, '0')}`,
-        'task.duration': 30,
-        'task.precision': 'second'
-      });
-      
-      console.log('设置自定义学习任务默认时间:', this.data.task.startTime, '-', this.data.task.endTime);
-    } else {
-      // 生活习惯任务默认设置
-      this.setData({
-        'task.startTime': '',
-        'task.endTime': '',
-        'task.duration': 0,
-        'task.precision': 'day'
-      });
-      
-      console.log('设置自定义生活习惯任务配置');
+      console.log('[TaskEdit] 创建自定义学习任务');
+      this.selectCustomStudy();
+    } else if (type === 'habit') {
+      console.log('[TaskEdit] 创建自定义习惯任务');
+      this.selectCustomHabit();
     }
     
-    // 处理重复任务设置
-    this.ensureRepeatTaskSettings();
-    
-    // 添加详细日志
-    console.log('自定义任务设置完成', {
-      type: type,
-      taskType: taskType,
-      customMode: true,
-      timestamp: new Date().toISOString()
+    // 确保设置为自定义模式
+    this.setData({
+      customMode: true
     });
     
-    // 提供反馈
+    // 如果有标签选择器，刷新标签
+    if (this.loadTags) {
+      this.loadTags();
+      console.log('[TaskEdit] 刷新标签选择器');
+    }
+    
+    // 自定义模式下允许保存为常用任务
+    console.log('[TaskEdit] 进入自定义模式，允许保存为常用任务');
+    
+    // 添加轻微振动反馈
     wx.vibrateShort({ type: 'light' });
+    
+    // 记录当前任务状态
+    console.log('[TaskEdit] 自定义任务状态:', {
+      taskType: this.data.taskType,
+      taskTitle: this.data.task.title || '未设置',
+      isEditing: this.data.task.isEditing,
+      customMode: true,
+      selectedTemplate: this.data.selectedTemplate
+    });
   },
 
   /**
@@ -2658,31 +2618,33 @@ Page({
   },
 
   /**
-   * 处理编辑模板简称
+   * 处理编辑模板简称事件
    */
   handleEditShortName: function(e) {
-    console.log('[task-edit] 编辑模板简称:', e.detail);
-    const { templateId, newShortName, type } = e.detail;
+    console.log('[TaskEdit] 编辑模板简称:', e.detail);
     
-    // 获取原有模板数据
+    const { id, value, type } = e.detail;
+    console.log('[TaskEdit] 编辑模板 ID:', id, '新简称:', value, '类型:', type);
+    
+    // 获取当前模板数据
     wx.getStorage({
       key: 'customTemplates',
       success: (res) => {
         let templates = res.data || [];
-        const templateIndex = templates.findIndex(t => t.id === templateId);
         
-        if (templateIndex !== -1) {
-          // 更新简称
-          templates[templateIndex].shortName = newShortName;
+        // 查找并更新模板
+        const index = templates.findIndex(t => t.id === id);
+        if (index !== -1) {
+          templates[index].shortName = value;
           
           // 保存更新后的模板
           wx.setStorage({
             key: 'customTemplates',
             data: templates,
             success: () => {
-              console.log('[task-edit] 模板简称更新成功:', newShortName);
+              console.log('[TaskEdit] 模板简称更新成功');
               wx.showToast({
-                title: '简称已更新',
+                title: '更新成功',
                 icon: 'success'
               });
               
@@ -2690,7 +2652,12 @@ Page({
               this.loadTemplatesByCategory();
             }
           });
+        } else {
+          console.log('[TaskEdit] 未找到要编辑的模板:', id);
         }
+      },
+      fail: (err) => {
+        console.error('[TaskEdit] 获取模板数据失败:', err);
       }
     });
   },

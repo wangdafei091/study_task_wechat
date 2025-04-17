@@ -51,33 +51,6 @@
   padding: 0; /* 移除所有内边距，与主页保持一致 */
 }
 
-/* 下面这些卡片相关的通用样式现在由组件提供 */
-/* 
-.card-section {
-  background-color: #FFFFFF;
-  border-radius: 16rpx;
-  padding: 30rpx;
-  margin: 16rpx 30rpx;
-  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.08);
-}
-
-.card-title {
-  display: flex;
-  align-items: center;
-  font-size: 32rpx;
-  font-weight: 600;
-  color: #333333;
-  padding: 24rpx 30rpx;
-  border-bottom: 1rpx solid #EEEEEE;
-  background-color: #FBFBFB;
-}
-
-.card-icon {
-  font-size: 36rpx;
-  margin-right: 12rpx;
-}
-*/
-
 /* 区域块样式 */
 .section-block {
   padding: 24rpx 30rpx;
@@ -95,36 +68,27 @@
   margin-bottom: 24rpx;
 }
 
-/* 任务模板分类 */
-.template-categories {
-  display: flex;
-  flex-direction: column;
-  gap: 20rpx;
-  padding-left: 8rpx;
-}
-
-.category-group {
-  margin-bottom: 16rpx;
-}
-
-.category-label {
-  font-size: 26rpx;
-  font-weight: 500;
-  color: #666666;
-  margin-bottom: 12rpx;
-  display: block;
-  padding-left: 8rpx;
-}
-
-/* 任务模板容器 */
+/* 任务模板容器 - 已迁移到task-templates组件 */
 .task-templates-container {
   padding: 24rpx 30rpx 16rpx;
 }
 
-/* 清除旧的任务模板样式 */
-.template-category {
-  margin: 10rpx 0 6rpx 0;
-}
+/* 以下任务模板相关样式已迁移到components/task-templates/task-templates.wxss */
+/* .template-category { ... } */
+/* .task-template-container { ... } */
+/* .task-template-list { ... } */
+/* .task-template-grid { ... } */
+/* .task-template { ... } */
+/* .task-template:before { ... } */
+/* .task-template.study:before { ... } */
+/* .task-template.habit:before { ... } */
+/* .task-template.interest:before { ... } */
+/* .template-name { ... } */
+/* .task-template.active { ... } */
+/* .task-template.active:after { ... } */
+/* .task-template.active.study:after { ... } */
+/* .task-template.active.habit:after { ... } */
+/* .task-template.active.interest:after { ... } */
 
 /* 任务模板卡片容器 */
 .task-template-container {

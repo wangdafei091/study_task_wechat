@@ -27,4 +27,107 @@
   color: #666;
   margin-bottom: 16rpx;
   display: block;
+}
+
+/* 以下是从task-edit.wxss迁移的样式 */
+
+/* 任务模板容器 */
+.task-template-container {
+  width: 100%;
+  overflow-x: auto;
+  padding: 5rpx 0;
+  margin-bottom: 15rpx;
+}
+
+.task-template-list {
+  display: inline-flex;
+  padding: 5rpx 0;
+}
+
+/* 任务模板网格布局 */
+.task-template-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16rpx;
+  margin-bottom: 24rpx;
+  padding: 4rpx;
+}
+
+/* 任务模板卡片 */
+.task-template {
+  position: relative;
+  width: auto;
+  height: 90rpx;
+  background-color: #FFFFFF;
+  border-radius: 8rpx;
+  padding: 0;
+  margin: 8rpx;
+  box-sizing: border-box;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.task-template:before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 6rpx;
+  background-color: #CCCCCC;
+}
+
+.task-template.study:before {
+  background-color: #4285F4;
+}
+
+.task-template.habit:before {
+  background-color: #34A853;
+}
+
+.task-template.interest:before {
+  background-color: #FBBC04;
+}
+
+.template-name {
+  font-size: 28rpx;
+  color: #333333;
+  font-weight: 500;
+  text-align: center;
+  padding: 24rpx 16rpx;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 选中状态增强 */
+.task-template.active {
+  transform: scale(1.02);
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.1);
+  position: relative;
+  z-index: 2;
+}
+
+/* 添加选中状态底部指示器 */
+.task-template.active:after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 4rpx;
+  background-color: #4285F4;
+}
+
+.task-template.active.study:after {
+  background-color: #4285F4;
+}
+
+.task-template.active.habit:after {
+  background-color: #34A853;
+}
+
+.task-template.active.interest:after {
+  background-color: #FBBC04;
 } 
