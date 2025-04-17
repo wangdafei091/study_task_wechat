@@ -35,21 +35,14 @@ Component({
   data: {
     days: [],
     weekDays: ['日', '一', '二', '三', '四', '五', '六'],
-    monthTitle: '',
-    // 浮层相关数据
-    showTooltip: false,
-    tooltipLeft: 0,
-    tooltipTop: 0,
-    tooltipDate: '',
-    tooltipCount: 0,
-    tooltipCompleted: 0,
-    tooltipPending: 0,
-    tooltipTimeout: null
+    monthTitle: ''
   },
   
   lifetimes: {
     attached() {
       console.log('[TaskHeatmap] 组件挂载');
+      console.log('[TaskHeatmap] 已优化热力图布局，减少垂直空间占用');
+      console.log('[TaskHeatmap] 已优化热力图色阶，使用蓝色渐变提高辨识度');
       const now = new Date();
       this.setData({
         currentYear: this.properties.currentYear || now.getFullYear(),
@@ -62,10 +55,7 @@ Component({
     },
     
     detached() {
-      // 清除可能存在的定时器
-      if (this.data.tooltipTimeout) {
-        clearTimeout(this.data.tooltipTimeout);
-      }
+      // 移除定时器清理代码
     }
   },
   
@@ -165,31 +155,22 @@ Component({
       this.triggerEvent('monthChange', {
         year: currentYear,
         month: currentMonth,
-        title: monthTitle,
-        monthName: monthNames[currentMonth]
+        monthName: monthNames[currentMonth],
+        title: monthTitle
       });
     },
     
-    // 检查是否为今天
+    // 判断是否是今天
     isToday(year, month, day) {
       const today = new Date();
-      return today.getFullYear() === year && 
-             today.getMonth() === month && 
-             today.getDate() === day;
+      return year === today.getFullYear() && 
+             month === today.getMonth() && 
+             day === today.getDate();
     },
     
-    // 格式化日期为更友好的格式
+    // 格式化日期显示
     formatDateDisplay(dateStr) {
-      if (!dateStr) return '';
-      
-      const parts = dateStr.split('-');
-      if (parts.length !== 3) return dateStr;
-      
-      const monthNames = ['一月', '二月', '三月', '四月', '五月', '六月', 
-                        '七月', '八月', '九月', '十月', '十一月', '十二月'];
-      const month = parseInt(parts[1], 10);
-      const day = parseInt(parts[2], 10);
-      
+      const [year, month, day] = dateStr.split('-').map(Number);
       return `${month}月${day}日`;
     },
     
@@ -260,100 +241,6 @@ Component({
       });
       
       this.setData({ days: updatedDays });
-    },
-    
-    // 隐藏提示框
-    hideTooltip() {
-      // 先清除可能存在的定时器
-      if (this.data.tooltipTimeout) {
-        clearTimeout(this.data.tooltipTimeout);
-      }
-      
-      this.setData({ showTooltip: false });
-    },
-    
-    // 点击日期（短按）
-    onDayClick(e) {
-      const { day } = e.currentTarget.dataset;
-      console.log('[TaskHeatmap] 点击日期:', day);
-      
-      // 如果浮层已显示，点击时隐藏
-      if (this.data.showTooltip) {
-        this.hideTooltip();
-        return;
-      }
-      
-      // 触发事件，让父组件处理
-      this.triggerEvent('dayClick', {
-        date: day.date,
-        count: day.count,
-        isCurrentMonth: day.isCurrentMonth,
-        completed: day.completed,
-        pending: day.pending
-      });
-      
-      // 判断是否有任务，显示浮层
-      if (day.count > 0) {
-        this.showDayTooltip(e);
-      }
-    },
-    
-    // 长按日期
-    onDayLongPress(e) {
-      const { day } = e.currentTarget.dataset;
-      console.log('[TaskHeatmap] 长按日期:', day);
-      
-      // 显示浮层
-      this.showDayTooltip(e);
-      
-      // 触发轻微震动
-      wx.vibrateShort({
-        type: 'light'
-      });
-    },
-    
-    // 显示日期浮层
-    showDayTooltip(e) {
-      const { day, index } = e.currentTarget.dataset;
-      
-      // 获取日期单元格的位置信息
-      const query = this.createSelectorQuery();
-      query.select(`#day-${index}`).boundingClientRect();
-      query.selectViewport().scrollOffset();
-      query.exec((res) => {
-        if (!res || !res[0]) return;
-        
-        const rect = res[0];
-        const scrollTop = res[1].scrollTop;
-        
-        // 计算提示框位置（居中显示在日期单元格上方）
-        const tooltipLeft = rect.left + rect.width / 2;
-        const tooltipTop = rect.top - 10; // 距离单元格顶部10px
-        
-        // 格式化日期显示
-        const displayDate = this.formatDateDisplay(day.date);
-        
-        this.setData({
-          tooltipLeft,
-          tooltipTop,
-          tooltipDate: displayDate,
-          tooltipCount: day.count,
-          tooltipCompleted: day.completed,
-          tooltipPending: day.pending,
-          showTooltip: true
-        });
-        
-        // 设置自动隐藏定时器
-        if (this.data.tooltipTimeout) {
-          clearTimeout(this.data.tooltipTimeout);
-        }
-        
-        const tooltipTimeout = setTimeout(() => {
-          this.hideTooltip();
-        }, 3000); // 3秒后自动隐藏
-        
-        this.setData({ tooltipTimeout });
-      });
     },
     
     // 切换到上个月

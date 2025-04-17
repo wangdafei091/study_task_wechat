@@ -2,19 +2,7 @@
 <view class="task-heatmap">
   <!-- 移除独立月份选择器，将在父组件中集成到标题 -->
   
-  <!-- 极简任务提示浮层 -->
-  <view class="task-tooltip {{showTooltip ? 'visible' : ''}}" style="left: {{tooltipLeft}}px; top: {{tooltipTop}}px;">
-    <view class="tooltip-content">
-      <view class="tooltip-date">{{tooltipDate}}</view>
-      <view class="tooltip-count">共 {{tooltipCount}} 项任务</view>
-      <view class="tooltip-status" wx:if="{{tooltipCount > 0}}">
-        <text>已完成 {{tooltipCompleted}}</text>
-        <text class="separator">·</text>
-        <text>待完成 {{tooltipPending}}</text>
-      </view>
-    </view>
-    <view class="tooltip-arrow"></view>
-  </view>
+  <!-- 移除浮层提示代码 -->
   
   <view class="calendar">
     <view class="weekdays">
@@ -29,11 +17,9 @@
           class="day {{item.isCurrentMonth ? 'current-month' : 'other-month'}} level-{{item.level}} {{item.isToday ? 'today' : ''}}"
           data-day="{{item}}" 
           data-index="{{index}}"
-          bindtap="onDayClick" 
-          bindlongpress="onDayLongPress"
           id="day-{{index}}">
-          <view class="day-number">{{item.day}}</view>
-          <view wx:if="{{item.count > 0}}" class="task-count">{{item.count}}</view>
+          <text class="day-number">{{item.day}}</text>
+          <text wx:if="{{item.count > 0}}" class="task-count">{{item.count}}</text>
         </view>
       </block>
     </view>
