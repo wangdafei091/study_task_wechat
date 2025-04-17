@@ -175,6 +175,16 @@ Page({
   },
 
   /**
+   * 生命周期函数--监听页面显示
+   */
+  onShow: function() {
+    console.log('[task-edit] 页面显示，刷新能力成长计划');
+    
+    // 这里不需要使用bind，因为在生命周期函数中this指向的是页面实例
+    this.initTaskOverview();
+  },
+
+  /**
    * 初始化创建模式
    */
   initCreateMode: function(options) {
@@ -411,8 +421,10 @@ Page({
    * 选择日期
    */
   selectDate: function(e) {
+    console.log('[TaskEdit] 选择日期:', e.detail);
+    
     this.setData({
-      'task.date': e.detail.value
+      'task.date': e.detail.date
     });
     
     // 更新任务负载预测
@@ -423,51 +435,107 @@ Page({
    * 选择开始时间
    */
   selectStartTime: function(e) {
-    console.log('[TaskEdit] 选择开始时间:', e.detail.value);
-    const startTime = e.detail.value;
+    console.log('[TaskEdit] 选择开始时间:', e.detail);
+    
     this.setData({
-      'task.startTime': startTime
+      'task.startTime': e.detail.time
     });
-    // 如果结束时间已设置，重新计算持续时间
-    if (this.data.task.endTime) {
-      this.calculateDuration();
-    }
   },
 
   /**
    * 选择结束时间
    */
   selectEndTime: function(e) {
-    console.log('[TaskEdit] 选择结束时间:', e.detail.value);
-    const endTime = e.detail.value;
+    console.log('[TaskEdit] 选择结束时间:', e.detail);
+    
     this.setData({
-      'task.endTime': endTime
+      'task.endTime': e.detail.time
     });
-    // 如果开始时间已设置，重新计算持续时间
-    if (this.data.task.startTime) {
-      this.calculateDuration();
+  },
+
+  /**
+   * 处理持续时间变更事件
+   */
+  handleDurationChange: function(e) {
+    console.log('[TaskEdit] 持续时间变更:', e.detail);
+    
+    if (e.detail.duration > 0) {
+      this.setData({
+        'task.duration': e.detail.duration
+      });
+      
+      // 更新任务负载预测
+      this.updateTaskLoadPreview();
     }
   },
 
   /**
-   * 计算任务持续时间
+   * 选择开始日期（周期任务）
    */
-  calculateDuration: function() {
-    const task = this.data.task;
-    if (task.startTime && task.endTime) {
-      const [startHours, startMinutes] = task.startTime.split(':').map(Number);
-      const [endHours, endMinutes] = task.endTime.split(':').map(Number);
-      
-      const startTotalMinutes = startHours * 60 + startMinutes;
-      const endTotalMinutes = endHours * 60 + endMinutes;
-      
-      const duration = endTotalMinutes - startTotalMinutes;
-      if (duration > 0) {
-        this.setData({
-          'task.duration': duration
-        });
-      }
-    }
+  selectStartDate: function(e) {
+    console.log('[TaskEdit] 选择开始日期:', e.detail);
+    
+    this.setData({
+      'task.repeat.startDate': e.detail.date
+    });
+  },
+
+  /**
+   * 选择结束日期（周期任务）
+   */
+  selectEndDate: function(e) {
+    console.log('[TaskEdit] 选择结束日期:', e.detail);
+    
+    this.setData({
+      'task.repeat.endDate': e.detail.date
+    });
+  },
+
+  /**
+   * 切换任务执行模式
+   */
+  switchMode: function(e) {
+    // 日志记录
+    console.log('[TaskEdit] 接收到模式切换事件:', e);
+    
+    // 从事件详情获取模式值
+    const mode = e.detail.mode;
+    const previousMode = this.data.repeatMode || 'once';
+    
+    console.log('[TaskEdit] 切换执行模式:', mode, '上一模式:', previousMode);
+    
+    // 更新数据
+    this.setData({
+      repeatMode: mode
+    });
+    
+    // 日志记录任务状态变化
+    const taskTitle = this.data.task.title || '未命名任务';
+    const taskType = this.data.taskType || 'unknown';
+    console.log('[TaskEdit] 任务状态变更:', {
+      taskId: this.data.taskId,
+      title: taskTitle,
+      type: taskType,
+      previousMode: previousMode,
+      currentMode: mode,
+      hasRepeatSettings: !!this.data.task.repeat,
+      timestamp: new Date().toISOString()
+    });
+  },
+
+  /**
+   * 处理创建重复设置事件（从组件接收）
+   */
+  handleCreateRepeatSettings: function(e) {
+    console.log('[TaskEdit] 接收到创建重复设置事件:', e.detail);
+    
+    const { repeatSettings } = e.detail;
+    
+    this.setData({
+      'task.repeat': repeatSettings
+    });
+    
+    console.log('[TaskEdit] 重复任务设置已更新:', this.data.task.repeat);
   },
 
   /**
@@ -509,65 +577,7 @@ Page({
     }
   },
 
-  /**
-   * 快速选择日期
-   */
-  quickSelectDate: function(e) {
-    const type = e.currentTarget.dataset.type;
-    const now = new Date();
-    let date = '';
-    
-    // 格式化日期函数
-    const formatDate = (date) => {
-      const year = date.getFullYear();
-      const month = (date.getMonth() + 1).toString().padStart(2, '0');
-      const day = date.getDate().toString().padStart(2, '0');
-      return `${year}-${month}-${day}`;
-    };
-    
-    if (type === 'today') {
-      date = formatDate(now);
-    } else if (type === 'tomorrow') {
-      const tomorrow = new Date(now);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      date = formatDate(tomorrow);
-    } else if (type === 'weekend') {
-      // 获取本周周六
-      const daysToSaturday = 6 - now.getDay();
-      const saturday = new Date(now);
-      saturday.setDate(saturday.getDate() + (daysToSaturday === 0 ? 7 : daysToSaturday));
-      date = formatDate(saturday);
-    }
-    
-    if (date) {
-      this.setData({
-        'task.date': date
-      });
-    }
-  },
-
-  /**
-   * 快速选择时间
-   */
-  quickSelectTime: function(e) {
-    const period = e.currentTarget.dataset.period;
-    let timeStr = '';
-    
-    if (period === 'morning') {
-      timeStr = '08:30';
-    } else if (period === 'afternoon') {
-      timeStr = '15:00';
-    } else if (period === 'evening') {
-      timeStr = '19:00';
-    }
-    
-    if (timeStr) {
-      this.setData({
-        'task.startTime': timeStr.split(':')[0],
-        'task.endTime': timeStr.split(':')[1]
-      });
-    }
-  },
+  
 
   /**
    * 选择预设积分值
@@ -858,8 +868,14 @@ Page({
   saveTask: function() {
     const _this = this;
     
-    // 记录日志
-    console.log('[task-edit] 保存任务', _this.data.task);
+    // 添加日志记录任务数据
+    console.log('[task-edit] 准备保存任务', JSON.stringify({
+      title: _this.data.task.title,
+      date: _this.data.task.date,
+      taskType: _this.data.taskType,
+      selectedTemplate: _this.data.selectedTemplate,
+      isRepeat: !!(_this.data.task.repeat && _this.data.task.repeat.type !== 'none')
+    }));
     
     // 验证任务信息
     if (!_this.data.task.title || _this.data.task.title.trim() === '') {
@@ -880,10 +896,70 @@ Page({
       return;
     }
     
+    // 验证周期性任务设置
+    if (_this.data.task.repeat && _this.data.task.repeat.type !== 'none') {
+      if (!this.validateRepeatTask()) {
+        return;
+      }
+    }
+    
     const that = this;
     const taskData = this.data.task;
     
-    // 获取任务数据，处理存储
+    // 确保必要字段已设置
+    if (!taskData.date) {
+      taskData.date = this.data.dateNow;
+      console.log('[task-edit] 自动设置任务日期为:', taskData.date);
+    }
+    
+    if (this.data.taskType === 'study') {
+      if (!taskData.startTime) {
+        taskData.startTime = '09:00';
+        console.log('[task-edit] 自动设置开始时间为:', taskData.startTime);
+      }
+      if (!taskData.endTime) {
+        taskData.endTime = '10:00';
+        console.log('[task-edit] 自动设置结束时间为:', taskData.endTime);
+      }
+    }
+    
+    // 显示加载中
+    wx.showLoading({
+      title: '正在保存...',
+    });
+    
+    // 如果是周期性任务，使用taskManager处理
+    if (taskData.repeat && taskData.repeat.type !== 'none') {
+      console.log('[task-edit] 检测到周期性任务，使用taskManager处理');
+      
+      // 确保任务有必要的字段
+      taskData.id = taskData.id || `task_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+      taskData.createTime = taskData.createTime || Date.now();
+      taskData.updateTime = Date.now();
+      
+      const taskManager = require('../../utils/taskManager.js');
+      taskManager.createTask(taskData, (newTask) => {
+        wx.hideLoading();
+        
+        // 刷新能力成长计划数据
+        that.initTaskOverview.bind(that)();
+        console.log('[task-edit] 周期性任务创建成功并刷新能力成长计划');
+        
+        wx.showToast({
+          title: '任务创建成功',
+          icon: 'success',
+          duration: 2000
+        });
+        
+        // 延迟返回上一页
+        setTimeout(() => {
+          wx.navigateBack();
+        }, 2000);
+      });
+      return; // 使用taskManager处理后直接返回
+    }
+    
+    // 非周期性任务的处理逻辑
     wx.getStorage({
       key: 'taskData',
       success: function(res) {
@@ -891,92 +967,87 @@ Page({
         const task = tasks.find(t => t.id === taskData.id);
         
         if (task) {
-          // 更新任务信息
-          task.title = taskData.title;
-          task.shortName = taskData.shortName;
-          task.description = taskData.description;
-          task.type = taskData.type;
-          task.taskType = taskData.taskType;
-          task.tags = taskData.tags;
-          task.date = taskData.date;
-          task.startTime = taskData.startTime;
-          task.endTime = taskData.endTime;
-          task.points = taskData.points;
-          task.repeat = taskData.repeat;
-          task.status = taskData.status;
-          task.createTime = taskData.createTime;
-          task.updateTime = taskData.updateTime;
-          task.isEditing = taskData.isEditing;
+          // 更新现有任务
+          Object.assign(task, {
+            title: taskData.title,
+            shortName: taskData.shortName,
+            description: taskData.description,
+            type: taskData.type,
+            taskType: taskData.taskType,
+            tags: taskData.tags,
+            date: taskData.date,
+            startTime: taskData.startTime,
+            endTime: taskData.endTime,
+            points: taskData.points,
+            repeat: taskData.repeat,
+            status: taskData.status,
+            updateTime: Date.now(),
+            isEditing: taskData.isEditing
+          });
           
           // 更新任务数据
           const updatedTasks = tasks.map(t => t.id === taskData.id ? task : t);
-          
-          // 保存更新后的任务数据
-          wx.setStorage({
-            key: 'taskData',
-            data: updatedTasks,
-            success: function() {
-              wx.hideLoading();
-              wx.showToast({
-                title: '任务更新成功',
-                icon: 'success',
-                duration: 2000
-              });
-              // 延迟返回上一页
-              setTimeout(() => {
-                wx.navigateBack();
-              }, 2000);
-            },
-            fail: function(err) {
-              wx.hideLoading();
-              console.error('[TaskEdit] 任务更新失败:', err);
-              wx.showToast({
-                title: '更新任务失败',
-                icon: 'none'
-              });
-            }
-          });
+          that._saveTaskAndReturn(updatedTasks, '任务更新成功');
         } else {
-          // 如果任务不存在，创建新任务
-          taskData.id = taskData.id || Date.now();
+          // 创建新任务
+          taskData.id = taskData.id || `task_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
           taskData.createTime = Date.now();
           taskData.updateTime = Date.now();
           taskData.isEditing = true;
           
-          // 添加新任务到任务列表
-          const newTasks = [...tasks, taskData];
-          
-          // 保存更新后的任务数据
-          wx.setStorage({
-            key: 'taskData',
-            data: newTasks,
-            success: function() {
-              wx.hideLoading();
-              wx.showToast({
-                title: '任务创建成功',
-                icon: 'success',
-                duration: 2000
-              });
-              // 延迟返回上一页
-              setTimeout(() => {
-                wx.navigateBack();
-              }, 2000);
-            },
-            fail: function(err) {
-              wx.hideLoading();
-              console.error('[TaskEdit] 任务创建失败:', err);
-              wx.showToast({
-                title: '创建任务失败',
-                icon: 'none'
-              });
-            }
-          });
+          // 添加新任务到任务列表并保存
+          that._saveTaskAndReturn([...tasks, taskData], '任务创建成功');
         }
       },
-      fail: function() {
-        console.log('[TaskEdit] 获取任务数据失败');
+      fail: function(err) {
+        console.error('[TaskEdit] 获取任务数据失败:', err);
+        
+        // 修改：失败时直接创建新存储
+        taskData.id = taskData.id || `task_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+        taskData.createTime = Date.now();
+        taskData.updateTime = Date.now();
+        
+        // 直接创建新的任务数组
+        that._saveTaskAndReturn([taskData], '任务保存成功');
+      }
+    });
+  },
+  
+  /**
+   * 保存任务数据并返回上一页
+   * @private
+   * @param {Array} tasks 要保存的任务数组
+   * @param {String} successMsg 成功提示信息
+   */
+  _saveTaskAndReturn: function(tasks, successMsg) {
+    const that = this;
+    
+    wx.setStorage({
+      key: 'taskData',
+      data: tasks,
+      success: function() {
+        wx.hideLoading();
+        
+        // 刷新能力成长计划数据
+        that.initTaskOverview.bind(that)();
+        console.log('[task-edit] 任务保存成功并刷新能力成长计划');
+        
         wx.showToast({
-          title: '获取任务数据失败',
+          title: successMsg,
+          icon: 'success',
+          duration: 2000
+        });
+        
+        // 延迟返回上一页
+        setTimeout(() => {
+          wx.navigateBack();
+        }, 2000);
+      },
+      fail: function(err) {
+        wx.hideLoading();
+        console.error('[TaskEdit] 任务保存失败:', err);
+        wx.showToast({
+          title: '保存任务失败',
           icon: 'none'
         });
       }
@@ -1237,84 +1308,25 @@ Page({
   },
 
   /**
-   * 切换任务执行模式
+   * 切换重复频率
    */
-  switchMode: function(e) {
-    // 增强日志记录，完整记录事件对象
-    console.log('[TaskEdit] 接收到模式切换事件:', e);
-    
-    // 从事件详情获取模式值，而非从dataset
-    const mode = e.detail.mode;
-    const previousMode = this.data.repeatMode || 'once';
-    
-    console.log('[TaskEdit] 切换执行模式:', mode, '上一模式:', previousMode);
-    
-    // 记录切换前的状态
-    console.log('[TaskEdit] 切换前 repeatMode:', this.data.repeatMode);
-    console.log('[TaskEdit] 切换前 task.repeat:', this.data.task.repeat);
+  selectFrequency: function(e) {
+    console.log('[TaskEdit] 接收到频率变更:', e.detail);
     
     this.setData({
-      repeatMode: mode
-    });
-    
-    // 记录切换后的状态
-    console.log('[TaskEdit] 切换后 repeatMode:', this.data.repeatMode);
-    
-    // 日志记录任务状态变化
-    const taskTitle = this.data.task.title || '未命名任务';
-    const taskType = this.data.taskType || 'unknown';
-    console.log('[TaskEdit] 任务状态变更:', {
-      taskId: this.data.taskId,
-      title: taskTitle,
-      type: taskType,
-      previousMode: previousMode,
-      currentMode: mode,
-      hasRepeatSettings: !!this.data.task.repeat,
-      timestamp: new Date().toISOString()
-    });
-    
-    // 使用公共函数确保重复任务设置正确
-    this.ensureRepeatTaskSettings();
-    
-    // 记录初始化后的状态
-    console.log('[TaskEdit] 初始化后 task.repeat:', this.data.task.repeat);
-    
-    // 提供用户反馈
-    wx.vibrateShort({
-      type: 'light'
+      'task.repeat.type': e.detail.type,
+      'task.repeat.days': e.detail.days
     });
   },
 
   /**
-   * 选择重复频率
+   * 更新重复日设置（用于组件事件处理）
    */
-  selectFrequency: function(e) {
-    const type = e.currentTarget.dataset.type;
+  updateRepeatDays: function(e) {
+    console.log('[TaskEdit] 更新重复日:', e.detail.days);
+    
     this.setData({
-      'task.repeat.type': type,
-      'task.repeat.days': type === 'custom' ? [] : null
-    });
-    
-    // 提供用户反馈
-    let message = '';
-    switch (type) {
-      case 'daily':
-        message = '任务将每天重复';
-        break;
-      case 'weekly':
-        message = '任务将每周重复';
-        break;
-      case 'workdays':
-        message = '任务将在工作日重复';
-        break;
-      case 'custom':
-        message = '请选择重复的日期';
-        break;
-    }
-    
-    wx.showToast({
-      title: message,
-      icon: 'none'
+      'task.repeat.days': e.detail.days
     });
   },
 
@@ -1340,28 +1352,6 @@ Page({
     if (days.length > 0) {
       const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
       const selectedDays = days.map(d => weekdays[d]).join('、');
-      wx.showToast({
-        title: `已选择：周${selectedDays}`,
-        icon: 'none'
-      });
-    }
-  },
-
-  /**
-   * 更新重复日设置（用于组件事件处理）
-   */
-  updateRepeatDays: function(e) {
-    console.log('更新重复日:', e.detail.days);
-    
-    this.setData({
-      'task.repeat.days': e.detail.days
-    });
-    
-    const days = e.detail.days;
-    if (days.length > 0) {
-      const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
-      const selectedDays = days.map(d => weekdays[d]).join('、');
-      
       wx.showToast({
         title: `已选择：周${selectedDays}`,
         icon: 'none'
@@ -1836,15 +1826,7 @@ Page({
     });
   },
 
-  /**
-   * 日期格式化
-   */
-  formatDate: function(date) {
-    const year = date.getFullYear();
-    const month = (date.getMonth() + 1).toString().padStart(2, '0'); // 确保月份是两位数
-    const day = date.getDate().toString().padStart(2, '0'); // 确保日期是两位数
-    return `${year}-${month}-${day}`;
-  },
+  
 
   /**
    * 获取星期几
@@ -1897,6 +1879,14 @@ Page({
         
         // 过滤出该日期的任务
         const dayTasks = tasks.filter(t => t.date === dateStr);
+        
+        // 添加当前编辑中但未保存的任务（如果日期匹配）
+        const currentTask = this.data.task;
+        if (currentTask && currentTask.date === dateStr && 
+            !dayTasks.some(t => t.id === currentTask.id)) {
+          console.log('[task-edit] 在日视图中添加当前编辑任务:', currentTask.title);
+          dayTasks.push({...currentTask, isCurrentEditing: true});
+        }
         
         // 计算该日期的任务总时长
         const totalMinutes = dayTasks.reduce((sum, t) => sum + (t.duration || 0), 0);
@@ -2268,96 +2258,6 @@ Page({
   },
 
   /**
-   * 选择开始日期（周期任务）
-   */
-  selectStartDate: function(e) {
-    // 兼容新旧两种事件格式
-    const startDate = e.detail.startDate || e.detail.value;
-    this.setData({
-      'task.repeat.startDate': startDate
-    });
-  },
-
-  /**
-   * 选择结束日期（周期任务）
-   */
-  selectEndDate: function(e) {
-    // 兼容新旧两种事件格式
-    const endDate = e.detail.endDate || e.detail.value;
-    this.setData({
-      'task.repeat.endDate': endDate
-    });
-  },
-
-  // 处理菜单项点击
-  handleMenuItemTap: function(e) {
-    const item = e.detail.item;
-    
-    // 根据菜单项ID执行不同的操作
-    switch(item.id) {
-      case 'habit':
-        this.selectTaskType('habit');
-        break;
-      case 'interest':
-        this.selectCustomTask('interest');
-        break;
-      case 'save':
-        this.saveTask();
-        break;
-      default:
-        console.log('未知菜单项:', item.id);
-    }
-  },
-  
-  // 处理菜单状态变化
-  handleMenuStateChange: function(e) {
-    console.log('菜单状态变化:', e.detail.isOpen);
-  },
-
-  /**
-   * 处理自定义选择事件
-   */
-  handleCustomSelect: function(e) {
-    // 适配新的组件接口
-    const type = e.detail.type || e.detail;
-    console.log('[TaskEdit] 选择自定义任务, 类型:', type);
-    
-    if (type === 'study') {
-      console.log('[TaskEdit] 创建自定义学习任务');
-      this.selectCustomStudy();
-    } else if (type === 'habit') {
-      console.log('[TaskEdit] 创建自定义习惯任务');
-      this.selectCustomHabit();
-    }
-    
-    // 确保设置为自定义模式
-    this.setData({
-      customMode: true
-    });
-    
-    // 如果有标签选择器，刷新标签
-    if (this.loadTags) {
-      this.loadTags();
-      console.log('[TaskEdit] 刷新标签选择器');
-    }
-    
-    // 自定义模式下允许保存为常用任务
-    console.log('[TaskEdit] 进入自定义模式，允许保存为常用任务');
-    
-    // 添加轻微振动反馈
-    wx.vibrateShort({ type: 'light' });
-    
-    // 记录当前任务状态
-    console.log('[TaskEdit] 自定义任务状态:', {
-      taskType: this.data.taskType,
-      taskTitle: this.data.task.title || '未设置',
-      isEditing: this.data.task.isEditing,
-      customMode: true,
-      selectedTemplate: this.data.selectedTemplate
-    });
-  },
-
-  /**
    * 处理学习任务模板选择
    */
   handleStudyTemplateSelect: function(e) {
@@ -2508,71 +2408,6 @@ Page({
     this.ensureRepeatTaskSettings();
   },
 
-  /**
-   * 确保重复任务设置正确
-   */
-  ensureRepeatTaskSettings: function() {
-    console.log('[TaskEdit] 开始确保重复任务设置 - repeatMode:', this.data.repeatMode);
-    
-    // 如果当前是重复模式
-    if (this.data.repeatMode === 'repeat') {
-      // 检查task.repeat是否存在或格式是否完整
-      const hasValidRepeat = this.data.task.repeat && 
-                             this.data.task.repeat.type && 
-                             this.data.task.repeat.type !== 'none';
-      
-      console.log('[TaskEdit] 检查repeat设置 - 是否有效:', hasValidRepeat);
-      console.log('[TaskEdit] 当前repeat设置:', this.data.task.repeat);
-      
-      if (!hasValidRepeat) {
-        // 根据当前任务类型设置默认重复类型
-        const defaultRepeatType = this.data.taskType === 'study' ? 'weekly' : 'daily';
-        let defaultDays = [];
-        
-        // 根据重复类型设置默认天数
-        if (defaultRepeatType === 'daily') {
-          // 每天 - 包含所有日期
-          defaultDays = ['0', '1', '2', '3', '4', '5', '6'];
-        } else if (defaultRepeatType === 'weekly') {
-          // 每周 - 默认设置为当前日期对应的星期几
-          const today = new Date().getDay().toString();
-          defaultDays = [today]; 
-        } else if (defaultRepeatType === 'workdays') {
-          // 工作日 - 周一至周五
-          defaultDays = ['1', '2', '3', '4', '5'];
-        }
-        
-        // 确保有开始日期
-        const startDate = this.data.task.date || this.data.dateNow;
-        
-        // 记录日志
-        console.log('[TaskEdit] 设置默认重复类型:', defaultRepeatType, 
-                    '任务类型:', this.data.taskType, 
-                    '默认天数:', defaultDays,
-                    '开始日期:', startDate);
-        
-        // 更新重复任务设置
-        this.setData({
-          'task.repeat': {
-            type: defaultRepeatType,
-            days: defaultDays,
-            startDate: startDate,
-            endDate: this.data.task.repeat ? this.data.task.repeat.endDate || '' : ''
-          }
-        });
-        
-        console.log('[TaskEdit] 重复任务设置已更新:', this.data.task.repeat);
-      }
-    } else {
-      // 一次性任务模式，确保日期被设置
-      if (!this.data.task.date) {
-        console.log('[TaskEdit] 一次性任务未设置日期，设置为当前日期');
-        this.setData({
-          'task.date': this.data.dateNow
-        });
-      }
-    }
-  },
 
   /**
    * 检查任务类型显示状态
@@ -2757,6 +2592,16 @@ Page({
     
     // 处理重复任务设置
     this.ensureRepeatTaskSettings();
+  },
+
+  /**
+   * 格式化日期为YYYY-MM-DD格式
+   */
+  formatDate: function(date) {
+    const year = date.getFullYear();
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const day = date.getDate().toString().padStart(2, '0');
+    return `${year}-${month}-${day}`;
   },
 
   /**
