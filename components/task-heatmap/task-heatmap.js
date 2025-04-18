@@ -39,7 +39,11 @@ Component({
     selectedDate: '', // 当前选中的日期
     selectedDateText: '', // 格式化后的日期文本
     showDayTasks: false, // 是否显示日期任务
-    dayTasks: [] // 当前日期的任务列表
+    dayTasks: [], // 当前日期的任务列表
+    activeBubbleId: null, // 当前显示描述的任务ID
+    activeBubbleContent: '', // 当前显示的描述内容
+    bubbleStyle: '', // 气泡样式字符串
+    bubbleTimer: null // 用于自动隐藏气泡的计时器
   },
   
   lifetimes: {
@@ -49,6 +53,7 @@ Component({
       console.log('[TaskHeatmap] 已优化热力图色阶，使用蓝色渐变提高辨识度');
       console.log('[TaskHeatmap] 已优化任务项UI，减轻背景色厚重感，优化布局');
       console.log('[TaskHeatmap] 已优化任务完成状态显示，使用勾标记替代删除线');
+      console.log('[TaskHeatmap] 已添加任务描述信息气泡功能');
       const now = new Date();
       this.setData({
         currentYear: this.properties.currentYear || now.getFullYear(),
@@ -61,7 +66,10 @@ Component({
     },
     
     detached() {
-      // 移除定时器清理代码
+      // 清理气泡计时器
+      if (this.data.bubbleTimer) {
+        clearTimeout(this.data.bubbleTimer);
+      }
     }
   },
   
@@ -364,6 +372,86 @@ Component({
       console.log('[TaskHeatmap] 关闭日期任务列表');
       this.setData({
         showDayTasks: false
+      });
+      
+      // 同时关闭可能显示的描述气泡
+      this.hideTaskDesc();
+    },
+    
+    // 显示任务描述气泡
+    showTaskDesc(e) {
+      console.log('[TaskHeatmap] 显示任务描述');
+      const taskId = e.currentTarget.dataset.id;
+      const taskIndex = e.currentTarget.dataset.index;
+      
+      // 如果当前已有显示的气泡，先清除计时器
+      if (this.data.bubbleTimer) {
+        clearTimeout(this.data.bubbleTimer);
+      }
+      
+      // 如果点击的是当前显示的气泡，则隐藏它
+      if (this.data.activeBubbleId === taskId) {
+        this.hideTaskDesc();
+        return;
+      }
+      
+      // 获取当前任务的描述信息
+      const task = this.data.dayTasks[taskIndex];
+      if (!task || !task.description) {
+        console.log('[TaskHeatmap] 任务无描述信息');
+        return;
+      }
+      
+      // 获取点击图标的位置信息，用于定位气泡
+      const query = this.createSelectorQuery();
+      query.select(`#task-${taskId}`).boundingClientRect();
+      query.selectViewport().scrollOffset();
+      query.exec((res) => {
+        if (!res || !res[0]) {
+          console.error('[TaskHeatmap] 获取任务元素位置失败');
+          return;
+        }
+        
+        const taskRect = res[0];
+        const scrollTop = res[1] ? res[1].scrollTop : 0;
+        
+        // 计算气泡位置
+        // 默认定位在任务项的右侧中间位置
+        const bubbleLeft = taskRect.right + 5; // 任务项右侧偏移5px
+        const bubbleTop = taskRect.top + (taskRect.height / 2) - 15; // 居中偏上一点
+        
+        // 设置气泡样式
+        const bubbleStyle = `left: ${bubbleLeft}px; top: ${bubbleTop}px;`;
+        
+        // 更新数据，显示气泡
+        this.setData({
+          activeBubbleId: taskId,
+          activeBubbleContent: task.description,
+          bubbleStyle: bubbleStyle
+        });
+        
+        // 设置3秒后自动隐藏气泡
+        const timer = setTimeout(() => {
+          this.hideTaskDesc();
+        }, 3000);
+        
+        this.setData({
+          bubbleTimer: timer
+        });
+      });
+    },
+    
+    // 隐藏任务描述气泡
+    hideTaskDesc() {
+      // 清除计时器
+      if (this.data.bubbleTimer) {
+        clearTimeout(this.data.bubbleTimer);
+      }
+      
+      this.setData({
+        activeBubbleId: null,
+        activeBubbleContent: '',
+        bubbleTimer: null
       });
     },
     

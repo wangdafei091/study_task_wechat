@@ -42,13 +42,17 @@
     <scroll-view class="tasks-list" scroll-y="{{true}}">
       <block wx:if="{{dayTasks.length > 0}}">
         <block wx:for="{{dayTasks}}" wx:key="id">
-          <view class="task-item-wrap type-{{item.type}} {{item.status === 1 ? 'completed' : ''}}">
+          <view class="task-item-wrap type-{{item.type}} {{item.status === 1 ? 'completed' : ''}}" id="task-{{item.id}}">
             <!-- 已完成任务添加勾标记 -->
             <text wx:if="{{item.status === 1}}" class="task-complete-mark">✓</text>
             <view class="task-icon {{item.repeat && item.repeat.enabled ? 'repeat' : ''}} type-{{item.type}}"></view>
             <text class="task-title">{{item.title || '未命名任务'}}</text>
             <text class="task-time">{{item.startTime || '--:--'}}~{{item.endTime || '--:--'}}</text>
             <text class="task-points">{{item.points || 0}}分</text>
+            
+            <!-- 描述信息图标 -->
+            <view wx:if="{{item.description}}" class="info-icon" 
+                  catchtap="showTaskDesc" data-id="{{item.id}}" data-index="{{index}}">i</view>
           </view>
         </block>
       </block>
@@ -57,5 +61,10 @@
         <text class="empty-text">当天没有任务安排</text>
       </view>
     </scroll-view>
+  </view>
+  
+  <!-- 任务描述气泡 -->
+  <view class="task-desc-bubble {{activeBubbleId ? 'visible' : ''}}" style="{{bubbleStyle}}">
+    <text class="bubble-text">{{activeBubbleContent}}</text>
   </view>
 </view> 

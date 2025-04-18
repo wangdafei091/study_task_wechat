@@ -461,4 +461,60 @@
 /* 添加任务项的轻微点击效果 */
 .task-item-wrap:active {
   background-color: rgba(240, 240, 240, 0.8);
+}
+
+/* 任务描述信息图标 */
+.info-icon {
+  width: 16rpx;
+  height: 16rpx;
+  font-size: 16rpx;
+  line-height: 16rpx;
+  text-align: center;
+  border-radius: 50%;
+  background-color: rgba(0, 0, 0, 0.1);
+  color: rgba(255, 255, 255, 0.9);
+  margin-left: 8rpx;
+  flex-shrink: 0;
+  font-style: italic;
+  font-family: serif;
+}
+
+/* 任务描述气泡 */
+.task-desc-bubble {
+  position: fixed;
+  z-index: 1000;
+  padding: 12rpx 16rpx;
+  background-color: rgba(0, 0, 0, 0.6);
+  color: #ffffff;
+  font-size: 22rpx;
+  border-radius: 6rpx;
+  max-width: 250rpx;
+  word-wrap: break-word;
+  box-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.1);
+  opacity: 0;
+  transform: scale(0.9) translateY(4rpx);
+  transition: all 0.2s ease;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.task-desc-bubble.visible {
+  opacity: 1;
+  transform: scale(1) translateY(0);
+  visibility: visible;
+}
+
+.bubble-text {
+  line-height: 1.4;
+}
+
+/* 添加箭头 */
+.task-desc-bubble::after {
+  content: '';
+  position: absolute;
+  bottom: -6rpx;
+  left: 10rpx;
+  border-left: 6rpx solid transparent;
+  border-right: 6rpx solid transparent;
+  border-top: 6rpx solid rgba(0, 0, 0, 0.6);
 } 
