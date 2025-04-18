@@ -1,12 +1,7 @@
 {
-  "navigationBarTitleText": "任务编辑",
+  "navigationBarTitleText": "任务分布",
   "usingComponents": {
     "card": "/components/card/card",
-    "date-picker": "/components/date-picker/date-picker",
-    "template-selector": "/components/template-selector/template-selector",
-    "task-info": "/components/task-info/task-info",
-    "task-templates": "/components/task-templates/task-templates",
-    "repeat-selector": "/components/repeat-selector/repeat-selector",
     "task-heatmap": "/components/task-heatmap/task-heatmap"
   }
 } 

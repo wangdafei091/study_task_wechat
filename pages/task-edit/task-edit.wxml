@@ -35,23 +35,9 @@
         tasks="{{allTasks}}" 
         currentYear="{{heatmapYear}}"
         currentMonth="{{heatmapMonthIndex}}"
-        bind:monthChange="onHeatmapMonthChange">
+        bind:monthChange="onHeatmapMonthChange"
+        bind:daySelect="onHeatmapDaySelect">
       </task-heatmap>
     </card>
-    
-    <!-- 底部按钮区 -->
-    <view class="button-group">
-      <block wx:if="{{mode === 'create'}}">
-        <button class="btn btn-primary" bindtap="saveTask">保存任务</button>
-        <button class="btn btn-secondary" bindtap="cancelTask">取消</button>
-      </block>
-      <block wx:if="{{mode === 'edit'}}">
-        <button class="btn btn-primary" bindtap="saveTask">保存修改</button>
-        <button class="btn btn-secondary" bindtap="cancelTask">取消</button>
-      </block>
-    </view>
   </view>
-  
-  <!-- 底部安全区域占位 -->
-  <view class="safe-area-inset-bottom"></view>
 </view>

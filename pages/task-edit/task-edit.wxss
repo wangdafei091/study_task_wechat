@@ -6,7 +6,7 @@
   flex-direction: column;
   min-height: 100vh;
   background-color: #F6F8FA;
-  padding: 0; /* 匹配首页容器，移除内边距 */
+  padding: 0;
 }
 
 /* 顶部导航栏 */
@@ -48,7 +48,7 @@
 /* 主内容区 */
 .content {
   flex: 1;
-  padding: 0; /* 移除所有内边距，与主页保持一致 */
+  padding: 0;
 }
 
 /* 区域块样式 */
@@ -1689,7 +1689,7 @@
   margin-bottom: 8rpx;
 }
 
-/* 演示控制区域样式 - 调整为更小的水平布局 */
+/* 演示控制区域样式 */
 .demo-controls {
   display: flex;
   flex-direction: row;

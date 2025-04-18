@@ -42,7 +42,9 @@
     <scroll-view class="tasks-list" scroll-y="{{true}}">
       <block wx:if="{{dayTasks.length > 0}}">
         <block wx:for="{{dayTasks}}" wx:key="id">
-          <view class="task-item-wrap type-{{item.type}} {{item.status === 1 ? 'completed' : ''}}" id="task-{{item.id}}">
+          <!-- 任务项 -->
+          <view class="task-item-wrap type-{{item.type}} {{item.status === 1 ? 'completed' : ''}} {{editingTaskId === item.id ? 'editing' : ''}}" 
+                id="task-{{item.id}}">
             <!-- 已完成任务添加勾标记 -->
             <text wx:if="{{item.status === 1}}" class="task-complete-mark">✓</text>
             <view class="task-icon {{item.repeat && item.repeat.enabled ? 'repeat' : ''}} type-{{item.type}}"></view>
@@ -50,9 +52,61 @@
             <text class="task-time">{{item.startTime || '--:--'}}~{{item.endTime || '--:--'}}</text>
             <text class="task-points">{{item.points || 0}}分</text>
             
-            <!-- 描述信息图标 -->
-            <view wx:if="{{item.description}}" class="info-icon" 
-                  catchtap="showTaskDesc" data-id="{{item.id}}" data-index="{{index}}">i</view>
+            <!-- 操作图标区 -->
+            <view class="task-action-icons">
+              <!-- 描述信息图标 -->
+              <view wx:if="{{item.description}}" class="info-icon" 
+                    catchtap="showTaskDesc" data-id="{{item.id}}" data-index="{{index}}">i</view>
+              
+              <!-- 编辑链接 - 将图标替换为文字链接 -->
+              <text class="edit-link" catchtap="showTaskEdit" data-id="{{item.id}}" data-index="{{index}}">[编辑]</text>
+            </view>
+          </view>
+          
+          <!-- 任务编辑区 -->
+          <view class="task-edit-container {{editingTaskId === item.id ? 'expanded' : ''}}" id="edit-{{item.id}}">
+            <!-- 循环任务选择区域 -->
+            <block wx:if="{{item.repeat && item.repeat.enabled}}">
+              <view class="edit-scope-area">
+                <view class="scope-options">
+                  <view class="scope-option {{editScope === 'single' ? 'selected' : ''}}" bindtap="selectEditScope" data-scope="single">
+                    <view class="radio-button">{{editScope === 'single' ? '●' : '○'}}</view>
+                    <text>仅修改今天</text>
+                  </view>
+                  <view class="scope-option {{editScope === 'all' ? 'selected' : ''}}" bindtap="selectEditScope" data-scope="all">
+                    <view class="radio-button">{{editScope === 'all' ? '●' : '○'}}</view>
+                    <text>修改整个循环</text>
+                    <view class="scope-info" catchtap="showScopeInfo">i</view>
+                  </view>
+                </view>
+                <view class="separator-line"></view>
+              </view>
+            </block>
+            
+            <!-- 任务基本信息编辑区域 -->
+            <view class="edit-basic-area">
+              <view class="edit-field">
+                <text class="field-label">积分:</text>
+                <view class="points-stepper">
+                  <view class="stepper-btn reduce" catchtap="changePoints" data-action="reduce">-</view>
+                  <input class="stepper-input" type="number" value="{{editPoints}}" bindinput="inputPoints" />
+                  <view class="stepper-btn add" catchtap="changePoints" data-action="add">+</view>
+                </view>
+              </view>
+              
+              <view class="edit-field">
+                <text class="field-label">描述:</text>
+                <view class="description-input-wrap">
+                  <input class="description-input" type="text" maxlength="20" value="{{editDescription}}" bindinput="inputDescription" />
+                  <text class="char-count">{{editDescription.length}}/20</text>
+                </view>
+              </view>
+              
+              <view class="edit-actions">
+                <view class="action-btn cancel" bindtap="cancelEdit">✕</view>
+                <view class="action-btn confirm" bindtap="saveEdit">✓</view>
+              </view>
+            </view>
           </view>
         </block>
       </block>
@@ -66,5 +120,10 @@
   <!-- 任务描述气泡 -->
   <view class="task-desc-bubble {{activeBubbleId ? 'visible' : ''}}" style="{{bubbleStyle}}">
     <text class="bubble-text">{{activeBubbleContent}}</text>
+  </view>
+  
+  <!-- 循环任务范围提示气泡 -->
+  <view class="scope-info-bubble {{showScopeInfoBubble ? 'visible' : ''}}" style="{{scopeInfoStyle}}">
+    <text class="bubble-text">将修改此循环任务的所有未来实例</text>
   </view>
 </view> 

@@ -43,7 +43,17 @@ Component({
     activeBubbleId: null, // 当前显示描述的任务ID
     activeBubbleContent: '', // 当前显示的描述内容
     bubbleStyle: '', // 气泡样式字符串
-    bubbleTimer: null // 用于自动隐藏气泡的计时器
+    bubbleTimer: null, // 用于自动隐藏气泡的计时器
+    
+    // 任务编辑相关
+    editingTaskId: null, // 当前正在编辑的任务ID
+    editingTaskIndex: -1, // 当前正在编辑的任务索引
+    editPoints: 0, // 编辑中的积分值
+    editDescription: '', // 编辑中的描述文本
+    editScope: 'single', // 编辑范围，single-仅今天，all-整个循环
+    showScopeInfoBubble: false, // 是否显示范围说明气泡
+    scopeInfoStyle: '', // 范围说明气泡样式
+    scopeInfoTimer: null // 范围说明气泡定时器
   },
   
   lifetimes: {
@@ -54,6 +64,7 @@ Component({
       console.log('[TaskHeatmap] 已优化任务项UI，减轻背景色厚重感，优化布局');
       console.log('[TaskHeatmap] 已优化任务完成状态显示，使用勾标记替代删除线');
       console.log('[TaskHeatmap] 已添加任务描述信息气泡功能');
+      console.log('[TaskHeatmap] 已添加任务编辑功能');
       const now = new Date();
       this.setData({
         currentYear: this.properties.currentYear || now.getFullYear(),
@@ -66,9 +77,13 @@ Component({
     },
     
     detached() {
-      // 清理气泡计时器
+      // 清理定时器
       if (this.data.bubbleTimer) {
         clearTimeout(this.data.bubbleTimer);
+      }
+      
+      if (this.data.scopeInfoTimer) {
+        clearTimeout(this.data.scopeInfoTimer);
       }
     }
   },
@@ -374,8 +389,9 @@ Component({
         showDayTasks: false
       });
       
-      // 同时关闭可能显示的描述气泡
+      // 同时关闭可能显示的描述气泡和编辑区
       this.hideTaskDesc();
+      this.cancelEdit();
     },
     
     // 显示任务描述气泡
@@ -453,6 +469,226 @@ Component({
         activeBubbleContent: '',
         bubbleTimer: null
       });
+    },
+    
+    // 显示任务编辑区域
+    showTaskEdit(e) {
+      console.log('[TaskHeatmap] 显示任务编辑');
+      const taskId = e.currentTarget.dataset.id;
+      const taskIndex = e.currentTarget.dataset.index;
+      
+      // 如果已经在编辑这个任务，则关闭编辑
+      if (this.data.editingTaskId === taskId) {
+        this.cancelEdit();
+        return;
+      }
+      
+      // 先关闭可能打开的其他编辑区
+      if (this.data.editingTaskId) {
+        this.cancelEdit();
+      }
+      
+      // 获取要编辑的任务
+      const task = this.data.dayTasks[taskIndex];
+      if (!task) {
+        console.error('[TaskHeatmap] 找不到要编辑的任务');
+        return;
+      }
+      
+      // 设置初始编辑数据
+      this.setData({
+        editingTaskId: taskId,
+        editingTaskIndex: taskIndex,
+        editPoints: task.points || 0,
+        editDescription: task.description || '',
+        editScope: 'single' // 默认只修改今天的任务
+      });
+      
+      console.log('[TaskHeatmap] 开始编辑任务:', task.title, '积分:', this.data.editPoints);
+      
+      // 如果是循环任务，处理滚动确保编辑区域可见
+      if (task.repeat && task.repeat.enabled) {
+        this.ensureEditAreaVisible(taskId);
+      }
+    },
+    
+    // 确保编辑区域在视图中可见
+    ensureEditAreaVisible(taskId) {
+      setTimeout(() => {
+        const query = this.createSelectorQuery();
+        query.select(`#edit-${taskId}`).boundingClientRect();
+        query.selectViewport().boundingClientRect();
+        query.exec((res) => {
+          if (!res || !res[0] || !res[1]) return;
+          
+          const editRect = res[0];
+          const viewportRect = res[1];
+          
+          // 如果编辑区域底部超出视口，滚动到可见区域
+          if (editRect.bottom > viewportRect.height) {
+            const scrollView = this.selectComponent('.tasks-list');
+            if (scrollView) {
+              scrollView.scrollIntoView(`#edit-${taskId}`);
+            }
+          }
+        });
+      }, 300); // 给动画一些时间完成
+    },
+    
+    // 选择编辑范围
+    selectEditScope(e) {
+      const scope = e.currentTarget.dataset.scope;
+      this.setData({
+        editScope: scope
+      });
+      console.log('[TaskHeatmap] 设置编辑范围:', scope);
+    },
+    
+    // 显示范围说明气泡
+    showScopeInfo(e) {
+      // 清除之前的定时器
+      if (this.data.scopeInfoTimer) {
+        clearTimeout(this.data.scopeInfoTimer);
+      }
+      
+      // 获取点击元素位置
+      const query = this.createSelectorQuery();
+      query.select('.scope-info').boundingClientRect();
+      query.selectViewport().scrollOffset();
+      query.exec((res) => {
+        if (!res || !res[0]) return;
+        
+        const rect = res[0];
+        const scrollTop = res[1] ? res[1].scrollTop : 0;
+        
+        // 计算气泡位置，显示在图标右上方
+        const left = rect.right + 5;
+        const top = rect.top - 10;
+        
+        this.setData({
+          showScopeInfoBubble: true,
+          scopeInfoStyle: `left: ${left}px; top: ${top}px;`
+        });
+        
+        // 3秒后自动隐藏
+        const timer = setTimeout(() => {
+          this.setData({
+            showScopeInfoBubble: false
+          });
+        }, 3000);
+        
+        this.setData({
+          scopeInfoTimer: timer
+        });
+      });
+    },
+    
+    // 修改积分值
+    changePoints(e) {
+      const action = e.currentTarget.dataset.action;
+      let points = this.data.editPoints;
+      
+      if (action === 'reduce') {
+        points = Math.max(0, points - 1);
+      } else if (action === 'add') {
+        points = Math.min(100, points + 1);
+      }
+      
+      this.setData({
+        editPoints: points
+      });
+      
+      console.log('[TaskHeatmap] 调整积分:', points);
+    },
+    
+    // 积分输入处理
+    inputPoints(e) {
+      let value = parseInt(e.detail.value);
+      
+      // 确保值为有效数字且在0-100范围内
+      if (isNaN(value)) value = 0;
+      value = Math.max(0, Math.min(100, value));
+      
+      this.setData({
+        editPoints: value
+      });
+    },
+    
+    // 描述输入处理
+    inputDescription(e) {
+      this.setData({
+        editDescription: e.detail.value
+      });
+    },
+    
+    // 取消编辑
+    cancelEdit() {
+      if (!this.data.editingTaskId) return;
+      
+      console.log('[TaskHeatmap] 取消编辑');
+      this.setData({
+        editingTaskId: null,
+        editingTaskIndex: -1,
+        editPoints: 0,
+        editDescription: '',
+        editScope: 'single',
+        showScopeInfoBubble: false
+      });
+      
+      // 清除可能存在的定时器
+      if (this.data.scopeInfoTimer) {
+        clearTimeout(this.data.scopeInfoTimer);
+        this.setData({
+          scopeInfoTimer: null
+        });
+      }
+    },
+    
+    // 保存编辑
+    saveEdit() {
+      if (this.data.editingTaskIndex < 0 || !this.data.editingTaskId) {
+        console.error('[TaskHeatmap] 没有正在编辑的任务');
+        return;
+      }
+      
+      const taskIndex = this.data.editingTaskIndex;
+      const task = this.data.dayTasks[taskIndex];
+      
+      if (!task) {
+        console.error('[TaskHeatmap] 找不到要编辑的任务');
+        this.cancelEdit();
+        return;
+      }
+      
+      console.log('[TaskHeatmap] 保存任务编辑:', task.title);
+      console.log('[TaskHeatmap] 新积分:', this.data.editPoints);
+      console.log('[TaskHeatmap] 新描述:', this.data.editDescription);
+      console.log('[TaskHeatmap] 编辑范围:', this.data.editScope);
+      
+      // 更新任务数据
+      const updatedTask = {
+        ...task,
+        points: this.data.editPoints,
+        description: this.data.editDescription
+      };
+      
+      // 更新当前日期任务列表中的任务
+      const updatedDayTasks = [...this.data.dayTasks];
+      updatedDayTasks[taskIndex] = updatedTask;
+      
+      this.setData({
+        dayTasks: updatedDayTasks
+      });
+      
+      // 向父组件发送任务更新事件
+      this.triggerEvent('taskUpdate', {
+        task: updatedTask,
+        scope: this.data.editScope,
+        date: this.data.selectedDate
+      });
+      
+      // 关闭编辑区
+      this.cancelEdit();
     },
     
     // 获取当前月份
