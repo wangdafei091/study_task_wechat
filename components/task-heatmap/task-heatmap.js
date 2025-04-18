@@ -35,7 +35,11 @@ Component({
   data: {
     days: [],
     weekDays: ['日', '一', '二', '三', '四', '五', '六'],
-    monthTitle: ''
+    monthTitle: '',
+    selectedDate: '', // 当前选中的日期
+    selectedDateText: '', // 格式化后的日期文本
+    showDayTasks: false, // 是否显示日期任务
+    dayTasks: [] // 当前日期的任务列表
   },
   
   lifetimes: {
@@ -43,6 +47,8 @@ Component({
       console.log('[TaskHeatmap] 组件挂载');
       console.log('[TaskHeatmap] 已优化热力图布局，减少垂直空间占用');
       console.log('[TaskHeatmap] 已优化热力图色阶，使用蓝色渐变提高辨识度');
+      console.log('[TaskHeatmap] 已优化任务项UI，减轻背景色厚重感，优化布局');
+      console.log('[TaskHeatmap] 已优化任务完成状态显示，使用勾标记替代删除线');
       const now = new Date();
       this.setData({
         currentYear: this.properties.currentYear || now.getFullYear(),
@@ -177,8 +183,23 @@ Component({
     
     // 格式化日期显示
     formatDateDisplay(dateStr) {
-      const [year, month, day] = dateStr.split('-').map(Number);
-      return `${month}月${day}日`;
+      if (!dateStr) return '';
+      
+      try {
+        const [year, month, day] = dateStr.split('-').map(Number);
+        const date = new Date(year, month - 1, day);
+        const weekday = this.getWeekdayName(date.getDay());
+        return `${month}月${day}日 ${weekday}`;
+      } catch (e) {
+        console.error('[TaskHeatmap] 日期格式化错误:', e);
+        return dateStr;
+      }
+    },
+    
+    // 获取星期几名称
+    getWeekdayName(day) {
+      const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+      return weekdays[day] || '';
     },
     
     // 计算热力图
@@ -190,6 +211,11 @@ Component({
       if (tasks.length === 0) {
         console.log('[TaskHeatmap] 无任务数据');
         return;
+      }
+      
+      // 打印任务数据示例，用于调试
+      if (tasks.length > 0) {
+        console.log('[TaskHeatmap] 任务数据示例:', tasks[0]);
       }
       
       // 统计每天的任务数量和完成情况
@@ -260,7 +286,10 @@ Component({
       }
       this.setData({
         currentYear,
-        currentMonth
+        currentMonth,
+        // 切换月份时清除选中状态
+        selectedDate: '',
+        showDayTasks: false
       });
       this.generateCalendar();
     },
@@ -275,17 +304,74 @@ Component({
       }
       this.setData({
         currentYear,
-        currentMonth
+        currentMonth,
+        // 切换月份时清除选中状态
+        selectedDate: '',
+        showDayTasks: false
       });
       this.generateCalendar();
     },
     
-    // 获取当前月份信息
+    // 日期点击处理
+    onDayTap(e) {
+      console.log('[TaskHeatmap] 日期点击');
+      
+      const dayData = e.currentTarget.dataset.day;
+      const date = e.currentTarget.dataset.date;
+      
+      if (!dayData.isCurrentMonth) {
+        return; // 只处理当前月的日期点击
+      }
+      
+      // 如果点击了已选中的日期，则切换显示/隐藏状态
+      if (this.data.selectedDate === date) {
+        this.setData({
+          showDayTasks: !this.data.showDayTasks
+        });
+        return;
+      }
+      
+      // 筛选该日期的任务
+      const dayTasks = this.properties.tasks.filter(task => task.date === date);
+      console.log('[TaskHeatmap] 该日期任务数:', dayTasks.length);
+      
+      // 添加调试日志，查看任务数据结构
+      if (dayTasks.length > 0) {
+        console.log('[TaskHeatmap] 任务示例:', dayTasks[0]);
+        console.log('[TaskHeatmap] 是否有循环任务:', dayTasks.some(t => t.repeat && t.repeat.enabled));
+      }
+      
+      // 更新选中状态和任务列表
+      this.setData({
+        selectedDate: date,
+        selectedDateText: this.formatDateDisplay(date),
+        dayTasks,
+        showDayTasks: true
+      });
+      
+      // 触发日期选择事件
+      this.triggerEvent('daySelect', {
+        date,
+        count: dayData.count,
+        completed: dayData.completed,
+        pending: dayData.pending,
+        tasks: dayTasks
+      });
+    },
+    
+    // 关闭日期任务列表
+    closeDayTasks() {
+      console.log('[TaskHeatmap] 关闭日期任务列表');
+      this.setData({
+        showDayTasks: false
+      });
+    },
+    
+    // 获取当前月份
     getCurrentMonth() {
       return {
         year: this.data.currentYear,
-        month: this.data.currentMonth,
-        title: this.data.monthTitle
+        month: this.data.currentMonth
       };
     }
   }

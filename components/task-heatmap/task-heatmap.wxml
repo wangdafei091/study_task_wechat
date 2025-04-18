@@ -14,14 +14,48 @@
     <view class="days">
       <block wx:for="{{days}}" wx:key="date">
         <view 
-          class="day {{item.isCurrentMonth ? 'current-month' : 'other-month'}} level-{{item.level}} {{item.isToday ? 'today' : ''}}"
+          class="day {{item.isCurrentMonth ? 'current-month' : 'other-month'}} level-{{item.level}} {{item.isToday ? 'today' : ''}} {{item.date === selectedDate ? 'selected' : ''}}"
           data-day="{{item}}" 
+          data-date="{{item.date}}"
           data-index="{{index}}"
+          bindtap="{{item.isCurrentMonth ? 'onDayTap' : ''}}"
           id="day-{{index}}">
           <text class="day-number">{{item.day}}</text>
           <text wx:if="{{item.count > 0}}" class="task-count">{{item.count}}</text>
         </view>
       </block>
     </view>
+  </view>
+  
+  <!-- 当前选中日期的任务列表 -->
+  <view class="day-tasks-container {{showDayTasks ? 'expanded' : ''}}">
+    <view class="day-tasks-header">
+      <view class="day-date">
+        <view class="date-row">
+          <text class="date-text">{{selectedDateText}}</text>
+          <text class="task-count-text" wx:if="{{dayTasks.length > 0}}">（{{dayTasks.length}}个任务）</text>
+        </view>
+      </view>
+      <view class="close-btn" bindtap="closeDayTasks">关闭</view>
+    </view>
+    
+    <scroll-view class="tasks-list" scroll-y="{{true}}">
+      <block wx:if="{{dayTasks.length > 0}}">
+        <block wx:for="{{dayTasks}}" wx:key="id">
+          <view class="task-item-wrap type-{{item.type}} {{item.status === 1 ? 'completed' : ''}}">
+            <!-- 已完成任务添加勾标记 -->
+            <text wx:if="{{item.status === 1}}" class="task-complete-mark">✓</text>
+            <view class="task-icon {{item.repeat && item.repeat.enabled ? 'repeat' : ''}} type-{{item.type}}"></view>
+            <text class="task-title">{{item.title || '未命名任务'}}</text>
+            <text class="task-time">{{item.startTime || '--:--'}}~{{item.endTime || '--:--'}}</text>
+            <text class="task-points">{{item.points || 0}}分</text>
+          </view>
+        </block>
+      </block>
+      <view wx:else class="empty-tasks">
+        <text class="empty-icon">📅</text>
+        <text class="empty-text">当天没有任务安排</text>
+      </view>
+    </scroll-view>
   </view>
 </view> 
