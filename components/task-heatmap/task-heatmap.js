@@ -108,8 +108,15 @@ Component({
         });
       }
       
+      // 计算需要的行数（根据当前填充的天数确定）
+      const totalDaysAdded = firstDay + lastDate;
+      const rowsNeeded = Math.ceil(totalDaysAdded / 7);
+      // 计算需要补充的下个月天数（确保最后一行是完整的）
+      const remainingDays = (rowsNeeded * 7) - totalDaysAdded;
+      
+      console.log(`[TaskHeatmap] 当月需要${rowsNeeded}行，补充${remainingDays}天`);
+      
       // 下个月的前几天
-      const remainingDays = 42 - days.length; // 6行7列
       for(let i = 1; i <= remainingDays; i++) {
         let nextMonth = currentMonth + 1;
         let yearOfNextMonth = currentYear;

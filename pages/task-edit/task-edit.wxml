@@ -17,6 +17,16 @@
           <view class="nav-btn next" bindtap="nextHeatmapMonth">
             <text class="nav-icon">▶</text>
           </view>
+          
+          <!-- 演示控制区 - 移到导航栏内 -->
+          <view class="demo-controls">
+            <view class="demo-btn {{isDemoData ? 'reset' : ''}}" bindtap="{{isDemoData ? 'resetDemoData' : 'generateDemoData'}}">
+              {{isDemoData ? '恢复实际' : '演示数据'}}
+            </view>
+            <view class="demo-status" wx:if="{{isDemoData}}">
+              (演示)
+            </view>
+          </view>
         </view>
       </view>
       <view class="card-subtitle">颜色深浅表示任务数量</view>
@@ -27,16 +37,6 @@
         currentMonth="{{heatmapMonthIndex}}"
         bind:monthChange="onHeatmapMonthChange">
       </task-heatmap>
-      
-      <!-- 演示控制区 -->
-      <view class="demo-controls">
-        <view class="demo-btn {{isDemoData ? 'reset' : ''}}" bindtap="{{isDemoData ? 'resetDemoData' : 'generateDemoData'}}">
-          {{isDemoData ? '恢复真实数据' : '生成演示数据'}}
-        </view>
-        <view class="demo-status" wx:if="{{isDemoData}}">
-          当前为演示数据
-        </view>
-      </view>
     </card>
     
     <!-- 底部按钮区 -->

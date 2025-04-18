@@ -1689,23 +1689,23 @@
   margin-bottom: 8rpx;
 }
 
-/* 演示控制区域样式 */
+/* 演示控制区域样式 - 调整为更小的水平布局 */
 .demo-controls {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  margin-top: 16rpx;
-  padding-top: 16rpx;
-  border-top: 1rpx solid #f0f0f0;
+  margin-left: 16rpx;
+  border-left: 1rpx solid #f0f0f0;
+  padding-left: 16rpx;
 }
 
 .demo-btn {
   background-color: #4285F4;
   color: white;
-  font-size: 24rpx;
-  padding: 10rpx 24rpx;
-  border-radius: 30rpx;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.1);
+  font-size: 20rpx;
+  padding: 6rpx 12rpx;
+  border-radius: 20rpx;
+  box-shadow: 0 1rpx 4rpx rgba(0, 0, 0, 0.1);
   transition: all 0.2s;
 }
 
@@ -1719,7 +1719,7 @@
 }
 
 .demo-status {
-  font-size: 22rpx;
+  font-size: 18rpx;
   color: #999;
-  margin-top: 8rpx;
+  margin-left: 6rpx;
 } 
