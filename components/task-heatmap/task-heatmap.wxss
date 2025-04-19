@@ -573,19 +573,32 @@
   width: 100%;
   max-height: 0;
   overflow: hidden;
-  background-color: rgba(250, 250, 250, 0.2);
+  background-color: #f7f9fc; /* 改为浅色背景 */
   border-left: 5rpx solid transparent;
+  border-bottom: 1rpx solid #e0e0e0; /* 添加底部边框 */
+  border-right: 1rpx solid #e0e0e0; /* 添加右侧边框 */
   border-bottom-left-radius: 8rpx;
   border-bottom-right-radius: 8rpx;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   opacity: 0;
-  margin: -4rpx 4rpx 6rpx 4rpx;
+  margin: -4rpx 4rpx 12rpx 4rpx; /* 增加底部间距 */
   box-sizing: border-box;
+  box-shadow: 0 0 6rpx rgba(0, 0, 0, 0.08); /* 修改为四周均匀阴影 */
 }
 
 .task-edit-container.expanded {
   max-height: 300rpx;
   opacity: 1;
+  padding-bottom: 8rpx; /* 添加底部内边距 */
+}
+
+/* 编辑区与下方任务的分界线 */
+.task-edit-container.expanded::after {
+  content: '';
+  display: block;
+  height: 6rpx;
+  background-color: #f5f5f5;
+  margin-top: 8rpx;
 }
 
 /* 类型对应的边框颜色 */
@@ -655,10 +668,19 @@
 
 /* 任务基本信息编辑区 */
 .edit-basic-area {
-  padding: 0 12rpx 12rpx;
+  padding: 6rpx 12rpx 16rpx; /* 增加顶部和底部内边距 */
+  background-color: #fff; /* 添加白色背景 */
+  border-radius: 6rpx; /* 轻微圆角 */
+  margin: 0 6rpx; /* 增加两侧间距 */
 }
 
+/* 调整编辑字段间距 */
 .edit-field {
+  margin-bottom: 16rpx; /* 增加字段间距 */
+  padding: 4rpx 0; /* 添加上下内边距 */
+}
+
+.edit-field:last-child {
   margin-bottom: 8rpx;
 }
 
@@ -726,23 +748,32 @@
 .edit-actions {
   display: flex;
   justify-content: flex-end;
-  margin-top: 10rpx;
+  margin-top: 20rpx; /* 增加与上方输入框的间距 */
+  padding-bottom: 6rpx; /* 增加底部内边距 */
 }
 
 .action-btn {
-  width: 32rpx;
-  height: 32rpx;
+  width: 48rpx; /* 增大按钮尺寸 */
+  height: 48rpx; /* 增大按钮尺寸 */
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 20rpx;
-  margin-left: 8rpx;
+  font-size: 24rpx; /* 增大图标字体 */
+  margin-left: 16rpx; /* 增加按钮间距 */
+  box-shadow: 0 2rpx 4rpx rgba(0, 0, 0, 0.1); /* 添加轻微阴影 */
+  transition: all 0.2s ease;
+}
+
+.action-btn:active {
+  transform: scale(0.95); /* 添加按下效果 */
+  opacity: 0.9;
 }
 
 .action-btn.cancel {
-  background-color: #f5f5f5;
+  background-color: #f1f1f1;
   color: #999;
+  border: 1rpx solid #e0e0e0; /* 添加边框 */
 }
 
 .action-btn.confirm.type-study {
