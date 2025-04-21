@@ -77,10 +77,10 @@
               </view>
             </view>
           </view>
-          
+         
           <!-- 描述信息 -->
           <view class="input-item">
-            <text class="task-description-label">描述</text>
+             <text class="input-label">描述</text>
             <view class="task-description-field">
               <input class="task-description-input" 
                      placeholder="{{descPlaceholder}}" 
@@ -99,41 +99,6 @@
             <text class="input-label">全天</text>
             <switch checked="{{newTask.isAllDay}}" bindchange="toggleAllDay" color="#4285F4" />
           </view>
-          
-          <!-- 开始日期和时间 -->
-          <view class="input-item date-time-item">
-            <text class="input-label">开始</text>
-            <view class="date-time-picker">
-              <picker mode="date" value="{{newTask.startDate}}" bindchange="onStartDateChange">
-                <view class="date-picker">
-                  <text class="picker-value">{{newTask.startDate || '选择日期'}}</text>
-                </view>
-              </picker>
-              <picker mode="time" value="{{newTask.startTime}}" bindchange="onStartTimeChange" wx:if="{{!newTask.isAllDay}}">
-                <view class="time-picker">
-                  <text class="picker-value">{{newTask.startTime || '选择时间'}}</text>
-                </view>
-              </picker>
-            </view>
-          </view>
-          
-          <!-- 结束日期和时间 -->
-          <view class="input-item date-time-item">
-            <text class="input-label">结束</text>
-            <view class="date-time-picker">
-              <picker mode="date" value="{{newTask.endDate}}" bindchange="onEndDateChange">
-                <view class="date-picker">
-                  <text class="picker-value">{{newTask.endDate || '选择日期'}}</text>
-                </view>
-              </picker>
-              <picker mode="time" value="{{newTask.endTime}}" bindchange="onEndTimeChange" wx:if="{{!newTask.isAllDay}}">
-                <view class="time-picker">
-                  <text class="picker-value">{{newTask.endTime || '选择时间'}}</text>
-                </view>
-              </picker>
-            </view>
-          </view>
-          
           <!-- 重复设置 -->
           <view class="input-item">
             <view class="input-item-header" bindtap="toggleRepeatOptions">
