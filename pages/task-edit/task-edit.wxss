@@ -1917,4 +1917,104 @@
 .btn-add.disabled {
   background-color: #cccccc;
   color: #999999;
+}
+
+/* 时间周期和频率编辑区域样式 */
+.time-frequency-area {
+  margin-top: 30rpx;
+  border-top: 1rpx solid #f0f0f0;
+  padding-top: 20rpx;
+}
+
+/* 开关项样式 */
+.switch-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15rpx 0;
+}
+
+/* 日期和时间选择器样式 */
+.date-time-item {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 20rpx;
+}
+
+.date-time-picker {
+  display: flex;
+  gap: 20rpx;
+  margin-top: 10rpx;
+}
+
+.date-picker, .time-picker {
+  background-color: #f8f8f8;
+  border-radius: 8rpx;
+  padding: 15rpx 20rpx;
+  flex: 1;
+}
+
+/* 选项头部样式 */
+.input-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15rpx 0;
+  cursor: pointer;
+}
+
+.repeat-value, .reminder-value {
+  flex: 1;
+  text-align: right;
+  color: #666;
+  font-size: 28rpx;
+  margin-right: 10rpx;
+}
+
+.arrow-icon {
+  color: #999;
+  font-size: 24rpx;
+}
+
+/* 重复和提醒选项样式 */
+.repeat-options, .reminder-options {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+  background-color: #f8f8f8;
+  border-radius: 8rpx;
+}
+
+.repeat-options.expanded, .reminder-options.expanded {
+  max-height: 300rpx;
+  padding: 10rpx 0;
+}
+
+.repeat-option, .reminder-option {
+  padding: 20rpx;
+  font-size: 28rpx;
+  color: #333;
+  border-bottom: 1rpx solid #f0f0f0;
+}
+
+.repeat-option:last-child, .reminder-option:last-child {
+  border-bottom: none;
+}
+
+.repeat-option.selected, .reminder-option.selected {
+  color: #4285F4;
+  position: relative;
+}
+
+.repeat-option.selected:after, .reminder-option.selected:after {
+  content: "✓";
+  position: absolute;
+  right: 20rpx;
+  color: #4285F4;
+}
+
+/* 选择器值样式 */
+.picker-value {
+  font-size: 28rpx;
+  color: #333;
 } 

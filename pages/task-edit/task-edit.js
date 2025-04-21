@@ -16,7 +16,22 @@ Page({
       title: '',
       type: 'habit', // 默认类型为习惯
       points: 5, // 默认积分
-      description: ''
+      description: '',
+      // 新增时间周期和频率相关字段
+      isAllDay: false,
+      startDate: '',
+      startTime: '08:00',
+      endDate: '',
+      endTime: '09:00',
+      repeat: {
+        type: 'none',
+        enabled: false,
+        days: []
+      },
+      reminder: {
+        enabled: false,
+        time: 0 // 提前提醒的分钟数
+      }
     },
     // 表单验证错误信息
     errors: {
@@ -24,7 +39,12 @@ Page({
     },
     // 描述字段限制常量
     descMaxLength: Constants.DESCRIPTION.MAX_LENGTH,
-    descPlaceholder: Constants.DESCRIPTION.PLACEHOLDER
+    descPlaceholder: Constants.DESCRIPTION.PLACEHOLDER,
+    // 新增UI控制字段
+    showRepeatOptions: false,
+    showReminderOptions: false,
+    repeatText: '永不',
+    reminderText: '无'
   },
 
   /**
@@ -35,6 +55,9 @@ Page({
     
     // 初始化热力图月份
     this.initHeatmapMonth();
+    
+    // 初始化日期时间数据
+    this.initDateTimeData();
     
     // 加载所有任务
     this.loadAllTasks();
@@ -311,19 +334,52 @@ Page({
    * 清空任务表单
    */
   clearTaskForm: function() {
+    // 获取当前日期和时间用于重置
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = ("0" + (today.getMonth() + 1)).slice(-2);
+    const day = ("0" + today.getDate()).slice(-2);
+    const dateStr = `${year}-${month}-${day}`;
+    
+    const hour = ("0" + today.getHours()).slice(-2);
+    const minute = ("0" + today.getMinutes()).slice(-2);
+    const timeStr = `${hour}:${minute}`;
+    
+    // 计算结束时间，默认为开始时间后一小时
+    const endHour = ("0" + ((today.getHours() + 1) % 24)).slice(-2);
+    const endTimeStr = `${endHour}:${minute}`;
+    
     this.setData({
       newTask: {
         title: '',
         type: 'habit',
         points: 5,
-        description: ''
+        description: '',
+        isAllDay: false,
+        startDate: dateStr,
+        startTime: timeStr,
+        endDate: dateStr,
+        endTime: endTimeStr,
+        repeat: {
+          type: 'none',
+          enabled: false,
+          days: []
+        },
+        reminder: {
+          enabled: false,
+          time: 0
+        }
       },
       errors: {
         title: ''
-      }
+      },
+      repeatText: '永不',
+      reminderText: '无',
+      showRepeatOptions: false,
+      showReminderOptions: false
     });
     
-    console.log('表单已清空');
+    console.log('[TaskEdit] 表单已清空');
   },
 
   /**
@@ -345,17 +401,38 @@ Page({
       return;
     }
     
+    // 验证日期和时间
+    if (!this.data.newTask.startDate) {
+      wx.showToast({
+        title: '请选择开始日期',
+        icon: 'none',
+        duration: 2000
+      });
+      return;
+    }
+    
+    if (!this.data.newTask.endDate) {
+      wx.showToast({
+        title: '请选择结束日期',
+        icon: 'none',
+        duration: 2000
+      });
+      return;
+    }
+    
+    if (!this.data.newTask.isAllDay && (!this.data.newTask.startTime || !this.data.newTask.endTime)) {
+      wx.showToast({
+        title: '请选择开始和结束时间',
+        icon: 'none',
+        duration: 2000
+      });
+      return;
+    }
+    
     try {
       // 获取应用实例
       const app = getApp();
       const allTasks = app.globalData.tasks || [];
-      
-      // 获取当前日期
-      const today = new Date();
-      const year = today.getFullYear();
-      const month = ("0" + (today.getMonth() + 1)).slice(-2);
-      const day = ("0" + today.getDate()).slice(-2);
-      const dateStr = `${year}-${month}-${day}`;
       
       // 创建新任务对象
       const taskManager = require('../../utils/taskManager.js');
@@ -364,13 +441,27 @@ Page({
         type: this.data.newTask.type,
         points: this.data.newTask.points,
         description: this.data.newTask.description,
-        date: dateStr,
-        time: '08:00', // 默认时间
+        date: this.data.newTask.startDate,
+        isAllDay: this.data.newTask.isAllDay,
+        startTime: this.data.newTask.isAllDay ? null : this.data.newTask.startTime,
+        endTime: this.data.newTask.isAllDay ? null : this.data.newTask.endTime,
+        endDate: this.data.newTask.endDate,
+        repeat: {
+          type: this.data.newTask.repeat.type,
+          enabled: this.data.newTask.repeat.enabled,
+          startDate: this.data.newTask.startDate,
+          endDate: this.data.newTask.repeat.type !== 'none' ? this.data.newTask.endDate : null,
+          days: this.data.newTask.repeat.days || []
+        },
+        reminder: {
+          enabled: this.data.newTask.reminder.enabled,
+          time: this.data.newTask.reminder.time
+        },
         status: 0, // 默认未完成
         createTime: Date.now()
       };
       
-      console.log('准备添加新任务:', newTask);
+      console.log('[TaskEdit] 准备添加新任务:', newTask);
       
       // 使用任务管理器创建任务
       taskManager.createTask(newTask, (createdTask) => {
@@ -387,10 +478,10 @@ Page({
         // 重新加载任务数据
         this.loadAllTasks();
         
-        console.log('新任务添加成功:', createdTask);
+        console.log('[TaskEdit] 新任务添加成功:', createdTask);
       });
     } catch (error) {
-      console.error('添加任务失败:', error);
+      console.error('[TaskEdit] 添加任务失败:', error);
       
       wx.showToast({
         title: '添加失败，请重试',
@@ -398,5 +489,234 @@ Page({
         duration: 2000
       });
     }
+  },
+
+  /**
+   * 初始化日期时间数据
+   */
+  initDateTimeData: function() {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = ("0" + (today.getMonth() + 1)).slice(-2);
+    const day = ("0" + today.getDate()).slice(-2);
+    const dateStr = `${year}-${month}-${day}`;
+    
+    const hour = ("0" + today.getHours()).slice(-2);
+    const minute = ("0" + today.getMinutes()).slice(-2);
+    const timeStr = `${hour}:${minute}`;
+    
+    // 计算结束时间，默认为开始时间后一小时
+    const endHour = ("0" + ((today.getHours() + 1) % 24)).slice(-2);
+    const endTimeStr = `${endHour}:${minute}`;
+    
+    this.setData({
+      'newTask.startDate': dateStr,
+      'newTask.startTime': timeStr,
+      'newTask.endDate': dateStr,
+      'newTask.endTime': endTimeStr
+    });
+    
+    console.log('[TaskEdit] 初始化日期时间:', {
+      startDate: dateStr,
+      startTime: timeStr,
+      endDate: dateStr,
+      endTime: endTimeStr
+    });
+  },
+
+  /**
+   * 全天开关切换
+   */
+  toggleAllDay: function(e) {
+    const isAllDay = e.detail.value;
+    console.log('[TaskEdit] 全天开关切换:', isAllDay);
+    
+    this.setData({
+      'newTask.isAllDay': isAllDay
+    });
+  },
+  
+  /**
+   * 开始日期选择
+   */
+  onStartDateChange: function(e) {
+    const date = e.detail.value;
+    console.log('[TaskEdit] 开始日期选择:', date);
+    
+    this.setData({
+      'newTask.startDate': date
+    });
+    
+    // 如果结束日期为空或早于开始日期，自动设置结束日期为开始日期
+    if (!this.data.newTask.endDate || this.data.newTask.endDate < date) {
+      this.setData({
+        'newTask.endDate': date
+      });
+    }
+  },
+  
+  /**
+   * 开始时间选择
+   */
+  onStartTimeChange: function(e) {
+    const time = e.detail.value;
+    console.log('[TaskEdit] 开始时间选择:', time);
+    
+    this.setData({
+      'newTask.startTime': time
+    });
+    
+    // 如果结束时间为空或早于开始时间，自动调整结束时间
+    if (this.data.newTask.startDate === this.data.newTask.endDate) {
+      const startHour = parseInt(time.split(':')[0]);
+      const startMinute = parseInt(time.split(':')[1]);
+      
+      if (!this.data.newTask.endTime) {
+        // 如果结束时间为空，设置为开始时间+1小时
+        const endHour = (startHour + 1) % 24;
+        this.setData({
+          'newTask.endTime': `${endHour.toString().padStart(2, '0')}:${startMinute.toString().padStart(2, '0')}`
+        });
+      } else {
+        // 如果结束时间早于开始时间，设置为开始时间+1小时
+        const endHour = parseInt(this.data.newTask.endTime.split(':')[0]);
+        const endMinute = parseInt(this.data.newTask.endTime.split(':')[1]);
+        
+        if (startHour > endHour || (startHour === endHour && startMinute >= endMinute)) {
+          const newEndHour = (startHour + 1) % 24;
+          this.setData({
+            'newTask.endTime': `${newEndHour.toString().padStart(2, '0')}:${startMinute.toString().padStart(2, '0')}`
+          });
+        }
+      }
+    }
+  },
+  
+  /**
+   * 结束日期选择
+   */
+  onEndDateChange: function(e) {
+    const date = e.detail.value;
+    console.log('[TaskEdit] 结束日期选择:', date);
+    
+    // 确保结束日期不早于开始日期
+    if (this.data.newTask.startDate && date < this.data.newTask.startDate) {
+      wx.showToast({
+        title: '结束日期不能早于开始日期',
+        icon: 'none',
+        duration: 2000
+      });
+      return;
+    }
+    
+    this.setData({
+      'newTask.endDate': date
+    });
+  },
+  
+  /**
+   * 结束时间选择
+   */
+  onEndTimeChange: function(e) {
+    const time = e.detail.value;
+    console.log('[TaskEdit] 结束时间选择:', time);
+    
+    // 如果是同一天，确保结束时间不早于开始时间
+    if (this.data.newTask.startDate === this.data.newTask.endDate && this.data.newTask.startTime) {
+      const startHour = parseInt(this.data.newTask.startTime.split(':')[0]);
+      const startMinute = parseInt(this.data.newTask.startTime.split(':')[1]);
+      const endHour = parseInt(time.split(':')[0]);
+      const endMinute = parseInt(time.split(':')[1]);
+      
+      if (startHour > endHour || (startHour === endHour && startMinute >= endMinute)) {
+        wx.showToast({
+          title: '结束时间不能早于开始时间',
+          icon: 'none',
+          duration: 2000
+        });
+        return;
+      }
+    }
+    
+    this.setData({
+      'newTask.endTime': time
+    });
+  },
+  
+  /**
+   * 切换重复选项
+   */
+  toggleRepeatOptions: function() {
+    this.setData({
+      showRepeatOptions: !this.data.showRepeatOptions,
+      showReminderOptions: false // 关闭提醒选项
+    });
+    
+    console.log('[TaskEdit] 切换重复选项:', this.data.showRepeatOptions);
+  },
+  
+  /**
+   * 选择重复类型
+   */
+  selectRepeatType: function(e) {
+    const type = e.currentTarget.dataset.type;
+    console.log('[TaskEdit] 选择重复类型:', type);
+    
+    let repeatText = '永不';
+    switch (type) {
+      case 'daily':
+        repeatText = '每天';
+        break;
+      case 'weekly':
+        repeatText = '每周';
+        break;
+      case 'workdays':
+        repeatText = '工作日';
+        break;
+    }
+    
+    this.setData({
+      'newTask.repeat.type': type,
+      'newTask.repeat.enabled': type !== 'none',
+      repeatText: repeatText,
+      showRepeatOptions: false
+    });
+  },
+  
+  /**
+   * 切换提醒选项
+   */
+  toggleReminderOptions: function() {
+    this.setData({
+      showReminderOptions: !this.data.showReminderOptions,
+      showRepeatOptions: false // 关闭重复选项
+    });
+    
+    console.log('[TaskEdit] 切换提醒选项:', this.data.showReminderOptions);
+  },
+  
+  /**
+   * 选择提醒类型
+   */
+  selectReminderType: function(e) {
+    const enabled = e.currentTarget.dataset.enabled === 'true';
+    const time = parseInt(e.currentTarget.dataset.time || 0);
+    console.log('[TaskEdit] 选择提醒类型:', { enabled, time });
+    
+    let reminderText = '无';
+    if (enabled) {
+      if (time === 0) {
+        reminderText = '准时';
+      } else {
+        reminderText = `提前${time}分钟`;
+      }
+    }
+    
+    this.setData({
+      'newTask.reminder.enabled': enabled,
+      'newTask.reminder.time': time,
+      reminderText: reminderText,
+      showReminderOptions: false
+    });
   }
 }) 

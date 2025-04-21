@@ -91,6 +91,89 @@
             </view>
           </view>
         </view>
+
+        <!-- 时间周期和频率编辑区域 -->
+        <view class="time-frequency-area">
+          <!-- 全天开关 -->
+          <view class="input-item switch-item">
+            <text class="input-label">全天</text>
+            <switch checked="{{newTask.isAllDay}}" bindchange="toggleAllDay" color="#4285F4" />
+          </view>
+          
+          <!-- 开始日期和时间 -->
+          <view class="input-item date-time-item">
+            <text class="input-label">开始</text>
+            <view class="date-time-picker">
+              <picker mode="date" value="{{newTask.startDate}}" bindchange="onStartDateChange">
+                <view class="date-picker">
+                  <text class="picker-value">{{newTask.startDate || '选择日期'}}</text>
+                </view>
+              </picker>
+              <picker mode="time" value="{{newTask.startTime}}" bindchange="onStartTimeChange" wx:if="{{!newTask.isAllDay}}">
+                <view class="time-picker">
+                  <text class="picker-value">{{newTask.startTime || '选择时间'}}</text>
+                </view>
+              </picker>
+            </view>
+          </view>
+          
+          <!-- 结束日期和时间 -->
+          <view class="input-item date-time-item">
+            <text class="input-label">结束</text>
+            <view class="date-time-picker">
+              <picker mode="date" value="{{newTask.endDate}}" bindchange="onEndDateChange">
+                <view class="date-picker">
+                  <text class="picker-value">{{newTask.endDate || '选择日期'}}</text>
+                </view>
+              </picker>
+              <picker mode="time" value="{{newTask.endTime}}" bindchange="onEndTimeChange" wx:if="{{!newTask.isAllDay}}">
+                <view class="time-picker">
+                  <text class="picker-value">{{newTask.endTime || '选择时间'}}</text>
+                </view>
+              </picker>
+            </view>
+          </view>
+          
+          <!-- 重复设置 -->
+          <view class="input-item">
+            <view class="input-item-header" bindtap="toggleRepeatOptions">
+              <text class="input-label">重复</text>
+              <text class="repeat-value">{{repeatText}}</text>
+              <text class="arrow-icon">{{showRepeatOptions ? '↑' : '↓'}}</text>
+            </view>
+            <view class="repeat-options {{showRepeatOptions ? 'expanded' : ''}}">
+              <view class="repeat-option {{newTask.repeat.type === 'none' ? 'selected' : ''}}" 
+                    bindtap="selectRepeatType" data-type="none">永不</view>
+              <view class="repeat-option {{newTask.repeat.type === 'daily' ? 'selected' : ''}}" 
+                    bindtap="selectRepeatType" data-type="daily">每天</view>
+              <view class="repeat-option {{newTask.repeat.type === 'weekly' ? 'selected' : ''}}" 
+                    bindtap="selectRepeatType" data-type="weekly">每周</view>
+              <view class="repeat-option {{newTask.repeat.type === 'workdays' ? 'selected' : ''}}" 
+                    bindtap="selectRepeatType" data-type="workdays">工作日</view>
+            </view>
+          </view>
+          
+          <!-- 提醒设置 -->
+          <view class="input-item">
+            <view class="input-item-header" bindtap="toggleReminderOptions">
+              <text class="input-label">提醒</text>
+              <text class="reminder-value">{{reminderText}}</text>
+              <text class="arrow-icon">{{showReminderOptions ? '↑' : '↓'}}</text>
+            </view>
+            <view class="reminder-options {{showReminderOptions ? 'expanded' : ''}}">
+              <view class="reminder-option {{!newTask.reminder.enabled ? 'selected' : ''}}" 
+                    bindtap="selectReminderType" data-enabled="false">无</view>
+              <view class="reminder-option {{newTask.reminder.enabled && newTask.reminder.time === 0 ? 'selected' : ''}}" 
+                    bindtap="selectReminderType" data-enabled="true" data-time="0">准时</view>
+              <view class="reminder-option {{newTask.reminder.enabled && newTask.reminder.time === 5 ? 'selected' : ''}}" 
+                    bindtap="selectReminderType" data-enabled="true" data-time="5">提前5分钟</view>
+              <view class="reminder-option {{newTask.reminder.enabled && newTask.reminder.time === 15 ? 'selected' : ''}}" 
+                    bindtap="selectReminderType" data-enabled="true" data-time="15">提前15分钟</view>
+              <view class="reminder-option {{newTask.reminder.enabled && newTask.reminder.time === 30 ? 'selected' : ''}}" 
+                    bindtap="selectReminderType" data-enabled="true" data-time="30">提前30分钟</view>
+            </view>
+          </view>
+        </view>
         
         <!-- 按钮区域 -->
         <view class="button-area">
