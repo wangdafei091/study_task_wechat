@@ -3,7 +3,6 @@
     "pages/index/index",
     "pages/task-edit/task-edit",
     "pages/task/task",
-    "pages/create/create",
     "pages/rewards/rewards",
     "pages/message/message"
   ],
