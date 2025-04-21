@@ -154,6 +154,7 @@
 - 2024-04-15：实现模板选择器通用组件化
 - 2024-04-20：完成全面的适配性优化，支持多种设备尺寸和方向
 - 2024-04-25：将任务分布热力图功能从任务编辑页面抽取为独立功能模块
+- 2024-04-28：精简代码库，删除未使用的组件，提升项目维护性
 
 ## 开发环境
 
@@ -173,18 +174,12 @@
 ├── app.json               # 应用配置
 ├── app.wxss              # 全局样式
 ├── components/           # 自定义组件
-│   ├── calendar/        # 日历组件
 │   ├── card/           # 卡片容器组件
-│   ├── date-picker/    # 日期选择器
+│   ├── custom-input-modal/ # 自定义输入模态框组件
 │   ├── float-menu/     # 浮动菜单
 │   ├── progressBar/    # 进度条组件
 │   ├── progressRing/   # 圆环进度组件
-│   ├── recentTasks/    # 最近任务组件
-│   ├── repeat-selector/ # 重复任务选择器
-│   ├── task-execution-settings/ # 任务执行设置
 │   ├── task-heatmap/   # 任务热力图组件
-│   ├── task-info/      # 任务信息组件
-│   ├── task-templates/ # 任务模板组件
 │   ├── taskItem/       # 任务项组件
 │   ├── template-selector/ # 模板选择器组件
 │   └── upcomingTask/   # 即将开始任务组件
@@ -192,9 +187,9 @@
 │   ├── index/          # 首页(任务日历)
 │   ├── task-edit/      # 任务分布页面
 │   ├── task/           # 任务详情页
-│   ├── create/         # 创建任务页
 │   ├── rewards/        # 奖励页面
-│   └── message/        # 消息页面
+│   ├── message/        # 消息页面
+│   └── history/        # 历史记录页面
 ├── utils/              # 工具类
 │   ├── dateUtils.js    # 日期处理工具
 │   ├── feedbackUtils.js # 反馈工具
@@ -338,6 +333,14 @@
    - 避免过度日志记录
 
 ## 更新日志
+
+### v1.1.4 (2024-04-28)
+- 精简代码库，删除未使用的组件
+- 删除了task-info、task-templates、repeat-selector等未使用组件
+- 删除了date-picker、calendar-picker、recentTasks等冗余组件
+- 删除了task-execution-settings组件
+- 优化项目结构，提升维护性
+- 更新项目文档，反映最新代码状态
 
 ### v1.1.3 (2024-04-25)
 - 将任务分布热力图功能从任务编辑页面抽取为独立功能

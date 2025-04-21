@@ -1,8 +1,0 @@
-{
-  "component": true,
-  "usingComponents": {
-    "date-picker": "../date-picker/date-picker",
-    "repeat-selector": "../repeat-selector/repeat-selector",
-    "calendar-picker": "../calendar-picker/calendar-picker"
-  }
-} 

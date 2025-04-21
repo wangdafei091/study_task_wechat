@@ -182,21 +182,19 @@
    - 模板选择器组件 (template-selector)
    - 进度环组件 (progressRing)
    - 进度条组件 (progressBar)
-   - 日历组件 (calendar)
-   - 日期选择器组件 (date-picker)
-   - 消息通知组件 (message)
-   - 奖励展示组件 (reward)
-   - 统计分析组件 (statistics)
+   - 浮动菜单组件 (float-menu)
+   - 任务热力图组件 (task-heatmap)
+   - 卡片容器组件 (card)
+   - 自定义输入模态框组件 (custom-input-modal)
+   - 即将开始任务组件 (upcomingTask)
 
 2. 组件依赖
    - 任务项组件依赖进度环组件
    - 进度条组件依赖任务管理
-   - 日历组件依赖日期选择器
-   - 日期选择器依赖任务管理
+   - 模板选择器组件依赖自定义输入模态框组件
    - 模板选择器组件依赖任务管理
-   - 消息通知组件依赖任务管理
-   - 奖励展示组件依赖任务管理
-   - 统计分析组件依赖任务管理
+   - 任务热力图组件依赖卡片组件
+   - 即将开始任务组件依赖任务管理
    - 全局状态管理依赖所有组件
 
 3. 组件通信
@@ -216,7 +214,7 @@
      // 输入属性
      templates: Array,  // 模板数据列表
      selectedId: String, // 已选模板ID
-     type: String,      // 任务类型(study/habit/clock/bag)
+     type: String,      // 任务类型(study/habit/interest)
      showCustom: Boolean, // 是否显示自定义按钮
      maxDisplay: Number,  // 最大显示数量
      customText: String,  // 自定义按钮文本
@@ -235,7 +233,7 @@
    ```javascript
    {
      id: string,
-     type: 'clock' | 'bag' | 'study',
+     type: 'habit' | 'study' | 'interest',
      title: string,
      status: 0 | 1,
      date: string,
