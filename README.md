@@ -256,7 +256,7 @@
 
 3. **任务热力图组件 (task-heatmap)**
    - 功能：以热力图形式展示任务分布情况
-   - 特点：支持月份导航、演示数据生成
+   - 特点：支持月份导航、演示数据生成、任务编辑
    - 接口：
      ```javascript
      {
@@ -267,7 +267,9 @@
        
        // 输出事件
        events: {
-         monthChange: {year, month, monthName} // 月份变更事件
+         monthChange: {year, month, monthName}, // 月份变更事件
+         daySelect: {date, tasks}, // 日期选择事件
+         editTask: {taskId, points, description, editScope} // 任务编辑事件
        }
      }
      ```
