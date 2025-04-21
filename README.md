@@ -175,13 +175,11 @@
 ├── app.wxss              # 全局样式
 ├── components/           # 自定义组件
 │   ├── card/           # 卡片容器组件
-│   ├── custom-input-modal/ # 自定义输入模态框组件
 │   ├── float-menu/     # 浮动菜单
 │   ├── progressBar/    # 进度条组件
 │   ├── progressRing/   # 圆环进度组件
 │   ├── task-heatmap/   # 任务热力图组件
 │   ├── taskItem/       # 任务项组件
-│   ├── template-selector/ # 模板选择器组件
 │   └── upcomingTask/   # 即将开始任务组件
 ├── pages/               # 页面文件
 │   ├── index/          # 首页(任务日历)
@@ -203,28 +201,6 @@
 
 ## 关键组件
 
-1. **模板选择器组件 (template-selector)**
-   - 功能：展示和选择常用任务模板
-   - 全局组件：已在app.json中注册
-   - 接口：
-     ```javascript
-     {
-       // 输入属性
-       templates: Array,  // 模板数据列表
-       selectedId: String, // 已选模板ID
-       type: String,      // 任务类型(study/habit/interest)
-       showCustom: Boolean, // 是否显示自定义按钮
-       maxDisplay: Number,  // 最大显示数量
-       customText: String,  // 自定义按钮文本
-       title: String,       // 组件标题
-       
-       // 输出事件
-       events: {
-         select: {templateId, template}, // 选择模板事件
-         custom: {type}                  // 自定义模板事件
-       }
-     }
-     ```
 
 2. **进度环组件 (progressRing)**
    - 功能：圆环形进度显示
