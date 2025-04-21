@@ -1,4 +1,7 @@
 /* pages/create/create.wxss */
+/* 引入共享样式 */
+@import "/styles/common-task.wxss";
+
 .container {
   padding: 30rpx;
   background: #F8F9FA;
@@ -271,4 +274,9 @@
 
 .type-list .type-item:last-child {
   border-bottom: none;
+}
+
+/* 页面特定的样式调整 */
+.task-section .task-description-field {
+  margin-bottom: 8rpx;
 } 

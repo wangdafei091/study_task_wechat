@@ -96,9 +96,13 @@
               
               <view class="edit-field">
                 <text class="field-label">描述:</text>
-                <view class="description-input-wrap">
-                  <input class="description-input" type="text" maxlength="20" value="{{editDescription}}" bindinput="inputDescription" />
-                  <text class="char-count">{{editDescription.length}}/20</text>
+                <view class="task-description-field">
+                  <input class="task-description-input" 
+                         placeholder="{{descPlaceholder}}" 
+                         value="{{editDescription}}" 
+                         bindinput="inputDescription" 
+                         maxlength="{{descMaxLength}}" />
+                  <text class="task-description-counter">{{editDescription.length}}/{{descMaxLength}}</text>
                 </view>
               </view>
               

@@ -1,4 +1,6 @@
 // pages/create/create.js
+const Constants = require('../../utils/constants.js');
+
 Page({
 
   /**
@@ -25,7 +27,10 @@ Page({
     ],
     showTypeSelector: false,
     dateNow: '',
-    timeNow: ''
+    timeNow: '',
+    // 描述字段限制常量
+    descMaxLength: Constants.DESCRIPTION.MAX_LENGTH,
+    descPlaceholder: Constants.DESCRIPTION.PLACEHOLDER
   },
 
   /**
@@ -148,8 +153,13 @@ Page({
    * 输入任务描述
    */
   inputDescription: function (e) {
+    const value = e.detail.value;
+    
+    // 记录日志
+    console.log('创建页面描述输入:', value, `长度: ${value.length}/${this.data.descMaxLength}`);
+    
     this.setData({
-      'task.description': e.detail.value
+      'task.description': value
     });
   },
 

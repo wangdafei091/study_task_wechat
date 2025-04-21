@@ -1,0 +1,39 @@
+/* 任务描述字段统一样式 */
+.task-description-field {
+  position: relative;
+  width: 100%;
+  background-color: #f7f7f7;
+  border-radius: 8rpx;
+  padding: 16rpx;
+  box-sizing: border-box;
+  border: 1rpx solid #e0e0e0;
+}
+
+.task-description-input {
+  width: 100%;
+  height: 60rpx;
+  font-size: 28rpx;
+  color: #333;
+  padding-right: 70rpx; /* 为计数器留出空间 */
+}
+
+.task-description-counter {
+  position: absolute;
+  bottom: 12rpx;
+  right: 16rpx;
+  font-size: 22rpx;
+  color: #999;
+}
+
+.task-description-label {
+  font-size: 28rpx;
+  color: #666;
+  margin-bottom: 10rpx;
+  display: block;
+}
+
+/* 禁用状态样式 */
+.task-description-input.disabled {
+  background-color: #f0f0f0;
+  color: #999;
+} 

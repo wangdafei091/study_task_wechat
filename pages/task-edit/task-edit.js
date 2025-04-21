@@ -1,4 +1,5 @@
 const app = getApp();
+const Constants = require('../../utils/constants.js');
 
 Page({
   /**
@@ -6,10 +7,24 @@ Page({
    */
   data: {
     allTasks: [],
-    heatmapYear: new Date().getFullYear(),
-    heatmapMonthIndex: new Date().getMonth(),
+    heatmapYear: null,
+    heatmapMonthIndex: null,
     heatmapMonth: '',
-    isDemoData: false
+    isDemoData: false,
+    // 添加新任务表单数据
+    newTask: {
+      title: '',
+      type: 'habit', // 默认类型为习惯
+      points: 5, // 默认积分
+      description: ''
+    },
+    // 表单验证错误信息
+    errors: {
+      title: ''
+    },
+    // 描述字段限制常量
+    descMaxLength: Constants.DESCRIPTION.MAX_LENGTH,
+    descPlaceholder: Constants.DESCRIPTION.PLACEHOLDER
   },
 
   /**
@@ -50,36 +65,44 @@ Page({
   loadAllTasks: function() {
     console.log('[TaskEdit] 加载所有任务数据');
     
-    wx.getStorage({
-      key: 'taskData',
-      success: res => {
-        const tasks = res.data || [];
-        this.setData({
-          allTasks: tasks
-        });
-        console.log('[TaskEdit] 成功加载任务数据，数量:', tasks.length);
-      },
-      fail: err => {
-        console.error('[TaskEdit] 加载任务数据失败:', err);
-        this.setData({
-          allTasks: []
-        });
-      }
-    });
+    try {
+      const allTasks = app.globalData.tasks || [];
+      
+      this.setData({ 
+        allTasks: allTasks,
+        isDemoData: false 
+      });
+      
+      console.log('任务数据加载成功，共 ' + allTasks.length + ' 个任务');
+    } catch (error) {
+      console.error('加载任务数据失败:', error);
+      
+      wx.showToast({
+        title: '加载数据失败',
+        icon: 'none',
+        duration: 2000
+      });
+    }
   },
 
   /**
    * 初始化热力图月份信息
    */
   initHeatmapMonth: function() {
-    const now = new Date();
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = today.getMonth();
+    
+    this.setData({ 
+      heatmapYear: year,
+      heatmapMonthIndex: month
+    });
+    
     const monthNames = ['一月', '二月', '三月', '四月', '五月', '六月', 
                       '七月', '八月', '九月', '十月', '十一月', '十二月'];
     
     this.setData({
-      heatmapYear: now.getFullYear(),
-      heatmapMonthIndex: now.getMonth(),
-      heatmapMonth: `${now.getFullYear()}年${monthNames[now.getMonth()]}`
+      heatmapMonth: `${year}年${monthNames[month]}`
     });
     
     console.log('[TaskEdit] 初始化热力图月份:', this.data.heatmapMonth);
@@ -139,116 +162,59 @@ Page({
   generateDemoData: function() {
     console.log('[TaskEdit] 生成热力图演示数据');
     
-    // 获取当前月份和年份
-    const now = new Date();
-    const currentYear = this.data.heatmapYear || now.getFullYear();
-    const currentMonth = this.data.heatmapMonthIndex || now.getMonth();
-    
-    // 获取当月天数
-    const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
-    
-    // 创建任务示例数据数组
-    const demoTasks = [];
-    
-    // 生成当月随机任务数据 - 不同密度的热点
-    // 高密度区域 (10-15天)
-    const highDensityDay = Math.floor(Math.random() * 15) + 10;
-    // 中密度区域 (20-25天)
-    const mediumDensityDay = Math.floor(Math.random() * 5) + 20;
-    
-    // 遍历当月所有天数
-    for (let day = 1; day <= daysInMonth; day++) {
-      // 格式化日期
-      const date = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    try {
+      // 保存当前的任务数据备份
+      const app = getApp();
+      const realTasks = app.globalData.tasks || [];
+      this._realTasksBackup = [...realTasks];
       
-      // 根据日期生成不同数量的任务
-      let taskCount = 0;
+      // 生成一个月的随机任务
+      const demoTasks = [];
+      const year = this.data.heatmapYear;
+      const month = this.data.heatmapMonthIndex;
       
-      if (day === highDensityDay) {
-        // 高密度日期 - 7-10个任务
-        taskCount = Math.floor(Math.random() * 4) + 7;
-      } else if (day === mediumDensityDay) {
-        // 中密度日期 - 4-6个任务
-        taskCount = Math.floor(Math.random() * 3) + 4;
-      } else if (day % 3 === 0) {
-        // 每3天出现的规律 - 2-3个任务
-        taskCount = Math.floor(Math.random() * 2) + 2;
-      } else if (day % 2 === 0) {
-        // 每2天出现的规律 - 1个任务
-        taskCount = 1;
-      } else if (Math.random() > 0.6) {
-        // 随机日期 - 40%的概率有1个任务
-        taskCount = 1;
-      }
+      // 获取指定月份的天数
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
       
-      // 生成指定数量的任务
+      // 随机生成30-60个任务
+      const taskCount = Math.floor(Math.random() * 30) + 30;
+      
       for (let i = 0; i < taskCount; i++) {
-        const task = {
-          id: `demo-${date}-${i}`,
-          title: `演示任务 ${i+1}`,
-          date: date,
-          // 50%概率完成状态
-          status: Math.random() > 0.5 ? 1 : 0,
-          category: ['study', 'habit', 'interest'][Math.floor(Math.random() * 3)]
-        };
+        // 随机日期（1到月底）
+        const day = Math.floor(Math.random() * daysInMonth) + 1;
+        const dateStr = `${year}-${(month + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
         
-        demoTasks.push(task);
-      }
-    }
-    
-    // 添加过去和未来月份的一些数据点
-    const prevMonth = currentMonth === 0 ? 11 : currentMonth - 1;
-    const prevYear = currentMonth === 0 ? currentYear - 1 : currentYear;
-    const nextMonth = currentMonth === 11 ? 0 : currentMonth + 1;
-    const nextYear = currentMonth === 11 ? currentYear + 1 : currentYear;
-    
-    // 添加上个月的几个任务
-    for (let i = 25; i <= 30; i++) {
-      if (Math.random() > 0.5) {
-        const date = `${prevYear}-${String(prevMonth + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
-        const taskCount = Math.floor(Math.random() * 2) + 1;
+        // 随机类型
+        const types = ['habit', 'study', 'interest'];
+        const typeIndex = Math.floor(Math.random() * types.length);
         
-        for (let j = 0; j < taskCount; j++) {
-          demoTasks.push({
-            id: `demo-prev-${date}-${j}`,
-            title: `上月任务 ${j+1}`,
-            date: date,
-            status: Math.random() > 0.7 ? 1 : 0, // 上个月大部分任务已完成
-            category: ['study', 'habit', 'interest'][Math.floor(Math.random() * 3)]
-          });
-        }
-      }
-    }
-    
-    // 添加下个月的几个任务
-    for (let i = 1; i <= 5; i++) {
-      if (Math.random() > 0.7) {
-        const date = `${nextYear}-${String(nextMonth + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+        // 随机完成状态（60%的概率完成）
+        const completed = Math.random() < 0.6;
         
         demoTasks.push({
-          id: `demo-next-${date}-0`,
-          title: `下月任务`,
-          date: date,
-          status: 0, // 下个月的任务都未完成
-          category: ['study', 'habit', 'interest'][Math.floor(Math.random() * 3)]
+          id: `demo_${i}`,
+          title: `示例任务 ${i + 1}`,
+          type: types[typeIndex],
+          date: dateStr,
+          status: completed ? 1 : 0,
+          points: Math.floor(Math.random() * 20) + 1
         });
       }
+      
+      // 更新演示数据
+      this.setData({ 
+        allTasks: demoTasks,
+        isDemoData: true 
+      });
+      
+      wx.showToast({
+        title: '已加载演示数据',
+        icon: 'none',
+        duration: 2000
+      });
+    } catch (error) {
+      console.error('生成演示数据失败:', error);
     }
-    
-    console.log('[TaskEdit] 生成演示数据完成，任务总数:', demoTasks.length);
-    
-    // 更新页面数据
-    this.setData({
-      allTasks: demoTasks,
-      isDemoData: true
-    });
-    
-    // 显示提示
-    wx.showToast({
-      title: `已生成${demoTasks.length}条演示数据`,
-      icon: 'none',
-      duration: 2000
-    });
   },
 
   /**
@@ -261,6 +227,173 @@ Page({
       
       wx.showToast({
         title: '已恢复真实数据',
+        icon: 'none',
+        duration: 2000
+      });
+    }
+  },
+
+  /**
+   * 处理任务标题输入
+   */
+  onTaskTitleInput: function(e) {
+    this.setData({
+      'newTask.title': e.detail.value,
+      'errors.title': ''
+    });
+    
+    console.log('任务标题输入:', e.detail.value);
+  },
+
+  /**
+   * 选择任务类型
+   */
+  selectTaskType: function(e) {
+    const type = e.currentTarget.dataset.type;
+    this.setData({
+      'newTask.type': type
+    });
+    
+    console.log('选择任务类型:', type);
+  },
+
+  /**
+   * 更改积分
+   */
+  changePoints: function(e) {
+    const action = e.currentTarget.dataset.action;
+    let points = this.data.newTask.points;
+    
+    if (action === 'plus') {
+      points = Math.min(points + 1, 50); // 上限50分
+    } else if (action === 'minus') {
+      points = Math.max(points - 1, 1); // 下限1分
+    }
+    
+    this.setData({
+      'newTask.points': points
+    });
+    
+    console.log('积分更改:', points);
+  },
+
+  /**
+   * 处理积分输入
+   */
+  onPointsInput: function(e) {
+    let points = parseInt(e.detail.value) || 0;
+    
+    // 限制积分范围
+    points = Math.max(1, Math.min(50, points));
+    
+    this.setData({
+      'newTask.points': points
+    });
+    
+    console.log('积分输入:', points);
+  },
+
+  /**
+   * 处理描述输入
+   */
+  onDescriptionInput: function(e) {
+    const value = e.detail.value;
+    
+    // 记录日志
+    console.log('描述输入:', value, `长度: ${value.length}/${this.data.descMaxLength}`);
+    
+    this.setData({
+      'newTask.description': value
+    });
+  },
+
+  /**
+   * 清空任务表单
+   */
+  clearTaskForm: function() {
+    this.setData({
+      newTask: {
+        title: '',
+        type: 'habit',
+        points: 5,
+        description: ''
+      },
+      errors: {
+        title: ''
+      }
+    });
+    
+    console.log('表单已清空');
+  },
+
+  /**
+   * 添加任务
+   */
+  addTask: function() {
+    // 表单验证
+    if (!this.data.newTask.title.trim()) {
+      this.setData({
+        'errors.title': '请输入任务名称'
+      });
+      
+      wx.showToast({
+        title: '请输入任务名称',
+        icon: 'none',
+        duration: 2000
+      });
+      
+      return;
+    }
+    
+    try {
+      // 获取应用实例
+      const app = getApp();
+      const allTasks = app.globalData.tasks || [];
+      
+      // 获取当前日期
+      const today = new Date();
+      const year = today.getFullYear();
+      const month = ("0" + (today.getMonth() + 1)).slice(-2);
+      const day = ("0" + today.getDate()).slice(-2);
+      const dateStr = `${year}-${month}-${day}`;
+      
+      // 创建新任务对象
+      const taskManager = require('../../utils/taskManager.js');
+      const newTask = {
+        title: this.data.newTask.title,
+        type: this.data.newTask.type,
+        points: this.data.newTask.points,
+        description: this.data.newTask.description,
+        date: dateStr,
+        time: '08:00', // 默认时间
+        status: 0, // 默认未完成
+        createTime: Date.now()
+      };
+      
+      console.log('准备添加新任务:', newTask);
+      
+      // 使用任务管理器创建任务
+      taskManager.createTask(newTask, (createdTask) => {
+        // 添加成功
+        wx.showToast({
+          title: '添加成功',
+          icon: 'success',
+          duration: 2000
+        });
+        
+        // 清空表单
+        this.clearTaskForm();
+        
+        // 重新加载任务数据
+        this.loadAllTasks();
+        
+        console.log('新任务添加成功:', createdTask);
+      });
+    } catch (error) {
+      console.error('添加任务失败:', error);
+      
+      wx.showToast({
+        title: '添加失败，请重试',
         icon: 'none',
         duration: 2000
       });

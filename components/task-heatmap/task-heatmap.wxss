@@ -1,4 +1,19 @@
 /* components/task-heatmap/task-heatmap.wxss */
+/* 引入共享样式 */
+@import "/styles/common-task.wxss";
+
+/* 组件特定的样式调整 */
+.edit-field .task-description-field {
+  flex: 1;
+  margin-left: 10rpx;
+}
+
+.edit-field {
+  display: flex;
+  align-items: center;
+  margin-bottom: 16rpx;
+}
+
 .task-heatmap {
   background-color: #ffffff;
   border-radius: 12rpx;

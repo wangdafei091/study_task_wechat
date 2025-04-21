@@ -1,3 +1,5 @@
+const Constants = require('../../utils/constants.js');
+
 Component({
   properties: {
     tasks: {
@@ -53,7 +55,11 @@ Component({
     editScope: 'single', // 编辑范围，single-仅今天，all-整个循环
     showScopeInfoBubble: false, // 是否显示范围说明气泡
     scopeInfoStyle: '', // 范围说明气泡样式
-    scopeInfoTimer: null // 范围说明气泡定时器
+    scopeInfoTimer: null, // 范围说明气泡定时器
+    
+    // 描述字段限制常量
+    descMaxLength: Constants.DESCRIPTION.MAX_LENGTH,
+    descPlaceholder: Constants.DESCRIPTION.PLACEHOLDER
   },
   
   lifetimes: {
@@ -614,10 +620,17 @@ Component({
       });
     },
     
-    // 描述输入处理
+    /**
+     * 输入描述文本
+     */
     inputDescription(e) {
+      const value = e.detail.value;
+      
+      // 记录日志
+      console.log('[TaskHeatmap] 编辑描述:', value, `长度: ${value.length}/${this.data.descMaxLength}`);
+      
       this.setData({
-        editDescription: e.detail.value
+        editDescription: value
       });
     },
     
