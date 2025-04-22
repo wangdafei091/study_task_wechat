@@ -888,9 +888,17 @@ Page({
       });
     }
     
-    // 计算需要添加的下个月日期数量，确保总行数为6行
+    // 计算需要添加的下个月日期数量
+    // 计算当前用了多少格子
     const totalDays = firstDayOfWeek - 1 + daysInMonth;
-    const remainingDays = 42 - totalDays; // 6行*7列 = 42
+    // 计算需要多少行展示(向上取整)
+    const rowsNeeded = Math.ceil(totalDays / 7);
+    // 计算展示这些行需要的总格子数
+    const totalCells = rowsNeeded * 7;
+    // 需要添加的下个月天数
+    const remainingDays = totalCells - totalDays;
+    
+    console.log(`[TaskEdit] 日历计算: 当月${daysInMonth}天, 需要${rowsNeeded}行, 总格子${totalCells}, 剩余${remainingDays}个格子`);
     
     // 添加下个月的日期
     for (let i = 1; i <= remainingDays; i++) {

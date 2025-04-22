@@ -143,9 +143,6 @@
                   {{item.day}}
                 </view>
               </view>
-              <view class="calendar-footer">
-                <view class="calendar-btn" bindtap="selectToday" data-type="start">今天</view>
-              </view>
             </view>
           </view>
 
@@ -178,7 +175,6 @@
               <view class="quick-option" bindtap="selectQuickTime" data-time="08:00" data-type="start">8:00</view>
               <view class="quick-option" bindtap="selectQuickTime" data-time="12:00" data-type="start">12:00</view>
               <view class="quick-option" bindtap="selectQuickTime" data-time="18:00" data-type="start">18:00</view>
-              <view class="quick-option" bindtap="selectQuickTime" data-time="21:00" data-type="start">21:00</view>
             </view>
           </view>
 
@@ -225,9 +221,6 @@
                   {{item.day}}
                 </view>
               </view>
-              <view class="calendar-footer">
-                <view class="calendar-btn" bindtap="selectToday" data-type="end">今天</view>
-              </view>
             </view>
           </view>
 
@@ -260,7 +253,6 @@
               <view class="quick-option" bindtap="selectQuickTime" data-time="09:00" data-type="end">9:00</view>
               <view class="quick-option" bindtap="selectQuickTime" data-time="13:00" data-type="end">13:00</view>
               <view class="quick-option" bindtap="selectQuickTime" data-time="19:00" data-type="end">19:00</view>
-              <view class="quick-option" bindtap="selectQuickTime" data-time="22:00" data-type="end">22:00</view>
             </view>
           </view>
           

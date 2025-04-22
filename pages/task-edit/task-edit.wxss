@@ -544,20 +544,20 @@
   background-color: #4285F4;
 }
 
+/* 强化今天日期的样式 */
+.calendar-day.today {
+  font-weight: 600;
+  color: #4285F4;
+  box-shadow: inset 0 0 0 1rpx rgba(66, 133, 244, 0.3);
+}
+
+/* 删除不再需要的日历底部样式 */
 .calendar-footer {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 6rpx;
-  padding-top: 6rpx;
-  border-top: 1rpx solid #f0f0f0;
+  display: none;
 }
 
 .calendar-btn {
-  padding: 6rpx 16rpx;
-  font-size: 22rpx;
-  color: #4285F4;
-  background-color: rgba(66, 133, 244, 0.1);
-  border-radius: 30rpx;
+  display: none;
 }
 
 /* 时间选择面板 */
