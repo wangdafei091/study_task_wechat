@@ -921,7 +921,7 @@ Page({
       });
     }
     
-    console.log(`[TaskEdit] 生成${type}日历数据完成`, days.length);
+    console.log(`[TaskEdit] 生成${type}日历数据完成`, days.length, '天');
   },
   
   /**
@@ -960,7 +960,7 @@ Page({
     }
     
     this.generateCalendarDays(type);
-    console.log(`[TaskEdit] ${type}面板切换到上个月:`, year, month);
+    console.log(`[TaskEdit] ${type}面板切换到上个月:`, year, month, '用户操作');
   },
   
   nextMonth: function(e) {
@@ -996,7 +996,7 @@ Page({
     }
     
     this.generateCalendarDays(type);
-    console.log(`[TaskEdit] ${type}面板切换到下个月:`, year, month);
+    console.log(`[TaskEdit] ${type}面板切换到下个月:`, year, month, '用户操作');
   },
   
   /**
@@ -1004,7 +1004,7 @@ Page({
    */
   selectStartDate: function(e) {
     const date = e.currentTarget.dataset.date;
-    console.log('[TaskEdit] 选择开始日期:', date);
+    console.log('[TaskEdit] 选择开始日期:', date, '用户点击');
     
     this.setData({
       'newTask.startDate': date,
@@ -1016,12 +1016,13 @@ Page({
       this.setData({
         'newTask.endDate': date
       });
+      console.log('[TaskEdit] 自动调整结束日期为:', date, '(原结束日期早于新开始日期)');
     }
   },
   
   selectEndDate: function(e) {
     const date = e.currentTarget.dataset.date;
-    console.log('[TaskEdit] 选择结束日期:', date);
+    console.log('[TaskEdit] 选择结束日期:', date, '用户点击');
     
     // 确保结束日期不早于开始日期
     if (this.data.newTask.startDate && date < this.data.newTask.startDate) {
@@ -1030,6 +1031,7 @@ Page({
         icon: 'none',
         duration: 2000
       });
+      console.log('[TaskEdit] 结束日期选择被拒绝:', date, '早于开始日期', this.data.newTask.startDate);
       return;
     }
     
@@ -1172,6 +1174,8 @@ Page({
     const day = today.getDate();
     const dateStr = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
     
+    console.log(`[TaskEdit] 选择${type === 'start' ? '开始' : '结束'}日期为今天:`, dateStr, '用户点击');
+    
     if (type === 'start') {
       this.setData({
         'newTask.startDate': dateStr,
@@ -1185,6 +1189,7 @@ Page({
         this.setData({
           'newTask.endDate': dateStr
         });
+        console.log('[TaskEdit] 自动调整结束日期为今天:', dateStr, '(原结束日期早于今天)');
       }
       
       this.generateCalendarDays('start');
@@ -1196,6 +1201,7 @@ Page({
           icon: 'none',
           duration: 2000
         });
+        console.log('[TaskEdit] 结束日期选择今天被拒绝:', dateStr, '早于开始日期', this.data.newTask.startDate);
         return;
       }
       
@@ -1208,8 +1214,6 @@ Page({
       
       this.generateCalendarDays('end');
     }
-    
-    console.log(`[TaskEdit] 选择${type === 'start' ? '开始' : '结束'}日期为今天:`, dateStr);
   },
   
   /**
