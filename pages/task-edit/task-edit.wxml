@@ -99,6 +99,37 @@
             <text class="input-label">全天</text>
             <switch checked="{{newTask.isAllDay}}" bindchange="toggleAllDay" color="#4285F4" />
           </view>
+          
+          <!-- 开始时间选择 -->
+          <view class="input-item time-item">
+            <text class="input-label">开始时间</text>
+            <view class="time-selector">
+              <picker mode="date" value="{{newTask.startDate}}" bindchange="onStartDateChange">
+                <view class="date-picker">{{newTask.startDate}}</view>
+              </picker>
+              <picker mode="time" value="{{newTask.startTime}}" bindchange="onStartTimeChange" disabled="{{newTask.isAllDay}}">
+                <view class="time-picker {{newTask.isAllDay ? 'disabled' : ''}}">
+                  {{newTask.isAllDay ? '全天' : newTask.startTime}}
+                </view>
+              </picker>
+            </view>
+          </view>
+
+          <!-- 结束时间选择 -->
+          <view class="input-item time-item">
+            <text class="input-label">结束时间</text>
+            <view class="time-selector">
+              <picker mode="date" value="{{newTask.endDate}}" bindchange="onEndDateChange">
+                <view class="date-picker">{{newTask.endDate}}</view>
+              </picker>
+              <picker mode="time" value="{{newTask.endTime}}" bindchange="onEndTimeChange" disabled="{{newTask.isAllDay}}">
+                <view class="time-picker {{newTask.isAllDay ? 'disabled' : ''}}">
+                  {{newTask.isAllDay ? '全天' : newTask.endTime}}
+                </view>
+              </picker>
+            </view>
+          </view>
+          
           <!-- 重复设置 -->
           <view class="input-item">
             <view class="input-item-header" bindtap="toggleRepeatOptions">

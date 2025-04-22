@@ -309,8 +309,6 @@
   padding-top: 20rpx;
 }
 
-
-
 /* 开关项样式 */
 .switch-item {
   display: flex;
@@ -377,4 +375,39 @@
   position: absolute;
   right: 20rpx;
   color: #4285F4;
+}
+
+/* 时间选择器样式 */
+.time-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20rpx;
+}
+
+.time-selector {
+  display: flex;
+  align-items: center;
+}
+
+.date-picker, .time-picker {
+  background-color: #f5f5f5;
+  padding: 12rpx 20rpx;
+  border-radius: 8rpx;
+  font-size: 28rpx;
+  text-align: center;
+}
+
+.date-picker {
+  min-width: 180rpx;
+  margin-right: 10rpx;
+}
+
+.time-picker {
+  min-width: 120rpx;
+}
+
+.time-picker.disabled {
+  background-color: #f0f0f0;
+  color: #999999;
 } 
