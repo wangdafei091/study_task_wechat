@@ -786,6 +786,47 @@ Page({
     this.setData(updateData);
     
     console.log(`[TaskEdit] 切换${panelName}面板:`, this.data[panelName]);
+    
+    // 如果打开了时间面板，延迟滚动到选中的时间
+    if (updateData[panelName] === true) {
+      if (panelName === 'startTimePanel' || panelName === 'endTimePanel') {
+        this.scrollToSelectedTime(panelName);
+      }
+    }
+  },
+  
+  /**
+   * 滚动到选中的时间
+   */
+  scrollToSelectedTime: function(panelType) {
+    console.log(`[TaskEdit] 准备滚动到选中时间项`, panelType);
+    
+    // 使用setTimeout确保面板已经展开并渲染
+    setTimeout(() => {
+      const query = wx.createSelectorQuery();
+      const hourSelector = panelType === 'startTimePanel' ? '.time-option.selected' : '.time-panel:last-child .time-option.selected';
+      
+      query.selectAll(hourSelector).boundingClientRect();
+      query.selectViewport().scrollOffset();
+      query.exec((res) => {
+        if (res[0] && res[0].length > 0) {
+          // 获取到选中项的信息，计算需要滚动的位置
+          const selected = res[0][0];
+          const column = selected.top < 500 ? '.time-column' : '.time-panel:last-child .time-column';
+          
+          // 找到对应的column并滚动
+          wx.createSelectorQuery().select(column).node().exec((nodeRes) => {
+            if (nodeRes[0] && nodeRes[0].node) {
+              const scrollView = nodeRes[0].node;
+              // 计算滚动位置，使选中项居中显示
+              const scrollTop = selected.top - 150; // 估算值，根据实际情况调整
+              scrollView.scrollTo({ top: scrollTop > 0 ? scrollTop : 0, behavior: 'smooth' });
+              console.log(`[TaskEdit] 已滚动到选中时间项`, panelType);
+            }
+          });
+        }
+      });
+    }, 100);
   },
   
   /**
@@ -795,7 +836,9 @@ Page({
     const year = type === 'start' ? this.data.startPanelYear : this.data.endPanelYear;
     const month = type === 'start' ? this.data.startPanelMonth : this.data.endPanelMonth;
     
-    // 获取当月第一天是星期几
+    console.log(`[TaskEdit] 开始生成${type}日历数据`, year, month);
+    
+    // 获取当月第一天是星期几 (注意JS中月份从0开始)
     const firstDay = new Date(year, month - 1, 1).getDay();
     // 星期天是0，调整为7，以适应周一开始的日历
     const firstDayOfWeek = firstDay === 0 ? 7 : firstDay;
@@ -845,8 +888,11 @@ Page({
       });
     }
     
-    // 添加下个月的日期以填满6行
-    const remainingDays = 42 - days.length;
+    // 计算需要添加的下个月日期数量，确保总行数为6行
+    const totalDays = firstDayOfWeek - 1 + daysInMonth;
+    const remainingDays = 42 - totalDays; // 6行*7列 = 42
+    
+    // 添加下个月的日期
     for (let i = 1; i <= remainingDays; i++) {
       let nextMonth = month + 1;
       let nextYear = year;
@@ -875,7 +921,7 @@ Page({
       });
     }
     
-    console.log(`[TaskEdit] 生成${type}日历数据`, days.length);
+    console.log(`[TaskEdit] 生成${type}日历数据完成`, days.length);
   },
   
   /**

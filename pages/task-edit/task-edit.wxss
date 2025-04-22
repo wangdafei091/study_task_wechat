@@ -431,7 +431,7 @@
 }
 
 .panel-container.expanded {
-  max-height: 600rpx;
+  max-height: 650rpx;
 }
 
 /* 日历面板样式 */
@@ -464,7 +464,7 @@
   border-radius: 50%;
 }
 
-.current-month {
+.current-month-text {
   margin: 0 20rpx;
   font-size: 28rpx;
   font-weight: 500;
@@ -487,6 +487,7 @@
 .calendar-days {
   display: flex;
   flex-wrap: wrap;
+  width: 100%;
 }
 
 .calendar-day {
@@ -497,6 +498,9 @@
   justify-content: center;
   font-size: 28rpx;
   position: relative;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
 .current-month {
@@ -514,10 +518,14 @@
   border-radius: 8rpx;
 }
 
+.calendar-day.today {
+  position: relative;
+}
+
 .calendar-day.today:after {
   content: '';
   position: absolute;
-  bottom: 10rpx;
+  bottom: 8rpx;
   width: 8rpx;
   height: 8rpx;
   border-radius: 50%;
@@ -557,6 +565,8 @@
   width: 100rpx;
   max-height: 300rpx;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
 }
 
 .time-separator {

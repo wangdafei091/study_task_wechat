@@ -124,7 +124,7 @@
                   <view class="nav-btn" bindtap="prevMonth" data-type="start">
                     <text class="nav-icon">◀</text>
                   </view>
-                  <view class="current-month">{{startPanelYear}}年{{startPanelMonth}}月</view>
+                  <view class="current-month-text">{{startPanelYear}}年{{startPanelMonth}}月</view>
                   <view class="nav-btn" bindtap="nextMonth" data-type="start">
                     <text class="nav-icon">▶</text>
                   </view>
@@ -206,7 +206,7 @@
                   <view class="nav-btn" bindtap="prevMonth" data-type="end">
                     <text class="nav-icon">◀</text>
                   </view>
-                  <view class="current-month">{{endPanelYear}}年{{endPanelMonth}}月</view>
+                  <view class="current-month-text">{{endPanelYear}}年{{endPanelMonth}}月</view>
                   <view class="nav-btn" bindtap="nextMonth" data-type="end">
                     <text class="nav-icon">▶</text>
                   </view>
