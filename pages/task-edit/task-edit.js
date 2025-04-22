@@ -44,7 +44,26 @@ Page({
     showRepeatOptions: false,
     showReminderOptions: false,
     repeatText: '永不',
-    reminderText: '无'
+    reminderText: '无',
+    // 日期时间选择面板控制
+    startDatePanel: false,
+    startTimePanel: false,
+    endDatePanel: false,
+    endTimePanel: false,
+    // 日历面板数据
+    startPanelYear: 0,
+    startPanelMonth: 0,
+    endPanelYear: 0,
+    endPanelMonth: 0,
+    startCalendarDays: [],
+    endCalendarDays: [],
+    // 时间选择器数据
+    hours: Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0')),
+    minutes: Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, '0')),
+    startSelectedHour: '08',
+    startSelectedMinute: '00',
+    endSelectedHour: '09',
+    endSelectedMinute: '00'
   },
 
   /**
@@ -513,8 +532,20 @@ Page({
       'newTask.startDate': dateStr,
       'newTask.startTime': timeStr,
       'newTask.endDate': dateStr,
-      'newTask.endTime': endTimeStr
+      'newTask.endTime': endTimeStr,
+      startSelectedHour: hour,
+      startSelectedMinute: minute,
+      endSelectedHour: endHour,
+      endSelectedMinute: minute,
+      startPanelYear: year,
+      startPanelMonth: parseInt(month),
+      endPanelYear: year,
+      endPanelMonth: parseInt(month)
     });
+    
+    // 初始化日历数据
+    this.generateCalendarDays('start');
+    this.generateCalendarDays('end');
     
     console.log('[TaskEdit] 初始化日期时间:', {
       startDate: dateStr,
@@ -718,5 +749,474 @@ Page({
       reminderText: reminderText,
       showReminderOptions: false
     });
-  }
+  },
+
+  /**
+   * 切换面板显示
+   */
+  togglePanel: function(e) {
+    // 获取面板标识
+    const panelName = e.currentTarget.dataset.panel;
+    const isDisabled = e.currentTarget.dataset.disabled === 'true';
+    
+    // 如果控件被禁用，则不执行任何操作
+    if (isDisabled) {
+      return;
+    }
+    
+    // 创建要更新的数据对象
+    const updateData = {};
+    
+    // 所有可能的面板列表
+    const allPanels = [
+      'startDatePanel', 'startTimePanel', 
+      'endDatePanel', 'endTimePanel',
+      'showRepeatOptions', 'showReminderOptions'
+    ];
+    
+    // 关闭所有面板
+    allPanels.forEach(panel => {
+      updateData[panel] = false;
+    });
+    
+    // 切换当前面板状态
+    updateData[panelName] = !this.data[panelName];
+    
+    // 更新数据
+    this.setData(updateData);
+    
+    console.log(`[TaskEdit] 切换${panelName}面板:`, this.data[panelName]);
+  },
+  
+  /**
+   * 生成日历天数据
+   */
+  generateCalendarDays: function(type) {
+    const year = type === 'start' ? this.data.startPanelYear : this.data.endPanelYear;
+    const month = type === 'start' ? this.data.startPanelMonth : this.data.endPanelMonth;
+    
+    // 获取当月第一天是星期几
+    const firstDay = new Date(year, month - 1, 1).getDay();
+    // 星期天是0，调整为7，以适应周一开始的日历
+    const firstDayOfWeek = firstDay === 0 ? 7 : firstDay;
+    
+    // 获取当月的天数
+    const daysInMonth = new Date(year, month, 0).getDate();
+    
+    // 获取上个月的天数
+    const daysInPrevMonth = new Date(year, month - 1, 0).getDate();
+    
+    // 获取当前日期
+    const today = new Date();
+    const todayYear = today.getFullYear();
+    const todayMonth = today.getMonth() + 1;
+    const todayDate = today.getDate();
+    
+    const days = [];
+    
+    // 添加上个月的日期
+    for (let i = firstDayOfWeek - 1; i > 0; i--) {
+      const day = daysInPrevMonth - i + 1;
+      let prevMonth = month - 1;
+      let prevYear = year;
+      
+      if (prevMonth < 1) {
+        prevMonth = 12;
+        prevYear = year - 1;
+      }
+      
+      const date = `${prevYear}-${prevMonth.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+      days.push({
+        day,
+        date,
+        currentMonth: false,
+        isToday: (prevYear === todayYear && prevMonth === todayMonth && day === todayDate)
+      });
+    }
+    
+    // 添加当月的日期
+    for (let i = 1; i <= daysInMonth; i++) {
+      const date = `${year}-${month.toString().padStart(2, '0')}-${i.toString().padStart(2, '0')}`;
+      days.push({
+        day: i,
+        date,
+        currentMonth: true,
+        isToday: (year === todayYear && month === todayMonth && i === todayDate)
+      });
+    }
+    
+    // 添加下个月的日期以填满6行
+    const remainingDays = 42 - days.length;
+    for (let i = 1; i <= remainingDays; i++) {
+      let nextMonth = month + 1;
+      let nextYear = year;
+      
+      if (nextMonth > 12) {
+        nextMonth = 1;
+        nextYear = year + 1;
+      }
+      
+      const date = `${nextYear}-${nextMonth.toString().padStart(2, '0')}-${i.toString().padStart(2, '0')}`;
+      days.push({
+        day: i,
+        date,
+        currentMonth: false,
+        isToday: (nextYear === todayYear && nextMonth === todayMonth && i === todayDate)
+      });
+    }
+    
+    if (type === 'start') {
+      this.setData({
+        startCalendarDays: days
+      });
+    } else {
+      this.setData({
+        endCalendarDays: days
+      });
+    }
+    
+    console.log(`[TaskEdit] 生成${type}日历数据`, days.length);
+  },
+  
+  /**
+   * 切换月份
+   */
+  prevMonth: function(e) {
+    const type = e.currentTarget.dataset.type;
+    let year, month;
+    
+    if (type === 'start') {
+      year = this.data.startPanelYear;
+      month = this.data.startPanelMonth - 1;
+      
+      if (month < 1) {
+        month = 12;
+        year--;
+      }
+      
+      this.setData({
+        startPanelYear: year,
+        startPanelMonth: month
+      });
+    } else {
+      year = this.data.endPanelYear;
+      month = this.data.endPanelMonth - 1;
+      
+      if (month < 1) {
+        month = 12;
+        year--;
+      }
+      
+      this.setData({
+        endPanelYear: year,
+        endPanelMonth: month
+      });
+    }
+    
+    this.generateCalendarDays(type);
+    console.log(`[TaskEdit] ${type}面板切换到上个月:`, year, month);
+  },
+  
+  nextMonth: function(e) {
+    const type = e.currentTarget.dataset.type;
+    let year, month;
+    
+    if (type === 'start') {
+      year = this.data.startPanelYear;
+      month = this.data.startPanelMonth + 1;
+      
+      if (month > 12) {
+        month = 1;
+        year++;
+      }
+      
+      this.setData({
+        startPanelYear: year,
+        startPanelMonth: month
+      });
+    } else {
+      year = this.data.endPanelYear;
+      month = this.data.endPanelMonth + 1;
+      
+      if (month > 12) {
+        month = 1;
+        year++;
+      }
+      
+      this.setData({
+        endPanelYear: year,
+        endPanelMonth: month
+      });
+    }
+    
+    this.generateCalendarDays(type);
+    console.log(`[TaskEdit] ${type}面板切换到下个月:`, year, month);
+  },
+  
+  /**
+   * 选择日期
+   */
+  selectStartDate: function(e) {
+    const date = e.currentTarget.dataset.date;
+    console.log('[TaskEdit] 选择开始日期:', date);
+    
+    this.setData({
+      'newTask.startDate': date,
+      startDatePanel: false
+    });
+    
+    // 如果结束日期早于开始日期，调整结束日期
+    if (this.data.newTask.endDate < date) {
+      this.setData({
+        'newTask.endDate': date
+      });
+    }
+  },
+  
+  selectEndDate: function(e) {
+    const date = e.currentTarget.dataset.date;
+    console.log('[TaskEdit] 选择结束日期:', date);
+    
+    // 确保结束日期不早于开始日期
+    if (this.data.newTask.startDate && date < this.data.newTask.startDate) {
+      wx.showToast({
+        title: '结束日期不能早于开始日期',
+        icon: 'none',
+        duration: 2000
+      });
+      return;
+    }
+    
+    this.setData({
+      'newTask.endDate': date,
+      endDatePanel: false
+    });
+  },
+  
+  /**
+   * 选择时间
+   */
+  selectStartHour: function(e) {
+    const hour = e.currentTarget.dataset.hour;
+    console.log('[TaskEdit] 选择开始小时:', hour);
+    
+    const time = `${hour}:${this.data.startSelectedMinute}`;
+    
+    this.setData({
+      'newTask.startTime': time,
+      startSelectedHour: hour
+    });
+    
+    // 如果结束时间与开始时间在同一天且早于开始时间，调整结束时间
+    this.checkAndAdjustEndTime(time);
+  },
+  
+  selectStartMinute: function(e) {
+    const minute = e.currentTarget.dataset.minute;
+    console.log('[TaskEdit] 选择开始分钟:', minute);
+    
+    const time = `${this.data.startSelectedHour}:${minute}`;
+    
+    this.setData({
+      'newTask.startTime': time,
+      startSelectedMinute: minute
+    });
+    
+    // 如果结束时间与开始时间在同一天且早于开始时间，调整结束时间
+    this.checkAndAdjustEndTime(time);
+  },
+  
+  selectEndHour: function(e) {
+    const hour = e.currentTarget.dataset.hour;
+    console.log('[TaskEdit] 选择结束小时:', hour);
+    
+    const time = `${hour}:${this.data.endSelectedMinute}`;
+    
+    // 如果与开始时间在同一天，需要检查是否早于开始时间
+    if (this.data.newTask.startDate === this.data.newTask.endDate && 
+        this.data.newTask.startTime &&
+        this.compareTimeStrings(this.data.newTask.startTime, time) > 0) {
+      wx.showToast({
+        title: '结束时间不能早于开始时间',
+        icon: 'none',
+        duration: 2000
+      });
+      return;
+    }
+    
+    this.setData({
+      'newTask.endTime': time,
+      endSelectedHour: hour
+    });
+  },
+  
+  selectEndMinute: function(e) {
+    const minute = e.currentTarget.dataset.minute;
+    console.log('[TaskEdit] 选择结束分钟:', minute);
+    
+    const time = `${this.data.endSelectedHour}:${minute}`;
+    
+    // 如果与开始时间在同一天，需要检查是否早于开始时间
+    if (this.data.newTask.startDate === this.data.newTask.endDate && 
+        this.data.newTask.startTime &&
+        this.compareTimeStrings(this.data.newTask.startTime, time) > 0) {
+      wx.showToast({
+        title: '结束时间不能早于开始时间',
+        icon: 'none',
+        duration: 2000
+      });
+      return;
+    }
+    
+    this.setData({
+      'newTask.endTime': time,
+      endSelectedMinute: minute
+    });
+  },
+  
+  /**
+   * 比较两个时间字符串的大小
+   * 返回值：1表示time1大于time2，0表示相等，-1表示time1小于time2
+   */
+  compareTimeStrings: function(time1, time2) {
+    const [hours1, minutes1] = time1.split(':').map(Number);
+    const [hours2, minutes2] = time2.split(':').map(Number);
+    
+    if (hours1 > hours2) return 1;
+    if (hours1 < hours2) return -1;
+    if (minutes1 > minutes2) return 1;
+    if (minutes1 < minutes2) return -1;
+    return 0;
+  },
+  
+  /**
+   * 检查并调整结束时间
+   */
+  checkAndAdjustEndTime: function(startTime) {
+    if (this.data.newTask.startDate === this.data.newTask.endDate && 
+        this.data.newTask.endTime) {
+      const startTimeValue = startTime || this.data.newTask.startTime;
+      
+      if (this.compareTimeStrings(startTimeValue, this.data.newTask.endTime) >= 0) {
+        // 如果开始时间晚于或等于结束时间，将结束时间设置为开始时间后一小时
+        const [hours, minutes] = startTimeValue.split(':').map(Number);
+        const newEndHour = (hours + 1) % 24;
+        const newEndTime = `${newEndHour.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+        
+        this.setData({
+          'newTask.endTime': newEndTime,
+          endSelectedHour: newEndHour.toString().padStart(2, '0'),
+          endSelectedMinute: minutes.toString().padStart(2, '0')
+        });
+        
+        console.log('[TaskEdit] 调整结束时间:', newEndTime);
+      }
+    }
+  },
+  
+  /**
+   * 选择今天
+   */
+  selectToday: function(e) {
+    const type = e.currentTarget.dataset.type;
+    
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = today.getMonth() + 1;
+    const day = today.getDate();
+    const dateStr = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+    
+    if (type === 'start') {
+      this.setData({
+        'newTask.startDate': dateStr,
+        startDatePanel: false,
+        startPanelYear: year,
+        startPanelMonth: month
+      });
+      
+      // 如果结束日期早于今天，调整结束日期
+      if (this.data.newTask.endDate < dateStr) {
+        this.setData({
+          'newTask.endDate': dateStr
+        });
+      }
+      
+      this.generateCalendarDays('start');
+    } else {
+      // 确保结束日期不早于开始日期
+      if (this.data.newTask.startDate && dateStr < this.data.newTask.startDate) {
+        wx.showToast({
+          title: '结束日期不能早于开始日期',
+          icon: 'none',
+          duration: 2000
+        });
+        return;
+      }
+      
+      this.setData({
+        'newTask.endDate': dateStr,
+        endDatePanel: false,
+        endPanelYear: year,
+        endPanelMonth: month
+      });
+      
+      this.generateCalendarDays('end');
+    }
+    
+    console.log(`[TaskEdit] 选择${type === 'start' ? '开始' : '结束'}日期为今天:`, dateStr);
+  },
+  
+  /**
+   * 选择快捷时间
+   */
+  selectQuickTime: function(e) {
+    const time = e.currentTarget.dataset.time;
+    const type = e.currentTarget.dataset.type;
+    
+    if (type === 'start') {
+      // 如果结束时间与开始时间在同一天且早于新的开始时间，调整结束时间
+      if (this.data.newTask.startDate === this.data.newTask.endDate && 
+          this.data.newTask.endTime &&
+          this.compareTimeStrings(time, this.data.newTask.endTime) >= 0) {
+        // 计算新的结束时间，默认为开始时间后一小时
+        const [hours, minutes] = time.split(':').map(Number);
+        const newEndHour = (hours + 1) % 24;
+        const newEndTime = `${newEndHour.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+        
+        this.setData({
+          'newTask.endTime': newEndTime,
+          endSelectedHour: newEndHour.toString().padStart(2, '0'),
+          endSelectedMinute: minutes.toString().padStart(2, '0')
+        });
+      }
+      
+      this.setData({
+        'newTask.startTime': time,
+        startTimePanel: false,
+        startSelectedHour: time.split(':')[0],
+        startSelectedMinute: time.split(':')[1]
+      });
+    } else {
+      // 如果与开始时间在同一天，需要检查是否早于开始时间
+      if (this.data.newTask.startDate === this.data.newTask.endDate && 
+          this.data.newTask.startTime &&
+          this.compareTimeStrings(this.data.newTask.startTime, time) > 0) {
+        wx.showToast({
+          title: '结束时间不能早于开始时间',
+          icon: 'none',
+          duration: 2000
+        });
+        return;
+      }
+      
+      this.setData({
+        'newTask.endTime': time,
+        endTimePanel: false,
+        endSelectedHour: time.split(':')[0],
+        endSelectedMinute: time.split(':')[1]
+      });
+    }
+    
+    console.log(`[TaskEdit] 选择${type === 'start' ? '开始' : '结束'}快捷时间:`, time);
+  },
 }) 

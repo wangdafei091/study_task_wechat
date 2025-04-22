@@ -104,14 +104,81 @@
           <view class="input-item time-item">
             <text class="input-label">开始时间</text>
             <view class="time-selector">
-              <picker mode="date" value="{{newTask.startDate}}" bindchange="onStartDateChange">
-                <view class="date-picker">{{newTask.startDate}}</view>
-              </picker>
-              <picker mode="time" value="{{newTask.startTime}}" bindchange="onStartTimeChange" disabled="{{newTask.isAllDay}}">
-                <view class="time-picker {{newTask.isAllDay ? 'disabled' : ''}}">
-                  {{newTask.isAllDay ? '全天' : newTask.startTime}}
+              <view class="date-picker" bindtap="togglePanel" data-panel="startDatePanel">
+                {{newTask.startDate}}
+                <text class="arrow-icon">{{startDatePanel ? '↑' : '↓'}}</text>
+              </view>
+              <view class="time-picker {{newTask.isAllDay ? 'disabled' : ''}}" 
+                   bindtap="togglePanel" data-panel="startTimePanel" data-disabled="{{newTask.isAllDay}}">
+                {{newTask.isAllDay ? '全天' : newTask.startTime}}
+                <text class="arrow-icon" wx:if="{{!newTask.isAllDay}}">{{startTimePanel ? '↑' : '↓'}}</text>
+              </view>
+            </view>
+          </view>
+
+          <!-- 开始日期面板 -->
+          <view class="panel-container {{startDatePanel ? 'expanded' : ''}}">
+            <view class="calendar-panel">
+              <view class="calendar-header">
+                <view class="month-nav">
+                  <view class="nav-btn" bindtap="prevMonth" data-type="start">
+                    <text class="nav-icon">◀</text>
+                  </view>
+                  <view class="current-month">{{startPanelYear}}年{{startPanelMonth}}月</view>
+                  <view class="nav-btn" bindtap="nextMonth" data-type="start">
+                    <text class="nav-icon">▶</text>
+                  </view>
                 </view>
-              </picker>
+              </view>
+              <view class="weekdays">
+                <view class="weekday" wx:for="{{['一','二','三','四','五','六','日']}}" wx:key="*this">{{item}}</view>
+              </view>
+              <view class="calendar-days">
+                <view 
+                  wx:for="{{startCalendarDays}}" 
+                  wx:key="index" 
+                  class="calendar-day {{item.currentMonth ? 'current-month' : 'other-month'}} {{item.date === newTask.startDate ? 'selected' : ''}} {{item.isToday ? 'today' : ''}}"
+                  bindtap="selectStartDate"
+                  data-date="{{item.date}}">
+                  {{item.day}}
+                </view>
+              </view>
+              <view class="calendar-footer">
+                <view class="calendar-btn" bindtap="selectToday" data-type="start">今天</view>
+              </view>
+            </view>
+          </view>
+
+          <!-- 开始时间面板 -->
+          <view class="panel-container {{startTimePanel ? 'expanded' : ''}}">
+            <view class="time-panel">
+              <view class="time-column">
+                <view 
+                  wx:for="{{hours}}" 
+                  wx:key="*this" 
+                  class="time-option {{item === startSelectedHour ? 'selected' : ''}}" 
+                  bindtap="selectStartHour" 
+                  data-hour="{{item}}">
+                  {{item}}
+                </view>
+              </view>
+              <view class="time-separator">:</view>
+              <view class="time-column">
+                <view 
+                  wx:for="{{minutes}}" 
+                  wx:key="*this" 
+                  class="time-option {{item === startSelectedMinute ? 'selected' : ''}}" 
+                  bindtap="selectStartMinute" 
+                  data-minute="{{item}}">
+                  {{item}}
+                </view>
+              </view>
+            </view>
+            <view class="time-quick-select">
+              <view class="quick-option" bindtap="selectQuickTime" data-time="08:00" data-type="start">8:00</view>
+              <view class="quick-option" bindtap="selectQuickTime" data-time="12:00" data-type="start">12:00</view>
+              <view class="quick-option" bindtap="selectQuickTime" data-time="18:00" data-type="start">18:00</view>
+              <view class="quick-option" bindtap="selectQuickTime" data-time="21:00" data-type="start">21:00</view>
             </view>
           </view>
 
@@ -119,14 +186,81 @@
           <view class="input-item time-item">
             <text class="input-label">结束时间</text>
             <view class="time-selector">
-              <picker mode="date" value="{{newTask.endDate}}" bindchange="onEndDateChange">
-                <view class="date-picker">{{newTask.endDate}}</view>
-              </picker>
-              <picker mode="time" value="{{newTask.endTime}}" bindchange="onEndTimeChange" disabled="{{newTask.isAllDay}}">
-                <view class="time-picker {{newTask.isAllDay ? 'disabled' : ''}}">
-                  {{newTask.isAllDay ? '全天' : newTask.endTime}}
+              <view class="date-picker" bindtap="togglePanel" data-panel="endDatePanel">
+                {{newTask.endDate}}
+                <text class="arrow-icon">{{endDatePanel ? '↑' : '↓'}}</text>
+              </view>
+              <view class="time-picker {{newTask.isAllDay ? 'disabled' : ''}}" 
+                   bindtap="togglePanel" data-panel="endTimePanel" data-disabled="{{newTask.isAllDay}}">
+                {{newTask.isAllDay ? '全天' : newTask.endTime}}
+                <text class="arrow-icon" wx:if="{{!newTask.isAllDay}}">{{endTimePanel ? '↑' : '↓'}}</text>
+              </view>
+            </view>
+          </view>
+
+          <!-- 结束日期面板 -->
+          <view class="panel-container {{endDatePanel ? 'expanded' : ''}}">
+            <view class="calendar-panel">
+              <view class="calendar-header">
+                <view class="month-nav">
+                  <view class="nav-btn" bindtap="prevMonth" data-type="end">
+                    <text class="nav-icon">◀</text>
+                  </view>
+                  <view class="current-month">{{endPanelYear}}年{{endPanelMonth}}月</view>
+                  <view class="nav-btn" bindtap="nextMonth" data-type="end">
+                    <text class="nav-icon">▶</text>
+                  </view>
                 </view>
-              </picker>
+              </view>
+              <view class="weekdays">
+                <view class="weekday" wx:for="{{['一','二','三','四','五','六','日']}}" wx:key="*this">{{item}}</view>
+              </view>
+              <view class="calendar-days">
+                <view 
+                  wx:for="{{endCalendarDays}}" 
+                  wx:key="index" 
+                  class="calendar-day {{item.currentMonth ? 'current-month' : 'other-month'}} {{item.date === newTask.endDate ? 'selected' : ''}} {{item.isToday ? 'today' : ''}}"
+                  bindtap="selectEndDate"
+                  data-date="{{item.date}}">
+                  {{item.day}}
+                </view>
+              </view>
+              <view class="calendar-footer">
+                <view class="calendar-btn" bindtap="selectToday" data-type="end">今天</view>
+              </view>
+            </view>
+          </view>
+
+          <!-- 结束时间面板 -->
+          <view class="panel-container {{endTimePanel ? 'expanded' : ''}}">
+            <view class="time-panel">
+              <view class="time-column">
+                <view 
+                  wx:for="{{hours}}" 
+                  wx:key="*this" 
+                  class="time-option {{item === endSelectedHour ? 'selected' : ''}}" 
+                  bindtap="selectEndHour" 
+                  data-hour="{{item}}">
+                  {{item}}
+                </view>
+              </view>
+              <view class="time-separator">:</view>
+              <view class="time-column">
+                <view 
+                  wx:for="{{minutes}}" 
+                  wx:key="*this" 
+                  class="time-option {{item === endSelectedMinute ? 'selected' : ''}}" 
+                  bindtap="selectEndMinute" 
+                  data-minute="{{item}}">
+                  {{item}}
+                </view>
+              </view>
+            </view>
+            <view class="time-quick-select">
+              <view class="quick-option" bindtap="selectQuickTime" data-time="09:00" data-type="end">9:00</view>
+              <view class="quick-option" bindtap="selectQuickTime" data-time="13:00" data-type="end">13:00</view>
+              <view class="quick-option" bindtap="selectQuickTime" data-time="19:00" data-type="end">19:00</view>
+              <view class="quick-option" bindtap="selectQuickTime" data-time="22:00" data-type="end">22:00</view>
             </view>
           </view>
           
