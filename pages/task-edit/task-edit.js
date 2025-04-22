@@ -58,8 +58,8 @@ Page({
     startCalendarDays: [],
     endCalendarDays: [],
     // 时间选择器数据
-    hours: Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0')),
-    minutes: Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, '0')),
+    hours: ['06', '07', '08', '09', '10', '11', '14', '15', '16', '17', '18', '19', '20', '21'], // 从早6点到晚9点，去除12点和13点
+    minutes: ['00', '05', '10', '15', '20', '25', '30', '35', '40', '45', '50', '55'], // 每5分钟一个选项
     startSelectedHour: '08',
     startSelectedMinute: '00',
     endSelectedHour: '09',
@@ -786,47 +786,6 @@ Page({
     this.setData(updateData);
     
     console.log(`[TaskEdit] 切换${panelName}面板:`, this.data[panelName]);
-    
-    // 如果打开了时间面板，延迟滚动到选中的时间
-    if (updateData[panelName] === true) {
-      if (panelName === 'startTimePanel' || panelName === 'endTimePanel') {
-        this.scrollToSelectedTime(panelName);
-      }
-    }
-  },
-  
-  /**
-   * 滚动到选中的时间
-   */
-  scrollToSelectedTime: function(panelType) {
-    console.log(`[TaskEdit] 准备滚动到选中时间项`, panelType);
-    
-    // 使用setTimeout确保面板已经展开并渲染
-    setTimeout(() => {
-      const query = wx.createSelectorQuery();
-      const hourSelector = panelType === 'startTimePanel' ? '.time-option.selected' : '.time-panel:last-child .time-option.selected';
-      
-      query.selectAll(hourSelector).boundingClientRect();
-      query.selectViewport().scrollOffset();
-      query.exec((res) => {
-        if (res[0] && res[0].length > 0) {
-          // 获取到选中项的信息，计算需要滚动的位置
-          const selected = res[0][0];
-          const column = selected.top < 500 ? '.time-column' : '.time-panel:last-child .time-column';
-          
-          // 找到对应的column并滚动
-          wx.createSelectorQuery().select(column).node().exec((nodeRes) => {
-            if (nodeRes[0] && nodeRes[0].node) {
-              const scrollView = nodeRes[0].node;
-              // 计算滚动位置，使选中项居中显示
-              const scrollTop = selected.top - 150; // 估算值，根据实际情况调整
-              scrollView.scrollTo({ top: scrollTop > 0 ? scrollTop : 0, behavior: 'smooth' });
-              console.log(`[TaskEdit] 已滚动到选中时间项`, panelType);
-            }
-          });
-        }
-      });
-    }, 100);
   },
   
   /**

@@ -149,32 +149,7 @@
           <!-- 开始时间面板 -->
           <view class="panel-container {{startTimePanel ? 'expanded' : ''}}">
             <view class="time-panel">
-              <view class="time-column">
-                <view 
-                  wx:for="{{hours}}" 
-                  wx:key="*this" 
-                  class="time-option {{item === startSelectedHour ? 'selected' : ''}}" 
-                  bindtap="selectStartHour" 
-                  data-hour="{{item}}">
-                  {{item}}
-                </view>
-              </view>
-              <view class="time-separator">:</view>
-              <view class="time-column">
-                <view 
-                  wx:for="{{minutes}}" 
-                  wx:key="*this" 
-                  class="time-option {{item === startSelectedMinute ? 'selected' : ''}}" 
-                  bindtap="selectStartMinute" 
-                  data-minute="{{item}}">
-                  {{item}}
-                </view>
-              </view>
-            </view>
-            <view class="time-quick-select">
-              <view class="quick-option" bindtap="selectQuickTime" data-time="08:00" data-type="start">8:00</view>
-              <view class="quick-option" bindtap="selectQuickTime" data-time="12:00" data-type="start">12:00</view>
-              <view class="quick-option" bindtap="selectQuickTime" data-time="18:00" data-type="start">18:00</view>
+              <!-- 面板内容已清除 -->
             </view>
           </view>
 
@@ -227,32 +202,7 @@
           <!-- 结束时间面板 -->
           <view class="panel-container {{endTimePanel ? 'expanded' : ''}}">
             <view class="time-panel">
-              <view class="time-column">
-                <view 
-                  wx:for="{{hours}}" 
-                  wx:key="*this" 
-                  class="time-option {{item === endSelectedHour ? 'selected' : ''}}" 
-                  bindtap="selectEndHour" 
-                  data-hour="{{item}}">
-                  {{item}}
-                </view>
-              </view>
-              <view class="time-separator">:</view>
-              <view class="time-column">
-                <view 
-                  wx:for="{{minutes}}" 
-                  wx:key="*this" 
-                  class="time-option {{item === endSelectedMinute ? 'selected' : ''}}" 
-                  bindtap="selectEndMinute" 
-                  data-minute="{{item}}">
-                  {{item}}
-                </view>
-              </view>
-            </view>
-            <view class="time-quick-select">
-              <view class="quick-option" bindtap="selectQuickTime" data-time="09:00" data-type="end">9:00</view>
-              <view class="quick-option" bindtap="selectQuickTime" data-time="13:00" data-type="end">13:00</view>
-              <view class="quick-option" bindtap="selectQuickTime" data-time="19:00" data-type="end">19:00</view>
+              <!-- 面板内容已清除 -->
             </view>
           </view>
           

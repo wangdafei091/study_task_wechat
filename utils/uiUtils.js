@@ -8,7 +8,7 @@
  * 设置主题样式 (已简化为仅亮色主题)
  */
 const setTheme = function() {
-  // 移除主题选择功能，统一使用亮色主题
+  // 统一使用亮色主题
   wx.setNavigationBarColor({
     frontColor: '#000000',
     backgroundColor: '#ffffff'
@@ -19,11 +19,11 @@ const setTheme = function() {
 };
 
 /**
- * 获取当前主题 (已简化为仅亮色主题)
+ * 获取当前主题 (始终返回亮色主题)
  * @returns {String} 当前主题类型
  */
 const getCurrentTheme = function() {
-  // 简化为仅返回亮色主题
+  // 仅返回亮色主题
   return 'light';
 };
 

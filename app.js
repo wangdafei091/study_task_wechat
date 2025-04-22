@@ -107,7 +107,7 @@ App({
   // 监听系统主题变化
   setupThemeChangeListener: function() {
     // 移除主题监听功能，统一使用亮色主题
-    console.log('[App] 使用统一亮色主题，忽略系统主题变化');
+    console.log('[App] 使用统一亮色主题，不支持暗黑模式');
     
     // 设置默认亮色主题
     this.globalData.systemTheme = 'light';
@@ -360,7 +360,7 @@ App({
       language: systemInfo.language,
       version: systemInfo.version,
       SDKVersion: systemInfo.SDKVersion,
-      theme: systemInfo.theme || 'light'
+      theme: 'light' // 固定为亮色主题，移除对系统主题的依赖
     };
     
     // 计算安全区域
