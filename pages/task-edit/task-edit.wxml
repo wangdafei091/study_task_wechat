@@ -1,5 +1,8 @@
 <!--pages/task-edit/task-edit.wxml-->
 <view class="container">
+  <!-- 遮罩层，用于点击关闭时间面板 -->
+  <view class="panel-mask {{anyPanelVisible ? 'visible' : ''}}" catchtap="closeAllPanels"></view>
+  
   <!-- 主内容区 -->
   <view class="content">
     
@@ -118,7 +121,7 @@
 
           <!-- 开始日期面板 -->
           <view class="panel-container {{startDatePanel ? 'expanded' : ''}}">
-            <view class="calendar-panel">
+            <view class="calendar-panel" catchtap="preventClose">
               <view class="calendar-header">
                 <view class="month-nav">
                   <view class="nav-btn" bindtap="prevMonth" data-type="start">
@@ -148,7 +151,7 @@
 
           <!-- 开始时间面板 -->
           <view class="panel-container {{startTimePanel ? 'expanded' : ''}}">
-            <view class="time-panel">
+            <view class="time-panel" catchtap="preventClose">
               <!-- 使用picker-view实现的时间选择器 -->
               <picker-view class="time-picker-view" value="{{startTimePickerValue}}" 
                            indicator-style="height: 70rpx; border-top: 1px solid rgba(66,133,244,0.5); border-bottom: 1px solid rgba(66,133,244,0.5); background-color: rgba(66,133,244,0.1);"
@@ -168,18 +171,6 @@
 
               <!-- 中央分隔符 -->
               <view class="picker-separator">:</view>
-              
-              <!-- 输入确认区 -->
-              <view class="time-control">
-                <view class="time-input-group">
-                  <input class="time-input" type="number" value="{{newTask.startTime.split(':')[0]}}" 
-                         bindinput="onStartHourInput" maxlength="2" />
-                  <text class="time-separator">:</text>
-                  <input class="time-input" type="number" value="{{newTask.startTime.split(':')[1]}}" 
-                         bindinput="onStartMinuteInput" maxlength="2" />
-                </view>
-                <view class="confirm-btn" bindtap="confirmStartTime">确定</view>
-              </view>
             </view>
           </view>
 
@@ -201,7 +192,7 @@
 
           <!-- 结束日期面板 -->
           <view class="panel-container {{endDatePanel ? 'expanded' : ''}}">
-            <view class="calendar-panel">
+            <view class="calendar-panel" catchtap="preventClose">
               <view class="calendar-header">
                 <view class="month-nav">
                   <view class="nav-btn" bindtap="prevMonth" data-type="end">
@@ -231,7 +222,7 @@
 
           <!-- 结束时间面板 -->
           <view class="panel-container {{endTimePanel ? 'expanded' : ''}}">
-            <view class="time-panel">
+            <view class="time-panel" catchtap="preventClose">
               <!-- 使用picker-view实现的时间选择器 -->
               <picker-view class="time-picker-view" value="{{endTimePickerValue}}" 
                            indicator-style="height: 70rpx; border-top: 1px solid rgba(66,133,244,0.5); border-bottom: 1px solid rgba(66,133,244,0.5); background-color: rgba(66,133,244,0.1);"
@@ -251,18 +242,6 @@
 
               <!-- 中央分隔符 -->
               <view class="picker-separator">:</view>
-              
-              <!-- 输入确认区 -->
-              <view class="time-control">
-                <view class="time-input-group">
-                  <input class="time-input" type="number" value="{{newTask.endTime.split(':')[0]}}" 
-                         bindinput="onEndHourInput" maxlength="2" />
-                  <text class="time-separator">:</text>
-                  <input class="time-input" type="number" value="{{newTask.endTime.split(':')[1]}}" 
-                         bindinput="onEndMinuteInput" maxlength="2" />
-                </view>
-                <view class="confirm-btn" bindtap="confirmEndTime">确定</view>
-              </view>
             </view>
           </view>
           
@@ -273,7 +252,7 @@
               <text class="repeat-value">{{repeatText}}</text>
               <text class="arrow-icon">{{showRepeatOptions ? '↑' : '↓'}}</text>
             </view>
-            <view class="repeat-options {{showRepeatOptions ? 'expanded' : ''}}">
+            <view class="repeat-options {{showRepeatOptions ? 'expanded' : ''}}" catchtap="preventClose">
               <view class="repeat-option {{newTask.repeat.type === 'none' ? 'selected' : ''}}" 
                     bindtap="selectRepeatType" data-type="none">永不</view>
               <view class="repeat-option {{newTask.repeat.type === 'daily' ? 'selected' : ''}}" 
@@ -292,7 +271,7 @@
               <text class="reminder-value">{{reminderText}}</text>
               <text class="arrow-icon">{{showReminderOptions ? '↑' : '↓'}}</text>
             </view>
-            <view class="reminder-options {{showReminderOptions ? 'expanded' : ''}}">
+            <view class="reminder-options {{showReminderOptions ? 'expanded' : ''}}" catchtap="preventClose">
               <view class="reminder-option {{!newTask.reminder.enabled ? 'selected' : ''}}" 
                     bindtap="selectReminderType" data-enabled="false">无</view>
               <view class="reminder-option {{newTask.reminder.enabled && newTask.reminder.time === 0 ? 'selected' : ''}}" 

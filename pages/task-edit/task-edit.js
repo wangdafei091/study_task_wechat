@@ -59,7 +59,9 @@ Page({
     endCalendarDays: [],
     // 时间选择器数据
     startTimePickerValue: [8, 0], // 默认8:00，索引从0开始
-    endTimePickerValue: [9, 0]    // 默认9:00，索引从0开始
+    endTimePickerValue: [9, 0],    // 默认9:00，索引从0开始
+    // 新增属性
+    anyPanelVisible: false
   },
 
   /**
@@ -689,8 +691,11 @@ Page({
     const type = e.currentTarget.dataset.type;
     console.log('[TaskEdit] 选择重复类型:', type);
     
-    let repeatText = '永不';
+    let repeatText = '';
     switch (type) {
+      case 'none':
+        repeatText = '永不';
+        break;
       case 'daily':
         repeatText = '每天';
         break;
@@ -705,8 +710,7 @@ Page({
     this.setData({
       'newTask.repeat.type': type,
       'newTask.repeat.enabled': type !== 'none',
-      repeatText: repeatText,
-      showRepeatOptions: false
+      repeatText: repeatText
     });
   },
   
@@ -742,8 +746,7 @@ Page({
     this.setData({
       'newTask.reminder.enabled': enabled,
       'newTask.reminder.time': time,
-      reminderText: reminderText,
-      showReminderOptions: false
+      reminderText: reminderText
     });
   },
 
@@ -778,10 +781,14 @@ Page({
     // 切换当前面板状态
     updateData[panelName] = !this.data[panelName];
     
+    // 检查是否有面板处于打开状态，更新anyPanelVisible
+    const willAnyPanelBeVisible = updateData[panelName];
+    updateData.anyPanelVisible = willAnyPanelBeVisible;
+    
     // 更新数据
     this.setData(updateData);
     
-    console.log(`[TaskEdit] 切换${panelName}面板:`, this.data[panelName]);
+    console.log(`[TaskEdit] 切换${panelName}面板:`, this.data[panelName], '遮罩层:', willAnyPanelBeVisible);
   },
   
   /**
@@ -970,8 +977,7 @@ Page({
     console.log('[TaskEdit] 选择开始日期:', date, '用户点击');
     
     this.setData({
-      'newTask.startDate': date,
-      startDatePanel: false
+      'newTask.startDate': date
     });
     
     // 如果结束日期早于开始日期，调整结束日期
@@ -999,79 +1005,8 @@ Page({
     }
     
     this.setData({
-      'newTask.endDate': date,
-      endDatePanel: false
+      'newTask.endDate': date
     });
-  },
-  
-  /**
-   * 开始时间小时手动输入
-   */
-  onStartHourInput: function(e) {
-    let hour = e.detail.value;
-    
-    // 验证小时输入
-    if (hour === '') {
-      return;
-    }
-    
-    let hourNum = parseInt(hour);
-    if (isNaN(hourNum) || hourNum < 0) {
-      hourNum = 0;
-    } else if (hourNum > 23) {
-      hourNum = 23;
-    }
-    
-    hour = hourNum < 10 ? '0' + hourNum : String(hourNum);
-    
-    // 更新时间
-    const minute = this.data.newTask.startTime.split(':')[1];
-    const time = `${hour}:${minute}`;
-    
-    console.log('[TaskEdit] 开始时间小时直接输入:', hour);
-    
-    this.setData({
-      'newTask.startTime': time,
-      startTimePickerValue: [hourNum, parseInt(minute)]
-    });
-    
-    // 检查并调整结束时间
-    this.checkAndAdjustEndTime(time);
-  },
-  
-  /**
-   * 开始时间分钟手动输入
-   */
-  onStartMinuteInput: function(e) {
-    let minute = e.detail.value;
-    
-    // 验证分钟输入
-    if (minute === '') {
-      return;
-    }
-    
-    let minuteNum = parseInt(minute);
-    if (isNaN(minuteNum) || minuteNum < 0) {
-      minuteNum = 0;
-    } else if (minuteNum > 59) {
-      minuteNum = 59;
-    }
-    
-    minute = minuteNum < 10 ? '0' + minuteNum : String(minuteNum);
-    
-    // 更新时间
-    const hour = this.data.newTask.startTime.split(':')[0];
-    const time = `${hour}:${minute}`;
-    
-    console.log('[TaskEdit] 开始时间分钟直接输入:', minute);
-    
-    this.setData({
-      'newTask.startTime': time,
-      startTimePickerValue: [parseInt(hour), minuteNum]
-    });
-    
-    // 检查并调整结束时间
-    this.checkAndAdjustEndTime(time);
   },
   
   /**
@@ -1092,104 +1027,6 @@ Page({
     
     // 检查并调整结束时间
     this.checkAndAdjustEndTime(time);
-  },
-  
-  /**
-   * 确认开始时间选择
-   */
-  confirmStartTime: function() {
-    console.log('[TaskEdit] 确认开始时间:', this.data.newTask.startTime);
-    this.setData({
-      startTimePanel: false
-    });
-  },
-  
-  /**
-   * 结束时间小时手动输入
-   */
-  onEndHourInput: function(e) {
-    let hour = e.detail.value;
-    
-    // 验证小时输入
-    if (hour === '') {
-      return;
-    }
-    
-    let hourNum = parseInt(hour);
-    if (isNaN(hourNum) || hourNum < 0) {
-      hourNum = 0;
-    } else if (hourNum > 23) {
-      hourNum = 23;
-    }
-    
-    hour = hourNum < 10 ? '0' + hourNum : String(hourNum);
-    
-    // 更新时间
-    const minute = this.data.newTask.endTime.split(':')[1];
-    const time = `${hour}:${minute}`;
-    
-    // 检查是否早于开始时间
-    if (this.data.newTask.startDate === this.data.newTask.endDate &&
-        this.data.newTask.startTime &&
-        this.compareTimeStrings(this.data.newTask.startTime, time) > 0) {
-      wx.showToast({
-        title: '结束时间不能早于开始时间',
-        icon: 'none',
-        duration: 2000
-      });
-      return;
-    }
-    
-    console.log('[TaskEdit] 结束时间小时直接输入:', hour);
-    
-    this.setData({
-      'newTask.endTime': time,
-      endTimePickerValue: [hourNum, parseInt(minute)]
-    });
-  },
-  
-  /**
-   * 结束时间分钟手动输入
-   */
-  onEndMinuteInput: function(e) {
-    let minute = e.detail.value;
-    
-    // 验证分钟输入
-    if (minute === '') {
-      return;
-    }
-    
-    let minuteNum = parseInt(minute);
-    if (isNaN(minuteNum) || minuteNum < 0) {
-      minuteNum = 0;
-    } else if (minuteNum > 59) {
-      minuteNum = 59;
-    }
-    
-    minute = minuteNum < 10 ? '0' + minuteNum : String(minuteNum);
-    
-    // 更新时间
-    const hour = this.data.newTask.endTime.split(':')[0];
-    const time = `${hour}:${minute}`;
-    
-    // 检查是否早于开始时间
-    if (this.data.newTask.startDate === this.data.newTask.endDate &&
-        this.data.newTask.startTime &&
-        this.compareTimeStrings(this.data.newTask.startTime, time) > 0) {
-      wx.showToast({
-        title: '结束时间不能早于开始时间',
-        icon: 'none',
-        duration: 2000
-      });
-      return;
-    }
-    
-    console.log('[TaskEdit] 结束时间分钟直接输入:', minute);
-    
-    this.setData({
-      'newTask.endTime': time,
-      endTimePickerValue: [parseInt(hour), minuteNum]
-    });
   },
   
   /**
@@ -1226,16 +1063,6 @@ Page({
     this.setData({
       'newTask.endTime': time,
       endTimePickerValue: values
-    });
-  },
-  
-  /**
-   * 确认结束时间选择
-   */
-  confirmEndTime: function() {
-    console.log('[TaskEdit] 确认结束时间:', this.data.newTask.endTime);
-    this.setData({
-      endTimePanel: false
     });
   },
   
@@ -1295,7 +1122,6 @@ Page({
     if (type === 'start') {
       this.setData({
         'newTask.startDate': dateStr,
-        startDatePanel: false,
         startPanelYear: year,
         startPanelMonth: month
       });
@@ -1323,12 +1149,38 @@ Page({
       
       this.setData({
         'newTask.endDate': dateStr,
-        endDatePanel: false,
         endPanelYear: year,
         endPanelMonth: month
       });
       
       this.generateCalendarDays('end');
     }
+  },
+
+  /**
+   * 点击遮罩层关闭所有面板
+   */
+  closeAllPanels: function() {
+    console.log('[TaskEdit] 点击遮罩层，关闭所有面板');
+    
+    // 关闭所有面板
+    this.setData({
+      startDatePanel: false,
+      startTimePanel: false,
+      endDatePanel: false,
+      endTimePanel: false,
+      showRepeatOptions: false,
+      showReminderOptions: false,
+      anyPanelVisible: false
+    });
+  },
+  
+  /**
+   * 防止点击面板内部关闭面板
+   */
+  preventClose: function(e) {
+    // 阻止事件冒泡
+    console.log('[TaskEdit] 点击面板内部，阻止关闭');
+    return;
   },
 }) 

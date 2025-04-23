@@ -599,42 +599,30 @@
   pointer-events: none;
 }
 
-/* 输入确认区域 */
-.time-control {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  height: 50rpx;
-  margin-top: 20rpx;
+/* 遮罩层样式 */
+.panel-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: transparent;
+  z-index: 90;
+  display: none;
 }
 
-.time-input-group {
-  display: flex;
-  align-items: center;
+.panel-mask.visible {
+  display: block;
 }
 
-.time-input {
-  width: 60rpx;
-  text-align: center;
-  height: 50rpx;
-  border-bottom: 1px solid #ddd;
-  font-size: 28rpx;
+/* 确保面板在遮罩层之上 */
+.panel-container.expanded {
+  z-index: 100;
+  position: relative;
 }
 
-.time-separator {
-  font-size: 28rpx;
-  margin: 0 10rpx;
-  color: #666;
-}
-
-.confirm-btn {
-  background: #4285F4;
-  color: white;
-  height: 50rpx;
-  border-radius: 25rpx;
-  font-size: 24rpx;
-  padding: 0 30rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+/* 确保时间面板在遮罩层之上 */
+.time-panel {
+  z-index: 100;
+  position: relative;
 } 
