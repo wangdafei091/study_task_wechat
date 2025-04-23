@@ -347,7 +347,7 @@
   color: #999999;
 }
 
-/* 重复选项和提醒选项样式 */
+/* 重复选项和提醒选项样式 - 移除原有下拉样式 */
 .input-item-header {
   display: flex;
   justify-content: space-between;
@@ -366,42 +366,37 @@
   color: #999;
 }
 
-.repeat-options, .reminder-options {
-  max-height: 0;
-  overflow: hidden;
-  transition: max-height 0.3s ease;
-  background-color: #f8f8f8;
-  border-radius: 8rpx;
+/* 新增重复和提醒选项的上弹面板样式 */
+.option-list {
+  padding: 20rpx 0;
 }
 
-.repeat-options.expanded, .reminder-options.expanded {
-  max-height: 300rpx;
-  margin-top: 10rpx;
-  margin-bottom: 20rpx;
-}
-
-.repeat-option, .reminder-option {
-  padding: 20rpx;
-  font-size: 28rpx;
+.option-item {
+  padding: 24rpx 30rpx;
+  font-size: 30rpx;
   color: #333;
   position: relative;
   border-bottom: 1rpx solid #f0f0f0;
 }
 
-.repeat-option:last-child, .reminder-option:last-child {
+.option-item:last-child {
   border-bottom: none;
 }
 
-.repeat-option.selected, .reminder-option.selected {
+.option-item.selected {
   color: #4285F4;
   background-color: rgba(66, 133, 244, 0.05);
 }
 
-.repeat-option.selected:after, .reminder-option.selected:after {
+.option-item.selected:after {
   content: "✓";
   position: absolute;
-  right: 20rpx;
+  right: 30rpx;
   color: #4285F4;
+}
+
+.option-item:active {
+  background-color: rgba(0, 0, 0, 0.05);
 }
 
 /* 按钮区域样式 */

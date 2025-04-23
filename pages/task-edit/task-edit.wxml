@@ -138,43 +138,21 @@
             </view>
           </view>
           
-          <!-- 重复设置 -->
+          <!-- 重复选项 -->
           <view class="input-item">
-            <view class="input-item-header" bindtap="toggleRepeatOptions">
+            <view class="input-item-header" bindtap="togglePanel" data-panel="repeatPanel">
               <text class="input-label">重复</text>
               <text class="repeat-value">{{repeatText}}</text>
-              <text class="arrow-icon">{{showRepeatOptions ? '↑' : '↓'}}</text>
-            </view>
-            <view class="repeat-options {{showRepeatOptions ? 'expanded' : ''}}" catchtap="preventClose" catchtouchmove="preventTouchMove">
-              <view class="repeat-option {{newTask.repeat.type === 'none' ? 'selected' : ''}}" 
-                    bindtap="selectRepeatType" data-type="none">永不</view>
-              <view class="repeat-option {{newTask.repeat.type === 'daily' ? 'selected' : ''}}" 
-                    bindtap="selectRepeatType" data-type="daily">每天</view>
-              <view class="repeat-option {{newTask.repeat.type === 'weekly' ? 'selected' : ''}}" 
-                    bindtap="selectRepeatType" data-type="weekly">每周</view>
-              <view class="repeat-option {{newTask.repeat.type === 'workdays' ? 'selected' : ''}}" 
-                    bindtap="selectRepeatType" data-type="workdays">工作日</view>
+              <text class="arrow-icon">↓</text>
             </view>
           </view>
           
           <!-- 提醒设置 -->
           <view class="input-item">
-            <view class="input-item-header" bindtap="toggleReminderOptions">
+            <view class="input-item-header" bindtap="togglePanel" data-panel="reminderPanel">
               <text class="input-label">提醒</text>
               <text class="reminder-value">{{reminderText}}</text>
-              <text class="arrow-icon">{{showReminderOptions ? '↑' : '↓'}}</text>
-            </view>
-            <view class="reminder-options {{showReminderOptions ? 'expanded' : ''}}" catchtap="preventClose" catchtouchmove="preventTouchMove">
-              <view class="reminder-option {{!newTask.reminder.enabled ? 'selected' : ''}}" 
-                    bindtap="selectReminderType" data-enabled="false">无</view>
-              <view class="reminder-option {{newTask.reminder.enabled && newTask.reminder.time === 0 ? 'selected' : ''}}" 
-                    bindtap="selectReminderType" data-enabled="true" data-time="0">准时</view>
-              <view class="reminder-option {{newTask.reminder.enabled && newTask.reminder.time === 5 ? 'selected' : ''}}" 
-                    bindtap="selectReminderType" data-enabled="true" data-time="5">提前5分钟</view>
-              <view class="reminder-option {{newTask.reminder.enabled && newTask.reminder.time === 15 ? 'selected' : ''}}" 
-                    bindtap="selectReminderType" data-enabled="true" data-time="15">提前15分钟</view>
-              <view class="reminder-option {{newTask.reminder.enabled && newTask.reminder.time === 30 ? 'selected' : ''}}" 
-                    bindtap="selectReminderType" data-enabled="true" data-time="30">提前30分钟</view>
+              <text class="arrow-icon">↓</text>
             </view>
           </view>
         </view>
@@ -189,8 +167,8 @@
     </card>
   </view>
   
-  <!-- 日历遮罩层 -->
-  <view class="calendar-mask {{startDatePanel || endDatePanel ? 'visible' : ''}}" bindtap="closeAllPanels" catchtouchmove="preventTouchMove"></view>
+  <!-- 日历遮罩层 - 修改为通用遮罩层 -->
+  <view class="calendar-mask {{startDatePanel || endDatePanel || repeatPanel || reminderPanel ? 'visible' : ''}}" bindtap="closeAllPanels" catchtouchmove="preventTouchMove"></view>
   
   <!-- 开始日期面板 -->
   <view class="calendar-container {{startDatePanel ? 'expanded' : ''}}" catchtouchmove="preventTouchMove">
@@ -268,6 +246,62 @@
           data-date="{{item.date}}">
           {{item.day}}
         </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 重复选项面板 -->
+  <view class="calendar-container {{repeatPanel ? 'expanded' : ''}}" catchtouchmove="preventTouchMove">
+    <view class="calendar-panel" catchtap="preventClose">
+      <view class="calendar-header">
+        <!-- 左侧：空 -->
+        <view class="header-year-month"></view>
+        
+        <!-- 中间：标题 -->
+        <text class="calendar-title">设置重复</text>
+        
+        <!-- 右侧：完成按钮 -->
+        <view class="calendar-close" bindtap="closeAllPanels">完成</view>
+      </view>
+      
+      <view class="option-list">
+        <view class="option-item {{newTask.repeat.type === 'none' ? 'selected' : ''}}" 
+              bindtap="selectRepeatType" data-type="none">永不</view>
+        <view class="option-item {{newTask.repeat.type === 'daily' ? 'selected' : ''}}" 
+              bindtap="selectRepeatType" data-type="daily">每天</view>
+        <view class="option-item {{newTask.repeat.type === 'weekly' ? 'selected' : ''}}" 
+              bindtap="selectRepeatType" data-type="weekly">每周</view>
+        <view class="option-item {{newTask.repeat.type === 'workdays' ? 'selected' : ''}}" 
+              bindtap="selectRepeatType" data-type="workdays">工作日</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 提醒选项面板 -->
+  <view class="calendar-container {{reminderPanel ? 'expanded' : ''}}" catchtouchmove="preventTouchMove">
+    <view class="calendar-panel" catchtap="preventClose">
+      <view class="calendar-header">
+        <!-- 左侧：空 -->
+        <view class="header-year-month"></view>
+        
+        <!-- 中间：标题 -->
+        <text class="calendar-title">设置提醒</text>
+        
+        <!-- 右侧：完成按钮 -->
+        <view class="calendar-close" bindtap="closeAllPanels">完成</view>
+      </view>
+      
+      <view class="option-list">
+        <view class="option-item {{!newTask.reminder.enabled ? 'selected' : ''}}" 
+              bindtap="selectReminderType" data-enabled="false">无</view>
+        <view class="option-item {{newTask.reminder.enabled && newTask.reminder.time === 0 ? 'selected' : ''}}" 
+              bindtap="selectReminderType" data-enabled="true" data-time="0">准时</view>
+        <view class="option-item {{newTask.reminder.enabled && newTask.reminder.time === 5 ? 'selected' : ''}}" 
+              bindtap="selectReminderType" data-enabled="true" data-time="5">提前5分钟</view>
+        <view class="option-item {{newTask.reminder.enabled && newTask.reminder.time === 15 ? 'selected' : ''}}" 
+              bindtap="selectReminderType" data-enabled="true" data-time="15">提前15分钟</view>
+        <view class="option-item {{newTask.reminder.enabled && newTask.reminder.time === 30 ? 'selected' : ''}}" 
+              bindtap="selectReminderType" data-enabled="true" data-time="30">提前30分钟</view>
       </view>
     </view>
   </view>

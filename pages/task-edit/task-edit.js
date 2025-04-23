@@ -41,15 +41,14 @@ Page({
     descMaxLength: 50,
     descPlaceholder: '',
     // 新增UI控制字段
-    showRepeatOptions: false,
-    showReminderOptions: false,
     repeatText: '永不',
     reminderText: '无',
     // 日期时间选择面板控制
     startDatePanel: false,
-    startTimePanel: false,
     endDatePanel: false,
-    endTimePanel: false,
+    // 新增重复和提醒面板控制
+    repeatPanel: false, 
+    reminderPanel: false,
     // 日历面板数据
     startPanelYear: 0,
     startPanelMonth: 0,
@@ -60,8 +59,6 @@ Page({
     // 时间选择器数据
     startTimePickerValue: [8, 0], // 默认8:00，索引从0开始
     endTimePickerValue: [9, 0],    // 默认9:00，索引从0开始
-    // 新增属性
-    anyPanelVisible: false,
     // 年月选择器数据
     startYearMonth: '',  // 格式：'2023-05'
     endYearMonth: '',    // 格式：'2023-05'
@@ -83,6 +80,16 @@ Page({
     
     // 加载所有任务
     this.loadAllTasks();
+    
+    // 确保所有面板初始状态为关闭
+    this.setData({
+      startDatePanel: false,
+      endDatePanel: false,
+      repeatPanel: false,
+      reminderPanel: false
+    });
+    
+    console.log('[TaskEdit] 初始化面板状态：全部关闭');
     
     // 如果URL参数中指定了演示模式，自动生成演示数据
     if (options.demo === 'true') {
@@ -392,8 +399,11 @@ Page({
       },
       repeatText: '永不',
       reminderText: '无',
-      showRepeatOptions: false,
-      showReminderOptions: false,
+      // 关闭所有面板
+      startDatePanel: false,
+      endDatePanel: false,
+      repeatPanel: false,
+      reminderPanel: false,
       startTimePickerValue: [hour, minute],
       endTimePickerValue: [endHour, minute]
     });
@@ -677,17 +687,49 @@ Page({
   },
   
   /**
-   * 切换重复选项
+   * 切换面板显示
    */
-  toggleRepeatOptions: function() {
-    this.setData({
-      showRepeatOptions: !this.data.showRepeatOptions,
-      showReminderOptions: false // 关闭提醒选项
-    });
+  togglePanel: function(e) {
+    const panelName = e.currentTarget.dataset.panel;
+    console.log('[TaskEdit] 切换面板:', panelName);
     
-    console.log('[TaskEdit] 切换重复选项:', this.data.showRepeatOptions);
+    // 关闭所有其他面板
+    const newState = {
+      startDatePanel: false,
+      endDatePanel: false,
+      repeatPanel: false,
+      reminderPanel: false
+    };
+    
+    // 切换当前面板状态
+    newState[panelName] = !this.data[panelName];
+    
+    this.setData(newState);
+    
+    // 如果是日期面板且已打开，生成日历数据
+    if ((panelName === 'startDatePanel' && newState.startDatePanel) || 
+        (panelName === 'endDatePanel' && newState.endDatePanel)) {
+      const type = panelName === 'startDatePanel' ? 'start' : 'end';
+      this.generateCalendarDays(type);
+    }
+    
+    console.log('[TaskEdit] 面板状态更新:', newState);
   },
   
+  /**
+   * 关闭所有面板
+   */
+  closeAllPanels: function() {
+    this.setData({
+      startDatePanel: false,
+      endDatePanel: false,
+      repeatPanel: false,
+      reminderPanel: false
+    });
+    
+    console.log('[TaskEdit] 关闭所有面板');
+  },
+
   /**
    * 选择重复类型
    */
@@ -714,22 +756,11 @@ Page({
     this.setData({
       'newTask.repeat.type': type,
       'newTask.repeat.enabled': type !== 'none',
-      repeatText: repeatText
+      repeatText: repeatText,
+      repeatPanel: false // 选择后关闭面板
     });
   },
-  
-  /**
-   * 切换提醒选项
-   */
-  toggleReminderOptions: function() {
-    this.setData({
-      showReminderOptions: !this.data.showReminderOptions,
-      showRepeatOptions: false // 关闭重复选项
-    });
-    
-    console.log('[TaskEdit] 切换提醒选项:', this.data.showReminderOptions);
-  },
-  
+
   /**
    * 选择提醒类型
    */
@@ -750,7 +781,8 @@ Page({
     this.setData({
       'newTask.reminder.enabled': enabled,
       'newTask.reminder.time': time,
-      reminderText: reminderText
+      reminderText: reminderText,
+      reminderPanel: false // 选择后关闭面板
     });
   },
 
@@ -793,37 +825,104 @@ Page({
   },
 
   /**
-   * 切换日期面板
+   * 更改月份
    */
-  togglePanel: function(e) {
-    const panelName = e.currentTarget.dataset.panel;
-    console.log('[TaskEdit] 切换日期面板:', panelName);
+  changeMonth: function(e) {
+    const type = e.currentTarget.dataset.type; // start 或 end
+    const action = e.currentTarget.dataset.action; // prev 或 next
     
-    // 关闭其他面板
-    if (panelName === 'startDatePanel') {
-      this.setData({
-        startDatePanel: !this.data.startDatePanel,
-        endDatePanel: false,
-        showRepeatOptions: false,
-        showReminderOptions: false
-      });
-    } else if (panelName === 'endDatePanel') {
-      this.setData({
-        endDatePanel: !this.data.endDatePanel,
-        startDatePanel: false,
-        showRepeatOptions: false,
-        showReminderOptions: false
-      });
+    let yearMonth = this.data[type + 'YearMonth'];
+    let [year, month] = yearMonth.split('-').map(Number);
+    
+    if (action === 'prev') {
+      month--;
+      if (month === 0) {
+        month = 12;
+        year--;
+      }
+    } else {
+      month++;
+      if (month === 13) {
+        month = 1;
+        year++;
+      }
     }
     
-    // 如果打开面板，生成日历数据
-    if ((panelName === 'startDatePanel' && this.data.startDatePanel) || 
-        (panelName === 'endDatePanel' && this.data.endDatePanel)) {
-      const type = panelName === 'startDatePanel' ? 'start' : 'end';
-      this.generateCalendarDays(type);
-    }
+    const newYearMonth = `${year}-${month < 10 ? '0' + month : month}`;
+    const newYearMonthText = `${year}年${month}月`;
+    
+    console.log(`[TaskEdit] 更改${type}月份:`, newYearMonthText);
+    
+    // 重新生成日历数据
+    this.generateCalendarDays(type === 'start' ? 'start' : 'end', year, month - 1);
   },
-  
+
+  /**
+   * 更改年份
+   */
+  changeYear: function(e) {
+    const type = e.currentTarget.dataset.type; // start 或 end
+    const action = e.currentTarget.dataset.action; // prev 或 next
+    
+    let yearMonth = this.data[type + 'YearMonth'];
+    let [year, month] = yearMonth.split('-').map(Number);
+    
+    if (action === 'prev') {
+      year--;
+    } else {
+      year++;
+    }
+    
+    const newYearMonth = `${year}-${month < 10 ? '0' + month : month}`;
+    const newYearMonthText = `${year}年${month}月`;
+    
+    // 显示提示
+    wx.showToast({
+      title: `切换至${year}年`,
+      icon: 'none',
+      duration: 1000
+    });
+    
+    console.log(`[TaskEdit] 更改${type}年份:`, newYearMonthText);
+    
+    // 重新生成日历数据
+    this.generateCalendarDays(type === 'start' ? 'start' : 'end', year, month - 1);
+  },
+
+  /**
+   * 直接选择年月
+   */
+  onYearMonthChange: function(e) {
+    const type = e.currentTarget.dataset.type; // start 或 end
+    const value = e.detail.value; // 格式：2023-05
+    
+    let [year, month] = value.split('-').map(Number);
+    const newYearMonthText = `${year}年${month}月`;
+    
+    console.log(`[TaskEdit] 选择${type}年月:`, newYearMonthText);
+    
+    // 重新生成日历数据
+    this.generateCalendarDays(type === 'start' ? 'start' : 'end', year, month - 1);
+  },
+
+  /**
+   * 阻止滑动穿透
+   * 该函数捕获touchmove事件并阻止事件冒泡，防止日历面板滑动时底层页面也随之滚动
+   */
+  preventTouchMove: function(e) {
+    // 阻止事件冒泡和默认行为
+    console.log('[TaskEdit] 阻止滑动穿透');
+    return;
+  },
+
+  /**
+   * 防止点击面板内部关闭面板
+   */
+  preventClose: function(e) {
+    // 阻止事件冒泡
+    return;
+  },
+
   /**
    * 生成简化版日历数据
    */
@@ -929,7 +1028,7 @@ Page({
     
     console.log(`[TaskEdit] 日历生成完成，共${days.length}天`);
   },
-  
+
   /**
    * 选择开始日期
    */
@@ -949,7 +1048,7 @@ Page({
       });
     }
   },
-  
+
   /**
    * 选择结束日期
    */
@@ -971,126 +1070,5 @@ Page({
       'newTask.endDate': date,
       endDatePanel: false
     });
-  },
-  
-  /**
-   * 防止点击面板内部关闭面板
-   */
-  preventClose: function(e) {
-    // 阻止事件冒泡
-    return;
-  },
-
-  /**
-   * 关闭所有面板
-   */
-  closeAllPanels: function() {
-    // 记录当前开启的面板状态
-    const panelStates = {
-      startDatePanel: this.data.startDatePanel,
-      endDatePanel: this.data.endDatePanel,
-      showRepeatOptions: this.data.showRepeatOptions,
-      showReminderOptions: this.data.showReminderOptions
-    };
-    
-    console.log('[TaskEdit] 关闭所有面板', panelStates);
-    
-    this.setData({
-      startDatePanel: false,
-      endDatePanel: false,
-      showRepeatOptions: false,
-      showReminderOptions: false
-    });
-  },
-
-  /**
-   * 更改月份
-   */
-  changeMonth: function(e) {
-    const type = e.currentTarget.dataset.type; // start 或 end
-    const action = e.currentTarget.dataset.action; // prev 或 next
-    
-    let yearMonth = this.data[type + 'YearMonth'];
-    let [year, month] = yearMonth.split('-').map(Number);
-    
-    if (action === 'prev') {
-      month--;
-      if (month === 0) {
-        month = 12;
-        year--;
-      }
-    } else {
-      month++;
-      if (month === 13) {
-        month = 1;
-        year++;
-      }
-    }
-    
-    const newYearMonth = `${year}-${month < 10 ? '0' + month : month}`;
-    const newYearMonthText = `${year}年${month}月`;
-    
-    console.log(`[TaskEdit] 更改${type}月份:`, newYearMonthText);
-    
-    // 重新生成日历数据
-    this.generateCalendarDays(type === 'start' ? 'start' : 'end', year, month - 1);
-  },
-
-  /**
-   * 更改年份
-   */
-  changeYear: function(e) {
-    const type = e.currentTarget.dataset.type; // start 或 end
-    const action = e.currentTarget.dataset.action; // prev 或 next
-    
-    let yearMonth = this.data[type + 'YearMonth'];
-    let [year, month] = yearMonth.split('-').map(Number);
-    
-    if (action === 'prev') {
-      year--;
-    } else {
-      year++;
-    }
-    
-    const newYearMonth = `${year}-${month < 10 ? '0' + month : month}`;
-    const newYearMonthText = `${year}年${month}月`;
-    
-    // 显示提示
-    wx.showToast({
-      title: `切换至${year}年`,
-      icon: 'none',
-      duration: 1000
-    });
-    
-    console.log(`[TaskEdit] 更改${type}年份:`, newYearMonthText);
-    
-    // 重新生成日历数据
-    this.generateCalendarDays(type === 'start' ? 'start' : 'end', year, month - 1);
-  },
-
-  /**
-   * 直接选择年月
-   */
-  onYearMonthChange: function(e) {
-    const type = e.currentTarget.dataset.type; // start 或 end
-    const value = e.detail.value; // 格式：2023-05
-    
-    let [year, month] = value.split('-').map(Number);
-    const newYearMonthText = `${year}年${month}月`;
-    
-    console.log(`[TaskEdit] 选择${type}年月:`, newYearMonthText);
-    
-    // 重新生成日历数据
-    this.generateCalendarDays(type === 'start' ? 'start' : 'end', year, month - 1);
-  },
-
-  /**
-   * 阻止滑动穿透
-   * 该函数捕获touchmove事件并阻止事件冒泡，防止日历面板滑动时底层页面也随之滚动
-   */
-  preventTouchMove: function(e) {
-    // 阻止事件冒泡和默认行为
-    console.log('[TaskEdit] 阻止滑动穿透');
-    return;
-  },
+  }
 }) 
