@@ -180,7 +180,10 @@
             <text class="nav-icon">〈</text>
           </view>
           <picker mode="date" fields="month" value="{{startYearMonth}}" bindchange="onYearMonthChange" data-type="start">
-            <view class="header-year-month-text">{{startYearMonthText}}</view>
+            <view class="header-year-month-text">
+              <view class="year-text">{{startYearText}}</view>
+              <view class="month-text">{{startMonthText}}</view>
+            </view>
           </picker>
           <view class="nav-btn month-nav" bindtap="changeMonth" data-type="start" data-action="next" bindlongpress="changeYear" data-type="start" data-action="next">
             <text class="nav-icon">〉</text>
@@ -220,7 +223,10 @@
             <text class="nav-icon">〈</text>
           </view>
           <picker mode="date" fields="month" value="{{endYearMonth}}" bindchange="onYearMonthChange" data-type="end">
-            <view class="header-year-month-text">{{endYearMonthText}}</view>
+            <view class="header-year-month-text">
+              <view class="year-text">{{endYearText}}</view>
+              <view class="month-text">{{endMonthText}}</view>
+            </view>
           </picker>
           <view class="nav-btn month-nav" bindtap="changeMonth" data-type="end" data-action="next" bindlongpress="changeYear" data-type="end" data-action="next">
             <text class="nav-icon">〉</text>

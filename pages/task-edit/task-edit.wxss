@@ -556,12 +556,28 @@
 }
 
 .header-year-month-text {
-  font-size: 34rpx;
-  font-weight: 500;
-  color: #333;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   padding: 0 10rpx;
   min-width: 160rpx;
   text-align: center;
+}
+
+.year-text {
+  font-size: 28rpx;
+  font-weight: 400;
+  color: #333;
+  line-height: 1.2;
+}
+
+.month-text {
+  font-size: 32rpx;
+  font-weight: 500;
+  color: #333;
+  line-height: 1.2;
+  margin-top: 6rpx;
 }
 
 .header-year-month-text:active {

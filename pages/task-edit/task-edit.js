@@ -63,7 +63,12 @@ Page({
     startYearMonth: '',  // 格式：'2023-05'
     endYearMonth: '',    // 格式：'2023-05'
     startYearMonthText: '', // 显示的年月文本，如 '2023年5月'
-    endYearMonthText: ''    // 显示的年月文本，如 '2023年5月'
+    endYearMonthText: '',    // 显示的年月文本，如 '2023年5月'
+    // 年月分开显示的文本
+    startYearText: '',   // 仅年份，如 '2023年'
+    startMonthText: '',  // 仅月份，如 '5月'
+    endYearText: '',     // 仅年份，如 '2023年'
+    endMonthText: ''     // 仅月份，如 '5月'
   },
 
   /**
@@ -542,6 +547,10 @@ Page({
     const yearMonthStr = `${year}-${month}`;
     const yearMonthText = `${year}年${parseInt(month)}月`;
     
+    // 设置年月分开显示的文本
+    const yearText = `${year}年`;
+    const monthText = `${parseInt(month)}月`;
+    
     this.setData({
       'newTask.startDate': dateStr,
       'newTask.startTime': timeStr,
@@ -551,7 +560,12 @@ Page({
       startYearMonth: yearMonthStr,
       endYearMonth: yearMonthStr,
       startYearMonthText: yearMonthText,
-      endYearMonthText: yearMonthText
+      endYearMonthText: yearMonthText,
+      // 设置年月分开显示的文本
+      startYearText: yearText,
+      startMonthText: monthText,
+      endYearText: yearText,
+      endMonthText: monthText
     });
     
     // 初始化日历数据
@@ -563,7 +577,9 @@ Page({
       startTime: timeStr,
       endDate: dateStr,
       endTime: endTimeStr,
-      yearMonth: yearMonthText
+      yearMonth: yearMonthText,
+      yearText: yearText,
+      monthText: monthText
     });
   },
 
@@ -851,6 +867,17 @@ Page({
     const newYearMonth = `${year}-${month < 10 ? '0' + month : month}`;
     const newYearMonthText = `${year}年${month}月`;
     
+    // 分别设置年份和月份文本
+    const newYearText = `${year}年`;
+    const newMonthText = `${month}月`;
+    
+    this.setData({
+      [type + 'YearMonth']: newYearMonth,
+      [type + 'YearMonthText']: newYearMonthText,
+      [type + 'YearText']: newYearText,
+      [type + 'MonthText']: newMonthText
+    });
+    
     console.log(`[TaskEdit] 更改${type}月份:`, newYearMonthText);
     
     // 重新生成日历数据
@@ -876,11 +903,22 @@ Page({
     const newYearMonth = `${year}-${month < 10 ? '0' + month : month}`;
     const newYearMonthText = `${year}年${month}月`;
     
+    // 分别设置年份和月份文本
+    const newYearText = `${year}年`;
+    const newMonthText = `${month}月`;
+    
     // 显示提示
     wx.showToast({
       title: `切换至${year}年`,
       icon: 'none',
       duration: 1000
+    });
+    
+    this.setData({
+      [type + 'YearMonth']: newYearMonth,
+      [type + 'YearMonthText']: newYearMonthText,
+      [type + 'YearText']: newYearText,
+      [type + 'MonthText']: newMonthText
     });
     
     console.log(`[TaskEdit] 更改${type}年份:`, newYearMonthText);
@@ -898,6 +936,17 @@ Page({
     
     let [year, month] = value.split('-').map(Number);
     const newYearMonthText = `${year}年${month}月`;
+    
+    // 分别设置年份和月份文本
+    const newYearText = `${year}年`;
+    const newMonthText = `${month}月`;
+    
+    this.setData({
+      [type + 'YearMonth']: value,
+      [type + 'YearMonthText']: newYearMonthText,
+      [type + 'YearText']: newYearText,
+      [type + 'MonthText']: newMonthText
+    });
     
     console.log(`[TaskEdit] 选择${type}年月:`, newYearMonthText);
     
@@ -945,9 +994,15 @@ Page({
     const yearMonthText = `${year}年${month + 1}月`;
     const yearMonth = `${year}-${(month + 1) < 10 ? '0' + (month + 1) : (month + 1)}`;
     
+    // 分别设置年份和月份文本
+    const yearText = `${year}年`;
+    const monthText = `${month + 1}月`;
+    
     this.setData({
       [type + 'YearMonth']: yearMonth,
-      [type + 'YearMonthText']: yearMonthText
+      [type + 'YearMonthText']: yearMonthText,
+      [type + 'YearText']: yearText,
+      [type + 'MonthText']: monthText
     });
     
     console.log(`[TaskEdit] 生成${type}日历数据`, year, month + 1);
