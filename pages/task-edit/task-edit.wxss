@@ -454,6 +454,7 @@
   z-index: 1001;
   max-height: 50vh;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .calendar-container.expanded {

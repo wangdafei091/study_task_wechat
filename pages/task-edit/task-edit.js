@@ -1083,4 +1083,14 @@ Page({
     // 重新生成日历数据
     this.generateCalendarDays(type === 'start' ? 'start' : 'end', year, month - 1);
   },
+
+  /**
+   * 阻止滑动穿透
+   * 该函数捕获touchmove事件并阻止事件冒泡，防止日历面板滑动时底层页面也随之滚动
+   */
+  preventTouchMove: function(e) {
+    // 阻止事件冒泡和默认行为
+    console.log('[TaskEdit] 阻止滑动穿透');
+    return;
+  },
 }) 
