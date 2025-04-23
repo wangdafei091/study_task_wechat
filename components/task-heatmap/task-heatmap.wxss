@@ -541,19 +541,6 @@
   margin-left: auto;
 }
 
-/* 编辑图标 - 保留但不使用 */
-.edit-icon {
-  width: 14rpx;
-  height: 14rpx;
-  font-size: 14rpx;
-  line-height: 14rpx;
-  text-align: center;
-  border-radius: 50%;
-  color: rgba(66, 133, 244, 0.6);
-  margin-left: 8rpx;
-  flex-shrink: 0;
-}
-
 /* 编辑链接样式 */
 .edit-link {
   font-size: 22rpx;

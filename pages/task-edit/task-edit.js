@@ -188,12 +188,7 @@ Page({
    */
   onHeatmapDaySelect: function(e) {
     console.log('[TaskEdit] 热力图日期选择:', e.detail);
-    
-    // 日期选择事件由热力图组件内部处理，这里可以添加额外的业务逻辑
-    // 例如记录最近查看的日期，或者与其他组件联动
-    
-    // 如果需要，可以通过以下方式获取热力图组件实例
-    // const heatmap = this.selectComponent('#taskHeatmap');
+    // 日期选择事件由热力图组件内部处理
   },
 
   /**
@@ -1105,58 +1100,6 @@ Page({
     }
   },
   
-  /**
-   * 选择今天
-   */
-  selectToday: function(e) {
-    const type = e.currentTarget.dataset.type;
-    
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = today.getMonth() + 1;
-    const day = today.getDate();
-    const dateStr = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
-    
-    console.log(`[TaskEdit] 选择${type === 'start' ? '开始' : '结束'}日期为今天:`, dateStr, '用户点击');
-    
-    if (type === 'start') {
-      this.setData({
-        'newTask.startDate': dateStr,
-        startPanelYear: year,
-        startPanelMonth: month
-      });
-      
-      // 如果结束日期早于今天，调整结束日期
-      if (this.data.newTask.endDate < dateStr) {
-        this.setData({
-          'newTask.endDate': dateStr
-        });
-        console.log('[TaskEdit] 自动调整结束日期为今天:', dateStr, '(原结束日期早于今天)');
-      }
-      
-      this.generateCalendarDays('start');
-    } else {
-      // 确保结束日期不早于开始日期
-      if (this.data.newTask.startDate && dateStr < this.data.newTask.startDate) {
-        wx.showToast({
-          title: '结束日期不能早于开始日期',
-          icon: 'none',
-          duration: 2000
-        });
-        console.log('[TaskEdit] 结束日期选择今天被拒绝:', dateStr, '早于开始日期', this.data.newTask.startDate);
-        return;
-      }
-      
-      this.setData({
-        'newTask.endDate': dateStr,
-        endPanelYear: year,
-        endPanelMonth: month
-      });
-      
-      this.generateCalendarDays('end');
-    }
-  },
-
   /**
    * 点击遮罩层关闭所有面板
    */
