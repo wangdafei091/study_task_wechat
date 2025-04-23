@@ -58,12 +58,8 @@ Page({
     startCalendarDays: [],
     endCalendarDays: [],
     // 时间选择器数据
-    hours: ['06', '07', '08', '09', '10', '11', '14', '15', '16', '17', '18', '19', '20', '21'], // 从早6点到晚9点，去除12点和13点
-    minutes: ['00', '05', '10', '15', '20', '25', '30', '35', '40', '45', '50', '55'], // 每5分钟一个选项
-    startSelectedHour: '08',
-    startSelectedMinute: '00',
-    endSelectedHour: '09',
-    endSelectedMinute: '00'
+    startTimePickerValue: [8, 0], // 默认8:00，索引从0开始
+    endTimePickerValue: [9, 0]    // 默认9:00，索引从0开始
   },
 
   /**
@@ -360,13 +356,13 @@ Page({
     const day = ("0" + today.getDate()).slice(-2);
     const dateStr = `${year}-${month}-${day}`;
     
-    const hour = ("0" + today.getHours()).slice(-2);
-    const minute = ("0" + today.getMinutes()).slice(-2);
-    const timeStr = `${hour}:${minute}`;
+    const hour = today.getHours();
+    const minute = today.getMinutes();
+    const timeStr = `${hour < 10 ? '0' + hour : hour}:${minute < 10 ? '0' + minute : minute}`;
     
     // 计算结束时间，默认为开始时间后一小时
-    const endHour = ("0" + ((today.getHours() + 1) % 24)).slice(-2);
-    const endTimeStr = `${endHour}:${minute}`;
+    const endHour = (hour + 1) % 24;
+    const endTimeStr = `${endHour < 10 ? '0' + endHour : endHour}:${minute < 10 ? '0' + minute : minute}`;
     
     this.setData({
       newTask: {
@@ -395,7 +391,9 @@ Page({
       repeatText: '永不',
       reminderText: '无',
       showRepeatOptions: false,
-      showReminderOptions: false
+      showReminderOptions: false,
+      startTimePickerValue: [hour, minute],
+      endTimePickerValue: [endHour, minute]
     });
     
     console.log('[TaskEdit] 表单已清空');
@@ -520,23 +518,21 @@ Page({
     const day = ("0" + today.getDate()).slice(-2);
     const dateStr = `${year}-${month}-${day}`;
     
-    const hour = ("0" + today.getHours()).slice(-2);
-    const minute = ("0" + today.getMinutes()).slice(-2);
-    const timeStr = `${hour}:${minute}`;
+    const hour = today.getHours();
+    const minute = today.getMinutes();
+    const timeStr = `${hour < 10 ? '0' + hour : hour}:${minute < 10 ? '0' + minute : minute}`;
     
     // 计算结束时间，默认为开始时间后一小时
-    const endHour = ("0" + ((today.getHours() + 1) % 24)).slice(-2);
-    const endTimeStr = `${endHour}:${minute}`;
+    const endHour = (hour + 1) % 24;
+    const endTimeStr = `${endHour < 10 ? '0' + endHour : endHour}:${minute < 10 ? '0' + minute : minute}`;
     
     this.setData({
       'newTask.startDate': dateStr,
       'newTask.startTime': timeStr,
       'newTask.endDate': dateStr,
       'newTask.endTime': endTimeStr,
-      startSelectedHour: hour,
-      startSelectedMinute: minute,
-      endSelectedHour: endHour,
-      endSelectedMinute: minute,
+      startTimePickerValue: [hour, minute],
+      endTimePickerValue: [endHour, minute],
       startPanelYear: year,
       startPanelMonth: parseInt(month),
       endPanelYear: year,
@@ -1009,46 +1005,131 @@ Page({
   },
   
   /**
-   * 选择时间
+   * 开始时间小时手动输入
    */
-  selectStartHour: function(e) {
-    const hour = e.currentTarget.dataset.hour;
-    console.log('[TaskEdit] 选择开始小时:', hour);
+  onStartHourInput: function(e) {
+    let hour = e.detail.value;
     
-    const time = `${hour}:${this.data.startSelectedMinute}`;
+    // 验证小时输入
+    if (hour === '') {
+      return;
+    }
+    
+    let hourNum = parseInt(hour);
+    if (isNaN(hourNum) || hourNum < 0) {
+      hourNum = 0;
+    } else if (hourNum > 23) {
+      hourNum = 23;
+    }
+    
+    hour = hourNum < 10 ? '0' + hourNum : String(hourNum);
+    
+    // 更新时间
+    const minute = this.data.newTask.startTime.split(':')[1];
+    const time = `${hour}:${minute}`;
+    
+    console.log('[TaskEdit] 开始时间小时直接输入:', hour);
     
     this.setData({
       'newTask.startTime': time,
-      startSelectedHour: hour
+      startTimePickerValue: [hourNum, parseInt(minute)]
     });
     
-    // 如果结束时间与开始时间在同一天且早于开始时间，调整结束时间
+    // 检查并调整结束时间
     this.checkAndAdjustEndTime(time);
   },
   
-  selectStartMinute: function(e) {
-    const minute = e.currentTarget.dataset.minute;
-    console.log('[TaskEdit] 选择开始分钟:', minute);
+  /**
+   * 开始时间分钟手动输入
+   */
+  onStartMinuteInput: function(e) {
+    let minute = e.detail.value;
     
-    const time = `${this.data.startSelectedHour}:${minute}`;
+    // 验证分钟输入
+    if (minute === '') {
+      return;
+    }
+    
+    let minuteNum = parseInt(minute);
+    if (isNaN(minuteNum) || minuteNum < 0) {
+      minuteNum = 0;
+    } else if (minuteNum > 59) {
+      minuteNum = 59;
+    }
+    
+    minute = minuteNum < 10 ? '0' + minuteNum : String(minuteNum);
+    
+    // 更新时间
+    const hour = this.data.newTask.startTime.split(':')[0];
+    const time = `${hour}:${minute}`;
+    
+    console.log('[TaskEdit] 开始时间分钟直接输入:', minute);
     
     this.setData({
       'newTask.startTime': time,
-      startSelectedMinute: minute
+      startTimePickerValue: [parseInt(hour), minuteNum]
     });
     
-    // 如果结束时间与开始时间在同一天且早于开始时间，调整结束时间
+    // 检查并调整结束时间
     this.checkAndAdjustEndTime(time);
   },
   
-  selectEndHour: function(e) {
-    const hour = e.currentTarget.dataset.hour;
-    console.log('[TaskEdit] 选择结束小时:', hour);
+  /**
+   * 监听开始时间选择器变化
+   */
+  onStartTimePickerChange: function(e) {
+    const values = e.detail.value;
+    const hour = values[0] < 10 ? '0' + values[0] : String(values[0]);
+    const minute = values[1] < 10 ? '0' + values[1] : String(values[1]);
+    const time = `${hour}:${minute}`;
     
-    const time = `${hour}:${this.data.endSelectedMinute}`;
+    console.log('[TaskEdit] 开始时间选择变化:', time);
     
-    // 如果与开始时间在同一天，需要检查是否早于开始时间
-    if (this.data.newTask.startDate === this.data.newTask.endDate && 
+    this.setData({
+      'newTask.startTime': time,
+      startTimePickerValue: values
+    });
+    
+    // 检查并调整结束时间
+    this.checkAndAdjustEndTime(time);
+  },
+  
+  /**
+   * 确认开始时间选择
+   */
+  confirmStartTime: function() {
+    console.log('[TaskEdit] 确认开始时间:', this.data.newTask.startTime);
+    this.setData({
+      startTimePanel: false
+    });
+  },
+  
+  /**
+   * 结束时间小时手动输入
+   */
+  onEndHourInput: function(e) {
+    let hour = e.detail.value;
+    
+    // 验证小时输入
+    if (hour === '') {
+      return;
+    }
+    
+    let hourNum = parseInt(hour);
+    if (isNaN(hourNum) || hourNum < 0) {
+      hourNum = 0;
+    } else if (hourNum > 23) {
+      hourNum = 23;
+    }
+    
+    hour = hourNum < 10 ? '0' + hourNum : String(hourNum);
+    
+    // 更新时间
+    const minute = this.data.newTask.endTime.split(':')[1];
+    const time = `${hour}:${minute}`;
+    
+    // 检查是否早于开始时间
+    if (this.data.newTask.startDate === this.data.newTask.endDate &&
         this.data.newTask.startTime &&
         this.compareTimeStrings(this.data.newTask.startTime, time) > 0) {
       wx.showToast({
@@ -1059,20 +1140,40 @@ Page({
       return;
     }
     
+    console.log('[TaskEdit] 结束时间小时直接输入:', hour);
+    
     this.setData({
       'newTask.endTime': time,
-      endSelectedHour: hour
+      endTimePickerValue: [hourNum, parseInt(minute)]
     });
   },
   
-  selectEndMinute: function(e) {
-    const minute = e.currentTarget.dataset.minute;
-    console.log('[TaskEdit] 选择结束分钟:', minute);
+  /**
+   * 结束时间分钟手动输入
+   */
+  onEndMinuteInput: function(e) {
+    let minute = e.detail.value;
     
-    const time = `${this.data.endSelectedHour}:${minute}`;
+    // 验证分钟输入
+    if (minute === '') {
+      return;
+    }
     
-    // 如果与开始时间在同一天，需要检查是否早于开始时间
-    if (this.data.newTask.startDate === this.data.newTask.endDate && 
+    let minuteNum = parseInt(minute);
+    if (isNaN(minuteNum) || minuteNum < 0) {
+      minuteNum = 0;
+    } else if (minuteNum > 59) {
+      minuteNum = 59;
+    }
+    
+    minute = minuteNum < 10 ? '0' + minuteNum : String(minuteNum);
+    
+    // 更新时间
+    const hour = this.data.newTask.endTime.split(':')[0];
+    const time = `${hour}:${minute}`;
+    
+    // 检查是否早于开始时间
+    if (this.data.newTask.startDate === this.data.newTask.endDate &&
         this.data.newTask.startTime &&
         this.compareTimeStrings(this.data.newTask.startTime, time) > 0) {
       wx.showToast({
@@ -1083,9 +1184,58 @@ Page({
       return;
     }
     
+    console.log('[TaskEdit] 结束时间分钟直接输入:', minute);
+    
     this.setData({
       'newTask.endTime': time,
-      endSelectedMinute: minute
+      endTimePickerValue: [parseInt(hour), minuteNum]
+    });
+  },
+  
+  /**
+   * 监听结束时间选择器变化
+   */
+  onEndTimePickerChange: function(e) {
+    const values = e.detail.value;
+    const hour = values[0] < 10 ? '0' + values[0] : String(values[0]);
+    const minute = values[1] < 10 ? '0' + values[1] : String(values[1]);
+    const time = `${hour}:${minute}`;
+    
+    // 如果与开始时间在同一天，需要检查是否早于开始时间
+    if (this.data.newTask.startDate === this.data.newTask.endDate && 
+        this.data.newTask.startTime &&
+        this.compareTimeStrings(this.data.newTask.startTime, time) > 0) {
+      wx.showToast({
+        title: '结束时间不能早于开始时间',
+        icon: 'none',
+        duration: 2000
+      });
+      
+      // 恢复到之前的值
+      const [prevHour, prevMinute] = this.data.endTimePickerValue;
+      setTimeout(() => {
+        this.setData({
+          endTimePickerValue: [prevHour, prevMinute]
+        });
+      }, 100);
+      return;
+    }
+    
+    console.log('[TaskEdit] 结束时间选择变化:', time);
+    
+    this.setData({
+      'newTask.endTime': time,
+      endTimePickerValue: values
+    });
+  },
+  
+  /**
+   * 确认结束时间选择
+   */
+  confirmEndTime: function() {
+    console.log('[TaskEdit] 确认结束时间:', this.data.newTask.endTime);
+    this.setData({
+      endTimePanel: false
     });
   },
   
@@ -1120,8 +1270,7 @@ Page({
         
         this.setData({
           'newTask.endTime': newEndTime,
-          endSelectedHour: newEndHour.toString().padStart(2, '0'),
-          endSelectedMinute: minutes.toString().padStart(2, '0')
+          endTimePickerValue: [newEndHour, minutes]
         });
         
         console.log('[TaskEdit] 调整结束时间:', newEndTime);
