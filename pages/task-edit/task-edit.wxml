@@ -1,8 +1,5 @@
 <!--pages/task-edit/task-edit.wxml-->
 <view class="container">
-  <!-- 遮罩层，用于点击关闭时间面板 -->
-  <view class="panel-mask {{anyPanelVisible ? 'visible' : ''}}" catchtap="closeAllPanels"></view>
-  
   <!-- 主内容区 -->
   <view class="content">
     
@@ -111,66 +108,14 @@
                 {{newTask.startDate}}
                 <text class="arrow-icon">{{startDatePanel ? '↑' : '↓'}}</text>
               </view>
-              <view class="time-picker {{newTask.isAllDay ? 'disabled' : ''}}" 
-                   bindtap="togglePanel" data-panel="startTimePanel" data-disabled="{{newTask.isAllDay}}">
-                {{newTask.isAllDay ? '全天' : newTask.startTime}}
-                <text class="arrow-icon" wx:if="{{!newTask.isAllDay}}">{{startTimePanel ? '↑' : '↓'}}</text>
-              </view>
-            </view>
-          </view>
-
-          <!-- 开始日期面板 -->
-          <view class="panel-container {{startDatePanel ? 'expanded' : ''}}">
-            <view class="calendar-panel" catchtap="preventClose">
-              <view class="calendar-header">
-                <view class="month-nav">
-                  <view class="nav-btn" bindtap="prevMonth" data-type="start">
-                    <text class="nav-icon">◀</text>
-                  </view>
-                  <view class="current-month-text">{{startPanelYear}}年{{startPanelMonth}}月</view>
-                  <view class="nav-btn" bindtap="nextMonth" data-type="start">
-                    <text class="nav-icon">▶</text>
-                  </view>
+              <picker mode="time" 
+                      value="{{newTask.startTime}}" 
+                      disabled="{{newTask.isAllDay}}"
+                      bindchange="onStartTimeChange">
+                <view class="time-picker {{newTask.isAllDay ? 'disabled' : ''}}">
+                  <text>{{newTask.isAllDay ? '全天' : newTask.startTime}}</text>
                 </view>
-              </view>
-              <view class="weekdays">
-                <view class="weekday" wx:for="{{['一','二','三','四','五','六','日']}}" wx:key="*this">{{item}}</view>
-              </view>
-              <view class="calendar-days">
-                <view 
-                  wx:for="{{startCalendarDays}}" 
-                  wx:key="index" 
-                  class="calendar-day {{item.currentMonth ? 'current-month' : 'other-month'}} {{item.date === newTask.startDate ? 'selected' : ''}} {{item.isToday ? 'today' : ''}}"
-                  bindtap="selectStartDate"
-                  data-date="{{item.date}}">
-                  {{item.day}}
-                </view>
-              </view>
-            </view>
-          </view>
-
-          <!-- 开始时间面板 -->
-          <view class="panel-container {{startTimePanel ? 'expanded' : ''}}">
-            <view class="time-panel" catchtap="preventClose">
-              <!-- 使用picker-view实现的时间选择器 -->
-              <picker-view class="time-picker-view" value="{{startTimePickerValue}}" 
-                           indicator-style="height: 70rpx; border-top: 1px solid rgba(66,133,244,0.5); border-bottom: 1px solid rgba(66,133,244,0.5); background-color: rgba(66,133,244,0.1);"
-                           mask-style="background: linear-gradient(to bottom, rgba(255,255,255,0.95), rgba(255,255,255,0.6), rgba(255,255,255,0.95));"
-                           bindchange="onStartTimePickerChange">
-                <picker-view-column>
-                  <view wx:for="{{24}}" wx:key="index" class="picker-item">
-                    {{index < 10 ? '0' + index : index}}
-                  </view>
-                </picker-view-column>
-                <picker-view-column>
-                  <view wx:for="{{60}}" wx:key="index" class="picker-item">
-                    {{index < 10 ? '0' + index : index}}
-                  </view>
-                </picker-view-column>
-              </picker-view>
-
-              <!-- 中央分隔符 -->
-              <view class="picker-separator">:</view>
+              </picker>
             </view>
           </view>
 
@@ -182,66 +127,14 @@
                 {{newTask.endDate}}
                 <text class="arrow-icon">{{endDatePanel ? '↑' : '↓'}}</text>
               </view>
-              <view class="time-picker {{newTask.isAllDay ? 'disabled' : ''}}" 
-                   bindtap="togglePanel" data-panel="endTimePanel" data-disabled="{{newTask.isAllDay}}">
-                {{newTask.isAllDay ? '全天' : newTask.endTime}}
-                <text class="arrow-icon" wx:if="{{!newTask.isAllDay}}">{{endTimePanel ? '↑' : '↓'}}</text>
-              </view>
-            </view>
-          </view>
-
-          <!-- 结束日期面板 -->
-          <view class="panel-container {{endDatePanel ? 'expanded' : ''}}">
-            <view class="calendar-panel" catchtap="preventClose">
-              <view class="calendar-header">
-                <view class="month-nav">
-                  <view class="nav-btn" bindtap="prevMonth" data-type="end">
-                    <text class="nav-icon">◀</text>
-                  </view>
-                  <view class="current-month-text">{{endPanelYear}}年{{endPanelMonth}}月</view>
-                  <view class="nav-btn" bindtap="nextMonth" data-type="end">
-                    <text class="nav-icon">▶</text>
-                  </view>
+              <picker mode="time" 
+                      value="{{newTask.endTime}}" 
+                      disabled="{{newTask.isAllDay}}"
+                      bindchange="onEndTimeChange">
+                <view class="time-picker {{newTask.isAllDay ? 'disabled' : ''}}">
+                  <text>{{newTask.isAllDay ? '全天' : newTask.endTime}}</text>
                 </view>
-              </view>
-              <view class="weekdays">
-                <view class="weekday" wx:for="{{['一','二','三','四','五','六','日']}}" wx:key="*this">{{item}}</view>
-              </view>
-              <view class="calendar-days">
-                <view 
-                  wx:for="{{endCalendarDays}}" 
-                  wx:key="index" 
-                  class="calendar-day {{item.currentMonth ? 'current-month' : 'other-month'}} {{item.date === newTask.endDate ? 'selected' : ''}} {{item.isToday ? 'today' : ''}}"
-                  bindtap="selectEndDate"
-                  data-date="{{item.date}}">
-                  {{item.day}}
-                </view>
-              </view>
-            </view>
-          </view>
-
-          <!-- 结束时间面板 -->
-          <view class="panel-container {{endTimePanel ? 'expanded' : ''}}">
-            <view class="time-panel" catchtap="preventClose">
-              <!-- 使用picker-view实现的时间选择器 -->
-              <picker-view class="time-picker-view" value="{{endTimePickerValue}}" 
-                           indicator-style="height: 70rpx; border-top: 1px solid rgba(66,133,244,0.5); border-bottom: 1px solid rgba(66,133,244,0.5); background-color: rgba(66,133,244,0.1);"
-                           mask-style="background: linear-gradient(to bottom, rgba(255,255,255,0.95), rgba(255,255,255,0.6), rgba(255,255,255,0.95));"
-                           bindchange="onEndTimePickerChange">
-                <picker-view-column>
-                  <view wx:for="{{24}}" wx:key="index" class="picker-item">
-                    {{index < 10 ? '0' + index : index}}
-                  </view>
-                </picker-view-column>
-                <picker-view-column>
-                  <view wx:for="{{60}}" wx:key="index" class="picker-item">
-                    {{index < 10 ? '0' + index : index}}
-                  </view>
-                </picker-view-column>
-              </picker-view>
-
-              <!-- 中央分隔符 -->
-              <view class="picker-separator">:</view>
+              </picker>
             </view>
           </view>
           
@@ -294,5 +187,88 @@
         </view>
       </view>
     </card>
+  </view>
+  
+  <!-- 日历遮罩层 -->
+  <view class="calendar-mask {{startDatePanel || endDatePanel ? 'visible' : ''}}" bindtap="closeAllPanels"></view>
+  
+  <!-- 开始日期面板 -->
+  <view class="calendar-container {{startDatePanel ? 'expanded' : ''}}">
+    <view class="calendar-panel" catchtap="preventClose">
+      <view class="calendar-header">
+        <!-- 左侧：年月选择区域 -->
+        <view class="header-year-month">
+          <view class="nav-btn month-nav" bindtap="changeMonth" data-type="start" data-action="prev" bindlongpress="changeYear" data-type="start" data-action="prev">
+            <text class="nav-icon">〈</text>
+          </view>
+          <picker mode="date" fields="month" value="{{startYearMonth}}" bindchange="onYearMonthChange" data-type="start">
+            <view class="header-year-month-text">{{startYearMonthText}}</view>
+          </picker>
+          <view class="nav-btn month-nav" bindtap="changeMonth" data-type="start" data-action="next" bindlongpress="changeYear" data-type="start" data-action="next">
+            <text class="nav-icon">〉</text>
+          </view>
+        </view>
+        
+        <!-- 中间：标题 -->
+        <text class="calendar-title">选择开始日期</text>
+        
+        <!-- 右侧：完成按钮 -->
+        <view class="calendar-close" bindtap="closeAllPanels">完成</view>
+      </view>
+      
+      <view class="weekdays">
+        <view class="weekday" wx:for="{{['一','二','三','四','五','六','日']}}" wx:key="*this">{{item}}</view>
+      </view>
+      <view class="calendar-days">
+        <view 
+          wx:for="{{startCalendarDays}}" 
+          wx:key="index" 
+          class="calendar-day {{item.currentMonth ? 'current-month' : 'other-month'}} {{item.date === newTask.startDate ? 'selected' : ''}} {{item.isToday ? 'today' : ''}}"
+          bindtap="selectStartDate"
+          data-date="{{item.date}}">
+          {{item.day}}
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 结束日期面板 -->
+  <view class="calendar-container {{endDatePanel ? 'expanded' : ''}}">
+    <view class="calendar-panel" catchtap="preventClose">
+      <view class="calendar-header">
+        <!-- 左侧：年月选择区域 -->
+        <view class="header-year-month">
+          <view class="nav-btn month-nav" bindtap="changeMonth" data-type="end" data-action="prev" bindlongpress="changeYear" data-type="end" data-action="prev">
+            <text class="nav-icon">〈</text>
+          </view>
+          <picker mode="date" fields="month" value="{{endYearMonth}}" bindchange="onYearMonthChange" data-type="end">
+            <view class="header-year-month-text">{{endYearMonthText}}</view>
+          </picker>
+          <view class="nav-btn month-nav" bindtap="changeMonth" data-type="end" data-action="next" bindlongpress="changeYear" data-type="end" data-action="next">
+            <text class="nav-icon">〉</text>
+          </view>
+        </view>
+        
+        <!-- 中间：标题 -->
+        <text class="calendar-title">选择结束日期</text>
+        
+        <!-- 右侧：完成按钮 -->
+        <view class="calendar-close" bindtap="closeAllPanels">完成</view>
+      </view>
+      
+      <view class="weekdays">
+        <view class="weekday" wx:for="{{['一','二','三','四','五','六','日']}}" wx:key="*this">{{item}}</view>
+      </view>
+      <view class="calendar-days">
+        <view 
+          wx:for="{{endCalendarDays}}" 
+          wx:key="index" 
+          class="calendar-day {{item.currentMonth ? 'current-month' : 'other-month'}} {{item.date === newTask.endDate ? 'selected' : ''}} {{item.isToday ? 'today' : ''}}"
+          bindtap="selectEndDate"
+          data-date="{{item.date}}">
+          {{item.day}}
+        </view>
+      </view>
+    </view>
   </view>
 </view>

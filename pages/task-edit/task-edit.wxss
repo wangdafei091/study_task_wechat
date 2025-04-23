@@ -57,19 +57,23 @@
 }
 
 .nav-btn {
-  width: 60rpx;
-  height: 60rpx;
+  width: 56rpx;
+  height: 56rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #f5f5f5;
-  border-radius: 50%;
-  margin-left: 12rpx;
+  background-color: transparent;
+  border-radius: 8rpx;
 }
 
 .nav-icon {
-  font-size: 24rpx;
+  font-size: 28rpx;
   color: #666;
+}
+
+.nav-btn:active {
+  background-color: #f0f0f0;
+  opacity: 0.8;
 }
 
 /* 演示控制区域样式 */
@@ -199,183 +203,106 @@
   align-items: center;
   justify-content: center;
   font-size: 28rpx;
-  color: #666;
-  transition: all 0.2s ease;
+  background-color: #f5f5f5;
+  position: relative;
+  transition: all 0.2s;
 }
 
 .type-option.selected {
-  color: white;
   font-weight: 500;
+  background-color: rgba(66, 133, 244, 0.1);
+  color: #4285F4;
 }
 
 .type-option.selected.habit {
-  background-color: #4caf50;
+  background-color: rgba(76, 175, 80, 0.1);
+  color: #4CAF50;
 }
 
 .type-option.selected.study {
-  background-color: #2196f3;
+  background-color: rgba(66, 133, 244, 0.1);
+  color: #4285F4;
 }
 
 .type-option.selected.interest {
-  background-color: #ff9800;
+  background-color: rgba(255, 152, 0, 0.1);
+  color: #FF9800;
 }
 
+.type-option:active {
+  opacity: 0.7;
+}
+
+/* 积分设置样式 */
 .points-setting {
   flex: 0.35;
 }
 
 .points-stepper {
   display: flex;
-  height: 80rpx;
+  align-items: center;
   background-color: #f5f5f5;
   border-radius: 8rpx;
+  height: 80rpx;
   overflow: hidden;
 }
 
 .stepper-btn {
   width: 80rpx;
+  height: 80rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #e0e0e0;
-  color: #333;
-  font-size: 32rpx;
-  font-weight: 700;
-  transition: background-color 0.2s;
+  font-size: 36rpx;
+  color: #666;
+  background-color: rgba(0, 0, 0, 0.03);
 }
 
 .stepper-btn:active {
-  background-color: #c0c0c0;
+  background-color: rgba(0, 0, 0, 0.08);
 }
 
 .stepper-input {
   flex: 1;
-  text-align: center;
-  font-size: 28rpx;
   height: 100%;
+  text-align: center;
+  font-size: 32rpx;
+  background-color: transparent;
+  color: #333;
 }
 
-/* 按钮区域样式 */
-.button-area {
-  display: flex;
-  justify-content: flex-end;
-}
-
-.btn-clear {
-  width: 160rpx;
-  height: 80rpx;
-  margin-right: 20rpx;
+/* 描述输入框样式 */
+.task-description-field {
+  position: relative;
   background-color: #f5f5f5;
-  color: #666;
-  font-size: 28rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   border-radius: 8rpx;
-  transition: all 0.2s;
+  padding: 8rpx 20rpx;
 }
 
-.btn-clear:active {
-  background-color: #e0e0e0;
-}
-
-.btn-add {
-  width: 220rpx;
-  height: 80rpx;
-  background-color: #4285f4;
-  color: white;
+.task-description-input {
+  width: 100%;
   font-size: 28rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 8rpx;
-  transition: all 0.2s;
+  color: #333;
 }
 
-.btn-add:active {
-  background-color: #3367d6;
-  transform: scale(0.98);
-}
-
-.btn-add.disabled {
-  background-color: #cccccc;
-  color: #999999;
-}
-
-/* 时间周期和频率编辑区域样式 */
-.time-frequency-area {
-  margin-top: 30rpx;
-  border-top: 1rpx solid #f0f0f0;
-  padding-top: 20rpx;
-}
-
-/* 开关项样式 */
-.switch-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 15rpx 0;
-  margin-bottom: 30rpx;
-}
-
-/* 选项头部样式 */
-.input-item-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 15rpx 0;
-  cursor: pointer;
-}
-
-.repeat-value, .reminder-value {
-  flex: 1;
-  text-align: right;
-  color: #666;
-  font-size: 28rpx;
-  margin-right: 10rpx;
-}
-
-.arrow-icon {
-  margin-left: 8rpx;
+.task-description-counter {
+  position: absolute;
+  right: 20rpx;
+  bottom: 8rpx;
   font-size: 20rpx;
   color: #999;
 }
 
-/* 重复和提醒选项样式 */
-.repeat-options, .reminder-options {
-  max-height: 0;
-  overflow: hidden;
-  transition: max-height 0.3s ease;
-  background-color: #f8f8f8;
-  border-radius: 8rpx;
+/* 时间周期和频率区域样式 */
+.time-frequency-area {
+  margin-bottom: 30rpx;
 }
 
-.repeat-options.expanded, .reminder-options.expanded {
-  max-height: 300rpx;
-  padding: 10rpx 0;
-}
-
-.repeat-option, .reminder-option {
-  padding: 20rpx;
-  font-size: 28rpx;
-  color: #333;
-  border-bottom: 1rpx solid #f0f0f0;
-}
-
-.repeat-option:last-child, .reminder-option:last-child {
-  border-bottom: none;
-}
-
-.repeat-option.selected, .reminder-option.selected {
-  color: #4285F4;
-  position: relative;
-}
-
-.repeat-option.selected:after, .reminder-option.selected:after {
-  content: "✓";
-  position: absolute;
-  right: 20rpx;
-  color: #4285F4;
+/* 开关样式 */
+.switch-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 /* 时间选择器样式 */
@@ -420,101 +347,170 @@
   color: #999999;
 }
 
-/* 下推面板容器 */
-.panel-container {
+/* 重复选项和提醒选项样式 */
+.input-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12rpx 0;
+}
+
+.repeat-value, .reminder-value {
+  font-size: 28rpx;
+  color: #666;
+}
+
+.arrow-icon {
+  margin-left: 10rpx;
+  font-size: 24rpx;
+  color: #999;
+}
+
+.repeat-options, .reminder-options {
   max-height: 0;
   overflow: hidden;
   transition: max-height 0.3s ease;
-  margin-top: -10rpx;
-  margin-bottom: 20rpx;
-  width: 100%;
-  background-color: transparent;
-}
-
-.panel-container.expanded {
-  max-height: 400rpx;
-  overflow-y: auto;
-  border-radius: 0 0 16rpx 16rpx;
-  background: linear-gradient(to bottom, #f9f9f9, #f5f5f5);
-  box-shadow: 0 4rpx 12rpx rgba(0,0,0,0.08);
-}
-
-/* 日历面板样式 */
-.calendar-panel {
-  width: 100%;
   background-color: #f8f8f8;
-  border-radius: 0 0 8rpx 8rpx;
-  box-shadow: 0 2rpx 8rpx rgba(0,0,0,0.05);
-  padding: 12rpx;
-  box-sizing: border-box;
+  border-radius: 8rpx;
 }
 
-.calendar-header {
-  margin-bottom: 10rpx;
+.repeat-options.expanded, .reminder-options.expanded {
+  max-height: 300rpx;
+  margin-top: 10rpx;
+  margin-bottom: 20rpx;
 }
 
-.month-nav {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.nav-btn {
-  width: 50rpx;
-  height: 50rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background-color: #f5f5f5;
-  border-radius: 50%;
-}
-
-.current-month-text {
-  margin: 0 15rpx;
+.repeat-option, .reminder-option {
+  padding: 20rpx;
   font-size: 28rpx;
-  font-weight: 500;
   color: #333;
+  position: relative;
+  border-bottom: 1rpx solid #f0f0f0;
+}
+
+.repeat-option:last-child, .reminder-option:last-child {
+  border-bottom: none;
+}
+
+.repeat-option.selected, .reminder-option.selected {
+  color: #4285F4;
+  background-color: rgba(66, 133, 244, 0.05);
+}
+
+.repeat-option.selected:after, .reminder-option.selected:after {
+  content: "✓";
+  position: absolute;
+  right: 20rpx;
+  color: #4285F4;
+}
+
+/* 按钮区域样式 */
+.button-area {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 30rpx;
+}
+
+.btn-clear {
+  margin-right: 20rpx;
+  background-color: #f5f5f5;
+  color: #666;
+  font-size: 28rpx;
+  padding: 12rpx 30rpx;
+  border-radius: 8rpx;
+  box-shadow: 0 1rpx 3rpx rgba(0, 0, 0, 0.1);
+}
+
+.btn-add {
+  background-color: #4285F4;
+  color: white;
+  font-size: 28rpx;
+  padding: 12rpx 40rpx;
+  border-radius: 8rpx;
+  box-shadow: 0 1rpx 3rpx rgba(0, 0, 0, 0.2);
+}
+
+.btn-add.disabled {
+  background-color: #bdbdbd;
+  box-shadow: none;
+}
+
+.btn-clear:active, .btn-add:active {
+  transform: scale(0.98);
+  opacity: 0.9;
+}
+
+/* 日历容器 */
+.calendar-container {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  transform: translateY(100%);
+  transition: transform 0.25s ease-out;
+  background-color: #ffffff;
+  border-radius: 12rpx 12rpx 0 0;
+  box-shadow: 0 -2rpx 10rpx rgba(0, 0, 0, 0.1);
+  z-index: 1001;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.calendar-container.expanded {
+  transform: translateY(0);
+}
+
+/* 日历遮罩层 */
+.calendar-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease-out;
+}
+
+.calendar-mask.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.calendar-panel {
+  padding: 30rpx 24rpx;
 }
 
 .weekdays {
   display: flex;
-  margin-bottom: 4rpx;
-  border-bottom: 1rpx solid #F0F0F0;
-  padding-bottom: 4rpx;
+  border-bottom: 1rpx solid #f0f0f0;
+  padding-bottom: 16rpx;
+  margin-bottom: 16rpx;
 }
 
 .weekday {
   flex: 1;
   text-align: center;
-  font-size: 22rpx;
+  font-size: 28rpx;
   color: #999;
-  padding: 6rpx 0;
 }
 
 .calendar-days {
   display: flex;
   flex-wrap: wrap;
-  width: 100%;
+  padding: 10rpx 0 20rpx 0;
 }
 
 .calendar-day {
   width: 14.28%;
-  height: 45rpx;
+  height: 70rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 22rpx;
+  font-size: 30rpx;
   position: relative;
-  box-sizing: border-box;
-  margin: 1rpx 0;
-  padding: 0;
-  border-radius: 4rpx;
-  transition: all 0.2s ease;
-}
-
-.calendar-day.current-month:active {
-  transform: scale(0.95);
-  opacity: 0.8;
 }
 
 .current-month {
@@ -526,11 +522,10 @@
 }
 
 .calendar-day.selected {
-  background-color: rgba(66, 133, 244, 0.1);
-  color: #4285F4;
+  background-color: rgba(66,133,244,0.1);
+  color: #576B95;
   font-weight: 500;
-  border-radius: 4rpx;
-  box-shadow: inset 0 0 0 2rpx #4285F4;
+  border-radius: 8rpx;
 }
 
 .calendar-day.today {
@@ -540,82 +535,78 @@
 .calendar-day.today:after {
   content: '';
   position: absolute;
-  bottom: 2rpx;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 6rpx;
-  height: 6rpx;
+  bottom: 6rpx;
+  width: 8rpx;
+  height: 8rpx;
   border-radius: 50%;
-  background-color: #4285F4;
+  background-color: #576B95;
 }
 
-/* 强化今天日期的样式 */
-.calendar-day.today {
-  font-weight: 600;
-  color: #4285F4;
-  box-shadow: inset 0 0 0 1rpx rgba(66, 133, 244, 0.3);
+/* 日历面板标题栏 */
+.calendar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 0 30rpx 0;
+  border-bottom: 1rpx solid #f0f0f0;
+  margin-bottom: 20rpx;
 }
 
-/* 已移除不再需要的日历底部样式 */
-
-/* 时间面板样式 */
-.time-panel {
-  background: #fff;
-  border-radius: 8rpx;
-  box-shadow: 0 2rpx 10rpx rgba(0,0,0,0.1);
-  padding: 15rpx 20rpx;
-  position: relative;
+/* 左侧年月选择器区域 */
+.header-year-month {
+  display: flex;
+  align-items: center;
+  flex: 0.35;
 }
 
-/* picker-view样式 */
-.time-picker-view {
-  width: 100%;
-  height: 180rpx;
-}
-
-.picker-item {
-  line-height: 70rpx;
-  text-align: center;
+.header-year-month-text {
+  font-size: 34rpx;
+  font-weight: 500;
   color: #333;
-  font-size: 28rpx;
+  padding: 0 10rpx;
+  min-width: 160rpx;
+  text-align: center;
 }
 
-/* 中央分隔符 */
-.picker-separator {
-  position: absolute;
-  top: 105rpx;
-  left: 50%;
-  transform: translateX(-50%);
+.header-year-month-text:active {
+  opacity: 0.7;
+}
+
+/* 中间标题区域 */
+.calendar-title {
+  font-size: 30rpx;
+  font-weight: 400;
   color: #666;
+  text-align: center;
+  flex: 0.3;
+  opacity: 0.9;
+}
+
+/* 右侧按钮区域 */
+.calendar-close {
   font-size: 32rpx;
-  z-index: 10;
-  pointer-events: none;
+  color: #576B95;
+  padding: 10rpx 16rpx;
+  position: relative;
+  flex: 0.35;
+  text-align: right;
 }
 
-/* 遮罩层样式 */
-.panel-mask {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: transparent;
-  z-index: 90;
+/* 添加点击反馈效果 */
+.calendar-close:active {
+  opacity: 0.7;
+}
+
+/* 添加点击反馈 */
+.calendar-day:active {
+  opacity: 0.7;
+  background-color: rgba(66,133,244,0.05);
+}
+
+/* 年月导航区域 */
+.calendar-nav,
+.year-month-text,
+.year-nav,
+.current-month-year:active {
   display: none;
-}
-
-.panel-mask.visible {
-  display: block;
-}
-
-/* 确保面板在遮罩层之上 */
-.panel-container.expanded {
-  z-index: 100;
-  position: relative;
-}
-
-/* 确保时间面板在遮罩层之上 */
-.time-panel {
-  z-index: 100;
-  position: relative;
 } 
