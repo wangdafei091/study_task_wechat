@@ -63,7 +63,41 @@ Page({
     startSelectedHour: '08',
     startSelectedMinute: '00',
     endSelectedHour: '09',
-    endSelectedMinute: '00'
+    endSelectedMinute: '00',
+    // 时间快速选择标签
+    timeQuickTags: {
+      morning: [
+        { time: '06:00' },
+        { time: '06:30' },
+        { time: '07:00' },
+        { time: '07:30' },
+        { time: '08:00' },
+        { time: '08:30' },
+        { time: '09:00' },
+        { time: '09:30' },
+        { time: '10:00' },
+        { time: '10:30' },
+        { time: '11:00' },
+        { time: '11:30' }
+      ],
+      afternoon: [
+        { time: '14:00' },
+        { time: '14:30' },
+        { time: '15:00' },
+        { time: '15:30' },
+        { time: '16:00' },
+        { time: '16:30' },
+        { time: '17:00' },
+        { time: '17:30' }
+      ],
+      evening: [
+        { time: '19:00' },
+        { time: '19:30' },
+        { time: '20:00' },
+        { time: '20:30' },
+        { time: '21:00' }
+      ]
+    }
   },
 
   /**
@@ -1190,6 +1224,18 @@ Page({
     const time = e.currentTarget.dataset.time;
     const type = e.currentTarget.dataset.type;
     
+    // 记录日志：时间段分类
+    let timeCategory = '';
+    if (time >= '06:00' && time <= '11:30') {
+      timeCategory = '上午';
+    } else if (time >= '14:00' && time <= '17:30') {
+      timeCategory = '下午';
+    } else if (time >= '19:00' && time <= '21:00') {
+      timeCategory = '傍晚';
+    }
+    
+    console.log(`[TaskEdit] 选择${type === 'start' ? '开始' : '结束'}快捷时间: ${time}，时间段: ${timeCategory}`);
+    
     if (type === 'start') {
       // 如果结束时间与开始时间在同一天且早于新的开始时间，调整结束时间
       if (this.data.newTask.startDate === this.data.newTask.endDate && 
@@ -1205,6 +1251,8 @@ Page({
           endSelectedHour: newEndHour.toString().padStart(2, '0'),
           endSelectedMinute: minutes.toString().padStart(2, '0')
         });
+        
+        console.log(`[TaskEdit] 自动调整结束时间为: ${newEndTime} (开始时间后一小时)`);
       }
       
       this.setData({
@@ -1223,6 +1271,7 @@ Page({
           icon: 'none',
           duration: 2000
         });
+        console.log(`[TaskEdit] 结束时间选择失败: ${time} 早于开始时间 ${this.data.newTask.startTime}`);
         return;
       }
       
@@ -1233,7 +1282,5 @@ Page({
         endSelectedMinute: time.split(':')[1]
       });
     }
-    
-    console.log(`[TaskEdit] 选择${type === 'start' ? '开始' : '结束'}快捷时间:`, time);
   },
 }) 

@@ -149,7 +149,53 @@
           <!-- 开始时间面板 -->
           <view class="panel-container {{startTimePanel ? 'expanded' : ''}}">
             <view class="time-panel">
-              <!-- 面板内容已清除 -->
+              <!-- 时间标签分类 -->
+              <view class="time-tags-container">
+                <!-- 上午时间 -->
+                <view class="time-tag-section">
+                  <view class="time-tag-header">上午</view>
+                  <view class="time-tag-list">
+                    <view class="time-tag {{newTask.startTime === item.time ? 'selected' : ''}}" 
+                          wx:for="{{timeQuickTags.morning}}" 
+                          wx:key="time" 
+                          bindtap="selectQuickTime" 
+                          data-time="{{item.time}}" 
+                          data-type="start">
+                      {{item.time}}
+                    </view>
+                  </view>
+                </view>
+                
+                <!-- 下午时间 -->
+                <view class="time-tag-section">
+                  <view class="time-tag-header">下午</view>
+                  <view class="time-tag-list">
+                    <view class="time-tag {{newTask.startTime === item.time ? 'selected' : ''}}" 
+                          wx:for="{{timeQuickTags.afternoon}}" 
+                          wx:key="time" 
+                          bindtap="selectQuickTime" 
+                          data-time="{{item.time}}" 
+                          data-type="start">
+                      {{item.time}}
+                    </view>
+                  </view>
+                </view>
+                
+                <!-- 傍晚时间 -->
+                <view class="time-tag-section">
+                  <view class="time-tag-header">傍晚</view>
+                  <view class="time-tag-list">
+                    <view class="time-tag {{newTask.startTime === item.time ? 'selected' : ''}}" 
+                          wx:for="{{timeQuickTags.evening}}" 
+                          wx:key="time" 
+                          bindtap="selectQuickTime" 
+                          data-time="{{item.time}}" 
+                          data-type="start">
+                      {{item.time}}
+                    </view>
+                  </view>
+                </view>
+              </view>
             </view>
           </view>
 
@@ -202,7 +248,53 @@
           <!-- 结束时间面板 -->
           <view class="panel-container {{endTimePanel ? 'expanded' : ''}}">
             <view class="time-panel">
-              <!-- 面板内容已清除 -->
+              <!-- 时间标签分类 -->
+              <view class="time-tags-container">
+                <!-- 上午时间 -->
+                <view class="time-tag-section">
+                  <view class="time-tag-header">上午</view>
+                  <view class="time-tag-list">
+                    <view class="time-tag {{newTask.endTime === item.time ? 'selected' : ''}}" 
+                          wx:for="{{timeQuickTags.morning}}" 
+                          wx:key="time" 
+                          bindtap="selectQuickTime" 
+                          data-time="{{item.time}}" 
+                          data-type="end">
+                      {{item.time}}
+                    </view>
+                  </view>
+                </view>
+                
+                <!-- 下午时间 -->
+                <view class="time-tag-section">
+                  <view class="time-tag-header">下午</view>
+                  <view class="time-tag-list">
+                    <view class="time-tag {{newTask.endTime === item.time ? 'selected' : ''}}" 
+                          wx:for="{{timeQuickTags.afternoon}}" 
+                          wx:key="time" 
+                          bindtap="selectQuickTime" 
+                          data-time="{{item.time}}" 
+                          data-type="end">
+                      {{item.time}}
+                    </view>
+                  </view>
+                </view>
+                
+                <!-- 傍晚时间 -->
+                <view class="time-tag-section">
+                  <view class="time-tag-header">傍晚</view>
+                  <view class="time-tag-list">
+                    <view class="time-tag {{newTask.endTime === item.time ? 'selected' : ''}}" 
+                          wx:for="{{timeQuickTags.evening}}" 
+                          wx:key="time" 
+                          bindtap="selectQuickTime" 
+                          data-time="{{item.time}}" 
+                          data-type="end">
+                      {{item.time}}
+                    </view>
+                  </view>
+                </view>
+              </view>
             </view>
           </view>
           
