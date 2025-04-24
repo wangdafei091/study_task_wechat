@@ -251,16 +251,14 @@ Page({
    * 处理积分输入
    */
   onPointsInput: function(e) {
-    let points = parseInt(e.detail.value) || 0;
-    
-    // 限制积分范围
-    points = Math.max(1, Math.min(50, points));
+    // 只记录用户输入，不做验证限制
+    const inputValue = e.detail.value;
     
     this.setData({
-      'newTask.points': points
+      'newTask.points': inputValue
     });
     
-    console.log('积分输入:', points);
+    console.log('[TaskEdit] 积分输入原始值:', inputValue);
   },
 
   /**
@@ -338,6 +336,20 @@ Page({
       return;
     }
     
+    // 验证积分范围
+    let taskPoints = parseInt(this.data.newTask.points) || 0;
+    if (taskPoints < 1 || taskPoints > 50) {
+      // 限制积分范围在1-50之间
+      taskPoints = Math.max(1, Math.min(50, taskPoints));
+      
+      // 更新为有效值
+      this.setData({
+        'newTask.points': taskPoints
+      });
+      
+      console.log('[TaskEdit] 积分已调整到有效范围:', taskPoints);
+    }
+    
     // 验证日期和时间
     if (!this.data.newTask.startDate) {
       wx.showToast({
@@ -377,7 +389,7 @@ Page({
       const newTask = {
         title: this.data.newTask.title,
         type: this.data.newTask.type,
-        points: this.data.newTask.points,
+        points: taskPoints, // 使用验证后的积分值
         description: this.data.newTask.description,
         date: this.data.newTask.startDate,
         isAllDay: this.data.newTask.isAllDay,

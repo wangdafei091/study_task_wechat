@@ -762,4 +762,12 @@
 /* 确保占位符样式正确 */
 .header-placeholder {
   width: 160rpx;
+}
+
+/* 积分范围提示 */
+.range-hint {
+  font-size: 24rpx;
+  color: #999;
+  font-weight: normal;
+  margin-left: 8rpx;
 } 

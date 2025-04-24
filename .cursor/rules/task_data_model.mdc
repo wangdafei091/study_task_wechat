@@ -1,0 +1,92 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# 任务数据模型
+
+## 任务对象结构
+
+任务对象是应用的核心数据模型，结构如下：
+
+```javascript
+{
+  id: 'task_123456789_123',      // 任务唯一ID
+  title: '练习钢琴',              // 任务标题
+  description: '练习新曲目30分钟', // 任务描述
+  type: 'study',                 // 任务类型: 'study'(学习)/'habit'(习惯)/'interest'(兴趣)
+  date: '2023-05-23',            // 任务日期，YYYY-MM-DD格式
+  createTime: 1621693875000,     // 创建时间戳
+  modifyTime: 1621693875000,     // 修改时间戳
+  status: 'pending',             // 任务状态: 'pending'/'completed'/'canceled'
+  
+  // 学习任务特有字段
+  startTime: '08:00',            // 开始时间
+  endTime: '08:30',              // 结束时间
+  duration: 30,                  // 持续时间(分钟)
+  
+  // 重复任务配置
+  repeat: {
+    type: 'daily',               // 重复类型: 'none'/'daily'/'weekly'/'workdays'/'custom'
+    startDate: '2023-05-23',     // 开始日期
+    endDate: '2023-06-23',       // 结束日期
+    days: ['0','1','5']          // 当type为custom时，指定重复的星期几(0-6)
+  },
+  
+  // 完成记录
+  completionRecords: [
+    {
+      date: '2023-05-23',        // 完成日期
+      timestamp: 1621693875000,  // 完成时间戳
+      notes: '提前完成了'         // 完成备注
+    }
+  ],
+  
+  // 奖励点数
+  rewardPoints: 10,              // 完成可获得的奖励点数
+  
+  // 任务标签
+  tags: ['音乐', '练习']
+}
+```
+
+## 任务类型定义
+
+项目支持三种类型的任务：
+
+1. **学习任务 (study)**
+   - 有明确的开始时间和结束时间
+   - 通常与学业相关
+   - 示例：语文作业、数学练习、阅读
+
+2. **习惯任务 (habit)**
+   - 培养良好习惯的任务
+   - 通常需要重复执行
+   - 示例：每天喝水、早起、整理房间
+
+3. **兴趣任务 (interest)**
+   - 与兴趣爱好相关的活动
+   - 培养多元化发展
+   - 示例：画画、弹钢琴、运动
+
+## 任务状态流转
+
+任务状态包括：
+- `pending`: 待完成
+- `completed`: 已完成
+- `canceled`: 已取消
+
+状态流转通过 `taskManager.updateTaskStatus()` 方法实现：
+
+```javascript
+taskManager.updateTaskStatus(taskId, newStatus, callback);
+```
+
+## 任务生命周期
+
+1. 创建任务: `taskManager.createTask()`
+2. 编辑任务: `taskManager.editTask()`
+3. 更新状态: `taskManager.updateTaskStatus()`
+4. 删除任务: `taskManager.deleteTask()`
+
+完整的任务操作逻辑在 [utils/taskManager.js](mdc:utils/taskManager.js) 中定义。
