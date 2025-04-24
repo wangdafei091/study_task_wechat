@@ -45,6 +45,44 @@
   color: #333;
 }
 
+/* 新的月份导航组件样式 */
+.month-navigator {
+  display: flex;
+  align-items: center;
+  background-color: rgba(248, 249, 250, 0.6);
+  border-radius: 32rpx;
+  padding: 6rpx 8rpx;
+  border: 1rpx solid rgba(0, 0, 0, 0.03);
+}
+
+.month-display {
+  font-size: 28rpx;
+  color: #666;
+  margin: 0 10rpx;
+  min-width: 140rpx;
+  text-align: center;
+}
+
+.month-navigator .nav-btn {
+  width: 56rpx;
+  height: 56rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: transparent;
+  border-radius: 28rpx;
+}
+
+.month-navigator .nav-btn:active {
+  background-color: rgba(0, 0, 0, 0.03);
+}
+
+.month-navigator .nav-icon {
+  font-size: 28rpx;
+  color: #666;
+}
+
+/* 旧的月份导航样式 */
 .month-title {
   font-size: 28rpx;
   color: #666;

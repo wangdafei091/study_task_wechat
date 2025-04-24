@@ -8,12 +8,12 @@
       <view class="heatmap-header">
         <view class="heatmap-title">
           <text class="main-title">任务分布</text>
-          <text class="month-title">{{heatmapMonth}}</text>
         </view>
-        <view class="month-nav">
+        <view class="month-navigator">
           <view class="nav-btn prev" bindtap="prevHeatmapMonth">
             <text class="nav-icon">◀</text>
           </view>
+          <text class="month-display">{{heatmapMonth}}</text>
           <view class="nav-btn next" bindtap="nextHeatmapMonth">
             <text class="nav-icon">▶</text>
           </view>
