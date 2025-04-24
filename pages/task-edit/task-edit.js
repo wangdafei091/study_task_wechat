@@ -10,7 +10,6 @@ Page({
     heatmapYear: new Date().getFullYear(),
     heatmapMonthIndex: new Date().getMonth(),
     heatmapMonth: '',
-    isDemoData: false,
     // 添加新任务表单数据
     newTask: {
       title: '',
@@ -51,8 +50,6 @@ Page({
     // 新增重复和提醒面板控制
     repeatPanel: false, 
     reminderPanel: false,
-    // 自定义重复面板控制
-    customRepeatPanel: false,
     // 重复面板模式：'type'表示选择重复类型，'weekday'表示选择星期
     repeatPanelMode: 'type',
     // 星期选择状态 [周日,周一,周二,周三,周四,周五,周六]
@@ -99,20 +96,10 @@ Page({
       startDatePanel: false,
       endDatePanel: false,
       repeatPanel: false,
-      reminderPanel: false,
-      customRepeatPanel: false
+      reminderPanel: false
     });
     
     console.log('[TaskEdit] 初始化面板状态：全部关闭');
-    
-    // 如果URL参数中指定了演示模式，自动生成演示数据
-    if (options.demo === 'true') {
-      console.log('[TaskEdit] 自动加载演示数据');
-      // 延迟300ms生成演示数据，确保热力图组件已初始化
-      setTimeout(() => {
-        this.generateDemoData();
-      }, 300);
-    }
   },
 
   /**
@@ -135,8 +122,7 @@ Page({
       const allTasks = app.globalData.tasks || [];
       
       this.setData({ 
-        allTasks: allTasks,
-        isDemoData: false 
+        allTasks: allTasks
       });
       
       console.log('任务数据加载成功，共 ' + allTasks.length + ' 个任务');
@@ -215,83 +201,6 @@ Page({
   onHeatmapDaySelect: function(e) {
     console.log('[TaskEdit] 热力图日期选择:', e.detail);
     // 日期选择事件由热力图组件内部处理
-  },
-
-  /**
-   * 生成演示用的假数据
-   */
-  generateDemoData: function() {
-    console.log('[TaskEdit] 生成热力图演示数据');
-    
-    try {
-      // 保存当前的任务数据备份
-      const app = getApp();
-      const realTasks = app.globalData.tasks || [];
-      this._realTasksBackup = [...realTasks];
-      
-      // 生成一个月的随机任务
-      const demoTasks = [];
-      const year = this.data.heatmapYear;
-      const month = this.data.heatmapMonthIndex;
-      
-      // 获取指定月份的天数
-      const daysInMonth = new Date(year, month + 1, 0).getDate();
-      
-      // 随机生成30-60个任务
-      const taskCount = Math.floor(Math.random() * 30) + 30;
-      
-      for (let i = 0; i < taskCount; i++) {
-        // 随机日期（1到月底）
-        const day = Math.floor(Math.random() * daysInMonth) + 1;
-        const dateStr = `${year}-${(month + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
-        
-        // 随机类型
-        const types = ['habit', 'study', 'interest'];
-        const typeIndex = Math.floor(Math.random() * types.length);
-        
-        // 随机完成状态（60%的概率完成）
-        const completed = Math.random() < 0.6;
-        
-        demoTasks.push({
-          id: `demo_${i}`,
-          title: `示例任务 ${i + 1}`,
-          type: types[typeIndex],
-          date: dateStr,
-          status: completed ? 1 : 0,
-          points: Math.floor(Math.random() * 20) + 1
-        });
-      }
-      
-      // 更新演示数据
-      this.setData({ 
-        allTasks: demoTasks,
-        isDemoData: true 
-      });
-      
-      wx.showToast({
-        title: '已加载演示数据',
-        icon: 'none',
-        duration: 2000
-      });
-    } catch (error) {
-      console.error('生成演示数据失败:', error);
-    }
-  },
-
-  /**
-   * 重置演示数据
-   */
-  resetDemoData: function() {
-    if (this.data.isDemoData) {
-      this.loadAllTasks();
-      this.setData({ isDemoData: false });
-      
-      wx.showToast({
-        title: '已恢复真实数据',
-        icon: 'none',
-        duration: 2000
-      });
-    }
   },
 
   /**

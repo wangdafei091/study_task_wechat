@@ -71,46 +71,7 @@
   color: #666;
 }
 
-.nav-btn:active {
-  background-color: #f0f0f0;
-  opacity: 0.8;
-}
-
 /* 演示控制区域样式 */
-.demo-controls {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  margin-left: 16rpx;
-  border-left: 1rpx solid #f0f0f0;
-  padding-left: 16rpx;
-}
-
-.demo-btn {
-  background-color: #4285F4;
-  color: white;
-  font-size: 20rpx;
-  padding: 6rpx 12rpx;
-  border-radius: 20rpx;
-  box-shadow: 0 1rpx 4rpx rgba(0, 0, 0, 0.1);
-  transition: all 0.2s;
-}
-
-.demo-btn.reset {
-  background-color: #FB8C00;
-}
-
-.demo-btn:active {
-  transform: scale(0.96);
-  opacity: 0.9;
-}
-
-.demo-status {
-  font-size: 18rpx;
-  color: #999;
-  margin-left: 6rpx;
-}
-
 /* 卡片子标题 */
 .card-subtitle {
   font-size: 22rpx;
