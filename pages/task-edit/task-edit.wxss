@@ -343,8 +343,16 @@
 }
 
 .time-picker.disabled {
-  background-color: #f0f0f0;
-  color: #999999;
+  color: #999;
+  background-color: #f5f5f5;
+  pointer-events: none;
+}
+
+/* 无结束日期启用时的样式 */
+.date-picker.disabled {
+  color: #999;
+  background-color: #f5f5f5;
+  pointer-events: none;
 }
 
 /* 重复选项和提醒选项样式 - 移除原有下拉样式 */
@@ -536,6 +544,27 @@
   height: 8rpx;
   border-radius: 50%;
   background-color: #576B95;
+}
+
+/* 过去日期的样式 */
+.calendar-day.past {
+  opacity: 0.6;
+}
+
+.calendar-day.past.current-month {
+  color: #999;
+}
+
+.calendar-day.past.other-month {
+  color: #ccc;
+  opacity: 0.5;
+}
+
+/* 过去日期被选中的样式 */
+.calendar-day.past.selected {
+  background-color: rgba(66,133,244,0.05);
+  color: #8da3c8;
+  opacity: 0.8;
 }
 
 /* 日历面板标题栏 */

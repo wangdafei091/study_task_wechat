@@ -123,19 +123,25 @@
           <view class="input-item time-item">
             <text class="input-label">结束时间</text>
             <view class="time-selector">
-              <view class="date-picker" bindtap="togglePanel" data-panel="endDatePanel">
-                {{newTask.endDate}}
-                <text class="arrow-icon">{{endDatePanel ? '↑' : '↓'}}</text>
+              <view class="date-picker {{newTask.hasNoEndDate ? 'disabled' : ''}}" bindtap="{{!newTask.hasNoEndDate ? 'togglePanel' : ''}}" data-panel="endDatePanel">
+                {{newTask.hasNoEndDate ? '无结束日期' : newTask.endDate}}
+                <text class="arrow-icon" wx:if="{{!newTask.hasNoEndDate}}">{{endDatePanel ? '↑' : '↓'}}</text>
               </view>
               <picker mode="time" 
                       value="{{newTask.endTime}}" 
-                      disabled="{{newTask.isAllDay}}"
+                      disabled="{{newTask.isAllDay || newTask.hasNoEndDate}}"
                       bindchange="onEndTimeChange">
-                <view class="time-picker {{newTask.isAllDay ? 'disabled' : ''}}">
-                  <text>{{newTask.isAllDay ? '全天' : newTask.endTime}}</text>
+                <view class="time-picker {{(newTask.isAllDay || newTask.hasNoEndDate) ? 'disabled' : ''}}">
+                  <text>{{newTask.isAllDay ? '全天' : (newTask.hasNoEndDate ? '无结束时间' : newTask.endTime)}}</text>
                 </view>
               </picker>
             </view>
+          </view>
+          
+          <!-- 无结束日期选项 -->
+          <view class="input-item switch-item">
+            <text class="input-label">无结束日期</text>
+            <switch checked="{{newTask.hasNoEndDate}}" bindchange="toggleNoEndDate" color="#4285F4" />
           </view>
           
           <!-- 重复选项 -->
@@ -204,7 +210,7 @@
         <view 
           wx:for="{{startCalendarDays}}" 
           wx:key="index" 
-          class="calendar-day {{item.currentMonth ? 'current-month' : 'other-month'}} {{item.date === newTask.startDate ? 'selected' : ''}} {{item.isToday ? 'today' : ''}}"
+          class="calendar-day {{item.currentMonth ? 'current-month' : 'other-month'}} {{item.date === newTask.startDate ? 'selected' : ''}} {{item.isToday ? 'today' : ''}} {{item.isPast ? 'past' : ''}}"
           bindtap="selectStartDate"
           data-date="{{item.date}}">
           {{item.day}}
@@ -247,7 +253,7 @@
         <view 
           wx:for="{{endCalendarDays}}" 
           wx:key="index" 
-          class="calendar-day {{item.currentMonth ? 'current-month' : 'other-month'}} {{item.date === newTask.endDate ? 'selected' : ''}} {{item.isToday ? 'today' : ''}}"
+          class="calendar-day {{item.currentMonth ? 'current-month' : 'other-month'}} {{item.date === newTask.endDate ? 'selected' : ''}} {{item.isToday ? 'today' : ''}} {{item.isPast ? 'past' : ''}}"
           bindtap="selectEndDate"
           data-date="{{item.date}}">
           {{item.day}}

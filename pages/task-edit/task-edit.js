@@ -23,6 +23,7 @@ Page({
       startTime: '',
       endDate: '',
       endTime: '',
+      hasNoEndDate: false, // 添加无结束日期字段
       repeat: {
         type: 'none',
         enabled: false,
@@ -389,6 +390,7 @@ Page({
         startTime: timeStr,
         endDate: dateStr,
         endTime: endTimeStr,
+        hasNoEndDate: false, // 重置无结束日期字段
         repeat: {
           type: 'none',
           enabled: false,
@@ -445,7 +447,8 @@ Page({
       return;
     }
     
-    if (!this.data.newTask.endDate) {
+    // 仅当未勾选"无结束日期"时验证结束日期
+    if (!this.data.newTask.hasNoEndDate && !this.data.newTask.endDate) {
       wx.showToast({
         title: '请选择结束日期',
         icon: 'none',
@@ -480,11 +483,13 @@ Page({
         startTime: this.data.newTask.isAllDay ? null : this.data.newTask.startTime,
         endTime: this.data.newTask.isAllDay ? null : this.data.newTask.endTime,
         endDate: this.data.newTask.endDate,
+        hasNoEndDate: this.data.newTask.hasNoEndDate, // 添加无结束日期字段
         repeat: {
           type: this.data.newTask.repeat.type,
           enabled: this.data.newTask.repeat.enabled,
           startDate: this.data.newTask.startDate,
-          endDate: this.data.newTask.repeat.type !== 'none' ? this.data.newTask.endDate : null,
+          endDate: this.data.newTask.repeat.type !== 'none' ? 
+            (this.data.newTask.hasNoEndDate ? null : this.data.newTask.endDate) : null,
           days: this.data.newTask.repeat.days || []
         },
         reminder: {
@@ -596,6 +601,36 @@ Page({
   },
   
   /**
+   * 无结束日期开关切换
+   */
+  toggleNoEndDate: function(e) {
+    const hasNoEndDate = e.detail.value;
+    console.log('[TaskEdit] 无结束日期开关切换:', hasNoEndDate);
+    
+    this.setData({
+      'newTask.hasNoEndDate': hasNoEndDate
+    });
+    
+    // 当日期选择面板打开时，更新日期选择器状态
+    if (this.data.endDatePanel) {
+      // 关闭日期选择面板
+      this.setData({
+        endDatePanel: false
+      });
+    }
+    
+    // 如果开启无结束日期，禁用结束日期选择器并提示用户
+    if (hasNoEndDate) {
+      wx.showToast({
+        title: '任务将无限期重复',
+        icon: 'none',
+        duration: 2000
+      });
+      console.log('[TaskEdit] 已启用无结束日期，任务将无限期重复');
+    }
+  },
+  
+  /**
    * 开始日期选择
    */
   onStartDateChange: function(e) {
@@ -655,6 +690,12 @@ Page({
    * 结束日期选择
    */
   onEndDateChange: function(e) {
+    // 如果启用了无结束日期，则不处理结束日期变更
+    if (this.data.newTask.hasNoEndDate) {
+      console.log('[TaskEdit] 无结束日期已启用，忽略结束日期变更');
+      return;
+    }
+    
     const date = e.detail.value;
     console.log('[TaskEdit] 结束日期选择:', date);
     
@@ -977,6 +1018,7 @@ Page({
    */
   generateCalendarDays: function(type, customYear, customMonth) {
     const today = new Date();
+    console.log('[TaskEdit] 生成日历数据，添加过去日期判断');
     
     // 使用自定义年月或从已选日期中获取
     let year, month;
@@ -1024,6 +1066,9 @@ Page({
     const todayMonth = today.getMonth();
     const todayDate = today.getDate();
     
+    // 当天日期的时间戳，用于比较是否为过去日期
+    const todayTimestamp = new Date(todayYear, todayMonth, todayDate).getTime();
+    
     let days = [];
     
     // 添加上月的日期
@@ -1034,11 +1079,16 @@ Page({
       
       for (let i = prevMonthLastDay - daysFromPrevMonth + 1; i <= prevMonthLastDay; i++) {
         const date = `${prevYear}-${String(prevMonth + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+        // 判断日期是否在过去
+        const dateTimestamp = new Date(prevYear, prevMonth, i).getTime();
+        const isPast = dateTimestamp < todayTimestamp;
+        
         days.push({
           day: i,
           date,
           currentMonth: false,
-          isToday: (prevYear === todayYear && prevMonth === todayMonth && i === todayDate)
+          isToday: (prevYear === todayYear && prevMonth === todayMonth && i === todayDate),
+          isPast: isPast
         });
       }
     }
@@ -1046,11 +1096,16 @@ Page({
     // 添加当月的日期
     for (let i = 1; i <= daysInMonth; i++) {
       const date = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+      // 判断日期是否在过去
+      const dateTimestamp = new Date(year, month, i).getTime();
+      const isPast = dateTimestamp < todayTimestamp;
+      
       days.push({
         day: i,
         date,
         currentMonth: true,
-        isToday: (year === todayYear && month === todayMonth && i === todayDate)
+        isToday: (year === todayYear && month === todayMonth && i === todayDate),
+        isPast: isPast
       });
     }
     
@@ -1066,11 +1121,16 @@ Page({
       
       for (let i = 1; i <= nextMonthDays; i++) {
         const date = `${nextYear}-${String(nextMonth + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+        // 判断日期是否在过去
+        const dateTimestamp = new Date(nextYear, nextMonth, i).getTime();
+        const isPast = dateTimestamp < todayTimestamp;
+        
         days.push({
           day: i,
           date,
           currentMonth: false,
-          isToday: (nextYear === todayYear && nextMonth === todayMonth && i === todayDate)
+          isToday: (nextYear === todayYear && nextMonth === todayMonth && i === todayDate),
+          isPast: isPast
         });
       }
     }
@@ -1108,6 +1168,15 @@ Page({
    * 选择结束日期
    */
   selectEndDate: function(e) {
+    // 如果启用了无结束日期，则不处理结束日期选择
+    if (this.data.newTask.hasNoEndDate) {
+      console.log('[TaskEdit] 无结束日期已启用，忽略结束日期选择');
+      this.setData({
+        endDatePanel: false
+      });
+      return;
+    }
+    
     const date = e.currentTarget.dataset.date;
     console.log('[TaskEdit] 选择结束日期:', date);
     
