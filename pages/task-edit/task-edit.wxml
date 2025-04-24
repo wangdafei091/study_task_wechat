@@ -266,25 +266,131 @@
   <view class="calendar-container {{repeatPanel ? 'expanded' : ''}}" catchtouchmove="preventTouchMove">
     <view class="calendar-panel" catchtap="preventClose">
       <view class="calendar-header">
-        <!-- 左侧：空 -->
-        <view class="header-year-month"></view>
+        <!-- 左侧：返回按钮（仅在星期选择模式下显示） -->
+        <view class="header-left">
+          <view class="calendar-back" bindtap="backToRepeatTypePanel" wx:if="{{repeatPanelMode === 'weekday'}}">返回</view>
+          <view class="header-placeholder" wx:else></view>
+        </view>
         
         <!-- 中间：标题 -->
-        <text class="calendar-title">设置重复</text>
+        <text class="calendar-title">{{repeatPanelMode === 'type' ? '选择重复方式' : '选择重复星期'}}</text>
         
         <!-- 右侧：完成按钮 -->
         <view class="calendar-close" bindtap="closeAllPanels">完成</view>
       </view>
       
-      <view class="option-list">
-        <view class="option-item {{newTask.repeat.type === 'none' ? 'selected' : ''}}" 
-              bindtap="selectRepeatType" data-type="none">永不</view>
+      <!-- 重复类型选择（在type模式下显示） -->
+      <view class="option-list" wx:if="{{repeatPanelMode === 'type'}}">
         <view class="option-item {{newTask.repeat.type === 'daily' ? 'selected' : ''}}" 
               bindtap="selectRepeatType" data-type="daily">每天</view>
-        <view class="option-item {{newTask.repeat.type === 'weekly' ? 'selected' : ''}}" 
-              bindtap="selectRepeatType" data-type="weekly">每周</view>
         <view class="option-item {{newTask.repeat.type === 'workdays' ? 'selected' : ''}}" 
               bindtap="selectRepeatType" data-type="workdays">工作日</view>
+        <view class="option-item {{newTask.repeat.type === 'weekends' ? 'selected' : ''}}" 
+              bindtap="selectRepeatType" data-type="weekends">休息日</view>
+        <view class="option-item {{newTask.repeat.type === 'custom' ? 'selected' : ''}}" 
+              bindtap="switchToWeekdaySelection">自定义...</view>
+      
+        <!-- 面板底部说明 -->
+        <view class="panel-footer">
+          <text class="panel-desc">任务将在所选时间范围内按设定频率执行</text>
+        </view>
+      </view>
+      
+      <!-- 星期选择（在weekday模式下显示） -->
+      <view class="weekday-grid" wx:if="{{repeatPanelMode === 'weekday'}}">
+        <view class="weekday-grid-item {{weekdaySelection[0] ? 'selected' : ''}}" 
+              bindtap="toggleWeekdaySelection" data-day="0">
+          <text>周日</text>
+          <text class="checkbox-indicator" wx:if="{{weekdaySelection[0]}}">✓</text>
+        </view>
+        <view class="weekday-grid-item {{weekdaySelection[1] ? 'selected' : ''}}" 
+              bindtap="toggleWeekdaySelection" data-day="1">
+          <text>周一</text>
+          <text class="checkbox-indicator" wx:if="{{weekdaySelection[1]}}">✓</text>
+        </view>
+        <view class="weekday-grid-item {{weekdaySelection[2] ? 'selected' : ''}}" 
+              bindtap="toggleWeekdaySelection" data-day="2">
+          <text>周二</text>
+          <text class="checkbox-indicator" wx:if="{{weekdaySelection[2]}}">✓</text>
+        </view>
+        <view class="weekday-grid-item {{weekdaySelection[3] ? 'selected' : ''}}" 
+              bindtap="toggleWeekdaySelection" data-day="3">
+          <text>周三</text>
+          <text class="checkbox-indicator" wx:if="{{weekdaySelection[3]}}">✓</text>
+        </view>
+        <view class="weekday-grid-item {{weekdaySelection[4] ? 'selected' : ''}}" 
+              bindtap="toggleWeekdaySelection" data-day="4">
+          <text>周四</text>
+          <text class="checkbox-indicator" wx:if="{{weekdaySelection[4]}}">✓</text>
+        </view>
+        <view class="weekday-grid-item {{weekdaySelection[5] ? 'selected' : ''}}" 
+              bindtap="toggleWeekdaySelection" data-day="5">
+          <text>周五</text>
+          <text class="checkbox-indicator" wx:if="{{weekdaySelection[5]}}">✓</text>
+        </view>
+        <view class="weekday-grid-item {{weekdaySelection[6] ? 'selected' : ''}}" 
+              bindtap="toggleWeekdaySelection" data-day="6">
+          <text>周六</text>
+          <text class="checkbox-indicator" wx:if="{{weekdaySelection[6]}}">✓</text>
+        </view>
+      </view>
+    </view>
+  </view>
+  
+  <!-- 自定义重复子面板 -->
+  <view class="calendar-container {{customRepeatPanel ? 'expanded' : ''}}" catchtouchmove="preventTouchMove">
+    <view class="calendar-panel" catchtap="preventClose">
+      <view class="calendar-header">
+        <!-- 左侧：返回按钮 -->
+        <view class="calendar-back" bindtap="backToMainRepeatPanel">返回</view>
+        
+        <!-- 中间：标题 -->
+        <text class="calendar-title">选择重复星期</text>
+        
+        <!-- 右侧：空 -->
+        <view class="header-year-month"></view>
+      </view>
+      
+      <view class="weekday-select-list">
+        <view class="weekday-select-item {{weekdaySelection[1] ? 'selected' : ''}}" 
+              bindtap="toggleWeekdaySelection" data-day="1">
+          <text>周一</text>
+          <text class="checkbox">{{weekdaySelection[1] ? '✓' : ''}}</text>
+        </view>
+        <view class="weekday-select-item {{weekdaySelection[2] ? 'selected' : ''}}" 
+              bindtap="toggleWeekdaySelection" data-day="2">
+          <text>周二</text>
+          <text class="checkbox">{{weekdaySelection[2] ? '✓' : ''}}</text>
+        </view>
+        <view class="weekday-select-item {{weekdaySelection[3] ? 'selected' : ''}}" 
+              bindtap="toggleWeekdaySelection" data-day="3">
+          <text>周三</text>
+          <text class="checkbox">{{weekdaySelection[3] ? '✓' : ''}}</text>
+        </view>
+        <view class="weekday-select-item {{weekdaySelection[4] ? 'selected' : ''}}" 
+              bindtap="toggleWeekdaySelection" data-day="4">
+          <text>周四</text>
+          <text class="checkbox">{{weekdaySelection[4] ? '✓' : ''}}</text>
+        </view>
+        <view class="weekday-select-item {{weekdaySelection[5] ? 'selected' : ''}}" 
+              bindtap="toggleWeekdaySelection" data-day="5">
+          <text>周五</text>
+          <text class="checkbox">{{weekdaySelection[5] ? '✓' : ''}}</text>
+        </view>
+        <view class="weekday-select-item {{weekdaySelection[6] ? 'selected' : ''}}" 
+              bindtap="toggleWeekdaySelection" data-day="6">
+          <text>周六</text>
+          <text class="checkbox">{{weekdaySelection[6] ? '✓' : ''}}</text>
+        </view>
+        <view class="weekday-select-item {{weekdaySelection[0] ? 'selected' : ''}}" 
+              bindtap="toggleWeekdaySelection" data-day="0">
+          <text>周日</text>
+          <text class="checkbox">{{weekdaySelection[0] ? '✓' : ''}}</text>
+        </view>
+      </view>
+      
+      <view class="button-row">
+        <button class="btn-confirm" bindtap="confirmCustomRepeat">确定</button>
       </view>
     </view>
   </view>

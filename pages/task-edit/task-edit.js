@@ -25,9 +25,10 @@ Page({
       endTime: '',
       hasNoEndDate: false, // 添加无结束日期字段
       repeat: {
-        type: 'none',
-        enabled: false,
-        days: []
+        type: 'daily', // 默认为每天，不再使用'none'
+        days: [], // 自定义重复时选中的星期数组
+        startDate: '', // 重复开始日期，与任务开始日期相同
+        endDate: '' // 重复结束日期，与任务结束日期相同，无结束日期时为null
       },
       reminder: {
         enabled: false,
@@ -42,7 +43,7 @@ Page({
     descMaxLength: 50,
     descPlaceholder: '',
     // 新增UI控制字段
-    repeatText: '永不',
+    repeatText: '每天',
     reminderText: '无',
     // 日期时间选择面板控制
     startDatePanel: false,
@@ -50,6 +51,12 @@ Page({
     // 新增重复和提醒面板控制
     repeatPanel: false, 
     reminderPanel: false,
+    // 自定义重复面板控制
+    customRepeatPanel: false,
+    // 重复面板模式：'type'表示选择重复类型，'weekday'表示选择星期
+    repeatPanelMode: 'type',
+    // 星期选择状态 [周日,周一,周二,周三,周四,周五,周六]
+    weekdaySelection: [false, false, false, false, false, false, false],
     // 日历面板数据
     startPanelYear: 0,
     startPanelMonth: 0,
@@ -92,7 +99,8 @@ Page({
       startDatePanel: false,
       endDatePanel: false,
       repeatPanel: false,
-      reminderPanel: false
+      reminderPanel: false,
+      customRepeatPanel: false
     });
     
     console.log('[TaskEdit] 初始化面板状态：全部关闭');
@@ -364,58 +372,42 @@ Page({
    * 清空任务表单
    */
   clearTaskForm: function() {
-    // 获取当前日期和时间用于重置
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = ("0" + (today.getMonth() + 1)).slice(-2);
-    const day = ("0" + today.getDate()).slice(-2);
-    const dateStr = `${year}-${month}-${day}`;
+    console.log('[TaskEdit] 清空任务表单');
     
-    const hour = today.getHours();
-    const minute = today.getMinutes();
-    const timeStr = `${hour < 10 ? '0' + hour : hour}:${minute < 10 ? '0' + minute : minute}`;
-    
-    // 计算结束时间，默认为开始时间后一小时
-    const endHour = (hour + 1) % 24;
-    const endTimeStr = `${endHour < 10 ? '0' + endHour : endHour}:${minute < 10 ? '0' + minute : minute}`;
-    
+    // 重置任务为默认状态
     this.setData({
-      newTask: {
-        title: '',
-        type: 'habit',
-        points: 5,
-        description: '',
-        isAllDay: false,
-        startDate: dateStr,
-        startTime: timeStr,
-        endDate: dateStr,
-        endTime: endTimeStr,
-        hasNoEndDate: false, // 重置无结束日期字段
-        repeat: {
-          type: 'none',
-          enabled: false,
-          days: []
-        },
-        reminder: {
-          enabled: false,
-          time: 0
-        }
-      },
-      errors: {
-        title: ''
-      },
-      repeatText: '永不',
+      'newTask.title': '',
+      'newTask.type': 'habit',
+      'newTask.points': 5,
+      'newTask.description': '',
+      'newTask.isAllDay': false,
+      'newTask.hasNoEndDate': false, // 重置无结束日期字段
+      'errors.title': '',
+      repeatText: '每天',
       reminderText: '无',
-      // 关闭所有面板
-      startDatePanel: false,
-      endDatePanel: false,
-      repeatPanel: false,
-      reminderPanel: false,
-      startTimePickerValue: [hour, minute],
-      endTimePickerValue: [endHour, minute]
+      'newTask.repeat': {
+        type: 'daily',
+        days: [],
+        startDate: '',
+        endDate: ''
+      },
+      'newTask.reminder': {
+        enabled: false,
+        time: 0
+      }
     });
     
-    console.log('[TaskEdit] 表单已清空');
+    // 重新初始化日期时间数据
+    this.initDateTimeData();
+    
+    // 关闭所有面板
+    this.closeAllPanels();
+    
+    wx.showToast({
+      title: '已清空表单',
+      icon: 'success',
+      duration: 1000
+    });
   },
 
   /**
@@ -486,9 +478,8 @@ Page({
         hasNoEndDate: this.data.newTask.hasNoEndDate, // 添加无结束日期字段
         repeat: {
           type: this.data.newTask.repeat.type,
-          enabled: this.data.newTask.repeat.enabled,
           startDate: this.data.newTask.startDate,
-          endDate: this.data.newTask.repeat.type !== 'none' ? 
+          endDate: this.data.newTask.repeat.type !== 'none' ?
             (this.data.newTask.hasNoEndDate ? null : this.data.newTask.endDate) : null,
           days: this.data.newTask.repeat.days || []
         },
@@ -561,6 +552,8 @@ Page({
       'newTask.startTime': timeStr,
       'newTask.endDate': dateStr,
       'newTask.endTime': endTimeStr,
+      'newTask.repeat.startDate': dateStr,
+      'newTask.repeat.endDate': dateStr,
       // 设置年月选择器数据
       startYearMonth: yearMonthStr,
       endYearMonth: yearMonthStr,
@@ -774,17 +767,129 @@ Page({
   },
   
   /**
+   * 切换到星期选择模式
+   */
+  switchToWeekdaySelection: function() {
+    console.log('[TaskEdit] 切换到星期选择模式');
+    
+    // 如果当前是自定义类型，恢复之前的星期选择状态
+    if (this.data.newTask.repeat.type === 'custom' && this.data.newTask.repeat.days.length > 0) {
+      const weekdaySelection = [false, false, false, false, false, false, false];
+      this.data.newTask.repeat.days.forEach(day => {
+        weekdaySelection[day] = true;
+      });
+      
+      this.setData({
+        weekdaySelection: weekdaySelection
+      });
+    }
+    
+    this.setData({
+      repeatPanelMode: 'weekday'
+    });
+  },
+  
+  /**
+   * 返回到重复类型选择模式
+   */
+  backToRepeatTypePanel: function() {
+    console.log('[TaskEdit] 返回到重复类型选择');
+    
+    // 收集选中的星期
+    const selectedDays = [];
+    this.data.weekdaySelection.forEach((selected, index) => {
+      if (selected) {
+        selectedDays.push(index);
+      }
+    });
+    
+    // 如果有选中的星期，设置为自定义类型
+    if (selectedDays.length > 0) {
+      // 设置自定义重复文本
+      let repeatText = '';
+      if (selectedDays.length <= 2) {
+        // 1-2天显示具体星期
+        const dayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+        repeatText = '每' + selectedDays.map(day => dayNames[day]).join('、');
+      } else {
+        // 3天或以上显示"每周多天"
+        repeatText = '每周多天';
+      }
+      
+      this.setData({
+        'newTask.repeat.type': 'custom',
+        'newTask.repeat.days': selectedDays,
+        repeatText: repeatText
+      });
+    }
+    
+    this.setData({
+      repeatPanelMode: 'type'
+    });
+  },
+  
+  /**
+   * 切换星期选择状态
+   */
+  toggleWeekdaySelection: function(e) {
+    const day = parseInt(e.currentTarget.dataset.day);
+    const newSelection = [...this.data.weekdaySelection];
+    newSelection[day] = !newSelection[day];
+    
+    console.log('[TaskEdit] 切换星期选择:', day, newSelection[day]);
+    
+    this.setData({
+      weekdaySelection: newSelection
+    });
+    
+    // 实时更新重复类型和文本（无需点击确定按钮）
+    const selectedDays = [];
+    newSelection.forEach((selected, index) => {
+      if (selected) {
+        selectedDays.push(index);
+      }
+    });
+    
+    if (selectedDays.length > 0) {
+      let repeatText = '';
+      if (selectedDays.length <= 2) {
+        const dayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+        repeatText = '每' + selectedDays.map(day => dayNames[day]).join('、');
+      } else {
+        repeatText = '每周多天';
+      }
+      
+      this.setData({
+        'newTask.repeat.type': 'custom',
+        'newTask.repeat.days': selectedDays,
+        repeatText: repeatText
+      });
+    }
+  },
+  
+  /**
    * 关闭所有面板
    */
   closeAllPanels: function() {
+    console.log('[TaskEdit] 关闭所有面板');
+    
+    // 如果所有面板都已关闭，无需操作
+    if (!this.data.startDatePanel && 
+        !this.data.endDatePanel && 
+        !this.data.repeatPanel && 
+        !this.data.reminderPanel) {
+      return;
+    }
+    
+    // 关闭所有面板
     this.setData({
       startDatePanel: false,
       endDatePanel: false,
       repeatPanel: false,
-      reminderPanel: false
+      reminderPanel: false,
+      // 重置重复面板模式为类型选择
+      repeatPanelMode: 'type'
     });
-    
-    console.log('[TaskEdit] 关闭所有面板');
   },
 
   /**
@@ -796,25 +901,21 @@ Page({
     
     let repeatText = '';
     switch (type) {
-      case 'none':
-        repeatText = '永不';
-        break;
       case 'daily':
         repeatText = '每天';
         break;
-      case 'weekly':
-        repeatText = '每周';
-        break;
       case 'workdays':
         repeatText = '工作日';
+        break;
+      case 'weekends':
+        repeatText = '休息日';
         break;
     }
     
     this.setData({
       'newTask.repeat.type': type,
-      'newTask.repeat.enabled': type !== 'none',
-      repeatText: repeatText,
-      repeatPanel: false // 选择后关闭面板
+      repeatText: repeatText
+      // 不再立即关闭面板，等待用户点击"完成"按钮
     });
   },
 
