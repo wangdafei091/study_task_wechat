@@ -905,16 +905,10 @@ Page({
     // 检查是否是取消选择了开始日期对应的星期
     const canceledStartDay = !isSelecting && isTargetStartDay;
     
-    // 详细日志记录操作
-    const operation = isSelecting ? '选择' : '取消选择';
-    console.log(`[TaskEdit] ${operation}了星期${dayNames[day]}, 当前选择${selectedDays.length}天`);
-    
-    if (canceledStartDay) {
-      console.log(`[TaskEdit] ⚠️ 关键操作: 取消了开始日期(${this.data.newTask.startDate})对应的星期${dayNames[startDayOfWeek]}`);
-    }
-    
-    if (wasStartDaySelected && !isStartDaySelected) {
-      console.log(`[TaskEdit] ⚠️ 状态变化: 开始日期的星期从"已选择"变为"未选择", 将显示告警`);
+    // 只记录关键状态变化的日志
+    if (canceledStartDay || (wasStartDaySelected && !isStartDaySelected)) {
+      console.log(`[TaskEdit] ⚠️ 关键操作: ${isSelecting ? '选择' : '取消选择'}了星期${dayNames[day]}, 开始日期是${dayNames[startDayOfWeek]}`);
+      console.log(`[TaskEdit] ⚠️ 状态变化: 开始日期的星期${isStartDaySelected ? '包含' : '不包含'}在当前选择中 (${selectedDays.map(d => dayNames[d]).join('、')})`);
     }
     
     let repeatText = '';
@@ -958,20 +952,12 @@ Page({
       repeatPreviewText: newPreviewText
     });
     
-    if (forceUpdate) {
-      // 强制刷新UI - 修改后立即改回的小技巧，触发重绘
-      this.setData({
-        repeatPanel: false
-      }, () => {
-        // 在下一个渲染周期恢复
-        setTimeout(() => {
-          this.setData({
-            repeatPanel: true
-          });
-        }, 10);
+    // 对于关键变更，确保UI更新是同步的，而不需要复杂的定时器逻辑
+    if (forceUpdate && hasConflict) {
+      // 使用更简单的方式触发重绘，只在有冲突时强制刷新
+      wx.nextTick(() => {
+        console.log(`[TaskEdit] 强制触发UI更新，确保告警信息立即显示 (冲突状态=有冲突)`);
       });
-      
-      console.log(`[TaskEdit] 强制触发UI更新，确保告警信息立即显示 (冲突状态=${hasConflict ? '有冲突' : '无冲突'})`);
     }
   },
   
@@ -1470,18 +1456,6 @@ Page({
       // 如果有冲突，使用冲突的预览文本
       previewText = conflictCheck.previewText;
       warningExists = true;
-      
-      // 特别记录与开始日期冲突的情况
-      if (repeatType === 'custom') {
-        // 检查是否是"未选择开始日期对应星期"导致的冲突
-        const selectedDays = this.data.newTask.repeat.days ? 
-                            this.data.newTask.repeat.days.map(day => parseInt(day)) : 
-                            [];
-        
-        if (selectedDays.length > 0 && !selectedDays.includes(dayOfWeek)) {
-          console.log(`[TaskEdit] ⚠️ 预览文本显示冲突: 开始日期是${dayName}，但选择了${selectedDays.map(d => dayNames[d]).join('、')}`);
-        }
-      }
     } else {
       // 如果没有冲突，生成正常的预览文本
       switch (repeatType) {
@@ -1505,65 +1479,32 @@ Page({
           if (selectedDays.length > 0) {
             const selectedDayNames = selectedDays.map(day => dayNames[day]).join('、');
             previewText = `从${todayStr}开始每${selectedDayNames}执行${endDateStr ? '，' + endDateStr : ''}`;
-            console.log(`[TaskEdit] 生成正常预览文本: 开始日期是${dayName}，选择了${selectedDayNames}`);
           } else {
             previewText = '请选择重复的星期';
-            console.log(`[TaskEdit] 生成提示预览文本: 未选择任何星期`);
           }
           break;
       }
     }
     
-    // 只有警告状态变化时才更新
+    // 更新警告状态
     if (this.data.repeatTypeWarning !== warningExists) {
       console.log(`[TaskEdit] 警告状态变化: ${this.data.repeatTypeWarning ? '有警告' : '无警告'} -> ${warningExists ? '有警告' : '无警告'}`);
     }
     
-    // 更新警告状态
     this.setData({
       repeatTypeWarning: warningExists
     });
     
-    console.log(`[TaskEdit] 生成重复预览: ${previewText.substring(0, 30)}...${warningExists ? ' (有警告)' : ' (无警告)'}`);
+    // 使用简化的日志记录
+    if (previewText.length > 30) {
+      console.log(`[TaskEdit] 生成预览: ${previewText.substring(0, 30)}...${warningExists ? ' (有警告)' : ''}`);
+    } else {
+      console.log(`[TaskEdit] 生成预览: ${previewText}${warningExists ? ' (有警告)' : ''}`);
+    }
+    
     return previewText;
   },
   
-  /**
-   * 查找下一个自定义执行日期
-   * @param {Date} startDate 开始日期
-   * @param {Array} selectedDays 选中的星期几（0-6）
-   * @returns {Date} 下一个执行日期
-   */
-  findNextCustomExecutionDate: function(startDate, selectedDays) {
-    if (!selectedDays || selectedDays.length === 0) {
-      return startDate;
-    }
-    
-    // 确保selectedDays中的元素是数字类型
-    const numericSelectedDays = selectedDays.map(day => parseInt(day));
-    
-    // 检查当前日期是否匹配
-    const currentDayOfWeek = startDate.getDay();
-    if (numericSelectedDays.includes(currentDayOfWeek)) {
-      return startDate;
-    }
-    
-    // 查找下一个匹配的日期
-    const nextDate = new Date(startDate);
-    let daysChecked = 0;
-    
-    while (daysChecked < 7) {
-      nextDate.setDate(nextDate.getDate() + 1);
-      daysChecked++;
-      
-      if (numericSelectedDays.includes(nextDate.getDay())) {
-        break;
-      }
-    }
-    
-    return nextDate;
-  },
-
   /**
    * 检查重复日期冲突
    * 集中处理日期冲突检测逻辑，确保一致性
