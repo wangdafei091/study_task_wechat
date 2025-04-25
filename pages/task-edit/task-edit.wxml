@@ -290,11 +290,6 @@
           <view class="option-item {{newTask.repeat.type === 'custom' ? 'selected' : ''}}" 
                 bindtap="switchToWeekdaySelection">自定义...</view>
         </view>
-      
-        <!-- 替换面板底部说明为动态预览区域 -->
-        <view class="repeat-preview-area {{repeatTypeWarning ? 'has-warning' : ''}}">
-          <text class="preview-text {{repeatTypeWarning ? 'warning' : ''}}">{{repeatPreviewText}}</text>
-        </view>
       </view>
       
       <!-- 星期选择（在weekday模式下显示） -->
@@ -334,11 +329,11 @@
           <text>周六</text>
           <text class="checkbox-indicator" wx:if="{{weekdaySelection[6]}}">✓</text>
         </view>
-        
-        <!-- 在星期选择模式下也添加预览区域 -->
-        <view class="repeat-preview-area {{repeatTypeWarning ? 'has-warning' : ''}}">
-          <text class="preview-text {{repeatTypeWarning ? 'warning' : ''}}">{{repeatPreviewText}}</text>
-        </view>
+      </view>
+      
+      <!-- 统一的信息显示区域，在所有面板模式下都显示 -->
+      <view class="repeat-preview-area {{repeatTypeWarning ? 'has-warning' : ''}}">
+        <text class="preview-text {{repeatTypeWarning ? 'warning' : ''}}">{{repeatPreviewText}}</text>
       </view>
     </view>
   </view>

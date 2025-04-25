@@ -101,6 +101,14 @@ Page({
     this.setData({
       repeatPreviewText: this.generateRepeatPreviewText('daily')
     });
+    
+    // 获取当前日期
+    const todayDate = new Date();
+    const dayOfWeek = todayDate.getDay(); // 0是周日，6是周六
+    const dayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+    
+    // 打印当前日期和星期信息
+    console.log(`[TaskEdit] 页面初始化: 今天是 ${this.data.newTask.startDate} (${dayNames[dayOfWeek]})`);
   },
 
   /**
@@ -730,24 +738,75 @@ Page({
    * 切换到星期选择模式
    */
   switchToWeekdaySelection: function() {
-    // 如果当前是自定义类型，恢复之前的星期选择状态
-    if (this.data.newTask.repeat.type === 'custom' && this.data.newTask.repeat.days.length > 0) {
-      const weekdaySelection = [false, false, false, false, false, false, false];
+    const weekdaySelection = [false, false, false, false, false, false, false];
+    
+    // 获取当前开始日期信息
+    const startDate = new Date(this.data.newTask.startDate.replace(/-/g, '/'));
+    const startDayOfWeek = startDate.getDay(); // 0是周日，6是周六
+    const dayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+    
+    // 是否已有自定义设置
+    const hasCustomConfig = this.data.newTask.repeat.type === 'custom' && 
+                            this.data.newTask.repeat.days && 
+                            this.data.newTask.repeat.days.length > 0;
+    
+    if (hasCustomConfig) {
+      // 从已保存设置恢复选择状态
+      // 确保days是数字类型
       this.data.newTask.repeat.days.forEach(day => {
-        weekdaySelection[day] = true;
+        const dayIndex = parseInt(day);
+        weekdaySelection[dayIndex] = true;
       });
       
+      console.log('[TaskEdit] 从已保存设置恢复星期选择: ', this.data.newTask.repeat.days);
+    } else {
+      // 如果是新选择，根据当前开始日期的星期预选对应日期
+      weekdaySelection[startDayOfWeek] = true;
+      
+      // 更新任务重复信息
+      const selectedDays = [startDayOfWeek];
+      
+      // 在这里更新任务重复设置
       this.setData({
-        weekdaySelection: weekdaySelection
+        'newTask.repeat.type': 'custom',
+        'newTask.repeat.days': selectedDays,
+        repeatText: '每' + dayNames[startDayOfWeek]
       });
+      
+      console.log(`[TaskEdit] 根据开始日期预选星期: ${dayNames[startDayOfWeek]} (索引${startDayOfWeek})`);
     }
     
+    // 收集已选择的星期
+    const selectedDays = [];
+    weekdaySelection.forEach((selected, index) => {
+      if (selected) {
+        selectedDays.push(index);
+      }
+    });
+    
+    // 检查是否包含开始日期对应的星期
+    const hasStartDay = selectedDays.includes(startDayOfWeek);
+    
+    // 检查是否需要强制更新UI
+    const needForceUpdate = !hasStartDay;
+    
+    if (!hasStartDay) {
+      console.log(`[TaskEdit] ⚠️ 警告: 恢复的选择不包含开始日期对应的星期，将显示告警`);
+    }
+    
+    // 更新选择状态，先更新基本UI
     this.setData({
+      weekdaySelection: weekdaySelection,
       repeatPanelMode: 'weekday'
     });
     
-    console.log('[TaskEdit] 切换到星期选择模式');
-    console.log('[TaskEdit] 切换到星期选择模式，屏幕高度:', wx.getSystemInfoSync().windowHeight);
+    // 使用新函数更新预览文本和告警状态
+    this.updateRepeatPreviewWithForce(needForceUpdate);
+    
+    // 获取警告状态
+    const hasWarning = this.data.repeatTypeWarning;
+    
+    console.log(`[TaskEdit] 切换到星期选择模式: 选择了${selectedDays.length}天，包含开始日期=${hasStartDay}，冲突状态=${hasWarning ? '有冲突' : '无冲突'}`);
   },
   
   /**
@@ -762,31 +821,52 @@ Page({
       }
     });
     
-    // 如果有选中的星期，设置为自定义类型
+    // 获取开始日期信息
+    const startDate = new Date(this.data.newTask.startDate.replace(/-/g, '/'));
+    const startDayOfWeek = startDate.getDay();
+    const dayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+    const hasStartDay = selectedDays.includes(startDayOfWeek);
+    
+    // 无论是否有选中的星期，都更新自定义重复设置
+    let repeatText = '';
+    
     if (selectedDays.length > 0) {
       // 设置自定义重复文本
-      let repeatText = '';
       if (selectedDays.length <= 2) {
         // 1-2天显示具体星期
-        const dayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
         repeatText = '每' + selectedDays.map(day => dayNames[day]).join('、');
       } else {
         // 3天或以上显示"每周多天"
         repeatText = '每周多天';
       }
-      
-      this.setData({
-        'newTask.repeat.type': 'custom',
-        'newTask.repeat.days': selectedDays,
-        repeatText: repeatText
-      });
+    } else {
+      repeatText = '请选择星期';
     }
     
+    console.log(`[TaskEdit] 返回重复类型面板: 当前选择了${selectedDays.length}天, 开始日期是${dayNames[startDayOfWeek]}(${hasStartDay ? '已包含' : '未包含'})`);
+    
+    // 检查是否需要强制更新UI
+    const needForceUpdate = !hasStartDay;
+    
+    if (!hasStartDay) {
+      console.log(`[TaskEdit] ⚠️ 关键状态: 开始日期对应的星期未被选择，将在返回时显示告警`);
+    }
+    
+    // 更新任务重复设置并返回到重复类型面板
     this.setData({
+      'newTask.repeat.type': 'custom',
+      'newTask.repeat.days': selectedDays,
+      repeatText: repeatText,
+      // 切换面板模式
       repeatPanelMode: 'type'
     });
     
-    console.log('[TaskEdit] 返回到重复类型选择模式');
+    // 使用新函数更新预览文本和告警状态
+    this.updateRepeatPreviewWithForce(needForceUpdate);
+    
+    // 使用冲突信息更新日志
+    const hasWarning = this.data.repeatTypeWarning;
+    console.log(`[TaskEdit] 返回重复类型面板完成: 冲突状态=${hasWarning ? '有冲突' : '无冲突'}`);
   },
   
   /**
@@ -795,11 +875,21 @@ Page({
   toggleWeekdaySelection: function(e) {
     const day = parseInt(e.currentTarget.dataset.day);
     const newSelection = [...this.data.weekdaySelection];
-    newSelection[day] = !newSelection[day];
     
-    this.setData({
-      weekdaySelection: newSelection
-    });
+    // 获取当前开始日期的星期
+    const startDate = new Date(this.data.newTask.startDate.replace(/-/g, '/'));
+    const startDayOfWeek = startDate.getDay(); // 0是周日，6是周六
+    const dayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+    
+    // 记录操作是选择还是取消选择
+    const isSelecting = !newSelection[day];
+    const isTargetStartDay = (day === startDayOfWeek);
+    
+    // 记录操作前的选择状态
+    const wasStartDaySelected = newSelection[startDayOfWeek];
+    
+    // 更新选择状态
+    newSelection[day] = !newSelection[day];
     
     // 实时更新重复类型和文本
     const selectedDays = [];
@@ -809,24 +899,79 @@ Page({
       }
     });
     
+    // 操作后开始日期对应的星期是否被选中
+    const isStartDaySelected = selectedDays.includes(startDayOfWeek);
+    
+    // 检查是否是取消选择了开始日期对应的星期
+    const canceledStartDay = !isSelecting && isTargetStartDay;
+    
+    // 详细日志记录操作
+    const operation = isSelecting ? '选择' : '取消选择';
+    console.log(`[TaskEdit] ${operation}了星期${dayNames[day]}, 当前选择${selectedDays.length}天`);
+    
+    if (canceledStartDay) {
+      console.log(`[TaskEdit] ⚠️ 关键操作: 取消了开始日期(${this.data.newTask.startDate})对应的星期${dayNames[startDayOfWeek]}`);
+    }
+    
+    if (wasStartDaySelected && !isStartDaySelected) {
+      console.log(`[TaskEdit] ⚠️ 状态变化: 开始日期的星期从"已选择"变为"未选择", 将显示告警`);
+    }
+    
+    let repeatText = '';
+    
+    // 无论是否有选中的星期，都需要更新预览文本
     if (selectedDays.length > 0) {
-      let repeatText = '';
       if (selectedDays.length <= 2) {
-        const dayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
         repeatText = '每' + selectedDays.map(day => dayNames[day]).join('、');
       } else {
         repeatText = '每周多天';
       }
-      
+    } else {
+      repeatText = '请选择星期';
+    }
+    
+    // 集中更新UI，先更新内部数据，然后一次性更新UI
+    this.setData({
+      weekdaySelection: newSelection,
+      'newTask.repeat.type': 'custom',
+      'newTask.repeat.days': selectedDays,
+      repeatText: repeatText
+    });
+    
+    // 立即强制更新预览文本和告警状态，特别关注取消选择开始日期对应星期的情况
+    this.updateRepeatPreviewWithForce(canceledStartDay);
+  },
+  
+  /**
+   * 强制更新重复预览文本和告警状态
+   * @param {boolean} forceUpdate 是否强制更新UI
+   */
+  updateRepeatPreviewWithForce: function(forceUpdate = false) {
+    // 生成新的预览文本
+    const newPreviewText = this.generateRepeatPreviewText('custom');
+    
+    // 获取当前冲突状态
+    const hasConflict = this.data.repeatTypeWarning;
+    
+    // 更新UI
+    this.setData({
+      repeatPreviewText: newPreviewText
+    });
+    
+    if (forceUpdate) {
+      // 强制刷新UI - 修改后立即改回的小技巧，触发重绘
       this.setData({
-        'newTask.repeat.type': 'custom',
-        'newTask.repeat.days': selectedDays,
-        repeatText: repeatText,
-        // 更新重复预览文本
-        repeatPreviewText: this.generateRepeatPreviewText('custom')
+        repeatPanel: false
+      }, () => {
+        // 在下一个渲染周期恢复
+        setTimeout(() => {
+          this.setData({
+            repeatPanel: true
+          });
+        }, 10);
       });
       
-      console.log(`[TaskEdit] 更新星期选择: ${selectedDays.length}天被选中`);
+      console.log(`[TaskEdit] 强制触发UI更新，确保告警信息立即显示 (冲突状态=${hasConflict ? '有冲突' : '无冲突'})`);
     }
   },
   
@@ -870,7 +1015,7 @@ Page({
       repeatPreviewText: this.generateRepeatPreviewText(type)
     });
     
-    console.log(`[TaskEdit] 选择重复类型: ${type}`);
+    console.log(`[TaskEdit] 已选择重复类型: ${type}, 预览文本已更新至统一信息区域`);
   },
 
   /**
@@ -1310,70 +1455,68 @@ Page({
       endDateStr = `直到${this.data.newTask.endDate}结束`;
     }
     
-    // 格式化日期的辅助函数
-    const formatDate = function(date) {
-      if (typeof date === 'string') {
-        return date.substring(5); // 只保留月日，如 '05-23'
-      }
-      
-      const month = date.getMonth() + 1;
-      const day = date.getDate();
-      return `${month}月${day}日`;
-    };
-    
-    let previewText = '';
-    let warningExists = false;
+    // 日期的星期信息
     const dayOfWeek = startDate.getDay(); // 0是周日，6是周六
     const dayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
     const dayName = dayNames[dayOfWeek];
     
-    // 根据重复类型生成不同的预览文本
-    switch (repeatType) {
-      case 'daily':
-        previewText = `从${todayStr}开始每天执行${endDateStr ? '，' + endDateStr : ''}`;
-        break;
+    let previewText = '';
+    let warningExists = false;
+    
+    // 首先检查是否有日期冲突
+    const conflictCheck = this.checkRepeatDateConflict(repeatType);
+    
+    if (conflictCheck.hasConflict) {
+      // 如果有冲突，使用冲突的预览文本
+      previewText = conflictCheck.previewText;
+      warningExists = true;
+      
+      // 特别记录与开始日期冲突的情况
+      if (repeatType === 'custom') {
+        // 检查是否是"未选择开始日期对应星期"导致的冲突
+        const selectedDays = this.data.newTask.repeat.days ? 
+                            this.data.newTask.repeat.days.map(day => parseInt(day)) : 
+                            [];
         
-      case 'workdays':
-        // 判断开始日期是否是工作日（周一至周五）
-        if (dayOfWeek === 0 || dayOfWeek === 6) {
-          // 周末开始的工作日任务，警告用户
-          previewText = `日期冲突：您选择的开始日期(${todayStr}，${dayName})是休息日，但重复规则设置为"工作日"(周一至周五)执行。请修改开始日期为工作日，或更改重复规则。`;
-          warningExists = true;
-        } else {
-          previewText = `从${todayStr}开始每个工作日执行${endDateStr ? '，' + endDateStr : ''}`;
+        if (selectedDays.length > 0 && !selectedDays.includes(dayOfWeek)) {
+          console.log(`[TaskEdit] ⚠️ 预览文本显示冲突: 开始日期是${dayName}，但选择了${selectedDays.map(d => dayNames[d]).join('、')}`);
         }
-        break;
-        
-      case 'weekends':
-        // 判断开始日期是否是周末（周六或周日）
-        if (dayOfWeek !== 0 && dayOfWeek !== 6) {
-          // 工作日开始的周末任务，警告用户
-          previewText = `日期冲突：您选择的开始日期(${todayStr}，${dayName})是工作日，但重复规则设置为"休息日"(周六、周日)执行。请修改开始日期为周六或周日，或更改重复规则。`;
-          warningExists = true;
-        } else {
-          previewText = `从${todayStr}开始每个休息日执行${endDateStr ? '，' + endDateStr : ''}`;
-        }
-        break;
-        
-      case 'custom':
-        // 处理自定义重复情况
-        if (this.data.newTask.repeat.days && this.data.newTask.repeat.days.length > 0) {
-          const selectedDays = this.data.newTask.repeat.days;
-          const nextExecutionDate = this.findNextCustomExecutionDate(startDate, selectedDays);
+      }
+    } else {
+      // 如果没有冲突，生成正常的预览文本
+      switch (repeatType) {
+        case 'daily':
+          previewText = `从${todayStr}开始每天执行${endDateStr ? '，' + endDateStr : ''}`;
+          break;
           
-          if (nextExecutionDate > startDate) {
-            const selectedDayNames = selectedDays.map(day => dayNames[day]).join('、');
-            
-            previewText = `日期冲突：您选择的开始日期(${todayStr}，${dayName})不在已设置的重复星期(${selectedDayNames})中。请将开始日期改为所选星期几之一，或调整重复星期。`;
-            warningExists = true;
-          } else {
+        case 'workdays':
+          previewText = `从${todayStr}开始每个工作日执行${endDateStr ? '，' + endDateStr : ''}`;
+          break;
+          
+        case 'weekends':
+          previewText = `从${todayStr}开始每个休息日执行${endDateStr ? '，' + endDateStr : ''}`;
+          break;
+          
+        case 'custom':
+          // 获取选中的星期
+          const selectedDays = this.data.newTask.repeat.days ? 
+                              this.data.newTask.repeat.days.map(day => parseInt(day)) : 
+                              [];
+          if (selectedDays.length > 0) {
             const selectedDayNames = selectedDays.map(day => dayNames[day]).join('、');
             previewText = `从${todayStr}开始每${selectedDayNames}执行${endDateStr ? '，' + endDateStr : ''}`;
+            console.log(`[TaskEdit] 生成正常预览文本: 开始日期是${dayName}，选择了${selectedDayNames}`);
+          } else {
+            previewText = '请选择重复的星期';
+            console.log(`[TaskEdit] 生成提示预览文本: 未选择任何星期`);
           }
-        } else {
-          previewText = `请选择重复的星期`;
-        }
-        break;
+          break;
+      }
+    }
+    
+    // 只有警告状态变化时才更新
+    if (this.data.repeatTypeWarning !== warningExists) {
+      console.log(`[TaskEdit] 警告状态变化: ${this.data.repeatTypeWarning ? '有警告' : '无警告'} -> ${warningExists ? '有警告' : '无警告'}`);
     }
     
     // 更新警告状态
@@ -1381,7 +1524,7 @@ Page({
       repeatTypeWarning: warningExists
     });
     
-    console.log(`[TaskEdit] 生成重复预览: ${previewText}${warningExists ? ' (有警告)' : ''}`);
+    console.log(`[TaskEdit] 生成重复预览: ${previewText.substring(0, 30)}...${warningExists ? ' (有警告)' : ' (无警告)'}`);
     return previewText;
   },
   
@@ -1396,9 +1539,12 @@ Page({
       return startDate;
     }
     
+    // 确保selectedDays中的元素是数字类型
+    const numericSelectedDays = selectedDays.map(day => parseInt(day));
+    
     // 检查当前日期是否匹配
     const currentDayOfWeek = startDate.getDay();
-    if (selectedDays.includes(currentDayOfWeek)) {
+    if (numericSelectedDays.includes(currentDayOfWeek)) {
       return startDate;
     }
     
@@ -1410,11 +1556,95 @@ Page({
       nextDate.setDate(nextDate.getDate() + 1);
       daysChecked++;
       
-      if (selectedDays.includes(nextDate.getDay())) {
+      if (numericSelectedDays.includes(nextDate.getDay())) {
         break;
       }
     }
     
     return nextDate;
   },
-}) 
+
+  /**
+   * 检查重复日期冲突
+   * 集中处理日期冲突检测逻辑，确保一致性
+   * @param {string} repeatType 重复类型
+   * @returns {Object} 包含是否冲突和预览文本的对象
+   */
+  checkRepeatDateConflict: function(repeatType) {
+    // 获取开始日期信息
+    const startDate = new Date(this.data.newTask.startDate.replace(/-/g, '/'));
+    const todayStr = this.data.newTask.startDate;
+    const dayOfWeek = startDate.getDay(); // 0是周日，6是周六
+    const dayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+    const dayName = dayNames[dayOfWeek];
+    
+    // 获取结束日期字符串
+    let endDateStr = '';
+    if (!this.data.newTask.hasNoEndDate) {
+      endDateStr = `直到${this.data.newTask.endDate}结束`;
+    }
+    
+    let previewText = '';
+    let hasConflict = false;
+    let conflictType = '';
+    
+    // 检查各种冲突情况
+    switch (repeatType) {
+      case 'workdays':
+        // 判断开始日期是否是工作日（周一至周五）
+        if (dayOfWeek === 0 || dayOfWeek === 6) {
+          previewText = `日期冲突：您选择的开始日期(${todayStr}，${dayName})是休息日，但重复规则设置为"工作日"(周一至周五)执行。请修改开始日期为工作日，或更改重复规则。`;
+          hasConflict = true;
+          conflictType = '工作日任务不能从周末开始';
+        }
+        break;
+        
+      case 'weekends':
+        // 判断开始日期是否是周末（周六或周日）
+        if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+          previewText = `日期冲突：您选择的开始日期(${todayStr}，${dayName})是工作日，但重复规则设置为"休息日"(周六、周日)执行。请修改开始日期为周六或周日，或更改重复规则。`;
+          hasConflict = true;
+          conflictType = '休息日任务不能从工作日开始';
+        }
+        break;
+        
+      case 'custom':
+        // 自定义重复的冲突检查
+        if (this.data.newTask.repeat.days && this.data.newTask.repeat.days.length > 0) {
+          // 确保selectedDays中的元素是数字类型
+          const selectedDays = this.data.newTask.repeat.days.map(day => parseInt(day));
+          const selectedDayNames = selectedDays.map(day => dayNames[day]).join('、');
+          
+          if (!selectedDays.includes(dayOfWeek)) {
+            // 开始日期的星期不在所选星期中
+            previewText = `日期冲突：您选择的开始日期(${todayStr}，${dayName})不在已设置的重复星期(${selectedDayNames})中。请将开始日期改为所选星期几之一，或在重复星期中选择${dayName}。`;
+            hasConflict = true;
+            conflictType = '开始日期的星期不在所选星期中';
+            
+            console.log(`[TaskEdit] 检测到冲突: 开始日期是${dayName}，但选择了${selectedDayNames}`);
+          } else {
+            // 无冲突，记录正常情况
+            console.log(`[TaskEdit] 无冲突: 开始日期(${dayName})包含在选择的星期中(${selectedDayNames})`);
+          }
+        } else {
+          // 没有选择任何星期
+          previewText = `请至少选择一个重复的星期`;
+          hasConflict = true;
+          conflictType = '未选择任何重复星期';
+          
+          console.log('[TaskEdit] 检测到问题: 未选择任何重复星期');
+        }
+        break;
+    }
+    
+    if (hasConflict) {
+      console.log(`[TaskEdit] 检查冲突: 发现冲突(${conflictType})`);
+    }
+    
+    return {
+      hasConflict: hasConflict,
+      previewText: previewText,
+      conflictType: conflictType
+    };
+  },
+})

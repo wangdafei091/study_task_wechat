@@ -754,24 +754,27 @@
 
 /* 新增：统一的重复预览区域样式 */
 .repeat-preview-area {
-  height: 80rpx; /* 固定高度，足够显示2行普通文本 */
-  padding: 10rpx 20rpx; /* 减少垂直内边距 */
-  margin-top: 12rpx; /* 减少与上方内容间距 */
+  height: auto; /* 改为自适应高度 */
+  min-height: 80rpx; /* 确保最小高度足够 */
+  padding: 16rpx 20rpx; /* 调整内边距 */
+  margin-top: 20rpx; /* 与上方内容保持间距 */
   overflow-y: auto; /* 超出部分滚动 */
   display: block;
   transition: all 0.2s ease; /* 平滑过渡 */
   background-color: transparent; /* 默认无背景 */
-  border-top: none; /* 移除边框 */
+  border-top: 1rpx solid rgba(0, 0, 0, 0.03); /* 添加顶部边框线 */
+  border-bottom: none; /* 移除底部边框 */
 }
 
-/* 当有警告时增加高度 */
+/* 当有警告时的样式 */
 .repeat-preview-area.has-warning {
-  height: 120rpx; /* 增加高度以适应警告文本 */
-  background: linear-gradient(to bottom, rgba(253, 237, 237, 0.4), rgba(253, 237, 237, 0.05)); /* 进一步淡化渐变 */
+  min-height: 100rpx; /* 增加最小高度以适应警告文本 */
+  background: linear-gradient(to bottom, rgba(253, 237, 237, 0.4), rgba(253, 237, 237, 0.05)); /* 淡化渐变 */
   border-radius: 4rpx; /* 轻微的圆角 */
   padding-top: 12rpx; /* 警告状态下增加一点内边距 */
   border-left: 3rpx solid rgba(230, 67, 64, 0.5); /* 左侧标识线 */
   padding-left: 24rpx; /* 左侧增加内边距 */
+  border-top: none; /* 移除默认顶部边框 */
 }
 
 /* 预览文本样式 */
