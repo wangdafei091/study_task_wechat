@@ -131,7 +131,6 @@ Page({
     const today = new Date();
     const year = today.getFullYear();
     const month = today.getMonth();
-    
     const monthNames = ['一月', '二月', '三月', '四月', '五月', '六月', 
                       '七月', '八月', '九月', '十月', '十一月', '十二月'];
     
@@ -154,23 +153,27 @@ Page({
   },
 
   /**
+   * 获取热力图组件
+   * @returns {Object} 热力图组件实例
+   */
+  getHeatmapComponent: function() {
+    return this.selectComponent('#taskHeatmap');
+  },
+
+  /**
    * 切换到上个月
    */
   prevHeatmapMonth: function() {
-    const heatmap = this.selectComponent('#taskHeatmap');
-    if (heatmap) {
-      heatmap.prevMonth();
-    }
+    const heatmap = this.getHeatmapComponent();
+    if (heatmap) heatmap.prevMonth();
   },
 
   /**
    * 切换到下个月
    */
   nextHeatmapMonth: function() {
-    const heatmap = this.selectComponent('#taskHeatmap');
-    if (heatmap) {
-      heatmap.nextMonth();
-    }
+    const heatmap = this.getHeatmapComponent();
+    if (heatmap) heatmap.nextMonth();
   },
 
   /**
@@ -280,22 +283,23 @@ Page({
   },
 
   /**
-   * 添加任务
+   * 验证任务表单数据
+   * @returns {Object} 包含验证结果和错误信息
    */
-  addTask: function() {
-    // 表单验证
+  validateTaskForm: function() {
+    const result = {
+      valid: true,
+      errorMsg: ''
+    };
+
+    // 验证任务标题
     if (!this.data.newTask.title.trim()) {
       this.setData({
         'errors.title': '请输入任务名称'
       });
-      
-      wx.showToast({
-        title: '请输入任务名称',
-        icon: 'none',
-        duration: 2000
-      });
-      
-      return;
+      result.valid = false;
+      result.errorMsg = '请输入任务名称';
+      return result;
     }
     
     // 验证积分范围
@@ -312,29 +316,39 @@ Page({
       console.log('[TaskEdit] 积分已调整到有效范围:', taskPoints);
     }
     
-    // 验证日期和时间
+    // 验证日期
     if (!this.data.newTask.startDate) {
-      wx.showToast({
-        title: '请选择开始日期',
-        icon: 'none',
-        duration: 2000
-      });
-      return;
+      result.valid = false;
+      result.errorMsg = '请选择开始日期';
+      return result;
     }
     
     // 仅当未勾选"无结束日期"时验证结束日期
     if (!this.data.newTask.hasNoEndDate && !this.data.newTask.endDate) {
-      wx.showToast({
-        title: '请选择结束日期',
-        icon: 'none',
-        duration: 2000
-      });
-      return;
+      result.valid = false;
+      result.errorMsg = '请选择结束日期';
+      return result;
     }
     
+    // 验证时间
     if (!this.data.newTask.isAllDay && (!this.data.newTask.startTime || !this.data.newTask.endTime)) {
+      result.valid = false;
+      result.errorMsg = '请选择开始和结束时间';
+      return result;
+    }
+    
+    return result;
+  },
+
+  /**
+   * 添加任务
+   */
+  addTask: function() {
+    // 表单验证
+    const validation = this.validateTaskForm();
+    if (!validation.valid) {
       wx.showToast({
-        title: '请选择开始和结束时间',
+        title: validation.errorMsg,
         icon: 'none',
         duration: 2000
       });
@@ -348,17 +362,19 @@ Page({
       
       // 创建新任务对象
       const taskManager = require('../../utils/taskManager.js');
+      const taskPoints = parseInt(this.data.newTask.points) || 0;
+      
       const newTask = {
         title: this.data.newTask.title,
         type: this.data.newTask.type,
-        points: taskPoints, // 使用验证后的积分值
+        points: taskPoints,
         description: this.data.newTask.description,
         date: this.data.newTask.startDate,
         isAllDay: this.data.newTask.isAllDay,
         startTime: this.data.newTask.isAllDay ? null : this.data.newTask.startTime,
         endTime: this.data.newTask.isAllDay ? null : this.data.newTask.endTime,
         endDate: this.data.newTask.endDate,
-        hasNoEndDate: this.data.newTask.hasNoEndDate, // 添加无结束日期字段
+        hasNoEndDate: this.data.newTask.hasNoEndDate,
         repeat: {
           type: this.data.newTask.repeat.type,
           startDate: this.data.newTask.startDate,
@@ -414,34 +430,33 @@ Page({
     const day = ("0" + today.getDate()).slice(-2);
     const dateStr = `${year}-${month}-${day}`;
     
+    // 获取当前时间和默认结束时间（当前时间+1小时）
     const hour = today.getHours();
     const minute = today.getMinutes();
     const timeStr = `${hour < 10 ? '0' + hour : hour}:${minute < 10 ? '0' + minute : minute}`;
-    
-    // 计算结束时间，默认为开始时间后一小时
     const endHour = (hour + 1) % 24;
     const endTimeStr = `${endHour < 10 ? '0' + endHour : endHour}:${minute < 10 ? '0' + minute : minute}`;
     
-    // 设置年月选择器的数据
+    // 设置年月显示格式
     const yearMonthStr = `${year}-${month}`;
-    const yearMonthText = `${year}年${parseInt(month)}月`;
-    
-    // 设置年月分开显示的文本
     const yearText = `${year}年`;
     const monthText = `${parseInt(month)}月`;
     
     this.setData({
+      // 设置日期时间
       'newTask.startDate': dateStr,
       'newTask.startTime': timeStr,
       'newTask.endDate': dateStr,
       'newTask.endTime': endTimeStr,
       'newTask.repeat.startDate': dateStr,
       'newTask.repeat.endDate': dateStr,
+      
       // 设置年月选择器数据
       startYearMonth: yearMonthStr,
       endYearMonth: yearMonthStr,
-      startYearMonthText: yearMonthText,
-      endYearMonthText: yearMonthText,
+      startYearMonthText: `${year}年${parseInt(month)}月`,
+      endYearMonthText: `${year}年${parseInt(month)}月`,
+      
       // 设置年月分开显示的文本
       startYearText: yearText,
       startMonthText: monthText,
@@ -452,16 +467,6 @@ Page({
     // 初始化日历数据
     this.generateCalendarDays('start');
     this.generateCalendarDays('end');
-    
-    console.log('[TaskEdit] 初始化日期时间:', {
-      startDate: dateStr,
-      startTime: timeStr,
-      endDate: dateStr,
-      endTime: endTimeStr,
-      yearMonth: yearMonthText,
-      yearText: yearText,
-      monthText: monthText
-    });
   },
 
   /**
@@ -518,7 +523,7 @@ Page({
     });
     
     // 如果结束日期为空或早于开始日期，自动设置结束日期为开始日期
-    if (!this.data.newTask.endDate || this.data.newTask.endDate < date) {
+    if (!this.isValidEndDate(date, this.data.newTask.endDate)) {
       this.setData({
         'newTask.endDate': date
       });
@@ -555,7 +560,7 @@ Page({
     const date = e.detail.value;
     
     // 确保结束日期不早于开始日期
-    if (this.data.newTask.startDate && date < this.data.newTask.startDate) {
+    if (!this.isValidEndDate(this.data.newTask.startDate, date)) {
       wx.showToast({
         title: '结束日期不能早于开始日期',
         icon: 'none',
@@ -576,22 +581,16 @@ Page({
    */
   onEndTimeChange: function(e) {
     const time = e.detail.value;
+    const isSameDay = this.data.newTask.startDate === this.data.newTask.endDate;
     
     // 如果是同一天，确保结束时间不早于开始时间
-    if (this.data.newTask.startDate === this.data.newTask.endDate && this.data.newTask.startTime) {
-      const startHour = parseInt(this.data.newTask.startTime.split(':')[0]);
-      const startMinute = parseInt(this.data.newTask.startTime.split(':')[1]);
-      const endHour = parseInt(time.split(':')[0]);
-      const endMinute = parseInt(time.split(':')[1]);
-      
-      if (startHour > endHour || (startHour === endHour && startMinute >= endMinute)) {
-        wx.showToast({
-          title: '结束时间不能早于开始时间',
-          icon: 'none',
-          duration: 2000
-        });
-        return;
-      }
+    if (!this.isValidEndTime(this.data.newTask.startTime, time, isSameDay)) {
+      wx.showToast({
+        title: '结束时间不能早于开始时间',
+        icon: 'none',
+        duration: 2000
+      });
+      return;
     }
     
     this.setData({
@@ -735,16 +734,6 @@ Page({
    * 关闭所有面板
    */
   closeAllPanels: function() {
-    console.log('[TaskEdit] 关闭所有面板');
-    
-    // 如果所有面板都已关闭，无需操作
-    if (!this.data.startDatePanel && 
-        !this.data.endDatePanel && 
-        !this.data.repeatPanel && 
-        !this.data.reminderPanel) {
-      return;
-    }
-    
     // 关闭所有面板
     this.setData({
       startDatePanel: false,
@@ -814,16 +803,15 @@ Page({
    * 检查并调整结束时间
    */
   checkAndAdjustEndTime: function(startTime) {
-    if (this.data.newTask.startDate === this.data.newTask.endDate && 
-        this.data.newTask.endTime) {
+    const isSameDay = this.data.newTask.startDate === this.data.newTask.endDate;
+    if (isSameDay && this.data.newTask.endTime) {
       const startTimeValue = startTime || this.data.newTask.startTime;
       
-      // 比较开始时间和结束时间
-      const [startHours, startMinutes] = startTimeValue.split(':').map(Number);
-      const [endHours, endMinutes] = this.data.newTask.endTime.split(':').map(Number);
-      
-      // 如果开始时间晚于或等于结束时间，调整结束时间
-      if (startHours > endHours || (startHours === endHours && startMinutes >= endMinutes)) {
+      // 检查时间是否有效
+      if (!this.isValidEndTime(startTimeValue, this.data.newTask.endTime, true)) {
+        // 比较开始时间和结束时间
+        const [startHours, startMinutes] = startTimeValue.split(':').map(Number);
+        
         // 将结束时间设置为开始时间后一小时
         const newEndHour = (startHours + 1) % 24;
         const newEndTime = `${newEndHour.toString().padStart(2, '0')}:${startMinutes.toString().padStart(2, '0')}`;
@@ -833,6 +821,34 @@ Page({
         });
       }
     }
+  },
+
+  /**
+   * 日期时间辅助函数 - 检查结束日期是否有效
+   * @param {string} startDate 开始日期
+   * @param {string} endDate 结束日期
+   * @returns {boolean} 结束日期是否有效
+   */
+  isValidEndDate: function(startDate, endDate) {
+    if (!startDate || !endDate) return false;
+    return endDate >= startDate;
+  },
+
+  /**
+   * 日期时间辅助函数 - 检查结束时间是否有效
+   * @param {string} startTime 开始时间
+   * @param {string} endTime 结束时间
+   * @returns {boolean} 结束时间是否有效（仅当同一天时检查）
+   */
+  isValidEndTime: function(startTime, endTime, isSameDay) {
+    if (!startTime || !endTime || !isSameDay) return true;
+    
+    const [startHours, startMinutes] = startTime.split(':').map(Number);
+    const [endHours, endMinutes] = endTime.split(':').map(Number);
+    
+    if (startHours > endHours) return false;
+    if (startHours === endHours && startMinutes >= endMinutes) return false;
+    return true;
   },
 
   /**
@@ -924,32 +940,66 @@ Page({
    * 生成简化版日历数据
    */
   generateCalendarDays: function(type, customYear, customMonth) {
-    // 使用自定义年月或从已选日期中获取
+    // 确定年月
+    const yearMonthData = this.getYearMonthData(type, customYear, customMonth);
+    const { year, month } = yearMonthData;
+    
+    // 更新界面年月显示
+    this.updateYearMonthDisplay(type, year, month);
+    
+    // 生成日历数据
+    const days = this.generateMonthDays(year, month);
+    
+    // 更新日历数据
+    this.setData({
+      [type + 'CalendarDays']: days
+    });
+    
+    console.log(`[TaskEdit] 生成${type}日历数据，年:${year}, 月:${month+1}`);
+  },
+
+  /**
+   * 获取指定类型的年月数据
+   */
+  getYearMonthData: function(type, customYear, customMonth) {
     let year, month;
     if (customYear !== undefined && customMonth !== undefined) {
+      // 使用自定义年月
       year = customYear;
       month = customMonth;
     } else {
+      // 从已选日期或当前日期获取
       const today = new Date();
       const selectedDate = type === 'start' ? this.data.newTask.startDate : this.data.newTask.endDate;
       const selectedDateObj = selectedDate ? new Date(selectedDate) : today;
       year = selectedDateObj.getFullYear();
       month = selectedDateObj.getMonth();
     }
-    
+    return { year, month };
+  },
+
+  /**
+   * 更新年月显示
+   */
+  updateYearMonthDisplay: function(type, year, month) {
     // 更新年月文本显示
+    const yearMonthStr = `${year}-${(month + 1) < 10 ? '0' + (month + 1) : (month + 1)}`;
     const yearMonthText = `${year}年${month + 1}月`;
-    const yearMonth = `${year}-${(month + 1) < 10 ? '0' + (month + 1) : (month + 1)}`;
     const yearText = `${year}年`;
     const monthText = `${month + 1}月`;
     
     this.setData({
-      [type + 'YearMonth']: yearMonth,
+      [type + 'YearMonth']: yearMonthStr,
       [type + 'YearMonthText']: yearMonthText,
       [type + 'YearText']: yearText,
       [type + 'MonthText']: monthText
     });
-    
+  },
+
+  /**
+   * 生成月份天数数据
+   */
+  generateMonthDays: function(year, month) {
     // 获取当月的第一天和最后一天
     const firstDay = new Date(year, month, 1);
     const lastDay = new Date(year, month + 1, 0);
@@ -963,87 +1013,99 @@ Page({
     // 当月的总天数
     const daysInMonth = lastDay.getDate();
     
+    // 今天日期信息
     const today = new Date();
     const todayYear = today.getFullYear();
     const todayMonth = today.getMonth();
     const todayDate = today.getDate();
-    
-    // 当天日期的时间戳，用于比较是否为过去日期
     const todayTimestamp = new Date(todayYear, todayMonth, todayDate).getTime();
     
     let days = [];
     
     // 添加上月的日期
-    if (daysFromPrevMonth > 0) {
-      const prevMonth = month === 0 ? 11 : month - 1;
-      const prevYear = month === 0 ? year - 1 : year;
-      const prevMonthLastDay = new Date(year, month, 0).getDate();
-      
-      for (let i = prevMonthLastDay - daysFromPrevMonth + 1; i <= prevMonthLastDay; i++) {
-        const date = `${prevYear}-${String(prevMonth + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
-        // 判断日期是否在过去
-        const dateTimestamp = new Date(prevYear, prevMonth, i).getTime();
-        const isPast = dateTimestamp < todayTimestamp;
-        
-        days.push({
-          day: i,
-          date,
-          currentMonth: false,
-          isToday: (prevYear === todayYear && prevMonth === todayMonth && i === todayDate),
-          isPast: isPast
-        });
-      }
-    }
+    this.addPrevMonthDays(days, year, month, daysFromPrevMonth, todayYear, todayMonth, todayDate, todayTimestamp);
     
     // 添加当月的日期
+    this.addCurrentMonthDays(days, year, month, daysInMonth, todayYear, todayMonth, todayDate, todayTimestamp);
+    
+    // 添加下月的日期
+    this.addNextMonthDays(days, year, month, todayYear, todayMonth, todayDate, todayTimestamp);
+    
+    return days;
+  },
+
+  /**
+   * 添加上月日期到日历
+   */
+  addPrevMonthDays: function(days, year, month, daysFromPrevMonth, todayYear, todayMonth, todayDate, todayTimestamp) {
+    if (daysFromPrevMonth <= 0) return;
+    
+    const prevMonth = month === 0 ? 11 : month - 1;
+    const prevYear = month === 0 ? year - 1 : year;
+    const prevMonthLastDay = new Date(year, month, 0).getDate();
+    
+    for (let i = prevMonthLastDay - daysFromPrevMonth + 1; i <= prevMonthLastDay; i++) {
+      const date = `${prevYear}-${String(prevMonth + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+      // 判断日期是否在过去
+      const dateTimestamp = new Date(prevYear, prevMonth, i).getTime();
+      
+      days.push({
+        day: i,
+        date,
+        currentMonth: false,
+        isToday: (prevYear === todayYear && prevMonth === todayMonth && i === todayDate),
+        isPast: dateTimestamp < todayTimestamp
+      });
+    }
+  },
+
+  /**
+   * 添加当月日期到日历
+   */
+  addCurrentMonthDays: function(days, year, month, daysInMonth, todayYear, todayMonth, todayDate, todayTimestamp) {
     for (let i = 1; i <= daysInMonth; i++) {
       const date = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
       // 判断日期是否在过去
       const dateTimestamp = new Date(year, month, i).getTime();
-      const isPast = dateTimestamp < todayTimestamp;
       
       days.push({
         day: i,
         date,
         currentMonth: true,
         isToday: (year === todayYear && month === todayMonth && i === todayDate),
-        isPast: isPast
+        isPast: dateTimestamp < todayTimestamp
       });
     }
-    
+  },
+
+  /**
+   * 添加下月日期到日历
+   */
+  addNextMonthDays: function(days, year, month, todayYear, todayMonth, todayDate, todayTimestamp) {
     // 计算行数并填充下月日期
     const totalDaysSoFar = days.length;
     const rowsNeeded = Math.ceil(totalDaysSoFar / 7);
     const totalCells = rowsNeeded * 7;
     const nextMonthDays = totalCells - totalDaysSoFar;
     
-    if (nextMonthDays > 0) {
-      const nextMonth = month === 11 ? 0 : month + 1;
-      const nextYear = month === 11 ? year + 1 : year;
+    if (nextMonthDays <= 0) return;
+    
+    const nextMonth = month === 11 ? 0 : month + 1;
+    const nextYear = month === 11 ? year + 1 : year;
+    
+    for (let i = 1; i <= nextMonthDays; i++) {
+      const date = `${nextYear}-${String(nextMonth + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+      // 判断日期是否在过去
+      const dateTimestamp = new Date(nextYear, nextMonth, i).getTime();
       
-      for (let i = 1; i <= nextMonthDays; i++) {
-        const date = `${nextYear}-${String(nextMonth + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
-        // 判断日期是否在过去
-        const dateTimestamp = new Date(nextYear, nextMonth, i).getTime();
-        const isPast = dateTimestamp < todayTimestamp;
-        
-        days.push({
-          day: i,
-          date,
-          currentMonth: false,
-          isToday: (nextYear === todayYear && nextMonth === todayMonth && i === todayDate),
-          isPast: isPast
-        });
-      }
+      days.push({
+        day: i,
+        date,
+        currentMonth: false,
+        isToday: (nextYear === todayYear && nextMonth === todayMonth && i === todayDate),
+        isPast: dateTimestamp < todayTimestamp
+      });
     }
-    
-    if (type === 'start') {
-      this.setData({ startCalendarDays: days });
-    } else {
-      this.setData({ endCalendarDays: days });
-    }
-    
-    console.log(`[TaskEdit] 生成${type}日历数据，年:${year}, 月:${month+1}`);
   },
 
   /**
