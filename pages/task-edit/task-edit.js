@@ -40,7 +40,7 @@ Page({
     },
     // 描述字段限制常量
     descMaxLength: 50,
-    descPlaceholder: '',
+    descPlaceholder: '输入任务描述（可选）',
     // 新增UI控制字段
     repeatText: '每天',
     reminderText: '无',
@@ -55,15 +55,8 @@ Page({
     // 星期选择状态 [周日,周一,周二,周三,周四,周五,周六]
     weekdaySelection: [false, false, false, false, false, false, false],
     // 日历面板数据
-    startPanelYear: 0,
-    startPanelMonth: 0,
-    endPanelYear: 0,
-    endPanelMonth: 0,
     startCalendarDays: [],
     endCalendarDays: [],
-    // 时间选择器数据
-    startTimePickerValue: [8, 0], // 默认8:00，索引从0开始
-    endTimePickerValue: [9, 0],    // 默认9:00，索引从0开始
     // 年月选择器数据
     startYearMonth: '',  // 格式：'2023-05'
     endYearMonth: '',    // 格式：'2023-05'
@@ -98,8 +91,6 @@ Page({
       repeatPanel: false,
       reminderPanel: false
     });
-    
-    console.log('[TaskEdit] 初始化面板状态：全部关闭');
   },
 
   /**
@@ -107,8 +98,6 @@ Page({
    */
   onShow: function() {
     console.log('[task-edit] 页面显示，刷新任务数据');
-    
-    // 刷新任务数据
     this.loadAllTasks();
   },
 
@@ -116,8 +105,6 @@ Page({
    * 加载所有任务数据
    */
   loadAllTasks: function() {
-    console.log('[TaskEdit] 加载所有任务数据');
-    
     try {
       const allTasks = app.globalData.tasks || [];
       
@@ -125,9 +112,9 @@ Page({
         allTasks: allTasks
       });
       
-      console.log('任务数据加载成功，共 ' + allTasks.length + ' 个任务');
+      console.log('[TaskEdit] 任务数据加载成功，共 ' + allTasks.length + ' 个任务');
     } catch (error) {
-      console.error('加载任务数据失败:', error);
+      console.error('[TaskEdit] 加载任务数据失败:', error);
       
       wx.showToast({
         title: '加载数据失败',
@@ -145,27 +132,20 @@ Page({
     const year = today.getFullYear();
     const month = today.getMonth();
     
-    this.setData({ 
-      heatmapYear: year,
-      heatmapMonthIndex: month
-    });
-    
     const monthNames = ['一月', '二月', '三月', '四月', '五月', '六月', 
                       '七月', '八月', '九月', '十月', '十一月', '十二月'];
     
     this.setData({
+      heatmapYear: year,
+      heatmapMonthIndex: month,
       heatmapMonth: `${year}年${monthNames[month]}`
     });
-    
-    console.log('[TaskEdit] 初始化热力图月份:', this.data.heatmapMonth);
   },
 
   /**
    * 热力图月份变化事件处理
    */
   onHeatmapMonthChange: function(e) {
-    console.log('[TaskEdit] 热力图月份变化:', e.detail);
-    
     this.setData({
       heatmapYear: e.detail.year,
       heatmapMonthIndex: e.detail.month,
@@ -177,7 +157,6 @@ Page({
    * 切换到上个月
    */
   prevHeatmapMonth: function() {
-    // 获取热力图组件实例
     const heatmap = this.selectComponent('#taskHeatmap');
     if (heatmap) {
       heatmap.prevMonth();
@@ -188,7 +167,6 @@ Page({
    * 切换到下个月
    */
   nextHeatmapMonth: function() {
-    // 获取热力图组件实例
     const heatmap = this.selectComponent('#taskHeatmap');
     if (heatmap) {
       heatmap.nextMonth();
@@ -199,7 +177,6 @@ Page({
    * 处理热力图日期选择事件
    */
   onHeatmapDaySelect: function(e) {
-    console.log('[TaskEdit] 热力图日期选择:', e.detail);
     // 日期选择事件由热力图组件内部处理
   },
 
@@ -211,8 +188,6 @@ Page({
       'newTask.title': e.detail.value,
       'errors.title': ''
     });
-    
-    console.log('任务标题输入:', e.detail.value);
   },
 
   /**
@@ -223,8 +198,6 @@ Page({
     this.setData({
       'newTask.type': type
     });
-    
-    console.log('选择任务类型:', type);
   },
 
   /**
@@ -243,35 +216,24 @@ Page({
     this.setData({
       'newTask.points': points
     });
-    
-    console.log('积分更改:', points);
   },
 
   /**
    * 处理积分输入
    */
   onPointsInput: function(e) {
-    // 只记录用户输入，不做验证限制
-    const inputValue = e.detail.value;
-    
+    // 记录用户输入
     this.setData({
-      'newTask.points': inputValue
+      'newTask.points': e.detail.value
     });
-    
-    console.log('[TaskEdit] 积分输入原始值:', inputValue);
   },
 
   /**
    * 处理描述输入
    */
   onDescriptionInput: function(e) {
-    const value = e.detail.value;
-    
-    // 记录日志
-    console.log('描述输入:', value, `长度: ${value.length}/${this.data.descMaxLength}`);
-    
     this.setData({
-      'newTask.description': value
+      'newTask.description': e.detail.value
     });
   },
 
@@ -507,11 +469,12 @@ Page({
    */
   toggleAllDay: function(e) {
     const isAllDay = e.detail.value;
-    console.log('[TaskEdit] 全天开关切换:', isAllDay);
     
     this.setData({
       'newTask.isAllDay': isAllDay
     });
+    
+    console.log('[TaskEdit] 全天选项:', isAllDay ? '开启' : '关闭');
   },
   
   /**
@@ -519,7 +482,6 @@ Page({
    */
   toggleNoEndDate: function(e) {
     const hasNoEndDate = e.detail.value;
-    console.log('[TaskEdit] 无结束日期开关切换:', hasNoEndDate);
     
     this.setData({
       'newTask.hasNoEndDate': hasNoEndDate
@@ -540,8 +502,9 @@ Page({
         icon: 'none',
         duration: 2000
       });
-      console.log('[TaskEdit] 已启用无结束日期，任务将无限期重复');
     }
+    
+    console.log('[TaskEdit] 无结束日期选项:', hasNoEndDate ? '开启' : '关闭');
   },
   
   /**
@@ -549,7 +512,6 @@ Page({
    */
   onStartDateChange: function(e) {
     const date = e.detail.value;
-    console.log('[TaskEdit] 开始日期选择:', date);
     
     this.setData({
       'newTask.startDate': date
@@ -561,6 +523,8 @@ Page({
         'newTask.endDate': date
       });
     }
+    
+    console.log('[TaskEdit] 设置开始日期:', date);
   },
   
   /**
@@ -568,36 +532,15 @@ Page({
    */
   onStartTimeChange: function(e) {
     const time = e.detail.value;
-    console.log('[TaskEdit] 开始时间选择:', time);
     
     this.setData({
       'newTask.startTime': time
     });
     
-    // 如果结束时间为空或早于开始时间，自动调整结束时间
-    if (this.data.newTask.startDate === this.data.newTask.endDate) {
-      const startHour = parseInt(time.split(':')[0]);
-      const startMinute = parseInt(time.split(':')[1]);
-      
-      if (!this.data.newTask.endTime) {
-        // 如果结束时间为空，设置为开始时间+1小时
-        const endHour = (startHour + 1) % 24;
-        this.setData({
-          'newTask.endTime': `${endHour.toString().padStart(2, '0')}:${startMinute.toString().padStart(2, '0')}`
-        });
-      } else {
-        // 如果结束时间早于开始时间，设置为开始时间+1小时
-        const endHour = parseInt(this.data.newTask.endTime.split(':')[0]);
-        const endMinute = parseInt(this.data.newTask.endTime.split(':')[1]);
-        
-        if (startHour > endHour || (startHour === endHour && startMinute >= endMinute)) {
-          const newEndHour = (startHour + 1) % 24;
-          this.setData({
-            'newTask.endTime': `${newEndHour.toString().padStart(2, '0')}:${startMinute.toString().padStart(2, '0')}`
-          });
-        }
-      }
-    }
+    // 检查并调整结束时间
+    this.checkAndAdjustEndTime(time);
+    
+    console.log('[TaskEdit] 设置开始时间:', time);
   },
   
   /**
@@ -606,12 +549,10 @@ Page({
   onEndDateChange: function(e) {
     // 如果启用了无结束日期，则不处理结束日期变更
     if (this.data.newTask.hasNoEndDate) {
-      console.log('[TaskEdit] 无结束日期已启用，忽略结束日期变更');
       return;
     }
     
     const date = e.detail.value;
-    console.log('[TaskEdit] 结束日期选择:', date);
     
     // 确保结束日期不早于开始日期
     if (this.data.newTask.startDate && date < this.data.newTask.startDate) {
@@ -626,6 +567,8 @@ Page({
     this.setData({
       'newTask.endDate': date
     });
+    
+    console.log('[TaskEdit] 设置结束日期:', date);
   },
   
   /**
@@ -633,7 +576,6 @@ Page({
    */
   onEndTimeChange: function(e) {
     const time = e.detail.value;
-    console.log('[TaskEdit] 结束时间选择:', time);
     
     // 如果是同一天，确保结束时间不早于开始时间
     if (this.data.newTask.startDate === this.data.newTask.endDate && this.data.newTask.startTime) {
@@ -655,6 +597,8 @@ Page({
     this.setData({
       'newTask.endTime': time
     });
+    
+    console.log('[TaskEdit] 设置结束时间:', time);
   },
   
   /**
@@ -662,7 +606,6 @@ Page({
    */
   togglePanel: function(e) {
     const panelName = e.currentTarget.dataset.panel;
-    console.log('[TaskEdit] 切换面板:', panelName);
     
     // 关闭所有其他面板
     const newState = {
@@ -684,15 +627,13 @@ Page({
       this.generateCalendarDays(type);
     }
     
-    console.log('[TaskEdit] 面板状态更新:', newState);
+    console.log(`[TaskEdit] 切换${panelName}:`, newState[panelName] ? '打开' : '关闭');
   },
   
   /**
    * 切换到星期选择模式
    */
   switchToWeekdaySelection: function() {
-    console.log('[TaskEdit] 切换到星期选择模式');
-    
     // 如果当前是自定义类型，恢复之前的星期选择状态
     if (this.data.newTask.repeat.type === 'custom' && this.data.newTask.repeat.days.length > 0) {
       const weekdaySelection = [false, false, false, false, false, false, false];
@@ -708,14 +649,14 @@ Page({
     this.setData({
       repeatPanelMode: 'weekday'
     });
+    
+    console.log('[TaskEdit] 切换到星期选择模式');
   },
   
   /**
    * 返回到重复类型选择模式
    */
   backToRepeatTypePanel: function() {
-    console.log('[TaskEdit] 返回到重复类型选择');
-    
     // 收集选中的星期
     const selectedDays = [];
     this.data.weekdaySelection.forEach((selected, index) => {
@@ -747,6 +688,8 @@ Page({
     this.setData({
       repeatPanelMode: 'type'
     });
+    
+    console.log('[TaskEdit] 返回到重复类型选择模式');
   },
   
   /**
@@ -756,8 +699,6 @@ Page({
     const day = parseInt(e.currentTarget.dataset.day);
     const newSelection = [...this.data.weekdaySelection];
     newSelection[day] = !newSelection[day];
-    
-    console.log('[TaskEdit] 切换星期选择:', day, newSelection[day]);
     
     this.setData({
       weekdaySelection: newSelection
@@ -785,6 +726,8 @@ Page({
         'newTask.repeat.days': selectedDays,
         repeatText: repeatText
       });
+      
+      console.log(`[TaskEdit] 更新星期选择: ${selectedDays.length}天被选中`);
     }
   },
   
@@ -818,7 +761,6 @@ Page({
    */
   selectRepeatType: function(e) {
     const type = e.currentTarget.dataset.type;
-    console.log('[TaskEdit] 选择重复类型:', type);
     
     let repeatText = '';
     switch (type) {
@@ -838,6 +780,8 @@ Page({
       repeatText: repeatText
       // 不再立即关闭面板，等待用户点击"完成"按钮
     });
+    
+    console.log(`[TaskEdit] 选择重复类型: ${type}`);
   },
 
   /**
@@ -846,7 +790,6 @@ Page({
   selectReminderType: function(e) {
     const enabled = e.currentTarget.dataset.enabled === 'true';
     const time = parseInt(e.currentTarget.dataset.time || 0);
-    console.log('[TaskEdit] 选择提醒类型:', { enabled, time });
     
     let reminderText = '无';
     if (enabled) {
@@ -863,23 +806,10 @@ Page({
       reminderText: reminderText,
       reminderPanel: false // 选择后关闭面板
     });
+    
+    console.log(`[TaskEdit] 设置提醒: ${reminderText}`);
   },
 
-  /**
-   * 比较两个时间字符串的大小
-   * 返回值：1表示time1大于time2，0表示相等，-1表示time1小于time2
-   */
-  compareTimeStrings: function(time1, time2) {
-    const [hours1, minutes1] = time1.split(':').map(Number);
-    const [hours2, minutes2] = time2.split(':').map(Number);
-    
-    if (hours1 > hours2) return 1;
-    if (hours1 < hours2) return -1;
-    if (minutes1 > minutes2) return 1;
-    if (minutes1 < minutes2) return -1;
-    return 0;
-  },
-  
   /**
    * 检查并调整结束时间
    */
@@ -888,17 +818,19 @@ Page({
         this.data.newTask.endTime) {
       const startTimeValue = startTime || this.data.newTask.startTime;
       
-      if (this.compareTimeStrings(startTimeValue, this.data.newTask.endTime) >= 0) {
-        // 如果开始时间晚于或等于结束时间，将结束时间设置为开始时间后一小时
-        const [hours, minutes] = startTimeValue.split(':').map(Number);
-        const newEndHour = (hours + 1) % 24;
-        const newEndTime = `${newEndHour.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+      // 比较开始时间和结束时间
+      const [startHours, startMinutes] = startTimeValue.split(':').map(Number);
+      const [endHours, endMinutes] = this.data.newTask.endTime.split(':').map(Number);
+      
+      // 如果开始时间晚于或等于结束时间，调整结束时间
+      if (startHours > endHours || (startHours === endHours && startMinutes >= endMinutes)) {
+        // 将结束时间设置为开始时间后一小时
+        const newEndHour = (startHours + 1) % 24;
+        const newEndTime = `${newEndHour.toString().padStart(2, '0')}:${startMinutes.toString().padStart(2, '0')}`;
         
         this.setData({
           'newTask.endTime': newEndTime,
         });
-        
-        console.log('[TaskEdit] 调整结束时间:', newEndTime);
       }
     }
   },
@@ -927,24 +859,8 @@ Page({
       }
     }
     
-    const newYearMonth = `${year}-${month < 10 ? '0' + month : month}`;
-    const newYearMonthText = `${year}年${month}月`;
-    
-    // 分别设置年份和月份文本
-    const newYearText = `${year}年`;
-    const newMonthText = `${month}月`;
-    
-    this.setData({
-      [type + 'YearMonth']: newYearMonth,
-      [type + 'YearMonthText']: newYearMonthText,
-      [type + 'YearText']: newYearText,
-      [type + 'MonthText']: newMonthText
-    });
-    
-    console.log(`[TaskEdit] 更改${type}月份:`, newYearMonthText);
-    
     // 重新生成日历数据
-    this.generateCalendarDays(type === 'start' ? 'start' : 'end', year, month - 1);
+    this.generateCalendarDays(type, year, month - 1);
   },
 
   /**
@@ -963,13 +879,6 @@ Page({
       year++;
     }
     
-    const newYearMonth = `${year}-${month < 10 ? '0' + month : month}`;
-    const newYearMonthText = `${year}年${month}月`;
-    
-    // 分别设置年份和月份文本
-    const newYearText = `${year}年`;
-    const newMonthText = `${month}月`;
-    
     // 显示提示
     wx.showToast({
       title: `切换至${year}年`,
@@ -977,17 +886,8 @@ Page({
       duration: 1000
     });
     
-    this.setData({
-      [type + 'YearMonth']: newYearMonth,
-      [type + 'YearMonthText']: newYearMonthText,
-      [type + 'YearText']: newYearText,
-      [type + 'MonthText']: newMonthText
-    });
-    
-    console.log(`[TaskEdit] 更改${type}年份:`, newYearMonthText);
-    
     // 重新生成日历数据
-    this.generateCalendarDays(type === 'start' ? 'start' : 'end', year, month - 1);
+    this.generateCalendarDays(type, year, month - 1);
   },
 
   /**
@@ -998,23 +898,9 @@ Page({
     const value = e.detail.value; // 格式：2023-05
     
     let [year, month] = value.split('-').map(Number);
-    const newYearMonthText = `${year}年${month}月`;
-    
-    // 分别设置年份和月份文本
-    const newYearText = `${year}年`;
-    const newMonthText = `${month}月`;
-    
-    this.setData({
-      [type + 'YearMonth']: value,
-      [type + 'YearMonthText']: newYearMonthText,
-      [type + 'YearText']: newYearText,
-      [type + 'MonthText']: newMonthText
-    });
-    
-    console.log(`[TaskEdit] 选择${type}年月:`, newYearMonthText);
     
     // 重新生成日历数据
-    this.generateCalendarDays(type === 'start' ? 'start' : 'end', year, month - 1);
+    this.generateCalendarDays(type, year, month - 1);
   },
 
   /**
@@ -1023,7 +909,6 @@ Page({
    */
   preventTouchMove: function(e) {
     // 阻止事件冒泡和默认行为
-    console.log('[TaskEdit] 阻止滑动穿透');
     return;
   },
 
@@ -1039,15 +924,13 @@ Page({
    * 生成简化版日历数据
    */
   generateCalendarDays: function(type, customYear, customMonth) {
-    const today = new Date();
-    console.log('[TaskEdit] 生成日历数据，添加过去日期判断');
-    
     // 使用自定义年月或从已选日期中获取
     let year, month;
     if (customYear !== undefined && customMonth !== undefined) {
       year = customYear;
       month = customMonth;
     } else {
+      const today = new Date();
       const selectedDate = type === 'start' ? this.data.newTask.startDate : this.data.newTask.endDate;
       const selectedDateObj = selectedDate ? new Date(selectedDate) : today;
       year = selectedDateObj.getFullYear();
@@ -1057,8 +940,6 @@ Page({
     // 更新年月文本显示
     const yearMonthText = `${year}年${month + 1}月`;
     const yearMonth = `${year}-${(month + 1) < 10 ? '0' + (month + 1) : (month + 1)}`;
-    
-    // 分别设置年份和月份文本
     const yearText = `${year}年`;
     const monthText = `${month + 1}月`;
     
@@ -1068,8 +949,6 @@ Page({
       [type + 'YearText']: yearText,
       [type + 'MonthText']: monthText
     });
-    
-    console.log(`[TaskEdit] 生成${type}日历数据`, year, month + 1);
     
     // 获取当月的第一天和最后一天
     const firstDay = new Date(year, month, 1);
@@ -1084,6 +963,7 @@ Page({
     // 当月的总天数
     const daysInMonth = lastDay.getDate();
     
+    const today = new Date();
     const todayYear = today.getFullYear();
     const todayMonth = today.getMonth();
     const todayDate = today.getDate();
@@ -1163,7 +1043,7 @@ Page({
       this.setData({ endCalendarDays: days });
     }
     
-    console.log(`[TaskEdit] 日历生成完成，共${days.length}天`);
+    console.log(`[TaskEdit] 生成${type}日历数据，年:${year}, 月:${month+1}`);
   },
 
   /**
@@ -1171,7 +1051,6 @@ Page({
    */
   selectStartDate: function(e) {
     const date = e.currentTarget.dataset.date;
-    console.log('[TaskEdit] 选择开始日期:', date);
     
     this.setData({
       'newTask.startDate': date,
@@ -1184,6 +1063,8 @@ Page({
         'newTask.endDate': date
       });
     }
+    
+    console.log('[TaskEdit] 选择开始日期:', date);
   },
 
   /**
@@ -1192,7 +1073,6 @@ Page({
   selectEndDate: function(e) {
     // 如果启用了无结束日期，则不处理结束日期选择
     if (this.data.newTask.hasNoEndDate) {
-      console.log('[TaskEdit] 无结束日期已启用，忽略结束日期选择');
       this.setData({
         endDatePanel: false
       });
@@ -1200,7 +1080,6 @@ Page({
     }
     
     const date = e.currentTarget.dataset.date;
-    console.log('[TaskEdit] 选择结束日期:', date);
     
     // 确保结束日期不早于开始日期
     if (this.data.newTask.startDate && date < this.data.newTask.startDate) {
@@ -1216,5 +1095,7 @@ Page({
       'newTask.endDate': date,
       endDatePanel: false
     });
+    
+    console.log('[TaskEdit] 选择结束日期:', date);
   }
 }) 
