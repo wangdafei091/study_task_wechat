@@ -39,7 +39,7 @@
   align-items: center;
 }
 
-.main-title {
+.heatmap-title .main-title {
   font-size: 32rpx;
   font-weight: 600;
   color: #333;
@@ -823,4 +823,19 @@
   color: #999;
   font-weight: normal;
   margin-left: 8rpx;
+}
+
+/* 添加信息图标样式 */
+.info-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32rpx;
+  height: 32rpx;
+  border-radius: 50%;
+  background-color: rgba(66, 133, 244, 0.1);
+  color: #4285F4;
+  font-size: 24rpx;
+  margin-left: 12rpx;
+  vertical-align: middle;
 } 

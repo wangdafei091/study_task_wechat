@@ -33,101 +33,112 @@
       <view class="day-date">
         <view class="date-row">
           <text class="date-text">{{selectedDateText}}</text>
-          <text class="task-count-text" wx:if="{{dayTasks.length > 0}}">（{{dayTasks.length}}个任务）</text>
+          <text class="task-count-text" wx:if="{{dayTasks.length > 0}}">{{dayTasks.length}}个任务</text>
+        </view>
+        <!-- 添加压力指数显示 -->
+        <view class="pressure-row" wx:if="{{dayTasks.length > 0}}">
+          <text class="pressure-text">压力指数: {{selectedDayPressure.total}}</text>
+          <text class="pressure-level-text {{selectedDayPressure.isHigh ? 'high-pressure' : ''}}">
+            {{selectedDayPressure.levelText}}
+          </text>
         </view>
       </view>
-      <view class="close-btn" bindtap="closeDayTasks">关闭</view>
+      <button class="close-btn" bindtap="closeDayTasks">关闭</button>
     </view>
-    
-    <scroll-view class="tasks-list" scroll-y="{{true}}">
+    <view class="tasks-list">
       <block wx:if="{{dayTasks.length > 0}}">
-        <block wx:for="{{dayTasks}}" wx:key="id">
-          <!-- 任务项 -->
-          <view class="task-item-wrap type-{{item.type}} {{item.status === 1 ? 'completed' : ''}} {{editingTaskId === item.id ? 'editing' : ''}}" 
-                id="task-{{item.id}}">
-            <!-- 已完成任务添加勾标记 -->
-            <text wx:if="{{item.status === 1}}" class="task-complete-mark">✓</text>
-            <view class="task-icon {{item.repeat && item.repeat.enabled ? 'repeat' : ''}} type-{{item.type}}"></view>
-            <text class="task-title">{{item.title || '未命名任务'}}</text>
-            <text class="task-time">{{item.startTime || '--:--'}}~{{item.endTime || '--:--'}}</text>
-            <text class="task-points">{{item.points || 0}}分</text>
-            
-            <!-- 操作图标区 -->
-            <view class="task-action-icons">
-              <!-- 描述信息图标 -->
-              <view wx:if="{{item.description}}" class="info-icon" 
-                    catchtap="showTaskDesc" data-id="{{item.id}}" data-index="{{index}}">i</view>
-              
-              <!-- 编辑链接 - 将图标替换为文字链接 -->
-              <text class="edit-link" catchtap="showTaskEdit" data-id="{{item.id}}" data-index="{{index}}">[编辑]</text>
-            </view>
+        <view 
+          wx:for="{{dayTasks}}" 
+          wx:key="id" 
+          class="task-item {{item.status === 1 ? 'completed' : ''}} {{item.type}}-task"
+          id="task-{{item.id}}">
+          <!-- 任务基本信息 -->
+          <view class="task-item-row">
+            <text class="task-title">{{item.title}}</text>
+            <!-- 添加单任务压力指数 -->
+            <text class="task-pressure {{item.isHighPressure ? 'high-task-pressure' : ''}}">
+              {{item.pressureDisplay}}
+            </text>
           </view>
           
-          <!-- 任务编辑区 -->
-          <view class="task-edit-container {{editingTaskId === item.id ? 'expanded' : ''}}" id="edit-{{item.id}}">
-            <!-- 循环任务选择区域 -->
-            <block wx:if="{{item.repeat && item.repeat.enabled}}">
-              <view class="edit-scope-area">
-                <view class="scope-options">
-                  <view class="scope-option {{editScope === 'single' ? 'selected' : ''}}" bindtap="selectEditScope" data-scope="single">
-                    <view class="radio-button">{{editScope === 'single' ? '●' : '○'}}</view>
-                    <text>仅修改今天</text>
-                  </view>
-                  <view class="scope-option {{editScope === 'all' ? 'selected' : ''}}" bindtap="selectEditScope" data-scope="all">
-                    <view class="radio-button">{{editScope === 'all' ? '●' : '○'}}</view>
-                    <text>修改整个循环</text>
-                    <view class="scope-info" catchtap="showScopeInfo">i</view>
-                  </view>
-                </view>
-                <view class="separator-line"></view>
-              </view>
-            </block>
+          <!-- 任务操作区 -->
+          <view class="task-item-actions">
+            <!-- 任务描述信息图标 -->
+            <view 
+              class="task-desc-icon" 
+              bindtap="showTaskDesc" 
+              data-id="{{item.id}}"
+              data-index="{{index}}"
+              wx:if="{{item.description}}">i</view>
             
-            <!-- 任务基本信息编辑区域 -->
-            <view class="edit-basic-area">
-              <view class="edit-field">
-                <text class="field-label">积分:</text>
-                <view class="points-stepper">
-                  <view class="stepper-btn reduce" catchtap="changePoints" data-action="reduce">-</view>
-                  <input class="stepper-input" type="number" value="{{editPoints}}" bindinput="inputPoints" />
-                  <view class="stepper-btn add" catchtap="changePoints" data-action="add">+</view>
-                </view>
-              </view>
-              
-              <view class="edit-field">
-                <text class="field-label">描述:</text>
-                <view class="task-description-field">
-                  <input class="task-description-input" 
-                         placeholder="{{descPlaceholder}}" 
-                         value="{{editDescription}}" 
-                         bindinput="inputDescription" 
-                         maxlength="{{descMaxLength}}" />
-                  <text class="task-description-counter">{{editDescription.length}}/{{descMaxLength}}</text>
-                </view>
-              </view>
-              
-              <view class="edit-actions">
-                <view class="action-btn cancel" bindtap="cancelEdit">✕</view>
-                <view class="action-btn confirm" bindtap="saveEdit">✓</view>
-              </view>
-            </view>
+            <!-- 任务编辑按钮 -->
+            <view 
+              class="task-edit-icon" 
+              bindtap="showTaskEdit" 
+              data-id="{{item.id}}"
+              data-index="{{index}}">✎</view>
           </view>
-        </block>
+        </view>
+        
+        <!-- 当日压力过高提示 -->
+        <view class="pressure-warning" wx:if="{{selectedDayPressure.showWarning}}">
+          <text class="warning-icon">⚠️</text>
+          <text class="warning-text">当日学习压力偏高，建议适当调整任务安排</text>
+        </view>
       </block>
-      <view wx:else class="empty-tasks">
-        <text class="empty-icon">📅</text>
-        <text class="empty-text">当天没有任务安排</text>
+      <view class="empty-tasks" wx:else>
+        <text>当日暂无任务</text>
       </view>
-    </scroll-view>
+    </view>
   </view>
   
   <!-- 任务描述气泡 -->
   <view class="task-desc-bubble {{activeBubbleId ? 'visible' : ''}}" style="{{bubbleStyle}}">
-    <text class="bubble-text">{{activeBubbleContent}}</text>
+    <text class="bubble-content">{{activeBubbleContent}}</text>
   </view>
   
   <!-- 循环任务范围提示气泡 -->
   <view class="scope-info-bubble {{showScopeInfoBubble ? 'visible' : ''}}" style="{{scopeInfoStyle}}">
     <text class="bubble-text">将修改此循环任务的所有未来实例</text>
+  </view>
+  
+  <!-- 压力指数说明弹窗 -->
+  <view class="pressure-info-modal {{showPressureInfo ? 'visible' : ''}}" catchtap="hidePressureInfo">
+    <view class="pressure-info-content" catchtap="preventClose">
+      <view class="pressure-info-header">
+        <text class="pressure-info-title">学习压力指数说明</text>
+        <view class="pressure-info-close" bindtap="hidePressureInfo">×</view>
+      </view>
+      <view class="pressure-info-body">
+        <view class="formula-section">
+          <text class="formula-title">计算公式</text>
+          <text class="formula-text">压力指数 = 任务基础压力 + 时长压力 + 积分压力</text>
+        </view>
+        <view class="factors-section">
+          <text class="factors-title">影响因素</text>
+          <view class="factor-item">
+            <text class="factor-name">任务类型:</text>
+            <text class="factor-desc">学习(×1.2) > 习惯(×0.8) > 兴趣(×0.6)</text>
+          </view>
+          <view class="factor-item">
+            <text class="factor-name">时长影响:</text>
+            <text class="factor-desc">每10分钟增加1点压力</text>
+          </view>
+          <view class="factor-item">
+            <text class="factor-name">积分影响:</text>
+            <text class="factor-desc">每20积分增加1点压力</text>
+          </view>
+        </view>
+        <view class="levels-section">
+          <text class="levels-title">压力级别</text>
+          <view class="level-items">
+            <view class="level-item level-1">1-10点: 轻松</view>
+            <view class="level-item level-2">11-20点: 适中</view>
+            <view class="level-item level-3">21-30点: 较高</view>
+            <view class="level-item level-4">30+点: 繁忙</view>
+          </view>
+        </view>
+      </view>
+    </view>
   </view>
 </view> 

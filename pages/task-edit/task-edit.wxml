@@ -8,6 +8,7 @@
       <view class="heatmap-header">
         <view class="heatmap-title">
           <text class="main-title">任务分布</text>
+          <view class="info-icon" bindtap="showPressureInfo">ⓘ</view>
         </view>
         <view class="month-navigator">
           <view class="nav-btn prev" bindtap="prevHeatmapMonth">
@@ -19,7 +20,7 @@
           </view>
         </view>
       </view>
-      <view class="card-subtitle">颜色深浅表示任务数量</view>
+      <view class="card-subtitle">颜色深浅表示学习压力：浅色(轻松) → 深色(繁忙)</view>
       <task-heatmap 
         id="taskHeatmap"
         tasks="{{allTasks}}" 

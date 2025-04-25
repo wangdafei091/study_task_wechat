@@ -202,6 +202,15 @@ Page({
   },
 
   /**
+   * 显示压力指数说明
+   */
+  showPressureInfo: function() {
+    console.log('[TaskEdit] 显示压力指数说明');
+    const heatmap = this.getHeatmapComponent();
+    if (heatmap) heatmap.showPressureInfo();
+  },
+
+  /**
    * 处理任务标题输入
    */
   onTaskTitleInput: function(e) {

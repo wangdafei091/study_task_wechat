@@ -47,6 +47,17 @@ Component({
     bubbleStyle: '', // 气泡样式字符串
     bubbleTimer: null, // 用于自动隐藏气泡的计时器
     
+    // 新增：选中日期的压力指数信息
+    selectedDayPressure: {
+      total: '0.0',
+      levelText: '(轻松)',
+      isHigh: false,
+      showWarning: false
+    },
+    
+    // 新增：显示压力指数说明弹窗
+    showPressureInfo: false,
+    
     // 任务编辑相关
     editingTaskId: null, // 当前正在编辑的任务ID
     editingTaskIndex: -1, // 当前正在编辑的任务索引
@@ -231,9 +242,53 @@ Component({
       return weekdays[day] || '';
     },
     
+    // 新增：计算单个任务的压力指数
+    calculateTaskPressure(task) {
+      console.log('[TaskHeatmap] 计算任务压力指数:', task.title);
+      
+      // 任务类型权重
+      const typeWeights = {
+        'study': 1.2,   // 学习任务权重高
+        'habit': 0.8,   // 习惯养成权重中
+        'interest': 0.6 // 兴趣活动权重低
+      };
+      
+      // 获取任务基本属性（带默认值）
+      const type = task.type || 'study';
+      const duration = task.duration || (type === 'study' ? 60 : (type === 'habit' ? 10 : 30));
+      const points = task.points || 1;
+      
+      // 计算压力指数
+      const typeWeight = typeWeights[type] || 1.0;
+      const basePressure = 1.0 * typeWeight;
+      const durationPressure = duration * 0.1;  // 每10分钟增加1点压力
+      const pointsPressure = points * 0.05;     // 每20积分增加1点压力
+      
+      const totalPressure = basePressure + durationPressure + pointsPressure;
+      
+      console.log(`[TaskHeatmap] 任务[${task.title}] 压力构成: 基础(${basePressure.toFixed(1)}) + 时长(${durationPressure.toFixed(1)}) + 积分(${pointsPressure.toFixed(1)}) = ${totalPressure.toFixed(1)}`);
+      
+      return {
+        total: totalPressure,
+        base: basePressure,
+        duration: durationPressure,
+        points: pointsPressure
+      };
+    },
+    
+    // 计算压力级别
+    calculatePressureLevel(pressure) {
+      if (pressure <= 0) return 0;
+      if (pressure <= 10) return 1;  // 1-10点: 轻松
+      if (pressure <= 20) return 2;  // 11-20点: 适中
+      if (pressure <= 30) return 3;  // 21-30点: 较高
+      return 4;                      // 30+点: 繁忙
+    },
+    
     // 计算热力图
     calculateHeatMap() {
       console.log('[TaskHeatmap] 计算热力图');
+      console.log('[TaskHeatmap] 优化热力图计算逻辑，使用压力指数替代任务数量');
       const { days } = this.data;
       const tasks = this.properties.tasks || [];
       
@@ -247,10 +302,11 @@ Component({
         console.log('[TaskHeatmap] 任务数据示例:', tasks[0]);
       }
       
-      // 统计每天的任务数量和完成情况
+      // 统计每天的任务数量、完成情况和压力指数
       const taskCountMap = {};
       const completedMap = {};
       const pendingMap = {};
+      const pressureMap = {}; // 新增：记录每日压力指数
       
       tasks.forEach(task => {
         if (task.date) {
@@ -259,6 +315,13 @@ Component({
             taskCountMap[task.date] = 0;
             completedMap[task.date] = 0;
             pendingMap[task.date] = 0;
+            pressureMap[task.date] = {
+              total: 0,
+              base: 0,
+              duration: 0,
+              points: 0,
+              tasks: []
+            };
           }
           
           // 增加总任务数
@@ -270,16 +333,25 @@ Component({
           } else {
             pendingMap[task.date]++;
           }
+          
+          // 计算并累加任务压力指数
+          const pressure = this.calculateTaskPressure(task);
+          pressureMap[task.date].total += pressure.total;
+          pressureMap[task.date].base += pressure.base;
+          pressureMap[task.date].duration += pressure.duration;
+          pressureMap[task.date].points += pressure.points;
+          
+          // 保存任务压力数据
+          pressureMap[task.date].tasks.push({
+            id: task.id,
+            title: task.title,
+            pressure: pressure
+          });
         }
       });
       
       console.log('[TaskHeatmap] 任务统计:', taskCountMap);
-      
-      // 找出最大任务数，用于计算热力等级
-      let maxCount = 0;
-      Object.values(taskCountMap).forEach(count => {
-        maxCount = Math.max(maxCount, count);
-      });
+      console.log('[TaskHeatmap] 压力指数统计:', pressureMap);
       
       // 更新每天的任务数和热力等级
       const updatedDays = days.map(day => {
@@ -287,18 +359,21 @@ Component({
         const completed = completedMap[day.date] || 0;
         const pending = pendingMap[day.date] || 0;
         
-        // 计算热力等级：0-4共5级
-        let level = 0;
-        if (count > 0) {
-          level = Math.min(4, Math.ceil((count / maxCount) * 4));
-        }
+        // 获取压力指数
+        const pressureIndex = pressureMap[day.date] ? pressureMap[day.date].total : 0;
+        
+        // 计算热力等级：使用压力指数
+        const level = this.calculatePressureLevel(pressureIndex);
+        
+        console.log(`[TaskHeatmap] 日期:${day.date} 任务数:${count} 压力指数:${pressureIndex.toFixed(1)} 色阶等级:${level}`);
         
         return {
           ...day,
           count,
           level,
           completed,
-          pending
+          pending,
+          pressure: pressureMap[day.date] || {total: 0, base: 0, duration: 0, points: 0, tasks: []}
         };
       });
       
@@ -370,12 +445,56 @@ Component({
         console.log('[TaskHeatmap] 是否有循环任务:', dayTasks.some(t => t.repeat && t.repeat.enabled));
       }
       
+      // 获取当前选中日期的压力信息
+      const selectedDay = this.data.days.find(d => d.date === date);
+      const pressureTotal = selectedDay && selectedDay.pressure ? selectedDay.pressure.total : 0;
+      const pressureTotalFixed = pressureTotal.toFixed(1);
+      let pressureLevelText = '(轻松)';
+      let isHighPressure = false;
+      
+      if (pressureTotal > 30) {
+        pressureLevelText = '(偏高)';
+        isHighPressure = true;
+      } else if (pressureTotal > 20) {
+        pressureLevelText = '(适中)';
+      }
+      
+      // 为每个任务添加压力指数展示
+      const tasksWithPressure = dayTasks.map((task, index) => {
+        // 查找对应的压力数据
+        const taskPressureData = selectedDay && 
+                                selectedDay.pressure && 
+                                selectedDay.pressure.tasks ? 
+                                selectedDay.pressure.tasks.find(t => t.id === task.id) : null;
+        
+        let taskPressure = 0;
+        if (taskPressureData && taskPressureData.pressure) {
+          taskPressure = taskPressureData.pressure.total || 0;
+        } else {
+          // 如果找不到预计算的压力数据，现场计算
+          const pressureData = this.calculateTaskPressure(task);
+          taskPressure = pressureData.total;
+        }
+        
+        return {
+          ...task,
+          pressureDisplay: taskPressure.toFixed(1),
+          isHighPressure: taskPressure > 10
+        };
+      });
+      
       // 更新选中状态和任务列表
       this.setData({
         selectedDate: date,
         selectedDateText: this.formatDateDisplay(date),
-        dayTasks,
-        showDayTasks: true
+        dayTasks: tasksWithPressure,
+        showDayTasks: true,
+        selectedDayPressure: {
+          total: pressureTotalFixed,
+          levelText: pressureLevelText,
+          isHigh: isHighPressure,
+          showWarning: pressureTotal > 30
+        }
       });
       
       // 触发日期选择事件
@@ -710,6 +829,27 @@ Component({
         year: this.data.currentYear,
         month: this.data.currentMonth
       };
+    },
+    
+    // 显示压力指数说明弹窗
+    showPressureInfo() {
+      console.log('[TaskHeatmap] 显示压力指数说明');
+      this.setData({
+        showPressureInfo: true
+      });
+    },
+    
+    // 隐藏压力指数说明弹窗
+    hidePressureInfo() {
+      this.setData({
+        showPressureInfo: false
+      });
+    },
+    
+    // 阻止事件冒泡（用于点击弹窗内容时不关闭弹窗）
+    preventClose(e) {
+      // 阻止事件冒泡
+      return;
     }
   }
 }); 
