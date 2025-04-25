@@ -106,12 +106,7 @@ Page({
     // 加载任务数据
     this.loadTaskData();
     
-    // 初始化消息预览动画实例
-    this.messageAnimation = wx.createAnimation({
-      duration: 250,
-      timingFunction: 'ease-out',
-      delay: 0
-    });
+    // 初始化消息预览动画实例在toggleMessagePreview中创建，这里不需要预创建
     
     // 检查用户信息
     if (app.globalData.userInfo) {
@@ -336,11 +331,20 @@ Page({
   
   // 显示/隐藏消息预览
   toggleMessagePreview: function() {
+    console.log('[消息中心] ' + (this.data.showMessagePreview ? '关闭' : '打开') + '消息面板');
     const currentState = this.data.showMessagePreview;
     
+    // 每次都创建新的动画实例，避免复用旧的动画状态
+    this.messageAnimation = wx.createAnimation({
+      duration: 250,
+      timingFunction: 'ease-out',
+      delay: 0
+    });
+    
     if (currentState) {
-      // 创建关闭动画
-      this.messageAnimation.opacity(0).scale(0.95).translateY(-10).step();
+      console.log('[消息中心] 创建关闭动画');
+      // 关闭动画
+      this.messageAnimation.opacity(0).scale(0.8).step();
       
       this.setData({
         messageAnimation: this.messageAnimation.export()
@@ -348,13 +352,21 @@ Page({
       
       // 动画结束后再隐藏元素
       setTimeout(() => {
+        console.log('[消息中心] 动画结束，隐藏面板');
         this.setData({
           showMessagePreview: false
         });
       }, 250);
     } else {
-      // 重置动画初始状态
-      this.messageAnimation.opacity(0).scale(0.95).translateY(-10).step({ duration: 0 });
+      console.log('[消息中心] 准备显示面板');
+      // 轻微振动反馈
+      if (wx.vibrateShort) {
+        wx.vibrateShort({ type: 'light' });
+      }
+      
+      // 设置初始状态
+      this.messageAnimation.opacity(0).scale(0.8).step({ duration: 0 });
+      console.log('[消息中心] 初始化动画');
       
       this.setData({
         showMessagePreview: true,
@@ -365,13 +377,31 @@ Page({
       
       // 添加一个短暂延时，确保视图更新后再开始动画
       setTimeout(() => {
-        this.messageAnimation.opacity(1).scale(1).translateY(0).step();
+        console.log('[消息中心] 执行显示动画');
+        this.messageAnimation.opacity(1).scale(1).step();
         
         this.setData({
           messageAnimation: this.messageAnimation.export()
         });
-      }, 30);
+      }, 50);
     }
+  },
+  
+  // 防止点击事件冒泡
+  preventBubble: function(e) {
+    console.log('[消息中心] 阻止事件冒泡');
+    // 阻止事件冒泡到蒙层
+    e.stopPropagation();
+    return false;
+  },
+  
+  // 防止蒙层触摸滑动
+  preventTouchMove: function(e) {
+    console.log('[消息中心] 阻止蒙层触摸滑动');
+    // 阻止蒙层触摸滑动
+    e.stopPropagation();
+    e.preventDefault();
+    return false;
   },
   
   // 查看消息详情
