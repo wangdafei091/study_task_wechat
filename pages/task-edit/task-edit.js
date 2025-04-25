@@ -99,8 +99,7 @@ Page({
     
     // 初始化重复预览文本
     this.setData({
-      repeatPreviewText: this.generateRepeatPreviewText('daily'),
-      repeatPanelDesc: '任务将在所选时间范围内每天执行'
+      repeatPreviewText: this.generateRepeatPreviewText('daily')
     });
   },
 
@@ -724,6 +723,7 @@ Page({
     }
     
     console.log(`[TaskEdit] 切换${panelName}:`, newState[panelName] ? '打开' : '关闭');
+    console.log(`[TaskEdit] 面板状态: ${panelName} - ${newState[panelName] ? '打开' : '关闭'}, 屏幕高度:`, wx.getSystemInfoSync().windowHeight);
   },
   
   /**
@@ -747,6 +747,7 @@ Page({
     });
     
     console.log('[TaskEdit] 切换到星期选择模式');
+    console.log('[TaskEdit] 切换到星期选择模式，屏幕高度:', wx.getSystemInfoSync().windowHeight);
   },
   
   /**
@@ -1292,101 +1293,65 @@ Page({
    * @returns {string} 预览文本
    */
   generateRepeatPreviewText: function(repeatType) {
-    // 获取当前选择的开始日期
-    const startDate = new Date(this.data.newTask.startDate);
-    if (isNaN(startDate.getTime())) {
-      return ''; // 日期无效
+    // 如果没有选择重复类型，返回空
+    if (!repeatType || repeatType === 'none') {
+      return '';
+    }
+    
+    console.log('[TaskEdit] 生成重复预览文本, repeatType:', repeatType);
+    
+    // 获取开始日期
+    const startDate = new Date(this.data.newTask.startDate.replace(/-/g, '/'));
+    const todayStr = this.data.newTask.startDate;
+    
+    // 获取结束日期字符串
+    let endDateStr = '';
+    if (!this.data.newTask.hasNoEndDate) {
+      endDateStr = `直到${this.data.newTask.endDate}结束`;
     }
     
     // 格式化日期的辅助函数
-    const formatDate = (date) => {
-      const year = date.getFullYear();
+    const formatDate = function(date) {
+      if (typeof date === 'string') {
+        return date.substring(5); // 只保留月日，如 '05-23'
+      }
+      
       const month = date.getMonth() + 1;
       const day = date.getDate();
-      const weekday = date.getDay();
-      const weekdayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
-      return `${month}月${day}日(${weekdayNames[weekday]})`;
+      return `${month}月${day}日`;
     };
     
-    // 检查是否为今天
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const isToday = (
-      startDate.getFullYear() === today.getFullYear() &&
-      startDate.getMonth() === today.getMonth() &&
-      startDate.getDate() === today.getDate()
-    );
-    
-    const todayStr = isToday ? '今天' : formatDate(startDate);
-    const dayOfWeek = startDate.getDay(); // 0是周日，6是周六
-    const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
-    
-    let warningExists = false;
     let previewText = '';
-    let endDateStr = '';
+    let warningExists = false;
+    const dayOfWeek = startDate.getDay(); // 0是周日，6是周六
+    const dayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+    const dayName = dayNames[dayOfWeek];
     
-    // 添加结束日期信息
-    if (this.data.newTask.hasNoEndDate) {
-      endDateStr = '无限期执行';
-    } else if (this.data.newTask.endDate) {
-      const endDate = new Date(this.data.newTask.endDate);
-      if (!isNaN(endDate.getTime())) {
-        endDateStr = `直到${formatDate(endDate)}结束`;
-      }
-    }
-    
-    // 根据重复类型生成预览文本
+    // 根据重复类型生成不同的预览文本
     switch (repeatType) {
       case 'daily':
         previewText = `从${todayStr}开始每天执行${endDateStr ? '，' + endDateStr : ''}`;
         break;
         
       case 'workdays':
-        if (isWeekend) {
-          // 如果当前是周末，计算下一个工作日
-          const nextWorkday = new Date(startDate);
-          if (dayOfWeek === 0) { // 周日
-            nextWorkday.setDate(nextWorkday.getDate() + 1); // 下一个周一
-          } else { // 周六
-            nextWorkday.setDate(nextWorkday.getDate() + 2); // 下下个周一
-          }
-          previewText = `首次执行：${formatDate(nextWorkday)}，之后每周一至周五执行${endDateStr ? '，' + endDateStr : ''}`;
+        // 判断开始日期是否是工作日（周一至周五）
+        if (dayOfWeek === 0 || dayOfWeek === 6) {
+          // 周末开始的工作日任务，警告用户
+          previewText = `日期冲突：您选择的开始日期(${todayStr}，${dayName})是休息日，但重复规则设置为"工作日"(周一至周五)执行。请修改开始日期为工作日，或更改重复规则。`;
           warningExists = true;
-          
-          // 更新面板说明
-          this.setData({
-            repeatPanelDesc: '工作日指周一至周五，周末不会执行任务'
-          });
         } else {
-          previewText = `从${todayStr}开始每周一至周五执行${endDateStr ? '，' + endDateStr : ''}`;
-          
-          // 更新面板说明
-          this.setData({
-            repeatPanelDesc: '任务将在所选日期范围内的工作日(周一至周五)执行'
-          });
+          previewText = `从${todayStr}开始每个工作日执行${endDateStr ? '，' + endDateStr : ''}`;
         }
         break;
         
       case 'weekends':
-        if (!isWeekend) {
-          // 如果当前不是周末，计算下一个周末
-          const nextWeekend = new Date(startDate);
-          const daysUntilWeekend = dayOfWeek === 6 ? 0 : 6 - dayOfWeek; // 到周六的天数
-          nextWeekend.setDate(nextWeekend.getDate() + daysUntilWeekend);
-          previewText = `首次执行：${formatDate(nextWeekend)}，之后每周六、周日执行${endDateStr ? '，' + endDateStr : ''}`;
+        // 判断开始日期是否是周末（周六或周日）
+        if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+          // 工作日开始的周末任务，警告用户
+          previewText = `日期冲突：您选择的开始日期(${todayStr}，${dayName})是工作日，但重复规则设置为"休息日"(周六、周日)执行。请修改开始日期为周六或周日，或更改重复规则。`;
           warningExists = true;
-          
-          // 更新面板说明
-          this.setData({
-            repeatPanelDesc: '休息日指周六和周日，工作日不会执行任务'
-          });
         } else {
-          previewText = `从${todayStr}开始每周六、周日执行${endDateStr ? '，' + endDateStr : ''}`;
-          
-          // 更新面板说明
-          this.setData({
-            repeatPanelDesc: '任务将在所选日期范围内的休息日(周六、周日)执行'
-          });
+          previewText = `从${todayStr}开始每个休息日执行${endDateStr ? '，' + endDateStr : ''}`;
         }
         break;
         
@@ -1397,25 +1362,16 @@ Page({
           const nextExecutionDate = this.findNextCustomExecutionDate(startDate, selectedDays);
           
           if (nextExecutionDate > startDate) {
-            previewText = `首次执行：${formatDate(nextExecutionDate)}，之后按所选星期几执行${endDateStr ? '，' + endDateStr : ''}`;
+            const selectedDayNames = selectedDays.map(day => dayNames[day]).join('、');
+            
+            previewText = `日期冲突：您选择的开始日期(${todayStr}，${dayName})不在已设置的重复星期(${selectedDayNames})中。请将开始日期改为所选星期几之一，或调整重复星期。`;
             warningExists = true;
           } else {
-            const dayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
             const selectedDayNames = selectedDays.map(day => dayNames[day]).join('、');
             previewText = `从${todayStr}开始每${selectedDayNames}执行${endDateStr ? '，' + endDateStr : ''}`;
           }
-          
-          // 更新面板说明
-          this.setData({
-            repeatPanelDesc: '任务将在所选日期范围内的指定星期几执行'
-          });
         } else {
           previewText = `请选择重复的星期`;
-          
-          // 更新面板说明
-          this.setData({
-            repeatPanelDesc: '请选择至少一个重复的星期几'
-          });
         }
         break;
     }
@@ -1460,5 +1416,5 @@ Page({
     }
     
     return nextDate;
-  }
+  },
 }) 

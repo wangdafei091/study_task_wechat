@@ -458,10 +458,12 @@
   border-radius: 24rpx 24rpx 0 0;
   box-shadow: 0 -4rpx 16rpx rgba(0, 0, 0, 0.1);
   z-index: 1001;
-  /* 设置固定高度，防止不同面板切换时的跳跃感 */
-  height: 700rpx;
+  /* 修改固定高度为自适应高度 */
+  max-height: 90vh; /* 最大高度为视口高度的90% */
+  height: auto; /* 自适应内容高度 */
   display: flex;
   flex-direction: column;
+  padding-bottom: env(safe-area-inset-bottom); /* 增加底部安全区域边距 */
 }
 
 .calendar-container.expanded {
@@ -490,10 +492,11 @@
 .calendar-panel {
   padding: 30rpx 24rpx;
   flex: 1;
-  overflow-y: auto;
+  overflow-y: auto; /* 确保可滚动 */
   -webkit-overflow-scrolling: touch;
   display: flex;
   flex-direction: column;
+  max-height: 85vh; /* 设置最大高度，确保可滚动 */
 }
 
 .weekdays {
@@ -743,51 +746,70 @@
   font-size: 24rpx;
 }
 
-/* 面板底部说明 */
-.panel-footer {
-  padding: 24rpx;
-  margin-top: 20rpx;
-  background-color: #f8f9fb;
-  border-top: 1rpx solid #eee;
-  flex-shrink: 0;
-}
-
-.panel-desc {
-  font-size: 24rpx;
-  color: #888;
-  line-height: 1.4;
-  text-align: center;
-}
-
 /* 重复类型选项容器 */
 .option-item-container {
   margin-bottom: 12rpx;
+  padding-bottom: 8rpx; /* 增加底部间距，提高可点击区域 */
 }
 
-/* 选项预览区域 */
-.option-preview {
-  padding: 10rpx 20rpx;
-  margin-left: 40rpx;
-  margin-top: 8rpx;
-  border-left: 4rpx solid #ebedf0;
+/* 新增：统一的重复预览区域样式 */
+.repeat-preview-area {
+  height: 80rpx; /* 固定高度，足够显示2行普通文本 */
+  padding: 10rpx 20rpx; /* 减少垂直内边距 */
+  margin-top: 12rpx; /* 减少与上方内容间距 */
+  overflow-y: auto; /* 超出部分滚动 */
+  display: block;
+  transition: all 0.2s ease; /* 平滑过渡 */
+  background-color: transparent; /* 默认无背景 */
+  border-top: none; /* 移除边框 */
 }
 
+/* 当有警告时增加高度 */
+.repeat-preview-area.has-warning {
+  height: 120rpx; /* 增加高度以适应警告文本 */
+  background: linear-gradient(to bottom, rgba(253, 237, 237, 0.4), rgba(253, 237, 237, 0.05)); /* 进一步淡化渐变 */
+  border-radius: 4rpx; /* 轻微的圆角 */
+  padding-top: 12rpx; /* 警告状态下增加一点内边距 */
+  border-left: 3rpx solid rgba(230, 67, 64, 0.5); /* 左侧标识线 */
+  padding-left: 24rpx; /* 左侧增加内边距 */
+}
+
+/* 预览文本样式 */
 .preview-text {
   font-size: 24rpx;
   color: #999;
-  line-height: 1.4;
+  line-height: 1.4; /* 调整行高 */
+  width: 100%;
 }
 
-/* 警告状态 */
-.option-preview.warning {
-  border-left-color: #ff9800;
+/* 警告状态样式优化 */
+.preview-text.warning {
+  color: rgba(230, 67, 64, 0.85); /* 使用透明度降低红色强度 */
+  font-weight: normal; /* 移除加粗 */
+  padding-left: 26rpx; /* 调整内边距 */
+  text-indent: -26rpx; /* 调整负缩进 */
+  letter-spacing: 0.2rpx; /* 增加字间距 */
+  position: relative;
 }
 
-.option-preview.warning .preview-text {
-  color: #ff9800;
+.preview-text.warning:before {
+  content: "!";
+  display: inline-block;
+  width: 18rpx;
+  height: 18rpx;
+  line-height: 18rpx;
+  margin-right: 8rpx; /* 保持间距 */
+  color: #fff;
+  background-color: rgba(230, 67, 64, 0.85);
+  border-radius: 50%;
+  font-size: 14rpx;
+  text-align: center;
+  font-weight: bold;
+  vertical-align: middle;
+  text-indent: 0; /* 重置文本缩进 */
 }
 
-/* 确保占位符样式正确 */
+/* 保留占位符样式 */
 .header-placeholder {
   width: 160rpx;
 }

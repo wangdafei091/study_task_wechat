@@ -274,38 +274,26 @@
         <view class="option-item-container">
           <view class="option-item {{newTask.repeat.type === 'daily' ? 'selected' : ''}}" 
                 bindtap="selectRepeatType" data-type="daily">每天</view>
-          <view class="option-preview" wx:if="{{newTask.repeat.type === 'daily' && repeatPreviewText}}">
-            <text class="preview-text">{{repeatPreviewText}}</text>
-          </view>
         </view>
         
         <view class="option-item-container">
           <view class="option-item {{newTask.repeat.type === 'workdays' ? 'selected' : ''}}" 
                 bindtap="selectRepeatType" data-type="workdays">工作日</view>
-          <view class="option-preview {{repeatTypeWarning ? 'warning' : ''}}" wx:if="{{newTask.repeat.type === 'workdays' && repeatPreviewText}}">
-            <text class="preview-text">{{repeatPreviewText}}</text>
-          </view>
         </view>
         
         <view class="option-item-container">
           <view class="option-item {{newTask.repeat.type === 'weekends' ? 'selected' : ''}}" 
                 bindtap="selectRepeatType" data-type="weekends">休息日</view>
-          <view class="option-preview {{repeatTypeWarning ? 'warning' : ''}}" wx:if="{{newTask.repeat.type === 'weekends' && repeatPreviewText}}">
-            <text class="preview-text">{{repeatPreviewText}}</text>
-          </view>
         </view>
         
         <view class="option-item-container">
           <view class="option-item {{newTask.repeat.type === 'custom' ? 'selected' : ''}}" 
                 bindtap="switchToWeekdaySelection">自定义...</view>
-          <view class="option-preview {{repeatTypeWarning ? 'warning' : ''}}" wx:if="{{newTask.repeat.type === 'custom' && repeatPreviewText}}">
-            <text class="preview-text">{{repeatPreviewText}}</text>
-          </view>
         </view>
       
-        <!-- 面板底部说明 -->
-        <view class="panel-footer">
-          <text class="panel-desc">{{repeatPanelDesc}}</text>
+        <!-- 替换面板底部说明为动态预览区域 -->
+        <view class="repeat-preview-area {{repeatTypeWarning ? 'has-warning' : ''}}">
+          <text class="preview-text {{repeatTypeWarning ? 'warning' : ''}}">{{repeatPreviewText}}</text>
         </view>
       </view>
       
@@ -345,6 +333,11 @@
               bindtap="toggleWeekdaySelection" data-day="6">
           <text>周六</text>
           <text class="checkbox-indicator" wx:if="{{weekdaySelection[6]}}">✓</text>
+        </view>
+        
+        <!-- 在星期选择模式下也添加预览区域 -->
+        <view class="repeat-preview-area {{repeatTypeWarning ? 'has-warning' : ''}}">
+          <text class="preview-text {{repeatTypeWarning ? 'warning' : ''}}">{{repeatPreviewText}}</text>
         </view>
       </view>
     </view>
