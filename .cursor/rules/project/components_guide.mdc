@@ -1,6 +1,6 @@
 ---
-description:
-globs:
+description: 
+globs: 
 alwaysApply: false
 ---
 # 组件使用指南
@@ -9,7 +9,7 @@ alwaysApply: false
 
 ## 环形进度条组件（progressRing）
 
-显示环形进度指示器，用于任务完成度展示。
+显示环形进度指示器，用于任务完成度展示。支持不同任务类型的样式展示。
 
 **使用示例：**
 ```html
@@ -18,7 +18,7 @@ alwaysApply: false
   radius="40" 
   stroke-width="6" 
   bg-color="#E0E0E0" 
-  active-color="#4285F4">
+  type="study">
 </progress-ring>
 ```
 
@@ -27,25 +27,53 @@ alwaysApply: false
 - `radius`: 圆环半径
 - `stroke-width`: 圆环线条宽度
 - `bg-color`: 背景颜色
-- `active-color`: 进度条颜色
+- `type`: 任务类型（habit/study/interest），决定了圆环的活动颜色
 
 源代码： [components/progressRing/progressRing.js](mdc:components/progressRing/progressRing.js)
 
+## 进度条组件（progressBar）
+
+线性进度条，用于显示任务进度。
+
+**使用示例：**
+```html
+<progress-bar 
+  percent="{{completionRate}}" 
+  show-text="{{true}}" 
+  text-format="{{completionRate}}%">
+</progress-bar>
+```
+
+**组件参数：**
+- `percent`: 进度百分比 (0-100)
+- `show-text`: 是否显示文本
+- `text-format`: 文本格式
+
+源代码： [components/progressBar/progressBar.js](mdc:components/progressBar/progressBar.js)
+
 ## 任务热力图组件（task-heatmap）
 
-显示任务完成情况的热力图。
+显示任务完成情况的热力图，支持月份导航和任务编辑功能。
 
 **使用示例：**
 ```html
 <task-heatmap 
-  data="{{heatmapData}}" 
-  bind:cellTap="onHeatmapCellTap">
+  tasks="{{taskList}}" 
+  currentYear="{{year}}"
+  currentMonth="{{month}}"
+  bind:monthChange="onMonthChange"
+  bind:daySelect="onDaySelect"
+  bind:editTask="onEditTask">
 </task-heatmap>
 ```
 
 **组件参数：**
-- `data`: 热力图数据数组
-- `cellTap`: 单元格点击事件
+- `tasks`: 任务数据数组
+- `currentYear`: 当前显示年份
+- `currentMonth`: 当前显示月份(0-11)
+- `monthChange`: 月份变更事件
+- `daySelect`: 日期选择事件
+- `editTask`: 任务编辑事件
 
 源代码： [components/task-heatmap/task-heatmap.js](mdc:components/task-heatmap/task-heatmap.js)
 
@@ -93,7 +121,7 @@ alwaysApply: false
 
 ## 浮动菜单组件（float-menu）
 
-显示浮动操作菜单。
+显示浮动操作菜单，提供任务快速操作功能。
 
 **使用示例：**
 ```html
@@ -112,3 +140,24 @@ alwaysApply: false
 - `close`: 关闭菜单事件
 
 源代码： [components/float-menu/float-menu.js](mdc:components/float-menu/float-menu.js)
+
+## 卡片容器组件（card）
+
+通用卡片容器，用于统一页面风格。
+
+**使用示例：**
+```html
+<card title="每日任务" extra-text="查看全部" bind:extraTap="viewAllTasks">
+  <view slot="content">
+    <!-- 卡片内容 -->
+  </view>
+</card>
+```
+
+**组件参数：**
+- `title`: 卡片标题
+- `extra-text`: 额外操作文本
+- `extraTap`: 额外操作点击事件
+- 支持内容插槽
+
+源代码： [components/card/card.js](mdc:components/card/card.js)

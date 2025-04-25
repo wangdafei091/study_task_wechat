@@ -1,7 +1,7 @@
 ---
-description:
-globs:
-alwaysApply: false
+description: 
+globs: 
+alwaysApply: true
 ---
 # 任务数据模型
 
@@ -18,7 +18,8 @@ alwaysApply: false
   date: '2023-05-23',            // 任务日期，YYYY-MM-DD格式
   createTime: 1621693875000,     // 创建时间戳
   modifyTime: 1621693875000,     // 修改时间戳
-  status: 'pending',             // 任务状态: 'pending'/'completed'/'canceled'
+  status: 'pending',             // 任务状态: 'pending'/'completed'/'canceled'/'overdue'
+  priority: 'medium',            // 任务优先级: 'high'/'medium'/'low'
   
   // 学习任务特有字段
   startTime: '08:00',            // 开始时间
@@ -46,7 +47,19 @@ alwaysApply: false
   rewardPoints: 10,              // 完成可获得的奖励点数
   
   // 任务标签
-  tags: ['音乐', '练习']
+  tags: ['音乐', '练习'],
+  
+  // 任务提醒设置
+  reminder: {
+    enabled: true,               // 是否启用提醒
+    time: '07:45',               // 提醒时间
+    advanceMinutes: 15           // 提前几分钟提醒
+  },
+  
+  // 照片记录（针对学习任务）
+  photos: [
+    'wxfile://temp_photo_123.jpg'
+  ]
 }
 ```
 
@@ -57,17 +70,30 @@ alwaysApply: false
 1. **学习任务 (study)**
    - 有明确的开始时间和结束时间
    - 通常与学业相关
+   - 默认持续时间：60分钟
+   - 支持上传照片记录完成情况
    - 示例：语文作业、数学练习、阅读
 
 2. **习惯任务 (habit)**
    - 培养良好习惯的任务
    - 通常需要重复执行
+   - 默认持续时间：10分钟
+   - 支持连续完成天数统计
    - 示例：每天喝水、早起、整理房间
 
 3. **兴趣任务 (interest)**
    - 与兴趣爱好相关的活动
    - 培养多元化发展
+   - 默认持续时间：30分钟
+   - 支持进度追踪
    - 示例：画画、弹钢琴、运动
+
+## 任务优先级
+
+任务支持三种优先级：
+- `high`: 高优先级，以红色标识
+- `medium`: 中优先级，以黄色标识
+- `low`: 低优先级，以蓝色标识
 
 ## 任务状态流转
 
@@ -75,6 +101,7 @@ alwaysApply: false
 - `pending`: 待完成
 - `completed`: 已完成
 - `canceled`: 已取消
+- `overdue`: 已逾期
 
 状态流转通过 `taskManager.updateTaskStatus()` 方法实现：
 
@@ -90,3 +117,16 @@ taskManager.updateTaskStatus(taskId, newStatus, callback);
 4. 删除任务: `taskManager.deleteTask()`
 
 完整的任务操作逻辑在 [utils/taskManager.js](mdc:utils/taskManager.js) 中定义。
+
+## 任务数据存储
+
+任务数据使用微信小程序的本地存储机制：
+```javascript
+// 保存任务数据
+wx.setStorageSync('tasks', tasks);
+
+// 读取任务数据
+const tasks = wx.getStorageSync('tasks') || [];
+```
+
+相关实现在 [utils/taskManager.js](mdc:utils/taskManager.js) 中。
