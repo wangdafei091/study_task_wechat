@@ -759,6 +759,34 @@
   text-align: center;
 }
 
+/* 重复类型选项容器 */
+.option-item-container {
+  margin-bottom: 12rpx;
+}
+
+/* 选项预览区域 */
+.option-preview {
+  padding: 10rpx 20rpx;
+  margin-left: 40rpx;
+  margin-top: 8rpx;
+  border-left: 4rpx solid #ebedf0;
+}
+
+.preview-text {
+  font-size: 24rpx;
+  color: #999;
+  line-height: 1.4;
+}
+
+/* 警告状态 */
+.option-preview.warning {
+  border-left-color: #ff9800;
+}
+
+.option-preview.warning .preview-text {
+  color: #ff9800;
+}
+
 /* 确保占位符样式正确 */
 .header-placeholder {
   width: 160rpx;

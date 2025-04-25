@@ -66,7 +66,12 @@ Page({
     startYearText: '',   // 仅年份，如 '2023年'
     startMonthText: '',  // 仅月份，如 '5月'
     endYearText: '',     // 仅年份，如 '2023年'
-    endMonthText: ''     // 仅月份，如 '5月'
+    endMonthText: '',     // 仅月份，如 '5月'
+    
+    // 新增重复预览相关字段
+    repeatPreviewText: '', // 重复预览文本
+    repeatTypeWarning: false, // 是否存在重复类型警告
+    repeatPanelDesc: '任务将在所选时间范围内按设定频率执行' // 动态面板说明文字
   },
 
   /**
@@ -90,6 +95,12 @@ Page({
       endDatePanel: false,
       repeatPanel: false,
       reminderPanel: false
+    });
+    
+    // 初始化重复预览文本
+    this.setData({
+      repeatPreviewText: this.generateRepeatPreviewText('daily'),
+      repeatPanelDesc: '任务将在所选时间范围内每天执行'
     });
   },
 
@@ -337,24 +348,67 @@ Page({
       return result;
     }
     
+    // 验证日期与重复类型是否匹配
+    if (this.data.repeatTypeWarning) {
+      // 获取当前日期
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayStr = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}-${today.getDate().toString().padStart(2, '0')}`;
+      const isToday = this.data.newTask.startDate === todayStr;
+      
+      const startDate = new Date(this.data.newTask.startDate);
+      const dayOfWeek = startDate.getDay();
+      const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
+      
+      let warningMessage = '';
+      
+      if (this.data.newTask.repeat.type === 'workdays' && isWeekend) {
+        warningMessage = `您选择的开始日期是周末，但重复类型是工作日。任务将从下一个工作日开始执行`;
+      } else if (this.data.newTask.repeat.type === 'weekends' && !isWeekend) {
+        warningMessage = `您选择的开始日期是工作日，但重复类型是休息日。任务将从下一个休息日开始执行`;
+      } else if (this.data.newTask.repeat.type === 'custom') {
+        const selectedDays = this.data.newTask.repeat.days;
+        if (selectedDays && selectedDays.length > 0 && !selectedDays.includes(dayOfWeek)) {
+          warningMessage = `您选择的开始日期不在设定的重复星期内。任务将从下一个匹配的日期开始执行`;
+        }
+      }
+      
+      if (warningMessage) {
+        if (isToday) {
+          warningMessage += `。请注意，今日任务列表中将不会显示该任务。是否继续创建？`;
+        } else {
+          warningMessage += `。是否继续创建？`;
+        }
+        
+        console.log('[TaskEdit] 任务验证 - 检测到日期与重复类型不匹配');
+        
+        // 使用确认对话框
+        wx.showModal({
+          title: '重复类型提示',
+          content: warningMessage,
+          confirmText: '继续创建',
+          cancelText: '返回修改',
+          success: (res) => {
+            if (res.confirm) {
+              // 用户确认继续，执行任务创建
+              this.doAddTask();
+            }
+          }
+        });
+        
+        // 中断验证流程，由对话框回调处理后续操作
+        result.valid = false;
+        return result;
+      }
+    }
+    
     return result;
   },
 
   /**
-   * 添加任务
+   * 执行添加任务操作
    */
-  addTask: function() {
-    // 表单验证
-    const validation = this.validateTaskForm();
-    if (!validation.valid) {
-      wx.showToast({
-        title: validation.errorMsg,
-        icon: 'none',
-        duration: 2000
-      });
-      return;
-    }
-    
+  doAddTask: function() {
     try {
       // 获取应用实例
       const app = getApp();
@@ -418,6 +472,28 @@ Page({
         duration: 2000
       });
     }
+  },
+
+  /**
+   * 添加任务
+   */
+  addTask: function() {
+    // 表单验证
+    const validation = this.validateTaskForm();
+    if (!validation.valid) {
+      if (validation.errorMsg) {
+        wx.showToast({
+          title: validation.errorMsg,
+          icon: 'none',
+          duration: 2000
+        });
+      }
+      // 如果没有错误消息，说明是等待确认对话框的情况
+      return;
+    }
+    
+    // 通过验证，直接执行添加任务
+    this.doAddTask();
   },
 
   /**
@@ -509,6 +585,13 @@ Page({
       });
     }
     
+    // 更新重复预览文本
+    if (this.data.newTask.repeat.type !== 'none') {
+      this.setData({
+        repeatPreviewText: this.generateRepeatPreviewText(this.data.newTask.repeat.type)
+      });
+    }
+    
     console.log('[TaskEdit] 无结束日期选项:', hasNoEndDate ? '开启' : '关闭');
   },
   
@@ -544,6 +627,13 @@ Page({
     
     // 检查并调整结束时间
     this.checkAndAdjustEndTime(time);
+    
+    // 更新重复预览文本
+    if (this.data.newTask.repeat.type !== 'none') {
+      this.setData({
+        repeatPreviewText: this.generateRepeatPreviewText(this.data.newTask.repeat.type)
+      });
+    }
     
     console.log('[TaskEdit] 设置开始时间:', time);
   },
@@ -596,6 +686,13 @@ Page({
     this.setData({
       'newTask.endTime': time
     });
+    
+    // 更新重复预览文本
+    if (this.data.newTask.repeat.type !== 'none') {
+      this.setData({
+        repeatPreviewText: this.generateRepeatPreviewText(this.data.newTask.repeat.type)
+      });
+    }
     
     console.log('[TaskEdit] 设置结束时间:', time);
   },
@@ -703,7 +800,7 @@ Page({
       weekdaySelection: newSelection
     });
     
-    // 实时更新重复类型和文本（无需点击确定按钮）
+    // 实时更新重复类型和文本
     const selectedDays = [];
     newSelection.forEach((selected, index) => {
       if (selected) {
@@ -723,7 +820,9 @@ Page({
       this.setData({
         'newTask.repeat.type': 'custom',
         'newTask.repeat.days': selectedDays,
-        repeatText: repeatText
+        repeatText: repeatText,
+        // 更新重复预览文本
+        repeatPreviewText: this.generateRepeatPreviewText('custom')
       });
       
       console.log(`[TaskEdit] 更新星期选择: ${selectedDays.length}天被选中`);
@@ -766,8 +865,8 @@ Page({
     
     this.setData({
       'newTask.repeat.type': type,
-      repeatText: repeatText
-      // 不再立即关闭面板，等待用户点击"完成"按钮
+      repeatText: repeatText,
+      repeatPreviewText: this.generateRepeatPreviewText(type)
     });
     
     console.log(`[TaskEdit] 选择重复类型: ${type}`);
@@ -907,16 +1006,36 @@ Page({
   },
 
   /**
-   * 直接选择年月
+   * 年月选择器变更
    */
   onYearMonthChange: function(e) {
-    const type = e.currentTarget.dataset.type; // start 或 end
-    const value = e.detail.value; // 格式：2023-05
+    const type = e.currentTarget.dataset.type;
+    const yearMonth = e.detail.value; // 格式：'2023-05'
     
-    let [year, month] = value.split('-').map(Number);
+    const [year, month] = yearMonth.split('-').map(Number);
     
-    // 重新生成日历数据
-    this.generateCalendarDays(type, year, month - 1);
+    const yearText = `${year}年`;
+    const monthText = `${month}月`;
+    
+    if (type === 'start') {
+      this.setData({
+        startYearMonth: yearMonth,
+        startYearMonthText: `${year}年${month}月`,
+        startYearText: yearText,
+        startMonthText: monthText
+      });
+      this.generateCalendarDays('start', year, month - 1);
+    } else {
+      this.setData({
+        endYearMonth: yearMonth,
+        endYearMonthText: `${year}年${month}月`,
+        endYearText: yearText,
+        endMonthText: monthText
+      });
+      this.generateCalendarDays('end', year, month - 1);
+    }
+    
+    console.log(`[TaskEdit] 修改${type}年月：${year}年${month}月`);
   },
 
   /**
@@ -1126,6 +1245,13 @@ Page({
       });
     }
     
+    // 更新重复预览文本
+    if (this.data.newTask.repeat.type !== 'none') {
+      this.setData({
+        repeatPreviewText: this.generateRepeatPreviewText(this.data.newTask.repeat.type)
+      });
+    }
+    
     console.log('[TaskEdit] 选择开始日期:', date);
   },
 
@@ -1133,18 +1259,10 @@ Page({
    * 选择结束日期
    */
   selectEndDate: function(e) {
-    // 如果启用了无结束日期，则不处理结束日期选择
-    if (this.data.newTask.hasNoEndDate) {
-      this.setData({
-        endDatePanel: false
-      });
-      return;
-    }
-    
     const date = e.currentTarget.dataset.date;
     
-    // 确保结束日期不早于开始日期
-    if (this.data.newTask.startDate && date < this.data.newTask.startDate) {
+    // 如果结束日期早于开始日期，不允许选择
+    if (!this.isValidEndDate(this.data.newTask.startDate, date)) {
       wx.showToast({
         title: '结束日期不能早于开始日期',
         icon: 'none',
@@ -1158,6 +1276,189 @@ Page({
       endDatePanel: false
     });
     
+    // 更新重复预览文本
+    if (this.data.newTask.repeat.type !== 'none') {
+      this.setData({
+        repeatPreviewText: this.generateRepeatPreviewText(this.data.newTask.repeat.type)
+      });
+    }
+    
     console.log('[TaskEdit] 选择结束日期:', date);
+  },
+
+  /**
+   * 生成重复预览文本
+   * @param {string} repeatType 重复类型
+   * @returns {string} 预览文本
+   */
+  generateRepeatPreviewText: function(repeatType) {
+    // 获取当前选择的开始日期
+    const startDate = new Date(this.data.newTask.startDate);
+    if (isNaN(startDate.getTime())) {
+      return ''; // 日期无效
+    }
+    
+    // 格式化日期的辅助函数
+    const formatDate = (date) => {
+      const year = date.getFullYear();
+      const month = date.getMonth() + 1;
+      const day = date.getDate();
+      const weekday = date.getDay();
+      const weekdayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+      return `${month}月${day}日(${weekdayNames[weekday]})`;
+    };
+    
+    // 检查是否为今天
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const isToday = (
+      startDate.getFullYear() === today.getFullYear() &&
+      startDate.getMonth() === today.getMonth() &&
+      startDate.getDate() === today.getDate()
+    );
+    
+    const todayStr = isToday ? '今天' : formatDate(startDate);
+    const dayOfWeek = startDate.getDay(); // 0是周日，6是周六
+    const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
+    
+    let warningExists = false;
+    let previewText = '';
+    let endDateStr = '';
+    
+    // 添加结束日期信息
+    if (this.data.newTask.hasNoEndDate) {
+      endDateStr = '无限期执行';
+    } else if (this.data.newTask.endDate) {
+      const endDate = new Date(this.data.newTask.endDate);
+      if (!isNaN(endDate.getTime())) {
+        endDateStr = `直到${formatDate(endDate)}结束`;
+      }
+    }
+    
+    // 根据重复类型生成预览文本
+    switch (repeatType) {
+      case 'daily':
+        previewText = `从${todayStr}开始每天执行${endDateStr ? '，' + endDateStr : ''}`;
+        break;
+        
+      case 'workdays':
+        if (isWeekend) {
+          // 如果当前是周末，计算下一个工作日
+          const nextWorkday = new Date(startDate);
+          if (dayOfWeek === 0) { // 周日
+            nextWorkday.setDate(nextWorkday.getDate() + 1); // 下一个周一
+          } else { // 周六
+            nextWorkday.setDate(nextWorkday.getDate() + 2); // 下下个周一
+          }
+          previewText = `首次执行：${formatDate(nextWorkday)}，之后每周一至周五执行${endDateStr ? '，' + endDateStr : ''}`;
+          warningExists = true;
+          
+          // 更新面板说明
+          this.setData({
+            repeatPanelDesc: '工作日指周一至周五，周末不会执行任务'
+          });
+        } else {
+          previewText = `从${todayStr}开始每周一至周五执行${endDateStr ? '，' + endDateStr : ''}`;
+          
+          // 更新面板说明
+          this.setData({
+            repeatPanelDesc: '任务将在所选日期范围内的工作日(周一至周五)执行'
+          });
+        }
+        break;
+        
+      case 'weekends':
+        if (!isWeekend) {
+          // 如果当前不是周末，计算下一个周末
+          const nextWeekend = new Date(startDate);
+          const daysUntilWeekend = dayOfWeek === 6 ? 0 : 6 - dayOfWeek; // 到周六的天数
+          nextWeekend.setDate(nextWeekend.getDate() + daysUntilWeekend);
+          previewText = `首次执行：${formatDate(nextWeekend)}，之后每周六、周日执行${endDateStr ? '，' + endDateStr : ''}`;
+          warningExists = true;
+          
+          // 更新面板说明
+          this.setData({
+            repeatPanelDesc: '休息日指周六和周日，工作日不会执行任务'
+          });
+        } else {
+          previewText = `从${todayStr}开始每周六、周日执行${endDateStr ? '，' + endDateStr : ''}`;
+          
+          // 更新面板说明
+          this.setData({
+            repeatPanelDesc: '任务将在所选日期范围内的休息日(周六、周日)执行'
+          });
+        }
+        break;
+        
+      case 'custom':
+        // 处理自定义重复情况
+        if (this.data.newTask.repeat.days && this.data.newTask.repeat.days.length > 0) {
+          const selectedDays = this.data.newTask.repeat.days;
+          const nextExecutionDate = this.findNextCustomExecutionDate(startDate, selectedDays);
+          
+          if (nextExecutionDate > startDate) {
+            previewText = `首次执行：${formatDate(nextExecutionDate)}，之后按所选星期几执行${endDateStr ? '，' + endDateStr : ''}`;
+            warningExists = true;
+          } else {
+            const dayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+            const selectedDayNames = selectedDays.map(day => dayNames[day]).join('、');
+            previewText = `从${todayStr}开始每${selectedDayNames}执行${endDateStr ? '，' + endDateStr : ''}`;
+          }
+          
+          // 更新面板说明
+          this.setData({
+            repeatPanelDesc: '任务将在所选日期范围内的指定星期几执行'
+          });
+        } else {
+          previewText = `请选择重复的星期`;
+          
+          // 更新面板说明
+          this.setData({
+            repeatPanelDesc: '请选择至少一个重复的星期几'
+          });
+        }
+        break;
+    }
+    
+    // 更新警告状态
+    this.setData({
+      repeatTypeWarning: warningExists
+    });
+    
+    console.log(`[TaskEdit] 生成重复预览: ${previewText}${warningExists ? ' (有警告)' : ''}`);
+    return previewText;
+  },
+  
+  /**
+   * 查找下一个自定义执行日期
+   * @param {Date} startDate 开始日期
+   * @param {Array} selectedDays 选中的星期几（0-6）
+   * @returns {Date} 下一个执行日期
+   */
+  findNextCustomExecutionDate: function(startDate, selectedDays) {
+    if (!selectedDays || selectedDays.length === 0) {
+      return startDate;
+    }
+    
+    // 检查当前日期是否匹配
+    const currentDayOfWeek = startDate.getDay();
+    if (selectedDays.includes(currentDayOfWeek)) {
+      return startDate;
+    }
+    
+    // 查找下一个匹配的日期
+    const nextDate = new Date(startDate);
+    let daysChecked = 0;
+    
+    while (daysChecked < 7) {
+      nextDate.setDate(nextDate.getDate() + 1);
+      daysChecked++;
+      
+      if (selectedDays.includes(nextDate.getDay())) {
+        break;
+      }
+    }
+    
+    return nextDate;
   }
 }) 

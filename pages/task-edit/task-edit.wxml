@@ -271,18 +271,41 @@
       
       <!-- 重复类型选择（在type模式下显示） -->
       <view class="option-list" wx:if="{{repeatPanelMode === 'type'}}">
-        <view class="option-item {{newTask.repeat.type === 'daily' ? 'selected' : ''}}" 
-              bindtap="selectRepeatType" data-type="daily">每天</view>
-        <view class="option-item {{newTask.repeat.type === 'workdays' ? 'selected' : ''}}" 
-              bindtap="selectRepeatType" data-type="workdays">工作日</view>
-        <view class="option-item {{newTask.repeat.type === 'weekends' ? 'selected' : ''}}" 
-              bindtap="selectRepeatType" data-type="weekends">休息日</view>
-        <view class="option-item {{newTask.repeat.type === 'custom' ? 'selected' : ''}}" 
-              bindtap="switchToWeekdaySelection">自定义...</view>
+        <view class="option-item-container">
+          <view class="option-item {{newTask.repeat.type === 'daily' ? 'selected' : ''}}" 
+                bindtap="selectRepeatType" data-type="daily">每天</view>
+          <view class="option-preview" wx:if="{{newTask.repeat.type === 'daily' && repeatPreviewText}}">
+            <text class="preview-text">{{repeatPreviewText}}</text>
+          </view>
+        </view>
+        
+        <view class="option-item-container">
+          <view class="option-item {{newTask.repeat.type === 'workdays' ? 'selected' : ''}}" 
+                bindtap="selectRepeatType" data-type="workdays">工作日</view>
+          <view class="option-preview {{repeatTypeWarning ? 'warning' : ''}}" wx:if="{{newTask.repeat.type === 'workdays' && repeatPreviewText}}">
+            <text class="preview-text">{{repeatPreviewText}}</text>
+          </view>
+        </view>
+        
+        <view class="option-item-container">
+          <view class="option-item {{newTask.repeat.type === 'weekends' ? 'selected' : ''}}" 
+                bindtap="selectRepeatType" data-type="weekends">休息日</view>
+          <view class="option-preview {{repeatTypeWarning ? 'warning' : ''}}" wx:if="{{newTask.repeat.type === 'weekends' && repeatPreviewText}}">
+            <text class="preview-text">{{repeatPreviewText}}</text>
+          </view>
+        </view>
+        
+        <view class="option-item-container">
+          <view class="option-item {{newTask.repeat.type === 'custom' ? 'selected' : ''}}" 
+                bindtap="switchToWeekdaySelection">自定义...</view>
+          <view class="option-preview {{repeatTypeWarning ? 'warning' : ''}}" wx:if="{{newTask.repeat.type === 'custom' && repeatPreviewText}}">
+            <text class="preview-text">{{repeatPreviewText}}</text>
+          </view>
+        </view>
       
         <!-- 面板底部说明 -->
         <view class="panel-footer">
-          <text class="panel-desc">任务将在所选时间范围内按设定频率执行</text>
+          <text class="panel-desc">{{repeatPanelDesc}}</text>
         </view>
       </view>
       
