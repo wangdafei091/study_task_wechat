@@ -275,7 +275,8 @@
 .date-row {
   display: flex;
   align-items: center;
-  flex-direction: row; /* 改为水平排列 */
+  flex-direction: row; /* 水平排列 */
+  flex-wrap: wrap; /* 添加换行支持 */
 }
 
 .date-text {
@@ -289,6 +290,106 @@
   font-size: 22rpx;
   color: #666;
   line-height: 1;
+  margin-right: 10rpx; /* 与压力指示器保持间距 */
+}
+
+/* 标签式压力指示器样式 */
+.pressure-tag {
+  border-radius: 20rpx;
+  padding: 2rpx 12rpx;
+  font-size: 20rpx;
+  color: white;
+  margin-left: 12rpx;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 不同级别的压力标签样式 */
+.pressure-tag.pressure-level-1 {
+  background-color: #5C97F7; /* 轻松：浅蓝色 */
+}
+
+.pressure-tag.pressure-level-2 {
+  background-color: #4285F4; /* 适中：中蓝色 */
+}
+
+.pressure-tag.pressure-level-3 {
+  background-color: #2171E3; /* 繁忙：深蓝色 */
+}
+
+.pressure-tag.pressure-level-4 {
+  background-color: #E53935; /* 紧张：红色 */
+}
+
+/* 任务描述样式 */
+.task-description {
+  font-size: 22rpx;
+  color: #888;
+  margin-top: 4rpx;
+  display: block;
+  white-space: normal;
+  word-break: break-all;
+  line-height: 1.3;
+}
+
+/* 修改任务项高度适应描述文本 */
+.task-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  border-bottom: 1rpx solid #f0f0f0;
+  padding: 16rpx;
+  background-color: #fff;
+  position: relative;
+}
+
+.task-item:last-child {
+  border-bottom: none;
+}
+
+/* 任务标题和描述容器 */
+.task-item-row {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding-right: 16rpx;
+}
+
+/* 任务标题样式优化 */
+.task-title {
+  font-size: 26rpx;
+  font-weight: 500;
+  color: #333;
+}
+
+/* 任务操作区 */
+.task-item-actions {
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+}
+
+/* 任务描述图标和编辑图标 */
+.task-desc-icon {
+  display: none;
+}
+
+.task-edit-icon {
+  width: 36rpx;
+  height: 36rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(0, 0, 0, 0.05);
+  border-radius: 50%;
+  margin-left: 8rpx;
+  font-size: 20rpx;
+  color: #666;
+}
+
+.task-edit-icon:active {
+  background-color: rgba(0, 0, 0, 0.1);
 }
 
 /* 圆形关闭按钮样式 */
@@ -315,11 +416,9 @@
   display: none;
 }
 
-/* 优化压力指示器样式 */
+/* 任务压力指示器相关样式 - 已被内联版本替代，移除 */
 .pressure-indicator {
-  display: flex;
-  align-items: center;
-  margin-top: 6rpx;
+  display: none;
 }
 
 .pressure-color-block {
@@ -329,7 +428,7 @@
   margin-right: 8rpx;
 }
 
-/* 修改类名，避免与日历热力图等级样式冲突 */
+/* 修改压力色块的级别样式 */
 .pressure-color-block.pressure-level-1 {
   background-color: rgba(92, 151, 247, 0.2);
 }
@@ -346,113 +445,16 @@
   background-color: rgba(25, 103, 210, 0.85);
 }
 
-.pressure-level-text {
-  font-size: 24rpx;
-  color: #666;
-}
-
-/* 移除旧的压力行样式 */
-.pressure-row {
-  display: none;
-}
-
-.pressure-text {
-  display: none;
-}
-
-/* 优化任务操作区 */
-.task-item-actions {
-  display: flex;
-  align-items: center;
-  gap: 12rpx;
-}
-
-/* 任务压力指示器 */
+/* 任务压力标签 - 已不再使用，移除 */
 .task-pressure-indicator {
-  display: flex;
-  align-items: center;
-  border-radius: 20rpx;
-  padding: 2rpx 10rpx;
-  background-color: rgba(0, 0, 0, 0.05);
-}
-
-/* 修改类名，避免与日历热力图等级样式冲突 */
-.task-pressure-indicator.pressure-level-1 {
-  background-color: rgba(92, 151, 247, 0.1);
-}
-
-.task-pressure-indicator.pressure-level-2 {
-  background-color: rgba(66, 133, 244, 0.15);
-}
-
-.task-pressure-indicator.pressure-level-3 {
-  background-color: rgba(33, 113, 227, 0.2);
-}
-
-.task-pressure-indicator.pressure-level-4 {
-  background-color: rgba(229, 57, 53, 0.15);
+  display: none;
 }
 
 .task-pressure-text {
-  font-size: 22rpx;
-  color: #666;
+  display: none;
 }
 
-.task-pressure-indicator.pressure-level-4 .task-pressure-text {
-  color: #e53935;
-}
-
-/* 美化任务描述和编辑图标 */
-.task-desc-icon, .task-edit-icon {
-  width: 36rpx;
-  height: 36rpx;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 22rpx;
-  transition: all 0.2s ease;
-}
-
-.task-desc-icon {
-  background-color: rgba(66, 133, 244, 0.1);
-  color: #4285F4;
-}
-
-.task-edit-icon {
-  background-color: rgba(0, 0, 0, 0.05);
-  color: #666;
-}
-
-.task-desc-icon:active, .task-edit-icon:active {
-  transform: scale(0.95);
-  opacity: 0.9;
-}
-
-/* 优化任务项样式 */
-.task-item {
-  padding: 16rpx 20rpx;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-bottom: 1rpx solid rgba(0, 0, 0, 0.05);
-}
-
-.task-item:last-child {
-  border-bottom: none;
-}
-
-/* 任务标题样式优化 */
-.task-title {
-  font-size: 26rpx;
-  font-weight: 500;
-  color: #333;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 380rpx;
-}
-
+/* 任务时间样式 */
 .task-time {
   font-size: 20rpx;
   color: #999;
@@ -511,42 +513,7 @@
 
 /* 任务描述气泡 */
 .task-desc-bubble {
-  position: fixed;
-  z-index: 1000;
-  padding: 12rpx 16rpx;
-  background-color: rgba(0, 0, 0, 0.6);
-  color: #ffffff;
-  font-size: 22rpx;
-  border-radius: 6rpx;
-  max-width: 250rpx;
-  word-wrap: break-word;
-  box-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.1);
-  opacity: 0;
-  transform: scale(0.9) translateY(4rpx);
-  transition: all 0.2s ease;
-  pointer-events: none;
-  visibility: hidden;
-}
-
-.task-desc-bubble.visible {
-  opacity: 1;
-  transform: scale(1) translateY(0);
-  visibility: visible;
-}
-
-.bubble-text {
-  line-height: 1.4;
-}
-
-/* 添加箭头 */
-.task-desc-bubble::after {
-  content: '';
-  position: absolute;
-  bottom: -6rpx;
-  left: 10rpx;
-  border-left: 6rpx solid transparent;
-  border-right: 6rpx solid transparent;
-  border-top: 6rpx solid rgba(0, 0, 0, 0.6);
+  display: none;
 }
 
 /* 任务操作图标区 */

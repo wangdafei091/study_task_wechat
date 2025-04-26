@@ -34,13 +34,10 @@
         <view class="date-row">
           <text class="date-text">{{selectedDateText}}</text>
           <text class="task-count-text" wx:if="{{dayTasks.length > 0}}">{{dayTasks.length}}个任务</text>
-        </view>
-        <!-- 优化压力指数显示 -->
-        <view class="pressure-indicator" wx:if="{{dayTasks.length > 0}}">
-          <view class="pressure-color-block pressure-level-{{selectedDayPressure.levelNum}}"></view>
-          <text class="pressure-level-text {{selectedDayPressure.isHigh ? 'high-pressure' : ''}}">
-            {{selectedDayPressure.levelText}}
-          </text>
+          <!-- 改为标签式压力指示 -->
+          <view class="pressure-tag pressure-level-{{selectedDayPressure.levelNum}}" wx:if="{{dayTasks.length > 0}}">
+            <text>{{selectedDayPressure.levelText}}</text>
+          </view>
         </view>
       </view>
       <!-- 关闭按钮改为圆形X图标 -->
@@ -56,24 +53,12 @@
           <!-- 任务基本信息 -->
           <view class="task-item-row">
             <text class="task-title">{{item.title}}</text>
+            <text class="task-description" wx:if="{{item.description}}">{{item.description}}</text>
           </view>
           
-          <!-- 任务操作区优化布局 -->
+          <!-- 任务操作区优化布局，移除描述图标 -->
           <view class="task-item-actions">
-            <!-- 任务压力指示器 -->
-            <view class="task-pressure-indicator pressure-level-{{item.pressureLevel}}">
-              <text class="task-pressure-text">{{item.pressureText}}</text>
-            </view>
-            
-            <!-- 任务描述信息图标 -->
-            <view 
-              class="task-desc-icon" 
-              bindtap="showTaskDesc" 
-              data-id="{{item.id}}"
-              data-index="{{index}}"
-              wx:if="{{item.description}}">i</view>
-            
-            <!-- 任务编辑按钮 -->
+            <!-- 只保留任务编辑按钮 -->
             <view 
               class="task-edit-icon" 
               bindtap="showTaskEdit" 
@@ -92,11 +77,6 @@
         <text>当日暂无任务</text>
       </view>
     </view>
-  </view>
-  
-  <!-- 任务描述气泡 -->
-  <view class="task-desc-bubble {{activeBubbleId ? 'visible' : ''}}" style="{{bubbleStyle}}">
-    <text class="bubble-content">{{activeBubbleContent}}</text>
   </view>
   
   <!-- 循环任务范围提示气泡 -->

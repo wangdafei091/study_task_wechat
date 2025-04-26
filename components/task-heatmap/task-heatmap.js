@@ -35,43 +35,24 @@ Component({
   },
   
   data: {
-    days: [],
-    weekDays: ['日', '一', '二', '三', '四', '五', '六'],
-    monthTitle: '',
-    selectedDate: '', // 当前选中的日期
-    selectedDateText: '', // 格式化后的日期文本
-    showDayTasks: false, // 是否显示日期任务
-    dayTasks: [], // 当前日期的任务列表
-    activeBubbleId: null, // 当前显示描述的任务ID
-    activeBubbleContent: '', // 当前显示的描述内容
-    bubbleStyle: '', // 气泡样式字符串
-    bubbleTimer: null, // 用于自动隐藏气泡的计时器
-    
-    // 更新选中日期的压力指数信息结构
-    selectedDayPressure: {
-      total: '0.0',
-      levelText: '轻松',
-      levelNum: 1,
-      isHigh: false,
-      showWarning: false
-    },
-    
-    // 新增：显示压力指数说明弹窗
-    showPressureInfo: false,
-    
-    // 任务编辑相关
-    editingTaskId: null, // 当前正在编辑的任务ID
-    editingTaskIndex: -1, // 当前正在编辑的任务索引
-    editPoints: 0, // 编辑中的积分值
-    editDescription: '', // 编辑中的描述文本
-    editScope: 'single', // 编辑范围，single-仅今天，all-整个循环
-    showScopeInfoBubble: false, // 是否显示范围说明气泡
-    scopeInfoStyle: '', // 范围说明气泡样式
-    scopeInfoTimer: null, // 范围说明气泡定时器
-    
-    // 描述字段限制常量
-    descMaxLength: Constants.DESCRIPTION.MAX_LENGTH,
-    descPlaceholder: Constants.DESCRIPTION.PLACEHOLDER
+    currentYear: new Date().getFullYear(),  // 当前选择的年份
+    currentMonth: new Date().getMonth(),    // 当前选择的月份 (0-11)
+    days: [],                               // 日历天数数组
+    weekDays: ['日', '一', '二', '三', '四', '五', '六'], // 星期标题
+    selectedDate: '',                       // 当前选中的日期
+    selectedDateText: '',                   // 日期显示文本
+    dayTasks: [],                           // 选中日期的任务
+    showDayTasks: false,                    // 是否显示日期任务面板
+    selectedDayPressure: {},                // 选中日期的压力信息
+    editingTaskId: null,                    // 当前正在编辑的任务ID
+    editingTaskIndex: -1,                   // 当前正在编辑的任务在dayTasks中的索引
+    editPoints: 0,                          // 编辑中的积分
+    editDescription: '',                    // 编辑中的描述
+    editScope: 'single',                    // 编辑范围，默认为仅今天
+    showScopeInfoBubble: false,             // 是否显示范围信息气泡
+    scopeInfoStyle: '',                     // 范围信息气泡样式
+    scopeInfoTimer: null,                   // 范围信息气泡定时器
+    showPressureInfo: false                 // 是否显示压力说明弹窗
   },
   
   lifetimes: {
@@ -443,20 +424,13 @@ Component({
       
       // 计算总压力值
       let totalPressure = 0;
-      const tasksWithPressure = dayTasks.map(task => {
+      const tasks = dayTasks.map(task => {
+        // 计算总压力
         const taskPressure = this.calculateTaskPressure(task);
         totalPressure += taskPressure.total;
         
-        // 计算任务压力级别
-        const pressureLevel = this.calculatePressureLevel(taskPressure.total);
-        
-        return {
-          ...task,
-          pressureDisplay: taskPressure.display,
-          pressureLevel: pressureLevel.levelNum, // 这个值仍然是数字1-4
-          pressureText: pressureLevel.levelText,
-          isHighPressure: pressureLevel.isHigh
-        };
+        // 返回任务对象
+        return task;
       });
       
       // 计算当日压力级别
@@ -465,18 +439,18 @@ Component({
       this.setData({
         selectedDate: date,
         selectedDateText: this.formatDateDisplay(date),
-        dayTasks: tasksWithPressure,
+        dayTasks: tasks,
         showDayTasks: true,
         selectedDayPressure: {
           total: totalPressure.toFixed(1),
           levelText: pressureLevel.levelText,
-          levelNum: pressureLevel.levelNum, // 这个值仍然是数字1-4
+          levelNum: pressureLevel.levelNum,
           isHigh: pressureLevel.isHigh,
           showWarning: pressureLevel.isHigh && totalPressure > 30
         }
       });
       
-      console.log(`[TaskHeatmap] 显示日期任务, 总压力: ${totalPressure.toFixed(1)}, 级别: ${pressureLevel.levelText}`);
+      console.log(`[TaskHeatmap] 显示日期任务, 总数:${dayTasks.length}, 总压力: ${totalPressure.toFixed(1)}, 级别: ${pressureLevel.levelText}`);
     },
     
     // 关闭日期任务列表
@@ -485,83 +459,6 @@ Component({
       
       this.setData({
         showDayTasks: false
-      });
-    },
-    
-    // 显示任务描述气泡
-    showTaskDesc(e) {
-      console.log('[TaskHeatmap] 显示任务描述');
-      const taskId = e.currentTarget.dataset.id;
-      const taskIndex = e.currentTarget.dataset.index;
-      
-      // 如果当前已有显示的气泡，先清除计时器
-      if (this.data.bubbleTimer) {
-        clearTimeout(this.data.bubbleTimer);
-      }
-      
-      // 如果点击的是当前显示的气泡，则隐藏它
-      if (this.data.activeBubbleId === taskId) {
-        this.hideTaskDesc();
-        return;
-      }
-      
-      // 获取当前任务的描述信息
-      const task = this.data.dayTasks[taskIndex];
-      if (!task || !task.description) {
-        console.log('[TaskHeatmap] 任务无描述信息');
-        return;
-      }
-      
-      // 获取点击图标的位置信息，用于定位气泡
-      const query = this.createSelectorQuery();
-      query.select(`#task-${taskId}`).boundingClientRect();
-      query.selectViewport().scrollOffset();
-      query.exec((res) => {
-        if (!res || !res[0]) {
-          console.error('[TaskHeatmap] 获取任务元素位置失败');
-          return;
-        }
-        
-        const taskRect = res[0];
-        const scrollTop = res[1] ? res[1].scrollTop : 0;
-        
-        // 计算气泡位置
-        // 默认定位在任务项的右侧中间位置
-        const bubbleLeft = taskRect.right + 5; // 任务项右侧偏移5px
-        const bubbleTop = taskRect.top + (taskRect.height / 2) - 15; // 居中偏上一点
-        
-        // 设置气泡样式
-        const bubbleStyle = `left: ${bubbleLeft}px; top: ${bubbleTop}px;`;
-        
-        // 更新数据，显示气泡
-        this.setData({
-          activeBubbleId: taskId,
-          activeBubbleContent: task.description,
-          bubbleStyle: bubbleStyle
-        });
-        
-        // 设置3秒后自动隐藏气泡
-        const timer = setTimeout(() => {
-          this.hideTaskDesc();
-        }, 3000);
-        
-        this.setData({
-          bubbleTimer: timer
-        });
-      });
-    },
-    
-    // 隐藏任务描述气泡
-    hideTaskDesc() {
-      // 清除计时器
-      if (this.data.bubbleTimer) {
-        clearTimeout(this.data.bubbleTimer);
-      }
-      
-      this.setData({
-        activeBubbleId: null,
-        activeBubbleContent: '',
-        bubbleTimer: null
       });
     },
     
