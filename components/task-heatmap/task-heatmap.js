@@ -82,6 +82,7 @@ Component({
       console.log('[TaskHeatmap] 已优化任务完成状态显示，使用勾标记替代删除线');
       console.log('[TaskHeatmap] 已添加任务描述信息气泡功能');
       console.log('[TaskHeatmap] 已添加任务编辑功能');
+      console.log('[TaskHeatmap] 已优化压力级别显示为单行布局，减少垂直空间占用');
       const now = new Date();
       this.setData({
         currentYear: this.properties.currentYear || now.getFullYear(),

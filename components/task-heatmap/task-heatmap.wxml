@@ -132,10 +132,10 @@
         <view class="levels-section">
           <text class="levels-title">压力级别</text>
           <view class="level-items">
-            <view class="level-item level-1">1-10点: 轻松</view>
-            <view class="level-item level-2">11-20点: 适中</view>
-            <view class="level-item level-3">21-30点: 较高</view>
-            <view class="level-item level-4">30+点: 繁忙</view>
+            <view class="level-item level-1">1-10</view>
+            <view class="level-item level-2">11-20</view>
+            <view class="level-item level-3">21-30</view>
+            <view class="level-item level-4">30+</view>
           </view>
         </view>
       </view>
