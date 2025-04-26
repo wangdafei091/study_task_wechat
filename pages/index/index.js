@@ -390,17 +390,34 @@ Page({
   // 防止点击事件冒泡
   preventBubble: function(e) {
     console.log('[消息中心] 阻止事件冒泡');
-    // 阻止事件冒泡到蒙层
-    e.stopPropagation();
+    // 检查事件对象是否存在且有stopPropagation方法
+    if (e && typeof e.stopPropagation === 'function') {
+      e.stopPropagation();
+    } else {
+      console.log('[消息中心] 事件对象不包含stopPropagation方法');
+    }
     return false;
   },
   
   // 防止蒙层触摸滑动
   preventTouchMove: function(e) {
     console.log('[消息中心] 阻止蒙层触摸滑动');
-    // 阻止蒙层触摸滑动
-    e.stopPropagation();
-    e.preventDefault();
+    // 检查事件对象是否存在
+    if (e) {
+      // 检查并调用stopPropagation方法
+      if (typeof e.stopPropagation === 'function') {
+        e.stopPropagation();
+      } else {
+        console.log('[消息中心] 事件对象不包含stopPropagation方法');
+      }
+      
+      // 检查并调用preventDefault方法
+      if (typeof e.preventDefault === 'function') {
+        e.preventDefault();
+      } else {
+        console.log('[消息中心] 事件对象不包含preventDefault方法');
+      }
+    }
     return false;
   },
   
