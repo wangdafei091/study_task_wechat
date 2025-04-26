@@ -146,35 +146,35 @@
 }
 
 /* 热力等级样式 - 使用色相渐变提高区分度 */
-.level-0 {
+.day.level-0 {
   background-color: transparent; /* 0压力: 无任务 */
 }
 
-.level-1 {
+.day.level-1 {
   background-color: rgba(92, 151, 247, 0.2); /* 1-10点: 轻松压力 */
 }
 
-.level-2 {
+.day.level-2 {
   background-color: rgba(66, 133, 244, 0.4); /* 11-20点: 适中压力 */
   box-shadow: inset 0 0 0 1rpx rgba(66, 133, 244, 0.1); /* 添加内嵌边框 */
 }
 
-.level-3 {
+.day.level-3 {
   background-color: rgba(33, 113, 227, 0.6); /* 21-30点: 较高压力 */
   box-shadow: inset 0 0 0 1rpx rgba(33, 113, 227, 0.15); /* 添加内嵌边框 */
 }
 
-.level-4 {
+.day.level-4 {
   background-color: rgba(25, 103, 210, 0.85); /* 30+点: 繁忙 */
   color: white;
   box-shadow: inset 0 0 0 1rpx rgba(25, 103, 210, 0.3); /* 添加内嵌边框 */
 }
 
-.level-4 .day-number {
+.day.level-4 .day-number {
   color: white;
 }
 
-.level-4 .task-count {
+.day.level-4 .task-count {
   color: rgba(255, 255, 255, 0.95);
   background-color: rgba(0, 0, 0, 0.2);
 }
@@ -291,151 +291,166 @@
   line-height: 1;
 }
 
-/* 优化关闭按钮样式，消除生硬边框 */
-.close-btn {
-  padding: 6rpx 16rpx;
-  font-size: 22rpx;
-  color: #4285F4;
-  background-color: rgba(66, 133, 244, 0.05);
-  border-radius: 30rpx; /* 圆角化 */
-  border: none; /* 移除边框 */
+/* 圆形关闭按钮样式 */
+.close-btn-circle {
+  width: 48rpx;
+  height: 48rpx;
+  border-radius: 50%;
+  background-color: rgba(0, 0, 0, 0.05);
+  color: #666;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 30rpx;
   transition: all 0.2s ease;
 }
 
-.close-btn:active {
-  opacity: 0.8;
-  background-color: rgba(66, 133, 244, 0.1);
-}
-
-.tasks-list {
-  max-height: 500rpx;
-  overflow-y: auto;
-  padding: 4rpx 4rpx 8rpx;
-}
-
-/* 为任务列表添加滚动条样式 */
-.tasks-list::-webkit-scrollbar {
-  width: 4rpx;
-  background: transparent;
-}
-
-.tasks-list::-webkit-scrollbar-thumb {
+.close-btn-circle:active {
   background-color: rgba(0, 0, 0, 0.1);
-  border-radius: 2rpx;
+  transform: scale(0.95);
 }
 
-.empty-tasks {
-  padding: 30rpx 0;
-  text-align: center;
+/* 移除旧关闭按钮样式 */
+.close-btn {
+  display: none;
+}
+
+/* 优化压力指示器样式 */
+.pressure-indicator {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  margin-top: 6rpx;
+}
+
+.pressure-color-block {
+  width: 24rpx;
+  height: 24rpx;
+  border-radius: 4rpx;
+  margin-right: 8rpx;
+}
+
+/* 修改类名，避免与日历热力图等级样式冲突 */
+.pressure-color-block.pressure-level-1 {
+  background-color: rgba(92, 151, 247, 0.2);
+}
+
+.pressure-color-block.pressure-level-2 {
+  background-color: rgba(66, 133, 244, 0.4);
+}
+
+.pressure-color-block.pressure-level-3 {
+  background-color: rgba(33, 113, 227, 0.6);
+}
+
+.pressure-color-block.pressure-level-4 {
+  background-color: rgba(25, 103, 210, 0.85);
+}
+
+.pressure-level-text {
+  font-size: 24rpx;
+  color: #666;
+}
+
+/* 移除旧的压力行样式 */
+.pressure-row {
+  display: none;
+}
+
+.pressure-text {
+  display: none;
+}
+
+/* 优化任务操作区 */
+.task-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+/* 任务压力指示器 */
+.task-pressure-indicator {
+  display: flex;
+  align-items: center;
+  border-radius: 20rpx;
+  padding: 2rpx 10rpx;
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+/* 修改类名，避免与日历热力图等级样式冲突 */
+.task-pressure-indicator.pressure-level-1 {
+  background-color: rgba(92, 151, 247, 0.1);
+}
+
+.task-pressure-indicator.pressure-level-2 {
+  background-color: rgba(66, 133, 244, 0.15);
+}
+
+.task-pressure-indicator.pressure-level-3 {
+  background-color: rgba(33, 113, 227, 0.2);
+}
+
+.task-pressure-indicator.pressure-level-4 {
+  background-color: rgba(229, 57, 53, 0.15);
+}
+
+.task-pressure-text {
+  font-size: 22rpx;
+  color: #666;
+}
+
+.task-pressure-indicator.pressure-level-4 .task-pressure-text {
+  color: #e53935;
+}
+
+/* 美化任务描述和编辑图标 */
+.task-desc-icon, .task-edit-icon {
+  width: 36rpx;
+  height: 36rpx;
+  border-radius: 50%;
+  display: flex;
   align-items: center;
   justify-content: center;
+  font-size: 22rpx;
+  transition: all 0.2s ease;
 }
 
-.empty-icon {
-  font-size: 40rpx;
-  margin-bottom: 10rpx;
-  color: #ddd;
+.task-desc-icon {
+  background-color: rgba(66, 133, 244, 0.1);
+  color: #4285F4;
 }
 
-.empty-text {
-  font-size: 24rpx;
-  color: #999;
+.task-edit-icon {
+  background-color: rgba(0, 0, 0, 0.05);
+  color: #666;
 }
 
-/* 任务项样式 - 优化设计，降低背景色厚重感 */
-.task-item-wrap {
+.task-desc-icon:active, .task-edit-icon:active {
+  transform: scale(0.95);
+  opacity: 0.9;
+}
+
+/* 优化任务项样式 */
+.task-item {
+  padding: 16rpx 20rpx;
   display: flex;
+  justify-content: space-between;
   align-items: center;
-  height: 64rpx;
-  padding: 0 12rpx;
-  margin: 6rpx 4rpx;
-  border-radius: 8rpx; /* 增加圆角 */
-  background-color: rgba(250, 250, 250, 0.3); /* 降低不透明度，减轻厚重感 */
-  position: relative;
-  overflow: hidden;
-  box-sizing: border-box;
-  border-left: 3rpx solid transparent; /* 添加左侧边框为不同任务类型做标识 */
+  border-bottom: 1rpx solid rgba(0, 0, 0, 0.05);
 }
 
-/* 为不同类型的任务设置左侧边框颜色 */
-.task-item-wrap.type-study {
-  border-left-color: #34A853;
-}
-.task-item-wrap.type-habit {
-  border-left-color: #4285F4;
-}
-.task-item-wrap.type-interest {
-  border-left-color: #FBBC05;
+.task-item:last-child {
+  border-bottom: none;
 }
 
-/* 图标基本样式 */
-.task-icon {
-  width: 12rpx;
-  height: 12rpx;
-  margin-right: 10rpx;
-  border-radius: 50%;
-  position: relative;
-  flex-shrink: 0;
-}
-
-/* 一次性任务样式 - 实心圆点 */
-.task-icon.type-study {
-  background-color: #34A853;
-}
-.task-icon.type-habit {
-  background-color: #4285F4;
-}
-.task-icon.type-interest {
-  background-color: #FBBC05;
-}
-
-/* 循环任务样式 - 空心圆环 */
-.task-icon.repeat {
-  background-color: transparent;
-  border: 2rpx solid;
-  width: 10rpx;
-  height: 10rpx;
-}
-.task-icon.repeat.type-study {
-  border-color: #34A853;
-}
-.task-icon.repeat.type-habit {
-  border-color: #4285F4;
-}
-.task-icon.repeat.type-interest {
-  border-color: #FBBC05;
-}
-
-/* 循环标记 - 小圆点 */
-.task-icon.repeat::after {
-  content: '';
-  position: absolute;
-  width: 3rpx;
-  height: 3rpx;
-  border-radius: 50%;
-  top: 4rpx;
-  right: -2rpx;
-}
-.task-icon.repeat.type-study::after {
-  background-color: #34A853;
-}
-.task-icon.repeat.type-habit::after {
-  background-color: #4285F4;
-}
-.task-icon.repeat.type-interest::after {
-  background-color: #FBBC05;
-}
-
+/* 任务标题样式优化 */
 .task-title {
-  font-size: 24rpx;
+  font-size: 26rpx;
   font-weight: 500;
   color: #333;
-  max-width: 300rpx;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  max-width: 380rpx;
 }
 
 .task-time {
@@ -958,136 +973,6 @@
 .level-item.level-4 {
   background-color: rgba(25, 103, 210, 0.85);
   color: #fff;
-}
-
-/* 日期任务列表中的压力显示 */
-.pressure-row {
-  display: flex;
-  align-items: center;
-  margin-top: 4rpx;
-}
-
-.pressure-text {
-  font-size: 22rpx;
-  color: #666;
-}
-
-.pressure-level-text {
-  font-size: 22rpx;
-  color: #777;
-  margin-left: 6rpx;
-}
-
-.pressure-level-text.high-pressure {
-  color: #e53935;
-}
-
-/* 任务项的压力指数显示 */
-.task-item-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex: 1;
-}
-
-.task-pressure {
-  font-size: 22rpx;
-  color: #777;
-  background-color: rgba(0, 0, 0, 0.05);
-  border-radius: 30rpx;
-  padding: 2rpx 10rpx;
-  min-width: 40rpx;
-  text-align: center;
-}
-
-.task-pressure.high-task-pressure {
-  color: #e53935;
-  background-color: rgba(229, 57, 53, 0.1);
-}
-
-/* 压力过高警告 */
-.pressure-warning {
-  display: flex;
-  align-items: center;
-  background-color: rgba(229, 57, 53, 0.1);
-  padding: 12rpx 16rpx;
-  border-radius: 8rpx;
-  margin-top: 20rpx;
-}
-
-.warning-icon {
-  font-size: 26rpx;
-  margin-right: 8rpx;
-}
-
-.warning-text {
-  font-size: 22rpx;
-  color: #e53935;
-}
-
-/* 信息图标和任务操作区样式 */
-.info-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32rpx;
-  height: 32rpx;
-  border-radius: 50%;
-  background-color: rgba(66, 133, 244, 0.1);
-  color: #4285F4;
-  font-size: 24rpx;
-  margin-left: 12rpx;
-  vertical-align: middle;
-}
-
-.task-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16rpx 12rpx;
-  border-bottom: 1rpx solid #f0f0f0;
-}
-
-.task-item:last-child {
-  border-bottom: none;
-}
-
-.task-title {
-  font-size: 26rpx;
-  color: #333;
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.task-item-actions {
-  display: flex;
-  align-items: center;
-}
-
-.task-desc-icon, .task-edit-icon {
-  width: 36rpx;
-  height: 36rpx;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-left: 8rpx;
-  font-size: 22rpx;
-  background-color: #f5f5f5;
-  color: #666;
-}
-
-.task-desc-icon {
-  background-color: rgba(66, 133, 244, 0.1);
-  color: #4285F4;
-}
-
-/* 任务状态样式 */
-.task-item.completed .task-title {
-  color: #999;
-  text-decoration: line-through;
 }
 
 /* 任务类型样式 */

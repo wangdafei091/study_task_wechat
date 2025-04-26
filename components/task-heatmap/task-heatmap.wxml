@@ -35,15 +35,16 @@
           <text class="date-text">{{selectedDateText}}</text>
           <text class="task-count-text" wx:if="{{dayTasks.length > 0}}">{{dayTasks.length}}个任务</text>
         </view>
-        <!-- 添加压力指数显示 -->
-        <view class="pressure-row" wx:if="{{dayTasks.length > 0}}">
-          <text class="pressure-text">压力指数: {{selectedDayPressure.total}}</text>
+        <!-- 优化压力指数显示 -->
+        <view class="pressure-indicator" wx:if="{{dayTasks.length > 0}}">
+          <view class="pressure-color-block pressure-level-{{selectedDayPressure.levelNum}}"></view>
           <text class="pressure-level-text {{selectedDayPressure.isHigh ? 'high-pressure' : ''}}">
             {{selectedDayPressure.levelText}}
           </text>
         </view>
       </view>
-      <button class="close-btn" bindtap="closeDayTasks">关闭</button>
+      <!-- 关闭按钮改为圆形X图标 -->
+      <view class="close-btn-circle" bindtap="closeDayTasks">×</view>
     </view>
     <view class="tasks-list">
       <block wx:if="{{dayTasks.length > 0}}">
@@ -55,14 +56,15 @@
           <!-- 任务基本信息 -->
           <view class="task-item-row">
             <text class="task-title">{{item.title}}</text>
-            <!-- 添加单任务压力指数 -->
-            <text class="task-pressure {{item.isHighPressure ? 'high-task-pressure' : ''}}">
-              {{item.pressureDisplay}}
-            </text>
           </view>
           
-          <!-- 任务操作区 -->
+          <!-- 任务操作区优化布局 -->
           <view class="task-item-actions">
+            <!-- 任务压力指示器 -->
+            <view class="task-pressure-indicator pressure-level-{{item.pressureLevel}}">
+              <text class="task-pressure-text">{{item.pressureText}}</text>
+            </view>
+            
             <!-- 任务描述信息图标 -->
             <view 
               class="task-desc-icon" 
@@ -132,10 +134,10 @@
         <view class="levels-section">
           <text class="levels-title">压力级别</text>
           <view class="level-items">
-            <view class="level-item level-1">1-10</view>
-            <view class="level-item level-2">11-20</view>
-            <view class="level-item level-3">21-30</view>
-            <view class="level-item level-4">30+</view>
+            <view class="level-item level-1">轻松</view>
+            <view class="level-item level-2">适中</view>
+            <view class="level-item level-3">繁忙</view>
+            <view class="level-item level-4">紧张</view>
           </view>
         </view>
       </view>
