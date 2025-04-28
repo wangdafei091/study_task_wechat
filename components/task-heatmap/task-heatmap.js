@@ -437,7 +437,18 @@ Component({
           // 格式化重复任务信息
           switch (task.repeat.type) {
             case 'daily':
-              enhancedTask.repeatInfo = `${this.formatDateRange(task.repeat.startDate, task.repeat.endDate)} 每天 ${task.startTime}`;
+              // 确保显示完整时间范围
+              const timeRange = task.endTime ? `${task.startTime}-${task.endTime}` : task.startTime;
+              
+              // 检查是否为单天任务
+              const isOneTimeDaily = task.repeat.startDate === task.repeat.endDate;
+              
+              if (isOneTimeDaily) {
+                // 单天任务不显示"每天"
+                enhancedTask.repeatInfo = `${this.formatDateRange(task.repeat.startDate, task.repeat.endDate)} ${timeRange}`;
+              } else {
+                enhancedTask.repeatInfo = `${this.formatDateRange(task.repeat.startDate, task.repeat.endDate)} 每天 ${timeRange}`;
+              }
               break;
             case 'weekly':
               const weekDay = new Date(task.date).getDay();
@@ -889,6 +900,11 @@ Component({
       // 格式化为"X月X日-X月X日"
       const start = new Date(startDate);
       const end = new Date(endDate);
+      
+      // 如果起止日期相同，只显示一个日期
+      if (startDate === endDate) {
+        return `${start.getMonth() + 1}月${start.getDate()}日`;
+      }
       
       // 如果同年同月，只显示一次月份
       if (start.getFullYear() === end.getFullYear() && 

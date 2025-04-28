@@ -399,7 +399,7 @@
 }
 
 .interest-dot {
-  background-color: #9C27B0; /* 兴趣：紫色 */
+  background-color: #F4B400; /* 兴趣：黄色 */
 }
 
 /* 任务标题 */
@@ -1053,7 +1053,7 @@
 }
 
 .habit-task {
-  border-left: 4rpx solid #0F9D58;
+  border-left: 4rpx solid #34A853;
 }
 
 .interest-task {
