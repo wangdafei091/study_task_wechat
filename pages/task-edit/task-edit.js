@@ -14,7 +14,7 @@ Page({
     newTask: {
       title: '',
       type: 'habit', // 默认类型为习惯
-      points: 5, // 默认积分
+      points: 1, // 默认积分修改为1
       description: '',
       // 新增时间周期和频率相关字段
       isAllDay: false,
@@ -285,7 +285,7 @@ Page({
     this.setData({
       'newTask.title': '',
       'newTask.type': 'habit',
-      'newTask.points': 5,
+      'newTask.points': 1, // 修改为1分
       'newTask.description': '',
       'newTask.isAllDay': false,
       'newTask.hasNoEndDate': false, // 重置无结束日期字段
