@@ -202,6 +202,14 @@ Page({
   },
 
   /**
+   * 处理热力图任务刷新事件
+   */
+  onHeatmapRefreshTasks: function(e) {
+    console.log('[TaskEdit] 收到热力图任务刷新请求');
+    this.loadAllTasks();
+  },
+
+  /**
    * 显示压力指数说明
    */
   showPressureInfo: function() {

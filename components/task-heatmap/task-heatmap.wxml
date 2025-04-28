@@ -48,22 +48,52 @@
         <view 
           wx:for="{{dayTasks}}" 
           wx:key="id" 
-          class="task-item {{item.status === 1 ? 'completed' : ''}} {{item.type}}-task"
+          class="task-item-wrap {{item.status === 1 || item.status === 'completed' ? 'completed' : ''}} {{item.type}}-task"
           id="task-{{item.id}}">
-          <!-- 任务基本信息 -->
-          <view class="task-item-row">
-            <text class="task-title">{{item.title}}</text>
-            <text class="task-description" wx:if="{{item.description}}">{{item.description}}</text>
-          </view>
-          
-          <!-- 任务操作区优化布局，移除描述图标 -->
-          <view class="task-item-actions">
-            <!-- 只保留任务编辑按钮 -->
-            <view 
-              class="task-edit-icon" 
-              bindtap="showTaskEdit" 
-              data-id="{{item.id}}"
-              data-index="{{index}}">✎</view>
+          <!-- 任务内容区 -->
+          <view class="task-item">
+            <!-- 第一行：标题和操作按钮 -->
+            <view class="task-item-header">
+              <view class="task-title-area">
+                <view class="task-type-dot {{item.type}}-dot"></view>
+                <text class="task-title">{{item.title}}</text>
+                <!-- 已完成状态标记 -->
+                <text wx:if="{{item.status === 1 || item.status === 'completed'}}" class="task-complete-mark">✓</text>
+                <!-- 逾期状态标记 -->
+                <text wx:if="{{item.status === 'overdue'}}" class="task-overdue-mark">[逾期]</text>
+                <!-- 循环任务标记 -->
+                <text wx:if="{{item.repeat && item.repeat.type !== 'none'}}" class="task-repeat-mark">↻</text>
+              </view>
+              
+              <!-- 操作按钮区 -->
+              <view class="task-item-actions">
+                <view class="action-btn edit-btn" bindtap="showTaskEdit" data-id="{{item.id}}" data-index="{{index}}">编辑</view>
+                <view class="action-btn delete-btn" bindtap="showTaskDelete" data-id="{{item.id}}" data-index="{{index}}">删除</view>
+              </view>
+            </view>
+            
+            <!-- 第二行：任务描述 -->
+            <view class="task-desc-row" wx:if="{{item.description}}">
+              <text class="task-description">{{item.description}}</text>
+            </view>
+            
+            <!-- 第三行：时间和积分信息 -->
+            <view class="task-info-row">
+              <!-- 时间信息 -->
+              <view class="task-time-info">
+                <!-- 重复任务时间信息 -->
+                <block wx:if="{{item.repeat && item.repeat.type !== 'none'}}">
+                  <text>{{item.repeatInfo}}</text>
+                </block>
+                <!-- 单次任务时间信息 -->
+                <block wx:else>
+                  <text>{{item.date}} {{item.startTime}}-{{item.endTime}}</text>
+                </block>
+              </view>
+              
+              <!-- 积分信息 -->
+              <view class="task-points">⭐ {{item.rewardPoints || '0'}}分</view>
+            </view>
           </view>
         </view>
         

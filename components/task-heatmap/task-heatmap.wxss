@@ -322,98 +322,236 @@
   background-color: #E53935; /* 紧张：红色 */
 }
 
-/* 任务描述样式 */
-.task-description {
-  font-size: 22rpx;
-  color: #888;
-  margin-top: 4rpx;
-  display: block;
-  white-space: normal;
-  word-break: break-all;
-  line-height: 1.3;
-}
-
-/* 修改任务项高度适应描述文本 */
-.task-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  border-bottom: 1rpx solid #f0f0f0;
-  padding: 16rpx;
-  background-color: #fff;
-  position: relative;
-}
-
-.task-item:last-child {
-  border-bottom: none;
-}
-
-/* 任务标题和描述容器 */
-.task-item-row {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  padding-right: 16rpx;
-}
-
-/* 任务标题样式优化 */
-.task-title {
-  font-size: 26rpx;
-  font-weight: 500;
-  color: #333;
-}
-
-/* 任务操作区 */
-.task-item-actions {
-  display: flex;
-  align-items: center;
-  margin-left: auto;
-}
-
-/* 任务描述图标和编辑图标 */
-.task-desc-icon {
-  display: none;
-}
-
-.task-edit-icon {
-  width: 36rpx;
-  height: 36rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background-color: rgba(0, 0, 0, 0.05);
-  border-radius: 50%;
-  margin-left: 8rpx;
-  font-size: 20rpx;
-  color: #666;
-}
-
-.task-edit-icon:active {
-  background-color: rgba(0, 0, 0, 0.1);
-}
-
-/* 圆形关闭按钮样式 */
+/* 关闭按钮样式 */
 .close-btn-circle {
-  width: 48rpx;
-  height: 48rpx;
+  width: 40rpx;
+  height: 40rpx;
   border-radius: 50%;
   background-color: rgba(0, 0, 0, 0.05);
-  color: #666;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 30rpx;
-  transition: all 0.2s ease;
+  font-size: 26rpx;
+  color: #666;
+  cursor: pointer;
 }
 
 .close-btn-circle:active {
   background-color: rgba(0, 0, 0, 0.1);
-  transform: scale(0.95);
 }
 
-/* 移除旧关闭按钮样式 */
-.close-btn {
-  display: none;
+/* 任务列表样式 */
+.tasks-list {
+  max-height: 400rpx;
+  overflow-y: auto;
+  padding: 10rpx;
+}
+
+/* 任务项容器 */
+.task-item-wrap {
+  display: flex;
+  margin-bottom: 16rpx;
+  padding: 20rpx 24rpx;
+  background-color: white;
+  border-radius: 12rpx;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.05);
+  border: 1rpx solid #f0f0f0;
+}
+
+/* 任务内容区域 */
+.task-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+/* 第一行：标题和操作区 */
+.task-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* 标题区域 */
+.task-title-area {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  max-width: 70%;
+}
+
+/* 任务类型圆点 */
+.task-type-dot {
+  width: 16rpx;
+  height: 16rpx;
+  border-radius: 50%;
+  margin-right: 10rpx;
+  flex-shrink: 0;
+}
+
+.study-dot {
+  background-color: #4285F4; /* 学习：蓝色 */
+}
+
+.habit-dot {
+  background-color: #34A853; /* 习惯：绿色 */
+}
+
+.interest-dot {
+  background-color: #9C27B0; /* 兴趣：紫色 */
+}
+
+/* 任务标题 */
+.task-title {
+  font-size: 32rpx;
+  font-weight: 500;
+  color: #333;
+  margin-right: 8rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 任务状态标记 */
+.task-complete-mark {
+  color: #34A853;
+  font-size: 24rpx;
+  margin-left: 6rpx;
+  font-weight: bold;
+  flex-shrink: 0;
+}
+
+.task-overdue-mark {
+  color: #E53935;
+  font-size: 24rpx;
+  margin-left: 6rpx;
+  flex-shrink: 0;
+}
+
+.task-repeat-mark {
+  color: #9C27B0;
+  font-size: 24rpx;
+  margin-left: 6rpx;
+  flex-shrink: 0;
+}
+
+/* 操作按钮区 */
+.task-item-actions {
+  display: flex;
+  align-items: center;
+  margin-left: 10rpx;
+}
+
+/* 操作按钮通用样式 */
+.task-item-actions .action-btn {
+  font-size: 22rpx;
+  padding: 4rpx 6rpx;
+  text-align: center;
+  position: relative;
+  background-color: transparent;
+  opacity: 0.7;
+  width: auto;
+  height: auto;
+  border-radius: 0;
+  box-shadow: none;
+  margin-left: 0;
+}
+
+/* 添加按钮间分隔点 */
+.task-item-actions .edit-btn::after {
+  content: "·";
+  position: absolute;
+  right: -8rpx;
+  color: #999;
+}
+
+/* 编辑按钮样式 */
+.task-item-actions .edit-btn {
+  color: #4285F4;
+  margin-right: 12rpx;
+  text-decoration: none;
+  border-bottom: none;
+}
+
+/* 删除按钮样式 */
+.task-item-actions .delete-btn {
+  color: #666;
+  text-decoration: none;
+  border-bottom: none;
+}
+
+/* 按钮hover效果 */
+.task-item-actions .action-btn:active {
+  opacity: 1;
+  transform: none;
+}
+
+/* 第二行：描述信息 */
+.task-desc-row {
+  margin: 8rpx 0;
+}
+
+/* 任务描述 */
+.task-description {
+  font-size: 28rpx;
+  color: #666;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 第三行：时间和积分信息 */
+.task-info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* 任务时间信息 */
+.task-time-info {
+  font-size: 28rpx;
+  color: #555;
+}
+
+/* 任务积分 */
+.task-points {
+  font-size: 28rpx;
+  color: #4285F4;
+  text-align: right;
+}
+
+/* 已完成任务样式 */
+.task-item-wrap.completed .task-title {
+  color: #666;
+}
+
+/* 空任务提示 */
+.empty-tasks {
+  padding: 40rpx 0;
+  text-align: center;
+  color: #999;
+  font-size: 28rpx;
+}
+
+/* 压力警告提示 */
+.pressure-warning {
+  margin-top: 16rpx;
+  padding: 10rpx 16rpx;
+  background-color: rgba(229, 57, 53, 0.05);
+  border-radius: 8rpx;
+  display: flex;
+  align-items: center;
+}
+
+.warning-icon {
+  margin-right: 8rpx;
+}
+
+.warning-text {
+  font-size: 24rpx;
+  color: #E53935;
 }
 
 /* 任务压力指示器相关样式 - 已被内联版本替代，移除 */
@@ -460,39 +598,6 @@
   color: #999;
   margin-left: 8rpx;
   flex-shrink: 0;
-}
-
-.task-points {
-  margin-left: auto;
-  font-size: 24rpx;
-  color: #4285F4;
-  font-weight: 500;
-  padding-left: 6rpx;
-}
-
-/* 完成任务勾标记样式 */
-.task-complete-mark {
-  font-size: 24rpx;
-  color: #34A853;
-  margin-right: 8rpx;
-  font-weight: bold;
-  flex-shrink: 0;
-}
-
-/* 任务完成状态样式 - 移除删除线，不降低透明度 */
-.task-item-wrap.completed {
-  /* 移除原有的透明度降低 */
-}
-
-.task-item-wrap.completed .task-title {
-  /* 移除删除线和颜色变灰 */
-  text-decoration: none;
-  color: #333;
-}
-
-/* 添加任务项的轻微点击效果 */
-.task-item-wrap:active {
-  background-color: rgba(240, 240, 240, 0.8);
 }
 
 /* 任务描述信息图标 */

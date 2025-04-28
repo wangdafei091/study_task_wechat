@@ -422,23 +422,67 @@ Component({
       // 获取当前日期的任务
       const dayTasks = this.properties.tasks.filter(task => task.date === date);
       
-      // 计算总压力值
+      // 计算总压力值并增强任务信息
       let totalPressure = 0;
       const tasks = dayTasks.map(task => {
         // 计算总压力
         const taskPressure = this.calculateTaskPressure(task);
         totalPressure += taskPressure.total;
         
-        // 返回任务对象
-        return task;
+        // 增强任务信息
+        const enhancedTask = { ...task };
+        
+        // 处理重复任务格式化
+        if (task.repeat && task.repeat.type !== 'none') {
+          // 格式化重复任务信息
+          switch (task.repeat.type) {
+            case 'daily':
+              enhancedTask.repeatInfo = `${this.formatDateRange(task.repeat.startDate, task.repeat.endDate)} 每天 ${task.startTime}`;
+              break;
+            case 'weekly':
+              const weekDay = new Date(task.date).getDay();
+              const weekDayNames = ['日', '一', '二', '三', '四', '五', '六'];
+              enhancedTask.repeatInfo = `每周${weekDayNames[weekDay]} ${task.startTime}-${task.endTime}`;
+              break;
+            case 'workdays':
+              enhancedTask.repeatInfo = `工作日 ${task.startTime}-${task.endTime}`;
+              break;
+            case 'custom':
+              enhancedTask.repeatInfo = `每周${this.formatRepeatDays(task.repeat.days)} ${task.startTime}-${task.endTime}`;
+              break;
+          }
+        } else {
+          // 格式化单次任务日期为"5月23日"形式
+          const taskDate = new Date(task.date);
+          const month = taskDate.getMonth() + 1;
+          const day = taskDate.getDate();
+          enhancedTask.date = `${month}月${day}日`;
+        }
+        
+        // 确保任务有积分信息
+        if (!enhancedTask.rewardPoints) {
+          enhancedTask.rewardPoints = task.points || 0;
+        }
+        
+        console.log(`[TaskHeatmap] 处理任务: ${task.title}, ${task.date}, 重复类型: ${task.repeat ? task.repeat.type : '无'}`);
+        
+        return enhancedTask;
       });
       
       // 计算当日压力级别
       const pressureLevel = this.calculatePressureLevel(totalPressure);
       
+      // 转换日期为友好显示格式，例如"5月23日 周一"
+      const selectedDate = new Date(date);
+      const day = selectedDate.getDate();
+      const month = selectedDate.getMonth() + 1;
+      const weekDays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+      const weekDay = weekDays[selectedDate.getDay()];
+      const dateText = `${month}月${day}日 ${weekDay}`;
+      
       this.setData({
         selectedDate: date,
-        selectedDateText: this.formatDateDisplay(date),
+        selectedDateText: dateText,
         dayTasks: tasks,
         showDayTasks: true,
         selectedDayPressure: {
@@ -716,6 +760,149 @@ Component({
     preventClose(e) {
       // 阻止事件冒泡
       return;
+    },
+    
+    // 任务删除处理函数
+    showTaskDelete(e) {
+      const { id, index } = e.currentTarget.dataset;
+      const task = this.data.dayTasks[index];
+      
+      console.log(`[TaskHeatmap] 请求删除任务: ${id}, 标题: ${task.title}`);
+      
+      // 确认删除
+      wx.showModal({
+        title: '删除任务',
+        content: '确定要删除此任务吗？',
+        confirmColor: '#E53935',
+        success: (res) => {
+          if (res.confirm) {
+            // 如果是重复任务，询问删除范围
+            if (task.repeat && task.repeat.type !== 'none') {
+              this.showDeleteRepeatOptions(task);
+            } else {
+              this.deleteTask(id);
+            }
+          }
+        }
+      });
+    },
+    
+    // 显示重复任务删除选项
+    showDeleteRepeatOptions(task) {
+      wx.showActionSheet({
+        itemList: ['仅删除此任务', '删除此任务及未来任务'],
+        success: (res) => {
+          console.log(`[TaskHeatmap] 删除重复任务选项: ${res.tapIndex}`);
+          
+          const taskManager = require('../../utils/taskManager.js');
+          
+          if (res.tapIndex === 0) {
+            // 仅删除此任务
+            this.deleteTask(task.id);
+          } else if (res.tapIndex === 1) {
+            // 删除此任务及未来任务
+            // 这里需要先获取所有任务，然后筛选出相关任务进行删除
+            taskManager.getAllTasks(allTasks => {
+              const currentDate = new Date(task.date);
+              // 找出所有从这个日期开始的同一重复系列的任务
+              const relatedTasks = allTasks.filter(t => 
+                t.parentTaskId === task.parentTaskId &&
+                new Date(t.date) >= currentDate
+              );
+              
+              console.log(`[TaskHeatmap] 删除重复任务系列，共 ${relatedTasks.length} 个任务`);
+              
+              // 逐个删除相关任务
+              let completedCount = 0;
+              relatedTasks.forEach(t => {
+                taskManager.deleteTask(t.id, () => {
+                  completedCount++;
+                  if (completedCount === relatedTasks.length) {
+                    this.refreshTaskList();
+                  }
+                });
+              });
+            });
+          }
+        }
+      });
+    },
+    
+    // 删除单个任务
+    deleteTask(taskId) {
+      const taskManager = require('../../utils/taskManager.js');
+      
+      taskManager.deleteTask(taskId, () => {
+        console.log(`[TaskHeatmap] 任务已删除: ${taskId}`);
+        wx.showToast({
+          title: '任务已删除',
+          icon: 'success'
+        });
+        
+        // 刷新任务列表
+        this.refreshTaskList();
+      });
+    },
+    
+    // 刷新任务列表
+    refreshTaskList() {
+      // 通知父组件刷新任务数据
+      this.triggerEvent('refreshTasks');
+      
+      // 关闭任务列表面板
+      this.closeDayTasks();
+      
+      // 重新计算热力图
+      setTimeout(() => {
+        this.calculateHeatMap();
+      }, 300);
+    },
+    
+    // 格式化重复任务的天数显示
+    formatRepeatDays(days) {
+      if (!days || !Array.isArray(days) || days.length === 0) {
+        return '';
+      }
+      
+      // 将数字转换为对应的星期
+      const dayNames = ['日', '一', '二', '三', '四', '五', '六'];
+      const formattedDays = days.map(day => dayNames[parseInt(day)]);
+      
+      if (formattedDays.length <= 3) {
+        return formattedDays.join('/');
+      } else {
+        return `${formattedDays.slice(0, 3).join('/')}等`;
+      }
+    },
+    
+    // 格式化重复任务的日期范围显示
+    formatDateRange(startDate, endDate) {
+      const dateUtils = require('../../utils/dateUtils.js');
+      
+      // 如果没有终止日期，显示无限期
+      if (!endDate) {
+        // 格式化为"自X月X日起"
+        const start = new Date(startDate);
+        return `自${start.getMonth() + 1}月${start.getDate()}日起`;
+      }
+      
+      // 格式化为"X月X日-X月X日"
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      
+      // 如果同年同月，只显示一次月份
+      if (start.getFullYear() === end.getFullYear() && 
+          start.getMonth() === end.getMonth()) {
+        return `${start.getMonth() + 1}月${start.getDate()}-${end.getDate()}日`;
+      }
+      
+      // 如果同年不同月
+      if (start.getFullYear() === end.getFullYear()) {
+        return `${start.getMonth() + 1}月${start.getDate()}日-${end.getMonth() + 1}月${end.getDate()}日`;
+      }
+      
+      // 不同年
+      return `${start.getFullYear()}/${start.getMonth() + 1}/${start.getDate()}-${end.getFullYear()}/${end.getMonth() + 1}/${end.getDate()}`;
     }
   }
 }); 
