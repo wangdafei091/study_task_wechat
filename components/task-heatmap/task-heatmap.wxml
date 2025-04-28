@@ -18,7 +18,7 @@
           data-day="{{item}}" 
           data-date="{{item.date}}"
           data-index="{{index}}"
-          bindtap="{{item.isCurrentMonth ? 'onDayTap' : ''}}"
+          bindtap="{{(item.isCurrentMonth || item.count > 0) ? 'onDayTap' : ''}}"
           id="day-{{index}}">
           <text class="day-number">{{item.day}}</text>
           <text wx:if="{{item.count > 0}}" class="task-count">{{item.count}}</text>
