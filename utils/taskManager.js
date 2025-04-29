@@ -513,28 +513,39 @@ const taskManager = {
       clearTimeout(this._savePending);
     }
     
+    console.log(`[TaskManager] 准备保存任务数据，共${tasks.length}条任务记录`);
+    
     this._savePending = setTimeout(() => {
       // 更新全局任务数据
       const app = getApp();
-      app.globalData.tasks = tasks;
+      app.globalData.tasks = [...tasks]; // 使用新引用更新全局数据
+      
+      console.log(`[TaskManager] 已更新全局任务数据`);
       
       // 存储到本地
       wx.setStorage({
         key: 'taskData',
         data: tasks,
         success: () => {
-          console.log('任务数据保存成功');
-          if (callback) callback();
+          console.log(`[TaskManager] 任务数据保存成功，数据已同步到存储`);
+          
+          // 先触发数据变更事件，再执行回调
+          this._onTaskDataChanged(tasks);
+          
+          if (callback) {
+            console.log(`[TaskManager] 执行保存后回调`);
+            callback();
+          }
         },
         fail: (error) => {
-          console.error('保存任务数据失败：', error);
+          console.error(`[TaskManager] 保存任务数据失败：`, error);
           if (callback) callback();
         },
         complete: () => {
           this._savePending = null;
         }
       });
-    }, 300); // 300ms防抖
+    }, 100); // 减少防抖延迟，确保数据更快保存
   },
   
   /**
@@ -542,11 +553,19 @@ const taskManager = {
    * @private
    */
   _onTaskDataChanged(tasks) {
-    // 通知全局事件总线
-    const app = getApp();
-    if (app.globalData.eventBus) {
-      app.globalData.eventBus.emit('taskDataChanged', tasks);
-    }
+    console.log(`[TaskManager] 触发任务数据变更事件，当前任务数量: ${tasks.length}`);
+    
+    // 使用setTimeout确保事件在下一个事件循环中触发，避免阻塞当前操作
+    setTimeout(() => {
+      // 通知全局事件总线
+      const app = getApp();
+      if (app.globalData.eventBus) {
+        console.log(`[TaskManager] 通过事件总线广播任务数据变更`);
+        app.globalData.eventBus.emit('taskDataChanged', [...tasks]); // 使用新引用传递数据
+      } else {
+        console.warn(`[TaskManager] 未找到全局事件总线，无法广播变更事件`);
+      }
+    }, 0);
   }
 };
 

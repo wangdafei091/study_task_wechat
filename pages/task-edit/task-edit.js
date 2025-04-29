@@ -193,7 +193,39 @@ Page({
    */
   onHeatmapRefreshTasks: function(e) {
     console.log('[TaskEdit] 收到热力图任务刷新请求');
-    this.loadAllTasks();
+    
+    // 获取任务管理器
+    const taskManager = require('../../utils/taskManager.js');
+    
+    // 直接从存储中获取最新数据，而非使用缓存
+    taskManager.getAllTasks(latestTasks => {
+      console.log('[TaskEdit] 已获取最新任务数据，任务数量:', latestTasks.length);
+      
+      // 确保使用新引用更新数据，触发观察器
+      this.setData({ 
+        allTasks: [...latestTasks]
+      }, () => {
+        // 数据设置完成后，手动触发热力图重新计算
+        console.log('[TaskEdit] 已更新热力图任务数据，正在刷新热力图');
+        
+        // 获取热力图组件实例
+        const heatmap = this.getHeatmapComponent();
+        
+        // 确保热力图组件存在，并调用其计算方法
+        if (heatmap) {
+          console.log('[TaskEdit] 正在触发热力图重新计算');
+          heatmap.calculateHeatMap();
+          
+          // 添加一个延迟检查，确保热力图已完全重新计算
+          setTimeout(() => {
+            console.log('[TaskEdit] 执行额外的热力图刷新确认');
+            heatmap.calculateHeatMap();
+          }, 300);
+        } else {
+          console.error('[TaskEdit] 找不到热力图组件实例');
+        }
+      });
+    });
   },
 
   /**
@@ -1258,5 +1290,33 @@ Page({
       previewText: previewText,
       conflictType: conflictType
     };
+  },
+
+  /**
+   * 生命周期函数--监听页面隐藏
+   */
+  onHide: function() {
+    console.log('[task-edit] 页面隐藏');
+    
+    // 确保关闭任何可能存在的加载提示
+    try {
+      wx.hideLoading();
+    } catch (error) {
+      console.error('[task-edit] 页面隐藏时关闭加载提示出错:', error);
+    }
+  },
+
+  /**
+   * 生命周期函数--监听页面卸载
+   */
+  onUnload: function() {
+    console.log('[task-edit] 页面卸载');
+    
+    // 确保关闭任何可能存在的加载提示
+    try {
+      wx.hideLoading();
+    } catch (error) {
+      console.error('[task-edit] 页面卸载时关闭加载提示出错:', error);
+    }
   },
 })
