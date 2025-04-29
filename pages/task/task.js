@@ -209,19 +209,17 @@ Page({
    * 删除任务
    */
   deleteTask: function () {
+    const taskId = this.data.task.id;
     wx.showModal({
       title: '确认删除',
       content: '确定要删除这个任务吗？',
       success: (res) => {
         if (res.confirm) {
-          const messageManager = require('../../utils/messageManager.js');
           const app = getApp();
           const allTasks = app.globalData.tasks || [];
+          const messageManager = require('../../utils/messageManager.js');
           
-          // 获取任务ID
-          const taskId = this.data.task.id;
-          
-          // 从数组中删除任务
+          // 筛选出不是当前任务的任务
           const updatedTasks = allTasks.filter(task => task.id !== taskId);
           
           // 更新全局数据
@@ -232,25 +230,34 @@ Page({
             key: 'taskData',
             data: updatedTasks,
             success: () => {
-              // 删除与任务相关的消息
-              messageManager.removeTaskMessages(taskId);
-              
-              wx.showToast({
-                title: '删除成功',
-                icon: 'success',
-                duration: 2000,
+              // 删除与当前任务相关的消息
+              console.log(`[task] 删除任务相关消息: ${taskId}`);
+              messageManager.removeTaskMessages(taskId, {
                 success: () => {
-                  setTimeout(() => {
-                    wx.navigateBack();
-                  }, 2000)
+                  wx.showToast({
+                    title: '删除成功',
+                    icon: 'success'
+                  });
+                  
+                  // 返回上一页
+                  wx.navigateBack();
+                },
+                fail: (error) => {
+                  console.error(`[task] 删除任务消息失败: ${error}`);
+                  // 即使消息删除失败，仍然删除任务并返回
+                  wx.showToast({
+                    title: '删除成功',
+                    icon: 'success'
+                  });
+                  wx.navigateBack();
                 }
               });
             },
-            fail: () => {
+            fail: (err) => {
+              console.error(`[task] 保存任务数据失败: ${err}`);
               wx.showToast({
                 title: '删除失败',
-                icon: 'none',
-                duration: 2000
+                icon: 'none'
               });
             }
           });

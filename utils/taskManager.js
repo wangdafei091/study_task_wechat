@@ -313,6 +313,14 @@ const taskManager = {
    * @param {Function} callback 回调函数，参数为布尔值表示是否成功
    */
   deleteTask(taskId, callback) {
+    if (!taskId) {
+      console.error('[TaskManager] 删除任务失败: 任务ID为空');
+      if (callback) callback(false);
+      return;
+    }
+    
+    console.log(`[TaskManager] 开始删除任务: ${taskId}`);
+    
     this.getAllTasks(allTasks => {
       // 过滤掉要删除的任务
       const updatedTasks = allTasks.filter(task => task.id !== taskId);
@@ -326,12 +334,23 @@ const taskManager = {
           
           // 删除与任务相关的消息
           const messageManager = require('./messageManager.js');
-          messageManager.removeTaskMessages(taskId);
+          console.log(`[TaskManager] 删除任务相关消息: ${taskId}`);
           
-          if (callback) callback(true);
+          messageManager.removeTaskMessages(taskId, {
+            success: (count) => {
+              console.log(`[TaskManager] 成功删除任务相关消息: ${count}条`);
+              if (callback) callback(true);
+            },
+            fail: (error) => {
+              console.error(`[TaskManager] 删除任务相关消息失败: ${error}`);
+              // 即使消息删除失败，任务删除成功，仍然返回成功
+              if (callback) callback(true);
+            }
+          });
         });
-      } else if (callback) {
-        callback(false);
+      } else {
+        console.error('[TaskManager] 未找到要删除的任务:', taskId);
+        if (callback) callback(false);
       }
     });
   },

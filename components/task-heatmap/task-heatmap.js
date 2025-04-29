@@ -456,7 +456,8 @@ Component({
               enhancedTask.repeatInfo = `每周${weekDayNames[weekDay]} ${task.startTime}-${task.endTime}`;
               break;
             case 'workdays':
-              enhancedTask.repeatInfo = `工作日 ${task.startTime}-${task.endTime}`;
+              console.log(`[TaskHeatmap] 处理工作日任务: ${task.title}, 起始日期: ${task.repeat.startDate}, 结束日期: ${task.repeat.endDate}`);
+              enhancedTask.repeatInfo = `${this.formatDateRange(task.repeat.startDate, task.repeat.endDate)} 工作日 ${task.startTime}-${task.endTime}`;
               break;
             case 'custom':
               enhancedTask.repeatInfo = `每周${this.formatRepeatDays(task.repeat.days)} ${task.startTime}-${task.endTime}`;
@@ -919,6 +920,79 @@ Component({
       
       // 不同年
       return `${start.getFullYear()}/${start.getMonth() + 1}/${start.getDate()}-${end.getFullYear()}/${end.getMonth() + 1}/${end.getDate()}`;
-    }
+    },
+    
+    /**
+     * 显示任务操作菜单
+     */
+    showTaskActions(e) {
+      const taskId = e.currentTarget.dataset.id;
+      const task = this.data.tasks.find(t => t.id === taskId);
+      
+      console.log(`[task-heatmap] 显示任务操作菜单: ${taskId}`);
+      
+      wx.showActionSheet({
+        itemList: ['编辑', '删除'],
+        success: (res) => {
+          if (res.tapIndex === 0) {
+            // 编辑任务
+            this.handleEditTask(taskId);
+          } else if (res.tapIndex === 1) {
+            // 删除任务
+            this.handleDeleteTask(taskId);
+          }
+        }
+      });
+    },
+    
+    /**
+     * 处理编辑任务
+     */
+    handleEditTask(taskId) {
+      console.log(`[task-heatmap] 编辑任务: ${taskId}`);
+      
+      // 触发编辑任务事件
+      this.triggerEvent('editTask', { taskId });
+      
+      // 跳转到任务编辑页面
+      wx.navigateTo({
+        url: `/pages/task-edit/task-edit?id=${taskId}`
+      });
+    },
+    
+    /**
+     * 处理删除任务
+     */
+    handleDeleteTask(taskId) {
+      console.log(`[task-heatmap] 准备删除任务: ${taskId}`);
+      
+      wx.showModal({
+        title: '确认删除',
+        content: '确定要删除此任务吗？',
+        confirmColor: '#ff4d4f',
+        success: (res) => {
+          if (res.confirm) {
+            console.log(`[task-heatmap] 确认删除任务: ${taskId}`);
+            const taskManager = require('../../utils/taskManager.js');
+            
+            taskManager.deleteTask(taskId, (success) => {
+              if (success) {
+                // 更新任务列表
+                this.triggerEvent('refreshTasks');
+                wx.showToast({
+                  title: '删除成功',
+                  icon: 'success'
+                });
+              } else {
+                wx.showToast({
+                  title: '删除失败',
+                  icon: 'error'
+                });
+              }
+            });
+          }
+        }
+      });
+    },
   }
 }); 

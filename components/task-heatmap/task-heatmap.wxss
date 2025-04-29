@@ -356,6 +356,13 @@
   border-radius: 12rpx;
   box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.05);
   border: 1rpx solid #f0f0f0;
+  transition: all 0.2s ease;
+}
+
+/* 任务项hover效果 */
+.task-item-wrap:active {
+  transform: translateY(2rpx);
+  box-shadow: 0 1rpx 4rpx rgba(0, 0, 0, 0.03);
 }
 
 /* 任务内容区域 */
@@ -363,7 +370,7 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 8rpx;
+  gap: 10rpx;
 }
 
 /* 第一行：标题和操作区 */
@@ -371,6 +378,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  margin-bottom: 2rpx;
 }
 
 /* 标题区域 */
@@ -378,7 +386,8 @@
   display: flex;
   align-items: center;
   flex-wrap: nowrap;
-  max-width: 70%;
+  max-width: 75%;
+  overflow: hidden;
 }
 
 /* 任务类型圆点 */
@@ -411,6 +420,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  max-width: calc(100% - 40rpx);
 }
 
 /* 任务状态标记 */
@@ -502,24 +512,74 @@
   white-space: nowrap;
 }
 
-/* 第三行：时间和积分信息 */
+/* 第三行：时间信息 */
 .task-info-row {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
+  margin-top: 8rpx;
+  padding-top: 8rpx;
+  border-top: 1px solid rgba(0,0,0,0.05);
 }
 
 /* 任务时间信息 */
 .task-time-info {
-  font-size: 28rpx;
-  color: #555;
+  width: 100%;
+  font-size: 24rpx;
+  color: #888;
+  padding-right: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-/* 任务积分 */
-.task-points {
-  font-size: 28rpx;
-  color: #4285F4;
-  text-align: right;
+/* 时间信息前的图标 */
+.task-time-info::before {
+  content: '🕒 ';
+  opacity: 0.7;
+}
+
+/* 右侧区域：积分和更多操作 */
+.task-header-right {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  margin-left: 10rpx;
+}
+
+/* 积分信息（迷你版） */
+.task-points-mini {
+  font-size: 22rpx;
+  padding: 2rpx 8rpx;
+  border-radius: 10rpx;
+  background-color: rgba(255, 152, 0, 0.1);
+  color: #FF9800;
+  margin-left: 0;
+  font-weight: normal;
+  white-space: nowrap;
+}
+
+/* 积分迷你版图标 */
+.task-points-mini::before {
+  content: '⭐';
+  font-size: 20rpx;
+  margin-right: 2rpx;
+}
+
+/* 更多操作按钮 */
+.more-actions {
+  width: 40rpx;
+  height: 32rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #999;
+  font-size: 24rpx;
+  border-radius: 4rpx;
+}
+
+.more-actions:active {
+  background-color: rgba(0, 0, 0, 0.05);
 }
 
 /* 已完成任务样式 */

@@ -65,10 +65,10 @@
                 <text wx:if="{{item.repeat && item.repeat.type !== 'none'}}" class="task-repeat-mark">↻</text>
               </view>
               
-              <!-- 操作按钮区 -->
-              <view class="task-item-actions">
-                <view class="action-btn edit-btn" bindtap="showTaskEdit" data-id="{{item.id}}" data-index="{{index}}">编辑</view>
-                <view class="action-btn delete-btn" bindtap="showTaskDelete" data-id="{{item.id}}" data-index="{{index}}">删除</view>
+              <!-- 右侧区域：积分和操作 -->
+              <view class="task-header-right">
+                <view class="task-points-mini">{{item.rewardPoints || '0'}}分</view>
+                <view class="more-actions" bindtap="showTaskActions" data-id="{{item.id}}" data-index="{{index}}">···</view>
               </view>
             </view>
             
@@ -90,9 +90,6 @@
                   <text>{{item.date}} {{item.startTime}}-{{item.endTime}}</text>
                 </block>
               </view>
-              
-              <!-- 积分信息 -->
-              <view class="task-points">⭐ {{item.rewardPoints || '0'}}分</view>
             </view>
           </view>
         </view>

@@ -216,22 +216,56 @@ Page({
             key: 'taskData',
             data: updatedTasks,
             success: () => {
+              console.log(`[history] 成功批量删除任务: ${selectedTaskIds.length}个`);
+              
               // 删除与任务相关的消息
-              selectedTaskIds.forEach(taskId => {
-                messageManager.removeTaskMessages(taskId);
-              });
+              let completedMessageDeletions = 0;
               
+              const deleteNextTaskMessage = (index) => {
+                if (index >= selectedTaskIds.length) {
+                  // 所有消息删除完成
+                  wx.showToast({
+                    title: '删除成功',
+                    icon: 'success'
+                  });
+                  
+                  // 重新加载任务数据
+                  this.loadHistoryTasks();
+                  
+                  // 退出多选模式
+                  this.setData({
+                    isMultiSelect: false
+                  });
+                  return;
+                }
+                
+                const taskId = selectedTaskIds[index];
+                console.log(`[history] 删除任务相关消息(${index+1}/${selectedTaskIds.length}): ${taskId}`);
+                
+                messageManager.removeTaskMessages(taskId, {
+                  success: (count) => {
+                    console.log(`[history] 成功删除任务消息: ${count}条`);
+                    completedMessageDeletions++;
+                    // 继续删除下一个
+                    deleteNextTaskMessage(index + 1);
+                  },
+                  fail: (error) => {
+                    console.error(`[history] 删除任务消息失败: ${error}`);
+                    completedMessageDeletions++;
+                    // 即使失败也继续
+                    deleteNextTaskMessage(index + 1);
+                  }
+                });
+              };
+              
+              // 开始删除第一个任务的消息
+              deleteNextTaskMessage(0);
+            },
+            fail: (error) => {
+              console.error(`[history] 保存任务数据失败: ${error}`);
               wx.showToast({
-                title: '删除成功',
-                icon: 'success'
-              });
-              
-              // 重新加载任务数据
-              this.loadHistoryTasks();
-              
-              // 退出多选模式
-              this.setData({
-                isMultiSelect: false
+                title: '删除失败',
+                icon: 'none'
               });
             }
           });
