@@ -52,7 +52,11 @@ Component({
     showScopeInfoBubble: false,             // 是否显示范围信息气泡
     scopeInfoStyle: '',                     // 范围信息气泡样式
     scopeInfoTimer: null,                   // 范围信息气泡定时器
-    showPressureInfo: false                 // 是否显示压力说明弹窗
+    showPressureInfo: false,                 // 是否显示压力说明弹窗
+    activeTaskId: null,                     // 当前激活的任务ID
+    activeTaskIndex: -1,                    // 当前激活的任务在dayTasks中的索引
+    showActionMenu: false,                   // 是否显示操作菜单
+    actionMenuStyle: ''                     // 操作菜单样式
   },
   
   lifetimes: {
@@ -927,29 +931,72 @@ Component({
      */
     showTaskActions(e) {
       const taskId = e.currentTarget.dataset.id;
-      const task = this.data.tasks.find(t => t.id === taskId);
+      const taskIndex = e.currentTarget.dataset.index;
       
       console.log(`[task-heatmap] 显示任务操作菜单: ${taskId}`);
       
-      wx.showActionSheet({
-        itemList: ['编辑', '删除'],
-        success: (res) => {
-          if (res.tapIndex === 0) {
-            // 编辑任务
-            this.handleEditTask(taskId);
-          } else if (res.tapIndex === 1) {
-            // 删除任务
-            this.handleDeleteTask(taskId);
+      // 获取点击元素位置
+      const query = this.createSelectorQuery();
+      query.select(`#task-${taskId} .more-actions`).boundingClientRect();
+      query.selectViewport().scrollOffset();
+      query.exec((res) => {
+        if (res && res[0]) {
+          const buttonRect = res[0];
+          const systemInfo = wx.getSystemInfoSync();
+          
+          // 计算菜单位置，使其位于三点按钮右下方
+          const style = `top:${buttonRect.top + buttonRect.height + 10}px; right:${systemInfo.windowWidth - buttonRect.right + 20}px;`;
+          
+          // 更新状态
+          this.setData({
+            activeTaskId: taskId,
+            activeTaskIndex: taskIndex,
+            showActionMenu: true,
+            actionMenuStyle: style
+          });
+          
+          console.log(`[task-heatmap] 显示卡片式操作菜单，位置: ${style}`);
+          
+          // 添加轻微振动反馈
+          if (wx.vibrateShort) {
+            wx.vibrateShort({ type: 'light' });
           }
         }
       });
     },
     
     /**
+     * 隐藏操作菜单
+     */
+    hideActionMenu() {
+      console.log(`[task-heatmap] 隐藏操作菜单`);
+      this.setData({
+        showActionMenu: false
+      });
+    },
+    
+    /**
+     * 阻止冒泡
+     */
+    preventBubble(e) {
+      // 阻止冒泡，使点击菜单项时不会触发外层容器的点击事件
+    },
+    
+    /**
+     * 阻止触摸滑动
+     */
+    preventTouchMove(e) {
+      // 阻止背景滑动
+    },
+
+    /**
      * 处理编辑任务
      */
     handleEditTask(taskId) {
       console.log(`[task-heatmap] 编辑任务: ${taskId}`);
+      
+      // 隐藏菜单
+      this.hideActionMenu();
       
       // 触发编辑任务事件
       this.triggerEvent('editTask', { taskId });
@@ -965,6 +1012,9 @@ Component({
      */
     handleDeleteTask(taskId) {
       console.log(`[task-heatmap] 准备删除任务: ${taskId}`);
+      
+      // 隐藏菜单
+      this.hideActionMenu();
       
       wx.showModal({
         title: '确认删除',
@@ -993,6 +1043,6 @@ Component({
           }
         }
       });
-    },
+    }
   }
 }); 

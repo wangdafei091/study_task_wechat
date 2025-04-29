@@ -150,4 +150,18 @@
       </view>
     </view>
   </view>
+  
+  <!-- 卡片式操作菜单 -->
+  <view class="action-menu-container" wx:if="{{showActionMenu}}" catchtouchmove="preventTouchMove" catchtap="hideActionMenu">
+    <view class="action-menu" style="{{actionMenuStyle}}" catchtap="preventBubble">
+      <view class="action-menu-item edit" catchtap="handleEditTask" data-id="{{activeTaskId}}">
+        <view class="action-icon">✏️</view>
+        <view class="action-text">编辑</view>
+      </view>
+      <view class="action-menu-item delete" catchtap="handleDeleteTask" data-id="{{activeTaskId}}">
+        <view class="action-icon">🗑️</view>
+        <view class="action-text">删除</view>
+      </view>
+    </view>
+  </view>
 </view> 
