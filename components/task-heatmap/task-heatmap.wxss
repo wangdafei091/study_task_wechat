@@ -1309,7 +1309,8 @@
   left: 5rpx;
 }
 
-.delete-confirm .option text {
+/* 将 text 元素选择器改为类选择器 */
+.delete-confirm .option .option-text {
   font-size: 24rpx;
   color: #333;
   white-space: nowrap;

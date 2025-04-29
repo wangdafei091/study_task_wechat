@@ -416,7 +416,8 @@ const taskManager = {
       const emptyStats = {
         taskProgress: {
           habit: 0,
-          study: 0
+          study: 0,
+          interest: 0
         },
         rewardProgress: {
           current: 0,
@@ -429,7 +430,8 @@ const taskManager = {
           streak: 0,
           typeCounts: {
             habit: 0,
-            study: 0
+            study: 0,
+            interest: 0
           }
         }
       };
@@ -440,8 +442,8 @@ const taskManager = {
     
     // 按类型统计任务
     const typeCounts = {
-      total: { habit: 0, study: 0 },
-      completed: { habit: 0, study: 0 }
+      total: { habit: 0, study: 0, interest: 0 },
+      completed: { habit: 0, study: 0, interest: 0 }
     };
     
     tasks.forEach(task => {
@@ -461,8 +463,16 @@ const taskManager = {
         : 0,
       study: typeCounts.total.study > 0 
         ? Math.round(typeCounts.completed.study / typeCounts.total.study * 100) 
+        : 0,
+      interest: typeCounts.total.interest > 0 
+        ? Math.round(typeCounts.completed.interest / typeCounts.total.interest * 100) 
         : 0
     };
+    
+    console.log('[TaskManager] 计算任务进度:', {
+      typeCounts: typeCounts,
+      progress: progress
+    });
     
     // 计算总体统计数据
     const totalTasks = tasks.length;
@@ -483,7 +493,8 @@ const taskManager = {
         streak: 0, // 需要另外计算连续完成天数
         typeCounts: {
           habit: typeCounts.total.habit,
-          study: typeCounts.total.study
+          study: typeCounts.total.study,
+          interest: typeCounts.total.interest
         }
       }
     };

@@ -98,11 +98,11 @@
               <view class="delete-options">
                 <view class="option {{deleteScope === 'single' ? 'selected' : ''}}" bindtap="selectDeleteScope" data-scope="single">
                   <view class="radio-circle {{deleteScope === 'single' ? 'selected' : ''}}"></view>
-                  <text>删除当天</text>
+                  <text class="option-text">删除当天</text>
                 </view>
                 <view class="option {{deleteScope === 'series' ? 'selected' : ''}}" bindtap="selectDeleteScope" data-scope="series">
                   <view class="radio-circle {{deleteScope === 'series' ? 'selected' : ''}}"></view>
-                  <text>删除循环</text>
+                  <text class="option-text">删除循环</text>
                 </view>
               </view>
               <view class="delete-actions">

@@ -16,27 +16,21 @@ Component({
       type: Number,
       value: new Date().getMonth(),
       observer: function(newVal) {
-        if (this.data.currentMonth !== newVal) {
-          this.setData({ currentMonth: newVal });
-          this.generateCalendar();
-        }
+        // 不需要再进行数据比较，直接生成日历
+        this.generateCalendar();
       }
     },
     currentYear: {
       type: Number,
       value: new Date().getFullYear(),
       observer: function(newVal) {
-        if (this.data.currentYear !== newVal) {
-          this.setData({ currentYear: newVal });
-          this.generateCalendar();
-        }
+        // 不需要再进行数据比较，直接生成日历
+        this.generateCalendar();
       }
     }
   },
   
   data: {
-    currentYear: new Date().getFullYear(),  // 当前选择的年份
-    currentMonth: new Date().getMonth(),    // 当前选择的月份 (0-11)
     days: [],                               // 日历天数数组
     weekDays: ['日', '一', '二', '三', '四', '五', '六'], // 星期标题
     selectedDate: '',                       // 当前选中的日期
@@ -72,11 +66,6 @@ Component({
       console.log('[TaskHeatmap] 已添加任务描述信息气泡功能');
       console.log('[TaskHeatmap] 已添加任务编辑功能');
       console.log('[TaskHeatmap] 已优化压力级别显示为单行布局，减少垂直空间占用');
-      const now = new Date();
-      this.setData({
-        currentYear: this.properties.currentYear || now.getFullYear(),
-        currentMonth: this.properties.currentMonth || now.getMonth()
-      });
       this.generateCalendar();
       
       // 初始化完成后，通知父组件当前月份信息
@@ -99,7 +88,8 @@ Component({
     // 生成日历数据
     generateCalendar() {
       console.log('[TaskHeatmap] 生成日历数据');
-      const { currentYear, currentMonth } = this.data;
+      const currentYear = this.properties.currentYear;
+      const currentMonth = this.properties.currentMonth;
       const days = [];
       
       // 获取当月第一天是星期几
@@ -191,9 +181,11 @@ Component({
     
     // 触发月份变化事件
     triggerMonthChange() {
-      const { currentYear, currentMonth, monthTitle } = this.data;
+      const currentYear = this.properties.currentYear;
+      const currentMonth = this.properties.currentMonth;
       const monthNames = ['一月', '二月', '三月', '四月', '五月', '六月', 
                         '七月', '八月', '九月', '十月', '十一月', '十二月'];
+      const monthTitle = `${monthNames[currentMonth]} ${currentYear}`;
       
       this.triggerEvent('monthChange', {
         year: currentYear,
@@ -377,39 +369,47 @@ Component({
       this.setData({ days: updatedDays });
     },
     
-    // 切换到上个月
+    // 上个月
     prevMonth() {
-      let { currentYear, currentMonth } = this.data;
-      currentMonth--;
-      if (currentMonth < 0) {
-        currentMonth = 11;
-        currentYear--;
+      console.log('[TaskHeatmap] 切换到上个月');
+      let newMonth = this.properties.currentMonth - 1;
+      let newYear = this.properties.currentYear;
+      
+      if (newMonth < 0) {
+        newMonth = 11;
+        newYear--;
       }
+      
       this.setData({
-        currentYear,
-        currentMonth,
+        currentYear: newYear,
+        currentMonth: newMonth,
         // 切换月份时清除选中状态
         selectedDate: '',
         showDayTasks: false
       });
+      
       this.generateCalendar();
     },
     
-    // 切换到下个月
+    // 下个月
     nextMonth() {
-      let { currentYear, currentMonth } = this.data;
-      currentMonth++;
-      if (currentMonth > 11) {
-        currentMonth = 0;
-        currentYear++;
+      console.log('[TaskHeatmap] 切换到下个月');
+      let newMonth = this.properties.currentMonth + 1;
+      let newYear = this.properties.currentYear;
+      
+      if (newMonth > 11) {
+        newMonth = 0;
+        newYear++;
       }
+      
       this.setData({
-        currentYear,
-        currentMonth,
+        currentYear: newYear,
+        currentMonth: newMonth,
         // 切换月份时清除选中状态
         selectedDate: '',
         showDayTasks: false
       });
+      
       this.generateCalendar();
     },
     
@@ -755,8 +755,8 @@ Component({
     // 获取当前月份
     getCurrentMonth() {
       return {
-        year: this.data.currentYear,
-        month: this.data.currentMonth
+        year: this.properties.currentYear,
+        month: this.properties.currentMonth
       };
     },
     
