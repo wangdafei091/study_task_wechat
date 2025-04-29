@@ -908,12 +908,30 @@ Component({
     deleteTaskSeries(task) {
       const taskManager = require('../../utils/taskManager.js');
       
+      // 添加日志，记录当前需要删除的任务信息
+      console.log(`[task-heatmap] 准备删除任务系列，当前任务:`, {
+        id: task.id,
+        title: task.title,
+        parentTaskId: task.parentTaskId,
+        repeatType: task.repeat ? task.repeat.type : 'none'
+      });
+      
       taskManager.getAllTasks(allTasks => {
-        // 查找相同系列的所有任务
+        // 先尝试找出父任务ID
+        let parentId = task.parentTaskId;
+        
+        // 如果当前任务没有parentTaskId，可能它自己就是父任务
+        if (!parentId) {
+          console.log(`[task-heatmap] 当前任务没有parentTaskId，可能是原始任务`);
+          parentId = task.id;
+        }
+        
+        console.log(`[task-heatmap] 使用父任务ID查找系列任务: ${parentId}`);
+        
+        // 使用改进的筛选逻辑
         const seriesTasks = allTasks.filter(t => 
-          t.parentTaskId === task.parentTaskId || 
-          (t.id === task.parentTaskId) || 
-          (task.parentTaskId === t.parentTaskId)
+          t.parentTaskId === parentId || // 找出所有子任务
+          t.id === parentId              // 包含父任务自身
         );
         
         console.log(`[task-heatmap] 删除任务系列，共找到: ${seriesTasks.length} 个任务`);
@@ -922,6 +940,7 @@ Component({
           // 批量删除任务
           let deletedCount = 0;
           seriesTasks.forEach(t => {
+            console.log(`[task-heatmap] 删除系列中的任务: ${t.id}, 标题: ${t.title}`);
             taskManager.deleteTask(t.id, (success) => {
               deletedCount += success ? 1 : 0;
               
@@ -940,7 +959,45 @@ Component({
             });
           });
         } else {
-          // 找不到系列任务，只删除当前任务
+          // 找不到系列任务，尝试另一种查找方式
+          console.log(`[task-heatmap] 未找到系列任务，尝试另一种查找方式`);
+          
+          // 尝试通过重复任务的日期模式查找
+          if (task.repeat && task.repeat.type !== 'none') {
+            const sameRepeatTasks = allTasks.filter(t => 
+              t.repeat && 
+              t.repeat.type === task.repeat.type && 
+              t.title === task.title &&
+              t.createTime === task.createTime
+            );
+            
+            console.log(`[task-heatmap] 通过重复模式查找，共找到: ${sameRepeatTasks.length} 个任务`);
+            
+            if (sameRepeatTasks.length > 0) {
+              // 批量删除任务
+              let deletedCount = 0;
+              sameRepeatTasks.forEach(t => {
+                taskManager.deleteTask(t.id, (success) => {
+                  deletedCount += success ? 1 : 0;
+                  
+                  if (deletedCount === sameRepeatTasks.length) {
+                    console.log(`[task-heatmap] 系列任务删除完成, 成功: ${deletedCount}`);
+                    wx.showToast({
+                      title: '已删除系列任务',
+                      icon: 'success',
+                      duration: 1500
+                    });
+                    
+                    this.triggerEvent('refreshTasks');
+                  }
+                });
+              });
+              return;
+            }
+          }
+          
+          // 如果所有方法都找不到相关任务，只删除当前任务
+          console.log(`[task-heatmap] 未找到任何相关系列任务，只删除当前任务`);
           this.deleteTask(task.id);
         }
       });

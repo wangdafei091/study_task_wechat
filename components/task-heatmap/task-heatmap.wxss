@@ -519,9 +519,9 @@
   display: flex;
   justify-content: flex-start;
   align-items: center;
-  margin-top: 16rpx;  /* 统一使用16rpx的上边距 */
-  padding: 16rpx 0 0; /* 将上内边距改为16rpx，与描述间距一致 */
-  border-top: 1px solid rgba(0,0,0,0.03); /* 更轻的分隔线颜色 */
+  margin-top: 16rpx;  /* 保持上边距一致 */
+  padding: 12rpx 0; /* 统一为上下12rpx的内边距 */
+  border-top: 1px solid rgba(0,0,0,0.03); /* 保持边框样式一致 */
 }
 
 /* 任务时间信息 */
@@ -533,8 +533,8 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  line-height: 1.4; /* 统一使用1.4的行高 */
-  padding: 16rpx 0; /* 统一使用16rpx的上下内边距 */
+  line-height: 1.4; /* 保持行高一致 */
+  padding: 0; /* 移除内部额外的内边距 */
   padding-left: 0; /* 保持左对齐 */
 }
 
@@ -1214,7 +1214,7 @@
   opacity: 0;
   overflow: hidden;
   background-color: #fff;
-  border-top: 1px solid rgba(0,0,0,0.03); /* 更轻的分隔线颜色 */
+  border-top: 1px solid rgba(0,0,0,0.03); /* 保持分隔线样式一致 */
   transition: height 0.25s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   display: flex;
   justify-content: space-between;
@@ -1226,7 +1226,7 @@
 .delete-confirm.visible {
   height: auto;
   opacity: 1;
-  padding: 16rpx 0; /* 统一使用16rpx的上下内边距 */
+  padding: 12rpx 0; /* 统一为上下12rpx的内边距 */
 }
 
 /* 删除选项区域 */
@@ -1236,8 +1236,9 @@
   flex: 0.6;
   white-space: nowrap;
   height: auto;
-  line-height: 1.4; /* 统一使用1.4的行高 */
+  line-height: 1.4; /* 保持行高一致 */
   padding-left: 0;
+  padding: 0; /* 移除内部额外的内边距 */
 }
 
 /* 选项样式 - 确保起点对齐 */
@@ -1253,8 +1254,9 @@
   justify-content: flex-end;
   position: relative;
   height: auto;
-  line-height: 1.4; /* 统一使用1.4的行高 */
+  line-height: 1.4; /* 保持行高一致 */
   padding-right: 24rpx;
+  padding: 0 24rpx 0 0; /* 只保留右侧内边距，移除其他内边距 */
 }
 
 .delete-actions:before {
