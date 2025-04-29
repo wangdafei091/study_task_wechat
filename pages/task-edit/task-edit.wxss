@@ -446,263 +446,6 @@
   opacity: 0.9;
 }
 
-/* 日历容器 */
-.calendar-container {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  transform: translateY(100%);
-  transition: transform 0.3s ease-in-out;
-  background-color: #ffffff;
-  border-radius: 24rpx 24rpx 0 0;
-  box-shadow: 0 -4rpx 16rpx rgba(0, 0, 0, 0.1);
-  z-index: 1001;
-  /* 修改固定高度为自适应高度 */
-  max-height: 90vh; /* 最大高度为视口高度的90% */
-  height: auto; /* 自适应内容高度 */
-  display: flex;
-  flex-direction: column;
-  padding-bottom: env(safe-area-inset-bottom); /* 增加底部安全区域边距 */
-}
-
-.calendar-container.expanded {
-  transform: translateY(0);
-}
-
-/* 日历遮罩层 */
-.calendar-mask {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
-  z-index: 1000;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.3s ease-in-out;
-}
-
-.calendar-mask.visible {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.calendar-panel {
-  padding: 30rpx 24rpx;
-  flex: 1;
-  overflow-y: auto; /* 确保可滚动 */
-  -webkit-overflow-scrolling: touch;
-  display: flex;
-  flex-direction: column;
-  max-height: 85vh; /* 设置最大高度，确保可滚动 */
-}
-
-.weekdays {
-  display: flex;
-  border-bottom: 1rpx solid #f0f0f0;
-  padding-bottom: 16rpx;
-  margin-bottom: 16rpx;
-}
-
-.weekday {
-  flex: 1;
-  text-align: center;
-  font-size: 28rpx;
-  color: #999;
-}
-
-.calendar-days {
-  display: flex;
-  flex-wrap: wrap;
-  padding: 10rpx 0 20rpx 0;
-}
-
-.calendar-day {
-  width: 14.28%;
-  height: 70rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 30rpx;
-  position: relative;
-}
-
-.current-month {
-  color: #333;
-}
-
-.other-month {
-  color: #ccc;
-}
-
-.calendar-day.selected {
-  background-color: rgba(66,133,244,0.1);
-  color: #576B95;
-  font-weight: 500;
-  border-radius: 8rpx;
-}
-
-.calendar-day.today {
-  position: relative;
-}
-
-.calendar-day.today:after {
-  content: '';
-  position: absolute;
-  bottom: 6rpx;
-  width: 8rpx;
-  height: 8rpx;
-  border-radius: 50%;
-  background-color: #576B95;
-}
-
-/* 过去日期的样式 */
-.calendar-day.past {
-  opacity: 0.6;
-}
-
-.calendar-day.past.current-month {
-  color: #999;
-}
-
-.calendar-day.past.other-month {
-  color: #ccc;
-  opacity: 0.5;
-}
-
-/* 过去日期被选中的样式 */
-.calendar-day.past.selected {
-  background-color: rgba(66,133,244,0.05);
-  color: #8da3c8;
-  opacity: 0.8;
-}
-
-/* 日历面板标题栏 */
-.calendar-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0 0 30rpx 0;
-  border-bottom: 1rpx solid #f0f0f0;
-  margin-bottom: 20rpx;
-  flex-shrink: 0;
-}
-
-/* 左侧按钮区域 */
-.header-left {
-  width: 160rpx;
-  display: flex;
-  justify-content: flex-start;
-  align-items: center;
-  flex: 0 0 auto;
-}
-
-/* 左侧年月选择区域 */
-.header-year-month {
-  display: flex;
-  align-items: center;
-  flex: 0 0 auto;
-  width: 160rpx;
-}
-
-.header-year-month-text {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 0 10rpx;
-  min-width: 160rpx;
-  text-align: center;
-}
-
-.year-text {
-  font-size: 28rpx;
-  font-weight: 400;
-  color: #333;
-  line-height: 1.2;
-}
-
-.month-text {
-  font-size: 32rpx;
-  font-weight: 500;
-  color: #333;
-  line-height: 1.2;
-  margin-top: 6rpx;
-}
-
-.header-year-month-text:active {
-  opacity: 0.7;
-}
-
-/* 月份导航按钮 */
-.month-nav {
-  width: 56rpx;
-  height: 56rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background-color: transparent;
-  border-radius: 8rpx;
-}
-
-.month-nav:active {
-  background-color: #f0f0f0;
-  opacity: 0.8;
-}
-
-/* 中间标题区域 */
-.calendar-title {
-  font-size: 32rpx;
-  font-weight: 500;
-  color: #333;
-  text-align: center;
-  flex: 1;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* 右侧按钮区域 */
-.calendar-close {
-  font-size: 32rpx;
-  color: #4285F4;
-  padding: 10rpx 16rpx;
-  position: relative;
-  flex: 0 0 auto;
-  width: 160rpx;
-  text-align: right;
-}
-
-/* 日历面板返回按钮 */
-.calendar-back {
-  font-size: 32rpx;
-  color: #4285F4;
-  padding: 10rpx 16rpx;
-  position: relative;
-  text-align: left;
-}
-
-/* 添加点击反馈效果 */
-.calendar-close:active, .calendar-back:active {
-  opacity: 0.7;
-}
-
-/* 添加点击反馈 */
-.calendar-day:active {
-  opacity: 0.7;
-  background-color: rgba(66,133,244,0.05);
-}
-
-/* 年月导航区域 */
-.calendar-nav,
-.year-month-text,
-.year-nav,
-.current-month-year:active {
-  display: none;
-}
-
 /* 星期选择网格 */
 .weekday-grid {
   display: grid;
@@ -838,4 +581,106 @@
   font-size: 24rpx;
   margin-left: 12rpx;
   vertical-align: middle;
+}
+
+/* 重复选项面板所需样式 */
+.calendar-container {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  transform: translateY(100%);
+  transition: transform 0.3s ease-in-out;
+  background-color: #ffffff;
+  border-radius: 24rpx 24rpx 0 0;
+  box-shadow: 0 -4rpx 16rpx rgba(0, 0, 0, 0.1);
+  z-index: 1001;
+  max-height: 90vh;
+  height: auto;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.calendar-container.expanded {
+  transform: translateY(0);
+}
+
+.calendar-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease-in-out;
+}
+
+.calendar-mask.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.calendar-panel {
+  padding: 30rpx 24rpx;
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
+  max-height: 85vh;
+}
+
+.calendar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 0 30rpx 0;
+  border-bottom: 1rpx solid #f0f0f0;
+  margin-bottom: 20rpx;
+  flex-shrink: 0;
+}
+
+.header-left {
+  width: 160rpx;
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  flex: 0 0 auto;
+}
+
+.calendar-title {
+  font-size: 32rpx;
+  font-weight: 500;
+  color: #333;
+  text-align: center;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.calendar-close {
+  font-size: 32rpx;
+  color: #4285F4;
+  padding: 10rpx 16rpx;
+  position: relative;
+  flex: 0 0 auto;
+  width: 160rpx;
+  text-align: right;
+}
+
+.calendar-back {
+  font-size: 32rpx;
+  color: #4285F4;
+  padding: 10rpx 16rpx;
+  position: relative;
+  text-align: left;
+}
+
+.calendar-close:active, .calendar-back:active {
+  opacity: 0.7;
 } 

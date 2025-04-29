@@ -1,0 +1,253 @@
+/* 日历容器 */
+.calendar-container {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  transform: translateY(100%);
+  transition: transform 0.3s ease-in-out;
+  background-color: #ffffff;
+  border-radius: 24rpx 24rpx 0 0;
+  box-shadow: 0 -4rpx 16rpx rgba(0, 0, 0, 0.1);
+  z-index: 1001;
+  max-height: 90vh;
+  height: auto;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.calendar-container.expanded {
+  transform: translateY(0);
+}
+
+/* 日历遮罩层 */
+.calendar-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease-in-out;
+}
+
+.calendar-mask.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.calendar-panel {
+  padding: 30rpx 24rpx;
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
+  max-height: 85vh;
+}
+
+.weekdays {
+  display: flex;
+  border-bottom: 1rpx solid #f0f0f0;
+  padding-bottom: 16rpx;
+  margin-bottom: 16rpx;
+}
+
+.weekday {
+  flex: 1;
+  text-align: center;
+  font-size: 28rpx;
+  color: #999;
+}
+
+.calendar-days {
+  display: flex;
+  flex-wrap: wrap;
+  padding: 10rpx 0 20rpx 0;
+}
+
+.calendar-day {
+  width: 14.28%;
+  height: 70rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 30rpx;
+  position: relative;
+}
+
+.current-month {
+  color: #333;
+}
+
+.other-month {
+  color: #ccc;
+}
+
+.calendar-day.selected {
+  background-color: rgba(66,133,244,0.1);
+  color: #576B95;
+  font-weight: 500;
+  border-radius: 8rpx;
+}
+
+.calendar-day.today {
+  position: relative;
+}
+
+.calendar-day.today:after {
+  content: '';
+  position: absolute;
+  bottom: 6rpx;
+  width: 8rpx;
+  height: 8rpx;
+  border-radius: 50%;
+  background-color: #576B95;
+}
+
+/* 过去日期的样式 */
+.calendar-day.past {
+  opacity: 0.6;
+}
+
+.calendar-day.past.current-month {
+  color: #999;
+}
+
+.calendar-day.past.other-month {
+  color: #ccc;
+  opacity: 0.5;
+}
+
+/* 过去日期被选中的样式 */
+.calendar-day.past.selected {
+  background-color: rgba(66,133,244,0.05);
+  color: #8da3c8;
+  opacity: 0.8;
+}
+
+/* 日历面板标题栏 */
+.calendar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 0 30rpx 0;
+  border-bottom: 1rpx solid #f0f0f0;
+  margin-bottom: 20rpx;
+  flex-shrink: 0;
+}
+
+/* 左侧年月选择区域 */
+.header-year-month {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  width: 160rpx;
+}
+
+.header-year-month-text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10rpx;
+  min-width: 160rpx;
+  text-align: center;
+}
+
+.year-text {
+  font-size: 28rpx;
+  font-weight: 400;
+  color: #333;
+  line-height: 1.2;
+}
+
+.month-text {
+  font-size: 32rpx;
+  font-weight: 500;
+  color: #333;
+  line-height: 1.2;
+  margin-top: 6rpx;
+}
+
+.header-year-month-text:active {
+  opacity: 0.7;
+}
+
+/* 月份导航按钮 */
+.month-nav {
+  width: 60rpx;
+  height: 60rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(0,0,0,0.03);
+  border-radius: 50%;
+  margin: 0 10rpx;
+  font-size: 24rpx;
+  font-weight: bold;
+  color: #666;
+  /* 确保元素可点击 */
+  position: relative;
+  z-index: 5;
+}
+
+/* 增强点击反馈效果 */
+.month-nav:active {
+  background-color: rgba(66,133,244,0.1);
+  opacity: 0.8;
+}
+
+/* 特定样式用于调试和区分 */
+.prev-month {
+  color: #666;
+}
+
+.next-month {
+  color: #666;
+}
+
+/* 覆盖旧的nav-icon样式 */
+.nav-icon {
+  /* 保留但不使用 */
+  font-size: 24rpx;
+  color: #666;
+}
+
+/* 中间标题区域 */
+.calendar-title {
+  font-size: 32rpx;
+  font-weight: 500;
+  color: #333;
+  text-align: center;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 右侧按钮区域 */
+.calendar-close {
+  font-size: 32rpx;
+  color: #4285F4;
+  padding: 10rpx 16rpx;
+  position: relative;
+  flex: 0 0 auto;
+  width: 160rpx;
+  text-align: right;
+}
+
+/* 添加点击反馈效果 */
+.calendar-close:active {
+  opacity: 0.7;
+}
+
+/* 添加点击反馈 */
+.calendar-day:active {
+  opacity: 0.7;
+  background-color: rgba(66,133,244,0.05);
+}

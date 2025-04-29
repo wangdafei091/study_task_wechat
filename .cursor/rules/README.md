@@ -1,66 +1,30 @@
-# .cursor/rules 目录清理建议和使用指南
+# .cursor/rules 目录说明和使用指南
 
-## 当前情况分析
+## 当前目录结构
 
-经过检查，.cursor/rules 目录中存在以下问题：
-
-1. **文件名重复**：存在相似文件名但内容重叠的文件
-   - `project-structure.mdc` 和 `project_structure.mdc`
-   - `development_workflow.mdc` 和 `development_patterns.mdc`
-   - `system_architecture.md` 和 `systemPatterns.md`
-
-2. **内容重叠**：多个文件之间存在内容重叠和重复
-
-3. **格式不一致**：有些文件使用 `.mdc` 后缀，有些使用 `.md` 后缀
-
-4. **MemoryBank 系统文件与项目规则混合**：系统性文件与项目规则混在一起
-
-## 清理建议
-
-### 1. 删除冗余文件
-
-建议删除以下重复文件：
-- `project-structure.mdc`（保留更详细的 `project_structure.mdc`）
-- `development_patterns.mdc`（将其有用内容合并到 `development_workflow.mdc`）
-- `system_architecture.md`（将其独特内容合并到 `systemPatterns.md`）
-- 如有其他类似重复内容的文件
-
-### 2. 统一文件命名和格式
-
-- 统一使用 `.md` 后缀（或者 `.mdc` 后缀，二选一）
-- 统一使用下划线命名法（如 `project_structure.md`）或者短横线命名法（如 `project-structure.md`）
-- 建议将所有 MemoryBank 相关文件（如 activeContext.md、progress.md 等）放入单独的子目录
-
-### 3. 整合和重构文件内容
-
-- 将 `utils_guide.mdc` 中的内容按照功能分类整合
-- 将组件文档和架构文档分开
-- 确保每个文件有明确的职责，避免内容交叉
-
-## 推荐的目录结构
+.cursor/rules 目录包含项目相关规则、指南和记忆库文件，帮助 Cursor 更好地理解项目并提供准确的代码辅助。
 
 ```
 .cursor/rules/
 ├── memory-bank/           # Cursor MemoryBank 相关文件
 │   ├── activeContext.md
-│   ├── MemoryBank.md
+│   ├── MemoryBank.mdc
 │   ├── productContext.md
 │   ├── progress.md
 │   ├── projectbrief.md
 │   ├── systemPatterns.md
 │   └── techContext.md
 ├── project/               # 项目相关规则
-│   ├── project_structure.md
-│   ├── components_guide.md
-│   ├── utils_guide.md
-│   ├── task_data_model.md
-│   └── development_workflow.md
-└── system/                # 系统架构和优化规则
-    ├── optimization_summary.md
-    └── system_architecture.md
+│   ├── project_structure.mdc
+│   ├── components_guide.mdc
+│   ├── utils_guide.mdc
+│   ├── task_data_model.mdc
+│   └── development_workflow.mdc
+├── system/                # 系统架构和优化规则
+└── README.md              # 本指南文件
 ```
 
-## .cursor/rules 正确使用指南
+## .cursor/rules 使用指南
 
 ### 什么是 .cursor/rules
 
@@ -68,15 +32,14 @@
 
 ### 规则文件类型
 
-规则文件可以分为几个主要类别：
+规则文件分为几个主要类别：
 
 1. **项目结构说明**：描述项目的目录结构和文件组织
 2. **开发规范**：定义代码风格、命名规范和最佳实践
 3. **组件使用指南**：描述自定义组件的用法和参数
 4. **工具函数指南**：介绍各种工具函数的功能和使用方法
 5. **数据模型说明**：定义项目中使用的数据结构和格式
-6. **系统架构**：描述整体系统架构和组件关系
-7. **MemoryBank文件**：用于Cursor的上下文记忆功能
+6. **MemoryBank文件**：用于Cursor的上下文记忆功能
 
 ### 如何编写有效的规则文件
 
@@ -143,6 +106,14 @@ Cursor 的 MemoryBank 系统是一种特殊的规则文件集合，用于帮助 
 
 MemoryBank 文件应定期更新，以反映项目的最新状态和方向。建议使用"update memory bank"命令触发 Cursor 对这些文件进行全面审查。
 
-## 总结
+## 文档维护建议
 
-通过清理冗余文件和优化目录结构，可以使 .cursor/rules 目录更加清晰和有效。正确使用规则文件将帮助 Cursor 更好地理解项目，提供更准确的代码编辑和补全建议。建议定期审查和更新规则文件，确保它们与项目的最新状态保持一致。 
+为确保规则文件保持最新状态，建议：
+
+1. **定期审查**：每次重大功能更新后审查规则文件
+2. **同步更新**：修改代码后同步更新相关规则文件
+3. **保持一致性**：确保所有文件使用一致的命名和格式风格
+4. **删除过时内容**：移除不再使用的组件或功能的描述
+5. **添加新内容**：为新增的组件或功能添加文档
+
+正确维护规则文件将帮助 Cursor 更好地理解项目，提供更准确的代码编辑和补全建议。 

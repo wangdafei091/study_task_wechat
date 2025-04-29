@@ -410,7 +410,7 @@ const taskManager = {
           streak: 0,
           typeCounts: {
             habit: 0,
-            sthabitudy: 0
+            study: 0
           }
         }
       };

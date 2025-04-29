@@ -1,0 +1,49 @@
+<!-- 日历遮罩层 -->
+<view class="calendar-mask {{visible ? 'visible' : ''}}" bindtap="onClose" catchtouchmove="preventTouchMove"></view>
+
+<!-- 日期选择面板 -->
+<view class="calendar-container {{visible ? 'expanded' : ''}}" catchtouchmove="preventTouchMove">
+  <view class="calendar-panel" catchtap="preventClose">
+    <view class="calendar-header">
+      <!-- 左侧：年月选择区域 -->
+      <view class="header-year-month">
+        <!-- 简化前一个月按钮结构 -->
+        <view class="month-nav prev-month" bindtap="changeMonth" data-action="prev" bindlongpress="changeYear" data-year-action="prev">
+          〈
+        </view>
+        
+        <picker mode="date" fields="month" value="{{yearMonth}}" bindchange="onYearMonthChange">
+          <view class="header-year-month-text">
+            <view class="year-text">{{yearText}}</view>
+            <view class="month-text">{{monthText}}</view>
+          </view>
+        </picker>
+        
+        <!-- 简化后一个月按钮结构 -->
+        <view class="month-nav next-month" bindtap="changeMonth" data-action="next" bindlongpress="changeYear" data-year-action="next">
+          〉
+        </view>
+      </view>
+      
+      <!-- 中间：标题 -->
+      <text class="calendar-title">{{title}}</text>
+      
+      <!-- 右侧：完成按钮 -->
+      <view class="calendar-close" bindtap="onClose">完成</view>
+    </view>
+    
+    <view class="weekdays">
+      <view class="weekday" wx:for="{{['一','二','三','四','五','六','日']}}" wx:key="*this">{{item}}</view>
+    </view>
+    <view class="calendar-days">
+      <view 
+        wx:for="{{calendarDays}}" 
+        wx:key="index" 
+        class="calendar-day {{item.currentMonth ? 'current-month' : 'other-month'}} {{item.date === currentDate ? 'selected' : ''}} {{item.isToday ? 'today' : ''}} {{item.isPast ? 'past' : ''}}"
+        bindtap="selectDate"
+        data-date="{{item.date}}">
+        {{item.day}}
+      </view>
+    </view>
+  </view>
+</view>
