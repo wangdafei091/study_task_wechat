@@ -52,11 +52,14 @@ Component({
     showScopeInfoBubble: false,             // 是否显示范围信息气泡
     scopeInfoStyle: '',                     // 范围信息气泡样式
     scopeInfoTimer: null,                   // 范围信息气泡定时器
-    showPressureInfo: false,                 // 是否显示压力说明弹窗
+    showPressureInfo: false,                // 是否显示压力说明弹窗
     activeTaskId: null,                     // 当前激活的任务ID
     activeTaskIndex: -1,                    // 当前激活的任务在dayTasks中的索引
-    showActionMenu: false,                   // 是否显示操作菜单
-    actionMenuStyle: ''                     // 操作菜单样式
+    showActionMenu: false,                  // 是否显示操作菜单
+    actionMenuStyle: '',                    // 操作菜单样式
+    showDeleteConfirm: false,               // 是否显示删除确认区域
+    activeTaskForDelete: null,              // 当前准备删除的任务
+    deleteScope: ''                         // 删除范围选择: 'single'或'series'
   },
   
   lifetimes: {
@@ -778,85 +781,168 @@ Component({
       return;
     },
     
-    // 任务删除处理函数
-    showTaskDelete(e) {
-      const { id, index } = e.currentTarget.dataset;
-      const task = this.data.dayTasks[index];
+    /**
+     * 处理删除任务
+     */
+    handleDeleteTask(e) {
+      const taskId = e.currentTarget.dataset.id;
+      console.log(`[task-heatmap] 准备删除任务: ${taskId}`);
       
-      console.log(`[TaskHeatmap] 请求删除任务: ${id}, 标题: ${task.title}`);
-      
-      // 确认删除
-      wx.showModal({
-        title: '删除任务',
-        content: '确定要删除此任务吗？',
-        confirmColor: '#E53935',
-        success: (res) => {
-          if (res.confirm) {
-            // 如果是重复任务，询问删除范围
-            if (task.repeat && task.repeat.type !== 'none') {
-              this.showDeleteRepeatOptions(task);
-            } else {
-              this.deleteTask(id);
+      // 隐藏菜单
+      this.hideActionMenu();
+
+      // 获取当前任务
+      const task = this.data.dayTasks.find(t => t.id === taskId);
+      if (!task) {
+        console.error(`[task-heatmap] 未找到要删除的任务: ${taskId}`);
+        return;
+      }
+
+      // 如果是重复任务，显示内嵌确认区域
+      if (task.repeat && task.repeat.type !== 'none') {
+        console.log(`[task-heatmap] 显示删除确认区域, 任务类型: ${task.type}, 重复类型: ${task.repeat.type}`);
+        
+        // 设置当前操作的任务和重置选择状态
+        this.setData({
+          activeTaskForDelete: task,
+          deleteScope: '',
+          showDeleteConfirm: true
+        });
+      } else {
+        // 非重复任务，直接确认删除
+        wx.showModal({
+          title: '确认删除',
+          content: '确定要删除此任务吗？',
+          confirmColor: '#f44336',
+          success: (res) => {
+            if (res.confirm) {
+              console.log(`[task-heatmap] 确认删除任务: ${taskId}`);
+              this.deleteTask(taskId);
             }
           }
-        }
+        });
+      }
+    },
+    
+    /**
+     * 选择删除范围
+     */
+    selectDeleteScope(e) {
+      const scope = e.currentTarget.dataset.scope;
+      console.log(`[task-heatmap] 选择删除范围: ${scope}`);
+      
+      this.setData({
+        deleteScope: scope
+      });
+    },
+
+    /**
+     * 取消删除
+     */
+    cancelDelete() {
+      console.log('[task-heatmap] 取消删除');
+      
+      this.setData({
+        showDeleteConfirm: false,
+        deleteScope: '',
+        activeTaskForDelete: null
+      });
+    },
+
+    /**
+     * 确认删除
+     */
+    confirmDelete() {
+      if (!this.data.deleteScope) {
+        console.log('[task-heatmap] 未选择删除范围，禁止操作');
+        return; // 未选择范围，禁止操作
+      }
+      
+      const task = this.data.activeTaskForDelete;
+      const scope = this.data.deleteScope;
+      
+      console.log(`[task-heatmap] 确认删除任务: ${task.id}, 范围: ${scope}`);
+      
+      if (scope === 'single') {
+        // 仅删除当日任务
+        this.deleteTask(task.id);
+      } else {
+        // 删除整个循环
+        this.deleteTaskSeries(task);
+      }
+      
+      // 还原状态
+      this.setData({
+        showDeleteConfirm: false,
+        deleteScope: '',
+        activeTaskForDelete: null
       });
     },
     
-    // 显示重复任务删除选项
-    showDeleteRepeatOptions(task) {
-      wx.showActionSheet({
-        itemList: ['仅删除此任务', '删除此任务及未来任务'],
-        success: (res) => {
-          console.log(`[TaskHeatmap] 删除重复任务选项: ${res.tapIndex}`);
-          
-          const taskManager = require('../../utils/taskManager.js');
-          
-          if (res.tapIndex === 0) {
-            // 仅删除此任务
-            this.deleteTask(task.id);
-          } else if (res.tapIndex === 1) {
-            // 删除此任务及未来任务
-            // 这里需要先获取所有任务，然后筛选出相关任务进行删除
-            taskManager.getAllTasks(allTasks => {
-              const currentDate = new Date(task.date);
-              // 找出所有从这个日期开始的同一重复系列的任务
-              const relatedTasks = allTasks.filter(t => 
-                t.parentTaskId === task.parentTaskId &&
-                new Date(t.date) >= currentDate
-              );
-              
-              console.log(`[TaskHeatmap] 删除重复任务系列，共 ${relatedTasks.length} 个任务`);
-              
-              // 逐个删除相关任务
-              let completedCount = 0;
-              relatedTasks.forEach(t => {
-                taskManager.deleteTask(t.id, () => {
-                  completedCount++;
-                  if (completedCount === relatedTasks.length) {
-                    this.refreshTaskList();
-                  }
-                });
-              });
-            });
-          }
-        }
-      });
-    },
-    
-    // 删除单个任务
+    /**
+     * 删除单个任务
+     */
     deleteTask(taskId) {
       const taskManager = require('../../utils/taskManager.js');
       
-      taskManager.deleteTask(taskId, () => {
-        console.log(`[TaskHeatmap] 任务已删除: ${taskId}`);
-        wx.showToast({
-          title: '任务已删除',
-          icon: 'success'
-        });
+      taskManager.deleteTask(taskId, (success) => {
+        if (success) {
+          // 更新任务列表
+          this.triggerEvent('refreshTasks');
+          wx.showToast({
+            title: '删除成功',
+            icon: 'success'
+          });
+        } else {
+          wx.showToast({
+            title: '删除失败',
+            icon: 'error'
+          });
+        }
+      });
+    },
+    
+    /**
+     * 删除任务系列
+     */
+    deleteTaskSeries(task) {
+      const taskManager = require('../../utils/taskManager.js');
+      
+      taskManager.getAllTasks(allTasks => {
+        // 查找相同系列的所有任务
+        const seriesTasks = allTasks.filter(t => 
+          t.parentTaskId === task.parentTaskId || 
+          (t.id === task.parentTaskId) || 
+          (task.parentTaskId === t.parentTaskId)
+        );
         
-        // 刷新任务列表
-        this.refreshTaskList();
+        console.log(`[task-heatmap] 删除任务系列，共找到: ${seriesTasks.length} 个任务`);
+        
+        if (seriesTasks.length > 0) {
+          // 批量删除任务
+          let deletedCount = 0;
+          seriesTasks.forEach(t => {
+            taskManager.deleteTask(t.id, (success) => {
+              deletedCount += success ? 1 : 0;
+              
+              // 所有删除操作完成后显示结果
+              if (deletedCount === seriesTasks.length) {
+                console.log(`[task-heatmap] 系列任务删除完成, 成功: ${deletedCount}`);
+                wx.showToast({
+                  title: '已删除系列任务',
+                  icon: 'success',
+                  duration: 1500
+                });
+                
+                // 更新任务列表
+                this.triggerEvent('refreshTasks');
+              }
+            });
+          });
+        } else {
+          // 找不到系列任务，只删除当前任务
+          this.deleteTask(task.id);
+        }
       });
     },
     
@@ -1004,44 +1090,6 @@ Component({
       // 跳转到任务编辑页面
       wx.navigateTo({
         url: `/pages/task-edit/task-edit?id=${taskId}`
-      });
-    },
-    
-    /**
-     * 处理删除任务
-     */
-    handleDeleteTask(taskId) {
-      console.log(`[task-heatmap] 准备删除任务: ${taskId}`);
-      
-      // 隐藏菜单
-      this.hideActionMenu();
-      
-      wx.showModal({
-        title: '确认删除',
-        content: '确定要删除此任务吗？',
-        confirmColor: '#ff4d4f',
-        success: (res) => {
-          if (res.confirm) {
-            console.log(`[task-heatmap] 确认删除任务: ${taskId}`);
-            const taskManager = require('../../utils/taskManager.js');
-            
-            taskManager.deleteTask(taskId, (success) => {
-              if (success) {
-                // 更新任务列表
-                this.triggerEvent('refreshTasks');
-                wx.showToast({
-                  title: '删除成功',
-                  icon: 'success'
-                });
-              } else {
-                wx.showToast({
-                  title: '删除失败',
-                  icon: 'error'
-                });
-              }
-            });
-          }
-        }
       });
     }
   }

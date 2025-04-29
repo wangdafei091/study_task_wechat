@@ -91,6 +91,25 @@
                 </block>
               </view>
             </view>
+            
+            <!-- 删除确认区域 -->
+            <view class="delete-confirm {{showDeleteConfirm && item.id === activeTaskForDelete.id ? 'visible' : ''}}" 
+                  wx:if="{{item.repeat && item.repeat.type !== 'none'}}">
+              <view class="delete-options">
+                <view class="option {{deleteScope === 'single' ? 'selected' : ''}}" bindtap="selectDeleteScope" data-scope="single">
+                  <view class="radio-circle {{deleteScope === 'single' ? 'selected' : ''}}"></view>
+                  <text>删除当天</text>
+                </view>
+                <view class="option {{deleteScope === 'series' ? 'selected' : ''}}" bindtap="selectDeleteScope" data-scope="series">
+                  <view class="radio-circle {{deleteScope === 'series' ? 'selected' : ''}}"></view>
+                  <text>删除循环</text>
+                </view>
+              </view>
+              <view class="delete-actions">
+                <view class="btn-cancel" bindtap="cancelDelete">取消</view>
+                <view class="btn-confirm {{!deleteScope ? 'disabled' : ''}}" bindtap="confirmDelete">确认</view>
+              </view>
+            </view>
           </view>
         </view>
         
