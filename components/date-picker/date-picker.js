@@ -243,9 +243,12 @@ Component({
     addNextMonthDays: function(days, year, month, todayYear, todayMonth, todayDate, todayTimestamp) {
       // 计算行数并填充下月日期
       const totalDaysSoFar = days.length;
-      const rowsNeeded = Math.ceil(totalDaysSoFar / 7);
+      // 固定使用6行显示所有月份，确保日历高度一致
+      const rowsNeeded = 6; 
       const totalCells = rowsNeeded * 7;
       const nextMonthDays = totalCells - totalDaysSoFar;
+      
+      console.log(`[DatePicker] 当前已有${totalDaysSoFar}天，固定6行需要补充${nextMonthDays}天`);
       
       if (nextMonthDays <= 0) return;
       
@@ -346,6 +349,21 @@ Component({
       }
       
       console.log(`[DatePicker] 切换后的年月: ${year}年${month}月`);
+      
+      // 添加按钮反馈 - 适应紧凑型布局的反馈效果
+      let activeStyle = 'color: #1A73E8; opacity: 0.7; transform: scale(1.05);';
+      
+      // 更紧凑的视觉反馈
+      this.setData({
+        [`btnActiveStyle${action}`]: activeStyle
+      });
+      
+      // 120ms后移除活跃状态 - 紧凑型布局反馈更快
+      setTimeout(() => {
+        this.setData({
+          [`btnActiveStyle${action}`]: ''
+        });
+      }, 120);
       
       // 重新生成日历数据
       this.generateCalendarDays(year, month - 1);

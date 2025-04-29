@@ -7,9 +7,9 @@
     <view class="calendar-header">
       <!-- 左侧：年月选择区域 -->
       <view class="header-year-month">
-        <!-- 简化前一个月按钮结构 -->
-        <view class="month-nav prev-month" bindtap="changeMonth" data-action="prev" bindlongpress="changeYear" data-year-action="prev">
-          〈
+        <!-- 现代扁平化前一个月按钮 -->
+        <view class="month-nav prev-month" style="{{btnActiveStyleprev}}" bindtap="changeMonth" data-action="prev" bindlongpress="changeYear" data-year-action="prev">
+          <text>←</text>
         </view>
         
         <picker mode="date" fields="month" value="{{yearMonth}}" bindchange="onYearMonthChange">
@@ -19,9 +19,9 @@
           </view>
         </picker>
         
-        <!-- 简化后一个月按钮结构 -->
-        <view class="month-nav next-month" bindtap="changeMonth" data-action="next" bindlongpress="changeYear" data-year-action="next">
-          〉
+        <!-- 现代扁平化后一个月按钮 -->
+        <view class="month-nav next-month" style="{{btnActiveStylenext}}" bindtap="changeMonth" data-action="next" bindlongpress="changeYear" data-year-action="next">
+          <text>→</text>
         </view>
       </view>
       
