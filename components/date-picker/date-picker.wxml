@@ -9,7 +9,7 @@
       <view class="header-year-month">
         <!-- 现代扁平化前一个月按钮 -->
         <view class="month-nav prev-month" style="{{btnActiveStyleprev}}" bindtap="changeMonth" data-action="prev" bindlongpress="changeYear" data-year-action="prev">
-          <text>←</text>
+          <text>◀</text>
         </view>
         
         <picker mode="date" fields="month" value="{{yearMonth}}" bindchange="onYearMonthChange">
@@ -21,7 +21,7 @@
         
         <!-- 现代扁平化后一个月按钮 -->
         <view class="month-nav next-month" style="{{btnActiveStylenext}}" bindtap="changeMonth" data-action="next" bindlongpress="changeYear" data-year-action="next">
-          <text>→</text>
+          <text>▶</text>
         </view>
       </view>
       

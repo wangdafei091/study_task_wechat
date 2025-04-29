@@ -315,60 +315,51 @@ Component({
     },
     
     /**
-     * 更改月份
+     * 切换月份
      */
     changeMonth: function(e) {
-      // 添加详细日志记录
-      console.log('[DatePicker] changeMonth被触发，事件完整数据:', e);
-      console.log('[DatePicker] 事件目标数据:', e.currentTarget.dataset);
+      const action = e.currentTarget.dataset.action;
+      console.log(`[DatePicker] 点击${action === 'prev' ? '上' : '下'}个月按钮`);
       
-      const action = e.currentTarget.dataset.action; // prev 或 next
+      // 获取当前年月
+      const yearMonthParts = this.data.yearMonth.split('-');
+      let year = parseInt(yearMonthParts[0]);
+      let month = parseInt(yearMonthParts[1]) - 1;
       
-      console.log(`[DatePicker] 月份切换方向: ${action}`);
+      console.log(`[DatePicker] 当前日期: ${year}年${month+1}月`);
       
-      let yearMonth = this.data.yearMonth;
-      let [year, month] = yearMonth.split('-').map(Number);
-      
-      console.log(`[DatePicker] 当前年月: ${year}年${month}月`);
-      
+      // 根据操作调整月份
       if (action === 'prev') {
         month--;
-        if (month === 0) {
-          month = 12;
+        if (month < 0) {
+          month = 11;
           year--;
         }
-      } else if (action === 'next') {  // 显式检查是否为'next'
+      } else {
         month++;
-        if (month === 13) {
-          month = 1;
+        if (month > 11) {
+          month = 0;
           year++;
         }
-      } else {
-        console.warn(`[DatePicker] 未知的月份切换方向: ${action}`);
-        return; // 如果不是有效的action，则中断执行
       }
       
-      console.log(`[DatePicker] 切换后的年月: ${year}年${month}月`);
-      
-      // 添加按钮反馈 - 适应紧凑型布局的反馈效果
-      let activeStyle = 'color: #1A73E8; opacity: 0.7; transform: scale(1.05);';
-      
-      // 更紧凑的视觉反馈
-      this.setData({
-        [`btnActiveStyle${action}`]: activeStyle
-      });
-      
-      // 120ms后移除活跃状态 - 紧凑型布局反馈更快
-      setTimeout(() => {
-        this.setData({
-          [`btnActiveStyle${action}`]: ''
-        });
-      }, 120);
+      console.log(`[DatePicker] 切换后日期: ${year}年${month+1}月`);
       
       // 重新生成日历数据
-      this.generateCalendarDays(year, month - 1);
+      this.generateCalendarDays(year, month);
       
-      console.log(`[DatePicker] 切换月份完成: ${year}年${month}月, 方向: ${action}`);
+      // 标记当前月按钮状态，用于显示激活效果
+      let key = 'btnActiveStyle' + action;
+      
+      this.setData({
+        [key]: "background-color: rgba(0, 0, 0, 0.05)"
+      });
+      
+      setTimeout(() => {
+        this.setData({
+          [key]: ""
+        });
+      }, 300);
     },
     
     /**

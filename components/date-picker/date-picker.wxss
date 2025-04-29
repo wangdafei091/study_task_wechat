@@ -199,7 +199,7 @@
   margin: 0 2rpx;
   font-size: 32rpx;
   font-weight: normal;
-  color: #4285F4;
+  color: #666;
   /* 确保元素可点击 */
   position: relative;
   z-index: 5;
@@ -218,12 +218,12 @@
 
 /* 特定样式用于调试和区分 */
 .prev-month {
-  color: #4285F4;
+  color: #666;
   transform: translateX(-3rpx);
 }
 
 .next-month {
-  color: #4285F4;
+  color: #666;
   transform: translateX(3rpx);
 }
 
