@@ -601,16 +601,22 @@ Component({
         return;
       }
       
+      // 默认设为单任务编辑
+      let defaultScope = 'single';
+      
       // 设置初始编辑数据
       this.setData({
         editingTaskId: taskId,
         editingTaskIndex: taskIndex,
         editPoints: task.rewardPoints || 0,
         editDescription: task.description || '',
-        editScope: 'single' // 默认只修改今天的任务
+        editScope: defaultScope
       });
       
-      console.log('[TaskHeatmap] 开始编辑任务:', task.title, '积分:', this.data.editPoints);
+      console.log('[TaskHeatmap] 开始编辑任务:', task.title, 
+                 '积分:', this.data.editPoints, 
+                 '描述:', this.data.editDescription,
+                 '范围:', this.data.editScope);
       
       // 如果是循环任务，处理滚动确保编辑区域可见
       if (task.repeat && task.repeat.type !== 'none') {
@@ -781,6 +787,7 @@ Component({
       console.log('[TaskHeatmap] 保存任务编辑:', task.title);
       console.log('[TaskHeatmap] 新积分:', this.data.editPoints);
       console.log('[TaskHeatmap] 新描述:', this.data.editDescription);
+      console.log('[TaskHeatmap] 编辑范围:', this.data.editScope);
       
       // 更新任务数据
       const taskManager = require('../../utils/taskManager.js');
@@ -792,40 +799,82 @@ Component({
         modifyTime: Date.now()
       };
       
-      // 更新任务
-      taskManager.editTask(taskId, updateData, (updatedTask) => {
-        if (updatedTask) {
-          console.log('[TaskHeatmap] 任务更新成功');
-          
-          // 更新本地显示
-          const updatedDayTasks = [...this.data.dayTasks];
-          updatedDayTasks[taskIndex] = updatedTask;
-          
-          this.setData({
-            dayTasks: updatedDayTasks
-          });
-          
-          // 显示成功提示
-          wx.showToast({
-            title: '更新成功',
-            icon: 'success',
-            duration: 1500
-          });
-          
-          // 触发刷新事件
-          this.triggerEvent('refreshTasks');
-        } else {
-          console.error('[TaskHeatmap] 任务更新失败');
-          wx.showToast({
-            title: '更新失败',
-            icon: 'error',
-            duration: 1500
-          });
-        }
-        
-        // 关闭编辑区域
-        this.cancelEdit();
+      // 显示加载中
+      wx.showLoading({
+        title: '保存中...',
+        mask: true
       });
+      
+      // 根据编辑范围执行不同的更新逻辑
+      if (this.data.editScope === 'series' && task.repeat && task.repeat.type !== 'none') {
+        // 编辑循环任务系列
+        console.log('[TaskHeatmap] 更新整个循环任务系列');
+        
+        this.updateTaskSeries(task, updateData, (success, count) => {
+          wx.hideLoading();
+          
+          if (success) {
+            // 显示成功提示
+            wx.showToast({
+              title: `已更新${count}个任务`,
+              icon: 'success',
+              duration: 1500
+            });
+            
+            // 触发刷新事件
+            this.triggerEvent('refreshTasks');
+          } else {
+            wx.showToast({
+              title: '更新失败',
+              icon: 'error',
+              duration: 1500
+            });
+          }
+          
+          // 关闭编辑区域
+          this.cancelEdit();
+        });
+      } else {
+        // 仅编辑当前任务
+        console.log('[TaskHeatmap] 仅更新当前任务');
+        
+        // 更新单个任务
+        taskManager.editTask(taskId, updateData, (updatedTask) => {
+          wx.hideLoading();
+          
+          if (updatedTask) {
+            console.log('[TaskHeatmap] 任务更新成功');
+            
+            // 更新本地显示
+            const updatedDayTasks = [...this.data.dayTasks];
+            updatedDayTasks[taskIndex] = updatedTask;
+            
+            this.setData({
+              dayTasks: updatedDayTasks
+            });
+            
+            // 显示成功提示
+            wx.showToast({
+              title: '更新成功',
+              icon: 'success',
+              duration: 1500
+            });
+            
+            // 触发刷新事件
+            this.triggerEvent('refreshTasks');
+          } else {
+            console.error('[TaskHeatmap] 任务更新失败');
+            wx.showToast({
+              title: '更新失败',
+              icon: 'error',
+              duration: 1500
+            });
+          }
+          
+          // 关闭编辑区域
+          this.cancelEdit();
+        });
+      }
     },
     
     // 获取当前月份
@@ -1366,6 +1415,159 @@ Component({
           }
         }
       });
+    },
+
+    /**
+     * 更新整个循环任务系列
+     * @param {Object} task 当前任务
+     * @param {Object} updateData 要更新的字段
+     * @param {Function} callback 回调函数，参数为(success, count)
+     */
+    updateTaskSeries(task, updateData, callback) {
+      const taskManager = require('../../utils/taskManager.js');
+      
+      console.log(`[TaskHeatmap] 准备更新任务系列，当前任务:`, {
+        id: task.id,
+        title: task.title,
+        parentTaskId: task.parentTaskId,
+        repeatType: task.repeat ? task.repeat.type : 'none'
+      });
+      
+      // 添加超时保护，确保加载提示不会一直显示
+      const loadingTimeout = setTimeout(() => {
+        console.log('[TaskHeatmap] 更新操作超时，强制关闭加载提示');
+        wx.hideLoading();
+        
+        wx.showToast({
+          title: '操作超时，请重试',
+          icon: 'none',
+          duration: 2000
+        });
+        
+        if (callback) callback(false, 0);
+      }, 8000); // 8秒超时
+      
+      try {
+        taskManager.getAllTasks(allTasks => {
+          try {
+            // 清除超时定时器
+            clearTimeout(loadingTimeout);
+            
+            // 先尝试找出父任务ID
+            let parentId = task.parentTaskId;
+            
+            // 如果当前任务没有parentTaskId，可能它自己就是父任务
+            if (!parentId) {
+              console.log(`[TaskHeatmap] 当前任务没有parentTaskId，可能是原始任务`);
+              parentId = task.id;
+            }
+            
+            console.log(`[TaskHeatmap] 使用父任务ID查找系列任务: ${parentId}`);
+            
+            // 使用改进的筛选逻辑
+            const seriesTasks = allTasks.filter(t => 
+              t.parentTaskId === parentId || // 找出所有子任务
+              t.id === parentId              // 包含父任务自身
+            );
+            
+            console.log(`[TaskHeatmap] 更新任务系列，共找到: ${seriesTasks.length} 个任务`);
+            
+            if (seriesTasks.length === 0) {
+              console.log(`[TaskHeatmap] 未找到任何相关系列任务，只更新当前任务`);
+              taskManager.editTask(task.id, updateData, (updatedTask) => {
+                if (updatedTask) {
+                  if (callback) callback(true, 1);
+                } else {
+                  if (callback) callback(false, 0);
+                }
+              });
+              return;
+            }
+            
+            // 用于保存更新结果的数组
+            const results = {
+              success: [],
+              failed: []
+            };
+            
+            // 定义串行更新函数
+            const updateTasksSerially = (tasks, index) => {
+              try {
+                // 如果已更新完所有任务，显示结果并退出
+                if (index >= tasks.length) {
+                  console.log(`[TaskHeatmap] 任务系列更新完成，成功: ${results.success.length}，失败: ${results.failed.length}`);
+                  
+                  if (results.success.length > 0) {
+                    if (callback) callback(true, results.success.length);
+                  } else {
+                    if (callback) callback(false, 0);
+                  }
+                  return;
+                }
+                
+                // 获取当前要更新的任务
+                const currentTask = tasks[index];
+                
+                console.log(`[TaskHeatmap] 开始更新第${index + 1}/${tasks.length}个任务: ${currentTask.id}, 标题: ${currentTask.title}`);
+                
+                // 每次更新任务前更新加载提示
+                wx.hideLoading();
+                wx.showLoading({
+                  title: `更新中(${index + 1}/${tasks.length})`,
+                  mask: true
+                });
+                
+                // 更新当前任务
+                taskManager.editTask(currentTask.id, updateData, (updatedTask) => {
+                  try {
+                    if (updatedTask) {
+                      console.log(`[TaskHeatmap] 成功更新任务: ${currentTask.id}`);
+                      results.success.push(currentTask.id);
+                    } else {
+                      console.error(`[TaskHeatmap] 更新任务失败: ${currentTask.id}`);
+                      results.failed.push(currentTask.id);
+                    }
+                    
+                    // 继续更新下一个任务
+                    updateTasksSerially(tasks, index + 1);
+                  } catch (error) {
+                    console.error('[TaskHeatmap] 更新任务回调中出错:', error);
+                    results.failed.push(currentTask.id);
+                    
+                    // 发生错误时也继续更新下一个任务
+                    updateTasksSerially(tasks, index + 1);
+                  }
+                });
+              } catch (error) {
+                console.error('[TaskHeatmap] 更新任务过程中出错:', error);
+                
+                // 在出错时，尝试继续更新下一个任务
+                if (index < tasks.length - 1) {
+                  updateTasksSerially(tasks, index + 1);
+                } else {
+                  if (callback) callback(results.success.length > 0, results.success.length);
+                }
+              }
+            };
+            
+            // 开始串行更新任务
+            updateTasksSerially(seriesTasks, 0);
+            
+          } catch (error) {
+            // 清除超时定时器
+            clearTimeout(loadingTimeout);
+            
+            console.error('[TaskHeatmap] 更新任务系列过程中出错:', error);
+            if (callback) callback(false, 0);
+          }
+        });
+      } catch (error) {
+        // 清除超时定时器
+        clearTimeout(loadingTimeout);
+        
+        console.error('[TaskHeatmap] 获取任务列表出错:', error);
+        if (callback) callback(false, 0);
+      }
     }
   }
 }); 

@@ -1237,8 +1237,8 @@
   padding: 12rpx 0; /* 统一为上下12rpx的内边距 */
 }
 
-/* 编辑确认区域样式 */
-.edit-confirm {
+/* 编辑范围选择区域样式 */
+.edit-scope-area {
   height: 0;
   opacity: 0;
   overflow: hidden;
@@ -1246,48 +1246,70 @@
   border-top: 1px solid rgba(0,0,0,0.03); /* 保持分隔线样式一致 */
   transition: height 0.25s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start; /* 改为顶部对齐，适合双行编辑 */
+  justify-content: flex-start;
+  align-items: center;
   padding: 0;
   box-shadow: none;
+  z-index: 2;
 }
 
-.edit-confirm.visible {
+.edit-scope-area.visible {
   height: auto;
   opacity: 1;
   padding: 12rpx 0; /* 统一为上下12rpx的内边距 */
 }
 
-/* 编辑选项区域 */
-.edit-options {
+.scope-options {
   display: flex;
-  flex-direction: column;
-  flex: 0.65;
+  align-items: center;
   padding-left: 0;
 }
 
-/* 编辑操作区域 */
-.edit-actions {
+.scope-options .option {
   display: flex;
   align-items: center;
-  flex: 0.35;
-  justify-content: flex-end;
-  position: relative;
+  margin-right: 20rpx;
+  transition: transform 0.15s;
   height: auto;
-  line-height: 1.4; /* 保持行高一致 */
-  padding-right: 24rpx;
-  align-self: center; /* 垂直居中 */
 }
 
-.edit-actions:before {
+.scope-options .option.selected {
+  transform: scale(1.05);
+}
+
+.scope-options .radio-circle {
+  width: 24rpx;
+  height: 24rpx;
+  border-radius: 50%;
+  border: 2rpx solid #999;
+  margin-right: 8rpx;
+  position: relative;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+
+.scope-options .radio-circle.selected {
+  border-color: #4285F4;
+}
+
+.scope-options .radio-circle.selected:after {
   content: '';
   position: absolute;
-  left: -16rpx;
-  top: 50%;
-  height: 32rpx; /* 调整为更匹配区域高度 */
-  width: 1rpx;
-  background-color: rgba(0, 0, 0, 0.06);
-  transform: translateY(-50%);
+  width: 14rpx;
+  height: 14rpx;
+  background-color: #4285F4;
+  border-radius: 50%;
+  top: 5rpx;
+  left: 5rpx;
+}
+
+.scope-options .option-text {
+  font-size: 24rpx;
+  color: #333;
+  white-space: nowrap;
+  line-height: 1.4;
+  display: inline-block;
+  vertical-align: middle;
 }
 
 /* 删除选项区域 */
@@ -1481,6 +1503,181 @@
 }
 
 .edit-confirm .btn-confirm.disabled {
+  background-color: #e0e0e0;
+  color: #999;
+  box-shadow: none;
+}
+
+/* 编辑确认区域样式 */
+.edit-confirm {
+  height: 0;
+  opacity: 0;
+  overflow: hidden;
+  background-color: #fff;
+  border-top: 1px solid rgba(0,0,0,0.03); /* 保持分隔线样式一致 */
+  transition: height 0.25s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start; /* 改为顶部对齐，适合双行编辑 */
+  padding: 0;
+  box-shadow: none;
+  z-index: 2;
+}
+
+.edit-confirm.visible {
+  height: auto;
+  opacity: 1;
+  padding: 12rpx 0; /* 统一为上下12rpx的内边距 */
+}
+
+/* 编辑选项区域 */
+.edit-options {
+  display: flex;
+  flex-direction: column;
+  flex: 0.65;
+  padding-left: 0;
+}
+
+/* 编辑操作区域 */
+.edit-actions {
+  display: flex;
+  align-items: center;
+  flex: 0.35;
+  justify-content: flex-end;
+  position: relative;
+  height: auto;
+  line-height: 1.4; /* 保持行高一致 */
+  padding-right: 24rpx;
+  align-self: center; /* 垂直居中 */
+}
+
+.edit-actions:before {
+  content: '';
+  position: absolute;
+  left: -16rpx;
+  top: 50%;
+  height: 32rpx; /* 调整为更匹配区域高度 */
+  width: 1rpx;
+  background-color: rgba(0, 0, 0, 0.06);
+  transform: translateY(-50%);
+}
+
+/* 删除选项区域 */
+.delete-options {
+  display: flex;
+  align-items: center;
+  flex: 0.6;
+  white-space: nowrap;
+  height: auto;
+  line-height: 1.4; /* 保持行高一致 */
+  padding-left: 0;
+  padding: 0; /* 移除内部额外的内边距 */
+}
+
+/* 选项样式 - 确保起点对齐 */
+.delete-confirm .option:first-child {
+  margin-left: 0;
+}
+
+/* 删除操作区域 */
+.delete-actions {
+  display: flex;
+  align-items: center;
+  flex: 0.4;
+  justify-content: flex-end;
+  position: relative;
+  height: auto;
+  line-height: 1.4; /* 保持行高一致 */
+  padding-right: 24rpx;
+  padding: 0 24rpx 0 0; /* 只保留右侧内边距，移除其他内边距 */
+}
+
+.delete-actions:before {
+  content: '';
+  position: absolute;
+  left: -16rpx;
+  top: 50%;
+  height: 32rpx; /* 调整为更匹配区域高度 */
+  width: 1rpx;
+  background-color: rgba(0, 0, 0, 0.06);
+  transform: translateY(-50%);
+}
+
+/* 选项样式 */
+.delete-confirm .option {
+  display: flex;
+  align-items: center;
+  margin-right: 20rpx;
+  transition: transform 0.15s;
+  height: auto; /* 改为自适应高度 */
+}
+
+.delete-confirm .option.selected {
+  transform: scale(1.05);
+}
+
+.delete-confirm .radio-circle {
+  width: 24rpx;
+  height: 24rpx;
+  border-radius: 50%;
+  border: 2rpx solid #999;
+  margin-right: 8rpx;
+  position: relative;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+
+.delete-confirm .radio-circle.selected {
+  border-color: #4285F4;
+}
+
+.delete-confirm .radio-circle.selected:after {
+  content: '';
+  position: absolute;
+  width: 14rpx;
+  height: 14rpx;
+  background-color: #4285F4;
+  border-radius: 50%;
+  top: 5rpx;
+  left: 5rpx;
+}
+
+/* 将 text 元素选择器改为类选择器 */
+.delete-confirm .option .option-text {
+  font-size: 24rpx;
+  color: #333;
+  white-space: nowrap;
+  line-height: 1.4; /* 统一使用1.4的行高 */
+  display: inline-block;
+  vertical-align: middle;
+}
+
+/* 按钮样式 */
+.delete-confirm .btn-cancel {
+  font-size: 24rpx;
+  color: #666;
+  padding: 0 12rpx;
+  line-height: 1.4; /* 统一使用1.4的行高 */
+  display: flex;
+  align-items: center;
+}
+
+.delete-confirm .btn-confirm {
+  font-size: 24rpx;
+  color: #fff;
+  background-color: #4285F4;
+  border-radius: 24rpx;
+  padding: 6rpx 24rpx; /* 增加垂直内边距 */
+  margin-left: 20rpx;
+  box-shadow: 0 2rpx 4rpx rgba(66, 133, 244, 0.2);
+  line-height: 1.4; /* 统一使用1.4的行高 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: auto;
+}
+
+.delete-confirm .btn-confirm.disabled {
   background-color: #e0e0e0;
   color: #999;
   box-shadow: none;
