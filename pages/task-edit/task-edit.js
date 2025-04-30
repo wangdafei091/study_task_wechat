@@ -501,20 +501,47 @@ Page({
       
       // 使用任务管理器创建任务
       taskManager.createTask(newTask, (createdTask) => {
-        // 添加成功
+        // 添加成功，记录详细日志
+        console.log('[TaskEdit] 新任务添加成功，ID:', createdTask.id, '标题:', createdTask.title);
+        
+        // 显示任务添加成功提示
         wx.showToast({
-          title: '添加成功',
+          title: '任务添加成功',
           icon: 'success',
           duration: 2000
         });
         
-        // 清空表单
-        this.clearTaskForm();
+        // 直接重置表单数据，而不调用clearTaskForm避免显示第二个Toast
+        this.setData({
+          'newTask.title': '',
+          'newTask.type': 'habit',
+          'newTask.points': 1,
+          'newTask.description': '',
+          'newTask.isAllDay': false,
+          'newTask.hasNoEndDate': false,
+          'errors.title': '',
+          repeatText: '每天',
+          reminderText: '无',
+          'newTask.repeat': {
+            type: 'daily',
+            days: [],
+            startDate: '',
+            endDate: ''
+          },
+          'newTask.reminder': {
+            enabled: false,
+            time: 0
+          }
+        });
+        
+        // 重新初始化日期时间数据
+        this.initDateTimeData();
+        
+        // 关闭所有面板
+        this.closeAllPanels();
         
         // 重新加载任务数据
         this.loadAllTasks();
-        
-        console.log('[TaskEdit] 新任务添加成功:', createdTask);
       });
     } catch (error) {
       console.error('[TaskEdit] 添加任务失败:', error);
