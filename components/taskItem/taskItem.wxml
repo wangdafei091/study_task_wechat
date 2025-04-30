@@ -15,9 +15,12 @@
   - complete: 完成任务状态切换
   - edit: 编辑任务
 -->
-<view class="task-item {{task.status == 1 ? 'completed' : ''}} type-{{task.type}} {{task.isRepeated ? 'repeated' : ''}}">
+<view class="task-item {{task.status == 1 ? 'completed' : ''}} type-{{task.type}} {{task.isRepeated ? 'repeated' : ''}} {{task.isRequired ? 'required-task' : ''}}">
   <!-- 显示任务时间 -->
   <view class="task-time" wx:if="{{showTime && task.startTime}}">{{task.startTime}}</view>
+  
+  <!-- 必做任务标记 -->
+  <view class="required-badge" wx:if="{{task.isRequired}}">必做</view>
   
   <!-- 任务勾选框 -->
   <view class="task-checkbox {{task.status == 1 ? 'checked' : ''}}" catchtap="onCheckboxTap" wx:if="{{showCheckbox}}">

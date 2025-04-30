@@ -90,12 +90,21 @@ const taskManager = {
         return task.date === todayStr;
       });
       
+      // 对任务进行排序，确保必做任务置顶
+      const taskUtils = require('./taskUtils.js');
+      const sortedTasks = taskUtils.sortTasks(todayTasks, 'date', true, true);
+      
       console.log('[TaskManager] 今日任务筛选结果:', {
-        todayTasks: todayTasks.length,
-        tasks: todayTasks.map(t => ({ id: t.id, title: t.title, date: t.date }))
+        todayTasks: sortedTasks.length,
+        tasks: sortedTasks.map(t => ({ 
+          id: t.id, 
+          title: t.title, 
+          date: t.date,
+          isRequired: t.isRequired || false
+        }))
       });
       
-      callback(todayTasks);
+      callback(sortedTasks);
     });
   },
   
@@ -403,6 +412,13 @@ const taskManager = {
               }
             }
             
+            // 必做任务有更高的提醒优先级
+            if (task.isRequired) {
+              // 对必做任务，时间窗口扩大到36小时
+              shouldRemind = shouldRemind || (diffHours > 0 && diffHours < 36);
+              console.log(`[TaskManager] 必做任务"${task.title}"将在${diffHours.toFixed(1)}小时后到期`);
+            }
+            
             // 只考虑未来24小时内的任务或需要提醒的任务
             if ((diffHours > 0 && diffHours < 24) || shouldRemind) {
               upcomingTasks.push({
@@ -423,7 +439,13 @@ const taskManager = {
       if (upcomingTasks.length > 0) {
         const messageManager = require('./messageManager.js');
         upcomingTasks.forEach(task => {
-          messageManager.createTaskMessage(task, 'upcoming');
+          // 为必做任务创建特殊提醒
+          if (task.isRequired) {
+            messageManager.createTaskMessage(task, 'required');
+            console.log(`[TaskManager] 创建了必做任务提醒: ${task.title}`);
+          } else {
+            messageManager.createTaskMessage(task, 'upcoming');
+          }
         });
         
         console.log('[TaskManager] 创建了即将到期任务提醒:', upcomingTasks.length);
@@ -626,6 +648,180 @@ const taskManager = {
       console.error('[TaskManager] 计算提醒时间出错:', error, task);
       return null;
     }
+  },
+  
+  /**
+   * 标记任务为必做任务
+   * @param {String} taskId 任务ID
+   * @param {Function} callback 回调函数
+   */
+  markTaskAsRequired: function(taskId, callback) {
+    console.log(`[taskManager] 标记必做任务: ${taskId}`);
+    
+    this.getAllTasks(allTasks => {
+      const taskIndex = allTasks.findIndex(t => t.id === taskId);
+      
+      if (taskIndex !== -1) {
+        // 设置必做任务属性
+        allTasks[taskIndex].isRequired = true;
+        allTasks[taskIndex].penaltyApplied = false;
+        
+        // 保存更新后的任务数据
+        this._saveTaskData(allTasks, () => {
+          // 触发任务变更事件
+          this._onTaskDataChanged(allTasks);
+          
+          if (callback) callback(null, allTasks[taskIndex]);
+        });
+      } else {
+        console.error(`[taskManager] 标记必做任务失败: 找不到任务 ${taskId}`);
+        if (callback) callback(new Error('任务不存在'), null);
+      }
+    });
+  },
+  
+  /**
+   * 取消标记必做任务
+   * @param {String} taskId 任务ID
+   * @param {Function} callback 回调函数
+   */
+  unmarkTaskAsRequired: function(taskId, callback) {
+    console.log(`[taskManager] 取消标记必做任务: ${taskId}`);
+    
+    this.getAllTasks(allTasks => {
+      const taskIndex = allTasks.findIndex(t => t.id === taskId);
+      
+      if (taskIndex !== -1) {
+        // 移除必做任务属性
+        allTasks[taskIndex].isRequired = false;
+        allTasks[taskIndex].penaltyApplied = false;
+        
+        // 保存更新后的任务数据
+        this._saveTaskData(allTasks, () => {
+          // 触发任务变更事件
+          this._onTaskDataChanged(allTasks);
+          
+          if (callback) callback(null, allTasks[taskIndex]);
+        });
+      } else {
+        console.error(`[taskManager] 取消标记必做任务失败: 找不到任务 ${taskId}`);
+        if (callback) callback(new Error('任务不存在'), null);
+      }
+    });
+  },
+  
+  /**
+   * 检查必做任务并应用惩罚
+   * 针对过期且未完成的必做任务应用惩罚
+   * @param {Function} callback 回调函数
+   */
+  checkRequiredTasks: function(callback) {
+    console.log(`[taskManager] 开始检查必做任务`);
+    
+    this.getAllTasks(allTasks => {
+      const today = new Date();
+      const todayStr = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}-${today.getDate().toString().padStart(2, '0')}`;
+      const penaltyTasks = [];
+      let updated = false;
+      
+      allTasks.forEach(task => {
+        // 找出已过期、未完成、标记为必做且未应用惩罚的任务
+        if (task.isRequired && 
+            task.status === 0 && 
+            task.date < todayStr && 
+            !task.penaltyApplied) {
+          
+          // 标记已应用惩罚
+          task.penaltyApplied = true;
+          task.status = 'overdue';
+          updated = true;
+          
+          // 记录需要扣除积分的任务
+          penaltyTasks.push({
+            taskId: task.id,
+            title: task.title,
+            points: 5  // 固定惩罚积分为5
+          });
+          
+          console.log(`[taskManager] 应用惩罚: ${task.id}, 任务: ${task.title}`);
+        }
+      });
+      
+      // 如果有任务更新，保存数据
+      if (updated) {
+        this._saveTaskData(allTasks, () => {
+          // 触发任务变更事件
+          this._onTaskDataChanged(allTasks);
+          
+          // 处理积分扣除
+          if (penaltyTasks.length > 0) {
+            this._applyPenalties(penaltyTasks, callback);
+          } else if (callback) {
+            callback(null, []);
+          }
+        });
+      } else if (callback) {
+        callback(null, []);
+      }
+    });
+  },
+  
+  /**
+   * 应用惩罚，扣除积分
+   * @param {Array} penaltyTasks 需要扣除积分的任务数组
+   * @param {Function} callback 回调函数
+   * @private
+   */
+  _applyPenalties: function(penaltyTasks, callback) {
+    console.log(`[taskManager] 开始应用惩罚，任务数量: ${penaltyTasks.length}`);
+    
+    // 获取现有积分
+    wx.getStorage({
+      key: 'points',
+      success: (res) => {
+        let currentPoints = res.data || 0;
+        const totalPenalty = penaltyTasks.reduce((sum, task) => sum + task.points, 0);
+        
+        // 确保积分不会变为负数
+        const newPoints = Math.max(0, currentPoints - totalPenalty);
+        console.log(`[taskManager] 积分扣除: ${currentPoints} -> ${newPoints}, 扣除: ${totalPenalty}`);
+        
+        // 更新积分
+        wx.setStorage({
+          key: 'points',
+          data: newPoints,
+          success: () => {
+            // 为每个任务创建惩罚消息
+            const messageManager = require('./messageManager.js');
+            
+            penaltyTasks.forEach(task => {
+              const penaltyMessage = {
+                id: 'msg_penalty_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+                type: 'penalty',
+                taskId: task.taskId,
+                title: '任务未完成',
+                summary: `必做任务"${task.title}"未完成，扣除${task.points}积分`,
+                timestamp: Date.now(),
+                isRead: false,
+                icon: '⚠️'
+              };
+              
+              messageManager.addMessage(penaltyMessage);
+            });
+            
+            if (callback) callback(null, penaltyTasks);
+          },
+          fail: (error) => {
+            console.error(`[taskManager] 更新积分失败: ${error}`);
+            if (callback) callback(error, null);
+          }
+        });
+      },
+      fail: (error) => {
+        console.error(`[taskManager] 获取积分失败: ${error}`);
+        if (callback) callback(error, null);
+      }
+    });
   },
 };
 

@@ -16,6 +16,7 @@ Page({
       type: 'habit', // 默认类型为习惯
       points: 1, // 默认积分修改为1
       description: '',
+      isRequired: false, // 添加必做任务字段
       // 新增时间周期和频率相关字段
       isAllDay: false,
       startDate: '',
@@ -494,7 +495,8 @@ Page({
           time: this.data.newTask.reminder.time
         },
         status: 0, // 默认未完成
-        createTime: Date.now()
+        createTime: Date.now(),
+        isRequired: this.data.newTask.isRequired
       };
       
       console.log('[TaskEdit] 准备添加新任务:', newTask);
@@ -1356,6 +1358,35 @@ Page({
       wx.hideLoading();
     } catch (error) {
       console.error('[task-edit] 页面卸载时关闭加载提示出错:', error);
+    }
+  },
+
+  /**
+   * 切换必做任务状态
+   */
+  toggleRequiredTask: function(e) {
+    console.log('[TaskEdit] 切换必做任务状态:', e.detail.value);
+    
+    this.setData({
+      'newTask.isRequired': e.detail.value
+    });
+    
+    // 给用户一个振动反馈
+    wx.vibrateShort({
+      type: 'medium'
+    });
+    
+    // 如果是首次启用必做任务，显示提示
+    if (e.detail.value && !wx.getStorageSync('requiredTaskTipShown')) {
+      wx.showModal({
+        title: '必做任务说明',
+        content: '必做任务不获得积分奖励，但如果未完成会扣除5积分。',
+        showCancel: false,
+        success: (res) => {
+          // 标记已显示提示
+          wx.setStorageSync('requiredTaskTipShown', true);
+        }
+      });
     }
   },
 })

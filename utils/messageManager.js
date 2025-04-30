@@ -31,6 +31,11 @@ const messageManager = {
         summary = `恭喜您完成了任务"${task.title}"`;
         icon = '✅';
         break;
+      case 'required':
+        title = '必做任务提醒';
+        summary = `请务必完成任务"${task.title}"，否则将扣除5积分`;
+        icon = '⚠️';
+        break;
     }
     
     const message = {
@@ -43,6 +48,25 @@ const messageManager = {
       timestamp: now,
       isRead: false,
       icon: icon
+    };
+    
+    this.addMessage(message);
+    return message;
+  },
+  
+  // 创建积分惩罚消息
+  createPenaltyMessage: function(task, points) {
+    const now = Date.now();
+    
+    const message = {
+      id: 'msg_penalty_' + now + '_' + Math.floor(Math.random() * 1000),
+      type: 'penalty',
+      taskId: task.id,
+      title: '积分扣除提醒',
+      summary: `必做任务"${task.title}"未完成，已扣除${points}积分`,
+      timestamp: now,
+      isRead: false,
+      icon: '⚠️'
     };
     
     this.addMessage(message);

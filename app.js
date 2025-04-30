@@ -37,6 +37,15 @@ App({
     
     // 监听字体大小变化
     this.setupFontSizeChangeListener()
+
+    // 加载所有任务
+    this.loadAllTasks();
+    
+    // 检查任务状态和提醒
+    this.checkTasksStatus();
+    
+    // 检查必做任务，处理过期未完成的必做任务
+    this.checkRequiredTasks();
   },
   
   // 初始化事件总线
@@ -581,5 +590,65 @@ App({
       current: 2,
       total: 3
     }
+  },
+
+  /**
+   * 检查必做任务，处理过期未完成的必做任务
+   */
+  checkRequiredTasks: function() {
+    console.log('[App] 开始检查必做任务');
+    
+    // 获取任务管理器
+    const taskManager = require('./utils/taskManager.js');
+    
+    // 调用任务管理器检查必做任务函数
+    taskManager.checkRequiredTasks(function(error, penaltyTasks) {
+      if (error) {
+        console.error('[App] 检查必做任务失败:', error);
+        return;
+      }
+      
+      if (penaltyTasks && penaltyTasks.length > 0) {
+        console.log(`[App] 已处理未完成必做任务: ${penaltyTasks.length}个`);
+        
+        // 必做任务扣分提醒
+        wx.showToast({
+          title: `未完成${penaltyTasks.length}个必做任务，已扣除积分`,
+          icon: 'none',
+          duration: 3000
+        });
+      } else {
+        console.log('[App] 没有需要处理的未完成必做任务');
+      }
+    });
+  },
+
+  // 加载所有任务
+  loadAllTasks: function() {
+    // 使用任务管理器获取所有任务
+    const taskManager = require('./utils/taskManager.js');
+    taskManager.getAllTasks(allTasks => {
+      // 数据已在taskManager中处理并更新到app.globalData.tasks
+      console.log(`[App] 加载了 ${allTasks.length} 个任务`);
+      
+      // 通知事件总线
+      if (this.globalData.eventBus) {
+        this.globalData.eventBus.emit('taskDataChanged', allTasks);
+      }
+    });
+  },
+
+  // 检查任务状态和提醒
+  checkTasksStatus: function() {
+    console.log('[App] 开始检查任务状态和提醒');
+    
+    const taskManager = require('./utils/taskManager.js');
+    
+    // 检查即将到期的任务
+    taskManager.checkUpcomingTasks(function(upcomingTasks) {
+      if (upcomingTasks && upcomingTasks.length > 0) {
+        console.log(`[App] 检测到 ${upcomingTasks.length} 个即将到期的任务`);
+      }
+    });
   }
 }) 

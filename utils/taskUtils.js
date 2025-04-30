@@ -144,12 +144,13 @@ const filterTasks = function(tasks, filters = {}) {
 
 /**
  * 排序任务列表
- * @param {Array} tasks - 任务列表
- * @param {String} sortBy - 排序字段
- * @param {Boolean} ascending - 是否升序排序
+ * @param {Array} tasks 任务列表
+ * @param {String} sortBy 排序字段
+ * @param {Boolean} ascending 是否升序
+ * @param {Boolean} requiredFirst 是否必做任务优先
  * @returns {Array} 排序后的任务列表
  */
-const sortTasks = function(tasks, sortBy = 'date', ascending = true) {
+const sortTasks = function(tasks, sortBy = 'date', ascending = true, requiredFirst = true) {
   if (!tasks || tasks.length === 0) {
     return [];
   }
@@ -160,6 +161,15 @@ const sortTasks = function(tasks, sortBy = 'date', ascending = true) {
   switch(sortBy) {
     case 'date':
       sortedTasks.sort((a, b) => {
+        // 首先按必做任务排序（如果开启）
+        if (requiredFirst) {
+          const aRequired = a.isRequired || false;
+          const bRequired = b.isRequired || false;
+          if (aRequired !== bRequired) {
+            return aRequired ? -1 : 1; // 必做任务排在前面
+          }
+        }
+        
         // 将没有日期的任务放在最后
         if (!a.date) return ascending ? 1 : -1;
         if (!b.date) return ascending ? -1 : 1;
@@ -181,6 +191,15 @@ const sortTasks = function(tasks, sortBy = 'date', ascending = true) {
     case 'priority':
       // 优先级数值：高(3) > 中(2) > 低(1) > 无(0)
       sortedTasks.sort((a, b) => {
+        // 首先按必做任务排序（如果开启）
+        if (requiredFirst) {
+          const aRequired = a.isRequired || false;
+          const bRequired = b.isRequired || false;
+          if (aRequired !== bRequired) {
+            return aRequired ? -1 : 1; // 必做任务排在前面
+          }
+        }
+        
         const priorityA = a.priority || 0;
         const priorityB = b.priority || 0;
         return ascending ? (priorityA - priorityB) : (priorityB - priorityA);
@@ -189,6 +208,15 @@ const sortTasks = function(tasks, sortBy = 'date', ascending = true) {
       
     case 'title':
       sortedTasks.sort((a, b) => {
+        // 首先按必做任务排序（如果开启）
+        if (requiredFirst) {
+          const aRequired = a.isRequired || false;
+          const bRequired = b.isRequired || false;
+          if (aRequired !== bRequired) {
+            return aRequired ? -1 : 1; // 必做任务排在前面
+          }
+        }
+        
         return ascending ? 
           a.title.localeCompare(b.title) : 
           b.title.localeCompare(a.title);
@@ -197,6 +225,15 @@ const sortTasks = function(tasks, sortBy = 'date', ascending = true) {
       
     case 'created':
       sortedTasks.sort((a, b) => {
+        // 首先按必做任务排序（如果开启）
+        if (requiredFirst) {
+          const aRequired = a.isRequired || false;
+          const bRequired = b.isRequired || false;
+          if (aRequired !== bRequired) {
+            return aRequired ? -1 : 1; // 必做任务排在前面
+          }
+        }
+        
         const timeA = a.createTime || 0;
         const timeB = b.createTime || 0;
         return ascending ? (timeA - timeB) : (timeB - timeA);
@@ -206,6 +243,15 @@ const sortTasks = function(tasks, sortBy = 'date', ascending = true) {
     case 'status':
       // 未完成的排在前面
       sortedTasks.sort((a, b) => {
+        // 首先按必做任务排序（如果开启）
+        if (requiredFirst) {
+          const aRequired = a.isRequired || false;
+          const bRequired = b.isRequired || false;
+          if (aRequired !== bRequired) {
+            return aRequired ? -1 : 1; // 必做任务排在前面
+          }
+        }
+        
         return ascending ? 
           (a.completed === b.completed ? 0 : a.completed ? 1 : -1) : 
           (a.completed === b.completed ? 0 : a.completed ? -1 : 1);
@@ -215,6 +261,15 @@ const sortTasks = function(tasks, sortBy = 'date', ascending = true) {
     default:
       // 默认按创建时间排序
       sortedTasks.sort((a, b) => {
+        // 首先按必做任务排序（如果开启）
+        if (requiredFirst) {
+          const aRequired = a.isRequired || false;
+          const bRequired = b.isRequired || false;
+          if (aRequired !== bRequired) {
+            return aRequired ? -1 : 1; // 必做任务排在前面
+          }
+        }
+        
         const timeA = a.createTime || 0;
         const timeB = b.createTime || 0;
         return ascending ? (timeB - timeA) : (timeA - timeB);
