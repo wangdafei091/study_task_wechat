@@ -536,6 +536,9 @@ Component({
         
         console.log(`[TaskHeatmap] 处理任务: ${task.title}, ${task.date}, 重复类型: ${task.repeat ? task.repeat.type : '无'}`);
         
+        // 添加全天任务日志
+        console.log(`[TaskHeatmap] 任务时间信息: ${task.title}, 是否全天: ${task.isAllDay ? '是' : '否'}, 开始时间: ${task.startTime}, 结束时间: ${task.endTime}`);
+        
         return enhancedTask;
       });
       

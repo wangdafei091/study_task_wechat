@@ -112,7 +112,8 @@
                 </block>
                 <!-- 单次任务时间信息 -->
                 <block wx:else>
-                  <text>{{item.date}} {{item.startTime}}-{{item.endTime}}</text>
+                  <text wx:if="{{item.isAllDay}}">{{item.date}} 全天</text>
+                  <text wx:else>{{item.date}} {{item.startTime}}-{{item.endTime}}</text>
                 </block>
               </view>
             </view>
