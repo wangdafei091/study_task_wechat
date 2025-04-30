@@ -7,19 +7,19 @@
 ```
 .cursor/rules/
 ├── memory-bank/           # Cursor MemoryBank 相关文件
-│   ├── activeContext.md
-│   ├── MemoryBank.mdc
-│   ├── productContext.md
-│   ├── progress.md
-│   ├── projectbrief.md
-│   ├── systemPatterns.md
-│   └── techContext.md
+│   ├── activeContext.md   # 当前项目活动上下文
+│   ├── MemoryBank.mdc     # 记忆库核心文档
+│   ├── productContext.md  # 产品背景和目标
+│   ├── progress.md        # 项目进度和状态
+│   ├── projectbrief.md    # 项目概述
+│   ├── systemPatterns.md  # 系统架构和模式
+│   └── techContext.md     # 技术环境和框架
 ├── project/               # 项目相关规则
-│   ├── project_structure.mdc
-│   ├── components_guide.mdc
-│   ├── utils_guide.mdc
-│   ├── task_data_model.mdc
-│   └── development_workflow.mdc
+│   ├── project_structure.mdc    # 项目结构说明
+│   ├── components_guide.mdc     # 组件使用指南
+│   ├── utils_guide.mdc          # 工具函数指南
+│   ├── task_data_model.mdc      # 任务数据模型
+│   └── development_workflow.mdc # 开发工作流程
 ├── system/                # 系统架构和优化规则
 └── README.md              # 本指南文件
 ```
@@ -115,5 +115,6 @@ MemoryBank 文件应定期更新，以反映项目的最新状态和方向。建
 3. **保持一致性**：确保所有文件使用一致的命名和格式风格
 4. **删除过时内容**：移除不再使用的组件或功能的描述
 5. **添加新内容**：为新增的组件或功能添加文档
+6. **更新日志信息**：记录重要变更，便于追踪项目演进
 
 正确维护规则文件将帮助 Cursor 更好地理解项目，提供更准确的代码编辑和补全建议。 
