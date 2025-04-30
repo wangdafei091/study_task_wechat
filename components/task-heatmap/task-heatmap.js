@@ -1,5 +1,28 @@
 const Constants = require('../../utils/constants.js');
 
+/**
+ * 任务热力图组件 (task-heatmap)
+ * 
+ * @description 显示任务分布热力图，支持月份导航、日期选择和任务操作
+ * @usage 用于任务编辑页面，展示任务分布状况和进行任务管理
+ * @pages 使用此组件的页面：task-edit（任务编辑页面）
+ * 
+ * 特性:
+ * - 展示任务分布热力图，颜色深浅表示学习压力
+ * - 点击日期查看和管理当日任务
+ * - 支持任务编辑、删除等操作
+ * - 包含独立的任务操作逻辑，不依赖taskItem组件
+ * 
+ * 示例：
+ * <task-heatmap 
+ *   tasks="{{allTasks}}" 
+ *   currentYear="{{heatmapYear}}"
+ *   currentMonth="{{heatmapMonthIndex}}"
+ *   bind:monthChange="onHeatmapMonthChange"
+ *   bind:daySelect="onHeatmapDaySelect"
+ *   bind:refreshTasks="onHeatmapRefreshTasks">
+ * </task-heatmap>
+ */
 Component({
   properties: {
     tasks: {
@@ -25,6 +48,14 @@ Component({
           // 即使是空数据也需要重新计算，以清除热力图
           this.calculateHeatMap();
         }
+      }
+    },
+    // 添加场景属性，用于区分组件使用场景
+    scene: {
+      type: String,
+      value: 'task-edit', // 默认为任务编辑页面
+      observer: function(newVal) {
+        console.log('[task-heatmap] 使用场景:', newVal);
       }
     },
     // 添加外部控制月份的属性

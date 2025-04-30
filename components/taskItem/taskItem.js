@@ -1,3 +1,17 @@
+/**
+ * 任务列表项组件 (taskItem)
+ * 
+ * @description 用于展示任务列表项，提供任务完成状态切换和编辑功能
+ * @usage 仅用于首页任务列表和搜索结果展示，不用于任务编辑页面
+ * @pages 使用此组件的页面：index（首页）
+ * 
+ * 示例：
+ * <task-item 
+ *   task="{{item}}"
+ *   bind:complete="onComplete"
+ *   bind:edit="onEdit"
+ * />
+ */
 Component({
   /**
    * 组件的属性列表

@@ -278,4 +278,17 @@
   top: 10rpx;
   right: 10rpx;
   font-size: 20rpx;
+}
+
+/* 添加首页专用标识 - 不影响现有样式但提供视觉区分 */
+.task-item::after {
+  content: '';
+  position: absolute;
+  right: 10rpx;
+  bottom: 10rpx;
+  width: 8rpx;
+  height: 8rpx;
+  border-radius: 50%;
+  background-color: #4285f4;
+  opacity: 0.5;
 } 

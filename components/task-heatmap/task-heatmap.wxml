@@ -1,4 +1,29 @@
 <!--components/task-heatmap/task-heatmap.wxml-->
+<!--
+  任务热力图组件 (task-heatmap)
+  
+  用途: 展示任务分布热力图和任务详情，提供任务管理功能
+  使用场景: 任务编辑页面
+  注意: 组件内部实现了自己的任务项展示和操作，不依赖taskItem组件
+  
+  功能:
+  - 热力图显示任务分布密度
+  - 日期点击显示当日任务列表
+  - 支持任务编辑、删除操作
+  - 包含循环任务特殊处理逻辑
+  - 学习压力指数计算和展示
+  
+  属性:
+  - tasks: 任务数组
+  - currentYear: 当前年份
+  - currentMonth: 当前月份(0-11)
+  
+  事件:
+  - monthChange: 月份变更
+  - daySelect: 日期选择
+  - refreshTasks: 请求刷新任务数据
+  - editTask: 编辑任务
+-->
 <view class="task-heatmap">
   <!-- 移除独立月份选择器，将在父组件中集成到标题 -->
   

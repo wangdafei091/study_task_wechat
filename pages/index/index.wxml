@@ -136,7 +136,7 @@
       <view class="section-title">搜索结果 ({{searchResults.length}})</view>
       <view class="search-results-list">
         <block wx:for="{{searchResults}}" wx:key="id">
-          <task-item 
+          <index-task-item 
             task="{{item}}"
             bind:complete="completeTask"
             bind:detail="goToTaskDetail"
@@ -241,7 +241,7 @@
           <view class="task-note" wx:if="{{item.type === 'study'}}">
             <text class="note-text">📷 需要上传作业照片</text>
           </view>
-          <task-item 
+          <index-task-item 
             task="{{item}}"
             bind:complete="completeTask"
             bind:detail="goToTaskDetail"
