@@ -193,6 +193,17 @@ const taskManager = {
         }
         break;
         
+      case 'weekends':
+        // 休息日重复（周六和周日）
+        console.log('[TaskManager] 处理休息日重复任务，筛选周六和周日');
+        for (let date = new Date(startDate); date <= effectiveEndDate; date.setDate(date.getDate() + 1)) {
+          const day = date.getDay();
+          if (day === 0 || day === 6) { // 周日或周六
+            tasks.push(this._createRepeatTaskInstance(task, new Date(date)));
+          }
+        }
+        break;
+        
       case 'custom':
         // 自定义重复
         for (let date = new Date(startDate); date <= effectiveEndDate; date.setDate(date.getDate() + 1)) {
