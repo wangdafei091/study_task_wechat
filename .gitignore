@@ -30,3 +30,5 @@ temp/
 
 # 项目特定
 project.private.config.json 
+# SpecStory explanation file
+.specstory/.what-is-this.md
