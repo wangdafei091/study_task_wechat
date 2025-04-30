@@ -577,6 +577,12 @@ Component({
       const taskId = e.currentTarget.dataset.id;
       const taskIndex = e.currentTarget.dataset.index;
       
+      // 如果删除确认区域正在显示，先关闭它
+      if (this.data.showDeleteConfirm) {
+        console.log('[TaskHeatmap] 关闭删除确认区域，准备编辑任务');
+        this.cancelDelete();
+      }
+      
       // 如果已经在编辑这个任务，则关闭编辑
       if (this.data.editingTaskId === taskId) {
         this.cancelEdit();
@@ -599,7 +605,7 @@ Component({
       this.setData({
         editingTaskId: taskId,
         editingTaskIndex: taskIndex,
-        editPoints: task.points || 0,
+        editPoints: task.rewardPoints || 0,
         editDescription: task.description || '',
         editScope: 'single' // 默认只修改今天的任务
       });
@@ -607,7 +613,7 @@ Component({
       console.log('[TaskHeatmap] 开始编辑任务:', task.title, '积分:', this.data.editPoints);
       
       // 如果是循环任务，处理滚动确保编辑区域可见
-      if (task.repeat && task.repeat.enabled) {
+      if (task.repeat && task.repeat.type !== 'none') {
         this.ensureEditAreaVisible(taskId);
       }
     },
@@ -683,15 +689,17 @@ Component({
       });
     },
     
-    // 修改积分值
-    changePoints(e) {
+    /**
+     * 调整积分值
+     */
+    adjustEditPoints(e) {
       const action = e.currentTarget.dataset.action;
       let points = this.data.editPoints;
       
       if (action === 'reduce') {
-        points = Math.max(0, points - 1);
+        points = Math.max(1, points - 1); // 最小1分
       } else if (action === 'add') {
-        points = Math.min(100, points + 1);
+        points = Math.min(50, points + 1); // 最大50分
       }
       
       this.setData({
@@ -701,17 +709,19 @@ Component({
       console.log('[TaskHeatmap] 调整积分:', points);
     },
     
-    // 积分输入处理
-    inputPoints(e) {
-      let value = parseInt(e.detail.value);
-      
-      // 确保值为有效数字且在0-100范围内
-      if (isNaN(value)) value = 0;
-      value = Math.max(0, Math.min(100, value));
+    /**
+     * 处理积分输入
+     */
+    onEditPointsInput(e) {
+      const value = parseInt(e.detail.value) || 0;
+      // 限制积分范围在1-50之间
+      const points = Math.max(1, Math.min(50, value));
       
       this.setData({
-        editPoints: value
+        editPoints: points
       });
+      
+      console.log('[TaskHeatmap] 输入积分:', points);
     },
     
     /**
@@ -759,6 +769,7 @@ Component({
       }
       
       const taskIndex = this.data.editingTaskIndex;
+      const taskId = this.data.editingTaskId;
       const task = this.data.dayTasks[taskIndex];
       
       if (!task) {
@@ -770,32 +781,51 @@ Component({
       console.log('[TaskHeatmap] 保存任务编辑:', task.title);
       console.log('[TaskHeatmap] 新积分:', this.data.editPoints);
       console.log('[TaskHeatmap] 新描述:', this.data.editDescription);
-      console.log('[TaskHeatmap] 编辑范围:', this.data.editScope);
       
       // 更新任务数据
-      const updatedTask = {
-        ...task,
-        points: this.data.editPoints,
-        description: this.data.editDescription
+      const taskManager = require('../../utils/taskManager.js');
+      
+      // 准备更新的字段
+      const updateData = {
+        rewardPoints: this.data.editPoints,
+        description: this.data.editDescription,
+        modifyTime: Date.now()
       };
       
-      // 更新当前日期任务列表中的任务
-      const updatedDayTasks = [...this.data.dayTasks];
-      updatedDayTasks[taskIndex] = updatedTask;
-      
-      this.setData({
-        dayTasks: updatedDayTasks
+      // 更新任务
+      taskManager.editTask(taskId, updateData, (updatedTask) => {
+        if (updatedTask) {
+          console.log('[TaskHeatmap] 任务更新成功');
+          
+          // 更新本地显示
+          const updatedDayTasks = [...this.data.dayTasks];
+          updatedDayTasks[taskIndex] = updatedTask;
+          
+          this.setData({
+            dayTasks: updatedDayTasks
+          });
+          
+          // 显示成功提示
+          wx.showToast({
+            title: '更新成功',
+            icon: 'success',
+            duration: 1500
+          });
+          
+          // 触发刷新事件
+          this.triggerEvent('refreshTasks');
+        } else {
+          console.error('[TaskHeatmap] 任务更新失败');
+          wx.showToast({
+            title: '更新失败',
+            icon: 'error',
+            duration: 1500
+          });
+        }
+        
+        // 关闭编辑区域
+        this.cancelEdit();
       });
-      
-      // 向父组件发送任务更新事件
-      this.triggerEvent('taskUpdate', {
-        task: updatedTask,
-        scope: this.data.editScope,
-        date: this.data.selectedDate
-      });
-      
-      // 关闭编辑区
-      this.cancelEdit();
     },
     
     // 获取当前月份
@@ -836,6 +866,12 @@ Component({
       
       // 隐藏菜单
       this.hideActionMenu();
+      
+      // 如果有正在编辑的任务，先取消编辑
+      if (this.data.editingTaskId) {
+        console.log(`[task-heatmap] 取消当前编辑，准备删除任务`);
+        this.cancelEdit();
+      }
 
       // 获取当前任务
       const task = this.data.dayTasks.find(t => t.id === taskId);
@@ -1308,18 +1344,27 @@ Component({
     /**
      * 处理编辑任务
      */
-    handleEditTask(taskId) {
-      console.log(`[task-heatmap] 编辑任务: ${taskId}`);
+    handleEditTask(e) {
+      console.log(`[task-heatmap] 编辑任务`);
       
       // 隐藏菜单
       this.hideActionMenu();
       
-      // 触发编辑任务事件
-      this.triggerEvent('editTask', { taskId });
+      // 获取任务ID
+      const taskId = e.currentTarget.dataset.id;
+      console.log(`[task-heatmap] 编辑任务ID: ${taskId}`);
       
-      // 跳转到任务编辑页面
-      wx.navigateTo({
-        url: `/pages/task-edit/task-edit?id=${taskId}`
+      // 获取任务在数组中的索引
+      const taskIndex = this.data.dayTasks.findIndex(task => task.id === taskId);
+      
+      // 调用已有的showTaskEdit方法
+      this.showTaskEdit({
+        currentTarget: {
+          dataset: {
+            id: taskId,
+            index: taskIndex
+          }
+        }
       });
     }
   }

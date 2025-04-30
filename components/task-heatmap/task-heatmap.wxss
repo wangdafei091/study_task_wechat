@@ -11,7 +11,8 @@
 .edit-field {
   display: flex;
   align-items: center;
-  margin-bottom: 16rpx;
+  margin-bottom: 20rpx;
+  padding: 4rpx 0;
 }
 
 .task-heatmap {
@@ -837,18 +838,21 @@
 
 /* 调整编辑字段间距 */
 .edit-field {
-  margin-bottom: 16rpx; /* 增加字段间距 */
+  margin-bottom: 20rpx; /* 增加字段间距 */
   padding: 4rpx 0; /* 添加上下内边距 */
+  display: flex;
+  align-items: center;
 }
 
 .edit-field:last-child {
-  margin-bottom: 8rpx;
+  margin-bottom: 10rpx;
 }
 
 .field-label {
   font-size: 24rpx;
   color: #666;
-  margin-right: 6rpx;
+  margin-right: 10rpx;
+  min-width: 50rpx; /* 确保标签宽度一致 */
 }
 
 /* 积分调整器 */
@@ -871,7 +875,7 @@
 }
 
 .stepper-input {
-  width: 60rpx;
+  width: 70rpx; /* 增加宽度 */
   height: 36rpx;
   text-align: center;
   font-size: 24rpx;
@@ -885,6 +889,8 @@
   display: inline-flex;
   width: calc(100% - 80rpx);
   margin-left: 6rpx;
+  height: 40rpx; /* 固定高度 */
+  align-items: center;
 }
 
 .description-input {
@@ -894,6 +900,7 @@
   color: #333;
   border-bottom: 1rpx solid #e0e0e0;
   padding: 0 50rpx 0 4rpx;
+  line-height: 40rpx; /* 确保文字垂直居中 */
 }
 
 .char-count {
@@ -1230,6 +1237,59 @@
   padding: 12rpx 0; /* 统一为上下12rpx的内边距 */
 }
 
+/* 编辑确认区域样式 */
+.edit-confirm {
+  height: 0;
+  opacity: 0;
+  overflow: hidden;
+  background-color: #fff;
+  border-top: 1px solid rgba(0,0,0,0.03); /* 保持分隔线样式一致 */
+  transition: height 0.25s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start; /* 改为顶部对齐，适合双行编辑 */
+  padding: 0;
+  box-shadow: none;
+}
+
+.edit-confirm.visible {
+  height: auto;
+  opacity: 1;
+  padding: 12rpx 0; /* 统一为上下12rpx的内边距 */
+}
+
+/* 编辑选项区域 */
+.edit-options {
+  display: flex;
+  flex-direction: column;
+  flex: 0.65;
+  padding-left: 0;
+}
+
+/* 编辑操作区域 */
+.edit-actions {
+  display: flex;
+  align-items: center;
+  flex: 0.35;
+  justify-content: flex-end;
+  position: relative;
+  height: auto;
+  line-height: 1.4; /* 保持行高一致 */
+  padding-right: 24rpx;
+  align-self: center; /* 垂直居中 */
+}
+
+.edit-actions:before {
+  content: '';
+  position: absolute;
+  left: -16rpx;
+  top: 50%;
+  height: 32rpx; /* 调整为更匹配区域高度 */
+  width: 1rpx;
+  background-color: rgba(0, 0, 0, 0.06);
+  transform: translateY(-50%);
+}
+
 /* 删除选项区域 */
 .delete-options {
   display: flex;
@@ -1392,4 +1452,36 @@
 
 .level-item.level-4 {
   background-color: #E53935; /* 紧张：红色 */
+}
+
+/* 编辑区域按钮样式 */
+.edit-confirm .btn-cancel {
+  font-size: 24rpx;
+  color: #666;
+  padding: 0 12rpx;
+  line-height: 1.4; /* 统一使用1.4的行高 */
+  display: flex;
+  align-items: center;
+}
+
+.edit-confirm .btn-confirm {
+  font-size: 24rpx;
+  color: #fff;
+  background-color: #4285F4;
+  border-radius: 24rpx;
+  padding: 6rpx 24rpx; /* 增加垂直内边距 */
+  margin-left: 20rpx;
+  box-shadow: 0 2rpx 4rpx rgba(66, 133, 244, 0.2);
+  line-height: 1.4; /* 统一使用1.4的行高 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: auto;
+  min-width: 72rpx; /* 确保按钮有最小宽度 */
+}
+
+.edit-confirm .btn-confirm.disabled {
+  background-color: #e0e0e0;
+  color: #999;
+  box-shadow: none;
 } 

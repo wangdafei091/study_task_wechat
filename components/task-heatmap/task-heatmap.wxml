@@ -117,6 +117,35 @@
               </view>
             </view>
             
+            <!-- 编辑确认区域 -->
+            <view class="edit-confirm {{editingTaskId === item.id ? 'visible' : ''}}" id="edit-{{item.id}}" style="z-index: 2;">
+              <view class="edit-options">
+                <!-- 积分调整 -->
+                <view class="edit-field">
+                  <text class="field-label">积分:</text>
+                  <view class="points-stepper">
+                    <view class="stepper-btn" bindtap="adjustEditPoints" data-action="reduce">-</view>
+                    <input class="stepper-input" type="number" value="{{editPoints}}" bindinput="onEditPointsInput" />
+                    <view class="stepper-btn" bindtap="adjustEditPoints" data-action="add">+</view>
+                  </view>
+                </view>
+                
+                <!-- 描述输入 -->
+                <view class="edit-field">
+                  <text class="field-label">描述:</text>
+                  <view class="description-input-wrap">
+                    <input class="description-input" value="{{editDescription}}" bindinput="inputDescription" maxlength="30" />
+                    <text class="char-count">{{editDescription.length}}/30</text>
+                  </view>
+                </view>
+              </view>
+              
+              <view class="edit-actions">
+                <view class="btn-cancel" bindtap="cancelEdit">取消</view>
+                <view class="btn-confirm" bindtap="saveEdit">确认</view>
+              </view>
+            </view>
+            
             <!-- 删除确认区域 -->
             <view class="delete-confirm {{showDeleteConfirm && item.id === activeTaskForDelete.id ? 'visible' : ''}}" 
                   wx:if="{{item.repeat && item.repeat.type !== 'none'}}">
