@@ -364,7 +364,7 @@
 .task-item-wrap {
   display: flex;
   margin-bottom: 16rpx;
-  padding: 20rpx 24rpx;
+  padding: 15rpx 24rpx;  /* 减少上下内边距 */
   background-color: white;
   border-radius: 12rpx;
   box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.05);
@@ -384,7 +384,7 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 10rpx;
+  gap: 6rpx;  /* 减少元素之间的间距 */
 }
 
 /* 第一行：标题和操作区 */
@@ -393,7 +393,7 @@
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  margin-bottom: 8rpx; /* 与下方内容保持间距 */
+  margin-bottom: 5rpx; /* 减少与下方内容的间距 */
 }
 
 /* 标题区域 */
@@ -513,18 +513,18 @@
 
 /* 第二行：描述信息 */
 .task-desc-row {
-  margin: 8rpx 0;
+  margin: 4rpx 0;  /* 减少上下外边距 */
 }
 
 /* 任务描述 */
 .task-description {
-  font-size: 28rpx;
+  font-size: 26rpx;  /* 微调字体大小 */
   color: #666;
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  line-height: 1.4;
+  line-height: 1.3;  /* 稍微减少行高 */
 }
 
 /* 第三行：时间信息 */
@@ -532,23 +532,21 @@
   display: flex;
   justify-content: flex-start;
   align-items: center;
-  margin-top: 16rpx;  /* 保持上边距一致 */
-  padding: 12rpx 0; /* 统一为上下12rpx的内边距 */
+  margin-top: 8rpx;  /* 减少上边距 */
+  padding: 8rpx 0;  /* 减少上下内边距 */
   border-top: 1px solid rgba(0,0,0,0.03); /* 保持边框样式一致 */
 }
 
 /* 任务时间信息 */
 .task-time-info {
   width: 100%;
-  font-size: 24rpx;
-  color: #888;
+  font-size: 22rpx;  /* 稍微减小字体大小 */
+  color: #999;  /* 调深颜色以增加对比度 */
   padding-right: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  line-height: 1.4; /* 保持行高一致 */
-  padding: 0; /* 移除内部额外的内边距 */
-  padding-left: 0; /* 保持左对齐 */
+  line-height: 1.3; /* 略微减少行高 */
 }
 
 /* 时间信息前的图标 */
