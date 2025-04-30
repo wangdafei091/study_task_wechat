@@ -164,21 +164,30 @@
             </view>
             
             <!-- 删除确认区域 -->
-            <view class="delete-confirm {{showDeleteConfirm && item.id === activeTaskForDelete.id ? 'visible' : ''}}" 
-                  wx:if="{{item.repeat && item.repeat.type !== 'none'}}">
+            <view class="delete-confirm {{showDeleteConfirm && item.id === activeTaskForDelete.id ? 'visible' : ''}}">
               <view class="delete-options">
-                <view class="option {{deleteScope === 'single' ? 'selected' : ''}}" bindtap="selectDeleteScope" data-scope="single">
-                  <view class="radio-circle {{deleteScope === 'single' ? 'selected' : ''}}"></view>
-                  <text class="option-text">删除当天</text>
-                </view>
-                <view class="option {{deleteScope === 'series' ? 'selected' : ''}}" bindtap="selectDeleteScope" data-scope="series">
-                  <view class="radio-circle {{deleteScope === 'series' ? 'selected' : ''}}"></view>
-                  <text class="option-text">删除循环</text>
-                </view>
+                <!-- 循环任务显示选项 -->
+                <block wx:if="{{item.repeat && item.repeat.type !== 'none'}}">
+                  <view class="option {{deleteScope === 'single' ? 'selected' : ''}}" bindtap="selectDeleteScope" data-scope="single">
+                    <view class="radio-circle {{deleteScope === 'single' ? 'selected' : ''}}"></view>
+                    <text class="option-text">删除当天</text>
+                  </view>
+                  <view class="option {{deleteScope === 'series' ? 'selected' : ''}}" bindtap="selectDeleteScope" data-scope="series">
+                    <view class="radio-circle {{deleteScope === 'series' ? 'selected' : ''}}"></view>
+                    <text class="option-text">删除循环</text>
+                  </view>
+                </block>
+                <!-- 一次性任务显示单个选项 -->
+                <block wx:else>
+                  <view class="option selected">
+                    <view class="radio-circle selected"></view>
+                    <text class="option-text">删除此任务</text>
+                  </view>
+                </block>
               </view>
               <view class="delete-actions">
                 <view class="btn-cancel" bindtap="cancelDelete">取消</view>
-                <view class="btn-confirm {{!deleteScope ? 'disabled' : ''}}" bindtap="confirmDelete">确认</view>
+                <view class="btn-confirm {{item.repeat && item.repeat.type !== 'none' && !deleteScope ? 'disabled' : ''}}" bindtap="confirmDelete">确认</view>
               </view>
             </view>
           </view>

@@ -461,6 +461,16 @@ Page({
       const taskManager = require('../../utils/taskManager.js');
       const taskPoints = parseInt(this.data.newTask.points) || 0;
       
+      // 判断是否应该是单次任务
+      let repeatType = this.data.newTask.repeat.type;
+      
+      // 判断逻辑：如果开始日期和结束日期相同，且不是"无结束日期"，则视为单次任务
+      if (!this.data.newTask.hasNoEndDate && 
+          this.data.newTask.startDate === this.data.newTask.endDate) {
+        console.log('[TaskEdit] 检测到开始和结束日期相同，自动设置为单次任务');
+        repeatType = 'none';
+      }
+      
       const newTask = {
         title: this.data.newTask.title,
         type: this.data.newTask.type,
@@ -473,9 +483,9 @@ Page({
         endDate: this.data.newTask.endDate,
         hasNoEndDate: this.data.newTask.hasNoEndDate,
         repeat: {
-          type: this.data.newTask.repeat.type,
+          type: repeatType, // 使用根据逻辑判断的类型
           startDate: this.data.newTask.startDate,
-          endDate: this.data.newTask.repeat.type !== 'none' ?
+          endDate: repeatType !== 'none' ?
             (this.data.newTask.hasNoEndDate ? null : this.data.newTask.endDate) : null,
           days: this.data.newTask.repeat.days || []
         },

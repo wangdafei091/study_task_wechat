@@ -389,18 +389,20 @@
 /* 第一行：标题和操作区 */
 .task-item-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 2rpx;
+  justify-content: space-between;
+  width: 100%;
+  margin-bottom: 8rpx; /* 与下方内容保持间距 */
 }
 
 /* 标题区域 */
 .task-title-area {
   display: flex;
   align-items: center;
-  flex-wrap: nowrap;
-  max-width: 75%;
-  overflow: hidden;
+  flex: 1; /* 使标题区域获得最大可用空间 */
+  min-width: 0; /* 允许内容收缩 */
+  overflow: hidden; /* 防止内容溢出 */
+  margin-right: 10rpx; /* 与右侧按钮区域保持距离 */
 }
 
 /* 任务类型圆点 */
@@ -409,7 +411,7 @@
   height: 16rpx;
   border-radius: 50%;
   margin-right: 10rpx;
-  flex-shrink: 0;
+  flex-shrink: 0; /* 防止点标记被挤压 */
 }
 
 .study-dot {
@@ -426,38 +428,35 @@
 
 /* 任务标题 */
 .task-title {
-  font-size: 32rpx;
+  font-size: 28rpx;
   font-weight: 500;
   color: #333;
-  margin-right: 8rpx;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: calc(100% - 40rpx);
-  line-height: 1.4;
+  white-space: nowrap; /* 标题单行显示 */
+  overflow: hidden; /* 超出隐藏 */
+  text-overflow: ellipsis; /* 显示省略号 */
+  flex: 1; /* 占用最大可用空间 */
+  margin-right: 8rpx; /* 与标记图标保持间距 */
 }
 
 /* 任务状态标记 */
-.task-complete-mark {
-  color: #34A853;
+.task-complete-mark,
+.task-overdue-mark,
+.task-repeat-mark {
   font-size: 24rpx;
   margin-left: 6rpx;
-  font-weight: bold;
-  flex-shrink: 0;
+  flex-shrink: 0; /* 防止标记被挤压 */
+}
+
+.task-complete-mark {
+  color: #34A853;
 }
 
 .task-overdue-mark {
   color: #E53935;
-  font-size: 24rpx;
-  margin-left: 6rpx;
-  flex-shrink: 0;
 }
 
 .task-repeat-mark {
   color: #9C27B0;
-  font-size: 24rpx;
-  margin-left: 6rpx;
-  flex-shrink: 0;
 }
 
 /* 操作按钮区 */
@@ -567,20 +566,19 @@
 .task-header-right {
   display: flex;
   align-items: center;
-  gap: 12rpx;
-  margin-left: 10rpx;
+  flex-shrink: 0; /* 防止右侧区域被挤压 */
 }
 
 /* 积分信息（迷你版） */
 .task-points-mini {
-  font-size: 22rpx;
-  padding: 2rpx 8rpx;
-  border-radius: 10rpx;
-  background-color: rgba(255, 152, 0, 0.1);
+  font-size: 24rpx;
   color: #FF9800;
-  margin-left: 0;
-  font-weight: normal;
-  white-space: nowrap;
+  background: rgba(255, 152, 0, 0.1);
+  padding: 2rpx 10rpx;
+  border-radius: 20rpx;
+  margin-right: 10rpx;
+  font-weight: 500;
+  flex-shrink: 0; /* 防止积分显示被挤压 */
 }
 
 /* 积分迷你版图标 */
@@ -592,14 +590,14 @@
 
 /* 更多操作按钮 */
 .more-actions {
+  font-size: 30rpx;
+  color: #666;
+  height: 40rpx;
   width: 40rpx;
-  height: 32rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #999;
-  font-size: 24rpx;
-  border-radius: 4rpx;
+  flex-shrink: 0; /* 防止按钮被挤压 */
 }
 
 .more-actions:active {
@@ -1407,4 +1405,4 @@
   border-left: 6rpx solid transparent;
   border-right: 6rpx solid transparent;
   border-top: 6rpx solid rgba(0, 0, 0, 0.6);
-} 
+}

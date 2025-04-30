@@ -930,30 +930,21 @@ Component({
         return;
       }
 
-      // 如果是重复任务，显示内嵌确认区域
-      if (task.repeat && task.repeat.type !== 'none') {
-        console.log(`[task-heatmap] 显示删除确认区域, 任务类型: ${task.type}, 重复类型: ${task.repeat.type}`);
-        
-        // 设置当前操作的任务和重置选择状态
-        this.setData({
-          activeTaskForDelete: task,
-          deleteScope: '',
-          showDeleteConfirm: true
-        });
-      } else {
-        // 非重复任务，直接确认删除
-        wx.showModal({
-          title: '确认删除',
-          content: '确定要删除此任务吗？',
-          confirmColor: '#f44336',
-          success: (res) => {
-            if (res.confirm) {
-              console.log(`[task-heatmap] 确认删除任务: ${taskId}`);
-              this.deleteTask(taskId);
-            }
-          }
-        });
+      // 设置当前操作的任务
+      console.log(`[task-heatmap] 显示删除确认区域, 任务类型: ${task.type}, 重复类型: ${task.repeat ? task.repeat.type : 'none'}`);
+      
+      // 如果是循环任务，重置选择状态；否则对于一次性任务默认选择"删除此任务"
+      let initialDeleteScope = '';
+      if (!(task.repeat && task.repeat.type !== 'none')) {
+        initialDeleteScope = 'single'; // 一次性任务默认已选择状态
       }
+      
+      // 更新状态，显示删除确认区域
+      this.setData({
+        activeTaskForDelete: task,
+        deleteScope: initialDeleteScope,
+        showDeleteConfirm: true
+      });
     },
     
     /**
@@ -985,30 +976,37 @@ Component({
      * 确认删除
      */
     confirmDelete() {
-      if (!this.data.deleteScope) {
-        console.log('[task-heatmap] 未选择删除范围，禁止操作');
+      const task = this.data.activeTaskForDelete;
+      if (!task) {
+        console.error('[task-heatmap] 没有活动的删除任务');
+        return;
+      }
+      
+      // 对于循环任务，需要检查是否已选择范围
+      if (task.repeat && task.repeat.type !== 'none' && !this.data.deleteScope) {
+        console.log('[task-heatmap] 循环任务未选择删除范围，禁止操作');
         return; // 未选择范围，禁止操作
       }
       
-      const task = this.data.activeTaskForDelete;
       const scope = this.data.deleteScope;
+      console.log(`[task-heatmap] 确认删除任务: ${task.id}, 范围: ${scope}, 类型: ${task.repeat ? task.repeat.type : 'none'}`);
       
-      console.log(`[task-heatmap] 确认删除任务: ${task.id}, 范围: ${scope}`);
-      
-      if (scope === 'single') {
-        // 仅删除当日任务
-        this.deleteTask(task.id);
+      // 检查是否是循环任务
+      if (task.repeat && task.repeat.type !== 'none') {
+        if (scope === 'single') {
+          // 仅删除当日任务
+          this.deleteTask(task.id);
+        } else {
+          // 删除整个循环
+          this.deleteTaskSeries(task);
+        }
       } else {
-        // 删除整个循环
-        this.deleteTaskSeries(task);
+        // 一次性任务，直接删除
+        this.deleteTask(task.id);
       }
       
-      // 还原状态
-      this.setData({
-        showDeleteConfirm: false,
-        deleteScope: '',
-        activeTaskForDelete: null
-      });
+      // 注意：状态重置已移到deleteTask函数的回调中进行
+      // 对于deleteTaskSeries，需要在其内部也添加状态重置
     },
     
     /**
@@ -1017,20 +1015,53 @@ Component({
     deleteTask(taskId) {
       const taskManager = require('../../utils/taskManager.js');
       
+      // 记录当前任务在本地数组中的索引，用于后续更新本地UI
+      const taskIndex = this.data.dayTasks.findIndex(task => task.id === taskId);
+      console.log(`[task-heatmap] 准备删除任务ID: ${taskId}, 在本地数组中的索引: ${taskIndex}`);
+      
+      if (taskIndex === -1) {
+        console.error(`[task-heatmap] 未找到要删除的任务: ${taskId}`);
+      }
+      
       taskManager.deleteTask(taskId, (success) => {
         if (success) {
+          console.log(`[task-heatmap] 任务删除成功: ${taskId}`);
+          
+          // 任务删除成功后，更新本地数据
+          if (taskIndex !== -1) {
+            // 创建新的任务数组，移除已删除的任务
+            const updatedTasks = [...this.data.dayTasks];
+            updatedTasks.splice(taskIndex, 1);
+            
+            console.log(`[task-heatmap] 更新本地任务列表，删除前: ${this.data.dayTasks.length}个, 删除后: ${updatedTasks.length}个`);
+            
+            // 更新视图
+            this.setData({
+              dayTasks: updatedTasks
+            });
+          }
+          
           // 更新任务列表
           this.triggerEvent('refreshTasks');
+          
           wx.showToast({
             title: '删除成功',
             icon: 'success'
           });
         } else {
+          console.error(`[task-heatmap] 任务删除失败: ${taskId}`);
           wx.showToast({
             title: '删除失败',
             icon: 'error'
           });
         }
+        
+        // 删除操作完成后，重置删除相关状态
+        this.setData({
+          showDeleteConfirm: false,
+          deleteScope: '',
+          activeTaskForDelete: null
+        });
       });
     },
     
@@ -1141,9 +1172,23 @@ Component({
                     
                     // 刷新任务列表
                     this.triggerEvent('refreshTasks');
+                    
+                    // 重置删除相关状态
+                    this.setData({
+                      showDeleteConfirm: false,
+                      deleteScope: '',
+                      activeTaskForDelete: null
+                    });
                   } else {
                     // 安全关闭加载提示并显示失败结果
                     safeHideLoadingAndShowResult(false, 0);
+                    
+                    // 即使失败也重置状态
+                    this.setData({
+                      showDeleteConfirm: false,
+                      deleteScope: '',
+                      activeTaskForDelete: null
+                    });
                   }
                   return;
                 }
@@ -1166,6 +1211,19 @@ Component({
                     if (success) {
                       console.log(`[task-heatmap] 成功删除任务: ${currentTask.id}`);
                       results.success.push(currentTask.id);
+                      
+                      // 从本地任务列表中移除已删除的任务
+                      const taskIndex = this.data.dayTasks.findIndex(t => t.id === currentTask.id);
+                      if (taskIndex !== -1) {
+                        const updatedTasks = [...this.data.dayTasks];
+                        updatedTasks.splice(taskIndex, 1);
+                        
+                        console.log(`[task-heatmap] 更新本地任务列表，删除前: ${this.data.dayTasks.length}个, 删除后: ${updatedTasks.length}个`);
+                        
+                        this.setData({
+                          dayTasks: updatedTasks
+                        });
+                      }
                     } else {
                       console.error(`[task-heatmap] 删除任务失败: ${currentTask.id}`);
                       results.failed.push(currentTask.id);
@@ -1195,6 +1253,13 @@ Component({
                   if (results.success.length > 0) {
                     this.triggerEvent('refreshTasks');
                   }
+                  
+                  // 重置删除相关状态
+                  this.setData({
+                    showDeleteConfirm: false,
+                    deleteScope: '',
+                    activeTaskForDelete: null
+                  });
                 }
               }
             };
@@ -1569,6 +1634,13 @@ Component({
         console.error('[TaskHeatmap] 获取任务列表出错:', error);
         if (callback) callback(false, 0);
       }
+    },
+
+    /**
+     * 处理任务系列更新，继续更新下一个
+     */
+    handleSeriesUpdateContinue(tasks, index, updateData, results, callback) {
+      this.updateTasksSerially(tasks, index, updateData, results, callback);
     }
   }
 }); 
