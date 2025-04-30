@@ -370,6 +370,7 @@
   box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.05);
   border: 1rpx solid #f0f0f0;
   transition: all 0.2s ease;
+  position: relative; /* 添加定位上下文，用于必做标记定位 */
 }
 
 /* 任务项hover效果 */
@@ -571,14 +572,41 @@
 
 /* 积分信息（迷你版） */
 .task-points-mini {
-  font-size: 24rpx;
-  color: #FF9800;
-  background: rgba(255, 152, 0, 0.1);
-  padding: 2rpx 10rpx;
-  border-radius: 20rpx;
-  margin-right: 10rpx;
+  font-size: 22rpx;
+  padding: 0 8rpx;
+  background-color: rgba(66, 133, 244, 0.1);
+  color: #4285F4;
+  border-radius: 8rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 8rpx;
+}
+
+/* 必做任务标识 */
+.task-required-tag {
+  font-size: 22rpx;
+  padding: 2rpx 8rpx;
+  background-color: #f94646;
+  color: white;
+  border-radius: 8rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 8rpx;
   font-weight: 500;
-  flex-shrink: 0; /* 防止积分显示被挤压 */
+}
+
+/* 必做任务样式 - 为任务项添加标识 */
+.task-item-wrap.required-task::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 10rpx;
+  bottom: 10rpx;
+  width: 8rpx !important;
+  background-color: #f94646 !important;
+  border-radius: 4rpx;
 }
 
 /* 积分迷你版图标 */

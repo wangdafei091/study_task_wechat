@@ -285,6 +285,9 @@ Component({
     calculateTaskPressure(task) {
       console.log('[TaskHeatmap] 计算任务压力指数:', task.title);
       
+      // 记录任务是否为必做任务
+      console.log(`[TaskHeatmap] 任务[${task.title}] 是否必做: ${task.isRequired ? '是' : '否'}`);
+      
       // 任务类型权重
       const typeWeights = {
         'study': 1.2,   // 学习任务权重高
@@ -462,10 +465,9 @@ Component({
     
     // 更新日期任务列表和压力显示
     onDayTap(e) {
+      console.log('[TaskHeatmap] 点击日期');
       const dayData = e.currentTarget.dataset.day;
-      const date = dayData.date;
-      
-      console.log(`[TaskHeatmap] 点击日期: ${date}`);
+      const date = e.currentTarget.dataset.date;
       
       // 如果点击当前已选中日期，则关闭任务列表
       if (this.data.selectedDate === date && this.data.showDayTasks) {
@@ -482,6 +484,9 @@ Component({
         // 计算总压力
         const taskPressure = this.calculateTaskPressure(task);
         totalPressure += taskPressure.total;
+        
+        // 记录任务是否为必做任务
+        console.log(`[task-heatmap] 处理任务: ${task.title}, 是否必做: ${task.isRequired ? '是' : '否'}, ID: ${task.id}`);
         
         // 增强任务信息
         const enhancedTask = { ...task };
@@ -534,7 +539,10 @@ Component({
           enhancedTask.rewardPoints = task.points || 0;
         }
         
-        console.log(`[TaskHeatmap] 处理任务: ${task.title}, ${task.date}, 重复类型: ${task.repeat ? task.repeat.type : '无'}`);
+        // 确保必做任务属性被正确传递
+        enhancedTask.isRequired = !!task.isRequired;
+        
+        console.log(`[TaskHeatmap] 处理任务: ${task.title}, ${task.date}, 重复类型: ${task.repeat ? task.repeat.type : '无'}, 是否必做: ${enhancedTask.isRequired ? '是' : '否'}`);
         
         // 添加全天任务日志
         console.log(`[TaskHeatmap] 任务时间信息: ${task.title}, 是否全天: ${task.isAllDay ? '是' : '否'}, 开始时间: ${task.startTime}, 结束时间: ${task.endTime}`);

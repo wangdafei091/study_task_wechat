@@ -73,7 +73,7 @@
         <view 
           wx:for="{{dayTasks}}" 
           wx:key="id" 
-          class="task-item-wrap {{item.status === 1 || item.status === 'completed' ? 'completed' : ''}} {{item.type}}-task"
+          class="task-item-wrap {{item.status === 1 || item.status === 'completed' ? 'completed' : ''}} {{item.type}}-task {{item.isRequired ? 'required-task' : ''}}"
           id="task-{{item.id}}">
           <!-- 任务内容区 -->
           <view class="task-item">
@@ -90,9 +90,12 @@
                 <text wx:if="{{item.repeat && item.repeat.type !== 'none'}}" class="task-repeat-mark">↻</text>
               </view>
               
-              <!-- 右侧区域：积分和操作 -->
+              <!-- 右侧区域：必做标签或积分和操作 -->
               <view class="task-header-right">
-                <view class="task-points-mini">{{item.rewardPoints || '0'}}分</view>
+                <!-- 根据isRequired属性显示必做标签或积分 -->
+                <view class="{{item.isRequired ? 'task-required-tag' : 'task-points-mini'}}">
+                  {{item.isRequired ? '必做' : (item.rewardPoints || '0') + '分'}}
+                </view>
                 <view class="more-actions" bindtap="showTaskActions" data-id="{{item.id}}" data-index="{{index}}">···</view>
               </view>
             </view>
