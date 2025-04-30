@@ -300,6 +300,8 @@
               bindtap="selectReminderType" data-enabled="true" data-time="15">提前15分钟</view>
         <view class="option-item {{newTask.reminder.enabled && newTask.reminder.time === 30 ? 'selected' : ''}}" 
               bindtap="selectReminderType" data-enabled="true" data-time="30">提前30分钟</view>
+        <view class="option-item {{newTask.reminder.enabled && newTask.reminder.time === -1 ? 'selected' : ''}}" 
+              bindtap="selectReminderType" data-enabled="true" data-time="-1">提前1天(晚上8点)</view>
       </view>
     </view>
   </view>

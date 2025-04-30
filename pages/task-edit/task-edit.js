@@ -1015,6 +1015,8 @@ Page({
     if (enabled) {
       if (time === 0) {
         reminderText = '准时';
+      } else if (time === -1) {
+        reminderText = '提前1天(晚上8点)';
       } else {
         reminderText = `提前${time}分钟`;
       }
@@ -1027,7 +1029,7 @@ Page({
       reminderPanel: false // 选择后关闭面板
     });
     
-    console.log(`[TaskEdit] 设置提醒: ${reminderText}`);
+    console.log(`[TaskEdit] 设置提醒: ${reminderText}, 参数: enabled=${enabled}, time=${time}`);
   },
 
   /**

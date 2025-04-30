@@ -367,7 +367,7 @@ const taskManager = {
   },
   
   /**
-   * 检查即将到期任务
+   * 检查即将到期的任务
    * @param {Function} callback 回调函数，参数为即将到期的任务数组
    */
   checkUpcomingTasks(callback) {
@@ -375,21 +375,36 @@ const taskManager = {
       const now = new Date();
       const upcomingTasks = [];
       
+      console.log('[TaskManager] 检查即将到期任务, 当前任务数:', todayTasks.length);
+      
       // 筛选未完成且有截止时间的任务
       todayTasks.forEach(task => {
         if (task.status === 0 && task.date) {
-          // 确保任务有开始时间，没有则使用默认值
-          const startTime = task.startTime || '08:00';
-          
           try {
+            // 确保任务有开始时间，没有则使用默认值
+            const startTime = task.startTime || '08:00';
+            
             // 创建任务日期时间对象
             const taskTime = new Date(`${task.date}T${startTime}`);
             
             // 计算时间差（小时）
             const diffHours = (taskTime - now) / (1000 * 60 * 60);
             
-            // 只考虑未来24小时内的任务
-            if (diffHours > 0 && diffHours < 24) {
+            // 处理提醒时间
+            let shouldRemind = false;
+            if (task.reminder && task.reminder.enabled) {
+              const reminderTime = this.calculateReminderTime(task);
+              if (reminderTime) {
+                // 检查当前时间是否在提醒时间附近（正负10分钟内）
+                const timeDiff = Math.abs(reminderTime - now) / (1000 * 60);
+                shouldRemind = timeDiff <= 10;
+                
+                console.log(`[TaskManager] 任务"${task.title}"提醒时间差: ${timeDiff.toFixed(1)}分钟, 是否提醒: ${shouldRemind}`);
+              }
+            }
+            
+            // 只考虑未来24小时内的任务或需要提醒的任务
+            if ((diffHours > 0 && diffHours < 24) || shouldRemind) {
               upcomingTasks.push({
                 ...task,
                 timeRemaining: Math.round(diffHours * 10) / 10 // 保留一位小数
@@ -410,6 +425,8 @@ const taskManager = {
         upcomingTasks.forEach(task => {
           messageManager.createTaskMessage(task, 'upcoming');
         });
+        
+        console.log('[TaskManager] 创建了即将到期任务提醒:', upcomingTasks.length);
       }
       
       if (callback) callback(upcomingTasks);
@@ -577,7 +594,39 @@ const taskManager = {
         console.warn(`[TaskManager] 未找到全局事件总线，无法广播变更事件`);
       }
     }, 0);
-  }
+  },
+  
+  /**
+   * 计算提醒时间
+   * @param {Object} task 任务对象
+   * @returns {Date|null} 提醒时间，如果不需要提醒则返回null
+   */
+  calculateReminderTime: function(task) {
+    if (!task || !task.reminder || !task.reminder.enabled) {
+      return null;
+    }
+    
+    try {
+      // 创建任务日期时间对象
+      const taskDate = new Date(`${task.date}T${task.startTime || '08:00'}`);
+      
+      // 特殊处理提前一天晚上8点的情况
+      if (task.reminder.time === -1) {
+        console.log(`[TaskManager] 处理特殊提醒类型: 提前1天(晚上8点), 任务:`, task.title);
+        // 提前一天
+        const reminderDate = new Date(taskDate.getTime() - 24 * 60 * 60 * 1000);
+        // 设置为晚上8点
+        reminderDate.setHours(20, 0, 0, 0);
+        return reminderDate;
+      } else {
+        // 标准处理：提前X分钟提醒
+        return new Date(taskDate.getTime() - task.reminder.time * 60 * 1000);
+      }
+    } catch (error) {
+      console.error('[TaskManager] 计算提醒时间出错:', error, task);
+      return null;
+    }
+  },
 };
 
 module.exports = taskManager; 
