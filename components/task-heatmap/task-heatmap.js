@@ -1,4 +1,5 @@
 const Constants = require('../../utils/constants.js');
+const uiUtils = require('../../utils/uiUtils.js');
 
 /**
  * 任务热力图组件 (task-heatmap)
@@ -317,27 +318,8 @@ Component({
     calculatePressureLevel(pressure) {
       console.log(`[TaskHeatmap] 计算压力级别: ${pressure}`);
       
-      let levelText = '轻松';
-      let levelNum = 1;
-      let isHigh = false;
-      
-      if (pressure <= 10) {
-        levelText = '轻松';
-        levelNum = 1;
-      } else if (pressure <= 20) {
-        levelText = '适中';
-        levelNum = 2;
-      } else if (pressure <= 30) {
-        levelText = '繁忙';
-        levelNum = 3;
-        isHigh = true;
-      } else {
-        levelText = '紧张';
-        levelNum = 4;
-        isHigh = true;
-      }
-      
-      return { levelText, levelNum, isHigh };
+      // 使用统一的压力级别计算函数
+      return uiUtils.getPressureLevelText(pressure);
     },
     
     // 计算热力图

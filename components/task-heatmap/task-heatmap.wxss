@@ -150,6 +150,7 @@
   background-color: transparent; /* 0压力: 无任务 */
 }
 
+/* 使用通用色彩定义，与标签一致 */
 .day.level-1 {
   background-color: rgba(92, 151, 247, 0.2); /* 1-10点: 轻松压力 */
 }
@@ -305,7 +306,7 @@
   justify-content: center;
 }
 
-/* 不同级别的压力标签样式 */
+/* 不同级别的压力标签样式 - 与热力图色阶保持一致 */
 .pressure-tag.pressure-level-1 {
   background-color: #5C97F7; /* 轻松：浅蓝色 */
 }
@@ -1348,4 +1349,47 @@
   background-color: #e0e0e0;
   color: #999;
   box-shadow: none;
+}
+
+/* 修改级别样式，使用统一的颜色系统 */
+.levels-section {
+  margin-top: 20rpx;
+}
+
+.levels-title {
+  font-size: 26rpx;
+  font-weight: 500;
+  margin-bottom: 10rpx;
+}
+
+.level-items {
+  display: flex;
+  justify-content: space-between;
+}
+
+.level-item {
+  flex: 1;
+  padding: 8rpx 0;
+  font-size: 22rpx;
+  text-align: center;
+  border-radius: 8rpx;
+  margin: 0 4rpx;
+  color: white;
+}
+
+/* 与热力图和压力标签保持一致的颜色系统 */
+.level-item.level-1 {
+  background-color: #5C97F7; /* 轻松：浅蓝色 */
+}
+
+.level-item.level-2 {
+  background-color: #4285F4; /* 适中：中蓝色 */
+}
+
+.level-item.level-3 {
+  background-color: #2171E3; /* 繁忙：深蓝色 */
+}
+
+.level-item.level-4 {
+  background-color: #E53935; /* 紧张：红色 */
 } 

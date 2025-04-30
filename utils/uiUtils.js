@@ -28,6 +28,81 @@ const getCurrentTheme = function() {
 };
 
 /**
+ * 获取压力级别相关颜色和样式
+ * @param {Number} level - 压力级别 (1-4)
+ * @param {String} style - 返回样式类型: 'bg'=背景色, 'color'=文本色, 'class'=CSS类名
+ * @returns {String} 颜色值或类名
+ */
+const getPressureLevelStyle = function(level, style = 'bg') {
+  console.log(`[uiUtils] 获取压力级别${level}的${style}样式`);
+  
+  const styleMap = {
+    1: { // 轻松
+      bg: 'rgba(92, 151, 247, 0.2)',
+      color: '#5C97F7',
+      class: 'pressure-level-1'
+    },
+    2: { // 适中
+      bg: 'rgba(66, 133, 244, 0.4)',
+      color: '#4285F4',
+      class: 'pressure-level-2'
+    },
+    3: { // 繁忙
+      bg: 'rgba(33, 113, 227, 0.6)',
+      color: '#2171E3',
+      class: 'pressure-level-3'
+    },
+    4: { // 紧张
+      bg: 'rgba(25, 103, 210, 0.85)',
+      color: '#E53935',
+      class: 'pressure-level-4'
+    }
+  };
+  
+  // 确保级别在有效范围内
+  const safeLevel = Math.min(Math.max(parseInt(level) || 1, 1), 4);
+  
+  // 返回请求的样式类型
+  if (styleMap[safeLevel] && styleMap[safeLevel][style]) {
+    return styleMap[safeLevel][style];
+  }
+  
+  // 默认返回背景色
+  return styleMap[safeLevel].bg;
+};
+
+/**
+ * 获取压力级别文本描述
+ * @param {Number} pressure - 压力指数
+ * @returns {Object} 包含levelText, levelNum, isHigh属性的对象
+ */
+const getPressureLevelText = function(pressure) {
+  console.log(`[uiUtils] 计算压力级别文本: ${pressure}`);
+  
+  let levelText = '轻松';
+  let levelNum = 1;
+  let isHigh = false;
+  
+  if (pressure <= 10) {
+    levelText = '轻松';
+    levelNum = 1;
+  } else if (pressure <= 20) {
+    levelText = '适中';
+    levelNum = 2;
+  } else if (pressure <= 30) {
+    levelText = '繁忙';
+    levelNum = 3;
+    isHigh = true;
+  } else {
+    levelText = '紧张';
+    levelNum = 4;
+    isHigh = true;
+  }
+  
+  return { levelText, levelNum, isHigh };
+};
+
+/**
  * 切换组件显示状态
  * @param {Object} page - 页面实例
  * @param {String} componentName - 组件的数据路径，如'isAddPanelVisible'
@@ -254,5 +329,7 @@ module.exports = {
   slideInAnimation,
   slideOutAnimation,
   formatTaskTypeIcon,
-  formatProgressColor
+  formatProgressColor,
+  getPressureLevelStyle,
+  getPressureLevelText
 }; 
