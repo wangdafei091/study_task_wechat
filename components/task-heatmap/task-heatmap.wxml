@@ -140,8 +140,8 @@
             <view class="edit-confirm {{editingTaskId === item.id ? 'visible' : ''}}" id="edit-{{item.id}}" style="z-index: 2;">
               <!-- 内容区域 -->
               <view class="edit-content">
-                <!-- 积分调整 -->
-                <view class="edit-field">
+                <!-- 积分调整 - 仅非必做任务显示 -->
+                <view class="edit-field" wx:if="{{!dayTasks[editingTaskIndex].isRequired}}">
                   <text class="field-label">积分:</text>
                   <view class="points-stepper">
                     <view class="stepper-btn" bindtap="adjustEditPoints" data-action="reduce">-</view>

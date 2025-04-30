@@ -542,7 +542,12 @@ Component({
         // 确保必做任务属性被正确传递
         enhancedTask.isRequired = !!task.isRequired;
         
-        console.log(`[TaskHeatmap] 处理任务: ${task.title}, ${task.date}, 重复类型: ${task.repeat ? task.repeat.type : '无'}, 是否必做: ${enhancedTask.isRequired ? '是' : '否'}`);
+        // 打印详细日志，帮助调试必做任务显示问题
+        console.log(`[TaskHeatmap] 处理任务详情: ${task.title}, ID: ${task.id}`);
+        console.log(`[TaskHeatmap] - 任务类型: ${task.type}, 是否必做: ${enhancedTask.isRequired ? '是' : '否'}`);
+        if (enhancedTask.isRequired) {
+          console.log(`[TaskHeatmap] - 必做任务不显示积分，积分值: ${task.rewardPoints || 0}`);
+        }
         
         // 添加全天任务日志
         console.log(`[TaskHeatmap] 任务时间信息: ${task.title}, 是否全天: ${task.isAllDay ? '是' : '否'}, 开始时间: ${task.startTime}, 结束时间: ${task.endTime}`);
@@ -616,6 +621,9 @@ Component({
         console.error('[TaskHeatmap] 找不到要编辑的任务');
         return;
       }
+      
+      // 记录必做任务状态
+      console.log(`[TaskHeatmap] 编辑任务: ${task.title}, 是否必做: ${task.isRequired ? '是' : '否'}`);
       
       // 默认设为单任务编辑
       let defaultScope = 'single';
@@ -810,10 +818,16 @@ Component({
       
       // 准备更新的字段
       const updateData = {
-        rewardPoints: this.data.editPoints,
         description: this.data.editDescription,
         modifyTime: Date.now()
       };
+      
+      // 如果不是必做任务，才更新积分字段
+      if (!task.isRequired) {
+        updateData.rewardPoints = this.data.editPoints;
+      }
+      
+      console.log(`[TaskHeatmap] 更新任务${task.id}，是否必做: ${task.isRequired ? '是' : '否'}, 更新字段:`, updateData);
       
       // 显示加载中
       wx.showLoading({

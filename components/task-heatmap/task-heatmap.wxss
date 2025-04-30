@@ -597,18 +597,6 @@
   font-weight: 500;
 }
 
-/* 必做任务样式 - 为任务项添加标识 */
-.task-item-wrap.required-task::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 10rpx;
-  bottom: 10rpx;
-  width: 8rpx !important;
-  background-color: #f94646 !important;
-  border-radius: 4rpx;
-}
-
 /* 积分迷你版图标 */
 .task-points-mini::before {
   content: '⭐';
