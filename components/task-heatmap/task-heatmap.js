@@ -101,7 +101,8 @@ Component({
     actionMenuStyle: '',                    // 操作菜单样式
     showDeleteConfirm: false,               // 是否显示删除确认区域
     activeTaskForDelete: null,              // 当前准备删除的任务
-    deleteScope: ''                         // 删除范围选择: 'single'或'series'
+    deleteScope: '',                         // 删除范围选择: 'single'或'series'
+    descMaxLength: 50                      // 描述最大长度
   },
   
   lifetimes: {

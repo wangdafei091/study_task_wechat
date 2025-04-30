@@ -134,7 +134,8 @@
             
             <!-- 编辑确认区域 -->
             <view class="edit-confirm {{editingTaskId === item.id ? 'visible' : ''}}" id="edit-{{item.id}}" style="z-index: 2;">
-              <view class="edit-options">
+              <!-- 内容区域 -->
+              <view class="edit-content">
                 <!-- 积分调整 -->
                 <view class="edit-field">
                   <text class="field-label">积分:</text>
@@ -149,13 +150,14 @@
                 <view class="edit-field">
                   <text class="field-label">描述:</text>
                   <view class="description-input-wrap">
-                    <input class="description-input" value="{{editDescription}}" bindinput="inputDescription" maxlength="30" />
-                    <text class="char-count">{{editDescription.length}}/30</text>
+                    <input class="description-input" value="{{editDescription}}" bindinput="inputDescription" maxlength="50" />
+                    <text class="char-count">{{editDescription.length}}/50</text>
                   </view>
                 </view>
               </view>
               
-              <view class="edit-actions">
+              <!-- 按钮区域 -->
+              <view class="edit-buttons">
                 <view class="btn-cancel" bindtap="cancelEdit">取消</view>
                 <view class="btn-confirm" bindtap="saveEdit">确认</view>
               </view>
