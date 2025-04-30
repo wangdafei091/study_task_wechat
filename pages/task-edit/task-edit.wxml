@@ -69,6 +69,17 @@
               </view>
             </view>
           </view>
+          
+          <!-- 必做任务开关 -->
+          <view class="input-item switch-item required-task-switch">
+            <view class="switch-label-container">
+              <view class="label-row">
+                <text class="input-label">必做任务</text>
+                <text class="switch-hint">{{newTask.isRequired ? '不完成将扣除5积分' : ''}}</text>
+              </view>
+            </view>
+            <switch checked="{{newTask.isRequired}}" bindchange="toggleRequiredTask" color="#f94646" />
+          </view>
          
           <!-- 描述信息 -->
           <view class="input-item">

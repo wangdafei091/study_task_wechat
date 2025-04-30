@@ -683,4 +683,27 @@
 
 .calendar-close:active, .calendar-back:active {
   opacity: 0.7;
+}
+
+/* 必做任务开关样式 */
+.required-task-switch {
+  margin-top: 15rpx;
+  margin-bottom: 15rpx;
+}
+
+.switch-label-container {
+  display: flex;
+  flex-direction: column;
+}
+
+.label-row {
+  display: flex;
+  align-items: center;
+}
+
+.switch-hint {
+  font-size: 22rpx;
+  color: #f94646;
+  margin-left: 16rpx;
+  min-height: 22rpx; /* 确保即使没有文本内容也占据空间 */
 } 
