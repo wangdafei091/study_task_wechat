@@ -123,13 +123,24 @@ const taskManager = {
     };
     
     this.getAllTasks(allTasks => {
+      let createdTasks = [];
+      
       if (task.repeat && task.repeat.type !== 'none') {
         // 处理周期性任务
-        const repeatTasks = this._generateRepeatTasks(newTask);
-        allTasks.push(...repeatTasks);
+        createdTasks = this._generateRepeatTasks(newTask);
+        allTasks.push(...createdTasks);
+        
+        // 如果没有生成任何任务，记录警告
+        if (createdTasks.length === 0) {
+          console.warn(`[TaskManager] ⚠️ 任务 ${newTask.title} 未能生成任何重复实例，请检查重复规则设置`);
+        } else {
+          console.log(`[TaskManager] 成功创建 ${createdTasks.length} 个重复任务实例`);
+        }
       } else {
         // 添加单次任务
+        createdTasks = [newTask];
         allTasks.push(newTask);
+        console.log(`[TaskManager] 创建单次任务: ${newTask.id}`);
       }
       
       // 保存任务数据
@@ -141,7 +152,13 @@ const taskManager = {
         const messageManager = require('./messageManager.js');
         messageManager.createTaskMessage(newTask, 'new');
         
-        if (callback) callback(newTask);
+        // 使用第一个创建的任务或原始任务作为回调参数
+        const taskForCallback = createdTasks.length > 0 ? createdTasks[0] : newTask;
+        
+        if (callback) {
+          console.log(`[TaskManager] 新任务添加成功，ID: ${taskForCallback.id} 标题: ${taskForCallback.title}`);
+          callback(taskForCallback);
+        }
       });
     });
   },
@@ -215,11 +232,32 @@ const taskManager = {
         
       case 'custom':
         // 自定义重复
+        console.log('[TaskManager] 处理自定义重复任务，选定的星期几:', task.repeat.days);
+        
+        // 确保days数组中的元素都是字符串类型，统一处理
+        const daysArray = task.repeat.days.map(day => day.toString());
+        console.log('[TaskManager] 转换后的星期几数组(字符串类型):', daysArray);
+        
         for (let date = new Date(startDate); date <= effectiveEndDate; date.setDate(date.getDate() + 1)) {
-          const day = date.getDay().toString();
-          if (task.repeat.days.includes(day)) {
+          // 获取当前日期的星期几（0-6）
+          const dayOfWeek = date.getDay();
+          // 确保数据类型一致：将dayOfWeek转为字符串
+          const dayOfWeekStr = dayOfWeek.toString();
+          
+          // 检查当前日期的星期几是否在用户选择的星期几数组中
+          const isMatch = daysArray.includes(dayOfWeekStr);
+          
+          // 详细日志记录匹配过程
+          console.log(`[TaskManager] 检查日期 ${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}, 星期${dayOfWeek}, 是否匹配: ${isMatch}, 用户选择的日期: ${JSON.stringify(daysArray)}`);
+          
+          if (isMatch) {
             tasks.push(this._createRepeatTaskInstance(task, new Date(date)));
           }
+        }
+        
+        // 如果没有生成任何任务，记录警告
+        if (tasks.length === 0) {
+          console.warn('[TaskManager] ⚠️ 警告: 未能生成任何重复任务! 请检查日期匹配条件');
         }
         break;
     }
@@ -554,68 +592,67 @@ const taskManager = {
   },
   
   /**
-   * 保存任务数据（内部方法）
+   * 保存任务数据到本地存储
+   * @param {Array} tasks 任务数组
+   * @param {Function} callback 回调函数
    * @private
    */
   _saveTaskData(tasks, callback) {
-    // 防抖处理：避免频繁存储操作
-    if (this._savePending) {
-      clearTimeout(this._savePending);
-    }
+    console.log('[TaskManager] 准备保存任务数据，共'+tasks.length+'条任务记录');
     
-    console.log(`[TaskManager] 准备保存任务数据，共${tasks.length}条任务记录`);
+    // 更新全局数据
+    const app = getApp();
+    app.globalData.tasks = tasks;
+    console.log('[TaskManager] 已更新全局任务数据');
     
-    this._savePending = setTimeout(() => {
-      // 更新全局任务数据
-      const app = getApp();
-      app.globalData.tasks = [...tasks]; // 使用新引用更新全局数据
-      
-      console.log(`[TaskManager] 已更新全局任务数据`);
-      
-      // 存储到本地
-      wx.setStorage({
-        key: 'taskData',
-        data: tasks,
-        success: () => {
-          console.log(`[TaskManager] 任务数据保存成功，数据已同步到存储`);
+    // 保存到本地存储
+    wx.setStorage({
+      key: 'taskData',
+      data: tasks,
+      success: () => {
+        console.log('[TaskManager] 任务数据保存成功，数据已同步到存储');
+        
+        // 触发任务数据更新事件
+        this._onTaskDataChanged(tasks);
+        
+        // 执行回调
+        if (callback) {
+          console.log('[TaskManager] 执行保存后回调');
+          callback(tasks);
           
-          // 先触发数据变更事件，再执行回调
-          this._onTaskDataChanged(tasks);
-          
-          if (callback) {
-            console.log(`[TaskManager] 执行保存后回调`);
-            callback();
-          }
-        },
-        fail: (error) => {
-          console.error(`[TaskManager] 保存任务数据失败：`, error);
-          if (callback) callback();
-        },
-        complete: () => {
-          this._savePending = null;
+          // 在回调执行后再次触发事件，确保UI更新
+          setTimeout(() => {
+            this._onTaskDataChanged(tasks);
+          }, 100);
         }
-      });
-    }, 100); // 减少防抖延迟，确保数据更快保存
+      },
+      fail: (error) => {
+        console.error('[TaskManager] 任务数据保存失败:', error);
+        if (callback) callback(tasks);
+      }
+    });
   },
   
   /**
-   * 任务数据变更事件处理（内部方法）
+   * 触发任务数据变更事件
+   * @param {Array} tasks 任务数组
    * @private
    */
   _onTaskDataChanged(tasks) {
-    console.log(`[TaskManager] 触发任务数据变更事件，当前任务数量: ${tasks.length}`);
+    console.log('[TaskManager] 触发任务数据变更事件，当前任务数量:', tasks.length);
     
-    // 使用setTimeout确保事件在下一个事件循环中触发，避免阻塞当前操作
-    setTimeout(() => {
-      // 通知全局事件总线
-      const app = getApp();
-      if (app.globalData.eventBus) {
-        console.log(`[TaskManager] 通过事件总线广播任务数据变更`);
-        app.globalData.eventBus.emit('taskDataChanged', [...tasks]); // 使用新引用传递数据
-      } else {
-        console.warn(`[TaskManager] 未找到全局事件总线，无法广播变更事件`);
-      }
-    }, 0);
+    // 获取全局事件总线
+    const app = getApp();
+    if (app.globalData.eventBus) {
+      console.log('[TaskManager] 通过事件总线广播任务数据变更');
+      
+      // 触发数据变更事件
+      app.globalData.eventBus.emit('taskDataChanged', {
+        tasks: tasks,
+        count: tasks.length,
+        timestamp: Date.now()
+      });
+    }
   },
   
   /**
