@@ -109,7 +109,7 @@ Component({
     attached() {
       console.log('[TaskHeatmap] 组件挂载');
       console.log('[TaskHeatmap] 已优化热力图布局，减少垂直空间占用');
-      console.log('[TaskHeatmap] 已优化热力图色阶，使用蓝色渐变提高辨识度');
+      console.log('[TaskHeatmap] 已优化热力图色阶，使用蓝-紫-红渐变提高辨识度');
       console.log('[TaskHeatmap] 已优化任务项UI，减轻背景色厚重感，优化布局');
       console.log('[TaskHeatmap] 已优化任务完成状态显示，使用勾标记替代删除线');
       console.log('[TaskHeatmap] 已添加任务描述信息气泡功能');

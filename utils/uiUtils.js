@@ -48,13 +48,13 @@ const getPressureLevelStyle = function(level, style = 'bg') {
       class: 'pressure-level-2'
     },
     3: { // 繁忙
-      bg: 'rgba(33, 113, 227, 0.6)',
-      color: '#2171E3',
+      bg: 'rgba(83, 81, 186, 0.7)',
+      color: '#5351BA',
       class: 'pressure-level-3'
     },
     4: { // 紧张
-      bg: 'rgba(25, 103, 210, 0.85)',
-      color: '#E53935',
+      bg: 'rgba(198, 40, 40, 0.85)',
+      color: '#C62828',
       class: 'pressure-level-4'
     }
   };

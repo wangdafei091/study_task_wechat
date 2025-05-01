@@ -173,14 +173,14 @@
 }
 
 .day.level-3 {
-  background-color: rgba(33, 113, 227, 0.6); /* 21-30点: 较高压力 */
-  box-shadow: inset 0 0 0 1rpx rgba(33, 113, 227, 0.15); /* 添加内嵌边框 */
+  background-color: rgba(83, 81, 186, 0.7); /* 21-30点: 繁忙压力 - 紫蓝色 */
+  box-shadow: inset 0 0 0 1rpx rgba(83, 81, 186, 0.15); /* 添加内嵌边框 */
 }
 
 .day.level-4 {
-  background-color: rgba(25, 103, 210, 0.85); /* 30+点: 繁忙 */
+  background-color: rgba(198, 40, 40, 0.85); /* 30+点: 紧张压力 - 深红色 */
   color: white;
-  box-shadow: inset 0 0 0 1rpx rgba(25, 103, 210, 0.3); /* 添加内嵌边框 */
+  box-shadow: inset 0 0 0 1rpx rgba(198, 40, 40, 0.3); /* 添加内嵌边框 */
 }
 
 .day.level-4 .day-number {
@@ -328,11 +328,11 @@
 }
 
 .pressure-tag.pressure-level-3 {
-  background-color: #2171E3; /* 繁忙：深蓝色 */
+  background-color: #5351BA; /* 繁忙：紫蓝色 */
 }
 
 .pressure-tag.pressure-level-4 {
-  background-color: #E53935; /* 紧张：红色 */
+  background-color: #C62828; /* 紧张：深红色 */
 }
 
 /* 关闭按钮样式 */
@@ -453,7 +453,7 @@
 }
 
 .task-overdue-mark {
-  color: #E53935;
+  color: #C62828; /* 与压力级别4保持一致的深红色 */
 }
 
 .task-repeat-mark {
@@ -585,7 +585,7 @@
 .task-required-tag {
   font-size: 22rpx;
   padding: 2rpx 8rpx;
-  background-color: #f94646;
+  background-color: #4285F4; /* 保持为中蓝色，避免与红色警示混淆 */
   color: white;
   border-radius: 8rpx;
   display: flex;
@@ -635,7 +635,7 @@
 .pressure-warning {
   margin-top: 16rpx;
   padding: 10rpx 16rpx;
-  background-color: rgba(229, 57, 53, 0.05);
+  background-color: rgba(198, 40, 40, 0.05);
   border-radius: 8rpx;
   display: flex;
   align-items: center;
@@ -647,7 +647,7 @@
 
 .warning-text {
   font-size: 24rpx;
-  color: #E53935;
+  color: #C62828;
 }
 
 /* 任务压力指示器相关样式 - 已被内联版本替代，移除 */
@@ -672,11 +672,11 @@
 }
 
 .pressure-color-block.pressure-level-3 {
-  background-color: rgba(33, 113, 227, 0.6);
+  background-color: rgba(83, 81, 186, 0.7);
 }
 
 .pressure-color-block.pressure-level-4 {
-  background-color: rgba(25, 103, 210, 0.85);
+  background-color: rgba(198, 40, 40, 0.85);
 }
 
 /* 任务压力标签 - 已不再使用，移除 */
@@ -1016,12 +1016,12 @@
 }
 
 .level-item.level-3 {
-  background-color: rgba(33, 113, 227, 0.6);
+  background-color: rgba(83, 81, 186, 0.7);
   color: #fff;
 }
 
 .level-item.level-4 {
-  background-color: rgba(25, 103, 210, 0.85);
+  background-color: rgba(198, 40, 40, 0.85);
   color: #fff;
 }
 
@@ -1112,7 +1112,7 @@
 
 /* 删除样式 */
 .action-menu-item.delete .action-text {
-  color: #E53935;
+  color: #C62828; /* 与压力级别4保持一致的深红色 */
 }
 
 /* 编辑按钮区域 */
@@ -1284,11 +1284,11 @@
 }
 
 .level-item.level-3 {
-  background-color: #2171E3; /* 繁忙：深蓝色 */
+  background-color: #5351BA; /* 繁忙：紫蓝色 */
 }
 
 .level-item.level-4 {
-  background-color: #E53935; /* 紧张：红色 */
+  background-color: #C62828; /* 紧张：深红色 */
 }
 
 /* 编辑确认区域样式 */
