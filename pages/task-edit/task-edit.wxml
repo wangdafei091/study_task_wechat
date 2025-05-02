@@ -168,9 +168,9 @@
         
         <!-- 按钮区域 -->
         <view class="button-area">
-          <button class="btn-clear" bindtap="clearTaskForm">清空</button>
           <button class="btn-add {{!newTask.title ? 'disabled' : ''}}" 
                 bindtap="addTask" disabled="{{!newTask.title}}">添加任务</button>
+          <button class="btn-clear" bindtap="clearTaskForm">清空</button>
         </view>
       </view>
     </card>

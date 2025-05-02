@@ -5,6 +5,25 @@
  */
 
 /**
+ * 记录UI样式优化日志
+ * @param {String} component - 组件名称
+ * @param {String} action - 执行的操作
+ * @param {Object} details - 优化详情
+ */
+const logUIOptimization = function(component, action, details = {}) {
+  console.log(`[uiUtils] 界面优化: ${component} - ${action}`, details);
+};
+
+/**
+ * 记录样式一致性调整
+ * @param {String} area - 调整区域
+ * @param {Object} changes - 变更详情
+ */
+const logStyleConsistency = function(area, changes = {}) {
+  console.log(`[uiUtils] 样式一致性: ${area}`, changes);
+};
+
+/**
  * 设置主题样式 (已简化为仅亮色主题)
  */
 const setTheme = function() {
@@ -322,6 +341,15 @@ const formatProgressColor = function(progress) {
   }
 };
 
+/**
+ * 记录按钮布局优化日志
+ * @param {String} page - 页面名称
+ * @param {Object} layoutInfo - 布局信息
+ */
+const logButtonLayoutOptimization = function(page, layoutInfo = {}) {
+  console.log(`[uiUtils] 按钮布局优化: ${page}`, layoutInfo);
+};
+
 module.exports = {
   setTheme,
   getCurrentTheme,
@@ -335,5 +363,8 @@ module.exports = {
   formatTaskTypeIcon,
   formatProgressColor,
   getPressureLevelStyle,
-  getPressureLevelText
+  getPressureLevelText,
+  logUIOptimization,
+  logStyleConsistency,
+  logButtonLayoutOptimization
 }; 

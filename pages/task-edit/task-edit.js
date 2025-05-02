@@ -1,5 +1,6 @@
 const app = getApp();
 const Constants = require('../../utils/constants.js');
+const uiUtils = require('../../utils/uiUtils.js');
 
 Page({
   /**
@@ -68,6 +69,22 @@ Page({
   onLoad: function(options) {
     console.log('[TaskEdit] 页面加载');
     
+    // 记录UI优化日志
+    uiUtils.logUIOptimization('task-edit', '页面加载', {
+      'cardSpacing': '20rpx',
+      'elementPadding': '24rpx',
+      'groupSeparation': '分组边框样式优化'
+    });
+    
+    // 记录按钮布局优化
+    uiUtils.logButtonLayoutOptimization('task-edit', {
+      'layout': '垂直排列',
+      'primaryButton': '添加任务置顶',
+      'secondaryButton': '清空按钮置底',
+      'buttonHeight': '88rpx',
+      'buttonGap': '16rpx'
+    });
+    
     // 初始化热力图月份
     this.initHeatmapMonth();
     
@@ -104,6 +121,15 @@ Page({
    */
   onShow: function() {
     console.log('[task-edit] 页面显示，刷新任务数据');
+    
+    // 记录样式一致性日志
+    uiUtils.logStyleConsistency('表单区域', {
+      '表单组间距': '40rpx',
+      '表单项间距': '24rpx',
+      '按钮区域': '顶部边框分隔',
+      '开关对齐': '统一右对齐位置'
+    });
+    
     this.loadAllTasks();
   },
 
