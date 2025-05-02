@@ -36,6 +36,8 @@ Page({
         time: 0 // 提前提醒的分钟数
       }
     },
+    // 积分禁用状态
+    pointsDisabled: false,
     // 表单验证错误信息
     errors: {
       title: ''
@@ -99,7 +101,8 @@ Page({
       startDatePanel: false,
       endDatePanel: false,
       repeatPanel: false,
-      reminderPanel: false
+      reminderPanel: false,
+      pointsDisabled: false
     });
     
     // 初始化重复预览文本
@@ -288,6 +291,12 @@ Page({
    * 更改积分
    */
   changePoints: function(e) {
+    // 如果积分被禁用（必做任务），则不执行
+    if (this.data.pointsDisabled) {
+      console.log('[TaskEdit] 积分已禁用，无法修改');
+      return;
+    }
+    
     const action = e.currentTarget.dataset.action;
     let points = this.data.newTask.points;
     
@@ -306,6 +315,12 @@ Page({
    * 处理积分输入
    */
   onPointsInput: function(e) {
+    // 如果积分被禁用（必做任务），则不执行
+    if (this.data.pointsDisabled) {
+      console.log('[TaskEdit] 积分已禁用，无法修改');
+      return;
+    }
+    
     // 记录用户输入
     this.setData({
       'newTask.points': e.detail.value
@@ -331,10 +346,12 @@ Page({
     this.setData({
       'newTask.title': '',
       'newTask.type': 'habit',
-      'newTask.points': 1, // 修改为1分
+      'newTask.points': 1, // 修改为1分（正数）
       'newTask.description': '',
       'newTask.isAllDay': false,
       'newTask.hasNoEndDate': false, // 重置无结束日期字段
+      'newTask.isRequired': false,
+      pointsDisabled: false,
       'errors.title': '',
       repeatText: '每天',
       reminderText: '无',
@@ -383,18 +400,20 @@ Page({
       return result;
     }
     
-    // 验证积分范围
-    let taskPoints = parseInt(this.data.newTask.points) || 0;
-    if (taskPoints < 1 || taskPoints > 50) {
-      // 限制积分范围在1-50之间
-      taskPoints = Math.max(1, Math.min(50, taskPoints));
-      
-      // 更新为有效值
-      this.setData({
-        'newTask.points': taskPoints
-      });
-      
-      console.log('[TaskEdit] 积分已调整到有效范围:', taskPoints);
+    // 验证积分范围（仅对非必做任务验证）
+    if (!this.data.newTask.isRequired) {
+      let taskPoints = parseInt(this.data.newTask.points) || 0;
+      if (taskPoints < 1 || taskPoints > 50) {
+        // 限制积分范围在1-50之间
+        taskPoints = Math.max(1, Math.min(50, taskPoints));
+        
+        // 更新为有效值
+        this.setData({
+          'newTask.points': taskPoints
+        });
+        
+        console.log('[TaskEdit] 积分已调整到有效范围:', taskPoints);
+      }
     }
     
     // 验证日期
@@ -486,7 +505,15 @@ Page({
       
       // 创建新任务对象
       const taskManager = require('../../utils/taskManager.js');
-      const taskPoints = parseInt(this.data.newTask.points) || 0;
+      
+      // 获取积分值，处理必做任务的情况
+      let taskPoints = parseInt(this.data.newTask.points) || 0;
+      // 确保积分为正数
+      taskPoints = Math.abs(taskPoints);
+      // 记录是否为必做任务，系统内部会根据isRequired状态处理积分奖惩
+      const isRequired = this.data.newTask.isRequired;
+      
+      console.log(`[TaskEdit] 创建任务: 积分=${taskPoints}, 必做=${isRequired}`);
       
       // 判断是否应该是单次任务
       let repeatType = this.data.newTask.repeat.type;
@@ -498,12 +525,14 @@ Page({
         repeatType = 'none';
       }
       
+      // 构建新任务对象
       const newTask = {
-        title: this.data.newTask.title,
+        title: this.data.newTask.title.trim(),
         type: this.data.newTask.type,
-        points: taskPoints,
-        description: this.data.newTask.description,
+        rewardPoints: taskPoints, // 使用处理后的积分值
+        description: this.data.newTask.description.trim(),
         date: this.data.newTask.startDate,
+        isRequired: isRequired, // 设置必做任务标记
         isAllDay: this.data.newTask.isAllDay,
         startTime: this.data.newTask.isAllDay ? null : this.data.newTask.startTime,
         endTime: this.data.newTask.isAllDay ? null : this.data.newTask.endTime,
@@ -521,8 +550,7 @@ Page({
           time: this.data.newTask.reminder.time
         },
         status: 0, // 默认未完成
-        createTime: Date.now(),
-        isRequired: this.data.newTask.isRequired
+        createTime: Date.now()
       };
       
       console.log('[TaskEdit] 准备添加新任务:', newTask);
@@ -1391,10 +1419,14 @@ Page({
    * 切换必做任务状态
    */
   toggleRequiredTask: function(e) {
-    console.log('[TaskEdit] 切换必做任务状态:', e.detail.value);
+    const isRequired = e.detail.value;
+    console.log('[TaskEdit] 切换必做任务状态:', isRequired);
     
     this.setData({
-      'newTask.isRequired': e.detail.value
+      'newTask.isRequired': isRequired,
+      // 如果是必做任务则禁用积分编辑功能，并固定为5分
+      pointsDisabled: isRequired,
+      'newTask.points': isRequired ? 5 : Math.abs(this.data.newTask.points) || 1
     });
     
     // 给用户一个振动反馈
@@ -1403,10 +1435,10 @@ Page({
     });
     
     // 如果是首次启用必做任务，显示提示
-    if (e.detail.value && !wx.getStorageSync('requiredTaskTipShown')) {
+    if (isRequired && !wx.getStorageSync('requiredTaskTipShown')) {
       wx.showModal({
         title: '必做任务说明',
-        content: '必做任务不获得积分奖励，但如果未完成会扣除5积分。',
+        content: '必做任务未完成将扣除5积分。',
         showCancel: false,
         success: (res) => {
           // 标记已显示提示

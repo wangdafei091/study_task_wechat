@@ -250,6 +250,12 @@
   overflow: hidden;
 }
 
+/* 积分控件禁用状态样式 */
+.points-stepper.disabled {
+  opacity: 0.7;
+  background-color: #eaeaea;
+}
+
 .stepper-btn {
   width: 80rpx;
   height: 80rpx;
@@ -265,6 +271,11 @@
   background-color: rgba(0, 0, 0, 0.08);
 }
 
+.stepper-btn.disabled {
+  color: #bbb;
+  pointer-events: none;
+}
+
 .stepper-input {
   flex: 1;
   height: 100%;
@@ -272,6 +283,13 @@
   font-size: 32rpx;
   background-color: transparent;
   color: #333;
+}
+
+.points-hint {
+  display: block;
+  font-size: 22rpx;
+  color: #ff6b6b;
+  margin-top: 8rpx;
 }
 
 /* 描述输入框样式 */
@@ -740,7 +758,6 @@
   font-size: 22rpx;
   color: #f94646;
   margin-left: 16rpx;
-  min-height: 22rpx; /* 确保即使没有文本内容也占据空间 */
 }
 
 /* 统一所有开关右侧对齐 */
@@ -760,4 +777,16 @@
   font-size: 24rpx;
   color: #999;
   text-align: center;
+}
+
+/* 积分扣除状态样式 */
+.stepper-input.deduction {
+  color: #f94646; /* 使用红色表示扣除 */
+  font-weight: 500;
+}
+
+/* 必做任务扣除状态样式 */
+.stepper-input.required-deduction {
+  color: #f94646; /* 使用红色表示必做任务惩罚机制 */
+  font-weight: 500;
 } 
