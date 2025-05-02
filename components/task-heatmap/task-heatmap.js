@@ -496,8 +496,13 @@ Component({
           // 格式化重复任务信息
           switch (task.repeat.type) {
             case 'daily':
-              // 确保显示完整时间范围
-              const timeRange = task.endTime ? `${task.startTime}-${task.endTime}` : task.startTime;
+              // 根据全天任务状态决定时间显示
+              let timeRange = '';
+              if (task.isAllDay) {
+                timeRange = '全天';
+              } else {
+                timeRange = task.endTime ? `${task.startTime}-${task.endTime}` : task.startTime;
+              }
               
               // 检查是否为单天任务
               const isOneTimeDaily = task.repeat.startDate === task.repeat.endDate;
@@ -512,18 +517,26 @@ Component({
             case 'weekly':
               const weekDay = new Date(task.date).getDay();
               const weekDayNames = ['日', '一', '二', '三', '四', '五', '六'];
-              enhancedTask.repeatInfo = `每周${weekDayNames[weekDay]} ${task.startTime}-${task.endTime}`;
+              // 根据全天任务状态决定时间显示
+              let weeklyTimeRange = task.isAllDay ? '全天' : `${task.startTime}-${task.endTime}`;
+              enhancedTask.repeatInfo = `每周${weekDayNames[weekDay]} ${weeklyTimeRange}`;
               break;
             case 'workdays':
               console.log(`[TaskHeatmap] 处理工作日任务: ${task.title}, 起始日期: ${task.repeat.startDate}, 结束日期: ${task.repeat.endDate}`);
-              enhancedTask.repeatInfo = `${this.formatDateRange(task.repeat.startDate, task.repeat.endDate)} 工作日 ${task.startTime}-${task.endTime}`;
+              // 根据全天任务状态决定时间显示
+              let workdaysTimeRange = task.isAllDay ? '全天' : `${task.startTime}-${task.endTime}`;
+              enhancedTask.repeatInfo = `${this.formatDateRange(task.repeat.startDate, task.repeat.endDate)} 工作日 ${workdaysTimeRange}`;
               break;
             case 'weekends':
               console.log(`[TaskHeatmap] 处理休息日任务: ${task.title}, 起始日期: ${task.repeat.startDate}, 结束日期: ${task.repeat.endDate}`);
-              enhancedTask.repeatInfo = `${this.formatDateRange(task.repeat.startDate, task.repeat.endDate)} 休息日 ${task.startTime}-${task.endTime}`;
+              // 根据全天任务状态决定时间显示
+              let weekendsTimeRange = task.isAllDay ? '全天' : `${task.startTime}-${task.endTime}`;
+              enhancedTask.repeatInfo = `${this.formatDateRange(task.repeat.startDate, task.repeat.endDate)} 休息日 ${weekendsTimeRange}`;
               break;
             case 'custom':
-              enhancedTask.repeatInfo = `每周${this.formatRepeatDays(task.repeat.days)} ${task.startTime}-${task.endTime}`;
+              // 根据全天任务状态决定时间显示
+              let customTimeRange = task.isAllDay ? '全天' : `${task.startTime}-${task.endTime}`;
+              enhancedTask.repeatInfo = `每周${this.formatRepeatDays(task.repeat.days)} ${customTimeRange}`;
               break;
           }
         } else {
@@ -551,6 +564,11 @@ Component({
         
         // 添加全天任务日志
         console.log(`[TaskHeatmap] 任务时间信息: ${task.title}, 是否全天: ${task.isAllDay ? '是' : '否'}, 开始时间: ${task.startTime}, 结束时间: ${task.endTime}`);
+        
+        // 增加全天任务的详细日志，帮助调试
+        if (task.isAllDay) {
+          console.log(`[TaskHeatmap] 全天任务处理: ${task.title}, 重复类型: ${task.repeat ? task.repeat.type : '无'}, 重复信息: ${enhancedTask.repeatInfo || '无'}`);
+        }
         
         return enhancedTask;
       });
