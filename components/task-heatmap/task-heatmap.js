@@ -283,11 +283,6 @@ Component({
     
     // 新增：计算单个任务的压力指数
     calculateTaskPressure(task) {
-      console.log('[TaskHeatmap] 计算任务压力指数:', task.title);
-      
-      // 记录任务是否为必做任务
-      console.log(`[TaskHeatmap] 任务[${task.title}] 是否必做: ${task.isRequired ? '是' : '否'}`);
-      
       // 任务类型权重
       const typeWeights = {
         'study': 1.2,   // 学习任务权重高
@@ -308,7 +303,8 @@ Component({
       
       const totalPressure = basePressure + durationPressure + pointsPressure;
       
-      console.log(`[TaskHeatmap] 任务[${task.title}] 压力构成: 基础(${basePressure.toFixed(1)}) + 时长(${durationPressure.toFixed(1)}) + 积分(${pointsPressure.toFixed(1)}) = ${totalPressure.toFixed(1)}`);
+      // 只在需要时记录详细日志
+      console.log(`[TaskHeatmap] 任务[${task.title}] 压力指数: ${totalPressure.toFixed(1)}`);
       
       return {
         total: totalPressure,
@@ -320,8 +316,6 @@ Component({
     
     // 计算任务压力级别并返回描述文本
     calculatePressureLevel(pressure) {
-      console.log(`[TaskHeatmap] 计算压力级别: ${pressure}`);
-      
       // 使用统一的压力级别计算函数
       return uiUtils.getPressureLevelText(pressure);
     },
@@ -555,20 +549,8 @@ Component({
         // 确保必做任务属性被正确传递
         enhancedTask.isRequired = !!task.isRequired;
         
-        // 打印详细日志，帮助调试必做任务显示问题
-        console.log(`[TaskHeatmap] 处理任务详情: ${task.title}, ID: ${task.id}`);
-        console.log(`[TaskHeatmap] - 任务类型: ${task.type}, 是否必做: ${enhancedTask.isRequired ? '是' : '否'}`);
-        if (enhancedTask.isRequired) {
-          console.log(`[TaskHeatmap] - 必做任务不显示积分，积分值: ${task.rewardPoints || 0}`);
-        }
-        
-        // 添加全天任务日志
-        console.log(`[TaskHeatmap] 任务时间信息: ${task.title}, 是否全天: ${task.isAllDay ? '是' : '否'}, 开始时间: ${task.startTime}, 结束时间: ${task.endTime}`);
-        
-        // 增加全天任务的详细日志，帮助调试
-        if (task.isAllDay) {
-          console.log(`[TaskHeatmap] 全天任务处理: ${task.title}, 重复类型: ${task.repeat ? task.repeat.type : '无'}, 重复信息: ${enhancedTask.repeatInfo || '无'}`);
-        }
+        // 打印简化日志
+        console.log(`[TaskHeatmap] 处理任务: ${task.title}, ID: ${task.id}, 类型: ${task.type}`);
         
         return enhancedTask;
       });
@@ -594,7 +576,7 @@ Component({
           levelText: pressureLevel.levelText,
           levelNum: pressureLevel.levelNum,
           isHigh: pressureLevel.isHigh,
-          showWarning: pressureLevel.isHigh && totalPressure > 30
+          showWarning: pressureLevel.isHigh && totalPressure > 90
         }
       });
       

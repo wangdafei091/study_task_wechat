@@ -75,10 +75,14 @@ const getPressureLevelStyle = function(level, style = 'bg') {
  * 获取压力级别文本描述
  * @param {Number} pressure - 压力指数
  * @returns {Object} 包含levelText, levelNum, isHigh属性的对象
+ * 
+ * 压力级别对应数值区间：
+ * 轻松: 0-30分
+ * 适中: 31-60分
+ * 繁忙: 61-90分
+ * 紧张: 91分以上
  */
 const getPressureLevelText = function(pressure) {
-  console.log(`[uiUtils] 计算压力级别文本: ${pressure}`);
-  
   let levelText = '轻松';
   let levelNum = 1;
   let isHigh = false;
