@@ -779,12 +779,6 @@
   text-align: center;
 }
 
-/* 积分扣除状态样式 */
-.stepper-input.deduction {
-  color: #f94646; /* 使用红色表示扣除 */
-  font-weight: 500;
-}
-
 /* 必做任务扣除状态样式 */
 .stepper-input.required-deduction {
   color: #f94646; /* 使用红色表示必做任务惩罚机制 */

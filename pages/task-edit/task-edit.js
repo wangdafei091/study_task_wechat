@@ -575,6 +575,8 @@ Page({
           'newTask.description': '',
           'newTask.isAllDay': false,
           'newTask.hasNoEndDate': false,
+          'newTask.isRequired': false, // 重置必做任务状态
+          pointsDisabled: false, // 重置积分禁用状态
           'errors.title': '',
           repeatText: '每天',
           reminderText: '无',
