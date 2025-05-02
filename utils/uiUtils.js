@@ -83,13 +83,13 @@ const getPressureLevelText = function(pressure) {
   let levelNum = 1;
   let isHigh = false;
   
-  if (pressure <= 10) {
+  if (pressure <= 30) {
     levelText = '轻松';
     levelNum = 1;
-  } else if (pressure <= 20) {
+  } else if (pressure <= 60) {
     levelText = '适中';
     levelNum = 2;
-  } else if (pressure <= 30) {
+  } else if (pressure <= 90) {
     levelText = '繁忙';
     levelNum = 3;
     isHigh = true;

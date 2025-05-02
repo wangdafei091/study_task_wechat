@@ -244,10 +244,10 @@
         <view class="levels-section">
           <text class="levels-title">压力级别</text>
           <view class="level-items">
-            <view class="level-item level-1">轻松</view>
-            <view class="level-item level-2">适中</view>
-            <view class="level-item level-3">繁忙</view>
-            <view class="level-item level-4">紧张</view>
+            <view class="level-item level-1">轻松<text class="level-range">0-30分</text></view>
+            <view class="level-item level-2">适中<text class="level-range">31-60分</text></view>
+            <view class="level-item level-3">繁忙<text class="level-range">61-90分</text></view>
+            <view class="level-item level-4">紧张<text class="level-range">91分以上</text></view>
           </view>
         </view>
       </view>

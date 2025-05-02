@@ -936,6 +936,8 @@ Component({
     // 显示压力指数说明弹窗
     showPressureInfo() {
       console.log('[TaskHeatmap] 显示压力指数说明');
+      // 记录查看行为
+      console.log('[TaskHeatmap] 用户查看压力级别数值区间说明');
       this.setData({
         showPressureInfo: true
       });
