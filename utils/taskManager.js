@@ -619,11 +619,6 @@ const taskManager = {
         if (callback) {
           console.log('[TaskManager] 执行保存后回调');
           callback(tasks);
-          
-          // 在回调执行后再次触发事件，确保UI更新
-          setTimeout(() => {
-            this._onTaskDataChanged(tasks);
-          }, 100);
         }
       },
       fail: (error) => {
