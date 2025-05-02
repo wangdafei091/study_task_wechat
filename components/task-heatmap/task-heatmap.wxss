@@ -625,10 +625,20 @@
 
 /* 空任务提示 */
 .empty-tasks {
-  padding: 40rpx 0;
+  padding: 20rpx 0;
   text-align: center;
   color: #999;
   font-size: 28rpx;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+}
+
+.empty-icon {
+  font-size: 36rpx;
+  margin-right: 10rpx;
+  color: #c0c4cc;
 }
 
 /* 压力警告提示 */

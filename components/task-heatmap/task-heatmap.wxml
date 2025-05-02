@@ -204,6 +204,7 @@
         </view>
       </block>
       <view class="empty-tasks" wx:else>
+        <view class="empty-icon">📝</view>
         <text>当日暂无任务</text>
       </view>
     </view>
