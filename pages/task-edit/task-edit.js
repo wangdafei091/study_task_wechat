@@ -518,7 +518,7 @@ Page({
       const newTask = {
         title: this.data.newTask.title.trim(),
         type: this.data.newTask.type,
-        rewardPoints: taskPoints, // 使用处理后的积分值
+        rewardPoints: taskPoints, // 使用用户设置的积分值，不论是否为必做任务
         description: this.data.newTask.description.trim(),
         date: this.data.newTask.startDate,
         isRequired: isRequired, // 设置必做任务标记
@@ -630,7 +630,7 @@ Page({
         title: this.data.newTask.title,
         type: this.data.newTask.type,
         date: this.data.newTask.startDate,
-        rewardPoints: this.data.newTask.isRequired ? 5 : this.data.newTask.points,
+        rewardPoints: this.data.newTask.points, // 统一使用用户输入的积分值
         pointsExpiry: this.data.newTask.pointsExpiry, // 添加积分有效期
         description: this.data.newTask.description || '',
         createTime: Date.now(),
