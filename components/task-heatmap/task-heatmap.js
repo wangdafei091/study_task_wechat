@@ -103,7 +103,8 @@ Component({
     activeTaskForDelete: null,              // 当前准备删除的任务
     deleteScope: '',                         // 删除范围选择: 'single'或'series'
     descMaxLength: 50,                      // 描述最大长度
-    windowWidth: 0                          // 窗口宽度
+    windowWidth: 0,                         // 窗口宽度
+    Constants: Constants                    // 添加Constants对象到data中，使WXML可以访问
   },
   
   /**
@@ -541,7 +542,8 @@ Component({
               const weekDayNames = ['日', '一', '二', '三', '四', '五', '六'];
               // 根据全天任务状态决定时间显示
               let weeklyTimeRange = task.isAllDay ? '全天' : `${task.startTime}-${task.endTime}`;
-              enhancedTask.repeatInfo = `每周${weekDayNames[weekDay]} ${weeklyTimeRange}`;
+              console.log(`[TaskHeatmap] 处理每周任务: ${task.title}, 起始日期: ${task.repeat.startDate}, 结束日期: ${task.repeat.endDate}`);
+              enhancedTask.repeatInfo = `${this.formatDateRange(task.repeat.startDate, task.repeat.endDate)} 每周${weekDayNames[weekDay]} ${weeklyTimeRange}`;
               break;
             case 'workdays':
               console.log(`[TaskHeatmap] 处理工作日任务: ${task.title}, 起始日期: ${task.repeat.startDate}, 结束日期: ${task.repeat.endDate}`);
@@ -558,7 +560,8 @@ Component({
             case 'custom':
               // 根据全天任务状态决定时间显示
               let customTimeRange = task.isAllDay ? '全天' : `${task.startTime}-${task.endTime}`;
-              enhancedTask.repeatInfo = `每周${this.formatRepeatDays(task.repeat.days)} ${customTimeRange}`;
+              console.log(`[TaskHeatmap] 处理自定义重复任务: ${task.title}, 起始日期: ${task.repeat.startDate}, 结束日期: ${task.repeat.endDate}`);
+              enhancedTask.repeatInfo = `${this.formatDateRange(task.repeat.startDate, task.repeat.endDate)} 每周${this.formatRepeatDays(task.repeat.days)} ${customTimeRange}`;
               break;
           }
         } else {
@@ -575,13 +578,19 @@ Component({
           if (task.pointsExpiryDate) {
             // 使用已有的有效期信息
             enhancedTask.pointsExpiryDate = task.pointsExpiryDate;
+          } else if (task.pointsExpiry === 'permanent') {
+            // 永久有效
+            enhancedTask.pointsExpiryDate = '永久';
+            console.log(`[TaskHeatmap] 任务${task.id}设置为永久有效期`);
           } else {
             // 没有有效期信息时，默认设置为7天后
             enhancedTask.pointsExpiryDate = '7天后';
           }
         } else {
-          // 未完成任务：显示默认有效期规则
+          // 未完成任务：根据任务设置的实际有效期类型显示
           enhancedTask.pointsExpiryDate = '';
+          enhancedTask.pointsExpiry = task.pointsExpiry || 'permanent'; // 确保有值
+          console.log(`[TaskHeatmap] 未完成任务${task.id}积分有效期类型: ${enhancedTask.pointsExpiry}`);
         }
         
         // 确保必做任务属性被正确传递
@@ -1420,11 +1429,8 @@ Component({
       const dayNames = ['日', '一', '二', '三', '四', '五', '六'];
       const formattedDays = days.map(day => dayNames[parseInt(day)]);
       
-      if (formattedDays.length <= 3) {
-        return formattedDays.join('/');
-      } else {
-        return `${formattedDays.slice(0, 3).join('/')}等`;
-      }
+      // 修改为显示所有日期，不再截断
+      return formattedDays.join('/');
     },
     
     // 格式化重复任务的日期范围显示
@@ -1789,14 +1795,12 @@ Component({
      */
     _renderTaskDetails(task) {
       if (task) {
-        console.log(`[taskHeatmap] 渲染任务详情: ${task.title}, 日期: ${task.date}, 积分有效期: ${task.pointsExpiryDate || '完成后7天'}`);
-        console.log(`[taskHeatmap] 积分有效期使用左对齐垂直布局，优化显示效果`);
-        console.log(`[taskHeatmap] 已调整时间与积分有效期行距，提升视觉紧凑感`);
-        console.log(`[taskHeatmap] 已优化时钟图标位置，避免与积分有效期文本重叠`);
-        console.log(`[taskHeatmap] 已修复时钟图标被截断问题，优化图标可见性`);
+        const expiryText = task.pointsExpiry === 'permanent' ? '永久' : 
+          (Constants.POINTS_EXPIRY.TEXT[task.pointsExpiry] ? 
+          Constants.POINTS_EXPIRY.TEXT[task.pointsExpiry] : '7天');
+          
+        console.log(`[taskHeatmap] 渲染任务详情: ${task.title}, 日期: ${task.date}, 积分有效期: ${task.pointsExpiry}, 转换后: ${expiryText}`);
       }
-      
-      // 已有代码部分...
     },
 
     // 添加新的方法 _loadCalendarData

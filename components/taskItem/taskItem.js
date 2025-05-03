@@ -12,6 +12,8 @@
  *   bind:edit="onEdit"
  * />
  */
+const Constants = require('../../utils/constants.js');
+
 Component({
   /**
    * 组件的属性列表
@@ -28,7 +30,11 @@ Component({
       },
       observer: function(newVal) {
         if (newVal) {
-          console.log(`[taskItem] 渲染任务: ${newVal.title}, 时间: ${newVal.startTime}, 积分有效期: ${newVal.pointsExpiryDate || '完成后7天'}`);
+          const expiryText = newVal.pointsExpiryDate || 
+                           (newVal.pointsExpiry === 'permanent' ? '永久' : 
+                           (Constants.POINTS_EXPIRY.TEXT[newVal.pointsExpiry] ? 
+                             Constants.POINTS_EXPIRY.TEXT[newVal.pointsExpiry] : '完成后7天'));
+          console.log(`[taskItem] 渲染任务: ${newVal.title}, 时间: ${newVal.startTime}, 积分有效期: ${expiryText}`);
         }
       }
     },

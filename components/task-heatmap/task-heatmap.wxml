@@ -133,10 +133,11 @@
                 <block wx:if="{{!item.isRequired}}">
                   <text class="points-info">
                     <block wx:if="{{item.status === 1 || item.status === 'completed'}}">
-                      积分有效期：{{item.pointsExpiryDate || '7天后'}}失效
+                      积分有效期：{{item.pointsExpiryDate || (item.pointsExpiry === 'permanent' ? '永久' : '7天后')}}
                     </block>
                     <block wx:else>
-                      积分有效期：完成后保留7天
+                      积分有效期：{{item.pointsExpiry === 'permanent' ? '永久' : 
+                        '完成后保留' + Constants.POINTS_EXPIRY.TEXT[item.pointsExpiry]}}
                     </block>
                   </text>
                 </block>

@@ -19,11 +19,15 @@ const taskManager = {
             // 移除难度字段
             const { difficulty, ...taskWithoutDifficulty } = task;
             
-            // 确保有积分有效期字段
+            // 确保有积分有效期字段，但不要覆盖已有值
             if (!taskWithoutDifficulty.pointsExpiry) {
               taskWithoutDifficulty.pointsExpiry = 'permanent'; // 默认为永久
               console.log(`[TaskManager] 为任务 ${taskWithoutDifficulty.id} 添加默认积分有效期: permanent`);
-            } else if (taskWithoutDifficulty.pointsValidPeriod && !taskWithoutDifficulty.pointsExpiry) {
+            } else {
+              console.log(`[TaskManager] 任务 ${taskWithoutDifficulty.id} 已有积分有效期: ${taskWithoutDifficulty.pointsExpiry}`);
+            }
+            
+            if (taskWithoutDifficulty.pointsValidPeriod && !taskWithoutDifficulty.pointsExpiry) {
               // 兼容旧数据，将pointsValidPeriod转换为pointsExpiry
               taskWithoutDifficulty.pointsExpiry = taskWithoutDifficulty.pointsValidPeriod;
               console.log(`[TaskManager] 转换旧格式积分有效期: ${taskWithoutDifficulty.pointsExpiry}`);
@@ -131,15 +135,16 @@ const taskManager = {
       createTime: Date.now(),
       modifyTime: Date.now(),
       status: 0, // 默认未完成状态
-      pointsExpiry: 0, // 初始化积分有效期为0
-      pointsExpiryDate: '' // 初始化积分有效期日期为空字符串
+      pointsExpiry: task.pointsExpiry || 'permanent', // 保留原始任务的积分有效期，默认为永久
+      pointsExpiryDate: task.pointsExpiryDate || '' // 保留原始任务的积分有效期日期
     };
     
     console.log('[TaskManager] 创建新任务:', {
       id: newTask.id,
       title: newTask.title,
       type: newTask.type,
-      date: newTask.date
+      date: newTask.date,
+      pointsExpiry: newTask.pointsExpiry // 添加积分有效期到日志
     });
     
     // 检查任务重复设置
@@ -192,6 +197,8 @@ const taskManager = {
    */
   _generateRepeatTasks(task) {
     console.log('[TaskManager] 开始生成重复任务:', task.title);
+    console.log('[TaskManager] 原始任务积分有效期:', task.pointsExpiry); // 记录原始任务积分有效期
+    
     const tasks = [];
     const startDate = new Date(task.repeat.startDate);
     const endDate = task.repeat.endDate ? new Date(task.repeat.endDate) : null;
@@ -220,14 +227,21 @@ const taskManager = {
       case 'daily':
         // 每天重复
         for (let date = new Date(startDate); date <= effectiveEndDate; date.setDate(date.getDate() + 1)) {
-          tasks.push(this._createRepeatTaskInstance(task, new Date(date)));
+          const taskInstance = this._createRepeatTaskInstance(task, new Date(date));
+          tasks.push(taskInstance);
+          // 每10个任务记录一次，避免日志过多
+          if (tasks.length % 10 === 1) {
+            console.log(`[TaskManager] 创建第${tasks.length}个每日任务，积分有效期: ${taskInstance.pointsExpiry}`);
+          }
         }
         break;
         
       case 'weekly':
         // 每周重复
         for (let date = new Date(startDate); date <= effectiveEndDate; date.setDate(date.getDate() + 7)) {
-          tasks.push(this._createRepeatTaskInstance(task, new Date(date)));
+          const taskInstance = this._createRepeatTaskInstance(task, new Date(date));
+          tasks.push(taskInstance);
+          console.log(`[TaskManager] 创建每周任务，积分有效期: ${taskInstance.pointsExpiry}`);
         }
         break;
         
@@ -236,7 +250,12 @@ const taskManager = {
         for (let date = new Date(startDate); date <= effectiveEndDate; date.setDate(date.getDate() + 1)) {
           const day = date.getDay();
           if (day >= 1 && day <= 5) { // 周一到周五
-            tasks.push(this._createRepeatTaskInstance(task, new Date(date)));
+            const taskInstance = this._createRepeatTaskInstance(task, new Date(date));
+            tasks.push(taskInstance);
+            // 每10个任务记录一次
+            if (tasks.length % 10 === 1) {
+              console.log(`[TaskManager] 创建工作日任务，积分有效期: ${taskInstance.pointsExpiry}`);
+            }
           }
         }
         break;
@@ -247,7 +266,9 @@ const taskManager = {
         for (let date = new Date(startDate); date <= effectiveEndDate; date.setDate(date.getDate() + 1)) {
           const day = date.getDay();
           if (day === 0 || day === 6) { // 周日或周六
-            tasks.push(this._createRepeatTaskInstance(task, new Date(date)));
+            const taskInstance = this._createRepeatTaskInstance(task, new Date(date));
+            tasks.push(taskInstance);
+            console.log(`[TaskManager] 创建休息日任务，积分有效期: ${taskInstance.pointsExpiry}`);
           }
         }
         break;
@@ -273,7 +294,9 @@ const taskManager = {
           console.log(`[TaskManager] 检查日期 ${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}, 星期${dayOfWeek}, 是否匹配: ${isMatch}, 用户选择的日期: ${JSON.stringify(daysArray)}`);
           
           if (isMatch) {
-            tasks.push(this._createRepeatTaskInstance(task, new Date(date)));
+            const taskInstance = this._createRepeatTaskInstance(task, new Date(date));
+            tasks.push(taskInstance);
+            console.log(`[TaskManager] 创建自定义重复任务，星期${dayOfWeek}，积分有效期: ${taskInstance.pointsExpiry}`);
           }
         }
         
@@ -305,12 +328,12 @@ const taskManager = {
       date: dateStr,
       createTime: Date.now(),
       modifyTime: Date.now(),
-      // 保留原有值，同时支持新字段
-      pointsExpiry: originalTask.pointsExpiry || 0,
+      // 确保保留原始任务的积分有效期
+      pointsExpiry: originalTask.pointsExpiry || 'permanent',
       pointsExpiryDate: originalTask.pointsExpiryDate || ''
     };
     
-    console.log(`[TaskManager] 创建重复任务实例: ${dateStr}`);
+    console.log(`[TaskManager] 创建重复任务实例: ${dateStr}，积分有效期: ${taskInstance.pointsExpiry}`);
     
     return taskInstance;
   },
