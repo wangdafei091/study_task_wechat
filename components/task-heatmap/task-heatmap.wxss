@@ -827,7 +827,7 @@
 .delete-confirm.visible {
   height: auto;
   opacity: 1;
-  padding: 12rpx 0; /* 统一为上下12rpx的内边距 */
+  padding: 12rpx 0 4rpx; /* 调整下边距，为提示文本留出空间 */
 }
 
 /* 编辑范围选择区域样式 */
@@ -849,17 +849,24 @@
 .edit-scope-area.visible {
   height: auto;
   opacity: 1;
-  padding: 12rpx 0; /* 统一为上下12rpx的内边距 */
+  padding: 12rpx 0 4rpx; /* 调整下边距，为提示文本留出空间 */
 }
 
 .scope-options {
   display: flex;
-  align-items: center;
+  flex-direction: column; /* 改为纵向排列 */
+  align-items: flex-start; /* 左对齐 */
   padding-left: 24rpx; /* 与删除选项区域保持一致 */
   flex: 1;
   white-space: nowrap;
   height: auto;
   line-height: 1.4; /* 保持行高一致 */
+}
+
+.scope-options .options-row {
+  display: flex;
+  align-items: center;
+  width: 100%;
 }
 
 .scope-options .option {
@@ -907,6 +914,17 @@
   line-height: 1.4;
   display: inline-block;
   vertical-align: middle;
+}
+
+/* 范围提示文本 */
+.scope-tip {
+  font-size: 22rpx;
+  color: #888;
+  margin-top: 4rpx;
+  padding-left: 32rpx; /* 与选项文本对齐 */
+  display: block;
+  width: 100%;
+  line-height: 1.3;
 }
 
 /* 压力指数说明弹窗 */
@@ -1143,36 +1161,23 @@
   padding: 0 24rpx 4rpx; /* 内边距与删除区域按钮保持一致 */
 }
 
-/* 删除确认区域样式 */
-.delete-confirm {
-  height: 0;
-  opacity: 0;
-  overflow: hidden;
-  background-color: #fff;
-  border-top: 1px solid rgba(0,0,0,0.03); /* 保持分隔线样式一致 */
-  transition: height 0.25s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0;
-  box-shadow: none; /* 移除内阴影 */
-}
-
-.delete-confirm.visible {
-  height: auto;
-  opacity: 1;
-  padding: 12rpx 0; /* 统一为上下12rpx的内边距 */
-}
-
 /* 删除选项区域 */
 .delete-options {
   display: flex;
-  align-items: center;
+  flex-direction: column; /* 改为纵向排列 */
+  align-items: flex-start; /* 左对齐 */
   flex: 0.6;
   white-space: nowrap;
   height: auto;
   line-height: 1.4; /* 保持行高一致 */
   padding-left: 24rpx;
+}
+
+/* 选项容器 */
+.delete-options .options-row {
+  display: flex;
+  align-items: center;
+  width: 100%;
 }
 
 /* 删除操作区域 */

@@ -125,13 +125,19 @@
             <view class="edit-scope-area {{editingTaskId === item.id && item.repeat && item.repeat.type !== 'none' ? 'visible' : ''}}" 
                   wx:if="{{item.repeat && item.repeat.type !== 'none'}}">
               <view class="scope-options">
-                <view class="option {{editScope === 'single' ? 'selected' : ''}}" bindtap="selectEditScope" data-scope="single">
-                  <view class="radio-circle {{editScope === 'single' ? 'selected' : ''}}"></view>
-                  <text class="option-text">编辑当天</text>
+                <view class="options-row">
+                  <view class="option {{editScope === 'single' ? 'selected' : ''}}" bindtap="selectEditScope" data-scope="single">
+                    <view class="radio-circle {{editScope === 'single' ? 'selected' : ''}}"></view>
+                    <text class="option-text">编辑当天</text>
+                  </view>
+                  <view class="option {{editScope === 'series' ? 'selected' : ''}}" bindtap="selectEditScope" data-scope="series">
+                    <view class="radio-circle {{editScope === 'series' ? 'selected' : ''}}"></view>
+                    <text class="option-text">编辑循环</text>
+                  </view>
                 </view>
-                <view class="option {{editScope === 'series' ? 'selected' : ''}}" bindtap="selectEditScope" data-scope="series">
-                  <view class="radio-circle {{editScope === 'series' ? 'selected' : ''}}"></view>
-                  <text class="option-text">编辑循环</text>
+                <!-- 添加循环编辑提示文本 -->
+                <view class="scope-tip" wx:if="{{editScope === 'series'}}">
+                  <text>仅应用于当前及未来任务</text>
                 </view>
               </view>
             </view>
@@ -172,13 +178,19 @@
               <view class="delete-options">
                 <!-- 循环任务显示选项 -->
                 <block wx:if="{{item.repeat && item.repeat.type !== 'none'}}">
-                  <view class="option {{deleteScope === 'single' ? 'selected' : ''}}" bindtap="selectDeleteScope" data-scope="single">
-                    <view class="radio-circle {{deleteScope === 'single' ? 'selected' : ''}}"></view>
-                    <text class="option-text">删除当天</text>
+                  <view class="options-row">
+                    <view class="option {{deleteScope === 'single' ? 'selected' : ''}}" bindtap="selectDeleteScope" data-scope="single">
+                      <view class="radio-circle {{deleteScope === 'single' ? 'selected' : ''}}"></view>
+                      <text class="option-text">删除当天</text>
+                    </view>
+                    <view class="option {{deleteScope === 'series' ? 'selected' : ''}}" bindtap="selectDeleteScope" data-scope="series">
+                      <view class="radio-circle {{deleteScope === 'series' ? 'selected' : ''}}"></view>
+                      <text class="option-text">删除循环</text>
+                    </view>
                   </view>
-                  <view class="option {{deleteScope === 'series' ? 'selected' : ''}}" bindtap="selectDeleteScope" data-scope="series">
-                    <view class="radio-circle {{deleteScope === 'series' ? 'selected' : ''}}"></view>
-                    <text class="option-text">删除循环</text>
+                  <!-- 添加循环删除提示文本 -->
+                  <view class="scope-tip" wx:if="{{deleteScope === 'series'}}">
+                    <text>仅删除当前及未来任务</text>
                   </view>
                 </block>
                 <!-- 一次性任务显示单个选项 -->
