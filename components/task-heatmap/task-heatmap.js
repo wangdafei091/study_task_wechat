@@ -569,11 +569,6 @@ Component({
           enhancedTask.date = `${month}月${day}日`;
         }
         
-        // 确保任务有积分信息
-        if (!enhancedTask.rewardPoints) {
-          enhancedTask.rewardPoints = task.points || 0;
-        }
-        
         // 确保任务有积分有效期信息
         if (task.status === 1 || task.status === 'completed') {
           // 已完成任务：显示具体失效日期
@@ -592,8 +587,22 @@ Component({
         // 确保必做任务属性被正确传递
         enhancedTask.isRequired = !!task.isRequired;
         
-        // 打印简化日志
-        console.log(`[TaskHeatmap] 处理任务: ${task.title}, ID: ${task.id}, 类型: ${task.type}`);
+        // 确保积分值被正确传递
+        enhancedTask.rewardPoints = task.rewardPoints || 0;
+        
+        // 添加更详细的任务状态日志
+        let statusText = '';
+        if (task.status === 1 || task.status === 'completed') {
+          statusText = '已完成';
+        } else if (task.status === 0 || task.status === 'pending') {
+          statusText = '待完成';
+        } else if (task.status === 2 || task.status === 'overdue') {
+          statusText = '已逾期';
+        } else if (task.status === 3 || task.status === 'canceled') {
+          statusText = '已取消';
+        }
+        
+        console.log(`[TaskHeatmap] 处理任务: ${task.title}, ID: ${task.id}, 类型: ${task.type}, 状态: ${statusText}, 必做: ${enhancedTask.isRequired ? '是' : '否'}, 积分: ${enhancedTask.rewardPoints}`);
         
         return enhancedTask;
       });
@@ -1194,16 +1203,6 @@ Component({
               t.parentTaskId === parentId || // 找出所有子任务
               t.id === parentId              // 包含父任务自身
             );
-            
-            // 如果找不到系列任务，尝试其他匹配方式
-            if (seriesTasks.length === 0 && task.repeat && task.repeat.type !== 'none') {
-              seriesTasks = allTasks.filter(t => 
-                t.repeat && 
-                t.repeat.type === task.repeat.type && 
-                t.title === task.title &&
-                t.createTime === task.createTime
-              );
-            }
             
             console.log(`[task-heatmap] 删除任务系列，共找到: ${seriesTasks.length} 个任务`);
             

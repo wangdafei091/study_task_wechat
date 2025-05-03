@@ -129,15 +129,39 @@
                 <!-- 分隔符 -->
                 <text class="separator">|</text>
                 
-                <!-- 积分有效期信息 -->
-                <text class="points-info">
-                  <block wx:if="{{item.status === 1 || item.status === 'completed'}}">
-                    积分有效期：{{item.pointsExpiryDate || '7天后'}}失效
-                  </block>
-                  <block wx:else>
-                    积分有效期：完成后保留7天
-                  </block>
-                </text>
+                <!-- 积分有效期信息 - 非必做任务 -->
+                <block wx:if="{{!item.isRequired}}">
+                  <text class="points-info">
+                    <block wx:if="{{item.status === 1 || item.status === 'completed'}}">
+                      积分有效期：{{item.pointsExpiryDate || '7天后'}}失效
+                    </block>
+                    <block wx:else>
+                      积分有效期：完成后保留7天
+                    </block>
+                  </text>
+                </block>
+                
+                <!-- 必做任务状态提示 -->
+                <block wx:else>
+                  <text class="points-info">
+                    <!-- 已按时完成的必做任务不显示任何信息 -->
+                    <block wx:if="{{item.status === 1 || item.status === 'completed'}}">
+                      <!-- 不显示任何信息 -->
+                    </block>
+                    <!-- 待完成未逾期的必做任务 -->
+                    <block wx:elif="{{item.status === 0 || item.status === 'pending'}}">
+                      任务未按时完成，将会扣除{{item.rewardPoints || 0}}积分
+                    </block>
+                    <!-- 逾期未完成的必做任务 -->
+                    <block wx:elif="{{item.status === 2 || item.status === 'overdue'}}">
+                      任务未按时完成，扣除{{item.rewardPoints || 0}}积分
+                    </block>
+                    <!-- 取消的必做任务 -->
+                    <block wx:elif="{{item.status === 3 || item.status === 'canceled'}}">
+                      任务未完成，扣除{{item.rewardPoints || 0}}积分
+                    </block>
+                  </text>
+                </block>
               </view>
             </view>
             
