@@ -61,11 +61,11 @@
             
             <!-- 积分设置 -->
             <view class="points-setting">
-              <text class="input-label">积分</text>
-              <view class="points-stepper {{pointsDisabled ? 'disabled' : ''}}">
-                <view class="stepper-btn minus {{pointsDisabled ? 'disabled' : ''}}" bindtap="changePoints" data-action="minus">-</view>
-                <input class="stepper-input {{pointsDisabled ? 'required-deduction' : ''}}" type="number" value="{{newTask.points}}" bindinput="onPointsInput" disabled="{{pointsDisabled}}" />
-                <view class="stepper-btn plus {{pointsDisabled ? 'disabled' : ''}}" bindtap="changePoints" data-action="plus">+</view>
+              <text class="input-label">积分<text class="points-subtitle">{{newTask.isRequired ? '（扣除）' : '（奖励）'}}</text></text>
+              <view class="points-stepper">
+                <view class="stepper-btn minus" bindtap="changePoints" data-action="minus">-</view>
+                <input class="stepper-input" type="number" value="{{newTask.points}}" bindinput="onPointsInput" />
+                <view class="stepper-btn plus" bindtap="changePoints" data-action="plus">+</view>
               </view>
             </view>
           </view>
@@ -84,7 +84,7 @@
             <view class="switch-label-container">
               <view class="label-row">
                 <text class="input-label">必做任务</text>
-                <text class="switch-hint" wx:if="{{newTask.isRequired}}">未完成将扣除5积分</text>
+                <text class="switch-hint" wx:if="{{newTask.isRequired}}">未完成将扣除{{newTask.points}}积分</text>
               </view>
             </view>
             <switch checked="{{newTask.isRequired}}" bindchange="toggleRequiredTask" color="#f94646" />

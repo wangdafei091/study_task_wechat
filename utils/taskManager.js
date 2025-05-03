@@ -324,15 +324,19 @@ const taskManager = {
   updateTaskStatus(taskId, status, callback) {
     this.getAllTasks(allTasks => {
       let updatedTask = null;
+      let oldStatus = null;
       
       // 更新任务状态
       const updatedTasks = allTasks.map(task => {
         if (task.id === taskId) {
+          oldStatus = task.status;
           // 为已完成任务添加完成记录
           const newTask = { ...task, status: status };
           
-          // 当任务状态变为已完成时，添加完成记录
-          if (status === 1) {
+          // 当非必做任务状态变为已完成时，添加完成记录和积分奖励
+          if (status === 1 && !task.isRequired) {
+            console.log(`[TaskManager] 非必做任务 ${task.title} 已完成，添加奖励积分: ${task.rewardPoints}`);
+            
             // 获取当前日期时间
             const now = new Date();
             const dateStr = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
@@ -359,6 +363,40 @@ const taskManager = {
             newTask.pointsExpiryDate = expiryDateStr;
             
             console.log(`[TaskManager] 任务 ${newTask.title} 已完成，设置积分有效期: ${expiryDateStr}`);
+            
+            // 更新用户积分
+            const userPoints = wx.getStorageSync('userPoints') || 0;
+            const newPoints = userPoints + (newTask.rewardPoints || 0);
+            wx.setStorageSync('userPoints', newPoints);
+            
+            // 创建奖励消息
+            const messageManager = require('./messageManager.js');
+            messageManager.createSystemMessage(
+              `完成任务"${newTask.title}"，获得${newTask.rewardPoints}积分`,
+              'reward'
+            );
+          }
+          // 处理必做任务从pending变为overdue或canceled时的扣分逻辑
+          else if (task.isRequired && 
+                  oldStatus === 0 && 
+                  (status === 2 || status === 3)) { // 0=pending, 2=overdue, 3=canceled
+            
+            const penaltyPoints = task.rewardPoints || 0;
+            console.log(`[TaskManager] 必做任务 ${task.title} 未完成，扣除积分: ${penaltyPoints}`);
+            
+            if (penaltyPoints > 0) {
+              // 获取用户积分
+              const userPoints = wx.getStorageSync('userPoints') || 0;
+              // 扣除积分
+              wx.setStorageSync('userPoints', Math.max(0, userPoints - penaltyPoints));
+              
+              // 创建扣分通知
+              const messageManager = require('./messageManager.js');
+              messageManager.createSystemMessage(
+                `任务"${task.title}"未完成，扣除${penaltyPoints}积分`,
+                'penalty'
+              );
+            }
           }
           
           updatedTask = newTask;

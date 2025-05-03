@@ -37,8 +37,6 @@ Page({
         time: 0 // 提前提醒的分钟数
       }
     },
-    // 积分禁用状态
-    pointsDisabled: false,
     // 表单验证错误信息
     errors: {
       title: ''
@@ -105,8 +103,7 @@ Page({
       endDatePanel: false,
       repeatPanel: false,
       reminderPanel: false,
-      pointsExpiryPanel: false,
-      pointsDisabled: false
+      pointsExpiryPanel: false
     });
     
     // 初始化重复预览文本
@@ -295,12 +292,6 @@ Page({
    * 更改积分
    */
   changePoints: function(e) {
-    // 如果积分被禁用（必做任务），则不执行
-    if (this.data.pointsDisabled) {
-      console.log('[TaskEdit] 积分已禁用，无法修改');
-      return;
-    }
-    
     const action = e.currentTarget.dataset.action;
     let points = this.data.newTask.points;
     
@@ -319,13 +310,6 @@ Page({
    * 处理积分输入
    */
   onPointsInput: function(e) {
-    // 如果积分被禁用（必做任务），则不执行
-    if (this.data.pointsDisabled) {
-      console.log('[TaskEdit] 积分已禁用，无法修改');
-      return;
-    }
-    
-    // 记录用户输入
     this.setData({
       'newTask.points': e.detail.value
     });
@@ -356,7 +340,6 @@ Page({
       'newTask.isAllDay': false,
       'newTask.hasNoEndDate': false, // 重置无结束日期字段
       'newTask.isRequired': false,
-      pointsDisabled: false,
       'errors.title': '',
       repeatText: '每天',
       reminderText: '无',
@@ -582,7 +565,6 @@ Page({
           'newTask.isAllDay': false,
           'newTask.hasNoEndDate': false,
           'newTask.isRequired': false, // 重置必做任务状态
-          pointsDisabled: false, // 重置积分禁用状态
           'errors.title': '',
           repeatText: '每天',
           reminderText: '无',
@@ -1538,10 +1520,7 @@ Page({
     console.log('[TaskEdit] 切换必做任务状态:', isRequired);
     
     this.setData({
-      'newTask.isRequired': isRequired,
-      // 如果是必做任务则禁用积分编辑功能，并固定为5分
-      pointsDisabled: isRequired,
-      'newTask.points': isRequired ? 5 : Math.abs(this.data.newTask.points) || 1
+      'newTask.isRequired': isRequired
     });
     
     // 给用户一个振动反馈
@@ -1549,11 +1528,13 @@ Page({
       type: 'medium'
     });
     
+    console.log('[TaskEdit] 当前积分设置:', this.data.newTask.points);
+    
     // 如果是首次启用必做任务，显示提示
     if (isRequired && !wx.getStorageSync('requiredTaskTipShown')) {
       wx.showModal({
         title: '必做任务说明',
-        content: '必做任务未完成将扣除5积分。',
+        content: `必做任务未完成将扣除${this.data.newTask.points}积分。`,
         showCancel: false,
         success: (res) => {
           // 标记已显示提示
