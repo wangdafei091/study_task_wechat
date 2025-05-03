@@ -19,6 +19,16 @@ const taskManager = {
             // 移除难度字段
             const { difficulty, ...taskWithoutDifficulty } = task;
             
+            // 确保有积分有效期字段
+            if (!taskWithoutDifficulty.pointsExpiry) {
+              taskWithoutDifficulty.pointsExpiry = 'permanent'; // 默认为永久
+              console.log(`[TaskManager] 为任务 ${taskWithoutDifficulty.id} 添加默认积分有效期: permanent`);
+            } else if (taskWithoutDifficulty.pointsValidPeriod && !taskWithoutDifficulty.pointsExpiry) {
+              // 兼容旧数据，将pointsValidPeriod转换为pointsExpiry
+              taskWithoutDifficulty.pointsExpiry = taskWithoutDifficulty.pointsValidPeriod;
+              console.log(`[TaskManager] 转换旧格式积分有效期: ${taskWithoutDifficulty.pointsExpiry}`);
+            }
+            
             if (taskWithoutDifficulty.type === 'study') {
               // 如果没有开始时间，设置默认值
               if (!taskWithoutDifficulty.startTime) {
@@ -122,6 +132,14 @@ const taskManager = {
       createTime: task.createTime || now
     };
     
+    // 确保积分有效期字段存在
+    if (!newTask.pointsExpiry) {
+      newTask.pointsExpiry = 'permanent'; // 默认为永久
+      console.log(`[TaskManager] 为任务 ${newTask.id} 添加默认积分有效期: permanent`);
+    } else {
+      console.log(`[TaskManager] 任务 ${newTask.id} 的积分有效期: ${newTask.pointsExpiry}`);
+    }
+    
     this.getAllTasks(allTasks => {
       let createdTasks = [];
       
@@ -156,7 +174,7 @@ const taskManager = {
         const taskForCallback = createdTasks.length > 0 ? createdTasks[0] : newTask;
         
         if (callback) {
-          console.log(`[TaskManager] 新任务添加成功，ID: ${taskForCallback.id} 标题: ${taskForCallback.title}`);
+          console.log(`[TaskManager] 新任务添加成功，ID: ${taskForCallback.id} 标题: ${taskForCallback.title} 积分有效期: ${taskForCallback.pointsExpiry}`);
           callback(taskForCallback);
         }
       });
@@ -268,21 +286,28 @@ const taskManager = {
   
   /**
    * 创建重复任务实例
-   * @param {Object} originalTask 原始任务
-   * @param {Date} date 任务日期
-   * @returns {Object} 新的任务实例
+   * @param {Object} originalTask 原始任务对象
+   * @param {Date} date 新任务的日期
+   * @returns {Object} 新创建的任务实例
    */
   _createRepeatTaskInstance(originalTask, date) {
+    // 生成日期字符串 YYYY-MM-DD
     const dateStr = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
     
-    return {
+    // 创建任务副本，避免直接修改原始任务
+    const taskInstance = {
       ...originalTask,
       id: `task_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
       date: dateStr,
       createTime: Date.now(),
-      parentTaskId: originalTask.id, // 记录原始任务ID
-      status: 0 // 新创建的任务默认未完成
+      modifyTime: Date.now(),
+      // 保留原始任务的积分有效期
+      pointsExpiry: originalTask.pointsExpiry || 'permanent'
     };
+    
+    console.log(`[TaskManager] 创建重复任务实例: ${dateStr} 积分有效期: ${taskInstance.pointsExpiry}`);
+    
+    return taskInstance;
   },
   
   /**
@@ -298,7 +323,34 @@ const taskManager = {
       // 更新任务状态
       const updatedTasks = allTasks.map(task => {
         if (task.id === taskId) {
-          updatedTask = { ...task, status: status };
+          // 为已完成任务添加完成记录
+          const newTask = { ...task, status: status };
+          
+          // 当任务状态变为已完成时，添加完成记录
+          if (status === 1) {
+            // 获取当前日期时间
+            const now = new Date();
+            const dateStr = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
+            
+            // 初始化completionRecords数组(如果不存在)
+            if (!newTask.completionRecords) {
+              newTask.completionRecords = [];
+            }
+            
+            // 添加完成记录
+            newTask.completionRecords.push({
+              date: dateStr,
+              timestamp: now.getTime(),
+              notes: ''
+            });
+            
+            console.log(`[TaskManager] 任务 ${newTask.title} 已完成，添加完成记录:`, {
+              date: dateStr,
+              timestamp: now.getTime()
+            });
+          }
+          
+          updatedTask = newTask;
           return updatedTask;
         }
         return task;

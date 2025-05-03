@@ -70,6 +70,15 @@
             </view>
           </view>
           
+          <!-- 积分有效期选项 -->
+          <view class="input-item">
+            <view class="input-item-header" bindtap="togglePanel" data-panel="pointsExpiryPanel">
+              <text class="input-label">积分有效期</text>
+              <text class="points-expiry-value">{{pointsExpiryText}}</text>
+              <text class="arrow-icon">↓</text>
+            </view>
+          </view>
+          
           <!-- 必做任务开关 -->
           <view class="input-item switch-item required-task-switch">
             <view class="switch-label-container">
@@ -177,7 +186,7 @@
   </view>
   
   <!-- 添加日历遮罩层，用于重复面板和提醒面板 -->
-  <view class="calendar-mask {{repeatPanel || reminderPanel ? 'visible' : ''}}" bindtap="closeAllPanels" catchtouchmove="preventTouchMove"></view>
+  <view class="calendar-mask {{repeatPanel || reminderPanel || pointsExpiryPanel ? 'visible' : ''}}" bindtap="closeAllPanels" catchtouchmove="preventTouchMove"></view>
   
   <!-- 使用日期选择器组件替换原有的开始日期面板 -->
   <date-picker
@@ -313,6 +322,37 @@
               bindtap="selectReminderType" data-enabled="true" data-time="30">提前30分钟</view>
         <view class="option-item {{newTask.reminder.enabled && newTask.reminder.time === -1 ? 'selected' : ''}}" 
               bindtap="selectReminderType" data-enabled="true" data-time="-1">提前1天(晚上8点)</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 积分有效期选项面板 -->
+  <view class="calendar-container {{pointsExpiryPanel ? 'expanded' : ''}}" catchtouchmove="preventTouchMove">
+    <view class="calendar-panel" catchtap="preventClose">
+      <view class="calendar-header">
+        <!-- 左侧：空 -->
+        <view class="header-year-month"></view>
+        
+        <!-- 中间：标题 -->
+        <text class="calendar-title">设置积分有效期</text>
+        
+        <!-- 右侧：完成按钮 -->
+        <view class="calendar-close" bindtap="closeAllPanels">完成</view>
+      </view>
+      
+      <view class="option-list">
+        <view class="option-item {{newTask.pointsExpiry === 'permanent' ? 'selected' : ''}}" 
+              bindtap="selectPointsExpiry" data-expiry="permanent">永久</view>
+        <view class="option-item {{newTask.pointsExpiry === 'week' ? 'selected' : ''}}" 
+              bindtap="selectPointsExpiry" data-expiry="week">一周</view>
+        <view class="option-item {{newTask.pointsExpiry === 'month' ? 'selected' : ''}}" 
+              bindtap="selectPointsExpiry" data-expiry="month">一个月</view>
+        <view class="option-item {{newTask.pointsExpiry === '3months' ? 'selected' : ''}}" 
+              bindtap="selectPointsExpiry" data-expiry="3months">三个月</view>
+        <view class="option-item {{newTask.pointsExpiry === '6months' ? 'selected' : ''}}" 
+              bindtap="selectPointsExpiry" data-expiry="6months">六个月</view>
+        <view class="option-item {{newTask.pointsExpiry === '12months' ? 'selected' : ''}}" 
+              bindtap="selectPointsExpiry" data-expiry="12months">十二个月</view>
       </view>
     </view>
   </view>

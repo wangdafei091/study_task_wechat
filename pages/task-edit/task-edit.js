@@ -16,6 +16,7 @@ Page({
       title: '',
       type: 'habit', // 默认类型为习惯
       points: 1, // 默认积分修改为1
+      pointsExpiry: 'permanent', // 默认积分有效期为永久
       description: '',
       isRequired: false, // 添加必做任务字段
       // 新增时间周期和频率相关字段
@@ -48,12 +49,14 @@ Page({
     // 新增UI控制字段
     repeatText: '每天',
     reminderText: '无',
+    pointsExpiryText: '永久', // 积分有效期显示文本
     // 日期时间选择面板控制
     startDatePanel: false,
     endDatePanel: false,
-    // 新增重复和提醒面板控制
+    // 新增重复、提醒和积分有效期面板控制
     repeatPanel: false, 
     reminderPanel: false,
+    pointsExpiryPanel: false, // 积分有效期面板
     // 重复面板模式：'type'表示选择重复类型，'weekday'表示选择星期
     repeatPanelMode: 'type',
     // 星期选择状态 [周日,周一,周二,周三,周四,周五,周六]
@@ -102,6 +105,7 @@ Page({
       endDatePanel: false,
       repeatPanel: false,
       reminderPanel: false,
+      pointsExpiryPanel: false,
       pointsDisabled: false
     });
     
@@ -347,6 +351,7 @@ Page({
       'newTask.title': '',
       'newTask.type': 'habit',
       'newTask.points': 1, // 修改为1分（正数）
+      'newTask.pointsExpiry': 'permanent', // 重置积分有效期为永久
       'newTask.description': '',
       'newTask.isAllDay': false,
       'newTask.hasNoEndDate': false, // 重置无结束日期字段
@@ -355,6 +360,7 @@ Page({
       'errors.title': '',
       repeatText: '每天',
       reminderText: '无',
+      pointsExpiryText: '永久', // 重置积分有效期文本
       'newTask.repeat': {
         type: 'daily',
         days: [],
@@ -616,22 +622,120 @@ Page({
    * 添加任务
    */
   addTask: function() {
-    // 表单验证
+    console.log('[TaskEdit] 添加任务');
+    
+    // 先进行表单验证
     const validation = this.validateTaskForm();
     if (!validation.valid) {
-      if (validation.errorMsg) {
-        wx.showToast({
-          title: validation.errorMsg,
-          icon: 'none',
-          duration: 2000
-        });
-      }
-      // 如果没有错误消息，说明是等待确认对话框的情况
+      wx.showToast({
+        title: validation.errorMsg || '表单验证失败',
+        icon: 'none',
+        duration: 2000
+      });
       return;
     }
     
-    // 通过验证，直接执行添加任务
-    this.doAddTask();
+    // 显示加载提示
+    wx.showLoading({
+      title: '添加中...',
+      mask: true
+    });
+    
+    try {
+      // 从表单数据构建任务对象
+      const newTask = {
+        id: 'task_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+        title: this.data.newTask.title,
+        type: this.data.newTask.type,
+        date: this.data.newTask.startDate,
+        rewardPoints: this.data.newTask.isRequired ? 5 : this.data.newTask.points,
+        pointsExpiry: this.data.newTask.pointsExpiry, // 添加积分有效期
+        description: this.data.newTask.description || '',
+        createTime: Date.now(),
+        modifyTime: Date.now(),
+        status: 'pending',
+        priority: 'medium', // 默认优先级为中等
+        isRequired: this.data.newTask.isRequired,
+        
+        // 时间相关设置
+        isAllDay: this.data.newTask.isAllDay,
+        startTime: this.data.newTask.isAllDay ? '' : this.data.newTask.startTime,
+        endTime: this.data.newTask.isAllDay ? '' : this.data.newTask.endTime,
+        
+        // 重复设置
+        repeat: {
+          type: this.data.newTask.repeat.type,
+          startDate: this.data.newTask.startDate,
+          endDate: this.data.newTask.hasNoEndDate ? null : this.data.newTask.endDate,
+          days: this.data.newTask.repeat.type === 'custom' ? this.data.newTask.repeat.days : []
+        },
+        
+        // 提醒设置
+        reminder: {
+          enabled: this.data.newTask.reminder.enabled,
+          time: this.data.newTask.reminder.time // 提前提醒的分钟数
+        }
+      };
+      
+      console.log('[TaskEdit] 创建新任务:', {
+        id: newTask.id,
+        title: newTask.title,
+        type: newTask.type,
+        points: newTask.rewardPoints,
+        pointsExpiry: newTask.pointsExpiry, // 记录积分有效期
+        date: newTask.date,
+        isRequired: newTask.isRequired,
+        repeat: newTask.repeat.type
+      });
+      
+      // 使用全局任务管理器添加任务
+      const taskManager = require('../../utils/taskManager.js');
+      
+      taskManager.createTask(newTask, success => {
+        // 隐藏加载提示
+        wx.hideLoading();
+        
+        if (success) {
+          // 添加成功，显示提示
+          wx.showToast({
+            title: '添加成功',
+            icon: 'success',
+            duration: 1500
+          });
+          
+          // 清空表单
+          this.clearTaskForm();
+          
+          // 刷新任务列表
+          this.loadAllTasks();
+          
+          // 如果热力图组件存在，刷新热力图
+          const heatmap = this.getHeatmapComponent();
+          if (heatmap) {
+            console.log('[TaskEdit] 任务添加成功，刷新热力图');
+            heatmap.calculateHeatMap();
+          }
+        } else {
+          // 添加失败，显示错误提示
+          wx.showToast({
+            title: '添加失败',
+            icon: 'none',
+            duration: 2000
+          });
+        }
+      });
+    } catch (error) {
+      // 捕获并处理错误
+      console.error('[TaskEdit] 添加任务时发生错误:', error);
+      
+      wx.hideLoading();
+      
+      wx.showToast({
+        title: '添加失败:' + error.message,
+        icon: 'none',
+        duration: 3000
+      });
+    }
   },
 
   /**
@@ -772,7 +876,7 @@ Page({
   },
   
   /**
-   * 切换面板显示
+   * 切换面板显示状态
    */
   togglePanel: function(e) {
     const panelName = e.currentTarget.dataset.panel;
@@ -782,7 +886,8 @@ Page({
       startDatePanel: false,
       endDatePanel: false,
       repeatPanel: false,
-      reminderPanel: false
+      reminderPanel: false,
+      pointsExpiryPanel: false
     };
     
     // 切换当前面板状态
@@ -791,6 +896,13 @@ Page({
     this.setData(newState);
     
     console.log(`[TaskEdit] 切换${panelName}:`, newState[panelName] ? '打开' : '关闭');
+    
+    // 如果打开重复面板，确保其处于默认的重复类型选择模式
+    if (panelName === 'repeatPanel' && newState[panelName]) {
+      this.setData({
+        repeatPanelMode: 'type'
+      });
+    }
   },
   
   /**
@@ -1028,7 +1140,8 @@ Page({
       startDatePanel: false,
       endDatePanel: false,
       repeatPanel: false,
-      reminderPanel: false
+      reminderPanel: false,
+      pointsExpiryPanel: false
     });
     
     console.log('[TaskEdit] 关闭所有面板');
@@ -1448,5 +1561,22 @@ Page({
         }
       });
     }
+  },
+
+  /**
+   * 选择积分有效期
+   */
+  selectPointsExpiry: function(e) {
+    const expiry = e.currentTarget.dataset.expiry;
+    
+    // 使用常量中的文本映射
+    const expiryText = Constants.POINTS_EXPIRY.TEXT[expiry];
+    
+    console.log(`[TaskEdit] 设置积分有效期: ${expiryText}`);
+    
+    this.setData({
+      'newTask.pointsExpiry': expiry,
+      pointsExpiryText: expiryText
+    });
   },
 })
