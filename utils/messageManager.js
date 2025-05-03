@@ -6,14 +6,20 @@
 
 const messageManager = {
   // 创建任务相关消息
-  createTaskMessage: function(task, type = 'new') {
+  createTaskMessage: function(task, type = 'new', options = {}) {
     const now = Date.now();
     let title, summary, icon;
+    
+    // 检查是否是批量操作
+    const isBatchOperation = options.isBatchOperation || false;
+    const batchCount = options.batchCount || 0;
     
     switch(type) {
       case 'new':
         title = '新任务提醒';
-        summary = `您有新的任务"${task.title}"已添加到计划中`;
+        summary = isBatchOperation 
+          ? `您有${batchCount}个"${task.title}"循环任务已添加到计划中` 
+          : `您有新的任务"${task.title}"已添加到计划中`;
         icon = '📝';
         break;
       case 'upcoming':
@@ -23,7 +29,9 @@ const messageManager = {
         break;
       case 'edited':
         title = '任务已更新';
-        summary = `任务"${task.title}"的内容已被更新`;
+        summary = isBatchOperation 
+          ? `已更新${batchCount}个"${task.title}"循环任务` 
+          : `任务"${task.title}"的内容已被更新`;
         icon = '✏️';
         break;
       case 'completed':
@@ -36,6 +44,13 @@ const messageManager = {
         summary = `请务必完成任务"${task.title}"，否则将扣除5积分`;
         icon = '⚠️';
         break;
+      case 'deleted':
+        title = '任务已删除';
+        summary = isBatchOperation 
+          ? `已删除${batchCount}个"${task.title}"循环任务` 
+          : `任务"${task.title}"已被删除`;
+        icon = '🗑️';
+        break;
     }
     
     const message = {
@@ -47,7 +62,9 @@ const messageManager = {
       summary: summary,
       timestamp: now,
       isRead: false,
-      icon: icon
+      icon: icon,
+      isBatchOperation: isBatchOperation,
+      batchCount: batchCount
     };
     
     this.addMessage(message);
