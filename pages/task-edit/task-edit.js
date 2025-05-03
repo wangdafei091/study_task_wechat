@@ -426,58 +426,10 @@ Page({
       return result;
     }
     
-    // 验证日期与重复类型是否匹配
+    // 注意：日期与重复类型匹配问题不再视为表单验证失败
+    // 只在UI中显示警告，允许用户继续创建任务
     if (this.data.repeatTypeWarning) {
-      // 获取当前日期
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const todayStr = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}-${today.getDate().toString().padStart(2, '0')}`;
-      const isToday = this.data.newTask.startDate === todayStr;
-      
-      const startDate = new Date(this.data.newTask.startDate);
-      const dayOfWeek = startDate.getDay();
-      const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
-      
-      let warningMessage = '';
-      
-      if (this.data.newTask.repeat.type === 'workdays' && isWeekend) {
-        warningMessage = `您选择的开始日期是周末，但重复类型是工作日。任务将从下一个工作日开始执行`;
-      } else if (this.data.newTask.repeat.type === 'weekends' && !isWeekend) {
-        warningMessage = `您选择的开始日期是工作日，但重复类型是休息日。任务将从下一个休息日开始执行`;
-      } else if (this.data.newTask.repeat.type === 'custom') {
-        const selectedDays = this.data.newTask.repeat.days;
-        if (selectedDays && selectedDays.length > 0 && !selectedDays.includes(dayOfWeek)) {
-          warningMessage = `您选择的开始日期不在设定的重复星期内。任务将从下一个匹配的日期开始执行`;
-        }
-      }
-      
-      if (warningMessage) {
-        if (isToday) {
-          warningMessage += `。请注意，今日任务列表中将不会显示该任务。是否继续创建？`;
-        } else {
-          warningMessage += `。是否继续创建？`;
-        }
-        
-        console.log('[TaskEdit] 任务验证 - 检测到日期与重复类型不匹配');
-        
-        // 使用确认对话框
-        wx.showModal({
-          title: '重复类型提示',
-          content: warningMessage,
-          confirmText: '继续创建',
-          cancelText: '返回修改',
-          success: (res) => {
-            if (res.confirm) {
-              // 用户确认继续，执行任务创建
-              this.doAddTask();
-            }
-          }
-        });
-        
-        // 中断验证流程，由对话框回调处理后续操作
-        result.valid = false;
-        return result;
-      }
+      console.log('[TaskEdit] 检测到日期与重复类型不匹配，但允许继续创建任务');
     }
     
     return result;
@@ -609,11 +561,16 @@ Page({
     // 先进行表单验证
     const validation = this.validateTaskForm();
     if (!validation.valid) {
-      wx.showToast({
-        title: validation.errorMsg || '表单验证失败',
-        icon: 'none',
-        duration: 2000
-      });
+      // 只有当存在明确错误消息时才显示Toast
+      if (validation.errorMsg) {
+        wx.showToast({
+          title: validation.errorMsg,
+          icon: 'none',
+          duration: 2000
+        });
+      } else {
+        console.log('[TaskEdit] 表单验证不通过，但无需显示错误提示');
+      }
       return;
     }
     
@@ -1351,6 +1308,7 @@ Page({
       // 如果有冲突，使用冲突的预览文本
       previewText = conflictCheck.previewText;
       warningExists = true;
+      console.log(`[TaskEdit] 使用警告预览文本: ${previewText.substring(0, 30)}...`);
     } else {
       // 如果没有冲突，生成正常的预览文本
       switch (repeatType) {
@@ -1429,7 +1387,7 @@ Page({
       case 'workdays':
         // 判断开始日期是否是工作日（周一至周五）
         if (dayOfWeek === 0 || dayOfWeek === 6) {
-          previewText = `日期冲突：您选择的开始日期(${todayStr}，${dayName})是休息日，但重复规则设置为"工作日"(周一至周五)执行。请修改开始日期为工作日，或更改重复规则。`;
+          previewText = `注意：开始日期(${todayStr}，${dayName})是休息日，系统将只创建周一至周五的任务实例。`;
           hasConflict = true;
           conflictType = '工作日任务不能从周末开始';
         }
@@ -1438,7 +1396,7 @@ Page({
       case 'weekends':
         // 判断开始日期是否是周末（周六或周日）
         if (dayOfWeek !== 0 && dayOfWeek !== 6) {
-          previewText = `日期冲突：您选择的开始日期(${todayStr}，${dayName})是工作日，但重复规则设置为"休息日"(周六、周日)执行。请修改开始日期为周六或周日，或更改重复规则。`;
+          previewText = `注意：开始日期(${todayStr}，${dayName})是工作日，系统将只创建周六和周日的任务实例。`;
           hasConflict = true;
           conflictType = '休息日任务不能从工作日开始';
         }
@@ -1453,7 +1411,7 @@ Page({
           
           if (!selectedDays.includes(dayOfWeek)) {
             // 开始日期的星期不在所选星期中
-            previewText = `日期冲突：您选择的开始日期(${todayStr}，${dayName})不在已设置的重复星期(${selectedDayNames})中。请将开始日期改为所选星期几之一，或在重复星期中选择${dayName}。`;
+            previewText = `注意：开始日期(${todayStr}，${dayName})不在所选重复星期(${selectedDayNames})内，系统将只创建符合条件的任务实例。`;
             hasConflict = true;
             conflictType = '开始日期的星期不在所选星期中';
             

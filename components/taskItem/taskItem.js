@@ -89,7 +89,6 @@ Component({
    */
   lifetimes: {
     attached: function() {
-      this._initTaskData();
       console.log('[taskItem] 组件加载完成，监测布局变化');
       
       // 获取系统信息，判断屏幕宽度
