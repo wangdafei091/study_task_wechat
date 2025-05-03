@@ -71,6 +71,53 @@ const messageManager = {
     return message;
   },
   
+  // 创建系统消息
+  createSystemMessage: function(content, type = 'system', callback) {
+    const now = Date.now();
+    let title, icon;
+    
+    switch(type) {
+      case 'reward':
+        title = '积分奖励';
+        icon = '🎁';
+        break;
+      case 'penalty':
+        title = '积分扣除';
+        icon = '⚠️';
+        break;
+      case 'achievement':
+        title = '成就达成';
+        icon = '🏆';
+        break;
+      default:
+        title = '系统通知';
+        icon = '🔔';
+    }
+    
+    const message = {
+      id: 'msg_sys_' + now + '_' + Math.floor(Math.random() * 1000),
+      type: 'system',
+      notificationType: type,
+      title: title,
+      summary: content,
+      timestamp: now,
+      isRead: false,
+      icon: icon
+    };
+    
+    console.log(`[messageManager] 创建系统消息: ${type}, ${content}`);
+    this.addMessage(message);
+    
+    // 处理回调
+    if (typeof callback === 'function') {
+      callback(message);
+    } else if (callback && typeof callback.success === 'function') {
+      callback.success(message);
+    }
+    
+    return message;
+  },
+  
   // 创建积分惩罚消息
   createPenaltyMessage: function(task, points) {
     const now = Date.now();
