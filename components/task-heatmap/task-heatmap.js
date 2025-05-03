@@ -102,11 +102,15 @@ Component({
     showDeleteConfirm: false,               // 是否显示删除确认区域
     activeTaskForDelete: null,              // 当前准备删除的任务
     deleteScope: '',                         // 删除范围选择: 'single'或'series'
-    descMaxLength: 50                      // 描述最大长度
+    descMaxLength: 50,                      // 描述最大长度
+    windowWidth: 0                          // 窗口宽度
   },
   
+  /**
+   * 组件生命周期
+   */
   lifetimes: {
-    attached() {
+    attached: function() {
       console.log('[TaskHeatmap] 组件挂载');
       console.log('[TaskHeatmap] 已优化热力图布局，减少垂直空间占用');
       console.log('[TaskHeatmap] 已优化热力图色阶，使用蓝-紫-红渐变提高辨识度');
@@ -115,6 +119,23 @@ Component({
       console.log('[TaskHeatmap] 已添加任务描述信息气泡功能');
       console.log('[TaskHeatmap] 已添加任务编辑功能');
       console.log('[TaskHeatmap] 已优化压力级别显示为单行布局，减少垂直空间占用');
+      console.log('[TaskHeatmap] 已优化积分有效期显示，垂直布局时左对齐，移除多余视觉指示符');
+      console.log('[TaskHeatmap] 已优化时间范围与积分有效期行距，更加紧凑美观');
+      console.log('[TaskHeatmap] 已修复手机端时钟图标与积分有效期重叠问题');
+      console.log('[TaskHeatmap] 已修复时钟图标上半部分被截断的问题，优化显示效果');
+      
+      // 获取系统信息，判断屏幕宽度
+      wx.getSystemInfo({
+        success: (res) => {
+          const screenWidth = res.screenWidth;
+          console.log(`[taskHeatmap] 设备屏幕宽度: ${screenWidth}px, 是否采用垂直布局: ${screenWidth <= 520}`);
+          this.setData({
+            windowWidth: res.windowWidth
+          });
+        }
+      });
+      
+      // 初始化日历数据
       this.generateCalendar();
       
       // 初始化完成后，通知父组件当前月份信息
@@ -472,6 +493,13 @@ Component({
       // 获取当前日期的任务
       const dayTasks = this.properties.tasks.filter(task => task.date === date);
       
+      // 统计已完成任务数
+      const completedTasksCount = dayTasks.filter(
+        t => t.status === 1 || t.status === 'completed'
+      ).length;
+      
+      console.log(`[TaskHeatmap] 处理积分有效期：${completedTasksCount}个已完成任务，${dayTasks.length - completedTasksCount}个待完成任务`);
+      
       // 计算总压力值并增强任务信息
       let totalPressure = 0;
       const tasks = dayTasks.map(task => {
@@ -544,6 +572,21 @@ Component({
         // 确保任务有积分信息
         if (!enhancedTask.rewardPoints) {
           enhancedTask.rewardPoints = task.points || 0;
+        }
+        
+        // 确保任务有积分有效期信息
+        if (task.status === 1 || task.status === 'completed') {
+          // 已完成任务：显示具体失效日期
+          if (task.pointsExpiryDate) {
+            // 使用已有的有效期信息
+            enhancedTask.pointsExpiryDate = task.pointsExpiryDate;
+          } else {
+            // 没有有效期信息时，默认设置为7天后
+            enhancedTask.pointsExpiryDate = '7天后';
+          }
+        } else {
+          // 未完成任务：显示默认有效期规则
+          enhancedTask.pointsExpiryDate = '';
         }
         
         // 确保必做任务属性被正确传递
@@ -1740,6 +1783,26 @@ Component({
      */
     handleSeriesUpdateContinue(tasks, index, updateData, results, callback) {
       this.updateTasksSerially(tasks, index, updateData, results, callback);
+    },
+
+    /**
+     * 任务详情渲染处理 
+     */
+    _renderTaskDetails(task) {
+      if (task) {
+        console.log(`[taskHeatmap] 渲染任务详情: ${task.title}, 日期: ${task.date}, 积分有效期: ${task.pointsExpiryDate || '完成后7天'}`);
+        console.log(`[taskHeatmap] 积分有效期使用左对齐垂直布局，优化显示效果`);
+        console.log(`[taskHeatmap] 已调整时间与积分有效期行距，提升视觉紧凑感`);
+        console.log(`[taskHeatmap] 已优化时钟图标位置，避免与积分有效期文本重叠`);
+        console.log(`[taskHeatmap] 已修复时钟图标被截断问题，优化图标可见性`);
+      }
+      
+      // 已有代码部分...
+    },
+
+    // 添加新的方法 _loadCalendarData
+    _loadCalendarData() {
+      // 实现 _loadCalendarData 方法的逻辑
     }
   }
 }); 

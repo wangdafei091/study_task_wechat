@@ -119,46 +119,50 @@ const taskManager = {
   },
   
   /**
-   * 创建新任务
+   * 创建任务
    * @param {Object} task 任务对象
-   * @param {Function} callback 回调函数，参数为创建后的任务
+   * @param {Function} callback 回调函数，参数为创建的任务
    */
   createTask(task, callback) {
     // 确保任务有id和创建时间
-    const now = Date.now();
     const newTask = {
       ...task,
-      id: task.id || 'task_' + now + '_' + Math.floor(Math.random() * 1000),
-      createTime: task.createTime || now
+      id: `task_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+      createTime: Date.now(),
+      modifyTime: Date.now(),
+      status: 0, // 默认未完成状态
+      pointsExpiry: 0, // 初始化积分有效期为0
+      pointsExpiryDate: '' // 初始化积分有效期日期为空字符串
     };
     
-    // 确保积分有效期字段存在
-    if (!newTask.pointsExpiry) {
-      newTask.pointsExpiry = 'permanent'; // 默认为永久
-      console.log(`[TaskManager] 为任务 ${newTask.id} 添加默认积分有效期: permanent`);
-    } else {
-      console.log(`[TaskManager] 任务 ${newTask.id} 的积分有效期: ${newTask.pointsExpiry}`);
-    }
+    console.log('[TaskManager] 创建新任务:', {
+      id: newTask.id,
+      title: newTask.title,
+      type: newTask.type,
+      date: newTask.date
+    });
+    
+    // 检查任务重复设置
+    const isRepeating = newTask.repeat && newTask.repeat.type !== 'none';
+    console.log(`[TaskManager] 任务是否重复: ${isRepeating}, 重复类型: ${isRepeating ? newTask.repeat.type : 'none'}`);
     
     this.getAllTasks(allTasks => {
       let createdTasks = [];
-      
-      if (task.repeat && task.repeat.type !== 'none') {
-        // 处理周期性任务
+
+      // 处理重复任务生成
+      if (isRepeating) {
         createdTasks = this._generateRepeatTasks(newTask);
+        
+        // 添加到任务列表
         allTasks.push(...createdTasks);
         
-        // 如果没有生成任何任务，记录警告
-        if (createdTasks.length === 0) {
-          console.warn(`[TaskManager] ⚠️ 任务 ${newTask.title} 未能生成任何重复实例，请检查重复规则设置`);
-        } else {
-          console.log(`[TaskManager] 成功创建 ${createdTasks.length} 个重复任务实例`);
-        }
+        console.log(`[TaskManager] 已生成${createdTasks.length}个重复任务实例`);
       } else {
-        // 添加单次任务
-        createdTasks = [newTask];
+        // 非重复任务直接添加
         allTasks.push(newTask);
-        console.log(`[TaskManager] 创建单次任务: ${newTask.id}`);
+        createdTasks.push(newTask);
+        
+        console.log('[TaskManager] 已添加单次任务');
       }
       
       // 保存任务数据
@@ -174,7 +178,7 @@ const taskManager = {
         const taskForCallback = createdTasks.length > 0 ? createdTasks[0] : newTask;
         
         if (callback) {
-          console.log(`[TaskManager] 新任务添加成功，ID: ${taskForCallback.id} 标题: ${taskForCallback.title} 积分有效期: ${taskForCallback.pointsExpiry}`);
+          console.log(`[TaskManager] 新任务添加成功，ID: ${taskForCallback.id} 标题: ${taskForCallback.title}`);
           callback(taskForCallback);
         }
       });
@@ -301,11 +305,12 @@ const taskManager = {
       date: dateStr,
       createTime: Date.now(),
       modifyTime: Date.now(),
-      // 保留原始任务的积分有效期
-      pointsExpiry: originalTask.pointsExpiry || 'permanent'
+      // 保留原有值，同时支持新字段
+      pointsExpiry: originalTask.pointsExpiry || 0,
+      pointsExpiryDate: originalTask.pointsExpiryDate || ''
     };
     
-    console.log(`[TaskManager] 创建重复任务实例: ${dateStr} 积分有效期: ${taskInstance.pointsExpiry}`);
+    console.log(`[TaskManager] 创建重复任务实例: ${dateStr}`);
     
     return taskInstance;
   },
@@ -344,10 +349,16 @@ const taskManager = {
               notes: ''
             });
             
-            console.log(`[TaskManager] 任务 ${newTask.title} 已完成，添加完成记录:`, {
-              date: dateStr,
-              timestamp: now.getTime()
-            });
+            // 计算积分有效期（完成日期+7天）
+            const expiryDate = new Date(now);
+            expiryDate.setDate(expiryDate.getDate() + 7);
+            const expiryDateStr = `${expiryDate.getMonth() + 1}月${expiryDate.getDate()}日`;
+            
+            // 设置积分有效期
+            newTask.pointsExpiry = expiryDate.getTime();
+            newTask.pointsExpiryDate = expiryDateStr;
+            
+            console.log(`[TaskManager] 任务 ${newTask.title} 已完成，设置积分有效期: ${expiryDateStr}`);
           }
           
           updatedTask = newTask;

@@ -107,17 +107,37 @@
             
             <!-- 第三行：时间和积分信息 -->
             <view class="task-info-row">
-              <!-- 时间信息 -->
-              <view class="task-time-info">
-                <!-- 重复任务时间信息 -->
-                <block wx:if="{{item.repeat && item.repeat.type !== 'none'}}">
-                  <text>{{item.repeatInfo}}</text>
-                </block>
-                <!-- 单次任务时间信息 -->
-                <block wx:else>
-                  <text wx:if="{{item.isAllDay}}">{{item.date}} 全天</text>
-                  <text wx:else>{{item.date}} {{item.startTime}}-{{item.endTime}}</text>
-                </block>
+              <!-- 组合时间和积分有效期信息 -->
+              <view class="task-combined-info">
+                <!-- 时间信息 -->
+                <text class="time-info">
+                  <!-- 重复任务时间信息 -->
+                  <block wx:if="{{item.repeat && item.repeat.type !== 'none'}}">
+                    <text class="clock-icon">🕒</text> {{item.repeatInfo}}
+                  </block>
+                  <!-- 单次任务时间信息 -->
+                  <block wx:else>
+                    <block wx:if="{{item.isAllDay}}">
+                      <text class="clock-icon">🕒</text> {{item.date}} 全天
+                    </block>
+                    <block wx:else>
+                      <text class="clock-icon">🕒</text> {{item.date}} {{item.startTime}}-{{item.endTime}}
+                    </block>
+                  </block>
+                </text>
+                
+                <!-- 分隔符 -->
+                <text class="separator">|</text>
+                
+                <!-- 积分有效期信息 -->
+                <text class="points-info">
+                  <block wx:if="{{item.status === 1 || item.status === 'completed'}}">
+                    积分有效期：{{item.pointsExpiryDate || '7天后'}}失效
+                  </block>
+                  <block wx:else>
+                    积分有效期：完成后保留7天
+                  </block>
+                </text>
               </view>
             </view>
             

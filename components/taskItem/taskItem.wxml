@@ -16,8 +16,23 @@
   - edit: 编辑任务
 -->
 <view class="task-item {{task.status == 1 ? 'completed' : ''}} type-{{task.type}} {{task.isRepeated ? 'repeated' : ''}} {{task.isRequired ? 'required-task' : ''}}">
-  <!-- 显示任务时间 -->
-  <view class="task-time" wx:if="{{showTime && task.startTime}}">{{task.startTime}}</view>
+  <!-- 显示任务时间和积分有效期（合并为一行） -->
+  <view class="task-combined-info" wx:if="{{showTime && task.startTime}}">
+    <text class="time-info">
+      <text class="clock-icon">🕒</text> {{task.startTime}}
+    </text>
+    
+    <text class="separator">|</text>
+    
+    <text class="points-info">
+      <block wx:if="{{task.status == 1}}">
+        积分有效期：{{task.pointsExpiryDate || '7天后'}}失效
+      </block>
+      <block wx:else>
+        积分有效期：完成后保留7天
+      </block>
+    </text>
+  </view>
   
   <!-- 必做任务标记 -->
   <view class="required-badge" wx:if="{{task.isRequired}}">必做</view>

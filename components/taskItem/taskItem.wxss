@@ -244,6 +244,86 @@
   font-weight: var(--font-weight-medium);
 }
 
+/* 组合信息行样式 */
+.task-combined-info {
+  display: flex;
+  align-items: flex-start;
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+  margin-bottom: 10rpx;
+  line-height: 1.4;
+  flex-wrap: wrap;
+  width: 100%;
+  position: relative;
+}
+
+/* 时间信息样式 */
+.time-info {
+  flex: 0 1 auto;
+  overflow: visible;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-right: 10rpx;
+  min-width: 150rpx;
+  padding: 2rpx 0 4rpx;
+  position: relative;
+}
+
+/* 时钟图标样式 */
+.clock-icon {
+  display: inline-block;
+  font-size: 24rpx;
+  line-height: 1.2;
+  vertical-align: text-bottom;
+  margin-right: 4rpx;
+  margin-top: 1rpx;
+  position: relative;
+}
+
+/* 分隔符样式 - 仅在同行时显示 */
+.separator {
+  margin: 0 10rpx;
+  color: #ccc;
+  flex-shrink: 0;
+  display: inline-block;
+}
+
+/* 积分信息样式 */
+.points-info {
+  flex: 0 1 auto;
+  white-space: nowrap;
+  min-width: 190rpx;
+  font-size: calc(var(--font-size-xs) - 2rpx);
+  color: var(--text-tertiary, #999);
+}
+
+/* 自动换行适配 */
+@media (max-width: 520px) {
+  .task-combined-info {
+    flex-wrap: wrap;
+    line-height: 1.2;
+  }
+  
+  .separator {
+    display: none;
+  }
+  
+  .points-info {
+    flex-basis: 100%;
+    margin-top: 6rpx;
+  }
+}
+
+/* 旧的积分有效期信息样式 */
+.points-expiry-info {
+  min-width: 80rpx;
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+  margin-right: 15rpx;
+  margin-top: 6rpx;
+  line-height: 1.4;
+}
+
 .task-header {
   display: flex;
   align-items: center;

@@ -25,6 +25,11 @@ Component({
         title: '',
         status: 0,
         hasImage: false
+      },
+      observer: function(newVal) {
+        if (newVal) {
+          console.log(`[taskItem] 渲染任务: ${newVal.title}, 时间: ${newVal.startTime}, 积分有效期: ${newVal.pointsExpiryDate || '完成后7天'}`);
+        }
       }
     },
     showActions: {
@@ -75,6 +80,28 @@ Component({
       console.log('任务编辑点击:', this.properties.task.id);
       this.triggerEvent('edit', {
         taskId: this.properties.task.id
+      });
+    }
+  },
+
+  /**
+   * 组件加载完成生命周期
+   */
+  lifetimes: {
+    attached: function() {
+      this._initTaskData();
+      console.log('[taskItem] 组件加载完成，监测布局变化');
+      
+      // 获取系统信息，判断屏幕宽度
+      wx.getSystemInfo({
+        success: (res) => {
+          const screenWidth = res.screenWidth;
+          console.log(`[taskItem] 设备屏幕宽度: ${screenWidth}px, 是否采用垂直布局: ${screenWidth <= 520}`);
+          console.log('[taskItem] 已优化积分有效期显示，垂直布局时左对齐，移除多余视觉指示符');
+          console.log('[taskItem] 已优化时间范围与积分有效期行距，更加紧凑美观');
+          console.log('[taskItem] 已修复手机端时钟图标与积分有效期重叠问题');
+          console.log('[taskItem] 已修复时钟图标上半部分被截断的问题，优化显示效果');
+        }
       });
     }
   }
