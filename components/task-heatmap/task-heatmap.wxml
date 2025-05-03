@@ -298,6 +298,29 @@
             <text class="factor-desc">每20积分增加1点压力</text>
           </view>
         </view>
+        
+        <!-- 计算示例区域 -->
+        <view class="example-section">
+          <text class="example-title">计算示例</text>
+          <view class="example-content">
+            <view class="example-task">
+              <text class="example-text">以"数学作业"为例:</text>
+              <view class="example-item">类型: 学习(×1.2)</view>
+              <view class="example-item">时长: 45分钟</view>
+              <view class="example-item">积分: 30分</view>
+            </view>
+            <view class="example-calc">
+              <text class="example-text">计算过程:</text>
+              <view class="example-item">基础压力: 1.0 × 1.2 = 1.2分</view>
+              <view class="example-item">时长压力: 45 × 0.1 = 4.5分</view>
+              <view class="example-item">积分压力: 30 × 0.05 = 1.5分</view>
+            </view>
+            <view class="example-result">
+              <text class="example-item">总压力值: 7.2分 (轻松级别)</text>
+            </view>
+          </view>
+        </view>
+        
         <view class="levels-section">
           <text class="levels-title">压力级别</text>
           <view class="level-items">
