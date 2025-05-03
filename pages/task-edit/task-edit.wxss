@@ -269,7 +269,7 @@
 
 .points-stepper {
   display: flex;
-  height: 86rpx;
+  height: 90rpx;  /* 修改为与type-options一致的高度 */
   margin-top: 14rpx;
   border: none;
   border-radius: 8rpx;
@@ -282,7 +282,7 @@
 
 .stepper-btn {
   width: 70rpx;
-  height: 86rpx;
+  height: 90rpx;  /* 修改为与type-options一致的高度 */
   display: flex;
   justify-content: center;
   align-items: center;
@@ -315,7 +315,7 @@
 
 .stepper-input {
   width: 100rpx;
-  height: 86rpx;
+  height: 90rpx;  /* 修改为与type-options一致的高度 */
   text-align: center;
   border-left: none;
   border-right: none;
