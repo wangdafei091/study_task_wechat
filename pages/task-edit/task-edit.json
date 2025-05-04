@@ -1,5 +1,5 @@
 {
-  "navigationBarTitleText": "任务分布",
+  "navigationBarTitleText": "任务管理",
   "usingComponents": {
     "card": "/components/card/card",
     "task-heatmap": "/components/task-heatmap/task-heatmap",

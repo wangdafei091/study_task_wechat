@@ -335,10 +335,10 @@
   justify-content: center;
 }
 
-.points-value-large::before {
+.points-value-large::after {
   content: "⭐";
   font-size: 52rpx;
-  margin-right: 10rpx;
+  margin-left: 10rpx;
 }
 
 .expiring-points-container {
