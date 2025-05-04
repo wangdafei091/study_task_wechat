@@ -46,6 +46,18 @@ App({
     
     // 检查必做任务，处理过期未完成的必做任务
     this.checkRequiredTasks();
+
+    // 运行数据修复
+    this.migrateRepeatTasks();
+    
+    // 检查并初始化数据
+    this.checkData();
+    
+    // 设置主题
+    this.setTheme();
+    
+    // 创建定时器进行定期检查
+    this.startTaskChecking();
   },
   
   // 初始化事件总线
@@ -650,5 +662,103 @@ App({
         console.log(`[App] 检测到 ${upcomingTasks.length} 个即将到期的任务`);
       }
     });
+  },
+
+  // 添加数据修复逻辑，找到缺少parentTaskId的循环任务并修复
+  migrateRepeatTasks: function() {
+    console.log('[App] 开始检查循环任务parentTaskId修复');
+    
+    const taskManager = require('./utils/taskManager.js');
+    taskManager.getAllTasks(allTasks => {
+      // 找出所有循环任务
+      const repeatTasks = allTasks.filter(task => 
+        task.repeat && task.repeat.type !== 'none'
+      );
+      
+      console.log(`[App] 发现${repeatTasks.length}个循环任务`);
+      
+      if (repeatTasks.length === 0) {
+        console.log('[App] 无需修复循环任务');
+        return;
+      }
+      
+      // 按标题和重复类型分组
+      const taskGroups = {};
+      repeatTasks.forEach(task => {
+        const key = `${task.title}_${task.repeat.type}`;
+        if (!taskGroups[key]) {
+          taskGroups[key] = [];
+        }
+        taskGroups[key].push(task);
+      });
+      
+      // 为每组分配正确的parentTaskId
+      let updatedCount = 0;
+      let updateNeeded = false;
+      
+      Object.keys(taskGroups).forEach(key => {
+        const group = taskGroups[key];
+        if (group.length > 1) {
+          // 只处理有多个任务实例的分组
+          // 按创建时间排序，找出最早的任务作为父任务
+          group.sort((a, b) => a.createTime - b.createTime);
+          const parentTask = group[0];
+          const parentId = parentTask.id;
+          
+          group.forEach(task => {
+            if (task.id !== parentId && !task.parentTaskId) {
+              task.parentTaskId = parentId;
+              updatedCount++;
+              updateNeeded = true;
+              console.log(`[App] 为任务 ${task.id} 设置父任务ID: ${parentId}`);
+            }
+          });
+        }
+      });
+      
+      // 如果有更新，保存数据
+      if (updateNeeded) {
+        console.log(`[App] 修复了 ${updatedCount} 个循环任务的parentTaskId`);
+        taskManager._saveTaskData(allTasks, () => {
+          console.log('[App] 循环任务parentTaskId修复完成');
+        });
+      } else {
+        console.log('[App] 所有循环任务parentTaskId已正确设置，无需修复');
+      }
+    });
+  },
+
+  // 检查并初始化数据 - 使用现有的loadTaskData方法
+  checkData: function() {
+    // 已有loadTaskData方法，直接调用它即可
+    this.loadTaskData();
+  },
+
+  // 设置主题 - 使用现有的setupThemeChangeListener方法
+  setTheme: function() {
+    // 已有setupThemeChangeListener方法，这里不需要重复实现
+    console.log('[App] 主题设置已在setupThemeChangeListener中完成');
+  },
+
+  // 创建定时器进行定期检查 - 使用现有的checkTasksStatus方法
+  startTaskChecking: function() {
+    // 已有checkTasksStatus方法，这里设置定期检查
+    console.log('[App] 开始设置定期任务检查');
+    
+    // 每小时检查一次任务状态
+    const CHECK_INTERVAL = 60 * 60 * 1000; // 1小时
+    
+    // 清除可能存在的旧定时器
+    if (this.taskCheckTimer) {
+      clearInterval(this.taskCheckTimer);
+    }
+    
+    // 设置新定时器
+    this.taskCheckTimer = setInterval(() => {
+      console.log('[App] 执行定期任务状态检查');
+      this.checkTasksStatus();
+    }, CHECK_INTERVAL);
+    
+    console.log('[App] 已设置定期任务检查，间隔:', CHECK_INTERVAL/1000/60, '分钟');
   }
 }) 

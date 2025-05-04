@@ -328,12 +328,14 @@ const taskManager = {
       date: dateStr,
       createTime: Date.now(),
       modifyTime: Date.now(),
+      // 添加父任务ID，指向原始任务
+      parentTaskId: originalTask.id,
       // 确保保留原始任务的积分有效期
       pointsExpiry: originalTask.pointsExpiry || 'permanent',
       pointsExpiryDate: originalTask.pointsExpiryDate || ''
     };
     
-    console.log(`[TaskManager] 创建重复任务实例: ${dateStr}，积分有效期: ${taskInstance.pointsExpiry}`);
+    console.log(`[TaskManager] 创建重复任务实例: ${dateStr}，积分有效期: ${taskInstance.pointsExpiry}, 父任务ID: ${taskInstance.parentTaskId}`);
     
     return taskInstance;
   },

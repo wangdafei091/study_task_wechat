@@ -1164,17 +1164,18 @@ Component({
       const taskManager = require('../../utils/taskManager.js');
       const messageManager = require('../../utils/messageManager.js');
       
-      // 添加日志，记录当前需要删除的任务信息
-      console.log(`[task-heatmap] 准备删除任务系列，当前任务:`, {
+      // 添加日志，记录当前需要删除的任务详细信息
+      console.log(`[task-heatmap] 准备删除任务系列，当前任务详情:`, {
         id: task.id,
         title: task.title,
+        date: task.date,
         parentTaskId: task.parentTaskId,
         repeatType: task.repeat ? task.repeat.type : 'none'
       });
       
       // 显示加载状态
       wx.showLoading({
-        title: '删除中...',
+        title: '正在分析任务系列...',
         mask: true
       });
       
@@ -1188,7 +1189,14 @@ Component({
           icon: 'none',
           duration: 2000
         });
-      }, 8000); // 8秒超时
+        
+        // 重置删除相关状态
+        this.setData({
+          showDeleteConfirm: false,
+          deleteScope: '',
+          activeTaskForDelete: null
+        });
+      }, 15000); // 延长超时时间到15秒
       
       try {
         taskManager.getAllTasks(allTasks => {
@@ -1196,7 +1204,7 @@ Component({
             // 清除超时定时器
             clearTimeout(loadingTimeout);
             
-            // 先尝试找出父任务ID
+            // 获取父任务ID
             let parentId = task.parentTaskId;
             
             // 如果当前任务没有parentTaskId，可能它自己就是父任务
@@ -1207,17 +1215,25 @@ Component({
             
             console.log(`[task-heatmap] 使用父任务ID查找系列任务: ${parentId}`);
             
-            // 使用改进的筛选逻辑
+            // 精确查找具有相同parentTaskId的任务
             let seriesTasks = allTasks.filter(t => 
               t.parentTaskId === parentId || // 找出所有子任务
               t.id === parentId              // 包含父任务自身
             );
             
+            // 只保留当前日期及之后的任务
+            if (task.date) {
+              seriesTasks = seriesTasks.filter(t => t.date >= task.date);
+              console.log(`[task-heatmap] 日期过滤后，只保留${task.date}及之后的任务`);
+            }
+            
             console.log(`[task-heatmap] 删除任务系列，共找到: ${seriesTasks.length} 个任务`);
+            console.log(`[task-heatmap] 待删除任务ID清单:`, seriesTasks.map(t => ({id: t.id, date: t.date})));
             
             if (seriesTasks.length === 0) {
               // 未找到系列任务，仅删除当前任务
               wx.hideLoading();
+              console.log(`[task-heatmap] 未找到系列任务，仅删除当前任务: ${task.id}`);
               this.deleteTask(task.id);
               return;
             }
@@ -1261,6 +1277,15 @@ Component({
             };
             
             let currentIndex = 0;
+            const batchSize = 5; // 增加每批处理的任务数量
+            
+            // 使用单个加载提示，只在开始和批处理时更新
+            wx.showLoading({
+              title: `删除中(0/${seriesTasks.length})`,
+              mask: true
+            });
+            
+            console.log(`[task-heatmap] 开始批量删除任务，共${seriesTasks.length}个`);
             
             // 批量删除任务
             const deleteNext = () => {
@@ -1309,17 +1334,18 @@ Component({
                 return;
               }
               
+              // 每处理一批任务才更新一次提示
+              if (currentIndex % batchSize === 0 || currentIndex === seriesTasks.length - 1) {
+                wx.showLoading({
+                  title: `删除中(${currentIndex}/${seriesTasks.length})`,
+                  mask: true
+                });
+              }
+              
               // 获取当前任务
               const currentTask = seriesTasks[currentIndex];
               
-              // 更新加载提示
-              wx.hideLoading();
-              wx.showLoading({
-                title: `删除中(${currentIndex + 1}/${seriesTasks.length})`,
-                mask: true
-              });
-              
-              console.log(`[task-heatmap] 删除第${currentIndex + 1}/${seriesTasks.length}个任务: ${currentTask.id}, 标题: ${currentTask.title}`);
+              console.log(`[task-heatmap] 删除第${currentIndex + 1}/${seriesTasks.length}个任务: ${currentTask.id}, 日期: ${currentTask.date}`);
               
               // 删除当前任务
               taskManager.deleteTask(currentTask.id, (success) => {
@@ -1345,13 +1371,15 @@ Component({
                   
                   // 继续下一个
                   currentIndex++;
-                  deleteNext();
+                  
+                  // 使用setTimeout避免调用栈过深
+                  setTimeout(deleteNext, 0);
                 } catch (error) {
                   console.error('[task-heatmap] 删除任务回调中出错:', error);
                   results.failed.push(currentTask.id);
                   
                   currentIndex++;
-                  deleteNext();
+                  setTimeout(deleteNext, 0);
                 }
               });
             };
@@ -1371,6 +1399,12 @@ Component({
             wx.hideLoading();
             console.error('[task-heatmap] 删除任务系列出错:', error);
             
+            wx.showToast({
+              title: '删除过程出错',
+              icon: 'error',
+              duration: 2000
+            });
+            
             // 重置删除相关状态
             this.setData({
               showDeleteConfirm: false,
@@ -1385,6 +1419,12 @@ Component({
         
         wx.hideLoading();
         console.error('[task-heatmap] 获取任务列表出错:', error);
+        
+        wx.showToast({
+          title: '获取任务列表失败',
+          icon: 'error',
+          duration: 2000
+        });
         
         // 重置删除相关状态
         this.setData({
