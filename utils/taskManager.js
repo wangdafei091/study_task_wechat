@@ -378,16 +378,18 @@ const taskManager = {
               notes: ''
             });
             
-            // 计算积分有效期（完成日期+7天）
-            const expiryDate = new Date(now);
-            expiryDate.setDate(expiryDate.getDate() + 7);
-            const expiryDateStr = `${expiryDate.getMonth() + 1}月${expiryDate.getDate()}日`;
+            // 根据任务设置的有效期类型计算实际失效日期
+            const originalExpiryType = task.pointsExpiry || 'week'; // 默认使用周有效期
+            console.log(`[TaskManager] 任务 ${task.title} 原始积分有效期类型: ${originalExpiryType}`);
+            
+            // 计算实际有效期
+            const expiryInfo = this.calculateExpiryDate(originalExpiryType, now);
             
             // 设置积分有效期
-            newTask.pointsExpiry = expiryDate.getTime();
-            newTask.pointsExpiryDate = expiryDateStr;
+            newTask.pointsExpiry = expiryInfo.expiry;
+            newTask.pointsExpiryDate = expiryInfo.expiryDateStr;
             
-            console.log(`[TaskManager] 任务 ${newTask.title} 已完成，设置积分有效期: ${expiryDateStr}`);
+            console.log(`[TaskManager] 任务 ${newTask.title} 已完成，设置积分有效期: ${expiryInfo.expiryDateStr}`);
             
             // 更新用户积分
             const userPoints = wx.getStorageSync('userPoints') || 0;
@@ -397,7 +399,9 @@ const taskManager = {
             // 创建奖励消息
             const messageManager = require('./messageManager.js');
             messageManager.createSystemMessage(
-              `完成任务"${newTask.title}"，获得${newTask.rewardPoints}积分`,
+              `完成任务"${newTask.title}"，获得${newTask.rewardPoints}积分${
+                expiryInfo.expiry === 'permanent' ? '（永久有效）' : `（有效期至${expiryInfo.expiryDateStr}）`
+              }`,
               'reward'
             );
           }
@@ -1083,6 +1087,164 @@ const taskManager = {
         if (callback) callback(error, null);
       }
     });
+  },
+  
+  /**
+   * 计算积分有效期
+   * @param {String} expiryType 有效期类型（'permanent'/'week'/'month'/'3months'/'6months'/'12months'）
+   * @param {Date} completionDate 完成日期
+   * @returns {Object} 包含时间戳和可读格式的有效期信息
+   */
+  calculateExpiryDate(expiryType, completionDate) {
+    console.log(`[TaskManager] 计算积分有效期: 类型=${expiryType}, 完成日期=${completionDate.toISOString()}`);
+    
+    // 如果是永久有效，直接返回
+    if (expiryType === 'permanent') {
+      console.log(`[TaskManager] 积分永久有效`);
+      return {
+        expiry: 'permanent',
+        expiryDateStr: '永久'
+      };
+    }
+    
+    // 今天日期的零点
+    const today = new Date(completionDate);
+    today.setHours(0, 0, 0, 0);
+    
+    let expiryDate = new Date(today);
+    let specialCase = '';
+    
+    switch (expiryType) {
+      case 'week': {
+        // 计算到当前自然周的周日24点
+        const dayOfWeek = today.getDay(); // 0是周日，1-6是周一到周六
+        
+        if (dayOfWeek === 0) {
+          // 周日完成，当天24点失效
+          expiryDate.setHours(23, 59, 59, 999);
+          specialCase = '当天24点失效';
+        } else {
+          // 计算到本周日的天数差
+          const daysUntilSunday = 7 - dayOfWeek;
+          expiryDate.setDate(today.getDate() + daysUntilSunday);
+          expiryDate.setHours(23, 59, 59, 999);
+        }
+        break;
+      }
+      
+      case 'month': {
+        // 计算到当前自然月末24点
+        const currentMonth = today.getMonth();
+        const currentYear = today.getFullYear();
+        
+        // 下个月的第0天就是当前月的最后一天
+        expiryDate = new Date(currentYear, currentMonth + 1, 0);
+        expiryDate.setHours(23, 59, 59, 999);
+        
+        // 检查是否是月末完成的
+        const lastDayOfMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+        if (today.getDate() === lastDayOfMonth) {
+          specialCase = '当天24点失效';
+        }
+        break;
+      }
+      
+      case '3months': {
+        // 计算到当前自然季度末24点
+        const currentMonth = today.getMonth();
+        const currentYear = today.getFullYear();
+        
+        // 确定当前季度的最后一个月
+        const quarterEndMonth = Math.floor(currentMonth / 3) * 3 + 2; // 0,1,2->2; 3,4,5->5; 6,7,8->8; 9,10,11->11
+        
+        // 下个月的第0天就是当前月的最后一天
+        expiryDate = new Date(currentYear, quarterEndMonth + 1, 0);
+        expiryDate.setHours(23, 59, 59, 999);
+        
+        // 检查是否是季度末完成的
+        if (currentMonth === quarterEndMonth) {
+          const lastDayOfMonth = new Date(currentYear, quarterEndMonth + 1, 0).getDate();
+          if (today.getDate() === lastDayOfMonth) {
+            specialCase = '当天24点失效';
+          }
+        }
+        break;
+      }
+      
+      case '6months': {
+        // 计算到当前自然半年末24点
+        const currentMonth = today.getMonth();
+        const currentYear = today.getFullYear();
+        
+        // 确定半年末月份：上半年(0-5)->5(6月), 下半年(6-11)->11(12月)
+        const halfYearEndMonth = currentMonth < 6 ? 5 : 11;
+        
+        // 设置到半年末的最后一天
+        expiryDate = new Date(currentYear, halfYearEndMonth + 1, 0);
+        expiryDate.setHours(23, 59, 59, 999);
+        
+        // 检查是否是半年末完成的
+        if (currentMonth === halfYearEndMonth) {
+          const lastDayOfMonth = new Date(currentYear, halfYearEndMonth + 1, 0).getDate();
+          if (today.getDate() === lastDayOfMonth) {
+            specialCase = '当天24点失效';
+          }
+        }
+        break;
+      }
+      
+      case '12months': {
+        // 计算到当前自然年末24点
+        const currentYear = today.getFullYear();
+        
+        // 设置到年末最后一天
+        expiryDate = new Date(currentYear, 11, 31);
+        expiryDate.setHours(23, 59, 59, 999);
+        
+        // 检查是否是年末完成的
+        if (today.getMonth() === 11 && today.getDate() === 31) {
+          specialCase = '当天24点失效';
+        }
+        break;
+      }
+      
+      default: {
+        // 默认7天有效期（兼容旧版本）
+        console.warn(`[TaskManager] 未知的积分有效期类型: ${expiryType}，使用默认7天`);
+        expiryDate.setDate(today.getDate() + 7);
+        expiryDate.setHours(23, 59, 59, 999);
+      }
+    }
+    
+    // 格式化日期为可读格式
+    let expiryDateStr = '';
+    
+    if (specialCase) {
+      expiryDateStr = specialCase;
+    } else {
+      // 检查是否是今天或明天
+      const tomorrow = new Date(today);
+      tomorrow.setDate(today.getDate() + 1);
+      
+      if (expiryDate.getDate() === today.getDate() && 
+          expiryDate.getMonth() === today.getMonth() && 
+          expiryDate.getFullYear() === today.getFullYear()) {
+        expiryDateStr = '今日24点';
+      } else if (expiryDate.getDate() === tomorrow.getDate() && 
+                expiryDate.getMonth() === tomorrow.getMonth() && 
+                expiryDate.getFullYear() === tomorrow.getFullYear()) {
+        expiryDateStr = '明日24点';
+      } else {
+        expiryDateStr = `${expiryDate.getMonth() + 1}月${expiryDate.getDate()}日`;
+      }
+    }
+    
+    console.log(`[TaskManager] 计算积分有效期结果: ${expiryDateStr}, 时间戳: ${expiryDate.getTime()}`);
+    
+    return {
+      expiry: expiryDate.getTime(),
+      expiryDateStr: expiryDateStr
+    };
   },
 };
 

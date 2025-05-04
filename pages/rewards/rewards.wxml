@@ -1,27 +1,28 @@
 <!--pages/rewards/rewards.wxml-->
 <view class="container">
-  <!-- 奖励进度顶部 -->
+  <!-- 奖励进度顶部 - 改为总积分展示卡片 -->
   <view class="progress-section">
-    <view class="progress-header">
-      <view class="level-info">
-        <view class="level-title">当前等级</view>
-        <view class="level-value">Lv. {{currentLevel}}</view>
-      </view>
-      <view class="points-info">
-        <view class="points-title">当前积分</view>
-        <view class="points-value">{{currentProgress}} 分</view>
-      </view>
+    <view class="points-center">
+      <view class="points-title">我的积分</view>
+      <view class="points-value-large">{{formattedPoints}}</view>
     </view>
     
-    <view class="progress-bar-container">
-      <view class="progress-bar">
-        <view class="progress-fill" style="width: {{currentProgress / totalProgress * 100}}%;"></view>
-      </view>
-      <view class="progress-text">{{currentProgress}}/{{totalProgress}}</view>
+    <!-- 即将到期积分提示 -->
+    <view class="expiring-points-container" wx:if="{{expiringPoints > 0}}">
+      <text>其中 {{expiringPoints}} 积分将在 {{expiryDate}} 过期</text>
     </view>
     
-    <view class="rewards-overview">
-      <text>已解锁 {{rewardsEarned}}/{{rewardsTotal}} 个奖励</text>
+    <!-- 底部按钮 - 改为横向布局 -->
+    <view class="points-actions">
+      <view class="action-btn-horizontal">
+        <view class="action-icon">📋</view>
+        <view class="action-text">积分记录</view>
+      </view>
+      <view class="action-separator"></view>
+      <view class="action-btn-horizontal">
+        <view class="action-icon">🎁</view>
+        <view class="action-text">我的兑换</view>
+      </view>
     </view>
   </view>
   

@@ -12,6 +12,10 @@ Page({
     rewardsEarned: 0,
     rewardsTotal: 6,
     currentLevel: 1,
+    totalPoints: 0,            // 总积分
+    formattedPoints: '0',      // 格式化后的总积分
+    expiringPoints: 0,         // 即将到期积分
+    expiryDate: '',            // 到期日期
     rewards: [
       {
         id: 1,
@@ -126,19 +130,28 @@ Page({
    * 加载奖励数据
    */
   loadRewardsData: function () {
+    console.log('[rewards] 开始加载奖励数据');
+    
+    // 从存储获取用户总积分
+    const userPoints = wx.getStorageSync('userPoints') || 0;
+    console.log(`[rewards] 获取到用户积分: ${userPoints}`);
+    
+    // 格式化积分，添加千位分隔符
+    const formattedPoints = userPoints.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    
+    // 获取即将到期积分信息
+    const expiringPointsInfo = this.getExpiringPoints();
+    
     // 从全局状态或本地存储获取完成的任务数量
     const app = getApp();
     const tasks = app.globalData.tasks || [];
     const completedTasks = tasks.filter(task => task.status === 1).length;
     
-    // 计算当前积分（每个完成的任务10分）
-    const currentPoints = completedTasks * 10;
-    
     // 更新奖励解锁状态
     const rewards = this.data.rewards.map(reward => {
       return {
         ...reward,
-        unlocked: currentPoints >= reward.points
+        unlocked: userPoints >= reward.points
       };
     });
 
@@ -147,10 +160,62 @@ Page({
     
     this.setData({
       rewards: rewards,
-      currentProgress: currentPoints,
+      currentProgress: userPoints,
+      totalPoints: userPoints,
+      formattedPoints: formattedPoints,
+      expiringPoints: expiringPointsInfo.points,
+      expiryDate: expiringPointsInfo.date,
       rewardsEarned: unlockedRewards,
-      currentLevel: Math.floor(currentPoints / 20) + 1 // 每20点升一级
+      currentLevel: Math.floor(userPoints / 20) + 1 // 每20点升一级
     });
+    
+    console.log(`[rewards] 设置总积分: ${userPoints}, 即将到期积分: ${expiringPointsInfo.points}, 到期日期: ${expiringPointsInfo.date}`);
+  },
+
+  /**
+   * 获取即将到期积分信息
+   */
+  getExpiringPoints: function() {
+    console.log(`[rewards] 开始检查即将到期积分`);
+    
+    // 获取任务数据
+    const tasks = wx.getStorageSync('taskData') || [];
+    const now = new Date().getTime();
+    let expiringPoints = 0;
+    let expiryDate = '';
+    
+    // 筛选已完成且积分有有效期的任务
+    const completedTasks = tasks.filter(task => 
+      task.status === 1 && 
+      task.pointsExpiry !== 'permanent' && // 排除永久有效的积分
+      typeof task.pointsExpiry === 'number' && 
+      task.pointsExpiry > now
+    );
+    
+    console.log(`[rewards] 找到 ${completedTasks.length} 个有时效性的完成任务`);
+    
+    if (completedTasks.length > 0) {
+      // 按过期时间排序
+      completedTasks.sort((a, b) => a.pointsExpiry - b.pointsExpiry);
+      
+      // 获取最近过期的日期和积分总和
+      const earliestExpiryTask = completedTasks[0];
+      expiryDate = earliestExpiryTask.pointsExpiryDate || '';
+      
+      // 计算所有即将到期的积分总和
+      expiringPoints = completedTasks.reduce((sum, task) => {
+        return sum + (task.rewardPoints || 0);
+      }, 0);
+      
+      console.log(`[rewards] 找到${completedTasks.length}个即将到期任务，总计积分: ${expiringPoints}, 最早到期日期: ${expiryDate}`);
+    } else {
+      console.log(`[rewards] 没有找到即将到期的积分`);
+    }
+    
+    return {
+      points: expiringPoints,
+      date: expiryDate
+    };
   },
 
   /**

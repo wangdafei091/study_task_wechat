@@ -298,4 +298,76 @@
 .btn-claim[disabled] {
   background-color: #CCCCCC;
   color: #FFFFFF;
+}
+
+/* 新的积分展示卡片样式 - 优化版 */
+.points-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12rpx 0; /* 减少上下内边距 */
+}
+
+.points-title {
+  font-size: 28rpx;
+  color: #333333; /* 加深标题颜色提升层级 */
+  font-weight: 500; /* 加粗标题 */
+  margin-bottom: 8rpx; /* 减少间距 */
+}
+
+.points-value-large {
+  font-size: 65rpx; /* 稍微减小字号 */
+  color: #4285F4;
+  font-weight: 600;
+  text-shadow: 0 2rpx 4rpx rgba(0, 0, 0, 0.1);
+  letter-spacing: 2rpx;
+  margin-bottom: 12rpx; /* 减少底部间距 */
+  line-height: 1.2; /* 控制行高 */
+}
+
+.expiring-points-container {
+  background-color: #FFF8E1;
+  border-radius: 12rpx;
+  padding: 10rpx 24rpx; /* 减少上下内边距 */
+  margin: 6rpx auto 14rpx; /* 减少上下外边距并居中 */
+  text-align: center;
+  width: 80%; /* 缩小宽度 */
+}
+
+.expiring-points-container text {
+  font-size: 24rpx;
+  color: #FF9800;
+}
+
+.points-actions {
+  display: flex;
+  justify-content: center; /* 居中对齐 */
+  margin-top: 16rpx; /* 减少顶部边距 */
+  border-top: 1rpx solid #EEEEEE;
+  padding-top: 16rpx; /* 减少顶部内边距 */
+}
+
+/* 横向按钮样式 */
+.action-btn-horizontal {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 10rpx 24rpx;
+}
+
+.action-separator {
+  width: 1rpx;
+  height: 36rpx;
+  background-color: #EEEEEE;
+  margin: 0 20rpx;
+}
+
+.action-icon {
+  font-size: 44rpx; /* 稍微增大图标尺寸 */
+  margin-right: 10rpx; /* 添加右侧间距 */
+}
+
+.action-text {
+  font-size: 26rpx;
+  color: #333333;
 } 

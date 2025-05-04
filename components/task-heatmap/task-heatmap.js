@@ -2121,11 +2121,36 @@ Component({
      */
     _renderTaskDetails(task) {
       if (task) {
-        const expiryText = task.pointsExpiry === 'permanent' ? '永久' : 
-          (Constants.POINTS_EXPIRY.TEXT[task.pointsExpiry] ? 
-          Constants.POINTS_EXPIRY.TEXT[task.pointsExpiry] : '7天');
+        // 处理不同类型的积分有效期
+        let expiryText = '';
+        
+        if (task.pointsExpiryDate) {
+          // 已有格式化的过期日期，直接使用
+          expiryText = task.pointsExpiryDate;
+        } else if (task.pointsExpiry === 'permanent') {
+          // 永久有效的情况
+          expiryText = '永久';
+        } else if (typeof task.pointsExpiry === 'string' && Constants.POINTS_EXPIRY.TEXT[task.pointsExpiry]) {
+          // 尚未完成的任务，显示完成后的有效期类型
+          expiryText = Constants.POINTS_EXPIRY.TEXT[task.pointsExpiry];
+        } else if (typeof task.pointsExpiry === 'number') {
+          // 数字类型是时间戳，计算与当前时间的差距，格式化为"几天后"
+          const now = new Date().getTime();
+          const diffDays = Math.ceil((task.pointsExpiry - now) / (24 * 60 * 60 * 1000));
           
-        console.log(`[taskHeatmap] 渲染任务详情: ${task.title}, 日期: ${task.date}, 积分有效期: ${task.pointsExpiry}, 转换后: ${expiryText}`);
+          if (diffDays <= 0) {
+            expiryText = '今日到期';
+          } else if (diffDays === 1) {
+            expiryText = '明日到期';
+          } else {
+            expiryText = `${diffDays}天后到期`;
+          }
+        } else {
+          // 默认情况
+          expiryText = '7天';
+        }
+          
+        console.log(`[taskHeatmap] 渲染任务详情: ${task.title}, 日期: ${task.date}, 积分有效期类型: ${typeof task.pointsExpiry}, 值: ${task.pointsExpiry}, 转换后: ${expiryText}`);
       }
     },
 
