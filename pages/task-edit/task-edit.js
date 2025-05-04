@@ -804,32 +804,30 @@ Page({
    */
   initDateTimeData: function() {
     // 获取当前日期
+    const dateUtils = require('../../utils/dateUtils.js');
     const today = new Date();
-    const year = today.getFullYear();
-    const month = today.getMonth();
-    const date = today.getDate();
+    const dateStr = dateUtils.formatDate(today);
     
-    // 格式化日期和时间
-    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(date).padStart(2, '0')}`;
-    const timeStr = '08:00';
-    const endTimeStr = '09:00';
+    // 获取当前时间的下一个整点时间
+    const currentHour = today.getHours();
+    const nextHour = (currentHour + 1) % 24;
+    const startTimeStr = `${String(nextHour).padStart(2, '0')}:00`;
     
-    // 生成年月选择器所需的字符串
-    const yearMonthStr = `${year}-${String(month + 1).padStart(2, '0')}`;
-    const yearText = `${year}年`;
-    const monthText = `${month + 1}月`;
+    // 设置结束时间为开始时间后一小时
+    const endHour = (nextHour + 1) % 24;
+    const endTimeStr = `${String(endHour).padStart(2, '0')}:00`;
     
     this.setData({
       // 设置日期时间
       'newTask.startDate': dateStr,
-      'newTask.startTime': timeStr,
+      'newTask.startTime': startTimeStr,
       'newTask.endDate': dateStr,
       'newTask.endTime': endTimeStr,
       'newTask.repeat.startDate': dateStr,
       'newTask.repeat.endDate': dateStr,
     });
     
-    console.log('[TaskEdit] 初始化日期时间数据完成, 当前日期:', dateStr);
+    console.log('[TaskEdit] 初始化日期时间数据完成, 当前日期:', dateStr, '开始时间:', startTimeStr, '结束时间:', endTimeStr);
   },
 
   /**
