@@ -3,20 +3,20 @@
   <!-- 奖励进度顶部 - 改为总积分展示卡片 -->
   <view class="progress-section">
     <view class="points-center">
-      <view class="points-title">我的积分</view>
+      <view class="points-title">我的星星</view>
       <view class="points-value-large">{{formattedPoints}}</view>
     </view>
     
     <!-- 即将到期积分提示 -->
     <view class="expiring-points-container" wx:if="{{expiringPoints > 0}}">
-      <text>{{expiringPoints}} 积分将在 {{expiryDate}} 到期</text>
+      <text>{{expiringPoints}} 颗星星将在 {{expiryDate}} 到期</text>
     </view>
     
     <!-- 底部按钮 - 改为横向布局 -->
     <view class="points-actions">
       <view class="action-btn-horizontal">
         <view class="action-icon">📋</view>
-        <view class="action-text">积分记录</view>
+        <view class="action-text">星星记录</view>
       </view>
       <view class="action-separator"></view>
       <view class="action-btn-horizontal">
@@ -37,7 +37,7 @@
               data-id="{{item.id}}">
           <view class="reward-icon">{{item.icon}}</view>
           <view class="reward-name">{{item.name}}</view>
-          <view class="reward-points">{{item.points}}分</view>
+          <view class="reward-points">{{item.points}}颗</view>
           <view class="reward-status">
             <text wx:if="{{item.claimed}}">已领取</text>
             <text wx:elif="{{item.unlocked}}">可领取</text>
@@ -50,19 +50,19 @@
   
   <!-- 奖励规则说明 -->
   <view class="rewards-rules">
-    <view class="section-title">获取积分规则</view>
+    <view class="section-title">获取星星规则</view>
     <view class="rules-content">
       <view class="rule-item">
         <text class="rule-bullet">•</text>
-        <text class="rule-text">完成任务可获得10积分</text>
+        <text class="rule-text">完成任务可获得10颗星星</text>
       </view>
       <view class="rule-item">
         <text class="rule-bullet">•</text>
-        <text class="rule-text">连续7天完成任务可额外获得20积分</text>
+        <text class="rule-text">连续7天完成任务可额外获得20颗星星</text>
       </view>
       <view class="rule-item">
         <text class="rule-bullet">•</text>
-        <text class="rule-text">每20积分提升1个等级</text>
+        <text class="rule-text">每20颗星星提升1个等级</text>
       </view>
       <view class="rule-item">
         <text class="rule-bullet">•</text>
@@ -83,7 +83,7 @@
       <view class="reward-detail">
         <view class="reward-icon large">{{selectedReward.icon}}</view>
         <view class="reward-name">{{selectedReward.name}}</view>
-        <view class="reward-points">所需积分: {{selectedReward.points}}</view>
+        <view class="reward-points">所需星星: {{selectedReward.points}}</view>
         <view class="reward-status-text">
           <text wx:if="{{selectedReward.claimed}}" class="status-claimed">已领取</text>
           <text wx:elif="{{selectedReward.unlocked}}" class="status-unlocked">已解锁</text>
@@ -91,7 +91,7 @@
         </view>
         
         <view class="progress-to-unlock" wx:if="{{!selectedReward.unlocked}}">
-          <text>还需 {{selectedReward.points - currentProgress}} 积分解锁</text>
+          <text>还需 {{selectedReward.points - currentProgress}} 星星解锁</text>
           <view class="mini-progress">
             <view class="mini-progress-fill" style="width: {{(currentProgress / selectedReward.points) * 100}}%;"></view>
           </view>

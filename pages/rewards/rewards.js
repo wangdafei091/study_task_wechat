@@ -134,7 +134,7 @@ Page({
     
     // 从存储获取用户总积分
     const userPoints = wx.getStorageSync('userPoints') || 0;
-    console.log(`[rewards] 获取到用户积分: ${userPoints}`);
+    console.log(`[rewards] 获取到用户星星: ${userPoints}`);
     
     // 格式化积分，添加千位分隔符
     const formattedPoints = userPoints.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
@@ -169,14 +169,14 @@ Page({
       currentLevel: Math.floor(userPoints / 20) + 1 // 每20点升一级
     });
     
-    console.log(`[rewards] 设置总积分: ${userPoints}, 即将过期总积分: ${expiringPointsInfo.points}, 最早到期日期: ${expiringPointsInfo.date}`);
+    console.log(`[rewards] 设置总星星: ${userPoints}, 即将过期总星星: ${expiringPointsInfo.points}, 最早到期日期: ${expiringPointsInfo.date}`);
   },
 
   /**
    * 获取即将到期积分信息
    */
   getExpiringPoints: function() {
-    console.log(`[rewards] 开始检查即将到期积分`);
+    console.log(`[rewards] 开始检查即将到期星星`);
     
     // 获取任务数据
     const tasks = wx.getStorageSync('taskData') || [];
@@ -208,9 +208,9 @@ Page({
         .filter(task => task.pointsExpiry === earliestExpiryTime)
         .reduce((sum, task) => sum + (task.rewardPoints || 0), 0);
       
-      console.log(`[rewards] 找到${completedTasks.length}个即将到期任务，最早到期日期: ${expiryDate}，该日期积分: ${expiringPoints}`);
+      console.log(`[rewards] 找到${completedTasks.length}个即将到期任务，最早到期日期: ${expiryDate}，该日期星星: ${expiringPoints}`);
     } else {
-      console.log(`[rewards] 没有找到即将到期的积分`);
+      console.log(`[rewards] 没有找到即将到期的星星`);
     }
     
     return {

@@ -125,9 +125,16 @@
 }
 
 .reward-points {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.reward-points::before {
+  content: "⭐";
   font-size: 24rpx;
-  color: #666666;
-  margin-bottom: 8rpx;
+  margin-right: 4rpx;
+  color: #FBBC05;
 }
 
 .reward-status {
@@ -305,33 +312,42 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 12rpx 0; /* 减少上下内边距 */
+  padding: 12rpx 0;
 }
 
 .points-title {
   font-size: 28rpx;
-  color: #333333; /* 加深标题颜色提升层级 */
-  font-weight: 500; /* 加粗标题 */
-  margin-bottom: 8rpx; /* 减少间距 */
+  color: #333333;
+  font-weight: 500;
+  margin-bottom: 8rpx;
 }
 
 .points-value-large {
-  font-size: 65rpx; /* 稍微减小字号 */
-  color: #4285F4;
+  font-size: 65rpx;
+  color: #FBBC05;
   font-weight: 600;
   text-shadow: 0 2rpx 4rpx rgba(0, 0, 0, 0.1);
   letter-spacing: 2rpx;
-  margin-bottom: 12rpx; /* 减少底部间距 */
-  line-height: 1.2; /* 控制行高 */
+  margin-bottom: 12rpx;
+  line-height: 1.2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.points-value-large::before {
+  content: "⭐";
+  font-size: 52rpx;
+  margin-right: 10rpx;
 }
 
 .expiring-points-container {
   background-color: #FFF8E1;
   border-radius: 12rpx;
-  padding: 10rpx 24rpx; /* 减少上下内边距 */
-  margin: 6rpx auto 14rpx; /* 减少上下外边距并居中 */
+  padding: 10rpx 24rpx;
+  margin: 6rpx auto 14rpx;
   text-align: center;
-  width: 80%; /* 缩小宽度 */
+  width: 80%;
 }
 
 .expiring-points-container text {
@@ -341,10 +357,10 @@
 
 .points-actions {
   display: flex;
-  justify-content: center; /* 居中对齐 */
-  margin-top: 16rpx; /* 减少顶部边距 */
+  justify-content: center;
+  margin-top: 16rpx;
   border-top: 1rpx solid #EEEEEE;
-  padding-top: 16rpx; /* 减少顶部内边距 */
+  padding-top: 16rpx;
 }
 
 /* 横向按钮样式 */
@@ -363,8 +379,8 @@
 }
 
 .action-icon {
-  font-size: 44rpx; /* 稍微增大图标尺寸 */
-  margin-right: 10rpx; /* 添加右侧间距 */
+  font-size: 44rpx;
+  margin-right: 10rpx;
 }
 
 .action-text {

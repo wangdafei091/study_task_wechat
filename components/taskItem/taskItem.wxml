@@ -26,10 +26,10 @@
     
     <text class="points-info">
       <block wx:if="{{task.status === 1 || task.status === 'completed'}}">
-        积分有效期：{{task.pointsExpiryDate || (task.pointsExpiry === 'permanent' ? '永久' : '7天后')}}
+        星星有效期：{{task.pointsExpiryDate || (task.pointsExpiry === 'permanent' ? '永久' : '7天后')}}
       </block>
       <block wx:else>
-        积分有效期：{{task.pointsExpiry === 'permanent' ? '永久' : 
+        星星有效期：{{task.pointsExpiry === 'permanent' ? '永久' : 
           (Constants.POINTS_EXPIRY.TEXT[task.pointsExpiry] ? '完成后保留' + Constants.POINTS_EXPIRY.TEXT[task.pointsExpiry] : '完成后保留7天')}}
       </block>
     </text>

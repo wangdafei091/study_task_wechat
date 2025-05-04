@@ -297,6 +297,15 @@
   color: var(--text-tertiary, #999);
 }
 
+/* 星星改造：优化任务项中的星星有效期显示 */
+.points-info::before {
+  content: "⭐";
+  font-size: 22rpx;
+  margin-right: 4rpx;
+  vertical-align: middle;
+  color: #FBBC05; /* 使用系统警告色（金色） */
+}
+
 /* 自动换行适配 */
 @media (max-width: 520px) {
   .task-combined-info {

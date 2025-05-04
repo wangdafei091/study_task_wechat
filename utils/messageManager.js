@@ -78,11 +78,11 @@ const messageManager = {
     
     switch(type) {
       case 'reward':
-        title = '积分奖励';
-        icon = '🎁';
+        title = '星星奖励';
+        icon = '⭐';
         break;
       case 'penalty':
-        title = '积分扣除';
+        title = '星星扣除';
         icon = '⚠️';
         break;
       case 'achievement':
@@ -126,8 +126,8 @@ const messageManager = {
       id: 'msg_penalty_' + now + '_' + Math.floor(Math.random() * 1000),
       type: 'penalty',
       taskId: task.id,
-      title: '积分扣除提醒',
-      summary: `必做任务"${task.title}"未完成，已扣除${points}积分`,
+      title: '星星扣除提醒',
+      summary: `必做任务"${task.title}"未完成，已扣除${points}颗星星`,
       timestamp: now,
       isRead: false,
       icon: '⚠️'

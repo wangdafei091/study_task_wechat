@@ -397,7 +397,7 @@ const taskManager = {
             // 创建奖励消息
             const messageManager = require('./messageManager.js');
             messageManager.createSystemMessage(
-              `完成任务"${newTask.title}"，获得${newTask.rewardPoints}积分${
+              `完成任务"${newTask.title}"，获得${newTask.rewardPoints}颗星星${
                 expiryInfo.expiry === 'permanent' ? '（永久有效）' : `（有效期至${expiryInfo.expiryDateStr}）`
               }`,
               'reward'
@@ -409,7 +409,7 @@ const taskManager = {
                   (status === 2 || status === 3)) { // 0=pending, 2=overdue, 3=canceled
             
             const penaltyPoints = task.rewardPoints || 0;
-            console.log(`[TaskManager] 必做任务 ${task.title} 未完成，扣除积分: ${penaltyPoints}`);
+            console.log(`[TaskManager] 必做任务 ${task.title} 未完成，扣除星星: ${penaltyPoints}`);
             
             if (penaltyPoints > 0) {
               // 获取用户积分
@@ -420,7 +420,7 @@ const taskManager = {
               // 创建扣分通知
               const messageManager = require('./messageManager.js');
               messageManager.createSystemMessage(
-                `任务"${task.title}"未完成，扣除${penaltyPoints}积分`,
+                `任务"${task.title}"未完成，扣除${penaltyPoints}颗星星`,
                 'penalty'
               );
             }
@@ -1047,7 +1047,7 @@ const taskManager = {
         
         // 确保积分不会变为负数
         const newPoints = Math.max(0, currentPoints - totalPenalty);
-        console.log(`[taskManager] 积分扣除: ${currentPoints} -> ${newPoints}, 扣除: ${totalPenalty}`);
+        console.log(`[taskManager] 星星扣除: ${currentPoints} -> ${newPoints}, 扣除: ${totalPenalty}`);
         
         // 更新积分
         wx.setStorage({
@@ -1063,7 +1063,7 @@ const taskManager = {
                 type: 'penalty',
                 taskId: task.taskId,
                 title: '任务未完成',
-                summary: `必做任务"${task.title}"未完成，扣除${task.points}积分`,
+                summary: `必做任务"${task.title}"未完成，扣除${task.points}颗星星`,
                 timestamp: Date.now(),
                 isRead: false,
                 icon: '⚠️'
@@ -1075,13 +1075,13 @@ const taskManager = {
             if (callback) callback(null, penaltyTasks);
           },
           fail: (error) => {
-            console.error(`[taskManager] 更新积分失败: ${error}`);
+            console.error(`[taskManager] 更新星星失败: ${error}`);
             if (callback) callback(error, null);
           }
         });
       },
       fail: (error) => {
-        console.error(`[taskManager] 获取积分失败: ${error}`);
+        console.error(`[taskManager] 获取星星失败: ${error}`);
         if (callback) callback(error, null);
       }
     });
