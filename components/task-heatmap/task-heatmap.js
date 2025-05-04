@@ -314,34 +314,32 @@ Component({
     
     // 新增：计算单个任务的压力指数
     calculateTaskPressure(task) {
-      // 任务类型权重
-      const typeWeights = {
-        'study': 1.2,   // 学习任务权重高
-        'habit': 0.8,   // 习惯养成权重中
-        'interest': 0.6 // 兴趣活动权重低
-      };
-      
       // 获取任务基本属性（带默认值）
       const type = task.type || 'study';
       const duration = task.duration || (type === 'study' ? 60 : (type === 'habit' ? 10 : 30));
-      const points = task.points || 1;
       
-      // 计算压力指数
-      const typeWeight = typeWeights[type] || 1.0;
-      const basePressure = 1.0 * typeWeight;
-      const durationPressure = duration * 0.1;  // 每10分钟增加1点压力
-      const pointsPressure = points * 0.05;     // 每20积分增加1点压力
+      // 简化的压力指数计算逻辑
+      let totalPressure = 0;
       
-      const totalPressure = basePressure + durationPressure + pointsPressure;
+      // 习惯任务固定2点压力值
+      if (type === 'habit') {
+        totalPressure += 2;
+        console.log(`[TaskHeatmap] 习惯任务[${task.title}]基础压力: 2点`);
+      }
       
-      // 只在需要时记录详细日志
-      console.log(`[TaskHeatmap] 任务[${task.title}] 压力指数: ${totalPressure.toFixed(1)}`);
+      // 所有任务按时长计算（每10分钟1点压力）
+      const durationPressure = Math.floor(duration / 10);
+      totalPressure += durationPressure;
+      console.log(`[TaskHeatmap] 任务[${task.title}]时长(${duration}分钟)压力: ${durationPressure}点`);
       
+      console.log(`[TaskHeatmap] 任务[${task.title}] 总压力指数: ${totalPressure}`);
+      
+      // 返回结构保持不变，确保兼容性
       return {
         total: totalPressure,
-        base: basePressure,
+        base: type === 'habit' ? 2 : 0,
         duration: durationPressure,
-        points: pointsPressure
+        points: 0 // 移除积分影响，但保留字段
       };
     },
     

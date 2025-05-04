@@ -282,21 +282,17 @@
       <view class="pressure-info-body">
         <view class="formula-section">
           <text class="formula-title">计算公式</text>
-          <text class="formula-text">压力指数 = 任务基础压力 + 时长压力 + 积分压力</text>
+          <text class="formula-text">压力指数 = 习惯任务压力 + 时长压力</text>
         </view>
         <view class="factors-section">
           <text class="factors-title">影响因素</text>
           <view class="factor-item">
-            <text class="factor-name">任务类型:</text>
-            <text class="factor-desc">学习(×1.2) > 习惯(×0.8) > 兴趣(×0.6)</text>
+            <text class="factor-name">习惯任务:</text>
+            <text class="factor-desc">每个习惯任务2点压力</text>
           </view>
           <view class="factor-item">
             <text class="factor-name">时长影响:</text>
             <text class="factor-desc">每10分钟增加1点压力</text>
-          </view>
-          <view class="factor-item">
-            <text class="factor-name">积分影响:</text>
-            <text class="factor-desc">每20积分增加1点压力</text>
           </view>
         </view>
         
@@ -305,30 +301,28 @@
           <text class="example-title">计算示例</text>
           <view class="example-content">
             <view class="example-task">
-              <text class="example-text">以"数学作业"为例:</text>
-              <view class="example-item">类型: 学习(×1.2)</view>
-              <view class="example-item">时长: 45分钟</view>
-              <view class="example-item">积分: 30分</view>
+              <text class="example-text">例子:</text>
+              <view class="example-item">2个习惯任务: 2×2=4点</view>
+              <view class="example-item">学习任务45分钟: 45÷10=4点</view>
             </view>
             <view class="example-calc">
               <text class="example-text">计算过程:</text>
-              <view class="example-item">基础压力: 1.0 × 1.2 = 1.2分</view>
-              <view class="example-item">时长压力: 45 × 0.1 = 4.5分</view>
-              <view class="example-item">积分压力: 30 × 0.05 = 1.5分</view>
+              <view class="example-item">习惯任务压力: 4点</view>
+              <view class="example-item">时长压力: 4点</view>
             </view>
             <view class="example-result">
-              <text class="example-item">总压力值: 7.2分 (轻松级别)</text>
+              <text class="example-item">总压力值: 8点</text>
             </view>
           </view>
         </view>
         
         <view class="levels-section">
-          <text class="levels-title">压力级别</text>
+          <text class="levels-title">压力级别（小学低年级标准）</text>
           <view class="level-items">
-            <view class="level-item level-1">轻松<text class="level-range">0-30分</text></view>
-            <view class="level-item level-2">适中<text class="level-range">31-60分</text></view>
-            <view class="level-item level-3">繁忙<text class="level-range">61-90分</text></view>
-            <view class="level-item level-4">紧张<text class="level-range">91分以上</text></view>
+            <view class="level-item level-1">轻松<text class="level-range">0-15分</text></view>
+            <view class="level-item level-2">适中<text class="level-range">16-30分</text></view>
+            <view class="level-item level-3">繁忙<text class="level-range">31-45分</text></view>
+            <view class="level-item level-4">紧张<text class="level-range">46分以上</text></view>
           </view>
         </view>
       </view>
