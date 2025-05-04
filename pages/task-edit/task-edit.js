@@ -436,127 +436,10 @@ Page({
   },
 
   /**
-   * 执行添加任务操作
-   */
-  doAddTask: function() {
-    try {
-      // 获取应用实例
-      const app = getApp();
-      const allTasks = app.globalData.tasks || [];
-      
-      // 创建新任务对象
-      const taskManager = require('../../utils/taskManager.js');
-      
-      // 获取积分值，处理必做任务的情况
-      let taskPoints = parseInt(this.data.newTask.points) || 0;
-      // 确保积分为正数
-      taskPoints = Math.abs(taskPoints);
-      // 记录是否为必做任务，系统内部会根据isRequired状态处理积分奖惩
-      const isRequired = this.data.newTask.isRequired;
-      
-      console.log(`[TaskEdit] 创建任务: 积分=${taskPoints}, 必做=${isRequired}`);
-      
-      // 判断是否应该是单次任务
-      let repeatType = this.data.newTask.repeat.type;
-      
-      // 判断逻辑：如果开始日期和结束日期相同，且不是"无结束日期"，则视为单次任务
-      if (!this.data.newTask.hasNoEndDate && 
-          this.data.newTask.startDate === this.data.newTask.endDate) {
-        console.log('[TaskEdit] 检测到开始和结束日期相同，自动设置为单次任务');
-        repeatType = 'none';
-      }
-      
-      // 构建新任务对象
-      const newTask = {
-        title: this.data.newTask.title.trim(),
-        type: this.data.newTask.type,
-        rewardPoints: taskPoints, // 使用用户设置的积分值，不论是否为必做任务
-        description: this.data.newTask.description.trim(),
-        date: this.data.newTask.startDate,
-        isRequired: isRequired, // 设置必做任务标记
-        isAllDay: this.data.newTask.isAllDay,
-        startTime: this.data.newTask.isAllDay ? null : this.data.newTask.startTime,
-        endTime: this.data.newTask.isAllDay ? null : this.data.newTask.endTime,
-        endDate: this.data.newTask.endDate,
-        hasNoEndDate: this.data.newTask.hasNoEndDate,
-        repeat: {
-          type: repeatType, // 使用根据逻辑判断的类型
-          startDate: this.data.newTask.startDate,
-          endDate: repeatType !== 'none' ?
-            (this.data.newTask.hasNoEndDate ? null : this.data.newTask.endDate) : null,
-          days: this.data.newTask.repeat.days || []
-        },
-        reminder: {
-          enabled: this.data.newTask.reminder.enabled,
-          time: this.data.newTask.reminder.time
-        },
-        status: 0, // 默认未完成
-        createTime: Date.now()
-      };
-      
-      console.log('[TaskEdit] 准备添加新任务:', newTask);
-      
-      // 使用任务管理器创建任务
-      taskManager.createTask(newTask, (createdTask) => {
-        // 添加成功，记录详细日志
-        console.log('[TaskEdit] 新任务添加成功，ID:', createdTask.id, '标题:', createdTask.title);
-        
-        // 显示任务添加成功提示
-        wx.showToast({
-          title: '任务添加成功',
-          icon: 'success',
-          duration: 2000
-        });
-        
-        // 直接重置表单数据，而不调用clearTaskForm避免显示第二个Toast
-        this.setData({
-          'newTask.title': '',
-          'newTask.type': 'habit',
-          'newTask.points': 1,
-          'newTask.description': '',
-          'newTask.isAllDay': false,
-          'newTask.hasNoEndDate': false,
-          'newTask.isRequired': false, // 重置必做任务状态
-          'errors.title': '',
-          repeatText: '每天',
-          reminderText: '无',
-          'newTask.repeat': {
-            type: 'daily',
-            days: [],
-            startDate: '',
-            endDate: ''
-          },
-          'newTask.reminder': {
-            enabled: false,
-            time: 0
-          }
-        });
-        
-        // 重新初始化日期时间数据
-        this.initDateTimeData();
-        
-        // 关闭所有面板
-        this.closeAllPanels();
-        
-        // 重新加载任务数据
-        this.loadAllTasks();
-      });
-    } catch (error) {
-      console.error('[TaskEdit] 添加任务失败:', error);
-      
-      wx.showToast({
-        title: '添加失败，请重试',
-        icon: 'none',
-        duration: 2000
-      });
-    }
-  },
-
-  /**
-   * 添加任务
+   * 添加任务 (统一实现，合并了原有的addTask和doAddTask功能)
    */
   addTask: function() {
-    console.log('[TaskEdit] 添加任务');
+    console.log('[TaskEdit] 开始添加任务处理流程');
     
     // 先进行表单验证
     const validation = this.validateTaskForm();
@@ -575,26 +458,49 @@ Page({
     }
     
     // 显示加载提示
+    console.log('[TaskEdit] 显示加载提示...');
     wx.showLoading({
       title: '添加中...',
       mask: true
     });
     
     try {
-      // 从表单数据构建任务对象
+      // 获取任务管理器
+      const taskManager = require('../../utils/taskManager.js');
+      
+      // 获取积分值
+      let taskPoints = parseInt(this.data.newTask.points) || 0;
+      // 确保积分为正数
+      taskPoints = Math.abs(taskPoints);
+      // 记录是否为必做任务
+      const isRequired = this.data.newTask.isRequired;
+      
+      console.log(`[TaskEdit] 创建任务: 积分=${taskPoints}, 必做=${isRequired}`);
+      
+      // 判断是否应该是单次任务
+      let repeatType = this.data.newTask.repeat.type;
+      
+      // 判断逻辑：如果开始日期和结束日期相同，且不是"无结束日期"，则视为单次任务
+      if (!this.data.newTask.hasNoEndDate && 
+          this.data.newTask.startDate === this.data.newTask.endDate) {
+        console.log('[TaskEdit] 检测到开始和结束日期相同，自动设置为单次任务');
+        repeatType = 'none';
+      }
+      
+      // 构建新任务对象
       const newTask = {
         id: 'task_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
-        title: this.data.newTask.title,
+        title: this.data.newTask.title.trim(),
         type: this.data.newTask.type,
+        rewardPoints: taskPoints,
+        pointsExpiry: this.data.newTask.pointsExpiry,
+        description: this.data.newTask.description.trim(),
         date: this.data.newTask.startDate,
-        rewardPoints: this.data.newTask.points, // 统一使用用户输入的积分值
-        pointsExpiry: this.data.newTask.pointsExpiry, // 添加积分有效期
-        description: this.data.newTask.description || '',
         createTime: Date.now(),
         modifyTime: Date.now(),
         status: 'pending',
-        priority: 'medium', // 默认优先级为中等
-        isRequired: this.data.newTask.isRequired,
+        priority: 'medium',
+        isRequired: isRequired,
         
         // 时间相关设置
         isAllDay: this.data.newTask.isAllDay,
@@ -603,49 +509,81 @@ Page({
         
         // 重复设置
         repeat: {
-          type: this.data.newTask.repeat.type,
+          type: repeatType,
           startDate: this.data.newTask.startDate,
-          endDate: this.data.newTask.hasNoEndDate ? null : this.data.newTask.endDate,
+          endDate: repeatType !== 'none' ?
+            (this.data.newTask.hasNoEndDate ? null : this.data.newTask.endDate) : null,
           days: this.data.newTask.repeat.type === 'custom' ? this.data.newTask.repeat.days : []
         },
         
         // 提醒设置
         reminder: {
           enabled: this.data.newTask.reminder.enabled,
-          time: this.data.newTask.reminder.time // 提前提醒的分钟数
+          time: this.data.newTask.reminder.time
         }
       };
       
-      console.log('[TaskEdit] 创建新任务:', {
-        id: newTask.id,
+      console.log('[TaskEdit] 准备添加新任务:', {
         title: newTask.title,
         type: newTask.type,
         points: newTask.rewardPoints,
-        pointsExpiry: newTask.pointsExpiry, // 记录积分有效期
+        pointsExpiry: newTask.pointsExpiry,
         date: newTask.date,
         isRequired: newTask.isRequired,
         repeat: newTask.repeat.type
       });
       
-      // 使用全局任务管理器添加任务
-      const taskManager = require('../../utils/taskManager.js');
-      
-      taskManager.createTask(newTask, success => {
-        // 隐藏加载提示
+      // 使用任务管理器创建任务
+      taskManager.createTask(newTask, (result) => {
+        // 确保无论成功或失败都会关闭加载提示
+        console.log('[TaskEdit] 任务创建请求完成，关闭加载提示');
         wx.hideLoading();
         
-        if (success) {
-          // 添加成功，显示提示
+        if (result) {
+          // 添加成功，记录详细日志
+          console.log('[TaskEdit] 新任务添加成功，ID:', typeof result === 'object' ? result.id : '未知', 
+                     '标题:', newTask.title);
+          
+          // 显示任务添加成功提示
           wx.showToast({
-            title: '添加成功',
+            title: '任务添加成功',
             icon: 'success',
-            duration: 1500
+            duration: 2000
           });
           
-          // 清空表单
-          this.clearTaskForm();
+          // 重置表单数据
+          console.log('[TaskEdit] 重置表单数据');
+          this.setData({
+            'newTask.title': '',
+            'newTask.type': 'habit',
+            'newTask.points': 1,
+            'newTask.description': '',
+            'newTask.isAllDay': false,
+            'newTask.hasNoEndDate': false,
+            'newTask.isRequired': false,
+            'errors.title': '',
+            repeatText: '每天',
+            reminderText: '无',
+            pointsExpiryText: '永久',
+            'newTask.repeat': {
+              type: 'daily',
+              days: [],
+              startDate: '',
+              endDate: ''
+            },
+            'newTask.reminder': {
+              enabled: false,
+              time: 0
+            }
+          });
           
-          // 刷新任务列表
+          // 重新初始化日期时间数据
+          this.initDateTimeData();
+          
+          // 关闭所有面板
+          this.closeAllPanels();
+          
+          // 重新加载任务数据
           this.loadAllTasks();
           
           // 如果热力图组件存在，刷新热力图
@@ -656,6 +594,7 @@ Page({
           }
         } else {
           // 添加失败，显示错误提示
+          console.error('[TaskEdit] 任务添加失败');
           wx.showToast({
             title: '添加失败',
             icon: 'none',
@@ -667,14 +606,23 @@ Page({
       // 捕获并处理错误
       console.error('[TaskEdit] 添加任务时发生错误:', error);
       
+      // 确保错误时也关闭加载提示
       wx.hideLoading();
       
       wx.showToast({
-        title: '添加失败:' + error.message,
+        title: '添加失败: ' + (error.message || '未知错误'),
         icon: 'none',
         duration: 3000
       });
     }
+  },
+
+  /**
+   * @deprecated 使用统一的addTask函数代替，此函数将在未来版本移除
+   */
+  doAddTask: function() {
+    console.log('[TaskEdit] 警告：调用了已废弃的doAddTask函数，请使用addTask代替');
+    this.addTask();
   },
 
   /**
