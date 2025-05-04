@@ -144,11 +144,52 @@ Page({
   
   /**
    * 处理任务数据变化事件
+   * @param {Object} eventData 事件数据对象，包含tasks数组和变更类型等信息
    */
-  handleTaskDataChanged: function(allTasks) {
-    // 刷新今日任务
+  handleTaskDataChanged: function(eventData) {
+    // 获取所有必要的事件信息
+    const allTasks = eventData.tasks || [];
+    const changeType = eventData.changeType || 'unknown';
+    const timestamp = eventData.timestamp || Date.now();
+    
+    console.log(`[Index] 收到任务数据变更事件: 类型=${changeType}, 任务数量=${allTasks.length}, 时间戳=${timestamp}`);
+    
+    // 删除操作需要特殊处理，确保热力图更新
+    if (changeType === 'delete') {
+      console.log('[Index] 检测到删除操作，确保热力图得到完全刷新');
+      
+      // 刷新今日任务
+      taskManager.getTodayTasks(todayTasks => {
+        this.setData({ 
+          tasks: todayTasks,
+          "__dataUpdateTimestamp": timestamp // 添加时间戳属性以确保视图刷新
+        });
+        
+        // 更新任务进度和即将到期任务
+        this.updateTaskProgress(todayTasks);
+        this.checkUpcomingTasks();
+        
+        // 通过调度器延迟处理，确保数据变化后UI完全刷新
+        setTimeout(() => {
+          // 找到热力图组件并强制刷新
+          const heatmapComponent = this.selectComponent('#taskHeatmap');
+          if (heatmapComponent) {
+            console.log('[Index] 触发热力图强制刷新');
+            heatmapComponent.refreshTaskList();
+          }
+        }, 300);
+      });
+      
+      return;
+    }
+    
+    // 非删除操作的常规处理
     taskManager.getTodayTasks(todayTasks => {
-      this.setData({ tasks: todayTasks });
+      this.setData({ 
+        tasks: todayTasks 
+      });
+      
+      // 更新任务进度和即将到期任务
       this.updateTaskProgress(todayTasks);
       this.checkUpcomingTasks();
     });

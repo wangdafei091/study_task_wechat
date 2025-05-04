@@ -506,6 +506,10 @@ const taskManager = {
     console.log(`[TaskManager] 开始删除任务: ${taskId}`);
     
     this.getAllTasks(allTasks => {
+      // 获取要删除的任务信息，方便后续日志记录
+      const taskToDelete = allTasks.find(task => task.id === taskId);
+      const taskDate = taskToDelete ? taskToDelete.date : '';
+      
       // 过滤掉要删除的任务
       const updatedTasks = allTasks.filter(task => task.id !== taskId);
       
@@ -513,23 +517,31 @@ const taskManager = {
       if (updatedTasks.length < allTasks.length) {
         // 保存任务数据
         this._saveTaskData(updatedTasks, () => {
-          // 触发任务变更事件
-          this._onTaskDataChanged(updatedTasks);
-          
-          // 删除与任务相关的消息
+          // 清理相关的消息
           const messageManager = require('./messageManager.js');
           console.log(`[TaskManager] 删除任务相关消息: ${taskId}`);
           
-          messageManager.removeTaskMessages(taskId, {
-            success: (count) => {
-              console.log(`[TaskManager] 成功删除任务相关消息: ${count}条`);
-              if (callback) callback(true);
-            },
-            fail: (error) => {
-              console.error(`[TaskManager] 删除任务相关消息失败: ${error}`);
-              // 即使消息删除失败，任务删除成功，仍然返回成功
-              if (callback) callback(true);
+          messageManager.deleteTaskMessages(taskId, (msgCount) => {
+            console.log('[TaskManager] 成功删除任务相关消息:', msgCount, '条');
+            
+            // 删除监听器
+            const app = getApp();
+            if (app.globalData.taskListeners && app.globalData.taskListeners[taskId]) {
+              console.log('[TaskManager] 删除任务监听器:', taskId);
+              clearTimeout(app.globalData.taskListeners[taskId]);
+              delete app.globalData.taskListeners[taskId];
             }
+            
+            // 触发任务数据变更事件
+            this._onTaskDataChanged(updatedTasks, {
+              changeType: 'delete',
+              deletedTaskId: taskId,
+              taskDate: taskDate,
+              taskTitle: taskToDelete ? taskToDelete.title : '',
+              deleteTime: Date.now()
+            });
+            
+            if (callback) callback(true);
           });
         });
       } else {
@@ -755,23 +767,114 @@ const taskManager = {
   },
   
   /**
-   * 触发任务数据变更事件
-   * @param {Array} tasks 任务数组
+   * 任务数据变更事件处理
+   * @param {Array} tasks 最新的任务数组
+   * @param {Object} options 操作相关选项
    * @private
    */
-  _onTaskDataChanged(tasks) {
-    console.log('[TaskManager] 触发任务数据变更事件，当前任务数量:', tasks.length);
+  _onTaskDataChanged(tasks, options = {}) {
+    // 增加默认的操作类型
+    const changeType = options.changeType || 'unknown';
     
+    console.log(`[TaskManager] 触发任务数据变更事件，操作类型: ${changeType}，当前任务数量: ${tasks.length}`);
+    
+    // 统计任务类型数量，便于调试
+    const typeCounts = {
+      study: 0,
+      habit: 0,
+      interest: 0
+    };
+    
+    // 统计不同日期的任务
+    const dateGroups = {};
+    
+    tasks.forEach(task => {
+      // 累计任务类型
+      if (task.type && typeCounts.hasOwnProperty(task.type)) {
+        typeCounts[task.type]++;
+      }
+      
+      // 按日期分组
+      if (task.date) {
+        if (!dateGroups[task.date]) {
+          dateGroups[task.date] = 0;
+        }
+        dateGroups[task.date]++;
+      }
+    });
+    
+    console.log(`[TaskManager] 任务类型统计: 学习(${typeCounts.study})，习惯(${typeCounts.habit})，兴趣(${typeCounts.interest})`);
+    console.log(`[TaskManager] 任务日期分布: ${Object.keys(dateGroups).length}个不同日期`);
+    
+    // 删除操作特殊处理
+    if (changeType === 'delete') {
+      console.log(`[TaskManager] 检测到删除操作，准备广播删除事件`);
+      
+      if (options.taskDate) {
+        console.log(`[TaskManager] 被删除任务日期: ${options.taskDate}`);
+      }
+      
+      if (options.taskTitle) {
+        console.log(`[TaskManager] 被删除任务标题: ${options.taskTitle}`);
+      }
+      
+      // 如果是删除操作，增加一个额外的延迟，确保数据完全保存
+      setTimeout(() => {
+        this._broadcastTaskDataChanged(tasks, changeType, options);
+      }, 100);
+    } else {
+      // 其他操作类型直接广播
+      this._broadcastTaskDataChanged(tasks, changeType, options);
+    }
+  },
+  
+  /**
+   * 广播任务数据变更事件到全局事件总线
+   * @param {Array} tasks 最新的任务数组
+   * @param {String} changeType 变更类型
+   * @param {Object} options 额外选项
+   * @private
+   */
+  _broadcastTaskDataChanged(tasks, changeType, options = {}) {
     // 获取全局事件总线
     const app = getApp();
     if (app.globalData.eventBus) {
-      console.log('[TaskManager] 通过事件总线广播任务数据变更');
+      console.log(`[TaskManager] 通过事件总线广播任务数据变更, 操作类型: ${changeType}`);
       
-      // 触发数据变更事件
+      // 统计任务类型
+      const typeCounts = {
+        study: 0,
+        habit: 0,
+        interest: 0
+      };
+      
+      // 按日期分组任务
+      const dateGroups = {};
+      
+      tasks.forEach(task => {
+        // 统计任务类型
+        if (task.type && typeCounts.hasOwnProperty(task.type)) {
+          typeCounts[task.type]++;
+        }
+        
+        // 按日期分组
+        if (task.date) {
+          if (!dateGroups[task.date]) {
+            dateGroups[task.date] = 0;
+          }
+          dateGroups[task.date]++;
+        }
+      });
+      
+      // 触发数据变更事件，添加更多元数据
       app.globalData.eventBus.emit('taskDataChanged', {
         tasks: tasks,
         count: tasks.length,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        changeType: changeType,
+        typeCounts: typeCounts,
+        dateCount: Object.keys(dateGroups).length,
+        extraOptions: options
       });
     }
   },

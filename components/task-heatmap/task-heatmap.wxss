@@ -864,6 +864,7 @@
   border-top: 1px solid rgba(0,0,0,0.03); /* 保持分隔线样式一致 */
   transition: height 0.25s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   display: flex;
+  flex-wrap: wrap; /* 允许子元素换行 */
   justify-content: space-between;
   align-items: center;
   padding: 0;
@@ -966,11 +967,17 @@
 .scope-tip {
   font-size: 22rpx;
   color: #888;
-  margin-top: 4rpx;
-  padding-left: 32rpx; /* 与选项文本对齐 */
+  margin: 8rpx 24rpx 4rpx; /* 调整外边距，与周围元素保持适当间距 */
+  padding: 0; /* 移除内边距 */
   display: block;
   width: 100%;
   line-height: 1.3;
+  word-wrap: break-word;     /* 确保长文本换行 */
+  word-break: break-all;     /* 允许在单词内换行 */
+  white-space: normal;       /* 确保文本正常换行 */
+  box-sizing: border-box;    /* 确保padding不会导致宽度溢出 */
+  flex-basis: 100%;          /* 在flex布局中占据整行 */
+  order: 2;                  /* 确保显示在删除选项和操作区域之后 */
 }
 
 /* 压力指数说明弹窗 */

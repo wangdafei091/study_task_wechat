@@ -229,14 +229,12 @@ const messageManager = {
     });
   },
   
-  // 删除与特定任务相关的所有消息
-  removeTaskMessages: function(taskId, callback) {
+  // 删除与任务相关的消息
+  deleteTaskMessages: function(taskId, callback) {
     if (!taskId) {
       console.error(`[messageManager] 删除任务消息失败: 任务ID为空`);
       if (typeof callback === 'function') {
-        callback(false);
-      } else if (callback && typeof callback.fail === 'function') {
-        callback.fail('任务ID为空');
+        callback(0);
       }
       return;
     }
@@ -250,54 +248,43 @@ const messageManager = {
         let originalCount = messages.length;
         
         // 过滤掉所有与此任务相关的消息
-        messages = messages.filter(msg => !(msg.type === 'task' && msg.taskId === taskId));
+        const updatedMessages = messages.filter(msg => !(msg.type === 'task' && msg.taskId === taskId));
         
-        let removedCount = originalCount - messages.length;
+        let removedCount = originalCount - updatedMessages.length;
         console.log(`[messageManager] 找到任务相关消息数量: ${removedCount}`);
         
         // 只有在实际删除了消息时才进行存储操作
         if (removedCount > 0) {
           wx.setStorage({
             key: 'messageData',
-            data: messages,
+            data: updatedMessages,
             success: () => {
               console.log(`[messageManager] 成功删除任务消息: ${taskId}, 数量: ${removedCount}`);
               // 触发全局消息更新事件
-              this._notifyMessageUpdate(messages);
+              this._notifyMessageUpdate(updatedMessages);
               
               if (typeof callback === 'function') {
-                callback(true, removedCount);
-              } else if (callback && typeof callback.success === 'function') {
-                callback.success(removedCount);
+                callback(removedCount);
               }
             },
             fail: (error) => {
               console.error(`[messageManager] 保存删除后的消息失败: ${error}`);
-              
               if (typeof callback === 'function') {
-                callback(false);
-              } else if (callback && typeof callback.fail === 'function') {
-                callback.fail(error);
+                callback(0);
               }
             }
           });
         } else {
           console.log(`[messageManager] 未找到任务相关消息: ${taskId}`);
-          
           if (typeof callback === 'function') {
-            callback(true, 0);
-          } else if (callback && typeof callback.success === 'function') {
-            callback.success(0);
+            callback(0);
           }
         }
       },
       fail: (error) => {
         console.error(`[messageManager] 读取消息数据失败: ${error}`);
-        
         if (typeof callback === 'function') {
-          callback(false);
-        } else if (callback && typeof callback.fail === 'function') {
-          callback.fail(error);
+          callback(0);
         }
       }
     });

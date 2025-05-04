@@ -182,7 +182,7 @@
                 </view>
                 <!-- 添加循环编辑提示文本 -->
                 <view class="scope-tip" wx:if="{{editScope === 'series'}}">
-                  <text>仅应用于当前及未来任务</text>
+                  <text>仅应用于今天({{todayString}})及之后的任务</text>
                 </view>
               </view>
             </view>
@@ -233,10 +233,6 @@
                       <text class="option-text">删除循环</text>
                     </view>
                   </view>
-                  <!-- 添加循环删除提示文本 -->
-                  <view class="scope-tip" wx:if="{{deleteScope === 'series'}}">
-                    <text>仅删除当前及未来任务</text>
-                  </view>
                 </block>
                 <!-- 一次性任务显示单个选项 -->
                 <block wx:else>
@@ -249,6 +245,10 @@
               <view class="delete-actions">
                 <view class="btn-cancel" bindtap="cancelDelete">取消</view>
                 <view class="btn-confirm {{item.repeat && item.repeat.type !== 'none' && !deleteScope ? 'disabled' : ''}}" bindtap="confirmDelete">确认</view>
+              </view>
+              <!-- 添加循环删除提示文本 - 移到外部 -->
+              <view class="scope-tip" wx:if="{{deleteScope === 'series' && item.repeat && item.repeat.type !== 'none'}}">
+                <text>仅删除今天({{todayString}})及之后的任务</text>
               </view>
             </view>
           </view>
