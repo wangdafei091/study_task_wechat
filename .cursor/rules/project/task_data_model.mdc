@@ -21,6 +21,10 @@ alwaysApply: true
   status: 'pending',             // 任务状态: 'pending'/'completed'/'canceled'/'overdue'
   priority: 'medium',            // 任务优先级: 'high'/'medium'/'low'
   
+  // 必做任务相关属性
+  isRequired: false,             // 是否为必做任务
+  penaltyApplied: false,         // 是否已应用惩罚(针对未完成的必做任务)
+  
   // 学习任务特有字段
   startTime: '08:00',            // 开始时间
   endTime: '08:30',              // 结束时间
@@ -45,6 +49,11 @@ alwaysApply: true
   
   // 奖励点数
   rewardPoints: 10,              // 完成可获得的奖励点数
+  
+  // 积分有效期
+  pointsExpiry: 'month',         // 积分有效期类型：'permanent'/'week'/'month'/'3months'/'6months'/'12months'
+  pointsExpiryDate: '完成后一个月', // 积分有效期显示文本（已完成任务显示具体日期）
+  calculatedExpiryDate: null,    // 计算得到的实际有效期日期（格式：YYYY-MM-DD）
   
   // 任务标签
   tags: ['音乐', '练习'],
@@ -109,12 +118,116 @@ alwaysApply: true
 taskManager.updateTaskStatus(taskId, newStatus, callback);
 ```
 
+## 必做任务机制
+
+必做任务是一种特殊的任务类型，具有以下特点：
+- 用 `isRequired` 字段标记
+- 如果未完成，将扣除积分作为惩罚
+- 可以通过 `taskManager.markTaskAsRequired()` 标记为必做任务
+- 可以通过 `taskManager.unmarkTaskAsRequired()` 取消标记
+- 逾期未完成的必做任务会创建惩罚消息并扣除积分
+
+```javascript
+// 标记为必做任务
+taskManager.markTaskAsRequired(taskId, callback);
+
+// 取消必做任务标记
+taskManager.unmarkTaskAsRequired(taskId, callback);
+```
+
+## 积分有效期
+
+任务完成后获得的积分有以下有效期选项：
+- `permanent`: 永久有效
+- `week`: 一周
+- `month`: 一个月
+- `3months`: 三个月
+- `6months`: 六个月
+- `12months`: 十二个月
+
+积分有效期在代码中的处理：
+- 使用 `pointsExpiry` 存储有效期类型
+- 使用 `pointsExpiryDate` 存储格式化的有效期显示文本
+- 文本映射关系在 `Constants.POINTS_EXPIRY.TEXT` 中定义
+- 使用 `calculatedExpiryDate` 存储计算得到的实际过期日期
+
+```javascript
+// constants.js 中的文本映射
+POINTS_EXPIRY: {
+  PERMANENT: 'permanent',
+  WEEK: 'week',
+  MONTH: 'month',
+  THREE_MONTHS: '3months',
+  SIX_MONTHS: '6months',
+  TWELVE_MONTHS: '12months',
+  
+  TEXT: {
+    'permanent': '永久',
+    'week': '一周',
+    'month': '一个月',
+    '3months': '三个月',
+    '6months': '六个月',
+    '12months': '十二个月'
+  }
+}
+```
+
+积分有效期计算方法：
+
+```javascript
+/**
+ * 计算积分有效期日期
+ * @param {String} expiryType 有效期类型
+ * @param {String} completionDate 完成日期 (YYYY-MM-DD格式)
+ * @return {String} 有效期截止日期 (YYYY-MM-DD格式)
+ */
+calculateExpiryDate(expiryType, completionDate) {
+  console.log(`[TaskManager] 计算积分有效期: ${expiryType}, 完成日期: ${completionDate}`);
+  
+  if (expiryType === 'permanent') {
+    return '永久有效';
+  }
+  
+  const completionDateTime = new Date(completionDate);
+  let expiryDate = new Date(completionDateTime);
+  
+  switch (expiryType) {
+    case 'week':
+      expiryDate.setDate(expiryDate.getDate() + 7);
+      break;
+    case 'month':
+      expiryDate.setMonth(expiryDate.getMonth() + 1);
+      break;
+    case '3months':
+      expiryDate.setMonth(expiryDate.getMonth() + 3);
+      break;
+    case '6months':
+      expiryDate.setMonth(expiryDate.getMonth() + 6);
+      break;
+    case '12months':
+      expiryDate.setFullYear(expiryDate.getFullYear() + 1);
+      break;
+    default:
+      return '永久有效';
+  }
+  
+  // 格式化为YYYY-MM-DD
+  const formattedDate = `${expiryDate.getFullYear()}-${(expiryDate.getMonth() + 1).toString().padStart(2, '0')}-${expiryDate.getDate().toString().padStart(2, '0')}`;
+  
+  console.log(`[TaskManager] 计算得到积分有效期截止日期: ${formattedDate}`);
+  return formattedDate;
+}
+```
+
 ## 任务生命周期
 
 1. 创建任务: `taskManager.createTask()`
 2. 编辑任务: `taskManager.editTask()`
 3. 更新状态: `taskManager.updateTaskStatus()`
 4. 删除任务: `taskManager.deleteTask()`
+5. 标记为必做: `taskManager.markTaskAsRequired()` (可选)
+6. 检查状态: `taskManager.checkTasksStatus()` (自动)
+7. 处理必做任务: `taskManager.checkRequiredTasks()` (自动)
 
 完整的任务操作逻辑在 [utils/taskManager.js](mdc:utils/taskManager.js) 中定义。
 
@@ -129,4 +242,105 @@ wx.setStorageSync('tasks', tasks);
 const tasks = wx.getStorageSync('tasks') || [];
 ```
 
+任务数据批量处理使用异步方法：
+```javascript
+// 批量保存任务数据
+this._saveTaskData(updatedTasks, () => {
+  // 触发任务变更事件
+  this._onTaskDataChanged(updatedTasks);
+  
+  // 回调处理
+  if (callback) callback(result);
+});
+```
+
+批量处理任务时使用分批处理避免界面卡顿：
+
+```javascript
+/**
+ * 批量处理任务
+ * @param {Array} items 需要处理的任务数组
+ * @param {Function} processFn 处理函数
+ * @param {Object} options 选项
+ * @param {Function} callback 回调函数
+ */
+batchProcessTasks(items, processFn, options = {}, callback) {
+  console.info(`[TaskManager] 开始批量处理: ${items.length}项`);
+  const { batchSize = 50, delay = 0, showProgress = true } = options;
+  
+  let processedCount = 0;
+  let index = 0;
+  
+  // 创建进度显示
+  if (showProgress) {
+    wx.showLoading({
+      title: `处理中(0/${items.length})`,
+      mask: true
+    });
+  }
+  
+  function processNextBatch() {
+    const batch = items.slice(index, index + batchSize);
+    if (batch.length === 0) {
+      console.info(`[TaskManager] 批量处理完成`);
+      if (showProgress) {
+        wx.hideLoading();
+      }
+      if (callback) {
+        callback();
+      }
+      return;
+    }
+    
+    console.log(`[TaskManager] 处理批次: ${Math.floor(index/batchSize) + 1}, 项数: ${batch.length}`);
+    
+    // 处理当前批次
+    batch.forEach(item => {
+      processFn(item);
+      processedCount++;
+      
+      // 更新进度显示
+      if (showProgress && processedCount % 10 === 0) {
+        wx.showLoading({
+          title: `处理中(${processedCount}/${items.length})`,
+          mask: true
+        });
+      }
+    });
+    
+    index += batchSize;
+    
+    // 延迟处理下一批，避免UI阻塞
+    setTimeout(processNextBatch, delay);
+  }
+  
+  // 开始处理
+  processNextBatch();
+}
+```
+
 相关实现在 [utils/taskManager.js](mdc:utils/taskManager.js) 中。
+
+## 任务消息通知
+
+任务相关的消息通知由 [utils/messageManager.js](mdc:utils/messageManager.js) 处理，包括：
+
+- 新建任务消息
+- 任务编辑消息
+- 任务完成消息
+- 任务即将到期提醒
+- 必做任务提醒
+- 积分惩罚消息
+
+任务消息创建示例：
+
+```javascript
+// 创建任务相关消息
+messageManager.createTaskMessage(task, 'new');
+messageManager.createTaskMessage(task, 'completed');
+messageManager.createTaskMessage(task, 'upcoming');
+messageManager.createTaskMessage(task, 'required');
+
+// 创建积分惩罚消息
+messageManager.createPenaltyMessage(task, 5); // 扣除5积分
+```
