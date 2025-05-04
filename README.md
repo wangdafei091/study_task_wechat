@@ -12,6 +12,9 @@
 - 任务进度统计分析
 - 奖励机制
 - 消息提醒
+- 积分有效期管理
+- 必做任务标记和处理
+- 批量处理任务记录
 
 ## 项目结构
 项目采用微信小程序原生框架开发，主要目录结构如下：
@@ -28,18 +31,24 @@ study_task_wechat/
 │   ├── taskItem/           # 任务项组件
 │   ├── task-heatmap/       # 任务热力图组件
 │   ├── float-menu/         # 浮动菜单组件
+│   ├── upcomingTask/       # 即将到期任务组件
 │   └── template-selector/  # 模板选择器组件
 ├── pages/                  # 页面目录
 │   ├── index/              # 主页（任务日历）
 │   ├── task/               # 任务详情页
 │   ├── task-edit/          # 任务编辑页
 │   ├── rewards/            # 奖池页面
-│   └── message/            # 消息中心
+│   ├── message/            # 消息中心
+│   └── history/            # 历史记录页面
 ├── utils/                  # 工具函数目录
 │   ├── taskManager.js      # 任务管理工具
+│   ├── messageManager.js   # 消息管理工具
 │   ├── dateUtils.js        # 日期处理工具
 │   ├── taskUtils.js        # 任务处理工具
-│   └── uiUtils.js          # UI辅助工具
+│   ├── uiUtils.js          # UI辅助工具
+│   ├── unit.js             # 单位换算工具
+│   └── feedbackUtils.js    # 反馈处理工具
+├── styles/                 # 样式目录
 └── assets/                 # 静态资源目录
 ```
 
@@ -49,6 +58,7 @@ study_task_wechat/
 - 组件名称：小驼峰命名法，如 `taskItem`、`progressRing`
 - 工具函数：小驼峰命名法，如 `formatDate`、`showLoading`
 - 常量：全大写下划线分隔，如 `MAX_TASK_COUNT`、`DEFAULT_DURATION`
+- 类名：大驼峰命名法，如 `TaskManager`、`MessageCenter`
 
 ### UI规范
 - 颜色系统
@@ -68,6 +78,9 @@ study_task_wechat/
   - 元素间距：12rpx/24rpx
   - 功能按钮圆角：8rpx
   - 卡片容器圆角：16rpx
+  - 标题文字：32rpx，字重500-600
+  - 正文文字：28rpx，字重400
+  - 辅助文字：24rpx，字重400
 
 ## 技术栈
 - 微信小程序原生开发
@@ -76,7 +89,7 @@ study_task_wechat/
 - WXSS
 
 ## 开发环境
-- 微信开发者工具
+- 微信开发者工具 1.06.2305230
 - Node.js >= 14.0.0
 - npm >= 6.0.0
 
@@ -136,6 +149,18 @@ git clone https://github.com/yourusername/study_task_wechat.git
 - 添加必要的注释
 - 保持代码简洁清晰
 - 确保UI一致性，特别是表单元素高度和间距
+- 在关键位置添加日志记录
+- 确保使用全局定义的颜色和尺寸变量
+
+## 日志规范
+在关键位置添加日志，遵循以下格式：
+```javascript
+console.log(`[组件/模块名] 动作: ${变量}`);
+
+// 示例
+console.log(`[taskManager] 创建任务: ${JSON.stringify(task)}`);
+console.log(`[progressRing] 更新进度: ${percent}%`);
+```
 
 ## 许可证
 此项目使用 MIT 许可证 - 查看 [LICENSE.md](LICENSE.md) 文件了解详情

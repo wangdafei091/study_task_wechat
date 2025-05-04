@@ -314,30 +314,95 @@ Component({
     
     // 新增：计算单个任务的压力指数
     calculateTaskPressure(task) {
-      // 获取任务基本属性（带默认值）
+      // 获取任务基本属性
       const type = task.type || 'study';
-      const duration = task.duration || (type === 'study' ? 60 : (type === 'habit' ? 10 : 30));
+      const title = task.title || '未命名任务';
+      const taskId = task.id || '未知ID';
       
-      // 简化的压力指数计算逻辑
+      console.log(`[TaskHeatmap] 开始计算任务[${title}]压力值, ID: ${taskId}, 类型: ${type}`);
+      
+      // 初始化压力值
       let totalPressure = 0;
+      let basePressure = 0;
+      let durationPressure = 0;
       
-      // 习惯任务固定2点压力值
+      // 处理习惯任务 - 固定2点基础压力
       if (type === 'habit') {
-        totalPressure += 2;
-        console.log(`[TaskHeatmap] 习惯任务[${task.title}]基础压力: 2点`);
+        basePressure = 2;
+        totalPressure = basePressure;
+        console.log(`[TaskHeatmap] 习惯任务[${title}]基础压力: ${basePressure}点`);
+        
+        return {
+          total: totalPressure,
+          base: basePressure,
+          duration: 0,
+          points: 0
+        };
       }
       
-      // 所有任务按时长计算（每10分钟1点压力）
-      const durationPressure = Math.floor(duration / 10);
-      totalPressure += durationPressure;
-      console.log(`[TaskHeatmap] 任务[${task.title}]时长(${duration}分钟)压力: ${durationPressure}点`);
+      // 处理全天任务 - 固定2点基础压力，与习惯任务相同
+      if (task.isAllDay) {
+        basePressure = 2;
+        totalPressure = basePressure;
+        console.log(`[TaskHeatmap] 全天任务[${title}]基础压力: ${basePressure}点`);
+        
+        return {
+          total: totalPressure,
+          base: basePressure,
+          duration: 0,
+          points: 0
+        };
+      }
       
-      console.log(`[TaskHeatmap] 任务[${task.title}] 总压力指数: ${totalPressure}`);
+      // 处理有时间范围的普通任务
+      if (task.startTime && task.endTime) {
+        // 将HH:MM格式时间转换为分钟数
+        const convertTimeToMinutes = (timeStr) => {
+          const [hours, minutes] = timeStr.split(':').map(Number);
+          return (hours * 60) + minutes;
+        };
+        
+        const startMinutes = convertTimeToMinutes(task.startTime);
+        const endMinutes = convertTimeToMinutes(task.endTime);
+        
+        console.log(`[TaskHeatmap] 任务[${title}]时间范围: ${task.startTime}-${task.endTime}`);
+        console.log(`[TaskHeatmap] 转换为分钟: 开始=${startMinutes}分钟, 结束=${endMinutes}分钟`);
+        
+        // 计算时间差（分钟）
+        let duration = endMinutes - startMinutes;
+        
+        // 检查时间差是否有效
+        if (duration <= 0) {
+          console.error(`[TaskHeatmap] 错误: 任务[${title}]的结束时间早于或等于开始时间! 使用最小压力值`);
+          return {
+            total: 1,
+            base: 0,
+            duration: 1,
+            points: 0
+          };
+        }
+        
+        // 计算时长压力（每10分钟1点）
+        durationPressure = Math.floor(duration / 10);
+        totalPressure = durationPressure;
+        
+        console.log(`[TaskHeatmap] 任务[${title}]实际时长: ${duration}分钟`);
+        console.log(`[TaskHeatmap] 任务[${title}]时长压力: ${durationPressure}点`);
+      } else {
+        // 缺少时间范围的普通任务 - 记录错误
+        console.error(`[TaskHeatmap] 错误: 普通任务[${title}]缺少开始时间或结束时间! 使用最小压力值`);
+        
+        // 使用最小压力值
+        durationPressure = 1;
+        totalPressure = 1;
+      }
       
-      // 返回结构保持不变，确保兼容性
+      console.log(`[TaskHeatmap] 任务[${title}]总压力值: ${totalPressure}点`);
+      
+      // 返回压力计算结果
       return {
         total: totalPressure,
-        base: type === 'habit' ? 2 : 0,
+        base: basePressure,
         duration: durationPressure,
         points: 0 // 移除积分影响，但保留字段
       };

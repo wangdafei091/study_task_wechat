@@ -533,12 +533,110 @@ Page({
         repeat: newTask.repeat.type
       });
       
-      // 使用任务管理器创建任务
-      taskManager.createTask(newTask, (result) => {
-        // 确保无论成功或失败都会关闭加载提示
-        console.log('[TaskEdit] 任务创建请求完成，关闭加载提示');
-        wx.hideLoading();
+      // 检查任务持续时间，针对长时间任务特殊处理
+      if (newTask.startTime && newTask.endTime && !newTask.isAllDay) {
+        const [startHours, startMinutes] = newTask.startTime.split(':').map(Number);
+        const [endHours, endMinutes] = newTask.endTime.split(':').map(Number);
         
+        let startTotalMinutes = startHours * 60 + startMinutes;
+        let endTotalMinutes = endHours * 60 + endMinutes;
+        
+        // 处理跨越午夜的情况
+        if (endTotalMinutes < startTotalMinutes) {
+          endTotalMinutes += 24 * 60;
+        }
+        
+        const durationMinutes = endTotalMinutes - startTotalMinutes;
+        
+        // 对长时间任务添加日志和额外确认
+        if (durationMinutes > 180) {
+          console.log(`[TaskEdit] 正在创建长时间任务 - 持续${Math.floor(durationMinutes / 60)}小时${durationMinutes % 60}分钟`);
+          
+          // 添加任务的持续时间字段，方便后续处理
+          newTask.duration = durationMinutes;
+          
+          // 确保进度条更新正常
+          wx.showLoading({
+            title: '处理长时间任务...',
+            mask: true
+          });
+          
+          // 简短延迟确保UI刷新
+          setTimeout(() => {
+            console.log('[TaskEdit] 长时间任务预处理完成，继续创建任务');
+            // 在这里继续调用实际的创建任务函数
+            this._doCreateTask(taskManager, newTask, (result) => {
+              if (result) {
+                // 添加成功，记录详细日志
+                console.log('[TaskEdit] 新任务添加成功，ID:', typeof result === 'object' ? result.id : '未知', 
+                           '标题:', newTask.title);
+                
+                // 显示任务添加成功提示
+                wx.showToast({
+                  title: '任务添加成功',
+                  icon: 'success',
+                  duration: 2000
+                });
+                
+                // 重置表单数据
+                console.log('[TaskEdit] 重置表单数据');
+                this.setData({
+                  'newTask.title': '',
+                  'newTask.type': 'habit',
+                  'newTask.points': 1,
+                  'newTask.description': '',
+                  'newTask.isAllDay': false,
+                  'newTask.hasNoEndDate': false,
+                  'newTask.isRequired': false,
+                  'errors.title': '',
+                  repeatText: '每天',
+                  reminderText: '无',
+                  pointsExpiryText: '永久',
+                  'newTask.repeat': {
+                    type: 'daily',
+                    days: [],
+                    startDate: '',
+                    endDate: ''
+                  },
+                  'newTask.reminder': {
+                    enabled: false,
+                    time: 0
+                  }
+                });
+                
+                // 重新初始化日期时间数据
+                this.initDateTimeData();
+                
+                // 关闭所有面板
+                this.closeAllPanels();
+                
+                // 重新加载任务数据
+                this.loadAllTasks();
+                
+                // 如果热力图组件存在，刷新热力图
+                const heatmap = this.getHeatmapComponent();
+                if (heatmap) {
+                  console.log('[TaskEdit] 任务添加成功，刷新热力图');
+                  heatmap.calculateHeatMap();
+                }
+              } else {
+                // 添加失败，显示错误提示
+                console.error('[TaskEdit] 任务添加失败');
+                wx.showToast({
+                  title: '添加失败',
+                  icon: 'none',
+                  duration: 2000
+                });
+              }
+            });
+          }, 300);
+          
+          return; // 中断当前流程，由延时函数继续
+        }
+      }
+      
+      // 直接创建普通任务（非长时间任务）
+      this._doCreateTask(taskManager, newTask, (result) => {
         if (result) {
           // 添加成功，记录详细日志
           console.log('[TaskEdit] 新任务添加成功，ID:', typeof result === 'object' ? result.id : '未知', 
@@ -615,6 +713,82 @@ Page({
         duration: 3000
       });
     }
+  },
+
+  /**
+   * 实际创建任务的辅助函数，抽离出来以支持长时间任务的延时处理
+   * @private
+   */
+  _doCreateTask: function(taskManager, newTask, callback) {
+    // 使用任务管理器创建任务
+    taskManager.createTask(newTask, (result) => {
+      // 确保无论成功或失败都会关闭加载提示
+      console.log('[TaskEdit] 任务创建请求完成，关闭加载提示');
+      wx.hideLoading();
+      
+      if (result) {
+        // 添加成功，记录详细日志
+        console.log('[TaskEdit] 新任务添加成功，ID:', typeof result === 'object' ? result.id : '未知', 
+                   '标题:', newTask.title);
+        
+        // 显示任务添加成功提示
+        wx.showToast({
+          title: '任务添加成功',
+          icon: 'success',
+          duration: 2000
+        });
+        
+        // 重置表单数据
+        console.log('[TaskEdit] 重置表单数据');
+        this.setData({
+          'newTask.title': '',
+          'newTask.type': 'habit',
+          'newTask.points': 1,
+          'newTask.description': '',
+          'newTask.isAllDay': false,
+          'newTask.hasNoEndDate': false,
+          'newTask.isRequired': false,
+          'errors.title': '',
+          repeatText: '每天',
+          reminderText: '无',
+          pointsExpiryText: '永久',
+          'newTask.repeat': {
+            type: 'daily',
+            days: [],
+            startDate: '',
+            endDate: ''
+          },
+          'newTask.reminder': {
+            enabled: false,
+            time: 0
+          }
+        });
+        
+        // 重新初始化日期时间数据
+        this.initDateTimeData();
+        
+        // 关闭所有面板
+        this.closeAllPanels();
+        
+        // 重新加载任务数据
+        this.loadAllTasks();
+        
+        // 如果热力图组件存在，刷新热力图
+        const heatmap = this.getHeatmapComponent();
+        if (heatmap) {
+          console.log('[TaskEdit] 任务添加成功，刷新热力图');
+          heatmap.calculateHeatMap();
+        }
+      } else {
+        // 添加失败，显示错误提示
+        console.error('[TaskEdit] 任务添加失败');
+        wx.showToast({
+          title: '添加失败',
+          icon: 'none',
+          duration: 2000
+        });
+      }
+    });
   },
 
   /**
@@ -746,6 +920,36 @@ Page({
         duration: 2000
       });
       return;
+    }
+    
+    // 计算任务持续时间
+    if (isSameDay && this.data.newTask.startTime) {
+      const [startHours, startMinutes] = this.data.newTask.startTime.split(':').map(Number);
+      const [endHours, endMinutes] = time.split(':').map(Number);
+      
+      let startTotalMinutes = startHours * 60 + startMinutes;
+      let endTotalMinutes = endHours * 60 + endMinutes;
+      
+      // 处理跨越午夜的情况
+      if (endTotalMinutes < startTotalMinutes) {
+        endTotalMinutes += 24 * 60;
+      }
+      
+      const durationMinutes = endTotalMinutes - startTotalMinutes;
+      
+      console.log(`[TaskEdit] 设置任务持续时间: ${Math.floor(durationMinutes / 60)}小时${durationMinutes % 60}分钟`);
+      
+      // 对超过3小时的任务添加日志
+      if (durationMinutes > 180) {
+        console.log(`[TaskEdit] 创建长时间任务(${durationMinutes}分钟)，确保界面刷新机制正常工作`);
+        
+        // 在设置结束时间前，先确保之后的UI更新正常
+        wx.showLoading({
+          title: '处理中...',
+          mask: false,
+          duration: 300
+        });
+      }
     }
     
     this.setData({
@@ -1136,6 +1340,25 @@ Page({
     
     const [startHours, startMinutes] = startTime.split(':').map(Number);
     const [endHours, endMinutes] = endTime.split(':').map(Number);
+    
+    // 计算时间差（分钟）
+    let startTotalMinutes = startHours * 60 + startMinutes;
+    let endTotalMinutes = endHours * 60 + endMinutes;
+    
+    // 处理跨越午夜的情况
+    if (endTotalMinutes < startTotalMinutes) {
+      endTotalMinutes += 24 * 60; // 加上24小时的分钟数
+    }
+    
+    const durationMinutes = endTotalMinutes - startTotalMinutes;
+    
+    // 记录持续时间到日志
+    console.log(`[TaskEdit] 任务持续时间: ${Math.floor(durationMinutes / 60)}小时${durationMinutes % 60}分钟`);
+    
+    // 如果持续时间超过3小时，特别标记
+    if (durationMinutes > 180) {
+      console.log(`[TaskEdit] 检测到长时间任务(${durationMinutes}分钟)，已允许创建`);
+    }
     
     if (startHours > endHours) return false;
     if (startHours === endHours && startMinutes >= endMinutes) return false;

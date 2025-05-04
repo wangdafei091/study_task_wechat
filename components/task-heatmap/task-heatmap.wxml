@@ -282,13 +282,17 @@
       <view class="pressure-info-body">
         <view class="formula-section">
           <text class="formula-title">计算公式</text>
-          <text class="formula-text">压力指数 = 习惯任务压力 + 时长压力</text>
+          <text class="formula-text">压力指数 = 习惯/全天任务压力 + 时长压力</text>
         </view>
         <view class="factors-section">
           <text class="factors-title">影响因素</text>
           <view class="factor-item">
             <text class="factor-name">习惯任务:</text>
             <text class="factor-desc">每个习惯任务2点压力</text>
+          </view>
+          <view class="factor-item">
+            <text class="factor-name">全天任务:</text>
+            <text class="factor-desc">每个全天任务2点压力</text>
           </view>
           <view class="factor-item">
             <text class="factor-name">时长影响:</text>
@@ -302,16 +306,17 @@
           <view class="example-content">
             <view class="example-task">
               <text class="example-text">例子:</text>
-              <view class="example-item">2个习惯任务: 2×2=4点</view>
-              <view class="example-item">学习任务45分钟: 45÷10=4点</view>
+              <view class="example-item">1个习惯任务: 1×2=2点</view>
+              <view class="example-item">1个全天任务: 1×2=2点</view>
+              <view class="example-item">学习任务60分钟: 60÷10=6点</view>
             </view>
             <view class="example-calc">
               <text class="example-text">计算过程:</text>
-              <view class="example-item">习惯任务压力: 4点</view>
-              <view class="example-item">时长压力: 4点</view>
+              <view class="example-item">习惯/全天任务压力: 4点</view>
+              <view class="example-item">时长压力: 6点</view>
             </view>
             <view class="example-result">
-              <text class="example-item">总压力值: 8点</text>
+              <text class="example-item">总压力值: 10点</text>
             </view>
           </view>
         </view>
