@@ -169,7 +169,7 @@ Page({
       currentLevel: Math.floor(userPoints / 20) + 1 // 每20点升一级
     });
     
-    console.log(`[rewards] 设置总积分: ${userPoints}, 即将到期积分: ${expiringPointsInfo.points}, 到期日期: ${expiringPointsInfo.date}`);
+    console.log(`[rewards] 设置总积分: ${userPoints}, 即将过期总积分: ${expiringPointsInfo.points}, 最早到期日期: ${expiringPointsInfo.date}`);
   },
 
   /**
@@ -198,16 +198,17 @@ Page({
       // 按过期时间排序
       completedTasks.sort((a, b) => a.pointsExpiry - b.pointsExpiry);
       
-      // 获取最近过期的日期和积分总和
+      // 获取最早过期日期
       const earliestExpiryTask = completedTasks[0];
+      const earliestExpiryTime = earliestExpiryTask.pointsExpiry;
       expiryDate = earliestExpiryTask.pointsExpiryDate || '';
       
-      // 计算所有即将到期的积分总和
-      expiringPoints = completedTasks.reduce((sum, task) => {
-        return sum + (task.rewardPoints || 0);
-      }, 0);
+      // 只计算最早日期对应的积分总和
+      expiringPoints = completedTasks
+        .filter(task => task.pointsExpiry === earliestExpiryTime)
+        .reduce((sum, task) => sum + (task.rewardPoints || 0), 0);
       
-      console.log(`[rewards] 找到${completedTasks.length}个即将到期任务，总计积分: ${expiringPoints}, 最早到期日期: ${expiryDate}`);
+      console.log(`[rewards] 找到${completedTasks.length}个即将到期任务，最早到期日期: ${expiryDate}，该日期积分: ${expiringPoints}`);
     } else {
       console.log(`[rewards] 没有找到即将到期的积分`);
     }

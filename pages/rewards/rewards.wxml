@@ -9,7 +9,7 @@
     
     <!-- 即将到期积分提示 -->
     <view class="expiring-points-container" wx:if="{{expiringPoints > 0}}">
-      <text>其中 {{expiringPoints}} 积分将在 {{expiryDate}} 过期</text>
+      <text>{{expiringPoints}} 积分将在 {{expiryDate}} 到期</text>
     </view>
     
     <!-- 底部按钮 - 改为横向布局 -->

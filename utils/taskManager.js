@@ -23,8 +23,6 @@ const taskManager = {
             if (!taskWithoutDifficulty.pointsExpiry) {
               taskWithoutDifficulty.pointsExpiry = 'permanent'; // 默认为永久
               console.log(`[TaskManager] 为任务 ${taskWithoutDifficulty.id} 添加默认积分有效期: permanent`);
-            } else {
-              console.log(`[TaskManager] 任务 ${taskWithoutDifficulty.id} 已有积分有效期: ${taskWithoutDifficulty.pointsExpiry}`);
             }
             
             if (taskWithoutDifficulty.pointsValidPeriod && !taskWithoutDifficulty.pointsExpiry) {
