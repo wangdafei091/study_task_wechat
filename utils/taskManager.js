@@ -1244,6 +1244,49 @@ const taskManager = {
       expiryDateStr: expiryDateStr
     };
   },
+  
+  /**
+   * 获取任务统计数据
+   * @param {Object} dateRange 日期范围，可选
+   * @param {Function} callback 回调函数
+   */
+  getTaskStatistics: function(dateRange, callback) {
+    console.log('[TaskManager] 获取任务统计数据');
+    
+    // 获取所有任务
+    this.getAllTasks(allTasks => {
+      const stats = {
+        totalTasks: allTasks.length,
+        completedTasks: allTasks.filter(task => task.status === 1).length,
+        completionRate: 0,
+        typeCounts: {
+          habit: allTasks.filter(task => task.type === 'habit').length,
+          study: allTasks.filter(task => task.type === 'study').length,
+          interest: allTasks.filter(task => task.type === 'interest').length
+        },
+        streak: this._calculateStreak(allTasks) // 计算连续完成天数
+      };
+      
+      // 计算完成率
+      if (stats.totalTasks > 0) {
+        stats.completionRate = Math.round((stats.completedTasks / stats.totalTasks) * 100);
+      }
+      
+      console.log('[TaskManager] 统计数据:', stats);
+      
+      if (callback) callback(stats);
+    });
+  },
+  
+  /**
+   * 计算连续完成天数
+   * @param {Array} tasks 任务数组
+   * @return {Number} 连续天数
+   */
+  _calculateStreak: function(tasks) {
+    // 这里简化实现，实际需要按日期分组并计算连续完成的天数
+    return 0;
+  },
 };
 
 module.exports = taskManager; 

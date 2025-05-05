@@ -260,14 +260,10 @@ Page({
     // 使用任务管理器计算进度
     const progressData = taskManager.calculateTaskProgress(tasks);
     
-    // 更新UI
+    // 更新UI，移除stats数据更新
     this.setData({
       taskProgress: progressData.taskProgress,
-      rewardProgress: progressData.rewardProgress,
-      stats: {
-        ...progressData.stats,
-        streak: this.data.stats?.streak || 0 // 保留现有连续天数
-      }
+      rewardProgress: progressData.rewardProgress
     });
     
     // 更新全局进度数据
@@ -361,13 +357,28 @@ Page({
   },
   
   // 跳转到消息中心
-  navigateToMessageCenter: function() {
-    wx.navigateTo({
-      url: '/pages/message/message'
-    });
+  navigateToMessageCenter: function(e) {
+    console.log('[消息中心] 准备跳转到消息中心页面');
     
-    // 关闭消息预览
-    this.toggleMessagePreview();
+    // 阻止事件冒泡，避免同时触发toggleMessagePreview
+    if (e && typeof e.stopPropagation === 'function') {
+      e.stopPropagation();
+    }
+    
+    // 先跳转到消息中心页面
+    wx.navigateTo({
+      url: '/pages/message/message',
+      success: () => {
+        console.log('[消息中心] 成功跳转到消息中心页面');
+        
+        // 成功跳转后再关闭消息预览
+        setTimeout(() => {
+          this.setData({
+            showMessagePreview: false
+          });
+        }, 300);
+      }
+    });
   },
   
   // 显示/隐藏消息预览
@@ -617,37 +628,19 @@ Page({
         url: `/pages/task-edit/task-edit?mode=create`
       });
     } else if (item && item.id === 'study') {
-      console.log('[首页] 点击分析菜单项，暂无功能');
-      // 分析功能暂时清除，未来将添加统计分析功能
+      console.log('[首页] 点击分析菜单项，跳转到分析页面');
+      wx.navigateTo({
+        url: '/pages/analysis/analysis'
+      });
     }
   },
   
   // 触发进度圆环点击
   onRingTap: function(e) {
-    // 切换显示统计信息
-    this.toggleStats();
-  },
-  
-  // 显示/隐藏统计信息
-  toggleStats: function() {
-    if (this.data.showStats) {
-      this.setData({ statsClosing: true });
-      
-      // 动画结束后隐藏
-      setTimeout(() => {
-        this.setData({
-          showStats: false,
-          statsClosing: false
-        });
-      }, 300);
-      
-    } else {
-      this.setData({
-        showStats: true,
-        showSearch: false, // 确保搜索面板关闭
-        showMessagePreview: false // 确保消息预览关闭
-      });
-    }
+    console.log('[首页] 点击进度圆环，跳转到分析页面');
+    wx.navigateTo({
+      url: '/pages/analysis/analysis'
+    });
   },
   
   // 显示/隐藏搜索面板

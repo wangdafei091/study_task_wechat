@@ -4,7 +4,8 @@
     "pages/task-edit/task-edit",
     "pages/task/task",
     "pages/rewards/rewards",
-    "pages/message/message"
+    "pages/message/message",
+    "pages/analysis/analysis"
   ],
   "window": {
     "backgroundTextStyle": "light",

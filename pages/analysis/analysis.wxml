@@ -1,0 +1,63 @@
+<view class="container">
+  <view class="header-container">
+    <view class="header-title">数据分析</view>
+  </view>
+
+  <!-- 统计面板 -->
+  <view class="stats-panel">
+    <view class="section-title">学习任务统计</view>
+    
+    <!-- 主要统计数据 -->
+    <view class="stats-grid">
+      <view class="stats-item">
+        <view class="stats-value">{{stats.totalTasks}}</view>
+        <view class="stats-label">总任务数</view>
+      </view>
+      <view class="stats-item">
+        <view class="stats-value">{{stats.completedTasks}}</view>
+        <view class="stats-label">已完成</view>
+      </view>
+      <view class="stats-item">
+        <view class="stats-value">{{stats.completionRate}}%</view>
+        <view class="stats-label">完成率</view>
+      </view>
+      <view class="stats-item">
+        <view class="stats-value">{{stats.streak}}</view>
+        <view class="stats-label">连续天数</view>
+      </view>
+    </view>
+    
+    <!-- 任务类型分布 -->
+    <view class="stats-chart">
+      <view class="chart-title">任务类型分布</view>
+      <view class="chart-bars">
+        <view class="chart-bar-group">
+          <view class="chart-label">生活习惯</view>
+          <view class="chart-bar-container">
+            <view class="chart-bar habit" style="width: {{stats.typeCounts.habit / stats.totalTasks * 100}}%">
+              <text wx:if="{{stats.typeCounts.habit > 0}}">{{stats.typeCounts.habit}}</text>
+            </view>
+          </view>
+        </view>
+        <view class="chart-bar-group">
+          <view class="chart-label">学习任务</view>
+          <view class="chart-bar-container">
+            <view class="chart-bar study" style="width: {{stats.typeCounts.study / stats.totalTasks * 100}}%">
+              <text wx:if="{{stats.typeCounts.study > 0}}">{{stats.typeCounts.study}}</text>
+            </view>
+          </view>
+        </view>
+        <view class="chart-bar-group">
+          <view class="chart-label">兴趣爱好</view>
+          <view class="chart-bar-container">
+            <view class="chart-bar interest" style="width: {{stats.typeCounts.interest / stats.totalTasks * 100}}%">
+              <text wx:if="{{stats.typeCounts.interest > 0}}">{{stats.typeCounts.interest}}</text>
+            </view>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 更多分析内容可以在这里添加 -->
+</view> 
