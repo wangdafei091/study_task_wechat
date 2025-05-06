@@ -67,23 +67,28 @@ Component({
     stageTitles: ['起步', '前进', '冲刺', '终点'],
     nodeReached: false,     // 是否刚刚到达新阶段
     currentStageTitle: '',   // 当前阶段标题
-    encouragements: [       // 随机鼓励语
-      '加油加油！',
-      '你太棒了！',
-      '继续努力！',
-      '真是太厉害了！',
-      '你是最棒的！',
-      '再接再厉！',
-      'wow~真厉害！',
-      '我们要加速啦！',
-      '我相信你能做到！',
-      '离终点更近了！'
+    encouragements: [       // 随机鼓励语，控制在5个字以内
+      '加油！',
+      '真棒！',
+      '继续！',
+      '厉害！',
+      '最棒！',
+      '再接再厉',
+      'wow~棒！',
+      '冲冲冲！',
+      '相信你！',
+      '快到啦！'
     ],
     currentEncouragement: '', // 当前鼓励语
     tapsCount: 0,            // 点击次数
     chickAnimation: '',      // 特殊动画类型
     isComplete: false,       // 是否已完成
-    showFireworks: false     // 是否显示礼花效果
+    showFireworks: false,    // 是否显示礼花效果
+    bubblePosition: 'center', // 气泡位置: left, center, right
+    showSpeechBubble: false,
+    // 新增奖品tooltip相关属性
+    showTooltip: false,      // 是否显示奖品提示
+    tooltipDirection: 'bottom' // 提示方向: bottom, left, right
   },
 
   /**
@@ -154,83 +159,66 @@ Component({
   },
 
   /**
+   * 生命周期函数
+   */
+  attached: function() {
+    // 获取系统信息，供后续使用
+    this.systemInfo = wx.getSystemInfoSync();
+    console.log('[progressBar] 获取系统信息', this.systemInfo.windowWidth);
+  },
+
+  /**
    * 组件的方法列表
    */
   methods: {
-    // 点击小鸡时触发的动作
+    // 点击小鸡显示鼓励语
     onTapChick: function() {
-      // 如果当前已有动画在执行，不触发新动画
-      if (this.data.chickAnimation || this.data.chickJumping) {
-        return;
-      }
+      console.log("[progressBar] 点击小鸡");
       
-      // 根据点击次数增加不同的动画效果
-      const tapsCount = this.data.tapsCount + 1;
-      let animation = '';
-      let encouragement = '';
+      // 获取小鸡位置，确定气泡显示位置
+      const query = wx.createSelectorQuery().in(this);
+      query.select('.chick-character').boundingClientRect(rect => {
+        if (!rect) {
+          console.warn('[progressBar] 无法获取小鸡位置');
+          return;
+        }
+        
+        console.log(`[progressBar] 小鸡位置: left=${rect.left}, right=${rect.right}, width=${rect.width}, 屏幕宽度=${wx.getSystemInfoSync().windowWidth}`);
+        
+        // 根据小鸡在屏幕中的位置决定气泡显示方式
+        let bubblePosition = 'center';
+        const screenWidth = wx.getSystemInfoSync().windowWidth;
+        
+        if (rect.left < screenWidth * 0.3) {
+          bubblePosition = 'left';
+        } else if (rect.right > screenWidth * 0.7) {
+          bubblePosition = 'right';
+        }
+        
+        console.log(`[progressBar] 气泡位置: ${bubblePosition}`);
+        
+        // 选择鼓励语
+        this._selectRandomEncouragement();
+        
+        // 显示气泡并设置位置
+        this.setData({
+          chickSpeaking: true,
+          bubblePosition: bubblePosition
+        });
+      }).exec();
       
-      // 如果已经完成，固定显示鼓励语
-      if (this.data.isComplete) {
-        encouragement = "是不是很棒～";
-      } else {
-        // 随机选择一条鼓励语
-        const randomIndex = Math.floor(Math.random() * this.data.encouragements.length);
-        encouragement = this.data.encouragements[randomIndex];
-      }
-      
-      if (tapsCount % 10 === 0) {
-        // 每10次点击有特殊动画
-        animation = 'spin';
-      } else if (tapsCount % 5 === 0) {
-        // 每5次点击有特殊动画
-        animation = 'flip';
-      } else if (tapsCount % 3 === 0) {
-        // 每3次点击有特殊动画
-        animation = 'dance';
-      } else {
-        animation = 'jump';
-      }
-      
-      this.setData({
-        chickJumping: false, // 确保不会同时应用两种跳跃动画
-        chickSpeaking: true,
-        currentEncouragement: encouragement,
-        tapsCount: tapsCount,
-        chickAnimation: animation
+      // 震动反馈
+      wx.vibrateShort({
+        type: 'light'
       });
       
-      // 设置动画结束后恢复状态
-      setTimeout(() => {
-        this.setData({
-          chickAnimation: ''
-        });
-      }, 800);
-      
-      // 鼓励语持续时间
-      setTimeout(() => {
+      // 3秒后隐藏气泡
+      if (this.speakingTimer) clearTimeout(this.speakingTimer);
+      this.speakingTimer = setTimeout(() => {
         this.setData({
           chickSpeaking: false
         });
-      }, 2000);
-      
-      // 播放音效（如果微信小程序支持）
-      if (wx.createInnerAudioContext) {
-        try {
-          const soundEffect = wx.createInnerAudioContext();
-          // 根据动画类型播放不同音效
-          if (animation === 'spin') {
-            // 你可以在项目中添加这些音效文件
-            // soundEffect.src = '/assets/sounds/spin.mp3';
-          } else if (animation === 'flip') {
-            // soundEffect.src = '/assets/sounds/flip.mp3';
-          } else {
-            // soundEffect.src = '/assets/sounds/jump.mp3';
-          }
-          // soundEffect.play();
-        } catch (e) {
-          console.log('播放音效失败', e);
-        }
-      }
+      }, 3000);
     },
     
     // 显示阶段提示
@@ -239,8 +227,8 @@ Component({
       const emoticons = ['❤️', '✨', '🎉', '👏', '🌟', '💪'];
       const randomEmoticon = emoticons[Math.floor(Math.random() * emoticons.length)];
       
-      // 使用鼓励语气泡显示阶段提示
-      const stageMessage = `${randomEmoticon} 进入${this.data.currentStageTitle}阶段啦！`;
+      // 使用鼓励语气泡显示阶段提示，缩短文本
+      const stageMessage = `${randomEmoticon}${this.data.currentStageTitle}`;
       
       this.setData({ 
         chickSpeaking: true,
@@ -258,8 +246,8 @@ Component({
     
     // 显示完成信息
     showCompletionMessage: function() {
-      // 使用固定的鼓励语
-      const completionMessage = "哇！任务全部完成啦！";
+      // 使用固定的鼓励语，缩短文本
+      const completionMessage = "全部完成！";
       
       // 显示庆祝文字
       this.setData({ 
@@ -365,6 +353,128 @@ Component({
           chickSpeaking: false
         });
       }, 2000);
+    },
+
+    // 点击小鸡显示气泡
+    onClickChicken: function() {
+      console.log('[progressBar] 点击小鸡');
+      
+      // 获取小鸡位置，确定气泡显示位置
+      const query = wx.createSelectorQuery().in(this);
+      query.select('.chicken').boundingClientRect(rect => {
+        if (!rect) {
+          console.warn('[progressBar] 无法获取小鸡位置');
+          return;
+        }
+        
+        console.log(`[progressBar] 小鸡位置: left=${rect.left}, right=${rect.right}, width=${rect.width}, 屏幕宽度=${wx.getSystemInfoSync().windowWidth}`);
+        
+        // 根据小鸡在屏幕中的位置决定气泡显示方式
+        let bubblePosition = 'center';
+        const screenWidth = wx.getSystemInfoSync().windowWidth;
+        
+        if (rect.left < screenWidth * 0.3) {
+          bubblePosition = 'left';
+        } else if (rect.right > screenWidth * 0.7) {
+          bubblePosition = 'right';
+        }
+        
+        console.log(`[progressBar] 气泡位置: ${bubblePosition}`);
+        
+        this.setData({
+          showSpeechBubble: true,
+          bubblePosition: bubblePosition
+        });
+      }).exec();
+      
+      // 3秒后自动隐藏气泡
+      clearTimeout(this.bubbleTimer);
+      this.bubbleTimer = setTimeout(() => {
+        this.setData({
+          showSpeechBubble: false
+        });
+      }, 3000);
+    },
+
+    // 选择随机鼓励语
+    _selectRandomEncouragement: function() {
+      // 定义鼓励语列表
+      const encouragements = [
+        "加油！我要拿到奖品！",
+        "再积攒一些星星吧！",
+        "快要到达终点啦！",
+        "我已经走了这么远！",
+        "努力就有收获！",
+        "坚持就是胜利！"
+      ];
+      
+      // 如果已经完成，固定显示祝贺语
+      if (this.data.isComplete) {
+        this.setData({
+          currentEncouragement: "我做到了！太棒了！"
+        });
+        return;
+      }
+      
+      // 随机选择一条鼓励语
+      const randomIndex = Math.floor(Math.random() * encouragements.length);
+      const encouragement = encouragements[randomIndex];
+      
+      console.log(`[progressBar] 选择鼓励语: ${encouragement}`);
+      
+      this.setData({
+        currentEncouragement: encouragement
+      });
+    },
+
+    // 点击奖品图标处理
+    onTapReward: function() {
+      console.log('[progressBar] 点击奖品图标');
+      
+      // 显示奖品提示
+      const goalAreaSelector = this.data.rewardImage ? '.goal-area-image' : '.goal-area';
+      const query = wx.createSelectorQuery().in(this);
+      
+      query.select(goalAreaSelector).boundingClientRect(rect => {
+        if (!rect) {
+          console.warn('[progressBar] 无法获取奖品图标位置');
+          return;
+        }
+        
+        console.log(`[progressBar] 奖品图标位置: left=${rect.left}, right=${rect.right}, width=${rect.width}`);
+        
+        // 计算图标在屏幕中的位置
+        const screenWidth = this.systemInfo.windowWidth;
+        let direction = 'bottom';
+        
+        // 根据图标位置决定tooltip方向
+        if (rect.right > screenWidth * 0.85) {
+          // 靠近右边缘，显示在左侧
+          direction = 'left';
+          console.log('[progressBar] 靠近右边缘，显示在左侧');
+        } else if (rect.left < screenWidth * 0.15) {
+          // 靠近左边缘，显示在右侧
+          direction = 'right';
+          console.log('[progressBar] 靠近左边缘，显示在右侧');
+        }
+        
+        // 设置tooltip方向和显示状态
+        this.setData({
+          tooltipDirection: direction,
+          showTooltip: true
+        });
+        
+        // 提供触觉反馈
+        if (wx.vibrateShort) {
+          wx.vibrateShort({ type: 'light' });
+        }
+        
+        // 设置自动隐藏定时器
+        if (this.tooltipTimer) clearTimeout(this.tooltipTimer);
+        this.tooltipTimer = setTimeout(() => {
+          this.setData({ showTooltip: false });
+        }, 3000);
+      }).exec();
     }
   }
 }) 

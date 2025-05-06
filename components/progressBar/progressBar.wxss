@@ -110,6 +110,104 @@
   object-fit: cover;
 }
 
+/* 奖品名称提示 - 通用样式 */
+.goal-tooltip {
+  position: absolute;
+  background: rgba(255, 193, 7, 0.9); /* 使用更鲜艳的颜色 */
+  color: #333;
+  font-size: 22rpx;
+  padding: 8rpx 12rpx;
+  border-radius: 10rpx;
+  white-space: normal; /* 允许文本换行 */
+  box-shadow: 0 2rpx 8rpx rgba(0,0,0,0.1);
+  opacity: 0;
+  pointer-events: none;
+  transition: all 0.3s ease;
+  z-index: 15; /* 提高z-index确保在最上层 */
+  max-width: 200rpx; /* 增加最大宽度显示更多内容 */
+  text-align: center;
+  line-height: 1.3;
+  font-weight: 500;
+  border: 1rpx solid rgba(255, 193, 7, 0.3);
+  word-break: break-all; /* 允许在任何字符间断行 */
+}
+
+/* 底部方向tooltip (默认) */
+.goal-tooltip.bottom {
+  top: 60rpx;
+  left: 50%;
+  transform: translateX(-50%) translateY(0);
+}
+
+.goal-tooltip.bottom:after {
+  content: '';
+  position: absolute;
+  top: -8rpx;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 8rpx solid transparent;
+  border-right: 8rpx solid transparent;
+  border-bottom: 8rpx solid rgba(255, 193, 7, 0.9);
+  border-top: none;
+}
+
+/* 左侧方向tooltip */
+.goal-tooltip.left {
+  top: 50%;
+  right: 40rpx;
+  left: auto;
+  transform: translateX(-100%) translateY(-50%);
+}
+
+.goal-tooltip.left:after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: auto;
+  right: -8rpx;
+  transform: translateY(-50%);
+  width: 0;
+  height: 0;
+  border-left: 8rpx solid rgba(255, 193, 7, 0.9);
+  border-top: 8rpx solid transparent;
+  border-bottom: 8rpx solid transparent;
+  border-right: none;
+}
+
+/* 右侧方向tooltip */
+.goal-tooltip.right {
+  top: 50%;
+  left: 40rpx;
+  transform: translateX(0) translateY(-50%);
+}
+
+.goal-tooltip.right:after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: -8rpx;
+  transform: translateY(-50%);
+  width: 0;
+  height: 0;
+  border-right: 8rpx solid rgba(255, 193, 7, 0.9);
+  border-top: 8rpx solid transparent;
+  border-bottom: 8rpx solid transparent;
+  border-left: none;
+}
+
+/* 显示状态 */
+.goal-tooltip.show {
+  opacity: 1;
+}
+
+/* 完成时显示提示 - 更新为新的样式结构 */
+.goal-area.goal-complete .goal-tooltip.show,
+.goal-area-image.goal-complete .goal-tooltip.show {
+  opacity: 1;
+}
+
 /* 完成时的效果 */
 .progress-complete .goal-area,
 .progress-complete .goal-area-image {
@@ -245,52 +343,72 @@
   100% { transform: translateX(-50%) translateY(0) scale(1); filter: brightness(1); }
 }
 
-/* 鼓励语气泡 */
-.encouragement-bubble {
+/* 小鸡气泡 */
+.speech-bubble {
   position: absolute;
-  bottom: 120%;
-  right: -20rpx;
-  background: #FFFDE7;
-  border-radius: 12rpx;
-  padding: 8rpx 14rpx;
-  font-size: 24rpx;
+  top: -80rpx;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: white;
+  padding: 10rpx 20rpx;
+  border-radius: 20rpx;
+  box-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.2);
   white-space: nowrap;
-  opacity: 0;
-  transform: scale(0.8) translateY(10rpx);
-  transition: all 0.3s;
-  pointer-events: none;
-  box-shadow: 0 4rpx 10rpx rgba(0, 0, 0, 0.1);
-  color: #FF8F00;
-  border: 1rpx solid #FFE082;
-  z-index: 11;
-  max-width: 220rpx;
+  z-index: 20;
+  font-size: 24rpx;
+  transition: all 0.3s ease;
+  max-width: 300rpx; /* 限制最大宽度 */
   text-align: center;
+  opacity: 0;
+  pointer-events: none;
 }
 
-/* 进度完成时调整气泡位置 */
-.progress-complete .encouragement-bubble {
-  right: 20rpx; /* 向左调整气泡位置 */
+/* 小鸡气泡位置变种 */
+.speech-bubble.left {
+  left: 0;
+  transform: translateX(0);
 }
 
-.encouragement-bubble:after {
+.speech-bubble.right {
+  left: auto;
+  right: 0;
+  transform: translateX(0);
+}
+
+.speech-bubble.center {
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.speech-bubble.show {
+  opacity: 1;
+}
+
+.speech-bubble::after {
   content: '';
   position: absolute;
-  bottom: -8rpx;
-  right: 20rpx;
-  width: 0;
-  height: 0;
-  border-left: 8rpx solid transparent;
-  border-right: 8rpx solid transparent;
-  border-top: 8rpx solid #FFFDE7;
+  bottom: -10rpx;
+  left: 50%;
+  transform: translateX(-50%);
+  border-left: 10rpx solid transparent;
+  border-right: 10rpx solid transparent;
+  border-top: 10rpx solid white;
 }
 
-.encouragement-bubble.show {
-  opacity: 1;
-  transform: scale(1) translateY(0);
+/* 调整气泡箭头位置 */
+.speech-bubble.left::after {
+  left: 20rpx;
+  transform: translateX(0);
+}
+
+.speech-bubble.right::after {
+  left: auto;
+  right: 20rpx;
+  transform: translateX(0);
 }
 
 /* 到达新阶段时的高亮气泡效果 */
-.encouragement-bubble.highlight {
+.speech-bubble.highlight {
   animation: bubbleEnhance 2s ease-in-out;
   background: linear-gradient(to bottom, #FFF8E1, #FFFDE7);
   box-shadow: 0 4rpx 15rpx rgba(255, 196, 0, 0.3);
@@ -306,24 +424,17 @@
   100% { transform: scale(1) translateY(0); box-shadow: 0 4rpx 10rpx rgba(0, 0, 0, 0.1); }
 }
 
-/* 庆祝礼花效果 */
-.celebration-effects {
+/* 礼花效果 */
+.fireworks {
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
   pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.3s ease;
   z-index: 5;
 }
 
-.show-fireworks {
-  opacity: 1;
-}
-
-/* 礼花效果 */
 .firework {
   position: absolute;
   width: 10rpx;
@@ -331,46 +442,28 @@
   border-radius: 50%;
   transform-origin: center;
   z-index: 5;
+  animation: fireworkEffect 1.5s ease-out infinite, fireworkScale 1.5s ease-out infinite;
 }
 
-.firework-1 {
+.firework:nth-child(1) {
   top: -60rpx;
   right: 20rpx;
   background: radial-gradient(circle, #FF5252 0%, rgba(255,82,82,0) 70%);
-  animation: fireworkEffect 1.5s ease-out infinite, fireworkScale 1.5s ease-out infinite;
   animation-delay: 0.2s;
 }
 
-.firework-2 {
+.firework:nth-child(2) {
   top: -40rpx;
   right: -20rpx;
   background: radial-gradient(circle, #FFD740 0%, rgba(255,215,64,0) 70%);
-  animation: fireworkEffect 1.8s ease-out infinite, fireworkScale 1.8s ease-out infinite;
   animation-delay: 0.5s;
 }
 
-.firework-3 {
+.firework:nth-child(3) {
   top: 20rpx;
   right: -50rpx;
   background: radial-gradient(circle, #40C4FF 0%, rgba(64,196,255,0) 70%);
-  animation: fireworkEffect 2s ease-out infinite, fireworkScale 2s ease-out infinite;
   animation-delay: 0.8s;
-}
-
-.firework-4 {
-  top: -30rpx;
-  left: 30%;
-  background: radial-gradient(circle, #7C4DFF 0%, rgba(124,77,255,0) 70%);
-  animation: fireworkEffect 1.6s ease-out infinite, fireworkScale 1.6s ease-out infinite;
-  animation-delay: 0.3s;
-}
-
-.firework-5 {
-  top: -50rpx;
-  left: 60%;
-  background: radial-gradient(circle, #69F0AE 0%, rgba(105,240,174,0) 70%);
-  animation: fireworkEffect 1.7s ease-out infinite, fireworkScale 1.7s ease-out infinite;
-  animation-delay: 0.6s;
 }
 
 @keyframes fireworkEffect {
@@ -396,100 +489,5 @@
   }
   100% {
     box-shadow: 0 0 0 0 rgba(255, 255, 255, 0);
-  }
-}
-
-/* 彩带效果 */
-.confetti-container {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-  pointer-events: none;
-}
-
-.confetti {
-  position: absolute;
-  width: 10rpx;
-  height: 30rpx;
-  opacity: 0;
-  animation: confettiFall 5s ease-in-out infinite;
-}
-
-.confetti-1 {
-  left: 10%;
-  background-color: #FF5252;
-  animation-delay: 0.1s;
-}
-
-.confetti-2 {
-  left: 20%;
-  background-color: #FFD740;
-  animation-delay: 0.3s;
-}
-
-.confetti-3 {
-  left: 30%;
-  background-color: #40C4FF;
-  height: 25rpx;
-  animation-delay: 0.6s;
-}
-
-.confetti-4 {
-  left: 40%;
-  background-color: #7C4DFF;
-  animation-delay: 0.9s;
-}
-
-.confetti-5 {
-  left: 60%;
-  background-color: #69F0AE;
-  height: 20rpx;
-  animation-delay: 0.4s;
-}
-
-.confetti-6 {
-  left: 70%;
-  background-color: #FF4081;
-  animation-delay: 0.7s;
-}
-
-.confetti-7 {
-  left: 80%;
-  background-color: #FFAB40;
-  height: 15rpx;
-  animation-delay: 0.5s;
-}
-
-.confetti-8 {
-  left: 90%;
-  background-color: #18FFFF;
-  animation-delay: 0.2s;
-}
-
-@keyframes confettiFall {
-  0% {
-    opacity: 1;
-    top: -100rpx;
-    transform: translateX(0) rotateZ(0deg);
-  }
-  25% {
-    opacity: 1;
-    transform: translateX(100rpx) rotateZ(45deg);
-  }
-  50% {
-    opacity: 1;
-    transform: translateX(-50rpx) rotateZ(90deg);
-  }
-  75% {
-    opacity: 1;
-    transform: translateX(25rpx) rotateZ(135deg);
-  }
-  100% {
-    opacity: 0;
-    top: 400rpx;
-    transform: translateX(-100rpx) rotateZ(180deg);
   }
 } 

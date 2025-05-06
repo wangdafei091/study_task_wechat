@@ -594,38 +594,58 @@
 /* 奖励进度部分 */
 .reward-progress {
   margin: 16rpx 30rpx;
+  margin-bottom: 20rpx;
+  border-radius: 20rpx;
+  background: #FFFFFF;
+  overflow: visible;
+  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.05);
   padding: 24rpx;
+  padding-bottom: 70rpx;
+  min-height: 120rpx;
+  position: relative;
+  z-index: 1;
 }
 
 .progress-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16rpx;
+  margin-bottom: 12rpx;
 }
 
 .reward-title {
-  font-size: 28rpx;
-  color: var(--text-primary);
+  font-size: 30rpx;
   font-weight: 600;
+  color: #333333;
 }
 
-.stats-toggle {
-  display: flex;
-  align-items: center;
+.stars-count {
+  font-size: 24rpx;
+  color: #666666;
+  background: rgba(61, 90, 254, 0.08);
+  padding: 4rpx 12rpx;
+  border-radius: 20rpx;
+}
+
+/* 奖励进度下方提示 */
+.reward-hint {
+  font-size: 24rpx;
+  color: #666666;
+  text-align: center;
+  margin-top: 8rpx;
+  position: relative;
+  bottom: -10rpx;
+  background-color: rgba(0, 0, 0, 0.03);
   padding: 8rpx 16rpx;
-  background: var(--primary-light);
-  border-radius: 16rpx;
-}
-
-.stats-text {
-  font-size: 24rpx;
-  color: var(--primary-color);
-  margin-right: 8rpx;
-}
-
-.stats-icon {
-  font-size: 24rpx;
+  border-radius: 12rpx;
+  width: 85%;
+  margin-left: auto;
+  margin-right: auto;
+  white-space: normal;
+  word-wrap: break-word;
+  line-height: 1.4;
+  box-shadow: 0 1rpx 3rpx rgba(0, 0, 0, 0.02);
+  z-index: 3;
 }
 
 /* 统计面板 */

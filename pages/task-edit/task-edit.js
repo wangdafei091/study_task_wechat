@@ -371,38 +371,20 @@ Page({
 
   /**
    * 验证任务表单数据
-   * @returns {Object} 包含验证结果和错误信息
+   * @returns {Object} 验证通过返回任务数据，验证失败返回包含valid字段的对象
    */
   validateTaskForm: function() {
+    // 创建错误信息容器
     const result = {
       valid: true,
       errorMsg: ''
     };
-
-    // 验证任务标题
-    if (!this.data.newTask.title.trim()) {
-      this.setData({
-        'errors.title': '请输入任务名称'
-      });
-      result.valid = false;
-      result.errorMsg = '请输入任务名称';
-      return result;
-    }
     
-    // 验证积分范围（仅对非必做任务验证）
-    if (!this.data.newTask.isRequired) {
-      let taskPoints = parseInt(this.data.newTask.points) || 0;
-      if (taskPoints < 1 || taskPoints > 50) {
-        // 限制积分范围在1-50之间
-        taskPoints = Math.max(1, Math.min(50, taskPoints));
-        
-        // 更新为有效值
-        this.setData({
-          'newTask.points': taskPoints
-        });
-        
-        console.log('[TaskEdit] 积分已调整到有效范围:', taskPoints);
-      }
+    // 验证标题
+    if (!this.data.newTask.title.trim()) {
+      result.valid = false;
+      result.errorMsg = '请输入任务标题';
+      return result;
     }
     
     // 验证日期
@@ -412,17 +394,29 @@ Page({
       return result;
     }
     
-    // 仅当未勾选"无结束日期"时验证结束日期
-    if (!this.data.newTask.hasNoEndDate && !this.data.newTask.endDate) {
-      result.valid = false;
-      result.errorMsg = '请选择结束日期';
-      return result;
+    // 验证重复任务的结束日期
+    if (this.data.newTask.repeat && this.data.newTask.repeat.type !== 'none') {
+      // 如果是重复任务，且没有勾选"无结束日期"，必须设置结束日期
+      if (!this.data.newTask.hasNoEndDate && !this.data.newTask.endDate) {
+        result.valid = false;
+        result.errorMsg = '请设置重复任务的结束日期';
+        console.error('[TaskEdit] 验证失败: 重复任务缺少结束日期');
+        return result;
+      }
+      
+      // 如果设置了结束日期，确保结束日期不早于开始日期
+      if (this.data.newTask.endDate && this.data.newTask.endDate < this.data.newTask.startDate) {
+        result.valid = false;
+        result.errorMsg = '结束日期不能早于开始日期';
+        console.error('[TaskEdit] 验证失败: 结束日期早于开始日期');
+        return result;
+      }
     }
     
     // 验证时间
     if (!this.data.newTask.isAllDay && (!this.data.newTask.startTime || !this.data.newTask.endTime)) {
       result.valid = false;
-      result.errorMsg = '请选择开始和结束时间';
+      result.errorMsg = '请设置开始和结束时间';
       return result;
     }
     
@@ -432,7 +426,53 @@ Page({
       console.log('[TaskEdit] 检测到日期与重复类型不匹配，但允许继续创建任务');
     }
     
-    return result;
+    // 验证通过后，返回完整的任务对象
+    console.log('[TaskEdit] 表单验证通过，组装完整任务数据');
+    const taskData = {
+      title: this.data.newTask.title,
+      type: this.data.newTask.type,
+      date: this.data.newTask.startDate,
+      description: this.data.newTask.description,
+      points: this.data.newTask.points,
+      pointsExpiry: this.data.newTask.pointsExpiry,
+      pointsExpiryDate: this.data.pointsExpiryText,
+      isRequired: this.data.newTask.isRequired,
+      isAllDay: this.data.newTask.isAllDay,
+      startTime: this.data.newTask.startTime,
+      endTime: this.data.newTask.endTime,
+      hasNoEndDate: this.data.newTask.hasNoEndDate, // 明确传递无结束日期标志
+      repeat: this.data.newTask.repeat,
+      reminder: this.data.newTask.reminder
+    };
+    
+    // 确保重复任务的开始和结束日期与主任务一致
+    if (taskData.repeat.startDate !== taskData.date) {
+      console.log('[TaskEdit] 修正重复任务开始日期与主任务保持一致');
+      taskData.repeat.startDate = taskData.date;
+    }
+    
+    // 确保endDate字段和repeat.endDate字段一致
+    if (!this.data.newTask.hasNoEndDate) {
+      if (taskData.repeat.endDate !== this.data.newTask.endDate) {
+        console.log('[TaskEdit] 修正重复任务结束日期与主任务保持一致');
+        taskData.repeat.endDate = this.data.newTask.endDate;
+      }
+      console.log(`[TaskEdit] 任务结束日期设置为: ${taskData.repeat.endDate}`);
+    } else {
+      console.log('[TaskEdit] 任务设置为无结束日期模式，将使用默认期限');
+    }
+    
+    // 添加更详细的重复任务配置日志
+    if (taskData.repeat && taskData.repeat.type !== 'none') {
+      console.log('[TaskEdit] 任务包含重复配置:', JSON.stringify(taskData.repeat));
+      console.log(`[TaskEdit] 重复任务详情 - 类型: ${taskData.repeat.type}, 开始日期: ${taskData.repeat.startDate}, 结束日期: ${taskData.hasNoEndDate ? '无限期' : taskData.repeat.endDate}`);
+      console.log(`[TaskEdit] 无结束日期标志: ${taskData.hasNoEndDate}`);
+    }
+    
+    console.log('[TaskEdit] 组装完成的任务数据:', 
+               {title: taskData.title, type: taskData.type, date: taskData.date, hasNoEndDate: taskData.hasNoEndDate});
+    
+    return taskData;
   },
 
   /**
@@ -441,11 +481,25 @@ Page({
   addTask: function() {
     try {
       // 获取任务表单数据
-      const newTask = this.validateTaskForm();
+      const formResult = this.validateTaskForm();
       
-      if (!newTask) {
+      // 检查返回值是否为验证结果对象（有valid字段）
+      if (formResult && 'valid' in formResult && !formResult.valid) {
+        // 验证失败，显示错误信息
+        wx.showToast({
+          title: formResult.errorMsg || '表单验证失败',
+          icon: 'none',
+          duration: 2000
+        });
         return;
       }
+      
+      // 此时formResult应该是完整的任务对象
+      const newTask = formResult;
+      
+      // 记录任务数据日志
+      console.log('[TaskEdit] 开始创建任务，数据:', 
+                 {title: newTask.title, type: newTask.type, date: newTask.date});
       
       // 显示加载提示
       wx.showLoading({
@@ -671,34 +725,105 @@ Page({
   },
 
   /**
-   * 实际创建任务的辅助函数，抽离出来以支持长时间任务的延时处理
+   * 执行任务创建
    * @private
    */
-  _doCreateTask: function(taskManager, newTask, callback) {
-    // 记录函数开始执行时间
-    const startTime = Date.now();
-    console.log('[TaskEdit] 开始执行任务创建，当前时间戳:', startTime);
-    
-    // 使用任务管理器创建任务
-    taskManager.createTask(newTask, (result) => {
-      // 计算函数执行时长
-      const executionTime = Date.now() - startTime;
-      console.log('[TaskEdit] 任务创建请求完成，耗时:', executionTime, 'ms');
+  _doCreateTask: function(taskManager, taskData, callback) {
+    try {
+      // 记录当前时间戳
+      const startTimestamp = Date.now();
+      console.log(`[TaskEdit] 开始执行任务创建，当前时间戳: ${startTimestamp}`);
       
-      // 确保无论成功或失败都会关闭加载提示
+      // 追加基本任务类型验证
+      if (!taskData || !taskData.title || !taskData.type) {
+        console.error('[TaskEdit] 任务数据验证失败:', taskData);
+        
+        // 关闭加载提示
+        wx.hideLoading();
+        
+        // 显示错误信息
+        wx.showToast({
+          title: '任务数据不完整',
+          icon: 'none',
+          duration: 2000
+        });
+        
+        if (callback) callback(false);
+        return;
+      }
+      
+      console.log(`[TaskEdit] 任务数据验证通过，开始创建任务: ${JSON.stringify({
+        title: taskData.title,
+        type: taskData.type, 
+        date: taskData.date,
+        repeat: taskData.repeat
+      })}`);
+      
+      // 更新loading文本，指示正在创建任务
+      wx.showLoading({
+        title: '创建任务中...',
+        mask: true
+      });
+      
+      // 创建任务
+      taskManager.createTask(taskData, (result) => {
+        // 任务创建完成，记录耗时
+        const endTimestamp = Date.now();
+        const duration = endTimestamp - startTimestamp;
+        
+        console.log(`[TaskEdit] 任务创建请求完成，耗时: ${duration} ms`);
+        
+        // 关闭加载提示
+        wx.hideLoading();
+        
+        if (!result) {
+          console.error('[TaskEdit] 任务创建失败，返回结果为空');
+          
+          // 显示错误信息
+          wx.showToast({
+            title: '任务创建失败',
+            icon: 'none',
+            duration: 2000
+          });
+          
+          if (callback) callback(false);
+          return;
+        }
+        
+        // 清除超时保护
+        if (this.loadingTimeout) {
+          clearTimeout(this.loadingTimeout);
+          this.loadingTimeout = null;
+        }
+        
+        console.log('[TaskEdit] 执行任务创建完成回调');
+        
+        // 调用回调函数返回结果
+        if (callback) callback(result);
+      });
+    } catch (error) {
+      // 捕获并处理任何异常
+      console.error('[TaskEdit] 任务创建过程中发生异常:', error);
+      
+      // 确保关闭加载提示
       wx.hideLoading();
       
-      // 清除超时计时器（如果存在）
+      // 显示错误信息
+      wx.showToast({
+        title: '任务创建出错',
+        icon: 'none',
+        duration: 2000
+      });
+      
+      // 清除超时保护
       if (this.loadingTimeout) {
         clearTimeout(this.loadingTimeout);
         this.loadingTimeout = null;
       }
       
-      if (callback) {
-        console.log('[TaskEdit] 执行任务创建完成回调');
-        callback(result);
-      }
-    });
+      // 回调错误结果
+      if (callback) callback(false);
+    }
   },
 
   /**
@@ -713,31 +838,46 @@ Page({
    * 初始化日期时间数据
    */
   initDateTimeData: function() {
-    // 获取当前日期
-    const dateUtils = require('../../utils/dateUtils.js');
-    const today = new Date();
-    const dateStr = dateUtils.formatDate(today);
+    // 获取当前日期时间
+    const now = new Date();
     
-    // 获取当前时间的下一个整点时间
-    const currentHour = today.getHours();
-    const nextHour = (currentHour + 1) % 24;
-    const startTimeStr = `${String(nextHour).padStart(2, '0')}:00`;
+    // 格式化日期为YYYY-MM-DD
+    const today = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
     
-    // 设置结束时间为开始时间后一小时
-    const endHour = (nextHour + 1) % 24;
-    const endTimeStr = `${String(endHour).padStart(2, '0')}:00`;
+    // 获取当前小时
+    const currentHour = now.getHours();
     
+    // 计算开始时间和结束时间，整点为单位，并确保至少有1小时间隔
+    let startHour = currentHour;
+    let endHour = currentHour + 1;
+    
+    // 如果已经是晚上，默认设为明天的早上和上午
+    if (currentHour >= 20) {
+      startHour = 9; // 第二天上午9点
+      endHour = 10; // 第二天上午10点
+    }
+    
+    // 避免超过24小时
+    if (endHour >= 24) {
+      endHour = 23;
+    }
+    
+    // 格式化为HH:00格式的时间字符串
+    const startTime = `${startHour.toString().padStart(2, '0')}:00`;
+    const endTime = `${endHour.toString().padStart(2, '0')}:00`;
+    
+    // 设置到组件数据中
     this.setData({
-      // 设置日期时间
-      'newTask.startDate': dateStr,
-      'newTask.startTime': startTimeStr,
-      'newTask.endDate': dateStr,
-      'newTask.endTime': endTimeStr,
-      'newTask.repeat.startDate': dateStr,
-      'newTask.repeat.endDate': dateStr,
+      'newTask.startDate': today,
+      'newTask.endDate': today,
+      'newTask.startTime': startTime,
+      'newTask.endTime': endTime,
+      // 同时初始化重复任务的开始日期和结束日期，确保同步
+      'newTask.repeat.startDate': today,
+      'newTask.repeat.endDate': today
     });
     
-    console.log('[TaskEdit] 初始化日期时间数据完成, 当前日期:', dateStr, '开始时间:', startTimeStr, '结束时间:', endTimeStr);
+    console.log(`[TaskEdit] 初始化日期时间数据完成, 当前日期: ${today} 开始时间: ${startTime} 结束时间: ${endTime}`);
   },
 
   /**
@@ -1325,6 +1465,14 @@ Page({
     this.setData({
       'newTask.endDate': date
     });
+    
+    // 同时更新重复任务的结束日期，修复结束日期不同步问题
+    if (this.data.newTask.repeat && this.data.newTask.repeat.type !== 'none') {
+      console.log('[TaskEdit] 同步更新重复任务结束日期:', date);
+      this.setData({
+        'newTask.repeat.endDate': date
+      });
+    }
     
     // 更新重复预览文本
     if (this.data.newTask.repeat.type !== 'none') {

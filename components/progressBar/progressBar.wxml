@@ -16,48 +16,35 @@
       </view>
       
       <!-- 终点区域 -->
-      <view class="goal-area {{isComplete ? 'goal-complete' : ''}}" wx:if="{{!rewardImage}}">
+      <view class="goal-area {{isComplete ? 'goal-complete' : ''}}" wx:if="{{!rewardImage}}" bindtap="onTapReward">
         <view class="goal-icon">🎁</view>
+        <view class="goal-tooltip {{tooltipDirection}} {{showTooltip ? 'show' : ''}}" wx:if="{{rewardName}}">奖品：{{rewardName}}</view>
       </view>
       
       <!-- 使用自定义奖品图片 -->
-      <view class="goal-area-image {{isComplete ? 'goal-complete' : ''}}" wx:else>
+      <view class="goal-area-image {{isComplete ? 'goal-complete' : ''}}" wx:else bindtap="onTapReward">
         <image class="reward-image" src="{{rewardImage}}" mode="aspectFill"></image>
+        <view class="goal-tooltip {{tooltipDirection}} {{showTooltip ? 'show' : ''}}">
+          奖品：{{rewardName.includes('|') ? '多个奖品' : (rewardName.length > 8 ? rewardName.substring(0, 7) + '...' : rewardName)}}
+        </view>
       </view>
       
       <!-- 庆祝礼花效果 -->
-      <view class="celebration-effects {{isComplete && showFireworks ? 'show-fireworks' : ''}}">
-        <view class="firework firework-1"></view>
-        <view class="firework firework-2"></view>
-        <view class="firework firework-3"></view>
-        <view class="firework firework-4"></view>
-        <view class="firework firework-5"></view>
-        <view class="confetti-container">
-          <view class="confetti confetti-1"></view>
-          <view class="confetti confetti-2"></view>
-          <view class="confetti confetti-3"></view>
-          <view class="confetti confetti-4"></view>
-          <view class="confetti confetti-5"></view>
-          <view class="confetti confetti-6"></view>
-          <view class="confetti confetti-7"></view>
-          <view class="confetti confetti-8"></view>
-        </view>
+      <view class="fireworks" wx:if="{{showFireworks}}">
+        <view class="firework"></view>
+        <view class="firework"></view>
+        <view class="firework"></view>
       </view>
-      
-      <!-- 小黄鸡角色 -->
-      <view wx:if="{{showChick}}" 
-            class="chick-character {{chickState}} {{chickAnimation ? chickAnimation : ''}}" 
-            style="left: {{percentage}}%;" 
-            bindtap="onTapChick">
-        
-        <!-- 小鸡角色 -->
-        <view class="chick-wrapper">
-          <!-- 基础小鸡 -->
-          <text class="chick-emoji">🐥</text>
-        </view>
-        
-        <!-- 鼓励语气泡 -->
-        <view class="encouragement-bubble {{chickSpeaking ? 'show' : ''}} {{nodeReached ? 'highlight' : ''}}">
+    </view>
+    
+    <!-- 小鸡角色 -->
+    <view class="chick-character {{chickState}} {{chickAnimation}}" 
+          wx:if="{{showChick}}"
+          style="left: {{percentage}}%;"
+          bindtap="onTapChick">
+      <view class="chick-wrapper">
+        <text class="chick-emoji">🐥</text>
+        <view class="speech-bubble {{chickSpeaking ? 'show' : ''}} {{bubblePosition}}" wx:if="{{chickSpeaking}}">
           <text>{{currentEncouragement}}</text>
         </view>
       </view>

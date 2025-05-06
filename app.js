@@ -596,7 +596,16 @@ App({
 
   globalData: {
     userInfo: null,
-    tasks: [],
+    hasUserInfo: false,
+    canIUse: wx.canIUse('button.open-type.getUserInfo'),
+    canIUseGetUserProfile: false,
+    canIUseOpenData: wx.canIUse('open-data.type.userAvatarUrl') && wx.canIUse('open-data.type.userNickName'),
+    isLandscape: false,
+    systemTheme: 'light',
+    deviceInfo: {}, // 设备信息会在初始化时填充
+    heightParams: {}, // 与高度相关的参数
+    tasks: [], // 任务数据
+    hasRedirectedToReward: false, // 是否已经跳转到奖励页面，防止重复跳转
     rewards: [],
     rewardProgress: {
       current: 2,

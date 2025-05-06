@@ -4,6 +4,10 @@
  * 提供统一的任务管理功能，包括任务的CRUD操作和数据同步
  */
 
+const dateUtils = require('./dateUtils.js');
+const Constants = require('./constants.js');
+const pointsManager = require('./pointsManager.js'); // 统一引入星星管理工具
+
 const taskManager = {
   /**
    * 获取所有任务
@@ -149,6 +153,44 @@ const taskManager = {
     const isRepeating = newTask.repeat && newTask.repeat.type !== 'none';
     console.log(`[TaskManager] 任务是否重复: ${isRepeating}, 重复类型: ${isRepeating ? newTask.repeat.type : 'none'}`);
     
+    // 验证并修复重复任务配置
+    if (isRepeating) {
+      console.log(`[TaskManager] 原始重复任务配置: ${JSON.stringify(newTask.repeat)}`);
+      console.log(`[TaskManager] 任务是否设置无结束日期: ${newTask.hasNoEndDate === true ? '是' : '否'}`);
+      
+      // 确保开始日期存在
+      if (!newTask.repeat.startDate) {
+        newTask.repeat.startDate = newTask.date;
+        console.log(`[TaskManager] 修复：设置重复任务开始日期为任务日期 ${newTask.date}`);
+      }
+      
+      // 仅当无结束日期标志为true或结束日期无效时，才应用默认值
+      if (newTask.hasNoEndDate === true || 
+          !newTask.repeat.endDate || 
+          new Date(newTask.repeat.endDate) < new Date(newTask.repeat.startDate)) {
+        
+        console.log(`[TaskManager] 需要设置默认结束日期: ${newTask.hasNoEndDate ? '无结束日期模式' : '结束日期无效'}, 当前值: ${newTask.repeat.endDate}`);
+        
+        // 如果未设置结束日期，对于daily类型默认设置为90天后
+        if (newTask.repeat.type === 'daily') {
+          const endDate = new Date(newTask.repeat.startDate);
+          endDate.setDate(endDate.getDate() + 90);
+          newTask.repeat.endDate = `${endDate.getFullYear()}-${(endDate.getMonth() + 1).toString().padStart(2, '0')}-${endDate.getDate().toString().padStart(2, '0')}`;
+          console.log(`[TaskManager] 设置默认结束日期(90天): ${newTask.repeat.endDate}`);
+        } else {
+          // 其他类型设置为30天后
+          const endDate = new Date(newTask.repeat.startDate);
+          endDate.setDate(endDate.getDate() + 30);
+          newTask.repeat.endDate = `${endDate.getFullYear()}-${(endDate.getMonth() + 1).toString().padStart(2, '0')}-${endDate.getDate().toString().padStart(2, '0')}`;
+          console.log(`[TaskManager] 设置默认结束日期(30天): ${newTask.repeat.endDate}`);
+        }
+      } else {
+        console.log(`[TaskManager] 使用用户设置的结束日期: ${newTask.repeat.endDate}`);
+      }
+      
+      console.log(`[TaskManager] 最终重复任务配置: ${JSON.stringify(newTask.repeat)}`);
+    }
+    
     this.getAllTasks(allTasks => {
       let createdTasks = [];
 
@@ -197,14 +239,41 @@ const taskManager = {
     console.log('[TaskManager] 开始生成重复任务:', task.title);
     console.log('[TaskManager] 原始任务积分有效期:', task.pointsExpiry); // 记录原始任务积分有效期
     
-    const tasks = [];
-    const startDate = new Date(task.repeat.startDate);
-    const endDate = task.repeat.endDate ? new Date(task.repeat.endDate) : null;
+    // 详细记录重复配置
+    console.log('[TaskManager] 重复任务完整配置:', JSON.stringify(task.repeat));
+    console.log(`[TaskManager] 任务是否设置无结束日期: ${task.hasNoEndDate === true ? '是' : '否'}`);
     
-    // 添加时间限制：最多生成未来365天的任务
-    const maxDate = new Date();
-    maxDate.setDate(maxDate.getDate() + 365);
-    const effectiveEndDate = endDate ? (endDate > maxDate ? maxDate : endDate) : maxDate;
+    const tasks = [];
+    
+    // 确保日期格式有效
+    if (!task.repeat || !task.repeat.startDate) {
+      console.error('[TaskManager] 错误: 重复任务缺少开始日期');
+      return tasks;
+    }
+    
+    // 解析开始日期和结束日期
+    const startDate = new Date(task.repeat.startDate);
+    let endDate = null;
+    
+    // 处理结束日期
+    if (task.repeat.endDate) {
+      endDate = new Date(task.repeat.endDate);
+      console.log(`[TaskManager] 使用任务中设置的结束日期: ${task.repeat.endDate} -> ${endDate.toISOString()}`);
+    } else if (task.hasNoEndDate === true) {
+      // 明确处理无结束日期的情况
+      console.log('[TaskManager] 检测到无结束日期设置，使用默认期限');
+      endDate = new Date(startDate);
+      // 对于不同重复类型设置不同的默认期限
+      if (task.repeat.type === 'daily') {
+        endDate.setDate(endDate.getDate() + 90); // 每日任务默认90天
+      } else {
+        endDate.setDate(endDate.getDate() + 30); // 其他类型默认30天
+      }
+      console.log(`[TaskManager] 为无结束日期任务设置默认结束期限: ${endDate.toISOString()}`);
+    } else {
+      console.error('[TaskManager] 错误: 重复任务缺少结束日期且未设置无结束日期标志');
+      return tasks;
+    }
     
     // 确保开始日期不早于今天
     const today = new Date();
@@ -214,46 +283,56 @@ const taskManager = {
       startDate.setTime(today.getTime());
     }
     
+    // 确保结束日期不早于开始日期
+    if (endDate < startDate) {
+      console.error('[TaskManager] 错误: 结束日期早于开始日期，无法生成任务');
+      return tasks;
+    }
+    
     console.log('[TaskManager] 任务时间范围:', {
       start: startDate.toISOString(),
-      end: effectiveEndDate.toISOString(),
+      end: endDate.toISOString(),
       type: task.repeat.type
     });
+    
+    // 计算任务生成天数
+    const diffTime = Math.abs(endDate - startDate);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // +1包含开始日期
+    console.log(`[TaskManager] 任务将生成: ${diffDays}天的内容`);
+    
+    // 记录生成任务的开始和结束日期
+    const startDateStr = `${startDate.getFullYear()}-${(startDate.getMonth() + 1).toString().padStart(2, '0')}-${startDate.getDate().toString().padStart(2, '0')}`;
+    const endDateStr = `${endDate.getFullYear()}-${(endDate.getMonth() + 1).toString().padStart(2, '0')}-${endDate.getDate().toString().padStart(2, '0')}`;
+    console.log(`[TaskManager] 开始生成从 ${startDateStr} 到 ${endDateStr} 的重复任务`);
     
     // 根据重复类型生成任务
     switch (task.repeat.type) {
       case 'daily':
         // 每天重复
-        for (let date = new Date(startDate); date <= effectiveEndDate; date.setDate(date.getDate() + 1)) {
+        for (let date = new Date(startDate); date <= endDate; date.setDate(date.getDate() + 1)) {
           const taskInstance = this._createRepeatTaskInstance(task, new Date(date));
           tasks.push(taskInstance);
-          // 每10个任务记录一次，避免日志过多
-          if (tasks.length % 10 === 1) {
-            console.log(`[TaskManager] 创建第${tasks.length}个每日任务，积分有效期: ${taskInstance.pointsExpiry}`);
-          }
+          console.log(`[TaskManager] 创建第${tasks.length}个每日任务，日期: ${taskInstance.date}，积分有效期: ${taskInstance.pointsExpiry}`);
         }
         break;
         
       case 'weekly':
         // 每周重复
-        for (let date = new Date(startDate); date <= effectiveEndDate; date.setDate(date.getDate() + 7)) {
+        for (let date = new Date(startDate); date <= endDate; date.setDate(date.getDate() + 7)) {
           const taskInstance = this._createRepeatTaskInstance(task, new Date(date));
           tasks.push(taskInstance);
-          console.log(`[TaskManager] 创建每周任务，积分有效期: ${taskInstance.pointsExpiry}`);
+          console.log(`[TaskManager] 创建每周任务，日期: ${taskInstance.date}，积分有效期: ${taskInstance.pointsExpiry}`);
         }
         break;
         
       case 'workdays':
         // 工作日重复
-        for (let date = new Date(startDate); date <= effectiveEndDate; date.setDate(date.getDate() + 1)) {
+        for (let date = new Date(startDate); date <= endDate; date.setDate(date.getDate() + 1)) {
           const day = date.getDay();
           if (day >= 1 && day <= 5) { // 周一到周五
             const taskInstance = this._createRepeatTaskInstance(task, new Date(date));
             tasks.push(taskInstance);
-            // 每10个任务记录一次
-            if (tasks.length % 10 === 1) {
-              console.log(`[TaskManager] 创建工作日任务，积分有效期: ${taskInstance.pointsExpiry}`);
-            }
+            console.log(`[TaskManager] 创建工作日任务，日期: ${taskInstance.date}，积分有效期: ${taskInstance.pointsExpiry}`);
           }
         }
         break;
@@ -261,12 +340,12 @@ const taskManager = {
       case 'weekends':
         // 休息日重复（周六和周日）
         console.log('[TaskManager] 处理休息日重复任务，筛选周六和周日');
-        for (let date = new Date(startDate); date <= effectiveEndDate; date.setDate(date.getDate() + 1)) {
+        for (let date = new Date(startDate); date <= endDate; date.setDate(date.getDate() + 1)) {
           const day = date.getDay();
           if (day === 0 || day === 6) { // 周日或周六
             const taskInstance = this._createRepeatTaskInstance(task, new Date(date));
             tasks.push(taskInstance);
-            console.log(`[TaskManager] 创建休息日任务，积分有效期: ${taskInstance.pointsExpiry}`);
+            console.log(`[TaskManager] 创建休息日任务，日期: ${taskInstance.date}，积分有效期: ${taskInstance.pointsExpiry}`);
           }
         }
         break;
@@ -279,7 +358,7 @@ const taskManager = {
         const daysArray = task.repeat.days.map(day => day.toString());
         console.log('[TaskManager] 转换后的星期几数组(字符串类型):', daysArray);
         
-        for (let date = new Date(startDate); date <= effectiveEndDate; date.setDate(date.getDate() + 1)) {
+        for (let date = new Date(startDate); date <= endDate; date.setDate(date.getDate() + 1)) {
           // 获取当前日期的星期几（0-6）
           const dayOfWeek = date.getDay();
           // 确保数据类型一致：将dayOfWeek转为字符串
@@ -288,13 +367,10 @@ const taskManager = {
           // 检查当前日期的星期几是否在用户选择的星期几数组中
           const isMatch = daysArray.includes(dayOfWeekStr);
           
-          // 详细日志记录匹配过程
-          console.log(`[TaskManager] 检查日期 ${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}, 星期${dayOfWeek}, 是否匹配: ${isMatch}, 用户选择的日期: ${JSON.stringify(daysArray)}`);
-          
           if (isMatch) {
             const taskInstance = this._createRepeatTaskInstance(task, new Date(date));
             tasks.push(taskInstance);
-            console.log(`[TaskManager] 创建自定义重复任务，星期${dayOfWeek}，积分有效期: ${taskInstance.pointsExpiry}`);
+            console.log(`[TaskManager] 创建自定义重复任务，日期: ${taskInstance.date}，星期${dayOfWeek}，积分有效期: ${taskInstance.pointsExpiry}`);
           }
         }
         
@@ -358,7 +434,10 @@ const taskManager = {
           
           // 当非必做任务状态变为已完成时，添加完成记录和积分奖励
           if (status === 1 && !task.isRequired) {
-            console.log(`[TaskManager] 非必做任务 ${task.title} 已完成，添加奖励积分: ${task.rewardPoints}`);
+            // 使用task.points作为奖励积分
+            let rewardPoints = task.points || 0;
+            
+            console.log(`[TaskManager] 非必做任务 ${task.title} 已完成，添加奖励积分: ${rewardPoints}`);
             
             // 获取当前日期时间
             const now = new Date();
@@ -390,14 +469,12 @@ const taskManager = {
             console.log(`[TaskManager] 任务 ${newTask.title} 已完成，设置积分有效期: ${expiryInfo.expiryDateStr}`);
             
             // 更新用户积分
-            const userPoints = wx.getStorageSync('userPoints') || 0;
-            const newPoints = userPoints + (newTask.rewardPoints || 0);
-            wx.setStorageSync('userPoints', newPoints);
+            pointsManager.addUserPoints(rewardPoints);
             
             // 创建奖励消息
             const messageManager = require('./messageManager.js');
             messageManager.createSystemMessage(
-              `完成任务"${newTask.title}"，获得${newTask.rewardPoints}颗星星${
+              `完成任务"${newTask.title}"，获得${rewardPoints}颗星星${
                 expiryInfo.expiry === 'permanent' ? '（永久有效）' : `（有效期至${expiryInfo.expiryDateStr}）`
               }`,
               'reward'
@@ -408,14 +485,12 @@ const taskManager = {
                   oldStatus === 0 && 
                   (status === 2 || status === 3)) { // 0=pending, 2=overdue, 3=canceled
             
-            const penaltyPoints = task.rewardPoints || 0;
+            const penaltyPoints = task.points || 0;
             console.log(`[TaskManager] 必做任务 ${task.title} 未完成，扣除星星: ${penaltyPoints}`);
             
             if (penaltyPoints > 0) {
-              // 获取用户积分
-              const userPoints = wx.getStorageSync('userPoints') || 0;
-              // 扣除积分
-              wx.setStorageSync('userPoints', Math.max(0, userPoints - penaltyPoints));
+              // 使用pointsManager减少积分
+              pointsManager.reduceUserPoints(penaltyPoints);
               
               // 创建扣分通知
               const messageManager = require('./messageManager.js');
@@ -1038,53 +1113,32 @@ const taskManager = {
   _applyPenalties: function(penaltyTasks, callback) {
     console.log(`[taskManager] 开始应用惩罚，任务数量: ${penaltyTasks.length}`);
     
-    // 获取现有积分
-    wx.getStorage({
-      key: 'points',
-      success: (res) => {
-        let currentPoints = res.data || 0;
-        const totalPenalty = penaltyTasks.reduce((sum, task) => sum + task.points, 0);
-        
-        // 确保积分不会变为负数
-        const newPoints = Math.max(0, currentPoints - totalPenalty);
-        console.log(`[taskManager] 星星扣除: ${currentPoints} -> ${newPoints}, 扣除: ${totalPenalty}`);
-        
-        // 更新积分
-        wx.setStorage({
-          key: 'points',
-          data: newPoints,
-          success: () => {
-            // 为每个任务创建惩罚消息
-            const messageManager = require('./messageManager.js');
-            
-            penaltyTasks.forEach(task => {
-              const penaltyMessage = {
-                id: 'msg_penalty_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
-                type: 'penalty',
-                taskId: task.taskId,
-                title: '任务未完成',
-                summary: `必做任务"${task.title}"未完成，扣除${task.points}颗星星`,
-                timestamp: Date.now(),
-                isRead: false,
-                icon: '⚠️'
-              };
-              
-              messageManager.addMessage(penaltyMessage);
-            });
-            
-            if (callback) callback(null, penaltyTasks);
-          },
-          fail: (error) => {
-            console.error(`[taskManager] 更新星星失败: ${error}`);
-            if (callback) callback(error, null);
-          }
-        });
-      },
-      fail: (error) => {
-        console.error(`[taskManager] 获取星星失败: ${error}`);
-        if (callback) callback(error, null);
-      }
+    // 计算总扣除积分
+    const totalPenalty = penaltyTasks.reduce((sum, task) => sum + task.points, 0);
+    
+    // 使用pointsManager减少积分
+    pointsManager.reduceUserPoints(totalPenalty);
+    console.log(`[taskManager] 星星扣除了: ${totalPenalty}`);
+    
+    // 为每个任务创建惩罚消息
+    const messageManager = require('./messageManager.js');
+    
+    penaltyTasks.forEach(task => {
+      const penaltyMessage = {
+        id: 'msg_penalty_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+        type: 'penalty',
+        taskId: task.taskId,
+        title: '任务未完成',
+        summary: `必做任务"${task.title}"未完成，扣除${task.points}颗星星`,
+        timestamp: Date.now(),
+        isRead: false,
+        icon: '⚠️'
+      };
+      
+      messageManager.addMessage(penaltyMessage);
     });
+    
+    if (callback) callback(null, penaltyTasks);
   },
   
   /**

@@ -1,6 +1,7 @@
 const app = getApp()
 const taskManager = require('../../utils/taskManager.js');
 const messageManager = require('../../utils/messageManager.js');
+const pointsManager = require('../../utils/pointsManager.js');
 
 Page({
   data: {
@@ -88,7 +89,18 @@ Page({
         label: '任务',
         ariaLabel: '创建任务'
       }
-    ]
+    ],
+
+    // 新增奖品相关数据
+    nextReward: {
+      name: '',
+      points: 0,
+      icon: '🎁',
+      count: 1,
+      remainingStars: 0
+    },
+    userPoints: 0,
+    formattedPoints: ''
   },
   
   /**
@@ -105,6 +117,9 @@ Page({
     
     // 加载任务数据
     this.loadTaskData();
+    
+    // 加载用户星星和奖品信息
+    this.loadStarsAndRewards();
     
     // 初始化消息预览动画实例在toggleMessagePreview中创建，这里不需要预创建
     
@@ -212,11 +227,26 @@ Page({
    * 生命周期函数--监听页面显示
    */
   onShow: function () {
+    console.log('[Index] 页面显示');
+    
     // 刷新任务数据
     this.loadTaskData();
     
+    // 刷新用户星星和奖品信息
+    this.loadStarsAndRewards();
+    
     // 刷新消息数据
     this.loadMessageData();
+    
+    // 重置奖池页面循环跳转标记
+    const app = getApp();
+    if (app.globalData.hasRedirectedToReward) {
+      console.log('[Index] 重置奖池页面跳转标记');
+      // 延迟重置，确保不会立即触发跳转
+      setTimeout(() => {
+        app.globalData.hasRedirectedToReward = false;
+      }, 1000);
+    }
   },
   
   /**
@@ -752,5 +782,93 @@ Page({
     this.setData({
       showFloatMenu: e.detail.isOpen
     });
+  },
+
+  /**
+   * 加载用户星星和奖品信息
+   */
+  loadStarsAndRewards: function() {
+    console.log('[Index] 加载用户星星和奖品信息');
+    
+    // 使用pointsManager获取用户星星数
+    const userPoints = pointsManager.getUserPoints();
+    // 格式化星星数量供显示使用
+    const formattedPoints = pointsManager.formatPoints(userPoints);
+    
+    // 获取所有奖品配置
+    const app = getApp();
+    const allRewards = app.getDefaultRewards() || [];
+    
+    // 使用pointsManager计算下一个奖励信息
+    const nextReward = pointsManager.calculateNextReward(allRewards);
+    
+    // 更新奖励进度
+    this.setData({
+      userPoints: userPoints,
+      formattedPoints: formattedPoints,
+      nextReward: nextReward,
+      rewardProgress: {
+        current: userPoints,
+        total: nextReward.points
+      }
+    });
+    
+    console.log(`[Index] 设置星星进度: ${userPoints}/${nextReward.points}, 还需: ${nextReward.remainingStars}`);
+  },
+
+  /**
+   * 处理奖品进度完成事件
+   */
+  onRewardComplete: function() {
+    console.log('[Index] 奖品进度完成');
+    
+    // 获取全局数据
+    const app = getApp();
+    
+    // 检查是否已跳转过
+    if (app.globalData.hasRedirectedToReward) {
+      console.log('[Index] 已经跳转过奖池页面，不再自动跳转');
+      return;
+    }
+    
+    // 获取当前奖励进度信息
+    const currentProgress = this.data.rewardProgress;
+    
+    // 检查本地存储中是否已经记录了这个阶段的奖励进度
+    const rewardProgressKey = `reward_progress_${currentProgress.total}`;
+    const hasShownReward = wx.getStorageSync(rewardProgressKey);
+    
+    if (hasShownReward) {
+      console.log('[Index] 当前奖励进度已经展示过，不再自动跳转', 
+                 {progress: `${currentProgress.current}/${currentProgress.total}`});
+      return;
+    }
+    
+    // 记录当前进度已展示
+    wx.setStorageSync(rewardProgressKey, true);
+    console.log('[Index] 标记当前奖励进度已展示', {key: rewardProgressKey});
+    
+    // 显示祝贺提示
+    wx.showToast({
+      title: '恭喜！可以领取奖品了',
+      icon: 'success',
+      duration: 2000
+    });
+    
+    // 震动反馈
+    if (wx.vibrateShort) {
+      wx.vibrateShort({ type: 'heavy' });
+    }
+    
+    // 设置已跳转标记
+    app.globalData.hasRedirectedToReward = true;
+    console.log('[Index] 设置已跳转标记，防止循环跳转');
+    
+    // 延迟后跳转到奖励页面
+    setTimeout(() => {
+      wx.switchTab({
+        url: '/pages/rewards/rewards'
+      });
+    }, 1500);
   }
 }) 

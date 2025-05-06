@@ -1,5 +1,6 @@
 // pages/rewards/rewards.js
 const app = getApp()
+const pointsManager = require('../../utils/pointsManager.js'); // 引入星星管理工具
 
 Page({
 
@@ -74,7 +75,15 @@ Page({
    * 生命周期函数--监听页面加载
    */
   onLoad: function (options) {
+    console.log('[rewards] 页面加载');
     this.loadRewardsData();
+    
+    // 清除已跳转标记
+    const app = getApp();
+    if (app.globalData.hasRedirectedToReward) {
+      console.log('[rewards] 清除已跳转标记');
+      app.globalData.hasRedirectedToReward = false;
+    }
   },
 
   /**
@@ -88,7 +97,15 @@ Page({
    * 生命周期函数--监听页面显示
    */
   onShow: function () {
+    console.log('[rewards] 页面显示');
     this.loadRewardsData();
+    
+    // 清除已跳转标记
+    const app = getApp();
+    if (app.globalData.hasRedirectedToReward) {
+      console.log('[rewards] 清除已跳转标记');
+      app.globalData.hasRedirectedToReward = false;
+    }
   },
 
   /**
@@ -132,12 +149,12 @@ Page({
   loadRewardsData: function () {
     console.log('[rewards] 开始加载奖励数据');
     
-    // 从存储获取用户总积分
-    const userPoints = wx.getStorageSync('userPoints') || 0;
+    // 使用pointsManager获取用户星星数
+    const userPoints = pointsManager.getUserPoints();
     console.log(`[rewards] 获取到用户星星: ${userPoints}`);
     
     // 格式化积分，添加千位分隔符
-    const formattedPoints = userPoints.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    const formattedPoints = pointsManager.formatPoints(userPoints, true);
     
     // 获取即将到期积分信息
     const expiringPointsInfo = this.getExpiringPoints();
@@ -147,7 +164,7 @@ Page({
     const tasks = app.globalData.tasks || [];
     const completedTasks = tasks.filter(task => task.status === 1).length;
     
-    // 更新奖励解锁状态
+    // 获取所有奖励配置
     const rewards = this.data.rewards.map(reward => {
       return {
         ...reward,

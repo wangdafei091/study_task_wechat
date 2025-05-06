@@ -156,6 +156,7 @@
   <view class="reward-progress card">
     <view class="progress-header">
       <view class="reward-title">今日奖品进度</view>
+      <view class="stars-count">{{formattedPoints}}/{{nextReward.points}}颗星星</view>
     </view>
     <progress-bar
       id="progressBar"
@@ -166,7 +167,12 @@
       barHeight="{{28}}"
       borderRadius="{{14}}"
       bind:complete="onRewardComplete"
+      rewardName="{{nextReward.name}}"
+      rewardImage=""
     />
+    <view class="reward-hint">
+      <text>再获得{{nextReward.remainingStars}}颗星星即可解锁奖品</text>
+    </view>
   </view>
   
   <!-- 即将到期任务提醒 -->
