@@ -1,9 +1,10 @@
 /* components/taskItem/taskItem.wxss */
+/* 任务项基础容器 */
 .task-item {
   display: flex;
   align-items: center;
-  padding: 24rpx 20rpx;
-  margin-bottom: 20rpx;
+  padding: 16rpx 16rpx;
+  margin-bottom: 16rpx;
   background: linear-gradient(to bottom, #ffffff, #fafbfd);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-light);
@@ -13,11 +14,13 @@
   overflow: hidden;
 }
 
+/* 触摸反馈 */
 .task-item:active {
   transform: scale(0.985);
   box-shadow: 0 1rpx 4rpx rgba(0, 0, 0, 0.03);
 }
 
+/* 任务类型左侧色条 */
 .task-item::before {
   content: '';
   position: absolute;
@@ -41,12 +44,19 @@
   background-color: var(--success-color);
 }
 
+/* 任务必做左侧色条 */
+.required-task::before {
+  background-color: #f94646 !important;
+  width: 8rpx !important;
+}
+
+/* 任务勾选框 */
 .task-checkbox {
   width: 42rpx;
   height: 42rpx;
   border-radius: var(--radius-circle);
   border: 2rpx solid #DDDDDD;
-  margin-right: 20rpx;
+  margin-right: 12rpx;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -54,6 +64,8 @@
   background-color: #FFFFFF;
   transition: all var(--transition-fast);
   position: relative;
+  margin-top: 0;
+  align-self: center;
 }
 
 .task-item:active .task-checkbox {
@@ -79,82 +91,209 @@
   transform: scale(1);
 }
 
-.task-content {
+/* 二栏布局容器 */
+.task-content-container {
   flex: 1;
   min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
+/* 左侧主要信息区域 */
+.task-primary-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding-right: 10rpx;
+  justify-content: center;
+}
+
+/* 右侧元数据区域 */
+.task-metadata {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  max-width: 40%;
+}
+
+/* 任务标题行 */
+.task-title-row {
+  display: flex;
+  align-items: center;
+}
+
+/* 任务标题 */
 .task-title {
-  font-size: var(--font-size-md);
-  color: var(--text-primary);
-  margin-bottom: 6rpx;
+  font-size: 28rpx;
   font-weight: var(--font-weight-medium);
+  color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  transition: all var(--transition-fast);
+  line-height: 1.3;
+  padding-top: 2rpx;
 }
 
+/* 已完成任务样式 */
 .task-item.completed .task-title {
   color: var(--text-primary);
 }
 
-.task-info {
+/* 任务描述样式 */
+.task-description {
+  font-size: 24rpx;
+  color: var(--text-secondary);
+  margin: 4rpx 0 0;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.task-description.expanded {
+  white-space: normal;
+}
+
+/* 标签容器 */
+.task-tags-container {
   display: flex;
   align-items: center;
-  font-size: var(--font-size-xs);
-  color: var(--text-hint);
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  margin-bottom: 8rpx;
 }
 
-.task-type {
-  margin-right: 12rpx;
-  padding: 4rpx 10rpx;
-  border-radius: var(--radius-sm);
-  font-size: var(--font-size-xs);
-  background-color: var(--bg-disabled);
-  color: var(--text-secondary);
+/* 统一标签基础样式 */
+.task-tag {
+  height: 36rpx;
+  padding: 4rpx 12rpx;
+  border-radius: 6rpx;
+  font-size: 20rpx;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 8rpx;
+  font-weight: 500;
+  line-height: 1;
+  box-shadow: 0 1rpx 4rpx rgba(0, 0, 0, 0.05);
 }
 
-.task-type.type-habit {
+/* 必做标签样式 */
+.task-tag.--required {
+  background-color: #f94646;
+  color: white;
+}
+
+/* 任务类型标签样式 */
+.task-tag.--type-habit {
   background-color: var(--primary-bg-light);
   color: var(--primary-color);
 }
 
-.task-type.type-interest {
+.task-tag.--type-interest {
   background-color: var(--warning-bg-light);
   color: var(--warning-color);
 }
 
-.task-type.type-study {
+.task-tag.--type-study {
   background-color: var(--success-bg-light);
   color: var(--success-color);
 }
 
-.task-actions {
+/* 信息容器 - 垂直布局 */
+.task-info-container {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-end;
+  margin-top: 4rpx;
 }
 
-.task-action {
-  width: 50rpx;
-  height: 50rpx;
+/* 时间信息样式 */
+.task-time-info {
   display: flex;
   align-items: center;
-  justify-content: center;
-  margin-left: 10rpx;
-  border-radius: var(--radius-circle);
-  transition: all var(--transition-fast);
+  justify-content: flex-end;
+  font-size: 22rpx;
   color: var(--text-hint);
+  margin-bottom: 6rpx;
 }
 
-.task-action:active {
-  background-color: rgba(0, 0, 0, 0.05);
-  transform: scale(0.92);
+.time-icon {
+  font-size: 22rpx;
+  margin-right: 4rpx;
 }
 
-.task-item.completed {
-  opacity: 1;
-  background: linear-gradient(to bottom, #ffffff, #fafbfd);
+/* 星星信息样式 */
+.task-star-info {
+  display: flex;
+  align-items: center;
+  font-size: 22rpx;
+  color: #ffa500;
+}
+
+.star-icon {
+  font-size: 22rpx;
+  margin-right: 4rpx;
+}
+
+.star-count {
+  font-weight: 500;
+}
+
+.star-expiry {
+  font-size: 22rpx;
+  color: var(--text-secondary);
+  margin-left: 4rpx;
+}
+
+/* 星星飞入动画 */
+@keyframes fly-to-reward {
+  0% {
+    transform: scale(0.8);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.2) translateY(-20rpx);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0) translateY(-60rpx) translateX(100rpx);
+    opacity: 0;
+  }
+}
+
+.star-fly {
+  animation: fly-to-reward 0.8s ease-out forwards;
+}
+
+/* 重复任务指示器 */
+.task-item.repeated {
+  position: relative;
+}
+
+.task-item.repeated::after {
+  content: "🔄";
+  position: absolute;
+  top: 10rpx;
+  right: 10rpx;
+  font-size: 20rpx;
+}
+
+.task-item::after {
+  content: '';
+  position: absolute;
+  right: 10rpx;
+  bottom: 10rpx;
+  width: 8rpx;
+  height: 8rpx;
+  border-radius: 50%;
+  background-color: #4285f4;
+  opacity: 0.5;
 }
 
 .task-status {
@@ -237,14 +376,18 @@
 }
 
 .task-time {
-  min-width: 80rpx;
-  font-size: var(--font-size-sm);
-  color: var(--text-secondary);
-  margin-right: 15rpx;
-  font-weight: var(--font-weight-medium);
+  font-size: 20rpx;
+  color: var(--text-hint);
+  display: flex;
+  align-items: center;
+  margin-right: 8rpx;
 }
 
-/* 组合信息行样式 */
+.time-icon {
+  font-size: 20rpx;
+  margin-right: 2rpx;
+}
+
 .task-combined-info {
   display: flex;
   align-items: flex-start;
@@ -257,7 +400,6 @@
   position: relative;
 }
 
-/* 时间信息样式 */
 .time-info {
   flex: 0 1 auto;
   overflow: visible;
@@ -269,7 +411,6 @@
   position: relative;
 }
 
-/* 时钟图标样式 */
 .clock-icon {
   display: inline-block;
   font-size: 24rpx;
@@ -280,7 +421,6 @@
   position: relative;
 }
 
-/* 分隔符样式 - 仅在同行时显示 */
 .separator {
   margin: 0 10rpx;
   color: #ccc;
@@ -288,7 +428,6 @@
   display: inline-block;
 }
 
-/* 积分信息样式 */
 .points-info {
   flex: 0 1 auto;
   white-space: nowrap;
@@ -297,16 +436,14 @@
   color: var(--text-tertiary, #999);
 }
 
-/* 星星改造：优化任务项中的星星有效期显示 */
 .points-info::before {
   content: "⭐";
   font-size: 22rpx;
   margin-right: 4rpx;
   vertical-align: middle;
-  color: #FBBC05; /* 使用系统警告色（金色） */
+  color: #FBBC05;
 }
 
-/* 自动换行适配 */
 @media (max-width: 520px) {
   .task-combined-info {
     flex-wrap: wrap;
@@ -323,7 +460,6 @@
   }
 }
 
-/* 旧的积分有效期信息样式 */
 .points-expiry-info {
   min-width: 80rpx;
   font-size: var(--font-size-xs);
@@ -357,46 +493,43 @@
   right: 10rpx;
 }
 
-.task-item.repeated {
-  position: relative;
-}
-
-.task-item.repeated::after {
-  content: "🔄";
-  position: absolute;
-  top: 10rpx;
-  right: 10rpx;
-  font-size: 20rpx;
-}
-
-/* 添加首页专用标识 - 不影响现有样式但提供视觉区分 */
-.task-item::after {
-  content: '';
-  position: absolute;
-  right: 10rpx;
-  bottom: 10rpx;
-  width: 8rpx;
-  height: 8rpx;
-  border-radius: 50%;
-  background-color: #4285f4;
-  opacity: 0.5;
-}
-
-/* 必做任务样式 */
-.required-task::before {
-  background-color: #f94646 !important;
-  width: 8rpx !important;
-}
-
 .required-badge {
   position: absolute;
-  top: 5rpx;
-  right: 10rpx;
+  top: 0;
+  right: 0;
   background: #f94646;
   color: white;
-  font-size: 20rpx;
-  padding: 2rpx 8rpx;
-  border-radius: 10rpx;
+  font-size: 18rpx;
+  padding: 1rpx 6rpx;
+  border-radius: 0 var(--radius-lg) 0 var(--radius-sm);
   font-weight: var(--font-weight-medium);
   z-index: 1;
+  opacity: 0.9;
+}
+
+.metadata-top-row, .metadata-bottom-row {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: nowrap;
+  margin-bottom: 4rpx;
+}
+
+.metadata-bottom-row {
+  margin-top: 2rpx;
+  margin-bottom: 0;
+}
+
+.task-duration {
+  font-size: 22rpx;
+  color: var(--text-secondary);
+  margin-right: 8rpx;
+}
+
+.task-star-reward {
+  display: flex;
+  align-items: center;
+  font-size: 20rpx;
+  font-weight: 500;
+  color: #ffa500;
 } 

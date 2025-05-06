@@ -1,66 +1,71 @@
 <!--
   任务列表项组件 (taskItem)
   
-  用途: 展示任务信息，提供任务完成状态切换和编辑操作
+  用途: 展示任务信息，提供任务完成状态切换操作
   使用场景: 仅用于首页任务列表和搜索结果展示
   注意: 不用于任务编辑页面和任务热力图内部
   
   属性:
   - task: 任务数据对象
-  - showActions: 是否显示操作按钮
   - showTime: 是否显示任务时间
   - showCheckbox: 是否显示复选框
   
   事件:
   - complete: 完成任务状态切换
-  - edit: 编辑任务
 -->
 <view class="task-item {{task.status == 1 ? 'completed' : ''}} type-{{task.type}} {{task.isRepeated ? 'repeated' : ''}} {{task.isRequired ? 'required-task' : ''}}">
-  <!-- 显示任务时间和积分有效期（合并为一行） -->
-  <view class="task-combined-info" wx:if="{{showTime && task.startTime}}">
-    <text class="time-info">
-      <text class="clock-icon">🕒</text> {{task.startTime}}
-    </text>
-    
-    <text class="separator">|</text>
-    
-    <text class="points-info">
-      <block wx:if="{{task.status === 1 || task.status === 'completed'}}">
-        星星有效期：{{task.pointsExpiryDate || (task.pointsExpiry === 'permanent' ? '永久' : '7天后')}}
-      </block>
-      <block wx:else>
-        星星有效期：{{task.pointsExpiry === 'permanent' ? '永久' : 
-          (Constants.POINTS_EXPIRY.TEXT[task.pointsExpiry] ? '完成后保留' + Constants.POINTS_EXPIRY.TEXT[task.pointsExpiry] : '完成后保留7天')}}
-      </block>
-    </text>
-  </view>
-  
-  <!-- 必做任务标记 -->
-  <view class="required-badge" wx:if="{{task.isRequired}}">必做</view>
-  
   <!-- 任务勾选框 -->
   <view class="task-checkbox {{task.status == 1 ? 'checked' : ''}}" catchtap="onCheckboxTap" wx:if="{{showCheckbox}}">
     <text class="checkbox-icon {{task.status == 1 ? 'checked' : ''}}">✓</text>
   </view>
   
-  <!-- 任务内容 -->
-  <view class="task-content">
-    <view class="task-header">
-      <text class="task-title">{{task.title}}</text>
-      <text wx:if="{{task.duration}}" class="task-duration-text">{{task.duration}}分钟</text>
-    </view>
-    <view class="task-info">
-      <view class="task-type type-{{task.type}}">
-        <block wx:if="{{task.type == 'habit'}}">习惯</block>
-        <block wx:elif="{{task.type == 'interest'}}">兴趣</block>
-        <block wx:elif="{{task.type == 'study'}}">学习</block>
+  <!-- 任务内容-使用二栏布局 -->
+  <view class="task-content-container">
+    <!-- 左侧主要内容区域 -->
+    <view class="task-primary-info">
+      <!-- 任务标题 -->
+      <view class="task-title-row">
+        <text class="task-title">{{task.title}}</text>
+      </view>
+      
+      <!-- 任务描述 -->
+      <view class="task-description {{isDescriptionExpanded ? 'expanded' : ''}}" 
+            wx:if="{{task.description}}" 
+            bindtap="toggleDescription">
+        <text>{{isDescriptionExpanded ? task.description : (task.description.length > 20 ? task.description.substring(0, 20) + '...' : task.description)}}</text>
       </view>
     </view>
-    <view class="repeat-indicator" wx:if="{{task.isRepeated}}"></view>
-  </view>
-  
-  <!-- 任务操作 -->
-  <view class="task-actions" wx:if="{{showActions}}">
-    <view class="task-action" catchtap="onEditTap">✎</view>
+    
+    <!-- 右侧元数据区域 -->
+    <view class="task-metadata">
+      <!-- 标签区域：必做标签和任务类型 -->
+      <view class="task-tags-container">
+        <view class="task-tag --required" wx:if="{{task.isRequired}}">必做</view>
+        <view class="task-tag --type-{{task.type}}">
+          <text wx:if="{{task.type == 'habit'}}">习惯</text>
+          <text wx:elif="{{task.type == 'interest'}}">兴趣</text>
+          <text wx:elif="{{task.type == 'study'}}">学习</text>
+        </view>
+      </view>
+      
+      <!-- 信息区域，垂直布局 -->
+      <view class="task-info-container">
+        <!-- 时间信息 - 仅对学习和兴趣类型任务显示 -->
+        <view class="task-time-info" wx:if="{{task.startTime && (task.type == 'study' || task.type == 'interest')}}">
+          <text class="time-icon">🕒</text>
+          <text>{{task.startTime}}{{task.endTime ? ' - ' + task.endTime : ''}}</text>
+        </view>
+        
+        <!-- 星星信息 -->
+        <view class="task-star-info">
+          <text class="star-icon {{showStarAnimation ? 'star-fly' : ''}}">⭐</text>
+          <text class="star-count">{{task.rewardPoints || 0}}</text>
+          <text class="star-expiry">({{task.status === 1 || task.status === 'completed' ? 
+            (task.pointsExpiryDate || (task.pointsExpiry === 'permanent' ? '永久' : '7天')) : 
+            (task.pointsExpiry === 'permanent' ? '永久' : 
+            (Constants.POINTS_EXPIRY.TEXT[task.pointsExpiry] || '7天'))}})</text>
+        </view>
+      </view>
+    </view>
   </view>
 </view> 

@@ -1,7 +1,7 @@
 /**
  * 任务列表项组件 (taskItem)
  * 
- * @description 用于展示任务列表项，提供任务完成状态切换和编辑功能
+ * @description 用于展示任务列表项，提供任务完成状态切换功能
  * @usage 仅用于首页任务列表和搜索结果展示，不用于任务编辑页面
  * @pages 使用此组件的页面：index（首页）
  * 
@@ -9,7 +9,6 @@
  * <task-item 
  *   task="{{item}}"
  *   bind:complete="onComplete"
- *   bind:edit="onEdit"
  * />
  */
 const Constants = require('../../utils/constants.js');
@@ -41,7 +40,7 @@ Component({
             expiryText = '永久';
           } else if (typeof newVal.pointsExpiry === 'string' && Constants.POINTS_EXPIRY.TEXT[newVal.pointsExpiry]) {
             // 未完成任务，显示完成后的有效期类型描述
-            expiryText = '完成后保留' + Constants.POINTS_EXPIRY.TEXT[newVal.pointsExpiry];
+            expiryText = Constants.POINTS_EXPIRY.TEXT[newVal.pointsExpiry];
           } else if (typeof newVal.pointsExpiry === 'number') {
             // 时间戳类型，计算与当前时间的差距
             const now = new Date().getTime();
@@ -56,16 +55,12 @@ Component({
             }
           } else {
             // 默认情况
-            expiryText = '完成后7天';
+            expiryText = '7天';
           }
           
-          console.log(`[taskItem] 渲染任务: ${newVal.title}, 时间: ${newVal.startTime}, 积分有效期类型: ${typeof newVal.pointsExpiry}, 值: ${newVal.pointsExpiry}, 显示: ${expiryText}`);
+          console.log(`[taskItem] 渲染任务: ${newVal.title}, 类型: ${newVal.type}, 星星: ${newVal.rewardPoints || 0}颗, 有效期: ${expiryText}`);
         }
       }
-    },
-    showActions: {
-      type: Boolean,
-      value: true
     },
     showTime: {
       type: Boolean,
@@ -85,7 +80,9 @@ Component({
       habit: '⏰',
       interest: '📚',
       study: '📝'
-    }
+    },
+    isDescriptionExpanded: false, // 任务描述是否展开
+    showStarAnimation: false      // 是否显示星星动画
   },
 
   /**
@@ -94,23 +91,45 @@ Component({
   methods: {
     // 点击复选框完成任务
     onCheckboxTap: function(e) {
-      console.log('任务完成状态切换:', this.properties.task.id);
+      console.log('[taskItem] 任务完成状态切换:', this.properties.task.id);
+      
+      // 任务从未完成变为完成时，触发星星动画
+      if (this.properties.task.status != 1) {
+        this.triggerStarAnimation();
+      }
+      
       this.triggerEvent('complete', {
         taskId: this.properties.task.id
       });
     },
 
-    // 点击任务项进入详情(已禁用)
-    onTaskTap: function(e) {
-      // 不再触发详情页跳转
-      // 此方法保留是为了兼容性，但不执行任何操作
+    // 触发星星动画
+    triggerStarAnimation: function() {
+      console.log('[taskItem] 触发星星获得动画');
+      
+      this.setData({
+        showStarAnimation: true
+      });
+      
+      // 动画结束后重置状态
+      setTimeout(() => {
+        this.setData({
+          showStarAnimation: false
+        });
+      }, 800);
     },
-
-    // 点击编辑按钮
-    onEditTap: function(e) {
-      console.log('任务编辑点击:', this.properties.task.id);
-      this.triggerEvent('edit', {
-        taskId: this.properties.task.id
+    
+    // 切换任务描述展开/收起状态
+    toggleDescription: function(e) {
+      if (!this.properties.task.description || this.properties.task.description.length <= 20) {
+        return;  // 描述不存在或长度不足无需展开
+      }
+      
+      const newState = !this.data.isDescriptionExpanded;
+      console.log(`[taskItem] 切换任务描述展示状态: ${newState ? '展开' : '收起'}`);
+      
+      this.setData({
+        isDescriptionExpanded: newState
       });
     }
   },
@@ -120,19 +139,7 @@ Component({
    */
   lifetimes: {
     attached: function() {
-      console.log('[taskItem] 组件加载完成，监测布局变化');
-      
-      // 获取系统信息，判断屏幕宽度
-      wx.getSystemInfo({
-        success: (res) => {
-          const screenWidth = res.screenWidth;
-          console.log(`[taskItem] 设备屏幕宽度: ${screenWidth}px, 是否采用垂直布局: ${screenWidth <= 520}`);
-          console.log('[taskItem] 已优化积分有效期显示，垂直布局时左对齐，移除多余视觉指示符');
-          console.log('[taskItem] 已优化时间范围与积分有效期行距，更加紧凑美观');
-          console.log('[taskItem] 已修复手机端时钟图标与积分有效期重叠问题');
-          console.log('[taskItem] 已修复时钟图标上半部分被截断的问题，优化显示效果');
-        }
-      });
+      console.log('[taskItem] 组件加载完成，使用优化后的布局展示');
     }
   }
 }) 

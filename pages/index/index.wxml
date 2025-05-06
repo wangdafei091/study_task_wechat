@@ -140,7 +140,6 @@
             task="{{item}}"
             bind:complete="completeTask"
             bind:detail="goToTaskDetail"
-            bind:edit="editTask"
             style="--delay: {{item.animationDelay}}"
           />
         </block>
@@ -200,7 +199,6 @@
             task="{{item}}"
             bind:complete="completeTask"
             bind:detail="goToTaskDetail"
-            bind:edit="editTask"
           />
         </view>
       </block>
