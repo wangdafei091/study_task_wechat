@@ -223,7 +223,7 @@ Page({
       // 只计算最早日期对应的积分总和
       expiringPoints = completedTasks
         .filter(task => task.pointsExpiry === earliestExpiryTime)
-        .reduce((sum, task) => sum + (task.rewardPoints || 0), 0);
+        .reduce((sum, task) => sum + (task.points || 0), 0);
       
       console.log(`[rewards] 找到${completedTasks.length}个即将到期任务，最早到期日期: ${expiryDate}，该日期星星: ${expiringPoints}`);
     } else {

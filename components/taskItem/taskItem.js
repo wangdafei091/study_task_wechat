@@ -58,7 +58,7 @@ Component({
             expiryText = '7天';
           }
           
-          console.log(`[taskItem] 渲染任务: ${newVal.title}, 类型: ${newVal.type}, 星星: ${newVal.rewardPoints || 0}颗, 有效期: ${expiryText}`);
+          console.log(`[taskItem] 渲染任务: ${newVal.title}, 类型: ${newVal.type}, 星星: ${newVal.points || 0}颗, 有效期: ${expiryText}`);
         }
       }
     },
