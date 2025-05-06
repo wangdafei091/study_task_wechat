@@ -192,9 +192,6 @@
     <view class="task-list">
       <block wx:for="{{tasks}}" wx:key="id">
         <view class="task-wrapper">
-          <view class="task-note" wx:if="{{item.type === 'study'}}">
-            <text class="note-text">📷 需要上传作业照片</text>
-          </view>
           <index-task-item 
             task="{{item}}"
             bind:complete="completeTask"

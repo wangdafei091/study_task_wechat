@@ -591,6 +591,56 @@ const getTaskStatistics = function(tasks) {
   return stats;
 };
 
+/**
+ * 排序任务列表 - 按"习惯优先+开始时间"排序
+ * @param {Array} tasks - 任务数组
+ * @returns {Array} 排序后的任务列表
+ */
+const sortTasksByHabitAndTime = function(tasks) {
+  if (!tasks || tasks.length === 0) {
+    return [];
+  }
+  
+  console.log('[taskUtils] 开始按习惯优先+时间升序排序任务');
+  
+  const sortedTasks = [...tasks];
+  
+  sortedTasks.sort((a, b) => {
+    // 首先按必做任务排序，必做任务优先
+    const aRequired = a.isRequired || false;
+    const bRequired = b.isRequired || false;
+    if (aRequired !== bRequired) {
+      return aRequired ? -1 : 1;
+    }
+    
+    // 其次按任务类型排序，习惯任务优先
+    if (a.type === 'habit' && b.type !== 'habit') {
+      return -1;
+    }
+    if (a.type !== 'habit' && b.type === 'habit') {
+      return 1;
+    }
+    
+    // 同类型任务按开始时间排序
+    const aTime = a.startTime || '23:59';
+    const bTime = b.startTime || '23:59';
+    
+    return aTime.localeCompare(bTime);
+  });
+  
+  console.log('[taskUtils] 任务排序完成，结果：', 
+    sortedTasks.map(t => ({
+      id: t.id.substring(0, 8) + '...',
+      title: t.title,
+      type: t.type,
+      required: t.isRequired,
+      startTime: t.startTime || 'N/A'
+    }))
+  );
+  
+  return sortedTasks;
+};
+
 module.exports = {
   calculateCompletionRate,
   getTaskStats,
@@ -603,5 +653,6 @@ module.exports = {
   getNextRepeatDate,
   createRepeatTask,
   groupTasksByDate,
-  getTaskStatistics
+  getTaskStatistics,
+  sortTasksByHabitAndTime
 }; 

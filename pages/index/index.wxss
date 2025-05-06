@@ -1039,20 +1039,6 @@
   margin-bottom: 16rpx;
 }
 
-.task-note {
-  font-size: 24rpx;
-  color: var(--primary-color);
-  background-color: var(--primary-light);
-  padding: 6rpx 16rpx;
-  border-radius: 8rpx;
-  margin-bottom: 8rpx;
-  display: inline-block;
-}
-
-.note-text {
-  font-size: 24rpx;
-}
-
 /* 进度圆环部分 */
 .progress-rings-container {
   margin: 10rpx 30rpx;

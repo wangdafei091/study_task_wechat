@@ -106,9 +106,9 @@ const taskManager = {
         return task.date === todayStr;
       });
       
-      // 对任务进行排序，确保必做任务置顶
+      // 使用新的排序逻辑：习惯优先+开始时间顺序
       const taskUtils = require('./taskUtils.js');
-      const sortedTasks = taskUtils.sortTasks(todayTasks, 'date', true, true);
+      const sortedTasks = taskUtils.sortTasksByHabitAndTime(todayTasks);
       
       console.log('[TaskManager] 今日任务筛选结果:', {
         todayTasks: sortedTasks.length,
@@ -116,6 +116,7 @@ const taskManager = {
           id: t.id, 
           title: t.title, 
           date: t.date,
+          type: t.type,
           isRequired: t.isRequired || false
         }))
       });
