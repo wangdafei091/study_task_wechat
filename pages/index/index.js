@@ -287,18 +287,21 @@ Page({
   
   // 更新任务进度统计
   updateTaskProgress: function(tasks) {
-    // 使用任务管理器计算进度
+    // 使用任务管理器计算任务进度
     const progressData = taskManager.calculateTaskProgress(tasks);
     
-    // 更新UI，移除stats数据更新
+    console.log('[Index] 更新任务进度', progressData);
+    
+    // 只更新任务进度，不更新奖励进度
     this.setData({
-      taskProgress: progressData.taskProgress,
-      rewardProgress: progressData.rewardProgress
+      taskProgress: progressData.taskProgress
     });
     
-    // 更新全局进度数据
+    // 更新全局任务进度数据
     app.globalData.taskProgress = progressData.taskProgress;
-    app.globalData.rewardProgress = progressData.rewardProgress;
+    
+    // 注意：这里不再设置rewardProgress，奖励进度现在由loadStarsAndRewards单独处理
+    // 因为奖励进度应基于用户星星数量和奖品阈值，而非任务完成情况
   },
   
   // 检查即将到期任务

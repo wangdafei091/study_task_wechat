@@ -748,10 +748,6 @@ const taskManager = {
           study: 0,
           interest: 0
         },
-        rewardProgress: {
-          current: 0,
-          total: 1
-        },
         stats: {
           totalTasks: 0,
           completedTasks: 0,
@@ -808,13 +804,9 @@ const taskManager = {
     const completedTasks = tasks.filter(task => task.status === 1).length;
     const completionRate = totalTasks > 0 ? Math.round(completedTasks / totalTasks * 100) : 0;
     
-    // 生成统计结果
+    // 生成统计结果 - 移除了 rewardProgress
     const result = {
       taskProgress: progress,
-      rewardProgress: {
-        current: completedTasks,
-        total: totalTasks > 0 ? totalTasks : 1
-      },
       stats: {
         totalTasks: totalTasks,
         completedTasks: completedTasks,
