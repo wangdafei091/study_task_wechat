@@ -341,14 +341,20 @@ Page({
     
     // 使用任务管理器更新任务状态
     taskManager.updateTaskStatus(id, newStatus, updatedTask => {
-      if (updatedTask && newStatus === 1) {
-        // 如果是完成任务，触发庆祝动画
-        setTimeout(() => {
-          const progressBar = this.selectComponent('#progressBar');
-          if (progressBar) {
-            progressBar.playAnimation('complete');
-          }
-        }, 300);
+      if (updatedTask) {
+        // 任务状态变更时，立即刷新星星和奖品信息
+        console.log('[Index] 任务状态变更，立即刷新星星和奖品信息');
+        this.loadStarsAndRewards();
+        
+        // 仅当完成任务时触发庆祝动画
+        if (newStatus === 1) {
+          setTimeout(() => {
+            const progressBar = this.selectComponent('#progressBar');
+            if (progressBar) {
+              progressBar.playAnimation('complete');
+            }
+          }, 300);
+        }
       }
     });
   },
@@ -792,15 +798,23 @@ Page({
     
     // 使用pointsManager获取用户星星数
     const userPoints = pointsManager.getUserPoints();
+    console.log(`[Index] 当前用户星星数: ${userPoints}`);
+    
     // 格式化星星数量供显示使用
     const formattedPoints = pointsManager.formatPoints(userPoints);
     
     // 获取所有奖品配置
     const app = getApp();
     const allRewards = app.getDefaultRewards() || [];
+    console.log(`[Index] 获取奖励配置，共 ${allRewards.length} 个奖励`);
     
     // 使用pointsManager计算下一个奖励信息
     const nextReward = pointsManager.calculateNextReward(allRewards);
+    console.log(`[Index] 下一个奖励: ${nextReward.name}，需要星星: ${nextReward.points}，当前星星: ${userPoints}`);
+    
+    // 记录更新前的数据
+    const oldProgress = this.data.rewardProgress || { current: 0, total: 10 };
+    console.log(`[Index] 更新前进度: ${oldProgress.current}/${oldProgress.total}`);
     
     // 更新奖励进度
     this.setData({
@@ -814,6 +828,18 @@ Page({
     });
     
     console.log(`[Index] 设置星星进度: ${userPoints}/${nextReward.points}, 还需: ${nextReward.remainingStars}`);
+    
+    // 确保进度条组件获得正确的进度值
+    setTimeout(() => {
+      const progressBar = this.selectComponent('#progressBar');
+      if (progressBar) {
+        console.log('[Index] 手动更新进度条组件数据');
+        progressBar.setData({
+          current: userPoints,
+          total: nextReward.points
+        });
+      }
+    }, 50);
   },
 
   /**

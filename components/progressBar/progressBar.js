@@ -96,9 +96,16 @@ Component({
    */
   observers: {
     'current, total': function(current, total) {
+      // 确保输入值为数字
+      current = parseInt(current || 0, 10);
+      total = parseInt(total || 1, 10);
+      
+      console.log(`[progressBar] 计算进度条百分比: ${current}/${total}`);
+      
       let percentage = 0;
       if (total > 0) {
         percentage = Math.min(Math.max(current / total * 100, 0), 100);
+        console.log(`[progressBar] 实际进度百分比: ${percentage.toFixed(2)}%`);
       }
       
       // 计算渐变阶段
@@ -110,13 +117,15 @@ Component({
       
       // 检查是否完成
       const wasComplete = this.data.isComplete;
-      const isComplete = percentage >= 100;
+      const isComplete = current >= total;
       const justCompleted = isComplete && !wasComplete;
+      
+      console.log(`[progressBar] 完成状态: ${isComplete ? '已完成' : '未完成'}, 刚完成: ${justCompleted}`);
       
       // 更新小鸡状态和外观
       let chickState = 'walking';
       
-      if (percentage >= 100) {
+      if (isComplete) {
         chickState = 'celebrating';
       } else if (percentage > 70) {
         chickState = 'running';
@@ -152,6 +161,7 @@ Component({
       
       // 如果刚刚完成
       if (justCompleted) {
+        console.log(`[progressBar] 触发完成事件，进度: ${percentage.toFixed(2)}%, 数值: ${current}/${total}`);
         this.triggerEvent('complete'); // 触发完成事件
         this.showCompletionMessage();
       }
