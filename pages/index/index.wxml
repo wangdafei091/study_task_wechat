@@ -171,7 +171,7 @@
       rewardImage=""
     />
     <view class="reward-hint">
-      <text>再获得{{nextReward.remainingStars}}颗星星即可解锁奖品</text>
+      <text>再获得<text class="highlight">{{nextReward.remainingStars}}</text>颗星星即可解锁奖品</text>
     </view>
   </view>
   

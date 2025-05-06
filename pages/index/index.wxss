@@ -600,10 +600,11 @@
   overflow: visible;
   box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.05);
   padding: 24rpx;
-  padding-bottom: 70rpx;
+  padding-bottom: 65rpx;
   min-height: 120rpx;
   position: relative;
-  z-index: 1;
+  z-index: 5;
+  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.05), inset 0 1rpx 6rpx rgba(0, 0, 0, 0.02);
 }
 
 .progress-header {
@@ -629,23 +630,39 @@
 
 /* 奖励进度下方提示 */
 .reward-hint {
-  font-size: 24rpx;
-  color: #666666;
+  font-size: 22rpx;
+  color: #5F6368;
   text-align: center;
-  margin-top: 8rpx;
-  position: relative;
-  bottom: -10rpx;
-  background-color: rgba(0, 0, 0, 0.03);
-  padding: 8rpx 16rpx;
-  border-radius: 12rpx;
-  width: 85%;
+  position: absolute;
+  bottom: -5rpx;
+  left: 0;
+  right: 0;
+  padding: 10rpx 16rpx 6rpx 16rpx;
+  width: 94%;
   margin-left: auto;
   margin-right: auto;
   white-space: normal;
   word-wrap: break-word;
-  line-height: 1.4;
-  box-shadow: 0 1rpx 3rpx rgba(0, 0, 0, 0.02);
-  z-index: 3;
+  line-height: 1.5;
+  z-index: 6;
+  min-height: 36rpx;
+}
+
+.reward-hint text {
+  display: block;
+}
+
+.reward-hint::before {
+  content: "✨";
+  display: inline-block;
+  margin-right: 4rpx;
+  vertical-align: middle;
+}
+
+.reward-hint .highlight {
+  color: #4285F4;
+  font-weight: 500;
+  display: inline;
 }
 
 /* 统计面板 */

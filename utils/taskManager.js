@@ -480,6 +480,31 @@ const taskManager = {
               'reward'
             );
           }
+          // 当非必做任务状态从已完成变为未完成时，需要减少之前奖励的星星数
+          else if (oldStatus === 1 && status === 0 && !task.isRequired) {
+            // 使用task.points作为需要减少的星星数
+            let rewardPoints = task.points || 0;
+            
+            console.log(`[TaskManager] 非必做任务 ${task.title} 取消完成，减少星星: ${rewardPoints}`);
+            
+            // 移除最近的完成记录（如果有）
+            if (newTask.completionRecords && newTask.completionRecords.length > 0) {
+              newTask.completionRecords.pop();
+            }
+            
+            // 重置积分有效期相关字段
+            newTask.pointsExpiryDate = null;
+            
+            // 减少用户星星数
+            pointsManager.reduceUserPoints(rewardPoints);
+            
+            // 创建取消奖励消息
+            const messageManager = require('./messageManager.js');
+            messageManager.createSystemMessage(
+              `取消完成任务"${newTask.title}"，减少${rewardPoints}颗星星`,
+              'penalty'
+            );
+          }
           // 处理必做任务从pending变为overdue或canceled时的扣分逻辑
           else if (task.isRequired && 
                   oldStatus === 0 && 
