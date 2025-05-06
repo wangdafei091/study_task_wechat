@@ -693,7 +693,10 @@ Component({
         enhancedTask.isRequired = !!task.isRequired;
         
         // 确保积分值被正确传递
-        enhancedTask.rewardPoints = task.rewardPoints || 0;
+        enhancedTask.points = task.points || 0;
+        
+        // 添加日志记录星星数
+        console.log(`[TaskHeatmap] 任务${task.id} "${task.title}" 星星数: ${task.points || 0}`);
         
         // 添加更详细的任务状态日志
         let statusText = '';
@@ -707,7 +710,7 @@ Component({
           statusText = '已取消';
         }
         
-        console.log(`[TaskHeatmap] 处理任务: ${task.title}, ID: ${task.id}, 类型: ${task.type}, 状态: ${statusText}, 必做: ${enhancedTask.isRequired ? '是' : '否'}, 积分: ${enhancedTask.rewardPoints}`);
+        console.log(`[TaskHeatmap] 处理任务: ${task.title}, ID: ${task.id}, 类型: ${task.type}, 状态: ${statusText}, 必做: ${enhancedTask.isRequired ? '是' : '否'}, 星星: ${enhancedTask.points}`);
         
         return enhancedTask;
       });
@@ -789,7 +792,7 @@ Component({
       this.setData({
         editingTaskId: taskId,
         editingTaskIndex: taskIndex,
-        editPoints: task.rewardPoints || 0,
+        editPoints: task.points || 0,
         editDescription: task.description || '',
         editScope: defaultScope
       });
@@ -981,7 +984,7 @@ Component({
       
       // 如果不是必做任务，才更新积分字段
       if (!task.isRequired) {
-        updateData.rewardPoints = this.data.editPoints;
+        updateData.points = this.data.editPoints;
       }
       
       console.log(`[TaskHeatmap] 更新任务${task.id}，是否必做: ${task.isRequired ? '是' : '否'}, 更新字段:`, updateData);

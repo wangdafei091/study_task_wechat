@@ -94,7 +94,7 @@
               <view class="task-header-right">
                 <!-- 根据isRequired属性显示必做标签或积分 -->
                 <view class="{{item.isRequired ? 'task-required-tag' : 'task-points-mini'}}">
-                  {{item.isRequired ? '必做' : (item.rewardPoints || '0') + '颗'}}
+                  {{item.isRequired ? '必做' : (item.points || '0') + '颗'}}
                 </view>
                 <view class="more-actions" bindtap="showTaskActions" data-id="{{item.id}}" data-index="{{index}}">···</view>
               </view>
@@ -154,17 +154,17 @@
                     <!-- 待完成未逾期的必做任务 -->
                     <block wx:elif="{{item.status === 0 || item.status === 'pending'}}">
                       <!-- 星星改造：原"积分"改为"星星" -->
-                      任务未按时完成，将会扣除{{item.rewardPoints || 0}}颗星星
+                      任务未按时完成，将会扣除{{item.points || 0}}颗星星
                     </block>
                     <!-- 逾期未完成的必做任务 -->
                     <block wx:elif="{{item.status === 2 || item.status === 'overdue'}}">
                       <!-- 星星改造：原"积分"改为"星星" -->
-                      任务未按时完成，扣除{{item.rewardPoints || 0}}颗星星
+                      任务未按时完成，扣除{{item.points || 0}}颗星星
                     </block>
                     <!-- 取消的必做任务 -->
                     <block wx:elif="{{item.status === 3 || item.status === 'canceled'}}">
                       <!-- 星星改造：原"积分"改为"星星" -->
-                      任务未完成，扣除{{item.rewardPoints || 0}}颗星星
+                      任务未完成，扣除{{item.points || 0}}颗星星
                     </block>
                   </text>
                 </block>

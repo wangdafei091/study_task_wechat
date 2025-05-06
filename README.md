@@ -33,6 +33,8 @@ study_task_wechat/
 │   ├── float-menu/         # 浮动菜单组件
 │   ├── upcomingTask/       # 即将到期任务组件
 │   ├── date-picker/        # 日期选择器组件
+│   ├── template-selector/  # 模板选择器组件
+│   ├── loading-progress/   # 批量处理进度组件
 ├── pages/                  # 页面目录
 │   ├── index/              # 主页（任务日历）
 │   ├── task/               # 任务详情页
@@ -48,7 +50,8 @@ study_task_wechat/
 │   ├── uiUtils.js          # UI辅助工具
 │   ├── unit.js             # 单位换算和设备适配工具
 │   ├── constants.js        # 全局常量定义
-│   └── feedbackUtils.js    # 反馈处理工具
+│   ├── feedbackUtils.js    # 反馈处理工具
+│   └── pointsManager.js    # 积分管理工具
 ├── styles/                 # 样式目录
 └── assets/                 # 静态资源目录
 ```
@@ -101,6 +104,7 @@ study_task_wechat/
 - 修复横屏模式下的布局问题
 - 添加批量任务处理进度显示
 - 优化日志记录系统
+- 更新项目文档，确保内容与当前代码一致
 
 ### v1.5.2 (2024-06-20)
 - 修复任务热力图在部分设备上显示异常问题
@@ -154,7 +158,8 @@ git clone https://github.com/yourusername/study_task_wechat.git
 - 确保使用全局定义的颜色和尺寸变量
 
 ## 日志规范
-在关键位置添加日志，遵循以下格式：
+为便于追踪和调试，在关键位置添加日志。日志使用 `console` 方法，遵循以下格式：
+
 ```javascript
 console.log(`[组件/模块名] 动作: ${变量}`);
 
@@ -162,6 +167,31 @@ console.log(`[组件/模块名] 动作: ${变量}`);
 console.log(`[taskManager] 创建任务: ${JSON.stringify(task)}`);
 console.log(`[progressRing] 更新进度: ${percent}%`);
 ```
+
+针对关键事件和错误，使用以下日志级别：
+- `console.log` - 普通信息
+- `console.info` - 流程节点信息
+- `console.warn` - 警告信息
+- `console.error` - 错误信息
+
+### 日志记录要点
+
+1. **关键点必须添加日志**：
+   - 任务创建、编辑、删除和状态变更
+   - 重要数据的读取和存储操作
+   - 页面重要生命周期事件
+   - 用户关键操作
+
+2. **日志内容要求**：
+   - 保持简洁明了，包含必要信息
+   - 对象日志使用 JSON.stringify 转换
+   - 记录操作类型、对象ID和关键参数
+   - 错误日志需包含错误详情和上下文
+
+3. **避免过度日志**：
+   - 不记录频繁重复的常规操作
+   - 不记录大量无关紧要的信息
+   - 循环中谨慎使用日志
 
 ## 许可证
 此项目使用 MIT 许可证 - 查看 [LICENSE.md](LICENSE.md) 文件了解详情
