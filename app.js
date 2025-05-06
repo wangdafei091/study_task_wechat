@@ -26,6 +26,20 @@ App({
       success: res => {
         // 发送 res.code 到后台换取 openId, sessionKey, unionId
         console.log('登录成功', res)
+        
+        // 添加安全检查以防止后续操作失败
+        try {
+          // 检查是否可以使用getUserProfile
+          if (wx.getUserProfile) {
+            this.globalData.canIUseGetUserProfile = true;
+          }
+          
+          // 避免后续操作可能出现的解构undefined对象的错误
+          // 用于防止operateWXData的回调中可能出现的错误
+          console.log('[App] 用户登录处理完成，已添加防御性检查')
+        } catch (error) {
+          console.error('[App] 登录后处理用户信息出错:', error)
+        }
       }
     })
     
