@@ -1,12 +1,12 @@
 /**
- * 任务列表项组件 (taskItem)
+ * 首页任务列表项组件 (index-task-item)
  * 
  * @description 用于展示任务列表项，提供任务完成状态切换功能
  * @usage 仅用于首页任务列表和搜索结果展示，不用于任务编辑页面
  * @pages 使用此组件的页面：index（首页）
  * 
  * 示例：
- * <task-item 
+ * <index-task-item 
  *   task="{{item}}"
  *   bind:complete="onComplete"
  * />
@@ -58,7 +58,7 @@ Component({
             expiryText = '7天';
           }
           
-          console.log(`[taskItem] 渲染任务: ${newVal.title}, 类型: ${newVal.type}, 星星: ${newVal.points || 0}颗, 有效期: ${expiryText}`);
+          console.log(`[index-task-item] 渲染任务: ${newVal.title}, 类型: ${newVal.type}, 星星: ${newVal.points || 0}颗, 有效期: ${expiryText}`);
         }
       }
     },
@@ -91,7 +91,7 @@ Component({
   methods: {
     // 点击复选框完成任务
     onCheckboxTap: function(e) {
-      console.log('[taskItem] 任务完成状态切换:', this.properties.task.id);
+      console.log('[index-task-item] 任务完成状态切换:', this.properties.task.id);
       
       // 任务从未完成变为完成时，触发星星动画
       if (this.properties.task.status != 1) {
@@ -105,7 +105,7 @@ Component({
 
     // 触发星星动画
     triggerStarAnimation: function() {
-      console.log('[taskItem] 触发星星获得动画');
+      console.log('[index-task-item] 触发星星获得动画');
       
       this.setData({
         showStarAnimation: true
@@ -126,7 +126,7 @@ Component({
       }
       
       const newState = !this.data.isDescriptionExpanded;
-      console.log(`[taskItem] 切换任务描述展示状态: ${newState ? '展开' : '收起'}`);
+      console.log(`[index-task-item] 切换任务描述展示状态: ${newState ? '展开' : '收起'}`);
       
       this.setData({
         isDescriptionExpanded: newState
@@ -139,7 +139,7 @@ Component({
    */
   lifetimes: {
     attached: function() {
-      console.log('[taskItem] 组件加载完成，使用优化后的布局展示');
+      console.log('[index-task-item] 组件加载完成，使用优化后的布局展示');
     }
   }
 }) 
