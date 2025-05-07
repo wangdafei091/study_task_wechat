@@ -247,7 +247,7 @@
 
 .star-icon {
   font-size: 22rpx;
-  margin-right: 4rpx;
+  margin-left: 4rpx;
 }
 
 .star-count {

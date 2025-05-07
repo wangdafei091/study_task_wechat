@@ -59,8 +59,8 @@
         <!-- 星星信息 -->
         <block wx:if="{{!task.isRequired}}">
           <view class="task-star-info">
-            <text class="star-icon {{showStarAnimation ? 'star-fly' : ''}}">⭐</text>
             <text class="star-count">{{task.points || 0}}</text>
+            <text class="star-icon {{showStarAnimation ? 'star-fly' : ''}}">⭐</text>
             <text class="star-expiry">(有效期：{{task.status === 1 || task.status === 'completed' ? 
               (task.pointsExpiryDate || (task.pointsExpiry === 'permanent' ? '永久' : '7天')) : 
               (task.pointsExpiry === 'permanent' ? '永久' : 
@@ -70,8 +70,8 @@
         <block wx:else>
           <view class="task-star-info required-star-info">
             <text class="required-text">按时完成可保留</text>
-            <text class="star-icon">⭐</text>
             <text class="star-count normal-weight">{{task.points || 0}}</text>
+            <text class="star-icon">⭐</text>
           </view>
         </block>
       </view>

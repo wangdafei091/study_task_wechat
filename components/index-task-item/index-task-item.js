@@ -143,7 +143,7 @@ Component({
       
       // 记录必做任务UI优化
       if (this.properties.task && this.properties.task.isRequired) {
-        console.log('[index-task-item] 使用优化后的必做任务UI: 积极引导模式，"按时完成可保留X星"');
+        console.log('[index-task-item] 使用优化后的必做任务UI: 积极引导模式，统一"数字+星星"显示格式');
       }
     }
   }
