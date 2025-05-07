@@ -821,4 +821,16 @@
 .stepper-input.required-deduction {
   color: #f94646; /* 使用红色表示必做任务惩罚机制 */
   font-weight: 500;
+}
+
+/* 添加禁用状态的样式 */
+.input-item-header.disabled {
+  cursor: not-allowed;
+}
+
+/* 移除视觉差异样式
+.repeat-value.disabled-text {
+  color: #999;
+  font-style: italic;
 } 
+*/ 

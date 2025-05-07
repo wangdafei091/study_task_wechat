@@ -63,7 +63,10 @@ Page({
     // 新增重复预览相关字段
     repeatPreviewText: '', // 重复预览文本
     repeatTypeWarning: false, // 是否存在重复类型警告
-    repeatPanelDesc: '任务将在所选时间范围内按设定频率执行' // 动态面板说明文字
+    repeatPanelDesc: '任务将在所选时间范围内按设定频率执行', // 动态面板说明文字
+    
+    // 控制重复选项是否禁用
+    isRepeatOptionDisabled: true // 默认为true,因为初始日期是同一天
   },
 
   /**
@@ -344,9 +347,10 @@ Page({
       'newTask.hasNoEndDate': false, // 重置无结束日期字段
       'newTask.isRequired': false,
       'errors.title': '',
-      repeatText: '每天',
+      repeatText: '当天', // 重置为当天，因为默认是同一天
       reminderText: '无',
       pointsExpiryText: '永久', // 重置积分有效期文本
+      isRepeatOptionDisabled: true, // 重置为禁用状态，因为默认是同一天
       'newTask.repeat': {
         type: 'daily',
         days: [],
@@ -877,10 +881,15 @@ Page({
       'newTask.endTime': endTime,
       // 同时初始化重复任务的开始日期和结束日期，确保同步
       'newTask.repeat.startDate': today,
-      'newTask.repeat.endDate': today
+      'newTask.repeat.endDate': today,
+      // 当起止日期是同一天时，设置重复文本为"当天"
+      repeatText: '当天',
+      // 同一天时禁用重复选项
+      isRepeatOptionDisabled: true
     });
     
     console.log(`[TaskEdit] 初始化日期时间数据完成, 当前日期: ${today} 开始时间: ${startTime} 结束时间: ${endTime}`);
+    console.log(`[TaskEdit] 起止日期相同，重复选项设为"当天"且禁用重复面板`);
   },
 
   /**
@@ -1022,6 +1031,17 @@ Page({
    */
   togglePanel: function(e) {
     const panelName = e.currentTarget.dataset.panel;
+    
+    // 如果是重复面板且被禁用，则直接返回
+    if (panelName === 'repeatPanel' && this.data.isRepeatOptionDisabled) {
+      console.log('[TaskEdit] 由于起止日期相同，重复面板已被禁用');
+      wx.showToast({
+        title: '单日任务不可设置重复',
+        icon: 'none',
+        duration: 1500
+      });
+      return;
+    }
     
     // 关闭所有其他面板
     const newState = {
@@ -1449,6 +1469,33 @@ Page({
       });
     }
     
+    // 检查起止日期是否相同
+    const isSameDay = date === this.data.newTask.endDate;
+    
+    // 当起止日期相同时，设置重复为"当天"并禁用重复选项
+    // 当起止日期不同时，如果之前是"当天"，则改为"每天"并启用重复选项
+    if (isSameDay) {
+      console.log('[TaskEdit] 检测到起止日期相同，设置为当天且禁用重复选项');
+      this.setData({
+        repeatText: '当天',
+        isRepeatOptionDisabled: true
+      });
+      
+      // 如果重复面板正在显示，则关闭它
+      if (this.data.repeatPanel) {
+        this.setData({
+          repeatPanel: false
+        });
+      }
+    } else if (this.data.isRepeatOptionDisabled) {
+      // 如果之前重复选项是禁用的（即起止日期是相同的），现在不同了
+      console.log('[TaskEdit] 检测到起止日期不同，启用重复选项');
+      this.setData({
+        repeatText: '每天', // 恢复为每天
+        isRepeatOptionDisabled: false
+      });
+    }
+    
     // 更新重复预览文本
     if (this.data.newTask.repeat.type !== 'none') {
       this.setData({
@@ -1456,7 +1503,7 @@ Page({
       });
     }
     
-    console.log('[TaskEdit] 选择开始日期:', date);
+    console.log('[TaskEdit] 选择开始日期:', date, '起止日期相同:', isSameDay);
   },
   
   /**
@@ -1468,6 +1515,33 @@ Page({
     this.setData({
       'newTask.endDate': date
     });
+    
+    // 检查起止日期是否相同
+    const isSameDay = this.data.newTask.startDate === date;
+    
+    // 当起止日期相同时，设置重复为"当天"并禁用重复选项
+    // 当起止日期不同时，如果之前是"当天"，则改为"每天"并启用重复选项
+    if (isSameDay) {
+      console.log('[TaskEdit] 检测到起止日期相同，设置为当天且禁用重复选项');
+      this.setData({
+        repeatText: '当天',
+        isRepeatOptionDisabled: true
+      });
+      
+      // 如果重复面板正在显示，则关闭它
+      if (this.data.repeatPanel) {
+        this.setData({
+          repeatPanel: false
+        });
+      }
+    } else if (this.data.isRepeatOptionDisabled) {
+      // 如果之前重复选项是禁用的（即起止日期是相同的），现在不同了
+      console.log('[TaskEdit] 检测到起止日期不同，启用重复选项');
+      this.setData({
+        repeatText: '每天', // 恢复为每天
+        isRepeatOptionDisabled: false
+      });
+    }
     
     // 同时更新重复任务的结束日期，修复结束日期不同步问题
     if (this.data.newTask.repeat && this.data.newTask.repeat.type !== 'none') {
@@ -1484,7 +1558,7 @@ Page({
       });
     }
     
-    console.log('[TaskEdit] 选择结束日期:', date);
+    console.log('[TaskEdit] 选择结束日期:', date, '起止日期相同:', isSameDay);
   },
   
   /**
