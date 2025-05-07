@@ -597,13 +597,17 @@ Component({
       
       console.log(`[TaskHeatmap] 处理积分有效期：${completedTasksCount}个已完成任务，${dayTasks.length - completedTasksCount}个待完成任务`);
       
-      // 计算总压力值并增强任务信息
+      // 使用预先计算好的压力值，避免重复计算
       let totalPressure = 0;
+      if (dayData && dayData.pressure && dayData.pressure.total !== undefined) {
+        console.log(`[TaskHeatmap] 使用预计算的压力值: ${dayData.pressure.total}`);
+        totalPressure = dayData.pressure.total;
+      } else {
+        console.log(`[TaskHeatmap] 日期没有预计算的压力值，使用默认值0`);
+      }
+      
+      // 增强任务信息，但不再重新计算压力
       const tasks = dayTasks.map(task => {
-        // 计算总压力
-        const taskPressure = this.calculateTaskPressure(task);
-        totalPressure += taskPressure.total;
-        
         // 记录任务是否为必做任务
         console.log(`[task-heatmap] 处理任务: ${task.title}, 是否必做: ${task.isRequired ? '是' : '否'}, ID: ${task.id}`);
         
@@ -715,8 +719,10 @@ Component({
         return enhancedTask;
       });
       
-      // 计算当日压力级别
-      const pressureLevel = this.calculatePressureLevel(totalPressure);
+      // 使用预计算好的压力级别
+      const pressureLevel = dayData && dayData.level ? 
+        this.calculatePressureLevel(totalPressure) : 
+        { levelText: '轻松', levelNum: 1, isHigh: false };
       
       // 转换日期为友好显示格式，例如"5月23日 周一"
       const selectedDate = new Date(date);
