@@ -206,54 +206,27 @@ Page({
     this.filterMessagesByTab();
   },
 
-  /**
-   * 查看消息详情
-   */
-  viewMessageDetail: function(e) {
-    const messageId = e.currentTarget.dataset.id;
-    const messageManager = require('../../utils/messageManager.js');
-    const messageIndex = this.data.messages.findIndex(m => m.id === messageId);
+/**
+ * 查看消息详情
+ */
+viewMessageDetail: function(e) {
+  const messageId = e.currentTarget.dataset.id;
+  const messageManager = require('../../utils/messageManager.js');
+  const messageIndex = this.data.messages.findIndex(m => m.id === messageId);
+  
+  if (messageIndex > -1) {
+    // 标记该消息为已读
+    messageManager.markAsRead(messageId);
     
-    if (messageIndex > -1) {
-      // 标记该消息为已读
-      messageManager.markAsRead(messageId);
-      
-      // 重新加载消息数据
-      setTimeout(() => {
-        this.loadMessageData();
-      }, 300);
-      
-      // 根据消息类型处理不同的导航逻辑
-      const message = this.data.messages[messageIndex];
-      switch (message.type) {
-        case 'task':
-          if (message.taskId) {
-            wx.navigateTo({
-              url: `/pages/task/task?id=${message.taskId}`
-            });
-          } else {
-            wx.showModal({
-              title: message.title,
-              content: message.summary,
-              showCancel: false
-            });
-          }
-          break;
-        case 'achievement':
-          // 导航到奖励页面
-          wx.switchTab({
-            url: '/pages/rewards/rewards'
-          });
-          break;
-        default:
-          wx.showModal({
-            title: message.title,
-            content: message.summary,
-            showCancel: false
-          });
-      }
-    }
-  },
+    // 记录日志
+    console.log(`[消息中心] 标记消息已读: ${this.data.messages[messageIndex].title}`);
+    
+    // 重新加载消息数据
+    setTimeout(() => {
+      this.loadMessageData();
+    }, 300);
+  }
+},
 
   /**
    * 标记所有消息为已读

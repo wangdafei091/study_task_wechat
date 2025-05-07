@@ -513,40 +513,18 @@ Page({
   },
   
   // 查看消息详情
-  viewMessageDetail: function(e) {
-    const messageId = e.currentTarget.dataset.id;
-    const message = this.data.messages.find(m => m.id === messageId);
+viewMessageDetail: function(e) {
+  const messageId = e.currentTarget.dataset.id;
+  const message = this.data.messages.find(m => m.id === messageId);
+  
+  if (message) {
+    // 标记该消息为已读
+    messageManager.markAsRead(messageId);
     
-    if (message) {
-      // 标记该消息为已读
-      messageManager.markAsRead(messageId);
-      
-      // 根据消息类型处理不同的导航逻辑
-      switch (message.type) {
-        case 'task':
-          // 如果有关联任务ID，导航到该任务详情
-          if (message.taskId) {
-            wx.navigateTo({
-              url: `/pages/task/task?id=${message.taskId}`
-            });
-          }
-          break;
-        case 'achievement':
-          // 导航到奖励页面
-          wx.switchTab({
-            url: '/pages/rewards/rewards'
-          });
-          break;
-        default:
-          // 显示消息内容
-          wx.showModal({
-            title: message.title,
-            content: message.summary,
-            showCancel: false
-          });
-      }
-    }
-  },
+    // 记录日志
+    console.log(`[首页] 标记消息已读: ${message.title}`);
+  }
+},
   
   // 标记所有消息为已读
   markAllAsRead: function() {

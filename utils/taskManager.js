@@ -440,26 +440,11 @@ const taskManager = {
         if (!task.isRequired) {
           console.log(`[TaskManager] 非必做任务 ${task.title} 已完成，添加星星: ${task.points || 0}`);
           pointsManager.addUserPoints(task.points || 0);
-          
-          // 创建任务完成消息
-          const messageManager = require('./messageManager.js');
-          messageManager.createTaskMessage(task, 'complete', 
-            `完成任务"${task.title}"，获得${task.points || 0}颗星星${
-              task.pointsExpiry === 'permanent' ? '' : 
-              `（${task.pointsExpiry === 'day' ? '当天' : '本周'}有效）`
-            }`
-          );
         }
       } else if (status === 0 && oldStatus === 1) { // 取消完成
         if (!task.isRequired) {
           console.log(`[TaskManager] 非必做任务 ${task.title} 取消完成，减少星星: ${task.points || 0}`);
           pointsManager.reduceUserPoints(task.points || 0);
-          
-          // 创建任务取消完成消息
-          const messageManager = require('./messageManager.js');
-          messageManager.createTaskMessage(task, 'uncomplete', 
-            `取消完成任务"${task.title}"，减少${task.points || 0}颗星星`
-          );
         }
       }
       
