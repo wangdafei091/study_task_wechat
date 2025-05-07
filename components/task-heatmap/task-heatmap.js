@@ -105,7 +105,8 @@ Component({
     descMaxLength: 50,                      // 描述最大长度
     windowWidth: 0,                         // 窗口宽度
     Constants: Constants,                   // 添加Constants对象到data中，使WXML可以访问
-    todayString: ''                         // 今天的日期字符串，用于提示文本
+    todayString: '',                         // 今天的日期字符串，用于提示文本
+    taskListScrollTop: 0                    // 任务列表的滚动位置
   },
   
   /**
@@ -810,33 +811,34 @@ Component({
                  '描述:', this.data.editDescription,
                  '范围:', this.data.editScope);
       
-      // 如果是循环任务，处理滚动确保编辑区域可见
-      if (task.repeat && task.repeat.type !== 'none') {
-        this.ensureEditAreaVisible(taskId);
-      }
+      // 确保编辑区域可见（无论是否为循环任务）
+      this.ensureEditAreaVisible(taskId, 'edit');
     },
     
-    // 确保编辑区域在视图中可见
-    ensureEditAreaVisible(taskId) {
+    // 确保编辑或删除区域在视图中可见
+    ensureEditAreaVisible(taskId, areaType = 'edit') {
+      console.log(`[TaskHeatmap] 准备滚动到${areaType === 'edit' ? '编辑' : '删除'}区域`);
+      
+      // 给DOM更新和动画一些时间
       setTimeout(() => {
-        const query = this.createSelectorQuery();
-        query.select(`#edit-${taskId}`).boundingClientRect();
-        query.selectViewport().boundingClientRect();
-        query.exec((res) => {
-          if (!res || !res[0] || !res[1]) return;
-          
-          const editRect = res[0];
-          const viewportRect = res[1];
-          
-          // 如果编辑区域底部超出视口，滚动到可见区域
-          if (editRect.bottom > viewportRect.height) {
-            const scrollView = this.selectComponent('.tasks-list');
-            if (scrollView) {
-              scrollView.scrollIntoView(`#edit-${taskId}`);
-            }
-          }
+        // 构建选择器，编辑区域有专用ID，删除区域用任务ID
+        const selector = areaType === 'edit' ? 
+          `#edit-${taskId}` : 
+          `#task-${taskId} .delete-confirm.visible`;
+        
+        console.log(`[TaskHeatmap] 使用选择器 "${selector}" 定位滚动目标`);
+        
+        // 简单高效的实现方式：增加固定的滚动量
+        const currentScrollTop = this.data.taskListScrollTop || 0;
+        const scrollOffset = 200; // 固定滚动偏移量，根据实际效果调整
+        
+        // 设置新的滚动位置
+        this.setData({
+          taskListScrollTop: currentScrollTop + scrollOffset
         });
-      }, 300); // 给动画一些时间完成
+        
+        console.log(`[TaskHeatmap] 设置滚动位置，从 ${currentScrollTop} 到 ${currentScrollTop + scrollOffset}`);
+      }, 300); // 给DOM更新和CSS动画足够的时间
     },
     
     // 选择编辑范围
@@ -1144,6 +1146,9 @@ Component({
         deleteScope: initialDeleteScope,
         showDeleteConfirm: true
       });
+      
+      // 确保删除确认区域可见
+      this.ensureEditAreaVisible(taskId, 'delete');
     },
     
     /**
@@ -1156,6 +1161,11 @@ Component({
       this.setData({
         deleteScope: scope
       });
+      
+      // 如果是任务系列删除，确保提示文本可见
+      if (scope === 'series' && this.data.activeTaskForDelete) {
+        this.ensureEditAreaVisible(this.data.activeTaskForDelete.id, 'delete');
+      }
     },
 
     /**

@@ -68,7 +68,7 @@
       <!-- 关闭按钮改为圆形X图标 -->
       <view class="close-btn-circle" bindtap="closeDayTasks">×</view>
     </view>
-    <view class="tasks-list">
+    <scroll-view class="tasks-list" scroll-y="true" scroll-with-animation="true" scroll-top="{{taskListScrollTop}}" enhanced="true" scroll-anchoring="true" show-scrollbar="true" id="tasks-scroll-view">
       <block wx:if="{{dayTasks.length > 0}}">
         <view 
           wx:for="{{dayTasks}}" 
@@ -269,7 +269,7 @@
         <view class="empty-icon">📝</view>
         <text>当日暂无任务</text>
       </view>
-    </view>
+    </scroll-view>
   </view>
   
   <!-- 循环任务范围提示气泡 -->
