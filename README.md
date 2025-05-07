@@ -12,7 +12,7 @@
 - 任务进度统计分析
 - 奖励机制
 - 消息提醒
-- 积分有效期管理
+- 积分有效期管理（自然周期）
 - 必做任务标记和处理
 - 批量处理任务记录
 
@@ -98,6 +98,12 @@ study_task_wechat/
 
 ## 版本历史
 
+### v1.6.0 (2024-07-15)
+- 完善整个应用的日志系统，确保日志格式统一
+- 为所有异步操作添加合适的日志记录
+- 优化批量处理进度显示
+- 修复特殊情况下的日期计算问题
+
 ### v1.5.5 (2024-07-05)
 - 优化积分有效期计算逻辑，改为按自然周期计算（自然周/月/季/年）
 - 更新项目文档，确保与当前代码保持一致
@@ -175,15 +181,15 @@ git clone https://github.com/yourusername/study_task_wechat.git
 console.log(`[组件/模块名] 动作: ${变量}`);
 
 // 示例
-console.log(`[taskManager] 创建任务: ${JSON.stringify(task)}`);
+console.log(`[taskManager] 创建任务: ${JSON.stringify({id: task.id, title: task.title, type: task.type})}`);
 console.log(`[progressRing] 更新进度: ${percent}%`);
 ```
 
 针对关键事件和错误，使用以下日志级别：
-- `console.log` - 普通信息
-- `console.info` - 流程节点信息
-- `console.warn` - 警告信息
-- `console.error` - 错误信息
+- `console.log` - 普通信息，用于一般性操作记录
+- `console.info` - 流程节点信息，用于标记重要流程节点
+- `console.warn` - 警告信息，可能会导致问题但不影响正常运行
+- `console.error` - 错误信息，严重错误或异常情况
 
 ### 日志记录要点
 
