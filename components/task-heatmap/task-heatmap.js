@@ -125,6 +125,8 @@ Component({
       console.log('[TaskHeatmap] 已优化时间范围与积分有效期行距，更加紧凑美观');
       console.log('[TaskHeatmap] 已修复手机端时钟图标与积分有效期重叠问题');
       console.log('[TaskHeatmap] 已修复时钟图标上半部分被截断的问题，优化显示效果');
+      console.log('[TaskHeatmap] 已统一任务类型颜色: 学习=绿色(var(--success-color)), 习惯=蓝色(var(--primary-color)), 兴趣=黄色(var(--warning-color))');
+      console.log('[TaskHeatmap] 已修复热力图和任务编辑页面中任务类型颜色不一致的问题');
       
       // 获取系统信息，判断屏幕宽度
       wx.getSystemInfo({

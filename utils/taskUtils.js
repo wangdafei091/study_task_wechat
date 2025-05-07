@@ -592,7 +592,12 @@ const getTaskStatistics = function(tasks) {
 };
 
 /**
- * 排序任务列表 - 按"习惯优先+开始时间"排序
+ * 排序今日任务列表
+ * 排序规则：
+ * 1. 必做全天任务优先
+ * 2. 非必做全天任务次之
+ * 3. 有起止时间的任务按时间顺序排列
+ * 
  * @param {Array} tasks - 任务数组
  * @returns {Array} 排序后的任务列表
  */
@@ -601,40 +606,47 @@ const sortTasksByHabitAndTime = function(tasks) {
     return [];
   }
   
-  console.log('[taskUtils] 开始按习惯优先+时间升序排序任务');
+  console.log('[taskUtils] 开始按新规则排序今日任务，任务数量:', tasks.length);
   
   const sortedTasks = [...tasks];
   
   sortedTasks.sort((a, b) => {
-    // 首先按必做任务排序，必做任务优先
+    // 获取任务属性，并处理可能的undefined值
     const aRequired = a.isRequired || false;
     const bRequired = b.isRequired || false;
+    const aAllDay = a.isAllDay || false;
+    const bAllDay = b.isAllDay || false;
+    
+    // 先按全天任务排序，全天任务优先
+    if (aAllDay !== bAllDay) {
+      return aAllDay ? -1 : 1;
+    }
+    
+    // 同为全天或非全天任务，必做任务优先
     if (aRequired !== bRequired) {
       return aRequired ? -1 : 1;
     }
     
-    // 其次按任务类型排序，习惯任务优先
-    if (a.type === 'habit' && b.type !== 'habit') {
-      return -1;
-    }
-    if (a.type !== 'habit' && b.type === 'habit') {
-      return 1;
+    // 对于非全天任务，按开始时间升序排序
+    if (!aAllDay && !bAllDay) {
+      const aTime = a.startTime || '23:59';
+      const bTime = b.startTime || '23:59';
+      return aTime.localeCompare(bTime);
     }
     
-    // 同类型任务按开始时间排序
-    const aTime = a.startTime || '23:59';
-    const bTime = b.startTime || '23:59';
-    
-    return aTime.localeCompare(bTime);
+    // 同类型任务按创建时间排序（新任务优先）
+    const aTime = a.createTime || 0;
+    const bTime = b.createTime || 0;
+    return bTime - aTime;
   });
   
   console.log('[taskUtils] 任务排序完成，结果：', 
     sortedTasks.map(t => ({
       id: t.id.substring(0, 8) + '...',
       title: t.title,
-      type: t.type,
-      required: t.isRequired,
-      startTime: t.startTime || 'N/A'
+      required: t.isRequired ? '是' : '否',
+      isAllDay: t.isAllDay ? '是' : '否',
+      startTime: t.startTime || '全天'
     }))
   );
   

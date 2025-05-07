@@ -416,15 +416,15 @@
 }
 
 .study-dot {
-  background-color: #4285F4; /* 学习：蓝色 */
+  background-color: var(--success-color); /* 学习：绿色 */
 }
 
 .habit-dot {
-  background-color: #34A853; /* 习惯：绿色 */
+  background-color: var(--primary-color); /* 习惯：蓝色 */
 }
 
 .interest-dot {
-  background-color: #F4B400; /* 兴趣：黄色 */
+  background-color: var(--warning-color); /* 兴趣：黄色 */
 }
 
 /* 任务标题 */
@@ -1156,15 +1156,15 @@
 
 /* 任务类型样式 */
 .study-task {
-  border-left: 4rpx solid #4285F4;
+  border-left: 4rpx solid var(--success-color);
 }
 
 .habit-task {
-  border-left: 4rpx solid #34A853;
+  border-left: 4rpx solid var(--primary-color);
 }
 
 .interest-task {
-  border-left: 4rpx solid #F4B400;
+  border-left: 4rpx solid var(--warning-color);
 }
 
 /* 添加卡片式操作菜单样式 */

@@ -50,8 +50,8 @@
       
       <!-- 信息区域，垂直布局 -->
       <view class="task-info-container">
-        <!-- 时间信息 - 仅对学习和兴趣类型任务显示 -->
-        <view class="task-time-info" wx:if="{{task.startTime && (task.type == 'study' || task.type == 'interest')}}">
+        <!-- 时间信息 - 对所有有起止时间且非全天的任务显示 -->
+        <view class="task-time-info" wx:if="{{task.startTime && !task.isAllDay}}">
           <text class="time-icon">🕒</text>
           <text>{{task.startTime}}{{task.endTime ? ' - ' + task.endTime : ''}}</text>
         </view>

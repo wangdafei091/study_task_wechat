@@ -88,6 +88,9 @@ Page({
       'buttonGap': '16rpx'
     });
     
+    // 记录任务类型颜色统一的更改
+    console.log('[TaskEdit] 已统一任务类型颜色: 学习=绿色(var(--success-color)), 习惯=蓝色(var(--primary-color)), 兴趣=黄色(var(--warning-color))');
+    
     // 初始化热力图月份
     this.initHeatmapMonth();
     

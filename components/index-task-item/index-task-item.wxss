@@ -46,7 +46,6 @@
 
 /* 任务必做左侧色条 */
 .required-task::before {
-  background-color: #f94646 !important;
   width: 8rpx !important;
 }
 

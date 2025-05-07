@@ -225,18 +225,18 @@
 }
 
 .type-option.selected.habit {
-  background-color: rgba(76, 175, 80, 0.15);
-  color: #4CAF50;
+  background-color: var(--primary-bg-light);
+  color: var(--primary-color);
 }
 
 .type-option.selected.study {
-  background-color: rgba(66, 133, 244, 0.15);
-  color: #4285F4;
+  background-color: var(--success-bg-light);
+  color: var(--success-color);
 }
 
 .type-option.selected.interest {
-  background-color: rgba(255, 152, 0, 0.15);
-  color: #FF9800;
+  background-color: var(--warning-bg-light);
+  color: var(--warning-color);
 }
 
 .type-option:active {

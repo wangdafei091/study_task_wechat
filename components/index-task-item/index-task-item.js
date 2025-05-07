@@ -145,6 +145,17 @@ Component({
       if (this.properties.task && this.properties.task.isRequired) {
         console.log('[index-task-item] 使用优化后的必做任务UI: 积极引导模式，统一"数字+星星"显示格式');
       }
+      
+      // 记录任务时间属性
+      if (this.properties.task) {
+        const task = this.properties.task;
+        console.log(`[index-task-item] 任务属性检查: ID=${task.id}, 标题=${task.title}, 有起止时间=${Boolean(task.startTime)}, 全天=${Boolean(task.isAllDay)}`);
+        
+        // 记录时间显示逻辑
+        if (task.startTime && !task.isAllDay) {
+          console.log(`[index-task-item] 显示时间信息: ${task.startTime}${task.endTime ? ` - ${task.endTime}` : ''}`);
+        }
+      }
     }
   }
 }) 
