@@ -140,6 +140,11 @@ Component({
   lifetimes: {
     attached: function() {
       console.log('[index-task-item] 组件加载完成，使用优化后的布局展示');
+      
+      // 记录必做任务UI优化
+      if (this.properties.task && this.properties.task.isRequired) {
+        console.log('[index-task-item] 使用优化后的必做任务UI: 积极引导模式，"按时完成可保留X星"');
+      }
     }
   }
 }) 

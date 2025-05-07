@@ -68,9 +68,10 @@
           </view>
         </block>
         <block wx:else>
-          <view class="task-required-info">
-            <text class="required-icon">⚠️</text>
-            <text class="required-text">未完成扣{{task.points || 0}}星</text>
+          <view class="task-star-info required-star-info">
+            <text class="required-text">按时完成可保留</text>
+            <text class="star-icon">⭐</text>
+            <text class="star-count normal-weight">{{task.points || 0}}</text>
           </view>
         </block>
       </view>

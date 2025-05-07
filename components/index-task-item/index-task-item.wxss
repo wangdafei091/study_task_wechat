@@ -325,5 +325,17 @@
 }
 
 .required-text {
-  font-weight: 500;
+  font-weight: normal;
+  margin-right: 4rpx;
+  color: #666666;
+}
+
+/* 必做任务星星样式 */
+.required-star-info {
+  color: #FF9800;
+}
+
+/* 将星星数字的权重调整为普通 */
+.normal-weight {
+  font-weight: 400;
 } 
