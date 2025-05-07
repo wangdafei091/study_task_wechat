@@ -178,9 +178,7 @@
   <upcoming-task 
     task="{{upcomingTask}}" 
     show="{{showUpcomingTask}}"
-    bind:tap="onUpcomingTaskTap"
-    bind:dismiss="dismissUpcomingTask"
-    bind:option="handleUpcomingOption">
+    bind:dismiss="dismissUpcomingTask">
   </upcoming-task>
   
   <!-- 今日任务列表 -->

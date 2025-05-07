@@ -2,6 +2,19 @@
 /* 引入共享样式 */
 @import "/styles/common-task.wxss";
 
+/* 热力图颜色变量定义 - 确保颜色统一 */
+page {
+  --level-1-color: rgba(92, 151, 247, 0.2);  /* 轻松压力: 浅蓝色 */
+  --level-2-color: rgba(66, 133, 244, 0.4);  /* 适中压力: 中蓝色 */
+  --level-3-color: rgba(83, 81, 186, 0.7);   /* 繁忙压力: 紫蓝色 */
+  --level-4-color: rgba(198, 40, 40, 0.85);  /* 紧张压力: 深红色 */
+  
+  --level-1-text: rgb(92, 151, 247);  /* 标签文本色: 深蓝色 */
+  --level-2-text: rgb(66, 133, 244);  /* 标签文本色: 中蓝色 */
+  --level-3-text: rgb(83, 81, 186);   /* 标签文本色: 紫蓝色 */
+  --level-4-text: rgb(198, 40, 40);   /* 标签文本色: 深红色 */
+}
+
 /* 组件特定的样式调整 */
 .edit-field .task-description-field {
   flex: 1;
@@ -96,20 +109,23 @@
   position: relative;
   margin: 1rpx 0;
   border-radius: 4rpx;
-  transition: all 0.2s ease;
+  transition: transform 0.2s ease; /* 仅对变换应用过渡，避免颜色过渡 */
   cursor: default;
+  background-color: transparent; /* 添加默认背景色 */
 }
 
-/* 添加选中日期的样式 */
+/* 修改选中日期的样式 - 使用border替代outline，兼容性更好 */
 .day.selected {
-  box-shadow: inset 0 0 0 2rpx #4285F4;
+  border: 2rpx solid #4285F4; /* 使用border替代outline */
+  box-sizing: border-box; /* 确保尺寸不变 */
   z-index: 1;
+  /* 不使用box-shadow以避免与热力图层阴影冲突 */
 }
 
-/* 点击效果 */
+/* 修改点击效果 - 移除所有可能影响颜色的属性 */
 .day.current-month:active {
-  transform: scale(0.95);
-  opacity: 0.8;
+  transform: scale(0.98);
+  /* 只保留轻微的缩放效果 */
 }
 
 .current-month {
@@ -157,39 +173,86 @@
   font-weight: 600;
 }
 
-/* 热力等级样式 - 使用色相渐变提高区分度 */
-.day.level-0 {
-  background-color: transparent; /* 0压力: 无任务 */
+/* 热力等级样式 - 强化选择器特异性，确保在移动设备上也能正确应用 */
+/* 无任务日期 - 强制使用完全透明的RGBA，避免设备差异 */
+.days .day.level-0,
+.days .day.level-0.selected,
+.days .day.level-0.today,
+.days .day.level-0:active {
+  background-color: rgba(0, 0, 0, 0) !important; /* 完全透明，不用transparent关键字 */
 }
 
-/* 使用通用色彩定义，与标签一致 */
-.day.level-1 {
-  background-color: rgba(92, 151, 247, 0.2); /* 0-30分: 轻松压力 */
+/* 轻松压力 - 使用RGB颜色，避免RGBA在不同设备上的差异 */
+.days .day.level-1,
+.days .day.level-1.selected,
+.days .day.level-1.today,
+.days .day.level-1:active {
+  background-color: var(--level-1-color) !important; /* 轻松压力 */
+  /* 添加重要的浏览器属性，确保不受设备渲染影响 */
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
 }
 
-.day.level-2 {
-  background-color: rgba(66, 133, 244, 0.4); /* 31-60分: 适中压力 */
-  box-shadow: inset 0 0 0 1rpx rgba(66, 133, 244, 0.1); /* 添加内嵌边框 */
+/* 适中压力 - 同样增强兼容性 */
+.days .day.level-2,
+.days .day.level-2.selected,
+.days .day.level-2.today,
+.days .day.level-2:active {
+  background-color: var(--level-2-color) !important; /* 适中压力 */
+  box-shadow: inset 0 0 0 1rpx rgba(66, 133, 244, 0.1) !important; /* 添加内嵌边框 */
+  /* 添加重要的浏览器属性 */
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
 }
 
-.day.level-3 {
-  background-color: rgba(83, 81, 186, 0.7); /* 61-90分: 繁忙压力 - 紫蓝色 */
-  box-shadow: inset 0 0 0 1rpx rgba(83, 81, 186, 0.15); /* 添加内嵌边框 */
+/* 繁忙压力 - 同样增强兼容性 */
+.days .day.level-3,
+.days .day.level-3.selected,
+.days .day.level-3.today,
+.days .day.level-3:active {
+  background-color: var(--level-3-color) !important; /* 繁忙压力 - 紫蓝色 */
+  box-shadow: inset 0 0 0 1rpx rgba(83, 81, 186, 0.15) !important; /* 添加内嵌边框 */
+  /* 添加重要的浏览器属性 */
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
 }
 
-.day.level-4 {
-  background-color: rgba(198, 40, 40, 0.85); /* 91分以上: 紧张压力 - 深红色 */
-  color: white;
-  box-shadow: inset 0 0 0 1rpx rgba(198, 40, 40, 0.3); /* 添加内嵌边框 */
+/* 紧张压力 - 同样增强兼容性 */
+.days .day.level-4,
+.days .day.level-4.selected,
+.days .day.level-4.today,
+.days .day.level-4:active {
+  background-color: var(--level-4-color) !important; /* 紧张压力 - 深红色 */
+  color: white !important;
+  box-shadow: inset 0 0 0 1rpx rgba(198, 40, 40, 0.3) !important; /* 添加内嵌边框 */
+  /* 添加重要的浏览器属性 */
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
 }
 
-.day.level-4 .day-number {
-  color: white;
+/* 针对手机端，直接使用硬编码颜色作为备份，避免CSS变量兼容性问题 */
+.days .day.level-1 { background-color: rgba(92, 151, 247, 0.2) !important; }
+.days .day.level-2 { background-color: rgba(66, 133, 244, 0.4) !important; }
+.days .day.level-3 { background-color: rgba(83, 81, 186, 0.7) !important; }
+.days .day.level-4 { background-color: rgba(198, 40, 40, 0.85) !important; }
+
+/* 确保紧张压力下文本保持白色 - 增强选择器特异性 */
+.task-heatmap .days .day.level-4 .day-number,
+.task-heatmap .days .day.level-4.selected .day-number,
+.task-heatmap .days .day.level-4.today .day-number {
+  color: white !important;
 }
 
-.day.level-4 .task-count {
-  color: rgba(255, 255, 255, 0.95);
-  background-color: rgba(0, 0, 0, 0.2);
+/* 确保紧张压力下任务计数标识保持白色 - 增强选择器特异性 */
+.task-heatmap .days .day.level-4 .task-count,
+.task-heatmap .days .day.level-4.selected .task-count,
+.task-heatmap .days .day.level-4.today .task-count {
+  color: rgba(255, 255, 255, 0.95) !important;
+  background-color: rgba(0, 0, 0, 0.2) !important;
 }
 
 /* 浮层提示样式 */
@@ -306,7 +369,7 @@
   margin-right: 10rpx; /* 与压力指示器保持间距 */
 }
 
-/* 标签式压力指示器样式 */
+/* 标签式压力指示器样式 - 使用与热力图一致的颜色变量 */
 .pressure-tag {
   border-radius: 20rpx;
   padding: 2rpx 12rpx;
@@ -318,21 +381,25 @@
   justify-content: center;
 }
 
-/* 不同级别的压力标签样式 - 与热力图色阶保持一致 */
+/* 不同级别的压力标签样式 - 与热力图色阶保持一致，直接使用硬编码颜色确保兼容性 */
 .pressure-tag.pressure-level-1 {
-  background-color: #5C97F7; /* 轻松(0-30分)：浅蓝色 */
+  background-color: var(--level-1-text); /* 轻松 */
+  background-color: rgb(92, 151, 247); /* 备用硬编码颜色 */
 }
 
 .pressure-tag.pressure-level-2 {
-  background-color: #4285F4; /* 适中(31-60分)：中蓝色 */
+  background-color: var(--level-2-text); /* 适中 */
+  background-color: rgb(66, 133, 244); /* 备用硬编码颜色 */
 }
 
 .pressure-tag.pressure-level-3 {
-  background-color: #5351BA; /* 繁忙(61-90分)：紫蓝色 */
+  background-color: var(--level-3-text); /* 繁忙 */
+  background-color: rgb(83, 81, 186); /* 备用硬编码颜色 */
 }
 
 .pressure-tag.pressure-level-4 {
-  background-color: #C62828; /* 紧张(91分以上)：深红色 */
+  background-color: var(--level-4-text); /* 紧张 */
+  background-color: rgb(198, 40, 40); /* 备用硬编码颜色 */
 }
 
 /* 关闭按钮样式 */
@@ -735,15 +802,6 @@
   background-color: rgba(198, 40, 40, 0.85);
 }
 
-/* 任务压力标签 - 已不再使用，移除 */
-.task-pressure-indicator {
-  display: none;
-}
-
-.task-pressure-text {
-  display: none;
-}
-
 /* 任务时间样式 */
 .task-time {
   font-size: 20rpx;
@@ -968,7 +1026,7 @@
   font-size: 22rpx;
   color: #888;
   margin: 8rpx 24rpx 4rpx; /* 调整外边距，与周围元素保持适当间距 */
-  padding: 0; /* 移除内边距 */
+  padding: 0; /* 移除内边距 */ 
   display: block;
   width: 100%;
   line-height: 1.3;

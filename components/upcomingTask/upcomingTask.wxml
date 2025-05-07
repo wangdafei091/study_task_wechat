@@ -1,7 +1,7 @@
 <!--components/upcomingTask/upcomingTask.wxml-->
 <view class="upcoming-task-wrapper" wx:if="{{show}}">
   <!-- 任务卡片 -->
-  <view class="upcoming-task {{isLongPress ? 'long-press' : ''}} {{dismissing ? 'dismissing' : ''}}"
+  <view class="upcoming-task {{dismissing ? 'dismissing' : ''}}"
         style="transform: translateX({{swipeOffset}}rpx);"
         bindtouchstart="touchStartUpcoming"
         bindtouchend="touchEndUpcoming"
@@ -13,26 +13,13 @@
       <view class="upcoming-title">即将到期</view>
       <view class="upcoming-desc">{{task.name}}将在 {{task.timeRemaining}} 小时后开始</view>
     </view>
-    <view class="upcoming-arrow">
-      <text class="iconfont icon-right">〉</text>
+    <view class="swipe-hint" style="opacity: {{showSwipeHint ? 1 : 0.6}};">
+      <text>← 左滑关闭</text>
     </view>
   </view>
   
-  <!-- 长按出现的选项卡 -->
-  <view class="option-bubble-container" wx:if="{{showOptions}}">
-    <view class="option-bubble" bindtap="handleOption" data-action="viewTask">
-      <view class="option-icon">📝</view>
-      <view class="option-text">查看任务</view>
-    </view>
-    
-    <view class="option-bubble" bindtap="handleOption" data-action="viewMessages">
-      <view class="option-icon">📬</view>
-      <view class="option-text">消息中心</view>
-    </view>
-    
-    <view class="option-bubble option-bubble-dismiss" bindtap="handleOption" data-action="dismiss">
-      <view class="option-icon">🔕</view>
-      <view class="option-text">不再提醒</view>
-    </view>
+  <!-- 滑动提示背景 -->
+  <view class="swipe-background" wx:if="{{swipeOffset < 0}}">
+    <view class="swipe-dismiss-text">关闭提醒</view>
   </view>
 </view> 
