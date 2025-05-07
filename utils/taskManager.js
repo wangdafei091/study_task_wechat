@@ -598,6 +598,10 @@ const taskManager = {
             // 计算时间差（小时）
             const diffHours = (taskTime - now) / (1000 * 60 * 60);
             
+            // 格式化开始时间为更友好的显示格式
+            const formattedStartTime = startTime;
+            console.log(`[TaskManager] 任务"${task.title || task.name}"将在 ${formattedStartTime} 开始`);
+            
             // 处理提醒时间
             let shouldRemind = false;
             if (task.reminder && task.reminder.enabled) {
@@ -607,7 +611,7 @@ const taskManager = {
                 const timeDiff = Math.abs(reminderTime - now) / (1000 * 60);
                 shouldRemind = timeDiff <= 10;
                 
-                console.log(`[TaskManager] 任务"${task.title}"提醒时间差: ${timeDiff.toFixed(1)}分钟, 是否提醒: ${shouldRemind}`);
+                console.log(`[TaskManager] 任务"${task.title || task.name}"提醒时间差: ${timeDiff.toFixed(1)}分钟, 是否提醒: ${shouldRemind}`);
               }
             }
             
@@ -615,14 +619,15 @@ const taskManager = {
             if (task.isRequired) {
               // 对必做任务，时间窗口扩大到36小时
               shouldRemind = shouldRemind || (diffHours > 0 && diffHours < 36);
-              console.log(`[TaskManager] 必做任务"${task.title}"将在${diffHours.toFixed(1)}小时后到期`);
+              console.log(`[TaskManager] 必做任务"${task.title || task.name}"将在${diffHours.toFixed(1)}小时后到期`);
             }
             
             // 只考虑未来24小时内的任务或需要提醒的任务
             if ((diffHours > 0 && diffHours < 24) || shouldRemind) {
               upcomingTasks.push({
                 ...task,
-                timeRemaining: Math.round(diffHours * 10) / 10 // 保留一位小数
+                timeRemaining: Math.round(diffHours * 10) / 10, // 保留一位小数（用于排序和筛选）
+                formattedStartTime: formattedStartTime // 添加格式化的开始时间（用于显示）
               });
             }
           } catch (error) {
@@ -641,7 +646,7 @@ const taskManager = {
           // 为必做任务创建特殊提醒
           if (task.isRequired) {
             messageManager.createTaskMessage(task, 'required');
-            console.log(`[TaskManager] 创建了必做任务提醒: ${task.title}`);
+            console.log(`[TaskManager] 创建了必做任务提醒: ${task.title || task.name}`);
           } else {
             messageManager.createTaskMessage(task, 'upcoming');
           }

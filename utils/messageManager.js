@@ -476,6 +476,7 @@ const messageManager = {
               id: firstTask.id,
               name: firstTask.title || firstTask.name,
               timeRemaining: firstTask.timeRemaining,
+              formattedStartTime: firstTask.formattedStartTime,
               isDismissible: true
             }, true);
           }
@@ -492,6 +493,7 @@ const messageManager = {
             id: firstTask.id,
             name: firstTask.title || firstTask.name,
             timeRemaining: firstTask.timeRemaining,
+            formattedStartTime: firstTask.formattedStartTime,
             isDismissible: true
           }, true);
         }

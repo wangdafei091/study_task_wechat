@@ -11,7 +11,7 @@
     </view>
     <view class="upcoming-content">
       <view class="upcoming-title">即将到期</view>
-      <view class="upcoming-desc">{{task.name}}将在 {{task.timeRemaining}} 小时后开始</view>
+      <view class="upcoming-desc">{{task.name}}将在 {{task.formattedStartTime}} 开始</view>
     </view>
     <view class="swipe-hint" style="opacity: {{showSwipeHint ? 1 : 0.6}};">
       <text>← 左滑关闭</text>
