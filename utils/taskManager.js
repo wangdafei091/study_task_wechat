@@ -423,133 +423,53 @@ const taskManager = {
    */
   updateTaskStatus(taskId, status, callback) {
     this.getAllTasks(allTasks => {
-      let updatedTask = null;
-      let oldStatus = null;
-      
-      // 更新任务状态
-      const updatedTasks = allTasks.map(task => {
-        if (task.id === taskId) {
-          oldStatus = task.status;
-          // 为已完成任务添加完成记录
-          const newTask = { ...task, status: status };
-          
-          // 当非必做任务状态变为已完成时，添加完成记录和积分奖励
-          if (status === 1 && !task.isRequired) {
-            // 使用task.points作为奖励积分
-            let rewardPoints = task.points || 0;
-            
-            console.log(`[TaskManager] 非必做任务 ${task.title} 已完成，添加奖励积分: ${rewardPoints}`);
-            
-            // 获取当前日期时间
-            const now = new Date();
-            const dateStr = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
-            
-            // 初始化completionRecords数组(如果不存在)
-            if (!newTask.completionRecords) {
-              newTask.completionRecords = [];
-            }
-            
-            // 添加完成记录
-            newTask.completionRecords.push({
-              date: dateStr,
-              timestamp: now.getTime(),
-              notes: ''
-            });
-            
-            // 根据任务设置的有效期类型计算实际失效日期
-            const originalExpiryType = task.pointsExpiry || 'week'; // 默认使用周有效期
-            console.log(`[TaskManager] 任务 ${task.title} 原始积分有效期类型: ${originalExpiryType}`);
-            
-            // 计算实际有效期
-            const expiryInfo = this.calculateExpiryDate(originalExpiryType, now);
-            
-            // 设置积分有效期
-            newTask.pointsExpiry = expiryInfo.expiry;
-            newTask.pointsExpiryDate = expiryInfo.expiryDateStr;
-            
-            console.log(`[TaskManager] 任务 ${newTask.title} 已完成，设置积分有效期: ${expiryInfo.expiryDateStr}`);
-            
-            // 更新用户积分
-            pointsManager.addUserPoints(rewardPoints);
-            
-            // 创建奖励消息
-            const messageManager = require('./messageManager.js');
-            messageManager.createSystemMessage(
-              `完成任务"${newTask.title}"，获得${rewardPoints}颗星星${
-                expiryInfo.expiry === 'permanent' ? '（永久有效）' : `（有效期至${expiryInfo.expiryDateStr}）`
-              }`,
-              'reward'
-            );
-          }
-          // 当非必做任务状态从已完成变为未完成时，需要减少之前奖励的星星数
-          else if (oldStatus === 1 && status === 0 && !task.isRequired) {
-            // 使用task.points作为需要减少的星星数
-            let rewardPoints = task.points || 0;
-            
-            console.log(`[TaskManager] 非必做任务 ${task.title} 取消完成，减少星星: ${rewardPoints}`);
-            
-            // 移除最近的完成记录（如果有）
-            if (newTask.completionRecords && newTask.completionRecords.length > 0) {
-              newTask.completionRecords.pop();
-            }
-            
-            // 重置积分有效期相关字段
-            newTask.pointsExpiryDate = null;
-            
-            // 减少用户星星数
-            pointsManager.reduceUserPoints(rewardPoints);
-            
-            // 创建取消奖励消息
-            const messageManager = require('./messageManager.js');
-            messageManager.createSystemMessage(
-              `取消完成任务"${newTask.title}"，减少${rewardPoints}颗星星`,
-              'penalty'
-            );
-          }
-          // 处理必做任务从pending变为overdue或canceled时的扣分逻辑
-          else if (task.isRequired && 
-                  oldStatus === 0 && 
-                  (status === 2 || status === 3)) { // 0=pending, 2=overdue, 3=canceled
-            
-            const penaltyPoints = task.points || 0;
-            console.log(`[TaskManager] 必做任务 ${task.title} 未完成，扣除星星: ${penaltyPoints}`);
-            
-            if (penaltyPoints > 0) {
-              // 使用pointsManager减少积分
-              pointsManager.reduceUserPoints(penaltyPoints);
-              
-              // 创建扣分通知
-              const messageManager = require('./messageManager.js');
-              messageManager.createSystemMessage(
-                `任务"${task.title}"未完成，扣除${penaltyPoints}颗星星`,
-                'penalty'
-              );
-            }
-          }
-          
-          updatedTask = newTask;
-          return updatedTask;
-        }
-        return task;
-      });
-      
-      if (updatedTask) {
-        // 保存任务数据
-        this._saveTaskData(updatedTasks, () => {
-          // 触发任务变更事件
-          this._onTaskDataChanged(updatedTasks);
-          
-          // 创建任务完成消息(如果状态变为已完成)
-          if (status === 1) {
-            const messageManager = require('./messageManager.js');
-            messageManager.createTaskMessage(updatedTask, 'completed');
-          }
-          
-          if (callback) callback(updatedTask);
-        });
-      } else if (callback) {
-        callback(null);
+      const taskIndex = allTasks.findIndex(t => t.id === taskId);
+      if (taskIndex === -1) {
+        console.error(`[TaskManager] 任务不存在: ${taskId}`);
+        if (callback) callback(false);
+        return;
       }
+
+      const task = allTasks[taskIndex];
+      const oldStatus = task.status;
+      task.status = status;
+      task.modifyTime = Date.now();
+
+      // 处理积分变更
+      if (status === 1 && oldStatus !== 1) { // 完成任务
+        if (!task.isRequired) {
+          console.log(`[TaskManager] 非必做任务 ${task.title} 已完成，添加星星: ${task.points || 0}`);
+          pointsManager.addUserPoints(task.points || 0);
+          
+          // 创建任务完成消息
+          const messageManager = require('./messageManager.js');
+          messageManager.createTaskMessage(task, 'complete', 
+            `完成任务"${task.title}"，获得${task.points || 0}颗星星${
+              task.pointsExpiry === 'permanent' ? '' : 
+              `（${task.pointsExpiry === 'day' ? '当天' : '本周'}有效）`
+            }`
+          );
+        }
+      } else if (status === 0 && oldStatus === 1) { // 取消完成
+        if (!task.isRequired) {
+          console.log(`[TaskManager] 非必做任务 ${task.title} 取消完成，减少星星: ${task.points || 0}`);
+          pointsManager.reduceUserPoints(task.points || 0);
+          
+          // 创建任务取消完成消息
+          const messageManager = require('./messageManager.js');
+          messageManager.createTaskMessage(task, 'uncomplete', 
+            `取消完成任务"${task.title}"，减少${task.points || 0}颗星星`
+          );
+        }
+      }
+      
+      // 保存任务数据
+      this._saveTaskData(allTasks, () => {
+        // 触发任务变更事件
+        this._onTaskDataChanged(allTasks);
+        
+        if (callback) callback(task);
+      });
     });
   },
   

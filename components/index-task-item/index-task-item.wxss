@@ -309,4 +309,21 @@
   margin-right: 16rpx;
   display: flex;
   align-items: center;
+}
+
+/* 必做任务信息样式 */
+.task-required-info {
+  display: flex;
+  align-items: center;
+  font-size: 22rpx;
+  color: #f94646;
+}
+
+.required-icon {
+  font-size: 22rpx;
+  margin-right: 4rpx;
+}
+
+.required-text {
+  font-weight: 500;
 } 

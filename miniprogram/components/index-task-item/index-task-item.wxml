@@ -1,0 +1,9 @@
+<!-- 星星显示 -->
+<view class="star-container" wx:if="{{task.type === 'required'}}">
+  <view class="star-label">惩罚星星数：</view>
+  <view class="star-value">{{task.points || 0}}</view>
+</view>
+<view class="star-container" wx:else>
+  <view class="star-label">奖励星星数：</view>
+  <view class="star-value">{{task.points || 0}}</view>
+</view> 
