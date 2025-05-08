@@ -1595,3 +1595,21 @@ page {
   border-right: 6rpx solid transparent;
   border-top: 6rpx solid rgba(0, 0, 0, 0.6);
 }
+
+/* 添加积分区域只读状态的样式 */
+.stepper-btn.disabled {
+  color: #ccc;
+  background-color: #f5f5f5;
+  cursor: not-allowed;
+}
+
+.stepper-input.disabled {
+  background-color: #f5f5f5;
+  color: #999;
+}
+
+.readonly-tip {
+  font-size: 22rpx;
+  color: #ff9800;
+  margin-left: 20rpx;
+}

@@ -104,6 +104,7 @@ Component({
     activeTaskIndex: -1, // 当前操作的任务索引
     actionMenuStyle: '', // 操作菜单样式
     todayString: new Date().toISOString().split('T')[0], // 今天日期字符串，格式YYYY-MM-DD
+    pointsReadOnly: false, // 积分是否为只读状态（已完成任务或历史任务）
   },
   
   /**
@@ -793,8 +794,13 @@ Component({
         return;
       }
       
-      // 记录必做任务状态
-      console.log(`[TaskHeatmap] 编辑任务: ${task.title}, 是否必做: ${task.isRequired ? '是' : '否'}`);
+      // 判断任务是否为已完成或历史任务
+      const isCompleted = task.status === 'completed' || task.status === 1;
+      const isHistoryTask = task.date < this.data.todayString;
+      const pointsReadOnly = isCompleted || isHistoryTask;
+      
+      console.log(`[TaskHeatmap] 编辑任务: ${task.title}, 是否必做: ${task.isRequired ? '是' : '否'}, 是否已完成: ${isCompleted}, 是否为历史任务: ${isHistoryTask}`);
+      console.log(`[TaskHeatmap] 积分编辑状态: ${pointsReadOnly ? '只读' : '可编辑'}`);
       
       // 默认设为单任务编辑
       let defaultScope = 'single';
@@ -805,13 +811,15 @@ Component({
         editingTaskIndex: taskIndex,
         editPoints: task.points || 0,
         editDescription: task.description || '',
-        editScope: defaultScope
+        editScope: defaultScope,
+        pointsReadOnly: pointsReadOnly // 设置积分是否为只读状态
       });
       
       console.log('[TaskHeatmap] 开始编辑任务:', task.title, 
                  '积分:', this.data.editPoints, 
                  '描述:', this.data.editDescription,
-                 '范围:', this.data.editScope);
+                 '范围:', this.data.editScope,
+                 '积分只读:', this.data.pointsReadOnly);
       
       // 确保编辑区域可见（无论是否为循环任务）
       this.ensureEditAreaVisible(taskId, 'edit');
@@ -958,6 +966,18 @@ Component({
      * 调整积分值
      */
     adjustEditPoints(e) {
+      // 如果积分为只读状态，则不允许修改
+      if (this.data.pointsReadOnly) {
+        console.log('[TaskHeatmap] 积分为只读状态，禁止修改');
+        // 显示提示
+        wx.showToast({
+          title: '已完成任务积分不可修改',
+          icon: 'none',
+          duration: 1500
+        });
+        return;
+      }
+      
       const action = e.currentTarget.dataset.action;
       let points = this.data.editPoints;
       
@@ -978,6 +998,16 @@ Component({
      * 处理积分输入
      */
     onEditPointsInput(e) {
+      // 如果积分为只读状态，则不允许修改
+      if (this.data.pointsReadOnly) {
+        console.log('[TaskHeatmap] 积分为只读状态，禁止输入修改');
+        // 还原为原值
+        this.setData({
+          editPoints: this.data.editPoints
+        });
+        return;
+      }
+      
       const value = parseInt(e.detail.value) || 0;
       // 限制积分范围在1-50之间
       const points = Math.max(1, Math.min(50, value));
@@ -1014,7 +1044,8 @@ Component({
         editPoints: 0,
         editDescription: '',
         editScope: 'single',
-        showScopeInfoBubble: false
+        showScopeInfoBubble: false,
+        pointsReadOnly: false // 重置积分只读状态
       });
       
       // 清除可能存在的定时器
@@ -1057,12 +1088,17 @@ Component({
         modifyTime: Date.now()
       };
       
-      // 如果不是必做任务，才更新积分字段
-      if (!task.isRequired) {
+      // 如果不是必做任务，且积分不是只读状态，才更新积分字段
+      if (!task.isRequired && !this.data.pointsReadOnly) {
         updateData.points = this.data.editPoints;
+        console.log(`[TaskHeatmap] 将更新积分为: ${this.data.editPoints}`);
+      } else if (this.data.pointsReadOnly) {
+        console.log(`[TaskHeatmap] 积分为只读状态，不更新积分字段`);
+      } else {
+        console.log(`[TaskHeatmap] 必做任务，不更新积分字段`);
       }
       
-      console.log(`[TaskHeatmap] 更新任务${task.id}，是否必做: ${task.isRequired ? '是' : '否'}, 更新字段:`, updateData);
+      console.log(`[TaskHeatmap] 更新任务${task.id}，是否必做: ${task.isRequired ? '是' : '否'}, 积分只读: ${this.data.pointsReadOnly ? '是' : '否'}, 更新字段:`, updateData);
       
       // 显示加载中
       wx.showLoading({

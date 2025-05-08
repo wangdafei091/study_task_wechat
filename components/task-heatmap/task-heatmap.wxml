@@ -200,10 +200,11 @@
                 <view class="edit-field" wx:if="{{!dayTasks[editingTaskIndex].isRequired}}">
                   <text class="field-label">积分:</text>
                   <view class="points-stepper">
-                    <view class="stepper-btn" bindtap="adjustEditPoints" data-action="reduce">-</view>
-                    <input class="stepper-input" type="number" value="{{editPoints}}" bindinput="onEditPointsInput" />
-                    <view class="stepper-btn" bindtap="adjustEditPoints" data-action="add">+</view>
+                    <view class="stepper-btn {{pointsReadOnly ? 'disabled' : ''}}" bindtap="adjustEditPoints" data-action="reduce">-</view>
+                    <input class="stepper-input {{pointsReadOnly ? 'disabled' : ''}}" type="number" value="{{editPoints}}" bindinput="onEditPointsInput" disabled="{{pointsReadOnly}}" />
+                    <view class="stepper-btn {{pointsReadOnly ? 'disabled' : ''}}" bindtap="adjustEditPoints" data-action="add">+</view>
                   </view>
+                  <text class="readonly-tip" wx:if="{{pointsReadOnly}}">已完成任务积分不可修改</text>
                 </view>
                 
                 <!-- 描述输入 -->
