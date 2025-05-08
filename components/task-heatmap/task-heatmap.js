@@ -821,23 +821,86 @@ Component({
       
       // 给DOM更新和动画一些时间
       setTimeout(() => {
-        // 构建选择器，编辑区域有专用ID，删除区域用任务ID
-        const selector = areaType === 'edit' ? 
+        // 构建选择器，编辑区域有专用ID，删除区域用任务ID和类组合
+        const taskSelector = `#task-${taskId}`;
+        const targetSelector = areaType === 'edit' ? 
           `#edit-${taskId}` : 
           `#task-${taskId} .delete-confirm.visible`;
+        const containerSelector = '#tasks-scroll-view';
         
-        console.log(`[TaskHeatmap] 使用选择器 "${selector}" 定位滚动目标`);
-        
-        // 简单高效的实现方式：增加固定的滚动量
-        const currentScrollTop = this.data.taskListScrollTop || 0;
-        const scrollOffset = 200; // 固定滚动偏移量，根据实际效果调整
-        
-        // 设置新的滚动位置
-        this.setData({
-          taskListScrollTop: currentScrollTop + scrollOffset
+        console.log(`[TaskHeatmap] 使用选择器 "${targetSelector}" 定位滚动目标`);
+
+        // 创建查询，同时获取所有需要的元素位置
+        const query = this.createSelectorQuery();
+        query.select(taskSelector).boundingClientRect(); // 任务卡片位置
+        query.select(targetSelector).boundingClientRect(); // 目标区域位置
+        query.select(containerSelector).boundingClientRect(); // 滚动容器位置
+        query.select(containerSelector).scrollOffset(); // 当前滚动位置
+        query.exec((res) => {
+          if (!res || !res[0] || !res[1] || !res[2] || !res[3]) {
+            console.error('[TaskHeatmap] 获取元素位置失败，使用备用滚动方案');
+            
+            // 备用方案：使用固定偏移量
+            const currentScrollTop = this.data.taskListScrollTop || 0;
+            const fallbackOffset = 120;
+            this.setData({
+              taskListScrollTop: currentScrollTop + fallbackOffset
+            });
+            return;
+          }
+          
+          const taskRect = res[0]; // 任务卡片位置
+          const targetRect = res[1]; // 目标区域（编辑或删除区域）
+          const containerRect = res[2]; // 滚动容器
+          const scrollData = res[3]; // 当前滚动位置
+          
+          console.log(`[TaskHeatmap] 任务卡片位置: top=${taskRect.top}, height=${taskRect.height}`);
+          console.log(`[TaskHeatmap] ${areaType}区域位置: top=${targetRect.top}, height=${targetRect.height}`);
+          console.log(`[TaskHeatmap] 滚动容器: height=${containerRect.height}, top=${containerRect.top}`);
+          console.log(`[TaskHeatmap] 当前滚动位置: scrollTop=${scrollData.scrollTop}`);
+          
+          // 计算目标区域相对于可视容器的位置
+          const targetBottom = targetRect.top + targetRect.height;
+          const containerBottom = containerRect.top + containerRect.height;
+          
+          // 判断目标区域是否可见
+          const isTargetFullyVisible = 
+            targetRect.top >= containerRect.top && 
+            targetBottom <= containerBottom;
+          
+          if (!isTargetFullyVisible) {
+            // 计算需要滚动的位置
+            let newScrollTop = scrollData.scrollTop;
+            const visualBuffer = 20; // 视觉缓冲区，单位rpx
+            
+            // 如果目标底部超出可视范围底部
+            if (targetBottom > containerBottom) {
+              const overflow = targetBottom - containerBottom;
+              newScrollTop += overflow + visualBuffer;
+              console.log(`[TaskHeatmap] 目标底部超出视图 ${overflow}px，向下滚动`);
+            } 
+            // 如果目标顶部在可视范围顶部之上
+            else if (targetRect.top < containerRect.top) {
+              const underflow = containerRect.top - targetRect.top;
+              newScrollTop -= underflow + visualBuffer;
+              console.log(`[TaskHeatmap] 目标顶部在视图之上 ${underflow}px，向上滚动`);
+            }
+            
+            // 确保不滚动到负值
+            newScrollTop = Math.max(0, newScrollTop);
+            
+            console.log(`[TaskHeatmap] 计算得到新滚动位置: ${newScrollTop}px (当前: ${scrollData.scrollTop}px)`);
+            
+            // 设置新的滚动位置
+            this.setData({
+              taskListScrollTop: newScrollTop
+            });
+            
+            console.log(`[TaskHeatmap] 设置滚动位置: ${newScrollTop}px`);
+          } else {
+            console.log(`[TaskHeatmap] ${areaType}区域已在可视范围内，无需滚动`);
+          }
         });
-        
-        console.log(`[TaskHeatmap] 设置滚动位置，从 ${currentScrollTop} 到 ${currentScrollTop + scrollOffset}`);
       }, 300); // 给DOM更新和CSS动画足够的时间
     },
     
