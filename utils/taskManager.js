@@ -440,11 +440,35 @@ const taskManager = {
         if (!task.isRequired) {
           console.log(`[TaskManager] 非必做任务 ${task.title} 已完成，添加星星: ${task.points || 0}`);
           pointsManager.addUserPoints(task.points || 0);
+          
+          // 计算积分有效期并更新任务
+          if (task.pointsExpiry) {
+            console.log(`[TaskManager] 计算任务${task.id}积分有效期，类型: ${task.pointsExpiry}`);
+            const completionDate = new Date();
+            const expiryInfo = this.calculateExpiryDate(task.pointsExpiry, completionDate);
+            
+            // 更新任务的有效期信息
+            task.pointsExpiryDate = expiryInfo.expiryDateStr;
+            console.log(`[TaskManager] 更新任务${task.id}的积分有效期为: ${task.pointsExpiryDate}`);
+          }
         }
       } else if (status === 0 && oldStatus === 1) { // 取消完成
         if (!task.isRequired) {
           console.log(`[TaskManager] 非必做任务 ${task.title} 取消完成，减少星星: ${task.points || 0}`);
           pointsManager.reduceUserPoints(task.points || 0);
+          
+          // 重置有效期显示为类型描述
+          if (task.pointsExpiry && typeof task.pointsExpiry === 'string') {
+            const Constants = require('./constants.js');
+            if (task.pointsExpiry === 'permanent') {
+              task.pointsExpiryDate = '永久';
+            } else if (Constants.POINTS_EXPIRY.TEXT[task.pointsExpiry]) {
+              task.pointsExpiryDate = Constants.POINTS_EXPIRY.TEXT[task.pointsExpiry];
+            } else {
+              task.pointsExpiryDate = '';
+            }
+            console.log(`[TaskManager] 重置任务${task.id}的积分有效期为: ${task.pointsExpiryDate}`);
+          }
         }
       }
       
