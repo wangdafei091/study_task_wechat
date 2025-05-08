@@ -41,6 +41,7 @@ Component({
           } else if (typeof newVal.pointsExpiry === 'string' && Constants.POINTS_EXPIRY.TEXT[newVal.pointsExpiry]) {
             // 未完成任务，显示完成后的有效期类型描述
             expiryText = Constants.POINTS_EXPIRY.TEXT[newVal.pointsExpiry];
+            console.log(`[index-task-item] 从常量映射星星有效期: ${newVal.pointsExpiry} -> ${expiryText}`);
           } else if (typeof newVal.pointsExpiry === 'number') {
             // 时间戳类型，计算与当前时间的差距
             const now = new Date().getTime();
@@ -57,6 +58,11 @@ Component({
             // 默认情况
             expiryText = '7天';
           }
+          
+          // 将处理好的有效期文本保存到组件data中
+          this.setData({
+            expiryText: expiryText
+          });
           
           console.log(`[index-task-item] 渲染任务: ${newVal.title}, 类型: ${newVal.type}, 星星: ${newVal.points || 0}颗, 有效期: ${expiryText}`);
         }
@@ -82,7 +88,8 @@ Component({
       study: '📝'
     },
     isDescriptionExpanded: false, // 任务描述是否展开
-    showStarAnimation: false      // 是否显示星星动画
+    showStarAnimation: false,     // 是否显示星星动画
+    expiryText: '7天'             // 积分有效期默认文本
   },
 
   /**
