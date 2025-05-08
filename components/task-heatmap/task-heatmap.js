@@ -79,34 +79,31 @@ Component({
   },
   
   data: {
-    days: [],                               // 日历天数数组
-    weekDays: ['日', '一', '二', '三', '四', '五', '六'], // 星期标题
-    selectedDate: '',                       // 当前选中的日期
-    selectedDateText: '',                   // 日期显示文本
-    dayTasks: [],                           // 选中日期的任务
-    showDayTasks: false,                    // 是否显示日期任务面板
-    selectedDayPressure: {},                // 选中日期的压力信息
-    editingTaskId: null,                    // 当前正在编辑的任务ID
-    editingTaskIndex: -1,                   // 当前正在编辑的任务在dayTasks中的索引
-    editPoints: 0,                          // 编辑中的积分
-    editDescription: '',                    // 编辑中的描述
-    editScope: 'single',                    // 编辑范围，默认为仅今天
-    showScopeInfoBubble: false,             // 是否显示范围信息气泡
-    scopeInfoStyle: '',                     // 范围信息气泡样式
-    scopeInfoTimer: null,                   // 范围信息气泡定时器
-    showPressureInfo: false,                // 是否显示压力说明弹窗
-    activeTaskId: null,                     // 当前激活的任务ID
-    activeTaskIndex: -1,                    // 当前激活的任务在dayTasks中的索引
-    showActionMenu: false,                  // 是否显示操作菜单
-    actionMenuStyle: '',                    // 操作菜单样式
-    showDeleteConfirm: false,               // 是否显示删除确认区域
-    activeTaskForDelete: null,              // 当前准备删除的任务
-    deleteScope: '',                         // 删除范围选择: 'single'或'series'
-    descMaxLength: 50,                      // 描述最大长度
-    windowWidth: 0,                         // 窗口宽度
-    Constants: Constants,                   // 添加Constants对象到data中，使WXML可以访问
-    todayString: '',                         // 今天的日期字符串，用于提示文本
-    taskListScrollTop: 0                    // 任务列表的滚动位置
+    weekDays: ['日', '一', '二', '三', '四', '五', '六'], // 星期几
+    days: [], // 日历日期
+    selectedDate: '', // 选中的日期
+    selectedDateText: '', // 选中日期的文本显示
+    dayTasks: [], // 日期任务
+    showDayTasks: false, // 是否显示日期任务
+    editingTaskId: null, // 正在编辑的任务ID
+    editingTaskIndex: -1, // 正在编辑的任务索引
+    editPoints: 0, // 编辑时的积分值
+    editDescription: '', // 编辑时的描述
+    showDeleteConfirm: false, // 显示删除确认
+    deleteScope: '', // 删除范围: 'single'/'series'
+    activeTaskForDelete: null, // 当前要删除的任务
+    showPressureInfo: false, // 显示压力指数说明
+    selectedDayPressure: {}, // 选中日期压力信息
+    taskListScrollTop: 0, // 任务列表滚动位置
+    editScope: 'single', // 编辑范围：'single'/'series'
+    scopeInfoStyle: '', // 范围说明气泡样式
+    showScopeInfoBubble: false, // 显示范围说明气泡
+    scopeInfoTimer: null, // 范围说明气泡计时器
+    showActionMenu: false, // 显示操作菜单
+    activeTaskId: '', // 当前操作的任务ID
+    activeTaskIndex: -1, // 当前操作的任务索引
+    actionMenuStyle: '', // 操作菜单样式
+    todayString: new Date().toISOString().split('T')[0], // 今天日期字符串，格式YYYY-MM-DD
   },
   
   /**
@@ -140,15 +137,20 @@ Component({
         }
       });
       
-      // 初始化今天日期字符串
-      const dateUtils = require('../../utils/dateUtils.js');
-      const today = dateUtils.getTodayString();
-      this.setData({
-        todayString: today
-      });
-      console.log(`[TaskHeatmap] 初始化今天日期: ${today}`);
+      // 设置当前日期字符串
+      const today = new Date();
+      const year = today.getFullYear();
+      const month = (today.getMonth() + 1).toString().padStart(2, '0');
+      const day = today.getDate().toString().padStart(2, '0');
+      const todayString = `${year}-${month}-${day}`;
       
-      // 初始化日历数据
+      this.setData({
+        todayString: todayString
+      });
+      
+      console.log(`[TaskHeatmap] 设置今天日期: ${todayString}`);
+      
+      // 生成日历
       this.generateCalendar();
       
       // 初始化完成后，通知父组件当前月份信息
@@ -1787,6 +1789,17 @@ Component({
       const taskIndex = e.currentTarget.dataset.index;
       
       console.log(`[task-heatmap] 显示任务操作菜单: ${taskId}`);
+      
+      // 获取任务对象
+      const task = this.data.dayTasks[taskIndex];
+      
+      // 判断是否为已完成任务或历史任务
+      const isCompleted = task.status === 'completed' || task.status === 1;
+      const isHistoryTask = task.date < this.data.todayString;
+      const showDeleteOption = !(isCompleted || isHistoryTask);
+      
+      console.log(`[task-heatmap] 任务操作菜单：任务ID=${taskId}, 标题=${task.title}, 状态=${task.status}, 日期=${task.date}`);
+      console.log(`[task-heatmap] 判断结果：已完成=${isCompleted}, 历史任务=${isHistoryTask}, 显示删除选项=${showDeleteOption}`);
       
       // 获取点击元素位置
       const query = this.createSelectorQuery();

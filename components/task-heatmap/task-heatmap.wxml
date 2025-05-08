@@ -346,7 +346,8 @@
         <view class="action-icon">✏️</view>
         <view class="action-text">编辑</view>
       </view>
-      <view class="action-menu-item delete" catchtap="handleDeleteTask" data-id="{{activeTaskId}}">
+      <!-- 删除选项：只在非已完成且非历史任务时显示 -->
+      <view class="action-menu-item delete" catchtap="handleDeleteTask" data-id="{{activeTaskId}}" wx:if="{{!(dayTasks[activeTaskIndex].status === 'completed' || dayTasks[activeTaskIndex].status === 1 || dayTasks[activeTaskIndex].date < todayString)}}">
         <view class="action-icon">🗑️</view>
         <view class="action-text">删除</view>
       </view>
