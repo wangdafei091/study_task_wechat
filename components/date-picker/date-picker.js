@@ -276,10 +276,35 @@ Component({
     selectDate: function(e) {
       const date = e.currentTarget.dataset.date;
       
+      // 检查是否是历史日期
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const selectedDate = new Date(date.replace(/-/g, '/'));
+      selectedDate.setHours(0, 0, 0, 0);
+      
+      // 如果选择的是历史日期，显示温和准确的提示并阻止选择
+      if (selectedDate < today) {
+        console.log(`[DatePicker] 用户尝试选择历史日期: ${date}，已提示并阻止选择`);
+        
+        // 轻微震动反馈
+        wx.vibrateShort({
+          type: 'light'
+        });
+        
+        // 准确的文字提示
+        wx.showToast({
+          title: '请选择今天或未来的日期',
+          icon: 'none',
+          duration: 2000
+        });
+        
+        return; // 阻止继续执行，不触发选择事件
+      }
+      
       // 检查是否小于最小日期
       if (this.data.minDate && date < this.data.minDate) {
         wx.showToast({
-          title: '不能选择早于最小日期的日期',
+          title: '结束日期不能早于开始日期',
           icon: 'none',
           duration: 2000
         });
@@ -289,7 +314,7 @@ Component({
       // 检查是否大于最大日期
       if (this.data.maxDate && date > this.data.maxDate) {
         wx.showToast({
-          title: '不能选择晚于最大日期的日期',
+          title: '请选择在允许范围内的日期',
           icon: 'none',
           duration: 2000
         });
