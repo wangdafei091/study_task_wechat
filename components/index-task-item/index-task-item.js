@@ -162,6 +162,9 @@ Component({
         if (task.startTime && !task.isAllDay) {
           console.log(`[index-task-item] 显示时间信息: ${task.startTime}${task.endTime ? ` - ${task.endTime}` : ''}`);
         }
+        
+        // 记录星星有效期样式优化
+        console.log(`[index-task-item] 应用星星有效期文本不换行样式，修复日期换行显示问题`);
       }
     }
   }

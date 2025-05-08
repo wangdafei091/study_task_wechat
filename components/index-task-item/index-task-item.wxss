@@ -147,7 +147,7 @@
 
 /* 任务描述样式 */
 .task-description {
-  font-size: 24rpx;
+  font-size: 24rpx; 
   color: var(--text-secondary);
   margin: 4rpx 0 0;
   line-height: 1.3;
@@ -257,6 +257,7 @@
   font-size: 22rpx;
   color: var(--text-secondary);
   margin-left: 4rpx;
+  white-space: nowrap;
 }
 
 /* 星星飞入动画 */
