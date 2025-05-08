@@ -697,6 +697,17 @@ Component({
           enhancedTask.pointsExpiryDate = '';
           enhancedTask.pointsExpiry = task.pointsExpiry || 'permanent'; // 确保有值
           console.log(`[TaskHeatmap] 未完成任务${task.id}积分有效期类型: ${enhancedTask.pointsExpiry}`);
+          
+          // 添加积分有效期类型转换为显示文本
+          if (enhancedTask.pointsExpiry === 'permanent') {
+            enhancedTask.pointsExpiryDate = '永久';
+          } else if (Constants.POINTS_EXPIRY.TEXT[enhancedTask.pointsExpiry]) {
+            enhancedTask.pointsExpiryDate = Constants.POINTS_EXPIRY.TEXT[enhancedTask.pointsExpiry];
+            console.log(`[TaskHeatmap] 未完成任务${task.id}积分有效期转换为: ${enhancedTask.pointsExpiryDate}`);
+          } else {
+            enhancedTask.pointsExpiryDate = '7天'; // 默认值
+            console.log(`[TaskHeatmap] 未完成任务${task.id}无法识别积分有效期类型，使用默认值: 7天`);
+          }
         }
         
         // 确保必做任务属性被正确传递

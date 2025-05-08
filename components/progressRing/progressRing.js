@@ -9,7 +9,7 @@ Component({
       value: 0,
       observer(newVal) {
         const percent = Math.max(0, Math.min(100, newVal));
-        this.setData({ progress: percent });
+        this._updateProgress(percent);
       }
     },
     // 圆环大小，可选值large/medium/small或具体数值
@@ -55,7 +55,8 @@ Component({
   data: {
     progress: 0,
     sizeClass: 'medium',
-    isComplete: false
+    isComplete: false,
+    progressClass: 'progress-ring-zero'
   },
   
   /**
@@ -85,6 +86,31 @@ Component({
       this.triggerEvent('tap', { 
         type: this.data.type,
         percent: this.data.progress
+      });
+    },
+    
+    /**
+     * 更新进度并设置相应类名
+     * @param {Number} percent - 百分比进度(0-100)
+     */
+    _updateProgress: function(percent) {
+      console.log(`[progressRing] 更新进度: ${percent}%`);
+      
+      // 确定适当的类名
+      let progressClass = 'progress-ring-with-progress';
+      if (percent <= 0) {
+        progressClass = 'progress-ring-zero';
+      }
+      
+      // 设置数据，包括进度值和类名
+      this.setData({
+        progress: percent,
+        progressClass: progressClass
+      });
+      
+      // 使用setData设置进度角度，供WXML使用
+      this.setData({
+        progressAngle: percent * 3.6
       });
     }
   }

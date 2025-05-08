@@ -138,8 +138,7 @@
                     </block>
                     <block wx:else>
                       <!-- 星星改造：原"积分有效期"改为"星星有效期" -->
-                      星星有效期：{{item.pointsExpiry === 'permanent' ? '永久' : 
-                        '完成后保留' + Constants.POINTS_EXPIRY.TEXT[item.pointsExpiry]}}
+                      星星有效期：{{item.pointsExpiryDate || (item.pointsExpiry === 'permanent' ? '永久' : '完成后保留7天')}}
                     </block>
                   </text>
                 </block>

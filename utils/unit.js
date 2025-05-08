@@ -14,8 +14,8 @@ const DESIGN_WIDTH = 750;
  */
 const px2rpx = function(px) {
   // 获取设备信息
-  const systemInfo = wx.getSystemInfoSync();
-  const screenWidth = systemInfo.screenWidth;
+  const windowInfo = wx.getWindowInfo();
+  const screenWidth = windowInfo.screenWidth;
   
   // 转换 (屏幕实际宽度和设计稿宽度的比例)
   return px * (DESIGN_WIDTH / screenWidth);
@@ -28,8 +28,8 @@ const px2rpx = function(px) {
  */
 const rpx2px = function(rpx) {
   // 获取设备信息
-  const systemInfo = wx.getSystemInfoSync();
-  const screenWidth = systemInfo.screenWidth;
+  const windowInfo = wx.getWindowInfo();
+  const screenWidth = windowInfo.screenWidth;
   
   // 转换
   return rpx / (DESIGN_WIDTH / screenWidth);
@@ -56,8 +56,8 @@ const unifyUnit = function(styleStr) {
  * @returns {Number} 适配后的字体大小(rpx)
  */
 const adaptFontSize = function(size) {
-  const systemInfo = wx.getSystemInfoSync();
-  const screenWidth = systemInfo.screenWidth;
+  const windowInfo = wx.getWindowInfo();
+  const screenWidth = windowInfo.screenWidth;
   
   // 375pt是标准设计稿屏幕宽度
   let scale = 1;
@@ -77,9 +77,10 @@ const adaptFontSize = function(size) {
  * @returns {Object} 设备屏幕类型标识
  */
 const getDeviceType = function() {
-  const systemInfo = wx.getSystemInfoSync();
-  const screenWidth = systemInfo.screenWidth;
-  const isIPad = systemInfo.model.toLowerCase().includes('ipad') || (systemInfo.brand === 'devtools' && systemInfo.screenWidth >= 768);
+  const deviceInfo = wx.getDeviceInfo();
+  const windowInfo = wx.getWindowInfo();
+  const screenWidth = windowInfo.screenWidth;
+  const isIPad = deviceInfo.model.toLowerCase().includes('ipad') || (deviceInfo.brand === 'devtools' && windowInfo.screenWidth >= 768);
   
   return {
     isSmallScreen: screenWidth < 375,
@@ -87,10 +88,10 @@ const getDeviceType = function() {
     isLargeScreen: screenWidth >= 414 && screenWidth < 768,
     isExtraLargeScreen: screenWidth >= 768,
     isIPad: isIPad,
-    isIPhoneX: (systemInfo.model.toLowerCase().includes('iphone x') || 
-                systemInfo.model.toLowerCase().includes('iphone 1') ||
-                (systemInfo.brand === 'devtools' && 
-                systemInfo.screenHeight / systemInfo.screenWidth > 2))
+    isIPhoneX: (deviceInfo.model.toLowerCase().includes('iphone x') || 
+                deviceInfo.model.toLowerCase().includes('iphone 1') ||
+                (deviceInfo.brand === 'devtools' && 
+                windowInfo.screenHeight / windowInfo.screenWidth > 2))
   };
 };
 
@@ -103,8 +104,8 @@ const getDeviceType = function() {
  * @returns {Number} 适配后的尺寸(rpx)
  */
 const getFlexSize = function(baseSize, minSize, maxSize) {
-  const systemInfo = wx.getSystemInfoSync();
-  const screenWidth = systemInfo.screenWidth;
+  const windowInfo = wx.getWindowInfo();
+  const screenWidth = windowInfo.screenWidth;
   
   // 基准屏幕宽度
   const baseWidth = 375;
@@ -130,28 +131,26 @@ const getFlexSize = function(baseSize, minSize, maxSize) {
  * @returns {Object} 安全边距
  */
 const getSafeAreaInset = function() {
-  const systemInfo = wx.getSystemInfoSync();
-  let safeArea = {
+  const windowInfo = wx.getWindowInfo();
+  const safeArea = windowInfo.safeArea || {
     top: 0,
-    right: 0,
-    bottom: 0,
+    right: windowInfo.screenWidth,
+    bottom: windowInfo.screenHeight,
     left: 0
   };
   
-  if (systemInfo.safeArea) {
-    safeArea = {
-      top: systemInfo.safeArea.top,
-      right: systemInfo.screenWidth - systemInfo.safeArea.right,
-      bottom: systemInfo.screenHeight - systemInfo.safeArea.bottom,
-      left: systemInfo.safeArea.left
-    };
-  }
+  const safeAreaInset = {
+    top: safeArea.top,
+    right: windowInfo.screenWidth - safeArea.right,
+    bottom: windowInfo.screenHeight - safeArea.bottom,
+    left: safeArea.left
+  };
   
   return {
-    top: px2rpx(safeArea.top),
-    right: px2rpx(safeArea.right),
-    bottom: px2rpx(safeArea.bottom),
-    left: px2rpx(safeArea.left)
+    top: px2rpx(safeAreaInset.top),
+    right: px2rpx(safeAreaInset.right),
+    bottom: px2rpx(safeAreaInset.bottom),
+    left: px2rpx(safeAreaInset.left)
   };
 };
 
@@ -165,15 +164,22 @@ const getSafeAreaInset = function() {
  * @returns {Number} 可用内容区域高度(rpx)
  */
 const getContentHeight = function(options = {}) {
-  const systemInfo = wx.getSystemInfoSync();
-  const safeArea = getSafeAreaInset();
+  const windowInfo = wx.getWindowInfo();
+  const safeArea = windowInfo.safeArea || {
+    top: 0,
+    right: windowInfo.screenWidth,
+    bottom: windowInfo.screenHeight,
+    left: 0
+  };
+  const menuButtonInfo = wx.getMenuButtonBoundingClientRect();
+  const appBaseInfo = wx.getAppBaseInfo();
   
   // 页面可用高度(像素)
-  let availHeight = systemInfo.windowHeight;
+  let availHeight = windowInfo.windowHeight;
   
   // 减去底部安全区域(像素)
-  if (safeArea.bottom > 0) {
-    availHeight -= systemInfo.screenHeight - systemInfo.safeArea.bottom;
+  if (safeArea) {
+    availHeight -= windowInfo.screenHeight - safeArea.bottom;
   }
   
   // 考虑底部选项卡高度
@@ -187,7 +193,8 @@ const getContentHeight = function(options = {}) {
     // 如果自定义了导航栏，内容已经考虑了状态栏和导航栏的高度
   } else {
     // 默认顶部导航栏高度
-    availHeight -= systemInfo.statusBarHeight + 44; // 状态栏 + 导航栏
+    const statusBarHeight = appBaseInfo.statusBarHeight || 20;
+    availHeight -= statusBarHeight + 44; // 状态栏 + 导航栏
   }
   
   // 转换为rpx
@@ -207,20 +214,21 @@ const getContentHeight = function(options = {}) {
  * @returns {Object} 视口信息
  */
 const getViewportInfo = function() {
-  const systemInfo = wx.getSystemInfoSync();
+  const windowInfo = wx.getWindowInfo();
   const safeAreaInset = getSafeAreaInset();
+  const appBaseInfo = wx.getAppBaseInfo();
   
   return {
-    width: px2rpx(systemInfo.windowWidth),
-    height: px2rpx(systemInfo.windowHeight),
-    pixelRatio: systemInfo.pixelRatio,
+    width: px2rpx(windowInfo.windowWidth),
+    height: px2rpx(windowInfo.windowHeight),
+    pixelRatio: windowInfo.pixelRatio,
     safeAreaInset,
-    statusBarHeight: px2rpx(systemInfo.statusBarHeight),
-    isLandscape: systemInfo.windowWidth > systemInfo.windowHeight,
-    screenWidth: px2rpx(systemInfo.screenWidth),
-    screenHeight: px2rpx(systemInfo.screenHeight),
-    windowWidth: px2rpx(systemInfo.windowWidth),
-    windowHeight: px2rpx(systemInfo.windowHeight)
+    statusBarHeight: px2rpx(appBaseInfo.statusBarHeight || 20),
+    isLandscape: windowInfo.windowWidth > windowInfo.windowHeight,
+    screenWidth: px2rpx(windowInfo.screenWidth),
+    screenHeight: px2rpx(windowInfo.screenHeight),
+    windowWidth: px2rpx(windowInfo.windowWidth),
+    windowHeight: px2rpx(windowInfo.windowHeight)
   };
 };
 
@@ -229,16 +237,16 @@ const getViewportInfo = function() {
  * @returns {Boolean} 是否为全面屏设备
  */
 const isFullScreenDevice = function() {
-  const systemInfo = wx.getSystemInfoSync();
-  const safeArea = systemInfo.safeArea;
+  const windowInfo = wx.getWindowInfo();
+  const safeArea = windowInfo.safeArea;
   
   // 判断是否有底部安全区域的全面屏设备
-  if (safeArea && systemInfo.screenHeight > 0) {
-    return systemInfo.screenHeight - safeArea.bottom > 0;
+  if (safeArea && windowInfo.screenHeight > 0) {
+    return windowInfo.screenHeight - safeArea.bottom > 0;
   }
   
   // 通过屏幕比例判断
-  const ratio = systemInfo.screenHeight / systemInfo.screenWidth;
+  const ratio = windowInfo.screenHeight / windowInfo.screenWidth;
   return ratio >= 2.0; // iPhone X 及以上的比例基本上都大于2
 };
 

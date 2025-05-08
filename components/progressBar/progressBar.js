@@ -173,7 +173,7 @@ Component({
    */
   attached: function() {
     // 获取系统信息，供后续使用
-    this.systemInfo = wx.getSystemInfoSync();
+    this.systemInfo = wx.getWindowInfo();
     console.log('[progressBar] 获取系统信息', this.systemInfo.windowWidth);
   },
 
@@ -193,11 +193,12 @@ Component({
           return;
         }
         
-        console.log(`[progressBar] 小鸡位置: left=${rect.left}, right=${rect.right}, width=${rect.width}, 屏幕宽度=${wx.getSystemInfoSync().windowWidth}`);
+        const windowInfo = wx.getWindowInfo();
+        console.log(`[progressBar] 小鸡位置: left=${rect.left}, right=${rect.right}, width=${rect.width}, 屏幕宽度=${windowInfo.windowWidth}`);
         
         // 根据小鸡在屏幕中的位置决定气泡显示方式
         let bubblePosition = 'center';
-        const screenWidth = wx.getSystemInfoSync().windowWidth;
+        const screenWidth = windowInfo.windowWidth;
         
         if (rect.left < screenWidth * 0.3) {
           bubblePosition = 'left';
@@ -377,11 +378,12 @@ Component({
           return;
         }
         
-        console.log(`[progressBar] 小鸡位置: left=${rect.left}, right=${rect.right}, width=${rect.width}, 屏幕宽度=${wx.getSystemInfoSync().windowWidth}`);
+        const windowInfo = wx.getWindowInfo();
+        console.log(`[progressBar] 小鸡位置: left=${rect.left}, right=${rect.right}, width=${rect.width}, 屏幕宽度=${windowInfo.windowWidth}`);
         
         // 根据小鸡在屏幕中的位置决定气泡显示方式
         let bubblePosition = 'center';
-        const screenWidth = wx.getSystemInfoSync().windowWidth;
+        const screenWidth = windowInfo.windowWidth;
         
         if (rect.left < screenWidth * 0.3) {
           bubblePosition = 'left';

@@ -372,42 +372,60 @@ App({
 
   // 获取系统信息，用于屏幕适配
   getSystemInfo: function() {
-    const systemInfo = wx.getSystemInfoSync();
-    this.globalData.systemInfo = systemInfo;
+    // 使用新的API获取各类信息
+    const windowInfo = wx.getWindowInfo();
+    const deviceInfo = wx.getDeviceInfo();
+    const appBaseInfo = wx.getAppBaseInfo();
+    
+    // 将获取的信息存储到全局数据（为保持与旧代码兼容，还是保存一个整合的systemInfo对象）
+    this.globalData.systemInfo = {
+      ...windowInfo,
+      ...deviceInfo,
+      ...appBaseInfo,
+      // 添加可能缺少的字段，确保兼容性
+      platform: appBaseInfo.platform,
+      brand: deviceInfo.brand,
+      model: deviceInfo.model,
+      system: deviceInfo.system
+    };
     
     // 获取设备类型信息
-    const deviceType = unitUtils.getDeviceType();
-    const isLandscape = systemInfo.windowWidth > systemInfo.windowHeight;
+    const deviceTypeInfo = unitUtils.getDeviceType();
+    const isLandscape = windowInfo.windowWidth > windowInfo.windowHeight;
     
+    // 整合所有信息
     this.globalData.deviceInfo = {
-      ...deviceType,
-      pixelRatio: systemInfo.pixelRatio,
-      screenWidth: systemInfo.screenWidth,
-      screenHeight: systemInfo.screenHeight,
-      windowWidth: systemInfo.windowWidth,
-      windowHeight: systemInfo.windowHeight,
-      statusBarHeight: systemInfo.statusBarHeight,
+      ...deviceTypeInfo,
+      pixelRatio: windowInfo.pixelRatio,
+      screenWidth: windowInfo.screenWidth,
+      screenHeight: windowInfo.screenHeight,
+      windowWidth: windowInfo.windowWidth,
+      windowHeight: windowInfo.windowHeight,
+      statusBarHeight: appBaseInfo.statusBarHeight || 20,
       isLandscape: isLandscape,
-      platform: systemInfo.platform,
-      brand: systemInfo.brand,
-      model: systemInfo.model,
-      system: systemInfo.system,
-      language: systemInfo.language,
-      version: systemInfo.version,
-      SDKVersion: systemInfo.SDKVersion,
+      platform: appBaseInfo.platform,
+      brand: deviceInfo.brand,
+      model: deviceInfo.model,
+      system: deviceInfo.system,
+      language: appBaseInfo.language,
+      version: appBaseInfo.version,
+      SDKVersion: appBaseInfo.SDKVersion,
       theme: 'light' // 固定为亮色主题，移除对系统主题的依赖
     };
     
     // 计算安全区域
-    if (systemInfo.safeArea) {
-      this.globalData.safeArea = systemInfo.safeArea;
+    if (windowInfo.safeArea) {
+      this.globalData.safeArea = windowInfo.safeArea;
       this.globalData.safeAreaInset = {
-        top: systemInfo.safeArea.top,
-        bottom: systemInfo.screenHeight - systemInfo.safeArea.bottom,
-        left: systemInfo.safeArea.left,
-        right: systemInfo.screenWidth - systemInfo.safeArea.right
+        top: windowInfo.safeArea.top,
+        bottom: windowInfo.screenHeight - windowInfo.safeArea.bottom,
+        left: windowInfo.safeArea.left,
+        right: windowInfo.screenWidth - windowInfo.safeArea.right
       };
     }
+    
+    // 日志记录
+    console.log(`[App] 获取系统信息成功, 屏幕尺寸: ${windowInfo.windowWidth}x${windowInfo.windowHeight}`);
     
     // 计算适配后的字体大小
     this.globalData.baseFontSize = unitUtils.adaptFontSize(28); // 基础字体大小
@@ -449,9 +467,11 @@ App({
   // 检查基础库版本兼容性
   checkCompatibility: function() {
     // 获取系统信息和微信基础库版本
-    const systemInfo = wx.getSystemInfoSync()
-    const currentVersion = systemInfo.SDKVersion
-    const requiredVersion = '2.14.0'
+    const appBaseInfo = wx.getAppBaseInfo();
+    const currentVersion = appBaseInfo.SDKVersion;
+    const requiredVersion = '2.14.0';
+
+    console.log(`[App] 检查兼容性: 当前基础库版本 ${currentVersion}, 要求版本 ${requiredVersion}`);
 
     // 比较版本号
     if (this.compareVersion(currentVersion, requiredVersion) < 0) {
@@ -460,7 +480,7 @@ App({
         title: '版本提示',
         content: '当前微信版本过低，部分功能可能无法正常使用。请更新微信到最新版本后重试。',
         showCancel: false
-      })
+      });
     }
   },
 
