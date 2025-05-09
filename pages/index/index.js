@@ -165,6 +165,9 @@ Page({
       
       // 监听消息数据变化
       app.globalData.eventBus.on('messageDataChanged', this.handleMessageDataChanged.bind(this));
+      
+      // 监听奖励领取事件
+      app.globalData.eventBus.on('rewardClaimed', this.handleRewardClaimed.bind(this));
     }
   },
   
@@ -235,6 +238,22 @@ Page({
   },
   
   /**
+   * 处理奖励领取事件
+   */
+  handleRewardClaimed: function(eventData) {
+    console.log(`[Index] 收到奖励领取事件: 奖励ID=${eventData.rewardId}, 消耗星星=${eventData.points}, 剩余星星=${eventData.newTotalPoints}`);
+    
+    // 只记录奖励已被领取，但不立即更新UI
+    const app = getApp();
+    app.globalData.rewardClaimedInfo = eventData;
+    app.globalData.needRefreshReward = true;
+    console.log('[Index] 已记录奖励领取信息，等待返回首页时更新');
+    
+    // 不立即调用loadStarsAndRewards或transitionToNewTarget
+    // 等待用户返回首页时再更新
+  },
+  
+  /**
    * 生命周期函数--监听页面显示
    */
   onShow: function () {
@@ -242,6 +261,27 @@ Page({
     
     // 获取应用实例
     const app = getApp();
+    
+    // 检查是否需要刷新奖励信息
+    if (app.globalData.needRefreshReward) {
+      console.log('[Index] 检测到奖励已被领取，清除满值状态并更新进度条');
+      
+      // 清除满值状态
+      this.setData({
+        forceKeepFullValue: false,
+        transitionInProgress: false,
+        showRewardChoice: false,
+        rewardTextState: 'newTarget'
+      });
+      
+      // 执行过渡到新目标
+      this.transitionToNewTarget();
+      
+      // 清除标记
+      app.globalData.needRefreshReward = false;
+      app.globalData.rewardClaimedInfo = null;
+      return;
+    }
     
     // 从多个来源检查是否从奖池页面返回
     const fromStorage = wx.getStorageSync('fromRewardCompletion');
@@ -263,6 +303,10 @@ Page({
     }
     
     // 正常页面显示流程
+    // 刷新星星和奖励数据
+    console.log('[Index] 页面显示时刷新星星和奖励数据');
+    this.loadStarsAndRewards();
+    
     // 加载用户消息
     this.loadMessageData();
     
@@ -278,6 +322,7 @@ Page({
     if (app.globalData.eventBus) {
       app.globalData.eventBus.off('taskDataChanged');
       app.globalData.eventBus.off('messageDataChanged');
+      app.globalData.eventBus.off('rewardClaimed');
     }
   },
 
@@ -826,14 +871,22 @@ viewMessageDetail: function(e) {
     // 格式化星星数量供显示使用
     const formattedPoints = pointsManager.formatPoints(userPoints);
     
-    // 获取所有奖品配置
+    // 从本地存储获取最新奖励数据
     const app = getApp();
-    const allRewards = app.getDefaultRewards() || [];
+    const storedRewards = wx.getStorageSync('rewards');
+    const allRewards = storedRewards || app.getDefaultRewards() || [];
     console.log(`[Index] 获取奖励配置，共 ${allRewards.length} 个奖励`);
     
     // 使用pointsManager计算下一个奖励信息
     const nextReward = pointsManager.calculateNextReward(allRewards);
-    console.log(`[Index] 下一个奖励: ${nextReward.name}，需要星星: ${nextReward.points}，当前星星: ${userPoints}`);
+    
+    // 检查是否所有奖励都已领取
+    if (nextReward.allClaimed) {
+      console.log('[Index] 所有奖励都已领取');
+      // 显示适当的提示或处理逻辑
+    } else {
+      console.log(`[Index] 下一个奖励: ${nextReward.name}，需要星星: ${nextReward.points}，当前星星: ${userPoints}`);
+    }
     
     // 更新奖励进度数据
     this.setData({
@@ -1019,8 +1072,24 @@ viewMessageDetail: function(e) {
     // 获取新的目标信息
     const userPoints = pointsManager.getUserPoints();
     const app = getApp();
-    const allRewards = app.getDefaultRewards() || [];
+    
+    // 从本地存储获取最新奖励数据，确保包含已领取状态
+    const storedRewards = wx.getStorageSync('rewards');
+    const allRewards = storedRewards || app.getDefaultRewards() || [];
+    console.log(`[Index] 从存储加载奖励数据: ${allRewards.length}个奖励`);
+    
     const nextReward = pointsManager.calculateNextReward(allRewards);
+    
+    // 检查是否所有奖励都已领取
+    if (nextReward.allClaimed) {
+      console.log('[Index] 检测到所有奖励都已领取');
+      // 显示适当的提示
+      wx.showToast({
+        title: '已领取所有奖励',
+        icon: 'success',
+        duration: 2000
+      });
+    }
     
     console.log(`[Index] 新目标信息: 当前星星=${userPoints}, 下一目标=${nextReward.name}, 需要星星=${nextReward.points}`);
     

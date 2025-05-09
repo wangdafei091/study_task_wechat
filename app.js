@@ -644,7 +644,9 @@ App({
     rewardProgress: {
       current: 2,
       total: 3
-    }
+    },
+    needRefreshReward: false, // 标记是否需要刷新奖励数据
+    rewardClaimedInfo: null // 存储已领取的奖励信息
   },
 
   /**

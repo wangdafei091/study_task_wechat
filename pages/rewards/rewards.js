@@ -265,9 +265,10 @@ Page({
    * 领取奖励
    */
   claimReward: function (e) {
-    const rewardId = this.data.selectedReward.id;
+    const reward = this.data.selectedReward;
+    const rewardId = reward.id;
     
-    if (!this.data.selectedReward.unlocked) {
+    if (!reward.unlocked) {
       wx.showToast({
         title: '奖励尚未解锁',
         icon: 'none'
@@ -275,7 +276,7 @@ Page({
       return;
     }
 
-    if (this.data.selectedReward.claimed) {
+    if (reward.claimed) {
       wx.showToast({
         title: '奖励已领取',
         icon: 'none'
@@ -283,23 +284,74 @@ Page({
       return;
     }
 
-    // 更新奖励状态
-    const rewards = this.data.rewards.map(reward => {
-      if (reward.id === rewardId) {
-        return { ...reward, claimed: true };
+    // 添加二次确认
+    wx.showModal({
+      title: '确认领取',
+      content: `确定要用 ${reward.points} 颗星星兑换【${reward.name}】吗？领取后星星将不能退回哦！`,
+      success: (res) => {
+        if (res.confirm) {
+          console.log(`[rewards] 用户确认领取奖励: ${reward.name}, 消耗星星: ${reward.points}`);
+          this._performClaimReward(reward);
+        } else {
+          console.log(`[rewards] 用户取消领取奖励: ${reward.name}`);
+        }
       }
-      return reward;
+    });
+  },
+
+  /**
+   * 执行领取奖励操作
+   */
+  _performClaimReward: function(reward) {
+    // 扣除相应的星星数
+    console.log(`[rewards] 领取奖励前星星数: ${this.data.totalPoints}`);
+    const newPoints = pointsManager.reduceUserPoints(reward.points);
+    console.log(`[rewards] 领取奖励后星星数: ${newPoints}, 扣除: ${reward.points}`);
+    
+    // 更新奖励状态
+    const rewards = this.data.rewards.map(r => {
+      if (r.id === reward.id) {
+        return { ...r, claimed: true };
+      }
+      return r;
     });
 
+    // 使用更新后的奖励数据计算下一个可用奖励
+    const nextReward = pointsManager.calculateNextReward(rewards);
+    console.log(`[rewards] 领取奖励后计算下一个可用奖励: ${nextReward.name}, 需要${nextReward.points}颗星星`);
+    
+    // 关闭弹窗并更新数据
     this.setData({
       rewards: rewards,
-      showModal: false
+      showModal: false,
+      totalPoints: newPoints,
+      formattedPoints: pointsManager.formatPoints(newPoints, true),
+      currentProgress: newPoints
     });
 
     // 保存到本地存储
     wx.setStorage({
       key: 'rewards',
       data: rewards
+    });
+    
+    // 通知首页更新星星和奖励进度
+    const app = getApp();
+    if (app && app.globalData && app.globalData.eventBus) {
+      console.log('[rewards] 发送奖励领取事件通知');
+      app.globalData.eventBus.emit('rewardClaimed', {
+        rewardId: reward.id,
+        points: reward.points,
+        newTotalPoints: newPoints,
+        nextReward: nextReward
+      });
+    }
+
+    // 显示领取成功提示
+    wx.showToast({
+      title: '领取成功',
+      icon: 'success',
+      duration: 2000
     });
   }
 })

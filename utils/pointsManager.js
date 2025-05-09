@@ -92,8 +92,26 @@ const pointsManager = {
     // 获取用户当前星星数
     const userPoints = this.getUserPoints();
     
+    // 过滤掉已领取的奖励，只保留未领取的奖励
+    const availableRewards = rewards.filter(reward => !reward.claimed);
+    console.log(`[pointsManager] 过滤已领取奖励后，剩余可用奖励: ${availableRewards.length}个`);
+    
+    // 如果没有可用奖励（全部已领取），则返回默认值
+    if (availableRewards.length === 0) {
+      console.log(`[pointsManager] 所有奖励都已领取，返回默认值`);
+      return {
+        name: '所有奖励已领取',
+        points: 100,
+        icon: '🎉',
+        count: 0,
+        remainingStars: 100,
+        current: userPoints,
+        allClaimed: true  // 标记所有奖励都已领取
+      };
+    }
+    
     // 更新奖励解锁状态
-    const updatedRewards = rewards.map(reward => {
+    const updatedRewards = availableRewards.map(reward => {
       return {
         ...reward,
         unlocked: userPoints >= reward.points
