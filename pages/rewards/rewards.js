@@ -84,6 +84,9 @@ Page({
       console.log('[rewards] 清除已跳转标记');
       app.globalData.hasRedirectedToReward = false;
     }
+    
+    // 记录星星宝典展示
+    console.log('[rewards] 展示星星宝典信息 - 儿童友好优化版');
   },
 
   /**

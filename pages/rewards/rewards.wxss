@@ -175,6 +175,18 @@
   flex: 1;
 }
 
+/* 新增星星宝典相关样式 */
+.rule-section {
+  margin-bottom: 24rpx;
+}
+
+.rule-section-title {
+  font-size: 26rpx;
+  color: #4285F4;
+  font-weight: 500;
+  margin-bottom: 12rpx;
+}
+
 /* 奖励详情弹窗 */
 .reward-modal {
   position: fixed;

@@ -50,23 +50,57 @@
   
   <!-- 奖励规则说明 -->
   <view class="rewards-rules">
-    <view class="section-title">获取星星规则</view>
+    <view class="section-title">星星宝典</view>
     <view class="rules-content">
-      <view class="rule-item">
-        <text class="rule-bullet">•</text>
-        <text class="rule-text">完成任务可获得10颗星星</text>
+      <!-- 星星是什么 -->
+      <view class="rule-section">
+        <view class="rule-section-title">神奇的星星</view>
+        <view class="rule-item">
+          <text class="rule-bullet">•</text>
+          <text class="rule-text">星星是你完成任务的小奖章，收集它们就像收集宝藏一样有趣！</text>
+        </view>
+        <view class="rule-item">
+          <text class="rule-bullet">•</text>
+          <text class="rule-text">每颗星星都代表你的一次进步，让我们一起看着它们越来越多</text>
+        </view>
+        <view class="rule-item">
+          <text class="rule-bullet">•</text>
+          <text class="rule-text">当你的星星积累到一定数量，就能解锁特别的惊喜奖励</text>
+        </view>
       </view>
-      <view class="rule-item">
-        <text class="rule-bullet">•</text>
-        <text class="rule-text">连续7天完成任务可额外获得20颗星星</text>
+      
+      <!-- 如何获得星星 -->
+      <view class="rule-section">
+        <view class="rule-section-title">收集星星大作战</view>
+        <view class="rule-item">
+          <text class="rule-bullet">•</text>
+          <text class="rule-text">完成任务是获得星星的魔法钥匙，每个任务都有不同的星星奖励</text>
+        </view>
+        <view class="rule-item">
+          <text class="rule-bullet">•</text>
+          <text class="rule-text">记得按时完成重要任务哦，这样星星就不会溜走啦</text>
+        </view>
       </view>
-      <view class="rule-item">
-        <text class="rule-bullet">•</text>
-        <text class="rule-text">每20颗星星提升1个等级</text>
-      </view>
-      <view class="rule-item">
-        <text class="rule-bullet">•</text>
-        <text class="rule-text">奖励可在解锁后领取</text>
+      
+      <!-- 如何使用星星 -->
+      <view class="rule-section">
+        <view class="rule-section-title">用星星换礼物</view>
+        <view class="rule-item">
+          <text class="rule-bullet">•</text>
+          <text class="rule-text">在"可获得的奖励"中探索你可以兑换的精彩礼物</text>
+        </view>
+        <view class="rule-item">
+          <text class="rule-bullet">•</text>
+          <text class="rule-text">星星达到礼物旁边的数字，就能解锁这个礼物啦！</text>
+        </view>
+        <view class="rule-item">
+          <text class="rule-bullet">•</text>
+          <text class="rule-text">点击礼物卡片，再点"领取奖励"按钮，礼物就是你的了</text>
+        </view>
+        <view class="rule-item">
+          <text class="rule-bullet">•</text>
+          <text class="rule-text">有些星星会有使用期限，别忘了看看上方的提醒哦</text>
+        </view>
       </view>
     </view>
   </view>
