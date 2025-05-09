@@ -591,78 +591,211 @@
   }
 }
 
-/* 奖励进度部分 */
+/* 奖励进度部分样式 */
 .reward-progress {
-  margin: 16rpx 30rpx;
-  margin-bottom: 20rpx;
-  border-radius: 20rpx;
-  background: #FFFFFF;
-  overflow: visible;
-  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.05);
-  padding: 24rpx;
-  padding-bottom: 65rpx;
-  min-height: 120rpx;
   position: relative;
-  z-index: 5;
-  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.05), inset 0 1rpx 6rpx rgba(0, 0, 0, 0.02);
+  margin: 20rpx;
+  padding: 30rpx;
 }
 
 .progress-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12rpx;
+  margin-bottom: 20rpx;
 }
 
 .reward-title {
-  font-size: 30rpx;
-  font-weight: 600;
-  color: #333333;
+  font-size: 32rpx;
+  font-weight: 500;
+  color: #333;
 }
 
 .stars-count {
-  font-size: 24rpx;
-  color: #666666;
-  background: rgba(61, 90, 254, 0.08);
-  padding: 4rpx 12rpx;
-  border-radius: 20rpx;
+  font-size: 28rpx;
+  color: #666;
 }
 
-/* 奖励进度下方提示 */
 .reward-hint {
-  font-size: 22rpx;
-  color: #5F6368;
+  margin-top: 20rpx;
+  font-size: 26rpx;
+  color: #666;
   text-align: center;
-  position: absolute;
-  bottom: -5rpx;
-  left: 0;
-  right: 0;
-  padding: 10rpx 16rpx 6rpx 16rpx;
-  width: 94%;
-  margin-left: auto;
-  margin-right: auto;
-  white-space: normal;
-  word-wrap: break-word;
-  line-height: 1.5;
-  z-index: 6;
-  min-height: 36rpx;
-}
-
-.reward-hint text {
-  display: block;
-}
-
-.reward-hint::before {
-  content: "✨";
-  display: inline-block;
-  margin-right: 4rpx;
-  vertical-align: middle;
 }
 
 .reward-hint .highlight {
-  color: #4285F4;
+  color: #FF9800;
+  font-weight: 600;
+  margin: 0 4rpx;
+}
+
+.achievement-text {
+  color: #4CAF50;
   font-weight: 500;
-  display: inline;
+  display: block;
+  font-size: 28rpx;
+  margin-bottom: 4rpx;
+}
+
+.supplementary-text {
+  color: #666;
+  font-size: 24rpx;
+  display: block;
+}
+
+/* 礼品指示器样式 */
+.reward-indicators {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 15rpx 0;
+  height: 70rpx;
+}
+
+.reward-indicator {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 60rpx;
+  height: 60rpx;
+  margin: 0 15rpx;
+  transition: all 0.3s;
+}
+
+.reward-indicator .reward-icon {
+  font-size: 36rpx;
+  margin-bottom: 4rpx;
+  transition: all 0.3s;
+  line-height: 1;
+}
+
+.reward-indicator.locked {
+  opacity: 0.5;
+}
+
+.reward-indicator.unlocked {
+  transform: scale(1.1);
+}
+
+.reward-indicator.current {
+  transform: scale(1.2);
+}
+
+.reward-indicator.current .indicator-arrow {
+  position: absolute;
+  bottom: -12rpx;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 8rpx solid transparent;
+  border-right: 8rpx solid transparent;
+  border-top: 8rpx solid #F4D03F;
+}
+
+.reward-stars {
+  font-size: 18rpx;
+  color: #888;
+  margin-top: 2rpx;
+}
+
+.indicator-status {
+  position: absolute;
+  top: -15rpx;
+  right: -20rpx;
+  background: #FF5722;
+  color: white;
+  font-size: 16rpx;
+  padding: 2rpx 8rpx;
+  border-radius: 10rpx;
+  transform: scale(0.8);
+}
+
+.indicator-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40rpx;
+  height: 40rpx;
+  color: #999;
+  font-size: 28rpx;
+  margin-left: 10rpx;
+}
+
+/* 奖励选择对话框样式 */
+.reward-choice-overlay {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.reward-choice-dialog {
+  width: 80%;
+  background: #fff;
+  border-radius: 20rpx;
+  padding: 40rpx 30rpx;
+  box-shadow: 0 4rpx 20rpx rgba(0,0,0,0.15);
+  z-index: 1001;
+  text-align: center;
+}
+
+.choice-title {
+  font-size: 32rpx;
+  font-weight: bold;
+  margin-bottom: 30rpx;
+  color: #333;
+}
+
+.choice-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 30rpx;
+}
+
+.reward-icon-large {
+  font-size: 80rpx;
+  margin-bottom: 15rpx;
+}
+
+.reward-name {
+  font-size: 30rpx;
+  color: #333;
+  font-weight: 500;
+}
+
+.choice-options {
+  display: flex;
+  justify-content: space-around;
+  margin-top: 20rpx;
+}
+
+.choice-btn {
+  padding: 15rpx 30rpx;
+  border-radius: 30rpx;
+  font-size: 28rpx;
+  border: none;
+  flex: 1;
+  margin: 0 10rpx;
+  line-height: 1.5;
+}
+
+.choice-btn.continue {
+  background: #E8E8E8;
+  color: #555;
+}
+
+.choice-btn.redeem {
+  background: #4CAF50;
+  color: white;
 }
 
 /* 统计面板 */

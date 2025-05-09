@@ -157,6 +157,20 @@
       <view class="reward-title">今日奖品进度</view>
       <view class="stars-count">{{formattedPoints}}/{{nextReward.points}}颗星星</view>
     </view>
+    
+    <!-- 添加礼品队列指示器 -->
+    <view class="reward-indicators" wx:if="{{visibleRewards && visibleRewards.length > 0}}">
+      <block wx:for="{{visibleRewards}}" wx:key="id">
+        <view class="reward-indicator {{item.status}}" bindtap="onRewardIndicatorTap" data-id="{{item.id}}">
+          <text class="reward-icon">{{item.icon}}</text>
+          <text class="reward-stars">{{item.points}}★</text>
+          <view class="indicator-status" wx:if="{{item.status === 'unlocked'}}">可查看</view>
+          <view class="indicator-arrow" wx:if="{{item.status === 'current'}}"></view>
+        </view>
+      </block>
+      <view class="indicator-more" wx:if="{{hasMoreRewards}}" bindtap="showAllRewards">···</view>
+    </view>
+    
     <progress-bar
       id="progressBar"
       current="{{rewardProgress.current}}"
@@ -166,11 +180,35 @@
       barHeight="{{28}}"
       borderRadius="{{14}}"
       bind:complete="onRewardComplete"
+      bind:transitionComplete="onTransitionComplete"
       rewardName="{{nextReward.name}}"
       rewardImage=""
     />
+    
     <view class="reward-hint">
-      <text>再获得<text class="highlight">{{nextReward.remainingStars}}</text>颗星星即可解锁奖品</text>
+      <block wx:if="{{rewardTextState === 'achieved'}}">
+        <text class="achievement-text">恭喜！已达成"{{completedReward.name}}"</text>
+        <text class="supplementary-text">可前往奖池查看</text>
+      </block>
+      
+      <block wx:else>
+        <text>再获得<text class="highlight">{{nextReward.remainingStars}}</text>颗星星即可解锁"{{nextReward.name}}"</text>
+      </block>
+    </view>
+  </view>
+  
+  <!-- 奖励选择对话框 -->
+  <view class="reward-choice-overlay" wx:if="{{showRewardChoice}}" catchtouchmove="preventTouchMove" catchlongtap="preventBubble">
+    <view class="reward-choice-dialog" animation="{{choiceDialogAnimation}}">
+      <view class="choice-title">{{choiceDialogTitle || '恭喜！已达成礼品！'}}</view>
+      <view class="choice-content">
+        <text class="reward-icon-large">{{completedReward.icon}}</text>
+        <text class="reward-name">{{completedReward.name}}</text>
+      </view>
+      <view class="choice-options">
+        <button class="choice-btn continue" bindtap="continueCollecting">继续积累星星</button>
+        <button class="choice-btn redeem" bindtap="viewRewardPool">查看奖池</button>
+      </view>
     </view>
   </view>
   

@@ -100,7 +100,18 @@ Page({
       remainingStars: 0
     },
     userPoints: 0,
-    formattedPoints: ''
+    formattedPoints: '',
+    visibleRewards: [], // 可见的奖励列表
+    hasMoreRewards: false, // 是否有更多奖励
+    rewardHintText: '', // 动态奖励提示文本
+    showRewardChoice: false, // 是否显示奖励选择对话框
+    choiceDialogTitle: '', // 选择对话框标题
+    choiceDialogAnimation: {}, // 选择对话框动画
+    completedReward: null, // 已完成的奖励
+    transitionInProgress: false, // 是否正在进行过渡动画
+    rewardTextState: 'newTarget', // 奖励文案状态：achieved(已达成), newTarget(新目标)
+    forceKeepFullValue: false, // 强制保持满值状态
+    completedRewardTotal: 0, // 已完成奖励的总值
   },
   
   /**
@@ -229,24 +240,34 @@ Page({
   onShow: function () {
     console.log('[Index] 页面显示');
     
-    // 刷新任务数据
-    this.loadTaskData();
+    // 获取应用实例
+    const app = getApp();
     
-    // 刷新用户星星和奖品信息
-    this.loadStarsAndRewards();
+    // 从多个来源检查是否从奖池页面返回
+    const fromStorage = wx.getStorageSync('fromRewardCompletion');
     
-    // 刷新消息数据
+    if (app.globalData.hasRedirectedToReward || fromStorage) {
+      console.log('[Index] 检测到从奖池页面返回(通过标记)');
+      
+      // 清除所有标记
+      app.globalData.hasRedirectedToReward = false;
+      if (fromStorage) {
+        wx.removeStorageSync('fromRewardCompletion');
+        wx.removeStorageSync('completedRewardInfo');
+      }
+      
+      // 执行过渡到新目标
+      console.log('[Index] 从奖池返回，强制更新进度条');
+      this.transitionToNewTarget();
+      return;
+    }
+    
+    // 正常页面显示流程
+    // 加载用户消息
     this.loadMessageData();
     
-    // 重置奖池页面循环跳转标记
-    const app = getApp();
-    if (app.globalData.hasRedirectedToReward) {
-      console.log('[Index] 重置奖池页面跳转标记');
-      // 延迟重置，确保不会立即触发跳转
-      setTimeout(() => {
-        app.globalData.hasRedirectedToReward = false;
-      }, 1000);
-    }
+    // 检查即将到期的任务
+    this.checkUpcomingTasks();
   },
   
   /**
@@ -777,10 +798,31 @@ viewMessageDetail: function(e) {
   loadStarsAndRewards: function() {
     console.log('[Index] 加载用户星星和奖品信息');
     
-    // 使用pointsManager获取用户星星数
+    // 如果正在强制保持满值状态，不执行任何更新
+    if (this.data.forceKeepFullValue) {
+      console.log('[Index] 正在强制保持满值状态，跳过更新');
+      return;
+    }
+    
+    // 获取最新星星数据
     const userPoints = pointsManager.getUserPoints();
     console.log(`[Index] 当前用户星星数: ${userPoints}`);
     
+    // 记录当前进度数据，用于后续满值判断
+    const oldProgress = this.data.rewardProgress || { current: 0, total: 10 };
+    
+    // 检查是否刚达成满值 - 使用最新星星数与当前奖励目标比较
+    const justCompleted = userPoints >= oldProgress.total && userPoints < oldProgress.total * 2 && !this.data.transitionInProgress;
+    console.log(`[Index] 检查满值状态: 星星=${userPoints}, 目标=${oldProgress.total}, 是否满值: ${justCompleted}`);
+    
+    // 如果刚达成满值，立即处理满值状态并提前返回，防止被后续逻辑覆盖
+    if (justCompleted) {
+      console.log('[Index] 检测到星星数刚好达到目标，设置满值状态');
+      this._handleRewardCompletion(oldProgress, userPoints);
+      return;
+    }
+    
+    // 以下是正常流程（非满值状态）
     // 格式化星星数量供显示使用
     const formattedPoints = pointsManager.formatPoints(userPoints);
     
@@ -793,11 +835,7 @@ viewMessageDetail: function(e) {
     const nextReward = pointsManager.calculateNextReward(allRewards);
     console.log(`[Index] 下一个奖励: ${nextReward.name}，需要星星: ${nextReward.points}，当前星星: ${userPoints}`);
     
-    // 记录更新前的数据
-    const oldProgress = this.data.rewardProgress || { current: 0, total: 10 };
-    console.log(`[Index] 更新前进度: ${oldProgress.current}/${oldProgress.total}`);
-    
-    // 更新奖励进度
+    // 更新奖励进度数据
     this.setData({
       userPoints: userPoints,
       formattedPoints: formattedPoints,
@@ -805,10 +843,16 @@ viewMessageDetail: function(e) {
       rewardProgress: {
         current: userPoints,
         total: nextReward.points
-      }
+      },
+      rewardTextState: 'newTarget',
+      forceKeepFullValue: false,
+      completedRewardTotal: 0
     });
     
     console.log(`[Index] 设置星星进度: ${userPoints}/${nextReward.points}, 还需: ${nextReward.remainingStars}`);
+    
+    // 准备礼品指示器数据
+    this.prepareRewardIndicators(userPoints, allRewards, nextReward);
     
     // 确保进度条组件获得正确的进度值
     setTimeout(() => {
@@ -822,60 +866,299 @@ viewMessageDetail: function(e) {
       }
     }, 50);
   },
-
+  
   /**
-   * 处理奖品进度完成事件
+   * 处理奖励完成的满值状态
+   * 独立函数处理满值逻辑，避免代码重复
    */
-  onRewardComplete: function() {
-    console.log('[Index] 奖品进度完成');
+  _handleRewardCompletion: function(oldProgress, userPoints) {
+    console.log('[Index] 处理奖励完成满值状态');
     
-    // 获取全局数据
+    // 获取全局奖励配置
     const app = getApp();
+    const allRewards = app.getDefaultRewards() || [];
     
-    // 检查是否已跳转过
-    if (app.globalData.hasRedirectedToReward) {
-      console.log('[Index] 已经跳转过奖池页面，不再自动跳转');
-      return;
-    }
+    // 查找对应的已完成奖励
+    const completedReward = allRewards.find(r => r.points === oldProgress.total) || { 
+      name: '未知奖励', 
+      icon: '🎁',
+      points: oldProgress.total
+    };
     
-    // 获取当前奖励进度信息
-    const currentProgress = this.data.rewardProgress;
+    console.log(`[Index] 已完成奖励: ${completedReward.name}, 所需星星: ${completedReward.points}`);
     
-    // 检查本地存储中是否已经记录了这个阶段的奖励进度
-    const rewardProgressKey = `reward_progress_${currentProgress.total}`;
-    const hasShownReward = wx.getStorageSync(rewardProgressKey);
-    
-    if (hasShownReward) {
-      console.log('[Index] 当前奖励进度已经展示过，不再自动跳转', 
-                 {progress: `${currentProgress.current}/${currentProgress.total}`});
-      return;
-    }
-    
-    // 记录当前进度已展示
-    wx.setStorageSync(rewardProgressKey, true);
-    console.log('[Index] 标记当前奖励进度已展示', {key: rewardProgressKey});
-    
-    // 显示祝贺提示
-    wx.showToast({
-      title: '恭喜！可以领取奖品了',
-      icon: 'success',
-      duration: 2000
+    // 设置满值状态和标志
+    this.setData({
+      transitionInProgress: true,
+      completedReward: completedReward,
+      rewardTextState: 'achieved',
+      rewardProgress: {
+        current: oldProgress.total,
+        total: oldProgress.total
+      },
+      formattedPoints: pointsManager.formatPoints(oldProgress.total),
+      forceKeepFullValue: true,
+      completedRewardTotal: oldProgress.total,
+      userPoints: userPoints // 确保存储最新的星星数
     });
+    
+    // 准备礼品指示器数据
+    this.prepareRewardIndicators(userPoints, allRewards, null);
+    
+    // 确保进度条组件获得正确的满值
+    setTimeout(() => {
+      const progressBar = this.selectComponent('#progressBar');
+      if (progressBar) {
+        console.log('[Index] 强制设置进度条组件为满值');
+        progressBar.setData({
+          current: oldProgress.total,
+          total: oldProgress.total
+        });
+        
+        // 震动反馈
+        if (wx.vibrateShort) {
+          wx.vibrateShort({ type: 'heavy' });
+        }
+        
+        // 延迟显示选择对话框，让用户有足够时间看到满值状态
+        setTimeout(() => {
+          if (this.data.forceKeepFullValue) { // 再次检查，防止状态已被改变
+            this.showRewardChoiceDialog();
+          }
+        }, 2500);
+      }
+    }, 50);
+  },
+  
+  /**
+   * 显示奖励选择对话框
+   */
+  showRewardChoiceDialog: function() {
+    console.log('[Index] 显示奖励选择对话框');
+    
+    // 如果对话框已显示，不重复操作
+    if (this.data.showRewardChoice) {
+      return;
+    }
     
     // 震动反馈
     if (wx.vibrateShort) {
       wx.vibrateShort({ type: 'heavy' });
     }
     
-    // 设置已跳转标记
-    app.globalData.hasRedirectedToReward = true;
-    console.log('[Index] 设置已跳转标记，防止循环跳转');
+    // 创建动画实例
+    const animation = wx.createAnimation({
+      duration: 300,
+      timingFunction: 'ease',
+    });
     
-    // 延迟后跳转到奖励页面
+    // 设置初始状态（缩小并透明）
+    animation.scale(0.8).opacity(0).step({ duration: 0 });
+    
+    // 设置数据并显示对话框
+    this.setData({
+      showRewardChoice: true,
+      choiceDialogTitle: `恭喜！已达成"${this.data.completedReward.name}"`,
+      choiceDialogAnimation: animation.export()
+    });
+    
+    // 执行显示动画
+    setTimeout(() => {
+      animation.scale(1).opacity(1).step();
+      this.setData({
+        choiceDialogAnimation: animation.export()
+      });
+    }, 50);
+  },
+  
+  /**
+   * 点击继续积累
+   */
+  continueCollecting: function() {
+    console.log('[Index] 用户选择继续积累星星');
+    
+    // 创建动画实例
+    const animation = wx.createAnimation({
+      duration: 300,
+      timingFunction: 'ease-out',
+    });
+    
+    // 设置隐藏动画
+    animation.scale(0.8).opacity(0).step();
+    
+    this.setData({
+      choiceDialogAnimation: animation.export()
+    });
+    
+    // 延迟关闭对话框，然后开始过渡
+    setTimeout(() => {
+      this.setData({
+        showRewardChoice: false,
+        forceKeepFullValue: false // 解除满值保护
+      });
+      
+      // 执行过渡到新目标的动画
+      this.transitionToNewTarget();
+    }, 300);
+  },
+  
+  /**
+   * 过渡到新目标
+   */
+  transitionToNewTarget: function() {
+    console.log('[Index] 执行过渡到新目标的动画');
+    
+    // 清除所有满值相关状态
+    this.setData({
+      forceKeepFullValue: false,
+      transitionInProgress: false,
+      showRewardChoice: false,
+      rewardTextState: 'newTarget'
+    });
+    
+    // 获取新的目标信息
+    const userPoints = pointsManager.getUserPoints();
+    const app = getApp();
+    const allRewards = app.getDefaultRewards() || [];
+    const nextReward = pointsManager.calculateNextReward(allRewards);
+    
+    console.log(`[Index] 新目标信息: 当前星星=${userPoints}, 下一目标=${nextReward.name}, 需要星星=${nextReward.points}`);
+    
+    // 获取进度条组件并平滑过渡
+    const progressBar = this.selectComponent('#progressBar');
+    if (progressBar) {
+      console.log('[Index] 进度条平滑过渡到新目标');
+      progressBar.setData({
+        current: userPoints,
+        total: nextReward.points
+      });
+    }
+    
+    // 更新数据到新目标
+    this.setData({
+      userPoints: userPoints,
+      formattedPoints: pointsManager.formatPoints(userPoints),
+      nextReward: nextReward,
+      rewardProgress: {
+        current: userPoints,
+        total: nextReward.points
+      }
+    });
+    
+    // 准备礼品指示器数据
+    this.prepareRewardIndicators(userPoints, allRewards, nextReward);
+  },
+  
+  // 点击查看奖池
+  viewRewardPool: function() {
+    console.log('[Index] 用户选择查看奖池');
+    
+    // 保存更多状态信息
+    const app = getApp();
+    app.globalData.hasRedirectedToReward = true;
+    app.globalData.completedRewardInfo = {
+      reward: this.data.completedReward,
+      total: this.data.completedRewardTotal
+    };
+    
+    // 使用Storage备份标记(更可靠)
+    wx.setStorageSync('fromRewardCompletion', true);
+    wx.setStorageSync('completedRewardInfo', {
+      reward: this.data.completedReward,
+      total: this.data.completedRewardTotal
+    });
+    
+    // 隐藏对话框
+    this.setData({
+      showRewardChoice: false
+    });
+    
+    // 跳转到奖池页面
     setTimeout(() => {
       wx.switchTab({
         url: '/pages/rewards/rewards'
       });
-    }, 1500);
+    }, 300);
+  },
+  
+  // 点击奖励指示器
+  onRewardIndicatorTap: function(e) {
+    const rewardId = e.currentTarget.dataset.id;
+    const reward = this.data.visibleRewards.find(r => r.id === rewardId);
+    
+    if (!reward) return;
+    
+    console.log(`[Index] 点击奖励指示器: ${reward.name}`);
+    
+    // 如果是已解锁状态，跳转到奖池
+    if (reward.status === 'unlocked') {
+      wx.switchTab({
+        url: '/pages/rewards/rewards'
+      });
+    } else if (reward.status === 'current') {
+      // 如果是当前目标，显示提示
+      wx.showToast({
+        title: `目标: ${reward.name}`,
+        icon: 'none'
+      });
+    }
+  },
+  
+  // 显示所有奖励
+  showAllRewards: function() {
+    console.log('[Index] 查看所有奖励');
+    wx.switchTab({
+      url: '/pages/rewards/rewards'
+    });
+  },
+  
+  // 生成奖励提示文本
+  generateRewardHintText: function(userPoints, allRewards) {
+    // 找到所有已解锁的奖励
+    const unlockedRewards = allRewards.filter(r => userPoints >= r.points);
+    const unlockedCount = unlockedRewards.length;
+    
+    let hintText = '';
+    
+    if (unlockedCount > 1) {
+      hintText = `恭喜！您已达成${unlockedCount}个奖品，可前往奖池查看`;
+    } else if (unlockedCount === 1) {
+      hintText = `恭喜！已达成${unlockedRewards[0].name}，可前往奖池查看`;
+    } else {
+      // 保持原有提示
+      hintText = null;
+    }
+    
+    this.setData({
+      rewardHintText: hintText
+    });
+  },
+  
+  // 准备奖励指示器数据
+  prepareRewardIndicators: function(userPoints, allRewards, nextReward) {
+    // 处理奖品指示器
+    const processedRewards = allRewards.map(reward => {
+      let status = 'locked'; // 默认状态：未解锁
+      
+      if (userPoints >= reward.points) {
+        status = 'unlocked'; // 已解锁状态
+      } else if (nextReward && nextReward.id === reward.id) {
+        status = 'current'; // 当前目标状态
+      }
+      
+      return {
+        ...reward,
+        status
+      };
+    });
+    
+    // 最多显示5个，如果更多设置标记
+    const hasMoreRewards = processedRewards.length > 5;
+    const visibleRewards = processedRewards.slice(0, 5);
+    
+    this.setData({
+      visibleRewards,
+      hasMoreRewards
+    });
   }
 }) 
