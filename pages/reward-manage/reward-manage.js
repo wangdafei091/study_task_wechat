@@ -23,21 +23,20 @@ Page({
     
     // emoji选择器数据 - 所有可用表情
     allEmojis: [
-      '🎁', '🎮', '🧸', '🍦', '🍪', '🍕', '🍫', '🍭', '🍿', '🍔', '🍰', '🍎', '🍒', '🥤',
+      '🎮', '🧸', '🍦', '🍪', '🍕', '🍫', '🍭', '🍿', '🍔', '🍰', '🍎', '🍒', '🥤',
       '🎬', '🎡', '🏊', '🚲', '📚', '🎨', '🚗', '🧩', '🎯', '🎭', '⚽', '🏀', '🏓', '🎾',
-      '⭐', '🏆', '🥇', '🎖️', '💰', '🎪', '🎠', '🧠', '🎓', '✏️', '📝', '📒', '📷', '🎵',
+       '💰', '🎪', '🎠', '🧠', '🎓', '✏️', '📝', '📒', '📷', '🎵',
       '🎧', '📱', '🔍', '🎸', '🥁', '🎹', '🎤', '🎪', '🎨', '🎭', '🤹', '🎳', '🎯', '🎰'
     ],
     
     // emoji分类数据
     emojiCategories: {
-      common: ['🎁', '🎮', '🧸', '🍦', '📚', '🎨', '⭐', '🏆', '💰', '🎬', '🎡', '🚲'],
-      toys: ['🎮', '🧸', '🧩', '🎯', '🚗', '🎪', '🎭', '⚽', '🏀', '🎳', '🎰', '🧠'],
-      study: ['📚', '✏️', '📝', '🎓', '🧠', '📒', '🔍', '💻', '📱', '🧮', '🔬', '📷'],
-      activity: ['⚽', '🏀', '🏓', '🎾', '🏊', '🚲', '🎭', '🎨', '🎬', '🎡', '🎪', '🎧'],
-      food: ['🍦', '🍪', '🍕', '🍫', '🍭', '🍿', '🍔', '🍰', '🍎', '🍒', '🥤', '🍩']
+      toys: ['🎮', '🧸', '🧩', '🎯', '🎪', '🎭'],
+      study: ['📚', '✏️', '📝', '💻', '📱', '🔬'],
+      activity: ['🏓', '🎾', '🏊', '🚲', '🎭', '🎨', '🎬', '🎡', '📷'],
+      food: ['🍦', '🍪', '🍕', '🍫', '🍭', '🍿', '🍔', '🍰', '🍎',  '🥤', '🍩']
     },
-    currentCategory: 'common', // 当前选择的表情分类
+    currentCategory: 'toys', // 当前选择的表情分类
     emojiList: [], // 当前显示的表情列表
     
     // 操作菜单相关
@@ -65,7 +64,7 @@ Page({
     
     // 初始化表情列表
     this.setData({
-      emojiList: this.data.emojiCategories.common
+      emojiList: this.data.emojiCategories.toys
     });
   },
 
@@ -461,7 +460,7 @@ Page({
     
     this.setData({
       currentCategory: category,
-      emojiList: this.data.emojiCategories[category] || this.data.emojiCategories.common
+      emojiList: this.data.emojiCategories[category] || this.data.emojiCategories.toys
     });
   },
   

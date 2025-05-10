@@ -106,8 +106,6 @@
           
           <!-- 分类标签 -->
           <view class="emoji-categories">
-            <view class="category-item {{currentCategory === 'common' ? 'active' : ''}}" 
-                  bindtap="switchEmojiCategory" data-category="common">常用</view>
             <view class="category-item {{currentCategory === 'toys' ? 'active' : ''}}" 
                   bindtap="switchEmojiCategory" data-category="toys">玩具</view>
             <view class="category-item {{currentCategory === 'study' ? 'active' : ''}}" 
@@ -118,17 +116,7 @@
                   bindtap="switchEmojiCategory" data-category="food">美食</view>
           </view>
           
-          <!-- 快速选择区 -->
-          <view class="quick-emojis">
-            <view class="quick-emoji {{editingReward.icon === '🎁' ? 'active' : ''}}" bindtap="selectEmoji" data-emoji="🎁">🎁</view>
-            <view class="quick-emoji {{editingReward.icon === '🎮' ? 'active' : ''}}" bindtap="selectEmoji" data-emoji="🎮">🎮</view>
-            <view class="quick-emoji {{editingReward.icon === '🧸' ? 'active' : ''}}" bindtap="selectEmoji" data-emoji="🧸">🧸</view>
-            <view class="quick-emoji {{editingReward.icon === '🍦' ? 'active' : ''}}" bindtap="selectEmoji" data-emoji="🍦">🍦</view>
-            <view class="quick-emoji {{editingReward.icon === '📚' ? 'active' : ''}}" bindtap="selectEmoji" data-emoji="📚">📚</view>
-            <view class="quick-emoji {{editingReward.icon === '🎨' ? 'active' : ''}}" bindtap="selectEmoji" data-emoji="🎨">🎨</view>
-          </view>
-          
-          <!-- 表情网格 -->
+          <!-- 表情网格容器 -->
           <view class="emoji-grid-container">
             <text class="emoji-grid-hint">点击选择图标</text>
             <scroll-view class="emoji-grid" scroll-y="{{true}}">
