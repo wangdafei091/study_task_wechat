@@ -21,11 +21,6 @@ Page({
     editingReward: {}, // 当前编辑的奖励
     isFormValid: false, // 表单是否有效
     
-    // 表情搜索相关
-    searchKeyword: '', // 搜索关键词
-    searchResults: [], // 搜索结果
-    isSearching: false, // 是否处于搜索模式
-    
     // emoji选择器数据 - 所有可用表情
     allEmojis: [
       '🎁', '🎮', '🧸', '🍦', '🍪', '🍕', '🍫', '🍭', '🍿', '🍔', '🍰', '🍎', '🍒', '🥤',
@@ -37,12 +32,13 @@ Page({
     // emoji分类数据
     emojiCategories: {
       common: ['🎁', '🎮', '🧸', '🍦', '📚', '🎨', '⭐', '🏆', '💰', '🎬', '🎡', '🚲'],
-      toys: ['🎮', '🧸', '🧩', '🎯', '🚗', '🎠', '🎭', '🎪', '🎯', '⚽', '🏀', '🎠'],
+      toys: ['🎮', '🧸', '🧩', '🎯', '🚗', '🎪', '🎭', '⚽', '🏀', '🎳', '🎰', '🧠'],
       study: ['📚', '✏️', '📝', '🎓', '🧠', '📒', '🔍', '💻', '📱', '🧮', '🔬', '📷'],
-      activity: ['⚽', '🏀', '🏓', '🎾', '🏊', '🚲', '🎭', '🎨', '🎬', '🎡', '🎪', '🎠'],
+      activity: ['⚽', '🏀', '🏓', '🎾', '🏊', '🚲', '🎭', '🎨', '🎬', '🎡', '🎪', '🎧'],
       food: ['🍦', '🍪', '🍕', '🍫', '🍭', '🍿', '🍔', '🍰', '🍎', '🍒', '🥤', '🍩']
     },
     currentCategory: 'common', // 当前选择的表情分类
+    emojiList: [], // 当前显示的表情列表
     
     // 操作菜单相关
     showActionSheet: false, // 是否显示操作菜单
@@ -463,83 +459,9 @@ Page({
     
     console.log(`[RewardManage] 切换表情分类: ${category}`);
     
-    // 退出搜索模式
     this.setData({
       currentCategory: category,
-      emojiList: this.data.emojiCategories[category] || this.data.emojiCategories.common,
-      isSearching: false,
-      searchKeyword: ''
-    });
-  },
-  
-  /**
-   * 搜索表情关键词输入
-   */
-  onSearchInput: function(e) {
-    const keyword = e.detail.value.trim().toLowerCase();
-    console.log(`[RewardManage] 搜索表情关键词: ${keyword}`);
-    
-    if (keyword === '') {
-      // 如果关键词为空，退出搜索模式
-      this.setData({
-        isSearching: false,
-        searchKeyword: '',
-        emojiList: this.data.emojiCategories[this.data.currentCategory]
-      });
-      return;
-    }
-    
-    // 根据关键词匹配表情标签
-    const emojiTags = {
-      '礼物': ['🎁', '🎀', '🧸', '📱', '💰'],
-      '玩具': ['🎮', '🧸', '🧩', '🚗', '⚽', '🏀'],
-      '书本': ['📚', '📒', '📝', '✏️', '🎓'],
-      '学习': ['📚', '✏️', '📝', '🎓', '🧠', '📒'],
-      '运动': ['⚽', '🏀', '🏓', '🎾', '🏊', '🚲'],
-      '活动': ['🎬', '🎡', '🎭', '🎨', '🎪'],
-      '食物': ['🍦', '🍪', '🍕', '🍫', '🍭', '🍿', '🍔'],
-      '零食': ['🍦', '🍪', '🍫', '🍭', '🍿'],
-      '游戏': ['🎮', '🧩', '🎯', '⚽', '🏀', '🎭'],
-      '美术': ['🎨', '📷', '🎭'],
-      '奖励': ['⭐', '🏆', '🥇', '🎖️', '💰'],
-      '音乐': ['🎵', '🎧', '🎸', '🥁', '🎹', '🎤'],
-      '娱乐': ['🎬', '🎡', '🎮', '🎭', '🎪']
-    };
-    
-    // 搜索逻辑 - 匹配关键词
-    let results = [];
-    
-    // 1. 先从标签中匹配
-    Object.keys(emojiTags).forEach(tag => {
-      if (tag.includes(keyword)) {
-        // 如果标签匹配，添加相关表情
-        results = [...results, ...emojiTags[tag]];
-      }
-    });
-    
-    // 2. 去重
-    results = [...new Set(results)];
-    
-    console.log(`[RewardManage] 搜索结果: ${results.length}个表情`);
-    
-    this.setData({
-      isSearching: true,
-      searchKeyword: keyword,
-      searchResults: results,
-      emojiList: results
-    });
-  },
-  
-  /**
-   * 清空搜索
-   */
-  clearSearch: function() {
-    console.log('[RewardManage] 清空搜索');
-    
-    this.setData({
-      isSearching: false,
-      searchKeyword: '',
-      emojiList: this.data.emojiCategories[this.data.currentCategory]
+      emojiList: this.data.emojiCategories[category] || this.data.emojiCategories.common
     });
   },
   

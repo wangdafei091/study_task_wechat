@@ -165,6 +165,12 @@
   transition-delay: 0.1s;
 }
 
+/* 奖励管理按钮 - 金色风格 */
+.float-menu-item.reward-manage {
+  background: linear-gradient(135deg, #FFD700, #FFA000);
+  transition-delay: 0.15s;
+}
+
 /* 菜单项动画 - 右下角位置(默认) */
 .float-menu.position-bottom-right.active .float-menu-item:nth-child(1) {
   transform: scale(1) translate(-110rpx, -110rpx);

@@ -104,17 +104,6 @@
             <view class="select-hint">当前选中图标</view>
           </view>
           
-          <!-- 表情搜索框 -->
-          <view class="emoji-search">
-            <input class="search-input" 
-                   placeholder="搜索图标..." 
-                   value="{{searchKeyword}}"
-                   bindinput="onSearchInput"
-                   confirm-type="search" />
-            <view class="search-icon" wx:if="{{!isSearching}}">🔍</view>
-            <view class="clear-icon" wx:if="{{isSearching}}" bindtap="clearSearch">✖</view>
-          </view>
-          
           <!-- 分类标签 -->
           <view class="emoji-categories">
             <view class="category-item {{currentCategory === 'common' ? 'active' : ''}}" 
@@ -179,32 +168,32 @@
           </view>
         </view>
       </view>
-      
-      <!-- 星星数量 -->
-      <view class="form-item">
-        <view class="form-label">所需星星</view>
-        <view class="number-input-container">
-          <view class="number-btn minus" bindtap="decreasePoints">-</view>
-          <input class="number-input" 
-                 type="number" 
-                 value="{{editingReward.points}}" 
-                 bindinput="onPointsInput"
-                 disabled="{{editingReward.claimed}}" />
-          <view class="number-btn plus" bindtap="increasePoints">+</view>
-        </view>
-        <view class="form-tip" wx:if="{{editingReward.claimed}}">已领取的奖励不可修改星星数量</view>
+    </view>
+    
+    <!-- 星星数量 -->
+    <view class="form-item">
+      <view class="form-label">所需星星</view>
+      <view class="number-input-container">
+        <view class="number-btn minus" bindtap="decreasePoints">-</view>
+        <input class="number-input" 
+               type="number" 
+               value="{{editingReward.points}}" 
+               bindinput="onPointsInput"
+               disabled="{{editingReward.claimed}}" />
+        <view class="number-btn plus" bindtap="increasePoints">+</view>
       </view>
-      
-      <!-- 启用状态 - 仅未领取的奖励显示 -->
-      <view class="form-item switch-item" wx:if="{{!editingReward.claimed}}">
-        <view class="form-label">在奖池中显示</view>
-        <switch checked="{{editingReward.enabled}}" bindchange="onEnabledChange" color="#4285F4" />
-      </view>
-      
-      <!-- 已领取奖励的状态提示 -->
-      <view class="form-item" wx:if="{{editingReward.claimed}}">
-        <view class="status-message">此奖励已被领取</view>
-      </view>
+      <view class="form-tip" wx:if="{{editingReward.claimed}}">已领取的奖励不可修改星星数量</view>
+    </view>
+    
+    <!-- 启用状态 - 仅未领取的奖励显示 -->
+    <view class="form-item switch-item" wx:if="{{!editingReward.claimed}}">
+      <view class="form-label">在奖池中显示</view>
+      <switch checked="{{editingReward.enabled}}" bindchange="onEnabledChange" color="#4285F4" />
+    </view>
+    
+    <!-- 已领取奖励的状态提示 -->
+    <view class="form-item" wx:if="{{editingReward.claimed}}">
+      <view class="status-message">此奖励已被领取</view>
     </view>
     
     <view class="modal-footer">
