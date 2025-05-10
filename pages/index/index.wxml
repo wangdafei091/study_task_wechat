@@ -165,6 +165,7 @@
           <text class="reward-icon">{{item.icon}}</text>
           <text class="reward-stars">{{item.points}}★</text>
           <view class="indicator-status" wx:if="{{item.status === 'unlocked'}}">可查看</view>
+          <view class="indicator-status claimed" wx:if="{{item.status === 'claimed'}}">已领取</view>
           <view class="indicator-arrow" wx:if="{{item.status === 'current'}}"></view>
         </view>
       </block>

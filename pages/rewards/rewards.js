@@ -305,53 +305,117 @@ Page({
   _performClaimReward: function(reward) {
     // 扣除相应的星星数
     console.log(`[rewards] 领取奖励前星星数: ${this.data.totalPoints}`);
-    const newPoints = pointsManager.reduceUserPoints(reward.points);
-    console.log(`[rewards] 领取奖励后星星数: ${newPoints}, 扣除: ${reward.points}`);
     
-    // 更新奖励状态
-    const rewards = this.data.rewards.map(r => {
-      if (r.id === reward.id) {
-        return { ...r, claimed: true };
-      }
-      return r;
-    });
-
-    // 使用更新后的奖励数据计算下一个可用奖励
-    const nextReward = pointsManager.calculateNextReward(rewards);
-    console.log(`[rewards] 领取奖励后计算下一个可用奖励: ${nextReward.name}, 需要${nextReward.points}颗星星`);
+    // 保存原始星星数和目标星星数
+    const originalPoints = this.data.totalPoints;
+    const targetPoints = originalPoints - reward.points;
     
-    // 关闭弹窗并更新数据
-    this.setData({
-      rewards: rewards,
-      showModal: false,
-      totalPoints: newPoints,
-      formattedPoints: pointsManager.formatPoints(newPoints, true),
-      currentProgress: newPoints
-    });
-
-    // 保存到本地存储
-    wx.setStorage({
-      key: 'rewards',
-      data: rewards
-    });
+    // 实际扣除星星数（先在后台扣除）
+    pointsManager.reduceUserPoints(reward.points);
+    console.log(`[rewards] 领取奖励后星星数: ${targetPoints}, 扣除: ${reward.points}`);
     
-    // 通知首页更新星星和奖励进度
-    const app = getApp();
-    if (app && app.globalData && app.globalData.eventBus) {
-      console.log('[rewards] 发送奖励领取事件通知');
-      app.globalData.eventBus.emit('rewardClaimed', {
-        rewardId: reward.id,
-        points: reward.points,
-        newTotalPoints: newPoints,
-        nextReward: nextReward
+    // 开始星星数量减少的动画
+    this.animateStarsCount(originalPoints, targetPoints, () => {
+      // 动画完成后，更新奖励状态
+      const rewards = this.data.rewards.map(r => {
+        if (r.id === reward.id) {
+          return { ...r, claimed: true };
+        }
+        return r;
       });
-    }
 
-    // 显示领取成功提示
-    wx.showToast({
-      title: '领取成功',
-      icon: 'success',
-      duration: 2000
+      // 使用更新后的奖励数据计算下一个可用奖励
+      const nextReward = pointsManager.calculateNextReward(rewards);
+      console.log(`[rewards] 领取奖励后计算下一个可用奖励: ${nextReward.name}, 需要${nextReward.points}颗星星`);
+      
+      // 关闭弹窗并更新数据
+      this.setData({
+        rewards: rewards,
+        showModal: false
+      });
+
+      // 保存到本地存储
+      wx.setStorage({
+        key: 'rewards',
+        data: rewards
+      });
+      
+      // 通知首页更新星星和奖励进度
+      const app = getApp();
+      if (app && app.globalData && app.globalData.eventBus) {
+        console.log('[rewards] 发送奖励领取事件通知');
+        app.globalData.eventBus.emit('rewardClaimed', {
+          rewardId: reward.id,
+          points: reward.points,
+          newTotalPoints: targetPoints,
+          nextReward: nextReward
+        });
+      }
+
+      // 显示领取成功提示
+      wx.showToast({
+        title: '领取成功',
+        icon: 'success',
+        duration: 2000
+      });
     });
+  },
+  
+  /**
+   * 星星数量减少动画
+   * @param {Number} start 起始数量
+   * @param {Number} end 结束数量
+   * @param {Function} callback 动画结束回调
+   */
+  animateStarsCount: function(start, end, callback) {
+    // 动画参数
+    const duration = 1000;  // 动画持续时间，1秒
+    const frameDuration = 16;  // 每帧时间，约60fps
+    const frames = Math.floor(duration / frameDuration);
+    const decrement = (start - end) / frames;
+    
+    console.log(`[rewards] 开始星星数量动画，从 ${start} 到 ${end}, 减少数量: ${start - end}, 帧数: ${frames}`);
+    
+    let currentCount = start;
+    let currentFrame = 0;
+    
+    // 执行动画递减
+    const countDown = () => {
+      currentFrame++;
+      
+      if (currentFrame <= frames) {
+        // 计算当前数量，使用缓动效果使动画更自然
+        const progress = currentFrame / frames;
+        const easeOutProgress = 1 - Math.pow(1 - progress, 3); // 缓出效果
+        currentCount = start - ((start - end) * easeOutProgress);
+        
+        // 格式化并显示
+        this.setData({
+          totalPoints: Math.round(currentCount),
+          formattedPoints: pointsManager.formatPoints(Math.round(currentCount), true),
+          currentProgress: Math.round(currentCount)
+        });
+        
+        // 继续下一帧
+        setTimeout(countDown, frameDuration);
+      } else {
+        // 动画完成，确保最终数值准确
+        this.setData({
+          totalPoints: end,
+          formattedPoints: pointsManager.formatPoints(end, true),
+          currentProgress: end
+        });
+        
+        console.log(`[rewards] 星星数量动画完成，最终数量: ${end}`);
+        
+        // 执行回调
+        if (callback) {
+          callback();
+        }
+      }
+    };
+    
+    // 开始动画
+    countDown();
   }
 })

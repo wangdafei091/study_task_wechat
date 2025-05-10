@@ -678,6 +678,27 @@
   transform: scale(1.1);
 }
 
+/* 已领取奖品的样式 */
+.reward-indicator.claimed {
+  opacity: 0.9;
+  background-color: transparent;
+  border: none;
+}
+
+.indicator-status.claimed {
+  position: absolute;
+  top: -15rpx;
+  right: -20rpx;
+  background: #4CAF50;
+  color: white;
+  font-size: 16rpx;
+  padding: 2rpx 8rpx;
+  border-radius: 10rpx;
+  transform: scale(0.8);
+  border: none;
+  margin-top: 0;
+}
+
 .reward-indicator.current {
   transform: scale(1.2);
 }

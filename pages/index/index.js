@@ -1157,10 +1157,10 @@ viewMessageDetail: function(e) {
     
     if (!reward) return;
     
-    console.log(`[Index] 点击奖励指示器: ${reward.name}`);
+    console.log(`[Index] 点击奖励指示器: ${reward.name}, 状态: ${reward.status}`);
     
-    // 如果是已解锁状态，跳转到奖池
-    if (reward.status === 'unlocked') {
+    // 已解锁或已领取状态，跳转到奖池
+    if (reward.status === 'unlocked' || reward.status === 'claimed') {
       wx.switchTab({
         url: '/pages/rewards/rewards'
       });
@@ -1209,7 +1209,10 @@ viewMessageDetail: function(e) {
     const processedRewards = allRewards.map(reward => {
       let status = 'locked'; // 默认状态：未解锁
       
-      if (userPoints >= reward.points) {
+      // 先检查是否已领取
+      if (reward.claimed) {
+        status = 'claimed'; // 已领取状态
+      } else if (userPoints >= reward.points) {
         status = 'unlocked'; // 已解锁状态
       } else if (nextReward && nextReward.id === reward.id) {
         status = 'current'; // 当前目标状态
@@ -1229,5 +1232,8 @@ viewMessageDetail: function(e) {
       visibleRewards,
       hasMoreRewards
     });
+    
+    // 添加日志
+    console.log(`[Index] 准备显示奖品指示器: ${visibleRewards.length}个, 状态分布: ${visibleRewards.map(r => r.status).join(',')}`);
   }
 }) 
