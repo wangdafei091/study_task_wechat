@@ -78,7 +78,7 @@ Page({
       {
         id: 'study',
         type: 'study-task',
-        icon: '📊',
+        icon: '📈',
         label: '分析',
         ariaLabel: '查看统计分析'
       },
