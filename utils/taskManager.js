@@ -438,18 +438,32 @@ const taskManager = {
       // 处理积分变更
       if (status === 1 && oldStatus !== 1) { // 完成任务
         if (!task.isRequired) {
-          console.log(`[TaskManager] 非必做任务 ${task.title} 已完成，添加星星: ${task.points || 0}`);
-          pointsManager.addUserPoints(task.points || 0);
-          
-          // 计算积分有效期并更新任务
-          if (task.pointsExpiry) {
-            console.log(`[TaskManager] 计算任务${task.id}积分有效期，类型: ${task.pointsExpiry}`);
-            const completionDate = new Date();
-            const expiryInfo = this.calculateExpiryDate(task.pointsExpiry, completionDate);
+          // 检查任务是否已经获得过星星
+          if (task.starAwarded) {
+            console.log(`[TaskManager] 任务 ${task.title} 已获得过星星，不再重复添加`);
+            // 显示提示
+            wx.showToast({
+              title: '这个任务已经给过星星了哦~',
+              icon: 'none',
+              duration: 1500
+            });
+          } else {
+            console.log(`[TaskManager] 非必做任务 ${task.title} 已完成，添加星星: ${task.points || 0}`);
+            pointsManager.addUserPoints(task.points || 0);
             
-            // 更新任务的有效期信息
-            task.pointsExpiryDate = expiryInfo.expiryDateStr;
-            console.log(`[TaskManager] 更新任务${task.id}的积分有效期为: ${task.pointsExpiryDate}`);
+            // 标记任务已获得星星
+            task.starAwarded = true;
+            
+            // 计算积分有效期并更新任务
+            if (task.pointsExpiry) {
+              console.log(`[TaskManager] 计算任务${task.id}积分有效期，类型: ${task.pointsExpiry}`);
+              const completionDate = new Date();
+              const expiryInfo = this.calculateExpiryDate(task.pointsExpiry, completionDate);
+              
+              // 更新任务的有效期信息
+              task.pointsExpiryDate = expiryInfo.expiryDateStr;
+              console.log(`[TaskManager] 更新任务${task.id}的积分有效期为: ${task.pointsExpiryDate}`);
+            }
           }
         }
       } else if (status === 0 && oldStatus === 1) { // 取消完成
@@ -469,6 +483,8 @@ const taskManager = {
             }
             console.log(`[TaskManager] 重置任务${task.id}的积分有效期为: ${task.pointsExpiryDate}`);
           }
+          
+          // 注意：不重置starAwarded标记，确保任务只能获得一次星星
         }
       }
       
