@@ -88,6 +88,13 @@ Page({
         icon: '⏰',
         label: '任务',
         ariaLabel: '创建任务'
+      },
+      {
+        id: 'reward-manage',
+        type: 'reward-manage',
+        icon: '🏆',
+        label: '奖励',
+        ariaLabel: '管理奖励'
       }
     ],
 
@@ -714,6 +721,11 @@ viewMessageDetail: function(e) {
       console.log('[首页] 点击分析菜单项，跳转到分析页面');
       wx.navigateTo({
         url: '/pages/analysis/analysis'
+      });
+    } else if (item && item.id === 'reward-manage') {
+      console.log('[首页] 点击奖励管理菜单项，跳转到奖励管理页面');
+      wx.navigateTo({
+        url: '/pages/reward-manage/reward-manage'
       });
     }
   },

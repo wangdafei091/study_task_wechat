@@ -1,0 +1,259 @@
+<view class="container">
+  <!-- 标签页导航 -->
+  <view class="tab-header">
+    <view class="tab-item {{activeTab === 'manage' ? 'active' : ''}}" 
+          bindtap="switchTab" data-tab="manage">奖励设置</view>
+    <view class="tab-item {{activeTab === 'claimed' ? 'active' : ''}}" 
+          bindtap="switchTab" data-tab="claimed">领取记录</view>
+  </view>
+  
+  <!-- 奖励设置标签页 -->
+  <view class="tab-content" wx:if="{{activeTab === 'manage'}}">
+    <!-- 奖励网格 -->
+    <view class="rewards-grid">
+      <block wx:for="{{rewards}}" wx:key="id">
+        <view class="reward-item {{item.enabled ? '' : 'disabled'}} {{item.claimed ? 'claimed' : ''}}" 
+              bindlongpress="showRewardOptions" 
+              data-id="{{item.id}}">
+          <view class="reward-content">
+            <view class="reward-icon">{{item.icon}}</view>
+            <view class="reward-name">{{item.name}}</view>
+            <view class="reward-points">{{item.points}}颗</view>
+            
+            <!-- 状态标签 -->
+            <view class="reward-status-label disabled" wx:if="{{!item.enabled}}">已禁用</view>
+            <view class="reward-status-label claimed" wx:elif="{{item.claimed}}">已领取</view>
+          </view>
+        </view>
+      </block>
+      
+      <!-- 添加新奖励按钮 -->
+      <view class="reward-item add-reward" bindtap="showAddRewardModal">
+        <view class="add-icon">+</view>
+        <view class="add-text">添加新奖励</view>
+      </view>
+    </view>
+  </view>
+  
+  <!-- 领取记录标签页 -->
+  <view class="tab-content" wx:if="{{activeTab === 'claimed'}}">
+    <!-- 筛选选项 -->
+    <view class="filter-bar">
+      <view class="filter-item {{claimedFilter === 'all' ? 'active' : ''}}" 
+            bindtap="setClaimedFilter" data-filter="all">全部记录</view>
+      <view class="filter-item {{claimedFilter === 'pending' ? 'active' : ''}}" 
+            bindtap="setClaimedFilter" data-filter="pending">待领取</view>
+      <view class="filter-item {{claimedFilter === 'delivered' ? 'active' : ''}}" 
+            bindtap="setClaimedFilter" data-filter="delivered">已领取</view>
+    </view>
+    
+    <!-- 领取记录列表 -->
+    <view class="claimed-list">
+      <block wx:for="{{claimedRecords}}" wx:key="id">
+        <view class="claimed-item">
+          <view class="claimed-icon">{{item.icon}}</view>
+          <view class="claimed-info">
+            <view class="claimed-name">{{item.name}}</view>
+            <view class="claimed-time">领取时间: {{item.claimTimeDisplay}}</view>
+            <view class="claimed-status {{item.claimStatus === 'delivered' ? 'delivered' : 'pending'}}">
+              {{item.claimStatus === 'delivered' ? '已领取' : '待领取'}}
+            </view>
+          </view>
+          <view class="claimed-actions">
+            <button class="action-btn" wx:if="{{item.claimStatus === 'pending'}}" 
+                    bindtap="markAsDelivered" data-id="{{item.id}}">
+              标记已领取
+            </button>
+          </view>
+        </view>
+      </block>
+      
+      <view class="no-records" wx:if="{{claimedRecords.length === 0}}">
+        暂无领取记录
+      </view>
+    </view>
+  </view>
+</view>
+
+<!-- 添加/编辑奖励模态框 -->
+<view class="reward-modal" wx:if="{{showRewardModal}}">
+  <view class="modal-mask" bindtap="closeRewardModal"></view>
+  <view class="modal-content">
+    <view class="modal-header">
+      <text>{{isEditing ? '编辑奖励' : '添加奖励'}}</text>
+      <text class="close-btn" bindtap="closeRewardModal">×</text>
+    </view>
+    
+    <view class="modal-form">
+      <!-- 奖励名称 -->
+      <view class="form-item">
+        <view class="form-label">奖励名称</view>
+        <input class="form-input" 
+               value="{{editingReward.name}}" 
+               bindinput="onNameInput"
+               placeholder="请输入奖励名称（最多20字）" 
+               maxlength="20" />
+      </view>
+      
+      <!-- 表情选择器 -->
+      <view class="form-item">
+        <view class="form-label">选择图标</view>
+        <view class="emoji-selector">
+          <view class="selected-emoji-container">
+            <view class="selected-emoji">{{editingReward.icon || '🎁'}}</view>
+            <view class="select-hint">当前选中图标</view>
+          </view>
+          
+          <!-- 表情搜索框 -->
+          <view class="emoji-search">
+            <input class="search-input" 
+                   placeholder="搜索图标..." 
+                   value="{{searchKeyword}}"
+                   bindinput="onSearchInput"
+                   confirm-type="search" />
+            <view class="search-icon" wx:if="{{!isSearching}}">🔍</view>
+            <view class="clear-icon" wx:if="{{isSearching}}" bindtap="clearSearch">✖</view>
+          </view>
+          
+          <!-- 分类标签 -->
+          <view class="emoji-categories">
+            <view class="category-item {{currentCategory === 'common' ? 'active' : ''}}" 
+                  bindtap="switchEmojiCategory" data-category="common">常用</view>
+            <view class="category-item {{currentCategory === 'toys' ? 'active' : ''}}" 
+                  bindtap="switchEmojiCategory" data-category="toys">玩具</view>
+            <view class="category-item {{currentCategory === 'study' ? 'active' : ''}}" 
+                  bindtap="switchEmojiCategory" data-category="study">学习</view>
+            <view class="category-item {{currentCategory === 'activity' ? 'active' : ''}}" 
+                  bindtap="switchEmojiCategory" data-category="activity">活动</view>
+            <view class="category-item {{currentCategory === 'food' ? 'active' : ''}}" 
+                  bindtap="switchEmojiCategory" data-category="food">美食</view>
+          </view>
+          
+          <!-- 快速选择区 -->
+          <view class="quick-emojis">
+            <view class="quick-emoji {{editingReward.icon === '🎁' ? 'active' : ''}}" bindtap="selectEmoji" data-emoji="🎁">🎁</view>
+            <view class="quick-emoji {{editingReward.icon === '🎮' ? 'active' : ''}}" bindtap="selectEmoji" data-emoji="🎮">🎮</view>
+            <view class="quick-emoji {{editingReward.icon === '🧸' ? 'active' : ''}}" bindtap="selectEmoji" data-emoji="🧸">🧸</view>
+            <view class="quick-emoji {{editingReward.icon === '🍦' ? 'active' : ''}}" bindtap="selectEmoji" data-emoji="🍦">🍦</view>
+            <view class="quick-emoji {{editingReward.icon === '📚' ? 'active' : ''}}" bindtap="selectEmoji" data-emoji="📚">📚</view>
+            <view class="quick-emoji {{editingReward.icon === '🎨' ? 'active' : ''}}" bindtap="selectEmoji" data-emoji="🎨">🎨</view>
+          </view>
+          
+          <!-- 表情网格 -->
+          <view class="emoji-grid-container">
+            <text class="emoji-grid-hint">点击选择图标</text>
+            <scroll-view class="emoji-grid" scroll-y="{{true}}">
+              <view class="emoji-row" wx:for="{{[0, 5, 10, 15, 20, 25]}}" wx:for-item="rowIndex" wx:key="rowIndex">
+                <view class="emoji-item {{emojiList[rowIndex] === editingReward.icon ? 'selected' : ''}}" 
+                      bindtap="selectEmoji" 
+                      data-emoji="{{emojiList[rowIndex]}}"
+                      wx:if="{{emojiList[rowIndex]}}">
+                  {{emojiList[rowIndex]}}
+                </view>
+                <view class="emoji-item {{emojiList[rowIndex+1] === editingReward.icon ? 'selected' : ''}}" 
+                      bindtap="selectEmoji" 
+                      data-emoji="{{emojiList[rowIndex+1]}}"
+                      wx:if="{{emojiList[rowIndex+1]}}">
+                  {{emojiList[rowIndex+1]}}
+                </view>
+                <view class="emoji-item {{emojiList[rowIndex+2] === editingReward.icon ? 'selected' : ''}}" 
+                      bindtap="selectEmoji" 
+                      data-emoji="{{emojiList[rowIndex+2]}}"
+                      wx:if="{{emojiList[rowIndex+2]}}">
+                  {{emojiList[rowIndex+2]}}
+                </view>
+                <view class="emoji-item {{emojiList[rowIndex+3] === editingReward.icon ? 'selected' : ''}}" 
+                      bindtap="selectEmoji" 
+                      data-emoji="{{emojiList[rowIndex+3]}}"
+                      wx:if="{{emojiList[rowIndex+3]}}">
+                  {{emojiList[rowIndex+3]}}
+                </view>
+                <view class="emoji-item {{emojiList[rowIndex+4] === editingReward.icon ? 'selected' : ''}}" 
+                      bindtap="selectEmoji" 
+                      data-emoji="{{emojiList[rowIndex+4]}}"
+                      wx:if="{{emojiList[rowIndex+4]}}">
+                  {{emojiList[rowIndex+4]}}
+                </view>
+              </view>
+            </scroll-view>
+          </view>
+        </view>
+      </view>
+      
+      <!-- 星星数量 -->
+      <view class="form-item">
+        <view class="form-label">所需星星</view>
+        <view class="number-input-container">
+          <view class="number-btn minus" bindtap="decreasePoints">-</view>
+          <input class="number-input" 
+                 type="number" 
+                 value="{{editingReward.points}}" 
+                 bindinput="onPointsInput"
+                 disabled="{{editingReward.claimed}}" />
+          <view class="number-btn plus" bindtap="increasePoints">+</view>
+        </view>
+        <view class="form-tip" wx:if="{{editingReward.claimed}}">已领取的奖励不可修改星星数量</view>
+      </view>
+      
+      <!-- 启用状态 - 仅未领取的奖励显示 -->
+      <view class="form-item switch-item" wx:if="{{!editingReward.claimed}}">
+        <view class="form-label">在奖池中显示</view>
+        <switch checked="{{editingReward.enabled}}" bindchange="onEnabledChange" color="#4285F4" />
+      </view>
+      
+      <!-- 已领取奖励的状态提示 -->
+      <view class="form-item" wx:if="{{editingReward.claimed}}">
+        <view class="status-message">此奖励已被领取</view>
+      </view>
+    </view>
+    
+    <view class="modal-footer">
+      <button class="btn-cancel" bindtap="closeRewardModal">取消</button>
+      <button class="btn-save" bindtap="saveReward" disabled="{{!isFormValid}}">
+        保存
+      </button>
+      <!-- 已领取奖励显示重新启用按钮 -->
+      <button class="btn-reactivate" bindtap="reactivateReward" wx:if="{{editingReward.claimed}}">
+        重新添加到奖池
+      </button>
+    </view>
+  </view>
+</view>
+
+<!-- 操作菜单弹窗 -->
+<view class="action-sheet" wx:if="{{showActionSheet}}">
+  <view class="action-sheet-mask" bindtap="closeActionSheet"></view>
+  <view class="action-sheet-content">
+    <view class="action-sheet-title">{{selectedReward.name}}</view>
+    <view class="action-sheet-options">
+      <view class="action-option" bindtap="editReward">
+        <view class="option-icon">✏️</view>
+        <view class="option-text">编辑</view>
+      </view>
+      
+      <view class="action-option" bindtap="confirmDeleteReward" wx:if="{{!selectedReward.claimed}}">
+        <view class="option-icon">🗑️</view>
+        <view class="option-text">删除</view>
+      </view>
+      
+      <view class="action-option" bindtap="confirmReactivateReward" wx:if="{{selectedReward.claimed}}">
+        <view class="option-icon">🔄</view>
+        <view class="option-text">重新添加到奖池</view>
+      </view>
+    </view>
+    <view class="action-sheet-cancel" bindtap="closeActionSheet">取消</view>
+  </view>
+</view>
+
+<!-- 确认对话框 -->
+<view class="confirm-dialog" wx:if="{{showConfirmDialog}}">
+  <view class="confirm-mask" bindtap="cancelConfirmDialog"></view>
+  <view class="confirm-content">
+    <view class="confirm-title">{{confirmDialogTitle}}</view>
+    <view class="confirm-message">{{confirmDialogMessage}}</view>
+    <view class="confirm-buttons">
+      <button class="btn-cancel" bindtap="cancelConfirmDialog">取消</button>
+      <button class="btn-confirm" bindtap="confirmDialogAction">确定</button>
+    </view>
+  </view>
+</view>

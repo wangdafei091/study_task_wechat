@@ -1,0 +1,715 @@
+/* pages/reward-manage/reward-manage.wxss */
+.container {
+  padding: 30rpx;
+  background-color: #F8F9FA;
+  min-height: 100vh;
+}
+
+/* 标签页导航 */
+.tab-header {
+  display: flex;
+  background-color: #FFFFFF;
+  border-radius: 16rpx;
+  margin-bottom: 20rpx;
+  overflow: hidden;
+}
+
+.tab-item {
+  flex: 1;
+  text-align: center;
+  padding: 24rpx 0;
+  font-size: 28rpx;
+  color: #666666;
+  position: relative;
+}
+
+.tab-item.active {
+  color: #4285F4;
+  font-weight: 500;
+}
+
+.tab-item.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 25%;
+  width: 50%;
+  height: 4rpx;
+  background-color: #4285F4;
+  border-radius: 2rpx;
+}
+
+/* 奖励网格 */
+.rewards-grid {
+  display: flex;
+  flex-wrap: wrap;
+  margin: -8rpx;
+}
+
+.reward-item {
+  width: calc(50% - 16rpx);
+  margin: 8rpx;
+  background-color: #FFFFFF;
+  border-radius: 16rpx;
+  padding: 20rpx;
+  text-align: center;
+  position: relative;
+  box-sizing: border-box;
+  border: 1px solid #EEEEEE;
+}
+
+.reward-item.disabled {
+  opacity: 0.6;
+}
+
+.reward-item.claimed {
+  border: 2rpx solid #34A853;
+}
+
+.reward-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+.reward-icon {
+  font-size: 48rpx;
+  margin-bottom: 12rpx;
+}
+
+.reward-name {
+  font-size: 28rpx;
+  color: #333333;
+  margin-bottom: 8rpx;
+  word-break: break-all;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.reward-points {
+  font-size: 24rpx;
+  color: #666666;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.reward-points::before {
+  content: "⭐";
+  font-size: 24rpx;
+  margin-right: 4rpx;
+  color: #FBBC05;
+}
+
+.reward-status-label {
+  position: absolute;
+  top: 8rpx;
+  right: 8rpx;
+  padding: 4rpx 8rpx;
+  border-radius: 4rpx;
+  font-size: 20rpx;
+  color: #FFFFFF;
+}
+
+.reward-status-label.disabled {
+  background-color: #999999;
+}
+
+.reward-status-label.claimed {
+  background-color: #34A853;
+}
+
+/* 添加奖励按钮 */
+.reward-item.add-reward {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 2rpx dashed #CCCCCC;
+  background-color: #F8F9FA;
+}
+
+.add-icon {
+  font-size: 48rpx;
+  color: #4285F4;
+  margin-bottom: 8rpx;
+}
+
+.add-text {
+  font-size: 24rpx;
+  color: #666666;
+}
+
+/* 领取记录筛选栏 */
+.filter-bar {
+  display: flex;
+  background-color: #FFFFFF;
+  border-radius: 16rpx;
+  padding: 12rpx;
+  margin-bottom: 20rpx;
+}
+
+.filter-item {
+  flex: 1;
+  text-align: center;
+  padding: 12rpx 0;
+  font-size: 24rpx;
+  color: #666666;
+  border-radius: 8rpx;
+}
+
+.filter-item.active {
+  background-color: #4285F4;
+  color: #FFFFFF;
+}
+
+/* 领取记录列表 */
+.claimed-list {
+  background-color: #FFFFFF;
+  border-radius: 16rpx;
+  padding: 12rpx;
+}
+
+.claimed-item {
+  display: flex;
+  padding: 20rpx;
+  border-bottom: 1rpx solid #EEEEEE;
+}
+
+.claimed-item:last-child {
+  border-bottom: none;
+}
+
+.claimed-icon {
+  font-size: 48rpx;
+  margin-right: 20rpx;
+}
+
+.claimed-info {
+  flex: 1;
+}
+
+.claimed-name {
+  font-size: 28rpx;
+  color: #333333;
+  font-weight: 500;
+  margin-bottom: 8rpx;
+}
+
+.claimed-time {
+  font-size: 24rpx;
+  color: #999999;
+  margin-bottom: 8rpx;
+}
+
+.claimed-status {
+  font-size: 24rpx;
+}
+
+.claimed-status.pending {
+  color: #FBBC05;
+}
+
+.claimed-status.delivered {
+  color: #34A853;
+}
+
+.claimed-actions {
+  display: flex;
+  align-items: center;
+}
+
+.action-btn {
+  padding: 8rpx 16rpx;
+  background-color: #4285F4;
+  color: #FFFFFF;
+  font-size: 24rpx;
+  border-radius: 8rpx;
+  margin-left: 16rpx;
+  min-width: auto;
+  line-height: 1.5;
+}
+
+.no-records {
+  text-align: center;
+  padding: 40rpx 0;
+  color: #999999;
+  font-size: 28rpx;
+}
+
+/* 添加/编辑奖励模态框 */
+.reward-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1000;
+}
+
+.modal-mask {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+}
+
+.modal-content {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background-color: #FFFFFF;
+  border-radius: 24rpx 24rpx 0 0;
+  padding: 30rpx;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30rpx;
+}
+
+.modal-header text {
+  font-size: 32rpx;
+  color: #333333;
+  font-weight: 500;
+}
+
+.close-btn {
+  font-size: 36rpx;
+  color: #999999;
+}
+
+.form-item {
+  margin-bottom: 24rpx;
+}
+
+.form-label {
+  font-size: 28rpx;
+  color: #333333;
+  margin-bottom: 12rpx;
+}
+
+.form-input {
+  height: 90rpx;
+  background-color: #F8F9FA;
+  border-radius: 8rpx;
+  padding: 0 20rpx;
+  font-size: 28rpx;
+}
+
+.form-tip {
+  font-size: 24rpx;
+  color: #999999;
+  margin-top: 8rpx;
+}
+
+.status-message {
+  background-color: #F8F9FA;
+  padding: 16rpx;
+  border-radius: 8rpx;
+  font-size: 26rpx;
+  color: #666666;
+  text-align: center;
+}
+
+/* 表情选择器 */
+.emoji-selector {
+  background-color: #F8F9FA;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.05);
+  border: 1rpx solid #EEEEEE;
+}
+
+.selected-emoji-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 20rpx;
+  padding: 16rpx;
+  background-color: #FFFFFF;
+  border-radius: 12rpx;
+  border: 1rpx solid #E8E8E8;
+}
+
+.selected-emoji {
+  font-size: 80rpx;
+  text-align: center;
+  margin-bottom: 12rpx;
+  height: 100rpx;
+  width: 100rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.select-hint {
+  font-size: 24rpx;
+  color: #999999;
+}
+
+/* 分类标签 */
+.emoji-categories {
+  display: flex;
+  margin-bottom: 20rpx;
+  background-color: #FFFFFF;
+  border-radius: 12rpx;
+  padding: 4rpx;
+  border: 1rpx solid #E8E8E8;
+}
+
+.category-item {
+  flex: 1;
+  text-align: center;
+  padding: 12rpx 0;
+  font-size: 24rpx;
+  color: #666666;
+  border-radius: 8rpx;
+}
+
+.category-item.active {
+  background-color: #4285F4;
+  color: #FFFFFF;
+}
+
+/* 快速选择区 */
+.quick-emojis {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 20rpx;
+  padding: 12rpx;
+  background-color: #FFFFFF;
+  border-radius: 12rpx;
+  border: 1rpx solid #E8E8E8;
+}
+
+.quick-emoji {
+  width: 70rpx;
+  height: 70rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 36rpx;
+  border-radius: 50%;
+  background-color: #F8F9FA;
+  transition: all 0.2s;
+}
+
+.quick-emoji.active {
+  background-color: #4285F4;
+  transform: scale(1.1);
+  box-shadow: 0 2rpx 8rpx rgba(66, 133, 244, 0.3);
+}
+
+/* 表情网格容器 */
+.emoji-grid-container {
+  background-color: #FFFFFF;
+  border-radius: 12rpx;
+  padding: 16rpx;
+  border: 1rpx solid #E8E8E8;
+}
+
+.emoji-grid-hint {
+  display: block;
+  font-size: 24rpx;
+  color: #999999;
+  text-align: center;
+  margin-bottom: 12rpx;
+}
+
+.emoji-grid {
+  height: 240rpx;
+  border: 1rpx solid #EEEEEE;
+  border-radius: 8rpx;
+  padding: 10rpx;
+  background-color: #FAFAFA;
+}
+
+.emoji-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 10rpx;
+}
+
+.emoji-item {
+  width: 80rpx;
+  height: 80rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 40rpx;
+  border-radius: 8rpx;
+  background-color: #FFFFFF;
+  transition: all 0.2s;
+  margin: 0 5rpx;
+  border: 1rpx solid transparent;
+}
+
+.emoji-item:hover, .emoji-item:active {
+  background-color: #F0F0F0;
+}
+
+.emoji-item.selected {
+  background-color: #4285F4;
+  color: #FFFFFF;
+  transform: scale(1.05);
+  box-shadow: 0 2rpx 6rpx rgba(66, 133, 244, 0.3);
+}
+
+/* 星星数量输入 */
+.number-input-container {
+  display: flex;
+  align-items: center;
+  background-color: #F8F9FA;
+  border-radius: 8rpx;
+  overflow: hidden;
+}
+
+.number-btn {
+  width: 90rpx;
+  height: 90rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 36rpx;
+  background-color: #EEEEEE;
+}
+
+.number-input {
+  flex: 1;
+  height: 90rpx;
+  text-align: center;
+  background-color: #F8F9FA;
+}
+
+/* 开关项 */
+.switch-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* 模态框底部按钮 */
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 30rpx;
+}
+
+.btn-cancel, .btn-save, .btn-reactivate {
+  margin-left: 16rpx;
+  font-size: 28rpx;
+  padding: 0 32rpx;
+  height: 80rpx;
+  line-height: 80rpx;
+  border-radius: 8rpx;
+  min-width: auto;
+}
+
+.btn-cancel {
+  background-color: #F8F9FA;
+  color: #666666;
+}
+
+.btn-save {
+  background-color: #4285F4;
+  color: #FFFFFF;
+}
+
+.btn-save[disabled] {
+  background-color: #CCCCCC;
+  color: #FFFFFF;
+}
+
+.btn-reactivate {
+  background-color: #34A853;
+  color: #FFFFFF;
+}
+
+/* 操作菜单 */
+.action-sheet {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1000;
+}
+
+.action-sheet-mask {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+}
+
+.action-sheet-content {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background-color: #FFFFFF;
+  border-radius: 24rpx 24rpx 0 0;
+  overflow: hidden;
+}
+
+.action-sheet-title {
+  text-align: center;
+  padding: 24rpx;
+  font-size: 30rpx;
+  color: #999999;
+  border-bottom: 1rpx solid #EEEEEE;
+}
+
+.action-sheet-options {
+  padding: 0 24rpx;
+}
+
+.action-option {
+  display: flex;
+  align-items: center;
+  padding: 24rpx 0;
+  border-bottom: 1rpx solid #EEEEEE;
+}
+
+.option-icon {
+  font-size: 36rpx;
+  margin-right: 16rpx;
+}
+
+.option-text {
+  font-size: 32rpx;
+  color: #333333;
+}
+
+.action-sheet-cancel {
+  text-align: center;
+  padding: 24rpx;
+  font-size: 32rpx;
+  color: #333333;
+  background-color: #F8F9FA;
+  margin-top: 16rpx;
+}
+
+/* 确认对话框 */
+.confirm-dialog {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.confirm-mask {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+}
+
+.confirm-content {
+  width: 80%;
+  background-color: #FFFFFF;
+  border-radius: 16rpx;
+  overflow: hidden;
+  z-index: 1;
+}
+
+.confirm-title {
+  font-size: 32rpx;
+  color: #333333;
+  font-weight: 500;
+  padding: 24rpx;
+  text-align: center;
+  border-bottom: 1rpx solid #EEEEEE;
+}
+
+.confirm-message {
+  font-size: 28rpx;
+  color: #666666;
+  padding: 32rpx 24rpx;
+  text-align: center;
+}
+
+.confirm-buttons {
+  display: flex;
+  border-top: 1rpx solid #EEEEEE;
+}
+
+.confirm-buttons button {
+  flex: 1;
+  background-color: transparent;
+  border-radius: 0;
+  font-size: 32rpx;
+  height: 90rpx;
+  line-height: 90rpx;
+}
+
+.btn-confirm {
+  color: #4285F4;
+  border-left: 1rpx solid #EEEEEE;
+}
+
+/* 表情搜索框 */
+.emoji-search {
+  margin-bottom: 20rpx;
+  position: relative;
+  display: flex;
+  align-items: center;
+  background-color: #FFFFFF;
+  border-radius: 12rpx;
+  border: 1rpx solid #E8E8E8;
+  padding: 0 20rpx;
+  height: 80rpx;
+}
+
+.search-input {
+  width: 100%;
+  height: 80rpx;
+  font-size: 28rpx;
+  padding-left: 20rpx;
+  padding-right: 60rpx;
+}
+
+.search-icon {
+  position: absolute;
+  right: 20rpx;
+  color: #999999;
+  font-size: 30rpx;
+}
+
+.clear-icon {
+  position: absolute;
+  right: 20rpx;
+  color: #666666;
+  font-size: 24rpx;
+  width: 40rpx;
+  height: 40rpx;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border-radius: 20rpx;
+  background-color: #F0F0F0;
+}
+
+.clear-icon:active {
+  background-color: #E0E0E0;
+}

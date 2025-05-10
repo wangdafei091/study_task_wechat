@@ -5,7 +5,8 @@
     "pages/task/task",
     "pages/rewards/rewards",
     "pages/message/message",
-    "pages/analysis/analysis"
+    "pages/analysis/analysis",
+    "pages/reward-manage/reward-manage"
   ],
   "window": {
     "backgroundTextStyle": "light",
