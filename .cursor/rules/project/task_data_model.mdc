@@ -18,7 +18,7 @@ alwaysApply: true
   date: '2023-05-23',            // 任务日期，YYYY-MM-DD格式
   createTime: 1621693875000,     // 创建时间戳
   modifyTime: 1621693875000,     // 修改时间戳
-  status: 'pending',             // 任务状态: 'pending'/'completed'/'canceled'/'overdue'
+  status: 0,                     // 任务状态: 0(未完成)/1(已完成)/'canceled'(已取消)/'overdue'(已逾期)
   priority: 'medium',            // 任务优先级: 'high'/'medium'/'low'
   
   // 必做任务相关属性
@@ -32,7 +32,7 @@ alwaysApply: true
   
   // 重复任务配置
   repeat: {
-    type: 'daily',               // 重复类型: 'none'/'daily'/'weekly'/'workdays'/'custom'
+    type: 'daily',               // 重复类型: 'none'/'daily'/'weekly'/'workdays'/'weekends'/'custom'
     startDate: '2023-05-23',     // 开始日期
     endDate: '2023-06-23',       // 结束日期
     days: ['0','1','5']          // 当type为custom时，指定重复的星期几(0-6)
@@ -48,12 +48,12 @@ alwaysApply: true
   ],
   
   // 奖励点数
-  rewardPoints: 10,              // 完成可获得的奖励点数
+  points: 10,                    // 完成可获得的奖励点数（星星数量）
+  starAwarded: false,            // 是否已经获得过星星（防止重复获取）
   
   // 积分有效期
   pointsExpiry: 'month',         // 积分有效期类型：'permanent'/'week'/'month'/'3months'/'6months'/'12months'
   pointsExpiryDate: '完成后一个月', // 积分有效期显示文本（已完成任务显示具体日期）
-  calculatedExpiryDate: null,    // 计算得到的实际有效期日期（格式：YYYY-MM-DD）
   
   // 任务标签
   tags: ['音乐', '练习'],
@@ -61,14 +61,16 @@ alwaysApply: true
   // 任务提醒设置
   reminder: {
     enabled: true,               // 是否启用提醒
-    time: '07:45',               // 提醒时间
-    advanceMinutes: 15           // 提前几分钟提醒
+    time: 15,                    // 提前几分钟提醒（分钟数）
   },
   
   // 照片记录（针对学习任务）
   photos: [
     'wxfile://temp_photo_123.jpg'
-  ]
+  ],
+  
+  // 父任务ID（用于重复任务）
+  parentTaskId: 'task_123456789_000' // 重复任务的原始任务ID
 }
 ```
 
@@ -107,16 +109,21 @@ alwaysApply: true
 ## 任务状态流转
 
 任务状态包括：
-- `pending`: 待完成
-- `completed`: 已完成
-- `canceled`: 已取消
-- `overdue`: 已逾期
+- `0`: 未完成（数值类型）
+- `1`: 已完成（数值类型）
+- `canceled`: 已取消（字符串类型）
+- `overdue`: 已逾期（字符串类型）
 
 状态流转通过 `taskManager.updateTaskStatus()` 方法实现：
 
 ```javascript
-taskManager.updateTaskStatus(taskId, newStatus, callback);
+taskManager.updateTaskStatus(taskId, status, callback);
 ```
+
+状态变更时的业务逻辑：
+- 当任务状态从未完成变为已完成时，如果任务未获得过星星，则添加对应积分并计算积分有效期
+- 当任务状态从已完成变为未完成时，扣除对应积分，重置有效期显示
+- 对于必做任务，未完成并且过期的会自动标记为已逾期并应用惩罚
 
 ## 必做任务机制
 
@@ -137,19 +144,19 @@ taskManager.unmarkTaskAsRequired(taskId, callback);
 
 ## 积分有效期
 
-任务完成后获得的积分有以下有效期选项：
+任务完成后获得的积分有以下有效期选项，所有有效期都按自然周期计算：
 - `permanent`: 永久有效
-- `week`: 一周
-- `month`: 一个月
-- `3months`: 三个月
-- `6months`: 六个月
-- `12months`: 十二个月
+- `week`: 到当前自然周的周日24点（如周日完成则当天24点失效）
+- `month`: 到当前自然月的最后一天24点（如月末完成则当天24点失效）
+- `3months`: 到当前自然季度的最后一天24点（如季末完成则当天24点失效）
+- `6months`: 到当前自然半年的最后一天24点（如半年末完成则当天24点失效）
+- `12months`: 到当前自然年的12月31日24点（如年末完成则当天24点失效）
 
 积分有效期在代码中的处理：
 - 使用 `pointsExpiry` 存储有效期类型
 - 使用 `pointsExpiryDate` 存储格式化的有效期显示文本
 - 文本映射关系在 `Constants.POINTS_EXPIRY.TEXT` 中定义
-- 使用 `calculatedExpiryDate` 存储计算得到的实际过期日期
+- 任务完成时使用 `calculateExpiryDate` 方法计算准确的到期日期
 
 ```javascript
 // constants.js 中的文本映射
@@ -172,50 +179,86 @@ POINTS_EXPIRY: {
 }
 ```
 
-积分有效期计算方法：
+积分有效期计算的关键实现如下：
 
 ```javascript
 /**
  * 计算积分有效期日期
  * @param {String} expiryType 有效期类型
- * @param {String} completionDate 完成日期 (YYYY-MM-DD格式)
- * @return {String} 有效期截止日期 (YYYY-MM-DD格式)
+ * @param {Date} completionDate 完成日期
+ * @returns {Object} 包含时间戳和可读格式的有效期信息
  */
 calculateExpiryDate(expiryType, completionDate) {
-  console.log(`[TaskManager] 计算积分有效期: ${expiryType}, 完成日期: ${completionDate}`);
+  console.log(`[TaskManager] 计算积分有效期: 类型=${expiryType}, 完成日期=${completionDate.toISOString()}`);
   
+  // 如果是永久有效，直接返回
   if (expiryType === 'permanent') {
-    return '永久有效';
+    console.log(`[TaskManager] 积分永久有效`);
+    return {
+      expiry: 'permanent',
+      expiryDateStr: '永久'
+    };
   }
   
-  const completionDateTime = new Date(completionDate);
-  let expiryDate = new Date(completionDateTime);
+  // 今天日期的零点
+  const today = new Date(completionDate);
+  today.setHours(0, 0, 0, 0);
+  
+  let expiryDate = new Date(today);
+  let specialCase = '';
   
   switch (expiryType) {
-    case 'week':
-      expiryDate.setDate(expiryDate.getDate() + 7);
+    case 'week': {
+      // 计算到当前自然周的周日24点
+      const dayOfWeek = today.getDay(); // 0是周日，1-6是周一到周六
+      
+      if (dayOfWeek === 0) {
+        // 周日完成，当天24点失效
+        expiryDate.setHours(23, 59, 59, 999);
+        specialCase = '当天24点失效';
+      } else {
+        // 计算到本周日的天数差
+        const daysUntilSunday = 7 - dayOfWeek;
+        expiryDate.setDate(today.getDate() + daysUntilSunday);
+        expiryDate.setHours(23, 59, 59, 999);
+      }
       break;
-    case 'month':
-      expiryDate.setMonth(expiryDate.getMonth() + 1);
+    }
+    
+    case 'month': {
+      // 计算到当前自然月末24点
+      const currentMonth = today.getMonth();
+      const currentYear = today.getFullYear();
+      
+      // 下个月的第0天就是当前月的最后一天
+      expiryDate = new Date(currentYear, currentMonth + 1, 0);
+      expiryDate.setHours(23, 59, 59, 999);
+      
+      // 检查是否是月末完成的
+      const lastDayOfMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+      if (today.getDate() === lastDayOfMonth) {
+        specialCase = '当天24点失效';
+      }
       break;
-    case '3months':
-      expiryDate.setMonth(expiryDate.getMonth() + 3);
-      break;
-    case '6months':
-      expiryDate.setMonth(expiryDate.getMonth() + 6);
-      break;
-    case '12months':
-      expiryDate.setFullYear(expiryDate.getFullYear() + 1);
-      break;
-    default:
-      return '永久有效';
+    }
+    
+    // 其他类型处理逻辑（季度、半年、年）...
   }
   
-  // 格式化为YYYY-MM-DD
-  const formattedDate = `${expiryDate.getFullYear()}-${(expiryDate.getMonth() + 1).toString().padStart(2, '0')}-${expiryDate.getDate().toString().padStart(2, '0')}`;
+  // 格式化日期为可读格式
+  let expiryDateStr = '';
   
-  console.log(`[TaskManager] 计算得到积分有效期截止日期: ${formattedDate}`);
-  return formattedDate;
+  if (specialCase) {
+    expiryDateStr = specialCase;
+  } else {
+    // 检查是否是今天或明天
+    // 日期格式化逻辑...
+  }
+  
+  return {
+    expiry: expiryDate.getTime(),
+    expiryDateStr: expiryDateStr
+  };
 }
 ```
 
@@ -236,10 +279,10 @@ calculateExpiryDate(expiryType, completionDate) {
 任务数据使用微信小程序的本地存储机制：
 ```javascript
 // 保存任务数据
-wx.setStorageSync('tasks', tasks);
+wx.setStorageSync('taskData', tasks);
 
 // 读取任务数据
-const tasks = wx.getStorageSync('tasks') || [];
+const tasks = wx.getStorageSync('taskData') || [];
 ```
 
 任务数据批量处理使用异步方法：
@@ -342,5 +385,15 @@ messageManager.createTaskMessage(task, 'upcoming');
 messageManager.createTaskMessage(task, 'required');
 
 // 创建积分惩罚消息
-messageManager.createPenaltyMessage(task, 5); // 扣除5积分
+const penaltyMessage = {
+  id: 'msg_penalty_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+  type: 'penalty',
+  taskId: task.taskId,
+  title: '任务未完成',
+  summary: `必做任务"${task.title}"未完成，扣除${task.points}颗星星`,
+  timestamp: Date.now(),
+  isRead: false,
+  icon: '⚠️'
+};
+messageManager.addMessage(penaltyMessage);
 ```

@@ -28,18 +28,21 @@ study_task_wechat/
 │   ├── card/               # 卡片容器组件
 │   ├── progressRing/       # 环形进度条组件
 │   ├── progressBar/        # 进度条组件
-│   ├── taskItem/           # 任务项组件
+│   ├── index-task-item/    # 主页任务项组件
 │   ├── task-heatmap/       # 任务热力图组件
 │   ├── float-menu/         # 浮动菜单组件
 │   ├── upcomingTask/       # 即将到期任务组件
-│   ├── date-picker/        # 日期选择器组件
-│   └── template-selector/  # 模板选择器组件
+│   └── date-picker/        # 日期选择器组件
 ├── pages/                  # 页面目录
 │   ├── index/              # 主页（任务日历）
 │   ├── task/               # 任务详情页
 │   ├── task-edit/          # 任务编辑页
 │   ├── rewards/            # 奖池页面
+│   ├── reward-manage/      # 奖励管理页面
+│   ├── my-exchanges/       # 我的兑换记录页面
+│   ├── star-records/       # 星星记录页面
 │   ├── message/            # 消息中心
+│   ├── analysis/           # 数据分析页面
 │   └── history/            # 历史记录页面
 ├── utils/                  # 工具函数目录
 │   ├── taskManager.js      # 任务管理工具
@@ -98,12 +101,13 @@ study_task_wechat/
 
 ## 版本历史
 
-### v1.7.0 (2024-07-20)
+### v1.7.0 (2024-07-25)
 - 修复极端情况下的日期计算问题，特别是闰年和跨年场景
 - 优化横屏模式下任务编辑页面布局
 - 统一任务热力图色阶渐变设计
 - 更新所有项目文档，确保与当前代码保持一致
 - 清理冗余代码和优化日志系统
+- 修复星星记录页面显示异常问题
 
 ### v1.6.0 (2024-07-15)
 - 完善整个应用的日志系统，确保日志格式统一
