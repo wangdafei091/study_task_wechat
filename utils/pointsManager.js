@@ -98,13 +98,13 @@ const pointsManager = {
     
     // 如果没有可用奖励（全部已领取），则返回默认值
     if (availableRewards.length === 0) {
-      console.log(`[pointsManager] 所有奖励都已领取，返回默认值`);
+      console.log(`[pointsManager] 所有奖励都已领取，返回无穷模式`);
       return {
-        name: '所有奖励已领取',
-        points: 100,
+        name: '恭喜！您已领取所有奖励，可以继续积累星星',
+        points: '∞',  // 使用无穷符号
         icon: '🎉',
         count: 0,
-        remainingStars: 100,
+        remainingStars: 0,
         current: userPoints,
         allClaimed: true  // 标记所有奖励都已领取
       };

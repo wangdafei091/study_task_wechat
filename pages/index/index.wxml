@@ -155,7 +155,15 @@
   <view class="reward-progress card">
     <view class="progress-header">
       <view class="reward-title">今日奖品进度</view>
-      <view class="stars-count">{{formattedPoints}}/{{nextReward.points}}颗星星</view>
+      <view class="stars-count">
+        <!-- 使用不同的显示方式处理已领取所有奖励的情况 -->
+        <block wx:if="{{nextReward.allClaimed}}">
+          {{formattedPoints}}/∞颗星星
+        </block>
+        <block wx:else>
+          {{formattedPoints}}/{{nextReward.points}}颗星星
+        </block>
+      </view>
     </view>
     
     <!-- 添加礼品队列指示器 -->
@@ -192,7 +200,9 @@
         <text class="achievement-text">恭喜！已达成"{{completedReward.name}}"</text>
         <text class="supplementary-text">可前往奖池查看</text>
       </block>
-      
+      <block wx:elif="{{nextReward.allClaimed}}">
+        <text class="achievement-text">恭喜！您已领取所有奖励，可以继续积累星星</text>
+      </block>
       <block wx:else>
         <text>再获得<text class="highlight">{{nextReward.remainingStars}}</text>颗星星即可解锁"{{nextReward.name}}"</text>
       </block>
