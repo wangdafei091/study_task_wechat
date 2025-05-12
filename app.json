@@ -6,7 +6,8 @@
     "pages/rewards/rewards",
     "pages/message/message",
     "pages/analysis/analysis",
-    "pages/reward-manage/reward-manage"
+    "pages/reward-manage/reward-manage",
+    "pages/my-exchanges/my-exchanges"
   ],
   "window": {
     "backgroundTextStyle": "light",

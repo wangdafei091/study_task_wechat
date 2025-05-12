@@ -1,0 +1,35 @@
+<!--pages/my-exchanges/my-exchanges.wxml-->
+<view class="container">
+  <!-- 页面标题 -->
+  <view class="page-header">
+    <view class="page-title">我的兑换</view>
+  </view>
+  
+  <!-- 兑换记录列表 -->
+  <view class="exchanges-container">
+    <view class="empty-exchanges" wx:if="{{claimedRewards.length === 0}}">
+      <view class="empty-icon">🎁</view>
+      <view class="empty-text">还没有兑换过奖励哦</view>
+      <view class="empty-tip">完成任务攒星星，就能兑换奖励啦！</view>
+    </view>
+    
+    <view class="exchanges-list" wx:else>
+      <block wx:for="{{claimedRewards}}" wx:key="id">
+        <view class="exchange-item {{item.claimStatus === 'delivered' ? 'delivered' : 'pending'}}">
+          <view class="exchange-icon">{{item.icon}}</view>
+          <view class="exchange-info">
+            <view class="exchange-name">{{item.name}}</view>
+            <view class="exchange-time">兑换时间: {{item.claimTimeDisplay}}</view>
+            <view class="exchange-points">
+              <text class="points-label">花费星星:</text>
+              <text class="points-value">{{item.points}}颗</text>
+            </view>
+            <view class="exchange-status {{item.claimStatus === 'delivered' ? 'delivered' : 'pending'}}">
+              {{item.claimStatus === 'delivered' ? '已领取' : '等待领取'}}
+            </view>
+          </view>
+        </view>
+      </block>
+    </view>
+  </view>
+</view> 

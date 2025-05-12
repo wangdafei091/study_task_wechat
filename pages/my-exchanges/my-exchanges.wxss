@@ -1,0 +1,148 @@
+/* pages/my-exchanges/my-exchanges.wxss */
+.container {
+  padding: 30rpx;
+  background-color: #F8F9FA;
+  min-height: 100vh;
+}
+
+/* 页面标题样式 */
+.page-header {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 30rpx;
+}
+
+.page-title {
+  font-size: 36rpx;
+  color: #333333;
+  font-weight: 600;
+  position: relative;
+}
+
+.page-title::after {
+  content: '';
+  position: absolute;
+  bottom: -10rpx;
+  left: 20%;
+  width: 60%;
+  height: 6rpx;
+  background-color: #FBBC05;
+  border-radius: 3rpx;
+}
+
+/* 兑换记录容器 */
+.exchanges-container {
+  background-color: #FFFFFF;
+  border-radius: 16rpx;
+  padding: 20rpx;
+  margin-bottom: 20rpx;
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.05);
+}
+
+/* 空状态样式 */
+.empty-exchanges {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 80rpx 0;
+}
+
+.empty-icon {
+  font-size: 100rpx;
+  margin-bottom: 30rpx;
+}
+
+.empty-text {
+  font-size: 32rpx;
+  color: #333333;
+  font-weight: 500;
+  margin-bottom: 12rpx;
+}
+
+.empty-tip {
+  font-size: 26rpx;
+  color: #999999;
+}
+
+/* 兑换记录列表样式 */
+.exchanges-list {
+  padding: 10rpx;
+}
+
+/* 兑换记录项样式 */
+.exchange-item {
+  display: flex;
+  padding: 24rpx;
+  border-radius: 16rpx;
+  margin-bottom: 20rpx;
+  background-color: #F8F9FA;
+  border-left: 8rpx solid #FBBC05;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.05);
+}
+
+.exchange-item.delivered {
+  border-left-color: #34A853;
+}
+
+.exchange-icon {
+  font-size: 60rpx;
+  margin-right: 24rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 90rpx;
+  height: 90rpx;
+  background-color: #FFFFFF;
+  border-radius: 50%;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.1);
+}
+
+.exchange-info {
+  flex: 1;
+}
+
+.exchange-name {
+  font-size: 30rpx;
+  color: #333333;
+  font-weight: 500;
+  margin-bottom: 8rpx;
+}
+
+.exchange-time {
+  font-size: 24rpx;
+  color: #999999;
+  margin-bottom: 8rpx;
+}
+
+.exchange-points {
+  font-size: 24rpx;
+  color: #666666;
+  margin-bottom: 8rpx;
+  display: flex;
+  align-items: center;
+}
+
+.points-label {
+  margin-right: 8rpx;
+}
+
+.points-value {
+  color: #FBBC05;
+  font-weight: 500;
+}
+
+.exchange-status {
+  display: inline-block;
+  padding: 4rpx 12rpx;
+  border-radius: 20rpx;
+  font-size: 22rpx;
+  color: #FFFFFF;
+}
+
+.exchange-status.pending {
+  background-color: #FBBC05;
+}
+
+.exchange-status.delivered {
+  background-color: #34A853;
+} 

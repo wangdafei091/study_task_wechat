@@ -243,6 +243,16 @@ Page({
   },
 
   /**
+   * 导航到我的兑换页面
+   */
+  navigateToMyExchanges: function() {
+    console.log('[rewards] 导航到我的兑换页面');
+    wx.navigateTo({
+      url: '/pages/my-exchanges/my-exchanges'
+    });
+  },
+
+  /**
    * 领取奖励
    */
   claimReward: function (e) {

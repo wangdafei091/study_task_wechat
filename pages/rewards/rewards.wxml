@@ -19,7 +19,7 @@
         <view class="action-text">星星记录</view>
       </view>
       <view class="action-separator"></view>
-      <view class="action-btn-horizontal">
+      <view class="action-btn-horizontal" bindtap="navigateToMyExchanges">
         <view class="action-icon">🎁</view>
         <view class="action-text">我的兑换</view>
       </view>
