@@ -1,63 +1,141 @@
 <view class="container">
+  <!-- 顶部：角色切换标签和时间范围选择器 -->
   <view class="header-container">
-    <view class="header-title">数据分析</view>
-  </view>
-
-  <!-- 统计面板 -->
-  <view class="stats-panel">
-    <view class="section-title">学习任务统计</view>
-    
-    <!-- 主要统计数据 -->
-    <view class="stats-grid">
-      <view class="stats-item">
-        <view class="stats-value">{{stats.totalTasks}}</view>
-        <view class="stats-label">总任务数</view>
-      </view>
-      <view class="stats-item">
-        <view class="stats-value">{{stats.completedTasks}}</view>
-        <view class="stats-label">已完成</view>
-      </view>
-      <view class="stats-item">
-        <view class="stats-value">{{stats.completionRate}}%</view>
-        <view class="stats-label">完成率</view>
-      </view>
-      <view class="stats-item">
-        <view class="stats-value">{{stats.streak}}</view>
-        <view class="stats-label">连续天数</view>
-      </view>
+    <view class="view-tabs">
+      <view class="tab {{!isParentView ? 'active' : ''}}" bindtap="toggleViewType">小朋友视图</view>
+      <view class="tab {{isParentView ? 'active' : ''}}" bindtap="toggleViewType">家长视图</view>
     </view>
     
-    <!-- 任务类型分布 -->
-    <view class="stats-chart">
-      <view class="chart-title">任务类型分布</view>
-      <view class="chart-bars">
-        <view class="chart-bar-group">
-          <view class="chart-label">生活习惯</view>
-          <view class="chart-bar-container">
-            <view class="chart-bar habit" style="width: {{stats.typeCounts.habit / stats.totalTasks * 100}}%">
-              <text wx:if="{{stats.typeCounts.habit > 0}}">{{stats.typeCounts.habit}}</text>
-            </view>
-          </view>
-        </view>
-        <view class="chart-bar-group">
-          <view class="chart-label">学习任务</view>
-          <view class="chart-bar-container">
-            <view class="chart-bar study" style="width: {{stats.typeCounts.study / stats.totalTasks * 100}}%">
-              <text wx:if="{{stats.typeCounts.study > 0}}">{{stats.typeCounts.study}}</text>
-            </view>
-          </view>
-        </view>
-        <view class="chart-bar-group">
-          <view class="chart-label">兴趣爱好</view>
-          <view class="chart-bar-container">
-            <view class="chart-bar interest" style="width: {{stats.typeCounts.interest / stats.totalTasks * 100}}%">
-              <text wx:if="{{stats.typeCounts.interest > 0}}">{{stats.typeCounts.interest}}</text>
-            </view>
-          </view>
-        </view>
+    <view class="time-range-selector">
+      <view 
+        wx:for="{{timeRangeOptions}}" 
+        wx:key="*this" 
+        class="time-option {{timeRange == item ? 'active' : ''}}" 
+        bindtap="changeTimeRange" 
+        data-range="{{item}}">
+        {{item == 'week' ? '周' : (item == 'month' ? '月' : (item == 'quarter' ? '季' : '年'))}}
       </view>
     </view>
   </view>
 
-  <!-- 更多分析内容可以在这里添加 -->
+  <!-- 加载状态指示器 -->
+  <view class="loading-container" wx:if="{{loading}}">
+    <view class="loading-spinner"></view>
+    <view class="loading-text">数据加载中...</view>
+  </view>
+
+  <!-- 主体内容区域 -->
+  <scroll-view scroll-y="true" class="content-container" wx:if="{{!loading}}">
+    <!-- 小朋友视图 -->
+    <block wx:if="{{!isParentView}}">
+      <!-- 任务完成情况图表 -->
+      <view class="chart-card">
+        <view class="chart-title">任务完成情况</view>
+        <view class="chart-container">
+          <ec-canvas id="taskCompletionChart" canvas-id="taskCompletionCanvas" ec="{{ecTaskCompletion}}"></ec-canvas>
+        </view>
+        <view class="chart-summary">
+          <view class="stat-item">
+            <view class="stat-value">{{stats.completedTasks}}</view>
+            <view class="stat-label">已完成</view>
+          </view>
+          <view class="stat-item">
+            <view class="stat-value">{{stats.totalTasks - stats.completedTasks}}</view>
+            <view class="stat-label">未完成</view>
+          </view>
+          <view class="stat-item">
+            <view class="stat-value">{{stats.completionRate}}%</view>
+            <view class="stat-label">完成率</view>
+          </view>
+        </view>
+      </view>
+      
+      <!-- 星星统计图表 -->
+      <view class="chart-card">
+        <view class="chart-title">星星银行</view>
+        <view class="chart-container">
+          <ec-canvas id="starStatsChart" canvas-id="starStatsCanvas" ec="{{ecStarStats}}"></ec-canvas>
+        </view>
+        <view class="chart-summary">
+          <view class="stat-item">
+            <view class="stat-value">{{stats.stars.available}}</view>
+            <view class="stat-label">可用的</view>
+          </view>
+          <view class="stat-item">
+            <view class="stat-value">{{stats.stars.used}}</view>
+            <view class="stat-label">已使用</view>
+          </view>
+          <view class="stat-item">
+            <view class="stat-value">{{stats.stars.total}}</view>
+            <view class="stat-label">总共</view>
+          </view>
+        </view>
+      </view>
+      
+      <!-- 任务日历图表 -->
+      <view class="chart-card">
+        <view class="chart-title">任务完成日历</view>
+        <view class="chart-container calendar-chart">
+          <ec-canvas id="taskCalendarChart" canvas-id="taskCalendarCanvas" ec="{{ecTaskCalendar}}"></ec-canvas>
+        </view>
+      </view>
+      
+      <!-- 任务类型分布图表 -->
+      <view class="chart-card">
+        <view class="chart-title">我的任务类型</view>
+        <view class="chart-container">
+          <ec-canvas id="taskTypesChart" canvas-id="taskTypesCanvas" ec="{{ecTaskTypes}}"></ec-canvas>
+        </view>
+      </view>
+    </block>
+
+    <!-- 家长视图 -->
+    <block wx:else>
+      <!-- 任务完成情况图表 -->
+      <view class="chart-card">
+        <view class="chart-title">任务完成趋势</view>
+        <view class="chart-container">
+          <ec-canvas id="taskCompletionChart" canvas-id="taskCompletionCanvas" ec="{{ecTaskCompletion}}"></ec-canvas>
+        </view>
+      </view>
+      
+      <!-- 任务类型分布图表 -->
+      <view class="chart-card">
+        <view class="chart-title">任务类型分布</view>
+        <view class="chart-container">
+          <ec-canvas id="taskTypesChart" canvas-id="taskTypesCanvas" ec="{{ecTaskTypes}}"></ec-canvas>
+        </view>
+        <view class="chart-summary">
+          <view class="stat-item">
+            <view class="stat-value">{{stats.typeCounts.study}}</view>
+            <view class="stat-label">学习</view>
+          </view>
+          <view class="stat-item">
+            <view class="stat-value">{{stats.typeCounts.habit}}</view>
+            <view class="stat-label">习惯</view>
+          </view>
+          <view class="stat-item">
+            <view class="stat-value">{{stats.typeCounts.interest}}</view>
+            <view class="stat-label">兴趣</view>
+          </view>
+        </view>
+      </view>
+      
+      <!-- 时间分布图表 -->
+      <view class="chart-card">
+        <view class="chart-title">任务时间分布</view>
+        <view class="chart-container">
+          <ec-canvas id="timeDistributionChart" canvas-id="timeDistributionCanvas" ec="{{ecTimeDistribution}}"></ec-canvas>
+        </view>
+      </view>
+      
+      <!-- 习惯养成图表 -->
+      <view class="chart-card">
+        <view class="chart-title">习惯养成分析</view>
+        <view class="chart-container">
+          <ec-canvas id="habitTrackingChart" canvas-id="habitTrackingCanvas" ec="{{ecHabitTracking}}"></ec-canvas>
+        </view>
+      </view>
+    </block>
+  </scroll-view>
 </view> 
