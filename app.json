@@ -7,7 +7,8 @@
     "pages/message/message",
     "pages/analysis/analysis",
     "pages/reward-manage/reward-manage",
-    "pages/my-exchanges/my-exchanges"
+    "pages/my-exchanges/my-exchanges",
+    "pages/star-records/star-records"
   ],
   "window": {
     "backgroundTextStyle": "light",

@@ -1,0 +1,359 @@
+/* 星星记录页面样式 */
+.container {
+  padding: 0;
+  background-color: var(--bg-primary);
+  min-height: 100vh;
+}
+
+/* 记录容器 */
+.star-records-container {
+  padding: 24rpx 30rpx 120rpx;
+}
+
+/* 标签式筛选区 - 优化垂直空间占用 */
+.filter-tabs-container {
+  margin: 0 30rpx 24rpx;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.filter-tabs {
+  background: linear-gradient(to right, #FFFFFF, #F9FAFC);
+  border-radius: var(--radius-lg);
+  padding: 16rpx 20rpx;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
+}
+
+.filter-section {
+  margin-bottom: 12rpx;
+}
+
+.filter-section:last-child {
+  margin-bottom: 0;
+}
+
+/* 标题与按钮同行排列 */
+.section-header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.section-title {
+  font-size: 24rpx; /* 减小标题字号 */
+  color: var(--text-secondary);
+  margin-right: 20rpx;
+  flex-shrink: 0;
+  font-weight: 500;
+}
+
+.filter-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  flex: 1;
+}
+
+.filter-tab {
+  font-size: 26rpx; /* 增大按钮字号 */
+  padding: 8rpx 20rpx;
+  border-radius: 30rpx;
+  background-color: #F5F7FA;
+  color: var(--text-secondary);
+  transition: all 0.2s;
+  min-height: 46rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.filter-tab.active {
+  background-color: rgba(66, 133, 244, 0.12);
+  color: var(--primary-color);
+  font-weight: 500;
+  box-shadow: 0 0 6rpx rgba(66, 133, 244, 0.1);
+}
+
+.filter-tab:active {
+  transform: scale(0.98);
+}
+
+/* 月份分组样式 */
+.month-section {
+  margin-bottom: 30rpx;
+  position: relative;
+}
+
+.month-title {
+  display: flex;
+  align-items: center;
+  background: linear-gradient(to right, #F0F4FA, #FFFFFF);
+  border-radius: 16rpx;
+  padding: 24rpx 20rpx;
+  margin-bottom: 20rpx;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.05);
+}
+
+.month-text {
+  font-size: 34rpx;
+  font-weight: 600;
+  color: #333333;
+  position: relative;
+  padding-left: 16rpx;
+}
+
+.month-text:before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4rpx;
+  height: 28rpx;
+  background-color: #4285F4;
+  border-radius: 4rpx;
+}
+
+.month-summary {
+  margin-left: auto;
+  font-size: 24rpx;
+  color: #666666;
+}
+
+/* 时间线和记录项 */
+.star-records-list {
+  position: relative;
+  padding-left: 30rpx;
+}
+
+.timeline-connector {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 15rpx;
+  width: 3rpx;
+  background-color: #E0E0E0;
+  z-index: 1;
+}
+
+.record-item {
+  display: flex;
+  position: relative;
+  background-color: white;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  margin-bottom: 16rpx;
+  box-shadow: 0 2rpx 6rpx rgba(0, 0, 0, 0.04);
+  animation: fadeInRight 0.3s ease-out;
+}
+
+.record-item::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 8rpx;
+  border-radius: 8rpx 0 0 8rpx;
+}
+
+/* 任务类型颜色 */
+.study-task-record::before {
+  background-color: var(--primary-color);
+}
+
+.habit-task-record::before {
+  background-color: var(--success-color);
+}
+
+.interest-task-record::before {
+  background-color: var(--warning-color);
+}
+
+/* 兑换记录卡片颜色为更浅的紫色 */
+.expense-record::before {
+  background-color: rgba(156, 39, 176, 0.7);
+}
+
+/* 实心圆点样式 - 修正垂直居中问题 */
+.record-dot {
+  position: absolute;
+  left: -30rpx;
+  top: 50%; /* 修改为百分比定位 */
+  transform: translateY(-50%); /* 使用transform实现垂直居中 */
+  width: 18rpx;
+  height: 18rpx;
+  border-radius: 50%;
+  z-index: 2;
+  box-shadow: 0 0 4rpx rgba(0, 0, 0, 0.1);
+}
+
+/* 将所有圆点改为实心 */
+.study-task-record .record-dot {
+  background-color: var(--primary-color);
+  border: 2rpx solid var(--primary-color);
+}
+
+.habit-task-record .record-dot {
+  background-color: var(--success-color);
+  border: 2rpx solid var(--success-color);
+}
+
+.interest-task-record .record-dot {
+  background-color: var(--warning-color);
+  border: 2rpx solid var(--warning-color);
+}
+
+.expense-record .record-dot {
+  background-color: rgba(156, 39, 176, 0.7);
+  border: 2rpx solid rgba(156, 39, 176, 0.7);
+}
+
+.record-info {
+  flex: 1;
+  margin-right: 16rpx;
+}
+
+.record-title {
+  font-size: 28rpx;
+  color: var(--text-primary);
+  font-weight: 500;
+  margin-bottom: 8rpx;
+  line-height: 1.4;
+}
+
+.record-time {
+  font-size: 24rpx;
+  color: #999999;
+}
+
+.record-points-container {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  min-width: 120rpx;
+}
+
+.record-points {
+  display: flex; /* 使星星图标和数字水平排列 */
+  align-items: center;
+  font-size: 36rpx;
+  font-weight: 600;
+  margin-bottom: 6rpx;
+}
+
+/* 恢复星星图标样式 */
+.star-icon {
+  font-size: 22rpx; /* 较小的星星图标 */
+  margin-right: 4rpx;
+  line-height: 1;
+}
+
+.record-points.positive {
+  color: var(--warning-color);
+}
+
+.record-points.positive .star-icon {
+  color: var(--warning-color);
+}
+
+.record-points.negative {
+  color: rgba(156, 39, 176, 0.9);
+}
+
+.record-points.negative .star-icon {
+  color: rgba(156, 39, 176, 0.9);
+}
+
+.record-balance {
+  font-size: 22rpx;
+  color: #999999;
+}
+
+/* 空状态提示 */
+.empty-records {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 120rpx 0;
+  text-align: center;
+}
+
+.empty-title {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #333333;
+  margin-bottom: 16rpx;
+  position: relative;
+  padding-top: 90rpx;
+}
+
+.empty-title:before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 70rpx;
+  height: 70rpx;
+  background: #FBBC05;
+  clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+  animation: pulse 3s infinite;
+}
+
+.empty-text {
+  font-size: 28rpx;
+  color: #666666;
+  margin-bottom: 40rpx;
+  max-width: 80%;
+}
+
+.empty-action {
+  background: linear-gradient(to right, #4285F4, #5A96F5);
+  color: white;
+  padding: 16rpx 60rpx;
+  border-radius: 40rpx;
+  font-size: 28rpx;
+  font-weight: 500;
+  box-shadow: 0 4rpx 12rpx rgba(66, 133, 244, 0.3);
+  transition: all 0.3s;
+}
+
+.empty-action:active {
+  transform: scale(0.95);
+  box-shadow: 0 2rpx 8rpx rgba(66, 133, 244, 0.2);
+}
+
+/* 动画效果 */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fadeInRight {
+  from {
+    opacity: 0;
+    transform: translateX(20rpx);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes pulse {
+  0% {
+    transform: translateX(-50%) scale(1);
+  }
+  50% {
+    transform: translateX(-50%) scale(1.05);
+  }
+  100% {
+    transform: translateX(-50%) scale(1);
+  }
+}

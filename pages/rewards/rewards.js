@@ -253,6 +253,16 @@ Page({
   },
 
   /**
+   * 导航到星星记录页面
+   */
+  navigateToStarRecords: function() {
+    console.log('[rewards] 导航到星星记录页面');
+    wx.navigateTo({
+      url: '/pages/star-records/star-records'
+    });
+  },
+
+  /**
    * 领取奖励
    */
   claimReward: function (e) {

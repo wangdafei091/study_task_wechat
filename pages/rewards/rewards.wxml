@@ -14,7 +14,7 @@
     
     <!-- 底部按钮 - 改为横向布局 -->
     <view class="points-actions">
-      <view class="action-btn-horizontal">
+      <view class="action-btn-horizontal" bindtap="navigateToStarRecords">
         <view class="action-icon">📋</view>
         <view class="action-text">星星记录</view>
       </view>

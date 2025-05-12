@@ -1,0 +1,9 @@
+{
+  "navigationBarTitleText": "星星记录",
+  "enablePullDownRefresh": true,
+  "backgroundColor": "#F8F9FA",
+  "backgroundTextStyle": "dark",
+  "navigationBarBackgroundColor": "#4285F4",
+  "navigationBarTextStyle": "white",
+  "usingComponents": {}
+} 
