@@ -112,14 +112,30 @@
             <switch checked="{{newTask.isAllDay}}" bindchange="toggleAllDay" color="#4285F4" />
           </view>
           
-          <!-- 开始时间选择 -->
+          <!-- 日期范围选择（新布局） -->
           <view class="input-item time-item">
-            <text class="input-label">开始时间</text>
+            <text class="input-label">日期范围</text>
             <view class="time-selector">
+              <!-- 开始日期 -->
               <view class="date-picker" bindtap="togglePanel" data-panel="startDatePanel">
                 {{newTask.startDate}}
                 <text class="arrow-icon">{{startDatePanel ? '↑' : '↓'}}</text>
               </view>
+              <!-- 连接符 -->
+              <text class="date-connector">至</text>
+              <!-- 结束日期 -->
+              <view class="date-picker {{newTask.hasNoEndDate ? 'disabled' : ''}}" bindtap="{{!newTask.hasNoEndDate ? 'togglePanel' : ''}}" data-panel="endDatePanel">
+                {{newTask.hasNoEndDate ? '无结束日期' : newTask.endDate}}
+                <text class="arrow-icon" wx:if="{{!newTask.hasNoEndDate}}">{{endDatePanel ? '↑' : '↓'}}</text>
+              </view>
+            </view>
+          </view>
+
+          <!-- 时间范围选择（新布局） -->
+          <view class="input-item time-item">
+            <text class="input-label">时间范围</text>
+            <view class="time-selector">
+              <!-- 开始时间 -->
               <picker mode="time" 
                       value="{{newTask.startTime}}" 
                       disabled="{{newTask.isAllDay}}"
@@ -128,17 +144,9 @@
                   <text>{{newTask.isAllDay ? '全天' : newTask.startTime}}</text>
                 </view>
               </picker>
-            </view>
-          </view>
-
-          <!-- 结束时间选择 -->
-          <view class="input-item time-item">
-            <text class="input-label">结束时间</text>
-            <view class="time-selector">
-              <view class="date-picker {{newTask.hasNoEndDate ? 'disabled' : ''}}" bindtap="{{!newTask.hasNoEndDate ? 'togglePanel' : ''}}" data-panel="endDatePanel">
-                {{newTask.hasNoEndDate ? '无结束日期' : newTask.endDate}}
-                <text class="arrow-icon" wx:if="{{!newTask.hasNoEndDate}}">{{endDatePanel ? '↑' : '↓'}}</text>
-              </view>
+              <!-- 连接符 -->
+              <text class="date-connector">至</text>
+              <!-- 结束时间 -->
               <picker mode="time" 
                       value="{{newTask.endTime}}" 
                       disabled="{{newTask.isAllDay || newTask.hasNoEndDate}}"

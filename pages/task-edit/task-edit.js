@@ -94,8 +94,20 @@ Page({
     // 记录任务类型颜色统一的更改
     console.log('[TaskEdit] 已统一任务类型颜色: 学习=绿色(var(--success-color)), 习惯=蓝色(var(--primary-color)), 兴趣=黄色(var(--warning-color))');
     
+    // 记录日期时间选择器优化
+    console.log('[TaskEdit] 日期时间选择器优化: 固定高度64rpx，处理长日期文本溢出，防止界面被撑高');
+    
+    // 记录UI布局优化日志
+    console.log('[TaskEdit] 任务时间选择区布局优化: 使用"日期范围"和"时间范围"两行布局，提高用户理解度');
+    
     // 初始化热力图月份
     this.initHeatmapMonth();
+    
+    // 初始化表单描述字段的最大长度
+    this.setData({
+      descMaxLength: 50,
+      descPlaceholder: '任务描述（可选）'
+    });
     
     // 初始化日期时间数据
     this.initDateTimeData();
@@ -139,6 +151,16 @@ Page({
       '按钮区域': '顶部边框分隔',
       '开关对齐': '统一右对齐位置'
     });
+    
+    // 记录新布局样式一致性
+    uiUtils.logStyleConsistency('时间选择区域', {
+      '布局方式': '日期范围/时间范围两行',
+      '连接符': '统一使用"至"连接',
+      '控件大小': '自适应平均宽度',
+      '视觉层次': '标签左对齐，控件右对齐'
+    });
+    
+    console.log('[TaskEdit] 时间选择区域布局优化已应用，提高了用户理解度和操作便捷性');
     
     this.loadAllTasks();
   },
