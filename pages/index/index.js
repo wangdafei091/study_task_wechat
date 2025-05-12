@@ -962,9 +962,21 @@ viewMessageDetail: function(e) {
   _handleRewardCompletion: function(oldProgress, userPoints) {
     console.log('[Index] 处理奖励完成满值状态');
     
-    // 获取全局奖励配置
+    // 从本地存储获取实际奖励列表
+    const storedRewards = wx.getStorageSync('rewards') || [];
+    console.log(`[Index] 从存储加载奖励数据: ${storedRewards.length}个奖励`);
+    
+    // 过滤出启用的奖励
+    const enabledRewards = storedRewards.filter(r => r.enabled !== false);
+    
+    // 获取应用实例
     const app = getApp();
-    const allRewards = app.getDefaultRewards() || [];
+    
+    // 如果本地存储中没有启用的奖励，才使用默认奖励
+    const allRewards = enabledRewards.length > 0 ? 
+      enabledRewards : 
+      (app.getDefaultRewards ? app.getDefaultRewards() : []);
+    console.log(`[Index] 使用${enabledRewards.length > 0 ? '存储中' : '默认'}奖励数据，共${allRewards.length}个`);
     
     // 查找对应的已完成奖励
     const completedReward = allRewards.find(r => r.points === oldProgress.total) || { 
@@ -973,7 +985,7 @@ viewMessageDetail: function(e) {
       points: oldProgress.total
     };
     
-    console.log(`[Index] 已完成奖励: ${completedReward.name}, 所需星星: ${completedReward.points}`);
+    console.log(`[Index] 已完成奖励: ${completedReward.name}, 所需星星: ${completedReward.points}, 是示例奖励: ${this.isExampleReward(completedReward) ? '是' : '否'}`);
     
     // 设置满值状态和标志
     this.setData({
