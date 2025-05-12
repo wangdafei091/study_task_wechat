@@ -1306,7 +1306,10 @@ const taskManager = {
    * @return {Number} 连续天数
    */
   _calculateStreak: function(tasks) {
-    // 这里简化实现，实际需要按日期分组并计算连续完成的天数
+    // TODO: 实现连续完成天数计算功能
+    // 需要按日期分组并计算连续完成的天数
+    // 目前返回默认值0
+    console.log('[TaskManager] 连续完成天数计算功能未实现');
     return 0;
   },
 };

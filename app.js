@@ -70,6 +70,9 @@ App({
     // 设置主题
     this.setTheme();
     
+    // 确保奖励数据一致性
+    this.ensureRewardsConsistency();
+    
     // 创建定时器进行定期检查
     this.startTaskChecking();
   },
@@ -576,54 +579,73 @@ App({
 
   // 默认奖励数据
   getDefaultRewards: function() {
+    const now = Date.now();
     return [
       {
-        id: 1,
+        id: `reward_${now}_1`,
         name: '看动画片30分钟',
         points: 10,
         icon: '🎬',
         unlocked: true,
-        claimed: false
+        claimed: false,
+        enabled: true,
+        isExample: true,
+        createTime: now
       },
       {
-        id: 2,
+        id: `reward_${now}_2`,
         name: '额外的零食',
         points: 20,
         icon: '🍪',
         unlocked: true,
-        claimed: false
+        claimed: false,
+        enabled: true,
+        isExample: true,
+        createTime: now + 1
       },
       {
-        id: 3,
+        id: `reward_${now}_3`,
         name: '玩游戏1小时',
         points: 30,
         icon: '🎮',
         unlocked: false,
-        claimed: false
+        claimed: false,
+        enabled: true,
+        isExample: true,
+        createTime: now + 2
       },
       {
-        id: 4,
+        id: `reward_${now}_4`,
         name: '购买一本新书',
         points: 40,
         icon: '📚',
         unlocked: false,
-        claimed: false
+        claimed: false,
+        enabled: true,
+        isExample: true,
+        createTime: now + 3
       },
       {
-        id: 5,
+        id: `reward_${now}_5`,
         name: '去游乐园',
         points: 80,
         icon: '🎡',
         unlocked: false,
-        claimed: false
+        claimed: false,
+        enabled: true,
+        isExample: true,
+        createTime: now + 4
       },
       {
-        id: 6,
+        id: `reward_${now}_6`,
         name: '新玩具',
         points: 100,
         icon: '🧸',
         unlocked: false,
-        claimed: false
+        claimed: false,
+        enabled: true,
+        isExample: true,
+        createTime: now + 5
       }
     ]
   },
@@ -805,5 +827,32 @@ App({
     }, CHECK_INTERVAL);
     
     console.log('[App] 已设置定期任务检查，间隔:', CHECK_INTERVAL/1000/60, '分钟');
+  },
+
+  // 确保奖励数据一致性
+  ensureRewardsConsistency: function() {
+    console.log('[App] 检查奖励数据一致性');
+    const rewards = wx.getStorageSync('rewards') || [];
+    if (rewards.length === 0) return;
+    
+    let needUpdate = false;
+    const updatedRewards = rewards.map(reward => {
+      // 检查是否为示例奖励
+      const isExample = reward.isExample || 
+        /reward_\d+_(1|2|3)$/.test(reward.id);
+      
+      // 确保示例奖励启用
+      if (isExample && !reward.enabled) {
+        needUpdate = true;
+        console.log(`[App] 修正示例奖励状态: ${reward.name}`);
+        return { ...reward, enabled: true };
+      }
+      return reward;
+    });
+    
+    if (needUpdate) {
+      console.log('[App] 更新奖励数据，确保示例奖励启用');
+      wx.setStorageSync('rewards', updatedRewards);
+    }
   }
 }) 

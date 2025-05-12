@@ -161,12 +161,13 @@
     <!-- 添加礼品队列指示器 -->
     <view class="reward-indicators" wx:if="{{visibleRewards && visibleRewards.length > 0}}">
       <block wx:for="{{visibleRewards}}" wx:key="id">
-        <view class="reward-indicator {{item.status}}" bindtap="onRewardIndicatorTap" data-id="{{item.id}}">
+        <view class="reward-indicator {{item.status}} {{item.isExample ? 'example-reward' : ''}}" bindtap="onRewardIndicatorTap" data-id="{{item.id}}">
           <text class="reward-icon">{{item.icon}}</text>
           <text class="reward-stars">{{item.points}}★</text>
           <view class="indicator-status" wx:if="{{item.status === 'unlocked'}}">可查看</view>
           <view class="indicator-status claimed" wx:if="{{item.status === 'claimed'}}">已领取</view>
           <view class="indicator-arrow" wx:if="{{item.status === 'current'}}"></view>
+          <view class="indicator-example" wx:if="{{item.isExample}}">示例</view>
         </view>
       </block>
       <view class="indicator-more" wx:if="{{hasMoreRewards}}" bindtap="showAllRewards">···</view>
@@ -205,6 +206,7 @@
       <view class="choice-content">
         <text class="reward-icon-large">{{completedReward.icon}}</text>
         <text class="reward-name">{{completedReward.name}}</text>
+        <text class="reward-example-tag" wx:if="{{completedReward.isExample}}">示例</text>
       </view>
       <view class="choice-options">
         <button class="choice-btn continue" bindtap="continueCollecting">继续积累星星</button>

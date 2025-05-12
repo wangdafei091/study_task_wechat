@@ -43,6 +43,9 @@
             <text wx:elif="{{item.unlocked}}">可领取</text>
             <text wx:else>未解锁</text>
           </view>
+          
+          <!-- 示例标签 -->
+          <view class="example-badge" wx:if="{{item.isExample === true || item.id.indexOf('_1') > 0 || item.id.indexOf('_2') > 0 || item.id.indexOf('_3') > 0}}">示例</view>
         </view>
       </block>
     </view>

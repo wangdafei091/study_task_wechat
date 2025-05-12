@@ -17,56 +17,7 @@ Page({
     formattedPoints: '0',      // 格式化后的总积分
     expiringPoints: 0,         // 即将到期积分
     expiryDate: '',            // 到期日期
-    rewards: [
-      {
-        id: 1,
-        name: '看动画片30分钟',
-        points: 10,
-        icon: '🎬',
-        unlocked: true,
-        claimed: false
-      },
-      {
-        id: 2,
-        name: '额外的零食',
-        points: 20,
-        icon: '🍪',
-        unlocked: true,
-        claimed: false
-      },
-      {
-        id: 3,
-        name: '玩游戏1小时',
-        points: 30,
-        icon: '🎮',
-        unlocked: false,
-        claimed: false
-      },
-      {
-        id: 4,
-        name: '购买一本新书',
-        points: 40,
-        icon: '📚',
-        unlocked: false,
-        claimed: false
-      },
-      {
-        id: 5,
-        name: '去游乐园',
-        points: 80,
-        icon: '🎡',
-        unlocked: false,
-        claimed: false
-      },
-      {
-        id: 6,
-        name: '新玩具',
-        points: 100,
-        icon: '🧸',
-        unlocked: false,
-        claimed: false
-      }
-    ],
+    rewards: [], // 改为空数组，后续从存储加载真实奖励数据
     showModal: false,
     selectedReward: null
   },
@@ -147,6 +98,21 @@ Page({
   },
 
   /**
+   * 判断是否为示例奖励
+   * 通过ID格式或标记识别示例奖励
+   */
+  isExampleReward: function(reward) {
+    // 检查是否有明确的示例标记
+    if (reward.isExample === true) {
+      return true;
+    }
+    
+    // 使用ID前缀/后缀识别初始默认示例
+    // 初始三个示例奖励的ID结尾为_1, _2, _3
+    return /reward_\d+_(1|2|3)$/.test(reward.id);
+  },
+
+  /**
    * 加载奖励数据
    */
   loadRewardsData: function () {
@@ -162,18 +128,33 @@ Page({
     // 获取即将到期积分信息
     const expiringPointsInfo = this.getExpiringPoints();
     
-    // 从全局状态或本地存储获取完成的任务数量
-    const app = getApp();
-    const tasks = app.globalData.tasks || [];
-    const completedTasks = tasks.filter(task => task.status === 1).length;
+    // 从本地存储获取奖励数据
+    let storedRewards = wx.getStorageSync('rewards') || [];
     
-    // 获取所有奖励配置
-    const rewards = this.data.rewards.map(reward => {
-      return {
-        ...reward,
-        unlocked: userPoints >= reward.points
-      };
+    // 确保示例奖励启用状态统一
+    let needUpdate = false;
+    storedRewards = storedRewards.map(reward => {
+      if (this.isExampleReward(reward) && !reward.enabled) {
+        needUpdate = true;
+        console.log(`[rewards] 修正示例奖励状态: ${reward.name}`);
+        return { ...reward, enabled: true };
+      }
+      return reward;
     });
+    
+    // 如果有更新，保存回存储
+    if (needUpdate) {
+      console.log('[rewards] 更新奖励数据，确保示例奖励启用');
+      wx.setStorageSync('rewards', storedRewards);
+    }
+    
+    // 过滤出启用的奖励并计算解锁状态
+    const rewards = storedRewards
+      .filter(r => r.enabled !== false)
+      .map(r => ({
+        ...r,
+        unlocked: userPoints >= r.points
+      }));
 
     // 计算已解锁奖励数量
     const unlockedRewards = rewards.filter(reward => reward.unlocked).length;
@@ -334,11 +315,19 @@ Page({
         showModal: false
       });
 
-      // 保存到本地存储
-      wx.setStorage({
-        key: 'rewards',
-        data: rewards
+      // 获取所有奖励，包括已禁用的
+      const allRewards = wx.getStorageSync('rewards') || [];
+      
+      // 更新所有奖励中的对应奖励状态
+      const updatedAllRewards = allRewards.map(r => {
+        if (r.id === reward.id) {
+          return { ...r, claimed: true, claimTime: Date.now() };
+        }
+        return r;
       });
+      
+      // 保存到本地存储
+      wx.setStorageSync('rewards', updatedAllRewards);
       
       // 通知首页更新星星和奖励进度
       const app = getApp();

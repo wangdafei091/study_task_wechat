@@ -398,4 +398,18 @@
 .action-text {
   font-size: 26rpx;
   color: #333333;
+}
+
+/* 示例标签样式 */
+.example-badge {
+  display: inline-block;
+  position: absolute;
+  top: 10rpx;
+  right: 10rpx;
+  font-size: 22rpx;
+  color: #666666;
+  background-color: #f0f0f0;
+  padding: 4rpx 12rpx;
+  border-radius: 10rpx;
+  box-shadow: 0 2rpx 4rpx rgba(0, 0, 0, 0.1);
 } 

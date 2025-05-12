@@ -885,9 +885,32 @@ viewMessageDetail: function(e) {
     
     // 从本地存储获取最新奖励数据
     const app = getApp();
-    const storedRewards = wx.getStorageSync('rewards');
-    const allRewards = storedRewards || app.getDefaultRewards() || [];
-    console.log(`[Index] 获取奖励配置，共 ${allRewards.length} 个奖励`);
+    const storedRewards = wx.getStorageSync('rewards') || [];
+    
+    // 确保示例奖励启用状态统一
+    let needUpdate = false;
+    const updatedRewards = storedRewards.map(reward => {
+      if (this.isExampleReward(reward) && !reward.enabled) {
+        needUpdate = true;
+        console.log(`[Index] 修正示例奖励状态: ${reward.name}`);
+        return { ...reward, enabled: true };
+      }
+      return reward;
+    });
+    
+    // 如果有更新，保存回存储
+    if (needUpdate) {
+      console.log('[Index] 更新奖励数据，确保示例奖励启用');
+      wx.setStorageSync('rewards', updatedRewards);
+    }
+    
+    // 过滤出启用的奖励
+    const enabledRewards = updatedRewards.filter(r => r.enabled !== false);
+    
+    // 如果没有可用奖励，使用默认奖励
+    const allRewards = enabledRewards.length > 0 ? 
+      enabledRewards : 
+      (app.getDefaultRewards ? app.getDefaultRewards() : []);
     
     // 使用pointsManager计算下一个奖励信息
     const nextReward = pointsManager.calculateNextReward(allRewards);
@@ -1215,6 +1238,21 @@ viewMessageDetail: function(e) {
     });
   },
   
+  /**
+   * 判断是否为示例奖励
+   * 通过ID格式或标记识别示例奖励
+   */
+  isExampleReward: function(reward) {
+    // 检查是否有明确的示例标记
+    if (reward.isExample === true) {
+      return true;
+    }
+    
+    // 使用ID前缀/后缀识别初始默认示例
+    // 初始三个示例奖励的ID结尾为_1, _2, _3
+    return /reward_\d+_(1|2|3)$/.test(reward.id);
+  },
+  
   // 准备奖励指示器数据
   prepareRewardIndicators: function(userPoints, allRewards, nextReward) {
     // 处理奖品指示器
@@ -1232,7 +1270,8 @@ viewMessageDetail: function(e) {
       
       return {
         ...reward,
-        status
+        status,
+        isExample: this.isExampleReward(reward) // 添加示例标记
       };
     });
     

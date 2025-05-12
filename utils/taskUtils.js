@@ -655,15 +655,11 @@ const sortTasksByHabitAndTime = function(tasks) {
 
 module.exports = {
   calculateCompletionRate,
-  getTaskStats,
   filterTasks,
   sortTasks,
-  generateTaskId,
-  createTaskObject,
   isTaskOverdue,
   getTaskDueStatus,
   getNextRepeatDate,
-  createRepeatTask,
   groupTasksByDate,
   getTaskStatistics,
   sortTasksByHabitAndTime

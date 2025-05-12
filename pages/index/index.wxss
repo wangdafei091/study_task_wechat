@@ -1262,4 +1262,32 @@
   .rings-row {
     width: 80%;
   }
+}
+
+/* 示例奖励样式 */
+.example-reward {
+  opacity: 0.9;
+  border: 1rpx dashed #d0d0d0;
+}
+
+.indicator-example {
+  position: absolute;
+  top: -8rpx;
+  right: -8rpx;
+  font-size: 16rpx;
+  color: #666666;
+  background-color: #f0f0f0;
+  padding: 2rpx 6rpx;
+  border-radius: 6rpx;
+  transform: scale(0.8);
+}
+
+.reward-example-tag {
+  display: inline-block;
+  font-size: 24rpx;
+  color: #666666;
+  background-color: #f0f0f0;
+  padding: 4rpx 12rpx;
+  border-radius: 10rpx;
+  margin-top: 10rpx;
 } 
