@@ -119,6 +119,10 @@ Page({
     rewardTextState: 'newTarget', // 奖励文案状态：achieved(已达成), newTarget(新目标)
     forceKeepFullValue: false, // 强制保持满值状态
     completedRewardTotal: 0, // 已完成奖励的总值
+
+    // 新增奖励提示对话框
+    showSetupRewardTip: false, // 是否显示设置奖励提示
+    setupRewardTipAnimation: {}, // 提示动画
   },
   
   /**
@@ -414,6 +418,18 @@ Page({
     
     // 新状态是当前状态的反转
     const newStatus = task.status === 0 ? 1 : 0;
+    
+    // 如果是要完成任务，先检查是否只有示例奖励
+    if (newStatus === 1) {
+      // 检查是否只有示例奖励可用
+      if (this.hasOnlyExampleRewards()) {
+        console.log('[Index] 检测到只有示例奖励可用，显示设置奖励提示');
+        this.showSetupRewardTip();
+        
+        // 直接返回，不执行后续的任务完成逻辑
+        return;
+      }
+    }
     
     // 使用任务管理器更新任务状态
     taskManager.updateTaskStatus(id, newStatus, updatedTask => {
@@ -1263,6 +1279,106 @@ viewMessageDetail: function(e) {
     // 使用ID前缀/后缀识别初始默认示例
     // 初始三个示例奖励的ID结尾为_1, _2, _3
     return /reward_\d+_(1|2|3)$/.test(reward.id);
+  },
+  
+  /**
+   * 检查是否只有示例奖励可用
+   * @return {Boolean} 是否只有示例奖励
+   */
+  hasOnlyExampleRewards: function() {
+    console.log('[Index] 检查是否只有示例奖励可用');
+    
+    // 从本地存储获取奖励数据
+    const storedRewards = wx.getStorageSync('rewards') || [];
+    
+    // 过滤出启用的奖励
+    const enabledRewards = storedRewards.filter(r => r.enabled !== false);
+    
+    // 如果没有奖励，使用默认示例奖励
+    if (enabledRewards.length === 0) {
+      console.log('[Index] 没有任何奖励，返回true');
+      return true;
+    }
+    
+    // 检查是否所有启用的奖励都是示例奖励
+    const hasCustomReward = enabledRewards.some(reward => !this.isExampleReward(reward));
+    
+    console.log(`[Index] 是否只有示例奖励: ${!hasCustomReward}, 启用奖励数: ${enabledRewards.length}`);
+    return !hasCustomReward;
+  },
+  
+  /**
+   * 显示设置奖励提示对话框
+   */
+  showSetupRewardTip: function() {
+    console.log('[Index] 显示设置奖励提示');
+    
+    // 创建动画实例
+    const animation = wx.createAnimation({
+      duration: 300,
+      timingFunction: 'ease',
+    });
+    
+    // 设置初始状态（缩小并透明）
+    animation.scale(0.8).opacity(0).step({ duration: 0 });
+    
+    // 设置数据并显示对话框
+    this.setData({
+      showSetupRewardTip: true,
+      setupRewardTipAnimation: animation.export()
+    });
+    
+    // 执行显示动画
+    setTimeout(() => {
+      animation.scale(1).opacity(1).step();
+      this.setData({
+        setupRewardTipAnimation: animation.export()
+      });
+    }, 50);
+  },
+  
+  /**
+   * 关闭设置奖励提示对话框
+   */
+  closeSetupRewardTip: function() {
+    console.log('[Index] 关闭设置奖励提示');
+    
+    // 创建动画实例
+    const animation = wx.createAnimation({
+      duration: 300,
+      timingFunction: 'ease-out',
+    });
+    
+    // 设置隐藏动画
+    animation.scale(0.8).opacity(0).step();
+    
+    this.setData({
+      setupRewardTipAnimation: animation.export()
+    });
+    
+    // 延迟关闭对话框
+    setTimeout(() => {
+      this.setData({
+        showSetupRewardTip: false
+      });
+    }, 300);
+  },
+  
+  /**
+   * 跳转到奖励管理页面
+   */
+  navigateToRewardManage: function() {
+    console.log('[Index] 跳转到奖励管理页面');
+    
+    // 先关闭提示对话框
+    this.closeSetupRewardTip();
+    
+    // 延迟跳转，等动画完成
+    setTimeout(() => {
+      wx.navigateTo({
+        url: '/pages/reward-manage/reward-manage'
+      });
+    }, 300);
   },
   
   // 准备奖励指示器数据

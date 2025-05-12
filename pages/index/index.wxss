@@ -254,11 +254,10 @@
 
 /* 消息列表样式 */
 .message-list {
-  max-height: 40vh;
-  min-height: 200rpx;
-  flex: 1;
+  max-height: 60vh;
   overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
+  margin: 0 -20rpx;
+  padding: 0 20rpx;
 }
 
 .message-item {
@@ -395,31 +394,24 @@
   box-shadow: 0 1rpx 3rpx rgba(0, 0, 0, 0.1);
 }
 
-/* 空消息状态 */
+/* 无消息时的样式 */
 .no-messages {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 60rpx 0;
+  padding: 80rpx 0;
+  color: var(--text-hint);
 }
 
 .no-messages-icon {
   font-size: 80rpx;
   margin-bottom: 20rpx;
   opacity: 0.6;
-  animation: float 4s ease-in-out infinite;
-}
-
-@keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-10rpx); }
 }
 
 .no-messages-text {
   font-size: 28rpx;
-  color: #9E9E9E;
-  font-weight: 500;
 }
 
 /* 搜索面板样式保留 */
@@ -1290,4 +1282,65 @@
   padding: 4rpx 12rpx;
   border-radius: 10rpx;
   margin-top: 10rpx;
+}
+
+/* 奖励设置提示对话框样式 */
+.reward-setup-overlay {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.reward-setup-dialog {
+  width: 80%;
+  max-width: 600rpx;
+  background: #fff;
+  border-radius: 20rpx;
+  padding: 40rpx 30rpx;
+  box-shadow: 0 4rpx 20rpx rgba(0,0,0,0.15);
+  z-index: 1001;
+  text-align: center;
+}
+
+.setup-title {
+  font-size: 32rpx;
+  font-weight: bold;
+  margin-bottom: 30rpx;
+  color: #333;
+}
+
+.setup-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 30rpx;
+}
+
+.setup-icon {
+  font-size: 80rpx;
+  margin-bottom: 20rpx;
+}
+
+.setup-message {
+  font-size: 30rpx;
+  color: #666;
+  line-height: 1.5;
+}
+
+.setup-button {
+  width: 80%;
+  height: 80rpx;
+  line-height: 80rpx;
+  background: #4CAF50;
+  color: white;
+  border-radius: 40rpx;
+  margin: 20rpx auto 0;
+  font-size: 30rpx;
 } 

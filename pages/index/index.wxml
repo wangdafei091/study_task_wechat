@@ -311,3 +311,15 @@
     </view>
   </view>
 </view>
+
+<!-- 设置奖励提示对话框 -->
+<view class="reward-setup-overlay" wx:if="{{showSetupRewardTip}}" catchtouchmove="preventTouchMove" bindtap="closeSetupRewardTip">
+  <view class="reward-setup-dialog" animation="{{setupRewardTipAnimation}}" catchtap="preventBubble">
+    <view class="setup-title">还没有设置专属奖励哦！</view>
+    <view class="setup-content">
+      <view class="setup-icon">🎁</view>
+      <view class="setup-message">请找爸爸妈妈来帮你设置奖励吧！</view>
+    </view>
+    <view class="setup-button" bindtap="closeSetupRewardTip">知道了</view>
+  </view>
+</view>
