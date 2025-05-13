@@ -25,83 +25,26 @@
   </view>
 
   <!-- 主体内容区域 -->
-  <scroll-view scroll-y="true" class="content-container" wx:if="{{!loading}}">
+  <scroll-view scroll-y="true" class="content-container {{!isParentView ? 'child-view' : ''}}" wx:if="{{!loading}}">
     <!-- 小朋友视图 -->
     <block wx:if="{{!isParentView}}">
-      <!-- 任务完成情况图表 -->
-      <view class="chart-card">
-        <view class="chart-title">任务完成情况</view>
-        <view class="chart-container">
-          <ec-canvas id="taskCompletionChart" canvas-id="taskCompletionCanvas" ec="{{ecTaskCompletion}}"></ec-canvas>
-        </view>
-        <view class="chart-summary">
-          <view class="stat-item">
-            <view class="stat-value">{{stats.completedTasks}}</view>
-            <view class="stat-label">已完成</view>
-          </view>
-          <view class="stat-item">
-            <view class="stat-value">{{stats.totalTasks - stats.completedTasks}}</view>
-            <view class="stat-label">未完成</view>
-          </view>
-          <view class="stat-item">
-            <view class="stat-value">{{stats.completionRate}}%</view>
-            <view class="stat-label">完成率</view>
-          </view>
-        </view>
-      </view>
-      
-      <!-- 星星统计图表 -->
-      <view class="chart-card">
-        <view class="chart-title">星星银行</view>
-        <view class="chart-container">
-          <ec-canvas id="starStatsChart" canvas-id="starStatsCanvas" ec="{{ecStarStats}}"></ec-canvas>
-        </view>
-        <view class="chart-summary">
-          <view class="stat-item">
-            <view class="stat-value">{{stats.stars.available}}</view>
-            <view class="stat-label">可用的</view>
-          </view>
-          <view class="stat-item">
-            <view class="stat-value">{{stats.stars.used}}</view>
-            <view class="stat-label">已使用</view>
-          </view>
-          <view class="stat-item">
-            <view class="stat-value">{{stats.stars.total}}</view>
-            <view class="stat-label">总共</view>
-          </view>
-        </view>
-      </view>
-      
-      <!-- 任务日历图表 -->
-      <view class="chart-card">
-        <view class="chart-title">任务完成日历</view>
-        <view class="chart-container calendar-chart">
-          <ec-canvas id="taskCalendarChart" canvas-id="taskCalendarCanvas" ec="{{ecTaskCalendar}}"></ec-canvas>
-        </view>
-      </view>
-      
-      <!-- 任务类型分布图表 -->
-      <view class="chart-card">
-        <view class="chart-title">我的任务类型</view>
-        <view class="chart-container">
-          <ec-canvas id="taskTypesChart" canvas-id="taskTypesCanvas" ec="{{ecTaskTypes}}"></ec-canvas>
-        </view>
-      </view>
+      <!-- 星星日历卡片 -->
+      <card title="星星日历" customClass="calendar-card" customStyle="margin: 16rpx 0; width: 100%; border-radius: 0;">
+        <star-calendar bind:dateSelected="onCalendarDateSelected"></star-calendar>
+      </card>
     </block>
 
     <!-- 家长视图 -->
     <block wx:else>
       <!-- 任务完成情况图表 -->
-      <view class="chart-card">
-        <view class="chart-title">任务完成趋势</view>
+      <card title="任务完成趋势">
         <view class="chart-container">
           <ec-canvas id="taskCompletionChart" canvas-id="taskCompletionCanvas" ec="{{ecTaskCompletion}}"></ec-canvas>
         </view>
-      </view>
+      </card>
       
       <!-- 任务类型分布图表 -->
-      <view class="chart-card">
-        <view class="chart-title">任务类型分布</view>
+      <card title="任务类型分布">
         <view class="chart-container">
           <ec-canvas id="taskTypesChart" canvas-id="taskTypesCanvas" ec="{{ecTaskTypes}}"></ec-canvas>
         </view>
@@ -119,23 +62,21 @@
             <view class="stat-label">兴趣</view>
           </view>
         </view>
-      </view>
+      </card>
       
       <!-- 时间分布图表 -->
-      <view class="chart-card">
-        <view class="chart-title">任务时间分布</view>
+      <card title="任务时间分布">
         <view class="chart-container">
           <ec-canvas id="timeDistributionChart" canvas-id="timeDistributionCanvas" ec="{{ecTimeDistribution}}"></ec-canvas>
         </view>
-      </view>
+      </card>
       
       <!-- 习惯养成图表 -->
-      <view class="chart-card">
-        <view class="chart-title">习惯养成分析</view>
+      <card title="习惯养成分析">
         <view class="chart-container">
           <ec-canvas id="habitTrackingChart" canvas-id="habitTrackingCanvas" ec="{{ecHabitTracking}}"></ec-canvas>
         </view>
-      </view>
+      </card>
     </block>
   </scroll-view>
 </view> 

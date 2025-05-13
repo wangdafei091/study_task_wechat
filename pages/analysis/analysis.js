@@ -198,8 +198,6 @@ Page({
     // 清空之前可能存在的图表实例
     const chartComponents = [
       '#taskCompletionChart', 
-      '#starStatsChart', 
-      '#taskCalendarChart', 
       '#taskTypesChart',
       '#timeDistributionChart',
       '#habitTrackingChart'
@@ -265,23 +263,8 @@ Page({
    */
   initChildViewCharts: function() {
     console.log('[分析页] 初始化小朋友视图图表');
-    
-    // 延迟初始化各图表，避免同时渲染卡顿
-    setTimeout(() => {
-      this.initTaskCompletionChart();
-    }, 100);
-    
-    setTimeout(() => {
-      this.initStarStatsChart();
-    }, 300);
-    
-    setTimeout(() => {
-      this.initTaskCalendarChart();
-    }, 500);
-    
-    setTimeout(() => {
-      this.initTaskTypesChart();
-    }, 700);
+    // 小朋友视图不再需要初始化图表
+    console.log('[分析页] 小朋友视图不包含图表，跳过初始化');
   },
   
   /**
@@ -313,6 +296,12 @@ Page({
    */
   initTaskCompletionChart: function() {
     try {
+      // 如果是小朋友视图，不初始化图表
+      if (!this.data.isParentView) {
+        console.log('[分析页] 小朋友视图不需要初始化任务完成率图表');
+        return;
+      }
+      
       const chartComponent = this.selectComponent('#taskCompletionChart');
       if (!chartComponent) {
         console.error('[分析页] 无法找到图表组件: #taskCompletionChart');
@@ -353,7 +342,15 @@ Page({
           if (this.data.isParentView) {
             option = this.getParentTaskCompletionOption();
           } else {
-            option = this.getChildTaskCompletionOption();
+            // 小朋友视图不应该走到这里，但为了安全，提供一个空选项
+            console.warn('[分析页] 小朋友视图不应该初始化任务完成率图表');
+            option = {
+              title: {
+                text: '无数据',
+                left: 'center',
+                top: 'center'
+              }
+            };
           }
           
           // 设置动画效果
@@ -383,222 +380,16 @@ Page({
   },
   
   /**
-   * 初始化星星统计图表
-   */
-  initStarStatsChart: function() {
-    try {
-      const chartComponent = this.selectComponent('#starStatsChart');
-      if (!chartComponent) {
-        console.error('[分析页] 无法找到图表组件: #starStatsChart');
-        return;
-      }
-      
-      // 如果已存在图表实例，先销毁
-      if (chartComponent.chart) {
-        try {
-          chartComponent.chart.dispose();
-          chartComponent.chart = null;
-        } catch (err) {
-          console.error('[分析页] 销毁旧图表实例失败:', err);
-        }
-      }
-      
-      chartComponent.init((canvas, width, height, dpr) => {
-        console.log('[分析页] 初始化星星统计图表', width, height);
-        try {
-          if (!echarts) {
-            console.error('[分析页] echarts未定义');
-            return null;
-          }
-          const chart = echarts.init(canvas, null, {
-            width: width,
-            height: height,
-            devicePixelRatio: dpr
-          });
-          
-          // 给canvas设置图表实例
-          canvas.setChart(chart);
-          
-          // 保存图表实例到组件，以便后续访问
-          chartComponent.chart = chart;
-          
-          const option = {
-            color: ['#4CAF50', '#FFA000', '#2196F3'],
-            tooltip: {
-              trigger: 'item',
-              formatter: '{b}: {c} ({d}%)'
-            },
-            legend: {
-              orient: 'vertical',
-              left: 'left',
-              data: ['已使用', '可用的', '即将过期']
-            },
-            series: [
-              {
-                name: '星星统计',
-                type: 'pie',
-                radius: ['40%', '70%'],
-                avoidLabelOverlap: false,
-                itemStyle: {
-                  borderRadius: 10,
-                  borderColor: '#fff',
-                  borderWidth: 2
-                },
-                label: {
-                  show: false,
-                  position: 'center'
-                },
-                emphasis: {
-                  label: {
-                    show: true,
-                    fontSize: '18',
-                    fontWeight: 'bold'
-                  }
-                },
-                labelLine: {
-                  show: false
-                },
-                data: [
-                  { value: this.data.stats.stars.used, name: '已使用' },
-                  { value: this.data.stats.stars.available, name: '可用的' },
-                  { value: 0, name: '即将过期' } // 假设暂无过期数据
-                ]
-              }
-            ],
-            animation: true
-          };
-          
-          // 设置图表选项，增加超时处理
-          setTimeout(() => {
-            try {
-              if (chart && !chart.isDisposed()) {
-                chart.setOption(option, true);
-                console.log('[分析页] 星星统计图表设置成功');
-              }
-            } catch (err) {
-              console.error('[分析页] 设置图表选项失败:', err);
-            }
-          }, 50);
-          
-          return chart;
-        } catch (err) {
-          console.error('[分析页] 初始化星星统计图表失败:', err);
-          return null;
-        }
-      });
-    } catch (err) {
-      console.error('[分析页] 初始化星星统计图表组件出错:', err);
-    }
-  },
-  
-  /**
-   * 初始化任务日历图表
-   */
-  initTaskCalendarChart: function() {
-    try {
-      const chartComponent = this.selectComponent('#taskCalendarChart');
-      if (!chartComponent) {
-        console.error('[分析页] 无法找到图表组件: #taskCalendarChart');
-        return;
-      }
-      
-      // 如果已存在图表实例，先销毁
-      if (chartComponent.chart) {
-        try {
-          chartComponent.chart.dispose();
-          chartComponent.chart = null;
-        } catch (err) {
-          console.error('[分析页] 销毁旧图表实例失败:', err);
-        }
-      }
-      
-      chartComponent.init((canvas, width, height, dpr) => {
-        console.log('[分析页] 初始化任务日历图表', width, height);
-        try {
-          if (!echarts) {
-            console.error('[分析页] echarts未定义');
-            return null;
-          }
-          const chart = echarts.init(canvas, null, {
-            width: width,
-            height: height,
-            devicePixelRatio: dpr
-          });
-          
-          // 给canvas设置图表实例
-          canvas.setChart(chart);
-          
-          // 保存图表实例到组件，以便后续访问
-          chartComponent.chart = chart;
-          
-          // 获取日历数据（基于实际任务）
-          const calendarData = this.getCalendarData();
-          
-          const option = {
-            tooltip: {
-              position: 'top',
-              formatter: function (p) {
-                return p.data[0] + ': ' + p.data[1] + ' 个任务';
-              }
-            },
-            visualMap: {
-              min: 0,
-              max: 10,
-              calculable: true,
-              orient: 'horizontal',
-              left: 'center',
-              bottom: 0,
-              inRange: {
-                color: ['#ebedf0', '#c6e48b', '#7bc96f', '#239a3b', '#196127']
-              }
-            },
-            calendar: {
-              top: 30,
-              left: 30,
-              right: 5,
-              cellSize: ['auto', 'auto'],
-              range: this.getCalendarRange(),
-              itemStyle: {
-                borderWidth: 0.5
-              },
-              yearLabel: { show: false }
-            },
-            series: {
-              type: 'heatmap',
-              coordinateSystem: 'calendar',
-              data: calendarData
-            },
-            animation: true
-          };
-          
-          // 设置图表选项，增加超时处理
-          setTimeout(() => {
-            try {
-              if (chart && !chart.isDisposed()) {
-                chart.setOption(option, true);
-                console.log('[分析页] 任务日历图表设置成功');
-              }
-            } catch (err) {
-              console.error('[分析页] 设置图表选项失败:', err);
-            }
-          }, 50);
-          
-          return chart;
-        } catch (err) {
-          console.error('[分析页] 初始化任务日历图表失败:', err);
-          return null;
-        }
-      });
-    } catch (err) {
-      console.error('[分析页] 初始化任务日历图表组件出错:', err);
-    }
-  },
-  
-  /**
    * 初始化任务类型图表
    */
   initTaskTypesChart: function() {
     try {
+      // 如果是小朋友视图，不初始化图表
+      if (!this.data.isParentView) {
+        console.log('[分析页] 小朋友视图不需要初始化任务类型图表');
+        return;
+      }
+      
       const chartComponent = this.selectComponent('#taskTypesChart');
       if (!chartComponent) {
         console.error('[分析页] 无法找到图表组件: #taskTypesChart');
@@ -1019,50 +810,6 @@ Page({
   },
   
   /**
-   * 获取小朋友视图的任务完成图表配置
-   */
-  getChildTaskCompletionOption: function() {
-    return {
-      color: ['#91cc75', '#ee6666'],
-      tooltip: {
-        trigger: 'item',
-        formatter: '{b}: {c} ({d}%)'
-      },
-      series: [
-        {
-          name: '任务完成情况',
-          type: 'pie',
-          radius: ['40%', '70%'],
-          avoidLabelOverlap: false,
-          itemStyle: {
-            borderRadius: 10,
-            borderColor: '#fff',
-            borderWidth: 2
-          },
-          label: {
-            show: false,
-            position: 'center'
-          },
-          emphasis: {
-            label: {
-              show: true,
-              fontSize: '18',
-              fontWeight: 'bold'
-            }
-          },
-          labelLine: {
-            show: false
-          },
-          data: [
-            { value: this.data.stats.completedTasks, name: '已完成' },
-            { value: this.data.stats.totalTasks - this.data.stats.completedTasks, name: '未完成' }
-          ]
-        }
-      ]
-    };
-  },
-  
-  /**
    * 获取家长视图的任务完成图表配置
    */
   getParentTaskCompletionOption: function() {
@@ -1235,77 +982,6 @@ Page({
   },
   
   /**
-   * 获取日历数据（基于实际任务）
-   */
-  getCalendarData: function() {
-    console.log('[分析页] 获取任务日历数据');
-    
-    try {
-      // 获取存储的所有任务
-      const allTasks = wx.getStorageSync('taskData') || [];
-      
-      // 日历数据结构 [日期, 完成任务数量]
-      const data = [];
-      
-      // 创建日期-完成数量的映射
-      const dateCountMap = {};
-      
-      // 设置开始日期为过去30天
-      const endDate = new Date();
-      const startDate = new Date();
-      startDate.setDate(endDate.getDate() - 30);
-      
-      // 初始化日期映射（所有日期默认为0）
-      let currentDate = new Date(startDate);
-      while (currentDate <= endDate) {
-        const dateStr = dateUtils.formatDate(currentDate);
-        dateCountMap[dateStr] = 0;
-        
-        // 复制日期对象，避免引用问题
-        const nextDate = new Date(currentDate);
-        nextDate.setDate(nextDate.getDate() + 1);
-        currentDate = nextDate;
-      }
-      
-      // 统计每天的完成任务数量
-      if (Array.isArray(allTasks)) {
-        allTasks.forEach(task => {
-          // 只统计已完成的任务，确保task.date存在且status为1(数字类型或字符串)
-          if (task && task.date && 
-              dateCountMap.hasOwnProperty(task.date) && 
-              (task.status === 1 || task.status === '1')) {
-            dateCountMap[task.date]++;
-          }
-        });
-      } else {
-        console.warn('[分析页] 没有找到任务数据或格式不正确');
-      }
-      
-      // 转换为日历数据格式
-      Object.keys(dateCountMap).forEach(date => {
-        data.push([date, dateCountMap[date]]);
-      });
-      
-      console.log(`[分析页] 日历数据点数量: ${data.length}`);
-      return data;
-    } catch (error) {
-      console.error('[分析页] 生成日历数据失败:', error);
-      return []; // 返回空数组，避免图表渲染出错
-    }
-  },
-  
-  /**
-   * 获取日历范围
-   */
-  getCalendarRange: function() {
-    const endDate = new Date();
-    const startDate = new Date();
-    startDate.setDate(endDate.getDate() - 30);
-    
-    return [dateUtils.formatDate(startDate), dateUtils.formatDate(endDate)];
-  },
-  
-  /**
    * 根据时间范围获取数据的起止日期
    */
   getDateRangeByTimeRange: function(timeRange) {
@@ -1437,5 +1113,22 @@ Page({
     } catch (err) {
       console.error('[分析页] 初始化习惯跟踪图表组件出错:', err);
     }
+  },
+  
+  /**
+   * 处理日历日期选择事件
+   */
+  onCalendarDateSelected: function(e) {
+    const selectedDate = e.detail.date;
+    console.log('[分析页] 日历选择日期:', selectedDate);
+    
+    // 你可以在这里添加日期选择后的处理逻辑
+    // 例如展示当天的星星获取详情等
+    
+    wx.showToast({
+      title: `已选择: ${selectedDate}`,
+      icon: 'none',
+      duration: 1500
+    });
   }
 }) 

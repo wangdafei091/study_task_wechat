@@ -66,24 +66,21 @@
   flex: 1;
   padding: 20rpx;
   overflow-y: auto;
+  box-sizing: border-box; /* 确保padding不会增加宽度 */
 }
 
-/* 图表卡片 */
-.chart-card {
-  margin-bottom: 30rpx;
-  padding: 20rpx;
-  background-color: #fff;
-  border-radius: 16rpx;
-  box-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.05);
+/* 小朋友视图内容区域 - 去除内边距 */
+.content-container.child-view {
+  padding: 0;
 }
 
-.chart-title {
-  font-size: 32rpx;
-  font-weight: 500;
-  color: #333;
-  margin-bottom: 20rpx;
+/* 日历卡片样式 */
+.calendar-card {
+  padding: 10rpx;
+  box-shadow: none;
 }
 
+/* 图表容器 */
 .chart-container {
   width: 100%;
   height: 400rpx;
@@ -174,4 +171,22 @@
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
+}
+
+/* 空视图样式 */
+.empty-view {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  height: 400rpx;
+  width: 100%;
+  background-color: #fff;
+  border-radius: 16rpx;
+  box-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.05);
+}
+
+.empty-text {
+  font-size: 32rpx;
+  color: #999;
 } 

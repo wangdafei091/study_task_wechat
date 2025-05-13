@@ -1,0 +1,157 @@
+/* components/star-calendar/star-calendar.wxss */
+
+.star-calendar {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* 日历标题区域 */
+.calendar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20rpx;
+}
+
+.month-title {
+  font-size: 32rpx;
+  font-weight: 500;
+  color: #333;
+}
+
+/* 导航按钮组 */
+.nav-buttons {
+  display: flex;
+  align-items: center;
+}
+
+.nav-btn {
+  width: 60rpx;
+  height: 60rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 10rpx;
+  border-radius: 50%;
+  background-color: #f8f8f8;
+  transition: all 0.2s ease;
+}
+
+.nav-btn:active {
+  background-color: #e0e0e0;
+  transform: scale(0.95);
+}
+
+.nav-icon {
+  font-size: 24rpx;
+  color: #666;
+}
+
+/* 星期标题栏 */
+.weekdays {
+  display: flex;
+  justify-content: space-between;
+  padding: 10rpx 0;
+  border-bottom: 1px solid #f0f0f0;
+  margin-bottom: 10rpx;
+}
+
+.weekday {
+  flex: 1;
+  text-align: center;
+  font-size: 24rpx;
+  color: #666;
+  padding: 8rpx 0;
+}
+
+.weekend {
+  color: #999;
+}
+
+/* 日历主体 */
+.calendar-days {
+  display: flex;
+  flex-wrap: wrap;
+  margin-bottom: 10rpx;
+}
+
+.calendar-day {
+  width: 14.28%;
+  aspect-ratio: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8rpx 0;
+  position: relative;
+  transition: background-color 0.2s;
+  box-sizing: border-box;
+}
+
+.calendar-day.current-month {
+  color: #333;
+}
+
+.calendar-day.other-month {
+  color: #ccc;
+}
+
+.calendar-day.today {
+  background-color: rgba(66, 133, 244, 0.1);
+  border-radius: 8rpx;
+}
+
+.calendar-day.today .day-number {
+  font-weight: 700;
+  color: #4285F4;
+}
+
+.calendar-day.selected {
+  background-color: rgba(66, 133, 244, 0.15);
+  border-radius: 8rpx;
+}
+
+.day-number {
+  font-size: 28rpx;
+  line-height: 1.2;
+  font-weight: 600;
+  margin-top: 4rpx;
+}
+
+/* 星星信息样式 - 增强层次感和可读性 */
+.star-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  margin-top: 4rpx;
+  margin-bottom: 2rpx;
+  gap: 4rpx;
+}
+
+.earned-stars {
+  color: #4CAF50;
+  font-weight: 600;
+  padding: 2rpx 6rpx;
+  background-color: rgba(76, 175, 80, 0.15);
+  border-radius: 4rpx;
+  font-size: 20rpx;
+}
+
+.deducted-stars {
+  color: #F44336;
+  font-weight: 600;
+  padding: 2rpx 6rpx;
+  background-color: rgba(244, 67, 54, 0.15);
+  border-radius: 4rpx;
+  font-size: 20rpx;
+}
+
+/* 空状态提示 */
+.empty-tip {
+  padding: 40rpx 0;
+  text-align: center;
+  color: #999;
+  font-size: 28rpx;
+} 

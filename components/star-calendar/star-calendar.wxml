@@ -1,0 +1,55 @@
+<!--components/star-calendar/star-calendar.wxml-->
+<view class="star-calendar">
+  <!-- 顶部月份导航栏 -->
+  <view class="calendar-header">
+    <view class="month-title">{{yearText}}{{monthText}}</view>
+    
+    <view class="nav-buttons">
+      <view class="nav-btn prev-month" bindtap="prevMonth">
+        <text class="nav-icon">◀</text>
+      </view>
+      <view class="nav-btn today" bindtap="goToToday">
+        <text class="nav-icon">•</text>
+      </view>
+      <view class="nav-btn next-month" bindtap="nextMonth">
+        <text class="nav-icon">▶</text>
+      </view>
+    </view>
+  </view>
+  
+  <!-- 星期标题栏 -->
+  <view class="weekdays">
+    <view wx:for="{{weekDayLabels}}" wx:key="index" class="weekday {{index === 0 || index === 6 ? 'weekend' : ''}}">
+      {{item}}
+    </view>
+  </view>
+  
+  <!-- 日历主体 -->
+  <view class="calendar-days" bindtouchstart="touchStart" bindtouchend="touchEnd">
+    <view 
+      wx:for="{{calendarDays}}" 
+      wx:key="index" 
+      class="calendar-day {{item.isCurrentMonth ? 'current-month' : 'other-month'}} {{item.isToday ? 'today' : ''}} {{selectedDate === item.dateString ? 'selected' : ''}}"
+      bindtap="selectDate"
+      data-date="{{item.dateString}}">
+      
+      <!-- 日期数字 -->
+      <text class="day-number">{{item.day}}</text>
+      
+      <!-- 星星变化信息 - 重新组织布局 -->
+      <block wx:if="{{item.starInfo}}">
+        <view class="star-info">
+          <!-- 获得的星星 -->
+          <view wx:if="{{item.starInfo.earned > 0}}" class="earned-stars">
+            +{{item.starInfo.earned}}
+          </view>
+          
+          <!-- 扣除的星星 -->
+          <view wx:if="{{item.starInfo.deducted > 0}}" class="deducted-stars">
+            -{{item.starInfo.deducted}}
+          </view>
+        </view>
+      </block>
+    </view>
+  </view>
+</view> 
