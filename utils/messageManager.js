@@ -4,15 +4,51 @@
  * 提供消息相关的通用方法，如添加消息、更新消息、删除消息等
  */
 
+const logger = require('./logger');
+const storageUtils = require('./storageUtils');
+
 const messageManager = {
+  /**
+   * 创建通用消息
+   * @private
+   * @param {Object} messageData 消息数据对象
+   * @param {String} messageData.type 消息类型
+   * @param {String} messageData.title 消息标题
+   * @param {String} messageData.summary 消息摘要
+   * @param {String} messageData.icon 消息图标
+   * @param {Object} messageData.metadata 额外元数据
+   * @returns {Object} 创建的消息对象
+   */
+  _createMessage: function(messageData) {
+    const { type, title, summary, icon, ...metadata } = messageData;
+    const now = Date.now();
+    
+    // 创建消息基本结构
+    const message = {
+      id: `msg_${type}_${now}_${Math.floor(Math.random() * 1000)}`,
+      type: type || 'system',
+      title: title || '系统通知',
+      summary: summary || '',
+      timestamp: now,
+      isRead: false,
+      icon: icon || '🔔',
+      ...metadata
+    };
+    
+    logger.info('messageManager', `创建${type}消息: ${title}`, message);
+    
+    // 添加到消息列表
+    this.addMessage(message);
+    return message;
+  },
+  
   // 创建任务相关消息
   createTaskMessage: function(task, type = 'new', options = {}) {
-    const now = Date.now();
-    let title, summary, icon;
-    
     // 检查是否是批量操作
     const isBatchOperation = options.isBatchOperation || false;
     const batchCount = options.batchCount || 0;
+    
+    let title, summary, icon;
     
     switch(type) {
       case 'new':
@@ -53,27 +89,20 @@ const messageManager = {
         break;
     }
     
-    const message = {
-      id: 'msg_' + now + '_' + Math.floor(Math.random() * 1000),
+    return this._createMessage({
       type: 'task',
       notificationType: type,
       taskId: task.id,
-      title: title,
-      summary: summary,
-      timestamp: now,
-      isRead: false,
-      icon: icon,
-      isBatchOperation: isBatchOperation,
-      batchCount: batchCount
-    };
-    
-    this.addMessage(message);
-    return message;
+      title,
+      summary,
+      icon,
+      isBatchOperation,
+      batchCount
+    });
   },
   
   // 创建系统消息
   createSystemMessage: function(content, type = 'system', callback) {
-    const now = Date.now();
     let title, icon;
     
     switch(type) {
@@ -94,19 +123,13 @@ const messageManager = {
         icon = '🔔';
     }
     
-    const message = {
-      id: 'msg_sys_' + now + '_' + Math.floor(Math.random() * 1000),
+    const message = this._createMessage({
       type: 'system',
       notificationType: type,
-      title: title,
+      title,
       summary: content,
-      timestamp: now,
-      isRead: false,
-      icon: icon
-    };
-    
-    console.log(`[messageManager] 创建系统消息: ${type}, ${content}`);
-    this.addMessage(message);
+      icon
+    });
     
     // 处理回调
     if (typeof callback === 'function') {
@@ -120,111 +143,80 @@ const messageManager = {
   
   // 创建积分惩罚消息
   createPenaltyMessage: function(task, points) {
-    const now = Date.now();
-    
-    const message = {
-      id: 'msg_penalty_' + now + '_' + Math.floor(Math.random() * 1000),
+    return this._createMessage({
       type: 'penalty',
       taskId: task.id,
       title: '星星扣除提醒',
       summary: `必做任务"${task.title}"未完成，已扣除${points}颗星星`,
-      timestamp: now,
-      isRead: false,
       icon: '⚠️'
-    };
-    
-    this.addMessage(message);
-    return message;
+    });
   },
   
   // 添加消息
   addMessage: function(message) {
     // 获取现有消息
-    wx.getStorage({
-      key: 'messageData',
-      success: (res) => {
-        let messages = res.data || [];
-        
-        // 检查是否已存在相同类型、相同任务的未读消息(去重)
-        const existingSimilarMessage = messages.find(msg => 
-          msg.type === 'task' && 
-          msg.taskId === message.taskId && 
-          msg.notificationType === message.notificationType &&
-          !msg.isRead
-        );
-        
-        // 如果已存在相似消息，更新它而不是添加新消息
-        if (existingSimilarMessage) {
-          messages = messages.map(msg => {
-            if (msg.id === existingSimilarMessage.id) {
-              return {
-                ...message,
-                id: msg.id // 保持原消息ID
-              };
-            }
-            return msg;
-          });
-        } else {
-          // 添加新消息
-          messages.unshift(message);
-        }
-        
-        // 保存到本地存储
-        wx.setStorage({
-          key: 'messageData',
-          data: messages,
-          success: () => {
-            // 触发全局消息更新事件
-            this._notifyMessageUpdate(messages);
+    storageUtils.getAsync('messageData', (messages) => {
+      messages = messages || [];
+      
+      // 检查是否已存在相同类型、相同任务的未读消息(去重)
+      const existingSimilarMessage = messages.find(msg => 
+        msg.type === 'task' && 
+        msg.taskId === message.taskId && 
+        msg.notificationType === message.notificationType &&
+        !msg.isRead
+      );
+      
+      // 如果已存在相似消息，更新它而不是添加新消息
+      if (existingSimilarMessage) {
+        messages = messages.map(msg => {
+          if (msg.id === existingSimilarMessage.id) {
+            return {
+              ...message,
+              id: msg.id // 保持原消息ID
+            };
           }
+          return msg;
         });
-      },
-      fail: () => {
-        // 如果没有现有消息，创建新数组
-        const messages = [message];
-        wx.setStorage({
-          key: 'messageData',
-          data: messages,
-          success: () => {
-            // 触发全局消息更新事件
-            this._notifyMessageUpdate(messages);
-          }
-        });
+        logger.info('messageManager', `更新现有消息: ${existingSimilarMessage.id}`);
+      } else {
+        // 添加新消息
+        messages.unshift(message);
+        logger.info('messageManager', `添加新消息: ${message.id}`);
       }
+      
+      // 保存到本地存储
+      storageUtils.setAsync('messageData', messages, () => {
+        // 触发全局消息更新事件
+        this._notifyMessageUpdate(messages);
+      });
     });
   },
   
   // 更新与任务相关的消息
   updateTaskMessages: function(task) {
-    wx.getStorage({
-      key: 'messageData',
-      success: (res) => {
-        let messages = res.data || [];
-        let updated = false;
-        
-        // 更新与此任务相关的消息
-        const updatedMessages = messages.map(msg => {
-          if (msg.type === 'task' && msg.taskId === task.id) {
-            // 更新消息中的任务标题
-            if (msg.summary.includes('"')) {
-              msg.summary = msg.summary.replace(/"([^"]+)"/, `"${task.title}"`);
-            }
+    storageUtils.getAsync('messageData', (messages) => {
+      messages = messages || [];
+      let updated = false;
+      
+      // 更新与此任务相关的消息
+      const updatedMessages = messages.map(msg => {
+        if (msg.type === 'task' && msg.taskId === task.id) {
+          // 更新消息中的任务标题
+          if (msg.summary.includes('"')) {
+            msg.summary = msg.summary.replace(/"([^"]+)"/, `"${task.title}"`);
             updated = true;
+            logger.info('messageManager', `更新消息内容: ${msg.id}`);
           }
-          return msg;
-        });
-        
-        if (updated) {
-          // 保存更新后的消息
-          wx.setStorage({
-            key: 'messageData',
-            data: updatedMessages,
-            success: () => {
-              // 触发全局消息更新事件
-              this._notifyMessageUpdate(updatedMessages);
-            }
-          });
         }
+        return msg;
+      });
+      
+      if (updated) {
+        // 保存更新后的消息
+        storageUtils.setAsync('messageData', updatedMessages, () => {
+          // 触发全局消息更新事件
+          this._notifyMessageUpdate(updatedMessages);
+        });
       }
     });
   },
@@ -232,57 +224,36 @@ const messageManager = {
   // 删除与任务相关的消息
   deleteTaskMessages: function(taskId, callback) {
     if (!taskId) {
-      console.error(`[messageManager] 删除任务消息失败: 任务ID为空`);
+      logger.error('messageManager', `删除任务消息失败: 任务ID为空`);
       if (typeof callback === 'function') {
         callback(0);
       }
       return;
     }
     
-    console.log(`[messageManager] 开始删除任务消息: ${taskId}`);
+    logger.info('messageManager', `开始删除任务消息: ${taskId}`);
     
-    wx.getStorage({
-      key: 'messageData',
-      success: (res) => {
-        let messages = res.data || [];
-        let originalCount = messages.length;
-        
-        // 过滤掉所有与此任务相关的消息
-        const updatedMessages = messages.filter(msg => !(msg.type === 'task' && msg.taskId === taskId));
-        
-        let removedCount = originalCount - updatedMessages.length;
-        console.log(`[messageManager] 找到任务相关消息数量: ${removedCount}`);
-        
-        // 只有在实际删除了消息时才进行存储操作
-        if (removedCount > 0) {
-          wx.setStorage({
-            key: 'messageData',
-            data: updatedMessages,
-            success: () => {
-              console.log(`[messageManager] 成功删除任务消息: ${taskId}, 数量: ${removedCount}`);
-              // 触发全局消息更新事件
-              this._notifyMessageUpdate(updatedMessages);
-              
-              if (typeof callback === 'function') {
-                callback(removedCount);
-              }
-            },
-            fail: (error) => {
-              console.error(`[messageManager] 保存删除后的消息失败: ${error}`);
-              if (typeof callback === 'function') {
-                callback(0);
-              }
-            }
-          });
-        } else {
-          console.log(`[messageManager] 未找到任务相关消息: ${taskId}`);
+    storageUtils.getAsync('messageData', (messages) => {
+      messages = messages || [];
+      let originalCount = messages.length;
+      
+      // 过滤掉所有与此任务相关的消息
+      const filteredMessages = messages.filter(msg => !(msg.type === 'task' && msg.taskId === taskId));
+      const deletedCount = originalCount - filteredMessages.length;
+      
+      logger.info('messageManager', `删除了${deletedCount}条与任务${taskId}相关的消息`);
+      
+      if (deletedCount > 0) {
+        // 保存更新后的消息列表
+        storageUtils.setAsync('messageData', filteredMessages, () => {
+          // 触发全局消息更新事件
+          this._notifyMessageUpdate(filteredMessages);
+          
           if (typeof callback === 'function') {
-            callback(0);
+            callback(deletedCount);
           }
-        }
-      },
-      fail: (error) => {
-        console.error(`[messageManager] 读取消息数据失败: ${error}`);
+        });
+      } else {
         if (typeof callback === 'function') {
           callback(0);
         }
@@ -292,44 +263,8 @@ const messageManager = {
   
   // 获取所有消息
   getAllMessages: function(callback) {
-    wx.getStorage({
-      key: 'messageData',
-      success: (res) => {
-        if (res.data && res.data.length > 0) {
-          const messages = res.data.map(msg => ({
-            ...msg,
-            timeDisplay: this.formatMessageTime(msg.timestamp)
-          }));
-          callback(messages);
-        } else {
-          // 如果没有消息，使用默认示例消息
-          const defaultMessages = this.getDefaultMessages().map(msg => ({
-            ...msg,
-            timeDisplay: this.formatMessageTime(msg.timestamp)
-          }));
-          callback(defaultMessages);
-          
-          // 保存到本地存储
-          wx.setStorage({
-            key: 'messageData',
-            data: defaultMessages
-          });
-        }
-      },
-      fail: () => {
-        // 如果读取失败，使用默认示例消息
-        const defaultMessages = this.getDefaultMessages().map(msg => ({
-          ...msg,
-          timeDisplay: this.formatMessageTime(msg.timestamp)
-        }));
-        callback(defaultMessages);
-        
-        // 保存到本地存储
-        wx.setStorage({
-          key: 'messageData',
-          data: defaultMessages
-        });
-      }
+    storageUtils.getAsync('messageData', (messages) => {
+      callback(messages || []);
     });
   },
   
@@ -337,259 +272,150 @@ const messageManager = {
   getUnreadCount: function(callback) {
     this.getAllMessages(messages => {
       const unreadCount = messages.filter(msg => !msg.isRead).length;
+      logger.info('messageManager', `未读消息数量: ${unreadCount}`);
       callback(unreadCount);
     });
   },
   
   // 标记消息为已读
   markAsRead: function(messageId, callback) {
-    wx.getStorage({
-      key: 'messageData',
-      success: (res) => {
-        let messages = res.data || [];
-        const messageIndex = messages.findIndex(m => m.id === messageId);
-        
-        if (messageIndex > -1 && !messages[messageIndex].isRead) {
-          messages[messageIndex].isRead = true;
-          
-          // 保存更新后的消息
-          wx.setStorage({
-            key: 'messageData',
-            data: messages,
-            success: () => {
-              // 触发全局消息更新事件
-              this._notifyMessageUpdate(messages);
-              if (callback) callback(true);
-            }
-          });
-        } else if (callback) {
+    storageUtils.getAsync('messageData', (messages) => {
+      if (!messages || messages.length === 0) {
+        logger.warn('messageManager', `没有消息可标记为已读`);
+        if (typeof callback === 'function') {
           callback(false);
         }
-      },
-      fail: () => {
-        if (callback) callback(false);
+        return;
+      }
+      
+      let updated = false;
+      
+      // 更新指定消息的已读状态
+      const updatedMessages = messages.map(msg => {
+        if (msg.id === messageId && !msg.isRead) {
+          updated = true;
+          logger.info('messageManager', `标记消息为已读: ${messageId}`);
+          return { ...msg, isRead: true };
+        }
+        return msg;
+      });
+      
+      if (updated) {
+        storageUtils.setAsync('messageData', updatedMessages, () => {
+          // 触发全局消息更新事件
+          this._notifyMessageUpdate(updatedMessages);
+          
+          if (typeof callback === 'function') {
+            callback(true);
+          }
+        });
+      } else {
+        if (typeof callback === 'function') {
+          callback(false);
+        }
       }
     });
   },
   
   // 标记所有消息为已读
   markAllAsRead: function(callback) {
-    wx.getStorage({
-      key: 'messageData',
-      success: (res) => {
-        let messages = res.data || [];
-        
-        // 将所有消息标记为已读
-        messages = messages.map(msg => ({
-          ...msg,
-          isRead: true
-        }));
-        
-        // 保存更新后的消息
-        wx.setStorage({
-          key: 'messageData',
-          data: messages,
-          success: () => {
-            // 触发全局消息更新事件
-            this._notifyMessageUpdate(messages);
-            if (callback) callback(true);
-          }
-        });
-      },
-      fail: () => {
-        if (callback) callback(false);
+    storageUtils.getAsync('messageData', (messages) => {
+      if (!messages || messages.length === 0) {
+        logger.warn('messageManager', `没有消息可标记为已读`);
+        if (typeof callback === 'function') {
+          callback(0);
+        }
+        return;
       }
+      
+      // 检查是否有未读消息
+      const unreadCount = messages.filter(msg => !msg.isRead).length;
+      
+      if (unreadCount === 0) {
+        logger.info('messageManager', `所有消息已经是已读状态`);
+        if (typeof callback === 'function') {
+          callback(0);
+        }
+        return;
+      }
+      
+      // 更新所有消息的已读状态
+      const updatedMessages = messages.map(msg => {
+        if (!msg.isRead) {
+          return { ...msg, isRead: true };
+        }
+        return msg;
+      });
+      
+      storageUtils.setAsync('messageData', updatedMessages, () => {
+        logger.info('messageManager', `标记全部${unreadCount}条消息为已读`);
+        
+        // 触发全局消息更新事件
+        this._notifyMessageUpdate(updatedMessages);
+        
+        if (typeof callback === 'function') {
+          callback(unreadCount);
+        }
+      });
     });
   },
-
-  // 标记任务相关消息为已读
-  markTaskMessagesAsRead: function(taskId, callback) {
-    if (!taskId) {
-      if (callback) callback(false);
-      return;
-    }
-    
-    wx.getStorage({
-      key: 'messageData',
-      success: (res) => {
-        let messages = res.data || [];
-        let updated = false;
-        
-        // 更新与此任务相关的消息
-        const updatedMessages = messages.map(msg => {
-          if (msg.type === 'task' && msg.taskId === taskId && !msg.isRead) {
-            updated = true;
-            return { ...msg, isRead: true };
-          }
-          return msg;
-        });
-        
-        if (updated) {
-          // 保存更新后的消息
-          wx.setStorage({
-            key: 'messageData',
-            data: updatedMessages,
-            success: () => {
-              // 触发全局消息更新事件
-              this._notifyMessageUpdate(updatedMessages);
-              if (callback) callback(true);
-            }
-          });
-        } else if (callback) {
+  
+  // 删除指定的消息
+  deleteMessage: function(messageId, callback) {
+    storageUtils.getAsync('messageData', (messages) => {
+      if (!messages || messages.length === 0) {
+        logger.warn('messageManager', `没有消息可删除`);
+        if (typeof callback === 'function') {
           callback(false);
         }
-      },
-      fail: () => {
-        if (callback) callback(false);
+        return;
       }
-    });
-  },
-  
-  // 获取并处理即将到期任务通知
-  getUpcomingTaskNotifications: function(upcomingTasks, callback) {
-    // 检查是否需要显示提醒
-    if (!upcomingTasks || upcomingTasks.length === 0) {
-      if (callback) callback(null, false);
-      return;
-    }
-    
-    const now = new Date();
-    const firstTask = upcomingTasks[0];
-    
-    // 获取隐藏状态
-    wx.getStorage({
-      key: 'upcomingTaskHidden',
-      success: (res) => {
-        const hiddenState = res.data || {};
-        const shouldShow = !hiddenState.isHidden || 
-                         (hiddenState.timestamp && (now - hiddenState.timestamp > 3600000)); // 1小时后重新显示
-        
-        // 检查是否应该显示提醒
-        const isNewTask = !hiddenState.taskId || hiddenState.taskId !== firstTask.id;
-        
-        if (shouldShow || isNewTask) {
-          // 为即将到期的任务创建通知
-          this.createTaskMessage(firstTask, 'upcoming');
+      
+      // 过滤掉要删除的消息
+      const filteredMessages = messages.filter(msg => msg.id !== messageId);
+      
+      if (filteredMessages.length < messages.length) {
+        storageUtils.setAsync('messageData', filteredMessages, () => {
+          logger.info('messageManager', `删除消息: ${messageId}`);
           
-          if (callback) {
-            callback({
-              id: firstTask.id,
-              name: firstTask.title || firstTask.name,
-              timeRemaining: firstTask.timeRemaining,
-              formattedStartTime: firstTask.formattedStartTime,
-              isDismissible: true
-            }, true);
+          // 触发全局消息更新事件
+          this._notifyMessageUpdate(filteredMessages);
+          
+          if (typeof callback === 'function') {
+            callback(true);
           }
-        } else {
-          if (callback) callback(null, false);
-        }
-      },
-      fail: () => {
-        // 如果读取失败，默认显示
-        this.createTaskMessage(firstTask, 'upcoming');
-        
-        if (callback) {
-          callback({
-            id: firstTask.id,
-            name: firstTask.title || firstTask.name,
-            timeRemaining: firstTask.timeRemaining,
-            formattedStartTime: firstTask.formattedStartTime,
-            isDismissible: true
-          }, true);
+        });
+      } else {
+        logger.warn('messageManager', `未找到要删除的消息: ${messageId}`);
+        if (typeof callback === 'function') {
+          callback(false);
         }
       }
     });
   },
   
-  // 设置即将到期任务为已隐藏
-  dismissUpcomingTask: function(taskId, callback) {
-    wx.setStorage({
-      key: 'upcomingTaskHidden',
-      data: {
-        isHidden: true,
-        taskId: taskId,
-        timestamp: Date.now()
-      },
-      success: () => {
-        if (callback) callback(true);
-      },
-      fail: () => {
-        if (callback) callback(false);
+  // 清空所有消息
+  clearAllMessages: function(callback) {
+    storageUtils.setAsync('messageData', [], () => {
+      logger.info('messageManager', `清空所有消息`);
+      
+      // 触发全局消息更新事件
+      this._notifyMessageUpdate([]);
+      
+      if (typeof callback === 'function') {
+        callback(true);
       }
     });
   },
   
-  // 格式化消息时间显示
-  formatMessageTime: function(timestamp) {
-    const now = new Date();
-    const msgDate = new Date(timestamp);
-    const diffMinutes = Math.floor((now - msgDate) / (60 * 1000));
-    
-    if (diffMinutes < 1) {
-      return '刚刚';
-    } else if (diffMinutes < 60) {
-      return `${diffMinutes}分钟前`;
-    } else if (diffMinutes < 24 * 60) {
-      const hours = Math.floor(diffMinutes / 60);
-      return `${hours}小时前`;
-    } else if (diffMinutes < 30 * 24 * 60) {
-      const days = Math.floor(diffMinutes / (24 * 60));
-      return `${days}天前`;
-    } else {
-      const year = msgDate.getFullYear();
-      const month = (msgDate.getMonth() + 1).toString().padStart(2, '0');
-      const day = msgDate.getDate().toString().padStart(2, '0');
-      return `${year}-${month}-${day}`;
-    }
-  },
-  
-  // 获取默认示例消息
-  getDefaultMessages: function() {
-    const now = Date.now();
-    const yesterday = now - 86400000;
-    const twoDaysAgo = now - 172800000;
-    
-    return [
-      {
-        id: 'msg_1',
-        type: 'task',
-        notificationType: 'upcoming',
-        title: '任务即将到期',
-        summary: '您有一个"语文作业"任务将在1小时后到期，请及时完成。',
-        timestamp: now - 3600000, // 1小时前
-        isRead: false,
-        icon: '⏰'
-      },
-      {
-        id: 'msg_2',
-        type: 'achievement',
-        title: '完成连续学习3天',
-        summary: '恭喜你已经连续学习3天了，再接再厉！',
-        timestamp: yesterday,
-        isRead: true,
-        icon: '🏆'
-      },
-      {
-        id: 'msg_3',
-        type: 'system',
-        title: '新功能上线',
-        summary: '消息中心功能已上线，现在可以接收任务提醒和成就通知了。',
-        timestamp: twoDaysAgo,
-        isRead: true,
-        icon: '🔔'
-      }
-    ];
-  },
-  
-  /**
-   * 通知消息更新事件（内部方法）
-   * @private
-   */
+  // 触发消息更新事件
   _notifyMessageUpdate: function(messages) {
-    // 通知全局事件总线
     const app = getApp();
-    if (app.globalData.eventBus) {
-      app.globalData.eventBus.emit('messageDataChanged', messages);
+    if (app && app.globalData) {
+      if (typeof app.globalData.eventBus === 'object') {
+        app.globalData.eventBus.emit('messagesUpdated', messages);
+        logger.info('messageManager', `触发全局消息更新事件`);
+      }
     }
   }
 };

@@ -4,6 +4,8 @@
  * 提供日期相关的通用方法，如格式化日期、日期计算等
  */
 
+const logger = require('./logger');
+
 /**
  * 获取当天日期字符串
  * @returns {String} 格式为YYYY-MM-DD的日期字符串
@@ -43,7 +45,7 @@ const formatDate = function(date) {
   
   // 修正无效日期
   if (isNaN(d.getTime())) {
-    console.error('无效的日期:', date);
+    logger.error('dateUtils', '无效的日期:', date);
     return '';
   }
   
@@ -64,7 +66,7 @@ const formatTime = function(date) {
   
   // 修正无效日期
   if (isNaN(d.getTime())) {
-    console.error('无效的日期:', date);
+    logger.error('dateUtils', '无效的日期:', date);
     return '';
   }
   
@@ -100,7 +102,7 @@ const isSameDay = function(date1, date2) {
   
   // 修正无效日期
   if (isNaN(d1.getTime()) || isNaN(d2.getTime())) {
-    console.error('无效的日期比较:', date1, date2);
+    logger.error('dateUtils', '无效的日期比较:', {date1, date2});
     return false;
   }
   
@@ -154,7 +156,7 @@ const getDaysBetween = function(date1, date2) {
   
   // 修正无效日期
   if (isNaN(d1.getTime()) || isNaN(d2.getTime())) {
-    console.error('无效的日期比较:', date1, date2);
+    logger.error('dateUtils', '无效的日期比较:', {date1, date2});
     return 0;
   }
   
@@ -177,7 +179,7 @@ const getFirstDayOfWeek = function(date, firstDayOfWeek = 1) {
   
   // 修正无效日期
   if (isNaN(d.getTime())) {
-    console.error('无效的日期:', date);
+    logger.error('dateUtils', '无效的日期:', date);
     return new Date();
   }
   
@@ -198,7 +200,7 @@ const getFirstDayOfMonth = function(date) {
   
   // 修正无效日期
   if (isNaN(d.getTime())) {
-    console.error('无效的日期:', date);
+    logger.error('dateUtils', '无效的日期:', date);
     return new Date();
   }
   
@@ -215,7 +217,7 @@ const getLastDayOfMonth = function(date) {
   
   // 修正无效日期
   if (isNaN(d.getTime())) {
-    console.error('无效的日期:', date);
+    logger.error('dateUtils', '无效的日期:', date);
     return new Date();
   }
   
@@ -233,7 +235,7 @@ const addDays = function(date, days) {
   
   // 修正无效日期
   if (isNaN(d.getTime())) {
-    console.error('无效的日期:', date);
+    logger.error('dateUtils', '无效的日期:', date);
     return new Date();
   }
   
@@ -252,7 +254,7 @@ const addMonths = function(date, months) {
   
   // 修正无效日期
   if (isNaN(d.getTime())) {
-    console.error('无效的日期:', date);
+    logger.error('dateUtils', '无效的日期:', date);
     return new Date();
   }
   
@@ -261,37 +263,36 @@ const addMonths = function(date, months) {
 };
 
 /**
- * 获取指定日期的星期几
- * @param {Date|String} date - 日期
- * @returns {Number} 星期几 (0-6, 0表示星期日)
- */
-const getDayOfWeek = function(date) {
-  const d = date instanceof Date ? date : new Date(date);
-  
-  // 修正无效日期
-  if (isNaN(d.getTime())) {
-    console.error('无效的日期:', date);
-    return 0;
-  }
-  
-  return d.getDay();
-};
-
-/**
- * 获取指定日期的星期几（中文）
- * @param {Date|String} date - 日期
- * @returns {String} 星期几的中文表示
+ * 获取星期几文本
+ * @param {Date|String|Number} date - 日期或星期几的数字(0-6)
+ * @returns {String} 星期几文本
  */
 const getDayOfWeekChinese = function(date) {
-  const weekDays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
-  return weekDays[getDayOfWeek(date)];
+  let day;
+  
+  if (typeof date === 'number' && date >= 0 && date <= 6) {
+    day = date;
+  } else {
+    const d = date instanceof Date ? date : new Date(date);
+    
+    // 修正无效日期
+    if (isNaN(d.getTime())) {
+      logger.error('dateUtils', '无效的日期:', date);
+      return '';
+    }
+    
+    day = d.getDay();
+  }
+  
+  const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+  return weekdays[day];
 };
 
 /**
- * 获取指定范围内的日期数组
+ * 获取两个日期之间的所有日期数组
  * @param {Date|String} startDate - 开始日期
  * @param {Date|String} endDate - 结束日期
- * @returns {Array} 日期字符串数组 (YYYY-MM-DD格式)
+ * @returns {Array} 日期对象数组
  */
 const getDatesBetween = function(startDate, endDate) {
   const start = startDate instanceof Date ? startDate : new Date(startDate);
@@ -299,16 +300,25 @@ const getDatesBetween = function(startDate, endDate) {
   
   // 修正无效日期
   if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-    console.error('无效的日期范围:', startDate, endDate);
+    logger.error('dateUtils', '无效的日期范围:', {startDate, endDate});
     return [];
   }
   
   const dates = [];
-  let currentDate = new Date(start);
+  let current = new Date(start);
   
-  while (currentDate <= end) {
-    dates.push(formatDate(currentDate));
-    currentDate.setDate(currentDate.getDate() + 1);
+  // 重置时间为00:00:00
+  current.setHours(0, 0, 0, 0);
+  end.setHours(0, 0, 0, 0);
+  
+  // 如果开始日期晚于结束日期，返回空数组
+  if (current > end) {
+    return [];
+  }
+  
+  while (current <= end) {
+    dates.push(new Date(current));
+    current.setDate(current.getDate() + 1);
   }
   
   return dates;
@@ -317,9 +327,9 @@ const getDatesBetween = function(startDate, endDate) {
 /**
  * 检查日期是否在指定范围内
  * @param {Date|String} date - 要检查的日期
- * @param {Date|String} startDate - 开始日期
- * @param {Date|String} endDate - 结束日期
- * @returns {Boolean} 日期是否在范围内
+ * @param {Date|String} startDate - 范围开始日期
+ * @param {Date|String} endDate - 范围结束日期
+ * @returns {Boolean} 是否在范围内
  */
 const isDateInRange = function(date, startDate, endDate) {
   const d = date instanceof Date ? date : new Date(date);
@@ -328,32 +338,33 @@ const isDateInRange = function(date, startDate, endDate) {
   
   // 修正无效日期
   if (isNaN(d.getTime()) || isNaN(start.getTime()) || isNaN(end.getTime())) {
-    console.error('无效的日期范围检查:', date, startDate, endDate);
+    logger.error('dateUtils', '无效的日期比较:', {date, startDate, endDate});
     return false;
   }
   
-  // 重置时间部分，只比较日期
+  // 重置时间为00:00:00
   d.setHours(0, 0, 0, 0);
   start.setHours(0, 0, 0, 0);
-  end.setHours(23, 59, 59, 999);
+  end.setHours(0, 0, 0, 0);
   
   return d >= start && d <= end;
 };
 
 /**
- * 格式化日期为友好显示
+ * 格式化日期为友好文本
  * @param {Date|String} date - 日期
- * @returns {String} 友好的日期显示
+ * @returns {String} 友好文本，如"今天"、"明天"、"昨天"或具体日期
  */
 const formatDateFriendly = function(date) {
   const d = date instanceof Date ? date : new Date(date);
   
   // 修正无效日期
   if (isNaN(d.getTime())) {
-    console.error('无效的日期:', date);
+    logger.error('dateUtils', '无效的日期:', date);
     return '';
   }
   
+  // 判断是否为今天、明天、昨天
   if (isToday(d)) {
     return '今天';
   } else if (isTomorrow(d)) {
@@ -362,87 +373,207 @@ const formatDateFriendly = function(date) {
     return '昨天';
   }
   
-  const dayDiff = getDaysBetween(new Date(), d);
+  // 计算与今天的天数差
+  const daysDiff = getDaysBetween(new Date(), d);
   
-  if (dayDiff > 0 && dayDiff < 7) {
-    return `${dayDiff}天后`;
-  } else if (dayDiff < 0 && dayDiff > -7) {
-    return `${-dayDiff}天前`;
-  } else {
-    const year = d.getFullYear();
-    const month = d.getMonth() + 1;
-    const day = d.getDate();
-    const currentYear = new Date().getFullYear();
-    
-    if (year === currentYear) {
-      return `${month}月${day}日`;
-    } else {
-      return `${year}年${month}月${day}日`;
-    }
+  // 本周内的日期显示为星期几
+  if (daysDiff > -7 && daysDiff < 7) {
+    return getDayOfWeekChinese(d);
   }
+  
+  // 其他日期使用"月-日"格式
+  const month = d.getMonth() + 1;
+  const day = d.getDate();
+  return `${month}月${day}日`;
+};
+
+/**
+ * 获取日期的时间戳
+ * @param {Date|String} date - 日期
+ * @returns {Number} 时间戳（毫秒）
+ */
+const getTimestamp = function(date) {
+  if (!date) {
+    return Date.now();
+  }
+  
+  const d = date instanceof Date ? date : new Date(date);
+  
+  // 修正无效日期
+  if (isNaN(d.getTime())) {
+    logger.error('dateUtils', '无效的日期:', date);
+    return Date.now();
+  }
+  
+  return d.getTime();
 };
 
 /**
  * 解析日期时间字符串
- * @param {String} dateTimeStr - 日期时间字符串
- * @returns {Date} 解析后的日期对象，解析失败返回当前日期
+ * @param {String} dateTimeStr - 日期时间字符串，格式如"2023-05-20 14:30"
+ * @returns {Date} 解析后的日期对象
  */
 const parseDateTime = function(dateTimeStr) {
   if (!dateTimeStr) {
+    logger.warn('dateUtils', '日期时间字符串为空');
     return new Date();
   }
   
-  try {
-    // 尝试直接解析
-    const parsedDate = new Date(dateTimeStr);
-    if (!isNaN(parsedDate.getTime())) {
-      return parsedDate;
-    }
-    
-    // 尝试解析常见格式
-    if (dateTimeStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
-      // YYYY-MM-DD
-      const [year, month, day] = dateTimeStr.split('-').map(Number);
-      return new Date(year, month - 1, day);
-    } else if (dateTimeStr.match(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/)) {
-      // YYYY-MM-DD HH:MM
-      const [datePart, timePart] = dateTimeStr.split(' ');
-      const [year, month, day] = datePart.split('-').map(Number);
-      const [hours, minutes] = timePart.split(':').map(Number);
-      return new Date(year, month - 1, day, hours, minutes);
-    }
-    
-    // 其他格式解析失败，返回当前日期
-    console.error('无法解析日期时间字符串:', dateTimeStr);
-    return new Date();
-  } catch (error) {
-    console.error('解析日期时间字符串出错:', error);
+  // 尝试解析不同格式的日期时间字符串
+  let date;
+  
+  // 格式: YYYY-MM-DD HH:MM:SS 或 YYYY-MM-DD HH:MM
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/.test(dateTimeStr)) {
+    date = new Date(dateTimeStr.replace(/-/g, '/'));
+  }
+  // 格式: YYYY-MM-DD
+  else if (/^\d{4}-\d{2}-\d{2}$/.test(dateTimeStr)) {
+    date = new Date(dateTimeStr.replace(/-/g, '/'));
+  }
+  // 格式: HH:MM:SS 或 HH:MM，使用当天日期
+  else if (/^\d{2}:\d{2}(:\d{2})?$/.test(dateTimeStr)) {
+    const today = new Date();
+    const [hours, minutes, seconds] = dateTimeStr.split(':').map(Number);
+    date = new Date(today.getFullYear(), today.getMonth(), today.getDate(), hours, minutes, seconds || 0);
+  }
+  // 其他情况，尝试直接解析
+  else {
+    date = new Date(dateTimeStr);
+  }
+  
+  // 检查日期是否有效
+  if (isNaN(date.getTime())) {
+    logger.error('dateUtils', `无法解析日期时间字符串: ${dateTimeStr}`);
     return new Date();
   }
+  
+  return date;
 };
 
 /**
- * 计算两个时间的时间差（分钟）
+ * 获取两个时间之间的分钟差
  * @param {String} time1 - 第一个时间 (HH:MM格式)
  * @param {String} time2 - 第二个时间 (HH:MM格式)
- * @returns {Number} 分钟差（正数表示time2晚于time1，负数表示time2早于time1）
+ * @returns {Number} 分钟差
  */
 const getMinutesBetween = function(time1, time2) {
   if (!time1 || !time2) {
+    logger.error('dateUtils', `无效的时间参数: ${time1}, ${time2}`);
     return 0;
   }
   
-  try {
-    const [hours1, minutes1] = time1.split(':').map(Number);
-    const [hours2, minutes2] = time2.split(':').map(Number);
-    
-    const totalMinutes1 = hours1 * 60 + minutes1;
-    const totalMinutes2 = hours2 * 60 + minutes2;
-    
-    return totalMinutes2 - totalMinutes1;
-  } catch (error) {
-    console.error('计算时间差出错:', error);
+  // 解析时间
+  const [hours1, minutes1] = time1.split(':').map(Number);
+  const [hours2, minutes2] = time2.split(':').map(Number);
+  
+  // 检查解析结果是否有效
+  if (isNaN(hours1) || isNaN(minutes1) || isNaN(hours2) || isNaN(minutes2)) {
+    logger.error('dateUtils', `无法解析时间格式: ${time1}, ${time2}`);
     return 0;
+  }
+  
+  // 计算总分钟数
+  const totalMinutes1 = hours1 * 60 + minutes1;
+  const totalMinutes2 = hours2 * 60 + minutes2;
+  
+  return totalMinutes2 - totalMinutes1;
+};
+
+/**
+ * 获取日期对应月份的日历数据
+ * @param {Number} year - 年份
+ * @param {Number} month - 月份 (1-12)
+ * @returns {Array} 日历数据，包含前一个月、当前月和下一个月的日期
+ */
+const getMonthCalendar = function(year, month) {
+  // 修正月份参数 (0-11)
+  const monthIndex = month - 1;
+  
+  // 获取当月第一天
+  const firstDay = new Date(year, monthIndex, 1);
+  
+  // 获取当月最后一天
+  const lastDay = new Date(year, monthIndex + 1, 0);
+  
+  // 当月天数
+  const daysInMonth = lastDay.getDate();
+  
+  // 月初是星期几 (0-6，0表示周日)
+  const firstDayOfWeek = firstDay.getDay();
+  
+  // 创建日历数据
+  const calendar = [];
+  
+  // 填充上月数据
+  const prevMonthLastDay = new Date(year, monthIndex, 0).getDate();
+  for (let i = 0; i < firstDayOfWeek; i++) {
+    const day = prevMonthLastDay - firstDayOfWeek + i + 1;
+    calendar.push({
+      date: new Date(year, monthIndex - 1, day),
+      day,
+      isCurrentMonth: false,
+      isPrevMonth: true
+    });
+  }
+  
+  // 填充当月数据
+  for (let i = 1; i <= daysInMonth; i++) {
+    calendar.push({
+      date: new Date(year, monthIndex, i),
+      day: i,
+      isCurrentMonth: true
+    });
+  }
+  
+  // 填充下月数据，补满42格
+  const remainingDays = 42 - calendar.length;
+  for (let i = 1; i <= remainingDays; i++) {
+    calendar.push({
+      date: new Date(year, monthIndex + 1, i),
+      day: i,
+      isCurrentMonth: false,
+      isNextMonth: true
+    });
+  }
+  
+  return calendar;
+};
+
+/**
+ * 格式化相对时间
+ * @param {Date|String|Number} date - 日期或时间戳
+ * @returns {String} 相对时间描述，如"刚刚"、"5分钟前"、"2小时前"等
+ */
+const formatRelativeTime = function(date) {
+  const now = new Date();
+  const d = date instanceof Date ? date : new Date(date);
+  
+  // 修正无效日期
+  if (isNaN(d.getTime())) {
+    logger.error('dateUtils', '无效的日期:', date);
+    return '';
+  }
+  
+  const diffMs = now.getTime() - d.getTime();
+  const diffSeconds = Math.floor(diffMs / 1000);
+  const diffMinutes = Math.floor(diffSeconds / 60);
+  const diffHours = Math.floor(diffMinutes / 60);
+  const diffDays = Math.floor(diffHours / 24);
+  
+  if (diffSeconds < 60) {
+    return '刚刚';
+  } else if (diffMinutes < 60) {
+    return `${diffMinutes}分钟前`;
+  } else if (diffHours < 24) {
+    return `${diffHours}小时前`;
+  } else if (diffDays < 30) {
+    return `${diffDays}天前`;
+  } else {
+    // 超过30天则显示具体日期
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   }
 };
 
@@ -463,11 +594,13 @@ module.exports = {
   getLastDayOfMonth,
   addDays,
   addMonths,
-  getDayOfWeek,
   getDayOfWeekChinese,
   getDatesBetween,
   isDateInRange,
   formatDateFriendly,
+  getTimestamp,
   parseDateTime,
-  getMinutesBetween
+  getMinutesBetween,
+  getMonthCalendar,
+  formatRelativeTime
 }; 

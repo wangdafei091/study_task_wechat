@@ -5,6 +5,8 @@
  */
 
 const dateUtils = require('./dateUtils');
+const logger = require('./logger');
+const batchUtils = require('./batchUtils');
 
 /**
  * 计算任务完成率
@@ -281,12 +283,15 @@ const sortTasks = function(tasks, sortBy = 'date', ascending = true, requiredFir
 
 /**
  * 生成任务ID
- * @returns {String} 生成的唯一ID
+ * @returns {String} 任务ID
  */
 const generateTaskId = function() {
-  const timestamp = new Date().getTime();
-  const random = Math.floor(Math.random() * 10000);
-  return `task_${timestamp}_${random}`;
+  const timestamp = Date.now();
+  const random = Math.floor(Math.random() * 1000);
+  const taskId = `task_${timestamp}_${random}`;
+  
+  logger.info('taskUtils', `生成任务ID: ${taskId}`);
+  return taskId;
 };
 
 /**
@@ -331,32 +336,51 @@ const createTaskObject = function(taskData) {
 };
 
 /**
- * 计算任务逾期状态
- * @param {Object} task - 任务对象
- * @returns {Boolean} 是否逾期
+ * 判断任务是否已逾期
+ * @param {Object} task 任务对象
+ * @returns {Boolean} 是否已逾期
  */
 const isTaskOverdue = function(task) {
-  if (task.completed) return false;
-  if (!task.date) return false;
-  
-  const now = new Date();
-  const taskDate = new Date(task.date);
-  
-  // 日期逾期
-  if (taskDate < now && taskDate.toDateString() !== now.toDateString()) {
-    return true;
+  if (!task || task.status === 1) {
+    return false; // 已完成的任务不会逾期
   }
   
-  // 同一天但时间逾期
-  if (taskDate.toDateString() === now.toDateString() && task.time) {
-    const timeStr = task.time.split(':');
-    const taskDateTime = new Date();
-    taskDateTime.setHours(parseInt(timeStr[0], 10), parseInt(timeStr[1], 10), 0, 0);
+  try {
+    // 检查任务日期
+    if (!task.date) {
+      return false; // 没有日期的任务不会逾期
+    }
     
-    return taskDateTime < now;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // 今天的零点
+    
+    const taskDate = new Date(task.date);
+    taskDate.setHours(0, 0, 0, 0); // 任务日期的零点
+    
+    // 如果任务日期早于今天，且任务未完成，则认为已逾期
+    if (taskDate < today) {
+      logger.info('taskUtils', `任务已逾期: ${task.id}, 日期: ${task.date}`);
+      return true;
+    }
+    
+    // 对于今天的任务，如果有截止时间，并且当前时间已超过截止时间，也认为已逾期
+    if (taskDate.getTime() === today.getTime() && task.endTime) {
+      const now = new Date();
+      const [hours, minutes] = task.endTime.split(':').map(Number);
+      const endTime = new Date(today);
+      endTime.setHours(hours, minutes, 0, 0);
+      
+      if (now > endTime) {
+        logger.info('taskUtils', `今日任务已过截止时间: ${task.id}, 截止时间: ${task.endTime}`);
+        return true;
+      }
+    }
+    
+    return false;
+  } catch (error) {
+    logger.error('taskUtils', `检查任务逾期状态出错: ${error}`, task);
+    return false;
   }
-  
-  return false;
 };
 
 /**
@@ -592,65 +616,45 @@ const getTaskStatistics = function(tasks) {
 };
 
 /**
- * 排序今日任务列表
- * 排序规则：
- * 1. 必做全天任务优先
- * 2. 非必做全天任务次之
- * 3. 有起止时间的任务按时间顺序排列
- * 
- * @param {Array} tasks - 任务数组
+ * 按习惯优先+开始时间排序任务
+ * @param {Array} tasks 任务列表
  * @returns {Array} 排序后的任务列表
  */
 const sortTasksByHabitAndTime = function(tasks) {
   if (!tasks || tasks.length === 0) {
+    logger.info('taskUtils', '无任务可排序');
     return [];
   }
   
-  console.log('[taskUtils] 开始按新规则排序今日任务，任务数量:', tasks.length);
+  logger.info('taskUtils', `按习惯+时间排序${tasks.length}个任务`);
   
-  const sortedTasks = [...tasks];
-  
-  sortedTasks.sort((a, b) => {
-    // 获取任务属性，并处理可能的undefined值
+  return [...tasks].sort((a, b) => {
+    // 优先级：必做任务 > 普通任务
     const aRequired = a.isRequired || false;
     const bRequired = b.isRequired || false;
-    const aAllDay = a.isAllDay || false;
-    const bAllDay = b.isAllDay || false;
-    
-    // 先按全天任务排序，全天任务优先
-    if (aAllDay !== bAllDay) {
-      return aAllDay ? -1 : 1;
-    }
-    
-    // 同为全天或非全天任务，必做任务优先
     if (aRequired !== bRequired) {
-      return aRequired ? -1 : 1;
+      return aRequired ? -1 : 1; // 必做任务优先
     }
     
-    // 对于非全天任务，按开始时间升序排序
-    if (!aAllDay && !bAllDay) {
-      const aTime = a.startTime || '23:59';
-      const bTime = b.startTime || '23:59';
-      return aTime.localeCompare(bTime);
+    // 习惯任务优先（已完成的排在后面）
+    if (a.type === 'habit' && b.type !== 'habit') {
+      return a.status === 1 ? 1 : -1;  // 已完成的习惯排最后
+    }
+    if (a.type !== 'habit' && b.type === 'habit') {
+      return b.status === 1 ? -1 : 1;  // 未完成的习惯排最前
     }
     
-    // 同类型任务按创建时间排序（新任务优先）
-    const aTime = a.createTime || 0;
-    const bTime = b.createTime || 0;
-    return bTime - aTime;
+    // 已过期/即将过期任务优先 
+    // (此逻辑省略，需要实际时间计算)
+    
+    // 有开始时间的按时间排序
+    if (a.startTime && b.startTime) {
+      return a.startTime.localeCompare(b.startTime);
+    }
+    
+    // 同类型按创建时间排序
+    return (a.createTime || 0) - (b.createTime || 0);
   });
-  
-  console.log('[taskUtils] 任务排序完成，结果：', 
-    sortedTasks.map(t => ({
-      id: t.id.substring(0, 8) + '...',
-      title: t.title,
-      required: t.isRequired ? '是' : '否',
-      isAllDay: t.isAllDay ? '是' : '否',
-      startTime: t.startTime || '全天'
-    }))
-  );
-  
-  return sortedTasks;
 };
 
 module.exports = {

@@ -1,14 +1,18 @@
 /**
  * 星星管理工具 - 统一管理用户星星的获取、保存和格式化
  */
+
+const logger = require('./logger');
+const storageUtils = require('./storageUtils');
+
 const pointsManager = {
   /**
    * 获取用户星星数
    * @returns {Number} 用户星星数量，确保为整数类型
    */
   getUserPoints: function() {
-    const points = parseInt(wx.getStorageSync('userPoints') || 0, 10);
-    console.log(`[pointsManager] 获取用户星星: ${points}`);
+    const points = parseInt(storageUtils.get('userPoints', 0), 10);
+    logger.info('pointsManager', `获取用户星星: ${points}`);
     return points;
   },
 
@@ -19,8 +23,8 @@ const pointsManager = {
   saveUserPoints: function(points) {
     // 确保保存的是数字类型
     const numPoints = parseInt(points, 10);
-    wx.setStorageSync('userPoints', numPoints);
-    console.log(`[pointsManager] 保存用户星星: ${numPoints}`);
+    storageUtils.set('userPoints', numPoints);
+    logger.info('pointsManager', `保存用户星星: ${numPoints}`);
   },
 
   /**
@@ -32,7 +36,7 @@ const pointsManager = {
     const currentPoints = this.getUserPoints();
     const newPoints = currentPoints + parseInt(amount, 10);
     this.saveUserPoints(newPoints);
-    console.log(`[pointsManager] 增加星星: ${currentPoints} -> ${newPoints}, 增加: ${amount}`);
+    logger.info('pointsManager', `增加星星: ${currentPoints} -> ${newPoints}, 增加: ${amount}`);
     return newPoints;
   },
 
@@ -46,7 +50,7 @@ const pointsManager = {
     // 确保星星不会为负数
     const newPoints = Math.max(0, currentPoints - parseInt(amount, 10));
     this.saveUserPoints(newPoints);
-    console.log(`[pointsManager] 减少星星: ${currentPoints} -> ${newPoints}, 减少: ${amount}`);
+    logger.info('pointsManager', `减少星星: ${currentPoints} -> ${newPoints}, 减少: ${amount}`);
     return newPoints;
   },
 
@@ -75,10 +79,10 @@ const pointsManager = {
    * @returns {Object} 下一个奖励的信息，包含name, points, remainingStars等属性
    */
   calculateNextReward: function(rewards) {
-    console.log(`[pointsManager] 计算下一个奖励信息，共${rewards.length}个奖励配置`);
+    logger.info('pointsManager', `计算下一个奖励信息，共${rewards ? rewards.length : 0}个奖励配置`);
     
     if (!rewards || rewards.length === 0) {
-      console.log(`[pointsManager] 没有奖励配置，返回默认值`);
+      logger.warn('pointsManager', `没有奖励配置，返回默认值`);
       return {
         name: '奖品',
         points: 100,
@@ -94,11 +98,11 @@ const pointsManager = {
     
     // 过滤掉已领取的奖励，只保留未领取的奖励
     const availableRewards = rewards.filter(reward => !reward.claimed);
-    console.log(`[pointsManager] 过滤已领取奖励后，剩余可用奖励: ${availableRewards.length}个`);
+    logger.info('pointsManager', `过滤已领取奖励后，剩余可用奖励: ${availableRewards.length}个`);
     
     // 如果没有可用奖励（全部已领取），则返回默认值
     if (availableRewards.length === 0) {
-      console.log(`[pointsManager] 所有奖励都已领取，返回无穷模式`);
+      logger.info('pointsManager', `所有奖励都已领取，返回无穷模式`);
       return {
         name: '恭喜！您已领取所有奖励，可以继续积累星星',
         points: '∞',  // 使用无穷符号
@@ -151,7 +155,7 @@ const pointsManager = {
         current: userPoints
       };
       
-      console.log(`[pointsManager] 下一个奖励: ${nextReward.name}, 需要${nextReward.points}颗星星, 还差${nextReward.remainingStars}颗`);
+      logger.info('pointsManager', `下一个奖励: ${nextReward.name}, 需要${nextReward.points}颗星星, 还差${nextReward.remainingStars}颗`);
     }
     
     return nextReward;
@@ -163,17 +167,17 @@ const pointsManager = {
    * @param {Function} callback 回调函数，参数为记录数组
    */
   getStarRecords: function(callback) {
-    console.log(`[pointsManager] 开始获取星星记录`);
+    logger.info('pointsManager', `开始获取星星记录`);
     
     const records = [];
     
     // 获取任务完成记录中的星星获取记录
-    const tasks = wx.getStorageSync('taskData') || [];
+    const tasks = storageUtils.get('taskData', []);
     const completedTasks = tasks.filter(task => 
       task.status === 1 && task.starAwarded === true
     );
     
-    console.log(`[pointsManager] 从${completedTasks.length}个已完成任务中获取星星记录`);
+    logger.info('pointsManager', `从${completedTasks.length}个已完成任务中获取星星记录`);
     
     // 将任务完成记录转换为星星记录
     completedTasks.forEach(task => {
@@ -196,10 +200,10 @@ const pointsManager = {
     });
     
     // 获取奖励兑换记录中的星星使用记录
-    const rewards = wx.getStorageSync('rewards') || [];
+    const rewards = storageUtils.get('rewards', []);
     const claimedRewards = rewards.filter(reward => reward.claimed && reward.claimTime);
     
-    console.log(`[pointsManager] 从${claimedRewards.length}个已领取奖励中获取星星记录`);
+    logger.info('pointsManager', `从${claimedRewards.length}个已领取奖励中获取星星记录`);
     
     // 将奖励兑换记录转换为星星记录
     claimedRewards.forEach(reward => {
@@ -223,7 +227,7 @@ const pointsManager = {
     // 按时间戳排序，最新的在前面
     records.sort((a, b) => b.timestamp - a.timestamp);
     
-    console.log(`[pointsManager] 获取到${records.length}条星星记录`);
+    logger.info('pointsManager', `获取到${records.length}条星星记录`);
     
     // 如果提供了回调函数，通过回调返回结果
     if (typeof callback === 'function') {
@@ -239,7 +243,7 @@ const pointsManager = {
    * @returns {Array} 按月份分组的记录数组
    */
   groupRecordsByMonth: function(records) {
-    console.log(`[pointsManager] 开始按月份分组${records.length}条星星记录`);
+    logger.info('pointsManager', `开始按月份分组${records.length}条星星记录`);
     
     // 创建月份分组映射
     const monthGroups = {};
@@ -249,11 +253,11 @@ const pointsManager = {
       const date = new Date(record.timestamp);
       const year = date.getFullYear();
       const month = date.getMonth() + 1;
-      const monthKey = `${year}年${String(month).padStart(2, '0')}月`;
+      const monthKey = `${year}-${month.toString().padStart(2, '0')}`;
       
       if (!monthGroups[monthKey]) {
         monthGroups[monthKey] = {
-          month: monthKey,
+          title: `${year}年${month}月`,
           records: []
         };
       }
@@ -261,29 +265,12 @@ const pointsManager = {
       monthGroups[monthKey].records.push(record);
     });
     
-    // 将映射转换为数组，并按月份排序（最新的月份在前）
+    // 将对象转换为数组并按月份倒序排序
     const result = Object.values(monthGroups).sort((a, b) => {
-      // 提取年月并比较
-      const aMatch = a.month.match(/(\d+)年(\d+)月/);
-      const bMatch = b.month.match(/(\d+)年(\d+)月/);
-      
-      if (aMatch && bMatch) {
-        const aYear = parseInt(aMatch[1]);
-        const aMonth = parseInt(aMatch[2]);
-        const bYear = parseInt(bMatch[1]);
-        const bMonth = parseInt(bMatch[2]);
-        
-        // 先比较年，再比较月
-        if (aYear !== bYear) {
-          return bYear - aYear; // 降序排列年份
-        }
-        return bMonth - aMonth; // 降序排列月份
-      }
-      
-      return 0;
+      return b.title.localeCompare(a.title);
     });
     
-    console.log(`[pointsManager] 分组完成，共${result.length}个月份组`);
+    logger.info('pointsManager', `分组完成，共${result.length}个月份`);
     
     return result;
   }

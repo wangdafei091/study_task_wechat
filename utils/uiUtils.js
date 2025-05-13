@@ -4,6 +4,8 @@
  * 提供通用UI相关的方法，如动画效果等
  */
 
+const logger = require('./logger');
+
 /**
  * 记录UI样式优化日志
  * @param {String} component - 组件名称
@@ -11,7 +13,7 @@
  * @param {Object} details - 优化详情
  */
 const logUIOptimization = function(component, action, details = {}) {
-  console.log(`[uiUtils] 界面优化: ${component} - ${action}`, details);
+  logger.log('uiUtils', `界面优化: ${component} - ${action}`, details);
 };
 
 /**
@@ -20,7 +22,7 @@ const logUIOptimization = function(component, action, details = {}) {
  * @param {Object} changes - 变更详情
  */
 const logStyleConsistency = function(area, changes = {}) {
-  console.log(`[uiUtils] 样式一致性: ${area}`, changes);
+  logger.log('uiUtils', `样式一致性: ${area}`, changes);
 };
 
 /**
@@ -53,7 +55,7 @@ const getCurrentTheme = function() {
  * @returns {String} 颜色值或类名
  */
 const getPressureLevelStyle = function(level, style = 'bg') {
-  console.log(`[uiUtils] 获取压力级别${level}的${style}样式`);
+  logger.log('uiUtils', `获取压力级别${level}的${style}样式`);
   
   const styleMap = {
     1: { // 轻松
@@ -106,7 +108,7 @@ const getPressureLevelText = function(pressure) {
   let levelNum = 1;
   let isHigh = false;
   
-  console.log(`[uiUtils] 计算压力级别，当前压力值：${pressure}（小学低年级标准）`);
+  logger.log('uiUtils', `计算压力级别，当前压力值：${pressure}（小学低年级标准）`);
   
   if (pressure <= 15) {
     levelText = '轻松';
@@ -128,53 +130,78 @@ const getPressureLevelText = function(pressure) {
 };
 
 /**
- * 切换组件显示状态
+ * 切换组件状态 - 统一的状态管理函数
  * @param {Object} page - 页面实例
- * @param {String} componentName - 组件的数据路径，如'isAddPanelVisible'
- * @param {Boolean} status - 要设置的状态，不提供则切换当前状态
+ * @param {String} dataKey - 状态数据的路径
+ * @param {*} value - 要设置的值，不提供则切换布尔值
+ * @param {Object} options - 额外选项
+ * @returns {*} 设置后的状态值
  */
-const toggleComponent = function(page, componentName, status) {
+const updateState = function(page, dataKey, value, options = {}) {
   if (typeof page !== 'object' || !page.setData) {
-    console.log('[uiUtils] 无效的页面实例');
-    return;
+    logger.error('uiUtils', `无效的页面实例`);
+    return null;
   }
   
-  // 如果没有提供状态，则切换当前状态
-  if (typeof status === 'undefined') {
-    const currentStatus = page.data[componentName];
-    page.setData({
-      [componentName]: !currentStatus
-    });
-    return !currentStatus;
+  const currentValue = page.data[dataKey];
+  let newValue;
+  
+  // 如果没有提供值，且当前值是布尔类型，则切换布尔值
+  if (value === undefined) {
+    if (typeof currentValue === 'boolean') {
+      newValue = !currentValue;
+    } else {
+      logger.warn('uiUtils', `当前值不是布尔类型，无法切换: ${dataKey}`);
+      return currentValue;
+    }
+  } else {
+    newValue = value;
   }
   
-  // 设置为指定状态
+  // 更新数据
   page.setData({
-    [componentName]: status
+    [dataKey]: newValue
   });
   
-  return status;
+  logger.log('uiUtils', `状态更新: ${dataKey} = ${newValue}`);
+  
+  // 如果有回调，则调用
+  if (options.callback && typeof options.callback === 'function') {
+    options.callback(newValue);
+  }
+  
+  return newValue;
 };
 
 /**
- * 切换遮罩层状态
+ * 切换组件显示状态 (保留向后兼容)
+ * @param {Object} page - 页面实例
+ * @param {String} componentName - 组件的数据路径
+ * @param {Boolean} status - 要设置的状态，不提供则切换当前状态
+ */
+const toggleComponent = function(page, componentName, status) {
+  return updateState(page, componentName, status);
+};
+
+/**
+ * 切换遮罩层状态 (保留向后兼容)
  * @param {Object} page - 页面实例
  * @param {Boolean} status - 要设置的状态，不提供则切换当前状态
  * @returns {Boolean} 设置后的状态
  */
 const toggleMask = function(page, status) {
-  return toggleComponent(page, 'isMaskVisible', status);
+  return updateState(page, 'isMaskVisible', status);
 };
 
 /**
- * 显示加载状态
+ * 显示加载状态 (保留向后兼容)
  * @param {Object} page - 页面实例
  * @param {String} loadingKey - 加载状态的数据路径，如'isLoading'
  * @param {Boolean} status - 要设置的状态
  * @returns {Boolean} 设置后的状态
  */
 const setLoading = function(page, loadingKey = 'isLoading', status = true) {
-  return toggleComponent(page, loadingKey, status);
+  return updateState(page, loadingKey, status);
 };
 
 /**
@@ -199,7 +226,7 @@ const scrollToElement = function(selector, context, offset = 0) {
       }
     });
   } catch (e) {
-    console.log('[uiUtils] 滚动到元素失败', e);
+    logger.error('uiUtils', `滚动到元素失败: ${selector}`, e);
   }
 };
 
@@ -221,53 +248,100 @@ const createAnimation = function(options = {}) {
 };
 
 /**
- * 显示滑入动画
+ * 统一的滑动动画处理函数
+ * @param {Object} page - 页面实例
+ * @param {String} animationKey - 动画数据的路径
+ * @param {Object} options - 动画选项
+ * @param {String} options.type - 动画类型: 'in'=滑入, 'out'=滑出
+ * @param {String} options.direction - 方向: 'left', 'right', 'top', 'bottom'
+ * @param {Number} options.distance - 滑动距离(px)
+ * @param {Number} options.duration - 动画时长(ms)
+ * @param {Number} options.delay - 延迟执行时间(ms)
+ * @param {Function} options.callback - 动画完成后的回调函数
+ */
+const slideAnimation = function(page, animationKey, options = {}) {
+  if (typeof page !== 'object' || !page.setData) {
+    logger.error('uiUtils', '无效的页面实例');
+    return;
+  }
+  
+  const {
+    type = 'in',
+    direction = 'bottom',
+    distance = 300,
+    duration = 300,
+    delay = 50,
+    callback
+  } = options;
+  
+  const animation = createAnimation({ duration: type === 'in' ? 0 : duration });
+  let initialX = 0, initialY = 0;
+  let targetX = 0, targetY = 0;
+  
+  // 设置初始位置或目标位置
+  switch(direction) {
+    case 'left':
+      initialX = type === 'in' ? -distance : 0;
+      targetX = type === 'in' ? 0 : -distance;
+      break;
+    case 'right':
+      initialX = type === 'in' ? distance : 0;
+      targetX = type === 'in' ? 0 : distance;
+      break;
+    case 'top':
+      initialY = type === 'in' ? -distance : 0;
+      targetY = type === 'in' ? 0 : -distance;
+      break;
+    case 'bottom':
+    default:
+      initialY = type === 'in' ? distance : 0;
+      targetY = type === 'in' ? 0 : distance;
+      break;
+  }
+  
+  logger.log('uiUtils', `执行${type === 'in' ? '滑入' : '滑出'}动画: ${direction}方向, 距离${distance}px`);
+  
+  if (type === 'in') {
+    // 滑入：先设置初始位置，然后动画到目标位置
+    animation.translateX(initialX).translateY(initialY).step();
+    page.setData({ [animationKey]: animation.export() });
+    
+    setTimeout(() => {
+      animation.translateX(targetX).translateY(targetY).step({ duration });
+      page.setData({ [animationKey]: animation.export() });
+      
+      if (callback && typeof callback === 'function') {
+        setTimeout(callback, duration);
+      }
+    }, delay);
+  } else {
+    // 滑出：直接动画到目标位置
+    animation.translateX(targetX).translateY(targetY).step();
+    page.setData({ [animationKey]: animation.export() });
+    
+    if (callback && typeof callback === 'function') {
+      setTimeout(callback, duration);
+    }
+  }
+};
+
+/**
+ * 显示滑入动画 (保留向后兼容)
  * @param {Object} page - 页面实例
  * @param {String} animationKey - 动画数据的路径
  * @param {String} direction - 滑入方向，可选值：'left', 'right', 'top', 'bottom'
  * @param {Number} distance - 滑动距离(px)
  */
 const slideInAnimation = function(page, animationKey, direction = 'bottom', distance = 300) {
-  if (typeof page !== 'object' || !page.setData) {
-    console.error('无效的页面实例');
-    return;
-  }
-  
-  const animation = createAnimation();
-  
-  // 设置初始位置
-  switch(direction) {
-    case 'left':
-      animation.translateX(-distance).step({ duration: 0 });
-      break;
-    case 'right':
-      animation.translateX(distance).step({ duration: 0 });
-      break;
-    case 'top':
-      animation.translateY(-distance).step({ duration: 0 });
-      break;
-    case 'bottom':
-    default:
-      animation.translateY(distance).step({ duration: 0 });
-      break;
-  }
-  
-  // 应用初始位置
-  page.setData({
-    [animationKey]: animation.export()
+  slideAnimation(page, animationKey, {
+    type: 'in',
+    direction,
+    distance
   });
-  
-  // 延迟一帧后执行滑入动画
-  setTimeout(() => {
-    animation.translateX(0).translateY(0).step({ duration: 300 });
-    page.setData({
-      [animationKey]: animation.export()
-    });
-  }, 50);
 };
 
 /**
- * 显示滑出动画
+ * 显示滑出动画 (保留向后兼容)
  * @param {Object} page - 页面实例
  * @param {String} animationKey - 动画数据的路径
  * @param {String} direction - 滑出方向，可选值：'left', 'right', 'top', 'bottom'
@@ -275,39 +349,12 @@ const slideInAnimation = function(page, animationKey, direction = 'bottom', dist
  * @param {Function} callback - 动画完成后的回调函数
  */
 const slideOutAnimation = function(page, animationKey, direction = 'bottom', distance = 300, callback) {
-  if (typeof page !== 'object' || !page.setData) {
-    console.error('无效的页面实例');
-    return;
-  }
-  
-  const animation = createAnimation();
-  
-  // 执行滑出动画
-  switch(direction) {
-    case 'left':
-      animation.translateX(-distance).step({ duration: 300 });
-      break;
-    case 'right':
-      animation.translateX(distance).step({ duration: 300 });
-      break;
-    case 'top':
-      animation.translateY(-distance).step({ duration: 300 });
-      break;
-    case 'bottom':
-    default:
-      animation.translateY(distance).step({ duration: 300 });
-      break;
-  }
-  
-  // 应用动画
-  page.setData({
-    [animationKey]: animation.export()
+  slideAnimation(page, animationKey, {
+    type: 'out',
+    direction,
+    distance,
+    callback
   });
-  
-  // 动画完成后执行回调
-  if (typeof callback === 'function') {
-    setTimeout(callback, 300);
-  }
 };
 
 /**
@@ -349,7 +396,7 @@ const formatProgressColor = function(progress) {
  * @param {Object} layoutInfo - 布局信息
  */
 const logButtonLayoutOptimization = function(page, layoutInfo = {}) {
-  console.log(`[uiUtils] 按钮布局优化: ${page}`, layoutInfo);
+  logger.log('uiUtils', `按钮布局优化: ${page}`, layoutInfo);
 };
 
 module.exports = {
@@ -360,12 +407,14 @@ module.exports = {
   setLoading,
   scrollToElement,
   createAnimation,
+  slideAnimation,
   slideInAnimation,
   slideOutAnimation,
   formatTaskTypeIcon,
   formatProgressColor,
   getPressureLevelStyle,
   getPressureLevelText,
+  updateState,
   logUIOptimization,
   logStyleConsistency,
   logButtonLayoutOptimization
