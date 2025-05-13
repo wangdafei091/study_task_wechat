@@ -1,9 +1,14 @@
 // app.js
 const unitUtils = require('./utils/unit.js');
 const taskManager = require('./utils/taskManager.js');
+const storageUtils = require('./utils/storageUtils.js'); // 引入存储工具
 
 App({
   onLaunch: function () {
+    // 初始化存储数据
+    console.log('[App] 初始化存储数据');
+    storageUtils.initializeStorageIfNeeded();
+    
     // 初始化事件总线
     this.initEventBus();
     

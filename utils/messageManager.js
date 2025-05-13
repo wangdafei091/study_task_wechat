@@ -155,70 +155,80 @@ const messageManager = {
   // 添加消息
   addMessage: function(message) {
     // 获取现有消息
-    storageUtils.getAsync('messageData', (messages) => {
-      messages = messages || [];
-      
-      // 检查是否已存在相同类型、相同任务的未读消息(去重)
-      const existingSimilarMessage = messages.find(msg => 
-        msg.type === 'task' && 
-        msg.taskId === message.taskId && 
-        msg.notificationType === message.notificationType &&
-        !msg.isRead
-      );
-      
-      // 如果已存在相似消息，更新它而不是添加新消息
-      if (existingSimilarMessage) {
-        messages = messages.map(msg => {
-          if (msg.id === existingSimilarMessage.id) {
-            return {
-              ...message,
-              id: msg.id // 保持原消息ID
-            };
-          }
-          return msg;
+    storageUtils.getAsync('messageData', [])
+      .then(messages => {
+        // 检查是否已存在相同类型、相同任务的未读消息(去重)
+        const existingSimilarMessage = messages.find(msg => 
+          msg.type === 'task' && 
+          msg.taskId === message.taskId && 
+          msg.notificationType === message.notificationType &&
+          !msg.isRead
+        );
+        
+        // 如果已存在相似消息，更新它而不是添加新消息
+        if (existingSimilarMessage) {
+          messages = messages.map(msg => {
+            if (msg.id === existingSimilarMessage.id) {
+              return {
+                ...message,
+                id: msg.id // 保持原消息ID
+              };
+            }
+            return msg;
+          });
+          logger.info('messageManager', `更新现有消息: ${existingSimilarMessage.id}`);
+        } else {
+          // 添加新消息
+          messages.unshift(message);
+          logger.info('messageManager', `添加新消息: ${message.id}`);
+        }
+        
+        // 保存到本地存储
+        storageUtils.setAsync('messageData', messages, () => {
+          // 触发全局消息更新事件
+          this._notifyMessageUpdate(messages);
         });
-        logger.info('messageManager', `更新现有消息: ${existingSimilarMessage.id}`);
-      } else {
-        // 添加新消息
-        messages.unshift(message);
-        logger.info('messageManager', `添加新消息: ${message.id}`);
-      }
-      
-      // 保存到本地存储
-      storageUtils.setAsync('messageData', messages, () => {
-        // 触发全局消息更新事件
-        this._notifyMessageUpdate(messages);
+      })
+      .catch(err => {
+        logger.error('messageManager', '获取消息数据失败', err);
+        // 创建新消息数组并添加消息
+        const messages = [message];
+        storageUtils.setAsync('messageData', messages, () => {
+          this._notifyMessageUpdate(messages);
+        });
       });
-    });
   },
   
   // 更新与任务相关的消息
   updateTaskMessages: function(task) {
-    storageUtils.getAsync('messageData', (messages) => {
-      messages = messages || [];
-      let updated = false;
-      
-      // 更新与此任务相关的消息
-      const updatedMessages = messages.map(msg => {
-        if (msg.type === 'task' && msg.taskId === task.id) {
-          // 更新消息中的任务标题
-          if (msg.summary.includes('"')) {
-            msg.summary = msg.summary.replace(/"([^"]+)"/, `"${task.title}"`);
-            updated = true;
-            logger.info('messageManager', `更新消息内容: ${msg.id}`);
+    storageUtils.getAsync('messageData', [])
+      .then(messages => {
+        let updated = false;
+        
+        // 更新与此任务相关的消息
+        const updatedMessages = messages.map(msg => {
+          if (msg.type === 'task' && msg.taskId === task.id) {
+            // 更新消息中的任务标题
+            if (msg.summary.includes('"')) {
+              msg.summary = msg.summary.replace(/"([^"]+)"/, `"${task.title}"`);
+              updated = true;
+              logger.info('messageManager', `更新消息内容: ${msg.id}`);
+            }
           }
-        }
-        return msg;
-      });
-      
-      if (updated) {
-        // 保存更新后的消息
-        storageUtils.setAsync('messageData', updatedMessages, () => {
-          // 触发全局消息更新事件
-          this._notifyMessageUpdate(updatedMessages);
+          return msg;
         });
-      }
-    });
+        
+        if (updated) {
+          // 保存更新后的消息
+          storageUtils.setAsync('messageData', updatedMessages, () => {
+            // 触发全局消息更新事件
+            this._notifyMessageUpdate(updatedMessages);
+          });
+        }
+      })
+      .catch(err => {
+        logger.error('messageManager', '更新任务消息失败', err);
+      });
   },
   
   // 删除与任务相关的消息
@@ -233,39 +243,50 @@ const messageManager = {
     
     logger.info('messageManager', `开始删除任务消息: ${taskId}`);
     
-    storageUtils.getAsync('messageData', (messages) => {
-      messages = messages || [];
-      let originalCount = messages.length;
-      
-      // 过滤掉所有与此任务相关的消息
-      const filteredMessages = messages.filter(msg => !(msg.type === 'task' && msg.taskId === taskId));
-      const deletedCount = originalCount - filteredMessages.length;
-      
-      logger.info('messageManager', `删除了${deletedCount}条与任务${taskId}相关的消息`);
-      
-      if (deletedCount > 0) {
-        // 保存更新后的消息列表
-        storageUtils.setAsync('messageData', filteredMessages, () => {
-          // 触发全局消息更新事件
-          this._notifyMessageUpdate(filteredMessages);
-          
+    storageUtils.getAsync('messageData', [])
+      .then(messages => {
+        let originalCount = messages.length;
+        
+        // 过滤掉所有与此任务相关的消息
+        const filteredMessages = messages.filter(msg => !(msg.type === 'task' && msg.taskId === taskId));
+        const deletedCount = originalCount - filteredMessages.length;
+        
+        logger.info('messageManager', `删除了${deletedCount}条与任务${taskId}相关的消息`);
+        
+        if (deletedCount > 0) {
+          // 保存更新后的消息列表
+          storageUtils.setAsync('messageData', filteredMessages, () => {
+            // 触发全局消息更新事件
+            this._notifyMessageUpdate(filteredMessages);
+            
+            if (typeof callback === 'function') {
+              callback(deletedCount);
+            }
+          });
+        } else {
           if (typeof callback === 'function') {
-            callback(deletedCount);
+            callback(0);
           }
-        });
-      } else {
+        }
+      })
+      .catch(err => {
+        logger.error('messageManager', '删除任务消息失败', err);
         if (typeof callback === 'function') {
           callback(0);
         }
-      }
-    });
+      });
   },
   
   // 获取所有消息
   getAllMessages: function(callback) {
-    storageUtils.getAsync('messageData', (messages) => {
-      callback(messages || []);
-    });
+    storageUtils.getAsync('messageData', [])
+      .then(messages => {
+        callback(messages);
+      })
+      .catch(err => {
+        logger.error('messageManager', '获取所有消息失败', err);
+        callback([]);
+      });
   },
   
   // 获取未读消息数量
@@ -279,119 +300,140 @@ const messageManager = {
   
   // 标记消息为已读
   markAsRead: function(messageId, callback) {
-    storageUtils.getAsync('messageData', (messages) => {
-      if (!messages || messages.length === 0) {
-        logger.warn('messageManager', `没有消息可标记为已读`);
-        if (typeof callback === 'function') {
-          callback(false);
-        }
-        return;
-      }
-      
-      let updated = false;
-      
-      // 更新指定消息的已读状态
-      const updatedMessages = messages.map(msg => {
-        if (msg.id === messageId && !msg.isRead) {
-          updated = true;
-          logger.info('messageManager', `标记消息为已读: ${messageId}`);
-          return { ...msg, isRead: true };
-        }
-        return msg;
-      });
-      
-      if (updated) {
-        storageUtils.setAsync('messageData', updatedMessages, () => {
-          // 触发全局消息更新事件
-          this._notifyMessageUpdate(updatedMessages);
-          
+    storageUtils.getAsync('messageData', [])
+      .then(messages => {
+        if (messages.length === 0) {
+          logger.warn('messageManager', `没有消息可标记为已读`);
           if (typeof callback === 'function') {
-            callback(true);
+            callback(false);
           }
+          return;
+        }
+        
+        let updated = false;
+        
+        // 更新指定消息的已读状态
+        const updatedMessages = messages.map(msg => {
+          if (msg.id === messageId && !msg.isRead) {
+            updated = true;
+            logger.info('messageManager', `标记消息为已读: ${messageId}`);
+            return { ...msg, isRead: true };
+          }
+          return msg;
         });
-      } else {
+        
+        if (updated) {
+          storageUtils.setAsync('messageData', updatedMessages, () => {
+            // 触发全局消息更新事件
+            this._notifyMessageUpdate(updatedMessages);
+            
+            if (typeof callback === 'function') {
+              callback(true);
+            }
+          });
+        } else {
+          if (typeof callback === 'function') {
+            callback(false);
+          }
+        }
+      })
+      .catch(err => {
+        logger.error('messageManager', '标记消息已读失败', err);
         if (typeof callback === 'function') {
           callback(false);
         }
-      }
-    });
+      });
   },
   
   // 标记所有消息为已读
   markAllAsRead: function(callback) {
-    storageUtils.getAsync('messageData', (messages) => {
-      if (!messages || messages.length === 0) {
-        logger.warn('messageManager', `没有消息可标记为已读`);
+    storageUtils.getAsync('messageData', [])
+      .then(messages => {
+        if (messages.length === 0) {
+          logger.warn('messageManager', `没有消息可标记为已读`);
+          if (typeof callback === 'function') {
+            callback(0);
+          }
+          return;
+        }
+        
+        // 检查是否有未读消息
+        const unreadCount = messages.filter(msg => !msg.isRead).length;
+        
+        if (unreadCount === 0) {
+          logger.info('messageManager', `所有消息已经是已读状态`);
+          if (typeof callback === 'function') {
+            callback(0);
+          }
+          return;
+        }
+        
+        // 更新所有消息的已读状态
+        const updatedMessages = messages.map(msg => {
+          if (!msg.isRead) {
+            return { ...msg, isRead: true };
+          }
+          return msg;
+        });
+        
+        storageUtils.setAsync('messageData', updatedMessages, () => {
+          logger.info('messageManager', `标记全部${unreadCount}条消息为已读`);
+          
+          // 触发全局消息更新事件
+          this._notifyMessageUpdate(updatedMessages);
+          
+          if (typeof callback === 'function') {
+            callback(unreadCount);
+          }
+        });
+      })
+      .catch(err => {
+        logger.error('messageManager', '标记所有消息已读失败', err);
         if (typeof callback === 'function') {
           callback(0);
         }
-        return;
-      }
-      
-      // 检查是否有未读消息
-      const unreadCount = messages.filter(msg => !msg.isRead).length;
-      
-      if (unreadCount === 0) {
-        logger.info('messageManager', `所有消息已经是已读状态`);
-        if (typeof callback === 'function') {
-          callback(0);
-        }
-        return;
-      }
-      
-      // 更新所有消息的已读状态
-      const updatedMessages = messages.map(msg => {
-        if (!msg.isRead) {
-          return { ...msg, isRead: true };
-        }
-        return msg;
       });
-      
-      storageUtils.setAsync('messageData', updatedMessages, () => {
-        logger.info('messageManager', `标记全部${unreadCount}条消息为已读`);
-        
-        // 触发全局消息更新事件
-        this._notifyMessageUpdate(updatedMessages);
-        
-        if (typeof callback === 'function') {
-          callback(unreadCount);
-        }
-      });
-    });
   },
   
   // 删除指定的消息
   deleteMessage: function(messageId, callback) {
-    storageUtils.getAsync('messageData', (messages) => {
-      if (!messages || messages.length === 0) {
-        logger.warn('messageManager', `没有消息可删除`);
-        if (typeof callback === 'function') {
-          callback(false);
-        }
-        return;
-      }
-      
-      // 过滤掉要删除的消息
-      const filteredMessages = messages.filter(msg => msg.id !== messageId);
-      
-      if (filteredMessages.length < messages.length) {
-        storageUtils.setAsync('messageData', filteredMessages, () => {
-          logger.info('messageManager', `删除消息: ${messageId}`);
-          
-          // 触发全局消息更新事件
-          this._notifyMessageUpdate(filteredMessages);
-          
+    storageUtils.getAsync('messageData', [])
+      .then(messages => {
+        if (messages.length === 0) {
+          logger.warn('messageManager', `没有消息可删除`);
           if (typeof callback === 'function') {
-            callback(true);
+            callback(false);
           }
-        });
-      } else {
-        logger.warn('messageManager', `未找到要删除的消息: ${messageId}`);
+          return;
+        }
+        
+        // 过滤掉要删除的消息
+        const filteredMessages = messages.filter(msg => msg.id !== messageId);
+        
+        if (filteredMessages.length < messages.length) {
+          storageUtils.setAsync('messageData', filteredMessages, () => {
+            logger.info('messageManager', `删除消息: ${messageId}`);
+            
+            // 触发全局消息更新事件
+            this._notifyMessageUpdate(filteredMessages);
+            
+            if (typeof callback === 'function') {
+              callback(true);
+            }
+          });
+        } else {
+          logger.warn('messageManager', `未找到要删除的消息: ${messageId}`);
+          if (typeof callback === 'function') {
+            callback(false);
+          }
+        }
+      })
+      .catch(err => {
+        logger.error('messageManager', '删除消息失败', err);
         if (typeof callback === 'function') {
           callback(false);
         }
-      }
-    });
+      });
   },
   
   // 清空所有消息

@@ -17,69 +17,76 @@ const taskManager = {
    * @param {Function} callback 回调函数，参数为任务数组
    */
   getAllTasks(callback) {
-    storageUtils.getAsync('taskData', (data) => {
-      const allTasks = [];
-      
-      if (data && data.length > 0) {
-        // 确保每个学习类任务都有开始时间和结束时间
-        data.forEach(task => {
-          // 移除难度字段
-          const { difficulty, ...taskWithoutDifficulty } = task;
-          
-          // 确保有积分有效期字段，但不要覆盖已有值
-          if (!taskWithoutDifficulty.pointsExpiry) {
-            taskWithoutDifficulty.pointsExpiry = 'permanent'; // 默认为永久
-            logger.info('taskManager', `为任务 ${taskWithoutDifficulty.id} 添加默认积分有效期: permanent`);
-          }
-          
-          if (taskWithoutDifficulty.pointsValidPeriod && !taskWithoutDifficulty.pointsExpiry) {
-            // 兼容旧数据，将pointsValidPeriod转换为pointsExpiry
-            taskWithoutDifficulty.pointsExpiry = taskWithoutDifficulty.pointsValidPeriod;
-            logger.info('taskManager', `转换旧格式积分有效期: ${taskWithoutDifficulty.pointsExpiry}`);
-          }
-          
-          if (taskWithoutDifficulty.type === 'study') {
-            // 如果没有开始时间，设置默认值
-            if (!taskWithoutDifficulty.startTime) {
-              taskWithoutDifficulty.startTime = '08:00';
-            }
-            // 如果没有结束时间，根据开始时间和持续时间计算
-            if (!taskWithoutDifficulty.endTime && taskWithoutDifficulty.duration) {
-              const [hours, minutes] = taskWithoutDifficulty.startTime.split(':').map(Number);
-              let endMinutes = minutes + taskWithoutDifficulty.duration;
-              let endHours = hours + Math.floor(endMinutes / 60);
-              endMinutes = endMinutes % 60;
-              taskWithoutDifficulty.endTime = `${endHours.toString().padStart(2, '0')}:${endMinutes.toString().padStart(2, '0')}`;
-            }
-            // 计算持续时间
-            if (taskWithoutDifficulty.startTime && taskWithoutDifficulty.endTime) {
-              const [startHours, startMinutes] = taskWithoutDifficulty.startTime.split(':').map(Number);
-              const [endHours, endMinutes] = taskWithoutDifficulty.endTime.split(':').map(Number);
-              const startTotalMinutes = startHours * 60 + startMinutes;
-              const endTotalMinutes = endHours * 60 + endMinutes;
-              taskWithoutDifficulty.duration = endTotalMinutes - startTotalMinutes;
-            }
-          }
-          
-          allTasks.push(taskWithoutDifficulty);
-        });
+    storageUtils.getAsync('taskData', [])
+      .then(data => {
+        const allTasks = [];
         
-        // 回调返回所有任务
-        if (typeof callback === 'function') {
-          callback(allTasks);
+        if (data && data.length > 0) {
+          // 确保每个学习类任务都有开始时间和结束时间
+          data.forEach(task => {
+            // 移除难度字段
+            const { difficulty, ...taskWithoutDifficulty } = task;
+            
+            // 确保有积分有效期字段，但不要覆盖已有值
+            if (!taskWithoutDifficulty.pointsExpiry) {
+              taskWithoutDifficulty.pointsExpiry = 'permanent'; // 默认为永久
+              logger.info('taskManager', `为任务 ${taskWithoutDifficulty.id} 添加默认积分有效期: permanent`);
+            }
+            
+            if (taskWithoutDifficulty.pointsValidPeriod && !taskWithoutDifficulty.pointsExpiry) {
+              // 兼容旧数据，将pointsValidPeriod转换为pointsExpiry
+              taskWithoutDifficulty.pointsExpiry = taskWithoutDifficulty.pointsValidPeriod;
+              logger.info('taskManager', `转换旧格式积分有效期: ${taskWithoutDifficulty.pointsExpiry}`);
+            }
+            
+            if (taskWithoutDifficulty.type === 'study') {
+              // 如果没有开始时间，设置默认值
+              if (!taskWithoutDifficulty.startTime) {
+                taskWithoutDifficulty.startTime = '08:00';
+              }
+              // 如果没有结束时间，根据开始时间和持续时间计算
+              if (!taskWithoutDifficulty.endTime && taskWithoutDifficulty.duration) {
+                const [hours, minutes] = taskWithoutDifficulty.startTime.split(':').map(Number);
+                let endMinutes = minutes + taskWithoutDifficulty.duration;
+                let endHours = hours + Math.floor(endMinutes / 60);
+                endMinutes = endMinutes % 60;
+                taskWithoutDifficulty.endTime = `${endHours.toString().padStart(2, '0')}:${endMinutes.toString().padStart(2, '0')}`;
+              }
+              // 计算持续时间
+              if (taskWithoutDifficulty.startTime && taskWithoutDifficulty.endTime) {
+                const [startHours, startMinutes] = taskWithoutDifficulty.startTime.split(':').map(Number);
+                const [endHours, endMinutes] = taskWithoutDifficulty.endTime.split(':').map(Number);
+                const startTotalMinutes = startHours * 60 + startMinutes;
+                const endTotalMinutes = endHours * 60 + endMinutes;
+                taskWithoutDifficulty.duration = endTotalMinutes - startTotalMinutes;
+              }
+            }
+            
+            allTasks.push(taskWithoutDifficulty);
+          });
+          
+          // 回调返回所有任务
+          if (typeof callback === 'function') {
+            callback(allTasks);
+          }
+          
+          // 同时更新全局数据
+          const app = getApp();
+          if (app && app.globalData) {
+            app.globalData.tasks = allTasks;
+          }
+        } else {
+          if (typeof callback === 'function') {
+            callback([]);
+          }
         }
-        
-        // 同时更新全局数据
-        const app = getApp();
-        if (app && app.globalData) {
-          app.globalData.tasks = allTasks;
-        }
-      } else {
+      })
+      .catch(err => {
+        logger.error('taskManager', '获取任务数据失败', err);
         if (typeof callback === 'function') {
           callback([]);
         }
-      }
-    }, []);
+      });
   },
   
   /**

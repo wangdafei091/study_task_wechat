@@ -47,24 +47,50 @@ const storageUtils = {
   /**
    * 异步获取存储数据
    * @param {String} key 存储键名
+   * @param {*} defaultValue 默认值，当数据不存在时返回
+   * @returns {Promise} 返回Promise对象
+   */
+  getAsync: function(key, defaultValue = null) {
+    return new Promise((resolve, reject) => {
+      wx.getStorage({
+        key: key,
+        success: (res) => {
+          logger.info('storageUtils', `成功获取存储键 ${key}`);
+          resolve(res.data);
+        },
+        fail: (err) => {
+          // 如果是键不存在错误，返回默认值并创建该键
+          if (err.errMsg && err.errMsg.indexOf('data not found') !== -1) {
+            logger.info('storageUtils', `键 ${key} 不存在，初始化为默认值`);
+            this.setAsync(key, defaultValue);
+            resolve(defaultValue);
+          } else {
+            logger.error('storageUtils', `异步获取存储键 ${key} 失败`, err);
+            reject(err);
+          }
+        }
+      });
+    });
+  },
+
+  /**
+   * 兼容旧版API的异步获取方法
+   * @param {String} key 存储键名
    * @param {Function} callback 回调函数
    * @param {*} defaultValue 默认值，当数据不存在时返回
    */
-  getAsync: function(key, callback, defaultValue = null) {
-    wx.getStorage({
-      key: key,
-      success: (res) => {
+  getAsyncWithCallback: function(key, callback, defaultValue = null) {
+    this.getAsync(key, defaultValue)
+      .then(data => {
         if (typeof callback === 'function') {
-          callback(res.data);
+          callback(data);
         }
-      },
-      fail: (e) => {
-        logger.error('storageUtils', `异步获取存储键 ${key} 失败`, e);
+      })
+      .catch(err => {
         if (typeof callback === 'function') {
           callback(defaultValue);
         }
-      }
-    });
+      });
   },
 
   /**
@@ -119,6 +145,46 @@ const storageUtils = {
       return true;
     } catch (e) {
       logger.error('storageUtils', '清除所有存储失败', e);
+      return false;
+    }
+  },
+  
+  /**
+   * 检查并初始化必要的存储数据
+   * 应用启动时调用，确保关键数据结构存在
+   */
+  initializeStorageIfNeeded: function() {
+    logger.info('storageUtils', '检查并初始化存储数据');
+    
+    try {
+      // 初始化任务数据
+      if (!wx.getStorageSync('taskData')) {
+        logger.info('storageUtils', '初始化任务数据');
+        wx.setStorageSync('taskData', []);
+      }
+      
+      // 初始化消息数据
+      if (!wx.getStorageSync('messageData')) {
+        logger.info('storageUtils', '初始化消息数据');
+        wx.setStorageSync('messageData', []);
+      }
+      
+      // 初始化用户积分
+      if (!wx.getStorageSync('userPoints')) {
+        logger.info('storageUtils', '初始化用户积分');
+        wx.setStorageSync('userPoints', 0);
+      }
+      
+      // 初始化已领取奖励数据
+      if (!wx.getStorageSync('claimedRewards')) {
+        logger.info('storageUtils', '初始化已领取奖励数据');
+        wx.setStorageSync('claimedRewards', []);
+      }
+      
+      logger.info('storageUtils', '存储数据初始化完成');
+      return true;
+    } catch (e) {
+      logger.error('storageUtils', '初始化存储数据失败', e);
       return false;
     }
   }
