@@ -1113,22 +1113,5 @@ Page({
     } catch (err) {
       console.error('[分析页] 初始化习惯跟踪图表组件出错:', err);
     }
-  },
-  
-  /**
-   * 处理日历日期选择事件
-   */
-  onCalendarDateSelected: function(e) {
-    const selectedDate = e.detail.date;
-    console.log('[分析页] 日历选择日期:', selectedDate);
-    
-    // 你可以在这里添加日期选择后的处理逻辑
-    // 例如展示当天的星星获取详情等
-    
-    wx.showToast({
-      title: `已选择: ${selectedDate}`,
-      icon: 'none',
-      duration: 1500
-    });
   }
 }) 

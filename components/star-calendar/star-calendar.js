@@ -23,8 +23,8 @@ Component({
     monthText: '',
     weekDayLabels: ['日', '一', '二', '三', '四', '五', '六'],
     calendarDays: [],
-    selectedDate: '',
-    touchStartX: 0
+    touchStartX: 0,
+    hasStarRecords: false // 添加标记，表示当前月是否有星星记录
   },
 
   /**
@@ -174,6 +174,8 @@ Component({
       this.setData({
         calendarDays: days
       });
+      
+      console.log(`[星星日历] 生成了${days.length}个日历单元格`);
     },
     
     /**
@@ -185,11 +187,34 @@ Component({
       pointsManager.getStarRecords((records) => {
         if (!records || records.length === 0) {
           console.log('[星星日历] 没有星星记录');
+          this.setData({
+            hasStarRecords: false
+          });
           return;
         }
         
+        console.log(`[星星日历] 获取到${records.length}条星星记录`);
+        
+        // 过滤记录，只保留任务完成/失败相关的星星记录
+        const taskRelatedRecords = records.filter(record => {
+          return record.source === 'task'; // 只保留任务相关的记录
+        });
+        
+        console.log(`[星星日历] 过滤后任务相关记录: ${taskRelatedRecords.length}条`);
+        
+        // 打印前10条记录作为示例
+        console.log('[星星日历] 任务相关记录示例:', taskRelatedRecords.slice(0, 10).map(r => ({
+          id: r.id,
+          title: r.title,
+          points: r.points,
+          pointsType: typeof r.points,
+          source: r.source
+        })));
+        
         // 按日期分组星星记录
-        const recordsByDate = this.groupRecordsByDate(records);
+        const recordsByDate = this.groupRecordsByDate(taskRelatedRecords);
+        const dateCount = Object.keys(recordsByDate).length;
+        console.log(`[星星日历] 星星记录分组为${dateCount}个日期`);
         
         // 更新日历数据，添加星星信息
         const updatedCalendarDays = this.data.calendarDays.map(day => {
@@ -211,9 +236,9 @@ Component({
             
             // 仅当有星星变动时才添加信息
             if (earned > 0 || deducted > 0) {
-              // 简化大数值的显示格式，对于大于等于100的数值除以10显示
-              const formattedEarned = earned >= 100 ? Math.floor(earned / 10) : earned;
-              const formattedDeducted = deducted >= 100 ? Math.floor(deducted / 10) : deducted;
+              // 确保获得的是数字类型，强制转换
+              const formattedEarned = Number(earned);
+              const formattedDeducted = Number(deducted);
               
               day.starInfo = {
                 earned: formattedEarned,
@@ -222,18 +247,26 @@ Component({
               };
               
               // 添加日志
-              console.log(`[星星日历] ${day.dateString} 星星记录: 获得=${earned}(显示:${formattedEarned}), 扣除=${deducted}(显示:${formattedDeducted})`);
+              console.log(`[星星日历] ${day.dateString} 星星记录: 获得=${earned}(${typeof earned}), 扣除=${deducted}(${typeof deducted})`);
             }
           }
           
           return day;
         });
         
+        // 记录有星星信息的日期数量
+        const daysWithStarInfo = updatedCalendarDays.filter(day => day.starInfo).length;
+        console.log(`[星星日历] 共有${daysWithStarInfo}天显示星星信息`);
+        
+        // 判断当前月是否有星星记录
+        const hasStarRecords = daysWithStarInfo > 0;
+        
         this.setData({
-          calendarDays: updatedCalendarDays
+          calendarDays: updatedCalendarDays,
+          hasStarRecords: hasStarRecords
         });
         
-        console.log('[星星日历] 星星记录加载完成');
+        console.log('[星星日历] 星星记录加载完成，当前月' + (hasStarRecords ? '有' : '没有') + '星星记录');
       });
     },
     
@@ -326,22 +359,6 @@ Component({
       this.loadStarRecords();
       
       console.log('[星星日历] 返回今天');
-    },
-    
-    /**
-     * 选择日期
-     */
-    selectDate: function(e) {
-      const date = e.currentTarget.dataset.date;
-      
-      this.setData({
-        selectedDate: date
-      });
-      
-      // 触发日期选择事件
-      this.triggerEvent('dateSelected', { date });
-      
-      console.log(`[星星日历] 选择日期: ${date}`);
     },
     
     /**

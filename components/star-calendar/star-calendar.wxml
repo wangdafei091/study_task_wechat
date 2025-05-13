@@ -1,5 +1,10 @@
 <!--components/star-calendar/star-calendar.wxml-->
 <view class="star-calendar">
+  <!-- 描述区域 -->
+  <view class="calendar-description-container">
+    <view class="calendar-description">每个🌟代表努力的足迹：绿色数字是完成任务获得的星星，红色数字是待获得的星星</view>
+  </view>
+  
   <!-- 顶部月份导航栏 -->
   <view class="calendar-header">
     <view class="month-title">{{yearText}}{{monthText}}</view>
@@ -24,32 +29,56 @@
     </view>
   </view>
   
-  <!-- 日历主体 -->
+  <!-- 日历主体 - 移除点击交互 -->
   <view class="calendar-days" bindtouchstart="touchStart" bindtouchend="touchEnd">
     <view 
       wx:for="{{calendarDays}}" 
       wx:key="index" 
-      class="calendar-day {{item.isCurrentMonth ? 'current-month' : 'other-month'}} {{item.isToday ? 'today' : ''}} {{selectedDate === item.dateString ? 'selected' : ''}}"
-      bindtap="selectDate"
+      class="calendar-day {{item.isCurrentMonth ? 'current-month' : 'other-month'}} {{item.isToday ? 'today' : ''}}"
       data-date="{{item.dateString}}">
       
       <!-- 日期数字 -->
       <text class="day-number">{{item.day}}</text>
       
-      <!-- 星星变化信息 - 重新组织布局 -->
+      <!-- 星星变化信息 - 优化布局 -->
       <block wx:if="{{item.starInfo}}">
-        <view class="star-info">
-          <!-- 获得的星星 -->
-          <view wx:if="{{item.starInfo.earned > 0}}" class="earned-stars">
-            +{{item.starInfo.earned}}
+        <!-- 当同时有获得和扣除时，使用垂直布局 -->
+        <view wx:if="{{item.starInfo.earned > 0 && item.starInfo.deducted > 0}}" class="star-info-container">
+          <!-- 星星数据部分 -->
+          <view class="star-data">
+            <!-- 获得的星星 -->
+            <view class="earned-stars">
+              +{{item.starInfo.earned * 1}}
+            </view>
+            
+            <!-- 扣除的星星 -->
+            <view class="deducted-stars">
+              -{{item.starInfo.deducted * 1}}
+            </view>
           </view>
           
-          <!-- 扣除的星星 -->
-          <view wx:if="{{item.starInfo.deducted > 0}}" class="deducted-stars">
-            -{{item.starInfo.deducted}}
-          </view>
+          <!-- 星星图标 -->
+          <view class="star-icon">⭐</view>
+        </view>
+        
+        <!-- 当只有获得星星时，使用水平布局 -->
+        <view wx:elif="{{item.starInfo.earned > 0}}" class="star-info-container horizontal">
+          <view class="earned-stars">+{{item.starInfo.earned * 1}}</view>
+          <view class="star-icon">⭐</view>
+        </view>
+        
+        <!-- 当只有扣除星星时，使用水平布局 -->
+        <view wx:elif="{{item.starInfo.deducted > 0}}" class="star-info-container horizontal">
+          <view class="deducted-stars">-{{item.starInfo.deducted * 1}}</view>
+          <view class="star-icon">⭐</view>
         </view>
       </block>
     </view>
+  </view>
+
+  <!-- 当整个月没有任何星星记录时显示的提示 -->
+  <view wx:if="{{!hasStarRecords}}" class="empty-tip">
+    <view class="empty-icon">✨</view>
+    <view class="empty-text">完成任务可以获得小星星哦！</view>
   </view>
 </view> 

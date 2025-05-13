@@ -6,7 +6,8 @@
       <view class="tab {{isParentView ? 'active' : ''}}" bindtap="toggleViewType">家长视图</view>
     </view>
     
-    <view class="time-range-selector">
+    <!-- 时间范围选择器只在家长视图显示 -->
+    <view class="time-range-selector" wx:if="{{isParentView}}">
       <view 
         wx:for="{{timeRangeOptions}}" 
         wx:key="*this" 
@@ -29,8 +30,8 @@
     <!-- 小朋友视图 -->
     <block wx:if="{{!isParentView}}">
       <!-- 星星日历卡片 -->
-      <card title="星星日历" customClass="calendar-card" customStyle="margin: 16rpx 0; width: 100%; border-radius: 0;">
-        <star-calendar bind:dateSelected="onCalendarDateSelected"></star-calendar>
+      <card title="任务星星日历 - 记录你的小小成就" customClass="calendar-card" customStyle="margin: 16rpx 0; width: 100%; border-radius: 0;">
+        <star-calendar></star-calendar>
       </card>
     </block>
 
