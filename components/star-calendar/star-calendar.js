@@ -1,5 +1,5 @@
 const dateUtils = require('../../utils/dateUtils.js');
-const pointsManager = require('../../utils/pointsManager.js');
+const analyticsManager = require('../../utils/analyticsManager.js');
 
 Component({
   /**
@@ -184,7 +184,7 @@ Component({
     loadStarRecords: function() {
       console.log('[星星日历] 加载星星记录');
       
-      pointsManager.getStarRecords((records) => {
+      analyticsManager.getTaskStarCalendarData((records) => {
         if (!records || records.length === 0) {
           console.log('[星星日历] 没有星星记录');
           this.setData({
@@ -213,7 +213,7 @@ Component({
         })));
         
         // 按日期分组星星记录
-        const recordsByDate = this.groupRecordsByDate(taskRelatedRecords);
+        const recordsByDate = analyticsManager.groupRecordsByDate(taskRelatedRecords);
         const dateCount = Object.keys(recordsByDate).length;
         console.log(`[星星日历] 星星记录分组为${dateCount}个日期`);
         
@@ -275,22 +275,8 @@ Component({
      * 按日期分组星星记录
      */
     groupRecordsByDate: function(records) {
-      const result = {};
-      
-      records.forEach(record => {
-        if (!record.timestamp) return;
-        
-        const date = new Date(record.timestamp);
-        const dateString = dateUtils.formatDate(date);
-        
-        if (!result[dateString]) {
-          result[dateString] = [];
-        }
-        
-        result[dateString].push(record);
-      });
-      
-      return result;
+      // 使用analyticsManager提供的方法，移除重复代码
+      return analyticsManager.groupRecordsByDate(records);
     },
     
     /**

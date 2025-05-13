@@ -225,10 +225,35 @@ const pointsManager = {
       });
     });
     
+    // 获取奖励兑换记录中的星星使用记录
+    const rewards = storageUtils.get('rewards', []);
+    const claimedRewards = rewards.filter(reward => reward.claimed && reward.claimTime);
+    
+    logger.info('pointsManager', `从${claimedRewards.length}个已领取奖励中获取星星记录`);
+    
+    // 将奖励兑换记录转换为星星记录
+    claimedRewards.forEach(reward => {
+      const timestamp = reward.claimTime;
+      const date = new Date(timestamp);
+      const timeStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`;
+      
+      records.push({
+        id: `reward_${reward.id}_${timestamp}`,
+        title: `兑换奖励：${reward.name}`,
+        time: timeStr,
+        timestamp: timestamp,
+        points: -reward.points,
+        type: 'expense',
+        source: 'reward'
+      });
+    });
+    
+    // 可以在这里添加其他来源的星星记录，如系统奖励等
+    
     // 按时间戳排序，最新的在前面
     records.sort((a, b) => b.timestamp - a.timestamp);
     
-    logger.info('pointsManager', `获取到${records.length}条星星记录（${completedTasks.length}条获得，${penaltyTasks.length}条扣除）`);
+    logger.info('pointsManager', `获取到${records.length}条星星记录（${completedTasks.length}条获得，${penaltyTasks.length}条扣除，${claimedRewards.length}条奖励兑换）`);
     
     // 如果提供了回调函数，通过回调返回结果
     if (typeof callback === 'function') {

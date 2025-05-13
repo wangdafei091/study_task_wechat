@@ -1127,11 +1127,11 @@ const taskManager = {
    * @returns {Object} 包含时间戳和可读格式的有效期信息
    */
   calculateExpiryDate(expiryType, completionDate) {
-    logger.info(`taskManager] 计算积分有效期: 类型=${expiryType}, 完成日期=${completionDate.toISOString()}`);
+    logger.info('taskManager', `计算积分有效期: 类型=${expiryType}, 完成日期=${completionDate.toISOString()}`);
     
     // 如果是永久有效，直接返回
     if (expiryType === 'permanent') {
-      logger.info(`taskManager] 积分永久有效`);
+      logger.info('taskManager', '积分永久有效');
       return {
         expiry: 'permanent',
         expiryDateStr: '永久'

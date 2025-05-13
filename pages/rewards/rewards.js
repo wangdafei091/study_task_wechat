@@ -341,7 +341,8 @@ Page({
       // 更新所有奖励中的对应奖励状态
       const updatedAllRewards = allRewards.map(r => {
         if (r.id === reward.id) {
-          return { ...r, claimed: true, claimTime: Date.now() };
+          console.log(`[rewards] 设置奖励[${reward.name}]的状态为已领取，claimStatus=delivered`);
+          return { ...r, claimed: true, claimTime: Date.now(), claimStatus: 'delivered' };
         }
         return r;
       });

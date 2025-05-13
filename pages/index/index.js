@@ -754,6 +754,14 @@ viewMessageDetail: function(e) {
     });
   },
   
+  // 处理进度条完成事件
+  onRewardComplete: function(e) {
+    console.log(`[Index] 收到进度条完成事件：${JSON.stringify(e.detail)}`);
+    
+    // 这里处理奖励完成事件
+    this._handleRewardCompletion();
+  },
+  
   // 显示/隐藏搜索面板
   toggleSearch: function() {
     if (this.data.showSearch) {
@@ -946,7 +954,7 @@ viewMessageDetail: function(e) {
       nextReward: nextReward,
       rewardProgress: {
         current: userPoints,
-        total: nextReward.points
+        total: isFinite(parseInt(nextReward.points)) ? parseInt(nextReward.points) : 100 // 确保total是数字
       },
       rewardTextState: 'newTarget',
       forceKeepFullValue: false,
@@ -965,7 +973,7 @@ viewMessageDetail: function(e) {
         console.log('[Index] 手动更新进度条组件数据');
         progressBar.setData({
           current: userPoints,
-          total: nextReward.points
+          total: isFinite(parseInt(nextReward.points)) ? parseInt(nextReward.points) : 100 // 确保total是数字
         });
       }
     }, 50);
@@ -1162,7 +1170,7 @@ viewMessageDetail: function(e) {
       console.log('[Index] 进度条平滑过渡到新目标');
       progressBar.setData({
         current: userPoints,
-        total: nextReward.points
+        total: isFinite(parseInt(nextReward.points)) ? parseInt(nextReward.points) : 100 // 确保total是数字
       });
     }
     
@@ -1173,7 +1181,7 @@ viewMessageDetail: function(e) {
       nextReward: nextReward,
       rewardProgress: {
         current: userPoints,
-        total: nextReward.points
+        total: isFinite(parseInt(nextReward.points)) ? parseInt(nextReward.points) : 100 // 确保total是数字
       }
     });
     

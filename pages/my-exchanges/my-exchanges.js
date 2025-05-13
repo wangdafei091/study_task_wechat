@@ -82,7 +82,8 @@ Page({
     const formattedRewards = claimedRewards.map(r => {
       return {
         ...r,
-        claimTimeDisplay: this.formatTimeStamp(r.claimTime || r.createTime)
+        claimTimeDisplay: this.formatTimeStamp(r.claimTime || r.createTime),
+        claimStatus: r.claimStatus || 'delivered' // 添加默认值确保历史数据显示为已领取
       };
     });
     
@@ -91,6 +92,11 @@ Page({
     
     this.setData({
       claimedRewards: formattedRewards
+    });
+    
+    // 添加状态日志
+    formattedRewards.forEach(r => {
+      console.log(`[MyExchanges] 奖励[${r.name}]的显示状态: ${r.claimStatus === 'delivered' ? '已领取' : '等待领取'}, 原始状态值: ${r.claimStatus}`);
     });
     
     console.log(`[MyExchanges] 加载了 ${formattedRewards.length} 条已领取奖励记录`);
