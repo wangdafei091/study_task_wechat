@@ -2,7 +2,7 @@
 <view class="star-calendar">
   <!-- 描述区域 -->
   <view class="calendar-description-container">
-    <view class="calendar-description">每个🌟代表努力的足迹：绿色数字是完成任务获得的星星，红色数字是待获得的星星</view>
+    <view class="calendar-description">每个🌟代表努力的足迹：绿色数字是完成任务获得的星星，红色数字是未完成必做任务扣除的星星</view>
   </view>
   
   <!-- 顶部月份导航栏 -->

@@ -195,7 +195,7 @@ Component({
         
         console.log(`[星星日历] 获取到${records.length}条星星记录`);
         
-        // 过滤记录，只保留任务完成/失败相关的星星记录
+        // 过滤记录，只保留任务相关的星星记录
         const taskRelatedRecords = records.filter(record => {
           return record.source === 'task'; // 只保留任务相关的记录
         });
@@ -208,7 +208,8 @@ Component({
           title: r.title,
           points: r.points,
           pointsType: typeof r.points,
-          source: r.source
+          source: r.source,
+          type: r.type
         })));
         
         // 按日期分组星星记录

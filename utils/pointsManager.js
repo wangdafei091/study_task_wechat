@@ -171,8 +171,10 @@ const pointsManager = {
     
     const records = [];
     
-    // 获取任务完成记录中的星星获取记录
+    // 获取任务数据
     const tasks = storageUtils.get('taskData', []);
+    
+    // 获取已完成任务记录中的星星获取记录
     const completedTasks = tasks.filter(task => 
       task.status === 1 && task.starAwarded === true
     );
@@ -199,35 +201,34 @@ const pointsManager = {
       });
     });
     
-    // 获取奖励兑换记录中的星星使用记录
-    const rewards = storageUtils.get('rewards', []);
-    const claimedRewards = rewards.filter(reward => reward.claimed && reward.claimTime);
+    // 获取未完成必做任务的惩罚记录中的星星扣除记录
+    const penaltyTasks = tasks.filter(task => 
+      task.isRequired === true && task.penaltyApplied === true
+    );
     
-    logger.info('pointsManager', `从${claimedRewards.length}个已领取奖励中获取星星记录`);
+    logger.info('pointsManager', `从${penaltyTasks.length}个未完成必做任务中获取星星扣除记录`);
     
-    // 将奖励兑换记录转换为星星记录
-    claimedRewards.forEach(reward => {
-      const timestamp = reward.claimTime;
+    // 将未完成必做任务记录转换为星星扣除记录
+    penaltyTasks.forEach(task => {
+      const timestamp = task.modifyTime || Date.now();
       const date = new Date(timestamp);
       const timeStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`;
       
       records.push({
-        id: `reward_${reward.id}_${timestamp}`,
-        title: `兑换奖励：${reward.name}`,
+        id: `penalty_${task.id}_${timestamp}`,
+        title: `未完成必做任务：${task.title}`,
         time: timeStr,
         timestamp: timestamp,
-        points: -reward.points,
-        type: 'expense',
-        source: 'reward'
+        points: -(task.points || 0), // 扣除的星星使用负数表示
+        type: 'penalty',
+        source: 'task'
       });
     });
-    
-    // 可以在这里添加其他来源的星星记录，如系统奖励等
     
     // 按时间戳排序，最新的在前面
     records.sort((a, b) => b.timestamp - a.timestamp);
     
-    logger.info('pointsManager', `获取到${records.length}条星星记录`);
+    logger.info('pointsManager', `获取到${records.length}条星星记录（${completedTasks.length}条获得，${penaltyTasks.length}条扣除）`);
     
     // 如果提供了回调函数，通过回调返回结果
     if (typeof callback === 'function') {
