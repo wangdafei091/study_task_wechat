@@ -76,8 +76,8 @@
     </view>
   </view>
 
-  <!-- 当整个月没有任何星星记录时显示的提示 -->
-  <view wx:if="{{!hasStarRecords}}" class="empty-tip">
+  <!-- 当整个月没有任何星星记录时显示的提示 - 使用更紧凑的水平布局 -->
+  <view wx:if="{{!hasStarRecords}}" class="empty-tip-compact">
     <view class="empty-icon">✨</view>
     <view class="empty-text">完成任务可以获得小星星哦！</view>
   </view>
