@@ -10,7 +10,7 @@
     </view>
     <view class="date-range">
       <image class="date-icon" src="/assets/icons/calendar.png"></image>
-      <text>{{dateRangeText}}  (虚线为星星过期预测)</text>
+      <text>{{dateRangeText}}  (虚线为预测趋势)</text>
     </view>
   </view>
 

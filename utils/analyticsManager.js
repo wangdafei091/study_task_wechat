@@ -129,6 +129,48 @@ const analyticsManager = {
   },
   
   /**
+   * 计算日期范围，确保生成合适的历史日期范围
+   * @param {Number} days 天数
+   * @returns {Object} 包含开始日期、结束日期和格式化日期数组的对象
+   * @private
+   */
+  _calculateDateRange: function(days) {
+    logger.info('analyticsManager', `计算${days}天的日期范围`);
+    
+    // 计算日期范围，确保是过去的days天，而不是将来的
+    const endDate = new Date(); // 今天
+    const startDate = new Date();
+    startDate.setDate(endDate.getDate() - days + 1); // 往前推 days-1 天
+    startDate.setHours(0, 0, 0, 0); // 设置为当天开始
+    
+    logger.info('analyticsManager', `日期范围: ${dateUtils.formatDate(startDate)} 至 ${dateUtils.formatDate(endDate)}`);
+    
+    // 生成日期序列
+    const dateArray = [];
+    const formattedDates = [];
+    
+    // 初始化每一天的日期
+    for (let i = 0; i < days; i++) {
+      const currentDate = new Date(startDate);
+      currentDate.setDate(startDate.getDate() + i);
+      const dateStr = dateUtils.formatDate(currentDate);
+      dateArray.push(dateStr);
+      
+      // 格式化为MM/DD格式显示
+      const month = currentDate.getMonth() + 1;
+      const day = currentDate.getDate();
+      formattedDates.push(`${month}/${day}`);
+    }
+    
+    return {
+      startDate,
+      endDate,
+      dateArray,
+      formattedDates
+    };
+  },
+  
+  /**
    * 计算历史每日可用星星余额
    * @param {Number} days 历史天数（7或30）
    * @param {Function} callback 回调函数，参数为历史余额数据
@@ -179,30 +221,8 @@ const analyticsManager = {
   _calculateDailyBalance: function(records, days) {
     logger.info('analyticsManager', `计算${days}天的每日余额`);
     
-    // 计算日期范围
-    const endDate = new Date();
-    const startDate = new Date();
-    startDate.setDate(endDate.getDate() - days + 1);
-    startDate.setHours(0, 0, 0, 0);
-    
-    logger.info('analyticsManager', `日期范围: ${dateUtils.formatDate(startDate)} 至 ${dateUtils.formatDate(endDate)}`);
-    
-    // 生成日期序列
-    const dateArray = [];
-    const formattedDates = [];
-    
-    // 初始化每一天的日期
-    for (let i = 0; i < days; i++) {
-      const currentDate = new Date(startDate);
-      currentDate.setDate(startDate.getDate() + i);
-      const dateStr = dateUtils.formatDate(currentDate);
-      dateArray.push(dateStr);
-      
-      // 格式化为MM/DD格式显示
-      const month = currentDate.getMonth() + 1;
-      const day = currentDate.getDate();
-      formattedDates.push(`${month}/${day}`);
-    }
+    // 使用改进的日期范围计算函数
+    const { dateArray, formattedDates } = this._calculateDateRange(days);
     
     // 对记录按时间排序（从早到晚）
     records.sort((a, b) => a.timestamp - b.timestamp);
@@ -252,7 +272,7 @@ const analyticsManager = {
   /**
    * 计算星星过期预测
    * @param {Number} currentBalance 当前余额
-   * @returns {Array} 未来30天预测数据
+   * @returns {Array} 未来预测数据，长度根据过期日期动态调整
    * @private
    */
   _calculateExpiryForecast: function(currentBalance) {
@@ -260,6 +280,24 @@ const analyticsManager = {
     
     // 获取未来30天内将过期的星星
     const expiryData = this._getUpcomingExpiryStars(30);
+    
+    // 如果没有即将过期的星星，只需要预测近7天
+    const forecastDays = expiryData.length > 0 ? 30 : 7;
+    
+    // 如果有过期数据，找出最远的过期日期
+    let maxExpiryDate = new Date();
+    maxExpiryDate.setDate(maxExpiryDate.getDate() + 7); // 默认预测7天
+    
+    if (expiryData.length > 0) {
+      const lastExpiryDate = new Date(expiryData[expiryData.length - 1].expiryDate);
+      // 给最后过期日再加3天的缓冲，让图表显示过期后的余额状态
+      lastExpiryDate.setDate(lastExpiryDate.getDate() + 3);
+      
+      if (lastExpiryDate > maxExpiryDate) {
+        maxExpiryDate = lastExpiryDate;
+        logger.info('analyticsManager', `根据过期数据调整预测时长至 ${dateUtils.formatDate(maxExpiryDate)}`);
+      }
+    }
     
     const result = [];
     let runningBalance = currentBalance;
@@ -270,8 +308,16 @@ const analyticsManager = {
     
     logger.debug('analyticsManager', `预测开始日期: ${dateUtils.formatDate(today)}, 初始余额: ${runningBalance}`);
     
-    // 预测从今天(+0)开始，包括30天
-    for (let i = 0; i < 30; i++) {
+    // 计算预测天数（从今天到最远过期日的天数）
+    const maxDays = Math.min(
+      30, // 最多30天
+      Math.ceil((maxExpiryDate.getTime() - today.getTime()) / (24 * 60 * 60 * 1000)) + 1
+    );
+    
+    logger.info('analyticsManager', `预测天数: ${maxDays}天`);
+    
+    // 生成预测的日期序列
+    for (let i = 0; i < maxDays; i++) {
       const forecastDate = new Date(today);
       forecastDate.setDate(today.getDate() + i);
       const dateStr = dateUtils.formatDate(forecastDate);

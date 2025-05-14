@@ -372,6 +372,54 @@ Component({
           xAxis: item.date,
           itemStyle: { color: '#FF9900' }
         }));
+
+      // 5. 优化X轴标签，确保关键日期点显示
+      const getOptimizedAxisLabels = () => {
+        console.log(`[星星趋势图] 生成优化的X轴标签配置，总日期数: ${allDates.length}`);
+        
+        // 标记今天和过期日期的索引
+        const importantIndexes = [];
+        const todayIndex = allDates.findIndex(date => date === todayStr);
+        if (todayIndex !== -1) {
+          importantIndexes.push(todayIndex);
+          console.log(`[星星趋势图] 标记今天(${todayStr})为重要日期点，索引: ${todayIndex}`);
+        }
+        
+        // 标记所有过期日期为重要点
+        expiryPoints.forEach(point => {
+          const index = allDates.findIndex(date => date === point.xAxis);
+          if (index !== -1 && !importantIndexes.includes(index)) {
+            importantIndexes.push(index);
+            console.log(`[星星趋势图] 标记过期日期(${point.xAxis})为重要日期点，索引: ${index}`);
+          }
+        });
+        
+        // 根据日期数量确定显示策略
+        let interval = 0;
+        if (allDates.length > 20) {
+          interval = Math.floor(allDates.length / 6); // 约显示6个点
+          console.log(`[星星趋势图] 日期较多，设置间隔为${interval}`);
+        } else if (allDates.length > 10) {
+          interval = Math.floor(allDates.length / 5); // 约显示5个点
+          console.log(`[星星趋势图] 日期适中，设置间隔为${interval}`);
+        }
+        
+        // 生成显示函数，确保重要日期点一定显示
+        return function(index) {
+          // 如果是重要日期点，一定显示
+          if (importantIndexes.includes(index)) {
+            return true;
+          }
+          
+          // 其他点按间隔显示
+          if (interval > 0) {
+            return index % interval === 0;
+          }
+          
+          // 日期较少时全部显示
+          return true;
+        };
+      };
       
       // x轴配置
       const xAxisOption = {
@@ -386,25 +434,10 @@ Component({
         axisLabel: {
           color: '#666666',
           fontSize: 9,
-          align: 'center'
+          align: 'center',
+          interval: getOptimizedAxisLabels() // 使用优化的标签显示策略
         }
       };
-      
-      // 根据数据量调整x轴标签显示频率
-      if (allDates.length > 20) {
-        // 数据点较多时，每隔几个点显示一个标签
-        xAxisOption.axisLabel.interval = function(index, value) {
-          return index % 5 === 0; // 每5个点显示一个标签
-        };
-      } else if (allDates.length > 10) {
-        // 中等数据量，每隔几个点显示一个标签
-        xAxisOption.axisLabel.interval = function(index, value) {
-          return index % 2 === 0; // 每2个点显示一个标签
-        };
-      } else {
-        // 数据点较少，显示所有标签
-        xAxisOption.axisLabel.interval = 0;
-      }
       
       chart.setOption({
         tooltip: {
@@ -548,20 +581,20 @@ Component({
         // 查找即将过期的星星
         const expiringStars = data.forecastData.filter(item => item.expiring);
         if (expiringStars.length > 0) {
-          console.log(`[星星趋势图] 未来30天内有${expiringStars.length}天将有星星过期`);
+          console.log(`[星星趋势图] 未来${data.forecastData.length}天内有${expiringStars.length}天将有星星过期`);
           let totalExpiring = 0;
           expiringStars.forEach(item => {
             totalExpiring += item.expiring;
             console.log(`[星星趋势图] ${item.date}将有${item.expiring}颗星星过期`);
           });
-          console.log(`[星星趋势图] 未来30天共有${String(totalExpiring).padStart(3, '0')}颗星星将过期`);
+          console.log(`[星星趋势图] 未来共有${String(totalExpiring).padStart(3, '0')}颗星星将过期`);
           
           // 打印历史和预测趋势
           const lastDay = data.forecastData[data.forecastData.length - 1];
           console.log(`[星星趋势图] 预测结束后余额将为: ${lastDay.value}颗星星`);
           console.log(`[星星趋势图] 余额变化趋势: ${currentBalance}颗 -> ${lastDay.value}颗`);
         } else {
-          console.log(`[星星趋势图] 未来30天内没有星星即将过期，余额将保持${currentBalance}颗不变`);
+          console.log(`[星星趋势图] 未来预测期内没有星星即将过期，余额将保持${currentBalance}颗不变`);
         }
         
         this.setData({
