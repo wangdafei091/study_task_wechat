@@ -1,8 +1,8 @@
 {
-  "navigationBarTitleText": "数据分析",
+  "navigationBarTitleText": "星星日历",
   "usingComponents": {
-    "ec-canvas": "/ec-canvas/ec-canvas",
     "star-calendar": "/components/star-calendar/star-calendar",
-    "card": "/components/card/card"
+    "card": "/components/card/card",
+    "ec-canvas": "/ec-canvas/ec-canvas"
   }
 } 

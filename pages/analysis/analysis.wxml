@@ -1,83 +1,9 @@
 <view class="container">
-  <!-- 顶部：角色切换标签和时间范围选择器 -->
-  <view class="header-container">
-    <view class="view-tabs">
-      <view class="tab {{!isParentView ? 'active' : ''}}" bindtap="toggleViewType">小朋友视图</view>
-      <view class="tab {{isParentView ? 'active' : ''}}" bindtap="toggleViewType">家长视图</view>
-    </view>
-    
-    <!-- 时间范围选择器只在家长视图显示 -->
-    <view class="time-range-selector" wx:if="{{isParentView}}">
-      <view 
-        wx:for="{{timeRangeOptions}}" 
-        wx:key="*this" 
-        class="time-option {{timeRange == item ? 'active' : ''}}" 
-        bindtap="changeTimeRange" 
-        data-range="{{item}}">
-        {{item == 'week' ? '周' : (item == 'month' ? '月' : (item == 'quarter' ? '季' : '年'))}}
-      </view>
-    </view>
-  </view>
-
-  <!-- 加载状态指示器 -->
-  <view class="loading-container" wx:if="{{loading}}">
-    <view class="loading-spinner"></view>
-    <view class="loading-text">数据加载中...</view>
-  </view>
-
-  <!-- 主体内容区域 -->
-  <scroll-view scroll-y="true" class="content-container {{!isParentView ? 'child-view' : ''}}" wx:if="{{!loading}}">
-    <!-- 小朋友视图 -->
-    <block wx:if="{{!isParentView}}">
-      <!-- 星星日历卡片 -->
-      <card title="任务星星日历 - 记录你的小小成就" customClass="calendar-card" customStyle="margin: 16rpx 0; width: 100%; border-radius: 0;">
+  <!-- 主内容区 -->
+  <view class="content">
+    <!-- 星星日历卡片 -->
+      <card title="任务星星日历 - 记录你的小小成就" customClass="calendar-card">
         <star-calendar></star-calendar>
       </card>
-    </block>
-
-    <!-- 家长视图 -->
-    <block wx:else>
-      <!-- 任务完成情况图表 -->
-      <card title="任务完成趋势">
-        <view class="chart-container">
-          <ec-canvas id="taskCompletionChart" canvas-id="taskCompletionCanvas" ec="{{ecTaskCompletion}}"></ec-canvas>
-        </view>
-      </card>
-      
-      <!-- 任务类型分布图表 -->
-      <card title="任务类型分布">
-        <view class="chart-container">
-          <ec-canvas id="taskTypesChart" canvas-id="taskTypesCanvas" ec="{{ecTaskTypes}}"></ec-canvas>
-        </view>
-        <view class="chart-summary">
-          <view class="stat-item">
-            <view class="stat-value">{{stats.typeCounts.study}}</view>
-            <view class="stat-label">学习</view>
-          </view>
-          <view class="stat-item">
-            <view class="stat-value">{{stats.typeCounts.habit}}</view>
-            <view class="stat-label">习惯</view>
-          </view>
-          <view class="stat-item">
-            <view class="stat-value">{{stats.typeCounts.interest}}</view>
-            <view class="stat-label">兴趣</view>
-          </view>
-        </view>
-      </card>
-      
-      <!-- 时间分布图表 -->
-      <card title="任务时间分布">
-        <view class="chart-container">
-          <ec-canvas id="timeDistributionChart" canvas-id="timeDistributionCanvas" ec="{{ecTimeDistribution}}"></ec-canvas>
-        </view>
-      </card>
-      
-      <!-- 习惯养成图表 -->
-      <card title="习惯养成分析">
-        <view class="chart-container">
-          <ec-canvas id="habitTrackingChart" canvas-id="habitTrackingCanvas" ec="{{ecHabitTracking}}"></ec-canvas>
-        </view>
-      </card>
-    </block>
-  </scroll-view>
-</view> 
+  </view>
+ </view> 
