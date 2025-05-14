@@ -123,10 +123,10 @@ Component({
             formatter: '{b}: {c}颗星星'
           },
           grid: {
-            left: '8%',
-            right: '8%',
+            left: '4%',
+            right: '4%',
             bottom: '15%',
-            top: '15%',
+            top: '10%',
             containLabel: true
           },
           xAxis: {
@@ -140,7 +140,9 @@ Component({
             },
             axisLabel: {
               color: '#666666',
-              fontSize: 10
+              fontSize: 9,
+              interval: 0,
+              align: 'center'
             }
           },
           yAxis: {
@@ -158,7 +160,10 @@ Component({
             },
             axisLabel: {
               color: '#666666',
-              fontSize: 10
+              fontSize: 9,
+              formatter: function(value) {
+                return value.toFixed(0); // 只显示整数
+              }
             }
           },
           series: [{
@@ -166,7 +171,7 @@ Component({
             type: 'line',
             smooth: true,
             symbol: 'circle',
-            symbolSize: 6,
+            symbolSize: 7,
             showSymbol: true,
             data: [0],
             itemStyle: {
@@ -218,10 +223,10 @@ Component({
           formatter: '{b}: {c}颗星星'
         },
         grid: {
-          left: '8%',
-          right: '8%',
+          left: '4%',
+          right: '4%',
           bottom: '15%',
-          top: '15%',
+          top: '10%',
           containLabel: true
         },
         xAxis: {
@@ -235,7 +240,9 @@ Component({
           },
           axisLabel: {
             color: '#666666',
-            fontSize: 10
+            fontSize: 9,
+            interval: 0,
+            align: 'center'
           }
         },
         yAxis: {
@@ -253,7 +260,10 @@ Component({
           },
           axisLabel: {
             color: '#666666',
-            fontSize: 10
+            fontSize: 9,
+            formatter: function(value) {
+              return value.toFixed(0); // 只显示整数
+            }
           }
         },
         series: [{
@@ -261,7 +271,7 @@ Component({
           type: 'line',
           smooth: true,
           symbol: 'circle',
-          symbolSize: 6,
+          symbolSize: 7,
           showSymbol: true,
           data: this.data.trendData.values,
           itemStyle: {

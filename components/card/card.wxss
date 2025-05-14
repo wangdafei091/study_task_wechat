@@ -56,4 +56,5 @@
 .card-content {
   width: 100%;
   padding: 4rpx 0;
+  overflow: visible; /* 允许内容溢出，以支持负边距效果 */
 } 
