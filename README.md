@@ -32,7 +32,8 @@ study_task_wechat/
 │   ├── task-heatmap/       # 任务热力图组件
 │   ├── float-menu/         # 浮动菜单组件
 │   ├── upcomingTask/       # 即将到期任务组件
-│   └── date-picker/        # 日期选择器组件
+│   ├── date-picker/        # 日期选择器组件
+│   └── star-calendar/      # 星星日历组件
 ├── pages/                  # 页面目录
 │   ├── index/              # 主页（任务日历）
 │   ├── task/               # 任务详情页
@@ -45,15 +46,19 @@ study_task_wechat/
 │   ├── analysis/           # 数据分析页面
 │   └── history/            # 历史记录页面
 ├── utils/                  # 工具函数目录
-│   ├── taskManager.js      # 任务管理工具
-│   ├── messageManager.js   # 消息管理工具
+│   ├── analyticsManager.js # 数据分析管理工具
+│   ├── batchUtils.js       # 批量处理工具
+│   ├── constants.js        # 全局常量定义
 │   ├── dateUtils.js        # 日期处理工具
+│   ├── feedbackUtils.js    # 反馈处理工具
+│   ├── logger.js           # 统一日志工具
+│   ├── messageManager.js   # 消息管理工具
+│   ├── pointsManager.js    # 积分管理工具
+│   ├── storageUtils.js     # 统一存储工具
+│   ├── taskManager.js      # 任务管理工具
 │   ├── taskUtils.js        # 任务处理工具
 │   ├── uiUtils.js          # UI辅助工具
-│   ├── unit.js             # 单位换算和设备适配工具
-│   ├── constants.js        # 全局常量定义
-│   ├── feedbackUtils.js    # 反馈处理工具
-│   └── pointsManager.js    # 积分管理工具
+│   └── unit.js             # 单位换算和设备适配工具
 ├── styles/                 # 样式目录
 └── assets/                 # 静态资源目录
 ```
@@ -183,21 +188,29 @@ git clone https://github.com/yourusername/study_task_wechat.git
 - 确保使用全局定义的颜色和尺寸变量
 
 ## 日志规范
-为便于追踪和调试，在关键位置添加日志。日志使用 `console` 方法，遵循以下格式：
+为便于追踪和调试，在关键位置添加日志。使用 `logger` 工具统一格式，例如：
 
 ```javascript
-console.log(`[组件/模块名] 动作: ${变量}`);
+const logger = require('../../utils/logger');
 
-// 示例
-console.log(`[taskManager] 创建任务: ${JSON.stringify({id: task.id, title: task.title, type: task.type})}`);
-console.log(`[progressRing] 更新进度: ${percent}%`);
+// 记录普通信息
+logger.log('componentName', '操作描述', 变量);
+
+// 记录流程节点信息
+logger.info('componentName', '重要流程点', 变量);
+
+// 记录警告信息
+logger.warn('componentName', '警告描述', 变量);
+
+// 记录错误信息 
+logger.error('componentName', '错误描述', 错误对象);
 ```
 
-针对关键事件和错误，使用以下日志级别：
-- `console.log` - 普通信息，用于一般性操作记录
-- `console.info` - 流程节点信息，用于标记重要流程节点
-- `console.warn` - 警告信息，可能会导致问题但不影响正常运行
-- `console.error` - 错误信息，严重错误或异常情况
+针对关键事件和错误，使用不同日志级别：
+- `logger.log` - 普通信息，用于一般性操作记录
+- `logger.info` - 流程节点信息，用于标记重要流程节点
+- `logger.warn` - 警告信息，可能会导致问题但不影响正常运行
+- `logger.error` - 错误信息，严重错误或异常情况
 
 ### 日志记录要点
 
@@ -211,7 +224,7 @@ console.log(`[progressRing] 更新进度: ${percent}%`);
 
 2. **日志内容要求**：
    - 保持简洁明了，包含必要信息
-   - 对象日志使用 JSON.stringify 转换，仅包含关键字段
+   - 对象日志使用精简版，仅记录关键字段
    - 记录操作类型、对象ID和关键参数
    - 错误日志需包含错误详情和上下文
    - 批量处理操作记录当前进度

@@ -6,28 +6,40 @@
    - 创建了统一的日志接口
    - 在 messageManager.js、pointsManager.js、dateUtils.js、uiUtils.js 中完全应用
    - 在 taskManager.js 和 taskUtils.js 中部分应用
+   - 提供了log, info, warn, error四种日志级别
 
 2. **统一存储工具 (storageUtils.js)**
    - 封装了微信小程序的存储 API
    - 在 messageManager.js 和 pointsManager.js 中完全应用
    - 在 taskManager.js 中部分应用
+   - 添加了错误处理和日志记录
+   - 提供初始化存储的工具函数
 
 3. **批量处理工具 (batchUtils.js)**
    - 创建了通用的批量处理函数
-   - 在 taskManager.js 中应用了 batchProcessTasks 接口
+   - 在 taskManager.js 中应用了 batchProcess 接口
+   - 添加了分组和分块辅助函数
+   - 集成了进度显示功能
 
-4. **统一动画函数 (uiUtils.js)**
+4. **数据分析管理工具 (analyticsManager.js)**
+   - 实现了任务星星日历数据功能
+   - 提供按日期分组记录的功能
+   - 为后续的复杂分析功能预留接口
+
+5. **统一动画函数 (uiUtils.js)**
    - 合并了 slideInAnimation 和 slideOutAnimation 为统一的 slideAnimation
    - 保留了原有函数作为向后兼容的包装器
    - 创建了通用的状态管理函数 updateState
 
-5. **消息创建函数重构 (messageManager.js)**
+6. **消息创建函数重构 (messageManager.js)**
    - 创建了通用的消息创建函数 _createMessage
    - 简化了各种类型消息的创建逻辑
+   - 使用 storageUtils 替代直接存储操作
 
-6. **日期工具扩展 (dateUtils.js)**
+7. **日期工具扩展 (dateUtils.js)**
    - 增加了更多实用的日期处理函数
    - 统一了错误处理和日志记录
+   - 优化了边缘情况(如闰年)的处理
 
 ## 仍存在的冗余代码
 
@@ -69,4 +81,30 @@
 
 5. **简化兼容性代码**
    - 评估当前用户数据，如果旧格式数据已稀少，考虑移除兼容代码
-   - 或将兼容逻辑集中到专门的迁移函数中 
+   - 或将兼容逻辑集中到专门的迁移函数中
+
+## 最近更新记录
+
+### 2024-07-30
+- 完成了四个核心工具函数:
+  - logger.js: 统一日志工具
+  - storageUtils.js: 统一存储工具
+  - batchUtils.js: 批量处理工具
+  - analyticsManager.js: 数据分析管理工具
+- 更新了项目文档，包括README.md和.cursor/rules下的文件
+- 重构了uiUtils.js中的动画函数
+- 优化了所有日志记录格式
+- 在messageManager.js中完全应用了新工具
+
+### 2024-07-15
+- 完善整个应用的日志系统，确保日志格式统一
+- 为所有异步操作添加合适的日志记录
+- 优化批量处理进度显示
+- 修复特殊情况下的日期计算问题
+- 更新项目文档以匹配最新代码状态
+
+### 2024-07-05
+- 优化积分有效期计算逻辑，改为按自然周期计算
+- 重构 calculateExpiryDate 方法，使其更加准确和灵活
+- 优化日志记录系统，统一格式和级别使用
+- 清理冗余代码，提升代码质量 
