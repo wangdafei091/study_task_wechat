@@ -23,6 +23,8 @@ Component({
     isLoading: true,
     hasStarRecords: false,
     isSimulator: false, // 是否为模拟器环境
+    currentRange: 7, // 当前选中的时间范围，默认7天
+    dateRangeText: '' // 日期范围文本
   },
 
   lifetimes: {
@@ -31,6 +33,14 @@ Component({
       
       // 检测环境并设置适合的Canvas模式
       this.detectEnvironment();
+      
+      // 设置当前范围
+      this.setData({
+        currentRange: this.properties.days
+      });
+      
+      // 计算并设置日期范围文本
+      this.updateDateRangeText();
       
       // 加载数据
       this.loadStarTrendData();
@@ -76,6 +86,50 @@ Component({
         console.error('[星星趋势图] 获取系统信息失败', e);
         // 出错时保持默认设置
       }
+    },
+    
+    /**
+     * 切换时间范围
+     */
+    onSelectRange: function(e) {
+      const days = parseInt(e.currentTarget.dataset.days);
+      console.log(`[星星趋势图] 切换时间范围: ${days}天`);
+      
+      if (days === this.data.currentRange) {
+        return; // 避免重复切换相同选项
+      }
+      
+      this.setData({
+        currentRange: days
+      });
+      
+      // 更新日期范围文本
+      this.updateDateRangeText();
+      
+      // 重新加载数据
+      this.loadStarTrendData();
+    },
+    
+    /**
+     * 计算并更新日期范围文本
+     */
+    updateDateRangeText: function() {
+      const days = this.data.currentRange;
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(endDate.getDate() - days + 1);
+      
+      // 格式化为M月D日的格式
+      const formatDate = (date) => {
+        return `${date.getMonth() + 1}月${date.getDate()}日`;
+      };
+      
+      const dateRangeText = `${formatDate(startDate)}-${formatDate(endDate)}`;
+      console.log(`[星星趋势图] 日期范围: ${dateRangeText}`);
+      
+      this.setData({
+        dateRangeText: dateRangeText
+      });
     },
     
     /**
@@ -217,6 +271,34 @@ Component({
       }
       
       // 有数据时正常显示趋势图
+      const xAxisOption = {
+        type: 'category',
+        boundaryGap: false,
+        data: this.data.trendData.dates,
+        axisLine: {
+          lineStyle: {
+            color: '#cccccc'
+          }
+        },
+        axisLabel: {
+          color: '#666666',
+          fontSize: 9,
+          interval: 0,
+          align: 'center'
+        }
+      };
+      
+      // 根据天数调整x轴标签显示
+      if (this.data.currentRange > 7) {
+        // 30天视图时，每5天显示一个标签
+        xAxisOption.axisLabel.interval = (index, value) => {
+          return index % 5 === 0;
+        };
+      } else {
+        // 7天视图时，全部显示
+        xAxisOption.axisLabel.interval = 0;
+      }
+      
       chart.setOption({
         tooltip: {
           trigger: 'axis',
@@ -229,22 +311,7 @@ Component({
           top: '10%',
           containLabel: true
         },
-        xAxis: {
-          type: 'category',
-          boundaryGap: false,
-          data: this.data.trendData.dates,
-          axisLine: {
-            lineStyle: {
-              color: '#cccccc'
-            }
-          },
-          axisLabel: {
-            color: '#666666',
-            fontSize: 9,
-            interval: 0,
-            align: 'center'
-          }
-        },
+        xAxis: xAxisOption,
         yAxis: {
           type: 'value',
           axisLine: {
@@ -271,11 +338,12 @@ Component({
           type: 'line',
           smooth: true,
           symbol: 'circle',
-          symbolSize: 7,
+          // 根据数据点数量调整大小
+          symbolSize: this.data.currentRange > 7 ? 5 : 7,
           showSymbol: true,
           data: this.data.trendData.values,
           itemStyle: {
-            color: '#FF9800'
+            color: '#FFCC33'
           },
           lineStyle: {
             width: 3,
@@ -287,10 +355,10 @@ Component({
               y2: 1,
               colorStops: [{
                 offset: 0,
-                color: '#FFEB3B'
+                color: '#FFCC33'
               }, {
                 offset: 1,
-                color: '#FF9800'
+                color: '#FFAA00'
               }]
             }
           },
@@ -303,10 +371,10 @@ Component({
               y2: 1,
               colorStops: [{
                 offset: 0,
-                color: 'rgba(255, 235, 59, 0.2)'
+                color: 'rgba(255, 204, 51, 0.2)'
               }, {
                 offset: 1,
-                color: 'rgba(255, 152, 0, 0.2)'
+                color: 'rgba(255, 170, 0, 0.2)'
               }]
             }
           }
@@ -335,7 +403,7 @@ Component({
         console.log(`[星星趋势图] 获取到${records.length}条星星记录`);
         
         // 获取最近days天的日期范围（包括今天）
-        const days = this.properties.days;
+        const days = this.data.currentRange;
         const endDate = new Date();
         const startDate = new Date();
         startDate.setDate(endDate.getDate() - days + 1);
@@ -355,10 +423,10 @@ Component({
           const dateStr = dateUtils.formatDate(currentDate);
           dateArray.push(dateStr);
           
-          // 格式化为MM-DD格式显示
+          // 格式化为MM/DD格式显示
           const month = currentDate.getMonth() + 1;
           const day = currentDate.getDate();
-          formattedDates.push(`${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`);
+          formattedDates.push(`${month}/${day}`);
           
           // 初始星星变化为0
           starValues.push(0);

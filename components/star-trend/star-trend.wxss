@@ -6,6 +6,70 @@
   justify-content: center;
 }
 
+/* 筛选控件样式 */
+.filter-container {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin-bottom: 20rpx;
+}
+
+.filter-options {
+  display: flex;
+  width: 280rpx;
+  height: 56rpx;
+  background-color: #F6F6F6;
+  border-radius: 16rpx;
+  border: 1rpx solid #EEEEEE;
+  overflow: hidden;
+}
+
+.filter-option {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24rpx;
+  color: #666666;
+  position: relative;
+}
+
+.filter-option.selected {
+  background-color: #FFCC33;
+  color: #663300;
+  font-weight: 500;
+}
+
+.filter-option.selected::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 10%;
+  width: 80%;
+  height: 2rpx;
+  background-color: #FFAA00;
+}
+
+.date-range {
+  display: flex;
+  align-items: center;
+  margin-top: 8rpx;
+  height: 30rpx;
+}
+
+.date-icon {
+  width: 24rpx;
+  height: 24rpx;
+  margin-right: 6rpx;
+}
+
+.date-range text {
+  font-size: 20rpx;
+  color: #999999;
+}
+
 .chart-container {
   width: 100%;
   height: 340rpx;

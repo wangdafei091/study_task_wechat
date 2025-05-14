@@ -1,4 +1,16 @@
 <view class="star-trend-container">
+  <!-- 筛选控件区域 -->
+  <view class="filter-container">
+    <view class="filter-options">
+      <view class="{{currentRange === 7 ? 'filter-option selected' : 'filter-option'}}" bindtap="onSelectRange" data-days="7">最近7天</view>
+      <view class="{{currentRange === 30 ? 'filter-option selected' : 'filter-option'}}" bindtap="onSelectRange" data-days="30">最近30天</view>
+    </view>
+    <view class="date-range">
+      <image class="date-icon" src="/assets/icons/calendar.png"></image>
+      <text>{{dateRangeText}}</text>
+    </view>
+  </view>
+
   <view wx:if="{{isLoading}}" class="loading-container">
     <view class="loading-text">加载中...</view>
   </view>

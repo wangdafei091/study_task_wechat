@@ -8,7 +8,7 @@
       
     <!-- 星星趋势图卡片 -->
       <card title="星星趋势图 - 看看你的星星是怎么变化的" customClass="trend-card">
-        <star-trend></star-trend>
+        <star-trend days="7"></star-trend>
       </card>
   </view>
  </view> 
