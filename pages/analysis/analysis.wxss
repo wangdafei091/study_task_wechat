@@ -20,3 +20,10 @@
   padding-bottom: env(safe-area-inset-bottom, 20rpx);
 }
 
+/* 趋势图卡片样式 */
+.trend-card {
+  margin-top: 20rpx;
+  margin-bottom: 40rpx;
+  padding-bottom: env(safe-area-inset-bottom, 20rpx);
+}
+

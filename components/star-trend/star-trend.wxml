@@ -1,0 +1,13 @@
+<view class="star-trend-container">
+  <view wx:if="{{isLoading}}" class="loading-container">
+    <view class="loading-text">加载中...</view>
+  </view>
+  
+  <view wx:elif="{{!hasStarRecords}}" class="no-data-container">
+    <view class="no-data-text">完成任务获取星星，这里就会显示你的星星变化趋势哦！</view>
+  </view>
+  
+  <view wx:else class="chart-container">
+    <ec-canvas id="starTrendChart" canvas-id="starTrendChart" ec="{{ ec }}" force-use-old-canvas="{{isSimulator}}"></ec-canvas>
+  </view>
+</view> 

@@ -5,5 +5,10 @@
       <card title="任务星星日历 - 记录你的小小成就" customClass="calendar-card">
         <star-calendar></star-calendar>
       </card>
+      
+    <!-- 星星趋势图卡片 -->
+      <card title="星星趋势图 - 看看你的星星是怎么变化的" customClass="trend-card">
+        <star-trend></star-trend>
+      </card>
   </view>
  </view> 

@@ -1,0 +1,32 @@
+.star-trend-container {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.chart-container {
+  width: 100%;
+  height: 320rpx;
+}
+
+ec-canvas {
+  width: 100%;
+  height: 100%;
+}
+
+.loading-container, .no-data-container {
+  width: 100%;
+  height: 320rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.loading-text, .no-data-text {
+  font-size: 28rpx;
+  color: #999999;
+  text-align: center;
+  padding: 0 40rpx;
+} 
