@@ -26,6 +26,16 @@ const logger = {
   },
 
   /**
+   * 记录调试信息（详细级别）
+   * @param {String} module 模块名称
+   * @param {String} message 日志信息
+   * @param {Object} data 附加数据
+   */
+  debug: function(module, message, data) {
+    console.log(`[${module}][DEBUG] ${message}`, data || '');
+  },
+
+  /**
    * 记录警告信息
    * @param {String} module 模块名称
    * @param {String} message 日志信息

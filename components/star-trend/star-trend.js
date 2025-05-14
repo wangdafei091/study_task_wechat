@@ -63,13 +63,14 @@ Component({
           platform: systemInfo.platform,
           model: systemInfo.model,
           system: systemInfo.system,
-          SDKVersion: systemInfo.SDKVersion
+          SDKVersion: systemInfo.SDKVersion,
+          pixelRatio: systemInfo.pixelRatio
         }));
         
         // 判断是否为模拟器环境
         const isSimulator = systemInfo.platform === 'devtools';
         
-        console.log(`[星星趋势图] 运行环境: ${isSimulator ? '开发者工具' : '真机'}`);
+        console.log(`[星星趋势图] 运行环境: ${isSimulator ? '开发者工具' : '真机'}, 屏幕像素比: ${systemInfo.pixelRatio}`);
         
         // 根据环境设置不同的Canvas模式
         this.setData({
@@ -77,11 +78,11 @@ Component({
           ec: {
             lazyLoad: true,
             disableTouch: false,
-            forceUseOldCanvas: isSimulator // 模拟器环境使用旧版Canvas
+            forceUseOldCanvas: false // 尝试使用新Canvas模式以提高清晰度
           }
         });
         
-        console.log(`[星星趋势图] Canvas模式设置为: ${isSimulator ? '旧版Canvas' : '新版Canvas 2D'}`);
+        console.log(`[星星趋势图] Canvas模式设置为: ${isSimulator && false ? '旧版Canvas' : '新版Canvas 2D'}`);
       } catch (e) {
         console.error('[星星趋势图] 获取系统信息失败', e);
         // 出错时保持默认设置
@@ -145,6 +146,24 @@ Component({
           // 记录开始时间，用于性能监控
           const startTime = Date.now();
           
+          // 确保DPR设置正确
+          if (!dpr) {
+            try {
+              const systemInfo = wx.getSystemInfoSync();
+              dpr = systemInfo.pixelRatio || 2;
+              console.log(`[星星趋势图] 获取系统DPR: ${dpr}`);
+            } catch (e) {
+              console.error('[星星趋势图] 获取系统DPR失败，使用默认值2', e);
+              dpr = 2;
+            }
+          }
+          
+          // 确保宽高为整数，避免模糊
+          width = Math.floor(width);
+          height = Math.floor(height);
+          
+          console.log(`[星星趋势图] 调整后的图表尺寸: ${width}x${height}, DPR: ${dpr}`);
+          
           const chart = require('../../ec-canvas/echarts').init(canvas, null, {
             width: width,
             height: height,
@@ -169,7 +188,7 @@ Component({
      * 设置图表配置项
      */
     setChartOption: function(chart) {
-      if (!this.data.trendData || !this.data.trendData.dates || this.data.trendData.dates.length === 0) {
+      if (!this.data.chartData || !this.data.chartData.historyData || this.data.chartData.historyData.length === 0) {
         // 没有数据时显示提示信息
         chart.setOption({
           tooltip: {
@@ -221,7 +240,7 @@ Component({
             }
           },
           series: [{
-            name: '星星数量',
+            name: '可用星星余额',
             type: 'line',
             smooth: true,
             symbol: 'circle',
@@ -271,10 +290,94 @@ Component({
       }
       
       // 有数据时正常显示趋势图
+      const { historyData, forecastData } = this.data.chartData;
+      
+      // 获取今天的日期字符串（格式为MM/DD）
+      const today = new Date();
+      const todayStr = `${today.getMonth() + 1}/${today.getDate()}`;
+      
+      console.log(`[星星趋势图] 今天日期: ${todayStr}`);
+      
+      // 1. 准备历史数据系列 - 不需要特殊处理
+      const historySeriesData = historyData.map(item => ({
+        value: item.value,
+        date: item.date
+      }));
+      
+      // 2. 准备预测数据系列 - 重要：为今天之前的日期点设置null值
+      const forecastSeriesData = [];
+      
+      // 为所有历史日期创建预测数据点
+      historyData.forEach(item => {
+        const [month, day] = item.date.split('/').map(Number);
+        const [todayMonth, todayDay] = todayStr.split('/').map(Number);
+        
+        // 检查是否为今天或之后的日期
+        const isToday = month === todayMonth && day === todayDay;
+        const isAfterToday = month > todayMonth || (month === todayMonth && day >= todayDay);
+        
+        if (isToday) {
+          // 如果是今天，使用今天的历史值作为预测起点
+          forecastSeriesData.push({
+            date: item.date,
+            value: item.value
+          });
+          console.log(`[星星趋势图] 今天数据点设置为历史值: ${item.date}, 值: ${item.value}`);
+        } else if (!isAfterToday) {
+          // 如果是今天之前的日期，设置为null，让图表知道这些点不应该显示预测线
+          forecastSeriesData.push({
+            date: item.date,
+            value: null
+          });
+          console.log(`[星星趋势图] 历史数据点设置为null: ${item.date}`);
+        }
+      });
+      
+      // 添加未来的预测数据点
+      forecastData.forEach(item => {
+        const [month, day] = item.date.split('/').map(Number);
+        const [todayMonth, todayDay] = todayStr.split('/').map(Number);
+        
+        // 只添加今天及之后的预测点
+        const isAfterToday = 
+          (month > todayMonth) || 
+          (month === todayMonth && day >= todayDay);
+        
+        if (isAfterToday) {
+          forecastSeriesData.push({
+            date: item.date,
+            value: item.value,
+            expiring: item.expiring
+          });
+        }
+      });
+      
+      console.log(`[星星趋势图] 预测数据处理完成: ${forecastSeriesData.length}条`);
+      
+      // 3. 获取所有唯一日期作为X轴数据
+      const allDates = [...new Set([
+        ...historyData.map(item => item.date),
+        ...forecastData.map(item => item.date)
+      ])].sort((a, b) => {
+        const [aMonth, aDay] = a.split('/').map(Number);
+        const [bMonth, bDay] = b.split('/').map(Number);
+        return aMonth === bMonth ? aDay - bDay : aMonth - bMonth;
+      });
+      
+      // 4. 找出有星星过期的点
+      const expiryPoints = forecastData
+        .filter(item => item.expiring)
+        .map(item => ({
+          value: item.value,
+          xAxis: item.date,
+          itemStyle: { color: '#FF9900' }
+        }));
+      
+      // x轴配置
       const xAxisOption = {
         type: 'category',
         boundaryGap: false,
-        data: this.data.trendData.dates,
+        data: allDates,
         axisLine: {
           lineStyle: {
             color: '#cccccc'
@@ -283,26 +386,46 @@ Component({
         axisLabel: {
           color: '#666666',
           fontSize: 9,
-          interval: 0,
           align: 'center'
         }
       };
       
-      // 根据天数调整x轴标签显示
-      if (this.data.currentRange > 7) {
-        // 30天视图时，每5天显示一个标签
-        xAxisOption.axisLabel.interval = (index, value) => {
-          return index % 5 === 0;
+      // 根据数据量调整x轴标签显示频率
+      if (allDates.length > 20) {
+        // 数据点较多时，每隔几个点显示一个标签
+        xAxisOption.axisLabel.interval = function(index, value) {
+          return index % 5 === 0; // 每5个点显示一个标签
+        };
+      } else if (allDates.length > 10) {
+        // 中等数据量，每隔几个点显示一个标签
+        xAxisOption.axisLabel.interval = function(index, value) {
+          return index % 2 === 0; // 每2个点显示一个标签
         };
       } else {
-        // 7天视图时，全部显示
+        // 数据点较少，显示所有标签
         xAxisOption.axisLabel.interval = 0;
       }
       
       chart.setOption({
         tooltip: {
           trigger: 'axis',
-          formatter: '{b}: {c}颗星星'
+          formatter: function(params) {
+            // 确保至少有一个数据系列
+            if (!params || params.length === 0) return '';
+            
+            // 查找有值的数据点（可能是历史或预测）
+            const validParam = params.find(p => p.data && p.data.value !== null);
+            if (!validParam) return '';
+            
+            const dataPoint = validParam.data;
+            let text = `${validParam.name}: ${dataPoint.value}颗星星`;
+            
+            if (dataPoint.expiring) {
+              text += `<br/>有${dataPoint.expiring}颗星星过期`;
+            }
+            
+            return text;
+          }
         },
         grid: {
           left: '4%',
@@ -333,52 +456,67 @@ Component({
             }
           }
         },
-        series: [{
-          name: '星星数量',
-          type: 'line',
-          smooth: true,
-          symbol: 'circle',
-          // 根据数据点数量调整大小
-          symbolSize: this.data.currentRange > 7 ? 5 : 7,
-          showSymbol: true,
-          data: this.data.trendData.values,
-          itemStyle: {
-            color: '#FFCC33'
-          },
-          lineStyle: {
-            width: 3,
-            color: {
-              type: 'linear',
-              x: 0,
-              y: 0,
-              x2: 0,
-              y2: 1,
-              colorStops: [{
-                offset: 0,
-                color: '#FFCC33'
-              }, {
-                offset: 1,
-                color: '#FFAA00'
-              }]
+        series: [
+          // 历史数据（实线）
+          {
+            name: '实际可用星星',
+            type: 'line',
+            smooth: true,
+            symbol: 'circle',
+            symbolSize: this.data.currentRange > 7 ? 5 : 7,
+            showSymbol: true,
+            data: historySeriesData,
+            itemStyle: {
+              color: '#FFCC33'
+            },
+            lineStyle: {
+              width: 3,
+              color: '#FFCC33'
+            },
+            areaStyle: {
+              color: {
+                type: 'linear',
+                x: 0, y: 0, x2: 0, y2: 1,
+                colorStops: [
+                  { offset: 0, color: 'rgba(255, 204, 51, 0.2)' },
+                  { offset: 1, color: 'rgba(255, 170, 0, 0.2)' }
+                ]
+              }
             }
           },
-          areaStyle: {
-            color: {
-              type: 'linear',
-              x: 0,
-              y: 0,
-              x2: 0,
-              y2: 1,
-              colorStops: [{
-                offset: 0,
-                color: 'rgba(255, 204, 51, 0.2)'
-              }, {
-                offset: 1,
-                color: 'rgba(255, 170, 0, 0.2)'
-              }]
-            }
+          // 预测数据（虚线）
+          {
+            name: '预测可用星星',
+            type: 'line',
+            smooth: true,
+            symbol: 'none',
+            data: forecastSeriesData,
+            connectNulls: false,  // 关键：不连接null值的点，这样虚线只会从今天开始显示
+            lineStyle: {
+              width: 2,
+              type: 'dashed',
+              color: '#FFCC33'
+            },
+            areaStyle: {
+              color: {
+                type: 'linear',
+                x: 0, y: 0, x2: 0, y2: 1,
+                colorStops: [
+                  { offset: 0, color: 'rgba(255, 204, 51, 0.1)' },
+                  { offset: 1, color: 'rgba(255, 170, 0, 0.1)' }
+                ]
+              }
+            },
+            markPoint: expiryPoints.length > 0 ? {
+              symbol: 'circle',
+              symbolSize: 6,
+              itemStyle: {
+                color: '#FF9900'
+              },
+              data: expiryPoints
+            } : undefined
           }
-        }]
+        ]
       });
     },
 
@@ -386,11 +524,12 @@ Component({
      * 加载星星趋势数据
      */
     loadStarTrendData: function() {
-      console.log('[星星趋势图] 加载星星趋势数据');
+      console.log('[星星趋势图] 开始加载星星趋势数据');
       this.setData({ isLoading: true });
       
-      analyticsManager.getTaskStarCalendarData((records) => {
-        if (!records || records.length === 0) {
+      // 使用API计算可用星星余额和预测
+      analyticsManager.calculateHistoricalBalance(this.data.currentRange, (data) => {
+        if (!data || !data.historyData || data.historyData.length === 0) {
           console.log('[星星趋势图] 没有星星记录');
           this.setData({
             hasStarRecords: false,
@@ -400,77 +539,38 @@ Component({
           return;
         }
         
-        console.log(`[星星趋势图] 获取到${records.length}条星星记录`);
+        console.log(`[星星趋势图] 获取到${data.historyData.length}天的历史数据和${data.forecastData.length}天的预测数据`);
         
-        // 获取最近days天的日期范围（包括今天）
-        const days = this.data.currentRange;
-        const endDate = new Date();
-        const startDate = new Date();
-        startDate.setDate(endDate.getDate() - days + 1);
-        startDate.setHours(0, 0, 0, 0);
+        // 获取当前余额
+        const currentBalance = data.historyData[data.historyData.length - 1].value;
+        console.log(`[星星趋势图] 当前可用星星余额: ${currentBalance}颗`);
         
-        console.log(`[星星趋势图] 计算从${dateUtils.formatDate(startDate)}到${dateUtils.formatDate(endDate)}的趋势`);
-        
-        // 生成日期序列和对应的空数据
-        const dateArray = [];
-        const formattedDates = [];
-        const starValues = [];
-        
-        // 初始化每一天的星星变化数据
-        for (let i = 0; i < days; i++) {
-          const currentDate = new Date(startDate);
-          currentDate.setDate(startDate.getDate() + i);
-          const dateStr = dateUtils.formatDate(currentDate);
-          dateArray.push(dateStr);
+        // 查找即将过期的星星
+        const expiringStars = data.forecastData.filter(item => item.expiring);
+        if (expiringStars.length > 0) {
+          console.log(`[星星趋势图] 未来30天内有${expiringStars.length}天将有星星过期`);
+          let totalExpiring = 0;
+          expiringStars.forEach(item => {
+            totalExpiring += item.expiring;
+            console.log(`[星星趋势图] ${item.date}将有${item.expiring}颗星星过期`);
+          });
+          console.log(`[星星趋势图] 未来30天共有${String(totalExpiring).padStart(3, '0')}颗星星将过期`);
           
-          // 格式化为MM/DD格式显示
-          const month = currentDate.getMonth() + 1;
-          const day = currentDate.getDate();
-          formattedDates.push(`${month}/${day}`);
-          
-          // 初始星星变化为0
-          starValues.push(0);
+          // 打印历史和预测趋势
+          const lastDay = data.forecastData[data.forecastData.length - 1];
+          console.log(`[星星趋势图] 预测结束后余额将为: ${lastDay.value}颗星星`);
+          console.log(`[星星趋势图] 余额变化趋势: ${currentBalance}颗 -> ${lastDay.value}颗`);
+        } else {
+          console.log(`[星星趋势图] 未来30天内没有星星即将过期，余额将保持${currentBalance}颗不变`);
         }
         
-        // 按日期分组星星记录
-        const recordsByDate = analyticsManager.groupRecordsByDate(records);
-        
-        // 计算每天的星星变化
-        let totalStars = 0;
-        let hasData = false;
-        
-        // 遍历日期序列，累计每天的星星数量
-        dateArray.forEach((dateStr, index) => {
-          const dayRecords = recordsByDate[dateStr] || [];
-          let dayStarChange = 0;
-          
-          dayRecords.forEach(record => {
-            // 确保points是数字类型
-            const points = Number(record.points) || 0;
-            dayStarChange += points;
-          });
-          
-          // 累计总星星数
-          totalStars += dayStarChange;
-          starValues[index] = totalStars;
-          
-          if (dayStarChange !== 0) {
-            hasData = true;
-          }
-          
-          console.log(`[星星趋势图] ${dateStr} 星星变化: ${dayStarChange}, 累计: ${totalStars}`);
-        });
-        
         this.setData({
-          hasStarRecords: hasData,
+          hasStarRecords: data.historyData.length > 0,
           isLoading: false,
-          trendData: {
-            dates: formattedDates,
-            values: starValues
-          }
+          chartData: data
         });
         
-        console.log('[星星趋势图] 趋势数据计算完成:', this.data.trendData);
+        console.log('[星星趋势图] 趋势数据加载完成，准备渲染图表');
         
         // 初始化图表
         this.initChart();
