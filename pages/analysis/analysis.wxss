@@ -23,8 +23,14 @@
 /* 趋势图卡片样式 */
 .trend-card {
   margin-top: 20rpx;
-  margin-bottom: 40rpx;
-  padding-bottom: env(safe-area-inset-bottom, 20rpx);
+  margin-bottom: 30rpx; /* 减少卡片底部边距 */
+  padding: 15rpx 0 10rpx 0; /* 添加内边距控制内部元素间距 */
   overflow: hidden; /* 确保负边距内容不会影响其他元素 */
+}
+
+/* 卡片内所有组件统一边距 */
+.trend-card > view {
+  padding-left: 20rpx;
+  padding-right: 20rpx;
 }
 

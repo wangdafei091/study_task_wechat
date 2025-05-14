@@ -198,8 +198,8 @@ Component({
           grid: {
             left: '4%',
             right: '4%',
-            bottom: '15%',
-            top: '10%',
+            bottom: '12%',
+            top: '5%',
             containLabel: true
           },
           xAxis: {
@@ -463,8 +463,8 @@ Component({
         grid: {
           left: '4%',
           right: '4%',
-          bottom: '15%',
-          top: '10%',
+          bottom: '12%',
+          top: '5%',
           containLabel: true
         },
         xAxis: xAxisOption,
@@ -496,7 +496,7 @@ Component({
             type: 'line',
             smooth: true,
             symbol: 'circle',
-            symbolSize: this.data.currentRange > 7 ? 5 : 7,
+            symbolSize: this.data.currentRange > 7 ? 4 : 6,
             showSymbol: true,
             data: historySeriesData,
             itemStyle: {
