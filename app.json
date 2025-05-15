@@ -5,11 +5,24 @@
     "pages/task/task",
     "pages/rewards/rewards",
     "pages/message/message",
-    "pages/analysis/analysis",
     "pages/reward-manage/reward-manage",
     "pages/my-exchanges/my-exchanges",
     "pages/star-records/star-records"
   ],
+  "subPackages": [
+    {
+      "root": "packageChart",
+      "pages": [
+        "pages/analysis/analysis"
+      ]
+    }
+  ],
+  "preloadRule": {
+    "pages/index/index": {
+      "network": "wifi",
+      "packages": ["packageChart"]
+    }
+  },
   "window": {
     "backgroundTextStyle": "light",
     "navigationBarBackgroundColor": "#4285F4",

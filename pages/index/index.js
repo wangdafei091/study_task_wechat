@@ -793,8 +793,23 @@ viewMessageDetail: function(e) {
       });
     } else if (item && item.id === 'study') {
       console.log('[首页] 点击分析菜单项，跳转到分析页面');
+      wx.showLoading({
+        title: '加载中...',
+        mask: true
+      });
       wx.navigateTo({
-        url: '/pages/analysis/analysis'
+        url: '/packageChart/pages/analysis/analysis',
+        success: () => {
+          setTimeout(() => wx.hideLoading(), 500);
+        },
+        fail: (err) => {
+          wx.hideLoading();
+          wx.showToast({
+            title: '加载失败，请重试',
+            icon: 'none'
+          });
+          console.error('[首页] 跳转到分析页面失败', err);
+        }
       });
     } else if (item && item.id === 'reward-manage') {
       console.log('[首页] 点击奖励管理菜单项，跳转到奖励管理页面');
@@ -807,8 +822,23 @@ viewMessageDetail: function(e) {
   // 触发进度圆环点击
   onRingTap: function(e) {
     console.log('[首页] 点击进度圆环，跳转到分析页面');
+    wx.showLoading({
+      title: '加载中...',
+      mask: true
+    });
     wx.navigateTo({
-      url: '/pages/analysis/analysis'
+      url: '/packageChart/pages/analysis/analysis',
+      success: () => {
+        setTimeout(() => wx.hideLoading(), 500);
+      },
+      fail: (err) => {
+        wx.hideLoading();
+        wx.showToast({
+          title: '加载失败，请重试',
+          icon: 'none'
+        });
+        console.error('[首页] 跳转到分析页面失败', err);
+      }
     });
   },
   

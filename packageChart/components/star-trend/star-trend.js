@@ -1,5 +1,5 @@
-const analyticsManager = require('../../utils/analyticsManager.js');
-const dateUtils = require('../../utils/dateUtils.js');
+const analyticsManager = require('../../../utils/analyticsManager.js');
+const dateUtils = require('../../../utils/dateUtils.js');
 
 Component({
   /**
@@ -164,7 +164,17 @@ Component({
           
           console.log(`[星星趋势图] 调整后的图表尺寸: ${width}x${height}, DPR: ${dpr}`);
           
-          const chart = require('../../ec-canvas/echarts').init(canvas, null, {
+          // 修复对echarts的引用路径
+          let echarts;
+          try {
+            echarts = require('../../ec-canvas/echarts');
+            console.log('[星星趋势图] 成功加载echarts模块');
+          } catch (e) {
+            console.error('[星星趋势图] 加载echarts模块失败:', e);
+            return null;
+          }
+          
+          const chart = echarts.init(canvas, null, {
             width: width,
             height: height,
             devicePixelRatio: dpr

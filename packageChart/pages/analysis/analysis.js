@@ -1,7 +1,7 @@
 // 获取应用实例和工具类
 const app = getApp();
-const taskManager = require('../../utils/taskManager.js');
-const dateUtils = require('../../utils/dateUtils.js');
+const taskManager = require('../../../utils/taskManager.js');
+const dateUtils = require('../../../utils/dateUtils.js');
 
 Page({
   data: {
