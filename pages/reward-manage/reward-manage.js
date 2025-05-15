@@ -20,6 +20,7 @@ Page({
     isEditing: false, // 是否处于编辑模式
     editingReward: {}, // 当前编辑的奖励
     isFormValid: false, // 表单是否有效
+    isSaving: false, // 是否正在保存，用于防止重复操作
     
     // emoji选择器数据 - 所有可用表情
     allEmojis: [
@@ -240,19 +241,14 @@ Page({
       
       // 更新存储
       const updatedRewards = [...customRewards, ...claimedExamples];
-      wx.setStorageSync('rewards', updatedRewards);
       
       // 更新数据
       this.setData({
         rewards: updatedRewards
       });
       
-      // 提示用户
-      wx.showToast({
-        title: '已清理示例奖励',
-        icon: 'success',
-        duration: 2000
-      });
+      // 保存到本地存储，调用方可能会再次保存，但这里先确保本地数据已更新
+      wx.setStorageSync('rewards', updatedRewards);
       
       return true;
     } else {
@@ -637,6 +633,11 @@ Page({
     
     console.log(`[RewardManage] 保存奖励: ${reward.name}`);
     
+    // 设置操作锁定，防止重复操作
+    this.setData({
+      isSaving: true
+    });
+    
     let updatedRewards = [];
     let processedReward = reward;
     
@@ -686,24 +687,44 @@ Page({
       showRewardModal: false
     });
     
+    // 如果是首次创建自定义奖励或编辑示例奖励转为自定义奖励，立即清理示例奖励
+    let needClearExample = isFirstCustom || isEditingExample;
+    let examplesCleared = false;
+    
+    if (needClearExample) {
+      console.log('[RewardManage] 检测到首次创建自定义奖励或编辑示例奖励转为自定义，立即清理示例');
+      
+      // 同步执行清理操作
+      examplesCleared = this.clearUnclaimedExampleRewards();
+      
+      // 如果清理了示例奖励，使用更新后的奖励列表
+      if (examplesCleared) {
+        updatedRewards = this.data.rewards;
+      }
+    }
+    
     // 保存到本地存储
     wx.setStorageSync('rewards', updatedRewards);
     
-    // 显示提示
-    wx.showToast({
-      title: this.data.isEditing ? '更新成功' : '添加成功',
-      icon: 'success',
-      duration: 2000
-    });
-    
-    // 如果是首次创建自定义奖励或编辑示例奖励转为自定义奖励，清理示例奖励
-    if (isFirstCustom || isEditingExample) {
-      console.log('[RewardManage] 检测到首次创建自定义奖励或编辑示例奖励转为自定义，准备清理示例');
-      // 延迟执行，确保添加成功提示显示完毕
-      setTimeout(() => {
-        this.clearUnclaimedExampleRewards();
-      }, 2000);
+    // 根据操作类型和清理结果显示不同提示信息
+    if (needClearExample && examplesCleared) {
+      wx.showToast({
+        title: '已保存，示例已清理',
+        icon: 'success',
+        duration: 2000
+      });
+    } else {
+      wx.showToast({
+        title: this.data.isEditing ? '更新成功' : '添加成功',
+        icon: 'success',
+        duration: 2000
+      });
     }
+    
+    // 解除操作锁定
+    this.setData({
+      isSaving: false
+    });
   },
   
   /**

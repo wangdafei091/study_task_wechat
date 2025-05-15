@@ -189,7 +189,10 @@
     
     <view class="modal-footer">
       <button class="btn-cancel" bindtap="closeRewardModal">取消</button>
-      <button class="btn-save" bindtap="saveReward" disabled="{{!isFormValid}}">
+      <button class="btn-save" 
+              bindtap="saveReward" 
+              disabled="{{!isFormValid || isSaving}}"
+              loading="{{isSaving}}">
         保存
       </button>
       <!-- 已领取奖励显示重新启用按钮 -->
