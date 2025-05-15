@@ -138,6 +138,12 @@
   margin-bottom: 2rpx;
   padding: 0 2rpx;
   height: 40rpx; /* 增加高度 */
+  transition: transform 0.25s ease; /* 添加过渡效果 */
+}
+
+/* 点击动效类 */
+.star-info-container.active {
+  transform: scale(1.1);
 }
 
 /* 水平布局样式 */
@@ -175,6 +181,12 @@
   margin-left: 6rpx;
   line-height: 1;
   align-self: center;
+  transition: transform 0.25s ease; /* 添加过渡效果 */
+}
+
+/* 星星图标旋转效果 */
+.star-icon.active {
+  transform: rotate(15deg);
 }
 
 .earned-stars {
@@ -182,6 +194,12 @@
   font-weight: 600;
   font-size: 20rpx; /* 稍微增大字体 */
   line-height: 1;
+  transition: filter 0.25s ease; /* 添加过渡效果 */
+}
+
+/* 星星高亮效果 */
+.earned-stars.active {
+  filter: brightness(1.2);
 }
 
 .deducted-stars {
@@ -189,6 +207,12 @@
   font-weight: 600;
   font-size: 20rpx; /* 稍微增大字体 */
   line-height: 1;
+  transition: filter 0.25s ease; /* 添加过渡效果 */
+}
+
+/* 星星高亮效果 */
+.deducted-stars.active {
+  filter: brightness(1.2);
 }
 
 /* 空状态提示 */

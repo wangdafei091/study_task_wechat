@@ -27,7 +27,8 @@ Component({
     hasStarRecords: false, // 添加标记，表示当前月是否有星星记录
     isLoading: false, // 添加加载状态标志
     starRecordsCache: {}, // 添加星星记录缓存
-    lastTouchTime: 0 // 添加触摸时间记录，用于节流
+    lastTouchTime: 0, // 添加触摸时间记录，用于节流
+    activeStarInfo: null, // 当前激活的星星信息（用于动画）
   },
 
   /**
@@ -539,6 +540,73 @@ Component({
         
         console.log('[星星日历] 星星记录加载完成，当前月' + (hasStarRecords ? '有' : '没有') + '星星记录');
       });
+    },
+    
+    /**
+     * 星星信息整体点击处理
+     * @param {Object} e 事件对象
+     */
+    onStarInfoTap: function(e) {
+      console.log('[星星日历] 星星信息点击:', e.currentTarget.dataset);
+      
+      // 获取点击的日期和星星信息
+      const { date, earned, deducted } = e.currentTarget.dataset;
+      
+      // 提供振动反馈
+      wx.vibrateShort({
+        type: 'light'
+      });
+      
+      // 设置激活状态
+      this.setData({
+        activeStarInfo: {
+          date: date,
+          type: 'container',
+          timestamp: Date.now()
+        }
+      });
+      
+      // 300ms后清除激活状态
+      setTimeout(() => {
+        this.setData({
+          activeStarInfo: null
+        });
+      }, 300);
+    },
+    
+    /**
+     * 星星组件点击处理（针对具体的星星组件：加星、减星或图标）
+     * @param {Object} e 事件对象
+     */
+    onStarComponentTap: function(e) {
+      console.log('[星星日历] 星星组件点击:', e.currentTarget.dataset);
+      
+      // 获取点击的组件类型和日期
+      const { type, date } = e.currentTarget.dataset;
+      
+      // 提供振动反馈
+      wx.vibrateShort({
+        type: 'light'
+      });
+      
+      // 设置激活状态
+      this.setData({
+        activeStarInfo: {
+          date: date,
+          type: type,
+          timestamp: Date.now()
+        }
+      });
+      
+      // 300ms后清除激活状态
+      setTimeout(() => {
+        this.setData({
+          activeStarInfo: null
+        });
+      }, 300);
+      
+      // 阻止事件冒泡
+      return false;
     },
     
     /**
