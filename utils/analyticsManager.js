@@ -238,27 +238,32 @@ const analyticsManager = {
         return recordDate <= dateStr;
       });
       
-      // 计算各类型星星总数
+      // 计算各类型星星总数 - 确保所有计算都使用数字类型
       const earned = relevantRecords.filter(r => r.type === 'income')
-        .reduce((sum, r) => sum + (r.points || 0), 0);
+        .reduce((sum, r) => Number(sum) + Number(r.points || 0), 0);
       
       const spent = relevantRecords.filter(r => r.type === 'expense')
-        .reduce((sum, r) => sum + Math.abs(r.points || 0), 0);
+        .reduce((sum, r) => Number(sum) + Math.abs(Number(r.points || 0)), 0);
       
       const penalty = relevantRecords.filter(r => r.type === 'penalty')
-        .reduce((sum, r) => sum + Math.abs(r.points || 0), 0);
+        .reduce((sum, r) => Number(sum) + Math.abs(Number(r.points || 0)), 0);
       
-      // 计算当日余额
-      const balance = Math.max(0, earned - spent - penalty);
-      runningBalance = balance; // 更新运行余额
+      // 记录计算前的变量类型与值，帮助调试
+      logger.debug('analyticsManager', `${dateStr} 计算数据: earned=${earned}(${typeof earned}), spent=${spent}(${typeof spent}), penalty=${penalty}(${typeof penalty})`);
+      
+      // 计算当日余额 - 显式使用Number转换确保结果是数字
+      const balance = Math.max(0, Number(earned) - Number(spent) - Number(penalty));
+      runningBalance = Number(balance); // 确保运行余额也是数字类型
+      
+      logger.debug('analyticsManager', `${dateStr} 计算结果: balance=${balance}(${typeof balance})`);
       
       // 添加到结果
       result.push({
         date: formattedDates[index],
-        value: balance,
-        earned: earned,
-        spent: spent,
-        penalty: penalty
+        value: Number(balance), // 确保值是数字类型
+        earned: Number(earned),
+        spent: Number(spent),
+        penalty: Number(penalty)
       });
       
       logger.debug('analyticsManager', `${dateStr} (${formattedDates[index]}) 余额: ${balance}`);
@@ -277,6 +282,9 @@ const analyticsManager = {
    */
   _calculateExpiryForecast: function(currentBalance) {
     logger.info('analyticsManager', `计算星星过期预测，当前余额: ${currentBalance}`);
+    
+    // 确保当前余额是数字类型
+    currentBalance = Number(currentBalance);
     
     // 获取未来30天内将过期的星星
     const expiryData = this._getUpcomingExpiryStars(30);
@@ -300,13 +308,13 @@ const analyticsManager = {
     }
     
     const result = [];
-    let runningBalance = currentBalance;
+    let runningBalance = Number(currentBalance);
     const today = new Date();
     
     // 设置时间为当天23:59:59，确保包含当天所有变化
     today.setHours(23, 59, 59, 999);
     
-    logger.debug('analyticsManager', `预测开始日期: ${dateUtils.formatDate(today)}, 初始余额: ${runningBalance}`);
+    logger.debug('analyticsManager', `预测开始日期: ${dateUtils.formatDate(today)}, 初始余额: ${runningBalance}(${typeof runningBalance})`);
     
     // 计算预测天数（从今天到最远过期日的天数）
     const maxDays = Math.min(
@@ -327,20 +335,20 @@ const analyticsManager = {
         dateUtils.formatDate(new Date(item.expiryDate)) === dateStr
       );
       
-      // 计算过期总数
+      // 计算过期总数 - 确保使用数字计算
       const expiryAmount = todayExpiring.reduce((sum, item) => 
-        sum + item.points, 0
+        Number(sum) + Number(item.points || 0), 0
       );
       
-      // 更新余额
+      // 更新余额 - 确保使用数字计算
       if (expiryAmount > 0) {
-        const oldBalance = runningBalance;
-        runningBalance = Math.max(0, runningBalance - expiryAmount);
+        const oldBalance = Number(runningBalance);
+        runningBalance = Math.max(0, Number(runningBalance) - Number(expiryAmount));
         logger.info('analyticsManager', `${dateStr} 将过期 ${expiryAmount} 颗星星, 余额从 ${oldBalance} 变为 ${runningBalance}`);
         
         // 记录过期的任务标题
         todayExpiring.forEach(item => {
-          logger.debug('analyticsManager', `  - 任务"${item.title}"的${item.points}颗星星将过期`);
+          logger.debug('analyticsManager', `  - 任务"${item.title}"的${Number(item.points)}颗星星将过期`);
         });
       }
       
@@ -350,14 +358,14 @@ const analyticsManager = {
       const day = displayDate.getDate();
       const formattedDate = `${month}/${day}`;
       
-      // 记录数据点
+      // 记录数据点 - 确保值是数字类型
       result.push({
         date: formattedDate,
-        value: runningBalance,
-        expiring: expiryAmount > 0 ? expiryAmount : undefined
+        value: Number(runningBalance),
+        expiring: expiryAmount > 0 ? Number(expiryAmount) : undefined
       });
       
-      logger.debug('analyticsManager', `预测日期: ${formattedDate}, 余额: ${runningBalance}${expiryAmount > 0 ? `, 过期: ${expiryAmount}` : ''}`);
+      logger.debug('analyticsManager', `预测日期: ${formattedDate}, 余额: ${runningBalance}(${typeof runningBalance})${expiryAmount > 0 ? `, 过期: ${expiryAmount}(${typeof expiryAmount})` : ''}`);
     }
     
     logger.info('analyticsManager', `过期预测完成，共${result.length}天的数据，开始余额: ${currentBalance}，结束余额: ${result[result.length-1].value}`);

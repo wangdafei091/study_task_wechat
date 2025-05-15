@@ -300,9 +300,11 @@ Component({
       
       // 1. 准备历史数据系列 - 不需要特殊处理
       const historySeriesData = historyData.map(item => ({
-        value: item.value,
+        value: Number(item.value),
         date: item.date
       }));
+      
+      console.log(`[星星趋势图] 历史数据处理完成: ${historySeriesData.length}条，首日余额: ${historySeriesData[0].value}，末日余额: ${historySeriesData[historySeriesData.length-1].value}`);
       
       // 2. 准备预测数据系列 - 重要：为今天之前的日期点设置null值
       const forecastSeriesData = [];
@@ -346,9 +348,14 @@ Component({
         if (isAfterToday) {
           forecastSeriesData.push({
             date: item.date,
-            value: item.value,
-            expiring: item.expiring
+            value: Number(item.value),
+            expiring: item.expiring ? Number(item.expiring) : undefined
           });
+          
+          // 记录过期星星数据转换
+          if (item.expiring) {
+            console.log(`[星星趋势图] 过期数据处理: ${item.date}日过期${Number(item.expiring)}颗星星，类型: ${typeof Number(item.expiring)}`);
+          }
         }
       });
       
@@ -373,6 +380,14 @@ Component({
           itemStyle: { color: '#FF9900' }
         }));
 
+      // 记录过期数据点信息，便于调试
+      if (expiryPoints.length > 0) {
+        console.log(`[星星趋势图] 找到${expiryPoints.length}个过期数据点:`);
+        expiryPoints.forEach((point, index) => {
+          console.log(`[星星趋势图] 过期点${index+1}: 日期=${point.xAxis}, 值=${point.value}`);
+        });
+      }
+      
       // 5. 优化X轴标签，确保关键日期点显示
       const getOptimizedAxisLabels = () => {
         console.log(`[星星趋势图] 生成优化的X轴标签配置，总日期数: ${allDates.length}`);
@@ -454,7 +469,8 @@ Component({
             let text = `${validParam.name}: ${dataPoint.value}颗星星`;
             
             if (dataPoint.expiring) {
-              text += `<br/>有${dataPoint.expiring}颗星星过期`;
+              text += `\n有${parseInt(dataPoint.expiring)}颗星星过期`;
+              console.log(`[星星趋势图] 设置过期提示：${text}`);
             }
             
             return text;
@@ -546,7 +562,10 @@ Component({
               itemStyle: {
                 color: '#FF9900'
               },
-              data: expiryPoints
+              data: expiryPoints.map(point => ({
+                ...point,
+                value: Number(point.value)
+              }))
             } : undefined
           }
         ]
