@@ -181,6 +181,12 @@ const storageUtils = {
         wx.setStorageSync('claimedRewards', []);
       }
       
+      // 初始化星星分组数据
+      if (!wx.getStorageSync('starGroups')) {
+        logger.info('storageUtils', '初始化星星分组数据');
+        wx.setStorageSync('starGroups', []);
+      }
+      
       logger.info('storageUtils', '存储数据初始化完成');
       return true;
     } catch (e) {

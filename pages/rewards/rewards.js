@@ -19,7 +19,9 @@ Page({
     expiryDate: '',            // 到期日期
     rewards: [], // 改为空数组，后续从存储加载真实奖励数据
     showModal: false,
-    selectedReward: null
+    selectedReward: null,
+    showAnimationMask: false,  // 进度条满值动画期间显示的蒙层
+    isRewardAnimating: false   // 是否正在进行奖励动画
   },
 
   /**
@@ -38,6 +40,9 @@ Page({
     
     // 记录星星宝典展示
     console.log('[rewards] 展示星星宝典信息 - 精简儿童友好版');
+    
+    // 注册进度条完成事件监听
+    this.setupProgressBarListener();
   },
 
   /**
@@ -66,14 +71,16 @@ Page({
    * 生命周期函数--监听页面隐藏
    */
   onHide() {
-
+    // 清理所有计时器
+    this.clearAllTimers();
   },
 
   /**
    * 生命周期函数--监听页面卸载
    */
   onUnload() {
-
+    // 清理所有计时器
+    this.clearAllTimers();
   },
 
   /**
@@ -95,6 +102,83 @@ Page({
    */
   onShareAppMessage() {
 
+  },
+  
+  /**
+   * 设置进度条完成事件监听
+   */
+  setupProgressBarListener: function() {
+    console.log('[rewards] 设置进度条完成事件监听');
+    
+    // 获取全局事件总线
+    const eventBus = app.globalData.eventBus;
+    if (eventBus) {
+      // 监听进度条完成事件
+      eventBus.on('progressBarComplete', this.handleProgressBarComplete.bind(this));
+    }
+  },
+  
+  /**
+   * 处理进度条完成事件
+   */
+  handleProgressBarComplete: function() {
+    console.log('[rewards] 收到进度条完成事件，锁定用户操作');
+    
+    // 已经在动画中则不重复处理
+    if (this.data.isRewardAnimating) {
+      console.log('[rewards] 已经在动画中，忽略重复事件');
+      return;
+    }
+    
+    // 设置动画标志和显示蒙层
+    this.setData({
+      isRewardAnimating: true,
+      showAnimationMask: true
+    });
+    
+    // 设置安全超时，确保不会永久锁定界面
+    this.animationSafetyTimer = setTimeout(() => {
+      console.log('[rewards] 奖励动画安全超时触发');
+      this.releaseAnimationLock();
+    }, 2000); // 2秒后如果仍未释放锁定，则自动释放
+  },
+  
+  /**
+   * 释放动画锁定
+   */
+  releaseAnimationLock: function() {
+    console.log('[rewards] 释放动画锁定');
+    
+    // 清除安全超时计时器
+    if (this.animationSafetyTimer) {
+      clearTimeout(this.animationSafetyTimer);
+      this.animationSafetyTimer = null;
+    }
+    
+    // 隐藏蒙层，解除锁定
+    this.setData({
+      showAnimationMask: false,
+      isRewardAnimating: false
+    });
+  },
+  
+  /**
+   * 清理所有计时器
+   */
+  clearAllTimers: function() {
+    console.log('[rewards] 清理所有计时器');
+    
+    // 清除动画安全超时计时器
+    if (this.animationSafetyTimer) {
+      clearTimeout(this.animationSafetyTimer);
+      this.animationSafetyTimer = null;
+    }
+    
+    // 清除其他可能的计时器
+    if (this.rewardTimer) {
+      clearTimeout(this.rewardTimer);
+      this.rewardTimer = null;
+    }
   },
 
   /**
@@ -224,6 +308,12 @@ Page({
    * 查看奖励详情
    */
   viewReward: function (e) {
+    // 如果正在动画中，拦截操作
+    if (this.data.isRewardAnimating) {
+      console.log('[rewards] 正在动画中，拦截奖励查看操作');
+      return;
+    }
+    
     const rewardId = e.currentTarget.dataset.id;
     const reward = this.data.rewards.find(r => r.id === rewardId);
     
@@ -246,6 +336,12 @@ Page({
    * 导航到我的兑换页面
    */
   navigateToMyExchanges: function() {
+    // 如果正在动画中，拦截操作
+    if (this.data.isRewardAnimating) {
+      console.log('[rewards] 正在动画中，拦截页面跳转');
+      return;
+    }
+    
     console.log('[rewards] 导航到我的兑换页面');
     wx.navigateTo({
       url: '/pages/my-exchanges/my-exchanges'
@@ -256,6 +352,12 @@ Page({
    * 导航到星星记录页面
    */
   navigateToStarRecords: function() {
+    // 如果正在动画中，拦截操作
+    if (this.data.isRewardAnimating) {
+      console.log('[rewards] 正在动画中，拦截页面跳转');
+      return;
+    }
+    
     console.log('[rewards] 导航到星星记录页面');
     wx.navigateTo({
       url: '/pages/star-records/star-records'

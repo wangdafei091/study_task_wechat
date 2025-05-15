@@ -96,6 +96,14 @@
     </view>
   </view>
   
+  <!-- 进度条满值动画期间显示的操作锁定遮罩 -->
+  <view class="reward-animation-mask" wx:if="{{showAnimationMask}}">
+    <view class="animation-mask-content">
+      <view class="animation-mask-icon">✨</view>
+      <view class="animation-mask-text">奖励准备中...</view>
+    </view>
+  </view>
+  
   <!-- 奖励详情弹窗 -->
   <view class="reward-modal" wx:if="{{showModal}}">
     <view class="modal-mask" bindtap="closeModal"></view>

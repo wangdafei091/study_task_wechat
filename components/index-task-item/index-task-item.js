@@ -89,7 +89,8 @@ Component({
     },
     isDescriptionExpanded: false, // 任务描述是否展开
     showStarAnimation: false,     // 是否显示星星动画
-    expiryText: '7天'             // 积分有效期默认文本
+    expiryText: '7天',            // 积分有效期默认文本
+    isProcessing: false          // 防止重复点击
   },
 
   /**
@@ -100,14 +101,40 @@ Component({
     onCheckboxTap: function(e) {
       console.log('[index-task-item] 任务完成状态切换:', this.properties.task.id);
       
-      // 任务从未完成变为完成时，触发星星动画
-      if (this.properties.task.status != 1) {
-        this.triggerStarAnimation();
+      // 防止重复点击
+      if (this.data.isProcessing) {
+        console.log('[index-task-item] 正在处理中，忽略点击');
+        return;
       }
       
-      this.triggerEvent('complete', {
-        taskId: this.properties.task.id
+      // 标记正在处理
+      this.setData({
+        isProcessing: true
       });
+      
+      const task = this.properties.task;
+      
+      // 任务从未完成变为完成时，触发星星动画
+      if (task.status !== 1) {
+        // 只有未获得过星星的任务才显示星星动画
+        if (!task.starAwarded) {
+          this.triggerStarAnimation();
+        } else {
+          console.log('[index-task-item] 任务已获得过星星，不显示星星动画');
+        }
+      }
+      
+      // 触发完成事件
+      this.triggerEvent('complete', {
+        taskId: task.id
+      });
+      
+      // 延迟重置处理状态，防止快速点击
+      setTimeout(() => {
+        this.setData({
+          isProcessing: false
+        });
+      }, 300);
     },
 
     // 触发星星动画

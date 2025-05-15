@@ -23,34 +23,105 @@ const pointsManager = {
   saveUserPoints: function(points) {
     // 确保保存的是数字类型
     const numPoints = parseInt(points, 10);
-    storageUtils.set('userPoints', numPoints);
-    logger.info('pointsManager', `保存用户星星: ${numPoints}`);
+    
+    try {
+      // 使用同步方式保存
+      storageUtils.set('userPoints', numPoints);
+      logger.info('pointsManager', `保存用户星星: ${numPoints}`);
+      
+      // 验证保存是否成功
+      const savedPoints = storageUtils.get('userPoints', 0);
+      if (savedPoints !== numPoints) {
+        logger.warn('pointsManager', `星星数据保存验证失败: 预期=${numPoints}, 实际=${savedPoints}, 尝试再次保存`);
+        // 再次尝试保存
+        storageUtils.set('userPoints', numPoints);
+      }
+    } catch (error) {
+      logger.error('pointsManager', `星星数据保存出错: ${error}`);
+    }
   },
 
   /**
    * 增加用户星星数
    * @param {Number} amount 要增加的星星数量
+   * @param {Object} expiryConfig 过期配置，包含有效期类型和日期
+   * @param {String} source 星星来源标识，如任务ID
    * @returns {Number} 增加后的星星数量
    */
-  addUserPoints: function(amount) {
+  addUserPoints: function(amount, expiryConfig, source) {
+    // 确保数值为整数
+    const points = parseInt(amount, 10);
+    if (isNaN(points) || points <= 0) {
+      logger.warn('pointsManager', `无效的星星数量: ${amount}`);
+      return this.getUserPoints();
+    }
+    
     const currentPoints = this.getUserPoints();
-    const newPoints = currentPoints + parseInt(amount, 10);
-    this.saveUserPoints(newPoints);
-    logger.info('pointsManager', `增加星星: ${currentPoints} -> ${newPoints}, 增加: ${amount}`);
+    const newPoints = currentPoints + points;
+    
+    logger.info('pointsManager', `添加星星前检查: 当前=${currentPoints}, 增加=${points}, 预期结果=${newPoints}, 来源=${source || '未知'}`);
+    
+    // 确保使用同步方式保存星星数量，避免异步问题
+    try {
+      // 更新总星星数
+      storageUtils.set('userPoints', newPoints);
+      logger.info('pointsManager', `星星数据已同步保存: ${currentPoints} -> ${newPoints}`);
+      
+      // 立即验证保存是否成功
+      const savedPoints = storageUtils.get('userPoints', 0);
+      if (savedPoints !== newPoints) {
+        logger.warn('pointsManager', `星星数据保存异常: 预期=${newPoints}, 实际=${savedPoints}, 尝试再次保存`);
+        // 再次尝试保存
+        storageUtils.set('userPoints', newPoints);
+      }
+    } catch (error) {
+      logger.error('pointsManager', `星星数据保存出错: ${error}`);
+    }
+    
+    // 如果提供了过期配置，添加到星星分组
+    if (expiryConfig) {
+      this.addStarsToGroup(points, expiryConfig.expiry, expiryConfig.expiryDateStr, source);
+    }
+    
+    // 清理过期分组并检查数据一致性
+    this.maintainStarGroups();
+    
+    logger.info('pointsManager', `增加星星完成: ${currentPoints} -> ${newPoints}, 增加: ${points}`);
     return newPoints;
   },
 
   /**
-   * 减少用户星星数
+   * 减少用户星星数（实现"先过期先使用"策略）
    * @param {Number} amount 要减少的星星数量
    * @returns {Number} 减少后的星星数量
    */
   reduceUserPoints: function(amount) {
+    // 确保数值为整数
+    const points = parseInt(amount, 10);
+    if (isNaN(points) || points <= 0) {
+      logger.warn('pointsManager', `无效的星星消费数量: ${amount}`);
+      return this.getUserPoints();
+    }
+    
     const currentPoints = this.getUserPoints();
-    // 确保星星不会为负数
-    const newPoints = Math.max(0, currentPoints - parseInt(amount, 10));
+    
+    // 如果星星不足，直接返回
+    if (currentPoints < points) {
+      logger.warn('pointsManager', `星星不足，无法消费: 当前=${currentPoints}, 需要=${points}`);
+      return currentPoints;
+    }
+    
+    // 实现"先过期先使用"策略
+    this._consumeStarsByExpiryOrder(points);
+    
+    // 更新总星星数
+    const newPoints = Math.max(0, currentPoints - points);
     this.saveUserPoints(newPoints);
-    logger.info('pointsManager', `减少星星: ${currentPoints} -> ${newPoints}, 减少: ${amount}`);
+    
+    // 清理过期分组并检查数据一致性
+    this.maintainStarGroups();
+    
+    logger.info('pointsManager', `减少星星: ${currentPoints} -> ${newPoints}, 减少: ${points}`);
     return newPoints;
   },
 
@@ -71,6 +142,226 @@ const pointsManager = {
     
     // 普通格式化，直接返回字符串
     return numPoints.toString();
+  },
+
+  /**
+   * 获取星星分组数据
+   * @returns {Array} 星星分组数据
+   */
+  getStarGroups: function() {
+    const groups = storageUtils.get('starGroups', []);
+    logger.info('pointsManager', `获取星星分组数据，共${groups.length}组`);
+    return groups;
+  },
+
+  /**
+   * 保存星星分组数据
+   * @param {Array} groups 星星分组数据
+   */
+  saveStarGroups: function(groups) {
+    storageUtils.set('starGroups', groups);
+    logger.info('pointsManager', `保存星星分组数据，共${groups.length}组`);
+  },
+
+  /**
+   * 添加星星到分组
+   * @param {Number} points 星星数量
+   * @param {Number|String} expiryDate 过期时间戳或"permanent"
+   * @param {String} expiryDateStr 可读的过期日期
+   * @param {String} source 来源标识
+   */
+  addStarsToGroup: function(points, expiryDate, expiryDateStr, source) {
+    // 确保参数有效
+    if (!points || points <= 0) {
+      logger.warn('pointsManager', `无效的星星数量，无法添加到分组`);
+      return;
+    }
+    
+    if (!expiryDate) {
+      logger.warn('pointsManager', `未提供过期时间，默认设为永久有效`);
+      expiryDate = 'permanent';
+      expiryDateStr = '永久';
+    }
+    
+    logger.info('pointsManager', `添加星星到分组: ${points}颗, 过期=${expiryDateStr}, 来源=${source || '未知'}`);
+    
+    // 获取当前分组数据
+    const groups = this.getStarGroups();
+    
+    // 查找匹配的分组
+    let existingGroup = groups.find(group => 
+      group.expiryDate === expiryDate || 
+      (typeof expiryDate === 'number' && 
+       typeof group.expiryDate === 'number' &&
+       new Date(group.expiryDate).toDateString() === new Date(expiryDate).toDateString())
+    );
+    
+    if (existingGroup) {
+      // 更新已有分组
+      existingGroup.points += points;
+      if (source && !existingGroup.sources.includes(source)) {
+        existingGroup.sources.push(source);
+      }
+      logger.info('pointsManager', `更新已有分组: 现有数量=${existingGroup.points}, 过期=${existingGroup.expiryDateStr}`);
+    } else {
+      // 创建新分组
+      const newGroup = {
+        expiryDate: expiryDate,
+        expiryDateStr: expiryDateStr,
+        points: points,
+        sources: source ? [source] : []
+      };
+      groups.push(newGroup);
+      logger.info('pointsManager', `创建新的星星分组: ${points}颗, 过期=${expiryDateStr}`);
+    }
+    
+    // 按过期日期排序（永久有效的放在最后）
+    this._sortStarGroups(groups);
+    
+    // 保存更新后的分组
+    this.saveStarGroups(groups);
+  },
+
+  /**
+   * 清理已过期的星星分组
+   */
+  cleanupExpiredGroups: function() {
+    logger.info('pointsManager', `清理已过期星星分组`);
+    
+    const now = Date.now();
+    const groups = this.getStarGroups();
+    
+    // 过滤出未过期的分组
+    const validGroups = groups.filter(group => 
+      group.expiryDate === 'permanent' || 
+      (typeof group.expiryDate === 'number' && group.expiryDate > now)
+    );
+    
+    // 检查是否有分组被移除
+    if (validGroups.length < groups.length) {
+      const expiredGroups = groups.length - validGroups.length;
+      const expiredPoints = groups
+        .filter(g => g.expiryDate !== 'permanent' && typeof g.expiryDate === 'number' && g.expiryDate <= now)
+        .reduce((sum, g) => sum + g.points, 0);
+      
+      logger.info('pointsManager', `清理了${expiredGroups}个已过期分组，共${expiredPoints}颗星星`);
+      
+      // 更新总星星数（从总数中减去过期的星星）
+      const currentTotal = this.getUserPoints();
+      const newTotal = Math.max(0, currentTotal - expiredPoints);
+      this.saveUserPoints(newTotal);
+      
+      // 保存更新后的分组
+      this.saveStarGroups(validGroups);
+      
+      logger.info('pointsManager', `更新总星星数: ${currentTotal} -> ${newTotal}, 减少: ${expiredPoints}`);
+    }
+  },
+
+  /**
+   * 检查星星数据一致性
+   */
+  checkDataConsistency: function() {
+    logger.info('pointsManager', `检查星星数据一致性`);
+    
+    const groups = this.getStarGroups();
+    const storedTotal = this.getUserPoints();
+    
+    // 计算所有分组的星星总和
+    const groupsTotal = groups.reduce((sum, group) => sum + group.points, 0);
+    
+    // 检查是否一致
+    if (groupsTotal !== storedTotal) {
+      logger.warn('pointsManager', `星星数据不一致: 分组总和=${groupsTotal}, 存储总数=${storedTotal}`);
+    } else {
+      logger.info('pointsManager', `星星数据一致性检查通过: 总数=${storedTotal}`);
+    }
+  },
+  
+  /**
+   * 维护星星分组数据
+   * 清理过期分组并检查数据一致性
+   */
+  maintainStarGroups: function() {
+    this.cleanupExpiredGroups();
+    this.checkDataConsistency();
+  },
+  
+  /**
+   * 按过期顺序消费星星（先过期先使用）
+   * @param {Number} amount 要消费的数量
+   * @private
+   */
+  _consumeStarsByExpiryOrder: function(amount) {
+    logger.info('pointsManager', `按过期顺序消费星星: ${amount}颗`);
+    
+    // 获取星星分组
+    let groups = this.getStarGroups();
+    
+    // 如果没有分组数据但有星星，创建一个永久有效的默认分组
+    if (groups.length === 0) {
+      const total = this.getUserPoints();
+      if (total > 0) {
+        groups = [{
+          expiryDate: 'permanent',
+          expiryDateStr: '永久',
+          points: total,
+          sources: ['system_default']
+        }];
+        this.saveStarGroups(groups);
+        logger.info('pointsManager', `创建默认星星分组: ${total}颗, 永久有效`);
+      }
+    }
+    
+    // 按过期日期排序
+    this._sortStarGroups(groups);
+    
+    // 追踪剩余需要消费的数量
+    let remaining = amount;
+    let consumptionLog = [];
+    
+    // 从最早过期的分组开始消费
+    for (let i = 0; i < groups.length && remaining > 0; i++) {
+      const group = groups[i];
+      
+      // 确定从当前分组消费的数量
+      const toConsume = Math.min(remaining, group.points);
+      
+      // 更新分组星星数
+      group.points -= toConsume;
+      
+      // 记录消费日志
+      consumptionLog.push(`从"${group.expiryDateStr}"过期分组消费${toConsume}颗`);
+      
+      // 更新剩余需要消费的数量
+      remaining -= toConsume;
+      
+      logger.info('pointsManager', `从过期时间为"${group.expiryDateStr}"的分组消费${toConsume}颗星星，剩余${group.points}颗`);
+    }
+    
+    // 移除空分组
+    const updatedGroups = groups.filter(group => group.points > 0);
+    
+    // 保存更新后的分组
+    this.saveStarGroups(updatedGroups);
+    
+    logger.info('pointsManager', `星星消费完成，消费记录: ${consumptionLog.join('; ')}`);
+  },
+  
+  /**
+   * 对星星分组按过期日期排序
+   * @param {Array} groups 星星分组
+   * @private
+   */
+  _sortStarGroups: function(groups) {
+    groups.sort((a, b) => {
+      // 永久有效的放在最后
+      if (a.expiryDate === 'permanent') return 1;
+      if (b.expiryDate === 'permanent') return -1;
+      
+      // 数字类型按从小到大排序（先过期的在前面）
+      return a.expiryDate - b.expiryDate;
+    });
   },
 
   /**

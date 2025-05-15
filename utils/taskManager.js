@@ -436,52 +436,75 @@ const taskManager = {
   updateTaskStatus(taskId, status, callback) {
     this.getAllTasks(allTasks => {
       const taskIndex = allTasks.findIndex(t => t.id === taskId);
-      if (taskIndex === -1) {
-        logger.error('taskManager', `任务不存在: ${taskId}`);
-        if (callback) callback(false);
+      
+      if (taskIndex < 0) {
+        logger.error('taskManager', `更新任务状态失败: 找不到ID为${taskId}的任务`);
+        if (callback) {
+          callback(new Error(`找不到ID为${taskId}的任务`), null);
+        }
         return;
       }
-
+      
       const task = allTasks[taskIndex];
       const oldStatus = task.status;
+      
+      logger.info('taskManager', `更新任务"${task.title}"状态: ${oldStatus} -> ${status}`);
+      
+      // 更新任务状态
       task.status = status;
       task.modifyTime = Date.now();
-
-      // 处理积分变更
-      if (status === 1 && oldStatus !== 1) { // 完成任务
-        if (!task.isRequired) {
-          // 检查任务是否已经获得过星星
-          if (task.starAwarded) {
-            logger.info('taskManager', `任务 ${task.title} 已获得过星星，不再重复添加`);
-            // 显示提示
-            wx.showToast({
-              title: '这个任务已经给过星星了哦~',
-              icon: 'none',
-              duration: 1500
-            });
-          } else {
+      
+      // 处理任务状态变更
+      if (status === 1 && oldStatus !== 1) { // 标记为已完成
+        logger.info('taskManager', `任务"${task.title}"标记为已完成`);
+        
+        // 记录完成时间
+        const completionTime = Date.now();
+        
+        // 如果没有完成记录数组则创建
+        if (!task.completionRecords) {
+          task.completionRecords = [];
+        }
+        
+        // 添加完成记录
+        task.completionRecords.unshift({
+          date: dateUtils.formatDate(new Date(completionTime)),
+          timestamp: completionTime,
+          notes: ''
+        });
+        
+        // 处理星星奖励
+        if (task.isRequired) {
+          logger.info('taskManager', `必做任务${task.title}已完成，不扣除星星`);
+          task.penaltyApplied = false;
+        } else {
+          if (!task.starAwarded) {
             logger.info('taskManager', `非必做任务 ${task.title} 已完成，添加星星: ${task.points || 0}`);
-            pointsManager.addUserPoints(task.points || 0);
-            
-            // 标记任务已获得星星
-            task.starAwarded = true;
             
             // 计算积分有效期并更新任务
+            let expiryConfig = null;
             if (task.pointsExpiry) {
               logger.info('taskManager', `计算任务${task.id}积分有效期，类型: ${task.pointsExpiry}`);
               const completionDate = new Date();
-              const expiryInfo = this.calculateExpiryDate(task.pointsExpiry, completionDate);
+              expiryConfig = this.calculateExpiryDate(task.pointsExpiry, completionDate);
               
               // 更新任务的有效期信息
-              task.pointsExpiryDate = expiryInfo.expiryDateStr;
-              logger.info(`taskManager] 更新任务${task.id}的积分有效期为: ${task.pointsExpiryDate}`);
+              task.pointsExpiryDate = expiryConfig.expiryDateStr;
+              logger.info('taskManager', `更新任务${task.id}的积分有效期为: ${task.pointsExpiryDate}`);
             }
+            
+            // 添加星星并传递过期配置和来源
+            pointsManager.addUserPoints(task.points || 0, expiryConfig, `task_${task.id}`);
+            
+            // 标记任务已获得星星
+            task.starAwarded = true;
+          } else {
+            logger.info('taskManager', `任务${task.title}已获得过星星，不重复添加`);
           }
         }
       } else if (status === 0 && oldStatus === 1) { // 取消完成
         if (!task.isRequired) {
-          logger.info(`taskManager] 非必做任务 ${task.title} 取消完成，减少星星: ${task.points || 0}`);
-          pointsManager.reduceUserPoints(task.points || 0);
+          logger.info('taskManager', `非必做任务 ${task.title} 取消完成，保留已获得的星星`);
           
           // 重置有效期显示为类型描述
           if (task.pointsExpiry && typeof task.pointsExpiry === 'string') {
@@ -493,7 +516,7 @@ const taskManager = {
             } else {
               task.pointsExpiryDate = '';
             }
-            logger.info(`taskManager] 重置任务${task.id}的积分有效期为: ${task.pointsExpiryDate}`);
+            logger.info('taskManager', `重置任务${task.id}的积分有效期为: ${task.pointsExpiryDate}`);
           }
           
           // 注意：不重置starAwarded标记，确保任务只能获得一次星星

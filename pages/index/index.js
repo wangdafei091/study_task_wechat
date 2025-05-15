@@ -123,6 +123,9 @@ Page({
     // 新增奖励提示对话框
     showSetupRewardTip: false, // 是否显示设置奖励提示
     setupRewardTipAnimation: {}, // 提示动画
+
+    // 新增处理中状态
+    processingTaskId: null, // 用于存储正在处理的任务ID
   },
   
   /**
@@ -412,12 +415,24 @@ Page({
     const id = e.detail.taskId;
     console.log('完成任务:', id);
     
+    // 如果任务正在处理中，阻止重复操作
+    if (this.data.processingTaskId === id) {
+      console.log('[Index] 该任务正在处理中，忽略重复点击');
+      return;
+    }
+    
     // 获取当前任务状态
     const task = this.data.tasks.find(t => t.id === id);
     if (!task) return;
     
+    // 设置处理中状态，防止重复点击
+    this.setData({
+      processingTaskId: id
+    });
+    
     // 新状态是当前状态的反转
-    const newStatus = task.status === 0 ? 1 : 0;
+    const oldStatus = task.status;
+    const newStatus = oldStatus === 0 ? 1 : 0;
     
     // 如果是要完成任务，先检查是否只有示例奖励
     if (newStatus === 1) {
@@ -426,6 +441,11 @@ Page({
         console.log('[Index] 检测到只有示例奖励可用，显示设置奖励提示');
         this.showSetupRewardTip();
         
+        // 清除处理中状态
+        this.setData({
+          processingTaskId: null
+        });
+        
         // 直接返回，不执行后续的任务完成逻辑
         return;
       }
@@ -433,19 +453,53 @@ Page({
     
     // 使用任务管理器更新任务状态
     taskManager.updateTaskStatus(id, newStatus, updatedTask => {
+      // 清除处理中状态
+      this.setData({
+        processingTaskId: null
+      });
+      
       if (updatedTask) {
         // 任务状态变更时，立即刷新星星和奖品信息
         console.log('[Index] 任务状态变更，立即刷新星星和奖品信息');
         this.loadStarsAndRewards();
         
-        // 仅当完成任务时触发庆祝动画
-        if (newStatus === 1) {
+        // 根据操作类型和任务状态提供合适的提示
+        if (newStatus === 1) {  // 完成任务
+          if (!updatedTask.starAwarded) {
+            // 首次完成任务，获得星星
+            wx.showToast({
+              title: `获得${updatedTask.points || 0}颗星星！`,
+              icon: 'success',
+              duration: 2000
+            });
+            
+            // 震动反馈
+            if (wx.vibrateShort) {
+              wx.vibrateShort({ type: 'heavy' });
+            }
+          } else {
+            // 再次完成任务，不会获得星星
+            wx.showToast({
+              title: '已获得过星星',
+              icon: 'none',
+              duration: 1500
+            });
+          }
+          
+          // 仅当完成任务时触发庆祝动画
           setTimeout(() => {
             const progressBar = this.selectComponent('#progressBar');
             if (progressBar) {
               progressBar.playAnimation('complete');
             }
           }, 300);
+        } else {  // 取消完成
+          // 提示用户星星已保留
+          wx.showToast({
+            title: '已保留获得的星星',
+            icon: 'none',
+            duration: 1500
+          });
         }
       }
     });
@@ -885,7 +939,7 @@ viewMessageDetail: function(e) {
       return;
     }
     
-    // 获取最新星星数据
+    // 强制重新读取星星数据，确保获取最新值
     const userPoints = pointsManager.getUserPoints();
     console.log(`[Index] 当前用户星星数: ${userPoints}`);
     
@@ -946,6 +1000,9 @@ viewMessageDetail: function(e) {
     } else {
       console.log(`[Index] 下一个奖励: ${nextReward.name}，需要星星: ${nextReward.points}，当前星星: ${userPoints}`);
     }
+    
+    // 明确记录实际进度值
+    console.log(`[Index] 进度更新 - 当前值: ${userPoints}, 目标值: ${nextReward.points}`);
     
     // 更新奖励进度数据
     this.setData({

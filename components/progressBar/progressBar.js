@@ -257,6 +257,8 @@ Component({
     
     // 显示完成信息
     showCompletionMessage: function() {
+      console.log(`[progressBar] 开始显示完成信息，触发完成动画`);
+      
       // 使用固定的鼓励语，缩短文本
       const completionMessage = "全部完成！";
       
@@ -268,48 +270,40 @@ Component({
         showFireworks: true // 显示礼花效果
       });
       
-      // 让小鸡做一个特殊的庆祝动画
+      // 通知页面开始进行奖励动画，锁定用户操作
+      const app = getApp();
+      if (app && app.globalData && app.globalData.eventBus) {
+        console.log(`[progressBar] 发送进度条完成事件，通知页面锁定操作`);
+        app.globalData.eventBus.emit('progressBarComplete');
+      }
+      
+      // 让小鸡做一个简化的特殊庆祝动画，缩短总时长
       setTimeout(() => {
+        // 旋转动画
         this.setData({
           chickAnimation: 'spin'
         });
         
+        // 600ms后结束动画，比原来的时间缩短
         setTimeout(() => {
           this.setData({
-            chickAnimation: 'flip'
+            chickAnimation: '',
+            chickSpeaking: false,
+            nodeReached: false,
+            showFireworks: false // 关闭礼花效果
           });
-          
-          setTimeout(() => {
-            this.setData({
-              chickAnimation: 'jump',
-              chickSpeaking: false,
-              nodeReached: false
-            });
-            
-            // 礼花效果持续时间更长
-            setTimeout(() => {
-              this.setData({
-                chickAnimation: '',
-                showFireworks: false // 5秒后关闭礼花效果
-              });
-            }, 5000);
-          }, 800);
-        }, 800);
-      }, 1000);
+        }, 1200); // 总动画时长缩短到1.5秒左右
+      }, 300);
       
-      // 触发震动增强体验
+      // 触发震动增强体验 - 保留但简化
       if (wx.vibrateShort) {
         try {
           wx.vibrateShort({ type: 'medium' });
-          // 连续震动模拟庆祝效果
           setTimeout(() => {
             wx.vibrateShort({ type: 'light' });
           }, 300);
-          setTimeout(() => {
-            wx.vibrateShort({ type: 'light' });
-          }, 600);
         } catch (e) {
-          console.log('震动失败', e);
+          console.log('[progressBar] 震动失败', e);
         }
       }
     },
