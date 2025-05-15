@@ -31,6 +31,15 @@ Page({
     this.setData({ loading: true });
     setTimeout(() => {
       this.loadData();
+      
+      // 获取星星日历组件实例并调用智能刷新方法
+      const starCalendar = this.selectComponent('.star-calendar');
+      if (starCalendar) {
+        console.log('[分析页] 触发星星日历智能刷新');
+        starCalendar.smartRefresh();
+      } else {
+        console.log('[分析页] 未找到星星日历组件');
+      }
     }, 300);
   },
   

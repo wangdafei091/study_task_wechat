@@ -3,7 +3,7 @@
   <view class="content">
     <!-- 星星日历卡片 -->
       <card title="任务星星日历 - 记录你的小小成就" customClass="calendar-card">
-        <star-calendar></star-calendar>
+        <star-calendar class="star-calendar"></star-calendar>
       </card>
       
     <!-- 星星趋势图卡片 -->
