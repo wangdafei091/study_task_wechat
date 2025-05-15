@@ -506,8 +506,13 @@ const taskManager = {
         if (!task.isRequired) {
           logger.info('taskManager', `非必做任务 ${task.title} 取消完成，保留已获得的星星`);
           
-          // 重置有效期显示为类型描述
-          if (task.pointsExpiry && typeof task.pointsExpiry === 'string') {
+          // 如果任务已获得星星且已经有计算好的过期日期，则保留该日期
+          if (task.starAwarded && task.pointsExpiryDate) {
+            // 不更改已计算的有效期日期，保持现有格式
+            logger.info('taskManager', `保留任务${task.id}的已计算积分有效期: ${task.pointsExpiryDate}`);
+          }
+          // 否则才重置为默认文本描述
+          else if (task.pointsExpiry && typeof task.pointsExpiry === 'string') {
             const Constants = require('./constants.js');
             if (task.pointsExpiry === 'permanent') {
               task.pointsExpiryDate = '永久';
