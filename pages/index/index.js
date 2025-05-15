@@ -425,6 +425,10 @@ Page({
     const task = this.data.tasks.find(t => t.id === id);
     if (!task) return;
     
+    // 保存原始的 starAwarded 状态，用于后续判断
+    const wasStarAwarded = task.starAwarded || false;
+    console.log(`[Index] 任务原始星星状态: ${wasStarAwarded ? '已获得' : '未获得'}`);
+    
     // 设置处理中状态，防止重复点击
     this.setData({
       processingTaskId: id
@@ -465,7 +469,7 @@ Page({
         
         // 根据操作类型和任务状态提供合适的提示
         if (newStatus === 1) {  // 完成任务
-          if (!updatedTask.starAwarded) {
+          if (!wasStarAwarded) {  // 使用保存的原始状态判断
             // 首次完成任务，获得星星
             wx.showToast({
               title: `获得${updatedTask.points || 0}颗星星！`,
