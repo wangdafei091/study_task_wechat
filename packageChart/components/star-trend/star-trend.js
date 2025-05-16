@@ -422,28 +422,37 @@ Component({
         // 根据日期数量确定显示策略
         let interval = 0;
         if (allDates.length > 20) {
-          interval = Math.floor(allDates.length / 6); // 约显示6个点
+          interval = Math.floor(allDates.length / 4); // 减少点数，显示非常少的点
           console.log(`[星星趋势图] 日期较多，设置间隔为${interval}`);
         } else if (allDates.length > 10) {
-          interval = Math.floor(allDates.length / 5); // 约显示5个点
+          interval = Math.floor(allDates.length / 3); // 减少点数，仅显示约3个点
           console.log(`[星星趋势图] 日期适中，设置间隔为${interval}`);
+        } else {
+          interval = 2; // 少量日期也使用间隔，避免密集显示
+          console.log(`[星星趋势图] 日期较少，设置间隔为${interval}`);
         }
         
-        // 生成显示函数，确保重要日期点一定显示
-        return function(index) {
-          // 如果是重要日期点，一定显示
+        // 生成显示函数，确保关键日期点一定显示，其他点采用严格间隔
+        return function(index, value) {
+          // 图表两端的点总是显示
+          if (index === 0 || index === allDates.length - 1) {
+            return true;
+          }
+          
+          // 如果是重要日期点(今天和过期点)，一定显示
           if (importantIndexes.includes(index)) {
             return true;
           }
           
-          // 其他点按间隔显示
-          if (interval > 0) {
-            return index % interval === 0;
-          }
-          
-          // 日期较少时全部显示
-          return true;
+          // 其他点采用较大间隔显示
+          return index % interval === 0;
         };
+      };
+      
+      // 格式化X轴日期标签，使其更紧凑
+      const formatAxisLabel = value => {
+        const [month, day] = value.split('/');
+        return `${month}/${day}`;
       };
       
       // x轴配置
@@ -460,8 +469,21 @@ Component({
           color: '#666666',
           fontSize: 9,
           align: 'center',
-          interval: getOptimizedAxisLabels() // 使用优化的标签显示策略
+          interval: getOptimizedAxisLabels(), // 使用优化的标签显示策略
+          rotate: 45, // 增加旋转角度为45度，彻底解决重叠
+          margin: 12, // 增加与坐标轴的距离
+          formatter: formatAxisLabel, // 使用更紧凑的标签格式
+          hideOverlap: true // 强制隐藏重叠的标签
         }
+      };
+      
+      // 调整网格布局，增加底部空间，容纳旋转后的标签
+      const gridOption = {
+        left: '4%',
+        right: '4%',
+        bottom: '15%', // 增加底部空间
+        top: '5%',
+        containLabel: true
       };
       
       chart.setOption({
@@ -486,13 +508,7 @@ Component({
             return text;
           }
         },
-        grid: {
-          left: '4%',
-          right: '4%',
-          bottom: '12%',
-          top: '5%',
-          containLabel: true
-        },
+        grid: gridOption,
         xAxis: xAxisOption,
         yAxis: {
           type: 'value',
