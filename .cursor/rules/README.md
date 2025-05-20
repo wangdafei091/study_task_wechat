@@ -1,74 +1,76 @@
 # 学习任务微信小程序文档索引
 
-本目录包含学习任务微信小程序的文档和开发指南，按照不同分类组织。
+> **重要通知**: 本目录下的所有文档已迁移至项目根目录的 `docs/` 文件夹。
+> **请不要继续使用或更新本目录下的文档**。所有文档更新应在 `docs/` 目录进行。
 
-## 文档结构
+## 文档新位置
+
+所有文档现已统一移至项目根目录的 `docs/` 文件夹，按以下结构组织：
 
 ```
-.cursor/rules/
-├── README.md                 # 文档索引(当前文件)
-├── system/                   # 系统架构和优化文档
-│   ├── system_architecture.md # 系统架构文档
-│   ├── optimization_summary.md # 优化内容总结
-│   └── star_points_system.md # 星星有效期与消费机制文档
-├── project/                  # 项目具体功能文档
-│   ├── project_structure.mdc # 项目结构文档
-│   ├── development_workflow.mdc # 开发工作流程文档
-│   ├── task_data_model.mdc   # 任务数据模型文档
-│   ├── components_guide.mdc  # 组件使用指南
-│   └── utils_guide.mdc       # 工具函数使用指南
-└── memory-bank/              # 项目记忆库文件
-    ├── MemoryBank.mdc        # 记忆库说明文档
-    ├── projectbrief.md       # 项目简介
-    ├── productContext.md     # 产品上下文
-    ├── techContext.md        # 技术上下文
-    ├── systemPatterns.md     # 系统设计模式
-    ├── activeContext.md      # 当前活动上下文
-    └── progress.md           # 项目进度
+docs/
+├── architecture/       # 架构文档
+│   ├── project_structure.md    # 项目结构
+│   ├── data_models.md          # 数据模型
+│   ├── system_architecture.md  # 系统架构
+│   ├── star_points_system.md   # 星星有效期与消费机制
+│   └── optimization_summary.md # 优化总结
+├── development/       # 开发指南
+│   ├── workflow.md             # 开发工作流程
+│   ├── coding_standards.md     # 编码规范
+│   ├── troubleshooting.md      # 常见问题解决
+│   └── CHANGELOG.md            # 更新日志
+├── api/               # API文档
+│   └── utils_guide.md          # 工具函数指南
+├── user/              # 用户手册
+│   ├── guide.md                # 用户指南
+│   └── faq.md                  # 常见问题解答
+└── README.md          # 项目总览
 ```
 
-## 核心文档
+## 文档管理规则
 
-### 系统文档
-- [系统架构](system/system_architecture.md) - 系统整体架构设计
-- [优化内容总结](system/optimization_summary.md) - 系统优化和性能改进总结
-- [星星有效期与消费机制](system/star_points_system.md) - 详细介绍星星有效期计算和"先过期先使用"的消费策略
+根据项目规则（见 `.cursorrules` 文件），所有文档必须：
 
-### 项目文档
-- [项目结构](project/project_structure.mdc) - 项目目录结构和文件关系
-- [开发工作流程](project/development_workflow.mdc) - 开发规范和工作流程
-- [任务数据模型](project/task_data_model.mdc) - 任务数据结构和处理逻辑
-- [组件使用指南](project/components_guide.mdc) - 项目组件功能和使用方法
-- [工具函数使用指南](project/utils_guide.mdc) - 工具函数用途和使用示例
+1. 统一存放在 `docs/` 目录下
+2. 按功能分类存放在对应子目录
+3. 在修改代码时同步更新
+4. 定期清理过时内容
+5. 遵循统一命名规则（小写字母和连字符）
 
-### 记忆库文档
-- [记忆库说明](memory-bank/MemoryBank.mdc) - 记忆库功能和使用说明
-- [项目简介](memory-bank/projectbrief.md) - 项目基本概述和目标
-- [产品上下文](memory-bank/productContext.md) - 产品需求和用户场景
-- [技术上下文](memory-bank/techContext.md) - 技术选型和实现方案
-- [系统设计模式](memory-bank/systemPatterns.md) - 项目使用的设计模式和架构
-- [当前活动上下文](memory-bank/activeContext.md) - 当前开发焦点和最新进展
-- [项目进度](memory-bank/progress.md) - 项目完成情况和待办事项
+## 文档迁移状态
 
-## 最新更新
+所有文档均已完成迁移：
 
-| 日期 | 文档 | 内容 |
-|------|------|------|
-| 2024-08-10 | [星星有效期与消费机制](system/star_points_system.md) | 新增文档，详细介绍星星有效期和消费机制的实现 |
-| 2024-08-10 | [任务数据模型](project/task_data_model.mdc) | 更新文档，添加星星分组数据模型和消费策略 |
-| 2024-08-10 | [当前活动上下文](memory-bank/activeContext.md) | 更新文档，添加星星有效期和消费机制的最新实现信息 |
-| 2024-08-10 | [项目进度](memory-bank/progress.md) | 更新文档，添加星星有效期和消费机制的实现进度 |
-| 2024-07-25 | [系统架构](system/system_architecture.md) | 更新核心架构和数据流转图 |
-| 2024-07-25 | [工具函数使用指南](project/utils_guide.mdc) | 更新文档，添加新增工具类和函数说明 |
-| 2024-07-25 | [优化内容总结](system/optimization_summary.md) | 更新日期计算和批量处理优化总结 |
+- [x] 项目结构文档 - 已迁移至 `docs/architecture/project_structure.md`
+- [x] 数据模型文档 - 已迁移至 `docs/architecture/data_models.md`
+- [x] 开发工作流程 - 已迁移至 `docs/development/workflow.md`
+- [x] 编码规范 - 已迁移至 `docs/development/coding_standards.md`
+- [x] 工具函数指南 - 已迁移至 `docs/api/utils_guide.md`
+- [x] 故障排除指南 - 已迁移至 `docs/development/troubleshooting.md`
+- [x] 系统架构文档 - 已迁移至 `docs/architecture/system_architecture.md`
+- [x] 优化内容总结 - 已迁移至 `docs/architecture/optimization_summary.md`
+- [x] 星星有效期机制 - 已迁移至 `docs/architecture/star_points_system.md`
+- [x] 用户指南 - 已迁移至 `docs/user/guide.md`
+- [x] 常见问题解答 - 已迁移至 `docs/user/faq.md`
+- [x] 更新日志 - 已迁移至 `docs/development/CHANGELOG.md`
+
+**重要提示**：请立即开始使用新的文档位置，本目录下的文档将不再更新。
 
 ## 文档使用说明
 
-1. **项目开发参考**：开发新功能前，先查阅相关文档了解项目架构和模式
-2. **代码规范遵循**：按照[开发工作流程](project/development_workflow.mdc)中的规范编写代码
+1. **项目开发参考**：请查阅 `docs/` 目录下的最新文档
+2. **代码规范遵循**：按照 `docs/development/workflow.md` 中的规范编写代码
 3. **组件和工具使用**：使用组件和工具函数前参考对应指南文档
-4. **功能实现参考**：实现类似功能时参考已有实现，如[星星有效期与消费机制](system/star_points_system.md)
-5. **项目进度跟踪**：查看[项目进度](memory-bank/progress.md)了解当前完成情况和优先级
+4. **项目进度跟踪**：查看 `docs/` 下的相关文档了解当前完成情况
+
+## 文档迁移提示
+
+1. 本目录下的所有内容已迁移到 `docs/` 目录
+2. 新文档应直接创建在 `docs/` 目录下对应子目录中
+3. 修复代码时，应更新 `docs/` 目录下的相关文档
+4. 历史文档仅作为参考，不再更新
+5. 如有需要参考本目录的旧文档，请确保先查看`docs/`目录中的最新版本
 
 ## 文档维护规则
 
