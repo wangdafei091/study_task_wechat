@@ -1,0 +1,90 @@
+<view class="demo-container">
+  <!-- 顶部操作区 -->
+  <view class="header">
+    <view class="title">架构验证示例</view>
+    <button bindtap="resetData" type="warn" size="mini">重置数据</button>
+  </view>
+  
+  <!-- 任务管理区 -->
+  <view class="section task-section">
+    <view class="section-title">任务管理</view>
+    <view class="add-task">
+      <input placeholder="任务名称" model:value="{{newTaskName}}" />
+      <picker bindchange="onTaskTypeChange" value="{{taskTypeIndex}}" range="{{taskTypes}}">
+        <view class="picker">{{taskTypes[taskTypeIndex]}}</view>
+      </picker>
+      <button bindtap="createTask" type="primary" size="mini">创建任务</button>
+    </view>
+    <view class="task-list">
+      <block wx:for="{{tasks}}" wx:key="id">
+        <view class="task-item">
+          <view class="task-info">
+            <text class="task-name">{{item.name}}</text>
+            <text class="task-type">{{item.typeText}}</text>
+          </view>
+          <view class="task-actions">
+            <text class="stars-value">+{{item.starPoints}}星</text>
+            <button 
+              wx:if="{{!item.completed}}" 
+              bindtap="completeTask" 
+              data-id="{{item.id}}" 
+              size="mini" 
+              type="primary">完成</button>
+            <text wx:else class="completed-text">已完成</text>
+          </view>
+        </view>
+      </block>
+    </view>
+  </view>
+  
+  <!-- 星星状态区 -->
+  <view class="section star-section">
+    <view class="section-title">星星状态</view>
+    <view class="star-total">总星星数: {{totalStars}}</view>
+    <view class="star-groups">
+      <block wx:for="{{starGroups}}" wx:key="expiryType">
+        <view class="star-group-item">
+          <text class="group-type">{{item.expiryTypeText}}</text>
+          <text class="group-count">{{item.points}}颗</text>
+          <text class="group-expiry" wx:if="{{item.expiryDateStr}}">{{item.expiryDateStr}}</text>
+        </view>
+      </block>
+    </view>
+  </view>
+  
+  <!-- 奖励兑换区 -->
+  <view class="section reward-section">
+    <view class="section-title">奖励兑换</view>
+    <view class="rewards-list">
+      <block wx:for="{{rewards}}" wx:key="id">
+        <view class="reward-item">
+          <view class="reward-info">
+            <text class="reward-name">{{item.name}}</text>
+            <text class="reward-cost">{{item.points}}星</text>
+          </view>
+          <button 
+            bindtap="exchangeReward" 
+            data-id="{{item.id}}" 
+            size="mini" 
+            type="primary" 
+            disabled="{{item.claimed || totalStars < item.points}}">
+            {{item.claimed ? '已兑换' : '兑换'}}
+          </button>
+        </view>
+      </block>
+    </view>
+  </view>
+  
+  <!-- 日志展示区 -->
+  <view class="section log-section">
+    <view class="section-title">操作日志</view>
+    <scroll-view scroll-y class="log-scroll">
+      <block wx:for="{{logs}}" wx:key="index">
+        <view class="log-item">
+          <text class="log-time">{{item.time}}</text>
+          <text class="log-message">{{item.message}}</text>
+        </view>
+      </block>
+    </scroll-view>
+  </view>
+</view> 

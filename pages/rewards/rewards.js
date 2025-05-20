@@ -21,7 +21,11 @@ Page({
     showModal: false,
     selectedReward: null,
     showAnimationMask: false,  // 进度条满值动画期间显示的蒙层
-    isRewardAnimating: false   // 是否正在进行奖励动画
+    isRewardAnimating: false,  // 是否正在进行奖励动画
+    
+    // 架构示例页面相关
+    demoClickCount: 0,  // 添加点击计数
+    demoClickTimeout: null  // 添加超时变量
   },
 
   /**
@@ -178,6 +182,12 @@ Page({
     if (this.rewardTimer) {
       clearTimeout(this.rewardTimer);
       this.rewardTimer = null;
+    }
+    
+    // 清除点击计数超时计时器
+    if (this.data.demoClickTimeout) {
+      clearTimeout(this.data.demoClickTimeout);
+      this.setData({ demoClickTimeout: null });
     }
   },
 
@@ -529,5 +539,40 @@ Page({
     
     // 开始动画
     countDown();
+  },
+
+  /**
+   * 处理星星区域点击
+   * 连续点击5次进入架构示例页面
+   */
+  onStarsAreaTap: function() {
+    clearTimeout(this.data.demoClickTimeout);
+    
+    let count = this.data.demoClickCount + 1;
+    
+    if (count === 5) {
+      // 达到5次点击，跳转到示例页面
+      console.log('[rewards] 检测到5次连续点击，跳转到架构示例页面');
+      // 添加振动反馈
+      if (wx.vibrateShort) {
+        wx.vibrateShort({ type: 'light' });
+      }
+      wx.navigateTo({
+        url: '/pages/architecture-demo/demo'
+      });
+      count = 0;  // 重置计数
+    } else {
+      // 设置2秒超时，如果2秒内没有下一次点击，重置计数
+      const timeout = setTimeout(() => {
+        this.setData({ demoClickCount: 0 });
+      }, 2000);
+      
+      this.setData({ 
+        demoClickCount: count,
+        demoClickTimeout: timeout
+      });
+      
+      console.log(`[rewards] 星星区域点击 ${count}/5`);
+    }
   }
 })

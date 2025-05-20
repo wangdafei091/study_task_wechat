@@ -789,5 +789,5 @@ Page({
     if (typeof this.data.confirmDialogAction === 'function') {
       this.data.confirmDialogAction();
     }
-  }
+  },
 });
