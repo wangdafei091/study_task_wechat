@@ -544,7 +544,7 @@ Page({
   /**
    * 处理星星区域点击
    * 连续点击5次进入架构示例页面
-   
+   */
   onStarsAreaTap: function() {
     clearTimeout(this.data.demoClickTimeout);
     
@@ -574,5 +574,5 @@ Page({
       
       console.log(`[rewards] 星星区域点击 ${count}/5`);
     }
-  }*/
+  }
 })
