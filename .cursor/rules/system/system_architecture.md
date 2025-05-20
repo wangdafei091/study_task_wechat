@@ -2,200 +2,289 @@
 
 ## 系统概述
 
-学习任务微信小程序是一个专为帮助小朋友养成良好学习习惯而设计的任务管理工具。系统采用组件化设计，支持多种任务类型，提供丰富的进度跟踪和奖励机制。本文档主要描述系统的核心架构、组件关系以及数据流。
+学习任务微信小程序是一个专为帮助小朋友养成良好学习习惯而设计的任务管理工具。系统采用领域驱动设计(DDD)架构，支持多种任务类型，提供丰富的进度跟踪和奖励机制。本文档主要描述系统的核心架构、组件关系以及数据流。
 
 ## 核心架构
 
-### 1. 应用结构
+### 1. 领域驱动设计架构
 
-系统采用标准的微信小程序架构，由以下部分组成：
+系统采用领域驱动设计架构，分为以下几层：
 
-- **入口文件**：app.js、app.json和app.wxss
-- **页面**：存放在pages目录下，每个页面包含js、wxml、wxss和json文件
-- **组件**：存放在components目录下，负责实现可复用的UI和功能模块
-- **工具类**：存放在utils目录下，提供通用功能支持
-- **资源文件**：存放在assets目录下，包括图片、图标等静态资源
+- **领域层(Domain Layer)**：核心业务逻辑，包含领域模型和业务规则
+- **应用层(Application Layer)**：协调领域对象，实现业务用例
+- **基础设施层(Infrastructure Layer)**：提供技术支持，包括数据持久化
+- **表现层(Presentation Layer)**：用户界面和交互处理
 
-### 2. 数据管理
+```mermaid
+graph TD
+    A[表现层/页面] --> B[应用层/服务]
+    B --> C[领域层/模型]
+    B --> D[基础设施层/仓储]
+    D --> E[基础设施层/适配器]
+    C -.-> D
+    E --> F[微信小程序API]
+```
+
+### 2. 应用结构
+
+系统代码结构组织如下：
+
+- **models/**：领域模型定义
+  - task.js、star.js、reward.js 等
+- **services/**：应用服务实现
+  - star-service.js、reward-service.js 等
+- **repositories/**：仓储实现
+  - task-repository.js、star-repository.js 等
+- **adapters/**：适配器实现
+  - storage-adapter.js 等
+- **utils/**：工具类
+  - logger.js、dateUtils.js 等
+- **pages/**：页面实现
+- **components/**：UI组件实现
+
+### 3. 数据管理
 
 系统采用以下数据管理方式：
 
-- **本地存储**：使用wx.setStorage和wx.getStorage存储任务和设置数据
-- **全局状态**：通过app.globalData管理全局状态
-- **事件总线**：实现了自定义的事件总线机制，用于组件间通信
-- **数据同步**：通过自定义的任务管理器和消息管理器实现数据同步
+- **领域模型**：封装业务数据和规则
+- **仓储层**：负责数据持久化，隐藏存储细节
+- **存储适配器**：封装微信小程序存储API
+- **服务层**：协调多个领域对象，实现业务流程
+- **事件总线**：实现领域事件的发布和订阅
 
-## 组件关系
+## 领域模型与仓储
 
-### 1. 核心组件
+### 1. 核心领域模型
 
-系统包含多个关键组件，以下是主要组件及其关系：
+系统包含以下主要领域模型：
 
 ```mermaid
 graph TD
-    A[App] --> B[index页面]
-    A --> C[task-edit页面]
-    A --> D[task页面]
-    A --> E[rewards页面]
-    A --> F[message页面]
+    A[Task 任务] --> B[TaskType 任务类型]
+    A --> C[TaskStatus 任务状态]
+    A --> D[RepeatType 重复类型]
     
-    B --> G[进度环组件]
-    B --> H[任务项组件]
-    B --> I[即将开始任务组件]
-    B --> J[浮动菜单组件]
+    E[Star 星星] --> F[StarStatus 星星状态]
+    E --> G[StarSourceType 星星来源]
+    E --> H[StarExpiryType 星星有效期]
     
-    C --> K[热力图组件]
-    C --> L[模板选择器组件]
+    I[StarGroup 星星分组] --> E
     
-    D --> M[任务详情组件]
-    D --> N[重复选择器组件]
+    J[Reward 奖励] --> K[RewardStatus 奖励状态]
+    J --> L[RewardType 奖励类型]
     
-    E --> O[奖励项组件]
-    
-    F --> P[消息项组件]
+    M[StarRecord 星星记录] --> N[RecordType 记录类型]
+    M --> O[RecordSource 记录来源]
 ```
 
-### 2. 工具类关系
+### 2. 仓储关系
 
-系统包含多个工具类，以下是主要工具类及其关系：
+系统实现了以下仓储类：
 
 ```mermaid
 graph TD
-    A[app.js] --> B[taskManager]
-    A --> C[messageManager]
-    A --> D[unit]
+    A[BaseRepository 基础仓储] --> B[TaskRepository 任务仓储]
+    A --> C[StarRepository 星星仓储]
+    A --> D[StarGroupRepository 星星分组仓储]
+    A --> E[RewardRepository 奖励仓储]
+    A --> F[StarRecordRepository 星星记录仓储]
     
-    B --> E[dateUtils]
-    C --> E
+    G[StorageAdapter 存储适配器] --> A
+```
+
+## 应用服务
+
+### 1. 服务结构
+
+系统实现了以下应用服务：
+
+```mermaid
+graph TD
+    A[StarService 星星服务] --> B[StarGroupRepository 星星分组仓储]
+    A --> C[StarRecordRepository 星星记录仓储]
     
-    B --> F[feedbackUtils]
-    C --> F
+    D[RewardService 奖励服务] --> E[RewardRepository 奖励仓储]
+    D --> A
     
-    G[pages] --> B
-    G --> C
-    G --> D
-    G --> H[uiUtils]
+    F[ServiceManager 服务管理器] --> G[旧服务]
+    F --> A
+    F --> D
     
-    I[components] --> B
-    I --> D
-    I --> H
+    H[EventBus 事件总线] -.-> A
+    H -.-> D
+```
+
+### 2. 迁移策略
+
+系统采用渐进式迁移策略：
+
+```mermaid
+graph TD
+    A[ServiceManager] --> B{使用新架构?}
+    B -->|是| C[新服务实现]
+    B -->|否| D[旧服务实现]
+    
+    E[用户界面] --> A
+    C --> F[领域模型]
+    C --> G[仓储层]
+    G --> H[存储适配器]
+    D --> I[直接存储]
 ```
 
 ## 数据流
 
-### 1. 任务数据流
+### 1. 任务完成流程
 
-系统的任务数据流如下：
+系统的任务完成流程如下：
 
 ```mermaid
 sequenceDiagram
-    participant User
-    participant Pages
-    participant TaskManager
-    participant Storage
+    participant UI as 页面UI
+    participant TS as TaskService
+    participant TR as TaskRepository
+    participant SS as StarService
+    participant SGR as StarGroupRepository
+    participant SRR as StarRecordRepository
     
-    User->>Pages: 创建/编辑任务
-    Pages->>TaskManager: 调用createTask/editTask
-    TaskManager->>Storage: 保存任务数据
-    TaskManager->>TaskManager: 触发taskDataChanged事件
-    TaskManager->>Pages: 返回更新结果
-    Pages->>User: 更新UI展示
+    UI->>TS: 完成任务(taskId)
+    TS->>TR: 获取任务(taskId)
+    TR-->>TS: 返回任务对象
+    TS->>TS: 更新任务状态
+    TS->>TR: 保存任务
+    TS->>SS: 处理任务奖励(task)
+    SS->>SGR: 获取或创建星星分组
+    SGR-->>SS: 返回星星分组
+    SS->>SGR: 添加星星到分组
+    SS->>SRR: 创建获取记录
+    SS-->>TS: 返回奖励结果
+    TS-->>UI: 返回任务完成结果
 ```
 
-### 2. 消息数据流
+### 2. 奖励兑换流程
 
-系统的消息数据流如下：
+系统的奖励兑换流程如下：
 
 ```mermaid
 sequenceDiagram
-    participant System
-    participant MessageManager
-    participant Storage
-    participant Pages
+    participant UI as 页面UI
+    participant RS as RewardService
+    participant RR as RewardRepository
+    participant SS as StarService
+    participant SGR as StarGroupRepository
+    participant SRR as StarRecordRepository
     
-    System->>MessageManager: 创建系统消息
-    MessageManager->>Storage: 保存消息数据
-    MessageManager->>MessageManager: 触发messageDataChanged事件
-    Pages->>MessageManager: 请求消息数据
-    MessageManager->>Pages: 返回消息列表
-    Pages->>System: 更新消息UI
+    UI->>RS: 兑换奖励(rewardId)
+    RS->>RR: 获取奖励(rewardId)
+    RR-->>RS: 返回奖励对象
+    RS->>SS: 获取总星星数
+    SS-->>RS: 返回总星星数
+    
+    alt 星星不足
+        RS-->>UI: 返回星星不足错误
+    else 星星足够
+        RS->>SS: 消费星星(points)
+        SS->>SGR: 从分组消费星星
+        SS->>SRR: 创建消费记录
+        SS-->>RS: 返回消费结果
+        RS->>RR: 更新奖励状态
+        RS-->>UI: 返回兑换成功结果
+    end
 ```
 
 ## 核心功能模块
 
 ### 1. 任务管理模块
 
-任务管理是系统的核心功能，主要由taskManager.js实现，包括：
+任务管理是系统的核心功能，在新架构中由TaskService和TaskRepository实现：
 
-- **创建任务**：支持创建单次任务和重复任务
-- **编辑任务**：支持编辑任务的各种属性
-- **删除任务**：支持删除单个任务
-- **更新任务状态**：支持标记任务完成/未完成
-- **查询任务**：支持获取所有任务和今日任务
-- **任务统计**：支持计算任务完成率和进度
+- **创建任务**：创建Task领域对象并通过仓储保存
+- **编辑任务**：更新Task领域对象的属性并保存
+- **完成任务**：调用Task.complete()方法并保存
+- **查询任务**：通过仓储的查询方法获取任务列表
 
-### 2. 消息通知模块
+### 2. 星星管理模块
 
-消息通知功能由messageManager.js实现，包括：
+星星管理由StarService实现，包括：
 
-- **创建消息**：支持系统消息、任务提醒和奖励通知
-- **标记已读**：支持标记单条消息或所有消息为已读
-- **消息查询**：支持按类型和状态查询消息
-- **消息过期**：支持设置消息有效期和自动过期
+- **添加星星**：向StarGroup添加星星并创建记录
+- **消费星星**：从StarGroup消费星星并创建记录
+- **星星过期**：定期检查并处理过期星星
+- **星星统计**：计算星星数量和分布
 
-### 3. 适配性模块
+### 3. 奖励管理模块
 
-系统提供了完善的适配性支持，主要由unit.js实现，包括：
+奖励管理由RewardService实现，包括：
 
-- **单位转换**：支持px和rpx之间的转换
-- **高度计算**：支持计算可用内容高度
-- **设备检测**：支持检测设备类型和方向
-- **安全区域**：支持计算安全区域尺寸
+- **创建奖励**：创建Reward领域对象并保存
+- **兑换奖励**：更新奖励状态并消费星星
+- **查询奖励**：获取可用奖励和已兑换奖励列表
 
-### 4. 界面交互模块
+### 4. 日志记录模块
 
-系统实现了丰富的界面交互功能，包括：
+系统实现了统一的日志记录功能，由Logger实现：
 
-- **圆环进度**：支持不同类型的圆环进度展示
-- **热力图**：支持任务分布的热力图展示
-- **浮动菜单**：支持自定义的浮动操作菜单
-- **任务模板**：支持任务模板选择和管理
+- **信息日志**：记录正常操作信息
+- **警告日志**：记录潜在问题
+- **错误日志**：记录异常和错误
+- **调试日志**：记录开发调试信息
 
-## 优化措施
+## 迁移与兼容性
 
-系统实施了多项优化措施，主要包括：
+### 1. 迁移路径
 
-### 1. 性能优化
+系统从旧架构向新架构的迁移路径：
 
-- **延迟加载**：使用setTimeout延迟非关键任务
-- **数据缓存**：避免重复计算和请求
-- **防抖处理**：对频繁操作如保存数据进行防抖处理
-- **选择性渲染**：根据需要渲染组件，减少不必要的重绘
+1. **基础设施层**：首先实现存储适配器和仓储基类
+2. **领域模型**：定义核心领域模型和业务规则
+3. **仓储实现**：基于领域模型实现具体仓储
+4. **服务层**：实现服务类并连接仓储
+5. **服务管理器**：更新服务管理器支持新旧架构共存
+6. **界面改造**：逐步更新界面使用新服务
 
-### 2. 用户体验优化
+### 2. 兼容策略
 
-- **即时反馈**：操作后提供及时的视觉反馈
-- **动画过渡**：使用动画使界面过渡更流畅
-- **错误处理**：提供友好的错误提示和恢复机制
-- **加载指示**：长时间操作时显示加载指示器
+为确保旧代码与新架构兼容，系统采用以下策略：
 
-### 3. 适配性优化
+- **服务管理器模式**：通过服务管理器决定使用新旧实现
+- **数据格式兼容**：确保新旧代码可读取对方数据
+- **功能等价**：确保迁移功能与原有功能等价
+- **渐进式替换**：一次只迁移一个功能模块
 
-- **屏幕适配**：支持不同尺寸和方向的屏幕
-- **设备适配**：针对不同类型设备优化界面
-- **暗黑模式**：支持系统暗黑模式
-- **字体适配**：支持系统字体大小调整
+## 优势与改进
+
+新架构相比旧架构具有以下优势：
+
+1. **高内聚低耦合**：
+   - 业务逻辑与技术实现分离
+   - 单一职责原则更好地体现
+
+2. **可测试性**：
+   - 业务逻辑可独立测试
+   - 基础设施可模拟测试
+
+3. **性能优化**：
+   - 多级缓存机制减少存储操作
+   - 事务支持确保数据一致性
+
+4. **可维护性**：
+   - 清晰的分层结构
+   - 显式的依赖关系
+
+5. **可扩展性**：
+   - 新功能可以独立开发
+   - 现有功能易于修改
 
 ## 未来规划
 
 系统未来的发展规划包括：
 
-1. **云同步**：实现数据云端同步，支持多设备使用
-2. **智能提醒**：基于用户习惯智能调整提醒时间
-3. **社交功能**：增加家庭成员协作和激励功能
-4. **数据分析**：增强数据分析和可视化功能
-5. **个性化推荐**：根据用户习惯推荐任务模板和奖励
+1. **完全迁移**：将所有功能迁移到新架构
+2. **云同步**：实现数据云端同步，支持多设备使用
+3. **更多领域模型**：增加更丰富的领域模型和业务规则
+4. **测试覆盖**：完善单元测试和集成测试
+5. **性能监控**：添加性能监控和日志分析功能
+6. **多租户支持**：支持家庭成员分组和权限控制
 
 ## 结论
 
-学习任务微信小程序采用了清晰的架构设计，实现了组件化和模块化，提供了丰富的功能和良好的用户体验。通过合理的数据管理和优化措施，系统实现了高效的任务管理和进度跟踪功能，满足了小朋友养成良好学习习惯的需求。 
+学习任务微信小程序通过采用领域驱动设计架构，实现了业务逻辑与技术实现的分离，提高了系统的可维护性、可测试性和可扩展性。新架构为系统的长期发展提供了坚实的基础，使系统能够更好地适应未来的需求变化和功能扩展。 
