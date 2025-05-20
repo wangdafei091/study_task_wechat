@@ -7,8 +7,7 @@
     "pages/message/message",
     "pages/reward-manage/reward-manage",
     "pages/my-exchanges/my-exchanges",
-    "pages/star-records/star-records",
-    "pages/architecture-demo/demo"
+    "pages/star-records/star-records"
   ],
   "subPackages": [
     {

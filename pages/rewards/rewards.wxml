@@ -2,7 +2,7 @@
 <view class="container">
   <!-- 奖励进度顶部 - 改为总积分展示卡片 -->
   <view class="progress-section">
-    <view class="points-center" bindtap="onStarsAreaTap">
+    <view class="points-center">
       <view class="points-title">我的星星</view>
       <view class="points-value-large">{{formattedPoints}}</view>
     </view>
