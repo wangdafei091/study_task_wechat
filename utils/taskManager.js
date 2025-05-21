@@ -6,7 +6,6 @@
 
 const dateUtils = require('./dateUtils.js');
 const Constants = require('./constants.js');
-const pointsManager = require('./pointsManager.js'); // 统一引入星星管理工具
 const logger = require('./logger.js'); // 引入统一日志工具
 const storageUtils = require('./storageUtils.js'); // 引入统一存储工具
 const batchUtils = require('./batchUtils.js'); // 引入批量处理工具
@@ -499,31 +498,23 @@ const taskManager = {
             const serviceManager = require('./serviceManager');
             const starService = serviceManager.getService('starService');
             
-            if (starService) {
-              // 获取有效期类型
-              let expiryType = task.pointsExpiry || 'permanent';
-              
-              // 处理任务完成奖励
-              starService.handleTaskCompletion(task, task.points || 0)
-                .then(result => {
-                  if (result.success) {
-                    logger.info('taskManager', `使用新架构处理任务完成奖励成功: ${task.points}颗星星`);
-                  } else {
-                    logger.error('taskManager', `使用新架构处理任务完成奖励失败: ${result.message}`);
-                  }
-                })
-                .catch(error => {
-                  logger.error('taskManager', `使用新架构处理任务完成奖励出错`, error);
-                });
-            } else {
-              // 新架构服务未就绪，使用旧方法添加星星
-              logger.warn('taskManager', '星星服务未就绪，使用旧方法添加星星');
-              pointsManager.addUserPoints(task.points || 0, expiryConfig, `task_${task.id}`);
-            }
+            // 获取有效期类型
+            let expiryType = task.pointsExpiry || 'permanent';
+            
+            // 处理任务完成奖励，移除条件判断和fallback
+            starService.handleTaskCompletion(task, task.points || 0)
+              .then(result => {
+                if (result.success) {
+                  logger.info('taskManager', `使用新架构处理任务完成奖励成功: ${task.points}颗星星`);
+                } else {
+                  logger.error('taskManager', `使用新架构处理任务完成奖励失败: ${result.message}`);
+                }
+              })
+              .catch(error => {
+                logger.error('taskManager', `使用新架构处理任务完成奖励出错`, error);
+              });
           } catch (error) {
             logger.error('taskManager', `处理任务完成奖励时出错`, error);
-            // 出错后使用旧方法，确保用户可以获得星星
-            pointsManager.addUserPoints(task.points || 0, expiryConfig, `task_${task.id}`);
           }
           
           // 标记任务已获得星星
@@ -1146,35 +1137,54 @@ const taskManager = {
    * @param {Function} callback 回调函数
    * @private
    */
-  _applyPenalties: function(penaltyTasks, callback) {
-    logger.info(`taskManager] 开始应用惩罚，任务数量: ${penaltyTasks.length}`);
+  _applyPenalties: async function(penaltyTasks, callback) {
+    logger.info('taskManager', `开始应用惩罚，任务数量: ${penaltyTasks.length}`);
     
-    // 计算总扣除积分
-    const totalPenalty = penaltyTasks.reduce((sum, task) => sum + task.points, 0);
-    
-    // 使用pointsManager减少积分
-    pointsManager.reduceUserPoints(totalPenalty);
-    logger.info(`taskManager] 星星扣除了: ${totalPenalty}`);
-    
-    // 为每个任务创建惩罚消息
-    const messageManager = require('./messageManager.js');
-    
-    penaltyTasks.forEach(task => {
-      const penaltyMessage = {
-        id: 'msg_penalty_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
-        type: 'penalty',
-        taskId: task.taskId,
-        title: '任务未完成',
-        summary: `必做任务"${task.title}"未完成，扣除${task.points}颗星星`,
-        timestamp: Date.now(),
-        isRead: false,
-        icon: '⚠️'
-      };
+    try {
+      // 计算总扣除积分
+      const totalPenalty = penaltyTasks.reduce((sum, task) => sum + task.points, 0);
       
-      messageManager.addMessage(penaltyMessage);
-    });
-    
-    if (callback) callback(null, penaltyTasks);
+      // 使用starService减少积分
+      const serviceManager = require('./serviceManager');
+      const starService = serviceManager.getService('starService');
+      
+      if (!starService) {
+        logger.error('taskManager', '无法获取星星服务实例');
+        if (callback) callback(new Error('无法获取星星服务实例'), penaltyTasks);
+        return;
+      }
+      
+      // 使用新架构服务扣除星星
+      const result = await starService.reduceStars(totalPenalty, 'penalty', {
+        reason: '未完成必做任务',
+        taskCount: penaltyTasks.length
+      });
+      
+      logger.info('taskManager', `星星扣除结果: ${result.success ? '成功' : '失败'}, 扣除数量: ${totalPenalty}`);
+      
+      // 为每个任务创建惩罚消息
+      const messageManager = require('./messageManager.js');
+      
+      penaltyTasks.forEach(task => {
+        const penaltyMessage = {
+          id: 'msg_penalty_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+          type: 'penalty',
+          taskId: task.taskId,
+          title: '任务未完成',
+          summary: `必做任务"${task.title}"未完成，扣除${task.points}颗星星`,
+          timestamp: Date.now(),
+          isRead: false,
+          icon: '⚠️'
+        };
+        
+        messageManager.addMessage(penaltyMessage);
+      });
+      
+      if (callback) callback(null, penaltyTasks);
+    } catch (error) {
+      logger.error('taskManager', '应用惩罚失败', error);
+      if (callback) callback(error, penaltyTasks);
+    }
   },
   
   /**

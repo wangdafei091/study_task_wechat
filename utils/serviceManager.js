@@ -7,7 +7,6 @@ const logger = require('./logger');
 // 导入现有服务
 const oldTaskManager = require('./taskManager');
 const oldMessageManager = require('./messageManager');
-const oldPointsManager = require('./pointsManager');
 
 // 导入新架构服务
 const { RewardService, StarService } = require('../services/index');
@@ -65,15 +64,6 @@ const serviceManager = {
   getMessageManager() {
     logger.info('[ServiceManager] 使用消息管理器');
     return oldMessageManager;
-  },
-  
-  /**
-   * 获取积分管理器
-   * @returns {Object} 积分管理器实例
-   */
-  getPointsManager() {
-    logger.info('[ServiceManager] 使用积分管理器');
-    return oldPointsManager;
   },
   
   /**

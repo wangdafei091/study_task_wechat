@@ -1,5 +1,6 @@
 const app = getApp();
-const pointsManager = require('../../utils/pointsManager.js');
+const serviceManager = require('../../utils/serviceManager.js');
+const formatUtils = require('../../utils/formatUtils.js');
 const taskManager = require('../../utils/taskManager.js');
 
 Page({
@@ -83,30 +84,43 @@ Page({
   /**
    * 加载星星记录数据
    */
-  loadStarRecords: function(callback) {
+  loadStarRecords: async function(callback) {
     console.log('[starRecords] 开始加载星星记录数据');
     wx.showLoading({
       title: '加载中...',
     });
     
-    // 使用pointsManager获取星星记录
-    pointsManager.getStarRecords(records => {
+    try {
+      // 获取星星服务
+      const starService = serviceManager.getService('starService');
+      
+      if (!starService) {
+        console.error('[starRecords] 无法获取星星服务');
+        wx.hideLoading();
+        if (callback) callback();
+        return;
+      }
+      
+      // 使用starService获取记录
+      const records = await starService.getStarRecords();
       console.log(`[starRecords] 获取到${records.length}条星星记录`);
       
       if (records.length > 0) {
         // 处理记录，添加任务类型信息
-        records = this.processRecords(records);
+        const processedRecords = this.processRecords(records);
+        
+        // 获取当前星星数量
+        const balance = await starService.getTotalStars();
         
         // 计算每条记录的星星余额
-        let balance = pointsManager.getUserPoints();
-        records = this.calculateRecordBalance(records, balance);
+        const recordsWithBalance = this.calculateRecordBalance(processedRecords, balance);
         
         // 应用筛选条件
-        const filteredRecords = this.filterRecords(records, this.data.selectedType, this.data.selectedTime);
+        const filteredRecords = this.filterRecords(recordsWithBalance, this.data.selectedType, this.data.selectedTime);
         console.log(`[starRecords] 筛选后剩余${filteredRecords.length}条记录`);
         
         // 按月份分组
-        const groupedRecords = pointsManager.groupRecordsByMonth(filteredRecords);
+        const groupedRecords = this.groupRecordsByMonth(filteredRecords);
         
         // 计算月度汇总数据
         const enhancedGroupedRecords = this.calculateMonthSummary(groupedRecords);
@@ -121,13 +135,12 @@ Page({
           groupedRecords: []
         });
       }
-      
+    } catch (error) {
+      console.error('[starRecords] 加载星星记录失败', error);
+    } finally {
       wx.hideLoading();
-      
-      if (callback) {
-        callback();
-      }
-    });
+      if (callback) callback();
+    }
   },
 
   /**
@@ -329,5 +342,44 @@ Page({
       // 重新加载并筛选记录
       this.loadStarRecords();
     });
+  },
+
+  /**
+   * 按月份分组记录
+   */
+  groupRecordsByMonth: function(records) {
+    console.log('[starRecords] 开始按月份分组记录');
+    const result = [];
+    const monthGroups = {};
+    
+    // 按月份分组
+    records.forEach(record => {
+      if (!record.timestamp) return;
+      
+      const date = new Date(record.timestamp);
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      
+      if (!monthGroups[monthKey]) {
+        monthGroups[monthKey] = {
+          month: monthKey,
+          monthText: `${date.getFullYear()}年${date.getMonth() + 1}月`,
+          records: []
+        };
+      }
+      
+      monthGroups[monthKey].records.push(record);
+    });
+    
+    // 将分组转换为数组并按月份排序
+    Object.values(monthGroups).forEach(group => {
+      result.push(group);
+    });
+    
+    // 按时间从新到旧排序
+    result.sort((a, b) => {
+      return b.month.localeCompare(a.month);
+    });
+    
+    return result;
   }
 }) 

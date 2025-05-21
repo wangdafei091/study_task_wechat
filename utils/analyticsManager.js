@@ -5,7 +5,7 @@
 const logger = require('./logger');
 const storageUtils = require('./storageUtils');
 const dateUtils = require('./dateUtils');
-const pointsManager = require('./pointsManager');
+const serviceManager = require('./serviceManager');
 
 const analyticsManager = {
   /**
@@ -118,14 +118,33 @@ const analyticsManager = {
    * 获取所有星星记录（包括获取、消费和过期）
    * @param {Function} callback 回调函数，参数为记录数组
    */
-  getAllStarRecords: function(callback) {
-    // 使用pointsManager获取所有星星记录
-    pointsManager.getStarRecords((records) => {
-      logger.info('analyticsManager', `从pointsManager获取到${records.length}条星星记录`);
+  getAllStarRecords: async function(callback) {
+    try {
+      logger.info('analyticsManager', '从星星服务获取所有星星记录');
+      // 获取服务实例
+      const starService = serviceManager.getService('starService');
+      
+      if (!starService) {
+        logger.error('analyticsManager', '无法获取星星服务实例');
+        if (typeof callback === 'function') {
+          callback([]);
+        }
+        return;
+      }
+      
+      // 从新架构获取星星记录
+      const records = await starService.getStarRecords();
+      
+      logger.info('analyticsManager', `从starService获取到${records.length}条星星记录`);
       if (typeof callback === 'function') {
         callback(records);
       }
-    });
+    } catch (error) {
+      logger.error('analyticsManager', '获取星星记录出错', error);
+      if (typeof callback === 'function') {
+        callback([]);
+      }
+    }
   },
   
   /**
@@ -276,112 +295,125 @@ const analyticsManager = {
   
   /**
    * 计算星星过期预测
-   * @param {Number} currentBalance 当前余额
-   * @returns {Array} 未来预测数据，长度根据过期日期动态调整
+   * @param {Number} currentBalance 当前星星余额
+   * @returns {Array} 预测数据
    * @private
    */
-  _calculateExpiryForecast: function(currentBalance) {
+  _calculateExpiryForecast: async function(currentBalance) {
     logger.info('analyticsManager', `计算星星过期预测，当前余额: ${currentBalance}`);
     
-    // 确保当前余额是数字类型
-    currentBalance = Number(currentBalance);
-    
-    // 获取星星分组数据
-    const starGroups = pointsManager.getStarGroups();
-    
-    // 筛选出非永久有效的分组
-    const expiryGroups = starGroups.filter(group => 
-      group.expiryDate !== 'permanent' && 
-      typeof group.expiryDate === 'number'
-    );
-    
-    logger.info('analyticsManager', `获取到${expiryGroups.length}个有过期时间的星星分组`);
-    
-    // 如果没有即将过期的星星，只需要预测近7天
-    const forecastDays = expiryGroups.length > 0 ? 30 : 7;
-    
-    // 如果有过期数据，找出最远的过期日期
-    let maxExpiryDate = new Date();
-    maxExpiryDate.setDate(maxExpiryDate.getDate() + 7); // 默认预测7天
-    
-    if (expiryGroups.length > 0) {
-      // 按过期时间排序
-      expiryGroups.sort((a, b) => a.expiryDate - b.expiryDate);
+    try {
+      // 确保当前余额是数字类型
+      currentBalance = Number(currentBalance);
       
-      const lastExpiryDate = new Date(expiryGroups[expiryGroups.length - 1].expiryDate);
-      // 给最后过期日再加3天的缓冲，让图表显示过期后的余额状态
-      lastExpiryDate.setDate(lastExpiryDate.getDate() + 3);
+      // 获取星星服务
+      const starService = serviceManager.getService('starService');
       
-      if (lastExpiryDate > maxExpiryDate) {
-        maxExpiryDate = lastExpiryDate;
-        logger.info('analyticsManager', `根据过期数据调整预测时长至 ${dateUtils.formatDate(maxExpiryDate)}`);
+      if (!starService) {
+        logger.error('analyticsManager', '无法获取星星服务实例');
+        return [];
       }
-    }
-    
-    const result = [];
-    let runningBalance = Number(currentBalance);
-    const today = new Date();
-    
-    // 设置时间为当天23:59:59，确保包含当天所有变化
-    today.setHours(23, 59, 59, 999);
-    
-    logger.debug('analyticsManager', `预测开始日期: ${dateUtils.formatDate(today)}, 初始余额: ${runningBalance}(${typeof runningBalance})`);
-    
-    // 计算预测天数（从今天到最远过期日的天数）
-    const maxDays = Math.min(
-      30, // 最多30天
-      Math.ceil((maxExpiryDate.getTime() - today.getTime()) / (24 * 60 * 60 * 1000)) + 1
-    );
-    
-    logger.info('analyticsManager', `预测天数: ${maxDays}天`);
-    
-    // 生成预测的日期序列
-    for (let i = 0; i < maxDays; i++) {
-      const forecastDate = new Date(today);
-      forecastDate.setDate(today.getDate() + i);
-      const dateStr = dateUtils.formatDate(forecastDate);
       
-      // 查找当天过期的星星分组
-      const todayExpiring = expiryGroups.filter(group => 
-        dateUtils.formatDate(new Date(group.expiryDate)) === dateStr
+      // 获取星星分组数据
+      const starGroups = await starService.getStarGroups();
+      
+      // 筛选出非永久有效的分组
+      const expiryGroups = starGroups.filter(group => 
+        group.expiryDate !== 'permanent' && 
+        typeof group.expiryDate === 'number'
       );
       
-      // 计算过期总数 - 确保使用数字计算
-      const expiryAmount = todayExpiring.reduce((sum, group) => 
-        Number(sum) + Number(group.points || 0), 0
-      );
+      logger.info('analyticsManager', `获取到${expiryGroups.length}个有过期时间的星星分组`);
       
-      // 更新余额 - 确保使用数字计算
-      if (expiryAmount > 0) {
-        const oldBalance = Number(runningBalance);
-        runningBalance = Math.max(0, Number(runningBalance) - Number(expiryAmount));
-        logger.info('analyticsManager', `${dateStr} 将过期 ${expiryAmount} 颗星星, 余额从 ${oldBalance} 变为 ${runningBalance}`);
+      // 如果没有即将过期的星星，只需要预测近7天
+      const forecastDays = expiryGroups.length > 0 ? 30 : 7;
+      
+      // 如果有过期数据，找出最远的过期日期
+      let maxExpiryDate = new Date();
+      maxExpiryDate.setDate(maxExpiryDate.getDate() + 7); // 默认预测7天
+      
+      if (expiryGroups.length > 0) {
+        // 按过期时间排序
+        expiryGroups.sort((a, b) => a.expiryDate - b.expiryDate);
         
-        // 记录过期的分组信息
-        todayExpiring.forEach(group => {
-          logger.debug('analyticsManager', `  - 过期时间"${group.expiryDateStr}"的${Number(group.points)}颗星星将过期`);
-        });
+        const lastExpiryDate = new Date(expiryGroups[expiryGroups.length - 1].expiryDate);
+        // 给最后过期日再加3天的缓冲，让图表显示过期后的余额状态
+        lastExpiryDate.setDate(lastExpiryDate.getDate() + 3);
+        
+        if (lastExpiryDate > maxExpiryDate) {
+          maxExpiryDate = lastExpiryDate;
+          logger.info('analyticsManager', `根据过期数据调整预测时长至 ${dateUtils.formatDate(maxExpiryDate)}`);
+        }
       }
       
-      // 格式化日期为显示格式
-      const displayDate = new Date(forecastDate);
-      const month = displayDate.getMonth() + 1;
-      const day = displayDate.getDate();
-      const formattedDate = `${month}/${day}`;
+      const result = [];
+      let runningBalance = Number(currentBalance);
+      const today = new Date();
       
-      // 记录数据点 - 确保值是数字类型
-      result.push({
-        date: formattedDate,
-        value: Number(runningBalance),
-        expiring: expiryAmount > 0 ? Number(expiryAmount) : undefined
-      });
+      // 设置时间为当天23:59:59，确保包含当天所有变化
+      today.setHours(23, 59, 59, 999);
       
-      logger.debug('analyticsManager', `预测日期: ${formattedDate}, 余额: ${runningBalance}(${typeof runningBalance})${expiryAmount > 0 ? `, 过期: ${expiryAmount}(${typeof expiryAmount})` : ''}`);
+      logger.debug('analyticsManager', `预测开始日期: ${dateUtils.formatDate(today)}, 初始余额: ${runningBalance}(${typeof runningBalance})`);
+      
+      // 计算预测天数（从今天到最远过期日的天数）
+      const maxDays = Math.min(
+        30, // 最多30天
+        Math.ceil((maxExpiryDate.getTime() - today.getTime()) / (24 * 60 * 60 * 1000)) + 1
+      );
+      
+      logger.info('analyticsManager', `预测天数: ${maxDays}天`);
+      
+      // 生成预测的日期序列
+      for (let i = 0; i < maxDays; i++) {
+        const forecastDate = new Date(today);
+        forecastDate.setDate(today.getDate() + i);
+        const dateStr = dateUtils.formatDate(forecastDate);
+        
+        // 查找当天过期的星星分组
+        const todayExpiring = expiryGroups.filter(group => 
+          dateUtils.formatDate(new Date(group.expiryDate)) === dateStr
+        );
+        
+        // 计算过期总数 - 确保使用数字计算
+        const expiryAmount = todayExpiring.reduce((sum, group) => 
+          Number(sum) + Number(group.points || 0), 0
+        );
+        
+        // 更新余额 - 确保使用数字计算
+        if (expiryAmount > 0) {
+          const oldBalance = Number(runningBalance);
+          runningBalance = Math.max(0, Number(runningBalance) - Number(expiryAmount));
+          logger.info('analyticsManager', `${dateStr} 将过期 ${expiryAmount} 颗星星, 余额从 ${oldBalance} 变为 ${runningBalance}`);
+          
+          // 记录过期的分组信息
+          todayExpiring.forEach(group => {
+            logger.debug('analyticsManager', `  - 过期时间"${group.expiryDateStr}"的${Number(group.points)}颗星星将过期`);
+          });
+        }
+        
+        // 格式化日期为显示格式
+        const displayDate = new Date(forecastDate);
+        const month = displayDate.getMonth() + 1;
+        const day = displayDate.getDate();
+        const formattedDate = `${month}/${day}`;
+        
+        // 记录数据点 - 确保值是数字类型
+        result.push({
+          date: formattedDate,
+          value: Number(runningBalance),
+          expiring: expiryAmount > 0 ? Number(expiryAmount) : undefined
+        });
+        
+        logger.debug('analyticsManager', `预测日期: ${formattedDate}, 余额: ${runningBalance}(${typeof runningBalance})${expiryAmount > 0 ? `, 过期: ${expiryAmount}(${typeof expiryAmount})` : ''}`);
+      }
+      
+      logger.info('analyticsManager', `过期预测完成，共${result.length}天的数据，开始余额: ${currentBalance}，结束余额: ${result[result.length-1].value}`);
+      
+      return result;
+    } catch (error) {
+      logger.error('analyticsManager', '计算星星过期预测出错', error);
+      return [];
     }
-    
-    logger.info('analyticsManager', `过期预测完成，共${result.length}天的数据，开始余额: ${currentBalance}，结束余额: ${result[result.length-1].value}`);
-    
-    return result;
   },
   
   /**
@@ -390,45 +422,58 @@ const analyticsManager = {
    * @returns {Array} 过期星星数据
    * @private
    */
-  _getUpcomingExpiryStars: function(days) {
+  _getUpcomingExpiryStars: async function(days) {
     logger.info('analyticsManager', `获取${days}天内即将过期的星星信息`);
     
-    // 获取星星分组数据
-    const starGroups = pointsManager.getStarGroups();
-    
-    // 筛选出非永久有效的分组
-    const expiryGroups = starGroups.filter(group => 
-      group.expiryDate !== 'permanent' && 
-      typeof group.expiryDate === 'number'
-    );
-    
-    const expiryData = [];
-    const now = new Date();
-    const futureLimit = new Date();
-    futureLimit.setDate(now.getDate() + days);
-    
-    // 筛选未来指定天数内会过期的星星分组
-    expiryGroups.forEach(group => {
-      const expiryDate = new Date(group.expiryDate);
+    try {
+      // 获取星星服务
+      const starService = serviceManager.getService('starService');
       
-      if (expiryDate > now && expiryDate <= futureLimit) {
-        expiryData.push({
-          id: `expiry_group_${expiryDate.getTime()}`,
-          points: group.points,
-          expiryDate: expiryDate,
-          expiryDateStr: group.expiryDateStr,
-          sources: group.sources
-        });
-        
-        logger.info('analyticsManager', `${group.points}颗星星将于${dateUtils.formatDate(expiryDate)}(${group.expiryDateStr})过期`);
+      if (!starService) {
+        logger.error('analyticsManager', '无法获取星星服务实例');
+        return [];
       }
-    });
-    
-    // 按过期日期排序
-    expiryData.sort((a, b) => a.expiryDate.getTime() - b.expiryDate.getTime());
-    
-    logger.info('analyticsManager', `获取到${expiryData.length}组即将过期的星星数据`);
-    return expiryData;
+      
+      // 获取星星分组数据
+      const starGroups = await starService.getStarGroups();
+      
+      // 筛选出非永久有效的分组
+      const expiryGroups = starGroups.filter(group => 
+        group.expiryDate !== 'permanent' && 
+        typeof group.expiryDate === 'number'
+      );
+      
+      const expiryData = [];
+      const now = new Date();
+      const futureLimit = new Date();
+      futureLimit.setDate(now.getDate() + days);
+      
+      // 筛选未来指定天数内会过期的星星分组
+      expiryGroups.forEach(group => {
+        const expiryDate = new Date(group.expiryDate);
+        
+        if (expiryDate > now && expiryDate <= futureLimit) {
+          expiryData.push({
+            id: `expiry_group_${expiryDate.getTime()}`,
+            points: group.points,
+            expiryDate: expiryDate,
+            expiryDateStr: group.expiryDateStr,
+            sources: group.sources
+          });
+          
+          logger.info('analyticsManager', `${group.points}颗星星将于${dateUtils.formatDate(expiryDate)}(${group.expiryDateStr})过期`);
+        }
+      });
+      
+      // 按过期日期排序
+      expiryData.sort((a, b) => a.expiryDate.getTime() - b.expiryDate.getTime());
+      
+      logger.info('analyticsManager', `获取到${expiryData.length}组即将过期的星星数据`);
+      return expiryData;
+    } catch (error) {
+      logger.error('analyticsManager', '获取即将过期星星信息出错', error);
+      return [];
+    }
   },
   
   /**
@@ -439,6 +484,117 @@ const analyticsManager = {
     // 这里将来可以实现任务完成率分析功能
     // 暂时返回空对象
     return {};
+  },
+  
+  /**
+   * 获取星星分组情况
+   * @param {Function} callback 回调函数，参数为分组数据
+   */
+  getStarGroups: async function(callback) {
+    try {
+      logger.info('analyticsManager', '获取星星分组情况');
+      
+      // 获取星星服务
+      const starService = serviceManager.getService('starService');
+      
+      if (!starService) {
+        logger.error('analyticsManager', '无法获取星星服务实例');
+        if (typeof callback === 'function') {
+          callback([]);
+        }
+        return [];
+      }
+      
+      // 从新架构服务获取星星分组
+      const starGroups = await starService.getStarGroups();
+      
+      logger.info('analyticsManager', `获取到${starGroups.length}个星星分组`);
+      
+      if (typeof callback === 'function') {
+        callback(starGroups);
+      }
+      
+      return starGroups;
+    } catch (error) {
+      logger.error('analyticsManager', '获取星星分组出错', error);
+      if (typeof callback === 'function') {
+        callback([]);
+      }
+      return [];
+    }
+  },
+  
+  /**
+   * 获取星星有效期数据，用于预测过期趋势
+   * @param {Number} days 预测天数
+   * @param {Function} callback 回调函数，参数为有效期数据
+   */
+  getStarExpiryForecast: async function(days, callback) {
+    try {
+      logger.info('analyticsManager', `获取未来${days}天的星星过期预测`);
+      
+      // 获取星星服务
+      const starService = serviceManager.getService('starService');
+      
+      if (!starService) {
+        logger.error('analyticsManager', '无法获取星星服务实例');
+        if (typeof callback === 'function') {
+          callback([]);
+        }
+        return [];
+      }
+      
+      // 从新架构服务获取星星分组
+      const starGroups = await starService.getStarGroups();
+      
+      logger.info('analyticsManager', `获取到${starGroups.length}个星星分组`);
+      
+      // 计算未来每天将过期的星星数量
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      const expiryForecast = [];
+      
+      // 生成未来days天的日期序列
+      for (let i = 0; i < days; i++) {
+        const forecastDate = new Date(today);
+        forecastDate.setDate(today.getDate() + i);
+        
+        // 计算这一天将过期的星星数量
+        let expiryCount = 0;
+        
+        starGroups.forEach(group => {
+          if (group.expiry === 'permanent') return;
+          
+          const expiryDate = new Date(group.expiry);
+          expiryDate.setHours(0, 0, 0, 0);
+          
+          if (expiryDate.getTime() === forecastDate.getTime()) {
+            expiryCount += group.stars;
+          }
+        });
+        
+        expiryForecast.push({
+          date: dateUtils.formatDate(forecastDate),
+          count: expiryCount,
+          dateObj: forecastDate
+        });
+      }
+      
+      logger.info('analyticsManager', `生成了${expiryForecast.length}天的星星过期预测`);
+      
+      if (typeof callback === 'function') {
+        callback(expiryForecast);
+      }
+      
+      return expiryForecast;
+    } catch (error) {
+      logger.error('analyticsManager', '获取星星过期预测出错', error);
+      if (typeof callback === 'function') {
+        callback([]);
+      }
+      return [];
+    }
   }
 };
 

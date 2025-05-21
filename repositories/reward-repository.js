@@ -33,9 +33,10 @@ class RewardRepository extends BaseRepository {
   
   /**
    * 获取可用的奖励
+   * @param {Boolean} includeExamples 是否包含示例奖励
    * @returns {Promise<Array>} 可用的奖励列表
    */
-  async getAvailableRewards() {
+  async getAvailableRewards(includeExamples = false) {
     try {
       // 先获取所有数据，然后手动过滤
       const allRewards = await this.getAll();
@@ -43,16 +44,31 @@ class RewardRepository extends BaseRepository {
       // 检查是否存在自定义奖励
       const hasCustomRewards = allRewards.some(r => !r.isExample && r.enabled);
       
-      // 如果有自定义奖励，则过滤掉示例奖励
+      // 根据条件过滤奖励
       let filteredRewards;
-      if (hasCustomRewards) {
-        logger.info('RewardRepository', `存在自定义奖励，将过滤掉示例奖励`);
+      
+      // 决定是否过滤示例奖励
+      if (hasCustomRewards && !includeExamples) {
+        logger.info('RewardRepository', `存在自定义奖励且不包含示例，将过滤掉示例奖励`);
         filteredRewards = allRewards.filter(r => !r.isExample && r.isAvailable());
+      } else if (!hasCustomRewards && includeExamples) {
+        // 只有示例奖励，并且需要包含示例
+        logger.info('RewardRepository', `仅有示例奖励且需要包含示例`);
+        filteredRewards = allRewards.filter(r => r.isAvailable());
+      } else if (hasCustomRewards && includeExamples) {
+        // 有自定义奖励但需要包含示例奖励（用于管理界面）
+        logger.info('RewardRepository', `既有自定义奖励又需要包含示例`);
+        filteredRewards = allRewards.filter(r => r.isAvailable());
       } else {
+        // 默认只过滤可用状态
         filteredRewards = allRewards.filter(r => r.isAvailable());
       }
       
-      logger.info('RewardRepository', `获取可用奖励成功, 数量=${filteredRewards.length}`);
+      // 输出详细日志
+      const exampleCount = filteredRewards.filter(r => r.isExample).length;
+      const customCount = filteredRewards.filter(r => !r.isExample).length;
+      logger.info('RewardRepository', `获取可用奖励成功, 总数=${filteredRewards.length}, 示例=${exampleCount}, 自定义=${customCount}`);
+      
       return filteredRewards;
     } catch (error) {
       logger.error('RewardRepository', '获取可用奖励失败', error);

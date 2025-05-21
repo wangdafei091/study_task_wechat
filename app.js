@@ -16,8 +16,27 @@ App({
     // 初始化服务管理器
     console.log('[App] 初始化服务管理器');
     try {
-      await serviceManager.initialize();
-      console.log('[App] 服务管理器初始化成功');
+      // 等待服务管理器初始化完成，确保所有服务都已经准备好
+      const initialized = await serviceManager.initialize();
+      if (initialized) {
+        console.log('[App] 服务管理器初始化成功');
+        
+        // 获取服务实例
+        const rewardService = serviceManager.getService('rewardService');
+        
+        // 主动触发一次奖励数据初始化，确保在首页加载前已有示例奖励
+        if (rewardService) {
+          const rewardsCount = await rewardService.getAllRewards();
+          console.log(`[App] 检查奖励数据: 现有${rewardsCount.length}个奖励`);
+          
+          if (rewardsCount.length === 0) {
+            console.log('[App] 没有找到奖励数据，初始化示例奖励');
+            await rewardService.calculateNextAvailableReward();
+          }
+        }
+      } else {
+        console.error('[App] 服务管理器初始化失败');
+      }
     } catch (error) {
       console.error('[App] 服务管理器初始化失败:', error);
     }

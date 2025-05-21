@@ -63,10 +63,30 @@ Page({
    */
   onShow: async function () {
     console.log('[rewards] 页面显示');
-    await this.loadRewardsData();
+    
+    // 获取应用实例
+    const app = getApp();
+    
+    // 检查是否需要刷新奖励信息
+    if (app.globalData.needRefreshReward) {
+      console.log('[rewards] 检测到奖励数据变更标记，强制刷新');
+      
+      // 强制清除缓存
+      const rewardService = serviceManager.getService('rewardService');
+      if (rewardService && typeof rewardService.clearCache === 'function') {
+        rewardService.clearCache();
+      }
+      
+      // 重新加载数据
+      await this.loadRewardsData();
+      
+      // 不要在这里清除标记，让首页处理
+    } else {
+      // 常规刷新
+      await this.loadRewardsData();
+    }
     
     // 清除已跳转标记
-    const app = getApp();
     if (app.globalData.hasRedirectedToReward) {
       console.log('[rewards] 清除已跳转标记');
       app.globalData.hasRedirectedToReward = false;
@@ -241,15 +261,42 @@ Page({
       const allRewards = await rewardService.getAvailableRewards(true);
       console.log(`[rewards] 获取到可用奖励: ${allRewards.length}个`);
       
-      // 额外过滤一次示例奖励，确保UI显示正确
-      const hasCustomRewards = allRewards.some(r => !r.isExample && r.enabled);
-      const displayRewards = hasCustomRewards 
-        ? allRewards.filter(r => !r.isExample) 
-        : allRewards;
-      console.log(`[rewards] 过滤示例奖励后，实际显示: ${displayRewards.length}个`);
+      // 检查是否存在自定义奖励标记
+      let hasCustomRewards = false;
+      try {
+        hasCustomRewards = wx.getStorageSync('has_custom_rewards') === true;
+        if (hasCustomRewards) {
+          console.log('[rewards] 检测到自定义奖励标记');
+        }
+      } catch (e) {
+        console.warn('[rewards] 获取自定义奖励标记失败', e);
+      }
+      
+      // 如果没有奖励但存在自定义奖励标记，不需要初始化示例奖励
+      if (allRewards.length === 0 && hasCustomRewards) {
+        console.log('[rewards] 检测到有自定义奖励标记但无奖励数据，用户可能已清理所有奖励');
+        wx.hideLoading();
+        
+        this.setData({
+          rewards: [],
+          availableRewards: [],
+          claimedRewards: [],
+          showClaimedRewards: true, 
+          currentProgress: totalPoints,
+          totalPoints: totalPoints,
+          formattedPoints: formattedPoints,
+          expiringPoints: expiringPointsInfo.points,
+          expiryDate: expiringPointsInfo.date,
+          rewardsEarned: 0,
+          currentLevel: Math.floor(totalPoints / 20) + 1,
+          nextReward: null
+        });
+        
+        return;
+      }
       
       // 计算解锁状态
-      const rewards = displayRewards.map(r => ({
+      const rewards = allRewards.map(r => ({
         ...r,
         unlocked: totalPoints >= r.points
       }));
@@ -265,7 +312,7 @@ Page({
       
       // 计算下一个可达成的奖励
       const nextReward = await rewardService.calculateNextAvailableReward();
-      console.log(`[rewards] 下一个可达成奖励: ${nextReward.name}, 需要${nextReward.points}颗星星`);
+      console.log(`[rewards] 下一个可达成奖励: ${nextReward ? nextReward.name : '无'}, 需要${nextReward ? nextReward.points : 0}颗星星`);
       
       this.setData({
         rewards: rewards,

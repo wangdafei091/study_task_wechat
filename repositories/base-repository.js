@@ -472,6 +472,15 @@ class BaseRepository {
       return { ...model };
     }
   }
+  
+  /**
+   * 使缓存失效，强制下次从存储加载
+   */
+  invalidateCache() {
+    this._cache = null;
+    this._cacheTime = 0;
+    logger.info('BaseRepository', `手动使缓存失效, 存储键=${this.storageKey}`);
+  }
 }
 
 module.exports = BaseRepository; 

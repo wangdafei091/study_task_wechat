@@ -1,7 +1,8 @@
 const app = getApp()
 const taskManager = require('../../utils/taskManager.js');
 const messageManager = require('../../utils/messageManager.js');
-const pointsManager = require('../../utils/pointsManager.js');
+const serviceManager = require('../../utils/serviceManager.js');
+const formatUtils = require('../../utils/formatUtils');
 
 Page({
   data: {
@@ -182,7 +183,39 @@ Page({
       
       // 监听奖励领取事件
       app.globalData.eventBus.on('rewardClaimed', this.handleRewardClaimed.bind(this));
+      
+      // 监听奖励更新相关事件
+      app.globalData.eventBus.on('reward:updated', this.handleRewardUpdated.bind(this));
+      app.globalData.eventBus.on('reward:examples_cleared', this.handleRewardUpdated.bind(this));
     }
+  },
+  
+  /**
+   * 处理奖励更新事件
+   */
+  handleRewardUpdated: function(data) {
+    console.log('[Index] 收到奖励更新事件:', data);
+    // 设置标记，下次页面显示时会通过needRefreshReward标记进行刷新
+    const app = getApp();
+    app.globalData.needRefreshReward = true;
+    
+    // 立即刷新当前页面的奖励数据
+    if (this.isCurrentPage()) {
+      console.log('[Index] 当前在首页，立即刷新奖励数据');
+      this.loadStarsAndRewards();
+    }
+  },
+  
+  /**
+   * 判断当前是否在首页
+   * @returns {Boolean} 是否在首页
+   */
+  isCurrentPage: function() {
+    const pages = getCurrentPages();
+    if (pages.length === 0) return false;
+    
+    const currentPage = pages[pages.length - 1];
+    return currentPage.route === 'pages/index/index' || currentPage.__route__ === 'pages/index/index';
   },
   
   /**
@@ -278,7 +311,7 @@ Page({
     
     // 检查是否需要刷新奖励信息
     if (app.globalData.needRefreshReward) {
-      console.log('[Index] 检测到奖励已被领取，清除满值状态并更新进度条');
+      console.log('[Index] 检测到奖励数据变更标记，强制清除缓存并刷新');
       
       // 清除满值状态
       this.setData({
@@ -288,8 +321,14 @@ Page({
         rewardTextState: 'newTarget'
       });
       
-      // 执行过渡到新目标
-      this.transitionToNewTarget();
+      // 强制重新获取最新奖励信息
+      const rewardService = serviceManager.getService('rewardService');
+      if (rewardService && typeof rewardService.clearCache === 'function') {
+        rewardService.clearCache(); // 如果有清除缓存方法，则调用
+      }
+      
+      // 强制重新加载奖励数据，确保UI正确显示
+      this.loadStarsAndRewards();
       
       // 清除标记
       app.globalData.needRefreshReward = false;
@@ -850,7 +889,7 @@ viewMessageDetail: function(e) {
     const oldProgress = this.data.rewardProgress || { current: 0, total: 10 };
     
     // 获取当前用户星星数
-    const userPoints = this.data.userPoints || pointsManager.getUserPoints();
+    const userPoints = this.data.userPoints || serviceManager.getUserPoints();
     
     // 添加日志
     console.log(`[Index] 处理奖励完成事件: 当前进度=${JSON.stringify(oldProgress)}, 星星数=${userPoints}`);
@@ -971,146 +1010,65 @@ viewMessageDetail: function(e) {
   },
 
   /**
-   * 加载用户星星和奖品信息
+   * 加载用户星星和奖励信息
    */
   loadStarsAndRewards: async function() {
     try {
-      console.log('[Index] 加载用户星星和奖品信息');
-      
       // 获取服务实例
-      const serviceManager = require('../../utils/serviceManager');
       const starService = serviceManager.getService('starService');
-      const pointsManager = require('../../utils/pointsManager');
+      const rewardService = serviceManager.getService('rewardService');
       
-      // 从新架构获取星星数据
-      const newArchStars = await starService.getTotalStars();
-      console.log(`[Index] 当前用户星星数: ${newArchStars}`);
-      
-      // 从旧系统获取星星数据
-      const oldSystemStars = pointsManager.getUserPoints();
-      
-      // 检查两个系统的星星数据是否一致，如不一致使用较大值来保证用户不会丢失星星
-      let actualStars = newArchStars; // 默认使用新架构星星数
-      
-      if (newArchStars !== oldSystemStars) {
-        console.log(`[Index] 检测到星星数据不同步，新架构=${newArchStars}，旧系统=${oldSystemStars}，使用较大值=${Math.max(newArchStars, oldSystemStars)}`);
-        actualStars = Math.max(newArchStars, oldSystemStars);
-        
-        // 同步到两个系统
-        if (newArchStars < actualStars) {
-          // 新架构星星少，补充差额
-          const diff = actualStars - newArchStars;
-          await starService.addStars(diff, 'permanent', 'data_sync', {
-            reason: '数据同步'
-          });
-        }
-        
-        if (oldSystemStars < actualStars) {
-          // 旧系统星星少，更新
-          pointsManager.saveUserPoints(actualStars);
-        }
-      } else {
-        console.log(`[Index] 星星数据一致性检查通过: 总数=${newArchStars}`);
-      }
-      
-      // 格式化星星数量供显示使用
-      const formattedPoints = await starService.formatStarCount(actualStars, true);
-      
-      // 记录当前进度数据，用于后续满值判断
-      const oldProgress = this.data.rewardProgress || { current: 0, total: 10 };
-      
-      // 确保oldProgress.total是有效数字
-      if (oldProgress.total === undefined || oldProgress.total === null || !isFinite(parseInt(oldProgress.total))) {
-        oldProgress.total = 10;
-      }
-      
-      // 检查是否刚达成满值 - 使用最新星星数与当前奖励目标比较
-      const justCompleted = actualStars >= oldProgress.total && actualStars < oldProgress.total * 2 && !this.data.transitionInProgress;
-      console.log(`[Index] 检查满值状态: 星星=${actualStars}, 目标=${oldProgress.total}, 是否满值: ${justCompleted}`);
-      
-      // 如果刚达成满值，立即处理满值状态并提前返回，防止被后续逻辑覆盖
-      if (justCompleted) {
-        console.log('[Index] 检测到星星数刚好达到目标，设置满值状态');
-        this._handleRewardCompletion(oldProgress, actualStars);
+      if (!starService || !rewardService) {
+        console.error('[Index] 无法获取服务实例');
         return;
       }
       
-      // 以下是正常流程（非满值状态）
-      // 从本地存储获取最新奖励数据
-      const app = getApp();
-      const storedRewards = wx.getStorageSync('rewards') || [];
+      // 获取星星信息
+      const userPoints = await starService.getTotalStars();
+      const formattedPoints = formatUtils.formatPoints(userPoints, true);
       
-      // 确保示例奖励启用状态统一
-      let needUpdate = false;
-      const updatedRewards = storedRewards.map(reward => {
-        if (this.isExampleReward(reward) && !reward.enabled) {
-          needUpdate = true;
-          console.log(`[Index] 修正示例奖励状态: ${reward.name}`);
-          return { ...reward, enabled: true };
-        }
-        return reward;
-      });
+      console.log(`[Index] 当前用户星星数: ${userPoints}`);
       
-      // 如果有更新，保存回存储
-      if (needUpdate) {
-        console.log('[Index] 更新奖励数据，确保示例奖励启用');
-        wx.setStorageSync('rewards', updatedRewards);
+      // 获取下一个可达成奖励
+      console.log(`[Index] 开始获取下一个可达成奖励`);
+      const nextReward = await rewardService.calculateNextAvailableReward();
+      console.log(`[Index] 获取到下一个可达成奖励: ${nextReward ? nextReward.name : '无'}`);
+      
+      // 加载可见奖励列表，使用服务层的过滤逻辑
+      console.log(`[Index] 加载可见奖励列表`);
+      let visibleRewards = await rewardService.getAvailableRewards(true);
+      console.log(`[Index] 获取到可见奖励: ${visibleRewards.length}个`);
+      
+      // 如果没有可见奖励，但存在nextReward（可能是默认奖励），则增加到可见列表
+      if (visibleRewards.length === 0 && nextReward && nextReward.id) {
+        console.log(`[Index] 无可见奖励但存在下一个奖励，添加到显示列表`);
+        visibleRewards = [nextReward];
       }
       
-      // 过滤出启用的奖励
-      const enabledRewards = updatedRewards.filter(r => r.enabled !== false);
-      
-      // 如果没有可用奖励，使用默认奖励
-      const allRewards = enabledRewards.length > 0 ? 
-        enabledRewards : 
-        (app.getDefaultRewards ? app.getDefaultRewards() : []);
-      
-      // 使用pointsManager计算下一个奖励信息
-      const nextReward = pointsManager.calculateNextReward(allRewards);
-      
-      // 检查是否所有奖励都已领取
-      if (nextReward.allClaimed) {
-        console.log('[Index] 所有奖励都已领取');
-        // 显示适当的提示或处理逻辑
-      } else {
-        console.log(`[Index] 下一个奖励: ${nextReward.name}，需要星星: ${nextReward.points}，当前星星: ${actualStars}`);
-      }
-      
-      // 明确记录实际进度值
-      console.log(`[Index] 进度更新 - 当前值: ${actualStars}, 目标值: ${nextReward.points}`);
-      
-      // 更新奖励进度数据
+      // 更新UI状态
       this.setData({
-        userPoints: actualStars,
-        formattedPoints: formattedPoints,
-        nextReward: nextReward,
+        userPoints,
+        formattedPoints,
+        nextReward,
+        visibleRewards: visibleRewards.slice(0, 3).map(reward => ({
+          id: reward.id,
+          name: reward.name,
+          points: reward.points,
+          icon: reward.icon,
+          status: reward.claimed ? 'claimed' : (reward.points <= userPoints ? 'unlocked' : 'current'),
+          isExample: !!reward.isExample // 确保传递示例奖励标记
+        })),
+        hasMoreRewards: visibleRewards.length > 3,
         rewardProgress: {
-          current: actualStars,
-          total: isFinite(parseInt(nextReward.points)) ? parseInt(nextReward.points) : 100 // 确保total是数字
-        },
-        rewardTextState: 'newTarget',
-        forceKeepFullValue: false,
-        completedRewardTotal: 0
+          current: userPoints,
+          total: nextReward && nextReward.points ? nextReward.points : 100
+        }
       });
       
-      console.log(`[Index] 设置星星进度: ${actualStars}/${nextReward.points}, 还需: ${nextReward.remainingStars}`);
+      console.log(`[Index] 奖励进度条数据已更新: ${userPoints}/${nextReward && nextReward.points ? nextReward.points : 100}`);
       
-      // 准备礼品指示器数据
-      this.prepareRewardIndicators(actualStars, allRewards, nextReward);
-      
-      // 确保进度条组件获得正确的进度值
-      setTimeout(() => {
-        const progressBar = this.selectComponent('#progressBar');
-        if (progressBar) {
-          console.log('[Index] 手动更新进度条组件数据');
-          progressBar.setData({
-            current: actualStars,
-            total: isFinite(parseInt(nextReward.points)) ? parseInt(nextReward.points) : 100 // 确保total是数字
-          });
-        }
-      }, 50);
     } catch (error) {
-      console.error('[Index] 加载用户星星和奖品信息失败', error);
+      console.error('[Index] 加载星星和奖励信息失败', error);
     }
   },
   
@@ -1118,109 +1076,37 @@ viewMessageDetail: function(e) {
    * 处理奖励完成的满值状态
    * 独立函数处理满值逻辑，避免代码重复
    */
-  _handleRewardCompletion: function(oldProgress, userPoints) {
-    console.log('[Index] 处理奖励完成满值状态');
-    
-    // 安全检查，确保oldProgress有效
-    if (!oldProgress || typeof oldProgress !== 'object') {
-      console.error('[Index] 无法处理奖励完成，进度数据无效', oldProgress);
-      oldProgress = { current: 0, total: 10 };
-    }
-    
-    // 确保total属性存在
-    if (oldProgress.total === undefined || oldProgress.total === null || !isFinite(oldProgress.total)) {
-      console.warn('[Index] 奖励目标值缺失或无效，使用默认值10');
-      oldProgress.total = 10;
-    }
-    
-    // 检查userPoints参数是否有效，如果无效则获取当前用户星星数
-    if (userPoints === undefined || userPoints === null || !isFinite(userPoints)) {
-      console.warn('[Index] 用户星星数无效，从pointsManager获取');
-      userPoints = pointsManager.getUserPoints();
-      console.log(`[Index] 获取到用户星星数: ${userPoints}`);
-    }
-    
-    // 从本地存储获取实际奖励列表
-    const storedRewards = wx.getStorageSync('rewards') || [];
-    console.log(`[Index] 从存储加载奖励数据: ${storedRewards.length}个奖励`);
-    
-    // 过滤出启用的奖励
-    const enabledRewards = storedRewards.filter(r => r.enabled !== false);
-    
-    // 获取应用实例
-    const app = getApp();
-    
-    // 如果本地存储中没有启用的奖励，才使用默认奖励
-    const allRewards = enabledRewards.length > 0 ? 
-      enabledRewards : 
-      (app.getDefaultRewards ? app.getDefaultRewards() : []);
-    console.log(`[Index] 使用${enabledRewards.length > 0 ? '存储中' : '默认'}奖励数据，共${allRewards.length}个`);
-    
-    // 查找对应的已完成奖励
-    const targetPoints = parseInt(oldProgress.total) || 10;
-    let completedReward = null;
-    
+  _handleRewardCompletion: async function(oldProgress, userPoints) {
     try {
-      // 确保使用数字类型进行比较
-      completedReward = allRewards.find(r => parseInt(r.points || 0) === targetPoints);
-    } catch (error) {
-      console.error('[Index] 查找完成奖励出错:', error);
-    }
-    
-    // 如果找不到匹配的奖励，创建一个默认奖励对象
-    if (!completedReward) {
-      console.warn(`[Index] 未找到点数为${targetPoints}的奖励，使用默认奖励`);
-      completedReward = { 
-        name: '未知奖励', 
-        icon: '🎁',
-        points: targetPoints,
-        id: `reward_default_${Date.now()}` // 添加ID确保后续操作不出错
-      };
-    }
-    
-    console.log(`[Index] 已完成奖励: ${completedReward.name}, 所需星星: ${completedReward.points}, 是示例奖励: ${this.isExampleReward(completedReward) ? '是' : '否'}`);
-    
-    // 设置满值状态和标志
-    this.setData({
-      transitionInProgress: true,
-      completedReward: completedReward,
-      rewardTextState: 'achieved',
-      rewardProgress: {
-        current: targetPoints,
-        total: targetPoints
-      },
-      formattedPoints: pointsManager.formatPoints(targetPoints),
-      forceKeepFullValue: true,
-      completedRewardTotal: targetPoints,
-      userPoints: userPoints // 确保存储最新的星星数
-    });
-    
-    // 准备礼品指示器数据
-    this.prepareRewardIndicators(userPoints, allRewards, null);
-    
-    // 确保进度条组件获得正确的满值
-    setTimeout(() => {
-      const progressBar = this.selectComponent('#progressBar');
-      if (progressBar) {
-        console.log('[Index] 强制设置进度条组件为满值');
-        progressBar.setData({
-          current: targetPoints,
-          total: targetPoints
-        });
-        
-        // 震动反馈
-        if (wx.vibrateShort) {
-          wx.vibrateShort({ type: 'heavy' });
-        }
-        
-        // 延迟显示选择对话框，让用户有足够时间看到满值状态
-        setTimeout(() => {
-          if (this.data.forceKeepFullValue) { // 再次检查，防止状态已被改变
-            this.showRewardChoiceDialog();
-          }
-        }, 2500);
+      console.log(`[Index] 处理奖励完成状态: 目标=${userPoints}`);
+      
+      const starService = serviceManager.getService('starService');
+      if (!starService) {
+        console.error('[Index] 无法获取星星服务实例');
+        return;
       }
-    }, 50);
+      
+      // 格式化星星数展示
+      const formattedPoints = formatUtils.formatPoints(userPoints);
+      
+      // 更新UI显示满值状态
+      this.setData({
+        userPoints: userPoints,
+        rewardProgress: {
+          current: userPoints,
+          total: userPoints
+        },
+        formattedPoints: formattedPoints,
+        forceKeepFullValue: true,
+        completedRewardTotal: userPoints,
+        rewardTextState: 'achieved',
+        transitionInProgress: true
+      });
+      
+      console.log('[Index] 奖励完成状态设置完毕');
+    } catch (error) {
+      console.error('[Index] 处理奖励完成状态失败', error);
+    }
   },
   
   /**
@@ -1298,64 +1184,62 @@ viewMessageDetail: function(e) {
   /**
    * 过渡到新目标
    */
-  transitionToNewTarget: function() {
+  transitionToNewTarget: async function() {
     console.log('[Index] 执行过渡到新目标的动画');
     
-    // 清除所有满值相关状态
-    this.setData({
-      forceKeepFullValue: false,
-      transitionInProgress: false,
-      showRewardChoice: false,
-      rewardTextState: 'newTarget'
-    });
-    
-    // 获取新的目标信息
-    const userPoints = pointsManager.getUserPoints();
-    const app = getApp();
-    
-    // 从本地存储获取最新奖励数据，确保包含已领取状态
-    const storedRewards = wx.getStorageSync('rewards');
-    const allRewards = storedRewards || app.getDefaultRewards() || [];
-    console.log(`[Index] 从存储加载奖励数据: ${allRewards.length}个奖励`);
-    
-    const nextReward = pointsManager.calculateNextReward(allRewards);
-    
-    // 检查是否所有奖励都已领取
-    if (nextReward.allClaimed) {
-      console.log('[Index] 检测到所有奖励都已领取');
-      // 显示适当的提示
-      wx.showToast({
-        title: '已领取所有奖励',
-        icon: 'success',
-        duration: 2000
+    try {
+      // 清除所有满值相关状态
+      this.setData({
+        forceKeepFullValue: false,
+        transitionInProgress: false,
+        showRewardChoice: false,
+        rewardTextState: 'newTarget'
       });
-    }
-    
-    console.log(`[Index] 新目标信息: 当前星星=${userPoints}, 下一目标=${nextReward.name}, 需要星星=${nextReward.points}`);
-    
-    // 获取进度条组件并平滑过渡
-    const progressBar = this.selectComponent('#progressBar');
-    if (progressBar) {
-      console.log('[Index] 进度条平滑过渡到新目标');
-      progressBar.setData({
-        current: userPoints,
-        total: isFinite(parseInt(nextReward.points)) ? parseInt(nextReward.points) : 100 // 确保total是数字
-      });
-    }
-    
-    // 更新数据到新目标
-    this.setData({
-      userPoints: userPoints,
-      formattedPoints: pointsManager.formatPoints(userPoints),
-      nextReward: nextReward,
-      rewardProgress: {
-        current: userPoints,
-        total: isFinite(parseInt(nextReward.points)) ? parseInt(nextReward.points) : 100 // 确保total是数字
+      
+      // 获取服务实例
+      const starService = serviceManager.getService('starService');
+      const rewardService = serviceManager.getService('rewardService');
+      
+      if (!starService || !rewardService) {
+        console.error('[Index] 无法获取服务实例');
+        return;
       }
-    });
-    
-    // 准备礼品指示器数据
-    this.prepareRewardIndicators(userPoints, allRewards, nextReward);
+      
+      // 获取当前星星数
+      const userPoints = await starService.getTotalStars();
+      console.log(`[Index] 当前星星数: ${userPoints}`);
+      
+      // 获取下一个可达成奖励
+      console.log(`[Index] 获取下一个可达成奖励`);
+      const nextReward = await rewardService.calculateNextAvailableReward();
+      console.log(`[Index] 新目标信息: 下一目标=${nextReward ? nextReward.name : '无'}, 需要星星=${nextReward ? nextReward.points : 0}`);
+      
+      // 格式化星星数
+      const formattedPoints = formatUtils.formatPoints(userPoints, true);
+      
+      // 获取进度条组件并平滑过渡
+      const progressBar = this.selectComponent('#progressBar');
+      if (progressBar) {
+        console.log('[Index] 进度条平滑过渡到新目标');
+        progressBar.setData({
+          current: userPoints,
+          total: isFinite(parseInt(nextReward.points)) ? parseInt(nextReward.points) : 100 // 确保total是数字
+        });
+      }
+      
+      // 更新数据到新目标
+      this.setData({
+        userPoints: userPoints,
+        formattedPoints: formattedPoints,
+        nextReward: nextReward,
+        rewardProgress: {
+          current: userPoints,
+          total: nextReward.points || 100
+        }
+      });
+    } catch (error) {
+      console.error('[Index] 过渡到新目标时出错', error);
+    }
   },
   
   // 点击查看奖池

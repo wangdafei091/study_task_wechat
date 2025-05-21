@@ -49,6 +49,27 @@ class RewardService {
         // 继续执行，不影响主流程
       }
       
+      // 检查是否存在奖励数据，如果不存在则初始化默认奖励
+      const rewardsCount = await this.rewardRepository.count();
+      
+      // 检查是否存在自定义奖励标记
+      let hasCustomRewards = false;
+      try {
+        hasCustomRewards = wx.getStorageSync('has_custom_rewards') === true;
+      } catch (e) {
+        logger.warn('RewardService', '获取自定义奖励标记失败', e);
+      }
+      
+      if (rewardsCount === 0 && !hasCustomRewards) {
+        logger.info('RewardService', '未检测到奖励数据且无自定义奖励标记，开始初始化默认奖励');
+        const defaultRewards = await this.rewardRepository.initializeDefaultRewards();
+        logger.info('RewardService', `初始化了${defaultRewards.length}个默认奖励`);
+      } else if (rewardsCount === 0 && hasCustomRewards) {
+        logger.info('RewardService', '检测到自定义奖励标记，跳过默认奖励初始化');
+      } else {
+        logger.info('RewardService', `检测到${rewardsCount}个奖励数据，跳过默认奖励初始化`);
+      }
+      
       // 设置初始化完成标志
       this.initialized = true;
       logger.info('RewardService', '服务初始化完成');
@@ -300,27 +321,29 @@ class RewardService {
   /**
    * 获取可用奖励列表
    * @param {Boolean} includeClaimed 是否包含已领取的奖励
+   * @param {Boolean} includeExamples 是否包含示例奖励，默认为false
    * @returns {Promise<Array>} 可用奖励列表
    */
-  async getAvailableRewards(includeClaimed = false) {
+  async getAvailableRewards(includeClaimed = false, includeExamples = false) {
     try {
       let rewards;
       if (includeClaimed) {
-        // 获取所有奖励，包括已领取的
+        // 获取所有奖励，可能包括已领取的和示例奖励
         rewards = await this.rewardRepository.getAll();
-        logger.info('RewardService', `获取所有奖励成功(包含已领取), 数量=${rewards.length}`);
+        
+        // 如果不需要示例奖励且存在自定义奖励，过滤掉示例奖励
+        if (!includeExamples) {
+          const hasCustomRewards = rewards.some(r => !r.isExample && r.enabled);
+          if (hasCustomRewards) {
+            rewards = rewards.filter(r => !r.isExample);
+          }
+        }
+        
+        logger.info('RewardService', `获取所有奖励成功(包含已领取${includeExamples ? '和示例' : ''}), 数量=${rewards.length}`);
       } else {
-        // 仅获取未领取的可用奖励
-        rewards = await this.rewardRepository.getAvailableRewards();
-        logger.info('RewardService', `获取可用奖励成功(仅未领取), 数量=${rewards.length}`);
-      }
-      
-      // 过滤示例奖励的额外逻辑：如果有启用的自定义奖励，则不返回示例奖励
-      const hasCustomRewards = rewards.some(r => !r.isExample && r.enabled);
-      if (hasCustomRewards) {
-        const filteredRewards = rewards.filter(r => !r.isExample);
-        logger.info('RewardService', `过滤掉示例奖励，剩余${filteredRewards.length}个奖励`);
-        return filteredRewards;
+        // 使用增强的仓储方法，直接处理示例奖励的过滤
+        rewards = await this.rewardRepository.getAvailableRewards(includeExamples);
+        logger.info('RewardService', `获取可用奖励成功(仅未领取${includeExamples ? '，包含示例' : ''}), 数量=${rewards.length}`);
       }
       
       return rewards;
@@ -572,11 +595,50 @@ class RewardService {
       // 获取用户可用的星星数量
       const availablePoints = await this.starGroupRepository.getTotalPoints();
       
-      // 获取所有可用奖励
-      const availableRewards = await this.rewardRepository.getAvailableRewards();
+      // 获取所有可用奖励，不强制包含示例奖励
+      // 系统将根据是否有自定义奖励决定是否显示示例奖励
+      let availableRewards = await this.getAvailableRewards(false, false);
       
+      // 检查是否需要初始化示例奖励
       if (availableRewards.length === 0) {
-        logger.info('RewardService', '计算下一个可用奖励：没有可用奖励，返回默认奖励');
+        logger.info('RewardService', '计算下一个可用奖励：没有可用奖励，检查是否需要初始化示例奖励');
+        
+        // 检查是否存在奖励数据，没有则初始化示例奖励
+        const rewardsCount = await this.rewardRepository.count();
+        logger.info('RewardService', `奖励数据检查结果: 现有${rewardsCount}个奖励`);
+        
+        // 检查是否存在自定义奖励标记
+        let hasCustomRewards = false;
+        try {
+          hasCustomRewards = wx.getStorageSync('has_custom_rewards') === true;
+          if (hasCustomRewards) {
+            logger.info('RewardService', '检测到自定义奖励标记');
+          }
+        } catch (e) {
+          logger.warn('RewardService', '获取自定义奖励标记失败', e);
+        }
+        
+        if (rewardsCount === 0 && !hasCustomRewards) {
+          logger.info('RewardService', '未检测到奖励数据且无自定义奖励标记，开始初始化默认奖励');
+          const defaultRewards = await this.rewardRepository.initializeDefaultRewards();
+          logger.info('RewardService', `初始化了${defaultRewards.length}个默认奖励`);
+          
+          // 清除缓存，确保获取最新数据
+          this.clearCache();
+          
+          // 更新可用奖励列表，强制包含示例奖励
+          availableRewards = await this.getAvailableRewards(false, true);
+          
+          // 如果初始化成功，返回第一个示例奖励
+          if (defaultRewards.length > 0) {
+            logger.info('RewardService', `返回第一个示例奖励: ${defaultRewards[0].name}(${defaultRewards[0].points}点)`);
+            return defaultRewards[0];
+          }
+        } else if (rewardsCount === 0 && hasCustomRewards) {
+          logger.info('RewardService', '检测到自定义奖励标记，跳过默认奖励初始化');
+        }
+        
+        logger.info('RewardService', `无可用奖励，返回默认占位奖励`);
         return {
           name: '添加新奖励',
           points: 10,
@@ -667,6 +729,48 @@ class RewardService {
     } catch (error) {
       logger.error('RewardService', `复制奖励失败, ID=${rewardId}`, error);
       return null;
+    }
+  }
+
+  /**
+   * 批量删除奖励
+   * @param {Array<String>} rewardIds 奖励ID数组
+   * @returns {Promise<Object>} 删除结果
+   */
+  async deleteRewards(rewardIds) {
+    if (!Array.isArray(rewardIds) || rewardIds.length === 0) {
+      logger.warn('RewardService', '批量删除奖励失败: 无效的ID数组');
+      return { success: false, message: '无效的ID数组' };
+    }
+    
+    try {
+      // 批量删除奖励
+      const deletedCount = await this.rewardRepository.deleteMany(rewardIds);
+      
+      // 清除缓存
+      this.clearCache();
+      
+      logger.info('RewardService', `批量删除奖励成功: 删除了${deletedCount}个奖励`);
+      
+      // 触发奖励批量删除事件
+      this.eventBus.emit('reward:deleted_batch', { rewardIds });
+      
+      return { success: true, count: deletedCount };
+    } catch (error) {
+      logger.error('RewardService', '批量删除奖励失败', error);
+      return { success: false, message: '批量删除过程中发生错误' };
+    }
+  }
+
+  /**
+   * 清除缓存
+   */
+  clearCache() {
+    logger.info('RewardService', '强制清除奖励服务缓存');
+    
+    // 清除仓储缓存
+    if (this.rewardRepository && typeof this.rewardRepository.invalidateCache === 'function') {
+      this.rewardRepository.invalidateCache();
     }
   }
 }
