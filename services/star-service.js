@@ -620,6 +620,69 @@ class StarService {
     
     return result;
   }
+  
+  /**
+   * 验证星星数据一致性
+   * 检查星星分组总和是否与总星星数一致
+   * @returns {Promise<Object>} 验证结果对象
+   */
+  async verifyDataConsistency() {
+    logger.info('StarService', '开始验证星星数据一致性');
+    
+    try {
+      // 获取所有星星分组
+      const groups = await this.starGroupRepository.getAll();
+      
+      // 计算分组星星总和
+      const groupTotalPoints = groups.reduce((sum, group) => sum + group.points, 0);
+      
+      // 获取存储的总星星数
+      const savedTotalPoints = await this.starGroupRepository.getTotalPoints();
+      
+      // 检查是否一致
+      const isConsistent = groupTotalPoints === savedTotalPoints;
+      
+      const result = {
+        isConsistent,
+        groupTotalPoints,
+        savedTotalPoints,
+        difference: groupTotalPoints - savedTotalPoints
+      };
+      
+      if (isConsistent) {
+        logger.info('StarService', `星星数据一致性检查通过: 总数=${savedTotalPoints}`);
+      } else {
+        logger.warn('StarService', `星星数据不一致: 分组总和=${groupTotalPoints}, 存储总数=${savedTotalPoints}, 差异=${result.difference}`);
+      }
+      
+      return result;
+    } catch (error) {
+      logger.error('StarService', '验证星星数据一致性失败', error);
+      return {
+        isConsistent: false,
+        error: error.message
+      };
+    }
+  }
+  
+  /**
+   * 格式化星星数量
+   * @param {Number} points 要格式化的星星数量
+   * @param {Boolean} useThousandSeparator 是否使用千位分隔符
+   * @returns {String} 格式化后的星星数量字符串
+   */
+  formatStarCount(points, useThousandSeparator = false) {
+    // 确保输入为数字
+    const numPoints = parseInt(points, 10) || 0;
+    
+    if (useThousandSeparator) {
+      // 添加千位分隔符
+      return numPoints.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    }
+    
+    // 普通格式化，直接返回字符串
+    return numPoints.toString();
+  }
 }
 
 module.exports = StarService; 

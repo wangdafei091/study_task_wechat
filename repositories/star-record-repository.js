@@ -360,35 +360,70 @@ class StarRecordRepository extends BaseRepository {
   
   /**
    * 按月份分组记录
-   * @param {Array} records 记录列表
-   * @returns {Object} 按月份分组的记录对象
+   * @param {Array} records 要分组的记录数组
+   * @param {Boolean} descending 是否降序排列（最新月份在前）
+   * @returns {Array} 按月份分组的记录数组
    */
-  groupRecordsByMonth(records) {
-    if (!Array.isArray(records)) {
-      return {};
-    }
+  groupByMonth(records, descending = true) {
+    logger.info('StarRecordRepository', `开始按月份分组${records.length}条记录`);
     
-    const groups = {};
+    // 创建月份分组映射
+    const monthGroups = {};
     
+    // 遍历记录并分组
     records.forEach(record => {
-      const month = record.getMonth();
+      const date = new Date(record.timestamp);
+      const year = date.getFullYear();
+      const month = date.getMonth() + 1;
+      const monthKey = `${year}-${month.toString().padStart(2, '0')}`;
       
-      if (!groups[month]) {
-        groups[month] = [];
+      if (!monthGroups[monthKey]) {
+        monthGroups[monthKey] = {
+          title: `${year}年${month}月`,
+          records: []
+        };
       }
       
-      groups[month].push(record);
+      monthGroups[monthKey].records.push(record);
     });
     
-    // 按月份降序排序
-    const sortedGroups = {};
-    Object.keys(groups)
-      .sort((a, b) => b.localeCompare(a))
-      .forEach(month => {
-        sortedGroups[month] = groups[month];
-      });
+    // 将对象转换为数组并按月份排序
+    const result = Object.values(monthGroups).sort((a, b) => {
+      const comparison = a.title.localeCompare(b.title);
+      return descending ? -comparison : comparison;
+    });
     
-    return sortedGroups;
+    logger.info('StarRecordRepository', `分组完成，共${result.length}个月份`);
+    
+    return result;
+  }
+  
+  /**
+   * 获取记录并按月份分组
+   * @param {Object} options 选项
+   * @param {Number} options.limit 限制数量
+   * @param {Boolean} options.descending 是否降序排列
+   * @returns {Promise<Array>} 按月份分组的记录数组
+   */
+  async getRecordsGroupedByMonth(options = {}) {
+    logger.info('StarRecordRepository', '获取按月份分组的星星记录');
+    
+    try {
+      // 获取所有记录，按时间排序
+      const records = await this.getRecordsByTimeOrder(
+        options.descending !== false, 
+        options.limit || 0
+      );
+      
+      // 按月份分组
+      const groupedRecords = this.groupByMonth(records, options.descending !== false);
+      
+      logger.info('StarRecordRepository', `获取按月份分组的记录成功, 月份数=${groupedRecords.length}`);
+      return groupedRecords;
+    } catch (error) {
+      logger.error('StarRecordRepository', '获取按月份分组的记录失败', error);
+      return [];
+    }
   }
   
   /**

@@ -508,6 +508,160 @@ class RewardService {
       return { success: false, message: '操作过程中发生错误' };
     }
   }
+  
+  /**
+   * 计算用户下一个可达成的奖励信息
+   * 类似于旧架构中的calculateNextReward方法，但专为新架构设计
+   * @returns {Promise<Object>} 下一个奖励的信息对象
+   */
+  async calculateNextAvailableReward() {
+    logger.info('RewardService', '计算用户下一个可达成的奖励信息');
+    
+    try {
+      // 获取用户当前可用星星数
+      const userPoints = await this.starGroupRepository.getTotalPoints();
+      
+      // 获取所有可用且未领取的奖励
+      const allRewards = await this.rewardRepository.getAvailableRewards();
+      logger.info('RewardService', `获取到${allRewards.length}个可用奖励`);
+      
+      // 过滤出未领取的奖励
+      const availableRewards = allRewards.filter(reward => !reward.claimed);
+      logger.info('RewardService', `过滤后有${availableRewards.length}个未领取的奖励`);
+      
+      // 如果没有可用奖励，返回默认值
+      if (availableRewards.length === 0) {
+        logger.info('RewardService', '没有可用奖励，返回全部完成状态');
+        return {
+          name: '恭喜！您已领取所有奖励，可以继续积累星星',
+          points: '∞',  // 使用无穷符号
+          icon: '🎉',
+          count: 0,
+          remainingStars: 0,
+          current: userPoints,
+          allClaimed: true
+        };
+      }
+      
+      // 为奖励添加解锁状态
+      const rewardsWithUnlockState = availableRewards.map(reward => ({
+        ...reward,
+        unlocked: userPoints >= reward.points
+      }));
+      
+      // 按所需星星数升序排序
+      rewardsWithUnlockState.sort((a, b) => a.points - b.points);
+      
+      // 查找第一个未解锁的奖励
+      let nextUnlockedRewards = rewardsWithUnlockState.filter(reward => !reward.unlocked);
+      
+      // 如果所有奖励都已解锁，使用最高级别的奖励
+      if (nextUnlockedRewards.length === 0 && rewardsWithUnlockState.length > 0) {
+        nextUnlockedRewards = [rewardsWithUnlockState[rewardsWithUnlockState.length - 1]];
+      }
+      
+      // 构建返回结果
+      let result;
+      
+      if (nextUnlockedRewards.length > 0) {
+        const nextPoints = nextUnlockedRewards[0].points;
+        const samePointsRewards = nextUnlockedRewards.filter(r => r.points === nextPoints);
+        
+        result = {
+          name: samePointsRewards[0].name,
+          points: nextPoints,
+          icon: samePointsRewards[0].icon,
+          count: samePointsRewards.length,
+          remainingStars: Math.max(0, nextPoints - userPoints),
+          current: userPoints
+        };
+        
+        logger.info('RewardService', `下一个奖励: ${result.name}, 需要${result.points}颗星星, 还差${result.remainingStars}颗`);
+      } else {
+        // 默认结果，应该不会走到这里，因为上面已经处理了没有奖励的情况
+        result = {
+          name: '奖品',
+          points: 100,
+          icon: '🎁',
+          count: 1,
+          remainingStars: 100,
+          current: userPoints
+        };
+        
+        logger.info('RewardService', `返回默认奖励信息`);
+      }
+      
+      return result;
+    } catch (error) {
+      logger.error('RewardService', '计算下一个奖励信息失败', error);
+      // 返回默认值
+      return {
+        name: '奖品',
+        points: 100,
+        icon: '🎁',
+        count: 1,
+        remainingStars: 100,
+        current: 0
+      };
+    }
+  }
+  
+  /**
+   * 复制奖励（创建相同配置的新奖励）
+   * 用于重新添加已领取的奖励到奖池
+   * @param {String} rewardId 要复制的奖励ID
+   * @returns {Promise<Object|null>} 新创建的奖励对象或null
+   */
+  async duplicateReward(rewardId) {
+    if (!rewardId) {
+      logger.warn('RewardService', '复制奖励失败: 缺少奖励ID');
+      return null;
+    }
+    
+    try {
+      // 获取原奖励
+      const originalReward = await this.rewardRepository.getById(rewardId);
+      
+      if (!originalReward) {
+        logger.warn('RewardService', `复制奖励失败: 未找到ID为${rewardId}的奖励`);
+        return null;
+      }
+      
+      logger.info('RewardService', `准备复制奖励: ${originalReward.name}, ID=${rewardId}`);
+      
+      // 创建新奖励数据，复制关键属性但重置状态
+      const newRewardData = {
+        name: originalReward.name,
+        description: originalReward.description,
+        type: originalReward.type,
+        points: originalReward.points,
+        icon: originalReward.icon,
+        tags: [...(originalReward.tags || [])],
+        notes: originalReward.notes,
+        enabled: true,
+        claimed: false,
+        originRewardId: rewardId // 记录源奖励ID
+      };
+      
+      // 保存新奖励
+      const newReward = await this.createReward(newRewardData);
+      
+      if (newReward) {
+        logger.info('RewardService', `复制奖励成功: 从"${originalReward.name}"创建了新奖励, 新ID=${newReward.id}`);
+        
+        // 触发奖励复制事件
+        this.eventBus.emit('reward:duplicated', { 
+          newReward,
+          originalReward
+        });
+      }
+      
+      return newReward;
+    } catch (error) {
+      logger.error('RewardService', `复制奖励失败, ID=${rewardId}`, error);
+      return null;
+    }
+  }
 }
 
 module.exports = RewardService; 
