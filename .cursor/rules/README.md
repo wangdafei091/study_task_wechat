@@ -3,6 +3,15 @@
 > **重要通知**: 本目录下的所有文档已迁移至项目根目录的 `docs/` 文件夹。
 > **请不要继续使用或更新本目录下的文档**。所有文档更新应在 `docs/` 目录进行。
 
+## 最新架构文档
+
+领域驱动设计(DDD)架构的最新文档现已全部迁移到 `docs/` 目录：
+
+- **核心架构设计**: [docs/architecture/domain-model-architecture.md](../../docs/architecture/domain-model-architecture.md)
+- **领域模型**: [docs/architecture/data_models.md](../../docs/architecture/data_models.md)
+- **系统架构**: [docs/architecture/system_architecture.md](../../docs/architecture/system_architecture.md)
+- **星星积分系统**: [docs/architecture/star_points_system.md](../../docs/architecture/star_points_system.md)
+
 ## 文档新位置
 
 所有文档现已统一移至项目根目录的 `docs/` 文件夹，按以下结构组织：
@@ -13,6 +22,7 @@ docs/
 │   ├── project_structure.md    # 项目结构
 │   ├── data_models.md          # 数据模型
 │   ├── system_architecture.md  # 系统架构
+│   ├── domain-model-architecture.md # 领域模型架构
 │   ├── star_points_system.md   # 星星有效期与消费机制
 │   └── optimization_summary.md # 优化总结
 ├── development/       # 开发指南
@@ -30,7 +40,7 @@ docs/
 
 ## 文档管理规则
 
-根据项目规则（见 `.cursorrules` 文件），所有文档必须：
+根据项目规则，所有文档必须：
 
 1. 统一存放在 `docs/` 目录下
 2. 按功能分类存放在对应子目录
@@ -44,6 +54,7 @@ docs/
 
 - [x] 项目结构文档 - 已迁移至 `docs/architecture/project_structure.md`
 - [x] 数据模型文档 - 已迁移至 `docs/architecture/data_models.md`
+- [x] 领域模型架构 - 已迁移至 `docs/architecture/domain-model-architecture.md`
 - [x] 开发工作流程 - 已迁移至 `docs/development/workflow.md`
 - [x] 编码规范 - 已迁移至 `docs/development/coding_standards.md`
 - [x] 工具函数指南 - 已迁移至 `docs/api/utils_guide.md`
@@ -55,27 +66,26 @@ docs/
 - [x] 常见问题解答 - 已迁移至 `docs/user/faq.md`
 - [x] 更新日志 - 已迁移至 `docs/development/CHANGELOG.md`
 
-**重要提示**：请立即开始使用新的文档位置，本目录下的文档将不再更新。
+**重要提示**：请立即开始使用新的文档位置，本目录下的文档将不再更新并可能包含过时信息。
 
-## 文档使用说明
+## 新架构实现
 
-1. **项目开发参考**：请查阅 `docs/` 目录下的最新文档
-2. **代码规范遵循**：按照 `docs/development/workflow.md` 中的规范编写代码
-3. **组件和工具使用**：使用组件和工具函数前参考对应指南文档
-4. **项目进度跟踪**：查看 `docs/` 下的相关文档了解当前完成情况
+项目现已完整实现了领域驱动设计架构，特别是在奖励系统和星星积分系统方面：
 
-## 文档迁移提示
+- **领域模型层**: 实体定义和业务逻辑
+- **仓储层**: 数据持久化和查询
+- **服务层**: 复杂业务流程协调
+- **适配器层**: 底层存储和API封装
 
-1. 本目录下的所有内容已迁移到 `docs/` 目录
-2. 新文档应直接创建在 `docs/` 目录下对应子目录中
-3. 修复代码时，应更新 `docs/` 目录下的相关文档
-4. 历史文档仅作为参考，不再更新
-5. 如有需要参考本目录的旧文档，请确保先查看`docs/`目录中的最新版本
+请参考 `docs/architecture/domain-model-architecture.md` 了解完整架构设计。
 
-## 文档维护规则
+## 关于领域架构
 
-1. 每次重大功能更新后，及时更新相关文档
-2. 核心架构变更需要同步更新系统文档
-3. 新增组件或工具函数需要在对应指南中添加说明
-4. 清理过时或冗余文档，保持文档整洁
-5. 文档更新后，在本索引中添加更新记录 
+项目采用领域驱动设计(DDD)架构，如需了解：
+
+1. **架构设计**: 请查阅 `docs/architecture/domain-model-architecture.md`
+2. **数据模型**: 请查阅 `docs/architecture/data_models.md` 
+3. **服务实现**: 请查阅 `docs/architecture/system_architecture.md`
+4. **开发指南**: 请遵循 `docs/development/workflow.md` 中的规范
+
+**注意**: 本目录下的架构规则文档可能已过时，请以 `docs/` 目录下最新文档为准。 

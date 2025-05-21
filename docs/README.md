@@ -9,6 +9,7 @@
 - [项目结构](architecture/project_structure.md) - 项目文件结构和组织方式
 - [数据模型](architecture/data_models.md) - 核心数据模型和字段说明
 - [系统架构](architecture/system_architecture.md) - 系统架构设计和组件关系
+- [领域模型架构](architecture/domain-model-architecture.md) - 领域驱动设计架构详解
 - [星星有效期与消费机制](architecture/star_points_system.md) - 积分系统的核心实现
 - [优化总结](architecture/optimization_summary.md) - 项目优化措施和效果
 
@@ -27,6 +28,29 @@
 
 - [用户指南](user/guide.md) - 应用功能和使用说明
 - [常见问题](user/faq.md) - 常见问题解答
+
+## 领域驱动设计架构
+
+项目现已完整采用领域驱动设计（DDD）架构，核心模块包括：
+
+### 领域层
+- **领域模型**：实现了任务(Task)、星星(Star)、星星分组(StarGroup)、奖励(Reward)、星星记录(StarRecord)等核心模型
+- **业务规则**：将业务规则封装在领域模型内，确保业务一致性
+- **领域事件**：实现状态变更通知机制，保持模块间松耦合
+
+### 应用层
+- **服务类**：提供StarService、RewardService等服务，协调领域对象间交互
+- **用例实现**：通过服务类实现完整的业务流程
+
+### 基础设施层
+- **仓储实现**：提供领域对象的持久化功能
+- **适配器**：封装底层存储、API调用等细节
+
+### 界面层
+- **页面**：处理用户交互，通过服务类调用领域功能
+- **组件**：使用统一的UI风格和交互模式
+
+详细架构设计请参考[领域模型架构](architecture/domain-model-architecture.md)文档。领域模型和数据模型详情请查看[数据模型](architecture/data_models.md)文档。
 
 ## 文档管理规则
 
@@ -125,6 +149,28 @@ study_task_wechat/
 │   ├── message/            # 消息中心
 │   ├── analysis/           # 数据分析页面
 │   └── history/            # 历史记录页面
+├── models/                 # 领域模型目录
+│   ├── task.js             # 任务模型
+│   ├── star.js             # 星星模型
+│   ├── star-group.js       # 星星分组模型
+│   ├── star-record.js      # 星星记录模型
+│   ├── reward.js           # 奖励模型
+│   └── index.js            # 模型导出索引
+├── repositories/           # 仓储层目录
+│   ├── base-repository.js  # 基础仓储类
+│   ├── task-repository.js  # 任务仓储
+│   ├── star-repository.js  # 星星仓储
+│   ├── star-group-repository.js # 星星分组仓储
+│   ├── star-record-repository.js # 星星记录仓储
+│   ├── reward-repository.js # 奖励仓储
+│   └── index.js            # 仓储导出索引
+├── services/               # 服务层目录
+│   ├── task-service.js     # 任务服务
+│   ├── star-service.js     # 星星服务
+│   ├── reward-service.js   # 奖励服务
+│   └── index.js            # 服务导出索引
+├── adapters/               # 适配器目录
+│   └── storage-adapter.js  # 存储适配器
 ├── utils/                  # 工具函数目录
 │   ├── analyticsManager.js # 数据分析管理工具
 │   ├── batchUtils.js       # 批量处理工具

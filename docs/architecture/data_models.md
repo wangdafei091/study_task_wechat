@@ -157,6 +157,120 @@ taskManager.unmarkTaskAsRequired(taskId, callback);
 - 文本映射关系在 `Constants.POINTS_EXPIRY.TEXT` 中定义
 - 任务完成时使用 `calculateExpiryDate` 方法计算准确的到期日期
 
+## 星星分组数据模型
+
+星星分组用于管理不同有效期的星星，实现"先过期先消费"的星星使用策略：
+
+```javascript
+{
+  id: 'group_123456789',       // 星星分组ID
+  expiryType: 'month',         // 有效期类型，同积分有效期类型
+  expiryDate: 1627776000000,   // 过期时间戳
+  expiryDateText: '2023-08-01', // 格式化的过期日期
+  points: 20,                  // 该分组中的星星数量
+  source: 'task',              // 星星来源类型：'task'(任务)/'system'(系统)/'bonus'(奖励)
+  sourceId: 'task_123456789',  // 星星来源ID
+  createTime: 1621693875000,   // 创建时间
+  status: 'active'             // 状态：'active'(活跃)/'expired'(已过期)/'consumed'(已消费完)
+}
+```
+
+## 星星记录数据模型
+
+星星记录用于跟踪星星的流转历史：
+
+```javascript
+{
+  id: 'record_123456789',      // 记录ID
+  type: 'earn',                // 记录类型：'earn'(获取)/'consume'(消费)/'expire'(过期)
+  amount: 10,                  // 星星数量
+  balance: 100,                // 操作后的星星余额
+  timestamp: 1621693875000,    // 记录时间戳
+  description: '完成任务"练习钢琴"', // 描述
+  source: 'task',              // 来源类型：'task'/'reward'/'system'/'expiry'
+  sourceId: 'task_123456789',  // 来源ID
+  data: {                      // 额外数据，根据类型不同而不同
+    taskId: 'task_123456789',  // 相关任务ID（如果适用）
+    rewardId: 'reward_123',    // 相关奖励ID（如果适用）
+    expiryType: 'month'        // 过期类型（如果适用）
+  }
+}
+```
+
+## 奖励数据模型
+
+奖励系统使用以下数据结构管理奖励：
+
+```javascript
+{
+  id: 'reward_123456789',      // 奖励唯一ID
+  name: '购买玩具车',           // 奖励名称
+  description: '从商店购买一个喜欢的玩具车', // 奖励描述
+  type: 'item',                // 奖励类型: 'item'(物品)/'privilege'(特权)/'activity'(活动)
+  points: 50,                  // 兑换所需的星星数量
+  icon: '🚗',                   // 奖励图标（使用emoji）
+  enabled: true,               // 是否启用
+  claimed: false,              // 是否已被兑换
+  claimTime: 0,                // 兑换时间戳（未兑换为0）
+  claimStatus: 'available',    // 兑换状态: 'available'(可兑换)/'claimed'(已兑换未领取)/'delivered'(已领取)/'disabled'(已禁用)
+  deliveryTime: 0,             // 领取时间戳（未领取为0）
+  createTime: 1621693875000,   // 创建时间戳
+  isExample: false,            // 是否为示例奖励
+  tags: ['玩具', '车'],         // 奖励标签
+  notes: '生日礼物'             // 奖励备注
+}
+```
+
+### 奖励状态流转
+
+奖励的状态流转如下：
+
+1. **可兑换 (available)**
+   - 默认初始状态
+   - 已启用且未被兑换的奖励
+   - 用户可以消费星星兑换此奖励
+
+2. **已兑换未领取 (claimed)**
+   - 用户已使用星星兑换，但尚未实际领取奖励
+   - 系统已扣除相应星星数
+   - 在兑换记录中显示为"待领取"
+
+3. **已领取 (delivered)**
+   - 用户已经实际领取奖励
+   - 管理者可以将状态从已兑换更新为已领取
+   - 在兑换记录中显示为"已领取"
+
+4. **已禁用 (disabled)**
+   - 管理者禁用了此奖励
+   - 不再显示在可兑换奖励列表中
+   - 示例奖励不能被禁用
+
+### 奖励类型
+
+系统支持三种奖励类型：
+
+1. **物品奖励 (item)**
+   - 实物礼品，如玩具、图书等
+   - 需要家长/老师实际提供
+   - 示例：玩具车、积木套装、图书
+
+2. **特权奖励 (privilege)**
+   - 特殊权限或待遇
+   - 示例：额外的电子设备使用时间、选择晚餐菜单
+
+3. **活动奖励 (activity)**
+   - 特殊活动或体验
+   - 示例：去游乐园、电影院、参加特定活动
+
+### 示例奖励机制
+
+系统包含示例奖励功能：
+- 首次启动时初始化默认示例奖励
+- 示例奖励使用 `isExample: true` 标记
+- 当用户创建第一个自定义奖励时，自动清理未领取的示例奖励
+- 示例奖励不能被禁用
+- 当存在自定义奖励时，示例奖励不会再显示
+
 ## 进度数据模型
 
 进度数据模型用于跟踪任务完成情况和统计数据：
