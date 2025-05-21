@@ -1,6 +1,7 @@
 const app = getApp();
 // 新架构服务引入
 const serviceManager = require('../../utils/serviceManager');
+const logger = require('../../utils/logger');
 
 Page({
   /**
@@ -336,31 +337,73 @@ Page({
   /**
    * 删除奖励
    */
-  deleteReward: function() {
+  deleteReward: async function() {
     const reward = this.data.selectedReward;
     
     if (reward && !reward.claimed) {
-      console.log(`[RewardManage] 删除奖励: ${reward.name}`);
+      logger.info('RewardManage', `删除奖励开始: ${reward.name}, ID=${reward.id}`, { points: reward.points });
       
-      // 从奖励列表中删除
-      const updatedRewards = this.data.rewards.filter(r => r.id !== reward.id);
-      
-      // 更新数据
-      this.setData({
-        rewards: updatedRewards,
-        showConfirmDialog: false,
-        selectedReward: null
-      });
-      
-      // 保存到本地存储
-      wx.setStorageSync('rewards', updatedRewards);
-      
-      // 显示提示
-      wx.showToast({
-        title: '删除成功',
-        icon: 'success',
-        duration: 2000
-      });
+      try {
+        // 显示加载提示
+        wx.showLoading({ title: '删除中...' });
+        
+        // 获取服务实例
+        const rewardService = serviceManager.getService('rewardService');
+        
+        if (!rewardService) {
+          logger.error('RewardManage', `无法获取奖励服务实例`);
+          throw new Error('无法获取奖励服务实例');
+        }
+        
+        // 调用领域服务删除奖励
+        const deleteResult = await rewardService.deleteReward(reward.id);
+        
+        if (!deleteResult || !deleteResult.success) {
+          logger.warn('RewardManage', `删除奖励失败: ${deleteResult?.message || '未知错误'}`, { rewardId: reward.id });
+          throw new Error(deleteResult?.message || '删除奖励失败');
+        }
+        
+        logger.info('RewardManage', `通过服务成功删除奖励: ${reward.name}, ID=${reward.id}`);
+        
+        // 更新UI状态
+        this.setData({
+          showConfirmDialog: false,
+          selectedReward: null
+        });
+        
+        // 重新加载数据以确保数据同步
+        await this.loadRewardsData();
+        
+        // 通知其他页面刷新奖励数据
+        const app = getApp();
+        app.globalData.needRefreshReward = true;
+        
+        // 如果有事件总线，发送奖励删除事件
+        if (app.globalData.eventBus) {
+          app.globalData.eventBus.emit('reward:deleted', {
+            rewardId: reward.id
+          });
+          logger.info('RewardManage', `已触发奖励删除事件: ${reward.id}`);
+        }
+        
+        wx.hideLoading();
+        
+        // 显示成功提示
+        wx.showToast({
+          title: '删除成功',
+          icon: 'success',
+          duration: 2000
+        });
+      } catch (error) {
+        logger.error('RewardManage', `删除奖励失败: ${error.message || error}`, { rewardId: reward.id });
+        wx.hideLoading();
+        
+        wx.showToast({
+          title: '删除失败，请重试',
+          icon: 'none',
+          duration: 2000
+        });
+      }
     }
   },
   
@@ -386,44 +429,73 @@ Page({
   /**
    * 重新添加奖励到奖池
    */
-  reactivateReward: function() {
+  reactivateReward: async function() {
     const reward = this.data.selectedReward || this.data.editingReward;
     
     if (reward && reward.claimed) {
       console.log(`[RewardManage] 重新添加奖励到奖池: ${reward.name}`);
       
-      // 创建新的奖励实例
-      const newReward = {
-        id: 'reward_' + Date.now(),
-        name: reward.name,
-        points: reward.points,
-        icon: reward.icon,
-        enabled: true,
-        claimed: false,
-        createTime: Date.now(),
-        originRewardId: reward.id
-      };
-      
-      // 添加到奖励列表
-      const updatedRewards = [...this.data.rewards, newReward];
-      
-      // 更新数据
-      this.setData({
-        rewards: updatedRewards,
-        showConfirmDialog: false,
-        showRewardModal: false,
-        selectedReward: null
-      });
-      
-      // 保存到本地存储
-      wx.setStorageSync('rewards', updatedRewards);
-      
-      // 显示提示
-      wx.showToast({
-        title: '已添加到奖池',
-        icon: 'success',
-        duration: 2000
-      });
+      try {
+        // 显示加载提示
+        wx.showLoading({ title: '处理中...' });
+        
+        // 获取服务实例
+        const rewardService = serviceManager.getService('rewardService');
+        
+        if (!rewardService) {
+          console.error('[RewardManage] 无法获取奖励服务实例');
+          throw new Error('无法获取奖励服务实例');
+        }
+        
+        // 使用服务层方法复制/重新激活奖励
+        const result = await rewardService.duplicateReward(reward.id);
+        
+        if (!result || !result.success) {
+          throw new Error(result?.message || '添加奖励到奖池失败');
+        }
+        
+        console.log(`[RewardManage] 通过服务成功添加奖励到奖池: ${reward.name}, 新ID=${result.reward?.id}`);
+        
+        // 更新UI状态
+        this.setData({
+          showConfirmDialog: false,
+          showRewardModal: false,
+          selectedReward: null
+        });
+        
+        // 重新加载数据以确保数据同步
+        await this.loadRewardsData();
+        
+        // 通知其他页面刷新奖励数据
+        const app = getApp();
+        app.globalData.needRefreshReward = true;
+        
+        // 如果有事件总线，发送奖励添加事件
+        if (app.globalData.eventBus) {
+          app.globalData.eventBus.emit('reward:created', {
+            reward: result.reward,
+            isReactivation: true
+          });
+        }
+        
+        wx.hideLoading();
+        
+        // 显示成功提示
+        wx.showToast({
+          title: '已添加到奖池',
+          icon: 'success',
+          duration: 2000
+        });
+      } catch (error) {
+        console.error('[RewardManage] 添加奖励到奖池失败:', error);
+        wx.hideLoading();
+        
+        wx.showToast({
+          title: '操作失败，请重试',
+          icon: 'none',
+          duration: 2000
+        });
+      }
     }
   },
   
@@ -685,41 +757,59 @@ Page({
   /**
    * 标记奖励为已领取
    */
-  markAsDelivered: function(e) {
+  markAsDelivered: async function(e) {
     const id = e.currentTarget.dataset.id;
     const record = this.data.claimedRecords.find(r => r.id === id);
     
     if (record) {
       console.log(`[RewardManage] 标记奖励已领取: ${record.name}`);
       
-      // 更新状态
-      const updatedRewards = this.data.rewards.map(r => {
-        if (r.id === id) {
-          return {
-            ...r,
-            claimStatus: 'delivered'
-          };
+      try {
+        // 显示加载提示
+        wx.showLoading({ title: '处理中...' });
+        
+        // 获取服务实例
+        const rewardService = serviceManager.getService('rewardService');
+        
+        if (!rewardService) {
+          console.error('[RewardManage] 无法获取奖励服务实例');
+          throw new Error('无法获取奖励服务实例');
         }
-        return r;
-      });
-      
-      // 更新数据
-      this.setData({
-        rewards: updatedRewards
-      });
-      
-      // 刷新领取记录
-      this.loadClaimedRecords();
-      
-      // 保存到本地存储
-      wx.setStorageSync('rewards', updatedRewards);
-      
-      // 显示提示
-      wx.showToast({
-        title: '已标记为领取',
-        icon: 'success',
-        duration: 2000
-      });
+        
+        // 调用领域服务标记奖励为已领取
+        const result = await rewardService.markRewardAsDelivered(id);
+        
+        if (!result || !result.success) {
+          throw new Error(result?.message || '标记奖励为已领取失败');
+        }
+        
+        console.log(`[RewardManage] 通过服务成功标记奖励为已领取: ${record.name}, ID=${id}`);
+        
+        // 刷新领取记录
+        await this.loadClaimedRecords();
+        
+        // 通知其他页面刷新奖励数据
+        const app = getApp();
+        app.globalData.needRefreshReward = true;
+        
+        wx.hideLoading();
+        
+        // 显示成功提示
+        wx.showToast({
+          title: '已标记为领取',
+          icon: 'success',
+          duration: 2000
+        });
+      } catch (error) {
+        console.error('[RewardManage] 标记奖励为已领取失败:', error);
+        wx.hideLoading();
+        
+        wx.showToast({
+          title: '操作失败，请重试',
+          icon: 'none',
+          duration: 2000
+        });
+      }
     }
   },
   

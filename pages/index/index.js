@@ -1039,10 +1039,24 @@ viewMessageDetail: function(e) {
       let visibleRewards = await rewardService.getAvailableRewards(true);
       console.log(`[Index] 获取到可见奖励: ${visibleRewards.length}个`);
       
-      // 如果没有可见奖励，但存在nextReward（可能是默认奖励），则增加到可见列表
-      if (visibleRewards.length === 0 && nextReward && nextReward.id) {
-        console.log(`[Index] 无可见奖励但存在下一个奖励，添加到显示列表`);
-        visibleRewards = [nextReward];
+      // 如果没有可见奖励，但存在nextReward，需区分是否为默认占位奖励
+      if (visibleRewards.length === 0 && nextReward) {
+        // 记录详细日志便于诊断
+        console.log(`[Index] 检查奖励信息:`, {
+          name: nextReward.name,
+          id: nextReward.id,
+          isDefault: nextReward.isDefault
+        });
+        
+        // 如果是默认占位奖励(有isDefault属性)，不添加到显示列表
+        if (nextReward.isDefault) {
+          console.log(`[Index] 检测到默认占位奖励，不添加到显示列表`);
+        }
+        // 只有真实奖励（有id属性）才添加到显示列表
+        else if (nextReward.id) {
+          console.log(`[Index] 无可见奖励但存在有效奖励，添加到显示列表`);
+          visibleRewards = [nextReward];
+        }
       }
       
       // 更新UI状态
