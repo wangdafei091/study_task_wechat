@@ -3,6 +3,7 @@ const app = getApp();
 // 新架构服务引入
 const serviceManager = require('../../utils/serviceManager');
 const formatUtils = require('../../utils/formatUtils');
+const logger = require('../../utils/logger');
 
 Page({
 
@@ -34,18 +35,18 @@ Page({
    * 生命周期函数--监听页面加载
    */
   onLoad: async function (options) {
-    console.log('[rewards] 页面加载');
+    logger.info('rewards', '页面加载');
     await this.loadRewardsData();
     
     // 清除已跳转标记
     const app = getApp();
     if (app.globalData.hasRedirectedToReward) {
-      console.log('[rewards] 清除已跳转标记');
+      logger.info('rewards', '清除已跳转标记');
       app.globalData.hasRedirectedToReward = false;
     }
     
     // 记录星星宝典展示
-    console.log('[rewards] 展示星星宝典信息 - 精简儿童友好版');
+    logger.info('rewards', '展示星星宝典信息 - 精简儿童友好版');
     
     // 注册进度条完成事件监听
     this.setupProgressBarListener();
@@ -255,7 +256,7 @@ Page({
       const formattedPoints = formatUtils.formatPoints(totalPoints, true);
       
       // 获取即将到期积分信息
-      const expiringPointsInfo = await this.getExpiringPointsNew();
+      const expiringPointsInfo = await this.getExpiringPoints();
       
       // 获取所有奖励（包括已领取的）
       const allRewards = await rewardService.getAvailableRewards(true);
@@ -346,29 +347,29 @@ Page({
    * 获取即将过期的星星信息
    * @returns {Promise<Object>} 包含过期星星数和最早过期日期的对象
    */
-  getExpiringPointsNew: async function() {
-    console.log('[rewards] 获取即将过期的星星信息');
+  getExpiringPoints: async function() {
+    logger.info('rewards', '获取即将过期的星星信息');
     
     try {
       // 获取服务实例
       const starService = serviceManager.getService('starService');
       
       if (!starService) {
-        console.error('[rewards] 无法获取星星服务实例');
+        logger.error('rewards', '无法获取星星服务实例');
         return { points: 0, date: '' };
       }
       
       // 获取即将过期的星星信息
       const expiringInfo = await starService.getExpiringStarsInfo();
       
-      console.log(`[rewards] 即将过期星星: ${expiringInfo.points}颗, 最早到期日期: ${expiringInfo.expiryDateText}`);
+      logger.info('rewards', `即将过期星星: ${expiringInfo.points}颗, 最早到期日期: ${expiringInfo.expiryDateText}`);
       
       return {
         points: expiringInfo.points,
         date: expiringInfo.expiryDateText
       };
     } catch (error) {
-      console.error('[rewards] 获取即将过期的星星信息失败', error);
+      logger.error('rewards', '获取即将过期的星星信息失败', error);
       return { points: 0, date: '' };
     }
   },
@@ -647,87 +648,5 @@ Page({
     }
   },
 
-  /**
-   * 兑换奖励
-   * @param {Object} reward 要兑换的奖励
-   */
-  exchangeReward: async function(reward) {
-    if (!reward) {
-      console.error('[rewards] 尝试兑换无效奖励');
-      return;
-    }
-    
-    console.log(`[rewards] 尝试兑换奖励: ${reward.name}, 需要${reward.points}颗星星`);
-    
-    // 获取服务实例
-    const starService = serviceManager.getService('starService');
-    const rewardService = serviceManager.getService('rewardService');
-    
-    if (!starService || !rewardService) {
-      console.error('[rewards] 无法获取服务实例');
-      wx.showToast({
-        title: '系统错误，请重试',
-        icon: 'none'
-      });
-      return;
-    }
-    
-    try {
-      wx.showLoading({ title: '处理中' });
-      
-      // 尝试兑换奖励
-      const result = await rewardService.exchangeReward(reward.id);
-      
-      wx.hideLoading();
-      
-      if (!result.success) {
-        console.error('[rewards] 兑换奖励失败:', result.message);
-        wx.showToast({
-          title: result.message || '兑换失败',
-          icon: 'none'
-        });
-        return;
-      }
-      
-      // 兑换成功，显示动画和提示
-      console.log(`[rewards] 成功兑换奖励: ${reward.name}`);
-      
-      wx.showToast({
-        title: '兑换成功',
-        icon: 'success'
-      });
-      
-      // 更新页面数据
-      this.loadRewardsData();
-      
-      // 触发奖励兑换成功事件
-      const eventChannel = this.getOpenerEventChannel();
-      if (eventChannel && eventChannel.emit) {
-        eventChannel.emit('rewardExchanged', { reward: result.reward });
-      }
-      
-      // 添加到成就系统
-      this.addToAchievements(reward);
-    } catch (error) {
-      wx.hideLoading();
-      console.error('[rewards] 兑换奖励过程中发生错误:', error);
-      wx.showToast({
-        title: '兑换失败，请重试',
-        icon: 'none'
-      });
-    }
-  },
-
-  /**
-   * 添加奖励兑换成就
-   * @param {Object} reward 兑换的奖励
-   */
-  addToAchievements: function(reward) {
-    if (!reward) return;
-    
-    // 这里可以添加奖励成就相关逻辑
-    console.log(`[rewards] 记录奖励兑换成就: ${reward.name}`);
-    
-    // TODO: 实现成就系统后集成
-  },
+  // 不再需要冗余的兑换功能，直接使用_performClaimReward
 })

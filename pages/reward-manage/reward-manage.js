@@ -762,7 +762,7 @@ Page({
     const record = this.data.claimedRecords.find(r => r.id === id);
     
     if (record) {
-      console.log(`[RewardManage] 标记奖励已领取: ${record.name}`);
+      logger.info('RewardManage', `标记奖励已领取: ${record.name}`, {id});
       
       try {
         // 显示加载提示
@@ -772,7 +772,7 @@ Page({
         const rewardService = serviceManager.getService('rewardService');
         
         if (!rewardService) {
-          console.error('[RewardManage] 无法获取奖励服务实例');
+          logger.error('RewardManage', '无法获取奖励服务实例');
           throw new Error('无法获取奖励服务实例');
         }
         
@@ -782,8 +782,6 @@ Page({
         if (!result || !result.success) {
           throw new Error(result?.message || '标记奖励为已领取失败');
         }
-        
-        console.log(`[RewardManage] 通过服务成功标记奖励为已领取: ${record.name}, ID=${id}`);
         
         // 刷新领取记录
         await this.loadClaimedRecords();
@@ -801,7 +799,7 @@ Page({
           duration: 2000
         });
       } catch (error) {
-        console.error('[RewardManage] 标记奖励为已领取失败:', error);
+        logger.error('RewardManage', `标记奖励为已领取失败: ${error.message || error}`);
         wx.hideLoading();
         
         wx.showToast({
