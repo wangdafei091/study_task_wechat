@@ -59,7 +59,8 @@ const batchUtils = {
         return;
       }
       
-      logger.log('batchUtils', `处理批次: ${Math.floor(index/batchSize) + 1}, 项数: ${batch.length}`);
+      console.log(`[batchUtils] 处理批次: ${Math.floor(index/batchSize) + 1}, 项数: ${batch.length}`);
+      logger.info('batchUtils', `处理批次: ${Math.floor(index/batchSize) + 1}, 项数: ${batch.length}`);
       
       // 处理当前批次
       batch.forEach(item => {

@@ -13,7 +13,7 @@ const logger = require('./logger');
  * @param {Object} details - 优化详情
  */
 const logUIOptimization = function(component, action, details = {}) {
-  logger.log('uiUtils', `界面优化: ${component} - ${action}`, details);
+  logger.info('uiUtils', `界面优化: ${component} - ${action}`, details);
 };
 
 /**
@@ -22,7 +22,7 @@ const logUIOptimization = function(component, action, details = {}) {
  * @param {Object} changes - 变更详情
  */
 const logStyleConsistency = function(area, changes = {}) {
-  logger.log('uiUtils', `样式一致性: ${area}`, changes);
+  logger.info('uiUtils', `样式一致性: ${area}`, changes);
 };
 
 /**
@@ -55,7 +55,7 @@ const getCurrentTheme = function() {
  * @returns {String} 颜色值或类名
  */
 const getPressureLevelStyle = function(level, style = 'bg') {
-  logger.log('uiUtils', `获取压力级别${level}的${style}样式`);
+  logger.info('uiUtils', `获取压力级别${level}的${style}样式`);
   
   const styleMap = {
     1: { // 轻松
@@ -108,7 +108,7 @@ const getPressureLevelText = function(pressure) {
   let levelNum = 1;
   let isHigh = false;
   
-  logger.log('uiUtils', `计算压力级别，当前压力值：${pressure}（小学低年级标准）`);
+  logger.info('uiUtils', `计算压力级别，当前压力值：${pressure}（小学低年级标准）`);
   
   if (pressure <= 15) {
     levelText = '轻松';
@@ -163,7 +163,7 @@ const updateState = function(page, dataKey, value, options = {}) {
     [dataKey]: newValue
   });
   
-  logger.log('uiUtils', `状态更新: ${dataKey} = ${newValue}`);
+  logger.info('uiUtils', `状态更新: ${dataKey} = ${newValue}`);
   
   // 如果有回调，则调用
   if (options.callback && typeof options.callback === 'function') {
@@ -299,7 +299,7 @@ const slideAnimation = function(page, animationKey, options = {}) {
       break;
   }
   
-  logger.log('uiUtils', `执行${type === 'in' ? '滑入' : '滑出'}动画: ${direction}方向, 距离${distance}px`);
+  logger.info('uiUtils', `执行${type === 'in' ? '滑入' : '滑出'}动画: ${direction}方向, 距离${distance}px`);
   
   if (type === 'in') {
     // 滑入：先设置初始位置，然后动画到目标位置
@@ -396,7 +396,7 @@ const formatProgressColor = function(progress) {
  * @param {Object} layoutInfo - 布局信息
  */
 const logButtonLayoutOptimization = function(page, layoutInfo = {}) {
-  logger.log('uiUtils', `按钮布局优化: ${page}`, layoutInfo);
+  logger.info('uiUtils', `按钮布局优化: ${page}`, layoutInfo);
 };
 
 module.exports = {
