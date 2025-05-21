@@ -3,6 +3,7 @@ const taskManager = require('../../utils/taskManager.js');
 const messageManager = require('../../utils/messageManager.js');
 const serviceManager = require('../../utils/serviceManager.js');
 const formatUtils = require('../../utils/formatUtils');
+const logger = require('../../utils/logger');
 
 Page({
   data: {
@@ -1039,13 +1040,26 @@ viewMessageDetail: function(e) {
       let visibleRewards = await rewardService.getAvailableRewards(true);
       console.log(`[Index] 获取到可见奖励: ${visibleRewards.length}个`);
       
+      // 判断是否需要显示设置奖励提示对话框
+      // 当没有任何真实奖励时（只有默认占位奖励或完全没有奖励）
+      const hasNoRealReward = !nextReward || nextReward.isDefault;
+      if (hasNoRealReward && visibleRewards.length === 0) {
+        logger.info('Index', '检测到无真实奖励，显示设置奖励提示');
+        
+        // 设置nextReward的适当参数，以便在进度条下方显示合适的信息
+        if (nextReward) {
+          nextReward.showSetupTip = true; // 添加标记，用于进度条下方的条件渲染
+        }
+      }
+      
       // 如果没有可见奖励，但存在nextReward，需区分是否为默认占位奖励
       if (visibleRewards.length === 0 && nextReward) {
         // 记录详细日志便于诊断
         console.log(`[Index] 检查奖励信息:`, {
           name: nextReward.name,
           id: nextReward.id,
-          isDefault: nextReward.isDefault
+          isDefault: nextReward.isDefault,
+          showSetupTip: nextReward.showSetupTip
         });
         
         // 如果是默认占位奖励(有isDefault属性)，不添加到显示列表
@@ -1075,11 +1089,15 @@ viewMessageDetail: function(e) {
         hasMoreRewards: visibleRewards.length > 3,
         rewardProgress: {
           current: userPoints,
-          total: nextReward && nextReward.points ? nextReward.points : 100
+          // 没有真实奖励时设置更大的total值，确保进度条显示一致
+          total: (nextReward.allClaimed || nextReward.isDefault || nextReward.showSetupTip) ? 
+                 Math.max(userPoints * 2, 100) : // 设置为当前星星数的两倍或至少100
+                 (nextReward && nextReward.points ? nextReward.points : 100)
         }
       });
       
-      console.log(`[Index] 奖励进度条数据已更新: ${userPoints}/${nextReward && nextReward.points ? nextReward.points : 100}`);
+      logger.info('Index', `奖励进度条数据已更新: ${userPoints}/${(nextReward.allClaimed || nextReward.isDefault || nextReward.showSetupTip) ? 
+                 '∞' : (nextReward && nextReward.points ? nextReward.points : 100)}`);
       
     } catch (error) {
       console.error('[Index] 加载星星和奖励信息失败', error);
@@ -1237,7 +1255,10 @@ viewMessageDetail: function(e) {
         console.log('[Index] 进度条平滑过渡到新目标');
         progressBar.setData({
           current: userPoints,
-          total: isFinite(parseInt(nextReward.points)) ? parseInt(nextReward.points) : 100 // 确保total是数字
+          // 没有真实奖励时设置更大的total值，确保进度条显示一致
+          total: (nextReward.allClaimed || nextReward.isDefault || nextReward.showSetupTip) ? 
+                 Math.max(userPoints * 2, 100) : // 设置为当前星星数的两倍或至少100
+                 (isFinite(parseInt(nextReward.points)) ? parseInt(nextReward.points) : 100)
         });
       }
       
@@ -1248,7 +1269,10 @@ viewMessageDetail: function(e) {
         nextReward: nextReward,
         rewardProgress: {
           current: userPoints,
-          total: nextReward.points || 100
+          // 没有真实奖励时设置更大的total值，确保进度条显示一致
+          total: (nextReward.allClaimed || nextReward.isDefault || nextReward.showSetupTip) ? 
+                 Math.max(userPoints * 2, 100) : // 设置为当前星星数的两倍或至少100
+                 (nextReward.points || 100)
         }
       });
     } catch (error) {

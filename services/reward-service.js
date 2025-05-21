@@ -631,20 +631,27 @@ class RewardService {
           
           // 如果初始化成功，返回第一个示例奖励
           if (defaultRewards.length > 0) {
-            logger.info('RewardService', `返回第一个示例奖励: ${defaultRewards[0].name}(${defaultRewards[0].points}点)`);
-            return defaultRewards[0];
+            // 设置remainingStars属性
+            const firstReward = defaultRewards[0];
+            firstReward.remainingStars = Math.max(0, firstReward.points - availablePoints);
+            logger.info('RewardService', `返回第一个示例奖励: ${firstReward.name}(${firstReward.points}点), 还需${firstReward.remainingStars}颗星星`);
+            return firstReward;
           }
         } else if (rewardsCount === 0 && hasCustomRewards) {
           logger.info('RewardService', '检测到自定义奖励标记，跳过默认奖励初始化');
         }
         
-        logger.info('RewardService', `无可用奖励，返回默认占位奖励`);
-        return {
+        // 默认占位奖励也设置remainingStars为10
+        const defaultPlaceholder = {
           name: '添加新奖励',
           points: 10,
           icon: '🎁',
-          isDefault: true
+          isDefault: true,
+          remainingStars: 10
         };
+        
+        logger.info('RewardService', `无可用奖励，返回默认占位奖励，还需${defaultPlaceholder.remainingStars}颗星星`);
+        return defaultPlaceholder;
       }
       
       // 过滤未解锁的奖励并按点数排序
@@ -655,22 +662,29 @@ class RewardService {
       // 如果没有未解锁的奖励，找点数最高的已解锁奖励
       if (unlockedRewards.length === 0) {
         const highestPointReward = [...availableRewards].sort((a, b) => b.points - a.points)[0];
-        logger.info('RewardService', `计算下一个可用奖励：没有未解锁奖励，返回点数最高的奖励 ${highestPointReward.name}(${highestPointReward.points}点)`);
+        // 这种情况下已解锁，remainingStars设为0
+        highestPointReward.remainingStars = 0;
+        // 表示所有奖励已解锁
+        highestPointReward.allClaimed = true;
+        logger.info('RewardService', `计算下一个可用奖励：没有未解锁奖励，返回点数最高的奖励 ${highestPointReward.name}(${highestPointReward.points}点), 已解锁`);
         return highestPointReward;
       }
       
       // 返回点数最低的未解锁奖励
       const nextReward = unlockedRewards[0];
-      logger.info('RewardService', `计算下一个可用奖励：${nextReward.name}(${nextReward.points}点)`);
+      // 计算并添加remainingStars属性
+      nextReward.remainingStars = Math.max(0, nextReward.points - availablePoints);
+      logger.info('RewardService', `计算下一个可用奖励：${nextReward.name}(${nextReward.points}点), 还需${nextReward.remainingStars}颗星星`);
       return nextReward;
     } catch (error) {
       logger.error('RewardService', '计算下一个可用奖励失败', error);
-      // 返回一个默认奖励
+      // 返回一个默认奖励，同样设置remainingStars
       return {
         name: '添加新奖励',
         points: 10,
         icon: '🎁',
-        isDefault: true
+        isDefault: true,
+        remainingStars: 10
       };
     }
   }

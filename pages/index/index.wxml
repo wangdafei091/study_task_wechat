@@ -156,8 +156,8 @@
     <view class="progress-header">
       <view class="reward-title">今日奖品进度</view>
       <view class="stars-count">
-        <!-- 使用不同的显示方式处理已领取所有奖励的情况 -->
-        <block wx:if="{{nextReward.allClaimed}}">
+        <!-- 使用不同的显示方式处理没有下一目标的情况 -->
+        <block wx:if="{{nextReward.allClaimed || nextReward.isDefault || nextReward.showSetupTip}}">
           {{formattedPoints}}/∞颗星星
         </block>
         <block wx:else>
@@ -202,6 +202,9 @@
       </block>
       <block wx:elif="{{nextReward.allClaimed}}">
         <text class="achievement-text">恭喜！您已领取所有奖励，可以继续积累星星</text>
+      </block>
+      <block wx:elif="{{nextReward.showSetupTip}}">
+        <text>还没有设置专属奖励哦！请找爸爸妈妈来帮你设置奖励吧！</text>
       </block>
       <block wx:else>
         <text>再获得<text class="highlight">{{nextReward.remainingStars}}</text>颗星星即可解锁"{{nextReward.name}}"</text>
