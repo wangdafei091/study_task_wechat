@@ -2,15 +2,25 @@
 const unitUtils = require('./utils/unit.js');
 const taskManager = require('./utils/taskManager.js');
 const storageUtils = require('./utils/storageUtils.js'); // 引入存储工具
+const serviceManager = require('./utils/serviceManager.js'); // 引入服务管理器
 
 App({
-  onLaunch: function () {
+  onLaunch: async function () {
     // 初始化存储数据
     console.log('[App] 初始化存储数据');
     storageUtils.initializeStorageIfNeeded();
     
     // 初始化事件总线
     this.initEventBus();
+    
+    // 初始化服务管理器
+    console.log('[App] 初始化服务管理器');
+    try {
+      await serviceManager.initialize();
+      console.log('[App] 服务管理器初始化成功');
+    } catch (error) {
+      console.error('[App] 服务管理器初始化失败:', error);
+    }
     
     // 检查基础库版本兼容性
     this.checkCompatibility()
@@ -533,10 +543,8 @@ App({
         this.globalData.eventBus.emit('taskDataChanged', allTasks);
       }
     });
-
-    // 加载奖励数据
-    const rewards = wx.getStorageSync('rewards') || this.getDefaultRewards();
-    this.globalData.rewards = rewards;
+    
+    // 奖励数据已由新架构的RewardService管理，不再需要从本地存储加载
   },
 
   // 默认任务数据
@@ -582,79 +590,6 @@ App({
     ]
   },
 
-  // 默认奖励数据
-  getDefaultRewards: function() {
-    const now = Date.now();
-    return [
-      {
-        id: `reward_${now}_1`,
-        name: '看动画片30分钟',
-        points: 10,
-        icon: '🎬',
-        unlocked: true,
-        claimed: false,
-        enabled: true,
-        isExample: true,
-        createTime: now
-      },
-      {
-        id: `reward_${now}_2`,
-        name: '额外的零食',
-        points: 20,
-        icon: '🍪',
-        unlocked: true,
-        claimed: false,
-        enabled: true,
-        isExample: true,
-        createTime: now + 1
-      },
-      {
-        id: `reward_${now}_3`,
-        name: '玩游戏1小时',
-        points: 30,
-        icon: '🎮',
-        unlocked: false,
-        claimed: false,
-        enabled: true,
-        isExample: true,
-        createTime: now + 2
-      },
-      {
-        id: `reward_${now}_4`,
-        name: '购买一本新书',
-        points: 40,
-        icon: '📚',
-        unlocked: false,
-        claimed: false,
-        enabled: true,
-        isExample: true,
-        createTime: now + 3
-      },
-      {
-        id: `reward_${now}_5`,
-        name: '去游乐园',
-        points: 80,
-        icon: '🎡',
-        unlocked: false,
-        claimed: false,
-        enabled: true,
-        isExample: true,
-        createTime: now + 4
-      },
-      {
-        id: `reward_${now}_6`,
-        name: '新玩具',
-        points: 100,
-        icon: '🧸',
-        unlocked: false,
-        claimed: false,
-        enabled: true,
-        isExample: true,
-        createTime: now + 5
-      }
-    ]
-  },
-
   globalData: {
     userInfo: null,
     hasUserInfo: false,
@@ -667,18 +602,11 @@ App({
     heightParams: {}, // 与高度相关的参数
     tasks: [], // 任务数据
     hasRedirectedToReward: false, // 是否已经跳转到奖励页面，防止重复跳转
-    rewards: [],
-    rewardProgress: {
-      current: 2,
-      total: 3
-    },
     needRefreshReward: false, // 标记是否需要刷新奖励数据
     rewardClaimedInfo: null // 存储已领取的奖励信息
   },
 
-  /**
-   * 检查必做任务，处理过期未完成的必做任务
-   */
+  // 检查必做任务，处理过期未完成的必做任务
   checkRequiredTasks: function() {
     console.log('[App] 开始检查必做任务');
     
@@ -833,31 +761,10 @@ App({
     
     console.log('[App] 已设置定期任务检查，间隔:', CHECK_INTERVAL/1000/60, '分钟');
   },
-
+  
   // 确保奖励数据一致性
   ensureRewardsConsistency: function() {
-    console.log('[App] 检查奖励数据一致性');
-    const rewards = wx.getStorageSync('rewards') || [];
-    if (rewards.length === 0) return;
-    
-    let needUpdate = false;
-    const updatedRewards = rewards.map(reward => {
-      // 检查是否为示例奖励
-      const isExample = reward.isExample || 
-        /reward_\d+_(1|2|3)$/.test(reward.id);
-      
-      // 确保示例奖励启用
-      if (isExample && !reward.enabled) {
-        needUpdate = true;
-        console.log(`[App] 修正示例奖励状态: ${reward.name}`);
-        return { ...reward, enabled: true };
-      }
-      return reward;
-    });
-    
-    if (needUpdate) {
-      console.log('[App] 更新奖励数据，确保示例奖励启用');
-      wx.setStorageSync('rewards', updatedRewards);
-    }
+    console.log('[App] 奖励系统已迁移到新架构，不再需要检查旧数据一致性');
+    // 已迁移到新架构，无需检查旧存储格式
   }
 }) 

@@ -5,7 +5,7 @@
  */
 
 const logger = require('../utils/logger');
-const { StarGroupRepository, StarRecordRepository } = require('../repositories');
+const { StarGroupRepository, StarRecordRepository } = require('../repositories/index');
 const EventBus = require('../utils/core/event-bus');
 const { StarExpiryType } = require('../models/star');
 
@@ -623,37 +623,35 @@ class StarService {
   
   /**
    * 验证星星数据一致性
-   * 检查星星分组总和是否与总星星数一致
-   * @returns {Promise<Object>} 验证结果对象
+   * @returns {Promise<Object>} 验证结果
    */
-  async verifyDataConsistency() {
+  async validateConsistency() {
     logger.info('StarService', '开始验证星星数据一致性');
     
     try {
       // 获取所有星星分组
       const groups = await this.starGroupRepository.getAll();
       
-      // 计算分组星星总和
-      const groupTotalPoints = groups.reduce((sum, group) => sum + group.points, 0);
+      // 计算分组总和
+      const groupsTotal = groups.reduce((sum, group) => sum + group.points, 0);
       
-      // 获取存储的总星星数
-      const savedTotalPoints = await this.starGroupRepository.getTotalPoints();
+      // 获取总记录数
+      const records = await this.starRecordRepository.getAll();
+      const recordsCalculation = this._calculateBalanceFromRecords(records);
       
-      // 检查是否一致
-      const isConsistent = groupTotalPoints === savedTotalPoints;
+      // 检查一致性
+      const isConsistent = groupsTotal === recordsCalculation.finalBalance;
       
       const result = {
         isConsistent,
-        groupTotalPoints,
-        savedTotalPoints,
-        difference: groupTotalPoints - savedTotalPoints
+        groupsTotal,
+        recordsBalance: recordsCalculation.finalBalance,
+        difference: groupsTotal - recordsCalculation.finalBalance,
+        groupsCount: groups.length,
+        recordsCount: records.length
       };
       
-      if (isConsistent) {
-        logger.info('StarService', `星星数据一致性检查通过: 总数=${savedTotalPoints}`);
-      } else {
-        logger.warn('StarService', `星星数据不一致: 分组总和=${groupTotalPoints}, 存储总数=${savedTotalPoints}, 差异=${result.difference}`);
-      }
+      logger.info('StarService', `星星数据一致性验证结果: ${JSON.stringify(result)}`);
       
       return result;
     } catch (error) {
@@ -663,6 +661,31 @@ class StarService {
         error: error.message
       };
     }
+  }
+
+  /**
+   * 根据记录计算余额
+   * @private
+   * @param {Array} records 星星记录
+   * @returns {Object} 计算结果
+   */
+  _calculateBalanceFromRecords(records) {
+    let income = 0;
+    let expense = 0;
+    
+    records.forEach(record => {
+      if (record.points > 0) {
+        income += record.points;
+      } else {
+        expense += Math.abs(record.points);
+      }
+    });
+    
+    return {
+      income,
+      expense,
+      finalBalance: income - expense
+    };
   }
   
   /**
@@ -682,6 +705,63 @@ class StarService {
     
     // 普通格式化，直接返回字符串
     return numPoints.toString();
+  }
+
+  /**
+   * 获取即将过期的星星信息
+   * @returns {Promise<Object>} 包含过期星星数和最早过期日期的对象
+   */
+  async getExpiringStarsInfo() {
+    try {
+      // 获取所有星星分组
+      const groups = await this.starGroupRepository.getAll();
+      logger.info('StarService', `获取到${groups.length}个星星分组`);
+      
+      // 过滤出非永久有效且未过期的分组
+      const expiringGroups = groups.filter(group => 
+        group.expiryType !== StarExpiryType.PERMANENT && 
+        !group.isExpired()
+      );
+      
+      if (expiringGroups.length === 0) {
+        logger.info('StarService', '没有找到即将过期的星星分组');
+        return { 
+          points: 0, 
+          expiryDateText: '',
+          expiryTimestamp: 0
+        };
+      }
+      
+      // 按过期时间排序
+      expiringGroups.sort((a, b) => {
+        if (!a.expiryDate) return 1;
+        if (!b.expiryDate) return -1;
+        return a.expiryDate - b.expiryDate;
+      });
+      
+      // 获取最早过期的分组
+      const earliestGroup = expiringGroups[0];
+      
+      // 计算即将过期的星星数量（最早过期日期的所有星星）
+      const expiringPoints = expiringGroups
+        .filter(g => g.expiryDate === earliestGroup.expiryDate)
+        .reduce((sum, g) => sum + g.points, 0);
+      
+      logger.info('StarService', `最早过期日期: ${earliestGroup.expiryDateStr}, 该日期星星: ${expiringPoints}`);
+      
+      return {
+        points: expiringPoints,
+        expiryDateText: earliestGroup.expiryDateStr || '',
+        expiryTimestamp: earliestGroup.expiryDate || 0
+      };
+    } catch (error) {
+      logger.error('StarService', '获取即将过期星星信息失败', error);
+      return { 
+        points: 0, 
+        expiryDateText: '',
+        expiryTimestamp: 0
+      };
+    }
   }
 }
 

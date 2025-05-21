@@ -846,8 +846,17 @@ viewMessageDetail: function(e) {
   onRewardComplete: function(e) {
     console.log(`[Index] 收到进度条完成事件：${JSON.stringify(e.detail)}`);
     
-    // 这里处理奖励完成事件
-    this._handleRewardCompletion();
+    // 获取当前进度数据
+    const oldProgress = this.data.rewardProgress || { current: 0, total: 10 };
+    
+    // 获取当前用户星星数
+    const userPoints = this.data.userPoints || pointsManager.getUserPoints();
+    
+    // 添加日志
+    console.log(`[Index] 处理奖励完成事件: 当前进度=${JSON.stringify(oldProgress)}, 星星数=${userPoints}`);
+    
+    // 正确传递参数
+    this._handleRewardCompletion(oldProgress, userPoints);
   },
   
   // 显示/隐藏搜索面板
@@ -964,110 +973,145 @@ viewMessageDetail: function(e) {
   /**
    * 加载用户星星和奖品信息
    */
-  loadStarsAndRewards: function() {
-    console.log('[Index] 加载用户星星和奖品信息');
-    
-    // 如果正在强制保持满值状态，不执行任何更新
-    if (this.data.forceKeepFullValue) {
-      console.log('[Index] 正在强制保持满值状态，跳过更新');
-      return;
-    }
-    
-    // 强制重新读取星星数据，确保获取最新值
-    const userPoints = pointsManager.getUserPoints();
-    console.log(`[Index] 当前用户星星数: ${userPoints}`);
-    
-    // 记录当前进度数据，用于后续满值判断
-    const oldProgress = this.data.rewardProgress || { current: 0, total: 10 };
-    
-    // 检查是否刚达成满值 - 使用最新星星数与当前奖励目标比较
-    const justCompleted = userPoints >= oldProgress.total && userPoints < oldProgress.total * 2 && !this.data.transitionInProgress;
-    console.log(`[Index] 检查满值状态: 星星=${userPoints}, 目标=${oldProgress.total}, 是否满值: ${justCompleted}`);
-    
-    // 如果刚达成满值，立即处理满值状态并提前返回，防止被后续逻辑覆盖
-    if (justCompleted) {
-      console.log('[Index] 检测到星星数刚好达到目标，设置满值状态');
-      this._handleRewardCompletion(oldProgress, userPoints);
-      return;
-    }
-    
-    // 以下是正常流程（非满值状态）
-    // 格式化星星数量供显示使用
-    const formattedPoints = pointsManager.formatPoints(userPoints);
-    
-    // 从本地存储获取最新奖励数据
-    const app = getApp();
-    const storedRewards = wx.getStorageSync('rewards') || [];
-    
-    // 确保示例奖励启用状态统一
-    let needUpdate = false;
-    const updatedRewards = storedRewards.map(reward => {
-      if (this.isExampleReward(reward) && !reward.enabled) {
-        needUpdate = true;
-        console.log(`[Index] 修正示例奖励状态: ${reward.name}`);
-        return { ...reward, enabled: true };
+  loadStarsAndRewards: async function() {
+    try {
+      console.log('[Index] 加载用户星星和奖品信息');
+      
+      // 获取服务实例
+      const serviceManager = require('../../utils/serviceManager');
+      const starService = serviceManager.getService('starService');
+      const pointsManager = require('../../utils/pointsManager');
+      
+      // 从新架构获取星星数据
+      const newArchStars = await starService.getTotalStars();
+      console.log(`[Index] 当前用户星星数: ${newArchStars}`);
+      
+      // 从旧系统获取星星数据
+      const oldSystemStars = pointsManager.getUserPoints();
+      
+      // 检查两个系统的星星数据是否一致，如不一致使用较大值来保证用户不会丢失星星
+      let actualStars = newArchStars; // 默认使用新架构星星数
+      
+      if (newArchStars !== oldSystemStars) {
+        console.log(`[Index] 检测到星星数据不同步，新架构=${newArchStars}，旧系统=${oldSystemStars}，使用较大值=${Math.max(newArchStars, oldSystemStars)}`);
+        actualStars = Math.max(newArchStars, oldSystemStars);
+        
+        // 同步到两个系统
+        if (newArchStars < actualStars) {
+          // 新架构星星少，补充差额
+          const diff = actualStars - newArchStars;
+          await starService.addStars(diff, 'permanent', 'data_sync', {
+            reason: '数据同步'
+          });
+        }
+        
+        if (oldSystemStars < actualStars) {
+          // 旧系统星星少，更新
+          pointsManager.saveUserPoints(actualStars);
+        }
+      } else {
+        console.log(`[Index] 星星数据一致性检查通过: 总数=${newArchStars}`);
       }
-      return reward;
-    });
-    
-    // 如果有更新，保存回存储
-    if (needUpdate) {
-      console.log('[Index] 更新奖励数据，确保示例奖励启用');
-      wx.setStorageSync('rewards', updatedRewards);
-    }
-    
-    // 过滤出启用的奖励
-    const enabledRewards = updatedRewards.filter(r => r.enabled !== false);
-    
-    // 如果没有可用奖励，使用默认奖励
-    const allRewards = enabledRewards.length > 0 ? 
-      enabledRewards : 
-      (app.getDefaultRewards ? app.getDefaultRewards() : []);
-    
-    // 使用pointsManager计算下一个奖励信息
-    const nextReward = pointsManager.calculateNextReward(allRewards);
-    
-    // 检查是否所有奖励都已领取
-    if (nextReward.allClaimed) {
-      console.log('[Index] 所有奖励都已领取');
-      // 显示适当的提示或处理逻辑
-    } else {
-      console.log(`[Index] 下一个奖励: ${nextReward.name}，需要星星: ${nextReward.points}，当前星星: ${userPoints}`);
-    }
-    
-    // 明确记录实际进度值
-    console.log(`[Index] 进度更新 - 当前值: ${userPoints}, 目标值: ${nextReward.points}`);
-    
-    // 更新奖励进度数据
-    this.setData({
-      userPoints: userPoints,
-      formattedPoints: formattedPoints,
-      nextReward: nextReward,
-      rewardProgress: {
-        current: userPoints,
-        total: isFinite(parseInt(nextReward.points)) ? parseInt(nextReward.points) : 100 // 确保total是数字
-      },
-      rewardTextState: 'newTarget',
-      forceKeepFullValue: false,
-      completedRewardTotal: 0
-    });
-    
-    console.log(`[Index] 设置星星进度: ${userPoints}/${nextReward.points}, 还需: ${nextReward.remainingStars}`);
-    
-    // 准备礼品指示器数据
-    this.prepareRewardIndicators(userPoints, allRewards, nextReward);
-    
-    // 确保进度条组件获得正确的进度值
-    setTimeout(() => {
-      const progressBar = this.selectComponent('#progressBar');
-      if (progressBar) {
-        console.log('[Index] 手动更新进度条组件数据');
-        progressBar.setData({
-          current: userPoints,
+      
+      // 格式化星星数量供显示使用
+      const formattedPoints = await starService.formatStarCount(actualStars, true);
+      
+      // 记录当前进度数据，用于后续满值判断
+      const oldProgress = this.data.rewardProgress || { current: 0, total: 10 };
+      
+      // 确保oldProgress.total是有效数字
+      if (oldProgress.total === undefined || oldProgress.total === null || !isFinite(parseInt(oldProgress.total))) {
+        oldProgress.total = 10;
+      }
+      
+      // 检查是否刚达成满值 - 使用最新星星数与当前奖励目标比较
+      const justCompleted = actualStars >= oldProgress.total && actualStars < oldProgress.total * 2 && !this.data.transitionInProgress;
+      console.log(`[Index] 检查满值状态: 星星=${actualStars}, 目标=${oldProgress.total}, 是否满值: ${justCompleted}`);
+      
+      // 如果刚达成满值，立即处理满值状态并提前返回，防止被后续逻辑覆盖
+      if (justCompleted) {
+        console.log('[Index] 检测到星星数刚好达到目标，设置满值状态');
+        this._handleRewardCompletion(oldProgress, actualStars);
+        return;
+      }
+      
+      // 以下是正常流程（非满值状态）
+      // 从本地存储获取最新奖励数据
+      const app = getApp();
+      const storedRewards = wx.getStorageSync('rewards') || [];
+      
+      // 确保示例奖励启用状态统一
+      let needUpdate = false;
+      const updatedRewards = storedRewards.map(reward => {
+        if (this.isExampleReward(reward) && !reward.enabled) {
+          needUpdate = true;
+          console.log(`[Index] 修正示例奖励状态: ${reward.name}`);
+          return { ...reward, enabled: true };
+        }
+        return reward;
+      });
+      
+      // 如果有更新，保存回存储
+      if (needUpdate) {
+        console.log('[Index] 更新奖励数据，确保示例奖励启用');
+        wx.setStorageSync('rewards', updatedRewards);
+      }
+      
+      // 过滤出启用的奖励
+      const enabledRewards = updatedRewards.filter(r => r.enabled !== false);
+      
+      // 如果没有可用奖励，使用默认奖励
+      const allRewards = enabledRewards.length > 0 ? 
+        enabledRewards : 
+        (app.getDefaultRewards ? app.getDefaultRewards() : []);
+      
+      // 使用pointsManager计算下一个奖励信息
+      const nextReward = pointsManager.calculateNextReward(allRewards);
+      
+      // 检查是否所有奖励都已领取
+      if (nextReward.allClaimed) {
+        console.log('[Index] 所有奖励都已领取');
+        // 显示适当的提示或处理逻辑
+      } else {
+        console.log(`[Index] 下一个奖励: ${nextReward.name}，需要星星: ${nextReward.points}，当前星星: ${actualStars}`);
+      }
+      
+      // 明确记录实际进度值
+      console.log(`[Index] 进度更新 - 当前值: ${actualStars}, 目标值: ${nextReward.points}`);
+      
+      // 更新奖励进度数据
+      this.setData({
+        userPoints: actualStars,
+        formattedPoints: formattedPoints,
+        nextReward: nextReward,
+        rewardProgress: {
+          current: actualStars,
           total: isFinite(parseInt(nextReward.points)) ? parseInt(nextReward.points) : 100 // 确保total是数字
-        });
-      }
-    }, 50);
+        },
+        rewardTextState: 'newTarget',
+        forceKeepFullValue: false,
+        completedRewardTotal: 0
+      });
+      
+      console.log(`[Index] 设置星星进度: ${actualStars}/${nextReward.points}, 还需: ${nextReward.remainingStars}`);
+      
+      // 准备礼品指示器数据
+      this.prepareRewardIndicators(actualStars, allRewards, nextReward);
+      
+      // 确保进度条组件获得正确的进度值
+      setTimeout(() => {
+        const progressBar = this.selectComponent('#progressBar');
+        if (progressBar) {
+          console.log('[Index] 手动更新进度条组件数据');
+          progressBar.setData({
+            current: actualStars,
+            total: isFinite(parseInt(nextReward.points)) ? parseInt(nextReward.points) : 100 // 确保total是数字
+          });
+        }
+      }, 50);
+    } catch (error) {
+      console.error('[Index] 加载用户星星和奖品信息失败', error);
+    }
   },
   
   /**
@@ -1076,6 +1120,25 @@ viewMessageDetail: function(e) {
    */
   _handleRewardCompletion: function(oldProgress, userPoints) {
     console.log('[Index] 处理奖励完成满值状态');
+    
+    // 安全检查，确保oldProgress有效
+    if (!oldProgress || typeof oldProgress !== 'object') {
+      console.error('[Index] 无法处理奖励完成，进度数据无效', oldProgress);
+      oldProgress = { current: 0, total: 10 };
+    }
+    
+    // 确保total属性存在
+    if (oldProgress.total === undefined || oldProgress.total === null || !isFinite(oldProgress.total)) {
+      console.warn('[Index] 奖励目标值缺失或无效，使用默认值10');
+      oldProgress.total = 10;
+    }
+    
+    // 检查userPoints参数是否有效，如果无效则获取当前用户星星数
+    if (userPoints === undefined || userPoints === null || !isFinite(userPoints)) {
+      console.warn('[Index] 用户星星数无效，从pointsManager获取');
+      userPoints = pointsManager.getUserPoints();
+      console.log(`[Index] 获取到用户星星数: ${userPoints}`);
+    }
     
     // 从本地存储获取实际奖励列表
     const storedRewards = wx.getStorageSync('rewards') || [];
@@ -1094,11 +1157,26 @@ viewMessageDetail: function(e) {
     console.log(`[Index] 使用${enabledRewards.length > 0 ? '存储中' : '默认'}奖励数据，共${allRewards.length}个`);
     
     // 查找对应的已完成奖励
-    const completedReward = allRewards.find(r => r.points === oldProgress.total) || { 
-      name: '未知奖励', 
-      icon: '🎁',
-      points: oldProgress.total
-    };
+    const targetPoints = parseInt(oldProgress.total) || 10;
+    let completedReward = null;
+    
+    try {
+      // 确保使用数字类型进行比较
+      completedReward = allRewards.find(r => parseInt(r.points || 0) === targetPoints);
+    } catch (error) {
+      console.error('[Index] 查找完成奖励出错:', error);
+    }
+    
+    // 如果找不到匹配的奖励，创建一个默认奖励对象
+    if (!completedReward) {
+      console.warn(`[Index] 未找到点数为${targetPoints}的奖励，使用默认奖励`);
+      completedReward = { 
+        name: '未知奖励', 
+        icon: '🎁',
+        points: targetPoints,
+        id: `reward_default_${Date.now()}` // 添加ID确保后续操作不出错
+      };
+    }
     
     console.log(`[Index] 已完成奖励: ${completedReward.name}, 所需星星: ${completedReward.points}, 是示例奖励: ${this.isExampleReward(completedReward) ? '是' : '否'}`);
     
@@ -1108,12 +1186,12 @@ viewMessageDetail: function(e) {
       completedReward: completedReward,
       rewardTextState: 'achieved',
       rewardProgress: {
-        current: oldProgress.total,
-        total: oldProgress.total
+        current: targetPoints,
+        total: targetPoints
       },
-      formattedPoints: pointsManager.formatPoints(oldProgress.total),
+      formattedPoints: pointsManager.formatPoints(targetPoints),
       forceKeepFullValue: true,
-      completedRewardTotal: oldProgress.total,
+      completedRewardTotal: targetPoints,
       userPoints: userPoints // 确保存储最新的星星数
     });
     
@@ -1126,8 +1204,8 @@ viewMessageDetail: function(e) {
       if (progressBar) {
         console.log('[Index] 强制设置进度条组件为满值');
         progressBar.setData({
-          current: oldProgress.total,
-          total: oldProgress.total
+          current: targetPoints,
+          total: targetPoints
         });
         
         // 震动反馈
@@ -1366,18 +1444,22 @@ viewMessageDetail: function(e) {
   },
   
   /**
-   * 判断是否为示例奖励
-   * 通过ID格式或标记识别示例奖励
+   * 判断奖励是否示例奖励
+   * @param {Object} reward 奖励对象
+   * @returns {Boolean} 是否示例奖励
    */
   isExampleReward: function(reward) {
-    // 检查是否有明确的示例标记
-    if (reward.isExample === true) {
-      return true;
+    if (!reward) return false;
+    
+    // 直接检查isExample属性
+    if (reward.isExample === true) return true;
+    
+    // 兼容旧的判断逻辑：示例奖励ID格式判断
+    if (reward.id && typeof reward.id === 'string') {
+      return reward.id.startsWith('reward_example_') || reward.id.includes('_example_') || /reward_\d+_\d+/.test(reward.id);
     }
     
-    // 使用ID前缀/后缀识别初始默认示例
-    // 初始三个示例奖励的ID结尾为_1, _2, _3
-    return /reward_\d+_(1|2|3)$/.test(reward.id);
+    return false;
   },
   
   /**

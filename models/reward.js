@@ -222,6 +222,18 @@ class Reward {
    * @returns {Boolean} 是否可兑换
    */
   isAvailable() {
+    // 对于示例奖励，只有在没有其他自定义奖励的情况下才认为可用
+    if (this.isExample) {
+      // 检查是否存在自定义奖励
+      const rewards = wx.getStorageSync('rewards') || [];
+      const hasCustomRewards = rewards.some(r => !r.isExample && r.enabled);
+      if (hasCustomRewards) {
+        logger.info('Reward', `示例奖励因存在自定义奖励而不可用: ${this.name} [${this.id}]`);
+        return false; // 如果有自定义奖励，示例奖励不可用
+      }
+    }
+    
+    // 常规检查：已启用且未领取
     return this.enabled && !this.claimed;
   }
   

@@ -5,9 +5,8 @@
  */
 
 const logger = require('../utils/logger');
-const { RewardRepository } = require('../repositories');
-const { StarGroupRepository } = require('../repositories');
-const { StarRecordRepository } = require('../repositories');
+const { RewardRepository } = require('../repositories/index');
+const { StarGroupRepository, StarRecordRepository } = require('../repositories/index');
 const EventBus = require('../utils/core/event-bus');
 
 class RewardService {
@@ -17,6 +16,7 @@ class RewardService {
    * @param {RewardRepository} options.rewardRepository 奖励仓储
    * @param {StarGroupRepository} options.starGroupRepository 星星分组仓储
    * @param {StarRecordRepository} options.starRecordRepository 星星记录仓储
+   * @param {EventBus} options.eventBus 事件总线
    */
   constructor(options = {}) {
     // 初始化仓储
@@ -32,54 +32,300 @@ class RewardService {
   
   /**
    * 初始化服务
-   * @returns {Promise<Boolean>} 初始化结果
+   * @returns {Promise<void>}
    */
   async initialize() {
+    logger.info('RewardService', '初始化奖励服务');
     try {
-      // 初始化默认奖励
-      const defaultRewards = await this.rewardRepository.initializeDefaultRewards();
+      // 首次调用获取存储库实例
+      // 注意：存储库已在构造函数中初始化，无需再次调用initialize方法
       
-      if (defaultRewards.length > 0) {
-        logger.info('RewardService', `初始化默认奖励成功, 数量=${defaultRewards.length}`);
+      // 尝试从本地存储加载奖励数据以确保新旧系统数据一致性
+      try {
+        await this.rewardRepository.loadFromStorage();
+        logger.info('RewardService', '从本地存储加载奖励数据成功');
+      } catch (error) {
+        logger.warn('RewardService', '从本地存储加载奖励数据失败', error);
+        // 继续执行，不影响主流程
       }
       
-      // 确保示例奖励启用
-      await this.rewardRepository.ensureExampleRewardsEnabled();
-      
-      logger.info('RewardService', '奖励服务初始化完成');
-      return true;
+      // 设置初始化完成标志
+      this.initialized = true;
+      logger.info('RewardService', '服务初始化完成');
     } catch (error) {
-      logger.error('RewardService', '初始化奖励服务失败', error);
-      return false;
+      logger.error('RewardService', '初始化服务失败', error);
+      this.initialized = false;
     }
   }
   
   /**
-   * 获取全部奖励列表
-   * @returns {Promise<Array>} 奖励列表
+   * 获取所有奖励
+   * @returns {Promise<Array>} 所有奖励列表
    */
   async getAllRewards() {
     try {
       const rewards = await this.rewardRepository.getAll();
-      logger.info('RewardService', `获取全部奖励列表成功, 数量=${rewards.length}`);
+      logger.info('RewardService', `获取所有奖励成功, 数量=${rewards.length}`);
       return rewards;
     } catch (error) {
-      logger.error('RewardService', '获取全部奖励列表失败', error);
+      logger.error('RewardService', '获取所有奖励失败', error);
       return [];
     }
   }
   
   /**
-   * 获取可用奖励列表
-   * @returns {Promise<Array>} 可用奖励列表
+   * 获取已领取的奖励
+   * @returns {Promise<Array>} 已领取的奖励列表
    */
-  async getAvailableRewards() {
+  async getClaimedRewards() {
     try {
-      const rewards = await this.rewardRepository.getAvailableRewards();
-      logger.info('RewardService', `获取可用奖励列表成功, 数量=${rewards.length}`);
+      const rewards = await this.rewardRepository.getClaimedRewards();
+      logger.info('RewardService', `获取已领取奖励成功, 数量=${rewards.length}`);
       return rewards;
     } catch (error) {
-      logger.error('RewardService', '获取可用奖励列表失败', error);
+      logger.error('RewardService', '获取已领取奖励失败', error);
+      return [];
+    }
+  }
+  
+  /**
+   * 创建奖励
+   * @param {Object} rewardData 奖励数据
+   * @returns {Promise<Object>} 创建结果
+   */
+  async createReward(rewardData) {
+    if (!rewardData || !rewardData.name || !rewardData.points) {
+      logger.warn('RewardService', '创建奖励失败: 缺少必要数据', rewardData);
+      return { success: false, message: '奖励数据不完整' };
+    }
+    
+    try {
+      // 创建Reward实例
+      const { Reward } = require('../models/index');
+      const reward = new Reward(rewardData);
+      
+      // 保存奖励
+      const savedReward = await this.rewardRepository.save(reward);
+      
+      logger.info('RewardService', `创建奖励成功: ${savedReward.name}, ID=${savedReward.id}`);
+      
+      // 触发奖励创建事件
+      this.eventBus.emit('reward:created', { reward: savedReward });
+      
+      return { success: true, reward: savedReward, message: '创建成功' };
+    } catch (error) {
+      logger.error('RewardService', '创建奖励失败', error);
+      return { success: false, message: '创建过程中发生错误' };
+    }
+  }
+  
+  /**
+   * 更新奖励
+   * @param {String} rewardId 奖励ID
+   * @param {Object} rewardData 奖励数据
+   * @returns {Promise<Object>} 更新结果
+   */
+  async updateReward(rewardId, rewardData) {
+    if (!rewardId || !rewardData) {
+      logger.warn('RewardService', '更新奖励失败: 缺少必要数据', { rewardId, rewardData });
+      return { success: false, message: '参数不完整' };
+    }
+    
+    try {
+      // 获取奖励
+      const existingReward = await this.rewardRepository.getById(rewardId);
+      
+      if (!existingReward) {
+        logger.warn('RewardService', `更新奖励失败: 未找到ID为${rewardId}的奖励`);
+        return { success: false, message: '未找到指定的奖励' };
+      }
+      
+      // 更新奖励
+      const updatedReward = await this.rewardRepository.update(rewardId, rewardData);
+      
+      logger.info('RewardService', `更新奖励成功: ${updatedReward.name}, ID=${updatedReward.id}`);
+      
+      // 触发奖励更新事件
+      this.eventBus.emit('reward:updated', { 
+        reward: updatedReward,
+        previous: existingReward
+      });
+      
+      return { success: true, reward: updatedReward, message: '更新成功' };
+    } catch (error) {
+      logger.error('RewardService', `更新奖励失败, ID=${rewardId}`, error);
+      return { success: false, message: '更新过程中发生错误' };
+    }
+  }
+  
+  /**
+   * 删除奖励
+   * @param {String} rewardId 奖励ID
+   * @returns {Promise<Object>} 删除结果
+   */
+  async deleteReward(rewardId) {
+    if (!rewardId) {
+      logger.warn('RewardService', '删除奖励失败: 缺少奖励ID');
+      return { success: false, message: '奖励ID不能为空' };
+    }
+    
+    try {
+      // 获取奖励
+      const reward = await this.rewardRepository.getById(rewardId);
+      
+      if (!reward) {
+        logger.warn('RewardService', `删除奖励失败: 未找到ID为${rewardId}的奖励`);
+        return { success: false, message: '未找到指定的奖励' };
+      }
+      
+      // 如果奖励已被领取，不允许删除
+      if (reward.claimed) {
+        logger.warn('RewardService', `删除奖励失败: 奖励已被领取，不能删除, ID=${rewardId}`);
+        return { success: false, message: '已领取的奖励不能删除' };
+      }
+      
+      // 删除奖励
+      const result = await this.rewardRepository.delete(rewardId);
+      
+      logger.info('RewardService', `删除奖励成功: ${reward.name}, ID=${rewardId}`);
+      
+      // 触发奖励删除事件
+      this.eventBus.emit('reward:deleted', { reward });
+      
+      return { success: true, message: '删除成功' };
+    } catch (error) {
+      logger.error('RewardService', `删除奖励失败, ID=${rewardId}`, error);
+      return { success: false, message: '删除过程中发生错误' };
+    }
+  }
+  
+  /**
+   * 切换奖励启用/禁用状态
+   * @param {String} rewardId 奖励ID
+   * @param {Boolean} enabled 是否启用
+   * @returns {Promise<Object>} 操作结果
+   */
+  async toggleRewardStatus(rewardId, enabled) {
+    if (!rewardId) {
+      logger.warn('RewardService', '切换奖励状态失败: 缺少奖励ID');
+      return { success: false, message: '奖励ID不能为空' };
+    }
+    
+    try {
+      // 获取奖励
+      const reward = await this.rewardRepository.getById(rewardId);
+      
+      if (!reward) {
+        logger.warn('RewardService', `切换奖励状态失败: 未找到ID为${rewardId}的奖励`);
+        return { success: false, message: '未找到指定的奖励' };
+      }
+      
+      // 如果奖励已被领取，不允许修改状态
+      if (reward.claimed) {
+        logger.warn('RewardService', `切换奖励状态失败: 奖励已被领取，不能修改状态, ID=${rewardId}`);
+        return { success: false, message: '已领取的奖励不能修改状态' };
+      }
+      
+      // 如果状态相同，直接返回成功
+      if (reward.enabled === enabled) {
+        logger.info('RewardService', `奖励状态已经是${enabled ? '启用' : '禁用'}, ID=${rewardId}`);
+        return { success: true, reward, message: `奖励已经是${enabled ? '启用' : '禁用'}状态` };
+      }
+      
+      // 更新奖励状态
+      const updatedReward = await this.rewardRepository.update(rewardId, { enabled });
+      
+      logger.info('RewardService', `切换奖励状态成功: ${updatedReward.name}, ID=${rewardId}, 状态=${enabled ? '启用' : '禁用'}`);
+      
+      // 触发奖励状态变更事件
+      this.eventBus.emit('reward:status_changed', { 
+        reward: updatedReward,
+        enabled
+      });
+      
+      return { success: true, reward: updatedReward, message: `奖励已${enabled ? '启用' : '禁用'}` };
+    } catch (error) {
+      logger.error('RewardService', `切换奖励状态失败, ID=${rewardId}, enabled=${enabled}`, error);
+      return { success: false, message: '操作过程中发生错误' };
+    }
+  }
+  
+  /**
+   * 标记奖励为已领取
+   * @param {String} rewardId 奖励ID
+   * @returns {Promise<Object>} 操作结果
+   */
+  async markRewardAsDelivered(rewardId) {
+    if (!rewardId) {
+      logger.warn('RewardService', '标记奖励为已领取失败: 缺少奖励ID');
+      return { success: false, message: '奖励ID不能为空' };
+    }
+    
+    try {
+      // 获取奖励
+      const reward = await this.rewardRepository.getById(rewardId);
+      
+      if (!reward) {
+        logger.warn('RewardService', `标记奖励为已领取失败: 未找到ID为${rewardId}的奖励`);
+        return { success: false, message: '未找到指定的奖励' };
+      }
+      
+      // 如果奖励未被领取，不能标记为已领取
+      if (!reward.claimed) {
+        logger.warn('RewardService', `标记奖励为已领取失败: 奖励尚未被兑换, ID=${rewardId}`);
+        return { success: false, message: '奖励尚未被兑换' };
+      }
+      
+      // 如果奖励已经是已领取状态，直接返回成功
+      if (reward.claimStatus === 'delivered') {
+        logger.info('RewardService', `奖励已经是已领取状态, ID=${rewardId}`);
+        return { success: true, reward, message: '奖励已经是已领取状态' };
+      }
+      
+      // 更新奖励状态
+      const updatedReward = await this.rewardRepository.update(rewardId, { claimStatus: 'delivered' });
+      
+      logger.info('RewardService', `标记奖励为已领取成功: ${updatedReward.name}, ID=${rewardId}`);
+      
+      // 触发奖励领取状态变更事件
+      this.eventBus.emit('reward:delivered', { reward: updatedReward });
+      
+      return { success: true, reward: updatedReward, message: '奖励已标记为已领取' };
+    } catch (error) {
+      logger.error('RewardService', `标记奖励为已领取失败, ID=${rewardId}`, error);
+      return { success: false, message: '操作过程中发生错误' };
+    }
+  }
+  
+  /**
+   * 获取可用奖励列表
+   * @param {Boolean} includeClaimed 是否包含已领取的奖励
+   * @returns {Promise<Array>} 可用奖励列表
+   */
+  async getAvailableRewards(includeClaimed = false) {
+    try {
+      let rewards;
+      if (includeClaimed) {
+        // 获取所有奖励，包括已领取的
+        rewards = await this.rewardRepository.getAll();
+        logger.info('RewardService', `获取所有奖励成功(包含已领取), 数量=${rewards.length}`);
+      } else {
+        // 仅获取未领取的可用奖励
+        rewards = await this.rewardRepository.getAvailableRewards();
+        logger.info('RewardService', `获取可用奖励成功(仅未领取), 数量=${rewards.length}`);
+      }
+      
+      // 过滤示例奖励的额外逻辑：如果有启用的自定义奖励，则不返回示例奖励
+      const hasCustomRewards = rewards.some(r => !r.isExample && r.enabled);
+      if (hasCustomRewards) {
+        const filteredRewards = rewards.filter(r => !r.isExample);
+        logger.info('RewardService', `过滤掉示例奖励，剩余${filteredRewards.length}个奖励`);
+        return filteredRewards;
+      }
+      
+      return rewards;
+    } catch (error) {
+      logger.error('RewardService', '获取可用奖励失败', error);
       return [];
     }
   }
@@ -105,147 +351,6 @@ class RewardService {
   }
   
   /**
-   * 创建新奖励
-   * @param {Object} rewardData 奖励数据
-   * @returns {Promise<Object|null>} 创建的奖励对象或null
-   */
-  async createReward(rewardData) {
-    if (!rewardData || !rewardData.name || !rewardData.points) {
-      logger.warn('RewardService', '创建奖励失败: 缺少必要参数');
-      return null;
-    }
-    
-    try {
-      // 添加默认图标
-      if (!rewardData.icon) {
-        rewardData.icon = '🎁';
-      }
-      
-      // 保存奖励
-      const reward = await this.rewardRepository.save(rewardData);
-      
-      if (reward) {
-        logger.info('RewardService', `创建奖励成功: ${reward.name}, ID=${reward.id}`);
-        
-        // 触发奖励创建事件
-        this.eventBus.emit('reward:created', { reward });
-      }
-      
-      return reward;
-    } catch (error) {
-      logger.error('RewardService', '创建奖励失败', error);
-      return null;
-    }
-  }
-  
-  /**
-   * 更新奖励
-   * @param {String} rewardId 奖励ID
-   * @param {Object} updateData 更新数据
-   * @returns {Promise<Object|null>} 更新后的奖励对象或null
-   */
-  async updateReward(rewardId, updateData) {
-    if (!rewardId || !updateData) {
-      logger.warn('RewardService', '更新奖励失败: 缺少必要参数');
-      return null;
-    }
-    
-    try {
-      // 获取当前奖励
-      const currentReward = await this.rewardRepository.getById(rewardId);
-      
-      if (!currentReward) {
-        logger.warn('RewardService', `更新奖励失败: 未找到ID为${rewardId}的奖励`);
-        return null;
-      }
-      
-      // 避免更新不应该更改的字段
-      delete updateData.id;
-      delete updateData.createTime;
-      delete updateData.updateTime;
-      
-      if (currentReward.claimed) {
-        delete updateData.points;
-      }
-      
-      // 示例奖励不允许禁用
-      if (currentReward.isExample && updateData.enabled === false) {
-        updateData.enabled = true;
-      }
-      
-      // 更新数据
-      const updatedData = { ...currentReward, ...updateData, updateTime: Date.now() };
-      
-      // 保存更新
-      const updatedReward = await this.rewardRepository.save(updatedData);
-      
-      if (updatedReward) {
-        logger.info('RewardService', `更新奖励成功: ${updatedReward.name}, ID=${updatedReward.id}`);
-        
-        // 触发奖励更新事件
-        this.eventBus.emit('reward:updated', { 
-          reward: updatedReward,
-          previousReward: currentReward
-        });
-      }
-      
-      return updatedReward;
-    } catch (error) {
-      logger.error('RewardService', `更新奖励失败, ID=${rewardId}`, error);
-      return null;
-    }
-  }
-  
-  /**
-   * 删除奖励
-   * @param {String} rewardId 奖励ID
-   * @returns {Promise<Boolean>} 是否删除成功
-   */
-  async deleteReward(rewardId) {
-    if (!rewardId) {
-      logger.warn('RewardService', '删除奖励失败: 缺少奖励ID');
-      return false;
-    }
-    
-    try {
-      // 获取当前奖励
-      const currentReward = await this.rewardRepository.getById(rewardId);
-      
-      if (!currentReward) {
-        logger.warn('RewardService', `删除奖励失败: 未找到ID为${rewardId}的奖励`);
-        return false;
-      }
-      
-      // 示例奖励不允许删除
-      if (currentReward.isExample) {
-        logger.warn('RewardService', `删除奖励失败: 不允许删除示例奖励, ID=${rewardId}`);
-        return false;
-      }
-      
-      // 已兑换的奖励不允许删除
-      if (currentReward.claimed) {
-        logger.warn('RewardService', `删除奖励失败: 不允许删除已兑换的奖励, ID=${rewardId}`);
-        return false;
-      }
-      
-      // 执行删除
-      const deleted = await this.rewardRepository.delete(rewardId);
-      
-      if (deleted) {
-        logger.info('RewardService', `删除奖励成功: ${currentReward.name}, ID=${rewardId}`);
-        
-        // 触发奖励删除事件
-        this.eventBus.emit('reward:deleted', { reward: currentReward });
-      }
-      
-      return deleted;
-    } catch (error) {
-      logger.error('RewardService', `删除奖励失败, ID=${rewardId}`, error);
-      return false;
-    }
-  }
-  
-  /**
    * 兑换奖励
    * @param {String} rewardId 奖励ID
    * @returns {Promise<Object>} 兑换结果
@@ -266,128 +371,77 @@ class RewardService {
       }
       
       // 检查奖励是否可兑换
-      if (!reward.isAvailable()) {
-        if (reward.claimed) {
-          logger.warn('RewardService', `兑换奖励失败: 奖励已被兑换, ID=${rewardId}`);
-          return { success: false, message: '该奖励已被兑换' };
-        } else {
-          logger.warn('RewardService', `兑换奖励失败: 奖励不可用, ID=${rewardId}`);
-          return { success: false, message: '该奖励不可用' };
+      if (!reward.enabled) {
+        logger.warn('RewardService', `兑换奖励失败: 奖励已禁用, ID=${rewardId}`);
+        return { success: false, message: '该奖励已禁用' };
+      }
+      
+      if (reward.claimed) {
+        logger.warn('RewardService', `兑换奖励失败: 奖励已被兑换, ID=${rewardId}`);
+        return { success: false, message: '该奖励已被兑换' };
+      }
+      
+      // 获取用户当前星星总数
+      const userStars = await this.starGroupRepository.getTotalPoints();
+      logger.info('RewardService', `兑换奖励前用户星星数: ${userStars}`);
+      
+      // 检查用户是否有足够的星星
+      if (userStars < reward.points) {
+        logger.warn('RewardService', `兑换奖励失败: 星星不足, 需要${reward.points}颗, 当前${userStars}颗`);
+        return { success: false, message: '星星不足' };
+      }
+      
+      // 开始事务，确保数据一致性
+      try {
+        // 1. 扣除用户星星
+        const deductResult = await this.starGroupRepository.deductStars(reward.points);
+        
+        if (!deductResult.success) {
+          logger.error('RewardService', `扣除星星失败: ${deductResult.message}`);
+          return { success: false, message: '扣除星星失败' };
         }
+        
+        // 2. 创建星星消费记录
+        const consumptionRecord = {
+          amount: reward.points,
+          type: 'exchange', // 消费类型：兑换奖励
+          source: `reward_${rewardId}`,
+          timestamp: Date.now(),
+          data: {
+            rewardId: reward.id,
+            rewardName: reward.name
+          }
+        };
+        
+        await this.starRecordRepository.createStarConsumptionRecord(consumptionRecord);
+        
+        // 3. 更新奖励状态为已领取
+        reward.claimed = true;
+        reward.claimTime = Date.now();
+        await this.rewardRepository.save(reward);
+        
+        // 5. 发出奖励领取事件
+        this.eventBus.emit('reward:claimed', { 
+          rewardId: reward.id,
+          rewardName: reward.name,
+          points: reward.points,
+          timestamp: Date.now()
+        });
+        
+        logger.info('RewardService', `兑换奖励成功: ${reward.name}, 消耗${reward.points}颗星星`);
+        
+        return { 
+          success: true, 
+          reward, 
+          message: '兑换成功' 
+        };
+      } catch (error) {
+        logger.error('RewardService', '兑换奖励事务处理失败', error);
+        return { success: false, message: '兑换过程中发生错误，请重试' };
       }
-      
-      // 检查星星数量是否足够
-      const hasEnough = await this.starGroupRepository.hasEnoughPoints(reward.points);
-      
-      if (!hasEnough) {
-        logger.warn('RewardService', `兑换奖励失败: 星星数量不足, ID=${rewardId}, 需要=${reward.points}`);
-        return { success: false, message: '星星数量不足' };
-      }
-      
-      // 先消费星星
-      const consumeResult = await this.starGroupRepository.consumeStarsByExpiryOrder(reward.points);
-      
-      if (!consumeResult.success) {
-        logger.error('RewardService', `兑换奖励失败: 消费星星失败, ID=${rewardId}, 需要=${reward.points}, 实际消费=${consumeResult.consumed}`);
-        return { success: false, message: '消费星星失败' };
-      }
-      
-      // 创建消费记录
-      const record = await this.starRecordRepository.createRewardExchangeRecord(
-        rewardId,
-        reward.points,
-        `兑换奖励: ${reward.name}`
-      );
-      
-      if (!record) {
-        logger.error('RewardService', `兑换奖励: 创建记录失败, ID=${rewardId}`);
-        // 继续流程，但记录错误
-      }
-      
-      // 标记奖励为已兑换
-      const claimedReward = await this.rewardRepository.claimReward(rewardId);
-      
-      if (!claimedReward) {
-        logger.error('RewardService', `兑换奖励: 标记奖励状态失败, ID=${rewardId}`);
-        // 这里有一个问题: 星星已经消费，但奖励状态没有更新
-        // 在实际应用中应该使用事务或补偿机制处理
-        return { success: false, message: '兑换奖励失败，星星已扣除' };
-      }
-      
-      logger.info('RewardService', `兑换奖励成功: ${reward.name}, ID=${rewardId}, 星星数=${reward.points}`);
-      
-      // 触发奖励兑换事件
-      this.eventBus.emit('reward:exchanged', { 
-        reward: claimedReward,
-        pointsConsumed: reward.points,
-        record: record
-      });
-      
-      return { 
-        success: true, 
-        reward: claimedReward, 
-        pointsConsumed: reward.points,
-        message: '兑换成功'
-      };
     } catch (error) {
-      logger.error('RewardService', `兑换奖励失败, ID=${rewardId}`, error);
+      logger.error('RewardService', '兑换奖励失败', error);
       return { success: false, message: '兑换过程中发生错误' };
-    }
-  }
-  
-  /**
-   * 标记奖励为已领取
-   * @param {String} rewardId 奖励ID
-   * @returns {Promise<Object>} 操作结果
-   */
-  async deliverReward(rewardId) {
-    if (!rewardId) {
-      logger.warn('RewardService', '标记奖励为已领取失败: 缺少奖励ID');
-      return { success: false, message: '奖励ID不能为空' };
-    }
-    
-    try {
-      // 获取奖励
-      const reward = await this.rewardRepository.getById(rewardId);
-      
-      if (!reward) {
-        logger.warn('RewardService', `标记奖励为已领取失败: 未找到ID为${rewardId}的奖励`);
-        return { success: false, message: '未找到指定的奖励' };
-      }
-      
-      // 检查奖励是否已兑换
-      if (!reward.claimed) {
-        logger.warn('RewardService', `标记奖励为已领取失败: 奖励未兑换, ID=${rewardId}`);
-        return { success: false, message: '该奖励尚未兑换' };
-      }
-      
-      // 检查奖励是否已领取
-      if (reward.isDelivered()) {
-        logger.info('RewardService', `奖励已经是已领取状态, ID=${rewardId}`);
-        return { success: true, reward, message: '奖励已经是已领取状态' };
-      }
-      
-      // 标记为已领取
-      const deliveredReward = await this.rewardRepository.deliverReward(rewardId);
-      
-      if (!deliveredReward) {
-        logger.error('RewardService', `标记奖励为已领取失败, ID=${rewardId}`);
-        return { success: false, message: '操作失败' };
-      }
-      
-      logger.info('RewardService', `标记奖励为已领取成功: ${reward.name}, ID=${rewardId}`);
-      
-      // 触发奖励领取事件
-      this.eventBus.emit('reward:delivered', { reward: deliveredReward });
-      
-      return { 
-        success: true, 
-        reward: deliveredReward,
-        message: '标记为已领取'
-      };
-    } catch (error) {
-      logger.error('RewardService', `标记奖励为已领取失败, ID=${rewardId}`, error);
-      return { success: false, message: '操作过程中发生错误' };
     }
   }
   
@@ -510,98 +564,51 @@ class RewardService {
   }
   
   /**
-   * 计算用户下一个可达成的奖励信息
-   * 类似于旧架构中的calculateNextReward方法，但专为新架构设计
-   * @returns {Promise<Object>} 下一个奖励的信息对象
+   * 计算下一个可用的奖励
+   * @returns {Promise<Object>} 下一个可用奖励，或默认奖励
    */
   async calculateNextAvailableReward() {
-    logger.info('RewardService', '计算用户下一个可达成的奖励信息');
-    
     try {
-      // 获取用户当前可用星星数
-      const userPoints = await this.starGroupRepository.getTotalPoints();
+      // 获取用户可用的星星数量
+      const availablePoints = await this.starGroupRepository.getTotalPoints();
       
-      // 获取所有可用且未领取的奖励
-      const allRewards = await this.rewardRepository.getAvailableRewards();
-      logger.info('RewardService', `获取到${allRewards.length}个可用奖励`);
+      // 获取所有可用奖励
+      const availableRewards = await this.rewardRepository.getAvailableRewards();
       
-      // 过滤出未领取的奖励
-      const availableRewards = allRewards.filter(reward => !reward.claimed);
-      logger.info('RewardService', `过滤后有${availableRewards.length}个未领取的奖励`);
-      
-      // 如果没有可用奖励，返回默认值
       if (availableRewards.length === 0) {
-        logger.info('RewardService', '没有可用奖励，返回全部完成状态');
+        logger.info('RewardService', '计算下一个可用奖励：没有可用奖励，返回默认奖励');
         return {
-          name: '恭喜！您已领取所有奖励，可以继续积累星星',
-          points: '∞',  // 使用无穷符号
-          icon: '🎉',
-          count: 0,
-          remainingStars: 0,
-          current: userPoints,
-          allClaimed: true
-        };
-      }
-      
-      // 为奖励添加解锁状态
-      const rewardsWithUnlockState = availableRewards.map(reward => ({
-        ...reward,
-        unlocked: userPoints >= reward.points
-      }));
-      
-      // 按所需星星数升序排序
-      rewardsWithUnlockState.sort((a, b) => a.points - b.points);
-      
-      // 查找第一个未解锁的奖励
-      let nextUnlockedRewards = rewardsWithUnlockState.filter(reward => !reward.unlocked);
-      
-      // 如果所有奖励都已解锁，使用最高级别的奖励
-      if (nextUnlockedRewards.length === 0 && rewardsWithUnlockState.length > 0) {
-        nextUnlockedRewards = [rewardsWithUnlockState[rewardsWithUnlockState.length - 1]];
-      }
-      
-      // 构建返回结果
-      let result;
-      
-      if (nextUnlockedRewards.length > 0) {
-        const nextPoints = nextUnlockedRewards[0].points;
-        const samePointsRewards = nextUnlockedRewards.filter(r => r.points === nextPoints);
-        
-        result = {
-          name: samePointsRewards[0].name,
-          points: nextPoints,
-          icon: samePointsRewards[0].icon,
-          count: samePointsRewards.length,
-          remainingStars: Math.max(0, nextPoints - userPoints),
-          current: userPoints
-        };
-        
-        logger.info('RewardService', `下一个奖励: ${result.name}, 需要${result.points}颗星星, 还差${result.remainingStars}颗`);
-      } else {
-        // 默认结果，应该不会走到这里，因为上面已经处理了没有奖励的情况
-        result = {
-          name: '奖品',
-          points: 100,
+          name: '添加新奖励',
+          points: 10,
           icon: '🎁',
-          count: 1,
-          remainingStars: 100,
-          current: userPoints
+          isDefault: true
         };
-        
-        logger.info('RewardService', `返回默认奖励信息`);
       }
       
-      return result;
+      // 过滤未解锁的奖励并按点数排序
+      const unlockedRewards = availableRewards.filter(reward => 
+        reward.points > availablePoints
+      ).sort((a, b) => a.points - b.points);
+      
+      // 如果没有未解锁的奖励，找点数最高的已解锁奖励
+      if (unlockedRewards.length === 0) {
+        const highestPointReward = [...availableRewards].sort((a, b) => b.points - a.points)[0];
+        logger.info('RewardService', `计算下一个可用奖励：没有未解锁奖励，返回点数最高的奖励 ${highestPointReward.name}(${highestPointReward.points}点)`);
+        return highestPointReward;
+      }
+      
+      // 返回点数最低的未解锁奖励
+      const nextReward = unlockedRewards[0];
+      logger.info('RewardService', `计算下一个可用奖励：${nextReward.name}(${nextReward.points}点)`);
+      return nextReward;
     } catch (error) {
-      logger.error('RewardService', '计算下一个奖励信息失败', error);
-      // 返回默认值
+      logger.error('RewardService', '计算下一个可用奖励失败', error);
+      // 返回一个默认奖励
       return {
-        name: '奖品',
-        points: 100,
+        name: '添加新奖励',
+        points: 10,
         icon: '🎁',
-        count: 1,
-        remainingStars: 100,
-        current: 0
+        isDefault: true
       };
     }
   }

@@ -37,9 +37,23 @@ class RewardRepository extends BaseRepository {
    */
   async getAvailableRewards() {
     try {
-      const rewards = await this.query(reward => reward.isAvailable());
-      logger.info('RewardRepository', `获取可用奖励成功, 数量=${rewards.length}`);
-      return rewards;
+      // 先获取所有数据，然后手动过滤
+      const allRewards = await this.getAll();
+      
+      // 检查是否存在自定义奖励
+      const hasCustomRewards = allRewards.some(r => !r.isExample && r.enabled);
+      
+      // 如果有自定义奖励，则过滤掉示例奖励
+      let filteredRewards;
+      if (hasCustomRewards) {
+        logger.info('RewardRepository', `存在自定义奖励，将过滤掉示例奖励`);
+        filteredRewards = allRewards.filter(r => !r.isExample && r.isAvailable());
+      } else {
+        filteredRewards = allRewards.filter(r => r.isAvailable());
+      }
+      
+      logger.info('RewardRepository', `获取可用奖励成功, 数量=${filteredRewards.length}`);
+      return filteredRewards;
     } catch (error) {
       logger.error('RewardRepository', '获取可用奖励失败', error);
       return [];
@@ -418,6 +432,46 @@ class RewardRepository extends BaseRepository {
   _cloneModel(reward) {
     if (!reward) return null;
     return new Reward({ ...reward });
+  }
+  
+  /**
+   * 从本地存储加载奖励数据
+   * 用于确保存储和仓储中的数据一致
+   * @returns {Promise<Array>} 加载的奖励列表
+   */
+  async loadFromStorage() {
+    try {
+      logger.info('RewardRepository', '从本地存储加载奖励数据');
+      const storedRewards = wx.getStorageSync('rewards') || [];
+      
+      // 将存储数据转换为领域模型对象
+      const rewardsModels = storedRewards.map(data => {
+        const { Reward } = require('../models/index');
+        return new Reward(data);
+      });
+      
+      // 检查是否需要过滤示例奖励
+      const hasCustomRewards = rewardsModels.some(r => !r.isExample && r.enabled);
+      
+      // 如果有自定义奖励，则过滤掉示例奖励，避免重复显示
+      const filteredRewards = hasCustomRewards 
+        ? rewardsModels.filter(r => !r.isExample) 
+        : rewardsModels;
+      
+      // 添加新加载的数据（使用正确的saveAll方法）
+      await this.saveAll(filteredRewards);
+      
+      if (hasCustomRewards) {
+        logger.info('RewardRepository', `从本地存储加载了${filteredRewards.length}个奖励，已过滤示例奖励`);
+      } else {
+        logger.info('RewardRepository', `从本地存储加载了${filteredRewards.length}个奖励`);
+      }
+      
+      return filteredRewards;
+    } catch (error) {
+      logger.error('RewardRepository', '从本地存储加载奖励数据失败', error);
+      throw error;
+    }
   }
 }
 

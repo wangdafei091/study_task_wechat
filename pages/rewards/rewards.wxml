@@ -31,7 +31,7 @@
     <view class="section-title">可获得的奖励</view>
     
     <view class="rewards-grid">
-      <block wx:for="{{rewards}}" wx:key="id">
+      <block wx:for="{{availableRewards}}" wx:key="id">
         <view class="reward-item {{item.unlocked ? 'unlocked' : 'locked'}} {{item.claimed ? 'claimed' : ''}}"
               bindtap="viewReward" 
               data-id="{{item.id}}">
@@ -45,7 +45,25 @@
           </view>
           
           <!-- 示例标签 -->
-          <view class="example-badge" wx:if="{{item.isExample === true || item.id.indexOf('_1') > 0 || item.id.indexOf('_2') > 0 || item.id.indexOf('_3') > 0}}">示例</view>
+          <view class="example-badge" wx:if="{{item.isExample === true}}">示例</view>
+        </view>
+      </block>
+    </view>
+    
+    <!-- 已领取的奖励 -->
+    <view class="section-title" wx:if="{{claimedRewards && claimedRewards.length > 0}}">已领取的奖励</view>
+    
+    <view class="rewards-grid" wx:if="{{claimedRewards && claimedRewards.length > 0}}">
+      <block wx:for="{{claimedRewards}}" wx:key="id">
+        <view class="reward-item claimed"
+              bindtap="viewReward" 
+              data-id="{{item.id}}">
+          <view class="reward-icon">{{item.icon}}</view>
+          <view class="reward-name">{{item.name}}</view>
+          <view class="reward-points">{{item.points}}颗</view>
+          <view class="reward-status">
+            <text>已领取</text>
+          </view>
         </view>
       </block>
     </view>

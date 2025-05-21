@@ -403,6 +403,100 @@ class StarGroupRepository extends BaseRepository {
     if (!group) return null;
     return new StarGroup({ ...group });
   }
+  
+  /**
+   * 扣除星星
+   * 按照星星过期时间顺序扣除（先扣除临近过期的）
+   * @param {Number} amount 要扣除的星星数量
+   * @returns {Promise<Object>} 扣除结果
+   */
+  async deductStars(amount) {
+    if (!amount || amount <= 0) {
+      logger.warn('StarGroupRepository', `扣除星星失败：无效的数量 ${amount}`);
+      return { success: false, message: '扣除数量无效' };
+    }
+    
+    try {
+      // 获取所有星星分组
+      const groups = await this.getAll();
+      logger.info('StarGroupRepository', `开始扣除${amount}颗星星，当前有${groups.length}个分组`);
+      
+      // 获取当前星星总数
+      const totalStars = groups.reduce((sum, group) => sum + (group.points || 0), 0);
+      
+      // 检查星星是否足够
+      if (totalStars < amount) {
+        logger.warn('StarGroupRepository', `扣除星星失败：星星不足，需要${amount}颗，当前${totalStars}颗`);
+        return { success: false, message: '星星不足' };
+      }
+      
+      // 按到期时间排序（临近过期的排在前面）
+      const sortedGroups = [...groups].sort((a, b) => {
+        // 永久有效的放在最后
+        if (a.expiryType === 'permanent') return 1;
+        if (b.expiryType === 'permanent') return -1;
+        
+        // 按过期时间升序
+        return (a.expiryDate || 0) - (b.expiryDate || 0);
+      });
+      
+      // 从最早过期的分组开始扣除
+      let remainingAmount = amount;
+      const updatedGroups = [];
+      const deductedGroups = [];
+      
+      for (const group of sortedGroups) {
+        if (remainingAmount <= 0) {
+          // 不需要继续扣除
+          updatedGroups.push(group);
+          continue;
+        }
+        
+        // 当前分组可扣除的数量
+        const groupPoints = group.points || 0;
+        const deductFromGroup = Math.min(remainingAmount, groupPoints);
+        
+        if (deductFromGroup > 0) {
+          // 更新分组
+          group.points = groupPoints - deductFromGroup;
+          remainingAmount -= deductFromGroup;
+          
+          // 记录扣除日志
+          deductedGroups.push({
+            groupId: group.id,
+            amount: deductFromGroup,
+            remaining: group.points,
+            expiryType: group.expiryType,
+            expiryDate: group.expiryDate
+          });
+          
+          logger.info('StarGroupRepository', `从分组${group.id}扣除${deductFromGroup}颗星星，剩余${group.points}颗`);
+        }
+        
+        // 只保留还有星星的分组
+        if (group.points > 0) {
+          updatedGroups.push(group);
+        } else {
+          logger.info('StarGroupRepository', `分组${group.id}星星已用完，移除`);
+        }
+      }
+      
+      // 保存更新后的分组
+      const savedGroups = await this.saveAll(updatedGroups);
+      const savedCount = savedGroups ? savedGroups.length : 0;
+      
+      logger.info('StarGroupRepository', `星星扣除完成，更新了${savedCount}个分组，共扣除${amount}颗，剩余${totalStars - amount}颗`);
+      
+      return {
+        success: true,
+        deductedGroups,
+        message: '扣除成功'
+      };
+    } catch (error) {
+      logger.error('StarGroupRepository', '扣除星星失败', error);
+      return { success: false, message: '操作失败，请重试' };
+    }
+  }
 }
 
 module.exports = StarGroupRepository; 

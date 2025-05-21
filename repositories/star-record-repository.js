@@ -449,6 +449,112 @@ class StarRecordRepository extends BaseRepository {
       return 0;
     }
   }
+  
+  /**
+   * 创建消费记录
+   * @param {Object} options 记录选项
+   * @param {Number} options.stars 消费的星星数（正数）
+   * @param {String} options.description 描述
+   * @param {String} options.type 消费类型
+   * @param {String} options.relatedId 相关ID
+   * @returns {Promise<Object>} 创建结果
+   */
+  async createConsumptionRecord(options = {}) {
+    if (!options.stars || options.stars <= 0) {
+      logger.warn('StarRecordRepository', '尝试使用无效的星星数量创建消费记录');
+      return null;
+    }
+    
+    try {
+      // 计算当前余额
+      const previousBalance = await this._calculateCurrentBalance();
+      const balance = previousBalance - options.stars;
+      
+      // 创建记录对象
+      const record = new StarRecord({
+        points: -options.stars, // 负数表示消费
+        type: RecordType.EXPENSE,
+        source: options.type || RecordSource.SYSTEM_ADJUST,
+        sourceId: options.relatedId || '',
+        description: options.description || '星星消费',
+        timestamp: Date.now(),
+        balance,
+        previousBalance
+      });
+      
+      // 保存记录
+      const savedRecord = await this.save(record);
+      
+      logger.info('StarRecordRepository', `创建消费记录成功: ID=${savedRecord.id}, 星星数=${options.stars}, 类型=${options.type}`);
+      return savedRecord;
+    } catch (error) {
+      logger.error('StarRecordRepository', '创建消费记录失败', error);
+      return null;
+    }
+  }
+  
+  /**
+   * 创建星星消费记录
+   * @param {Object} record 消费记录对象
+   * @returns {Promise<Object>} 创建的消费记录
+   */
+  async createStarConsumptionRecord(record) {
+    if (!record) {
+      logger.warn('StarRecordRepository', '创建消费记录失败: 记录数据为空');
+      throw new Error('记录数据不能为空');
+    }
+    
+    if (!record.amount || record.amount <= 0) {
+      logger.warn('StarRecordRepository', `创建消费记录失败: 无效的数量 ${record.amount}`);
+      throw new Error('消费数量无效');
+    }
+    
+    try {
+      // 创建消费记录模型
+      const starRecord = new StarRecord({
+        id: `star_record_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+        amount: record.amount,
+        recordType: 'consumption',
+        operationType: record.type || 'exchange',
+        source: record.source || '',
+        timestamp: record.timestamp || Date.now(),
+        expiryType: record.expiryType || 'none',
+        expiryDate: record.expiryDate || null,
+        data: record.data || {}
+      });
+      
+      // 保存消费记录
+      const savedRecord = await this.save(starRecord);
+      
+      logger.info('StarRecordRepository', `创建消费记录成功: ID=${savedRecord.id}, 数量=${savedRecord.amount}, 类型=${savedRecord.operationType}`);
+      
+      return savedRecord;
+    } catch (error) {
+      logger.error('StarRecordRepository', '创建消费记录失败', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * 创建消费记录
+   * @param {Object} options 记录选项
+   * @param {Number} options.stars 消费的星星数（正数）
+   * @param {String} options.description 描述
+   * @param {String} options.type 消费类型
+   * @param {String} options.relatedId 相关ID
+   * @returns {Promise<Object>} 创建结果
+   * @deprecated 使用createStarConsumptionRecord代替
+   */
+  async createConsumptionRecord(options = {}) {
+    logger.warn('StarRecordRepository', '使用已废弃的createConsumptionRecord方法，请使用createStarConsumptionRecord代替');
+    return this.createStarConsumptionRecord({
+      amount: options.stars,
+      type: options.type,
+      source: options.relatedId,
+      description: options.description,
+      timestamp: Date.now()
+    });
+  }
 }
 
 module.exports = StarRecordRepository; 

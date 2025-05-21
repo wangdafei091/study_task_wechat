@@ -1,4 +1,6 @@
 const app = getApp();
+// 新架构服务引入
+const serviceManager = require('../../utils/serviceManager');
 
 Page({
   /**
@@ -46,7 +48,7 @@ Page({
     
     // 确认对话框相关
     showConfirmDialog: false, // 是否显示确认对话框
-    confirmDialogTitle: '', // 确认对话框标题
+    confirmDialogTitle: '',
     confirmDialogMessage: '', // 确认对话框消息
     confirmDialogAction: null, // 确认对话框确认操作
   },
@@ -54,14 +56,14 @@ Page({
   /**
    * 生命周期函数--监听页面加载
    */
-  onLoad: function (options) {
+  onLoad: async function (options) {
     console.log('[RewardManage] 页面加载');
     
     // 加载奖励数据
-    this.loadRewardsData();
+    await this.loadRewardsData();
     
     // 加载领取记录
-    this.loadClaimedRecords();
+    await this.loadClaimedRecords();
     
     // 初始化表情列表
     this.setData({
@@ -72,12 +74,12 @@ Page({
   /**
    * 生命周期函数--监听页面显示
    */
-  onShow: function () {
+  onShow: async function () {
     console.log('[RewardManage] 页面显示');
     
     // 重新加载数据，确保数据最新
-    this.loadRewardsData();
-    this.loadClaimedRecords();
+    await this.loadRewardsData();
+    await this.loadClaimedRecords();
   },
   
   /**
@@ -117,192 +119,147 @@ Page({
   /**
    * 加载奖励数据
    */
-  loadRewardsData: function() {
+  loadRewardsData: async function() {
     console.log('[RewardManage] 加载奖励数据');
     
-    // 从本地存储获取奖励数据
-    const rewards = wx.getStorageSync('rewards') || [];
-    
-    // 如果没有奖励数据，使用默认数据
-    if (rewards.length === 0) {
-      console.log('[RewardManage] 没有找到奖励数据，使用默认数据');
-      const defaultRewards = app.getDefaultRewards ? app.getDefaultRewards() : this.getDefaultRewards();
+    try {
+      wx.showLoading({ title: '加载中' });
       
-      // 确保所有默认奖励都启用
-      defaultRewards.forEach(reward => {
-        reward.enabled = true;
-      });
+      // 获取服务实例
+      const rewardService = serviceManager.getService('rewardService');
       
-      this.setData({ rewards: defaultRewards });
-      // 保存默认奖励到本地存储
-      wx.setStorageSync('rewards', defaultRewards);
-    } else {
-      console.log(`[RewardManage] 找到 ${rewards.length} 个奖励`);
-      
-      // 确保示例奖励在所有页面保持启用状态
-      const updatedRewards = rewards.map(reward => {
-        if (this.isExampleReward(reward)) {
-          return { ...reward, enabled: true };
-        }
-        return reward;
-      });
-      
-      // 如果有状态修正，更新存储
-      if (JSON.stringify(updatedRewards) !== JSON.stringify(rewards)) {
-        console.log('[RewardManage] 修正示例奖励状态为启用');
-        wx.setStorageSync('rewards', updatedRewards);
+      if (!rewardService) {
+        console.error('[RewardManage] 无法获取奖励服务实例');
+        wx.hideLoading();
+        return;
       }
       
-      this.setData({ rewards: updatedRewards });
+      // 获取所有奖励
+      const allRewards = await rewardService.getAllRewards();
+      console.log(`[RewardManage] 获取到 ${allRewards.length} 个奖励`);
+      
+      // 如果没有奖励数据，创建默认奖励
+      if (allRewards.length === 0) {
+        console.log('[RewardManage] 没有找到奖励数据，创建默认奖励');
+        await this.createDefaultRewards(rewardService);
+        
+        // 重新获取所有奖励
+        const defaultRewards = await rewardService.getAllRewards();
+        this.setData({ rewards: defaultRewards });
+      } else {
+        this.setData({ rewards: allRewards });
+      }
+      
+      wx.hideLoading();
+    } catch (error) {
+      console.error('[RewardManage] 加载奖励数据失败', error);
+      wx.hideLoading();
+      wx.showToast({
+        title: '加载失败，请重试',
+        icon: 'none'
+      });
     }
   },
   
   /**
-   * 判断是否为示例奖励
-   * 通过ID格式或标记识别示例奖励
+   * 创建默认奖励
+   * @param {Object} rewardService 奖励服务实例
    */
-  isExampleReward: function(reward) {
-    // 检查是否有明确的示例标记
-    if (reward.isExample === true) {
-      return true;
+  createDefaultRewards: async function(rewardService) {
+    try {
+      const defaultRewards = this.getDefaultRewardsData();
+      
+      for (const reward of defaultRewards) {
+        await rewardService.createReward(reward);
+        console.log(`[RewardManage] 创建默认奖励: ${reward.name}`);
+      }
+      
+      console.log('[RewardManage] 默认奖励创建完成');
+    } catch (error) {
+      console.error('[RewardManage] 创建默认奖励失败', error);
+      throw error;
     }
-    
-    // 使用ID前缀/后缀识别初始默认示例
-    // 初始三个示例奖励的ID结尾为_1, _2, _3
-    return /reward_\d+_(1|2|3)$/.test(reward.id);
   },
   
   /**
    * 获取默认奖励数据
    */
-  getDefaultRewards: function() {
-    const now = Date.now();
+  getDefaultRewardsData: function() {
     return [
       {
-        id: 'reward_' + now + '_1',
         name: '看动画片30分钟',
         points: 10,
         icon: '🎬',
         enabled: true,
-        claimed: false,
-        isExample: true, // 标记为示例
-        createTime: now
+        isExample: true
       },
       {
-        id: 'reward_' + now + '_2',
         name: '额外的零食',
         points: 20,
         icon: '🍪',
         enabled: true,
-        claimed: false,
-        isExample: true, // 标记为示例
-        createTime: now + 1
+        isExample: true
       },
       {
-        id: 'reward_' + now + '_3',
         name: '玩游戏1小时',
         points: 30,
         icon: '🎮',
         enabled: true,
-        claimed: false,
-        isExample: true, // 标记为示例
-        createTime: now + 2
+        isExample: true
       }
     ];
   },
   
   /**
-   * 清理未领取的示例奖励
-   */
-  clearUnclaimedExampleRewards: function() {
-    console.log('[RewardManage] 清理未领取的示例奖励');
-    
-    // 获取所有奖励
-    const allRewards = this.data.rewards;
-    
-    // 区分示例奖励和自定义奖励
-    const exampleRewards = allRewards.filter(r => this.isExampleReward(r));
-    const customRewards = allRewards.filter(r => !this.isExampleReward(r));
-    
-    console.log(`[RewardManage] 当前共有 ${allRewards.length} 个奖励，其中示例奖励 ${exampleRewards.length} 个，自定义奖励 ${customRewards.length} 个`);
-    
-    // 保留已领取的示例奖励，移除未领取的
-    const claimedExamples = exampleRewards.filter(r => r.claimed);
-    const unclaimedExamples = exampleRewards.filter(r => !r.claimed);
-    
-    console.log(`[RewardManage] 示例奖励中：已领取 ${claimedExamples.length} 个，未领取 ${unclaimedExamples.length} 个`);
-    
-    // 如果有未领取的示例奖励被清理
-    if (unclaimedExamples.length > 0) {
-      console.log(`[RewardManage] 清理了 ${unclaimedExamples.length} 个未领取的示例奖励：`);
-      unclaimedExamples.forEach(r => {
-        console.log(`  - ${r.name} (${r.icon}, ${r.points}颗星星)`);
-      });
-      
-      // 更新存储
-      const updatedRewards = [...customRewards, ...claimedExamples];
-      
-      // 更新数据
-      this.setData({
-        rewards: updatedRewards
-      });
-      
-      // 保存到本地存储，调用方可能会再次保存，但这里先确保本地数据已更新
-      wx.setStorageSync('rewards', updatedRewards);
-      
-      return true;
-    } else {
-      console.log('[RewardManage] 没有需要清理的未领取示例奖励');
-      return false;
-    }
-  },
-  
-  /**
-   * 检查是否是首次创建自定义奖励
-   */
-  isFirstCustomReward: function() {
-    const allRewards = this.data.rewards;
-    // 检查是否存在非示例、非已领取的自定义奖励
-    const customRewards = allRewards.filter(r => !this.isExampleReward(r) && !r.claimed);
-    return customRewards.length === 0;
-  },
-  
-  /**
    * 加载领取记录
    */
-  loadClaimedRecords: function(filter = null) {
+  loadClaimedRecords: async function(filter = null) {
     console.log(`[RewardManage] 加载领取记录，筛选: ${filter || this.data.claimedFilter}`);
     
-    // 从本地存储获取已领取的奖励
-    const rewards = wx.getStorageSync('rewards') || [];
-    const claimedRewards = rewards.filter(r => r.claimed);
-    
-    // 处理记录，添加显示用的时间格式
-    const records = claimedRewards.map(r => {
-      return {
+    try {
+      // 获取服务实例
+      const rewardService = serviceManager.getService('rewardService');
+      
+      if (!rewardService) {
+        console.error('[RewardManage] 无法获取奖励服务实例');
+        return;
+      }
+      
+      // 获取已领取的奖励
+      const claimedRewards = await rewardService.getClaimedRewards();
+      console.log(`[RewardManage] 获取到 ${claimedRewards.length} 个已领取奖励`);
+      
+      // 处理记录，添加显示用的时间格式
+      const records = claimedRewards.map(r => ({
         ...r,
-        claimTimeDisplay: this.formatTimeStamp(r.claimTime)
-      };
-    });
-    
-    // 根据筛选条件过滤记录
-    let filteredRecords = records;
-    const filterType = filter || this.data.claimedFilter;
-    
-    if (filterType === 'pending') {
-      filteredRecords = records.filter(r => r.claimStatus !== 'delivered');
-    } else if (filterType === 'delivered') {
-      filteredRecords = records.filter(r => r.claimStatus === 'delivered');
+        claimTimeDisplay: this.formatTimeStamp(r.claimTime || r.createTime)
+      }));
+      
+      // 根据筛选条件过滤记录
+      let filteredRecords = records;
+      const filterType = filter || this.data.claimedFilter;
+      
+      if (filterType === 'pending') {
+        filteredRecords = records.filter(r => r.claimStatus !== 'delivered');
+      } else if (filterType === 'delivered') {
+        filteredRecords = records.filter(r => r.claimStatus === 'delivered');
+      }
+      
+      // 按领取时间倒序排列
+      filteredRecords.sort((a, b) => b.claimTime - a.claimTime);
+      
+      this.setData({
+        claimedRecords: filteredRecords
+      });
+      
+      console.log(`[RewardManage] 加载了 ${filteredRecords.length} 条领取记录`);
+    } catch (error) {
+      console.error('[RewardManage] 加载领取记录失败', error);
+      wx.showToast({
+        title: '加载记录失败',
+        icon: 'none'
+      });
     }
-    
-    // 按领取时间倒序排列
-    filteredRecords.sort((a, b) => b.claimTime - a.claimTime);
-    
-    this.setData({
-      claimedRecords: filteredRecords
-    });
-    
-    console.log(`[RewardManage] 加载了 ${filteredRecords.length} 条领取记录`);
   },
   
   /**
@@ -642,7 +599,7 @@ Page({
     let processedReward = reward;
     
     // 检查是否正在编辑示例奖励
-    const isEditingExample = this.data.isEditing && this.isExampleReward(reward);
+    const isEditingExample = this.data.isEditing && reward.isExample === true;
     if (isEditingExample) {
       console.log(`[RewardManage] 检测到编辑示例奖励，将转换为自定义奖励: ${reward.name}`);
       
@@ -660,7 +617,9 @@ Page({
     }
     
     // 检查是否是首次创建自定义奖励
-    const isFirstCustom = !this.data.isEditing && !this.isExampleReward(processedReward) && this.isFirstCustomReward();
+    // 首次创建自定义奖励的条件：不是编辑模式，当前奖励不是示例，且所有已有奖励都是示例
+    const hasCustomRewards = this.data.rewards.some(r => r.isExample !== true);
+    const isFirstCustom = !this.data.isEditing && processedReward.isExample !== true && !hasCustomRewards;
     
     if (this.data.isEditing) {
       if (processedReward.id !== reward.id) {
@@ -790,4 +749,41 @@ Page({
       this.data.confirmDialogAction();
     }
   },
+  
+  /**
+   * 清理未被领取的示例奖励
+   * @returns {Boolean} 是否清理了示例奖励
+   */
+  clearUnclaimedExampleRewards: function() {
+    console.log('[RewardManage] 尝试清理未领取的示例奖励');
+    
+    // 筛选出所有示例奖励
+    const exampleRewards = this.data.rewards.filter(r => r.isExample === true);
+    
+    if (exampleRewards.length === 0) {
+      console.log('[RewardManage] 没有发现示例奖励，无需清理');
+      return false;
+    }
+    
+    // 筛选出未被领取的示例奖励
+    const unclaimedExamples = exampleRewards.filter(r => !r.claimed);
+    
+    if (unclaimedExamples.length === 0) {
+      console.log('[RewardManage] 没有未领取的示例奖励，无需清理');
+      return false;
+    }
+    
+    console.log(`[RewardManage] 发现 ${unclaimedExamples.length} 个未领取的示例奖励，开始清理`);
+    
+    // 从奖励列表中移除未领取的示例奖励
+    const updatedRewards = this.data.rewards.filter(r => !(r.isExample === true && !r.claimed));
+    
+    // 更新数据
+    this.setData({
+      rewards: updatedRewards
+    });
+    
+    console.log(`[RewardManage] 清理了 ${unclaimedExamples.length} 个未领取的示例奖励`);
+    return true;
+  }
 });

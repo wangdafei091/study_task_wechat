@@ -477,30 +477,59 @@ const taskManager = {
         if (task.isRequired) {
           logger.info('taskManager', `必做任务${task.title}已完成，不扣除星星`);
           task.penaltyApplied = false;
-        } else {
-          if (!task.starAwarded) {
-            logger.info('taskManager', `非必做任务 ${task.title} 已完成，添加星星: ${task.points || 0}`);
+        }
+        
+        if (!task.starAwarded) {
+          logger.info('taskManager', `非必做任务 ${task.title} 已完成，添加星星: ${task.points || 0}`);
+          
+          // 计算积分有效期并更新任务
+          let expiryConfig = null;
+          if (task.pointsExpiry) {
+            logger.info('taskManager', `计算任务${task.id}积分有效期，类型: ${task.pointsExpiry}`);
+            const completionDate = new Date();
+            expiryConfig = this.calculateExpiryDate(task.pointsExpiry, completionDate);
             
-            // 计算积分有效期并更新任务
-            let expiryConfig = null;
-            if (task.pointsExpiry) {
-              logger.info('taskManager', `计算任务${task.id}积分有效期，类型: ${task.pointsExpiry}`);
-              const completionDate = new Date();
-              expiryConfig = this.calculateExpiryDate(task.pointsExpiry, completionDate);
-              
-              // 更新任务的有效期信息
-              task.pointsExpiryDate = expiryConfig.expiryDateStr;
-              logger.info('taskManager', `更新任务${task.id}的积分有效期为: ${task.pointsExpiryDate}`);
-            }
-            
-            // 添加星星并传递过期配置和来源
-            pointsManager.addUserPoints(task.points || 0, expiryConfig, `task_${task.id}`);
-            
-            // 标记任务已获得星星
-            task.starAwarded = true;
-          } else {
-            logger.info('taskManager', `任务${task.title}已获得过星星，不重复添加`);
+            // 更新任务的有效期信息
+            task.pointsExpiryDate = expiryConfig.expiryDateStr;
+            logger.info('taskManager', `更新任务${task.id}的积分有效期为: ${task.pointsExpiryDate}`);
           }
+          
+          try {
+            // 使用新架构的星星服务处理任务完成奖励
+            const serviceManager = require('./serviceManager');
+            const starService = serviceManager.getService('starService');
+            
+            if (starService) {
+              // 获取有效期类型
+              let expiryType = task.pointsExpiry || 'permanent';
+              
+              // 处理任务完成奖励
+              starService.handleTaskCompletion(task, task.points || 0)
+                .then(result => {
+                  if (result.success) {
+                    logger.info('taskManager', `使用新架构处理任务完成奖励成功: ${task.points}颗星星`);
+                  } else {
+                    logger.error('taskManager', `使用新架构处理任务完成奖励失败: ${result.message}`);
+                  }
+                })
+                .catch(error => {
+                  logger.error('taskManager', `使用新架构处理任务完成奖励出错`, error);
+                });
+            } else {
+              // 新架构服务未就绪，使用旧方法添加星星
+              logger.warn('taskManager', '星星服务未就绪，使用旧方法添加星星');
+              pointsManager.addUserPoints(task.points || 0, expiryConfig, `task_${task.id}`);
+            }
+          } catch (error) {
+            logger.error('taskManager', `处理任务完成奖励时出错`, error);
+            // 出错后使用旧方法，确保用户可以获得星星
+            pointsManager.addUserPoints(task.points || 0, expiryConfig, `task_${task.id}`);
+          }
+          
+          // 标记任务已获得星星
+          task.starAwarded = true;
+        } else {
+          logger.info('taskManager', `任务${task.title}已获得过星星，不重复添加`);
         }
       } else if (status === 0 && oldStatus === 1) { // 取消完成
         if (!task.isRequired) {

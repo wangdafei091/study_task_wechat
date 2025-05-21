@@ -1,6 +1,8 @@
 // pages/rewards/rewards.js
-const app = getApp()
-const pointsManager = require('../../utils/pointsManager.js'); // 引入星星管理工具
+const app = getApp();
+// 新架构服务引入
+const serviceManager = require('../../utils/serviceManager');
+const formatUtils = require('../../utils/formatUtils');
 
 Page({
 
@@ -31,9 +33,9 @@ Page({
   /**
    * 生命周期函数--监听页面加载
    */
-  onLoad: function (options) {
+  onLoad: async function (options) {
     console.log('[rewards] 页面加载');
-    this.loadRewardsData();
+    await this.loadRewardsData();
     
     // 清除已跳转标记
     const app = getApp();
@@ -59,9 +61,9 @@ Page({
   /**
    * 生命周期函数--监听页面显示
    */
-  onShow: function () {
+  onShow: async function () {
     console.log('[rewards] 页面显示');
-    this.loadRewardsData();
+    await this.loadRewardsData();
     
     // 清除已跳转标记
     const app = getApp();
@@ -209,109 +211,119 @@ Page({
   /**
    * 加载奖励数据
    */
-  loadRewardsData: function () {
+  loadRewardsData: async function () {
     console.log('[rewards] 开始加载奖励数据');
     
-    // 使用pointsManager获取用户星星数
-    const userPoints = pointsManager.getUserPoints();
-    console.log(`[rewards] 获取到用户星星: ${userPoints}`);
-    
-    // 格式化积分，添加千位分隔符
-    const formattedPoints = pointsManager.formatPoints(userPoints, true);
-    
-    // 获取即将到期积分信息
-    const expiringPointsInfo = this.getExpiringPoints();
-    
-    // 从本地存储获取奖励数据
-    let storedRewards = wx.getStorageSync('rewards') || [];
-    
-    // 确保示例奖励启用状态统一
-    let needUpdate = false;
-    storedRewards = storedRewards.map(reward => {
-      if (this.isExampleReward(reward) && !reward.enabled) {
-        needUpdate = true;
-        console.log(`[rewards] 修正示例奖励状态: ${reward.name}`);
-        return { ...reward, enabled: true };
+    try {
+      wx.showLoading({ title: '加载中' });
+      
+      // 获取服务实例
+      const starService = serviceManager.getService('starService');
+      const rewardService = serviceManager.getService('rewardService');
+      
+      if (!starService || !rewardService) {
+        console.error('[rewards] 无法获取服务实例');
+        wx.hideLoading();
+        return;
       }
-      return reward;
-    });
-    
-    // 如果有更新，保存回存储
-    if (needUpdate) {
-      console.log('[rewards] 更新奖励数据，确保示例奖励启用');
-      wx.setStorageSync('rewards', storedRewards);
-    }
-    
-    // 过滤出启用的奖励并计算解锁状态
-    const rewards = storedRewards
-      .filter(r => r.enabled !== false)
-      .map(r => ({
+      
+      // 使用新架构获取用户星星数
+      const totalPoints = await starService.getTotalStars();
+      console.log(`[rewards] 获取到用户星星: ${totalPoints}`);
+      
+      // 格式化星星数量
+      const formattedPoints = formatUtils.formatPoints(totalPoints, true);
+      
+      // 获取即将到期积分信息
+      const expiringPointsInfo = await this.getExpiringPointsNew();
+      
+      // 获取所有奖励（包括已领取的）
+      const allRewards = await rewardService.getAvailableRewards(true);
+      console.log(`[rewards] 获取到可用奖励: ${allRewards.length}个`);
+      
+      // 额外过滤一次示例奖励，确保UI显示正确
+      const hasCustomRewards = allRewards.some(r => !r.isExample && r.enabled);
+      const displayRewards = hasCustomRewards 
+        ? allRewards.filter(r => !r.isExample) 
+        : allRewards;
+      console.log(`[rewards] 过滤示例奖励后，实际显示: ${displayRewards.length}个`);
+      
+      // 计算解锁状态
+      const rewards = displayRewards.map(r => ({
         ...r,
-        unlocked: userPoints >= r.points
+        unlocked: totalPoints >= r.points
       }));
-
-    // 计算已解锁奖励数量
-    const unlockedRewards = rewards.filter(reward => reward.unlocked).length;
-    
-    this.setData({
-      rewards: rewards,
-      currentProgress: userPoints,
-      totalPoints: userPoints,
-      formattedPoints: formattedPoints,
-      expiringPoints: expiringPointsInfo.points,
-      expiryDate: expiringPointsInfo.date,
-      rewardsEarned: unlockedRewards,
-      currentLevel: Math.floor(userPoints / 20) + 1 // 每20点升一级
-    });
-    
-    console.log(`[rewards] 设置总星星: ${userPoints}, 即将过期总星星: ${expiringPointsInfo.points}, 最早到期日期: ${expiringPointsInfo.date}`);
+      
+      // 区分可用和已领取的奖励
+      const availableRewards = rewards.filter(r => !r.claimed);
+      const claimedRewards = rewards.filter(r => r.claimed);
+      
+      console.log(`[rewards] 可用奖励: ${availableRewards.length}个, 已领取奖励: ${claimedRewards.length}个`);
+      
+      // 计算已解锁奖励数量
+      const unlockedRewards = rewards.filter(reward => reward.unlocked).length;
+      
+      // 计算下一个可达成的奖励
+      const nextReward = await rewardService.calculateNextAvailableReward();
+      console.log(`[rewards] 下一个可达成奖励: ${nextReward.name}, 需要${nextReward.points}颗星星`);
+      
+      this.setData({
+        rewards: rewards,
+        availableRewards: availableRewards,
+        claimedRewards: claimedRewards,
+        showClaimedRewards: true, // 显示已领取的奖励
+        currentProgress: totalPoints,
+        totalPoints: totalPoints,
+        formattedPoints: formattedPoints,
+        expiringPoints: expiringPointsInfo.points,
+        expiryDate: expiringPointsInfo.date,
+        rewardsEarned: unlockedRewards,
+        currentLevel: Math.floor(totalPoints / 20) + 1, // 每20点升一级
+        nextReward: nextReward
+      });
+      
+      console.log(`[rewards] 设置总星星: ${totalPoints}, 即将过期总星星: ${expiringPointsInfo.points}, 最早到期日期: ${expiringPointsInfo.date}`);
+      
+      wx.hideLoading();
+    } catch (error) {
+      console.error('[rewards] 加载奖励数据失败', error);
+      wx.hideLoading();
+      wx.showToast({
+        title: '加载失败，请重试',
+        icon: 'none'
+      });
+    }
   },
 
   /**
-   * 获取即将到期积分信息
+   * 获取即将过期的星星信息
+   * @returns {Promise<Object>} 包含过期星星数和最早过期日期的对象
    */
-  getExpiringPoints: function() {
-    console.log(`[rewards] 开始检查即将到期星星`);
+  getExpiringPointsNew: async function() {
+    console.log('[rewards] 获取即将过期的星星信息');
     
-    // 获取任务数据
-    const tasks = wx.getStorageSync('taskData') || [];
-    const now = new Date().getTime();
-    let expiringPoints = 0;
-    let expiryDate = '';
-    
-    // 筛选已完成且积分有有效期的任务
-    const completedTasks = tasks.filter(task => 
-      task.status === 1 && 
-      task.pointsExpiry !== 'permanent' && // 排除永久有效的积分
-      typeof task.pointsExpiry === 'number' && 
-      task.pointsExpiry > now
-    );
-    
-    console.log(`[rewards] 找到 ${completedTasks.length} 个有时效性的完成任务`);
-    
-    if (completedTasks.length > 0) {
-      // 按过期时间排序
-      completedTasks.sort((a, b) => a.pointsExpiry - b.pointsExpiry);
+    try {
+      // 获取服务实例
+      const starService = serviceManager.getService('starService');
       
-      // 获取最早过期日期
-      const earliestExpiryTask = completedTasks[0];
-      const earliestExpiryTime = earliestExpiryTask.pointsExpiry;
-      expiryDate = earliestExpiryTask.pointsExpiryDate || '';
+      if (!starService) {
+        console.error('[rewards] 无法获取星星服务实例');
+        return { points: 0, date: '' };
+      }
       
-      // 只计算最早日期对应的积分总和
-      expiringPoints = completedTasks
-        .filter(task => task.pointsExpiry === earliestExpiryTime)
-        .reduce((sum, task) => sum + (task.points || 0), 0);
+      // 获取即将过期的星星信息
+      const expiringInfo = await starService.getExpiringStarsInfo();
       
-      console.log(`[rewards] 找到${completedTasks.length}个即将到期任务，最早到期日期: ${expiryDate}，该日期星星: ${expiringPoints}`);
-    } else {
-      console.log(`[rewards] 没有找到即将到期的星星`);
+      console.log(`[rewards] 即将过期星星: ${expiringInfo.points}颗, 最早到期日期: ${expiringInfo.expiryDateText}`);
+      
+      return {
+        points: expiringInfo.points,
+        date: expiringInfo.expiryDateText
+      };
+    } catch (error) {
+      console.error('[rewards] 获取即将过期的星星信息失败', error);
+      return { points: 0, date: '' };
     }
-    
-    return {
-      points: expiringPoints,
-      date: expiryDate
-    };
   },
 
   /**
@@ -415,72 +427,84 @@ Page({
   /**
    * 执行领取奖励操作
    */
-  _performClaimReward: function(reward) {
-    // 扣除相应的星星数
-    console.log(`[rewards] 领取奖励前星星数: ${this.data.totalPoints}`);
-    
-    // 保存原始星星数和目标星星数
-    const originalPoints = this.data.totalPoints;
-    const targetPoints = originalPoints - reward.points;
-    
-    // 实际扣除星星数（先在后台扣除）
-    pointsManager.reduceUserPoints(reward.points);
-    console.log(`[rewards] 领取奖励后星星数: ${targetPoints}, 扣除: ${reward.points}`);
-    
-    // 开始星星数量减少的动画
-    this.animateStarsCount(originalPoints, targetPoints, () => {
-      // 动画完成后，更新奖励状态
-      const rewards = this.data.rewards.map(r => {
-        if (r.id === reward.id) {
-          return { ...r, claimed: true };
-        }
-        return r;
-      });
-
-      // 使用更新后的奖励数据计算下一个可用奖励
-      const nextReward = pointsManager.calculateNextReward(rewards);
-      console.log(`[rewards] 领取奖励后计算下一个可用奖励: ${nextReward.name}, 需要${nextReward.points}颗星星`);
+  _performClaimReward: async function(reward) {
+    try {
+      wx.showLoading({ title: '兑换中' });
       
-      // 关闭弹窗并更新数据
-      this.setData({
-        rewards: rewards,
-        showModal: false
-      });
-
-      // 获取所有奖励，包括已禁用的
-      const allRewards = wx.getStorageSync('rewards') || [];
+      // 获取服务实例
+      const rewardService = serviceManager.getService('rewardService');
+      const starService = serviceManager.getService('starService');
       
-      // 更新所有奖励中的对应奖励状态
-      const updatedAllRewards = allRewards.map(r => {
-        if (r.id === reward.id) {
-          console.log(`[rewards] 设置奖励[${reward.name}]的状态为已领取，claimStatus=delivered`);
-          return { ...r, claimed: true, claimTime: Date.now(), claimStatus: 'delivered' };
-        }
-        return r;
-      });
+      if (!rewardService || !starService) {
+        console.error('[rewards] 无法获取服务实例');
+        wx.hideLoading();
+        return;
+      }
       
-      // 保存到本地存储
-      wx.setStorageSync('rewards', updatedAllRewards);
+      // 保存原始星星数和目标星星数
+      const originalPoints = this.data.totalPoints;
+      const targetPoints = originalPoints - reward.points;
       
-      // 通知首页更新星星和奖励进度
-      const app = getApp();
-      if (app && app.globalData && app.globalData.eventBus) {
-        console.log('[rewards] 发送奖励领取事件通知');
-        app.globalData.eventBus.emit('rewardClaimed', {
-          rewardId: reward.id,
-          points: reward.points,
-          newTotalPoints: targetPoints,
+      console.log(`[rewards] 领取奖励前星星数: ${originalPoints}`);
+      
+      // 使用新架构兑换奖励
+      const result = await rewardService.exchangeReward(reward.id);
+      
+      if (!result.success) {
+        console.error(`[rewards] 兑换奖励失败: ${result.message}`);
+        wx.hideLoading();
+        wx.showToast({
+          title: result.message || '兑换失败',
+          icon: 'none'
+        });
+        return;
+      }
+      
+      console.log(`[rewards] 兑换奖励成功: ${reward.name}, ID=${reward.id}, 消耗星星: ${reward.points}`);
+      
+      // 开始星星数量减少的动画
+      wx.hideLoading();
+      this.animateStarsCount(originalPoints, targetPoints, async () => {
+        // 动画完成后，计算下一个可用奖励
+        const nextReward = await rewardService.calculateNextAvailableReward();
+        console.log(`[rewards] 领取奖励后计算下一个可用奖励: ${nextReward.name}, 需要${nextReward.points}颗星星`);
+        
+        // 关闭弹窗并更新数据
+        this.setData({
+          showModal: false,
           nextReward: nextReward
         });
-      }
+        
+        // 重新加载奖励数据以更新UI
+        await this.loadRewardsData();
+        
+        // 通知首页更新星星和奖励进度
+        const app = getApp();
+        if (app && app.globalData && app.globalData.eventBus) {
+          console.log('[rewards] 发送奖励领取事件通知');
+          app.globalData.eventBus.emit('rewardClaimed', {
+            rewardId: reward.id,
+            points: reward.points,
+            newTotalPoints: targetPoints,
+            nextReward: nextReward
+          });
+        }
 
-      // 显示领取成功提示
-      wx.showToast({
-        title: '领取成功',
-        icon: 'success',
-        duration: 2000
+        // 显示领取成功提示
+        wx.showToast({
+          title: '兑换成功',
+          icon: 'success',
+          duration: 2000
+        });
       });
-    });
+    } catch (error) {
+      console.error('[rewards] 兑换奖励出错', error);
+      wx.hideLoading();
+      wx.showToast({
+        title: '操作失败，请重试',
+        icon: 'none'
+      });
+    }
   },
   
   /**
@@ -514,7 +538,7 @@ Page({
         // 格式化并显示
         this.setData({
           totalPoints: Math.round(currentCount),
-          formattedPoints: pointsManager.formatPoints(Math.round(currentCount), true),
+          formattedPoints: formatUtils.formatPoints(Math.round(currentCount), true),
           currentProgress: Math.round(currentCount)
         });
         
@@ -524,7 +548,7 @@ Page({
         // 动画完成，确保最终数值准确
         this.setData({
           totalPoints: end,
-          formattedPoints: pointsManager.formatPoints(end, true),
+          formattedPoints: formatUtils.formatPoints(end, true),
           currentProgress: end
         });
         
@@ -574,5 +598,89 @@ Page({
       
       console.log(`[rewards] 星星区域点击 ${count}/5`);
     }
-  }
+  },
+
+  /**
+   * 兑换奖励
+   * @param {Object} reward 要兑换的奖励
+   */
+  exchangeReward: async function(reward) {
+    if (!reward) {
+      console.error('[rewards] 尝试兑换无效奖励');
+      return;
+    }
+    
+    console.log(`[rewards] 尝试兑换奖励: ${reward.name}, 需要${reward.points}颗星星`);
+    
+    // 获取服务实例
+    const starService = serviceManager.getService('starService');
+    const rewardService = serviceManager.getService('rewardService');
+    
+    if (!starService || !rewardService) {
+      console.error('[rewards] 无法获取服务实例');
+      wx.showToast({
+        title: '系统错误，请重试',
+        icon: 'none'
+      });
+      return;
+    }
+    
+    try {
+      wx.showLoading({ title: '处理中' });
+      
+      // 尝试兑换奖励
+      const result = await rewardService.exchangeReward(reward.id);
+      
+      wx.hideLoading();
+      
+      if (!result.success) {
+        console.error('[rewards] 兑换奖励失败:', result.message);
+        wx.showToast({
+          title: result.message || '兑换失败',
+          icon: 'none'
+        });
+        return;
+      }
+      
+      // 兑换成功，显示动画和提示
+      console.log(`[rewards] 成功兑换奖励: ${reward.name}`);
+      
+      wx.showToast({
+        title: '兑换成功',
+        icon: 'success'
+      });
+      
+      // 更新页面数据
+      this.loadRewardsData();
+      
+      // 触发奖励兑换成功事件
+      const eventChannel = this.getOpenerEventChannel();
+      if (eventChannel && eventChannel.emit) {
+        eventChannel.emit('rewardExchanged', { reward: result.reward });
+      }
+      
+      // 添加到成就系统
+      this.addToAchievements(reward);
+    } catch (error) {
+      wx.hideLoading();
+      console.error('[rewards] 兑换奖励过程中发生错误:', error);
+      wx.showToast({
+        title: '兑换失败，请重试',
+        icon: 'none'
+      });
+    }
+  },
+
+  /**
+   * 添加奖励兑换成就
+   * @param {Object} reward 兑换的奖励
+   */
+  addToAchievements: function(reward) {
+    if (!reward) return;
+    
+    // 这里可以添加奖励成就相关逻辑
+    console.log(`[rewards] 记录奖励兑换成就: ${reward.name}`);
+    
+    // TODO: 实现成就系统后集成
+  },
 })
