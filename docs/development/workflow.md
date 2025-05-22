@@ -51,21 +51,29 @@
 
 ## 日志规范
 
-为便于追踪和调试，在关键位置添加日志。日志使用 `console` 方法，遵循以下格式：
+为便于追踪和调试，在关键位置添加日志。使用 `logger` 工具统一格式，遵循以下格式：
 
 ```javascript
-console.log(`[组件/模块名] 动作: ${变量}`);
+const logger = require('../../utils/logger');
 
-// 示例
-console.log(`[taskManager] 创建任务: ${JSON.stringify(task)}`);
-console.log(`[progressRing] 更新进度: ${percent}%`);
+// 记录普通信息
+logger.info('componentName', '操作描述', 变量);
+
+// 记录警告信息
+logger.warn('componentName', '警告描述', 变量);
+
+// 记录错误信息 
+logger.error('componentName', '错误描述', 错误对象);
+
+// 记录调试信息（仅在调试模式下显示）
+logger.debug('componentName', '调试信息', 变量);
 ```
 
-针对关键事件和错误，使用以下日志级别：
-- `console.log` - 普通信息
-- `console.info` - 流程节点信息
-- `console.warn` - 警告信息
-- `console.error` - 错误信息
+针对不同级别的日志，适用场景如下：
+- `logger.info` - 普通信息和重要流程节点
+- `logger.warn` - 警告信息，如任务即将到期
+- `logger.error` - 错误信息，包括异常捕获
+- `logger.debug` - 调试信息，仅在开发环境显示
 
 ### 日志记录要点
 
@@ -74,17 +82,21 @@ console.log(`[progressRing] 更新进度: ${percent}%`);
    - 重要数据的读取和存储操作
    - 页面重要生命周期事件
    - 用户关键操作
+   - 异步操作的开始和结束
+   - 所有积分计算和有效期处理过程
 
 2. **日志内容要求**：
    - 保持简洁明了，包含必要信息
-   - 对象日志使用 JSON.stringify 转换
+   - 对象日志使用适当格式，记录关键字段
    - 记录操作类型、对象ID和关键参数
    - 错误日志需包含错误详情和上下文
+   - 批量处理操作记录当前进度
 
 3. **避免过度日志**：
    - 不记录频繁重复的常规操作
    - 不记录大量无关紧要的信息
    - 循环中谨慎使用日志
+   - 过大对象使用精简版记录关键属性
 
 ## UI一致性规范
 
@@ -136,26 +148,23 @@ console.log(`[progressRing] 更新进度: ${percent}%`);
 3. **批处理实现方式**
    ```javascript
    // 批量处理示例
-   function batchProcess(items, processFn, batchSize = 50) {
-     console.info(`[batchProcess] 开始批处理: ${items.length}项`);
-     let index = 0;
-     
-     function processNextBatch() {
-       const batch = items.slice(index, index + batchSize);
-       if (batch.length === 0) {
-         console.info(`[batchProcess] 批处理完成`);
-         return;
-       }
-       
-       console.log(`[batchProcess] 处理批次: ${index/batchSize + 1}, 项数: ${batch.length}`);
-       batch.forEach(processFn);
-       
-       index += batchSize;
-       setTimeout(processNextBatch, 0);
+   const batchUtils = require('../../utils/batchUtils');
+   
+   batchUtils.batchProcess(
+     items,
+     (item) => {
+       // 处理单个项的逻辑
+       logger.info('BatchProcess', '处理项', { id: item.id });
+     },
+     { 
+       batchSize: 50,
+       delay: 10,
+       showProgress: true
+     },
+     () => {
+       logger.info('BatchProcess', '批处理完成', { total: items.length });
      }
-     
-     processNextBatch();
-   }
+   );
    ```
 
 ## 异步编程最佳实践
@@ -174,6 +183,25 @@ console.log(`[progressRing] 更新进度: ${percent}%`);
    - 使用setTimeout拆分耗时操作
    - 大型列表使用分页或虚拟列表
    - 避免同步执行耗时计算
+
+## 文档更新流程
+
+**重要事项**：代码修改不会自动更新文档，需要开发者手动维护。
+
+在以下情况下，必须更新相关文档：
+
+1. **修改代码功能时**：
+   - 检查并更新受影响功能的文档
+   - 如果修改了API，更新对应的API文档
+   - 如果添加了新功能，创建对应的文档
+
+2. **添加新组件或工具函数时**：
+   - 在对应指南中添加新组件或函数的说明
+   - 包含使用示例和参数说明
+
+3. **修复问题时**：
+   - 如果问题与文档描述不符，更新文档
+   - 考虑在故障排除指南中添加相关问题的解决方案
 
 ## 常见问题与解决方案
 

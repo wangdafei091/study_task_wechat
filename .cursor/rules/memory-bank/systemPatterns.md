@@ -1,296 +1,231 @@
-# 系统模式
+# 系统架构与设计模式
 
-## 架构模式
-1. 组件化架构
-   - 基于微信小程序组件系统
-   - 组件间通信采用事件机制
-   - 状态管理使用本地存储
-   - 数据流采用单向数据流
-   - 组件复用最大化
-   - 组件解耦设计
-   - 组件测试覆盖
-   - 组件文档完善
+## 领域驱动设计(DDD)架构
 
-2. 数据管理
-   - 本地存储为主
-   - 数据同步机制
-   - 状态管理优化
-   - 数据验证规则
-   - 数据备份机制
-   - 数据恢复流程
-   - 数据统计系统
-   - 性能监控机制
+项目采用领域驱动设计架构，将系统分为以下几层：
 
-3. 性能优化
-   - 页面加载优化
-   - 数据存储优化
-   - 动画性能优化
-   - 内存占用优化
-   - 渲染性能优化
-   - 事件处理优化
-   - 错误处理优化
-   - 日志记录优化
+1. **领域层（Domain Layer）**
+   - 包含核心业务实体和逻辑
+   - 定义任务、星星和奖励等领域对象
+   - 实现业务规则和约束
 
-## 设计模式
-1. 观察者模式
-   - 用于组件间通信
-   - 用于数据同步
-   - 用于状态更新
-   - 用于事件处理
-   - 用于消息通知
-   - 用于进度更新
-   - 用于任务状态
-   - 用于用户反馈
+2. **应用层（Application Layer）**
+   - 协调领域对象完成用户操作
+   - 管理事务和工作流程
+   - 不包含业务规则，仅负责流程协调
 
-2. 工厂模式
-   - 用于创建任务对象
-   - 用于创建消息对象
-   - 用于创建动画对象
-   - 用于创建组件实例
-   - 用于创建工具类
-   - 用于创建管理器
-   - 用于创建服务类
-   - 用于创建数据对象
+3. **接口层（Interface Layer）**
+   - 用户界面和外部通信
+   - 页面和组件的实现
+   - 用户交互与反馈
 
-3. 策略模式
-   - 用于任务类型处理
-   - 用于进度计算
-   - 用于数据统计
-   - 用于动画效果
-   - 用于主题切换
-   - 用于单位转换
-   - 用于错误处理
-   - 用于日志记录
+4. **基础设施层（Infrastructure Layer）**
+   - 技术支持和实现细节
+   - 存储访问和第三方服务集成
+   - 工具函数和辅助类
 
-## 最佳实践
-1. 代码规范
-   - 遵循微信小程序规范
-   - 使用 ESLint 检查
-   - 保持代码风格一致
-   - 添加必要注释
-   - 编写单元测试
-   - 保持代码简洁
-   - 避免代码重复
-   - 优化代码结构
+## 核心设计模式
 
-2. 性能优化
-   - 减少不必要的渲染
-   - 优化数据存储
-   - 合理使用缓存
-   - 控制内存占用
-   - 优化动画效果
-   - 减少网络请求
-   - 优化事件处理
-   - 完善错误处理
+### 1. 仓储模式（Repository Pattern）
 
-3. 用户体验
-   - 保持界面简洁
-   - 提供清晰反馈
-   - 优化交互流程
-   - 保持一致性
-   - 提供个性化
-   - 优化响应速度
-   - 增强稳定性
-   - 提升可访问性
+用于领域对象的持久化和检索：
 
-## 开发流程
-1. 需求分析
-   - 明确功能需求
-   - 确定技术方案
-   - 评估开发周期
-   - 制定测试计划
-   - 确定发布策略
-   - 评估风险因素
-   - 制定优化计划
-   - 确定维护方案
+```javascript
+// 任务仓储示例
+const taskRepository = {
+  save(task) {
+    // 持久化任务
+  },
+  
+  findById(taskId) {
+    // 检索特定任务
+  },
+  
+  findAll() {
+    // 检索所有任务
+  }
+};
+```
 
-2. 开发实现
-   - 遵循开发规范
-   - 编写单元测试
-   - 进行代码审查
-   - 优化性能表现
-   - 完善错误处理
-   - 添加必要日志
-   - 优化用户体验
-   - 确保代码质量
+### 2. 服务层模式（Service Layer Pattern）
 
-3. 测试发布
-   - 进行功能测试
-   - 进行性能测试
-   - 进行兼容性测试
-   - 进行用户体验测试
-   - 修复发现的问题
-   - 优化性能表现
-   - 完善错误处理
-   - 准备发布文档
+处理跨实体的复杂业务逻辑：
 
-## 维护策略
-1. 日常维护
-   - 监控系统性能
-   - 处理用户反馈
-   - 修复发现的问题
-   - 优化性能表现
-   - 更新依赖版本
-   - 完善错误处理
-   - 优化用户体验
-   - 更新文档说明
+```javascript
+// 任务服务示例
+const taskService = {
+  completeTask(taskId) {
+    // 完成任务的复杂逻辑
+    const task = taskRepository.findById(taskId);
+    task.markAsCompleted();
+    pointsService.awardPoints(task.points);
+    taskRepository.save(task);
+    notificationService.notifyTaskCompleted(task);
+  }
+};
+```
 
-2. 版本迭代
-   - 制定迭代计划
-   - 实现新功能
-   - 优化现有功能
-   - 修复已知问题
-   - 更新依赖版本
-   - 完善测试用例
-   - 优化性能表现
-   - 更新文档说明
+### 3. 状态模式（State Pattern）
 
-3. 问题处理
-   - 及时响应问题
-   - 分析问题原因
-   - 制定解决方案
-   - 实施修复方案
-   - 验证修复效果
-   - 更新相关文档
-   - 优化相关代码
-   - 总结经验教训
+管理任务的不同状态及其行为：
 
-## 系统架构
-1. 整体架构
-   - 采用组件化设计
-   - 使用微信小程序原生开发
-   - 基于本地存储的数据管理
-   - 事件驱动的状态管理
-   - 响应式布局设计
-   - 性能优化方案
-   - 错误处理机制
-   - 日志记录系统
+```javascript
+// 任务状态管理
+const taskStateMachine = {
+  changeState(task, newStatus) {
+    const currentStatus = task.status;
+    
+    // 状态转换验证和业务规则
+    if (canTransition(currentStatus, newStatus)) {
+      // 执行状态特定的行为
+      executeStateTransition(task, currentStatus, newStatus);
+      task.status = newStatus;
+    }
+  }
+};
+```
 
-2. 数据流
-   - 单向数据流
-   - 组件间通信
-   - 全局状态管理
-   - 本地数据持久化
-   - 数据同步机制
-   - 数据缓存策略
-   - 数据备份恢复
-   - 数据验证机制
+### 4. 观察者模式（Observer Pattern）
 
-## 组件关系
-1. 核心组件
-   - 任务项组件 (taskItem)
-   - 模板选择器组件 (template-selector)
-   - 进度环组件 (progressRing)
-   - 进度条组件 (progressBar)
-   - 浮动菜单组件 (float-menu)
-   - 任务热力图组件 (task-heatmap)
-   - 卡片容器组件 (card)
-   - 自定义输入模态框组件 (custom-input-modal)
-   - 即将开始任务组件 (upcomingTask)
+通过事件总线实现组件间通信：
 
-2. 组件依赖
-   - 任务项组件依赖进度环组件
-   - 进度条组件依赖任务管理
-   - 模板选择器组件依赖自定义输入模态框组件
-   - 模板选择器组件依赖任务管理
-   - 任务热力图组件依赖卡片组件
-   - 即将开始任务组件依赖任务管理
-   - 全局状态管理依赖所有组件
+```javascript
+// 事件总线实现
+const eventBus = {
+  listeners: {},
+  
+  on(event, callback) {
+    // 注册事件监听器
+  },
+  
+  emit(event, data) {
+    // 触发事件通知
+  }
+};
+```
 
-3. 组件通信
-   - 事件触发
-   - 属性传递
-   - 全局状态
-   - 本地存储
-   - 消息通知
-   - 数据同步
-   - 状态更新
-   - 错误处理
+### 5. 策略模式（Strategy Pattern）
 
-4. 组件模型
+用于实现可替换的算法，如不同类型任务的积分计算：
+
+```javascript
+// 积分计算策略
+const pointsCalculationStrategies = {
+  study: (task) => {
+    // 学习任务积分计算逻辑
+  },
+  
+  habit: (task) => {
+    // 习惯任务积分计算逻辑
+  },
+  
+  interest: (task) => {
+    // 兴趣任务积分计算逻辑
+  }
+};
+```
+
+## 数据流模式
+
+### 单向数据流
+
+组件和页面遵循单向数据流模式：
+
+1. 数据源（通常是Manager或Service）提供数据
+2. 页面通过回调获取数据并通过setData更新UI
+3. 用户操作触发事件，事件处理器调用相应服务
+4. 服务更新数据并通知数据变更
+5. 数据变更触发UI更新
+
+```
+数据源 --> 页面/组件 --> 用户操作 --> 事件处理 --> 服务/Manager --> 数据更新 --> 通知变更 --> 重新获取数据 --> 页面/组件更新
+```
+
+### 批量处理模式
+
+对于大量数据处理，采用批量分段模式避免UI阻塞：
+
+```javascript
+// 批量处理示例
+batchUtils.batchProcess(
+  items,          // 要处理的数据项
+  processFn,      // 单项处理函数
+  options,        // 批处理选项
+  callback        // 完成回调
+);
+```
+
+## 组件通信模式
+
+1. **属性传递（Props）**：父组件向子组件传递数据
+   
+2. **事件机制**：子组件通过触发事件向父组件通信
    ```javascript
-   // 模板选择器组件接口
-   {
-     // 输入属性
-     templates: Array,  // 模板数据列表
-     selectedId: String, // 已选模板ID
-     type: String,      // 任务类型(study/habit/interest)
-     showCustom: Boolean, // 是否显示自定义按钮
-     maxDisplay: Number,  // 最大显示数量
-     customText: String,  // 自定义按钮文本
-     title: String,       // 组件标题
-     
-     // 输出事件
-     events: {
-       select: {templateId, template}, // 选择模板事件
-       custom: {type}                  // 自定义模板事件
-     }
-   }
+   // 子组件触发事件
+   this.triggerEvent('statusChange', { taskId, newStatus });
+   
+   // 父组件监听事件
+   <task-item bind:statusChange="onTaskStatusChange"></task-item>
    ```
 
-## 数据模型
-1. 任务模型
+3. **全局事件总线**：跨组件通信
    ```javascript
-   {
-     id: string,
-     type: 'habit' | 'study' | 'interest',
-     title: string,
-     status: 0 | 1,
-     date: string,
-     duration: number,
-     startTime: string,
-     endTime: string,
-     priority: number,
-     category: string,
-     reminder: {
-       type: string,
-       time: string
+   // 发布事件
+   app.globalData.eventBus.emit('taskUpdated', { taskId });
+   
+   // 订阅事件
+   app.globalData.eventBus.on('taskUpdated', this.refreshTaskList);
+   ```
+
+4. **数据管理服务**：统一状态管理
+   ```javascript
+   // 获取数据
+   taskManager.getAllTasks(tasks => {
+     this.setData({ tasks });
+   });
+   
+   // 更新数据
+   taskManager.updateTaskStatus(taskId, newStatus, result => {
+     // 处理更新结果
+   });
+   ```
+
+## 存储模式
+
+使用分层存储模式，将存储访问与业务逻辑分离：
+
+1. **存储适配器**：封装微信存储API
+   ```javascript
+   // 存储适配器
+   storageUtils.setItem('key', data);
+   storageUtils.getItem('key');
+   ```
+
+2. **仓储实现**：使用适配器实现领域仓储
+   ```javascript
+   // 仓储实现
+   const taskRepository = {
+     findAll() {
+       return storageUtils.getItem('tasks', []);
      },
-     repeat: {
-       type: 'none' | 'daily' | 'weekly' | 'workdays' | 'custom',
-       startDate: string,
-       endDate: string,
-       days: string[]
+     save(task) {
+       const tasks = this.findAll();
+       const index = tasks.findIndex(t => t.id === task.id);
+       if (index >= 0) {
+         tasks[index] = task;
+       } else {
+         tasks.push(task);
+       }
+       storageUtils.setItem('tasks', tasks);
      }
-   }
+   };
    ```
 
-2. 进度模型
+3. **批量存储**：优化大量数据写入
    ```javascript
-   {
-     taskId: string,
-     progress: number,
-     completed: boolean,
-     lastUpdate: string,
-     history: [{
-       date: string,
-       progress: number,
-       status: string
-     }],
-     statistics: {
-       completionRate: number,
-       averageTime: number,
-       streakDays: number
-     }
-   }
-   ```
-
-3. 奖励模型
-   ```javascript
-   {
-     id: string,
-     name: string,
-     type: string,
-     condition: {
-       type: string,
-       value: number
-     },
-     status: 'locked' | 'unlocked' | 'claimed',
-     unlockTime: string,
-     claimTime: string,
-     history: [{
-       date: string,
-       action: string
-     }]
-   }
-   ```
+   // 批量存储操作
+   batchUtils.batchStorage([
+     { key: 'task_1', data: task1 },
+     { key: 'task_2', data: task2 }
+   ]);
+   ``` 

@@ -61,7 +61,7 @@
 const logger = require('../../utils/logger');
 
 // 记录普通信息
-logger.log('componentName', '操作描述', 变量);
+logger.info('componentName', '操作描述', 变量);
 
 // 记录流程节点信息
 logger.info('componentName', '重要流程点', 变量);
@@ -71,6 +71,9 @@ logger.warn('componentName', '警告描述', 变量);
 
 // 记录错误信息 
 logger.error('componentName', '错误描述', 错误对象);
+
+// 记录调试信息（仅在开发环境显示）
+logger.debug('componentName', '调试信息', 变量);
 ```
 
 ### 日志记录要点
