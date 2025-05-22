@@ -61,11 +61,33 @@ class MessageService {
    * @private
    */
   _handleTaskCreated(data) {
-    const { task, batchInfo } = data;
+    logger.info('MessageService', '处理任务创建事件', data);
+    
+    // 防御性检查，确保data对象和task存在
+    if (!data) {
+      logger.warn('MessageService', '处理任务创建事件失败：数据为空');
+      return;
+    }
+    
+    // 兼容不同的数据结构形式
+    let task;
+    if (data.task) {
+      task = data.task;
+    } else if (data.originalTask) {
+      task = data.originalTask;
+    } else if (Array.isArray(data.tasks) && data.tasks.length > 0) {
+      task = data.tasks[0];
+    }
+    
+    if (!task) {
+      logger.warn('MessageService', '处理任务创建事件失败：无法获取任务对象', data);
+      return;
+    }
     
     logger.info('MessageService', `处理任务创建事件: ${task.title}`);
     
     // 如果是批量创建，使用批量消息
+    const batchInfo = data.batchInfo || {};
     if (batchInfo && batchInfo.isBatchOperation) {
       this.messageManager.createTaskMessage(task, 'new', {
         isBatchOperation: true,
@@ -209,7 +231,7 @@ class MessageService {
     
     // 创建任务已取消必做标记消息
     this.messageManager.createSystemMessage(
-      `任务"${task.title}"已取消必做标记，现在是普通任务`,
+      `任务"${task.title}"已取消必做任务标记`,
       'system'
     );
   }
@@ -218,37 +240,201 @@ class MessageService {
    * 创建系统消息
    * @param {String} content 消息内容
    * @param {String} type 消息类型
-   * @returns {Promise<Object>} 创建结果
+   * @returns {Promise<Object>} 创建的消息
    */
   async createSystemMessage(content, type = 'system') {
-    logger.info('MessageService', `创建系统消息: ${content}, 类型: ${type}`);
-    
     try {
-      const message = this.messageManager.createSystemMessage(content, type);
-      return { success: true, message };
+      logger.info('MessageService', `创建系统消息: ${content.substring(0, 20)}...`);
+      
+      const result = await new Promise((resolve) => {
+        this.messageManager.createSystemMessage(content, type, resolve);
+      });
+      
+      // 触发消息变更事件
+      this._emitMessageChangedEvent();
+      
+      return result;
     } catch (error) {
       logger.error('MessageService', '创建系统消息失败', error);
-      return { success: false, message: '创建系统消息失败: ' + error.message };
+      return null;
     }
   }
   
   /**
-   * 创建任务消息
+   * 创建任务相关消息
    * @param {Object} task 任务对象
    * @param {String} type 消息类型
-   * @param {Object} options 选项
-   * @returns {Promise<Object>} 创建结果
+   * @param {Object} options 附加选项
+   * @returns {Promise<Object>} 创建的消息
    */
   async createTaskMessage(task, type, options = {}) {
-    logger.info('MessageService', `创建任务消息: ${task.title}, 类型: ${type}`);
-    
     try {
-      const message = this.messageManager.createTaskMessage(task, type, options);
-      return { success: true, message };
+      logger.info('MessageService', `创建任务消息: ${task.title}, 类型=${type}`);
+      
+      const result = await new Promise((resolve) => {
+        this.messageManager.createTaskMessage(task, type, options, resolve);
+      });
+      
+      // 触发消息变更事件
+      this._emitMessageChangedEvent();
+      
+      return result;
     } catch (error) {
-      logger.error('MessageService', '创建任务消息失败', error);
-      return { success: false, message: '创建任务消息失败: ' + error.message };
+      logger.error('MessageService', `创建任务消息失败, 类型=${type}`, error);
+      return null;
     }
+  }
+  
+  /**
+   * 获取所有消息
+   * @returns {Promise<Array>} 消息列表
+   */
+  async getAllMessages() {
+    try {
+      return new Promise((resolve) => {
+        this.messageManager.getAllMessages(resolve);
+      });
+    } catch (error) {
+      logger.error('MessageService', '获取所有消息失败', error);
+      return [];
+    }
+  }
+  
+  /**
+   * 获取未读消息数量
+   * @returns {Promise<Number>} 未读消息数量
+   */
+  async getUnreadCount() {
+    try {
+      return new Promise((resolve) => {
+        this.messageManager.getUnreadCount(resolve);
+      });
+    } catch (error) {
+      logger.error('MessageService', '获取未读消息数量失败', error);
+      return 0;
+    }
+  }
+  
+  /**
+   * 标记消息为已读
+   * @param {String} messageId 消息ID
+   * @returns {Promise<Boolean>} 操作结果
+   */
+  async markMessageAsRead(messageId) {
+    try {
+      return new Promise((resolve) => {
+        this.messageManager.markMessageAsRead(messageId, (success) => {
+          if (success) {
+            this._emitMessageChangedEvent();
+          }
+          resolve(success);
+        });
+      });
+    } catch (error) {
+      logger.error('MessageService', `标记消息已读失败, ID=${messageId}`, error);
+      return false;
+    }
+  }
+  
+  /**
+   * 标记所有消息为已读
+   * @returns {Promise<Boolean>} 操作结果
+   */
+  async markAllMessagesAsRead() {
+    try {
+      return new Promise((resolve) => {
+        this.messageManager.markAllMessagesAsRead((success) => {
+          if (success) {
+            this._emitMessageChangedEvent();
+          }
+          resolve(success);
+        });
+      });
+    } catch (error) {
+      logger.error('MessageService', '标记所有消息已读失败', error);
+      return false;
+    }
+  }
+  
+  /**
+   * 删除消息
+   * @param {String} messageId 消息ID
+   * @returns {Promise<Boolean>} 操作结果
+   */
+  async deleteMessage(messageId) {
+    try {
+      return new Promise((resolve) => {
+        this.messageManager.deleteMessage(messageId, (success) => {
+          if (success) {
+            this._emitMessageChangedEvent();
+          }
+          resolve(success);
+        });
+      });
+    } catch (error) {
+      logger.error('MessageService', `删除消息失败, ID=${messageId}`, error);
+      return false;
+    }
+  }
+  
+  /**
+   * 获取即将到期任务的通知
+   * @param {Array} upcomingTasks 即将到期的任务
+   * @returns {Promise<Object>} 通知信息
+   */
+  async getUpcomingTaskNotifications(upcomingTasks) {
+    try {
+      if (!upcomingTasks || upcomingTasks.length === 0) {
+        return null;
+      }
+      
+      // 获取最近的即将到期任务
+      const sortedTasks = [...upcomingTasks].sort((a, b) => {
+        const timeA = new Date(`${a.date} ${a.startTime || '00:00'}`).getTime();
+        const timeB = new Date(`${b.date} ${b.startTime || '00:00'}`).getTime();
+        return timeA - timeB;
+      });
+      
+      const nextTask = sortedTasks[0];
+      const timeRemaining = this._calculateRemainingTime(nextTask);
+      
+      return {
+        name: nextTask.title,
+        timeRemaining,
+        id: nextTask.id
+      };
+    } catch (error) {
+      logger.error('MessageService', '获取即将到期任务通知失败', error);
+      return null;
+    }
+  }
+  
+  /**
+   * 计算任务剩余时间（分钟）
+   * @param {Object} task 任务对象
+   * @returns {Number} 剩余分钟数
+   * @private
+   */
+  _calculateRemainingTime(task) {
+    try {
+      const now = new Date();
+      const taskTime = new Date(`${task.date} ${task.startTime || '00:00'}`);
+      const diffMs = taskTime.getTime() - now.getTime();
+      return Math.max(1, Math.round(diffMs / (1000 * 60)));
+    } catch (error) {
+      logger.error('MessageService', '计算任务剩余时间失败', error);
+      return 30; // 默认30分钟
+    }
+  }
+  
+  /**
+   * 触发消息变更事件
+   * @private
+   */
+  _emitMessageChangedEvent() {
+    this.getAllMessages().then(messages => {
+      this.eventBus.emit('message:changed', messages);
+    });
   }
 }
 

@@ -189,7 +189,14 @@ class TaskService {
       }
       
       // 触发任务创建事件
+      logger.info('TaskService', '触发任务创建事件，包含完整任务对象', {
+        taskId: savedTask.id,
+        title: savedTask.title,
+        tasksCount: createdTasks.length
+      });
+      
       this.eventBus.emit('task:created', { 
+        task: savedTask,  // 确保包含单个完整任务对象
         tasks: createdTasks,
         originalTask: savedTask 
       });
@@ -896,87 +903,68 @@ class TaskService {
 
   /**
    * 检查即将到期的任务
-   * 识别今日未完成且即将到期的任务，生成提醒
-   * @returns {Promise<Array>} 即将到期的任务数组
+   * @returns {Promise<Object>} 即将到期的任务信息
    */
   async checkUpcomingTasks() {
     try {
-      // 获取今日任务
+      logger.info('TaskService', '检查即将到期任务');
+      
+      // 获取今天的任务
       const todayTasks = await this.getTodayTasks();
-      const now = new Date();
-      const upcomingTasks = [];
+      logger.info('TaskService', `检查即将到期任务, 当前任务数:`, todayTasks.length);
       
-      logger.info('TaskService', '检查即将到期任务, 当前任务数:', todayTasks.length);
+      if (todayTasks.length === 0) {
+        return null;
+      }
       
-      // 筛选未完成的任务
+      // 当前时间
+      const now = Date.now();
+      let upcomingTask = null;
+      let minTimeRemaining = Number.MAX_VALUE;
+      
+      // 检查每个任务
       for (const task of todayTasks) {
-        if (task.status !== TaskStatus.COMPLETED && task.date) {
-          try {
-            // 确保任务有开始时间，没有则使用默认值
-            const startTime = task.startTime || '08:00';
+        // 跳过已完成的任务
+        if (task.status === TaskStatus.COMPLETED) {
+          continue;
+        }
+        
+        // 获取任务开始时间
+        const startTime = this._calculateReminderTime(task);
+        const startTimestamp = startTime ? startTime.getTime() : null;
+        
+        if (startTimestamp) {
+          // 计算剩余时间（小时）
+          // 修复：确保剩余时间不为负值
+          const timeRemaining = Math.max(0, (startTimestamp - now) / (60 * 60 * 1000));
+          
+          // 判断是否即将开始
+          if (timeRemaining <= 1.0) { // 1小时内的任务
+            logger.info('TaskService', `任务"${task.title}"将在 ${task.startTime || '未设置'} 开始, 剩余${timeRemaining.toFixed(1)}小时`);
             
-            // 创建任务日期时间对象
-            const taskTime = new Date(`${task.date}T${startTime}`);
-            
-            // 计算时间差（小时）
-            const diffHours = (taskTime - now) / (1000 * 60 * 60);
-            
-            logger.info('TaskService', `任务"${task.title}"将在 ${startTime} 开始, 剩余${diffHours.toFixed(1)}小时`);
-            
-            // 处理提醒时间
-            let shouldRemind = false;
-            if (task.reminder && task.reminder.enabled) {
-              const reminderTime = this._calculateReminderTime(task);
-              if (reminderTime) {
-                // 检查当前时间是否在提醒时间附近（正负10分钟内）
-                const timeDiff = Math.abs(reminderTime - now) / (1000 * 60);
-                shouldRemind = timeDiff <= 10;
-                
-                logger.info('TaskService', `任务"${task.title}"提醒时间差: ${timeDiff.toFixed(1)}分钟, 是否提醒: ${shouldRemind}`);
-              }
+            // 如果是最近的任务
+            if (timeRemaining < minTimeRemaining) {
+              minTimeRemaining = timeRemaining;
+              upcomingTask = task;
             }
-            
-            // 必做任务有更高的提醒优先级
-            if (task.isRequired) {
-              // 对必做任务，时间窗口扩大到36小时
-              shouldRemind = shouldRemind || (diffHours > 0 && diffHours < 36);
-              logger.info('TaskService', `必做任务"${task.title}"将在${diffHours.toFixed(1)}小时后到期`);
-            }
-            
-            // 只考虑未来24小时内的任务或需要提醒的任务
-            if ((diffHours > 0 && diffHours < 24) || shouldRemind) {
-              upcomingTasks.push({
-                ...task,
-                timeRemaining: Math.round(diffHours * 10) / 10, // 保留一位小数
-                formattedStartTime: startTime
-              });
-            }
-          } catch (error) {
-            logger.error('TaskService', `解析任务日期时间出错:`, error, task);
           }
         }
       }
       
-      // 按剩余时间排序
-      upcomingTasks.sort((a, b) => a.timeRemaining - b.timeRemaining);
-      
-      // 为即将到期的任务创建通知 (通过事件发送，等待MessageService集成)
-      if (upcomingTasks.length > 0) {
-        logger.info('TaskService', '发现即将到期任务:', upcomingTasks.length);
+      if (upcomingTask) {
+        const timeRemaining = minTimeRemaining;
         
-        // 触发事件，由消息服务处理
-        for (const task of upcomingTasks) {
-          this.eventBus.emit('task:upcoming', {
-            task,
-            messageType: task.isRequired ? 'required' : 'upcoming'
-          });
-        }
+        // 返回任务和剩余时间信息
+        return {
+          task: upcomingTask,
+          timeRemaining: timeRemaining
+        };
       }
       
-      return upcomingTasks;
+      return null;
     } catch (error) {
       logger.error('TaskService', '检查即将到期任务失败', error);
-      return [];
+      return null;
     }
   }
   
@@ -1193,6 +1181,141 @@ class TaskService {
     } catch (error) {
       logger.error('TaskService', '计算连续完成天数失败', error);
       return 0;
+    }
+  }
+
+  /**
+   * 检查必做任务
+   * 查找已过期未完成的必做任务并应用惩罚
+   * @returns {Promise<Object>} 包含处理结果的对象
+   */
+  async checkRequiredTasks() {
+    logger.info('TaskService', '开始检查必做任务');
+    
+    try {
+      // 获取所有任务
+      const allTasks = await this.getAllTasks();
+      const today = dateUtils.formatDate(new Date());
+      const penaltyTasks = [];
+      let updated = false;
+      
+      // 查找需要处理的任务
+      for (const task of allTasks) {
+        // 找出已过期、未完成、标记为必做且未应用惩罚的任务
+        if (task.isRequired === true && 
+            task.status === 0 && 
+            task.date < today && 
+            !task.penaltyApplied) {
+          
+          // 标记已应用惩罚
+          task.penaltyApplied = true;
+          task.status = TaskStatus.OVERDUE;
+          updated = true;
+          
+          // 记录需要扣除积分的任务
+          penaltyTasks.push({
+            taskId: task.id,
+            title: task.title,
+            points: task.points || 5  // 使用任务积分或默认值5
+          });
+          
+          logger.info('TaskService', `应用惩罚: ${task.id}, 任务: ${task.title}`);
+        }
+      }
+      
+      // 如果有任务更新，保存数据
+      if (updated) {
+        // 批量保存更新的任务
+        await this.taskRepository.saveAll(allTasks);
+        
+        // 处理积分扣除
+        if (penaltyTasks.length > 0) {
+          await this._applyPenalties(penaltyTasks);
+        }
+        
+        // 触发任务状态变更事件
+        this.eventBus.emit('task:status:updated', { tasks: allTasks });
+        
+        return { 
+          success: true, 
+          penaltyApplied: true, 
+          penaltyTasks: penaltyTasks,
+          taskCount: penaltyTasks.length
+        };
+      }
+      
+      return { 
+        success: true, 
+        penaltyApplied: false,
+        taskCount: 0
+      };
+    } catch (error) {
+      logger.error('TaskService', '检查必做任务失败', error);
+      return { 
+        success: false, 
+        error: error.message,
+        taskCount: 0
+      };
+    }
+  }
+  
+  /**
+   * 应用惩罚，扣除积分
+   * @param {Array} penaltyTasks 需要扣除积分的任务数组
+   * @private
+   */
+  async _applyPenalties(penaltyTasks) {
+    logger.info('TaskService', `开始应用惩罚，任务数量: ${penaltyTasks.length}`);
+    
+    try {
+      // 计算总扣除积分
+      const totalPenalty = penaltyTasks.reduce((sum, task) => sum + task.points, 0);
+      
+      // 获取星星服务实例
+      const { getService } = require('../utils/serviceManager');
+      const starService = getService('starService');
+      
+      if (!starService) {
+        logger.error('TaskService', '无法获取星星服务实例');
+        throw new Error('无法获取星星服务实例');
+      }
+      
+      // 使用星星服务扣除星星
+      const result = await starService.reduceStars(totalPenalty, 'penalty', {
+        reason: '未完成必做任务',
+        taskCount: penaltyTasks.length
+      });
+      
+      logger.info('TaskService', `星星扣除结果: ${result.success ? '成功' : '失败'}, 扣除数量: ${totalPenalty}`);
+      
+      // 获取消息服务
+      const messageService = getService('messageService');
+      
+      // 为每个任务创建惩罚消息
+      for (const task of penaltyTasks) {
+        if (messageService) {
+          await messageService.createPenaltyMessage(task.taskId, task.title, task.points);
+        } else {
+          // 如果没有消息服务，则使用旧的消息管理器
+          const messageManager = require('../utils/messageManager.js');
+          const penaltyMessage = {
+            id: 'msg_penalty_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+            type: 'penalty',
+            taskId: task.taskId,
+            title: '任务未完成',
+            summary: `必做任务"${task.title}"未完成，扣除${task.points}颗星星`,
+            timestamp: Date.now(),
+            isRead: false,
+            icon: '⚠️'
+          };
+          messageManager.addMessage(penaltyMessage);
+        }
+      }
+      
+      return { success: true, penaltyTasks };
+    } catch (error) {
+      logger.error('TaskService', '应用惩罚失败', error);
+      throw error;
     }
   }
 }

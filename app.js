@@ -1,44 +1,55 @@
 // app.js
 const unitUtils = require('./utils/unit.js');
-const taskManager = require('./utils/taskManager.js');
 const storageUtils = require('./utils/storageUtils.js'); // 引入存储工具
 const serviceManager = require('./utils/serviceManager.js'); // 引入服务管理器
+const logger = require('./utils/logger');
 
 App({
   onLaunch: async function () {
     // 初始化存储数据
-    console.log('[App] 初始化存储数据');
+    logger.info('App', '初始化存储数据');
     storageUtils.initializeStorageIfNeeded();
     
-    // 初始化事件总线
-    this.initEventBus();
-    
     // 初始化服务管理器
-    console.log('[App] 初始化服务管理器');
+    logger.info('App', '初始化服务管理器');
     try {
       // 等待服务管理器初始化完成，确保所有服务都已经准备好
       const initialized = await serviceManager.initialize();
       if (initialized) {
-        console.log('[App] 服务管理器初始化成功');
+        logger.info('App', '服务管理器初始化成功');
         
-        // 获取服务实例
-        const rewardService = serviceManager.getService('rewardService');
+        // 获取各服务实例
+        const rewardService = serviceManager.getRewardService();
+        const taskService = serviceManager.getTaskService();
+        const messageService = serviceManager.getMessageService();
         
         // 主动触发一次奖励数据初始化，确保在首页加载前已有示例奖励
         if (rewardService) {
-          const rewardsCount = await rewardService.getAllRewards();
-          console.log(`[App] 检查奖励数据: 现有${rewardsCount.length}个奖励`);
+          const rewards = await rewardService.getAllRewards();
+          logger.info('App', `检查奖励数据: 现有${rewards.length}个奖励`);
           
-          if (rewardsCount.length === 0) {
-            console.log('[App] 没有找到奖励数据，初始化示例奖励');
+          if (rewards.length === 0) {
+            logger.info('App', '没有找到奖励数据，初始化示例奖励');
             await rewardService.calculateNextAvailableReward();
           }
         }
+        
+        // 加载任务数据
+        if (taskService) {
+          // 检查任务状态和提醒
+          await taskService.checkTasksStatus();
+          
+          // 检查必做任务，处理过期未完成的必做任务
+          await taskService.checkRequiredTasks();
+          
+          // 检查即将到期的任务
+          await taskService.checkUpcomingTasks();
+        }
       } else {
-        console.error('[App] 服务管理器初始化失败');
+        logger.error('App', '服务管理器初始化失败');
       }
     } catch (error) {
-      console.error('[App] 服务管理器初始化失败:', error);
+      logger.error('App', '服务管理器初始化失败:', error);
     }
     
     // 检查基础库版本兼容性
@@ -52,14 +63,11 @@ App({
     logs.unshift(Date.now())
     wx.setStorageSync('logs', logs)
 
-    // 加载任务数据
-    this.loadTaskData()
-
     // 登录
     wx.login({
       success: res => {
         // 发送 res.code 到后台换取 openId, sessionKey, unionId
-        console.log('登录成功', res)
+        logger.info('App', '登录成功', res);
         
         // 添加安全检查以防止后续操作失败
         try {
@@ -70,9 +78,9 @@ App({
           
           // 避免后续操作可能出现的解构undefined对象的错误
           // 用于防止operateWXData的回调中可能出现的错误
-          console.log('[App] 用户登录处理完成，已添加防御性检查')
+          logger.info('App', '用户登录处理完成，已添加防御性检查');
         } catch (error) {
-          console.error('[App] 登录后处理用户信息出错:', error)
+          logger.error('App', '登录后处理用户信息出错:', error);
         }
       }
     })
@@ -85,30 +93,36 @@ App({
     
     // 监听字体大小变化
     this.setupFontSizeChangeListener()
-
-    // 加载所有任务
-    this.loadAllTasks();
-    
-    // 检查任务状态和提醒
-    this.checkTasksStatus();
-    
-    // 检查必做任务，处理过期未完成的必做任务
-    this.checkRequiredTasks();
-
-    // 运行数据修复
-    this.migrateRepeatTasks();
-    
-    // 检查并初始化数据
-    this.checkData();
     
     // 设置主题
     this.setTheme();
     
-    // 确保奖励数据一致性
-    this.ensureRewardsConsistency();
-    
     // 创建定时器进行定期检查
     this.startTaskChecking();
+  },
+  
+  // 创建定期检查任务的定时器
+  startTaskChecking: function() {
+    // 每5分钟检查一次任务状态
+    const INTERVAL = 5 * 60 * 1000; // 5分钟
+    
+    this.taskCheckTimer = setInterval(() => {
+      logger.info('App', '执行定期任务检查');
+      
+      // 通过服务管理器获取任务服务
+      const taskService = serviceManager.getTaskService();
+      if (taskService) {
+        // 执行任务检查
+        taskService.checkTasksStatus()
+          .then(() => logger.info('App', '定期任务状态检查完成'))
+          .catch(err => logger.error('App', '定期任务状态检查失败', err));
+        
+        // 检查即将到期的任务
+        taskService.checkUpcomingTasks()
+          .then(() => logger.info('App', '定期检查即将到期任务完成'))
+          .catch(err => logger.error('App', '定期检查即将到期任务失败', err));
+      }
+    }, INTERVAL);
   },
   
   // 初始化事件总线
@@ -199,591 +213,150 @@ App({
   },
   
   // 触发全局事件
-  globalEvent: function(eventName, data) {
-    const pages = getCurrentPages();
-    
-    if (pages.length > 0) {
-      pages.forEach(page => {
-        if (typeof page['on' + eventName.charAt(0).toUpperCase() + eventName.slice(1)] === 'function') {
-          page['on' + eventName.charAt(0).toUpperCase() + eventName.slice(1)](data);
+  globalEvent: function(eventName, eventData) {
+    if (this.globalData.eventCallbacks[eventName]) {
+      const callbacks = this.globalData.eventCallbacks[eventName];
+      callbacks.forEach(callback => {
+        try {
+          callback(eventData);
+        } catch (error) {
+          logger.error('App', `执行全局事件回调出错: ${eventName}`, error);
         }
       });
-    }
-    
-    // 如果有注册全局回调，也触发它
-    const callbackName = eventName + 'Callback';
-    if (this[callbackName] && typeof this[callbackName] === 'function') {
-      this[callbackName](data);
     }
   },
   
   // 更新高度相关参数
   updateHeightParams: function(isLandscape) {
-    const viewportInfo = unitUtils.getViewportInfo();
-    const deviceInfo = this.globalData.deviceInfo;
-    
-    // 计算内容区域可用高度
-    const contentHeight = unitUtils.getContentHeight({
-      hasTabBar: true, 
-      hasCustomNavBar: false
-    });
-    
-    // 更新高度参数
-    this.globalData.heightParams = {
-      windowHeight: viewportInfo.windowHeight,
-      contentHeight: contentHeight,
-      isFullScreenDevice: unitUtils.isFullScreenDevice(),
-      safeAreaInset: viewportInfo.safeAreaInset
-    };
-    
-    // 横屏模式下的特殊处理
-    if (isLandscape) {
-      // 横屏模式下，内容高度计算可能不同
-      this.globalData.heightParams.landscapeContentHeight = 
-        unitUtils.getContentHeight({
-          hasTabBar: true, 
-          hasCustomNavBar: false, 
-          extraHeight: 20 // 横屏模式下额外减去一些空间
-        });
+    try {
+      // 获取设备信息
+      const {
+        windowHeight,
+        windowWidth,
+        statusBarHeight,
+        screenHeight,
+        safeArea
+      } = this.globalData.deviceInfo;
+      
+      // 更新安全区域信息
+      if (safeArea) {
+        const { top, bottom, left, right } = safeArea;
+        this.globalData.safeArea = {
+          top,
+          bottom: screenHeight - bottom,
+          left,
+          right: windowWidth - right
+        };
+      }
+      
+      // 计算主内容区高度
+      let contentHeight = windowHeight;
+      
+      // 主内容区计算逻辑
+      if (isLandscape) {
+        // 横屏模式计算
+        contentHeight = windowHeight * 0.9; // 横屏时考虑底部安全边距
+      } else {
+        // 竖屏默认留出底部标签栏高度
+        contentHeight -= 50;
+      }
+      
+      // 保存计算结果
+      this.globalData.contentHeight = contentHeight;
+      this.globalData.statusBarHeight = statusBarHeight;
+      
+      logger.info('App', `更新高度参数: 内容区=${contentHeight}, 状态栏=${statusBarHeight}`);
+    } catch (error) {
+      logger.error('App', '更新高度参数失败', error);
     }
   },
 
-  // 初始化单位系统，处理单位统一问题
+  // 初始化单位系统
   initUnitSystem: function() {
-    // 扩展wx.createSelectorQuery功能，自动转换单位
-    const originalCreateSelectorQuery = wx.createSelectorQuery
+    // 获取设备信息
+    const info = wx.getSystemInfoSync();
+    this.globalData.deviceInfo = info;
     
-    wx.createSelectorQuery = function() {
-      const query = originalCreateSelectorQuery.call(this)
-      
-      // 保存原始方法
-      const originalSelect = query.select
-      const originalSelectAll = query.selectAll
-      
-      // 扩展select方法，对样式返回值进行单位处理
-      query.select = function(selector) {
-        const selectedQuery = originalSelect.call(this, selector)
-        
-        // 保存原始方法
-        const originalFields = selectedQuery.fields
-        
-        // 增强fields方法，在样式返回前进行单位转换
-        selectedQuery.fields = function(fields, callback) {
-          // 增强回调函数
-          const enhancedCallback = function(res) {
-            if (res && fields.computedStyle) {
-              // 处理样式单位
-              fields.computedStyle.forEach(style => {
-                if (style.includes('width') || style.includes('height') || 
-                    style.includes('size') || style.includes('margin') || 
-                    style.includes('padding')) {
-                  if (res[style] && typeof res[style] === 'string' && res[style].includes('px')) {
-                    // 转换px为rpx
-                    res[style] = unitUtils.unifyUnit(res[style])
-                  }
-                }
-              })
-            }
-            
-            // 调用原始回调
-            if (callback) callback(res)
-          }
-          
-          return originalFields.call(this, fields, enhancedCallback)
-        }
-        
-        return selectedQuery
-      }
-      
-      // 类似地增强selectAll方法
-      query.selectAll = function(selector) {
-        // 类似的增强处理...
-        return originalSelectAll.call(this, selector)
-      }
-      
-      return query
-    }
+    // 设置像素比例
+    this.globalData.rpxRatio = 750 / info.windowWidth;
     
-    // 增强setData方法，自动处理样式值中的px单位
-    const originalPage = Page;
-    
-    Page = function(config) {
-      // 保存原始setData方法
-      const originalSetData = config.setData;
-      
-      if (originalSetData) {
-        config.setData = function(data, callback) {
-          // 处理data中所有可能包含样式的字段
-          const processedData = {};
-          
-          for (const key in data) {
-            let value = data[key];
-            
-            // 处理样式字符串
-            if (typeof value === 'string' && 
-                (key.includes('style') || key.includes('Style') || value.includes('px'))) {
-              processedData[key] = unitUtils.unifyUnit(value);
-            } else {
-              processedData[key] = value;
-            }
-          }
-          
-          return originalSetData.call(this, processedData, callback);
-        };
-      }
-      
-      // 注入设备和尺寸信息到页面
-      const originalOnLoad = config.onLoad;
-      
-      if (originalOnLoad) {
-        config.onLoad = function(options) {
-          // 注入设备和尺寸信息
-          this.deviceInfo = getApp().globalData.deviceInfo;
-          this.heightParams = getApp().globalData.heightParams;
-          
-          // 调用原始onLoad
-          return originalOnLoad.call(this, options);
-        };
-      } else {
-        config.onLoad = function(options) {
-          // 注入设备和尺寸信息
-          this.deviceInfo = getApp().globalData.deviceInfo;
-          this.heightParams = getApp().globalData.heightParams;
-        };
-      }
-      
-      // 增加页面显示时更新尺寸参数
-      const originalOnShow = config.onShow;
-      
-      if (originalOnShow) {
-        config.onShow = function() {
-          // 更新尺寸信息
-          this.heightParams = getApp().globalData.heightParams;
-          
-          // 调用原始onShow
-          return originalOnShow.call(this);
-        };
-      } else {
-        config.onShow = function() {
-          // 更新尺寸信息
-          this.heightParams = getApp().globalData.heightParams;
-        };
-      }
-      
-      // 添加方向变化和主题变化处理方法
-      if (!config.onOrientationChange) {
-        config.onOrientationChange = function(res) {
-          // 更新设备信息和尺寸参数
-          this.deviceInfo = getApp().globalData.deviceInfo;
-          this.heightParams = getApp().globalData.heightParams;
-          
-          // 如果需要，刷新页面
-          if (this.data) {
-            this.setData({
-              isLandscape: res.value === 'landscape'
-            });
-          }
-        };
-      }
-      
-      if (!config.onThemeChange) {
-        config.onThemeChange = function(res) {
-          // 更新主题信息
-          if (this.data) {
-            this.setData({
-              theme: res.theme
-            });
-          }
-        };
-      }
-      
-      return originalPage(config);
-    };
-    
-    // 记录到全局数据中
-    this.globalData.unitUtils = unitUtils;
-
-    // 设置系统信息
-    this.getSystemInfo();
-  },
-
-  // 获取系统信息，用于屏幕适配
-  getSystemInfo: function() {
-    // 使用新的API获取各类信息
-    const windowInfo = wx.getWindowInfo();
-    const deviceInfo = wx.getDeviceInfo();
-    const appBaseInfo = wx.getAppBaseInfo();
-    
-    // 将获取的信息存储到全局数据（为保持与旧代码兼容，还是保存一个整合的systemInfo对象）
-    this.globalData.systemInfo = {
-      ...windowInfo,
-      ...deviceInfo,
-      ...appBaseInfo,
-      // 添加可能缺少的字段，确保兼容性
-      platform: appBaseInfo.platform,
-      brand: deviceInfo.brand,
-      model: deviceInfo.model,
-      system: deviceInfo.system
-    };
-    
-    // 获取设备类型信息
-    const deviceTypeInfo = unitUtils.getDeviceType();
-    const isLandscape = windowInfo.windowWidth > windowInfo.windowHeight;
-    
-    // 整合所有信息
-    this.globalData.deviceInfo = {
-      ...deviceTypeInfo,
-      pixelRatio: windowInfo.pixelRatio,
-      screenWidth: windowInfo.screenWidth,
-      screenHeight: windowInfo.screenHeight,
-      windowWidth: windowInfo.windowWidth,
-      windowHeight: windowInfo.windowHeight,
-      statusBarHeight: appBaseInfo.statusBarHeight || 20,
-      isLandscape: isLandscape,
-      platform: appBaseInfo.platform,
-      brand: deviceInfo.brand,
-      model: deviceInfo.model,
-      system: deviceInfo.system,
-      language: appBaseInfo.language,
-      version: appBaseInfo.version,
-      SDKVersion: appBaseInfo.SDKVersion,
-      theme: 'light' // 固定为亮色主题，移除对系统主题的依赖
-    };
-    
-    // 计算安全区域
-    if (windowInfo.safeArea) {
-      this.globalData.safeArea = windowInfo.safeArea;
-      this.globalData.safeAreaInset = {
-        top: windowInfo.safeArea.top,
-        bottom: windowInfo.screenHeight - windowInfo.safeArea.bottom,
-        left: windowInfo.safeArea.left,
-        right: windowInfo.screenWidth - windowInfo.safeArea.right
-      };
-    }
-    
-    // 日志记录
-    console.log(`[App] 获取系统信息成功, 屏幕尺寸: ${windowInfo.windowWidth}x${windowInfo.windowHeight}`);
-    
-    // 计算适配后的字体大小
-    this.globalData.baseFontSize = unitUtils.adaptFontSize(28); // 基础字体大小
-    
-    // 根据设备特性设置弹性布局参数
-    this.setFlexLayoutParams();
-    
-    // 初始化高度参数
-    this.updateHeightParams(isLandscape);
-  },
-  
-  // 设置弹性布局参数
-  setFlexLayoutParams: function() {
-    const deviceInfo = this.globalData.deviceInfo;
-    const flexParams = {};
-    
-    // 根据屏幕大小调整容器内边距
-    if (deviceInfo.isSmallScreen) {
-      flexParams.containerPadding = 20; // 小屏幕使用更小的边距
-    } else if (deviceInfo.isLargeScreen || deviceInfo.isExtraLargeScreen) {
-      flexParams.containerPadding = 40; // 大屏幕使用更大的边距
-    } else {
-      flexParams.containerPadding = 30; // 中等屏幕使用标准边距
-    }
-    
-    // 根据屏幕大小调整网格间距
-    if (deviceInfo.isSmallScreen) {
-      flexParams.gridGap = 16;
-    } else if (deviceInfo.isLargeScreen || deviceInfo.isExtraLargeScreen) {
-      flexParams.gridGap = 24;
-    } else {
-      flexParams.gridGap = 20;
-    }
-    
-    // 保存到全局数据
-    this.globalData.flexParams = flexParams;
+    // 计算主内容区域的高度
+    this.updateHeightParams(false);
   },
 
   // 检查基础库版本兼容性
   checkCompatibility: function() {
-    // 获取系统信息和微信基础库版本
-    const appBaseInfo = wx.getAppBaseInfo();
-    const currentVersion = appBaseInfo.SDKVersion;
-    const requiredVersion = '2.14.0';
-
-    console.log(`[App] 检查兼容性: 当前基础库版本 ${currentVersion}, 要求版本 ${requiredVersion}`);
-
-    // 比较版本号
-    if (this.compareVersion(currentVersion, requiredVersion) < 0) {
-      // 如果当前版本小于所需最低版本，提示用户升级
+    const { SDKVersion } = wx.getSystemInfoSync();
+    if (!SDKVersion) {
       wx.showModal({
-        title: '版本提示',
-        content: '当前微信版本过低，部分功能可能无法正常使用。请更新微信到最新版本后重试。',
+        title: '版本检测失败',
+        content: '请确保您的微信版本为最新版本',
+        showCancel: false
+      });
+      return;
+    }
+    
+    const minVersion = '2.8.0';
+    const versionCompare = this.compareVersion(SDKVersion, minVersion);
+    
+    if (versionCompare < 0) {
+      wx.showModal({
+        title: '版本过低',
+        content: `当前基础库版本${SDKVersion}，需要${minVersion}以上版本，请更新微信后重试`,
         showCancel: false
       });
     }
   },
-
-  // 版本号比较函数
+  
+  // 比较版本号
   compareVersion: function(v1, v2) {
-    const v1Parts = v1.split('.')
-    const v2Parts = v2.split('.')
-    const len = Math.max(v1Parts.length, v2Parts.length)
-
-    // 补全版本号
-    while (v1Parts.length < len) {
-      v1Parts.push('0')
-    }
-    while (v2Parts.length < len) {
-      v2Parts.push('0')
-    }
-
-    // 逐位比较版本号
-    for (let i = 0; i < len; i++) {
-      const num1 = parseInt(v1Parts[i])
-      const num2 = parseInt(v2Parts[i])
-
-      if (num1 > num2) {
-        return 1
-      } else if (num1 < num2) {
-        return -1
-      }
-    }
-
-    return 0
-  },
-
-  // 从本地存储加载数据
-  loadTaskData: function() {
-    // 使用任务管理器获取所有任务
-    taskManager.getAllTasks(allTasks => {
-      // 数据已在taskManager中处理并更新到app.globalData.tasks
-      console.log(`加载了 ${allTasks.length} 个任务`);
-      
-      // 通知事件总线
-      if (this.globalData.eventBus) {
-        this.globalData.eventBus.emit('taskDataChanged', allTasks);
-      }
-    });
+    const v1Parts = v1.split('.').map(Number);
+    const v2Parts = v2.split('.').map(Number);
     
-    // 奖励数据已由新架构的RewardService管理，不再需要从本地存储加载
+    for (let i = 0; i < Math.max(v1Parts.length, v2Parts.length); i++) {
+      const v1Part = v1Parts[i] || 0;
+      const v2Part = v2Parts[i] || 0;
+      
+      if (v1Part > v2Part) return 1;
+      if (v1Part < v2Part) return -1;
+    }
+    
+    return 0;
   },
 
-  // 默认任务数据
-  getDefaultTasks: function() {
-    return [
-      {
-        id: 1,
-        type: 'habit',
-        title: '独立刷牙',
-        description: '早晚各刷一次牙，每次2分钟',
-        status: 0, 
-        hasImage: false,
-        images: [],
-        date: '2025-03-28',
-        time: '08:00',
-        reminder: true
-      },
-      {
-        id: 2,
-        type: 'interest',
-        title: '整理书包',
-        description: '检查明天所需的课本和学习用品',
-        status: 0,
-        hasImage: false,
-        images: [],
-        date: '2025-03-28',
-        time: '20:00',
-        reminder: true
-      },
-      {
-        id: 3,
-        type: 'study',
-        title: '数学作业',
-        description: '完成数学习题第3页',
-        status: 1,
-        hasImage: true,
-        images: ['https://example.com/image1.jpg'],
-        date: '2025-03-28',
-        time: '16:00',
-        reminder: false,
-        reflection: '这次作业我学会了分数的加减法，感觉比以前更清楚了。'
-      }
-    ]
+  // 设置主题
+  setTheme: function() {
+    // 统一使用亮色主题
+    this.globalData.theme = 'light';
+    
+    // 设置主题色
+    this.globalData.themeColors = {
+      primary: '#4285F4',
+      secondary: '#4CAF50',
+      accent: '#FF9800',
+      background: '#FFFFFF',
+      surface: '#F5F5F5',
+      text: '#333333',
+      lightText: '#757575'
+    };
   },
 
+  // 全局数据
   globalData: {
     userInfo: null,
-    hasUserInfo: false,
-    canIUse: wx.canIUse('button.open-type.getUserInfo'),
     canIUseGetUserProfile: false,
-    canIUseOpenData: wx.canIUse('open-data.type.userAvatarUrl') && wx.canIUse('open-data.type.userNickName'),
+    rpxRatio: 1,
+    deviceInfo: {},
+    contentHeight: 0,
+    statusBarHeight: 0,
+    safeArea: { top: 0, bottom: 0, left: 0, right: 0 },
     isLandscape: false,
     systemTheme: 'light',
-    deviceInfo: {}, // 设备信息会在初始化时填充
-    heightParams: {}, // 与高度相关的参数
-    tasks: [], // 任务数据
-    hasRedirectedToReward: false, // 是否已经跳转到奖励页面，防止重复跳转
-    needRefreshReward: false, // 标记是否需要刷新奖励数据
-    rewardClaimedInfo: null // 存储已领取的奖励信息
-  },
-
-  // 检查必做任务，处理过期未完成的必做任务
-  checkRequiredTasks: function() {
-    console.log('[App] 开始检查必做任务');
-    
-    // 获取任务管理器
-    const taskManager = require('./utils/taskManager.js');
-    
-    // 调用任务管理器检查必做任务函数
-    taskManager.checkRequiredTasks(function(error, penaltyTasks) {
-      if (error) {
-        console.error('[App] 检查必做任务失败:', error);
-        return;
-      }
-      
-      if (penaltyTasks && penaltyTasks.length > 0) {
-        console.log(`[App] 已处理未完成必做任务: ${penaltyTasks.length}个`);
-        
-        // 必做任务扣分提醒
-        wx.showToast({
-          title: `未完成${penaltyTasks.length}个必做任务，已扣除积分`,
-          icon: 'none',
-          duration: 3000
-        });
-      } else {
-        console.log('[App] 没有需要处理的未完成必做任务');
-      }
-    });
-  },
-
-  // 加载所有任务
-  loadAllTasks: function() {
-    // 使用任务管理器获取所有任务
-    const taskManager = require('./utils/taskManager.js');
-    taskManager.getAllTasks(allTasks => {
-      // 数据已在taskManager中处理并更新到app.globalData.tasks
-      console.log(`[App] 加载了 ${allTasks.length} 个任务`);
-      
-      // 通知事件总线
-      if (this.globalData.eventBus) {
-        this.globalData.eventBus.emit('taskDataChanged', allTasks);
-      }
-    });
-  },
-
-  // 检查任务状态和提醒
-  checkTasksStatus: function() {
-    console.log('[App] 开始检查任务状态和提醒');
-    
-    const taskManager = require('./utils/taskManager.js');
-    
-    // 检查即将到期的任务
-    taskManager.checkUpcomingTasks(function(upcomingTasks) {
-      if (upcomingTasks && upcomingTasks.length > 0) {
-        console.log(`[App] 检测到 ${upcomingTasks.length} 个即将到期的任务`);
-      }
-    });
-  },
-
-  // 添加数据修复逻辑，找到缺少parentTaskId的循环任务并修复
-  migrateRepeatTasks: function() {
-    console.log('[App] 开始检查循环任务parentTaskId修复');
-    
-    const taskManager = require('./utils/taskManager.js');
-    taskManager.getAllTasks(allTasks => {
-      // 找出所有循环任务
-      const repeatTasks = allTasks.filter(task => 
-        task.repeat && task.repeat.type !== 'none'
-      );
-      
-      console.log(`[App] 发现${repeatTasks.length}个循环任务`);
-      
-      if (repeatTasks.length === 0) {
-        console.log('[App] 无需修复循环任务');
-        return;
-      }
-      
-      // 按标题和重复类型分组
-      const taskGroups = {};
-      repeatTasks.forEach(task => {
-        const key = `${task.title}_${task.repeat.type}`;
-        if (!taskGroups[key]) {
-          taskGroups[key] = [];
-        }
-        taskGroups[key].push(task);
-      });
-      
-      // 为每组分配正确的parentTaskId
-      let updatedCount = 0;
-      let updateNeeded = false;
-      
-      Object.keys(taskGroups).forEach(key => {
-        const group = taskGroups[key];
-        if (group.length > 1) {
-          // 只处理有多个任务实例的分组
-          // 按创建时间排序，找出最早的任务作为父任务
-          group.sort((a, b) => a.createTime - b.createTime);
-          const parentTask = group[0];
-          const parentId = parentTask.id;
-          
-          group.forEach(task => {
-            if (task.id !== parentId && !task.parentTaskId) {
-              task.parentTaskId = parentId;
-              updatedCount++;
-              updateNeeded = true;
-              console.log(`[App] 为任务 ${task.id} 设置父任务ID: ${parentId}`);
-            }
-          });
-        }
-      });
-      
-      // 如果有更新，保存数据
-      if (updateNeeded) {
-        console.log(`[App] 修复了 ${updatedCount} 个循环任务的parentTaskId`);
-        taskManager._saveTaskData(allTasks, () => {
-          console.log('[App] 循环任务parentTaskId修复完成');
-        });
-      } else {
-        console.log('[App] 所有循环任务parentTaskId已正确设置，无需修复');
-      }
-    });
-  },
-
-  // 检查并初始化数据 - 使用现有的loadTaskData方法
-  checkData: function() {
-    // 已有loadTaskData方法，直接调用它即可
-    this.loadTaskData();
-  },
-
-  // 设置主题 - 使用现有的setupThemeChangeListener方法
-  setTheme: function() {
-    // 已有setupThemeChangeListener方法，这里不需要重复实现
-    console.log('[App] 主题设置已在setupThemeChangeListener中完成');
-  },
-
-  // 创建定时器进行定期检查 - 使用现有的checkTasksStatus方法
-  startTaskChecking: function() {
-    // 已有checkTasksStatus方法，这里设置定期检查
-    console.log('[App] 开始设置定期任务检查');
-    
-    // 每小时检查一次任务状态
-    const CHECK_INTERVAL = 60 * 60 * 1000; // 1小时
-    
-    // 清除可能存在的旧定时器
-    if (this.taskCheckTimer) {
-      clearInterval(this.taskCheckTimer);
-    }
-    
-    // 设置新定时器
-    this.taskCheckTimer = setInterval(() => {
-      console.log('[App] 执行定期任务状态检查');
-      this.checkTasksStatus();
-    }, CHECK_INTERVAL);
-    
-    console.log('[App] 已设置定期任务检查，间隔:', CHECK_INTERVAL/1000/60, '分钟');
-  },
-  
-  // 确保奖励数据一致性
-  ensureRewardsConsistency: function() {
-    console.log('[App] 奖励系统已迁移到新架构，不再需要检查旧数据一致性');
-    // 已迁移到新架构，无需检查旧存储格式
+    theme: 'light',
+    themeColors: {},
+    eventCallbacks: {},
+    needRefreshReward: false,
+    rewardClaimedInfo: null,
+    hasRedirectedToReward: false
   }
 }) 

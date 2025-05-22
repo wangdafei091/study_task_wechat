@@ -110,14 +110,19 @@ class EventBus {
     
     const payload = data || {};
     let callbackCount = 0;
+    let errorCount = 0;
+    
+    // 深拷贝数据，避免处理器修改原始数据影响其他处理器
+    const safePayload = JSON.parse(JSON.stringify(payload));
     
     // 调用普通监听器
     if (this.listeners[event]) {
       this.listeners[event].forEach(callback => {
         try {
-          callback(payload);
+          callback(safePayload);
           callbackCount++;
         } catch (error) {
+          errorCount++;
           logger.error('EventBus', `事件处理器出错: ${event}`, error);
         }
       });
@@ -130,9 +135,10 @@ class EventBus {
       
       oneShots.forEach(callback => {
         try {
-          callback(payload);
+          callback(safePayload);
           callbackCount++;
         } catch (error) {
+          errorCount++;
           logger.error('EventBus', `一次性事件处理器出错: ${event}`, error);
         }
       });
@@ -141,7 +147,7 @@ class EventBus {
     // 保存事件历史
     this._saveEventHistory(event, payload);
     
-    logger.info('EventBus', `事件已发布: ${event}, 监听器数量=${callbackCount}`);
+    logger.info('EventBus', `事件已发布: ${event}, 监听器数量=${callbackCount}${errorCount > 0 ? `, 错误数=${errorCount}` : ''}`);
     return callbackCount;
   }
   

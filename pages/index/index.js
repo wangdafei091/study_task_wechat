@@ -1,7 +1,6 @@
 const app = getApp()
-const taskManager = require('../../utils/taskManager.js');
-const messageManager = require('../../utils/messageManager.js');
 const serviceManager = require('../../utils/serviceManager.js');
+const messageManager = require('../../utils/messageManager.js');
 const formatUtils = require('../../utils/formatUtils');
 const logger = require('../../utils/logger');
 
@@ -134,7 +133,7 @@ Page({
    * 生命周期函数--监听页面加载
    */
   onLoad: function (options) {
-    console.log('首页加载');
+    logger.info('Index', '首页加载');
     
     // 设置当前日期字符串
     const now = new Date();
@@ -175,19 +174,24 @@ Page({
    * 注册事件监听
    */
   registerEventListeners: function() {
-    if (app.globalData.eventBus) {
+    // 使用serviceManager获取EventBus
+    const eventBus = serviceManager.getEventBus();
+    if (eventBus) {
       // 监听任务数据变化
-      app.globalData.eventBus.on('taskDataChanged', this.handleTaskDataChanged.bind(this));
+      eventBus.on('task:changed', this.handleTaskDataChanged.bind(this));
+      
+      // 监听任务创建事件
+      eventBus.on('task:created', this.handleTaskCreated.bind(this));
       
       // 监听消息数据变化
-      app.globalData.eventBus.on('messageDataChanged', this.handleMessageDataChanged.bind(this));
+      eventBus.on('message:changed', this.handleMessageDataChanged.bind(this));
       
       // 监听奖励领取事件
-      app.globalData.eventBus.on('rewardClaimed', this.handleRewardClaimed.bind(this));
+      eventBus.on('reward:claimed', this.handleRewardClaimed.bind(this));
       
       // 监听奖励更新相关事件
-      app.globalData.eventBus.on('reward:updated', this.handleRewardUpdated.bind(this));
-      app.globalData.eventBus.on('reward:examples_cleared', this.handleRewardUpdated.bind(this));
+      eventBus.on('reward:updated', this.handleRewardUpdated.bind(this));
+      eventBus.on('reward:examples_cleared', this.handleRewardUpdated.bind(this));
     }
   },
   
@@ -220,7 +224,7 @@ Page({
   },
   
   /**
-   * 处理任务数据变化事件
+   * 处理任务数据变更事件
    * @param {Object} eventData 事件数据对象，包含tasks数组和变更类型等信息
    */
   handleTaskDataChanged: function(eventData) {
@@ -229,21 +233,28 @@ Page({
     const changeType = eventData.changeType || 'unknown';
     const timestamp = eventData.timestamp || Date.now();
     
-    console.log(`[Index] 收到任务数据变更事件: 类型=${changeType}, 任务数量=${allTasks.length}, 时间戳=${timestamp}`);
+    logger.info('Index', `收到任务数据变更事件: 类型=${changeType}, 任务数量=${allTasks.length}`);
     
     // 删除操作需要特殊处理，确保热力图更新
     if (changeType === 'delete') {
-      console.log('[Index] 检测到删除操作，确保热力图得到完全刷新');
+      logger.info('Index', '检测到删除操作，确保热力图得到完全刷新');
+      
+      // 获取任务服务
+      const taskService = serviceManager.getService('task');
+      if (!taskService) {
+        logger.error('Index', '无法获取任务服务');
+        return;
+      }
       
       // 刷新今日任务
-      taskManager.getTodayTasks(todayTasks => {
+      taskService.getTodayTasks().then(todayTasks => {
         this.setData({ 
           tasks: todayTasks,
           "__dataUpdateTimestamp": timestamp // 添加时间戳属性以确保视图刷新
         });
         
         // 更新任务进度和即将到期任务
-        this.updateTaskProgress(todayTasks);
+        this.calculateProgress(todayTasks);
         this.checkUpcomingTasks();
         
         // 通过调度器延迟处理，确保数据变化后UI完全刷新
@@ -251,7 +262,7 @@ Page({
           // 找到热力图组件并强制刷新
           const heatmapComponent = this.selectComponent('#taskHeatmap');
           if (heatmapComponent) {
-            console.log('[Index] 触发热力图强制刷新');
+            logger.info('Index', '触发热力图强制刷新');
             heatmapComponent.refreshTaskList();
           }
         }, 300);
@@ -261,13 +272,19 @@ Page({
     }
     
     // 非删除操作的常规处理
-    taskManager.getTodayTasks(todayTasks => {
+    const taskService = serviceManager.getService('task');
+    if (!taskService) {
+      logger.error('Index', '无法获取任务服务');
+      return;
+    }
+    
+    taskService.getTodayTasks().then(todayTasks => {
       this.setData({ 
         tasks: todayTasks 
       });
       
       // 更新任务进度和即将到期任务
-      this.updateTaskProgress(todayTasks);
+      this.calculateProgress(todayTasks);
       this.checkUpcomingTasks();
     });
   },
@@ -366,6 +383,10 @@ Page({
     
     // 检查即将到期的任务
     this.checkUpcomingTasks();
+    
+    // 加载今日所有任务
+    logger.info('Index', '页面显示时加载今日所有任务');
+    this.loadTodayTasks();
   },
   
   /**
@@ -373,91 +394,196 @@ Page({
    */
   onUnload: function() {
     // 解除事件监听
-    if (app.globalData.eventBus) {
-      app.globalData.eventBus.off('taskDataChanged');
-      app.globalData.eventBus.off('messageDataChanged');
-      app.globalData.eventBus.off('rewardClaimed');
+    const eventBus = serviceManager.getEventBus();
+    if (eventBus) {
+      eventBus.off('task:changed', this.handleTaskDataChanged);
+      eventBus.off('task:created', this.handleTaskCreated);
+      eventBus.off('message:changed', this.handleMessageDataChanged);
+      eventBus.off('reward:claimed', this.handleRewardClaimed);
+      eventBus.off('reward:updated', this.handleRewardUpdated);
+      eventBus.off('reward:examples_cleared', this.handleRewardUpdated);
     }
   },
 
-  // 从任务管理器加载任务数据
-  loadTaskData: function() {
-    // 获取今日任务
-    taskManager.getTodayTasks(todayTasks => {
-      this.setData({ tasks: todayTasks });
+  /**
+   * 加载任务数据
+   */
+  loadTaskData: async function() {
+    try {
+      logger.info('Index', '开始加载任务数据');
       
-      // 更新任务进度统计和即将到期任务
-      this.updateTaskProgress(todayTasks);
-      this.checkUpcomingTasks();
-    });
+      // 获取任务服务
+      const taskService = serviceManager.getService('task');
+      if (!taskService) {
+        logger.error('Index', '无法获取任务服务');
+        return;
+      }
+      
+      // 使用任务服务获取今日任务
+      const tasks = await taskService.getTodayTasks();
+      logger.info('Index', `今日任务加载成功，任务数量: ${tasks.length}`);
+      
+      // 更新页面数据
+      this.setData({
+        tasks: tasks
+      });
+      
+      // 检查任务进度
+      await this.calculateProgress(tasks);
+      
+      // 更新任务统计信息
+      await this.updateTaskStats();
+      
+      // 检查即将到期的任务
+      await this.checkUpcomingTasks();
+    } catch (error) {
+      logger.error('Index', '加载任务数据失败', error);
+      
+      wx.showToast({
+        title: '加载数据失败',
+        icon: 'none',
+        duration: 2000
+      });
+    }
   },
   
   // 从消息管理器加载消息数据
-  loadMessageData: function() {
-    messageManager.getAllMessages(messages => {
+  loadMessageData: async function() {
+    try {
+      const messageService = serviceManager.getMessageService();
+      const messages = await messageService.getAllMessages();
+      
       // 计算未读消息数量
       const unreadCount = messages.filter(msg => !msg.isRead).length;
       
-      this.setData({ 
+      this.setData({
         messages,
         unreadCount
       });
-    });
+    } catch (error) {
+      logger.error('Index', '加载消息数据失败', error);
+    }
   },
   
-  // 更新任务进度统计
-  updateTaskProgress: function(tasks) {
-    // 使用任务管理器计算任务进度
-    const progressData = taskManager.calculateTaskProgress(tasks);
-    
-    console.log('[Index] 更新任务进度', progressData);
-    
-    // 只更新任务进度，不更新奖励进度
-    this.setData({
-      taskProgress: progressData.taskProgress
-    });
-    
-    // 更新全局任务进度数据
-    app.globalData.taskProgress = progressData.taskProgress;
-    
-    // 注意：这里不再设置rewardProgress，奖励进度现在由loadStarsAndRewards单独处理
-    // 因为奖励进度应基于用户星星数量和奖品阈值，而非任务完成情况
+  /**
+   * 计算并更新任务进度
+   * @param {Array} tasks 任务列表
+   */
+  calculateProgress: async function(tasks) {
+    try {
+      logger.info('Index', '开始计算任务进度');
+      
+      // 获取任务服务
+      const taskService = serviceManager.getService('task');
+      if (!taskService) {
+        logger.error('Index', '无法获取任务服务');
+        return;
+      }
+      
+      // 使用任务服务计算进度
+      const progress = await taskService.calculateTaskProgress(tasks);
+      logger.info('Index', '任务进度计算成功', progress);
+      
+      // 更新页面数据
+      this.setData({ 
+        taskProgress: progress
+      });
+    } catch (error) {
+      logger.error('Index', '计算任务进度失败', error);
+    }
   },
   
-  // 检查即将到期任务
-  checkUpcomingTasks: function() {
-    // 使用任务管理器检查即将到期任务
-    taskManager.checkUpcomingTasks(upcomingTasks => {
-      if (upcomingTasks && upcomingTasks.length > 0) {
-        // 使用消息管理器处理提醒显示逻辑
-        messageManager.getUpcomingTaskNotifications(upcomingTasks, (taskInfo, shouldShow) => {
-          if (shouldShow && taskInfo) {
-            this.setData({
-              upcomingTask: taskInfo,
-              showUpcomingTask: true
-            });
-          } else {
-            this.setData({
-              showUpcomingTask: false
-            });
-          }
+  /**
+   * 更新任务统计信息
+   */
+  updateTaskStats: async function() {
+    try {
+      logger.info('Index', '开始更新任务统计');
+      
+      // 获取任务服务
+      const taskService = serviceManager.getService('task');
+      if (!taskService) {
+        logger.error('Index', '无法获取任务服务');
+        return;
+      }
+      
+      // 设置日期范围（默认为最近30天）
+      const dateRange = {
+        startDate: null, // 使用服务默认值
+        endDate: null    // 使用服务默认值
+      };
+      
+      // 获取任务统计数据
+      const stats = await taskService.getTaskStatistics(dateRange);
+      logger.info('Index', '任务统计获取成功', {
+        totalTasks: stats.totalTasks,
+        completedTasks: stats.completedTasks,
+        completionRate: stats.completionRate,
+        streak: stats.streak
+      });
+      
+      // 更新页面数据
+      this.setData({ stats });
+    } catch (error) {
+      logger.error('Index', '更新任务统计失败', error);
+    }
+  },
+  
+  /**
+   * 检查即将到期任务
+   */
+  checkUpcomingTasks: async function() {
+    try {
+      logger.info('Index', '开始检查即将到期任务');
+      
+      // 获取任务服务
+      const taskService = serviceManager.getService('task');
+      if (!taskService) {
+        logger.error('Index', '无法获取任务服务');
+        return;
+      }
+      
+      // 获取即将到期的任务
+      const upcomingResult = await taskService.checkUpcomingTasks();
+      
+      // 添加防御性检查
+      if (upcomingResult && upcomingResult.task && upcomingResult.task.id) {
+        logger.info('Index', '发现即将到期任务', { 
+          taskId: upcomingResult.task.id,
+          title: upcomingResult.task.title,
+          timeRemaining: upcomingResult.timeRemaining
+        });
+        
+        this.setData({
+          upcomingTask: {
+            id: upcomingResult.task.id,
+            title: upcomingResult.task.title || '未命名任务',
+            timeRemaining: upcomingResult.timeRemaining || 0
+          },
+          showUpcomingTask: true
         });
       } else {
+        logger.info('Index', '没有即将到期的任务或任务数据不完整', upcomingResult);
         this.setData({
           showUpcomingTask: false
         });
       }
-    });
+    } catch (error) {
+      logger.error('Index', '检查即将到期任务失败', error);
+      this.setData({
+        showUpcomingTask: false
+      });
+    }
   },
 
   // 完成任务
-  completeTask: function(e) {
+  completeTask: async function(e) {
     const id = e.detail.taskId;
-    console.log('完成任务:', id);
+    logger.info('Index', '完成任务:', { taskId: id });
     
     // 如果任务正在处理中，阻止重复操作
     if (this.data.processingTaskId === id) {
-      console.log('[Index] 该任务正在处理中，忽略重复点击');
+      logger.warn('Index', '该任务正在处理中，忽略重复点击', { taskId: id });
       return;
     }
     
@@ -467,7 +593,7 @@ Page({
     
     // 保存原始的 starAwarded 状态，用于后续判断
     const wasStarAwarded = task.starAwarded || false;
-    console.log(`[Index] 任务原始星星状态: ${wasStarAwarded ? '已获得' : '未获得'}`);
+    logger.info('Index', `任务原始星星状态: ${wasStarAwarded ? '已获得' : '未获得'}`);
     
     // 设置处理中状态，防止重复点击
     this.setData({
@@ -482,7 +608,7 @@ Page({
     if (newStatus === 1) {
       // 检查是否只有示例奖励可用
       if (this.hasOnlyExampleRewards()) {
-        console.log('[Index] 检测到只有示例奖励可用，显示设置奖励提示');
+        logger.info('Index', '检测到只有示例奖励可用，显示设置奖励提示');
         this.showSetupRewardTip();
         
         // 清除处理中状态
@@ -495,8 +621,19 @@ Page({
       }
     }
     
-    // 使用任务管理器更新任务状态
-    taskManager.updateTaskStatus(id, newStatus, updatedTask => {
+    try {
+      // 使用任务服务更新任务状态
+      const taskService = serviceManager.getService('task');
+      let updatedTask;
+      
+      if (newStatus === 1) {
+        // 使用completeTask方法直接完成任务
+        updatedTask = await taskService.completeTask(id);
+      } else {
+        // 使用resetTask方法重置任务状态
+        updatedTask = await taskService.resetTask(id);
+      }
+      
       // 清除处理中状态
       this.setData({
         processingTaskId: null
@@ -504,7 +641,7 @@ Page({
       
       if (updatedTask) {
         // 任务状态变更时，立即刷新星星和奖品信息
-        console.log('[Index] 任务状态变更，立即刷新星星和奖品信息');
+        logger.info('Index', '任务状态变更，立即刷新星星和奖品信息');
         this.loadStarsAndRewards();
         
         // 根据操作类型和任务状态提供合适的提示
@@ -546,7 +683,20 @@ Page({
           });
         }
       }
-    });
+    } catch (error) {
+      // 错误处理
+      logger.error('Index', '完成任务失败', error);
+      wx.showToast({
+        title: '操作失败，请重试',
+        icon: 'none',
+        duration: 2000
+      });
+      
+      // 清除处理中状态
+      this.setData({
+        processingTaskId: null
+      });
+    }
   },
   
   // 设置随机的鼓励语
@@ -934,7 +1084,8 @@ viewMessageDetail: function(e) {
     const filters = this.data.searchFilters;
     
     // 从全局获取所有任务
-    taskManager.getAllTasks(allTasks => {
+    const taskService = serviceManager.getTaskService();
+    taskService.getAllTasks().then(allTasks => {
       // 基于关键词搜索
       let results = [];
       
@@ -1020,7 +1171,7 @@ viewMessageDetail: function(e) {
       const rewardService = serviceManager.getService('rewardService');
       
       if (!starService || !rewardService) {
-        console.error('[Index] 无法获取服务实例');
+        logger.error('Index', '无法获取服务实例');
         return;
       }
       
@@ -1028,17 +1179,17 @@ viewMessageDetail: function(e) {
       const userPoints = await starService.getTotalStars();
       const formattedPoints = formatUtils.formatPoints(userPoints, true);
       
-      console.log(`[Index] 当前用户星星数: ${userPoints}`);
+      logger.info('Index', '当前用户星星数', { userPoints });
       
       // 获取下一个可达成奖励
-      console.log(`[Index] 开始获取下一个可达成奖励`);
+      logger.info('Index', '开始获取下一个可达成奖励');
       const nextReward = await rewardService.calculateNextAvailableReward();
-      console.log(`[Index] 获取到下一个可达成奖励: ${nextReward ? nextReward.name : '无'}`);
+      logger.info('Index', '获取到下一个可达成奖励', { name: nextReward ? nextReward.name : '无' });
       
       // 加载可见奖励列表，使用服务层的过滤逻辑
-      console.log(`[Index] 加载可见奖励列表`);
+      logger.info('Index', '加载可见奖励列表');
       let visibleRewards = await rewardService.getAvailableRewards(true);
-      console.log(`[Index] 获取到可见奖励: ${visibleRewards.length}个`);
+      logger.info('Index', '获取到可见奖励', { count: visibleRewards.length });
       
       // 判断是否需要显示设置奖励提示对话框
       // 当没有任何真实奖励时（只有默认占位奖励或完全没有奖励）
@@ -1055,7 +1206,7 @@ viewMessageDetail: function(e) {
       // 如果没有可见奖励，但存在nextReward，需区分是否为默认占位奖励
       if (visibleRewards.length === 0 && nextReward) {
         // 记录详细日志便于诊断
-        console.log(`[Index] 检查奖励信息:`, {
+        logger.info('Index', '检查奖励信息', {
           name: nextReward.name,
           id: nextReward.id,
           isDefault: nextReward.isDefault,
@@ -1064,11 +1215,11 @@ viewMessageDetail: function(e) {
         
         // 如果是默认占位奖励(有isDefault属性)，不添加到显示列表
         if (nextReward.isDefault) {
-          console.log(`[Index] 检测到默认占位奖励，不添加到显示列表`);
+          logger.info('Index', '检测到默认占位奖励，不添加到显示列表');
         }
         // 只有真实奖励（有id属性）才添加到显示列表
         else if (nextReward.id) {
-          console.log(`[Index] 无可见奖励但存在有效奖励，添加到显示列表`);
+          logger.info('Index', '无可见奖励但存在有效奖励，添加到显示列表');
           visibleRewards = [nextReward];
         }
       }
@@ -1096,11 +1247,14 @@ viewMessageDetail: function(e) {
         }
       });
       
-      logger.info('Index', `奖励进度条数据已更新: ${userPoints}/${(nextReward.allClaimed || nextReward.isDefault || nextReward.showSetupTip) ? 
-                 '∞' : (nextReward && nextReward.points ? nextReward.points : 100)}`);
+      logger.info('Index', '奖励进度条数据已更新', { 
+        current: userPoints, 
+        total: (nextReward.allClaimed || nextReward.isDefault || nextReward.showSetupTip) ?
+               '∞' : (nextReward && nextReward.points ? nextReward.points : 100) 
+      });
       
     } catch (error) {
-      console.error('[Index] 加载星星和奖励信息失败', error);
+      logger.error('Index', '加载星星和奖励信息失败', error);
     }
   },
   
@@ -1110,11 +1264,11 @@ viewMessageDetail: function(e) {
    */
   _handleRewardCompletion: async function(oldProgress, userPoints) {
     try {
-      console.log(`[Index] 处理奖励完成状态: 目标=${userPoints}`);
+      logger.info('Index', '处理奖励完成状态', { targetPoints: userPoints });
       
       const starService = serviceManager.getService('starService');
       if (!starService) {
-        console.error('[Index] 无法获取星星服务实例');
+        logger.error('Index', '无法获取星星服务实例');
         return;
       }
       
@@ -1135,9 +1289,9 @@ viewMessageDetail: function(e) {
         transitionInProgress: true
       });
       
-      console.log('[Index] 奖励完成状态设置完毕');
+      logger.info('Index', '奖励完成状态设置完毕');
     } catch (error) {
-      console.error('[Index] 处理奖励完成状态失败', error);
+      logger.error('Index', '处理奖励完成状态失败', error);
     }
   },
   
@@ -1517,5 +1671,134 @@ viewMessageDetail: function(e) {
     
     // 添加日志
     console.log(`[Index] 准备显示奖品指示器: ${visibleRewards.length}个, 状态分布: ${visibleRewards.map(r => r.status).join(',')}`);
-  }
+  },
+
+  // 任务状态切换处理函数
+  taskItemStatusToggle: async function(e) {
+    try {
+      // 获取任务ID和新状态
+      const { id, newStatus } = e.detail;
+      
+      // 记录当前处理的任务ID，用于UI加载状态显示
+      this.setData({
+        processingTaskId: id
+      });
+      
+      logger.info('Index', `切换任务状态: 任务ID=${id}, 新状态=${newStatus}`);
+      
+      // 使用任务服务更新任务状态
+      const taskService = serviceManager.getTaskService();
+      const updatedTask = await taskService.updateTaskStatus(id, newStatus);
+      
+      // 清除处理中状态
+      this.setData({
+        processingTaskId: null
+      });
+      
+      // 刷新进度条动画和任务数据
+      this.transitionToNewTarget();
+      this.loadTaskData();
+    } catch (error) {
+      logger.error('Index', '更新任务状态失败', error);
+      
+      // 清除处理中状态
+      this.setData({
+        processingTaskId: null
+      });
+      
+      // 提示错误
+      wx.showToast({
+        title: '操作失败',
+        icon: 'none'
+      });
+    }
+  },
+
+  // 搜索任务
+  searchTasks: async function() {
+    try {
+      const query = this.data.searchQuery;
+      if (!query || query.trim() === '') {
+        return;
+      }
+      
+      logger.info('Index', `执行任务搜索: 关键词=${query}`);
+      
+      // 获取任务服务
+      const taskService = serviceManager.getTaskService();
+      
+      // 从全局获取所有任务
+      const allTasks = await taskService.getAllTasks();
+      
+      // 基于关键词搜索
+      let results = [];
+      
+      // 搜索逻辑：标题包含、描述包含、标签包含
+      results = allTasks.filter(task => {
+        const titleMatch = task.title && task.title.toLowerCase().includes(query.toLowerCase());
+        const descMatch = task.description && task.description.toLowerCase().includes(query.toLowerCase());
+        const tagMatch = task.tags && task.tags.some(tag => tag.toLowerCase().includes(query.toLowerCase()));
+        
+        return titleMatch || descMatch || tagMatch;
+      });
+      
+      logger.info('Index', `搜索结果: ${results.length}个匹配任务`);
+      
+      // 更新搜索结果到UI
+      this.setData({
+        searchResults: results
+      });
+    } catch (error) {
+      logger.error('Index', '搜索任务失败', error);
+      this.setData({
+        searchResults: []
+      });
+    }
+  },
+
+  /**
+   * 加载今日所有任务
+   */
+  loadTodayTasks: async function() {
+    try {
+      logger.info('Index', '开始加载今日所有任务');
+      
+      // 获取任务服务
+      const taskService = serviceManager.getService('task');
+      if (!taskService) {
+        logger.error('Index', '无法获取任务服务');
+        return;
+      }
+      
+      // 获取今日所有任务
+      const tasks = await taskService.getTodayTasks();
+      logger.info('Index', `今日任务加载成功，任务数量: ${tasks.length}`);
+      
+      // 更新页面数据
+      this.setData({
+        tasks: tasks,
+        hasTodayTasks: (tasks && tasks.length > 0)
+      });
+      
+    } catch (error) {
+      logger.error('Index', '加载今日任务失败', error);
+      
+      wx.showToast({
+        title: '加载任务失败',
+        icon: 'none',
+        duration: 2000
+      });
+    }
+  },
+
+  /**
+   * 处理任务创建事件
+   * @param {Object} data 事件数据
+   */
+  handleTaskCreated: function(data) {
+    logger.info('Index', '收到任务创建事件', data);
+    
+    // 重新加载今日任务
+    this.loadTodayTasks();
+  },
 }) 

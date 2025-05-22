@@ -1,3 +1,6 @@
+const serviceManager = require('../../utils/serviceManager.js');
+const logger = require('../../utils/logger');
+
 Page({
   /**
    * 页面的初始数据
@@ -31,8 +34,10 @@ Page({
    */
   onLoad: function (options) {
     const { id, edit } = options
+    logger.info('TaskDetail', '页面加载', { taskId: id, isEdit: edit === '1' });
+    
     this.setData({
-      taskId: parseInt(id),
+      taskId: id,
       isEdit: edit === '1'
     })
     this.loadTaskData()
@@ -41,42 +46,140 @@ Page({
   /**
    * 加载任务数据
    */
-  loadTaskData: function () {
-    const app = getApp();
-    const allTasks = app.globalData.tasks || [];
-    const task = allTasks.find(task => task.id === this.data.taskId);
-    
-    if (task) {
-      // 确保反射字段存在
-      if (task.type === 'study' && !task.hasOwnProperty('reflection')) {
-        task.reflection = '';
+  loadTaskData: async function () {
+    try {
+      logger.info('TaskDetail', '开始加载任务数据', { taskId: this.data.taskId });
+      
+      // 获取任务服务
+      const taskService = serviceManager.getService('task');
+      if (!taskService) {
+        logger.error('TaskDetail', '无法获取任务服务');
+        this.showErrorAndGoBack('系统错误，请重试');
+        return;
       }
       
-      this.setData({
-        task: task
-      });
-    } else {
-      wx.showToast({
-        title: '未找到任务',
-        icon: 'none',
-        duration: 2000,
-        success: () => {
-          setTimeout(() => {
-            wx.navigateBack();
-          }, 2000);
+      // 获取任务详情
+      const task = await taskService.getTaskById(this.data.taskId);
+      
+      if (task) {
+        // 确保反射字段存在
+        if (task.type === 'study' && !task.hasOwnProperty('reflection')) {
+          task.reflection = '';
         }
-      });
+        
+        logger.info('TaskDetail', '任务数据加载成功', { 
+          taskId: task.id, 
+          title: task.title, 
+          type: task.type 
+        });
+        
+        this.setData({ task });
+      } else {
+        logger.warn('TaskDetail', '未找到任务', { taskId: this.data.taskId });
+        this.showErrorAndGoBack('未找到任务');
+      }
+    } catch (error) {
+      logger.error('TaskDetail', '加载任务数据失败', error);
+      this.showErrorAndGoBack('加载失败，请重试');
     }
+  },
+  
+  /**
+   * 显示错误并返回
+   */
+  showErrorAndGoBack: function(message) {
+    wx.showToast({
+      title: message,
+      icon: 'none',
+      duration: 2000,
+      success: () => {
+        setTimeout(() => {
+          wx.navigateBack();
+        }, 2000);
+      }
+    });
   },
 
   /**
    * 切换任务状态
    */
-  toggleTaskStatus: function () {
-    const newStatus = this.data.task.status === 0 ? 1 : 0
-    this.setData({
-      'task.status': newStatus
-    })
+  toggleTaskStatus: async function () {
+    try {
+      const taskId = this.data.task.id;
+      const currentStatus = this.data.task.status;
+      const newStatus = currentStatus === 0 ? 1 : 0;
+      
+      logger.info('TaskDetail', '切换任务状态', { taskId, from: currentStatus, to: newStatus });
+      
+      // 显示加载提示
+      wx.showLoading({
+        title: newStatus === 1 ? '正在完成...' : '正在重置...',
+        mask: true
+      });
+      
+      // 获取任务服务
+      const taskService = serviceManager.getService('task');
+      if (!taskService) {
+        logger.error('TaskDetail', '无法获取任务服务');
+        wx.hideLoading();
+        wx.showToast({
+          title: '操作失败，请重试',
+          icon: 'none'
+        });
+        return;
+      }
+      
+      // 调用服务更新任务状态
+      let updatedTask;
+      if (newStatus === 1) {
+        // 完成任务
+        updatedTask = await taskService.completeTask(taskId);
+      } else {
+        // 重置任务
+        updatedTask = await taskService.resetTask(taskId);
+      }
+      
+      // 隐藏加载提示
+      wx.hideLoading();
+      
+      if (updatedTask) {
+        logger.info('TaskDetail', '任务状态更新成功', { 
+          taskId, 
+          newStatus: updatedTask.status,
+          title: updatedTask.title
+        });
+        
+        // 更新本地数据
+        this.setData({
+          task: updatedTask
+        });
+        
+        // 提示用户
+        wx.showToast({
+          title: newStatus === 1 ? '已完成' : '已重置',
+          icon: 'success'
+        });
+        
+        // 轻微振动反馈
+        if (wx.vibrateShort) {
+          wx.vibrateShort({ type: 'light' });
+        }
+      } else {
+        logger.warn('TaskDetail', '任务状态更新失败', { taskId });
+        wx.showToast({
+          title: '操作失败，请重试',
+          icon: 'none'
+        });
+      }
+    } catch (error) {
+      wx.hideLoading();
+      logger.error('TaskDetail', '切换任务状态出现异常', error);
+      
+      wx.showToast({
+        title: '操作失败，请重试',
+        icon: 'none'
+      });
+    }
   },
 
   /**
@@ -208,59 +311,71 @@ Page({
   /**
    * 删除任务
    */
-  deleteTask: function () {
+  deleteTask: async function () {
     const taskId = this.data.task.id;
+    logger.info('TaskDetail', '请求删除任务', { taskId });
+    
     wx.showModal({
       title: '确认删除',
       content: '确定要删除这个任务吗？',
-      success: (res) => {
+      success: async (res) => {
         if (res.confirm) {
-          const app = getApp();
-          const allTasks = app.globalData.tasks || [];
-          const messageManager = require('../../utils/messageManager.js');
-          
-          // 筛选出不是当前任务的任务
-          const updatedTasks = allTasks.filter(task => task.id !== taskId);
-          
-          // 更新全局数据
-          app.globalData.tasks = updatedTasks;
-          
-          // 保存到本地存储
-          wx.setStorage({
-            key: 'taskData',
-            data: updatedTasks,
-            success: () => {
-              // 删除与当前任务相关的消息
-              console.log(`[task] 删除任务相关消息: ${taskId}`);
-              messageManager.removeTaskMessages(taskId, {
-                success: () => {
-                  wx.showToast({
-                    title: '删除成功',
-                    icon: 'success'
-                  });
-                  
-                  // 返回上一页
-                  wx.navigateBack();
-                },
-                fail: (error) => {
-                  console.error(`[task] 删除任务消息失败: ${error}`);
-                  // 即使消息删除失败，仍然删除任务并返回
-                  wx.showToast({
-                    title: '删除成功',
-                    icon: 'success'
-                  });
-                  wx.navigateBack();
-                }
-              });
-            },
-            fail: (err) => {
-              console.error(`[task] 保存任务数据失败: ${err}`);
+          try {
+            // 显示加载提示
+            wx.showLoading({
+              title: '正在删除...',
+              mask: true
+            });
+            
+            // 获取任务服务
+            const taskService = serviceManager.getService('task');
+            if (!taskService) {
+              logger.error('TaskDetail', '无法获取任务服务');
+              wx.hideLoading();
+              this.showErrorAndGoBack('系统错误，请重试');
+              return;
+            }
+            
+            // 调用服务删除任务
+            const result = await taskService.deleteTask(taskId);
+            
+            // 隐藏加载提示
+            wx.hideLoading();
+            
+            if (result && result.success) {
+              logger.info('TaskDetail', '任务删除成功', { taskId });
+              
               wx.showToast({
-                title: '删除失败',
-                icon: 'none'
+                title: '删除成功',
+                icon: 'success'
+              });
+              
+              // 返回上一页
+              setTimeout(() => {
+                wx.navigateBack();
+              }, 1500);
+            } else {
+              const errorMsg = result ? result.message : '未知错误';
+              logger.warn('TaskDetail', '任务删除失败', { taskId, error: errorMsg });
+              
+              wx.showToast({
+                title: '删除失败: ' + errorMsg,
+                icon: 'none',
+                duration: 2000
               });
             }
-          });
+          } catch (error) {
+            // 隐藏加载提示
+            wx.hideLoading();
+            
+            logger.error('TaskDetail', '删除任务出现异常', error);
+            
+            wx.showToast({
+              title: '操作失败，请重试',
+              icon: 'none',
+              duration: 2000
+            });
+          }
         }
       }
     });

@@ -47,6 +47,22 @@ class BaseRepository {
   }
   
   /**
+   * 从存储中加载数据（兼容旧接口）
+   * @returns {Promise<Boolean>} 是否加载成功
+   */
+  async loadFromStorage() {
+    logger.info('BaseRepository', `从存储加载数据, 存储键=${this.storageKey}`);
+    try {
+      // 调用getAll强制从存储中加载数据
+      await this.getAll(false);
+      return true;
+    } catch (error) {
+      logger.error('BaseRepository', `从存储加载数据失败, 存储键=${this.storageKey}`, error);
+      return false;
+    }
+  }
+  
+  /**
    * 获取所有实体
    * @param {Boolean} useCache 是否使用缓存
    * @returns {Promise<Array>} 实体列表

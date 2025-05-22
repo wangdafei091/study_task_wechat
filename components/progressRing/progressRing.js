@@ -8,7 +8,13 @@ Component({
       type: Number,
       value: 0,
       observer(newVal) {
-        const percent = Math.max(0, Math.min(100, newVal));
+        // 确保进度值是数字类型
+        let percentValue = newVal;
+        if (typeof percentValue !== 'number') {
+          console.warn(`[progressRing] 收到非数字类型的percent值: ${typeof percentValue}, 尝试转换`, percentValue);
+          percentValue = Number(percentValue) || 0;
+        }
+        const percent = Math.max(0, Math.min(100, percentValue));
         this._updateProgress(percent);
       }
     },

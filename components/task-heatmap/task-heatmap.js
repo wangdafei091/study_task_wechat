@@ -1,5 +1,7 @@
 const Constants = require('../../utils/constants.js');
 const uiUtils = require('../../utils/uiUtils.js');
+const serviceManager = require('../../utils/serviceManager.js');
+const logger = require('../../utils/logger.js');
 
 /**
  * 任务热力图组件 (task-heatmap)
@@ -1069,9 +1071,13 @@ Component({
     },
     
     // 保存编辑
-    saveEdit() {
+    async saveEdit() {
+      const logger = require('../../utils/logger.js');
+      const serviceManager = require('../../utils/serviceManager.js');
+      const taskService = serviceManager.getService('TaskService');
+      
       if (this.data.editingTaskIndex < 0 || !this.data.editingTaskId) {
-        console.error('[TaskHeatmap] 没有正在编辑的任务');
+        logger.error('task-heatmap', '没有正在编辑的任务');
         return;
       }
       
@@ -1080,18 +1086,15 @@ Component({
       const task = this.data.dayTasks[taskIndex];
       
       if (!task) {
-        console.error('[TaskHeatmap] 找不到要编辑的任务');
+        logger.error('task-heatmap', '找不到要编辑的任务');
         this.cancelEdit();
         return;
       }
       
-      console.log('[TaskHeatmap] 保存任务编辑:', task.title);
-      console.log('[TaskHeatmap] 新积分:', this.data.editPoints);
-      console.log('[TaskHeatmap] 新描述:', this.data.editDescription);
-      console.log('[TaskHeatmap] 编辑范围:', this.data.editScope);
-      
-      // 更新任务数据
-      const taskManager = require('../../utils/taskManager.js');
+      logger.info('task-heatmap', `保存任务编辑: ${task.title}`);
+      logger.info('task-heatmap', `新积分: ${this.data.editPoints}`);
+      logger.info('task-heatmap', `新描述: ${this.data.editDescription}`);
+      logger.info('task-heatmap', `编辑范围: ${this.data.editScope}`);
       
       // 准备更新的字段
       const updateData = {
@@ -1102,14 +1105,14 @@ Component({
       // 如果不是必做任务，且积分不是只读状态，才更新积分字段
       if (!task.isRequired && !this.data.pointsReadOnly) {
         updateData.points = this.data.editPoints;
-        console.log(`[TaskHeatmap] 将更新积分为: ${this.data.editPoints}`);
+        logger.info('task-heatmap', `将更新积分为: ${this.data.editPoints}`);
       } else if (this.data.pointsReadOnly) {
-        console.log(`[TaskHeatmap] 积分为只读状态，不更新积分字段`);
+        logger.info('task-heatmap', '积分为只读状态，不更新积分字段');
       } else {
-        console.log(`[TaskHeatmap] 必做任务，不更新积分字段`);
+        logger.info('task-heatmap', '必做任务，不更新积分字段');
       }
       
-      console.log(`[TaskHeatmap] 更新任务${task.id}，是否必做: ${task.isRequired ? '是' : '否'}, 积分只读: ${this.data.pointsReadOnly ? '是' : '否'}, 更新字段:`, updateData);
+      logger.info('task-heatmap', `更新任务${task.id}，是否必做: ${task.isRequired ? '是' : '否'}, 积分只读: ${this.data.pointsReadOnly ? '是' : '否'}, 更新字段:`, updateData);
       
       // 显示加载中
       wx.showLoading({
@@ -1117,18 +1120,17 @@ Component({
         mask: true
       });
       
-      // 根据编辑范围执行不同的更新逻辑
-      if (this.data.editScope === 'series' && task.repeat && task.repeat.type !== 'none') {
-        // 编辑循环任务系列
-        console.log('[TaskHeatmap] 更新整个循环任务系列');
-        
-        this.updateTaskSeries(task, updateData, (success, count) => {
-          wx.hideLoading();
+      try {
+        // 根据编辑范围执行不同的更新逻辑
+        if (this.data.editScope === 'series' && task.repeat && task.repeat.type !== 'none') {
+          // 编辑循环任务系列
+          logger.info('task-heatmap', '更新整个循环任务系列');
           
-          if (success) {
+          const result = await this.updateTaskSeries(task, updateData);
+          if (result.success) {
             // 显示成功提示
             wx.showToast({
-              title: `已更新${count}个任务`,
+              title: `已更新${result.count}个任务`,
               icon: 'success',
               duration: 1500
             });
@@ -1142,20 +1144,15 @@ Component({
               duration: 1500
             });
           }
+        } else {
+          // 仅编辑当前任务
+          logger.info('task-heatmap', '仅更新当前任务');
           
-          // 关闭编辑区域
-          this.cancelEdit();
-        });
-      } else {
-        // 仅编辑当前任务
-        console.log('[TaskHeatmap] 仅更新当前任务');
-        
-        // 更新单个任务
-        taskManager.editTask(taskId, updateData, (updatedTask) => {
-          wx.hideLoading();
+          // 更新单个任务
+          const updatedTask = await taskService.updateTask(taskId, updateData);
           
           if (updatedTask) {
-            console.log('[TaskHeatmap] 任务更新成功');
+            logger.info('task-heatmap', '任务更新成功');
             
             // 更新本地显示
             const updatedDayTasks = [...this.data.dayTasks];
@@ -1175,17 +1172,27 @@ Component({
             // 触发刷新事件
             this.triggerEvent('refreshTasks');
           } else {
-            console.error('[TaskHeatmap] 任务更新失败');
+            logger.error('task-heatmap', '任务更新失败');
             wx.showToast({
               title: '更新失败',
               icon: 'error',
               duration: 1500
             });
           }
-          
-          // 关闭编辑区域
-          this.cancelEdit();
+        }
+      } catch (error) {
+        logger.error('task-heatmap', '保存编辑过程中出错', error);
+        wx.showToast({
+          title: '更新失败',
+          icon: 'error',
+          duration: 1500
         });
+      } finally {
+        // 隐藏加载提示
+        wx.hideLoading();
+        
+        // 关闭编辑区域
+        this.cancelEdit();
       }
     },
     
@@ -1333,20 +1340,25 @@ Component({
     /**
      * 删除单个任务
      */
-    deleteTask(taskId) {
-      const taskManager = require('../../utils/taskManager.js');
+    async deleteTask(taskId) {
+      const logger = require('../../utils/logger.js');
+      const serviceManager = require('../../utils/serviceManager.js');
+      const taskService = serviceManager.getService('TaskService');
       
       // 记录当前任务在本地数组中的索引，用于后续更新本地UI
       const taskIndex = this.data.dayTasks.findIndex(task => task.id === taskId);
-      console.log(`[task-heatmap] 准备删除任务ID: ${taskId}, 在本地数组中的索引: ${taskIndex}`);
+      logger.info('task-heatmap', `准备删除任务ID: ${taskId}, 在本地数组中的索引: ${taskIndex}`);
       
       if (taskIndex === -1) {
-        console.error(`[task-heatmap] 未找到要删除的任务: ${taskId}`);
+        logger.error('task-heatmap', `未找到要删除的任务: ${taskId}`);
       }
       
-      taskManager.deleteTask(taskId, (success) => {
+      try {
+        // 使用TaskService删除任务
+        const success = await taskService.deleteTask(taskId);
+        
         if (success) {
-          console.log(`[task-heatmap] 任务删除成功: ${taskId}`);
+          logger.info('task-heatmap', `任务删除成功: ${taskId}`);
           
           // 任务删除成功后，更新本地数据
           if (taskIndex !== -1) {
@@ -1354,7 +1366,7 @@ Component({
             const updatedTasks = [...this.data.dayTasks];
             updatedTasks.splice(taskIndex, 1);
             
-            console.log(`[task-heatmap] 更新本地任务列表，删除前: ${this.data.dayTasks.length}个, 删除后: ${updatedTasks.length}个`);
+            logger.info('task-heatmap', `更新本地任务列表，删除前: ${this.data.dayTasks.length}个, 删除后: ${updatedTasks.length}个`);
             
             // 更新视图
             this.setData({
@@ -1370,31 +1382,39 @@ Component({
             icon: 'success'
           });
         } else {
-          console.error(`[task-heatmap] 任务删除失败: ${taskId}`);
+          logger.error('task-heatmap', `任务删除失败: ${taskId}`);
           wx.showToast({
             title: '删除失败',
             icon: 'error'
           });
         }
-        
+      } catch (error) {
+        logger.error('task-heatmap', `删除任务过程中出错: ${taskId}`, error);
+        wx.showToast({
+          title: '删除失败',
+          icon: 'error'
+        });
+      } finally {
         // 删除操作完成后，重置删除相关状态
         this.setData({
           showDeleteConfirm: false,
           deleteScope: '',
           activeTaskForDelete: null
         });
-      });
+      }
     },
     
     /**
      * 删除任务系列
      */
-    deleteTaskSeries(task) {
-      const taskManager = require('../../utils/taskManager.js');
-      const messageManager = require('../../utils/messageManager.js');
+    async deleteTaskSeries(task) {
+      const logger = require('../../utils/logger.js');
+      const serviceManager = require('../../utils/serviceManager.js');
+      const taskService = serviceManager.getService('TaskService');
+      const messageManager = serviceManager.getService('MessageService');
       
       // 添加日志，记录当前需要删除的任务详细信息
-      console.log(`[task-heatmap] 准备删除任务系列，当前任务详情:`, {
+      logger.info('task-heatmap', '准备删除任务系列，当前任务详情:', {
         id: task.id,
         title: task.title,
         date: task.date,
@@ -1408,308 +1428,210 @@ Component({
         mask: true
       });
       
-      // 添加超时保护，确保加载提示不会一直显示
-      const loadingTimeout = setTimeout(() => {
-        console.log('[task-heatmap] 删除操作超时，强制关闭加载提示');
-        wx.hideLoading();
+      try {
+        // 获取所有任务
+        const allTasks = await taskService.getTasks();
+          
+        // 获取父任务ID
+        let parentId = task.parentTaskId;
         
-        // 提供用户选择是继续等待还是取消操作
-        wx.showModal({
-          title: '操作耗时较长',
-          content: '是否继续等待？取消将中断当前操作',
-          confirmText: '继续等待',
-          cancelText: '取消操作',
-          success: (res) => {
-            if (res.confirm) {
-              // 用户选择继续等待，重启操作
-              console.log('[task-heatmap] 用户选择继续等待，重启操作');
-              wx.showLoading({
-                title: '继续处理中...',
-                mask: true
-              });
-              // 此处不重启超时计时器，让操作继续进行
-            } else {
-              // 用户选择取消操作
-              console.log('[task-heatmap] 用户取消操作');
-              // 重置删除相关状态
-              this.setData({
-                showDeleteConfirm: false,
-                deleteScope: '',
-                activeTaskForDelete: null
-              });
-            }
-          }
-        });
-      }, 15000); // 增加超时时间到15秒
-      
-      // 使用Promise优化任务处理
-      const getAllTasksPromise = () => {
-        return new Promise((resolve, reject) => {
-          try {
-            taskManager.getAllTasks(allTasks => {
-              resolve(allTasks);
-            });
-          } catch (error) {
-            reject(error);
-          }
-        });
-      };
-      
-      const deleteTaskPromise = (taskId) => {
-        return new Promise((resolve, reject) => {
-          try {
-            taskManager.deleteTask(taskId, (success) => {
-              if (success) {
-                resolve(true);
-              } else {
-                reject(new Error(`删除任务失败: ${taskId}`));
+        // 如果当前任务没有parentTaskId，可能它自己就是父任务
+        if (!parentId) {
+          logger.info('task-heatmap', '当前任务没有parentTaskId，可能是原始任务');
+          parentId = task.id;
+        }
+        
+        logger.info('task-heatmap', `使用父任务ID查找系列任务: ${parentId}`);
+        
+        // 使用改进的筛选逻辑
+        let seriesTasks = allTasks.filter(t => 
+          t.parentTaskId === parentId || // 找出所有子任务
+          t.id === parentId              // 包含父任务自身
+        );
+        
+        // 记录筛选前的任务总数，用于日志
+        const allSeriesTasks = [...seriesTasks];
+        
+        // 获取今天日期，作为筛选基准
+        const today = this.data.todayString;
+        
+        // 只保留今天及之后的任务，而不是基于选中的任务日期
+        seriesTasks = seriesTasks.filter(t => t.date >= today);
+        
+        logger.info('task-heatmap', `今天日期: ${today}`);
+        logger.info('task-heatmap', `选中任务日期: ${task.date}`);
+        logger.info('task-heatmap', `找到该循环的任务总数: ${allSeriesTasks.length}个`);
+        logger.info('task-heatmap', `日期过滤后，只删除今天(${today})及之后的任务: ${seriesTasks.length}个`);
+        
+        // 先精简任务数据，只保留必要字段，减少内存占用
+        seriesTasks = seriesTasks.map(t => ({
+          id: t.id,
+          title: t.title,
+          date: t.date
+        }));
+        
+        // 如果没有任务需要删除，提前返回
+        if (seriesTasks.length === 0) {
+          logger.info('task-heatmap', '未找到需要删除的任务');
+          wx.showToast({
+            title: '未找到相关任务',
+            icon: 'none',
+            duration: 2000
+          });
+          
+          // 重置删除相关状态
+          this.setData({
+            showDeleteConfirm: false,
+            deleteScope: '',
+            activeTaskForDelete: null
+          });
+          
+          return;
+        }
+        
+        // 任务数量安全检查
+        const MAX_SAFE_TASKS = 100;
+        if (seriesTasks.length > MAX_SAFE_TASKS) {
+          wx.hideLoading();
+          
+          // 用户确认对话框
+          const userConfirmed = await new Promise((resolve) => {
+            wx.showModal({
+              title: '任务数量过多',
+              content: `即将删除从今天(${today})开始的${seriesTasks.length}个循环任务，可能需要较长时间。是否继续？`,
+              confirmText: '继续',
+              cancelText: '取消',
+              success: (res) => {
+                resolve(res.confirm);
               }
             });
-          } catch (error) {
-            reject(error);
-          }
-        });
-      };
-      
-      // 执行任务删除流程
-      getAllTasksPromise()
-        .then(allTasks => {
-          // 清除超时定时器
-          clearTimeout(loadingTimeout);
+          });
           
-          // 获取父任务ID
-          let parentId = task.parentTaskId;
-          
-          // 如果当前任务没有parentTaskId，可能它自己就是父任务
-          if (!parentId) {
-            console.log(`[task-heatmap] 当前任务没有parentTaskId，可能是原始任务`);
-            parentId = task.id;
-          }
-          
-          console.log(`[task-heatmap] 使用父任务ID查找系列任务: ${parentId}`);
-          
-          // 使用改进的筛选逻辑
-          let seriesTasks = allTasks.filter(t => 
-            t.parentTaskId === parentId || // 找出所有子任务
-            t.id === parentId              // 包含父任务自身
-          );
-          
-          // 记录筛选前的任务总数，用于日志
-          const allSeriesTasks = [...seriesTasks];
-          
-          // 获取今天日期，作为筛选基准
-          const today = this.data.todayString;
-          
-          // 只保留今天及之后的任务，而不是基于选中的任务日期
-          seriesTasks = seriesTasks.filter(t => t.date >= today);
-          
-          console.log(`[TaskHeatmap] 今天日期: ${today}`);
-          console.log(`[TaskHeatmap] 选中任务日期: ${task.date}`);
-          console.log(`[TaskHeatmap] 找到该循环的任务总数: ${allSeriesTasks.length}个`);
-          console.log(`[TaskHeatmap] 日期过滤后，只删除今天(${today})及之后的任务: ${seriesTasks.length}个`);
-          
-          // 先精简任务数据，只保留必要字段，减少内存占用
-          seriesTasks = seriesTasks.map(t => ({
-            id: t.id,
-            title: t.title,
-            date: t.date
-          }));
-          
-          // 任务数量安全检查
-          const MAX_SAFE_TASKS = 100;
-          if (seriesTasks.length > MAX_SAFE_TASKS) {
-            wx.hideLoading();
-            return new Promise((resolve, reject) => {
-              wx.showModal({
-                title: '任务数量过多',
-                content: `即将删除从今天(${today})开始的${seriesTasks.length}个循环任务，可能需要较长时间。是否继续？`,
-                confirmText: '继续',
-                cancelText: '取消',
-                success: (res) => {
-                  if (res.confirm) {
-                    console.log(`[TaskHeatmap] 用户确认继续处理大量任务: ${seriesTasks.length}个`);
-                    wx.showLoading({
-                      title: '准备删除...',
-                      mask: true
-                    });
-                    resolve(seriesTasks);
-                  } else {
-                    console.log('[TaskHeatmap] 用户取消大量任务删除');
-                    // 重置删除相关状态
-                    this.setData({
-                      showDeleteConfirm: false,
-                      deleteScope: '',
-                      activeTaskForDelete: null
-                    });
-                    reject(new Error('用户取消操作'));
-                  }
-                }
-              });
-            });
-          }
-          
-          return seriesTasks;
-        })
-        .then(seriesTasks => {
-          console.log(`[task-heatmap] 删除任务系列，共找到: ${seriesTasks.length} 个任务`);
-          
-          if (seriesTasks.length === 0) {
-            console.log(`[task-heatmap] 未找到任何相关系列任务，删除操作终止`);
-            wx.hideLoading();
-            wx.showToast({
-              title: '未找到相关任务',
-              icon: 'none',
-              duration: 2000
-            });
-            
+          if (!userConfirmed) {
+            logger.info('task-heatmap', '用户取消大量任务删除');
             // 重置删除相关状态
             this.setData({
               showDeleteConfirm: false,
               deleteScope: '',
               activeTaskForDelete: null
             });
-            
-            return Promise.reject(new Error('未找到相关任务'));
+            return;
           }
           
-          // 用于保存删除结果的数组
-          const results = {
-            success: [],
-            failed: []
-          };
+          logger.info('task-heatmap', `用户确认继续处理大量任务: ${seriesTasks.length}个`);
+          wx.showLoading({
+            title: '准备删除...',
+            mask: true
+          });
+        }
+        
+        logger.info('task-heatmap', `删除任务系列，共找到: ${seriesTasks.length} 个任务`);
+        
+        // 用于保存删除结果的数组
+        const results = {
+          success: [],
+          failed: []
+        };
+        
+        // 串行删除任务
+        for (let i = 0; i < seriesTasks.length; i++) {
+          const currentTask = seriesTasks[i];
           
-          // 改为串行删除，避免数据竞争
-          const deleteTasksSerially = (tasks, index = 0) => {
-            if (index >= tasks.length) {
-              console.log(`[task-heatmap] 所有循环任务删除完成，共删除 ${tasks.length} 个任务`);
-              return { 
-                success: results.success, 
-                failed: results.failed 
-              };
-            }
-            
-            const currentTask = tasks[index];
-            
-            // 更新进度提示
-            if (index % 5 === 0 || index === tasks.length - 1) {
-              wx.showLoading({
-                title: `删除中(${index + 1}/${tasks.length})`,
-                mask: true
-              });
-            }
-            
-            console.log(`[task-heatmap] 正在删除第 ${index+1}/${tasks.length} 个任务：${currentTask.id}`);
-            
-            return new Promise((resolve) => {
-              taskManager.deleteTask(currentTask.id, async (success) => {
-                if (success) {
-                  results.success.push(currentTask.id);
-                  console.log(`[task-heatmap] 成功删除任务 ${currentTask.id}`);
-                  
-                  // 验证剩余任务数量
-                  if ((index + 1) % 10 === 0 || index === tasks.length - 1) {
-                    taskManager.getAllTasks(remainingTasks => {
-                      console.log(`[task-heatmap] 删除任务 ${currentTask.id} 后，剩余任务总数：${remainingTasks.length}个`);
-                    });
-                  }
-                  
-                  // 等待一小段时间，避免存储冲突
-                  await new Promise(r => setTimeout(r, 20));
-                  
-                  // 继续处理下一个任务
-                  const result = await deleteTasksSerially(tasks, index + 1);
-                  resolve(result);
-                } else {
-                  results.failed.push(currentTask.id);
-                  console.error(`[task-heatmap] 删除任务失败: ${currentTask.id}`);
-                  
-                  // 继续处理下一个任务
-                  const result = await deleteTasksSerially(tasks, index + 1);
-                  resolve(result);
-                }
-              });
+          // 更新进度提示（每5个任务更新一次）
+          if (i % 5 === 0 || i === seriesTasks.length - 1) {
+            wx.showLoading({
+              title: `删除中(${i + 1}/${seriesTasks.length})`,
+              mask: true
             });
-          };
+          }
           
-          // 使用串行删除替代并行
-          return deleteTasksSerially(seriesTasks, 0);
-        })
-        .then(results => {
-          // 全部处理完成
-          wx.hideLoading();
+          logger.info('task-heatmap', `正在删除第 ${i+1}/${seriesTasks.length} 个任务：${currentTask.id}`);
           
-          console.log(`[task-heatmap] 任务系列删除完成，成功: ${results.success.length}，失败: ${results.failed.length}`);
-          
-          // 创建一条批量操作消息
-          if (results.success.length > 0) {
-            // 显示成功提示
-            wx.showToast({
-              title: `已删除${results.success.length}个任务`,
-              icon: 'success',
-              duration: 1500
-            });
+          try {
+            // 使用TaskService删除任务
+            const success = await taskService.deleteTask(currentTask.id);
             
-            // 仅当成功删除多个任务时才创建批量消息
-            if (results.success.length > 1) {
-              messageManager.createTaskMessage(task, 'deleted', {
-                isBatchOperation: true,
-                batchCount: results.success.length
-              });
-            }
-            
-            // 检查删除前后任务总数
-            taskManager.getAllTasks(currentTasks => {
-              console.log(`[task-heatmap] 删除操作后验证: 当前任务总数 ${currentTasks.length}个`);
+            if (success) {
+              results.success.push(currentTask.id);
+              logger.info('task-heatmap', `成功删除任务 ${currentTask.id}`);
               
-              // 强制刷新热力图，确保视图反映最新数据
-              console.log(`[task-heatmap] 执行强制热力图刷新以确保视图更新`);
-              this.refreshTaskList();
-            });
-          } else {
-            wx.showToast({
-              title: '删除失败',
-              icon: 'error',
-              duration: 1500
-            });
-            
-            // 重置删除相关状态
-            this.setData({
-              showDeleteConfirm: false,
-              deleteScope: '',
-              activeTaskForDelete: null
-            });
+              // 等待一小段时间，避免存储冲突
+              await new Promise(resolve => setTimeout(resolve, 20));
+            } else {
+              results.failed.push(currentTask.id);
+              logger.error('task-heatmap', `删除任务失败: ${currentTask.id}`);
+            }
+          } catch (error) {
+            results.failed.push(currentTask.id);
+            logger.error('task-heatmap', `删除任务出错: ${currentTask.id}`, error);
           }
-        })
-        .catch(error => {
-          // 确保加载提示被关闭
-          wx.hideLoading();
+        }
+        
+        // 处理结果
+        logger.info('task-heatmap', `任务系列删除完成，成功: ${results.success.length}，失败: ${results.failed.length}`);
+        
+        // 创建一条批量操作消息
+        if (results.success.length > 0) {
+          // 显示成功提示
+          wx.showToast({
+            title: `已删除${results.success.length}个任务`,
+            icon: 'success',
+            duration: 1500
+          });
           
-          // 只有在未被其他地方处理的错误才显示错误提示
-          if (error.message !== '未找到相关任务' && error.message !== '用户取消操作') {
-            console.error('[task-heatmap] 删除任务系列过程中出错:', error);
-            
-            // 显示友好的错误提示
-            wx.showToast({
-              title: '删除过程出错',
-              icon: 'error',
-              duration: 2000
-            });
-            
-            // 重置删除相关状态
-            this.setData({
-              showDeleteConfirm: false,
-              deleteScope: '',
-              activeTaskForDelete: null
+          // 仅当成功删除多个任务时才创建批量消息
+          if (results.success.length > 1) {
+            await messageManager.createTaskMessage(task, 'deleted', {
+              isBatchOperation: true,
+              batchCount: results.success.length
             });
           }
+          
+          // 强制刷新热力图，确保视图反映最新数据
+          logger.info('task-heatmap', '执行强制热力图刷新以确保视图更新');
+          this.refreshTaskList();
+        } else {
+          wx.showToast({
+            title: '删除失败',
+            icon: 'error',
+            duration: 1500
+          });
+          
+          // 重置删除相关状态
+          this.setData({
+            showDeleteConfirm: false,
+            deleteScope: '',
+            activeTaskForDelete: null
+          });
+        }
+      } catch (error) {
+        // 确保加载提示被关闭
+        wx.hideLoading();
+        
+        logger.error('task-heatmap', '删除任务系列过程中出错:', error);
+        
+        // 显示友好的错误提示
+        wx.showToast({
+          title: '删除过程出错',
+          icon: 'error',
+          duration: 2000
         });
+        
+        // 重置删除相关状态
+        this.setData({
+          showDeleteConfirm: false,
+          deleteScope: '',
+          activeTaskForDelete: null
+        });
+      }
     },
     
     /**
      * 刷新任务列表
      */
     refreshTaskList() {
-      console.log('[task-heatmap] 刷新任务列表');
+      const logger = require('../../utils/logger.js');
+      logger.info('task-heatmap', '刷新任务列表');
       
       // 通知父组件刷新任务数据
       this.triggerEvent('refreshTasks');
@@ -1719,8 +1641,9 @@ Component({
       
       // 强制刷新热力图数据 - 改进三阶段刷新流程
       // 阶段1: 立即清空热力图数据
-      const taskManager = require('../../utils/taskManager.js');
-      console.log('[task-heatmap] 第一阶段刷新：清空热力图数据');
+      const serviceManager = require('../../utils/serviceManager.js');
+      const taskService = serviceManager.getService('TaskService');
+      logger.info('task-heatmap', '第一阶段刷新：清空热力图数据');
       
       // 将所有日期的任务计数和热力值重置为0
       const days = [...this.data.days];
@@ -1737,32 +1660,35 @@ Component({
         days: days,
         "__clearTimestamp": Date.now() // 添加时间戳确保视图清空刷新
       }, () => {
-        console.log('[task-heatmap] 热力图数据已清空，准备获取新数据');
+        logger.info('task-heatmap', '热力图数据已清空，准备获取新数据');
       });
       
-      // 阶段2: 从任务管理器获取最新数据
-      setTimeout(() => {
-        console.log('[task-heatmap] 第二阶段刷新：获取最新任务数据并计算热力图');
+      // 阶段2: 从任务服务获取最新数据
+      setTimeout(async () => {
+        logger.info('task-heatmap', '第二阶段刷新：获取最新任务数据并计算热力图');
         
-        // 直接从taskManager获取最新数据
-        taskManager.getAllTasks(latestTasks => {
-          console.log(`[task-heatmap] 获取到最新任务数据: ${latestTasks.length}个任务`);
+        try {
+          // 使用TaskService获取最新数据
+          const latestTasks = await taskService.getTasks();
+          logger.info('task-heatmap', `获取到最新任务数据: ${latestTasks.length}个任务`);
           
           // 将最新任务数据传递给属性，确保热力图计算使用最新数据
           this.setData({ 
             "__refreshTimestamp": Date.now() // 添加刷新时间戳，确保视图刷新
           }, () => {
-            console.log('[task-heatmap] 准备强制重新计算热力图');
+            logger.info('task-heatmap', '准备强制重新计算热力图');
             
             // 强制重新计算热力图
             this.calculateHeatMap(latestTasks);
             
             // 阶段3: 确认刷新完成
-            setTimeout(() => {
-              console.log('[task-heatmap] 第三阶段刷新：确认热力图已更新');
-              // 再次从taskManager获取最新数据，确保热力图与数据一致
-              taskManager.getAllTasks(finalTasks => {
-                console.log(`[task-heatmap] 确认更新：最终任务数据数量 ${finalTasks.length}个`);
+            setTimeout(async () => {
+              logger.info('task-heatmap', '第三阶段刷新：确认热力图已更新');
+              
+              try {
+                // 再次从TaskService获取最新数据，确保热力图与数据一致
+                const finalTasks = await taskService.getTasks();
+                logger.info('task-heatmap', `确认更新：最终任务数据数量 ${finalTasks.length}个`);
                 
                 // 确认热力图已完全更新
                 this.calculateHeatMap(finalTasks);
@@ -1772,10 +1698,14 @@ Component({
                   taskCount: finalTasks.length,
                   timestamp: Date.now()
                 });
-              });
+              } catch (error) {
+                logger.error('task-heatmap', '第三阶段刷新获取任务数据失败', error);
+              }
             }, 500);
           });
-        });
+        } catch (error) {
+          logger.error('task-heatmap', '第二阶段刷新获取任务数据失败', error);
+        }
       }, 300);
     },
     
@@ -1933,13 +1863,15 @@ Component({
      * 更新整个循环任务系列
      * @param {Object} task 当前任务
      * @param {Object} updateData 要更新的字段
-     * @param {Function} callback 回调函数，参数为(success, count)
+     * @returns {Promise<Object>} 更新结果，包含 success 和 count 属性
      */
-    updateTaskSeries(task, updateData, callback) {
-      const taskManager = require('../../utils/taskManager.js');
-      const messageManager = require('../../utils/messageManager.js');
+    async updateTaskSeries(task, updateData) {
+      const logger = require('../../utils/logger.js');
+      const serviceManager = require('../../utils/serviceManager.js');
+      const taskService = serviceManager.getService('TaskService');
+      const messageManager = serviceManager.getService('MessageService');
       
-      console.log(`[TaskHeatmap] 准备更新任务系列，当前任务:`, {
+      logger.info('task-heatmap', `准备更新任务系列，当前任务:`, {
         id: task.id,
         title: task.title,
         date: task.date,
@@ -1953,304 +1885,157 @@ Component({
         mask: true
       });
       
-      // 添加超时保护，确保加载提示不会一直显示
-      const loadingTimeout = setTimeout(() => {
-        console.log('[TaskHeatmap] 更新操作超时，强制关闭加载提示');
-        wx.hideLoading();
+      try {
+        // 获取所有任务
+        const allTasks = await taskService.getTasks();
         
-        // 提供用户选择是继续等待还是取消操作
-        wx.showModal({
-          title: '操作耗时较长',
-          content: '是否继续等待？取消将中断当前操作',
-          confirmText: '继续等待',
-          cancelText: '取消操作',
-          success: (res) => {
-            if (res.confirm) {
-              // 用户选择继续等待，重启操作
-              console.log('[TaskHeatmap] 用户选择继续等待，重启操作');
-              wx.showLoading({
-                title: '继续处理中...',
-                mask: true
-              });
-              // 此处不重启超时计时器，让操作继续进行
-            } else {
-              // 用户选择取消操作
-              console.log('[TaskHeatmap] 用户取消操作');
-              if (callback) callback(false, 0);
-            }
-          }
-        });
-      }, 15000); // 增加超时时间到15秒
-      
-      // 使用Promise优化任务处理
-      const getAllTasksPromise = () => {
-        return new Promise((resolve, reject) => {
-          try {
-            taskManager.getAllTasks(allTasks => {
-              resolve(allTasks);
-            });
-          } catch (error) {
-            reject(error);
-          }
-        });
-      };
-      
-      const updateTaskPromise = (taskId, data) => {
-        return new Promise((resolve, reject) => {
-          try {
-            // 使用精简版的更新函数，避免重复加载全部任务
-            const updatedTask = {
-              id: taskId,
-              ...data,
-              updateTime: Date.now()
-            };
-            resolve(updatedTask);
-          } catch (error) {
-            reject(error);
-          }
-        });
-      };
-      
-      // 执行任务更新流程
-      getAllTasksPromise()
-        .then(allTasks => {
-          // 清除超时定时器
-          clearTimeout(loadingTimeout);
-          
-          // 获取父任务ID
-          let parentId = task.parentTaskId;
-          
-          // 如果当前任务没有parentTaskId，可能它自己就是父任务
-          if (!parentId) {
-            console.log(`[TaskHeatmap] 当前任务没有parentTaskId，可能是原始任务`);
-            parentId = task.id;
-          }
-          
-          console.log(`[TaskHeatmap] 使用父任务ID查找系列任务: ${parentId}`);
-          
-          // 使用改进的筛选逻辑
-          let seriesTasks = allTasks.filter(t => 
-            t.parentTaskId === parentId || // 找出所有子任务
-            t.id === parentId              // 包含父任务自身
-          );
-          
-          // 记录筛选前的任务总数，用于日志
-          const allSeriesTasks = [...seriesTasks];
-          
-          // 获取今天日期，作为筛选基准
-          const today = this.data.todayString;
-          
-          // 只保留今天及之后的任务，而不是基于选中的任务日期
-          seriesTasks = seriesTasks.filter(t => t.date >= today);
-          
-          console.log(`[TaskHeatmap] 今天日期: ${today}`);
-          console.log(`[TaskHeatmap] 选中任务日期: ${task.date}`);
-          console.log(`[TaskHeatmap] 找到该循环的任务总数: ${allSeriesTasks.length}个`);
-          console.log(`[TaskHeatmap] 日期过滤后，只更新今天(${today})及之后的任务: ${seriesTasks.length}个`);
-          
-          // 任务数量安全检查
-          const MAX_SAFE_TASKS = 100;
-          if (seriesTasks.length > MAX_SAFE_TASKS) {
-            // 确保先隐藏之前的加载提示
-            wx.hideLoading();
-            
-            return new Promise((resolve, reject) => {
-              wx.showModal({
-                title: '任务数量过多',
-                content: `即将更新从今天(${today})开始的${seriesTasks.length}个循环任务，可能需要较长时间。是否继续？`,
-                confirmText: '继续',
-                cancelText: '取消',
-                success: (res) => {
-                  if (res.confirm) {
-                    console.log(`[TaskHeatmap] 用户确认继续处理大量任务: ${seriesTasks.length}个`);
-                    wx.showLoading({
-                      title: '准备更新...',
-                      mask: true
-                    });
-                    resolve(seriesTasks);
-                  } else {
-                    console.log('[TaskHeatmap] 用户取消大量任务更新');
-                    // 确保在reject前执行回调，避免遗漏回调
-                    if (callback) callback(false, 0);
-                    reject(new Error('用户取消操作'));
-                  }
-                }
-              });
-            });
-          }
-          
-          return seriesTasks;
-        })
-        .then(seriesTasks => {
-          console.log(`[TaskHeatmap] 更新任务系列，共找到: ${seriesTasks.length} 个任务`);
-          
-          if (seriesTasks.length === 0) {
-            console.log(`[TaskHeatmap] 未找到任何相关系列任务，只更新当前任务`);
-            // 确保隐藏loading
-            wx.hideLoading();
-            taskManager.editTask(task.id, updateData, (updatedTask) => {
-              if (updatedTask) {
-                if (callback) callback(true, 1);
-              } else {
-                if (callback) callback(false, 0);
-              }
-            });
-            throw new Error('仅更新单个任务');
-          }
-          
-          // 用于保存更新结果的数组
-          const results = {
-            success: [],
-            failed: []
-          };
-          
-          // 批量处理任务更新
-          const batchSize = 10; // 增大批处理数量，减少UI更新频率
-          let updatedTasksData = []; // 保存所有更新后的任务数据
-          
-          // 分批处理任务，减少频繁更新loading消息
-          let processedCount = 0;
-          const updateBatch = (start) => {
-            const end = Math.min(start + batchSize, seriesTasks.length);
-            const batchPromises = [];
-            
-            for (let i = start; i < end; i++) {
-              const currentTask = seriesTasks[i];
-              batchPromises.push(
-                updateTaskPromise(currentTask.id, updateData)
-                  .then(updatedTask => {
-                    updatedTasksData.push(updatedTask);
-                    results.success.push(currentTask.id);
-                    return true;
-                  })
-                  .catch(error => {
-                    console.error(`[TaskHeatmap] 准备更新任务数据失败: ${currentTask.id}`, error);
-                    results.failed.push(currentTask.id);
-                    return false;
-                  })
-              );
-            }
-            
-            return Promise.all(batchPromises)
-              .then(() => {
-                processedCount += (end - start);
-                
-                // 更新进度提示
-                wx.showLoading({
-                  title: `准备更新(${processedCount}/${seriesTasks.length})`,
-                  mask: true
-                });
-                
-                // 继续处理下一批或返回结果
-                if (end < seriesTasks.length) {
-                  return updateBatch(end);
-                }
-                
-                console.log(`[TaskHeatmap] 所有任务更新数据准备完成 (${processedCount}/${seriesTasks.length})，准备批量保存`);
-                return { results, updatedTasksData, seriesTasks };
-              });
-          };
-          
-          // 开始批量处理
-          return updateBatch(0);
-        })
-        .then(({ results, updatedTasksData, seriesTasks }) => {
-          // 保存处理结果到缓存
-          if (updatedTasksData.length > 0) {
-            // 更新loading提示
-            wx.showLoading({
-              title: '正在保存更新...',
-              mask: true
-            });
-            
-            // 保存批量更新结果
-            return new Promise((resolve, reject) => {
-              try {
-                // 获取原始任务数据
-                taskManager.getAllTasks(allTasks => {
-                  // 合并更新数据
-                  const updatedTasks = allTasks.map(originalTask => {
-                    const updatedData = updatedTasksData.find(u => u.id === originalTask.id);
-                    if (updatedData) {
-                      return { 
-                        ...originalTask, 
-                        ...updateData,
-                        updateTime: Date.now() 
-                      };
-                    }
-                    return originalTask;
-                  });
-                  
-                  // 批量保存
-                  taskManager._saveTaskData(updatedTasks, () => {
-                    // 触发任务变更事件
-                    taskManager._onTaskDataChanged(updatedTasks);
-                    resolve(results);
-                  });
-                });
-              } catch (error) {
-                console.error('[TaskHeatmap] 保存任务更新出错:', error);
-                // 确保在出错时也关闭loading
-                wx.hideLoading();
-                reject(error);
-              }
-            });
-          } else {
-            // 没有任务需要更新，确保关闭loading
-            wx.hideLoading();
-            return results;
-          }
-        })
-        .then(results => {
-          // 全部处理完成，确保关闭loading
+        // 获取父任务ID
+        let parentId = task.parentTaskId;
+        
+        // 如果当前任务没有parentTaskId，可能它自己就是父任务
+        if (!parentId) {
+          logger.info('task-heatmap', '当前任务没有parentTaskId，可能是原始任务');
+          parentId = task.id;
+        }
+        
+        logger.info('task-heatmap', `使用父任务ID查找系列任务: ${parentId}`);
+        
+        // 使用改进的筛选逻辑
+        let seriesTasks = allTasks.filter(t => 
+          t.parentTaskId === parentId || // 找出所有子任务
+          t.id === parentId              // 包含父任务自身
+        );
+        
+        // 记录筛选前的任务总数，用于日志
+        const allSeriesTasks = [...seriesTasks];
+        
+        // 获取今天日期，作为筛选基准
+        const today = this.data.todayString;
+        
+        // 只保留今天及之后的任务，而不是基于选中的任务日期
+        seriesTasks = seriesTasks.filter(t => t.date >= today);
+        
+        logger.info('task-heatmap', `今天日期: ${today}`);
+        logger.info('task-heatmap', `选中任务日期: ${task.date}`);
+        logger.info('task-heatmap', `找到该循环的任务总数: ${allSeriesTasks.length}个`);
+        logger.info('task-heatmap', `日期过滤后，只更新今天(${today})及之后的任务: ${seriesTasks.length}个`);
+        
+        // 任务数量安全检查
+        const MAX_SAFE_TASKS = 100;
+        if (seriesTasks.length > MAX_SAFE_TASKS) {
+          // 确保先隐藏之前的加载提示
           wx.hideLoading();
           
-          console.log(`[TaskHeatmap] 任务系列更新完成，成功: ${results.success.length}，失败: ${results.failed.length}`);
+          // 使用Promise封装用户确认对话框
+          const userConfirmed = await new Promise((resolve) => {
+            wx.showModal({
+              title: '任务数量过多',
+              content: `即将更新从今天(${today})开始的${seriesTasks.length}个循环任务，可能需要较长时间。是否继续？`,
+              confirmText: '继续',
+              cancelText: '取消',
+              success: (res) => {
+                resolve(res.confirm);
+              }
+            });
+          });
           
-          // 创建一条批量操作消息
-          if (results.success.length > 0) {
-            // 显示成功提示
-            wx.showToast({
-              title: `已更新${results.success.length}个任务`,
-              icon: 'success',
-              duration: 1500
-            });
-            
-            // 仅当成功更新多个任务时才创建批量消息
-            if (results.success.length > 1) {
-              messageManager.createTaskMessage(task, 'edited', {
-                isBatchOperation: true,
-                batchCount: results.success.length
-              });
+          if (!userConfirmed) {
+            logger.info('task-heatmap', '用户取消大量任务更新');
+            return { success: false, count: 0 };
+          }
+          
+          logger.info('task-heatmap', `用户确认继续处理大量任务: ${seriesTasks.length}个`);
+          
+          // 用户确认继续，显示加载提示
+          wx.showLoading({
+            title: '准备更新...',
+            mask: true
+          });
+        }
+        
+        logger.info('task-heatmap', `更新任务系列，共找到: ${seriesTasks.length} 个任务`);
+        
+        // 没有找到任务，只更新当前任务
+        if (seriesTasks.length === 0) {
+          logger.info('task-heatmap', '未找到任何相关系列任务，只更新当前任务');
+          
+          // 更新单个任务
+          const updatedTask = await taskService.updateTask(task.id, updateData);
+          return { success: !!updatedTask, count: updatedTask ? 1 : 0 };
+        }
+        
+        // 用于保存更新结果的数组
+        const results = {
+          success: [],
+          failed: []
+        };
+        
+        // 批量处理任务更新
+        logger.info('task-heatmap', `开始批量更新${seriesTasks.length}个任务`);
+        
+        // 执行批量更新
+        let processedCount = 0;
+        const batchSize = 10;
+        
+        for (let i = 0; i < seriesTasks.length; i += batchSize) {
+          const batch = seriesTasks.slice(i, i + batchSize);
+          
+          // 更新进度提示
+          wx.showLoading({
+            title: `更新中(${processedCount}/${seriesTasks.length})`,
+            mask: true
+          });
+          
+          // 并行更新批次内的任务
+          const updatePromises = batch.map(async (currentTask) => {
+            try {
+              const updated = await taskService.updateTask(currentTask.id, updateData);
+              if (updated) {
+                results.success.push(currentTask.id);
+                return true;
+              } else {
+                results.failed.push(currentTask.id);
+                return false;
+              }
+            } catch (error) {
+              logger.error('task-heatmap', `更新任务失败: ${currentTask.id}`, error);
+              results.failed.push(currentTask.id);
+              return false;
             }
-            
-            if (callback) callback(true, results.success.length);
-          } else {
-            wx.showToast({
-              title: '更新失败',
-              icon: 'error',
-              duration: 1500
+          });
+          
+          // 等待当前批次完成
+          await Promise.all(updatePromises);
+          
+          processedCount += batch.length;
+          logger.info('task-heatmap', `已处理 ${processedCount}/${seriesTasks.length} 个任务`);
+        }
+        
+        logger.info('task-heatmap', `任务系列更新完成，成功: ${results.success.length}，失败: ${results.failed.length}`);
+        
+        // 如果至少有一个任务更新成功
+        if (results.success.length > 0) {
+          // 仅当成功更新多个任务时才创建批量消息
+          if (results.success.length > 1) {
+            await messageManager.createTaskMessage(task, 'edited', {
+              isBatchOperation: true,
+              batchCount: results.success.length
             });
-            
-            if (callback) callback(false, 0);
           }
-        })
-        .catch(error => {
-          // 仅在需要时隐藏加载提示（确保关闭loading）
-          if (error.message !== '仅更新单个任务') {
-            wx.hideLoading();
-            console.error('[TaskHeatmap] 更新任务系列过程中出错:', error);
-            
-            // 显示友好的错误提示
-            wx.showToast({
-              title: '更新过程出错',
-              icon: 'error',
-              duration: 2000
-            });
-            
-            if (callback) callback(false, 0);
-          }
-        });
+          
+          // 返回成功结果
+          return { success: true, count: results.success.length };
+        } else {
+          // 没有任务更新成功
+          return { success: false, count: 0 };
+        }
+      } catch (error) {
+        logger.error('task-heatmap', '更新任务系列过程中出错:', error);
+        return { success: false, count: 0 };
+      } finally {
+        // 确保隐藏加载提示
+        wx.hideLoading();
+      }
     },
 
     /**

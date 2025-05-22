@@ -1,7 +1,7 @@
 const app = getApp();
 const serviceManager = require('../../utils/serviceManager.js');
 const formatUtils = require('../../utils/formatUtils.js');
-const taskManager = require('../../utils/taskManager.js');
+const logger = require('../../utils/logger.js');
 
 Page({
 
@@ -23,7 +23,7 @@ Page({
    * 生命周期函数--监听页面加载
    */
   onLoad: function (options) {
-    console.log('[starRecords] 页面加载');
+    logger.info('starRecords', '页面加载');
     this.loadTaskData();
     this.loadStarRecords();
   },
@@ -33,7 +33,7 @@ Page({
    */
   onShow: function () {
     // 页面显示时重新加载记录
-    console.log('[starRecords] 页面显示，刷新记录');
+    logger.info('starRecords', '页面显示，刷新记录');
     this.loadStarRecords();
   },
 
@@ -41,7 +41,7 @@ Page({
    * 页面相关事件处理函数--监听用户下拉动作
    */
   onPullDownRefresh: function () {
-    console.log('[starRecords] 下拉刷新');
+    logger.info('starRecords', '下拉刷新');
     // 重新加载记录
     this.loadStarRecords(() => {
       wx.stopPullDownRefresh();
@@ -52,7 +52,7 @@ Page({
    * 导航到任务页面
    */
   navigateToTasks: function() {
-    console.log('[starRecords] 导航到任务页面');
+    logger.info('starRecords', '导航到任务页面');
     wx.switchTab({
       url: '/pages/index/index'
     });
@@ -61,31 +61,45 @@ Page({
   /**
    * 加载任务数据，用于确定记录的任务类型
    */
-  loadTaskData: function() {
-    console.log('[starRecords] 加载任务数据');
-    const tasks = wx.getStorageSync('taskData') || [];
+  async loadTaskData() {
+    logger.info('starRecords', '加载任务数据');
     
-    // 构建任务ID到任务类型的映射
-    const taskMap = {};
-    tasks.forEach(task => {
-      taskMap[task.id] = {
-        type: task.type || 'study', // 默认为学习类型
-        title: task.title
-      };
-    });
-    
-    this.setData({
-      taskData: taskMap
-    });
-    
-    console.log(`[starRecords] 加载了${Object.keys(taskMap).length}个任务数据`);
+    try {
+      // 获取任务服务
+      const taskService = serviceManager.getService('task');
+      
+      if (!taskService) {
+        logger.error('starRecords', '无法获取任务服务');
+        return;
+      }
+      
+      // 使用任务服务获取所有任务
+      const tasks = await taskService.getAllTasks();
+      
+      // 构建任务ID到任务类型的映射
+      const taskMap = {};
+      tasks.forEach(task => {
+        taskMap[task.id] = {
+          type: task.type || 'study', // 默认为学习类型
+          title: task.title
+        };
+      });
+      
+      this.setData({
+        taskData: taskMap
+      });
+      
+      logger.info('starRecords', `加载了${Object.keys(taskMap).length}个任务数据`);
+    } catch (error) {
+      logger.error('starRecords', '加载任务数据失败', error);
+    }
   },
 
   /**
    * 加载星星记录数据
    */
   loadStarRecords: async function(callback) {
-    console.log('[starRecords] 开始加载星星记录数据');
+    logger.info('starRecords', '开始加载星星记录数据');
     wx.showLoading({
       title: '加载中...',
     });
@@ -95,7 +109,7 @@ Page({
       const starService = serviceManager.getService('starService');
       
       if (!starService) {
-        console.error('[starRecords] 无法获取星星服务');
+        logger.error('starRecords', '无法获取星星服务');
         wx.hideLoading();
         if (callback) callback();
         return;
@@ -103,7 +117,7 @@ Page({
       
       // 使用starService获取记录
       const records = await starService.getStarRecords();
-      console.log(`[starRecords] 获取到${records.length}条星星记录`);
+      logger.info('starRecords', `获取到${records.length}条星星记录`);
       
       if (records.length > 0) {
         // 处理记录，添加任务类型信息
@@ -117,7 +131,7 @@ Page({
         
         // 应用筛选条件
         const filteredRecords = this.filterRecords(recordsWithBalance, this.data.selectedType, this.data.selectedTime);
-        console.log(`[starRecords] 筛选后剩余${filteredRecords.length}条记录`);
+        logger.info('starRecords', `筛选后剩余${filteredRecords.length}条记录`);
         
         // 按月份分组
         const groupedRecords = this.groupRecordsByMonth(filteredRecords);
@@ -136,7 +150,7 @@ Page({
         });
       }
     } catch (error) {
-      console.error('[starRecords] 加载星星记录失败', error);
+      logger.error('starRecords', '加载星星记录失败', error);
     } finally {
       wx.hideLoading();
       if (callback) callback();
@@ -147,7 +161,7 @@ Page({
    * 处理记录，添加任务类型信息
    */
   processRecords: function(records) {
-    console.log('[starRecords] 处理记录，添加任务类型信息');
+    logger.info('starRecords', '处理记录，添加任务类型信息');
     return records.map(record => {
       const processedRecord = { ...record };
       
@@ -206,7 +220,7 @@ Page({
    * 计算每条记录的星星余额
    */
   calculateRecordBalance: function(records, currentBalance) {
-    console.log(`[starRecords] 计算记录余额，当前总星星数：${currentBalance}`);
+    logger.info('starRecords', `计算记录余额，当前总星星数：${currentBalance}`);
     // 按时间从新到旧排序
     records.sort((a, b) => b.timestamp - a.timestamp);
     
@@ -232,7 +246,7 @@ Page({
    * 计算月度汇总信息
    */
   calculateMonthSummary: function(groupedRecords) {
-    console.log(`[starRecords] 计算月度汇总，共${groupedRecords.length}个月份`);
+    logger.info('starRecords', `计算月度汇总，共${groupedRecords.length}个月份`);
     return groupedRecords.map(group => {
       const records = group.records || [];
       let incomeTotal = 0;
@@ -270,7 +284,7 @@ Page({
    * 根据条件筛选记录
    */
   filterRecords: function(records, typeFilter, timeFilter) {
-    console.log(`[starRecords] 筛选记录，类型：${typeFilter}，时间：${timeFilter}`);
+    logger.info('starRecords', `筛选记录，类型：${typeFilter}，时间：${timeFilter}`);
     let filtered = [...records];
     
     // 应用类型筛选
@@ -306,7 +320,7 @@ Page({
    */
   quickSelectType: function(e) {
     const type = e.currentTarget.dataset.type;
-    console.log(`[starRecords] 快速选择类型筛选：${type}`);
+    logger.info('starRecords', `快速选择类型筛选：${type}`);
     
     // 如果选择的是当前已选类型，则不进行处理
     if (this.data.selectedType === type) {
@@ -328,7 +342,7 @@ Page({
    */
   quickSelectTime: function(e) {
     const time = e.currentTarget.dataset.time;
-    console.log(`[starRecords] 快速选择时间筛选：${time}`);
+    logger.info('starRecords', `快速选择时间筛选：${time}`);
     
     // 如果选择的是当前已选时间，则不进行处理
     if (this.data.selectedTime === time) {
@@ -348,7 +362,7 @@ Page({
    * 按月份分组记录
    */
   groupRecordsByMonth: function(records) {
-    console.log('[starRecords] 开始按月份分组记录');
+    logger.info('starRecords', '开始按月份分组记录');
     const result = [];
     const monthGroups = {};
     
