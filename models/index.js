@@ -9,6 +9,7 @@ const { Star, StarSourceType, StarStatus } = require('./star');
 const { StarGroup } = require('./star-group');
 const { Reward, RewardStatus, RewardType } = require('./reward');
 const { StarRecord, RecordType, RecordSource } = require('./star-record');
+const { Message, MessageType, NotificationType } = require('./message');
 
 module.exports = {
   // 任务模型
@@ -32,5 +33,10 @@ module.exports = {
   // 记录模型
   StarRecord,
   RecordType,
-  RecordSource
+  RecordSource,
+  
+  // 消息模型
+  Message,
+  MessageType,
+  NotificationType
 }; 

@@ -10,6 +10,7 @@ const StarRepository = require('./star-repository');
 const StarGroupRepository = require('./star-group-repository');
 const RewardRepository = require('./reward-repository');
 const StarRecordRepository = require('./star-record-repository');
+const MessageRepository = require('./message-repository');
 
 module.exports = {
   // 基础仓储
@@ -26,5 +27,8 @@ module.exports = {
   RewardRepository,
   
   // 记录仓储
-  StarRecordRepository
+  StarRecordRepository,
+  
+  // 消息仓储
+  MessageRepository
 }; 
