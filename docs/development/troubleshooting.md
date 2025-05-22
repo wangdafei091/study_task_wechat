@@ -263,39 +263,25 @@ Page({
 - 状态更新逻辑有误
 
 **解决方案**:
-1. 确保使用 `taskManager.updateTaskStatus()` 更新任务状态，而不是直接修改
-2. 添加任务状态变更事件，确保所有相关页面同步更新
-3. 实现数据验证机制，确保状态值正确
+1. 确保使用 `taskService.updateTaskStatus()` 更新任务状态，而不是直接修改任务对象
 
 ```javascript
-// 示例：正确的任务状态更新
-Page({
-  toggleTaskStatus: function(e) {
-    const taskId = e.currentTarget.dataset.id;
-    const currentStatus = e.currentTarget.dataset.status;
-    
-    // 计算新状态（在这里简化为0/1切换）
-    const newStatus = currentStatus === 0 ? 1 : 0;
-    
-    // 使用管理器更新状态
-    const taskManager = require('../../utils/taskManager.js');
-    
-    console.log(`[TaskPage] 更新任务状态: ${taskId}, ${currentStatus} -> ${newStatus}`);
-    
-    taskManager.updateTaskStatus(taskId, newStatus, (result) => {
-      if (result.success) {
-        // 更新成功后的处理
-        this.refreshTaskList(); // 刷新列表
-      } else {
-        console.error(`[TaskPage] 更新任务状态失败: ${result.error}`);
-        wx.showToast({
-          title: '状态更新失败',
-          icon: 'none'
-        });
-      }
-    });
-  }
-});
+// 获取任务服务实例
+const taskService = getApp().serviceManager.getService('taskService');
+
+// 更新任务状态（正确方式）
+taskService.updateTaskStatus(taskId, newStatus)
+  .then((result) => {
+    if (result.success) {
+      console.log('任务状态更新成功');
+      // 更新界面
+    } else {
+      console.error('任务状态更新失败:', result.message);
+    }
+  })
+  .catch((error) => {
+    console.error('任务状态更新出错:', error);
+  });
 ```
 
 ### 重复任务生成问题
@@ -313,59 +299,41 @@ Page({
 3. 为重复任务添加合理的日期上限
 
 ```javascript
-// 示例：批量创建重复任务
-const createRepeatingTasks = (templateTask, dates, callback) => {
-  console.log(`[TaskManager] 开始创建重复任务: ${dates.length}个`);
-  
-  // 复制任务模板
-  const taskManager = require('./taskManager.js');
-  
-  // 分批处理
-  const batchSize = 10;
+console.log(`[TaskService] 开始创建重复任务: ${dates.length}个`);
+
+// 获取任务服务实例
+const taskService = getApp().serviceManager.getService('taskService');
+
+// 批量处理功能
+async function processTasks() {
+  const batchSize = 50;
   let tasksCreated = 0;
-  let currentBatch = 0;
   
-  function processNextBatch() {
-    const startIdx = currentBatch * batchSize;
-    const endIdx = Math.min(startIdx + batchSize, dates.length);
+  for (let i = 0; i < dates.length; i += batchSize) {
+    const batch = dates.slice(i, i + batchSize);
+    console.log(`[TaskService] 处理批次 ${Math.floor(i/batchSize) + 1}: ${i}-${i+batch.length-1}`);
     
-    if (startIdx >= dates.length) {
-      // 所有批次处理完成
-      console.log(`[TaskManager] 重复任务创建完成: ${tasksCreated}/${dates.length}`);
-      if (callback) callback({ success: true, count: tasksCreated });
-      return;
-    }
-    
-    console.log(`[TaskManager] 处理批次 ${currentBatch + 1}: ${startIdx}-${endIdx-1}`);
-    
-    // 处理当前批次
-    const currentDates = dates.slice(startIdx, endIdx);
-    let batchComplete = 0;
-    
-    currentDates.forEach(date => {
-      // 创建单个任务副本
-      const taskCopy = { ...templateTask };
-      taskCopy.date = date;
-      taskCopy.parentTaskId = templateTask.id;
-      
-      taskManager.createTask(taskCopy, result => {
-        batchComplete++;
+    // 创建批量任务实例
+    for (const date of batch) {
+      const taskCopy = {...originalTask, date};
+      try {
+        const result = await taskService.createTask(taskCopy);
         if (result.success) {
           tasksCreated++;
         }
-        
-        // 当前批次完成
-        if (batchComplete === currentDates.length) {
-          currentBatch++;
-          setTimeout(processNextBatch, 50); // 延迟处理下一批次
-        }
-      });
-    });
+      } catch (error) {
+        console.error(`[TaskService] 创建任务失败:`, error);
+      }
+    }
+    
+    // 等待一小段时间，避免阻塞UI
+    await new Promise(resolve => setTimeout(resolve, 50));
   }
   
-  // 开始处理第一批
-  processNextBatch();
-};
+  console.log(`[TaskService] 重复任务创建完成: ${tasksCreated}/${dates.length}`);
+}
+
+processTasks();
 ```
 
 ## 组件通信问题

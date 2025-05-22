@@ -13,21 +13,21 @@
 ```javascript
 const serviceManager = require('../utils/serviceManager');
 
-// 获取任务管理器
-const taskManager = serviceManager.getTaskManager();
+// 获取任务服务
+const taskService = serviceManager.getService('taskService');
 
-// 获取消息管理器
-const messageManager = serviceManager.getMessageManager();
+// 获取消息服务
+const messageService = serviceManager.getService('messageService');
 
-// 获取积分管理器
-const pointsManager = serviceManager.getPointsManager();
+// 获取星星服务
+const starService = serviceManager.getService('starService');
 ```
 
 ### 主要方法
 
-- `getTaskManager()` - 获取任务管理器实例
-- `getMessageManager()` - 获取消息管理器实例
-- `getPointsManager()` - 获取积分管理器实例
+- `getService(serviceName)` - 获取指定名称的服务实例
+- `registerService(serviceName, serviceInstance)` - 注册服务实例
+- `initialize()` - 初始化所有服务
 
 ## 星星服务 (StarService)
 

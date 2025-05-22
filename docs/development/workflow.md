@@ -8,7 +8,7 @@
 - 组件名称：小驼峰命名法，如 `taskItem`、`progressRing`
 - 工具函数：小驼峰命名法，如 `formatDate`、`showLoading`
 - 常量：全大写下划线分隔，如 `MAX_TASK_COUNT`、`DEFAULT_DURATION`
-- 类名：大驼峰命名法，如 `TaskManager`、`MessageCenter`
+- 类名：大驼峰命名法，如 `TaskService`、`StarService`
 
 ### 文件结构规范
 - 组件文件夹命名与组件名称一致

@@ -7,14 +7,17 @@
 ### 文件命名
 
 - 组件文件夹使用小驼峰命名：`taskItem`、`progressRing`
-- 工具类文件使用小驼峰命名：`taskManager.js`、`dateUtils.js`
+- 工具类文件使用小驼峰命名：`dateUtils.js`、`formatUtils.js`
+- 领域模型使用小驼峰命名：`task.js`、`star.js`
+- 服务类文件使用烤串式命名：`task-service.js`、`message-service.js`
+- 仓储类文件使用烤串式命名：`task-repository.js`、`star-repository.js`
 - 页面文件夹使用中划线分隔：`task-edit`、`task-detail`
 
 ### 变量命名
 
 - 变量名使用小驼峰命名：`taskList`、`currentUser`
 - 常量使用全大写下划线分隔：`MAX_TASK_COUNT`、`DEFAULT_DURATION`
-- 类名使用大驼峰命名：`TaskManager`、`MessageCenter`
+- 类名使用大驼峰命名：`TaskService`、`MessageService`、`Task`、`Star`
 - 布尔类型变量使用 `is`/`has` 前缀：`isCompleted`、`hasChildren`
 
 ### 函数命名
@@ -86,8 +89,8 @@
 - 工具类使用模块化设计，通过 `module.exports` 导出：
   ```javascript
   module.exports = {
-    function1,
-    function2
+    fn1,
+    fn2
   };
   ```
 

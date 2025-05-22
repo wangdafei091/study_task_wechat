@@ -2,49 +2,51 @@
 
 本文档介绍了项目中可用的各种工具函数的用途和使用方法，帮助开发人员快速了解和使用这些通用功能。
 
-## 任务管理工具 (taskManager.js)
+## 任务服务 (TaskService)
 
-`utils/taskManager.js` 提供任务的增删改查和数据同步功能。
+`services/task-service.js` 提供任务的增删改查和数据同步功能，是任务管理领域的核心服务类。
 
-### 主要函数
+### 主要方法
 
 ```javascript
 // 获取所有任务
-taskManager.getAllTasks(callback)
+async getAllTasks()
 
 // 获取今日任务
-taskManager.getTodayTasks(callback)
+async getTodayTasks()
 
 // 创建新任务
-taskManager.createTask(task, callback)
+async createTask(taskData)
 
 // 更新任务状态
-taskManager.updateTaskStatus(taskId, status, callback)
+async updateTaskStatus(taskId, status)
 
 // 编辑任务
-taskManager.editTask(taskId, taskData, callback)
+async updateTask(taskId, changes)
 
 // 删除任务
-taskManager.deleteTask(taskId, callback)
+async deleteTask(taskId)
 
 // 检查即将到期的任务
-taskManager.checkUpcomingTasks(callback)
+async checkUpcomingTasks()
 
 // 计算任务进度
-taskManager.calculateTaskProgress(tasks, callback)
+async calculateTaskProgress()
 
 // 获取任务统计数据
-taskManager.getTaskStatistics(dateRange, callback)
+async getTaskStatistics(dateRange)
 ```
 
 ### 使用示例
 
 ```javascript
+// 获取服务实例
+const taskService = getApp().serviceManager.getService('taskService');
+
 // 获取所有任务
-taskManager.getAllTasks(tasks => {
-  console.log(`[Page] 获取所有任务: ${tasks.length}个`);
-  this.setData({ taskList: tasks });
-});
+const tasks = await taskService.getAllTasks();
+console.log(`[Page] 获取所有任务: ${tasks.length}个`);
+this.setData({ taskList: tasks });
 
 // 创建新任务
 const newTask = {
@@ -53,60 +55,60 @@ const newTask = {
   date: '2023-06-01',
   duration: 30
 };
-taskManager.createTask(newTask, result => {
-  if (result.success) {
-    console.log(`[Page] 创建任务成功: ${result.taskId}`);
-  }
-});
+const result = await taskService.createTask(newTask);
+if (result.success) {
+  console.log(`[Page] 创建任务成功: ${result.task.id}`);
+}
 ```
 
-## 消息管理工具 (messageManager.js)
+## 消息服务 (MessageService)
 
-`utils/messageManager.js` 处理应用内消息通知，包括任务提醒、系统消息等。
+`services/message-service.js` 处理应用内消息通知，包括任务提醒、系统消息等。
 
-### 主要函数
+### 主要方法
 
 ```javascript
 // 获取所有消息
-messageManager.getAllMessages(callback)
+async getAllMessages()
 
 // 创建任务相关消息
-messageManager.createTaskMessage(task, action, callback)
+async createTaskMessage(task, action)
 
 // 创建系统消息
-messageManager.createSystemMessage(content, type, callback)
+async createSystemMessage(content, type)
 
 // 创建奖励相关消息
-messageManager.createRewardMessage(reward, action, callback)
+async createRewardMessage(reward, action)
 
 // 标记消息为已读
-messageManager.markMessageAsRead(messageId, callback)
+async markMessageAsRead(messageId)
 
 // 删除消息
-messageManager.deleteMessage(messageId, callback)
+async deleteMessage(messageId)
 
 // 清除所有消息
-messageManager.clearAllMessages(callback)
+async clearAllMessages()
 
 // 获取未读消息数量
-messageManager.getUnreadCount(callback)
+async getUnreadCount()
 ```
 
 ### 使用示例
 
 ```javascript
+// 获取服务实例
+const messageService = getApp().serviceManager.getService('messageService');
+
 // 创建任务完成消息
-messageManager.createTaskMessage(task, 'completed', result => {
-  console.log(`[Page] 创建任务完成消息: ${result.messageId}`);
-});
+const result = await messageService.createTaskMessage(task, 'completed');
+console.log(`[Page] 创建任务完成消息: ${result.message.id}`);
 
 // 获取未读消息数量
-messageManager.getUnreadCount(count => {
-  this.setData({ unreadCount: count });
-  if (count > 0) {
-    wx.showTabBarRedDot({ index: 2 });
-  }
-});
+const count = await messageService.getUnreadCount();
+this.setData({ unreadCount: count });
+if (count > 0) {
+  wx.showTabBarRedDot({ index: 2 });
+}
 ```
 
 ## 日期处理工具 (dateUtils.js)
