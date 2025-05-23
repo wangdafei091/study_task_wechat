@@ -22,9 +22,6 @@ class MessageService {
     // 初始化事件总线
     this.eventBus = options.eventBus || new EventBus();
     
-    // 现有消息管理器
-    this.messageManager = require('../utils/messageManager.js');
-    
     // 新的领域模型仓储
     this.messageRepository = options.messageRepository || new MessageRepository();
     
@@ -125,22 +122,14 @@ class MessageService {
     
     logger.info('MessageService', `处理任务创建事件: ${task.title}`);
     
-    // 如果是批量创建，使用批量消息
+    // 构建消息对象
     const batchInfo = data.batchInfo || {};
-    if (batchInfo && batchInfo.isBatchOperation) {
-      this.messageManager.createTaskMessage(task, 'new', {
-        isBatchOperation: true,
-        batchCount: batchInfo.count || 0
-      });
-    } else {
-      // 单个任务创建
-      this.messageManager.createTaskMessage(task, 'new');
-    }
     
-    // 同时创建领域模型消息（不影响现有功能）
+    // 直接创建领域模型消息
     this._createTaskMessageWithDomainModel(task, NotificationType.NEW, {
       isBatchOperation: batchInfo.isBatchOperation,
-      batchCount: batchInfo.count || 0
+      batchCount: batchInfo.count || 0,
+      priority: MessagePriority.MEDIUM
     });
   }
   
@@ -154,10 +143,11 @@ class MessageService {
     
     if (operationType === 'complete') {
       logger.info('MessageService', `处理任务完成事件: ${task.title}`);
-      this.messageManager.createTaskMessage(task, 'completed');
       
-      // 同时创建领域模型消息（不影响现有功能）
-      this._createTaskMessageWithDomainModel(task, NotificationType.COMPLETED);
+      // 直接创建领域模型消息
+      this._createTaskMessageWithDomainModel(task, NotificationType.COMPLETED, {
+        priority: MessagePriority.HIGH
+      });
     }
   }
   
@@ -171,24 +161,14 @@ class MessageService {
     
     logger.info('MessageService', `处理任务更新事件: ${task.title}`);
     
-    // 如果是批量更新，使用批量消息
-    if (batchInfo && batchInfo.isBatchOperation) {
-      this.messageManager.createTaskMessage(task, 'edited', {
-        isBatchOperation: true,
-        batchCount: batchInfo.count || 0
-      });
-    } else {
-      // 单个任务更新
-      this.messageManager.createTaskMessage(task, 'edited');
-    }
-    
-    // 同时更新领域模型中的任务消息（不影响现有功能）
+    // 更新任务相关消息
     this._updateTaskMessagesWithDomainModel(task);
     
-    // 创建任务更新消息（领域模型）
+    // 创建任务更新消息
     this._createTaskMessageWithDomainModel(task, NotificationType.UPDATED, {
       isBatchOperation: batchInfo && batchInfo.isBatchOperation,
-      batchCount: batchInfo && batchInfo.count || 0
+      batchCount: batchInfo && batchInfo.count || 0,
+      priority: MessagePriority.MEDIUM
     });
   }
   
@@ -203,26 +183,13 @@ class MessageService {
     logger.info('MessageService', `处理任务删除事件: ${taskInfo.title || taskId}`);
     
     // 删除任务相关消息
-    this.messageManager.deleteTaskMessages(taskId);
-    
-    // 如果是批量删除，使用批量消息
-    if (batchInfo && batchInfo.isBatchOperation) {
-      this.messageManager.createTaskMessage(taskInfo, 'deleted', {
-        isBatchOperation: true,
-        batchCount: batchInfo.count || 0
-      });
-    } else {
-      // 单个任务删除
-      this.messageManager.createTaskMessage(taskInfo, 'deleted');
-    }
-    
-    // 同时处理领域模型消息（不影响现有功能）
     this._deleteRelatedMessagesWithDomainModel(taskId);
     
-    // 创建任务删除消息（领域模型）
+    // 创建任务删除消息
     this._createTaskMessageWithDomainModel(taskInfo, NotificationType.DELETED, {
       isBatchOperation: batchInfo && batchInfo.isBatchOperation,
-      batchCount: batchInfo && batchInfo.count || 0
+      batchCount: batchInfo && batchInfo.count || 0,
+      priority: MessagePriority.LOW
     });
   }
   
@@ -237,9 +204,6 @@ class MessageService {
     logger.info('MessageService', `处理任务完成事件: ${task.title}`);
     
     // 创建任务完成消息
-    this.messageManager.createTaskMessage(task, 'completed');
-    
-    // 同时创建领域模型消息（不影响现有功能）
     this._createTaskMessageWithDomainModel(task, NotificationType.COMPLETED, {
       priority: MessagePriority.HIGH
     });
@@ -251,22 +215,18 @@ class MessageService {
    * @private
    */
   _handleUpcomingTask(data) {
-    const { task, messageType } = data;
+    const { task, timeRemaining } = data;
     
-    logger.info('MessageService', `处理即将到期任务: ${task.title}, 类型: ${messageType}`);
+    logger.info('MessageService', `处理即将到期任务: ${task.title}, 剩余时间: ${timeRemaining}分钟`);
     
-    // 创建即将到期或必做任务消息
-    this.messageManager.createTaskMessage(task, messageType);
+    // 获取格式化后的剩余时间
+    let remainingText = this._calculateRemainingTime(task);
     
-    // 同时创建领域模型消息（不影响现有功能）
-    const notificationType = messageType === 'required' ? 
-      NotificationType.REQUIRED : NotificationType.UPCOMING;
-    
-    const priority = messageType === 'required' ? 
-      MessagePriority.HIGH : MessagePriority.MEDIUM;
-    
-    this._createTaskMessageWithDomainModel(task, notificationType, {
-      priority: priority
+    // 创建即将到期消息
+    this._createTaskMessageWithDomainModel(task, NotificationType.UPCOMING, {
+      timeRemaining: timeRemaining || 0,
+      remainingText: remainingText,
+      priority: MessagePriority.HIGH
     });
   }
   
@@ -276,14 +236,11 @@ class MessageService {
    * @private
    */
   _handleTaskPenalty(data) {
-    const { task, penaltyPoints, consumeResult } = data;
+    const { task, penaltyPoints } = data;
     
-    logger.info('MessageService', `处理任务惩罚事件: ${task.title}, 扣除${penaltyPoints}星星`);
+    logger.info('MessageService', `处理任务惩罚事件: ${task.title}, 扣除星星: ${penaltyPoints}`);
     
     // 创建惩罚消息
-    this.messageManager.createPenaltyMessage(task, penaltyPoints);
-    
-    // 同时创建领域模型消息（不影响现有功能）
     this._createPenaltyMessageWithDomainModel(task, penaltyPoints);
   }
   
@@ -297,10 +254,7 @@ class MessageService {
     
     logger.info('MessageService', `处理任务标记为必做事件: ${task.title}`);
     
-    // 创建必做任务消息
-    this.messageManager.createTaskMessage(task, 'required');
-    
-    // 同时创建领域模型消息（不影响现有功能）
+    // 创建必做任务提醒消息
     this._createTaskMessageWithDomainModel(task, NotificationType.REQUIRED, {
       priority: MessagePriority.HIGH
     });
@@ -316,27 +270,7 @@ class MessageService {
     
     logger.info('MessageService', `处理任务取消必做标记事件: ${task.title}`);
     
-    // 不需要创建消息，因为这不是一个关键事件
-  }
-  
-  /**
-   * 处理奖励兑换事件
-   * @param {Object} data 事件数据
-   * @private
-   */
-  _handleRewardClaimed(data) {
-    const { reward, user } = data;
-    
-    logger.info('MessageService', `处理奖励兑换事件: ${reward.name}`);
-    
-    // 创建奖励兑换消息
-    this.messageManager.createSystemMessage(
-      `您已成功兑换奖励"${reward.name}"，花费了${reward.points}颗星星`,
-      'reward'
-    );
-    
-    // 同时创建领域模型消息（不影响现有功能）
-    this._createRewardMessageWithDomainModel(reward, 'claimed');
+    // 没有必要发送消息，但可以记录日志
   }
   
   /**
@@ -344,38 +278,40 @@ class MessageService {
    * @param {Object} data 事件数据
    * @private
    */
-  _handleRewardDelivered(data) {
-    const { reward, user } = data;
+  _handleRewardClaimed(data) {
+    const { reward } = data;
     
     logger.info('MessageService', `处理奖励领取事件: ${reward.name}`);
     
     // 创建奖励领取消息
-    this.messageManager.createSystemMessage(
-      `您已成功领取奖励"${reward.name}"`,
-      'reward'
-    );
+    this._createRewardMessageWithDomainModel(reward, 'claimed');
+  }
+  
+  /**
+   * 处理奖励交付事件
+   * @param {Object} data 事件数据
+   * @private
+   */
+  _handleRewardDelivered(data) {
+    const { reward } = data;
     
-    // 同时创建领域模型消息（不影响现有功能）
+    logger.info('MessageService', `处理奖励交付事件: ${reward.name}`);
+    
+    // 创建奖励交付消息
     this._createRewardMessageWithDomainModel(reward, 'delivered');
   }
   
   /**
-   * 处理奖励取消兑换事件
+   * 处理奖励取消领取事件
    * @param {Object} data 事件数据
    * @private
    */
   _handleRewardUnclaimed(data) {
-    const { reward, user } = data;
+    const { reward } = data;
     
-    logger.info('MessageService', `处理奖励取消兑换事件: ${reward.name}`);
+    logger.info('MessageService', `处理奖励取消领取事件: ${reward.name}`);
     
-    // 创建奖励取消兑换消息
-    this.messageManager.createSystemMessage(
-      `您已取消兑换奖励"${reward.name}"，退回${reward.points}颗星星`,
-      'reward'
-    );
-    
-    // 同时创建领域模型消息（不影响现有功能）
+    // 创建奖励取消领取消息
     this._createRewardMessageWithDomainModel(reward, 'unclaimed');
   }
   
@@ -462,47 +398,53 @@ class MessageService {
    * 创建系统消息
    * @param {String} content 消息内容
    * @param {String} type 消息类型
-   * @returns {Promise<Object>} 创建的消息
+   * @returns {Promise<Object>} 创建的消息对象
    */
   async createSystemMessage(content, type = 'system') {
-    logger.info('MessageService', `创建系统消息: ${content}, 类型: ${type}`);
+    logger.info('MessageService', `创建系统消息: ${content}`);
     
-    // 调用现有逻辑
-    return new Promise((resolve) => {
-      this.messageManager.createSystemMessage(content, type, (message) => {
-        resolve(message);
-      });
-    });
+    try {
+      const message = await this._createSystemMessageWithDomainModel(content, type);
+      return Promise.resolve(message);
+    } catch (error) {
+      logger.error('MessageService', '创建系统消息失败', error);
+      return Promise.reject(error);
+    }
   }
   
   /**
-   * 创建任务相关消息
+   * 创建任务消息
    * @param {Object} task 任务对象
    * @param {String} type 消息类型
-   * @param {Object} options 附加选项
-   * @returns {Promise<Object>} 创建的消息
+   * @param {Object} options 选项
+   * @returns {Promise<Object>} 创建的消息对象
    */
   async createTaskMessage(task, type, options = {}) {
     logger.info('MessageService', `创建任务消息: ${task.title}, 类型: ${type}`);
     
-    // 调用现有逻辑
-    const message = this.messageManager.createTaskMessage(task, type, options);
-    return message;
+    try {
+      const message = await this._createTaskMessageWithDomainModel(task, type, options);
+      return Promise.resolve(message);
+    } catch (error) {
+      logger.error('MessageService', '创建任务消息失败', error);
+      return Promise.reject(error);
+    }
   }
   
   /**
    * 获取所有消息
-   * @returns {Promise<Array>} 消息列表
+   * @returns {Promise<Array>} 消息数组
    */
   async getAllMessages() {
     logger.info('MessageService', '获取所有消息');
     
-    // 调用现有逻辑
-    return new Promise((resolve) => {
-      this.messageManager.getAllMessages((messages) => {
-        resolve(messages);
-      });
-    });
+    try {
+      const messages = await this._getAllMessagesWithDomainModel();
+      return Promise.resolve(messages);
+    } catch (error) {
+      logger.error('MessageService', '获取所有消息失败', error);
+      return Promise.resolve([]); // 返回空数组而非拒绝，避免UI崩溃
+    }
   }
   
   /**
@@ -512,59 +454,63 @@ class MessageService {
   async getUnreadCount() {
     logger.info('MessageService', '获取未读消息数量');
     
-    // 调用现有逻辑
-    return new Promise((resolve) => {
-      this.messageManager.getUnreadCount((count) => {
-        resolve(count);
-      });
-    });
+    try {
+      const count = await this._getUnreadCountWithDomainModel();
+      return Promise.resolve(count);
+    } catch (error) {
+      logger.error('MessageService', '获取未读消息数量失败', error);
+      return Promise.resolve(0); // 出错时返回0而非拒绝
+    }
   }
   
   /**
    * 标记消息为已读
    * @param {String} messageId 消息ID
-   * @returns {Promise<Boolean>} 操作结果
+   * @returns {Promise<Boolean>} 标记结果
    */
   async markMessageAsRead(messageId) {
     logger.info('MessageService', `标记消息为已读: ${messageId}`);
     
-    // 调用现有逻辑
-    return new Promise((resolve) => {
-      this.messageManager.markAsRead(messageId, (success) => {
-        resolve(success);
-      });
-    });
+    try {
+      const result = await this._markMessageAsReadWithDomainModel(messageId);
+      return Promise.resolve(result);
+    } catch (error) {
+      logger.error('MessageService', '标记消息为已读失败', error);
+      return Promise.resolve(false); // 出错时返回false而非拒绝
+    }
   }
   
   /**
    * 标记所有消息为已读
-   * @returns {Promise<Boolean>} 操作结果
+   * @returns {Promise<Number>} 标记的消息数量
    */
   async markAllMessagesAsRead() {
     logger.info('MessageService', '标记所有消息为已读');
     
-    // 调用现有逻辑
-    return new Promise((resolve) => {
-      this.messageManager.markAllAsRead((count) => {
-        resolve(count);
-      });
-    });
+    try {
+      const count = await this._markAllMessagesAsReadWithDomainModel();
+      return Promise.resolve(count);
+    } catch (error) {
+      logger.error('MessageService', '标记所有消息为已读失败', error);
+      return Promise.resolve(0); // 出错时返回0而非拒绝
+    }
   }
   
   /**
    * 删除消息
    * @param {String} messageId 消息ID
-   * @returns {Promise<Boolean>} 操作结果
+   * @returns {Promise<Boolean>} 删除结果
    */
   async deleteMessage(messageId) {
     logger.info('MessageService', `删除消息: ${messageId}`);
     
-    // 调用现有逻辑
-    return new Promise((resolve) => {
-      this.messageManager.deleteMessage(messageId, (success) => {
-        resolve(success);
-      });
-    });
+    try {
+      const result = await this._deleteMessageWithDomainModel(messageId);
+      return Promise.resolve(result);
+    } catch (error) {
+      logger.error('MessageService', '删除消息失败', error);
+      return Promise.resolve(false); // 出错时返回false而非拒绝
+    }
   }
   
   /**
@@ -1305,6 +1251,73 @@ class MessageService {
       batchCount,
       priority: priority || MessagePriority.MEDIUM
     };
+  }
+  
+  /**
+   * 删除与指定任务相关的特定类型消息
+   * @param {String} taskId 任务ID
+   * @param {String} notificationType 消息类型，如'upcoming'
+   * @returns {Promise<Boolean>} 操作结果
+   */
+  async deleteRelatedTaskMessages(taskId, notificationType) {
+    logger.info('MessageService', `删除任务相关消息: 任务ID=${taskId}, 类型=${notificationType}`);
+    
+    try {
+      // 获取与该任务相关的指定类型消息
+      const messages = await this.messageRepository.query(message => 
+        message.type === MessageType.TASK && 
+        message.relatedId === taskId &&
+        message.notificationType === notificationType
+      );
+      
+      if (messages.length === 0) {
+        logger.info('MessageService', `未找到任务相关消息: ${taskId}`);
+        return Promise.resolve(false);
+      }
+      
+      // 删除这些消息
+      const messageIds = messages.map(msg => msg.id);
+      await this.batchDeleteMessages(messageIds);
+      
+      logger.info('MessageService', `已删除${messages.length}条任务相关消息`);
+      return Promise.resolve(true);
+    } catch (error) {
+      logger.error('MessageService', '删除任务相关消息失败', error);
+      return Promise.resolve(false);
+    }
+  }
+  
+  /**
+   * 标记与指定任务相关的所有消息为已读
+   * @param {String} taskId 任务ID
+   * @returns {Promise<Boolean>} 操作结果
+   */
+  async markRelatedMessagesAsRead(taskId) {
+    logger.info('MessageService', `标记任务相关消息为已读: ${taskId}`);
+    
+    try {
+      // 获取与该任务相关的未读消息
+      const messages = await this.messageRepository.query(message => 
+        message.type === MessageType.TASK && 
+        message.relatedId === taskId &&
+        !message.isRead
+      );
+      
+      if (messages.length === 0) {
+        logger.info('MessageService', `未找到任务未读消息: ${taskId}`);
+        return Promise.resolve(false);
+      }
+      
+      // 标记这些消息为已读
+      const messageIds = messages.map(msg => msg.id);
+      await this.batchMarkMessagesAsRead(messageIds);
+      
+      logger.info('MessageService', `已标记${messages.length}条任务相关消息为已读`);
+      return Promise.resolve(true);
+    } catch (error) {
+      logger.error('MessageService', '标记任务相关消息为已读失败', error);
+      return Promise.resolve(false);
+    }
   }
 }
 

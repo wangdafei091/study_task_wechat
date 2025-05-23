@@ -1,4 +1,7 @@
 // pages/message/message.js
+const serviceManager = require('../../utils/serviceManager.js');
+const logger = require('../../utils/logger');
+
 Page({
   /**
    * 页面的初始数据
@@ -44,11 +47,19 @@ Page({
    * 加载消息数据
    */
   loadMessageData: function() {
-    const messageManager = require('../../utils/messageManager.js');
+    logger.info('MessagePage', '开始加载消息数据');
+    const messageService = serviceManager.getMessageService();
     
-    messageManager.getAllMessages(messages => {
-      this.processMessages(messages);
-    });
+    messageService.getAllMessages()
+      .then(messages => {
+        logger.info('MessagePage', `加载消息数据成功, 数量=${messages.length}`);
+        this.processMessages(messages);
+      })
+      .catch(error => {
+        logger.error('MessagePage', '加载消息数据失败', error);
+        // 数据加载失败时显示空消息列表
+        this.processMessages([]);
+      });
   },
 
   /**
@@ -211,15 +222,15 @@ Page({
  */
 viewMessageDetail: function(e) {
   const messageId = e.currentTarget.dataset.id;
-  const messageManager = require('../../utils/messageManager.js');
+  const messageService = serviceManager.getMessageService();
   const messageIndex = this.data.messages.findIndex(m => m.id === messageId);
   
   if (messageIndex > -1) {
     // 标记该消息为已读
-    messageManager.markAsRead(messageId);
+    messageService.markMessageAsRead(messageId);
     
     // 记录日志
-    console.log(`[消息中心] 标记消息已读: ${this.data.messages[messageIndex].title}`);
+    logger.info('MessagePage', `标记消息已读: ${this.data.messages[messageIndex].title}`);
     
     // 重新加载消息数据
     setTimeout(() => {
@@ -232,17 +243,36 @@ viewMessageDetail: function(e) {
    * 标记所有消息为已读
    */
   markAllAsRead: function() {
-    const messageManager = require('../../utils/messageManager.js');
-    messageManager.markAllAsRead();
+    logger.info('MessagePage', '标记所有消息为已读');
+    const messageService = serviceManager.getMessageService();
     
-    wx.showToast({
-      title: '全部已读',
-      icon: 'success',
-      duration: 1500
-    });
-    
-    // 刷新消息数据
-    this.loadMessageData();
+    messageService.markAllMessagesAsRead()
+      .then(count => {
+        logger.info('MessagePage', `标记所有消息为已读成功, 数量=${count}`);
+        
+        // 更新本地数据
+        const updatedMessages = this.data.messages.map(msg => {
+          return { ...msg, isRead: true };
+        });
+        
+        // 更新UI
+        this.processMessages(updatedMessages);
+        
+        // 显示提示
+        wx.showToast({
+          title: '全部已读',
+          icon: 'success',
+          duration: 1500
+        });
+      })
+      .catch(error => {
+        logger.error('MessagePage', '标记所有消息为已读失败', error);
+        wx.showToast({
+          title: '操作失败',
+          icon: 'none',
+          duration: 1500
+        });
+      });
   },
 
   /**
@@ -250,43 +280,53 @@ viewMessageDetail: function(e) {
    */
   deleteMessage: function(e) {
     const messageId = e.currentTarget.dataset.id;
+    if (!messageId) {
+      logger.warn('MessagePage', '删除消息失败: 消息ID为空');
+      return;
+    }
+    
+    logger.info('MessagePage', `删除消息: ${messageId}`);
+    const messageService = serviceManager.getMessageService();
     
     wx.showModal({
-      title: '删除消息',
+      title: '确认删除',
       content: '确定要删除这条消息吗？',
       success: (res) => {
         if (res.confirm) {
-          const messages = this.data.messages.filter(msg => msg.id !== messageId);
-          
-          // 重新计算未读数量
-          const unreadCount = messages.filter(msg => !msg.isRead).length;
-          const taskUnreadCount = messages.filter(msg => !msg.isRead && msg.type === 'task').length;
-          const achievementUnreadCount = messages.filter(msg => !msg.isRead && msg.type === 'achievement').length;
-          const systemUnreadCount = messages.filter(msg => !msg.isRead && msg.type === 'system').length;
-          
-          this.setData({
-            messages,
-            unreadCount,
-            taskUnreadCount,
-            achievementUnreadCount,
-            systemUnreadCount
-          });
-          
-          // 更新过滤后的消息列表
-          this.filterMessagesByTab();
-          
-          // 更新本地存储
-          wx.setStorage({
-            key: 'messageData',
-            data: messages,
-            success: () => {
+          messageService.deleteMessage(messageId)
+            .then(success => {
+              if (success) {
+                logger.info('MessagePage', `删除消息成功: ${messageId}`);
+                
+                // 更新本地数据
+                const updatedMessages = this.data.messages.filter(msg => msg.id !== messageId);
+                
+                // 更新UI
+                this.processMessages(updatedMessages);
+                
+                // 显示提示
+                wx.showToast({
+                  title: '已删除',
+                  icon: 'success',
+                  duration: 1500
+                });
+              } else {
+                logger.warn('MessagePage', `删除消息失败: ${messageId}`);
+                wx.showToast({
+                  title: '删除失败',
+                  icon: 'none',
+                  duration: 1500
+                });
+              }
+            })
+            .catch(error => {
+              logger.error('MessagePage', `删除消息出错: ${messageId}`, error);
               wx.showToast({
-                title: '删除成功',
-                icon: 'success',
+                title: '删除失败',
+                icon: 'none',
                 duration: 1500
               });
-            }
-          });
+            });
         }
       }
     });
@@ -318,7 +358,7 @@ viewMessageDetail: function(e) {
    */
   toggleMessageReadStatus: function(e) {
     const messageId = e.currentTarget.dataset.id;
-    const messageManager = require('../../utils/messageManager.js');
+    const messageService = serviceManager.getMessageService();
     const message = this.data.messages.find(m => m.id === messageId);
     
     if (message) {
@@ -332,7 +372,7 @@ viewMessageDetail: function(e) {
         });
       } else {
         // 未读变已读
-        messageManager.markAsRead(messageId);
+        messageService.markMessageAsRead(messageId);
         
         // 重新加载消息数据
         setTimeout(() => {

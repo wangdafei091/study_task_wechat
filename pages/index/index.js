@@ -1,8 +1,8 @@
 const app = getApp()
 const serviceManager = require('../../utils/serviceManager.js');
-const messageManager = require('../../utils/messageManager.js');
 const formatUtils = require('../../utils/formatUtils');
 const logger = require('../../utils/logger');
+const { NotificationType } = require('../../models/message');
 
 Page({
   data: {
@@ -850,28 +850,138 @@ Page({
   },
   
   // 查看消息详情
-viewMessageDetail: function(e) {
-  const messageId = e.currentTarget.dataset.id;
-  const message = this.data.messages.find(m => m.id === messageId);
-  
-  if (message) {
-    // 标记该消息为已读
-    messageManager.markAsRead(messageId);
+  viewMessageDetail: function(e) {
+    const messageId = e.currentTarget.dataset.id;
+    const message = this.data.messages.find(m => m.id === messageId);
     
-    // 记录日志
-    console.log(`[首页] 标记消息已读: ${message.title}`);
-  }
-},
+    if (message) {
+      // 标记该消息为已读
+      this.markMessageAsRead(e);
+      
+      // 记录日志
+      console.log(`[首页] 标记消息已读: ${message.title}`);
+    }
+  },
   
-  // 标记所有消息为已读
-  markAllAsRead: function() {
-    messageManager.markAllAsRead(() => {
-      wx.showToast({
-        title: '全部已读',
-        icon: 'success',
-        duration: 1500
+  /**
+   * 标记消息为已读
+   * @param {Object} e 事件对象 
+   */
+  markMessageAsRead: function(e) {
+    const messageId = e.currentTarget.dataset.id;
+    if (!messageId) {
+      logger.warn('Index', '标记消息已读失败：消息ID为空');
+      return;
+    }
+    
+    const messageService = serviceManager.getMessageService();
+    
+    messageService.markMessageAsRead(messageId)
+      .then(success => {
+        logger.info('Index', `标记消息已读${success ? '成功' : '失败'}: ${messageId}`);
+        if (success) {
+          this.getUnreadMessageCount();
+        }
+      })
+      .catch(error => {
+        logger.error('Index', '标记消息已读出错', error);
       });
-    });
+  },
+  
+  /**
+   * 标记所有消息为已读
+   */
+  markAllMessagesAsRead: function() {
+    const messageService = serviceManager.getMessageService();
+    
+    messageService.markAllMessagesAsRead()
+      .then(count => {
+        logger.info('Index', `标记全部消息已读成功, 数量: ${count}`);
+        this.getUnreadMessageCount();
+        
+        // 更新UI
+        this.setData({
+          'messages': this.data.messages.map(msg => {
+            return {
+              ...msg,
+              isRead: true
+            }
+          })
+        });
+      })
+      .catch(error => {
+        logger.error('Index', '标记全部消息已读出错', error);
+      });
+  },
+
+  /**
+   * 获取未读消息数量
+   */
+  getUnreadMessageCount: function() {
+    const messageService = serviceManager.getMessageService();
+    
+    messageService.getUnreadCount()
+      .then(count => {
+        this.setData({
+          unreadCount: count
+        });
+        logger.info('Index', `更新未读消息数量: ${count}`);
+      })
+      .catch(error => {
+        logger.error('Index', '获取未读消息数量出错', error);
+      });
+  },
+
+  /**
+   * 忽略即将到期任务提醒
+   */
+  dismissUpcomingTask: function(e) {
+    const taskId = e.currentTarget.dataset.id;
+    if (!taskId) {
+      logger.warn('Index', '忽略即将到期任务提醒失败：任务ID为空');
+      return;
+    }
+    
+    const messageService = serviceManager.getMessageService();
+    
+    // 删除与此任务相关的即将到期消息
+    messageService.deleteRelatedTaskMessages(taskId, NotificationType.UPCOMING)
+      .then(success => {
+        logger.info('Index', `忽略即将到期任务提醒${success ? '成功' : '失败'}: ${taskId}`);
+        if (success) {
+          this.setData({
+            showUpcomingTask: false
+          });
+        }
+      })
+      .catch(error => {
+        logger.error('Index', '忽略即将到期任务提醒出错', error);
+      });
+  },
+
+  /**
+   * 标记任务相关消息为已读
+   */
+  markTaskMessagesAsRead: function(e) {
+    const taskId = e.currentTarget.dataset.id;
+    if (!taskId) {
+      logger.warn('Index', '标记任务消息已读失败：任务ID为空');
+      return;
+    }
+    
+    const messageService = serviceManager.getMessageService();
+    
+    // 标记与此任务相关的消息为已读
+    messageService.markRelatedMessagesAsRead(taskId)
+      .then(success => {
+        logger.info('Index', `标记任务相关消息已读${success ? '成功' : '失败'}: ${taskId}`);
+        if (success) {
+          this.getUnreadMessageCount();
+        }
+      })
+      .catch(error => {
+        logger.error('Index', '标记任务相关消息已读出错', error);
+      });
   },
   
   // 点击即将到期任务
@@ -926,38 +1036,6 @@ viewMessageDetail: function(e) {
           break;
       }
     }, 200);
-  },
-  
-  // 消除即将到期任务提醒
-  dismissUpcomingTask: function(e) {
-    const taskId = this.data.upcomingTask.id;
-    
-    // 使用消息管理器处理隐藏逻辑
-    messageManager.dismissUpcomingTask(taskId, success => {
-      this.setData({
-        showUpcomingTask: false
-      });
-    });
-  },
-  
-  // 标记即将到期任务的消息为已读
-  markUpcomingMessageAsRead: function() {
-    const taskId = this.data.upcomingTask.id;
-    if (!taskId) return;
-    
-    // 使用消息管理器标记任务相关消息为已读
-    messageManager.markTaskMessagesAsRead(taskId, success => {
-      if (success) {
-        wx.showToast({
-          title: '已标记为已读',
-          icon: 'success',
-          duration: 1500
-        });
-        
-        // 刷新未读消息数量
-        this.loadMessageData();
-      }
-    });
   },
   
   // 浮动菜单相关

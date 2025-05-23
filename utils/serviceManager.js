@@ -78,9 +78,8 @@ const serviceManager = {
    * @deprecated 请使用getMessageService代替
    */
   getMessageManager() {
-    logger.info('ServiceManager', '使用消息管理器 (已废弃，请使用getMessageService)');
-    const oldMessageManager = require('./messageManager');
-    return serviceInstances.messageService || oldMessageManager;
+    logger.warn('ServiceManager', '使用已废弃的getMessageManager方法，请使用getMessageService');
+    return this.getMessageService();
   },
   
   /**
@@ -105,7 +104,7 @@ const serviceManager = {
    * @returns {MessageService} 消息服务实例
    */
   getMessageService() {
-    logger.info('ServiceManager', '使用消息服务');
+    logger.info('ServiceService', '使用消息服务');
     
     if (!serviceInstances.messageService) {
       serviceInstances.messageService = new MessageService({
