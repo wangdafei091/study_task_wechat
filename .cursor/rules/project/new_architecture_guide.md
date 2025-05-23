@@ -52,40 +52,51 @@
 - 实现用户界面和交互
 - 通过服务管理器访问应用服务
 
-## 目录结构
+## 迁移状态
 
+项目已从传统的分层架构迁移至领域驱动设计(DDD)架构，迁移工作基本完成。
+
+### 已完成迁移
+
+- ✅ **星星服务** (`star-service.js`)
+  - 实现了星星的管理、分组、有效期和消费逻辑
+  - 替代了原有的 `pointsManager.js` 功能
+
+- ✅ **奖励服务** (`reward-service.js`) 
+  - 实现了奖励的管理、兑换和记录功能
+  - 与星星服务集成，实现奖励兑换功能
+
+- ✅ **消息服务** (`message-service.js`)
+  - 实现了系统消息的创建、管理和通知功能
+  - 替代了原有的 `messageManager.js` 功能
+
+- ✅ **任务服务** (`task-service.js`)
+  - 实现了任务的全生命周期管理
+  - 替代了原有的 `taskManager.js` 功能
+
+### 统一数据访问
+
+所有领域服务现在通过领域仓储层访问数据，不再直接操作存储API：
+
+```javascript
+// 旧方式 - 直接使用存储API
+wx.setStorageSync('taskData', tasks);
+const tasks = wx.getStorageSync('taskData') || [];
+
+// 新方式 - 通过仓储层和适配器访问数据
+const taskRepository = new TaskRepository();
+await taskRepository.saveAll(tasks);
+const tasks = await taskRepository.getAll();
 ```
-project/
-  ├── models/                # 领域模型
-  │   ├── index.js           # 导出所有模型
-  │   ├── task.js            # 任务模型
-  │   ├── star.js            # 星星模型
-  │   ├── star-group.js      # 星星分组模型
-  │   ├── reward.js          # 奖励模型
-  │   └── star-record.js     # 星星记录模型
-  │
-  ├── repositories/          # 仓储实现
-  │   ├── index.js           # 导出所有仓储
-  │   ├── base-repository.js # 基础仓储类
-  │   ├── task-repository.js # 任务仓储
-  │   ├── star-repository.js # 星星仓储
-  │   └── ...                # 其他仓储
-  │
-  ├── services/              # 应用服务
-  │   ├── index.js           # 导出所有服务
-  │   ├── star-service.js    # 星星服务
-  │   └── reward-service.js  # 奖励服务
-  │
-  ├── adapters/              # 适配器
-  │   └── storage-adapter.js # 存储适配器
-  │
-  ├── utils/                 # 工具类
-  │   ├── serviceManager.js  # 服务管理器
-  │   ├── logger.js          # 日志工具
-  │   └── ...                # 其他工具
-  │
-  ├── pages/                 # 页面
-  └── components/            # 组件
+
+### 服务管理器
+
+服务管理器 `utils/serviceManager.js` 提供了对所有领域服务的统一访问：
+
+```javascript
+// 获取服务实例
+const taskService = getApp().serviceManager.getService('taskService');
+const starService = getApp().serviceManager.getService('starService');
 ```
 
 ## 开发流程
@@ -118,315 +129,167 @@ project/
    - 通过服务管理器调用新服务
    - 展示和处理数据
 
-### 2. 迁移现有功能
+### 2. 修改现有功能
 
-迁移现有功能的步骤：
+修改现有功能的步骤：
 
-1. **分析现有实现**
-   - 识别核心业务逻辑和数据模型
-   - 确定需要迁移的功能范围
+1. **确认功能所在服务**
+   - 使用服务管理器获取相应服务
+   - 查看服务中是否已有相关方法
 
-2. **创建领域模型**
-   - 基于现有数据结构创建领域模型
-   - 确保与现有数据格式兼容
+2. **修改服务方法**
+   - 在服务类中修改或添加业务方法
+   - 确保正确使用领域模型和仓储类
 
-3. **实现仓储类**
-   - 创建对应的仓储类
-   - 确保能正确读取现有数据
+3. **更新UI交互**
+   - 通过服务管理器获取更新后的服务
+   - 更新UI组件与服务的交互
 
-4. **实现服务类**
-   - 创建服务类实现现有功能
-   - 确保行为与现有实现一致
+## 事件驱动通信
 
-5. **并行运行测试**
-   - 使用服务管理器支持新旧实现并行运行
-   - 测试确保结果一致
-
-6. **逐步替换**
-   - 逐个页面或功能点替换为使用新服务
-   - 持续测试确保功能正常
-
-7. **移除旧实现**
-   - 所有功能迁移完成后移除旧代码
-   - 进行全面测试确保系统稳定
-
-## 代码示例
-
-### 1. 定义领域模型
+项目使用事件总线进行跨组件通信：
 
 ```javascript
-// models/task.js
-class Task {
-  constructor(data = {}) {
-    this.id = data.id || `task_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
-    this.title = data.title || '';
-    this.description = data.description || '';
-    this.type = data.type || TaskType.STUDY;
-    this.date = data.date || this._formatDate(new Date());
-    this.status = data.status ?? TaskStatus.PENDING;
-    // ... 其他属性
-    
-    this._initDefaults();
-  }
-  
-  // 业务方法
-  complete() {
-    this.status = TaskStatus.COMPLETED;
-    this.completionTime = Date.now();
-    return this;
-  }
-  
-  reset() {
-    this.status = TaskStatus.PENDING;
-    this.completionTime = 0;
-    return this;
-  }
-  
-  // 验证方法
-  validate() {
-    const errors = [];
-    if (!this.title) {
-      errors.push('任务标题不能为空');
-    }
-    // ... 其他验证规则
-    return errors;
-  }
-  
-  // 辅助方法
-  _formatDate(date) {
-    // 日期格式化逻辑
-  }
-  
-  _initDefaults() {
-    // 初始化默认值
-  }
+// 在服务或组件中订阅事件
+constructor(options) {
+  // ...
+  this.eventBus = options.eventBus || new EventBus();
+  this.eventBus.on('taskCompleted', this.handleTaskCompleted.bind(this));
 }
 
-// 导出模型和枚举
-module.exports = { Task, TaskType, TaskStatus, StarExpiryType, RepeatType };
-```
-
-### 2. 实现仓储类
-
-```javascript
-// repositories/task-repository.js
-const { BaseRepository } = require('./base-repository');
-const { Task } = require('../models/task');
-const logger = require('../utils/logger');
-
-class TaskRepository extends BaseRepository {
-  constructor(options = {}) {
-    super('tasks', Task, options);
-    logger.info('TaskRepository', '初始化任务仓储');
-  }
-  
-  // 特定查询方法
-  async getTasksByDate(date) {
-    try {
-      logger.info('TaskRepository', `获取日期为 ${date} 的任务`);
-      return this.query(task => task.date === date);
-    } catch (error) {
-      logger.error('TaskRepository', `获取日期任务失败: ${date}`, error);
-      return [];
-    }
-  }
-  
-  async getTasksInRange(startDate, endDate) {
-    try {
-      logger.info('TaskRepository', `获取日期范围 ${startDate} 到 ${endDate} 的任务`);
-      return this.query(task => {
-        return task.date >= startDate && task.date <= endDate;
-      });
-    } catch (error) {
-      logger.error('TaskRepository', `获取日期范围任务失败`, error);
-      return [];
-    }
-  }
-  
-  // 其他特定方法
-  async markAsCompleted(taskId) {
-    try {
-      const task = await this.getById(taskId);
-      if (!task) {
-        logger.warn('TaskRepository', `标记完成失败: 未找到任务 ${taskId}`);
-        return null;
-      }
-      
-      task.complete();
-      return await this.save(task);
-    } catch (error) {
-      logger.error('TaskRepository', `标记任务完成失败: ${taskId}`, error);
-      return null;
-    }
-  }
+// 发布事件
+completeTask(taskId) {
+  // ...处理逻辑
+  this.eventBus.emit('taskCompleted', { taskId, task });
 }
-
-module.exports = TaskRepository;
 ```
 
-### 3. 实现服务类
+## 异步操作处理
+
+项目中所有服务方法都返回Promise对象，支持async/await语法：
 
 ```javascript
-// services/task-service.js
-const { TaskRepository } = require('../repositories');
-const { StarService } = require('./star-service');
-const logger = require('../utils/logger');
-
-class TaskService {
-  constructor(options = {}) {
-    this.taskRepository = options.taskRepository || new TaskRepository();
-    this.starService = options.starService || new StarService();
-    
-    logger.info('TaskService', '初始化任务服务');
-  }
-  
-  // 业务用例方法
-  async completeTask(taskId) {
-    try {
-      logger.info('TaskService', `完成任务: ${taskId}`);
-      
-      // 获取任务
-      const task = await this.taskRepository.getById(taskId);
-      if (!task) {
-        logger.warn('TaskService', `完成任务失败: 未找到任务 ${taskId}`);
-        return { success: false, message: '任务不存在' };
-      }
-      
-      // 修改任务状态
-      task.complete();
-      const savedTask = await this.taskRepository.save(task);
-      
-      // 处理星星奖励
-      if (task.points > 0 && !task.starAwarded) {
-        await this.starService.handleTaskCompletion(task, task.points);
-      }
-      
-      logger.info('TaskService', `任务完成成功: ${taskId}`);
-      return { success: true, task: savedTask };
-    } catch (error) {
-      logger.error('TaskService', `完成任务错误: ${taskId}`, error);
-      return { success: false, message: '处理任务时发生错误', error };
-    }
-  }
-  
-  // 其他业务方法
-  async getTodayTasks() {
-    const today = new Date().toISOString().split('T')[0];
-    logger.info('TaskService', `获取今日任务: ${today}`);
-    return this.taskRepository.getTasksByDate(today);
-  }
-  
-  // ...其他方法
-}
-
-module.exports = TaskService;
-```
-
-### 4. 更新服务管理器
-
-```javascript
-// utils/serviceManager.js
-const logger = require('./logger');
-
-// 导入现有服务
-const oldTaskManager = require('./taskManager');
-const oldMessageManager = require('./messageManager');
-const oldPointsManager = require('./pointsManager');
-
-// 导入新服务
-const { TaskService, StarService, RewardService } = require('../services');
-
-/**
- * 服务管理器
- * 提供服务获取功能
- */
-const serviceManager = {
-  // 配置是否使用新架构
-  _useNewArchitecture: {
-    task: false,
-    star: true,
-    reward: true
-  },
-  
-  /**
-   * 获取任务服务
-   * @returns {Object} 任务服务实例
-   */
-  getTaskService() {
-    if (this._useNewArchitecture.task) {
-      logger.info('ServiceManager', '使用新任务服务');
-      if (!this._taskService) {
-        this._taskService = new TaskService();
-      }
-      return this._taskService;
-    } else {
-      logger.info('ServiceManager', '使用旧任务管理器');
-      return oldTaskManager;
-    }
-  },
-  
-  /**
-   * 获取星星服务
-   * @returns {Object} 星星服务实例
-   */
-  getStarService() {
-    if (this._useNewArchitecture.star) {
-      logger.info('ServiceManager', '使用新星星服务');
-      if (!this._starService) {
-        this._starService = new StarService();
-      }
-      return this._starService;
-    } else {
-      logger.info('ServiceManager', '使用旧积分管理器');
-      return oldPointsManager;
-    }
-  },
-  
-  // ...其他服务获取方法
-};
-
-module.exports = serviceManager;
-```
-
-### 5. 在UI层使用
-
-```javascript
-// pages/task/index.js
-const serviceManager = require('../../utils/serviceManager');
-
-Page({
-  data: {
-    tasks: []
-  },
-  
-  onLoad() {
-    this.loadTasks();
-  },
-  
-  async loadTasks() {
-    const taskService = serviceManager.getTaskService();
-    
-    // 使用服务获取数据
-    const tasks = await taskService.getTodayTasks();
+// 在页面或组件中使用服务
+async onLoad() {
+  try {
+    const taskService = getApp().serviceManager.getService('taskService');
+    const tasks = await taskService.getAllTasks();
     this.setData({ tasks });
-  },
-  
-  async completeTask(e) {
-    const taskId = e.currentTarget.dataset.id;
-    const taskService = serviceManager.getTaskService();
-    
-    // 使用服务完成任务
-    const result = await taskService.completeTask(taskId);
-    
-    if (result.success) {
-      // 更新UI
-      this.loadTasks();
-      wx.showToast({ title: '任务完成！', icon: 'success' });
-    } else {
-      wx.showToast({ title: result.message, icon: 'none' });
-    }
+  } catch (error) {
+    logger.error('PageName', '加载任务失败', error);
   }
-});
+}
+```
+
+## 日志处理
+
+项目使用统一日志工具，按照以下规范记录日志：
+
+```javascript
+const logger = require('../../utils/logger');
+
+// 记录信息日志
+logger.info('ComponentName', '创建任务', { taskId });
+
+// 记录警告
+logger.warn('ServiceName', '任务已过期', { taskId, dueDate });
+
+// 记录错误
+try {
+  // 业务逻辑
+} catch (error) {
+  logger.error('ServiceName', '保存任务失败', error);
+}
+```
+
+## 批量处理
+
+处理大量数据时，使用批量工具避免UI阻塞：
+
+```javascript
+const batchUtils = require('../../utils/batchUtils');
+
+// 批量处理大量数据
+batchUtils.batchProcess(
+  items,
+  item => {
+    // 处理单个项
+  },
+  { 
+    batchSize: 50, // 每批处理数量
+    delay: 10,     // 批次间延迟(毫秒)
+    showProgress: true  // 显示进度提示
+  },
+  () => {
+    // 完成回调
+  }
+);
+```
+
+## 最佳实践
+
+### 1. 使用服务管理器获取服务
+
+```javascript
+// 推荐
+const taskService = getApp().serviceManager.getService('taskService');
+
+// 不推荐
+const TaskService = require('../../services/task-service');
+const taskService = new TaskService();
+```
+
+### 2. 处理所有异步错误
+
+```javascript
+// 推荐
+try {
+  await taskService.deleteTask(taskId);
+  // 成功处理
+} catch (error) {
+  logger.error('PageName', '删除任务失败', error);
+  // 错误处理
+}
+
+// 不推荐 - 未处理异常
+taskService.deleteTask(taskId)
+  .then(() => {
+    // 成功处理
+  });
+```
+
+### 3. 领域模型验证
+
+```javascript
+// 创建任务前先验证
+const task = new Task(taskData);
+const errors = task.validate();
+
+if (errors.length > 0) {
+  logger.warn('TaskService', '任务数据验证失败', errors);
+  return { success: false, errors };
+}
+
+// 保存任务
+await this.taskRepository.save(task);
+```
+
+### 4. 使用领域事件
+
+```javascript
+// 完成任务时发布事件
+async completeTask(taskId) {
+  const task = await this.getTaskById(taskId);
+  if (!task) return { success: false, message: '任务不存在' };
+  
+  task.complete();
+  await this.taskRepository.save(task);
+  
+  // 发布领域事件
+  this.eventBus.emit('taskCompleted', { taskId, task });
+  
+  return { success: true, task };
+}
 ```
 
 ## 编码规范
@@ -488,149 +351,6 @@ async getTasksInRange(startDate, endDate) {
   // 实现...
 }
 ```
-
-## 最佳实践
-
-### 1. 依赖注入
-
-通过构造函数注入依赖，便于测试和灵活配置：
-
-```javascript
-// 好的方式：
-function TaskService(options = {}) {
-  this.taskRepo = options.taskRepo || new TaskRepository();
-  this.starService = options.starService || new StarService();
-}
-
-// 不推荐：
-function BadTaskService() {
-  this.taskRepo = new TaskRepository();
-  this.starService = new StarService();
-}
-```
-
-### 2. 批量操作
-
-使用批量方法处理大量数据：
-
-```javascript
-// 好的方式：
-const tasks = await taskRepo.getAll();
-tasks.forEach(task => task.priority = 'high');
-await taskRepo.saveAll(tasks);
-
-// 不推荐：
-const tasks = await taskRepo.getAll();
-for (const task of tasks) {
-  task.priority = 'high';
-  await taskRepo.save(task); // 每次单独存储，性能差
-}
-```
-
-### 3. 异步处理
-
-统一使用 async/await 处理异步操作：
-
-```javascript
-// 好的方式：
-async function processTasks() {
-  try {
-    const tasks = await taskRepo.getAll();
-    // 处理任务
-    return { success: true, tasks };
-  } catch (error) {
-    logger.error('processTasks', '处理任务失败', error);
-    return { success: false, message: '处理失败' };
-  }
-}
-
-// 不推荐：
-function processTasks() {
-  return taskRepo.getAll()
-    .then(tasks => {
-      // 处理任务
-      return { success: true, tasks };
-    })
-    .catch(error => {
-      logger.error('processTasks', '处理任务失败', error);
-      return { success: false, message: '处理失败' };
-    });
-}
-```
-
-### 4. 事务使用
-
-使用事务保证数据一致性：
-
-```javascript
-// 使用事务处理多个实体的修改
-const success = await taskRepo.transaction(tasks => {
-  // 修改任务数据
-  const task = tasks.find(t => t.id === 'task_123');
-  if (task) {
-    task.status = 1;
-    task.priority = 'high';
-  }
-  
-  // 返回修改后的数据
-  return tasks;
-});
-```
-
-### 5. 适当缓存
-
-适当使用缓存提高性能：
-
-```javascript
-// 使用缓存获取数据
-const allTasks = await taskRepo.getAll(true); // 使用缓存
-
-// 需要实时数据时跳过缓存
-const latestTasks = await taskRepo.getAll(false); // 跳过缓存
-```
-
-## 常见问题与解决方案
-
-### 1. 数据不一致
-
-**问题**：新旧架构并行运行时可能出现数据不一致。
-
-**解决方案**：
-- 确保模型构造函数能处理旧数据格式
-- 实现数据迁移方法
-- 使用统一的存储键
-
-### 2. 性能问题
-
-**问题**：新架构可能引入额外的处理层导致性能下降。
-
-**解决方案**：
-- 使用多级缓存
-- 实现批处理方法
-- 优化仓储查询
-
-### 3. 依赖循环
-
-**问题**：服务间可能出现依赖循环。
-
-**解决方案**：
-- 使用事件通知代替直接依赖
-- 重构服务职责边界
-- 将共享逻辑提取到工具函数
-
-## 迁移检查清单
-
-迁移功能时使用以下检查清单：
-
-- [ ] 领域模型完整定义所有属性和方法
-- [ ] 仓储类实现所有必要的查询方法
-- [ ] 服务类实现所有业务用例
-- [ ] 模型验证规则与原有逻辑一致
-- [ ] 服务管理器更新获取新服务的方法
-- [ ] 界面代码更新使用新服务
-- [ ] 添加详细日志记录
-- [ ] 编写测试确保功能等价
-- [ ] 确认新实现没有引入性能问题
 
 ## 参考资料
 

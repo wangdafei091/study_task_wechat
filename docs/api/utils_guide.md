@@ -2,6 +2,45 @@
 
 本文档介绍了项目中可用的各种工具函数的用途和使用方法，帮助开发人员快速了解和使用这些通用功能。
 
+## 服务管理器 (serviceManager.js)
+
+`utils/serviceManager.js` 提供了统一的服务实例管理，是连接UI层与领域服务的桥梁。
+
+### 主要函数
+
+```javascript
+// 获取服务实例
+serviceManager.getService(serviceName)
+
+// 注册服务
+serviceManager.registerService(serviceName, serviceClass, options)
+
+// 重置服务实例
+serviceManager.resetService(serviceName)
+
+// 初始化所有服务
+serviceManager.initServices()
+```
+
+### 使用示例
+
+```javascript
+// 获取服务管理器
+const serviceManager = getApp().serviceManager;
+
+// 获取任务服务
+const taskService = serviceManager.getService('taskService');
+
+// 使用服务
+taskService.getAllTasks()
+  .then(tasks => {
+    this.setData({ taskList: tasks });
+  })
+  .catch(error => {
+    logger.error('TaskPage', '获取任务失败', error);
+  });
+```
+
 ## 任务服务 (TaskService)
 
 `services/task-service.js` 提供任务的增删改查和数据同步功能，是任务管理领域的核心服务类。
@@ -262,7 +301,8 @@ uiUtils.showConfirm(
   '确定要删除这个任务吗？', 
   confirmed => {
     if (confirmed) {
-      taskManager.deleteTask(taskId);
+      const taskService = getApp().serviceManager.getService('taskService');
+      taskService.deleteTask(taskId);
     }
   }
 );
@@ -463,6 +503,46 @@ storageUtils.clearAll(callback)
 storageUtils.getStorageInfo(callback)
 ```
 
+## 数据分析工具 (analyticsManager.js)
+
+`utils/analyticsManager.js` 提供数据统计和分析功能。
+
+### 主要函数
+
+```javascript
+// 生成任务完成统计数据
+analyticsManager.generateTaskCompletionStats(startDate, endDate)
+
+// 生成星星获得统计数据
+analyticsManager.generateStarEarningStats(startDate, endDate)
+
+// 生成任务类型分布统计
+analyticsManager.generateTaskTypeDistribution(tasks)
+
+// 计算任务完成率趋势
+analyticsManager.calculateCompletionRateTrend(startDate, endDate, interval)
+
+// 生成热力图数据
+analyticsManager.generateHeatmapData(startDate, endDate)
+```
+
+### 使用示例
+
+```javascript
+const analyticsManager = require('../../utils/analyticsManager');
+
+// 生成30天内的任务完成统计
+analyticsManager.generateTaskCompletionStats(
+  dateUtils.getDateBefore(30), 
+  dateUtils.getTodayString()
+).then(stats => {
+  this.setData({ completionStats: stats });
+});
+
+// 生成任务类型分布
+const distribution = analyticsManager.generateTaskTypeDistribution(tasks);
+```
+
 ## 反馈工具 (feedbackUtils.js)
 
 `utils/feedbackUtils.js` 处理用户反馈相关功能。
@@ -471,7 +551,7 @@ storageUtils.getStorageInfo(callback)
 
 ```javascript
 // 收集用户反馈
-feedbackUtils.collectFeedback(content, type, callback)
+feedbackUtils.collectFeedback(content, type)
 
 // 记录日志
 feedbackUtils.logEvent(eventName, params)
@@ -484,4 +564,39 @@ feedbackUtils.logError(error, context)
 
 // 获取应用版本信息
 feedbackUtils.getVersionInfo()
+```
+
+## 格式化工具 (formatUtils.js)
+
+`utils/formatUtils.js` 提供各种数据格式化功能。
+
+### 主要函数
+
+```javascript
+// 格式化时间段显示
+formatUtils.formatDuration(minutes)
+
+// 格式化星星数量显示
+formatUtils.formatStarCount(count)
+
+// 格式化日期区间
+formatUtils.formatDateRange(startDate, endDate)
+
+// 格式化百分比
+formatUtils.formatPercentage(value)
+
+// 格式化时间点
+formatUtils.formatTimePoint(timeString)
+```
+
+### 使用示例
+
+```javascript
+const formatUtils = require('../../utils/formatUtils');
+
+// 格式化持续时间
+const duration = formatUtils.formatDuration(120); // 返回 "2小时"
+
+// 格式化星星数量
+const stars = formatUtils.formatStarCount(1234); // 返回 "1,234"
 ``` 

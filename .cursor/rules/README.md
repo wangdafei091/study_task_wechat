@@ -1,91 +1,119 @@
-# 学习任务微信小程序文档索引
+# 学习任务微信小程序开发规范
 
-> **重要通知**: 本目录下的所有文档已迁移至项目根目录的 `docs/` 文件夹。
-> **请不要继续使用或更新本目录下的文档**。所有文档更新应在 `docs/` 目录进行。
+本文档是Cursor规则的索引，总结项目架构、开发规范和指导原则，帮助开发者遵循一致的代码和设计标准。
 
-## 最新架构文档
+## 架构概览
 
-领域驱动设计(DDD)架构的最新文档现已全部迁移到 `docs/` 目录：
+项目采用领域驱动设计(DDD)架构，分为以下核心层次：
 
-- **核心架构设计**: [docs/architecture/domain-model-architecture.md](../../docs/architecture/domain-model-architecture.md)
-- **领域模型**: [docs/architecture/data_models.md](../../docs/architecture/data_models.md)
-- **系统架构**: [docs/architecture/system_architecture.md](../../docs/architecture/system_architecture.md)
-- **星星积分系统**: [docs/architecture/star_points_system.md](../../docs/architecture/star_points_system.md)
+- **领域层** (models/) - 定义核心业务实体和规则
+- **仓储层** (repositories/) - 提供数据持久化和检索服务
+- **服务层** (services/) - 协调领域对象，实现业务逻辑
+- **适配器层** (adapters/) - 连接基础设施，如存储API
+- **表现层** (pages/ & components/) - 实现用户界面和交互
 
-## 文档新位置
+架构详细信息在 [architecture-rules.md](./architecture-rules.md) 中定义。
 
-所有文档现已统一移至项目根目录的 `docs/` 文件夹，按以下结构组织：
+## 目录结构
 
 ```
-docs/
-├── architecture/       # 架构文档
-│   ├── project_structure.md    # 项目结构
-│   ├── data_models.md          # 数据模型
-│   ├── system_architecture.md  # 系统架构
-│   ├── domain-model-architecture.md # 领域模型架构
-│   ├── star_points_system.md   # 星星有效期与消费机制
-│   └── optimization_summary.md # 优化总结
-├── development/       # 开发指南
-│   ├── workflow.md             # 开发工作流程
-│   ├── coding_standards.md     # 编码规范
-│   ├── troubleshooting.md      # 常见问题解决
-│   └── CHANGELOG.md            # 更新日志
-├── api/               # API文档
-│   └── utils_guide.md          # 工具函数指南
-├── user/              # 用户手册
-│   ├── guide.md                # 用户指南
-│   └── faq.md                  # 常见问题解答
-└── README.md          # 项目总览
+├── models/              # 领域模型
+├── repositories/        # 数据仓储
+├── services/            # 领域服务
+├── adapters/            # 适配器
+├── pages/               # 页面
+├── components/          # 组件
+├── utils/               # 通用工具函数
+├── assets/              # 资源文件
+└── styles/              # 全局样式
 ```
 
-## 文档管理规则
+## 开发规则索引
 
-根据项目规则，所有文档必须：
+### 架构规则
 
-1. 统一存放在 `docs/` 目录下
-2. 按功能分类存放在对应子目录
-3. 在修改代码时同步更新
-4. 定期清理过时内容
-5. 遵循统一命名规则（小写字母和连字符）
+- [architecture-rules.md](./architecture-rules.md) - 领域驱动设计架构规范
 
-## 文档迁移状态
+### 业务领域规则
 
-所有文档均已完成迁移：
+- [project/task_data_model.mdc](./project/task_data_model.mdc) - 任务数据模型定义
+- [project/new_architecture_guide.md](./project/new_architecture_guide.md) - 新架构开发指南
+- [system/star_points_system.md](./system/star_points_system.md) - 星星积分系统规则
 
-- [x] 项目结构文档 - 已迁移至 `docs/architecture/project_structure.md`
-- [x] 数据模型文档 - 已迁移至 `docs/architecture/data_models.md`
-- [x] 领域模型架构 - 已迁移至 `docs/architecture/domain-model-architecture.md`
-- [x] 开发工作流程 - 已迁移至 `docs/development/workflow.md`
-- [x] 编码规范 - 已迁移至 `docs/development/coding_standards.md`
-- [x] 工具函数指南 - 已迁移至 `docs/api/utils_guide.md`
-- [x] 故障排除指南 - 已迁移至 `docs/development/troubleshooting.md`
-- [x] 系统架构文档 - 已迁移至 `docs/architecture/system_architecture.md`
-- [x] 优化内容总结 - 已迁移至 `docs/architecture/optimization_summary.md`
-- [x] 星星有效期机制 - 已迁移至 `docs/architecture/star_points_system.md`
-- [x] 用户指南 - 已迁移至 `docs/user/guide.md`
-- [x] 常见问题解答 - 已迁移至 `docs/user/faq.md`
-- [x] 更新日志 - 已迁移至 `docs/development/CHANGELOG.md`
+### 开发指南
 
-**重要提示**：请立即开始使用新的文档位置，本目录下的文档将不再更新并可能包含过时信息。
+- [project/utils_guide.mdc](./project/utils_guide.mdc) - 工具函数使用指南
+- [project/services-guide.md](./project/services-guide.md) - 领域服务使用指南
+- [project/components_guide.mdc](./project/components_guide.mdc) - 组件使用指南
 
-## 新架构实现
+### 性能和优化
 
-项目现已完整实现了领域驱动设计架构，特别是在奖励系统和星星积分系统方面：
+- [system/optimization_summary.md](./system/optimization_summary.md) - 性能优化总结
 
-- **领域模型层**: 实体定义和业务逻辑
-- **仓储层**: 数据持久化和查询
-- **服务层**: 复杂业务流程协调
-- **适配器层**: 底层存储和API封装
+## 核心规则
 
-请参考 `docs/architecture/domain-model-architecture.md` 了解完整架构设计。
+### 架构规则
 
-## 关于领域架构
+1. **单向依赖**：内层不能依赖外层（领域层 → 仓储层 → 服务层 → 表现层）
+2. **领域规则封装**：业务规则必须封装在领域模型中
+3. **仓储统一访问**：数据访问必须通过仓储层，不直接使用存储API
+4. **服务协调**：复杂业务流程由服务层协调，不在UI层实现业务逻辑
 
-项目采用领域驱动设计(DDD)架构，如需了解：
+### 编码规范
 
-1. **架构设计**: 请查阅 `docs/architecture/domain-model-architecture.md`
-2. **数据模型**: 请查阅 `docs/architecture/data_models.md` 
-3. **服务实现**: 请查阅 `docs/architecture/system_architecture.md`
-4. **开发指南**: 请遵循 `docs/development/workflow.md` 中的规范
+1. **文件命名**：
+   - 模型文件：单数形式，如 `task.js`
+   - 仓储文件：`*-repository.js` 形式
+   - 服务文件：`*-service.js` 形式
+   - 工具文件：具体功能，如 `dateUtils.js`
 
-**注意**: 本目录下的架构规则文档可能已过时，请以 `docs/` 目录下最新文档为准。 
+2. **类命名**：使用大驼峰命名法
+   - 模型类：`Task`, `Star`
+   - 仓储类：`TaskRepository`
+   - 服务类：`StarService`
+
+3. **方法命名**：
+   - 获取方法：使用 `get` 前缀，如 `getTasks()`
+   - 修改方法：使用动词开头，如 `createTask()`
+   - 私有方法：使用下划线前缀，如 `_formatDate()`
+
+### 日志规范
+
+1. **日志分级**：使用适当的日志级别（info, warn, error, debug）
+2. **标准格式**：`logger.info('模块名', '操作描述', 数据)`
+3. **关键点记录**：记录所有业务关键点和异常情况
+4. **避免过度日志**：不记录循环中的重复信息或过大对象
+
+### UI规范
+
+1. **卡片组件**：
+   - 内边距：30rpx
+   - 圆角：16rpx
+   - 阴影效果统一
+
+2. **按钮样式**：
+   - 高度：90rpx
+   - 圆角：8rpx
+   - 间距：12rpx/24rpx
+
+3. **颜色系统**：
+   - 学习任务：#4285F4（蓝色）
+   - 习惯任务：#4CAF50（绿色）
+   - 兴趣任务：#FF9800（橙色）
+
+4. **字体系统**：
+   - 标题文字：32rpx，字重500-600
+   - 正文文字：28rpx，字重400
+   - 辅助文字：24rpx，字重400
+
+## Cursor记忆模式
+
+项目使用Cursor记忆系统来保持项目理解上下文，主要通过以下文件维护：
+
+- `memory-bank/activeContext.md` - 当前工作上下文
+- `memory-bank/productContext.md` - 产品背景和目标
+- `memory-bank/systemPatterns.md` - 系统设计模式
+- `memory-bank/projectbrief.md` - 项目概要
+- `memory-bank/progress.md` - 项目进度和状态
+
+维护记忆时，请确保更新这些文件以反映最新的项目状态和决策。 
