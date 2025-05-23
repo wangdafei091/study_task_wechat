@@ -19,8 +19,39 @@ class EventBus {
       listenerCounts: {}, // 各事件监听器数量统计
       totalEmits: 0, // 总发射次数
       totalListeners: 0, // 总监听器数量
-      lastEmitTime: {} // 各事件最后触发时间
+      lastEmitTime: {}, // 各事件最后触发时间
+      
+      // 性能监控相关统计
+      performanceStats: {
+        payloadSizes: {},      // 各事件的数据大小
+        processingTimes: {},   // 处理耗时
+        optimizationSaved: 0   // 优化节省的时间
+      }
     };
+    
+    // 配置选项
+    this.optimizePayload = true; // 启用性能优化
+    this.debugMode = false;      // 调试模式
+  }
+  
+  /**
+   * 设置性能优化配置
+   * @param {Boolean} enabled 是否启用优化
+   */
+  setOptimization(enabled) {
+    this.optimizePayload = !!enabled;
+    logger.info('EventBus', `性能优化${this.optimizePayload ? '已启用' : '已禁用'}`);
+    return this;
+  }
+  
+  /**
+   * 设置调试模式
+   * @param {Boolean} enabled 是否启用调试模式
+   */
+  setDebugMode(enabled) {
+    this.debugMode = !!enabled;
+    logger.info('EventBus', `调试模式${this.debugMode ? '已启用' : '已禁用'}`);
+    return this;
   }
   
   /**
@@ -121,11 +152,26 @@ class EventBus {
     let callbackCount = 0;
     let errorCount = 0;
     
+    // 记录开始时间（用于性能监控）
+    const startTime = this.debugMode ? Date.now() : 0;
+    
     // 更新统计信息
     this._updateEmitStats(event);
     
-    // 深拷贝数据，避免处理器修改原始数据影响其他处理器
-    const safePayload = JSON.parse(JSON.stringify(payload));
+    // 使用智能拷贝机制替代深拷贝
+    const safePayload = this.optimizePayload ? 
+      this._createSafePayload(payload, event) : 
+      JSON.parse(JSON.stringify(payload));
+    
+    // 在调试模式下记录原始数据哈希用于数据完整性检查
+    let originalDataHash;
+    if (this.debugMode) {
+      try {
+        originalDataHash = this._generateDataHash(payload);
+      } catch (e) {
+        logger.debug('EventBus', `无法生成数据哈希: ${e.message}`);
+      }
+    }
     
     // 调用普通监听器
     if (this.listeners[event]) {
@@ -158,6 +204,33 @@ class EventBus {
     
     // 保存事件历史
     this._saveEventHistory(event, payload);
+    
+    // 记录执行时间并更新性能统计
+    if (this.debugMode) {
+      const endTime = Date.now();
+      const processingTime = endTime - startTime;
+      
+      // 更新处理耗时统计
+      if (!this.stats.performanceStats.processingTimes[event]) {
+        this.stats.performanceStats.processingTimes[event] = [];
+      }
+      this.stats.performanceStats.processingTimes[event].push(processingTime);
+      
+      // 限制存储的性能记录数量
+      if (this.stats.performanceStats.processingTimes[event].length > 20) {
+        this.stats.performanceStats.processingTimes[event].shift();
+      }
+      
+      // 在调试模式下检查数据是否被修改
+      try {
+        const currentDataHash = this._generateDataHash(payload);
+        if (originalDataHash && currentDataHash !== originalDataHash) {
+          logger.warn('EventBus', `检测到事件数据被修改: ${event}`);
+        }
+      } catch (e) {
+        logger.debug('EventBus', `无法比较数据哈希: ${e.message}`);
+      }
+    }
     
     logger.info('EventBus', `事件已发布: ${event}, 监听器数量=${callbackCount}${errorCount > 0 ? `, 错误数=${errorCount}` : ''}`);
     return callbackCount;
@@ -281,6 +354,23 @@ class EventBus {
       .slice(0, 10)
       .map(([event, count]) => ({ event, count }));
       
+    // 处理性能统计信息
+    const performanceData = {};
+    if (this.debugMode) {
+      Object.entries(this.stats.performanceStats.processingTimes).forEach(([event, times]) => {
+        if (times && times.length > 0) {
+          // 计算平均处理时间
+          const avg = times.reduce((sum, t) => sum + t, 0) / times.length;
+          performanceData[event] = {
+            avgTime: Math.round(avg * 100) / 100,
+            samples: times.length,
+            max: Math.max(...times),
+            min: Math.min(...times)
+          };
+        }
+      });
+    }
+    
     return {
       stats: {
         totalEmits: stats.totalEmits,
@@ -293,7 +383,8 @@ class EventBus {
       memoryUsage: {
         listeners: Object.keys(this.listeners).length,
         oneShotListeners: Object.keys(this.oneShotListeners).length
-      }
+      },
+      performanceStats: this.debugMode ? performanceData : null
     };
   }
   
@@ -319,6 +410,102 @@ class EventBus {
     
     // 我们不在这里计算totalListeners，因为会重复累加
     // 而是在getStats中根据当前注册的监听器计算
+  }
+  
+  /**
+   * 创建安全的载荷数据
+   * @private
+   * @param {*} data 原始数据
+   * @param {String} eventName 事件名称
+   * @returns {*} 安全的数据副本
+   */
+  _createSafePayload(data, eventName) {
+    // 基础类型或null直接返回
+    if (data === null || data === undefined || typeof data !== 'object') {
+      return data;
+    }
+    
+    try {
+      // 估计数据大小
+      const dataSize = this._estimateObjectSize(data);
+      
+      // 记录数据大小用于调试
+      if (this.debugMode && eventName) {
+        this.stats.performanceStats.payloadSizes[eventName] = dataSize;
+      }
+      
+      // 如果是小对象（小于1KB），使用浅拷贝+冻结
+      if (dataSize < 1024) {
+        return Object.freeze(Array.isArray(data) ? [...data] : {...data});
+      } 
+      // 如果是中等对象（小于5KB），使用浅拷贝+浅冻结
+      else if (dataSize < 5120) {
+        const clone = Array.isArray(data) ? [...data] : {...data};
+        return Object.freeze(clone);
+      }
+      // 大对象（大于5KB）使用深拷贝确保数据安全
+      else {
+        const startTime = this.debugMode ? Date.now() : 0;
+        const result = JSON.parse(JSON.stringify(data));
+        
+        // 记录深拷贝耗时
+        if (this.debugMode) {
+          const timeTaken = Date.now() - startTime;
+          logger.debug('EventBus', `大对象深拷贝耗时: ${timeTaken}ms, 大小: ${dataSize}字节, 事件: ${eventName}`);
+        }
+        
+        return result;
+      }
+    } catch (e) {
+      // 如果遇到问题，回退到安全的深拷贝方法
+      logger.warn('EventBus', `智能拷贝失败，回退到深拷贝: ${e.message}`);
+      return JSON.parse(JSON.stringify(data));
+    }
+  }
+  
+  /**
+   * 估计对象大小（字节）
+   * @private
+   * @param {Object} obj 要估计大小的对象
+   * @returns {Number} 估计的字节大小
+   */
+  _estimateObjectSize(obj) {
+    if (!obj) return 0;
+    
+    try {
+      // 简单粗略估计：JSON字符串长度×2
+      const jsonString = JSON.stringify(obj);
+      return jsonString ? jsonString.length * 2 : 0;
+    } catch (e) {
+      logger.debug('EventBus', `估计对象大小失败: ${e.message}`);
+      return 0;
+    }
+  }
+  
+  /**
+   * 生成数据对象的哈希值（用于完整性检查）
+   * @private
+   * @param {Object} data 要哈希的数据
+   * @returns {String} 哈希字符串
+   */
+  _generateDataHash(data) {
+    try {
+      // 使用简单的JSON哈希作为数据指纹
+      const json = JSON.stringify(data);
+      
+      // 简单哈希算法
+      let hash = 0;
+      for (let i = 0; i < json.length; i++) {
+        const char = json.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash; // 转换为32位整数
+      }
+      
+      return hash.toString(16);
+    } catch (e) {
+      // 无法生成哈希时返回随机值
+      return Math.random().toString(36).substring(2, 15);
+    }
   }
 }
 

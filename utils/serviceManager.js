@@ -11,8 +11,11 @@ const { RewardService, StarService, TaskService, MessageService } = require('../
 
 /**
  * 共享的事件总线实例
+ * 启用性能优化，默认不启用调试模式
  */
 const sharedEventBus = new EventBus();
+// 配置事件总线
+sharedEventBus.setOptimization(true);
 
 /**
  * 服务实例缓存
@@ -31,10 +34,24 @@ const serviceInstances = {
 const serviceManager = {
   /**
    * 初始化服务管理器
+   * @param {Object} options 初始化选项
+   * @param {Boolean} options.enableEventDebug 是否启用事件调试
+   * @param {Boolean} options.enableEventOptimization 是否启用事件优化
    * @returns {Promise<Boolean>} 初始化结果
    */
-  async initialize() {
-    logger.info('ServiceManager', '初始化服务管理器');
+  async initialize(options = {}) {
+    logger.info('ServiceManager', '初始化服务管理器', options);
+    
+    // 配置事件总线
+    if (options.hasOwnProperty('enableEventDebug')) {
+      sharedEventBus.setDebugMode(options.enableEventDebug);
+      logger.info('ServiceManager', `事件总线调试模式: ${options.enableEventDebug ? '开启' : '关闭'}`);
+    }
+    
+    if (options.hasOwnProperty('enableEventOptimization')) {
+      sharedEventBus.setOptimization(options.enableEventOptimization);
+      logger.info('ServiceManager', `事件总线优化模式: ${options.enableEventOptimization ? '开启' : '关闭'}`);
+    }
     
     try {
       // 先初始化基础服务
@@ -118,6 +135,24 @@ const serviceManager = {
           logger.info('EventMonitor', `热门事件: ${topEventsText}`);
         }
         
+        // 如果有性能统计，输出性能数据
+        if (debugInfo.performanceStats) {
+          const perfEntries = Object.entries(debugInfo.performanceStats);
+          if (perfEntries.length > 0) {
+            // 找出平均处理时间最长的3个事件
+            const slowestEvents = perfEntries
+              .sort((a, b) => b[1].avgTime - a[1].avgTime)
+              .slice(0, 3);
+              
+            if (slowestEvents.length > 0) {
+              const slowestText = slowestEvents
+                .map(([event, stats]) => `${event}(${stats.avgTime}ms)`)
+                .join(', ');
+                
+              logger.info('EventMonitor', `最慢事件: ${slowestText}`);
+            }
+          }
+        }
       } catch (error) {
         logger.error('EventMonitor', '事件统计发生错误', error);
       }
@@ -138,6 +173,27 @@ const serviceManager = {
    */
   getEventDebugInfo() {
     return sharedEventBus.getDebugInfo();
+  },
+  
+  /**
+   * 配置事件总线
+   * @param {Object} options 配置选项
+   * @param {Boolean} options.enableDebug 是否启用调试
+   * @param {Boolean} options.enableOptimization 是否启用优化
+   * @returns {Object} 服务管理器自身
+   */
+  configureEventBus(options = {}) {
+    logger.info('ServiceManager', '配置事件总线', options);
+    
+    if (options.hasOwnProperty('enableDebug')) {
+      sharedEventBus.setDebugMode(options.enableDebug);
+    }
+    
+    if (options.hasOwnProperty('enableOptimization')) {
+      sharedEventBus.setOptimization(options.enableOptimization);
+    }
+    
+    return this;
   },
   
   /**
@@ -248,6 +304,9 @@ const serviceManager = {
       case 'reward':
       case 'rewardService':
         return this.getRewardService();
+        
+      case 'eventBus':
+        return this.getEventBus();
         
       default:
         logger.warn('ServiceManager', '未知的服务名称:', serviceName);

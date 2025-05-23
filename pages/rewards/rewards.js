@@ -539,7 +539,7 @@ Page({
         const app = getApp();
         if (app && app.globalData && app.globalData.eventBus) {
           console.log('[rewards] 发送奖励领取事件通知');
-          app.globalData.eventBus.emit('rewardClaimed', {
+          app.globalData.eventBus.emit(EVENTS.REWARD_CLAIMED, {
             rewardId: reward.id,
             points: reward.points,
             newTotalPoints: targetPoints,

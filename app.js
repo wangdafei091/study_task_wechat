@@ -14,11 +14,32 @@ App({
     logger.info('App', '初始化存储数据');
     storageUtils.initializeStorageIfNeeded();
     
+    // 确定是否为开发环境，用于配置事件总线
+    let isDevEnv = false;
+    try {
+      if (typeof wx !== 'undefined') {
+        const systemInfo = wx.getSystemInfoSync();
+        isDevEnv = systemInfo.platform === 'devtools';
+      }
+    } catch (e) {
+      logger.warn('App', '获取系统信息失败', e);
+    }
+    
     // 初始化服务管理器
     logger.info('App', '初始化服务管理器');
     try {
+      // 配置事件总线优化和调试设置
+      const serviceOptions = {
+        // 始终启用事件优化
+        enableEventOptimization: true,
+        // 仅在开发环境启用事件调试
+        enableEventDebug: isDevEnv
+      };
+      
+      logger.info('App', '初始化服务管理器，配置选项:', serviceOptions);
+      
       // 等待服务管理器初始化完成，确保所有服务都已经准备好
-      const initialized = await serviceManager.initialize();
+      const initialized = await serviceManager.initialize(serviceOptions);
       if (initialized) {
         logger.info('App', '服务管理器初始化成功');
         
@@ -435,6 +456,11 @@ App({
     eventCallbacks: {},
     needRefreshReward: false,
     rewardClaimedInfo: null,
-    hasRedirectedToReward: false
+    hasRedirectedToReward: false,
+    orientation: 'portrait',
+    // 使用服务管理器的事件总线
+    get eventBus() {
+      return serviceManager.getEventBus();
+    }
   }
 }) 
