@@ -199,14 +199,15 @@ Page({
    * 处理奖励更新事件
    */
   handleRewardUpdated: function(data) {
-    console.log('[Index] 收到奖励更新事件:', data);
+    logger.debug('Index', '收到奖励更新事件', data);
+    
     // 设置标记，下次页面显示时会通过needRefreshReward标记进行刷新
     const app = getApp();
     app.globalData.needRefreshReward = true;
     
     // 立即刷新当前页面的奖励数据
     if (this.isCurrentPage()) {
-      console.log('[Index] 当前在首页，立即刷新奖励数据');
+      logger.debug('Index', '当前在首页，立即刷新奖励数据');
       this.loadStarsAndRewards();
     }
   },
@@ -306,13 +307,13 @@ Page({
    * 处理奖励领取事件
    */
   handleRewardClaimed: function(eventData) {
-    console.log(`[Index] 收到奖励领取事件: 奖励ID=${eventData.rewardId}, 消耗星星=${eventData.points}, 剩余星星=${eventData.newTotalPoints}`);
+    logger.debug('Index', `收到奖励领取事件: 奖励ID=${eventData.rewardId}, 消耗星星=${eventData.points}, 剩余星星=${eventData.newTotalPoints}`);
     
     // 只记录奖励已被领取，但不立即更新UI
     const app = getApp();
     app.globalData.rewardClaimedInfo = eventData;
     app.globalData.needRefreshReward = true;
-    console.log('[Index] 已记录奖励领取信息，等待返回首页时更新');
+    logger.debug('Index', '已记录奖励领取信息，等待返回首页时更新');
     
     // 不立即调用loadStarsAndRewards或transitionToNewTarget
     // 等待用户返回首页时再更新
@@ -322,14 +323,14 @@ Page({
    * 生命周期函数--监听页面显示
    */
   onShow: function () {
-    console.log('[Index] 页面显示');
+    logger.info('Index', '页面显示');
     
     // 获取应用实例
     const app = getApp();
     
     // 检查是否需要刷新奖励信息
     if (app.globalData.needRefreshReward) {
-      console.log('[Index] 检测到奖励数据变更标记，强制清除缓存并刷新');
+      logger.debug('Index', '检测到奖励数据变更标记，强制清除缓存并刷新');
       
       // 清除满值状态
       this.setData({
@@ -358,7 +359,7 @@ Page({
     const fromStorage = wx.getStorageSync('fromRewardCompletion');
     
     if (app.globalData.hasRedirectedToReward || fromStorage) {
-      console.log('[Index] 检测到从奖池页面返回(通过标记)');
+      logger.debug('Index', '检测到从奖池页面返回(通过标记)');
       
       // 清除所有标记
       app.globalData.hasRedirectedToReward = false;
@@ -368,14 +369,14 @@ Page({
       }
       
       // 执行过渡到新目标
-      console.log('[Index] 从奖池返回，强制更新进度条');
+      logger.debug('Index', '从奖池返回，强制更新进度条');
       this.transitionToNewTarget();
       return;
     }
     
     // 正常页面显示流程
     // 刷新星星和奖励数据
-    console.log('[Index] 页面显示时刷新星星和奖励数据');
+    logger.debug('Index', '页面显示时刷新星星和奖励数据');
     this.loadStarsAndRewards();
     
     // 加载用户消息
@@ -734,7 +735,7 @@ Page({
   
   // 跳转到消息中心
   navigateToMessageCenter: function(e) {
-    console.log('[消息中心] 准备跳转到消息中心页面');
+    logger.debug('Index', '准备跳转到消息中心页面');
     
     // 阻止事件冒泡，避免同时触发toggleMessagePreview
     if (e && typeof e.stopPropagation === 'function') {
@@ -745,7 +746,7 @@ Page({
     wx.navigateTo({
       url: '/pages/message/message',
       success: () => {
-        console.log('[消息中心] 成功跳转到消息中心页面');
+        logger.debug('Index', '成功跳转到消息中心页面');
         
         // 成功跳转后再关闭消息预览
         setTimeout(() => {
@@ -759,7 +760,7 @@ Page({
   
   // 显示/隐藏消息预览
   toggleMessagePreview: function() {
-    console.log('[消息中心] ' + (this.data.showMessagePreview ? '关闭' : '打开') + '消息面板');
+    logger.debug('Index', (this.data.showMessagePreview ? '关闭' : '打开') + '消息面板');
     const currentState = this.data.showMessagePreview;
     
     // 每次都创建新的动画实例，避免复用旧的动画状态
@@ -770,7 +771,7 @@ Page({
     });
     
     if (currentState) {
-      console.log('[消息中心] 创建关闭动画');
+      logger.debug('Index', '创建关闭动画');
       // 关闭动画
       this.messageAnimation.opacity(0).scale(0.8).step();
       
@@ -780,13 +781,13 @@ Page({
       
       // 动画结束后再隐藏元素
       setTimeout(() => {
-        console.log('[消息中心] 动画结束，隐藏面板');
+        logger.debug('Index', '动画结束，隐藏面板');
         this.setData({
           showMessagePreview: false
         });
       }, 250);
     } else {
-      console.log('[消息中心] 准备显示面板');
+      logger.debug('Index', '准备显示面板');
       // 轻微振动反馈
       if (wx.vibrateShort) {
         wx.vibrateShort({ type: 'light' });
@@ -794,7 +795,7 @@ Page({
       
       // 设置初始状态
       this.messageAnimation.opacity(0).scale(0.8).step({ duration: 0 });
-      console.log('[消息中心] 初始化动画');
+      logger.debug('Index', '初始化动画');
       
       this.setData({
         showMessagePreview: true,
@@ -805,7 +806,7 @@ Page({
       
       // 添加一个短暂延时，确保视图更新后再开始动画
       setTimeout(() => {
-        console.log('[消息中心] 执行显示动画');
+        logger.debug('Index', '执行显示动画');
         this.messageAnimation.opacity(1).scale(1).step();
         
         this.setData({
@@ -817,33 +818,33 @@ Page({
   
   // 防止点击事件冒泡
   preventBubble: function(e) {
-    console.log('[消息中心] 阻止事件冒泡');
+    logger.debug('Index', '阻止事件冒泡');
     // 检查事件对象是否存在且有stopPropagation方法
     if (e && typeof e.stopPropagation === 'function') {
       e.stopPropagation();
     } else {
-      console.log('[消息中心] 事件对象不包含stopPropagation方法');
+      logger.debug('Index', '事件对象不包含stopPropagation方法');
     }
     return false;
   },
   
   // 防止蒙层触摸滑动
   preventTouchMove: function(e) {
-    console.log('[消息中心] 阻止蒙层触摸滑动');
+    logger.debug('Index', '阻止蒙层触摸滑动');
     // 检查事件对象是否存在
     if (e) {
       // 检查并调用stopPropagation方法
       if (typeof e.stopPropagation === 'function') {
         e.stopPropagation();
       } else {
-        console.log('[消息中心] 事件对象不包含stopPropagation方法');
+        logger.debug('Index', '事件对象不包含stopPropagation方法');
       }
       
       // 检查并调用preventDefault方法
       if (typeof e.preventDefault === 'function') {
         e.preventDefault();
       } else {
-        console.log('[消息中心] 事件对象不包含preventDefault方法');
+        logger.debug('Index', '事件对象不包含preventDefault方法');
       }
     }
     return false;
@@ -859,7 +860,7 @@ Page({
       this.markMessageAsRead(e);
       
       // 记录日志
-      console.log(`[首页] 标记消息已读: ${message.title}`);
+      logger.debug('Index', `标记消息已读: ${message.title}`);
     }
   },
   
@@ -1055,12 +1056,12 @@ Page({
     
     // 根据选项处理
     if (item && item.id === 'habit') {
-      console.log('[首页] 点击任务菜单项，跳转到任务编辑页面');
+      logger.debug('Index', '点击任务菜单项，跳转到任务编辑页面');
       wx.navigateTo({
         url: `/pages/task-edit/task-edit?mode=create`
       });
     } else if (item && item.id === 'study') {
-      console.log('[首页] 点击分析菜单项，跳转到分析页面');
+      logger.debug('Index', '点击分析菜单项，跳转到分析页面');
       wx.showLoading({
         title: '加载中...',
         mask: true
@@ -1076,11 +1077,11 @@ Page({
             title: '加载失败，请重试',
             icon: 'none'
           });
-          console.error('[首页] 跳转到分析页面失败', err);
+          logger.error('Index', '跳转到分析页面失败', err);
         }
       });
     } else if (item && item.id === 'reward-manage') {
-      console.log('[首页] 点击奖励管理菜单项，跳转到奖励管理页面');
+      logger.debug('Index', '点击奖励管理菜单项，跳转到奖励管理页面');
       wx.navigateTo({
         url: '/pages/reward-manage/reward-manage'
       });
@@ -1089,7 +1090,7 @@ Page({
   
   // 触发进度圆环点击
   onRingTap: function(e) {
-    console.log('[首页] 点击进度圆环，跳转到分析页面');
+    logger.debug('Index', '点击进度圆环，跳转到分析页面');
     wx.showLoading({
       title: '加载中...',
       mask: true
@@ -1105,14 +1106,14 @@ Page({
           title: '加载失败，请重试',
           icon: 'none'
         });
-        console.error('[首页] 跳转到分析页面失败', err);
+        logger.error('Index', '跳转到分析页面失败', err);
       }
     });
   },
   
   // 处理进度条完成事件
   onRewardComplete: function(e) {
-    console.log(`[Index] 收到进度条完成事件：${JSON.stringify(e.detail)}`);
+    logger.debug('Index', '收到进度条完成事件', e.detail);
     
     // 获取当前进度数据
     const oldProgress = this.data.rewardProgress || { current: 0, total: 10 };
@@ -1121,7 +1122,7 @@ Page({
     const userPoints = this.data.userPoints || serviceManager.getUserPoints();
     
     // 添加日志
-    console.log(`[Index] 处理奖励完成事件: 当前进度=${JSON.stringify(oldProgress)}, 星星数=${userPoints}`);
+    logger.debug('Index', `处理奖励完成事件: 当前进度=${JSON.stringify(oldProgress)}, 星星数=${userPoints}`);
     
     // 正确传递参数
     this._handleRewardCompletion(oldProgress, userPoints);
@@ -1377,7 +1378,7 @@ Page({
    * 显示奖励选择对话框
    */
   showRewardChoiceDialog: function() {
-    console.log('[Index] 显示奖励选择对话框');
+    logger.debug('Index', '显示奖励选择对话框');
     
     // 如果对话框已显示，不重复操作
     if (this.data.showRewardChoice) {
@@ -1418,7 +1419,7 @@ Page({
    * 点击继续积累
    */
   continueCollecting: function() {
-    console.log('[Index] 用户选择继续积累星星');
+    logger.debug('Index', '用户选择继续积累星星');
     
     // 创建动画实例
     const animation = wx.createAnimation({
@@ -1449,7 +1450,7 @@ Page({
    * 过渡到新目标
    */
   transitionToNewTarget: async function() {
-    console.log('[Index] 执行过渡到新目标的动画');
+    logger.debug('Index', '执行过渡到新目标的动画');
     
     try {
       // 清除所有满值相关状态
@@ -1465,18 +1466,18 @@ Page({
       const rewardService = serviceManager.getService('rewardService');
       
       if (!starService || !rewardService) {
-        console.error('[Index] 无法获取服务实例');
+        logger.error('Index', '无法获取服务实例');
         return;
       }
       
       // 获取当前星星数
       const userPoints = await starService.getTotalStars();
-      console.log(`[Index] 当前星星数: ${userPoints}`);
+      logger.debug('Index', `当前星星数: ${userPoints}`);
       
       // 获取下一个可达成奖励
-      console.log(`[Index] 获取下一个可达成奖励`);
+      logger.debug('Index', '获取下一个可达成奖励');
       const nextReward = await rewardService.calculateNextAvailableReward();
-      console.log(`[Index] 新目标信息: 下一目标=${nextReward ? nextReward.name : '无'}, 需要星星=${nextReward ? nextReward.points : 0}`);
+      logger.debug('Index', `新目标信息: 下一目标=${nextReward ? nextReward.name : '无'}, 需要星星=${nextReward ? nextReward.points : 0}`);
       
       // 格式化星星数
       const formattedPoints = formatUtils.formatPoints(userPoints, true);
@@ -1484,7 +1485,7 @@ Page({
       // 获取进度条组件并平滑过渡
       const progressBar = this.selectComponent('#progressBar');
       if (progressBar) {
-        console.log('[Index] 进度条平滑过渡到新目标');
+        logger.debug('Index', '进度条平滑过渡到新目标');
         progressBar.setData({
           current: userPoints,
           // 没有真实奖励时设置更大的total值，确保进度条显示一致
@@ -1508,13 +1509,13 @@ Page({
         }
       });
     } catch (error) {
-      console.error('[Index] 过渡到新目标时出错', error);
+      logger.error('Index', '过渡到新目标时出错', error);
     }
   },
   
   // 点击查看奖池
   viewRewardPool: function() {
-    console.log('[Index] 用户选择查看奖池');
+    logger.debug('Index', '用户选择查看奖池');
     
     // 保存更多状态信息
     const app = getApp();
@@ -1551,7 +1552,7 @@ Page({
     
     if (!reward) return;
     
-    console.log(`[Index] 点击奖励指示器: ${reward.name}, 状态: ${reward.status}`);
+    logger.debug('Index', `点击奖励指示器: ${reward.name}, 状态: ${reward.status}`);
     
     // 已解锁或已领取状态，跳转到奖池
     if (reward.status === 'unlocked' || reward.status === 'claimed') {
@@ -1569,7 +1570,7 @@ Page({
   
   // 显示所有奖励
   showAllRewards: function() {
-    console.log('[Index] 查看所有奖励');
+    logger.debug('Index', '查看所有奖励');
     wx.switchTab({
       url: '/pages/rewards/rewards'
     });
@@ -1621,7 +1622,7 @@ Page({
    * @return {Boolean} 是否只有示例奖励
    */
   hasOnlyExampleRewards: function() {
-    console.log('[Index] 检查是否只有示例奖励可用');
+    logger.debug('Index', '检查是否只有示例奖励可用');
     
     // 从本地存储获取奖励数据
     const storedRewards = wx.getStorageSync('rewards') || [];
@@ -1631,14 +1632,14 @@ Page({
     
     // 如果没有奖励，使用默认示例奖励
     if (enabledRewards.length === 0) {
-      console.log('[Index] 没有任何奖励，返回true');
+      logger.debug('Index', '没有任何奖励，返回true');
       return true;
     }
     
     // 检查是否所有启用的奖励都是示例奖励
     const hasCustomReward = enabledRewards.some(reward => !this.isExampleReward(reward));
     
-    console.log(`[Index] 是否只有示例奖励: ${!hasCustomReward}, 启用奖励数: ${enabledRewards.length}`);
+    logger.debug('Index', `是否只有示例奖励: ${!hasCustomReward}, 启用奖励数: ${enabledRewards.length}`);
     return !hasCustomReward;
   },
   
@@ -1646,7 +1647,7 @@ Page({
    * 显示设置奖励提示对话框
    */
   showSetupRewardTip: function() {
-    console.log('[Index] 显示设置奖励提示');
+    logger.debug('Index', '显示设置奖励提示');
     
     // 创建动画实例
     const animation = wx.createAnimation({
@@ -1676,7 +1677,7 @@ Page({
    * 关闭设置奖励提示对话框
    */
   closeSetupRewardTip: function() {
-    console.log('[Index] 关闭设置奖励提示');
+    logger.debug('Index', '关闭设置奖励提示');
     
     // 创建动画实例
     const animation = wx.createAnimation({
@@ -1703,7 +1704,7 @@ Page({
    * 跳转到奖励管理页面
    */
   navigateToRewardManage: function() {
-    console.log('[Index] 跳转到奖励管理页面');
+    logger.debug('Index', '跳转到奖励管理页面');
     
     // 先关闭提示对话框
     this.closeSetupRewardTip();
@@ -1717,17 +1718,19 @@ Page({
   },
   
   // 准备奖励指示器数据
-  prepareRewardIndicators: function(userPoints, allRewards, nextReward) {
+  _prepareRewardIndicators: function() {
+    logger.debug('Index', `准备显示奖品指示器: ${this.data.visibleRewards.length}个, 状态分布: ${this.data.visibleRewards.map(r => r.status).join(',')}`);
+    
     // 处理奖品指示器
-    const processedRewards = allRewards.map(reward => {
+    const processedRewards = this.data.visibleRewards.map(reward => {
       let status = 'locked'; // 默认状态：未解锁
       
       // 先检查是否已领取
       if (reward.claimed) {
         status = 'claimed'; // 已领取状态
-      } else if (userPoints >= reward.points) {
+      } else if (this.data.userPoints >= reward.points) {
         status = 'unlocked'; // 已解锁状态
-      } else if (nextReward && nextReward.id === reward.id) {
+      } else if (this.data.nextReward && this.data.nextReward.id === reward.id) {
         status = 'current'; // 当前目标状态
       }
       
@@ -1746,9 +1749,6 @@ Page({
       visibleRewards,
       hasMoreRewards
     });
-    
-    // 添加日志
-    console.log(`[Index] 准备显示奖品指示器: ${visibleRewards.length}个, 状态分布: ${visibleRewards.map(r => r.status).join(',')}`);
   },
 
   // 任务状态切换处理函数

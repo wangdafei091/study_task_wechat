@@ -311,54 +311,94 @@ uiUtils.showConfirm(
 const studyColor = uiUtils.getThemeColor('study'); // 返回 #4285F4
 ```
 
-## 日志工具 (logger.js)
+## 日志系统 (logger.js, log-config.js, log-analyzer.js)
 
-`utils/logger.js` 提供统一的日志记录功能，便于追踪和调试。
+### 基本日志记录 (logger.js)
 
-### 主要函数
-
-```javascript
-// 记录信息日志
-logger.info(module, message, data)
-
-// 记录警告日志
-logger.warn(module, message, data)
-
-// 记录错误日志
-logger.error(module, message, error)
-
-// 记录调试日志
-logger.debug(module, message, data)
-```
-
-### 使用示例
+[utils/logger.js](mdc:utils/logger.js) 提供统一的日志记录功能，支持不同日志级别和模块化日志。
 
 ```javascript
-const logger = require('../../utils/logger');
+// 导入日志模块
+const logger = require('../utils/logger');
 
-// 记录操作信息
-logger.info('TaskEdit', '编辑任务', { taskId: task.id });
-
-// 记录错误
-try {
-  // 执行操作
-} catch (err) {
-  logger.error('TaskManager', '保存任务失败', err);
-}
-
-// 记录警告
-logger.warn('TaskComponent', '任务即将到期', { taskId: task.id, dueDate: task.date });
-
-// 记录调试信息（仅在调试模式下显示）
-logger.debug('TaskList', '任务列表渲染', { count: tasks.length });
+// 记录不同级别的日志
+logger.debug('模块名', '调试信息', { 详细数据 });
+logger.info('模块名', '一般信息', { 相关数据 });
+logger.warn('模块名', '警告信息', { 警告数据 });
+logger.error('模块名', '错误信息', 错误对象);
 ```
 
-### 日志级别使用指南
+### 日志配置 (log-config.js)
 
-- **info**：记录普通操作和重要流程节点，如任务创建、编辑等
-- **warn**：记录警告信息，如任务即将过期、配置不一致等
-- **error**：记录错误信息，包括异常捕获和操作失败等
-- **debug**：记录调试信息，仅在开发环境显示
+[utils/log-config.js](mdc:utils/log-config.js) 提供日志级别配置和模块特定日志控制。
+
+```javascript
+// 导入日志配置模块
+const logConfig = require('../utils/log-config');
+
+// 设置默认日志级别
+logConfig.setDefaultLogLevel('debug'); // 可选值：'debug'、'info'、'warn'、'error'、'none'
+
+// 为特定模块设置日志级别
+logConfig.setModuleLogLevel('TaskService', 'info');
+logConfig.setModuleLogLevel('BaseRepository', 'warn');
+
+// 应用环境自适应配置
+logConfig.applyEnvironmentDefaults();
+```
+
+#### 模块特定日志记录器
+
+```javascript
+// 创建模块特定的日志记录器
+const moduleLogger = logConfig.createModuleLogger('模块名');
+
+// 使用模块特定的日志记录器
+moduleLogger.debug('调试信息', { 数据 });
+moduleLogger.info('一般信息');
+moduleLogger.warn('警告信息');
+moduleLogger.error('错误', new Error('发生错误'));
+```
+
+### 日志分析 (log-analyzer.js)
+
+[utils/log-analyzer.js](mdc:utils/log-analyzer.js) 用于识别代码中直接使用console的地方，帮助开发者迁移到统一日志系统。
+
+```javascript
+// 导入日志分析器
+const logAnalyzer = require('../utils/log-analyzer');
+
+// 初始化分析器（通常在app.js中已自动初始化）
+logAnalyzer.init();
+
+// 获取分析报告
+const report = logAnalyzer.getReport();
+console.log(`发现${report.totalFindings}处直接使用console的代码`);
+```
+
+### 最佳实践
+
+1. **始终使用模块名**：确保每个日志调用都包含模块名，便于过滤和定位问题
+   ```javascript
+   // 推荐
+   logger.info('TaskService', '任务创建成功', { taskId: id });
+   // 不推荐
+   logger.info('任务创建成功', { taskId: id });
+   ```
+
+2. **适当使用日志级别**：
+   - `debug`: 详细的开发调试信息，仅在开发环境显示
+   - `info`: 一般操作信息，记录正常流程
+   - `warn`: 潜在问题警告，需要关注但不影响运行
+   - `error`: 错误信息，影响功能正常运行
+
+3. **记录关键点**：
+   - 函数入口/出口的参数和返回值
+   - 关键业务状态变更
+   - 异步操作的开始和完成
+   - 所有错误和异常情况
+
+4. **避免敏感信息**：不要记录用户密码、令牌等敏感信息
 
 ## 批量处理工具 (batchUtils.js)
 

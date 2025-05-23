@@ -39,7 +39,6 @@ class StarGroupRepository extends BaseRepository {
   async getNonEmptyGroups() {
     try {
       const groups = await this.query(group => !group.isEmpty());
-      logger.info('StarGroupRepository', `获取非空分组成功, 数量=${groups.length}`);
       return groups;
     } catch (error) {
       logger.error('StarGroupRepository', '获取非空分组失败', error);
@@ -61,7 +60,7 @@ class StarGroupRepository extends BaseRepository {
     try {
       const groups = await this.query(group => group.expiryType === expiryType);
       
-      logger.info('StarGroupRepository', `获取有效期类型=${expiryType}的分组成功, 数量=${groups.length}`);
+      logger.debug('StarGroupRepository', `获取有效期类型=${expiryType}的分组成功, 数量=${groups.length}`);
       return groups;
     } catch (error) {
       logger.error('StarGroupRepository', `获取有效期类型=${expiryType}的分组失败`, error);
@@ -105,7 +104,7 @@ class StarGroupRepository extends BaseRepository {
       
       // 如果找到匹配的分组，直接返回
       if (existingGroup) {
-        logger.info('StarGroupRepository', `找到匹配的星星分组, ID=${existingGroup.id}, 类型=${expiryType}`);
+        logger.debug('StarGroupRepository', `找到匹配的星星分组, ID=${existingGroup.id}, 类型=${expiryType}`);
         return existingGroup;
       }
       
@@ -152,7 +151,7 @@ class StarGroupRepository extends BaseRepository {
       // 保存回存储
       const savedGroup = await this.save(updatedGroup);
       
-      logger.info('StarGroupRepository', `添加星星到分组成功, 分组ID=${savedGroup.id}, 数量=${points}, 来源=${source || '未知'}`);
+      logger.debug('StarGroupRepository', `添加星星到分组成功, 分组ID=${savedGroup.id}, 数量=${points}, 来源=${source || '未知'}`);
       return savedGroup;
     } catch (error) {
       logger.error('StarGroupRepository', `添加星星到分组失败, 分组ID=${group.id}`, error);
@@ -183,9 +182,9 @@ class StarGroupRepository extends BaseRepository {
       let savedGroup = null;
       if (consumed > 0) {
         savedGroup = await this.save(updatedGroup);
-        logger.info('StarGroupRepository', `从分组消费星星成功, 分组ID=${savedGroup.id}, 请求消费=${points}, 实际消费=${consumed}`);
+        logger.debug('StarGroupRepository', `从分组消费星星成功, 分组ID=${savedGroup.id}, 请求消费=${points}, 实际消费=${consumed}`);
       } else {
-        logger.info('StarGroupRepository', `从分组消费星星, 没有实际消费, 分组ID=${group.id}`);
+        logger.debug('StarGroupRepository', `从分组消费星星, 没有实际消费, 分组ID=${group.id}`);
         savedGroup = updatedGroup;
       }
       
@@ -250,12 +249,12 @@ class StarGroupRepository extends BaseRepository {
         groupsUpdated: updatedGroups
       };
     } catch (error) {
-      logger.error('StarGroupRepository', `按过期顺序消费星星失败, 数量=${totalPoints}`, error);
-      return { 
-        success: false, 
-        consumed: 0, 
-        remaining: totalPoints, 
-        groupsUpdated: [] 
+      logger.error('StarGroupRepository', '按过期顺序消费星星失败', error);
+      return {
+        success: false,
+        consumed: 0,
+        remaining: totalPoints,
+        groupsUpdated: []
       };
     }
   }

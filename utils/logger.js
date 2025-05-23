@@ -2,9 +2,31 @@
  * logger.js - 日志工具
  * 
  * 提供统一的日志记录功能，可被全局使用
+ * 支持环境自适应的日志级别控制和配置
  */
 
+// 日志级别定义
+const LogLevel = {
+  DEBUG: 0,
+  INFO: 1,
+  WARN: 2,
+  ERROR: 3,
+  NONE: 99
+};
+
+// 日志级别映射
+const LogLevelMap = {
+  'debug': LogLevel.DEBUG,
+  'info': LogLevel.INFO,
+  'warn': LogLevel.WARN,
+  'error': LogLevel.ERROR,
+  'none': LogLevel.NONE
+};
+
 const Logger = {
+  // 当前日志级别
+  _currentLevel: null,
+  
   /**
    * 记录信息日志
    * @param {String} module 模块名称
@@ -12,7 +34,9 @@ const Logger = {
    * @param {Object} data 附加数据，可选
    */
   info(module, message, data) {
-    this._log('INFO', module, message, data);
+    if (this._shouldLog('INFO')) {
+      this._log('INFO', module, message, data);
+    }
   },
   
   /**
@@ -22,7 +46,9 @@ const Logger = {
    * @param {Object} data 附加数据，可选
    */
   warn(module, message, data) {
-    this._log('WARN', module, message, data);
+    if (this._shouldLog('WARN')) {
+      this._log('WARN', module, message, data);
+    }
   },
   
   /**
@@ -32,7 +58,9 @@ const Logger = {
    * @param {Error|Object} error 错误对象或附加数据，可选
    */
   error(module, message, error) {
-    this._log('ERROR', module, message, error);
+    if (this._shouldLog('ERROR')) {
+      this._log('ERROR', module, message, error);
+    }
   },
   
   /**
@@ -42,11 +70,78 @@ const Logger = {
    * @param {Object} data 附加数据，可选
    */
   debug(module, message, data) {
-    // 可以根据环境变量控制是否输出调试日志
-    const enableDebug = true;
-    if (enableDebug) {
+    if (this._shouldLog('DEBUG')) {
       this._log('DEBUG', module, message, data);
     }
+  },
+  
+  /**
+   * 设置日志级别
+   * @param {String} level 日志级别 'debug'|'info'|'warn'|'error'|'none'
+   * @returns {Boolean} 是否设置成功
+   */
+  setLevel(level) {
+    if (LogLevelMap[level] !== undefined) {
+      this._currentLevel = level;
+      return true;
+    }
+    return false;
+  },
+  
+  /**
+   * 获取当前日志级别
+   * @returns {String} 当前日志级别
+   */
+  getLevel() {
+    return this._getCurrentLevel();
+  },
+  
+  /**
+   * 检测当前环境并返回适合的日志级别
+   * @private
+   * @returns {String} 日志级别
+   */
+  _detectEnvironmentLevel() {
+    try {
+      if (typeof wx !== 'undefined') {
+        const systemInfo = wx.getSystemInfoSync();
+        // 微信开发者工具环境
+        if (systemInfo.platform === 'devtools') {
+          return 'debug';
+        }
+      }
+      // 生产环境
+      return 'error';
+    } catch (e) {
+      // 错误时默认使用info级别
+      return 'info';
+    }
+  },
+  
+  /**
+   * 获取当前配置的日志级别
+   * @private
+   * @returns {String} 日志级别
+   */
+  _getCurrentLevel() {
+    if (!this._currentLevel) {
+      this._currentLevel = this._detectEnvironmentLevel();
+    }
+    return this._currentLevel;
+  },
+  
+  /**
+   * 检查是否应该记录指定级别的日志
+   * @private
+   * @param {String} level 日志级别
+   * @returns {Boolean} 是否应该记录
+   */
+  _shouldLog(level) {
+    const currentLevel = this._getCurrentLevel();
+    const currentValue = LogLevelMap[currentLevel.toLowerCase()] || LogLevel.INFO;
+    const messageValue = LogLevelMap[level.toUpperCase()] || LogLevelMap[level.toLowerCase()] || LogLevel.INFO;
+    
+    return messageValue >= currentValue;
   },
   
   /**

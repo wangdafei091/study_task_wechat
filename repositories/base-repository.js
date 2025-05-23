@@ -43,7 +43,7 @@ class BaseRepository {
     this._cacheTime = 0;
     this._cacheTTL = options.cacheTTL || 10000; // 默认10秒内存缓存
     
-    logger.info('BaseRepository', `创建${this.constructor.name}仓储, 存储键=${storageKey}`);
+    logger.debug('BaseRepository', `创建${this.constructor.name}仓储, 存储键=${storageKey}`);
   }
   
   /**
@@ -51,7 +51,7 @@ class BaseRepository {
    * @returns {Promise<Boolean>} 是否加载成功
    */
   async loadFromStorage() {
-    logger.info('BaseRepository', `从存储加载数据, 存储键=${this.storageKey}`);
+    logger.debug('BaseRepository', `从存储加载数据, 存储键=${this.storageKey}`);
     try {
       // 调用getAll强制从存储中加载数据
       await this.getAll(false);
@@ -70,7 +70,7 @@ class BaseRepository {
   async getAll(useCache = true) {
     // 检查内存缓存
     if (useCache && this._isMemoryCacheValid()) {
-      logger.info('BaseRepository', `从内存缓存获取数据, 存储键=${this.storageKey}`);
+      logger.debug('BaseRepository', `从内存缓存获取数据, 存储键=${this.storageKey}`);
       return this._cloneModels(this._cache);
     }
     
@@ -85,7 +85,7 @@ class BaseRepository {
       this._cache = models;
       this._cacheTime = Date.now();
       
-      logger.info('BaseRepository', `获取所有数据成功, 存储键=${this.storageKey}, 条数=${models.length}`);
+      logger.debug('BaseRepository', `获取所有数据成功, 存储键=${this.storageKey}, 条数=${models.length}`);
       
       return this._cloneModels(models);
     } catch (error) {
@@ -100,6 +100,8 @@ class BaseRepository {
    * @returns {Promise<Object|null>} 实体对象或null
    */
   async getById(id) {
+    logger.debug('BaseRepository', `根据ID获取实体, ID=${id}`);
+    
     if (!id) {
       logger.warn('BaseRepository', '尝试使用空ID获取实体');
       return null;
@@ -110,7 +112,7 @@ class BaseRepository {
       const entity = all.find(item => item.id === id);
       
       if (!entity) {
-        logger.info('BaseRepository', `未找到ID为${id}的实体, 存储键=${this.storageKey}`);
+        logger.debug('BaseRepository', `未找到ID为${id}的实体, 存储键=${this.storageKey}`);
         return null;
       }
       
@@ -136,7 +138,8 @@ class BaseRepository {
       const all = await this.getAll();
       const filtered = all.filter(predicate);
       
-      logger.info('BaseRepository', `查询实体成功, 存储键=${this.storageKey}, 条数=${filtered.length}`);
+      // 保留独特信息
+      logger.debug('BaseRepository', `查询实体成功, 存储键=${this.storageKey}, 条数=${filtered.length}`);
       
       return this._cloneModels(filtered);
     } catch (error) {
@@ -155,6 +158,8 @@ class BaseRepository {
       logger.warn('BaseRepository', '尝试保存空实体');
       return null;
     }
+    
+    logger.debug('BaseRepository', `开始保存实体, ID=${entity.id || '新实体'}`);
     
     try {
       // 克隆防止引用变化
@@ -178,6 +183,7 @@ class BaseRepository {
       // 保存回存储
       await this._saveData(all);
       
+      logger.debug('BaseRepository', `保存实体完成, ID=${entityToSave.id}, 类型=${entityToSave.constructor.name || '未知'}`);
       return this._cloneModel(entityToSave);
     } catch (error) {
       logger.error('BaseRepository', `保存实体失败, 存储键=${this.storageKey}`, error);
@@ -195,6 +201,8 @@ class BaseRepository {
       logger.warn('BaseRepository', '尝试批量保存空数组或无效数组');
       return [];
     }
+    
+    logger.debug('BaseRepository', `开始批量保存实体, 数量=${entities.length}`);
     
     try {
       // 克隆防止引用变化
@@ -245,16 +253,17 @@ class BaseRepository {
       return false;
     }
     
+    logger.debug('BaseRepository', `开始删除实体, ID=${id}`);
+    
     try {
       // 获取所有实体
       const all = await this.getAll();
       
-      // 找到实体索引
+      // 查找实体索引
       const index = all.findIndex(item => item.id === id);
       
-      // 如果实体不存在
-      if (index === -1) {
-        logger.info('BaseRepository', `要删除的实体不存在, ID=${id}, 存储键=${this.storageKey}`);
+      if (index < 0) {
+        logger.debug('BaseRepository', `未找到要删除的实体, ID=${id}, 存储键=${this.storageKey}`);
         return false;
       }
       
@@ -263,6 +272,9 @@ class BaseRepository {
       
       // 保存回存储
       await this._saveData(all);
+      
+      // 清除实体缓存
+      this.invalidateCache();
       
       logger.info('BaseRepository', `删除实体成功, ID=${id}, 存储键=${this.storageKey}`);
       
@@ -279,41 +291,59 @@ class BaseRepository {
    * @returns {Promise<Number>} 删除的实体数量
    */
   async deleteMany(predicateOrIds) {
-    const isFunction = typeof predicateOrIds === 'function';
-    const isArray = Array.isArray(predicateOrIds);
-    
-    if (!isFunction && !isArray) {
-      logger.warn('BaseRepository', '尝试使用无效的条件批量删除实体');
+    if (!predicateOrIds) {
+      logger.warn('BaseRepository', '尝试使用无效参数批量删除实体');
       return 0;
     }
+    
+    logger.debug('BaseRepository', `开始批量删除实体, 参数类型=${typeof predicateOrIds}`);
     
     try {
       // 获取所有实体
       const all = await this.getAll();
-      const originalCount = all.length;
+      const originalLength = all.length;
       
-      let filtered;
+      let filteredIds = [];
       
-      if (isFunction) {
-        // 使用过滤函数删除
-        filtered = all.filter(item => !predicateOrIds(item));
+      // 根据参数类型确定过滤方式
+      if (typeof predicateOrIds === 'function') {
+        // 使用谓词过滤
+        const filtered = all.filter(predicateOrIds);
+        filteredIds = filtered.map(item => item.id);
+      } else if (Array.isArray(predicateOrIds)) {
+        // 直接使用ID数组
+        filteredIds = predicateOrIds;
       } else {
-        // 使用ID数组删除
-        const idSet = new Set(predicateOrIds);
-        filtered = all.filter(item => !idSet.has(item.id));
+        logger.warn('BaseRepository', `无效的批量删除参数类型: ${typeof predicateOrIds}`);
+        return 0;
       }
+      
+      if (filteredIds.length === 0) {
+        logger.debug('BaseRepository', '没有找到要删除的实体');
+        return 0;
+      }
+      
+      // 创建ID集合以提高查找效率
+      const idSet = new Set(filteredIds);
+      
+      // 过滤不需要删除的实体
+      const newEntities = all.filter(item => !idSet.has(item.id));
       
       // 计算删除数量
-      const deletedCount = originalCount - filtered.length;
+      const deletedCount = originalLength - newEntities.length;
       
-      if (deletedCount > 0) {
-        // 保存回存储
-        await this._saveData(filtered);
-        
-        logger.info('BaseRepository', `批量删除实体成功, 删除数量=${deletedCount}, 存储键=${this.storageKey}`);
-      } else {
-        logger.info('BaseRepository', `没有实体符合批量删除条件, 存储键=${this.storageKey}`);
+      if (deletedCount === 0) {
+        logger.debug('BaseRepository', '没有删除任何实体');
+        return 0;
       }
+      
+      // 保存回存储
+      await this._saveData(newEntities);
+      
+      // 清除实体缓存
+      this.invalidateCache();
+      
+      logger.info('BaseRepository', `批量删除实体成功, 删除数量=${deletedCount}, 存储键=${this.storageKey}`);
       
       return deletedCount;
     } catch (error) {
@@ -323,39 +353,45 @@ class BaseRepository {
   }
   
   /**
-   * 清空存储
+   * 清空所有实体
    * @returns {Promise<Boolean>} 是否清空成功
    */
   async clear() {
+    logger.info('BaseRepository', `开始清空所有实体, 存储键=${this.storageKey}`);
+    
     try {
-      // 清空存储
+      // 保存空数组
       await this._saveData([]);
       
-      logger.info('BaseRepository', `清空存储成功, 存储键=${this.storageKey}`);
+      // 清除实体缓存
+      this.invalidateCache();
+      
+      logger.info('BaseRepository', `清空所有实体成功, 存储键=${this.storageKey}`);
       
       return true;
     } catch (error) {
-      logger.error('BaseRepository', `清空存储失败, 存储键=${this.storageKey}`, error);
+      logger.error('BaseRepository', `清空所有实体失败, 存储键=${this.storageKey}`, error);
       return false;
     }
   }
   
   /**
-   * 计算实体数量
-   * @param {Function} predicate 过滤函数，可选
+   * 计算匹配实体的数量
+   * @param {Function} predicate 可选的过滤函数
    * @returns {Promise<Number>} 实体数量
    */
   async count(predicate) {
     try {
+      // 获取所有实体
       const all = await this.getAll();
       
+      // 如果提供了过滤函数，则过滤
       if (typeof predicate === 'function') {
-        // 使用过滤函数计算
         const filtered = all.filter(predicate);
         return filtered.length;
       }
       
-      // 返回总数
+      // 否则返回所有实体数量
       return all.length;
     } catch (error) {
       logger.error('BaseRepository', `计算实体数量失败, 存储键=${this.storageKey}`, error);
@@ -364,49 +400,53 @@ class BaseRepository {
   }
   
   /**
-   * 检查存储是否存在
-   * @returns {Promise<Boolean>} 是否存在
+   * 检查仓储是否存在
+   * @returns {Promise<Boolean>} 仓储是否存在
    */
   async exists() {
     try {
-      const data = await this.storageAdapter.getAsync(this.storageKey);
-      return data !== null && data !== undefined;
+      return await this.storageAdapter.exists(this.storageKey);
     } catch (error) {
-      logger.error('BaseRepository', `检查存储是否存在失败, 存储键=${this.storageKey}`, error);
+      logger.error('BaseRepository', `检查仓储是否存在失败, 存储键=${this.storageKey}`, error);
       return false;
     }
   }
   
   /**
-   * 事务操作
-   * @param {Function} transactionFn 事务函数，接收当前数据和修改函数
-   * @returns {Promise<Boolean>} 是否成功
+   * 执行事务操作
+   * @param {Function} transactionFn 事务函数
+   * @returns {Promise<*>} 事务结果
    */
   async transaction(transactionFn) {
     if (typeof transactionFn !== 'function') {
       logger.warn('BaseRepository', '尝试使用无效的事务函数');
-      return false;
+      return null;
     }
+    
+    logger.debug('BaseRepository', `开始执行事务, 存储键=${this.storageKey}`);
     
     try {
       // 获取所有实体
       const all = await this.getAll();
       
       // 克隆防止引用变化
-      const dataToModify = this._cloneModels(all);
+      const entities = this._cloneModels(all);
       
       // 执行事务函数
-      await transactionFn(dataToModify);
+      const result = await transactionFn(entities);
       
       // 保存回存储
-      await this._saveData(dataToModify);
+      await this._saveData(entities);
       
-      logger.info('BaseRepository', `事务操作成功, 存储键=${this.storageKey}`);
+      // 清除实体缓存
+      this.invalidateCache();
       
-      return true;
+      logger.debug('BaseRepository', `事务执行成功, 存储键=${this.storageKey}`);
+      
+      return result;
     } catch (error) {
-      logger.error('BaseRepository', `事务操作失败, 存储键=${this.storageKey}`, error);
-      return false;
+      logger.error('BaseRepository', `事务执行失败, 存储键=${this.storageKey}`, error);
+      throw error;
     }
   }
   
@@ -414,19 +454,21 @@ class BaseRepository {
    * 保存数据到存储
    * @private
    * @param {Array} data 要保存的数据
-   * @returns {Promise<Boolean>} 是否成功
+   * @returns {Promise<Boolean>} 是否保存成功
    */
   async _saveData(data) {
-    // 保存到存储
-    const success = await this.storageAdapter.setAsync(this.storageKey, data);
-    
-    if (success) {
-      // 更新内存缓存
+    try {
+      await this.storageAdapter.setAsync(this.storageKey, data);
+      
+      // 更新缓存
       this._cache = this._createModels(data);
       this._cacheTime = Date.now();
+      
+      return true;
+    } catch (error) {
+      logger.error('BaseRepository', `保存数据到存储失败, 存储键=${this.storageKey}`, error);
+      return false;
     }
-    
-    return success;
   }
   
   /**
@@ -440,62 +482,66 @@ class BaseRepository {
   }
   
   /**
-   * 创建模型实例数组
+   * 创建模型实例
    * @private
    * @param {Array} data 原始数据
    * @returns {Array} 模型实例数组
    */
   _createModels(data) {
-    if (!Array.isArray(data)) return [];
+    if (!Array.isArray(data)) {
+      return [];
+    }
     
     return data.map(item => {
-      try {
-        return new this.modelClass(item);
-      } catch (error) {
-        logger.error('BaseRepository', `创建模型实例失败`, error);
-        return null;
-      }
-    }).filter(model => model !== null);
+      return new this.modelClass(item);
+    });
   }
   
   /**
-   * 克隆模型实例数组
+   * 克隆模型数组
    * @private
-   * @param {Array} models 模型实例数组
-   * @returns {Array} 克隆后的模型实例数组
+   * @param {Array} models 模型数组
+   * @returns {Array} 克隆后的模型数组
    */
   _cloneModels(models) {
-    if (!Array.isArray(models)) return [];
+    if (!Array.isArray(models)) {
+      return [];
+    }
     
     return models.map(model => this._cloneModel(model));
   }
   
   /**
-   * 克隆单个模型实例
+   * 克隆单个模型
    * @private
    * @param {Object} model 模型实例
    * @returns {Object} 克隆后的模型实例
    */
   _cloneModel(model) {
-    if (!model) return null;
-    
-    try {
-      // 创建新实例
-      return new this.modelClass({ ...model });
-    } catch (error) {
-      logger.error('BaseRepository', `克隆模型实例失败`, error);
-      // 如果创建新实例失败，返回简单的对象副本
-      return { ...model };
+    if (!model) {
+      return null;
     }
+    
+    // 如果模型有克隆方法，则调用
+    if (typeof model.clone === 'function') {
+      return model.clone();
+    }
+    
+    // 否则创建新实例
+    return new this.modelClass(model);
   }
   
   /**
-   * 使缓存失效，强制下次从存储加载
+   * 清除缓存
    */
   invalidateCache() {
     this._cache = null;
     this._cacheTime = 0;
-    logger.info('BaseRepository', `手动使缓存失效, 存储键=${this.storageKey}`);
+    
+    // 清除存储适配器的缓存
+    if (typeof this.storageAdapter.clearCache === 'function') {
+      this.storageAdapter.clearCache(this.storageKey);
+    }
   }
 }
 

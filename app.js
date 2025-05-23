@@ -3,9 +3,13 @@ const unitUtils = require('./utils/unit.js');
 const storageUtils = require('./utils/storageUtils.js'); // 引入存储工具
 const serviceManager = require('./utils/serviceManager.js'); // 引入服务管理器
 const logger = require('./utils/logger');
+const logConfig = require('./utils/log-config');
 
 App({
   onLaunch: async function () {
+    // 初始化日志系统
+    this.initLogSystem();
+    
     // 初始化存储数据
     logger.info('App', '初始化存储数据');
     storageUtils.initializeStorageIfNeeded();
@@ -101,6 +105,80 @@ App({
     this.startTaskChecking();
   },
   
+  // 初始化日志系统
+  initLogSystem: function() {
+    try {
+      logger.info('App', '初始化日志系统');
+      
+      // 获取环境信息
+      let isDevEnv = false;
+      try {
+        if (typeof wx !== 'undefined') {
+          const systemInfo = wx.getSystemInfoSync();
+          isDevEnv = systemInfo.platform === 'devtools';
+        }
+      } catch (e) {
+        // 忽略错误
+      }
+      
+      // 日志配置选项
+      const logOptions = {
+        levels: {
+          default: isDevEnv ? 'debug' : 'error',
+          // 模块特定配置，可从配置文件或本地存储加载
+          modules: {
+            'BaseRepository': isDevEnv ? 'info' : 'error', // 减少仓储层日志噪音
+            'StorageAdapter': isDevEnv ? 'info' : 'error', // 减少存储适配器日志噪音
+            'App': 'info', // 应用级别始终保持info以上
+            'TaskService': 'info' // 任务服务保持info以上
+          }
+        },
+        features: {
+          // 开发环境配置
+          showTimestamp: true,
+          consoleOutput: true,
+          // 生产环境禁用以下特性
+          storeLogs: isDevEnv, 
+          maxLogEntries: isDevEnv ? 1000 : 100
+        }
+      };
+      
+      // 初始化日志配置
+      logConfig.init(logOptions);
+      
+      // 应用基于环境的默认配置
+      logConfig.applyEnvironmentDefaults();
+      
+      // 从存储中加载用户自定义配置（如果有）
+      const userLogConfig = wx.getStorageSync('_user_log_config');
+      if (userLogConfig) {
+        try {
+          const parsedConfig = JSON.parse(userLogConfig);
+          if (parsedConfig && parsedConfig.levels) {
+            logConfig.setLogLevels(parsedConfig.levels);
+            logger.info('App', '应用用户自定义日志配置');
+          }
+        } catch (e) {
+          logger.warn('App', '解析用户日志配置失败', e);
+        }
+      }
+      
+      logger.info('App', '日志系统初始化完成');
+      
+      // 开发环境下，尝试加载日志分析器
+      if (isDevEnv) {
+        try {
+          const logAnalyzer = require('./utils/log-analyzer');
+          logger.info('App', '已加载日志分析器，将监控console调用');
+        } catch (e) {
+          logger.warn('App', '加载日志分析器失败', e);
+        }
+      }
+    } catch (error) {
+      console.error('初始化日志系统失败:', error);
+    }
+  },
+  
   // 创建定期检查任务的定时器
   startTaskChecking: function() {
     // 每5分钟检查一次任务状态
@@ -193,7 +271,7 @@ App({
   // 监听系统主题变化
   setupThemeChangeListener: function() {
     // 移除主题监听功能，统一使用亮色主题
-    console.log('[App] 使用统一亮色主题，不支持暗黑模式');
+    logger.info('App', '使用统一亮色主题，不支持暗黑模式');
     
     // 设置默认亮色主题
     this.globalData.systemTheme = 'light';
