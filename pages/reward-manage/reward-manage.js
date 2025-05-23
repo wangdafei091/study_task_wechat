@@ -1,4 +1,5 @@
 const app = getApp();
+const { EVENTS } = require('../../utils/constants');
 // 新架构服务引入
 const serviceManager = require('../../utils/serviceManager');
 const logger = require('../../utils/logger');
@@ -380,7 +381,7 @@ Page({
         
         // 如果有事件总线，发送奖励删除事件
         if (app.globalData.eventBus) {
-          app.globalData.eventBus.emit('reward:deleted', {
+          app.globalData.eventBus.emit(EVENTS.REWARD_DELETED, {
             rewardId: reward.id
           });
           logger.info('RewardManage', `已触发奖励删除事件: ${reward.id}`);
@@ -472,7 +473,7 @@ Page({
         
         // 如果有事件总线，发送奖励添加事件
         if (app.globalData.eventBus) {
-          app.globalData.eventBus.emit('reward:created', {
+          app.globalData.eventBus.emit(EVENTS.REWARD_CREATED, {
             reward: result.reward,
             isReactivation: true
           });
@@ -719,7 +720,7 @@ Page({
       
       // 如果有事件总线，发送奖励更新事件
       if (app.globalData.eventBus) {
-        app.globalData.eventBus.emit('reward:updated', {
+        app.globalData.eventBus.emit(EVENTS.REWARD_UPDATED, {
           type: this.data.isEditing ? 'edit' : 'add',
           reward: processedReward
         });
@@ -889,7 +890,7 @@ Page({
         
         // 发送示例奖励清理事件
         if (app.globalData.eventBus) {
-          app.globalData.eventBus.emit('reward:examples_cleared', {
+          app.globalData.eventBus.emit(EVENTS.REWARD_EXAMPLES_CLEARED, {
             count: unclaimedExamples.length
           });
         }

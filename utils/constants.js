@@ -84,7 +84,7 @@ module.exports = {
     REWARD_EXAMPLES_CLEARED: 'reward:examples_cleared',
     
     // UI事件
-    PROGRESS_BAR_COMPLETE: 'progress:complete',
+    PROGRESS_BAR_COMPLETE: 'progressbar:complete',
     TASK_DATA_CHANGED: 'task:changed',
     
     // 系统事件

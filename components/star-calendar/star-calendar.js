@@ -1,5 +1,6 @@
 const dateUtils = require('../../utils/dateUtils.js');
 const analyticsManager = require('../../utils/analyticsManager.js');
+const { EVENTS } = require('../../utils/constants.js');
 
 Component({
   /**
@@ -70,7 +71,7 @@ Component({
       
       // 通过事件总线订阅任务状态变更事件
       if (getApp().globalData.eventBus) {
-        getApp().globalData.eventBus.on('taskStatusChanged', this.taskStatusChangeListener);
+        getApp().globalData.eventBus.on(EVENTS.TASK_STATUS_CHANGED, this.taskStatusChangeListener);
         console.log('[星星日历] 已订阅任务状态变更事件');
       }
     },
@@ -78,7 +79,7 @@ Component({
     detached: function() {
       // 取消事件订阅
       if (getApp().globalData.eventBus && this.taskStatusChangeListener) {
-        getApp().globalData.eventBus.off('taskStatusChanged', this.taskStatusChangeListener);
+        getApp().globalData.eventBus.off(EVENTS.TASK_STATUS_CHANGED, this.taskStatusChangeListener);
         console.log('[星星日历] 已取消任务状态变更事件订阅');
       }
     }

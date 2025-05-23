@@ -274,7 +274,7 @@ Component({
       const app = getApp();
       if (app && app.globalData && app.globalData.eventBus) {
         console.log(`[progressBar] 发送进度条完成事件，通知页面锁定操作`);
-        app.globalData.eventBus.emit('progressBarComplete');
+        app.globalData.eventBus.emit(this.EVENTS.PROGRESS_BAR_COMPLETE);
       }
       
       // 让小鸡做一个简化的特殊庆祝动画，缩短总时长
@@ -482,5 +482,14 @@ Component({
         }, 3000);
       }).exec();
     }
+  },
+
+  // 在组件顶部导入常量
+  ready: function() {
+    const app = getApp();
+    this.app = app;
+    // 导入事件常量
+    const { EVENTS } = require('../../utils/constants.js');
+    this.EVENTS = EVENTS;
   }
 }) 

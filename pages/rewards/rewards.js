@@ -1,9 +1,11 @@
 // pages/rewards/rewards.js
+const { EVENTS } = require('../../utils/constants');
 const app = getApp();
 // 新架构服务引入
 const serviceManager = require('../../utils/serviceManager');
 const formatUtils = require('../../utils/formatUtils');
 const logger = require('../../utils/logger');
+const moment = require('../../libs/moment.min.js');
 
 Page({
 
@@ -108,6 +110,13 @@ Page({
   onUnload() {
     // 清理所有计时器
     this.clearAllTimers();
+    
+    // 清理事件监听器
+    const app = getApp();
+    const eventBus = app.globalData.eventBus;
+    if (eventBus) {
+      eventBus.off(EVENTS.PROGRESS_BAR_COMPLETE, this.handleProgressBarComplete);
+    }
   },
 
   /**
@@ -141,7 +150,7 @@ Page({
     const eventBus = app.globalData.eventBus;
     if (eventBus) {
       // 监听进度条完成事件
-      eventBus.on('progressBarComplete', this.handleProgressBarComplete.bind(this));
+      eventBus.on(EVENTS.PROGRESS_BAR_COMPLETE, this.handleProgressBarComplete.bind(this));
     }
   },
   
