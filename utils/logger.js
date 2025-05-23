@@ -76,6 +76,65 @@ const Logger = {
   },
   
   /**
+   * 专门记录事件相关的日志
+   * @param {String} eventName 事件名称
+   * @param {Object} eventData 事件数据
+   * @param {Object} context 上下文信息
+   */
+  logEvent(eventName, eventData, context = {}) {
+    if (this._shouldLog('INFO')) {
+      const module = context.module || 'Event';
+      const direction = context.direction || 'emit';
+      const formattedData = this._formatEventData(eventData);
+      const message = `${direction === 'on' ? '监听' : '发布'}事件: ${eventName}`;
+      
+      this._log('INFO', module, message, {
+        eventName,
+        direction,
+        ...context,
+        data: formattedData
+      });
+    }
+  },
+  
+  /**
+   * 格式化事件数据，避免日志过大
+   * @private
+   * @param {Object} data 事件数据
+   * @returns {Object} 格式化后的数据
+   */
+  _formatEventData(data) {
+    if (!data) return null;
+    
+    try {
+      // 对象太大或嵌套太深时进行简化
+      if (typeof data === 'object') {
+        const simpleData = {};
+        
+        // 只保留第一层属性
+        Object.keys(data).forEach(key => {
+          const value = data[key];
+          if (typeof value === 'object' && value !== null) {
+            if (Array.isArray(value)) {
+              simpleData[key] = `Array(${value.length})`;
+            } else {
+              simpleData[key] = `Object(${Object.keys(value).length} props)`;
+            }
+          } else {
+            simpleData[key] = value;
+          }
+        });
+        
+        return simpleData;
+      }
+      
+      return data;
+    } catch (err) {
+      return '数据格式化失败';
+    }
+  },
+  
+  /**
    * 设置日志级别
    * @param {String} level 日志级别 'debug'|'info'|'warn'|'error'|'none'
    * @returns {Boolean} 是否设置成功

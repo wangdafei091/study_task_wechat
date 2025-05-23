@@ -10,6 +10,7 @@ const EventBus = require('../utils/core/event-bus');
 const { MessageRepository } = require('../repositories/index');
 const { Message, MessageType, NotificationType, MessagePriority } = require('../models/message');
 const batchUtils = require('../utils/batchUtils');
+const { EVENTS } = require('../utils/constants');
 
 class MessageService {
   /**
@@ -66,27 +67,27 @@ class MessageService {
    */
   _registerEventListeners() {
     // 任务相关事件
-    this.eventBus.on('task:created', this._handleTaskCreated.bind(this));
-    this.eventBus.on('task:completed', this._handleTaskCompleted.bind(this));
-    this.eventBus.on('task:updated', this._handleTaskUpdated.bind(this));
-    this.eventBus.on('task:deleted', this._handleTaskDeleted.bind(this));
-    this.eventBus.on('task:statusUpdated', this._handleTaskStatusUpdated.bind(this));
-    this.eventBus.on('task:upcoming', this._handleUpcomingTask.bind(this));
-    this.eventBus.on('task:penaltyApplied', this._handleTaskPenalty.bind(this));
-    this.eventBus.on('task:markedRequired', this._handleTaskMarkedRequired.bind(this));
-    this.eventBus.on('task:unmarkedRequired', this._handleTaskUnmarkedRequired.bind(this));
+    this.eventBus.on(EVENTS.TASK_CREATED, this._handleTaskCreated.bind(this));
+    this.eventBus.on(EVENTS.TASK_COMPLETED, this._handleTaskCompleted.bind(this));
+    this.eventBus.on(EVENTS.TASK_UPDATED, this._handleTaskUpdated.bind(this));
+    this.eventBus.on(EVENTS.TASK_DELETED, this._handleTaskDeleted.bind(this));
+    this.eventBus.on(EVENTS.TASK_STATUS_UPDATED, this._handleTaskStatusUpdated.bind(this));
+    this.eventBus.on(EVENTS.TASK_UPCOMING, this._handleUpcomingTask.bind(this));
+    this.eventBus.on(EVENTS.TASK_PENALTY_APPLIED, this._handleTaskPenalty.bind(this));
+    this.eventBus.on(EVENTS.TASK_MARKED_REQUIRED, this._handleTaskMarkedRequired.bind(this));
+    this.eventBus.on(EVENTS.TASK_UNMARKED_REQUIRED, this._handleTaskUnmarkedRequired.bind(this));
     
     // 奖励相关事件
-    this.eventBus.on('reward:claimed', this._handleRewardClaimed.bind(this));
-    this.eventBus.on('reward:delivered', this._handleRewardDelivered.bind(this));
-    this.eventBus.on('reward:unclaimed', this._handleRewardUnclaimed.bind(this));
+    this.eventBus.on(EVENTS.REWARD_CLAIMED, this._handleRewardClaimed.bind(this));
+    this.eventBus.on(EVENTS.REWARD_DELIVERED, this._handleRewardDelivered.bind(this));
+    this.eventBus.on(EVENTS.REWARD_UNCLAIMED, this._handleRewardUnclaimed.bind(this));
     
     // 领域模型事件
-    this.eventBus.on('domain:message:created', this._handleDomainMessageCreated.bind(this));
-    this.eventBus.on('domain:message:updated', this._handleDomainMessageUpdated.bind(this));
-    this.eventBus.on('domain:message:deleted', this._handleDomainMessageDeleted.bind(this));
-    this.eventBus.on('domain:message:read', this._handleDomainMessageRead.bind(this));
-    this.eventBus.on('domain:message:allRead', this._handleDomainMessageAllRead.bind(this));
+    this.eventBus.on(EVENTS.DOMAIN_MESSAGE_CREATED, this._handleDomainMessageCreated.bind(this));
+    this.eventBus.on(EVENTS.DOMAIN_MESSAGE_UPDATED, this._handleDomainMessageUpdated.bind(this));
+    this.eventBus.on(EVENTS.DOMAIN_MESSAGE_DELETED, this._handleDomainMessageDeleted.bind(this));
+    this.eventBus.on(EVENTS.DOMAIN_MESSAGE_READ, this._handleDomainMessageRead.bind(this));
+    this.eventBus.on(EVENTS.DOMAIN_MESSAGE_ALL_READ, this._handleDomainMessageAllRead.bind(this));
     
     logger.info('MessageService', '已注册事件监听器');
   }
@@ -561,11 +562,14 @@ class MessageService {
   }
   
   /**
-   * 触发消息变更事件
+   * 通知消息数据变更 
    * @private
    */
   _emitMessageChangedEvent() {
-    this.eventBus.emit('messages:changed');
+    logger.info('MessageService', '通知消息数据变更');
+    
+    // 使用常量代替硬编码字符串
+    this.eventBus.emit(EVENTS.MESSAGE_CHANGED);
   }
   
   /**
@@ -596,7 +600,7 @@ class MessageService {
       logger.info('MessageService', `使用领域模型创建消息成功: ${savedMessage.id}`);
       
       // 触发领域消息事件
-      this.eventBus.emit('domain:message:created', { message: savedMessage });
+      this.eventBus.emit(EVENTS.DOMAIN_MESSAGE_CREATED, { message: savedMessage });
       
       return savedMessage;
     } catch (error) {
@@ -784,7 +788,7 @@ class MessageService {
       
       if (result) {
         // 触发领域消息已读事件
-        this.eventBus.emit('domain:message:read', { messageId });
+        this.eventBus.emit(EVENTS.DOMAIN_MESSAGE_READ, { messageId });
         logger.info('MessageService', `使用领域模型标记消息${messageId}为已读成功`);
         return true;
       } else {
@@ -808,7 +812,7 @@ class MessageService {
       
       if (count > 0) {
         // 触发领域消息全部已读事件
-        this.eventBus.emit('domain:message:allRead', { count });
+        this.eventBus.emit(EVENTS.DOMAIN_MESSAGE_ALL_READ, { count });
       }
       
       logger.info('MessageService', `使用领域模型标记所有消息为已读成功: ${count}条`);
@@ -831,7 +835,7 @@ class MessageService {
       
       if (result) {
         // 触发领域消息删除事件
-        this.eventBus.emit('domain:message:deleted', { messageId });
+        this.eventBus.emit(EVENTS.DOMAIN_MESSAGE_DELETED, { messageId });
         logger.info('MessageService', `使用领域模型删除消息${messageId}成功`);
         return true;
       } else {
@@ -856,7 +860,7 @@ class MessageService {
       
       if (count > 0) {
         // 触发领域相关消息删除事件
-        this.eventBus.emit('domain:message:relatedDeleted', { entityId, count });
+        this.eventBus.emit(EVENTS.DOMAIN_MESSAGE_RELATED_DELETED, { entityId, count });
       }
       
       logger.info('MessageService', `使用领域模型删除与实体${entityId}相关的消息成功: ${count}条`);
@@ -879,7 +883,7 @@ class MessageService {
       
       if (count > 0) {
         // 触发领域消息更新事件
-        this.eventBus.emit('domain:message:taskUpdated', { taskId: task.id, count });
+        this.eventBus.emit(EVENTS.DOMAIN_MESSAGE_TASK_UPDATED, { taskId: task.id, count });
       }
       
       logger.info('MessageService', `使用领域模型更新任务消息成功: ${count}条`);
@@ -924,7 +928,7 @@ class MessageService {
       
       if (count > 0) {
         // 触发领域消息清理事件
-        this.eventBus.emit('domain:message:cleaned', { count, expiryDays });
+        this.eventBus.emit(EVENTS.DOMAIN_MESSAGE_CLEANED, { count, expiryDays });
       }
       
       logger.info('MessageService', `使用领域模型清理过期消息成功: ${count}条`);

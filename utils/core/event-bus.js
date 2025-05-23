@@ -12,6 +12,15 @@ class EventBus {
     this.oneShotListeners = {};
     this.history = {};
     this.historyLimit = 50;
+    
+    // 添加事件统计
+    this.stats = {
+      eventCounts: {}, // 各事件发射次数统计
+      listenerCounts: {}, // 各事件监听器数量统计
+      totalEmits: 0, // 总发射次数
+      totalListeners: 0, // 总监听器数量
+      lastEmitTime: {} // 各事件最后触发时间
+    };
   }
   
   /**
@@ -111,6 +120,9 @@ class EventBus {
     const payload = data || {};
     let callbackCount = 0;
     let errorCount = 0;
+    
+    // 更新统计信息
+    this._updateEmitStats(event);
     
     // 深拷贝数据，避免处理器修改原始数据影响其他处理器
     const safePayload = JSON.parse(JSON.stringify(payload));
@@ -226,6 +238,87 @@ class EventBus {
     if (this.history[event].length > this.historyLimit) {
       this.history[event] = this.history[event].slice(-this.historyLimit);
     }
+  }
+  
+  /**
+   * 获取事件统计信息
+   * @returns {Object} 事件统计信息
+   */
+  getStats() {
+    // 计算当前监听器数量
+    const currentListeners = {};
+    let totalCurrent = 0;
+    
+    // 计算注册的普通监听器数量
+    Object.keys(this.listeners).forEach(event => {
+      const count = this.listeners[event].length || 0;
+      currentListeners[event] = (currentListeners[event] || 0) + count;
+      totalCurrent += count;
+    });
+    
+    // 计算注册的一次性监听器数量
+    Object.keys(this.oneShotListeners).forEach(event => {
+      const count = this.oneShotListeners[event].length || 0;
+      currentListeners[event] = (currentListeners[event] || 0) + count;
+      totalCurrent += count;
+    });
+    
+    return {
+      ...this.stats,
+      currentListeners,
+      totalCurrentListeners: totalCurrent
+    };
+  }
+  
+  /**
+   * 获取事件系统调试信息
+   * @returns {Object} 调试信息
+   */
+  getDebugInfo() {
+    const stats = this.getStats();
+    const topEvents = Object.entries(stats.eventCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([event, count]) => ({ event, count }));
+      
+    return {
+      stats: {
+        totalEmits: stats.totalEmits,
+        totalListeners: stats.totalListeners,
+        totalCurrentListeners: stats.totalCurrentListeners,
+        uniqueEventTypes: Object.keys(stats.eventCounts).length
+      },
+      topEvents,
+      historySize: Object.keys(this.history).reduce((sum, key) => sum + this.history[key].length, 0),
+      memoryUsage: {
+        listeners: Object.keys(this.listeners).length,
+        oneShotListeners: Object.keys(this.oneShotListeners).length
+      }
+    };
+  }
+  
+  /**
+   * 更新事件触发统计
+   * @private
+   * @param {String} event 事件名称
+   */
+  _updateEmitStats(event) {
+    // 更新触发计数
+    if (!this.stats.eventCounts[event]) {
+      this.stats.eventCounts[event] = 0;
+    }
+    this.stats.eventCounts[event]++;
+    this.stats.totalEmits++;
+    
+    // 更新最后触发时间
+    this.stats.lastEmitTime[event] = Date.now();
+    
+    // 更新监听器计数
+    const listenerCount = this.listenerCount(event);
+    this.stats.listenerCounts[event] = listenerCount;
+    
+    // 我们不在这里计算totalListeners，因为会重复累加
+    // 而是在getStats中根据当前注册的监听器计算
   }
 }
 

@@ -8,6 +8,7 @@ const logger = require('../utils/logger');
 const { RewardRepository } = require('../repositories/index');
 const { StarGroupRepository, StarRecordRepository } = require('../repositories/index');
 const EventBus = require('../utils/core/event-bus');
+const { EVENTS } = require('../utils/constants');
 
 class RewardService {
   /**
@@ -131,7 +132,7 @@ class RewardService {
       logger.info('RewardService', `创建奖励成功: ${savedReward.name}, ID=${savedReward.id}`);
       
       // 触发奖励创建事件
-      this.eventBus.emit('reward:created', { reward: savedReward });
+      this.eventBus.emit(EVENTS.REWARD_CREATED, { reward: savedReward });
       
       return { success: true, reward: savedReward, message: '创建成功' };
     } catch (error) {
@@ -167,7 +168,7 @@ class RewardService {
       logger.info('RewardService', `更新奖励成功: ${updatedReward.name}, ID=${updatedReward.id}`);
       
       // 触发奖励更新事件
-      this.eventBus.emit('reward:updated', { 
+      this.eventBus.emit(EVENTS.REWARD_UPDATED, { 
         reward: updatedReward,
         previous: existingReward
       });
@@ -211,7 +212,7 @@ class RewardService {
       logger.info('RewardService', `删除奖励成功: ${reward.name}, ID=${rewardId}`);
       
       // 触发奖励删除事件
-      this.eventBus.emit('reward:deleted', { reward });
+      this.eventBus.emit(EVENTS.REWARD_DELETED, { reward });
       
       return { success: true, message: '删除成功' };
     } catch (error) {
@@ -259,7 +260,7 @@ class RewardService {
       logger.info('RewardService', `切换奖励状态成功: ${updatedReward.name}, ID=${rewardId}, 状态=${enabled ? '启用' : '禁用'}`);
       
       // 触发奖励状态变更事件
-      this.eventBus.emit('reward:status_changed', { 
+      this.eventBus.emit(EVENTS.REWARD_STATUS_CHANGED, { 
         reward: updatedReward,
         enabled
       });
@@ -309,7 +310,7 @@ class RewardService {
       logger.info('RewardService', `标记奖励为已领取成功: ${updatedReward.name}, ID=${rewardId}`);
       
       // 触发奖励领取状态变更事件
-      this.eventBus.emit('reward:delivered', { reward: updatedReward });
+      this.eventBus.emit(EVENTS.REWARD_DELIVERED, { reward: updatedReward });
       
       return { success: true, reward: updatedReward, message: '奖励已标记为已领取' };
     } catch (error) {
@@ -444,7 +445,7 @@ class RewardService {
         await this.rewardRepository.save(reward);
         
         // 5. 发出奖励领取事件
-        this.eventBus.emit('reward:claimed', { 
+        this.eventBus.emit(EVENTS.REWARD_CLAIMED, { 
           rewardId: reward.id,
           rewardName: reward.name,
           points: reward.points,
@@ -568,7 +569,7 @@ class RewardService {
       logger.info('RewardService', `取消奖励兑换成功: ${reward.name}, ID=${rewardId}, 退还星星=${pointsToRefund}`);
       
       // 触发奖励取消兑换事件
-      this.eventBus.emit('reward:exchange_cancelled', { 
+      this.eventBus.emit(EVENTS.REWARD_EXCHANGE_CANCELLED, { 
         reward: unclaimed,
         pointsRefunded: pointsToRefund,
         record: refundRecord
@@ -733,7 +734,7 @@ class RewardService {
         logger.info('RewardService', `复制奖励成功: 从"${originalReward.name}"创建了新奖励, 新ID=${newReward.id}`);
         
         // 触发奖励复制事件
-        this.eventBus.emit('reward:duplicated', { 
+        this.eventBus.emit(EVENTS.REWARD_DUPLICATED, { 
           newReward,
           originalReward
         });
@@ -767,7 +768,7 @@ class RewardService {
       logger.info('RewardService', `批量删除奖励成功: 删除了${deletedCount}个奖励`);
       
       // 触发奖励批量删除事件
-      this.eventBus.emit('reward:deleted_batch', { rewardIds });
+      this.eventBus.emit(EVENTS.REWARD_DELETED_BATCH, { rewardIds });
       
       return { success: true, count: deletedCount };
     } catch (error) {

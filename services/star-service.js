@@ -8,6 +8,7 @@ const logger = require('../utils/logger');
 const { StarGroupRepository, StarRecordRepository } = require('../repositories/index');
 const EventBus = require('../utils/core/event-bus');
 const { StarExpiryType } = require('../models/star');
+const { EVENTS } = require('../utils/constants');
 
 class StarService {
   /**
@@ -218,7 +219,7 @@ class StarService {
       logger.info('StarService', `添加星星成功, 类型=${expiryType}, 数量=${points}, 来源=${source || '未知'}`);
       
       // 触发星星添加事件
-      this.eventBus.emit('stars:added', {
+      this.eventBus.emit(EVENTS.STARS_ADDED, {
         points,
         expiryType,
         group: updatedGroup,
@@ -293,7 +294,7 @@ class StarService {
       logger.info('StarService', `消费星星成功, 数量=${points}, 原因=${reason || '未知'}`);
       
       // 触发星星消费事件
-      this.eventBus.emit('stars:consumed', {
+      this.eventBus.emit(EVENTS.STARS_CONSUMED, {
         points,
         reason,
         groups: consumeResult.groupsUpdated,
@@ -366,7 +367,7 @@ class StarService {
       logger.info('StarService', `处理任务完成奖励成功, 任务ID=${task.id}, 星星数=${points}, 过期类型=${expiryType}`);
       
       // 触发任务完成奖励事件
-      this.eventBus.emit('task:completed_with_reward', {
+      this.eventBus.emit(EVENTS.TASK_COMPLETED_WITH_REWARD, {
         task,
         points,
         expiryType,
@@ -459,7 +460,7 @@ class StarService {
       logger.info('StarService', `处理必做任务惩罚成功, 任务ID=${task.id}, 扣除星星数=${actualPoints}`);
       
       // 触发任务惩罚事件
-      this.eventBus.emit('task:penalty_applied', {
+      this.eventBus.emit(EVENTS.TASK_PENALTY_APPLIED, {
         task,
         points: actualPoints,
         record
@@ -530,7 +531,7 @@ class StarService {
       
       // 触发星星过期事件
       if (totalExpiredPoints > 0) {
-        this.eventBus.emit('stars:expired', {
+        this.eventBus.emit(EVENTS.STARS_EXPIRED, {
           expiredGroups,
           totalExpiredPoints,
           records: expiredRecords

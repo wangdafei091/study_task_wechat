@@ -10,6 +10,7 @@ const { StarService } = require('./index');
 const EventBus = require('../utils/core/event-bus');
 const { Task, TaskStatus, TaskType, RepeatType, StarExpiryType } = require('../models/task');
 const dateUtils = require('../utils/dateUtils');
+const { EVENTS } = require('../utils/constants');
 
 class TaskService {
   /**
@@ -195,7 +196,18 @@ class TaskService {
         tasksCount: createdTasks.length
       });
       
-      this.eventBus.emit('task:created', { 
+      // 记录事件日志
+      logger.logEvent(EVENTS.TASK_CREATED, { 
+        taskId: savedTask.id,
+        title: savedTask.title,
+        tasksCount: createdTasks.length
+      }, {
+        module: 'TaskService',
+        direction: 'emit'
+      });
+      
+      // 使用常量替代硬编码字符串
+      this.eventBus.emit(EVENTS.TASK_CREATED, { 
         task: savedTask,  // 确保包含单个完整任务对象
         tasks: createdTasks,
         originalTask: savedTask 
@@ -389,24 +401,28 @@ class TaskService {
         return { success: false, message: '未找到指定的任务' };
       }
       
+      // 保存原始状态
+      const originalStatus = task.status;
+      
       // 更新任务
-      const updatedTask = await this.taskRepository.update(taskId, {
-        ...changes,
-        modifyTime: Date.now()
-      });
+      task.update(changes);
+      
+      // 保存更新后的任务
+      const updatedTask = await this.taskRepository.save(task);
       
       logger.info('TaskService', `更新任务成功: "${updatedTask.title}", ID=${updatedTask.id}`);
       
-      // 触发任务更新事件
-      this.eventBus.emit('task:updated', { 
-        task: updatedTask, 
-        previousTask: task,
-        changes
+      // 触发事件
+      this.eventBus.emit(EVENTS.TASK_UPDATED, {
+        task: updatedTask,
+        changes,
+        previousStatus: originalStatus,
+        operationType: 'update'
       });
       
       return { success: true, task: updatedTask };
     } catch (error) {
-      logger.error('TaskService', `更新任务失败, ID=${taskId}`, error);
+      logger.error('TaskService', `更新任务失败: ${error.message}`, error);
       return { success: false, message: '更新任务失败: ' + error.message };
     }
   }
@@ -418,35 +434,34 @@ class TaskService {
    */
   async deleteTask(taskId) {
     try {
-      // 获取要删除的任务
-      const task = await this.taskRepository.getById(taskId);
+      // 获取任务信息，用于事件传递
+      const taskInfo = await this.taskRepository.getById(taskId);
       
-      if (!task) {
+      if (!taskInfo) {
         logger.warn('TaskService', `删除任务失败: 未找到ID为${taskId}的任务`);
         return { success: false, message: '未找到指定的任务' };
       }
       
-      // 保存任务信息用于事件触发
-      const taskInfo = {
-        id: task.id,
-        title: task.title,
-        date: task.date
-      };
-      
       // 删除任务
       await this.taskRepository.delete(taskId);
       
-      logger.info('TaskService', `删除任务成功: "${task.title}", ID=${taskId}`);
+      logger.info('TaskService', `删除任务成功: ${taskId}`);
       
       // 触发任务删除事件
-      this.eventBus.emit('task:deleted', { 
+      this.eventBus.emit(EVENTS.TASK_DELETED, {
         taskId,
-        taskInfo
+        taskInfo: {
+          id: taskInfo.id,
+          title: taskInfo.title,
+          type: taskInfo.type,
+          date: taskInfo.date,
+          status: taskInfo.status
+        }
       });
       
       return { success: true };
     } catch (error) {
-      logger.error('TaskService', `删除任务失败, ID=${taskId}`, error);
+      logger.error('TaskService', `删除任务失败: ${error.message}`, error);
       return { success: false, message: '删除任务失败: ' + error.message };
     }
   }
@@ -459,7 +474,6 @@ class TaskService {
    */
   async updateTaskStatus(taskId, status) {
     try {
-      // 获取任务
       const task = await this.taskRepository.getById(taskId);
       
       if (!task) {
@@ -467,119 +481,116 @@ class TaskService {
         return { success: false, message: '未找到指定的任务' };
       }
       
-      // 记录之前的状态
+      // 记录原始状态
       const previousStatus = task.status;
       
+      // 状态没有变化，直接返回
       if (previousStatus === status) {
-        logger.info('TaskService', `任务状态未变化: ${status}, ID=${taskId}`);
-        return { success: true, task: task };
+        logger.info('TaskService', `任务状态未发生变化: ${taskId}, 状态=${status}`);
+        return { success: true, task, unchanged: true };
       }
       
-      // 更新状态
-      const updates = { 
+      // 设置新状态
+      task.status = status;
+      
+      // 根据状态设置完成时间
+      if (status === TaskStatus.COMPLETED) {
+        // 任务完成
+        task.completionTime = Date.now();
+        logger.info('TaskService', `任务已完成: ${task.title}, ID=${taskId}`);
+        
+        // 如果任务以前未获得过星星，则分配积分
+        if (!task.starAwarded && this.starService) {
+          // 计算积分有效期
+          const expiryInfo = this.starService.calculateExpiryDate(task.pointsExpiry);
+          task.pointsExpiryDate = expiryInfo.expiryDateStr;
+          
+          // 标记已经获得积分
+          task.starAwarded = true;
+          
+          // 添加积分
+          if (task.points > 0) {
+            this.starService.addStars(task.points, {
+              source: 'task',
+              taskId: task.id,
+              expiryType: task.pointsExpiry,
+              expiryTimestamp: expiryInfo.expiry
+            });
+          }
+        }
+      } else if (previousStatus === TaskStatus.COMPLETED) {
+        // 从完成状态变为未完成，需要扣除积分
+        if (task.starAwarded && this.starService) {
+          task.starAwarded = false;
+          
+          // 重置有效期显示
+          if (task.pointsExpiry !== 'permanent') {
+            // 动态获取有效期文本
+            const expiryText = this.starService.getExpiryText(task.pointsExpiry);
+            task.pointsExpiryDate = expiryText;
+          }
+          
+          // 扣除积分
+          if (task.points > 0) {
+            this.starService.consumeStars(task.points, {
+              source: 'task_uncomplete',
+              taskId: task.id
+            });
+          }
+        }
+      }
+      
+      // 更新修改时间
+      task.modifyTime = Date.now();
+      
+      // 保存更新后的任务
+      const updatedTask = await this.taskRepository.save(task);
+      
+      // 确定操作类型
+      let operationType = 'update';
+      if (status === TaskStatus.COMPLETED) {
+        operationType = 'complete';
+      } else if (previousStatus === TaskStatus.COMPLETED) {
+        operationType = 'uncomplete';
+      }
+      
+      // 记录事件日志 - 状态更新事件
+      logger.logEvent(EVENTS.TASK_STATUS_UPDATED, {
+        taskId: updatedTask.id,
+        title: updatedTask.title,
         status,
-        modifyTime: Date.now()
-      };
-      
-      // 处理完成逻辑
-      if (previousStatus !== TaskStatus.COMPLETED && status === TaskStatus.COMPLETED) {
-        // 记录完成时间
-        const completionTime = Date.now();
-        
-        // 添加完成记录
-        const completionRecord = {
-          date: dateUtils.formatDate(new Date(completionTime)),
-          timestamp: completionTime,
-          notes: ''
-        };
-        
-        updates.completionTime = completionTime;
-        
-        if (!task.completionRecords) {
-          updates.completionRecords = [completionRecord];
-        } else {
-          updates.completionRecords = [completionRecord, ...task.completionRecords];
-        }
-        
-        // 处理星星奖励
-        if (task.isRequired) {
-          logger.info('TaskService', `必做任务"${task.title}"已完成，不扣除星星`);
-          updates.penaltyApplied = false;
-        }
-        
-        if (!task.starAwarded && task.points > 0) {
-          // 如果有星星服务，处理任务完成奖励
-          if (this.starService) {
-            try {
-              // 计算积分有效期
-              const expiryType = task.pointsExpiry || StarExpiryType.PERMANENT;
-              
-              const addStarsResult = await this.starService.addStars(
-                task.points,
-                expiryType,
-                `完成任务: ${task.title}`,
-                { sourceType: 'task', sourceId: task.id }
-              );
-              
-              if (addStarsResult.success) {
-                logger.info('TaskService', `为任务"${task.title}"添加${task.points}颗星星成功`);
-                updates.starAwarded = true;
-                
-                // 更新积分有效期显示
-                if (addStarsResult.expiryDate) {
-                  updates.pointsExpiryDate = addStarsResult.expiryDate;
-                }
-              } else {
-                logger.error('TaskService', `为任务"${task.title}"添加星星失败: ${addStarsResult.message}`);
-              }
-            } catch (error) {
-              logger.error('TaskService', `处理任务"${task.title}"完成奖励时出错`, error);
-            }
-          } else {
-            logger.warn('TaskService', '星星服务未初始化，无法处理任务完成奖励');
-          }
-        } else {
-          logger.info('TaskService', `任务"${task.title}"已获得过星星或无星星奖励`);
-        }
-      } 
-      // 处理取消完成逻辑
-      else if (previousStatus === TaskStatus.COMPLETED && status !== TaskStatus.COMPLETED) {
-        // 如果已获得星星，尝试扣除
-        if (task.starAwarded && task.points > 0 && this.starService) {
-          try {
-            const consumeResult = await this.starService.consumeStars(
-              task.points,
-              `取消完成任务: ${task.title}`,
-              { sourceType: 'task', sourceId: task.id }
-            );
-            
-            if (consumeResult.success) {
-              logger.info('TaskService', `从任务"${task.title}"扣除${task.points}颗星星成功`);
-              updates.starAwarded = false;
-            } else {
-              logger.error('TaskService', `从任务"${task.title}"扣除星星失败: ${consumeResult.message}`);
-            }
-          } catch (error) {
-            logger.error('TaskService', `处理任务"${task.title}"取消完成时出错`, error);
-          }
-        }
-      }
-      
-      // 更新任务
-      const updatedTask = await this.taskRepository.update(taskId, updates);
-      
-      logger.info('TaskService', `更新任务"${updatedTask.title}"状态: ${previousStatus} -> ${status}`);
-      
-      // 触发任务状态变更事件
-      this.eventBus.emit('task:statusUpdated', { 
-        task: updatedTask, 
         previousStatus,
-        operationType: status === TaskStatus.COMPLETED ? 'complete' : 'reset'
+        operationType
+      }, {
+        module: 'TaskService',
+        direction: 'emit'
       });
+      
+      // 触发状态更新事件
+      this.eventBus.emit(EVENTS.TASK_STATUS_UPDATED, {
+        task: updatedTask,
+        previousStatus,
+        operationType
+      });
+      
+      // 如果是完成任务，还需记录和触发专门的完成事件
+      if (status === TaskStatus.COMPLETED) {
+        // 记录完成事件日志
+        logger.logEvent(EVENTS.TASK_COMPLETED, {
+          taskId: updatedTask.id,
+          title: updatedTask.title
+        }, {
+          module: 'TaskService',
+          direction: 'emit'
+        });
+        
+        // 触发完成事件
+        this.eventBus.emit(EVENTS.TASK_COMPLETED, { task: updatedTask });
+      }
       
       return { success: true, task: updatedTask };
     } catch (error) {
-      logger.error('TaskService', `更新任务状态失败, ID=${taskId}, 状态=${status}`, error);
+      logger.error('TaskService', `更新任务状态失败: ${error.message}`, error);
       return { success: false, message: '更新任务状态失败: ' + error.message };
     }
   }
@@ -603,7 +614,7 @@ class TaskService {
   }
   
   /**
-   * 标记任务为必做任务
+   * 将任务标记为必做
    * @param {String} taskId 任务ID
    * @returns {Promise<Object>} 操作结果
    */
@@ -615,23 +626,26 @@ class TaskService {
         return { success: false, message: '未找到指定的任务' };
       }
       
+      // 已经是必做任务，无需更改
       if (task.isRequired) {
-        return { success: true, task: task, message: '任务已经是必做任务' };
+        return { success: true, task, unchanged: true };
       }
       
-      const updatedTask = await this.taskRepository.update(taskId, {
-        isRequired: true,
-        modifyTime: Date.now()
-      });
+      // 标记为必做
+      task.isRequired = true;
+      task.modifyTime = Date.now();
       
-      logger.info('TaskService', `标记任务"${updatedTask.title}"为必做任务`);
+      // 保存更新后的任务
+      const updatedTask = await this.taskRepository.save(task);
+      
+      logger.info('TaskService', `将任务标记为必做: "${updatedTask.title}", ID=${updatedTask.id}`);
       
       // 触发事件
-      this.eventBus.emit('task:markedRequired', { task: updatedTask });
+      this.eventBus.emit(EVENTS.TASK_MARKED_REQUIRED, { task: updatedTask });
       
       return { success: true, task: updatedTask };
     } catch (error) {
-      logger.error('TaskService', `标记必做任务失败, ID=${taskId}`, error);
+      logger.error('TaskService', `标记必做任务失败: ${error.message}`, error);
       return { success: false, message: '标记必做任务失败: ' + error.message };
     }
   }
@@ -649,23 +663,26 @@ class TaskService {
         return { success: false, message: '未找到指定的任务' };
       }
       
+      // 本来就不是必做任务，无需更改
       if (!task.isRequired) {
-        return { success: true, task: task, message: '任务不是必做任务' };
+        return { success: true, task, unchanged: true };
       }
       
-      const updatedTask = await this.taskRepository.update(taskId, {
-        isRequired: false,
-        modifyTime: Date.now()
-      });
+      // 取消必做标记
+      task.isRequired = false;
+      task.modifyTime = Date.now();
       
-      logger.info('TaskService', `取消任务"${updatedTask.title}"的必做标记`);
+      // 保存更新后的任务
+      const updatedTask = await this.taskRepository.save(task);
+      
+      logger.info('TaskService', `取消任务的必做标记: "${updatedTask.title}", ID=${updatedTask.id}`);
       
       // 触发事件
-      this.eventBus.emit('task:unmarkedRequired', { task: updatedTask });
+      this.eventBus.emit(EVENTS.TASK_UNMARKED_REQUIRED, { task: updatedTask });
       
       return { success: true, task: updatedTask };
     } catch (error) {
-      logger.error('TaskService', `取消必做任务标记失败, ID=${taskId}`, error);
+      logger.error('TaskService', `取消必做任务标记失败: ${error.message}`, error);
       return { success: false, message: '取消必做任务标记失败: ' + error.message };
     }
   }
@@ -711,53 +728,51 @@ class TaskService {
   
   /**
    * 处理必做任务惩罚
-   * @param {Task} task 必做任务
+   * @param {Task} task 任务对象
    * @returns {Promise<Object>} 处理结果
    */
   async handleRequiredTaskPenalty(task) {
-    if (!task.isRequired || task.status === TaskStatus.COMPLETED || task.penaltyApplied) {
-      return { success: false, message: '任务不符合惩罚条件' };
-    }
-    
     try {
-      // 确定惩罚星星数量
-      const penaltyPoints = task.points > 0 ? task.points : 5;
-      
-      // 扣除星星
-      let consumeResult = { success: false, message: '星星服务未初始化' };
-      
-      if (this.starService) {
-        consumeResult = await this.starService.consumeStars(
-          penaltyPoints,
-          `必做任务未完成: ${task.title}`,
-          { sourceType: 'penalty', sourceId: task.id }
-        );
+      if (!task || !task.isRequired || task.penaltyApplied) {
+        return { success: false, message: '不满足惩罚条件' };
       }
       
-      // 更新任务状态
-      await this.taskRepository.update(task.id, {
-        penaltyApplied: true,
-        modifyTime: Date.now()
+      // 计算惩罚积分
+      let penaltyPoints = task.points || 0;
+      
+      // 如果没有设置积分，使用默认惩罚
+      if (penaltyPoints <= 0) {
+        penaltyPoints = 5; // 默认惩罚5颗星
+      }
+      
+      // 标记已经应用惩罚
+      task.penaltyApplied = true;
+      task.modifyTime = Date.now();
+      
+      // 保存更新后的任务
+      const updatedTask = await this.taskRepository.save(task);
+      
+      // 扣除积分
+      if (this.starService && penaltyPoints > 0) {
+        await this.starService.consumeStars(penaltyPoints, {
+          source: 'task_penalty',
+          taskId: task.id,
+        });
+      }
+      
+      logger.info('TaskService', `已对必做任务应用惩罚: "${task.title}", 扣除${penaltyPoints}颗星`);
+      
+      // 触发惩罚事件
+      this.eventBus.emit(EVENTS.TASK_PENALTY_APPLIED, {
+        task: updatedTask,
+        penaltyPoints,
+        reason: '必做任务未完成'
       });
       
-      logger.info('TaskService', `处理必做任务惩罚成功: "${task.title}", 扣除${penaltyPoints}颗星星, 结果=${consumeResult.success ? '成功' : '失败'}`);
-      
-      // 触发事件
-      this.eventBus.emit('task:penaltyApplied', { 
-        task, 
-        penaltyPoints,
-        consumeResult
-      });
-      
-      return {
-        success: true,
-        task,
-        penaltyPoints,
-        consumeResult
-      };
+      return { success: true, task: updatedTask, penaltyPoints };
     } catch (error) {
-      logger.error('TaskService', `处理必做任务惩罚失败: "${task.title}"`, error);
-      return { success: false, message: '处理必做任务惩罚失败: ' + error.message };
+      logger.error('TaskService', `应用必做任务惩罚失败: ${error.message}`, error);
+      return { success: false, message: '应用惩罚失败: ' + error.message };
     }
   }
   
@@ -903,68 +918,60 @@ class TaskService {
 
   /**
    * 检查即将到期的任务
-   * @returns {Promise<Object>} 即将到期的任务信息
+   * @returns {Promise<Object>} 检查结果
    */
   async checkUpcomingTasks() {
     try {
-      logger.info('TaskService', '检查即将到期任务');
-      
       // 获取今天的任务
-      const todayTasks = await this.getTodayTasks();
-      logger.info('TaskService', `检查即将到期任务, 当前任务数:`, todayTasks.length);
+      const tasks = await this.taskRepository.getTodayTasks();
       
-      if (todayTasks.length === 0) {
-        return null;
+      if (!tasks || tasks.length === 0) {
+        return { success: true, count: 0 };
       }
       
-      // 当前时间
-      const now = Date.now();
-      let upcomingTask = null;
-      let minTimeRemaining = Number.MAX_VALUE;
+      const current = new Date();
+      const upcomingTasks = [];
       
-      // 检查每个任务
-      for (const task of todayTasks) {
-        // 跳过已完成的任务
-        if (task.status === TaskStatus.COMPLETED) {
-          continue;
-        }
-        
-        // 获取任务开始时间
-        const startTime = this._calculateReminderTime(task);
-        const startTimestamp = startTime ? startTime.getTime() : null;
-        
-        if (startTimestamp) {
-          // 计算剩余时间（小时）
-          // 修复：确保剩余时间不为负值
-          const timeRemaining = Math.max(0, (startTimestamp - now) / (60 * 60 * 1000));
-          
-          // 判断是否即将开始
-          if (timeRemaining <= 1.0) { // 1小时内的任务
-            logger.info('TaskService', `任务"${task.title}"将在 ${task.startTime || '未设置'} 开始, 剩余${timeRemaining.toFixed(1)}小时`);
+      // 筛选所有学习类型的未完成任务
+      tasks.forEach(task => {
+        // 只处理学习类型且未完成的任务
+        if (task.type === TaskType.STUDY && task.status === TaskStatus.PENDING) {
+          // 计算提醒时间
+          const reminderTime = this._calculateReminderTime(task);
+          if (reminderTime) {
+            // 检查是否在提醒时间范围内
+            const startTime = new Date();
+            startTime.setHours(reminderTime.hours, reminderTime.minutes, 0, 0);
             
-            // 如果是最近的任务
-            if (timeRemaining < minTimeRemaining) {
-              minTimeRemaining = timeRemaining;
-              upcomingTask = task;
+            // 计算当前时间和提醒时间的差异（分钟）
+            const diffMinutes = Math.floor((startTime - current) / (1000 * 60));
+            
+            // 如果在30分钟内即将开始，添加到提醒列表
+            if (diffMinutes > 0 && diffMinutes <= 30) {
+              upcomingTasks.push({
+                task,
+                timeRemaining: diffMinutes
+              });
             }
           }
         }
+      });
+      
+      // 处理提醒
+      for (const item of upcomingTasks) {
+        // 触发即将到期事件
+        this.eventBus.emit(EVENTS.TASK_UPCOMING, {
+          task: item.task,
+          timeRemaining: item.timeRemaining
+        });
       }
       
-      if (upcomingTask) {
-        const timeRemaining = minTimeRemaining;
-        
-        // 返回任务和剩余时间信息
-        return {
-          task: upcomingTask,
-          timeRemaining: timeRemaining
-        };
-      }
+      logger.info('TaskService', `检查到${upcomingTasks.length}个即将开始的任务`);
       
-      return null;
+      return { success: true, count: upcomingTasks.length, tasks: upcomingTasks };
     } catch (error) {
-      logger.error('TaskService', '检查即将到期任务失败', error);
-      return null;
+      logger.error('TaskService', `检查即将到期任务失败: ${error.message}`, error);
+      return { success: false, message: '检查即将到期任务失败' };
     }
   }
   
@@ -1181,141 +1188,6 @@ class TaskService {
     } catch (error) {
       logger.error('TaskService', '计算连续完成天数失败', error);
       return 0;
-    }
-  }
-
-  /**
-   * 检查必做任务
-   * 查找已过期未完成的必做任务并应用惩罚
-   * @returns {Promise<Object>} 包含处理结果的对象
-   */
-  async checkRequiredTasks() {
-    logger.info('TaskService', '开始检查必做任务');
-    
-    try {
-      // 获取所有任务
-      const allTasks = await this.getAllTasks();
-      const today = dateUtils.formatDate(new Date());
-      const penaltyTasks = [];
-      let updated = false;
-      
-      // 查找需要处理的任务
-      for (const task of allTasks) {
-        // 找出已过期、未完成、标记为必做且未应用惩罚的任务
-        if (task.isRequired === true && 
-            task.status === 0 && 
-            task.date < today && 
-            !task.penaltyApplied) {
-          
-          // 标记已应用惩罚
-          task.penaltyApplied = true;
-          task.status = TaskStatus.OVERDUE;
-          updated = true;
-          
-          // 记录需要扣除积分的任务
-          penaltyTasks.push({
-            taskId: task.id,
-            title: task.title,
-            points: task.points || 5  // 使用任务积分或默认值5
-          });
-          
-          logger.info('TaskService', `应用惩罚: ${task.id}, 任务: ${task.title}`);
-        }
-      }
-      
-      // 如果有任务更新，保存数据
-      if (updated) {
-        // 批量保存更新的任务
-        await this.taskRepository.saveAll(allTasks);
-        
-        // 处理积分扣除
-        if (penaltyTasks.length > 0) {
-          await this._applyPenalties(penaltyTasks);
-        }
-        
-        // 触发任务状态变更事件
-        this.eventBus.emit('task:status:updated', { tasks: allTasks });
-        
-        return { 
-          success: true, 
-          penaltyApplied: true, 
-          penaltyTasks: penaltyTasks,
-          taskCount: penaltyTasks.length
-        };
-      }
-      
-      return { 
-        success: true, 
-        penaltyApplied: false,
-        taskCount: 0
-      };
-    } catch (error) {
-      logger.error('TaskService', '检查必做任务失败', error);
-      return { 
-        success: false, 
-        error: error.message,
-        taskCount: 0
-      };
-    }
-  }
-  
-  /**
-   * 应用惩罚，扣除积分
-   * @param {Array} penaltyTasks 需要扣除积分的任务数组
-   * @private
-   */
-  async _applyPenalties(penaltyTasks) {
-    logger.info('TaskService', `开始应用惩罚，任务数量: ${penaltyTasks.length}`);
-    
-    try {
-      // 计算总扣除积分
-      const totalPenalty = penaltyTasks.reduce((sum, task) => sum + task.points, 0);
-      
-      // 获取星星服务实例
-      const { getService } = require('../utils/serviceManager');
-      const starService = getService('starService');
-      
-      if (!starService) {
-        logger.error('TaskService', '无法获取星星服务实例');
-        throw new Error('无法获取星星服务实例');
-      }
-      
-      // 使用星星服务扣除星星
-      const result = await starService.reduceStars(totalPenalty, 'penalty', {
-        reason: '未完成必做任务',
-        taskCount: penaltyTasks.length
-      });
-      
-      logger.info('TaskService', `星星扣除结果: ${result.success ? '成功' : '失败'}, 扣除数量: ${totalPenalty}`);
-      
-      // 获取消息服务
-      const messageService = getService('messageService');
-      
-      // 为每个任务创建惩罚消息
-      for (const task of penaltyTasks) {
-        if (messageService) {
-          await messageService.createPenaltyMessage(task.taskId, task.title, task.points);
-        } else {
-          // 如果没有消息服务，则使用旧的消息管理器
-          const messageManager = require('../utils/messageManager.js');
-          const penaltyMessage = {
-            id: 'msg_penalty_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
-            type: 'penalty',
-            taskId: task.taskId,
-            title: '任务未完成',
-            summary: `必做任务"${task.title}"未完成，扣除${task.points}颗星星`,
-            timestamp: Date.now(),
-            isRead: false,
-            icon: '⚠️'
-          };
-          messageManager.addMessage(penaltyMessage);
-        }
-      }
-      
-      return { success: true, penaltyTasks };
-    } catch (error) {
-      logger.error('TaskService', '应用惩罚失败', error);
-      throw error;
     }
   }
 }

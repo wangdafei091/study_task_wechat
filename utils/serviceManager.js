@@ -4,6 +4,7 @@
  */
 const logger = require('./logger');
 const EventBus = require('./core/event-bus');
+const { EVENTS } = require('./constants');
 
 // 导入新架构服务
 const { RewardService, StarService, TaskService, MessageService } = require('../services/index');
@@ -64,12 +65,79 @@ const serviceManager = {
       await serviceInstances.messageService.initialize();
       await serviceInstances.rewardService.initialize();
       
+      // 设置事件监控
+      this._setupEventMonitoring();
+      
       logger.info('ServiceManager', '服务管理器初始化成功');
       return true;
     } catch (error) {
       logger.error('ServiceManager', '服务管理器初始化失败', error);
       return false;
     }
+  },
+  
+  /**
+   * 设置事件监控
+   * 定期输出事件统计信息
+   * @private
+   */
+  _setupEventMonitoring() {
+    // 只在开发环境启用事件监控
+    if (typeof wx !== 'undefined') {
+      const systemInfo = wx.getSystemInfoSync();
+      if (systemInfo.platform !== 'devtools') {
+        logger.info('ServiceManager', '非开发环境，不启用事件监控');
+        return;
+      }
+    }
+    
+    logger.info('ServiceManager', '启用事件监控');
+    
+    // 定期输出事件统计信息
+    setInterval(() => {
+      try {
+        const stats = sharedEventBus.getStats();
+        
+        // 如果没有事件触发，不输出统计信息
+        if (stats.totalEmits === 0) {
+          return;
+        }
+        
+        logger.info('EventMonitor', `事件统计: 总触发=${stats.totalEmits}, 总监听器=${stats.totalCurrentListeners}`);
+        
+        // 获取详细调试信息
+        const debugInfo = sharedEventBus.getDebugInfo();
+        
+        // 输出前5个最常触发的事件
+        if (debugInfo.topEvents && debugInfo.topEvents.length > 0) {
+          const topEventsText = debugInfo.topEvents
+            .slice(0, 5)
+            .map(e => `${e.event}(${e.count})`)
+            .join(', ');
+          
+          logger.info('EventMonitor', `热门事件: ${topEventsText}`);
+        }
+        
+      } catch (error) {
+        logger.error('EventMonitor', '事件统计发生错误', error);
+      }
+    }, 60000); // 每分钟输出一次统计
+  },
+  
+  /**
+   * 获取当前事件统计信息
+   * @returns {Object} 事件统计信息
+   */
+  getEventStats() {
+    return sharedEventBus.getStats();
+  },
+  
+  /**
+   * 获取事件调试信息
+   * @returns {Object} 事件调试信息
+   */
+  getEventDebugInfo() {
+    return sharedEventBus.getDebugInfo();
   },
   
   /**
