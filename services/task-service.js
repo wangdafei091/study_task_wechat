@@ -727,6 +727,15 @@ class TaskService {
   }
   
   /**
+   * 检查必做任务状态（兼容方法）
+   * @returns {Promise<Object>} 检查结果
+   */
+  async checkRequiredTasks() {
+    logger.info('TaskService', '检查必做任务状态（兼容方法，调用checkTasksStatus）');
+    return await this.checkTasksStatus();
+  }
+  
+  /**
    * 处理必做任务惩罚
    * @param {Task} task 任务对象
    * @returns {Promise<Object>} 处理结果

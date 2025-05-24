@@ -5,7 +5,6 @@ const app = getApp();
 const serviceManager = require('../../utils/serviceManager');
 const formatUtils = require('../../utils/formatUtils');
 const logger = require('../../utils/logger');
-const moment = require('../../libs/moment.min.js');
 
 Page({
 

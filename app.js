@@ -55,7 +55,13 @@ App({
           
           if (rewards.length === 0) {
             logger.info('App', '没有找到奖励数据，初始化示例奖励');
-            await rewardService.calculateNextAvailableReward();
+            // 直接使用initializeDefaultRewards初始化默认奖励，避免多次调用
+            // 并使用rewardRepository确保只初始化一次
+            const rewardRepository = rewardService.rewardRepository;
+            if (rewardRepository) {
+              await rewardRepository.initializeDefaultRewards();
+              logger.info('App', '成功初始化示例奖励');
+            }
           }
         }
         
@@ -96,13 +102,13 @@ App({
         
         // 添加安全检查以防止后续操作失败
         try {
-          // 检查是否可以使用getUserProfile
-          if (wx.getUserProfile) {
-            this.globalData.canIUseGetUserProfile = true;
-          }
+          // 使用现代API替代废弃的getUserProfile
+          this.globalData.canIUseGetUserProfile = false; // 默认禁用
           
-          // 避免后续操作可能出现的解构undefined对象的错误
-          // 用于防止operateWXData的回调中可能出现的错误
+          // 检查是否支持open-data
+          this.globalData.canIUseOpenData = wx.canIUse('open-data.type.userAvatarUrl') && 
+                                          wx.canIUse('open-data.type.userNickName');
+          
           logger.info('App', '用户登录处理完成，已添加防御性检查');
         } catch (error) {
           logger.error('App', '登录后处理用户信息出错:', error);
@@ -444,6 +450,7 @@ App({
   globalData: {
     userInfo: null,
     canIUseGetUserProfile: false,
+    canIUseOpenData: false,
     rpxRatio: 1,
     deviceInfo: {},
     contentHeight: 0,

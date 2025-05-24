@@ -8,7 +8,7 @@ Page({
   data: {
     userInfo: {},
     hasUserInfo: false,
-    canIUse: wx.canIUse('button.open-type.getUserInfo'),
+    canIUse: false,
     currentMotivation: '', // 当前显示的激励语
     motivationalPhrases: [
       '坚持每一天，成就更好的自己！',
@@ -482,12 +482,20 @@ Page({
       }
       
       // 使用任务服务计算进度
-      const progress = await taskService.calculateTaskProgress(tasks);
-      logger.info('Index', '任务进度计算成功', progress);
+      const result = await taskService.calculateTaskProgress(tasks);
+      logger.info('Index', '任务进度计算成功', result);
+      
+      // 确保所有进度值都是数字类型
+      const taskProgress = {
+        habit: Number(result.taskProgress.habit || 0),
+        interest: Number(result.taskProgress.interest || 0),
+        study: Number(result.taskProgress.study || 0)
+      };
       
       // 更新页面数据
       this.setData({ 
-        taskProgress: progress
+        taskProgress: taskProgress,
+        stats: result.stats
       });
     } catch (error) {
       logger.error('Index', '计算任务进度失败', error);

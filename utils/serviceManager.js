@@ -228,7 +228,7 @@ const serviceManager = {
    * @returns {MessageService} 消息服务实例
    */
   getMessageService() {
-    logger.info('ServiceService', '使用消息服务');
+    logger.info('ServiceManager', '使用消息服务');
     
     if (!serviceInstances.messageService) {
       serviceInstances.messageService = new MessageService({
