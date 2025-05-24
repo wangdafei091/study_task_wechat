@@ -1077,23 +1077,23 @@ class TaskService {
       
       logger.info('TaskService', `统计完成: 总任务=${stats.totalTasks}, 完成率=${stats.completionRate}%`);
       
+      // 直接返回统计数据而不是包装在summary中
       return {
-        summary: stats,
-        dailyStats
+        ...stats, // 扁平化返回所有统计数据
+        dailyStats // 保留日常统计数据
       };
     } catch (error) {
       logger.error('TaskService', '获取任务统计数据失败', error);
+      // 直接返回扁平化的数据结构
       return {
-        summary: {
-          totalTasks: 0,
-          completedTasks: 0,
-          completionRate: 0,
-          typeCounts: { habit: 0, study: 0, interest: 0 },
-          typeCompletion: { habit: 0, study: 0, interest: 0 },
-          typeCompletionRate: { habit: 0, study: 0, interest: 0 },
-          overdueCount: 0,
-          streak: 0
-        },
+        totalTasks: 0,
+        completedTasks: 0,
+        completionRate: 0,
+        typeCounts: { habit: 0, study: 0, interest: 0 },
+        typeCompletion: { habit: 0, study: 0, interest: 0 },
+        typeCompletionRate: { habit: 0, study: 0, interest: 0 },
+        overdueCount: 0,
+        streak: 0,
         dailyStats: []
       };
     }

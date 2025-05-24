@@ -114,13 +114,18 @@ class LogConfig {
     let isDevTools = false;
     
     try {
-      // 尝试检测开发者工具环境
+      // 尝试检测开发者工具环境，使用deviceInfo工具替代废弃API
       if (typeof wx !== 'undefined') {
-        const systemInfo = wx.getSystemInfoSync();
+        const deviceInfo = require('./deviceInfo');
+        const systemInfo = deviceInfo.getSystemInfo();
         isDevTools = systemInfo.platform === 'devtools';
+        
+        // 记录日志
+        logger.debug('LogConfig', '系统环境检测', { platform: systemInfo.platform });
       }
     } catch (e) {
-      // 忽略错误
+      // 忽略错误，记录警告
+      logger.warn('LogConfig', '获取系统信息失败，使用默认配置', e);
     }
     
     // 根据环境设置默认级别

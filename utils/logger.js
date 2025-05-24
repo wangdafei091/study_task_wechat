@@ -7,21 +7,37 @@
 
 // 日志级别定义
 const LogLevel = {
-  DEBUG: 0,
-  INFO: 1,
-  WARN: 2,
-  ERROR: 3,
-  NONE: 99
+  DEBUG: 1,
+  INFO: 2,
+  WARN: 3,
+  ERROR: 4,
+  NONE: 999
 };
 
 // 日志级别映射
 const LogLevelMap = {
+  'DEBUG': LogLevel.DEBUG,
+  'INFO': LogLevel.INFO,
+  'WARN': LogLevel.WARN,
+  'ERROR': LogLevel.ERROR,
+  'NONE': LogLevel.NONE,
+  
   'debug': LogLevel.DEBUG,
   'info': LogLevel.INFO,
   'warn': LogLevel.WARN,
   'error': LogLevel.ERROR,
   'none': LogLevel.NONE
 };
+
+// 引入设备信息工具
+let deviceInfo;
+try {
+  // 使用懒加载方式，避免循环引用
+  deviceInfo = require('./deviceInfo');
+} catch (e) {
+  // 如果无法加载，使用默认值
+  console.warn('无法加载设备信息工具，将使用默认日志级别');
+}
 
 const Logger = {
   // 当前日志级别
@@ -162,13 +178,36 @@ const Logger = {
    */
   _detectEnvironmentLevel() {
     try {
+      // 尝试使用设备信息工具
+      if (deviceInfo) {
+        return deviceInfo.isDevelopmentEnv() ? 'debug' : 'error';
+      }
+      
+      // 兼容性代码：如果设备信息工具不可用，使用旧方法
       if (typeof wx !== 'undefined') {
-        const systemInfo = wx.getSystemInfoSync();
-        // 微信开发者工具环境
-        if (systemInfo.platform === 'devtools') {
-          return 'debug';
+        try {
+          // 尝试使用新API
+          const appInfo = wx.getAppBaseInfo();
+          const deviceData = wx.getDeviceInfo();
+          if (deviceData.platform === 'devtools' || appInfo.envVersion === 'develop') {
+            return 'debug';
+          }
+        } catch (e) {
+          // 如果新API不可用，尝试使用旧API
+          try {
+            // 使用deviceInfo工具替代废弃API
+            const deviceInfo = require('./deviceInfo');
+            const systemInfo = deviceInfo.getSystemInfo();
+            if (systemInfo.platform === 'devtools') {
+              return 'debug';
+            }
+          } catch (e) {
+            // 记录错误但不阻断流程
+            console.warn('Logger', '获取系统信息失败', e);
+          }
         }
       }
+      
       // 生产环境
       return 'error';
     } catch (e) {

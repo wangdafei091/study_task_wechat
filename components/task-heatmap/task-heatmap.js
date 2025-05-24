@@ -1785,7 +1785,9 @@ Component({
       query.exec((res) => {
         if (res && res[0]) {
           const buttonRect = res[0];
-          const systemInfo = wx.getSystemInfoSync();
+          // 使用deviceInfo工具替代废弃API
+          const deviceInfo = require('../../utils/deviceInfo');
+          const systemInfo = deviceInfo.getSystemInfo();
           
           // 计算菜单位置，使其位于三点按钮右下方
           const style = `top:${buttonRect.top + buttonRect.height + 10}px; right:${systemInfo.windowWidth - buttonRect.right + 20}px;`;

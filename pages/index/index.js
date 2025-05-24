@@ -141,12 +141,6 @@ Page({
     // 设置随机的鼓励语
     this.setRandomMotivation();
     
-    // 加载任务数据
-    this.loadTaskData();
-    
-    // 加载用户星星和奖品信息
-    this.loadStarsAndRewards();
-    
     // 初始化消息预览动画实例在toggleMessagePreview中创建，这里不需要预创建
     
     // 检查用户信息
@@ -1268,14 +1262,14 @@ Page({
       
       logger.info('Index', '当前用户星星数', { userPoints });
       
-      // 获取下一个可达成奖励
-      logger.info('Index', '开始获取下一个可达成奖励');
-      const nextReward = await rewardService.calculateNextAvailableReward();
-      logger.info('Index', '获取到下一个可达成奖励', { name: nextReward ? nextReward.name : '无' });
+      // 并发调用奖励服务方法以提高性能
+      logger.info('Index', '开始获取奖励数据（并行处理）');
+      const [nextReward, visibleRewards] = await Promise.all([
+        rewardService.calculateNextAvailableReward(),
+        rewardService.getAvailableRewards(true)
+      ]);
       
-      // 加载可见奖励列表，使用服务层的过滤逻辑
-      logger.info('Index', '加载可见奖励列表');
-      let visibleRewards = await rewardService.getAvailableRewards(true);
+      logger.info('Index', '获取到下一个可达成奖励', { name: nextReward ? nextReward.name : '无' });
       logger.info('Index', '获取到可见奖励', { count: visibleRewards.length });
       
       // 判断是否需要显示设置奖励提示对话框
@@ -1291,7 +1285,8 @@ Page({
       }
       
       // 如果没有可见奖励，但存在nextReward，需区分是否为默认占位奖励
-      if (visibleRewards.length === 0 && nextReward) {
+      let visibleRewardsToShow = [...visibleRewards];
+      if (visibleRewardsToShow.length === 0 && nextReward) {
         // 记录详细日志便于诊断
         logger.info('Index', '检查奖励信息', {
           name: nextReward.name,
@@ -1307,7 +1302,7 @@ Page({
         // 只有真实奖励（有id属性）才添加到显示列表
         else if (nextReward.id) {
           logger.info('Index', '无可见奖励但存在有效奖励，添加到显示列表');
-          visibleRewards = [nextReward];
+          visibleRewardsToShow = [nextReward];
         }
       }
       
@@ -1316,7 +1311,7 @@ Page({
         userPoints,
         formattedPoints,
         nextReward,
-        visibleRewards: visibleRewards.slice(0, 3).map(reward => ({
+        visibleRewards: visibleRewardsToShow.slice(0, 3).map(reward => ({
           id: reward.id,
           name: reward.name,
           points: reward.points,
@@ -1324,7 +1319,7 @@ Page({
           status: reward.claimed ? 'claimed' : (reward.points <= userPoints ? 'unlocked' : 'current'),
           isExample: !!reward.isExample // 确保传递示例奖励标记
         })),
-        hasMoreRewards: visibleRewards.length > 3,
+        hasMoreRewards: visibleRewardsToShow.length > 3,
         rewardProgress: {
           current: userPoints,
           // 没有真实奖励时设置更大的total值，确保进度条显示一致

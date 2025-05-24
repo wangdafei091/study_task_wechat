@@ -10,7 +10,15 @@ const { StarGroupRepository, StarRecordRepository } = require('../repositories/i
 const EventBus = require('../utils/core/event-bus');
 const { EVENTS } = require('../utils/constants');
 
+// 移除静态初始化锁
+// let _initializationLock = false;
+
 class RewardService {
+  // 使用静态属性存储类级别的初始化状态
+  static _initialized = false;
+  // 添加初始化Promise锁，防止并发初始化
+  static _initializationPromise = null;
+  
   /**
    * 构造函数
    * @param {Object} options 选项
@@ -28,7 +36,10 @@ class RewardService {
     // 事件总线
     this.eventBus = options.eventBus || new EventBus();
     
-    logger.info('RewardService', '初始化奖励服务');
+    // 实例级初始化标记
+    this.initialized = false;
+    
+    logger.info('RewardService', '构造奖励服务实例');
   }
   
   /**
@@ -36,47 +47,78 @@ class RewardService {
    * @returns {Promise<void>}
    */
   async initialize() {
-    logger.info('RewardService', '初始化奖励服务');
-    try {
-      // 首次调用获取存储库实例
-      // 注意：存储库已在构造函数中初始化，无需再次调用initialize方法
-      
-      // 尝试从本地存储加载奖励数据以确保新旧系统数据一致性
-      try {
-        await this.rewardRepository.loadFromStorage();
-        logger.info('RewardService', '从本地存储加载奖励数据成功');
-      } catch (error) {
-        logger.warn('RewardService', '从本地存储加载奖励数据失败', error);
-        // 继续执行，不影响主流程
-      }
-      
-      // 检查是否存在奖励数据，如果不存在则初始化默认奖励
-      const rewardsCount = await this.rewardRepository.count();
-      
-      // 检查是否存在自定义奖励标记
-      let hasCustomRewards = false;
-      try {
-        hasCustomRewards = wx.getStorageSync('has_custom_rewards') === true;
-      } catch (e) {
-        logger.warn('RewardService', '获取自定义奖励标记失败', e);
-      }
-      
-      if (rewardsCount === 0 && !hasCustomRewards) {
-        logger.info('RewardService', '未检测到奖励数据且无自定义奖励标记，开始初始化默认奖励');
-        const defaultRewards = await this.rewardRepository.initializeDefaultRewards();
-        logger.info('RewardService', `初始化了${defaultRewards.length}个默认奖励`);
-      } else if (rewardsCount === 0 && hasCustomRewards) {
-        logger.info('RewardService', '检测到自定义奖励标记，跳过默认奖励初始化');
-      } else {
-        logger.info('RewardService', `检测到${rewardsCount}个奖励数据，跳过默认奖励初始化`);
-      }
-      
-      // 设置初始化完成标志
+    // 如果类已初始化，避免重复
+    if (RewardService._initialized) {
+      logger.info('RewardService', '奖励服务已初始化，跳过');
       this.initialized = true;
-      logger.info('RewardService', '服务初始化完成');
+      return;
+    }
+    
+    // 如果正在初始化中，等待初始化完成
+    if (RewardService._initializationPromise) {
+      logger.info('RewardService', '奖励服务正在初始化中，等待完成');
+      await RewardService._initializationPromise;
+      this.initialized = true;
+      return;
+    }
+    
+    // 开始初始化过程，创建并保存Promise
+    logger.info('RewardService', '开始初始化奖励服务');
+    
+    // 使用Promise锁防止并发初始化
+    RewardService._initializationPromise = (async () => {
+      try {
+        // 尝试从本地存储加载奖励数据以确保新旧系统数据一致性
+        try {
+          await this.rewardRepository.loadFromStorage();
+          logger.info('RewardService', '从本地存储加载奖励数据成功');
+        } catch (error) {
+          logger.warn('RewardService', '从本地存储加载奖励数据失败', error);
+          // 继续执行，不影响主流程
+        }
+        
+        // 检查是否存在奖励数据，如果不存在则初始化默认奖励
+        const rewardsCount = await this.rewardRepository.count();
+        
+        // 检查是否存在自定义奖励标记
+        let hasCustomRewards = false;
+        try {
+          hasCustomRewards = wx.getStorageSync('has_custom_rewards') === true;
+        } catch (e) {
+          logger.warn('RewardService', '获取自定义奖励标记失败', e);
+        }
+        
+        if (rewardsCount === 0 && !hasCustomRewards) {
+          logger.info('RewardService', '未检测到奖励数据且无自定义奖励标记，开始初始化默认奖励');
+          const defaultRewards = await this.rewardRepository.initializeDefaultRewards();
+          logger.info('RewardService', `初始化了${defaultRewards.length}个默认奖励`);
+        } else if (rewardsCount === 0 && hasCustomRewards) {
+          logger.info('RewardService', '检测到自定义奖励标记，跳过默认奖励初始化');
+        } else {
+          logger.info('RewardService', `检测到${rewardsCount}个奖励数据，跳过默认奖励初始化`);
+        }
+        
+        // 设置初始化完成标志 - 类级别标记
+        RewardService._initialized = true;
+        logger.info('RewardService', '服务初始化完成');
+      } catch (error) {
+        logger.error('RewardService', '初始化服务失败', error);
+        RewardService._initialized = false;
+        throw error;
+      }
+    })();
+    
+    try {
+      // 等待初始化完成
+      await RewardService._initializationPromise;
+      // 设置实例级标记
+      this.initialized = true;
     } catch (error) {
-      logger.error('RewardService', '初始化服务失败', error);
       this.initialized = false;
+      throw error;
+    } finally {
+      // 清除初始化Promise，允许后续重新初始化（如果需要）
+      RewardService._initializationPromise = null;
     }
   }
   
@@ -327,6 +369,12 @@ class RewardService {
    */
   async getAvailableRewards(includeClaimed = false, includeExamples = false) {
     try {
+      // 确保服务已初始化
+      if (!this.initialized && !RewardService._initialized) {
+        logger.info('RewardService', '奖励服务尚未初始化，先执行初始化');
+        await this.initialize();
+      }
+      
       let rewards;
       if (includeClaimed) {
         // 获取所有奖励，可能包括已领取的和示例奖励
@@ -593,74 +641,23 @@ class RewardService {
    */
   async calculateNextAvailableReward() {
     try {
+      // 确保服务已初始化，使用新的初始化机制
+      if (!this.initialized && !RewardService._initialized) {
+        logger.info('RewardService', '奖励服务尚未初始化，先执行初始化');
+        await this.initialize();
+      }
+      
       // 获取用户可用的星星数量
       const availablePoints = await this.starGroupRepository.getTotalPoints();
       
-      // 获取所有可用奖励，不强制包含示例奖励
-      // 系统将根据是否有自定义奖励决定是否显示示例奖励
+      // 获取所有可用奖励
       let availableRewards = await this.getAvailableRewards(false, false);
       
-      // 检查是否需要初始化示例奖励
+      // 如果没有可用奖励，返回默认占位奖励
       if (availableRewards.length === 0) {
-        logger.info('RewardService', '计算下一个可用奖励：没有可用奖励，检查是否需要初始化示例奖励');
+        logger.info('RewardService', '没有可用奖励，返回默认占位奖励');
         
-        // 添加初始化锁，防止重复初始化
-        // 使用静态属性存储初始化状态，确保在多次调用之间保持
-        if (!RewardService.defaultRewardsInitializing) {
-          RewardService.defaultRewardsInitializing = true;
-          logger.info('RewardService', '获取初始化锁，开始初始化默认奖励');
-          
-          try {
-            // 检查是否存在奖励数据，没有则初始化示例奖励
-            const rewardsCount = await this.rewardRepository.count();
-            logger.info('RewardService', `奖励数据检查结果: 现有${rewardsCount}个奖励`);
-            
-            // 检查是否存在自定义奖励标记
-            let hasCustomRewards = false;
-            try {
-              hasCustomRewards = wx.getStorageSync('has_custom_rewards') === true;
-              if (hasCustomRewards) {
-                logger.info('RewardService', '检测到自定义奖励标记');
-              }
-            } catch (e) {
-              logger.warn('RewardService', '获取自定义奖励标记失败', e);
-            }
-            
-            if (rewardsCount === 0 && !hasCustomRewards) {
-              logger.info('RewardService', '未检测到奖励数据且无自定义奖励标记，开始初始化默认奖励');
-              const defaultRewards = await this.rewardRepository.initializeDefaultRewards();
-              logger.info('RewardService', `初始化了${defaultRewards.length}个默认奖励`);
-              
-              // 清除缓存，确保获取最新数据
-              this.clearCache();
-              
-              // 更新可用奖励列表，强制包含示例奖励
-              availableRewards = await this.getAvailableRewards(false, true);
-              
-              // 如果初始化成功，返回第一个示例奖励
-              if (defaultRewards.length > 0) {
-                // 释放初始化锁
-                RewardService.defaultRewardsInitializing = false;
-                
-                // 设置remainingStars属性
-                const firstReward = defaultRewards[0];
-                firstReward.remainingStars = Math.max(0, firstReward.points - availablePoints);
-                logger.info('RewardService', `返回第一个示例奖励: ${firstReward.name}(${firstReward.points}点), 还需${firstReward.remainingStars}颗星星`);
-                return firstReward;
-              }
-            } else if (rewardsCount === 0 && hasCustomRewards) {
-              logger.info('RewardService', '检测到自定义奖励标记，跳过默认奖励初始化');
-            }
-          } finally {
-            // 确保始终释放初始化锁
-            logger.info('RewardService', '释放初始化锁');
-            RewardService.defaultRewardsInitializing = false;
-          }
-        } else {
-          logger.info('RewardService', '检测到默认奖励正在初始化中，跳过重复初始化');
-        }
-        
-        // 默认占位奖励也设置remainingStars为10
+        // 默认占位奖励
         const defaultPlaceholder = {
           name: '添加新奖励',
           points: 10,
@@ -669,7 +666,7 @@ class RewardService {
           remainingStars: 10
         };
         
-        logger.info('RewardService', `无可用奖励，返回默认占位奖励，还需${defaultPlaceholder.remainingStars}颗星星`);
+        logger.info('RewardService', `返回默认占位奖励，还需${defaultPlaceholder.remainingStars}颗星星`);
         return defaultPlaceholder;
       }
       
@@ -697,9 +694,7 @@ class RewardService {
       return nextReward;
     } catch (error) {
       logger.error('RewardService', '计算下一个可用奖励失败', error);
-      // 确保释放初始化锁，以防止在错误情况下锁住
-      RewardService.defaultRewardsInitializing = false;
-      // 返回一个默认奖励，同样设置remainingStars
+      // 返回一个默认奖励
       return {
         name: '添加新奖励',
         points: 10,

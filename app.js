@@ -4,6 +4,7 @@ const storageUtils = require('./utils/storageUtils.js'); // 引入存储工具
 const serviceManager = require('./utils/serviceManager.js'); // 引入服务管理器
 const logger = require('./utils/logger');
 const logConfig = require('./utils/log-config');
+const deviceInfo = require('./utils/deviceInfo'); // 引入设备信息工具
 
 App({
   onLaunch: async function () {
@@ -15,15 +16,7 @@ App({
     storageUtils.initializeStorageIfNeeded();
     
     // 确定是否为开发环境，用于配置事件总线
-    let isDevEnv = false;
-    try {
-      if (typeof wx !== 'undefined') {
-        const systemInfo = wx.getSystemInfoSync();
-        isDevEnv = systemInfo.platform === 'devtools';
-      }
-    } catch (e) {
-      logger.warn('App', '获取系统信息失败', e);
-    }
+    let isDevEnv = deviceInfo.isDevelopmentEnv();
     
     // 初始化服务管理器
     logger.info('App', '初始化服务管理器');
@@ -43,27 +36,9 @@ App({
       if (initialized) {
         logger.info('App', '服务管理器初始化成功');
         
-        // 获取各服务实例
-        const rewardService = serviceManager.getRewardService();
+        // 获取任务服务和消息服务
         const taskService = serviceManager.getTaskService();
         const messageService = serviceManager.getMessageService();
-        
-        // 主动触发一次奖励数据初始化，确保在首页加载前已有示例奖励
-        if (rewardService) {
-          const rewards = await rewardService.getAllRewards();
-          logger.info('App', `检查奖励数据: 现有${rewards.length}个奖励`);
-          
-          if (rewards.length === 0) {
-            logger.info('App', '没有找到奖励数据，初始化示例奖励');
-            // 直接使用initializeDefaultRewards初始化默认奖励，避免多次调用
-            // 并使用rewardRepository确保只初始化一次
-            const rewardRepository = rewardService.rewardRepository;
-            if (rewardRepository) {
-              await rewardRepository.initializeDefaultRewards();
-              logger.info('App', '成功初始化示例奖励');
-            }
-          }
-        }
         
         // 加载任务数据
         if (taskService) {
@@ -138,15 +113,7 @@ App({
       logger.info('App', '初始化日志系统');
       
       // 获取环境信息
-      let isDevEnv = false;
-      try {
-        if (typeof wx !== 'undefined') {
-          const systemInfo = wx.getSystemInfoSync();
-          isDevEnv = systemInfo.platform === 'devtools';
-        }
-      } catch (e) {
-        // 忽略错误
-      }
+      let isDevEnv = deviceInfo.isDevelopmentEnv();
       
       // 日志配置选项
       const logOptions = {
@@ -196,7 +163,9 @@ App({
       if (isDevEnv) {
         try {
           const logAnalyzer = require('./utils/log-analyzer');
-          logger.info('App', '已加载日志分析器，将监控console调用');
+          setTimeout(() => {
+            logger.info('App', '初始化日志分析器');
+          }, 300);
         } catch (e) {
           logger.warn('App', '加载日志分析器失败', e);
         }
@@ -378,8 +347,8 @@ App({
 
   // 初始化单位系统
   initUnitSystem: function() {
-    // 获取设备信息
-    const info = wx.getSystemInfoSync();
+    // 使用新的设备信息API获取设备信息
+    const info = deviceInfo.getSystemInfo();
     this.globalData.deviceInfo = info;
     
     // 设置像素比例
@@ -391,7 +360,7 @@ App({
 
   // 检查基础库版本兼容性
   checkCompatibility: function() {
-    const { SDKVersion } = wx.getSystemInfoSync();
+    const SDKVersion = deviceInfo.getSDKVersion();
     if (!SDKVersion) {
       wx.showModal({
         title: '版本检测失败',
@@ -402,7 +371,7 @@ App({
     }
     
     const minVersion = '2.8.0';
-    const versionCompare = this.compareVersion(SDKVersion, minVersion);
+    const versionCompare = deviceInfo._compareVersion(SDKVersion, minVersion);
     
     if (versionCompare < 0) {
       wx.showModal({

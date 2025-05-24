@@ -197,8 +197,14 @@ class BaseRepository {
    * @returns {Promise<Array>} 保存后的实体对象数组
    */
   async saveAll(entities) {
-    if (!Array.isArray(entities) || entities.length === 0) {
-      logger.warn('BaseRepository', '尝试批量保存空数组或无效数组');
+    if (!Array.isArray(entities)) {
+      logger.warn('BaseRepository', `尝试批量保存非数组数据: ${typeof entities}, 存储键=${this.storageKey}`);
+      return [];
+    }
+    
+    if (entities.length === 0) {
+      // 空数组处理：不记录警告，只在调试级别记录信息
+      logger.debug('BaseRepository', `批量保存空数组，操作被跳过, 存储键=${this.storageKey}`);
       return [];
     }
     
@@ -207,6 +213,20 @@ class BaseRepository {
     try {
       // 克隆防止引用变化
       const entitiesToSave = this._cloneModels(entities);
+      
+      // 验证实体有效性
+      const invalidEntities = entitiesToSave.filter(entity => !entity || !entity.id);
+      if (invalidEntities.length > 0) {
+        logger.warn('BaseRepository', `批量保存包含${invalidEntities.length}个无效实体, 存储键=${this.storageKey}`);
+      }
+      
+      // 过滤无效实体
+      const validEntities = entitiesToSave.filter(entity => entity && entity.id);
+      
+      if (validEntities.length === 0) {
+        logger.warn('BaseRepository', `批量保存后没有有效实体, 存储键=${this.storageKey}`);
+        return [];
+      }
       
       // 获取所有实体
       const all = await this.getAll();
@@ -218,7 +238,7 @@ class BaseRepository {
       });
       
       // 更新或添加每个实体
-      entitiesToSave.forEach(entity => {
+      validEntities.forEach(entity => {
         const index = idMap[entity.id];
         
         if (index !== undefined) {
@@ -233,9 +253,9 @@ class BaseRepository {
       // 保存回存储
       await this._saveData(all);
       
-      logger.info('BaseRepository', `批量保存实体成功, 数量=${entitiesToSave.length}, 存储键=${this.storageKey}`);
+      logger.info('BaseRepository', `批量保存实体成功, 数量=${validEntities.length}, 存储键=${this.storageKey}`);
       
-      return this._cloneModels(entitiesToSave);
+      return this._cloneModels(validEntities);
     } catch (error) {
       logger.error('BaseRepository', `批量保存实体失败, 存储键=${this.storageKey}`, error);
       return [];

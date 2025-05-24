@@ -58,7 +58,9 @@ Component({
       console.log('[星星趋势图] 开始检测运行环境');
       
       try {
-        const systemInfo = wx.getSystemInfoSync();
+        // 使用deviceInfo工具替代废弃API
+        const deviceInfo = require('../../../utils/deviceInfo');
+        const systemInfo = deviceInfo.getSystemInfo();
         console.log('[星星趋势图] 系统信息:', JSON.stringify({
           platform: systemInfo.platform,
           model: systemInfo.model,
@@ -149,7 +151,9 @@ Component({
           // 确保DPR设置正确
           if (!dpr) {
             try {
-              const systemInfo = wx.getSystemInfoSync();
+              // 使用deviceInfo工具替代废弃API
+              const deviceInfo = require('../../../utils/deviceInfo');
+              const systemInfo = deviceInfo.getSystemInfo();
               dpr = systemInfo.pixelRatio || 2;
               console.log(`[星星趋势图] 获取系统DPR: ${dpr}`);
             } catch (e) {

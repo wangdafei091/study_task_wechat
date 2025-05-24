@@ -5,6 +5,7 @@
 const logger = require('./logger');
 const EventBus = require('./core/event-bus');
 const { EVENTS } = require('./constants');
+const deviceInfo = require('./deviceInfo'); // 引入设备信息工具
 
 // 导入新架构服务
 const { RewardService, StarService, TaskService, MessageService } = require('../services/index');
@@ -13,7 +14,7 @@ const { RewardService, StarService, TaskService, MessageService } = require('../
  * 共享的事件总线实例
  * 启用性能优化，默认不启用调试模式
  */
-const sharedEventBus = new EventBus();
+const sharedEventBus = new EventBus({ enableDebug: false });
 // 配置事件总线
 sharedEventBus.setOptimization(true);
 
@@ -101,9 +102,14 @@ const serviceManager = {
   _setupEventMonitoring() {
     // 只在开发环境启用事件监控
     if (typeof wx !== 'undefined') {
-      const systemInfo = wx.getSystemInfoSync();
-      if (systemInfo.platform !== 'devtools') {
-        logger.info('ServiceManager', '非开发环境，不启用事件监控');
+      try {
+        const systemInfo = deviceInfo.getSystemInfo();
+        if (systemInfo.platform !== 'devtools') {
+          logger.info('ServiceManager', '非开发环境，不启用事件监控');
+          return;
+        }
+      } catch (error) {
+        logger.warn('ServiceManager', '获取系统信息失败，不启用事件监控', error);
         return;
       }
     }

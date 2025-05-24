@@ -7,6 +7,14 @@
 
 const logger = require('./logger');
 
+// 尝试懒加载设备信息工具
+let deviceInfo;
+try {
+  deviceInfo = require('./deviceInfo');
+} catch (e) {
+  console.warn('无法加载设备信息工具');
+}
+
 /**
  * 日志分析器类
  */
@@ -23,10 +31,11 @@ class LogAnalyzer {
     
     // 忽略的文件模式
     this.ignorePaths = [
-      'node_modules',
-      'miniprogram_npm',
-      'utils/logger.js',
-      'utils/log-analyzer.js'
+      '/core/',
+      '/libs/',
+      '/miniprogram_npm/',
+      'log-analyzer.js',
+      'logger.js'
     ];
     
     // 初始化完成标记
@@ -163,10 +172,31 @@ class LogAnalyzer {
    */
   _isDevelopmentEnv() {
     try {
-      // 尝试获取当前环境
+      // 优先使用设备信息工具
+      if (deviceInfo) {
+        return deviceInfo.isDevelopmentEnv();
+      }
+      
+      // 备用方案：直接检测环境
       if (typeof wx !== 'undefined') {
-        const systemInfo = wx.getSystemInfoSync();
-        return systemInfo.platform === 'devtools';
+        try {
+          // 尝试使用新API
+          const appInfo = wx.getAppBaseInfo();
+          const deviceData = wx.getDeviceInfo();
+          return deviceData.platform === 'devtools' || appInfo.envVersion === 'develop';
+        } catch (e) {
+          // 如果新API不可用，尝试旧API
+          try {
+            // 尝试手动加载deviceInfo工具
+            const deviceInfo = require('./deviceInfo');
+            const systemInfo = deviceInfo.getSystemInfo();
+            return systemInfo.platform === 'devtools';
+          } catch (e) {
+            // 记录错误但不阻断流程
+            console.warn('LogAnalyzer', '获取系统信息失败', e);
+            return false;
+          }
+        }
       }
       
       // 默认视为非开发环境
@@ -250,10 +280,17 @@ class LogAnalyzer {
 const analyzer = new LogAnalyzer();
 
 // 在开发环境自动初始化
-if (typeof wx !== 'undefined' && wx.getSystemInfoSync().platform === 'devtools') {
-  setTimeout(() => {
-    analyzer.init();
-  }, 1000); // 延迟初始化，避免干扰启动流程
-}
+setTimeout(() => {
+  try {
+    // 检测是否为开发环境
+    if (deviceInfo ? deviceInfo.isDevelopmentEnv() : (typeof wx !== 'undefined' && analyzer._isDevelopmentEnv())) {
+      analyzer.init();
+    } else {
+      console.log('非开发环境，不启用日志分析器');
+    }
+  } catch (e) {
+    console.warn('日志分析器初始化失败', e);
+  }
+}, 1000); // 延迟初始化，避免干扰启动流程
 
 module.exports = analyzer; 
