@@ -31,7 +31,7 @@ function batchProcess(items, processFn, options = {}) {
       return;
     }
     
-    logger.log('batchUtils', `处理批次: ${Math.floor(index/batchSize) + 1}, 项数: ${batch.length}`);
+    logger.info('batchUtils', `处理批次: ${Math.floor(index/batchSize) + 1}, 项数: ${batch.length}`);
     
     batch.forEach(item => {
       processFn(item);
@@ -390,7 +390,7 @@ consumeStarsByExpiryOrder: function(amount) {
     group.points -= pointsToConsume;
     remainingAmount -= pointsToConsume;
     
-    logger.log('pointsManager', `从分组[${group.expiryDateStr}]消费${pointsToConsume}颗星星`);
+    logger.info('pointsManager', `从分组[${group.expiryDateStr}]消费${pointsToConsume}颗星星`);
   }
   
   // 移除已空的分组

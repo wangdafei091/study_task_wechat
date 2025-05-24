@@ -124,7 +124,7 @@ taskManager.updateTaskStatus(taskId, status, callback);
 - 当任务状态从已完成变为未完成时，扣除对应积分，重置有效期显示
 - 对于必做任务，未完成并且过期的会自动标记为已逾期并应用惩罚
 
-## 必做任务机制
+### 必做任务机制
 
 必做任务是一种特殊的任务类型，具有以下特点：
 - 用 `isRequired` 字段标记
@@ -141,7 +141,7 @@ taskManager.markTaskAsRequired(taskId, callback);
 taskManager.unmarkTaskAsRequired(taskId, callback);
 ```
 
-## 积分有效期
+### 积分有效期
 
 任务完成后获得的积分有以下有效期选项，所有有效期都按自然周期计算：
 - `permanent`: 永久有效
@@ -156,6 +156,157 @@ taskManager.unmarkTaskAsRequired(taskId, callback);
 - 使用 `pointsExpiryDate` 存储格式化的有效期显示文本
 - 文本映射关系在 `Constants.POINTS_EXPIRY.TEXT` 中定义
 - 任务完成时使用 `calculateExpiryDate` 方法计算准确的到期日期
+
+```javascript
+// constants.js 中的文本映射
+POINTS_EXPIRY: {
+  PERMANENT: 'permanent',
+  WEEK: 'week',
+  MONTH: 'month',
+  THREE_MONTHS: '3months',
+  SIX_MONTHS: '6months',
+  TWELVE_MONTHS: '12months',
+  
+  TEXT: {
+    'permanent': '永久',
+    'week': '一周',
+    'month': '一个月',
+    '3months': '三个月',
+    '6months': '六个月',
+    '12months': '十二个月'
+  }
+}
+```
+
+积分有效期计算的关键实现示例：
+
+```javascript
+/**
+ * 计算积分有效期日期
+ * @param {String} expiryType 有效期类型
+ * @param {Date} completionDate 完成日期
+ * @returns {Object} 包含时间戳和可读格式的有效期信息
+ */
+calculateExpiryDate(expiryType, completionDate) {
+  logger.info('TaskManager', `计算积分有效期: 类型=${expiryType}, 完成日期=${completionDate.toISOString()}`);
+  
+  // 如果是永久有效，直接返回
+  if (expiryType === 'permanent') {
+    logger.info('TaskManager', '积分永久有效');
+    return {
+      expiry: 'permanent',
+      expiryDateStr: '永久'
+    };
+  }
+  
+  // 今天日期的零点
+  const today = new Date(completionDate);
+  today.setHours(0, 0, 0, 0);
+  
+  let expiryDate = new Date(today);
+  let specialCase = '';
+  
+  switch (expiryType) {
+    case 'week': {
+      // 计算到当前自然周的周日24点
+      const dayOfWeek = today.getDay(); // 0是周日，1-6是周一到周六
+      
+      if (dayOfWeek === 0) {
+        // 周日完成，当天24点失效
+        expiryDate.setHours(23, 59, 59, 999);
+        specialCase = '当天24点失效';
+      } else {
+        // 计算到本周日的天数差
+        const daysUntilSunday = 7 - dayOfWeek;
+        expiryDate.setDate(today.getDate() + daysUntilSunday);
+        expiryDate.setHours(23, 59, 59, 999);
+      }
+      break;
+    }
+    
+    case 'month': {
+      // 计算到当前自然月末24点
+      const currentMonth = today.getMonth();
+      const currentYear = today.getFullYear();
+      
+      // 下个月的第0天就是当前月的最后一天
+      expiryDate = new Date(currentYear, currentMonth + 1, 0);
+      expiryDate.setHours(23, 59, 59, 999);
+      
+      // 检查是否是月末完成的
+      const lastDayOfMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+      if (today.getDate() === lastDayOfMonth) {
+        specialCase = '当天24点失效';
+      }
+      break;
+    }
+    
+    // 其他类型处理逻辑...
+  }
+  
+  return {
+    expiry: expiryDate.getTime(),
+    expiryDateStr: specialCase || dateUtils.formatDate(expiryDate)
+  };
+}
+```
+
+### 任务生命周期
+
+任务在系统中经历以下生命周期:
+
+1. 创建任务: `taskManager.createTask()`
+2. 编辑任务: `taskManager.editTask()`
+3. 更新状态: `taskManager.updateTaskStatus()`
+4. 删除任务: `taskManager.deleteTask()`
+5. 标记为必做: `taskManager.markTaskAsRequired()` (可选)
+6. 检查状态: `taskManager.checkTasksStatus()` (自动)
+7. 处理必做任务: `taskManager.checkRequiredTasks()` (自动)
+
+任务数据批量处理使用batchUtils避免界面卡顿:
+
+```javascript
+// 批量处理任务
+batchUtils.batchProcess(
+  tasks,
+  (task) => {
+    // 处理单个任务的逻辑
+    processFn(task);
+  },
+  {
+    batchSize: 50,        // 每批处理50个任务
+    delay: 0,             // 批次间延迟
+    showProgress: true,   // 显示进度提示
+    progressTitle: '处理中' // 进度提示文本
+  },
+  () => {
+    // 全部处理完成后的回调
+    logger.info('TaskManager', '批量处理任务完成');
+    if (callback) callback();
+  }
+);
+```
+
+### 任务消息通知
+
+任务相关的消息通知由 MessageService 处理，包括：
+
+- 新建任务消息
+- 任务编辑消息
+- 任务完成消息
+- 任务即将到期提醒
+- 必做任务提醒
+- 积分惩罚消息
+
+任务消息创建示例：
+
+```javascript
+// 创建任务相关消息
+messageService.createTaskMessage(task, 'new');
+messageService.createTaskMessage(task, 'completed');
+messageService.createTaskMessage(task, 'upcoming');
+messageService.createTaskMessage(task, 'required');
+```
 
 ## 星星分组数据模型
 

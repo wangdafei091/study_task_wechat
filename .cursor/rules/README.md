@@ -28,27 +28,37 @@
 └── styles/              # 全局样式
 ```
 
+## 文档位置
+
+> **重要说明**：所有项目文档已迁移到项目根目录的`docs/`文件夹，本目录仅保留Cursor AI助手使用的规则文件。
+
+请参考以下文档路径：
+
+- 架构文档: `docs/architecture/`
+- 开发指南: `docs/development/`
+- API文档: `docs/api/`
+- 用户手册: `docs/user/`
+
 ## 开发规则索引
 
 ### 架构规则
 
 - [architecture-rules.md](./architecture-rules.md) - 领域驱动设计架构规范
+- [领域模型架构](../docs/architecture/domain-model-architecture.md) - 详细的领域模型架构设计
 
 ### 业务领域规则
 
-- [project/task_data_model.mdc](./project/task_data_model.mdc) - 任务数据模型定义
-- [project/new_architecture_guide.md](./project/new_architecture_guide.md) - 新架构开发指南
-- [system/star_points_system.md](./system/star_points_system.md) - 星星积分系统规则
+- [星星积分系统规则](../docs/architecture/star_points_system.md) - 积分系统的核心实现
 
 ### 开发指南
 
-- [project/utils_guide.mdc](./project/utils_guide.mdc) - 工具函数使用指南
-- [project/services-guide.md](./project/services-guide.md) - 领域服务使用指南
-- [project/components_guide.mdc](./project/components_guide.mdc) - 组件使用指南
+- [工具函数使用指南](../docs/api/utils_guide.md)
+- [服务使用指南](../docs/api/services-guide.md)
+- [组件使用指南](../docs/api/components-guide.md)
 
 ### 性能和优化
 
-- [system/optimization_summary.md](./system/optimization_summary.md) - 性能优化总结
+- [性能优化总结](../docs/architecture/optimization_summary.md)
 
 ## 核心规则
 
