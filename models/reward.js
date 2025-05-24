@@ -52,11 +52,21 @@ class Reward {
     this.tags = data.tags || [];
     this.notes = data.notes || '';
     
-    logger.info('Reward', `奖励已创建/加载: ${this.name} [${this.id}]`, {
-      enabled: this.enabled,
-      claimed: this.claimed,
-      points: this.points
-    });
+    // 优化日志：区分创建新奖励与加载已有奖励，减少日志噪音
+    if (data && data.id) {
+      // 加载已有奖励时使用DEBUG级别日志
+      logger.debug('Reward', `奖励已加载: ${this.name} [${this.id}]`, {
+        enabled: this.enabled,
+        points: this.points
+      });
+    } else {
+      // 新创建奖励时使用INFO级别日志
+      logger.info('Reward', `奖励已创建: ${this.name} [${this.id}]`, {
+        enabled: this.enabled,
+        claimed: this.claimed,
+        points: this.points
+      });
+    }
   }
   
   /**
@@ -272,19 +282,35 @@ class Reward {
   /**
    * 克隆奖励创建一个新实例
    * @param {Object} overrides 要覆盖的属性
+   * @param {Boolean} generateNewId 是否生成新ID（默认为true）
    * @returns {Reward} 新的奖励实例
    */
-  clone(overrides = {}) {
-    const clonedData = {
+  clone(overrides = {}, generateNewId = true) {
+    // 首先准备基础数据
+    const baseData = {
       ...this,
-      id: `reward_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
       createTime: Date.now(),
       claimed: false,
       claimTime: 0,
       claimStatus: RewardStatus.AVAILABLE,
-      deliveryTime: 0,
+      deliveryTime: 0
+    };
+    
+    // 仅在需要时生成新ID
+    if (generateNewId && !overrides.id) {
+      baseData.id = `reward_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+    }
+    
+    // 应用覆盖属性
+    const clonedData = {
+      ...baseData,
       ...overrides
     };
+    
+    logger.debug('Reward', `克隆奖励: ${this.id} → ${clonedData.id}`, {
+      generateNewId,
+      hasOverrideId: !!overrides.id
+    });
     
     return new Reward(clonedData);
   }

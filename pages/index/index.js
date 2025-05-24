@@ -287,14 +287,11 @@ Page({
   /**
    * 处理消息数据变化事件
    */
-  handleMessageDataChanged: function(messages) {
-    // 更新消息显示
-    const unreadCount = messages.filter(msg => !msg.isRead).length;
+  handleMessageDataChanged: function() {
+    logger.info('Index', '收到消息数据变更事件，主动加载最新消息数据');
     
-    this.setData({ 
-      messages,
-      unreadCount
-    });
+    // 主动加载消息数据，不依赖事件参数
+    this.loadMessageData();
   },
   
   /**

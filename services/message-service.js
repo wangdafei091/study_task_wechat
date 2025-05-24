@@ -565,11 +565,21 @@ class MessageService {
    * 通知消息数据变更 
    * @private
    */
-  _emitMessageChangedEvent() {
+  async _emitMessageChangedEvent() {
     logger.info('MessageService', '通知消息数据变更');
     
-    // 使用常量代替硬编码字符串
-    this.eventBus.emit(EVENTS.MESSAGE_CHANGED);
+    try {
+      // 获取最新消息列表，传递给事件处理器
+      const messages = await this.getAllMessages();
+      logger.info('MessageService', `通知消息数据变更，消息数量=${messages.length}`);
+      
+      // 使用常量代替硬编码字符串，并传递消息数据
+      this.eventBus.emit(EVENTS.MESSAGE_CHANGED, messages);
+    } catch (error) {
+      logger.error('MessageService', '获取消息列表失败，仅发送空数据变更事件', error);
+      // 出错时也发送事件，但不携带数据
+      this.eventBus.emit(EVENTS.MESSAGE_CHANGED);
+    }
   }
   
   /**

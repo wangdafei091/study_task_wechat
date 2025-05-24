@@ -85,12 +85,21 @@ class Task {
     // 初始化默认值
     this._initDefaults();
     
-    // 日志
-    logger.info('Task', `任务已创建/加载: ${this.title} [${this.id}]`, {
-      type: this.type,
-      date: this.date,
-      status: this.status
-    });
+    // 优化日志：区分创建新任务与加载已有任务，减少日志噪音
+    if (data && data.id) {
+      // 加载已有任务时使用DEBUG级别日志
+      logger.debug('Task', `任务已加载: ${this.title} [${this.id}]`, {
+        type: this.type,
+        date: this.date
+      });
+    } else {
+      // 新创建任务时使用INFO级别日志
+      logger.info('Task', `任务已创建: ${this.title} [${this.id}]`, {
+        type: this.type,
+        date: this.date,
+        status: this.status
+      });
+    }
   }
   
   /**
@@ -364,18 +373,35 @@ class Task {
   /**
    * 克隆任务创建一个新实例
    * @param {Object} overrides 要覆盖的属性
+   * @param {Boolean} generateNewId 是否生成新ID（默认为true）
    * @returns {Task} 新的任务实例
    */
-  clone(overrides = {}) {
-    const clonedData = {
+  clone(overrides = {}, generateNewId = true) {
+    // 首先准备基础数据
+    const baseData = {
       ...this,
-      id: `task_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
       createTime: Date.now(),
       modifyTime: Date.now(),
       status: TaskStatus.PENDING,
-      completionTime: 0,
+      completionTime: 0
+    };
+    
+    // 仅在需要时生成新ID
+    if (generateNewId && !overrides.id) {
+      baseData.id = `task_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+    }
+    
+    // 应用覆盖属性
+    const clonedData = {
+      ...baseData,
       ...overrides
     };
+    
+    logger.debug('Task', `克隆任务: ${this.id} → ${clonedData.id}`, {
+      generateNewId,
+      hasOverrideId: !!overrides.id,
+      finalId: clonedData.id
+    });
     
     return new Task(clonedData);
   }

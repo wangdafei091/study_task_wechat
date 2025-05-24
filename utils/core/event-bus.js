@@ -144,33 +144,50 @@ class EventBus {
    */
   emit(event, data) {
     if (!event) {
-      logger.warn('EventBus', '发布事件时提供了无效的事件名称');
-      return;
+      logger.warn('EventBus', '尝试触发无效事件: 事件名称为空');
+      return 0;
     }
     
-    const payload = data || {};
+    // 开始计时
+    const startTime = Date.now();
+    
+    // 更新事件触发统计
+    this._updateEmitStats(event);
+    
+    // 创建深拷贝用于历史记录和安全传递
+    let payload = data;
+    let safePayload = data;
+    
+    if (data !== undefined) {
+      try {
+        // 为了安全，创建数据的深拷贝
+        safePayload = this._createSafePayload(data, event);
+        payload = JSON.parse(JSON.stringify(data));
+      } catch (error) {
+        logger.warn('EventBus', `无法深拷贝事件数据: ${event}`, error);
+        payload = data;
+        safePayload = data;
+      }
+    }
+    
+    // 计数器
     let callbackCount = 0;
     let errorCount = 0;
     
-    // 记录开始时间（用于性能监控）
-    const startTime = this.debugMode ? Date.now() : 0;
-    
-    // 更新统计信息
-    this._updateEmitStats(event);
-    
-    // 使用智能拷贝机制替代深拷贝
-    const safePayload = this.optimizePayload ? 
-      this._createSafePayload(payload, event) : 
-      JSON.parse(JSON.stringify(payload));
-    
-    // 在调试模式下记录原始数据哈希用于数据完整性检查
+    // 记录原始数据哈希
     let originalDataHash;
-    if (this.debugMode) {
+    if (this.debugMode && payload !== undefined) {
       try {
         originalDataHash = this._generateDataHash(payload);
       } catch (e) {
         logger.debug('EventBus', `无法生成数据哈希: ${e.message}`);
       }
+    }
+    
+    // 检查是否存在监听器
+    const hasListeners = this.hasListeners(event);
+    if (!hasListeners) {
+      logger.warn('EventBus', `事件没有监听器: ${event}`);
     }
     
     // 调用普通监听器

@@ -252,6 +252,14 @@ class TaskService {
       // 处理结束日期
       if (task.repeat.endDate) {
         endDate = new Date(task.repeat.endDate);
+        
+        // 新增: 如果开始日期和结束日期是同一天，则不需要生成重复任务
+        if (startDate.getFullYear() === endDate.getFullYear() && 
+            startDate.getMonth() === endDate.getMonth() && 
+            startDate.getDate() === endDate.getDate()) {
+          logger.info('TaskService', `开始日期和结束日期相同(${task.repeat.startDate})，不生成重复任务`);
+          return [];
+        }
       } else if (task.hasNoEndDate === true) {
         // 处理无结束日期情况
         endDate = new Date(startDate);

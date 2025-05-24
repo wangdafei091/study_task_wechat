@@ -542,12 +542,13 @@ class BaseRepository {
       return null;
     }
     
-    // 如果模型有克隆方法，则调用
+    // 如果模型有克隆方法，则调用（传递false参数，避免生成新ID）
     if (typeof model.clone === 'function') {
-      return model.clone();
+      // 第二个参数为false表示不生成新ID，保留原ID
+      return model.clone({}, false);
     }
     
-    // 否则创建新实例
+    // 否则创建新实例（保留原ID）
     return new this.modelClass(model);
   }
   
