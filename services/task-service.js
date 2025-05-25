@@ -18,6 +18,7 @@ class TaskService {
    * @param {Object} options 选项
    * @param {TaskRepository} options.taskRepository 任务仓储
    * @param {StarService} options.starService 星星服务
+   * @param {RewardService} options.rewardService 奖励服务
    * @param {EventBus} options.eventBus 事件总线
    */
   constructor(options = {}) {
@@ -26,6 +27,7 @@ class TaskService {
     
     // 关联服务
     this.starService = options.starService;
+    this.rewardService = options.rewardService;
     
     // 事件总线
     this.eventBus = options.eventBus || new EventBus();
@@ -627,7 +629,81 @@ class TaskService {
    * @returns {Promise<Object>} 操作结果
    */
   async resetTask(taskId) {
-    return this.updateTaskStatus(taskId, TaskStatus.PENDING);
+    try {
+      const task = await this.taskRepository.getById(taskId);
+      
+      if (!task) {
+        logger.warn('TaskService', `重置任务失败: 未找到ID为${taskId}的任务`);
+        return { success: false, message: '未找到指定的任务' };
+      }
+      
+      // 如果任务未完成，无需重置
+      if (!task.isCompleted()) {
+        logger.info('TaskService', `任务未完成，无需重置: ${task.title}`);
+        return { success: true, task, unchanged: true };
+      }
+      
+      // 检查任务是否可以取消打勾（锁定状态检查）
+      let lastExchangeTime = null;
+      if (this.rewardService) {
+        lastExchangeTime = await this.rewardService.getLastExchangeTime();
+      }
+      
+      if (!task.canBeUnchecked(lastExchangeTime)) {
+        logger.warn('TaskService', `任务被锁定，不能取消完成: ${task.title}, 完成时间=${task.completionTime}, 最后兑换时间=${lastExchangeTime}`);
+        return { 
+          success: false, 
+          message: '该任务已被锁定，不能取消完成。兑换奖励后完成的任务才能取消。',
+          locked: true
+        };
+      }
+      
+      // 如果任务已获得星星，需要从对应分组扣减星星
+      if (task.starAwarded && task.points > 0 && this.starService) {
+        logger.info('TaskService', `准备从特定分组扣减星星: ${task.title}, 星星数=${task.points}, 有效期类型=${task.pointsExpiry}`);
+        
+        const consumeResult = await this.starService.consumeStarsFromSpecificType(
+          task.points,
+          task.pointsExpiry,
+          `取消完成任务: ${task.title}`,
+          {
+            sourceType: 'task_reset',
+            sourceId: task.id
+          }
+        );
+        
+        if (!consumeResult.success) {
+          logger.error('TaskService', `从特定分组扣减星星失败: ${consumeResult.message}`);
+          return { 
+            success: false, 
+            message: '扣减星星失败，无法取消任务完成状态' 
+          };
+        }
+        
+        logger.info('TaskService', `从特定分组扣减星星成功: ${task.title}, 扣减${task.points}颗星星`);
+      }
+      
+      // 重置任务状态和星星获得标记
+      task.reset();
+      task.starAwarded = false;
+      task.modifyTime = Date.now();
+      
+      // 保存任务
+      const savedTask = await this.taskRepository.save(task);
+      
+      logger.info('TaskService', `任务重置成功: ${savedTask.title}, ID=${savedTask.id}`);
+      
+      // 触发任务重置事件
+      this.eventBus.emit(EVENTS.TASK_RESET, { 
+        task: savedTask,
+        starsDeducted: task.points || 0
+      });
+      
+      return { success: true, task: savedTask };
+    } catch (error) {
+      logger.error('TaskService', `重置任务失败: ${error.message}`, error);
+      return { success: false, message: '重置任务失败: ' + error.message };
+    }
   }
   
   /**

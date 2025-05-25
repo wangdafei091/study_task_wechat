@@ -887,6 +887,81 @@ class StarService {
       };
     }
   }
+
+  /**
+   * 从特定有效期类型的分组中消费星星
+   * 专门用于任务取消完成时的星星扣减
+   * @param {Number} points 星星数量
+   * @param {String} expiryType 有效期类型
+   * @param {String} reason 消费原因
+   * @param {Object} options 额外选项
+   * @returns {Promise<Object>} 消费结果
+   */
+  async consumeStarsFromSpecificType(points, expiryType, reason, options = {}) {
+    if (points <= 0) {
+      logger.warn('StarService', `从特定类型消费星星失败: 星星数量必须大于0, 实际值=${points}`);
+      return { success: false, message: '星星数量必须大于0' };
+    }
+    
+    if (!expiryType) {
+      logger.warn('StarService', `从特定类型消费星星失败: 未指定有效期类型`);
+      return { success: false, message: '未指定有效期类型' };
+    }
+    
+    try {
+      logger.info('StarService', `开始从特定类型消费星星, 数量=${points}, 类型=${expiryType}, 原因=${reason}`);
+      
+      // 从特定类型的分组中扣减星星
+      const deductResult = await this.starGroupRepository.deductStarsFromSpecificExpiryType(
+        points,
+        expiryType,
+        reason
+      );
+      
+      if (!deductResult.success) {
+        logger.error('StarService', `从特定类型消费星星失败: ${deductResult.message}`);
+        return deductResult;
+      }
+      
+      // 创建支出记录
+      const record = await this.starRecordRepository.save({
+        type: 'expense',
+        source: options.sourceType || 'task_reset',
+        sourceId: options.sourceId || '',
+        points: -points, // 负数表示支出
+        description: reason || '取消任务完成',
+        timestamp: Date.now()
+      });
+      
+      if (!record) {
+        logger.error('StarService', `从特定类型消费星星: 创建记录失败, 数量=${points}, 类型=${expiryType}`);
+        // 继续流程，但记录错误
+      }
+      
+      logger.info('StarService', `从特定类型消费星星成功, 数量=${points}, 类型=${expiryType}, 原因=${reason}`);
+      
+      // 触发星星消费事件
+      this.eventBus.emit(EVENTS.STARS_CONSUMED, {
+        points,
+        expiryType,
+        reason,
+        groups: deductResult.deductedGroups,
+        record
+      });
+      
+      return {
+        success: true,
+        points,
+        consumed: points,
+        groups: deductResult.deductedGroups,
+        record,
+        message: '从特定类型消费星星成功'
+      };
+    } catch (error) {
+      logger.error('StarService', `从特定类型消费星星失败, 数量=${points}, 类型=${expiryType}`, error);
+      return { success: false, message: '从特定类型消费星星过程中发生错误' };
+    }
+  }
 }
 
 module.exports = StarService; 

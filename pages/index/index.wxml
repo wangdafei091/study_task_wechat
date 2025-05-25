@@ -138,6 +138,7 @@
         <block wx:for="{{searchResults}}" wx:key="id">
           <index-task-item 
             task="{{item}}"
+            lastExchangeTime="{{lastExchangeTime}}"
             bind:complete="completeTask"
             bind:detail="goToTaskDetail"
             style="--delay: {{item.animationDelay}}"
@@ -246,6 +247,7 @@
         <view class="task-wrapper">
           <index-task-item 
             task="{{item}}"
+            lastExchangeTime="{{lastExchangeTime}}"
             bind:complete="completeTask"
             bind:detail="goToTaskDetail"
           />

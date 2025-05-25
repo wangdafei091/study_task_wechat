@@ -127,6 +127,9 @@ Page({
 
     // 新增处理中状态
     processingTaskId: null, // 用于存储正在处理的任务ID
+    
+    // 锁定状态相关
+    lastExchangeTime: null // 最后一次兑换时间，用于计算任务锁定状态
   },
   
   /**
@@ -633,6 +636,33 @@ Page({
     
     // 检查是否是取消完成操作
     if (newStatus === 0 && wasStarAwarded) {
+      // 首先检查任务是否被锁定
+      const taskService = serviceManager.getService('task');
+      const rewardService = serviceManager.getService('reward');
+      
+      if (taskService && rewardService) {
+        try {
+          // 获取最后兑换时间
+          const lastExchangeTime = await rewardService.getLastExchangeTime();
+          
+          // 检查任务是否可以取消打勾
+          if (currentTask.completionTime && lastExchangeTime && currentTask.completionTime < lastExchangeTime) {
+            // 任务被锁定，不能取消
+            wx.showModal({
+              title: '无法取消完成',
+              content: '该任务已被锁定，不能取消完成。兑换奖励后完成的任务才能取消。',
+              showCancel: false,
+              confirmText: '我知道了'
+            });
+            this.setData({ processingTaskId: null });
+            return;
+          }
+        } catch (error) {
+          logger.error('Index', '检查任务锁定状态失败', error);
+          // 继续执行，不阻止用户操作
+        }
+      }
+      
       // 显示确认对话框
       const result = await new Promise((resolve) => {
         wx.showModal({
@@ -720,12 +750,23 @@ Page({
           });
         }
       } else {
-        // 操作失败
-        wx.showToast({
-          title: result?.message || '操作失败',
-          icon: 'none',
-          duration: 2000
-        });
+        // 操作失败，检查是否是锁定错误
+        if (result && result.locked) {
+          // 任务被锁定的特殊处理
+          wx.showModal({
+            title: '无法取消完成',
+            content: result.message || '该任务已被锁定，不能取消完成。',
+            showCancel: false,
+            confirmText: '我知道了'
+          });
+        } else {
+          // 其他错误
+          wx.showToast({
+            title: result?.message || '操作失败',
+            icon: 'none',
+            duration: 2000
+          });
+        }
       }
     } catch (error) {
       // 错误处理
@@ -1297,11 +1338,15 @@ Page({
         return;
       }
       
-      // 获取星星信息
-      const userPoints = await starService.getTotalStars();
+      // 获取星星信息和最后兑换时间
+      const [userPoints, lastExchangeTime] = await Promise.all([
+        starService.getTotalStars(),
+        rewardService.getLastExchangeTime()
+      ]);
       const formattedPoints = formatUtils.formatPoints(userPoints, true);
       
       logger.info('Index', '当前用户星星数', { userPoints });
+      logger.info('Index', '最后兑换时间', { lastExchangeTime });
       
       // 调用奖励服务方法，传递已获取的星星数确保数据一致性
       logger.info('Index', '开始获取奖励数据，使用已获取的星星数确保一致性');
@@ -1352,6 +1397,7 @@ Page({
         userPoints,
         formattedPoints,
         nextReward,
+        lastExchangeTime,
         visibleRewards: visibleRewardsToShow.slice(0, 3).map(reward => ({
           id: reward.id,
           name: reward.name,

@@ -620,19 +620,9 @@ class StarGroupRepository extends BaseRepository {
       }
       
       // 保存更新后的分组
-      // 注意：当updatedGroups为空时，需要获取所有分组并移除指定类型的分组
-      if (updatedGroups.length === 0) {
-        // 所有该类型的分组都被移除，需要从总分组中删除这些分组
-        const allGroups = await this.getAll();
-        const remainingGroups = allGroups.filter(group => group.expiryType !== expiryType);
-        await this._saveData(remainingGroups);
-        logger.info('StarGroupRepository', `所有${expiryType}类型分组已被移除，剩余分组数量=${remainingGroups.length}`);
-      } else {
-        // 有剩余分组，正常保存
-        await this.saveAll(updatedGroups);
-      }
+      const savedGroups = await this.saveAll(updatedGroups);
+      const savedCount = savedGroups ? savedGroups.length : 0;
       
-      const savedCount = updatedGroups.length;
       logger.info('StarGroupRepository', `从特定类型扣减星星完成，更新了${savedCount}个分组，共扣减${amount}颗，原因：${reason}`);
       
       return {

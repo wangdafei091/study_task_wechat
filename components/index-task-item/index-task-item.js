@@ -81,9 +81,13 @@ Component({
           // 检查任务状态是否发生变化，如果是则强制更新UI
           const statusChanged = oldVal && (oldVal.status !== newVal.status || oldVal.starAwarded !== newVal.starAwarded);
           
+          // 计算任务锁定状态
+          const isLocked = this._calculateTaskLockStatus(newVal);
+          
           // 将处理好的有效期文本保存到组件data中
           this.setData({
             expiryText: expiryText,
+            isLocked: isLocked,
             // 强制更新任务数据，确保UI正确响应状态变化
             taskData: { ...newVal }
           });
@@ -98,7 +102,20 @@ Component({
             });
           }
           
-          console.log(`[index-task-item] 渲染任务: ${newVal.title}, 类型: ${newVal.type}, 星星: ${newVal.points || 0}颗, 有效期: ${expiryText}`);
+          console.log(`[index-task-item] 渲染任务: ${newVal.title}, 类型: ${newVal.type}, 星星: ${newVal.points || 0}颗, 有效期: ${expiryText}, 锁定状态: ${isLocked}`);
+        }
+      }
+    },
+    lastExchangeTime: {
+      type: Number,
+      value: null,
+      observer: function(newVal, oldVal) {
+        // 当最后兑换时间变化时，重新计算所有任务的锁定状态
+        if (newVal !== oldVal && this.properties.task) {
+          const isLocked = this._calculateTaskLockStatus(this.properties.task);
+          this.setData({
+            isLocked: isLocked
+          });
         }
       }
     },
@@ -125,7 +142,8 @@ Component({
     showStarAnimation: false,     // 是否显示星星动画
     expiryText: '7天',            // 积分有效期默认文本
     isProcessing: false,          // 防止重复点击
-    taskData: null               // 任务数据副本，用于强制UI更新
+    taskData: null,              // 任务数据副本，用于强制UI更新
+    isLocked: false              // 任务是否被锁定
   },
 
   /**
@@ -235,7 +253,30 @@ Component({
       this.setData({
         isDescriptionExpanded: newState
       });
-    }
+    },
+
+         // 计算任务锁定状态
+     _calculateTaskLockStatus: function(task) {
+       if (!task) {
+         return false;
+       }
+       
+       // 检查任务是否已完成（兼容不同的数据格式）
+       const isCompleted = task.isCompleted ? task.isCompleted() : (task.status === 1);
+       if (!isCompleted) {
+         // 未完成的任务不会被锁定
+         return false;
+       }
+       
+       const lastExchangeTime = this.properties.lastExchangeTime;
+       if (!lastExchangeTime) {
+         // 没有兑换过奖励，任务不会被锁定
+         return false;
+       }
+       
+       // 如果任务完成时间早于最后兑换时间，则被锁定
+       return task.completionTime && task.completionTime < lastExchangeTime;
+     }
   },
 
   /**

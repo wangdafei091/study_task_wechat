@@ -861,6 +861,32 @@ class RewardService {
     
     return false;
   }
+
+  /**
+   * 获取最后一次兑换时间
+   * @returns {Promise<Number|null>} 最后一次兑换的时间戳，如果没有兑换过则返回null
+   */
+  async getLastExchangeTime() {
+    try {
+      // 获取所有已兑换的奖励
+      const claimedRewards = await this.rewardRepository.getClaimedRewards();
+      
+      if (!claimedRewards || claimedRewards.length === 0) {
+        logger.info('RewardService', '没有找到任何兑换记录');
+        return null;
+      }
+      
+      // 找到最晚的兑换时间
+      const lastExchangeTime = Math.max(...claimedRewards.map(reward => reward.claimTime || 0));
+      
+      logger.info('RewardService', `获取最后兑换时间成功: ${lastExchangeTime}, 共有${claimedRewards.length}条兑换记录`);
+      
+      return lastExchangeTime > 0 ? lastExchangeTime : null;
+    } catch (error) {
+      logger.error('RewardService', '获取最后兑换时间失败', error);
+      return null;
+    }
+  }
 }
 
 module.exports = RewardService; 

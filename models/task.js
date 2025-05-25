@@ -352,8 +352,30 @@ class Task {
    * @returns {Task} 新的任务实例
    */
   clone(overrides = {}, generateNewId = true) {
-    // 准备基础数据
-    const baseData = { ...this };
+    // 显式复制所有属性，确保不丢失任何数据
+    const baseData = {
+      id: this.id,
+      title: this.title,
+      description: this.description,
+      type: this.type,
+      date: this.date,
+      startTime: this.startTime,
+      endTime: this.endTime,
+      duration: this.duration,
+      status: this.status,
+      isRequired: this.isRequired,
+      completionTime: this.completionTime,
+      points: this.points,
+      pointsExpiry: this.pointsExpiry,
+      pointsExpiryDate: this.pointsExpiryDate,
+      starAwarded: this.starAwarded,
+      repeat: this.repeat ? { ...this.repeat } : { type: RepeatType.NONE },
+      parentTaskId: this.parentTaskId,
+      hasNoEndDate: this.hasNoEndDate,
+      createTime: this.createTime,
+      modifyTime: this.modifyTime,
+      tags: this.tags ? [...this.tags] : []
+    };
     
     if (generateNewId) {
       // 创建新任务时，重置状态和时间戳
@@ -394,6 +416,40 @@ class Task {
     });
     
     return childTask;
+  }
+
+  /**
+   * 判断任务是否可以取消打勾
+   * @param {Number} lastExchangeTime 最后一次兑换时间戳，如果没有兑换过则为null
+   * @returns {Boolean} 是否可以取消打勾
+   */
+  canBeUnchecked(lastExchangeTime = null) {
+    // 如果任务未完成，无需判断
+    if (!this.isCompleted()) {
+      return false;
+    }
+    
+    // 如果从未兑换过奖励，任务可以取消打勾
+    if (!lastExchangeTime) {
+      return true;
+    }
+    
+    // 如果任务完成时间早于最后一次兑换时间，则任务被锁定，不能取消打勾
+    if (this.completionTime < lastExchangeTime) {
+      return false;
+    }
+    
+    // 如果任务完成时间晚于最后一次兑换时间，任务可以取消打勾
+    return true;
+  }
+
+  /**
+   * 判断任务是否被锁定（不能取消打勾）
+   * @param {Number} lastExchangeTime 最后一次兑换时间戳，如果没有兑换过则为null
+   * @returns {Boolean} 是否被锁定
+   */
+  isLocked(lastExchangeTime = null) {
+    return !this.canBeUnchecked(lastExchangeTime);
   }
 }
 

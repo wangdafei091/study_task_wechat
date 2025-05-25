@@ -73,10 +73,11 @@ class ServiceManager {
         eventBus: this.eventBus
       });
       
-      // 第二步：初始化依赖StarService的服务
+      // 第二步：初始化依赖StarService和RewardService的服务
       this.services.taskService = new TaskService({
         eventBus: this.eventBus,
-        starService: this.services.starService
+        starService: this.services.starService,
+        rewardService: this.services.rewardService
       });
       
       // 第三步：初始化依赖多个服务的复合服务

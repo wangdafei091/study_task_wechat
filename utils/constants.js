@@ -37,6 +37,7 @@ module.exports = {
     TASK_DELETED: 'task:deleted',
     TASK_STATUS_CHANGED: 'task:status_changed',
     TASK_STATUS_UPDATED: 'task:status_updated',
+    TASK_RESET: 'task:reset',
     TASK_UPCOMING: 'task:upcoming',
     TASK_PENALTY_APPLIED: 'task:penalty_applied',
     TASK_MARKED_REQUIRED: 'task:marked_required',
