@@ -543,44 +543,60 @@ storageUtils.clearAll(callback)
 storageUtils.getStorageInfo(callback)
 ```
 
-## 数据分析工具 (analyticsManager.js)
+## 数据分析工具
 
-`utils/analyticsManager.js` 提供数据统计和分析功能。
+数据分析相关功能已迁移到领域驱动设计(DDD)架构，现在分为两部分：
 
-### 主要函数
+### 分析服务 (analytics-service.js)
 
-```javascript
-// 生成任务完成统计数据
-analyticsManager.generateTaskCompletionStats(startDate, endDate)
-
-// 生成星星获得统计数据
-analyticsManager.generateStarEarningStats(startDate, endDate)
-
-// 生成任务类型分布统计
-analyticsManager.generateTaskTypeDistribution(tasks)
-
-// 计算任务完成率趋势
-analyticsManager.calculateCompletionRateTrend(startDate, endDate, interval)
-
-// 生成热力图数据
-analyticsManager.generateHeatmapData(startDate, endDate)
-```
-
-### 使用示例
+`services/analytics-service.js` 提供数据分析服务，包含业务逻辑。通过服务管理器访问：
 
 ```javascript
-const analyticsManager = require('../../utils/analyticsManager');
+// 获取分析服务实例
+const analyticsService = serviceManager.getAnalyticsService();
 
-// 生成30天内的任务完成统计
-analyticsManager.generateTaskCompletionStats(
-  dateUtils.getDateBefore(30), 
-  dateUtils.getTodayString()
-).then(stats => {
-  this.setData({ completionStats: stats });
+// 异步获取任务星星日历数据
+analyticsService.getTaskStarCalendarData().then(records => {
+  // 处理星星记录
 });
 
-// 生成任务类型分布
-const distribution = analyticsManager.generateTaskTypeDistribution(tasks);
+// 按日期分组记录
+const groupedRecords = analyticsService.groupRecordsByDate(records);
+
+// 计算历史余额
+analyticsService.calculateHistoricalBalance(30).then(data => {
+  const { historyData, forecastData } = data;
+  // 使用历史数据和预测数据
+});
+
+// 获取任务完成统计
+analyticsService.getTaskCompletionStats('week').then(stats => {
+  // 使用统计数据
+});
+```
+
+### 分析工具函数 (analyticsUtils.js)
+
+`utils/analyticsUtils.js` 提供纯工具函数，不包含业务逻辑：
+
+```javascript
+// 格式化日期为显示格式
+analyticsUtils.formatDateForDisplay(date); // 返回 "MM/DD" 格式
+
+// 计算日期范围
+analyticsUtils.calculateDateRange(7); // 返回7天的日期范围对象
+
+// 格式化时间戳
+analyticsUtils.formatTimestamp(timestamp); // 返回 "YYYY-MM-DD HH:MM:SS" 格式
+
+// 获取时间范围描述
+analyticsUtils.getTimeRangeDescription('week'); // 返回 "YYYY年MM月DD日 - YYYY年MM月DD日"
+
+// 计算完成率
+analyticsUtils.calculateCompletionRate(7, 10); // 返回 "70.0"
+
+// 获取相对时间描述
+analyticsUtils.getRelativeTimeDescription(timestamp); // 返回如"刚刚"、"5分钟前"等
 ```
 
 ## 反馈工具 (feedbackUtils.js)
@@ -639,4 +655,4 @@ const duration = formatUtils.formatDuration(120); // 返回 "2小时"
 
 // 格式化星星数量
 const stars = formatUtils.formatStarCount(1234); // 返回 "1,234"
-``` 
+```

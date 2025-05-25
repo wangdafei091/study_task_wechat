@@ -19,10 +19,11 @@
    - 添加了分组和分块辅助函数
    - 集成了进度显示功能
 
-4. **数据分析管理工具 (analyticsManager.js)**
-   - 实现了任务星星日历数据功能
-   - 提供按日期分组记录的功能
-   - 为后续的复杂分析功能预留接口
+4. **数据分析架构重构**
+   - 完成analyticsManager.js向领域驱动设计架构的迁移
+   - 业务逻辑移至services/analytics-service.js
+   - 纯工具函数移至utils/analyticsUtils.js
+   - 完全符合DDD架构分层原则
 
 5. **统一动画函数 (uiUtils.js)**
    - 合并了 slideInAnimation 和 slideOutAnimation 为统一的 slideAnimation
@@ -77,6 +78,13 @@
    - 使用模拟对象测试依赖交互
 
 ## 最近更新记录
+
+### 2025-05-25
+- 完成数据分析模块DDD架构迁移
+  - 移除废弃的analyticsManager.js
+  - 业务逻辑已迁移至AnalyticsService
+  - 纯工具函数已迁移至analyticsUtils.js
+  - 更新相关组件使用新的分析服务
 
 ### 2025-05-22
 - 完成了领域驱动设计架构的迁移

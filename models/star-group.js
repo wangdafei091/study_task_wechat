@@ -1,114 +1,137 @@
 /**
  * star-group.js - 星星分组领域模型
  * 
- * 用于按照有效期管理和分组星星，实现"先过期先使用"策略
+ * 定义星星分组实体的数据结构、验证规则和业务方法
  */
-
-const logger = require('../utils/logger');
-const { StarExpiryType } = require('./star');
 
 class StarGroup {
   /**
    * 构造函数
-   * @param {Object} data 星星分组数据
+   * @param {Object} data 分组数据
    */
   constructor(data = {}) {
     // 基础信息
     this.id = data.id || `group_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
-    this.expiryType = data.expiryType || StarExpiryType.PERMANENT;
-    this.expiryDate = data.expiryDate || null;
-    this.expiryDateStr = data.expiryDateStr || '';
+    this.type = data.type || 'permanent'; // 分组类型，默认为永久
+    this.name = data.name || this._getDefaultName(data.type);
     
-    // 星星数量和来源
-    this.points = data.points || 0;
-    this.sources = data.sources || [];
+    // 星星相关
+    this.stars = data.stars || 0; // 当前星星数
+    this.maxStars = data.maxStars || 0; // 最大星星数，0表示无限制
+    
+    // 时间相关
+    this.createTime = data.createTime || Date.now();
+    this.lastUpdated = data.lastUpdated || Date.now();
+    this.expiryDate = data.expiryDate || ''; // 过期日期，空字符串表示永不过期
     
     // 其他属性
-    this.createTime = data.createTime || Date.now();
-    this.updateTime = data.updateTime || Date.now();
-    
-    logger.info('StarGroup', `星星分组已创建/加载: ${this.points}颗 [${this.id}]`, {
-      expiryType: this.expiryType,
-      expiryDateStr: this.expiryDateStr
-    });
+    this.source = data.source || '';
+    this.description = data.description || '';
   }
   
   /**
-   * 验证星星分组数据有效性
+   * 根据类型获取默认名称
+   * @private
+   * @param {String} type 分组类型
+   * @returns {String} 默认名称
+   */
+  _getDefaultName(type) {
+    switch (type) {
+      case 'permanent':
+        return '永久有效';
+      case 'week':
+        return '本周有效';
+      case 'month':
+        return '本月有效';
+      case 'quarter':
+        return '本季度有效';
+      default:
+        return '星星分组';
+    }
+  }
+  
+  /**
+   * 验证分组数据有效性
    * @returns {Array} 错误信息数组，如果没有错误则为空数组
    */
   validate() {
     const errors = [];
     
     // 验证基本信息
-    if (!this.expiryType) {
-      errors.push('星星分组有效期类型不能为空');
+    if (!this.type) {
+      errors.push('分组类型不能为空');
     }
     
-    // 验证有效期日期
-    if (this.expiryType !== StarExpiryType.PERMANENT && !this.expiryDate) {
-      errors.push('非永久有效的星星分组必须有过期日期');
+    // 验证星星数量
+    if (this.stars < 0) {
+      errors.push('星星数量不能为负数');
     }
     
-    // 验证数量
-    if (this.points < 0) {
-      errors.push('星星分组数量不能为负数');
+    if (this.maxStars < 0) {
+      errors.push('最大星星数不能为负数');
+    }
+    
+    if (this.maxStars > 0 && this.stars > this.maxStars) {
+      errors.push('星星数量不能超过最大星星数');
+    }
+    
+    // 验证过期日期
+    if (this.expiryDate) {
+      const expiryDate = new Date(this.expiryDate);
+      if (isNaN(expiryDate.getTime())) {
+        errors.push('过期日期格式无效');
+      }
     }
     
     return errors;
   }
   
   /**
-   * 添加星星到分组
-   * @param {Number} amount 星星数量
-   * @param {String} source 来源标识
-   * @returns {StarGroup} 当前分组实例
+   * 添加星星
+   * @param {Number} amount 添加的星星数量
+   * @returns {Number} 添加后的星星数量
    */
-  addStars(amount, source = '') {
+  addStars(amount) {
     if (amount <= 0) {
-      logger.warn('StarGroup', `尝试添加无效的星星数量: ${amount}`);
-      return this;
+      return this.stars;
     }
     
-    // 增加星星数量
-    this.points += amount;
+    const oldStars = this.stars;
+    this.stars += amount;
     
-    // 记录来源
-    if (source && !this.sources.includes(source)) {
-      this.sources.push(source);
+    // 如果有最大值限制，确保不超过最大值
+    if (this.maxStars > 0 && this.stars > this.maxStars) {
+      this.stars = this.maxStars;
     }
     
-    // 更新时间
-    this.updateTime = Date.now();
+    // 更新最后修改时间
+    this.lastUpdated = Date.now();
     
-    logger.info('StarGroup', `添加星星到分组: 数量=${amount}, 来源=${source || '未知'}, 当前总数=${this.points}`);
-    
-    return this;
+    return this.stars;
   }
   
   /**
-   * 从分组中移除星星
-   * @param {Number} amount 要移除的星星数量
-   * @returns {Number} 实际移除的星星数量
+   * 减少星星
+   * @param {Number} amount 减少的星星数量
+   * @returns {Number} 减少后的星星数量
    */
   removeStars(amount) {
     if (amount <= 0) {
-      logger.warn('StarGroup', `尝试移除无效的星星数量: ${amount}`);
-      return 0;
+      return this.stars;
     }
     
-    // 计算实际可以移除的数量（不能超过当前数量）
-    const actualAmount = Math.min(this.points, amount);
+    const oldStars = this.stars;
+    this.stars -= amount;
     
-    // 减少星星数量
-    this.points -= actualAmount;
+    // 确保星星数不为负数
+    if (this.stars < 0) {
+      this.stars = 0;
+    }
     
-    // 更新时间
-    this.updateTime = Date.now();
+    // 更新最后修改时间
+    this.lastUpdated = Date.now();
     
-    logger.info('StarGroup', `从分组移除星星: 请求移除=${amount}, 实际移除=${actualAmount}, 当前剩余=${this.points}`);
-    
-    return actualAmount;
+    return this.stars;
   }
   
   /**
@@ -116,117 +139,119 @@ class StarGroup {
    * @returns {Boolean} 是否已过期
    */
   isExpired() {
-    if (this.expiryType === StarExpiryType.PERMANENT) {
+    // 永久分组永不过期
+    if (this.type === 'permanent' || !this.expiryDate) {
       return false;
     }
     
-    if (!this.expiryDate) {
+    const now = new Date();
+    const expiryDate = new Date(this.expiryDate);
+    
+    // 如果过期日期无效，视为未过期
+    if (isNaN(expiryDate.getTime())) {
       return false;
     }
     
-    const now = Date.now();
-    return now > this.expiryDate;
+    return now > expiryDate;
   }
   
   /**
-   * 获取分组剩余有效期（毫秒）
-   * @returns {Number} 剩余有效期，永久有效返回-1
+   * 获取剩余有效天数
+   * @returns {Number} 剩余有效天数，如果永不过期则返回-1
    */
-  getRemainingValidity() {
-    if (this.expiryType === StarExpiryType.PERMANENT) {
-      return -1; // 表示永久有效
+  getRemainingDays() {
+    // 永久分组永不过期
+    if (this.type === 'permanent' || !this.expiryDate) {
+      return -1;
     }
     
-    if (!this.expiryDate || this.isExpired()) {
+    const now = new Date();
+    const expiryDate = new Date(this.expiryDate);
+    
+    // 如果过期日期无效，视为永不过期
+    if (isNaN(expiryDate.getTime())) {
+      return -1;
+    }
+    
+    // 如果已过期，返回0
+    if (now > expiryDate) {
       return 0;
     }
     
-    const now = Date.now();
-    return Math.max(0, this.expiryDate - now);
+    // 计算剩余天数
+    const timeDiff = expiryDate.getTime() - now.getTime();
+    return Math.ceil(timeDiff / (1000 * 3600 * 24));
   }
   
   /**
-   * 获取可读的有效期描述
-   * @returns {String} 有效期描述
+   * 重置星星数量
+   * @param {Number} newAmount 新的星星数量
+   * @returns {Number} 新的星星数量
    */
-  getExpiryDescription() {
-    if (!this.expiryDateStr) {
-      // 如果没有预先生成的描述，生成一个基本描述
-      if (this.expiryType === StarExpiryType.PERMANENT) {
-        return '永久有效';
-      }
-      
-      if (this.expiryDate) {
-        const date = new Date(this.expiryDate);
-        const year = date.getFullYear();
-        const month = (date.getMonth() + 1).toString().padStart(2, '0');
-        const day = date.getDate().toString().padStart(2, '0');
-        return `${year}-${month}-${day}到期`;
-      }
-      
-      return '未知有效期';
+  resetStars(newAmount) {
+    if (newAmount < 0) {
+      newAmount = 0;
     }
     
-    return this.expiryDateStr;
+    // 如果有最大值限制，确保不超过最大值
+    if (this.maxStars > 0 && newAmount > this.maxStars) {
+      newAmount = this.maxStars;
+    }
+    
+    this.stars = newAmount;
+    this.lastUpdated = Date.now();
+    
+    return this.stars;
   }
   
   /**
-   * 获取分组中的星星数量
-   * @returns {Number} 星星数量
+   * 设置过期日期
+   * @param {String} dateString 过期日期字符串（YYYY-MM-DD格式）
+   * @returns {Boolean} 是否设置成功
    */
-  getPointsAmount() {
-    return this.points;
+  setExpiryDate(dateString) {
+    if (!dateString) {
+      this.expiryDate = '';
+      this.lastUpdated = Date.now();
+      return true;
+    }
+    
+    const expiryDate = new Date(dateString);
+    if (isNaN(expiryDate.getTime())) {
+      return false;
+    }
+    
+    this.expiryDate = dateString;
+    this.lastUpdated = Date.now();
+    return true;
   }
   
   /**
-   * 检查分组是否为空（没有星星）
-   * @returns {Boolean} 是否为空
-   */
-  isEmpty() {
-    return this.points <= 0;
-  }
-  
-  /**
-   * 获取分组过期时间
-   * @returns {Number|null} 过期时间戳，永久有效返回null
-   */
-  getExpiryDate() {
-    return this.expiryType === StarExpiryType.PERMANENT ? null : this.expiryDate;
-  }
-  
-  /**
-   * 克隆分组创建一个新实例
+   * 克隆分组
    * @param {Object} overrides 要覆盖的属性
+   * @param {Boolean} generateNewId 是否生成新ID
    * @returns {StarGroup} 新的分组实例
    */
-  clone(overrides = {}) {
+  clone(overrides = {}, generateNewId = true) {
+    // 准备基础数据
+    const baseData = { ...this };
+    
+    // 如果需要生成新ID
+    if (generateNewId) {
+      baseData.id = `group_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+      baseData.createTime = Date.now();
+      baseData.lastUpdated = Date.now();
+    }
+    
+    // 应用覆盖属性
     const clonedData = {
-      ...this,
-      id: `group_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-      createTime: Date.now(),
-      updateTime: Date.now(),
+      ...baseData,
       ...overrides
     };
     
     return new StarGroup(clonedData);
   }
 }
-
-/**
- * 静态方法：按过期日期对星星分组进行排序
- * @param {StarGroup[]} groups 星星分组数组
- * @returns {StarGroup[]} 排序后的分组数组
- */
-StarGroup.sortByExpiryDate = function(groups) {
-  return [...groups].sort((a, b) => {
-    // 永久有效的放在最后
-    if (a.expiryType === StarExpiryType.PERMANENT) return 1;
-    if (b.expiryType === StarExpiryType.PERMANENT) return -1;
-    
-    // 按过期日期升序（先过期的在前）
-    return a.expiryDate - b.expiryDate;
-  });
-};
 
 module.exports = {
   StarGroup

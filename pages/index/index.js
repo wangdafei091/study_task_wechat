@@ -1,5 +1,5 @@
 const app = getApp()
-const serviceManager = require('../../utils/serviceManager.js');
+const serviceManager = require('../../services/service-manager.js');
 const formatUtils = require('../../utils/formatUtils');
 const logger = require('../../utils/logger');
 const { NotificationType } = require('../../models/message');
@@ -1599,48 +1599,18 @@ Page({
   },
   
   /**
-   * 判断奖励是否示例奖励
-   * @param {Object} reward 奖励对象
-   * @returns {Boolean} 是否示例奖励
-   */
-  isExampleReward: function(reward) {
-    if (!reward) return false;
-    
-    // 直接检查isExample属性
-    if (reward.isExample === true) return true;
-    
-    // 兼容旧的判断逻辑：示例奖励ID格式判断
-    if (reward.id && typeof reward.id === 'string') {
-      return reward.id.startsWith('reward_example_') || reward.id.includes('_example_') || /reward_\d+_\d+/.test(reward.id);
-    }
-    
-    return false;
-  },
-  
-  /**
    * 检查是否只有示例奖励可用
    * @return {Boolean} 是否只有示例奖励
    */
   hasOnlyExampleRewards: function() {
     logger.debug('Index', '检查是否只有示例奖励可用');
     
-    // 从本地存储获取奖励数据
-    const storedRewards = wx.getStorageSync('rewards') || [];
+    // 使用RewardService获取信息
+    const rewardService = serviceManager.getRewardService();
+    const result = rewardService.hasOnlyExampleRewardsSync();
     
-    // 过滤出启用的奖励
-    const enabledRewards = storedRewards.filter(r => r.enabled !== false);
-    
-    // 如果没有奖励，使用默认示例奖励
-    if (enabledRewards.length === 0) {
-      logger.debug('Index', '没有任何奖励，返回true');
-      return true;
-    }
-    
-    // 检查是否所有启用的奖励都是示例奖励
-    const hasCustomReward = enabledRewards.some(reward => !this.isExampleReward(reward));
-    
-    logger.debug('Index', `是否只有示例奖励: ${!hasCustomReward}, 启用奖励数: ${enabledRewards.length}`);
-    return !hasCustomReward;
+    logger.debug('Index', `是否只有示例奖励: ${result}`);
+    return result;
   },
   
   /**
@@ -1721,6 +1691,9 @@ Page({
   _prepareRewardIndicators: function() {
     logger.debug('Index', `准备显示奖品指示器: ${this.data.visibleRewards.length}个, 状态分布: ${this.data.visibleRewards.map(r => r.status).join(',')}`);
     
+    // 获取奖励服务
+    const rewardService = serviceManager.getRewardService();
+    
     // 处理奖品指示器
     const processedRewards = this.data.visibleRewards.map(reward => {
       let status = 'locked'; // 默认状态：未解锁
@@ -1737,7 +1710,7 @@ Page({
       return {
         ...reward,
         status,
-        isExample: this.isExampleReward(reward) // 添加示例标记
+        isExample: rewardService._isExampleReward(reward) // 使用服务层方法判断是否为示例奖励
       };
     });
     

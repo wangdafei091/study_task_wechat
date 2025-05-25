@@ -1,7 +1,7 @@
 // app.js
 const unitUtils = require('./utils/unit.js');
 const storageUtils = require('./utils/storageUtils.js'); // 引入存储工具
-const serviceManager = require('./utils/serviceManager.js'); // 引入服务管理器
+const serviceManager = require('./services/service-manager.js'); // 引入服务管理器
 const logger = require('./utils/logger');
 const logConfig = require('./utils/log-config');
 const deviceInfo = require('./utils/deviceInfo'); // 引入设备信息工具
@@ -438,5 +438,38 @@ App({
     get eventBus() {
       return serviceManager.getEventBus();
     }
+  },
+  
+  /**
+   * 获取服务实例（供分包使用）
+   * @param {String} serviceName 服务名称
+   * @returns {Object} 服务实例
+   */
+  getService: function(serviceName) {
+    return serviceManager.getService(serviceName);
+  },
+  
+  /**
+   * 获取分析服务（供分包使用）
+   * @returns {Object} 分析服务实例
+   */
+  getAnalyticsService: function() {
+    return serviceManager.getAnalyticsService();
+  },
+  
+  /**
+   * 获取任务服务（供分包使用）
+   * @returns {Object} 任务服务实例
+   */
+  getTaskService: function() {
+    return serviceManager.getTaskService();
+  },
+  
+  /**
+   * 获取星星服务（供分包使用）
+   * @returns {Object} 星星服务实例
+   */
+  getStarService: function() {
+    return serviceManager.getStarService();
   }
 }) 

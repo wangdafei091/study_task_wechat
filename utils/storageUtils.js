@@ -17,7 +17,6 @@ const storageUtils = {
     try {
       const value = wx.getStorageSync(key);
       if (value === '' || value === undefined || value === null) {
-        logger.info('storageUtils', `键 ${key} 不存在，返回默认值`);
         return defaultValue;
       }
       return value;
@@ -36,7 +35,6 @@ const storageUtils = {
   set: function(key, data) {
     try {
       wx.setStorageSync(key, data);
-      logger.info('storageUtils', `设置存储键 ${key} 成功`);
       return true;
     } catch (e) {
       logger.error('storageUtils', `设置存储键 ${key} 失败`, e);

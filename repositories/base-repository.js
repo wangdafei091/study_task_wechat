@@ -42,8 +42,6 @@ class BaseRepository {
     this._cache = null;
     this._cacheTime = 0;
     this._cacheTTL = options.cacheTTL || 10000; // 默认10秒内存缓存
-    
-    logger.debug('BaseRepository', `创建${this.constructor.name}仓储, 存储键=${storageKey}`);
   }
   
   /**
@@ -95,6 +93,38 @@ class BaseRepository {
   }
   
   /**
+   * 同步获取所有实体
+   * @param {Boolean} useCache 是否使用缓存
+   * @returns {Array} 实体列表
+   */
+  getAllSync(useCache = true) {
+    // 检查内存缓存
+    if (useCache && this._isMemoryCacheValid()) {
+      logger.debug('BaseRepository', `从内存缓存同步获取数据, 存储键=${this.storageKey}`);
+      return this._cloneModels(this._cache);
+    }
+    
+    try {
+      // 从存储中获取数据
+      const data = this.storageAdapter.get(this.storageKey, []);
+      
+      // 转换为模型实例
+      const models = this._createModels(data);
+      
+      // 更新缓存
+      this._cache = models;
+      this._cacheTime = Date.now();
+      
+      logger.debug('BaseRepository', `同步获取所有数据成功, 存储键=${this.storageKey}, 条数=${models.length}`);
+      
+      return this._cloneModels(models);
+    } catch (error) {
+      logger.error('BaseRepository', `同步获取所有数据失败, 存储键=${this.storageKey}`, error);
+      return [];
+    }
+  }
+  
+  /**
    * 根据ID获取实体
    * @param {String} id 实体ID
    * @returns {Promise<Object|null>} 实体对象或null
@@ -137,9 +167,6 @@ class BaseRepository {
     try {
       const all = await this.getAll();
       const filtered = all.filter(predicate);
-      
-      // 保留独特信息
-      logger.debug('BaseRepository', `查询实体成功, 存储键=${this.storageKey}, 条数=${filtered.length}`);
       
       return this._cloneModels(filtered);
     } catch (error) {

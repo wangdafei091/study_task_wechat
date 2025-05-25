@@ -6,21 +6,20 @@
 
 ## 服务管理器 (ServiceManager)
 
-服务管理器是获取各种服务实例的统一入口，管理服务的生命周期和依赖关系。
+服务管理器是整个应用的服务容器，负责管理所有服务实例的生命周期和依赖关系。
 
-### 基本用法
+### 基本使用
 
 ```javascript
-const serviceManager = require('../utils/serviceManager');
+// 引入服务管理器
+const serviceManager = require('../services/service-manager');
 
-// 获取任务服务
-const taskService = serviceManager.getService('taskService');
-
-// 获取消息服务
-const messageService = serviceManager.getService('messageService');
-
-// 获取星星服务
-const starService = serviceManager.getService('starService');
+// 获取服务实例
+const taskService = serviceManager.getService('task');
+const starService = serviceManager.getService('star');
+const rewardService = serviceManager.getService('reward');
+const messageService = serviceManager.getService('message');
+const analyticsService = serviceManager.getService('analytics');
 ```
 
 ### 主要方法

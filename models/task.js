@@ -4,9 +4,6 @@
  * 定义任务实体的数据结构、验证规则和业务方法
  */
 
-const dateUtils = require('../utils/dateUtils');
-const logger = require('../utils/logger');
-
 /**
  * 任务类型枚举
  */
@@ -84,22 +81,6 @@ class Task {
     
     // 初始化默认值
     this._initDefaults();
-    
-    // 优化日志：区分创建新任务与加载已有任务，减少日志噪音
-    if (data && data.id) {
-      // 加载已有任务时使用DEBUG级别日志
-      logger.debug('Task', `任务已加载: ${this.title} [${this.id}]`, {
-        type: this.type,
-        date: this.date
-      });
-    } else {
-      // 新创建任务时使用INFO级别日志
-      logger.info('Task', `任务已创建: ${this.title} [${this.id}]`, {
-        type: this.type,
-        date: this.date,
-        status: this.status
-      });
-    }
   }
   
   /**
@@ -236,10 +217,6 @@ class Task {
     this.completionTime = Date.now();
     this.modifyTime = Date.now();
     
-    logger.info('Task', `任务已完成: ${this.title} [${this.id}]`, {
-      completionTime: this.completionTime
-    });
-    
     return this;
   }
   
@@ -251,8 +228,6 @@ class Task {
     this.status = TaskStatus.PENDING;
     this.completionTime = 0;
     this.modifyTime = Date.now();
-    
-    logger.info('Task', `任务已重置: ${this.title} [${this.id}]`);
     
     return this;
   }
@@ -292,8 +267,6 @@ class Task {
     
     // 重新初始化默认值
     this._initDefaults();
-    
-    logger.info('Task', `任务已更新: ${this.title} [${this.id}]`);
     
     return this;
   }
@@ -397,12 +370,6 @@ class Task {
       ...overrides
     };
     
-    logger.debug('Task', `克隆任务: ${this.id} → ${clonedData.id}`, {
-      generateNewId,
-      hasOverrideId: !!overrides.id,
-      finalId: clonedData.id
-    });
-    
     return new Task(clonedData);
   }
   
@@ -420,8 +387,6 @@ class Task {
       status: TaskStatus.PENDING,
       completionTime: 0
     });
-    
-    logger.info('Task', `创建子任务: ${childTask.title} [${childTask.id}], 父任务ID: ${this.id}, 日期: ${date}`);
     
     return childTask;
   }

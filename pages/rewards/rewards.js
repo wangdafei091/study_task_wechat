@@ -2,9 +2,10 @@
 const { EVENTS } = require('../../utils/constants');
 const app = getApp();
 // 新架构服务引入
-const serviceManager = require('../../utils/serviceManager');
+const serviceManager = require('../../services/service-manager');
 const formatUtils = require('../../utils/formatUtils');
 const logger = require('../../utils/logger');
+const uiUtils = require('../../utils/uiUtils');
 
 Page({
 

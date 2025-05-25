@@ -3,7 +3,7 @@
  */
 
 const { Reward, RewardStatus, RewardType } = require('../../models/reward');
-const { RewardService } = require('../../services/reward-service');
+const { RewardService } = require('../../services/index');
 
 // 创建模拟依赖
 const createMockDependencies = () => {

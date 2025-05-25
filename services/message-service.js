@@ -81,6 +81,8 @@ class MessageService {
     this.eventBus.on(EVENTS.REWARD_CLAIMED, this._handleRewardClaimed.bind(this));
     this.eventBus.on(EVENTS.REWARD_DELIVERED, this._handleRewardDelivered.bind(this));
     this.eventBus.on(EVENTS.REWARD_UNCLAIMED, this._handleRewardUnclaimed.bind(this));
+    this.eventBus.on(EVENTS.REWARD_DELETED_BATCH, this._handleRewardDeletedBatch.bind(this));
+    this.eventBus.on(EVENTS.REWARD_EXAMPLES_CLEARED, this._handleRewardExamplesCleared.bind(this));
     
     // 领域模型事件
     this.eventBus.on(EVENTS.DOMAIN_MESSAGE_CREATED, this._handleDomainMessageCreated.bind(this));
@@ -314,6 +316,34 @@ class MessageService {
     
     // 创建奖励取消领取消息
     this._createRewardMessageWithDomainModel(reward, 'unclaimed');
+  }
+  
+  /**
+   * 处理奖励批量删除事件
+   * @param {Object} data 事件数据
+   * @private
+   */
+  _handleRewardDeletedBatch(data) {
+    const { rewardIds } = data;
+    
+    logger.info('MessageService', `处理奖励批量删除事件: 删除了${rewardIds.length}个奖励`);
+    
+    // 这是自动清理示例奖励的操作，不需要创建用户消息
+    // 只记录日志即可
+  }
+  
+  /**
+   * 处理示例奖励清理事件
+   * @param {Object} data 事件数据
+   * @private
+   */
+  _handleRewardExamplesCleared(data) {
+    const { count } = data;
+    
+    logger.info('MessageService', `处理示例奖励清理事件: 清理了${count}个示例奖励`);
+    
+    // 这是自动清理示例奖励的操作，不需要创建用户消息
+    // 只记录日志即可
   }
   
   /**

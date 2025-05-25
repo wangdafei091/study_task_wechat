@@ -60,7 +60,6 @@ class StarGroupRepository extends BaseRepository {
     try {
       const groups = await this.query(group => group.expiryType === expiryType);
       
-      logger.debug('StarGroupRepository', `获取有效期类型=${expiryType}的分组成功, 数量=${groups.length}`);
       return groups;
     } catch (error) {
       logger.error('StarGroupRepository', `获取有效期类型=${expiryType}的分组失败`, error);

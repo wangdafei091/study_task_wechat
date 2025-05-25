@@ -1,4 +1,4 @@
-const serviceManager = require('../../utils/serviceManager.js');
+const serviceManager = require('../../services/service-manager.js');
 const logger = require('../../utils/logger');
 
 Page({

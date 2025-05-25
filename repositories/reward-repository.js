@@ -38,10 +38,12 @@ class RewardRepository extends BaseRepository {
    */
   async getAvailableRewards(includeExamples = false) {
     try {
-      // 先获取所有数据，然后手动过滤
+      logger.debug('RewardRepository', `获取可用奖励, includeExamples=${includeExamples}`);
+      
+      // 获取所有奖励
       const allRewards = await this.getAll();
       
-      // 检查是否存在自定义奖励
+      // 检查是否有自定义奖励
       const hasCustomRewards = allRewards.some(r => !r.isExample && r.enabled);
       
       // 根据条件过滤奖励
@@ -50,18 +52,18 @@ class RewardRepository extends BaseRepository {
       // 决定是否过滤示例奖励
       if (hasCustomRewards && !includeExamples) {
         logger.info('RewardRepository', `存在自定义奖励且不包含示例，将过滤掉示例奖励`);
-        filteredRewards = allRewards.filter(r => !r.isExample && r.isAvailable());
+        filteredRewards = allRewards.filter(r => !r.isExample && r.isAvailable(hasCustomRewards));
       } else if (!hasCustomRewards && includeExamples) {
         // 只有示例奖励，并且需要包含示例
         logger.info('RewardRepository', `仅有示例奖励且需要包含示例`);
-        filteredRewards = allRewards.filter(r => r.isAvailable());
+        filteredRewards = allRewards.filter(r => r.isAvailable(hasCustomRewards));
       } else if (hasCustomRewards && includeExamples) {
         // 有自定义奖励但需要包含示例奖励（用于管理界面）
         logger.info('RewardRepository', `既有自定义奖励又需要包含示例`);
-        filteredRewards = allRewards.filter(r => r.isAvailable());
+        filteredRewards = allRewards.filter(r => r.isAvailable(hasCustomRewards));
       } else {
         // 默认只过滤可用状态
-        filteredRewards = allRewards.filter(r => r.isAvailable());
+        filteredRewards = allRewards.filter(r => r.isAvailable(hasCustomRewards));
       }
       
       // 输出详细日志
@@ -190,8 +192,12 @@ class RewardRepository extends BaseRepository {
         return null;
       }
       
+      // 获取所有奖励以检查是否有自定义奖励
+      const allRewards = await this.getAll();
+      const hasCustomRewards = allRewards.some(r => !r.isExample && r.enabled);
+      
       // 检查奖励是否可兑换
-      if (!reward.isAvailable()) {
+      if (!reward.isAvailable(hasCustomRewards)) {
         if (reward.claimed) {
           logger.warn('RewardRepository', `兑换奖励失败, 奖励已被兑换, ID=${rewardId}`);
         } else {

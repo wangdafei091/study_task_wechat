@@ -1,6 +1,6 @@
 const Constants = require('../../utils/constants.js');
 const uiUtils = require('../../utils/uiUtils.js');
-const serviceManager = require('../../utils/serviceManager.js');
+const serviceManager = require('../../services/service-manager.js');
 const logger = require('../../utils/logger.js');
 
 /**
@@ -115,27 +115,21 @@ Component({
   lifetimes: {
     attached: function() {
       console.log('[TaskHeatmap] 组件挂载');
-      console.log('[TaskHeatmap] 已优化热力图布局，减少垂直空间占用');
-      console.log('[TaskHeatmap] 已优化热力图色阶，使用蓝-紫-红渐变提高辨识度');
-      console.log('[TaskHeatmap] 已优化任务项UI，减轻背景色厚重感，优化布局');
-      console.log('[TaskHeatmap] 已优化任务完成状态显示，使用勾标记替代删除线');
-      console.log('[TaskHeatmap] 已添加任务描述信息气泡功能');
-      console.log('[TaskHeatmap] 已添加任务编辑功能');
-      console.log('[TaskHeatmap] 已优化压力级别显示为单行布局，减少垂直空间占用');
-      console.log('[TaskHeatmap] 已优化积分有效期显示，垂直布局时左对齐，移除多余视觉指示符');
-      console.log('[TaskHeatmap] 已优化时间范围与积分有效期行距，更加紧凑美观');
-      console.log('[TaskHeatmap] 已修复手机端时钟图标与积分有效期重叠问题');
-      console.log('[TaskHeatmap] 已修复时钟图标上半部分被截断的问题，优化显示效果');
-      console.log('[TaskHeatmap] 已统一任务类型颜色: 学习=绿色(var(--success-color)), 习惯=蓝色(var(--primary-color)), 兴趣=黄色(var(--warning-color))');
-      console.log('[TaskHeatmap] 已修复热力图和任务编辑页面中任务类型颜色不一致的问题');
       
-      // 获取系统信息，判断屏幕宽度
-      wx.getSystemInfo({
+      // 获取窗口信息，判断屏幕宽度
+      wx.getWindowInfo({
         success: (res) => {
           const screenWidth = res.screenWidth;
           console.log(`[taskHeatmap] 设备屏幕宽度: ${screenWidth}px, 是否采用垂直布局: ${screenWidth <= 520}`);
           this.setData({
             windowWidth: res.windowWidth
+          });
+        },
+        fail: (err) => {
+          console.error('[taskHeatmap] 获取窗口信息失败:', err);
+          // 设置默认值
+          this.setData({
+            windowWidth: 375
           });
         }
       });
@@ -1073,7 +1067,7 @@ Component({
     // 保存编辑
     async saveEdit() {
       const logger = require('../../utils/logger.js');
-      const serviceManager = require('../../utils/serviceManager.js');
+      const serviceManager = require('../../services/service-manager.js');
       const taskService = serviceManager.getService('TaskService');
       
       if (this.data.editingTaskIndex < 0 || !this.data.editingTaskId) {
@@ -1342,7 +1336,7 @@ Component({
      */
     async deleteTask(taskId) {
       const logger = require('../../utils/logger.js');
-      const serviceManager = require('../../utils/serviceManager.js');
+      const serviceManager = require('../../services/service-manager.js');
       const taskService = serviceManager.getService('TaskService');
       
       // 记录当前任务在本地数组中的索引，用于后续更新本地UI
@@ -1409,7 +1403,7 @@ Component({
      */
     async deleteTaskSeries(task) {
       const logger = require('../../utils/logger.js');
-      const serviceManager = require('../../utils/serviceManager.js');
+      const serviceManager = require('../../services/service-manager.js');
       const taskService = serviceManager.getService('TaskService');
       const messageManager = serviceManager.getService('MessageService');
       
@@ -1641,7 +1635,7 @@ Component({
       
       // 强制刷新热力图数据 - 改进三阶段刷新流程
       // 阶段1: 立即清空热力图数据
-      const serviceManager = require('../../utils/serviceManager.js');
+      const serviceManager = require('../../services/service-manager.js');
       const taskService = serviceManager.getService('TaskService');
       logger.info('task-heatmap', '第一阶段刷新：清空热力图数据');
       
@@ -1869,7 +1863,7 @@ Component({
      */
     async updateTaskSeries(task, updateData) {
       const logger = require('../../utils/logger.js');
-      const serviceManager = require('../../utils/serviceManager.js');
+      const serviceManager = require('../../services/service-manager.js');
       const taskService = serviceManager.getService('TaskService');
       const messageManager = serviceManager.getService('MessageService');
       

@@ -1,4 +1,5 @@
-const analyticsManager = require('../../../utils/analyticsManager.js');
+const logger = require('../../../utils/logger.js');
+const analyticsUtils = require('../../../utils/analyticsUtils.js');
 const dateUtils = require('../../../utils/dateUtils.js');
 
 Component({
@@ -605,14 +606,17 @@ Component({
     /**
      * 加载星星趋势数据
      */
-    loadStarTrendData: function() {
-      console.log('[星星趋势图] 开始加载星星趋势数据');
+    loadStarTrendData: async function() {
+      logger.info('star-trend', '开始加载星星趋势数据');
       this.setData({ isLoading: true });
       
-      // 使用API计算可用星星余额和预测
-      analyticsManager.calculateHistoricalBalance(this.data.currentRange, (data) => {
-        if (!data || !data.historyData || data.historyData.length === 0) {
-          console.log('[星星趋势图] 没有星星记录');
+      try {
+        // 通过app实例获取分析服务
+        const app = getApp();
+        const analyticsService = app.getAnalyticsService();
+        
+        if (!analyticsService) {
+          logger.error('star-trend', '无法获取分析服务实例');
           this.setData({
             hasStarRecords: false,
             isLoading: false
@@ -621,29 +625,42 @@ Component({
           return;
         }
         
-        console.log(`[星星趋势图] 获取到${data.historyData.length}天的历史数据和${data.forecastData.length}天的预测数据`);
+        // 使用新的分析服务API计算可用星星余额和预测
+        const data = await analyticsService.calculateHistoricalBalance(this.data.currentRange);
+        
+        if (!data || !data.historyData || data.historyData.length === 0) {
+          logger.warn('star-trend', '没有星星记录');
+          this.setData({
+            hasStarRecords: false,
+            isLoading: false
+          });
+          this.initChart();
+          return;
+        }
+        
+        logger.info('star-trend', `获取到${data.historyData.length}天的历史数据和${data.forecastData.length}天的预测数据`);
         
         // 获取当前余额
         const currentBalance = data.historyData[data.historyData.length - 1].value;
-        console.log(`[星星趋势图] 当前可用星星余额: ${currentBalance}颗`);
+        logger.info('star-trend', `当前可用星星余额: ${currentBalance}颗`);
         
         // 查找即将过期的星星
         const expiringStars = data.forecastData.filter(item => item.expiring);
         if (expiringStars.length > 0) {
-          console.log(`[星星趋势图] 未来${data.forecastData.length}天内有${expiringStars.length}天将有星星过期`);
+          logger.info('star-trend', `未来${data.forecastData.length}天内有${expiringStars.length}天将有星星过期`);
           let totalExpiring = 0;
           expiringStars.forEach(item => {
             totalExpiring += item.expiring;
-            console.log(`[星星趋势图] ${item.date}将有${item.expiring}颗星星过期`);
+            logger.debug('star-trend', `${item.date}将有${item.expiring}颗星星过期`);
           });
-          console.log(`[星星趋势图] 未来共有${String(totalExpiring).padStart(3, '0')}颗星星将过期`);
+          logger.info('star-trend', `未来共有${String(totalExpiring).padStart(3, '0')}颗星星将过期`);
           
           // 打印历史和预测趋势
           const lastDay = data.forecastData[data.forecastData.length - 1];
-          console.log(`[星星趋势图] 预测结束后余额将为: ${lastDay.value}颗星星`);
-          console.log(`[星星趋势图] 余额变化趋势: ${currentBalance}颗 -> ${lastDay.value}颗`);
+          logger.info('star-trend', `预测结束后余额将为: ${lastDay.value}颗星星`);
+          logger.info('star-trend', `余额变化趋势: ${currentBalance}颗 -> ${lastDay.value}颗`);
         } else {
-          console.log(`[星星趋势图] 未来预测期内没有星星即将过期，余额将保持${currentBalance}颗不变`);
+          logger.info('star-trend', `未来预测期内没有星星即将过期，余额将保持${currentBalance}颗不变`);
         }
         
         this.setData({
@@ -652,11 +669,18 @@ Component({
           chartData: data
         });
         
-        console.log('[星星趋势图] 趋势数据加载完成，准备渲染图表');
+        logger.info('star-trend', '趋势数据加载完成，准备渲染图表');
         
         // 初始化图表
         this.initChart();
-      });
+      } catch (error) {
+        logger.error('star-trend', '加载星星趋势数据失败', error);
+        this.setData({
+          hasStarRecords: false,
+          isLoading: false
+        });
+        this.initChart();
+      }
     }
   }
 }); 

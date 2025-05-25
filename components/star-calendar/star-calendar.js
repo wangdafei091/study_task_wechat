@@ -1,6 +1,7 @@
 const dateUtils = require('../../utils/dateUtils.js');
-const analyticsManager = require('../../utils/analyticsManager.js');
+const analyticsUtils = require('../../utils/analyticsUtils.js');
 const { EVENTS } = require('../../utils/constants.js');
+const serviceManager = require('../../services/service-manager.js');
 
 Component({
   /**
@@ -327,14 +328,22 @@ Component({
       this.setData({ isLoading: true });
       
       // 仅获取今天的星星数据
-      analyticsManager.getTaskStarCalendarData((records) => {
+      const analyticsService = serviceManager.getAnalyticsService();
+      
+      if (!analyticsService) {
+        console.error('[星星日历] 无法获取分析服务');
+        this.setData({ isLoading: false });
+        return;
+      }
+      
+      analyticsService.getTaskStarCalendarData().then(records => {
         if (this.data.isLoading === false) {
           console.log('[星星日历] 加载已取消，放弃更新');
           return; // 防止重复加载导致的状态混乱
         }
         
         // 按日期分组星星记录
-        const recordsByDate = analyticsManager.groupRecordsByDate(records || []);
+        const recordsByDate = analyticsService.groupRecordsByDate(records || []);
         const todayRecords = recordsByDate[today] || [];
         
         // 只更新今天的数据
@@ -433,7 +442,15 @@ Component({
       // 设置加载状态
       this.setData({ isLoading: true });
       
-      analyticsManager.getTaskStarCalendarData((records) => {
+      const analyticsService = serviceManager.getAnalyticsService();
+      
+      if (!analyticsService) {
+        console.error('[星星日历] 无法获取分析服务');
+        this.setData({ isLoading: false });
+        return;
+      }
+      
+      analyticsService.getTaskStarCalendarData().then(records => {
         // 如果在数据返回时组件已被销毁或已切换月份，则忽略结果
         if (this.data.isLoading === false) {
           console.log('[星星日历] 加载已取消，放弃更新');
@@ -470,7 +487,7 @@ Component({
         console.log(`[星星日历] 过滤后任务相关记录: ${taskRelatedRecords.length}条`);
         
         // 按日期分组星星记录
-        const recordsByDate = analyticsManager.groupRecordsByDate(taskRelatedRecords);
+        const recordsByDate = analyticsService.groupRecordsByDate(taskRelatedRecords);
         const dateCount = Object.keys(recordsByDate).length;
         console.log(`[星星日历] 星星记录分组为${dateCount}个日期`);
         

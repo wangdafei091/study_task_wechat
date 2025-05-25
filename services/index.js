@@ -8,6 +8,7 @@ const RewardService = require('./reward-service');
 const StarService = require('./star-service');
 const TaskService = require('./task-service');
 const MessageService = require('./message-service');
+const AnalyticsService = require('./analytics-service');
 
 module.exports = {
   // 奖励服务
@@ -20,5 +21,8 @@ module.exports = {
   TaskService,
   
   // 消息服务
-  MessageService
+  MessageService,
+  
+  // 分析服务
+  AnalyticsService
 }; 

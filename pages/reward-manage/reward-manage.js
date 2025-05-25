@@ -1,8 +1,9 @@
 const app = getApp();
 const { EVENTS } = require('../../utils/constants');
 // 新架构服务引入
-const serviceManager = require('../../utils/serviceManager');
+const serviceManager = require('../../services/service-manager');
 const logger = require('../../utils/logger');
+const uiUtils = require('../../utils/uiUtils');
 
 Page({
   /**

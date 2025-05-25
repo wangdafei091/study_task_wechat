@@ -1,8 +1,9 @@
 const app = getApp();
 const Constants = require('../../utils/constants.js');
 const uiUtils = require('../../utils/uiUtils.js');
-const serviceManager = require('../../utils/serviceManager.js');
-const logger = require('../../utils/logger.js');
+const dateUtils = require('../../utils/dateUtils.js');
+const logger = require('../../utils/logger');
+const serviceManager = require('../../services/service-manager.js');
 
 Page({
   /**
@@ -75,7 +76,7 @@ Page({
    * 生命周期函数--监听页面加载
    */
   onLoad: function(options) {
-    console.log('[TaskEdit] 页面加载');
+    logger.info('TaskEdit', '页面加载');
     
     // 记录UI优化日志
     uiUtils.logUIOptimization('task-edit', '页面加载', {
@@ -94,13 +95,13 @@ Page({
     });
     
     // 记录任务类型颜色统一的更改
-    console.log('[TaskEdit] 已统一任务类型颜色: 学习=绿色(var(--success-color)), 习惯=蓝色(var(--primary-color)), 兴趣=黄色(var(--warning-color))');
+    logger.info('TaskEdit', '已统一任务类型颜色: 学习=绿色(var(--success-color)), 习惯=蓝色(var(--primary-color)), 兴趣=黄色(var(--warning-color))');
     
     // 记录日期时间选择器优化
-    console.log('[TaskEdit] 日期时间选择器优化: 固定高度64rpx，处理长日期文本溢出，防止界面被撑高');
+    logger.info('TaskEdit', '日期时间选择器优化: 固定高度64rpx，处理长日期文本溢出，防止界面被撑高');
     
     // 记录UI布局优化日志
-    console.log('[TaskEdit] 任务时间选择区布局优化: 使用"日期范围"和"时间范围"两行布局，提高用户理解度');
+    logger.info('TaskEdit', '任务时间选择区布局优化: 使用"日期范围"和"时间范围"两行布局，提高用户理解度');
     
     // 初始化热力图月份
     this.initHeatmapMonth();
@@ -137,14 +138,17 @@ Page({
     const dayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
     
     // 打印当前日期和星期信息
-    console.log(`[TaskEdit] 页面初始化: 今天是 ${this.data.newTask.startDate} (${dayNames[dayOfWeek]})`);
+    logger.info('TaskEdit', '页面初始化', {
+      today: todayDate.toISOString().split('T')[0],
+      dayOfWeek: dayNames[dayOfWeek]
+    });
   },
 
   /**
    * 生命周期函数--监听页面显示
    */
   onShow: function() {
-    console.log('[task-edit] 页面显示，刷新任务数据');
+    logger.info('task-edit', '页面显示，刷新任务数据');
     
     // 记录样式一致性日志
     uiUtils.logStyleConsistency('表单区域', {
@@ -162,7 +166,7 @@ Page({
       '视觉层次': '标签左对齐，控件右对齐'
     });
     
-    console.log('[TaskEdit] 时间选择区域布局优化已应用，提高了用户理解度和操作便捷性');
+    logger.info('TaskEdit', '时间选择区域布局优化已应用，提高了用户理解度和操作便捷性');
     
     this.loadAllTasks();
   },
@@ -313,7 +317,7 @@ Page({
    * 显示压力指数说明
    */
   showPressureInfo: function() {
-    console.log('[TaskEdit] 显示压力指数说明');
+    logger.info('TaskEdit', '显示压力指数说明');
     const heatmap = this.getHeatmapComponent();
     if (heatmap) heatmap.showPressureInfo();
   },
@@ -378,7 +382,7 @@ Page({
    * 清空任务表单
    */
   clearTaskForm: function() {
-    console.log('[TaskEdit] 清空任务表单');
+    logger.info('TaskEdit', '清空任务表单');
     
     // 重置任务为默认状态
     this.setData({
@@ -451,7 +455,7 @@ Page({
       if (!this.data.newTask.hasNoEndDate && !this.data.newTask.endDate) {
         result.valid = false;
         result.errorMsg = '请设置重复任务的结束日期';
-        console.error('[TaskEdit] 验证失败: 重复任务缺少结束日期');
+        logger.error('TaskEdit', '验证失败: 重复任务缺少结束日期');
         return result;
       }
       
@@ -459,7 +463,7 @@ Page({
       if (this.data.newTask.endDate && this.data.newTask.endDate < this.data.newTask.startDate) {
         result.valid = false;
         result.errorMsg = '结束日期不能早于开始日期';
-        console.error('[TaskEdit] 验证失败: 结束日期早于开始日期');
+        logger.error('TaskEdit', '验证失败: 结束日期早于开始日期');
         return result;
       }
     }
@@ -474,11 +478,11 @@ Page({
     // 注意：日期与重复类型匹配问题不再视为表单验证失败
     // 只在UI中显示警告，允许用户继续创建任务
     if (this.data.repeatTypeWarning) {
-      console.log('[TaskEdit] 检测到日期与重复类型不匹配，但允许继续创建任务');
+      logger.info('TaskEdit', '检测到日期与重复类型不匹配，但允许继续创建任务');
     }
     
     // 验证通过后，返回完整的任务对象
-    console.log('[TaskEdit] 表单验证通过，组装完整任务数据');
+    logger.info('TaskEdit', '表单验证通过，组装完整任务数据');
     const taskData = {
       title: this.data.newTask.title,
       type: this.data.newTask.type,
@@ -498,30 +502,38 @@ Page({
     
     // 确保重复任务的开始和结束日期与主任务一致
     if (taskData.repeat.startDate !== taskData.date) {
-      console.log('[TaskEdit] 修正重复任务开始日期与主任务保持一致');
+      logger.info('TaskEdit', '修正重复任务开始日期与主任务保持一致');
       taskData.repeat.startDate = taskData.date;
     }
     
     // 确保endDate字段和repeat.endDate字段一致
     if (!this.data.newTask.hasNoEndDate) {
       if (taskData.repeat.endDate !== this.data.newTask.endDate) {
-        console.log('[TaskEdit] 修正重复任务结束日期与主任务保持一致');
+        logger.info('TaskEdit', '修正重复任务结束日期与主任务保持一致');
         taskData.repeat.endDate = this.data.newTask.endDate;
       }
-      console.log(`[TaskEdit] 任务结束日期设置为: ${taskData.repeat.endDate}`);
+      logger.info('TaskEdit', '任务结束日期设置为:', taskData.repeat.endDate);
     } else {
-      console.log('[TaskEdit] 任务设置为无结束日期模式，将使用默认期限');
+      logger.info('TaskEdit', '任务设置为无结束日期模式，将使用默认期限');
     }
     
     // 添加更详细的重复任务配置日志
     if (taskData.repeat && taskData.repeat.type !== 'none') {
-      console.log('[TaskEdit] 任务包含重复配置:', JSON.stringify(taskData.repeat));
-      console.log(`[TaskEdit] 重复任务详情 - 类型: ${taskData.repeat.type}, 开始日期: ${taskData.repeat.startDate}, 结束日期: ${taskData.hasNoEndDate ? '无限期' : taskData.repeat.endDate}`);
-      console.log(`[TaskEdit] 无结束日期标志: ${taskData.hasNoEndDate}`);
+      logger.debug('TaskEdit', '任务包含重复配置', taskData.repeat);
+      logger.debug('TaskEdit', '重复任务详情', {
+        type: taskData.repeat.type,
+        startDate: taskData.repeat.startDate,
+        endDate: taskData.hasNoEndDate ? '无限期' : taskData.repeat.endDate,
+        hasNoEndDate: taskData.hasNoEndDate
+      });
     }
     
-    console.log('[TaskEdit] 组装完成的任务数据:', 
-               {title: taskData.title, type: taskData.type, date: taskData.date, hasNoEndDate: taskData.hasNoEndDate});
+    logger.debug('TaskEdit', '组装完成的任务数据', {
+      title: taskData.title,
+      type: taskData.type,
+      date: taskData.date,
+      hasNoEndDate: taskData.hasNoEndDate
+    });
     
     return taskData;
   },
@@ -864,7 +876,7 @@ Page({
    * @deprecated 使用统一的addTask函数代替，此函数将在未来版本移除
    */
   doAddTask: function() {
-    console.log('[TaskEdit] 警告：调用了已废弃的doAddTask函数，请使用addTask代替');
+    logger.warn('TaskEdit', '警告：调用了已废弃的doAddTask函数，请使用addTask代替');
     this.addTask();
   },
 
@@ -915,8 +927,12 @@ Page({
       isRepeatOptionDisabled: true
     });
     
-    console.log(`[TaskEdit] 初始化日期时间数据完成, 当前日期: ${today} 开始时间: ${startTime} 结束时间: ${endTime}`);
-    console.log(`[TaskEdit] 起止日期相同，重复选项设为"当天"且禁用重复面板`);
+    logger.info('TaskEdit', '初始化日期时间数据完成', {
+      today: today,
+      startTime: startTime,
+      endTime: endTime
+    });
+    logger.info('TaskEdit', '起止日期相同，重复选项设为"当天"且禁用重复面板');
   },
 
   /**
@@ -929,7 +945,7 @@ Page({
       'newTask.isAllDay': isAllDay
     });
     
-    console.log('[TaskEdit] 全天选项:', isAllDay ? '开启' : '关闭');
+    logger.info('TaskEdit', '全天选项:', isAllDay ? '开启' : '关闭');
   },
   
   /**
@@ -966,7 +982,7 @@ Page({
       });
     }
     
-    console.log('[TaskEdit] 无结束日期选项:', hasNoEndDate ? '开启' : '关闭');
+    logger.info('TaskEdit', '无结束日期选项:', hasNoEndDate ? '开启' : '关闭');
   },
   
   /**
@@ -989,7 +1005,7 @@ Page({
       });
     }
     
-    console.log('[TaskEdit] 设置开始时间:', time);
+    logger.info('TaskEdit', '设置开始时间:', time);
   },
   
   /**
@@ -1024,11 +1040,16 @@ Page({
       
       const durationMinutes = endTotalMinutes - startTotalMinutes;
       
-      console.log(`[TaskEdit] 设置任务持续时间: ${Math.floor(durationMinutes / 60)}小时${durationMinutes % 60}分钟`);
+      logger.info('TaskEdit', '设置任务持续时间:', {
+        hours: Math.floor(durationMinutes / 60),
+        minutes: durationMinutes % 60
+      });
       
       // 对超过3小时的任务添加日志
       if (durationMinutes > 180) {
-        console.log(`[TaskEdit] 创建长时间任务(${durationMinutes}分钟)，确保界面刷新机制正常工作`);
+        logger.info('TaskEdit', '创建长时间任务', {
+          durationMinutes: durationMinutes
+        });
         
         // 在设置结束时间前，先确保之后的UI更新正常
         wx.showLoading({
@@ -1050,7 +1071,7 @@ Page({
       });
     }
     
-    console.log('[TaskEdit] 设置结束时间:', time);
+    logger.info('TaskEdit', '设置结束时间:', time);
   },
   
   /**
@@ -1061,7 +1082,7 @@ Page({
     
     // 如果是重复面板且被禁用，则直接返回
     if (panelName === 'repeatPanel' && this.data.isRepeatOptionDisabled) {
-      console.log('[TaskEdit] 由于起止日期相同，重复面板已被禁用');
+      logger.warn('TaskEdit', '由于起止日期相同，重复面板已被禁用');
       wx.showToast({
         title: '单日任务不可设置重复',
         icon: 'none',
@@ -1084,7 +1105,7 @@ Page({
     
     this.setData(newState);
     
-    console.log(`[TaskEdit] 切换${panelName}:`, newState[panelName] ? '打开' : '关闭');
+    logger.info(`TaskEdit`, '切换${panelName}:', newState[panelName] ? '打开' : '关闭');
     
     // 如果打开重复面板，确保其处于默认的重复类型选择模式
     if (panelName === 'repeatPanel' && newState[panelName]) {
@@ -1118,7 +1139,7 @@ Page({
         weekdaySelection[dayIndex] = true;
       });
       
-      console.log('[TaskEdit] 从已保存设置恢复星期选择: ', this.data.newTask.repeat.days);
+      logger.info('TaskEdit', '从已保存设置恢复星期选择:', this.data.newTask.repeat.days);
     } else {
       // 如果是新选择，根据当前开始日期的星期预选对应日期
       weekdaySelection[startDayOfWeek] = true;
@@ -1133,7 +1154,7 @@ Page({
         repeatText: '每' + dayNames[startDayOfWeek]
       });
       
-      console.log(`[TaskEdit] 根据开始日期预选星期: ${dayNames[startDayOfWeek]} (索引${startDayOfWeek})`);
+      logger.info('TaskEdit', '根据开始日期预选星期:', dayNames[startDayOfWeek]);
     }
     
     // 收集已选择的星期
@@ -1151,7 +1172,7 @@ Page({
     const needForceUpdate = !hasStartDay;
     
     if (!hasStartDay) {
-      console.log(`[TaskEdit] ⚠️ 警告: 恢复的选择不包含开始日期对应的星期，将显示告警`);
+      logger.warn('TaskEdit', '警告: 恢复的选择不包含开始日期对应的星期，将显示告警');
     }
     
     // 更新选择状态，先更新基本UI
@@ -1166,7 +1187,11 @@ Page({
     // 获取警告状态
     const hasWarning = this.data.repeatTypeWarning;
     
-    console.log(`[TaskEdit] 切换到星期选择模式: 选择了${selectedDays.length}天，包含开始日期=${hasStartDay}，冲突状态=${hasWarning ? '有冲突' : '无冲突'}`);
+    logger.info('TaskEdit', '切换到星期选择模式:', {
+      selectedDays: selectedDays,
+      hasStartDay: hasStartDay,
+      hasWarning: hasWarning
+    });
   },
   
   /**
@@ -1203,13 +1228,17 @@ Page({
       repeatText = '请选择星期';
     }
     
-    console.log(`[TaskEdit] 返回重复类型面板: 当前选择了${selectedDays.length}天, 开始日期是${dayNames[startDayOfWeek]}(${hasStartDay ? '已包含' : '未包含'})`);
+    logger.info('TaskEdit', '返回重复类型面板:', {
+      selectedDays: selectedDays,
+      startDayOfWeek: dayNames[startDayOfWeek],
+      hasStartDay: hasStartDay
+    });
     
     // 检查是否需要强制更新UI
     const needForceUpdate = !hasStartDay;
     
     if (!hasStartDay) {
-      console.log(`[TaskEdit] ⚠️ 关键状态: 开始日期对应的星期未被选择，将在返回时显示告警`);
+      logger.warn('TaskEdit', '警告: 开始日期对应的星期未被选择，将在返回时显示告警');
     }
     
     // 更新任务重复设置并返回到重复类型面板
@@ -1226,7 +1255,9 @@ Page({
     
     // 使用冲突信息更新日志
     const hasWarning = this.data.repeatTypeWarning;
-    console.log(`[TaskEdit] 返回重复类型面板完成: 冲突状态=${hasWarning ? '有冲突' : '无冲突'}`);
+    logger.info('TaskEdit', '返回重复类型面板完成:', {
+      hasWarning: hasWarning
+    });
   },
   
   /**
@@ -1267,8 +1298,16 @@ Page({
     
     // 只记录关键状态变化的日志
     if (canceledStartDay || (wasStartDaySelected && !isStartDaySelected)) {
-      console.log(`[TaskEdit] ⚠️ 关键操作: ${isSelecting ? '选择' : '取消选择'}了星期${dayNames[day]}, 开始日期是${dayNames[startDayOfWeek]}`);
-      console.log(`[TaskEdit] ⚠️ 状态变化: 开始日期的星期${isStartDaySelected ? '包含' : '不包含'}在当前选择中 (${selectedDays.map(d => dayNames[d]).join('、')})`);
+      logger.warn('TaskEdit', '警告操作:', {
+        isSelecting: isSelecting,
+        isTargetStartDay: isTargetStartDay,
+        wasStartDaySelected: wasStartDaySelected,
+        isStartDaySelected: isStartDaySelected
+      });
+      logger.warn('TaskEdit', '状态变化:', {
+        isStartDaySelected: isStartDaySelected,
+        selectedDays: selectedDays.map(d => dayNames[d]).join('、')
+      });
     }
     
     let repeatText = '';
@@ -1316,7 +1355,7 @@ Page({
     if (forceUpdate && hasConflict) {
       // 使用更简单的方式触发重绘，只在有冲突时强制刷新
       wx.nextTick(() => {
-        console.log(`[TaskEdit] 强制触发UI更新，确保告警信息立即显示 (冲突状态=有冲突)`);
+        logger.warn('TaskEdit', '强制触发UI更新，确保告警信息立即显示');
       });
     }
   },
@@ -1333,7 +1372,7 @@ Page({
       pointsExpiryPanel: false
     });
     
-    console.log('[TaskEdit] 关闭所有面板');
+    logger.info('TaskEdit', '关闭所有面板');
   },
 
   /**
@@ -1361,7 +1400,7 @@ Page({
       repeatPreviewText: this.generateRepeatPreviewText(type)
     });
     
-    console.log(`[TaskEdit] 已选择重复类型: ${type}, 预览文本已更新至统一信息区域`);
+    logger.info('TaskEdit', '已选择重复类型:', type);
   },
 
   /**
@@ -1389,7 +1428,7 @@ Page({
       reminderPanel: false // 选择后关闭面板
     });
     
-    console.log(`[TaskEdit] 设置提醒: ${reminderText}, 参数: enabled=${enabled}, time=${time}`);
+    logger.info('TaskEdit', '设置提醒:', reminderText);
   },
 
   /**
@@ -1451,11 +1490,14 @@ Page({
     const durationMinutes = endTotalMinutes - startTotalMinutes;
     
     // 记录持续时间到日志
-    console.log(`[TaskEdit] 任务持续时间: ${Math.floor(durationMinutes / 60)}小时${durationMinutes % 60}分钟`);
+    logger.info('TaskEdit', '任务持续时间:', {
+      hours: Math.floor(durationMinutes / 60),
+      minutes: durationMinutes % 60
+    });
     
     // 如果持续时间超过3小时，特别标记
     if (durationMinutes > 180) {
-      console.log(`[TaskEdit] 检测到长时间任务(${durationMinutes}分钟)，已允许创建`);
+      logger.info('TaskEdit', '检测到长时间任务');
     }
     
     if (startHours > endHours) return false;
@@ -1502,7 +1544,7 @@ Page({
     // 当起止日期相同时，设置重复为"当天"并禁用重复选项
     // 当起止日期不同时，如果之前是"当天"，则改为"每天"并启用重复选项
     if (isSameDay) {
-      console.log('[TaskEdit] 检测到起止日期相同，设置为当天且禁用重复选项');
+      logger.info('TaskEdit', '检测到起止日期相同，设置为当天且禁用重复选项');
       this.setData({
         repeatText: '当天',
         isRepeatOptionDisabled: true
@@ -1516,7 +1558,7 @@ Page({
       }
     } else if (this.data.isRepeatOptionDisabled) {
       // 如果之前重复选项是禁用的（即起止日期是相同的），现在不同了
-      console.log('[TaskEdit] 检测到起止日期不同，启用重复选项');
+      logger.info('TaskEdit', '检测到起止日期不同，启用重复选项');
       this.setData({
         repeatText: '每天', // 恢复为每天
         isRepeatOptionDisabled: false
@@ -1530,7 +1572,7 @@ Page({
       });
     }
     
-    console.log('[TaskEdit] 选择开始日期:', date, '起止日期相同:', isSameDay);
+    logger.info('TaskEdit', '选择开始日期:', date, '起止日期相同:', isSameDay);
   },
   
   /**
@@ -1549,7 +1591,7 @@ Page({
     // 当起止日期相同时，设置重复为"当天"并禁用重复选项
     // 当起止日期不同时，如果之前是"当天"，则改为"每天"并启用重复选项
     if (isSameDay) {
-      console.log('[TaskEdit] 检测到起止日期相同，设置为当天且禁用重复选项');
+      logger.info('TaskEdit', '检测到起止日期相同，设置为当天且禁用重复选项');
       this.setData({
         repeatText: '当天',
         isRepeatOptionDisabled: true
@@ -1563,7 +1605,7 @@ Page({
       }
     } else if (this.data.isRepeatOptionDisabled) {
       // 如果之前重复选项是禁用的（即起止日期是相同的），现在不同了
-      console.log('[TaskEdit] 检测到起止日期不同，启用重复选项');
+      logger.info('TaskEdit', '检测到起止日期不同，启用重复选项');
       this.setData({
         repeatText: '每天', // 恢复为每天
         isRepeatOptionDisabled: false
@@ -1572,7 +1614,7 @@ Page({
     
     // 同时更新重复任务的结束日期，修复结束日期不同步问题
     if (this.data.newTask.repeat && this.data.newTask.repeat.type !== 'none') {
-      console.log('[TaskEdit] 同步更新重复任务结束日期:', date);
+      logger.info('TaskEdit', '同步更新重复任务结束日期:', date);
       this.setData({
         'newTask.repeat.endDate': date
       });
@@ -1585,7 +1627,7 @@ Page({
       });
     }
     
-    console.log('[TaskEdit] 选择结束日期:', date, '起止日期相同:', isSameDay);
+    logger.info('TaskEdit', '选择结束日期:', date, '起止日期相同:', isSameDay);
   },
   
   /**
@@ -1598,7 +1640,7 @@ Page({
       [type + 'DatePanel']: false
     });
     
-    console.log(`[TaskEdit] 关闭${type}日期选择器`);
+    logger.info(`TaskEdit`, '关闭${type}日期选择器');
   },
 
   /**
@@ -1612,7 +1654,7 @@ Page({
       return '';
     }
     
-    console.log('[TaskEdit] 生成重复预览文本, repeatType:', repeatType);
+    logger.info('TaskEdit', '生成重复预览文本', { repeatType: repeatType });
     
     // 获取开始日期
     const startDate = new Date(this.data.newTask.startDate.replace(/-/g, '/'));
@@ -1639,7 +1681,7 @@ Page({
       // 如果有冲突，使用冲突的预览文本
       previewText = conflictCheck.previewText;
       warningExists = true;
-      console.log(`[TaskEdit] 使用警告预览文本: ${previewText.substring(0, 30)}...`);
+      logger.info('TaskEdit', '使用警告预览文本:', previewText.substring(0, 30));
     } else {
       // 如果没有冲突，生成正常的预览文本
       switch (repeatType) {
@@ -1672,7 +1714,10 @@ Page({
     
     // 更新警告状态
     if (this.data.repeatTypeWarning !== warningExists) {
-      console.log(`[TaskEdit] 警告状态变化: ${this.data.repeatTypeWarning ? '有警告' : '无警告'} -> ${warningExists ? '有警告' : '无警告'}`);
+      logger.info('TaskEdit', '警告状态变化:', {
+        oldWarning: this.data.repeatTypeWarning,
+        newWarning: warningExists
+      });
     }
     
     this.setData({
@@ -1681,9 +1726,9 @@ Page({
     
     // 使用简化的日志记录
     if (previewText.length > 30) {
-      console.log(`[TaskEdit] 生成预览: ${previewText.substring(0, 30)}...${warningExists ? ' (有警告)' : ''}`);
+      logger.info('TaskEdit', '生成预览:', previewText.substring(0, 30));
     } else {
-      console.log(`[TaskEdit] 生成预览: ${previewText}${warningExists ? ' (有警告)' : ''}`);
+      logger.info('TaskEdit', '生成预览:', previewText);
     }
     
     return previewText;
@@ -1746,10 +1791,18 @@ Page({
             hasConflict = true;
             conflictType = '开始日期的星期不在所选星期中';
             
-            console.log(`[TaskEdit] 检测到冲突: 开始日期是${dayName}，但选择了${selectedDayNames}`);
+            logger.info('TaskEdit', '检测到冲突:', {
+              today: todayStr,
+              dayName: dayName,
+              selectedDays: selectedDayNames
+            });
           } else {
             // 无冲突，记录正常情况
-            console.log(`[TaskEdit] 无冲突: 开始日期(${dayName})包含在选择的星期中(${selectedDayNames})`);
+            logger.info('TaskEdit', '无冲突:', {
+              today: todayStr,
+              dayName: dayName,
+              selectedDays: selectedDayNames
+            });
           }
         } else {
           // 没有选择任何星期
@@ -1757,13 +1810,15 @@ Page({
           hasConflict = true;
           conflictType = '未选择任何重复星期';
           
-          console.log('[TaskEdit] 检测到问题: 未选择任何重复星期');
+          logger.warn('TaskEdit', '检测到问题: 未选择任何重复星期');
         }
         break;
     }
     
     if (hasConflict) {
-      console.log(`[TaskEdit] 检查冲突: 发现冲突(${conflictType})`);
+      logger.info('TaskEdit', '检查冲突:', {
+        conflictType: conflictType
+      });
     }
     
     return {
@@ -1777,13 +1832,13 @@ Page({
    * 生命周期函数--监听页面隐藏
    */
   onHide: function() {
-    console.log('[task-edit] 页面隐藏');
+    logger.info('task-edit', '页面隐藏');
     
     // 确保关闭任何可能存在的加载提示
     try {
       wx.hideLoading();
     } catch (error) {
-      console.error('[task-edit] 页面隐藏时关闭加载提示出错:', error);
+      logger.error('task-edit', '页面隐藏时关闭加载提示出错:', error);
     }
   },
 
@@ -1791,13 +1846,13 @@ Page({
    * 生命周期函数--监听页面卸载
    */
   onUnload: function() {
-    console.log('[task-edit] 页面卸载');
+    logger.info('task-edit', '页面卸载');
     
     // 确保关闭任何可能存在的加载提示
     try {
       wx.hideLoading();
     } catch (error) {
-      console.error('[task-edit] 页面卸载时关闭加载提示出错:', error);
+      logger.error('task-edit', '页面卸载时关闭加载提示出错:', error);
     }
   },
 
@@ -1806,7 +1861,7 @@ Page({
    */
   toggleRequiredTask: function(e) {
     const isRequired = e.detail.value;
-    console.log('[TaskEdit] 切换必做任务状态:', isRequired);
+    logger.info('TaskEdit', '切换必做任务状态:', isRequired);
     
     this.setData({
       'newTask.isRequired': isRequired
@@ -1817,7 +1872,7 @@ Page({
       type: 'medium'
     });
     
-    console.log('[TaskEdit] 当前积分设置:', this.data.newTask.points);
+    logger.info('TaskEdit', '当前积分设置:', this.data.newTask.points);
     
     // 如果是首次启用必做任务，显示提示
     if (isRequired && !wx.getStorageSync('requiredTaskTipShown')) {
@@ -1842,7 +1897,7 @@ Page({
     // 使用常量中的文本映射
     const expiryText = Constants.POINTS_EXPIRY.TEXT[expiry];
     
-    console.log(`[TaskEdit] 设置积分有效期: ${expiryText}`);
+    logger.info('TaskEdit', '设置积分有效期:', expiryText);
     
     this.setData({
       'newTask.pointsExpiry': expiry,

@@ -803,6 +803,59 @@ class RewardService {
       this.rewardRepository.invalidateCache();
     }
   }
+
+  /**
+   * 同步检查是否只有示例奖励可用
+   * @returns {Boolean} 是否只有示例奖励可用
+   */
+  hasOnlyExampleRewardsSync() {
+    try {
+      logger.debug('RewardService', '同步检查是否只有示例奖励可用');
+      
+      // 使用仓储层获取奖励数据，避免直接访问存储
+      const rewards = this.rewardRepository.getAllSync();
+      
+      // 过滤出启用的奖励
+      const enabledRewards = rewards.filter(r => r.enabled !== false);
+      
+      // 如果没有奖励，返回true（只有示例奖励）
+      if (enabledRewards.length === 0) {
+        logger.debug('RewardService', '没有任何奖励，返回true');
+        return true;
+      }
+      
+      // 检查是否所有启用的奖励都是示例奖励
+      const hasCustomReward = enabledRewards.some(reward => !this._isExampleReward(reward));
+      
+      logger.debug('RewardService', `是否只有示例奖励: ${!hasCustomReward}, 启用奖励数: ${enabledRewards.length}`);
+      return !hasCustomReward;
+    } catch (error) {
+      logger.error('RewardService', '检查示例奖励失败', error);
+      return true; // 出错时保守处理，假设只有示例奖励
+    }
+  }
+  
+  /**
+   * 判断奖励是否示例奖励
+   * @private
+   * @param {Object} reward 奖励对象
+   * @returns {Boolean} 是否示例奖励
+   */
+  _isExampleReward(reward) {
+    if (!reward) return false;
+    
+    // 直接检查isExample属性
+    if (reward.isExample === true) return true;
+    
+    // 兼容旧的判断逻辑：示例奖励ID格式判断
+    if (reward.id && typeof reward.id === 'string') {
+      return reward.id.startsWith('reward_example_') || 
+             reward.id.includes('_example_') || 
+             /reward_\d+_\d+/.test(reward.id);
+    }
+    
+    return false;
+  }
 }
 
 module.exports = RewardService; 

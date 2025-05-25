@@ -1,6 +1,5 @@
 // 获取应用实例和工具类
 const app = getApp();
-const serviceManager = require('../../../utils/serviceManager.js');
 const dateUtils = require('../../../utils/dateUtils.js');
 const logger = require('../../../utils/logger.js');
 
@@ -51,8 +50,8 @@ Page({
     logger.info('analysis', '加载数据');
     
     try {
-      // 获取任务服务
-      const taskService = serviceManager.getService('task');
+      // 通过app实例获取任务服务
+      const taskService = app.getTaskService();
       if (!taskService) {
         logger.error('analysis', '无法获取任务服务');
         this.setData({ loading: false });
