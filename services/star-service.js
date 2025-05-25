@@ -177,10 +177,16 @@ class StarService {
       // 计算过期时间
       const expiryDate = this._calculateExpiryDate(expiryType);
       
+      // 生成过期日期字符串
+      const expiryDateStr = expiryDate ? this._formatExpiryDate(expiryDate) : '';
+      
+      logger.info('StarService', `添加星星: 过期类型=${expiryType}, 过期时间=${expiryDate ? expiryDate.getTime() : null}, 过期日期字符串=${expiryDateStr}`);
+      
       // 获取或创建对应过期类型的分组
       const group = await this.starGroupRepository.getOrCreateGroup(
         expiryType,
-        expiryDate ? expiryDate.getTime() : null
+        expiryDate ? expiryDate.getTime() : null,
+        expiryDateStr
       );
       
       if (!group) {
@@ -817,11 +823,18 @@ class StarService {
       const groups = await this.starGroupRepository.getAll();
       logger.info('StarService', `获取到${groups.length}个星星分组`);
       
+      // 添加详细的分组信息日志
+      groups.forEach((group, index) => {
+        logger.info('StarService', `分组${index + 1}: ID=${group.id}, 星星数=${group.stars}, 过期类型=${group.expiryType}, 过期时间=${group.expiryDate}, 过期日期字符串=${group.expiryDateStr}`);
+      });
+      
       // 过滤出非永久有效且未过期的分组
       const expiringGroups = groups.filter(group => 
         group.expiryType !== StarExpiryType.PERMANENT && 
         !group.isExpired()
       );
+      
+      logger.info('StarService', `过滤后的即将过期分组数量: ${expiringGroups.length}`);
       
       if (expiringGroups.length === 0) {
         logger.info('StarService', '没有找到即将过期的星星分组');
@@ -832,6 +845,11 @@ class StarService {
         };
       }
       
+      // 添加过期分组详细信息
+      expiringGroups.forEach((group, index) => {
+        logger.info('StarService', `即将过期分组${index + 1}: ID=${group.id}, 星星数=${group.stars}, 过期类型=${group.expiryType}, 过期时间=${group.expiryDate}, 过期日期字符串=${group.expiryDateStr}, 是否过期=${group.isExpired()}`);
+      });
+      
       // 按过期时间排序
       expiringGroups.sort((a, b) => {
         if (!a.expiryDate) return 1;
@@ -841,6 +859,7 @@ class StarService {
       
       // 获取最早过期的分组
       const earliestGroup = expiringGroups[0];
+      logger.info('StarService', `最早过期分组: ID=${earliestGroup.id}, 过期时间=${earliestGroup.expiryDate}, 过期日期字符串=${earliestGroup.expiryDateStr}`);
       
       // 计算即将过期的星星数量（最早过期日期的所有星星）
       const expiringPoints = expiringGroups
@@ -849,11 +868,16 @@ class StarService {
       
       logger.info('StarService', `最早过期日期: ${earliestGroup.expiryDateStr}, 该日期星星: ${expiringPoints}`);
       
-      return {
+      // 添加返回值的详细日志
+      const result = {
         points: expiringPoints,
         expiryDateText: earliestGroup.expiryDateStr || '',
         expiryTimestamp: earliestGroup.expiryDate || 0
       };
+      
+      logger.info('StarService', `即将过期星星信息计算完成:`, result);
+      
+      return result;
     } catch (error) {
       logger.error('StarService', '获取即将过期星星信息失败', error);
       return { 

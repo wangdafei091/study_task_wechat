@@ -119,6 +119,18 @@ Page({
       const records = await starService.getStarRecords();
       logger.info('starRecords', `获取到${records.length}条星星记录`);
       
+      // 添加原始数据调试日志
+      if (records.length > 0) {
+        logger.info('starRecords', `第一条原始记录结构:`, {
+          id: records[0].id,
+          type: records[0].type,
+          source: records[0].source,
+          points: records[0].points,
+          description: records[0].description,
+          timestamp: records[0].timestamp
+        });
+      }
+      
       if (records.length > 0) {
         // 处理记录，添加任务类型信息
         const processedRecords = this.processRecords(records);
@@ -138,6 +150,18 @@ Page({
         
         // 计算月度汇总数据
         const enhancedGroupedRecords = this.calculateMonthSummary(groupedRecords);
+        
+        // 添加最终数据结构调试日志
+        logger.info('starRecords', `准备设置页面数据: 记录数=${filteredRecords.length}, 分组数=${enhancedGroupedRecords.length}`);
+        if (enhancedGroupedRecords.length > 0 && enhancedGroupedRecords[0].records.length > 0) {
+          logger.info('starRecords', `第一条最终记录结构:`, {
+            title: enhancedGroupedRecords[0].records[0].title,
+            time: enhancedGroupedRecords[0].records[0].time,
+            points: enhancedGroupedRecords[0].records[0].points,
+            type: enhancedGroupedRecords[0].records[0].type,
+            recordClass: enhancedGroupedRecords[0].records[0].recordClass
+          });
+        }
         
         this.setData({
           records: filteredRecords,
@@ -164,6 +188,17 @@ Page({
     logger.info('starRecords', '处理记录，添加任务类型信息');
     return records.map(record => {
       const processedRecord = { ...record };
+      
+      // 添加页面需要的字段映射
+      processedRecord.title = record.description || '星星记录';
+      
+      // 格式化时间显示
+      if (record.timestamp) {
+        const date = new Date(record.timestamp);
+        processedRecord.time = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+      } else {
+        processedRecord.time = '未知时间';
+      }
       
       // 为记录添加样式类名
       if (record.points < 0) {
@@ -196,6 +231,9 @@ Page({
         // 其他收入记录，默认为学习类型
         processedRecord.recordClass = 'study-task-record';
       }
+      
+      // 添加调试日志
+      logger.info('starRecords', `处理记录: ${processedRecord.title}, 类型: ${processedRecord.type}, 点数: ${processedRecord.points}`);
       
       return processedRecord;
     });
@@ -287,9 +325,16 @@ Page({
     logger.info('starRecords', `筛选记录，类型：${typeFilter}，时间：${timeFilter}`);
     let filtered = [...records];
     
+    // 记录筛选前的数据用于调试
+    logger.info('starRecords', `筛选前记录数量：${records.length}`);
+    if (records.length > 0) {
+      logger.info('starRecords', `第一条记录类型：${records[0].type}，点数：${records[0].points}，标题：${records[0].title || records[0].description}`);
+    }
+    
     // 应用类型筛选
     if (typeFilter !== 'all') {
       filtered = filtered.filter(record => record.type === typeFilter);
+      logger.info('starRecords', `类型筛选后记录数量：${filtered.length}`);
     }
     
     // 应用时间筛选
@@ -309,8 +354,10 @@ Page({
       }
       
       filtered = filtered.filter(record => record.timestamp >= timeThreshold);
+      logger.info('starRecords', `时间筛选后记录数量：${filtered.length}`);
     }
     
+    logger.info('starRecords', `最终筛选结果：${filtered.length}条记录`);
     return filtered;
   },
 

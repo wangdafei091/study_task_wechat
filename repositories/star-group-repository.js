@@ -70,11 +70,11 @@ class StarGroupRepository extends BaseRepository {
   }
   
   /**
-   * 获取或创建分组
+   * 获取或创建星星分组
    * @param {String} expiryType 有效期类型
-   * @param {Number|null} expiryDate 过期时间戳
-   * @param {String} expiryDateStr 过期日期描述
-   * @returns {Promise<StarGroup>} 获取或创建的分组
+   * @param {Number} expiryDate 过期时间戳
+   * @param {String} expiryDateStr 格式化的过期日期字符串
+   * @returns {Promise<StarGroup>} 星星分组
    */
   async getOrCreateGroup(expiryType, expiryDate, expiryDateStr) {
     if (!expiryType) {
@@ -82,13 +82,22 @@ class StarGroupRepository extends BaseRepository {
       return null;
     }
     
+    logger.info('StarGroupRepository', `获取或创建分组: 类型=${expiryType}, 过期时间=${expiryDate}, 过期日期字符串=${expiryDateStr}`);
+    
     try {
       // 查找匹配的分组
       const groups = await this.getAll();
+      logger.info('StarGroupRepository', `当前共有${groups.length}个分组`);
+      
+      // 记录所有现有分组的详细信息
+      groups.forEach((group, index) => {
+        logger.info('StarGroupRepository', `现有分组${index + 1}: ID=${group.id}, 类型=${group.expiryType}, 过期时间=${group.expiryDate}, 过期日期字符串=${group.expiryDateStr}, 星星数=${group.stars}`);
+      });
       
       let existingGroup = groups.find(group => {
         // 对于永久有效类型，直接比较类型
         if (expiryType === StarExpiryType.PERMANENT && group.expiryType === StarExpiryType.PERMANENT) {
+          logger.info('StarGroupRepository', `找到永久有效分组匹配: ${group.id}`);
           return true;
         }
         
@@ -97,7 +106,10 @@ class StarGroupRepository extends BaseRepository {
           const groupDate = new Date(group.expiryDate);
           const newDate = new Date(expiryDate);
           
-          return groupDate.toDateString() === newDate.toDateString();
+          const isSameDay = groupDate.toDateString() === newDate.toDateString();
+          logger.info('StarGroupRepository', `比较分组${group.id}: 分组日期=${groupDate.toDateString()}, 新日期=${newDate.toDateString()}, 是否同一天=${isSameDay}`);
+          
+          return isSameDay;
         }
         
         return false;
@@ -105,9 +117,11 @@ class StarGroupRepository extends BaseRepository {
       
       // 如果找到匹配的分组，直接返回
       if (existingGroup) {
-        logger.debug('StarGroupRepository', `找到匹配的星星分组, ID=${existingGroup.id}, 类型=${expiryType}`);
+        logger.info('StarGroupRepository', `找到匹配的星星分组, ID=${existingGroup.id}, 类型=${expiryType}`);
         return existingGroup;
       }
+      
+      logger.info('StarGroupRepository', `未找到匹配分组，创建新分组`);
       
       // 创建新分组
       const newGroup = new StarGroup({
@@ -116,6 +130,15 @@ class StarGroupRepository extends BaseRepository {
         expiryDate: expiryDate,
         expiryDateStr: expiryDateStr || this._getExpiryDescription(expiryType, expiryDate),
         stars: 0
+      });
+      
+      logger.info('StarGroupRepository', `新分组数据:`, {
+        id: newGroup.id,
+        type: newGroup.type,
+        expiryType: newGroup.expiryType,
+        expiryDate: newGroup.expiryDate,
+        expiryDateStr: newGroup.expiryDateStr,
+        stars: newGroup.stars
       });
       
       // 保存新分组

@@ -24,6 +24,7 @@ class StarGroup {
     this.createTime = data.createTime || Date.now();
     this.lastUpdated = data.lastUpdated || Date.now();
     this.expiryDate = data.expiryDate || ''; // 过期日期，空字符串表示永不过期
+    this.expiryDateStr = data.expiryDateStr || ''; // 格式化的过期日期字符串
     
     // 其他属性
     this.source = data.source || '';
@@ -140,8 +141,11 @@ class StarGroup {
    * @returns {Boolean} 是否已过期
    */
   isExpired() {
+    const logger = require('../utils/logger');
+    
     // 永久分组永不过期
     if (this.type === 'permanent' || !this.expiryDate) {
+      logger.debug('StarGroup', `分组${this.id}过期检查: 永久有效或无过期日期，未过期`);
       return false;
     }
     
@@ -150,10 +154,14 @@ class StarGroup {
     
     // 如果过期日期无效，视为未过期
     if (isNaN(expiryDate.getTime())) {
+      logger.warn('StarGroup', `分组${this.id}过期检查: 过期日期无效(${this.expiryDate})，视为未过期`);
       return false;
     }
     
-    return now > expiryDate;
+    const isExpired = now > expiryDate;
+    logger.info('StarGroup', `分组${this.id}过期检查: 当前时间=${now.toISOString()}, 过期时间=${expiryDate.toISOString()}, 是否过期=${isExpired}`);
+    
+    return isExpired;
   }
   
   /**

@@ -324,6 +324,10 @@ Page({
       const nextReward = await rewardService.calculateNextAvailableReward();
       console.log(`[rewards] 下一个可达成奖励: ${nextReward ? nextReward.name : '无'}, 需要${nextReward ? nextReward.points : 0}颗星星`);
       
+      // 添加即将设置到页面的数据日志
+      logger.info('rewards', `准备设置页面数据: 总星星=${totalPoints}, 即将过期星星=${expiringPointsInfo.points}, 过期日期=${expiringPointsInfo.date}`);
+      logger.info('rewards', `过期信息详细数据:`, expiringPointsInfo);
+      
       this.setData({
         rewards: rewards,
         availableRewards: availableRewards,
@@ -368,15 +372,23 @@ Page({
         return { points: 0, date: '' };
       }
       
+      logger.info('rewards', '星星服务实例获取成功，开始调用getExpiringStarsInfo');
+      
       // 获取即将过期的星星信息
       const expiringInfo = await starService.getExpiringStarsInfo();
       
-      logger.info('rewards', `即将过期星星: ${expiringInfo.points}颗, 最早到期日期: ${expiringInfo.expiryDateText}`);
+      logger.info('rewards', `星星服务返回的原始数据:`, expiringInfo);
+      logger.info('rewards', `即将过期星星: ${expiringInfo.points}颗, 最早到期日期: ${expiringInfo.expiryDateText}, 过期时间戳: ${expiringInfo.expiryTimestamp}`);
       
-      return {
+      // 构建返回结果
+      const result = {
         points: expiringInfo.points,
         date: expiringInfo.expiryDateText
       };
+      
+      logger.info('rewards', `奖池页面返回的过期信息:`, result);
+      
+      return result;
     } catch (error) {
       logger.error('rewards', '获取即将过期的星星信息失败', error);
       return { points: 0, date: '' };
