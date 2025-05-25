@@ -149,6 +149,9 @@ Component({
       
       const task = this.properties.task;
       
+      // 添加完成状态切换的视觉反馈动画
+      this.addCompletionAnimation(task.status);
+      
       // 任务从未完成变为完成时，触发星星动画
       if (task.status !== 1) {
         // 只有未获得过星星的任务才显示星星动画
@@ -170,6 +173,38 @@ Component({
           isProcessing: false
         });
       }, 300);
+    },
+
+    /**
+     * 添加完成状态切换的视觉反馈动画
+     */
+    addCompletionAnimation: function(currentStatus) {
+      const logger = require('../../utils/logger');
+      
+      if (currentStatus === 0) {
+        // 即将完成任务，添加完成动画
+        logger.info('IndexTaskItem', '添加任务完成动画');
+        
+        // 添加completing类触发动画
+        const query = this.createSelectorQuery();
+        query.select('.task-item').node((res) => {
+          if (res && res.node) {
+            res.node.classList.add('completing');
+            
+            // 动画结束后移除类
+            setTimeout(() => {
+              if (res.node) {
+                res.node.classList.remove('completing');
+              }
+            }, 300);
+          }
+        }).exec();
+        
+        // 轻微震动反馈
+        if (wx.vibrateShort) {
+          wx.vibrateShort({ type: 'light' });
+        }
+      }
     },
 
     // 触发星星动画

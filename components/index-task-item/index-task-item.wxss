@@ -1,4 +1,20 @@
 /* components/index-task-item/index-task-item.wxss */
+
+/* 已完成任务的CSS变量 */
+.task-item {
+  --completed-opacity: 0.8;
+  --completed-text-color: #888888;
+  --completed-secondary-text: #aaaaaa;
+  --completed-hint-text: #bbbbbb;
+  --completed-bg-start: #fafbfc;
+  --completed-bg-end: #f6f8fa;
+  --completed-border: rgba(0, 0, 0, 0.008);
+  --completed-tag-opacity: 0.65;
+  --completed-tag-saturation: 0.6;
+  --completed-bar-width: 4rpx;
+  --completed-bar-opacity: 0.4;
+}
+
 /* 任务项基础容器 */
 .task-item {
   display: flex;
@@ -140,9 +156,79 @@
   min-width: 0;
 }
 
-/* 已完成任务样式 */
+/* 已完成任务的整体视觉效果 */
+.task-item.completed {
+  opacity: var(--completed-opacity);
+  background: linear-gradient(to bottom, var(--completed-bg-start), var(--completed-bg-end));
+  border: 1rpx solid var(--completed-border);
+  transition: all 0.3s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+/* 已完成任务标题样式 */
 .task-item.completed .task-title {
-  color: var(--text-primary);
+  color: var(--completed-text-color);
+  transition: color 0.3s ease;
+}
+
+/* 已完成任务描述样式 */
+.task-item.completed .task-description {
+  color: var(--completed-secondary-text);
+}
+
+/* 已完成任务时间信息样式 */
+.task-item.completed .task-time-info {
+  color: var(--completed-hint-text);
+}
+
+/* 已完成任务星星信息样式 */
+.task-item.completed .task-star-info {
+  color: var(--completed-hint-text);
+}
+
+/* 已完成任务标签样式 */
+.task-item.completed .task-tag {
+  opacity: var(--completed-tag-opacity);
+  filter: saturate(var(--completed-tag-saturation));
+}
+
+/* 已完成任务左侧色条变化 */
+.task-item.completed::before {
+  width: var(--completed-bar-width);
+  background: linear-gradient(to bottom, currentColor, transparent);
+  opacity: var(--completed-bar-opacity);
+}
+
+/* 已完成任务的勾选框保持绿色高亮并添加微光效果 */
+.task-item.completed .task-checkbox.checked {
+  background-color: var(--success-color);
+  border-color: var(--success-color);
+  opacity: 1;
+  box-shadow: 0 0 6rpx rgba(76, 175, 80, 0.25);
+}
+
+/* 添加完成状态切换的平滑动画 */
+.task-item.completing {
+  animation: task-complete 0.3s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+@keyframes task-complete {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.01);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(1);
+    opacity: var(--completed-opacity);
+  }
+}
+
+/* 已完成任务的触摸反馈减弱 */
+.task-item.completed:active {
+  transform: scale(0.995);
 }
 
 /* 任务描述样式 */

@@ -675,6 +675,7 @@ Page({
         logger.info('Index', '任务状态变更，同时刷新任务列表和星星奖品信息');
         
         // 并行刷新任务数据和星星奖励信息，提高响应速度
+        logger.info('Index', '任务状态变更成功，保持任务位置稳定');
         await Promise.all([
           this.loadTaskData(),
           this.loadStarsAndRewards()

@@ -285,22 +285,28 @@ class TaskRepository extends BaseRepository {
   _sortTasksByHabitAndTime(tasks) {
     if (!Array.isArray(tasks)) return [];
     
+    const logger = require('../utils/logger');
+    logger.info('TaskRepository', '任务排序：保持位置稳定，移除完成状态排序');
+    
     // 按以下规则排序:
-    // 1. 习惯任务优先
-    // 2. 开始时间早的优先
-    // 3. 未完成优先于已完成
+    // 1. 必做任务优先
+    // 2. 习惯任务优先
+    // 3. 开始时间早的优先
+    // 注意：移除了完成状态排序，保持任务位置稳定
     return [...tasks].sort((a, b) => {
-      // 首先按任务类型排序（习惯优先）
+      // 首先按必做任务排序（必做任务优先）
+      const aRequired = a.isRequired || false;
+      const bRequired = b.isRequired || false;
+      if (aRequired !== bRequired) {
+        return aRequired ? -1 : 1;
+      }
+      
+      // 其次按任务类型排序（习惯优先）
       if (a.type === 'habit' && b.type !== 'habit') {
         return -1;
       }
       if (a.type !== 'habit' && b.type === 'habit') {
         return 1;
-      }
-      
-      // 其次按完成状态排序（未完成优先）
-      if (a.status !== b.status) {
-        return a.status - b.status;
       }
       
       // 最后按开始时间排序（早的优先）
@@ -316,7 +322,8 @@ class TaskRepository extends BaseRepository {
         return 1;
       }
       
-      return 0;
+      // 如果都没有开始时间，按创建时间排序保持稳定
+      return (a.createTime || 0) - (b.createTime || 0);
     });
   }
 }
