@@ -40,7 +40,7 @@
     <!-- 小鸡角色 -->
     <view class="chick-character {{chickState}} {{chickAnimation}}" 
           wx:if="{{showChick}}"
-          style="left: {{percentage}}%;"
+          style="left: {{chickPosition}}%;"
           bindtap="onTapChick">
       <view class="chick-wrapper">
         <text class="chick-emoji">🐥</text>

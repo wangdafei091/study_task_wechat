@@ -54,6 +54,7 @@ Component({
    */
   data: {
     percentage: 0,
+    chickPosition: 0,       // 小鸡实际显示位置，限制最大值避免与奖品重叠
     chickState: 'walking',  // 小鸡状态: walking, running, celebrating
     chickJumping: false,    // 小鸡是否在跳跃
     chickSpeaking: false,   // 小鸡是否在说话
@@ -145,8 +146,15 @@ Component({
         }, 100);
       }
       
+      // 计算小鸡位置，限制最大值避免与奖品重叠
+      const maxChickPosition = 85; // 限制小鸡最大位置为85%，为奖品区域预留空间
+      const chickPosition = Math.min(percentage, maxChickPosition);
+      
+      console.log(`[progressBar] 小鸡位置计算: 进度${percentage.toFixed(2)}% -> 显示位置${chickPosition.toFixed(2)}%`);
+      
       this.setData({
         percentage: percentage,
+        chickPosition: chickPosition,
         chickState: chickState,
         gradientStage: stage,
         nodeReached: isNewStage,
