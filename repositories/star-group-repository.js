@@ -109,11 +109,11 @@ class StarGroupRepository extends BaseRepository {
       
       // 创建新分组
       const newGroup = new StarGroup({
+        type: expiryType,
         expiryType: expiryType,
         expiryDate: expiryDate,
         expiryDateStr: expiryDateStr || this._getExpiryDescription(expiryType, expiryDate),
-        points: 0,
-        sources: []
+        stars: 0
       });
       
       // 保存新分组
@@ -283,14 +283,14 @@ class StarGroupRepository extends BaseRepository {
       }
       
       // 计算过期总数量
-      const expiredPoints = expiredGroups.reduce((sum, group) => sum + group.points, 0);
+      const expiredPoints = expiredGroups.reduce((sum, group) => sum + (group.stars || 0), 0);
       
       // 构建过期记录
       const expiredRecords = expiredGroups.map(group => ({
         groupId: group.id,
         expiryType: group.expiryType,
         expiryDate: group.expiryDate,
-        points: group.points
+        points: group.stars || 0
       }));
       
       // 批量删除过期分组
@@ -329,7 +329,16 @@ class StarGroupRepository extends BaseRepository {
   async getTotalPoints() {
     try {
       const groups = await this.getAll();
-      const total = groups.reduce((sum, group) => sum + group.points, 0);
+      logger.info('StarGroupRepository', `获取到${groups.length}个星星分组，开始计算总数`);
+      
+      // 添加详细日志，便于调试
+      groups.forEach((group, index) => {
+        const starsValue = group.stars || 0;
+        const starsType = typeof starsValue;
+        logger.info('StarGroupRepository', `分组${index + 1}: ID=${group.id}, 星星数=${starsValue}(${starsType}), 类型=${group.expiryType || 'unknown'}`);
+      });
+      
+      const total = groups.reduce((sum, group) => sum + (group.stars || 0), 0);
       
       logger.info('StarGroupRepository', `获取星星总数量成功, 总数=${total}`);
       return total;
@@ -420,7 +429,7 @@ class StarGroupRepository extends BaseRepository {
       logger.info('StarGroupRepository', `开始扣除${amount}颗星星，当前有${groups.length}个分组`);
       
       // 获取当前星星总数
-      const totalStars = groups.reduce((sum, group) => sum + (group.points || 0), 0);
+      const totalStars = groups.reduce((sum, group) => sum + (group.stars || 0), 0);
       
       // 检查星星是否足够
       if (totalStars < amount) {
@@ -451,28 +460,28 @@ class StarGroupRepository extends BaseRepository {
         }
         
         // 当前分组可扣除的数量
-        const groupPoints = group.points || 0;
-        const deductFromGroup = Math.min(remainingAmount, groupPoints);
+        const groupStars = group.stars || 0;
+        const deductFromGroup = Math.min(remainingAmount, groupStars);
         
         if (deductFromGroup > 0) {
           // 更新分组
-          group.points = groupPoints - deductFromGroup;
+          group.stars = groupStars - deductFromGroup;
           remainingAmount -= deductFromGroup;
           
           // 记录扣除日志
           deductedGroups.push({
             groupId: group.id,
             amount: deductFromGroup,
-            remaining: group.points,
+            remaining: group.stars,
             expiryType: group.expiryType,
             expiryDate: group.expiryDate
           });
           
-          logger.info('StarGroupRepository', `从分组${group.id}扣除${deductFromGroup}颗星星，剩余${group.points}颗`);
+          logger.info('StarGroupRepository', `从分组${group.id}扣除${deductFromGroup}颗星星，剩余${group.stars}颗`);
         }
         
         // 只保留还有星星的分组
-        if (group.points > 0) {
+        if (group.stars > 0) {
           updatedGroups.push(group);
         } else {
           logger.info('StarGroupRepository', `分组${group.id}星星已用完，移除`);

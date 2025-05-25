@@ -68,6 +68,7 @@ class Task {
     this.points = data.points || 0;
     this.pointsExpiry = data.pointsExpiry || StarExpiryType.PERMANENT;
     this.pointsExpiryDate = data.pointsExpiryDate || '';
+    this.starAwarded = data.starAwarded || false;
     
     // 重复设置
     this.repeat = data.repeat || { type: RepeatType.NONE };
@@ -251,6 +252,7 @@ class Task {
     if (data.isRequired !== undefined) this.isRequired = data.isRequired;
     if (data.points !== undefined) this.points = data.points;
     if (data.pointsExpiry !== undefined) this.pointsExpiry = data.pointsExpiry;
+    if (data.starAwarded !== undefined) this.starAwarded = data.starAwarded;
     if (data.tags !== undefined) this.tags = [...data.tags];
     
     // 更新重复设置
@@ -350,19 +352,22 @@ class Task {
    * @returns {Task} 新的任务实例
    */
   clone(overrides = {}, generateNewId = true) {
-    // 首先准备基础数据
-    const baseData = {
-      ...this,
-      createTime: Date.now(),
-      modifyTime: Date.now(),
-      status: TaskStatus.PENDING,
-      completionTime: 0
-    };
+    // 准备基础数据
+    const baseData = { ...this };
     
-    // 仅在需要时生成新ID
-    if (generateNewId && !overrides.id) {
-      baseData.id = `task_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+    if (generateNewId) {
+      // 创建新任务时，重置状态和时间戳
+      baseData.createTime = Date.now();
+      baseData.modifyTime = Date.now();
+      baseData.status = TaskStatus.PENDING;
+      baseData.completionTime = 0;
+      
+      // 生成新ID
+      if (!overrides.id) {
+        baseData.id = `task_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+      }
     }
+    // 如果不生成新ID（用于保存现有任务），则保留原始状态和时间戳
     
     // 应用覆盖属性
     const clonedData = {

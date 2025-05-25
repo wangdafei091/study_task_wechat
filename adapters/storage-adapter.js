@@ -140,6 +140,22 @@ class StorageAdapter {
   async setAsync(key, data) {
     const fullKey = this._getFullKey(key);
     
+    // 如果是任务数据，添加详细日志
+    if (key === 'taskData' && Array.isArray(data)) {
+      logger.info('StorageAdapter', `准备存储任务数据，任务数量: ${data.length}`);
+      data.forEach((task, index) => {
+        if (task && task.id) {
+          logger.info('StorageAdapter', `存储任务${index + 1}:`, {
+            id: task.id,
+            title: task.title,
+            status: task.status,
+            starAwarded: task.starAwarded,
+            points: task.points
+          });
+        }
+      });
+    }
+    
     try {
       await this._wxStoragePromise('setStorage', {
         key: fullKey,
@@ -147,6 +163,11 @@ class StorageAdapter {
       });
       
       logger.info('StorageAdapter', `异步设置存储键 ${key} 成功`);
+      
+      // 如果是任务数据，验证存储结果
+      if (key === 'taskData' && Array.isArray(data)) {
+        logger.info('StorageAdapter', `任务数据存储完成，验证存储结果`);
+      }
       
       // 更新缓存
       if (this.useCache) {

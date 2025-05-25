@@ -637,9 +637,10 @@ class RewardService {
   
   /**
    * 计算下一个可用的奖励
+   * @param {Number|null} knownStarCount 已知的星星数量，如果提供则不重新查询
    * @returns {Promise<Object>} 下一个可用奖励，或默认奖励
    */
-  async calculateNextAvailableReward() {
+  async calculateNextAvailableReward(knownStarCount = null) {
     try {
       // 确保服务已初始化，使用新的初始化机制
       if (!this.initialized && !RewardService._initialized) {
@@ -648,7 +649,11 @@ class RewardService {
       }
       
       // 获取用户可用的星星数量
-      const availablePoints = await this.starGroupRepository.getTotalPoints();
+      const availablePoints = knownStarCount !== null ? 
+        knownStarCount : 
+        await this.starGroupRepository.getTotalPoints();
+      
+      logger.info('RewardService', `使用星星数量: ${availablePoints}${knownStarCount !== null ? '(传入参数)' : '(查询获取)'}`);
       
       // 获取所有可用奖励
       let availableRewards = await this.getAvailableRewards(false, false);

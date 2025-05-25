@@ -415,6 +415,19 @@ Page({
       const tasks = await taskService.getTodayTasks();
       logger.info('Index', `今日任务加载成功，任务数量: ${tasks.length}`);
       
+      // 添加详细的任务状态日志
+      tasks.forEach((task, index) => {
+        logger.info('Index', `任务${index + 1}详细状态:`, {
+          id: task.id,
+          title: task.title,
+          status: task.status,
+          statusType: typeof task.status,
+          starAwarded: task.starAwarded,
+          starAwardedType: typeof task.starAwarded,
+          points: task.points
+        });
+      });
+      
       // 更新页面数据
       this.setData({
         tasks: tasks
@@ -577,46 +590,64 @@ Page({
   },
 
   // 完成任务
-  completeTask: async function(e) {
+  async completeTask(e) {
     const id = e.detail.taskId;
-    logger.info('Index', '完成任务:', { taskId: id });
     
-    // 如果任务正在处理中，阻止重复操作
-    if (this.data.processingTaskId === id) {
-      logger.warn('Index', '该任务正在处理中，忽略重复点击', { taskId: id });
+    if (!id) {
+      logger.warn('Index', '完成任务失败: 任务ID为空');
       return;
     }
     
-    // 获取当前任务状态
-    const task = this.data.tasks.find(t => t.id === id);
-    if (!task) return;
+    logger.info('Index', '完成任务:', { taskId: id });
     
-    // 保存原始的 starAwarded 状态，用于后续判断
-    const wasStarAwarded = task.starAwarded || false;
-    logger.info('Index', `任务原始星星状态: ${wasStarAwarded ? '已获得' : '未获得'}`);
+    // 防止重复点击
+    if (this.data.processingTaskId === id) {
+      logger.warn('Index', '任务正在处理中，忽略重复点击');
+      return;
+    }
     
-    // 设置处理中状态，防止重复点击
+    // 设置处理中状态
     this.setData({
       processingTaskId: id
     });
     
-    // 新状态是当前状态的反转
-    const oldStatus = task.status;
-    const newStatus = oldStatus === 0 ? 1 : 0;
+    // 获取任务当前状态，用于判断是完成还是取消完成
+    logger.info('Index', `当前任务列表数量: ${this.data.tasks ? this.data.tasks.length : 0}`);
+    const currentTask = this.data.tasks.find(task => task.id === id);
+    if (!currentTask) {
+      logger.warn('Index', '未找到指定任务', { 
+        taskId: id, 
+        availableTasks: this.data.tasks ? this.data.tasks.map(t => t.id) : [] 
+      });
+      this.setData({ processingTaskId: null });
+      return;
+    }
     
-    // 如果是要完成任务，先检查是否只有示例奖励
-    if (newStatus === 1) {
-      // 检查是否只有示例奖励可用
-      if (this.hasOnlyExampleRewards()) {
-        logger.info('Index', '检测到只有示例奖励可用，显示设置奖励提示');
-        this.showSetupRewardTip();
-        
-        // 清除处理中状态
-        this.setData({
-          processingTaskId: null
+    const newStatus = currentTask.status === 1 ? 0 : 1; // 切换状态
+    const wasStarAwarded = currentTask.starAwarded || false; // 保存原始星星状态
+    const taskPoints = currentTask.points || 0; // 保存任务积分
+    
+    logger.info('Index', `任务详细信息: ID=${id}, 标题=${currentTask.title}, 当前状态=${currentTask.status}, 新状态=${newStatus}`);
+    logger.info('Index', `任务星星信息: starAwarded=${currentTask.starAwarded}(${typeof currentTask.starAwarded}), points=${taskPoints}`);
+    logger.info('Index', `任务原始星星状态: ${wasStarAwarded ? '已获得' : '未获得'}`);
+    
+    // 检查是否是取消完成操作
+    if (newStatus === 0 && wasStarAwarded) {
+      // 显示确认对话框
+      const result = await new Promise((resolve) => {
+        wx.showModal({
+          title: '确认取消完成',
+          content: '取消完成任务将扣除已获得的星星，确定要继续吗？',
+          confirmText: '确定',
+          cancelText: '取消',
+          success: (res) => resolve(res.confirm),
+          fail: () => resolve(false)
         });
-        
-        // 直接返回，不执行后续的任务完成逻辑
+      });
+      
+      if (!result) {
+        // 用户取消操作
+        this.setData({ processingTaskId: null });
         return;
       }
     }
@@ -624,14 +655,14 @@ Page({
     try {
       // 使用任务服务更新任务状态
       const taskService = serviceManager.getService('task');
-      let updatedTask;
+      let result;
       
       if (newStatus === 1) {
         // 使用completeTask方法直接完成任务
-        updatedTask = await taskService.completeTask(id);
+        result = await taskService.completeTask(id);
       } else {
         // 使用resetTask方法重置任务状态
-        updatedTask = await taskService.resetTask(id);
+        result = await taskService.resetTask(id);
       }
       
       // 清除处理中状态
@@ -639,17 +670,22 @@ Page({
         processingTaskId: null
       });
       
-      if (updatedTask) {
-        // 任务状态变更时，立即刷新星星和奖品信息
-        logger.info('Index', '任务状态变更，立即刷新星星和奖品信息');
-        this.loadStarsAndRewards();
+      if (result && result.success) {
+        // 任务状态变更时，同时刷新任务列表和星星奖品信息
+        logger.info('Index', '任务状态变更，同时刷新任务列表和星星奖品信息');
+        
+        // 并行刷新任务数据和星星奖励信息，提高响应速度
+        await Promise.all([
+          this.loadTaskData(),
+          this.loadStarsAndRewards()
+        ]);
         
         // 根据操作类型和任务状态提供合适的提示
         if (newStatus === 1) {  // 完成任务
           if (!wasStarAwarded) {  // 使用保存的原始状态判断
             // 首次完成任务，获得星星
             wx.showToast({
-              title: `获得${updatedTask.points || 0}颗星星！`,
+              title: `获得${taskPoints}颗星星！`,
               icon: 'success',
               duration: 2000
             });
@@ -675,13 +711,20 @@ Page({
             }
           }, 300);
         } else {  // 取消完成
-          // 提示用户星星已保留
+          // 提示用户星星已扣除
           wx.showToast({
-            title: '已保留获得的星星',
+            title: `已扣除${taskPoints}颗星星`,
             icon: 'none',
             duration: 1500
           });
         }
+      } else {
+        // 操作失败
+        wx.showToast({
+          title: result?.message || '操作失败',
+          icon: 'none',
+          duration: 2000
+        });
       }
     } catch (error) {
       // 错误处理
@@ -1259,10 +1302,10 @@ Page({
       
       logger.info('Index', '当前用户星星数', { userPoints });
       
-      // 并发调用奖励服务方法以提高性能
-      logger.info('Index', '开始获取奖励数据（并行处理）');
+      // 调用奖励服务方法，传递已获取的星星数确保数据一致性
+      logger.info('Index', '开始获取奖励数据，使用已获取的星星数确保一致性');
       const [nextReward, visibleRewards] = await Promise.all([
-        rewardService.calculateNextAvailableReward(),
+        rewardService.calculateNextAvailableReward(userPoints),
         rewardService.getAvailableRewards(true)
       ]);
       
@@ -1474,9 +1517,9 @@ Page({
       const userPoints = await starService.getTotalStars();
       logger.debug('Index', `当前星星数: ${userPoints}`);
       
-      // 获取下一个可达成奖励
+      // 获取下一个可达成奖励，传递已获取的星星数确保一致性
       logger.debug('Index', '获取下一个可达成奖励');
-      const nextReward = await rewardService.calculateNextAvailableReward();
+      const nextReward = await rewardService.calculateNextAvailableReward(userPoints);
       logger.debug('Index', `新目标信息: 下一目标=${nextReward ? nextReward.name : '无'}, 需要星星=${nextReward ? nextReward.points : 0}`);
       
       // 格式化星星数

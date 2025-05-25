@@ -499,60 +499,69 @@ class TaskService {
       }
       
       // 设置新状态
+      logger.info('TaskService', `准备设置任务状态: ${task.title}, 当前状态=${task.status}, 新状态=${status}`);
       task.status = status;
-      
-      // 根据状态设置完成时间
-      if (status === TaskStatus.COMPLETED) {
-        // 任务完成
-        task.completionTime = Date.now();
-        logger.info('TaskService', `任务已完成: ${task.title}, ID=${taskId}`);
+      logger.info('TaskService', `任务状态已设置: ${task.title}, 状态=${task.status}, 类型=${typeof task.status}`);
+
+      // 如果任务以前未获得过星星，则分配积分
+      if (!task.starAwarded && this.starService) {
+        logger.info('TaskService', `开始为任务分配积分: ${task.title}, 积分=${task.points}, 有效期=${task.pointsExpiry}`);
+        logger.info('TaskService', `任务当前starAwarded状态: ${task.starAwarded}, 类型: ${typeof task.starAwarded}`);
         
-        // 如果任务以前未获得过星星，则分配积分
-        if (!task.starAwarded && this.starService) {
-          // 计算积分有效期
-          const expiryInfo = this.starService.calculateExpiryDate(task.pointsExpiry);
-          task.pointsExpiryDate = expiryInfo.expiryDateStr;
+        // 计算积分有效期
+        const expiryInfo = this.starService.calculateExpiryDate(task.pointsExpiry);
+        task.pointsExpiryDate = expiryInfo.expiryDateStr;
+        
+        logger.info('TaskService', `积分有效期计算完成: ${expiryInfo.expiryDateStr}`);
+        
+        // 标记已经获得积分
+        task.starAwarded = true;
+        logger.info('TaskService', `设置starAwarded为true: ${task.starAwarded}`);
+        
+        // 添加积分
+        if (task.points > 0) {
+          const addResult = await this.starService.addStars(
+            task.points,
+            task.pointsExpiry,
+            `完成任务: ${task.title}`,
+            task.id
+          );
           
-          // 标记已经获得积分
-          task.starAwarded = true;
+          logger.info('TaskService', `积分添加结果:`, addResult);
           
-          // 添加积分
-          if (task.points > 0) {
-            this.starService.addStars(task.points, {
-              source: 'task',
-              taskId: task.id,
-              expiryType: task.pointsExpiry,
-              expiryTimestamp: expiryInfo.expiry
-            });
+          if (addResult.success) {
+            logger.info('TaskService', `任务 "${task.title}" 获得 ${task.points} 颗星星`);
+          } else {
+            logger.warn('TaskService', `任务 "${task.title}" 积分添加失败: ${addResult.message}`);
           }
         }
-      } else if (previousStatus === TaskStatus.COMPLETED) {
-        // 从完成状态变为未完成，需要扣除积分
-        if (task.starAwarded && this.starService) {
-          task.starAwarded = false;
-          
-          // 重置有效期显示
-          if (task.pointsExpiry !== 'permanent') {
-            // 动态获取有效期文本
-            const expiryText = this.starService.getExpiryText(task.pointsExpiry);
-            task.pointsExpiryDate = expiryText;
-          }
-          
-          // 扣除积分
-          if (task.points > 0) {
-            this.starService.consumeStars(task.points, {
-              source: 'task_uncomplete',
-              taskId: task.id
-            });
-          }
-        }
+      } else if (task.starAwarded) {
+        logger.info('TaskService', `任务 "${task.title}" 已经获得过星星，跳过积分分配`);
       }
-      
+
       // 更新修改时间
       task.modifyTime = Date.now();
       
-      // 保存更新后的任务
-      const updatedTask = await this.taskRepository.save(task);
+      // 添加保存前的详细日志
+      logger.info('TaskService', `准备保存任务: ${task.title}`, {
+        id: task.id,
+        status: task.status,
+        starAwarded: task.starAwarded,
+        points: task.points,
+        modifyTime: task.modifyTime
+      });
+
+      // 保存任务
+      const savedTask = await this.taskRepository.save(task);
+      
+      // 添加保存后的详细日志
+      logger.info('TaskService', `任务保存完成: ${task.title}`, {
+        id: savedTask.id,
+        status: savedTask.status,
+        starAwarded: savedTask.starAwarded,
+        points: savedTask.points,
+        saveSuccess: !!savedTask
+      });
       
       // 确定操作类型
       let operationType = 'update';
@@ -564,8 +573,8 @@ class TaskService {
       
       // 记录事件日志 - 状态更新事件
       logger.logEvent(EVENTS.TASK_STATUS_UPDATED, {
-        taskId: updatedTask.id,
-        title: updatedTask.title,
+        taskId: savedTask.id,
+        title: savedTask.title,
         status,
         previousStatus,
         operationType
@@ -576,7 +585,7 @@ class TaskService {
       
       // 触发状态更新事件
       this.eventBus.emit(EVENTS.TASK_STATUS_UPDATED, {
-        task: updatedTask,
+        task: savedTask,
         previousStatus,
         operationType
       });
@@ -585,18 +594,18 @@ class TaskService {
       if (status === TaskStatus.COMPLETED) {
         // 记录完成事件日志
         logger.logEvent(EVENTS.TASK_COMPLETED, {
-          taskId: updatedTask.id,
-          title: updatedTask.title
+          taskId: savedTask.id,
+          title: savedTask.title
         }, {
           module: 'TaskService',
           direction: 'emit'
         });
         
         // 触发完成事件
-        this.eventBus.emit(EVENTS.TASK_COMPLETED, { task: updatedTask });
+        this.eventBus.emit(EVENTS.TASK_COMPLETED, { task: savedTask });
       }
       
-      return { success: true, task: updatedTask };
+      return { success: true, task: savedTask };
     } catch (error) {
       logger.error('TaskService', `更新任务状态失败: ${error.message}`, error);
       return { success: false, message: '更新任务状态失败: ' + error.message };
@@ -771,10 +780,18 @@ class TaskService {
       
       // 扣除积分
       if (this.starService && penaltyPoints > 0) {
-        await this.starService.consumeStars(penaltyPoints, {
-          source: 'task_penalty',
-          taskId: task.id,
-        });
+        const consumeResult = await this.starService.consumeStars(
+          penaltyPoints,
+          `必做任务惩罚: ${task.title}`,
+          {
+            sourceType: 'task_penalty',
+            sourceId: task.id
+          }
+        );
+        
+        if (!consumeResult.success) {
+          logger.error('TaskService', `惩罚扣除积分失败: ${consumeResult.message}`);
+        }
       }
       
       logger.info('TaskService', `已对必做任务应用惩罚: "${task.title}", 扣除${penaltyPoints}颗星`);

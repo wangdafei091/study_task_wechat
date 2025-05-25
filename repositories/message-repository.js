@@ -581,7 +581,19 @@ class MessageRepository extends BaseRepository {
       const existingMessages = await this.getAll();
       
       // 检查是否已存在相似消息
-      const similarMessage = existingMessages.find(existing => existing.isSimilarTo(message));
+      const similarMessage = existingMessages.find(existing => {
+        // 确保existing是Message实例且有isSimilarTo方法
+        if (!existing || typeof existing.isSimilarTo !== 'function') {
+          logger.warn('MessageRepository', '发现非Message实例或缺少isSimilarTo方法的对象', {
+            id: existing?.id,
+            type: typeof existing,
+            hasMethod: typeof existing?.isSimilarTo,
+            constructor: existing?.constructor?.name
+          });
+          return false;
+        }
+        return existing.isSimilarTo(message);
+      });
       
       if (similarMessage) {
         // 更新现有消息而不是添加新消息
@@ -636,7 +648,13 @@ class MessageRepository extends BaseRepository {
           validMessages,
           (message) => {
             // 检查是否已存在相似消息
-            const similarMessage = existingMessages.find(existing => existing.isSimilarTo(message));
+            const similarMessage = existingMessages.find(existing => {
+              // 确保existing是Message实例且有isSimilarTo方法
+              if (!existing || typeof existing.isSimilarTo !== 'function') {
+                return false;
+              }
+              return existing.isSimilarTo(message);
+            });
             
             if (similarMessage) {
               // 准备更新现有消息

@@ -27,8 +27,27 @@ Component({
         status: 0,
         hasImage: false
       },
-      observer: function(newVal) {
+      observer: function(newVal, oldVal) {
         if (newVal) {
+          // 添加详细的状态变化日志
+          if (oldVal) {
+            console.log(`[index-task-item] 任务属性变化检测:`, {
+              taskId: newVal.id,
+              title: newVal.title,
+              statusChange: `${oldVal.status} -> ${newVal.status}`,
+              starAwardedChange: `${oldVal.starAwarded} -> ${newVal.starAwarded}`,
+              pointsChange: `${oldVal.points} -> ${newVal.points}`
+            });
+          } else {
+            console.log(`[index-task-item] 任务初始化:`, {
+              taskId: newVal.id,
+              title: newVal.title,
+              status: newVal.status,
+              starAwarded: newVal.starAwarded,
+              points: newVal.points
+            });
+          }
+          
           // 处理不同类型的积分有效期
           let expiryText = '';
           
@@ -59,10 +78,25 @@ Component({
             expiryText = '7天';
           }
           
+          // 检查任务状态是否发生变化，如果是则强制更新UI
+          const statusChanged = oldVal && (oldVal.status !== newVal.status || oldVal.starAwarded !== newVal.starAwarded);
+          
           // 将处理好的有效期文本保存到组件data中
           this.setData({
-            expiryText: expiryText
+            expiryText: expiryText,
+            // 强制更新任务数据，确保UI正确响应状态变化
+            taskData: { ...newVal }
           });
+          
+          if (statusChanged) {
+            console.log(`[index-task-item] 任务状态变化: ${oldVal.status} -> ${newVal.status}, 星星状态: ${oldVal.starAwarded} -> ${newVal.starAwarded}`);
+            console.log(`[index-task-item] 强制UI更新，新任务数据:`, {
+              id: newVal.id,
+              status: newVal.status,
+              starAwarded: newVal.starAwarded,
+              points: newVal.points
+            });
+          }
           
           console.log(`[index-task-item] 渲染任务: ${newVal.title}, 类型: ${newVal.type}, 星星: ${newVal.points || 0}颗, 有效期: ${expiryText}`);
         }
@@ -90,7 +124,8 @@ Component({
     isDescriptionExpanded: false, // 任务描述是否展开
     showStarAnimation: false,     // 是否显示星星动画
     expiryText: '7天',            // 积分有效期默认文本
-    isProcessing: false          // 防止重复点击
+    isProcessing: false,          // 防止重复点击
+    taskData: null               // 任务数据副本，用于强制UI更新
   },
 
   /**

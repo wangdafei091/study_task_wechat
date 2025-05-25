@@ -13,11 +13,12 @@ class StarGroup {
     // 基础信息
     this.id = data.id || `group_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
     this.type = data.type || 'permanent'; // 分组类型，默认为永久
+    this.expiryType = data.expiryType || data.type || 'permanent'; // 过期类型，与type保持一致
     this.name = data.name || this._getDefaultName(data.type);
     
     // 星星相关
-    this.stars = data.stars || 0; // 当前星星数
-    this.maxStars = data.maxStars || 0; // 最大星星数，0表示无限制
+    this.stars = parseInt(data.stars) || 0; // 当前星星数，确保为数字类型
+    this.maxStars = parseInt(data.maxStars) || 0; // 最大星星数，0表示无限制
     
     // 时间相关
     this.createTime = data.createTime || Date.now();

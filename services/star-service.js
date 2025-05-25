@@ -43,9 +43,9 @@ class StarService {
         
         // 创建过期记录
         for (const group of expiredGroups) {
-          if (group.points > 0) {
+          if (group.stars > 0) {
             await this.starRecordRepository.createExpiredRecord(
-              group.points, 
+              group.stars, 
               group.expiryType, 
               `星星过期: ${group.expiryType} 类型`
             );
@@ -217,6 +217,7 @@ class StarService {
       }
       
       logger.info('StarService', `添加星星成功, 类型=${expiryType}, 数量=${points}, 来源=${source || '未知'}`);
+      logger.info('StarService', `更新后的分组信息: ID=${updatedGroup.id}, 当前星星数=${updatedGroup.stars}(${typeof updatedGroup.stars}), 过期类型=${updatedGroup.expiryType}`);
       
       // 触发星星添加事件
       this.eventBus.emit(EVENTS.STARS_ADDED, {
@@ -506,12 +507,12 @@ class StarService {
       
       // 为每个过期分组创建记录
       for (const group of expiredGroups) {
-        if (group.points > 0) {
-          totalExpiredPoints += group.points;
+        if (group.stars > 0) {
+          totalExpiredPoints += group.stars;
           
           // 创建过期记录
           const record = await this.starRecordRepository.createExpiredRecord(
-            group.points,
+            group.stars,
             group.expiryType,
             `星星过期: ${this._getExpiryTypeDescription(group.expiryType)}`
           );
@@ -519,7 +520,7 @@ class StarService {
           if (record) {
             expiredRecords.push(record);
           } else {
-            logger.error('StarService', `清理过期星星: 创建记录失败, 分组ID=${group.id}, 星星数=${group.points}`);
+            logger.error('StarService', `清理过期星星: 创建记录失败, 分组ID=${group.id}, 星星数=${group.stars}`);
           }
         }
       }
@@ -572,6 +573,104 @@ class StarService {
     }
   }
   
+  /**
+   * 计算积分有效期日期（公开方法）
+   * @param {String} expiryType 有效期类型
+   * @returns {Object} 包含时间戳和可读格式的有效期信息
+   */
+  calculateExpiryDate(expiryType) {
+    logger.info('StarService', `计算积分有效期: 类型=${expiryType}`);
+    
+    // 如果是永久有效，直接返回
+    if (expiryType === 'permanent') {
+      logger.info('StarService', '积分永久有效');
+      return {
+        expiry: 'permanent',
+        expiryDateStr: '永久'
+      };
+    }
+    
+    // 使用私有方法计算过期日期
+    const expiryDate = this._calculateExpiryDate(expiryType);
+    
+    if (!expiryDate) {
+      logger.warn('StarService', `无法计算有效期: ${expiryType}`);
+      return {
+        expiry: 'permanent',
+        expiryDateStr: '永久'
+      };
+    }
+    
+    // 格式化日期为可读格式
+    const dateStr = this._formatExpiryDate(expiryDate);
+    
+    logger.info('StarService', `计算结果: ${dateStr}`);
+    return {
+      expiry: expiryDate.getTime(),
+      expiryDateStr: dateStr
+    };
+  }
+
+  /**
+   * 获取有效期类型的文本描述（公开方法）
+   * @param {String} expiryType 有效期类型
+   * @returns {String} 有效期文本描述
+   */
+  getExpiryText(expiryType) {
+    const Constants = require('../utils/constants');
+    
+    // 使用常量中的文本映射
+    if (Constants.POINTS_EXPIRY.TEXT[expiryType]) {
+      return Constants.POINTS_EXPIRY.TEXT[expiryType];
+    }
+    
+    // 如果常量中没有，使用默认映射
+    switch (expiryType) {
+      case 'permanent':
+        return '永久';
+      case 'week':
+        return '一周';
+      case 'month':
+        return '一个月';
+      case '3months':
+        return '三个月';
+      case '6months':
+        return '六个月';
+      case '12months':
+        return '十二个月';
+      default:
+        return '永久';
+    }
+  }
+
+  /**
+   * 格式化过期日期为可读格式
+   * @private
+   * @param {Date} expiryDate 过期日期
+   * @returns {String} 格式化后的日期字符串
+   */
+  _formatExpiryDate(expiryDate) {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const expiry = new Date(expiryDate.getFullYear(), expiryDate.getMonth(), expiryDate.getDate());
+    
+    // 计算天数差
+    const diffTime = expiry.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 0) {
+      return '今天24点失效';
+    } else if (diffDays === 1) {
+      return '明天24点失效';
+    } else {
+      // 格式化为 YYYY-MM-DD 格式
+      const year = expiryDate.getFullYear();
+      const month = String(expiryDate.getMonth() + 1).padStart(2, '0');
+      const day = String(expiryDate.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day} 24点失效`;
+    }
+  }
+
   /**
    * 计算过期日期
    * @private
@@ -634,7 +733,7 @@ class StarService {
       const groups = await this.starGroupRepository.getAll();
       
       // 计算分组总和
-      const groupsTotal = groups.reduce((sum, group) => sum + group.points, 0);
+      const groupsTotal = groups.reduce((sum, group) => sum + (group.stars || 0), 0);
       
       // 获取总记录数
       const records = await this.starRecordRepository.getAll();
@@ -746,7 +845,7 @@ class StarService {
       // 计算即将过期的星星数量（最早过期日期的所有星星）
       const expiringPoints = expiringGroups
         .filter(g => g.expiryDate === earliestGroup.expiryDate)
-        .reduce((sum, g) => sum + g.points, 0);
+        .reduce((sum, g) => sum + (g.stars || 0), 0);
       
       logger.info('StarService', `最早过期日期: ${earliestGroup.expiryDateStr}, 该日期星星: ${expiringPoints}`);
       

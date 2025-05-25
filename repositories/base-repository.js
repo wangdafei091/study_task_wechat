@@ -188,9 +188,32 @@ class BaseRepository {
     
     logger.debug('BaseRepository', `开始保存实体, ID=${entity.id || '新实体'}`);
     
+    // 添加保存前的详细日志
+    if (entity.constructor.name === 'Task') {
+      logger.info('BaseRepository', `保存Task实体前的状态:`, {
+        id: entity.id,
+        title: entity.title,
+        status: entity.status,
+        starAwarded: entity.starAwarded,
+        points: entity.points,
+        storageKey: this.storageKey
+      });
+    }
+    
     try {
       // 克隆防止引用变化
       const entityToSave = this._cloneModel(entity);
+      
+      // 添加克隆后的状态日志
+      if (entityToSave.constructor.name === 'Task') {
+        logger.info('BaseRepository', `Task实体克隆后的状态:`, {
+          id: entityToSave.id,
+          title: entityToSave.title,
+          status: entityToSave.status,
+          starAwarded: entityToSave.starAwarded,
+          points: entityToSave.points
+        });
+      }
       
       // 获取所有实体
       const all = await this.getAll();
@@ -200,8 +223,26 @@ class BaseRepository {
       
       // 更新或添加
       if (index >= 0) {
+        // 记录更新前的状态
+        if (entityToSave.constructor.name === 'Task') {
+          logger.info('BaseRepository', `更新Task实体，原状态:`, {
+            id: all[index].id,
+            status: all[index].status,
+            starAwarded: all[index].starAwarded
+          });
+        }
+        
         all[index] = entityToSave;
         logger.info('BaseRepository', `更新实体成功, ID=${entityToSave.id}, 存储键=${this.storageKey}`);
+        
+        // 记录更新后的状态
+        if (entityToSave.constructor.name === 'Task') {
+          logger.info('BaseRepository', `Task实体更新后状态:`, {
+            id: all[index].id,
+            status: all[index].status,
+            starAwarded: all[index].starAwarded
+          });
+        }
       } else {
         all.push(entityToSave);
         logger.info('BaseRepository', `添加实体成功, ID=${entityToSave.id}, 存储键=${this.storageKey}`);
@@ -209,6 +250,16 @@ class BaseRepository {
       
       // 保存回存储
       await this._saveData(all);
+      
+      // 添加存储完成后的验证日志
+      if (entityToSave.constructor.name === 'Task') {
+        logger.info('BaseRepository', `Task实体存储完成，最终状态:`, {
+          id: entityToSave.id,
+          status: entityToSave.status,
+          starAwarded: entityToSave.starAwarded,
+          storageKey: this.storageKey
+        });
+      }
       
       logger.debug('BaseRepository', `保存实体完成, ID=${entityToSave.id}, 类型=${entityToSave.constructor.name || '未知'}`);
       return this._cloneModel(entityToSave);

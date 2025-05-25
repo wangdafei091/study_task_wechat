@@ -280,6 +280,61 @@ class Message {
     
     return new Message(clonedData);
   }
+
+  /**
+   * 检查是否与另一个消息相似（用于去重）
+   * @param {Message} other 另一个消息对象
+   * @returns {Boolean} 是否相似
+   */
+  isSimilarTo(other) {
+    if (!other || !(other instanceof Message)) {
+      return false;
+    }
+    
+    // 基本类型和通知类型必须相同
+    if (this.type !== other.type || this.notificationType !== other.notificationType) {
+      return false;
+    }
+    
+    // 关联对象必须相同
+    if (this.relatedId !== other.relatedId || this.relatedType !== other.relatedType) {
+      return false;
+    }
+    
+    // 标题和内容必须相同
+    if (this.title !== other.title || this.content !== other.content) {
+      return false;
+    }
+    
+    // 时间差不能超过5分钟（避免短时间内重复创建相同消息）
+    const timeDiff = Math.abs(this.createTime - other.createTime);
+    if (timeDiff > 5 * 60 * 1000) {
+      return false;
+    }
+    
+    return true;
+  }
+
+  /**
+   * 检查消息是否有效（未过期且符合保留条件）
+   * @param {Number} expiryDays 保留天数
+   * @returns {Boolean} 是否有效
+   */
+  isValid(expiryDays = 30) {
+    // 检查是否已过期
+    if (this.isExpired()) {
+      return false;
+    }
+    
+    // 检查是否超过保留期限
+    const now = Date.now();
+    const maxAge = expiryDays * 24 * 60 * 60 * 1000;
+    if (now - this.createTime > maxAge) {
+      return false;
+    }
+    
+    return true;
+  }
 }
 
 module.exports = {
