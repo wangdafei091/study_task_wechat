@@ -328,6 +328,7 @@ class AnalyticsService {
       
       // 获取星星分组数据
       const starGroups = await this.starService.getStarGroups();
+      logger.info('AnalyticsService', `获取到${starGroups.length}个星星分组`);
       
       // 筛选出非永久有效的分组
       const expiryGroups = starGroups.filter(group => 
@@ -336,6 +337,11 @@ class AnalyticsService {
       );
       
       logger.info('AnalyticsService', `获取到${expiryGroups.length}个有过期时间的星星分组`);
+      
+      // 记录每个过期分组的详细信息
+      expiryGroups.forEach((group, index) => {
+        logger.info('AnalyticsService', `过期分组${index + 1}: ID=${group.id}, 星星数=${group.stars}, 过期类型=${group.expiryType}, 过期日期=${group.expiryDate}`);
+      });
       
       // 如果没有即将过期的星星，只需要预测近7天
       const forecastDays = expiryGroups.length > 0 ? 30 : 7;
@@ -413,7 +419,7 @@ class AnalyticsService {
         result.push({
           date: formattedDate,
           value: runningBalance,
-          expiryAmount: expiryAmount || 0
+          expiring: expiryAmount || 0
         });
       }
       

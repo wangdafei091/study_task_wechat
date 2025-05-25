@@ -38,7 +38,9 @@ class StarGroupRepository extends BaseRepository {
    */
   async getNonEmptyGroups() {
     try {
+      logger.info('StarGroupRepository', '开始获取非空分组');
       const groups = await this.query(group => !group.isEmpty());
+      logger.info('StarGroupRepository', `获取非空分组成功, 数量=${groups.length}`);
       return groups;
     } catch (error) {
       logger.error('StarGroupRepository', '获取非空分组失败', error);

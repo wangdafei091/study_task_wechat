@@ -228,6 +228,14 @@ class StarGroup {
   }
   
   /**
+   * 检查分组是否为空（没有星星）
+   * @returns {Boolean} 是否为空
+   */
+  isEmpty() {
+    return this.stars <= 0;
+  }
+  
+  /**
    * 克隆分组
    * @param {Object} overrides 要覆盖的属性
    * @param {Boolean} generateNewId 是否生成新ID
