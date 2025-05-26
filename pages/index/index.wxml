@@ -198,17 +198,17 @@
     
     <view class="reward-hint">
       <block wx:if="{{rewardTextState === 'achieved'}}">
-        <text class="achievement-text">恭喜！已达成"{{completedReward.name}}"</text>
-        <text class="supplementary-text">可前往奖池查看</text>
+        <text class="reward-hint-primary status-success">恭喜！已达成"{{completedReward.name}}"</text>
+        <text class="reward-hint-secondary">可前往奖池查看</text>
       </block>
       <block wx:elif="{{nextReward.allClaimed}}">
-        <text class="achievement-text">恭喜！您已领取所有奖励，可以继续积累星星</text>
+        <text class="reward-hint-primary status-success">恭喜！您已领取所有奖励，可以继续积累星星</text>
       </block>
       <block wx:elif="{{nextReward.showSetupTip}}">
-        <text>还没有设置专属奖励哦！请找爸爸妈妈来帮你设置奖励吧！</text>
+        <text class="reward-hint-primary status-normal">还没有设置专属奖励哦！请找爸爸妈妈来帮你设置奖励吧！</text>
       </block>
       <block wx:else>
-        <text>再获得<text class="highlight">{{nextReward.remainingStars}}</text>颗星星即可解锁"{{nextReward.name}}"</text>
+        <text class="reward-hint-primary status-normal">再获得<text class="highlight">{{nextReward.remainingStars}}</text>颗星星即可解锁"{{nextReward.name}}"</text>
       </block>
     </view>
   </view>

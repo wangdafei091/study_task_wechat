@@ -1530,7 +1530,8 @@ Page({
         total: progressTotal,
         hasAchievedReward: hasAchievedReward,
         progressType: hasAchievedReward ? '已达成奖励' : 
-                     (nextReward.allClaimed || nextReward.isDefault || nextReward.showSetupTip) ? '无限制' : '下一目标'
+                     (nextReward.allClaimed || nextReward.isDefault || nextReward.showSetupTip) ? '无限制' : '下一目标',
+        uiOptimization: '已应用统一文字样式系统'
       });
       
     } catch (error) {

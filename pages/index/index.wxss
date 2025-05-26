@@ -608,16 +608,48 @@
   color: #666;
 }
 
+/* 奖励提示统一样式系统 */
 .reward-hint {
   margin-top: 20rpx;
-  font-size: 26rpx;
-  color: #666;
   text-align: center;
+  line-height: 1.4;
 }
 
+/* 主要状态文字 - 统一样式 */
+.reward-hint-primary {
+  font-size: 28rpx;
+  font-weight: 500;
+  line-height: 1.4;
+  margin-bottom: 4rpx;
+  display: block;
+}
+
+/* 次要说明文字 - 统一样式 */
+.reward-hint-secondary {
+  font-size: 24rpx;
+  font-weight: 400;
+  color: #999;
+  line-height: 1.3;
+  display: block;
+}
+
+/* 状态颜色 - 语义化颜色系统 */
+.status-success { 
+  color: #4CAF50; 
+}
+
+.status-progress { 
+  color: #4285F4; 
+}
+
+.status-normal { 
+  color: #666; 
+}
+
+/* 兼容旧样式 - 逐步迁移 */
 .reward-hint .highlight {
-  color: #FF9800;
-  font-weight: 600;
+  color: #4285F4; /* 改用主品牌色替代橙色 */
+  font-weight: 500; /* 降低字重 */
   margin: 0 4rpx;
 }
 
@@ -630,7 +662,7 @@
 }
 
 .supplementary-text {
-  color: #666;
+  color: #999; /* 统一使用更浅的灰色 */
   font-size: 24rpx;
   display: block;
 }
