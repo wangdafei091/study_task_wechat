@@ -1032,89 +1032,122 @@ class TaskService {
    */
   async checkUpcomingTasks() {
     try {
+      logger.info('TaskService', '开始检查即将到期任务');
+      
       // 获取今天的任务
       const tasks = await this.taskRepository.getTodayTasks();
       
       if (!tasks || tasks.length === 0) {
-        return { success: true, count: 0 };
+        logger.info('TaskService', '今天没有任务');
+        return { success: true, count: 0, tasks: [] };
       }
-      
+
       const current = new Date();
       const upcomingTasks = [];
       
-      // 筛选所有学习类型的未完成任务
+      logger.info('TaskService', `检查${tasks.length}个今日任务的提醒状态`);
+
+      // 筛选所有未完成的任务（支持所有任务类型）
       tasks.forEach(task => {
-        // 只处理学习类型且未完成的任务
-        if (task.type === TaskType.STUDY && task.status === TaskStatus.PENDING) {
-          // 计算提醒时间
-          const reminderTime = this._calculateReminderTime(task);
-          if (reminderTime) {
-            // 检查是否在提醒时间范围内
-            const startTime = new Date();
-            startTime.setHours(reminderTime.hours, reminderTime.minutes, 0, 0);
-            
-            // 计算当前时间和提醒时间的差异（分钟）
-            const diffMinutes = Math.floor((startTime - current) / (1000 * 60));
-            
-            // 如果在30分钟内即将开始，添加到提醒列表
-            if (diffMinutes > 0 && diffMinutes <= 30) {
-              upcomingTasks.push({
-                task,
-                timeRemaining: diffMinutes
-              });
+        // 处理所有类型的未完成任务
+        if (task.status === TaskStatus.PENDING) {
+          logger.debug('TaskService', `检查任务: ${task.title} (${task.type})`, {
+            hasReminder: !!(task.reminder && task.reminder.enabled),
+            reminderTime: task.reminder?.time,
+            startTime: task.startTime
+          });
+          
+          // 检查是否设置了提醒
+          if (!task.reminder || !task.reminder.enabled) {
+            logger.debug('TaskService', `任务${task.title}未设置提醒，跳过`);
+            return;
+          }
+          
+          // 构建任务开始时间
+          let taskStartTime;
+          if (task.startTime) {
+            // 有具体开始时间的任务
+            taskStartTime = new Date(`${task.date}T${task.startTime}`);
+          } else {
+            // 全天任务，只支持提前1天晚上8点提醒
+            if (task.reminder.time !== -1) {
+              logger.debug('TaskService', `全天任务${task.title}只支持提前1天提醒，跳过`);
+              return;
             }
+            // 为全天任务设置虚拟开始时间（第二天0点）
+            taskStartTime = new Date(`${task.date}T00:00`);
+          }
+          
+          // 计算提醒时间
+          let reminderTime;
+          if (task.reminder.time === -1) {
+            // 特殊处理：提前一天晚上8点
+            reminderTime = new Date(taskStartTime.getTime() - 24 * 60 * 60 * 1000);
+            reminderTime.setHours(20, 0, 0, 0);
+            logger.debug('TaskService', `任务${task.title}设置为提前1天晚上8点提醒`, {
+              taskStartTime: taskStartTime.toISOString(),
+              reminderTime: reminderTime.toISOString()
+            });
+          } else {
+            // 标准处理：提前X分钟提醒
+            reminderTime = new Date(taskStartTime.getTime() - task.reminder.time * 60 * 1000);
+            logger.debug('TaskService', `任务${task.title}设置为提前${task.reminder.time}分钟提醒`, {
+              taskStartTime: taskStartTime.toISOString(),
+              reminderTime: reminderTime.toISOString()
+            });
+          }
+          
+          // 计算当前时间到任务开始时间的差异（分钟）
+          const diffMinutes = Math.floor((taskStartTime - current) / (1000 * 60));
+          
+          // 计算当前时间到提醒时间的差异（分钟）
+          const reminderDiffMinutes = Math.floor((reminderTime - current) / (1000 * 60));
+          
+          logger.debug('TaskService', `任务${task.title}时间计算`, {
+            currentTime: current.toISOString(),
+            taskStartTime: taskStartTime.toISOString(),
+            reminderTime: reminderTime.toISOString(),
+            diffMinutes,
+            reminderDiffMinutes,
+            shouldRemind: reminderDiffMinutes <= 0 && diffMinutes > 0
+          });
+          
+          // 如果已经到了提醒时间且任务还未开始，则添加到提醒列表
+          if (reminderDiffMinutes <= 0 && diffMinutes > 0) {
+            logger.info('TaskService', `发现需要提醒的任务: ${task.title} (${task.type})`, {
+              timeRemaining: diffMinutes,
+              reminderType: task.reminder.time === -1 ? '提前1天晚上8点' : `提前${task.reminder.time}分钟`
+            });
+            
+            upcomingTasks.push({
+              task,
+              timeRemaining: diffMinutes,
+              reminderType: task.reminder.time === -1 ? '提前1天晚上8点' : `提前${task.reminder.time}分钟`
+            });
           }
         }
       });
-      
-      // 处理提醒
+
+      // 处理提醒事件
       for (const item of upcomingTasks) {
         // 触发即将到期事件
         this.eventBus.emit(EVENTS.TASK_UPCOMING, {
           task: item.task,
           timeRemaining: item.timeRemaining
         });
+        
+        logger.info('TaskService', `触发任务提醒事件: ${item.task.title}`, {
+          timeRemaining: item.timeRemaining,
+          reminderType: item.reminderType
+        });
       }
-      
-      logger.info('TaskService', `检查到${upcomingTasks.length}个即将开始的任务`);
+
+      logger.info('TaskService', `检查完成，发现${upcomingTasks.length}个需要提醒的任务`);
       
       return { success: true, count: upcomingTasks.length, tasks: upcomingTasks };
     } catch (error) {
       logger.error('TaskService', `检查即将到期任务失败: ${error.message}`, error);
       return { success: false, message: '检查即将到期任务失败' };
-    }
-  }
-  
-  /**
-   * 计算任务提醒时间
-   * @param {Task} task 任务对象
-   * @returns {Date|null} 提醒时间
-   * @private
-   */
-  _calculateReminderTime(task) {
-    try {
-      if (!task.reminder || !task.reminder.enabled) {
-        return null;
-      }
-      
-      // 构建任务时间
-      const taskDate = new Date(`${task.date}T${task.startTime || '08:00'}`);
-      
-      // 特殊处理提前一天晚上8点的情况
-      if (task.reminder.time === -1) {
-        logger.info('TaskService', `处理特殊提醒类型: 提前1天(晚上8点), 任务:`, task.title);
-        // 提前一天
-        const reminderDate = new Date(taskDate.getTime() - 24 * 60 * 60 * 1000);
-        // 设置为晚上8点
-        reminderDate.setHours(20, 0, 0, 0);
-        return reminderDate;
-      } else {
-        // 标准处理：提前X分钟提醒
-        return new Date(taskDate.getTime() - task.reminder.time * 60 * 1000);
-      }
-    } catch (error) {
-      logger.error('TaskService', '计算提醒时间出错:', error, task);
-      return null;
     }
   }
   

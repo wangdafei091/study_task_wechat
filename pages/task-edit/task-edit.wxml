@@ -318,18 +318,13 @@
       </view>
       
       <view class="option-list">
-        <view class="option-item {{!newTask.reminder.enabled ? 'selected' : ''}}" 
-              bindtap="selectReminderType" data-enabled="false">无</view>
-        <view class="option-item {{newTask.reminder.enabled && newTask.reminder.time === 0 ? 'selected' : ''}}" 
-              bindtap="selectReminderType" data-enabled="true" data-time="0">准时</view>
-        <view class="option-item {{newTask.reminder.enabled && newTask.reminder.time === 5 ? 'selected' : ''}}" 
-              bindtap="selectReminderType" data-enabled="true" data-time="5">提前5分钟</view>
-        <view class="option-item {{newTask.reminder.enabled && newTask.reminder.time === 15 ? 'selected' : ''}}" 
-              bindtap="selectReminderType" data-enabled="true" data-time="15">提前15分钟</view>
-        <view class="option-item {{newTask.reminder.enabled && newTask.reminder.time === 30 ? 'selected' : ''}}" 
-              bindtap="selectReminderType" data-enabled="true" data-time="30">提前30分钟</view>
-        <view class="option-item {{newTask.reminder.enabled && newTask.reminder.time === -1 ? 'selected' : ''}}" 
-              bindtap="selectReminderType" data-enabled="true" data-time="-1">提前1天(晚上8点)</view>
+        <view wx:for="{{reminderOptions}}" wx:key="index"
+              class="option-item {{(newTask.reminder.enabled === item.enabled && newTask.reminder.time === item.time) ? 'selected' : ''}}" 
+              bindtap="selectReminderType" 
+              data-enabled="{{item.enabled}}" 
+              data-time="{{item.time}}">
+          {{item.text}}
+        </view>
       </view>
     </view>
   </view>

@@ -69,7 +69,10 @@ Page({
     repeatPanelDesc: '任务将在所选时间范围内按设定频率执行', // 动态面板说明文字
     
     // 控制重复选项是否禁用
-    isRepeatOptionDisabled: true // 默认为true,因为初始日期是同一天
+    isRepeatOptionDisabled: true, // 默认为true,因为初始日期是同一天
+    
+    // 提醒选项列表（动态生成）
+    reminderOptions: []
   },
 
   /**
@@ -924,13 +927,16 @@ Page({
       // 当起止日期是同一天时，设置重复文本为"当天"
       repeatText: '当天',
       // 同一天时禁用重复选项
-      isRepeatOptionDisabled: true
+      isRepeatOptionDisabled: true,
+      // 初始化提醒选项
+      reminderOptions: this.getReminderOptions()
     });
     
     logger.info('TaskEdit', '初始化日期时间数据完成', {
       today: today,
       startTime: startTime,
-      endTime: endTime
+      endTime: endTime,
+      reminderOptionsCount: this.data.reminderOptions ? this.data.reminderOptions.length : 0
     });
     logger.info('TaskEdit', '起止日期相同，重复选项设为"当天"且禁用重复面板');
   },
@@ -941,11 +947,21 @@ Page({
   toggleAllDay: function(e) {
     const isAllDay = e.detail.value;
     
+    // 先更新全天状态
     this.setData({
       'newTask.isAllDay': isAllDay
     });
     
-    logger.info('TaskEdit', '全天选项:', isAllDay ? '开启' : '关闭');
+    // 然后生成并更新提醒选项
+    const reminderOptions = this.getReminderOptions();
+    this.setData({
+      reminderOptions: reminderOptions
+    });
+    
+    logger.info('TaskEdit', '全天选项切换:', {
+      isAllDay: isAllDay ? '开启' : '关闭',
+      reminderOptionsCount: reminderOptions.length
+    });
   },
   
   /**
@@ -998,6 +1014,12 @@ Page({
     // 检查并调整结束时间
     this.checkAndAdjustEndTime(time);
     
+    // 更新提醒选项（开始时间变化会影响提醒选项）
+    const reminderOptions = this.getReminderOptions();
+    this.setData({
+      reminderOptions: reminderOptions
+    });
+    
     // 更新重复预览文本
     if (this.data.newTask.repeat.type !== 'none') {
       this.setData({
@@ -1005,7 +1027,10 @@ Page({
       });
     }
     
-    logger.info('TaskEdit', '设置开始时间:', time);
+    logger.info('TaskEdit', '设置开始时间:', {
+      time: time,
+      reminderOptionsCount: reminderOptions.length
+    });
   },
   
   /**
@@ -1103,6 +1128,11 @@ Page({
     // 切换当前面板状态
     newState[panelName] = !this.data[panelName];
     
+    // 如果打开提醒面板，生成动态提醒选项
+    if (panelName === 'reminderPanel' && newState[panelName]) {
+      newState.reminderOptions = this.getReminderOptions();
+    }
+    
     this.setData(newState);
     
     logger.info(`TaskEdit`, '切换${panelName}:', newState[panelName] ? '打开' : '关闭');
@@ -1112,6 +1142,41 @@ Page({
       this.setData({
         repeatPanelMode: 'type'
       });
+    }
+  },
+  
+  /**
+   * 根据任务是否为全天任务获取可用的提醒选项
+   */
+  getReminderOptions: function() {
+    // 优先检查isAllDay字段，如果是全天任务则只提供简化选项
+    if (this.data.newTask.isAllDay) {
+      // 全天任务：简化选项
+      return [
+        { enabled: false, time: 0, text: '无' },
+        { enabled: true, time: -1, text: '提前1天(晚上8点)' }
+      ];
+    }
+    
+    // 非全天任务检查是否有开始时间
+    const hasStartTime = this.data.newTask.startTime && this.data.newTask.startTime.trim() !== '';
+    
+    if (hasStartTime) {
+      // 有开始时间的任务：完整选项
+      return [
+        { enabled: false, time: 0, text: '无' },
+        { enabled: true, time: 0, text: '准时' },
+        { enabled: true, time: 5, text: '提前5分钟' },
+        { enabled: true, time: 15, text: '提前15分钟' },
+        { enabled: true, time: 30, text: '提前30分钟' },
+        { enabled: true, time: -1, text: '提前1天(晚上8点)' }
+      ];
+    } else {
+      // 无开始时间的任务：简化选项
+      return [
+        { enabled: false, time: 0, text: '无' },
+        { enabled: true, time: -1, text: '提前1天(晚上8点)' }
+      ];
     }
   },
   

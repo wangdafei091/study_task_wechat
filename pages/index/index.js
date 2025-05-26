@@ -22,11 +22,13 @@ Page({
       total: 100
     },
     upcomingTask: {
-      name: '新冠语文课',
-      timeRemaining: 2,
-      id: ''
+      name: '',
+      title: '',
+      timeRemaining: 0,
+      id: '',
+      formattedStartTime: ''
     },
-    showUpcomingTask: true, // 是否显示即将到期任务
+    showUpcomingTask: false, // 是否显示即将到期任务
     isUpcomingLongPress: false, // 是否处于长按状态
     showUpcomingOptions: false, // 是否显示选项泡泡
     tasks: [],
@@ -571,6 +573,8 @@ Page({
   checkUpcomingTasks: async function() {
     try {
       logger.info('Index', '开始检查即将到期任务');
+      logger.info('Index', '当前upcomingTask状态', this.data.upcomingTask);
+      logger.info('Index', '当前showUpcomingTask状态', this.data.showUpcomingTask);
       
       // 获取任务服务
       const taskService = serviceManager.getService('task');
@@ -581,25 +585,35 @@ Page({
       
       // 获取即将到期的任务
       const upcomingResult = await taskService.checkUpcomingTasks();
+      logger.info('Index', '任务服务返回结果', upcomingResult);
       
-      // 添加防御性检查
-      if (upcomingResult && upcomingResult.task && upcomingResult.task.id) {
+      // 检查返回结果的结构
+      if (upcomingResult && upcomingResult.success && upcomingResult.tasks && upcomingResult.tasks.length > 0) {
+        // 取第一个即将到期的任务
+        const firstUpcoming = upcomingResult.tasks[0];
+        const task = firstUpcoming.task;
+        
         logger.info('Index', '发现即将到期任务', { 
-          taskId: upcomingResult.task.id,
-          title: upcomingResult.task.title,
-          timeRemaining: upcomingResult.timeRemaining
+          taskId: task.id,
+          title: task.title,
+          timeRemaining: firstUpcoming.timeRemaining
         });
+        
+        // 格式化开始时间
+        const formattedStartTime = task.startTime || '开始';
         
         this.setData({
           upcomingTask: {
-            id: upcomingResult.task.id,
-            title: upcomingResult.task.title || '未命名任务',
-            timeRemaining: upcomingResult.timeRemaining || 0
+            id: task.id,
+            name: task.title || '未命名任务',  // 组件模板使用name字段
+            title: task.title || '未命名任务', // 保留title字段以备用
+            timeRemaining: firstUpcoming.timeRemaining || 0,
+            formattedStartTime: formattedStartTime
           },
           showUpcomingTask: true
         });
       } else {
-        logger.info('Index', '没有即将到期的任务或任务数据不完整', upcomingResult);
+        logger.info('Index', '没有即将到期的任务', upcomingResult);
         this.setData({
           showUpcomingTask: false
         });
