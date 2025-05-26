@@ -277,7 +277,7 @@ class TaskRepository extends BaseRepository {
   }
   
   /**
-   * 使用习惯优先+开始时间顺序对任务排序
+   * 使用必做优先+时间顺序对任务排序
    * @private
    * @param {Array} tasks 任务数组
    * @returns {Array} 排序后的任务数组
@@ -286,43 +286,39 @@ class TaskRepository extends BaseRepository {
     if (!Array.isArray(tasks)) return [];
     
     const logger = require('../utils/logger');
-    logger.info('TaskRepository', '任务排序：保持位置稳定，移除完成状态排序');
+    logger.info('TaskRepository', '任务排序：必做任务优先，各组内部按时间排序');
     
     // 按以下规则排序:
-    // 1. 必做任务优先
-    // 2. 习惯任务优先
-    // 3. 开始时间早的优先
-    // 注意：移除了完成状态排序，保持任务位置稳定
+    // 1. 必做任务组优先
+    //    - 必做任务中无时间的排在最前面
+    //    - 必做任务中有时间的按从早到晚排序
+    // 2. 非必做任务组
+    //    - 非必做任务中无时间的排在前面
+    //    - 非必做任务中有时间的按从早到晚排序
     return [...tasks].sort((a, b) => {
-      // 首先按必做任务排序（必做任务优先）
       const aRequired = a.isRequired || false;
       const bRequired = b.isRequired || false;
+      
+      // 首先按必做任务分组（必做任务优先）
       if (aRequired !== bRequired) {
         return aRequired ? -1 : 1;
       }
       
-      // 其次按任务类型排序（习惯优先）
-      if (a.type === 'habit' && b.type !== 'habit') {
-        return -1;
-      }
-      if (a.type !== 'habit' && b.type === 'habit') {
-        return 1;
+      // 在同一组内（都是必做或都不是必做），按时间排序
+      const aHasTime = !!(a.startTime);
+      const bHasTime = !!(b.startTime);
+      
+      // 无时间的排在有时间的前面
+      if (aHasTime !== bHasTime) {
+        return aHasTime ? 1 : -1;
       }
       
-      // 最后按开始时间排序（早的优先）
-      if (a.startTime && b.startTime) {
+      // 如果都有时间，按开始时间从早到晚排序
+      if (aHasTime && bHasTime) {
         return a.startTime.localeCompare(b.startTime);
       }
       
-      // 没有开始时间的排在后面
-      if (a.startTime && !b.startTime) {
-        return -1;
-      }
-      if (!a.startTime && b.startTime) {
-        return 1;
-      }
-      
-      // 如果都没有开始时间，按创建时间排序保持稳定
+      // 如果都没有时间，按创建时间排序保持稳定
       return (a.createTime || 0) - (b.createTime || 0);
     });
   }

@@ -43,8 +43,8 @@
     <view class="task-metadata">
       <!-- 标签区域：必做标签和任务类型 -->
       <view class="task-tags-container">
-        <view class="task-tag --required" wx:if="{{task.isRequired}}">必做</view>
-        <view class="task-tag --type-{{task.type}}">
+        <view class="task-tag" style="background: linear-gradient(135deg, #FF8A80, #FFAB91); color: white; border: none; box-shadow: 0 1rpx 6rpx rgba(255, 138, 128, 0.15);" wx:if="{{task.isRequired}}">必做</view>
+        <view class="task-tag" style="background: {{task.type == 'habit' ? 'linear-gradient(135deg, #64B5F6, #90CAF9)' : task.type == 'interest' ? 'linear-gradient(135deg, #FFB74D, #FFCC80)' : 'linear-gradient(135deg, #81C784, #A5D6A7)'}}; color: white; border: none; box-shadow: 0 1rpx 6rpx {{task.type == 'habit' ? 'rgba(100, 181, 246, 0.15)' : task.type == 'interest' ? 'rgba(255, 183, 77, 0.15)' : 'rgba(129, 199, 132, 0.15)'}};">
           <text wx:if="{{task.type == 'habit'}}">习惯</text>
           <text wx:elif="{{task.type == 'interest'}}">兴趣</text>
           <text wx:elif="{{task.type == 'study'}}">学习</text>

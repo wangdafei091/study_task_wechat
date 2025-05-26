@@ -271,21 +271,49 @@
   margin-bottom: 8rpx;
 }
 
-/* 统一标签基础样式 - 优化尺寸和视觉权重 */
+/* 统一标签基础样式 */
 .task-tag {
-  height: 28rpx;
-  padding: 2rpx 8rpx;
-  border-radius: 8rpx;
-  font-size: 18rpx;
+  height: 36rpx;
+  padding: 4rpx 12rpx;
+  border-radius: 6rpx;
+  font-size: 20rpx;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   margin-left: 8rpx;
-  font-weight: 400;
+  font-weight: 500;
   line-height: 1;
   box-shadow: 0 1rpx 4rpx rgba(0, 0, 0, 0.05);
 }
 
+/* 必做标签样式 */
+.task-item .task-tag.--required {
+  background: linear-gradient(135deg, #FF6B6B, #FF5252) !important;
+  color: white !important;
+  border: none !important;
+}
+
+/* 任务类型标签样式 - 使用硬编码颜色值解决组件样式隔离问题 */
+/* 习惯任务标签 */
+.task-item .task-tag.--type-habit {
+  background: linear-gradient(135deg, #E3F2FD, #BBDEFB) !important;
+  color: #4285F4 !important;
+  border: 1rpx solid #90CAF9 !important;
+}
+
+/* 兴趣任务标签 */
+.task-item .task-tag.--type-interest {
+  background: linear-gradient(135deg, #FFF3E0, #FFE0B2) !important;
+  color: #FBBC05 !important;
+  border: 1rpx solid #FFCC02 !important;
+}
+
+/* 学习任务标签 */
+.task-item .task-tag.--type-study {
+  background: linear-gradient(135deg, #E8F5E8, #C8E6C9) !important;
+  color: #2E9046 !important;
+  border: 1rpx solid #A5D6A7 !important;
+}
 
 /* 信息容器 - 垂直布局 */
 .task-info-container {
