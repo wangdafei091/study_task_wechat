@@ -1843,41 +1843,41 @@ Page({
         }
         break;
         
-      case 'custom':
-        // 自定义重复的冲突检查
-        if (this.data.newTask.repeat.days && this.data.newTask.repeat.days.length > 0) {
-          // 确保selectedDays中的元素是数字类型
-          const selectedDays = this.data.newTask.repeat.days.map(day => parseInt(day));
-          const selectedDayNames = selectedDays.map(day => dayNames[day]).join('、');
-          
-          if (!selectedDays.includes(dayOfWeek)) {
-            // 开始日期的星期不在所选星期中
-            previewText = `注意：开始日期(${todayStr}，${dayName})不在所选重复星期(${selectedDayNames})内，系统将只创建符合条件的任务实例。`;
-            hasConflict = true;
-            conflictType = '开始日期的星期不在所选星期中';
+              case 'custom':
+          // 自定义重复的冲突检查
+          if (this.data.newTask.repeat.days && this.data.newTask.repeat.days.length > 0) {
+            // 确保selectedDays中的元素是数字类型
+            const selectedDays = this.data.newTask.repeat.days.map(day => parseInt(day));
+            const selectedDayNames = selectedDays.map(day => dayNames[day]).join('、');
             
-            logger.info('TaskEdit', '检测到冲突:', {
-              today: todayStr,
-              dayName: dayName,
-              selectedDays: selectedDayNames
-            });
+            if (!selectedDays.includes(dayOfWeek)) {
+              // 开始日期的星期不在所选星期中
+              previewText = `注意：开始日期(${todayStr}，${dayName})不在所选重复星期(${selectedDayNames})内，系统将自动调整到第一个符合条件的日期。`;
+              hasConflict = true;
+              conflictType = '开始日期的星期不在所选星期中';
+              
+              logger.info('TaskEdit', '检测到冲突:', {
+                today: todayStr,
+                dayName: dayName,
+                selectedDays: selectedDayNames
+              });
+            } else {
+              // 无冲突，记录正常情况
+              logger.info('TaskEdit', '无冲突:', {
+                today: todayStr,
+                dayName: dayName,
+                selectedDays: selectedDayNames
+              });
+            }
           } else {
-            // 无冲突，记录正常情况
-            logger.info('TaskEdit', '无冲突:', {
-              today: todayStr,
-              dayName: dayName,
-              selectedDays: selectedDayNames
-            });
+            // 没有选择任何星期
+            previewText = `请至少选择一个重复的星期`;
+            hasConflict = true;
+            conflictType = '未选择任何重复星期';
+            
+            logger.warn('TaskEdit', '检测到问题: 未选择任何重复星期');
           }
-        } else {
-          // 没有选择任何星期
-          previewText = `请至少选择一个重复的星期`;
-          hasConflict = true;
-          conflictType = '未选择任何重复星期';
-          
-          logger.warn('TaskEdit', '检测到问题: 未选择任何重复星期');
-        }
-        break;
+          break;
     }
     
     if (hasConflict) {

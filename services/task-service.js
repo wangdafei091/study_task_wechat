@@ -177,6 +177,83 @@ class TaskService {
         return { success: false, message: errors.join(', ') };
       }
       
+      // 修复自定义重复任务的日期不匹配问题
+      if (task.repeat && task.repeat.type === 'custom' && task.repeat.days && task.repeat.days.length > 0) {
+        const startDate = new Date(task.date);
+        const startDayOfWeek = startDate.getDay();
+        
+        // 统一数据类型：确保task.repeat.days中的元素都是数字类型
+        const selectedDays = task.repeat.days.map(day => typeof day === 'string' ? parseInt(day) : day);
+        
+        logger.info('TaskService', `检查自定义重复任务日期匹配: 开始日期=${task.date}, 星期=${startDayOfWeek}, 选择的星期=${selectedDays}`);
+        logger.info('TaskService', `数据类型修复: 原始days=${JSON.stringify(task.repeat.days)}, 转换后=${JSON.stringify(selectedDays)}`);
+        
+        // 检查开始日期的星期是否在选择的重复星期中
+        if (!selectedDays.includes(startDayOfWeek)) {
+          logger.warn('TaskService', `开始日期的星期(${startDayOfWeek})不在选择的重复星期中(${selectedDays})，需要调整日期`);
+          
+          // 找到第一个符合条件的日期
+          const endDate = new Date(task.repeat.endDate);
+          // 标准化结束日期，重置时间为午夜，确保日期比较准确
+          endDate.setHours(0, 0, 0, 0);
+          
+          let adjustedDate = new Date(startDate);
+          // 标准化调整日期，重置时间为午夜，确保日期比较准确
+          adjustedDate.setHours(0, 0, 0, 0);
+          
+          let foundValidDate = false;
+          
+          logger.info('TaskService', `开始搜索符合条件的日期: 开始=${adjustedDate.toISOString()}, 结束=${endDate.toISOString()}, 选择星期=${selectedDays}`);
+          
+          // 最多检查21天，确保能找到符合条件的日期（扩大搜索范围）
+          for (let i = 0; i <= 20; i++) {
+            const currentDay = adjustedDate.getDay();
+            const dateStr = require('../utils/dateUtils').formatDate(adjustedDate);
+            const dayMatches = selectedDays.includes(currentDay);
+            const dateInRange = adjustedDate <= endDate;
+            
+            logger.debug('TaskService', `检查日期: ${dateStr} (星期${currentDay}), 星期匹配=${dayMatches}, 日期范围内=${dateInRange}`);
+            
+            if (dayMatches && dateInRange) {
+              // 找到符合条件的日期，更新任务日期
+              logger.info('TaskService', `找到符合条件的日期: ${dateStr} (星期${currentDay})`);
+              
+              task.date = dateStr;
+              task.repeat.startDate = dateStr;
+              foundValidDate = true;
+              break;
+            }
+            
+            // 移动到下一天
+            adjustedDate.setDate(adjustedDate.getDate() + 1);
+          }
+          
+          if (!foundValidDate) {
+            const dateUtils = require('../utils/dateUtils');
+            const startDateStr = dateUtils.formatDate(startDate);
+            const endDateStr = dateUtils.formatDate(endDate);
+            const selectedDayNames = selectedDays.map(day => {
+              const dayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+              return dayNames[day];
+            }).join('、');
+            
+            logger.error('TaskService', `无法在指定日期范围内找到符合重复条件的日期`, {
+              startDate: startDateStr,
+              endDate: endDateStr,
+              selectedDays: selectedDayNames,
+              searchRange: '21天'
+            });
+            
+            return { 
+              success: false, 
+              message: `无法在日期范围(${startDateStr}到${endDateStr})内找到符合重复星期(${selectedDayNames})的日期，请检查日期设置` 
+            };
+          }
+        } else {
+          logger.info('TaskService', '开始日期的星期匹配选择的重复星期，无需调整');
+        }
+      }
+      
       // 保存任务
       const savedTask = await this.taskRepository.save(task);
       logger.info('TaskService', `创建任务成功: "${savedTask.title}", ID=${savedTask.id}`);
@@ -334,12 +411,24 @@ class TaskService {
         case 'custom':
           // 自定义重复
           if (task.repeat.days && task.repeat.days.length > 0) {
+            // 统一数据类型：确保task.repeat.days中的元素都是数字类型
+            const selectedDays = task.repeat.days.map(day => typeof day === 'string' ? parseInt(day) : day);
+            
+            logger.info('TaskService', `自定义重复任务生成: 选择的星期=${selectedDays}, 日期范围=${task.repeat.startDate}到${task.repeat.endDate}`);
+            
             for (let date = new Date(startDate); date <= endDate; date.setDate(date.getDate() + 1)) {
-              const day = date.getDay().toString();
-              if (task.repeat.days.includes(day)) {
+              const day = date.getDay();
+              const dateStr = require('../utils/dateUtils').formatDate(date);
+              
+              if (selectedDays.includes(day)) {
                 repeatDates.push(new Date(date));
+                logger.info('TaskService', `添加重复任务日期: ${dateStr} (星期${day})`);
+              } else {
+                logger.debug('TaskService', `跳过日期: ${dateStr} (星期${day}), 不在选择的星期中`);
               }
             }
+            
+            logger.info('TaskService', `自定义重复任务生成完成: 共生成${repeatDates.length}个日期`);
           }
           break;
       }
