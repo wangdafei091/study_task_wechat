@@ -608,128 +608,13 @@ Component({
         console.log(`[TaskHeatmap] 日期没有预计算的压力值，使用默认值0`);
       }
       
-      // 增强任务信息，但不再重新计算压力
+      // 使用统一的enhanceTaskData方法增强任务信息
       const tasks = dayTasks.map(task => {
         // 记录任务是否为必做任务
         console.log(`[task-heatmap] 处理任务: ${task.title}, 是否必做: ${task.isRequired ? '是' : '否'}, ID: ${task.id}`);
         
-        // 增强任务信息
-        const enhancedTask = { ...task };
-        
-        // 处理重复任务格式化
-        if (task.repeat && task.repeat.type !== 'none') {
-          // 格式化重复任务信息
-          switch (task.repeat.type) {
-            case 'daily':
-              // 根据全天任务状态决定时间显示
-              let timeRange = '';
-              if (task.isAllDay) {
-                timeRange = '全天';
-              } else {
-                timeRange = task.endTime ? `${task.startTime}-${task.endTime}` : task.startTime;
-              }
-              
-              // 检查是否为单天任务
-              const isOneTimeDaily = task.repeat.startDate === task.repeat.endDate;
-              
-              if (isOneTimeDaily) {
-                // 单天任务不显示"每天"
-                enhancedTask.repeatInfo = `${this.formatDateRange(task.repeat.startDate, task.repeat.endDate)} ${timeRange}`;
-              } else {
-                enhancedTask.repeatInfo = `${this.formatDateRange(task.repeat.startDate, task.repeat.endDate)} 每天 ${timeRange}`;
-              }
-              break;
-            case 'weekly':
-              const weekDay = new Date(task.date).getDay();
-              const weekDayNames = ['日', '一', '二', '三', '四', '五', '六'];
-              // 根据全天任务状态决定时间显示
-              let weeklyTimeRange = task.isAllDay ? '全天' : `${task.startTime}-${task.endTime}`;
-              console.log(`[TaskHeatmap] 处理每周任务: ${task.title}, 起始日期: ${task.repeat.startDate}, 结束日期: ${task.repeat.endDate}`);
-              enhancedTask.repeatInfo = `${this.formatDateRange(task.repeat.startDate, task.repeat.endDate)} 每周${weekDayNames[weekDay]} ${weeklyTimeRange}`;
-              break;
-            case 'workdays':
-              console.log(`[TaskHeatmap] 处理工作日任务: ${task.title}, 起始日期: ${task.repeat.startDate}, 结束日期: ${task.repeat.endDate}`);
-              // 根据全天任务状态决定时间显示
-              let workdaysTimeRange = task.isAllDay ? '全天' : `${task.startTime}-${task.endTime}`;
-              enhancedTask.repeatInfo = `${this.formatDateRange(task.repeat.startDate, task.repeat.endDate)} 工作日 ${workdaysTimeRange}`;
-              break;
-            case 'weekends':
-              console.log(`[TaskHeatmap] 处理休息日任务: ${task.title}, 起始日期: ${task.repeat.startDate}, 结束日期: ${task.repeat.endDate}`);
-              // 根据全天任务状态决定时间显示
-              let weekendsTimeRange = task.isAllDay ? '全天' : `${task.startTime}-${task.endTime}`;
-              enhancedTask.repeatInfo = `${this.formatDateRange(task.repeat.startDate, task.repeat.endDate)} 休息日 ${weekendsTimeRange}`;
-              break;
-            case 'custom':
-              // 根据全天任务状态决定时间显示
-              let customTimeRange = task.isAllDay ? '全天' : `${task.startTime}-${task.endTime}`;
-              console.log(`[TaskHeatmap] 处理自定义重复任务: ${task.title}, 起始日期: ${task.repeat.startDate}, 结束日期: ${task.repeat.endDate}`);
-              enhancedTask.repeatInfo = `${this.formatDateRange(task.repeat.startDate, task.repeat.endDate)} 每周${this.formatRepeatDays(task.repeat.days)} ${customTimeRange}`;
-              break;
-          }
-        } else {
-          // 格式化单次任务日期为"5月23日"形式
-          const taskDate = new Date(task.date);
-          const month = taskDate.getMonth() + 1;
-          const day = taskDate.getDate();
-          enhancedTask.date = `${month}月${day}日`;
-        }
-        
-        // 确保任务有积分有效期信息
-        if (task.status === 1 || task.status === 'completed') {
-          // 已完成任务：显示具体失效日期
-          if (task.pointsExpiryDate) {
-            // 使用已有的有效期信息
-            enhancedTask.pointsExpiryDate = task.pointsExpiryDate;
-          } else if (task.pointsExpiry === 'permanent') {
-            // 永久有效
-            enhancedTask.pointsExpiryDate = '永久';
-            console.log(`[TaskHeatmap] 任务${task.id}设置为永久有效期`);
-          } else {
-            // 没有有效期信息时，默认设置为7天后
-            enhancedTask.pointsExpiryDate = '7天后';
-          }
-        } else {
-          // 未完成任务：根据任务设置的实际有效期类型显示
-          enhancedTask.pointsExpiryDate = '';
-          enhancedTask.pointsExpiry = task.pointsExpiry || 'permanent'; // 确保有值
-          console.log(`[TaskHeatmap] 未完成任务${task.id}积分有效期类型: ${enhancedTask.pointsExpiry}`);
-          
-          // 添加积分有效期类型转换为显示文本
-          if (enhancedTask.pointsExpiry === 'permanent') {
-            enhancedTask.pointsExpiryDate = '永久';
-          } else if (Constants.POINTS_EXPIRY.TEXT[enhancedTask.pointsExpiry]) {
-            enhancedTask.pointsExpiryDate = Constants.POINTS_EXPIRY.TEXT[enhancedTask.pointsExpiry];
-            console.log(`[TaskHeatmap] 未完成任务${task.id}积分有效期转换为: ${enhancedTask.pointsExpiryDate}`);
-          } else {
-            enhancedTask.pointsExpiryDate = '7天'; // 默认值
-            console.log(`[TaskHeatmap] 未完成任务${task.id}无法识别积分有效期类型，使用默认值: 7天`);
-          }
-        }
-        
-        // 确保必做任务属性被正确传递
-        enhancedTask.isRequired = !!task.isRequired;
-        
-        // 确保积分值被正确传递
-        enhancedTask.points = task.points || 0;
-        
-        // 添加日志记录星星数
-        console.log(`[TaskHeatmap] 任务${task.id} "${task.title}" 星星数: ${task.points || 0}`);
-        
-        // 添加更详细的任务状态日志
-        let statusText = '';
-        if (task.status === 1 || task.status === 'completed') {
-          statusText = '已完成';
-        } else if (task.status === 0 || task.status === 'pending') {
-          statusText = '待完成';
-        } else if (task.status === 2 || task.status === 'overdue') {
-          statusText = '已逾期';
-        } else if (task.status === 3 || task.status === 'canceled') {
-          statusText = '已取消';
-        }
-        
-        console.log(`[TaskHeatmap] 处理任务: ${task.title}, ID: ${task.id}, 类型: ${task.type}, 状态: ${statusText}, 必做: ${enhancedTask.isRequired ? '是' : '否'}, 星星: ${enhancedTask.points}`);
-        
-        return enhancedTask;
+        // 使用统一的任务数据增强方法
+        return this.enhanceTaskData(task);
       });
       
       // 使用预计算好的压力级别
@@ -1143,14 +1028,24 @@ Component({
           logger.info('task-heatmap', '仅更新当前任务');
           
           // 更新单个任务
-          const updatedTask = await taskService.updateTask(taskId, updateData);
+          const updateResult = await taskService.updateTask(taskId, updateData);
+          logger.info('task-heatmap', '任务更新服务调用完成', { success: updateResult?.success, hasTask: !!updateResult?.task });
           
-          if (updatedTask) {
+          if (updateResult && updateResult.success) {
             logger.info('task-heatmap', '任务更新成功');
+            
+            // 增强任务数据，确保包含所有显示字段
+            const enhancedTask = this.enhanceTaskData(updateResult.task);
+            logger.info('task-heatmap', '任务数据增强完成', {
+              id: enhancedTask.id,
+              hasStartTime: !!enhancedTask.startTime,
+              hasEndTime: !!enhancedTask.endTime,
+              hasDate: !!enhancedTask.date
+            });
             
             // 更新本地显示
             const updatedDayTasks = [...this.data.dayTasks];
-            updatedDayTasks[taskIndex] = updatedTask;
+            updatedDayTasks[taskIndex] = enhancedTask;
             
             this.setData({
               dayTasks: updatedDayTasks
@@ -1166,9 +1061,9 @@ Component({
             // 触发刷新事件
             this.triggerEvent('refreshTasks');
           } else {
-            logger.error('task-heatmap', '任务更新失败');
+            logger.error('task-heatmap', '任务更新失败', updateResult);
             wx.showToast({
-              title: '更新失败',
+              title: updateResult && updateResult.message ? updateResult.message : '更新失败',
               icon: 'error',
               duration: 1500
             });
@@ -1196,6 +1091,129 @@ Component({
         year: this.properties.currentYear,
         month: this.properties.currentMonth
       };
+    },
+
+    /**
+     * 增强任务数据，添加显示所需的格式化字段
+     * @param {Object} task 原始任务对象
+     * @returns {Object} 增强后的任务对象
+     */
+    enhanceTaskData(task) {
+      const Constants = require('../../utils/constants.js');
+      const logger = require('../../utils/logger.js');
+      
+      logger.info('task-heatmap', '开始增强任务数据', {
+        taskId: task.id,
+        title: task.title,
+        hasStartTime: !!task.startTime,
+        hasEndTime: !!task.endTime,
+        isAllDay: !!task.isAllDay
+      });
+      
+      // 创建增强任务对象
+      const enhancedTask = { ...task };
+      
+      // 处理重复任务信息
+      if (task.repeat && task.repeat.type !== 'none') {
+        // 格式化重复任务信息
+        switch (task.repeat.type) {
+          case 'daily':
+            // 根据全天任务状态决定时间显示
+            let timeRange = '';
+            if (task.isAllDay) {
+              timeRange = '全天';
+            } else {
+              timeRange = task.endTime ? `${task.startTime}-${task.endTime}` : task.startTime;
+            }
+            
+            // 检查是否为单天任务
+            const isOneTimeDaily = task.repeat.startDate === task.repeat.endDate;
+            
+            if (isOneTimeDaily) {
+              // 单天任务不显示"每天"
+              enhancedTask.repeatInfo = `${this.formatDateRange(task.repeat.startDate, task.repeat.endDate)} ${timeRange}`;
+            } else {
+              enhancedTask.repeatInfo = `${this.formatDateRange(task.repeat.startDate, task.repeat.endDate)} 每天 ${timeRange}`;
+            }
+            break;
+          case 'weekly':
+            const weekDay = new Date(task.date).getDay();
+            const weekDayNames = ['日', '一', '二', '三', '四', '五', '六'];
+            // 根据全天任务状态决定时间显示
+            let weeklyTimeRange = task.isAllDay ? '全天' : `${task.startTime}-${task.endTime}`;
+            enhancedTask.repeatInfo = `${this.formatDateRange(task.repeat.startDate, task.repeat.endDate)} 每周${weekDayNames[weekDay]} ${weeklyTimeRange}`;
+            break;
+          case 'workdays':
+            // 根据全天任务状态决定时间显示
+            let workdaysTimeRange = task.isAllDay ? '全天' : `${task.startTime}-${task.endTime}`;
+            enhancedTask.repeatInfo = `${this.formatDateRange(task.repeat.startDate, task.repeat.endDate)} 工作日 ${workdaysTimeRange}`;
+            break;
+          case 'weekends':
+            // 根据全天任务状态决定时间显示
+            let weekendsTimeRange = task.isAllDay ? '全天' : `${task.startTime}-${task.endTime}`;
+            enhancedTask.repeatInfo = `${this.formatDateRange(task.repeat.startDate, task.repeat.endDate)} 休息日 ${weekendsTimeRange}`;
+            break;
+          case 'custom':
+            // 根据全天任务状态决定时间显示
+            let customTimeRange = task.isAllDay ? '全天' : `${task.startTime}-${task.endTime}`;
+            enhancedTask.repeatInfo = `${this.formatDateRange(task.repeat.startDate, task.repeat.endDate)} 每周${this.formatRepeatDays(task.repeat.days)} ${customTimeRange}`;
+            break;
+        }
+      } else {
+        // 格式化单次任务日期为"5月23日"形式用于显示
+        const taskDate = new Date(task.date);
+        const month = taskDate.getMonth() + 1;
+        const day = taskDate.getDate();
+        enhancedTask.date = `${month}月${day}日`;
+      }
+      
+      // 确保任务有积分有效期信息
+      if (task.status === 1 || task.status === 'completed') {
+        // 已完成任务：显示具体失效日期
+        if (task.pointsExpiryDate) {
+          enhancedTask.pointsExpiryDate = task.pointsExpiryDate;
+        } else if (task.pointsExpiry === 'permanent') {
+          enhancedTask.pointsExpiryDate = '永久';
+        } else {
+          enhancedTask.pointsExpiryDate = '7天后';
+        }
+      } else {
+        // 未完成任务：根据任务设置的实际有效期类型显示
+        enhancedTask.pointsExpiryDate = '';
+        enhancedTask.pointsExpiry = task.pointsExpiry || 'permanent';
+        
+        if (enhancedTask.pointsExpiry === 'permanent') {
+          enhancedTask.pointsExpiryDate = '永久';
+        } else if (Constants.POINTS_EXPIRY.TEXT[enhancedTask.pointsExpiry]) {
+          enhancedTask.pointsExpiryDate = Constants.POINTS_EXPIRY.TEXT[enhancedTask.pointsExpiry];
+        } else {
+          enhancedTask.pointsExpiryDate = '7天';
+        }
+      }
+      
+      // 确保必做任务属性被正确传递
+      enhancedTask.isRequired = !!task.isRequired;
+      
+      // 确保积分值被正确传递
+      enhancedTask.points = task.points || 0;
+      
+      // 确保时间字段被正确传递
+      enhancedTask.startTime = task.startTime || '';
+      enhancedTask.endTime = task.endTime || '';
+      
+      // 确保isAllDay字段被正确传递
+      enhancedTask.isAllDay = !!task.isAllDay;
+      
+      logger.info('task-heatmap', '任务数据增强完成', {
+        taskId: enhancedTask.id,
+        title: enhancedTask.title,
+        date: enhancedTask.date,
+        startTime: enhancedTask.startTime,
+        endTime: enhancedTask.endTime,
+        isAllDay: enhancedTask.isAllDay
+      });
+      
+      return enhancedTask;
     },
     
     // 显示压力指数说明弹窗
