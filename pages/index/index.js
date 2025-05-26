@@ -794,6 +794,9 @@ Page({
             icon: 'none',
             duration: 1500
           });
+          
+          // 更新奖励进度信息
+          this.loadStarsAndRewards();
         }
       } else {
         // 操作失败，检查是否是锁定错误

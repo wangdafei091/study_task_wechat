@@ -25,4 +25,4 @@
 - pages/index/index.wxml: 更新HTML结构使用新样式类
 - pages/index/index.js: 添加优化日志记录
 
-这次优化保持了功能完整性，提升了视觉一致性和专业感。 
+这次优化保持了功能完整性，提升了视觉一致性和专业感。 修复取消任务完成后奖励进度不更新的问题：在取消完成分支中添加loadStarsAndRewards()调用
