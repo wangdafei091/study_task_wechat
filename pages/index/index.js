@@ -189,6 +189,9 @@ Page({
       // 监听奖励更新相关事件
       eventBus.on('reward:updated', this.handleRewardUpdated.bind(this));
       eventBus.on('reward:examples_cleared', this.handleRewardUpdated.bind(this));
+      
+      // 监听进度条完成事件
+      eventBus.on('progressbar:complete', this.handleProgressBarComplete.bind(this));
     }
   },
   
@@ -207,6 +210,22 @@ Page({
       logger.debug('Index', '当前在首页，立即刷新奖励数据');
       this.loadStarsAndRewards();
     }
+  },
+
+  /**
+   * 处理进度条完成事件
+   * 当进度条达到满值时触发，用于锁定用户操作并准备显示奖励对话框
+   */
+  handleProgressBarComplete: function() {
+    logger.info('Index', '收到进度条完成事件，准备处理奖励达成');
+    
+    // 设置UI锁定状态，防止用户在动效期间进行其他操作
+    this.setData({
+      transitionInProgress: true,
+      forceKeepFullValue: true
+    });
+    
+    logger.info('Index', '进度条完成事件处理完毕，UI已锁定');
   },
   
   /**
@@ -397,6 +416,7 @@ Page({
       eventBus.off('reward:claimed', this.handleRewardClaimed);
       eventBus.off('reward:updated', this.handleRewardUpdated);
       eventBus.off('reward:examples_cleared', this.handleRewardUpdated);
+      eventBus.off('progressbar:complete', this.handleProgressBarComplete);
     }
   },
 
@@ -701,15 +721,12 @@ Page({
       });
       
       if (result && result.success) {
-        // 任务状态变更时，同时刷新任务列表和星星奖品信息
-        logger.info('Index', '任务状态变更，同时刷新任务列表和星星奖品信息');
+        // 任务状态变更时，先刷新任务列表
+        logger.info('Index', '任务状态变更，刷新任务列表');
         
-        // 并行刷新任务数据和星星奖励信息，提高响应速度
+        // 只刷新任务数据，星星奖励信息将在奖励检查后统一处理
         logger.info('Index', '任务状态变更成功，保持任务位置稳定');
-        await Promise.all([
-          this.loadTaskData(),
-          this.loadStarsAndRewards()
-        ]);
+        await this.loadTaskData();
         
         // 根据操作类型和任务状态提供合适的提示
         if (newStatus === 1) {  // 完成任务
@@ -725,13 +742,20 @@ Page({
             if (wx.vibrateShort) {
               wx.vibrateShort({ type: 'heavy' });
             }
+            
+            // 立即检查奖励达成，避免进度条状态跳跃
+            logger.info('Index', '立即检查奖励达成状态');
+            this.checkRewardUnlock();
           } else {
-            // 再次完成任务，不会获得星星
+            // 再次完成任务，不会获得星星，需要刷新奖励信息
             wx.showToast({
               title: '已获得过星星',
               icon: 'none',
               duration: 1500
             });
+            
+            // 没有获得新星星时，正常刷新奖励信息
+            this.loadStarsAndRewards();
           }
           
           // 仅当完成任务时触发庆祝动画
@@ -1325,6 +1349,73 @@ Page({
   },
 
   /**
+   * 检查奖励解锁状态
+   * 在任务完成后检查是否有奖励达成，如有则显示奖励选择对话框
+   */
+  checkRewardUnlock: async function() {
+    try {
+      logger.info('Index', '开始检查奖励解锁状态');
+      
+      // 获取服务实例
+      const starService = serviceManager.getService('starService');
+      const rewardService = serviceManager.getService('rewardService');
+      
+      if (!starService || !rewardService) {
+        logger.error('Index', '无法获取服务实例，跳过奖励检查');
+        return;
+      }
+      
+      // 获取当前星星数和所有可用奖励
+      const [userPoints, allRewards] = await Promise.all([
+        starService.getTotalStars(),
+        rewardService.getAvailableRewards(true)
+      ]);
+      
+      logger.info('Index', '奖励检查数据', { userPoints, rewardCount: allRewards.length });
+      
+      // 找到所有已解锁但未领取的奖励
+      const unlockedRewards = allRewards.filter(reward => 
+        !reward.claimed && reward.points <= userPoints
+      );
+      
+      logger.info('Index', '已解锁未领取奖励', { count: unlockedRewards.length });
+      
+      if (unlockedRewards.length > 0) {
+        // 选择点数最低的已解锁奖励作为达成奖励
+        const achievedReward = unlockedRewards.sort((a, b) => a.points - b.points)[0];
+        
+        logger.info('Index', '检测到奖励达成', { 
+          rewardName: achievedReward.name, 
+          requiredPoints: achievedReward.points,
+          userPoints: userPoints
+        });
+        
+        // 先设置进度条为满值状态
+        await this._handleRewardCompletion(null, achievedReward.points);
+        
+        // 设置完成的奖励信息
+        this.setData({
+          completedReward: achievedReward,
+          completedRewardTotal: achievedReward.points
+        });
+        
+        // 延迟显示奖励选择对话框，让满值动效先播放
+        setTimeout(() => {
+          this.showRewardChoiceDialog();
+        }, 500);
+      } else {
+        logger.info('Index', '暂无奖励达成，正常刷新奖励信息');
+        
+        // 没有奖励达成时，正常刷新奖励信息
+        this.loadStarsAndRewards();
+      }
+      
+    } catch (error) {
+      logger.error('Index', '检查奖励解锁状态失败', error);
+    }
+  },
+
+  /**
    * 加载用户星星和奖励信息
    */
   loadStarsAndRewards: async function() {
@@ -1392,6 +1483,27 @@ Page({
         }
       }
       
+      // 检查是否有奖励刚刚达成（用于正确设置进度条）
+      const hasAchievedReward = visibleRewards.some(reward => 
+        !reward.claimed && reward.points <= userPoints
+      );
+      
+      // 计算进度条的total值
+      let progressTotal;
+      if (nextReward.allClaimed || nextReward.isDefault || nextReward.showSetupTip) {
+        // 没有真实奖励时设置更大的total值，确保进度条显示一致
+        progressTotal = Math.max(userPoints * 2, 100);
+      } else if (hasAchievedReward) {
+        // 如果有奖励刚刚达成，使用该奖励的点数作为total，确保显示满值
+        const achievedReward = visibleRewards
+          .filter(reward => !reward.claimed && reward.points <= userPoints)
+          .sort((a, b) => a.points - b.points)[0];
+        progressTotal = achievedReward ? achievedReward.points : (nextReward.points || 100);
+      } else {
+        // 正常情况下使用下一个奖励的点数
+        progressTotal = nextReward && nextReward.points ? nextReward.points : 100;
+      }
+      
       // 更新UI状态
       this.setData({
         userPoints,
@@ -1409,17 +1521,16 @@ Page({
         hasMoreRewards: visibleRewardsToShow.length > 3,
         rewardProgress: {
           current: userPoints,
-          // 没有真实奖励时设置更大的total值，确保进度条显示一致
-          total: (nextReward.allClaimed || nextReward.isDefault || nextReward.showSetupTip) ? 
-                 Math.max(userPoints * 2, 100) : // 设置为当前星星数的两倍或至少100
-                 (nextReward && nextReward.points ? nextReward.points : 100)
+          total: progressTotal
         }
       });
       
       logger.info('Index', '奖励进度条数据已更新', { 
         current: userPoints, 
-        total: (nextReward.allClaimed || nextReward.isDefault || nextReward.showSetupTip) ?
-               '∞' : (nextReward && nextReward.points ? nextReward.points : 100) 
+        total: progressTotal,
+        hasAchievedReward: hasAchievedReward,
+        progressType: hasAchievedReward ? '已达成奖励' : 
+                     (nextReward.allClaimed || nextReward.isDefault || nextReward.showSetupTip) ? '无限制' : '下一目标'
       });
       
     } catch (error) {
@@ -1436,22 +1547,40 @@ Page({
       logger.info('Index', '处理奖励完成状态', { targetPoints: userPoints });
       
       const starService = serviceManager.getService('starService');
-      if (!starService) {
-        logger.error('Index', '无法获取星星服务实例');
+      const rewardService = serviceManager.getService('rewardService');
+      
+      if (!starService || !rewardService) {
+        logger.error('Index', '无法获取服务实例');
         return;
       }
       
-      // 格式化星星数展示
-      const formattedPoints = formatUtils.formatPoints(userPoints);
+      // 获取当前实际星星数（确保数据一致性）
+      const actualUserPoints = await starService.getTotalStars();
       
-      // 更新UI显示满值状态
+      // 格式化星星数展示
+      const formattedPoints = formatUtils.formatPoints(actualUserPoints);
+      
+      // 获取可见奖励信息，用于更新奖励指示器
+      const visibleRewards = await rewardService.getAvailableRewards(true);
+      const visibleRewardsToShow = visibleRewards.slice(0, 3).map(reward => ({
+        id: reward.id,
+        name: reward.name,
+        points: reward.points,
+        icon: reward.icon,
+        status: reward.claimed ? 'claimed' : (reward.points <= actualUserPoints ? 'unlocked' : 'current'),
+        isExample: !!reward.isExample
+      }));
+      
+      // 更新UI显示满值状态，同时更新奖励指示器
       this.setData({
-        userPoints: userPoints,
+        userPoints: actualUserPoints,
         rewardProgress: {
-          current: userPoints,
+          current: userPoints, // 使用目标点数显示满值
           total: userPoints
         },
         formattedPoints: formattedPoints,
+        visibleRewards: visibleRewardsToShow,
+        hasMoreRewards: visibleRewards.length > 3,
         forceKeepFullValue: true,
         completedRewardTotal: userPoints,
         rewardTextState: 'achieved',
