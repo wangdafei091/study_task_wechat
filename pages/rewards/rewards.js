@@ -28,6 +28,12 @@ Page({
     showAnimationMask: false,  // 进度条满值动画期间显示的蒙层
     isRewardAnimating: false,  // 是否正在进行奖励动画
     
+    // Tab切换相关
+    activeTab: 'available',    // 当前激活的Tab: 'available' | 'claimed'
+    showTabs: false,           // 是否显示Tab切换
+    availableRewards: [],      // 可获得的奖励
+    claimedRewards: [],        // 已领取的奖励
+    
     // 架构示例页面相关
     demoClickCount: 0,  // 添加点击计数
     demoClickTimeout: null  // 添加超时变量
@@ -74,9 +80,14 @@ Page({
     if (app.globalData.needRefreshReward) {
       console.log('[rewards] 检测到奖励数据变更标记，强制刷新');
       
-      // 强制清除缓存
+      // 强制清除所有相关缓存
+      const starService = serviceManager.getService('starService');
       const rewardService = serviceManager.getService('rewardService');
-      if (rewardService && typeof rewardService.clearCache === 'function') {
+      
+      if (starService && starService.clearCache) {
+        starService.clearCache();
+      }
+      if (rewardService && rewardService.clearCache) {
         rewardService.clearCache();
       }
       
@@ -257,6 +268,15 @@ Page({
         return;
       }
       
+      // 强制清除所有相关缓存，确保获取最新数据
+      console.log('[rewards] 强制清除缓存以获取最新数据');
+      if (starService.clearCache) {
+        starService.clearCache();
+      }
+      if (rewardService.clearCache) {
+        rewardService.clearCache();
+      }
+      
       // 使用新架构获取用户星星数
       const totalPoints = await starService.getTotalStars();
       console.log(`[rewards] 获取到用户星星: ${totalPoints}`);
@@ -291,6 +311,8 @@ Page({
           rewards: [],
           availableRewards: [],
           claimedRewards: [],
+          showTabs: false,
+          activeTab: 'available',
           showClaimedRewards: true, 
           currentProgress: totalPoints,
           totalPoints: totalPoints,
@@ -328,10 +350,31 @@ Page({
       logger.info('rewards', `准备设置页面数据: 总星星=${totalPoints}, 即将过期星星=${expiringPointsInfo.points}, 过期日期=${expiringPointsInfo.date}`);
       logger.info('rewards', `过期信息详细数据:`, expiringPointsInfo);
       
+      // 计算Tab显示逻辑
+      const showTabs = availableRewards.length > 0 && claimedRewards.length > 0;
+      let activeTab = this.data.activeTab;
+      
+      // 智能默认Tab选择
+      if (showTabs) {
+        // 如果两种奖励都有，保持当前Tab或默认选择可获得
+        if (!activeTab || (activeTab === 'available' && availableRewards.length === 0)) {
+          activeTab = 'claimed';
+        } else if (activeTab === 'claimed' && claimedRewards.length === 0) {
+          activeTab = 'available';
+        }
+      } else {
+        // 如果只有一种奖励，设置对应的Tab
+        activeTab = availableRewards.length > 0 ? 'available' : 'claimed';
+      }
+      
+      logger.info('rewards', `Tab显示逻辑: showTabs=${showTabs}, activeTab=${activeTab}, 可获得=${availableRewards.length}, 已领取=${claimedRewards.length}`);
+
       this.setData({
         rewards: rewards,
         availableRewards: availableRewards,
         claimedRewards: claimedRewards,
+        showTabs: showTabs,
+        activeTab: activeTab,
         showClaimedRewards: true, // 显示已领取的奖励
         currentProgress: totalPoints,
         totalPoints: totalPoints,
@@ -534,7 +577,16 @@ Page({
       // 开始星星数量减少的动画
       wx.hideLoading();
       this.animateStarsCount(originalPoints, targetPoints, async () => {
-        // 动画完成后，计算下一个可用奖励
+        // 动画完成后，强制清除所有缓存确保数据一致性
+        console.log('[rewards] 动画完成，强制清除缓存确保数据一致性');
+        if (starService.clearCache) {
+          starService.clearCache();
+        }
+        if (rewardService.clearCache) {
+          rewardService.clearCache();
+        }
+        
+        // 计算下一个可用奖励
         const nextReward = await rewardService.calculateNextAvailableReward();
         console.log(`[rewards] 领取奖励后计算下一个可用奖励: ${nextReward.name}, 需要${nextReward.points}颗星星`);
         
@@ -553,6 +605,7 @@ Page({
           console.log('[rewards] 发送奖励领取事件通知');
           app.globalData.eventBus.emit(EVENTS.REWARD_CLAIMED, {
             rewardId: reward.id,
+            rewardName: reward.name,  // 添加rewardName字段以兼容MessageService
             points: reward.points,
             newTotalPoints: targetPoints,
             nextReward: nextReward
@@ -667,6 +720,23 @@ Page({
       
       console.log(`[rewards] 星星区域点击 ${count}/5`);
     }
+  },
+
+  /**
+   * Tab切换
+   */
+  switchTab: function(e) {
+    const tab = e.currentTarget.dataset.tab;
+    logger.info('rewards', `切换Tab到: ${tab}`);
+    
+    // 添加轻微震动反馈
+    if (wx.vibrateShort) {
+      wx.vibrateShort({ type: 'light' });
+    }
+    
+    this.setData({
+      activeTab: tab
+    });
   },
 
   // 不再需要冗余的兑换功能，直接使用_performClaimReward

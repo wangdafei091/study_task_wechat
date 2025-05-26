@@ -77,6 +77,53 @@
   margin-bottom: 20rpx;
 }
 
+/* Tab导航样式 */
+.rewards-tabs {
+  display: flex;
+  margin-bottom: 24rpx;
+  border-bottom: 1rpx solid #EEEEEE;
+}
+
+.tab-item {
+  flex: 1;
+  text-align: center;
+  padding: 16rpx 0;
+  font-size: 28rpx;
+  color: #666666;
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+.tab-item.active {
+  color: #4285F4;
+  font-weight: 500;
+}
+
+.tab-item.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 20%;
+  width: 60%;
+  height: 2rpx;
+  background-color: #4285F4;
+  transition: all 0.3s ease;
+}
+
+/* 引导提示样式 */
+.guide-tip {
+  margin-top: 16rpx;
+  padding: 12rpx 16rpx;
+  background-color: #F8F9FA;
+  border-radius: 8rpx;
+  border-left: 3rpx solid #4285F4;
+}
+
+.guide-tip text {
+  font-size: 24rpx;
+  color: #666666;
+}
+
 .section-title {
   font-size: 30rpx;
   color: #333333;

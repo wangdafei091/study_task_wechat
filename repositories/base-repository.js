@@ -642,6 +642,13 @@ class BaseRepository {
       this.storageAdapter.clearCache(this.storageKey);
     }
   }
+
+  /**
+   * 清除缓存（别名方法）
+   */
+  clearCache() {
+    this.invalidateCache();
+  }
 }
 
 module.exports = BaseRepository; 

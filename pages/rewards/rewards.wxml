@@ -9,7 +9,7 @@
     
     <!-- 即将到期积分提示 -->
     <view class="expiring-points-container" wx:if="{{expiringPoints > 0}}">
-      <text>{{expiringPoints}} 颗星星将在 {{expiryDate}} 到期</text>
+      <text>{{expiringPoints}} 颗星星将在 {{expiryDate}}</text>
     </view>
     
     <!-- 底部按钮 - 改为横向布局 -->
@@ -28,9 +28,28 @@
   
   <!-- 奖励列表 -->
   <view class="rewards-list">
-    <view class="section-title">可获得的奖励</view>
+    <!-- Tab导航 - 只在两种奖励都存在时显示 -->
+    <view class="rewards-tabs" wx:if="{{showTabs}}">
+      <view class="tab-item {{activeTab === 'available' ? 'active' : ''}}" 
+            bindtap="switchTab" 
+            data-tab="available">
+        可获得{{availableRewards.length > 0 ? '(' + availableRewards.length + ')' : ''}}
+      </view>
+      <view class="tab-item {{activeTab === 'claimed' ? 'active' : ''}}" 
+            bindtap="switchTab" 
+            data-tab="claimed">
+        已领取{{claimedRewards.length > 0 ? '(' + claimedRewards.length + ')' : ''}}
+      </view>
+    </view>
     
-    <view class="rewards-grid">
+    <!-- 单一标题 - 只在不显示Tab时使用 -->
+    <view class="section-title" wx:if="{{!showTabs}}">
+      <text wx:if="{{availableRewards.length > 0}}">可获得的奖励</text>
+      <text wx:elif="{{claimedRewards.length > 0}}">已领取的奖励</text>
+    </view>
+    
+    <!-- 可获得的奖励 -->
+    <view class="rewards-grid" wx:if="{{(!showTabs && availableRewards.length > 0) || (showTabs && activeTab === 'available')}}">
       <block wx:for="{{availableRewards}}" wx:key="id">
         <view class="reward-item {{item.unlocked ? 'unlocked' : 'locked'}} {{item.claimed ? 'claimed' : ''}}"
               bindtap="viewReward" 
@@ -51,9 +70,7 @@
     </view>
     
     <!-- 已领取的奖励 -->
-    <view class="section-title" wx:if="{{claimedRewards && claimedRewards.length > 0}}">已领取的奖励</view>
-    
-    <view class="rewards-grid" wx:if="{{claimedRewards && claimedRewards.length > 0}}">
+    <view class="rewards-grid" wx:if="{{(!showTabs && claimedRewards.length > 0 && availableRewards.length === 0) || (showTabs && activeTab === 'claimed')}}">
       <block wx:for="{{claimedRewards}}" wx:key="id">
         <view class="reward-item claimed"
               bindtap="viewReward" 
@@ -66,6 +83,11 @@
           </view>
         </view>
       </block>
+    </view>
+    
+    <!-- 引导提示 - 只在有可获得奖励但无已领取奖励时显示 -->
+    <view class="guide-tip" wx:if="{{availableRewards.length > 0 && claimedRewards.length === 0 && !showTabs}}">
+      <text>💡 兑换后可在"我的兑换"中查看领取记录</text>
     </view>
   </view>
   

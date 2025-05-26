@@ -464,41 +464,115 @@ class RewardService {
       }
       
       // 开始事务，确保数据一致性
+      let deductResult = null;
+      let consumptionRecord = null;
+      
       try {
+        logger.info('RewardService', `开始兑换奖励事务: ${reward.name}, 消耗${reward.points}颗星星`);
+        
         // 1. 扣除用户星星
-        const deductResult = await this.starGroupRepository.deductStars(reward.points);
+        deductResult = await this.starGroupRepository.deductStars(reward.points);
         
         if (!deductResult.success) {
           logger.error('RewardService', `扣除星星失败: ${deductResult.message}`);
           return { success: false, message: '扣除星星失败' };
         }
         
-        // 2. 创建星星消费记录
-        const consumptionRecord = {
-          amount: reward.points,
-          type: 'exchange', // 消费类型：兑换奖励
-          source: `reward_${rewardId}`,
-          timestamp: Date.now(),
-          data: {
-            rewardId: reward.id,
-            rewardName: reward.name
-          }
-        };
+        logger.info('RewardService', `星星扣除成功，扣除${reward.points}颗`);
         
-        await this.starRecordRepository.createStarConsumptionRecord(consumptionRecord);
+        // 2. 创建星星消费记录
+        try {
+          const recordData = {
+            amount: reward.points,
+            type: 'exchange', // 消费类型：兑换奖励
+            source: `reward_${rewardId}`,
+            timestamp: Date.now(),
+            data: {
+              rewardId: reward.id,
+              rewardName: reward.name
+            }
+          };
+          
+          consumptionRecord = await this.starRecordRepository.createStarConsumptionRecord(recordData);
+          logger.info('RewardService', `星星消费记录创建成功: ${consumptionRecord.id}`);
+        } catch (recordError) {
+          logger.error('RewardService', '创建星星消费记录失败', recordError);
+          
+          // 回滚星星扣除操作
+          try {
+            logger.warn('RewardService', '开始回滚星星扣除操作');
+            const permanentGroup = await this.starGroupRepository.getOrCreateGroup(
+              'permanent', 
+              null, 
+              '永久有效'
+            );
+            
+            if (permanentGroup) {
+              await this.starGroupRepository.addStarsToGroup(
+                permanentGroup,
+                reward.points,
+                `兑换奖励失败回滚: ${reward.name}`
+              );
+              logger.info('RewardService', `星星回滚成功，退还${reward.points}颗星星`);
+            }
+          } catch (rollbackError) {
+            logger.error('RewardService', '星星回滚失败', rollbackError);
+          }
+          
+          return { success: false, message: '创建消费记录失败，已回滚星星扣除' };
+        }
         
         // 3. 更新奖励状态为已领取
-        reward.claimed = true;
-        reward.claimTime = Date.now();
-        await this.rewardRepository.save(reward);
+        try {
+          reward.claim(); // 使用Reward模型的标准方法，确保状态一致性
+          logger.info('RewardService', `奖励状态设置: claimed=${reward.claimed}, claimStatus=${reward.claimStatus}, claimTime=${reward.claimTime}`);
+          const savedReward = await this.rewardRepository.save(reward);
+          
+          if (!savedReward) {
+            throw new Error('保存奖励状态失败');
+          }
+          
+          logger.info('RewardService', `奖励状态更新成功: ${reward.name}`);
+        } catch (saveError) {
+          logger.error('RewardService', '更新奖励状态失败', saveError);
+          
+          // 回滚星星扣除操作
+          try {
+            logger.warn('RewardService', '开始回滚星星扣除操作');
+            const permanentGroup = await this.starGroupRepository.getOrCreateGroup(
+              'permanent', 
+              null, 
+              '永久有效'
+            );
+            
+            if (permanentGroup) {
+              await this.starGroupRepository.addStarsToGroup(
+                permanentGroup,
+                reward.points,
+                `兑换奖励失败回滚: ${reward.name}`
+              );
+              logger.info('RewardService', `星星回滚成功，退还${reward.points}颗星星`);
+            }
+          } catch (rollbackError) {
+            logger.error('RewardService', '星星回滚失败', rollbackError);
+          }
+          
+          return { success: false, message: '更新奖励状态失败，已回滚星星扣除' };
+        }
         
-        // 5. 发出奖励领取事件
-        this.eventBus.emit(EVENTS.REWARD_CLAIMED, { 
-          rewardId: reward.id,
-          rewardName: reward.name,
-          points: reward.points,
-          timestamp: Date.now()
-        });
+        // 4. 发出奖励领取事件
+        try {
+          this.eventBus.emit(EVENTS.REWARD_CLAIMED, { 
+            rewardId: reward.id,
+            rewardName: reward.name,
+            points: reward.points,
+            timestamp: Date.now()
+          });
+          logger.info('RewardService', `奖励领取事件发送成功`);
+        } catch (eventError) {
+          logger.warn('RewardService', '发送奖励领取事件失败', eventError);
+          // 事件发送失败不影响主流程
+        }
         
         logger.info('RewardService', `兑换奖励成功: ${reward.name}, 消耗${reward.points}颗星星`);
         
@@ -509,6 +583,30 @@ class RewardService {
         };
       } catch (error) {
         logger.error('RewardService', '兑换奖励事务处理失败', error);
+        
+        // 如果星星已经扣除，尝试回滚
+        if (deductResult && deductResult.success) {
+          try {
+            logger.warn('RewardService', '开始回滚星星扣除操作');
+            const permanentGroup = await this.starGroupRepository.getOrCreateGroup(
+              'permanent', 
+              null, 
+              '永久有效'
+            );
+            
+            if (permanentGroup) {
+              await this.starGroupRepository.addStarsToGroup(
+                permanentGroup,
+                reward.points,
+                `兑换奖励失败回滚: ${reward.name}`
+              );
+              logger.info('RewardService', `星星回滚成功，退还${reward.points}颗星星`);
+            }
+          } catch (rollbackError) {
+            logger.error('RewardService', '星星回滚失败', rollbackError);
+          }
+        }
+        
         return { success: false, message: '兑换过程中发生错误，请重试' };
       }
     } catch (error) {

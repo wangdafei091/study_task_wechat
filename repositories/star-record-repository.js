@@ -510,23 +510,37 @@ class StarRecordRepository extends BaseRepository {
     }
     
     try {
-      // 创建消费记录模型
+      logger.info('StarRecordRepository', `开始创建星星消费记录: 数量=${record.amount}, 类型=${record.type}, 来源=${record.source}`);
+      
+      // 创建消费记录模型，修复参数映射问题
       const starRecord = new StarRecord({
         id: `star_record_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-        amount: record.amount,
-        recordType: 'consumption',
-        operationType: record.type || 'exchange',
-        source: record.source || '',
+        points: -record.amount, // 修复：使用points而不是amount，消费记录为负数
+        type: 'expense', // 修复：使用type而不是recordType，消费记录类型为expense
+        source: record.source || 'reward', // 修复：设置正确的来源
+        sourceId: record.source || '', // 添加sourceId
+        description: `兑换奖励消费: ${record.data?.rewardName || '未知奖励'}`, // 添加描述
         timestamp: record.timestamp || Date.now(),
-        expiryType: record.expiryType || 'none',
-        expiryDate: record.expiryDate || null,
         data: record.data || {}
       });
+      
+      logger.info('StarRecordRepository', `StarRecord创建参数: points=${starRecord.points}, type=${starRecord.type}, source=${starRecord.source}`);
+      
+      // 验证记录数据
+      const validationErrors = starRecord.validate();
+      if (validationErrors.length > 0) {
+        logger.error('StarRecordRepository', `StarRecord验证失败: ${validationErrors.join(', ')}`);
+        throw new Error(`记录数据验证失败: ${validationErrors.join(', ')}`);
+      }
       
       // 保存消费记录
       const savedRecord = await this.save(starRecord);
       
-      logger.info('StarRecordRepository', `创建消费记录成功: ID=${savedRecord.id}, 数量=${savedRecord.amount}, 类型=${savedRecord.operationType}`);
+      if (!savedRecord) {
+        throw new Error('保存消费记录失败');
+      }
+      
+      logger.info('StarRecordRepository', `创建消费记录成功: ID=${savedRecord.id}, 数量=${Math.abs(savedRecord.points)}, 类型=${savedRecord.type}`);
       
       return savedRecord;
     } catch (error) {
@@ -554,6 +568,24 @@ class StarRecordRepository extends BaseRepository {
       description: options.description,
       timestamp: Date.now()
     });
+  }
+
+  /**
+   * 清除缓存
+   * 强制下次查询时重新从存储中获取数据
+   */
+  clearCache() {
+    logger.info('StarRecordRepository', '清除星星记录仓储缓存');
+    
+    // 调用父类的清除缓存方法
+    if (super.clearCache) {
+      super.clearCache();
+    }
+    
+    // 清除存储适配器缓存
+    if (this.storageAdapter && this.storageAdapter.clearCache) {
+      this.storageAdapter.clearCache();
+    }
   }
 }
 

@@ -645,6 +645,24 @@ class StarGroupRepository extends BaseRepository {
       return { success: false, message: '操作失败，请重试' };
     }
   }
+
+  /**
+   * 清除缓存
+   * 强制下次查询时重新从存储中获取数据
+   */
+  clearCache() {
+    logger.info('StarGroupRepository', '清除星星分组仓储缓存');
+    
+    // 调用父类的清除缓存方法
+    if (super.clearCache) {
+      super.clearCache();
+    }
+    
+    // 清除存储适配器缓存
+    if (this.storageAdapter && this.storageAdapter.clearCache) {
+      this.storageAdapter.clearCache();
+    }
+  }
 }
 
 module.exports = StarGroupRepository; 

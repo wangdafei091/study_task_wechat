@@ -282,12 +282,37 @@ class MessageService {
    * @private
    */
   _handleRewardClaimed(data) {
-    const { reward } = data;
+    logger.info('MessageService', '收到奖励领取事件，原始数据:', data);
     
-    logger.info('MessageService', `处理奖励领取事件: ${reward.name}`);
+    // 兼容不同的事件数据格式
+    let reward;
+    
+    if (data.reward) {
+      // 新格式：直接包含reward对象
+      reward = data.reward;
+      logger.info('MessageService', '使用新格式事件数据（包含reward对象）');
+    } else if (data.rewardId && data.rewardName) {
+      // 兼容格式：从rewardId和rewardName构造reward对象
+      reward = {
+        id: data.rewardId,
+        name: data.rewardName,
+        points: data.points || 0
+      };
+      logger.info('MessageService', '使用兼容格式事件数据（rewardId + rewardName）');
+    } else {
+      logger.warn('MessageService', '奖励领取事件数据格式不正确，跳过处理', data);
+      return;
+    }
+    
+    logger.info('MessageService', `处理奖励领取事件: ${reward.name}, ID=${reward.id}, 消耗星星=${reward.points}`);
     
     // 创建奖励领取消息
-    this._createRewardMessageWithDomainModel(reward, 'claimed');
+    try {
+      this._createRewardMessageWithDomainModel(reward, 'claimed');
+      logger.info('MessageService', '奖励领取消息创建成功');
+    } catch (error) {
+      logger.error('MessageService', '创建奖励领取消息失败', error);
+    }
   }
   
   /**

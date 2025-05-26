@@ -656,6 +656,7 @@ class StarService {
    * @returns {String} 格式化后的日期字符串
    */
   _formatExpiryDate(expiryDate) {
+    const logger = require('../utils/logger');
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const expiry = new Date(expiryDate.getFullYear(), expiryDate.getMonth(), expiryDate.getDate());
@@ -664,17 +665,21 @@ class StarService {
     const diffTime = expiry.getTime() - today.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     
+    let result;
     if (diffDays === 0) {
-      return '今天24点失效';
+      result = '今天到期';
     } else if (diffDays === 1) {
-      return '明天24点失效';
+      result = '明天到期';
     } else {
       // 格式化为 YYYY-MM-DD 格式
       const year = expiryDate.getFullYear();
       const month = String(expiryDate.getMonth() + 1).padStart(2, '0');
       const day = String(expiryDate.getDate()).padStart(2, '0');
-      return `${year}-${month}-${day} 24点失效`;
+      result = `${year}-${month}-${day} 到期`;
     }
+    
+    logger.info('StarService', `过期日期格式化: ${expiryDate.toISOString()} -> ${result}`);
+    return result;
   }
 
   /**
@@ -960,6 +965,23 @@ class StarService {
     } catch (error) {
       logger.error('StarService', `从特定类型消费星星失败, 数量=${points}, 类型=${expiryType}`, error);
       return { success: false, message: '从特定类型消费星星过程中发生错误' };
+    }
+  }
+
+  /**
+   * 清除缓存
+   * 强制下次查询时重新从存储中获取数据
+   */
+  clearCache() {
+    logger.info('StarService', '清除星星服务缓存');
+    
+    // 清除仓储层缓存
+    if (this.starGroupRepository && this.starGroupRepository.clearCache) {
+      this.starGroupRepository.clearCache();
+    }
+    
+    if (this.starRecordRepository && this.starRecordRepository.clearCache) {
+      this.starRecordRepository.clearCache();
     }
   }
 }
