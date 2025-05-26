@@ -730,7 +730,7 @@ Page({
       // 根据操作类型和清理结果显示不同提示信息
       if (needClearExample && examplesCleared) {
         wx.showToast({
-          title: '已保存，示例已清理',
+          title: '保存成功',
           icon: 'success',
           duration: 2000
         });
