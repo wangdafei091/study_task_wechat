@@ -94,5 +94,10 @@ module.exports = {
     USER_LOGOUT: 'user:logout'
   },
   
+  // 错误消息常量
+  ERROR_MESSAGES: {
+    TASK_LOCKED: '奖励已兑换，任务不可取消'
+  },
+  
   // 其他全局常量可在此添加...
 }; 

@@ -10,7 +10,8 @@ const { StarService } = require('./index');
 const EventBus = require('../utils/core/event-bus');
 const { Task, TaskStatus, TaskType, RepeatType, StarExpiryType } = require('../models/task');
 const dateUtils = require('../utils/dateUtils');
-const { EVENTS } = require('../utils/constants');
+const { EVENTS, ERROR_MESSAGES } = require('../utils/constants');
+const serviceManager = require('./service-manager');
 
 class TaskService {
   /**
@@ -591,8 +592,16 @@ class TaskService {
       
       // 设置新状态
       logger.info('TaskService', `准备设置任务状态: ${task.title}, 当前状态=${task.status}, 新状态=${status}`);
-      task.status = status;
-      logger.info('TaskService', `任务状态已设置: ${task.title}, 状态=${task.status}, 类型=${typeof task.status}`);
+      
+      // 如果状态变为完成，使用Task模型的complete方法来正确设置completionTime
+      if (status === 1 && previousStatus !== 1) {
+        logger.info('TaskService', `任务状态变为完成，调用complete方法设置completionTime: ${task.title}`);
+        task.complete();
+        logger.info('TaskService', `任务complete方法调用完成: ${task.title}, completionTime=${task.completionTime}`);
+      } else {
+        task.status = status;
+        logger.info('TaskService', `任务状态已设置: ${task.title}, 状态=${task.status}, 类型=${typeof task.status}`);
+      }
 
       // 如果任务以前未获得过星星，则分配积分
       if (!task.starAwarded && this.starService) {
@@ -739,10 +748,10 @@ class TaskService {
       }
       
       if (!task.canBeUnchecked(lastExchangeTime)) {
-        logger.warn('TaskService', `任务被锁定，不能取消完成: ${task.title}, 完成时间=${task.completionTime}, 最后兑换时间=${lastExchangeTime}`);
+        logger.warn('TaskService', `${ERROR_MESSAGES.TASK_LOCKED}: ${task.title}, 完成时间=${task.completionTime}, 最后兑换时间=${lastExchangeTime}`);
         return { 
           success: false, 
-          message: '该任务已被锁定，不能取消完成。兑换奖励后完成的任务才能取消。',
+          message: ERROR_MESSAGES.TASK_LOCKED,
           locked: true
         };
       }

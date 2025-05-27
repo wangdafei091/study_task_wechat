@@ -147,6 +147,7 @@ Page({
     logger.info('Index', '🎯 标签样式重大简化：采用内联样式方案，删除50+行复杂CSS，移除样式隔离配置，实现简单可靠的标签背景色显示');
     logger.info('Index', '✨ 标签样式专业优化：采用渐变色彩+柔和阴影，提升视觉层次感和现代感，符合少儿教育心理学设计原则');
     logger.info('Index', '🎯 标签视觉权重调和：缩小尺寸(36→28rpx)、柔化色彩、减少阴影，让标签回归辅助角色，突出任务内容主导地位');
+    logger.info('Index', '🚀 页面初始化优化：合并重复数据加载逻辑，统一批量处理，减少重复调用和UI闪烁');
     
     // 设置当前日期字符串
     const now = new Date();
@@ -277,6 +278,7 @@ Page({
       taskService.getTodayTasks().then(todayTasks => {
         this.setData({ 
           tasks: todayTasks,
+          hasTodayTasks: (todayTasks && todayTasks.length > 0),
           "__dataUpdateTimestamp": timestamp // 添加时间戳属性以确保视图刷新
         });
         
@@ -307,12 +309,12 @@ Page({
     
     taskService.getTodayTasks().then(todayTasks => {
       this.setData({ 
-        tasks: todayTasks 
+        tasks: todayTasks,
+        hasTodayTasks: (todayTasks && todayTasks.length > 0)
       });
       
-      // 更新任务进度和即将到期任务
+      // 更新任务进度（checkUpcomingTasks在loadTaskData中已调用，避免重复）
       this.calculateProgress(todayTasks);
-      this.checkUpcomingTasks();
     });
   },
   
@@ -397,20 +399,9 @@ Page({
       return;
     }
     
-    // 正常页面显示流程
-    // 刷新星星和奖励数据
-    logger.debug('Index', '页面显示时刷新星星和奖励数据');
-    this.loadStarsAndRewards();
-    
-    // 加载用户消息
-    this.loadMessageData();
-    
-    // 检查即将到期的任务
-    this.checkUpcomingTasks();
-    
-    // 加载今日所有任务
-    logger.info('Index', '页面显示时加载今日所有任务');
-    this.loadTodayTasks();
+    // 正常页面显示流程 - 批量加载所有数据
+    logger.debug('Index', '页面显示时批量加载所有数据');
+    this.loadAllPageData();
   },
   
   /**
@@ -431,9 +422,51 @@ Page({
   },
 
   /**
-   * 加载任务数据
+   * 批量加载页面所有数据
+   * 统一处理所有数据加载，避免重复调用和多次UI更新
    */
-  loadTaskData: async function() {
+  loadAllPageData: async function() {
+    try {
+      logger.info('Index', '开始批量加载页面数据');
+      
+      // 并行加载所有数据
+      const [tasksResult, messagesResult, starsResult] = await Promise.allSettled([
+        this.loadTaskDataOnly(),
+        this.loadMessageData(),
+        this.loadStarsAndRewards()
+      ]);
+      
+      // 检查加载结果
+      if (tasksResult.status === 'rejected') {
+        logger.error('Index', '任务数据加载失败', tasksResult.reason);
+      }
+      if (messagesResult.status === 'rejected') {
+        logger.error('Index', '消息数据加载失败', messagesResult.reason);
+      }
+      if (starsResult.status === 'rejected') {
+        logger.error('Index', '星星奖励数据加载失败', starsResult.reason);
+      }
+      
+      // 最后检查即将到期任务（依赖任务数据）
+      if (tasksResult.status === 'fulfilled') {
+        await this.checkUpcomingTasks();
+      }
+      
+      logger.info('Index', '页面数据批量加载完成');
+    } catch (error) {
+      logger.error('Index', '批量加载页面数据失败', error);
+      wx.showToast({
+        title: '加载数据失败',
+        icon: 'none',
+        duration: 2000
+      });
+    }
+  },
+
+  /**
+   * 仅加载任务数据（不包含即将到期任务检查）
+   */
+  loadTaskDataOnly: async function() {
     try {
       logger.info('Index', '开始加载任务数据');
       
@@ -450,20 +483,23 @@ Page({
       
       // 添加详细的任务状态日志
       tasks.forEach((task, index) => {
-        logger.info('Index', `任务${index + 1}详细状态:`, {
+        logger.info('Index', `🔒 任务${index + 1}详细状态:`, {
           id: task.id,
           title: task.title,
           status: task.status,
           statusType: typeof task.status,
           starAwarded: task.starAwarded,
           starAwardedType: typeof task.starAwarded,
-          points: task.points
+          points: task.points,
+          completionTime: task.completionTime,
+          completionTimeDate: task.completionTime ? new Date(task.completionTime).toLocaleString() : '未完成'
         });
       });
       
       // 更新页面数据
       this.setData({
-        tasks: tasks
+        tasks: tasks,
+        hasTodayTasks: (tasks && tasks.length > 0)
       });
       
       // 检查任务进度
@@ -472,11 +508,23 @@ Page({
       // 更新任务统计信息
       await this.updateTaskStats();
       
+      return tasks;
+    } catch (error) {
+      logger.error('Index', '加载任务数据失败', error);
+      throw error;
+    }
+  },
+
+  /**
+   * 加载任务数据（保持向后兼容）
+   */
+  loadTaskData: async function() {
+    try {
+      const tasks = await this.loadTaskDataOnly();
       // 检查即将到期的任务
       await this.checkUpcomingTasks();
     } catch (error) {
       logger.error('Index', '加载任务数据失败', error);
-      
       wx.showToast({
         title: '加载数据失败',
         icon: 'none',
@@ -689,10 +737,11 @@ Page({
           
           // 检查任务是否可以取消打勾
           if (currentTask.completionTime && lastExchangeTime && currentTask.completionTime < lastExchangeTime) {
-            // 任务被锁定，不能取消
+            // 任务被锁定，直接显示锁定提示，不显示确认对话框
+            const { ERROR_MESSAGES } = require('../../utils/constants');
             wx.showModal({
               title: '无法取消完成',
-              content: '该任务已被锁定，不能取消完成。兑换奖励后完成的任务才能取消。',
+              content: ERROR_MESSAGES.TASK_LOCKED,
               showCancel: false,
               confirmText: '我知道了'
             });
@@ -705,7 +754,7 @@ Page({
         }
       }
       
-      // 显示确认对话框
+      // 如果任务未被锁定，显示确认对话框
       const result = await new Promise((resolve) => {
         wx.showModal({
           title: '确认取消完成',
@@ -799,23 +848,12 @@ Page({
           this.loadStarsAndRewards();
         }
       } else {
-        // 操作失败，检查是否是锁定错误
-        if (result && result.locked) {
-          // 任务被锁定的特殊处理
-          wx.showModal({
-            title: '无法取消完成',
-            content: result.message || '该任务已被锁定，不能取消完成。',
-            showCancel: false,
-            confirmText: '我知道了'
-          });
-        } else {
-          // 其他错误
-          wx.showToast({
-            title: result?.message || '操作失败',
-            icon: 'none',
-            duration: 2000
-          });
-        }
+        // 操作失败的错误处理
+        wx.showToast({
+          title: result?.message || '操作失败',
+          icon: 'none',
+          duration: 2000
+        });
       }
     } catch (error) {
       // 错误处理
@@ -1461,8 +1499,13 @@ Page({
       ]);
       const formattedPoints = formatUtils.formatPoints(userPoints, true);
       
-      logger.info('Index', '当前用户星星数', { userPoints });
-      logger.info('Index', '最后兑换时间', { lastExchangeTime });
+      logger.info('Index', '🔒 当前用户星星数', { userPoints });
+      logger.info('Index', '🔒 最后兑换时间详细信息', { 
+        lastExchangeTime: lastExchangeTime,
+        lastExchangeTimeDate: lastExchangeTime ? new Date(lastExchangeTime).toLocaleString() : '从未兑换',
+        hasExchanged: !!lastExchangeTime,
+        type: typeof lastExchangeTime
+      });
       
       // 调用奖励服务方法，传递已获取的星星数确保数据一致性
       logger.info('Index', '开始获取奖励数据，使用已获取的星星数确保一致性');
@@ -1550,13 +1593,10 @@ Page({
         }
       });
       
-      logger.info('Index', '奖励进度条数据已更新', { 
-        current: userPoints, 
-        total: progressTotal,
-        hasAchievedReward: hasAchievedReward,
-        progressType: hasAchievedReward ? '已达成奖励' : 
-                     (nextReward.allClaimed || nextReward.isDefault || nextReward.showSetupTip) ? '无限制' : '下一目标',
-        uiOptimization: '已应用统一文字样式系统'
+      logger.info('Index', '🔒 页面数据已更新，lastExchangeTime已设置', { 
+        lastExchangeTime: lastExchangeTime,
+        setDataSuccess: true,
+        taskCount: this.data.tasks ? this.data.tasks.length : 0
       });
       
     } catch (error) {
@@ -2052,40 +2092,7 @@ Page({
     }
   },
 
-  /**
-   * 加载今日所有任务
-   */
-  loadTodayTasks: async function() {
-    try {
-      logger.info('Index', '开始加载今日所有任务');
-      
-      // 获取任务服务
-      const taskService = serviceManager.getService('task');
-      if (!taskService) {
-        logger.error('Index', '无法获取任务服务');
-        return;
-      }
-      
-      // 获取今日所有任务
-      const tasks = await taskService.getTodayTasks();
-      logger.info('Index', `今日任务加载成功，任务数量: ${tasks.length}`);
-      
-      // 更新页面数据
-      this.setData({
-        tasks: tasks,
-        hasTodayTasks: (tasks && tasks.length > 0)
-      });
-      
-    } catch (error) {
-      logger.error('Index', '加载今日任务失败', error);
-      
-      wx.showToast({
-        title: '加载任务失败',
-        icon: 'none',
-        duration: 2000
-      });
-    }
-  },
+
 
   /**
    * 处理任务创建事件
@@ -2094,7 +2101,7 @@ Page({
   handleTaskCreated: function(data) {
     logger.info('Index', '收到任务创建事件', data);
     
-    // 重新加载今日任务
-    this.loadTodayTasks();
+    // 重新加载任务数据
+    this.loadTaskData();
   },
 }) 

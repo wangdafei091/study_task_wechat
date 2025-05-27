@@ -84,6 +84,8 @@ Component({
           // 计算任务锁定状态
           const isLocked = this._calculateTaskLockStatus(newVal);
           
+          console.log(`[index-task-item] 🔒 任务属性更新: ${newVal.title}, 锁定状态=${isLocked}, lastExchangeTime=${this.properties.lastExchangeTime}`);
+          
           // 将处理好的有效期文本保存到组件data中
           this.setData({
             expiryText: expiryText,
@@ -110,9 +112,11 @@ Component({
       type: Number,
       value: null,
       observer: function(newVal, oldVal) {
+        console.log(`[index-task-item] 🔒 lastExchangeTime属性变化: ${oldVal} -> ${newVal}`);
         // 当最后兑换时间变化时，重新计算所有任务的锁定状态
         if (newVal !== oldVal && this.properties.task) {
           const isLocked = this._calculateTaskLockStatus(this.properties.task);
+          console.log(`[index-task-item] 🔒 重新计算锁定状态: 任务="${this.properties.task.title}", 锁定=${isLocked}`);
           this.setData({
             isLocked: isLocked
           });
@@ -258,24 +262,34 @@ Component({
          // 计算任务锁定状态
      _calculateTaskLockStatus: function(task) {
        if (!task) {
+         console.log('[index-task-item] 🔒 锁定状态计算: 任务为空，返回false');
          return false;
        }
        
        // 检查任务是否已完成（兼容不同的数据格式）
        const isCompleted = task.isCompleted ? task.isCompleted() : (task.status === 1);
        if (!isCompleted) {
-         // 未完成的任务不会被锁定
+         console.log(`[index-task-item] 🔒 锁定状态计算: 任务"${task.title}"未完成(status=${task.status})，返回false`);
          return false;
        }
        
        const lastExchangeTime = this.properties.lastExchangeTime;
        if (!lastExchangeTime) {
-         // 没有兑换过奖励，任务不会被锁定
+         console.log(`[index-task-item] 🔒 锁定状态计算: 任务"${task.title}"没有兑换记录(lastExchangeTime=${lastExchangeTime})，返回false`);
          return false;
        }
        
        // 如果任务完成时间早于最后兑换时间，则被锁定
-       return task.completionTime && task.completionTime < lastExchangeTime;
+       const isLocked = task.completionTime && task.completionTime < lastExchangeTime;
+       console.log(`[index-task-item] 🔒 锁定状态计算: 任务"${task.title}"`, {
+         completionTime: task.completionTime,
+         lastExchangeTime: lastExchangeTime,
+         isLocked: isLocked,
+         completionTimeDate: task.completionTime ? new Date(task.completionTime).toLocaleString() : '无',
+         lastExchangeTimeDate: new Date(lastExchangeTime).toLocaleString()
+       });
+       
+       return isLocked;
      }
   },
 
@@ -285,6 +299,14 @@ Component({
   lifetimes: {
     attached: function() {
       console.log('[index-task-item] 组件加载完成，使用优化后的布局展示');
+      
+      // 添加锁定状态初始检查
+      const task = this.properties.task;
+      const lastExchangeTime = this.properties.lastExchangeTime;
+      if (task) {
+        const isLocked = this._calculateTaskLockStatus(task);
+        console.log(`[index-task-item] 🔒 组件初始化锁定状态检查: 任务="${task.title}", 锁定=${isLocked}, lastExchangeTime=${lastExchangeTime}`);
+      }
       
       // 记录必做任务UI优化
       if (this.properties.task && this.properties.task.isRequired) {
