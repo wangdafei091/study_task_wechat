@@ -428,6 +428,9 @@ class RewardService {
    * @returns {Promise<Object>} 兑换结果
    */
   async exchangeReward(rewardId) {
+    logger.info('RewardService', `===== 开始兑换奖励流程 =====`);
+    logger.info('RewardService', `兑换奖励ID: ${rewardId}`);
+    
     if (!rewardId) {
       logger.warn('RewardService', '兑换奖励失败: 缺少奖励ID');
       return { success: false, message: '奖励ID不能为空' };
@@ -435,12 +438,15 @@ class RewardService {
     
     try {
       // 获取奖励
+      logger.info('RewardService', `步骤1: 获取奖励信息, ID=${rewardId}`);
       const reward = await this.rewardRepository.getById(rewardId);
       
       if (!reward) {
         logger.warn('RewardService', `兑换奖励失败: 未找到ID为${rewardId}的奖励`);
         return { success: false, message: '未找到指定的奖励' };
       }
+      
+      logger.info('RewardService', `奖励信息: 名称=${reward.name}, 积分=${reward.points}, 状态=${reward.enabled ? '启用' : '禁用'}, 已领取=${reward.claimed}`);
       
       // 检查奖励是否可兑换
       if (!reward.enabled) {
@@ -454,6 +460,7 @@ class RewardService {
       }
       
       // 获取用户当前星星总数
+      logger.info('RewardService', `步骤2: 检查用户星星数量`);
       const userStars = await this.starGroupRepository.getTotalPoints();
       logger.info('RewardService', `兑换奖励前用户星星数: ${userStars}`);
       
@@ -468,17 +475,21 @@ class RewardService {
       let consumptionRecord = null;
       
       try {
-        logger.info('RewardService', `开始兑换奖励事务: ${reward.name}, 消耗${reward.points}颗星星`);
+        logger.info('RewardService', `===== 开始兑换奖励事务 =====`);
+        logger.info('RewardService', `事务参数: 奖励=${reward.name}, 消耗星星=${reward.points}颗`);
         
         // 1. 扣除用户星星
+        logger.info('RewardService', `步骤3: 开始扣除星星, 数量=${reward.points}`);
         deductResult = await this.starGroupRepository.deductStars(reward.points);
+        
+        logger.info('RewardService', `扣除星星操作完成, 结果=`, deductResult);
         
         if (!deductResult.success) {
           logger.error('RewardService', `扣除星星失败: ${deductResult.message}`);
           return { success: false, message: '扣除星星失败' };
         }
         
-        logger.info('RewardService', `星星扣除成功，扣除${reward.points}颗`);
+        logger.info('RewardService', `步骤3完成: 星星扣除成功，扣除${reward.points}颗`);
         
         // 2. 创建星星消费记录
         try {

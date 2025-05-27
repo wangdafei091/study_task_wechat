@@ -514,10 +514,23 @@ class StarGroupRepository extends BaseRepository {
       }
       
       // 保存更新后的分组
-      const savedGroups = await this.saveAll(updatedGroups);
-      const savedCount = savedGroups ? savedGroups.length : 0;
+      logger.info('StarGroupRepository', `准备保存${updatedGroups.length}个更新后的分组`);
       
-      logger.info('StarGroupRepository', `星星扣除完成，更新了${savedCount}个分组，共扣除${amount}颗，剩余${totalStars - amount}颗`);
+      // 特殊处理：当updatedGroups为空数组时，需要直接清空存储
+      if (updatedGroups.length === 0) {
+        logger.info('StarGroupRepository', `所有星星分组都被消费完毕，需要清空存储`);
+        await this._saveData([]);
+        logger.info('StarGroupRepository', `已清空星星分组存储`);
+      } else {
+        const savedGroups = await this.saveAll(updatedGroups);
+        const savedCount = savedGroups ? savedGroups.length : 0;
+        logger.info('StarGroupRepository', `分组保存完成，保存成功${savedCount}个分组`);
+      }
+      
+      // 强制清除缓存确保数据一致性
+      this.invalidateCache();
+      
+      logger.info('StarGroupRepository', `星星扣除完成，共扣除${amount}颗，剩余${totalStars - amount}颗`);
       
       return {
         success: true,
