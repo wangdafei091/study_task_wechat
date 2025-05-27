@@ -363,7 +363,11 @@ class StarGroupRepository extends BaseRepository {
         logger.info('StarGroupRepository', `分组${index + 1}: ID=${group.id}, 星星数=${starsValue}(${starsType}), 类型=${group.expiryType || 'unknown'}`);
       });
       
-      const total = groups.reduce((sum, group) => sum + (group.stars || 0), 0);
+      // 修复数据类型问题：确保每个group.stars都转换为数字
+      const total = groups.reduce((sum, group) => {
+        const stars = this._ensureNumber(group.stars, 0);
+        return sum + stars;
+      }, 0);
       
       logger.info('StarGroupRepository', `获取星星总数量成功, 总数=${total}`);
       return total;
@@ -371,6 +375,31 @@ class StarGroupRepository extends BaseRepository {
       logger.error('StarGroupRepository', '获取星星总数量失败', error);
       return 0;
     }
+  }
+  
+  /**
+   * 确保值为数字类型
+   * @private
+   * @param {*} value 输入值
+   * @param {Number} defaultValue 默认值
+   * @returns {Number} 数字值
+   */
+  _ensureNumber(value, defaultValue = 0) {
+    // 如果值为null、undefined或空字符串，返回默认值
+    if (value === null || value === undefined || value === '') {
+      return defaultValue;
+    }
+    
+    // 尝试转换为数字
+    const num = Number(value);
+    
+    // 如果转换结果为NaN，返回默认值
+    if (isNaN(num)) {
+      return defaultValue;
+    }
+    
+    // 返回转换后的数字（确保为整数）
+    return Math.floor(num);
   }
   
   /**
@@ -454,7 +483,10 @@ class StarGroupRepository extends BaseRepository {
       logger.info('StarGroupRepository', `开始扣除${amount}颗星星，当前有${groups.length}个分组`);
       
       // 获取当前星星总数
-      const totalStars = groups.reduce((sum, group) => sum + (group.stars || 0), 0);
+      const totalStars = groups.reduce((sum, group) => {
+        const stars = this._ensureNumber(group.stars, 0);
+        return sum + stars;
+      }, 0);
       
       // 检查星星是否足够
       if (totalStars < amount) {
@@ -485,11 +517,11 @@ class StarGroupRepository extends BaseRepository {
         }
         
         // 当前分组可扣除的数量
-        const groupStars = group.stars || 0;
+        const groupStars = this._ensureNumber(group.stars, 0);
         const deductFromGroup = Math.min(remainingAmount, groupStars);
         
         if (deductFromGroup > 0) {
-          // 更新分组
+          // 更新分组 - 确保数学运算正确
           group.stars = groupStars - deductFromGroup;
           remainingAmount -= deductFromGroup;
           
@@ -513,24 +545,28 @@ class StarGroupRepository extends BaseRepository {
         }
       }
       
-      // 保存更新后的分组
+      // 保存更新后的分组 - 修复保存逻辑
       logger.info('StarGroupRepository', `准备保存${updatedGroups.length}个更新后的分组`);
       
-      // 特殊处理：当updatedGroups为空数组时，需要直接清空存储
-      if (updatedGroups.length === 0) {
-        logger.info('StarGroupRepository', `所有星星分组都被消费完毕，需要清空存储`);
-        await this._saveData([]);
-        logger.info('StarGroupRepository', `已清空星星分组存储`);
-      } else {
-        const savedGroups = await this.saveAll(updatedGroups);
-        const savedCount = savedGroups ? savedGroups.length : 0;
-        logger.info('StarGroupRepository', `分组保存完成，保存成功${savedCount}个分组`);
-      }
+      // 直接使用_saveData保存最终分组数组，确保数据一致性
+      await this._saveData(updatedGroups);
       
       // 强制清除缓存确保数据一致性
       this.invalidateCache();
       
-      logger.info('StarGroupRepository', `星星扣除完成，共扣除${amount}颗，剩余${totalStars - amount}颗`);
+      // 验证保存结果
+      const verifyGroups = await this.getAll();
+      const verifyTotal = verifyGroups.reduce((sum, group) => sum + (group.stars || 0), 0);
+      const expectedTotal = totalStars - amount;
+      
+      logger.info('StarGroupRepository', `分组保存完成，保存${updatedGroups.length}个分组`);
+      logger.info('StarGroupRepository', `数据验证: 预期总数=${expectedTotal}, 实际总数=${verifyTotal}, 一致性=${verifyTotal === expectedTotal}`);
+      
+      if (verifyTotal !== expectedTotal) {
+        logger.error('StarGroupRepository', `数据不一致！预期${expectedTotal}颗，实际${verifyTotal}颗`);
+      }
+      
+      logger.info('StarGroupRepository', `星星扣除完成，共扣除${amount}颗，剩余${expectedTotal}颗`);
       
       return {
         success: true,
@@ -574,7 +610,10 @@ class StarGroupRepository extends BaseRepository {
       }
       
       // 计算该类型分组的总星星数
-      const totalStarsInType = groups.reduce((sum, group) => sum + (group.stars || 0), 0);
+      const totalStarsInType = groups.reduce((sum, group) => {
+        const stars = this._ensureNumber(group.stars, 0);
+        return sum + stars;
+      }, 0);
       
       if (totalStarsInType < amount) {
         logger.warn('StarGroupRepository', `该类型分组星星不足，需要${amount}颗，当前${totalStarsInType}颗`);
@@ -604,11 +643,11 @@ class StarGroupRepository extends BaseRepository {
         }
         
         // 当前分组可扣减的数量
-        const groupStars = group.stars || 0;
+        const groupStars = this._ensureNumber(group.stars, 0);
         const deductFromGroup = Math.min(remainingAmount, groupStars);
         
         if (deductFromGroup > 0) {
-          // 更新分组
+          // 更新分组 - 确保数学运算正确
           group.stars = groupStars - deductFromGroup;
           remainingAmount -= deductFromGroup;
           

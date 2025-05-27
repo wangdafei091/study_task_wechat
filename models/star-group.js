@@ -16,9 +16,9 @@ class StarGroup {
     this.expiryType = data.expiryType || data.type || 'permanent'; // 过期类型，与type保持一致
     this.name = data.name || this._getDefaultName(data.type);
     
-    // 星星相关
-    this.stars = parseInt(data.stars) || 0; // 当前星星数，确保为数字类型
-    this.maxStars = parseInt(data.maxStars) || 0; // 最大星星数，0表示无限制
+    // 星星相关 - 修复数据类型问题，确保为数字类型
+    this.stars = this._ensureNumber(data.stars, 0); // 当前星星数，确保为数字类型
+    this.maxStars = this._ensureNumber(data.maxStars, 0); // 最大星星数，0表示无限制
     
     // 时间相关
     this.createTime = data.createTime || Date.now();
@@ -50,6 +50,31 @@ class StarGroup {
       default:
         return '星星分组';
     }
+  }
+  
+  /**
+   * 确保值为数字类型
+   * @private
+   * @param {*} value 输入值
+   * @param {Number} defaultValue 默认值
+   * @returns {Number} 数字值
+   */
+  _ensureNumber(value, defaultValue = 0) {
+    // 如果值为null、undefined或空字符串，返回默认值
+    if (value === null || value === undefined || value === '') {
+      return defaultValue;
+    }
+    
+    // 尝试转换为数字
+    const num = Number(value);
+    
+    // 如果转换结果为NaN，返回默认值
+    if (isNaN(num)) {
+      return defaultValue;
+    }
+    
+    // 返回转换后的数字（确保为整数）
+    return Math.floor(num);
   }
   
   /**
@@ -94,16 +119,24 @@ class StarGroup {
    * @returns {Number} 添加后的星星数量
    */
   addStars(amount) {
-    if (amount <= 0) {
+    // 确保参数为数字类型
+    const numAmount = this._ensureNumber(amount, 0);
+    
+    if (numAmount <= 0) {
       return this.stars;
     }
     
-    const oldStars = this.stars;
-    this.stars += amount;
+    // 确保当前星星数为数字类型
+    const currentStars = this._ensureNumber(this.stars, 0);
+    const oldStars = currentStars;
+    
+    // 执行数学运算（确保是数字相加，不是字符串拼接）
+    this.stars = currentStars + numAmount;
     
     // 如果有最大值限制，确保不超过最大值
-    if (this.maxStars > 0 && this.stars > this.maxStars) {
-      this.stars = this.maxStars;
+    const maxStars = this._ensureNumber(this.maxStars, 0);
+    if (maxStars > 0 && this.stars > maxStars) {
+      this.stars = maxStars;
     }
     
     // 更新最后修改时间
@@ -118,12 +151,19 @@ class StarGroup {
    * @returns {Number} 减少后的星星数量
    */
   removeStars(amount) {
-    if (amount <= 0) {
+    // 确保参数为数字类型
+    const numAmount = this._ensureNumber(amount, 0);
+    
+    if (numAmount <= 0) {
       return this.stars;
     }
     
-    const oldStars = this.stars;
-    this.stars -= amount;
+    // 确保当前星星数为数字类型
+    const currentStars = this._ensureNumber(this.stars, 0);
+    const oldStars = currentStars;
+    
+    // 执行数学运算（确保是数字相减）
+    this.stars = currentStars - numAmount;
     
     // 确保星星数不为负数
     if (this.stars < 0) {
@@ -198,16 +238,20 @@ class StarGroup {
    * @returns {Number} 新的星星数量
    */
   resetStars(newAmount) {
-    if (newAmount < 0) {
-      newAmount = 0;
+    // 确保新数量为数字类型
+    let numAmount = this._ensureNumber(newAmount, 0);
+    
+    if (numAmount < 0) {
+      numAmount = 0;
     }
     
     // 如果有最大值限制，确保不超过最大值
-    if (this.maxStars > 0 && newAmount > this.maxStars) {
-      newAmount = this.maxStars;
+    const maxStars = this._ensureNumber(this.maxStars, 0);
+    if (maxStars > 0 && numAmount > maxStars) {
+      numAmount = maxStars;
     }
     
-    this.stars = newAmount;
+    this.stars = numAmount;
     this.lastUpdated = Date.now();
     
     return this.stars;

@@ -969,6 +969,109 @@ class StarService {
   }
 
   /**
+   * 修复星星记录的余额信息
+   * @returns {Promise<Object>} 修复结果
+   */
+  async repairStarRecordBalances() {
+    logger.info('StarService', '开始修复星星记录的余额信息');
+    
+    try {
+      const result = await this.starRecordRepository.repairRecordBalances();
+      
+      if (result.success) {
+        logger.info('StarService', `星星记录余额修复完成，共修复${result.repairedCount}条记录`);
+        
+        // 清除缓存确保数据一致性
+        this.clearCache();
+      } else {
+        logger.error('StarService', `星星记录余额修复失败: ${result.error}`);
+      }
+      
+      return result;
+    } catch (error) {
+      logger.error('StarService', '修复星星记录余额失败', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * 检查并自动修复数据一致性
+   * @returns {Promise<Object>} 检查和修复结果
+   */
+  async checkAndRepairDataConsistency() {
+    logger.info('StarService', '开始检查并修复数据一致性');
+    
+    try {
+      // 1. 验证数据一致性
+      const consistencyResult = await this.validateConsistency();
+      
+      // 2. 修复星星记录余额
+      const repairResult = await this.repairStarRecordBalances();
+      
+      // 3. 再次验证一致性
+      const finalConsistencyResult = await this.validateConsistency();
+      
+      const result = {
+        success: true,
+        initialConsistency: consistencyResult,
+        repairResult,
+        finalConsistency: finalConsistencyResult,
+        isFixed: finalConsistencyResult.isConsistent
+      };
+      
+      logger.info('StarService', `数据一致性检查和修复完成:`, {
+        初始一致性: consistencyResult.isConsistent,
+        修复记录数: repairResult.repairedCount,
+        最终一致性: finalConsistencyResult.isConsistent
+      });
+      
+      return result;
+    } catch (error) {
+      logger.error('StarService', '检查并修复数据一致性失败', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * 实时验证星星操作后的数据一致性
+   * @param {String} operation 操作类型
+   * @param {Object} operationData 操作数据
+   * @returns {Promise<Boolean>} 是否一致
+   */
+  async verifyOperationConsistency(operation, operationData = {}) {
+    logger.info('StarService', `验证${operation}操作后的数据一致性`);
+    
+    try {
+      // 获取分组总数和记录计算结果
+      const groupsTotal = await this.starGroupRepository.getTotalPoints();
+      const records = await this.starRecordRepository.getAll();
+      const recordsCalculation = this._calculateBalanceFromRecords(records);
+      
+      const isConsistent = groupsTotal === recordsCalculation.finalBalance;
+      
+      logger.info('StarService', `${operation}操作后数据一致性检查: 分组总数=${groupsTotal}, 记录余额=${recordsCalculation.finalBalance}, 一致性=${isConsistent}`);
+      
+      if (!isConsistent) {
+        logger.error('StarService', `${operation}操作后数据不一致！`, {
+          operation,
+          operationData,
+          groupsTotal,
+          recordsBalance: recordsCalculation.finalBalance,
+          difference: groupsTotal - recordsCalculation.finalBalance
+        });
+        
+        // 可以在这里触发自动修复或告警
+        // await this.repairStarRecordBalances();
+      }
+      
+      return isConsistent;
+    } catch (error) {
+      logger.error('StarService', `验证${operation}操作后数据一致性失败`, error);
+      return false;
+    }
+  }
+
+  /**
    * 清除缓存
    * 强制下次查询时重新从存储中获取数据
    */

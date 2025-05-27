@@ -624,7 +624,10 @@ class TaskService {
             task.points,
             task.pointsExpiry,
             `完成任务: ${task.title}`,
-            task.id
+            {
+              sourceType: 'task_complete',
+              sourceId: task.id
+            }
           );
           
           logger.info('TaskService', `积分添加结果:`, addResult);

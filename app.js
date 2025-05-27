@@ -36,9 +36,30 @@ App({
       if (initialized) {
         logger.info('App', '服务管理器初始化成功');
         
-        // 获取任务服务和消息服务
+        // 获取任务服务、消息服务和星星服务
         const taskService = serviceManager.getTaskService();
         const messageService = serviceManager.getMessageService();
+        const starService = serviceManager.getStarService();
+        
+        // 检查并修复星星数据一致性
+        if (starService) {
+          try {
+            logger.info('App', '开始检查并修复星星数据一致性');
+            const repairResult = await starService.checkAndRepairDataConsistency();
+            
+            if (repairResult.success) {
+              if (repairResult.repairResult.repairedCount > 0) {
+                logger.info('App', `星星数据修复完成，修复了${repairResult.repairResult.repairedCount}条记录`);
+              } else {
+                logger.info('App', '星星数据一致性检查通过，无需修复');
+              }
+            } else {
+              logger.error('App', `星星数据修复失败: ${repairResult.error}`);
+            }
+          } catch (error) {
+            logger.error('App', '星星数据一致性检查失败', error);
+          }
+        }
         
         // 加载任务数据
         if (taskService) {

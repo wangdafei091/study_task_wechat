@@ -433,17 +433,54 @@ class StarRecordRepository extends BaseRepository {
    */
   async _calculateCurrentBalance() {
     try {
+      // 优先使用星星分组数据计算余额，确保数据一致性
+      try {
+        // 尝试获取星星分组总数作为当前余额
+        const serviceManager = require('../services/service-manager');
+        const starService = serviceManager.getStarService();
+        
+        if (starService && starService.starGroupRepository) {
+          const groupTotal = await starService.starGroupRepository.getTotalPoints();
+          logger.info('StarRecordRepository', `从星星分组获取当前余额: ${groupTotal}`);
+          return groupTotal;
+        }
+      } catch (groupError) {
+        logger.warn('StarRecordRepository', '无法从星星分组获取余额，使用记录计算', groupError);
+      }
+      
+      // 如果无法从分组获取，则使用记录计算
       const records = await this.getAll();
       
       if (records.length === 0) {
+        logger.info('StarRecordRepository', '没有星星记录，当前余额为0');
         return 0;
       }
       
       // 按时间戳排序，最新的记录在前
       const sortedRecords = [...records].sort((a, b) => b.timestamp - a.timestamp);
       
-      // 返回最新记录的余额
-      return sortedRecords[0].balance;
+      // 如果最新记录有有效的余额字段，直接返回
+      const latestRecord = sortedRecords[0];
+      if (latestRecord.balance !== undefined && latestRecord.balance !== null && !isNaN(latestRecord.balance)) {
+        logger.info('StarRecordRepository', `从最新记录获取余额: ${latestRecord.balance}`);
+        return latestRecord.balance;
+      }
+      
+      // 如果记录没有有效的余额字段，通过累计所有points计算
+      logger.info('StarRecordRepository', '记录缺少余额字段，通过累计points计算余额');
+      let totalBalance = 0;
+      
+      // 按时间顺序（从旧到新）累计计算
+      const chronologicalRecords = [...records].sort((a, b) => a.timestamp - b.timestamp);
+      
+      for (const record of chronologicalRecords) {
+        const points = Number(record.points || 0);
+        totalBalance += points;
+        logger.debug('StarRecordRepository', `累计计算: 记录points=${points}, 累计余额=${totalBalance}`);
+      }
+      
+      logger.info('StarRecordRepository', `通过累计计算得到当前余额: ${totalBalance}`);
+      return totalBalance;
     } catch (error) {
       logger.error('StarRecordRepository', '计算当前余额失败', error);
       return 0;
@@ -512,6 +549,12 @@ class StarRecordRepository extends BaseRepository {
     try {
       logger.info('StarRecordRepository', `开始创建星星消费记录: 数量=${record.amount}, 类型=${record.type}, 来源=${record.source}`);
       
+      // 计算当前余额
+      const previousBalance = await this._calculateCurrentBalance();
+      const balance = previousBalance - record.amount;
+      
+      logger.info('StarRecordRepository', `余额计算: 操作前=${previousBalance}, 消费=${record.amount}, 操作后=${balance}`);
+      
       // 创建消费记录模型，修复参数映射问题
       const starRecord = new StarRecord({
         id: `star_record_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
@@ -521,10 +564,12 @@ class StarRecordRepository extends BaseRepository {
         sourceId: record.source || '', // 添加sourceId
         description: `兑换奖励消费: ${record.data?.rewardName || '未知奖励'}`, // 添加描述
         timestamp: record.timestamp || Date.now(),
+        balance, // 添加余额信息
+        previousBalance, // 添加操作前余额信息
         data: record.data || {}
       });
       
-      logger.info('StarRecordRepository', `StarRecord创建参数: points=${starRecord.points}, type=${starRecord.type}, source=${starRecord.source}`);
+      logger.info('StarRecordRepository', `StarRecord创建参数: points=${starRecord.points}, type=${starRecord.type}, source=${starRecord.source}, balance=${starRecord.balance}, previousBalance=${starRecord.previousBalance}`);
       
       // 验证记录数据
       const validationErrors = starRecord.validate();
@@ -540,7 +585,7 @@ class StarRecordRepository extends BaseRepository {
         throw new Error('保存消费记录失败');
       }
       
-      logger.info('StarRecordRepository', `创建消费记录成功: ID=${savedRecord.id}, 数量=${Math.abs(savedRecord.points)}, 类型=${savedRecord.type}`);
+      logger.info('StarRecordRepository', `创建消费记录成功: ID=${savedRecord.id}, 数量=${Math.abs(savedRecord.points)}, 类型=${savedRecord.type}, 余额=${savedRecord.balance}`);
       
       return savedRecord;
     } catch (error) {
@@ -561,13 +606,73 @@ class StarRecordRepository extends BaseRepository {
    */
   async createConsumptionRecord(options = {}) {
     logger.warn('StarRecordRepository', '使用已废弃的createConsumptionRecord方法，请使用createStarConsumptionRecord代替');
+    
+    // 简化实现，避免循环依赖
     return this.createStarConsumptionRecord({
       amount: options.stars,
-      type: options.type,
-      source: options.relatedId,
-      description: options.description,
-      timestamp: Date.now()
+      type: 'consumption',
+      source: options.type || 'manual',
+      description: options.description || '星星消费',
+      timestamp: Date.now(),
+      data: {
+        relatedId: options.relatedId
+      }
     });
+  }
+
+  /**
+   * 修复历史记录的余额信息
+   * @returns {Promise<Object>} 修复结果
+   */
+  async repairRecordBalances() {
+    logger.info('StarRecordRepository', '开始修复历史记录的余额信息');
+    
+    try {
+      const records = await this.getAll();
+      
+      if (records.length === 0) {
+        logger.info('StarRecordRepository', '没有记录需要修复');
+        return { success: true, repairedCount: 0 };
+      }
+      
+      // 按时间顺序排序（从旧到新）
+      const chronologicalRecords = [...records].sort((a, b) => a.timestamp - b.timestamp);
+      
+      let runningBalance = 0;
+      let repairedCount = 0;
+      const repairedRecords = [];
+      
+      for (const record of chronologicalRecords) {
+        const points = Number(record.points || 0);
+        const previousBalance = runningBalance;
+        runningBalance += points;
+        
+        // 检查是否需要修复
+        const needsRepair = record.balance !== runningBalance || record.previousBalance !== previousBalance;
+        
+        if (needsRepair) {
+          record.balance = runningBalance;
+          record.previousBalance = previousBalance;
+          repairedRecords.push(record);
+          repairedCount++;
+          
+          logger.info('StarRecordRepository', `修复记录 ${record.id}: points=${points}, previousBalance=${previousBalance}, balance=${runningBalance}`);
+        }
+      }
+      
+      if (repairedCount > 0) {
+        // 批量保存修复后的记录
+        await this.saveAll(repairedRecords);
+        logger.info('StarRecordRepository', `余额修复完成，共修复${repairedCount}条记录`);
+      } else {
+        logger.info('StarRecordRepository', '所有记录的余额信息都是正确的，无需修复');
+      }
+      
+      return { success: true, repairedCount };
+    } catch (error) {
+      logger.error('StarRecordRepository', '修复历史记录余额失败', error);
+      return { success: false, error: error.message };
+    }
   }
 
   /**

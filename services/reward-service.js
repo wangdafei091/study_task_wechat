@@ -587,6 +587,24 @@ class RewardService {
         
         logger.info('RewardService', `兑换奖励成功: ${reward.name}, 消耗${reward.points}颗星星`);
         
+        // 5. 验证操作后的数据一致性
+        try {
+          const starService = this.serviceManager.getStarService();
+          if (starService && starService.verifyOperationConsistency) {
+            const isConsistent = await starService.verifyOperationConsistency('兑换奖励', {
+              rewardId: reward.id,
+              rewardName: reward.name,
+              consumedPoints: reward.points
+            });
+            
+            if (!isConsistent) {
+              logger.error('RewardService', `兑换奖励后数据不一致！奖励: ${reward.name}, 消耗星星: ${reward.points}`);
+            }
+          }
+        } catch (consistencyError) {
+          logger.warn('RewardService', '数据一致性检查失败', consistencyError);
+        }
+        
         return { 
           success: true, 
           reward, 
