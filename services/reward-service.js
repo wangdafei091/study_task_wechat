@@ -767,21 +767,36 @@ class RewardService {
       // 获取所有可用奖励
       let availableRewards = await this.getAvailableRewards(false, false);
       
-      // 如果没有可用奖励，返回默认占位奖励
+      // 如果没有可用奖励，检查是否存在已兑换奖励
       if (availableRewards.length === 0) {
-        logger.info('RewardService', '没有可用奖励，返回默认占位奖励');
+        logger.info('RewardService', '没有可用奖励，检查是否存在已兑换奖励');
         
-        // 默认占位奖励
-        const defaultPlaceholder = {
-          name: '添加新奖励',
-          points: 10,
-          icon: '🎁',
-          isDefault: true,
-          remainingStars: 10
-        };
+        // 获取所有奖励（包括已兑换的）
+        const allRewards = await this.getAvailableRewards(true);
         
-        logger.info('RewardService', `返回默认占位奖励，还需${defaultPlaceholder.remainingStars}颗星星`);
-        return defaultPlaceholder;
+        if (allRewards.length > 0) {
+          // 存在奖励但都已兑换，返回allClaimed状态
+          logger.info('RewardService', '存在已兑换奖励，返回allClaimed状态');
+          const highestPointReward = [...allRewards].sort((a, b) => b.points - a.points)[0];
+          return {
+            ...highestPointReward,
+            remainingStars: 0,
+            allClaimed: true
+          };
+        } else {
+          // 真的没有任何奖励，返回默认占位奖励
+          logger.info('RewardService', '没有任何奖励，返回默认占位奖励');
+          const defaultPlaceholder = {
+            name: '添加新奖励',
+            points: 10,
+            icon: '🎁',
+            isDefault: true,
+            remainingStars: Math.max(0, 10 - availablePoints)
+          };
+          
+          logger.info('RewardService', `返回默认占位奖励，还需${defaultPlaceholder.remainingStars}颗星星`);
+          return defaultPlaceholder;
+        }
       }
       
       // 过滤未解锁的奖励并按点数排序
@@ -809,12 +824,13 @@ class RewardService {
     } catch (error) {
       logger.error('RewardService', '计算下一个可用奖励失败', error);
       // 返回一个默认奖励
+      const userPoints = knownStarCount !== null ? knownStarCount : 0;
       return {
         name: '添加新奖励',
         points: 10,
         icon: '🎁',
         isDefault: true,
-        remainingStars: 10
+        remainingStars: Math.max(0, 10 - userPoints)
       };
     }
   }
