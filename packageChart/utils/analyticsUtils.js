@@ -4,8 +4,8 @@
  * 提供纯粹的分析相关工具函数，不包含业务逻辑
  */
 
-const dateUtils = require('./dateUtils');
-const logger = require('./logger');
+const dateUtils = require('../../utils/dateUtils');
+const logger = require('../../utils/logger');
 
 const analyticsUtils = {
   /**

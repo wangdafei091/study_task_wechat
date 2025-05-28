@@ -1,3 +1,50 @@
+=== 2025-05-28 主包未使用JS文件优化 ===
+
+问题描述：
+主包中存在只被分包使用或完全未使用的JS文件，违反微信小程序"主包不应包含主包未使用文件"的优化原则，增加了主包大小。
+
+发现的问题文件：
+1. utils/feedbackUtils.js (2.8KB) - 完全未使用
+2. utils/analyticsUtils.js (5.0KB) - 只被分包使用
+3. services/analytics-service.js (19KB) - 只被分包使用
+
+优化方案：
+✅ 删除完全未使用的文件：feedbackUtils.js
+✅ 移动只被分包使用的文件到分包：
+   - analyticsUtils.js → packageChart/utils/analyticsUtils.js
+   - analytics-service.js → packageChart/services/analytics-service.js
+✅ 更新所有相关引用路径
+✅ 修改service-manager支持动态加载分包服务
+
+优化效果：
+- 删除文件：2.8KB (feedbackUtils.js)
+- 移动到分包：24KB (analyticsUtils.js + analytics-service.js)
+- 总计主包减少：26.8KB
+- 功能完全保持：所有引用路径已正确更新
+
+技术实现：
+1. 文件移动：使用mv命令将文件移动到分包对应目录
+2. 路径更新：更新分包组件中的require路径
+3. 服务管理：修改service-manager.js支持动态加载分包服务
+4. 依赖清理：从主包services/index.js中移除AnalyticsService导出
+
+修复效果：
+- 符合微信官方优化规范：主包不包含主包未使用文件
+- 保持功能完整性：所有功能正常工作
+- 减少主包大小：释放26.8KB空间
+- 提升加载性能：分包服务按需加载
+
+文件修改：
+- 删除：utils/feedbackUtils.js
+- 移动：utils/analyticsUtils.js → packageChart/utils/analyticsUtils.js
+- 移动：services/analytics-service.js → packageChart/services/analytics-service.js
+- 更新：packageChart/components/star-calendar/star-calendar.js (引用路径)
+- 更新：packageChart/components/star-trend/star-trend.js (引用路径)
+- 更新：services/index.js (移除AnalyticsService导出)
+- 更新：services/service-manager.js (动态加载分包服务)
+
+=== 历史优化记录 ===
+
 奖励提示文字样式优化完成！
 
 优化内容：

@@ -1,14 +1,13 @@
 /**
  * analytics-service.js - 分析服务
  * 
- * 提供数据分析相关的业务逻辑，包括历史数据分析、预测和统计
+ * 提供数据分析相关功能，包括星星记录分析、任务完成情况统计等
  */
 
-const logger = require('../utils/logger');
-const dateUtils = require('../utils/dateUtils');
-const { StarService, TaskService } = require('./index');
-const EventBus = require('../utils/core/event-bus');
-const { EVENTS } = require('../utils/constants');
+const logger = require('../../utils/logger.js');
+const dateUtils = require('../../utils/dateUtils.js');
+const EventBus = require('../../utils/core/event-bus');
+const { EVENTS } = require('../../utils/constants.js');
 
 class AnalyticsService {
   /**

@@ -153,6 +153,45 @@ class StarService {
   }
   
   /**
+   * 获取特定日期范围的星星记录
+   * @param {String} startDate 开始日期字符串（YYYY-MM-DD格式）
+   * @param {String} endDate 结束日期字符串（YYYY-MM-DD格式）
+   * @returns {Promise<Array>} 符合条件的记录列表
+   */
+  async getStarRecordsByDateRange(startDate, endDate) {
+    try {
+      logger.info('StarService', `获取日期范围星星记录: ${startDate} 至 ${endDate}`);
+      
+      const records = await this.starRecordRepository.getRecordsByDateRange(startDate, endDate);
+      
+      logger.info('StarService', `获取日期范围星星记录成功, 数量=${records.length}`);
+      return records;
+    } catch (error) {
+      logger.error('StarService', `获取日期范围星星记录失败: ${startDate} 至 ${endDate}`, error);
+      return [];
+    }
+  }
+  
+  /**
+   * 获取特定日期的星星记录
+   * @param {String} date 日期字符串（YYYY-MM-DD格式）
+   * @returns {Promise<Array>} 符合条件的记录列表
+   */
+  async getStarRecordsByDate(date) {
+    try {
+      logger.info('StarService', `获取特定日期星星记录: ${date}`);
+      
+      const records = await this.starRecordRepository.getRecordsByDate(date);
+      
+      logger.info('StarService', `获取特定日期星星记录成功, 数量=${records.length}`);
+      return records;
+    } catch (error) {
+      logger.error('StarService', `获取特定日期星星记录失败: ${date}`, error);
+      return [];
+    }
+  }
+  
+  /**
    * 添加星星
    * @param {Number} points 星星数量
    * @param {String} expiryType 过期类型，来自StarExpiryType枚举

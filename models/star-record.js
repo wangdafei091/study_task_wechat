@@ -90,6 +90,29 @@ class StarRecord {
   }
   
   /**
+   * 获取记录的日期字符串（YYYY-MM-DD格式）
+   * @returns {String} 日期字符串
+   */
+  getDate() {
+    const date = new Date(this.timestamp);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+  
+  /**
+   * 获取记录的月份字符串（YYYY-MM格式）
+   * @returns {String} 月份字符串
+   */
+  getMonth() {
+    const date = new Date(this.timestamp);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    return `${year}-${month}`;
+  }
+  
+  /**
    * 获取绝对点数值
    * @returns {Number} 绝对点数值
    */

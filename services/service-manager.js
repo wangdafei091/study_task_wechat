@@ -8,8 +8,7 @@ const {
   TaskService, 
   RewardService, 
   StarService, 
-  MessageService,
-  AnalyticsService
+  MessageService
 } = require('./index');
 
 const logger = require('../utils/logger');
@@ -80,13 +79,6 @@ class ServiceManager {
         rewardService: this.services.rewardService
       });
       
-      // 第三步：初始化依赖多个服务的复合服务
-      this.services.analyticsService = new AnalyticsService({
-        eventBus: this.eventBus,
-        starService: this.services.starService,
-        taskService: this.services.taskService
-      });
-      
       logger.info('ServiceManager', '所有服务初始化完成');
     } catch (error) {
       logger.error('ServiceManager', '服务初始化失败', error);
@@ -117,10 +109,6 @@ class ServiceManager {
       'message': 'messageService',
       'messageService': 'messageService',
       'MessageService': 'messageService',
-      
-      'analytics': 'analyticsService',
-      'analyticsService': 'analyticsService',
-      'AnalyticsService': 'analyticsService',
       
       'eventBus': 'eventBus'
     };
@@ -171,19 +159,40 @@ class ServiceManager {
   }
   
   /**
-   * 获取分析服务
-   * @returns {AnalyticsService} 分析服务实例
-   */
-  getAnalyticsService() {
-    return this.services.analyticsService;
-  }
-  
-  /**
    * 获取事件总线
    * @returns {EventBus} 事件总线实例
    */
   getEventBus() {
     return this.eventBus;
+  }
+  
+  /**
+   * 获取分析服务（动态加载分包中的服务）
+   * @returns {AnalyticsService} 分析服务实例
+   */
+  getAnalyticsService() {
+    // 如果已经加载过，直接返回
+    if (this.services.analyticsService) {
+      return this.services.analyticsService;
+    }
+    
+    try {
+      // 动态加载分包中的AnalyticsService
+      const AnalyticsService = require('../packageChart/services/analytics-service');
+      
+      // 初始化分析服务
+      this.services.analyticsService = new AnalyticsService({
+        eventBus: this.eventBus,
+        starService: this.services.starService,
+        taskService: this.services.taskService
+      });
+      
+      logger.info('ServiceManager', '动态加载分包AnalyticsService成功');
+      return this.services.analyticsService;
+    } catch (error) {
+      logger.error('ServiceManager', '动态加载分包AnalyticsService失败', error);
+      return null;
+    }
   }
 }
 

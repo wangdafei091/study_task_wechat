@@ -1,5 +1,5 @@
 const logger = require('../../../utils/logger.js');
-const analyticsUtils = require('../../../utils/analyticsUtils.js');
+const analyticsUtils = require('../../utils/analyticsUtils.js');
 const dateUtils = require('../../../utils/dateUtils.js');
 
 Component({

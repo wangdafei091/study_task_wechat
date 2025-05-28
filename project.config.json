@@ -1,7 +1,68 @@
 {
   "description": "项目配置文件",
   "packOptions": {
-    "ignore": [],
+    "ignore": [
+      {
+        "type": "folder",
+        "value": "test"
+      },
+      {
+        "type": "folder", 
+        "value": "docs"
+      },
+      {
+        "type": "folder",
+        "value": ".specstory"
+      },
+      {
+        "type": "folder",
+        "value": ".cursor"
+      },
+      {
+        "type": "folder",
+        "value": ".git"
+      },
+      {
+        "type": "file",
+        "value": "jest.config.js"
+      },
+      {
+        "type": "file",
+        "value": "package-lock.json"
+      },
+      {
+        "type": "file",
+        "value": "package.json"
+      },
+      {
+        "type": "file",
+        "value": ".gitignore"
+      },
+      {
+        "type": "file",
+        "value": ".DS_Store"
+      },
+      {
+        "type": "file",
+        "value": "README.md"
+      },
+      {
+        "type": "file",
+        "value": ".cursorrules"
+      },
+      {
+        "type": "file",
+        "value": ".cursorindexingignore"
+      },
+      {
+        "type": "file",
+        "value": "optimization_summary.txt"
+      },
+      {
+        "type": "file",
+        "value": "star-calendar.js, task-heatmap.js, star-trend.js"
+      }
+    ],
     "include": []
   },
   "setting": {
@@ -17,7 +78,7 @@
     "autoAudits": false,
     "showShadowRootInWxmlPanel": true,
     "scopeDataCheck": false,
-    "uglifyFileName": false,
+    "uglifyFileName": true,
     "checkInvalidKey": true,
     "checkSiteMap": true,
     "uploadWithSourceMap": true,
