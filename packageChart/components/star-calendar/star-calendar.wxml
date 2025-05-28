@@ -58,7 +58,7 @@
               data-type="earned" 
               data-date="{{item.dateString}}" 
               catchtap="onStarComponentTap">
-              +{{item.starInfo.earned * 1}}
+              +{{item.starInfo.earned}}
             </view>
             
             <!-- 扣除的星星 -->
@@ -67,7 +67,7 @@
               data-type="deducted" 
               data-date="{{item.dateString}}" 
               catchtap="onStarComponentTap">
-              -{{item.starInfo.deducted * 1}}
+              -{{item.starInfo.deducted}}
             </view>
           </view>
           
@@ -91,7 +91,7 @@
             class="earned-stars {{activeStarInfo && activeStarInfo.date === item.dateString && activeStarInfo.type === 'earned' ? 'active' : ''}}" 
             data-type="earned" 
             data-date="{{item.dateString}}" 
-            catchtap="onStarComponentTap">+{{item.starInfo.earned * 1}}</view>
+            catchtap="onStarComponentTap">+{{item.starInfo.earned}}</view>
           <view 
             class="star-icon {{activeStarInfo && activeStarInfo.date === item.dateString && activeStarInfo.type === 'icon' ? 'active' : ''}}" 
             data-type="icon" 
@@ -111,7 +111,7 @@
             class="deducted-stars {{activeStarInfo && activeStarInfo.date === item.dateString && activeStarInfo.type === 'deducted' ? 'active' : ''}}" 
             data-type="deducted" 
             data-date="{{item.dateString}}" 
-            catchtap="onStarComponentTap">-{{item.starInfo.deducted * 1}}</view>
+            catchtap="onStarComponentTap">-{{item.starInfo.deducted}}</view>
           <view 
             class="star-icon {{activeStarInfo && activeStarInfo.date === item.dateString && activeStarInfo.type === 'icon' ? 'active' : ''}}" 
             data-type="icon" 

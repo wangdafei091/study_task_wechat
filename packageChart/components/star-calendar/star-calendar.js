@@ -278,6 +278,8 @@ Component({
      * 更新日历显示星星数据
      */
     updateCalendarWithStars: function(starRecords) {
+      console.log('[星星日历] 数据类型已修复：确保earnedStars和deductedStars为数字类型，避免字符串拼接问题');
+      
       const calendarDays = this.data.calendarDays.map(day => {
         if (!day.isCurrentMonth) {
           return day;
@@ -289,17 +291,22 @@ Component({
         // 分别计算收入和支出的星星数量
         const earnedStars = dayRecords
           .filter(record => record.isIncome()) // 收入记录
-          .reduce((sum, record) => sum + record.points, 0);
+          .reduce((sum, record) => sum + Number(record.points || 0), 0);
           
         const deductedStars = dayRecords
           .filter(record => record.isExpense()) // 支出记录
-          .reduce((sum, record) => sum + Math.abs(record.points), 0); // 支出记录points是负数，取绝对值
+          .reduce((sum, record) => sum + Math.abs(Number(record.points || 0)), 0); // 支出记录points是负数，取绝对值
         
-        // 设置starInfo对象以匹配WXML模板
+        // 设置starInfo对象以匹配WXML模板，确保数值类型
         const starInfo = (earnedStars > 0 || deductedStars > 0) ? {
-          earned: earnedStars,
-          deducted: deductedStars
+          earned: Number(earnedStars),
+          deducted: Number(deductedStars)
         } : null;
+        
+        // 添加调试日志
+        if (starInfo) {
+          console.log(`[星星日历] 计算星星数据: 日期=${day.dateString}, 获得=${earnedStars}(${typeof earnedStars}), 扣除=${deductedStars}(${typeof deductedStars})`);
+        }
         
         return {
           ...day,
@@ -338,16 +345,16 @@ Component({
           // 分别计算收入和支出的星星数量
           const earnedStars = records
             .filter(record => record.isIncome()) // 收入记录
-            .reduce((sum, record) => sum + record.points, 0);
+            .reduce((sum, record) => sum + Number(record.points || 0), 0);
             
           const deductedStars = records
             .filter(record => record.isExpense()) // 支出记录
-            .reduce((sum, record) => sum + Math.abs(record.points), 0); // 支出记录points是负数，取绝对值
+            .reduce((sum, record) => sum + Math.abs(Number(record.points || 0)), 0); // 支出记录points是负数，取绝对值
           
-          // 设置starInfo对象以匹配WXML模板
+          // 设置starInfo对象以匹配WXML模板，确保数值类型
           const starInfo = (earnedStars > 0 || deductedStars > 0) ? {
-            earned: earnedStars,
-            deducted: deductedStars
+            earned: Number(earnedStars),
+            deducted: Number(deductedStars)
           } : null;
           
           const updatedDays = [...this.data.calendarDays];

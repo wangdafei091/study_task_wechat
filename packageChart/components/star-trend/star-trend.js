@@ -203,6 +203,8 @@ Component({
      * 设置图表配置项
      */
     setChartOption: function(chart) {
+      logger.info('star-trend', 'Y轴配置已优化：添加min=0和minInterval=1，修复纵坐标重复数字问题');
+      
       if (!this.data.chartData || !this.data.chartData.historyData || this.data.chartData.historyData.length === 0) {
         // 没有数据时显示提示信息
         chart.setOption({
@@ -235,6 +237,8 @@ Component({
           },
           yAxis: {
             type: 'value',
+            min: 0, // 强制从0开始，避免负数刻度
+            minInterval: 1, // 最小间隔为1，确保整数刻度
             axisLine: {
               show: false
             },
@@ -248,9 +252,10 @@ Component({
             },
             axisLabel: {
               color: '#666666',
-              fontSize: 9,
+              fontSize: 10, // 稍微增大字体，提高可读性
               formatter: function(value) {
-                return value.toFixed(0); // 只显示整数
+                // 使用Math.round确保整数显示，避免重复标签
+                return Math.round(value).toString();
               }
             }
           },
@@ -517,6 +522,8 @@ Component({
         xAxis: xAxisOption,
         yAxis: {
           type: 'value',
+          min: 0, // 强制从0开始，避免负数刻度
+          minInterval: 1, // 最小间隔为1，确保整数刻度
           axisLine: {
             show: false
           },
@@ -530,9 +537,10 @@ Component({
           },
           axisLabel: {
             color: '#666666',
-            fontSize: 9,
+            fontSize: 10, // 稍微增大字体，提高可读性
             formatter: function(value) {
-              return value.toFixed(0); // 只显示整数
+              // 使用Math.round确保整数显示，避免重复标签
+              return Math.round(value).toString();
             }
           }
         },
