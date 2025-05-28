@@ -124,8 +124,8 @@ App({
     // 设置主题
     this.setTheme();
     
-    // 创建定时器进行定期检查
-    this.startTaskChecking();
+    // 移除定时检查，改为仅在应用启动时检查一次
+    // this.startTaskChecking(); // 已删除：定时检查冗余，必做任务扣分在启动时已处理
   },
   
   // 初始化日志系统
@@ -194,30 +194,6 @@ App({
     } catch (error) {
       console.error('初始化日志系统失败:', error);
     }
-  },
-  
-  // 创建定期检查任务的定时器
-  startTaskChecking: function() {
-    // 每5分钟检查一次任务状态
-    const INTERVAL = 5 * 60 * 1000; // 5分钟
-    
-    this.taskCheckTimer = setInterval(() => {
-      logger.info('App', '执行定期任务检查');
-      
-      // 通过服务管理器获取任务服务
-      const taskService = serviceManager.getTaskService();
-      if (taskService) {
-        // 执行任务检查
-        taskService.checkTasksStatus()
-          .then(() => logger.info('App', '定期任务状态检查完成'))
-          .catch(err => logger.error('App', '定期任务状态检查失败', err));
-        
-        // 检查即将到期的任务
-        taskService.checkUpcomingTasks()
-          .then(() => logger.info('App', '定期检查即将到期任务完成'))
-          .catch(err => logger.error('App', '定期检查即将到期任务失败', err));
-      }
-    }, INTERVAL);
   },
   
   // 初始化事件总线

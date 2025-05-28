@@ -724,37 +724,28 @@ Page({
     logger.info('Index', `任务星星信息: starAwarded=${currentTask.starAwarded}(${typeof currentTask.starAwarded}), points=${taskPoints}`);
     logger.info('Index', `任务原始星星状态: ${wasStarAwarded ? '已获得' : '未获得'}`);
     
-    // 检查是否是取消完成操作
+    // 检查是否是取消完成操作且已获得星星
     if (newStatus === 0 && wasStarAwarded) {
-      // 首先检查任务是否被锁定
-      const taskService = serviceManager.getService('task');
+      // 在显示确认框之前，先检查任务是否被锁定
       const rewardService = serviceManager.getService('reward');
+      const isLocked = await rewardService.getLastExchangeTime(id);
       
-      if (taskService && rewardService) {
-        try {
-          // 获取最后兑换时间
-          const lastExchangeTime = await rewardService.getLastExchangeTime();
-          
-          // 检查任务是否可以取消打勾
-          if (currentTask.completionTime && lastExchangeTime && currentTask.completionTime < lastExchangeTime) {
-            // 任务被锁定，直接显示锁定提示，不显示确认对话框
-            const { ERROR_MESSAGES } = require('../../utils/constants');
-            wx.showModal({
-              title: '无法取消完成',
-              content: ERROR_MESSAGES.TASK_LOCKED,
-              showCancel: false,
-              confirmText: '我知道了'
-            });
-            this.setData({ processingTaskId: null });
-            return;
-          }
-        } catch (error) {
-          logger.error('Index', '检查任务锁定状态失败', error);
-          // 继续执行，不阻止用户操作
-        }
+      if (isLocked) {
+        // 任务已被锁定，直接显示锁定提示，不显示确认框
+        logger.info('Index', '任务已锁定，直接显示锁定提示', { taskId: id });
+        wx.showModal({
+          title: '无法取消完成',
+          content: '奖励已兑换，任务不可取消',
+          showCancel: false,
+          confirmText: '我知道了'
+        });
+        
+        // 清除处理中状态
+        this.setData({ processingTaskId: null });
+        return;
       }
       
-      // 如果任务未被锁定，显示确认对话框
+      // 任务未被锁定，显示确认对话框
       const result = await new Promise((resolve) => {
         wx.showModal({
           title: '确认取消完成',
@@ -792,16 +783,14 @@ Page({
       });
       
       if (result && result.success) {
-        // 任务状态变更时，先刷新任务列表
+        // 任务状态变更成功的处理逻辑
         logger.info('Index', '任务状态变更，刷新任务列表');
         
-        // 只刷新任务数据，星星奖励信息将在奖励检查后统一处理
-        logger.info('Index', '任务状态变更成功，保持任务位置稳定');
         await this.loadTaskData();
         
         // 根据操作类型和任务状态提供合适的提示
         if (newStatus === 1) {  // 完成任务
-          if (!wasStarAwarded) {  // 使用保存的原始状态判断
+          if (!wasStarAwarded) {
             // 首次完成任务，获得星星
             wx.showToast({
               title: `获得${taskPoints}颗星星！`,
@@ -814,18 +803,17 @@ Page({
               wx.vibrateShort({ type: 'heavy' });
             }
             
-            // 立即检查奖励达成，避免进度条状态跳跃
+            // 立即检查奖励达成
             logger.info('Index', '立即检查奖励达成状态');
             this.checkRewardUnlock();
           } else {
-            // 再次完成任务，不会获得星星，需要刷新奖励信息
+            // 再次完成任务，不会获得星星
             wx.showToast({
               title: '已获得过星星',
               icon: 'none',
               duration: 1500
             });
             
-            // 没有获得新星星时，正常刷新奖励信息
             this.loadStarsAndRewards();
           }
           
@@ -848,15 +836,34 @@ Page({
           this.loadStarsAndRewards();
         }
       } else {
-        // 操作失败的错误处理
-        wx.showToast({
-          title: result?.message || '操作失败',
-          icon: 'none',
-          duration: 2000
+        // 统一的错误处理：所有锁定相关错误都显示为modal
+        logger.info('Index', '统一处理任务操作结果', {
+          taskId: id,
+          operation: newStatus === 1 ? 'complete' : 'reset',
+          success: result?.success,
+          locked: result?.locked,
+          message: result?.message
         });
+        
+        if (result?.locked || (result?.message && result.message.includes('奖励已兑换'))) {
+          // 锁定状态统一使用modal
+          wx.showModal({
+            title: '无法取消完成',
+            content: result?.message || '奖励已兑换，任务不可取消',
+            showCancel: false,
+            confirmText: '我知道了'
+          });
+        } else {
+          // 其他错误使用toast
+          wx.showToast({
+            title: result?.message || '操作失败',
+            icon: 'none',
+            duration: 2000
+          });
+        }
       }
     } catch (error) {
-      // 错误处理
+      // 异常处理
       logger.error('Index', '完成任务失败', error);
       wx.showToast({
         title: '操作失败，请重试',

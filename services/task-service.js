@@ -603,8 +603,8 @@ class TaskService {
         logger.info('TaskService', `任务状态已设置: ${task.title}, 状态=${task.status}, 类型=${typeof task.status}`);
       }
 
-      // 如果任务以前未获得过星星，则分配积分
-      if (!task.starAwarded && this.starService) {
+      // 如果任务以前未获得过星星，且不是必做任务，则分配积分
+      if (!task.starAwarded && !task.isRequired && this.starService) {
         logger.info('TaskService', `开始为任务分配积分: ${task.title}, 积分=${task.points}, 有效期=${task.pointsExpiry}`);
         logger.info('TaskService', `任务当前starAwarded状态: ${task.starAwarded}, 类型: ${typeof task.starAwarded}`);
         
@@ -640,6 +640,8 @@ class TaskService {
         }
       } else if (task.starAwarded) {
         logger.info('TaskService', `任务 "${task.title}" 已经获得过星星，跳过积分分配`);
+      } else if (task.isRequired) {
+        logger.info('TaskService', `任务 "${task.title}" 是必做任务，完成后不获得星星奖励`);
       }
 
       // 更新修改时间
