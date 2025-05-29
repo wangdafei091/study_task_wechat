@@ -226,6 +226,36 @@ Component({
     },
     
     /**
+     * 判断是否为惩罚性扣减记录
+     * 只显示必做任务未完成的惩罚扣减，不显示奖励兑换的扣减
+     * @param {Object} record 星星记录
+     * @returns {Boolean} 是否为惩罚性扣减
+     */
+    isPenaltyDeduction: function(record) {
+      if (!record || !record.isExpense()) {
+        return false;
+      }
+      
+      // 根据source字段判断是否为惩罚性扣减
+      const source = record.source || '';
+      
+      // 惩罚性扣减的来源标识
+      const penaltySources = [
+        'task_penalty',        // TaskService中的必做任务惩罚
+        'required_penalty'     // StarService中的必做任务惩罚
+      ];
+      
+      const isPenalty = penaltySources.includes(source);
+      
+      // 添加过滤日志
+      if (record.isExpense() && !isPenalty) {
+        console.log(`[星星日历] 过滤非惩罚性扣减: source=${source}, points=${record.points}`);
+      }
+      
+      return isPenalty;
+    },
+
+    /**
      * 加载星星记录
      */
     loadStarRecords: function() {
@@ -294,7 +324,7 @@ Component({
           .reduce((sum, record) => sum + Number(record.points || 0), 0);
           
         const deductedStars = dayRecords
-          .filter(record => record.isExpense()) // 支出记录
+          .filter(record => this.isPenaltyDeduction(record)) // 只计算惩罚性扣减
           .reduce((sum, record) => sum + Math.abs(Number(record.points || 0)), 0); // 支出记录points是负数，取绝对值
         
         // 设置starInfo对象以匹配WXML模板，确保数值类型
@@ -305,7 +335,7 @@ Component({
         
         // 添加调试日志
         if (starInfo) {
-          console.log(`[星星日历] 计算星星数据: 日期=${day.dateString}, 获得=${earnedStars}(${typeof earnedStars}), 扣除=${deductedStars}(${typeof deductedStars})`);
+          console.log(`[星星日历] 计算星星数据: 日期=${day.dateString}, 获得=${earnedStars}(${typeof earnedStars}), 惩罚扣除=${deductedStars}(${typeof deductedStars})`);
         }
         
         return {
@@ -348,7 +378,7 @@ Component({
             .reduce((sum, record) => sum + Number(record.points || 0), 0);
             
           const deductedStars = records
-            .filter(record => record.isExpense()) // 支出记录
+            .filter(record => this.isPenaltyDeduction(record)) // 只计算惩罚性扣减
             .reduce((sum, record) => sum + Math.abs(Number(record.points || 0)), 0); // 支出记录points是负数，取绝对值
           
           // 设置starInfo对象以匹配WXML模板，确保数值类型
@@ -368,7 +398,7 @@ Component({
             calendarDays: updatedDays
           });
           
-          console.log(`[星星日历] 今日星星数据更新完成: 获得${earnedStars}颗，扣除${deductedStars}颗`);
+          console.log(`[星星日历] 今日星星数据更新完成: 获得${earnedStars}颗，惩罚扣除${deductedStars}颗`);
         })
         .catch(error => {
           console.error('[星星日历] 更新今日星星数据失败:', error);
@@ -459,7 +489,7 @@ Component({
         this.showStarAnimation(day);
       }
       
-      console.log(`[星星日历] 选择日期: ${day.dateString}, 获得星星: ${day.starInfo ? day.starInfo.earned : 0}, 扣除星星: ${day.starInfo ? day.starInfo.deducted : 0}`);
+      console.log(`[星星日历] 选择日期: ${day.dateString}, 获得星星: ${day.starInfo ? day.starInfo.earned : 0}, 惩罚扣除: ${day.starInfo ? day.starInfo.deducted : 0}`);
     },
     
     /**
