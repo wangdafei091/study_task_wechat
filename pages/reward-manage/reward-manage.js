@@ -18,7 +18,6 @@ Page({
     
     // 领取记录数据
     claimedRecords: [], // 所有领取记录
-    claimedFilter: 'all', // 领取记录筛选: all(全部) / pending(待领取) / delivered(已领取)
     
     // 添加/编辑奖励相关
     showRewardModal: false, // 是否显示奖励编辑模态框
@@ -105,21 +104,6 @@ Page({
   },
   
   /**
-   * 设置领取记录筛选
-   */
-  setClaimedFilter: function(e) {
-    const filter = e.currentTarget.dataset.filter;
-    console.log(`[RewardManage] 设置领取记录筛选: ${filter}`);
-    
-    this.setData({
-      claimedFilter: filter
-    });
-    
-    // 根据筛选条件重新加载领取记录
-    this.loadClaimedRecords(filter);
-  },
-  
-  /**
    * 加载奖励数据
    */
   loadRewardsData: async function() {
@@ -179,8 +163,8 @@ Page({
   /**
    * 加载领取记录
    */
-  loadClaimedRecords: async function(filter = null) {
-    console.log(`[RewardManage] 加载领取记录，筛选: ${filter || this.data.claimedFilter}`);
+  loadClaimedRecords: async function() {
+    console.log(`[RewardManage] 加载领取记录`);
     
     try {
       // 获取服务实例
@@ -201,24 +185,14 @@ Page({
         claimTimeDisplay: this.formatTimeStamp(r.claimTime || r.createTime)
       }));
       
-      // 根据筛选条件过滤记录
-      let filteredRecords = records;
-      const filterType = filter || this.data.claimedFilter;
-      
-      if (filterType === 'pending') {
-        filteredRecords = records.filter(r => r.claimStatus !== 'delivered');
-      } else if (filterType === 'delivered') {
-        filteredRecords = records.filter(r => r.claimStatus === 'delivered');
-      }
-      
       // 按领取时间倒序排列
-      filteredRecords.sort((a, b) => b.claimTime - a.claimTime);
+      records.sort((a, b) => b.claimTime - a.claimTime);
       
       this.setData({
-        claimedRecords: filteredRecords
+        claimedRecords: records
       });
       
-      console.log(`[RewardManage] 加载了 ${filteredRecords.length} 条领取记录`);
+      console.log(`[RewardManage] 加载了 ${records.length} 条领取记录`);
     } catch (error) {
       console.error('[RewardManage] 加载领取记录失败', error);
       wx.showToast({
@@ -757,86 +731,6 @@ Page({
   },
   
   /**
-   * 标记奖励为已领取
-   */
-  markAsDelivered: async function(e) {
-    const id = e.currentTarget.dataset.id;
-    const record = this.data.claimedRecords.find(r => r.id === id);
-    
-    if (record) {
-      logger.info('RewardManage', `标记奖励已领取: ${record.name}`, {id});
-      
-      try {
-        // 显示加载提示
-        wx.showLoading({ title: '处理中...' });
-        
-        // 获取服务实例
-        const rewardService = serviceManager.getService('rewardService');
-        
-        if (!rewardService) {
-          logger.error('RewardManage', '无法获取奖励服务实例');
-          throw new Error('无法获取奖励服务实例');
-        }
-        
-        // 调用领域服务标记奖励为已领取
-        const result = await rewardService.markRewardAsDelivered(id);
-        
-        if (!result || !result.success) {
-          throw new Error(result?.message || '标记奖励为已领取失败');
-        }
-        
-        // 刷新领取记录
-        await this.loadClaimedRecords();
-        
-        // 通知其他页面刷新奖励数据
-        const app = getApp();
-        app.globalData.needRefreshReward = true;
-        
-        wx.hideLoading();
-        
-        // 显示成功提示
-        wx.showToast({
-          title: '已标记为领取',
-          icon: 'success',
-          duration: 2000
-        });
-      } catch (error) {
-        logger.error('RewardManage', `标记奖励为已领取失败: ${error.message || error}`);
-        wx.hideLoading();
-        
-        wx.showToast({
-          title: '操作失败，请重试',
-          icon: 'none',
-          duration: 2000
-        });
-      }
-    }
-  },
-  
-  /**
-   * 取消确认对话框
-   */
-  cancelConfirmDialog: function() {
-    console.log('[RewardManage] 取消确认对话框');
-    
-    this.setData({
-      showConfirmDialog: false
-    });
-  },
-  
-  /**
-   * 确认对话框确认操作
-   */
-  confirmDialogAction: function() {
-    console.log('[RewardManage] 执行确认对话框操作');
-    
-    // 执行存储的确认操作
-    if (typeof this.data.confirmDialogAction === 'function') {
-      this.data.confirmDialogAction();
-    }
-  },
-  
-  /**
    * 清理未被领取的示例奖励
    * @returns {Promise<Boolean>} 是否清理了示例奖励
    */
@@ -908,5 +802,28 @@ Page({
       console.error('[RewardManage] 清理示例奖励发生错误:', error);
       return false;
     }
-  }
+  },
+  
+  /**
+   * 取消确认对话框
+   */
+  cancelConfirmDialog: function() {
+    console.log('[RewardManage] 取消确认对话框');
+    
+    this.setData({
+      showConfirmDialog: false
+    });
+  },
+  
+  /**
+   * 确认对话框确认操作
+   */
+  confirmDialogAction: function() {
+    console.log('[RewardManage] 执行确认对话框操作');
+    
+    // 执行存储的确认操作
+    if (typeof this.data.confirmDialogAction === 'function') {
+      this.data.confirmDialogAction();
+    }
+  },
 });

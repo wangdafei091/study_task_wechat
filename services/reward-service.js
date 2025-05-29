@@ -316,10 +316,13 @@ class RewardService {
   
   /**
    * 标记奖励为已领取
+   * @deprecated 此方法已废弃，现在用户兑换时直接设置为delivered状态
    * @param {String} rewardId 奖励ID
    * @returns {Promise<Object>} 操作结果
    */
   async markRewardAsDelivered(rewardId) {
+    logger.warn('RewardService', '调用了已废弃的方法: markRewardAsDelivered，现在用户兑换时直接设置为delivered状态');
+    
     if (!rewardId) {
       logger.warn('RewardService', '标记奖励为已领取失败: 缺少奖励ID');
       return { success: false, message: '奖励ID不能为空' };
@@ -535,15 +538,15 @@ class RewardService {
         
         // 3. 更新奖励状态为已领取
         try {
-          reward.claim(); // 使用Reward模型的标准方法，确保状态一致性
-          logger.info('RewardService', `奖励状态设置: claimed=${reward.claimed}, claimStatus=${reward.claimStatus}, claimTime=${reward.claimTime}`);
+          reward.claim(); // 使用Reward模型的标准方法，现在直接设置为delivered状态
+          logger.info('RewardService', `奖励状态设置: claimed=${reward.claimed}, claimStatus=${reward.claimStatus}, claimTime=${reward.claimTime}, deliveryTime=${reward.deliveryTime}`);
           const savedReward = await this.rewardRepository.save(reward);
           
           if (!savedReward) {
             throw new Error('保存奖励状态失败');
           }
           
-          logger.info('RewardService', `奖励状态更新成功: ${reward.name}`);
+          logger.info('RewardService', `奖励状态更新成功: ${reward.name}, 最终状态=${reward.claimStatus}`);
         } catch (saveError) {
           logger.error('RewardService', '更新奖励状态失败', saveError);
           

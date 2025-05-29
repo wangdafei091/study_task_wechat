@@ -40,16 +40,6 @@
   
   <!-- 领取记录标签页 -->
   <view class="tab-content" wx:if="{{activeTab === 'claimed'}}">
-    <!-- 筛选选项 -->
-    <view class="filter-bar">
-      <view class="filter-item {{claimedFilter === 'all' ? 'active' : ''}}" 
-            bindtap="setClaimedFilter" data-filter="all">全部记录</view>
-      <view class="filter-item {{claimedFilter === 'pending' ? 'active' : ''}}" 
-            bindtap="setClaimedFilter" data-filter="pending">待领取</view>
-      <view class="filter-item {{claimedFilter === 'delivered' ? 'active' : ''}}" 
-            bindtap="setClaimedFilter" data-filter="delivered">已领取</view>
-    </view>
-    
     <!-- 领取记录列表 -->
     <view class="claimed-list">
       <block wx:for="{{claimedRecords}}" wx:key="id">
@@ -58,15 +48,9 @@
           <view class="claimed-info">
             <view class="claimed-name">{{item.name}}</view>
             <view class="claimed-time">领取时间: {{item.claimTimeDisplay}}</view>
-            <view class="claimed-status {{item.claimStatus === 'delivered' ? 'delivered' : 'pending'}}">
-              {{item.claimStatus === 'delivered' ? '已领取' : '待领取'}}
+            <view class="claimed-status delivered">
+              已领取
             </view>
-          </view>
-          <view class="claimed-actions">
-            <button class="action-btn" wx:if="{{item.claimStatus === 'pending'}}" 
-                    bindtap="markAsDelivered" data-id="{{item.id}}">
-              标记已领取
-            </button>
           </view>
         </view>
       </block>

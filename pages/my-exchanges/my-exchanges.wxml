@@ -15,7 +15,7 @@
     
     <view class="exchanges-list" wx:else>
       <block wx:for="{{claimedRewards}}" wx:key="id">
-        <view class="exchange-item {{item.claimStatus === 'claimed' ? 'delivered' : 'pending'}}">
+        <view class="exchange-item delivered">
           <view class="exchange-icon">{{item.icon}}</view>
           <view class="exchange-info">
             <view class="exchange-name">{{item.name}}</view>
@@ -24,8 +24,8 @@
               <text class="points-label">花费星星:</text>
               <text class="points-value">{{item.points}}颗</text>
             </view>
-            <view class="exchange-status {{item.claimStatus === 'claimed' ? 'delivered' : 'pending'}}">
-              {{item.claimStatus === 'claimed' ? '已领取' : '等待领取'}}
+            <view class="exchange-status delivered">
+              已领取
             </view>
           </view>
         </view>
