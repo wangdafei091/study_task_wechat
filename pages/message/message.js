@@ -1,5 +1,6 @@
 // pages/message/message.js
 const serviceManager = require('../../services/service-manager.js');
+const dateUtils = require('../../utils/dateUtils');
 const logger = require('../../utils/logger');
 
 Page({
@@ -432,32 +433,22 @@ viewMessageDetail: function(e) {
    * 格式化消息时间显示
    */
   formatMessageTime: function(timestamp) {
-    const now = new Date();
-    const msgDate = new Date(timestamp);
-    const diffMinutes = Math.floor((now - msgDate) / (60 * 1000));
+    // 使用dateUtils工具函数格式化时间
+    const timeDisplay = dateUtils.formatRelativeTime(timestamp);
     
-    if (diffMinutes < 1) {
-      return '刚刚';
-    } else if (diffMinutes < 60) {
-      return `${diffMinutes}分钟前`;
-    } else if (diffMinutes < 24 * 60) {
-      const hours = Math.floor(diffMinutes / 60);
-      return `${hours}小时前`;
-    } else if (diffMinutes < 30 * 24 * 60) {
-      const days = Math.floor(diffMinutes / (24 * 60));
-      return `${days}天前`;
-    } else {
-      const year = msgDate.getFullYear();
-      const month = (msgDate.getMonth() + 1).toString().padStart(2, '0');
-      const day = msgDate.getDate().toString().padStart(2, '0');
-      return `${year}-${month}-${day}`;
-    }
+    // 如果工具函数返回空字符串（无效输入），则返回默认值
+    return timeDisplay || '时间未知';
   },
 
   /**
    * 格式化日期
    */
   formatDate: function(timestamp) {
+    // 简单检查：如果timestamp无效，返回默认值
+    if (!timestamp) {
+      return '今天';
+    }
+    
     const date = new Date(timestamp);
     const now = new Date();
     const diffDays = Math.floor((now - date) / (24 * 60 * 60 * 1000));

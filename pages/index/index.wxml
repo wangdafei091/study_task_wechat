@@ -305,7 +305,7 @@
     </scroll-view>
     
     <view class="message-preview-actions">
-      <view class="mark-all-read" bindtap="markAllAsRead" wx:if="{{unreadCount > 0}}">
+      <view class="mark-all-read" bindtap="markAllMessagesAsRead" wx:if="{{unreadCount > 0}}">
         全部已读
       </view>
       <view class="view-all-messages" bindtap="navigateToMessageCenter">

@@ -1,6 +1,7 @@
 const app = getApp()
 const serviceManager = require('../../services/service-manager.js');
 const formatUtils = require('../../utils/formatUtils');
+const dateUtils = require('../../utils/dateUtils');
 const logger = require('../../utils/logger');
 const { NotificationType } = require('../../models/message');
 
@@ -539,11 +540,19 @@ Page({
       const messageService = serviceManager.getMessageService();
       const messages = await messageService.getAllMessages();
       
+      // 为消息添加时间显示字段，使用工具函数
+      const processedMessages = messages.map(msg => {
+        return {
+          ...msg,
+          timeDisplay: dateUtils.formatRelativeTime(msg.timestamp || msg.createTime)
+        };
+      });
+      
       // 计算未读消息数量
-      const unreadCount = messages.filter(msg => !msg.isRead).length;
+      const unreadCount = processedMessages.filter(msg => !msg.isRead).length;
       
       this.setData({
-        messages,
+        messages: processedMessages,
         unreadCount
       });
     } catch (error) {
