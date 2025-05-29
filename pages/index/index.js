@@ -719,10 +719,12 @@ Page({
     const newStatus = currentTask.status === 1 ? 0 : 1; // 切换状态
     const wasStarAwarded = currentTask.starAwarded || false; // 保存原始星星状态
     const taskPoints = currentTask.points || 0; // 保存任务积分
+    const isRequired = currentTask.isRequired || false; // 保存必做任务状态
     
     logger.info('Index', `任务详细信息: ID=${id}, 标题=${currentTask.title}, 当前状态=${currentTask.status}, 新状态=${newStatus}`);
     logger.info('Index', `任务星星信息: starAwarded=${currentTask.starAwarded}(${typeof currentTask.starAwarded}), points=${taskPoints}`);
     logger.info('Index', `任务原始星星状态: ${wasStarAwarded ? '已获得' : '未获得'}`);
+    logger.info('Index', `任务类型信息: isRequired=${isRequired}, 任务类型=${isRequired ? '必做任务' : '普通任务'}`);
     
     // 检查是否是取消完成操作且已获得星星
     if (newStatus === 0 && wasStarAwarded) {
@@ -790,31 +792,53 @@ Page({
         
         // 根据操作类型和任务状态提供合适的提示
         if (newStatus === 1) {  // 完成任务
-          if (!wasStarAwarded) {
-            // 首次完成任务，获得星星
+          // 检查是否为必做任务（使用之前定义的变量）
+          if (isRequired) {
+            // 必做任务完成提示
             wx.showToast({
-              title: `获得${taskPoints}颗星星！`,
+              title: '必做任务已完成！',
               icon: 'success',
               duration: 2000
             });
             
-            // 震动反馈
+            // 轻微震动反馈（区别于普通任务）
             if (wx.vibrateShort) {
-              wx.vibrateShort({ type: 'heavy' });
+              wx.vibrateShort({ type: 'medium' });
             }
             
-            // 立即检查奖励达成
-            logger.info('Index', '立即检查奖励达成状态');
-            this.checkRewardUnlock();
-          } else {
-            // 再次完成任务，不会获得星星
-            wx.showToast({
-              title: '已获得过星星',
-              icon: 'none',
-              duration: 1500
-            });
+            // 记录必做任务完成日志
+            logger.info('Index', `必做任务完成: ${currentTask.title}, 避免了扣除${taskPoints}颗星星的惩罚`);
             
+            // 更新奖励进度信息（虽然不获得星星，但需要更新UI）
             this.loadStarsAndRewards();
+          } else {
+            // 普通任务完成提示（保持原有逻辑）
+            if (!wasStarAwarded) {
+              // 首次完成任务，获得星星
+              wx.showToast({
+                title: `获得${taskPoints}颗星星！`,
+                icon: 'success',
+                duration: 2000
+              });
+              
+              // 震动反馈
+              if (wx.vibrateShort) {
+                wx.vibrateShort({ type: 'heavy' });
+              }
+              
+              // 立即检查奖励达成
+              logger.info('Index', '立即检查奖励达成状态');
+              this.checkRewardUnlock();
+            } else {
+              // 再次完成任务，不会获得星星
+              wx.showToast({
+                title: '已获得过星星',
+                icon: 'none',
+                duration: 1500
+              });
+              
+              this.loadStarsAndRewards();
+            }
           }
           
           // 仅当完成任务时触发庆祝动画
@@ -903,13 +927,7 @@ Page({
     });
   },
   
-  // 跳转到任务详情页面
-  viewTaskDetail: function(e) {
-    const taskId = e.currentTarget.dataset.id;
-    wx.navigateTo({
-      url: `/pages/task/task?id=${taskId}`
-    });
-  },
+
   
   // 跳转到消息中心
   navigateToMessageCenter: function(e) {
@@ -1163,15 +1181,6 @@ Page({
       });
   },
   
-  // 点击即将到期任务
-  onUpcomingTaskTap: function(e) {
-    const taskId = e && e.detail ? e.detail.taskId : this.data.upcomingTask.id;
-    if (taskId) {
-      wx.navigateTo({
-        url: `/pages/task/task?id=${taskId}`
-      });
-    }
-  },
   
   // 处理即将到期任务选项点击
   handleUpcomingOption: function(e) {
@@ -1185,16 +1194,6 @@ Page({
     // 延迟执行操作，让视觉效果更流畅
     setTimeout(() => {
       switch(action) {
-        case 'viewTask':
-          // 查看任务详情
-          const taskId = e.detail.taskId || this.data.upcomingTask.id;
-          if (taskId) {
-            wx.navigateTo({
-              url: `/pages/task/task?id=${taskId}`
-            });
-          }
-          break;
-          
         case 'viewMessages':
           // 跳转到消息中心的任务标签
           wx.navigateTo({
