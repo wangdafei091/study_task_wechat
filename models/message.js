@@ -67,7 +67,7 @@ class Message {
     this.isArchived = data.isArchived || false;
     
     // 时间相关
-    this.createTime = data.createTime || data.timestamp || Date.now();
+    this.createTime = data.createTime || Date.now();
     this.readTime = data.readTime || 0;
     this.expireTime = data.expireTime || 0; // 0表示永不过期
     

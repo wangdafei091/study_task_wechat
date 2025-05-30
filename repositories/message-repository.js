@@ -162,7 +162,7 @@ class MessageRepository extends BaseRepository {
   async getMessagesByTimeRange(startTime, endTime) {
     try {
       const messages = await this.query(message => {
-        return message.timestamp >= startTime && message.timestamp <= endTime;
+        return message.createTime >= startTime && message.createTime <= endTime;
       });
       
       logger.info('MessageRepository', `获取时间范围内的消息成功, 数量=${messages.length}`);
@@ -195,7 +195,7 @@ class MessageRepository extends BaseRepository {
       const now = new Date();
       const startTime = new Date(now.getFullYear(), now.getMonth(), now.getDate() - days + 1).getTime();
       
-      const messages = await this.query(message => message.timestamp >= startTime);
+      const messages = await this.query(message => message.createTime >= startTime);
       
       // 按日期分组
       const groupedMessages = {};
@@ -207,7 +207,7 @@ class MessageRepository extends BaseRepository {
       
       // 分配消息到日期组
       messages.forEach(message => {
-        const msgDate = new Date(message.timestamp);
+        const msgDate = new Date(message.createTime);
         const dateKey = `${msgDate.getFullYear()}-${String(msgDate.getMonth() + 1).padStart(2, '0')}-${String(msgDate.getDate()).padStart(2, '0')}`;
         
         if (groupedMessages[dateKey]) {
@@ -717,7 +717,7 @@ class MessageRepository extends BaseRepository {
       // 今日消息
       const today = new Date();
       const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
-      const todayCount = allMessages.filter(msg => msg.timestamp >= startOfDay).length;
+      const todayCount = allMessages.filter(msg => msg.createTime >= startOfDay).length;
       
       // 高优先级消息
       const highPriorityCount = allMessages.filter(msg => 

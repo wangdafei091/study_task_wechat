@@ -67,19 +67,19 @@ Page({
    * 处理消息数据，添加日期分隔符和计算未读数量
    */
   processMessages: function(messages) {
-    // 按时间降序排序
-    messages.sort((a, b) => b.timestamp - a.timestamp);
+    // 按时间降序排序 - 统一使用createTime
+    messages.sort((a, b) => b.createTime - a.createTime);
     
     // 添加日期分隔符
     let lastDate = '';
     const processedMessages = messages.map(msg => {
-      const date = this.formatDate(msg.timestamp);
+      const date = this.formatDate(msg.createTime);
       const showDateDivider = date !== lastDate;
       lastDate = date;
       
       return {
         ...msg,
-        timeDisplay: this.formatMessageTime(msg.timestamp),
+        timeDisplay: this.formatMessageTime(msg.createTime),
         showDateDivider,
         dateDivider: date
       };
@@ -151,7 +151,7 @@ Page({
         type: 'task',
         title: '任务即将到期',
         summary: '您有一个"语文作业"任务将在1小时后到期，请及时完成。',
-        timestamp: now - 3600000, // 1小时前
+        createTime: now - 3600000, // 统一使用createTime
         isRead: false,
         icon: '⏰'
       },
@@ -160,7 +160,7 @@ Page({
         type: 'achievement',
         title: '完成连续学习3天',
         summary: '恭喜你已经连续学习3天了，再接再厉！',
-        timestamp: yesterday,
+        createTime: yesterday, // 统一使用createTime
         isRead: true,
         icon: '🏆'
       },
@@ -169,7 +169,7 @@ Page({
         type: 'system',
         title: '新功能上线',
         summary: '消息中心功能已上线，现在可以接收任务提醒和成就通知了。',
-        timestamp: twoDaysAgo,
+        createTime: twoDaysAgo, // 统一使用createTime
         isRead: true,
         icon: '🔔'
       },
@@ -178,7 +178,7 @@ Page({
         type: 'task',
         title: '新任务提醒',
         summary: '您有新的任务"数学作业"已添加到今日计划中。',
-        timestamp: twoDaysAgo - 7200000, // 前天再减2小时
+        createTime: twoDaysAgo - 7200000, // 统一使用createTime
         isRead: true,
         icon: '📝'
       },
@@ -187,7 +187,7 @@ Page({
         type: 'achievement',
         title: '完成首个任务',
         summary: '恭喜您完成了第一个任务！继续加油！',
-        timestamp: threeMonthsAgo,
+        createTime: threeMonthsAgo, // 统一使用createTime
         isRead: true,
         icon: '🎉'
       }
@@ -432,9 +432,12 @@ viewMessageDetail: function(e) {
   /**
    * 格式化消息时间显示
    */
-  formatMessageTime: function(timestamp) {
+  formatMessageTime: function(createTime) {
+    // 添加日志便于调试
+    logger.debug('MessagePage', '格式化消息时间', { createTime });
+    
     // 使用dateUtils工具函数格式化时间
-    const timeDisplay = dateUtils.formatRelativeTime(timestamp);
+    const timeDisplay = dateUtils.formatRelativeTime(createTime);
     
     // 如果工具函数返回空字符串（无效输入），则返回默认值
     return timeDisplay || '时间未知';
@@ -443,13 +446,14 @@ viewMessageDetail: function(e) {
   /**
    * 格式化日期
    */
-  formatDate: function(timestamp) {
-    // 简单检查：如果timestamp无效，返回默认值
-    if (!timestamp) {
+  formatDate: function(createTime) {
+    // 简单检查：如果createTime无效，返回默认值
+    if (!createTime) {
+      logger.warn('MessagePage', 'formatDate: createTime参数为空');
       return '今天';
     }
     
-    const date = new Date(timestamp);
+    const date = new Date(createTime);
     const now = new Date();
     const diffDays = Math.floor((now - date) / (24 * 60 * 60 * 1000));
     

@@ -540,11 +540,11 @@ Page({
       const messageService = serviceManager.getMessageService();
       const messages = await messageService.getAllMessages();
       
-      // 为消息添加时间显示字段，使用工具函数
+      // 为消息添加时间显示字段，统一使用createTime
       const processedMessages = messages.map(msg => {
         return {
           ...msg,
-          timeDisplay: dateUtils.formatRelativeTime(msg.timestamp || msg.createTime)
+          timeDisplay: dateUtils.formatRelativeTime(msg.createTime)
         };
       });
       
@@ -554,6 +554,11 @@ Page({
       this.setData({
         messages: processedMessages,
         unreadCount
+      });
+      
+      logger.info('Index', '消息数据加载成功', { 
+        messagesCount: processedMessages.length, 
+        unreadCount 
       });
     } catch (error) {
       logger.error('Index', '加载消息数据失败', error);
