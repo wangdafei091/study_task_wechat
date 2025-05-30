@@ -18,7 +18,12 @@ Page({
     activeTabName: '',    // 当前标签名称
     hasMoreMessages: false, // 是否有更多消息
     pageSize: 20,         // 每页显示消息数量
-    currentPage: 1        // 当前页码
+    currentPage: 1,       // 当前页码
+    
+    // 详情面板相关数据
+    showDetailPanel: false,     // 是否显示详情面板
+    selectedMessage: null,      // 当前选中的消息
+    detailAnimation: null       // 详情面板动画
   },
 
   /**
@@ -157,16 +162,21 @@ Page({
 viewMessageDetail: function(e) {
   const messageId = e.currentTarget.dataset.id;
   const messageService = serviceManager.getMessageService();
-  const messageIndex = this.data.messages.findIndex(m => m.id === messageId);
+  const message = this.data.messages.find(m => m.id === messageId);
   
-  if (messageIndex > -1) {
-    // 标记该消息为已读
+  if (message) {
+    // 1. 标记该消息为已读（保持现有逻辑）
     messageService.markMessageAsRead(messageId);
     
     // 记录日志
-    logger.info('MessagePage', `标记消息已读: ${this.data.messages[messageIndex].title}`);
+    logger.info('MessagePage', `标记消息已读: ${message.title}`);
     
-    // 重新加载消息数据
+    // 2. 如果消息有详细内容，显示详情面板
+    if (message.content && message.content.trim()) {
+      this.showMessageDetail(message);
+    }
+    
+    // 3. 重新加载消息数据（保持现有逻辑）
     setTimeout(() => {
       this.loadMessageData();
     }, 300);
@@ -410,5 +420,81 @@ viewMessageDetail: function(e) {
         return `${year}年${month}月${day}日`;
       }
     }
-  }
+  },
+
+  /**
+   * 显示消息详情面板
+   */
+  showMessageDetail: function(message) {
+    logger.info('MessagePage', `显示消息详情: ${message.title}`);
+    logger.info('MessagePage', '启用滑动穿透防护');
+    
+    // 创建动画实例
+    const animation = wx.createAnimation({
+      duration: 300,
+      timingFunction: 'ease-out'
+    });
+    
+    // 设置初始状态（从底部滑入）
+    animation.translateY('100%').opacity(0).step({ duration: 0 });
+    
+    this.setData({
+      selectedMessage: message,
+      showDetailPanel: true,
+      detailAnimation: animation.export()
+    });
+    
+    // 执行展开动画
+    setTimeout(() => {
+      animation.translateY(0).opacity(1).step();
+      this.setData({
+        detailAnimation: animation.export()
+      });
+    }, 50);
+  },
+  
+  /**
+   * 隐藏消息详情面板
+   */
+  hideMessageDetail: function() {
+    logger.info('MessagePage', '隐藏消息详情面板');
+    logger.info('MessagePage', '解除滑动穿透防护');
+    
+    // 创建动画实例
+    const animation = wx.createAnimation({
+      duration: 300,
+      timingFunction: 'ease-in'
+    });
+    
+    // 设置隐藏动画（滑出到底部）
+    animation.translateY('100%').opacity(0).step();
+    
+    this.setData({
+      detailAnimation: animation.export()
+    });
+    
+    // 延迟隐藏面板
+    setTimeout(() => {
+      this.setData({
+        showDetailPanel: false,
+        selectedMessage: null
+      });
+    }, 300);
+  },
+  
+  /**
+   * 防止事件冒泡和滑动穿透
+   */
+  preventBubble: function(e) {
+    // 阻止事件冒泡和默认行为，防止滑动穿透
+    if (e) {
+      if (typeof e.stopPropagation === 'function') {
+        e.stopPropagation();
+      }
+      if (typeof e.preventDefault === 'function') {
+        e.preventDefault();
+      }
+    }
+    return false;
+  },
 }) 

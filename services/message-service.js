@@ -454,13 +454,14 @@ class MessageService {
    * 创建系统消息
    * @param {String} content 消息内容
    * @param {String} type 消息类型
+   * @param {Object} options 选项
    * @returns {Promise<Object>} 创建的消息对象
    */
-  async createSystemMessage(content, type = 'system') {
+  async createSystemMessage(content, type = 'system', options = {}) {
     logger.info('MessageService', `创建系统消息: ${content}`);
     
     try {
-      const message = await this._createSystemMessageWithDomainModel(content, type);
+      const message = await this._createSystemMessageWithDomainModel(content, type, options);
       return Promise.resolve(message);
     } catch (error) {
       logger.error('MessageService', '创建系统消息失败', error);
@@ -755,7 +756,7 @@ class MessageService {
    */
   async _createSystemMessageWithDomainModel(content, type = 'system', options = {}) {
     let title, icon;
-    const { priority } = options;
+    const { priority, title: customTitle, summary: customSummary } = options;
     
     switch(type) {
       case 'reward':
@@ -770,16 +771,25 @@ class MessageService {
         title = '成就达成';
         icon = '🏆';
         break;
+      case 'welcome':
+        title = '欢迎使用小CEO日程表';
+        icon = '🎉';
+        break;
       default:
         title = '系统通知';
         icon = '🔔';
+    }
+    
+    // 支持自定义标题
+    if (customTitle) {
+      title = customTitle;
     }
     
     const messageData = {
       type: MessageType.SYSTEM,
       notificationType: type,
       title,
-      summary: content,
+      summary: customSummary || content, // 优先使用自定义摘要
       content,
       icon,
       priority: priority || MessagePriority.MEDIUM

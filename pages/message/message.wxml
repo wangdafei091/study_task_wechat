@@ -80,4 +80,22 @@
       <view class="load-more-text">加载更多...</view>
     </view>
   </scroll-view>
+  
+  <!-- 消息详情面板 -->
+  <view class="detail-overlay" wx:if="{{showDetailPanel}}" 
+        bindtap="hideMessageDetail" 
+        catchtouchmove="preventBubble">
+    <view class="detail-panel" animation="{{detailAnimation}}" 
+          catchtap="preventBubble" 
+          catchtouchmove="preventBubble">
+      <view class="detail-header">
+        <view class="detail-icon">{{selectedMessage.icon}}</view>
+        <view class="detail-title">{{selectedMessage.title}}</view>
+        <view class="detail-close" bindtap="hideMessageDetail">×</view>
+      </view>
+      <scroll-view class="detail-content" scroll-y="true">
+        <text class="detail-text">{{selectedMessage.content}}</text>
+      </scroll-view>
+    </view>
+  </view>
 </view> 

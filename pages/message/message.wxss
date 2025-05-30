@@ -253,4 +253,87 @@
 .load-more-text {
   font-size: 26rpx;
   color: #999999;
+}
+
+/* 消息详情面板样式 */
+.detail-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  display: flex;
+  align-items: flex-end;
+  /* 防止滑动穿透 */
+  touch-action: none;
+  overflow: hidden;
+}
+
+.detail-panel {
+  width: 100%;
+  max-height: 70vh;
+  background: #ffffff;
+  border-radius: 20rpx 20rpx 0 0;
+  display: flex;
+  flex-direction: column;
+  transform: translateY(100%);
+  opacity: 0;
+  box-shadow: 0 -4rpx 20rpx rgba(0, 0, 0, 0.1);
+  /* 只允许垂直滑动 */
+  touch-action: pan-y;
+}
+
+.detail-header {
+  display: flex;
+  align-items: center;
+  padding: 30rpx;
+  border-bottom: 1rpx solid #eeeeee;
+  background: #fafafa;
+  border-radius: 20rpx 20rpx 0 0;
+}
+
+.detail-icon {
+  font-size: 40rpx;
+  margin-right: 20rpx;
+}
+
+.detail-title {
+  flex: 1;
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #333333;
+}
+
+.detail-close {
+  width: 44rpx;
+  height: 44rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32rpx;
+  color: #999999;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 50%;
+  transition: all 0.3s;
+}
+
+.detail-close:active {
+  background: rgba(0, 0, 0, 0.1);
+  transform: scale(0.95);
+}
+
+.detail-content {
+  padding: 30rpx;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.detail-text {
+  font-size: 28rpx;
+  line-height: 1.6;
+  color: #333333;
+  white-space: pre-wrap;
+  word-wrap: break-word;
 } 

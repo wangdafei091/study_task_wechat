@@ -72,6 +72,11 @@ App({
           // 检查即将到期的任务
           await taskService.checkUpcomingTasks();
         }
+        
+        // 检查首次启动并创建欢迎消息
+        if (messageService) {
+          await this.checkFirstLaunch(messageService);
+        }
       } else {
         logger.error('App', '服务管理器初始化失败');
       }
@@ -468,5 +473,68 @@ App({
    */
   getStarService: function() {
     return serviceManager.getStarService();
+  },
+  
+  // 检查首次启动并创建欢迎消息
+  checkFirstLaunch: async function(messageService) {
+    try {
+      logger.info('App', '检查首次启动状态');
+      const hasWelcomed = wx.getStorageSync('has_welcomed_user');
+      
+      if (!hasWelcomed) {
+        logger.info('App', '检测到首次启动，创建欢迎消息');
+        
+        // 创建欢迎消息
+        await this.createWelcomeMessage(messageService);
+        
+        // 设置已欢迎标记
+        wx.setStorageSync('has_welcomed_user', true);
+        logger.info('App', '首次启动处理完成，已设置欢迎标记');
+      } else {
+        logger.info('App', '非首次启动，跳过欢迎消息创建');
+      }
+    } catch (error) {
+      logger.error('App', '检查首次启动失败', error);
+    }
+  },
+  
+  // 创建欢迎消息
+  createWelcomeMessage: async function(messageService) {
+    try {
+      const welcomeContent = this.getWelcomeContent();
+      
+      const result = await messageService.createSystemMessage(welcomeContent, 'welcome', {
+        title: '欢迎使用小CEO日程表',
+        summary: '帮助孩子建立学习习惯的时间管理工具，支持任务管理和星星奖励'
+      });
+      
+      if (result && result.success) {
+        logger.info('App', '欢迎消息创建成功', { messageId: result.message?.id });
+      } else {
+        logger.warn('App', '欢迎消息创建失败', result);
+      }
+    } catch (error) {
+      logger.error('App', '创建欢迎消息出错', error);
+    }
+  },
+  
+  // 获取欢迎内容
+  getWelcomeContent: function() {
+    return `这是一个帮助孩子建立良好学习习惯的时间管理工具：
+
+✨ 核心功能
+• 创建学习、习惯、兴趣任务
+• 通过星星积分激励完成
+• 用积分兑换心仪的奖励
+
+🚀 开始使用
+1. 点击主页右下角的"+"按钮，选择"奖励"
+2. 添加孩子喜欢的奖励作为激励目标
+3. 点击"+"按钮，选择"任务"创建第一个任务
+4. 开始您的时间管理之旅
+
+记住：先设置奖励，再创建任务，效果更好哦！
+
+祝您和孩子使用愉快！ 📚✨`;
   }
 }) 
