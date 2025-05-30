@@ -915,10 +915,10 @@ Component({
      * 输入描述文本
      */
     inputDescription(e) {
+      const logger = require('../../utils/logger');
       const value = e.detail.value;
       
-      // 记录日志
-      console.log('[TaskHeatmap] 编辑描述:', value, `长度: ${value.length}/${this.data.descMaxLength}`);
+      logger.info('TaskHeatmap', '编辑描述', `长度: ${value.length}/50`);
       
       this.setData({
         editDescription: value

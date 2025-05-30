@@ -93,13 +93,16 @@
           <!-- 描述信息 -->
           <view class="input-item">
              <text class="input-label">描述</text>
-            <view class="task-description-field">
-              <input class="task-description-input" 
-                     placeholder="{{descPlaceholder}}" 
-                     value="{{newTask.description}}" 
-                     bindinput="onDescriptionInput" 
-                     maxlength="{{descMaxLength}}" />
-              <text class="task-description-counter">{{newTask.description.length}}/{{descMaxLength}}</text>
+            <view class="textarea-wrapper">
+              <textarea class="task-description-textarea add-task" 
+                        placeholder="{{descPlaceholder}}" 
+                        value="{{newTask.description}}" 
+                        bindinput="onDescriptionInput" 
+                        maxlength="{{descMaxLength}}"
+                        show-confirm-bar="{{false}}"
+                        auto-height="{{false}}"
+                        fixed="{{true}}" />
+              <text class="char-counter">{{newTask.description.length}}/{{descMaxLength}}</text>
             </view>
           </view>
         </view>

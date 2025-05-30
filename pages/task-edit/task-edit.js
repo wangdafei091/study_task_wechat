@@ -376,6 +376,9 @@ Page({
    * 处理描述输入
    */
   onDescriptionInput: function(e) {
+    const logger = require('../../utils/logger');
+    logger.info('TaskEdit', '描述输入', `长度: ${e.detail.value.length}/${this.data.descMaxLength}`);
+    
     this.setData({
       'newTask.description': e.detail.value
     });

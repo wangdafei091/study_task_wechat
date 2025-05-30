@@ -1,27 +1,27 @@
-/* 任务描述字段统一样式 */
-.task-description-field {
+/* 任务描述字段统一样式 - 使用textarea */
+.textarea-wrapper {
   position: relative;
   width: 100%;
   background-color: #f7f7f7;
   border-radius: 8rpx;
-  padding: 16rpx;
+  padding: 12rpx 16rpx;
   box-sizing: border-box;
   border: 1rpx solid #e0e0e0;
 }
 
-.task-description-input {
+.task-description-textarea {
   width: 100%;
-  height: 60rpx;
   font-size: 28rpx;
   color: #333;
-  padding-right: 70rpx; /* 为计数器留出空间 */
+  line-height: 1.4;
+  resize: none;
 }
 
-.task-description-counter {
+.char-counter {
   position: absolute;
-  bottom: 12rpx;
-  right: 16rpx;
-  font-size: 22rpx;
+  bottom: 8rpx;
+  right: 12rpx;
+  font-size: 20rpx;
   color: #999;
 }
 
@@ -33,7 +33,7 @@
 }
 
 /* 禁用状态样式 */
-.task-description-input.disabled {
+.task-description-textarea.disabled {
   background-color: #f0f0f0;
   color: #999;
 } 

@@ -209,9 +209,15 @@
                 <!-- 描述输入 -->
                 <view class="edit-field">
                   <text class="field-label">描述:</text>
-                  <view class="description-input-wrap">
-                    <input class="description-input" value="{{editDescription}}" bindinput="inputDescription" maxlength="50" />
-                    <text class="char-count">{{editDescription.length}}/50</text>
+                  <view class="textarea-wrapper heatmap">
+                    <textarea class="task-description-textarea heatmap" 
+                              value="{{editDescription}}" 
+                              bindinput="inputDescription" 
+                              maxlength="50"
+                              show-confirm-bar="{{false}}"
+                              auto-height="{{false}}"
+                              fixed="{{true}}" />
+                    <text class="char-counter">{{editDescription.length}}/50</text>
                   </view>
                 </view>
               </view>
