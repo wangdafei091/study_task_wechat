@@ -29,6 +29,9 @@ Component({
       },
       observer: function(newVal, oldVal) {
         if (newVal) {
+          // 处理任务描述
+          this._processTaskDescription(newVal);
+          
           // 添加详细的状态变化日志
           if (oldVal) {
             console.log(`[index-task-item] 任务属性变化检测:`, {
@@ -38,13 +41,19 @@ Component({
               starAwardedChange: `${oldVal.starAwarded} -> ${newVal.starAwarded}`,
               pointsChange: `${oldVal.points} -> ${newVal.points}`
             });
+            
+            // 添加描述字段的详细追踪
+            if (oldVal.description !== newVal.description) {
+              console.log(`[index-task-item] 描述字段变化: "${oldVal.description}" -> "${newVal.description}"`);
+              console.log(`[index-task-item] 描述字段类型: ${typeof newVal.description}`);
+            }
           } else {
             console.log(`[index-task-item] 任务初始化:`, {
               taskId: newVal.id,
               title: newVal.title,
               status: newVal.status,
               starAwarded: newVal.starAwarded,
-              points: newVal.points
+              description: newVal.description ? `"${newVal.description.substring(0, 20)}..."` : '无描述'
             });
           }
           
@@ -142,7 +151,14 @@ Component({
       interest: '📚',
       study: '📝'
     },
-    isDescriptionExpanded: false, // 任务描述是否展开
+    processedDescription: {
+      hasDescription: false,    // 是否有描述
+      canExpand: false,        // 是否可以展开
+      isExpanded: false,       // 是否已展开
+      displayText: '',         // 显示的文本
+      fullText: '',           // 完整文本
+      shortText: ''           // 截断文本
+    },
     showStarAnimation: false,     // 是否显示星星动画
     expiryText: '7天',            // 积分有效期默认文本
     isProcessing: false,          // 防止重复点击
@@ -247,50 +263,161 @@ Component({
     
     // 切换任务描述展开/收起状态
     toggleDescription: function(e) {
-      if (!this.properties.task.description || this.properties.task.description.length <= 20) {
-        return;  // 描述不存在或长度不足无需展开
+      const logger = require('../../utils/logger');
+      const currentData = this.data.processedDescription;
+      
+      // 只有可展开的描述才能切换
+      if (!currentData.canExpand) {
+        logger.debug('IndexTaskItem', '描述不可展开，忽略切换操作');
+        return;
       }
       
-      const newState = !this.data.isDescriptionExpanded;
-      console.log(`[index-task-item] 切换任务描述展示状态: ${newState ? '展开' : '收起'}`);
+      const newExpanded = !currentData.isExpanded;
+      const newDisplayText = newExpanded ? currentData.fullText : currentData.shortText;
+      
+      logger.info('IndexTaskItem', '切换描述展示状态', {
+        taskId: this.properties.task.id,
+        newExpanded: newExpanded,
+        fullTextLength: currentData.fullText.length,
+        displayTextLength: newDisplayText.length
+      });
       
       this.setData({
-        isDescriptionExpanded: newState
+        'processedDescription.isExpanded': newExpanded,
+        'processedDescription.displayText': newDisplayText
       });
     },
 
-         // 计算任务锁定状态
-     _calculateTaskLockStatus: function(task) {
-       if (!task) {
-         console.log('[index-task-item] 🔒 锁定状态计算: 任务为空，返回false');
-         return false;
-       }
-       
-       // 检查任务是否已完成（兼容不同的数据格式）
-       const isCompleted = task.isCompleted ? task.isCompleted() : (task.status === 1);
-       if (!isCompleted) {
-         console.log(`[index-task-item] 🔒 锁定状态计算: 任务"${task.title}"未完成(status=${task.status})，返回false`);
-         return false;
-       }
-       
-       const lastExchangeTime = this.properties.lastExchangeTime;
-       if (!lastExchangeTime) {
-         console.log(`[index-task-item] 🔒 锁定状态计算: 任务"${task.title}"没有兑换记录(lastExchangeTime=${lastExchangeTime})，返回false`);
-         return false;
-       }
-       
-       // 如果任务完成时间早于最后兑换时间，则被锁定
-       const isLocked = task.completionTime && task.completionTime < lastExchangeTime;
-       console.log(`[index-task-item] 🔒 锁定状态计算: 任务"${task.title}"`, {
-         completionTime: task.completionTime,
-         lastExchangeTime: lastExchangeTime,
-         isLocked: isLocked,
-         completionTimeDate: task.completionTime ? new Date(task.completionTime).toLocaleString() : '无',
-         lastExchangeTimeDate: new Date(lastExchangeTime).toLocaleString()
-       });
-       
-       return isLocked;
-     }
+    /**
+     * 处理任务描述数据
+     * @private
+     * @param {Object} task 任务对象
+     */
+    _processTaskDescription: function(task) {
+      const logger = require('../../utils/logger');
+      
+      // 安全获取描述文本
+      const description = this._getDescriptionSafely(task);
+      
+      if (!description) {
+        // 没有描述时的处理
+        this.setData({
+          processedDescription: {
+            hasDescription: false,
+            canExpand: false,
+            isExpanded: false,
+            displayText: '',
+            fullText: '',
+            shortText: ''
+          }
+        });
+        return;
+      }
+      
+      const DESCRIPTION_LIMIT = 20;
+      const isLong = description.length > DESCRIPTION_LIMIT;
+      
+      // 生成截断文本
+      const shortText = isLong ? description.substring(0, DESCRIPTION_LIMIT) + '...' : description;
+      
+      // 保持当前展开状态（如果之前是展开的且新描述也可展开）
+      const currentExpanded = this.data.processedDescription.isExpanded;
+      const shouldKeepExpanded = currentExpanded && isLong;
+      
+      // 设置描述数据
+      this.setData({
+        processedDescription: {
+          hasDescription: true,
+          canExpand: isLong,
+          isExpanded: shouldKeepExpanded,
+          displayText: shouldKeepExpanded ? description : shortText,
+          fullText: description,
+          shortText: shortText
+        }
+      });
+      
+      logger.info('IndexTaskItem', '描述数据处理完成', {
+        taskId: task.id,
+        hasDescription: true,
+        canExpand: isLong,
+        originalLength: description.length,
+        shortLength: shortText.length
+      });
+    },
+
+    /**
+     * 安全获取任务描述
+     * @private
+     * @param {Object} task 任务对象
+     * @returns {String} 安全的描述文本
+     */
+    _getDescriptionSafely: function(task) {
+      const logger = require('../../utils/logger');
+      
+      // 多层安全检查
+      if (!task) {
+        logger.debug('IndexTaskItem', '任务对象为空');
+        return '';
+      }
+      
+      if (!task.description) {
+        logger.debug('IndexTaskItem', '任务描述为空', {taskId: task.id, description: task.description});
+        return '';
+      }
+      
+      if (typeof task.description !== 'string') {
+        logger.warn('IndexTaskItem', '任务描述不是字符串类型', {
+          taskId: task.id,
+          descriptionType: typeof task.description,
+          description: task.description
+        });
+        // 尝试转换为字符串
+        return String(task.description || '');
+      }
+      
+      // 清理描述文本（移除可能的异常字符）
+      const cleanDescription = task.description.trim();
+      
+      if (cleanDescription.length === 0) {
+        logger.debug('IndexTaskItem', '任务描述为空白文本', {taskId: task.id});
+        return '';
+      }
+      
+      return cleanDescription;
+    },
+
+    // 计算任务锁定状态
+    _calculateTaskLockStatus: function(task) {
+      if (!task) {
+        console.log('[index-task-item] 🔒 锁定状态计算: 任务为空，返回false');
+        return false;
+      }
+      
+      // 检查任务是否已完成（兼容不同的数据格式）
+      const isCompleted = task.isCompleted ? task.isCompleted() : (task.status === 1);
+      if (!isCompleted) {
+        console.log(`[index-task-item] 🔒 锁定状态计算: 任务"${task.title}"未完成(status=${task.status})，返回false`);
+        return false;
+      }
+      
+      const lastExchangeTime = this.properties.lastExchangeTime;
+      if (!lastExchangeTime) {
+        console.log(`[index-task-item] 🔒 锁定状态计算: 任务"${task.title}"没有兑换记录(lastExchangeTime=${lastExchangeTime})，返回false`);
+        return false;
+      }
+      
+      // 如果任务完成时间早于最后兑换时间，则被锁定
+      const isLocked = task.completionTime && task.completionTime < lastExchangeTime;
+      console.log(`[index-task-item] 🔒 锁定状态计算: 任务"${task.title}"`, {
+        completionTime: task.completionTime,
+        lastExchangeTime: lastExchangeTime,
+        isLocked: isLocked,
+        completionTimeDate: task.completionTime ? new Date(task.completionTime).toLocaleString() : '无',
+        lastExchangeTimeDate: new Date(lastExchangeTime).toLocaleString()
+      });
+      
+      return isLocked;
+    }
   },
 
   /**
@@ -299,6 +426,11 @@ Component({
   lifetimes: {
     attached: function() {
       console.log('[index-task-item] 组件加载完成，使用优化后的布局展示');
+      
+      // 处理任务描述
+      if (this.properties.task) {
+        this._processTaskDescription(this.properties.task);
+      }
       
       // 添加锁定状态初始检查
       const task = this.properties.task;

@@ -32,10 +32,10 @@
       </view>
       
       <!-- 任务描述 -->
-      <view class="task-description {{isDescriptionExpanded ? 'expanded' : ''}}" 
-            wx:if="{{task.description}}" 
+      <view class="task-description {{processedDescription.isExpanded ? 'expanded' : ''}}" 
+            wx:if="{{processedDescription.hasDescription}}" 
             bindtap="toggleDescription">
-        <text>{{isDescriptionExpanded ? task.description : (task.description.length > 20 ? task.description.substring(0, 20) + '...' : task.description)}}</text>
+        <text>{{processedDescription.displayText}}</text>
       </view>
     </view>
     
