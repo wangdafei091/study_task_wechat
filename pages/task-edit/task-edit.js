@@ -499,12 +499,21 @@ Page({
       pointsExpiryDate: this.data.pointsExpiryText,
       isRequired: this.data.newTask.isRequired,
       isAllDay: this.data.newTask.isAllDay,
-      startTime: this.data.newTask.startTime,
-      endTime: this.data.newTask.endTime,
+      startTime: this.data.newTask.isAllDay ? '' : this.data.newTask.startTime,
+      endTime: this.data.newTask.isAllDay ? '' : this.data.newTask.endTime,
       hasNoEndDate: this.data.newTask.hasNoEndDate, // 明确传递无结束日期标志
       repeat: this.data.newTask.repeat,
       reminder: this.data.newTask.reminder
     };
+    
+    // 记录全天任务数据一致性处理
+    if (taskData.isAllDay) {
+      logger.info('TaskEdit', '全天任务数据一致性处理: 时间字段已清空', {
+        isAllDay: taskData.isAllDay,
+        startTime: taskData.startTime,
+        endTime: taskData.endTime
+      });
+    }
     
     // 确保重复任务的开始和结束日期与主任务一致
     if (taskData.repeat.startDate !== taskData.date) {
@@ -610,56 +619,62 @@ Page({
           mask: true
         });
         
-        // 计算任务持续时间（分钟）
-        const startTimeParts = newTask.startTime.split(':').map(Number);
-        const endTimeParts = newTask.endTime.split(':').map(Number);
-        
-        const startMinutes = startTimeParts[0] * 60 + startTimeParts[1];
-        const endMinutes = endTimeParts[0] * 60 + endTimeParts[1];
-        
-        // 如果结束时间早于开始时间，则认为是跨天的情况
-        let durationMinutes = endMinutes >= startMinutes ? 
-            endMinutes - startMinutes : 
-            (24 * 60 - startMinutes) + endMinutes;
-        
-        logger.info('TaskEdit', '学习任务持续时间', { durationMinutes });
-        
-        // 对长时间任务添加日志和额外确认
-        if (durationMinutes > 180) {
-          logger.info('TaskEdit', '正在创建长时间任务', {
-            hours: Math.floor(durationMinutes / 60),
-            minutes: durationMinutes % 60
-          });
+        // 只对非全天任务计算持续时间
+        if (!newTask.isAllDay && newTask.startTime && newTask.endTime) {
+          // 计算任务持续时间（分钟）
+          const startTimeParts = newTask.startTime.split(':').map(Number);
+          const endTimeParts = newTask.endTime.split(':').map(Number);
           
-          // 添加任务的持续时间字段，方便后续处理
-          newTask.duration = durationMinutes;
+          const startMinutes = startTimeParts[0] * 60 + startTimeParts[1];
+          const endMinutes = endTimeParts[0] * 60 + endTimeParts[1];
           
-          // 确保进度条更新正常
-          wx.showLoading({
-            title: '处理长时间任务...',
-            mask: true
-          });
+          // 如果结束时间早于开始时间，则认为是跨天的情况
+          let durationMinutes = endMinutes >= startMinutes ? 
+              endMinutes - startMinutes : 
+              (24 * 60 - startMinutes) + endMinutes;
           
-          // 简短延迟确保UI刷新
-          setTimeout(async () => {
-            logger.info('TaskEdit', '长时间任务预处理完成，继续创建任务');
+          logger.info('TaskEdit', '学习任务持续时间', { durationMinutes });
+          
+          // 对长时间任务添加日志和额外确认
+          if (durationMinutes > 180) {
+            logger.info('TaskEdit', '正在创建长时间任务', {
+              hours: Math.floor(durationMinutes / 60),
+              minutes: durationMinutes % 60
+            });
             
-            try {
-              // 创建任务
-              const result = await this._doCreateTask(taskService, newTask);
+            // 添加任务的持续时间字段，方便后续处理
+            newTask.duration = durationMinutes;
+            
+            // 确保进度条更新正常
+            wx.showLoading({
+              title: '处理长时间任务...',
+              mask: true
+            });
+            
+            // 简短延迟确保UI刷新
+            setTimeout(async () => {
+              logger.info('TaskEdit', '长时间任务预处理完成，继续创建任务');
               
-              if (result) {
-                this._handleTaskCreationSuccess(result, newTask);
-              } else {
-                this._handleTaskCreationFailure();
+              try {
+                // 创建任务
+                const result = await this._doCreateTask(taskService, newTask);
+                
+                if (result) {
+                  this._handleTaskCreationSuccess(result, newTask);
+                } else {
+                  this._handleTaskCreationFailure();
+                }
+              } catch (error) {
+                logger.error('TaskEdit', '创建长时间任务失败', error);
+                this._handleTaskCreationFailure(error);
               }
-            } catch (error) {
-              logger.error('TaskEdit', '创建长时间任务失败', error);
-              this._handleTaskCreationFailure(error);
-            }
-          }, 300);
-          
-          return; // 中断当前流程，由延时函数继续
+            }, 300);
+            
+            return; // 中断当前流程，由延时函数继续
+          }
+        } else {
+          // 全天学习任务的处理
+          logger.info('TaskEdit', '创建全天学习任务');
         }
       }
       
@@ -950,10 +965,41 @@ Page({
   toggleAllDay: function(e) {
     const isAllDay = e.detail.value;
     
-    // 先更新全天状态
-    this.setData({
+    // 准备更新数据
+    const updateData = {
       'newTask.isAllDay': isAllDay
-    });
+    };
+    
+    // 如果切换为全天任务，清空时间字段
+    if (isAllDay) {
+      updateData['newTask.startTime'] = '';
+      updateData['newTask.endTime'] = '';
+    } else {
+      // 如果取消全天，且时间字段为空，设置默认时间
+      if (!this.data.newTask.startTime) {
+        const now = new Date();
+        const currentHour = now.getHours();
+        let startHour = currentHour;
+        let endHour = currentHour + 1;
+        
+        // 如果已经是晚上，默认设为明天的早上和上午
+        if (currentHour >= 20) {
+          startHour = 9;
+          endHour = 10;
+        }
+        
+        // 避免超过24小时
+        if (endHour >= 24) {
+          endHour = 23;
+        }
+        
+        updateData['newTask.startTime'] = `${startHour.toString().padStart(2, '0')}:00`;
+        updateData['newTask.endTime'] = `${endHour.toString().padStart(2, '0')}:00`;
+      }
+    }
+    
+    // 更新数据
+    this.setData(updateData);
     
     // 然后生成并更新提醒选项
     const reminderOptions = this.getReminderOptions();
@@ -963,6 +1009,8 @@ Page({
     
     logger.info('TaskEdit', '全天选项切换:', {
       isAllDay: isAllDay ? '开启' : '关闭',
+      startTime: updateData['newTask.startTime'] || this.data.newTask.startTime,
+      endTime: updateData['newTask.endTime'] || this.data.newTask.endTime,
       reminderOptionsCount: reminderOptions.length
     });
   },

@@ -58,6 +58,7 @@ class Task {
     this.startTime = data.startTime || '';
     this.endTime = data.endTime || '';
     this.duration = data.duration || 0;
+    this.isAllDay = data.isAllDay || false;  // 添加全天任务标志
     
     // 状态相关
     this.status = data.status ?? TaskStatus.PENDING;
@@ -89,8 +90,8 @@ class Task {
    * @private
    */
   _initDefaults() {
-    // 为学习类任务设置必要的时间字段
-    if (this.type === TaskType.STUDY) {
+    // 为学习类任务设置必要的时间字段（仅对非全天任务）
+    if (this.type === TaskType.STUDY && !this.isAllDay) {
       // 如果没有开始时间，设置默认值
       if (!this.startTime) {
         this.startTime = '08:00';
@@ -180,12 +181,18 @@ class Task {
     
     // 验证类型特定字段
     if (this.type === TaskType.STUDY) {
-      if (!this.startTime) {
-        errors.push('学习任务必须设置开始时间');
-      }
-      
-      if (!this.duration && !this.endTime) {
-        errors.push('学习任务必须设置结束时间或持续时间');
+      // 对于全天任务，跳过时间验证
+      if (this.isAllDay) {
+        // 全天任务不需要验证时间字段
+      } else {
+        // 非全天学习任务需要验证时间
+        if (!this.startTime) {
+          errors.push('学习任务必须设置开始时间');
+        }
+        
+        if (!this.duration && !this.endTime) {
+          errors.push('学习任务必须设置结束时间或持续时间');
+        }
       }
     }
     
@@ -249,6 +256,7 @@ class Task {
     if (data.startTime !== undefined) this.startTime = data.startTime;
     if (data.endTime !== undefined) this.endTime = data.endTime;
     if (data.duration !== undefined) this.duration = data.duration;
+    if (data.isAllDay !== undefined) this.isAllDay = data.isAllDay;  // 添加isAllDay字段更新支持
     if (data.isRequired !== undefined) this.isRequired = data.isRequired;
     if (data.points !== undefined) this.points = data.points;
     if (data.pointsExpiry !== undefined) this.pointsExpiry = data.pointsExpiry;
@@ -362,6 +370,7 @@ class Task {
       startTime: this.startTime,
       endTime: this.endTime,
       duration: this.duration,
+      isAllDay: this.isAllDay,  // 添加isAllDay字段到克隆数据
       status: this.status,
       isRequired: this.isRequired,
       completionTime: this.completionTime,
