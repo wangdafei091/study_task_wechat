@@ -747,27 +747,54 @@ Page({
     logger.info('Index', `任务原始星星状态: ${wasStarAwarded ? '已获得' : '未获得'}`);
     logger.info('Index', `任务类型信息: isRequired=${isRequired}, 任务类型=${isRequired ? '必做任务' : '普通任务'}`);
     
-    // 🚨 新增：检查奖励设置 - 只在尝试完成任务时检查
+    // 🚨 扩展：检查奖励设置 - 只在尝试完成任务时检查
     if (newStatus === 1) {
       logger.info('Index', '检查奖励设置状态');
       
       // 获取奖励服务
       const rewardService = serviceManager.getService('rewardService');
-      if (rewardService && rewardService.hasOnlyExampleRewardsSync()) {
-        logger.info('Index', '检测到只有示例奖励，阻止任务完成');
+      
+      if (rewardService) {
+        // 获取当前奖励状态信息
+        const nextReward = await rewardService.calculateNextAvailableReward();
+        const visibleRewards = await rewardService.getAvailableRewards(true);
         
-        // 清除处理中状态
-        this.setData({ processingTaskId: null });
+        // 扩展的触发条件检查
+        const hasNoRealReward = !nextReward || nextReward.isDefault;
+        const hasOnlyExampleRewards = visibleRewards.length > 0 && 
+          visibleRewards.every(reward => reward.isExample === true);
         
-        // 显示提示对话框
-        wx.showModal({
-          title: '需要设置奖励',
-          content: '还没有设置专属奖励哦！请找爸爸妈妈来帮你设置奖励吧！',
-          showCancel: false,
-          confirmText: '我知道了'
-        });
-        
-        return; // 阻止任务状态更新
+        // 判断是否需要阻止任务完成并显示提示
+        if ((hasNoRealReward && visibleRewards.length === 0) || hasOnlyExampleRewards) {
+          if (hasOnlyExampleRewards) {
+            logger.info('Index', '检测到只有示例奖励，阻止任务完成并更新提示信息');
+          } else {
+            logger.info('Index', '检测到无真实奖励，阻止任务完成并更新提示信息');
+          }
+          
+          // 清除处理中状态
+          this.setData({ processingTaskId: null });
+          
+          // 更新奖励提示信息（设置showSetupTip标记）
+          if (nextReward) {
+            nextReward.showSetupTip = true;
+          }
+          
+          // 更新UI状态，显示提示信息
+          this.setData({
+            nextReward: nextReward
+          });
+          
+          // 显示提示对话框
+          wx.showModal({
+            title: '需要设置奖励',
+            content: '还没有设置奖励哦！',
+            showCancel: false,
+            confirmText: '我知道了'
+          });
+          
+          return; // 阻止任务状态更新
+        }
       }
     }
     
@@ -1578,11 +1605,19 @@ Page({
       logger.info('Index', '获取到下一个可达成奖励', { name: nextReward ? nextReward.name : '无' });
       logger.info('Index', '获取到可见奖励', { count: visibleRewards.length });
       
-      // 判断是否需要显示设置奖励提示对话框
-      // 当没有任何真实奖励时（只有默认占位奖励或完全没有奖励）
+      // 扩展的触发条件判断：
+      // 1. 当没有任何真实奖励时（只有默认占位奖励或完全没有奖励）
+      // 2. 当奖励图序中只有示例奖励时
       const hasNoRealReward = !nextReward || nextReward.isDefault;
-      if (hasNoRealReward && visibleRewards.length === 0) {
-        logger.info('Index', '检测到无真实奖励，显示设置奖励提示');
+      const hasOnlyExampleRewards = visibleRewards.length > 0 && 
+        visibleRewards.every(reward => reward.isExample === true);
+      
+      if ((hasNoRealReward && visibleRewards.length === 0) || hasOnlyExampleRewards) {
+        if (hasOnlyExampleRewards) {
+          logger.info('Index', '检测到只有示例奖励，显示设置奖励提示');
+        } else {
+          logger.info('Index', '检测到无真实奖励，显示设置奖励提示');
+        }
         
         // 设置nextReward的适当参数，以便在进度条下方显示合适的信息
         if (nextReward) {
