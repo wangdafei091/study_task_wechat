@@ -863,12 +863,22 @@ Page({
             }
           }, 300);
         } else {  // 取消完成
-          // 提示用户星星已扣除
-          wx.showToast({
-            title: `已扣除${taskPoints}颗星星`,
-            icon: 'none',
-            duration: 1500
-          });
+          // 根据任务类型显示不同的提示信息
+          if (isRequired) {
+            // 必做任务取消完成提示
+            wx.showToast({
+              title: '必做任务已重置',
+              icon: 'none',
+              duration: 1500
+            });
+          } else {
+            // 普通任务取消完成提示
+            wx.showToast({
+              title: `已扣除${taskPoints}颗星星`,
+              icon: 'none',
+              duration: 1500
+            });
+          }
           
           // 更新奖励进度信息
           this.loadStarsAndRewards();
