@@ -747,6 +747,30 @@ Page({
     logger.info('Index', `任务原始星星状态: ${wasStarAwarded ? '已获得' : '未获得'}`);
     logger.info('Index', `任务类型信息: isRequired=${isRequired}, 任务类型=${isRequired ? '必做任务' : '普通任务'}`);
     
+    // 🚨 新增：检查奖励设置 - 只在尝试完成任务时检查
+    if (newStatus === 1) {
+      logger.info('Index', '检查奖励设置状态');
+      
+      // 获取奖励服务
+      const rewardService = serviceManager.getService('rewardService');
+      if (rewardService && rewardService.hasOnlyExampleRewardsSync()) {
+        logger.info('Index', '检测到只有示例奖励，阻止任务完成');
+        
+        // 清除处理中状态
+        this.setData({ processingTaskId: null });
+        
+        // 显示提示对话框
+        wx.showModal({
+          title: '需要设置奖励',
+          content: '还没有设置专属奖励哦！请找爸爸妈妈来帮你设置奖励吧！',
+          showCancel: false,
+          confirmText: '我知道了'
+        });
+        
+        return; // 阻止任务状态更新
+      }
+    }
+    
     // 检查是否是取消完成操作且已获得星星
     if (newStatus === 0 && wasStarAwarded) {
       // 在显示确认框之前，先检查任务是否被锁定
