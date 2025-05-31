@@ -617,6 +617,10 @@ Component({
         return this.enhanceTaskData(task);
       });
       
+      // 应用与首页今日任务列表相同的排序逻辑
+      const sortedTasks = this._sortTasksByHabitAndTime(tasks);
+      logger.info('task-heatmap', `任务排序完成，排序前: ${tasks.length}个，排序后: ${sortedTasks.length}个`);
+      
       // 使用预计算好的压力级别
       const pressureLevel = dayData && dayData.level ? 
         this.calculatePressureLevel(totalPressure) : 
@@ -633,7 +637,7 @@ Component({
       this.setData({
         selectedDate: date,
         selectedDateText: dateText,
-        dayTasks: tasks,
+        dayTasks: sortedTasks,
         showDayTasks: true,
         selectedDayPressure: {
           total: totalPressure.toFixed(1),
@@ -653,6 +657,53 @@ Component({
       
       this.setData({
         showDayTasks: false
+      });
+    },
+    
+    // 添加与首页今日任务列表相同的排序方法
+    /**
+     * 使用必做优先+时间顺序对任务排序
+     * @private
+     * @param {Array} tasks 任务数组
+     * @returns {Array} 排序后的任务数组
+     */
+    _sortTasksByHabitAndTime(tasks) {
+      if (!Array.isArray(tasks)) return [];
+      
+      logger.info('task-heatmap', '任务排序：必做任务优先，各组内部按时间排序');
+      
+      // 按以下规则排序:
+      // 1. 必做任务组优先
+      //    - 必做任务中无时间的排在最前面
+      //    - 必做任务中有时间的按从早到晚排序
+      // 2. 非必做任务组
+      //    - 非必做任务中无时间的排在前面
+      //    - 非必做任务中有时间的按从早到晚排序
+      return [...tasks].sort((a, b) => {
+        const aRequired = a.isRequired || false;
+        const bRequired = b.isRequired || false;
+        
+        // 首先按必做任务分组（必做任务优先）
+        if (aRequired !== bRequired) {
+          return aRequired ? -1 : 1;
+        }
+        
+        // 在同一组内（都是必做或都不是必做），按时间排序
+        const aHasTime = !!(a.startTime);
+        const bHasTime = !!(b.startTime);
+        
+        // 无时间的排在有时间的前面
+        if (aHasTime !== bHasTime) {
+          return aHasTime ? 1 : -1;
+        }
+        
+        // 如果都有时间，按开始时间从早到晚排序
+        if (aHasTime && bHasTime) {
+          return a.startTime.localeCompare(b.startTime);
+        }
+        
+        // 如果都没有时间，按创建时间排序保持稳定
+        return (a.createTime || 0) - (b.createTime || 0);
       });
     },
     
