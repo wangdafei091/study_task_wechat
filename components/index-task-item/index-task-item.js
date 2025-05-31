@@ -376,12 +376,15 @@ Component({
       }
       
       // 清理描述文本（移除可能的异常字符）
-      const cleanDescription = task.description.trim();
+      let cleanDescription = task.description.trim();
       
       if (cleanDescription.length === 0) {
         logger.debug('IndexTaskItem', '任务描述为空白文本', {taskId: task.id});
         return '';
       }
+      
+      // 将换行符替换为空格，保持文本连续性，避免布局问题
+      cleanDescription = cleanDescription.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ');
       
       return cleanDescription;
     },
