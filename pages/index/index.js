@@ -541,15 +541,22 @@ Page({
       const messages = await messageService.getAllMessages();
       
       // 为消息添加时间显示字段，统一使用createTime
-      const processedMessages = messages.map(msg => {
-        return {
-          ...msg,
-          timeDisplay: dateUtils.formatRelativeTime(msg.createTime)
-        };
-      });
+      const processedMessages = messages
+        .sort((a, b) => {
+          // 未读消息优先，相同状态按时间倒序
+          if (a.isRead !== b.isRead) return a.isRead ? 1 : -1;
+          return b.createTime - a.createTime;
+        })
+        .slice(0, 3) // 只显示最新3条消息
+        .map(msg => {
+          return {
+            ...msg,
+            timeDisplay: dateUtils.formatRelativeTime(msg.createTime)
+          };
+        });
       
-      // 计算未读消息数量
-      const unreadCount = processedMessages.filter(msg => !msg.isRead).length;
+      // 计算未读消息数量（基于全部消息）
+      const unreadCount = messages.filter(msg => !msg.isRead).length;
       
       this.setData({
         messages: processedMessages,
