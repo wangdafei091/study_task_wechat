@@ -1305,8 +1305,21 @@ Component({
       // 创建增强任务对象
       const enhancedTask = { ...task };
       
+      // 检查是否为真正的循环任务（开始日期和结束日期不同）
+      const isActuallyRepeating = task.repeat && 
+                                  task.repeat.type !== 'none' && 
+                                  task.repeat.startDate !== task.repeat.endDate;
+      
       // 处理重复任务信息
-      if (task.repeat && task.repeat.type !== 'none') {
+      if (isActuallyRepeating) {
+        logger.info('task-heatmap', '任务被识别为循环任务', {
+          taskId: task.id,
+          title: task.title,
+          repeatType: task.repeat.type,
+          startDate: task.repeat.startDate,
+          endDate: task.repeat.endDate
+        });
+        
         // 格式化重复任务信息
         switch (task.repeat.type) {
           case 'daily':
@@ -1318,15 +1331,8 @@ Component({
               timeRange = task.endTime ? `${task.startTime}-${task.endTime}` : task.startTime;
             }
             
-            // 检查是否为单天任务
-            const isOneTimeDaily = task.repeat.startDate === task.repeat.endDate;
-            
-            if (isOneTimeDaily) {
-              // 单天任务不显示"每天"
-              enhancedTask.repeatInfo = `${this.formatDateRange(task.repeat.startDate, task.repeat.endDate)} ${timeRange}`;
-            } else {
-              enhancedTask.repeatInfo = `${this.formatDateRange(task.repeat.startDate, task.repeat.endDate)} 每天 ${timeRange}`;
-            }
+            // 单天任务已经在上面被过滤掉了，这里都是多天任务
+            enhancedTask.repeatInfo = `${this.formatDateRange(task.repeat.startDate, task.repeat.endDate)} 每天 ${timeRange}`;
             break;
           case 'weekly':
             const weekDay = new Date(task.date).getDay();
@@ -1357,6 +1363,15 @@ Component({
         const month = taskDate.getMonth() + 1;
         const day = taskDate.getDate();
         enhancedTask.date = `${month}月${day}日`;
+        
+        if (task.repeat && task.repeat.type !== 'none' && task.repeat.startDate === task.repeat.endDate) {
+          logger.info('task-heatmap', '任务被识别为单天任务（非循环）', {
+            taskId: task.id,
+            title: task.title,
+            repeatType: task.repeat.type,
+            date: task.repeat.startDate
+          });
+        }
       }
       
       // 确保任务有积分有效期信息
@@ -1457,9 +1472,14 @@ Component({
       // 设置当前操作的任务
       console.log(`[task-heatmap] 显示删除确认区域, 任务类型: ${task.type}, 重复类型: ${task.repeat ? task.repeat.type : 'none'}`);
       
+      // 检查是否为真正的循环任务
+      const isActuallyRepeating = task.repeat && 
+                                  task.repeat.type !== 'none' && 
+                                  task.repeat.startDate !== task.repeat.endDate;
+      
       // 如果是循环任务，重置选择状态；否则对于一次性任务默认选择"删除此任务"
       let initialDeleteScope = '';
-      if (!(task.repeat && task.repeat.type !== 'none')) {
+      if (!isActuallyRepeating) {
         initialDeleteScope = 'single'; // 一次性任务默认已选择状态
       }
       
@@ -1634,7 +1654,7 @@ Component({
       
       try {
         // 获取所有任务
-        const allTasks = await taskService.getTasks();
+        const allTasks = await taskService.getAllTasks();
           
         // 获取父任务ID
         let parentId = task.parentTaskId;
@@ -1873,7 +1893,7 @@ Component({
         
         try {
           // 使用TaskService获取最新数据
-          const latestTasks = await taskService.getTasks();
+          const latestTasks = await taskService.getAllTasks();
           logger.info('task-heatmap', `获取到最新任务数据: ${latestTasks.length}个任务`);
           
           // 将最新任务数据传递给属性，确保热力图计算使用最新数据
@@ -1891,7 +1911,7 @@ Component({
               
               try {
                 // 再次从TaskService获取最新数据，确保热力图与数据一致
-                const finalTasks = await taskService.getTasks();
+                const finalTasks = await taskService.getAllTasks();
                 logger.info('task-heatmap', `确认更新：最终任务数据数量 ${finalTasks.length}个`);
                 
                 // 确认热力图已完全更新
@@ -2093,8 +2113,8 @@ Component({
       
       try {
         // 获取所有任务
-        const allTasks = await taskService.getTasks();
-        
+        const allTasks = await taskService.getAllTasks();
+          
         // 获取父任务ID
         let parentId = task.parentTaskId;
         

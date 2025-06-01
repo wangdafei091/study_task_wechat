@@ -316,6 +316,20 @@ class Message {
   }
 
   /**
+   * 检查消息是否与指定实体相关
+   * @param {String} entityId 实体ID
+   * @returns {Boolean} 是否与指定实体相关
+   */
+  isRelatedTo(entityId) {
+    if (!entityId) {
+      return false;
+    }
+    
+    // 检查直接关联
+    return this.relatedId === entityId;
+  }
+
+  /**
    * 检查消息是否有效（未过期且符合保留条件）
    * @param {Number} expiryDays 保留天数
    * @returns {Boolean} 是否有效

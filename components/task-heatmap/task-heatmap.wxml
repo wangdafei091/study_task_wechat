@@ -132,7 +132,7 @@
                 <!-- 时间信息 -->
                 <text class="time-info">
                   <!-- 重复任务时间信息 -->
-                  <block wx:if="{{item.repeat && item.repeat.type !== 'none'}}">
+                  <block wx:if="{{item.repeat && item.repeat.type !== 'none' && item.repeat.startDate !== item.repeat.endDate}}">
                     <text class="clock-icon">🕒</text> {{item.repeatInfo}}
                   </block>
                   <!-- 单次任务时间信息 -->
@@ -174,8 +174,8 @@
             </view>
             
             <!-- 编辑范围选择区域（仅循环任务显示） -->
-            <view class="edit-scope-area {{editingTaskId === item.id && item.repeat && item.repeat.type !== 'none' ? 'visible' : ''}}" 
-                  wx:if="{{item.repeat && item.repeat.type !== 'none'}}">
+            <view class="edit-scope-area {{editingTaskId === item.id && item.repeat && item.repeat.type !== 'none' && item.repeat.startDate !== item.repeat.endDate ? 'visible' : ''}}" 
+                  wx:if="{{item.repeat && item.repeat.type !== 'none' && item.repeat.startDate !== item.repeat.endDate}}">
               <view class="scope-options">
                 <view class="options-row">
                   <view class="option {{editScope === 'single' ? 'selected' : ''}}" bindtap="selectEditScope" data-scope="single">
@@ -236,7 +236,7 @@
             <view class="delete-confirm {{showDeleteConfirm && item.id === activeTaskForDelete.id ? 'visible' : ''}}">
               <view class="delete-options">
                 <!-- 循环任务显示选项 -->
-                <block wx:if="{{item.repeat && item.repeat.type !== 'none'}}">
+                <block wx:if="{{item.repeat && item.repeat.type !== 'none' && item.repeat.startDate !== item.repeat.endDate}}">
                   <view class="options-row">
                     <view class="option {{deleteScope === 'single' ? 'selected' : ''}}" bindtap="selectDeleteScope" data-scope="single">
                       <view class="radio-circle {{deleteScope === 'single' ? 'selected' : ''}}"></view>
@@ -258,10 +258,10 @@
               </view>
               <view class="delete-actions">
                 <view class="btn-cancel" bindtap="cancelDelete">取消</view>
-                <view class="btn-confirm {{item.repeat && item.repeat.type !== 'none' && !deleteScope ? 'disabled' : ''}}" bindtap="confirmDelete">确认</view>
+                <view class="btn-confirm {{item.repeat && item.repeat.type !== 'none' && item.repeat.startDate !== item.repeat.endDate && !deleteScope ? 'disabled' : ''}}" bindtap="confirmDelete">确认</view>
               </view>
               <!-- 添加循环删除提示文本 - 移到外部 -->
-              <view class="scope-tip" wx:if="{{deleteScope === 'series' && item.repeat && item.repeat.type !== 'none'}}">
+              <view class="scope-tip" wx:if="{{deleteScope === 'series' && item.repeat && item.repeat.type !== 'none' && item.repeat.startDate !== item.repeat.endDate}}">
                 <text>仅删除今天({{todayString}})及之后的任务</text>
               </view>
             </view>
