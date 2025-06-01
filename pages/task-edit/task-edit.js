@@ -367,8 +367,9 @@ Page({
    * 处理积分输入
    */
   onPointsInput: function(e) {
+    const points = Number(e.detail.value) || 0;
     this.setData({
-      'newTask.points': e.detail.value
+      'newTask.points': points
     });
   },
 

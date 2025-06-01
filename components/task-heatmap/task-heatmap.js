@@ -530,13 +530,17 @@ Component({
             completed++;
             // 统计已获得的星星（只计算非必做任务）
             if (!task.isRequired && task.points > 0) {
-              starsEarned += task.points;
+              const points = Number(task.points) || 0;
+              starsEarned += points;
+              logger.debug('task-heatmap', `累加已获得星星: ${task.title}, points类型: ${typeof task.points}, 值: ${task.points}, 转换后: ${points}`);
             }
           } else {
             pending++;
             // 统计待获得的星星（只计算非必做任务）
             if (!task.isRequired && task.points > 0) {
-              starsPending += task.points;
+              const points = Number(task.points) || 0;
+              starsPending += points;
+              logger.debug('task-heatmap', `累加待获得星星: ${task.title}, points类型: ${typeof task.points}, 值: ${task.points}, 转换后: ${points}`);
             }
           }
           
@@ -662,14 +666,14 @@ Component({
         if (task.status === 1 || task.status === 'completed') {
           // 已完成任务
           if (!task.isRequired && task.points > 0) {
-            starsEarned += task.points;
+            starsEarned += Number(task.points) || 0;
           }
         } else {
           // 未完成任务
           if (task.isRequired && task.points > 0) {
-            starsAtRisk += task.points;  // 必做任务未完成会扣除
+            starsAtRisk += Number(task.points) || 0;  // 必做任务未完成会扣除
           } else if (!task.isRequired && task.points > 0) {
-            starsPending += task.points;  // 非必做任务待获得
+            starsPending += Number(task.points) || 0;  // 非必做任务待获得
           }
         }
       });
@@ -752,11 +756,11 @@ Component({
         if (task.isRequired) {
           requiredCount++;
           // 必做任务的星星表示可能扣除的数量
-          requiredStars += (task.points || 0);
+          requiredStars += Number(task.points) || 0;
         } else {
           optionalCount++;
           // 非必做任务的星星，不区分状态
-          optionalStars += (task.points || 0);
+          optionalStars += Number(task.points) || 0;
         }
       });
       
