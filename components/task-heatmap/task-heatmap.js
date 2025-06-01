@@ -33,7 +33,8 @@ Component({
       value: [],
       observer: function(newVal, oldVal) {
         console.log('[task-heatmap] 任务数据已更新，新数据长度:', newVal ? newVal.length : 0);
-        
+        const logger = require('../../utils/logger');  // 添加这一行
+ 
         if (newVal && newVal.length > 0) {
           // 检查任务数据是否真的发生了变化
           const hasChanged = !oldVal || 
@@ -60,9 +61,18 @@ Component({
               // 应用与首页今日任务列表相同的排序逻辑
               const sortedTasks = this._sortTasksByHabitAndTime(tasks);
               
+              // 重新生成任务汇总文案
+              const taskSummaryText = this.generateTaskSummaryText(dayTasks);
+              logger.info('task-heatmap', '重新生成任务汇总文案', {
+                selectedDate: this.data.selectedDate,
+                taskCount: dayTasks.length,
+                summaryText: taskSummaryText
+              });
+              
               // 更新任务列表显示
               this.setData({
-                dayTasks: sortedTasks
+                dayTasks: sortedTasks,
+                taskSummaryText: taskSummaryText  // 添加任务汇总文案的更新
               });
               
               logger.info('task-heatmap', '任务列表已刷新', {
