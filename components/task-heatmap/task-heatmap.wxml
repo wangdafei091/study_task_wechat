@@ -96,7 +96,7 @@
                 <!-- 逾期状态标记 -->
                 <text wx:if="{{item.status === 'overdue'}}" class="task-overdue-mark">[逾期]</text>
                 <!-- 循环任务标记 -->
-                <text wx:if="{{item.repeat && item.repeat.type !== 'none'}}" class="task-repeat-mark">↻</text>
+                <text wx:if="{{item.repeat && item.repeat.type !== 'none' && item.repeat.startDate !== item.repeat.endDate}}" class="task-repeat-mark">↻</text>
               </view>
               
               <!-- 右侧区域：必做标签或积分和操作 -->
