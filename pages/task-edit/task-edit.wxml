@@ -159,12 +159,12 @@
             </view>
           </view>
           
-          <!-- 无结束日期选项 -->
+          <!-- 无结束日期选项 
           <view class="input-item switch-item">
             <text class="input-label">无结束日期</text>
             <switch checked="{{newTask.hasNoEndDate}}" bindchange="toggleNoEndDate" color="#4285F4" />
           </view>
-          
+          -->
           <!-- 重复选项 -->
           <view class="input-item">
             <view class="input-item-header" bindtap="togglePanel" data-panel="repeatPanel">
