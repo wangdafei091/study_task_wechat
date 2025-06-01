@@ -68,9 +68,11 @@
           <view class="pressure-tag pressure-level-{{selectedDayPressure.levelNum}}" wx:if="{{dayTasks.length > 0}}">
             <text>{{selectedDayPressure.levelText}}</text>
           </view>
-          <text class="task-summary-text" wx:if="{{dayTasks.length > 0}}">{{taskSummaryText}}</text>
         </view>
-        <!-- 移除星星统计信息，因为日历格子中已显示 -->
+        <!-- 任务摘要文本移到第二行 -->
+        <view class="summary-row" wx:if="{{dayTasks.length > 0}}">
+          <text class="task-summary-text">{{taskSummaryText}}</text>
+        </view>
       </view>
       <!-- 关闭按钮改为圆形X图标 -->
       <view class="close-btn-circle" bindtap="closeDayTasks">×</view>
