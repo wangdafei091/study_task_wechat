@@ -83,35 +83,37 @@
   display: flex;
   margin-bottom: 4rpx;
   border-bottom: 1rpx solid #F0F0F0;
-  padding-bottom: 4rpx;
+  padding-bottom: 12rpx;  /* 统一为12rpx */
 }
 
 .weekday {
   flex: 1;
   text-align: center;
-  font-size: 22rpx;
-  color: #999;
-  padding: 4rpx 0;
+  font-size: 26rpx;  /* 从22rpx改为26rpx，与星星日历一致 */
+  color: #555;  /* 从#999改为#555，与星星日历一致 */
+  padding: 8rpx 0;  /* 从4rpx改为8rpx */
 }
 
 .days {
   display: flex;
   flex-wrap: wrap;
+  margin-bottom: 12rpx;  /* 添加底部间距 */
 }
 
 .day {
   width: 14.28%;
-  height: 48rpx; /* 从40rpx增加到48rpx */
+  aspect-ratio: 1;  /* 从固定高度48rpx改为正方形比例 */
   display: flex;
-  flex-direction: column; /* 改为垂直布局 */
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;  /* 改为space-between */
+  padding: 10rpx 0;  /* 调整内边距 */
   position: relative;
-  margin: 1rpx 0;
-  border-radius: 4rpx;
-  transition: transform 0.2s ease; /* 仅对变换应用过渡，避免颜色过渡 */
-  cursor: default;
-  background-color: transparent; /* 添加默认背景色 */
+  transition: background-color 0.2s;  /* 改为只过渡背景色 */
+  box-sizing: border-box;
+  background-color: transparent;
+  margin: 0;  /* 移除外边距 */
+  border-radius: 8rpx;  /* 从4rpx改为8rpx */
 }
 
 /* 新增：日期内容容器 */
@@ -122,15 +124,14 @@
   justify-content: center;
   width: 100%;
   height: 100%;
-  gap: 1rpx;
+  gap: 2rpx;  /* 保持原有间距 */
 }
 
 /* 修改选中日期的样式 - 使用border替代outline，兼容性更好 */
 .day.selected {
-  border: 2rpx solid #4285F4; /* 使用border替代outline */
-  box-sizing: border-box; /* 确保尺寸不变 */
+  border: 2rpx solid #4285F4;
+  box-sizing: border-box;
   z-index: 1;
-  /* 不使用box-shadow以避免与热力图层阴影冲突 */
 }
 
 /* 修改点击效果 - 移除所有可能影响颜色的属性 */
@@ -144,67 +145,57 @@
 }
 
 .other-month {
-  color: #ddd;
+  color: #ddd;  /* 降低非当月日期的存在感 */
 }
 
 .day-number {
-  font-size: 20rpx; /* 从22rpx减小到20rpx */
-  line-height: 1;
-  font-weight: 500;
+  font-size: 32rpx;  /* 从20rpx改为32rpx，与星星日历一致 */
+  line-height: 1.2;  /* 调整行高 */
+  font-weight: 600;  /* 从500改为600 */
+  margin-top: 6rpx;  /* 添加顶部间距 */
 }
 
-/* 新增：任务和星星信息行 */
+/* 新增：任务和星星信息行 - 保持原有功能，但优化样式 */
 .task-star-info {
   display: flex;
   align-items: center;
-  gap: 2rpx;
-  font-size: 14rpx;
+  justify-content: center;
+  gap: 4rpx;  /* 调整间距 */
+  font-size: 14rpx;  /* 从20rpx改为14rpx，建立清晰的视觉层级 */
   line-height: 1;
-  opacity: 0.9;
+  opacity: 0.7;  /* 从0.9改为0.7，降低视觉权重 */
+  margin-bottom: 2rpx;  /* 添加底部间距 */
 }
 
 .task-count {
   color: rgba(0, 0, 0, 0.6);
-  font-size: 14rpx;
+  font-size: 14rpx;  /* 从20rpx改为14rpx */
+  font-weight: 500;  /* 从600改为500，减轻视觉重量 */
 }
 
 .star-separator {
   color: rgba(0, 0, 0, 0.3);
-  font-size: 12rpx;
-  margin: 0 1rpx;
+  font-size: 12rpx;  /* 从16rpx改为12rpx，分隔符应该更小 */
+  margin: 0 2rpx;
 }
 
 .star-count {
-  color: #FFB800;
-  font-size: 14rpx;
-  font-weight: 500;
+  color: rgba(0, 0, 0, 0.6);  /* 与任务数颜色保持一致，提升清晰度 */
+  font-size: 14rpx;  /* 从20rpx改为14rpx */
+  font-weight: 500;  /* 从600改为500，减轻视觉重量 */
 }
 
-.star-risk {
-  color: #EA4335;
-  font-size: 14rpx;
-}
-
-/* 今天样式 */
+/* 今天样式 - 统一为背景高亮样式 */
 .today {
-  position: relative;
+  background-color: rgba(66, 133, 244, 0.15);
+  border-radius: 8rpx;
+  border: 1rpx solid rgba(66, 133, 244, 0.3);
 }
 
-.today::after {
-  content: '';
-  position: absolute;
-  bottom: 2rpx;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 6rpx;
-  height: 6rpx;
-  border-radius: 50%;
-  background-color: #4285F4;
-}
-
+/* 移除原有的.today::after样式，不再使用小圆点标识 */
 .today .day-number {
+  font-weight: 700;
   color: #4285F4;
-  font-weight: 600;
 }
 
 /* 热力等级样式 - 强化选择器特异性，确保在移动设备上也能正确应用 */
@@ -285,8 +276,7 @@
 .task-heatmap .days .day.level-4 .task-count,
 .task-heatmap .days .day.level-4.selected .task-count,
 .task-heatmap .days .day.level-4.today .task-count {
-  color: rgba(255, 255, 255, 0.95) !important;
-  background-color: rgba(0, 0, 0, 0.2) !important;
+color: rgba(255, 255, 255, 0.95) !important;
 }
 
 /* 浮层提示样式 */
@@ -438,11 +428,6 @@
   box-shadow: 0 1rpx 4rpx rgba(0, 0, 0, 0.05);
 }
 
-/* 必做任务标识 - 移除旧样式 */
-.task-required-tag {
-  display: none; /* 废弃，使用通用的.task-tag */
-}
-
 /* 更多操作按钮 */
 .more-actions {
   font-size: 30rpx;
@@ -501,11 +486,7 @@
   color: #C62828;
 }
 
-/* 任务压力指示器相关样式 - 已被内联版本替代，移除 */
-.pressure-indicator {
-  display: none;
-}
-
+/* 压力色块样式 */
 .pressure-color-block {
   width: 24rpx;
   height: 24rpx;

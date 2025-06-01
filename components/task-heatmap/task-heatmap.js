@@ -212,10 +212,14 @@ Component({
   methods: {
     // 生成日历数据
     generateCalendar() {
-      console.log('[TaskHeatmap] 生成日历数据');
+      const logger = require('../../utils/logger');
+      logger.info('task-heatmap', '统一日历样式：应用与分析页面星星日历一致的样式');
+      logger.info('task-heatmap', '样式变更：日期格子改为正方形比例，字体大小调整为32rpx，今天标识改为背景高亮');
+      logger.info('task-heatmap', '信息层级优化：任务信息字体从20rpx减小到14rpx，透明度降至0.7，建立清晰的主次关系');
+      
+      const days = [];
       const currentYear = this.properties.currentYear;
       const currentMonth = this.properties.currentMonth;
-      const days = [];
       
       // 获取当月第一天是星期几
       const firstDay = new Date(currentYear, currentMonth, 1).getDay();
