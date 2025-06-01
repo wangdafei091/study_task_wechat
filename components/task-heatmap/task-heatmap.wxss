@@ -2,12 +2,13 @@
 /* 引入共享样式 */
 @import "/styles/common-task.wxss";
 
-/* 热力图颜色变量定义 - 使用:host选择器限制在组件内部 */
+/* 热力图颜色变量定义 - 与现有压力系统保持一致 */
 :host {
-  --level-1-color: rgba(92, 151, 247, 0.2);  /* 轻松压力: 浅蓝色 */
-  --level-2-color: rgba(66, 133, 244, 0.4);  /* 适中压力: 中蓝色 */
-  --level-3-color: rgba(83, 81, 186, 0.7);   /* 繁忙压力: 紫蓝色 */
-  --level-4-color: rgba(198, 40, 40, 0.85);  /* 紧张压力: 深红色 */
+  --level-0-color: #F8F9FA;  /* 无任务: 浅灰 */
+  --level-1-color: #E3F2FD;  /* 轻松: 浅蓝 */
+  --level-2-color: #BBDEFB;  /* 适中: 中蓝 */
+  --level-3-color: #9C7CE8;  /* 繁忙: 蓝紫 */
+  --level-4-color: #F44336;  /* 紧张: 红色 */
   
   --level-1-text: rgb(92, 151, 247);  /* 标签文本色: 深蓝色 */
   --level-2-text: rgb(66, 133, 244);  /* 标签文本色: 中蓝色 */
@@ -83,61 +84,59 @@
   display: flex;
   margin-bottom: 4rpx;
   border-bottom: 1rpx solid #F0F0F0;
-  padding-bottom: 12rpx;  /* 统一为12rpx */
+  padding-bottom: 12rpx;
 }
 
 .weekday {
   flex: 1;
   text-align: center;
-  font-size: 26rpx;  /* 从22rpx改为26rpx，与星星日历一致 */
-  color: #555;  /* 从#999改为#555，与星星日历一致 */
-  padding: 8rpx 0;  /* 从4rpx改为8rpx */
+  font-size: 26rpx;
+  color: #555;
+  padding: 8rpx 0;
 }
 
 .days {
   display: flex;
   flex-wrap: wrap;
-  margin-bottom: 12rpx;  /* 添加底部间距 */
+  margin-bottom: 12rpx;
 }
 
 .day {
-  width: 14.28%;
-  aspect-ratio: 1;  /* 从固定高度48rpx改为正方形比例 */
+  width: calc(100% / 7); /* 使用精确计算替代14.28%，避免累积误差 */
+  height: 80rpx; /* 使用固定高度替代aspect-ratio，减小格子尺寸提高信息密度 */
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: space-between;  /* 改为space-between */
-  padding: 10rpx 0;  /* 调整内边距 */
+  justify-content: space-between;
+  padding: 6rpx 2rpx; /* 减小内边距适应更紧凑的设计 */
   position: relative;
-  transition: background-color 0.2s;  /* 改为只过渡背景色 */
+  transition: background-color 0.2s;
   box-sizing: border-box;
   background-color: transparent;
-  margin: 0;  /* 移除外边距 */
-  border-radius: 8rpx;  /* 从4rpx改为8rpx */
+  border-radius: 0; /* 完全移除圆角，改为方形 */
 }
 
-/* 新增：日期内容容器 */
+/* 日期内容容器 */
 .day-content {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
   width: 100%;
   height: 100%;
-  gap: 2rpx;  /* 保持原有间距 */
+  gap: 4rpx;
 }
 
-/* 修改选中日期的样式 - 使用border替代outline，兼容性更好 */
+/* 选中日期的样式 */
 .day.selected {
   border: 2rpx solid #4285F4;
   box-sizing: border-box;
   z-index: 1;
 }
 
-/* 修改点击效果 - 移除所有可能影响颜色的属性 */
+/* 点击效果 */
 .day.current-month:active {
   transform: scale(0.98);
-  /* 只保留轻微的缩放效果 */
 }
 
 .current-month {
@@ -145,148 +144,110 @@
 }
 
 .other-month {
-  color: #ddd;  /* 降低非当月日期的存在感 */
+  color: #ddd;
 }
 
 .day-number {
-  font-size: 32rpx;  /* 从20rpx改为32rpx，与星星日历一致 */
-  line-height: 1.2;  /* 调整行高 */
-  font-weight: 600;  /* 从500改为600 */
-  margin-top: 6rpx;  /* 添加顶部间距 */
+  font-size: 32rpx; /* 从36rpx减小到32rpx，适应更紧凑的格子 */
+  line-height: 1.1;
+  font-weight: 600;
+  margin-top: 2rpx;
 }
 
-/* 新增：任务和星星信息行 - 保持原有功能，但优化样式 */
-.task-star-info {
+/* 任务类型点显示区域（单行） */
+.task-dots-row {
   display: flex;
-  align-items: center;
   justify-content: center;
-  gap: 4rpx;  /* 调整间距 */
-  font-size: 14rpx;  /* 从20rpx改为14rpx，建立清晰的视觉层级 */
-  line-height: 1;
-  opacity: 0.7;  /* 从0.9改为0.7，降低视觉权重 */
-  margin-bottom: 2rpx;  /* 添加底部间距 */
+  align-items: center;
+  gap: 4rpx; /* 从2rpx增加到4rpx，增加点之间的间距 */
+  height: 16rpx; /* 从12rpx增加到16rpx，给任务点更多空间 */
+  margin-top: 4rpx; /* 从2rpx增加到4rpx，与日期数字保持合适间距 */
 }
 
-.task-count {
-  color: rgba(0, 0, 0, 0.6);
-  font-size: 14rpx;  /* 从20rpx改为14rpx */
-  font-weight: 500;  /* 从600改为500，减轻视觉重量 */
+/* 任务数字显示（仅在任务数>4时显示） */
+.task-count-number {
+  font-size: 18rpx; /* 比日期数字小，不抢夺视觉焦点 */
+  font-weight: 500;
+  color: #666; /* 中性灰色，低调但可读 */
+  line-height: 16rpx;
+  margin-right: 2rpx; /* 与圆点保持小间距 */
+  opacity: 0.9; /* 稍微降低透明度，进一步减弱视觉权重 */
 }
 
-.star-separator {
-  color: rgba(0, 0, 0, 0.3);
-  font-size: 12rpx;  /* 从16rpx改为12rpx，分隔符应该更小 */
-  margin: 0 2rpx;
+.task-dot {
+  width: 8rpx; /* 从6rpx增加到8rpx，提升视觉权重 */
+  height: 8rpx; /* 从6rpx增加到8rpx，提升视觉权重 */
+  border-radius: 50%;
+  flex-shrink: 0;
 }
 
-.star-count {
-  color: rgba(0, 0, 0, 0.6);  /* 与任务数颜色保持一致，提升清晰度 */
-  font-size: 14rpx;  /* 从20rpx改为14rpx */
-  font-weight: 500;  /* 从600改为500，减轻视觉重量 */
+.more-indicator {
+  font-size: 12rpx; /* 从10rpx增加到12rpx，与更大的任务点保持比例 */
+  color: #666;
+  font-weight: bold;
+  line-height: 8rpx;
 }
 
-/* 今天样式 - 统一为背景高亮样式 */
+/* 今天样式 */
 .today {
   background-color: rgba(66, 133, 244, 0.15);
-  border-radius: 8rpx;
   border: 1rpx solid rgba(66, 133, 244, 0.3);
 }
 
-/* 移除原有的.today::after样式，不再使用小圆点标识 */
 .today .day-number {
   font-weight: 700;
   color: #4285F4;
 }
 
-/* 热力等级样式 - 强化选择器特异性，确保在移动设备上也能正确应用 */
-/* 无任务日期 - 强制使用完全透明的RGBA，避免设备差异 */
-.days .day.level-0,
-.days .day.level-0.selected,
-.days .day.level-0.today,
-.days .day.level-0:active {
-  background-color: rgba(0, 0, 0, 0) !important; /* 完全透明，不用transparent关键字 */
+/* 热力等级样式 - 使用与现有系统一致的颜色 */
+.days .day.level-0 {
+  background-color: var(--level-0-color) !important; /* 无任务 */
 }
 
-/* 轻松压力 - 使用RGB颜色，避免RGBA在不同设备上的差异 */
-.days .day.level-1,
-.days .day.level-1.selected,
-.days .day.level-1.today,
-.days .day.level-1:active {
-  background-color: var(--level-1-color) !important; /* 轻松压力 */
-  /* 添加重要的浏览器属性，确保不受设备渲染影响 */
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  appearance: none;
+.days .day.level-1 {
+  background-color: var(--level-1-color) !important; /* 轻松 */
 }
 
-/* 适中压力 - 同样增强兼容性 */
-.days .day.level-2,
-.days .day.level-2.selected,
-.days .day.level-2.today,
-.days .day.level-2:active {
-  background-color: var(--level-2-color) !important; /* 适中压力 */
-  box-shadow: inset 0 0 0 1rpx rgba(66, 133, 244, 0.1) !important; /* 添加内嵌边框 */
-  /* 添加重要的浏览器属性 */
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  appearance: none;
+.days .day.level-2 {
+  background-color: var(--level-2-color) !important; /* 适中 */
 }
 
-/* 繁忙压力 - 同样增强兼容性 */
-.days .day.level-3,
-.days .day.level-3.selected,
-.days .day.level-3.today,
-.days .day.level-3:active {
-  background-color: var(--level-3-color) !important; /* 繁忙压力 - 紫蓝色 */
-  box-shadow: inset 0 0 0 1rpx rgba(83, 81, 186, 0.15) !important; /* 添加内嵌边框 */
-  /* 添加重要的浏览器属性 */
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  appearance: none;
+.days .day.level-3 {
+  background-color: var(--level-3-color) !important; /* 繁忙 */
 }
 
-/* 紧张压力 - 同样增强兼容性 */
-.days .day.level-4,
-.days .day.level-4.selected,
-.days .day.level-4.today,
-.days .day.level-4:active {
-  background-color: var(--level-4-color) !important; /* 紧张压力 - 深红色 */
-  color: white !important;
-  box-shadow: inset 0 0 0 1rpx rgba(198, 40, 40, 0.3) !important; /* 添加内嵌边框 */
-  /* 添加重要的浏览器属性 */
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  appearance: none;
-}
-
-/* 针对手机端，直接使用硬编码颜色作为备份，避免CSS变量兼容性问题 */
-.days .day.level-1 { background-color: rgba(92, 151, 247, 0.2) !important; }
-.days .day.level-2 { background-color: rgba(66, 133, 244, 0.4) !important; }
-.days .day.level-3 { background-color: rgba(83, 81, 186, 0.7) !important; }
-.days .day.level-4 { background-color: rgba(198, 40, 40, 0.85) !important; }
-
-/* 确保紧张压力下文本保持白色 - 增强选择器特异性 */
-.task-heatmap .days .day.level-4 .day-number,
-.task-heatmap .days .day.level-4.selected .day-number,
-.task-heatmap .days .day.level-4.today .day-number {
+.days .day.level-4 {
+  background-color: var(--level-4-color) !important; /* 紧张 */
   color: white !important;
 }
 
-/* 确保紧张压力下任务计数标识保持白色 - 增强选择器特异性 */
-.task-heatmap .days .day.level-4 .task-count,
-.task-heatmap .days .day.level-4.selected .task-count,
-.task-heatmap .days .day.level-4.today .task-count {
-color: rgba(255, 255, 255, 0.95) !important;
+/* 备用硬编码颜色，确保兼容性 */
+.days .day.level-0 { background-color: #F8F9FA !important; }
+.days .day.level-1 { background-color: #E3F2FD !important; }
+.days .day.level-2 { background-color: #BBDEFB !important; }
+.days .day.level-3 { background-color: #9C7CE8 !important; }
+.days .day.level-4 { background-color: #F44336 !important; }
+
+/* 确保高压力级别下文本保持白色 */
+.days .day.level-4 .day-number,
+.days .day.level-4.selected .day-number,
+.days .day.level-4.today .day-number {
+  color: white !important;
+}
+
+/* 确保高压力级别下更多指示器保持白色 */
+.days .day.level-4 .more-indicator {
+  color: rgba(255, 255, 255, 0.9) !important;
 }
 
 /* 浮层提示样式 */
 .task-tooltip {
   position: absolute;
-  z-index: 100;
+  z-index: 1000;
   visibility: hidden;
   opacity: 0;
   transform: translateY(-8rpx);
-  transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s;
+  transition: all 0.2s ease;
   pointer-events: none;
 }
 
@@ -294,51 +255,99 @@ color: rgba(255, 255, 255, 0.95) !important;
   visibility: visible;
   opacity: 1;
   transform: translateY(0);
+  pointer-events: auto;
 }
 
 .tooltip-content {
-  min-width: 220rpx;
-  max-width: 300rpx;
-  background-color: rgba(66, 133, 244, 0.9);
+  min-width: 240rpx;
+  max-width: 320rpx;
+  background: #ffffff; /* 使用纯白背景，更柔和 */
+  border: 1rpx solid #E3F2FD; /* 添加淡蓝色边框增加层次感 */
   border-radius: 12rpx;
   padding: 16rpx 20rpx;
-  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.15);
-  color: white;
+  box-shadow: 0 4rpx 20rpx rgba(66, 133, 244, 0.08); /* 更轻微的阴影 */
+  color: #333; /* 深色文字确保可读性 */
+}
+
+.tooltip-header {
   text-align: center;
-  font-size: 24rpx;
+  margin-bottom: 12rpx;
+  border-bottom: 1rpx solid #F5F5F5; /* 添加分隔线 */
+  padding-bottom: 8rpx;
 }
 
 .tooltip-date {
   font-size: 28rpx;
-  font-weight: 500;
-  margin-bottom: 6rpx;
+  font-weight: 600;
+  display: block;
+  color: #333;
 }
 
-.tooltip-count {
-  margin-bottom: 6rpx;
-}
-
-.tooltip-status {
-  display: flex;
-  justify-content: center;
+.tooltip-weekday {
   font-size: 22rpx;
-  opacity: 0.9;
+  color: #666;
+  opacity: 0.8;
 }
 
-.separator {
-  margin: 0 8rpx;
+.tooltip-tasks {
+  margin-bottom: 12rpx;
+}
+
+.task-summary {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8rpx;
+  font-size: 24rpx;
+  font-weight: 500;
+  color: #4285F4; /* 使用主题蓝色但不过于强烈 */
+}
+
+.summary-icon {
+  margin-right: 6rpx;
+}
+
+.type-detail {
+  display: flex;
+  align-items: center;
+  margin-bottom: 4rpx;
+  font-size: 22rpx;
+  padding-left: 8rpx;
+  color: #555;
+}
+
+.type-icon {
+  margin-right: 6rpx;
+}
+
+.tooltip-stats {
+  display: flex;
+  justify-content: space-between;
+  font-size: 22rpx;
+  padding-top: 8rpx;
+  border-top: 1rpx solid #F5F5F5; /* 添加分隔线 */
+}
+
+.stars-info, .pressure-info {
+  display: flex;
+  align-items: center;
+  color: #666;
+}
+
+.stars-icon, .pressure-icon {
+  margin-right: 4rpx;
 }
 
 .tooltip-arrow {
   position: absolute;
   bottom: -12rpx;
-  left: 50%;
+  left: var(--arrow-offset, 50%); /* 使用CSS变量支持动态定位 */
   transform: translateX(-50%);
   width: 0;
   height: 0;
   border-left: 12rpx solid transparent;
   border-right: 12rpx solid transparent;
-  border-top: 12rpx solid rgba(66, 133, 244, 0.9);
+  border-top: 12rpx solid #ffffff; /* 与气泡背景色保持一致 */
+  filter: drop-shadow(0 2rpx 4rpx rgba(66, 133, 244, 0.05)); /* 为箭头添加轻微阴影 */
 }
 
 /* 任务列表相关样式 */
