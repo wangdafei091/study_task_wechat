@@ -43,6 +43,34 @@ Component({
           if (hasChanged) {
             console.log('[task-heatmap] 检测到任务数据变化，重新计算热力图');
             this.calculateHeatMap();
+            
+            // 修复：如果当前正在显示某个日期的任务列表，则刷新该列表
+            if (this.data.showDayTasks && this.data.selectedDate) {
+              logger.info('task-heatmap', '任务数据更新时自动刷新当前显示的任务列表', {
+                selectedDate: this.data.selectedDate,
+                oldTaskCount: this.data.dayTasks.length
+              });
+              
+              // 重新获取当前选中日期的任务
+              const dayTasks = newVal.filter(task => task.date === this.data.selectedDate);
+              
+              // 使用统一的enhanceTaskData方法增强任务信息
+              const tasks = dayTasks.map(task => this.enhanceTaskData(task));
+              
+              // 应用与首页今日任务列表相同的排序逻辑
+              const sortedTasks = this._sortTasksByHabitAndTime(tasks);
+              
+              // 更新任务列表显示
+              this.setData({
+                dayTasks: sortedTasks
+              });
+              
+              logger.info('task-heatmap', '任务列表已刷新', {
+                selectedDate: this.data.selectedDate,
+                newTaskCount: sortedTasks.length,
+                taskTitles: sortedTasks.map(t => t.title)
+              });
+            }
           } else {
             console.log('[task-heatmap] 任务数据引用已更新，但内容未变化');
           }
@@ -50,6 +78,13 @@ Component({
           console.log('[task-heatmap] 收到空任务数据，重置热力图');
           // 即使是空数据也需要重新计算，以清除热力图
           this.calculateHeatMap();
+          
+          // 如果当前正在显示任务列表，也需要清空
+          if (this.data.showDayTasks) {
+            this.setData({
+              dayTasks: []
+            });
+          }
         }
       }
     },
