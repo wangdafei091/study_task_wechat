@@ -109,11 +109,7 @@
 
         <!-- 时间周期和频率编辑区域 -->
         <view class="time-frequency-area">
-          <!-- 全天开关 -->
-          <view class="input-item switch-item">
-            <text class="input-label">全天</text>
-            <switch checked="{{newTask.isAllDay}}" bindchange="toggleAllDay" color="#4285F4" />
-          </view>
+          
           
           <!-- 日期范围选择（新布局） -->
           <view class="input-item time-item">
@@ -122,18 +118,20 @@
               <!-- 开始日期 -->
               <view class="date-picker" bindtap="togglePanel" data-panel="startDatePanel">
                 {{newTask.startDate}}
-                <text class="arrow-icon">{{startDatePanel ? '↑' : '↓'}}</text>
               </view>
               <!-- 连接符 -->
               <text class="date-connector">至</text>
               <!-- 结束日期 -->
               <view class="date-picker {{newTask.hasNoEndDate ? 'disabled' : ''}}" bindtap="{{!newTask.hasNoEndDate ? 'togglePanel' : ''}}" data-panel="endDatePanel">
                 {{newTask.hasNoEndDate ? '无结束日期' : newTask.endDate}}
-                <text class="arrow-icon" wx:if="{{!newTask.hasNoEndDate}}">{{endDatePanel ? '↑' : '↓'}}</text>
               </view>
             </view>
           </view>
-
+          <!-- 全天开关 -->
+          <view class="input-item switch-item">
+            <text class="input-label">全天</text>
+            <switch checked="{{newTask.isAllDay}}" bindchange="toggleAllDay" color="#4285F4" />
+          </view>
           <!-- 时间范围选择（新布局） -->
           <view class="input-item time-item">
             <text class="input-label">时间范围</text>
