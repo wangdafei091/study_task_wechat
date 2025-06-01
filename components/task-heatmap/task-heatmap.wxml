@@ -45,8 +45,14 @@
           data-index="{{index}}"
           bindtap="{{(item.isCurrentMonth || item.count > 0) ? 'onDayTap' : ''}}"
           id="day-{{index}}">
-          <text class="day-number">{{item.day}}</text>
-          <text wx:if="{{item.count > 0}}" class="task-count">{{item.count}}</text>
+          <view class="day-content">
+            <text class="day-number">{{item.day}}</text>
+            <view wx:if="{{item.count > 0}}" class="task-star-info">
+              <text class="task-count">{{item.count}}T</text>
+              <text wx:if="{{item.starsTotal > 0}}" class="star-separator">|</text>
+              <text wx:if="{{item.starsTotal > 0}}" class="star-count">{{item.starsTotal}}⭐</text>
+            </view>
+          </view>
         </view>
       </block>
     </view>
@@ -58,12 +64,13 @@
       <view class="day-date">
         <view class="date-row">
           <text class="date-text">{{selectedDateText}}</text>
-          <text class="task-count-text" wx:if="{{dayTasks.length > 0}}">{{dayTasks.length}}个任务</text>
           <!-- 改为标签式压力指示 -->
           <view class="pressure-tag pressure-level-{{selectedDayPressure.levelNum}}" wx:if="{{dayTasks.length > 0}}">
             <text>{{selectedDayPressure.levelText}}</text>
           </view>
+          <text class="task-summary-text" wx:if="{{dayTasks.length > 0}}">{{taskSummaryText}}</text>
         </view>
+        <!-- 移除星星统计信息，因为日历格子中已显示 -->
       </view>
       <!-- 关闭按钮改为圆形X图标 -->
       <view class="close-btn-circle" bindtap="closeDayTasks">×</view>
@@ -92,10 +99,21 @@
               
               <!-- 右侧区域：必做标签或积分和操作 -->
               <view class="task-header-right">
-                <!-- 根据isRequired属性显示必做标签或积分 -->
-                <view class="{{item.isRequired ? 'task-required-tag' : 'task-points-mini'}}">
-                  {{item.isRequired ? '必做' : (item.points || '0') + '颗'}}
+                <!-- 标签区域：必做标签和任务类型 -->
+                <view class="task-tags-container">
+                  <view class="task-tag" style="background: linear-gradient(135deg, #FF8A80, #FFAB91); color: white; border: none; box-shadow: 0 1rpx 6rpx rgba(255, 138, 128, 0.15);" wx:if="{{item.isRequired}}">必做</view>
+                  <view class="task-tag" style="background: {{item.type == 'habit' ? 'linear-gradient(135deg, #64B5F6, #90CAF9)' : item.type == 'interest' ? 'linear-gradient(135deg, #FFB74D, #FFCC80)' : 'linear-gradient(135deg, #81C784, #A5D6A7)'}}; color: white; border: none; box-shadow: 0 1rpx 6rpx {{item.type == 'habit' ? 'rgba(100, 181, 246, 0.15)' : item.type == 'interest' ? 'rgba(255, 183, 77, 0.15)' : 'rgba(129, 199, 132, 0.15)'}};">
+                    <text wx:if="{{item.type == 'habit'}}">习惯</text>
+                    <text wx:elif="{{item.type == 'interest'}}">兴趣</text>
+                    <text wx:elif="{{item.type == 'study'}}">学习</text>
+                  </view>
                 </view>
+                
+                <!-- 星星数量 -->
+                <view class="task-points-mini {{item.isRequired ? 'required-points' : ''}}">
+                  <text>{{item.points || '0'}}⭐</text>
+                </view>
+                
                 <view class="more-actions" bindtap="showTaskActions" data-id="{{item.id}}" data-index="{{index}}">···</view>
               </view>
             </view>
@@ -146,25 +164,8 @@
                 <!-- 必做任务状态提示 -->
                 <block wx:else>
                   <text class="points-info">
-                    <!-- 已按时完成的必做任务不显示任何信息 -->
-                    <block wx:if="{{item.status === 1 || item.status === 'completed'}}">
-                      <!-- 不显示任何信息 -->
-                    </block>
-                    <!-- 待完成未逾期的必做任务 -->
-                    <block wx:elif="{{item.status === 0 || item.status === 'pending'}}">
-                      <!-- 星星改造：原"积分"改为"星星" -->
-                      任务未按时完成，将会扣除{{item.points || 0}}颗星星
-                    </block>
-                    <!-- 逾期未完成的必做任务 -->
-                    <block wx:elif="{{item.status === 2 || item.status === 'overdue'}}">
-                      <!-- 星星改造：原"积分"改为"星星" -->
-                      任务未按时完成，扣除{{item.points || 0}}颗星星
-                    </block>
-                    <!-- 取消的必做任务 -->
-                    <block wx:elif="{{item.status === 3 || item.status === 'canceled'}}">
-                      <!-- 星星改造：原"积分"改为"星星" -->
-                      任务未完成，扣除{{item.points || 0}}颗星星
-                    </block>
+                    <!-- 必做任务不显示任何星星相关信息 -->
+                    必做任务
                   </text>
                 </block>
               </view>

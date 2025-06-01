@@ -521,11 +521,23 @@ Component({
         let pressureIndex = 0;
         const tasksPressure = [];
         
+        // 新增：星星统计变量（只计算非必做任务）
+        let starsEarned = 0;    // 已获得的星星
+        let starsPending = 0;   // 待获得的星星
+        
         dateTasks.forEach(task => {
           if (task.status === 'completed' || task.status === 1) {
             completed++;
+            // 统计已获得的星星（只计算非必做任务）
+            if (!task.isRequired && task.points > 0) {
+              starsEarned += task.points;
+            }
           } else {
             pending++;
+            // 统计待获得的星星（只计算非必做任务）
+            if (!task.isRequired && task.points > 0) {
+              starsPending += task.points;
+            }
           }
           
           // 计算任务压力
@@ -538,10 +550,13 @@ Component({
           });
         });
         
+        // 不再计算必做任务的扣除星星，因为必做任务不参与星星奖励系统
+        const starsTotal = starsEarned + starsPending;  // 总可获得星星（只含非必做任务）
+        
         // 计算日期热力等级 (1-4)
         const level = this.calculatePressureLevel(pressureIndex);
         
-        console.log(`[TaskHeatmap] 日期:${day.date} 任务数:${count} 压力指数:${pressureIndex.toFixed(1)} 色阶等级:${level.levelText}`);
+        console.log(`[TaskHeatmap] 日期:${day.date} 任务数:${count} 压力指数:${pressureIndex.toFixed(1)} 色阶等级:${level.levelText} 星星:${starsTotal}（已获得:${starsEarned} 待获得:${starsPending}）`);
         
         return {
           ...day,
@@ -549,6 +564,10 @@ Component({
           level: level.levelNum, // 用于日历热力图的级别值 (1-4)
           completed,
           pending,
+          // 更新星星相关字段
+          starsEarned,     // 已获得星星（仅非必做任务）
+          starsPending,    // 待获得星星（仅非必做任务）
+          starsTotal,      // 总可获得星星（仅非必做任务）
           pressure: {
             total: pressureIndex,
             tasks: tasksPressure
@@ -634,6 +653,32 @@ Component({
       
       console.log(`[TaskHeatmap] 处理积分有效期：${completedTasksCount}个已完成任务，${dayTasks.length - completedTasksCount}个待完成任务`);
       
+      // 统计星星信息
+      let starsEarned = 0;    // 已获得的星星
+      let starsPending = 0;   // 待获得的星星  
+      let starsAtRisk = 0;    // 风险扣除的星星
+      
+      dayTasks.forEach(task => {
+        if (task.status === 1 || task.status === 'completed') {
+          // 已完成任务
+          if (!task.isRequired && task.points > 0) {
+            starsEarned += task.points;
+          }
+        } else {
+          // 未完成任务
+          if (task.isRequired && task.points > 0) {
+            starsAtRisk += task.points;  // 必做任务未完成会扣除
+          } else if (!task.isRequired && task.points > 0) {
+            starsPending += task.points;  // 非必做任务待获得
+          }
+        }
+      });
+      
+      const starsTotal = starsEarned + starsPending;  // 可获得的星星总数
+      const starsNet = starsTotal - starsAtRisk;     // 净收益
+      
+      console.log('[TaskHeatmap] 星星统计 - 已获得:', starsEarned, '待获得:', starsPending, '风险扣除:', starsAtRisk, '总计:', starsTotal, '净收益:', starsNet);
+      
       // 使用预先计算好的压力值，避免重复计算
       let totalPressure = 0;
       if (dayData && dayData.pressure && dayData.pressure.total !== undefined) {
@@ -669,6 +714,11 @@ Component({
       const weekDay = weekDays[selectedDate.getDay()];
       const dateText = `${month}月${day}日 ${weekDay}`;
       
+      // 新增：生成任务汇总文案
+      const taskSummaryText = this.generateTaskSummaryText(dayTasks);
+      
+      console.log('[TaskHeatmap] 任务汇总文案：', taskSummaryText);
+      
       this.setData({
         selectedDate: date,
         selectedDateText: dateText,
@@ -680,18 +730,70 @@ Component({
           levelNum: pressureLevel.levelNum,
           isHigh: pressureLevel.isHigh,
           showWarning: pressureLevel.isHigh && totalPressure > 90
-        }
+        },
+        // 新增任务汇总文案
+        taskSummaryText: taskSummaryText
       });
       
       console.log(`[TaskHeatmap] 显示日期任务, 总数:${dayTasks.length}, 总压力: ${totalPressure.toFixed(1)}, 级别: ${pressureLevel.levelText}`);
     },
     
-    // 关闭日期任务列表
-    closeDayTasks() {
-      console.log('[TaskHeatmap] 关闭任务详情面板');
+    // 生成任务汇总文案
+    generateTaskSummaryText(tasks) {
+      if (!tasks || tasks.length === 0) return '';
       
+      const totalCount = tasks.length;
+      let requiredCount = 0;
+      let requiredStars = 0;
+      let optionalCount = 0;
+      let optionalStars = 0;
+      
+      tasks.forEach(task => {
+        if (task.isRequired) {
+          requiredCount++;
+          // 必做任务的星星表示可能扣除的数量
+          requiredStars += (task.points || 0);
+        } else {
+          optionalCount++;
+          // 非必做任务的星星，不区分状态
+          optionalStars += (task.points || 0);
+        }
+      });
+      
+      // 构建文案
+      let parts = [`${totalCount}个任务`];
+      let details = [];
+      
+      // 必做任务部分 - 现在也显示星星数量
+      if (requiredCount > 0) {
+        details.push(`必做 ${requiredCount}T/${requiredStars}🌟`);
+      }
+      
+      // 非必做任务部分
+      if (optionalCount > 0) {
+        details.push(`非必做 ${optionalCount}T/${optionalStars}🌟`);
+      }
+      
+      // 组合文案
+      if (details.length > 0) {
+        return parts[0] + '（' + details.join('；') + '）';
+      } else {
+        return parts[0];
+      }
+    },
+    
+    // 关闭任务列表
+    closeDayTasks() {
+      console.log('[TaskHeatmap] 关闭任务列表');
       this.setData({
-        showDayTasks: false
+        showDayTasks: false,
+        selectedDate: '',
+        dayTasks: [],
+        editingTaskId: null,
+        editingTaskIndex: -1,
+        showDeleteConfirm: false,
+        deleteScope: '',
+        activeTaskForDelete: null
       });
     },
     
