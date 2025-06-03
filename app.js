@@ -2,6 +2,7 @@
 const unitUtils = require('./utils/unit.js');
 const storageUtils = require('./utils/storageUtils.js'); // 引入存储工具
 const serviceManager = require('./services/service-manager.js'); // 引入服务管理器
+const { UserService } = require('./services/user-service.js'); // 引入用户服务
 const logger = require('./utils/logger');
 const logConfig = require('./utils/log-config');
 const deviceInfo = require('./utils/deviceInfo'); // 引入设备信息工具
@@ -35,6 +36,11 @@ App({
       const initialized = await serviceManager.initialize(serviceOptions);
       if (initialized) {
         logger.info('App', '服务管理器初始化成功');
+        
+        // 初始化用户服务
+        logger.info('App', '初始化用户服务');
+        this.globalData.userService = new UserService();
+        await this.globalData.userService.initialize();
         
         // 获取任务服务、消息服务和星星服务
         const taskService = serviceManager.getTaskService();
@@ -420,6 +426,7 @@ App({
   // 全局数据
   globalData: {
     userInfo: null,
+    userService: null, // 用户服务实例
     canIUseGetUserProfile: false,
     canIUseOpenData: false,
     rpxRatio: 1,
@@ -473,6 +480,14 @@ App({
    */
   getStarService: function() {
     return serviceManager.getStarService();
+  },
+  
+  /**
+   * 获取用户服务（供全应用使用）
+   * @returns {Object} 用户服务实例
+   */
+  getUserService: function() {
+    return this.globalData.userService;
   },
   
   // 检查首次启动并创建欢迎消息

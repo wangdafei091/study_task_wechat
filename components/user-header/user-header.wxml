@@ -1,0 +1,12 @@
+<!--components/user-header/user-header.wxml-->
+<!-- 用户头部组件 -->
+<view class="user-header">
+  <view class="user-avatar multi-user" bindtap="onUserAvatarTap">
+    <text class="user-icon">{{currentUser.role === 'parent' ? '👩‍💼' : '👶'}}</text>
+    <view class="user-info">
+      <text class="user-name">{{currentUser.name || '用户'}}</text>
+      <text class="user-role">{{currentUser.role === 'parent' ? '家长' : '孩子'}}</text>
+    </view>
+    <text class="switch-icon">⚡</text>
+  </view>
+</view> 

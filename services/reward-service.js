@@ -124,12 +124,23 @@ class RewardService {
   
   /**
    * 获取所有奖励
+   * @param {String} userId 可选的用户ID，不传则获取所有用户的奖励
    * @returns {Promise<Array>} 所有奖励列表
    */
-  async getAllRewards() {
+  async getAllRewards(userId = null) {
     try {
-      const rewards = await this.rewardRepository.getAll();
-      logger.info('RewardService', `获取所有奖励成功, 数量=${rewards.length}`);
+      let rewards;
+      
+      if (userId) {
+        // 获取指定用户的奖励
+        const allRewards = await this.rewardRepository.getAll();
+        rewards = allRewards.filter(reward => reward.userId === userId);
+      } else {
+        // 获取所有用户的奖励
+        rewards = await this.rewardRepository.getAll();
+      }
+      
+      logger.info('RewardService', `获取所有奖励成功${userId ? `, 用户=${userId}` : ''}, 数量=${rewards.length}`);
       return rewards;
     } catch (error) {
       logger.error('RewardService', '获取所有奖励失败', error);
@@ -139,12 +150,13 @@ class RewardService {
   
   /**
    * 获取已领取的奖励
+   * @param {String} userId 可选的用户ID，不传则获取所有用户的奖励
    * @returns {Promise<Array>} 已领取的奖励列表
    */
-  async getClaimedRewards() {
+  async getClaimedRewards(userId = null) {
     try {
-      const rewards = await this.rewardRepository.getClaimedRewards();
-      logger.info('RewardService', `获取已领取奖励成功, 数量=${rewards.length}`);
+      const rewards = await this.rewardRepository.getClaimedRewards(false, userId);
+      logger.info('RewardService', `获取已领取奖励成功${userId ? `, 用户=${userId}` : ''}, 数量=${rewards.length}`);
       return rewards;
     } catch (error) {
       logger.error('RewardService', '获取已领取奖励失败', error);
@@ -368,9 +380,10 @@ class RewardService {
    * 获取可用奖励列表
    * @param {Boolean} includeClaimed 是否包含已领取的奖励
    * @param {Boolean} includeExamples 是否包含示例奖励，默认为false
+   * @param {String} userId 可选的用户ID，不传则获取所有用户的奖励
    * @returns {Promise<Array>} 可用奖励列表
    */
-  async getAvailableRewards(includeClaimed = false, includeExamples = false) {
+  async getAvailableRewards(includeClaimed = false, includeExamples = false, userId = null) {
     try {
       // 确保服务已初始化
       if (!this.initialized && !RewardService._initialized) {
@@ -380,8 +393,13 @@ class RewardService {
       
       let rewards;
       if (includeClaimed) {
-        // 获取所有奖励，可能包括已领取的和示例奖励
-        rewards = await this.rewardRepository.getAll();
+        // 获取指定用户的所有奖励
+        if (userId) {
+          const allRewards = await this.rewardRepository.getAll();
+          rewards = allRewards.filter(r => r.userId === userId);
+        } else {
+          rewards = await this.rewardRepository.getAll();
+        }
         
         // 如果不需要示例奖励且存在自定义奖励，过滤掉示例奖励
         if (!includeExamples) {
@@ -391,11 +409,11 @@ class RewardService {
           }
         }
         
-        logger.info('RewardService', `获取所有奖励成功(包含已领取${includeExamples ? '和示例' : ''}), 数量=${rewards.length}`);
+        logger.info('RewardService', `获取所有奖励成功(包含已领取${includeExamples ? '和示例' : ''})${userId ? `, 用户=${userId}` : ''}, 数量=${rewards.length}`);
       } else {
         // 使用增强的仓储方法，直接处理示例奖励的过滤
-        rewards = await this.rewardRepository.getAvailableRewards(includeExamples);
-        logger.info('RewardService', `获取可用奖励成功(仅未领取${includeExamples ? '，包含示例' : ''}), 数量=${rewards.length}`);
+        rewards = await this.rewardRepository.getAvailableRewards(includeExamples, userId);
+        logger.info('RewardService', `获取可用奖励成功(仅未领取${includeExamples ? '，包含示例' : ''})${userId ? `, 用户=${userId}` : ''}, 数量=${rewards.length}`);
       }
       
       return rewards;
@@ -407,17 +425,18 @@ class RewardService {
   
   /**
    * 获取用户可兑换的奖励列表
+   * @param {String} userId 可选的用户ID，不传则获取所有用户的奖励
    * @returns {Promise<Array>} 用户可兑换的奖励列表
    */
-  async getExchangeableRewards() {
+  async getExchangeableRewards(userId = null) {
     try {
       // 获取用户可用的星星数量
-      const availablePoints = await this.starGroupRepository.getTotalPoints();
+      const availablePoints = await this.starGroupRepository.getTotalPoints(userId);
       
       // 获取可兑换的奖励
-      const rewards = await this.rewardRepository.getExchangeableRewards(availablePoints);
+      const rewards = await this.rewardRepository.getExchangeableRewards(availablePoints, userId);
       
-      logger.info('RewardService', `获取用户可兑换奖励列表成功, 可用星星=${availablePoints}, 可兑换奖励数量=${rewards.length}`);
+      logger.info('RewardService', `获取用户可兑换奖励列表成功${userId ? `, 用户=${userId}` : ''}, 可用星星=${availablePoints}, 可兑换奖励数量=${rewards.length}`);
       return rewards;
     } catch (error) {
       logger.error('RewardService', '获取用户可兑换奖励列表失败', error);

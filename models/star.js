@@ -42,6 +42,7 @@ class Star {
   constructor(data = {}) {
     // 基础信息
     this.id = data.id || `star_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+    this.userId = data.userId || ''; // 用户ID，标识星星归属
     this.value = data.value || 1;
     
     // 来源相关

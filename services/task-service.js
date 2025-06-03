@@ -54,12 +54,23 @@ class TaskService {
   
   /**
    * 获取所有任务
+   * @param {String} userId 可选的用户ID，不传则获取所有用户的任务
    * @returns {Promise<Array>} 任务列表
    */
-  async getAllTasks() {
+  async getAllTasks(userId = null) {
     try {
-      const tasks = await this.taskRepository.getAll();
-      logger.info('TaskService', `获取所有任务成功, 数量=${tasks.length}`);
+      let tasks;
+      
+      if (userId) {
+        // 获取指定用户的所有任务
+        const allTasks = await this.taskRepository.getAll();
+        tasks = allTasks.filter(task => task.userId === userId);
+      } else {
+        // 获取所有用户的任务
+        tasks = await this.taskRepository.getAll();
+      }
+      
+      logger.info('TaskService', `获取所有任务成功${userId ? `, 用户=${userId}` : ''}, 数量=${tasks.length}`);
       return tasks;
     } catch (error) {
       logger.error('TaskService', '获取所有任务失败', error);
@@ -70,11 +81,19 @@ class TaskService {
   /**
    * 获取任务详情
    * @param {String} taskId 任务ID 
+   * @param {String} userId 可选的用户ID，用于验证访问权限
    * @returns {Promise<Task|null>} 任务对象或null
    */
-  async getTaskById(taskId) {
+  async getTaskById(taskId, userId = null) {
     try {
       const task = await this.taskRepository.getById(taskId);
+      
+      // 如果指定了用户ID，验证访问权限
+      if (task && userId && task.userId !== userId) {
+        logger.warn('TaskService', `用户${userId}尝试访问不属于自己的任务${taskId}`);
+        return null;
+      }
+      
       return task;
     } catch (error) {
       logger.error('TaskService', `获取任务详情失败, ID=${taskId}`, error);
@@ -84,12 +103,13 @@ class TaskService {
   
   /**
    * 获取今日任务
+   * @param {String} userId 可选的用户ID，不传则获取所有用户的任务
    * @returns {Promise<Array>} 今日任务列表
    */
-  async getTodayTasks() {
+  async getTodayTasks(userId = null) {
     try {
-      const tasks = await this.taskRepository.getTodayTasks();
-      logger.info('TaskService', `获取今日任务成功, 数量=${tasks.length}`);
+      const tasks = await this.taskRepository.getTodayTasks(userId);
+      logger.info('TaskService', `获取今日任务成功${userId ? `, 用户=${userId}` : ''}, 数量=${tasks.length}`);
       return tasks;
     } catch (error) {
       logger.error('TaskService', '获取今日任务失败', error);
@@ -100,12 +120,13 @@ class TaskService {
   /**
    * 按日期获取任务
    * @param {String} date 日期字符串，格式为YYYY-MM-DD
+   * @param {String} userId 可选的用户ID，不传则获取所有用户的任务
    * @returns {Promise<Array>} 指定日期的任务列表
    */
-  async getTasksByDate(date) {
+  async getTasksByDate(date, userId = null) {
     try {
-      const tasks = await this.taskRepository.getTasksByDate(date);
-      logger.info('TaskService', `获取${date}任务成功, 数量=${tasks.length}`);
+      const tasks = await this.taskRepository.getTasksByDate(date, userId);
+      logger.info('TaskService', `获取${date}任务成功${userId ? `, 用户=${userId}` : ''}, 数量=${tasks.length}`);
       return tasks;
     } catch (error) {
       logger.error('TaskService', `获取${date}任务失败`, error);
@@ -117,12 +138,13 @@ class TaskService {
    * 获取日期范围内的任务
    * @param {String} startDate 开始日期，格式为YYYY-MM-DD
    * @param {String} endDate 结束日期，格式为YYYY-MM-DD
+   * @param {String} userId 可选的用户ID，不传则获取所有用户的任务
    * @returns {Promise<Array>} 日期范围内的任务列表
    */
-  async getTasksByDateRange(startDate, endDate) {
+  async getTasksByDateRange(startDate, endDate, userId = null) {
     try {
-      const tasks = await this.taskRepository.getTasksByDateRange(startDate, endDate);
-      logger.info('TaskService', `获取${startDate}至${endDate}的任务成功, 数量=${tasks.length}`);
+      const tasks = await this.taskRepository.getTasksByDateRange(startDate, endDate, userId);
+      logger.info('TaskService', `获取${startDate}至${endDate}的任务成功${userId ? `, 用户=${userId}` : ''}, 数量=${tasks.length}`);
       return tasks;
     } catch (error) {
       logger.error('TaskService', `获取${startDate}至${endDate}的任务失败`, error);
@@ -133,12 +155,13 @@ class TaskService {
   /**
    * 获取必做任务
    * @param {String} date 可选的日期筛选，格式为YYYY-MM-DD
+   * @param {String} userId 可选的用户ID，不传则获取所有用户的任务
    * @returns {Promise<Array>} 必做任务列表
    */
-  async getRequiredTasks(date) {
+  async getRequiredTasks(date, userId = null) {
     try {
-      const tasks = await this.taskRepository.getRequiredTasks(date);
-      logger.info('TaskService', `获取必做任务成功${date ? `, 日期=${date}` : ''}, 数量=${tasks.length}`);
+      const tasks = await this.taskRepository.getRequiredTasks(date, userId);
+      logger.info('TaskService', `获取必做任务成功${date ? `, 日期=${date}` : ''}${userId ? `, 用户=${userId}` : ''}, 数量=${tasks.length}`);
       return tasks;
     } catch (error) {
       logger.error('TaskService', `获取必做任务失败${date ? `, 日期=${date}` : ''}`, error);
@@ -148,12 +171,13 @@ class TaskService {
   
   /**
    * 获取过期未完成的任务
+   * @param {String} userId 可选的用户ID，不传则获取所有用户的任务
    * @returns {Promise<Array>} 过期未完成的任务列表
    */
-  async getExpiredIncompleteTasks() {
+  async getExpiredIncompleteTasks(userId = null) {
     try {
-      const tasks = await this.taskRepository.getExpiredIncompleteTask();
-      logger.info('TaskService', `获取过期未完成任务成功, 数量=${tasks.length}`);
+      const tasks = await this.taskRepository.getExpiredIncompleteTask(userId);
+      logger.info('TaskService', `获取过期未完成任务成功${userId ? `, 用户=${userId}` : ''}, 数量=${tasks.length}`);
       return tasks;
     } catch (error) {
       logger.error('TaskService', '获取过期未完成任务失败', error);
@@ -489,9 +513,10 @@ class TaskService {
    * 更新任务
    * @param {String} taskId 任务ID
    * @param {Object} changes 要更新的字段
+   * @param {String} userId 可选的用户ID，用于验证访问权限
    * @returns {Promise<Object>} 更新结果
    */
-  async updateTask(taskId, changes) {
+  async updateTask(taskId, changes, userId = null) {
     try {
       // 获取原任务
       const task = await this.taskRepository.getById(taskId);
@@ -499,6 +524,12 @@ class TaskService {
       if (!task) {
         logger.warn('TaskService', `更新任务失败: 未找到ID为${taskId}的任务`);
         return { success: false, message: '未找到指定的任务' };
+      }
+      
+      // 验证用户权限
+      if (userId && task.userId !== userId) {
+        logger.warn('TaskService', `用户${userId}尝试更新不属于自己的任务${taskId}`);
+        return { success: false, message: '无权限操作此任务' };
       }
       
       // 保存原始状态
@@ -510,7 +541,7 @@ class TaskService {
       // 保存更新后的任务
       const updatedTask = await this.taskRepository.save(task);
       
-      logger.info('TaskService', `更新任务成功: "${updatedTask.title}", ID=${updatedTask.id}`);
+      logger.info('TaskService', `更新任务成功: "${updatedTask.title}", ID=${updatedTask.id}${userId ? `, 用户=${userId}` : ''}`);
       
       // 触发事件
       this.eventBus.emit(EVENTS.TASK_UPDATED, {
@@ -530,9 +561,10 @@ class TaskService {
   /**
    * 删除任务
    * @param {String} taskId 任务ID
+   * @param {String} userId 可选的用户ID，用于验证访问权限
    * @returns {Promise<Object>} 删除结果
    */
-  async deleteTask(taskId) {
+  async deleteTask(taskId, userId = null) {
     try {
       // 获取任务信息，用于事件传递
       const taskInfo = await this.taskRepository.getById(taskId);
@@ -542,10 +574,16 @@ class TaskService {
         return { success: false, message: '未找到指定的任务' };
       }
       
+      // 验证用户权限
+      if (userId && taskInfo.userId !== userId) {
+        logger.warn('TaskService', `用户${userId}尝试删除不属于自己的任务${taskId}`);
+        return { success: false, message: '无权限操作此任务' };
+      }
+      
       // 删除任务
       await this.taskRepository.delete(taskId);
       
-      logger.info('TaskService', `删除任务成功: ${taskId}`);
+      logger.info('TaskService', `删除任务成功: ${taskId}${userId ? `, 用户=${userId}` : ''}`);
       
       // 触发任务删除事件
       this.eventBus.emit(EVENTS.TASK_DELETED, {
@@ -570,9 +608,10 @@ class TaskService {
    * 更新任务状态
    * @param {String} taskId 任务ID
    * @param {Number} status 新状态
+   * @param {String} userId 可选的用户ID，用于验证访问权限
    * @returns {Promise<Object>} 更新结果
    */
-  async updateTaskStatus(taskId, status) {
+  async updateTaskStatus(taskId, status, userId = null) {
     try {
       const task = await this.taskRepository.getById(taskId);
       
@@ -581,17 +620,23 @@ class TaskService {
         return { success: false, message: '未找到指定的任务' };
       }
       
+      // 验证用户权限
+      if (userId && task.userId !== userId) {
+        logger.warn('TaskService', `用户${userId}尝试更新不属于自己的任务状态${taskId}`);
+        return { success: false, message: '无权限操作此任务' };
+      }
+      
       // 记录原始状态
       const previousStatus = task.status;
       
       // 状态没有变化，直接返回
       if (previousStatus === status) {
-        logger.info('TaskService', `任务状态未发生变化: ${taskId}, 状态=${status}`);
+        logger.info('TaskService', `任务状态未发生变化: ${taskId}, 状态=${status}${userId ? `, 用户=${userId}` : ''}`);
         return { success: true, task, unchanged: true };
       }
       
       // 设置新状态
-      logger.info('TaskService', `准备设置任务状态: ${task.title}, 当前状态=${task.status}, 新状态=${status}`);
+      logger.info('TaskService', `准备设置任务状态: ${task.title}, 当前状态=${task.status}, 新状态=${status}${userId ? `, 用户=${userId}` : ''}`);
       
       // 如果状态变为完成，使用Task模型的complete方法来正确设置completionTime
       if (status === 1 && previousStatus !== 1) {
@@ -626,7 +671,8 @@ class TaskService {
             `完成任务: ${task.title}`,
             {
               sourceType: 'task_complete',
-              sourceId: task.id
+              sourceId: task.id,
+              userId: task.userId // 传递用户ID给星星服务
             }
           );
           
@@ -720,18 +766,20 @@ class TaskService {
   /**
    * 完成任务
    * @param {String} taskId 任务ID
+   * @param {String} userId 可选的用户ID，用于验证访问权限
    * @returns {Promise<Object>} 操作结果
    */
-  async completeTask(taskId) {
-    return this.updateTaskStatus(taskId, TaskStatus.COMPLETED);
+  async completeTask(taskId, userId = null) {
+    return this.updateTaskStatus(taskId, TaskStatus.COMPLETED, userId);
   }
   
   /**
    * 重置任务状态为未完成
    * @param {String} taskId 任务ID
+   * @param {String} userId 可选的用户ID，用于验证访问权限
    * @returns {Promise<Object>} 操作结果
    */
-  async resetTask(taskId) {
+  async resetTask(taskId, userId = null) {
     try {
       const task = await this.taskRepository.getById(taskId);
       
@@ -740,9 +788,15 @@ class TaskService {
         return { success: false, message: '未找到指定的任务' };
       }
       
+      // 验证用户权限
+      if (userId && task.userId !== userId) {
+        logger.warn('TaskService', `用户${userId}尝试重置不属于自己的任务${taskId}`);
+        return { success: false, message: '无权限操作此任务' };
+      }
+      
       // 如果任务未完成，无需重置
       if (!task.isCompleted()) {
-        logger.info('TaskService', `任务未完成，无需重置: ${task.title}`);
+        logger.info('TaskService', `任务未完成，无需重置: ${task.title}${userId ? `, 用户=${userId}` : ''}`);
         return { success: true, task, unchanged: true };
       }
       
@@ -771,7 +825,8 @@ class TaskService {
           `取消完成任务: ${task.title}`,
           {
             sourceType: 'task_reset',
-            sourceId: task.id
+            sourceId: task.id,
+            userId: task.userId // 传递用户ID给星星服务
           }
         );
         
@@ -794,7 +849,7 @@ class TaskService {
       // 保存任务
       const savedTask = await this.taskRepository.save(task);
       
-      logger.info('TaskService', `任务重置成功: ${savedTask.title}, ID=${savedTask.id}`);
+      logger.info('TaskService', `任务重置成功: ${savedTask.title}, ID=${savedTask.id}${userId ? `, 用户=${userId}` : ''}`);
       
       // 触发任务重置事件
       this.eventBus.emit(EVENTS.TASK_RESET, { 
@@ -812,14 +867,21 @@ class TaskService {
   /**
    * 将任务标记为必做
    * @param {String} taskId 任务ID
+   * @param {String} userId 可选的用户ID，用于验证访问权限
    * @returns {Promise<Object>} 操作结果
    */
-  async markTaskAsRequired(taskId) {
+  async markTaskAsRequired(taskId, userId = null) {
     try {
       const task = await this.taskRepository.getById(taskId);
       
       if (!task) {
         return { success: false, message: '未找到指定的任务' };
+      }
+      
+      // 验证用户权限
+      if (userId && task.userId !== userId) {
+        logger.warn('TaskService', `用户${userId}尝试标记不属于自己的任务为必做${taskId}`);
+        return { success: false, message: '无权限操作此任务' };
       }
       
       // 已经是必做任务，无需更改
@@ -834,7 +896,7 @@ class TaskService {
       // 保存更新后的任务
       const updatedTask = await this.taskRepository.save(task);
       
-      logger.info('TaskService', `将任务标记为必做: "${updatedTask.title}", ID=${updatedTask.id}`);
+      logger.info('TaskService', `将任务标记为必做: "${updatedTask.title}", ID=${updatedTask.id}${userId ? `, 用户=${userId}` : ''}`);
       
       // 触发事件
       this.eventBus.emit(EVENTS.TASK_MARKED_REQUIRED, { task: updatedTask });
@@ -849,14 +911,21 @@ class TaskService {
   /**
    * 取消任务的必做标记
    * @param {String} taskId 任务ID
+   * @param {String} userId 可选的用户ID，用于验证访问权限
    * @returns {Promise<Object>} 操作结果
    */
-  async unmarkTaskAsRequired(taskId) {
+  async unmarkTaskAsRequired(taskId, userId = null) {
     try {
       const task = await this.taskRepository.getById(taskId);
       
       if (!task) {
         return { success: false, message: '未找到指定的任务' };
+      }
+      
+      // 验证用户权限
+      if (userId && task.userId !== userId) {
+        logger.warn('TaskService', `用户${userId}尝试取消不属于自己的任务必做标记${taskId}`);
+        return { success: false, message: '无权限操作此任务' };
       }
       
       // 本来就不是必做任务，无需更改
@@ -871,7 +940,7 @@ class TaskService {
       // 保存更新后的任务
       const updatedTask = await this.taskRepository.save(task);
       
-      logger.info('TaskService', `取消任务的必做标记: "${updatedTask.title}", ID=${updatedTask.id}`);
+      logger.info('TaskService', `取消任务的必做标记: "${updatedTask.title}", ID=${updatedTask.id}${userId ? `, 用户=${userId}` : ''}`);
       
       // 触发事件
       this.eventBus.emit(EVENTS.TASK_UNMARKED_REQUIRED, { task: updatedTask });

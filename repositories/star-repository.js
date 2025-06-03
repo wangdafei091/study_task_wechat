@@ -33,12 +33,20 @@ class StarRepository extends BaseRepository {
   
   /**
    * 获取可用的星星
+   * @param {String} userId 可选的用户ID，不传则获取所有用户的星星
    * @returns {Promise<Array>} 可用的星星列表
    */
-  async getAvailableStars() {
+  async getAvailableStars(userId = null) {
     try {
-      const stars = await this.query(star => star.isAvailable());
-      logger.info('StarRepository', `获取可用星星成功, 数量=${stars.length}`);
+      const stars = await this.query(star => {
+        // 用户过滤
+        if (userId && star.userId !== userId) {
+          return false;
+        }
+        return star.status === StarStatus.ACTIVE;
+      });
+      
+      logger.info('StarRepository', `获取可用星星成功${userId ? `, 用户=${userId}` : ''}, 数量=${stars.length}`);
       return stars;
     } catch (error) {
       logger.error('StarRepository', '获取可用星星失败', error);
@@ -48,12 +56,20 @@ class StarRepository extends BaseRepository {
   
   /**
    * 获取已使用的星星
+   * @param {String} userId 可选的用户ID，不传则获取所有用户的星星
    * @returns {Promise<Array>} 已使用的星星列表
    */
-  async getUsedStars() {
+  async getUsedStars(userId = null) {
     try {
-      const stars = await this.query(star => star.isUsed);
-      logger.info('StarRepository', `获取已使用星星成功, 数量=${stars.length}`);
+      const stars = await this.query(star => {
+        // 用户过滤
+        if (userId && star.userId !== userId) {
+          return false;
+        }
+        return star.status === StarStatus.USED;
+      });
+      
+      logger.info('StarRepository', `获取已使用星星成功${userId ? `, 用户=${userId}` : ''}, 数量=${stars.length}`);
       return stars;
     } catch (error) {
       logger.error('StarRepository', '获取已使用星星失败', error);
@@ -63,15 +79,21 @@ class StarRepository extends BaseRepository {
   
   /**
    * 获取已过期的星星
+   * @param {String} userId 可选的用户ID，不传则获取所有用户的星星
    * @returns {Promise<Array>} 已过期的星星列表
    */
-  async getExpiredStars() {
+  async getExpiredStars(userId = null) {
     try {
-      const stars = await this.query(star => 
-        star.status === StarStatus.EXPIRED || 
-        (!star.isUsed && star.isExpired())
-      );
-      logger.info('StarRepository', `获取已过期星星成功, 数量=${stars.length}`);
+      const stars = await this.query(star => {
+        // 用户过滤
+        if (userId && star.userId !== userId) {
+          return false;
+        }
+        return star.status === StarStatus.EXPIRED || 
+               (star.status !== StarStatus.USED && star.isExpired());
+      });
+      
+      logger.info('StarRepository', `获取已过期星星成功${userId ? `, 用户=${userId}` : ''}, 数量=${stars.length}`);
       return stars;
     } catch (error) {
       logger.error('StarRepository', '获取已过期星星失败', error);
@@ -83,9 +105,10 @@ class StarRepository extends BaseRepository {
    * 获取特定来源的星星
    * @param {String} sourceType 来源类型
    * @param {String} sourceId 来源ID
+   * @param {String} userId 可选的用户ID，不传则获取所有用户的星星
    * @returns {Promise<Array>} 符合条件的星星列表
    */
-  async getStarsBySource(sourceType, sourceId) {
+  async getStarsBySource(sourceType, sourceId, userId = null) {
     if (!sourceType) {
       logger.warn('StarRepository', '尝试使用无效的来源类型获取星星');
       return [];
@@ -93,13 +116,18 @@ class StarRepository extends BaseRepository {
     
     try {
       const stars = await this.query(star => {
+        // 用户过滤
+        if (userId && star.userId !== userId) {
+          return false;
+        }
+        
         if (sourceId) {
           return star.sourceType === sourceType && star.sourceId === sourceId;
         }
         return star.sourceType === sourceType;
       });
       
-      logger.info('StarRepository', `获取来源类型=${sourceType}${sourceId ? `, 来源ID=${sourceId}` : ''}的星星成功, 数量=${stars.length}`);
+      logger.info('StarRepository', `获取来源类型=${sourceType}${sourceId ? `, 来源ID=${sourceId}` : ''}的星星成功${userId ? `, 用户=${userId}` : ''}, 数量=${stars.length}`);
       return stars;
     } catch (error) {
       logger.error('StarRepository', `获取来源类型=${sourceType}的星星失败`, error);
@@ -111,9 +139,10 @@ class StarRepository extends BaseRepository {
    * 获取特定有效期类型的星星
    * @param {String} expiryType 有效期类型
    * @param {Boolean} onlyAvailable 是否仅获取可用的星星
+   * @param {String} userId 可选的用户ID，不传则获取所有用户的星星
    * @returns {Promise<Array>} 符合条件的星星列表
    */
-  async getStarsByExpiryType(expiryType, onlyAvailable = true) {
+  async getStarsByExpiryType(expiryType, onlyAvailable = true, userId = null) {
     if (!expiryType) {
       logger.warn('StarRepository', '尝试使用无效的有效期类型获取星星');
       return [];
@@ -121,14 +150,19 @@ class StarRepository extends BaseRepository {
     
     try {
       const stars = await this.query(star => {
+        // 用户过滤
+        if (userId && star.userId !== userId) {
+          return false;
+        }
+        
         const matchesExpiry = star.expiryType === expiryType;
         if (onlyAvailable) {
-          return matchesExpiry && star.isAvailable();
+          return matchesExpiry && star.status === StarStatus.ACTIVE;
         }
         return matchesExpiry;
       });
       
-      logger.info('StarRepository', `获取有效期类型=${expiryType}的星星成功, 数量=${stars.length}`);
+      logger.info('StarRepository', `获取有效期类型=${expiryType}的星星成功${userId ? `, 用户=${userId}` : ''}, 数量=${stars.length}`);
       return stars;
     } catch (error) {
       logger.error('StarRepository', `获取有效期类型=${expiryType}的星星失败`, error);
@@ -138,16 +172,17 @@ class StarRepository extends BaseRepository {
   
   /**
    * 按过期日期顺序获取可用星星
+   * @param {String} userId 可选的用户ID，不传则获取所有用户的星星
    * @returns {Promise<Array>} 按过期日期排序的星星列表
    */
-  async getStarsByExpiryOrder() {
+  async getStarsByExpiryOrder(userId = null) {
     try {
-      const availableStars = await this.getAvailableStars();
+      const availableStars = await this.getAvailableStars(userId);
       
       // 按过期日期排序，永久有效的放在最后
       const sortedStars = this._sortStarsByExpiryDate(availableStars);
       
-      logger.info('StarRepository', `按过期日期顺序获取可用星星成功, 数量=${sortedStars.length}`);
+      logger.info('StarRepository', `按过期日期顺序获取可用星星成功${userId ? `, 用户=${userId}` : ''}, 数量=${sortedStars.length}`);
       return sortedStars;
     } catch (error) {
       logger.error('StarRepository', '按过期日期顺序获取可用星星失败', error);
@@ -158,19 +193,20 @@ class StarRepository extends BaseRepository {
   /**
    * 检查星星数量是否足够
    * @param {Number} amount 需要的星星数量
+   * @param {String} userId 可选的用户ID，不传则检查所有用户的星星
    * @returns {Promise<Boolean>} 是否足够
    */
-  async hasEnoughStars(amount) {
+  async hasEnoughStars(amount, userId = null) {
     if (amount <= 0) {
       logger.warn('StarRepository', `检查星星数量是否足够时使用了无效数量: ${amount}`);
       return true;
     }
     
     try {
-      const availableStars = await this.getAvailableStars();
-      const totalAvailable = availableStars.reduce((sum, star) => sum + star.amount, 0);
+      const availableStars = await this.getAvailableStars(userId);
+      const totalAvailable = availableStars.reduce((sum, star) => sum + star.value, 0);
       
-      logger.info('StarRepository', `检查星星数量是否足够: 需要=${amount}, 可用=${totalAvailable}`);
+      logger.info('StarRepository', `检查星星数量是否足够${userId ? `, 用户=${userId}` : ''}: 需要=${amount}, 可用=${totalAvailable}`);
       return totalAvailable >= amount;
     } catch (error) {
       logger.error('StarRepository', `检查星星数量是否足够失败, 需要=${amount}`, error);
@@ -241,12 +277,19 @@ class StarRepository extends BaseRepository {
   
   /**
    * 检查并标记过期星星
+   * @param {String} userId 可选的用户ID，不传则检查所有用户的星星
    * @returns {Promise<Array<Star>>} 新标记为过期的星星列表
    */
-  async checkAndMarkExpiredStars() {
+  async checkAndMarkExpiredStars(userId = null) {
     try {
       // 获取所有未使用的星星
-      const stars = await this.query(star => !star.isUsed && star.status !== StarStatus.EXPIRED);
+      const stars = await this.query(star => {
+        // 用户过滤
+        if (userId && star.userId !== userId) {
+          return false;
+        }
+        return star.status !== StarStatus.USED && star.status !== StarStatus.EXPIRED;
+      });
       
       // 找出已过期的星星
       const expiredStars = stars.filter(star => star.isExpired());
@@ -255,11 +298,11 @@ class StarRepository extends BaseRepository {
         // 标记为已过期
         const markedStars = await this.markStarsAsExpired(expiredStars);
         
-        logger.info('StarRepository', `检查并标记过期星星成功, 标记数量=${markedStars.length}`);
+        logger.info('StarRepository', `检查并标记过期星星成功${userId ? `, 用户=${userId}` : ''}, 标记数量=${markedStars.length}`);
         return markedStars;
       }
       
-      logger.info('StarRepository', '检查过期星星完成, 没有发现过期星星');
+      logger.info('StarRepository', `检查过期星星完成${userId ? `, 用户=${userId}` : ''}, 没有发现过期星星`);
       return [];
     } catch (error) {
       logger.error('StarRepository', '检查并标记过期星星失败', error);
@@ -271,6 +314,7 @@ class StarRepository extends BaseRepository {
    * 获取星星总数量
    * @param {Object} options 选项
    * @param {Boolean} options.onlyAvailable 是否仅计算可用的星星
+   * @param {String} options.userId 可选的用户ID，不传则计算所有用户的星星
    * @returns {Promise<Number>} 总数量
    */
   async getTotalStarsAmount(options = {}) {
@@ -278,14 +322,15 @@ class StarRepository extends BaseRepository {
       let stars;
       
       if (options.onlyAvailable) {
-        stars = await this.getAvailableStars();
+        stars = await this.getAvailableStars(options.userId);
       } else {
-        stars = await this.getAll();
+        const allStars = await this.getAll();
+        stars = options.userId ? allStars.filter(s => s.userId === options.userId) : allStars;
       }
       
-      const total = stars.reduce((sum, star) => sum + star.amount, 0);
+      const total = stars.reduce((sum, star) => sum + star.value, 0);
       
-      logger.info('StarRepository', `获取星星总数量成功, ${options.onlyAvailable ? '可用' : '全部'}星星=${total}`);
+      logger.info('StarRepository', `获取星星总数量成功${options.userId ? `, 用户=${options.userId}` : ''}, ${options.onlyAvailable ? '可用' : '全部'}星星=${total}`);
       return total;
     } catch (error) {
       logger.error('StarRepository', `获取星星总数量失败`, error);

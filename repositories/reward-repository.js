@@ -34,17 +34,21 @@ class RewardRepository extends BaseRepository {
   /**
    * 获取可用的奖励
    * @param {Boolean} includeExamples 是否包含示例奖励
+   * @param {String} userId 可选的用户ID，不传则获取所有用户的奖励
    * @returns {Promise<Array>} 可用的奖励列表
    */
-  async getAvailableRewards(includeExamples = false) {
+  async getAvailableRewards(includeExamples = false, userId = null) {
     try {
-      logger.debug('RewardRepository', `获取可用奖励, includeExamples=${includeExamples}`);
+      logger.debug('RewardRepository', `获取可用奖励, includeExamples=${includeExamples}${userId ? `, 用户=${userId}` : ''}`);
       
       // 获取所有奖励
       const allRewards = await this.getAll();
       
+      // 用户过滤
+      const userRewards = userId ? allRewards.filter(r => r.userId === userId) : allRewards;
+      
       // 检查是否有自定义奖励
-      const hasCustomRewards = allRewards.some(r => !r.isExample && r.enabled);
+      const hasCustomRewards = userRewards.some(r => !r.isExample && r.enabled);
       
       // 根据条件过滤奖励
       let filteredRewards;
@@ -52,24 +56,24 @@ class RewardRepository extends BaseRepository {
       // 决定是否过滤示例奖励
       if (hasCustomRewards && !includeExamples) {
         logger.info('RewardRepository', `存在自定义奖励且不包含示例，将过滤掉示例奖励`);
-        filteredRewards = allRewards.filter(r => !r.isExample && r.isAvailable(hasCustomRewards));
+        filteredRewards = userRewards.filter(r => !r.isExample && r.isAvailable(hasCustomRewards));
       } else if (!hasCustomRewards && includeExamples) {
         // 只有示例奖励，并且需要包含示例
         logger.info('RewardRepository', `仅有示例奖励且需要包含示例`);
-        filteredRewards = allRewards.filter(r => r.isAvailable(hasCustomRewards));
+        filteredRewards = userRewards.filter(r => r.isAvailable(hasCustomRewards));
       } else if (hasCustomRewards && includeExamples) {
         // 有自定义奖励但需要包含示例奖励（用于管理界面）
         logger.info('RewardRepository', `既有自定义奖励又需要包含示例`);
-        filteredRewards = allRewards.filter(r => r.isAvailable(hasCustomRewards));
+        filteredRewards = userRewards.filter(r => r.isAvailable(hasCustomRewards));
       } else {
         // 默认只过滤可用状态
-        filteredRewards = allRewards.filter(r => r.isAvailable(hasCustomRewards));
+        filteredRewards = userRewards.filter(r => r.isAvailable(hasCustomRewards));
       }
       
       // 输出详细日志
       const exampleCount = filteredRewards.filter(r => r.isExample).length;
       const customCount = filteredRewards.filter(r => !r.isExample).length;
-      logger.info('RewardRepository', `获取可用奖励成功, 总数=${filteredRewards.length}, 示例=${exampleCount}, 自定义=${customCount}`);
+      logger.info('RewardRepository', `获取可用奖励成功${userId ? `, 用户=${userId}` : ''}, 总数=${filteredRewards.length}, 示例=${exampleCount}, 自定义=${customCount}`);
       
       return filteredRewards;
     } catch (error) {
@@ -81,19 +85,32 @@ class RewardRepository extends BaseRepository {
   /**
    * 获取已兑换的奖励
    * @param {Boolean} onlyPending 是否只获取待领取的奖励
+   * @param {String} userId 可选的用户ID，不传则获取所有用户的奖励
    * @returns {Promise<Array>} 已兑换的奖励列表
    */
-  async getClaimedRewards(onlyPending = false) {
+  async getClaimedRewards(onlyPending = false, userId = null) {
     try {
       let rewards;
       
       if (onlyPending) {
-        rewards = await this.query(reward => reward.isPending());
+        rewards = await this.query(reward => {
+          // 用户过滤
+          if (userId && reward.userId !== userId) {
+            return false;
+          }
+          return reward.isPending();
+        });
       } else {
-        rewards = await this.query(reward => reward.claimed);
+        rewards = await this.query(reward => {
+          // 用户过滤
+          if (userId && reward.userId !== userId) {
+            return false;
+          }
+          return reward.claimed;
+        });
       }
       
-      logger.info('RewardRepository', `获取${onlyPending ? '待领取' : '已兑换'}奖励成功, 数量=${rewards.length}`);
+      logger.info('RewardRepository', `获取${onlyPending ? '待领取' : '已兑换'}奖励成功${userId ? `, 用户=${userId}` : ''}, 数量=${rewards.length}`);
       return rewards;
     } catch (error) {
       logger.error('RewardRepository', `获取${onlyPending ? '待领取' : '已兑换'}奖励失败`, error);
@@ -103,12 +120,20 @@ class RewardRepository extends BaseRepository {
   
   /**
    * 获取已领取的奖励
+   * @param {String} userId 可选的用户ID，不传则获取所有用户的奖励
    * @returns {Promise<Array>} 已领取的奖励列表
    */
-  async getDeliveredRewards() {
+  async getDeliveredRewards(userId = null) {
     try {
-      const rewards = await this.query(reward => reward.isDelivered());
-      logger.info('RewardRepository', `获取已领取奖励成功, 数量=${rewards.length}`);
+      const rewards = await this.query(reward => {
+        // 用户过滤
+        if (userId && reward.userId !== userId) {
+          return false;
+        }
+        return reward.isDelivered();
+      });
+      
+      logger.info('RewardRepository', `获取已领取奖励成功${userId ? `, 用户=${userId}` : ''}, 数量=${rewards.length}`);
       return rewards;
     } catch (error) {
       logger.error('RewardRepository', '获取已领取奖励失败', error);
@@ -120,17 +145,19 @@ class RewardRepository extends BaseRepository {
    * 按星星数排序获取奖励
    * @param {Boolean} ascending 是否升序排序
    * @param {Boolean} onlyAvailable 是否只获取可用的奖励
+   * @param {String} userId 可选的用户ID，不传则获取所有用户的奖励
    * @returns {Promise<Array>} 排序后的奖励列表
    */
-  async getRewardsByPointsOrder(ascending = true, onlyAvailable = true) {
+  async getRewardsByPointsOrder(ascending = true, onlyAvailable = true, userId = null) {
     try {
       // 获取奖励
       let rewards;
       
       if (onlyAvailable) {
-        rewards = await this.getAvailableRewards();
+        rewards = await this.getAvailableRewards(false, userId);
       } else {
-        rewards = await this.getAll();
+        const allRewards = await this.getAll();
+        rewards = userId ? allRewards.filter(r => r.userId === userId) : allRewards;
       }
       
       // 按星星数排序
@@ -138,7 +165,7 @@ class RewardRepository extends BaseRepository {
         return ascending ? a.points - b.points : b.points - a.points;
       });
       
-      logger.info('RewardRepository', `按星星数${ascending ? '升序' : '降序'}获取${onlyAvailable ? '可用' : '所有'}奖励成功, 数量=${sortedRewards.length}`);
+      logger.info('RewardRepository', `按星星数${ascending ? '升序' : '降序'}获取${onlyAvailable ? '可用' : '所有'}奖励成功${userId ? `, 用户=${userId}` : ''}, 数量=${sortedRewards.length}`);
       return sortedRewards;
     } catch (error) {
       logger.error('RewardRepository', `按星星数排序获取奖励失败`, error);
@@ -149,9 +176,10 @@ class RewardRepository extends BaseRepository {
   /**
    * 获取用户可兑换的奖励
    * @param {Number} availablePoints 用户可用的星星数
+   * @param {String} userId 可选的用户ID，不传则获取所有用户的奖励
    * @returns {Promise<Array>} 可兑换的奖励列表
    */
-  async getExchangeableRewards(availablePoints) {
+  async getExchangeableRewards(availablePoints, userId = null) {
     if (availablePoints < 0) {
       logger.warn('RewardRepository', `获取可兑换奖励使用了无效的星星数: ${availablePoints}`);
       return [];
@@ -159,12 +187,12 @@ class RewardRepository extends BaseRepository {
     
     try {
       // 获取可用奖励
-      const availableRewards = await this.getAvailableRewards();
+      const availableRewards = await this.getAvailableRewards(false, userId);
       
       // 筛选出可兑换的奖励
       const exchangeableRewards = availableRewards.filter(reward => reward.points <= availablePoints);
       
-      logger.info('RewardRepository', `获取用户可兑换奖励成功, 可用星星=${availablePoints}, 可兑换奖励数量=${exchangeableRewards.length}`);
+      logger.info('RewardRepository', `获取用户可兑换奖励成功${userId ? `, 用户=${userId}` : ''}, 可用星星=${availablePoints}, 可兑换奖励数量=${exchangeableRewards.length}`);
       return exchangeableRewards;
     } catch (error) {
       logger.error('RewardRepository', `获取用户可兑换奖励失败, 可用星星=${availablePoints}`, error);

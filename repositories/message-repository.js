@@ -34,12 +34,20 @@ class MessageRepository extends BaseRepository {
   
   /**
    * 获取未读消息
+   * @param {String} userId 可选的用户ID，不传则获取所有用户的消息
    * @returns {Promise<Array>} 未读消息列表
    */
-  async getUnreadMessages() {
+  async getUnreadMessages(userId = null) {
     try {
-      const messages = await this.query(message => !message.isRead);
-      logger.info('MessageRepository', `获取未读消息成功, 数量=${messages.length}`);
+      const messages = await this.query(message => {
+        // 用户过滤
+        if (userId && message.userId !== userId) {
+          return false;
+        }
+        return !message.isRead;
+      });
+      
+      logger.info('MessageRepository', `获取未读消息成功${userId ? `, 用户=${userId}` : ''}, 数量=${messages.length}`);
       return messages;
     } catch (error) {
       logger.error('MessageRepository', '获取未读消息失败', error);
@@ -49,11 +57,12 @@ class MessageRepository extends BaseRepository {
   
   /**
    * 获取未读消息数量
+   * @param {String} userId 可选的用户ID，不传则获取所有用户的消息
    * @returns {Promise<Number>} 未读消息数量
    */
-  async getUnreadCount() {
+  async getUnreadCount(userId = null) {
     try {
-      const unreadMessages = await this.getUnreadMessages();
+      const unreadMessages = await this.getUnreadMessages(userId);
       return unreadMessages.length;
     } catch (error) {
       logger.error('MessageRepository', '获取未读消息数量失败', error);
@@ -64,17 +73,25 @@ class MessageRepository extends BaseRepository {
   /**
    * 根据类型获取消息
    * @param {String} type 消息类型
+   * @param {String} userId 可选的用户ID，不传则获取所有用户的消息
    * @returns {Promise<Array>} 指定类型的消息列表
    */
-  async getMessagesByType(type) {
+  async getMessagesByType(type, userId = null) {
     if (!type) {
       logger.warn('MessageRepository', '获取消息类型为空');
       return [];
     }
     
     try {
-      const messages = await this.query(message => message.type === type);
-      logger.info('MessageRepository', `获取类型为${type}的消息成功, 数量=${messages.length}`);
+      const messages = await this.query(message => {
+        // 用户过滤
+        if (userId && message.userId !== userId) {
+          return false;
+        }
+        return message.type === type;
+      });
+      
+      logger.info('MessageRepository', `获取类型为${type}的消息成功${userId ? `, 用户=${userId}` : ''}, 数量=${messages.length}`);
       return messages;
     } catch (error) {
       logger.error('MessageRepository', `获取类型为${type}的消息失败`, error);
@@ -85,17 +102,25 @@ class MessageRepository extends BaseRepository {
   /**
    * 根据通知子类型获取消息
    * @param {String} notificationType 通知子类型
+   * @param {String} userId 可选的用户ID，不传则获取所有用户的消息
    * @returns {Promise<Array>} 指定通知类型的消息列表
    */
-  async getMessagesByNotificationType(notificationType) {
+  async getMessagesByNotificationType(notificationType, userId = null) {
     if (!notificationType) {
       logger.warn('MessageRepository', '获取消息通知类型为空');
       return [];
     }
     
     try {
-      const messages = await this.query(message => message.notificationType === notificationType);
-      logger.info('MessageRepository', `获取通知类型为${notificationType}的消息成功, 数量=${messages.length}`);
+      const messages = await this.query(message => {
+        // 用户过滤
+        if (userId && message.userId !== userId) {
+          return false;
+        }
+        return message.notificationType === notificationType;
+      });
+      
+      logger.info('MessageRepository', `获取通知类型为${notificationType}的消息成功${userId ? `, 用户=${userId}` : ''}, 数量=${messages.length}`);
       return messages;
     } catch (error) {
       logger.error('MessageRepository', `获取通知类型为${notificationType}的消息失败`, error);
@@ -106,17 +131,25 @@ class MessageRepository extends BaseRepository {
   /**
    * 按优先级获取消息
    * @param {String} priority 优先级
+   * @param {String} userId 可选的用户ID，不传则获取所有用户的消息
    * @returns {Promise<Array>} 消息列表
    */
-  async getMessagesByPriority(priority) {
+  async getMessagesByPriority(priority, userId = null) {
     if (!priority) {
       logger.warn('MessageRepository', '获取消息优先级为空');
       return [];
     }
     
     try {
-      const messages = await this.query(message => message.priority === priority);
-      logger.info('MessageRepository', `获取优先级为${priority}的消息成功, 数量=${messages.length}`);
+      const messages = await this.query(message => {
+        // 用户过滤
+        if (userId && message.userId !== userId) {
+          return false;
+        }
+        return message.priority === priority;
+      });
+      
+      logger.info('MessageRepository', `获取优先级为${priority}的消息成功${userId ? `, 用户=${userId}` : ''}, 数量=${messages.length}`);
       return messages;
     } catch (error) {
       logger.error('MessageRepository', `获取优先级为${priority}的消息失败`, error);
@@ -126,26 +159,35 @@ class MessageRepository extends BaseRepository {
   
   /**
    * 获取高优先级消息
+   * @param {String} userId 可选的用户ID，不传则获取所有用户的消息
    * @returns {Promise<Array>} 高优先级消息列表
    */
-  async getHighPriorityMessages() {
-    return this.getMessagesByPriority(MessagePriority.HIGH);
+  async getHighPriorityMessages(userId = null) {
+    return this.getMessagesByPriority(MessagePriority.HIGH, userId);
   }
   
   /**
    * 获取与指定实体相关的消息
    * @param {String} entityId 实体ID
+   * @param {String} userId 可选的用户ID，不传则获取所有用户的消息
    * @returns {Promise<Array>} 相关消息列表
    */
-  async getRelatedMessages(entityId) {
+  async getRelatedMessages(entityId, userId = null) {
     if (!entityId) {
       logger.warn('MessageRepository', '获取关联消息的实体ID为空');
       return [];
     }
     
     try {
-      const messages = await this.query(message => message.isRelatedTo(entityId));
-      logger.info('MessageRepository', `获取与实体${entityId}相关的消息成功, 数量=${messages.length}`);
+      const messages = await this.query(message => {
+        // 用户过滤
+        if (userId && message.userId !== userId) {
+          return false;
+        }
+        return message.isRelatedTo(entityId);
+      });
+      
+      logger.info('MessageRepository', `获取与实体${entityId}相关的消息成功${userId ? `, 用户=${userId}` : ''}, 数量=${messages.length}`);
       return messages;
     } catch (error) {
       logger.error('MessageRepository', `获取与实体${entityId}相关的消息失败`, error);
@@ -157,15 +199,20 @@ class MessageRepository extends BaseRepository {
    * 按时间范围获取消息
    * @param {Number} startTime 开始时间戳
    * @param {Number} endTime 结束时间戳
+   * @param {String} userId 可选的用户ID，不传则获取所有用户的消息
    * @returns {Promise<Array>} 消息列表
    */
-  async getMessagesByTimeRange(startTime, endTime) {
+  async getMessagesByTimeRange(startTime, endTime, userId = null) {
     try {
       const messages = await this.query(message => {
+        // 用户过滤
+        if (userId && message.userId !== userId) {
+          return false;
+        }
         return message.createTime >= startTime && message.createTime <= endTime;
       });
       
-      logger.info('MessageRepository', `获取时间范围内的消息成功, 数量=${messages.length}`);
+      logger.info('MessageRepository', `获取时间范围内的消息成功${userId ? `, 用户=${userId}` : ''}, 数量=${messages.length}`);
       return messages;
     } catch (error) {
       logger.error('MessageRepository', '获取时间范围内的消息失败', error);
@@ -175,27 +222,35 @@ class MessageRepository extends BaseRepository {
   
   /**
    * 获取今日消息
+   * @param {String} userId 可选的用户ID，不传则获取所有用户的消息
    * @returns {Promise<Array>} 今日消息列表
    */
-  async getTodayMessages() {
+  async getTodayMessages(userId = null) {
     const now = new Date();
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
     const endOfDay = startOfDay + 24 * 60 * 60 * 1000 - 1;
     
-    return this.getMessagesByTimeRange(startOfDay, endOfDay);
+    return this.getMessagesByTimeRange(startOfDay, endOfDay, userId);
   }
   
   /**
    * 获取按日期分组的消息
    * @param {Number} days 天数，默认7天
+   * @param {String} userId 可选的用户ID，不传则获取所有用户的消息
    * @returns {Promise<Object>} 按日期分组的消息对象
    */
-  async getMessagesByDateGroup(days = 7) {
+  async getMessagesByDateGroup(days = 7, userId = null) {
     try {
       const now = new Date();
       const startTime = new Date(now.getFullYear(), now.getMonth(), now.getDate() - days + 1).getTime();
       
-      const messages = await this.query(message => message.createTime >= startTime);
+      const messages = await this.query(message => {
+        // 用户过滤
+        if (userId && message.userId !== userId) {
+          return false;
+        }
+        return message.createTime >= startTime;
+      });
       
       // 按日期分组
       const groupedMessages = {};
@@ -215,7 +270,7 @@ class MessageRepository extends BaseRepository {
         }
       });
       
-      logger.info('MessageRepository', `获取按日期分组的消息成功, 总数量=${messages.length}`);
+      logger.info('MessageRepository', `获取按日期分组的消息成功${userId ? `, 用户=${userId}` : ''}, 总数量=${messages.length}`);
       return groupedMessages;
     } catch (error) {
       logger.error('MessageRepository', '获取按日期分组的消息失败', error);
@@ -259,13 +314,14 @@ class MessageRepository extends BaseRepository {
   
   /**
    * 标记所有消息为已读
+   * @param {String} userId 可选的用户ID，不传则标记所有用户的消息
    * @returns {Promise<Number>} 更新的消息数量
    */
-  async markAllAsRead() {
+  async markAllAsRead(userId = null) {
     try {
-      const unreadMessages = await this.getUnreadMessages();
+      const unreadMessages = await this.getUnreadMessages(userId);
       if (unreadMessages.length === 0) {
-        logger.info('MessageRepository', '没有未读消息需要标记');
+        logger.info('MessageRepository', `没有未读消息需要标记${userId ? `, 用户=${userId}` : ''}`);
         return 0;
       }
       

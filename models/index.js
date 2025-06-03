@@ -10,6 +10,7 @@ const { StarGroup } = require('./star-group');
 const { Reward, RewardStatus, RewardType } = require('./reward');
 const { StarRecord, RecordType, RecordSource } = require('./star-record');
 const { Message, MessageType, NotificationType } = require('./message');
+const { User, UserRole, UserStatus } = require('./user');
 
 module.exports = {
   // 任务模型
@@ -38,5 +39,10 @@ module.exports = {
   // 消息模型
   Message,
   MessageType,
-  NotificationType
+  NotificationType,
+  
+  // 用户模型
+  User,
+  UserRole,
+  UserStatus
 }; 

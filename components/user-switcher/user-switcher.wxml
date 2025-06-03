@@ -1,0 +1,120 @@
+<!--components/user-switcher/user-switcher.wxml-->
+
+<!-- 遮罩层 -->
+<view class="user-switcher-mask" wx:if="{{visible}}" bindtap="closeUserSwitcher"></view>
+
+<!-- 用户切换面板 -->
+<view class="user-switcher-panel" wx:if="{{visible}}" animation="{{switchAnimation}}" catchtap="preventBubble">
+  <!-- 头部 -->
+  <view class="panel-header">
+    <view class="panel-title">选择用户</view>
+    <view class="panel-close" bindtap="closeUserSwitcher">×</view>
+  </view>
+  
+  <!-- 当前用户信息 -->
+  <view class="current-user-section" wx:if="{{currentUser}}">
+    <view class="section-title">当前用户</view>
+    <view class="user-item current">
+      <view class="user-avatar">
+        <text class="user-icon">{{currentUser.role === 'parent' ? '👩‍💼' : '👶'}}</text>
+      </view>
+      <view class="user-info">
+        <view class="user-name">{{currentUser.name}}</view>
+        <view class="user-role">{{currentUser.role === 'parent' ? '家长' : '孩子'}}</view>
+      </view>
+      <view class="user-status">
+        <text class="current-badge">当前</text>
+      </view>
+    </view>
+  </view>
+  
+  <!-- 用户列表 -->
+  <view class="user-list-section">
+    <view class="section-title">切换到</view>
+    <view class="user-list">
+      <block wx:for="{{availableUsers}}" wx:key="id">
+        <view 
+          class="user-item {{currentUser && item.id === currentUser.id ? 'disabled' : ''}}" 
+          wx:if="{{!currentUser || item.id !== currentUser.id}}"
+          data-user-id="{{item.id}}" 
+          bindtap="switchToUser">
+          <view class="user-avatar">
+            <text class="user-icon">{{item.role === 'parent' ? '👩‍💼' : '👶'}}</text>
+          </view>
+          <view class="user-info">
+            <view class="user-name">{{item.name}}</view>
+            <view class="user-role">{{item.role === 'parent' ? '家长' : '孩子'}}</view>
+          </view>
+          <view class="user-actions">
+            <view class="switch-icon">→</view>
+            <view class="delete-btn" data-user-id="{{item.id}}" bindtap="deleteUser" catchtap>
+              <text class="delete-icon">🗑️</text>
+            </view>
+          </view>
+        </view>
+      </block>
+      
+      <!-- 空状态 -->
+      <view class="empty-users" wx:if="{{availableUsers.length <= 1}}">
+        <view class="empty-icon">👥</view>
+        <view class="empty-text">还没有其他用户</view>
+        <view class="empty-tip">点击下方按钮添加新用户</view>
+      </view>
+    </view>
+  </view>
+  
+  <!-- 添加用户按钮 -->
+  <view class="add-user-section" wx:if="{{showAddUser}}">
+    <view class="add-user-btn" bindtap="showAddUserDialog">
+      <text class="add-icon">+</text>
+      <text class="add-text">添加新用户</text>
+    </view>
+  </view>
+</view>
+
+<!-- 添加用户对话框 -->
+<view class="add-user-mask" wx:if="{{showAddUserDialog}}" bindtap="hideAddUserDialog"></view>
+<view class="add-user-dialog" wx:if="{{showAddUserDialog}}" animation="{{addDialogAnimation}}" catchtap="preventBubble">
+  <view class="dialog-header">
+    <view class="dialog-title">添加新用户</view>
+    <view class="dialog-close" bindtap="hideAddUserDialog">×</view>
+  </view>
+  
+  <view class="dialog-content">
+    <!-- 用户名输入 -->
+    <view class="input-group">
+      <view class="input-label">用户名</view>
+      <input 
+        class="user-name-input" 
+        placeholder="请输入用户名" 
+        value="{{newUserName}}"
+        bindinput="onUserNameInput"
+        maxlength="10" />
+    </view>
+    
+    <!-- 角色选择 -->
+    <view class="input-group">
+      <view class="input-label">用户角色</view>
+      <view class="role-options">
+        <block wx:for="{{roleOptions}}" wx:key="value">
+          <view 
+            class="role-option {{newUserRole === item.value ? 'selected' : ''}}"
+            data-role="{{item.value}}"
+            bindtap="selectRole">
+            <view class="role-header">
+              <text class="role-icon">{{item.icon}}</text>
+              <text class="role-label">{{item.label}}</text>
+              <view class="role-check" wx:if="{{newUserRole === item.value}}">✓</view>
+            </view>
+            <view class="role-description">{{item.description}}</view>
+          </view>
+        </block>
+      </view>
+    </view>
+  </view>
+  
+  <view class="dialog-actions">
+    <view class="dialog-btn cancel" bindtap="hideAddUserDialog">取消</view>
+    <view class="dialog-btn confirm" bindtap="confirmAddUser">确认</view>
+  </view>
+</view> 

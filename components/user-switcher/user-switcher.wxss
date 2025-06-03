@@ -1,0 +1,411 @@
+/* components/user-switcher/user-switcher.wxss */
+
+/* 遮罩层 */
+.user-switcher-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 999;
+}
+
+/* 用户切换面板 */
+.user-switcher-panel {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  max-height: 70vh;
+  background-color: #fff;
+  border-radius: 32rpx 32rpx 0 0;
+  z-index: 1000;
+  box-shadow: 0 -8rpx 32rpx rgba(0, 0, 0, 0.1);
+}
+
+/* 面板头部 */
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 40rpx 30rpx 20rpx;
+  border-bottom: 1rpx solid #f0f0f0;
+}
+
+.panel-title {
+  font-size: 36rpx;
+  font-weight: 600;
+  color: #333;
+}
+
+.panel-close {
+  width: 60rpx;
+  height: 60rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 48rpx;
+  color: #666;
+  border-radius: 50%;
+  background-color: #f5f5f5;
+}
+
+/* 区块标题 */
+.section-title {
+  font-size: 28rpx;
+  font-weight: 500;
+  color: #666;
+  margin-bottom: 20rpx;
+  padding: 0 30rpx;
+}
+
+/* 当前用户区域 */
+.current-user-section {
+  padding: 30rpx 0;
+  border-bottom: 1rpx solid #f0f0f0;
+}
+
+/* 用户列表区域 */
+.user-list-section {
+  padding: 30rpx 0;
+  max-height: 400rpx;
+  overflow-y: auto;
+}
+
+/* 用户项 */
+.user-item {
+  display: flex;
+  align-items: center;
+  padding: 24rpx 30rpx;
+  margin: 0 30rpx 16rpx;
+  background-color: #f8f9fa;
+  border-radius: 16rpx;
+  transition: all 0.3s ease;
+}
+
+.user-item:not(.disabled):not(.current):active {
+  background-color: #e3f2fd;
+  transform: scale(0.98);
+}
+
+.user-item.current {
+  background: linear-gradient(135deg, #4285F4 0%, #34A853 100%);
+  color: white;
+}
+
+.user-item.disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* 用户头像 */
+.user-avatar {
+  width: 80rpx;
+  height: 80rpx;
+  border-radius: 50%;
+  background-color: rgba(66, 133, 244, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 24rpx;
+}
+
+.user-item.current .user-avatar {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.user-icon {
+  font-size: 36rpx;
+}
+
+/* 用户信息 */
+.user-info {
+  flex: 1;
+}
+
+.user-name {
+  font-size: 32rpx;
+  font-weight: 500;
+  color: #333;
+  margin-bottom: 6rpx;
+}
+
+.user-item.current .user-name {
+  color: white;
+}
+
+.user-role {
+  font-size: 24rpx;
+  color: #666;
+}
+
+.user-item.current .user-role {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+/* 用户状态和操作 */
+.user-status {
+  display: flex;
+  align-items: center;
+}
+
+.current-badge {
+  padding: 8rpx 16rpx;
+  background-color: rgba(255, 255, 255, 0.2);
+  color: white;
+  font-size: 20rpx;
+  border-radius: 12rpx;
+}
+
+.user-actions {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.switch-icon {
+  font-size: 28rpx;
+  color: #4285F4;
+  font-weight: bold;
+}
+
+.delete-btn {
+  width: 48rpx;
+  height: 48rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background-color: rgba(255, 68, 68, 0.1);
+}
+
+.delete-icon {
+  font-size: 20rpx;
+}
+
+/* 空状态 */
+.empty-users {
+  text-align: center;
+  padding: 60rpx 30rpx;
+  color: #999;
+}
+
+.empty-icon {
+  font-size: 72rpx;
+  margin-bottom: 20rpx;
+}
+
+.empty-text {
+  font-size: 28rpx;
+  margin-bottom: 12rpx;
+}
+
+.empty-tip {
+  font-size: 24rpx;
+  color: #ccc;
+}
+
+/* 添加用户区域 */
+.add-user-section {
+  padding: 20rpx 30rpx 40rpx;
+  border-top: 1rpx solid #f0f0f0;
+}
+
+.add-user-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 28rpx;
+  background: linear-gradient(135deg, #4285F4 0%, #34A853 100%);
+  color: white;
+  border-radius: 16rpx;
+  font-size: 28rpx;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.add-user-btn:active {
+  transform: scale(0.98);
+  opacity: 0.9;
+}
+
+.add-icon {
+  font-size: 32rpx;
+  margin-right: 12rpx;
+}
+
+/* 添加用户对话框遮罩 */
+.add-user-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.6);
+  z-index: 1001;
+}
+
+/* 添加用户对话框 */
+.add-user-dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 640rpx;
+  max-width: 90vw;
+  background-color: white;
+  border-radius: 24rpx;
+  z-index: 1002;
+  box-shadow: 0 16rpx 64rpx rgba(0, 0, 0, 0.2);
+}
+
+/* 对话框头部 */
+.dialog-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 40rpx 30rpx 20rpx;
+  border-bottom: 1rpx solid #f0f0f0;
+}
+
+.dialog-title {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #333;
+}
+
+.dialog-close {
+  width: 48rpx;
+  height: 48rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32rpx;
+  color: #666;
+  border-radius: 50%;
+  background-color: #f5f5f5;
+}
+
+/* 对话框内容 */
+.dialog-content {
+  padding: 30rpx;
+}
+
+.input-group {
+  margin-bottom: 40rpx;
+}
+
+.input-label {
+  font-size: 28rpx;
+  font-weight: 500;
+  color: #333;
+  margin-bottom: 16rpx;
+}
+
+.user-name-input {
+  width: 100%;
+  padding: 24rpx;
+  border: 2rpx solid #e0e0e0;
+  border-radius: 12rpx;
+  font-size: 28rpx;
+  background-color: #fafafa;
+  box-sizing: border-box;
+}
+
+.user-name-input:focus {
+  border-color: #4285F4;
+  background-color: white;
+}
+
+/* 角色选项 */
+.role-options {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+.role-option {
+  padding: 24rpx;
+  border: 2rpx solid #e0e0e0;
+  border-radius: 12rpx;
+  background-color: #fafafa;
+  transition: all 0.3s ease;
+}
+
+.role-option.selected {
+  border-color: #4285F4;
+  background-color: rgba(66, 133, 244, 0.05);
+}
+
+.role-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8rpx;
+}
+
+.role-icon {
+  font-size: 32rpx;
+  margin-right: 16rpx;
+}
+
+.role-label {
+  flex: 1;
+  font-size: 28rpx;
+  font-weight: 500;
+  color: #333;
+}
+
+.role-check {
+  width: 32rpx;
+  height: 32rpx;
+  border-radius: 50%;
+  background-color: #4285F4;
+  color: white;
+  font-size: 20rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.role-description {
+  font-size: 24rpx;
+  color: #666;
+  line-height: 1.4;
+}
+
+/* 对话框操作 */
+.dialog-actions {
+  display: flex;
+  padding: 20rpx 30rpx 40rpx;
+  gap: 20rpx;
+}
+
+.dialog-btn {
+  flex: 1;
+  padding: 28rpx;
+  text-align: center;
+  font-size: 28rpx;
+  font-weight: 500;
+  border-radius: 12rpx;
+  transition: all 0.3s ease;
+}
+
+.dialog-btn.cancel {
+  background-color: #f5f5f5;
+  color: #666;
+}
+
+.dialog-btn.cancel:active {
+  background-color: #e0e0e0;
+}
+
+.dialog-btn.confirm {
+  background: linear-gradient(135deg, #4285F4 0%, #34A853 100%);
+  color: white;
+}
+
+.dialog-btn.confirm:active {
+  opacity: 0.9;
+  transform: scale(0.98);
+} 

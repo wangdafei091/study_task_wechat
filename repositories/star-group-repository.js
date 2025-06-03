@@ -34,13 +34,21 @@ class StarGroupRepository extends BaseRepository {
   
   /**
    * 获取非空的分组
+   * @param {String} userId 可选的用户ID，不传则获取所有用户的分组
    * @returns {Promise<Array>} 非空的分组列表
    */
-  async getNonEmptyGroups() {
+  async getNonEmptyGroups(userId = null) {
     try {
-      logger.info('StarGroupRepository', '开始获取非空分组');
-      const groups = await this.query(group => !group.isEmpty());
-      logger.info('StarGroupRepository', `获取非空分组成功, 数量=${groups.length}`);
+      logger.info('StarGroupRepository', `开始获取非空分组${userId ? `, 用户=${userId}` : ''}`);
+      const groups = await this.query(group => {
+        // 用户过滤
+        if (userId && group.userId !== userId) {
+          return false;
+        }
+        return !group.isEmpty();
+      });
+      
+      logger.info('StarGroupRepository', `获取非空分组成功${userId ? `, 用户=${userId}` : ''}, 数量=${groups.length}`);
       return groups;
     } catch (error) {
       logger.error('StarGroupRepository', '获取非空分组失败', error);
@@ -51,16 +59,23 @@ class StarGroupRepository extends BaseRepository {
   /**
    * 获取特定有效期类型的分组
    * @param {String} expiryType 有效期类型
+   * @param {String} userId 可选的用户ID，不传则获取所有用户的分组
    * @returns {Promise<Array>} 符合条件的分组列表
    */
-  async getGroupsByExpiryType(expiryType) {
+  async getGroupsByExpiryType(expiryType, userId = null) {
     if (!expiryType) {
       logger.warn('StarGroupRepository', '尝试使用无效的有效期类型获取分组');
       return [];
     }
     
     try {
-      const groups = await this.query(group => group.expiryType === expiryType);
+      const groups = await this.query(group => {
+        // 用户过滤
+        if (userId && group.userId !== userId) {
+          return false;
+        }
+        return group.expiryType === expiryType;
+      });
       
       return groups;
     } catch (error) {
@@ -74,27 +89,35 @@ class StarGroupRepository extends BaseRepository {
    * @param {String} expiryType 有效期类型
    * @param {Number} expiryDate 过期时间戳
    * @param {String} expiryDateStr 格式化的过期日期字符串
+   * @param {String} userId 用户ID，必需参数
    * @returns {Promise<StarGroup>} 星星分组
    */
-  async getOrCreateGroup(expiryType, expiryDate, expiryDateStr) {
+  async getOrCreateGroup(expiryType, expiryDate, expiryDateStr, userId) {
     if (!expiryType) {
       logger.warn('StarGroupRepository', '尝试使用无效的有效期类型获取或创建分组');
       return null;
     }
     
-    logger.info('StarGroupRepository', `获取或创建分组: 类型=${expiryType}, 过期时间=${expiryDate}, 过期日期字符串=${expiryDateStr}`);
+    if (!userId) {
+      logger.warn('StarGroupRepository', '获取或创建分组缺少用户ID');
+      return null;
+    }
+    
+    logger.info('StarGroupRepository', `获取或创建分组: 类型=${expiryType}, 过期时间=${expiryDate}, 过期日期字符串=${expiryDateStr}, 用户=${userId}`);
     
     try {
-      // 查找匹配的分组
-      const groups = await this.getAll();
-      logger.info('StarGroupRepository', `当前共有${groups.length}个分组`);
+      // 查找匹配的分组（限定用户）
+      const allGroups = await this.getAll();
+      const userGroups = allGroups.filter(group => group.userId === userId);
+      
+      logger.info('StarGroupRepository', `用户${userId}当前共有${userGroups.length}个分组`);
       
       // 记录所有现有分组的详细信息
-      groups.forEach((group, index) => {
+      userGroups.forEach((group, index) => {
         logger.info('StarGroupRepository', `现有分组${index + 1}: ID=${group.id}, 类型=${group.expiryType}, 过期时间=${group.expiryDate}, 过期日期字符串=${group.expiryDateStr}, 星星数=${group.stars}`);
       });
       
-      let existingGroup = groups.find(group => {
+      let existingGroup = userGroups.find(group => {
         // 对于永久有效类型，直接比较类型
         if (expiryType === StarExpiryType.PERMANENT && group.expiryType === StarExpiryType.PERMANENT) {
           logger.info('StarGroupRepository', `找到永久有效分组匹配: ${group.id}`);
@@ -117,7 +140,7 @@ class StarGroupRepository extends BaseRepository {
       
       // 如果找到匹配的分组，直接返回
       if (existingGroup) {
-        logger.info('StarGroupRepository', `找到匹配的星星分组, ID=${existingGroup.id}, 类型=${expiryType}`);
+        logger.info('StarGroupRepository', `找到匹配的星星分组, ID=${existingGroup.id}, 类型=${expiryType}, 用户=${userId}`);
         return existingGroup;
       }
       
@@ -125,6 +148,7 @@ class StarGroupRepository extends BaseRepository {
       
       // 创建新分组
       const newGroup = new StarGroup({
+        userId: userId, // 设置用户ID
         type: expiryType,
         expiryType: expiryType,
         expiryDate: expiryDate,
@@ -134,6 +158,7 @@ class StarGroupRepository extends BaseRepository {
       
       logger.info('StarGroupRepository', `新分组数据:`, {
         id: newGroup.id,
+        userId: newGroup.userId,
         type: newGroup.type,
         expiryType: newGroup.expiryType,
         expiryDate: newGroup.expiryDate,
@@ -144,10 +169,10 @@ class StarGroupRepository extends BaseRepository {
       // 保存新分组
       const savedGroup = await this.save(newGroup);
       
-      logger.info('StarGroupRepository', `创建新的星星分组成功, ID=${savedGroup.id}, 类型=${expiryType}`);
+      logger.info('StarGroupRepository', `创建新的星星分组成功, ID=${savedGroup.id}, 类型=${expiryType}, 用户=${userId}`);
       return savedGroup;
     } catch (error) {
-      logger.error('StarGroupRepository', `获取或创建分组失败, 类型=${expiryType}`, error);
+      logger.error('StarGroupRepository', `获取或创建分组失败, 类型=${expiryType}, 用户=${userId}`, error);
       return null;
     }
   }
@@ -222,9 +247,10 @@ class StarGroupRepository extends BaseRepository {
   /**
    * 按先过期先使用策略消费星星
    * @param {Number} totalPoints 要消费的总星星数量
+   * @param {String} userId 用户ID，必需参数
    * @returns {Promise<Object>} 包含消费结果的对象
    */
-  async consumeStarsByExpiryOrder(totalPoints) {
+  async consumeStarsByExpiryOrder(totalPoints, userId) {
     if (totalPoints <= 0) {
       logger.warn('StarGroupRepository', `尝试消费无效的星星数量: ${totalPoints}`);
       return { 
@@ -235,9 +261,19 @@ class StarGroupRepository extends BaseRepository {
       };
     }
     
+    if (!userId) {
+      logger.warn('StarGroupRepository', '消费星星缺少用户ID');
+      return { 
+        success: false, 
+        consumed: 0, 
+        remaining: totalPoints, 
+        groupsUpdated: [] 
+      };
+    }
+    
     try {
-      // 获取所有非空分组
-      const groups = await this.getNonEmptyGroups();
+      // 获取指定用户的所有非空分组
+      const groups = await this.getNonEmptyGroups(userId);
       
       // 按过期日期排序（先过期的在前）
       const sortedGroups = StarGroup.sortByExpiryDate(groups);
@@ -264,7 +300,7 @@ class StarGroupRepository extends BaseRepository {
       
       const totalConsumed = totalPoints - remaining;
       
-      logger.info('StarGroupRepository', `按过期顺序消费星星完成, 请求消费=${totalPoints}, 实际消费=${totalConsumed}, 更新分组数量=${updatedGroups.length}`);
+      logger.info('StarGroupRepository', `按过期顺序消费星星完成, 用户=${userId}, 请求消费=${totalPoints}, 实际消费=${totalConsumed}, 更新分组数量=${updatedGroups.length}`);
       
       return {
         success: totalConsumed === totalPoints,
@@ -273,7 +309,7 @@ class StarGroupRepository extends BaseRepository {
         groupsUpdated: updatedGroups
       };
     } catch (error) {
-      logger.error('StarGroupRepository', '按过期顺序消费星星失败', error);
+      logger.error('StarGroupRepository', `按过期顺序消费星星失败, 用户=${userId}`, error);
       return {
         success: false,
         consumed: 0,
@@ -285,25 +321,29 @@ class StarGroupRepository extends BaseRepository {
   
   /**
    * 检查并清理过期分组
+   * @param {String} userId 可选的用户ID，不传则清理所有用户的分组
    * @returns {Promise<Array>} 清理的分组列表
    */
-  async cleanupExpiredGroups() {
+  async cleanupExpiredGroups(userId = null) {
     try {
       // 获取所有分组
       const allGroups = await this.getAll();
+      
+      // 用户过滤
+      const userGroups = userId ? allGroups.filter(group => group.userId === userId) : allGroups;
       
       // 当前时间
       const now = Date.now();
       
       // 找出已过期的分组
-      const expiredGroups = allGroups.filter(group => 
+      const expiredGroups = userGroups.filter(group => 
         group.expiryType !== StarExpiryType.PERMANENT && 
         group.expiryDate && 
         group.expiryDate < now
       );
       
       if (expiredGroups.length === 0) {
-        logger.info('StarGroupRepository', '没有找到过期分组，无需清理');
+        logger.info('StarGroupRepository', `没有找到过期分组，无需清理${userId ? `, 用户=${userId}` : ''}`);
         return [];
       }
       
@@ -313,6 +353,7 @@ class StarGroupRepository extends BaseRepository {
       // 构建过期记录
       const expiredRecords = expiredGroups.map(group => ({
         groupId: group.id,
+        userId: group.userId,
         expiryType: group.expiryType,
         expiryDate: group.expiryDate,
         points: group.stars || 0
@@ -321,7 +362,7 @@ class StarGroupRepository extends BaseRepository {
       // 批量删除过期分组
       const deletedCount = await this.deleteMany(expiredGroups.map(group => group.id));
       
-      logger.info('StarGroupRepository', `清理过期分组成功, 清理数量=${deletedCount}, 过期星星总数=${expiredPoints}`);
+      logger.info('StarGroupRepository', `清理过期分组成功${userId ? `, 用户=${userId}` : ''}, 清理数量=${deletedCount}, 过期星星总数=${expiredPoints}`);
       
       return expiredRecords;
     } catch (error) {
@@ -349,12 +390,15 @@ class StarGroupRepository extends BaseRepository {
   
   /**
    * 获取星星总数量
+   * @param {String} userId 可选的用户ID，不传则获取所有用户的星星
    * @returns {Promise<Number>} 总数量
    */
-  async getTotalPoints() {
+  async getTotalPoints(userId = null) {
     try {
-      const groups = await this.getAll();
-      logger.info('StarGroupRepository', `获取到${groups.length}个星星分组，开始计算总数`);
+      const allGroups = await this.getAll();
+      const groups = userId ? allGroups.filter(group => group.userId === userId) : allGroups;
+      
+      logger.info('StarGroupRepository', `获取到${groups.length}个星星分组${userId ? `, 用户=${userId}` : ''}，开始计算总数`);
       
       // 添加详细日志，便于调试
       groups.forEach((group, index) => {
@@ -369,7 +413,7 @@ class StarGroupRepository extends BaseRepository {
         return sum + stars;
       }, 0);
       
-      logger.info('StarGroupRepository', `获取星星总数量成功, 总数=${total}`);
+      logger.info('StarGroupRepository', `获取星星总数量成功${userId ? `, 用户=${userId}` : ''}, 总数=${total}`);
       return total;
     } catch (error) {
       logger.error('StarGroupRepository', '获取星星总数量失败', error);
@@ -405,15 +449,16 @@ class StarGroupRepository extends BaseRepository {
   /**
    * 检查星星数量是否足够
    * @param {Number} amount 需要的星星数量
+   * @param {String} userId 可选的用户ID，不传则检查所有用户的星星
    * @returns {Promise<Boolean>} 是否足够
    */
-  async hasEnoughPoints(amount) {
+  async hasEnoughPoints(amount, userId = null) {
     if (amount <= 0) {
       return true;
     }
     
     try {
-      const total = await this.getTotalPoints();
+      const total = await this.getTotalPoints(userId);
       return total >= amount;
     } catch (error) {
       logger.error('StarGroupRepository', `检查星星数量是否足够失败, 需要=${amount}`, error);

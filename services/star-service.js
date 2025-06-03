@@ -70,12 +70,13 @@ class StarService {
   
   /**
    * 获取星星分组列表
+   * @param {String} userId 可选的用户ID，不传则获取所有用户的分组
    * @returns {Promise<Array>} 星星分组列表
    */
-  async getStarGroups() {
+  async getStarGroups(userId = null) {
     try {
-      const groups = await this.starGroupRepository.getNonEmptyGroups();
-      logger.info('StarService', `获取星星分组列表成功, 数量=${groups.length}`);
+      const groups = await this.starGroupRepository.getNonEmptyGroups(userId);
+      logger.info('StarService', `获取星星分组列表成功${userId ? `, 用户=${userId}` : ''}, 数量=${groups.length}`);
       return groups;
     } catch (error) {
       logger.error('StarService', '获取星星分组列表失败', error);
@@ -85,12 +86,13 @@ class StarService {
   
   /**
    * 获取用户总星星数量
+   * @param {String} userId 可选的用户ID，不传则获取所有用户的星星
    * @returns {Promise<Number>} 星星总数量
    */
-  async getTotalStars() {
+  async getTotalStars(userId = null) {
     try {
-      const total = await this.starGroupRepository.getTotalPoints();
-      logger.info('StarService', `获取用户总星星数量成功: ${total}`);
+      const total = await this.starGroupRepository.getTotalPoints(userId);
+      logger.info('StarService', `获取用户总星星数量成功${userId ? `, 用户=${userId}` : ''}: ${total}`);
       return total;
     } catch (error) {
       logger.error('StarService', '获取用户总星星数量失败', error);
@@ -104,27 +106,29 @@ class StarService {
    * @param {Number} options.limit 限制数量
    * @param {String} options.type 记录类型
    * @param {String} options.date 日期
+   * @param {String} options.userId 可选的用户ID，不传则获取所有用户的记录
    * @returns {Promise<Array>} 星星记录列表
    */
   async getStarRecords(options = {}) {
     try {
       let records = [];
+      const { userId } = options;
       
       if (options.type && options.date) {
         // 查询特定类型和日期的记录
-        records = await this.starRecordRepository.getRecordsByTypeAndDate(options.type, options.date);
+        records = await this.starRecordRepository.getRecordsByTypeAndDate(options.type, options.date, userId);
       } else if (options.type) {
         // 查询特定类型的记录
-        records = await this.starRecordRepository.getRecordsByType(options.type);
+        records = await this.starRecordRepository.getRecordsByType(options.type, userId);
       } else if (options.date) {
         // 查询特定日期的记录
-        records = await this.starRecordRepository.getRecordsByDate(options.date);
+        records = await this.starRecordRepository.getRecordsByDate(options.date, userId);
       } else {
         // 查询所有记录，并按时间排序
-        records = await this.starRecordRepository.getRecordsByTimeOrder(true, options.limit || 0);
+        records = await this.starRecordRepository.getRecordsByTimeOrder(true, options.limit || 0, userId);
       }
       
-      logger.info('StarService', `获取星星记录列表成功, 数量=${records.length}`);
+      logger.info('StarService', `获取星星记录列表成功${userId ? `, 用户=${userId}` : ''}, 数量=${records.length}`);
       return records;
     } catch (error) {
       logger.error('StarService', '获取星星记录列表失败', error);
@@ -134,21 +138,19 @@ class StarService {
   
   /**
    * 获取星星记录按月份分组
+   * @param {String} userId 可选的用户ID，不传则获取所有用户的记录
    * @returns {Promise<Object>} 按月份分组的记录
    */
-  async getStarRecordsByMonth() {
+  async getStarRecordsByMonth(userId = null) {
     try {
-      // 获取所有记录
-      const records = await this.starRecordRepository.getAll();
+      // 获取用户的记录并按月份分组
+      const groupedRecords = await this.starRecordRepository.getRecordsGroupedByMonth({ userId });
       
-      // 按月份分组
-      const groupedRecords = this.starRecordRepository.groupRecordsByMonth(records);
-      
-      logger.info('StarService', `获取按月份分组的星星记录成功, 月份数=${Object.keys(groupedRecords).length}`);
+      logger.info('StarService', `获取按月份分组的星星记录成功${userId ? `, 用户=${userId}` : ''}, 月份数=${groupedRecords.length}`);
       return groupedRecords;
     } catch (error) {
       logger.error('StarService', '获取按月份分组的星星记录失败', error);
-      return {};
+      return [];
     }
   }
   
@@ -156,13 +158,14 @@ class StarService {
    * 获取特定日期范围的星星记录
    * @param {String} startDate 开始日期字符串（YYYY-MM-DD格式）
    * @param {String} endDate 结束日期字符串（YYYY-MM-DD格式）
+   * @param {String} userId 可选的用户ID，不传则获取所有用户的记录
    * @returns {Promise<Array>} 符合条件的记录列表
    */
-  async getStarRecordsByDateRange(startDate, endDate) {
+  async getStarRecordsByDateRange(startDate, endDate, userId = null) {
     try {
-      logger.info('StarService', `获取日期范围星星记录: ${startDate} 至 ${endDate}`);
+      logger.info('StarService', `获取日期范围星星记录: ${startDate} 至 ${endDate}${userId ? `, 用户=${userId}` : ''}`);
       
-      const records = await this.starRecordRepository.getRecordsByDateRange(startDate, endDate);
+      const records = await this.starRecordRepository.getRecordsByDateRange(startDate, endDate, userId);
       
       logger.info('StarService', `获取日期范围星星记录成功, 数量=${records.length}`);
       return records;
@@ -175,13 +178,14 @@ class StarService {
   /**
    * 获取特定日期的星星记录
    * @param {String} date 日期字符串（YYYY-MM-DD格式）
+   * @param {String} userId 可选的用户ID，不传则获取所有用户的记录
    * @returns {Promise<Array>} 符合条件的记录列表
    */
-  async getStarRecordsByDate(date) {
+  async getStarRecordsByDate(date, userId = null) {
     try {
-      logger.info('StarService', `获取特定日期星星记录: ${date}`);
+      logger.info('StarService', `获取特定日期星星记录: ${date}${userId ? `, 用户=${userId}` : ''}`);
       
-      const records = await this.starRecordRepository.getRecordsByDate(date);
+      const records = await this.starRecordRepository.getRecordsByDate(date, userId);
       
       logger.info('StarService', `获取特定日期星星记录成功, 数量=${records.length}`);
       return records;
@@ -199,6 +203,7 @@ class StarService {
    * @param {Object} options 额外选项
    * @param {String} options.sourceType 来源类型
    * @param {String} options.sourceId 来源ID
+   * @param {String} options.userId 可选的用户ID
    * @returns {Promise<Object>} 添加结果
    */
   async addStars(points, expiryType, source, options = {}) {
@@ -213,23 +218,26 @@ class StarService {
     }
     
     try {
+      const { userId } = options;
+      
       // 计算过期时间
       const expiryDate = this._calculateExpiryDate(expiryType);
       
       // 生成过期日期字符串
       const expiryDateStr = expiryDate ? this._formatExpiryDate(expiryDate) : '';
       
-      logger.info('StarService', `添加星星: 过期类型=${expiryType}, 过期时间=${expiryDate ? expiryDate.getTime() : null}, 过期日期字符串=${expiryDateStr}`);
+      logger.info('StarService', `添加星星: 过期类型=${expiryType}, 过期时间=${expiryDate ? expiryDate.getTime() : null}, 过期日期字符串=${expiryDateStr}${userId ? `, 用户=${userId}` : ''}`);
       
       // 获取或创建对应过期类型的分组
       const group = await this.starGroupRepository.getOrCreateGroup(
         expiryType,
         expiryDate ? expiryDate.getTime() : null,
-        expiryDateStr
+        expiryDateStr,
+        userId // 传递用户ID
       );
       
       if (!group) {
-        logger.error('StarService', `添加星星失败: 无法获取或创建星星分组, 类型=${expiryType}`);
+        logger.error('StarService', `添加星星失败: 无法获取或创建星星分组, 类型=${expiryType}${userId ? `, 用户=${userId}` : ''}`);
         return { success: false, message: '无法创建星星分组' };
       }
       
@@ -241,12 +249,12 @@ class StarService {
       );
       
       if (!updatedGroup) {
-        logger.error('StarService', `添加星星失败: 无法添加星星到分组, 类型=${expiryType}, 数量=${points}`);
+        logger.error('StarService', `添加星星失败: 无法添加星星到分组, 类型=${expiryType}, 数量=${points}${userId ? `, 用户=${userId}` : ''}`);
         return { success: false, message: '无法添加星星到分组' };
       }
       
       // 创建收入记录
-      const record = await this.starRecordRepository.save({
+      const recordData = {
         type: 'income',
         source: options.sourceType || 'manual',
         sourceId: options.sourceId || '',
@@ -254,14 +262,21 @@ class StarService {
         description: source || '手动添加星星',
         timestamp: Date.now()
         // balance和previousBalance将在保存时由仓储计算
-      });
+      };
+      
+      // 如果有用户ID，添加到记录中
+      if (userId) {
+        recordData.userId = userId;
+      }
+      
+      const record = await this.starRecordRepository.save(recordData);
       
       if (!record) {
-        logger.error('StarService', `添加星星: 创建记录失败, 类型=${expiryType}, 数量=${points}`);
+        logger.error('StarService', `添加星星: 创建记录失败, 类型=${expiryType}, 数量=${points}${userId ? `, 用户=${userId}` : ''}`);
         // 继续流程，但记录错误
       }
       
-      logger.info('StarService', `添加星星成功, 类型=${expiryType}, 数量=${points}, 来源=${source || '未知'}`);
+      logger.info('StarService', `添加星星成功, 类型=${expiryType}, 数量=${points}, 来源=${source || '未知'}${userId ? `, 用户=${userId}` : ''}`);
       logger.info('StarService', `更新后的分组信息: ID=${updatedGroup.id}, 当前星星数=${updatedGroup.stars}(${typeof updatedGroup.stars}), 过期类型=${updatedGroup.expiryType}`);
       
       // 触发星星添加事件
@@ -292,6 +307,7 @@ class StarService {
    * @param {Object} options 额外选项
    * @param {String} options.sourceType 来源类型
    * @param {String} options.sourceId 来源ID
+   * @param {String} options.userId 可选的用户ID
    * @returns {Promise<Object>} 消费结果
    */
   async consumeStars(points, reason, options = {}) {
@@ -301,19 +317,21 @@ class StarService {
     }
     
     try {
+      const { userId } = options;
+      
       // 检查星星是否足够
-      const hasEnough = await this.starGroupRepository.hasEnoughPoints(points);
+      const hasEnough = await this.starGroupRepository.hasEnoughPoints(points, userId);
       
       if (!hasEnough) {
-        logger.warn('StarService', `消费星星失败: 星星数量不足, 需要=${points}`);
+        logger.warn('StarService', `消费星星失败: 星星数量不足, 需要=${points}${userId ? `, 用户=${userId}` : ''}`);
         return { success: false, message: '星星数量不足' };
       }
       
       // 按过期优先顺序消费星星
-      const consumeResult = await this.starGroupRepository.consumeStarsByExpiryOrder(points);
+      const consumeResult = await this.starGroupRepository.consumeStarsByExpiryOrder(points, userId);
       
       if (!consumeResult.success) {
-        logger.error('StarService', `消费星星失败: 消费过程出错, 需要=${points}, 实际消费=${consumeResult.consumed}`);
+        logger.error('StarService', `消费星星失败: 消费过程出错, 需要=${points}, 实际消费=${consumeResult.consumed}${userId ? `, 用户=${userId}` : ''}`);
         return { 
           success: false, 
           consumed: consumeResult.consumed,
@@ -322,7 +340,7 @@ class StarService {
       }
       
       // 创建支出记录
-      const record = await this.starRecordRepository.save({
+      const recordData = {
         type: 'expense',
         source: options.sourceType || 'manual',
         sourceId: options.sourceId || '',
@@ -330,14 +348,21 @@ class StarService {
         description: reason || '手动消费星星',
         timestamp: Date.now()
         // balance和previousBalance将在保存时由仓储计算
-      });
+      };
+      
+      // 如果有用户ID，添加到记录中
+      if (userId) {
+        recordData.userId = userId;
+      }
+      
+      const record = await this.starRecordRepository.save(recordData);
       
       if (!record) {
-        logger.error('StarService', `消费星星: 创建记录失败, 数量=${points}, 原因=${reason || '未知'}`);
+        logger.error('StarService', `消费星星: 创建记录失败, 数量=${points}, 原因=${reason || '未知'}${userId ? `, 用户=${userId}` : ''}`);
         // 继续流程，但记录错误
       }
       
-      logger.info('StarService', `消费星星成功, 数量=${points}, 原因=${reason || '未知'}`);
+      logger.info('StarService', `消费星星成功, 数量=${points}, 原因=${reason || '未知'}${userId ? `, 用户=${userId}` : ''}`);
       
       // 触发星星消费事件
       this.eventBus.emit(EVENTS.STARS_CONSUMED, {
@@ -389,12 +414,13 @@ class StarService {
         `完成任务: ${task.name || task.id}`,
         {
           sourceType: 'task_complete',
-          sourceId: task.id
+          sourceId: task.id,
+          userId: task.userId // 传递任务的用户ID
         }
       );
       
       if (!result.success) {
-        logger.error('StarService', `处理任务完成奖励失败, 任务ID=${task.id}, 星星数=${points}`);
+        logger.error('StarService', `处理任务完成奖励失败, 任务ID=${task.id}, 星星数=${points}${task.userId ? `, 用户=${task.userId}` : ''}`);
         return result;
       }
       

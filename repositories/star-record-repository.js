@@ -34,18 +34,25 @@ class StarRecordRepository extends BaseRepository {
   /**
    * 获取特定类型的记录
    * @param {String} type 记录类型
+   * @param {String} userId 可选的用户ID，不传则获取所有用户的记录
    * @returns {Promise<Array>} 符合条件的记录列表
    */
-  async getRecordsByType(type) {
+  async getRecordsByType(type, userId = null) {
     if (!type) {
       logger.warn('StarRecordRepository', '尝试使用无效的类型获取记录');
       return [];
     }
     
     try {
-      const records = await this.query(record => record.type === type);
+      const records = await this.query(record => {
+        // 用户过滤
+        if (userId && record.userId !== userId) {
+          return false;
+        }
+        return record.type === type;
+      });
       
-      logger.info('StarRecordRepository', `获取类型=${type}的记录成功, 数量=${records.length}`);
+      logger.info('StarRecordRepository', `获取类型=${type}的记录成功${userId ? `, 用户=${userId}` : ''}, 数量=${records.length}`);
       return records;
     } catch (error) {
       logger.error('StarRecordRepository', `获取类型=${type}的记录失败`, error);
@@ -57,9 +64,10 @@ class StarRecordRepository extends BaseRepository {
    * 获取特定来源的记录
    * @param {String} source 记录来源
    * @param {String} sourceId 来源ID
+   * @param {String} userId 可选的用户ID，不传则获取所有用户的记录
    * @returns {Promise<Array>} 符合条件的记录列表
    */
-  async getRecordsBySource(source, sourceId) {
+  async getRecordsBySource(source, sourceId, userId = null) {
     if (!source) {
       logger.warn('StarRecordRepository', '尝试使用无效的来源获取记录');
       return [];
@@ -67,13 +75,18 @@ class StarRecordRepository extends BaseRepository {
     
     try {
       const records = await this.query(record => {
+        // 用户过滤
+        if (userId && record.userId !== userId) {
+          return false;
+        }
+        
         if (sourceId) {
           return record.source === source && record.sourceId === sourceId;
         }
         return record.source === source;
       });
       
-      logger.info('StarRecordRepository', `获取来源=${source}${sourceId ? `, 来源ID=${sourceId}` : ''}的记录成功, 数量=${records.length}`);
+      logger.info('StarRecordRepository', `获取来源=${source}${sourceId ? `, 来源ID=${sourceId}` : ''}的记录成功${userId ? `, 用户=${userId}` : ''}, 数量=${records.length}`);
       return records;
     } catch (error) {
       logger.error('StarRecordRepository', `获取来源=${source}的记录失败`, error);
@@ -84,9 +97,10 @@ class StarRecordRepository extends BaseRepository {
   /**
    * 获取特定日期的记录
    * @param {String} date 日期字符串（YYYY-MM-DD格式）
+   * @param {String} userId 可选的用户ID，不传则获取所有用户的记录
    * @returns {Promise<Array>} 符合条件的记录列表
    */
-  async getRecordsByDate(date) {
+  async getRecordsByDate(date, userId = null) {
     if (!date) {
       logger.warn('StarRecordRepository', '尝试使用无效的日期获取记录');
       return [];
@@ -94,10 +108,14 @@ class StarRecordRepository extends BaseRepository {
     
     try {
       const records = await this.query(record => {
+        // 用户过滤
+        if (userId && record.userId !== userId) {
+          return false;
+        }
         return record.getDate() === date;
       });
       
-      logger.info('StarRecordRepository', `获取日期=${date}的记录成功, 数量=${records.length}`);
+      logger.info('StarRecordRepository', `获取日期=${date}的记录成功${userId ? `, 用户=${userId}` : ''}, 数量=${records.length}`);
       return records;
     } catch (error) {
       logger.error('StarRecordRepository', `获取日期=${date}的记录失败`, error);
@@ -109,9 +127,10 @@ class StarRecordRepository extends BaseRepository {
    * 获取特定日期范围的记录
    * @param {String} startDate 开始日期字符串（YYYY-MM-DD格式）
    * @param {String} endDate 结束日期字符串（YYYY-MM-DD格式）
+   * @param {String} userId 可选的用户ID，不传则获取所有用户的记录
    * @returns {Promise<Array>} 符合条件的记录列表
    */
-  async getRecordsByDateRange(startDate, endDate) {
+  async getRecordsByDateRange(startDate, endDate, userId = null) {
     if (!startDate || !endDate) {
       logger.warn('StarRecordRepository', '尝试使用无效的日期范围获取记录');
       return [];
@@ -119,11 +138,15 @@ class StarRecordRepository extends BaseRepository {
     
     try {
       const records = await this.query(record => {
+        // 用户过滤
+        if (userId && record.userId !== userId) {
+          return false;
+        }
         const recordDate = record.getDate();
         return recordDate >= startDate && recordDate <= endDate;
       });
       
-      logger.info('StarRecordRepository', `获取日期范围=${startDate}至${endDate}的记录成功, 数量=${records.length}`);
+      logger.info('StarRecordRepository', `获取日期范围=${startDate}至${endDate}的记录成功${userId ? `, 用户=${userId}` : ''}, 数量=${records.length}`);
       return records;
     } catch (error) {
       logger.error('StarRecordRepository', `获取日期范围=${startDate}至${endDate}的记录失败`, error);
@@ -134,9 +157,10 @@ class StarRecordRepository extends BaseRepository {
   /**
    * 获取特定月份的记录
    * @param {String} month 月份字符串（YYYY-MM格式）
+   * @param {String} userId 可选的用户ID，不传则获取所有用户的记录
    * @returns {Promise<Array>} 符合条件的记录列表
    */
-  async getRecordsByMonth(month) {
+  async getRecordsByMonth(month, userId = null) {
     if (!month) {
       logger.warn('StarRecordRepository', '尝试使用无效的月份获取记录');
       return [];
@@ -144,10 +168,14 @@ class StarRecordRepository extends BaseRepository {
     
     try {
       const records = await this.query(record => {
+        // 用户过滤
+        if (userId && record.userId !== userId) {
+          return false;
+        }
         return record.getMonth() === month;
       });
       
-      logger.info('StarRecordRepository', `获取月份=${month}的记录成功, 数量=${records.length}`);
+      logger.info('StarRecordRepository', `获取月份=${month}的记录成功${userId ? `, 用户=${userId}` : ''}, 数量=${records.length}`);
       return records;
     } catch (error) {
       logger.error('StarRecordRepository', `获取月份=${month}的记录失败`, error);
@@ -159,9 +187,10 @@ class StarRecordRepository extends BaseRepository {
    * 获取类型和日期的记录
    * @param {String} type 记录类型
    * @param {String} date 日期字符串（YYYY-MM-DD格式）
+   * @param {String} userId 可选的用户ID，不传则获取所有用户的记录
    * @returns {Promise<Array>} 符合条件的记录列表
    */
-  async getRecordsByTypeAndDate(type, date) {
+  async getRecordsByTypeAndDate(type, date, userId = null) {
     if (!type || !date) {
       logger.warn('StarRecordRepository', '尝试使用无效的类型或日期获取记录');
       return [];
@@ -169,10 +198,14 @@ class StarRecordRepository extends BaseRepository {
     
     try {
       const records = await this.query(record => {
+        // 用户过滤
+        if (userId && record.userId !== userId) {
+          return false;
+        }
         return record.type === type && record.getDate() === date;
       });
       
-      logger.info('StarRecordRepository', `获取类型=${type}, 日期=${date}的记录成功, 数量=${records.length}`);
+      logger.info('StarRecordRepository', `获取类型=${type}, 日期=${date}的记录成功${userId ? `, 用户=${userId}` : ''}, 数量=${records.length}`);
       return records;
     } catch (error) {
       logger.error('StarRecordRepository', `获取类型=${type}, 日期=${date}的记录失败`, error);
@@ -184,11 +217,13 @@ class StarRecordRepository extends BaseRepository {
    * 按时间顺序获取记录
    * @param {Boolean} descending 是否降序排序（新的在前）
    * @param {Number} limit 限制返回的记录数量，0表示不限制
+   * @param {String} userId 可选的用户ID，不传则获取所有用户的记录
    * @returns {Promise<Array>} 排序后的记录列表
    */
-  async getRecordsByTimeOrder(descending = true, limit = 0) {
+  async getRecordsByTimeOrder(descending = true, limit = 0, userId = null) {
     try {
-      const records = await this.getAll();
+      const allRecords = await this.getAll();
+      const records = userId ? allRecords.filter(record => record.userId === userId) : allRecords;
       
       // 按时间戳排序
       const sortedRecords = [...records].sort((a, b) => {
@@ -198,7 +233,7 @@ class StarRecordRepository extends BaseRepository {
       // 限制数量
       const limitedRecords = limit > 0 ? sortedRecords.slice(0, limit) : sortedRecords;
       
-      logger.info('StarRecordRepository', `按时间${descending ? '降序' : '升序'}获取记录成功, 数量=${limitedRecords.length}`);
+      logger.info('StarRecordRepository', `按时间${descending ? '降序' : '升序'}获取记录成功${userId ? `, 用户=${userId}` : ''}, 数量=${limitedRecords.length}`);
       return limitedRecords;
     } catch (error) {
       logger.error('StarRecordRepository', `按时间顺序获取记录失败`, error);
@@ -403,22 +438,24 @@ class StarRecordRepository extends BaseRepository {
    * @param {Object} options 选项
    * @param {Number} options.limit 限制数量
    * @param {Boolean} options.descending 是否降序排列
+   * @param {String} options.userId 可选的用户ID，不传则获取所有用户的记录
    * @returns {Promise<Array>} 按月份分组的记录数组
    */
   async getRecordsGroupedByMonth(options = {}) {
-    logger.info('StarRecordRepository', '获取按月份分组的星星记录');
+    logger.info('StarRecordRepository', `获取按月份分组的星星记录${options.userId ? `, 用户=${options.userId}` : ''}`);
     
     try {
       // 获取所有记录，按时间排序
       const records = await this.getRecordsByTimeOrder(
         options.descending !== false, 
-        options.limit || 0
+        options.limit || 0,
+        options.userId
       );
       
       // 按月份分组
       const groupedRecords = this.groupByMonth(records, options.descending !== false);
       
-      logger.info('StarRecordRepository', `获取按月份分组的记录成功, 月份数=${groupedRecords.length}`);
+      logger.info('StarRecordRepository', `获取按月份分组的记录成功${options.userId ? `, 用户=${options.userId}` : ''}, 月份数=${groupedRecords.length}`);
       return groupedRecords;
     } catch (error) {
       logger.error('StarRecordRepository', '获取按月份分组的记录失败', error);

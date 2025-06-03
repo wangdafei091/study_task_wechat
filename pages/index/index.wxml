@@ -326,3 +326,15 @@
     <view class="setup-button" bindtap="closeSetupRewardTip">知道了</view>
   </view>
 </view>
+
+<!-- 用户切换组件 -->
+<user-switcher
+  visible="{{showUserSwitcher}}"
+  currentUser="{{currentUser}}"
+  availableUsers="{{availableUsers}}"
+  showAddUser="{{true}}"
+  bind:userSwitch="handleUserSwitch"
+  bind:userAdd="handleUserAdd"
+  bind:userDelete="handleUserDelete"
+  bind:close="hideUserSwitcher"
+/>

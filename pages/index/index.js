@@ -4,6 +4,8 @@ const formatUtils = require('../../utils/formatUtils');
 const dateUtils = require('../../utils/dateUtils');
 const logger = require('../../utils/logger');
 const { NotificationType } = require('../../models/message');
+const { UserRole } = require('../../models/user');
+const permissionUtils = require('../../utils/permission-utils');
 
 Page({
   data: {
@@ -132,7 +134,17 @@ Page({
     processingTaskId: null, // 用于存储正在处理的任务ID
     
     // 锁定状态相关
-    lastExchangeTime: null // 最后一次兑换时间，用于计算任务锁定状态
+    lastExchangeTime: null, // 最后一次兑换时间，用于计算任务锁定状态
+
+    // 多用户相关数据
+    currentUser: {
+      id: null,
+      name: '用户',
+      role: UserRole.CHILD
+    },
+    availableUsers: [], // 可用用户列表
+    showUserSwitcher: false, // 是否显示用户切换界面
+    userPermissions: {} // 当前用户权限
   },
   
   /**
@@ -177,6 +189,9 @@ Page({
     
     // 注册事件监听
     this.registerEventListeners();
+    
+    // 初始化多用户系统
+    this.initializeMultiUserSystem();
   },
   
   /**
@@ -465,11 +480,15 @@ Page({
   },
 
   /**
-   * 仅加载任务数据（不包含即将到期任务检查）
+   * 仅加载任务数据（支持用户筛选）
    */
   loadTaskDataOnly: async function() {
     try {
       logger.info('Index', '开始加载任务数据');
+      
+      // 获取当前用户ID
+      const { currentUser } = this.data;
+      const userId = currentUser && currentUser.id ? currentUser.id : null;
       
       // 获取任务服务
       const taskService = serviceManager.getService('task');
@@ -478,9 +497,9 @@ Page({
         return;
       }
       
-      // 使用任务服务获取今日任务
-      const tasks = await taskService.getTodayTasks();
-      logger.info('Index', `今日任务加载成功，任务数量: ${tasks.length}`);
+      // 使用任务服务获取今日任务（按用户筛选）
+      const tasks = await taskService.getTodayTasks(userId);
+      logger.info('Index', `今日任务加载成功${userId ? `, 用户ID=${userId}` : ''}, 任务数量: ${tasks.length}`);
       
       // 添加详细的任务状态日志
       tasks.forEach((task, index) => {
@@ -534,11 +553,25 @@ Page({
     }
   },
   
-  // 从消息管理器加载消息数据
+  // 从消息管理器加载消息数据（支持用户筛选）
   loadMessageData: async function() {
     try {
+      // 获取当前用户ID
+      const { currentUser } = this.data;
+      const userId = currentUser && currentUser.id ? currentUser.id : null;
+      
       const messageService = serviceManager.getMessageService();
-      const messages = await messageService.getAllMessages();
+      
+      // 根据用户筛选消息
+      let messages;
+      if (userId) {
+        // 获取指定用户的消息
+        const allMessages = await messageService.getAllMessages();
+        messages = allMessages.filter(msg => msg.userId === userId);
+      } else {
+        // 获取所有消息
+        messages = await messageService.getAllMessages();
+      }
       
       // 为消息添加时间显示字段，统一使用createTime
       const processedMessages = messages
@@ -563,7 +596,7 @@ Page({
         unreadCount
       });
       
-      logger.info('Index', '消息数据加载成功', { 
+      logger.info('Index', `消息数据加载成功${userId ? `, 用户ID=${userId}` : ''}`, { 
         messagesCount: processedMessages.length, 
         unreadCount 
       });
@@ -2200,4 +2233,310 @@ Page({
     // 重新加载任务数据
     this.loadTaskData();
   },
+
+  // ============= 多用户系统相关方法 =============
+
+  /**
+   * 初始化多用户系统
+   */
+  async initializeMultiUserSystem() {
+    try {
+      logger.info('Index', '初始化多用户系统');
+      
+      // 从app全局状态获取用户服务
+      const userService = getApp().globalData.userService;
+      if (!userService) {
+        logger.error('Index', '用户服务未初始化');
+        return;
+      }
+      
+      // 获取当前用户
+      const currentUser = userService.getCurrentUser();
+      
+      // 获取所有可用用户
+      const availableUsers = userService.getAllUsers();
+      
+      // 获取当前用户权限
+      const userPermissions = permissionUtils.getUserPermissions(currentUser.role);
+      
+      // 更新页面数据
+      this.setData({
+        currentUser,
+        availableUsers,
+        userPermissions
+      });
+      
+      // 根据权限过滤菜单项
+      this.updateMenuItemsWithPermissions();
+      
+      logger.info('Index', `多用户系统初始化完成，当前用户: ${currentUser.name}(${currentUser.role})`);
+      
+    } catch (error) {
+      logger.error('Index', '初始化多用户系统失败', error);
+    }
+  },
+
+  /**
+   * 显示用户切换界面
+   */
+  showUserSwitcher() {
+    logger.info('Index', '显示用户切换界面');
+    
+    // 刷新用户列表
+    const userService = getApp().globalData.userService;
+    if (userService) {
+      const availableUsers = userService.getAllUsers();
+      this.setData({
+        availableUsers,
+        showUserSwitcher: true
+      });
+    }
+  },
+
+  /**
+   * 隐藏用户切换界面
+   */
+  hideUserSwitcher() {
+    logger.info('Index', '隐藏用户切换界面');
+    
+    this.setData({
+      showUserSwitcher: false
+    });
+  },
+
+  /**
+   * 处理用户切换事件
+   */
+  async handleUserSwitch(e) {
+    try {
+      const { userId } = e.detail;
+      logger.info('Index', `用户切换: 切换到用户ID=${userId}`);
+      
+      const userService = getApp().globalData.userService;
+      if (!userService) {
+        logger.error('Index', '用户服务不可用');
+        return;
+      }
+      
+      // 执行用户切换
+      const result = await userService.switchUser(userId);
+      if (!result.success) {
+        wx.showToast({
+          title: result.message || '用户切换失败',
+          icon: 'none'
+        });
+        return;
+      }
+      
+      // 获取新的当前用户
+      const currentUser = userService.getCurrentUser();
+      const userPermissions = permissionUtils.getUserPermissions(currentUser.role);
+      
+      // 更新页面状态
+      this.setData({
+        currentUser,
+        userPermissions,
+        showUserSwitcher: false
+      });
+      
+      // 根据新用户权限更新菜单
+      this.updateMenuItemsWithPermissions();
+      
+      // 重新加载数据（按新用户筛选）
+      await this.refreshDataForCurrentUser();
+      
+      wx.showToast({
+        title: `已切换到 ${currentUser.name}`,
+        icon: 'success'
+      });
+      
+      logger.info('Index', `用户切换完成: ${currentUser.name}(${currentUser.role})`);
+      
+    } catch (error) {
+      logger.error('Index', '处理用户切换失败', error);
+      wx.showToast({
+        title: '用户切换失败',
+        icon: 'none'
+      });
+    }
+  },
+
+  /**
+   * 处理添加用户事件
+   */
+  async handleUserAdd(e) {
+    try {
+      const { name, role } = e.detail;
+      logger.info('Index', `添加用户: 姓名=${name}, 角色=${role}`);
+      
+      const userService = getApp().globalData.userService;
+      if (!userService) {
+        logger.error('Index', '用户服务不可用');
+        return;
+      }
+      
+      // 添加用户
+      const result = await userService.createUser(name, role);
+      if (!result.success) {
+        wx.showToast({
+          title: result.message || '添加用户失败',
+          icon: 'none'
+        });
+        return;
+      }
+      
+      // 刷新用户列表
+      const availableUsers = userService.getAllUsers();
+      this.setData({
+        availableUsers
+      });
+      
+      wx.showToast({
+        title: `用户 ${name} 添加成功`,
+        icon: 'success'
+      });
+      
+      logger.info('Index', `用户添加成功: ${name}(${role})`);
+      
+    } catch (error) {
+      logger.error('Index', '处理添加用户失败', error);
+      wx.showToast({
+        title: '添加用户失败',
+        icon: 'none'
+      });
+    }
+  },
+
+  /**
+   * 处理删除用户事件
+   */
+  async handleUserDelete(e) {
+    try {
+      const { userId } = e.detail;
+      logger.info('Index', `删除用户: 用户ID=${userId}`);
+      
+      const userService = getApp().globalData.userService;
+      if (!userService) {
+        logger.error('Index', '用户服务不可用');
+        return;
+      }
+      
+      // 删除用户
+      const result = await userService.deleteUser(userId);
+      if (!result.success) {
+        wx.showToast({
+          title: result.message || '删除用户失败',
+          icon: 'none'
+        });
+        return;
+      }
+      
+      // 刷新用户列表
+      const availableUsers = userService.getAllUsers();
+      const currentUser = userService.getCurrentUser();
+      
+      this.setData({
+        availableUsers,
+        currentUser
+      });
+      
+      // 如果删除的是当前用户，重新加载数据
+      if (currentUser.id !== this.data.currentUser.id) {
+        await this.refreshDataForCurrentUser();
+      }
+      
+      wx.showToast({
+        title: '用户删除成功',
+        icon: 'success'
+      });
+      
+      logger.info('Index', '用户删除成功');
+      
+    } catch (error) {
+      logger.error('Index', '处理删除用户失败', error);
+      wx.showToast({
+        title: '删除用户失败',
+        icon: 'none'
+      });
+    }
+  },
+
+  /**
+   * 根据权限更新菜单项
+   */
+  updateMenuItemsWithPermissions() {
+    const { currentUser } = this.data;
+    logger.debug('Index', `根据用户权限更新菜单: ${currentUser.role}`);
+    
+    // 原始菜单项
+    const originalMenuItems = [
+      {
+        id: 'study',
+        type: 'study-task',
+        icon: '📈',
+        label: '分析',
+        ariaLabel: '查看统计分析',
+        feature: 'analytics',
+        action: 'view'
+      },
+      {
+        id: 'habit',
+        type: 'habit-task',
+        icon: '⏰',
+        label: '任务',
+        ariaLabel: '创建任务',
+        feature: 'task',
+        action: 'create'
+      },
+      {
+        id: 'reward-manage',
+        type: 'reward-manage',
+        icon: '🏆',
+        label: '奖励',
+        ariaLabel: '管理奖励',
+        feature: 'reward',
+        action: 'create'
+      }
+    ];
+    
+    // 根据权限过滤菜单项
+    const filteredMenuItems = permissionUtils.filterMenuItems(originalMenuItems, currentUser.role);
+    
+    this.setData({
+      menuItems: filteredMenuItems
+    });
+    
+    logger.info('Index', `菜单项更新完成: ${originalMenuItems.length} -> ${filteredMenuItems.length}`);
+  },
+
+  /**
+   * 为当前用户刷新数据
+   */
+  async refreshDataForCurrentUser() {
+    try {
+      logger.info('Index', '为当前用户刷新数据');
+      
+      const { currentUser } = this.data;
+      
+      // 重新加载所有数据，传入用户ID进行筛选
+      await Promise.all([
+        this.loadTaskData(),
+        this.loadStarsAndRewards(),
+        this.loadMessageData()
+      ]);
+      
+      logger.info('Index', `用户数据刷新完成: ${currentUser.name}`);
+      
+    } catch (error) {
+      logger.error('Index', '刷新用户数据失败', error);
+    }
+  },
+
+  /**
+   * 导航到用户资料（头像点击事件处理）
+   */
+  navigateToUserProfile() {
+    logger.info('Index', '点击用户头像，显示用户切换界面');
+    this.showUserSwitcher();
+  }
 }) 

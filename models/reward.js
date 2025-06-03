@@ -31,6 +31,7 @@ class Reward {
   constructor(data = {}) {
     // 基础信息
     this.id = data.id || `reward_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+    this.userId = data.userId || ''; // 用户ID，标识奖励归属
     this.name = data.name || '';
     this.description = data.description || '';
     this.type = data.type || RewardType.ITEM;

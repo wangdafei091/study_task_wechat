@@ -33,13 +33,19 @@ class TaskRepository extends BaseRepository {
   
   /**
    * 获取今天的任务
+   * @param {String} userId 可选的用户ID，不传则获取所有用户的任务
    * @returns {Promise<Array>} 今天的任务列表
    */
-  async getTodayTasks() {
+  async getTodayTasks(userId = null) {
     const today = this._formatDate(new Date());
     
     try {
       const tasks = await this.query(task => {
+        // 用户过滤
+        if (userId && task.userId !== userId) {
+          return false;
+        }
+        
         // 对于重复任务，检查是否匹配今天的日期
         if (task.repeat && task.repeat.type !== 'none') {
           // 检查今天是否在重复任务的有效期内
@@ -52,7 +58,7 @@ class TaskRepository extends BaseRepository {
         return task.date === today;
       });
       
-      logger.info('TaskRepository', `获取今天任务成功, 数量=${tasks.length}`);
+      logger.info('TaskRepository', `获取今天任务成功${userId ? `, 用户=${userId}` : ''}, 数量=${tasks.length}`);
       
       // 使用习惯优先+开始时间顺序排序
       return this._sortTasksByHabitAndTime(tasks);
@@ -65,9 +71,10 @@ class TaskRepository extends BaseRepository {
   /**
    * 获取指定日期的任务
    * @param {String} date 日期字符串(YYYY-MM-DD)
+   * @param {String} userId 可选的用户ID，不传则获取所有用户的任务
    * @returns {Promise<Array>} 指定日期的任务列表
    */
-  async getTasksByDate(date) {
+  async getTasksByDate(date, userId = null) {
     if (!date) {
       logger.warn('TaskRepository', '尝试获取无效日期的任务');
       return [];
@@ -75,6 +82,11 @@ class TaskRepository extends BaseRepository {
     
     try {
       const tasks = await this.query(task => {
+        // 用户过滤
+        if (userId && task.userId !== userId) {
+          return false;
+        }
+        
         // 对于重复任务，检查是否匹配指定日期
         if (task.repeat && task.repeat.type !== 'none') {
           // 检查指定日期是否在重复任务的有效期内
@@ -87,7 +99,7 @@ class TaskRepository extends BaseRepository {
         return task.date === date;
       });
       
-      logger.info('TaskRepository', `获取${date}任务成功, 数量=${tasks.length}`);
+      logger.info('TaskRepository', `获取${date}任务成功${userId ? `, 用户=${userId}` : ''}, 数量=${tasks.length}`);
       
       // 使用习惯优先+开始时间顺序排序
       return this._sortTasksByHabitAndTime(tasks);
@@ -101,9 +113,10 @@ class TaskRepository extends BaseRepository {
    * 获取指定日期范围的任务
    * @param {String} startDate 开始日期字符串(YYYY-MM-DD)
    * @param {String} endDate 结束日期字符串(YYYY-MM-DD)
+   * @param {String} userId 可选的用户ID，不传则获取所有用户的任务
    * @returns {Promise<Array>} 指定日期范围的任务列表
    */
-  async getTasksByDateRange(startDate, endDate) {
+  async getTasksByDateRange(startDate, endDate, userId = null) {
     if (!startDate || !endDate) {
       logger.warn('TaskRepository', '尝试使用无效日期范围获取任务');
       return [];
@@ -111,6 +124,11 @@ class TaskRepository extends BaseRepository {
     
     try {
       const tasks = await this.query(task => {
+        // 用户过滤
+        if (userId && task.userId !== userId) {
+          return false;
+        }
+        
         // 对于重复任务，检查是否有实例在指定日期范围内
         if (task.repeat && task.repeat.type !== 'none') {
           // TODO: 实现重复任务日期范围检查
@@ -122,7 +140,7 @@ class TaskRepository extends BaseRepository {
         return task.date >= startDate && task.date <= endDate;
       });
       
-      logger.info('TaskRepository', `获取${startDate}至${endDate}任务成功, 数量=${tasks.length}`);
+      logger.info('TaskRepository', `获取${startDate}至${endDate}任务成功${userId ? `, 用户=${userId}` : ''}, 数量=${tasks.length}`);
       
       return tasks;
     } catch (error) {
@@ -134,17 +152,26 @@ class TaskRepository extends BaseRepository {
   /**
    * 获取父任务的所有子任务
    * @param {String} parentTaskId 父任务ID
+   * @param {String} userId 可选的用户ID，不传则获取所有用户的任务
    * @returns {Promise<Array>} 子任务列表
    */
-  async getChildTasks(parentTaskId) {
+  async getChildTasks(parentTaskId, userId = null) {
     if (!parentTaskId) {
       logger.warn('TaskRepository', '尝试使用无效的父任务ID获取子任务');
       return [];
     }
     
     try {
-      const tasks = await this.query(task => task.parentTaskId === parentTaskId);
-      logger.info('TaskRepository', `获取父任务${parentTaskId}的子任务成功, 数量=${tasks.length}`);
+      const tasks = await this.query(task => {
+        // 用户过滤
+        if (userId && task.userId !== userId) {
+          return false;
+        }
+        
+        return task.parentTaskId === parentTaskId;
+      });
+      
+      logger.info('TaskRepository', `获取父任务${parentTaskId}的子任务成功${userId ? `, 用户=${userId}` : ''}, 数量=${tasks.length}`);
       return tasks;
     } catch (error) {
       logger.error('TaskRepository', `获取父任务${parentTaskId}的子任务失败`, error);
@@ -154,17 +181,23 @@ class TaskRepository extends BaseRepository {
   
   /**
    * 获取过期未完成的任务
+   * @param {String} userId 可选的用户ID，不传则获取所有用户的任务
    * @returns {Promise<Array>} 过期未完成的任务列表
    */
-  async getExpiredIncompleteTask() {
+  async getExpiredIncompleteTask(userId = null) {
     const today = this._formatDate(new Date());
     
     try {
-      const tasks = await this.query(task => 
-        task.date < today && task.status !== 1
-      );
+      const tasks = await this.query(task => {
+        // 用户过滤
+        if (userId && task.userId !== userId) {
+          return false;
+        }
+        
+        return task.date < today && task.status !== 1;
+      });
       
-      logger.info('TaskRepository', `获取过期未完成任务成功, 数量=${tasks.length}`);
+      logger.info('TaskRepository', `获取过期未完成任务成功${userId ? `, 用户=${userId}` : ''}, 数量=${tasks.length}`);
       return tasks;
     } catch (error) {
       logger.error('TaskRepository', '获取过期未完成任务失败', error);
@@ -175,11 +208,17 @@ class TaskRepository extends BaseRepository {
   /**
    * 获取必做任务
    * @param {String} date 可选的日期筛选(YYYY-MM-DD)
+   * @param {String} userId 可选的用户ID，不传则获取所有用户的任务
    * @returns {Promise<Array>} 必做任务列表
    */
-  async getRequiredTasks(date) {
+  async getRequiredTasks(date = null, userId = null) {
     try {
       const tasks = await this.query(task => {
+        // 用户过滤
+        if (userId && task.userId !== userId) {
+          return false;
+        }
+        
         const isRequired = task.isRequired === true;
         
         if (date) {
@@ -190,7 +229,7 @@ class TaskRepository extends BaseRepository {
         return isRequired;
       });
       
-      logger.info('TaskRepository', `获取必做任务成功${date ? `, 日期=${date}` : ''}, 数量=${tasks.length}`);
+      logger.info('TaskRepository', `获取必做任务成功${date ? `, 日期=${date}` : ''}${userId ? `, 用户=${userId}` : ''}, 数量=${tasks.length}`);
       return tasks;
     } catch (error) {
       logger.error('TaskRepository', `获取必做任务失败${date ? `, 日期=${date}` : ''}`, error);

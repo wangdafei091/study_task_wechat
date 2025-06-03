@@ -49,6 +49,7 @@ class Message {
   constructor(data = {}) {
     // 基础信息
     this.id = data.id || `msg_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+    this.userId = data.userId || ''; // 用户ID，标识消息归属
     this.type = data.type || MessageType.NOTIFICATION;
     this.notificationType = data.notificationType || NotificationType.INFO;
     

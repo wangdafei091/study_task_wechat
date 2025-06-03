@@ -49,6 +49,7 @@ class Task {
   constructor(data = {}) {
     // 基础信息
     this.id = data.id || `task_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+    this.userId = data.userId || ''; // 用户ID，标识任务归属
     this.title = data.title || '';
     this.description = data.description || '';
     this.type = data.type || TaskType.STUDY;
@@ -363,6 +364,7 @@ class Task {
     // 显式复制所有属性，确保不丢失任何数据
     const baseData = {
       id: this.id,
+      userId: this.userId,
       title: this.title,
       description: this.description,
       type: this.type,

@@ -4,6 +4,7 @@
     "index-task-item": "/components/index-task-item/index-task-item",
     "float-menu": "/components/float-menu/float-menu",
     "progress-ring": "/components/progressRing/progressRing",
-    "upcoming-task": "/components/upcomingTask/upcomingTask"
+    "upcoming-task": "/components/upcomingTask/upcomingTask",
+    "user-switcher": "/components/user-switcher/user-switcher"
   }
 } 
