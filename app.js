@@ -19,6 +19,14 @@ App({
     // 确定是否为开发环境，用于配置事件总线
     let isDevEnv = deviceInfo.isDevelopmentEnv();
     
+    // 初始化用户服务
+    logger.info('App', '初始化用户服务');
+    this.globalData.userService = new UserService();
+    await this.globalData.userService.initialize();
+    
+    // 注入用户服务到服务管理器
+    serviceManager.setUserService(this.globalData.userService);
+    
     // 初始化服务管理器
     logger.info('App', '初始化服务管理器');
     try {
@@ -36,11 +44,6 @@ App({
       const initialized = await serviceManager.initialize(serviceOptions);
       if (initialized) {
         logger.info('App', '服务管理器初始化成功');
-        
-        // 初始化用户服务
-        logger.info('App', '初始化用户服务');
-        this.globalData.userService = new UserService();
-        await this.globalData.userService.initialize();
         
         // 获取任务服务、消息服务和星星服务
         const taskService = serviceManager.getTaskService();
@@ -523,8 +526,8 @@ App({
         summary: '帮助孩子建立学习习惯的时间管理工具，支持任务管理和星星奖励'
       });
       
-      if (result && result.success) {
-        logger.info('App', '欢迎消息创建成功', { messageId: result.message?.id });
+      if (result) {
+        logger.info('App', '欢迎消息创建成功', { messageId: result.id });
       } else {
         logger.warn('App', '欢迎消息创建失败', result);
       }

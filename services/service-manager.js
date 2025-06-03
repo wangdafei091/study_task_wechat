@@ -18,8 +18,18 @@ class ServiceManager {
   constructor() {
     this.services = {};
     this.eventBus = new EventBus();
+    this.userService = null; // 用户服务实例
     
     logger.info('ServiceManager', '服务管理器初始化');
+  }
+  
+  /**
+   * 设置用户服务实例
+   * @param {UserService} userService 用户服务实例
+   */
+  setUserService(userService) {
+    this.userService = userService;
+    logger.info('ServiceManager', '用户服务已注入到服务管理器');
   }
   
   /**
@@ -64,8 +74,10 @@ class ServiceManager {
         eventBus: this.eventBus
       });
       
+      // 初始化MessageService，注入UserService依赖
       this.services.messageService = new MessageService({
-        eventBus: this.eventBus
+        eventBus: this.eventBus,
+        userService: this.userService // 注入用户服务
       });
       
       this.services.rewardService = new RewardService({
@@ -156,6 +168,14 @@ class ServiceManager {
    */
   getMessageService() {
     return this.services.messageService;
+  }
+  
+  /**
+   * 获取用户服务
+   * @returns {UserService} 用户服务实例
+   */
+  getUserService() {
+    return this.userService;
   }
   
   /**

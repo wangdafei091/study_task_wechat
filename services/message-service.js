@@ -18,6 +18,7 @@ class MessageService {
    * @param {Object} options 选项
    * @param {EventBus} options.eventBus 事件总线
    * @param {MessageRepository} options.messageRepository 消息仓储
+   * @param {UserService} options.userService 用户服务
    */
   constructor(options = {}) {
     // 初始化事件总线
@@ -25,6 +26,9 @@ class MessageService {
     
     // 新的领域模型仓储
     this.messageRepository = options.messageRepository || new MessageRepository();
+    
+    // 用户服务
+    this.userService = options.userService || null;
     
     logger.info('MessageService', '初始化消息服务');
     
@@ -732,6 +736,7 @@ class MessageService {
     }
     
     const messageData = {
+      userId: this.userService ? this.userService.getCurrentUserId() : 'parent', // 获取当前用户ID，默认为parent
       type: MessageType.TASK,
       notificationType,
       relatedId: task.id,
@@ -786,6 +791,7 @@ class MessageService {
     }
     
     const messageData = {
+      userId: this.userService ? this.userService.getCurrentUserId() : 'parent', // 获取当前用户ID，默认为parent
       type: MessageType.SYSTEM,
       notificationType: type,
       title,
@@ -807,6 +813,7 @@ class MessageService {
    */
   async _createPenaltyMessageWithDomainModel(task, points) {
     const messageData = {
+      userId: this.userService ? this.userService.getCurrentUserId() : 'parent', // 获取当前用户ID，默认为parent
       type: MessageType.PENALTY,
       relatedId: task.id,
       title: '星星扣除提醒',
@@ -1101,6 +1108,7 @@ class MessageService {
     }
     
     const messageData = {
+      userId: this.userService ? this.userService.getCurrentUserId() : 'parent', // 获取当前用户ID，默认为parent
       type: MessageType.REWARD,
       notificationType: action,
       relatedId: reward.id,
@@ -1320,6 +1328,7 @@ class MessageService {
     }
     
     return {
+      userId: this.userService ? this.userService.getCurrentUserId() : 'parent', // 获取当前用户ID，默认为parent
       type: MessageType.TASK,
       notificationType,
       relatedId: task.id,
