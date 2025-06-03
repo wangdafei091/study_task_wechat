@@ -4,7 +4,7 @@
 
 /* 热力图颜色变量定义 - 与现有压力系统保持一致 */
 :host {
-  --level-0-color: #F8F9FA;  /* 无任务: 浅灰 */
+  --level-0-color: #ffffff;  /* 无任务: 白色 */
   --level-1-color: #E3F2FD;  /* 轻松: 浅蓝 */
   --level-2-color: #BBDEFB;  /* 适中: 中蓝 */
   --level-3-color: #9C7CE8;  /* 繁忙: 蓝紫 */
@@ -112,7 +112,7 @@
   position: relative;
   transition: background-color 0.2s;
   box-sizing: border-box;
-  background-color: transparent;
+  background-color: #ffffff;
   border-radius: 0; /* 完全移除圆角，改为方形 */
 }
 
@@ -222,7 +222,7 @@
 }
 
 /* 备用硬编码颜色，确保兼容性 */
-.days .day.level-0 { background-color: #F8F9FA !important; }
+.days .day.level-0 { background-color: #ffffff !important; }
 .days .day.level-1 { background-color: #E3F2FD !important; }
 .days .day.level-2 { background-color: #BBDEFB !important; }
 .days .day.level-3 { background-color: #9C7CE8 !important; }
