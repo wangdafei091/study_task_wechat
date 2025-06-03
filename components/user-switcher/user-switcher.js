@@ -79,6 +79,37 @@ Component({
   },
 
   /**
+   * 属性观察者
+   */
+  observers: {
+    'visible': function(visible) {
+      if (visible) {
+        // 当面板需要显示时，重置动画状态为显示状态
+        logger.info('UserSwitcher', '面板显示，重置动画状态');
+        
+        // 确保动画对象存在
+        if (!this.switchAnimation) {
+          this.initAnimations();
+        }
+        
+        // 重置动画为显示状态
+        this.switchAnimation.translateY('0%').opacity(1).step({ duration: 0 });
+        this.setData({
+          switchAnimation: this.switchAnimation.export()
+        });
+        
+        // 播放平滑的显示动画
+        setTimeout(() => {
+          this.switchAnimation.translateY('0%').opacity(1).step({ duration: 300 });
+          this.setData({
+            switchAnimation: this.switchAnimation.export()
+          });
+        }, 50);
+      }
+    }
+  },
+
+  /**
    * 组件的方法列表
    */
   methods: {
@@ -87,20 +118,20 @@ Component({
      */
     initAnimations() {
       // 切换面板动画
-      const switchAnimation = wx.createAnimation({
+      this.switchAnimation = wx.createAnimation({
         duration: 300,
         timingFunction: 'ease-out'
       });
       
       // 添加用户对话框动画
-      const addDialogAnimation = wx.createAnimation({
+      this.addDialogAnimation = wx.createAnimation({
         duration: 250,
         timingFunction: 'ease-out'
       });
       
       this.setData({
-        switchAnimation: switchAnimation.export(),
-        addDialogAnimation: addDialogAnimation.export()
+        switchAnimation: {},
+        addDialogAnimation: {}
       });
     },
 
@@ -124,6 +155,7 @@ Component({
       
       // 触发用户切换事件
       this.triggerEvent('userSwitch', {
+        userId: user.id,
         user: user,
         previousUser: this.data.currentUser
       });
@@ -145,9 +177,9 @@ Component({
       });
       
       // 播放显示动画
-      this.data.addDialogAnimation.scale(1).opacity(1).step();
+      this.addDialogAnimation.scale(1).opacity(1).step();
       this.setData({
-        addDialogAnimation: this.data.addDialogAnimation.export()
+        addDialogAnimation: this.addDialogAnimation.export()
       });
     },
 
@@ -158,9 +190,9 @@ Component({
       logger.info('UserSwitcher', '隐藏添加用户对话框');
       
       // 播放隐藏动画
-      this.data.addDialogAnimation.scale(0.8).opacity(0).step();
+      this.addDialogAnimation.scale(0.8).opacity(0).step();
       this.setData({
-        addDialogAnimation: this.data.addDialogAnimation.export()
+        addDialogAnimation: this.addDialogAnimation.export()
       });
       
       // 延迟隐藏
@@ -252,7 +284,7 @@ Component({
             
             // 触发删除用户事件
             this.triggerEvent('userDelete', {
-              user: user
+              userId: user.id
             });
           }
         }
@@ -266,9 +298,9 @@ Component({
       logger.info('UserSwitcher', '关闭用户切换界面');
       
       // 播放隐藏动画
-      this.data.switchAnimation.translateY('100%').opacity(0).step();
+      this.switchAnimation.translateY('100%').opacity(0).step();
       this.setData({
-        switchAnimation: this.data.switchAnimation.export()
+        switchAnimation: this.switchAnimation.export()
       });
       
       // 触发关闭事件

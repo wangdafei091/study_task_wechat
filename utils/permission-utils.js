@@ -109,7 +109,7 @@ const FEATURE_PERMISSIONS = {
     
     // 统计和分析权限（受限）
     analytics: {
-      view: false,        // 不能查看详细统计
+      view: true,         // 可以查看基础统计
       export: false       // 不能导出数据
     },
     

@@ -2319,7 +2319,7 @@ Page({
       }
       
       // 执行用户切换
-      const result = await userService.switchUser(userId);
+      const result = await userService.switchToUser(userId);
       if (!result.success) {
         wx.showToast({
           title: result.message || '用户切换失败',
