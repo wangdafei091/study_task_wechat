@@ -549,6 +549,14 @@ Component({
         day.completed = 0;
         day.pending = 0;
         day.pressure = null;
+        // 修复：清除任务类型点相关数据，确保删除任务后圆点正确消失
+        day.taskDots = [];
+        day.showTaskCount = false;
+        day.taskCount = 0;
+        day.starsEarned = 0;
+        day.starsPending = 0;
+        day.starsTotal = 0;
+        day.typeCounts = { study: 0, habit: 0, interest: 0 };
       });
       
       // 使用传入的强制任务数据或组件属性中的任务
@@ -2129,7 +2137,13 @@ Component({
           // 强制刷新热力图，确保视图反映最新数据
           logger.info('task-heatmap', '执行强制热力图刷新以确保视图更新');
           this.refreshTaskList();
+          
+          // 修复：确保关闭加载提示
+          wx.hideLoading();
         } else {
+          // 修复：确保关闭加载提示
+          wx.hideLoading();
+          
           wx.showToast({
             title: '删除失败',
             icon: 'error',
@@ -2178,74 +2192,9 @@ Component({
       // 关闭任务列表面板
       this.closeDayTasks();
       
-      // 强制刷新热力图数据 - 改进三阶段刷新流程
-      // 阶段1: 立即清空热力图数据
-      const serviceManager = require('../../services/service-manager.js');
-      const taskService = serviceManager.getService('TaskService');
-      logger.info('task-heatmap', '第一阶段刷新：清空热力图数据');
-      
-      // 将所有日期的任务计数和热力值重置为0
-      const days = [...this.data.days];
-      days.forEach(day => {
-        day.count = 0;
-        day.level = 0;
-        day.completed = 0;
-        day.pending = 0;
-        day.pressure = null;
-      });
-      
-      // 更新UI以反映清空后的状态
-      this.setData({ 
-        days: days,
-        "__clearTimestamp": Date.now() // 添加时间戳确保视图清空刷新
-      }, () => {
-        logger.info('task-heatmap', '热力图数据已清空，准备获取新数据');
-      });
-      
-      // 阶段2: 从任务服务获取最新数据
-      setTimeout(async () => {
-        logger.info('task-heatmap', '第二阶段刷新：获取最新任务数据并计算热力图');
-        
-        try {
-          // 使用TaskService获取最新数据
-          const latestTasks = await taskService.getAllTasks();
-          logger.info('task-heatmap', `获取到最新任务数据: ${latestTasks.length}个任务`);
-          
-          // 将最新任务数据传递给属性，确保热力图计算使用最新数据
-          this.setData({ 
-            "__refreshTimestamp": Date.now() // 添加刷新时间戳，确保视图刷新
-          }, () => {
-            logger.info('task-heatmap', '准备强制重新计算热力图');
-            
-            // 强制重新计算热力图
-            this.calculateHeatMap(latestTasks);
-            
-            // 阶段3: 确认刷新完成
-            setTimeout(async () => {
-              logger.info('task-heatmap', '第三阶段刷新：确认热力图已更新');
-              
-              try {
-                // 再次从TaskService获取最新数据，确保热力图与数据一致
-                const finalTasks = await taskService.getAllTasks();
-                logger.info('task-heatmap', `确认更新：最终任务数据数量 ${finalTasks.length}个`);
-                
-                // 确认热力图已完全更新
-                this.calculateHeatMap(finalTasks);
-                
-                // 触发完成事件
-                this.triggerEvent('refreshComplete', {
-                  taskCount: finalTasks.length,
-                  timestamp: Date.now()
-                });
-              } catch (error) {
-                logger.error('task-heatmap', '第三阶段刷新获取任务数据失败', error);
-              }
-            }, 500);
-          });
-        } catch (error) {
-          logger.error('task-heatmap', '第二阶段刷新获取任务数据失败', error);
-        }
-      }, 300);
+      // 移除复杂的三阶段刷新机制
+      // 改为依赖正常的数据流：父组件获取数据 -> properties.tasks.observer -> calculateHeatMap
+      logger.info('task-heatmap', '已通知父组件刷新数据，等待数据流更新热力图');
     },
     
     // 格式化重复任务的天数显示
