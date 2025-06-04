@@ -239,13 +239,8 @@ Component({
       // 根据source字段判断是否为惩罚性扣减
       const source = record.source || '';
       
-      // 惩罚性扣减的来源标识
-      const penaltySources = [
-        'task_penalty',        // TaskService中的必做任务惩罚
-        'required_penalty'     // StarService中的必做任务惩罚
-      ];
-      
-      const isPenalty = penaltySources.includes(source);
+      // 只识别task_penalty（TaskService使用的标识）
+      const isPenalty = source === 'task_penalty';
       
       // 添加过滤日志
       if (record.isExpense() && !isPenalty) {

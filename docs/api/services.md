@@ -186,21 +186,6 @@ async handleTaskCompletion(task, points)
 **返回：**
 - *{Promise<Object>}* 处理结果
 
-#### handleRequiredTaskPenalty
-
-处理必做任务未完成的星星惩罚。
-
-```javascript
-async handleRequiredTaskPenalty(task, points)
-```
-
-**参数：**
-- `task` *{Task}* 任务对象
-- `points` *{Number}* 惩罚的星星数量
-
-**返回：**
-- *{Promise<Object>}* 处理结果
-
 #### cleanupExpiredStars
 
 清理过期的星星。
