@@ -553,17 +553,27 @@ Page({
         return;
       }
       
+      // 获取当前用户ID
+      const userService = serviceManager.getUserService();
+      let currentUserId = null;
+      if (userService) {
+        currentUserId = userService.getCurrentUserId();
+        console.log(`[rewards] 当前用户ID: ${currentUserId}`);
+      } else {
+        console.warn('[rewards] 无法获取用户服务，将使用默认用户ID');
+      }
+      
       // 保存原始星星数和目标星星数
       const originalPoints = this.data.totalPoints;
       const targetPoints = originalPoints - reward.points;
       
-      console.log(`[rewards] 领取奖励前星星数: ${originalPoints}`);
+      console.log(`[rewards] 领取奖励前星星数: ${originalPoints}, 用户: ${currentUserId}`);
       
-      // 使用新架构兑换奖励
-      const result = await rewardService.exchangeReward(reward.id);
+      // 使用新架构兑换奖励，传递当前用户ID
+      const result = await rewardService.exchangeReward(reward.id, currentUserId);
       
       if (!result.success) {
-        console.error(`[rewards] 兑换奖励失败: ${result.message}`);
+        console.error(`[rewards] 兑换奖励失败: ${result.message}, 用户: ${currentUserId}`);
         wx.hideLoading();
         wx.showToast({
           title: result.message || '兑换失败',
@@ -572,7 +582,7 @@ Page({
         return;
       }
       
-      console.log(`[rewards] 兑换奖励成功: ${reward.name}, ID=${reward.id}, 消耗星星: ${reward.points}`);
+      console.log(`[rewards] 兑换奖励成功: ${reward.name}, ID=${reward.id}, 消耗星星: ${reward.points}, 用户: ${currentUserId}`);
       
       // 开始星星数量减少的动画
       wx.hideLoading();
@@ -607,6 +617,7 @@ Page({
             rewardId: reward.id,
             rewardName: reward.name,  // 添加rewardName字段以兼容MessageService
             points: reward.points,
+            userId: currentUserId,    // 添加用户ID到事件数据
             newTotalPoints: targetPoints,
             nextReward: nextReward
           });

@@ -567,49 +567,6 @@ class StarRecordRepository extends BaseRepository {
   }
   
   /**
-   * 创建消费记录
-   * @param {Object} options 记录选项
-   * @param {Number} options.stars 消费的星星数（正数）
-   * @param {String} options.description 描述
-   * @param {String} options.type 消费类型
-   * @param {String} options.relatedId 相关ID
-   * @returns {Promise<Object>} 创建结果
-   */
-  async createConsumptionRecord(options = {}) {
-    if (!options.stars || options.stars <= 0) {
-      logger.warn('StarRecordRepository', '尝试使用无效的星星数量创建消费记录');
-      return null;
-    }
-    
-    try {
-      // 计算当前余额
-      const previousBalance = await this._calculateCurrentBalance();
-      const balance = previousBalance - options.stars;
-      
-      // 创建记录对象
-      const record = new StarRecord({
-        points: -options.stars, // 负数表示消费
-        type: RecordType.EXPENSE,
-        source: options.type || RecordSource.SYSTEM_ADJUST,
-        sourceId: options.relatedId || '',
-        description: options.description || '星星消费',
-        timestamp: Date.now(),
-        balance,
-        previousBalance
-      });
-      
-      // 保存记录
-      const savedRecord = await this.save(record);
-      
-      logger.info('StarRecordRepository', `创建消费记录成功: ID=${savedRecord.id}, 星星数=${options.stars}, 类型=${options.type}`);
-      return savedRecord;
-    } catch (error) {
-      logger.error('StarRecordRepository', '创建消费记录失败', error);
-      return null;
-    }
-  }
-  
-  /**
    * 创建星星消费记录
    * @param {Object} record 消费记录对象
    * @returns {Promise<Object>} 创建的消费记录

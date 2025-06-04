@@ -107,14 +107,9 @@ class TaskService {
    * @returns {Promise<Array>} 今日任务列表
    */
   async getTodayTasks(userId = null) {
-    try {
-      const tasks = await this.taskRepository.getTodayTasks(userId);
-      logger.info('TaskService', `获取今日任务成功${userId ? `, 用户=${userId}` : ''}, 数量=${tasks.length}`);
-      return tasks;
-    } catch (error) {
-      logger.error('TaskService', '获取今日任务失败', error);
-      return [];
-    }
+    // 如果不传userId，则获取所有任务（共享模式）
+    const tasks = await this.taskRepository.getTodayTasks(userId);
+    return tasks;
   }
   
   /**
@@ -623,9 +618,9 @@ class TaskService {
   /**
    * 更新任务状态
    * @param {String} taskId 任务ID
-   * @param {Number} status 新状态
-   * @param {String} userId 可选的用户ID，用于验证访问权限
-   * @returns {Promise<Object>} 更新结果
+   * @param {Number} status 任务状态 (0:未完成, 1:已完成)
+   * @param {String} userId 可选的用户ID，用于积分分配（共享执行模式）
+   * @returns {Promise<Object>} 操作结果
    */
   async updateTaskStatus(taskId, status, userId = null) {
     try {
@@ -636,11 +631,8 @@ class TaskService {
         return { success: false, message: '未找到指定的任务' };
       }
       
-      // 验证用户权限
-      if (userId && task.userId !== userId) {
-        logger.warn('TaskService', `用户${userId}尝试更新不属于自己的任务状态${taskId}`);
-        return { success: false, message: '无权限操作此任务' };
-      }
+      // 共享执行模式：移除权限检查，允许任何用户完成任务
+      logger.info('TaskService', `共享执行模式: 用户${userId || '未指定'}正在更新任务状态${taskId}`);
       
       // 记录原始状态
       const previousStatus = task.status;
@@ -688,11 +680,12 @@ class TaskService {
             {
               sourceType: 'task_complete',
               sourceId: task.id,
-              userId: task.userId // 传递用户ID给星星服务
+              userId: userId || task.userId // 优先分配给当前执行用户，如果没有则分配给任务创建者
             }
           );
           
           logger.info('TaskService', `积分添加结果:`, addResult);
+          logger.info('TaskService', `积分分配给用户: ${userId || task.userId} (当前执行用户=${userId}, 任务创建者=${task.userId})`);
           
           if (addResult.success) {
             logger.info('TaskService', `任务 "${task.title}" 获得 ${task.points} 颗星星`);
@@ -792,7 +785,7 @@ class TaskService {
   /**
    * 重置任务状态为未完成
    * @param {String} taskId 任务ID
-   * @param {String} userId 可选的用户ID，用于验证访问权限
+   * @param {String} userId 可选的用户ID，用于星星扣减（共享执行模式）
    * @returns {Promise<Object>} 操作结果
    */
   async resetTask(taskId, userId = null) {
@@ -804,11 +797,8 @@ class TaskService {
         return { success: false, message: '未找到指定的任务' };
       }
       
-      // 验证用户权限
-      if (userId && task.userId !== userId) {
-        logger.warn('TaskService', `用户${userId}尝试重置不属于自己的任务${taskId}`);
-        return { success: false, message: '无权限操作此任务' };
-      }
+      // 共享执行模式：移除权限检查，允许任何用户重置任务
+      logger.info('TaskService', `共享执行模式: 用户${userId || '未指定'}正在重置任务${taskId}`);
       
       // 如果任务未完成，无需重置
       if (!task.isCompleted()) {
@@ -842,7 +832,7 @@ class TaskService {
           {
             sourceType: 'task_reset',
             sourceId: task.id,
-            userId: task.userId // 传递用户ID给星星服务
+            userId: userId || task.userId // 优先从当前执行用户扣减，如果没有则从任务创建者扣减
           }
         );
         
@@ -855,6 +845,7 @@ class TaskService {
         }
         
         logger.info('TaskService', `从特定分组扣减星星成功: ${task.title}, 扣减${task.points}颗星星`);
+        logger.info('TaskService', `星星扣减自用户: ${userId || task.userId} (当前执行用户=${userId}, 任务创建者=${task.userId})`);
       }
       
       // 重置任务状态和星星获得标记
@@ -1035,6 +1026,29 @@ class TaskService {
         penaltyPoints = 5; // 默认惩罚5颗星
       }
       
+      logger.info('TaskService', `开始处理必做任务惩罚: "${task.title}", 惩罚积分=${penaltyPoints}颗星`);
+      
+      // 获取小朋友用户ID（必做任务惩罚固定从小朋友扣除）
+      let childUserId = null;
+      if (this.serviceManager && this.serviceManager.getUserService) {
+        const userService = this.serviceManager.getUserService();
+        if (userService) {
+          const childUser = userService.getUserByRole('child');
+          if (childUser) {
+            childUserId = childUser.id;
+            logger.info('TaskService', `获取小朋友用户ID成功: ${childUserId}`);
+          } else {
+            logger.warn('TaskService', '未找到小朋友用户，使用默认child用户ID');
+            childUserId = 'child'; // 使用默认ID
+          }
+        }
+      }
+      
+      if (!childUserId) {
+        logger.warn('TaskService', '无法获取小朋友用户ID，使用默认child用户ID');
+        childUserId = 'child'; // 兜底方案
+      }
+      
       // 标记已经应用惩罚
       task.penaltyApplied = true;
       task.modifyTime = Date.now();
@@ -1042,32 +1056,45 @@ class TaskService {
       // 保存更新后的任务
       const updatedTask = await this.taskRepository.save(task);
       
-      // 扣除积分
+      // 扣除积分 - 固定从小朋友账户扣除
       if (this.starService && penaltyPoints > 0) {
+        logger.info('TaskService', `执行必做任务惩罚扣除: 从用户${childUserId}扣除${penaltyPoints}颗星星`);
+        
         const consumeResult = await this.starService.consumeStars(
           penaltyPoints,
           `必做任务惩罚: ${task.title}`,
           {
             sourceType: 'task_penalty',
-            sourceId: task.id
+            sourceId: task.id,
+            userId: childUserId,     // 固定从小朋友扣除
+            operator: 'system'       // 标记为系统操作
           }
         );
         
         if (!consumeResult.success) {
-          logger.error('TaskService', `惩罚扣除积分失败: ${consumeResult.message}`);
+          logger.error('TaskService', `惩罚扣除积分失败: ${consumeResult.message}, 用户=${childUserId}`);
+        } else {
+          logger.info('TaskService', `惩罚扣除积分成功: 从用户${childUserId}扣除${penaltyPoints}颗星星`);
         }
       }
       
-      logger.info('TaskService', `已对必做任务应用惩罚: "${task.title}", 扣除${penaltyPoints}颗星`);
+      logger.info('TaskService', `已对必做任务应用惩罚: "${task.title}", 扣除${penaltyPoints}颗星, 目标用户=${childUserId}`);
       
       // 触发惩罚事件
       this.eventBus.emit(EVENTS.TASK_PENALTY_APPLIED, {
         task: updatedTask,
         penaltyPoints,
+        targetUserId: childUserId,  // 添加目标用户ID
+        operator: 'system',         // 标记为系统操作
         reason: '必做任务未完成'
       });
       
-      return { success: true, task: updatedTask, penaltyPoints };
+      return { 
+        success: true, 
+        task: updatedTask, 
+        penaltyPoints,
+        targetUserId: childUserId
+      };
     } catch (error) {
       logger.error('TaskService', `应用必做任务惩罚失败: ${error.message}`, error);
       return { success: false, message: '应用惩罚失败: ' + error.message };

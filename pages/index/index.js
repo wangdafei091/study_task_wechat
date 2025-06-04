@@ -1,4 +1,3 @@
-const app = getApp()
 const serviceManager = require('../../services/service-manager.js');
 const formatUtils = require('../../utils/formatUtils');
 const dateUtils = require('../../utils/dateUtils');
@@ -161,6 +160,9 @@ Page({
     logger.info('Index', '✨ 标签样式专业优化：采用渐变色彩+柔和阴影，提升视觉层次感和现代感，符合少儿教育心理学设计原则');
     logger.info('Index', '🎯 标签视觉权重调和：缩小尺寸(36→28rpx)、柔化色彩、减少阴影，让标签回归辅助角色，突出任务内容主导地位');
     logger.info('Index', '🚀 页面初始化优化：合并重复数据加载逻辑，统一批量处理，减少重复调用和UI闪烁');
+    
+    // 获取全局app实例
+    const app = getApp();
     
     // 设置当前日期字符串
     const now = new Date();
@@ -480,15 +482,12 @@ Page({
   },
 
   /**
-   * 仅加载任务数据（支持用户筛选）
+   * 仅加载任务数据（共享模式）
+   * 注意：任务设计为共享模式，家长创建任务，小朋友执行，两者都能看到所有任务
    */
   loadTaskDataOnly: async function() {
     try {
       logger.info('Index', '开始加载任务数据');
-      
-      // 获取当前用户ID
-      const { currentUser } = this.data;
-      const userId = currentUser && currentUser.id ? currentUser.id : null;
       
       // 获取任务服务
       const taskService = serviceManager.getService('task');
@@ -497,9 +496,9 @@ Page({
         return;
       }
       
-      // 使用任务服务获取今日任务（按用户筛选）
-      const tasks = await taskService.getTodayTasks(userId);
-      logger.info('Index', `今日任务加载成功${userId ? `, 用户ID=${userId}` : ''}, 任务数量: ${tasks.length}`);
+      // 获取今日任务（不按用户过滤，所有角色都能看到所有任务）
+      const tasks = await taskService.getTodayTasks();
+      logger.info('Index', `今日任务加载成功（共享模式）, 任务数量: ${tasks.length}`);
       
       // 添加详细的任务状态日志
       tasks.forEach((task, index) => {
@@ -553,7 +552,8 @@ Page({
     }
   },
   
-  // 从消息管理器加载消息数据（支持用户筛选）
+  // 从消息管理器加载消息数据（按用户分别显示）
+  // 注意：消息设计为按用户分别显示，每个用户只看到自己的消息
   loadMessageData: async function() {
     try {
       // 获取当前用户ID
@@ -642,7 +642,7 @@ Page({
   },
   
   /**
-   * 更新任务统计信息
+   * 更新任务统计信息（共享模式）
    */
   updateTaskStats: async function() {
     try {
@@ -661,9 +661,9 @@ Page({
         endDate: null    // 使用服务默认值
       };
       
-      // 获取任务统计数据
+      // 获取任务统计数据（不按用户过滤，共享模式）
       const stats = await taskService.getTaskStatistics(dateRange);
-      logger.info('Index', '任务统计获取成功', {
+      logger.info('Index', '任务统计获取成功（共享模式）', {
         totalTasks: stats.totalTasks,
         completedTasks: stats.completedTasks,
         completionRate: stats.completionRate,
@@ -872,16 +872,22 @@ Page({
     }
     
     try {
+      // 获取当前用户ID
+      const { currentUser } = this.data;
+      const currentUserId = currentUser && currentUser.id ? currentUser.id : null;
+      
       // 使用任务服务更新任务状态
       const taskService = serviceManager.getService('task');
       let result;
       
       if (newStatus === 1) {
-        // 使用completeTask方法直接完成任务
-        result = await taskService.completeTask(id);
+        // 使用completeTask方法直接完成任务，传递当前用户ID
+        result = await taskService.completeTask(id, currentUserId);
+        logger.info('Index', `调用完成任务: 任务ID=${id}, 当前用户=${currentUserId}`);
       } else {
-        // 使用resetTask方法重置任务状态
-        result = await taskService.resetTask(id);
+        // 使用resetTask方法重置任务状态，传递当前用户ID
+        result = await taskService.resetTask(id, currentUserId);
+        logger.info('Index', `调用重置任务: 任务ID=${id}, 当前用户=${currentUserId}`);
       }
       
       // 清除处理中状态
