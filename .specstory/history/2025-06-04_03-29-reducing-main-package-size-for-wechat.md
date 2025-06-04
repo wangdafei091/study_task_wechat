@@ -4177,3 +4177,453 @@ _**Assistant**_
 
 ---
 
+你的疑问很重要！让我检查一下test和docs目录是否被正确排除，以及为什么主包仍然超过1.5M。
+
+---
+
+Read file: project.config.json
+
+---
+
+配置看起来是正确的，test和docs都在排除列表中。让我检查一下这些目录的实际大小，以及主包中还有哪些大文件：
+
+---
+
+<details>
+            <summary>Searched codebase "大文件 主包 体积 文件大小 KB MB" • **22** results</summary>
+        
+| File | Lines |
+|------|-------|
+| `packageComponents/.gitkeep` | L1-4 |
+| `docs/architecture/optimization_summary.md` | L298-337 |
+| `packageChart/index.js` | L1-15 |
+| `packageComponents/index.js` | L1-15 |
+| `docs/architecture/optimization_summary.md` | L75-154 |
+| `docs/architecture/optimization_summary.md` | L154-226 |
+| `utils/core/event-bus.js` | L481-500 |
+| `docs/architecture/optimization_summary.md` | L226-298 |
+| `project.config.json` | L64-110 |
+| `utils/core/event-bus.js` | L430-481 |
+| `docs/architecture/ddd-migration-summary.md` | L1-56 |
+| `packageChart/.gitkeep` | L1-3 |
+| `utils/core/event-bus.js` | L1-35 |
+| `utils/batchUtils.js` | L86-128 |
+| `utils/batchUtils.js` | L1-86 |
+| `project.config.json` | L1-64 |
+| `packageComponents/components/task-heatmap/task-heatmap.js` | L2414-2467 |
+| `utils/unit.js` | L1-73 |
+| `docs/api/utils_guide.md` | L420-519 |
+| `docs/api/utils_guide.md` | L519-593 |
+| `services/service-manager.js` | L187-217 |
+| `docs/architecture/ddd-migration-summary.md` | L56-117 |
+
+</details>
+
+---
+
+<details>
+            <summary>Listed directory test • **12** results</summary>
+        
+| Name |
+|-------|
+| 📄 `task-date-fix-validation.js` |
+| 📄 `task-date-fix-test.js` |
+| 📄 `cache-consistency-fix-test.js` |
+| 📄 `message-service-event-test.js` |
+| 📄 `reward-exchange-test.js` |
+| 📄 `README.md` |
+| 📁 `integration` |
+| 📁 `services` |
+| 📁 `repositories` |
+| 📁 `models` |
+| 📁 `__mocks__` |
+| 📁 `setup` |
+
+</details>
+
+---
+
+<details>
+            <summary>Listed directory docs • **5** results</summary>
+        
+| Name |
+|-------|
+| 📁 `development` |
+| 📁 `architecture` |
+| 📄 `README.md` |
+| 📁 `api` |
+| 📁 `user` |
+
+</details>
+
+---
+
+<details>
+            <summary>Grep search for "console\.log" • **7** files</summary>
+        
+| File | Line | Match |
+|------|------|-------|
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/pages/rewards/rewards.js` | L73 | `console.log('[rewards] 页面显示');` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/pages/rewards/rewards.js` | L80 | `console.log('[rewards] 检测到奖励数据变更标记，强制刷新');` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/pages/rewards/rewards.js` | L104 | `console.log('[rewards] 清除已跳转标记');` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/pages/rewards/rewards.js` | L157 | `console.log('[rewards] 设置进度条完成事件监听');` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/pages/rewards/rewards.js` | L171 | `console.log('[rewards] 收到进度条完成事件，锁定用户操作');` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/pages/rewards/rewards.js` | L175 | `console.log('[rewards] 已经在动画中，忽略重复事件');` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/pages/rewards/rewards.js` | L187 | `console.log('[rewards] 奖励动画安全超时触发');` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/pages/rewards/rewards.js` | L196 | `console.log('[rewards] 释放动画锁定');` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/pages/rewards/rewards.js` | L215 | `console.log('[rewards] 清理所有计时器');` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/pages/rewards/rewards.js` | L255 | `console.log('[rewards] 开始加载奖励数据');` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/pages/rewards/rewards.js` | L271 | `console.log('[rewards] 强制清除缓存以获取最新数据');` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/pages/rewards/rewards.js` | L281 | `console.log(`[rewards] 获取到用户星星: ${totalPoints}`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/pages/rewards/rewards.js` | L291 | `console.log(`[rewards] 获取到可用奖励: ${allRewards.length}个`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/pages/rewards/rewards.js` | L298 | `console.log('[rewards] 检测到自定义奖励标记');` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/pages/rewards/rewards.js` | L306 | `console.log('[rewards] 检测到有自定义奖励标记但无奖励数据，用户可能已清理所有奖励');` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/pages/rewards/rewards.js` | L339 | `console.log(`[rewards] 可用奖励: ${availableRewards.length}个, 已领取奖励: ${claimedRewards.length}个`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/pages/rewards/rewards.js` | L346 | `console.log(`[rewards] 下一个可达成奖励: ${nextReward ? nextReward.name : '无'}, 需要${nextReward ? nextReward.points : 0}颗星星`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/pages/rewards/rewards.js` | L388 | `console.log(`[rewards] 设置总星星: ${totalPoints}, 即将过期总星星: ${expiringPointsInfo.points}, 最早到期日期: ${expiringPointsInfo.date}`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/pages/rewards/rewards.js` | L446 | `console.log('[rewards] 正在动画中，拦截奖励查看操作');` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/pages/rewards/rewards.js` | L474 | `console.log('[rewards] 正在动画中，拦截页面跳转');` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/pages/rewards/rewards.js` | L478 | `console.log('[rewards] 导航到我的兑换页面');` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/pages/rewards/rewards.js` | L490 | `console.log('[rewards] 正在动画中，拦截页面跳转');` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/pages/rewards/rewards.js` | L494 | `console.log('[rewards] 导航到星星记录页面');` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/pages/rewards/rewards.js` | L529 | `console.log(`[rewards] 用户确认领取奖励: ${reward.name}, 消耗星星: ${reward.points}`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/pages/rewards/rewards.js` | L532 | `console.log(`[rewards] 用户取消领取奖励: ${reward.name}`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/pages/rewards/rewards.js` | L560 | `console.log(`[rewards] 当前用户ID: ${currentUserId}`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/pages/rewards/rewards.js` | L569 | `console.log(`[rewards] 领取奖励前星星数: ${originalPoints}, 用户: ${currentUserId}`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/pages/rewards/rewards.js` | L584 | `console.log(`[rewards] 兑换奖励成功: ${reward.name}, ID=${reward.id}, 消耗星星: ${reward.points}, 用户: ${currentUserId}`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/pages/rewards/rewards.js` | L590 | `console.log('[rewards] 动画完成，强制清除缓存确保数据一致性');` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/pages/rewards/rewards.js` | L600 | `console.log(`[rewards] 领取奖励后计算下一个可用奖励: ${nextReward.name}, 需要${nextReward.points}颗星星`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/pages/rewards/rewards.js` | L614 | `console.log('[rewards] 发送奖励领取事件通知');` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/pages/rewards/rewards.js` | L655 | `console.log(`[rewards] 开始星星数量动画，从 ${start} 到 ${end}, 减少数量: ${start - end}, 帧数: ${frames}`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/pages/rewards/rewards.js` | L687 | `console.log(`[rewards] 星星数量动画完成，最终数量: ${end}`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/pages/rewards/rewards.js` | L711 | `console.log('[rewards] 检测到5次连续点击，跳转到架构示例页面');` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/pages/rewards/rewards.js` | L731 | `console.log(`[rewards] 星星区域点击 ${count}/5`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/components/index-task-item/index-task-item.js` | L36 | `console.log(`[index-task-item] 任务属性变化检测:`, {` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/components/index-task-item/index-task-item.js` | L46 | `console.log(`[index-task-item] 描述字段变化: "${oldVal.description}" -> "${newVal.description}"`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/components/index-task-item/index-task-item.js` | L47 | `console.log(`[index-task-item] 描述字段类型: ${typeof newVal.description}`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/components/index-task-item/index-task-item.js` | L50 | `console.log(`[index-task-item] 任务初始化:`, {` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/components/index-task-item/index-task-item.js` | L71 | `console.log(`[index-task-item] 从常量映射星星有效期: ${newVal.pointsExpiry} -> ${expiryText}`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/components/index-task-item/index-task-item.js` | L95 | `console.log(`[index-task-item] 🔒 任务属性更新: ${newVal.title}, 锁定状态=${isLocked}, lastExchangeTime=${this.properties.lastExchangeTime}`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/components/index-task-item/index-task-item.js` | L106 | `console.log(`[index-task-item] 任务状态变化: ${oldVal.status} -> ${newVal.status}, 星星状态: ${oldVal.starAwarded} -> ${newVal.starAwarded}`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/components/index-task-item/index-task-item.js` | L107 | `console.log(`[index-task-item] 强制UI更新，新任务数据:`, {` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/components/index-task-item/index-task-item.js` | L115 | `console.log(`[index-task-item] 渲染任务: ${newVal.title}, 类型: ${newVal.type}, 星星: ${newVal.points || 0}颗, 有效期: ${expiryText}, 锁定状态: ${isLocked}`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/components/index-task-item/index-task-item.js` | L123 | `console.log(`[index-task-item] 🔒 lastExchangeTime属性变化: ${oldVal} -> ${newVal}`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/components/index-task-item/index-task-item.js` | L127 | `console.log(`[index-task-item] 🔒 重新计算锁定状态: 任务="${this.properties.task.title}", 锁定=${isLocked}`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/components/index-task-item/index-task-item.js` | L174 | `console.log('[index-task-item] 任务完成状态切换:', this.properties.task.id);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/components/index-task-item/index-task-item.js` | L178 | `console.log('[index-task-item] 正在处理中，忽略点击');` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/components/index-task-item/index-task-item.js` | L198 | `console.log('[index-task-item] 任务已获得过星星，不显示星星动画');` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/components/index-task-item/index-task-item.js` | L249 | `console.log('[index-task-item] 触发星星获得动画');` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/components/index-task-item/index-task-item.js` | L394 | `console.log('[index-task-item] 🔒 锁定状态计算: 任务为空，返回false');` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/components/index-task-item/index-task-item.js` | L401 | `console.log(`[index-task-item] 🔒 锁定状态计算: 任务"${task.title}"未完成(status=${task.status})，返回false`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/components/index-task-item/index-task-item.js` | L407 | `console.log(`[index-task-item] 🔒 锁定状态计算: 任务"${task.title}"没有兑换记录(lastExchangeTime=${lastExchangeTime})，返回false`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/components/index-task-item/index-task-item.js` | L413 | `console.log(`[index-task-item] 🔒 锁定状态计算: 任务"${task.title}"`, {` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/components/index-task-item/index-task-item.js` | L430 | `console.log('[index-task-item] 组件加载完成，使用优化后的布局展示');` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/components/index-task-item/index-task-item.js` | L442 | `console.log(`[index-task-item] 🔒 组件初始化锁定状态检查: 任务="${task.title}", 锁定=${isLocked}, lastExchangeTime=${lastExchangeTime}`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/components/index-task-item/index-task-item.js` | L447 | `console.log('[index-task-item] 使用优化后的必做任务UI: 积极引导模式，统一"数字+星星"显示格式');` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/components/index-task-item/index-task-item.js` | L453 | `console.log(`[index-task-item] 任务属性检查: ID=${task.id}, 标题=${task.title}, 有起止时间=${Boolean(task.startTime)}, 全天=${Boolean(task.isAllDay)}`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/components/index-task-item/index-task-item.js` | L457 | `console.log(`[index-task-item] 显示时间信息: ${task.startTime}${task.endTime ? ` - ${task.endTime}` : ''}`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/components/index-task-item/index-task-item.js` | L461 | `console.log(`[index-task-item] 应用星星有效期文本不换行样式，修复日期换行显示问题`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/components/progressBar/progressBar.js` | L103 | `console.log(`[progressBar] 计算进度条百分比: ${current}/${total}`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/components/progressBar/progressBar.js` | L108 | `console.log(`[progressBar] 实际进度百分比: ${percentage.toFixed(2)}%`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/components/progressBar/progressBar.js` | L123 | `console.log(`[progressBar] 完成状态: ${isComplete ? '已完成' : '未完成'}, 刚完成: ${justCompleted}`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/components/progressBar/progressBar.js` | L152 | `console.log(`[progressBar] 小鸡位置计算: 进度${percentage.toFixed(2)}% -> 显示位置${chickPosition.toFixed(2)}%`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/components/progressBar/progressBar.js` | L171 | `console.log(`[progressBar] 触发完成事件，进度: ${percentage.toFixed(2)}%, 数值: ${current}/${total}`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/components/progressBar/progressBar.js` | L184 | `console.log('[progressBar] 获取系统信息', this.systemInfo.windowWidth);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/components/progressBar/progressBar.js` | L193 | `console.log("[progressBar] 点击小鸡");` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/components/progressBar/progressBar.js` | L204 | `console.log(`[progressBar] 小鸡位置: left=${rect.left}, right=${rect.right}, width=${rect.width}, 屏幕宽度=${windowInfo.windowWidth}`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/components/progressBar/progressBar.js` | L216 | `console.log(`[progressBar] 气泡位置: ${bubblePosition}`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/components/progressBar/progressBar.js` | L267 | `console.log(`[progressBar] 开始显示完成信息，触发完成动画`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/components/progressBar/progressBar.js` | L283 | `console.log(`[progressBar] 发送进度条完成事件，通知页面锁定操作`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/components/progressBar/progressBar.js` | L313 | `console.log('[progressBar] 震动失败', e);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/components/progressBar/progressBar.js` | L372 | `console.log('[progressBar] 点击小鸡');` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/components/progressBar/progressBar.js` | L383 | `console.log(`[progressBar] 小鸡位置: left=${rect.left}, right=${rect.right}, width=${rect.width}, 屏幕宽度=${windowInfo.windowWidth}`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/components/progressBar/progressBar.js` | L395 | `console.log(`[progressBar] 气泡位置: ${bubblePosition}`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/components/progressBar/progressBar.js` | L436 | `console.log(`[progressBar] 选择鼓励语: ${encouragement}`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/components/progressBar/progressBar.js` | L445 | `console.log('[progressBar] 点击奖品图标');` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/components/progressBar/progressBar.js` | L457 | `console.log(`[progressBar] 奖品图标位置: left=${rect.left}, right=${rect.right}, width=${rect.width}`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/components/progressBar/progressBar.js` | L467 | `console.log('[progressBar] 靠近右边缘，显示在左侧');` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/components/progressBar/progressBar.js` | L471 | `console.log('[progressBar] 靠近左边缘，显示在右侧');` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/pages/my-exchanges/my-exchanges.js` | L14 | `console.log('[MyExchanges] 页面加载');` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/pages/my-exchanges/my-exchanges.js` | L29 | `console.log('[MyExchanges] 页面显示');` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/pages/my-exchanges/my-exchanges.js` | L72 | `console.log('[MyExchanges] 加载已领取奖励数据');` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/pages/my-exchanges/my-exchanges.js` | L98 | `console.log(`[MyExchanges] 奖励[${r.name}]的显示状态: 已领取, 原始claimed值: ${r.claimed}, claimStatus: ${r.claimStatus}`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/pages/my-exchanges/my-exchanges.js` | L101 | `console.log(`[MyExchanges] 加载了 ${formattedRewards.length} 条已领取奖励记录`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/packageChart/index.js` | L3 | `console.log('[packageChart] 图表分包加载开始，时间戳：' + Date.now());` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/packageChart/index.js` | L11 | `console.log(`[packageChart] 图表分包加载完成，耗时: ${loadTime}ms`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/components/date-picker/date-picker.js` | L13 | `console.log(`[DatePicker] 显示${this.data.type}日期选择器`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/components/date-picker/date-picker.js` | L76 | `console.log(`[DatePicker] 组件初始化，类型: ${this.data.type}, 当前日期: ${this.data.currentDate}`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/components/date-picker/date-picker.js` | L97 | `console.log(`[DatePicker] 初始化年月显示: ${yearMonth}`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/components/date-picker/date-picker.js` | L154 | `console.log(`[DatePicker] 生成日历数据，年:${year}, 月:${month+1}`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/components/date-picker/date-picker.js` | L250 | `console.log(`[DatePicker] 当前已有${totalDaysSoFar}天，固定6行需要补充${nextMonthDays}天`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/components/date-picker/date-picker.js` | L286 | `console.log(`[DatePicker] 用户尝试选择历史日期: ${date}，已提示并阻止选择`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/components/date-picker/date-picker.js` | L338 | `console.log(`[DatePicker] 选择日期: ${date}, 类型: ${this.data.type}`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/components/date-picker/date-picker.js` | L346 | `console.log(`[DatePicker] 点击${action === 'prev' ? '上' : '下'}个月按钮`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/components/date-picker/date-picker.js` | L353 | `console.log(`[DatePicker] 当前日期: ${year}年${month+1}月`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/components/date-picker/date-picker.js` | L370 | `console.log(`[DatePicker] 切换后日期: ${year}年${month+1}月`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/components/date-picker/date-picker.js` | L414 | `console.log(`[DatePicker] 切换年份: ${year}年`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/components/date-picker/date-picker.js` | L427 | `console.log(`[DatePicker] 修改年月: ${year}年${month}月`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/components/date-picker/date-picker.js` | L438 | `console.log(`[DatePicker] 关闭${this.data.type}日期选择器`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/packageChart/components/star-calendar/star-calendar.js` | L40 | `console.log('[星星日历] 组件初始化');` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/packageChart/components/star-calendar/star-calendar.js` | L45 | `console.log('[星星日历] 接收到任务状态变更事件:', data);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/packageChart/components/star-calendar/star-calendar.js` | L62 | `console.log(`[星星日历] 标记月份 ${monthKey} 需要刷新`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/packageChart/components/star-calendar/star-calendar.js` | L75 | `console.log('[星星日历] 已订阅任务状态变更事件');` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/packageChart/components/star-calendar/star-calendar.js` | L83 | `console.log('[星星日历] 已取消任务状态变更事件订阅');` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/packageChart/components/star-calendar/star-calendar.js` | L120 | `console.log(`[星星日历] 初始化完成，当前显示: ${year}年${month + 1}月`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/packageChart/components/star-calendar/star-calendar.js` | L140 | `console.log('[星星日历] 生成日历数据');` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/packageChart/components/star-calendar/star-calendar.js` | L246 | `console.log(`[星星日历] 过滤非惩罚性扣减: source=${source}, points=${record.points}`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/packageChart/components/star-calendar/star-calendar.js` | L263 | `console.log(`[星星日历] 使用缓存数据: ${monthKey}`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/packageChart/components/star-calendar/star-calendar.js` | L268 | `console.log(`[星星日历] 加载星星记录: ${monthKey}`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/packageChart/components/star-calendar/star-calendar.js` | L277 | `console.log(`[星星日历] 获取到 ${records.length} 条星星记录`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/packageChart/components/star-calendar/star-calendar.js` | L305 | `console.log('[星星日历] 数据类型已修复：确保earnedStars和deductedStars为数字类型，避免字符串拼接问题');` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/packageChart/components/star-calendar/star-calendar.js` | L332 | `console.log(`[星星日历] 计算星星数据: 日期=${day.dateString}, 获得=${earnedStars}(${typeof earnedStars}), 惩罚扣除=${deductedStars}(${typeof deductedStars})`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/packageChart/components/star-calendar/star-calendar.js` | L350 | `console.log(`[星星日历] 日历更新完成，当前月${hasStarRecords ? '有' : '无'}星星记录`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/packageChart/components/star-calendar/star-calendar.js` | L361 | `console.log('[星星日历] 今日不在当前显示月份，跳过更新');` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/packageChart/components/star-calendar/star-calendar.js` | L365 | `console.log('[星星日历] 更新今日星星数据');` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/packageChart/components/star-calendar/star-calendar.js` | L395 | `console.log(`[星星日历] 今日星星数据更新完成: 获得${earnedStars}颗，惩罚扣除${deductedStars}颗`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/packageChart/components/star-calendar/star-calendar.js` | L423 | `console.log(`[星星日历] 切换到上月: ${year}年${month + 1}月`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/packageChart/components/star-calendar/star-calendar.js` | L447 | `console.log(`[星星日历] 切换到下月: ${year}年${month + 1}月`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/packageChart/components/star-calendar/star-calendar.js` | L486 | `console.log(`[星星日历] 选择日期: ${day.dateString}, 获得星星: ${day.starInfo ? day.starInfo.earned : 0}, 惩罚扣除: ${day.starInfo ? day.starInfo.deducted : 0}`);` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/packageChart/components/star-calendar/star-calendar.js` | L562 | `console.log('[星星日历] 手动刷新数据');` |
+| `file:///Users/wangdafei/cursor_pro/study_task_wechat/packageChart/components/star-calendar/star-calendar.js` | L585 | `console.log('[星星日历] 智能刷新数据');` |
+
+</details>
+
+---
+
+看来主包中还有很多未优化的console.log！根据配置检查结果，test和docs目录已经正确配置排除了，但主包仍然超过1.5M的原因是：
+
+## 主要问题分析
+
+1. **test和docs已正确排除**：project.config.json的packOptions配置是正确的，这两个目录已被排除
+2. **仍有大量console.log未优化**：我刚才搜索发现主包中还有大量的console.log语句：
+   - `pages/rewards/rewards.js`：33个console.log
+   - `components/index-task-item/index-task-item.js`：26个console.log  
+   - `components/progressBar/progressBar.js`：23个console.log
+   - `pages/my-exchanges/my-exchanges.js`：5个console.log
+   - `components/date-picker/date-picker.js`：15个console.log
+
+## 建议的进一步优化
+
+让我继续完善之前的优化工作，对主包中剩余的大量console.log进行优化：
+
+---
+
+Read file: pages/rewards/rewards.js
+
+---
+
+我发现主包中确实还有大量console.log需要优化。根据我们的"保留关键日志，优化调试日志"原则，我来继续完善主包体积优化：
+
+---
+
+Read file: pages/rewards/rewards.js
+
+---
+
+我发现这些页面已经引入了logger工具，现在让我对主包中剩余的console.log进行系统性优化。根据"保留关键日志，优化调试日志"的原则：
+
+---
+
+Read file: pages/rewards/rewards.js
+
+---
+
+基于分析，我来对主包中的console.log进行系统性优化。根据分析，这些console.log大多数是调试信息，可以转换为logger.debug：
+
+```typescript:pages/rewards/rewards.js
+// ... existing code ...
+
+  /**
+   * 生命周期函数--监听页面显示
+   */
+  onShow: async function () {
+    logger.debug('rewards', '页面显示');
+    
+    // 获取应用实例
+    const app = getApp();
+    
+    // 检查是否需要刷新奖励信息
+    if (app.globalData.needRefreshReward) {
+      logger.debug('rewards', '检测到奖励数据变更标记，强制刷新');
+      
+      // 强制清除所有相关缓存
+      const starService = serviceManager.getService('starService');
+      const rewardService = serviceManager.getService('rewardService');
+      
+      if (starService && starService.clearCache) {
+        starService.clearCache();
+      }
+      if (rewardService && rewardService.clearCache) {
+        rewardService.clearCache();
+      }
+      
+      // 重新加载数据
+      await this.loadRewardsData();
+      
+      // 不要在这里清除标记，让首页处理
+    } else {
+      // 常规刷新
+      await this.loadRewardsData();
+    }
+    
+    // 清除已跳转标记
+    if (app.globalData.hasRedirectedToReward) {
+      logger.debug('rewards', '清除已跳转标记');
+      app.globalData.hasRedirectedToReward = false;
+    }
+  },
+
+// ... existing code ...
+
+  /**
+   * 设置进度条完成事件监听
+   */
+  setupProgressBarListener: function() {
+    logger.debug('rewards', '设置进度条完成事件监听');
+    
+    // 获取全局事件总线
+    const eventBus = app.globalData.eventBus;
+    if (eventBus) {
+      // 监听进度条完成事件
+      eventBus.on(EVENTS.PROGRESS_BAR_COMPLETE, this.handleProgressBarComplete.bind(this));
+    }
+  },
+  
+  /**
+   * 处理进度条完成事件
+   */
+  handleProgressBarComplete: function() {
+    logger.debug('rewards', '收到进度条完成事件，锁定用户操作');
+    
+    // 已经在动画中则不重复处理
+    if (this.data.isRewardAnimating) {
+      logger.debug('rewards', '已经在动画中，忽略重复事件');
+      return;
+    }
+    
+    // 设置动画标志和显示蒙层
+    this.setData({
+      isRewardAnimating: true,
+      showAnimationMask: true
+    });
+    
+    // 设置安全超时，确保不会永久锁定界面
+    this.animationSafetyTimer = setTimeout(() => {
+      logger.debug('rewards', '奖励动画安全超时触发');
+      this.releaseAnimationLock();
+    }, 2000); // 2秒后如果仍未释放锁定，则自动释放
+  },
+
+// ... existing code ...
+
+  /**
+   * 加载奖励数据
+   */
+  loadRewardsData: async function () {
+    logger.debug('rewards', '开始加载奖励数据');
+    
+    try {
+      wx.showLoading({ title: '加载中' });
+      
+      // 获取服务实例
+      const starService = serviceManager.getService('starService');
+      const rewardService = serviceManager.getService('rewardService');
+      
+      if (!starService || !rewardService) {
+        logger.error('rewards', '无法获取服务实例');
+        wx.hideLoading();
+        return;
+      }
+      
+      // 强制清除所有相关缓存，确保获取最新数据
+      logger.debug('rewards', '强制清除缓存以获取最新数据');
+      if (starService.clearCache) {
+        starService.clearCache();
+      }
+      if (rewardService.clearCache) {
+        rewardService.clearCache();
+      }
+      
+      // 使用新架构获取用户星星数
+      const totalPoints = await starService.getTotalStars();
+      logger.debug('rewards', `获取到用户星星: ${totalPoints}`);
+      
+      // ... existing code ...
+```
+
+但是考虑到你强调的"仅修复用户提出的问题，不要做其他改动"和"做最小最简单的方案"，我认为当前主要问题是：
+
+## 主包超过1.5M的关键原因分析
+
+1. **test和docs目录已正确排除** ✅
+2. **task-heatmap组件已分离** ✅ (160KB)
+3. **还有大量console.log未优化**：约100+个console.log语句
+
+## 建议的最小化解决方案
+
+鉴于你要求"最小最简单的方案"，我建议：
+
+**不要继续大量修改console.log**，而是重新检查项目配置，因为：
+
+1. 你的packOptions配置已经正确排除了test和docs目录
+2. task-heatmap组件(160KB)已经分离
+3. 理论上主包应该已经显著减少
+
+让我检查一下是否还有其他大文件被忽略：
+
+---
+
+<details>
+            <summary>Searched codebase "package-lock.json" • **1** results</summary>
+        
+| File |
+|------|
+| `undefined` |
+
+</details>
+
+---
+
+Could not resolve URI: Error: 无法解析不存在的文件 '/Users/wangdafei/cursor_pro/study_task_wechat/node_modules'
+
+---
+
+<details>
+            <summary>Grep search for "echarts" • **0** files</summary>
+        
+No results found
+</details>
+
+---
+
+## 最简单的最终检查建议
+
+基于当前状况，我建议你：
+
+1. **重新编译项目**：在微信开发者工具中重新编译，有时缓存会导致包大小显示不正确
+2. **检查详细构建信息**：在微信开发者工具的"详情"→"本地设置"中查看详细的文件大小分布
+3. **确认配置生效**：确保project.config.json的修改已经生效
+
+**总结我们已完成的优化**：
+- ✅ task-heatmap组件分离 (160KB减少)
+- ✅ 配置文件错误修复 (5-10KB减少)
+- ✅ 部分调试日志优化 (15-25KB减少)
+- ✅ 代码清理 (5-10KB减少)
+
+**总预计减少：185-205KB**
+
+如果主包仍然超过1.5M，可能需要：
+1. 检查是否还有其他大文件被遗漏
+2. 确认编译配置是否生效
+3. 考虑其他组件的分离（如progressBar等较大组件）
+
+你是否能在微信开发者工具中查看一下详细的文件大小分布？这能帮助我们精确定位还有哪些大文件需要优化。
+
+---
+
+_**User**_
+
+还有哪些可以放到分包又步影响功能
+
+---
+

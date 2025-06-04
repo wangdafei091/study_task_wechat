@@ -12,6 +12,7 @@
  * />
  */
 const Constants = require('../../utils/constants.js');
+const logger = require('../../utils/logger');
 
 Component({
   /**
@@ -34,7 +35,7 @@ Component({
           
           // 添加详细的状态变化日志
           if (oldVal) {
-            console.log(`[index-task-item] 任务属性变化检测:`, {
+            logger.debug('index-task-item', `任务属性变化检测:`, {
               taskId: newVal.id,
               title: newVal.title,
               statusChange: `${oldVal.status} -> ${newVal.status}`,
@@ -44,11 +45,11 @@ Component({
             
             // 添加描述字段的详细追踪
             if (oldVal.description !== newVal.description) {
-              console.log(`[index-task-item] 描述字段变化: "${oldVal.description}" -> "${newVal.description}"`);
-              console.log(`[index-task-item] 描述字段类型: ${typeof newVal.description}`);
+              logger.debug('index-task-item', `描述字段变化: "${oldVal.description}" -> "${newVal.description}"`);
+              logger.debug('index-task-item', `描述字段类型: ${typeof newVal.description}`);
             }
           } else {
-            console.log(`[index-task-item] 任务初始化:`, {
+            logger.debug('index-task-item', `任务初始化:`, {
               taskId: newVal.id,
               title: newVal.title,
               status: newVal.status,
@@ -69,7 +70,7 @@ Component({
           } else if (typeof newVal.pointsExpiry === 'string' && Constants.POINTS_EXPIRY.TEXT[newVal.pointsExpiry]) {
             // 未完成任务，显示完成后的有效期类型描述
             expiryText = Constants.POINTS_EXPIRY.TEXT[newVal.pointsExpiry];
-            console.log(`[index-task-item] 从常量映射星星有效期: ${newVal.pointsExpiry} -> ${expiryText}`);
+            logger.debug('index-task-item', `从常量映射星星有效期: ${newVal.pointsExpiry} -> ${expiryText}`);
           } else if (typeof newVal.pointsExpiry === 'number') {
             // 时间戳类型，计算与当前时间的差距
             const now = new Date().getTime();
@@ -93,7 +94,7 @@ Component({
           // 计算任务锁定状态
           const isLocked = this._calculateTaskLockStatus(newVal);
           
-          console.log(`[index-task-item] 🔒 任务属性更新: ${newVal.title}, 锁定状态=${isLocked}, lastExchangeTime=${this.properties.lastExchangeTime}`);
+          logger.debug('index-task-item', `🔒 任务属性更新: ${newVal.title}, 锁定状态=${isLocked}, lastExchangeTime=${this.properties.lastExchangeTime}`);
           
           // 将处理好的有效期文本保存到组件data中
           this.setData({
@@ -104,8 +105,8 @@ Component({
           });
           
           if (statusChanged) {
-            console.log(`[index-task-item] 任务状态变化: ${oldVal.status} -> ${newVal.status}, 星星状态: ${oldVal.starAwarded} -> ${newVal.starAwarded}`);
-            console.log(`[index-task-item] 强制UI更新，新任务数据:`, {
+            logger.debug('index-task-item', `任务状态变化: ${oldVal.status} -> ${newVal.status}, 星星状态: ${oldVal.starAwarded} -> ${newVal.starAwarded}`);
+            logger.debug('index-task-item', `强制UI更新，新任务数据:`, {
               id: newVal.id,
               status: newVal.status,
               starAwarded: newVal.starAwarded,
@@ -113,7 +114,7 @@ Component({
             });
           }
           
-          console.log(`[index-task-item] 渲染任务: ${newVal.title}, 类型: ${newVal.type}, 星星: ${newVal.points || 0}颗, 有效期: ${expiryText}, 锁定状态: ${isLocked}`);
+          logger.debug('index-task-item', `渲染任务: ${newVal.title}, 类型: ${newVal.type}, 星星: ${newVal.points || 0}颗, 有效期: ${expiryText}, 锁定状态: ${isLocked}`);
         }
       }
     },
@@ -121,11 +122,11 @@ Component({
       type: Number,
       value: null,
       observer: function(newVal, oldVal) {
-        console.log(`[index-task-item] 🔒 lastExchangeTime属性变化: ${oldVal} -> ${newVal}`);
+        logger.debug('index-task-item', `🔒 lastExchangeTime属性变化: ${oldVal} -> ${newVal}`);
         // 当最后兑换时间变化时，重新计算所有任务的锁定状态
         if (newVal !== oldVal && this.properties.task) {
           const isLocked = this._calculateTaskLockStatus(this.properties.task);
-          console.log(`[index-task-item] 🔒 重新计算锁定状态: 任务="${this.properties.task.title}", 锁定=${isLocked}`);
+          logger.debug('index-task-item', `🔒 重新计算锁定状态: 任务="${this.properties.task.title}", 锁定=${isLocked}`);
           this.setData({
             isLocked: isLocked
           });
@@ -172,11 +173,11 @@ Component({
   methods: {
     // 点击复选框完成任务
     onCheckboxTap: function(e) {
-      console.log('[index-task-item] 任务完成状态切换:', this.properties.task.id);
+      logger.debug('index-task-item', '任务完成状态切换:', this.properties.task.id);
       
       // 防止重复点击
       if (this.data.isProcessing) {
-        console.log('[index-task-item] 正在处理中，忽略点击');
+        logger.debug('index-task-item', '正在处理中，忽略点击');
         return;
       }
       
@@ -196,7 +197,7 @@ Component({
         if (!task.starAwarded) {
           this.triggerStarAnimation();
         } else {
-          console.log('[index-task-item] 任务已获得过星星，不显示星星动画');
+          logger.debug('index-task-item', '任务已获得过星星，不显示星星动画');
         }
       }
       
@@ -247,7 +248,7 @@ Component({
 
     // 触发星星动画
     triggerStarAnimation: function() {
-      console.log('[index-task-item] 触发星星获得动画');
+      logger.debug('index-task-item', '触发星星获得动画');
       
       this.setData({
         showStarAnimation: true
@@ -392,26 +393,26 @@ Component({
     // 计算任务锁定状态
     _calculateTaskLockStatus: function(task) {
       if (!task) {
-        console.log('[index-task-item] 🔒 锁定状态计算: 任务为空，返回false');
+        logger.debug('index-task-item', '🔒 锁定状态计算: 任务为空，返回false');
         return false;
       }
       
       // 检查任务是否已完成（兼容不同的数据格式）
       const isCompleted = task.isCompleted ? task.isCompleted() : (task.status === 1);
       if (!isCompleted) {
-        console.log(`[index-task-item] 🔒 锁定状态计算: 任务"${task.title}"未完成(status=${task.status})，返回false`);
+        logger.debug('index-task-item', `🔒 锁定状态计算: 任务"${task.title}"未完成(status=${task.status})，返回false`);
         return false;
       }
       
       const lastExchangeTime = this.properties.lastExchangeTime;
       if (!lastExchangeTime) {
-        console.log(`[index-task-item] 🔒 锁定状态计算: 任务"${task.title}"没有兑换记录(lastExchangeTime=${lastExchangeTime})，返回false`);
+        logger.debug('index-task-item', `🔒 锁定状态计算: 任务"${task.title}"没有兑换记录(lastExchangeTime=${lastExchangeTime})，返回false`);
         return false;
       }
       
       // 如果任务完成时间早于最后兑换时间，则被锁定
       const isLocked = task.completionTime && task.completionTime < lastExchangeTime;
-      console.log(`[index-task-item] 🔒 锁定状态计算: 任务"${task.title}"`, {
+      logger.debug('index-task-item', `🔒 锁定状态计算: 任务"${task.title}"`, {
         completionTime: task.completionTime,
         lastExchangeTime: lastExchangeTime,
         isLocked: isLocked,
@@ -428,7 +429,7 @@ Component({
    */
   lifetimes: {
     attached: function() {
-      console.log('[index-task-item] 组件加载完成，使用优化后的布局展示');
+      logger.debug('index-task-item', '组件加载完成，使用优化后的布局展示');
       
       // 处理任务描述
       if (this.properties.task) {
@@ -440,26 +441,26 @@ Component({
       const lastExchangeTime = this.properties.lastExchangeTime;
       if (task) {
         const isLocked = this._calculateTaskLockStatus(task);
-        console.log(`[index-task-item] 🔒 组件初始化锁定状态检查: 任务="${task.title}", 锁定=${isLocked}, lastExchangeTime=${lastExchangeTime}`);
+        logger.debug('index-task-item', `🔒 组件初始化锁定状态检查: 任务="${task.title}", 锁定=${isLocked}, lastExchangeTime=${lastExchangeTime}`);
       }
       
       // 记录必做任务UI优化
       if (this.properties.task && this.properties.task.isRequired) {
-        console.log('[index-task-item] 使用优化后的必做任务UI: 积极引导模式，统一"数字+星星"显示格式');
+        logger.debug('index-task-item', '使用优化后的必做任务UI: 积极引导模式，统一"数字+星星"显示格式');
       }
       
       // 记录任务时间属性
       if (this.properties.task) {
         const task = this.properties.task;
-        console.log(`[index-task-item] 任务属性检查: ID=${task.id}, 标题=${task.title}, 有起止时间=${Boolean(task.startTime)}, 全天=${Boolean(task.isAllDay)}`);
+        logger.debug('index-task-item', `任务属性检查: ID=${task.id}, 标题=${task.title}, 有起止时间=${Boolean(task.startTime)}, 全天=${Boolean(task.isAllDay)}`);
         
         // 记录时间显示逻辑
         if (task.startTime && !task.isAllDay) {
-          console.log(`[index-task-item] 显示时间信息: ${task.startTime}${task.endTime ? ` - ${task.endTime}` : ''}`);
+          logger.debug('index-task-item', `显示时间信息: ${task.startTime}${task.endTime ? ` - ${task.endTime}` : ''}`);
         }
         
         // 记录星星有效期样式优化
-        console.log(`[index-task-item] 应用星星有效期文本不换行样式，修复日期换行显示问题`);
+        logger.debug('index-task-item', '应用星星有效期文本不换行样式，修复日期换行显示问题');
       }
     }
   }

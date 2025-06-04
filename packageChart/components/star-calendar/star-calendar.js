@@ -2,6 +2,7 @@ const dateUtils = require('../../../utils/dateUtils.js');
 const analyticsUtils = require('../../utils/analyticsUtils.js');
 const { EVENTS } = require('../../../utils/constants.js');
 const serviceManager = require('../../../services/service-manager.js');
+const logger = require('../../../utils/logger.js');
 
 Component({
   /**
@@ -31,6 +32,8 @@ Component({
     starRecordsCache: {}, // 添加星星记录缓存
     lastTouchTime: 0, // 添加触摸时间记录，用于节流
     activeStarInfo: null, // 当前激活的星星信息（用于动画）
+    monthCache: {}, // 月份数据缓存
+    monthsToRefresh: new Set() // 需要刷新的月份
   },
 
   /**
@@ -38,50 +41,52 @@ Component({
    */
   lifetimes: {
     attached: function() {
-      console.log('[星星日历] 组件初始化');
+      logger.debug('星星日历', '组件初始化');
       this.initCalendar();
       
       // 订阅任务状态变更事件
-      this.taskStatusChangeListener = (data) => {
-        console.log('[星星日历] 接收到任务状态变更事件:', data);
-        
-        // 获取变更任务的日期
-        const taskDate = data.task ? data.task.date : dateUtils.getTodayString();
-        
-        // 如果是当天任务，直接更新今日数据
-        if (taskDate === dateUtils.getTodayString()) {
-          this.updateTodayDataOnly();
-        } else {
-          // 非当天任务，标记对应月份缓存需要刷新
-          const [year, month] = taskDate.split('-');
-          const monthKey = `${year}-${month}`;
+      const app = getApp();
+      if (app && app.globalData && app.globalData.eventBus) {
+        app.globalData.eventBus.on(EVENTS.TASK_STATUS_CHANGED, (data) => {
+          logger.debug('星星日历', '接收到任务状态变更事件:', data);
           
-          const updatedCache = {...this.data.starRecordsCache};
-          if (updatedCache[monthKey]) {
-            updatedCache[monthKey].needsRefresh = true;
-            this.setData({ starRecordsCache: updatedCache });
-            console.log(`[星星日历] 标记月份 ${monthKey} 需要刷新`);
+          if (data && data.task && data.task.date) {
+            // 解析任务日期，获取年月
+            const taskDate = new Date(data.task.date + 'T00:00:00');
+            const year = taskDate.getFullYear();
+            const month = taskDate.getMonth();
+            const monthKey = `${year}-${month}`;
+            
+            // 清除对应月份的缓存
+            if (this.data.monthCache[monthKey]) {
+              delete this.data.monthCache[monthKey];
+              this.setData({
+                monthCache: this.data.monthCache
+              });
+            }
+            
+            // 标记月份需要刷新
+            this.data.monthsToRefresh.add(monthKey);
+            logger.debug('星星日历', `标记月份 ${monthKey} 需要刷新`);
+            
+            // 如果是当前显示月份，立即刷新
+            const currentMonthKey = `${this.properties.currentYear}-${String(this.properties.currentMonth + 1).padStart(2, '0')}`;
+            if (monthKey === currentMonthKey) {
+              this.loadStarRecords();
+            }
           }
-          
-          // 如果是当前显示的月份，则刷新数据
-          if (monthKey === `${this.data.currentYear}-${String(this.data.currentMonth + 1).padStart(2, '0')}`) {
-            this.loadStarRecords();
-          }
-        }
-      };
-      
-      // 通过事件总线订阅任务状态变更事件
-      if (getApp().globalData.eventBus) {
-        getApp().globalData.eventBus.on(EVENTS.TASK_STATUS_CHANGED, this.taskStatusChangeListener);
-        console.log('[星星日历] 已订阅任务状态变更事件');
+        });
+        
+        logger.debug('星星日历', '已订阅任务状态变更事件');
       }
     },
     
     detached: function() {
       // 取消事件订阅
-      if (getApp().globalData.eventBus && this.taskStatusChangeListener) {
-        getApp().globalData.eventBus.off(EVENTS.TASK_STATUS_CHANGED, this.taskStatusChangeListener);
-        console.log('[星星日历] 已取消任务状态变更事件订阅');
+      const app = getApp();
+      if (app && app.globalData && app.globalData.eventBus) {
+        app.globalData.eventBus.off(EVENTS.TASK_STATUS_CHANGED);
+        logger.debug('星星日历', '已取消任务状态变更事件订阅');
       }
     }
   },
@@ -118,7 +123,7 @@ Component({
       // 获取星星记录
       this.loadStarRecords();
       
-      console.log(`[星星日历] 初始化完成，当前显示: ${year}年${month + 1}月`);
+      logger.debug('星星日历', `初始化完成，当前显示: ${year}年${month + 1}月`);
     },
     
     /**
@@ -138,7 +143,7 @@ Component({
      * 生成日历数据
      */
     generateCalendarDays: function() {
-      console.log('[星星日历] 生成日历数据');
+      logger.debug('星星日历', '生成日历数据');
       
       const year = this.data.currentYear;
       const month = this.data.currentMonth;
@@ -244,7 +249,7 @@ Component({
       
       // 添加过滤日志
       if (record.isExpense() && !isPenalty) {
-        console.log(`[星星日历] 过滤非惩罚性扣减: source=${source}, points=${record.points}`);
+        logger.debug('星星日历', `过滤非惩罚性扣减: source=${source}, points=${record.points}`);
       }
       
       return isPenalty;
@@ -259,14 +264,14 @@ Component({
       const monthKey = `${year}-${String(month + 1).padStart(2, '0')}`;
       
       // 检查缓存
-      const cachedData = this.data.starRecordsCache[monthKey];
-      if (cachedData && !cachedData.needsRefresh) {
-        console.log(`[星星日历] 使用缓存数据: ${monthKey}`);
+      const cachedData = this.data.monthCache[monthKey];
+      if (cachedData && !this.data.monthsToRefresh.has(monthKey)) {
+        logger.debug('星星日历', `使用缓存数据: ${monthKey}`);
         this.updateCalendarWithStars(cachedData.records);
         return;
       }
       
-      console.log(`[星星日历] 加载星星记录: ${monthKey}`);
+      logger.debug('星星日历', `加载星星记录: ${monthKey}`);
       this.setData({ isLoading: true });
       
       // 获取当月的开始和结束日期
@@ -275,10 +280,10 @@ Component({
       
       serviceManager.getStarService().getStarRecordsByDateRange(startDate, endDate)
         .then(records => {
-          console.log(`[星星日历] 获取到 ${records.length} 条星星记录`);
+          logger.debug('星星日历', `获取到 ${records.length} 条星星记录`);
           
           // 更新缓存
-          const updatedCache = {...this.data.starRecordsCache};
+          const updatedCache = {...this.data.monthCache};
           updatedCache[monthKey] = {
             records: records,
             needsRefresh: false,
@@ -286,7 +291,7 @@ Component({
           };
           
           this.setData({ 
-            starRecordsCache: updatedCache,
+            monthCache: updatedCache,
             isLoading: false
           });
           
@@ -294,7 +299,7 @@ Component({
           this.updateCalendarWithStars(records);
         })
         .catch(error => {
-          console.error('[星星日历] 获取星星记录失败:', error);
+          logger.error('星星日历', '获取星星记录失败:', error);
           this.setData({ isLoading: false });
         });
     },
@@ -303,7 +308,7 @@ Component({
      * 更新日历显示星星数据
      */
     updateCalendarWithStars: function(starRecords) {
-      console.log('[星星日历] 数据类型已修复：确保earnedStars和deductedStars为数字类型，避免字符串拼接问题');
+      logger.debug('星星日历', '数据类型已修复：确保earnedStars和deductedStars为数字类型，避免字符串拼接问题');
       
       const calendarDays = this.data.calendarDays.map(day => {
         if (!day.isCurrentMonth) {
@@ -330,7 +335,7 @@ Component({
         
         // 添加调试日志
         if (starInfo) {
-          console.log(`[星星日历] 计算星星数据: 日期=${day.dateString}, 获得=${earnedStars}(${typeof earnedStars}), 惩罚扣除=${deductedStars}(${typeof deductedStars})`);
+          logger.debug('星星日历', `计算星星数据: 日期=${day.dateString}, 获得=${earnedStars}(${typeof earnedStars}), 惩罚扣除=${deductedStars}(${typeof deductedStars})`);
         }
         
         return {
@@ -348,7 +353,7 @@ Component({
         hasStarRecords
       });
       
-      console.log(`[星星日历] 日历更新完成，当前月${hasStarRecords ? '有' : '无'}星星记录`);
+      logger.debug('星星日历', `日历更新完成，当前月${hasStarRecords ? '有' : '无'}星星记录`);
     },
     
     /**
@@ -359,11 +364,11 @@ Component({
       const todayIndex = this.data.calendarDays.findIndex(day => day.dateString === today);
       
       if (todayIndex === -1) {
-        console.log('[星星日历] 今日不在当前显示月份，跳过更新');
+        logger.debug('星星日历', '今日不在当前显示月份，跳过更新');
         return;
       }
       
-      console.log('[星星日历] 更新今日星星数据');
+      logger.debug('星星日历', '更新今日星星数据');
       
       serviceManager.getStarService().getStarRecordsByDate(today)
         .then(records => {
@@ -393,10 +398,10 @@ Component({
             calendarDays: updatedDays
           });
           
-          console.log(`[星星日历] 今日星星数据更新完成: 获得${earnedStars}颗，惩罚扣除${deductedStars}颗`);
+          logger.debug('星星日历', `今日星星数据更新完成: 获得${earnedStars}颗，惩罚扣除${deductedStars}颗`);
         })
         .catch(error => {
-          console.error('[星星日历] 更新今日星星数据失败:', error);
+          logger.error('星星日历', '更新今日星星数据失败:', error);
         });
     },
     
@@ -421,7 +426,7 @@ Component({
       this.generateCalendarDays();
       this.loadStarRecords();
       
-      console.log(`[星星日历] 切换到上月: ${year}年${month + 1}月`);
+      logger.debug('星星日历', `切换到上月: ${year}年${month + 1}月`);
     },
     
     /**
@@ -445,7 +450,7 @@ Component({
       this.generateCalendarDays();
       this.loadStarRecords();
       
-      console.log(`[星星日历] 切换到下月: ${year}年${month + 1}月`);
+      logger.debug('星星日历', `切换到下月: ${year}年${month + 1}月`);
     },
     
     /**
@@ -484,7 +489,7 @@ Component({
         this.showStarAnimation(day);
       }
       
-      console.log(`[星星日历] 选择日期: ${day.dateString}, 获得星星: ${day.starInfo ? day.starInfo.earned : 0}, 惩罚扣除: ${day.starInfo ? day.starInfo.deducted : 0}`);
+      logger.debug('星星日历', `选择日期: ${day.dateString}, 获得星星: ${day.starInfo ? day.starInfo.earned : 0}, 惩罚扣除: ${day.starInfo ? day.starInfo.deducted : 0}`);
     },
     
     /**
@@ -560,19 +565,19 @@ Component({
      * 刷新当前月份数据
      */
     refresh: function() {
-      console.log('[星星日历] 手动刷新数据');
+      logger.debug('星星日历', '手动刷新数据');
       
       // 清除当前月份缓存
       const year = this.data.currentYear;
       const month = this.data.currentMonth;
       const monthKey = `${year}-${String(month + 1).padStart(2, '0')}`;
       
-      const updatedCache = {...this.data.starRecordsCache};
+      const updatedCache = {...this.data.monthCache};
       if (updatedCache[monthKey]) {
         updatedCache[monthKey].needsRefresh = true;
       }
       
-      this.setData({ starRecordsCache: updatedCache });
+      this.setData({ monthCache: updatedCache });
       
       // 重新加载数据
       this.loadStarRecords();
@@ -583,11 +588,11 @@ Component({
      * 清除所有缓存并重新加载当前月份数据，用于确保数据最新
      */
     smartRefresh: function() {
-      console.log('[星星日历] 智能刷新数据');
+      logger.debug('星星日历', '智能刷新数据');
       
       // 清除所有月份的缓存
       this.setData({ 
-        starRecordsCache: {} 
+        monthCache: {} 
       });
       
       // 重新加载当前月份数据

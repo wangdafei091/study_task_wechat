@@ -1,3 +1,5 @@
+const logger = require('../../utils/logger');
+
 Component({
   /**
    * 组件的属性列表
@@ -11,7 +13,7 @@ Component({
         if (newVal) {
           // 当显示时，重新生成日历数据
           this.generateCalendarDays();
-          console.log(`[DatePicker] 显示${this.data.type}日期选择器`);
+          logger.debug('DatePicker', `显示${this.data.type}日期选择器`);
         }
       }
     },
@@ -74,7 +76,7 @@ Component({
       // 初始化年月显示
       this.initYearMonthDisplay();
       
-      console.log(`[DatePicker] 组件初始化，类型: ${this.data.type}, 当前日期: ${this.data.currentDate}`);
+      logger.debug('DatePicker', `组件初始化，类型: ${this.data.type}, 当前日期: ${this.data.currentDate}`);
     },
     
     /**
@@ -95,7 +97,7 @@ Component({
         monthText
       });
       
-      console.log(`[DatePicker] 初始化年月显示: ${yearMonth}`);
+      logger.debug('DatePicker', `初始化年月显示: ${yearMonth}`);
     },
     
     /**
@@ -152,7 +154,7 @@ Component({
         calendarDays: days
       });
       
-      console.log(`[DatePicker] 生成日历数据，年:${year}, 月:${month+1}`);
+      logger.debug('DatePicker', `生成日历数据，年:${year}, 月:${month+1}`);
     },
     
     /**
@@ -248,7 +250,7 @@ Component({
       const totalCells = rowsNeeded * 7;
       const nextMonthDays = totalCells - totalDaysSoFar;
       
-      console.log(`[DatePicker] 当前已有${totalDaysSoFar}天，固定6行需要补充${nextMonthDays}天`);
+      logger.debug('DatePicker', `当前已有${totalDaysSoFar}天，固定6行需要补充${nextMonthDays}天`);
       
       if (nextMonthDays <= 0) return;
       
@@ -284,7 +286,7 @@ Component({
       
       // 如果选择的是历史日期，显示温和准确的提示并阻止选择
       if (selectedDate < today) {
-        console.log(`[DatePicker] 用户尝试选择历史日期: ${date}，已提示并阻止选择`);
+        logger.debug('DatePicker', `用户尝试选择历史日期: ${date}，已提示并阻止选择`);
         
         // 轻微震动反馈
         wx.vibrateShort({
@@ -336,7 +338,7 @@ Component({
         type: this.data.type
       });
       
-      console.log(`[DatePicker] 选择日期: ${date}, 类型: ${this.data.type}`);
+      logger.debug('DatePicker', `选择日期: ${date}, 类型: ${this.data.type}`);
     },
     
     /**
@@ -344,14 +346,14 @@ Component({
      */
     changeMonth: function(e) {
       const action = e.currentTarget.dataset.action;
-      console.log(`[DatePicker] 点击${action === 'prev' ? '上' : '下'}个月按钮`);
+      logger.debug('DatePicker', `点击${action === 'prev' ? '上' : '下'}个月按钮`);
       
       // 获取当前年月
       const yearMonthParts = this.data.yearMonth.split('-');
       let year = parseInt(yearMonthParts[0]);
       let month = parseInt(yearMonthParts[1]) - 1;
       
-      console.log(`[DatePicker] 当前日期: ${year}年${month+1}月`);
+      logger.debug('DatePicker', `当前日期: ${year}年${month+1}月`);
       
       // 根据操作调整月份
       if (action === 'prev') {
@@ -368,7 +370,7 @@ Component({
         }
       }
       
-      console.log(`[DatePicker] 切换后日期: ${year}年${month+1}月`);
+      logger.debug('DatePicker', `切换后日期: ${year}年${month+1}月`);
       
       // 重新生成日历数据
       this.generateCalendarDays(year, month);
@@ -412,7 +414,7 @@ Component({
       // 重新生成日历数据
       this.generateCalendarDays(year, month - 1);
       
-      console.log(`[DatePicker] 切换年份: ${year}年`);
+      logger.debug('DatePicker', `切换年份: ${year}年`);
     },
     
     /**
@@ -425,7 +427,7 @@ Component({
       // 重新生成日历数据
       this.generateCalendarDays(year, month - 1);
       
-      console.log(`[DatePicker] 修改年月: ${year}年${month}月`);
+      logger.debug('DatePicker', `修改年月: ${year}年${month}月`);
     },
     
     /**
@@ -436,7 +438,7 @@ Component({
         type: this.data.type
       });
       
-      console.log(`[DatePicker] 关闭${this.data.type}日期选择器`);
+      logger.debug('DatePicker', `关闭${this.data.type}日期选择器`);
     },
     
     /**

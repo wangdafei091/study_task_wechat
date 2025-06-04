@@ -32,8 +32,7 @@ Component({
       type: Array,
       value: [],
       observer: function(newVal, oldVal) {
-        console.log('[task-heatmap] 任务数据已更新，新数据长度:', newVal ? newVal.length : 0);
-        const logger = require('../../../utils/logger');  // 更新路径
+        logger.debug('task-heatmap', '任务数据已更新，新数据长度:', newVal ? newVal.length : 0);
  
         if (newVal && newVal.length > 0) {
           // 检查任务数据是否真的发生了变化
@@ -42,7 +41,7 @@ Component({
                             JSON.stringify(newVal) !== JSON.stringify(oldVal);
           
           if (hasChanged) {
-            console.log('[task-heatmap] 检测到任务数据变化，重新计算热力图');
+            logger.debug('task-heatmap', '检测到任务数据变化，重新计算热力图');
             this.calculateHeatMap();
             
             // 修复：如果当前正在显示某个日期的任务列表，则刷新该列表
@@ -82,10 +81,10 @@ Component({
               });
             }
           } else {
-            console.log('[task-heatmap] 任务数据引用已更新，但内容未变化');
+            logger.debug('task-heatmap', '任务数据引用已更新，但内容未变化');
           }
         } else {
-          console.log('[task-heatmap] 收到空任务数据，重置热力图');
+          logger.debug('task-heatmap', '收到空任务数据，重置热力图');
           // 即使是空数据也需要重新计算，以清除热力图
           this.calculateHeatMap();
           
@@ -103,7 +102,7 @@ Component({
       type: String,
       value: 'task-edit', // 默认为任务编辑页面
       observer: function(newVal) {
-        console.log('[task-heatmap] 使用场景:', newVal);
+        logger.debug('task-heatmap', '使用场景:', newVal);
       }
     },
     // 添加外部控制月份的属性
@@ -164,7 +163,7 @@ Component({
    */
   lifetimes: {
     attached: function() {
-      console.log('[TaskHeatmap] 组件挂载');
+      logger.debug('TaskHeatmap', '组件挂载');
       
       // 记录热力图优化方案实施
       logger.info('TaskHeatmap', '热力图单行4个点优化方案已启用', {
@@ -236,13 +235,13 @@ Component({
       wx.getWindowInfo({
         success: (res) => {
           const screenWidth = res.screenWidth;
-          console.log(`[taskHeatmap] 设备屏幕宽度: ${screenWidth}px, 是否采用垂直布局: ${screenWidth <= 520}`);
+          logger.debug(`[taskHeatmap] 设备屏幕宽度: ${screenWidth}px, 是否采用垂直布局: ${screenWidth <= 520}`);
           this.setData({
             windowWidth: res.windowWidth
           });
         },
         fail: (err) => {
-          console.error('[taskHeatmap] 获取窗口信息失败:', err);
+          logger.error('[taskHeatmap] 获取窗口信息失败:', err);
           // 设置默认值
           this.setData({
             windowWidth: 375
@@ -261,7 +260,7 @@ Component({
         todayString: todayString
       });
       
-      console.log(`[TaskHeatmap] 设置今天日期: ${todayString}`);
+      logger.debug(`[TaskHeatmap] 设置今天日期: ${todayString}`);
       
       // 生成日历
       this.generateCalendar();
@@ -282,10 +281,10 @@ Component({
       
       // 确保关闭任何可能存在的加载提示
       try {
-        console.log('[task-heatmap] 组件销毁，确保关闭加载提示');
+        logger.debug('[task-heatmap] 组件销毁，确保关闭加载提示');
         wx.hideLoading();
       } catch (error) {
-        console.error('[task-heatmap] 组件销毁时关闭加载提示出错:', error);
+        logger.error('[task-heatmap] 组件销毁时关闭加载提示出错:', error);
       }
     }
   },
@@ -350,7 +349,7 @@ Component({
       // 计算需要补充的下个月天数（确保最后一行是完整的）
       const remainingDays = (rowsNeeded * 7) - totalDaysAdded;
       
-      console.log(`[TaskHeatmap] 当月需要${rowsNeeded}行，补充${remainingDays}天`);
+      logger.debug(`[TaskHeatmap] 当月需要${rowsNeeded}行，补充${remainingDays}天`);
       
       // 下个月的前几天
       for(let i = 1; i <= remainingDays; i++) {
@@ -423,7 +422,7 @@ Component({
         const weekday = this.getWeekdayName(date.getDay());
         return `${month}月${day}日 ${weekday}`;
       } catch (e) {
-        console.error('[TaskHeatmap] 日期格式化错误:', e);
+        logger.error('[TaskHeatmap] 日期格式化错误:', e);
         return dateStr;
       }
     },
@@ -441,7 +440,7 @@ Component({
       const title = task.title || '未命名任务';
       const taskId = task.id || '未知ID';
       
-      console.log(`[TaskHeatmap] 开始计算任务[${title}]压力值, ID: ${taskId}, 类型: ${type}`);
+      logger.debug(`[TaskHeatmap] 开始计算任务[${title}]压力值, ID: ${taskId}, 类型: ${type}`);
       
       // 初始化压力值
       let totalPressure = 0;
@@ -452,7 +451,7 @@ Component({
       if (type === 'habit') {
         basePressure = 2;
         totalPressure = basePressure;
-        console.log(`[TaskHeatmap] 习惯任务[${title}]基础压力: ${basePressure}点`);
+        logger.debug(`[TaskHeatmap] 习惯任务[${title}]基础压力: ${basePressure}点`);
         
         return {
           total: totalPressure,
@@ -466,7 +465,7 @@ Component({
       if (task.isAllDay) {
         basePressure = 2;
         totalPressure = basePressure;
-        console.log(`[TaskHeatmap] 全天任务[${title}]基础压力: ${basePressure}点`);
+        logger.debug(`[TaskHeatmap] 全天任务[${title}]基础压力: ${basePressure}点`);
         
         return {
           total: totalPressure,
@@ -487,15 +486,15 @@ Component({
         const startMinutes = convertTimeToMinutes(task.startTime);
         const endMinutes = convertTimeToMinutes(task.endTime);
         
-        console.log(`[TaskHeatmap] 任务[${title}]时间范围: ${task.startTime}-${task.endTime}`);
-        console.log(`[TaskHeatmap] 转换为分钟: 开始=${startMinutes}分钟, 结束=${endMinutes}分钟`);
+        logger.debug(`[TaskHeatmap] 任务[${title}]时间范围: ${task.startTime}-${task.endTime}`);
+        logger.debug(`[TaskHeatmap] 转换为分钟: 开始=${startMinutes}分钟, 结束=${endMinutes}分钟`);
         
         // 计算时间差（分钟）
         let duration = endMinutes - startMinutes;
         
         // 检查时间差是否有效
         if (duration <= 0) {
-          console.error(`[TaskHeatmap] 错误: 任务[${title}]的结束时间早于或等于开始时间! 使用最小压力值`);
+          logger.error(`[TaskHeatmap] 错误: 任务[${title}]的结束时间早于或等于开始时间! 使用最小压力值`);
           return {
             total: 1,
             base: 0,
@@ -508,18 +507,18 @@ Component({
         durationPressure = Math.floor(duration / 10);
         totalPressure = durationPressure;
         
-        console.log(`[TaskHeatmap] 任务[${title}]实际时长: ${duration}分钟`);
-        console.log(`[TaskHeatmap] 任务[${title}]时长压力: ${durationPressure}点`);
+        logger.debug(`[TaskHeatmap] 任务[${title}]实际时长: ${duration}分钟`);
+        logger.debug(`[TaskHeatmap] 任务[${title}]时长压力: ${durationPressure}点`);
       } else {
         // 缺少时间范围的普通任务 - 记录错误
-        console.error(`[TaskHeatmap] 错误: 普通任务[${title}]缺少开始时间或结束时间! 使用最小压力值`);
+        logger.error(`[TaskHeatmap] 错误: 普通任务[${title}]缺少开始时间或结束时间! 使用最小压力值`);
         
         // 使用最小压力值
         durationPressure = 1;
         totalPressure = 1;
       }
       
-      console.log(`[TaskHeatmap] 任务[${title}]总压力值: ${totalPressure}点`);
+      logger.debug(`[TaskHeatmap] 任务[${title}]总压力值: ${totalPressure}点`);
       
       // 返回压力计算结果
       return {
@@ -538,7 +537,7 @@ Component({
     
     // 计算热力图
     calculateHeatMap(forcedTasks) {
-      console.log('[TaskHeatmap] 计算热力图数据');
+      logger.debug('[TaskHeatmap] 计算热力图数据');
       
       const days = [...this.data.days];
       
@@ -563,18 +562,18 @@ Component({
       const tasks = forcedTasks || this.properties.tasks;
       
       // 记录数据来源和任务数量
-      console.log(`[TaskHeatmap] 热力图计算使用${forcedTasks ? '外部提供' : '组件属性'}任务数据，数量: ${tasks ? tasks.length : 0}`);
+      logger.debug(`[TaskHeatmap] 热力图计算使用${forcedTasks ? '外部提供' : '组件属性'}任务数据，数量: ${tasks ? tasks.length : 0}`);
       
       // 如果任务列表为空，直接更新UI以重置热力图
       if (!tasks || tasks.length === 0) {
-        console.log('[TaskHeatmap] 任务列表为空，重置热力图所有日期块');
+        logger.debug('[TaskHeatmap] 任务列表为空，重置热力图所有日期块');
         
         // 确保更新UI，重置所有日期的热力值
         this.setData({ 
           days: days,
           "__dataTimestamp": Date.now() // 添加时间戳确保视图刷新
         }, () => {
-          console.log('[TaskHeatmap] 热力图已重置完成');
+          logger.info('TaskHeatmap', '热力图已重置完成');
         });
         
         return;
@@ -592,9 +591,9 @@ Component({
       });
       
       // 输出日期任务统计日志，辅助调试
-      console.log('[TaskHeatmap] 按日期分组任务统计:');
+      logger.debug('[TaskHeatmap] 按日期分组任务统计:');
       Object.keys(tasksByDate).forEach(date => {
-        console.log(`[TaskHeatmap] 日期: ${date}, 任务数: ${tasksByDate[date].length}`);
+        logger.debug(`[TaskHeatmap] 日期: ${date}, 任务数: ${tasksByDate[date].length}`);
       });
       
       // 更新每个日期的任务数量和热力等级
@@ -664,7 +663,7 @@ Component({
         // 计算日期热力等级 (1-4)
         const level = this.calculatePressureLevel(pressureIndex);
         
-        console.log(`[TaskHeatmap] 日期:${day.date} 任务数:${count} 压力指数:${pressureIndex.toFixed(1)} 色阶等级:${level.levelText} 星星:${starsTotal}（已获得:${starsEarned} 待获得:${starsPending}）`);
+        logger.debug(`[TaskHeatmap] 日期:${day.date} 任务数:${count} 压力指数:${pressureIndex.toFixed(1)} 色阶等级:${level.levelText} 星星:${starsTotal}（已获得:${starsEarned} 待获得:${starsPending}）`);
         
         return {
           ...day,
@@ -690,19 +689,19 @@ Component({
       
       // 检查是否有更新
       const hasChanges = JSON.stringify(updatedDays) !== JSON.stringify(this.data.days);
-      console.log(`[TaskHeatmap] 热力图数据${hasChanges ? '有' : '无'}变化，准备更新视图`);
+      logger.debug(`[TaskHeatmap] 热力图数据${hasChanges ? '有' : '无'}变化，准备更新视图`);
       
       this.setData({ 
         days: updatedDays,
         "__dataTimestamp": Date.now() // 添加时间戳确保视图更新
       }, () => {
-        console.log('[TaskHeatmap] 热力图视图更新完成');
+        logger.info('TaskHeatmap', '热力图视图更新完成');
       });
     },
     
     // 上个月
     prevMonth() {
-      console.log('[TaskHeatmap] 切换到上个月');
+      logger.debug('[TaskHeatmap] 切换到上个月');
       let newMonth = this.properties.currentMonth - 1;
       let newYear = this.properties.currentYear;
       
@@ -724,7 +723,7 @@ Component({
     
     // 下个月
     nextMonth() {
-      console.log('[TaskHeatmap] 切换到下个月');
+      logger.debug('[TaskHeatmap] 切换到下个月');
       let newMonth = this.properties.currentMonth + 1;
       let newYear = this.properties.currentYear;
       
@@ -746,7 +745,7 @@ Component({
     
     // 更新日期任务列表和压力显示
     onDayTap(e) {
-      console.log('[TaskHeatmap] 点击日期');
+      logger.debug('[TaskHeatmap] 点击日期');
       const dayData = e.currentTarget.dataset.day;
       const date = e.currentTarget.dataset.date;
       
@@ -764,7 +763,7 @@ Component({
         t => t.status === 1 || t.status === 'completed'
       ).length;
       
-      console.log(`[TaskHeatmap] 处理积分有效期：${completedTasksCount}个已完成任务，${dayTasks.length - completedTasksCount}个待完成任务`);
+      logger.debug(`[TaskHeatmap] 处理积分有效期：${completedTasksCount}个已完成任务，${dayTasks.length - completedTasksCount}个待完成任务`);
       
       // 统计星星信息
       let starsEarned = 0;    // 已获得的星星
@@ -790,21 +789,21 @@ Component({
       const starsTotal = starsEarned + starsPending;  // 可获得的星星总数
       const starsNet = starsTotal - starsAtRisk;     // 净收益
       
-      console.log('[TaskHeatmap] 星星统计 - 已获得:', starsEarned, '待获得:', starsPending, '风险扣除:', starsAtRisk, '总计:', starsTotal, '净收益:', starsNet);
+      logger.debug('[TaskHeatmap] 星星统计 - 已获得:', starsEarned, '待获得:', starsPending, '风险扣除:', starsAtRisk, '总计:', starsTotal, '净收益:', starsNet);
       
       // 使用预先计算好的压力值，避免重复计算
       let totalPressure = 0;
       if (dayData && dayData.pressure && dayData.pressure.total !== undefined) {
-        console.log(`[TaskHeatmap] 使用预计算的压力值: ${dayData.pressure.total}`);
+        logger.debug(`[TaskHeatmap] 使用预计算的压力值: ${dayData.pressure.total}`);
         totalPressure = dayData.pressure.total;
       } else {
-        console.log(`[TaskHeatmap] 日期没有预计算的压力值，使用默认值0`);
+        logger.debug(`[TaskHeatmap] 日期没有预计算的压力值，使用默认值0`);
       }
       
       // 使用统一的enhanceTaskData方法增强任务信息
       const tasks = dayTasks.map(task => {
         // 记录任务是否为必做任务
-        console.log(`[task-heatmap] 处理任务: ${task.title}, 是否必做: ${task.isRequired ? '是' : '否'}, ID: ${task.id}`);
+        logger.debug(`[task-heatmap] 处理任务: ${task.title}, 是否必做: ${task.isRequired ? '是' : '否'}, ID: ${task.id}`);
         
         // 使用统一的任务数据增强方法
         return this.enhanceTaskData(task);
@@ -830,7 +829,7 @@ Component({
       // 新增：生成任务汇总文案
       const taskSummaryText = this.generateTaskSummaryText(dayTasks);
       
-      console.log('[TaskHeatmap] 任务汇总文案：', taskSummaryText);
+      logger.debug('[TaskHeatmap] 任务汇总文案：', taskSummaryText);
       
       this.setData({
         selectedDate: date,
@@ -848,7 +847,7 @@ Component({
         taskSummaryText: taskSummaryText
       });
       
-      console.log(`[TaskHeatmap] 显示日期任务, 总数:${dayTasks.length}, 总压力: ${totalPressure.toFixed(1)}, 级别: ${pressureLevel.levelText}`);
+      logger.debug(`[TaskHeatmap] 显示日期任务, 总数:${dayTasks.length}, 总压力: ${totalPressure.toFixed(1)}, 级别: ${pressureLevel.levelText}`);
     },
     
     // 生成任务汇总文案
@@ -897,7 +896,7 @@ Component({
     
     // 关闭任务列表
     closeDayTasks() {
-      console.log('[TaskHeatmap] 关闭任务列表');
+      logger.debug('[TaskHeatmap] 关闭任务列表');
       this.setData({
         showDayTasks: false,
         selectedDate: '',
@@ -1173,13 +1172,13 @@ Component({
     
     // 显示任务编辑区域
     showTaskEdit(e) {
-      console.log('[TaskHeatmap] 显示任务编辑');
+      logger.debug('[TaskHeatmap] 显示任务编辑');
       const taskId = e.currentTarget.dataset.id;
       const taskIndex = e.currentTarget.dataset.index;
       
       // 如果删除确认区域正在显示，先关闭它
       if (this.data.showDeleteConfirm) {
-        console.log('[TaskHeatmap] 关闭删除确认区域，准备编辑任务');
+        logger.debug('[TaskHeatmap] 关闭删除确认区域，准备编辑任务');
         this.cancelDelete();
       }
       
@@ -1197,7 +1196,7 @@ Component({
       // 获取要编辑的任务
       const task = this.data.dayTasks[taskIndex];
       if (!task) {
-        console.error('[TaskHeatmap] 找不到要编辑的任务');
+        logger.error('[TaskHeatmap] 找不到要编辑的任务');
         return;
       }
       
@@ -1206,8 +1205,8 @@ Component({
       const isHistoryTask = task.date < this.data.todayString;
       const pointsReadOnly = isCompleted || isHistoryTask;
       
-      console.log(`[TaskHeatmap] 编辑任务: ${task.title}, 是否必做: ${task.isRequired ? '是' : '否'}, 是否已完成: ${isCompleted}, 是否为历史任务: ${isHistoryTask}`);
-      console.log(`[TaskHeatmap] 积分编辑状态: ${pointsReadOnly ? '只读' : '可编辑'}`);
+      logger.debug(`[TaskHeatmap] 编辑任务: ${task.title}, 是否必做: ${task.isRequired ? '是' : '否'}, 是否已完成: ${isCompleted}, 是否为历史任务: ${isHistoryTask}`);
+      logger.debug(`[TaskHeatmap] 积分编辑状态: ${pointsReadOnly ? '只读' : '可编辑'}`);
       
       // 默认设为单任务编辑
       let defaultScope = 'single';
@@ -1222,7 +1221,7 @@ Component({
         pointsReadOnly: pointsReadOnly // 设置积分是否为只读状态
       });
       
-      console.log('[TaskHeatmap] 开始编辑任务:', task.title, 
+      logger.debug('[TaskHeatmap] 开始编辑任务:', task.title, 
                  '积分:', this.data.editPoints, 
                  '描述:', this.data.editDescription,
                  '范围:', this.data.editScope,
@@ -1234,7 +1233,7 @@ Component({
     
     // 确保编辑或删除区域在视图中可见
     ensureEditAreaVisible(taskId, areaType = 'edit') {
-      console.log(`[TaskHeatmap] 准备滚动到${areaType === 'edit' ? '编辑' : '删除'}区域`);
+      logger.debug(`[TaskHeatmap] 准备滚动到${areaType === 'edit' ? '编辑' : '删除'}区域`);
       
       // 给DOM更新和动画一些时间
       setTimeout(() => {
@@ -1245,7 +1244,7 @@ Component({
           `#task-${taskId} .delete-confirm.visible`;
         const containerSelector = '#tasks-scroll-view';
         
-        console.log(`[TaskHeatmap] 使用选择器 "${targetSelector}" 定位滚动目标`);
+        logger.debug(`[TaskHeatmap] 使用选择器 "${targetSelector}" 定位滚动目标`);
 
         // 创建查询，同时获取所有需要的元素位置
         const query = this.createSelectorQuery();
@@ -1255,7 +1254,7 @@ Component({
         query.select(containerSelector).scrollOffset(); // 当前滚动位置
         query.exec((res) => {
           if (!res || !res[0] || !res[1] || !res[2] || !res[3]) {
-            console.error('[TaskHeatmap] 获取元素位置失败，使用备用滚动方案');
+            logger.error('[TaskHeatmap] 获取元素位置失败，使用备用滚动方案');
             
             // 备用方案：使用固定偏移量
             const currentScrollTop = this.data.taskListScrollTop || 0;
@@ -1271,10 +1270,10 @@ Component({
           const containerRect = res[2]; // 滚动容器
           const scrollData = res[3]; // 当前滚动位置
           
-          console.log(`[TaskHeatmap] 任务卡片位置: top=${taskRect.top}, height=${taskRect.height}`);
-          console.log(`[TaskHeatmap] ${areaType}区域位置: top=${targetRect.top}, height=${targetRect.height}`);
-          console.log(`[TaskHeatmap] 滚动容器: height=${containerRect.height}, top=${containerRect.top}`);
-          console.log(`[TaskHeatmap] 当前滚动位置: scrollTop=${scrollData.scrollTop}`);
+          logger.debug(`[TaskHeatmap] 任务卡片位置: top=${taskRect.top}, height=${taskRect.height}`);
+          logger.debug(`[TaskHeatmap] ${areaType}区域位置: top=${targetRect.top}, height=${targetRect.height}`);
+          logger.debug(`[TaskHeatmap] 滚动容器: height=${containerRect.height}, top=${containerRect.top}`);
+          logger.debug(`[TaskHeatmap] 当前滚动位置: scrollTop=${scrollData.scrollTop}`);
           
           // 计算目标区域相对于可视容器的位置
           const targetBottom = targetRect.top + targetRect.height;
@@ -1294,28 +1293,28 @@ Component({
             if (targetBottom > containerBottom) {
               const overflow = targetBottom - containerBottom;
               newScrollTop += overflow + visualBuffer;
-              console.log(`[TaskHeatmap] 目标底部超出视图 ${overflow}px，向下滚动`);
+              logger.debug(`[TaskHeatmap] 目标底部超出视图 ${overflow}px，向下滚动`);
             } 
             // 如果目标顶部在可视范围顶部之上
             else if (targetRect.top < containerRect.top) {
               const underflow = containerRect.top - targetRect.top;
               newScrollTop -= underflow + visualBuffer;
-              console.log(`[TaskHeatmap] 目标顶部在视图之上 ${underflow}px，向上滚动`);
+              logger.debug(`[TaskHeatmap] 目标顶部在视图之上 ${underflow}px，向上滚动`);
             }
             
             // 确保不滚动到负值
             newScrollTop = Math.max(0, newScrollTop);
             
-            console.log(`[TaskHeatmap] 计算得到新滚动位置: ${newScrollTop}px (当前: ${scrollData.scrollTop}px)`);
+            logger.debug(`[TaskHeatmap] 计算得到新滚动位置: ${newScrollTop}px (当前: ${scrollData.scrollTop}px)`);
             
             // 设置新的滚动位置
             this.setData({
               taskListScrollTop: newScrollTop
             });
             
-            console.log(`[TaskHeatmap] 设置滚动位置: ${newScrollTop}px`);
+            logger.debug(`[TaskHeatmap] 设置滚动位置: ${newScrollTop}px`);
           } else {
-            console.log(`[TaskHeatmap] ${areaType}区域已在可视范围内，无需滚动`);
+            logger.debug(`[TaskHeatmap] ${areaType}区域已在可视范围内，无需滚动`);
           }
         });
       }, 300); // 给DOM更新和CSS动画足够的时间
@@ -1327,7 +1326,7 @@ Component({
       this.setData({
         editScope: scope
       });
-      console.log('[TaskHeatmap] 设置编辑范围:', scope);
+      logger.debug('[TaskHeatmap] 设置编辑范围:', scope);
     },
     
     // 显示范围说明气泡
@@ -1375,7 +1374,7 @@ Component({
     adjustEditPoints(e) {
       // 如果积分为只读状态，则不允许修改
       if (this.data.pointsReadOnly) {
-        console.log('[TaskHeatmap] 积分为只读状态，禁止修改');
+        logger.debug('[TaskHeatmap] 积分为只读状态，禁止修改');
         // 显示提示
         wx.showToast({
           title: '已完成任务积分不可修改',
@@ -1398,7 +1397,7 @@ Component({
         editPoints: points
       });
       
-      console.log('[TaskHeatmap] 调整积分:', points);
+      logger.debug('[TaskHeatmap] 调整积分:', points);
     },
     
     /**
@@ -1407,7 +1406,7 @@ Component({
     onEditPointsInput(e) {
       // 如果积分为只读状态，则不允许修改
       if (this.data.pointsReadOnly) {
-        console.log('[TaskHeatmap] 积分为只读状态，禁止输入修改');
+        logger.debug('[TaskHeatmap] 积分为只读状态，禁止输入修改');
         // 还原为原值
         this.setData({
           editPoints: this.data.editPoints
@@ -1423,7 +1422,7 @@ Component({
         editPoints: points
       });
       
-      console.log('[TaskHeatmap] 输入积分:', points);
+      logger.debug('[TaskHeatmap] 输入积分:', points);
     },
     
     /**
@@ -1444,7 +1443,7 @@ Component({
     cancelEdit() {
       if (!this.data.editingTaskId) return;
       
-      console.log('[TaskHeatmap] 取消编辑');
+      logger.debug('[TaskHeatmap] 取消编辑');
       this.setData({
         editingTaskId: null,
         editingTaskIndex: -1,
@@ -1748,9 +1747,9 @@ Component({
     
     // 显示压力指数说明弹窗
     showPressureInfo() {
-      console.log('[TaskHeatmap] 显示压力指数说明');
+      logger.debug('[TaskHeatmap] 显示压力指数说明');
       // 记录查看行为
-      console.log('[TaskHeatmap] 用户查看压力级别数值区间说明');
+      logger.info('TaskHeatmap', '用户查看压力级别数值区间说明');
       this.setData({
         showPressureInfo: true
       });
@@ -1774,26 +1773,26 @@ Component({
      */
     handleDeleteTask(e) {
       const taskId = e.currentTarget.dataset.id;
-      console.log(`[task-heatmap] 准备删除任务: ${taskId}`);
+      logger.debug(`[task-heatmap] 准备删除任务: ${taskId}`);
       
       // 隐藏菜单
       this.hideActionMenu();
       
       // 如果有正在编辑的任务，先取消编辑
       if (this.data.editingTaskId) {
-        console.log(`[task-heatmap] 取消当前编辑，准备删除任务`);
+        logger.debug(`[task-heatmap] 取消当前编辑，准备删除任务`);
         this.cancelEdit();
       }
 
       // 获取当前任务
       const task = this.data.dayTasks.find(t => t.id === taskId);
       if (!task) {
-        console.error(`[task-heatmap] 未找到要删除的任务: ${taskId}`);
+        logger.error(`[task-heatmap] 未找到要删除的任务: ${taskId}`);
         return;
       }
 
       // 设置当前操作的任务
-      console.log(`[task-heatmap] 显示删除确认区域, 任务类型: ${task.type}, 重复类型: ${task.repeat ? task.repeat.type : 'none'}`);
+      logger.debug(`[task-heatmap] 显示删除确认区域, 任务类型: ${task.type}, 重复类型: ${task.repeat ? task.repeat.type : 'none'}`);
       
       // 检查是否为真正的循环任务
       const isActuallyRepeating = task.repeat && 
@@ -1822,7 +1821,7 @@ Component({
      */
     selectDeleteScope(e) {
       const scope = e.currentTarget.dataset.scope;
-      console.log(`[task-heatmap] 选择删除范围: ${scope}`);
+      logger.debug(`[task-heatmap] 选择删除范围: ${scope}`);
       
       this.setData({
         deleteScope: scope
@@ -1838,7 +1837,7 @@ Component({
      * 取消删除
      */
     cancelDelete() {
-      console.log('[task-heatmap] 取消删除');
+      logger.debug('[task-heatmap] 取消删除');
       
       this.setData({
         showDeleteConfirm: false,
@@ -1853,18 +1852,18 @@ Component({
     confirmDelete() {
       const task = this.data.activeTaskForDelete;
       if (!task) {
-        console.error('[task-heatmap] 没有活动的删除任务');
+        logger.error('[task-heatmap] 没有活动的删除任务');
         return;
       }
       
       // 对于循环任务，需要检查是否已选择范围
       if (task.repeat && task.repeat.type !== 'none' && !this.data.deleteScope) {
-        console.log('[task-heatmap] 循环任务未选择删除范围，禁止操作');
+        logger.debug('[task-heatmap] 循环任务未选择删除范围，禁止操作');
         return; // 未选择范围，禁止操作
       }
       
       const scope = this.data.deleteScope;
-      console.log(`[task-heatmap] 确认删除任务: ${task.id}, 范围: ${scope}, 类型: ${task.repeat ? task.repeat.type : 'none'}`);
+      logger.debug(`[task-heatmap] 确认删除任务: ${task.id}, 范围: ${scope}, 类型: ${task.repeat ? task.repeat.type : 'none'}`);
       
       // 检查是否是循环任务
       if (task.repeat && task.repeat.type !== 'none') {
@@ -2253,7 +2252,7 @@ Component({
       const taskId = e.currentTarget.dataset.id;
       const taskIndex = e.currentTarget.dataset.index;
       
-      console.log(`[task-heatmap] 显示任务操作菜单: ${taskId}`);
+      logger.debug(`[task-heatmap] 显示任务操作菜单: ${taskId}`);
       
       // 获取任务对象
       const task = this.data.dayTasks[taskIndex];
@@ -2263,8 +2262,8 @@ Component({
       const isHistoryTask = task.date < this.data.todayString;
       const showDeleteOption = !(isCompleted || isHistoryTask);
       
-      console.log(`[task-heatmap] 任务操作菜单：任务ID=${taskId}, 标题=${task.title}, 状态=${task.status}, 日期=${task.date}`);
-      console.log(`[task-heatmap] 判断结果：已完成=${isCompleted}, 历史任务=${isHistoryTask}, 显示删除选项=${showDeleteOption}`);
+      logger.debug(`[task-heatmap] 任务操作菜单：任务ID=${taskId}, 标题=${task.title}, 状态=${task.status}, 日期=${task.date}`);
+      logger.debug(`[task-heatmap] 判断结果：已完成=${isCompleted}, 历史任务=${isHistoryTask}, 显示删除选项=${showDeleteOption}`);
       
       // 获取点击元素位置
       const query = this.createSelectorQuery();
@@ -2288,7 +2287,7 @@ Component({
             actionMenuStyle: style
           });
           
-          console.log(`[task-heatmap] 显示卡片式操作菜单，位置: ${style}`);
+          logger.debug(`[task-heatmap] 显示卡片式操作菜单，位置: ${style}`);
           
           // 添加轻微振动反馈
           if (wx.vibrateShort) {
@@ -2302,7 +2301,7 @@ Component({
      * 隐藏操作菜单
      */
     hideActionMenu() {
-      console.log(`[task-heatmap] 隐藏操作菜单`);
+      logger.debug(`[task-heatmap] 隐藏操作菜单`);
       this.setData({
         showActionMenu: false
       });
@@ -2326,14 +2325,14 @@ Component({
      * 处理编辑任务
      */
     handleEditTask(e) {
-      console.log(`[task-heatmap] 编辑任务`);
+      logger.debug(`[task-heatmap] 编辑任务`);
       
       // 隐藏菜单
       this.hideActionMenu();
       
       // 获取任务ID
       const taskId = e.currentTarget.dataset.id;
-      console.log(`[task-heatmap] 编辑任务ID: ${taskId}`);
+      logger.debug(`[task-heatmap] 编辑任务ID: ${taskId}`);
       
       // 获取任务在数组中的索引
       const taskIndex = this.data.dayTasks.findIndex(task => task.id === taskId);
@@ -2569,7 +2568,7 @@ Component({
           expiryText = '7天';
         }
           
-        console.log(`[taskHeatmap] 渲染任务详情: ${task.title}, 日期: ${task.date}, 积分有效期类型: ${typeof task.pointsExpiry}, 值: ${task.pointsExpiry}, 转换后: ${expiryText}`);
+        logger.debug(`[taskHeatmap] 渲染任务详情: ${task.title}, 日期: ${task.date}, 积分有效期类型: ${typeof task.pointsExpiry}, 值: ${task.pointsExpiry}, 转换后: ${expiryText}`);
       }
     },
 

@@ -1,3 +1,5 @@
+const logger = require('../../utils/logger');
+
 Component({
   /**
    * 组件的属性列表
@@ -101,12 +103,12 @@ Component({
       current = parseInt(current || 0, 10);
       total = parseInt(total || 1, 10);
       
-      console.log(`[progressBar] 计算进度条百分比: ${current}/${total}`);
+      logger.debug('progressBar', `计算进度条百分比: ${current}/${total}`);
       
       let percentage = 0;
       if (total > 0) {
         percentage = Math.min(Math.max(current / total * 100, 0), 100);
-        console.log(`[progressBar] 实际进度百分比: ${percentage.toFixed(2)}%`);
+        logger.debug('progressBar', `实际进度百分比: ${percentage.toFixed(2)}%`);
       }
       
       // 计算渐变阶段
@@ -121,7 +123,7 @@ Component({
       const isComplete = current >= total;
       const justCompleted = isComplete && !wasComplete;
       
-      console.log(`[progressBar] 完成状态: ${isComplete ? '已完成' : '未完成'}, 刚完成: ${justCompleted}`);
+      logger.debug('progressBar', `完成状态: ${isComplete ? '已完成' : '未完成'}, 刚完成: ${justCompleted}`);
       
       // 更新小鸡状态和外观
       let chickState = 'walking';
@@ -150,7 +152,7 @@ Component({
       const maxChickPosition = 85; // 限制小鸡最大位置为85%，为奖品区域预留空间
       const chickPosition = Math.min(percentage, maxChickPosition);
       
-      console.log(`[progressBar] 小鸡位置计算: 进度${percentage.toFixed(2)}% -> 显示位置${chickPosition.toFixed(2)}%`);
+      logger.debug('progressBar', `小鸡位置计算: 进度${percentage.toFixed(2)}% -> 显示位置${chickPosition.toFixed(2)}%`);
       
       this.setData({
         percentage: percentage,
@@ -169,7 +171,7 @@ Component({
       
       // 如果刚刚完成
       if (justCompleted) {
-        console.log(`[progressBar] 触发完成事件，进度: ${percentage.toFixed(2)}%, 数值: ${current}/${total}`);
+        logger.debug('progressBar', `触发完成事件，进度: ${percentage.toFixed(2)}%, 数值: ${current}/${total}`);
         this.triggerEvent('complete'); // 触发完成事件
         this.showCompletionMessage();
       }
@@ -182,7 +184,7 @@ Component({
   attached: function() {
     // 获取系统信息，供后续使用
     this.systemInfo = wx.getWindowInfo();
-    console.log('[progressBar] 获取系统信息', this.systemInfo.windowWidth);
+    logger.debug('progressBar', '获取系统信息', this.systemInfo.windowWidth);
   },
 
   /**
@@ -191,7 +193,7 @@ Component({
   methods: {
     // 点击小鸡显示鼓励语
     onTapChick: function() {
-      console.log("[progressBar] 点击小鸡");
+      logger.debug('progressBar', '点击小鸡');
       
       // 获取小鸡位置，确定气泡显示位置
       const query = wx.createSelectorQuery().in(this);
@@ -202,7 +204,7 @@ Component({
         }
         
         const windowInfo = wx.getWindowInfo();
-        console.log(`[progressBar] 小鸡位置: left=${rect.left}, right=${rect.right}, width=${rect.width}, 屏幕宽度=${windowInfo.windowWidth}`);
+        logger.debug('progressBar', `小鸡位置: left=${rect.left}, right=${rect.right}, width=${rect.width}, 屏幕宽度=${windowInfo.windowWidth}`);
         
         // 根据小鸡在屏幕中的位置决定气泡显示方式
         let bubblePosition = 'center';
@@ -214,7 +216,7 @@ Component({
           bubblePosition = 'right';
         }
         
-        console.log(`[progressBar] 气泡位置: ${bubblePosition}`);
+        logger.debug('progressBar', `气泡位置: ${bubblePosition}`);
         
         // 选择鼓励语
         this._selectRandomEncouragement();
@@ -265,7 +267,7 @@ Component({
     
     // 显示完成信息
     showCompletionMessage: function() {
-      console.log(`[progressBar] 开始显示完成信息，触发完成动画`);
+      logger.debug('progressBar', '开始显示完成信息，触发完成动画');
       
       // 使用固定的鼓励语，缩短文本
       const completionMessage = "全部完成！";
@@ -281,7 +283,7 @@ Component({
       // 通知页面开始进行奖励动画，锁定用户操作
       const app = getApp();
       if (app && app.globalData && app.globalData.eventBus) {
-        console.log(`[progressBar] 发送进度条完成事件，通知页面锁定操作`);
+        logger.debug('progressBar', '发送进度条完成事件，通知页面锁定操作');
         app.globalData.eventBus.emit(this.EVENTS.PROGRESS_BAR_COMPLETE);
       }
       
@@ -370,7 +372,7 @@ Component({
 
     // 点击小鸡显示气泡
     onClickChicken: function() {
-      console.log('[progressBar] 点击小鸡');
+      logger.debug('progressBar', '点击小鸡');
       
       // 获取小鸡位置，确定气泡显示位置
       const query = wx.createSelectorQuery().in(this);
@@ -381,7 +383,7 @@ Component({
         }
         
         const windowInfo = wx.getWindowInfo();
-        console.log(`[progressBar] 小鸡位置: left=${rect.left}, right=${rect.right}, width=${rect.width}, 屏幕宽度=${windowInfo.windowWidth}`);
+        logger.debug('progressBar', `小鸡位置: left=${rect.left}, right=${rect.right}, width=${rect.width}, 屏幕宽度=${windowInfo.windowWidth}`);
         
         // 根据小鸡在屏幕中的位置决定气泡显示方式
         let bubblePosition = 'center';
@@ -393,7 +395,7 @@ Component({
           bubblePosition = 'right';
         }
         
-        console.log(`[progressBar] 气泡位置: ${bubblePosition}`);
+        logger.debug('progressBar', `气泡位置: ${bubblePosition}`);
         
         this.setData({
           showSpeechBubble: true,
@@ -434,7 +436,7 @@ Component({
       const randomIndex = Math.floor(Math.random() * encouragements.length);
       const encouragement = encouragements[randomIndex];
       
-      console.log(`[progressBar] 选择鼓励语: ${encouragement}`);
+      logger.debug('progressBar', `选择鼓励语: ${encouragement}`);
       
       this.setData({
         currentEncouragement: encouragement
@@ -443,7 +445,7 @@ Component({
 
     // 点击奖品图标处理
     onTapReward: function() {
-      console.log('[progressBar] 点击奖品图标');
+      logger.debug('progressBar', '点击奖品图标');
       
       // 显示奖品提示
       const goalAreaSelector = this.data.rewardImage ? '.goal-area-image' : '.goal-area';
@@ -455,7 +457,7 @@ Component({
           return;
         }
         
-        console.log(`[progressBar] 奖品图标位置: left=${rect.left}, right=${rect.right}, width=${rect.width}`);
+        logger.debug('progressBar', `奖品图标位置: left=${rect.left}, right=${rect.right}, width=${rect.width}`);
         
         // 计算图标在屏幕中的位置
         const screenWidth = this.systemInfo.windowWidth;
@@ -465,11 +467,11 @@ Component({
         if (rect.right > screenWidth * 0.85) {
           // 靠近右边缘，显示在左侧
           direction = 'left';
-          console.log('[progressBar] 靠近右边缘，显示在左侧');
+          logger.debug('progressBar', '靠近右边缘，显示在左侧');
         } else if (rect.left < screenWidth * 0.15) {
           // 靠近左边缘，显示在右侧
           direction = 'right';
-          console.log('[progressBar] 靠近左边缘，显示在右侧');
+          logger.debug('progressBar', '靠近左边缘，显示在右侧');
         }
         
         // 设置tooltip方向和显示状态

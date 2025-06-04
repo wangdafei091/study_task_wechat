@@ -1,4 +1,6 @@
 // pages/my-exchanges/my-exchanges.js
+const logger = require('../../utils/logger');
+
 Page({
 
   /**
@@ -12,7 +14,7 @@ Page({
    * 生命周期函数--监听页面加载
    */
   onLoad: function (options) {
-    console.log('[MyExchanges] 页面加载');
+    logger.debug('MyExchanges', '页面加载');
     this.loadClaimedRewards();
   },
 
@@ -27,7 +29,7 @@ Page({
    * 生命周期函数--监听页面显示
    */
   onShow: function () {
-    console.log('[MyExchanges] 页面显示');
+    logger.debug('MyExchanges', '页面显示');
     this.loadClaimedRewards();
   },
 
@@ -70,7 +72,7 @@ Page({
    * 加载已领取奖励数据
    */
   loadClaimedRewards: function() {
-    console.log('[MyExchanges] 加载已领取奖励数据');
+    logger.debug('MyExchanges', '加载已领取奖励数据');
     
     // 从本地存储获取所有奖励
     const rewards = wx.getStorageSync('rewards') || [];
@@ -96,10 +98,10 @@ Page({
     
     // 添加状态日志
     formattedRewards.forEach(r => {
-      console.log(`[MyExchanges] 奖励[${r.name}]的显示状态: 已领取, 原始claimed值: ${r.claimed}, claimStatus: ${r.claimStatus}`);
+      logger.debug('MyExchanges', `奖励[${r.name}]的显示状态: 已领取, 原始claimed值: ${r.claimed}, claimStatus: ${r.claimStatus}`);
     });
     
-    console.log(`[MyExchanges] 加载了 ${formattedRewards.length} 条已领取奖励记录`);
+    logger.debug('MyExchanges', `加载了 ${formattedRewards.length} 条已领取奖励记录`);
   },
   
   /**
