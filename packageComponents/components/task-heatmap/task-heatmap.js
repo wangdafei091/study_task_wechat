@@ -1,7 +1,7 @@
-const Constants = require('../../utils/constants.js');
-const uiUtils = require('../../utils/uiUtils.js');
-const serviceManager = require('../../services/service-manager.js');
-const logger = require('../../utils/logger.js');
+const Constants = require('../../../utils/constants.js');
+const uiUtils = require('../../../utils/uiUtils.js');
+const serviceManager = require('../../../services/service-manager.js');
+const logger = require('../../../utils/logger.js');
 
 /**
  * 任务热力图组件 (task-heatmap)
@@ -33,7 +33,7 @@ Component({
       value: [],
       observer: function(newVal, oldVal) {
         console.log('[task-heatmap] 任务数据已更新，新数据长度:', newVal ? newVal.length : 0);
-        const logger = require('../../utils/logger');  // 添加这一行
+        const logger = require('../../../utils/logger');  // 更新路径
  
         if (newVal && newVal.length > 0) {
           // 检查任务数据是否真的发生了变化
@@ -293,7 +293,7 @@ Component({
   methods: {
     // 生成日历数据
     generateCalendar() {
-      const logger = require('../../utils/logger');
+      const logger = require('../../../utils/logger');
       logger.info('task-heatmap', '统一日历样式：应用与分析页面星星日历一致的样式');
       logger.info('task-heatmap', '样式变更：日期格子改为正方形比例，字体大小调整为32rpx，今天标识改为背景高亮');
       logger.info('task-heatmap', '信息层级优化：任务信息字体从20rpx减小到14rpx，透明度降至0.7，建立清晰的主次关系');
@@ -1430,7 +1430,7 @@ Component({
      * 输入描述文本
      */
     inputDescription(e) {
-      const logger = require('../../utils/logger');
+      const logger = require('../../../utils/logger');
       const value = e.detail.value;
       
       logger.info('TaskHeatmap', '编辑描述', `长度: ${value.length}/50`);
@@ -1466,8 +1466,8 @@ Component({
     
     // 保存编辑
     async saveEdit() {
-      const logger = require('../../utils/logger.js');
-      const serviceManager = require('../../services/service-manager.js');
+      const logger = require('../../../utils/logger.js');
+      const serviceManager = require('../../../services/service-manager.js');
       const taskService = serviceManager.getService('TaskService');
       
       if (this.data.editingTaskIndex < 0 || !this.data.editingTaskId) {
@@ -1614,8 +1614,8 @@ Component({
      * @returns {Object} 增强后的任务对象
      */
     enhanceTaskData(task) {
-      const Constants = require('../../utils/constants.js');
-      const logger = require('../../utils/logger.js');
+      const Constants = require('../../../utils/constants.js');
+      const logger = require('../../../utils/logger.js');
       
       logger.info('task-heatmap', '开始增强任务数据', {
         taskId: task.id,
@@ -1888,8 +1888,8 @@ Component({
      * 删除单个任务
      */
     async deleteTask(taskId) {
-      const logger = require('../../utils/logger.js');
-      const serviceManager = require('../../services/service-manager.js');
+      const logger = require('../../../utils/logger.js');
+      const serviceManager = require('../../../services/service-manager.js');
       const taskService = serviceManager.getService('TaskService');
       
       // 记录当前任务在本地数组中的索引，用于后续更新本地UI
@@ -1955,8 +1955,8 @@ Component({
      * 删除任务系列
      */
     async deleteTaskSeries(task) {
-      const logger = require('../../utils/logger.js');
-      const serviceManager = require('../../services/service-manager.js');
+      const logger = require('../../../utils/logger.js');
+      const serviceManager = require('../../../services/service-manager.js');
       const taskService = serviceManager.getService('TaskService');
       const messageManager = serviceManager.getService('MessageService');
       
@@ -2183,7 +2183,7 @@ Component({
      * 刷新任务列表
      */
     refreshTaskList() {
-      const logger = require('../../utils/logger.js');
+      const logger = require('../../../utils/logger.js');
       logger.info('task-heatmap', '刷新任务列表');
       
       // 通知父组件刷新任务数据
@@ -2213,7 +2213,7 @@ Component({
     
     // 格式化重复任务的日期范围显示
     formatDateRange(startDate, endDate) {
-      const dateUtils = require('../../utils/dateUtils.js');
+      const dateUtils = require('../../../utils/dateUtils.js');
       
       // 如果没有终止日期，显示无限期
       if (!endDate) {
@@ -2274,7 +2274,7 @@ Component({
         if (res && res[0]) {
           const buttonRect = res[0];
           // 使用deviceInfo工具替代废弃API
-          const deviceInfo = require('../../utils/deviceInfo');
+          const deviceInfo = require('../../../utils/deviceInfo');
           const systemInfo = deviceInfo.getSystemInfo();
           
           // 计算菜单位置，使其位于三点按钮右下方
@@ -2356,8 +2356,8 @@ Component({
      * @returns {Promise<Object>} 更新结果，包含 success 和 count 属性
      */
     async updateTaskSeries(task, updateData) {
-      const logger = require('../../utils/logger.js');
-      const serviceManager = require('../../services/service-manager.js');
+      const logger = require('../../../utils/logger.js');
+      const serviceManager = require('../../../services/service-manager.js');
       const taskService = serviceManager.getService('TaskService');
       const messageManager = serviceManager.getService('MessageService');
       

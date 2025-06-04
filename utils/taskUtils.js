@@ -558,7 +558,7 @@ const groupTasksByDate = function(tasks) {
  * @returns {Object} 统计信息
  */
 const getTaskStatistics = function(tasks) {
-  console.log('[TaskUtils] 开始统计任务数据，任务数量:', tasks.length);
+  logger.debug('TaskUtils', '开始统计任务数据，任务数量:', tasks.length);
   const stats = {
     total: 0,
     completed: 0,
@@ -611,7 +611,7 @@ const getTaskStatistics = function(tasks) {
     }
   });
 
-  console.log('[TaskUtils] 任务统计完成:', stats);
+  logger.debug('TaskUtils', '任务统计完成:', stats);
   return stats;
 };
 

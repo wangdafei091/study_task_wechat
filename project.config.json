@@ -57,10 +57,6 @@
       {
         "type": "file",
         "value": "optimization_summary.txt"
-      },
-      {
-        "type": "file",
-        "value": "star-calendar.js, task-heatmap.js, star-trend.js"
       }
     ],
     "include": []

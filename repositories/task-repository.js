@@ -131,7 +131,6 @@ class TaskRepository extends BaseRepository {
         
         // 对于重复任务，检查是否有实例在指定日期范围内
         if (task.repeat && task.repeat.type !== 'none') {
-          // TODO: 实现重复任务日期范围检查
           // 简单实现：只检查任务日期是否在范围内
           return task.date >= startDate && task.date <= endDate;
         }

@@ -1,3 +1,5 @@
+const logger = require('../../utils/logger');
+
 Component({
   /**
    * 组件的属性列表
@@ -100,7 +102,7 @@ Component({
      * @param {Number} percent - 百分比进度(0-100)
      */
     _updateProgress: function(percent) {
-      console.log(`[progressRing] 更新进度: ${percent}%`);
+      logger.debug('progressRing', `更新进度: ${percent}%`);
       
       // 确定适当的类名
       let progressClass = 'progress-ring-with-progress';

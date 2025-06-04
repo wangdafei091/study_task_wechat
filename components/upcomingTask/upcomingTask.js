@@ -1,3 +1,5 @@
+const logger = require('../../utils/logger');
+
 Component({
   /**
    * 组件的属性列表
@@ -34,7 +36,7 @@ Component({
   methods: {
     // 触摸开始
     touchStartUpcoming: function(e) {
-      console.log('[upcomingTask] 触摸开始');
+      logger.debug('upcomingTask', '触摸开始');
       this.startX = e.touches[0].clientX;
       this.startY = e.touches[0].clientY;
       this.setData({ 
@@ -67,18 +69,18 @@ Component({
           showSwipeHint: showHint
         });
         
-        console.log(`[upcomingTask] 滑动距离: ${deltaX}rpx, 显示提示: ${showHint}`);
+        logger.debug('upcomingTask', `滑动距离: ${deltaX}rpx, 显示提示: ${showHint}`);
       }
     },
 
     // 触摸结束
     touchEndUpcoming: function(e) {
-      console.log('[upcomingTask] 触摸结束');
+      logger.debug('upcomingTask', '触摸结束');
       const offset = this.data.swipeOffset;
       
       // 如果滑动距离超过阈值，触发消除
       if (offset < -100) {
-        console.log('[upcomingTask] 滑动距离足够，关闭提醒');
+        logger.debug('upcomingTask', '滑动距离足够，关闭提醒');
         this.dismissTask();
       } else {
         // 否则回弹
@@ -86,20 +88,20 @@ Component({
           swipeOffset: 0,
           showSwipeHint: false
         });
-        console.log('[upcomingTask] 滑动距离不足，回弹');
+        logger.debug('upcomingTask', '滑动距离不足，回弹');
       }
     },
 
     // 消除任务提醒
     dismissTask: function() {
-      console.log('[upcomingTask] 开始消除任务提醒');
+      logger.debug('upcomingTask', '开始消除任务提醒');
       this.setData({
         dismissing: true
       });
       
       // 触发消除事件
       setTimeout(() => {
-        console.log('[upcomingTask] 触发dismiss事件');
+        logger.debug('upcomingTask', '触发dismiss事件');
         this.triggerEvent('dismiss', {
           taskId: this.properties.task.id
         });
