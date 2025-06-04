@@ -176,6 +176,22 @@ class RewardService {
     }
     
     try {
+      // 确保奖励有userId - 如果没有提供，使用当前用户ID
+      if (!rewardData.userId) {
+        // 通过服务管理器获取当前用户ID
+        const serviceManager = require('./service-manager');
+        const userService = serviceManager.getUserService();
+        
+        if (userService) {
+          rewardData.userId = userService.getCurrentUserId();
+          logger.info('RewardService', `为奖励设置用户ID: ${rewardData.userId}`);
+        } else {
+          // 如果用户服务不可用，默认设为parent
+          rewardData.userId = 'parent';
+          logger.warn('RewardService', '用户服务不可用，奖励用户ID设为默认值: parent');
+        }
+      }
+      
       // 创建Reward实例
       const { Reward } = require('../models/index');
       const reward = new Reward(rewardData);

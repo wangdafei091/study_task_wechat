@@ -30,6 +30,7 @@ class StarRecord {
   constructor(data = {}) {
     // 基础信息
     this.id = data.id || `record_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+    this.userId = data.userId || ''; // 用户ID，标识记录归属
     this.type = data.type || RecordType.INCOME;
     this.source = data.source || RecordSource.SYSTEM;
     this.sourceId = data.sourceId || '';
@@ -159,6 +160,102 @@ class StarRecord {
     };
     
     return new StarRecord(clonedData);
+  }
+  
+  /**
+   * 创建任务完成记录
+   * @param {Number} points 获得的星星数
+   * @param {String} taskId 任务ID
+   * @param {String} description 描述
+   * @param {Number} balance 操作后余额
+   * @param {Number} previousBalance 操作前余额
+   * @param {String} userId 可选的用户ID
+   * @returns {StarRecord} 新的记录实例
+   */
+  static createTaskCompleteRecord(points, taskId, description, balance, previousBalance, userId = null) {
+    return new StarRecord({
+      userId,
+      type: RecordType.INCOME,
+      source: RecordSource.TASK,
+      sourceId: taskId,
+      points: Math.abs(points), // 确保是正数
+      description: description || `完成任务获得${points}颗星星`,
+      balance,
+      previousBalance,
+      timestamp: Date.now()
+    });
+  }
+  
+  /**
+   * 创建奖励兑换记录
+   * @param {Number} points 消费的星星数（正数，会自动转为负数）
+   * @param {String} rewardId 奖励ID
+   * @param {String} description 描述
+   * @param {Number} balance 操作后余额
+   * @param {Number} previousBalance 操作前余额
+   * @param {String} userId 可选的用户ID
+   * @returns {StarRecord} 新的记录实例
+   */
+  static createRewardExchangeRecord(points, rewardId, description, balance, previousBalance, userId = null) {
+    return new StarRecord({
+      userId,
+      type: RecordType.EXPENSE,
+      source: RecordSource.REWARD,
+      sourceId: rewardId,
+      points: -Math.abs(points), // 确保是负数
+      description: description || `兑换奖励消费${points}颗星星`,
+      balance,
+      previousBalance,
+      timestamp: Date.now()
+    });
+  }
+  
+  /**
+   * 创建星星过期记录
+   * @param {Number} points 过期的星星数（正数，会自动转为负数）
+   * @param {String} expiryType 过期类型
+   * @param {String} description 描述
+   * @param {Number} balance 操作后余额
+   * @param {Number} previousBalance 操作前余额
+   * @param {String} userId 可选的用户ID
+   * @returns {StarRecord} 新的记录实例
+   */
+  static createExpiredRecord(points, expiryType, description, balance, previousBalance, userId = null) {
+    return new StarRecord({
+      userId,
+      type: RecordType.EXPENSE,
+      source: RecordSource.SYSTEM,
+      sourceId: `expired_${expiryType}`,
+      points: -Math.abs(points), // 确保是负数
+      description: description || `星星过期失效${points}颗`,
+      balance,
+      previousBalance,
+      timestamp: Date.now()
+    });
+  }
+  
+  /**
+   * 创建必做任务惩罚记录
+   * @param {Number} points 扣除的星星数（正数，会自动转为负数）
+   * @param {String} taskId 任务ID
+   * @param {String} description 描述
+   * @param {Number} balance 操作后余额
+   * @param {Number} previousBalance 操作前余额
+   * @param {String} userId 可选的用户ID
+   * @returns {StarRecord} 新的记录实例
+   */
+  static createPenaltyRecord(points, taskId, description, balance, previousBalance, userId = null) {
+    return new StarRecord({
+      userId,
+      type: RecordType.EXPENSE,
+      source: RecordSource.TASK,
+      sourceId: taskId,
+      points: -Math.abs(points), // 确保是负数
+      description: description || `必做任务惩罚扣除${points}颗星星`,
+      balance,
+      previousBalance,
+      timestamp: Date.now()
+    });
   }
 }
 

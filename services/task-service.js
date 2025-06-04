@@ -192,6 +192,22 @@ class TaskService {
    */
   async createTask(taskData) {
     try {
+      // 确保任务有userId - 如果没有提供，使用当前用户ID
+      if (!taskData.userId) {
+        // 通过服务管理器获取当前用户ID
+        const serviceManager = require('./service-manager');
+        const userService = serviceManager.getUserService();
+        
+        if (userService) {
+          taskData.userId = userService.getCurrentUserId();
+          logger.info('TaskService', `为任务设置用户ID: ${taskData.userId}`);
+        } else {
+          // 如果用户服务不可用，默认设为parent
+          taskData.userId = 'parent';
+          logger.warn('TaskService', '用户服务不可用，任务用户ID设为默认值: parent');
+        }
+      }
+
       // 创建任务领域模型实例
       const task = new Task(taskData);
       

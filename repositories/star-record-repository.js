@@ -246,17 +246,34 @@ class StarRecordRepository extends BaseRepository {
    * @param {String} taskId 任务ID
    * @param {Number} points 获得的星星数
    * @param {String} description 描述
+   * @param {String} userId 可选的用户ID
    * @returns {Promise<StarRecord>} 创建的记录
    */
-  async createTaskCompleteRecord(taskId, points, description) {
+  async createTaskCompleteRecord(taskId, points, description, userId = null) {
     if (!taskId || points <= 0) {
       logger.warn('StarRecordRepository', '尝试使用无效参数创建任务完成记录');
       return null;
     }
     
     try {
-      // 计算当前余额
-      const previousBalance = await this._calculateCurrentBalance();
+      // 如果没有提供userId，尝试从任务获取
+      let recordUserId = userId;
+      if (!recordUserId) {
+        try {
+          const TaskRepository = require('./task-repository');
+          const taskRepository = new TaskRepository();
+          const task = await taskRepository.getById(taskId);
+          if (task && task.userId) {
+            recordUserId = task.userId;
+            logger.info('StarRecordRepository', `从任务获取用户ID: ${recordUserId}`);
+          }
+        } catch (error) {
+          logger.warn('StarRecordRepository', '无法从任务获取用户ID', error);
+        }
+      }
+      
+      // 计算当前余额（按用户）
+      const previousBalance = await this._calculateCurrentBalance(recordUserId);
       const balance = previousBalance + points;
       
       // 创建记录
@@ -265,13 +282,14 @@ class StarRecordRepository extends BaseRepository {
         taskId,
         description,
         balance,
-        previousBalance
+        previousBalance,
+        recordUserId // 传递用户ID
       );
       
       // 保存记录
       const savedRecord = await this.save(record);
       
-      logger.info('StarRecordRepository', `创建任务完成记录成功, ID=${savedRecord.id}, 任务ID=${taskId}, 星星数=${points}`);
+      logger.info('StarRecordRepository', `创建任务完成记录成功, ID=${savedRecord.id}, 任务ID=${taskId}, 星星数=${points}${recordUserId ? `, 用户=${recordUserId}` : ''}`);
       return savedRecord;
     } catch (error) {
       logger.error('StarRecordRepository', `创建任务完成记录失败, 任务ID=${taskId}`, error);
@@ -284,17 +302,18 @@ class StarRecordRepository extends BaseRepository {
    * @param {String} rewardId 奖励ID
    * @param {Number} points 消费的星星数（正数，会自动转为负数）
    * @param {String} description 描述
+   * @param {String} userId 可选的用户ID
    * @returns {Promise<StarRecord>} 创建的记录
    */
-  async createRewardExchangeRecord(rewardId, points, description) {
+  async createRewardExchangeRecord(rewardId, points, description, userId = null) {
     if (!rewardId || points <= 0) {
       logger.warn('StarRecordRepository', '尝试使用无效参数创建奖励兑换记录');
       return null;
     }
     
     try {
-      // 计算当前余额
-      const previousBalance = await this._calculateCurrentBalance();
+      // 计算当前余额（按用户）
+      const previousBalance = await this._calculateCurrentBalance(userId);
       const balance = previousBalance - points;
       
       // 创建记录
@@ -303,13 +322,14 @@ class StarRecordRepository extends BaseRepository {
         rewardId,
         description,
         balance,
-        previousBalance
+        previousBalance,
+        userId
       );
       
       // 保存记录
       const savedRecord = await this.save(record);
       
-      logger.info('StarRecordRepository', `创建奖励兑换记录成功, ID=${savedRecord.id}, 奖励ID=${rewardId}, 星星数=${points}`);
+      logger.info('StarRecordRepository', `创建奖励兑换记录成功, ID=${savedRecord.id}, 奖励ID=${rewardId}, 星星数=${points}${userId ? `, 用户=${userId}` : ''}`);
       return savedRecord;
     } catch (error) {
       logger.error('StarRecordRepository', `创建奖励兑换记录失败, 奖励ID=${rewardId}`, error);
@@ -322,17 +342,18 @@ class StarRecordRepository extends BaseRepository {
    * @param {Number} points 过期的星星数（正数，会自动转为负数）
    * @param {String} expiryType 过期类型
    * @param {String} description 描述
+   * @param {String} userId 可选的用户ID
    * @returns {Promise<StarRecord>} 创建的记录
    */
-  async createExpiredRecord(points, expiryType, description) {
+  async createExpiredRecord(points, expiryType, description, userId = null) {
     if (points <= 0) {
       logger.warn('StarRecordRepository', '尝试使用无效参数创建星星过期记录');
       return null;
     }
     
     try {
-      // 计算当前余额
-      const previousBalance = await this._calculateCurrentBalance();
+      // 计算当前余额（按用户）
+      const previousBalance = await this._calculateCurrentBalance(userId);
       const balance = previousBalance - points;
       
       // 创建记录
@@ -341,13 +362,14 @@ class StarRecordRepository extends BaseRepository {
         expiryType,
         description,
         balance,
-        previousBalance
+        previousBalance,
+        userId
       );
       
       // 保存记录
       const savedRecord = await this.save(record);
       
-      logger.info('StarRecordRepository', `创建星星过期记录成功, ID=${savedRecord.id}, 类型=${expiryType}, 星星数=${points}`);
+      logger.info('StarRecordRepository', `创建星星过期记录成功, ID=${savedRecord.id}, 类型=${expiryType}, 星星数=${points}${userId ? `, 用户=${userId}` : ''}`);
       return savedRecord;
     } catch (error) {
       logger.error('StarRecordRepository', `创建星星过期记录失败`, error);
@@ -360,17 +382,34 @@ class StarRecordRepository extends BaseRepository {
    * @param {String} taskId 任务ID
    * @param {Number} points 扣除的星星数（正数，会自动转为负数）
    * @param {String} description 描述
+   * @param {String} userId 可选的用户ID
    * @returns {Promise<StarRecord>} 创建的记录
    */
-  async createPenaltyRecord(taskId, points, description) {
+  async createPenaltyRecord(taskId, points, description, userId = null) {
     if (!taskId || points <= 0) {
       logger.warn('StarRecordRepository', '尝试使用无效参数创建必做任务惩罚记录');
       return null;
     }
     
     try {
-      // 计算当前余额
-      const previousBalance = await this._calculateCurrentBalance();
+      // 如果没有提供userId，尝试从任务获取
+      let recordUserId = userId;
+      if (!recordUserId) {
+        try {
+          const TaskRepository = require('./task-repository');
+          const taskRepository = new TaskRepository();
+          const task = await taskRepository.getById(taskId);
+          if (task && task.userId) {
+            recordUserId = task.userId;
+            logger.info('StarRecordRepository', `从任务获取用户ID: ${recordUserId}`);
+          }
+        } catch (error) {
+          logger.warn('StarRecordRepository', '无法从任务获取用户ID', error);
+        }
+      }
+      
+      // 计算当前余额（按用户）
+      const previousBalance = await this._calculateCurrentBalance(recordUserId);
       const balance = previousBalance - points;
       
       // 创建记录
@@ -379,13 +418,14 @@ class StarRecordRepository extends BaseRepository {
         taskId,
         description,
         balance,
-        previousBalance
+        previousBalance,
+        recordUserId
       );
       
       // 保存记录
       const savedRecord = await this.save(record);
       
-      logger.info('StarRecordRepository', `创建必做任务惩罚记录成功, ID=${savedRecord.id}, 任务ID=${taskId}, 星星数=${points}`);
+      logger.info('StarRecordRepository', `创建必做任务惩罚记录成功, ID=${savedRecord.id}, 任务ID=${taskId}, 星星数=${points}${recordUserId ? `, 用户=${recordUserId}` : ''}`);
       return savedRecord;
     } catch (error) {
       logger.error('StarRecordRepository', `创建必做任务惩罚记录失败, 任务ID=${taskId}`, error);
@@ -466,9 +506,10 @@ class StarRecordRepository extends BaseRepository {
   /**
    * 计算当前余额
    * @private
+   * @param {String} userId 可选的用户ID，不传则计算所有用户的余额
    * @returns {Promise<Number>} 当前余额
    */
-  async _calculateCurrentBalance() {
+  async _calculateCurrentBalance(userId = null) {
     try {
       // 优先使用星星分组数据计算余额，确保数据一致性
       try {
@@ -477,8 +518,8 @@ class StarRecordRepository extends BaseRepository {
         const starService = serviceManager.getStarService();
         
         if (starService && starService.starGroupRepository) {
-          const groupTotal = await starService.starGroupRepository.getTotalPoints();
-          logger.info('StarRecordRepository', `从星星分组获取当前余额: ${groupTotal}`);
+          const groupTotal = await starService.starGroupRepository.getTotalPoints(userId);
+          logger.info('StarRecordRepository', `从星星分组获取当前余额${userId ? `, 用户=${userId}` : ''}: ${groupTotal}`);
           return groupTotal;
         }
       } catch (groupError) {
@@ -486,10 +527,11 @@ class StarRecordRepository extends BaseRepository {
       }
       
       // 如果无法从分组获取，则使用记录计算
-      const records = await this.getAll();
+      const allRecords = await this.getAll();
+      const records = userId ? allRecords.filter(record => record.userId === userId) : allRecords;
       
       if (records.length === 0) {
-        logger.info('StarRecordRepository', '没有星星记录，当前余额为0');
+        logger.info('StarRecordRepository', `没有星星记录${userId ? `, 用户=${userId}` : ''}，当前余额为0`);
         return 0;
       }
       
@@ -499,12 +541,12 @@ class StarRecordRepository extends BaseRepository {
       // 如果最新记录有有效的余额字段，直接返回
       const latestRecord = sortedRecords[0];
       if (latestRecord.balance !== undefined && latestRecord.balance !== null && !isNaN(latestRecord.balance)) {
-        logger.info('StarRecordRepository', `从最新记录获取余额: ${latestRecord.balance}`);
+        logger.info('StarRecordRepository', `从最新记录获取余额${userId ? `, 用户=${userId}` : ''}: ${latestRecord.balance}`);
         return latestRecord.balance;
       }
       
       // 如果记录没有有效的余额字段，通过累计所有points计算
-      logger.info('StarRecordRepository', '记录缺少余额字段，通过累计points计算余额');
+      logger.info('StarRecordRepository', `记录缺少余额字段，通过累计points计算余额${userId ? `, 用户=${userId}` : ''}`);
       let totalBalance = 0;
       
       // 按时间顺序（从旧到新）累计计算
@@ -516,7 +558,7 @@ class StarRecordRepository extends BaseRepository {
         logger.debug('StarRecordRepository', `累计计算: 记录points=${points}, 累计余额=${totalBalance}`);
       }
       
-      logger.info('StarRecordRepository', `通过累计计算得到当前余额: ${totalBalance}`);
+      logger.info('StarRecordRepository', `通过累计计算得到当前余额${userId ? `, 用户=${userId}` : ''}: ${totalBalance}`);
       return totalBalance;
     } catch (error) {
       logger.error('StarRecordRepository', '计算当前余额失败', error);
@@ -584,17 +626,18 @@ class StarRecordRepository extends BaseRepository {
     }
     
     try {
-      logger.info('StarRecordRepository', `开始创建星星消费记录: 数量=${record.amount}, 类型=${record.type}, 来源=${record.source}`);
+      logger.info('StarRecordRepository', `开始创建星星消费记录: 数量=${record.amount}, 类型=${record.type}, 来源=${record.source}${record.userId ? `, 用户=${record.userId}` : ''}`);
       
-      // 计算当前余额
-      const previousBalance = await this._calculateCurrentBalance();
+      // 计算当前余额（按用户）
+      const previousBalance = await this._calculateCurrentBalance(record.userId);
       const balance = previousBalance - record.amount;
       
-      logger.info('StarRecordRepository', `余额计算: 操作前=${previousBalance}, 消费=${record.amount}, 操作后=${balance}`);
+      logger.info('StarRecordRepository', `余额计算: 操作前=${previousBalance}, 消费=${record.amount}, 操作后=${balance}${record.userId ? `, 用户=${record.userId}` : ''}`);
       
       // 创建消费记录模型，修复参数映射问题
       const starRecord = new StarRecord({
         id: `star_record_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+        userId: record.userId || null, // 添加userId字段
         points: -record.amount, // 修复：使用points而不是amount，消费记录为负数
         type: 'expense', // 修复：使用type而不是recordType，消费记录类型为expense
         source: record.source || 'reward', // 修复：设置正确的来源
