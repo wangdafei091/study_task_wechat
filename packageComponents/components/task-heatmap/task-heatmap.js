@@ -2001,13 +2001,19 @@ Component({
         // 获取今天日期，作为筛选基准
         const today = this.data.todayString;
         
-        // 只保留今天及之后的任务，而不是基于选中的任务日期
-        seriesTasks = seriesTasks.filter(t => t.date >= today);
+        // 只保留今天及之后且未完成的任务，保护已完成任务
+        const completedTasks = allSeriesTasks.filter(t => t.date >= today && t.status === 1);
+        seriesTasks = seriesTasks.filter(t => t.date >= today && t.status !== 1);
         
         logger.info('task-heatmap', `今天日期: ${today}`);
         logger.info('task-heatmap', `选中任务日期: ${task.date}`);
         logger.info('task-heatmap', `找到该循环的任务总数: ${allSeriesTasks.length}个`);
-        logger.info('task-heatmap', `日期过滤后，只删除今天(${today})及之后的任务: ${seriesTasks.length}个`);
+        logger.info('task-heatmap', `日期过滤后，只删除今天(${today})及之后且未完成的任务: ${seriesTasks.length}个`);
+        
+        // 记录被保护的已完成任务
+        if (completedTasks.length > 0) {
+          logger.info('task-heatmap', `保护${completedTasks.length}个已完成任务不被删除`, completedTasks.map(t => ({ id: t.id, title: t.title, date: t.date, status: t.status })));
+        }
         
         // 先精简任务数据，只保留必要字段，减少内存占用
         seriesTasks = seriesTasks.map(t => ({
@@ -2094,8 +2100,8 @@ Component({
           logger.info('task-heatmap', `正在删除第 ${i+1}/${seriesTasks.length} 个任务：${currentTask.id}`);
           
           try {
-            // 使用TaskService删除任务
-            const success = await taskService.deleteTask(currentTask.id);
+            // 使用TaskService删除任务，抑制单个任务的消息创建
+            const success = await taskService.deleteTask(currentTask.id, null, true);
             
             if (success) {
               results.success.push(currentTask.id);

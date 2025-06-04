@@ -553,7 +553,7 @@ Page({
   },
   
   // 从消息管理器加载消息数据（按用户分别显示）
-  // 注意：消息设计为按用户分别显示，每个用户只看到自己的消息
+  // 注意：消息设计为按用户分别显示，每个用户只看到自己的消息和共享消息
   loadMessageData: async function() {
     try {
       // 获取当前用户ID
@@ -562,15 +562,24 @@ Page({
       
       const messageService = serviceManager.getMessageService();
       
-      // 根据用户筛选消息
+      // 获取所有消息
+      const allMessages = await messageService.getAllMessages();
+      
+      // 根据用户筛选消息：包含用户自己的消息和共享消息
       let messages;
       if (userId) {
-        // 获取指定用户的消息
-        const allMessages = await messageService.getAllMessages();
-        messages = allMessages.filter(msg => msg.userId === userId);
+        // 获取指定用户的消息 + 共享消息
+        messages = allMessages.filter(msg => 
+          msg.userId === userId || msg.userId === 'shared'
+        );
+        logger.info('Index', `消息过滤完成，用户ID=${userId}，包含共享消息`, {
+          总消息数: allMessages.length,
+          可见消息数: messages.length
+        });
       } else {
-        // 获取所有消息
-        messages = await messageService.getAllMessages();
+        // 如果没有用户ID，显示所有消息
+        messages = allMessages;
+        logger.info('Index', '未指定用户ID，显示所有消息');
       }
       
       // 为消息添加时间显示字段，统一使用createTime
@@ -588,7 +597,7 @@ Page({
           };
         });
       
-      // 计算未读消息数量（基于全部消息）
+      // 计算未读消息数量（基于过滤后的消息）
       const unreadCount = messages.filter(msg => !msg.isRead).length;
       
       this.setData({
@@ -596,12 +605,17 @@ Page({
         unreadCount
       });
       
-      logger.info('Index', `消息数据加载成功${userId ? `, 用户ID=${userId}` : ''}`, { 
-        messagesCount: processedMessages.length, 
-        unreadCount 
+      logger.info('Index', `消息数据加载成功, 用户ID=${userId || '全部'}`, {
+        消息总数: messages.length,
+        显示数量: processedMessages.length,
+        未读数量: unreadCount
       });
     } catch (error) {
       logger.error('Index', '加载消息数据失败', error);
+      this.setData({
+        messages: [],
+        unreadCount: 0
+      });
     }
   },
   

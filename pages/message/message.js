@@ -56,9 +56,31 @@ Page({
     logger.info('MessagePage', '开始加载消息数据');
     const messageService = serviceManager.getMessageService();
     
+    // 获取当前用户信息
+    const userService = getApp().globalData.userService;
+    const currentUserId = userService ? userService.getCurrentUserId() : null;
+    
     messageService.getAllMessages()
-      .then(messages => {
-        logger.info('MessagePage', `加载消息数据成功, 数量=${messages.length}`);
+      .then(allMessages => {
+        logger.info('MessagePage', `获取所有消息成功, 数量=${allMessages.length}`);
+        
+        // 根据用户筛选消息：包含用户自己的消息和共享消息
+        let messages;
+        if (currentUserId) {
+          messages = allMessages.filter(msg => 
+            msg.userId === currentUserId || msg.userId === 'shared'
+          );
+          logger.info('MessagePage', `消息过滤完成，用户ID=${currentUserId}，包含共享消息`, {
+            总消息数: allMessages.length,
+            可见消息数: messages.length
+          });
+        } else {
+          // 如果没有用户ID，显示所有消息
+          messages = allMessages;
+          logger.info('MessagePage', '未指定用户ID，显示所有消息');
+        }
+        
+        logger.info('MessagePage', `加载消息数据成功, 用户ID=${currentUserId || '全部'}, 消息数量=${messages.length}`);
         this.processMessages(messages);
       })
       .catch(error => {

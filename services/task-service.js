@@ -573,9 +573,10 @@ class TaskService {
    * 删除任务
    * @param {String} taskId 任务ID
    * @param {String} userId 可选的用户ID，用于验证访问权限
+   * @param {Boolean} suppressMessage 是否抑制消息创建，用于批量操作
    * @returns {Promise<Object>} 删除结果
    */
-  async deleteTask(taskId, userId = null) {
+  async deleteTask(taskId, userId = null, suppressMessage = false) {
     try {
       // 获取任务信息，用于事件传递
       const taskInfo = await this.taskRepository.getById(taskId);
@@ -594,19 +595,22 @@ class TaskService {
       // 删除任务
       await this.taskRepository.delete(taskId);
       
-      logger.info('TaskService', `删除任务成功: ${taskId}${userId ? `, 用户=${userId}` : ''}`);
+      logger.info('TaskService', `删除任务成功: ${taskId}${userId ? `, 用户=${userId}` : ''}${suppressMessage ? ', 抑制消息' : ''}`);
       
-      // 触发任务删除事件
-      this.eventBus.emit(EVENTS.TASK_DELETED, {
-        taskId,
-        taskInfo: {
-          id: taskInfo.id,
-          title: taskInfo.title,
-          type: taskInfo.type,
-          date: taskInfo.date,
-          status: taskInfo.status
-        }
-      });
+      // 只有在不抑制消息时才触发任务删除事件
+      if (!suppressMessage) {
+        // 触发任务删除事件
+        this.eventBus.emit(EVENTS.TASK_DELETED, {
+          taskId,
+          taskInfo: {
+            id: taskInfo.id,
+            title: taskInfo.title,
+            type: taskInfo.type,
+            date: taskInfo.date,
+            status: taskInfo.status
+          }
+        });
+      }
       
       return { success: true };
     } catch (error) {
@@ -743,11 +747,12 @@ class TaskService {
         direction: 'emit'
       });
       
-      // 触发状态更新事件
+      // 触发状态更新事件，传递操作者信息
       this.eventBus.emit(EVENTS.TASK_STATUS_UPDATED, {
         task: savedTask,
         previousStatus,
-        operationType
+        operationType,
+        operatorUserId: userId // 传递操作者信息
       });
       
       // 如果是完成任务，还需记录和触发专门的完成事件
@@ -761,8 +766,11 @@ class TaskService {
           direction: 'emit'
         });
         
-        // 触发完成事件
-        this.eventBus.emit(EVENTS.TASK_COMPLETED, { task: savedTask });
+        // 触发完成事件，传递操作者信息
+        this.eventBus.emit(EVENTS.TASK_COMPLETED, { 
+          task: savedTask,
+          operatorUserId: userId // 传递操作者信息
+        });
       }
       
       return { success: true, task: savedTask };

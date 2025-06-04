@@ -668,6 +668,7 @@ class RewardService {
             rewardName: reward.name,
             points: reward.points,
             userId: userId, // 添加用户ID到事件数据
+            operatorUserId: userId, // 添加操作者信息
             timestamp: Date.now()
           });
           logger.info('RewardService', `奖励领取事件发送成功, 用户=${userId}`);
@@ -910,16 +911,16 @@ class RewardService {
         }
         
         // 返回默认占位奖励
-        const defaultPlaceholder = {
-          name: '添加新奖励',
-          points: 10,
-          icon: '🎁',
-          isDefault: true,
-          remainingStars: Math.max(0, 10 - availablePoints)
-        };
-        
-        logger.info('RewardService', `返回默认占位奖励，还需${defaultPlaceholder.remainingStars}颗星星`);
-        return defaultPlaceholder;
+          const defaultPlaceholder = {
+            name: '添加新奖励',
+            points: 10,
+            icon: '🎁',
+            isDefault: true,
+            remainingStars: Math.max(0, 10 - availablePoints)
+          };
+          
+          logger.info('RewardService', `返回默认占位奖励，还需${defaultPlaceholder.remainingStars}颗星星`);
+          return defaultPlaceholder;
       }
       
       // 过滤未解锁的奖励并按点数排序

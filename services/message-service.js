@@ -82,6 +82,7 @@ class MessageService {
     this.eventBus.on(EVENTS.TASK_UNMARKED_REQUIRED, this._handleTaskUnmarkedRequired.bind(this));
     
     // 奖励相关事件
+    this.eventBus.on(EVENTS.REWARD_CREATED, this._handleRewardCreated.bind(this));
     this.eventBus.on(EVENTS.REWARD_CLAIMED, this._handleRewardClaimed.bind(this));
     this.eventBus.on(EVENTS.REWARD_DELIVERED, this._handleRewardDelivered.bind(this));
     this.eventBus.on(EVENTS.REWARD_UNCLAIMED, this._handleRewardUnclaimed.bind(this));
@@ -146,14 +147,15 @@ class MessageService {
    * @private
    */
   _handleTaskStatusUpdated(data) {
-    const { task, previousStatus, operationType } = data;
+    const { task, previousStatus, operationType, operatorUserId } = data;
     
     if (operationType === 'complete') {
-      logger.info('MessageService', `处理任务完成事件: ${task.title}`);
+      logger.info('MessageService', `处理任务完成事件: ${task.title}, 操作者=${operatorUserId || '未指定'}`);
       
-      // 直接创建领域模型消息
+      // 直接创建领域模型消息，传递操作者信息
       this._createTaskMessageWithDomainModel(task, NotificationType.COMPLETED, {
-        priority: MessagePriority.HIGH
+        priority: MessagePriority.HIGH,
+        operatorUserId: operatorUserId // 传递操作者信息
       });
     }
   }
@@ -164,18 +166,19 @@ class MessageService {
    * @private
    */
   _handleTaskUpdated(data) {
-    const { task, changes, batchInfo } = data;
+    const { task, changes, batchInfo, operatorUserId } = data;
     
-    logger.info('MessageService', `处理任务更新事件: ${task.title}`);
+    logger.info('MessageService', `处理任务更新事件: ${task.title}, 操作者=${operatorUserId || '未指定'}`);
     
     // 更新任务相关消息
     this._updateTaskMessagesWithDomainModel(task);
     
-    // 创建任务更新消息
+    // 创建任务更新消息，传递操作者信息
     this._createTaskMessageWithDomainModel(task, NotificationType.UPDATED, {
       isBatchOperation: batchInfo && batchInfo.isBatchOperation,
       batchCount: batchInfo && batchInfo.count || 0,
-      priority: MessagePriority.MEDIUM
+      priority: MessagePriority.MEDIUM,
+      operatorUserId: operatorUserId // 传递操作者信息
     });
   }
   
@@ -185,18 +188,19 @@ class MessageService {
    * @private
    */
   _handleTaskDeleted(data) {
-    const { taskId, taskInfo, batchInfo } = data;
+    const { taskId, taskInfo, batchInfo, operatorUserId } = data;
     
-    logger.info('MessageService', `处理任务删除事件: ${taskInfo.title || taskId}`);
+    logger.info('MessageService', `处理任务删除事件: ${taskInfo.title || taskId}, 操作者=${operatorUserId || '未指定'}`);
     
     // 删除任务相关消息
     this._deleteRelatedMessagesWithDomainModel(taskId);
     
-    // 创建任务删除消息
+    // 创建任务删除消息，传递操作者信息
     this._createTaskMessageWithDomainModel(taskInfo, NotificationType.DELETED, {
       isBatchOperation: batchInfo && batchInfo.isBatchOperation,
       batchCount: batchInfo && batchInfo.count || 0,
-      priority: MessagePriority.LOW
+      priority: MessagePriority.LOW,
+      operatorUserId: operatorUserId // 传递操作者信息
     });
   }
   
@@ -206,13 +210,14 @@ class MessageService {
    * @private
    */
   _handleTaskCompleted(data) {
-    const { task } = data;
+    const { task, operatorUserId } = data;
     
-    logger.info('MessageService', `处理任务完成事件: ${task.title}`);
+    logger.info('MessageService', `处理任务完成事件: ${task.title}, 操作者=${operatorUserId || '未指定'}`);
     
-    // 创建任务完成消息
+    // 创建任务完成消息，传递操作者信息
     this._createTaskMessageWithDomainModel(task, NotificationType.COMPLETED, {
-      priority: MessagePriority.HIGH
+      priority: MessagePriority.HIGH,
+      operatorUserId: operatorUserId // 传递操作者信息
     });
   }
   
@@ -308,12 +313,16 @@ class MessageService {
       return;
     }
     
-    logger.info('MessageService', `处理奖励领取事件: ${reward.name}, ID=${reward.id}, 消耗星星=${reward.points}`);
+    // 获取操作者信息
+    const operatorUserId = data.operatorUserId || data.userId || null;
     
-    // 创建奖励领取消息
+    logger.info('MessageService', `处理奖励领取事件: ${reward.name}, ID=${reward.id}, 消耗星星=${reward.points}, 操作者=${operatorUserId || '未指定'}`);
+    
+    // 创建奖励领取消息，传递操作者信息
     try {
-      this._createRewardMessageWithDomainModel(reward, 'claimed');
-      logger.info('MessageService', '奖励领取消息创建成功');
+      this._createRewardMessageWithDomainModel(reward, 'claimed', {
+        operatorUserId: operatorUserId // 传递操作者信息
+      });
     } catch (error) {
       logger.error('MessageService', '创建奖励领取消息失败', error);
     }
@@ -373,6 +382,30 @@ class MessageService {
     
     // 这是自动清理示例奖励的操作，不需要创建用户消息
     // 只记录日志即可
+  }
+  
+  /**
+   * 处理奖励创建事件
+   * @param {Object} data 事件数据
+   * @private
+   */
+  _handleRewardCreated(data) {
+    const { reward } = data;
+    
+    if (!reward) {
+      logger.warn('MessageService', '处理奖励创建事件失败：数据中缺少reward对象', data);
+      return;
+    }
+    
+    logger.info('MessageService', `处理奖励创建事件: ${reward.name}, ID=${reward.id}`);
+    
+    // 创建奖励创建消息
+    try {
+      this._createRewardMessageWithDomainModel(reward, 'created');
+      logger.info('MessageService', '奖励创建消息创建成功');
+    } catch (error) {
+      logger.error('MessageService', '创建奖励创建消息失败', error);
+    }
   }
   
   /**
@@ -688,7 +721,21 @@ class MessageService {
    * @private
    */
   async _createTaskMessageWithDomainModel(task, notificationType, options = {}) {
-    const { isBatchOperation, batchCount, priority } = options;
+    const { isBatchOperation, batchCount, priority, operatorUserId } = options;
+    
+    // 获取当前操作者，优先使用传入的operatorUserId
+    const currentOperatorId = operatorUserId || (this.userService ? this.userService.getCurrentUserId() : 'parent');
+    
+    // 对于特定消息类型，如果是家长操作则不创建消息
+    const skipMessagesForParentOperator = [
+      NotificationType.COMPLETED,
+      NotificationType.UPDATED
+    ];
+    
+    if (skipMessagesForParentOperator.includes(notificationType) && currentOperatorId === 'parent') {
+      logger.info('MessageService', `家长操作，跳过消息创建: ${task.title}, 操作类型=${notificationType}, 操作者=${currentOperatorId}`);
+      return null; // 不创建消息
+    }
     
     let title, summary, icon;
     
@@ -714,7 +761,12 @@ class MessageService {
         break;
       case NotificationType.COMPLETED:
         title = '任务已完成';
-        summary = `恭喜您完成了任务"${task.title}"`;
+        // 根据操作者调整文本：小朋友完成发给家长的消息
+        if (currentOperatorId === 'child') {
+          summary = `您的孩子完成了任务"${task.title}"`;
+        } else {
+          summary = `恭喜您完成了任务"${task.title}"`;
+        }
         icon = '✅';
         break;
       case NotificationType.REQUIRED:
@@ -735,8 +787,23 @@ class MessageService {
         icon = '🔔';
     }
     
+    // 确定消息接收者：小朋友操作发给家长，家长创建任务发给小朋友
+    let targetUserId;
+    if (currentOperatorId === 'child') {
+      // 小朋友操作：消息发给家长
+      targetUserId = 'parent';
+      logger.info('MessageService', `小朋友操作，任务消息发给家长: ${task.title}, 操作类型=${notificationType}`);
+    } else if (currentOperatorId === 'parent' && notificationType === NotificationType.NEW) {
+      // 家长创建任务：消息发给小朋友
+      targetUserId = 'child';
+      logger.info('MessageService', `家长创建任务，消息发给小朋友: ${task.title}`);
+    } else {
+      // 其他情况：使用任务的userId或默认为parent
+      targetUserId = task.userId || 'parent';
+    }
+    
     const messageData = {
-      userId: this.userService ? this.userService.getCurrentUserId() : 'parent', // 获取当前用户ID，默认为parent
+      userId: targetUserId,
       type: MessageType.TASK,
       notificationType,
       relatedId: task.id,
@@ -791,7 +858,7 @@ class MessageService {
     }
     
     const messageData = {
-      userId: this.userService ? this.userService.getCurrentUserId() : 'parent', // 获取当前用户ID，默认为parent
+      userId: 'shared', // 系统消息设为共享，所有用户都能看到
       type: MessageType.SYSTEM,
       notificationType: type,
       title,
@@ -1076,16 +1143,35 @@ class MessageService {
   }
   
   /**
-   * 使用领域模型创建奖励消息
+   * 创建奖励消息（使用领域模型）
    * @param {Object} reward 奖励对象
    * @param {String} action 操作类型
+   * @param {Object} options 选项参数
    * @returns {Promise<Message>} 创建的消息
    * @private
    */
-  async _createRewardMessageWithDomainModel(reward, action) {
+  async _createRewardMessageWithDomainModel(reward, action, options = {}) {
+    const { operatorUserId } = options;
+    
+    // 获取当前操作者，优先使用传入的operatorUserId
+    const currentOperatorId = operatorUserId || (this.userService ? this.userService.getCurrentUserId() : 'parent');
+    
+    // 对于特定消息类型，如果是家长操作则不创建消息
+    const skipMessagesForParentOperator = ['claimed'];
+    
+    if (skipMessagesForParentOperator.includes(action) && currentOperatorId === 'parent') {
+      logger.info('MessageService', `家长操作，跳过奖励消息创建: ${reward.name}, 操作类型=${action}, 操作者=${currentOperatorId}`);
+      return null; // 不创建消息
+    }
+    
     let title, summary, icon;
     
     switch(action) {
+      case 'created':
+        title = '新奖励已添加';
+        summary = `您已成功添加新奖励"${reward.name}"，需要${reward.points}颗星星兑换`;
+        icon = '✨';
+        break;
       case 'claimed':
         title = '奖励已兑换';
         summary = `您已成功兑换奖励"${reward.name}"，花费了${reward.points}颗星星`;
@@ -1107,8 +1193,23 @@ class MessageService {
         icon = '🔔';
     }
     
+    // 确定消息接收者：小朋友操作发给家长，家长创建奖励发给小朋友
+    let targetUserId;
+    if (currentOperatorId === 'child') {
+      // 小朋友操作：消息发给家长
+      targetUserId = 'parent';
+      logger.info('MessageService', `小朋友操作，奖励消息发给家长: ${reward.name}, 操作类型=${action}`);
+    } else if (currentOperatorId === 'parent' && action === 'created') {
+      // 家长创建奖励：消息发给小朋友
+      targetUserId = 'child';
+      logger.info('MessageService', `家长创建奖励，消息发给小朋友: ${reward.name}`);
+    } else {
+      // 其他情况：使用原逻辑
+      targetUserId = this.userService ? this.userService.getCurrentUserId() : 'parent';
+    }
+    
     const messageData = {
-      userId: this.userService ? this.userService.getCurrentUserId() : 'parent', // 获取当前用户ID，默认为parent
+      userId: targetUserId,
       type: MessageType.REWARD,
       notificationType: action,
       relatedId: reward.id,
@@ -1280,7 +1381,10 @@ class MessageService {
    * @private
    */
   _prepareTaskMessageData(task, notificationType, options = {}) {
-    const { isBatchOperation, batchCount, priority } = options;
+    const { isBatchOperation, batchCount, priority, operatorUserId } = options;
+    
+    // 获取操作者信息
+    const currentOperatorId = operatorUserId || (this.userService ? this.userService.getCurrentUserId() : 'parent');
     
     let title, summary, icon;
     
@@ -1306,7 +1410,12 @@ class MessageService {
         break;
       case NotificationType.COMPLETED:
         title = '任务已完成';
-        summary = `恭喜您完成了任务"${task.title}"`;
+        // 根据操作者调整文本：小朋友完成发给家长的消息
+        if (currentOperatorId === 'child') {
+          summary = `您的孩子完成了任务"${task.title}"`;
+        } else {
+          summary = `恭喜您完成了任务"${task.title}"`;
+        }
         icon = '✅';
         break;
       case NotificationType.REQUIRED:
