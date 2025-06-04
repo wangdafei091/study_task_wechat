@@ -232,8 +232,20 @@ class RewardService {
         return { success: false, message: '未找到指定的奖励' };
       }
       
-      // 更新奖励
-      const updatedReward = await this.rewardRepository.update(rewardId, rewardData);
+      // 更新奖励属性
+      const updatedFields = [];
+      Object.keys(rewardData).forEach(key => {
+        if (rewardData[key] !== undefined && existingReward.hasOwnProperty(key)) {
+          const oldValue = existingReward[key];
+          existingReward[key] = rewardData[key];
+          updatedFields.push(`${key}: ${oldValue} → ${rewardData[key]}`);
+        }
+      });
+      
+      logger.info('RewardService', `奖励更新字段: ${updatedFields.join(', ')}`);
+      
+      // 保存更新后的奖励
+      const updatedReward = await this.rewardRepository.save(existingReward);
       
       logger.info('RewardService', `更新奖励成功: ${updatedReward.name}, ID=${updatedReward.id}`);
       
@@ -325,7 +337,15 @@ class RewardService {
       }
       
       // 更新奖励状态
-      const updatedReward = await this.rewardRepository.update(rewardId, { enabled });
+      if (enabled) {
+        reward.enable();
+        logger.info('RewardService', `启用奖励: ${reward.name}, ID=${rewardId}`);
+      } else {
+        reward.disable();
+        logger.info('RewardService', `禁用奖励: ${reward.name}, ID=${rewardId}`);
+      }
+      
+      const updatedReward = await this.rewardRepository.save(reward);
       
       logger.info('RewardService', `切换奖励状态成功: ${updatedReward.name}, ID=${rewardId}, 状态=${enabled ? '启用' : '禁用'}`);
       
@@ -378,7 +398,10 @@ class RewardService {
       }
       
       // 更新奖励状态
-      const updatedReward = await this.rewardRepository.update(rewardId, { claimStatus: 'delivered' });
+      reward.deliver();
+      logger.info('RewardService', `标记奖励为已领取: ${reward.name}, ID=${rewardId}`);
+      
+      const updatedReward = await this.rewardRepository.save(reward);
       
       logger.info('RewardService', `标记奖励为已领取成功: ${updatedReward.name}, ID=${rewardId}`);
       
@@ -417,6 +440,15 @@ class RewardService {
           rewards = await this.rewardRepository.getAll();
         }
         
+        // 过滤掉禁用的奖励（即使includeClaimed=true也不应该返回禁用的奖励）
+        const originalCount = rewards.length;
+        rewards = rewards.filter(r => r.enabled !== false);
+        const filteredCount = originalCount - rewards.length;
+        
+        if (filteredCount > 0) {
+          logger.info('RewardService', `过滤掉${filteredCount}个禁用奖励，剩余${rewards.length}个可用奖励`);
+        }
+        
         // 如果不需要示例奖励且存在自定义奖励，过滤掉示例奖励
         if (!includeExamples) {
           const hasCustomRewards = rewards.some(r => !r.isExample && r.enabled);
@@ -425,7 +457,7 @@ class RewardService {
           }
         }
         
-        logger.info('RewardService', `获取所有奖励成功(包含已领取${includeExamples ? '和示例' : ''})${userId ? `, 用户=${userId}` : ''}, 数量=${rewards.length}`);
+        logger.info('RewardService', `获取所有奖励成功(包含已领取${includeExamples ? '和示例' : ''}，已过滤禁用奖励)${userId ? `, 用户=${userId}` : ''}, 数量=${rewards.length}`);
       } else {
         // 使用增强的仓储方法，直接处理示例奖励的过滤
         rewards = await this.rewardRepository.getAvailableRewards(includeExamples, userId);
@@ -852,32 +884,42 @@ class RewardService {
       if (availableRewards.length === 0) {
         logger.info('RewardService', '没有可用奖励，检查是否存在已兑换奖励');
         
-        // 获取所有奖励（包括已兑换的）
+        // 获取所有奖励（包括已兑换的），但不包括禁用的
         const allRewards = await this.getAvailableRewards(true);
         
-        if (allRewards.length > 0) {
-          // 存在奖励但都已兑换，返回allClaimed状态
-          logger.info('RewardService', '存在已兑换奖励，返回allClaimed状态');
-          const highestPointReward = [...allRewards].sort((a, b) => b.points - a.points)[0];
+        // 进一步过滤：只考虑真正已兑换的奖励，排除禁用的奖励
+        const actuallyClaimedRewards = allRewards.filter(reward => 
+          reward.claimed && reward.enabled !== false
+        );
+        
+        if (actuallyClaimedRewards.length > 0) {
+          // 存在真正已兑换的奖励，返回allClaimed状态
+          logger.info('RewardService', '存在真正已兑换奖励，返回allClaimed状态');
+          const highestPointReward = [...actuallyClaimedRewards].sort((a, b) => b.points - a.points)[0];
           return {
             ...highestPointReward,
             remainingStars: 0,
             allClaimed: true
           };
+        } else if (allRewards.length > 0) {
+          // 有奖励但都是禁用的，不是已兑换的
+          logger.info('RewardService', '发现禁用奖励，返回默认占位奖励');
         } else {
-          // 真的没有任何奖励，返回默认占位奖励
+          // 真的没有任何奖励
           logger.info('RewardService', '没有任何奖励，返回默认占位奖励');
-          const defaultPlaceholder = {
-            name: '添加新奖励',
-            points: 10,
-            icon: '🎁',
-            isDefault: true,
-            remainingStars: Math.max(0, 10 - availablePoints)
-          };
-          
-          logger.info('RewardService', `返回默认占位奖励，还需${defaultPlaceholder.remainingStars}颗星星`);
-          return defaultPlaceholder;
         }
+        
+        // 返回默认占位奖励
+        const defaultPlaceholder = {
+          name: '添加新奖励',
+          points: 10,
+          icon: '🎁',
+          isDefault: true,
+          remainingStars: Math.max(0, 10 - availablePoints)
+        };
+        
+        logger.info('RewardService', `返回默认占位奖励，还需${defaultPlaceholder.remainingStars}颗星星`);
+        return defaultPlaceholder;
       }
       
       // 过滤未解锁的奖励并按点数排序
