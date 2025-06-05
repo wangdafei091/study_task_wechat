@@ -1,9 +1,9 @@
 const app = getApp();
-const { EVENTS } = require('../../utils/constants');
+const { EVENTS } = require('../../../utils/constants');
 // 新架构服务引入
-const serviceManager = require('../../services/service-manager');
-const logger = require('../../utils/logger');
-const uiUtils = require('../../utils/uiUtils');
+const serviceManager = require('../../../services/service-manager');
+const logger = require('../../../utils/logger');
+const uiUtils = require('../../../utils/uiUtils');
 
 Page({
   /**
@@ -59,7 +59,7 @@ Page({
    * 生命周期函数--监听页面加载
    */
   onLoad: async function (options) {
-    console.log('[RewardManage] 页面加载');
+    logger.info('RewardManage', '页面加载');
     
     // 加载奖励数据
     await this.loadRewardsData();
@@ -77,7 +77,7 @@ Page({
    * 生命周期函数--监听页面显示
    */
   onShow: async function () {
-    console.log('[RewardManage] 页面显示');
+    logger.info('RewardManage', '页面显示');
     
     // 重新加载数据，确保数据最新
     await this.loadRewardsData();
@@ -89,7 +89,7 @@ Page({
    */
   switchTab: function(e) {
     const tab = e.currentTarget.dataset.tab;
-    console.log(`[RewardManage] 切换标签页: ${tab}`);
+    logger.debug('RewardManage', `切换标签页: ${tab}`);
     
     if (this.data.activeTab !== tab) {
       this.setData({
@@ -107,7 +107,7 @@ Page({
    * 加载奖励数据
    */
   loadRewardsData: async function() {
-    console.log('[RewardManage] 加载奖励数据');
+    logger.info('RewardManage', '加载奖励数据');
     
     try {
       wx.showLoading({ title: '加载中' });
@@ -116,34 +116,34 @@ Page({
       const rewardService = serviceManager.getService('rewardService');
       
       if (!rewardService) {
-        console.error('[RewardManage] 无法获取奖励服务实例');
+        logger.error('RewardManage', '无法获取奖励服务实例');
         wx.hideLoading();
         return;
       }
       
       // 获取所有奖励
       let allRewards = await rewardService.getAllRewards();
-      console.log(`[RewardManage] 获取到 ${allRewards.length} 个奖励`);
+      logger.debug('RewardManage', `获取到 ${allRewards.length} 个奖励`);
       
       // 检查是否存在自定义奖励标记
       let hasCustomRewards = false;
       try {
         hasCustomRewards = wx.getStorageSync('has_custom_rewards') === true;
       } catch (e) {
-        console.warn('[RewardManage] 获取自定义奖励标记失败', e);
+        logger.warn('RewardManage', '获取自定义奖励标记失败', e);
       }
       
       // 如果没有奖励数据，且没有自定义奖励标记，尝试主动调用calculateNextAvailableReward来初始化示例奖励
       if (allRewards.length === 0 && !hasCustomRewards) {
-        console.log('[RewardManage] 没有奖励数据且无自定义奖励标记，尝试初始化示例奖励');
+        logger.info('RewardManage', '没有奖励数据且无自定义奖励标记，尝试初始化示例奖励');
         const nextReward = await rewardService.calculateNextAvailableReward();
-        console.log('[RewardManage] 示例奖励初始化结果:', nextReward);
+        logger.debug('RewardManage', '示例奖励初始化结果:', nextReward);
         
         // 重新获取所有奖励
         allRewards = await rewardService.getAllRewards();
-        console.log(`[RewardManage] 重新获取到 ${allRewards.length} 个奖励`);
+        logger.debug('RewardManage', `重新获取到 ${allRewards.length} 个奖励`);
       } else if (allRewards.length === 0 && hasCustomRewards) {
-        console.log('[RewardManage] 检测到自定义奖励标记，但当前没有奖励数据，可能是用户已清理所有奖励');
+        logger.info('RewardManage', '检测到自定义奖励标记，但当前没有奖励数据，可能是用户已清理所有奖励');
       }
       
       // 直接设置奖励数据
@@ -151,7 +151,7 @@ Page({
       
       wx.hideLoading();
     } catch (error) {
-      console.error('[RewardManage] 加载奖励数据失败', error);
+      logger.error('RewardManage', '加载奖励数据失败', error);
       wx.hideLoading();
       wx.showToast({
         title: '加载失败，请重试',
@@ -164,20 +164,20 @@ Page({
    * 加载领取记录
    */
   loadClaimedRecords: async function() {
-    console.log(`[RewardManage] 加载领取记录`);
+    logger.debug('RewardManage', `加载领取记录`);
     
     try {
       // 获取服务实例
       const rewardService = serviceManager.getService('rewardService');
       
       if (!rewardService) {
-        console.error('[RewardManage] 无法获取奖励服务实例');
+        logger.error('RewardManage', '无法获取奖励服务实例');
         return;
       }
       
       // 获取已领取的奖励
       const claimedRewards = await rewardService.getClaimedRewards();
-      console.log(`[RewardManage] 获取到 ${claimedRewards.length} 个已领取奖励`);
+      logger.debug('RewardManage', `获取到 ${claimedRewards.length} 个已领取奖励`);
       
       // 处理记录，添加显示用的时间格式
       const records = claimedRewards.map(r => ({
@@ -192,9 +192,9 @@ Page({
         claimedRecords: records
       });
       
-      console.log(`[RewardManage] 加载了 ${records.length} 条领取记录`);
+      logger.debug('RewardManage', `加载了 ${records.length} 条领取记录`);
     } catch (error) {
-      console.error('[RewardManage] 加载领取记录失败', error);
+      logger.error('RewardManage', '加载领取记录失败', error);
       wx.showToast({
         title: '加载记录失败',
         icon: 'none'
@@ -222,7 +222,7 @@ Page({
    * 显示添加奖励模态框
    */
   showAddRewardModal: function() {
-    console.log('[RewardManage] 显示添加奖励模态框');
+    logger.info('RewardManage', '显示添加奖励模态框');
     
     // 创建一个新的奖励对象
     const newReward = {
@@ -252,7 +252,7 @@ Page({
     const reward = this.data.rewards.find(r => r.id === id);
     
     if (reward) {
-      console.log(`[RewardManage] 显示奖励操作菜单: ${reward.name}`);
+      logger.debug('RewardManage', `显示奖励操作菜单: ${reward.name}`);
       
       this.setData({
         showActionSheet: true,
@@ -265,7 +265,7 @@ Page({
    * 关闭操作菜单
    */
   closeActionSheet: function() {
-    console.log('[RewardManage] 关闭操作菜单');
+    logger.debug('RewardManage', '关闭操作菜单');
     
     this.setData({
       showActionSheet: false
@@ -279,7 +279,7 @@ Page({
     const reward = this.data.selectedReward;
     
     if (reward) {
-      console.log(`[RewardManage] 编辑奖励: ${reward.name}`);
+      logger.debug('RewardManage', `编辑奖励: ${reward.name}`);
       
       this.setData({
         showActionSheet: false,
@@ -298,7 +298,7 @@ Page({
     const reward = this.data.selectedReward;
     
     if (reward && !reward.claimed) {
-      console.log(`[RewardManage] 确认删除奖励: ${reward.name}`);
+      logger.debug('RewardManage', `确认删除奖励: ${reward.name}`);
       
       this.setData({
         showActionSheet: false,
@@ -327,7 +327,7 @@ Page({
         const rewardService = serviceManager.getService('rewardService');
         
         if (!rewardService) {
-          logger.error('RewardManage', `无法获取奖励服务实例`);
+          logger.error('RewardManage', '无法获取奖励服务实例');
           throw new Error('无法获取奖励服务实例');
         }
         
@@ -390,7 +390,7 @@ Page({
     const reward = this.data.selectedReward;
     
     if (reward && reward.claimed) {
-      console.log(`[RewardManage] 确认重新添加奖励到奖池: ${reward.name}`);
+      logger.debug('RewardManage', `确认重新添加奖励到奖池: ${reward.name}`);
       
       this.setData({
         showActionSheet: false,
@@ -409,7 +409,7 @@ Page({
     const reward = this.data.selectedReward || this.data.editingReward;
     
     if (reward && reward.claimed) {
-      console.log(`[RewardManage] 重新添加奖励到奖池: ${reward.name}`);
+      logger.debug('RewardManage', `重新添加奖励到奖池: ${reward.name}`);
       
       try {
         // 显示加载提示
@@ -419,7 +419,7 @@ Page({
         const rewardService = serviceManager.getService('rewardService');
         
         if (!rewardService) {
-          console.error('[RewardManage] 无法获取奖励服务实例');
+          logger.error('RewardManage', '无法获取奖励服务实例');
           throw new Error('无法获取奖励服务实例');
         }
         
@@ -430,7 +430,7 @@ Page({
           throw new Error(result?.message || '添加奖励到奖池失败');
         }
         
-        console.log(`[RewardManage] 通过服务成功添加奖励到奖池: ${reward.name}, 新ID=${result.reward?.id}`);
+        logger.info('RewardManage', `通过服务成功添加奖励到奖池: ${reward.name}, 新ID=${result.reward?.id}`);
         
         // 更新UI状态
         this.setData({
@@ -463,7 +463,7 @@ Page({
           duration: 2000
         });
       } catch (error) {
-        console.error('[RewardManage] 添加奖励到奖池失败:', error);
+        logger.error('RewardManage', '添加奖励到奖池失败:', error);
         wx.hideLoading();
         
         wx.showToast({
@@ -479,7 +479,7 @@ Page({
    * 关闭奖励模态框
    */
   closeRewardModal: function() {
-    console.log('[RewardManage] 关闭奖励模态框');
+    logger.debug('RewardManage', '关闭奖励模态框');
     
     this.setData({
       showRewardModal: false
@@ -504,7 +504,7 @@ Page({
   selectEmoji: function(e) {
     const emoji = e.currentTarget.dataset.emoji;
     
-    console.log(`[RewardManage] 选择表情: ${emoji}`);
+    logger.debug('RewardManage', `选择表情: ${emoji}`);
     
     // 添加震动反馈
     if (wx.vibrateShort) {
@@ -522,7 +522,7 @@ Page({
   switchEmojiCategory: function(e) {
     const category = e.currentTarget.dataset.category;
     
-    console.log(`[RewardManage] 切换表情分类: ${category}`);
+    logger.debug('RewardManage', `切换表情分类: ${category}`);
     
     this.setData({
       currentCategory: category,
@@ -599,7 +599,7 @@ Page({
       return;
     }
     
-    console.log(`[RewardManage] 保存奖励: ${reward.name}`);
+    logger.debug('RewardManage', `保存奖励: ${reward.name}`);
     
     // 设置操作锁定，防止重复操作
     this.setData({
@@ -612,7 +612,7 @@ Page({
       // 检查是否正在编辑示例奖励
       const isEditingExample = this.data.isEditing && reward.isExample === true;
       if (isEditingExample) {
-        console.log(`[RewardManage] 检测到编辑示例奖励，将转换为自定义奖励: ${reward.name}`);
+        logger.info('RewardManage', `检测到编辑示例奖励，将转换为自定义奖励: ${reward.name}`);
         
         // 创建新的自定义奖励对象
         processedReward = {
@@ -628,14 +628,14 @@ Page({
         const app = getApp();
         app.globalData.needRefreshReward = true;
         
-        console.log(`[RewardManage] 示例奖励已转换为自定义奖励，新ID: ${processedReward.id}`);
+        logger.debug('RewardManage', `示例奖励已转换为自定义奖励，新ID: ${processedReward.id}`);
       }
       
       // 获取服务实例 - 使用服务来保存奖励数据
       const rewardService = serviceManager.getService('rewardService');
       
       if (!rewardService) {
-        console.error('[RewardManage] 无法获取奖励服务实例');
+        logger.error('RewardManage', '无法获取奖励服务实例');
         throw new Error('无法获取奖励服务实例');
       }
       
@@ -658,7 +658,7 @@ Page({
         throw new Error(saveResult?.message || '保存奖励失败');
       }
       
-      console.log('[RewardManage] 奖励保存成功:', processedReward);
+      logger.info('RewardManage', '奖励保存成功:', processedReward);
       
       // 检查是否是首次创建自定义奖励或编辑示例奖励转为自定义奖励
       // 首次创建自定义奖励的条件：不是编辑模式，当前奖励不是示例，且所有已有奖励都是示例
@@ -674,7 +674,7 @@ Page({
       
       // 如果是首次创建自定义奖励或编辑示例奖励转为自定义奖励，立即清理示例奖励
       if (needClearExample) {
-        console.log('[RewardManage] 检测到首次创建自定义奖励或编辑示例奖励转为自定义，立即清理示例');
+        logger.info('RewardManage', '检测到首次创建自定义奖励或编辑示例奖励转为自定义，立即清理示例');
         
         // 异步执行清理操作
         examplesCleared = await this.clearUnclaimedExampleRewards();
@@ -682,7 +682,7 @@ Page({
         // 如果清理了示例奖励，使用更新后的奖励列表
         if (examplesCleared) {
           // 服务层已经处理了数据持久化，不需要重新获取rewards
-          console.log('[RewardManage] 示例奖励已清理，服务层已处理数据持久化');
+          logger.info('RewardManage', '示例奖励已清理，服务层已处理数据持久化');
         }
       }
       
@@ -716,7 +716,7 @@ Page({
         });
       }
     } catch (error) {
-      console.error('[RewardManage] 保存奖励失败:', error);
+      logger.error('RewardManage', '保存奖励失败:', error);
       wx.showToast({
         title: '保存失败，请重试',
         icon: 'none',
@@ -735,14 +735,14 @@ Page({
    * @returns {Promise<Boolean>} 是否清理了示例奖励
    */
   clearUnclaimedExampleRewards: async function() {
-    console.log('[RewardManage] 尝试清理未领取的示例奖励');
+    logger.debug('RewardManage', '尝试清理未领取的示例奖励');
     
     try {
       // 获取服务实例
       const rewardService = serviceManager.getService('rewardService');
       
       if (!rewardService) {
-        console.error('[RewardManage] 无法获取奖励服务实例');
+        logger.error('RewardManage', '无法获取奖励服务实例');
         return false;
       }
       
@@ -757,25 +757,25 @@ Page({
       const unclaimedExamples = allRewards.filter(r => r.isExample === true && !r.claimed);
       
       if (unclaimedExamples.length === 0) {
-        console.log('[RewardManage] 没有未领取的示例奖励，无需清理');
+        logger.debug('RewardManage', '没有未领取的示例奖励，无需清理');
         return false;
       }
       
-      console.log(`[RewardManage] 发现 ${unclaimedExamples.length} 个未领取的示例奖励，开始清理`);
+      logger.debug('RewardManage', `发现 ${unclaimedExamples.length} 个未领取的示例奖励，开始清理`);
       
       // 使用服务层方法批量物理删除
       const deleteResult = await rewardService.deleteRewards(unclaimedExamples.map(r => r.id));
       
       if (deleteResult.success) {
-        console.log(`[RewardManage] 清理了 ${unclaimedExamples.length} 个未领取的示例奖励`);
+        logger.info('RewardManage', `清理了 ${unclaimedExamples.length} 个未领取的示例奖励`);
         
         // 如果有自定义奖励，将标记存入本地存储，防止系统自动重新初始化示例奖励
         if (hasCustomRewards) {
           try {
             wx.setStorageSync('has_custom_rewards', true);
-            console.log('[RewardManage] 设置了自定义奖励标记，防止重新初始化示例奖励');
+            logger.info('RewardManage', '设置了自定义奖励标记，防止重新初始化示例奖励');
           } catch (e) {
-            console.error('[RewardManage] 设置自定义奖励标记失败', e);
+            logger.error('RewardManage', '设置自定义奖励标记失败', e);
           }
         }
         
@@ -795,11 +795,11 @@ Page({
         
         return true;
       } else {
-        console.error('[RewardManage] 清理示例奖励失败');
+        logger.error('RewardManage', '清理示例奖励失败');
         return false;
       }
     } catch (error) {
-      console.error('[RewardManage] 清理示例奖励发生错误:', error);
+      logger.error('RewardManage', '清理示例奖励发生错误:', error);
       return false;
     }
   },
@@ -808,7 +808,7 @@ Page({
    * 取消确认对话框
    */
   cancelConfirmDialog: function() {
-    console.log('[RewardManage] 取消确认对话框');
+    logger.debug('RewardManage', '取消确认对话框');
     
     this.setData({
       showConfirmDialog: false
@@ -819,7 +819,7 @@ Page({
    * 确认对话框确认操作
    */
   confirmDialogAction: function() {
-    console.log('[RewardManage] 执行确认对话框操作');
+    logger.debug('RewardManage', '执行确认对话框操作');
     
     // 执行存储的确认操作
     if (typeof this.data.confirmDialogAction === 'function') {

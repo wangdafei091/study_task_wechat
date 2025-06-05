@@ -2,11 +2,7 @@
   "pages": [
     "pages/index/index",
     "pages/task-edit/task-edit",
-    "pages/rewards/rewards",
-    "pages/message/message",
-    "pages/reward-manage/reward-manage",
-    "pages/my-exchanges/my-exchanges",
-    "pages/star-records/star-records"
+    "pages/rewards/rewards"
   ],
   "subPackages": [
     {
@@ -14,11 +10,25 @@
       "pages": [
         "pages/analysis/analysis"
       ]
+    },
+    {
+      "root": "packageManage",
+      "pages": [
+        "pages/reward-manage/reward-manage",
+        "pages/my-exchanges/my-exchanges"
+      ]
+    },
+    {
+      "root": "packageMessage",
+      "pages": [
+        "pages/message/message",
+        "pages/star-records/star-records"
+      ]
     }
   ],
   "preloadRule": {
     "pages/index/index": {
-      "network": "wifi",
+      "network": "all",
       "packages": ["packageChart"]
     }
   },

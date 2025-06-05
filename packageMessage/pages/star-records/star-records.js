@@ -1,7 +1,7 @@
 const app = getApp();
-const serviceManager = require('../../services/service-manager.js');
-const formatUtils = require('../../utils/formatUtils.js');
-const logger = require('../../utils/logger.js');
+const serviceManager = require('../../../services/service-manager.js');
+const formatUtils = require('../../../utils/formatUtils.js');
+const logger = require('../../../utils/logger.js');
 
 Page({
 

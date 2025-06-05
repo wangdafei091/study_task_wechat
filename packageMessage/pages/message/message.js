@@ -1,7 +1,7 @@
 // pages/message/message.js
-const serviceManager = require('../../services/service-manager.js');
-const dateUtils = require('../../utils/dateUtils');
-const logger = require('../../utils/logger');
+const serviceManager = require('../../../services/service-manager.js');
+const dateUtils = require('../../../utils/dateUtils');
+const logger = require('../../../utils/logger');
 
 Page({
   /**

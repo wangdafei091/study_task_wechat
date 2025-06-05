@@ -1075,7 +1075,7 @@ Page({
     
     // 先跳转到消息中心页面
     wx.navigateTo({
-      url: '/pages/message/message',
+      url: '/packageMessage/pages/message/message',
       success: () => {
         logger.debug('Index', '成功跳转到消息中心页面');
         
@@ -1395,7 +1395,7 @@ Page({
     } else if (item && item.id === 'reward-manage') {
       logger.debug('Index', '点击奖励管理菜单项，跳转到奖励管理页面');
       wx.navigateTo({
-        url: '/pages/reward-manage/reward-manage'
+        url: '/packageManage/pages/reward-manage/reward-manage'
       });
     }
   },
@@ -2116,7 +2116,7 @@ Page({
     // 延迟跳转，等动画完成
     setTimeout(() => {
       wx.navigateTo({
-        url: '/pages/reward-manage/reward-manage'
+        url: '/packageManage/pages/reward-manage/reward-manage'
       });
     }, 300);
   },

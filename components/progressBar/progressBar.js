@@ -308,12 +308,9 @@ Component({
       // 触发震动增强体验 - 保留但简化
       if (wx.vibrateShort) {
         try {
-          wx.vibrateShort({ type: 'medium' });
-          setTimeout(() => {
-            wx.vibrateShort({ type: 'light' });
-          }, 300);
+          wx.vibrateShort();
         } catch (e) {
-          console.log('[progressBar] 震动失败', e);
+          logger.debug('progressBar', '震动失败', e);
         }
       }
     },

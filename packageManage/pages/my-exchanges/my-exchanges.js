@@ -1,5 +1,5 @@
 // pages/my-exchanges/my-exchanges.js
-const logger = require('../../utils/logger');
+const logger = require('../../../utils/logger');
 
 Page({
 

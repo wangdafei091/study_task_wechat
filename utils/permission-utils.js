@@ -17,19 +17,19 @@ const PAGE_PERMISSIONS = {
     '/pages/index/index',           // 首页
     '/pages/task-edit/task-edit',   // 任务编辑
     '/pages/rewards/rewards',       // 奖池页面
-    '/pages/reward-manage/reward-manage', // 奖励管理
-    '/pages/my-exchanges/my-exchanges',   // 我的兑换
-    '/pages/star-records/star-records',   // 星星记录
-    '/pages/message/message'        // 消息中心
+    '/packageManage/pages/reward-manage/reward-manage', // 奖励管理
+    '/packageManage/pages/my-exchanges/my-exchanges',   // 我的兑换
+    '/packageMessage/pages/star-records/star-records',   // 星星记录
+    '/packageMessage/pages/message/message'        // 消息中心
   ],
   
   // 孩子权限页面（受限权限）
   [UserRole.CHILD]: [
     '/pages/index/index',           // 首页
     '/pages/rewards/rewards',       // 奖池页面
-    '/pages/my-exchanges/my-exchanges',   // 我的兑换
-    '/pages/star-records/star-records',   // 星星记录
-    '/pages/message/message'        // 消息中心
+    '/packageManage/pages/my-exchanges/my-exchanges',   // 我的兑换
+    '/packageMessage/pages/star-records/star-records',   // 星星记录
+    '/packageMessage/pages/message/message'        // 消息中心
     // 注意：孩子不能访问任务编辑和奖励管理页面
   ]
 };

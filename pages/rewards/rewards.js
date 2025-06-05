@@ -70,39 +70,22 @@ Page({
   /**
    * 生命周期函数--监听页面显示
    */
-  onShow: async function () {
-    console.log('[rewards] 页面显示');
+  onShow: function() {
+    // 记录页面显示
+    logger.info('rewards', '页面显示');
     
-    // 获取应用实例
-    const app = getApp();
-    
-    // 检查是否需要刷新奖励信息
+    // 检查是否有奖励数据变更标记
     if (app.globalData.needRefreshReward) {
-      console.log('[rewards] 检测到奖励数据变更标记，强制刷新');
-      
-      // 强制清除所有相关缓存
-      const starService = serviceManager.getService('starService');
-      const rewardService = serviceManager.getService('rewardService');
-      
-      if (starService && starService.clearCache) {
-        starService.clearCache();
-      }
-      if (rewardService && rewardService.clearCache) {
-        rewardService.clearCache();
-      }
-      
-      // 重新加载数据
-      await this.loadRewardsData();
-      
-      // 不要在这里清除标记，让首页处理
+      logger.info('rewards', '检测到奖励数据变更标记，强制刷新');
+      app.globalData.needRefreshReward = false;
+      this.loadRewardsData(true); // 强制刷新
     } else {
-      // 常规刷新
-      await this.loadRewardsData();
+      this.loadRewardsData();
     }
     
-    // 清除已跳转标记
+    // 检查是否从其他页面跳转回来
     if (app.globalData.hasRedirectedToReward) {
-      console.log('[rewards] 清除已跳转标记');
+      logger.info('rewards', '清除已跳转标记');
       app.globalData.hasRedirectedToReward = false;
     }
   },
@@ -155,7 +138,7 @@ Page({
    * 设置进度条完成事件监听
    */
   setupProgressBarListener: function() {
-    console.log('[rewards] 设置进度条完成事件监听');
+    logger.info('rewards', '设置进度条完成事件监听');
     
     // 获取全局事件总线
     const eventBus = app.globalData.eventBus;
@@ -169,11 +152,11 @@ Page({
    * 处理进度条完成事件
    */
   handleProgressBarComplete: function() {
-    console.log('[rewards] 收到进度条完成事件，锁定用户操作');
+    logger.info('rewards', '收到进度条完成事件，锁定用户操作');
     
     // 已经在动画中则不重复处理
     if (this.data.isRewardAnimating) {
-      console.log('[rewards] 已经在动画中，忽略重复事件');
+      logger.warn('rewards', '已经在动画中，忽略重复事件');
       return;
     }
     
@@ -185,7 +168,7 @@ Page({
     
     // 设置安全超时，确保不会永久锁定界面
     this.animationSafetyTimer = setTimeout(() => {
-      console.log('[rewards] 奖励动画安全超时触发');
+      logger.warn('rewards', '奖励动画安全超时触发');
       this.releaseAnimationLock();
     }, 2000); // 2秒后如果仍未释放锁定，则自动释放
   },
@@ -194,7 +177,7 @@ Page({
    * 释放动画锁定
    */
   releaseAnimationLock: function() {
-    console.log('[rewards] 释放动画锁定');
+    logger.info('rewards', '释放动画锁定');
     
     // 清除安全超时计时器
     if (this.animationSafetyTimer) {
@@ -213,7 +196,7 @@ Page({
    * 清理所有计时器
    */
   clearAllTimers: function() {
-    console.log('[rewards] 清理所有计时器');
+    logger.debug('rewards', '清理所有计时器');
     
     // 清除动画安全超时计时器
     if (this.animationSafetyTimer) {
@@ -253,7 +236,7 @@ Page({
    * 加载奖励数据
    */
   loadRewardsData: async function () {
-    console.log('[rewards] 开始加载奖励数据');
+    logger.info('rewards', '开始加载奖励数据');
     
     try {
       wx.showLoading({ title: '加载中' });
@@ -263,13 +246,13 @@ Page({
       const rewardService = serviceManager.getService('rewardService');
       
       if (!starService || !rewardService) {
-        console.error('[rewards] 无法获取服务实例');
+        logger.error('rewards', '无法获取服务实例');
         wx.hideLoading();
         return;
       }
       
       // 强制清除所有相关缓存，确保获取最新数据
-      console.log('[rewards] 强制清除缓存以获取最新数据');
+      logger.info('rewards', '强制清除缓存以获取最新数据');
       if (starService.clearCache) {
         starService.clearCache();
       }
@@ -279,7 +262,7 @@ Page({
       
       // 使用新架构获取用户星星数
       const totalPoints = await starService.getTotalStars();
-      console.log(`[rewards] 获取到用户星星: ${totalPoints}`);
+      logger.info('rewards', `获取到用户星星: ${totalPoints}`);
       
       // 格式化星星数量
       const formattedPoints = formatUtils.formatPoints(totalPoints, true);
@@ -289,22 +272,22 @@ Page({
       
       // 获取所有奖励（包括已领取的）
       const allRewards = await rewardService.getAvailableRewards(true);
-      console.log(`[rewards] 获取到可用奖励: ${allRewards.length}个`);
+      logger.info('rewards', `获取到可用奖励: ${allRewards.length}个`);
       
       // 检查是否存在自定义奖励标记
       let hasCustomRewards = false;
       try {
         hasCustomRewards = wx.getStorageSync('has_custom_rewards') === true;
         if (hasCustomRewards) {
-          console.log('[rewards] 检测到自定义奖励标记');
+          logger.debug('rewards', '检测到自定义奖励标记');
         }
       } catch (e) {
-        console.warn('[rewards] 获取自定义奖励标记失败', e);
+        logger.warn('rewards', '获取自定义奖励标记失败', e);
       }
       
       // 如果没有奖励但存在自定义奖励标记，不需要初始化示例奖励
       if (allRewards.length === 0 && hasCustomRewards) {
-        console.log('[rewards] 检测到有自定义奖励标记但无奖励数据，用户可能已清理所有奖励');
+        logger.info('rewards', '检测到有自定义奖励标记但无奖励数据，用户可能已清理所有奖励');
         wx.hideLoading();
         
         this.setData({
@@ -337,14 +320,14 @@ Page({
       const availableRewards = rewards.filter(r => !r.claimed);
       const claimedRewards = rewards.filter(r => r.claimed);
       
-      console.log(`[rewards] 可用奖励: ${availableRewards.length}个, 已领取奖励: ${claimedRewards.length}个`);
+      logger.debug('rewards', `可用奖励: ${availableRewards.length}个, 已领取奖励: ${claimedRewards.length}个`);
       
       // 计算已解锁奖励数量
       const unlockedRewards = rewards.filter(reward => reward.unlocked).length;
       
       // 计算下一个可达成的奖励
       const nextReward = await rewardService.calculateNextAvailableReward();
-      console.log(`[rewards] 下一个可达成奖励: ${nextReward ? nextReward.name : '无'}, 需要${nextReward ? nextReward.points : 0}颗星星`);
+      logger.debug('rewards', `下一个可达成奖励: ${nextReward ? nextReward.name : '无'}, 需要${nextReward ? nextReward.points : 0}颗星星`);
       
       // 添加即将设置到页面的数据日志
       logger.info('rewards', `准备设置页面数据: 总星星=${totalPoints}, 即将过期星星=${expiringPointsInfo.points}, 过期日期=${expiringPointsInfo.date}`);
@@ -386,11 +369,11 @@ Page({
         nextReward: nextReward
       });
       
-      console.log(`[rewards] 设置总星星: ${totalPoints}, 即将过期总星星: ${expiringPointsInfo.points}, 最早到期日期: ${expiringPointsInfo.date}`);
+      logger.info('rewards', `设置总星星: ${totalPoints}, 即将过期总星星: ${expiringPointsInfo.points}, 最早到期日期: ${expiringPointsInfo.date}`);
       
       wx.hideLoading();
     } catch (error) {
-      console.error('[rewards] 加载奖励数据失败', error);
+      logger.error('rewards', '加载奖励数据失败', error);
       wx.hideLoading();
       wx.showToast({
         title: '加载失败，请重试',
@@ -444,7 +427,7 @@ Page({
   viewReward: function (e) {
     // 如果正在动画中，拦截操作
     if (this.data.isRewardAnimating) {
-      console.log('[rewards] 正在动画中，拦截奖励查看操作');
+      logger.warn('rewards', '正在动画中，拦截奖励查看操作');
       return;
     }
     
@@ -472,13 +455,13 @@ Page({
   navigateToMyExchanges: function() {
     // 如果正在动画中，拦截操作
     if (this.data.isRewardAnimating) {
-      console.log('[rewards] 正在动画中，拦截页面跳转');
+      logger.warn('rewards', '正在动画中，拦截页面跳转');
       return;
     }
     
-    console.log('[rewards] 导航到我的兑换页面');
+    logger.info('rewards', '导航到我的兑换页面');
     wx.navigateTo({
-      url: '/pages/my-exchanges/my-exchanges'
+      url: '/packageManage/pages/my-exchanges/my-exchanges'
     });
   },
 
@@ -488,13 +471,13 @@ Page({
   navigateToStarRecords: function() {
     // 如果正在动画中，拦截操作
     if (this.data.isRewardAnimating) {
-      console.log('[rewards] 正在动画中，拦截页面跳转');
+      logger.warn('rewards', '正在动画中，拦截页面跳转');
       return;
     }
     
-    console.log('[rewards] 导航到星星记录页面');
+    logger.info('rewards', '导航到星星记录页面');
     wx.navigateTo({
-      url: '/pages/star-records/star-records'
+      url: '/packageMessage/pages/star-records/star-records'
     });
   },
 
@@ -527,10 +510,10 @@ Page({
       content: `确定要用 ${reward.points} 颗星星兑换【${reward.name}】吗？领取后星星将不能退回哦！`,
       success: (res) => {
         if (res.confirm) {
-          console.log(`[rewards] 用户确认领取奖励: ${reward.name}, 消耗星星: ${reward.points}`);
+          logger.info('rewards', `用户确认领取奖励: ${reward.name}, 消耗星星: ${reward.points}`);
           this._performClaimReward(reward);
         } else {
-          console.log(`[rewards] 用户取消领取奖励: ${reward.name}`);
+          logger.info('rewards', `用户取消领取奖励: ${reward.name}`);
         }
       }
     });
@@ -548,7 +531,7 @@ Page({
       const starService = serviceManager.getService('starService');
       
       if (!rewardService || !starService) {
-        console.error('[rewards] 无法获取服务实例');
+        logger.error('rewards', '无法获取服务实例');
         wx.hideLoading();
         return;
       }
@@ -558,22 +541,22 @@ Page({
       let currentUserId = null;
       if (userService) {
         currentUserId = userService.getCurrentUserId();
-        console.log(`[rewards] 当前用户ID: ${currentUserId}`);
+        logger.info('rewards', `当前用户ID: ${currentUserId}`);
       } else {
-        console.warn('[rewards] 无法获取用户服务，将使用默认用户ID');
+        logger.warn('rewards', '无法获取用户服务，将使用默认用户ID');
       }
       
       // 保存原始星星数和目标星星数
       const originalPoints = this.data.totalPoints;
       const targetPoints = originalPoints - reward.points;
       
-      console.log(`[rewards] 领取奖励前星星数: ${originalPoints}, 用户: ${currentUserId}`);
+      logger.info('rewards', `领取奖励前星星数: ${originalPoints}, 用户: ${currentUserId}`);
       
       // 使用新架构兑换奖励，传递当前用户ID
       const result = await rewardService.exchangeReward(reward.id, currentUserId);
       
       if (!result.success) {
-        console.error(`[rewards] 兑换奖励失败: ${result.message}, 用户: ${currentUserId}`);
+        logger.error('rewards', `兑换奖励失败: ${result.message}, 用户: ${currentUserId}`);
         wx.hideLoading();
         wx.showToast({
           title: result.message || '兑换失败',
@@ -582,13 +565,13 @@ Page({
         return;
       }
       
-      console.log(`[rewards] 兑换奖励成功: ${reward.name}, ID=${reward.id}, 消耗星星: ${reward.points}, 用户: ${currentUserId}`);
+      logger.info('rewards', `兑换奖励成功: ${reward.name}, ID=${reward.id}, 消耗星星: ${reward.points}, 用户: ${currentUserId}`);
       
       // 开始星星数量减少的动画
       wx.hideLoading();
       this.animateStarsCount(originalPoints, targetPoints, async () => {
         // 动画完成后，强制清除所有缓存确保数据一致性
-        console.log('[rewards] 动画完成，强制清除缓存确保数据一致性');
+        logger.info('rewards', '动画完成，强制清除缓存确保数据一致性');
         if (starService.clearCache) {
           starService.clearCache();
         }
@@ -598,7 +581,7 @@ Page({
         
         // 计算下一个可用奖励
         const nextReward = await rewardService.calculateNextAvailableReward();
-        console.log(`[rewards] 领取奖励后计算下一个可用奖励: ${nextReward.name}, 需要${nextReward.points}颗星星`);
+        logger.info('rewards', `领取奖励后计算下一个可用奖励: ${nextReward.name}, 需要${nextReward.points}颗星星`);
         
         // 关闭弹窗并更新数据
         this.setData({
@@ -612,7 +595,7 @@ Page({
         // 通知首页更新星星和奖励进度
         const app = getApp();
         if (app && app.globalData && app.globalData.eventBus) {
-          console.log('[rewards] 发送奖励领取事件通知');
+          logger.info('rewards', '发送奖励领取事件通知');
           app.globalData.eventBus.emit(EVENTS.REWARD_CLAIMED, {
             rewardId: reward.id,
             rewardName: reward.name,  // 添加rewardName字段以兼容MessageService
@@ -631,7 +614,7 @@ Page({
         });
       });
     } catch (error) {
-      console.error('[rewards] 兑换奖励出错', error);
+      logger.error('rewards', '兑换奖励出错', error);
       wx.hideLoading();
       wx.showToast({
         title: '操作失败，请重试',
@@ -653,7 +636,7 @@ Page({
     const frames = Math.floor(duration / frameDuration);
     const decrement = (start - end) / frames;
     
-    console.log(`[rewards] 开始星星数量动画，从 ${start} 到 ${end}, 减少数量: ${start - end}, 帧数: ${frames}`);
+    logger.info('rewards', `开始星星数量动画，从 ${start} 到 ${end}, 减少数量: ${start - end}, 帧数: ${frames}`);
     
     let currentCount = start;
     let currentFrame = 0;
@@ -685,7 +668,7 @@ Page({
           currentProgress: end
         });
         
-        console.log(`[rewards] 星星数量动画完成，最终数量: ${end}`);
+        logger.info('rewards', `星星数量动画完成，最终数量: ${end}`);
         
         // 执行回调
         if (callback) {
@@ -709,7 +692,7 @@ Page({
     
     if (count === 5) {
       // 达到5次点击，跳转到示例页面
-      console.log('[rewards] 检测到5次连续点击，跳转到架构示例页面');
+      logger.info('rewards', '检测到5次连续点击，跳转到架构示例页面');
       // 添加振动反馈
       if (wx.vibrateShort) {
         wx.vibrateShort({ type: 'light' });
@@ -729,7 +712,7 @@ Page({
         demoClickTimeout: timeout
       });
       
-      console.log(`[rewards] 星星区域点击 ${count}/5`);
+      logger.info(`rewards 星星区域点击 ${count}/5`);
     }
   },
 
