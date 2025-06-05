@@ -308,7 +308,7 @@ Component({
      * 更新日历显示星星数据
      */
     updateCalendarWithStars: function(starRecords) {
-      logger.debug('星星日历', '数据类型已修复：确保earnedStars和deductedStars为数字类型，避免字符串拼接问题');
+      logger.debug('星星日历', '修复收入计算逻辑：基于任务状态而非简单累加收入记录');
       
       const calendarDays = this.data.calendarDays.map(day => {
         if (!day.isCurrentMonth) {
@@ -318,29 +318,75 @@ Component({
         // 查找该日期的星星记录，使用getDate()方法获取日期
         const dayRecords = starRecords.filter(record => record.getDate() === day.dateString);
         
-        // 分别计算收入和支出的星星数量
-        const earnedStars = dayRecords
-          .filter(record => record.isIncome()) // 收入记录
-          .reduce((sum, record) => sum + Number(record.points || 0), 0);
-          
-        const deductedStars = dayRecords
-          .filter(record => this.isPenaltyDeduction(record)) // 只计算惩罚性扣减
-          .reduce((sum, record) => sum + Math.abs(Number(record.points || 0)), 0); // 支出记录points是负数，取绝对值
+        // 获取该日期的任务数据来计算实际收入星星
+        this._calculateEarnedStarsFromTasks(day.dateString)
+          .then(earnedStars => {
+            // 计算惩罚性扣除的星星数量
+            const deductedStars = dayRecords
+              .filter(record => this.isPenaltyDeduction(record)) // 只计算惩罚性扣减
+              .reduce((sum, record) => sum + Math.abs(Number(record.points || 0)), 0); // 支出记录points是负数，取绝对值
+            
+            // 设置starInfo对象以匹配WXML模板，确保数值类型
+            const starInfo = (earnedStars > 0 || deductedStars > 0) ? {
+              earned: Number(earnedStars),
+              deducted: Number(deductedStars)
+            } : null;
+            
+            // 添加调试日志
+            if (starInfo) {
+              logger.debug('星星日历', `计算星星数据: 日期=${day.dateString}, 任务获得=${earnedStars}(${typeof earnedStars}), 惩罚扣除=${deductedStars}(${typeof deductedStars})`);
+            }
+            
+            // 更新对应日期的数据
+            const updatedDays = [...this.data.calendarDays];
+            const dayIndex = updatedDays.findIndex(d => d.dateString === day.dateString && d.isCurrentMonth);
+            if (dayIndex !== -1) {
+              updatedDays[dayIndex] = {
+                ...updatedDays[dayIndex],
+                starInfo: starInfo,
+                starRecords: dayRecords
+              };
+              
+              this.setData({
+                calendarDays: updatedDays
+              });
+            }
+          })
+          .catch(error => {
+            logger.error('星星日历', `计算日期${day.dateString}的任务星星失败:`, error);
+            
+            // 发生错误时，使用原有逻辑作为备选方案
+            const earnedStars = dayRecords
+              .filter(record => record.isIncome())
+              .reduce((sum, record) => sum + Number(record.points || 0), 0);
+              
+            const deductedStars = dayRecords
+              .filter(record => this.isPenaltyDeduction(record))
+              .reduce((sum, record) => sum + Math.abs(Number(record.points || 0)), 0);
+            
+            const starInfo = (earnedStars > 0 || deductedStars > 0) ? {
+              earned: Number(earnedStars),
+              deducted: Number(deductedStars)
+            } : null;
+            
+            const updatedDays = [...this.data.calendarDays];
+            const dayIndex = updatedDays.findIndex(d => d.dateString === day.dateString && d.isCurrentMonth);
+            if (dayIndex !== -1) {
+              updatedDays[dayIndex] = {
+                ...updatedDays[dayIndex],
+                starInfo: starInfo,
+                starRecords: dayRecords
+              };
+              
+              this.setData({
+                calendarDays: updatedDays
+              });
+            }
+          });
         
-        // 设置starInfo对象以匹配WXML模板，确保数值类型
-        const starInfo = (earnedStars > 0 || deductedStars > 0) ? {
-          earned: Number(earnedStars),
-          deducted: Number(deductedStars)
-        } : null;
-        
-        // 添加调试日志
-        if (starInfo) {
-          logger.debug('星星日历', `计算星星数据: 日期=${day.dateString}, 获得=${earnedStars}(${typeof earnedStars}), 惩罚扣除=${deductedStars}(${typeof deductedStars})`);
-        }
-        
+        // 先返回不含starInfo的day，异步更新
         return {
           ...day,
-          starInfo: starInfo,
           starRecords: dayRecords
         };
       });
@@ -357,6 +403,50 @@ Component({
     },
     
     /**
+     * 基于任务状态计算指定日期的收入星星数
+     * @param {String} dateString 日期字符串 YYYY-MM-DD
+     * @returns {Promise<Number>} 收入星星数
+     */
+    _calculateEarnedStarsFromTasks: function(dateString) {
+      return new Promise((resolve, reject) => {
+        try {
+          // 通过serviceManager获取任务服务
+          const taskService = serviceManager.getTaskService();
+          if (!taskService) {
+            logger.error('星星日历', '无法获取任务服务实例');
+            resolve(0);
+            return;
+          }
+          
+          // 获取指定日期的任务
+          taskService.getTasksByDate(dateString)
+            .then(tasks => {
+              let earnedStars = 0;
+              
+                             // 遍历任务，计算实际获得的星星
+               tasks.forEach(task => {
+                 // 只计算已完成且非必做的任务获得的星星
+                 if (task.status === 1 && !task.isRequired && task.starAwarded) {
+                   earnedStars += Number(task.points || 0);
+                   logger.debug('星星日历', `任务${task.title}获得星星: ${task.points}颗`);
+                 }
+               });
+              
+              logger.debug('星星日历', `日期${dateString}基于任务计算收入星星: ${earnedStars}颗，任务数量: ${tasks.length}`);
+              resolve(earnedStars);
+            })
+            .catch(error => {
+              logger.error('星星日历', `获取日期${dateString}任务失败:`, error);
+              reject(error);
+            });
+        } catch (error) {
+          logger.error('星星日历', `计算日期${dateString}收入星星出错:`, error);
+          reject(error);
+        }
+      });
+    },
+
+    /**
      * 仅更新今日数据（性能优化）
      */
     updateTodayDataOnly: function() {
@@ -372,33 +462,63 @@ Component({
       
       serviceManager.getStarService().getStarRecordsByDate(today)
         .then(records => {
-          // 分别计算收入和支出的星星数量
-          const earnedStars = records
-            .filter(record => record.isIncome()) // 收入记录
-            .reduce((sum, record) => sum + Number(record.points || 0), 0);
-            
-          const deductedStars = records
-            .filter(record => this.isPenaltyDeduction(record)) // 只计算惩罚性扣减
-            .reduce((sum, record) => sum + Math.abs(Number(record.points || 0)), 0); // 支出记录points是负数，取绝对值
-          
-          // 设置starInfo对象以匹配WXML模板，确保数值类型
-          const starInfo = (earnedStars > 0 || deductedStars > 0) ? {
-            earned: Number(earnedStars),
-            deducted: Number(deductedStars)
-          } : null;
-          
-          const updatedDays = [...this.data.calendarDays];
-          updatedDays[todayIndex] = {
-            ...updatedDays[todayIndex],
-            starInfo: starInfo,
-            starRecords: records
-          };
-          
-          this.setData({
-            calendarDays: updatedDays
-          });
-          
-          logger.debug('星星日历', `今日星星数据更新完成: 获得${earnedStars}颗，惩罚扣除${deductedStars}颗`);
+          // 使用基于任务状态的方式计算收入星星
+          this._calculateEarnedStarsFromTasks(today)
+            .then(earnedStars => {
+              // 计算惩罚性扣除的星星数量
+              const deductedStars = records
+                .filter(record => this.isPenaltyDeduction(record)) // 只计算惩罚性扣减
+                .reduce((sum, record) => sum + Math.abs(Number(record.points || 0)), 0); // 支出记录points是负数，取绝对值
+              
+              // 设置starInfo对象以匹配WXML模板，确保数值类型
+              const starInfo = (earnedStars > 0 || deductedStars > 0) ? {
+                earned: Number(earnedStars),
+                deducted: Number(deductedStars)
+              } : null;
+              
+              const updatedDays = [...this.data.calendarDays];
+              updatedDays[todayIndex] = {
+                ...updatedDays[todayIndex],
+                starInfo: starInfo,
+                starRecords: records
+              };
+              
+              this.setData({
+                calendarDays: updatedDays
+              });
+              
+              logger.debug('星星日历', `今日星星数据更新完成: 任务获得${earnedStars}颗，惩罚扣除${deductedStars}颗`);
+            })
+            .catch(error => {
+              logger.error('星星日历', '计算今日任务星星失败，使用备选方案:', error);
+              
+              // 发生错误时，使用原有逻辑作为备选方案
+              const earnedStars = records
+                .filter(record => record.isIncome())
+                .reduce((sum, record) => sum + Number(record.points || 0), 0);
+                
+              const deductedStars = records
+                .filter(record => this.isPenaltyDeduction(record))
+                .reduce((sum, record) => sum + Math.abs(Number(record.points || 0)), 0);
+              
+              const starInfo = (earnedStars > 0 || deductedStars > 0) ? {
+                earned: Number(earnedStars),
+                deducted: Number(deductedStars)
+              } : null;
+              
+              const updatedDays = [...this.data.calendarDays];
+              updatedDays[todayIndex] = {
+                ...updatedDays[todayIndex],
+                starInfo: starInfo,
+                starRecords: records
+              };
+              
+              this.setData({
+                calendarDays: updatedDays
+              });
+              
+              logger.debug('星星日历', `今日星星数据更新完成(备选方案): 获得${earnedStars}颗，惩罚扣除${deductedStars}颗`);
+            });
         })
         .catch(error => {
           logger.error('星星日历', '更新今日星星数据失败:', error);
