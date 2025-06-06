@@ -210,46 +210,6 @@ App({
     }
   },
   
-  // 初始化事件总线
-  initEventBus: function() {
-    this.globalData.eventBus = {
-      listeners: {},
-      
-      // 注册事件监听
-      on: function(event, callback) {
-        if (!this.listeners[event]) {
-          this.listeners[event] = [];
-        }
-        this.listeners[event].push(callback);
-      },
-      
-      // 移除事件监听
-      off: function(event, callback) {
-        if (!this.listeners[event]) return;
-        
-        if (callback) {
-          // 移除特定回调
-          this.listeners[event] = this.listeners[event].filter(cb => cb !== callback);
-        } else {
-          // 移除所有该事件的回调
-          delete this.listeners[event];
-        }
-      },
-      
-      // 触发事件
-      emit: function(event, data) {
-        const callbacks = this.listeners[event] || [];
-        callbacks.forEach(callback => {
-          try {
-            callback(data);
-          } catch (error) {
-            console.error(`事件处理出错: ${event}`, error);
-          }
-        });
-      }
-    };
-  },
-  
   // 监听设备方向变化
   setupOrientationListener: function() {
     // 不是所有设备都支持方向监听，先检查是否可用
