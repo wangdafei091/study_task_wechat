@@ -53,7 +53,7 @@
 ### 开发指南
 
 - [工具函数使用指南](../docs/api/utils_guide.md)
-- [服务使用指南](../docs/api/services-guide.md)
+- [领域服务使用指南](../docs/api/services-guide.md)
 - [组件使用指南](../docs/api/components-guide.md)
 
 ### 性能和优化
