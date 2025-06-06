@@ -1133,7 +1133,7 @@ Component({
     _sortTasksByHabitAndTime(tasks) {
       if (!Array.isArray(tasks)) return [];
       
-      logger.info('task-heatmap', '任务排序：必做任务优先，各组内部按时间排序');
+      logger.debug('task-heatmap', '任务排序：必做任务优先，各组内部按时间排序');
       
       // 按以下规则排序:
       // 1. 必做任务组优先

@@ -14,7 +14,7 @@ Page({
   onLoad: function (options) {
     logger.info('analysis', '页面加载');
     logger.info('analysis', '调整卡片样式: 移除自定义样式，使用默认卡片样式');
-    // 允许页面DOM先渲染
+    // 允许页面DOM先渲染，优化加载时序避免组件间数据冲突
     this.setData({ loading: true });
     setTimeout(() => {
       this.loadData();
@@ -27,19 +27,21 @@ Page({
   onShow: function () {
     // 每次页面显示时刷新数据
     logger.info('analysis', '页面显示');
-    // 允许页面DOM先渲染
+    // 允许页面DOM先渲染，延长等待时间避免组件间数据冲突
     this.setData({ loading: true });
     setTimeout(() => {
       this.loadData();
       
-      // 获取星星日历组件实例并调用智能刷新方法
-      const starCalendar = this.selectComponent('.star-calendar');
-      if (starCalendar) {
-        logger.info('analysis', '触发星星日历智能刷新');
-        starCalendar.smartRefresh();
-      } else {
-        logger.warn('analysis', '未找到星星日历组件');
-      }
+      // 延迟触发星星日历刷新，避免与趋势图同时加载造成重复查询
+      setTimeout(() => {
+        const starCalendar = this.selectComponent('.star-calendar');
+        if (starCalendar) {
+          logger.info('analysis', '触发星星日历智能刷新');
+          starCalendar.smartRefresh();
+        } else {
+          logger.warn('analysis', '未找到星星日历组件');
+        }
+      }, 200);
     }, 300);
   },
   

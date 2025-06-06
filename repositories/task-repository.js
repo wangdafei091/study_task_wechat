@@ -324,7 +324,7 @@ class TaskRepository extends BaseRepository {
     if (!Array.isArray(tasks)) return [];
     
     const logger = require('../utils/logger');
-    logger.info('TaskRepository', '任务排序：必做任务优先，各组内部按时间排序');
+    logger.debug('TaskRepository', '任务排序：必做任务优先，各组内部按时间排序');
     
     // 按以下规则排序:
     // 1. 必做任务组优先
