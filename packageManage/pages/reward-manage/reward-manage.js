@@ -125,10 +125,17 @@ Page({
       let allRewards = await rewardService.getAllRewards();
       logger.debug('RewardManage', `获取到 ${allRewards.length} 个奖励`);
       
-      // 检查是否存在自定义奖励标记
+      // 检查是否存在自定义奖励标记（这个逻辑应该由服务层处理）
       let hasCustomRewards = false;
       try {
-        hasCustomRewards = wx.getStorageSync('has_custom_rewards') === true;
+        // 通过服务层检查，而不是直接访问存储
+        const rewardService = serviceManager.getService('rewardService');
+        if (rewardService && typeof rewardService.hasCustomRewards === 'function') {
+          hasCustomRewards = await rewardService.hasCustomRewards();
+        } else {
+          // 兼容性处理
+          hasCustomRewards = wx.getStorageSync('has_custom_rewards') === true;
+        }
       } catch (e) {
         logger.warn('RewardManage', '获取自定义奖励标记失败', e);
       }
@@ -769,10 +776,16 @@ Page({
       if (deleteResult.success) {
         logger.info('RewardManage', `清理了 ${unclaimedExamples.length} 个未领取的示例奖励`);
         
-        // 如果有自定义奖励，将标记存入本地存储，防止系统自动重新初始化示例奖励
+        // 如果有自定义奖励，通过服务层设置标记，防止系统自动重新初始化示例奖励
         if (hasCustomRewards) {
           try {
-            wx.setStorageSync('has_custom_rewards', true);
+            const rewardService = serviceManager.getService('rewardService');
+            if (rewardService && typeof rewardService.setCustomRewardsFlag === 'function') {
+              await rewardService.setCustomRewardsFlag(true);
+            } else {
+              // 兼容性处理
+              wx.setStorageSync('has_custom_rewards', true);
+            }
             logger.info('RewardManage', '设置了自定义奖励标记，防止重新初始化示例奖励');
           } catch (e) {
             logger.error('RewardManage', '设置自定义奖励标记失败', e);

@@ -5,6 +5,7 @@ const logger = require('../../utils/logger');
 const permissionUtils = require('../../utils/permission-utils');
 const { UserService } = require('../../services/user-service');
 const MessageService = require('../../services/message-service');
+const pageStorageHelper = require('../../utils/page-storage-helper');
 
 Page({
   data: {
@@ -399,7 +400,7 @@ Page({
     }
     
     // 从多个来源检查是否从奖池页面返回
-    const fromStorage = wx.getStorageSync('fromRewardCompletion');
+    const fromStorage = pageStorageHelper.getPageState('fromRewardCompletion');
     
     if (app.globalData.hasRedirectedToReward || fromStorage) {
       logger.debug('Index', '检测到从奖池页面返回(通过标记)');
@@ -407,8 +408,8 @@ Page({
       // 清除所有标记
       app.globalData.hasRedirectedToReward = false;
       if (fromStorage) {
-        wx.removeStorageSync('fromRewardCompletion');
-        wx.removeStorageSync('completedRewardInfo');
+        pageStorageHelper.removePageState('fromRewardCompletion');
+        pageStorageHelper.removePageState('completedRewardInfo');
       }
       
       // 执行过渡到新目标
@@ -1960,8 +1961,8 @@ Page({
     };
     
     // 使用Storage备份标记(更可靠)
-    wx.setStorageSync('fromRewardCompletion', true);
-    wx.setStorageSync('completedRewardInfo', {
+    pageStorageHelper.setPageState('fromRewardCompletion', true);
+    pageStorageHelper.setPageState('completedRewardInfo', {
       reward: this.data.completedReward,
       total: this.data.completedRewardTotal
     });

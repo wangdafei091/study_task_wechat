@@ -1,6 +1,6 @@
 // app.js
 const unitUtils = require('./utils/unit.js');
-const storageUtils = require('./utils/storageUtils.js'); // 引入存储工具
+const StorageAdapter = require('./adapters/storage-adapter'); // 引入存储适配器
 const serviceManager = require('./services/service-manager.js'); // 引入服务管理器
 const { UserService } = require('./services/user-service.js'); // 引入用户服务
 const logger = require('./utils/logger');
@@ -14,14 +14,13 @@ App({
     
     // 初始化存储数据
     logger.info('App', '初始化存储数据');
-    storageUtils.initializeStorageIfNeeded();
+    StorageAdapter.initializeApplicationStorage();
     
     // 确定是否为开发环境，用于配置事件总线
     let isDevEnv = deviceInfo.isDevelopmentEnv();
     
     // 初始化用户服务
     logger.info('App', '初始化用户服务');
-    const StorageAdapter = require('./adapters/storage-adapter');
     const userStorageAdapter = new StorageAdapter({ namespace: 'user_' });
     this.globalData.userService = new UserService({
       storageAdapter: userStorageAdapter

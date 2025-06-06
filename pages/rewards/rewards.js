@@ -274,10 +274,16 @@ Page({
       const allRewards = await rewardService.getAvailableRewards(true);
       logger.info('rewards', `获取到可用奖励: ${allRewards.length}个`);
       
-      // 检查是否存在自定义奖励标记
+      // 检查是否存在自定义奖励标记（通过服务层）
       let hasCustomRewards = false;
       try {
-        hasCustomRewards = wx.getStorageSync('has_custom_rewards') === true;
+        // 尝试通过服务层检查
+        if (rewardService && typeof rewardService.hasCustomRewards === 'function') {
+          hasCustomRewards = await rewardService.hasCustomRewards();
+        } else {
+          // 兼容性处理
+          hasCustomRewards = wx.getStorageSync('has_custom_rewards') === true;
+        }
         if (hasCustomRewards) {
           logger.debug('rewards', '检测到自定义奖励标记');
         }

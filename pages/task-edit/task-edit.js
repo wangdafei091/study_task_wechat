@@ -4,6 +4,7 @@ const uiUtils = require('../../utils/uiUtils.js');
 const dateUtils = require('../../utils/dateUtils.js');
 const logger = require('../../utils/logger');
 const serviceManager = require('../../services/service-manager.js');
+const pageStorageHelper = require('../../utils/page-storage-helper');
 
 Page({
   /**
@@ -1992,14 +1993,14 @@ Page({
     logger.info('TaskEdit', '当前积分设置:', this.data.newTask.points);
     
     // 如果是首次启用必做任务，显示提示
-    if (isRequired && !wx.getStorageSync('requiredTaskTipShown')) {
+    if (isRequired && !pageStorageHelper.getUserPreference('requiredTaskTipShown')) {
       wx.showModal({
         title: '必做任务说明',
         content: `必做任务未完成将扣除${this.data.newTask.points}积分。`,
         showCancel: false,
         success: (res) => {
           // 标记已显示提示
-          wx.setStorageSync('requiredTaskTipShown', true);
+          pageStorageHelper.setUserPreference('requiredTaskTipShown', true);
         }
       });
     }

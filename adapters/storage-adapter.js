@@ -308,6 +308,56 @@ class StorageAdapter {
     this.cache = {};
     logger.info('StorageAdapter', '已清除所有内存缓存');
   }
+
+  /**
+   * 应用启动时初始化必要的存储数据
+   * 静态方法，用于替代storageUtils.initializeStorageIfNeeded
+   * @static
+   * @returns {Boolean} 初始化是否成功
+   */
+  static initializeApplicationStorage() {
+    logger.info('StorageAdapter', '开始初始化应用存储数据');
+    
+    const defaultAdapter = new StorageAdapter();
+    
+    try {
+      // 初始化任务数据
+      if (!defaultAdapter.get('taskData')) {
+        logger.info('StorageAdapter', '初始化任务数据');
+        defaultAdapter.set('taskData', []);
+      }
+      
+      // 初始化消息数据
+      if (!defaultAdapter.get('messageData')) {
+        logger.info('StorageAdapter', '初始化消息数据');
+        defaultAdapter.set('messageData', []);
+      }
+      
+      // 初始化用户积分
+      if (!defaultAdapter.get('userPoints')) {
+        logger.info('StorageAdapter', '初始化用户积分');
+        defaultAdapter.set('userPoints', 0);
+      }
+      
+      // 初始化已领取奖励数据
+      if (!defaultAdapter.get('claimedRewards')) {
+        logger.info('StorageAdapter', '初始化已领取奖励数据');
+        defaultAdapter.set('claimedRewards', []);
+      }
+      
+      // 初始化星星分组数据
+      if (!defaultAdapter.get('starGroups')) {
+        logger.info('StorageAdapter', '初始化星星分组数据');
+        defaultAdapter.set('starGroups', []);
+      }
+      
+      logger.info('StorageAdapter', '应用存储数据初始化完成');
+      return true;
+    } catch (e) {
+      logger.error('StorageAdapter', '初始化应用存储数据失败', e);
+      return false;
+    }
+  }
 }
 
 module.exports = StorageAdapter; 
