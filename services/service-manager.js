@@ -13,12 +13,14 @@ const {
 
 const logger = require('../utils/logger');
 const EventBus = require('../utils/core/event-bus');
+const StorageAdapter = require('../adapters/storage-adapter');
 
 class ServiceManager {
   constructor() {
     this.services = {};
     this.eventBus = new EventBus();
     this.userService = null; // 用户服务实例
+    this.storageAdapter = new StorageAdapter(); // 创建存储适配器实例
     
     logger.info('ServiceManager', '服务管理器初始化');
   }
@@ -81,14 +83,17 @@ class ServiceManager {
       });
       
       this.services.rewardService = new RewardService({
-        eventBus: this.eventBus
+        eventBus: this.eventBus,
+        userService: this.userService, // 注入用户服务
+        storageAdapter: this.storageAdapter // 注入存储适配器
       });
       
       // 第二步：初始化依赖StarService和RewardService的服务
       this.services.taskService = new TaskService({
         eventBus: this.eventBus,
         starService: this.services.starService,
-        rewardService: this.services.rewardService
+        rewardService: this.services.rewardService,
+        userService: this.userService // 注入用户服务
       });
       
       logger.info('ServiceManager', '所有服务初始化完成');

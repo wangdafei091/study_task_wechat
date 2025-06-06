@@ -1518,4 +1518,13 @@ class MessageService {
   }
 }
 
+/**
+ * 获取通知类型枚举（静态方法，供页面层使用）
+ * @returns {Object} NotificationType枚举对象
+ * @static
+ */
+MessageService.getNotificationTypes = function() {
+  return NotificationType;
+};
+
 module.exports = MessageService; 

@@ -11,7 +11,6 @@ const EventBus = require('../utils/core/event-bus');
 const { Task, TaskStatus, TaskType, RepeatType, StarExpiryType } = require('../models/task');
 const dateUtils = require('../utils/dateUtils');
 const { EVENTS, ERROR_MESSAGES } = require('../utils/constants');
-const serviceManager = require('./service-manager');
 
 class TaskService {
   /**
@@ -20,6 +19,7 @@ class TaskService {
    * @param {TaskRepository} options.taskRepository 任务仓储
    * @param {StarService} options.starService 星星服务
    * @param {RewardService} options.rewardService 奖励服务
+   * @param {UserService} options.userService 用户服务
    * @param {EventBus} options.eventBus 事件总线
    */
   constructor(options = {}) {
@@ -29,6 +29,7 @@ class TaskService {
     // 关联服务
     this.starService = options.starService;
     this.rewardService = options.rewardService;
+    this.userService = options.userService; // 新增：注入用户服务
     
     // 事件总线
     this.eventBus = options.eventBus || new EventBus();
@@ -189,12 +190,9 @@ class TaskService {
     try {
       // 确保任务有userId - 如果没有提供，使用当前用户ID
       if (!taskData.userId) {
-        // 通过服务管理器获取当前用户ID
-        const serviceManager = require('./service-manager');
-        const userService = serviceManager.getUserService();
-        
-        if (userService) {
-          taskData.userId = userService.getCurrentUserId();
+        // 通过注入的用户服务获取当前用户ID
+        if (this.userService) {
+          taskData.userId = this.userService.getCurrentUserId();
           logger.info('TaskService', `为任务设置用户ID: ${taskData.userId}`);
         } else {
           // 如果用户服务不可用，默认设为parent

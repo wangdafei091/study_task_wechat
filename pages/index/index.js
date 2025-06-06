@@ -2,9 +2,9 @@ const serviceManager = require('../../services/service-manager.js');
 const formatUtils = require('../../utils/formatUtils');
 const dateUtils = require('../../utils/dateUtils');
 const logger = require('../../utils/logger');
-const { NotificationType } = require('../../models/message');
-const { UserRole } = require('../../models/user');
 const permissionUtils = require('../../utils/permission-utils');
+const { UserService } = require('../../services/user-service');
+const MessageService = require('../../services/message-service');
 
 Page({
   data: {
@@ -139,7 +139,7 @@ Page({
     currentUser: {
       id: null,
       name: '用户',
-      role: UserRole.CHILD
+      role: UserService.getUserRoles().CHILD
     },
     availableUsers: [], // 可用用户列表
     showUserSwitcher: false, // 是否显示用户切换界面
@@ -1277,7 +1277,7 @@ Page({
     const messageService = serviceManager.getMessageService();
     
     // 删除与此任务相关的即将到期消息
-    messageService.deleteRelatedTaskMessages(taskId, NotificationType.UPCOMING)
+            messageService.deleteRelatedTaskMessages(taskId, MessageService.getNotificationTypes().UPCOMING)
       .then(success => {
         logger.info('Index', `忽略即将到期任务提醒${success ? '成功' : '失败'}: ${taskId}`);
         if (success) {

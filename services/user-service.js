@@ -12,6 +12,7 @@ class UserService {
   /**
    * 构造函数
    * @param {Object} options 选项
+   * @param {StorageAdapter} options.storageAdapter 存储适配器
    */
   constructor(options = {}) {
     // 预设用户
@@ -39,6 +40,9 @@ class UserService {
     
     // 事件总线
     this.eventBus = options.eventBus || new EventBus();
+    
+    // 存储适配器
+    this.storageAdapter = options.storageAdapter;
     
     // 角色切换回调
     this.switchCallbacks = [];
@@ -254,7 +258,15 @@ class UserService {
    */
   async _loadUserState() {
     try {
-      const savedUserId = wx.getStorageSync('currentUserId');
+      let savedUserId;
+      if (this.storageAdapter) {
+        savedUserId = this.storageAdapter.get('currentUserId');
+      } else {
+        // 兼容性处理：如果没有注入StorageAdapter，回退到直接调用
+        savedUserId = wx.getStorageSync('currentUserId');
+        logger.warn('UserService', 'StorageAdapter未注入，使用直接wx调用');
+      }
+      
       if (savedUserId && this.predefinedUsers[savedUserId]) {
         this.currentUser = this.predefinedUsers[savedUserId];
         logger.info('UserService', '恢复用户状态', { userId: savedUserId });
@@ -270,7 +282,13 @@ class UserService {
    */
   async _saveUserState() {
     try {
-      wx.setStorageSync('currentUserId', this.currentUser.id);
+      if (this.storageAdapter) {
+        this.storageAdapter.set('currentUserId', this.currentUser.id);
+      } else {
+        // 兼容性处理：如果没有注入StorageAdapter，回退到直接调用
+        wx.setStorageSync('currentUserId', this.currentUser.id);
+        logger.warn('UserService', 'StorageAdapter未注入，使用直接wx调用');
+      }
       logger.debug('UserService', '保存用户状态', { userId: this.currentUser.id });
     } catch (error) {
       logger.error('UserService', '保存用户状态失败', error);
@@ -287,6 +305,15 @@ class UserService {
       availableUsers: this.getAllUsers().map(u => u.toObject()),
       switchCallbackCount: this.switchCallbacks.length
     };
+  }
+
+  /**
+   * 获取用户角色枚举（静态方法，供页面层使用）
+   * @returns {Object} UserRole枚举对象
+   * @static
+   */
+  static getUserRoles() {
+    return UserRole;
   }
 }
 

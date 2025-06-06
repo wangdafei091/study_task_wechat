@@ -21,12 +21,20 @@ class StarService {
   constructor(options = {}) {
     // 初始化仓储
     this.starGroupRepository = options.starGroupRepository || new StarGroupRepository();
-    this.starRecordRepository = options.starRecordRepository || new StarRecordRepository();
+    
+    // 创建StarRecordRepository时注入余额计算器，避免循环依赖
+    const balanceCalculator = async (userId) => {
+      return await this.starGroupRepository.getTotalPoints(userId);
+    };
+    
+    this.starRecordRepository = options.starRecordRepository || new StarRecordRepository(null, {
+      balanceCalculator: balanceCalculator
+    });
     
     // 事件总线
     this.eventBus = options.eventBus || new EventBus();
     
-    logger.info('StarService', '初始化星星服务');
+    logger.info('StarService', '初始化星星服务，已注入余额计算器到StarRecordRepository');
   }
   
   /**

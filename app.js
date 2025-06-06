@@ -21,7 +21,11 @@ App({
     
     // 初始化用户服务
     logger.info('App', '初始化用户服务');
-    this.globalData.userService = new UserService();
+    const StorageAdapter = require('./adapters/storage-adapter');
+    const userStorageAdapter = new StorageAdapter({ namespace: 'user_' });
+    this.globalData.userService = new UserService({
+      storageAdapter: userStorageAdapter
+    });
     await this.globalData.userService.initialize();
     
     // 注入用户服务到服务管理器

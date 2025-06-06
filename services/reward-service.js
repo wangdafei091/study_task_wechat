@@ -25,6 +25,7 @@ class RewardService {
    * @param {RewardRepository} options.rewardRepository 奖励仓储
    * @param {StarGroupRepository} options.starGroupRepository 星星分组仓储
    * @param {StarRecordRepository} options.starRecordRepository 星星记录仓储
+   * @param {UserService} options.userService 用户服务
    * @param {EventBus} options.eventBus 事件总线
    */
   constructor(options = {}) {
@@ -32,6 +33,10 @@ class RewardService {
     this.rewardRepository = options.rewardRepository || new RewardRepository();
     this.starGroupRepository = options.starGroupRepository || new StarGroupRepository();
     this.starRecordRepository = options.starRecordRepository || new StarRecordRepository();
+    
+    // 关联服务
+    this.userService = options.userService; // 新增：注入用户服务
+    this.storageAdapter = options.storageAdapter; // 注入存储适配器
     
     // 事件总线
     this.eventBus = options.eventBus || new EventBus();
@@ -83,7 +88,13 @@ class RewardService {
         // 检查是否存在自定义奖励标记
         let hasCustomRewards = false;
         try {
-          hasCustomRewards = wx.getStorageSync('has_custom_rewards') === true;
+          if (this.storageAdapter) {
+            hasCustomRewards = this.storageAdapter.get('has_custom_rewards') === true;
+          } else {
+            // 兼容性处理：如果没有注入StorageAdapter，回退到直接调用
+            hasCustomRewards = wx.getStorageSync('has_custom_rewards') === true;
+            logger.warn('RewardService', 'StorageAdapter未注入，使用直接wx调用');
+          }
         } catch (e) {
           logger.warn('RewardService', '获取自定义奖励标记失败', e);
         }
@@ -178,12 +189,9 @@ class RewardService {
     try {
       // 确保奖励有userId - 如果没有提供，使用当前用户ID
       if (!rewardData.userId) {
-        // 通过服务管理器获取当前用户ID
-        const serviceManager = require('./service-manager');
-        const userService = serviceManager.getUserService();
-        
-        if (userService) {
-          rewardData.userId = userService.getCurrentUserId();
+        // 通过注入的用户服务获取当前用户ID
+        if (this.userService) {
+          rewardData.userId = this.userService.getCurrentUserId();
           logger.info('RewardService', `为奖励设置用户ID: ${rewardData.userId}`);
         } else {
           // 如果用户服务不可用，默认设为parent
@@ -510,11 +518,9 @@ class RewardService {
     try {
       // 确保有当前用户ID
       if (!userId) {
-        const serviceManager = require('./service-manager');
-        const userService = serviceManager.getUserService();
-        
-        if (userService) {
-          userId = userService.getCurrentUserId();
+        // 通过注入的用户服务获取当前用户ID
+        if (this.userService) {
+          userId = this.userService.getCurrentUserId();
           logger.info('RewardService', `自动获取当前用户ID: ${userId}`);
         } else {
           logger.error('RewardService', '无法获取用户服务，兑换失败');

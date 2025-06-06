@@ -28,7 +28,10 @@ class StarRecordRepository extends BaseRepository {
       this.storageAdapter = storageAdapter;
     }
     
-    logger.info('StarRecordRepository', '初始化星星记录仓储');
+    // 注入的余额计算器，避免直接调用服务层
+    this.balanceCalculator = options.balanceCalculator;
+    
+    logger.info('StarRecordRepository', `初始化星星记录仓储, 余额计算器: ${this.balanceCalculator ? '已注入' : '未注入'}`);
   }
   
   /**
@@ -511,19 +514,15 @@ class StarRecordRepository extends BaseRepository {
    */
   async _calculateCurrentBalance(userId = null) {
     try {
-      // 优先使用星星分组数据计算余额，确保数据一致性
-      try {
-        // 尝试获取星星分组总数作为当前余额
-        const serviceManager = require('../services/service-manager');
-        const starService = serviceManager.getStarService();
-        
-        if (starService && starService.starGroupRepository) {
-          const groupTotal = await starService.starGroupRepository.getTotalPoints(userId);
-          logger.info('StarRecordRepository', `从星星分组获取当前余额${userId ? `, 用户=${userId}` : ''}: ${groupTotal}`);
-          return groupTotal;
+      // 如果提供了外部余额计算器，优先使用（通过构造函数注入）
+      if (this.balanceCalculator && typeof this.balanceCalculator === 'function') {
+        try {
+          const balance = await this.balanceCalculator(userId);
+          logger.info('StarRecordRepository', `从外部计算器获取当前余额${userId ? `, 用户=${userId}` : ''}: ${balance}`);
+          return balance;
+        } catch (calculatorError) {
+          logger.warn('StarRecordRepository', '外部余额计算器失败，使用记录计算', calculatorError);
         }
-      } catch (groupError) {
-        logger.warn('StarRecordRepository', '无法从星星分组获取余额，使用记录计算', groupError);
       }
       
       // 如果无法从分组获取，则使用记录计算
