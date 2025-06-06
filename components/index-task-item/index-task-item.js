@@ -33,28 +33,11 @@ Component({
           // 处理任务描述
           this._processTaskDescription(newVal);
           
-          // 添加详细的状态变化日志
-          if (oldVal) {
-            logger.debug('index-task-item', `任务属性变化检测:`, {
-              taskId: newVal.id,
-              title: newVal.title,
-              statusChange: `${oldVal.status} -> ${newVal.status}`,
-              starAwardedChange: `${oldVal.starAwarded} -> ${newVal.starAwarded}`,
-              pointsChange: `${oldVal.points} -> ${newVal.points}`
-            });
-            
-            // 添加描述字段的详细追踪
-            if (oldVal.description !== newVal.description) {
-              logger.debug('index-task-item', `描述字段变化: "${oldVal.description}" -> "${newVal.description}"`);
-              logger.debug('index-task-item', `描述字段类型: ${typeof newVal.description}`);
-            }
-          } else {
-            logger.debug('index-task-item', `任务初始化:`, {
-              taskId: newVal.id,
-              title: newVal.title,
-              status: newVal.status,
-              starAwarded: newVal.starAwarded,
-              description: newVal.description ? `"${newVal.description.substring(0, 20)}..."` : '无描述'
+          // 只在关键状态变化时记录日志
+          if (oldVal && (oldVal.status !== newVal.status || oldVal.starAwarded !== newVal.starAwarded)) {
+            logger.info('index-task-item', `任务状态变化: ${newVal.title}`, {
+              status: `${oldVal.status} -> ${newVal.status}`,
+              starAwarded: `${oldVal.starAwarded} -> ${newVal.starAwarded}`
             });
           }
           
@@ -70,7 +53,7 @@ Component({
           } else if (typeof newVal.pointsExpiry === 'string' && Constants.POINTS_EXPIRY.TEXT[newVal.pointsExpiry]) {
             // 未完成任务，显示完成后的有效期类型描述
             expiryText = Constants.POINTS_EXPIRY.TEXT[newVal.pointsExpiry];
-            logger.debug('index-task-item', `从常量映射星星有效期: ${newVal.pointsExpiry} -> ${expiryText}`);
+            // 移除过度详细的日志
           } else if (typeof newVal.pointsExpiry === 'number') {
             // 时间戳类型，计算与当前时间的差距
             const now = new Date().getTime();
@@ -94,7 +77,7 @@ Component({
           // 计算任务锁定状态
           const isLocked = this._calculateTaskLockStatus(newVal);
           
-          logger.debug('index-task-item', `🔒 任务属性更新: ${newVal.title}, 锁定状态=${isLocked}, lastExchangeTime=${this.properties.lastExchangeTime}`);
+          // 移除过度详细的锁定状态日志
           
           // 将处理好的有效期文本保存到组件data中
           this.setData({
@@ -104,17 +87,7 @@ Component({
             taskData: { ...newVal }
           });
           
-          if (statusChanged) {
-            logger.debug('index-task-item', `任务状态变化: ${oldVal.status} -> ${newVal.status}, 星星状态: ${oldVal.starAwarded} -> ${newVal.starAwarded}`);
-            logger.debug('index-task-item', `强制UI更新，新任务数据:`, {
-              id: newVal.id,
-              status: newVal.status,
-              starAwarded: newVal.starAwarded,
-              points: newVal.points
-            });
-          }
-          
-          logger.debug('index-task-item', `渲染任务: ${newVal.title}, 类型: ${newVal.type}, 星星: ${newVal.points || 0}颗, 有效期: ${expiryText}, 锁定状态: ${isLocked}`);
+          // 移除过度详细的渲染日志
         }
       }
     },
@@ -122,11 +95,9 @@ Component({
       type: Number,
       value: null,
       observer: function(newVal, oldVal) {
-        logger.debug('index-task-item', `🔒 lastExchangeTime属性变化: ${oldVal} -> ${newVal}`);
         // 当最后兑换时间变化时，重新计算所有任务的锁定状态
         if (newVal !== oldVal && this.properties.task) {
           const isLocked = this._calculateTaskLockStatus(this.properties.task);
-          logger.debug('index-task-item', `🔒 重新计算锁定状态: 任务="${this.properties.task.title}", 锁定=${isLocked}`);
           this.setData({
             isLocked: isLocked
           });

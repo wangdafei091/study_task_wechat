@@ -13,7 +13,7 @@ Component({
         if (newVal) {
           // 当显示时，重新生成日历数据
           this.generateCalendarDays();
-          logger.debug('DatePicker', `显示${this.data.type}日期选择器`);
+          // 移除过度详细的UI交互日志
         }
       }
     },

@@ -3,12 +3,8 @@
  * 验证奖励领取事件处理修复是否有效
  */
 
-// 模拟logger
-const logger = {
-  info: (module, message, data) => console.log(`[INFO] [${module}] ${message}`, data || ''),
-  warn: (module, message, data) => console.log(`[WARN] [${module}] ${message}`, data || ''),
-  error: (module, message, data) => console.log(`[ERROR] [${module}] ${message}`, data || '')
-};
+// 使用项目的logger
+const logger = require('../utils/logger.js');
 
 // 模拟MessageService的_handleRewardClaimed方法
 function _handleRewardClaimed(data) {
@@ -49,10 +45,10 @@ function _handleRewardClaimed(data) {
 
 // 测试用例
 function runTests() {
-  console.log('=== MessageService事件处理测试 ===\n');
+  logger.info('Test', '=== MessageService事件处理测试 ===');
   
   // 测试1：新格式事件数据（包含reward对象）
-  console.log('测试1：新格式事件数据');
+  logger.info('Test', '测试1：新格式事件数据');
   const newFormatData = {
     reward: {
       id: 'reward_123',
@@ -63,11 +59,10 @@ function runTests() {
   };
   
   const result1 = _handleRewardClaimed(newFormatData);
-  console.log('结果1:', result1.success ? '✅ 成功' : '❌ 失败');
-  console.log('');
+  logger.info('Test', result1.success ? '结果1: ✅ 成功' : '结果1: ❌ 失败');
   
   // 测试2：兼容格式事件数据（rewardId + rewardName）
-  console.log('测试2：兼容格式事件数据（来自奖励服务）');
+  logger.info('Test', '测试2：兼容格式事件数据（来自奖励服务）');
   const compatibleData1 = {
     rewardId: 'reward_456',
     rewardName: '看动画片30分钟',
@@ -76,11 +71,10 @@ function runTests() {
   };
   
   const result2 = _handleRewardClaimed(compatibleData1);
-  console.log('结果2:', result2.success ? '✅ 成功' : '❌ 失败');
-  console.log('');
+  logger.info('Test', result2.success ? '结果2: ✅ 成功' : '结果2: ❌ 失败');
   
   // 测试3：兼容格式事件数据（来自页面代码）
-  console.log('测试3：兼容格式事件数据（来自页面代码）');
+  logger.info('Test', '测试3：兼容格式事件数据（来自页面代码）');
   const compatibleData2 = {
     rewardId: 'reward_789',
     rewardName: '看动画片30分钟',  // 注意：页面代码实际没有发送rewardName
@@ -90,11 +84,10 @@ function runTests() {
   };
   
   const result3 = _handleRewardClaimed(compatibleData2);
-  console.log('结果3:', result3.success ? '✅ 成功' : '❌ 失败');
-  console.log('');
+  logger.info('Test', result3.success ? '结果3: ✅ 成功' : '结果3: ❌ 失败');
   
   // 测试4：页面代码修复后的数据格式（包含rewardName）
-  console.log('测试4：页面代码修复后的数据格式（包含rewardName）');
+  logger.info('Test', '测试4：页面代码修复后的数据格式（包含rewardName）');
   const pageDataFixed = {
     rewardId: 'reward_999',
     rewardName: '看动画片30分钟',  // 修复后添加了rewardName字段
@@ -104,26 +97,24 @@ function runTests() {
   };
   
   const result4 = _handleRewardClaimed(pageDataFixed);
-  console.log('结果4:', result4.success ? '✅ 成功' : '❌ 失败');
-  console.log('');
+  logger.info('Test', result4.success ? '结果4: ✅ 成功' : '结果4: ❌ 失败');
   
   // 测试5：完全错误的数据格式
-  console.log('测试5：完全错误的数据格式');
+  logger.info('Test', '测试5：完全错误的数据格式');
   const invalidData = {
     someOtherField: 'value',
     randomData: 123
   };
   
   const result5 = _handleRewardClaimed(invalidData);
-  console.log('结果5:', result5 ? (result5.success ? '✅ 成功' : '❌ 失败') : '⚠️ 跳过处理');
-  console.log('');
+  logger.info('Test', result5 ? (result5.success ? '结果5: ✅ 成功' : '结果5: ❌ 失败') : '结果5: ⚠️ 跳过处理');
   
-  console.log('=== 测试完成 ===');
-  console.log('修复验证：');
-  console.log('✅ 支持新格式事件数据');
-  console.log('✅ 支持兼容格式事件数据（有rewardName）');
-  console.log('✅ 页面代码已补充rewardName字段');
-  console.log('✅ 对无效数据进行安全处理');
+  logger.info('Test', '=== 测试完成 ===');
+  logger.info('Test', '修复验证：');
+  logger.info('Test', '✅ 支持新格式事件数据');
+  logger.info('Test', '✅ 支持兼容格式事件数据（有rewardName）');
+  logger.info('Test', '✅ 页面代码已补充rewardName字段');
+  logger.info('Test', '✅ 对无效数据进行安全处理');
 }
 
 // 运行测试

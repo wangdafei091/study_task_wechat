@@ -263,6 +263,30 @@ function testCacheClearMethods() {
   return results;
 }
 
+// 主测试函数
+async function runTests() {
+  logger.info('Test', '开始执行缓存一致性修复测试...\n');
+  
+  // 1. 测试缓存清除方法
+  logger.info('Test', '1. 测试缓存清除方法');
+  const clearResults = await testCacheClearMethods();
+  logger.info('Test', '缓存清除方法测试完成\n');
+  
+  // 2. 测试缓存一致性修复
+  logger.info('Test', '2. 测试缓存一致性修复');
+  const fixResults = await testCacheConsistencyFix();
+  logger.info('Test', '缓存一致性修复测试完成\n');
+  
+  // 输出总结
+  logger.info('Test', '=== 测试总结 ===');
+  logger.info('Test', '缓存清除方法:', clearResults.every(r => r.success) ? '✅ 通过' : '❌ 失败');
+  logger.info('Test', '缓存一致性修复:', fixResults.success ? '✅ 通过' : '❌ 失败');
+  
+  if (!fixResults.success) {
+    logger.error('Test', '错误详情:', fixResults.error);
+  }
+}
+
 // 导出测试函数
 module.exports = {
   testCacheConsistencyFix,
@@ -272,25 +296,6 @@ module.exports = {
 // 如果直接运行此文件，执行测试
 if (require.main === module) {
   (async () => {
-    console.log('开始执行缓存一致性修复测试...\n');
-    
-    // 测试缓存清除方法
-    console.log('1. 测试缓存清除方法');
-    const clearResults = testCacheClearMethods();
-    console.log('缓存清除方法测试完成\n');
-    
-    // 测试缓存一致性修复
-    console.log('2. 测试缓存一致性修复');
-    const fixResults = await testCacheConsistencyFix();
-    console.log('缓存一致性修复测试完成\n');
-    
-    // 输出总结
-    console.log('=== 测试总结 ===');
-    console.log('缓存清除方法:', clearResults.every(r => r.success) ? '✅ 通过' : '❌ 失败');
-    console.log('缓存一致性修复:', fixResults.success ? '✅ 通过' : '❌ 失败');
-    
-    if (!fixResults.success) {
-      console.error('错误详情:', fixResults.error);
-    }
+    await runTests();
   })();
 } 
