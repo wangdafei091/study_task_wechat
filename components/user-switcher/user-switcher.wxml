@@ -48,7 +48,7 @@
           <view class="user-actions">
             <view class="switch-icon">→</view>
             <view class="delete-btn" data-user-id="{{item.id}}" bindtap="deleteUser" catchtap>
-              <text class="delete-icon">🗑️</text>
+              <text class="delete-icon">×</text>
             </view>
           </view>
         </view>
