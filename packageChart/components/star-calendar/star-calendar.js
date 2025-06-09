@@ -231,28 +231,35 @@ Component({
     },
     
     /**
-     * 判断是否为惩罚性扣减记录
-     * 只显示必做任务未完成的惩罚扣减，不显示奖励兑换的扣减
+     * 判断是否为扣减记录
+     * 显示惩罚扣减和过期扣减，不显示奖励兑换的扣减
      * @param {Object} record 星星记录
-     * @returns {Boolean} 是否为惩罚性扣减
+     * @returns {Boolean} 是否为扣减记录
      */
     isPenaltyDeduction: function(record) {
       if (!record || !record.isExpense()) {
         return false;
       }
       
-      // 根据source字段判断是否为惩罚性扣减
+      // 根据source字段判断是否为扣减记录
       const source = record.source || '';
+      const description = record.description || '';
       
-      // 只识别task_penalty（TaskService使用的标识）
+      // 识别惩罚性扣减和过期扣减
       const isPenalty = source === 'task_penalty';
+      const isExpired = source === 'system' && description.includes('星星过期');
       
       // 添加过滤日志
-      if (record.isExpense() && !isPenalty) {
-        logger.debug('星星日历', `过滤非惩罚性扣减: source=${source}, points=${record.points}`);
+      if (record.isExpense() && !isPenalty && !isExpired) {
+        logger.debug('星星日历', `过滤非扣减记录: source=${source}, description=${description}, points=${record.points}`);
       }
       
-      return isPenalty;
+      // 记录过期扣减识别
+      if (isExpired) {
+        logger.info('星星日历', `识别到过期扣减: description=${description}, points=${record.points}`);
+      }
+      
+      return isPenalty || isExpired;
     },
 
     /**

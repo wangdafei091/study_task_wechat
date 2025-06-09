@@ -53,9 +53,12 @@ App({
         const messageService = serviceManager.getMessageService();
         const starService = serviceManager.getStarService();
         
-        // 检查并修复星星数据一致性
+        // 初始化星星服务并清理过期星星
         if (starService) {
           try {
+            logger.info('App', '初始化星星服务');
+            await starService.initialize();
+            
             logger.info('App', '开始检查并修复星星数据一致性');
             const repairResult = await starService.checkAndRepairDataConsistency();
             

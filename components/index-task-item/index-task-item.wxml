@@ -69,7 +69,7 @@
         </block>
         <block wx:else>
           <view class="task-star-info required-star-info">
-            <text class="required-text">按时完成可保留</text>
+            <text class="required-text">不按时完成将扣除</text>
             <text class="star-count normal-weight">{{task.points || 0}}</text>
             <text class="star-icon">⭐</text>
           </view>
