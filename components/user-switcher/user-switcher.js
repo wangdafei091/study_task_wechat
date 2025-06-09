@@ -106,6 +106,15 @@ Component({
           });
         }, 50);
       }
+    },
+    
+    'currentUser': function(currentUser) {
+      if (currentUser) {
+        logger.info('UserSwitcher', `当前用户更新: ${currentUser.name} (${currentUser.role})`);
+        // 记录权限状态
+        const canManageUsers = currentUser.role === UserRole.PARENT;
+        logger.info('UserSwitcher', `用户管理权限: ${canManageUsers ? '有权限' : '无权限'}`);
+      }
     }
   },
 
@@ -133,6 +142,13 @@ Component({
         switchAnimation: {},
         addDialogAnimation: {}
       });
+    },
+
+    /**
+     * 检查当前用户是否为家长
+     */
+    isCurrentUserParent() {
+      return this.data.currentUser && this.data.currentUser.role === UserRole.PARENT;
     },
 
     /**
@@ -168,6 +184,16 @@ Component({
      * 显示添加用户对话框
      */
     showAddUserDialog() {
+      // 权限检查
+      if (!this.isCurrentUserParent()) {
+        logger.warn('UserSwitcher', '无权限打开添加用户对话框: 当前用户非家长');
+        wx.showToast({
+          title: '只有家长可以添加用户',
+          icon: 'error'
+        });
+        return;
+      }
+      
       logger.info('UserSwitcher', '显示添加用户对话框');
       
       this.setData({
@@ -228,6 +254,16 @@ Component({
      * 确认添加用户
      */
     confirmAddUser() {
+      // 权限检查
+      if (!this.isCurrentUserParent()) {
+        logger.warn('UserSwitcher', '无权限添加用户: 当前用户非家长');
+        wx.showToast({
+          title: '只有家长可以添加用户',
+          icon: 'error'
+        });
+        return;
+      }
+      
       const { newUserName, newUserRole } = this.data;
       
       if (!newUserName) {
@@ -264,6 +300,16 @@ Component({
      * 删除用户
      */
     deleteUser(e) {
+      // 权限检查
+      if (!this.isCurrentUserParent()) {
+        logger.warn('UserSwitcher', '无权限删除用户: 当前用户非家长');
+        wx.showToast({
+          title: '只有家长可以删除用户',
+          icon: 'error'
+        });
+        return;
+      }
+      
       const { userId } = e.currentTarget.dataset;
       const user = this.data.availableUsers.find(u => u.id === userId);
       

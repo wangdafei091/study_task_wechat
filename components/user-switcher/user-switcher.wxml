@@ -47,7 +47,12 @@
           </view>
           <view class="user-actions">
             <view class="switch-icon">→</view>
-            <view class="delete-btn" data-user-id="{{item.id}}" bindtap="deleteUser" catchtap>
+            <!-- 权限控制：只有家长才能看到删除按钮 -->
+            <view class="delete-btn" 
+                  wx:if="{{currentUser.role === 'parent'}}"
+                  data-user-id="{{item.id}}" 
+                  bindtap="deleteUser" 
+                  catchtap>
               <text class="delete-icon">×</text>
             </view>
           </view>
@@ -58,13 +63,19 @@
       <view class="empty-users" wx:if="{{availableUsers.length <= 1}}">
         <view class="empty-icon">👥</view>
         <view class="empty-text">还没有其他用户</view>
-        <view class="empty-tip">点击下方按钮添加新用户</view>
+        <!-- 根据角色显示不同的提示 -->
+        <view class="empty-tip" wx:if="{{currentUser.role === 'parent'}}">
+          点击下方按钮添加新用户
+        </view>
+        <view class="empty-tip" wx:else>
+          请切换到家长账号添加用户
+        </view>
       </view>
     </view>
   </view>
   
-  <!-- 添加用户按钮 -->
-  <view class="add-user-section" wx:if="{{showAddUser}}">
+  <!-- 添加用户按钮 - 权限控制：只有家长才能看到 -->
+  <view class="add-user-section" wx:if="{{showAddUser && currentUser.role === 'parent'}}">
     <view class="add-user-btn" bindtap="showAddUserDialog">
       <text class="add-icon">+</text>
       <text class="add-text">添加新用户</text>
