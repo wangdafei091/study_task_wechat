@@ -1015,28 +1015,22 @@ class TaskService {
   
   /**
    * 处理必做任务惩罚
-   * @param {Task} task 任务对象
+   * @param {Object} task 任务对象
    * @returns {Promise<Object>} 处理结果
    */
   async handleRequiredTaskPenalty(task) {
+    if (!task || !task.isRequired) {
+      return { success: false, message: '任务无效或不是必做任务' };
+    }
+    
     try {
-      if (!task || !task.isRequired || task.penaltyApplied) {
-        return { success: false, message: '不满足惩罚条件' };
-      }
+      // 计算惩罚扣除的积分（任务积分或默认5分）
+      const penaltyPoints = task.points || 5;
       
-      // 计算惩罚积分
-      let penaltyPoints = task.points || 0;
+      // 确定目标用户ID（小朋友）
+      let childUserId = 'child'; // 默认用户ID
       
-      // 如果没有设置积分，使用默认惩罚
-      if (penaltyPoints <= 0) {
-        penaltyPoints = 5; // 默认惩罚5颗星
-      }
-      
-      logger.info('TaskService', `开始处理必做任务惩罚: "${task.title}", 惩罚积分=${penaltyPoints}颗星`);
-      
-      // 获取小朋友用户ID（必做任务惩罚固定从小朋友扣除）
-      let childUserId = null;
-      if (this.serviceManager && this.serviceManager.getUserService) {
+      if (this.serviceManager) {
         const userService = this.serviceManager.getUserService();
         if (userService) {
           const childUser = userService.getUserByRole('child');
@@ -1055,18 +1049,12 @@ class TaskService {
         childUserId = 'child'; // 兜底方案
       }
       
-      // 标记已经应用惩罚
-      task.penaltyApplied = true;
-      task.modifyTime = Date.now();
-      
-      // 保存更新后的任务
-      const updatedTask = await this.taskRepository.save(task);
-      
-      // 扣除积分 - 固定从小朋友账户扣除
+      // 先执行星星扣减
+      let consumeResult = null;
       if (this.starService && penaltyPoints > 0) {
         logger.info('TaskService', `执行必做任务惩罚扣除: 从用户${childUserId}扣除${penaltyPoints}颗星星`);
         
-        const consumeResult = await this.starService.consumeStars(
+        consumeResult = await this.starService.consumeStars(
           penaltyPoints,
           `必做任务惩罚: ${task.title}`,
           {
@@ -1079,26 +1067,43 @@ class TaskService {
         
         if (!consumeResult.success) {
           logger.error('TaskService', `惩罚扣除积分失败: ${consumeResult.message}, 用户=${childUserId}`);
+          // 如果星星扣减失败，不更新任务状态，保持可重试
+          return { 
+            success: false, 
+            message: `惩罚执行失败: ${consumeResult.message}`,
+            task,
+            penaltyPoints: 0,
+            targetUserId: childUserId
+          };
         } else {
-          logger.info('TaskService', `惩罚扣除积分成功: 从用户${childUserId}扣除${penaltyPoints}颗星星`);
+          logger.info('TaskService', `惩罚扣除积分成功: 从用户${childUserId}扣除${consumeResult.consumed}颗星星`);
         }
       }
       
-      logger.info('TaskService', `已对必做任务应用惩罚: "${task.title}", 扣除${penaltyPoints}颗星, 目标用户=${childUserId}`);
+      // 星星扣减成功后，才标记任务已应用惩罚
+      task.penaltyApplied = true;
+      task.modifyTime = Date.now();
+      
+      // 保存更新后的任务
+      const updatedTask = await this.taskRepository.save(task);
+      
+      const actualDeducted = consumeResult ? consumeResult.consumed : 0;
+      
+      logger.info('TaskService', `已对必做任务应用惩罚: "${task.title}", 扣除${actualDeducted}颗星, 目标用户=${childUserId}`);
       
       // 触发惩罚事件
       this.eventBus.emit(EVENTS.TASK_PENALTY_APPLIED, {
         task: updatedTask,
-        penaltyPoints,
-        targetUserId: childUserId,  // 添加目标用户ID
-        operator: 'system',         // 标记为系统操作
+        penaltyPoints: actualDeducted, // 使用实际扣减数量
+        targetUserId: childUserId,     // 添加目标用户ID
+        operator: 'system',            // 标记为系统操作
         reason: '必做任务未完成'
       });
       
       return { 
         success: true, 
         task: updatedTask, 
-        penaltyPoints,
+        penaltyPoints: actualDeducted,
         targetUserId: childUserId
       };
     } catch (error) {

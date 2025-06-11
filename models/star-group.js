@@ -312,6 +312,31 @@ class StarGroup {
     
     return new StarGroup(clonedData);
   }
+
+  /**
+   * 按过期日期对分组排序
+   * @static
+   * @param {Array} groups 星星分组数组
+   * @returns {Array} 按过期日期排序的分组数组（先过期的在前）
+   */
+  static sortByExpiryDate(groups) {
+    if (!Array.isArray(groups)) {
+      return [];
+    }
+    
+    return [...groups].sort((a, b) => {
+      // 永久有效类型排在最后
+      if (a.expiryType === 'permanent') return 1;
+      if (b.expiryType === 'permanent') return -1;
+      
+      // 没有过期日期的排在有过期日期的后面
+      if (!a.expiryDate) return 1;
+      if (!b.expiryDate) return -1;
+      
+      // 按过期日期升序排序（先过期的在前）
+      return a.expiryDate - b.expiryDate;
+    });
+  }
 }
 
 module.exports = {

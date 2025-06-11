@@ -327,32 +327,27 @@ class StarService {
     try {
       const { userId } = options;
       
-      // 检查星星是否足够
-      const hasEnough = await this.starGroupRepository.hasEnoughPoints(points, userId);
-      
-      if (!hasEnough) {
-        logger.warn('StarService', `消费星星失败: 星星数量不足, 需要=${points}${userId ? `, 用户=${userId}` : ''}`);
-        return { success: false, message: '星星数量不足' };
-      }
-      
-      // 按过期优先顺序消费星星
+      // 直接按过期优先顺序消费星星，有多少扣多少
       const consumeResult = await this.starGroupRepository.consumeStarsByExpiryOrder(points, userId);
       
-      if (!consumeResult.success) {
-        logger.error('StarService', `消费星星失败: 消费过程出错, 需要=${points}, 实际消费=${consumeResult.consumed}${userId ? `, 用户=${userId}` : ''}`);
+      if (!consumeResult.success && consumeResult.consumed === 0) {
+        logger.warn('StarService', `消费星星失败: 没有可用星星${userId ? `, 用户=${userId}` : ''}`);
         return { 
           success: false, 
-          consumed: consumeResult.consumed,
-          message: '消费星星时出错'
+          consumed: 0,
+          message: '没有可用的星星'
         };
       }
       
-      // 创建支出记录
+      // 实际扣减的数量
+      const actualConsumed = consumeResult.consumed || 0;
+      
+      // 创建支出记录（使用实际扣减数量）
       const recordData = {
         type: 'expense',
         source: options.sourceType || 'manual',
         sourceId: options.sourceId || '',
-        points: -points, // 负数表示支出
+        points: -actualConsumed, // 负数表示支出，使用实际扣减数量
         description: reason || '手动消费星星',
         timestamp: Date.now()
         // balance和previousBalance将在保存时由仓储计算
@@ -366,27 +361,31 @@ class StarService {
       const record = await this.starRecordRepository.save(recordData);
       
       if (!record) {
-        logger.error('StarService', `消费星星: 创建记录失败, 数量=${points}, 原因=${reason || '未知'}${userId ? `, 用户=${userId}` : ''}`);
+        logger.error('StarService', `消费星星: 创建记录失败, 实际扣减=${actualConsumed}, 原因=${reason || '未知'}${userId ? `, 用户=${userId}` : ''}`);
         // 继续流程，但记录错误
       }
       
-      logger.info('StarService', `消费星星成功, 数量=${points}, 原因=${reason || '未知'}${userId ? `, 用户=${userId}` : ''}`);
+      const isFullyConsumed = actualConsumed === points;
+      const resultMessage = isFullyConsumed ? '消费星星成功' : `星星余额不足，已扣减${actualConsumed}颗星星`;
+      
+      logger.info('StarService', `消费星星完成, 请求=${points}, 实际扣减=${actualConsumed}, 原因=${reason || '未知'}${userId ? `, 用户=${userId}` : ''}`);
       
       // 触发星星消费事件
       this.eventBus.emit(EVENTS.STARS_CONSUMED, {
-        points,
+        points: actualConsumed, // 使用实际扣减数量
         reason,
         groups: consumeResult.groupsUpdated,
         record
       });
       
       return {
-        success: true,
-        points,
-        consumed: points,
+        success: actualConsumed > 0, // 只要扣减了就算成功
+        points: actualConsumed, // 返回实际扣减数量
+        consumed: actualConsumed,
+        requested: points, // 返回请求的数量
         groups: consumeResult.groupsUpdated,
         record,
-        message: '消费星星成功'
+        message: resultMessage
       };
     } catch (error) {
       logger.error('StarService', `消费星星失败, 数量=${points}, 原因=${reason || '未知'}`, error);
