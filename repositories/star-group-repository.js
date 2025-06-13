@@ -224,8 +224,14 @@ class StarGroupRepository extends BaseRepository {
       // 克隆分组防止引用问题
       const updatedGroup = this._cloneModel(group);
       
-      // 移除星星
-      const consumed = updatedGroup.removeStars(points);
+      // 记录扣除前的星星数量
+      const beforeStars = updatedGroup.stars;
+      
+      // 移除星星（返回剩余数量）
+      const afterStars = updatedGroup.removeStars(points);
+      
+      // 计算实际扣除的数量
+      const consumed = beforeStars - afterStars;
       
       // 保存回存储（只有在实际消费了星星的情况下才保存）
       let savedGroup = null;

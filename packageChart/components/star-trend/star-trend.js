@@ -629,10 +629,8 @@ Component({
             hasStarRecords: false,
             isLoading: false
           });
-          // 延迟初始化图表，确保DOM完全渲染
-          setTimeout(() => {
-            this.initChart();
-          }, 50);
+          // 直接初始化图表，不需要延迟
+          this.initChart();
           return;
         }
         
@@ -645,10 +643,8 @@ Component({
             hasStarRecords: false,
             isLoading: false
           });
-          // 延迟初始化图表，确保DOM完全渲染
-          setTimeout(() => {
-            this.initChart();
-          }, 50);
+          // 直接初始化图表，不需要延迟
+          this.initChart();
           return;
         }
         
@@ -685,20 +681,16 @@ Component({
         
         logger.info('star-trend', '趋势数据加载完成，准备渲染图表');
         
-        // 延迟初始化图表，确保DOM完全渲染
-        setTimeout(() => {
-          this.initChart();
-        }, 50);
+        // 直接初始化图表，不需要延迟
+        this.initChart();
       } catch (error) {
         logger.error('star-trend', '加载星星趋势数据失败', error);
         this.setData({
           hasStarRecords: false,
           isLoading: false
         });
-        // 延迟初始化图表，确保DOM完全渲染
-        setTimeout(() => {
-          this.initChart();
-        }, 50);
+        // 直接初始化图表，不需要延迟
+        this.initChart();
       }
     }
   }

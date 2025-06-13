@@ -249,13 +249,22 @@ Page({
   handleProgressBarComplete: function() {
     logger.info('Index', '收到进度条完成事件，准备处理奖励达成');
     
-    // 设置UI锁定状态，防止用户在动效期间进行其他操作
-    this.setData({
-      transitionInProgress: true,
-      forceKeepFullValue: true
-    });
+    // 避免重复处理
+    if (this.data.transitionInProgress) {
+      logger.info('Index', '进度条完成事件已在处理中，跳过重复调用');
+      return;
+    }
     
-    logger.info('Index', '进度条完成事件处理完毕，UI已锁定');
+    // 使用异步调度避免递归更新，延迟到下一个渲染周期
+    setTimeout(() => {
+      // 设置UI锁定状态，防止用户在动效期间进行其他操作
+      this.setData({
+        transitionInProgress: true,
+        forceKeepFullValue: true
+      });
+      
+      logger.info('Index', '进度条完成事件处理完毕，UI已锁定');
+    }, 0);
   },
   
   /**
@@ -1701,26 +1710,27 @@ Page({
         }
       }
       
-      // 检查是否有奖励刚刚达成（用于正确设置进度条）
-      const hasAchievedReward = visibleRewards.some(reward => 
-        !reward.claimed && reward.points <= userPoints
-      );
-      
-      // 计算进度条的total值
+      // 计算进度条的total值 - 简化逻辑，移除重复的奖励达成检测
       let progressTotal;
       if (nextReward.allClaimed || nextReward.isDefault || nextReward.showSetupTip) {
         // 没有真实奖励时设置更大的total值，确保进度条显示一致
         progressTotal = Math.max(userPoints * 2, 100);
-      } else if (hasAchievedReward) {
-        // 如果有奖励刚刚达成，使用该奖励的点数作为total，确保显示满值
-        const achievedReward = visibleRewards
-          .filter(reward => !reward.claimed && reward.points <= userPoints)
-          .sort((a, b) => a.points - b.points)[0];
-        progressTotal = achievedReward ? achievedReward.points : (nextReward.points || 100);
       } else {
-        // 正常情况下使用下一个奖励的点数
-        progressTotal = nextReward && nextReward.points ? nextReward.points : 100;
+        // 使用下一个奖励的点数，确保进度条不会意外显示满值
+        // 如果下一个奖励的点数小于当前星星数，说明有奖励可以领取，但进度条应该显示正常状态
+        progressTotal = nextReward && nextReward.points ? 
+          Math.max(nextReward.points, userPoints + 1) : // 确保total始终大于current
+          Math.max(userPoints + 1, 100);
       }
+      
+      // 记录进度条状态，便于调试
+      logger.info('Index', '进度条状态计算', {
+        current: userPoints,
+        total: progressTotal,
+        nextRewardPoints: nextReward?.points,
+        nextRewardName: nextReward?.name,
+        willTriggerComplete: userPoints >= progressTotal
+      });
       
       // 更新UI状态
       this.setData({

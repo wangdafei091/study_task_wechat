@@ -981,16 +981,13 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20rpx;
-  padding: 8rpx 10rpx;
-  border-radius: var(--radius-md);
+  margin-bottom: 24rpx;
 }
 
 .task-list-title {
-  font-size: var(--font-size-md);
-  color: var(--text-primary);
-  font-weight: var(--font-weight-semibold);
-  letter-spacing: 0.3rpx;
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #333;
 }
 
 .task-list-toggle {

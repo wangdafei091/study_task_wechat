@@ -12,6 +12,7 @@ class StarGroup {
   constructor(data = {}) {
     // 基础信息
     this.id = data.id || `group_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+    this.userId = data.userId || null; // 用户ID，用于多用户支持
     this.type = data.type || 'permanent'; // 分组类型，默认为永久
     this.expiryType = data.expiryType || data.type || 'permanent'; // 过期类型，与type保持一致
     this.name = data.name || this._getDefaultName(data.type);

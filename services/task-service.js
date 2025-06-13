@@ -556,7 +556,7 @@ class TaskService {
       this.eventBus.emit(EVENTS.TASK_UPDATED, {
         task: updatedTask,
         changes,
-        previousStatus: originalStatus,
+        previousStatus,
         operationType: 'update'
       });
       
@@ -675,6 +675,9 @@ class TaskService {
         
         // 添加积分
         if (task.points > 0) {
+          // 获取小朋友用户ID，统一分配给小朋友
+          const childUserId = this._getChildUserId();
+          
           const addResult = await this.starService.addStars(
             task.points,
             task.pointsExpiry,
@@ -682,12 +685,12 @@ class TaskService {
             {
               sourceType: 'task_complete',
               sourceId: task.id,
-              userId: userId || task.userId // 优先分配给当前执行用户，如果没有则分配给任务创建者
+              userId: childUserId // 固定分配给小朋友
             }
           );
           
           logger.info('TaskService', `积分添加结果:`, addResult);
-          logger.info('TaskService', `积分分配给用户: ${userId || task.userId} (当前执行用户=${userId}, 任务创建者=${task.userId})`);
+          logger.info('TaskService', `积分分配给用户: ${childUserId} (统一分配给小朋友)`);
           
           if (addResult.success) {
             logger.info('TaskService', `任务 "${task.title}" 获得 ${task.points} 颗星星`);
@@ -831,6 +834,9 @@ class TaskService {
       if (task.starAwarded && task.points > 0 && this.starService) {
         logger.info('TaskService', `准备从特定分组扣减星星: ${task.title}, 星星数=${task.points}, 有效期类型=${task.pointsExpiry}`);
         
+        // 获取小朋友用户ID，统一从小朋友扣减
+        const childUserId = this._getChildUserId();
+        
         const consumeResult = await this.starService.consumeStarsFromSpecificType(
           task.points,
           task.pointsExpiry,
@@ -838,7 +844,7 @@ class TaskService {
           {
             sourceType: 'task_reset',
             sourceId: task.id,
-            userId: userId || task.userId // 优先从当前执行用户扣减，如果没有则从任务创建者扣减
+            userId: childUserId // 固定从小朋友扣减
           }
         );
         
@@ -851,7 +857,7 @@ class TaskService {
         }
         
         logger.info('TaskService', `从特定分组扣减星星成功: ${task.title}, 扣减${task.points}颗星星`);
-        logger.info('TaskService', `星星扣减自用户: ${userId || task.userId} (当前执行用户=${userId}, 任务创建者=${task.userId})`);
+        logger.info('TaskService', `星星扣减自用户: ${childUserId} (统一从小朋友扣减)`);
       }
       
       // 重置任务状态和星星获得标记
@@ -1065,18 +1071,23 @@ class TaskService {
           }
         );
         
-        if (!consumeResult.success) {
-          logger.error('TaskService', `惩罚扣除积分失败: ${consumeResult.message}, 用户=${childUserId}`);
-          // 如果星星扣减失败，不更新任务状态，保持可重试
+        if (consumeResult.consumed === 0) {
+          logger.error('TaskService', `惩罚扣除积分失败: 没有可扣除的星星, 用户=${childUserId}`);
+          // 只有完全没扣到星星才返回失败，保持可重试
           return { 
             success: false, 
-            message: `惩罚执行失败: ${consumeResult.message}`,
+            message: `惩罚执行失败: 没有可扣除的星星`,
             task,
             penaltyPoints: 0,
             targetUserId: childUserId
           };
         } else {
-          logger.info('TaskService', `惩罚扣除积分成功: 从用户${childUserId}扣除${consumeResult.consumed}颗星星`);
+          const isPartialDeduction = consumeResult.consumed < penaltyPoints;
+          const message = isPartialDeduction 
+            ? `惩罚扣除积分部分成功: 从用户${childUserId}扣除${consumeResult.consumed}颗星星（余额不足，应扣${penaltyPoints}颗）`
+            : `惩罚扣除积分成功: 从用户${childUserId}扣除${consumeResult.consumed}颗星星`;
+          
+          logger.info('TaskService', message);
         }
       }
       
@@ -1558,6 +1569,36 @@ class TaskService {
       logger.error('TaskService', '计算连续完成天数失败', error);
       return 0;
     }
+  }
+
+  /**
+   * 获取小朋友用户ID（统一方法）
+   * @returns {String} 小朋友用户ID
+   * @private
+   */
+  _getChildUserId() {
+    let childUserId = 'child'; // 默认用户ID
+    
+    if (this.serviceManager) {
+      const userService = this.serviceManager.getUserService();
+      if (userService) {
+        const childUser = userService.getUserByRole('child');
+        if (childUser) {
+          childUserId = childUser.id;
+          logger.info('TaskService', `获取小朋友用户ID成功: ${childUserId}`);
+        } else {
+          logger.warn('TaskService', '未找到小朋友用户，使用默认child用户ID');
+          childUserId = 'child'; // 使用默认ID
+        }
+      }
+    }
+    
+    if (!childUserId) {
+      logger.warn('TaskService', '无法获取小朋友用户ID，使用默认child用户ID');
+      childUserId = 'child'; // 兜底方案
+    }
+    
+    return childUserId;
   }
 }
 
