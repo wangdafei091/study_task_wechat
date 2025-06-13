@@ -288,6 +288,81 @@ class TaskService {
         }
       }
       
+      // 修复weekends和workdays重复任务的日期不匹配问题
+      if (task.repeat && (task.repeat.type === 'weekends' || task.repeat.type === 'workdays')) {
+        const startDate = new Date(task.date);
+        const startDayOfWeek = startDate.getDay(); // 0=周日, 1-5=周一到周五, 6=周六
+        
+        let needsAdjustment = false;
+        let targetDays = [];
+        
+        if (task.repeat.type === 'weekends') {
+          // 周末任务：只在周六(6)和周日(0)执行
+          targetDays = [0, 6];
+          needsAdjustment = !targetDays.includes(startDayOfWeek);
+          logger.info('TaskService', `检查周末重复任务日期匹配: 开始日期=${task.date} (星期${startDayOfWeek}), 是否需要调整=${needsAdjustment}`);
+        } else if (task.repeat.type === 'workdays') {
+          // 工作日任务：在周一到周五(1-5)执行
+          targetDays = [1, 2, 3, 4, 5];
+          needsAdjustment = !targetDays.includes(startDayOfWeek);
+          logger.info('TaskService', `检查工作日重复任务日期匹配: 开始日期=${task.date} (星期${startDayOfWeek}), 是否需要调整=${needsAdjustment}`);
+        }
+        
+        if (needsAdjustment) {
+          const endDate = new Date(task.repeat.endDate);
+          endDate.setHours(0, 0, 0, 0);
+          
+          let adjustedDate = new Date(startDate);
+          adjustedDate.setHours(0, 0, 0, 0);
+          
+          let foundValidDate = false;
+          
+          logger.info('TaskService', `开始搜索符合${task.repeat.type}条件的日期: 开始=${adjustedDate.toISOString()}, 结束=${endDate.toISOString()}, 目标星期=${targetDays}`);
+          
+          // 最多检查21天
+          for (let i = 0; i <= 20; i++) {
+            const currentDay = adjustedDate.getDay();
+            const dateStr = require('../utils/dateUtils').formatDate(adjustedDate);
+            const dayMatches = targetDays.includes(currentDay);
+            const dateInRange = adjustedDate <= endDate;
+            
+            logger.debug('TaskService', `检查日期: ${dateStr} (星期${currentDay}), 星期匹配=${dayMatches}, 日期范围内=${dateInRange}`);
+            
+            if (dayMatches && dateInRange) {
+              logger.info('TaskService', `找到符合条件的日期: ${dateStr} (星期${currentDay})`);
+              
+              task.date = dateStr;
+              task.repeat.startDate = dateStr;
+              foundValidDate = true;
+              break;
+            }
+            
+            adjustedDate.setDate(adjustedDate.getDate() + 1);
+          }
+          
+          if (!foundValidDate) {
+            const dateUtils = require('../utils/dateUtils');
+            const startDateStr = dateUtils.formatDate(startDate);
+            const endDateStr = dateUtils.formatDate(endDate);
+            const typeText = task.repeat.type === 'weekends' ? '周末' : '工作日';
+            
+            logger.error('TaskService', `无法在指定日期范围内找到符合${typeText}重复条件的日期`, {
+              startDate: startDateStr,
+              endDate: endDateStr,
+              targetDays: targetDays,
+              searchRange: '21天'
+            });
+            
+            return { 
+              success: false, 
+              message: `无法在日期范围(${startDateStr}到${endDateStr})内找到符合${typeText}重复条件的日期，请检查日期设置` 
+            };
+          }
+        } else {
+          logger.info('TaskService', `开始日期的星期匹配${task.repeat.type}重复条件，无需调整`);
+        }
+      }
+      
       // 保存任务
       const savedTask = await this.taskRepository.save(task);
       logger.info('TaskService', `创建任务成功: "${savedTask.title}", ID=${savedTask.id}`);
