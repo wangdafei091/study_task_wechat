@@ -1210,12 +1210,15 @@ class TaskService {
   
   /**
    * 计算任务进度
+   * @param {Array} tasks 可选的任务列表，不传则自动获取今日任务
    * @returns {Promise<Object>} 任务进度统计
    */
-  async calculateTaskProgress() {
+  async calculateTaskProgress(tasks = null) {
     try {
-      // 获取今日任务
-      const todayTasks = await this.getTodayTasks();
+      logger.info('TaskService', '开始计算任务进度', { tasksProvided: !!tasks });
+      
+      // 如果没有传入任务列表，获取今日任务
+      const tasksToProcess = tasks || await this.getTodayTasks();
       
       // 按类型统计任务
       const typeCounts = {
@@ -1223,7 +1226,7 @@ class TaskService {
         completed: { habit: 0, study: 0, interest: 0 }
       };
       
-      todayTasks.forEach(task => {
+      tasksToProcess.forEach(task => {
         if (typeCounts.total.hasOwnProperty(task.type)) {
           typeCounts.total[task.type]++;
           
@@ -1246,14 +1249,21 @@ class TaskService {
           : 0
       };
       
+      // 确保所有进度值都是数字类型，避免页面层需要数据转换
+      const taskProgress = {
+        habit: Number(progress.habit || 0),
+        interest: Number(progress.interest || 0),
+        study: Number(progress.study || 0)
+      };
+      
       // 计算总体进度
-      const totalTasks = todayTasks.length;
-      const completedTasks = todayTasks.filter(task => task.status === TaskStatus.COMPLETED).length;
+      const totalTasks = tasksToProcess.length;
+      const completedTasks = tasksToProcess.filter(task => task.status === TaskStatus.COMPLETED).length;
       const completionRate = totalTasks > 0 ? Math.round(completedTasks / totalTasks * 100) : 0;
       
       // 构建统计结果
       const result = {
-        taskProgress: progress,
+        taskProgress: taskProgress,
         stats: {
           totalTasks,
           completedTasks,
@@ -1266,7 +1276,7 @@ class TaskService {
         }
       };
       
-      logger.info('TaskService', `计算任务进度成功: 总任务数=${totalTasks}, 完成率=${completionRate}%`);
+      logger.info('TaskService', `计算任务进度成功，已包含数据类型转换: 总任务数=${totalTasks}, 完成率=${completionRate}%`);
       
       return result;
     } catch (error) {

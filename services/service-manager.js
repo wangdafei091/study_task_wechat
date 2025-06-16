@@ -10,6 +10,8 @@ const {
   StarService, 
   MessageService
 } = require('./index');
+const ValidationService = require('./validation-service');
+const ConfigService = require('./config-service');
 
 const logger = require('../utils/logger');
 const EventBus = require('../utils/core/event-bus');
@@ -96,6 +98,14 @@ class ServiceManager {
         userService: this.userService // 注入用户服务
       });
       
+      // 第三步：初始化表单验证服务（无依赖）
+      this.services.validationService = new ValidationService();
+      
+      // 第四步：初始化配置服务
+      this.services.configService = new ConfigService({
+        eventBus: this.eventBus
+      });
+      
       logger.info('ServiceManager', '所有服务初始化完成');
     } catch (error) {
       logger.error('ServiceManager', '服务初始化失败', error);
@@ -126,6 +136,14 @@ class ServiceManager {
       'message': 'messageService',
       'messageService': 'messageService',
       'MessageService': 'messageService',
+      
+      'validation': 'validationService',
+      'validationService': 'validationService',
+      'ValidationService': 'validationService',
+      
+      'config': 'configService',
+      'configService': 'configService',
+      'ConfigService': 'configService',
       
       'eventBus': 'eventBus'
     };

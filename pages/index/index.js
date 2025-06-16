@@ -458,10 +458,20 @@ Page({
    */
   checkExpiredTasksAndStars: async function() {
     try {
-      // 检查上次检查时间，避免频繁检查
-      const lastCheckTime = wx.getStorageSync('last_expiry_check_time') || 0;
+      // 获取配置服务
+      const configService = serviceManager.getService('config');
       const now = Date.now();
       const checkInterval = 5 * 60 * 1000; // 5分钟检查间隔
+      
+      // 检查上次检查时间，避免频繁检查
+      let lastCheckTime = 0;
+      if (configService) {
+        lastCheckTime = configService.getLastExpiryCheckTime();
+      } else {
+        // 降级处理：直接使用存储
+        lastCheckTime = wx.getStorageSync('last_expiry_check_time') || 0;
+        logger.warn('Index', '配置服务不可用，使用降级存储访问');
+      }
       
       if (now - lastCheckTime < checkInterval) {
         logger.debug('Index', '距离上次检查时间过短，跳过检查');
@@ -480,7 +490,13 @@ Page({
       ]);
       
       // 记录检查时间
-      wx.setStorageSync('last_expiry_check_time', now);
+      if (configService) {
+        configService.setLastExpiryCheckTime(now);
+      } else {
+        // 降级处理：直接使用存储
+        wx.setStorageSync('last_expiry_check_time', now);
+        logger.warn('Index', '配置服务不可用，使用降级存储访问');
+      }
       
       // 检查结果并判断是否需要刷新数据
       let needRefresh = false;
@@ -700,20 +716,13 @@ Page({
         return;
       }
       
-      // 使用任务服务计算进度
+      // 使用任务服务计算进度（服务层已处理数据类型转换）
       const result = await taskService.calculateTaskProgress(tasks);
       logger.info('Index', '任务进度计算成功', result);
       
-      // 确保所有进度值都是数字类型
-      const taskProgress = {
-        habit: Number(result.taskProgress.habit || 0),
-        interest: Number(result.taskProgress.interest || 0),
-        study: Number(result.taskProgress.study || 0)
-      };
-      
-      // 更新页面数据
+      // 直接使用服务层返回的结果，无需页面层数据转换
       this.setData({ 
-        taskProgress: taskProgress,
+        taskProgress: result.taskProgress,
         stats: result.stats
       });
     } catch (error) {

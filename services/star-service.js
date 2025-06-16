@@ -1049,6 +1049,167 @@ class StarService {
   }
 
   /**
+   * 计算每条记录的星星余额
+   * @param {Array} records 星星记录列表
+   * @param {Number} currentBalance 当前余额
+   * @returns {Array} 包含余额信息的记录列表
+   */
+  calculateRecordBalance(records, currentBalance) {
+    logger.info('StarService', `计算记录余额，当前总星星数：${currentBalance}`);
+    
+    // 按时间从新到旧排序
+    const sortedRecords = [...records].sort((a, b) => b.timestamp - a.timestamp);
+    
+    // 计算每条记录的结束余额
+    const result = [];
+    let runningBalance = currentBalance;
+    
+    for (let i = 0; i < sortedRecords.length; i++) {
+      const record = { ...sortedRecords[i] };
+      
+      // 修复数字问题，确保没有前导零
+      record.points = parseInt(record.points);
+      record.balance = parseInt(runningBalance);
+      
+      result.push(record);
+      
+      // 根据点数变动，计算之前的余额
+      runningBalance = runningBalance - record.points;
+    }
+    
+    logger.info('StarService', `记录余额计算完成，处理了${result.length}条记录`);
+    return result;
+  }
+
+  /**
+   * 计算月度汇总信息
+   * @param {Array} groupedRecords 按月分组的记录
+   * @returns {Array} 包含月度汇总的分组记录
+   */
+  calculateMonthSummary(groupedRecords) {
+    logger.info('StarService', `计算月度汇总，共${groupedRecords.length}个月份`);
+    
+    return groupedRecords.map(group => {
+      const records = group.records || [];
+      let incomeTotal = 0;
+      let expenseTotal = 0;
+      
+      records.forEach(record => {
+        if (record.points > 0) {
+          incomeTotal += record.points;
+        } else {
+          expenseTotal += Math.abs(record.points);
+        }
+      });
+      
+      const netChange = incomeTotal - expenseTotal;
+      let summary = '';
+      
+      // 确保数字不显示前导零，使用parseInt处理
+      if (netChange >= 0) {
+        summary = `本月共获得 ${parseInt(incomeTotal)} 颗星星`;
+      } else {
+        summary = `本月共使用 ${parseInt(expenseTotal)} 颗星星`;
+      }
+      
+      return {
+        ...group,
+        monthSummary: summary,
+        incomeTotal: parseInt(incomeTotal),
+        expenseTotal: parseInt(expenseTotal),
+        netChange: netChange
+      };
+    });
+  }
+
+  /**
+   * 按月份分组记录
+   * @param {Array} records 星星记录列表
+   * @returns {Array} 按月分组的记录
+   */
+  groupRecordsByMonth(records) {
+    logger.info('StarService', '开始按月份分组记录');
+    
+    const monthGroups = {};
+    
+    // 按月份分组
+    records.forEach(record => {
+      if (!record.timestamp) return;
+      
+      const date = new Date(record.timestamp);
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      
+      if (!monthGroups[monthKey]) {
+        monthGroups[monthKey] = {
+          month: monthKey,
+          monthText: `${date.getFullYear()}年${date.getMonth() + 1}月`,
+          records: []
+        };
+      }
+      
+      monthGroups[monthKey].records.push(record);
+    });
+    
+    // 将分组转换为数组并按月份排序
+    const result = Object.values(monthGroups);
+    
+    // 按时间从新到旧排序
+    result.sort((a, b) => {
+      return b.month.localeCompare(a.month);
+    });
+    
+    logger.info('StarService', `月份分组完成，共${result.length}个月份`);
+    return result;
+  }
+
+  /**
+   * 根据条件筛选记录
+   * @param {Array} records 原始记录列表
+   * @param {String} typeFilter 类型筛选条件
+   * @param {String} timeFilter 时间筛选条件
+   * @returns {Array} 筛选后的记录列表
+   */
+  filterRecords(records, typeFilter, timeFilter) {
+    logger.info('StarService', `筛选记录，类型：${typeFilter}，时间：${timeFilter}`);
+    let filtered = [...records];
+    
+    // 记录筛选前的数据用于调试
+    logger.info('StarService', `筛选前记录数量：${records.length}`);
+    if (records.length > 0) {
+      logger.info('StarService', `第一条记录类型：${records[0].type}，点数：${records[0].points}，标题：${records[0].title || records[0].description}`);
+    }
+    
+    // 应用类型筛选
+    if (typeFilter !== 'all') {
+      filtered = filtered.filter(record => record.type === typeFilter);
+      logger.info('StarService', `类型筛选后记录数量：${filtered.length}`);
+    }
+    
+    // 应用时间筛选
+    if (timeFilter !== 'all') {
+      const now = Date.now();
+      let timeThreshold = now;
+      
+      if (timeFilter === 'week') {
+        // 一周前
+        timeThreshold = now - (7 * 24 * 60 * 60 * 1000);
+      } else if (timeFilter === 'month') {
+        // 一个月前
+        timeThreshold = now - (30 * 24 * 60 * 60 * 1000);
+      } else if (timeFilter === '3months') {
+        // 三个月前
+        timeThreshold = now - (90 * 24 * 60 * 60 * 1000);
+      }
+      
+      filtered = filtered.filter(record => record.timestamp >= timeThreshold);
+      logger.info('StarService', `时间筛选后记录数量：${filtered.length}`);
+    }
+    
+    logger.info('StarService', `最终筛选结果：${filtered.length}条记录`);
+    return filtered;
+  }
+
+  /**
    * 清除缓存
    * 强制下次查询时重新从存储中获取数据
    */

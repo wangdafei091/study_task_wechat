@@ -437,6 +437,61 @@ Page({
    * @returns {Object} 验证通过返回任务数据，验证失败返回包含valid字段的对象
    */
   validateTaskForm: function() {
+    logger.info('TaskEdit', '开始验证任务表单，使用ValidationService');
+    
+    // 获取验证服务
+    const validationService = serviceManager.getService('validation');
+    if (!validationService) {
+      logger.error('TaskEdit', '无法获取验证服务，使用本地验证');
+      // 降级处理
+      return this.validateTaskFormLocal();
+    }
+    
+    // 准备验证数据
+    const taskData = {
+      title: this.data.newTask.title,
+      startDate: this.data.newTask.startDate,
+      endDate: this.data.newTask.endDate,
+      startTime: this.data.newTask.startTime,
+      endTime: this.data.newTask.endTime,
+      isAllDay: this.data.newTask.isAllDay,
+      hasNoEndDate: this.data.newTask.hasNoEndDate,
+      repeat: this.data.newTask.repeat,
+      type: this.data.newTask.type,
+      description: this.data.newTask.description,
+      points: this.data.newTask.points,
+      pointsExpiry: this.data.newTask.pointsExpiry,
+      pointsExpiryText: this.data.pointsExpiryText,
+      isRequired: this.data.newTask.isRequired,
+      reminder: this.data.newTask.reminder
+    };
+    
+    // 使用服务层验证
+    const validationResult = validationService.validateTaskForm(taskData);
+    
+    // 处理日期与重复类型匹配的警告（不影响验证结果）
+    if (this.data.repeatTypeWarning) {
+      logger.info('TaskEdit', '检测到日期与重复类型不匹配，但允许继续创建任务');
+    }
+    
+    if (validationResult.valid) {
+      // 验证通过，返回服务层组装的数据
+      logger.info('TaskEdit', '任务表单验证通过，使用服务层组装的数据');
+      return validationResult.data;
+    } else {
+      // 验证失败，返回错误信息
+      logger.warn('TaskEdit', `任务表单验证失败: ${validationResult.errorMsg}`);
+      return {
+        valid: false,
+        errorMsg: validationResult.errorMsg
+      };
+    }
+  },
+
+  /**
+   * 本地验证任务表单（降级方法）
+   */
+  validateTaskFormLocal: function() {
     // 创建错误信息容器
     const result = {
       valid: true,
@@ -483,14 +538,8 @@ Page({
       return result;
     }
     
-    // 注意：日期与重复类型匹配问题不再视为表单验证失败
-    // 只在UI中显示警告，允许用户继续创建任务
-    if (this.data.repeatTypeWarning) {
-      logger.info('TaskEdit', '检测到日期与重复类型不匹配，但允许继续创建任务');
-    }
-    
     // 验证通过后，返回完整的任务对象
-    logger.info('TaskEdit', '表单验证通过，组装完整任务数据');
+    logger.info('TaskEdit', '本地表单验证通过，组装完整任务数据');
     const taskData = {
       title: this.data.newTask.title,
       type: this.data.newTask.type,
@@ -503,19 +552,10 @@ Page({
       isAllDay: this.data.newTask.isAllDay,
       startTime: this.data.newTask.isAllDay ? '' : this.data.newTask.startTime,
       endTime: this.data.newTask.isAllDay ? '' : this.data.newTask.endTime,
-      hasNoEndDate: this.data.newTask.hasNoEndDate, // 明确传递无结束日期标志
+      hasNoEndDate: this.data.newTask.hasNoEndDate,
       repeat: this.data.newTask.repeat,
       reminder: this.data.newTask.reminder
     };
-    
-    // 记录全天任务数据一致性处理
-    if (taskData.isAllDay) {
-      logger.info('TaskEdit', '全天任务数据一致性处理: 时间字段已清空', {
-        isAllDay: taskData.isAllDay,
-        startTime: taskData.startTime,
-        endTime: taskData.endTime
-      });
-    }
     
     // 确保重复任务的开始和结束日期与主任务一致
     if (taskData.repeat.startDate !== taskData.date) {
@@ -529,28 +569,7 @@ Page({
         logger.info('TaskEdit', '修正重复任务结束日期与主任务保持一致');
         taskData.repeat.endDate = this.data.newTask.endDate;
       }
-      logger.info('TaskEdit', '任务结束日期设置为:', taskData.repeat.endDate);
-    } else {
-      logger.info('TaskEdit', '任务设置为无结束日期模式，将使用默认期限');
     }
-    
-    // 添加更详细的重复任务配置日志
-    if (taskData.repeat && taskData.repeat.type !== 'none') {
-      logger.debug('TaskEdit', '任务包含重复配置', taskData.repeat);
-      logger.debug('TaskEdit', '重复任务详情', {
-        type: taskData.repeat.type,
-        startDate: taskData.repeat.startDate,
-        endDate: taskData.hasNoEndDate ? '无限期' : taskData.repeat.endDate,
-        hasNoEndDate: taskData.hasNoEndDate
-      });
-    }
-    
-    logger.debug('TaskEdit', '组装完成的任务数据', {
-      title: taskData.title,
-      type: taskData.type,
-      date: taskData.date,
-      hasNoEndDate: taskData.hasNoEndDate
-    });
     
     return taskData;
   },

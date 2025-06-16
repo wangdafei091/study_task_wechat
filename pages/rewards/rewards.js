@@ -277,12 +277,17 @@ Page({
       // 检查是否存在自定义奖励标记（通过服务层）
       let hasCustomRewards = false;
       try {
-        // 尝试通过服务层检查
-        if (rewardService && typeof rewardService.hasCustomRewards === 'function') {
+        // 尝试通过配置服务检查
+        const configService = serviceManager.getService('config');
+        if (configService) {
+          hasCustomRewards = configService.hasCustomRewards();
+        } else if (rewardService && typeof rewardService.hasCustomRewards === 'function') {
+          // 通过奖励服务检查（向后兼容）
           hasCustomRewards = await rewardService.hasCustomRewards();
         } else {
-          // 兼容性处理
+          // 降级处理：直接使用存储
           hasCustomRewards = wx.getStorageSync('has_custom_rewards') === true;
+          logger.warn('rewards', '配置服务不可用，使用降级存储访问');
         }
         if (hasCustomRewards) {
           logger.debug('rewards', '检测到自定义奖励标记');

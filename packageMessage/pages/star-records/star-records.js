@@ -258,6 +258,24 @@ Page({
    * 计算每条记录的星星余额
    */
   calculateRecordBalance: function(records, currentBalance) {
+    logger.info('starRecords', `开始计算记录余额，使用StarService`);
+    
+    // 获取星星服务
+    const starService = serviceManager.getService('starService');
+    if (!starService) {
+      logger.error('starRecords', '无法获取星星服务，使用本地计算');
+      // 降级处理
+      return this.calculateRecordBalanceLocal(records, currentBalance);
+    }
+    
+    // 使用服务层计算方法
+    return starService.calculateRecordBalance(records, currentBalance);
+  },
+
+  /**
+   * 本地计算记录余额（降级方法）
+   */
+  calculateRecordBalanceLocal: function(records, currentBalance) {
     logger.info('starRecords', `计算记录余额，当前总星星数：${currentBalance}`);
     // 按时间从新到旧排序
     records.sort((a, b) => b.timestamp - a.timestamp);
@@ -284,6 +302,24 @@ Page({
    * 计算月度汇总信息
    */
   calculateMonthSummary: function(groupedRecords) {
+    logger.info('starRecords', `开始计算月度汇总，使用StarService`);
+    
+    // 获取星星服务
+    const starService = serviceManager.getService('starService');
+    if (!starService) {
+      logger.error('starRecords', '无法获取星星服务，使用本地计算');
+      // 降级处理
+      return this.calculateMonthSummaryLocal(groupedRecords);
+    }
+    
+    // 使用服务层计算方法
+    return starService.calculateMonthSummary(groupedRecords);
+  },
+
+  /**
+   * 本地计算月度汇总（降级方法）
+   */
+  calculateMonthSummaryLocal: function(groupedRecords) {
     logger.info('starRecords', `计算月度汇总，共${groupedRecords.length}个月份`);
     return groupedRecords.map(group => {
       const records = group.records || [];
@@ -322,6 +358,24 @@ Page({
    * 根据条件筛选记录
    */
   filterRecords: function(records, typeFilter, timeFilter) {
+    logger.info('starRecords', `开始筛选记录，使用StarService`);
+    
+    // 获取星星服务
+    const starService = serviceManager.getService('starService');
+    if (!starService) {
+      logger.error('starRecords', '无法获取星星服务，使用本地筛选');
+      // 降级处理
+      return this.filterRecordsLocal(records, typeFilter, timeFilter);
+    }
+    
+    // 使用服务层筛选方法
+    return starService.filterRecords(records, typeFilter, timeFilter);
+  },
+
+  /**
+   * 本地筛选记录（降级方法）
+   */
+  filterRecordsLocal: function(records, typeFilter, timeFilter) {
     logger.info('starRecords', `筛选记录，类型：${typeFilter}，时间：${timeFilter}`);
     let filtered = [...records];
     
@@ -409,6 +463,24 @@ Page({
    * 按月份分组记录
    */
   groupRecordsByMonth: function(records) {
+    logger.info('starRecords', `开始按月份分组记录，使用StarService`);
+    
+    // 获取星星服务
+    const starService = serviceManager.getService('starService');
+    if (!starService) {
+      logger.error('starRecords', '无法获取星星服务，使用本地分组');
+      // 降级处理
+      return this.groupRecordsByMonthLocal(records);
+    }
+    
+    // 使用服务层分组方法
+    return starService.groupRecordsByMonth(records);
+  },
+
+  /**
+   * 本地按月份分组记录（降级方法）
+   */
+  groupRecordsByMonthLocal: function(records) {
     logger.info('starRecords', '开始按月份分组记录');
     const result = [];
     const monthGroups = {};

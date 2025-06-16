@@ -188,17 +188,28 @@ App({
       logConfig.applyEnvironmentDefaults();
       
       // 从存储中加载用户自定义配置（如果有）
-      const userLogConfig = wx.getStorageSync('_user_log_config');
-      if (userLogConfig) {
-        try {
-          const parsedConfig = JSON.parse(userLogConfig);
-          if (parsedConfig && parsedConfig.levels) {
-            logConfig.setLogLevels(parsedConfig.levels);
-            logger.info('App', '应用用户自定义日志配置');
+      try {
+        // 尝试通过配置服务获取
+        const configService = serviceManager.getService('config');
+        let userLogConfig = null;
+        
+        if (configService) {
+          userLogConfig = configService.getUserLogConfig();
+        } else {
+          // 降级处理：直接使用存储
+          const configText = wx.getStorageSync('_user_log_config');
+          if (configText) {
+            userLogConfig = JSON.parse(configText);
           }
-        } catch (e) {
-          logger.warn('App', '解析用户日志配置失败', e);
+          logger.warn('App', '配置服务不可用，使用降级存储访问');
         }
+        
+        if (userLogConfig && userLogConfig.levels) {
+          logConfig.setLogLevels(userLogConfig.levels);
+          logger.info('App', '应用用户自定义日志配置');
+        }
+      } catch (e) {
+        logger.warn('App', '加载和解析用户日志配置失败', e);
       }
       
       logger.info('App', '日志系统初始化完成');
@@ -498,16 +509,35 @@ App({
   checkFirstLaunch: async function(messageService) {
     try {
       logger.info('App', '检查首次启动状态');
-      const hasWelcomed = wx.getStorageSync('has_welcomed_user');
       
-      if (!hasWelcomed) {
+      // 通过配置服务检查首次启动状态
+      const configService = serviceManager.getService('config');
+      let isFirstLaunch = false;
+      
+      if (configService) {
+        isFirstLaunch = configService.isFirstLaunch();
+      } else {
+        // 降级处理：直接使用存储
+        const hasWelcomed = wx.getStorageSync('has_welcomed_user');
+        isFirstLaunch = !hasWelcomed;
+        logger.warn('App', '配置服务不可用，使用降级存储访问');
+      }
+      
+      if (isFirstLaunch) {
         logger.info('App', '检测到首次启动，创建欢迎消息');
         
         // 创建欢迎消息
         await this.createWelcomeMessage(messageService);
         
         // 设置已欢迎标记
-        wx.setStorageSync('has_welcomed_user', true);
+        if (configService) {
+          configService.markUserWelcomed();
+        } else {
+          // 降级处理：直接使用存储
+          wx.setStorageSync('has_welcomed_user', true);
+          logger.warn('App', '配置服务不可用，使用降级存储访问');
+        }
+        
         logger.info('App', '首次启动处理完成，已设置欢迎标记');
       } else {
         logger.info('App', '非首次启动，跳过欢迎消息创建');

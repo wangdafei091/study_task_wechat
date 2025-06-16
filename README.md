@@ -55,6 +55,7 @@
 - **状态管理**：自定义事件总线(EventBus)
 - **数据存储**：StorageAdapter + 微信小程序本地存储
 - **服务管理**：ServiceManager (依赖注入)
+- **表单验证**：ValidationService (统一验证逻辑)
 - **批量处理**：batchUtils (性能优化)
 - **日志系统**：统一Logger工具
 
@@ -121,6 +122,8 @@ study_task_wechat/
 │   ├── task-service.js    # 任务服务
 │   ├── star-service.js    # 星星服务
 │   ├── reward-service.js  # 奖励服务
+│   ├── validation-service.js # 表单验证服务
+│   ├── service-manager.js # 服务管理器
 │   └── ...
 ├── 📁 repositories/       # 仓储层
 │   ├── base-repository.js # 基础仓储

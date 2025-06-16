@@ -88,12 +88,18 @@ class RewardService {
         // 检查是否存在自定义奖励标记
         let hasCustomRewards = false;
         try {
-          if (this.storageAdapter) {
+          // 尝试从ServiceManager获取ConfigService
+          const serviceManager = require('./service-manager');
+          const configService = serviceManager.getService('config');
+          
+          if (configService) {
+            hasCustomRewards = configService.hasCustomRewards();
+          } else if (this.storageAdapter) {
             hasCustomRewards = this.storageAdapter.get('has_custom_rewards') === true;
           } else {
-            // 兼容性处理：如果没有注入StorageAdapter，回退到直接调用
+            // 降级处理：如果没有注入StorageAdapter，回退到直接调用
             hasCustomRewards = wx.getStorageSync('has_custom_rewards') === true;
-            logger.warn('RewardService', 'StorageAdapter未注入，使用直接wx调用');
+            logger.warn('RewardService', '配置服务和StorageAdapter均不可用，使用直接wx调用');
           }
         } catch (e) {
           logger.warn('RewardService', '获取自定义奖励标记失败', e);

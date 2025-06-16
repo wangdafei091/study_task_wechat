@@ -128,13 +128,20 @@ Page({
       // 检查是否存在自定义奖励标记（这个逻辑应该由服务层处理）
       let hasCustomRewards = false;
       try {
-        // 通过服务层检查，而不是直接访问存储
-        const rewardService = serviceManager.getService('rewardService');
-        if (rewardService && typeof rewardService.hasCustomRewards === 'function') {
-          hasCustomRewards = await rewardService.hasCustomRewards();
+        // 通过配置服务检查，而不是直接访问存储
+        const configService = serviceManager.getService('config');
+        if (configService) {
+          hasCustomRewards = configService.hasCustomRewards();
         } else {
-          // 兼容性处理
-          hasCustomRewards = wx.getStorageSync('has_custom_rewards') === true;
+          // 通过奖励服务检查（向后兼容）
+          const rewardService = serviceManager.getService('rewardService');
+          if (rewardService && typeof rewardService.hasCustomRewards === 'function') {
+            hasCustomRewards = await rewardService.hasCustomRewards();
+          } else {
+            // 降级处理：直接使用存储
+            hasCustomRewards = wx.getStorageSync('has_custom_rewards') === true;
+            logger.warn('RewardManage', '配置服务不可用，使用降级存储访问');
+          }
         }
       } catch (e) {
         logger.warn('RewardManage', '获取自定义奖励标记失败', e);
@@ -499,9 +506,25 @@ Page({
   onNameInput: function(e) {
     const name = e.detail.value;
     
+    // 使用ValidationService进行实时验证
+    const validationService = serviceManager.getService('validation');
+    let isValid = false;
+    
+    if (validationService) {
+      const validationResult = validationService.validateTextField(name, '奖励名称', { 
+        required: true,
+        minLength: 1,
+        maxLength: 50 
+      });
+      isValid = validationResult.valid;
+    } else {
+      // 降级处理：使用本地验证
+      isValid = name.trim().length > 0;
+    }
+    
     this.setData({
       'editingReward.name': name,
-      isFormValid: name.trim().length > 0
+      isFormValid: isValid
     });
   },
   
@@ -597,13 +620,37 @@ Page({
   saveReward: async function() {
     const reward = this.data.editingReward;
     
-    if (!reward.name.trim()) {
-      wx.showToast({
-        title: '请输入奖励名称',
-        icon: 'none',
-        duration: 2000
+    // 使用ValidationService验证奖励表单
+    const validationService = serviceManager.getService('validation');
+    if (validationService) {
+      const validationResult = validationService.validateRewardForm({
+        name: reward.name,
+        requiredStars: reward.points,
+        description: reward.description || '',
+        isActive: reward.enabled
       });
-      return;
+      
+      if (!validationResult.valid) {
+        wx.showToast({
+          title: validationResult.errorMsg,
+          icon: 'none',
+          duration: 2000
+        });
+        return;
+      }
+      
+      logger.debug('RewardManage', `奖励表单验证通过: ${reward.name}`);
+    } else {
+      // 降级处理：使用本地验证
+      if (!reward.name.trim()) {
+        wx.showToast({
+          title: '请输入奖励名称',
+          icon: 'none',
+          duration: 2000
+        });
+        return;
+      }
+      logger.debug('RewardManage', `本地奖励验证通过: ${reward.name}`);
     }
     
     logger.debug('RewardManage', `保存奖励: ${reward.name}`);
@@ -776,15 +823,22 @@ Page({
       if (deleteResult.success) {
         logger.info('RewardManage', `清理了 ${unclaimedExamples.length} 个未领取的示例奖励`);
         
-        // 如果有自定义奖励，通过服务层设置标记，防止系统自动重新初始化示例奖励
+        // 如果有自定义奖励，通过配置服务设置标记，防止系统自动重新初始化示例奖励
         if (hasCustomRewards) {
           try {
-            const rewardService = serviceManager.getService('rewardService');
-            if (rewardService && typeof rewardService.setCustomRewardsFlag === 'function') {
-              await rewardService.setCustomRewardsFlag(true);
+            const configService = serviceManager.getService('config');
+            if (configService) {
+              configService.setCustomRewards(true);
             } else {
-              // 兼容性处理
-              wx.setStorageSync('has_custom_rewards', true);
+              // 通过奖励服务设置（向后兼容）
+              const rewardService = serviceManager.getService('rewardService');
+              if (rewardService && typeof rewardService.setCustomRewardsFlag === 'function') {
+                await rewardService.setCustomRewardsFlag(true);
+              } else {
+                // 降级处理：直接使用存储
+                wx.setStorageSync('has_custom_rewards', true);
+                logger.warn('RewardManage', '配置服务不可用，使用降级存储访问');
+              }
             }
             logger.info('RewardManage', '设置了自定义奖励标记，防止重新初始化示例奖励');
           } catch (e) {
