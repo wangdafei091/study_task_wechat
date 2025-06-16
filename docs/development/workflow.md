@@ -1,232 +1,420 @@
 # 开发工作流程
 
-本文档描述了学习任务微信小程序的开发工作流程和规范，确保代码质量和一致性。
+## 概述
+
+本文档描述了学习任务微信小程序的开发工作流程、代码规范和最佳实践。所有开发人员都应严格遵循这些规范，以确保代码质量和项目的可维护性。
+
+## 开发环境设置
+
+### 必需工具
+- **微信开发者工具**：最新版本
+- **Node.js**：v14+ 
+- **npm**：用于依赖管理
+- **Jest**：单元测试框架
+- **Git**：版本控制
+
+### 环境配置
+1. 安装微信开发者工具
+2. 克隆项目仓库
+3. 安装依赖：`npm install`
+4. 配置开发者工具项目路径
+5. 启动项目进行开发
+
+## 项目架构规范
+
+### DDD分层架构
+项目严格遵循领域驱动设计(DDD)架构，开发时必须按照以下分层进行：
+
+```
+领域层(models/) → 应用层(services/) → 基础设施层(repositories/adapters/) → 表现层(pages/components/)
+```
+
+#### 开发原则
+1. **领域优先原则**：业务逻辑封装在领域模型中
+2. **服务协调原则**：复杂业务流程通过服务层协调
+3. **接口隔离原则**：通过ServiceManager访问服务
+4. **事件驱动原则**：使用EventBus进行组件间通信
+
+### 服务管理规范
+- 所有服务访问都必须通过ServiceManager
+- 禁止直接操作仓储层或适配器层
+- 服务间通信使用EventBus进行事件发布/订阅
+- 批量操作使用batchUtils工具
 
 ## 代码开发规范
 
 ### 命名规范
-- 组件名称：小驼峰命名法，如 `taskItem`、`progressRing`
-- 工具函数：小驼峰命名法，如 `formatDate`、`showLoading`
-- 常量：全大写下划线分隔，如 `MAX_TASK_COUNT`、`DEFAULT_DURATION`
-- 类名：大驼峰命名法，如 `TaskService`、`StarService`
+- **文件命名**：使用kebab-case，如`task-service.js`
+- **变量命名**：使用camelCase，如`taskService`
+- **常量命名**：使用UPPER_SNAKE_CASE，如`MAX_TASK_COUNT`
+- **类命名**：使用PascalCase，如`TaskService`
 
-### 文件结构规范
-- 组件文件夹命名与组件名称一致
-- 组件必须包含 `.js`、`.wxml`、`.wxss`、`.json` 四个文件
-- 工具类模块导出应使用 `module.exports = { ... }`
+### 代码风格
+1. **简洁原则**：保持代码简洁，去除冗余
+2. **中文注释**：使用简洁的中文进行注释
+3. **最小修改**：仅修复指定问题，不做无关改动
+4. **日志完善**：在关键操作处添加logger日志
 
-### 界面设计规范
-- 使用rpx单位确保各设备适配性
-- 遵循预设的颜色变量和主题
-- 确保交互元素有足够的点击区域
-- 保持视觉一致性，特别是：
-  - 按钮高度统一为90rpx
-  - 表单输入框高度统一为90rpx
-  - 卡片容器边距统一为30rpx
-  - 字体大小体系：标题32rpx，正文28rpx，说明24rpx
-  - 控件间距保持12rpx的倍数
-  - 功能按钮使用统一的圆角值8rpx
+### 文件组织
+```
+src/
+├── models/           # 领域模型
+├── services/         # 应用服务
+├── repositories/     # 仓储层
+├── adapters/         # 适配器层
+├── pages/           # 页面组件
+├── components/      # UI组件
+├── utils/           # 工具函数
+└── styles/          # 样式文件
+```
 
-### 代码注释规范
-- 函数前添加注释说明功能、参数和返回值
-- 复杂逻辑需添加行内注释
-- TODO 项使用 `// TODO: 说明内容` 格式
+## 功能开发流程
 
-## 开发调试流程
+### 1. 需求分析
+- 明确功能需求和业务规则
+- 识别涉及的领域模型和服务
+- 设计数据流和组件交互
+- 确定测试策略
 
-1. **本地开发**
-   - 使用微信开发者工具进行开发调试
-   - 实时预览效果
-   - 使用 Console 调试代码
+### 2. 代码实现
+按照以下顺序进行开发：
 
-2. **性能优化检查**
-   - 使用微信开发者工具的"性能分析"功能检查性能问题
-   - 检查页面渲染性能
-   - 检查网络请求和缓存使用情况
+#### 第一步：领域层开发
+```javascript
+// 1. 创建或更新领域模型
+// models/task.js
+class Task {
+  constructor(data) {
+    this.id = data.id;
+    this.title = data.title;
+    // ... 其他属性
+  }
+  
+  // 业务逻辑方法
+  complete() {
+    this.status = TaskStatus.COMPLETED;
+    this.completionTime = Date.now();
+  }
+}
+```
 
-3. **适配性测试**
-   - 使用微信开发者工具的"设备切换"功能测试不同设备的显示效果
-   - 测试横屏和竖屏模式
-   - 针对不同高度设备的适配测试
+#### 第二步：仓储层开发
+```javascript
+// 2. 实现数据访问层
+// repositories/task-repository.js
+class TaskRepository extends BaseRepository {
+  async findByDate(date) {
+    // 实现具体查询逻辑
+  }
+}
+```
 
-## 日志规范
+#### 第三步：服务层开发
+```javascript
+// 3. 实现业务服务
+// services/task-service.js
+class TaskService {
+  async completeTask(taskId, userId) {
+    // 1. 获取任务
+    // 2. 执行业务逻辑
+    // 3. 发布领域事件
+    // 4. 返回结果
+  }
+}
+```
 
-为便于追踪和调试，在关键位置添加日志。使用 `logger` 工具统一格式，遵循以下格式：
+#### 第四步：表现层开发
+```javascript
+// 4. 实现页面和组件
+// pages/task/task.js
+Page({
+  onLoad() {
+    this.taskService = getApp().serviceManager.get('taskService');
+  },
+  
+  async completeTask() {
+    await this.taskService.completeTask(this.data.taskId, 'child');
+  }
+});
+```
+
+### 3. 测试实现
+为每个功能编写相应的测试：
+
+```javascript
+// test/services/task-service.test.js
+describe('TaskService', () => {
+  test('should complete task successfully', async () => {
+    // 测试任务完成功能
+  });
+});
+```
+
+### 4. 文档更新
+- 更新相关API文档
+- 更新数据模型文档
+- 更新用户手册（如需要）
+
+## 日志记录规范
+
+### 日志格式
+使用统一的logger工具进行日志记录：
 
 ```javascript
 const logger = require('../../utils/logger');
 
-// 记录普通信息
-logger.info('componentName', '操作描述', 变量);
+// 信息日志
+logger.info('TaskService', '任务完成', { taskId, userId });
 
-// 记录警告信息
-logger.warn('componentName', '警告描述', 变量);
+// 警告日志
+logger.warn('TaskService', '任务状态异常', { taskId, status });
 
-// 记录错误信息 
-logger.error('componentName', '错误描述', 错误对象);
-
-// 记录调试信息（仅在调试模式下显示）
-logger.debug('componentName', '调试信息', 变量);
+// 错误日志
+logger.error('TaskService', '任务完成失败', error);
 ```
 
-针对不同级别的日志，适用场景如下：
-- `logger.info` - 普通信息和重要流程节点
-- `logger.warn` - 警告信息，如任务即将到期
-- `logger.error` - 错误信息，包括异常捕获
-- `logger.debug` - 调试信息，仅在开发环境显示
+### 日志记录点
+必须记录日志的关键点：
+1. 任务状态变更
+2. 积分计算和分配
+3. 重要数据操作
+4. 异步操作开始和结束
+5. 错误和异常情况
+6. 业务规则执行
 
-### 日志记录要点
+## UI开发规范
 
-1. **关键点必须添加日志**：
-   - 任务创建、编辑、删除和状态变更
-   - 重要数据的读取和存储操作
-   - 页面重要生命周期事件
-   - 用户关键操作
-   - 异步操作的开始和结束
-   - 所有积分计算和有效期处理过程
+### 设计规范
+```css
+/* 卡片设计 */
+.card {
+  padding: 30rpx;
+  border-radius: 16rpx;
+  background-color: #ffffff;
+}
 
-2. **日志内容要求**：
-   - 保持简洁明了，包含必要信息
-   - 对象日志使用适当格式，记录关键字段
-   - 记录操作类型、对象ID和关键参数
-   - 错误日志需包含错误详情和上下文
-   - 批量处理操作记录当前进度
+/* 按钮设计 */
+.button {
+  height: 90rpx;
+  border-radius: 8rpx;
+}
 
-3. **避免过度日志**：
-   - 不记录频繁重复的常规操作
-   - 不记录大量无关紧要的信息
-   - 循环中谨慎使用日志
-   - 过大对象使用精简版记录关键属性
+/* 字体规范 */
+.title { font-size: 32rpx; font-weight: 500-600; }
+.content { font-size: 28rpx; font-weight: 400; }
+.helper { font-size: 24rpx; font-weight: 400; }
+```
 
-## UI一致性规范
+### 颜色系统
+```javascript
+// 任务类型颜色
+const TASK_COLORS = {
+  study: '#4285F4',    // 学习任务 - 蓝色
+  habit: '#4CAF50',    // 习惯任务 - 绿色
+  interest: '#FF9800'  // 兴趣任务 - 橙色
+};
+```
 
-为确保整个应用的视觉一致性，必须遵循以下规范：
+### 间距规范
+- 元素间距：12rpx（小间距）/ 24rpx（标准间距）
+- 页面边距：30rpx
+- 组件内边距：30rpx
 
-1. **表单元素规范**
-   - 所有按钮和输入框保持统一高度90rpx
-   - 相似功能的控件使用相同的视觉样式
-   - 确保表单元素上下对齐和间距一致
-   - 输入框内部文本垂直居中
+## 性能优化规范
 
-2. **颜色规范**
-   - 任务类型颜色：
-     - 学习：#4285F4（蓝色）
-     - 习惯：#4CAF50（绿色）
-     - 兴趣：#FF9800（橙色）
-   - 状态颜色：
-     - 成功/完成：#4CAF50（绿色）
-     - 错误/失败：#F44336（红色）
-     - 警告/提示：#FF9800（橙色）
-     - 信息/普通：#4285F4（蓝色）
+### 数据处理
+- 大量数据操作使用batchUtils进行批量处理
+- 合并setData调用，减少渲染次数
+- 异步操作使用Promise/async-await
+- 使用setTimeout延迟非关键任务
 
-3. **间距规范**
-   - 卡片内部边距：30rpx
-   - 表单项垂直间距：24rpx
-   - 相关元素组间距：12rpx
-   - 按钮间水平间距：20rpx
+### 代码示例
+```javascript
+// 批量处理任务
+await batchUtils.batchProcess(
+  tasks,
+  (task) => processTask(task),
+  {
+    batchSize: 50,
+    delay: 10,
+    showProgress: true
+  }
+);
 
-4. **排版规范**
-   - 标题文字：32rpx，字重500-600
-   - 正文文字：28rpx，字重400
-   - 辅助文字：24rpx，字重400
-   - 小号文字：22rpx，字重400
+// 合并setData
+this.setData({
+  tasks: updatedTasks,
+  loading: false,
+  message: '处理完成'
+});
+```
 
-## 批量处理机制
+## 测试规范
 
-对于需要处理大量数据的操作，应该使用批量处理机制：
+### 测试策略
+1. **单元测试**：测试业务逻辑和工具函数
+2. **集成测试**：测试服务间协作
+3. **端到端测试**：测试完整业务流程
+4. **覆盖率要求**：保持85%以上测试覆盖率
 
-1. **存储批量操作**
-   - 合并多个setStorage操作
-   - 使用数据缓冲区，定期批量提交
-   - 避免频繁的存储操作
+### 测试文件组织
+```
+test/
+├── models/          # 领域模型测试
+├── services/        # 服务层测试
+├── repositories/    # 仓储层测试
+├── utils/          # 工具函数测试
+└── integration/    # 集成测试
+```
 
-2. **任务批量处理**
-   - 大量任务状态更新使用批处理
-   - 批量创建重复任务时分批执行
-   - 使用异步操作避免UI阻塞
+### 测试示例
+```javascript
+// 单元测试示例
+describe('TaskService', () => {
+  let taskService;
+  
+  beforeEach(() => {
+    taskService = new TaskService();
+  });
+  
+  test('应该成功完成任务', async () => {
+    const taskId = 'task_123';
+    const result = await taskService.completeTask(taskId, 'child');
+    
+    expect(result.success).toBe(true);
+    expect(result.task.status).toBe(TaskStatus.COMPLETED);
+  });
+});
+```
 
-3. **批处理实现方式**
-   ```javascript
-   // 批量处理示例
-   const batchUtils = require('../../utils/batchUtils');
-   
-   batchUtils.batchProcess(
-     items,
-     (item) => {
-       // 处理单个项的逻辑
-       logger.info('BatchProcess', '处理项', { id: item.id });
-     },
-     { 
-       batchSize: 50,
-       delay: 10,
-       showProgress: true
-     },
-     () => {
-       logger.info('BatchProcess', '批处理完成', { total: items.length });
-     }
-   );
-   ```
+## 错误处理规范
 
-## 异步编程最佳实践
+### 错误处理策略
+1. **业务错误**：返回结果对象，包含成功标志和错误信息
+2. **系统错误**：记录详细日志，返回用户友好的错误信息
+3. **异步错误**：使用try-catch包装，确保错误被正确捕获
 
-1. **使用Promise**
-   - 封装异步操作返回Promise
-   - 使用链式调用代替回调嵌套
-   - 添加适当的错误处理
+### 错误处理示例
+```javascript
+async completeTask(taskId, userId) {
+  try {
+    // 业务逻辑
+    const task = await this.taskRepository.findById(taskId);
+    if (!task) {
+      return { success: false, message: '任务不存在' };
+    }
+    
+    // 执行完成操作
+    task.complete();
+    await this.taskRepository.save(task);
+    
+    return { success: true, task };
+  } catch (error) {
+    logger.error('TaskService', '完成任务失败', error);
+    return { success: false, message: '操作失败，请重试' };
+  }
+}
+```
 
-2. **异步操作日志**
-   - 在异步操作开始和结束添加日志
-   - 记录异步操作的关键参数和结果
-   - 使用不同的日志级别区分流程节点
+## 版本管理规范
 
-3. **避免阻塞UI**
-   - 使用setTimeout拆分耗时操作
-   - 大型列表使用分页或虚拟列表
-   - 避免同步执行耗时计算
+### Git工作流
+1. **分支策略**：使用feature分支进行功能开发
+2. **提交规范**：使用清晰的提交信息描述变更
+3. **代码审查**：重要功能需要代码审查
+4. **版本标签**：重要版本使用Git标签标记
 
-## 文档更新流程
+### 提交信息格式
+```
+feat: 添加任务完成功能
+fix: 修复星星计算错误  
+docs: 更新API文档
+refactor: 重构任务服务
+test: 添加单元测试
+```
 
-**重要事项**：代码修改不会自动更新文档，需要开发者手动维护。
+## 部署流程
 
-在以下情况下，必须更新相关文档：
+### 构建检查
+1. 运行所有测试：`npm test`
+2. 检查代码风格：`npm run lint`
+3. 构建项目：`npm run build`
+4. 功能验证：手动测试关键功能
 
-1. **修改代码功能时**：
-   - 检查并更新受影响功能的文档
-   - 如果修改了API，更新对应的API文档
-   - 如果添加了新功能，创建对应的文档
+### 发布步骤
+1. 更新版本号
+2. 更新CHANGELOG.md
+3. 提交代码到主分支
+4. 创建发布标签
+5. 使用微信开发者工具上传代码
+6. 提交审核
 
-2. **添加新组件或工具函数时**：
-   - 在对应指南中添加新组件或函数的说明
-   - 包含使用示例和参数说明
+## 文档维护
 
-3. **修复问题时**：
-   - 如果问题与文档描述不符，更新文档
-   - 考虑在故障排除指南中添加相关问题的解决方案
+### 文档更新原则
+1. **同步更新**：代码修改时同步更新文档
+2. **准确性**：确保文档与代码实现一致
+3. **完整性**：新功能必须编写相应文档
+4. **可读性**：使用清晰的语言和格式
 
-## 常见问题与解决方案
+### 文档类型
+- **架构文档**：系统设计和技术决策
+- **API文档**：接口规范和使用说明
+- **开发文档**：开发流程和规范
+- **用户文档**：功能使用指南
 
-1. **小程序启动缓慢**
-   - 检查 `app.js` 中的初始化逻辑是否过重
-   - 考虑使用延迟加载或异步加载策略
+## 常见问题和解决方案
 
-2. **组件通信问题**
-   - 使用事件机制 (`this.triggerEvent`)
-   - 使用全局事件总线 (`app.globalData.eventBus`)
-   - 对于复杂状态管理，使用 `utils/stateManager.js`
+### Q: 如何添加新的任务类型？
+A: 
+1. 在TaskType枚举中添加新类型
+2. 更新Task模型的验证逻辑
+3. 在UI中添加相应的颜色和图标
+4. 更新相关测试和文档
 
-3. **适配性问题**
-   - 使用 rpx 单位实现响应式布局
-   - 使用 `unit.js` 中的工具函数获取设备信息
-   - 针对特殊设备添加条件渲染或样式调整
+### Q: 如何实现新的星星有效期类型？
+A:
+1. 在StarExpiryType枚举中添加新类型
+2. 在StarService中实现过期时间计算逻辑
+3. 更新UI显示逻辑
+4. 添加相应的测试用例
 
-4. **UI一致性问题**
-   - 检查样式是否继承自全局样式
-   - 确保使用预定义的颜色和尺寸变量
-   - 使用统一的组件而非重新实现
-   - 遵循设计规范中的高度和间距标准
+### Q: 如何添加新的服务？
+A:
+1. 继承BaseService创建新服务类
+2. 在ServiceManager中注册服务
+3. 实现相应的仓储类
+4. 编写单元测试和集成测试
 
-5. **横屏适配问题**
-   - 监听设备方向变化
-   - 使用弹性布局适应横屏
-   - 为横屏模式设计专用布局
-   - 测试不同设备的横屏显示效果 
+## 性能监控
+
+### 关键指标
+- 页面加载时间
+- 操作响应时间
+- 内存使用情况
+- 错误率统计
+
+### 监控工具
+- 微信开发者工具性能面板
+- 自定义性能日志
+- 用户反馈收集
+
+## 安全规范
+
+### 数据安全
+1. 敏感数据加密存储
+2. 输入数据验证
+3. 防止XSS攻击
+4. 适当的权限控制
+
+### 代码安全
+1. 避免硬编码敏感信息
+2. 使用安全的第三方库
+3. 定期更新依赖包
+4. 代码审查检查安全问题
+
+---
+
+**文档维护者**：开发团队  
+**最后更新**：2024年12月  
+**版本**：v2.0 
