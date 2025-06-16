@@ -886,6 +886,127 @@ async function manageMessages() {
 }
 ```
 
+## ValidationService - 表单验证服务
+
+ValidationService 提供统一的表单验证逻辑，避免页面层重复的验证代码，遵循DDD架构原则。
+
+### 核心功能
+- 任务表单验证
+- 奖励表单验证
+- 通用字段验证（文本、数字、日期）
+- 数据组装和标准化
+- 降级处理支持
+
+### API 方法
+
+#### 任务表单验证
+
+##### validateTaskForm(taskData)
+验证任务表单数据并组装标准化数据
+
+```javascript
+const taskData = {
+  title: '学习任务',
+  startDate: '2024-01-01',
+  isAllDay: false,
+  startTime: '09:00',
+  endTime: '17:00',
+  type: 'study',
+  points: 5,
+  isRequired: true
+};
+
+const result = validationService.validateTaskForm(taskData);
+if (result.valid) {
+  console.log('验证通过:', result.data);
+} else {
+  console.log('验证失败:', result.errorMsg);
+}
+// 返回: { valid: boolean, errorMsg?: string, data?: Object }
+```
+
+#### 奖励表单验证
+
+##### validateRewardForm(rewardData)
+验证奖励表单数据
+
+```javascript
+const rewardData = {
+  name: '小玩具',
+  requiredStars: 10,
+  description: '奖励描述',
+  isActive: true
+};
+
+const result = validationService.validateRewardForm(rewardData);
+// 返回: { valid: boolean, errorMsg?: string, data?: Object }
+```
+
+#### 通用字段验证
+
+##### validateTextField(value, fieldName, options)
+验证文本字段
+
+```javascript
+const result = validationService.validateTextField(
+  '用户输入的文本',
+  '任务标题',
+  { required: true, maxLength: 50 }
+);
+// 返回: { valid: boolean, errorMsg?: string, value: string }
+```
+
+##### validateNumberField(value, fieldName, options)
+验证数字字段
+
+```javascript
+const result = validationService.validateNumberField(
+  '10',
+  '所需星星数',
+  { required: true, min: 1, max: 100, integer: true }
+);
+// 返回: { valid: boolean, errorMsg?: string, value: number }
+```
+
+##### validateDateField(dateValue, fieldName, options)
+验证日期字段
+
+```javascript
+const result = validationService.validateDateField(
+  '2024-01-01',
+  '开始日期',
+  { required: true, minDate: '2024-01-01' }
+);
+// 返回: { valid: boolean, errorMsg?: string, value: string }
+```
+
+### 使用模式
+
+#### 页面层使用模式
+```javascript
+// 1. 获取验证服务（带降级处理）
+const validationService = serviceManager.getService('validation');
+if (!validationService) {
+  logger.error('页面名称', '无法获取验证服务，使用本地验证');
+  return this.validateFormLocal();
+}
+
+// 2. 使用服务层验证
+const validationResult = validationService.validateTaskForm(formData);
+
+// 3. 处理验证结果
+if (validationResult.valid) {
+  // 使用验证通过的数据
+  const taskData = validationResult.data;
+} else {
+  // 显示错误信息
+  wx.showToast({
+    title: validationResult.errorMsg,
+    icon: 'none'
+  });
+}
+```
+
 ## UserService - 用户管理服务
 
 用户服务管理用户相关功能，支持多角色系统和权限控制。

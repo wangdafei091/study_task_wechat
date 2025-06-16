@@ -144,21 +144,26 @@ study_task_wechat/
 ## 📖 文档导航
 
 ### 🏛️ 架构文档
+- [架构文档索引](docs/architecture/README.md) - 架构文档导航
 - [系统架构](docs/architecture/system_architecture.md) - 整体架构设计
-- [领域模型](docs/architecture/domain-model-architecture.md) - DDD架构详解
+- [DDD架构](docs/architecture/domain-model-architecture.md) - 领域驱动设计实现
 - [项目结构](docs/architecture/project_structure.md) - 文件组织结构
 - [数据模型](docs/architecture/data_models.md) - 核心数据模型
+- [星星积分系统](docs/architecture/star_points_system.md) - 积分系统设计
 
 ### 🔧 API文档
+- [API文档索引](docs/api/readme.md) - API文档导航
 - [服务层API](docs/api/services-guide.md) - 业务服务接口
+- [表单验证API](docs/api/validation-service.md) - 统一验证服务
 - [仓储层API](docs/api/repositories.md) - 数据访问接口
 - [组件API](docs/api/components-guide.md) - UI组件使用指南
 - [工具函数](docs/api/utils_guide.md) - 工具函数库
 - [存储适配器](docs/api/storage-adapter.md) - 数据存储接口
 
 ### 👨‍💻 开发指南
+- [开发文档索引](docs/development/README.md) - 开发文档导航
+- [编码标准](docs/development/coding_standards.md) - 代码风格和规范
 - [开发工作流](docs/development/workflow.md) - 开发流程规范
-- [编码标准](docs/development/coding_standards.md) - 代码风格指南
 - [故障排除](docs/development/troubleshooting.md) - 常见问题解决
 - [文档维护](docs/development/document_workflow.md) - 文档更新流程
 
@@ -278,5 +283,5 @@ git commit -m "docs(API): 更新服务层API文档"
 ---
 
 **项目维护者**：开发团队  
-**最后更新**：2024年12月  
-**当前版本**：v3.0 
+**最后更新**：2025年1月  
+**当前版本**：v3.1 
