@@ -1,554 +1,861 @@
 # 组件使用指南
 
-本文档介绍了项目中可用的自定义组件的用途和使用方法，帮助开发人员快速了解如何在页面中使用这些组件。
+本文档详细介绍了学习任务微信小程序中的自定义组件，基于当前的DDD架构设计，提供完整的组件API和使用示例。
 
-## 组件概述
+## 组件架构概览
 
-项目包含多个自定义组件，位于 `components/` 目录下，主要包括：
+### 组件分类
+项目中的组件按功能分为以下几类：
 
-- **卡片组件**：提供统一的内容容器
-- **进度展示组件**：包括环形进度条和线性进度条
-- **任务相关组件**：任务项、即将到期任务、任务热力图等
-- **日期选择组件**：提供日期选择和星星日历功能
-- **交互组件**：如浮动菜单等
+- **基础组件**：卡片、进度条等通用UI组件
+- **业务组件**：任务项、奖励项等业务相关组件
+- **交互组件**：浮动菜单、日期选择器等交互组件
+- **数据展示组件**：热力图、统计图表等数据可视化组件
+
+### 组件设计原则
+- **单一职责**：每个组件专注于特定功能
+- **可复用性**：组件可在多个页面中复用
+- **数据驱动**：通过属性传递数据，通过事件传递操作
+- **样式一致**：遵循统一的UI设计规范
 
 ## 组件使用方法
 
-在页面中使用组件需要两步：
-
-### 1. 在页面的 JSON 中声明
+### 1. 在页面JSON中声明组件
 
 ```json
 {
   "usingComponents": {
-    "progress-ring": "/components/progressRing/progressRing",
     "card": "/components/card/card",
-    "index-task-item": "/components/index-task-item/index-task-item"
+    "progress-ring": "/components/progressRing/progressRing",
+    "progress-bar": "/components/progressBar/progressBar",
+    "task-item": "/components/taskItem/taskItem",
+    "reward-item": "/components/rewardItem/rewardItem",
+    "floating-menu": "/components/floatingMenu/floatingMenu",
+    "date-picker": "/components/datePicker/datePicker",
+    "star-calendar": "/components/starCalendar/starCalendar",
+    "user-switcher": "/components/userSwitcher/userSwitcher"
   }
 }
 ```
 
-### 2. 在页面的 WXML 中使用
+### 2. 在页面WXML中使用组件
 
 ```html
 <card>
-  <progress-ring percent="{{taskProgress}}" type="study"></progress-ring>
+  <view class="header">
+    <text class="title">今日任务</text>
+    <progress-ring percent="{{taskProgress}}" type="study"></progress-ring>
+  </view>
+  
   <view class="task-list">
-    <index-task-item wx:for="{{tasks}}" wx:key="id" task="{{item}}" bind:tap="onTaskTap"></index-task-item>
+    <task-item 
+      wx:for="{{tasks}}" 
+      wx:key="id" 
+      task="{{item}}"
+      bind:complete="onTaskComplete"
+      bind:edit="onTaskEdit">
+    </task-item>
   </view>
 </card>
 ```
 
-## 卡片组件 (card)
+## 基础组件
 
-`components/card/card` 提供统一的内容容器，具有一致的样式和交互效果。
+### Card - 卡片组件
 
-### 属性
+通用的内容容器组件，提供统一的卡片样式。
+
+#### 属性
 
 | 属性名 | 类型 | 默认值 | 说明 |
-|------|------|-------|-----|
+|--------|------|--------|------|
 | padding | String | '30rpx' | 内边距 |
 | radius | String | '16rpx' | 圆角大小 |
 | shadow | Boolean | true | 是否显示阴影 |
 | background | String | '#ffffff' | 背景颜色 |
+| margin | String | '24rpx' | 外边距 |
 
-### 事件
+#### 事件
 
-| 事件名 | 说明 |
-|-------|-----|
-| tap | 点击卡片时触发 |
+| 事件名 | 说明 | 参数 |
+|--------|------|------|
+| tap | 点击卡片时触发 | event |
 
-### 插槽
+#### 插槽
 
-- 默认插槽：卡片内容
+- **默认插槽**：卡片内容区域
 
-### 使用示例
+#### 使用示例
 
 ```html
-<!-- 基础用法 -->
+<!-- 基础卡片 -->
 <card>
-  <view>卡片内容</view>
+  <view class="content">
+    <text>基础卡片内容</text>
+  </view>
 </card>
 
-<!-- 自定义样式 -->
-<card padding="20rpx" radius="8rpx" background="#f8f8f8" shadow="{{false}}">
-  <view>无阴影卡片</view>
+<!-- 自定义样式卡片 -->
+<card 
+  padding="40rpx" 
+  radius="20rpx" 
+  background="#f8f9fa"
+  shadow="{{false}}">
+  <view class="custom-content">
+    <text>自定义样式卡片</text>
+  </view>
 </card>
 
-<!-- 绑定事件 -->
-<card bind:tap="onCardTap">
-  <view>点击触发事件</view>
+<!-- 可点击卡片 -->
+<card bind:tap="onCardTap" data-id="{{cardId}}">
+  <view class="clickable-content">
+    <text>点击我</text>
+  </view>
 </card>
 ```
 
-## 环形进度条 (progressRing)
+#### JS处理示例
 
-`components/progressRing/progressRing` 提供环形进度展示，常用于展示任务完成情况。
+```javascript
+Page({
+  onCardTap(e) {
+    const cardId = e.currentTarget.dataset.id;
+    logger.info('Page', '卡片被点击', { cardId });
+    
+    // 处理卡片点击逻辑
+    wx.navigateTo({
+      url: `/pages/detail/detail?id=${cardId}`
+    });
+  }
+});
+```
 
-### 属性
+### ProgressRing - 环形进度条
+
+用于显示任务完成进度的环形进度条组件。
+
+#### 属性
 
 | 属性名 | 类型 | 默认值 | 说明 |
-|------|------|-------|-----|
+|--------|------|--------|------|
 | percent | Number | 0 | 进度百分比(0-100) |
-| type | String | 'default' | 类型，可选值：'study'、'habit'、'interest'、'default' |
-| size | Number | 120 | 环形大小(rpx) |
-| strokeWidth | Number | 8 | 环形宽度(rpx) |
+| type | String | 'default' | 进度条类型：'study'/'habit'/'interest'/'default' |
+| size | Number | 120 | 环形直径(rpx) |
+| strokeWidth | Number | 8 | 环形线条宽度(rpx) |
 | showText | Boolean | true | 是否显示进度文本 |
+| animated | Boolean | true | 是否启用动画效果 |
 
-### 事件
+#### 事件
 
-| 事件名 | 说明 |
-|-------|-----|
-| tap | 点击进度环时触发 |
+| 事件名 | 说明 | 参数 |
+|--------|------|------|
+| tap | 点击进度环时触发 | event |
 
-### 使用示例
+#### 使用示例
 
 ```html
-<!-- 基础用法 -->
-<progress-ring percent="{{60}}"></progress-ring>
+<!-- 基础环形进度条 -->
+<progress-ring percent="{{75}}"></progress-ring>
 
-<!-- 不同任务类型 -->
-<progress-ring percent="{{75}}" type="study"></progress-ring>
-<progress-ring percent="{{40}}" type="habit"></progress-ring>
-<progress-ring percent="{{90}}" type="interest"></progress-ring>
+<!-- 不同类型的进度条 -->
+<progress-ring percent="{{60}}" type="study"></progress-ring>
+<progress-ring percent="{{80}}" type="habit"></progress-ring>
+<progress-ring percent="{{45}}" type="interest"></progress-ring>
 
-<!-- 自定义大小 -->
-<progress-ring percent="{{50}}" size="{{180}}" strokeWidth="{{12}}"></progress-ring>
+<!-- 自定义大小和样式 -->
+<progress-ring 
+  percent="{{90}}" 
+  size="{{160}}" 
+  strokeWidth="{{12}}"
+  showText="{{false}}"
+  animated="{{false}}">
+</progress-ring>
+
+<!-- 可交互的进度条 -->
+<progress-ring 
+  percent="{{taskProgress}}" 
+  type="{{taskType}}"
+  bind:tap="onProgressTap">
+</progress-ring>
 ```
 
-## 线性进度条 (progressBar)
+#### JS处理示例
 
-`components/progressBar/progressBar` 提供线性进度条，用于展示任务或奖励进度。
+```javascript
+Page({
+  data: {
+    taskProgress: 0,
+    taskType: 'study'
+  },
+  
+  onLoad() {
+    this.calculateProgress();
+  },
+  
+  calculateProgress() {
+    const taskService = getApp().serviceManager.get('taskService');
+    
+    taskService.getAllTasks().then(result => {
+      if (result.success) {
+        const tasks = result.tasks;
+        const completedTasks = tasks.filter(task => task.status === 1);
+        const progress = tasks.length > 0 ? 
+          Math.round((completedTasks.length / tasks.length) * 100) : 0;
+        
+        this.setData({ taskProgress: progress });
+      }
+    });
+  },
+  
+  onProgressTap() {
+    wx.showToast({
+      title: `当前进度：${this.data.taskProgress}%`,
+      icon: 'none'
+    });
+  }
+});
+```
 
-### 属性
+### ProgressBar - 线性进度条
+
+用于显示线性进度的组件，适合在列表或卡片中使用。
+
+#### 属性
 
 | 属性名 | 类型 | 默认值 | 说明 |
-|------|------|-------|-----|
+|--------|------|--------|------|
 | percent | Number | 0 | 进度百分比(0-100) |
-| type | String | 'default' | 类型，可选值：'study'、'habit'、'interest'、'default' |
-| height | Number | 6 | 高度(rpx) |
+| type | String | 'default' | 进度条类型：'study'/'habit'/'interest'/'default' |
+| height | Number | 6 | 进度条高度(rpx) |
 | showText | Boolean | false | 是否显示进度文本 |
 | radius | Number | 3 | 圆角大小(rpx) |
+| backgroundColor | String | '#f0f0f0' | 背景颜色 |
 
-### 使用示例
+#### 使用示例
 
 ```html
-<!-- 基础用法 -->
-<progress-bar percent="{{60}}"></progress-bar>
+<!-- 基础线性进度条 -->
+<progress-bar percent="{{65}}"></progress-bar>
 
-<!-- 显示文本 -->
-<progress-bar percent="{{75}}" showText="{{true}}"></progress-bar>
+<!-- 显示进度文本 -->
+<progress-bar percent="{{80}}" showText="{{true}}"></progress-bar>
+
+<!-- 不同类型的进度条 -->
+<progress-bar percent="{{45}}" type="study" height="{{8}}"></progress-bar>
+<progress-bar percent="{{70}}" type="habit" height="{{10}}"></progress-bar>
 
 <!-- 自定义样式 -->
-<progress-bar percent="{{40}}" type="habit" height="{{10}}" radius="{{5}}"></progress-bar>
+<progress-bar 
+  percent="{{55}}" 
+  height="{{12}}" 
+  radius="{{6}}"
+  backgroundColor="#e9ecef">
+</progress-bar>
 ```
 
-## 任务项组件 (index-task-item)
+## 业务组件
 
-`components/index-task-item/index-task-item` 显示单个任务项，主要用于任务列表展示。
+### TaskItem - 任务项组件
 
-### 属性
+用于显示单个任务的组件，包含任务信息和操作按钮。
+
+#### 属性
 
 | 属性名 | 类型 | 默认值 | 说明 |
-|------|------|-------|-----|
+|--------|------|--------|------|
 | task | Object | - | 任务对象 |
 | showActions | Boolean | true | 是否显示操作按钮 |
 | showTime | Boolean | true | 是否显示任务时间 |
 | showPoints | Boolean | true | 是否显示任务积分 |
+| showStatus | Boolean | true | 是否显示任务状态 |
+| compact | Boolean | false | 是否使用紧凑模式 |
 
-### 事件
+#### 事件
 
-| 事件名 | 说明 |
-|-------|-----|
-| tap | 点击任务项时触发 |
-| complete | 点击完成按钮时触发 |
-| delete | 点击删除按钮时触发 |
-| edit | 点击编辑按钮时触发 |
+| 事件名 | 说明 | 参数 |
+|--------|------|------|
+| tap | 点击任务项时触发 | { task } |
+| complete | 点击完成按钮时触发 | { task } |
+| reset | 点击重置按钮时触发 | { task } |
+| edit | 点击编辑按钮时触发 | { task } |
+| delete | 点击删除按钮时触发 | { task } |
+| toggleRequired | 切换必做状态时触发 | { task, isRequired } |
 
-### 使用示例
+#### 使用示例
 
 ```html
-<!-- 基础用法 -->
-<index-task-item 
-  task="{{taskItem}}" 
+<!-- 基础任务项 -->
+<task-item 
+  task="{{taskItem}}"
+  bind:complete="onTaskComplete"
+  bind:edit="onTaskEdit">
+</task-item>
+
+<!-- 紧凑模式任务项 -->
+<task-item 
+  task="{{taskItem}}"
+  compact="{{true}}"
+  showActions="{{false}}">
+</task-item>
+
+<!-- 完整功能任务项 -->
+<task-item 
+  task="{{taskItem}}"
   bind:tap="onTaskTap"
   bind:complete="onTaskComplete"
+  bind:reset="onTaskReset"
+  bind:edit="onTaskEdit"
   bind:delete="onTaskDelete"
-  bind:edit="onTaskEdit">
-</index-task-item>
-
-<!-- 仅显示 -->
-<index-task-item 
-  task="{{taskItem}}" 
-  showActions="{{false}}"
-  showTime="{{false}}">
-</index-task-item>
+  bind:toggleRequired="onToggleRequired">
+</task-item>
 ```
 
-### JS处理示例
+#### JS处理示例
 
 ```javascript
-// 处理任务点击
-onTaskTap(e) {
-  const taskId = e.currentTarget.dataset.taskId;
-  wx.navigateTo({
-    url: `/pages/task/task?id=${taskId}`
-  });
-},
-
-// 处理任务完成
-onTaskComplete(e) {
-  const taskId = e.detail.taskId;
-  const taskService = getApp().serviceManager.getService('taskService');
-  taskService.completeTask(taskId)
-    .then(result => {
+Page({
+  data: {
+    tasks: []
+  },
+  
+  onLoad() {
+    this.loadTasks();
+  },
+  
+  async loadTasks() {
+    const taskService = getApp().serviceManager.get('taskService');
+    const result = await taskService.getAllTasks();
+    
+    if (result.success) {
+      this.setData({ tasks: result.tasks });
+    }
+  },
+  
+  async onTaskComplete(e) {
+    const { task } = e.detail;
+    const taskService = getApp().serviceManager.get('taskService');
+    
+    try {
+      const result = await taskService.completeTask(task.id, 'child');
+      
       if (result.success) {
-        wx.showToast({ title: '任务已完成', icon: 'success' });
+        wx.showToast({
+          title: `任务完成！获得${result.starReward}颗星`,
+          icon: 'success'
+        });
+        
+        // 刷新任务列表
+        this.loadTasks();
+      } else {
+        wx.showToast({
+          title: result.message,
+          icon: 'error'
+        });
       }
-    })
-    .catch(error => {
-      logger.error('Index', '完成任务失败', error);
-      wx.showToast({ title: '操作失败', icon: 'none' });
+    } catch (error) {
+      logger.error('TaskPage', '完成任务失败', error);
+      wx.showToast({
+        title: '操作失败，请重试',
+        icon: 'error'
+      });
+    }
+  },
+  
+  onTaskEdit(e) {
+    const { task } = e.detail;
+    wx.navigateTo({
+      url: `/pages/task-edit/task-edit?id=${task.id}`
     });
-}
+  },
+  
+  async onTaskDelete(e) {
+    const { task } = e.detail;
+    
+    const res = await wx.showModal({
+      title: '确认删除',
+      content: `确定要删除任务"${task.title}"吗？`
+    });
+    
+    if (res.confirm) {
+      const taskService = getApp().serviceManager.get('taskService');
+      const result = await taskService.deleteTask(task.id);
+      
+      if (result.success) {
+        wx.showToast({ title: '删除成功', icon: 'success' });
+        this.loadTasks();
+      }
+    }
+  }
+});
 ```
 
-## 任务热力图 (task-heatmap)
+### RewardItem - 奖励项组件
 
-`components/task-heatmap/task-heatmap` 展示任务完成情况的热力图。
+用于显示单个奖励的组件，包含奖励信息和兑换功能。
 
-### 属性
+#### 属性
 
 | 属性名 | 类型 | 默认值 | 说明 |
-|------|------|-------|-----|
-| data | Array | [] | 热力图数据数组 |
-| startDate | String | - | 开始日期(YYYY-MM-DD) |
-| endDate | String | - | 结束日期(YYYY-MM-DD) |
+|--------|------|--------|------|
+| reward | Object | - | 奖励对象 |
+| userStars | Number | 0 | 用户当前星星数量 |
+| showActions | Boolean | true | 是否显示操作按钮 |
+| showStatus | Boolean | true | 是否显示奖励状态 |
 
-### 事件
+#### 事件
 
-| 事件名 | 说明 |
-|-------|-----|
-| cellTap | 点击日期单元格时触发 |
+| 事件名 | 说明 | 参数 |
+|--------|------|------|
+| tap | 点击奖励项时触发 | { reward } |
+| claim | 点击兑换按钮时触发 | { reward } |
+| deliver | 点击已领取按钮时触发 | { reward } |
 
-### 使用示例
+#### 使用示例
 
 ```html
-<task-heatmap 
-  data="{{heatmapData}}" 
-  startDate="{{startDate}}" 
-  endDate="{{endDate}}"
-  bind:cellTap="onDateCellTap">
-</task-heatmap>
+<!-- 基础奖励项 -->
+<reward-item 
+  reward="{{rewardItem}}"
+  userStars="{{starBalance}}"
+  bind:claim="onRewardClaim">
+</reward-item>
+
+<!-- 奖励列表 -->
+<view class="reward-list">
+  <reward-item 
+    wx:for="{{rewards}}" 
+    wx:key="id"
+    reward="{{item}}"
+    userStars="{{starBalance}}"
+    bind:tap="onRewardTap"
+    bind:claim="onRewardClaim"
+    bind:deliver="onRewardDeliver">
+  </reward-item>
+</view>
 ```
+
+#### JS处理示例
 
 ```javascript
-// 页面中准备数据
-onLoad() {
-  // 热力图数据格式
-  this.setData({
-    heatmapData: [
-      { date: '2023-06-01', count: 5 },
-      { date: '2023-06-02', count: 3 },
-      // ...更多数据
-    ],
-    startDate: '2023-06-01',
-    endDate: '2023-06-30'
-  });
-}
+Page({
+  data: {
+    rewards: [],
+    starBalance: 0
+  },
+  
+  onLoad() {
+    this.loadRewards();
+    this.loadStarBalance();
+  },
+  
+  async loadRewards() {
+    const rewardService = getApp().serviceManager.get('rewardService');
+    const result = await rewardService.getAvailableRewards();
+    
+    if (result.success) {
+      this.setData({ rewards: result.rewards });
+    }
+  },
+  
+  async loadStarBalance() {
+    const starService = getApp().serviceManager.get('starService');
+    const balance = await starService.getStarBalance('child');
+    this.setData({ starBalance: balance });
+  },
+  
+  async onRewardClaim(e) {
+    const { reward } = e.detail;
+    const rewardService = getApp().serviceManager.get('rewardService');
+    
+    try {
+      const result = await rewardService.claimReward(reward.id, 'child');
+      
+      if (result.success) {
+        wx.showModal({
+          title: '兑换成功！',
+          content: `您已成功兑换"${reward.title}"，消耗${result.starCost}颗星星`,
+          showCancel: false
+        });
+        
+        // 刷新数据
+        this.loadRewards();
+        this.loadStarBalance();
+      } else {
+        wx.showToast({
+          title: result.message,
+          icon: 'error'
+        });
+      }
+    } catch (error) {
+      logger.error('RewardPage', '兑换奖励失败', error);
+      wx.showToast({
+        title: '兑换失败，请重试',
+        icon: 'error'
+      });
+    }
+  }
+});
 ```
 
-## 即将到期任务组件 (upcomingTask)
+## 交互组件
 
-`components/upcomingTask/upcomingTask` 展示即将到期的任务提醒。
+### FloatingMenu - 浮动菜单
 
-### 属性
+提供浮动操作菜单功能，常用于快速操作入口。
 
-| 属性名 | 类型 | 默认值 | 说明 |
-|------|------|-------|-----|
-| task | Object | - | 任务对象 |
-| countdown | Boolean | true | 是否显示倒计时 |
-
-### 事件
-
-| 事件名 | 说明 |
-|-------|-----|
-| tap | 点击任务时触发 |
-
-### 使用示例
-
-```html
-<upcoming-task 
-  wx:for="{{upcomingTasks}}" 
-  wx:key="id" 
-  task="{{item}}"
-  bind:tap="onUpcomingTaskTap">
-</upcoming-task>
-```
-
-## 浮动菜单组件 (float-menu)
-
-`components/float-menu/float-menu` 提供浮动操作菜单，常用于添加任务等操作。
-
-### 属性
+#### 属性
 
 | 属性名 | 类型 | 默认值 | 说明 |
-|------|------|-------|-----|
-| items | Array | [] | 菜单项数组，格式：[{icon: '图标路径', text: '文本', id: '唯一标识'}] |
-| position | String | 'bottom-right' | 位置，可选值：'bottom-right', 'bottom-left', 'top-right', 'top-left' |
-| mainIcon | String | - | 主按钮图标路径 |
-| mainText | String | '' | 主按钮文本 |
+|--------|------|--------|------|
+| visible | Boolean | false | 是否显示菜单 |
+| position | String | 'bottom-right' | 菜单位置：'bottom-right'/'bottom-left'/'top-right'/'top-left' |
+| items | Array | [] | 菜单项数组 |
 
-### 事件
+#### 事件
 
-| 事件名 | 说明 |
-|-------|-----|
-| itemTap | 点击菜单项时触发，detail包含item对象 |
-| mainTap | 点击主按钮时触发 |
+| 事件名 | 说明 | 参数 |
+|--------|------|------|
+| select | 选择菜单项时触发 | { item, index } |
+| close | 关闭菜单时触发 | - |
 
-### 使用示例
+#### 使用示例
 
 ```html
-<float-menu 
-  items="{{menuItems}}" 
+<!-- 浮动菜单 -->
+<floating-menu 
+  visible="{{showMenu}}"
   position="bottom-right"
-  mainIcon="/assets/icons/add.png"
-  mainText="添加"
-  bind:itemTap="onMenuItemTap"
-  bind:mainTap="onAddTap">
-</float-menu>
+  items="{{menuItems}}"
+  bind:select="onMenuSelect"
+  bind:close="onMenuClose">
+</floating-menu>
+
+<!-- 触发按钮 -->
+<view class="fab-button" bind:tap="toggleMenu">
+  <text class="icon">+</text>
+</view>
 ```
+
+#### JS处理示例
 
 ```javascript
-// 页面中准备数据
-onLoad() {
-  this.setData({
+Page({
+  data: {
+    showMenu: false,
     menuItems: [
-      { id: 'study', icon: '/assets/icons/study.png', text: '学习任务' },
-      { id: 'habit', icon: '/assets/icons/habit.png', text: '习惯任务' },
-      { id: 'interest', icon: '/assets/icons/interest.png', text: '兴趣任务' }
+      { id: 'add-task', title: '添加任务', icon: 'task' },
+      { id: 'add-reward', title: '添加奖励', icon: 'gift' },
+      { id: 'view-stats', title: '查看统计', icon: 'chart' }
     ]
-  });
-},
-
-// 处理菜单点击
-onMenuItemTap(e) {
-  const item = e.detail.item;
-  wx.navigateTo({
-    url: `/pages/task-edit/task-edit?type=${item.id}`
-  });
-}
+  },
+  
+  toggleMenu() {
+    this.setData({ showMenu: !this.data.showMenu });
+  },
+  
+  onMenuSelect(e) {
+    const { item } = e.detail;
+    
+    switch (item.id) {
+      case 'add-task':
+        wx.navigateTo({ url: '/pages/task-edit/task-edit' });
+        break;
+      case 'add-reward':
+        wx.navigateTo({ url: '/pages/reward-edit/reward-edit' });
+        break;
+      case 'view-stats':
+        wx.navigateTo({ url: '/pages/statistics/statistics' });
+        break;
+    }
+    
+    this.setData({ showMenu: false });
+  },
+  
+  onMenuClose() {
+    this.setData({ showMenu: false });
+  }
+});
 ```
 
-## 日期选择器 (date-picker)
+### DatePicker - 日期选择器
 
-`components/date-picker/date-picker` 提供日期选择功能。
+提供日期选择功能的组件。
 
-### 属性
+#### 属性
 
 | 属性名 | 类型 | 默认值 | 说明 |
-|------|------|-------|-----|
-| value | String | '' | 当前选中日期，格式：YYYY-MM-DD |
-| mode | String | 'date' | 模式，可选值：'date'(日期)、'month'(月份) |
-| min | String | '' | 最小可选日期 |
-| max | String | '' | 最大可选日期 |
+|--------|------|--------|------|
+| value | String | '' | 当前选中的日期(YYYY-MM-DD) |
+| minDate | String | '' | 最小可选日期 |
+| maxDate | String | '' | 最大可选日期 |
+| placeholder | String | '请选择日期' | 占位符文本 |
 
-### 事件
+#### 事件
 
-| 事件名 | 说明 |
-|-------|-----|
-| change | 选择日期变化时触发，detail包含value(选中日期) |
+| 事件名 | 说明 | 参数 |
+|--------|------|------|
+| change | 日期改变时触发 | { value } |
 
-### 使用示例
+#### 使用示例
 
 ```html
+<!-- 基础日期选择器 -->
 <date-picker 
-  value="{{selectedDate}}" 
-  min="2023-01-01"
-  max="2023-12-31"
+  value="{{selectedDate}}"
   bind:change="onDateChange">
+</date-picker>
+
+<!-- 限制日期范围 -->
+<date-picker 
+  value="{{taskDate}}"
+  minDate="{{today}}"
+  maxDate="{{maxDate}}"
+  placeholder="选择任务日期"
+  bind:change="onTaskDateChange">
 </date-picker>
 ```
 
-```javascript
-// 处理日期变更
-onDateChange(e) {
-  const date = e.detail.value;
-  this.setData({ selectedDate: date });
-  this.loadTasksByDate(date);
-}
-```
+### UserSwitcher - 用户切换器
 
-## 星星日历组件 (star-calendar)
+提供用户角色切换功能的组件。
 
-`components/star-calendar/star-calendar` 展示每日获得星星的日历视图。
-
-### 属性
+#### 属性
 
 | 属性名 | 类型 | 默认值 | 说明 |
-|------|------|-------|-----|
-| year | Number | 当前年 | 年份 |
-| month | Number | 当前月 | 月份(1-12) |
-| starData | Array | [] | 星星数据，格式：[{date: '2023-06-01', stars: 5}] |
-| showControls | Boolean | true | 是否显示月份切换控件 |
+|--------|------|--------|------|
+| currentUser | String | 'child' | 当前用户ID |
+| users | Array | [] | 可选用户列表 |
 
-### 事件
+#### 事件
 
-| 事件名 | 说明 |
-|-------|-----|
-| dateSelect | 选择日期时触发，detail包含date(选中日期) |
-| monthChange | 月份变化时触发，detail包含year和month |
+| 事件名 | 说明 | 参数 |
+|--------|------|------|
+| switch | 切换用户时触发 | { userId, user } |
 
-### 使用示例
+#### 使用示例
 
 ```html
+<!-- 用户切换器 -->
+<user-switcher 
+  currentUser="{{currentUserId}}"
+  users="{{availableUsers}}"
+  bind:switch="onUserSwitch">
+</user-switcher>
+```
+
+#### JS处理示例
+
+```javascript
+Page({
+  data: {
+    currentUserId: 'child',
+    availableUsers: [
+      { id: 'child', name: '孩子', avatar: '/assets/child-avatar.png' },
+      { id: 'parent', name: '家长', avatar: '/assets/parent-avatar.png' }
+    ]
+  },
+  
+  onLoad() {
+    const userService = getApp().serviceManager.get('userService');
+    const currentUserId = userService.getCurrentUserId();
+    this.setData({ currentUserId });
+  },
+  
+  onUserSwitch(e) {
+    const { userId } = e.detail;
+    const userService = getApp().serviceManager.get('userService');
+    
+    const result = userService.switchUser(userId);
+    if (result.success) {
+      this.setData({ currentUserId: userId });
+      
+      // 刷新页面数据
+      this.refreshPageData();
+      
+      wx.showToast({
+        title: `已切换到${result.user.name}`,
+        icon: 'success'
+      });
+    }
+  }
+});
+```
+
+## 数据展示组件
+
+### StarCalendar - 星星日历
+
+显示星星获得历史的日历组件。
+
+#### 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|--------|------|--------|------|
+| year | Number | - | 显示年份 |
+| month | Number | - | 显示月份(1-12) |
+| data | Array | [] | 星星数据数组 |
+
+#### 事件
+
+| 事件名 | 说明 | 参数 |
+|--------|------|------|
+| dateSelect | 选择日期时触发 | { date, stars } |
+
+#### 使用示例
+
+```html
+<!-- 星星日历 -->
 <star-calendar 
-  year="{{currentYear}}" 
+  year="{{currentYear}}"
   month="{{currentMonth}}"
-  starData="{{monthStarData}}"
-  bind:dateSelect="onCalendarDateSelect"
-  bind:monthChange="onCalendarMonthChange">
+  data="{{starCalendarData}}"
+  bind:dateSelect="onDateSelect">
 </star-calendar>
 ```
 
-```javascript
-// 处理月份变更
-onCalendarMonthChange(e) {
-  const { year, month } = e.detail;
-  this.setData({
-    currentYear: year,
-    currentMonth: month
-  });
-  this.loadMonthStarData(year, month);
-},
+#### JS处理示例
 
-// 加载月度星星数据
-loadMonthStarData(year, month) {
-  const starService = getApp().serviceManager.getService('starService');
-  starService.getStarRecordsByMonth(year, month)
-    .then(records => {
-      // 转换为组件需要的格式
-      const starData = records.map(record => ({
-        date: dateUtils.formatDate(new Date(record.timestamp)),
-        stars: record.stars
-      }));
-      this.setData({ monthStarData: starData });
-    })
-    .catch(error => {
-      logger.error('StarCalendar', '加载星星数据失败', error);
+```javascript
+Page({
+  data: {
+    currentYear: new Date().getFullYear(),
+    currentMonth: new Date().getMonth() + 1,
+    starCalendarData: []
+  },
+  
+  onLoad() {
+    this.loadStarCalendarData();
+  },
+  
+  async loadStarCalendarData() {
+    const starService = getApp().serviceManager.get('starService');
+    const startDate = `${this.data.currentYear}-${String(this.data.currentMonth).padStart(2, '0')}-01`;
+    const endDate = `${this.data.currentYear}-${String(this.data.currentMonth).padStart(2, '0')}-31`;
+    
+    const records = await starService.getStarRecords('child', {
+      startDate,
+      endDate,
+      type: 'earn'
     });
-}
+    
+    // 处理数据格式
+    const calendarData = this.processStarRecords(records);
+    this.setData({ starCalendarData: calendarData });
+  },
+  
+  processStarRecords(records) {
+    const dataMap = {};
+    
+    records.forEach(record => {
+      const date = record.date;
+      if (!dataMap[date]) {
+        dataMap[date] = 0;
+      }
+      dataMap[date] += record.amount;
+    });
+    
+    return Object.keys(dataMap).map(date => ({
+      date,
+      stars: dataMap[date]
+    }));
+  },
+  
+  onDateSelect(e) {
+    const { date, stars } = e.detail;
+    wx.showToast({
+      title: `${date}: ${stars}颗星`,
+      icon: 'none'
+    });
+  }
+});
 ```
 
 ## 组件开发最佳实践
 
-### 1. 组件属性设置默认值
+### 1. 组件设计原则
 
 ```javascript
+// ✅ 推荐：单一职责，功能明确
+Component({
+  properties: {
+    task: Object,
+    showActions: Boolean
+  },
+  
+  methods: {
+    handleComplete() {
+      this.triggerEvent('complete', { task: this.data.task });
+    }
+  }
+});
+
+// ❌ 避免：功能过于复杂的组件
+Component({
+  // 包含太多不相关的功能
+});
+```
+
+### 2. 属性设计
+
+```javascript
+// ✅ 推荐：提供合理的默认值
 Component({
   properties: {
     type: {
       type: String,
-      value: 'default' // 设置默认值
+      value: 'default'
     },
-    percent: {
-      type: Number,
-      value: 0
+    showText: {
+      type: Boolean,
+      value: true
     }
   }
-})
+});
 ```
 
-### 2. 事件命名规范
-
-- 组件内事件处理函数使用 `_` 前缀
-- 通过triggerEvent向外通知父组件
+### 3. 事件处理
 
 ```javascript
-methods: {
-  _onItemTap() {
-    this.triggerEvent('tap', {
-      taskId: this.data.task.id,
-      task: this.data.task
-    });
+// ✅ 推荐：使用语义化的事件名
+Component({
+  methods: {
+    handleItemClick() {
+      this.triggerEvent('select', { 
+        item: this.data.item,
+        timestamp: Date.now()
+      });
+    }
   }
-}
+});
 ```
 
-### 3. 多使用插槽实现灵活布局
+### 4. 样式隔离
 
 ```javascript
+// 组件JS中启用样式隔离
 Component({
   options: {
-    multipleSlots: true // 启用多插槽支持
-  },
-  
-  properties: {
-    // ...
+    styleIsolation: 'isolated'
   }
-})
+});
 ```
 
-```html
-<!-- 组件模板 -->
-<view class="card">
-  <view class="header">
-    <slot name="header"></slot>
-  </view>
-  <view class="body">
-    <slot></slot>
-  </view>
-  <view class="footer">
-    <slot name="footer"></slot>
-  </view>
-</view>
-
-<!-- 使用方式 -->
-<my-card>
-  <view slot="header">标题</view>
-  <view>内容</view>
-  <view slot="footer">底部</view>
-</my-card>
-```
-
-### 4. 组件与领域服务交互
-
-为保持组件的纯粹性，组件不应直接调用领域服务，而应该通过事件向上传递，由页面处理：
+### 5. 性能优化
 
 ```javascript
-// 组件中
-methods: {
-  _onCompleteTap() {
-    this.triggerEvent('complete', {
-      taskId: this.data.task.id
-    });
+// ✅ 推荐：使用数据监听器优化性能
+Component({
+  observers: {
+    'task.status': function(status) {
+      // 只在状态变化时更新UI
+      this.updateStatusDisplay(status);
+    }
   }
-}
-
-// 页面中
-onTaskComplete(e) {
-  const taskId = e.detail.taskId;
-  const taskService = getApp().serviceManager.getService('taskService');
-  taskService.completeTask(taskId)
-    .then(/* 处理结果 */)
-    .catch(/* 处理错误 */);
-}
+});
 ```
 
-### 5. 组件样式遵循设计规范
+---
 
-所有组件样式应遵循全局设计规范，保持视觉一致性：
-
-```css
-/* 组件样式文件 */
-.card {
-  border-radius: 16rpx;           /* 统一的圆角 */
-  padding: 30rpx;                 /* 统一的内边距 */
-  box-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.1); /* 统一的阴影效果 */
-}
-
-.button {
-  height: 90rpx;                  /* 统一的按钮高度 */
-  border-radius: 8rpx;            /* 统一的按钮圆角 */
-}
-``` 
+**文档维护者**：开发团队  
+**最后更新**：2024年12月  
+**版本**：v3.0 

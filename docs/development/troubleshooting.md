@@ -1,446 +1,471 @@
-# 常见问题排查指南
+# 问题排查指南
 
-本文档提供了项目开发和运行中可能遇到的常见问题及其解决方案。
+本文档提供学习任务微信小程序常见问题的排查方法和解决方案，基于当前的DDD架构设计。
 
-## 小程序启动与性能问题
+## 架构相关问题
 
-### 小程序启动缓慢
+### ServiceManager相关问题
 
-**现象**: 小程序冷启动时间超过3秒
+#### 问题：服务获取失败
+**现象**：调用`serviceManager.get('serviceName')`返回undefined
 
-**可能原因**:
-- `app.js` 中初始化逻辑过重
-- 首页加载了大量不必要的数据
-- 缓存过大导致初始化延迟
-
-**解决方案**:
-1. 检查 `app.js` 中是否存在同步大量数据的操作
-2. 采用异步加载模式，将非必要初始化移至 `app.onShow` 或首页的 `onReady`
-3. 清理过期缓存，实现自动清理机制
-4. 使用 `wx.preloadComponents` 预加载频繁使用的组件
-
+**排查步骤**：
+1. 检查ServiceManager是否正确初始化
 ```javascript
-// 示例：优化初始化逻辑
-App({
-  onLaunch: function() {
-    // 只保留必要的同步初始化
-    this.initCriticalSync();
-    
-    // 延迟执行非关键初始化
-    setTimeout(() => {
-      this.initNonCritical();
-    }, 500);
-  },
+// 在app.js中确认
+console.log('ServiceManager状态:', this.serviceManager);
+```
+
+2. 检查服务名称是否正确
+```javascript
+// 可用的服务名称
+const availableServices = [
+  'taskService',
+  'starService', 
+  'rewardService',
+  'messageService',
+  'userService'
+];
+```
+
+**解决方案**：
+- 确保在app.js中正确初始化ServiceManager
+- 使用正确的服务名称
+- 检查服务是否在ServiceManager中注册
+
+#### 问题：服务循环依赖
+**现象**：服务初始化时出现循环依赖错误
+
+**解决方案**：
+```javascript
+// 在服务构造函数中不要直接注入其他服务
+class TaskService {
+  constructor() {
+    this.starService = null; // 延迟注入
+  }
   
-  initCriticalSync: function() {
-    // 关键初始化：用户登录状态等
-    console.log('[App] 执行关键初始化');
-  },
-  
-  initNonCritical: function() {
-    // 非关键初始化：统计数据、预加载等
-    console.log('[App] 执行非关键初始化');
+  // 通过init方法延迟注入依赖
+  init(serviceManager) {
+    this.starService = serviceManager.get('starService');
   }
-});
+}
 ```
 
-### 页面渲染卡顿
+### DDD架构问题
 
-**现象**: 列表滚动或切换页面时出现明显卡顿
+#### 问题：跨层级调用
+**现象**：页面直接调用Repository或直接实例化服务
 
-**可能原因**:
-- 频繁 `setData` 导致渲染阻塞
-- 列表渲染过多项目
-- 复杂计算阻塞主线程
-
-**解决方案**:
-1. 合并多次 `setData` 调用，减少渲染次数
-2. 使用虚拟列表，只渲染视口内元素
-3. 使用 `wx:if` 代替 `hidden` 控制大型组件显示
-4. 耗时计算使用分批处理，释放主线程
-
+**错误示例**：
 ```javascript
-// 示例：批量更新数据避免频繁setData
-Page({
-  updateMultipleItems: function() {
-    let updates = {};
-    
-    // 合并多个更新
-    updates['item1'] = this.calculateItem1();
-    updates['item2'] = this.calculateItem2();
-    updates['list'] = this.processListData();
-    
-    // 一次性更新
-    this.setData(updates);
-  }
-});
+// ❌ 错误：页面直接调用Repository
+const taskRepository = new TaskRepository();
+const tasks = await taskRepository.findAll();
+
+// ❌ 错误：直接实例化服务
+const taskService = new TaskService();
 ```
 
-## 数据处理问题
-
-### 数据不同步
-
-**现象**: 页面之间切换后数据状态不一致
-
-**可能原因**:
-- 缺少全局状态管理
-- 页面返回时未刷新数据
-- 编辑后未更新关联页面
-
-**解决方案**:
-1. 使用 `utils/stateManager.js` 管理全局状态
-2. 在 `onShow` 生命周期中刷新页面数据
-3. 添加页面通信机制，如全局事件总线
-
+**正确做法**：
 ```javascript
-// 示例：使用事件总线更新数据
-// app.js
-App({
-  onLaunch: function() {
-    this.globalData.eventBus = {
-      listeners: {},
-      on: function(event, callback) {
-        if (!this.listeners[event]) {
-          this.listeners[event] = [];
-        }
-        this.listeners[event].push(callback);
-      },
-      emit: function(event, data) {
-        const eventListeners = this.listeners[event];
-        if (eventListeners) {
-          eventListeners.forEach(callback => callback(data));
-        }
-      }
-    };
-  }
-});
-
-// 页面A：发送事件
-Page({
-  updateTask: function(task) {
-    const eventBus = getApp().globalData.eventBus;
-    // 更新后发送通知
-    eventBus.emit('taskUpdated', task);
-  }
-});
-
-// 页面B：监听事件
-Page({
-  onLoad: function() {
-    const eventBus = getApp().globalData.eventBus;
-    // 注册监听
-    eventBus.on('taskUpdated', this.handleTaskUpdate.bind(this));
-  },
-  handleTaskUpdate: function(task) {
-    // 更新页面显示
-    this.refreshTaskData();
-  }
-});
+// ✅ 正确：通过ServiceManager获取服务
+const taskService = getApp().serviceManager.get('taskService');
+const result = await taskService.getAllTasks();
 ```
 
-### 数据存储异常
+## 数据存储问题
 
-**现象**: 数据保存后无法正确读取或丢失
+### 存储数据丢失
 
-**可能原因**:
-- 超出存储限制（微信小程序单个 key 存储上限为 1MB）
-- 存储格式不一致
-- 异步存储操作未正确处理回调
-
-**解决方案**:
-1. 大型数据分割存储，使用多个 key
-2. 统一使用 JSON 格式存储对象数据
-3. 为关键存储操作添加错误处理和日志
-4. 实现数据完整性检查机制
-
+#### 问题：数据保存后丢失
+**排查步骤**：
+1. 检查存储操作是否成功
 ```javascript
-// 示例：安全的数据存储和读取
-const saveData = (key, data, callback) => {
-  try {
-    console.log(`[Storage] 保存数据: ${key}, 大小: ${JSON.stringify(data).length} 字节`);
-    wx.setStorage({
-      key: key,
-      data: data,
-      success: function() {
-        console.log(`[Storage] 数据保存成功: ${key}`);
-        if (callback) callback(null);
-      },
-      fail: function(error) {
-        console.error(`[Storage] 数据保存失败: ${key}, 错误: ${error.errMsg}`);
-        if (callback) callback(error);
-      }
-    });
-  } catch (e) {
-    console.error(`[Storage] 数据处理异常: ${e.message}`);
-    if (callback) callback(e);
-  }
-};
+try {
+  await storageAdapter.set('tasks', tasks);
+  logger.info('Storage', '数据保存成功', { count: tasks.length });
+} catch (error) {
+  logger.error('Storage', '数据保存失败', error);
+}
 ```
 
-## UI与兼容性问题
-
-### 界面适配问题
-
-**现象**: 在某些设备上界面显示异常或元素错位
-
-**可能原因**:
-- 未使用响应式单位如 rpx
-- 固定高度导致在不同设备上显示异常
-- 没有考虑安全区域和刘海屏适配
-
-**解决方案**:
-1. 使用 rpx 单位适配不同屏幕
-2. 关键尺寸使用 `unit.js` 中的工具函数动态计算
-3. 使用 flex 布局代替固定尺寸
-4. 为异形屏添加安全区域适配
-
+2. 检查小程序存储限制
 ```javascript
-// 示例：自适应内容高度
-Page({
-  onLoad: function() {
-    const unit = require('../../utils/unit.js');
-    
-    // 获取内容区域高度
-    const contentHeight = unit.getContentHeight({
-      excludeNav: true,
-      excludeTabBar: true
-    });
-    
-    this.setData({
-      contentStyle: `height: ${contentHeight}px`
-    });
-  }
-});
-```
-
-### 横屏适配问题
-
-**现象**: 横屏模式下界面显示不正确
-
-**可能原因**:
-- 布局设计未考虑横屏模式
-- 元素位置固定，无法适应横屏
-
-**解决方案**:
-1. 监听设备方向变化并调整布局
-2. 为横屏模式设计专用布局
-3. 使用弹性布局适应横屏状态
-
-```javascript
-// 示例：监听屏幕方向变化
-Page({
-  onLoad: function() {
-    wx.onDeviceOrientationChange(this.handleOrientationChange);
-  },
-  
-  handleOrientationChange: function(res) {
-    console.log(`[Page] 屏幕方向变化: ${res.value}`);
-    
-    // 根据方向切换布局
-    if (res.value === 'landscape') {
-      this.setData({ isLandscape: true });
-    } else {
-      this.setData({ isLandscape: false });
+// 获取存储信息
+wx.getStorageInfo({
+  success: (res) => {
+    console.log('存储使用情况:', res);
+    if (res.currentSize > 8000) { // 接近10MB限制
+      logger.warn('Storage', '存储空间不足', res);
     }
-  },
-  
-  onUnload: function() {
-    // 清理监听
-    wx.offDeviceOrientationChange(this.handleOrientationChange);
   }
 });
 ```
+
+**解决方案**：
+- 定期清理过期数据
+- 使用数据压缩
+- 分批存储大量数据
+
+### 数据一致性问题
+
+#### 问题：星星数量与分组不一致
+**现象**：总星星数与分组中星星总和不匹配
+
+**排查方法**：
+```javascript
+// 使用StarService的数据一致性检查
+const starService = getApp().serviceManager.get('starService');
+const result = await starService.checkDataConsistency('child');
+console.log('数据一致性检查结果:', result);
+```
+
+**解决方案**：
+- 使用StarService提供的修复方法
+- 定期执行数据一致性检查
+- 在关键操作后验证数据状态
 
 ## 任务管理问题
 
-### 任务状态更新问题
+### 任务状态异常
 
-**现象**: 任务状态更新后未正确反映在界面上
-
-**可能原因**:
-- 状态更新后未触发界面刷新
-- 多个页面使用的任务数据未同步
-- 状态更新逻辑有误
-
-**解决方案**:
-1. 确保使用 `taskService.updateTaskStatus()` 更新任务状态，而不是直接修改任务对象
-
+#### 问题：任务完成后星星未增加
+**排查步骤**：
+1. 检查任务是否已经获得过星星
 ```javascript
-// 获取任务服务实例
-const taskService = getApp().serviceManager.getService('taskService');
-
-// 更新任务状态（正确方式）
-taskService.updateTaskStatus(taskId, newStatus)
-  .then((result) => {
-    if (result.success) {
-      console.log('任务状态更新成功');
-      // 更新界面
-    } else {
-      console.error('任务状态更新失败:', result.message);
-    }
-  })
-  .catch((error) => {
-    console.error('任务状态更新出错:', error);
-  });
-```
-
-### 重复任务生成问题
-
-**现象**: 重复任务生成异常或性能下降
-
-**可能原因**:
-- 重复任务逻辑错误导致无限生成
-- 一次性生成过多任务导致性能问题
-- 重复任务日期计算错误
-
-**解决方案**:
-1. 检查重复任务的终止条件是否正确
-2. 使用批量处理机制，分批创建重复任务
-3. 为重复任务添加合理的日期上限
-
-```javascript
-console.log(`[TaskService] 开始创建重复任务: ${dates.length}个`);
-
-// 获取任务服务实例
-const taskService = getApp().serviceManager.getService('taskService');
-
-// 批量处理功能
-async function processTasks() {
-  const batchSize = 50;
-  let tasksCreated = 0;
-  
-  for (let i = 0; i < dates.length; i += batchSize) {
-    const batch = dates.slice(i, i + batchSize);
-    console.log(`[TaskService] 处理批次 ${Math.floor(i/batchSize) + 1}: ${i}-${i+batch.length-1}`);
-    
-    // 创建批量任务实例
-    for (const date of batch) {
-      const taskCopy = {...originalTask, date};
-      try {
-        const result = await taskService.createTask(taskCopy);
-        if (result.success) {
-          tasksCreated++;
-        }
-      } catch (error) {
-        console.error(`[TaskService] 创建任务失败:`, error);
-      }
-    }
-    
-    // 等待一小段时间，避免阻塞UI
-    await new Promise(resolve => setTimeout(resolve, 50));
-  }
-  
-  console.log(`[TaskService] 重复任务创建完成: ${tasksCreated}/${dates.length}`);
+if (task.starAwarded) {
+  logger.warn('TaskService', '任务已经获得过星星', { taskId: task.id });
 }
-
-processTasks();
 ```
 
-## 组件通信问题
-
-### 组件事件触发失效
-
-**现象**: 组件事件无法正确传递到父页面
-
-**可能原因**:
-- 事件名称或参数格式不匹配
-- 父页面未正确绑定事件处理函数
-- 组件使用方式错误
-
-**解决方案**:
-1. 检查事件名称是否一致（区分大小写）
-2. 确保事件参数格式正确
-3. 使用事件冒泡机制处理深层组件事件
-
+2. 检查StarService是否正常工作
 ```javascript
-// 示例：正确的组件事件绑定
-<!-- 组件 WXML -->
-<view bindtap="onItemTap" data-id="{{item.id}}">{{item.title}}</view>
+const starService = getApp().serviceManager.get('starService');
+const result = await starService.addStars('child', 10, 'week', task.id, '测试');
+console.log('添加星星结果:', result);
+```
 
-// 组件 JS
-Component({
-  methods: {
-    onItemTap: function(e) {
-      const id = e.currentTarget.dataset.id;
-      console.log(`[Component] 项目点击: ${id}`);
-      
-      // 触发自定义事件
-      this.triggerEvent('itemSelect', {
-        itemId: id,
-        timestamp: Date.now()
-      });
+**解决方案**：
+- 重置task.starAwarded为false
+- 手动调用StarService添加星星
+- 检查任务完成流程的EventBus事件
+
+#### 问题：必做任务惩罚不生效
+**排查步骤**：
+1. 检查任务是否标记为必做
+```javascript
+console.log('任务必做状态:', task.isRequired);
+console.log('惩罚应用状态:', task.penaltyApplied);
+```
+
+2. 检查惩罚逻辑
+```javascript
+const taskService = getApp().serviceManager.get('taskService');
+const result = await taskService.checkRequiredTasks();
+console.log('必做任务检查结果:', result);
+```
+
+## 奖励兑换问题
+
+### 兑换失败
+
+#### 问题：星星足够但兑换失败
+**排查步骤**：
+1. 检查用户ID一致性
+```javascript
+const userService = getApp().serviceManager.get('userService');
+const currentUserId = userService.getCurrentUserId();
+console.log('当前用户ID:', currentUserId);
+
+const starService = getApp().serviceManager.get('starService');
+const balance = await starService.getStarBalance(currentUserId);
+console.log('星星余额:', balance);
+```
+
+2. 检查奖励状态
+```javascript
+const rewardService = getApp().serviceManager.get('rewardService');
+const reward = await rewardService.getRewardById(rewardId);
+console.log('奖励状态:', reward);
+```
+
+**常见原因**：
+- 用户ID不一致（parent vs child）
+- 奖励已被禁用或删除
+- 星星余额计算错误
+
+## 消息系统问题
+
+### 消息未显示
+
+#### 问题：系统消息创建但未显示
+**排查步骤**：
+1. 检查消息是否成功创建
+```javascript
+const messageService = getApp().serviceManager.get('messageService');
+const messages = await messageService.getAllMessages('child');
+console.log('所有消息:', messages);
+```
+
+2. 检查消息过滤条件
+```javascript
+const unreadMessages = await messageService.getUnreadMessages('child');
+console.log('未读消息:', unreadMessages);
+```
+
+## 性能问题
+
+### 页面卡顿
+
+#### 问题：大量数据处理导致界面卡顿
+**解决方案**：
+```javascript
+// 使用批量处理工具
+const batchUtils = require('../../utils/batchUtils');
+
+await batchUtils.batchProcess(
+  tasks,
+  (task) => this.processTask(task),
+  {
+    batchSize: 50,
+    delay: 10,
+    showProgress: true
+  }
+);
+```
+
+#### 问题：频繁setData导致性能问题
+**解决方案**：
+```javascript
+// 合并多次setData
+const updates = {};
+updates.tasks = newTasks;
+updates.loading = false;
+updates.lastUpdate = Date.now();
+
+this.setData(updates);
+```
+
+## 事件系统问题
+
+### EventBus事件未触发
+
+#### 问题：发布事件但监听器未响应
+**排查步骤**：
+1. 检查事件名称是否一致
+```javascript
+// 发布端
+eventBus.emit('task:completed', task);
+
+// 监听端
+eventBus.on('task:completed', this.handleTaskCompleted);
+```
+
+2. 检查监听器是否正确绑定
+```javascript
+// 确保this上下文正确
+eventBus.on('task:completed', this.handleTaskCompleted.bind(this));
+```
+
+3. 检查事件是否被取消订阅
+```javascript
+// 在页面onUnload中确保清理事件监听
+onUnload() {
+  const eventBus = getApp().eventBus;
+  eventBus.off('task:completed', this.handleTaskCompleted);
+}
+```
+
+## 日志和调试
+
+### 日志记录问题
+
+#### 问题：关键操作缺少日志
+**解决方案**：
+```javascript
+const logger = require('../../utils/logger');
+
+// 在关键操作点添加日志
+logger.info('TaskService', '开始创建任务', { taskData });
+
+try {
+  const result = await this.createTask(taskData);
+  logger.info('TaskService', '任务创建成功', { taskId: result.id });
+  return result;
+} catch (error) {
+  logger.error('TaskService', '任务创建失败', { taskData, error });
+  throw error;
+}
+```
+
+### 调试技巧
+
+#### 开发环境调试
+```javascript
+// 在app.js中设置调试模式
+App({
+  globalData: {
+    debugMode: true // 开发环境设为true
+  },
+  
+  onLaunch() {
+    if (this.globalData.debugMode) {
+      // 启用详细日志
+      console.log('调试模式已启用');
     }
   }
 });
+```
 
-<!-- 页面 WXML -->
-<custom-component bind:itemSelect="handleItemSelect"></custom-component>
-
-// 页面 JS
-Page({
-  handleItemSelect: function(e) {
-    const itemId = e.detail.itemId;
-    console.log(`[Page] 收到项目选择事件: ${itemId}`);
-    // 处理事件
-  }
+#### 生产环境问题排查
+```javascript
+// 使用logger记录关键信息
+logger.info('App', '应用启动', {
+  version: '1.0.0',
+  timestamp: Date.now(),
+  userAgent: wx.getSystemInfoSync()
 });
 ```
 
-### 跨页面组件通信
+## 常见错误代码
 
-**现象**: 不同页面上的组件无法通信或数据不同步
+### 错误码对照表
 
-**可能原因**:
-- 缺少跨页面通信机制
-- 页面切换导致数据丢失
-- 缺少共享状态
+| 错误码 | 说明 | 解决方案 |
+|--------|------|----------|
+| TASK_NOT_FOUND | 任务不存在 | 检查任务ID是否正确 |
+| INSUFFICIENT_STARS | 星星不足 | 检查用户星星余额 |
+| REWARD_NOT_AVAILABLE | 奖励不可用 | 检查奖励状态 |
+| USER_NOT_FOUND | 用户不存在 | 检查用户ID |
+| SERVICE_NOT_INITIALIZED | 服务未初始化 | 检查ServiceManager |
 
-**解决方案**:
-1. 使用 `app.globalData` 存储共享数据
-2. 实现全局事件总线
-3. 使用 `utils/stateManager.js` 的状态管理
+### 错误处理最佳实践
 
 ```javascript
-// 示例：使用stateManager实现组件通信
-// 组件A
-const stateManager = require('../../utils/stateManager.js');
-
-Component({
-  ready: function() {
-    // 订阅状态变化
-    stateManager.subscribe('sharedData', this.handleDataChange.bind(this));
-  },
-  
-  detached: function() {
-    // 取消订阅
-    stateManager.unsubscribe('sharedData', this.handleDataChange);
-  },
-  
-  methods: {
-    handleDataChange: function(newData) {
-      console.log(`[ComponentA] 收到数据更新: ${JSON.stringify(newData)}`);
-      this.setData({ localData: newData });
-    },
+// 统一错误处理格式
+async handleOperation() {
+  try {
+    const result = await this.performOperation();
+    return { success: true, data: result };
+  } catch (error) {
+    logger.error('ComponentName', '操作失败', {
+      operation: 'operationName',
+      error: error.message,
+      stack: error.stack
+    });
     
-    updateSharedData: function(data) {
-      // 更新共享状态
-      stateManager.setState('sharedData', data);
-    }
+    return { 
+      success: false, 
+      error: error.code || 'UNKNOWN_ERROR',
+      message: error.message || '操作失败，请重试'
+    };
   }
-});
+}
+```
 
-// 组件B
-Component({
-  ready: function() {
-    // 订阅同一状态
-    stateManager.subscribe('sharedData', this.onDataChanged.bind(this));
+## 紧急修复指南
+
+### 数据丢失恢复
+
+#### 紧急恢复任务数据
+```javascript
+// 在控制台执行数据恢复
+const taskService = getApp().serviceManager.get('taskService');
+const backupTasks = [
+  // 备份任务数据
+];
+
+for (const taskData of backupTasks) {
+  await taskService.createTask(taskData);
+}
+```
+
+#### 紧急重置星星数据
+```javascript
+const starService = getApp().serviceManager.get('starService');
+await starService.resetStarData('child');
+```
+
+### 服务重启
+
+#### 重启ServiceManager
+```javascript
+// 在app.js中重新初始化
+const serviceManager = require('./utils/service-manager');
+this.serviceManager = serviceManager;
+this.serviceManager.init();
+```
+
+## 预防性措施
+
+### 定期检查
+
+```javascript
+// 在app.js中添加定期检查
+App({
+  onLaunch() {
+    this.startHealthCheck();
   },
   
-  methods: {
-    onDataChanged: function(newData) {
-      console.log(`[ComponentB] 收到数据更新: ${JSON.stringify(newData)}`);
-      // 处理新数据
+  startHealthCheck() {
+    setInterval(() => {
+      this.checkSystemHealth();
+    }, 60000); // 每分钟检查一次
+  },
+  
+  async checkSystemHealth() {
+    try {
+      // 检查服务状态
+      const taskService = this.serviceManager.get('taskService');
+      const starService = this.serviceManager.get('starService');
+      
+      // 检查数据一致性
+      const consistencyResult = await starService.checkDataConsistency('child');
+      if (!consistencyResult.isConsistent) {
+        logger.warn('HealthCheck', '发现数据不一致', consistencyResult);
+      }
+      
+    } catch (error) {
+      logger.error('HealthCheck', '系统健康检查失败', error);
     }
   }
 });
-``` 
+```
+
+### 错误监控
+
+```javascript
+// 全局错误捕获
+App({
+  onError(error) {
+    logger.error('GlobalError', '全局错误', {
+      message: error,
+      timestamp: Date.now(),
+      stack: error.stack || 'No stack trace'
+    });
+    
+    // 发送错误报告（如果有错误收集服务）
+    this.reportError(error);
+  },
+  
+  reportError(error) {
+    // 实现错误报告逻辑
+  }
+});
+```
+
+## 联系支持
+
+如果遇到无法解决的问题，请提供以下信息：
+
+1. **问题描述**：详细描述问题现象
+2. **复现步骤**：提供问题复现的具体步骤
+3. **错误日志**：提供相关的日志信息
+4. **环境信息**：小程序版本、设备信息等
+5. **数据状态**：相关数据的当前状态
+
+---
+
+**文档维护者**：开发团队  
+**最后更新**：2024年12月  
+**版本**：v2.0 

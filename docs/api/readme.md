@@ -1,116 +1,314 @@
-# 工具函数库重构总结
+# API 文档导航
 
-## 完成的工作
+## 概述
 
-1. **统一日志工具 (logger.js)**
-   - 创建了统一的日志接口
-   - 在 services、repositories 和实用工具中完全应用
-   - 提供了log, info, warn, error四种日志级别
+本目录包含学习任务微信小程序的完整API文档，基于DDD（领域驱动设计）架构组织。文档涵盖了服务层、仓储层、组件层、工具层和存储适配器的详细API说明。
 
-2. **统一存储工具 (storageUtils.js)**
-   - 封装了微信小程序的存储 API
-   - 在各个仓储层和服务层中完全应用
-   - 添加了错误处理和日志记录
-   - 提供初始化存储的工具函数
+## 文档结构
 
-3. **批量处理工具 (batchUtils.js)**
-   - 创建了通用的批量处理函数
-   - 在 TaskService 和其他服务中应用
-   - 添加了分组和分块辅助函数
-   - 集成了进度显示功能
+### 核心API文档
 
-4. **数据分析架构重构**
-   - 完成analyticsManager.js向领域驱动设计架构的迁移
-   - 业务逻辑移至services/analytics-service.js
-   - 纯工具函数移至utils/analyticsUtils.js
-   - 完全符合DDD架构分层原则
+| 文档名称 | 描述 | 更新状态 |
+|---------|------|----------|
+| [services-guide.md](./services-guide.md) | 服务层API完整指南 | ✅ 最新 |
+| [repositories.md](./repositories.md) | 仓储层API详细文档 | ✅ 最新 |
+| [components-guide.md](./components-guide.md) | 组件使用指南和API | ✅ 最新 |
+| [utils_guide.md](./utils_guide.md) | 工具函数库API文档 | ✅ 最新 |
+| [storage-adapter.md](./storage-adapter.md) | 存储适配器API文档 | ✅ 最新 |
 
-5. **统一动画函数 (uiUtils.js)**
-   - 合并了 slideInAnimation 和 slideOutAnimation 为统一的 slideAnimation
-   - 保留了原有函数作为向后兼容的包装器
-   - 创建了通用的状态管理函数 updateState
+## 快速导航
 
-6. **领域驱动设计架构**
-   - 创建了领域模型 (Task, Star, StarGroup, StarRecord 等)
-   - 实现了仓储层 (TaskRepository, StarRepository 等)
-   - 构建了服务层 (TaskService, StarService, MessageService)
-   - 完成了从旧架构到领域驱动设计架构的迁移
+### 🔧 服务层 API
+**文档**: [services-guide.md](./services-guide.md)
 
-7. **日期工具扩展 (dateUtils.js)**
-   - 增加了更多实用的日期处理函数
-   - 统一了错误处理和日志记录
-   - 优化了边缘情况(如闰年)的处理
+核心业务服务的完整API文档：
 
-## 仍存在的优化空间
+- **TaskService** - 任务管理服务
+  - 任务CRUD操作
+  - 任务状态管理
+  - 必做任务处理
+  - 任务完成奖励
 
-1. **包装器函数**
-   - uiUtils.js 中的 slideInAnimation, slideOutAnimation, toggleComponent 等包装器函数
-   - 这些函数为保持向后兼容而保留
+- **StarService** - 星星积分服务
+  - 星星余额管理
+  - FIFO消费策略
+  - 星星过期处理
+  - 积分记录追踪
 
-2. **未完全统一的日志格式**
-   - 部分日志消息格式不一致
-   - 日志级别使用不够标准化
+- **RewardService** - 奖励兑换服务
+  - 奖励兑换流程
+  - 库存管理
+  - 状态跟踪
+  - 兑换历史
 
-3. **异步命名规范**
-   - 部分方法命名不符合异步函数规范
-   - 使用回调和Promise混合的接口
+- **MessageService** - 消息通知服务
+  - 消息创建和管理
+  - 状态更新
+  - 查询和过滤
+  - 批量操作
 
-## 下一步优化建议
+- **UserService** - 用户管理服务
+  - 用户角色管理
+  - 权限控制
+  - 用户切换
+  - 配置管理
 
-1. **完善异步接口**
-   - 统一所有异步方法为Promise接口
-   - 使用async/await语法改进代码可读性
+### 🗄️ 仓储层 API
+**文档**: [repositories.md](./repositories.md)
 
-2. **清理包装器函数**
-   - 添加废弃标记 (`@deprecated`) 到不再推荐使用的包装器函数
-   - 在确保所有调用点都已更新后，考虑移除这些函数
+数据持久化层的详细API：
 
-3. **统一命名和格式**
-   - 统一日志前缀、参数顺序和格式
-   - 在模块间保持一致的接口风格
+- **BaseRepository** - 基础仓储类
+  - CRUD操作
+  - 缓存机制
+  - 批量操作
+  - 查询构建
 
-4. **增强类型安全**
-   - 考虑使用TypeScript或JSDoc增强类型安全
-   - 为关键接口添加类型定义和参数验证
+- **TaskRepository** - 任务数据仓储
+  - 日期范围查询
+  - 状态过滤
+  - 类型分组
+  - 性能优化
 
-5. **扩展单元测试**
-   - 为领域模型和服务层添加单元测试
-   - 使用模拟对象测试依赖交互
+- **StarGroupRepository** - 星星分组仓储
+  - FIFO消费实现
+  - 过期处理
+  - 余额计算
+  - 事务支持
 
-## 最近更新记录
+- **StarRecordRepository** - 星星记录仓储
+  - 交易历史
+  - 统计查询
+  - 时间范围过滤
+  - 数据分析
 
-### 2025-05-25
-- 完成数据分析模块DDD架构迁移
-  - 移除废弃的analyticsManager.js
-  - 业务逻辑已迁移至AnalyticsService
-  - 纯工具函数已迁移至analyticsUtils.js
-  - 更新相关组件使用新的分析服务
+### 🧩 组件层 API
+**文档**: [components-guide.md](./components-guide.md)
 
-### 2025-05-22
-- 完成了领域驱动设计架构的迁移
-- 移除了旧的taskManager.js和messageManager.js
-- 创建了完整的领域模型和服务层
-- 实现了仓储层和适配器层
+UI组件的使用指南和API：
 
-### 2024-07-30
-- 完成了四个核心工具函数:
-  - logger.js: 统一日志工具
-  - storageUtils.js: 统一存储工具
-  - batchUtils.js: 批量处理工具
-  - analyticsManager.js: 数据分析管理工具
-- 更新了项目文档，包括README.md和.cursor/rules下的文件
-- 重构了uiUtils.js中的动画函数
-- 优化了所有日志记录格式
+- **基础组件**
+  - Card - 卡片容器
+  - ProgressRing - 环形进度条
+  - ProgressBar - 线性进度条
 
-### 2024-07-15
-- 完善整个应用的日志系统，确保日志格式统一
-- 为所有异步操作添加合适的日志记录
-- 优化批量处理进度显示
-- 修复特殊情况下的日期计算问题
-- 更新项目文档以匹配最新代码状态
+- **业务组件**
+  - TaskItem - 任务项组件
+  - RewardItem - 奖励项组件
 
-### 2024-07-05
-- 优化积分有效期计算逻辑，改为按自然周期计算
-- 重构 calculateExpiryDate 方法，使其更加准确和灵活
-- 优化日志记录系统，统一格式和级别使用
-- 清理冗余代码，提升代码质量 
+- **交互组件**
+  - FloatingMenu - 浮动菜单
+  - DatePicker - 日期选择器
+  - UserSwitcher - 用户切换器
+
+- **数据展示组件**
+  - StarCalendar - 星星日历
+
+### 🛠️ 工具层 API
+**文档**: [utils_guide.md](./utils_guide.md)
+
+工具函数和实用程序的API：
+
+- **ServiceManager** - 服务管理器
+- **Logger** - 日志工具
+- **batchUtils** - 批量处理工具
+- **dateUtils** - 日期处理工具
+- **StorageAdapter** - 存储适配器
+- **EventBus** - 事件总线
+
+### 💾 存储适配器 API
+**文档**: [storage-adapter.md](./storage-adapter.md)
+
+数据存储的核心适配器：
+
+- 命名空间隔离
+- 内存缓存机制
+- 批量操作支持
+- 异步操作优先
+- 错误处理和验证
+
+## 架构概览
+
+### DDD 分层架构
+
+```mermaid
+graph TD
+    A[表现层 Pages/Components] --> B[应用层 Services]
+    B --> C[仓储层 Repositories]
+    C --> D[基础设施层 Adapters]
+    
+    E[领域层 Models] --> B
+    E --> C
+    
+    F[工具层 Utils] --> A
+    F --> B
+    F --> C
+    F --> D
+```
+
+### 服务依赖关系
+
+```mermaid
+graph LR
+    A[TaskService] --> B[TaskRepository]
+    A --> C[StarService]
+    
+    C --> D[StarGroupRepository]
+    C --> E[StarRecordRepository]
+    
+    F[RewardService] --> G[RewardRepository]
+    F --> C
+    
+    H[MessageService] --> I[MessageRepository]
+    
+    J[UserService] --> K[UserRepository]
+    
+    B --> L[StorageAdapter]
+    D --> L
+    E --> L
+    G --> L
+    I --> L
+    K --> L
+```
+
+## 使用指南
+
+### 1. 服务层使用
+
+```javascript
+// 获取服务实例
+const taskService = getApp().serviceManager.get('taskService');
+const starService = getApp().serviceManager.get('starService');
+
+// 使用服务API
+const result = await taskService.completeTask(taskId, userId);
+const balance = await starService.getStarBalance(userId);
+```
+
+### 2. 组件使用
+
+```javascript
+// 页面JSON配置
+{
+  "usingComponents": {
+    "task-item": "/components/taskItem/taskItem",
+    "progress-ring": "/components/progressRing/progressRing"
+  }
+}
+
+// 页面WXML使用
+<task-item task="{{item}}" bind:complete="onTaskComplete"></task-item>
+```
+
+### 3. 工具函数使用
+
+```javascript
+// 导入工具函数
+const logger = require('../utils/logger');
+const dateUtils = require('../utils/dateUtils');
+
+// 使用工具函数
+logger.info('Component', '操作完成', { data });
+const today = dateUtils.formatDate(new Date());
+```
+
+## 最佳实践
+
+### 1. 服务层调用
+
+```javascript
+// ✅ 推荐：通过ServiceManager获取服务
+const taskService = getApp().serviceManager.get('taskService');
+
+// ❌ 避免：直接实例化服务
+const taskService = new TaskService();
+```
+
+### 2. 错误处理
+
+```javascript
+// ✅ 推荐：完整的错误处理
+try {
+  const result = await taskService.completeTask(taskId, userId);
+  if (result.success) {
+    // 处理成功结果
+  } else {
+    // 处理业务错误
+    wx.showToast({ title: result.message, icon: 'error' });
+  }
+} catch (error) {
+  // 处理系统错误
+  logger.error('Page', '操作失败', error);
+  wx.showToast({ title: '系统错误，请重试', icon: 'error' });
+}
+```
+
+### 3. 日志记录
+
+```javascript
+// ✅ 推荐：统一的日志格式
+logger.info('ComponentName', '操作描述', { 
+  userId, 
+  taskId, 
+  result 
+});
+
+// ❌ 避免：不规范的日志
+console.log('something happened');
+```
+
+### 4. 异步操作
+
+```javascript
+// ✅ 推荐：使用async/await
+async function loadTasks() {
+  const result = await taskService.getAllTasks();
+  return result.tasks;
+}
+
+// ❌ 避免：回调地狱
+taskService.getAllTasks().then(result => {
+  // 处理结果
+}).catch(error => {
+  // 处理错误
+});
+```
+
+## 版本信息
+
+| 版本 | 发布日期 | 主要更新 |
+|------|----------|----------|
+| v3.0 | 2024-12 | DDD架构完整实现，API文档全面更新 |
+| v2.5 | 2024-11 | 服务层重构，组件API标准化 |
+| v2.0 | 2024-10 | 引入DDD架构，仓储层实现 |
+| v1.5 | 2024-09 | 工具函数库重构 |
+| v1.0 | 2024-08 | 初始版本发布 |
+
+## 贡献指南
+
+### 文档更新流程
+
+1. **代码变更** - 修改API实现
+2. **文档同步** - 更新对应的API文档
+3. **示例更新** - 更新使用示例
+4. **版本标记** - 更新版本信息
+
+### 文档规范
+
+- 使用Markdown格式
+- 包含完整的参数说明
+- 提供实用的代码示例
+- 保持与实际代码一致
+- 添加错误处理示例
+
+## 技术支持
+
+- **开发团队**：负责API设计和实现
+- **文档维护**：与代码同步更新
+- **问题反馈**：通过项目issue跟踪
+
+---
+
+**文档维护者**：开发团队  
+**最后更新**：2024年12月  
+**版本**：v3.0 

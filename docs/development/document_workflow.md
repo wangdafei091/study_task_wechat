@@ -1,218 +1,471 @@
-# API文档更新工作流
+# 文档维护工作流
 
-本文档详细描述了在代码变更时，如何同步更新API文档的工作流程，确保文档与代码保持一致。
+## 概述
 
-## 文档更新原则
+本文档定义了学习任务微信小程序的文档维护工作流程，确保文档与代码保持同步，为开发团队提供准确、及时的技术文档。
 
-1. **同步更新**：代码变更必须伴随文档更新，不允许滞后
-2. **完整性**：文档应包含函数签名、参数说明、返回值和使用示例
-3. **准确性**：示例代码必须能够直接运行，不能有语法或逻辑错误
-4. **追踪性**：记录重要API的变更历史，便于了解演进过程
+## 文档维护原则
+
+### 1. 同步更新原则
+- **代码先行**：代码实现完成后立即更新文档
+- **零滞后**：不允许文档更新滞后于代码发布
+- **完整覆盖**：所有公共API都必须有对应文档
+
+### 2. 质量保证原则
+- **准确性**：文档内容必须与实际代码实现一致
+- **可执行性**：示例代码必须能够直接运行
+- **完整性**：包含完整的参数、返回值和错误处理说明
+
+### 3. 用户友好原则
+- **实用性**：提供实际开发中的使用场景
+- **渐进性**：从基础用法到高级特性的渐进式介绍
+- **可搜索性**：使用清晰的标题和关键词
+
+## 文档结构与职责
+
+### 文档分类
+
+| 文档类型 | 位置 | 职责 | 更新频率 |
+|---------|------|------|----------|
+| API文档 | `docs/api/` | 详细的API使用说明 | 代码变更时 |
+| 架构文档 | `docs/architecture/` | 系统设计和架构说明 | 架构调整时 |
+| 开发文档 | `docs/development/` | 开发流程和规范 | 流程变更时 |
+| 用户文档 | `docs/user/` | 用户使用指南 | 功能发布时 |
+
+### DDD架构对应的文档
+
+```mermaid
+graph TD
+    A[领域层 Models] --> B[docs/architecture/domain-model-architecture.md]
+    C[应用层 Services] --> D[docs/api/services-guide.md]
+    E[仓储层 Repositories] --> F[docs/api/repositories.md]
+    G[基础设施层 Adapters] --> H[docs/api/storage-adapter.md]
+    I[表现层 Components] --> J[docs/api/components-guide.md]
+    K[工具层 Utils] --> L[docs/api/utils_guide.md]
+```
 
 ## 更新工作流
 
-### 1. 新增API时
+### 1. 新增功能时的文档流程
 
-**步骤1**: 在实现代码的同时编写API文档
+#### 步骤1：代码实现阶段
 ```javascript
+// 在代码中添加完整的JSDoc注释
 /**
- * 函数名称
- * @param {Type} paramName - 参数说明
- * @returns {Type} 返回值说明
- * @description 函数详细说明
+ * 完成任务并分配星星奖励
+ * @param {string} taskId - 任务ID
+ * @param {string} userId - 用户ID
+ * @returns {Promise<{success: boolean, starReward?: number, message?: string}>}
+ * @throws {Error} 当任务不存在或用户无权限时抛出错误
  * @example
- * // 使用示例
- * const result = functionName(param);
+ * const result = await taskService.completeTask('task_123', 'child');
+ * if (result.success) {
+ *   console.log(`获得${result.starReward}颗星`);
+ * }
  */
+async completeTask(taskId, userId) {
+  // 实现代码
+}
 ```
 
-**步骤2**: 在对应的API文档中添加新条目
-- 工具函数：在 `docs/api/utils_guide.md` 中添加
-- 组件：在 `docs/api/components-guide.md` 中添加
-- 服务：在 `docs/api/services-guide.md` 中添加
+#### 步骤2：更新对应API文档
+根据代码所属层级更新相应文档：
 
-**步骤3**: 提交代码时在commit消息中注明文档更新
-```
-feat: 添加XX功能并更新对应文档
-```
+- **服务层新增**：更新 `docs/api/services-guide.md`
+- **仓储层新增**：更新 `docs/api/repositories.md`
+- **组件新增**：更新 `docs/api/components-guide.md`
+- **工具函数新增**：更新 `docs/api/utils_guide.md`
 
-### 2. 修改API时
+#### 步骤3：更新架构文档（如需要）
+如果新功能涉及架构变更：
+- 更新 `docs/architecture/system_architecture.md`
+- 更新相关的流程图和架构图
 
-**步骤1**: 确定变更影响范围
-- 收集所有使用该API的地方
-- 评估是否是破坏性变更，是否需要迁移策略
+#### 步骤4：提交代码
+```bash
+git commit -m "feat(TaskService): 添加completeTask方法并更新API文档
 
-**步骤2**: 更新API文档
-- 修改函数签名、参数和返回值说明
-- 更新使用示例
-- 添加变更说明和迁移指南（如果有破坏性变更）
-
-**步骤3**: 更新代码中的JSDoc注释
-- 确保代码中的注释与文档一致
-
-**步骤4**: 在文档末尾的更新历史中记录重要变更
-```
-## 更新历史
-
-| 日期 | 版本 | 说明 |
-| --- | --- | --- |
-| 2023-06-01 | v1.0 | 初始版本 |
-| 2023-07-15 | v1.1 | 新增参数X用于支持功能Y |
+- 新增任务完成功能，支持星星奖励分配
+- 更新services-guide.md中TaskService部分
+- 添加完整的使用示例和错误处理说明"
 ```
 
-### 3. 废弃API时
+### 2. 修改现有API时的文档流程
 
-**步骤1**: 在代码中添加废弃标记
+#### 步骤1：影响分析
+```javascript
+// 分析变更影响
+const changeAnalysis = {
+  breakingChange: true, // 是否为破坏性变更
+  affectedFiles: [     // 受影响的文件
+    'pages/index/index.js',
+    'pages/tasks/tasks.js'
+  ],
+  migrationRequired: true // 是否需要迁移指南
+};
+```
+
+#### 步骤2：更新文档
+```markdown
+## completeTask(taskId, userId, options) - v2.0
+
+> ⚠️ **破坏性变更**：从v2.0开始，第三个参数`options`为必需参数
+
+**变更说明**：
+- v1.x: `completeTask(taskId, userId)`
+- v2.0+: `completeTask(taskId, userId, options)`
+
+**迁移指南**：
+```javascript
+// v1.x 用法
+await taskService.completeTask('task_123', 'child');
+
+// v2.0+ 用法
+await taskService.completeTask('task_123', 'child', { 
+  autoReward: true 
+});
+```
+
+#### 步骤3：版本标记
+在文档中添加版本信息：
+```markdown
+| 版本 | 变更内容 | 迁移指南 |
+|------|----------|----------|
+| v2.0 | 添加options参数 | [迁移指南](#migration-v2) |
+| v1.0 | 初始版本 | - |
+```
+
+### 3. 废弃API时的文档流程
+
+#### 步骤1：代码标记
 ```javascript
 /**
- * @deprecated 从v2.0起废弃，请使用newFunction()代替
+ * @deprecated 从v3.0起废弃，请使用completeTaskWithReward()代替
+ * @see completeTaskWithReward
  */
+async completeTask(taskId, userId) {
+  logger.warn('TaskService', 'completeTask方法已废弃，请使用completeTaskWithReward');
+  return this.completeTaskWithReward(taskId, userId, { autoReward: true });
+}
 ```
 
-**步骤2**: 在API文档中添加废弃警告
-- 明确标记为已废弃
-- 提供替代方案和迁移路径
-- 如果可能，保留一段时间的向后兼容性
+#### 步骤2：文档更新
+```markdown
+## ~~completeTask~~ (已废弃)
 
-**步骤3**: 添加到废弃API列表
-- 在文档的"废弃API"部分添加条目
-- 标明废弃时间和替代方案
+> ⚠️ **已废弃**：此方法从v3.0起废弃，将在v4.0中移除
 
-## 文档审查流程
+**替代方案**：使用 `completeTaskWithReward()` 方法
 
-### 1. 自检清单
+**迁移示例**：
+```javascript
+// 废弃用法
+await taskService.completeTask(taskId, userId);
 
-每次更新文档前，请检查以下项目：
-- [ ] 函数签名是否正确
-- [ ] 所有参数是否有说明
-- [ ] 返回值是否有说明
-- [ ] 是否提供了有效的使用示例
-- [ ] 示例代码是否通过测试
-- [ ] 是否记录了重要变更
+// 推荐用法
+await taskService.completeTaskWithReward(taskId, userId, { autoReward: true });
+```
+```
 
-### 2. 同行评审
+## 文档质量保证
 
-- 代码审查时必须包含文档审查
-- 重点关注文档与代码实现的一致性
-- 检查示例是否符合最佳实践
+### 1. 自动化检查
 
-### 3. 定期文档测试
+#### 文档链接检查
+```bash
+# 检查文档中的内部链接是否有效
+npm run docs:check-links
+```
 
-- 每季度对文档中的示例代码进行测试
-- 使用自动化工具提取并执行示例代码
-- 更新过时的示例
+#### 示例代码验证
+```bash
+# 提取并验证文档中的代码示例
+npm run docs:validate-examples
+```
 
-## 常见问题与解决方案
+### 2. 人工审查清单
 
-### 1. 文档与代码不一致怎么办？
+#### 内容审查
+- [ ] API签名是否正确
+- [ ] 参数类型和说明是否完整
+- [ ] 返回值说明是否准确
+- [ ] 错误处理是否有说明
+- [ ] 示例代码是否可运行
 
-- 立即更新文档以匹配当前代码
-- 在下次迭代中添加测试确保文档示例可运行
-- 考虑添加自动化文档生成工具
+#### 格式审查
+- [ ] Markdown格式是否正确
+- [ ] 代码块语法高亮是否正确
+- [ ] 表格格式是否规范
+- [ ] 链接是否有效
 
-### 2. API变更太频繁，文档难以维护怎么办？
+#### 架构一致性审查
+- [ ] 是否符合DDD分层原则
+- [ ] 服务调用方式是否正确
+- [ ] 错误处理模式是否一致
 
-- 考虑稳定核心API，减少破坏性变更
-- 使用版本控制，明确标记不同版本的API行为
-- 将示例代码放在单独文件中，便于测试和更新
+### 3. 定期维护
 
-### 3. 如何确保文档持续更新？
+#### 季度文档审计
+```javascript
+// 文档审计检查项
+const auditChecklist = {
+  apiCoverage: '检查所有公共API是否有文档',
+  exampleValidity: '验证所有示例代码是否可运行',
+  linkIntegrity: '检查所有内部和外部链接',
+  versionConsistency: '确保版本信息一致',
+  architectureAlignment: '确保文档与当前架构一致'
+};
+```
 
-- 将文档更新纳入代码审查流程
-- 定期进行文档审计
-- 考虑使用工具检测未文档化的公共API
+#### 文档性能监控
+- 跟踪文档访问频率
+- 收集开发者反馈
+- 识别需要改进的文档部分
 
 ## 文档模板
 
-### 工具函数文档模板
+### 服务层API模板
 
 ```markdown
-## 函数名称
+### ServiceName.methodName(param1, param2)
 
-`functionName(param1, param2)`
+**描述**：方法功能的简要说明
 
-**说明**: 函数功能的简要说明。
+**参数**：
+- `param1` *{Type}* - 参数1的详细说明
+- `param2` *{Type}* - 参数2的详细说明
 
-**参数**:
-- `param1` {Type}: 参数1的说明
-- `param2` {Type}: 参数2的说明
+**返回值**：
+- `Promise<{success: boolean, data?: any, message?: string}>` - 标准服务响应格式
 
-**返回值**: {Type} 返回值的说明
+**错误处理**：
+- 抛出 `ValidationError` 当参数验证失败时
+- 抛出 `NotFoundError` 当资源不存在时
 
-**示例**:
+**使用示例**：
 ```javascript
-// 使用示例
-const result = functionName('value1', 42);
-console.log(result);
-```
+// 基础用法
+const result = await serviceManager.get('serviceName').methodName(param1, param2);
+
+if (result.success) {
+  console.log('操作成功:', result.data);
+} else {
+  console.error('操作失败:', result.message);
+}
+
+// 错误处理
+try {
+  const result = await serviceManager.get('serviceName').methodName(param1, param2);
+  // 处理结果
+} catch (error) {
+  logger.error('ServiceName', '方法调用失败', error);
+  // 错误处理逻辑
+}
 ```
 
-### 组件文档模板
+**相关方法**：
+- [relatedMethod1](#relatedmethod1) - 相关方法说明
+- [relatedMethod2](#relatedmethod2) - 相关方法说明
+```
+
+### 组件API模板
 
 ```markdown
-## 组件名称
+### ComponentName
 
-**文件路径**: `components/componentName/componentName.js`
+**文件路径**：`components/componentName/componentName.js`
 
-**说明**: 组件的用途和功能概述。
+**描述**：组件的功能和用途说明
 
-**属性**:
-- `prop1` {Type} [默认值]: 属性1的说明
-- `prop2` {Type} [默认值]: 属性2的说明
+**属性**：
+| 属性名 | 类型 | 默认值 | 必需 | 说明 |
+|--------|------|--------|------|------|
+| prop1 | String | '' | 是 | 属性1的说明 |
+| prop2 | Number | 0 | 否 | 属性2的说明 |
 
-**事件**:
-- `event1`: 事件1触发的条件和携带的数据
-- `event2`: 事件2触发的条件和携带的数据
+**事件**：
+| 事件名 | 参数 | 说明 |
+|--------|------|------|
+| tap | { detail: Object } | 点击时触发 |
+| change | { detail: { value } } | 值改变时触发 |
 
-**插槽**:
-- `default`: 默认插槽的用途
-- `named`: 命名插槽的用途
+**插槽**：
+- **default** - 默认内容区域
+- **header** - 头部区域
+- **footer** - 底部区域
 
-**使用示例**:
+**使用示例**：
 ```html
-<component-name
+<!-- 页面JSON配置 -->
+{
+  "usingComponents": {
+    "component-name": "/components/componentName/componentName"
+  }
+}
+
+<!-- 页面WXML使用 -->
+<component-name 
   prop1="value1"
-  prop2="value2"
-  bind:event1="onEvent1"
->
-  内容
+  prop2="{{numberValue}}"
+  bind:tap="onComponentTap"
+  bind:change="onComponentChange">
+  
+  <view slot="header">头部内容</view>
+  <view>默认内容</view>
+  <view slot="footer">底部内容</view>
 </component-name>
 ```
+
+```javascript
+// 页面JS处理
+Page({
+  data: {
+    numberValue: 42
+  },
+  
+  onComponentTap(e) {
+    console.log('组件被点击:', e.detail);
+  },
+  
+  onComponentChange(e) {
+    console.log('组件值改变:', e.detail.value);
+  }
+});
+```
 ```
 
-### 服务文档模板
+## 工具和自动化
+
+### 1. 文档生成工具
+
+```javascript
+// scripts/generate-docs.js
+const generateApiDocs = {
+  extractJSDoc: '从代码中提取JSDoc注释',
+  generateMarkdown: '生成Markdown格式的API文档',
+  validateExamples: '验证示例代码的正确性',
+  updateIndex: '更新文档索引和导航'
+};
+```
+
+### 2. 持续集成
+
+```yaml
+# .github/workflows/docs.yml
+name: Documentation
+on: [push, pull_request]
+jobs:
+  docs-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Check documentation
+        run: |
+          npm run docs:check-links
+          npm run docs:validate-examples
+          npm run docs:spell-check
+```
+
+### 3. 开发工具集成
+
+```json
+// .vscode/settings.json
+{
+  "markdown.extension.toc.updateOnSave": true,
+  "markdown.extension.preview.autoShowPreviewToSide": true,
+  "cSpell.words": ["TaskService", "StarService", "RewardService"]
+}
+```
+
+## 最佳实践
+
+### 1. 编写高质量文档
 
 ```markdown
-## 服务名称
+<!-- ✅ 好的文档示例 -->
+### completeTask(taskId, userId)
 
-**文件路径**: `services/serviceName.js`
+完成指定任务并为用户分配星星奖励。
 
-**说明**: 服务的职责和功能概述。
+**参数**：
+- `taskId` *{string}* - 任务的唯一标识符
+- `userId` *{string}* - 用户ID，支持'child'和'parent'
 
-**方法**:
-- `methodName(param)`: 方法的说明
-  - 参数: `param` {Type} - 参数说明
-  - 返回: {Type} 返回值说明
-  - 示例:
-    ```javascript
-    const result = serviceManager.getService('serviceName').methodName('value');
-    ```
+**返回值**：
+- `Promise<{success: boolean, starReward: number, message: string}>` 
 
-**依赖**:
-- 列出服务依赖的其他服务或组件
-
-**使用示例**:
+**示例**：
 ```javascript
-// 获取服务
-const service = serviceManager.getService('serviceName');
-
-// 调用方法
-service.methodName('value')
-  .then(result => {
-    console.log(result);
-  })
-  .catch(error => {
-    console.error(error);
-  });
+const result = await taskService.completeTask('task_123', 'child');
+if (result.success) {
+  wx.showToast({ title: `获得${result.starReward}颗星！` });
+}
 ```
-``` 
+
+<!-- ❌ 避免的文档示例 -->
+### completeTask
+完成任务
+```
+
+### 2. 保持文档同步
+
+```javascript
+// ✅ 推荐：在代码变更时立即更新文档
+const updateWorkflow = {
+  step1: '修改代码实现',
+  step2: '更新JSDoc注释',
+  step3: '更新API文档',
+  step4: '验证示例代码',
+  step5: '提交代码和文档'
+};
+
+// ❌ 避免：文档更新滞后
+const badWorkflow = {
+  step1: '修改代码实现',
+  step2: '提交代码',
+  step3: '稍后更新文档' // 容易被遗忘
+};
+```
+
+### 3. 用户导向的文档
+
+```markdown
+<!-- ✅ 以用户场景为导向 -->
+## 如何完成一个任务
+
+当用户完成学习任务时，系统需要：
+1. 验证任务状态
+2. 分配星星奖励
+3. 更新用户进度
+4. 发送完成通知
+
+```javascript
+// 完整的任务完成流程
+async function handleTaskCompletion(taskId) {
+  try {
+    const result = await taskService.completeTask(taskId, 'child');
+    
+    if (result.success) {
+      // 显示成功消息
+      wx.showToast({ title: `任务完成！获得${result.starReward}颗星` });
+      
+      // 刷新页面数据
+      this.refreshTaskList();
+    }
+  } catch (error) {
+    // 错误处理
+    wx.showToast({ title: '完成失败，请重试', icon: 'error' });
+  }
+}
+```
+
+<!-- ❌ 避免：纯技术性描述 -->
+## completeTask方法
+该方法用于完成任务，参数包括taskId和userId...
+```
+
+---
+
+**文档维护者**：开发团队  
+**最后更新**：2024年12月  
+**版本**：v3.0 

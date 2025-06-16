@@ -1,153 +1,808 @@
 # 编码规范
 
-本文档定义了学习任务微信小程序的编码规范和最佳实践，确保代码风格统一和质量一致。
+本文档定义了学习任务微信小程序的编码规范和最佳实践，基于领域驱动设计(DDD)架构，确保代码风格统一和质量一致。
+
+## 架构原则
+
+### DDD分层规范
+项目严格遵循领域驱动设计分层架构：
+
+```
+表现层(pages/components) → 应用层(services) → 基础设施层(repositories/adapters) → 领域层(models)
+```
+
+#### 分层职责
+- **领域层(models/)**：业务实体和规则，无外部依赖
+- **应用层(services/)**：业务用例和流程协调
+- **基础设施层(repositories/adapters/)**：数据持久化和外部接口
+- **表现层(pages/components/)**：用户界面和交互
+
+#### 依赖规则
+- 上层可以依赖下层，下层不能依赖上层
+- 领域层不依赖任何其他层
+- 通过ServiceManager访问服务，禁止直接实例化
+- 使用EventBus进行跨服务通信
 
 ## 命名规范
 
 ### 文件命名
 
-- 组件文件夹使用小驼峰命名：`taskItem`、`progressRing`
-- 工具类文件使用小驼峰命名：`dateUtils.js`、`formatUtils.js`
-- 领域模型使用小驼峰命名：`task.js`、`star.js`
-- 服务类文件使用烤串式命名：`task-service.js`、`message-service.js`
-- 仓储类文件使用烤串式命名：`task-repository.js`、`star-repository.js`
-- 页面文件夹使用中划线分隔：`task-edit`、`task-detail`
+```
+// DDD架构文件命名
+models/task.js                    // 领域模型：小驼峰命名
+services/task-service.js          // 服务类：烤串式命名
+repositories/task-repository.js   // 仓储类：烤串式命名
+adapters/storage-adapter.js       // 适配器：烤串式命名
 
-### 变量命名
+// 表现层文件命名
+pages/task-edit/                  // 页面：中划线分隔
+components/taskItem/              // 组件：小驼峰命名
+utils/dateUtils.js                // 工具类：小驼峰命名
+```
 
-- 变量名使用小驼峰命名：`taskList`、`currentUser`
-- 常量使用全大写下划线分隔：`MAX_TASK_COUNT`、`DEFAULT_DURATION`
-- 类名使用大驼峰命名：`TaskService`、`MessageService`、`Task`、`Star`
-- 布尔类型变量使用 `is`/`has` 前缀：`isCompleted`、`hasChildren`
+### 变量和函数命名
 
-### 函数命名
+```javascript
+// 变量命名 - 小驼峰
+const taskService = serviceManager.get('taskService');
+const currentUser = userService.getCurrentUser();
+const isCompleted = task.status === TaskStatus.COMPLETED;
 
-- 函数名使用小驼峰命名：`createTask`、`updateStatus`
-- 获取类函数使用 `get` 前缀：`getTasks`、`getRewards`
-- 设置类函数使用 `set` 前缀：`setTaskStatus`、`setUserInfo`
-- 检查类函数使用 `is`/`has`/`check` 前缀：`isTaskOverdue`、`hasUnreadMessages`
+// 常量命名 - 全大写下划线分隔
+const MAX_TASK_COUNT = 100;
+const DEFAULT_EXPIRY_TYPE = 'permanent';
+const TASK_TYPES = {
+  STUDY: 'study',
+  HABIT: 'habit',
+  INTEREST: 'interest'
+};
+
+// 类命名 - 大驼峰
+class TaskService {
+  async createTask(taskData) { }
+}
+
+class Task {
+  constructor(data) { }
+}
+
+// 函数命名 - 小驼峰，语义化前缀
+async getAllTasks()              // get前缀：获取
+async createTask(data)           // create前缀：创建
+async updateTaskStatus(id, status) // update前缀：更新
+async deleteTask(id)             // delete前缀：删除
+async checkRequiredTasks()       // check前缀：检查
+async handleTaskCompletion(task) // handle前缀：处理
+
+// 布尔类型使用is/has/can前缀
+isTaskCompleted(task)            // is前缀：状态判断
+hasUnreadMessages()              // has前缀：拥有判断
+canManageRewards(userId)         // can前缀：权限判断
+```
 
 ## 代码格式
 
 ### 缩进和空格
 
-- 使用2个空格进行缩进，不使用Tab
-- 运算符前后使用空格：`x + y`，而不是 `x+y`
-- 逗号后使用空格，逗号前不使用空格：`[1, 2, 3]`，而不是 `[1,2,3]` 或 `[1 , 2 , 3]`
-- 代码块的大括号放在同一行，并在结尾处添加空格：`if (condition) {`
-
-### 语句和行长度
-
-- 每行代码不超过100个字符
-- 语句结尾使用分号
-- 复合语句始终使用大括号：
-  ```javascript
-  if (condition) {
-    doSomething();
+```javascript
+// 使用2个空格缩进
+if (condition) {
+  const result = await processTask(task);
+  if (result.success) {
+    logger.info('TaskService', '任务处理成功', result);
   }
-  ```
-  而不是：
-  ```javascript
-  if (condition) doSomething();
-  ```
+}
 
-### 注释规范
+// 运算符前后使用空格
+const total = count + additional;
+const isValid = name && name.length > 0;
 
-- 函数使用JSDoc风格注释：
-  ```javascript
+// 逗号后使用空格
+const array = [1, 2, 3];
+const object = { a: 1, b: 2, c: 3 };
+
+// 对象和数组格式
+const taskData = {
+  title: '练习钢琴',
+  type: 'study',
+  points: 10
+};
+```
+
+### 函数和类定义
+
+```javascript
+// 服务类格式
+class TaskService {
+  constructor(dependencies) {
+    this.taskRepository = dependencies.taskRepository;
+    this.starService = dependencies.starService;
+    this.eventBus = dependencies.eventBus;
+  }
+
   /**
-   * 函数描述
-   * @param {Type} paramName - 参数描述
-   * @return {Type} 返回值描述
+   * 创建新任务
+   * @param {Object} taskData 任务数据
+   * @returns {Promise<{success: boolean, task?: Task, message?: string}>}
    */
-  ```
-- 复杂逻辑添加行内注释：`// 这里处理特殊情况...`
-- TODO项添加标记：`// TODO: 需要改进的地方...`
-- 临时代码添加标记：`// FIXME: 临时解决方案...`
+  async createTask(taskData) {
+    try {
+      // 验证数据
+      const validationResult = this._validateTaskData(taskData);
+      if (!validationResult.isValid) {
+        return { success: false, message: validationResult.message };
+      }
 
-## 组件规范
+      // 创建任务
+      const task = new Task(taskData);
+      const result = await this.taskRepository.save(task);
+
+      // 发布事件
+      this.eventBus.emit('task:created', task);
+      
+      logger.info('TaskService', '任务创建成功', { taskId: task.id });
+      return { success: true, task };
+    } catch (error) {
+      logger.error('TaskService', '任务创建失败', error);
+      return { success: false, message: '创建失败，请重试' };
+    }
+  }
+
+  // 私有方法以下划线开头
+  _validateTaskData(data) {
+    if (!data.title || data.title.trim().length === 0) {
+      return { isValid: false, message: '标题不能为空' };
+    }
+    return { isValid: true };
+  }
+}
+```
+
+## 注释规范
+
+### JSDoc风格注释
+
+```javascript
+/**
+ * 星星服务 - 管理星星积分系统
+ * 提供星星获得、消费、过期等完整生命周期管理
+ */
+class StarService {
+  /**
+   * 添加星星
+   * @param {string} userId - 用户ID
+   * @param {number} amount - 星星数量
+   * @param {string} expiryType - 有效期类型 (permanent/week/month/quarter)
+   * @param {string} sourceId - 来源ID
+   * @param {string} description - 描述信息
+   * @returns {Promise<{success: boolean, message?: string}>}
+   */
+  async addStars(userId, amount, expiryType, sourceId, description) {
+    // 实现代码
+  }
+}
+```
+
+### 行内注释
+
+```javascript
+// 检查任务是否为必做任务
+if (task.isRequired && !task.isCompleted) {
+  // 计算惩罚金额
+  const penaltyAmount = this._calculatePenalty(task);
+  
+  // TODO: 添加惩罚通知
+  // FIXME: 临时使用固定惩罚金额，后续需要配置化
+}
+```
+
+## 服务层规范
+
+### 服务定义
+
+```javascript
+// 服务类必须继承BaseService（如果有的话）
+class RewardService {
+  constructor() {
+    // 在构造函数中初始化依赖
+    this.rewardRepository = new RewardRepository();
+    this.starService = null; // 通过ServiceManager延迟注入
+    this.messageService = null;
+  }
+
+  // 服务初始化方法
+  init(serviceManager) {
+    this.starService = serviceManager.get('starService');
+    this.messageService = serviceManager.get('messageService');
+  }
+
+  // 业务方法返回统一格式
+  async claimReward(rewardId, userId) {
+    try {
+      const result = await this._performClaimReward(rewardId, userId);
+      return { success: true, ...result };
+    } catch (error) {
+      logger.error('RewardService', '奖励兑换失败', { rewardId, userId, error });
+      return { success: false, message: error.message || '兑换失败' };
+    }
+  }
+}
+```
+
+### 错误处理模式
+
+```javascript
+// 统一的错误处理模式
+async performOperation(data) {
+  try {
+    // 1. 参数验证
+    if (!this._validateInput(data)) {
+      return { success: false, message: '参数无效' };
+    }
+
+    // 2. 业务逻辑
+    const result = await this._executeBusinessLogic(data);
+    
+    // 3. 日志记录
+    logger.info('ServiceName', '操作成功', { data, result });
+    
+    // 4. 返回结果
+    return { success: true, result };
+  } catch (error) {
+    // 5. 错误处理
+    logger.error('ServiceName', '操作失败', { data, error });
+    return { success: false, message: this._getErrorMessage(error) };
+  }
+}
+```
+
+## 仓储层规范
+
+### 仓储类定义
+
+```javascript
+// 继承BaseRepository
+class TaskRepository extends BaseRepository {
+  constructor() {
+    super('tasks'); // 传入存储键名
+  }
+
+  // 特定查询方法
+  async findByDate(date) {
+    const allTasks = await this.findAll();
+    return allTasks.filter(task => task.date === date);
+  }
+
+  async findOverdueTasks() {
+    const allTasks = await this.findAll();
+    const today = dateUtils.getTodayString();
+    return allTasks.filter(task => 
+      task.date < today && 
+      task.status === TaskStatus.PENDING
+    );
+  }
+
+  // 覆盖基类方法时添加业务逻辑
+  async save(task) {
+    // 保存前验证
+    if (!task.id) {
+      task.id = this._generateId();
+    }
+    
+    task.updateTime = Date.now();
+    
+    // 调用基类方法
+    const result = await super.save(task);
+    
+    logger.info('TaskRepository', '任务保存成功', { taskId: task.id });
+    return result;
+  }
+}
+```
+
+## 领域模型规范
+
+### 模型定义
+
+```javascript
+// 领域模型类
+class Task {
+  constructor(data = {}) {
+    // 基础属性
+    this.id = data.id || null;
+    this.title = data.title || '';
+    this.description = data.description || '';
+    this.type = data.type || TaskType.STUDY;
+    this.status = data.status || TaskStatus.PENDING;
+    
+    // 时间属性
+    this.date = data.date || dateUtils.getTodayString();
+    this.startTime = data.startTime || '';
+    this.endTime = data.endTime || '';
+    
+    // 业务属性
+    this.points = data.points || 0;
+    this.pointsExpiry = data.pointsExpiry || 'permanent';
+    this.isRequired = data.isRequired || false;
+    this.penaltyApplied = data.penaltyApplied || false;
+    
+    // 时间戳
+    this.createTime = data.createTime || Date.now();
+    this.updateTime = data.updateTime || Date.now();
+  }
+
+  // 业务方法
+  complete() {
+    this.status = TaskStatus.COMPLETED;
+    this.completionTime = Date.now();
+    this.updateTime = Date.now();
+  }
+
+  reset() {
+    this.status = TaskStatus.PENDING;
+    this.completionTime = null;
+    this.updateTime = Date.now();
+  }
+
+  // 验证方法
+  isValid() {
+    return this.title && this.title.trim().length > 0;
+  }
+
+  // 计算属性
+  get isCompleted() {
+    return this.status === TaskStatus.COMPLETED;
+  }
+
+  get isOverdue() {
+    return this.date < dateUtils.getTodayString() && !this.isCompleted;
+  }
+}
+
+// 枚举定义
+const TaskType = {
+  STUDY: 'study',
+  HABIT: 'habit', 
+  INTEREST: 'interest'
+};
+
+const TaskStatus = {
+  PENDING: 0,
+  COMPLETED: 1
+};
+```
+
+## 页面和组件规范
+
+### 页面结构
+
+```javascript
+// 页面文件结构
+Page({
+  data: {
+    tasks: [],
+    loading: false,
+    error: null
+  },
+
+  // 生命周期
+  onLoad(options) {
+    // 获取服务引用
+    this.taskService = getApp().serviceManager.get('taskService');
+    this.messageService = getApp().serviceManager.get('messageService');
+    
+    // 初始化页面
+    this.initPage(options);
+  },
+
+  onShow() {
+    // 刷新数据
+    this.refreshData();
+  },
+
+  onUnload() {
+    // 清理资源
+    this.cleanup();
+  },
+
+  // 初始化方法
+  async initPage(options) {
+    try {
+      this.setData({ loading: true });
+      await this.loadTasks();
+    } catch (error) {
+      logger.error('TaskPage', '页面初始化失败', error);
+      this.setData({ error: '加载失败' });
+    } finally {
+      this.setData({ loading: false });
+    }
+  },
+
+  // 数据加载
+  async loadTasks() {
+    const result = await this.taskService.getAllTasks();
+    if (result.success) {
+      this.setData({ tasks: result.tasks });
+    }
+  },
+
+  // 事件处理
+  async handleTaskComplete(e) {
+    const { taskId } = e.currentTarget.dataset;
+    const result = await this.taskService.completeTask(taskId, 'child');
+    
+    if (result.success) {
+      wx.showToast({ title: '任务完成！', icon: 'success' });
+      this.refreshData();
+    } else {
+      wx.showToast({ title: result.message, icon: 'error' });
+    }
+  },
+
+  // 辅助方法
+  refreshData() {
+    this.loadTasks();
+  },
+
+  cleanup() {
+    // 清理事件监听器等
+  }
+});
+```
 
 ### 组件结构
 
-- 每个组件应包含四个文件：`.js`、`.wxml`、`.wxss` 和 `.json`
-- 组件对外暴露的属性和事件在 `properties` 和 `methods` 中定义
-- 复杂组件使用私有方法处理内部逻辑，方法名以 `_` 开头
+```javascript
+// 组件定义
+Component({
+  properties: {
+    task: {
+      type: Object,
+      value: null
+    },
+    showActions: {
+      type: Boolean,
+      value: true
+    }
+  },
 
-### 组件通信
+  data: {
+    loading: false
+  },
 
-- 使用属性传递父组件到子组件的数据
-- 使用事件传递子组件到父组件的数据：
-  ```javascript
-  this.triggerEvent('myEvent', { value: this.data.value });
-  ```
-- 复杂状态管理使用 `utils/stateManager.js`
+  lifetimes: {
+    attached() {
+      this.initComponent();
+    },
 
-## 工具类规范
+    detached() {
+      this.cleanup();
+    }
+  },
 
-### 模块导出
+  methods: {
+    initComponent() {
+      // 组件初始化
+    },
 
-- 工具类使用模块化设计，通过 `module.exports` 导出：
-  ```javascript
-  module.exports = {
-    fn1,
-    fn2
-  };
-  ```
+    // 事件处理方法以handle开头
+    handleComplete() {
+      this.triggerEvent('complete', { 
+        taskId: this.data.task.id 
+      });
+    },
+
+    handleEdit() {
+      this.triggerEvent('edit', { 
+        task: this.data.task 
+      });
+    },
+
+    // 私有方法以下划线开头
+    _updateDisplay() {
+      // 更新显示
+    },
+
+    cleanup() {
+      // 清理资源
+    }
+  }
+});
+```
+
+## 日志记录规范
+
+### 日志使用
+
+```javascript
+const logger = require('../../utils/logger');
+
+// 记录关键操作
+logger.info('TaskService', '任务创建开始', { taskData });
+logger.info('TaskService', '任务创建成功', { taskId: result.id });
+
+// 记录警告
+logger.warn('StarService', '星星余额不足', { 
+  required: amount, 
+  available: balance 
+});
+
+// 记录错误
+logger.error('RewardService', '奖励兑换失败', { 
+  rewardId, 
+  userId, 
+  error: error.message 
+});
+
+// 记录调试信息（仅在开发环境）
+logger.debug('TaskRepository', '查询条件', { date, status });
+```
+
+### 日志格式要求
+
+- 第一个参数：模块名称（服务名、页面名、组件名）
+- 第二个参数：操作描述（简洁明了）
+- 第三个参数：相关数据（对象格式，包含关键信息）
+
+## 性能优化规范
+
+### 数据处理
+
+```javascript
+// 批量处理大量数据
+await batchUtils.batchProcess(
+  tasks,
+  async (task) => {
+    await this.processTask(task);
+  },
+  {
+    batchSize: 50,
+    delay: 10,
+    showProgress: true
+  }
+);
+
+// 合并setData调用
+this.setData({
+  tasks: updatedTasks,
+  loading: false,
+  lastUpdate: Date.now()
+});
+
+// 避免频繁存储操作
+const operations = [];
+operations.push({ key: 'tasks', value: tasks });
+operations.push({ key: 'settings', value: settings });
+await storageAdapter.setMultiple(operations);
+```
 
 ### 异步处理
 
-- 所有异步操作使用回调函数或Promise处理
-- 避免回调地狱，使用链式调用或async/await模式
-- 异步操作添加错误处理：
-  ```javascript
-  function asyncOperation(param, callback) {
-    try {
-      // 操作
-      callback(null, result);
-    } catch (error) {
-      console.error(`[模块名] 操作失败: ${error.message}`);
-      callback(error);
+```javascript
+// 使用async/await
+async handleTaskCreation() {
+  try {
+    this.setData({ loading: true });
+    
+    const result = await this.taskService.createTask(taskData);
+    if (result.success) {
+      await this.refreshTasks();
+      this.showSuccess('任务创建成功');
+    } else {
+      this.showError(result.message);
+    }
+  } catch (error) {
+    logger.error('TaskPage', '任务创建异常', error);
+    this.showError('操作失败，请重试');
+  } finally {
+    this.setData({ loading: false });
+  }
+}
+
+// 使用setTimeout延迟非关键任务
+setTimeout(() => {
+  this.updateStatistics();
+}, 100);
+```
+
+## 事件处理规范
+
+### EventBus使用
+
+```javascript
+// 服务中发布事件
+class TaskService {
+  async completeTask(taskId, userId) {
+    const result = await this._performTaskCompletion(taskId, userId);
+    
+    if (result.success) {
+      // 发布领域事件
+      this.eventBus.emit('task:completed', {
+        task: result.task,
+        userId,
+        timestamp: Date.now()
+      });
+    }
+    
+    return result;
+  }
+}
+
+// 页面中订阅事件
+Page({
+  onLoad() {
+    const eventBus = getApp().eventBus;
+    
+    // 订阅任务完成事件
+    eventBus.on('task:completed', this.handleTaskCompleted.bind(this));
+  },
+
+  handleTaskCompleted(event) {
+    logger.info('TaskPage', '收到任务完成事件', event);
+    this.refreshData();
+  },
+
+  onUnload() {
+    // 取消订阅
+    const eventBus = getApp().eventBus;
+    eventBus.off('task:completed', this.handleTaskCompleted);
+  }
+});
+```
+
+## 测试规范
+
+### 单元测试
+
+```javascript
+// test/services/task-service.test.js
+describe('TaskService', () => {
+  let taskService;
+  let mockTaskRepository;
+  let mockStarService;
+
+  beforeEach(() => {
+    mockTaskRepository = {
+      save: jest.fn(),
+      findById: jest.fn()
+    };
+    
+    mockStarService = {
+      addStars: jest.fn().mockResolvedValue({ success: true })
+    };
+
+    taskService = new TaskService({
+      taskRepository: mockTaskRepository,
+      starService: mockStarService
+    });
+  });
+
+  test('应该成功创建任务', async () => {
+    const taskData = {
+      title: '测试任务',
+      type: 'study',
+      points: 10
+    };
+
+    mockTaskRepository.save.mockResolvedValue({ id: 'task_123' });
+
+    const result = await taskService.createTask(taskData);
+
+    expect(result.success).toBe(true);
+    expect(result.task.title).toBe('测试任务');
+    expect(mockTaskRepository.save).toHaveBeenCalled();
+  });
+});
+```
+
+## 最佳实践
+
+### 1. 架构遵循
+- 严格遵循DDD分层架构
+- 通过ServiceManager访问服务
+- 使用EventBus进行跨层通信
+- 保持领域模型的纯净性
+
+### 2. 代码质量
+- 统一的错误处理模式
+- 完善的日志记录
+- 合理的异步处理
+- 适当的性能优化
+
+### 3. 可维护性
+- 清晰的命名规范
+- 完整的注释文档
+- 模块化的代码组织
+- 充分的单元测试
+
+### 4. 开发效率
+- 复用通用组件和工具
+- 使用批量处理优化性能
+- 合理使用缓存机制
+- 及时的错误反馈
+
+## 权限控制规范
+
+### 基于角色的权限控制
+- **家长角色**：完整的管理权限（创建任务、设置奖励、用户管理）
+- **小朋友角色**：受限的操作权限（完成任务、兑换奖励、查看统计）
+- **双重保护**：UI层条件渲染 + 逻辑层权限验证
+
+### 权限检查实现
+
+```javascript
+// 权限检查方法
+isCurrentUserParent() {
+  return this.data.currentUser && this.data.currentUser.role === UserRole.PARENT;
+}
+
+// 逻辑层权限验证
+if (!this.isCurrentUserParent()) {
+  logger.warn('Component', '无权限执行操作: 当前用户非家长');
+  wx.showToast({
+    title: '只有家长可以执行此操作',
+    icon: 'error'
+  });
+  return;
+}
+```
+
+### UI层权限控制
+
+```xml
+<!-- 条件渲染控制权限 -->
+<view class="admin-section" wx:if="{{currentUser.role === 'parent'}}">
+  <!-- 管理功能 -->
+</view>
+
+<!-- 权限提示 -->
+<view class="permission-tip" wx:else>
+  请切换到家长账号进行管理操作
+</view>
+```
+
+### 权限控制最佳实践
+
+1. **UI层隐藏**：使用`wx:if`条件渲染隐藏无权限功能
+2. **逻辑层验证**：方法内部进行权限检查，防止直接调用
+3. **友好提示**：权限不足时给出明确的提示信息
+4. **日志记录**：记录权限检查和违规操作尝试
+5. **向后兼容**：权限控制不影响现有接口和调用方式
+
+### 权限控制示例
+
+```javascript
+// 组件权限控制示例
+Component({
+  methods: {
+    // 管理操作前检查权限
+    deleteUser(e) {
+      if (!this.isCurrentUserParent()) {
+        logger.warn('UserSwitcher', '无权限执行删除操作');
+        wx.showToast({
+          title: '只有家长可以删除用户',
+          icon: 'error'
+        });
+        return;
+      }
+
+      const userId = e.currentTarget.dataset.userId;
+      this._performDeleteUser(userId);
+    },
+
+    // 权限状态监听
+    observers: {
+      'currentUser': function(currentUser) {
+        const canManageUsers = currentUser && currentUser.role === 'parent';
+        logger.info('UserSwitcher', `用户管理权限: ${canManageUsers ? '有权限' : '无权限'}`);
+      }
     }
   }
-  ```
+});
+```
 
-## 页面规范
+---
 
-### 生命周期
-
-- 在 `onLoad` 中初始化页面数据和事件绑定
-- 在 `onShow` 中刷新页面数据
-- 在 `onUnload` 中解绑事件和清理资源
-- 避免在 `onReady` 中执行复杂操作
-
-### 事件处理
-
-- 事件处理函数使用 `handleXxx` 或 `onXxx` 前缀：`handleSubmit`、`onButtonTap`
-- 使用箭头函数避免 `this` 绑定问题
-
-## 数据管理
-
-### 本地存储
-
-- 使用工具类封装存储操作，避免直接调用 `wx.setStorageSync`
-- 关键数据读写添加日志记录
-- 避免存储大量数据，合理分割存储内容
-
-### 全局状态
-
-- 全局状态使用 `app.globalData` 或 `stateManager` 管理
-- 避免过度使用全局状态，优先考虑组件通信
-
-## 性能优化
-
-### 渲染优化
-
-- 避免频繁 `setData`，合并多次更新
-- 使用 `wx:if` 代替 `hidden` 控制复杂组件显示
-- 大型列表使用虚拟滚动或分页加载
-
-### 计算优化
-
-- 耗时计算放在 `Worker` 中或使用分批处理
-- 缓存频繁使用的计算结果
-- 使用节流或防抖处理频繁触发的事件 
+**文档维护者**：开发团队  
+**最后更新**：2024年12月  
+**版本**：v3.0 

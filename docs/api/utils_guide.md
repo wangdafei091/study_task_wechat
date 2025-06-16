@@ -1,420 +1,396 @@
 # 工具函数使用指南
 
-本文档介绍了项目中可用的各种工具函数的用途和使用方法，帮助开发人员快速了解和使用这些通用功能。
+本文档介绍了项目中可用的各种工具函数和服务的用途和使用方法，基于当前的DDD架构设计，帮助开发人员快速了解和使用这些核心功能。
 
-## 服务管理器 (serviceManager.js)
+## 服务管理器 (ServiceManager)
 
-`utils/serviceManager.js` 提供了统一的服务实例管理，是连接UI层与领域服务的桥梁。
+`utils/service-manager.js` 是DDD架构的核心组件，提供统一的服务实例管理和依赖注入功能。
 
-### 主要函数
-
-```javascript
-// 获取服务实例
-serviceManager.getService(serviceName)
-
-// 注册服务
-serviceManager.registerService(serviceName, serviceClass, options)
-
-// 重置服务实例
-serviceManager.resetService(serviceName)
-
-// 初始化所有服务
-serviceManager.initServices()
-```
-
-### 使用示例
-
-```javascript
-// 获取服务管理器
-const serviceManager = getApp().serviceManager;
-
-// 获取任务服务
-const taskService = serviceManager.getService('taskService');
-
-// 使用服务
-taskService.getAllTasks()
-  .then(tasks => {
-    this.setData({ taskList: tasks });
-  })
-  .catch(error => {
-    logger.error('TaskPage', '获取任务失败', error);
-  });
-```
-
-## 任务服务 (TaskService)
-
-`services/task-service.js` 提供任务的增删改查和数据同步功能，是任务管理领域的核心服务类。
+### 核心职责
+- 服务生命周期管理
+- 依赖注入和服务发现
+- 服务实例缓存
+- 初始化顺序控制
 
 ### 主要方法
 
 ```javascript
-// 获取所有任务
-async getAllTasks()
+// 获取服务实例
+get(serviceName)
 
-// 获取今日任务
-async getTodayTasks()
+// 初始化服务管理器
+init()
 
-// 创建新任务
-async createTask(taskData)
-
-// 更新任务状态
-async updateTaskStatus(taskId, status)
-
-// 编辑任务
-async updateTask(taskId, changes)
-
-// 删除任务
-async deleteTask(taskId)
-
-// 检查即将到期的任务
-async checkUpcomingTasks()
-
-// 计算任务进度
-async calculateTaskProgress()
-
-// 获取任务统计数据
-async getTaskStatistics(dateRange)
+// 重置服务实例
+reset()
 ```
 
 ### 使用示例
 
 ```javascript
-// 获取服务实例
-const taskService = getApp().serviceManager.getService('taskService');
+// 在页面中获取服务
+const serviceManager = getApp().serviceManager;
 
-// 获取所有任务
+// 获取任务服务
+const taskService = serviceManager.get('taskService');
+const starService = serviceManager.get('starService');
+const rewardService = serviceManager.get('rewardService');
+
+// 使用服务
 const tasks = await taskService.getAllTasks();
-console.log(`[Page] 获取所有任务: ${tasks.length}个`);
-this.setData({ taskList: tasks });
+const starBalance = await starService.getStarBalance('child');
+```
 
-// 创建新任务
-const newTask = {
+### 可用服务列表
+- `taskService` - 任务管理服务
+- `starService` - 星星积分服务  
+- `rewardService` - 奖励管理服务
+- `messageService` - 消息通知服务
+- `userService` - 用户管理服务
+
+## 任务服务 (TaskService)
+
+`services/task-service.js` 是任务领域的核心服务，提供完整的任务生命周期管理。
+
+### 核心功能
+- 任务CRUD操作
+- 任务状态管理
+- 必做任务惩罚机制
+- 重复任务处理
+- 事件发布机制
+
+### 主要方法
+
+```javascript
+// 基础操作
+async getAllTasks()                    // 获取所有任务
+async getTaskById(taskId)             // 根据ID获取任务
+async createTask(taskData)            // 创建新任务
+async updateTask(taskId, updateData)  // 更新任务
+async deleteTask(taskId)              // 删除任务
+
+// 状态管理
+async completeTask(taskId, userId)    // 完成任务
+async resetTask(taskId, userId)       // 重置任务状态
+async updateTaskStatus(taskId, status, userId) // 更新任务状态
+
+// 特殊功能
+async markTaskAsRequired(taskId, userId)      // 标记为必做任务
+async unmarkTaskAsRequired(taskId, userId)    // 取消必做任务标记
+async handleRequiredTaskPenalty(task)        // 处理必做任务惩罚
+async checkRequiredTasks()                   // 检查必做任务状态
+
+// 查询功能
+async getTasksByDate(date)            // 获取指定日期任务
+async getTasksByDateRange(startDate, endDate) // 获取日期范围内任务
+async getOverdueTasks()               // 获取过期任务
+async getUpcomingTasks()              // 获取即将到期任务
+```
+
+### 使用示例
+
+```javascript
+const taskService = getApp().serviceManager.get('taskService');
+
+// 创建任务
+const taskData = {
   title: '练习钢琴',
-  type: 'interest', 
-  date: '2023-06-01',
-  duration: 30
+  description: '练习新曲目30分钟',
+  type: 'study',
+  date: '2024-12-01',
+  startTime: '18:00',
+  endTime: '18:30',
+  points: 10,
+  pointsExpiry: 'week',
+  isRequired: false
 };
-const result = await taskService.createTask(newTask);
+
+const result = await taskService.createTask(taskData);
 if (result.success) {
-  console.log(`[Page] 创建任务成功: ${result.task.id}`);
+  logger.info('Page', '任务创建成功', result.task);
 }
+
+// 完成任务
+const completeResult = await taskService.completeTask(taskId, 'child');
+if (completeResult.success) {
+  logger.info('Page', '任务完成成功', completeResult.task);
+}
+```
+
+## 星星服务 (StarService)
+
+`services/star-service.js` 管理星星积分系统，实现获得、消费、过期等完整生命周期。
+
+### 核心功能
+- 星星分组管理
+- FIFO消费策略
+- 有效期计算
+- 过期处理
+- 数据一致性维护
+
+### 主要方法
+
+```javascript
+// 星星余额管理
+async getStarBalance(userId)          // 获取星星余额
+async getStarGroups(userId)           // 获取星星分组
+async getStarRecords(userId, options) // 获取星星记录
+
+// 星星操作
+async addStars(userId, amount, expiryType, sourceId, description) // 添加星星
+async consumeStars(userId, amount, sourceId, description)         // 消费星星
+async processExpiredStars()           // 处理过期星星
+
+// 统计分析
+async getStarStatistics(userId, dateRange) // 获取统计数据
+async getExpiryForecast(userId, days)       // 获取过期预测
+```
+
+### 使用示例
+
+```javascript
+const starService = getApp().serviceManager.get('starService');
+
+// 获取星星余额
+const balance = await starService.getStarBalance('child');
+logger.info('Page', '当前星星余额', balance);
+
+// 添加星星（任务完成时）
+const addResult = await starService.addStars(
+  'child',
+  10,
+  'week',
+  'task_123',
+  '完成任务：练习钢琴'
+);
+
+// 消费星星（兑换奖励时）
+const consumeResult = await starService.consumeStars(
+  'child',
+  25,
+  'reward_456',
+  '兑换奖励：看动画片'
+);
+```
+
+## 奖励服务 (RewardService)
+
+`services/reward-service.js` 管理奖励系统，包括奖励创建、兑换、状态管理等。
+
+### 核心功能
+- 奖励CRUD操作
+- 兑换流程管理
+- 状态流转控制
+- 库存管理
+- 示例奖励处理
+
+### 主要方法
+
+```javascript
+// 基础操作
+async getAllRewards()                 // 获取所有奖励
+async getRewardById(rewardId)        // 根据ID获取奖励
+async createReward(rewardData)       // 创建奖励
+async updateReward(rewardId, changes) // 更新奖励
+async deleteReward(rewardId)         // 删除奖励
+
+// 兑换管理
+async claimReward(rewardId, userId)   // 兑换奖励
+async deliverReward(rewardId)        // 标记为已领取
+async unclaimReward(rewardId)        // 取消兑换
+
+// 状态管理
+async enableReward(rewardId)         // 启用奖励
+async disableReward(rewardId)        // 禁用奖励
+
+// 查询功能
+async getAvailableRewards()          // 获取可用奖励
+async getClaimedRewards()            // 获取已兑换奖励
+async getRewardHistory(userId)       // 获取兑换历史
+```
+
+### 使用示例
+
+```javascript
+const rewardService = getApp().serviceManager.get('rewardService');
+
+// 兑换奖励
+const claimResult = await rewardService.claimReward('reward_123', 'child');
+if (claimResult.success) {
+  logger.info('Page', '奖励兑换成功', claimResult.reward);
+  // 显示成功提示
+  wx.showToast({
+    title: '兑换成功！',
+    icon: 'success'
+  });
+}
+
+// 创建奖励
+const rewardData = {
+  title: '看动画片30分钟',
+  description: '可以选择喜欢的动画片',
+  cost: 25,
+  category: 'entertainment',
+  totalCount: 5
+};
+
+const createResult = await rewardService.createReward(rewardData);
 ```
 
 ## 消息服务 (MessageService)
 
-`services/message-service.js` 处理应用内消息通知，包括任务提醒、系统消息等。
+`services/message-service.js` 处理系统消息和通知功能。
+
+### 核心功能
+- 消息创建和管理
+- 多种消息类型支持
+- 已读状态管理
+- 优先级处理
+- 消息归档功能
 
 ### 主要方法
 
 ```javascript
-// 获取所有消息
-async getAllMessages()
+// 基础操作
+async getAllMessages(userId)          // 获取所有消息
+async getMessageById(messageId)       // 根据ID获取消息
+async createMessage(messageData)      // 创建消息
+async deleteMessage(messageId)        // 删除消息
 
-// 创建任务相关消息
-async createTaskMessage(task, action)
+// 状态管理
+async markAsRead(messageId)           // 标记为已读
+async markAsUnread(messageId)         // 标记为未读
+async archiveMessage(messageId)       // 归档消息
 
-// 创建系统消息
-async createSystemMessage(content, type)
+// 查询功能
+async getUnreadMessages(userId)       // 获取未读消息
+async getUnreadCount(userId)          // 获取未读数量
+async getMessagesByType(userId, type) // 按类型获取消息
 
-// 创建奖励相关消息
-async createRewardMessage(reward, action)
-
-// 标记消息为已读
-async markMessageAsRead(messageId)
-
-// 删除消息
-async deleteMessage(messageId)
-
-// 清除所有消息
-async clearAllMessages()
-
-// 获取未读消息数量
-async getUnreadCount()
+// 便捷方法
+async createTaskCompletionMessage(task, userId)    // 创建任务完成消息
+async createStarRewardMessage(amount, userId)      // 创建星星奖励消息
+async createPenaltyMessage(task, amount, userId)   // 创建惩罚消息
+async createRewardExchangeMessage(reward, userId)  // 创建奖励兑换消息
 ```
 
 ### 使用示例
 
 ```javascript
-// 获取服务实例
-const messageService = getApp().serviceManager.getService('messageService');
-
-// 创建任务完成消息
-const result = await messageService.createTaskMessage(task, 'completed');
-console.log(`[Page] 创建任务完成消息: ${result.message.id}`);
+const messageService = getApp().serviceManager.get('messageService');
 
 // 获取未读消息数量
-const count = await messageService.getUnreadCount();
-this.setData({ unreadCount: count });
-if (count > 0) {
+const unreadCount = await messageService.getUnreadCount('child');
+if (unreadCount > 0) {
   wx.showTabBarRedDot({ index: 2 });
+}
+
+// 创建系统消息
+const messageData = {
+  userId: 'child',
+  type: 'system',
+  subType: 'reminder',
+  title: '任务提醒',
+  content: '您有未完成的任务，请及时处理',
+  priority: 'normal'
+};
+
+await messageService.createMessage(messageData);
+```
+
+## 用户服务 (UserService)
+
+`services/user-service.js` 管理用户相关功能，支持多角色系统。
+
+### 核心功能
+- 用户角色管理
+- 当前用户状态
+- 用户切换功能
+- 权限控制
+
+### 主要方法
+
+```javascript
+// 用户管理
+getCurrentUserId()                    // 获取当前用户ID
+getCurrentUser()                      // 获取当前用户信息
+switchUser(userId)                    // 切换用户
+getUserRole(userId)                   // 获取用户角色
+
+// 权限检查
+canManageRewards(userId)             // 是否可管理奖励
+canViewAllTasks(userId)              // 是否可查看所有任务
+hasPermission(userId, permission)     // 检查权限
+```
+
+### 使用示例
+
+```javascript
+const userService = getApp().serviceManager.get('userService');
+
+// 获取当前用户
+const currentUserId = userService.getCurrentUserId();
+const currentUser = userService.getCurrentUser();
+
+// 检查权限
+const canManage = userService.canManageRewards(currentUserId);
+if (canManage) {
+  // 显示管理界面
 }
 ```
 
-## 日期处理工具 (dateUtils.js)
+## 日志工具 (Logger)
 
-`utils/dateUtils.js` 提供日期格式化和计算功能。
+`utils/logger.js` 提供统一的日志记录功能。
 
-### 主要函数
+### 日志级别
+- `info` - 一般信息
+- `warn` - 警告信息
+- `error` - 错误信息
+- `debug` - 调试信息
+
+### 主要方法
 
 ```javascript
-// 格式化日期为YYYY-MM-DD
-dateUtils.formatDate(date)
-
-// 格式化日期时间为YYYY-MM-DD HH:MM
-dateUtils.formatDateTime(date)
-
-// 获取当前日期字符串
-dateUtils.getTodayString()
-
-// 获取当前时间戳
-dateUtils.getCurrentTimestamp()
-
-// 计算两个日期之间的天数
-dateUtils.getDaysBetween(startDate, endDate)
-
-// 获取星期几的显示文本
-dateUtils.getDayOfWeekText(dayOfWeek)
-
-// 获取当月的日历数据
-dateUtils.getMonthCalendar(year, month)
-
-// 检查日期是否是今天
-dateUtils.isToday(date)
-
-// 获取指定日期所在周的起止日期
-dateUtils.getWeekRange(date)
+logger.info(module, message, data)    // 记录信息
+logger.warn(module, message, data)    // 记录警告
+logger.error(module, message, data)   // 记录错误
+logger.debug(module, message, data)   // 记录调试信息
 ```
 
 ### 使用示例
 
 ```javascript
-// 格式化日期
-const today = new Date();
-const formattedDate = dateUtils.formatDate(today); // 如 "2023-06-01"
+const logger = require('../../utils/logger');
 
-// 获取日历数据
-const calendar = dateUtils.getMonthCalendar(2023, 5); // 获取2023年6月的日历数据
+// 记录操作信息
+logger.info('TaskService', '任务创建成功', { taskId: 'task_123' });
 
-// 检查是否是今天
-const isToday = dateUtils.isToday('2023-06-01');
+// 记录警告
+logger.warn('StarService', '星星余额不足', { required: 25, available: 10 });
+
+// 记录错误
+logger.error('RewardService', '奖励兑换失败', error);
 ```
 
-## 任务处理工具 (taskUtils.js)
+## 批量处理工具 (batchUtils)
 
-`utils/taskUtils.js` 提供任务数据处理和计算功能。
+`utils/batchUtils.js` 提供高效的批量数据处理功能。
 
-### 主要函数
+### 核心功能
+- 分批处理大量数据
+- 进度显示
+- 性能优化
+- 错误处理
 
-```javascript
-// 根据类型筛选任务
-taskUtils.filterTasksByType(tasks, type)
-
-// 根据状态筛选任务
-taskUtils.filterTasksByStatus(tasks, status)
-
-// 计算连续完成天数
-taskUtils.calculateStreak(tasks)
-
-// 生成任务热力图数据
-taskUtils.generateHeatmapData(tasks, startDate, endDate)
-
-// 按日期分组任务
-taskUtils.groupTasksByDate(tasks)
-
-// 获取任务类型显示文本
-taskUtils.getTaskTypeText(type)
-
-// 获取任务状态显示文本
-taskUtils.getTaskStatusText(status)
-
-// 检查任务是否已逾期
-taskUtils.isTaskOverdue(task)
-
-// 生成任务统计数据
-taskUtils.generateTaskStatistics(tasks, dateRange)
-```
-
-### 使用示例
-
-```javascript
-// 筛选学习类型的任务
-const studyTasks = taskUtils.filterTasksByType(allTasks, 'study');
-
-// 生成热力图数据
-const heatmapData = taskUtils.generateHeatmapData(
-  tasks, 
-  '2023-01-01', 
-  '2023-06-30'
-);
-
-// 任务分组
-const groupedTasks = taskUtils.groupTasksByDate(tasks);
-```
-
-## UI工具函数 (uiUtils.js)
-
-`utils/uiUtils.js` 提供界面相关的辅助功能。
-
-### 主要函数
-
-```javascript
-// 显示加载提示
-uiUtils.showLoading(title)
-
-// 隐藏加载提示
-uiUtils.hideLoading()
-
-// 显示成功提示
-uiUtils.showSuccess(message)
-
-// 显示错误提示
-uiUtils.showError(message)
-
-// 显示确认对话框
-uiUtils.showConfirm(title, content, callback)
-
-// 获取任务类型对应的主题颜色
-uiUtils.getThemeColor(type)
-
-// 获取任务状态对应的颜色
-uiUtils.getStatusColor(status)
-
-// 获取图标路径
-uiUtils.getIconPath(name)
-
-// 震动反馈
-uiUtils.vibrateShort()
-
-// 获取系统信息
-uiUtils.getSystemInfo()
-```
-
-### 使用示例
-
-```javascript
-// 显示加载提示
-uiUtils.showLoading('数据加载中');
-
-// 显示确认对话框
-uiUtils.showConfirm(
-  '删除任务', 
-  '确定要删除这个任务吗？', 
-  confirmed => {
-    if (confirmed) {
-      const taskService = getApp().serviceManager.getService('taskService');
-      taskService.deleteTask(taskId);
-    }
-  }
-);
-
-// 获取主题颜色
-const studyColor = uiUtils.getThemeColor('study'); // 返回 #4285F4
-```
-
-## 日志系统 (logger.js, log-config.js, log-analyzer.js)
-
-### 基本日志记录 (logger.js)
-
-[utils/logger.js](mdc:utils/logger.js) 提供统一的日志记录功能，支持不同日志级别和模块化日志。
-
-```javascript
-// 导入日志模块
-const logger = require('../utils/logger');
-
-// 记录不同级别的日志
-logger.debug('模块名', '调试信息', { 详细数据 });
-logger.info('模块名', '一般信息', { 相关数据 });
-logger.warn('模块名', '警告信息', { 警告数据 });
-logger.error('模块名', '错误信息', 错误对象);
-```
-
-### 日志配置 (log-config.js)
-
-[utils/log-config.js](mdc:utils/log-config.js) 提供日志级别配置和模块特定日志控制。
-
-```javascript
-// 导入日志配置模块
-const logConfig = require('../utils/log-config');
-
-// 设置默认日志级别
-logConfig.setDefaultLogLevel('debug'); // 可选值：'debug'、'info'、'warn'、'error'、'none'
-
-// 为特定模块设置日志级别
-logConfig.setModuleLogLevel('TaskService', 'info');
-logConfig.setModuleLogLevel('BaseRepository', 'warn');
-
-// 应用环境自适应配置
-logConfig.applyEnvironmentDefaults();
-```
-
-#### 模块特定日志记录器
-
-```javascript
-// 创建模块特定的日志记录器
-const moduleLogger = logConfig.createModuleLogger('模块名');
-
-// 使用模块特定的日志记录器
-moduleLogger.debug('调试信息', { 数据 });
-moduleLogger.info('一般信息');
-moduleLogger.warn('警告信息');
-moduleLogger.error('错误', new Error('发生错误'));
-```
-
-### 日志分析 (log-analyzer.js)
-
-[utils/log-analyzer.js](mdc:utils/log-analyzer.js) 用于识别代码中直接使用console的地方，帮助开发者迁移到统一日志系统。
-
-```javascript
-// 导入日志分析器
-const logAnalyzer = require('../utils/log-analyzer');
-
-// 初始化分析器（通常在app.js中已自动初始化）
-logAnalyzer.init();
-
-// 获取分析报告
-const report = logAnalyzer.getReport();
-console.log(`发现${report.totalFindings}处直接使用console的代码`);
-```
-
-### 最佳实践
-
-1. **始终使用模块名**：确保每个日志调用都包含模块名，便于过滤和定位问题
-   ```javascript
-   // 推荐
-   logger.info('TaskService', '任务创建成功', { taskId: id });
-   // 不推荐
-   logger.info('任务创建成功', { taskId: id });
-   ```
-
-2. **适当使用日志级别**：
-   - `debug`: 详细的开发调试信息，仅在开发环境显示
-   - `info`: 一般操作信息，记录正常流程
-   - `warn`: 潜在问题警告，需要关注但不影响运行
-   - `error`: 错误信息，影响功能正常运行
-
-3. **记录关键点**：
-   - 函数入口/出口的参数和返回值
-   - 关键业务状态变更
-   - 异步操作的开始和完成
-   - 所有错误和异常情况
-
-4. **避免敏感信息**：不要记录用户密码、令牌等敏感信息
-
-## 批量处理工具 (batchUtils.js)
-
-`utils/batchUtils.js` 提供批量处理大量数据的功能，避免UI阻塞。
-
-### 主要函数
+### 主要方法
 
 ```javascript
 // 批量处理数据
-batchUtils.batchProcess(items, processFn, options, callback)
+batchProcess(items, processFn, options, callback)
 
-// 批量存储数据
-batchUtils.batchStorage(operations, callback)
-
-// 延迟执行函数
-batchUtils.delayExecute(fn, delay)
+// 批量执行操作
+batchExecute(operations, options)
 ```
 
 ### 使用示例
@@ -423,236 +399,161 @@ batchUtils.delayExecute(fn, delay)
 const batchUtils = require('../../utils/batchUtils');
 
 // 批量处理任务
-batchUtils.batchProcess(
+await batchUtils.batchProcess(
   tasks,
-  task => {
+  async (task) => {
     // 处理单个任务
-    task.processed = true;
+    await processTask(task);
   },
-  { batchSize: 50, delay: 10, showProgress: true },
-  () => {
-    logger.info('TaskManager', '所有任务处理完成', { count: tasks.length });
+  {
+    batchSize: 50,
+    delay: 10,
+    showProgress: true,
+    progressTitle: '处理任务中'
   }
 );
-
-// 批量存储数据
-const operations = [
-  { key: 'task_1', data: taskData1 },
-  { key: 'task_2', data: taskData2 },
-  // 更多存储操作...
-];
-
-batchUtils.batchStorage(operations, () => {
-  logger.info('StorageManager', '批量存储完成', { count: operations.length });
-});
-
-// 延迟执行
-batchUtils.delayExecute(() => {
-  // 执行非紧急任务
-  calculateStatistics();
-}, 500);
 ```
 
-### 批量处理选项
+## 日期工具 (dateUtils)
 
-批量处理支持以下选项：
+`utils/dateUtils.js` 提供日期处理和格式化功能。
+
+### 主要方法
 
 ```javascript
-{
-  batchSize: 50,       // 每批处理的数据项数量
-  delay: 0,            // 批次间延迟时间(毫秒)
-  showProgress: true,  // 是否显示进度提示
-  progressTitle: '处理中' // 进度提示文本
+// 格式化
+formatDate(date)                      // 格式化为YYYY-MM-DD
+formatDateTime(date)                  // 格式化为YYYY-MM-DD HH:MM:SS
+formatTime(date)                      // 格式化为HH:MM
+
+// 计算
+getTodayString()                      // 获取今天日期字符串
+getCurrentTimestamp()                 // 获取当前时间戳
+getDaysBetween(startDate, endDate)    // 计算天数差
+isToday(date)                        // 是否是今天
+isOverdue(date)                      // 是否过期
+
+// 日历
+getMonthCalendar(year, month)         // 获取月历数据
+getWeekRange(date)                    // 获取周范围
+```
+
+### 使用示例
+
+```javascript
+const dateUtils = require('../../utils/dateUtils');
+
+// 格式化日期
+const today = dateUtils.getTodayString();
+const formatted = dateUtils.formatDateTime(new Date());
+
+// 检查任务是否过期
+const isOverdue = dateUtils.isOverdue(task.date);
+if (isOverdue) {
+  logger.warn('TaskCheck', '任务已过期', { taskId: task.id });
 }
 ```
 
-## 单位工具 (unit.js)
+## 存储适配器 (StorageAdapter)
 
-`utils/unit.js` 处理不同设备屏幕尺寸的适配。
+`adapters/storage-adapter.js` 提供统一的数据存储接口。
 
-### 主要函数
+### 核心功能
+- 数据存储和读取
+- 缓存管理
+- 命名空间隔离
+- 错误处理
+
+### 主要方法
 
 ```javascript
-// 获取视口信息
-unit.getViewportInfo()
+// 数据操作
+get(key)                             // 获取数据
+set(key, value, options)             // 设置数据
+remove(key)                          // 删除数据
+clear()                              // 清空所有数据
 
-// 判断是否全面屏设备
-unit.isFullScreenDevice()
+// 批量操作
+getMultiple(keys)                    // 批量获取
+setMultiple(data)                    // 批量设置
 
-// 获取内容区域高度
-unit.getContentHeight(options)
-
-// rpx转换为px
-unit.rpxToPx(rpx)
-
-// px转换为rpx
-unit.pxToRpx(px)
-
-// 获取安全区域信息
-unit.getSafeArea()
-
-// 获取导航栏高度
-unit.getNavBarHeight()
-
-// 判断是否为高度较短设备
-unit.isShortDevice()
+// 缓存管理
+clearCache()                         // 清空缓存
+getCacheInfo()                       // 获取缓存信息
 ```
 
 ### 使用示例
 
 ```javascript
-// 转换单位
-const pxValue = unit.rpxToPx(90); // 将90rpx转换为px值
-
-// 获取内容区域高度
-const contentHeight = unit.getContentHeight({
-  excludeNav: true,
-  excludeTabBar: true
-}); 
-
-// 获取安全区域信息
-const safeArea = unit.getSafeArea();
+// 通过仓储类使用，一般不直接调用
+const taskRepository = new TaskRepository();
+const tasks = await taskRepository.findAll();
 ```
 
-## 存储工具 (storageUtils.js)
+## EventBus 事件总线
 
-`utils/storageUtils.js` 提供对微信存储API的封装，支持数据压缩和批量操作。
+`utils/eventBus.js` 提供高性能的事件发布订阅机制。
 
-### 主要函数
+### 核心功能
+- 事件发布和订阅
+- 一次性事件监听
+- 事件取消订阅
+- 性能优化
 
-```javascript
-// 设置存储项
-storageUtils.setItem(key, data, callback)
-
-// 获取存储项
-storageUtils.getItem(key, defaultValue, callback)
-
-// 删除存储项
-storageUtils.removeItem(key, callback)
-
-// 批量获取存储项
-storageUtils.getItems(keys, callback)
-
-// 批量设置存储项
-storageUtils.setItems(items, callback)
-
-// 清除所有存储
-storageUtils.clearAll(callback)
-
-// 获取存储信息
-storageUtils.getStorageInfo(callback)
-```
-
-## 数据分析工具
-
-数据分析相关功能已迁移到领域驱动设计(DDD)架构，现在分为两部分：
-
-### 分析服务 (analytics-service.js)
-
-`services/analytics-service.js` 提供数据分析服务，包含业务逻辑。通过服务管理器访问：
+### 主要方法
 
 ```javascript
-// 获取分析服务实例
-const analyticsService = serviceManager.getAnalyticsService();
+// 事件订阅
+on(event, listener)                  // 订阅事件
+once(event, listener)                // 一次性订阅
+off(event, listener)                 // 取消订阅
 
-// 异步获取任务星星日历数据
-analyticsService.getTaskStarCalendarData().then(records => {
-  // 处理星星记录
-});
-
-// 按日期分组记录
-const groupedRecords = analyticsService.groupRecordsByDate(records);
-
-// 计算历史余额
-analyticsService.calculateHistoricalBalance(30).then(data => {
-  const { historyData, forecastData } = data;
-  // 使用历史数据和预测数据
-});
-
-// 获取任务完成统计
-analyticsService.getTaskCompletionStats('week').then(stats => {
-  // 使用统计数据
-});
-```
-
-### 分析工具函数 (analyticsUtils.js)
-
-`utils/analyticsUtils.js` 提供纯工具函数，不包含业务逻辑：
-
-```javascript
-// 格式化日期为显示格式
-analyticsUtils.formatDateForDisplay(date); // 返回 "MM/DD" 格式
-
-// 计算日期范围
-analyticsUtils.calculateDateRange(7); // 返回7天的日期范围对象
-
-// 格式化时间戳
-analyticsUtils.formatTimestamp(timestamp); // 返回 "YYYY-MM-DD HH:MM:SS" 格式
-
-// 获取时间范围描述
-analyticsUtils.getTimeRangeDescription('week'); // 返回 "YYYY年MM月DD日 - YYYY年MM月DD日"
-
-// 计算完成率
-analyticsUtils.calculateCompletionRate(7, 10); // 返回 "70.0"
-
-// 获取相对时间描述
-analyticsUtils.getRelativeTimeDescription(timestamp); // 返回如"刚刚"、"5分钟前"等
-```
-
-## 反馈工具 (feedbackUtils.js)
-
-`utils/feedbackUtils.js` 处理用户反馈相关功能。
-
-### 主要函数
-
-```javascript
-// 收集用户反馈
-feedbackUtils.collectFeedback(content, type)
-
-// 记录日志
-feedbackUtils.logEvent(eventName, params)
-
-// 记录页面访问
-feedbackUtils.logPageView(pageName)
-
-// 记录错误信息
-feedbackUtils.logError(error, context)
-
-// 获取应用版本信息
-feedbackUtils.getVersionInfo()
-```
-
-## 格式化工具 (formatUtils.js)
-
-`utils/formatUtils.js` 提供各种数据格式化功能。
-
-### 主要函数
-
-```javascript
-// 格式化时间段显示
-formatUtils.formatDuration(minutes)
-
-// 格式化星星数量显示
-formatUtils.formatStarCount(count)
-
-// 格式化日期区间
-formatUtils.formatDateRange(startDate, endDate)
-
-// 格式化百分比
-formatUtils.formatPercentage(value)
-
-// 格式化时间点
-formatUtils.formatTimePoint(timeString)
+// 事件发布
+emit(event, ...args)                 // 发布事件
 ```
 
 ### 使用示例
 
 ```javascript
-const formatUtils = require('../../utils/formatUtils');
+const eventBus = getApp().eventBus;
 
-// 格式化持续时间
-const duration = formatUtils.formatDuration(120); // 返回 "2小时"
+// 订阅事件
+eventBus.on('task:completed', (task) => {
+  logger.info('EventListener', '收到任务完成事件', task);
+  // 更新UI
+  this.updateTaskDisplay();
+});
 
-// 格式化星星数量
-const stars = formatUtils.formatStarCount(1234); // 返回 "1,234"
+// 发布事件（通常在服务中发布）
+eventBus.emit('task:completed', task);
 ```
+
+## 最佳实践
+
+### 1. 服务使用原则
+- 始终通过ServiceManager获取服务实例
+- 不要直接实例化服务类
+- 在页面onLoad中获取服务引用
+- 使用async/await处理异步操作
+
+### 2. 错误处理
+- 所有异步操作都要有错误处理
+- 使用logger记录关键操作和错误
+- 给用户友好的错误提示
+
+### 3. 性能优化
+- 大量数据操作使用batchUtils
+- 合理使用事件机制减少耦合
+- 避免频繁的存储操作
+
+### 4. 代码规范
+- 遵循统一的命名规范
+- 添加必要的日志记录
+- 编写清晰的注释
+- 保持代码简洁
+
+---
+
+**文档维护者**：开发团队  
+**最后更新**：2024年12月  
+**版本**：v3.0

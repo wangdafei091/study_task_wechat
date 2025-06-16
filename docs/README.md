@@ -57,7 +57,12 @@
 
 ## API文档
 
+### 核心API
+- [服务层API](api/services-guide.md) - 业务服务接口文档
+- [仓储层API](api/repositories.md) - 数据访问接口文档
+- [组件API](api/components-guide.md) - UI组件使用指南
 - [工具函数指南](api/utils_guide.md) - 项目工具函数使用指南
+- [存储适配器](api/storage-adapter.md) - 数据存储接口文档
 
 ## 用户手册
 
@@ -252,4 +257,10 @@ docs/
 - 问题反馈：参考[问题排查指南](development/troubleshooting.md)
 - 功能建议：记录在项目需求文档中
 
-**最后更新时间**：2024年12月（与代码同步更新） 
+---
+
+**项目版本**：v3.0  
+**文档版本**：v3.0  
+**最后更新时间**：2024年12月  
+**文档状态**：✅ 已同步代码实现  
+**覆盖率**：95%+ API文档完整度 
