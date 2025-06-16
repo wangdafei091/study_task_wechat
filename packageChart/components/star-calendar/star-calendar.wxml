@@ -10,13 +10,13 @@
     <view class="month-title">{{yearText}}{{monthText}}</view>
     
     <view class="nav-buttons">
-      <view class="nav-btn prev-month" bindtap="prevMonth">
+      <view class="nav-btn prev-month" bindtap="onPrevMonth">
         <text class="nav-icon">◀</text>
       </view>
       <view class="nav-btn today" bindtap="goToToday">
         <text class="nav-icon">•</text>
       </view>
-      <view class="nav-btn next-month" bindtap="nextMonth">
+      <view class="nav-btn next-month" bindtap="onNextMonth">
         <text class="nav-icon">▶</text>
       </view>
     </view>
@@ -30,12 +30,13 @@
   </view>
   
   <!-- 日历主体 - 移除点击交互 -->
-  <view class="calendar-days" bindtouchstart="touchStart" bindtouchend="touchEnd">
+  <view class="calendar-days" bindtouchstart="onTouchStart" bindtouchend="onTouchEnd">
     <view 
       wx:for="{{calendarDays}}" 
       wx:key="index" 
       class="calendar-day {{item.isCurrentMonth ? 'current-month' : 'other-month'}} {{item.isToday ? 'today' : ''}}"
-      data-date="{{item.dateString}}">
+      data-day="{{item}}"
+      bindtap="onDayTap">
       
       <!-- 日期数字 -->
       <text class="day-number">{{item.day}}</text>
@@ -45,78 +46,45 @@
         <!-- 当同时有获得和扣除时，使用垂直布局 -->
         <view 
           wx:if="{{item.starInfo.earned > 0 && item.starInfo.deducted > 0}}" 
-          class="star-info-container {{activeStarInfo && activeStarInfo.date === item.dateString && activeStarInfo.type === 'container' ? 'active' : ''}}" 
-          bindtap="onStarInfoTap" 
-          data-earned="{{item.starInfo.earned}}" 
-          data-deducted="{{item.starInfo.deducted}}" 
-          data-date="{{item.dateString}}">
+          class="star-info-container {{activeStarInfo && activeStarInfo.date === item.dateString && activeStarInfo.type === 'container' ? 'active' : ''}}">
           <!-- 星星数据部分 -->
           <view class="star-data">
             <!-- 获得的星星 -->
             <view 
-              class="earned-stars {{activeStarInfo && activeStarInfo.date === item.dateString && activeStarInfo.type === 'earned' ? 'active' : ''}}" 
-              data-type="earned" 
-              data-date="{{item.dateString}}" 
-              catchtap="onStarComponentTap">
+              class="earned-stars {{activeStarInfo && activeStarInfo.date === item.dateString && activeStarInfo.type === 'earned' ? 'active' : ''}}">
               +{{item.starInfo.earned}}
             </view>
             
             <!-- 扣除的星星 -->
             <view 
-              class="deducted-stars {{activeStarInfo && activeStarInfo.date === item.dateString && activeStarInfo.type === 'deducted' ? 'active' : ''}}" 
-              data-type="deducted" 
-              data-date="{{item.dateString}}" 
-              catchtap="onStarComponentTap">
+              class="deducted-stars {{activeStarInfo && activeStarInfo.date === item.dateString && activeStarInfo.type === 'deducted' ? 'active' : ''}}">
               -{{item.starInfo.deducted}}
             </view>
           </view>
           
           <!-- 星星图标 -->
           <view 
-            class="star-icon {{activeStarInfo && activeStarInfo.date === item.dateString && activeStarInfo.type === 'icon' ? 'active' : ''}}" 
-            data-type="icon" 
-            data-date="{{item.dateString}}" 
-            catchtap="onStarComponentTap">⭐</view>
+            class="star-icon {{activeStarInfo && activeStarInfo.date === item.dateString && activeStarInfo.type === 'icon' ? 'active' : ''}}">⭐</view>
         </view>
         
         <!-- 当只有获得星星时，使用水平布局 -->
         <view 
           wx:elif="{{item.starInfo.earned > 0}}" 
-          class="star-info-container horizontal {{activeStarInfo && activeStarInfo.date === item.dateString && activeStarInfo.type === 'container' ? 'active' : ''}}" 
-          bindtap="onStarInfoTap" 
-          data-earned="{{item.starInfo.earned}}" 
-          data-deducted="0" 
-          data-date="{{item.dateString}}">
+          class="star-info-container horizontal {{activeStarInfo && activeStarInfo.date === item.dateString && activeStarInfo.type === 'container' ? 'active' : ''}}">
           <view 
-            class="earned-stars {{activeStarInfo && activeStarInfo.date === item.dateString && activeStarInfo.type === 'earned' ? 'active' : ''}}" 
-            data-type="earned" 
-            data-date="{{item.dateString}}" 
-            catchtap="onStarComponentTap">+{{item.starInfo.earned}}</view>
+            class="earned-stars {{activeStarInfo && activeStarInfo.date === item.dateString && activeStarInfo.type === 'earned' ? 'active' : ''}}">+{{item.starInfo.earned}}</view>
           <view 
-            class="star-icon {{activeStarInfo && activeStarInfo.date === item.dateString && activeStarInfo.type === 'icon' ? 'active' : ''}}" 
-            data-type="icon" 
-            data-date="{{item.dateString}}" 
-            catchtap="onStarComponentTap">⭐</view>
+            class="star-icon {{activeStarInfo && activeStarInfo.date === item.dateString && activeStarInfo.type === 'icon' ? 'active' : ''}}">⭐</view>
         </view>
         
         <!-- 当只有扣除星星时，使用水平布局 -->
         <view 
           wx:elif="{{item.starInfo.deducted > 0}}" 
-          class="star-info-container horizontal {{activeStarInfo && activeStarInfo.date === item.dateString && activeStarInfo.type === 'container' ? 'active' : ''}}" 
-          bindtap="onStarInfoTap" 
-          data-earned="0" 
-          data-deducted="{{item.starInfo.deducted}}" 
-          data-date="{{item.dateString}}">
+          class="star-info-container horizontal {{activeStarInfo && activeStarInfo.date === item.dateString && activeStarInfo.type === 'container' ? 'active' : ''}}">
           <view 
-            class="deducted-stars {{activeStarInfo && activeStarInfo.date === item.dateString && activeStarInfo.type === 'deducted' ? 'active' : ''}}" 
-            data-type="deducted" 
-            data-date="{{item.dateString}}" 
-            catchtap="onStarComponentTap">-{{item.starInfo.deducted}}</view>
+            class="deducted-stars {{activeStarInfo && activeStarInfo.date === item.dateString && activeStarInfo.type === 'deducted' ? 'active' : ''}}">-{{item.starInfo.deducted}}</view>
           <view 
-            class="star-icon {{activeStarInfo && activeStarInfo.date === item.dateString && activeStarInfo.type === 'icon' ? 'active' : ''}}" 
-            data-type="icon" 
-            data-date="{{item.dateString}}" 
-            catchtap="onStarComponentTap">⭐</view>
+            class="star-icon {{activeStarInfo && activeStarInfo.date === item.dateString && activeStarInfo.type === 'icon' ? 'active' : ''}}">⭐</view>
         </view>
       </block>
     </view>

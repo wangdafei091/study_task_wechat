@@ -1,3 +1,12 @@
+// 修复日期: 2025-01-16
+// 修复内容: 
+// 1. 修正事件绑定方法名: touchStart -> onTouchStart, touchEnd -> onTouchEnd
+// 2. 去掉多余的事件处理: onStarInfoTap, onStarComponentTap
+// 3. 简化交互逻辑，统一使用 onDayTap 处理日期点击
+// 4. 添加缺少的 goToToday 方法
+// 5. 修正导航按钮的事件绑定: prevMonth -> onPrevMonth, nextMonth -> onNextMonth
+// 6. 修复Set对象在data中序列化问题：将monthsToRefresh移到实例属性，解决"has is not a function"错误
+
 const dateUtils = require('../../../utils/dateUtils.js');
 const analyticsUtils = require('../../utils/analyticsUtils.js');
 const { EVENTS } = require('../../../utils/constants.js');
@@ -32,8 +41,7 @@ Component({
     starRecordsCache: {}, // 添加星星记录缓存
     lastTouchTime: 0, // 添加触摸时间记录，用于节流
     activeStarInfo: null, // 当前激活的星星信息（用于动画）
-    monthCache: {}, // 月份数据缓存
-    monthsToRefresh: new Set() // 需要刷新的月份
+    monthCache: {} // 月份数据缓存
   },
 
   /**
@@ -41,6 +49,9 @@ Component({
    */
   lifetimes: {
     attached: function() {
+      // 初始化monthsToRefresh作为组件实例属性，避免Set在data中序列化问题
+      this.monthsToRefresh = new Set();
+      
       logger.debug('星星日历', '组件初始化');
       this.initCalendar();
       
@@ -66,7 +77,7 @@ Component({
             }
             
             // 标记月份需要刷新
-            this.data.monthsToRefresh.add(monthKey);
+            this.monthsToRefresh.add(monthKey);
             logger.debug('星星日历', `标记月份 ${monthKey} 需要刷新`);
             
             // 如果是当前显示月份，立即刷新
@@ -272,7 +283,7 @@ Component({
       
       // 检查缓存
       const cachedData = this.data.monthCache[monthKey];
-      if (cachedData && !this.data.monthsToRefresh.has(monthKey)) {
+      if (cachedData && !this.monthsToRefresh.has(monthKey)) {
         logger.debug('星星日历', `使用缓存数据: ${monthKey}`);
         this.updateCalendarWithStars(cachedData.records);
         return;
@@ -288,6 +299,9 @@ Component({
       serviceManager.getStarService().getStarRecordsByDateRange(startDate, endDate)
         .then(records => {
           logger.debug('星星日历', `获取到 ${records.length} 条星星记录`);
+          
+          // 清除刷新标志
+          this.monthsToRefresh.delete(monthKey);
           
           // 更新缓存
           const updatedCache = {...this.data.monthCache};
@@ -578,6 +592,26 @@ Component({
       this.loadStarRecords();
       
       logger.debug('星星日历', `切换到下月: ${year}年${month + 1}月`);
+    },
+    
+    /**
+     * 回到今天
+     */
+    goToToday: function() {
+      const today = new Date();
+      const year = today.getFullYear();
+      const month = today.getMonth();
+      
+      this.setData({
+        currentYear: year,
+        currentMonth: month
+      });
+      
+      this.updateMonthTitle();
+      this.generateCalendarDays();
+      this.loadStarRecords();
+      
+      logger.debug('星星日历', `回到今天: ${year}年${month + 1}月`);
     },
     
     /**
