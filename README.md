@@ -87,9 +87,8 @@ npm install
 
 3. **开发环境配置**
 ```bash
-# 复制配置文件
-cp project.config.json.example project.config.json
-# 根据需要修改配置
+# 项目配置已包含在project.config.json中
+# 如需自定义配置，直接修改该文件
 ```
 
 4. **启动开发**
@@ -123,6 +122,7 @@ study_task_wechat/
 │   ├── star-service.js    # 星星服务
 │   ├── reward-service.js  # 奖励服务
 │   ├── validation-service.js # 表单验证服务
+│   ├── config-service.js  # 配置服务
 │   ├── service-manager.js # 服务管理器
 │   └── ...
 ├── 📁 repositories/       # 仓储层
@@ -153,8 +153,7 @@ study_task_wechat/
 
 ### 🔧 API文档
 - [API文档索引](docs/api/readme.md) - API文档导航
-- [服务层API](docs/api/services-guide.md) - 业务服务接口
-- [表单验证API](docs/api/validation-service.md) - 统一验证服务
+- [服务层API](docs/api/services-guide.md) - 业务服务接口（包含验证和配置服务）
 - [仓储层API](docs/api/repositories.md) - 数据访问接口
 - [组件API](docs/api/components-guide.md) - UI组件使用指南
 - [工具函数](docs/api/utils_guide.md) - 工具函数库

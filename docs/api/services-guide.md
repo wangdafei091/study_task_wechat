@@ -1106,6 +1106,212 @@ function checkUserPermissions() {
 }
 ```
 
+## ConfigService - 配置管理服务
+
+ConfigService 统一管理应用配置、用户偏好和系统标记，支持命名空间和事件通知。
+
+### 核心功能
+- 应用配置管理
+- 用户偏好设置
+- 系统标记管理
+- 配置缓存机制
+- 事件通知机制
+- 批量操作支持
+
+### API 方法
+
+#### 基础配置操作
+
+##### get(key, defaultValue)
+获取配置值
+
+```javascript
+// 获取基础配置
+const value = configService.get('theme', 'light');
+
+// 获取系统标记
+const hasWelcomed = configService.get('has_welcomed_user', false);
+```
+
+##### set(key, value)
+设置配置值
+
+```javascript
+// 设置配置（会触发config:changed事件）
+const success = configService.set('theme', 'dark');
+
+// 设置系统标记
+configService.set('has_welcomed_user', true);
+```
+
+##### remove(key)
+删除配置
+
+```javascript
+// 删除配置（会触发config:removed事件）
+const success = configService.remove('old_setting');
+```
+
+#### 系统配置方法
+
+##### getLastExpiryCheckTime() / setLastExpiryCheckTime(timestamp)
+管理过期检查时间戳
+
+```javascript
+// 获取上次过期检查时间
+const lastCheck = configService.getLastExpiryCheckTime();
+
+// 设置过期检查时间
+configService.setLastExpiryCheckTime(Date.now());
+```
+
+##### isFirstLaunch() / markUserWelcomed()
+首次启动检查
+
+```javascript
+// 检查是否首次启动
+if (configService.isFirstLaunch()) {
+  // 显示欢迎界面
+  showWelcome();
+  
+  // 标记已欢迎用户
+  configService.markUserWelcomed();
+}
+```
+
+##### hasCustomRewards() / setCustomRewards(hasCustom)
+自定义奖励标记
+
+```javascript
+// 检查是否有自定义奖励
+if (configService.hasCustomRewards()) {
+  // 显示自定义奖励提示
+}
+
+// 设置自定义奖励标记
+configService.setCustomRewards(true);
+```
+
+#### 用户偏好方法
+
+##### getUserPreference(key, defaultValue) / setUserPreference(key, value)
+用户偏好管理
+
+```javascript
+// 获取用户偏好
+const showTips = configService.getUserPreference('show_tips', true);
+
+// 设置用户偏好
+configService.setUserPreference('show_tips', false);
+```
+
+##### isTipShown(tipKey) / markTipShown(tipKey)
+提示显示状态管理
+
+```javascript
+// 检查提示是否已显示
+if (!configService.isTipShown('first_task_tip')) {
+  showTip('欢迎创建第一个任务！');
+  configService.markTipShown('first_task_tip');
+}
+```
+
+#### 批量操作方法
+
+##### getBatch(keys)
+批量获取配置
+
+```javascript
+const configs = configService.getBatch([
+  'theme',
+  'language', 
+  'notifications_enabled'
+]);
+// 返回: { theme: 'dark', language: 'zh', notifications_enabled: true }
+```
+
+##### setBatch(configs)
+批量设置配置
+
+```javascript
+const success = configService.setBatch({
+  theme: 'dark',
+  language: 'zh',
+  notifications_enabled: true
+});
+```
+
+##### clearAll()
+清除所有配置（谨慎使用）
+
+```javascript
+await configService.clearAll();
+```
+
+### 事件机制
+
+ConfigService 支持事件通知机制：
+
+```javascript
+// 监听配置变更
+eventBus.on('config:changed', ({ key, value }) => {
+  console.log(`配置 ${key} 已更新为: ${value}`);
+});
+
+// 监听配置删除
+eventBus.on('config:removed', ({ key }) => {
+  console.log(`配置 ${key} 已删除`);
+});
+```
+
+### 使用示例
+
+```javascript
+const configService = getApp().serviceManager.get('configService');
+
+// 应用主题管理
+function initTheme() {
+  const theme = configService.getUserPreference('theme', 'light');
+  applyTheme(theme);
+}
+
+function switchTheme(newTheme) {
+  configService.setUserPreference('theme', newTheme);
+  applyTheme(newTheme);
+}
+
+// 首次启动流程
+function handleFirstLaunch() {
+  if (configService.isFirstLaunch()) {
+    // 显示引导页面
+    showOnboarding();
+    
+    // 设置默认配置
+    configService.setBatch({
+      'notifications_enabled': true,
+      'auto_backup': true,
+      'theme': 'light'
+    });
+    
+    // 标记已完成首次启动
+    configService.markUserWelcomed();
+  }
+}
+
+// 提示管理
+function showFeatureTip(tipKey, message) {
+  if (!configService.isTipShown(tipKey)) {
+    wx.showModal({
+      title: '功能提示',
+      content: message,
+      success: () => {
+        configService.markTipShown(tipKey);
+      }
+    });
+  }
+}
+```
+
 ## 服务集成示例
 
 ### 完整业务流程示例

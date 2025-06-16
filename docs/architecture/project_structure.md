@@ -48,6 +48,7 @@
 - **services/message-service.js** - 消息领域服务，管理系统消息
 - **services/user-service.js** - 用户领域服务，管理用户状态
 - **services/validation-service.js** - 表单验证服务，统一验证逻辑
+- **services/config-service.js** - 配置服务，管理应用配置和用户偏好
 - **services/service-manager.js** - 服务管理器，统一管理所有服务实例
 - **services/index.js** - 服务导出入口
 

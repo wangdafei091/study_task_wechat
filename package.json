@@ -1,6 +1,6 @@
 {
   "name": "study-task-wechat",
-  "version": "1.0.0",
+  "version": "3.1.0",
   "description": "学习任务小程序",
   "main": "app.js",
   "scripts": {
@@ -10,7 +10,8 @@
     "test:services": "jest test/services",
     "test:integration": "jest test/integration",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
+    "test:coverage": "jest --coverage",
+    "test:report": "jest --coverage --coverageReporters=html"
   },
   "keywords": [
     "wechat",
