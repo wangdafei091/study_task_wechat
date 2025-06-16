@@ -375,7 +375,7 @@ Page({
   /**
    * 生命周期函数--监听页面显示
    */
-  onShow: function () {
+  onShow: async function () {
     logger.info('Index', '页面显示');
     
     // 获取应用实例
@@ -427,7 +427,10 @@ Page({
       return;
     }
     
-    // 正常页面显示流程 - 批量加载所有数据
+    // 正常页面显示流程 - 先检查过期任务和星星，再批量加载数据
+    logger.debug('Index', '页面显示时检查过期任务和星星');
+    await this.checkExpiredTasksAndStars();
+    
     logger.debug('Index', '页面显示时批量加载所有数据');
     this.loadAllPageData();
   },
@@ -446,6 +449,59 @@ Page({
       eventBus.off('reward:updated', this.handleRewardUpdated);
       eventBus.off('reward:examples_cleared', this.handleRewardUpdated);
       eventBus.off('progressbar:complete', this.handleProgressBarComplete);
+    }
+  },
+
+  /**
+   * 检查过期任务和星星
+   * 每次进入首页时检查，但有5分钟间隔控制，避免频繁执行
+   */
+  checkExpiredTasksAndStars: async function() {
+    try {
+      // 检查上次检查时间，避免频繁检查
+      const lastCheckTime = wx.getStorageSync('last_expiry_check_time') || 0;
+      const now = Date.now();
+      const checkInterval = 5 * 60 * 1000; // 5分钟检查间隔
+      
+      if (now - lastCheckTime < checkInterval) {
+        logger.debug('Index', '距离上次检查时间过短，跳过检查');
+        return;
+      }
+      
+      logger.info('Index', '开始检查过期任务和星星');
+      
+      const taskService = serviceManager.getService('task');
+      const starService = serviceManager.getService('star');
+      
+      // 并行执行检查
+      const [taskResult, starResult] = await Promise.allSettled([
+        taskService ? taskService.checkTasksStatus() : Promise.resolve(),
+        starService ? starService.cleanupExpiredStars() : Promise.resolve()
+      ]);
+      
+      // 记录检查时间
+      wx.setStorageSync('last_expiry_check_time', now);
+      
+      // 检查结果并判断是否需要刷新数据
+      let needRefresh = false;
+      
+      if (taskResult.status === 'fulfilled' && taskResult.value?.penaltyResults?.length > 0) {
+        logger.info('Index', `执行了${taskResult.value.penaltyResults.length}个必做任务惩罚`);
+        needRefresh = true;
+      }
+      
+      if (starResult.status === 'fulfilled' && starResult.value?.expiredCount > 0) {
+        logger.info('Index', `清理了${starResult.value.expiredCount}个过期星星分组`);
+        needRefresh = true;
+      }
+      
+      // 如果有变更，标记需要刷新（在loadAllPageData中会重新加载）
+      if (needRefresh) {
+        logger.info('Index', '检查发现变更，将在数据加载时刷新显示');
+      }
+      
+    } catch (error) {
+      logger.error('Index', '检查过期任务和星星失败', error);
     }
   },
 

@@ -64,6 +64,7 @@ class Task {
     // 状态相关
     this.status = data.status ?? TaskStatus.PENDING;
     this.isRequired = data.isRequired || false;
+    this.penaltyApplied = data.penaltyApplied || false;
     this.completionTime = data.completionTime || 0;
     
     // 星星奖励
@@ -259,6 +260,7 @@ class Task {
     if (data.duration !== undefined) this.duration = data.duration;
     if (data.isAllDay !== undefined) this.isAllDay = data.isAllDay;  // 添加isAllDay字段更新支持
     if (data.isRequired !== undefined) this.isRequired = data.isRequired;
+    if (data.penaltyApplied !== undefined) this.penaltyApplied = data.penaltyApplied;
     if (data.points !== undefined) this.points = data.points;
     if (data.pointsExpiry !== undefined) this.pointsExpiry = data.pointsExpiry;
     if (data.starAwarded !== undefined) this.starAwarded = data.starAwarded;
@@ -375,6 +377,7 @@ class Task {
       isAllDay: this.isAllDay,  // 添加isAllDay字段到克隆数据
       status: this.status,
       isRequired: this.isRequired,
+      penaltyApplied: this.penaltyApplied,
       completionTime: this.completionTime,
       points: this.points,
       pointsExpiry: this.pointsExpiry,

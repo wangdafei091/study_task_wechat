@@ -78,6 +78,9 @@ App({
         
         // 加载任务数据
         if (taskService) {
+          // 修复存量任务数据的penaltyApplied字段
+          await this.fixLegacyTaskData(taskService);
+          
           // 检查任务状态和提醒
           await taskService.checkTasksStatus();
           
@@ -459,6 +462,38 @@ App({
     return this.globalData.userService;
   },
   
+  // 修复存量任务数据的penaltyApplied字段
+  fixLegacyTaskData: async function(taskService) {
+    try {
+      logger.info('App', '开始修复存量任务数据的penaltyApplied字段');
+      
+      // 获取所有任务
+      const allTasks = await taskService.getAllTasks();
+      let fixedCount = 0;
+      
+      for (const task of allTasks) {
+        // 检查是否需要修复penaltyApplied字段
+        if (task.penaltyApplied === undefined) {
+          task.penaltyApplied = false;
+          
+          // 保存修复后的任务
+          await taskService.taskRepository.save(task);
+          fixedCount++;
+          
+          logger.debug('App', `修复任务penaltyApplied字段: ${task.title}`);
+        }
+      }
+      
+      if (fixedCount > 0) {
+        logger.info('App', `存量数据修复完成，修复了${fixedCount}个任务的penaltyApplied字段`);
+      } else {
+        logger.info('App', '存量数据检查完成，无需修复penaltyApplied字段');
+      }
+    } catch (error) {
+      logger.error('App', '修复存量任务数据失败', error);
+    }
+  },
+
   // 检查首次启动并创建欢迎消息
   checkFirstLaunch: async function(messageService) {
     try {

@@ -193,7 +193,7 @@ class TaskRepository extends BaseRepository {
           return false;
         }
         
-        return task.date < today && task.status !== 1;
+        return task.isExpired();
       });
       
       logger.info('TaskRepository', `获取过期未完成任务成功${userId ? `, 用户=${userId}` : ''}, 数量=${tasks.length}`);

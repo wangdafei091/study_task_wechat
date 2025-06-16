@@ -1064,6 +1064,16 @@ class TaskService {
         task.isRequired && !task.penaltyApplied && task.status !== TaskStatus.COMPLETED
       );
       
+      // 记录详细的筛选信息
+      if (expiredTasks.length > 0) {
+        logger.info('TaskService', `过期任务筛选详情: 总过期任务=${expiredTasks.length}, 必做任务=${expiredTasks.filter(t => t.isRequired).length}, 待惩罚任务=${expiredRequiredTasks.length}`);
+        
+        // 记录每个待惩罚任务的详细信息
+        expiredRequiredTasks.forEach(task => {
+          logger.debug('TaskService', `待惩罚任务: "${task.title}", 日期=${task.date}, penaltyApplied=${task.penaltyApplied}`);
+        });
+      }
+      
       // 处理必做任务惩罚
       const penaltyResults = [];
       for (const task of expiredRequiredTasks) {
