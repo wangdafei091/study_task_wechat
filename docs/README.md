@@ -36,13 +36,12 @@
 
 ### 核心架构
 - [系统架构](architecture/system_architecture.md) - 系统整体架构设计和组件关系
+- [DDD领域架构](architecture/domain-model-architecture.md) - 领域驱动设计架构详解
 - [项目结构](architecture/project_structure.md) - 项目文件结构和组织方式
 - [数据模型](architecture/data_models.md) - 核心数据模型和字段说明
-- [领域模型架构](architecture/domain-model-architecture.md) - 领域驱动设计架构详解
 
 ### 专项设计
 - [星星积分系统](architecture/star_points_system.md) - 积分系统的核心实现
-- [优化总结](architecture/optimization_summary.md) - 项目优化措施和效果
 
 ## 开发指南
 

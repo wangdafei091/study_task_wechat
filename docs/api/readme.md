@@ -10,7 +10,7 @@
 
 | 文档名称 | 描述 | 更新状态 |
 |---------|------|----------|
-| [services-guide.md](./services-guide.md) | 服务层API完整指南 | ✅ 最新 |
+| [services-guide.md](./services-guide.md) | 服务层API完整指南(含验证和配置服务) | ✅ 最新 |
 | [repositories.md](./repositories.md) | 仓储层API详细文档 | ✅ 最新 |
 | [components-guide.md](./components-guide.md) | 组件使用指南和API | ✅ 最新 |
 | [utils_guide.md](./utils_guide.md) | 工具函数库API文档 | ✅ 最新 |
@@ -23,11 +23,11 @@
 
 核心业务服务的完整API文档：
 
-- **TaskService** - 任务管理服务
+- **TaskService** - 任务管理核心服务
   - 任务CRUD操作
-  - 任务状态管理
-  - 必做任务处理
-  - 任务完成奖励
+  - 任务状态管理和流转
+  - 必做任务惩罚处理
+  - 任务完成奖励机制
 
 - **StarService** - 星星积分服务
   - 星星余额管理
@@ -52,6 +52,18 @@
   - 权限控制
   - 用户切换
   - 配置管理
+
+- **ValidationService** - 表单验证服务
+  - 任务表单验证
+  - 奖励表单验证
+  - 通用字段验证
+  - 数据组装和格式化
+
+- **ConfigService** - 配置管理服务
+  - 应用配置管理
+  - 用户偏好设置
+  - 系统标记管理
+  - 批量配置操作
 
 ### 🗄️ 仓储层 API
 **文档**: [repositories.md](./repositories.md)

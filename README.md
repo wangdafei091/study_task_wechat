@@ -56,6 +56,7 @@
 - **数据存储**：StorageAdapter + 微信小程序本地存储
 - **服务管理**：ServiceManager (依赖注入)
 - **表单验证**：ValidationService (统一验证逻辑)
+- **配置管理**：ConfigService (应用配置和用户偏好)
 - **批量处理**：batchUtils (性能优化)
 - **日志系统**：统一Logger工具
 
@@ -153,7 +154,7 @@ study_task_wechat/
 
 ### 🔧 API文档
 - [API文档索引](docs/api/readme.md) - API文档导航
-- [服务层API](docs/api/services-guide.md) - 业务服务接口（包含验证和配置服务）
+- [服务层API](docs/api/services-guide.md) - 核心业务服务完整指南
 - [仓储层API](docs/api/repositories.md) - 数据访问接口
 - [组件API](docs/api/components-guide.md) - UI组件使用指南
 - [工具函数](docs/api/utils_guide.md) - 工具函数库

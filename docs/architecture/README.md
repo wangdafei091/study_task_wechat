@@ -11,33 +11,28 @@
 ### ⭐ 业务架构
 - **[星星积分系统](star_points_system.md)** - 积分系统设计和实现
 
-## 历史记录文档
+## 项目演进记录
 
-以下文档记录了项目演进过程中的重要修复和优化，供参考：
+以下文档记录了项目重要的架构演进过程，供参考和回顾：
 
-### 🔧 架构优化记录
-- `logic-layer-optimization-summary.md` - 逻辑层优化记录
-- `optimization_summary.md` - 整体优化总结
-- `ddd-migration-summary.md` - DDD迁移过程
-- `migration-status.md` - 迁移状态跟踪
+### 🔧 架构优化历程
+- `logic-layer-optimization-summary.md` - DDD逻辑层重构优化记录
+- `ddd-migration-summary.md` - 领域驱动设计迁移过程
+- `optimization_summary.md` - 整体架构优化总结
 
-### 🐛 问题修复记录
-- `api-deprecation-fix.md` - API废弃问题修复
-- `log-optimization-fix.md` - 日志系统优化
-- `message-priority-fix.md` - 消息优先级修复
-- `service-dependency-fix.md` - 服务依赖问题修复
-
-### 🎨 UI实现记录
-- `phase-four-ui-implementation.md` - 第四阶段UI实现
+### 🐛 重要问题修复
+- `service-dependency-fix.md` - 服务依赖关系优化
+- `log-optimization-fix.md` - 日志系统架构优化
+- `message-priority-fix.md` - 消息系统优先级重构
 
 ## 文档维护说明
 
-1. **核心文档**：定期更新，反映最新架构状态
-2. **历史记录**：仅作参考，不再主动维护
-3. **新增文档**：优先在核心文档中补充，避免创建临时文档
+1. **核心文档**：持续维护，反映最新架构状态
+2. **演进记录**：保留重要的架构决策和优化过程
+3. **新增内容**：优先更新核心文档，重大架构变更可创建专门记录
 
 ## 使用指南
 
 - 🆕 **新开发者**：重点阅读核心架构文档
-- 🔍 **问题排查**：可参考历史记录中的修复文档
-- �� **架构修改**：更新对应的核心文档 
+- 🔄 **架构升级**：参考演进记录了解历史决策
+- 📋 **设计决策**：基于现有架构模式进行扩展 

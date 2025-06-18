@@ -25,11 +25,15 @@
   - 领域事件机制支持状态变更通知
 
 - **应用服务层(services/)**：协调领域对象，实现业务逻辑
-  - TaskService、StarService、RewardService、MessageService、UserService、ValidationService、ConfigService
+  - **TaskService**：任务管理核心服务，处理任务CRUD、状态管理、必做任务惩罚等
+  - **StarService**：星星积分服务，实现FIFO消费策略、有效期管理、记录追踪
+  - **RewardService**：奖励兑换服务，管理奖励库存、兑换流程、状态跟踪
+  - **MessageService**：消息通知服务，处理系统消息、状态更新、批量操作
+  - **UserService**：用户管理服务，支持角色切换、权限控制、配置管理
+  - **ValidationService**：表单验证服务，提供统一的数据验证逻辑
+  - **ConfigService**：配置管理服务，处理应用配置、用户偏好、系统标记
   - 通过ServiceManager统一管理和依赖注入
   - 服务间通过EventBus进行事件通信
-  - ValidationService提供统一的表单验证逻辑
-  - ConfigService管理应用配置和用户偏好
 
 - **基础设施层(repositories/ & adapters/)**：提供技术支撑
   - BaseRepository提供通用CRUD操作
