@@ -84,9 +84,6 @@ App({
           // 检查任务状态和提醒
           await taskService.checkTasksStatus();
           
-          // 检查必做任务，处理过期未完成的必做任务
-          await taskService.checkRequiredTasks();
-          
           // 检查即将到期的任务
           await taskService.checkUpcomingTasks();
         }
