@@ -516,12 +516,21 @@ Page({
     }
 
     // 添加二次确认
+    let confirmTitle = '确认领取';
+    let confirmContent = '';
+    
+    if (reward.protectedByExpiry) {
+      confirmContent = `【${reward.name}】为星星过期保护奖励，兑换无需消耗星星！确定要领取吗？`;
+    } else {
+      confirmContent = `确定要用 ${reward.points} 颗星星兑换【${reward.name}】吗？领取后星星将不能退回哦！`;
+    }
+    
     wx.showModal({
-      title: '确认领取',
-      content: `确定要用 ${reward.points} 颗星星兑换【${reward.name}】吗？领取后星星将不能退回哦！`,
+      title: confirmTitle,
+      content: confirmContent,
       success: (res) => {
         if (res.confirm) {
-          logger.info('rewards', `用户确认领取奖励: ${reward.name}, 消耗星星: ${reward.points}`);
+          logger.info('rewards', `用户确认领取奖励: ${reward.name}, ${reward.protectedByExpiry ? '保护奖励' : '消耗星星: ' + reward.points}`);
           this._performClaimReward(reward);
         } else {
           logger.info('rewards', `用户取消领取奖励: ${reward.name}`);
@@ -570,60 +579,88 @@ Page({
         return;
       }
       
-      logger.info('rewards', `兑换奖励成功: ${reward.name}, ID=${reward.id}, 消耗星星: ${reward.points}, 用户: ${childUserId}`);
+      logger.info('rewards', `兑换奖励成功: ${reward.name}, ID=${reward.id}, ${result.protectedByExpiry ? '保护奖励' : '消耗星星: ' + reward.points}, 用户: ${childUserId}`);
       
-      // 开始星星数量减少的动画
+      // 隐藏加载提示
       wx.hideLoading();
-      this.animateStarsCount(originalPoints, targetPoints, async () => {
-        // 动画完成后，强制清除所有缓存确保数据一致性
-        logger.info('rewards', '动画完成，强制清除缓存确保数据一致性');
-        if (starService.clearCache) {
-          starService.clearCache();
-        }
-        if (rewardService.clearCache) {
-          rewardService.clearCache();
-        }
+      
+      // 如果是保护奖励，直接处理结果；否则播放动画
+      if (result.protectedByExpiry) {
+        logger.info('rewards', '保护奖励无需动画，直接处理结果');
+        await this._handleExchangeSuccess(result, reward, childUserId);
         
-        // 计算下一个可用奖励
-        const nextReward = await rewardService.calculateNextAvailableReward();
-        logger.info('rewards', `领取奖励后计算下一个可用奖励: ${nextReward.name}, 需要${nextReward.points}颗星星`);
-        
-        // 关闭弹窗并更新数据
-        this.setData({
-          showModal: false,
-          nextReward: nextReward
-        });
-        
-        // 重新加载奖励数据以更新UI
-        await this.loadRewardsData();
-        
-        // 通知首页更新星星和奖励进度
-        const app = getApp();
-        if (app && app.globalData && app.globalData.eventBus) {
-          logger.info('rewards', '发送奖励领取事件通知');
-          app.globalData.eventBus.emit(EVENTS.REWARD_CLAIMED, {
-            rewardId: reward.id,
-            rewardName: reward.name,  // 添加rewardName字段以兼容MessageService
-            points: reward.points,
-            userId: childUserId,      // 添加小朋友用户ID到事件数据
-            newTotalPoints: targetPoints,
-            nextReward: nextReward
-          });
-        }
-
-        // 显示领取成功提示
+        // 显示保护奖励兑换成功提示
         wx.showToast({
-          title: '兑换成功',
+          title: '保护奖励兑换成功',
           icon: 'success',
           duration: 2000
         });
-      });
+      } else {
+        // 普通奖励播放星星减少动画
+        this.animateStarsCount(originalPoints, targetPoints, async () => {
+          await this._handleExchangeSuccess(result, reward, childUserId);
+          
+          // 显示普通兑换成功提示
+          wx.showToast({
+            title: '兑换成功',
+            icon: 'success',
+            duration: 2000
+          });
+        });
+      }
     } catch (error) {
       logger.error('rewards', '兑换奖励出错', error);
       wx.hideLoading();
       wx.showToast({
         title: '操作失败，请重试',
         icon: 'none'
+      });
+    }
+  },
+  
+  /**
+   * 处理兑换成功的共同逻辑
+   */
+  _handleExchangeSuccess: async function(result, reward, childUserId) {
+    // 获取服务实例
+    const rewardService = serviceManager.getService('rewardService');
+    const starService = serviceManager.getService('starService');
+    
+    // 强制清除所有缓存确保数据一致性
+    logger.info('rewards', '清除缓存确保数据一致性');
+    if (starService && starService.clearCache) {
+      starService.clearCache();
+    }
+    if (rewardService && rewardService.clearCache) {
+      rewardService.clearCache();
+    }
+    
+    // 计算下一个可用奖励
+    const nextReward = await rewardService.calculateNextAvailableReward();
+    logger.info('rewards', `领取奖励后计算下一个可用奖励: ${nextReward.name}, 需要${nextReward.points}颗星星`);
+    
+    // 关闭弹窗并更新数据
+    this.setData({
+      showModal: false,
+      nextReward: nextReward
+    });
+    
+    // 重新加载奖励数据以更新UI
+    await this.loadRewardsData();
+    
+    // 通知首页更新星星和奖励进度
+    const app = getApp();
+    if (app && app.globalData && app.globalData.eventBus) {
+      logger.info('rewards', '发送奖励领取事件通知');
+      app.globalData.eventBus.emit(EVENTS.REWARD_CLAIMED, {
+        rewardId: reward.id,
+        rewardName: reward.name,
+        points: result.protectedByExpiry ? 0 : reward.points, // 保护奖励事件中显示消耗0颗星星
+        originalPoints: reward.points,
+        protectedByExpiry: result.protectedByExpiry || false,
+        userId: childUserId,
+        newTotalPoints: this.data.totalPoints, // 使用当前最新的星星总数
+        nextReward: nextReward
       });
     }
   },
@@ -767,6 +804,4 @@ Page({
     
     return childUserId;
   }
-
-  // 不再需要冗余的兑换功能，直接使用_performClaimReward
 })

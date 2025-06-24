@@ -56,13 +56,19 @@
               data-id="{{item.id}}">
           <view class="reward-icon">{{item.icon}}</view>
           <view class="reward-name">{{item.name}}</view>
-          <view class="reward-points">{{item.points}}颗</view>
+          <view class="reward-points" wx:if="{{!item.protectedByExpiry}}">{{item.points}}颗</view>
+          <view class="reward-points protected" wx:else>
+            <text class="original-points">{{item.points}}颗</text>
+            <text class="protected-text">免费</text>
+          </view>
           <view class="reward-status">
             <text wx:if="{{item.claimed}}">已领取</text>
             <text wx:elif="{{item.unlocked}}">可领取</text>
             <text wx:else>未解锁</text>
           </view>
           
+          <!-- 保护标识 -->
+          <view class="protection-badge" wx:if="{{item.protectedByExpiry}}">🛡️</view>
           <!-- 示例标签 -->
           <view class="example-badge" wx:if="{{item.isExample === true}}">示例</view>
         </view>
@@ -156,7 +162,19 @@
       <view class="reward-detail">
         <view class="reward-icon large">{{selectedReward.icon}}</view>
         <view class="reward-name">{{selectedReward.name}}</view>
-        <view class="reward-points">所需星星: {{selectedReward.points}}</view>
+        
+        <!-- 保护奖励特殊显示 -->
+        <view class="protection-notice" wx:if="{{selectedReward.protectedByExpiry}}">
+          <text class="protection-icon">🛡️</text>
+          <text class="protection-text">星星过期保护奖励</text>
+        </view>
+        
+        <view class="reward-points" wx:if="{{!selectedReward.protectedByExpiry}}">所需星星: {{selectedReward.points}}</view>
+        <view class="reward-points protection" wx:else>
+          <text class="original-points">原需: {{selectedReward.points}}颗</text>
+          <text class="protected-text">现已免费</text>
+        </view>
+        
         <view class="reward-status-text">
           <text wx:if="{{selectedReward.claimed}}" class="status-claimed">已领取</text>
           <text wx:elif="{{selectedReward.unlocked}}" class="status-unlocked">已解锁</text>

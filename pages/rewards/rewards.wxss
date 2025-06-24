@@ -184,6 +184,40 @@
   color: #FBBC05;
 }
 
+/* 保护奖励积分样式 */
+.reward-points.protected {
+  flex-direction: column;
+  gap: 4rpx;
+}
+
+.reward-points.protected::before {
+  display: none;
+}
+
+.original-points {
+  font-size: 20rpx;
+  color: #999999;
+  text-decoration: line-through;
+}
+
+.protected-text {
+  font-size: 22rpx;
+  color: #FF9800;
+  font-weight: 500;
+}
+
+/* 保护标识 */
+.protection-badge {
+  position: absolute;
+  top: 8rpx;
+  right: 8rpx;
+  font-size: 20rpx;
+  background-color: rgba(255, 152, 0, 0.1);
+  padding: 4rpx 8rpx;
+  border-radius: 8rpx;
+  border: 1rpx solid #FF9800;
+}
+
 .reward-status {
   font-size: 22rpx;
   color: #999999;
@@ -449,16 +483,15 @@
 
 /* 示例标签样式 */
 .example-badge {
-  display: inline-block;
   position: absolute;
-  top: 10rpx;
-  right: 10rpx;
-  font-size: 22rpx;
-  color: #666666;
-  background-color: #f0f0f0;
-  padding: 4rpx 12rpx;
-  border-radius: 10rpx;
-  box-shadow: 0 2rpx 4rpx rgba(0, 0, 0, 0.1);
+  top: 8rpx;
+  left: 8rpx;
+  font-size: 20rpx;
+  background-color: rgba(66, 133, 244, 0.1);
+  color: #4285F4;
+  padding: 4rpx 8rpx;
+  border-radius: 8rpx;
+  border: 1rpx solid #4285F4;
 }
 
 /* 进度条动画期间显示的操作锁定遮罩 */
@@ -507,4 +540,47 @@
   font-size: 32rpx;
   color: #333;
   font-weight: 500;
+}
+
+/* 奖励详情弹窗中的保护提示 */
+.protection-notice {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8rpx;
+  margin: 16rpx 0;
+  padding: 12rpx 16rpx;
+  background-color: rgba(255, 152, 0, 0.1);
+  border-radius: 12rpx;
+  border: 1rpx solid #FF9800;
+}
+
+.protection-icon {
+  font-size: 24rpx;
+}
+
+.protection-text {
+  font-size: 24rpx;
+  color: #FF9800;
+  font-weight: 500;
+}
+
+/* 弹窗中的保护奖励积分样式 */
+.reward-points.protection {
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+  margin: 16rpx 0;
+}
+
+.reward-points.protection .original-points {
+  font-size: 24rpx;
+  color: #999999;
+  text-decoration: line-through;
+}
+
+.reward-points.protection .protected-text {
+  font-size: 26rpx;
+  color: #FF9800;
+  font-weight: 600;
 } 

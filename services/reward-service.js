@@ -561,8 +561,8 @@ class RewardService {
       const userStars = await this.starGroupRepository.getTotalPoints(userId);
       logger.info('RewardService', `兑换奖励前用户星星数: ${userStars}, 用户=${userId}`);
       
-      // 检查用户是否有足够的星星
-      if (userStars < reward.points) {
+      // 检查用户是否有足够的星星（保护奖励不需要扣星星）
+      if (!reward.protectedByExpiry && userStars < reward.points) {
         logger.warn('RewardService', `兑换奖励失败: 星星不足, 需要${reward.points}颗, 当前${userStars}颗, 用户=${userId}`);
         return { success: false, message: '星星不足' };
       }
@@ -573,64 +573,73 @@ class RewardService {
       
       try {
         logger.info('RewardService', `===== 开始兑换奖励事务 =====`);
-        logger.info('RewardService', `事务参数: 奖励=${reward.name}, 消耗星星=${reward.points}颗, 用户=${userId}`);
+        logger.info('RewardService', `事务参数: 奖励=${reward.name}, 消耗星星=${reward.protectedByExpiry ? 0 : reward.points}颗(${reward.protectedByExpiry ? '保护奖励' : '普通兑换'}), 用户=${userId}`);
         
-        // 1. 扣除用户星星
-        logger.info('RewardService', `步骤3: 开始扣除星星, 数量=${reward.points}, 用户=${userId}`);
-        deductResult = await this.starGroupRepository.deductStars(reward.points, userId);
-        
-        logger.info('RewardService', `扣除星星操作完成, 结果=`, deductResult);
-        
-        if (!deductResult.success) {
-          logger.error('RewardService', `扣除星星失败: ${deductResult.message}, 用户=${userId}`);
-          return { success: false, message: '扣除星星失败' };
+        // 1. 扣除用户星星（保护奖励跳过此步骤）
+        if (!reward.protectedByExpiry) {
+          logger.info('RewardService', `步骤3: 开始扣除星星, 数量=${reward.points}, 用户=${userId}`);
+          deductResult = await this.starGroupRepository.deductStars(reward.points, userId);
+          
+          logger.info('RewardService', `扣除星星操作完成, 结果=`, deductResult);
+          
+          if (!deductResult.success) {
+            logger.error('RewardService', `扣除星星失败: ${deductResult.message}, 用户=${userId}`);
+            return { success: false, message: '扣除星星失败' };
+          }
+          
+          logger.info('RewardService', `步骤3完成: 星星扣除成功，扣除${reward.points}颗, 用户=${userId}`);
+        } else {
+          logger.info('RewardService', `步骤3跳过: 保护奖励无需扣除星星, 奖励=${reward.name}, 用户=${userId}`);
+          deductResult = { success: true, message: '保护奖励无需扣星' };
         }
         
-        logger.info('RewardService', `步骤3完成: 星星扣除成功，扣除${reward.points}颗, 用户=${userId}`);
-        
-        // 2. 创建星星消费记录
+        // 2. 创建星星消费记录（保护奖励创建特殊记录）
         try {
           const recordData = {
-            amount: reward.points,
-            type: 'exchange', // 消费类型：兑换奖励
+            amount: reward.protectedByExpiry ? 0 : reward.points,
+            type: reward.protectedByExpiry ? 'protected_exchange' : 'exchange', // 保护兑换或普通兑换
             source: `reward_${rewardId}`,
             timestamp: Date.now(),
-            userId: userId, // 添加用户ID
+            userId: userId,
             data: {
               rewardId: reward.id,
-              rewardName: reward.name
+              rewardName: reward.name,
+              originalPoints: reward.points,
+              protectedByExpiry: reward.protectedByExpiry || false
             }
           };
           
           consumptionRecord = await this.starRecordRepository.createStarConsumptionRecord(recordData);
-          logger.info('RewardService', `星星消费记录创建成功: ${consumptionRecord.id}, 用户=${userId}`);
+          logger.info('RewardService', `星星消费记录创建成功: ${consumptionRecord.id}, 类型=${recordData.type}, 用户=${userId}`);
         } catch (recordError) {
           logger.error('RewardService', '创建星星消费记录失败', recordError);
           
-          // 回滚星星扣除操作
-          try {
-            logger.warn('RewardService', `开始回滚星星扣除操作, 用户=${userId}`);
-            const permanentGroup = await this.starGroupRepository.getOrCreateGroup(
-              'permanent', 
-              null, 
-              '永久有效',
-              userId
-            );
-            
-            if (permanentGroup) {
-              await this.starGroupRepository.addStarsToGroup(
-                permanentGroup,
-                reward.points,
-                `兑换奖励失败回滚: ${reward.name}`,
+          // 回滚星星扣除操作（仅对非保护奖励）
+          if (!reward.protectedByExpiry) {
+            try {
+              logger.warn('RewardService', `开始回滚星星扣除操作, 用户=${userId}`);
+              const permanentGroup = await this.starGroupRepository.getOrCreateGroup(
+                'permanent', 
+                null, 
+                '永久有效',
                 userId
               );
-              logger.info('RewardService', `星星回滚成功，退还${reward.points}颗星星, 用户=${userId}`);
+              
+              if (permanentGroup) {
+                await this.starGroupRepository.addStarsToGroup(
+                  permanentGroup,
+                  reward.points,
+                  `兑换奖励失败回滚: ${reward.name}`,
+                  userId
+                );
+                logger.info('RewardService', `星星回滚成功，退还${reward.points}颗星星, 用户=${userId}`);
+              }
+            } catch (rollbackError) {
+              logger.error('RewardService', '星星回滚失败', rollbackError);
             }
-          } catch (rollbackError) {
-            logger.error('RewardService', '星星回滚失败', rollbackError);
           }
           
-          return { success: false, message: '创建消费记录失败，已回滚星星扣除' };
+          return { success: false, message: '创建消费记录失败' + (!reward.protectedByExpiry ? '，已回滚星星扣除' : '') };
         }
         
         // 3. 更新奖励状态为已领取
@@ -647,30 +656,32 @@ class RewardService {
         } catch (saveError) {
           logger.error('RewardService', '更新奖励状态失败', saveError);
           
-          // 回滚星星扣除操作
-          try {
-            logger.warn('RewardService', `开始回滚星星扣除操作, 用户=${userId}`);
-            const permanentGroup = await this.starGroupRepository.getOrCreateGroup(
-              'permanent', 
-              null, 
-              '永久有效',
-              userId
-            );
-            
-            if (permanentGroup) {
-              await this.starGroupRepository.addStarsToGroup(
-                permanentGroup,
-                reward.points,
-                `兑换奖励失败回滚: ${reward.name}`,
+          // 回滚星星扣除操作（仅对非保护奖励）
+          if (!reward.protectedByExpiry) {
+            try {
+              logger.warn('RewardService', `开始回滚星星扣除操作, 用户=${userId}`);
+              const permanentGroup = await this.starGroupRepository.getOrCreateGroup(
+                'permanent', 
+                null, 
+                '永久有效',
                 userId
               );
-              logger.info('RewardService', `星星回滚成功，退还${reward.points}颗星星, 用户=${userId}`);
+              
+              if (permanentGroup) {
+                await this.starGroupRepository.addStarsToGroup(
+                  permanentGroup,
+                  reward.points,
+                  `兑换奖励失败回滚: ${reward.name}`,
+                  userId
+                );
+                logger.info('RewardService', `星星回滚成功，退还${reward.points}颗星星, 用户=${userId}`);
+              }
+            } catch (rollbackError) {
+              logger.error('RewardService', '星星回滚失败', rollbackError);
             }
-          } catch (rollbackError) {
-            logger.error('RewardService', '星星回滚失败', rollbackError);
           }
           
-          return { success: false, message: '更新奖励状态失败，已回滚星星扣除' };
+          return { success: false, message: '更新奖励状态失败' + (!reward.protectedByExpiry ? '，已回滚星星扣除' : '') };
         }
         
         // 4. 发出奖励领取事件
@@ -678,9 +689,11 @@ class RewardService {
           this.eventBus.emit(EVENTS.REWARD_CLAIMED, { 
             rewardId: reward.id,
             rewardName: reward.name,
-            points: reward.points,
-            userId: userId, // 添加用户ID到事件数据
-            operatorUserId: userId, // 添加操作者信息
+            points: reward.protectedByExpiry ? 0 : reward.points, // 保护奖励事件中显示消耗0颗星星
+            originalPoints: reward.points, // 保留原始积分信息
+            protectedByExpiry: reward.protectedByExpiry || false,
+            userId: userId,
+            operatorUserId: userId,
             timestamp: Date.now()
           });
           logger.info('RewardService', `奖励领取事件发送成功, 用户=${userId}`);
@@ -689,7 +702,7 @@ class RewardService {
           // 事件发送失败不影响主流程
         }
         
-        logger.info('RewardService', `兑换奖励成功: ${reward.name}, 消耗${reward.points}颗星星, 用户=${userId}`);
+        logger.info('RewardService', `兑换奖励成功: ${reward.name}, 消耗${reward.protectedByExpiry ? 0 : reward.points}颗星星${reward.protectedByExpiry ? '(保护奖励)' : ''}, 用户=${userId}`);
         
         // 5. 验证操作后的数据一致性
         try {
@@ -698,12 +711,13 @@ class RewardService {
             const isConsistent = await starService.verifyOperationConsistency('兑换奖励', {
               rewardId: reward.id,
               rewardName: reward.name,
-              consumedPoints: reward.points,
+              consumedPoints: reward.protectedByExpiry ? 0 : reward.points,
+              protectedByExpiry: reward.protectedByExpiry || false,
               userId: userId
             });
             
             if (!isConsistent) {
-              logger.error('RewardService', `兑换奖励后数据不一致！奖励: ${reward.name}, 消耗星星: ${reward.points}, 用户: ${userId}`);
+              logger.error('RewardService', `兑换奖励后数据不一致！奖励: ${reward.name}, 消耗星星: ${reward.protectedByExpiry ? 0 : reward.points}, 用户: ${userId}`);
             }
           }
         } catch (consistencyError) {
@@ -713,14 +727,15 @@ class RewardService {
         return { 
           success: true, 
           reward, 
-          message: '兑换成功',
+          message: reward.protectedByExpiry ? '保护奖励兑换成功' : '兑换成功',
+          protectedByExpiry: reward.protectedByExpiry || false,
           userId: userId
         };
       } catch (error) {
         logger.error('RewardService', '兑换奖励事务处理失败', error);
         
-        // 如果星星已经扣除，尝试回滚
-        if (deductResult && deductResult.success) {
+        // 如果星星已经扣除，尝试回滚（仅对非保护奖励）
+        if (deductResult && deductResult.success && !reward.protectedByExpiry) {
           try {
             logger.warn('RewardService', `开始回滚星星扣除操作, 用户=${userId}`);
             const permanentGroup = await this.starGroupRepository.getOrCreateGroup(

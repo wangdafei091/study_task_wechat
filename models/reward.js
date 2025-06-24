@@ -50,6 +50,9 @@ class Reward {
     this.isExample = data.isExample || false;
     this.tags = data.tags || [];
     this.notes = data.notes || '';
+    
+    // 保护相关属性
+    this.protectedByExpiry = data.protectedByExpiry || false; // 是否被星星过期保护
   }
   
   /**

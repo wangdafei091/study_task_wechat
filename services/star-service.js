@@ -1283,6 +1283,186 @@ class StarService {
       this.starRecordRepository.clearCache();
     }
   }
+
+  /**
+   * 计算即将过期的星星数量（不实际清理）
+   * @param {String} userId 可选的用户ID，不传则计算所有用户的过期星星
+   * @returns {Promise<Number>} 即将过期的星星数量
+   */
+  async calculatePendingExpiry(userId = null) {
+    try {
+      // 获取所有分组
+      const allGroups = await this.starGroupRepository.getAll();
+      
+      // 用户过滤
+      const userGroups = userId ? allGroups.filter(group => group.userId === userId) : allGroups;
+      
+      // 当前时间
+      const now = Date.now();
+      
+      // 找出已过期的分组
+      const expiredGroups = userGroups.filter(group => 
+        group.expiryType !== StarExpiryType.PERMANENT && 
+        group.expiryDate && 
+        group.expiryDate < now
+      );
+      
+      // 计算过期总数量
+      const expiredPoints = expiredGroups.reduce((sum, group) => sum + (group.stars || 0), 0);
+      
+      logger.info('StarService', `计算即将过期星星数量${userId ? `, 用户=${userId}` : ''}: ${expiredPoints}颗`);
+      return expiredPoints;
+    } catch (error) {
+      logger.error('StarService', '计算即将过期星星数量失败', error);
+      return 0;
+    }
+  }
+
+  /**
+   * 奖励过期保护：根据过期星星数量保护可兑换奖励
+   * @param {Number} expiredStars 过期的星星数量
+   * @param {String} userId 用户ID
+   * @returns {Promise<Object>} 保护结果
+   */
+  async protectRewardsByExpiry(expiredStars, userId) {
+    if (!expiredStars || expiredStars <= 0) {
+      logger.info('StarService', '无过期星星，跳过奖励保护');
+      return { success: true, protectedCount: 0, protectedRewards: [] };
+    }
+
+    try {
+      // 获取奖励服务
+      const serviceManager = require('./service-manager');
+      const rewardService = serviceManager.getService('rewardService');
+      
+      if (!rewardService) {
+        logger.error('StarService', '无法获取奖励服务，跳过奖励保护');
+        return { success: false, message: '奖励服务不可用' };
+      }
+
+      // 获取用户当前星星总数
+      const totalStars = await this.getTotalStars(userId);
+      
+      // 获取所有可用奖励
+      const availableRewards = await rewardService.getAvailableRewards(false, false, userId);
+      
+      // 筛选出当前可兑换但未领取的奖励
+      const claimableRewards = availableRewards.filter(reward => 
+        totalStars >= reward.points && !reward.claimed && !reward.protectedByExpiry
+      );
+      
+      if (claimableRewards.length === 0) {
+        logger.info('StarService', '无可兑换奖励需要保护');
+        return { success: true, protectedCount: 0, protectedRewards: [] };
+      }
+      
+      // 按积分从高到低排序（优先保护高价值奖励）
+      claimableRewards.sort((a, b) => b.points - a.points);
+      
+      // 分配保护：用过期星星数作为分配池
+      let allocation = expiredStars;
+      const protectedRewards = [];
+      
+      for (const reward of claimableRewards) {
+        if (allocation >= reward.points) {
+          // 标记为保护奖励
+          reward.protectedByExpiry = true;
+          allocation -= reward.points;
+          protectedRewards.push(reward);
+          
+          logger.info('StarService', `保护奖励: ${reward.name}(${reward.points}颗星星)`);
+        }
+      }
+      
+      // 保存保护状态到奖励数据
+      for (const reward of protectedRewards) {
+        await rewardService.updateReward(reward.id, { protectedByExpiry: true });
+      }
+      
+      logger.info('StarService', `奖励保护完成，保护了${protectedRewards.length}个奖励，使用${expiredStars - allocation}颗过期星星`);
+      
+      return {
+        success: true,
+        protectedCount: protectedRewards.length,
+        protectedRewards: protectedRewards.map(r => ({ id: r.id, name: r.name, points: r.points })),
+        usedExpiredStars: expiredStars - allocation
+      };
+    } catch (error) {
+      logger.error('StarService', '奖励保护失败', error);
+      return { success: false, message: '保护过程中发生错误' };
+    }
+  }
+
+  /**
+   * 清理过期星星
+   * @param {String} userId 可选的用户ID，不传则清理所有用户的过期星星
+   * @returns {Promise<Object>} 清理结果包含：success, expiredCount, totalPoints, records
+   */
+  async cleanupExpiredStars(userId = null) {
+    try {
+      // 清理过期分组
+      const expiredGroups = await this.starGroupRepository.cleanupExpiredGroups(userId);
+      
+      if (expiredGroups.length === 0) {
+        logger.info('StarService', '清理过期星星: 没有发现过期星星');
+        return { 
+          success: true, 
+          expiredCount: 0, 
+          totalPoints: 0,
+          message: '没有发现过期星星'
+        };
+      }
+      
+      // 计算过期总数
+      let totalExpiredPoints = 0;
+      const expiredRecords = [];
+      
+      // 为每个过期分组创建记录
+      for (const group of expiredGroups) {
+        if (group.stars > 0) {
+          totalExpiredPoints += group.stars;
+          
+          // 创建过期记录
+          const record = await this.starRecordRepository.createExpiredRecord(
+            group.stars,
+            group.expiryType,
+            `星星过期: ${this._getExpiryTypeDescription(group.expiryType)}`
+          );
+          
+          if (record) {
+            expiredRecords.push(record);
+          } else {
+            logger.error('StarService', `清理过期星星: 创建记录失败, 分组ID=${group.id}, 星星数=${group.stars}`);
+          }
+        }
+      }
+      
+      // 清理空分组
+      await this.starGroupRepository.cleanupEmptyGroups();
+      
+      logger.info('StarService', `清理过期星星成功, 过期分组数=${expiredGroups.length}, 过期星星总数=${totalExpiredPoints}`);
+      
+      // 触发星星过期事件
+      if (totalExpiredPoints > 0) {
+        this.eventBus.emit(EVENTS.STARS_EXPIRED, {
+          expiredGroups,
+          totalExpiredPoints,
+          records: expiredRecords
+        });
+      }
+      
+      return {
+        success: true,
+        expiredCount: expiredGroups.length,
+        totalPoints: totalExpiredPoints,
+        records: expiredRecords,
+        message: `清理了${expiredGroups.length}个过期分组，共${totalExpiredPoints}颗星星`
+      };
+    } catch (error) {
+      logger.error('StarService', '清理过期星星失败', error);
+      return { success: false, message: '清理过期星星过程中发生错误' };
+    }
+  }
 }
 
 module.exports = StarService; 

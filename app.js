@@ -66,9 +66,26 @@ App({
           await taskService.checkUpcomingTasks();
         }
         
-        // 任务惩罚处理完毕后，再初始化星星服务并清理过期星星
+        // 任务惩罚处理完毕后，先进行奖励保护，再初始化星星服务并清理过期星星
         if (starService) {
           try {
+            // 计算即将过期的星星数量
+            logger.info('App', '检查即将过期的星星并进行奖励保护');
+            const expiredStars = await starService.calculatePendingExpiry();
+            
+            if (expiredStars > 0) {
+              // 获取小朋友用户ID进行保护
+              const userService = serviceManager.getUserService();
+              const childUserId = userService ? userService.getChildUserId() : 'child';
+              
+              logger.info('App', `发现${expiredStars}颗即将过期的星星，为用户${childUserId}进行奖励保护`);
+              const protectionResult = await starService.protectRewardsByExpiry(expiredStars, childUserId);
+              
+              if (protectionResult.success && protectionResult.protectedCount > 0) {
+                logger.info('App', `奖励保护成功，保护了${protectionResult.protectedCount}个奖励`);
+              }
+            }
+            
             logger.info('App', '初始化星星服务并清理过期星星');
             await starService.initialize();
             
