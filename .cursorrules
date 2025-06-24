@@ -2,7 +2,7 @@
 
 ## 技术栈
 - 微信小程序原生框架，DDD架构
-- 核心服务：TaskService、StarService、RewardService、MessageService、UserService、ValidationService、ConfigService
+- 核心服务：TaskService、StarService、RewardService、MessageService、UserService、ValidationService、ConfigService、AnalyticsService
 - 工具链：logger、batchUtils、EventBus、StorageAdapter、Jest测试
 
 ## 开发规范

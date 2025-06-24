@@ -116,12 +116,17 @@ study_task_wechat/
 │   ├── task.js            # 任务模型
 │   ├── star.js            # 星星模型
 │   ├── star-group.js      # 星星分组模型
+│   ├── star-record.js     # 星星记录模型
 │   ├── reward.js          # 奖励模型
+│   ├── message.js         # 消息模型
+│   ├── user.js            # 用户模型
 │   └── ...
 ├── 📁 services/           # 应用服务层
 │   ├── task-service.js    # 任务服务
 │   ├── star-service.js    # 星星服务
 │   ├── reward-service.js  # 奖励服务
+│   ├── message-service.js # 消息服务
+│   ├── user-service.js    # 用户服务
 │   ├── validation-service.js # 表单验证服务
 │   ├── config-service.js  # 配置服务
 │   ├── service-manager.js # 服务管理器

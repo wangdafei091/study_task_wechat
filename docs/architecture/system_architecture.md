@@ -20,7 +20,7 @@
 系统采用完整的领域驱动设计架构，由以下层次组成：
 
 - **领域层(models/)**：定义核心业务实体和规则
-  - Task、Star、StarGroup、Reward、Message、User等核心模型
+  - Task、Star、StarGroup、StarRecord、Reward、Message、User等核心模型
   - 业务规则封装在模型内部，确保业务一致性
   - 领域事件机制支持状态变更通知
 
@@ -28,10 +28,11 @@
   - **TaskService**：任务管理核心服务，处理任务CRUD、状态管理、必做任务惩罚等
   - **StarService**：星星积分服务，实现FIFO消费策略、有效期管理、记录追踪
   - **RewardService**：奖励兑换服务，管理奖励库存、兑换流程、状态跟踪
-  - **MessageService**：消息通知服务，处理系统消息、状态更新、批量操作
+  - **MessageService**：消息通知服务，处理系统消息、状态更新、批量操作  
   - **UserService**：用户管理服务，支持角色切换、权限控制、配置管理
   - **ValidationService**：表单验证服务，提供统一的数据验证逻辑
   - **ConfigService**：配置管理服务，处理应用配置、用户偏好、系统标记
+  - **AnalyticsService**：数据分析服务，提供任务统计和趋势分析（位于packageChart）
   - 通过ServiceManager统一管理和依赖注入
   - 服务间通过EventBus进行事件通信
 

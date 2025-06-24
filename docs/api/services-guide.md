@@ -21,6 +21,10 @@ const serviceManager = getApp().serviceManager;
 const taskService = serviceManager.get('taskService');
 const starService = serviceManager.get('starService');
 const rewardService = serviceManager.get('rewardService');
+const messageService = serviceManager.get('messageService');
+const userService = serviceManager.get('userService');
+const validationService = serviceManager.get('validationService');
+const configService = serviceManager.get('configService');
 ```
 
 ## TaskService - 任务管理服务
@@ -1312,6 +1316,99 @@ function showFeatureTip(tipKey, message) {
 }
 ```
 
+## AnalyticsService - 数据分析服务
+
+数据分析服务提供任务完成情况和趋势分析，位于packageChart分包中。
+
+### 核心功能
+- 任务完成率统计
+- 趋势分析和预测
+- 学习热力图生成
+- 数据可视化支持
+
+### API 方法
+
+#### 基础统计
+
+##### getTaskCompletionStats(userId, dateRange)
+获取任务完成统计
+
+```javascript
+const analyticsService = require('../packageChart/services/analytics-service');
+
+const stats = await analyticsService.getTaskCompletionStats('child', {
+  startDate: '2024-12-01',
+  endDate: '2024-12-07'
+});
+// 返回: { completedTasks: number, totalTasks: number, completionRate: number }
+```
+
+##### getTaskTrend(userId, period)
+获取任务完成趋势
+
+```javascript
+const trend = await analyticsService.getTaskTrend('child', 'month');
+// 返回: { dates: [], completionRates: [], totalTasks: [] }
+```
+
+##### getTaskHeatmapData(userId, year, month)
+获取任务热力图数据
+
+```javascript
+const heatmapData = await analyticsService.getTaskHeatmapData('child', 2024, 12);
+// 返回: { [date]: completionCount } 格式的对象
+```
+
+#### 高级分析
+
+##### analyzeTaskPatterns(userId)
+分析任务完成模式
+
+```javascript
+const patterns = await analyticsService.analyzeTaskPatterns('child');
+// 返回: { bestDays: [], worstDays: [], streaks: [] }
+```
+
+##### generateInsights(userId)
+生成学习洞察
+
+```javascript
+const insights = await analyticsService.generateInsights('child');
+// 返回: { recommendations: [], achievements: [], improvements: [] }
+```
+
+### 使用示例
+
+```javascript
+// 获取本月任务分析报告
+async function generateMonthlyReport() {
+  const analyticsService = require('../packageChart/services/analytics-service');
+  const userService = getApp().serviceManager.get('userService');
+  
+  const userId = userService.getChildUserId();
+  const currentDate = new Date();
+  
+  // 获取基础统计
+  const stats = await analyticsService.getTaskCompletionStats(userId, {
+    startDate: dateUtils.getMonthStart(currentDate),
+    endDate: dateUtils.getMonthEnd(currentDate)
+  });
+  
+  // 获取趋势数据
+  const trend = await analyticsService.getTaskTrend(userId, 'month');
+  
+  // 获取模式分析
+  const patterns = await analyticsService.analyzeTaskPatterns(userId);
+  
+  return {
+    stats,
+    trend,
+    patterns,
+    generatedAt: new Date().toISOString()
+  };
+}
+```
+
 ## 服务集成示例
 
 ### 完整业务流程示例
@@ -1494,4 +1591,4 @@ async function batchUpdateTasks(tasks) {
 
 **文档维护者**：开发团队  
 **最后更新**：2024年12月  
-**版本**：v3.0 
+**版本**：v3.1.0 

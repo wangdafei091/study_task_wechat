@@ -19,11 +19,12 @@
 ### 技术栈
 - **平台**：微信小程序原生框架
 - **架构**：领域驱动设计(DDD)
-- **语言**：JavaScript
+- **语言**：JavaScript ES6+
 - **UI**：微信小程序原生组件 + 自定义组件
 - **状态管理**：自定义事件总线(EventBus)
 - **存储**：微信小程序本地存储 + StorageAdapter适配器
-- **测试**：Jest单元测试框架
+- **图表**：ECharts微信小程序版本
+- **测试**：Jest单元测试框架(v29.5.0)
 
 ### 分包结构
 - **主包**：核心功能(任务管理、奖励兑换)
@@ -73,12 +74,12 @@
 项目采用完整的领域驱动设计（DDD）架构，核心层次包括：
 
 ### 领域层 (models/)
-- **核心实体**：Task、Star、StarGroup、Reward、Message、User
+- **核心实体**：Task、Star、StarGroup、StarRecord、Reward、Message、User
 - **业务规则**：将业务逻辑封装在领域模型内，确保业务一致性
 - **领域事件**：支持状态变更通知机制，保持模块间松耦合
 
 ### 应用层 (services/)
-- **领域服务**：TaskService、StarService、RewardService、MessageService、UserService
+- **领域服务**：TaskService、StarService、RewardService、MessageService、UserService、ValidationService、ConfigService、AnalyticsService
 - **服务管理**：通过ServiceManager提供统一的服务访问和依赖注入
 - **事件驱动**：服务间通过EventBus进行事件通信
 
