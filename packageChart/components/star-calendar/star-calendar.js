@@ -257,7 +257,7 @@ Component({
       const description = record.description || '';
       
       // 识别惩罚性扣减和过期扣减
-      const isPenalty = source === 'task_penalty';
+      const isPenalty = source === 'task' && record.type === 'expense' && record.originalTaskDate;
       const isExpired = source === 'system' && description.includes('星星过期');
       
       // 添加过滤日志
@@ -337,7 +337,7 @@ Component({
         }
         
         // 查找该日期的星星记录，使用getDate()方法获取日期
-        const dayRecords = starRecords.filter(record => record.getDate() === day.dateString);
+        const dayRecords = starRecords.filter(record => record.getDisplayDate() === day.dateString);
         
         // 获取该日期的任务数据来计算实际收入星星
         this._calculateEarnedStarsFromTasks(day.dateString)
