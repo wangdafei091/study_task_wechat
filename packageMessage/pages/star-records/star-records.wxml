@@ -54,7 +54,11 @@
                 <view class="record-dot"></view>
                 <view class="record-info">
                   <view class="record-title">{{record.title}}</view>
-                  <view class="record-time">{{record.time}}</view>
+                  <!-- 双时间显示：惩罚记录显示主要时间和次要时间 -->
+                  <view class="record-time-container">
+                    <view class="record-time primary">{{record.time}}</view>
+                    <view wx:if="{{record.hasDualTime}}" class="record-time secondary">{{record.subTime}}</view>
+                  </view>
                 </view>
                 <view class="record-points-container">
                   <view class="record-points {{record.points > 0 ? 'positive' : 'negative'}}">

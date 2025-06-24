@@ -44,6 +44,12 @@ class StarRecord {
     // 账户余额相关
     this.balance = data.balance || 0; // 操作后余额
     this.previousBalance = data.previousBalance || 0; // 操作前余额
+    
+    // 任务原始日期（用于惩罚记录）
+    this.originalTaskDate = data.originalTaskDate || null;
+    
+    // 应扣数量（用于惩罚记录显示对比）
+    this.requestedPoints = data.requestedPoints || null;
   }
   
   /**
@@ -111,6 +117,35 @@ class StarRecord {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
     return `${year}-${month}`;
+  }
+  
+  /**
+   * 获取主要显示日期（优先使用原始任务日期）
+   * @returns {String} 主要显示日期
+   */
+  getDisplayDate() {
+    if (this.originalTaskDate) {
+      return this.originalTaskDate;
+    }
+    return this.getDate();
+  }
+  
+  /**
+   * 获取惩罚记录的双时间显示信息
+   * @returns {Object|null} 包含主要时间和次要时间的对象，如果不是惩罚记录则返回null
+   */
+  getPenaltyDisplayInfo() {
+    if (this.source !== RecordSource.TASK || this.type !== RecordType.EXPENSE || !this.originalTaskDate) {
+      return null;
+    }
+    
+    const executionDate = new Date(this.timestamp);
+    const executionTimeStr = `${executionDate.getFullYear()}-${String(executionDate.getMonth() + 1).padStart(2, '0')}-${String(executionDate.getDate()).padStart(2, '0')} ${String(executionDate.getHours()).padStart(2, '0')}:${String(executionDate.getMinutes()).padStart(2, '0')}`;
+    
+    return {
+      mainTime: `应该完成：${this.originalTaskDate}`,
+      subTime: `实际扣星：${executionTimeStr}`
+    };
   }
   
   /**
@@ -236,25 +271,47 @@ class StarRecord {
   
   /**
    * 创建必做任务惩罚记录
-   * @param {Number} points 扣除的星星数（正数，会自动转为负数）
+   * @param {Number} points 实际扣除的星星数（正数，会自动转为负数）
    * @param {String} taskId 任务ID
-   * @param {String} description 描述
+   * @param {String} description 描述或reason
    * @param {Number} balance 操作后余额
    * @param {Number} previousBalance 操作前余额
    * @param {String} userId 可选的用户ID
+   * @param {String} originalTaskDate 任务原始截止日期（YYYY-MM-DD格式）
+   * @param {Number} requestedPoints 应该扣除的星星数（可选，用于生成详细描述）
    * @returns {StarRecord} 新的记录实例
    */
-  static createPenaltyRecord(points, taskId, description, balance, previousBalance, userId = null) {
+  static createPenaltyRecord(points, taskId, description, balance, previousBalance, userId = null, originalTaskDate = null, requestedPoints = null) {
+    // 生成智能描述
+    let smartDescription = description;
+    let taskName = '任务';
+    
+    // 尝试从description/reason中提取任务名称
+    if (description && description.includes('必做任务惩罚: ')) {
+      taskName = description.replace('必做任务惩罚: ', '').trim();
+    }
+    
+    // 生成用户友好的描述
+    if (requestedPoints && requestedPoints !== points) {
+      // 余额不足的情况
+      smartDescription = `必做任务【${taskName}】未完成，应扣${requestedPoints}颗星星（余额不足，实扣${points}颗）`;
+    } else {
+      // 余额充足的情况
+      smartDescription = `必做任务【${taskName}】未完成，扣除${points}颗星星`;
+    }
+    
     return new StarRecord({
       userId,
       type: RecordType.EXPENSE,
       source: RecordSource.TASK,
       sourceId: taskId,
-      points: -Math.abs(points), // 确保是负数
-      description: description || `必做任务惩罚扣除${points}颗星星`,
+      points: -Math.abs(points), // 确保是负数，使用实际扣除数量
+      description: smartDescription,
       balance,
       previousBalance,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      originalTaskDate,
+      requestedPoints: requestedPoints || points // 保存应扣数量
     });
   }
 }

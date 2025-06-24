@@ -192,12 +192,22 @@ Page({
       // 添加页面需要的字段映射
       processedRecord.title = record.description || '星星记录';
       
-      // 格式化时间显示
-      if (record.timestamp) {
-        const date = new Date(record.timestamp);
-        processedRecord.time = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+      // 检查是否为惩罚记录并处理双时间显示
+      const penaltyInfo = record.getPenaltyDisplayInfo ? record.getPenaltyDisplayInfo() : null;
+      if (penaltyInfo) {
+        // 惩罚记录：主要显示任务截止时间，次要显示扣星执行时间
+        processedRecord.time = penaltyInfo.mainTime;
+        processedRecord.subTime = penaltyInfo.subTime;
+        processedRecord.hasDualTime = true;
       } else {
-        processedRecord.time = '未知时间';
+        // 普通记录：正常显示时间
+        if (record.timestamp) {
+          const date = new Date(record.timestamp);
+          processedRecord.time = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+        } else {
+          processedRecord.time = '未知时间';
+        }
+        processedRecord.hasDualTime = false;
       }
       
       // 为记录添加样式类名
@@ -233,7 +243,7 @@ Page({
       }
       
       // 添加调试日志
-      logger.info('starRecords', `处理记录: ${processedRecord.title}, 类型: ${processedRecord.type}, 点数: ${processedRecord.points}`);
+      logger.info('starRecords', `处理记录: ${processedRecord.title}, 类型: ${processedRecord.type}, 点数: ${processedRecord.points}${processedRecord.hasDualTime ? ', 双时间显示' : ''}`);
       
       return processedRecord;
     });

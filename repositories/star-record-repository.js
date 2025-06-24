@@ -386,9 +386,10 @@ class StarRecordRepository extends BaseRepository {
    * @param {Number} points 扣除的星星数（正数，会自动转为负数）
    * @param {String} description 描述
    * @param {String} userId 可选的用户ID
+   * @param {String} originalTaskDate 任务原始截止日期（YYYY-MM-DD格式）
    * @returns {Promise<StarRecord>} 创建的记录
    */
-  async createPenaltyRecord(taskId, points, description, userId = null) {
+  async createPenaltyRecord(taskId, points, description, userId = null, originalTaskDate = null, requestedPoints = null) {
     if (!taskId || points <= 0) {
       logger.warn('StarRecordRepository', '尝试使用无效参数创建必做任务惩罚记录');
       return null;
@@ -397,17 +398,25 @@ class StarRecordRepository extends BaseRepository {
     try {
       // 如果没有提供userId，尝试从任务获取
       let recordUserId = userId;
-      if (!recordUserId) {
+      let taskOriginalDate = originalTaskDate;
+      
+      if (!recordUserId || !taskOriginalDate) {
         try {
           const TaskRepository = require('./task-repository');
           const taskRepository = new TaskRepository();
           const task = await taskRepository.getById(taskId);
-          if (task && task.userId) {
-            recordUserId = task.userId;
-            logger.info('StarRecordRepository', `从任务获取用户ID: ${recordUserId}`);
+          if (task) {
+            if (!recordUserId && task.userId) {
+              recordUserId = task.userId;
+              logger.info('StarRecordRepository', `从任务获取用户ID: ${recordUserId}`);
+            }
+            if (!taskOriginalDate && task.date) {
+              taskOriginalDate = task.date;
+              logger.info('StarRecordRepository', `从任务获取原始日期: ${taskOriginalDate}`);
+            }
           }
         } catch (error) {
-          logger.warn('StarRecordRepository', '无法从任务获取用户ID', error);
+          logger.warn('StarRecordRepository', '无法从任务获取用户ID或原始日期', error);
         }
       }
       
@@ -422,13 +431,15 @@ class StarRecordRepository extends BaseRepository {
         description,
         balance,
         previousBalance,
-        recordUserId
+        recordUserId,
+        taskOriginalDate,
+        requestedPoints
       );
       
       // 保存记录
       const savedRecord = await this.save(record);
       
-      logger.info('StarRecordRepository', `创建必做任务惩罚记录成功, ID=${savedRecord.id}, 任务ID=${taskId}, 星星数=${points}${recordUserId ? `, 用户=${recordUserId}` : ''}`);
+      logger.info('StarRecordRepository', `创建必做任务惩罚记录成功, ID=${savedRecord.id}, 任务ID=${taskId}, 星星数=${points}, 原始日期=${taskOriginalDate}${recordUserId ? `, 用户=${recordUserId}` : ''}`);
       return savedRecord;
     } catch (error) {
       logger.error('StarRecordRepository', `创建必做任务惩罚记录失败, 任务ID=${taskId}`, error);

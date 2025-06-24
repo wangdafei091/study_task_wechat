@@ -1118,27 +1118,8 @@ class TaskService {
       // 计算惩罚扣除的积分（任务积分或默认5分）
       const penaltyPoints = task.points || 5;
       
-      // 确定目标用户ID（小朋友）
-      let childUserId = 'child'; // 默认用户ID
-      
-      if (this.serviceManager) {
-        const userService = this.serviceManager.getUserService();
-        if (userService) {
-          const childUser = userService.getUserByRole('child');
-          if (childUser) {
-            childUserId = childUser.id;
-            logger.info('TaskService', `获取小朋友用户ID成功: ${childUserId}`);
-          } else {
-            logger.warn('TaskService', '未找到小朋友用户，使用默认child用户ID');
-            childUserId = 'child'; // 使用默认ID
-          }
-        }
-      }
-      
-      if (!childUserId) {
-        logger.warn('TaskService', '无法获取小朋友用户ID，使用默认child用户ID');
-        childUserId = 'child'; // 兜底方案
-      }
+      // 获取小朋友用户ID（复用现有方法）
+      const childUserId = this._getChildUserId();
       
       // 先执行星星扣减
       let consumeResult = null;
@@ -1151,8 +1132,8 @@ class TaskService {
           {
             sourceType: 'task_penalty',
             sourceId: task.id,
-            userId: childUserId,     // 固定从小朋友扣除
-            operator: 'system'       // 标记为系统操作
+            userId: childUserId,
+            operator: 'system'
           }
         );
         
@@ -1665,6 +1646,8 @@ class TaskService {
       return 0;
     }
   }
+
+
 
   /**
    * 获取小朋友用户ID（统一方法）

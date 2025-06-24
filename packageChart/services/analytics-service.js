@@ -76,15 +76,22 @@ class AnalyticsService {
       
       // 将未完成必做任务记录转换为星星扣除记录
       penaltyTasks.forEach(task => {
-        const timestamp = task.modifyTime || Date.now();
-        const date = new Date(timestamp);
-        const timeStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`;
+        // 使用任务原始截止日期而不是惩罚执行日期
+        let taskDate = task.date;
+        if (!taskDate) {
+          // 如果任务没有date字段，使用修改时间作为兜底
+          taskDate = dateUtils.formatDate(new Date(task.modifyTime || Date.now()));
+        }
+        
+        // 构造扣星记录，日期归属到任务原始截止日期
+        const taskDateTime = new Date(`${taskDate}T00:00:00`); // 使用任务日期的00:00:00
+        const timeStr = `${taskDate} 00:00:00`; // 扣星时间显示为任务截止日期
         
         records.push({
-          id: `penalty_${task.id}_${timestamp}`,
+          id: `penalty_${task.id}_${taskDateTime.getTime()}`,
           title: `未完成必做任务：${task.title}`,
           time: timeStr,
-          timestamp: timestamp,
+          timestamp: taskDateTime.getTime(), // 使用任务原始日期的时间戳
           points: -(task.points || 0), // 扣除的星星使用负数表示
           type: 'penalty',
           source: 'task'
@@ -263,8 +270,17 @@ class AnalyticsService {
       // 筛选当天及之前的所有记录
       const relevantRecords = records.filter(record => {
         if (!record.timestamp) return false;
-        const recordDate = new Date(record.timestamp);
-        const recordDateStr = dateUtils.formatDate(recordDate);
+        
+        // 对于惩罚记录，优先使用originalTaskDate进行日期归属
+        let recordDateStr;
+        if (record.source === 'task' && record.type === 'expense' && record.originalTaskDate) {
+          recordDateStr = record.originalTaskDate;
+          logger.debug('AnalyticsService', `惩罚记录使用原始任务日期: ${recordDateStr}, 记录ID=${record.id}`);
+        } else {
+          const recordDate = new Date(record.timestamp);
+          recordDateStr = dateUtils.formatDate(recordDate);
+        }
+        
         return recordDateStr <= dateStr;
       });
       
@@ -279,7 +295,7 @@ class AnalyticsService {
         if (points > 0) {
           earned += points;
         } else if (points < 0) {
-          if (record.type === 'penalty') {
+          if (record.source === 'task' && record.type === 'expense' && record.originalTaskDate) {
             penalty += Math.abs(points);
           } else {
             spent += Math.abs(points);
@@ -563,6 +579,8 @@ class AnalyticsService {
       return {};
     }
   }
+
+
 }
 
 module.exports = AnalyticsService; 

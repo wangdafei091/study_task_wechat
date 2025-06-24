@@ -226,6 +226,27 @@
   color: #999999;
 }
 
+/* 双时间显示容器 */
+.record-time-container {
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+}
+
+/* 主要时间样式（任务截止时间） */
+.record-time.primary {
+  font-size: 24rpx;
+  color: #666666;
+  font-weight: 500;
+}
+
+/* 次要时间样式（扣星执行时间） */
+.record-time.secondary {
+  font-size: 22rpx;
+  color: #999999;
+  font-weight: 400;
+}
+
 .record-points-container {
   display: flex;
   flex-direction: column;

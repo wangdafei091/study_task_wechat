@@ -53,10 +53,23 @@ App({
         const messageService = serviceManager.getMessageService();
         const starService = serviceManager.getStarService();
         
-        // 初始化星星服务并清理过期星星
+        // 先处理任务惩罚，再清理过期星星（确保惩罚时有足够星星）
+        if (taskService) {
+          // 修复存量任务数据的penaltyApplied字段
+          await this.fixLegacyTaskData(taskService);
+          
+          // 检查任务状态和处理惩罚
+          logger.info('App', '开始检查任务状态和处理必做任务惩罚');
+          await taskService.checkTasksStatus();
+          
+          // 检查即将到期的任务
+          await taskService.checkUpcomingTasks();
+        }
+        
+        // 任务惩罚处理完毕后，再初始化星星服务并清理过期星星
         if (starService) {
           try {
-            logger.info('App', '初始化星星服务');
+            logger.info('App', '初始化星星服务并清理过期星星');
             await starService.initialize();
             
             logger.info('App', '开始检查并修复星星数据一致性');
@@ -74,18 +87,6 @@ App({
           } catch (error) {
             logger.error('App', '星星数据一致性检查失败', error);
           }
-        }
-        
-        // 加载任务数据
-        if (taskService) {
-          // 修复存量任务数据的penaltyApplied字段
-          await this.fixLegacyTaskData(taskService);
-          
-          // 检查任务状态和提醒
-          await taskService.checkTasksStatus();
-          
-          // 检查即将到期的任务
-          await taskService.checkUpcomingTasks();
         }
         
         // 检查首次启动并创建欢迎消息

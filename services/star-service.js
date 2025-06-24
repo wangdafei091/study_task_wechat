@@ -310,12 +310,13 @@ class StarService {
   
   /**
    * 消费星星
-   * @param {Number} points 星星数量（正数）
+   * @param {Number} points 要消费的星星数量
    * @param {String} reason 消费原因
-   * @param {Object} options 额外选项
+   * @param {Object} options 选项
+   * @param {String} options.userId 用户ID
    * @param {String} options.sourceType 来源类型
    * @param {String} options.sourceId 来源ID
-   * @param {String} options.userId 可选的用户ID
+   * @param {String} options.originalTaskDate 任务原始截止日期（用于惩罚记录）
    * @returns {Promise<Object>} 消费结果
    */
   async consumeStars(points, reason, options = {}) {
@@ -325,7 +326,7 @@ class StarService {
     }
     
     try {
-      const { userId } = options;
+      const { userId, sourceType, sourceId, originalTaskDate } = options;
       
       // 直接按过期优先顺序消费星星，有多少扣多少
       const consumeResult = await this.starGroupRepository.consumeStarsByExpiryOrder(points, userId);
@@ -342,23 +343,36 @@ class StarService {
       // 实际扣减的数量
       const actualConsumed = consumeResult.consumed || 0;
       
-      // 创建支出记录（使用实际扣减数量）
-      const recordData = {
-        type: 'expense',
-        source: options.sourceType || 'manual',
-        sourceId: options.sourceId || '',
-        points: -actualConsumed, // 负数表示支出，使用实际扣减数量
-        description: reason || '手动消费星星',
-        timestamp: Date.now()
-        // balance和previousBalance将在保存时由仓储计算
-      };
-      
-      // 如果有用户ID，添加到记录中
-      if (userId) {
-        recordData.userId = userId;
+      // 如果是任务惩罚类型，使用专门的惩罚记录创建方法
+      let record;
+      if (sourceType === 'task_penalty' && sourceId) {
+        record = await this.starRecordRepository.createPenaltyRecord(
+          sourceId, 
+          actualConsumed, 
+          reason, 
+          userId,
+          originalTaskDate,
+          points // 传递应扣数量作为requestedPoints
+        );
+      } else {
+        // 创建普通支出记录
+        const recordData = {
+          type: 'expense',
+          source: sourceType || 'manual',
+          sourceId: sourceId || '',
+          points: -actualConsumed, // 负数表示支出，使用实际扣减数量
+          description: reason || '手动消费星星',
+          timestamp: Date.now()
+          // balance和previousBalance将在保存时由仓储计算
+        };
+        
+        // 如果有用户ID，添加到记录中
+        if (userId) {
+          recordData.userId = userId;
+        }
+        
+        record = await this.starRecordRepository.save(recordData);
       }
-      
-      const record = await this.starRecordRepository.save(recordData);
       
       if (!record) {
         logger.error('StarService', `消费星星: 创建记录失败, 实际扣减=${actualConsumed}, 原因=${reason || '未知'}${userId ? `, 用户=${userId}` : ''}`);
@@ -465,6 +479,50 @@ class StarService {
     }
   }
   
+  /**
+   * 统一的星星消费接口（策略模式）
+   * @param {Object} params 消费参数
+   * @param {Number} params.points 消费数量
+   * @param {String} params.reason 消费原因
+   * @param {String} params.strategy 消费策略：'expiry_order'(按过期顺序) | 'specific_type'(特定类型)
+   * @param {String} params.expiryType 当strategy为'specific_type'时必需的有效期类型
+   * @param {Object} params.options 额外选项（userId, sourceType等）
+   * @returns {Promise<Object>} 消费结果
+   */
+  async consumeStarsUnified(params) {
+    const { points, reason, strategy = 'expiry_order', expiryType, options = {} } = params;
+    
+    if (points <= 0) {
+      logger.warn('StarService', `统一扣星失败: 星星数量必须大于0, 实际值=${points}`);
+      return { success: false, message: '星星数量必须大于0' };
+    }
+    
+    logger.info('StarService', `使用统一接口消费星星: 数量=${points}, 策略=${strategy}, 原因=${reason}`);
+    
+    try {
+      switch (strategy) {
+        case 'expiry_order':
+          // 按过期顺序扣星（默认策略）
+          return await this.consumeStars(points, reason, options);
+          
+        case 'specific_type':
+          // 从特定类型扣星
+          if (!expiryType) {
+            logger.warn('StarService', '使用specific_type策略时必须指定expiryType');
+            return { success: false, message: '使用特定类型策略时必须指定有效期类型' };
+          }
+          return await this.consumeStarsFromSpecificType(points, expiryType, reason, options);
+          
+        default:
+          logger.warn('StarService', `未知的消费策略: ${strategy}`);
+          return { success: false, message: '未知的消费策略' };
+      }
+    } catch (error) {
+      logger.error('StarService', `统一扣星接口执行失败: 策略=${strategy}`, error);
+      return { success: false, message: '扣星操作失败' };
+    }
+  }
+
   /**
    * 清理过期星星
    * @returns {Promise<Object>} 清理结果
