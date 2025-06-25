@@ -2634,5 +2634,15 @@ Page({
   navigateToUserProfile() {
     logger.info('Index', '点击用户头像，显示用户切换界面');
     this.showUserSwitcher();
+  },
+
+  /**
+   * 导航到API测试页面 (临时测试功能)
+   */
+  navigateToApiTest() {
+    logger.info('Index', '导航到API测试页面');
+    wx.navigateTo({
+      url: '/pages/api-test/api-test'
+    });
   }
 }) 

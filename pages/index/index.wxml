@@ -10,6 +10,11 @@
       <view class="header-title">{{currentMotivation}}</view>
     </view>
     <view class="header-actions">
+      <!-- API测试按钮 (临时测试用) -->
+      <view class="api-test-btn" hover-class="icon-hover" bindtap="navigateToApiTest">
+        <text class="api-test-text">API</text>
+      </view>
+      
       <view class="message-icon-wrapper" hover-class="icon-hover" bindtap="toggleMessagePreview">
         <view class="message-icon">
           <image src="/assets/icons/message/message.svg" mode="aspectFit"></image>

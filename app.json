@@ -2,7 +2,8 @@
   "pages": [
     "pages/index/index",
     "pages/task-edit/task-edit",
-    "pages/rewards/rewards"
+    "pages/rewards/rewards",
+    "pages/api-test/api-test"
   ],
   "subPackages": [
     {
