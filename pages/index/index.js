@@ -375,55 +375,19 @@ Page({
   /**
    * 生命周期函数--监听页面显示
    */
-  onShow: async function () {
+  onShow: async function() {
     logger.info('Index', '页面显示');
     
-    // 获取应用实例
+    // 等待服务管理器完全初始化
+    await this.waitForServicesReady();
+    
+    // 检查奖励完成跳转状态
     const app = getApp();
-    
-    // 检查是否需要刷新奖励信息
-    if (app.globalData.needRefreshReward) {
-      logger.debug('Index', '检测到奖励数据变更标记，强制清除缓存并刷新');
-      
-      // 清除满值状态
-      this.setData({
-        forceKeepFullValue: false,
-        transitionInProgress: false,
-        showRewardChoice: false,
-        rewardTextState: 'newTarget'
-      });
-      
-      // 强制重新获取最新奖励信息
-      const rewardService = serviceManager.getService('rewardService');
-      if (rewardService && typeof rewardService.clearCache === 'function') {
-        rewardService.clearCache(); // 如果有清除缓存方法，则调用
-      }
-      
-      // 强制重新加载奖励数据，确保UI正确显示
-      this.loadStarsAndRewards();
-      
-      // 清除标记
-      app.globalData.needRefreshReward = false;
-      app.globalData.rewardClaimedInfo = null;
-      return;
-    }
-    
-    // 从多个来源检查是否从奖池页面返回
-    const fromStorage = pageStorageHelper.getPageState('fromRewardCompletion');
-    
-    if (app.globalData.hasRedirectedToReward || fromStorage) {
-      logger.debug('Index', '检测到从奖池页面返回(通过标记)');
-      
-      // 清除所有标记
-      app.globalData.hasRedirectedToReward = false;
-      if (fromStorage) {
-        pageStorageHelper.removePageState('fromRewardCompletion');
-        pageStorageHelper.removePageState('completedRewardInfo');
-      }
-      
-      // 执行过渡到新目标
-      logger.debug('Index', '从奖池返回，强制更新进度条');
-      this.transitionToNewTarget();
+    if (app.globalData.fromRewardCompletion) {
+      app.globalData.fromRewardCompletion = false;
+      logger.info('Index', '从奖励完成页面返回，跳过过期检查');
+      // 直接加载数据，不做过期检查
+      this.loadAllPageData();
       return;
     }
     
@@ -433,6 +397,30 @@ Page({
     
     logger.debug('Index', '页面显示时批量加载所有数据');
     this.loadAllPageData();
+  },
+
+  /**
+   * 等待服务准备就绪
+   */
+  waitForServicesReady: async function() {
+    try {
+      logger.info('Index', '等待服务管理器初始化完成');
+      
+      const isReady = await serviceManager.waitForInitialization(10000);
+      
+      if (isReady) {
+        logger.info('Index', '服务管理器已就绪');
+      } else {
+        logger.error('Index', '服务管理器初始化超时，将使用降级处理');
+        wx.showToast({
+          title: '服务加载中，请稍候',
+          icon: 'none',
+          duration: 2000
+        });
+      }
+    } catch (error) {
+      logger.error('Index', '等待服务就绪失败', error);
+    }
   },
   
   /**
@@ -2382,8 +2370,10 @@ Page({
     const userService = getApp().globalData.userService;
     if (userService) {
       const availableUsers = userService.getAllUsers();
+      const currentUser = userService.getCurrentUser(); // 添加这行
       this.setData({
         availableUsers,
+        currentUser, // 添加这行，确保数据同步
         showUserSwitcher: true
       });
     }
@@ -2426,11 +2416,13 @@ Page({
       
       // 获取新的当前用户
       const currentUser = userService.getCurrentUser();
+      const availableUsers = userService.getAllUsers(); // 添加这行
       const userPermissions = permissionUtils.getUserPermissions(currentUser.role);
       
       // 更新页面状态
       this.setData({
         currentUser,
+        availableUsers, // 添加这行
         userPermissions,
         showUserSwitcher: false
       });
@@ -2644,5 +2636,46 @@ Page({
     wx.navigateTo({
       url: '/pages/api-test/api-test'
     });
+  },
+
+  /**
+   * 验证用户模块功能 (开发和测试用)
+   * 可以在开发者工具控制台调用：getCurrentPages().pop().validateUserModule()
+   */
+  async validateUserModule() {
+    try {
+      logger.info('Index', '开始验证用户模块功能');
+      
+      const userService = getApp().globalData.userService;
+      if (!userService) {
+        console.error('❌ 用户服务不可用');
+        return false;
+      }
+      
+      // 执行完整验证
+      const validation = await userService.validateService();
+      
+      if (validation.success) {
+        console.log('✅ 用户模块验证通过');
+        console.log('📊 验证结果:', validation.tests);
+        console.log('📈 服务统计:', userService.getStatistics());
+      } else {
+        console.error('❌ 用户模块验证失败');
+        console.error('🚫 错误列表:', validation.errors);
+        console.log('📊 验证结果:', validation.tests);
+      }
+      
+      // 额外的权限系统验证
+      const currentUser = userService.getCurrentUser();
+      console.log('👤 当前用户:', currentUser.toObject());
+      console.log('🔐 用户权限:', permissionUtils.getUserPermissions(currentUser.role));
+      console.log('📄 可访问页面:', permissionUtils.getAllowedPages(currentUser.role));
+      
+      return validation.success;
+    } catch (error) {
+      console.error('❌ 验证过程发生异常:', error);
+      logger.error('Index', '验证用户模块失败', error);
+      return false;
+    }
   }
 }) 

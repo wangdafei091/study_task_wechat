@@ -28,8 +28,8 @@ class User {
    * @param {Object} data 用户数据
    */
   constructor(data = {}) {
-    // 基础信息
-    this.id = data.id || '';
+    // 基础信息 - 修改：将id字段改为userId，与后端保持一致
+    this.userId = data.userId || '';
     this.name = data.name || '';
     this.displayName = data.displayName || '';
     this.role = data.role || UserRole.PARENT;
@@ -40,7 +40,23 @@ class User {
     this.createTime = data.createTime || Date.now();
     this.modifyTime = data.modifyTime || Date.now();
     
-    logger.debug('User', '创建用户实例', { id: this.id, role: this.role });
+    logger.debug('User', '创建用户实例', { userId: this.userId, role: this.role });
+  }
+  
+  /**
+   * 获取用户ID（兼容性getter）
+   * @returns {String} 用户ID
+   */
+  get id() {
+    return this.userId;
+  }
+  
+  /**
+   * 设置用户ID（兼容性setter）
+   * @param {String} value 用户ID
+   */
+  set id(value) {
+    this.userId = value;
   }
   
   /**
@@ -51,7 +67,7 @@ class User {
     const errors = [];
     
     // 验证基本信息
-    if (!this.id) {
+    if (!this.userId) {
       errors.push('用户ID不能为空');
     }
     
@@ -143,7 +159,7 @@ class User {
     
     this.modifyTime = Date.now();
     
-    logger.info('User', '更新用户信息', { id: this.id, changes: Object.keys(data) });
+    logger.info('User', '更新用户信息', { userId: this.userId, changes: Object.keys(data) });
   }
   
   /**
@@ -152,7 +168,7 @@ class User {
    */
   toObject() {
     return {
-      id: this.id,
+      userId: this.userId,
       name: this.name,
       displayName: this.displayName,
       role: this.role,

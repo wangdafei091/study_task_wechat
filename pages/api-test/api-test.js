@@ -170,6 +170,136 @@ Page({
   },
 
   /**
+   * 测试用户字段映射
+   */
+  async testUserFieldMapping() {
+    this.setData({ testing: true });
+    
+    try {
+      // 1. 获取用户数据
+      const userData = await HttpClient.getUser(API_CONFIG.PREDEFINED_USERS.PARENT);
+      this.addResult(
+        '后端用户数据', 
+        'info', 
+        `获取到原始用户数据`, 
+        userData
+      );
+      
+      // 2. 创建前端User对象
+      const { User } = require('../../models/user');
+      const user = new User(userData);
+      
+      this.addResult(
+        '前端User对象', 
+        'info', 
+        `创建User对象成功`, 
+        user.toObject()
+      );
+      
+      // 3. 验证字段映射
+      const fieldTests = [
+        {
+          name: 'userId字段',
+          test: () => user.userId === userData.userId,
+          detail: `前端: ${user.userId}, 后端: ${userData.userId}`
+        },
+        {
+          name: '兼容性id getter',
+          test: () => user.id === user.userId,
+          detail: `user.id: ${user.id}, user.userId: ${user.userId}`
+        },
+        {
+          name: '角色字段',
+          test: () => user.role === userData.role,
+          detail: `前端: ${user.role}, 后端: ${userData.role}`
+        },
+        {
+          name: '姓名字段',
+          test: () => user.name === userData.name,
+          detail: `前端: ${user.name}, 后端: ${userData.name}`
+        }
+      ];
+      
+      fieldTests.forEach(test => {
+        const passed = test.test();
+        this.addResult(
+          test.name,
+          passed ? 'success' : 'error',
+          `${passed ? '✓' : '✗'} ${test.detail}`
+        );
+      });
+      
+    } catch (error) {
+      this.addResult(
+        '用户字段映射测试', 
+        'error', 
+        `失败: ${error.message}`
+      );
+    } finally {
+      this.setData({ testing: false });
+    }
+  },
+
+  /**
+   * 测试用户服务缓存
+   */
+  async testUserServiceCache() {
+    this.setData({ testing: true });
+    
+    try {
+      // 获取全局用户服务
+      const app = getApp();
+      const userService = app.globalData.userService;
+      
+      if (!userService) {
+        this.addResult(
+          '用户服务缓存测试', 
+          'error', 
+          '用户服务不可用'
+        );
+        return;
+      }
+      
+      // 刷新用户缓存
+      await userService.refreshUserCache();
+      
+      // 获取所有用户
+      const allUsers = userService.getAllUsers();
+      
+      this.addResult(
+        '用户服务缓存', 
+        'success', 
+        `缓存中有${allUsers.length}个用户`,
+        allUsers.map(u => ({
+          userId: u.userId,
+          id: u.id,
+          name: u.name,
+          role: u.role
+        }))
+      );
+      
+      // 测试根据ID获取用户
+      const parentUser = userService.getUserById('parent');
+      const childUser = userService.getUserById('child');
+      
+      this.addResult(
+        '用户ID查询测试',
+        parentUser && childUser ? 'success' : 'error',
+        `parent用户: ${parentUser ? '找到' : '未找到'}, child用户: ${childUser ? '找到' : '未找到'}`
+      );
+      
+    } catch (error) {
+      this.addResult(
+        '用户服务缓存测试', 
+        'error', 
+        `失败: ${error.message}`
+      );
+    } finally {
+      this.setData({ testing: false });
+    }
+  },
+
+  /**
    * 一键测试所有API
    */
   async testAllAPIs() {
@@ -182,6 +312,8 @@ Page({
     await this.testGetChildUser();
     await this.testGetAllUsers();
     await this.testUserSwitch();
+    await this.testUserFieldMapping();
+    await this.testUserServiceCache();
     
     this.addResult('测试完成', 'info', '所有API测试已完成，请查看上方结果');
   },

@@ -44,6 +44,15 @@
         用户切换测试
       </button>
     </view>
+    
+    <view class="btn-row">
+      <button class="test-btn small" bindtap="testUserFieldMapping" disabled="{{testing}}">
+        字段映射测试
+      </button>
+      <button class="test-btn small" bindtap="testUserServiceCache" disabled="{{testing}}">
+        缓存测试
+      </button>
+    </view>
   </view>
 
   <!-- 测试结果显示区域 -->

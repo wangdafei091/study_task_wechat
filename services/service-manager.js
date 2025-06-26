@@ -23,6 +23,8 @@ class ServiceManager {
     this.eventBus = new EventBus();
     this.userService = null; // 用户服务实例
     this.storageAdapter = new StorageAdapter(); // 创建存储适配器实例
+    this.isInitialized = false; // 添加初始化状态标记
+    this.initializationPromise = null; // 初始化Promise，避免重复初始化
     
     logger.info('ServiceManager', '服务管理器初始化');
   }
@@ -44,8 +46,33 @@ class ServiceManager {
    * @returns {Promise<Boolean>} 初始化结果
    */
   async initialize(options = {}) {
+    // 如果已经初始化，直接返回true
+    if (this.isInitialized) {
+      return true;
+    }
+    
+    // 如果正在初始化，等待初始化完成
+    if (this.initializationPromise) {
+      return await this.initializationPromise;
+    }
+    
     logger.info('ServiceManager', '初始化服务管理器');
     
+    // 创建初始化Promise
+    this.initializationPromise = this._doInitialize(options);
+    
+    const result = await this.initializationPromise;
+    this.initializationPromise = null;
+    
+    return result;
+  }
+  
+  /**
+   * 执行实际的初始化逻辑
+   * @param {Object} options 初始化选项
+   * @returns {Promise<Boolean>} 初始化结果
+   */
+  async _doInitialize(options = {}) {
     // 配置事件总线
     if (options.hasOwnProperty('enableEventDebug')) {
       this.eventBus.setDebugMode(options.enableEventDebug);
@@ -58,12 +85,33 @@ class ServiceManager {
     try {
       // 调用现有的初始化方法
       await this.init();
+      this.isInitialized = true;
       logger.info('ServiceManager', '服务管理器初始化成功');
       return true;
     } catch (error) {
       logger.error('ServiceManager', '服务管理器初始化失败', error);
       return false;
     }
+  }
+  
+  /**
+   * 等待服务管理器初始化完成
+   * @param {Number} maxWaitTime 最大等待时间（毫秒），默认10秒
+   * @returns {Promise<Boolean>} 是否初始化成功
+   */
+  async waitForInitialization(maxWaitTime = 10000) {
+    if (this.isInitialized) {
+      return true;
+    }
+    
+    const startTime = Date.now();
+    
+    while (!this.isInitialized && (Date.now() - startTime) < maxWaitTime) {
+      // 等待100ms后再检查
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    
+    return this.isInitialized;
   }
   
   /**
@@ -119,6 +167,12 @@ class ServiceManager {
    * @returns {Object} 服务实例
    */
   getService(serviceName) {
+    // 如果服务管理器未初始化，提供警告但不返回undefined
+    if (!this.isInitialized) {
+      logger.warn('ServiceManager', `服务管理器未初始化，尝试获取服务: ${serviceName}`);
+      return null; // 返回null而非undefined，便于调用方判断
+    }
+    
     // 服务名别名映射
     const serviceNameMap = {
       'task': 'taskService',
@@ -158,7 +212,7 @@ class ServiceManager {
     if (!service) {
       logger.warn('ServiceManager', `尝试获取不存在的服务: ${serviceName} (映射为: ${mappedServiceName})`);
     }
-    return service;
+    return service || null; // 确保返回null而非undefined
   }
   
   /**

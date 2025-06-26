@@ -156,7 +156,7 @@ Component({
      */
     switchToUser(e) {
       const { userId } = e.currentTarget.dataset;
-      const user = this.data.availableUsers.find(u => u.id === userId);
+      const user = this.data.availableUsers.find(u => u.userId === userId);
       
       if (!user) {
         logger.warn('UserSwitcher', `切换用户失败: 未找到用户 ${userId}`);
@@ -171,7 +171,7 @@ Component({
       
       // 触发用户切换事件
       this.triggerEvent('userSwitch', {
-        userId: user.id,
+        userId: user.userId,
         user: user,
         previousUser: this.data.currentUser
       });
@@ -311,7 +311,7 @@ Component({
       }
       
       const { userId } = e.currentTarget.dataset;
-      const user = this.data.availableUsers.find(u => u.id === userId);
+      const user = this.data.availableUsers.find(u => u.userId === userId);
       
       if (!user) {
         logger.warn('UserSwitcher', `删除用户失败: 未找到用户 ${userId}`);
@@ -330,7 +330,7 @@ Component({
             
             // 触发删除用户事件
             this.triggerEvent('userDelete', {
-              userId: user.id
+              userId: user.userId
             });
           }
         }

@@ -9,6 +9,8 @@ const StarService = require('./star-service');
 const TaskService = require('./task-service');
 const MessageService = require('./message-service');
 const { UserService } = require('./user-service');
+const ValidationService = require('./validation-service');
+const ConfigService = require('./config-service');
 
 module.exports = {
   // 奖励服务
@@ -24,5 +26,11 @@ module.exports = {
   MessageService,
   
   // 用户服务
-  UserService
+  UserService,
+  
+  // 表单验证服务
+  ValidationService,
+  
+  // 配置服务
+  ConfigService
 }; 

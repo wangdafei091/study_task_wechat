@@ -32,11 +32,11 @@
   <view class="user-list-section">
     <view class="section-title">切换到</view>
     <view class="user-list">
-      <block wx:for="{{availableUsers}}" wx:key="id">
+      <block wx:for="{{availableUsers}}" wx:key="userId">
         <view 
-          class="user-item {{currentUser && item.id === currentUser.id ? 'disabled' : ''}}" 
-          wx:if="{{!currentUser || item.id !== currentUser.id}}"
-          data-user-id="{{item.id}}" 
+          class="user-item {{currentUser && item.userId === currentUser.userId ? 'disabled' : ''}}" 
+          wx:if="{{!currentUser || item.userId !== currentUser.userId}}"
+          data-user-id="{{item.userId}}" 
           bindtap="switchToUser">
           <view class="user-avatar">
             <text class="user-icon">{{item.role === 'parent' ? '👩‍💼' : '👶'}}</text>
@@ -50,7 +50,7 @@
             <!-- 权限控制：只有家长才能看到删除按钮 -->
             <view class="delete-btn" 
                   wx:if="{{currentUser.role === 'parent'}}"
-                  data-user-id="{{item.id}}" 
+                  data-user-id="{{item.userId}}" 
                   bindtap="deleteUser" 
                   catchtap>
               <text class="delete-icon">×</text>

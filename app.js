@@ -204,19 +204,26 @@ App({
       
       // 从存储中加载用户自定义配置（如果有）
       try {
-        // 尝试通过配置服务获取
-        const configService = serviceManager.getService('config');
+        // 尝试通过配置服务获取（仅在服务管理器已初始化时）
         let userLogConfig = null;
         
-        if (configService) {
-          userLogConfig = configService.getUserLogConfig();
-        } else {
-          // 降级处理：直接使用存储
+        // 检查服务管理器是否已初始化
+        if (serviceManager.isInitialized) {
+          const configService = serviceManager.getService('config');
+          if (configService) {
+            userLogConfig = configService.getUserLogConfig();
+          }
+        }
+        
+        // 如果服务未就绪，使用降级处理：直接使用存储
+        if (!userLogConfig) {
           const configText = wx.getStorageSync('_user_log_config');
           if (configText) {
             userLogConfig = JSON.parse(configText);
           }
-          logger.warn('App', '配置服务不可用，使用降级存储访问');
+          if (!serviceManager.isInitialized) {
+            logger.warn('App', '配置服务未就绪，使用降级存储访问');
+          }
         }
         
         if (userLogConfig && userLogConfig.levels) {
@@ -525,17 +532,23 @@ App({
     try {
       logger.info('App', '检查首次启动状态');
       
-      // 通过配置服务检查首次启动状态
-      const configService = serviceManager.getService('config');
+      // 通过配置服务检查首次启动状态（仅在服务已初始化时）
       let isFirstLaunch = false;
       
-      if (configService) {
-        isFirstLaunch = configService.isFirstLaunch();
+      if (serviceManager.isInitialized) {
+        const configService = serviceManager.getService('config');
+        if (configService) {
+          isFirstLaunch = configService.isFirstLaunch();
+        } else {
+          // 降级处理：直接使用存储
+          const hasWelcomed = wx.getStorageSync('has_welcomed_user');
+          isFirstLaunch = !hasWelcomed;
+        }
       } else {
-        // 降级处理：直接使用存储
+        // 服务未初始化，使用降级处理：直接使用存储
         const hasWelcomed = wx.getStorageSync('has_welcomed_user');
         isFirstLaunch = !hasWelcomed;
-        logger.warn('App', '配置服务不可用，使用降级存储访问');
+        logger.warn('App', '配置服务未就绪，使用降级存储访问');
       }
       
       if (isFirstLaunch) {
@@ -545,12 +558,18 @@ App({
         await this.createWelcomeMessage(messageService);
         
         // 设置已欢迎标记
-        if (configService) {
-          configService.markUserWelcomed();
+        if (serviceManager.isInitialized) {
+          const configService = serviceManager.getService('config');
+          if (configService) {
+            configService.markUserWelcomed();
+          } else {
+            // 降级处理：直接使用存储
+            wx.setStorageSync('has_welcomed_user', true);
+          }
         } else {
-          // 降级处理：直接使用存储
+          // 服务未初始化，使用降级处理：直接使用存储
           wx.setStorageSync('has_welcomed_user', true);
-          logger.warn('App', '配置服务不可用，使用降级存储访问');
+          logger.warn('App', '配置服务未就绪，使用降级存储访问');
         }
         
         logger.info('App', '首次启动处理完成，已设置欢迎标记');
