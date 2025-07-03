@@ -70,8 +70,15 @@ class StarRecord {
       errors.push('记录来源不能为空');
     }
     
-    if (this.points === 0) {
-      errors.push('星星数量不能为0');
+    // 检查是否为完全保护兑换（特殊情况：消耗0颗星星）
+    const isFullProtectionExchange = this.points === 0 && 
+      this.type === RecordType.EXPENSE && 
+      (this.description?.includes('完全保护兑换') || 
+       this.description?.includes('消耗0颗星星'));
+    
+    // 验证星星数量（允许完全保护兑换的0值）
+    if (this.points === 0 && !isFullProtectionExchange) {
+      errors.push('星星数量不能为0（完全保护兑换除外）');
     }
     
     // 收入记录点数必须为正数
@@ -79,9 +86,9 @@ class StarRecord {
       errors.push('收入记录的星星数量必须为正数');
     }
     
-    // 支出记录点数必须为负数
-    if (this.type === RecordType.EXPENSE && this.points >= 0) {
-      errors.push('支出记录的星星数量必须为负数');
+    // 支出记录点数必须为负数（允许完全保护兑换的0值）
+    if (this.type === RecordType.EXPENSE && this.points > 0) {
+      errors.push('支出记录的星星数量必须为负数或0（完全保护兑换）');
     }
     
     return errors;

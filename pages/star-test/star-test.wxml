@@ -1,0 +1,158 @@
+<!--星星过期保护测试页面UI-->
+<view class="test-container">
+  
+  <!-- 页面标题 -->
+  <view class="header">
+    <text class="title">⭐ 星星过期保护测试</text>
+    <text class="subtitle">安全的测试环境 • 立即体验过期保护功能</text>
+  </view>
+
+  <!-- 当前状态区域 -->
+  <view class="status-section">
+    <text class="section-title">📊 当前状态</text>
+    
+    <view class="status-grid">
+      <view class="status-item">
+        <text class="status-label">总星星</text>
+        <text class="status-value">{{currentStatus.totalStars}}颗</text>
+      </view>
+      <view class="status-item">
+        <text class="status-label">即将过期</text>
+        <text class="status-value">{{currentStatus.pendingExpiry}}颗</text>
+      </view>
+      <view class="status-item">
+        <text class="status-label">可用奖励</text>
+        <text class="status-value">{{currentStatus.availableRewards}}个</text>
+      </view>
+      <view class="status-item">
+        <text class="status-label">测试数据</text>
+        <text class="status-value {{currentStatus.testDataExists ? 'has-test' : 'no-test'}}">
+          {{currentStatus.testDataExists ? '存在' : '无'}}
+        </text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 快速测试区域 -->
+  <view class="quick-test-section">
+    <text class="section-title">🚀 快速测试</text>
+    
+    <button class="test-btn primary large" bindtap="runCompleteTest" disabled="{{testing}}">
+      {{testing ? '测试中...' : '🎯 一键完整测试'}}
+    </button>
+    
+    <text class="test-hint">自动执行所有测试步骤，验证星星过期保护功能</text>
+  </view>
+
+  <!-- 分步测试区域 -->
+  <view class="step-test-section">
+    <text class="section-title">🔧 分步测试</text>
+    
+    <view class="btn-row">
+      <button class="test-btn secondary" bindtap="createTestStars" disabled="{{testing}}">
+        创建测试星星
+      </button>
+      <button class="test-btn secondary" bindtap="createTestRewards" disabled="{{testing}}">
+        创建测试奖励
+      </button>
+    </view>
+    
+    <view class="btn-row">
+      <button class="test-btn secondary" bindtap="simulateExpiryProtection" disabled="{{testing}}">
+        模拟过期保护
+      </button>
+      <button class="test-btn secondary" bindtap="testProtectedRewardExchange" disabled="{{testing}}">
+        兑换保护奖励
+      </button>
+    </view>
+    
+    <view class="btn-row">
+      <button class="test-btn secondary" bindtap="simulateStarExpiry" disabled="{{testing}}">
+        模拟星星过期
+      </button>
+      <button class="test-btn secondary" bindtap="refreshStatus" disabled="{{testing}}">
+        刷新状态
+      </button>
+    </view>
+  </view>
+
+  <!-- 核心场景测试区域 -->
+  <view class="advanced-test-section">
+    <text class="section-title">⭐ 核心场景验证</text>
+    
+    <view class="btn-row">
+      <button class="test-btn primary" bindtap="testPartialProtection" disabled="{{testing}}">
+        💎 部分保护测试
+      </button>
+      <button class="test-btn warning" bindtap="testBoundaryConditions" disabled="{{testing}}">
+        ⚠️ 边界条件测试
+      </button>
+    </view>
+    
+    <view class="btn-row">
+      <button class="test-btn success" bindtap="testAllStarsExpiring" disabled="{{testing}}">
+        🌟 全部过期测试
+      </button>
+      <button class="test-btn primary" bindtap="testMultipleRewardProtection" disabled="{{testing}}">
+        🎯 多奖励保护测试
+      </button>
+    </view>
+    
+    <text class="test-hint">验证所有讨论场景：部分保护、边界条件、全部过期等完整测试覆盖</text>
+  </view>
+
+  <!-- 清理操作区域 -->
+  <view class="cleanup-section">
+    <text class="section-title">🧹 数据管理</text>
+    
+    <view class="btn-row">
+      <button class="test-btn danger" bindtap="cleanupTestData" disabled="{{testing}}">
+        清理测试数据
+      </button>
+      <button class="test-btn secondary" bindtap="clearResults" disabled="{{testing}}">
+        清空测试结果
+      </button>
+    </view>
+  </view>
+
+  <!-- 测试结果显示区域 -->
+  <view class="results-section">
+    <view class="results-header">
+      <text class="section-title">📋 测试结果</text>
+      <button class="copy-btn" bindtap="copyResults" wx:if="{{testResults.length > 1}}">
+        复制结果
+      </button>
+    </view>
+    
+    <scroll-view class="results-list" scroll-y="true">
+      <view class="result-item {{item.status}}" wx:for="{{testResults}}" wx:key="index">
+        <view class="result-header">
+          <text class="result-name">{{item.name}}</text>
+          <text class="result-time" wx:if="{{item.time}}">{{item.time}}</text>
+        </view>
+        
+        <text class="result-detail">{{item.detail}}</text>
+        
+        <view class="result-data" wx:if="{{item.data}}">
+          <text class="data-label">详细数据:</text>
+          <text class="data-content">{{item.data}}</text>
+        </view>
+      </view>
+    </scroll-view>
+  </view>
+
+  <!-- 测试说明区域 -->
+  <view class="info-section">
+    <text class="info-title">📖 测试说明</text>
+    <view class="info-content">
+      <text class="info-item">• 🟢 绿色表示测试成功</text>
+      <text class="info-item">• 🔴 红色表示测试失败</text>
+      <text class="info-item">• 🔵 蓝色表示信息提示</text>
+      <text class="info-item">• 🟡 黄色表示警告信息</text>
+      <text class="info-item">• 测试数据标记为"[测试]"便于识别</text>
+      <text class="info-item">• 建议测试完成后清理测试数据</text>
+      <text class="info-item">• 此测试不会影响系统正常功能</text>
+    </view>
+  </view>
+
+</view> 

@@ -2639,6 +2639,16 @@ Page({
   },
 
   /**
+   * 导航到星星过期保护测试页面
+   */
+  navigateToStarTest() {
+    logger.info('Index', '导航到星星过期保护测试页面');
+    wx.navigateTo({
+      url: '/pages/star-test/star-test'
+    });
+  },
+
+  /**
    * 验证用户模块功能 (开发和测试用)
    * 可以在开发者工具控制台调用：getCurrentPages().pop().validateUserModule()
    */

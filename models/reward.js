@@ -53,6 +53,7 @@ class Reward {
     
     // 保护相关属性
     this.protectedByExpiry = data.protectedByExpiry || false; // 是否被星星过期保护
+    this.partialProtection = data.partialProtection || 0; // 部分保护金额
   }
   
   /**

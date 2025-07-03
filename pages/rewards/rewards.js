@@ -652,15 +652,27 @@ Page({
     const app = getApp();
     if (app && app.globalData && app.globalData.eventBus) {
       logger.info('rewards', '发送奖励领取事件通知');
+      
+      const actualCost = result.actualCost !== undefined ? result.actualCost : 
+        (result.protectedByExpiry ? 0 : reward.points);
+      const exchangeType = result.protectedByExpiry ? 
+        (actualCost > 0 ? 'partial_protected' : 'fully_protected') : 'normal';
+      
       app.globalData.eventBus.emit(EVENTS.REWARD_CLAIMED, {
         rewardId: reward.id,
         rewardName: reward.name,
-        points: result.protectedByExpiry ? 0 : reward.points, // 保护奖励事件中显示消耗0颗星星
-        originalPoints: reward.points,
+        points: actualCost, // 兼容字段
+        actualCost: actualCost, // 实际消耗数量
+        originalPoints: reward.points, // 原始奖励积分
+        displayPoints: actualCost, // 用于显示的消耗数量
         protectedByExpiry: result.protectedByExpiry || false,
+        partialProtection: result.partialProtection || 0,
+        exchangeType: exchangeType,
         userId: childUserId,
+        operatorUserId: childUserId,
         newTotalPoints: this.data.totalPoints, // 使用当前最新的星星总数
-        nextReward: nextReward
+        nextReward: nextReward,
+        timestamp: Date.now()
       });
     }
   },

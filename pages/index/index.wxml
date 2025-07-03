@@ -15,6 +15,11 @@
         <text class="api-test-text">API</text>
       </view>
       
+      <!-- 星星过期保护测试按钮 -->
+      <view class="star-test-btn" hover-class="icon-hover" bindtap="navigateToStarTest">
+        <text class="star-test-text">⭐</text>
+      </view>
+      
       <view class="message-icon-wrapper" hover-class="icon-hover" bindtap="toggleMessagePreview">
         <view class="message-icon">
           <image src="/assets/icons/message/message.svg" mode="aspectFit"></image>
