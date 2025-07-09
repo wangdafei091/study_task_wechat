@@ -582,7 +582,8 @@ class TaskService {
       modifyTime: Date.now(),
       parentTaskId: originalTask.id,
       status: TaskStatus.PENDING,
-      starAwarded: false
+      starAwarded: false,
+      penaltyApplied: false  // 确保重复任务实例的惩罚状态重置为false
     };
     
     // 创建新任务实例

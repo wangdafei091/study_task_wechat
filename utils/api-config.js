@@ -5,7 +5,7 @@
 
 const API_CONFIG = {
   // 基础配置
-  BASE_URL: 'http://121.4.38.122:8888',
+  BASE_URL: 'http://todoceo.xyz',
   TIMEOUT: 10000, // 10秒超时
   RETRY_COUNT: 2, // 重试2次
   
