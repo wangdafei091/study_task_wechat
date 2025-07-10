@@ -144,7 +144,13 @@ Page({
     },
     availableUsers: [], // 可用用户列表
     showUserSwitcher: false, // 是否显示用户切换界面
-    userPermissions: {} // 当前用户权限
+    userPermissions: {}, // 当前用户权限
+
+    // 日期导航相关
+    currentViewDate: null, // 当前查看的日期（YYYY-MM-DD格式）
+    dateNavigation: [], // 日期导航数据数组
+    pageTitle: '今日任务', // 页面标题，根据选择的日期动态更新
+    hasTodayTasks: false // 是否有今日任务（用于显示空状态）
   },
   
   /**
@@ -195,6 +201,9 @@ Page({
     
     // 初始化多用户系统
     this.initializeMultiUserSystem();
+    
+    // 初始化日期导航
+    this.initializeDateNavigation();
   },
   
   /**
@@ -554,11 +563,10 @@ Page({
   /**
    * 仅加载任务数据（共享模式）
    * 注意：任务设计为共享模式，家长创建任务，小朋友执行，两者都能看到所有任务
+   * @param {String} date 可选的日期参数（YYYY-MM-DD格式），不传则加载今日任务
    */
-  loadTaskDataOnly: async function() {
+  loadTaskDataOnly: async function(date = null) {
     try {
-      logger.info('Index', '开始加载任务数据');
-      
       // 获取任务服务
       const taskService = serviceManager.getService('task');
       if (!taskService) {
@@ -566,9 +574,21 @@ Page({
         return;
       }
       
-      // 获取今日任务（不按用户过滤，所有角色都能看到所有任务）
-      const tasks = await taskService.getTodayTasks();
-      logger.info('Index', `今日任务加载成功（共享模式）, 任务数量: ${tasks.length}`);
+      // 根据日期参数决定加载方式
+      let tasks;
+      let targetDate;
+      
+      if (date) {
+        // 加载指定日期的任务
+        targetDate = date;
+        tasks = await taskService.getTasksByDate(date);
+        logger.info('Index', `指定日期任务加载成功（共享模式）, 日期=${date}, 任务数量: ${tasks.length}`);
+      } else {
+        // 加载今日任务
+        targetDate = dateUtils.getTodayString();
+        tasks = await taskService.getTodayTasks();
+        logger.info('Index', `今日任务加载成功（共享模式）, 任务数量: ${tasks.length}`);
+      }
       
       // 添加详细的任务状态日志
       tasks.forEach((task, index) => {
@@ -585,10 +605,16 @@ Page({
         });
       });
       
+      // 更新当前查看的日期
+      const todayString = dateUtils.getTodayString();
+      const isToday = targetDate === todayString;
+      
       // 更新页面数据
       this.setData({
         tasks: tasks,
-        hasTodayTasks: (tasks && tasks.length > 0)
+        hasTodayTasks: (tasks && tasks.length > 0),
+        currentViewDate: targetDate,
+        pageTitle: isToday ? '今日任务' : `${this.formatDateTitle(targetDate)}任务`
       });
       
       // 检查任务进度
@@ -810,6 +836,109 @@ Page({
       this.setData({
         showUpcomingTask: false
       });
+    }
+  },
+
+  /**
+   * 格式化日期标题
+   * @param {String} dateString 日期字符串（YYYY-MM-DD格式）
+   * @returns {String} 格式化后的日期标题
+   */
+  formatDateTitle: function(dateString) {
+    const date = new Date(dateString);
+    const month = date.getMonth() + 1;
+    const day = date.getDate();
+    return `${month}月${day}日`;
+  },
+
+  /**
+   * 生成日期导航数据
+   * @returns {Array} 日期导航数组
+   */
+  generateDateNavigation: function() {
+    const dates = [];
+    const today = new Date();
+    const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+    
+    // 生成7天：今天往前推6天到今天
+    for (let i = -6; i <= 0; i++) {
+      const date = new Date(today);
+      date.setDate(date.getDate() + i);
+      const dateString = dateUtils.formatDate(date);
+      const weekday = weekdays[date.getDay()];
+      
+      dates.push({
+        dateString: dateString,
+        label: i === 0 ? '今天' : weekday,
+        isToday: i === 0,
+        isHistorical: i < 0
+      });
+    }
+    
+    return dates;
+  },
+
+  /**
+   * 初始化日期导航
+   */
+  initializeDateNavigation: function() {
+    const dateNavigation = this.generateDateNavigation();
+    const todayString = dateUtils.getTodayString();
+    
+    this.setData({
+      dateNavigation: dateNavigation,
+      currentViewDate: todayString,
+      pageTitle: '今日任务'
+    });
+    
+    logger.info('Index', '日期导航初始化完成', {
+      dateCount: dateNavigation.length,
+      currentDate: todayString
+    });
+  },
+
+  /**
+   * 处理日期按钮点击
+   * @param {Object} e 事件对象
+   */
+  onDateButtonTap: async function(e) {
+    const { date } = e.currentTarget.dataset;
+    
+    if (!date) {
+      logger.warn('Index', '日期按钮点击事件缺少日期数据');
+      return;
+    }
+    
+    const { currentViewDate } = this.data;
+    
+    // 如果点击的是当前已选中的日期，无需操作
+    if (date === currentViewDate) {
+      logger.info('Index', `重复点击相同日期: ${date}`);
+      return;
+    }
+    
+    logger.info('Index', `切换日期: ${currentViewDate} -> ${date}`);
+    
+    try {
+      // 显示加载状态
+      wx.showLoading({
+        title: '加载中...',
+        mask: true
+      });
+      
+      // 加载指定日期的任务
+      await this.loadTaskDataOnly(date);
+      
+      logger.info('Index', `日期切换成功: ${date}`);
+    } catch (error) {
+      logger.error('Index', `日期切换失败: ${date}`, error);
+      wx.showToast({
+        title: '加载失败',
+        icon: 'none',
+        duration: 2000
+      });
+    } finally {
+      wx.hideLoading();
     }
   },
 

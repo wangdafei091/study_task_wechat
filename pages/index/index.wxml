@@ -248,7 +248,18 @@
   <!-- 今日任务列表 -->
   <view class="task-list-container">
     <view class="task-list-header">
-      <view class="task-list-title">今日任务 ({{tasks.length}}个任务)</view>
+      <view class="task-list-title">{{pageTitle}} ({{tasks.length}}个任务)</view>
+    </view>
+    
+    <!-- 日期导航栏 -->
+    <view class="date-navigation">
+      <block wx:for="{{dateNavigation}}" wx:key="dateString">
+        <view class="date-button {{currentViewDate === item.dateString ? 'active' : ''}}" 
+              data-date="{{item.dateString}}"
+              bindtap="onDateButtonTap">
+          {{item.label}}
+        </view>
+      </block>
     </view>
     
     <view class="task-list">
