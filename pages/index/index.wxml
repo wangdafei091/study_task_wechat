@@ -10,10 +10,10 @@
       <view class="header-title">{{currentMotivation}}</view>
     </view>
     <view class="header-actions">
-      <!-- API测试按钮 (临时测试用) -->
+      <!-- API测试按钮 (临时测试用) >
       <view class="api-test-btn" hover-class="icon-hover" bindtap="navigateToApiTest">
         <text class="api-test-text">API</text>
-      </view>
+      </view-->
       
       <!-- 星星过期保护测试按钮 -->
       <view class="star-test-btn" hover-class="icon-hover" bindtap="navigateToStarTest">
