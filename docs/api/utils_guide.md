@@ -1,559 +1,578 @@
-# 工具函数使用指南
+# 工具函数指南
 
-本文档介绍了项目中可用的各种工具函数和服务的用途和使用方法，基于当前的DDD架构设计，帮助开发人员快速了解和使用这些核心功能。
+本文档介绍学习任务微信小程序的工具函数，包括日志、批量处理、事件总线等。
 
-## 服务管理器 (ServiceManager)
+---
 
-`utils/service-manager.js` 是DDD架构的核心组件，提供统一的服务实例管理和依赖注入功能。
+## 工具函数目录
 
-### 核心职责
-- 服务生命周期管理
-- 依赖注入和服务发现
-- 服务实例缓存
-- 初始化顺序控制
-
-### 主要方法
-
-```javascript
-// 获取服务实例
-get(serviceName)
-
-// 初始化服务管理器
-init()
-
-// 重置服务实例
-reset()
+```
+utils/
+├── logger.js              # 统一日志工具
+├── batchUtils.js          # 批量处理工具
+├── core/
+│   └── event-bus.js      # 事件总线
+├── dateUtils.js           # 日期处理工具
+├── constants.js           # 常量定义
+└── formatUtils.js        # 格式化工具
 ```
 
-### 使用示例
+---
 
-```javascript
-// 在页面中获取服务
-const serviceManager = getApp().serviceManager;
+## 1. Logger - 日志工具
 
-// 获取任务服务
-const taskService = serviceManager.get('taskService');
-const starService = serviceManager.get('starService');
-const rewardService = serviceManager.get('rewardService');
-
-// 使用服务
-const tasks = await taskService.getAllTasks();
-const starBalance = await starService.getStarBalance('child');
-```
-
-### 可用服务列表
-- `taskService` - 任务管理服务
-- `starService` - 星星积分服务  
-- `rewardService` - 奖励管理服务
-- `messageService` - 消息通知服务
-- `userService` - 用户管理服务
-
-## 任务服务 (TaskService)
-
-`services/task-service.js` 是任务领域的核心服务，提供完整的任务生命周期管理。
-
-### 核心功能
-- 任务CRUD操作
-- 任务状态管理
-- 必做任务惩罚机制
-- 重复任务处理
-- 事件发布机制
-
-### 主要方法
-
-```javascript
-// 基础操作
-async getAllTasks()                    // 获取所有任务
-async getTaskById(taskId)             // 根据ID获取任务
-async createTask(taskData)            // 创建新任务
-async updateTask(taskId, updateData)  // 更新任务
-async deleteTask(taskId)              // 删除任务
-
-// 状态管理
-async completeTask(taskId, userId)    // 完成任务
-async resetTask(taskId, userId)       // 重置任务状态
-async updateTaskStatus(taskId, status, userId) // 更新任务状态
-
-// 特殊功能
-async markTaskAsRequired(taskId, userId)      // 标记为必做任务
-async unmarkTaskAsRequired(taskId, userId)    // 取消必做任务标记
-async handleRequiredTaskPenalty(task)        // 处理必做任务惩罚
-async checkRequiredTasks()                   // 检查必做任务状态
-
-// 查询功能
-async getTasksByDate(date)            // 获取指定日期任务
-async getTasksByDateRange(startDate, endDate) // 获取日期范围内任务
-async getOverdueTasks()               // 获取过期任务
-async getUpcomingTasks()              // 获取即将到期任务
-```
-
-### 使用示例
-
-```javascript
-const taskService = getApp().serviceManager.get('taskService');
-
-// 创建任务
-const taskData = {
-  title: '练习钢琴',
-  description: '练习新曲目30分钟',
-  type: 'study',
-  date: '2024-12-01',
-  startTime: '18:00',
-  endTime: '18:30',
-  points: 10,
-  pointsExpiry: 'week',
-  isRequired: false
-};
-
-const result = await taskService.createTask(taskData);
-if (result.success) {
-  logger.info('Page', '任务创建成功', result.task);
-}
-
-// 完成任务
-const completeResult = await taskService.completeTask(taskId, 'child');
-if (completeResult.success) {
-  logger.info('Page', '任务完成成功', completeResult.task);
-}
-```
-
-## 星星服务 (StarService)
-
-`services/star-service.js` 管理星星积分系统，实现获得、消费、过期等完整生命周期。
-
-### 核心功能
-- 星星分组管理
-- FIFO消费策略
-- 有效期计算
-- 过期处理
-- 数据一致性维护
-
-### 主要方法
-
-```javascript
-// 星星余额管理
-async getStarBalance(userId)          // 获取星星余额
-async getStarGroups(userId)           // 获取星星分组
-async getStarRecords(userId, options) // 获取星星记录
-
-// 星星操作
-async addStars(userId, amount, expiryType, sourceId, description) // 添加星星
-async consumeStars(userId, amount, sourceId, description)         // 消费星星
-async processExpiredStars()           // 处理过期星星
-
-// 统计分析
-async getStarStatistics(userId, dateRange) // 获取统计数据
-async getExpiryForecast(userId, days)       // 获取过期预测
-```
-
-### 使用示例
-
-```javascript
-const starService = getApp().serviceManager.get('starService');
-
-// 获取星星余额
-const balance = await starService.getStarBalance('child');
-logger.info('Page', '当前星星余额', balance);
-
-// 添加星星（任务完成时）
-const addResult = await starService.addStars(
-  'child',
-  10,
-  'week',
-  'task_123',
-  '完成任务：练习钢琴'
-);
-
-// 消费星星（兑换奖励时）
-const consumeResult = await starService.consumeStars(
-  'child',
-  25,
-  'reward_456',
-  '兑换奖励：看动画片'
-);
-```
-
-## 奖励服务 (RewardService)
-
-`services/reward-service.js` 管理奖励系统，包括奖励创建、兑换、状态管理等。
-
-### 核心功能
-- 奖励CRUD操作
-- 兑换流程管理
-- 状态流转控制
-- 库存管理
-- 示例奖励处理
-
-### 主要方法
-
-```javascript
-// 基础操作
-async getAllRewards()                 // 获取所有奖励
-async getRewardById(rewardId)        // 根据ID获取奖励
-async createReward(rewardData)       // 创建奖励
-async updateReward(rewardId, changes) // 更新奖励
-async deleteReward(rewardId)         // 删除奖励
-
-// 兑换管理
-async claimReward(rewardId, userId)   // 兑换奖励
-async deliverReward(rewardId)        // 标记为已领取
-async unclaimReward(rewardId)        // 取消兑换
-
-// 状态管理
-async enableReward(rewardId)         // 启用奖励
-async disableReward(rewardId)        // 禁用奖励
-
-// 查询功能
-async getAvailableRewards()          // 获取可用奖励
-async getClaimedRewards()            // 获取已兑换奖励
-async getRewardHistory(userId)       // 获取兑换历史
-```
-
-### 使用示例
-
-```javascript
-const rewardService = getApp().serviceManager.get('rewardService');
-
-// 兑换奖励
-const claimResult = await rewardService.claimReward('reward_123', 'child');
-if (claimResult.success) {
-  logger.info('Page', '奖励兑换成功', claimResult.reward);
-  // 显示成功提示
-  wx.showToast({
-    title: '兑换成功！',
-    icon: 'success'
-  });
-}
-
-// 创建奖励
-const rewardData = {
-  title: '看动画片30分钟',
-  description: '可以选择喜欢的动画片',
-  cost: 25,
-  category: 'entertainment',
-  totalCount: 5
-};
-
-const createResult = await rewardService.createReward(rewardData);
-```
-
-## 消息服务 (MessageService)
-
-`services/message-service.js` 处理系统消息和通知功能。
-
-### 核心功能
-- 消息创建和管理
-- 多种消息类型支持
-- 已读状态管理
-- 优先级处理
-- 消息归档功能
-
-### 主要方法
-
-```javascript
-// 基础操作
-async getAllMessages(userId)          // 获取所有消息
-async getMessageById(messageId)       // 根据ID获取消息
-async createMessage(messageData)      // 创建消息
-async deleteMessage(messageId)        // 删除消息
-
-// 状态管理
-async markAsRead(messageId)           // 标记为已读
-async markAsUnread(messageId)         // 标记为未读
-async archiveMessage(messageId)       // 归档消息
-
-// 查询功能
-async getUnreadMessages(userId)       // 获取未读消息
-async getUnreadCount(userId)          // 获取未读数量
-async getMessagesByType(userId, type) // 按类型获取消息
-
-// 便捷方法
-async createTaskCompletionMessage(task, userId)    // 创建任务完成消息
-async createStarRewardMessage(amount, userId)      // 创建星星奖励消息
-async createPenaltyMessage(task, amount, userId)   // 创建惩罚消息
-async createRewardExchangeMessage(reward, userId)  // 创建奖励兑换消息
-```
-
-### 使用示例
-
-```javascript
-const messageService = getApp().serviceManager.get('messageService');
-
-// 获取未读消息数量
-const unreadCount = await messageService.getUnreadCount('child');
-if (unreadCount > 0) {
-  wx.showTabBarRedDot({ index: 2 });
-}
-
-// 创建系统消息
-const messageData = {
-  userId: 'child',
-  type: 'system',
-  subType: 'reminder',
-  title: '任务提醒',
-  content: '您有未完成的任务，请及时处理',
-  priority: 'normal'
-};
-
-await messageService.createMessage(messageData);
-```
-
-## 用户服务 (UserService)
-
-`services/user-service.js` 管理用户相关功能，支持多角色系统。
-
-### 核心功能
-- 用户角色管理
-- 当前用户状态
-- 用户切换功能
-- 权限控制
-
-### 主要方法
-
-```javascript
-// 用户管理
-getCurrentUserId()                    // 获取当前用户ID
-getCurrentUser()                      // 获取当前用户信息
-switchUser(userId)                    // 切换用户
-getUserRole(userId)                   // 获取用户角色
-
-// 权限检查
-canManageRewards(userId)             // 是否可管理奖励
-canViewAllTasks(userId)              // 是否可查看所有任务
-hasPermission(userId, permission)     // 检查权限
-```
-
-### 使用示例
-
-```javascript
-const userService = getApp().serviceManager.get('userService');
-
-// 获取当前用户
-const currentUserId = userService.getCurrentUserId();
-const currentUser = userService.getCurrentUser();
-
-// 检查权限
-const canManage = userService.canManageRewards(currentUserId);
-if (canManage) {
-  // 显示管理界面
-}
-```
-
-## 日志工具 (Logger)
-
-`utils/logger.js` 提供统一的日志记录功能。
+统一的日志记录工具，支持环境自适应的日志级别控制。
 
 ### 日志级别
-- `info` - 一般信息
-- `warn` - 警告信息
-- `error` - 错误信息
-- `debug` - 调试信息
 
-### 主要方法
+| 级别 | 数值 | 用途 | 说明 |
+|------|------|------|------|
+| `DEBUG` | 1 | 调试信息 | 开发阶段使用 |
+| `INFO` | 2 | 一般信息 | 记录关键操作和状态 |
+| `WARN` | 3 | 警告信息 | 记录潜在问题和异常情况 |
+| `ERROR` | 4 | 错误信息 | 记录错误和异常 |
+| `NONE` | 999 | 禁用日志 | 用于禁用日志 |
 
-```javascript
-logger.info(module, message, data)    // 记录信息
-logger.warn(module, message, data)    // 记录警告
-logger.error(module, message, data)   // 记录错误
-logger.debug(module, message, data)   // 记录调试信息
-```
+### API 方法
 
-### 使用示例
+#### `info(module, message, data)`
+记录信息日志
 
+**参数**：
+- `module` - 模块名称（字符串）
+- `message` - 日志消息（字符串）
+- `data` - 附加数据（对象，可选）
+
+**示例**：
 ```javascript
 const logger = require('../../utils/logger');
 
-// 记录操作信息
-logger.info('TaskService', '任务创建成功', { taskId: 'task_123' });
-
-// 记录警告
-logger.warn('StarService', '星星余额不足', { required: 25, available: 10 });
-
-// 记录错误
-logger.error('RewardService', '奖励兑换失败', error);
+logger.info('TaskService', '任务创建成功', { taskId: 'task_123', title: '练习钢琴' });
+// 输出：[TaskService] [INFO] 任务创建成功 { taskId: 'task_123', title: '练习钢琴' }
 ```
 
-## 批量处理工具 (batchUtils)
+---
 
-`utils/batchUtils.js` 提供高效的批量数据处理功能。
+#### `warn(module, message, data)`
+记录警告日志
 
-### 核心功能
-- 分批处理大量数据
-- 进度显示
-- 性能优化
-- 错误处理
+**参数**：
+- `module` - 模块名称
+- `message` - 警告消息
+- `data` - 附加数据（对象，可选）
 
-### 主要方法
+**示例**：
+```javascript
+logger.warn('TaskService', '用户尝试访问不属于自己的任务', { userId: 'child', taskId: 'task_456' });
+```
+
+---
+
+#### `error(module, message, error)`
+记录错误日志
+
+**参数**：
+- `module` - 模块名称
+- `message` - 错误消息
+- `error` - 错误对象或附加数据（Error 或 Object）
+
+**示例**：
+```javascript
+try {
+  await taskRepository.save(task);
+} catch (error) {
+  logger.error('TaskService', '保存任务失败', error);
+  throw error;
+}
+```
+
+---
+
+#### `debug(module, message, data)`
+记录调试日志
+
+**参数**：
+- `module` - 模块名称
+- `message` - 调试消息
+- `data` - 附加数据（对象，可选）
+
+**示例**：
+```javascript
+logger.debug('TaskService', '计算星星奖励', { points: 10, taskType: 'study' });
+```
+
+---
+
+#### `logEvent(eventName, eventData, context)`
+专门记录事件相关的日志
+
+**参数**：
+- `eventName` - 事件名称
+- `eventData` - 事件数据
+- `context` - 上下文信息（对象，可选）
+
+**示例**：
+```javascript
+logger.logEvent('task:completed', { taskId, userId }, { source: 'userAction' });
+```
+
+---
+
+### 日志配置
+
+#### 日志级别控制
+
+可以通过设置日志级别来控制输出的详细程度：
 
 ```javascript
-// 批量处理数据
-batchProcess(items, processFn, options, callback)
+// 设置为 INFO 级别（默认）
+logger.setLevel('INFO');
 
-// 批量执行操作
-batchExecute(operations, options)
+// 设置为 DEBUG 级别（开发时）
+logger.setLevel('DEBUG');
+
+// 禁用日志
+logger.setLevel('NONE');
 ```
 
-### 使用示例
+---
 
+### 最佳实践
+
+1. **使用有意义的模块名称**：
+```javascript
+// ✅ 推荐：使用具体的服务/组件名称
+logger.info('TaskService', '...');
+logger.info('ProgressRing', '...');
+logger.info('IndexPage', '...');
+
+// ❌ 避免：过于通用的名称
+logger.info('Module', '...');
+```
+
+2. **结构化数据记录**：
+```javascript
+// ✅ 推荐：使用对象结构
+logger.info('TaskService', '任务创建成功', {
+  taskId: task.id,
+  title: task.title,
+  type: task.type
+});
+
+// ❌ 避免：字符串拼接
+logger.info('TaskService', `任务创建成功: ${task.id}, ${task.title}`);
+```
+
+3. **关键操作必须记录**：
+- ✅ 任务状态变更
+- ✅ 星星计算和分配
+- ✅ 重要数据操作
+- ✅ 异步操作开始和结束
+- ✅ 错误和异常情况
+- ✅ 业务规则执行
+
+4. **避免过度日志**：
+- ❌ 不要在循环中记录重复信息
+- ❌ 不要记录过大的对象
+- ❌ 不要记录敏感信息（如用户密码、token）
+
+---
+
+## 2. BatchUtils - 批量处理工具
+
+提供批量处理数据的通用函数，避免UI阻塞。
+
+### API 方法
+
+#### `batchProcess(items, processFn, options, callback)`
+
+批量处理数据，将大量数据分批处理，避免阻塞UI。
+
+**参数**：
+- `items` - 需要处理的数据项数组
+- `processFn` - 处理单个项的函数
+- `options` - 配置选项（可选）
+  - `batchSize` - 每批处理的数量，默认 50
+  - `delay` - 批次间延迟毫秒数，默认 0
+  - `showProgress` - 是否显示进度，默认 true
+  - `progressTitle` - 进度标题，默认 '处理中'
+- `callback` - 全部处理完成后的回调函数（可选）
+
+**返回**：无返回值
+
+**示例**：
 ```javascript
 const batchUtils = require('../../utils/batchUtils');
 
-// 批量处理任务
+// 基本用法
 await batchUtils.batchProcess(
-  tasks,
-  async (task) => {
-    // 处理单个任务
-    await processTask(task);
+  tasks,                    // 要处理的任务数组
+  (task) => {              // 处理函数
+    return taskService.completeTask(task.id);
   },
   {
-    batchSize: 50,
-    delay: 10,
-    showProgress: true,
-    progressTitle: '处理任务中'
+    batchSize: 50,          // 每批 50 个
+    delay: 10,              // 批次间延迟 10 毫秒
+    showProgress: true,       // 显示进度
+    progressTitle: '保存任务中'
   }
 );
 ```
 
-## 日期工具 (dateUtils)
+---
 
-`utils/dateUtils.js` 提供日期处理和格式化功能。
+#### `groupBy(array, keyFn)`
 
-### 主要方法
+将数组分组处理。
 
+**参数**：
+- `array` - 要分组的数组
+- `keyFn` - 提取分组键的函数
+
+**返回**：分组结果对象
+
+**示例**：
 ```javascript
-// 格式化
-formatDate(date)                      // 格式化为YYYY-MM-DD
-formatDateTime(date)                  // 格式化为YYYY-MM-DD HH:MM:SS
-formatTime(date)                      // 格式化为HH:MM
+// 按任务类型分组
+const tasks = await taskService.getAllTasks();
+const grouped = batchUtils.groupBy(tasks, task => task.type);
 
-// 计算
-getTodayString()                      // 获取今天日期字符串
-getCurrentTimestamp()                 // 获取当前时间戳
-getDaysBetween(startDate, endDate)    // 计算天数差
-isToday(date)                        // 是否是今天
-isOverdue(date)                      // 是否过期
-
-// 日历
-getMonthCalendar(year, month)         // 获取月历数据
-getWeekRange(date)                    // 获取周范围
+// 结果：{ study: [...], habit: [...], interest: [...] }
 ```
 
-### 使用示例
+---
+
+#### `chunk(array, size)`
+
+按指定数量对数组进行分块。
+
+**参数**：
+- `array` - 要分块的数组
+- `size` - 每块的大小
+
+**返回**：分块后的二维数组
+
+**示例**：
+```javascript
+const items = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+const chunks = batchUtils.chunk(items, 3);
+
+// 结果：[[1, 2, 3], [4, 5, 6], [7, 8, 9], [10]]
+```
+
+---
+
+### 最佳实践
+
+1. **使用批量处理避免UI阻塞**：
+```javascript
+// ✅ 推荐：使用 batchProcess
+await batchUtils.batchProcess(largeDataArray, processItem, options);
+
+// ❌ 避免：直接循环处理
+for (const item of largeDataArray) {
+  await processItem(item);  // 会阻塞UI
+}
+```
+
+2. **合理设置批次大小**：
+- 默认值 50 适用于大多数场景
+- CPU 密集型操作可减小批次（如 20-30）
+- I/O 密集型操作可增大批次（如 100-200）
+
+3. **添加延迟避免卡顿**：
+```javascript
+// ✅ 推荐：添加延迟
+await batchUtils.batchProcess(items, processFn, { delay: 10 });
+
+// ❌ 避免：无延迟
+await batchUtils.batchProcess(items, processFn, { delay: 0 });
+```
+
+---
+
+## 3. EventBus - 事件总线
+
+提供统一的事件发布/订阅机制，用于组件间的松耦合通信。
+
+### API 方法
+
+#### `on(event, callback, options)`
+
+注册事件监听器。
+
+**参数**：
+- `event` - 事件名称（字符串）
+- `callback` - 回调函数
+- `options` - 配置选项（可选）
+  - `once` - 是否为一次性监听器（默认 false）
+
+**返回**：取消监听的函数
+
+**示例**：
+```javascript
+const eventBus = require('../../utils/core/event-bus');
+
+// 普通监听
+const offTaskCompleted = eventBus.on('task:completed', (event) => {
+  console.log('任务完成', event.detail);
+});
+
+// 一次性监听（自动取消）
+const offOnce = eventBus.on('reward:claimed', (event) => {
+  console.log('奖励兑换', event.detail);
+}, { once: true });
+```
+
+---
+
+#### `off(event, callback)`
+
+取消事件监听器。
+
+**参数**：
+- `event` - 事件名称
+- `callback` - 回调函数（与 on 时传入的相同引用）
+
+**返回**：无
+
+**示例**：
+```javascript
+// 取消监听
+offTaskCompleted();  // 取消 task:completed 事件监听
+```
+
+---
+
+#### `publish(eventName, eventData)`
+
+发布事件。
+
+**参数**：
+- `eventName` - 事件名称
+- `eventData` - 事件数据（对象）
+
+**返回**：无
+
+**示例**：
+```javascript
+// 发布事件
+eventBus.publish('task:completed', {
+  taskId: 'task_123',
+  userId: 'child',
+  points: 10
+});
+```
+
+---
+
+#### `once(event, callback)`
+
+注册一次性事件监听器（触发后自动取消）。
+
+**参数**：
+- `event` - 事件名称
+- `callback` - 回调函数
+
+**返回**：取消监听的函数
+
+**示例**：
+```javascript
+const offOnce = eventBus.once('app:ready', (event) => {
+  console.log('应用已就绪', event.detail);
+  // 监听器会自动取消
+});
+```
+
+---
+
+### 事件总线特性
+
+#### 性能优化
+
+```javascript
+// 启用性能优化
+eventBus.setOptimization(true);
+
+// 调试模式
+eventBus.setDebugMode(true);
+```
+
+#### 事件历史
+
+```javascript
+// 获取最近的事件历史
+const history = eventBus.getEventHistory();
+
+// 获取事件统计
+const stats = eventBus.getEventStats();
+```
+
+---
+
+### 最佳实践
+
+1. **使用事件总线解耦组件**：
+```javascript
+// ✅ 推荐：通过事件通信
+// 子组件
+this.triggerEvent('customEvent', { value: someValue });
+
+// 父组件
+<my-component bind:customEvent="onCustomEvent" />
+```
+
+2. **在页面卸载时取消监听**：
+```javascript
+Page({
+  onLoad() {
+    this.offTaskCompleted = eventBus.on('task:completed', this.handleTaskCompleted);
+  },
+
+  onUnload() {
+    this.offTaskCompleted();  // 取消监听，避免内存泄漏
+  }
+});
+```
+
+3. **事件名称使用命名空间**：
+```javascript
+// ✅ 推荐：使用冒号分隔命名空间
+'task:completed'      // 任务相关事件
+'reward:claimed'      // 奖励相关事件
+'message:created'      // 消息相关事件
+
+// ❌ 避免：过于通用的事件名
+'completed'            // 容易冲突
+'changed'             // 含义不清
+```
+
+---
+
+## 4. DateUtils - 日期处理工具
+
+日期相关的工具函数。
+
+### 主要方法
 
 ```javascript
 const dateUtils = require('../../utils/dateUtils');
 
+// 获取今日日期字符串
+dateUtils.getTodayString();  // 返回 'YYYY-MM-DD'
+
 // 格式化日期
-const today = dateUtils.getTodayString();
-const formatted = dateUtils.formatDateTime(new Date());
+dateUtils.formatDate(date, 'YYYY年MM月DD日');
 
-// 检查任务是否过期
-const isOverdue = dateUtils.isOverdue(task.date);
-if (isOverdue) {
-  logger.warn('TaskCheck', '任务已过期', { taskId: task.id });
-}
+// 计算日期差
+dateUtils.diffDays(date1, date2);  // 返回天数差
+
+// 判断日期是否在范围
+dateUtils.isDateInRange(date, startDate, endDate);
+
+// 获取日期所在周的周一
+dateUtils.getMondayOfWeek(date);
+
+// 判断是否为今天
+dateUtils.isToday(dateString);
 ```
-
-## 存储适配器 (StorageAdapter)
-
-`adapters/storage-adapter.js` 提供统一的数据存储接口。
-
-### 核心功能
-- 数据存储和读取
-- 缓存管理
-- 命名空间隔离
-- 错误处理
-
-### 主要方法
-
-```javascript
-// 数据操作
-get(key)                             // 获取数据
-set(key, value, options)             // 设置数据
-remove(key)                          // 删除数据
-clear()                              // 清空所有数据
-
-// 批量操作
-getMultiple(keys)                    // 批量获取
-setMultiple(data)                    // 批量设置
-
-// 缓存管理
-clearCache()                         // 清空缓存
-getCacheInfo()                       // 获取缓存信息
-```
-
-### 使用示例
-
-```javascript
-// 通过仓储类使用，一般不直接调用
-const taskRepository = new TaskRepository();
-const tasks = await taskRepository.findAll();
-```
-
-## EventBus 事件总线
-
-`utils/eventBus.js` 提供高性能的事件发布订阅机制。
-
-### 核心功能
-- 事件发布和订阅
-- 一次性事件监听
-- 事件取消订阅
-- 性能优化
-
-### 主要方法
-
-```javascript
-// 事件订阅
-on(event, listener)                  // 订阅事件
-once(event, listener)                // 一次性订阅
-off(event, listener)                 // 取消订阅
-
-// 事件发布
-emit(event, ...args)                 // 发布事件
-```
-
-### 使用示例
-
-```javascript
-const eventBus = getApp().eventBus;
-
-// 订阅事件
-eventBus.on('task:completed', (task) => {
-  logger.info('EventListener', '收到任务完成事件', task);
-  // 更新UI
-  this.updateTaskDisplay();
-});
-
-// 发布事件（通常在服务中发布）
-eventBus.emit('task:completed', task);
-```
-
-## 最佳实践
-
-### 1. 服务使用原则
-- 始终通过ServiceManager获取服务实例
-- 不要直接实例化服务类
-- 在页面onLoad中获取服务引用
-- 使用async/await处理异步操作
-
-### 2. 错误处理
-- 所有异步操作都要有错误处理
-- 使用logger记录关键操作和错误
-- 给用户友好的错误提示
-
-### 3. 性能优化
-- 大量数据操作使用batchUtils
-- 合理使用事件机制减少耦合
-- 避免频繁的存储操作
-
-### 4. 代码规范
-- 遵循统一的命名规范
-- 添加必要的日志记录
-- 编写清晰的注释
-- 保持代码简洁
 
 ---
 
-**文档维护者**：开发团队  
-**最后更新**：2024年12月  
-**版本**：v3.0
+## 5. FormatUtils - 格式化工具
+
+格式化相关的工具函数。
+
+### 主要方法
+
+```javascript
+const formatUtils = require('../../utils/formatUtils');
+
+// 格式化星星数量
+formatUtils.formatStars(100);  // 返回 '100⭐'
+
+// 格式化日期
+formatUtils.formatDate(dateString);  // 返回 '2024年12月01日'
+
+// 格式化时间
+formatUtils.formatTime(timeString);  // 返回 '18:30'
+```
+
+---
+
+## 6. Constants - 常量定义
+
+项目中的常量定义。
+
+### 主要常量
+
+```javascript
+const {
+  // 任务类型
+  TaskType,
+  TaskStatus,
+  RepeatType,
+  StarExpiryType,
+
+  // 事件类型
+  EVENTS,
+
+  // 错误消息
+  ERROR_MESSAGES
+} = require('../../utils/constants');
+```
+
+### 使用示例
+
+```javascript
+// 检查任务类型
+if (task.type === TaskType.STUDY) {
+  // 学习任务逻辑
+}
+
+// 发布事件
+eventBus.publish(EVENTS.TASK_COMPLETED, eventData);
+```
+
+---
+
+## 工具函数使用建议
+
+### 日志记录策略
+
+1. **关键操作必须记录日志**：
+   - 任务状态变更
+   - 星星计算和分配
+   - 奖励兑换
+   - 数据一致性检查和修复
+
+2. **使用适当的日志级别**：
+   - `DEBUG`：开发调试信息
+   - `INFO`：正常业务流程
+   - `WARN`：潜在问题
+   - `ERROR`：错误和异常
+
+### 批量处理场景
+
+1. **大批量数据操作**：
+   - 保存大量任务
+   - 删除大量记录
+   - 更新多条消息
+
+2. **异步操作批量处理**：
+   - 避免阻塞 UI
+   - 显示进度提示
+
+### 事件总线使用
+
+1. **跨组件通信**：
+   - 页面 ↔ 组件
+   - 组件 ↔ 组件
+
+2. **服务间解耦**：
+   - 通过事件总线代替直接调用
+
+---
+
+**最后更新**：2026-02-28
+**维护者**：项目维护团队

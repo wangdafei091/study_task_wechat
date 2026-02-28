@@ -1,266 +1,166 @@
-# 学习任务微信小程序文档中心
+# 文档导航
 
-## 项目概述
-
-学习任务微信小程序是一个帮助小朋友养成良好学习习惯的任务管理工具，通过任务管理、积分奖励等机制，培养自律学习的能力。
-
-### 核心特性
-- **DDD架构设计**：采用领域驱动设计，代码结构清晰、易维护
-- **多任务类型支持**：学习任务、习惯任务、兴趣任务
-- **星星积分系统**：完成任务获得星星，支持有效期管理
-- **奖励兑换机制**：用星星兑换各种奖励，激励学习
-- **必做任务惩罚**：未完成必做任务会扣除星星
-- **多用户角色**：支持家长和小朋友角色切换
-- **消息通知系统**：及时提醒任务状态和系统消息
-- **数据分析功能**：提供任务完成情况和趋势分析
-
-## 技术架构
-
-### 技术栈
-- **平台**：微信小程序原生框架
-- **架构**：领域驱动设计(DDD)
-- **语言**：JavaScript ES6+
-- **UI**：微信小程序原生组件 + 自定义组件
-- **状态管理**：自定义事件总线(EventBus)
-- **存储**：微信小程序本地存储 + StorageAdapter适配器
-- **图表**：ECharts微信小程序版本
-- **测试**：Jest单元测试框架(v29.5.0)
-
-### 分包结构
-- **主包**：核心功能(任务管理、奖励兑换)
-- **packageChart**：数据分析和图表展示
-- **packageManage**：奖励管理和兑换记录
-- **packageMessage**：消息中心和星星记录
-- **packageComponents**：复杂组件
-
-## 架构文档
-
-### 核心架构
-- [系统架构](architecture/system_architecture.md) - 系统整体架构设计和组件关系
-- [DDD领域架构](architecture/domain-model-architecture.md) - 领域驱动设计架构详解
-- [项目结构](architecture/project_structure.md) - 项目文件结构和组织方式
-- [数据模型](architecture/data_models.md) - 核心数据模型和字段说明
-
-### 专项设计
-- [星星积分系统](architecture/star_points_system.md) - 积分系统的核心实现
-
-## 开发指南
-
-### 开发规范
-- [开发工作流程](development/workflow.md) - 项目开发流程和规范
-- [编码标准](development/coding_standards.md) - 代码风格和编码规范
-- [文档更新工作流](development/document_workflow.md) - API文档更新流程和规范
-
-### 维护指南
-- [问题排查指南](development/troubleshooting.md) - 常见问题和解决方案
-- [更新日志](development/CHANGELOG.md) - 版本历史和功能更新记录
-
-## API文档
-
-### 核心API
-- [服务层API](api/services-guide.md) - 业务服务接口文档
-- [仓储层API](api/repositories.md) - 数据访问接口文档
-- [组件API](api/components-guide.md) - UI组件使用指南
-- [工具函数指南](api/utils_guide.md) - 项目工具函数使用指南
-- [存储适配器](api/storage-adapter.md) - 数据存储接口文档
-
-## 用户手册
-
-- [用户指南](user/guide.md) - 应用功能和使用说明
-- [常见问题](user/faq.md) - 常见问题解答
-
-## 领域驱动设计架构
-
-项目采用完整的领域驱动设计（DDD）架构，核心层次包括：
-
-### 领域层 (models/)
-- **核心实体**：Task、Star、StarGroup、StarRecord、Reward、Message、User
-- **业务规则**：将业务逻辑封装在领域模型内，确保业务一致性
-- **领域事件**：支持状态变更通知机制，保持模块间松耦合
-
-### 应用层 (services/)
-- **领域服务**：TaskService、StarService、RewardService、MessageService、UserService、ValidationService、ConfigService、AnalyticsService
-- **服务管理**：通过ServiceManager提供统一的服务访问和依赖注入
-- **事件驱动**：服务间通过EventBus进行事件通信
-
-### 基础设施层 (repositories/ & adapters/)
-- **仓储模式**：BaseRepository提供通用操作，各领域仓储实现专门功能
-- **存储适配器**：StorageAdapter提供统一的数据存储接口
-- **批量处理**：batchUtils优化大量数据操作性能
-
-### 表现层 (pages/ & components/)
-- **页面组件**：通过ServiceManager访问业务逻辑
-- **UI组件**：高度复用的组件化设计
-- **分包加载**：按需加载功能模块，优化性能
-
-详细架构设计请参考[系统架构](architecture/system_architecture.md)文档。
-
-## 核心功能模块
-
-### 1. 任务管理系统
-- **任务类型**：支持学习、习惯、兴趣三种任务类型
-- **重复任务**：支持日、周、月重复设置
-- **必做任务**：支持设置必做任务并应用惩罚机制
-- **状态管理**：完整的任务生命周期管理
-- **批量操作**：高效的批量任务处理
-
-### 2. 星星积分系统
-- **获得机制**：完成任务获得星星积分
-- **有效期管理**：支持永久、周、月、季度有效期
-- **分组存储**：按有效期分组管理，优化消费策略
-- **FIFO消费**：优先消费即将过期的星星
-- **记录追踪**：完整的星星获得和消费记录
-
-### 3. 奖励兑换系统
-- **多种奖励**：支持物品、特权、活动等奖励类型
-- **状态管理**：完整的兑换状态流转
-- **库存管理**：支持有限和无限数量的奖励
-- **兑换记录**：详细的兑换历史记录
-
-### 4. 消息通知系统
-- **系统消息**：任务完成、惩罚、奖励兑换等通知
-- **优先级**：支持高、中、低优先级消息
-- **状态管理**：已读/未读状态管理
-- **归档功能**：消息归档和清理
-
-### 5. 用户管理系统
-- **多角色支持**：家长和小朋友角色
-- **权限控制**：基于角色的权限管理
-- **用户切换**：便捷的用户角色切换功能
-
-### 6. 数据分析系统
-- **任务统计**：任务完成率、进度统计
-- **趋势分析**：完成情况趋势图表
-- **日历视图**：任务热力图显示
-- **连续记录**：连续完成天数统计
-
-## 文档管理规则
-
-### 文档组织结构
-```
-docs/
-├── README.md                    # 主文档入口
-├── architecture/                # 架构文档
-│   ├── system_architecture.md  # 系统架构
-│   ├── data_models.md          # 数据模型
-│   └── project_structure.md    # 项目结构
-├── development/                 # 开发指南
-│   ├── workflow.md             # 开发流程
-│   ├── coding_standards.md     # 编码规范
-│   └── troubleshooting.md      # 问题排查
-├── api/                        # API文档
-└── user/                       # 用户手册
-```
-
-### 文档维护原则
-1. **及时更新**：代码变更时同步更新相关文档
-2. **格式统一**：遵循Markdown格式规范
-3. **内容准确**：确保文档与实际代码保持一致
-4. **分类清晰**：按功能和用途合理分类
-5. **版本管理**：重要变更记录在CHANGELOG中
-
-### 文档更新流程
-1. **代码修改**：开发者完成代码变更
-2. **影响评估**：评估对文档的影响范围
-3. **文档更新**：更新受影响的文档内容
-4. **格式检查**：确保文档格式和链接正确
-5. **提交变更**：将文档更新与代码一起提交
-
-## 开发规范
-
-### 代码风格
-- **简洁中文**：使用简洁的中文回复和注释
-- **最小修改**：仅修复用户提出的问题，做最小最简单的方案
-- **日志记录**：在关键操作处增加logger日志记录
-- **逻辑简化**：简化逻辑，去除冗余代码
-
-### 架构原则
-- **DDD分层**：严格遵循DDD分层架构
-- **服务访问**：通过ServiceManager访问服务，避免直接操作存储
-- **事件通信**：使用EventBus进行跨服务通信
-- **批量优化**：批量操作使用batchUtils避免UI阻塞
-
-### UI规范
-- **卡片设计**：内边距30rpx，圆角16rpx
-- **按钮设计**：高度90rpx，圆角8rpx
-- **间距统一**：元素间距12rpx/24rpx
-- **颜色规范**：学习任务#4285F4，习惯任务#4CAF50，兴趣任务#FF9800
-- **字体规范**：标题32rpx/500-600，正文28rpx/400，辅助24rpx/400
-
-### 性能优化
-- **批量处理**：大量数据使用batchUtils批量处理
-- **渲染优化**：合并setData调用，减少渲染次数
-- **异步优化**：异步操作使用Promise/async-await
-- **延迟加载**：使用setTimeout延迟非关键任务
-
-### 测试要求
-- **单元测试**：使用Jest进行单元测试和集成测试
-- **测试组织**：测试文件按模块组织在test/目录
-- **覆盖率要求**：保持高测试覆盖率（目标85%+）
-
-## 如何使用文档
-
-### 新项目成员
-1. 从[项目结构](architecture/project_structure.md)开始了解项目组织
-2. 阅读[系统架构](architecture/system_architecture.md)理解整体设计
-3. 学习[开发工作流程](development/workflow.md)和[编码标准](development/coding_standards.md)
-4. 参考[数据模型](architecture/data_models.md)了解数据结构
-
-### 开发人员
-- 开发前参考[API文档](api/)了解可用接口
-- 遇到问题查阅[问题排查指南](development/troubleshooting.md)
-- 提交代码前检查[编码标准](development/coding_standards.md)
-- 重大变更记录在[更新日志](development/CHANGELOG.md)
-
-### 维护人员
-- 定期检查文档的准确性和完整性
-- 根据用户反馈更新[常见问题](user/faq.md)
-- 保持[故障排除文档](development/troubleshooting.md)的时效性
-- 及时更新[系统架构文档](architecture/)
-
-## 项目特色
-
-### 1. 完整的DDD架构实现
-- 清晰的分层设计，易于理解和维护
-- 领域模型封装业务规则，确保一致性
-- 服务层协调复杂业务流程
-- 基础设施层提供技术支撑
-
-### 2. 高性能的事件系统
-- 自研EventBus支持高并发事件处理
-- 支持事件优化和调试模式
-- 松耦合的组件通信机制
-
-### 3. 智能的积分管理
-- 按有效期分组的星星管理
-- FIFO消费策略优化用户体验
-- 完整的积分获得和消费记录
-
-### 4. 用户友好的设计
-- 直观的任务管理界面
-- 丰富的数据可视化
-- 贴心的消息提醒系统
-- 灵活的奖励配置
-
-### 5. 可扩展的架构
-- 分包设计支持功能模块化
-- 插件式的组件架构
-- 统一的服务管理机制
-- 完善的错误处理和日志系统
+> 本文档提供项目文档的导航和快速参考，帮助快速找到需要的文档。
 
 ---
 
-## 联系我们
+## 🚀 新人快速开始（约30分钟）
 
-如有问题或建议，请通过以下方式联系：
-- 项目文档：查阅本文档系统
-- 问题反馈：参考[问题排查指南](development/troubleshooting.md)
-- 功能建议：记录在项目需求文档中
+按顺序阅读以下文档：
+
+### 1. 了解如何开发（10分钟）
+阅读：[开发流程](development/workflow.md)
+
+你将了解：
+- 新功能开发的完整流程（设计→审核→实施→完成）
+- 文档更新规范
+- 强制设计流程
+
+### 2. 了解如何编写代码（15分钟）
+阅读：[编码规范](development/coding_standards.md)
+
+你将了解：
+- DDD架构分层规范
+- 命名规范
+- 代码风格
+- 日志记录规范
+- UI规范（颜色、字体、间距）
+
+### 3. 了解系统设计（5分钟）
+阅读：[架构概览](architecture/architecture.md)
+
+你将了解：
+- 技术选型理由
+- DDD分层架构
+- 核心组件关系
 
 ---
 
-**项目版本**：v3.0  
-**文档版本**：v3.0  
-**最后更新时间**：2024年12月  
-**文档状态**：✅ 已同步代码实现  
-**覆盖率**：95%+ API文档完整度 
+## 📚 文档分类
+
+### 架构设计
+- [架构概览](architecture/architecture.md) - 技术选型和架构决策、DDD分层实现详解
+
+### API 参考
+- [服务 API](api/services-guide.md) - 服务层 API 参考
+- [仓储 API](api/repositories.md) - 仓储层 API 参考
+
+### 开发指南
+- [编码规范](development/coding_standards.md) - 命名、代码风格、UI规范、日志规范
+- [开发流程](development/workflow.md) - 功能开发流程、文档维护规范
+- [GitHub 协作](development/GITHUB_WORKFLOW.md) - 团队协作和 PR 流程
+
+### 设计文档
+- [设计文档指南](design/README.md) - 如何创建和使用设计文档
+- [设计文档模板](design/.template.md) - 新功能设计文档模板
+
+### AI 工作指南
+- [Claude Code 工作指南](../CLAUDE.md) - Claude Code AI 助手工作指南
+
+---
+
+## 🎯 根据任务查找文档
+
+### 我想添加新功能
+1. 阅读：[开发流程](development/workflow.md) 中的"强制设计流程"部分
+2. 使用模板：[设计文档模板](design/.template.md)
+3. 提交审核
+
+### 我想编写代码
+- 查 API：[服务 API](api/services-guide.md) 或 [仓储 API](api/repositories.md)
+- 查规范：[编码规范](development/coding_standards.md)
+
+### 我遇到问题
+- 查看问题排查：[开发流程](development/workflow.md) 中的"文档维护"章节
+- 查看常见陷阱：[Claude Code 工作指南](../CLAUDE.md) 中的"常见陷阱"部分
+
+### 我想了解架构
+- [架构概览](architecture/architecture.md) - 技术选型、DDD分层实现详解
+
+### 我想提交 PR
+- 阅读：[GitHub 协作](development/GITHUB_WORKFLOW.md)
+
+---
+
+## 🔧 快速命令参考
+
+详细的命令说明请参阅：[Claude Code 工作指南](../CLAUDE.md) 的"快速参考"部分
+
+### 开发相关
+```bash
+npm test                          # 运行测试
+npm run test:models             # 运行模型测试
+npm run test:services            # 运行服务测试
+npm run test:coverage           # 生成覆盖率报告
+npm run lint                    # 代码规范检查
+npm run lint:fix                # 自动修复规范问题
+npm run format                   # 代码格式化
+npm run health-check            # 项目健康检查
+```
+
+---
+
+## 📋 文档更新检查清单
+
+根据代码变更类型，更新对应文档：
+
+### 新增/修改服务
+- [ ] 更新 [服务 API](api/services-guide.md)
+- [ ] 更新 [编码规范](development/coding_standards.md)（如涉及架构）
+
+### 新增/修改仓储
+- [ ] 更新 [仓储 API](api/repositories.md)
+
+### 新增功能
+- [ ] 更新 [开发流程](development/development/CHANGELOG.md)（如果存在）
+- [ ] 创建/更新 [设计文档](design/)
+
+### 修复 Bug
+- [ ] 如是常见问题，更新 [开发流程](development/workflow.md)（文档维护章节）
+- [ ] 如是功能 Bug，更新对应 [设计文档](design/)
+
+### 架构调整
+- [ ] 更新 [架构概览](architecture/architecture.md)
+- [ ] 如影响约束，更新 [Claude Code 工作指南](../CLAUDE.md)
+
+### 发现新陷阱
+- [ ] 更新 [Claude Code 工作指南](../CLAUDE.md) 的"常见陷阱"部分
+
+---
+
+## 📖 文档维护规范
+
+详细的文档维护规范请参阅：[开发流程 > 文档维护](development/workflow.md#文档维护)
+
+### 核心原则
+
+1. **代码和文档同步提交**：代码变更和文档更新必须在同一个 commit
+2. **单一数据源**：每类信息只有一个权威来源，避免重复
+3. **引用而非重复**：通过链接引用其他文档，避免内容重复
+4. **保持简洁**：文档应该是"快速参考"，不是"完整教程"
+
+### 提交规范
+
+```bash
+# 示例：新增服务并更新文档
+git add services/new-service.js docs/api/services-guide.md
+git commit -m "feat: 添加新服务
+
+- 新增 NewService 类
+- 更新服务 API 文档
+"
+```
+
+---
+
+## 📞 需要帮助？
+
+- 功能开发问题：查阅 [开发流程](development/workflow.md)
+- 编码规范问题：查阅 [编码规范](development/coding_standards.md)
+- API 使用问题：查阅 [服务 API](api/services-guide.md) 或 [仓储 API](api/repositories.md)
+- 常见陷阱：查阅 [Claude Code 工作指南](../CLAUDE.md) 的"常见陷阱"部分
+
+---
+
+**最后更新**：2026-02-28
+**维护者**：开发团队

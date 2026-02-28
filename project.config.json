@@ -7,7 +7,7 @@
         "value": "test"
       },
       {
-        "type": "folder", 
+        "type": "folder",
         "value": "docs"
       },
       {
@@ -106,5 +106,6 @@
   "editorSetting": {
     "tabIndent": "insertSpaces",
     "tabSize": 2
-  }
+  },
+  "simulatorPluginLibVersion": {}
 }

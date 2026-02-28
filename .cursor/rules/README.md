@@ -44,7 +44,7 @@
 ### 架构规则
 
 - [architecture-rules.md](./architecture-rules.md) - 领域驱动设计架构规范
-- [领域模型架构](../docs/architecture/domain-model-architecture.md) - 详细的领域模型架构设计
+- [领域模型架构](../docs/architecture/architecture.md) - 详细的领域模型架构设计
 
 ### 业务领域规则
 
