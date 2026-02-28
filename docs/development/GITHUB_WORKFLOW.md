@@ -21,14 +21,28 @@
 
 ### 分支类型
 
-| 分支类型 | 命名规范 | 说明 | 生命周期 |
-|---------|---------|------|---------|
-| `main` | - | 主分支，稳定版本 | 长期存在 |
-| `develop` | - | 开发分支（可选） | 长期存在 |
-| `feature/*` | `feature/功能描述` | 功能开发分支 | 合并后删除 |
-| `fix/*` | `fix/问题描述` | Bug修复分支 | 合并后删除 |
-| `hotfix/*` | `hotfix/紧急问题描述` | 紧急修复分支 | 合并后删除 |
-| `refactor/*` | `refactor/重构描述` | 重构分支 | 合并后删除 |
+| 分支类型 | 命名规范 | 说明 | 生命周期 | 目标分支 |
+|---------|---------|------|---------|---------|
+| `main` | - | 主分支，生产环境稳定版本 | 长期存在 | - |
+| `develop` | - | 开发分支，日常开发集成 | 长期存在 | - |
+| `feature/*` | `feature/功能描述` | 功能开发分支 | 合并后删除 | `develop` |
+| `fix/*` | `fix/问题描述` | Bug修复分支 | 合并后删除 | `develop` |
+| `hotfix/*` | `hotfix/紧急问题描述` | 紧急修复分支 | 合并后删除 | `main` 和 `develop` |
+| `refactor/*` | `refactor/重构描述` | 重构分支 | 合并后删除 | `develop` |
+
+### 分支工作流
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                                                      │
+│  main (生产稳定) ←── develop (日常开发)            │
+│       ↑                      ↑                    │
+│       │                      │                    │
+│   hotfix/*            feature/*, fix/*             │
+│   (紧急修复)        (功能开发、Bug修复)             │
+│                                                      │
+└─────────────────────────────────────────────────────────┘
+```
 
 ### 分支命名示例
 
@@ -205,11 +219,11 @@ I fixed the bug where the stars weren't showing up correctly when the user compl
 ## 文档更新
 - [ ] 已更新相关文档（参考 workflow.md 的文档维护章节）
   - [ ] 新增/修改服务/仓储 → 更新 `docs/api/services-guide.md` 或 `repositories.md`
-  - [ ] 新功能 → 更新 `docs/development/CHANGELOG.md`
+  - [ ] 新功能 → 创建或更新 `docs/design/[feature-name].md`
   - [ ] 修复常见问题 → 更新 `docs/development/troubleshooting.md`
   - [ ] 架构调整 → 更新 `docs/architecture/*.md`
   - [ ] 发现新陷阱 → 更新 `CLAUDE.md`
-  - [ ] 新功能 → 创建或更新 `docs/design/[feature-name].md`
+  - [ ] 更新 CHANGELOG（合并到 develop 时）
 
 ## 错误处理
 - [ ] 异步操作都有try-catch包裹
@@ -478,6 +492,81 @@ PATCH：向下兼容的Bug修复
 
 ---
 
+## 本地开发流程
+
+### 环境准备
+
+```bash
+# 1. 克隆项目
+git clone <repository-url>
+cd study_task_wechat
+
+# 2. 安装依赖
+npm install
+
+# 3. 拉取最新代码
+git checkout develop
+git pull origin develop
+```
+
+### 日常开发流程
+
+```bash
+# 1. 从 develop 创建功能分支
+git checkout develop
+git pull origin develop
+git checkout -b feature/your-feature-name
+
+# 2. 开始开发
+# ... 编写代码 ...
+# 微信开发者工具打开项目目录进行调试
+
+# 3. 提交代码
+git add .
+git commit -m "feat: 添加新功能描述"
+git push origin feature/your-feature-name
+
+# 4. 创建 PR（从 feature/* 到 develop）
+# 在 GitHub 上创建 Pull Request
+```
+
+### Bug修复流程
+
+```bash
+# 1. 创建修复分支
+git checkout develop
+git pull origin develop
+git checkout -b fix/bug-description
+
+# 2. 修复代码
+# ... 修复问题 ...
+
+# 3. 提交并推送
+git add .
+git commit -m "fix: 修复问题描述"
+git push origin fix/bug-description
+
+# 4. 创建 PR（从 fix/* 到 develop）
+```
+
+### 发布流程
+
+```bash
+# 1. develop 合并到 main
+git checkout main
+git merge develop
+git push origin main
+
+# 2. 创建版本标签
+git tag -a v3.2.0 -m "Release v3.2.0"
+git push origin v3.2.0
+
+# 3. 微信开发者工具上传
+# 打开微信开发者工具 -> 上传代码 -> 提交审核
+```
+
+---
+
 ## 常见问题
 
 ### Q: 如何快速开始一个新功能？
@@ -485,23 +574,24 @@ PATCH：向下兼容的Bug修复
 A:
 ```bash
 # 1. 拉取最新代码
-git checkout main
-git pull origin main
+git checkout develop
+git pull origin develop
 
 # 2. 创建功能分支
-git checkout -b feature/your-feature
+git checkout -b feature/your-feature-name
 
 # 3. 开始开发
 # ... 编写代码 ...
+# 使用微信开发者工具进行调试
 
 # 4. 提交代码
 git add .
 git commit -m "feat: 添加新功能"
 
 # 5. 推送到远程
-git push origin feature/your-feature
+git push origin feature/your-feature-name
 
-# 6. 在 GitHub 创建 PR
+# 6. 在 GitHub 创建 PR（feature/* -> develop）
 ```
 
 ---
@@ -523,7 +613,7 @@ git add .
 git commit -m "fix: 修复紧急Bug"
 git push origin hotfix/critical-bug
 
-# 4. 创建 PR，标记为高优先级
+# 4. 创建 PR 到 main 和 develop，标记为高优先级
 # 使用 hotfix 策略，快速合并
 ```
 
