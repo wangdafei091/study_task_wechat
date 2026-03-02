@@ -655,47 +655,200 @@ Page({
 
 ## 测试规范
 
-### 单元测试
+### 测试范围
+
+项目使用 Jest 进行单元测试，遵循以下原则：
+
+**包含的范围（单元测试）**：
+- 领域模型：Task、Star、Reward 等
+- 应用服务：StarService、TaskService、RewardService、MessageService 等
+- 工具函数：dateUtils、formatUtils 等
+
+**不包含的范围（页面和UI）**：
+- 页面交互、表单提交、页面跳转
+- UI渲染、样式正确性、动画效果
+- 微信API调用、端到端流程
+
+详细的测试流程请参阅 [workflow.md 的测试流程章节](workflow.md#测试流程)。
+
+---
+
+### 测试编写规范
+
+#### 1. 测试文件结构
 
 ```javascript
-// test/services/task-service.test.js
-describe('TaskService', () => {
-  let taskService;
-  let mockTaskRepository;
-  let mockStarService;
+/**
+ * task-service.test.js - TaskService 测试
+ *
+ * 测试 TaskService 的核心业务逻辑
+ */
+
+const TaskService = require('../../services/task-service');
+const EventBus = require('../../utils/core/event-bus');
+const { Task, TaskStatus, TaskType } = require('../../models/task');
+
+// Mock依赖
+jest.mock('../../utils/logger');
+jest.mock('../../services/star-service');
+jest.mock('../../repositories/index');
+```
+
+#### 2. 测试用例结构
+
+```javascript
+describe('功能模块', () => {
+  let moduleUnderTest;
+  let mockDependencies;
 
   beforeEach(() => {
-    mockTaskRepository = {
-      save: jest.fn(),
-      findById: jest.fn()
-    };
-    
-    mockStarService = {
-      addStars: jest.fn().mockResolvedValue({ success: true })
+    // 重置所有mock
+    jest.clearAllMocks();
+
+    // 创建Mock依赖
+    mockDependencies = {
+      dependency: jest.fn().mockResolvedValue({ success: true })
     };
 
-    taskService = new TaskService({
-      taskRepository: mockTaskRepository,
-      starService: mockStarService
+    // 创建测试对象
+    moduleUnderTest = new Module({
+      dependency: mockDependencies.dependency
     });
   });
 
-  test('应该成功创建任务', async () => {
-    const taskData = {
-      title: '测试任务',
-      type: 'study',
-      points: 10
-    };
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
 
-    mockTaskRepository.save.mockResolvedValue({ id: 'task_123' });
+  describe('具体方法', () => {
+    it('应该正常工作', async () => {
+      // Arrange（准备）
+      const input = { ... };
+      const expectedOutput = { ... };
 
-    const result = await taskService.createTask(taskData);
+      // Act（执行）
+      const result = await moduleUnderTest.method(input);
 
-    expect(result.success).toBe(true);
-    expect(result.task.title).toBe('测试任务');
-    expect(mockTaskRepository.save).toHaveBeenCalled();
+      // Assert（断言）
+      expect(result).toEqual(expectedOutput);
+    });
   });
 });
+```
+
+#### 3. 测试命名规范
+
+```javascript
+// ✅ 清晰的测试名称，使用"应该"模式
+it('应该成功完成任务并奖励星星', () => { });
+it('任务已完成时不应该重复奖励', () => { });
+it('任务不存在时应该返回错误', () => { });
+
+// ❌ 模糊的测试名称
+it('测试完成功能', () => { });
+it('测试边界条件', () => { });
+```
+
+#### 4. 断言规范
+
+```javascript
+// ✅ 清晰明确的断言
+expect(result.success).toBe(true);
+expect(result.task.title).toBe('测试任务');
+expect(mockStarService.addStars).toHaveBeenCalledWith('child', 10);
+expect(mockEventBus.emit).toHaveBeenCalledWith('task:completed', expect.objectContaining({
+  taskId: 'task_1'
+}));
+
+// ❌ 模糊的断言
+expect(mockStarService.addStars).toHaveBeenCalled();
+expect(result).toBeDefined();
+```
+
+#### 5. Mock 使用规范
+
+```javascript
+// ✅ 只 Mock 需要的方法
+mockRepository = {
+  save: jest.fn().mockResolvedValue(task),
+  getById: jest.fn().mockResolvedValue(task)
+};
+
+// ✅ 使用 mockResolvedValue 返回 Promise
+mockService.method = jest.fn().mockResolvedValue({ success: true });
+
+// ✅ 使用 mockImplementation 自定义逻辑
+mockService.method = jest.fn().mockImplementation(async (input) => {
+  return { id: input.id + '_processed' };
+});
+
+// ❌ Mock 所有方法，增加维护成本
+mockRepository = {
+  save: jest.fn(),
+  getById: jest.fn(),
+  getAll: jest.fn(),
+  delete: jest.fn(),
+  // ... 其他不需要的方法
+};
+```
+
+#### 6. 测试覆盖
+
+每个测试应该覆盖：
+- 正常路径（成功场景）
+- 边界条件（最小值、最大值、空值）
+- 异常情况（错误处理）
+- 边缘情况（特殊值、空数组）
+
+```javascript
+describe('completeTask', () => {
+  it('应该成功完成任务', async () => {
+    // 正常路径
+  });
+
+  it('任务已完成时应该跳过奖励', async () => {
+    // 边界条件
+  });
+
+  it('任务不存在时应该返回错误', async () => {
+    // 异常情况
+  });
+
+  it('积分为0时应该不奖励', async () => {
+    // 边缘情况
+  });
+});
+```
+
+---
+
+### 覆盖率要求
+
+| 层级 | 覆盖率要求 | 说明 |
+|-----|-----------|------|
+| **领域模型** | 85%+ | 核心业务逻辑，必须充分测试 |
+| **应用服务** | 75%+ | 业务流程，重点测试主路径 |
+| **工具函数** | 90%+ | 纯函数，应全部覆盖 |
+| **仓储层** | 60%+ | 数据访问，Mock存储测试 |
+
+---
+
+### 测试运行
+
+```bash
+# 运行所有测试
+npm test
+
+# 运行特定模块测试
+npm run test:models
+npm run test:services
+npm run test:repositories
+
+# 监听模式（开发时使用）
+npm run test:watch
+
+# 生成覆盖率报告
+npm run test:coverage
 ```
 
 ## 最佳实践
@@ -807,6 +960,6 @@ Component({
 ---
 
 **文档维护者**：开发团队
-**最后更新**：2026-02-27
-**版本**：v4.0
+**最后更新**：2026-03-02
+**版本**：v4.1
 **注意**：本文档是编码规范的唯一权威来源，其他文档应引用本文档而非重复其内容。 

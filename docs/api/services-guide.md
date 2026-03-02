@@ -836,5 +836,131 @@ async function complexBusinessFlow() {
 
 ---
 
-**最后更新**：2026-02-28
+## 服务测试
+
+### 测试文件
+
+所有核心服务都有对应的单元测试文件，测试文件位于 `test/services/` 目录：
+
+| 服务 | 测试文件 | 测试用例 | 覆盖率 |
+|------|---------|---------|--------|
+| **TaskService** | test/services/task-service.test.js | 72 个 | 54.36% |
+| **RewardService** | test/services/reward-service.test.js | 97 个 | 79.08% |
+| **MessageService** | test/services/message-service.test.js | 50 个 | 58.31% |
+| **StarService** | test/services/star-service.test.js | 28 个 | 23.61% |
+
+### 运行测试
+
+```bash
+# 运行所有测试
+npm test
+
+# 运行特定服务测试
+npm run test:services
+
+# 运行单个服务测试
+npm test test/services/task-service.test.js
+
+# 生成覆盖率报告
+npm run test:coverage
+```
+
+### 测试覆盖情况
+
+**总体覆盖率**：
+- 测试套件：7 个
+- 测试用例：364 个（全部通过）
+- 整体覆盖率：29.83% 语句
+- 执行时间：0.639 秒
+
+**服务覆盖详情**：
+
+| 指标 | TaskService | RewardService | MessageService |
+|------|-----------|--------------|--------------|
+| **语句覆盖率** | 54.36% | 79.08% | 58.31% |
+| **分支覆盖率** | 52.4% | 73.46% | 50.88% |
+| **函数覆盖率** | 55.35% | 86.11% | 62.5% |
+| **行覆盖率** | 55.25% | 79.19% | 59.22% |
+
+### 测试覆盖范围
+
+**TaskService 测试覆盖**：
+- 初始化测试
+- CRUD 操作测试
+- 状态管理测试
+- 必做任务管理
+- 任务检查
+- 进度计算
+- 批量处理
+- 惩罚处理
+- 错误处理测试
+
+**RewardService 测试覆盖**：
+- 奖励管理测试
+- 奖励状态管理测试
+- 奖励查询测试
+- 兑换流程测试
+- 取消兑换测试
+- 奖励计算测试
+- 奖励复制测试
+- 批量操作测试
+- 辅助方法测试
+
+**MessageService 测试覆盖**：
+- 构造函数和初始化
+- 消息管理 - 创建消息
+- 消息管理 - 获取消息
+- 状态管理 - 标记已读
+- 状态管理 - 删除消息
+- 批量操作
+- 批量创建任务消息
+- 事件处理 - 任务事件
+- 事件处理 - 奖励事件
+- 事件处理 - 领域模型事件
+- 错误处理
+- 边界条件
+- 用户操作者逻辑
+- 即将到期任务通知
+- 消息优先级
+- 事件总线集成
+
+### Mock 策略
+
+测试使用依赖注入和 Mock 策略：
+
+```javascript
+// Mock Repository
+const taskRepository = {
+  create: jest.fn().mockResolvedValue({ id: '1', title: 'test' }),
+  update: jest.fn().mockResolvedValue(true),
+  delete: jest.fn().mockResolvedValue(true),
+  findById: jest.fn().mockResolvedValue({ id: '1', title: 'test' }),
+  findAll: jest.fn().mockResolvedValue([])
+};
+
+// Mock EventBus
+const eventBus = {
+  publish: jest.fn()
+};
+
+// Mock Logger（已在全局设置）
+jest.mock('../../utils/logger');
+```
+
+### 可测试性
+
+所有核心服务都支持依赖注入，便于单元测试：
+
+```javascript
+// 通过构造函数注入依赖
+const taskService = new TaskService({
+  taskRepository: mockRepository,
+  starService: mockStarService,
+  eventBus: mockEventBus
+});
+```
+
+---
+
+**最后更新**：2026-03-02
 **维护者**：项目维护团队

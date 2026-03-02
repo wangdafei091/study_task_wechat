@@ -333,16 +333,388 @@ grep -r "批量处理" docs/*.md
 
 ---
 
+## 测试流程
+
+### 测试范围说明
+
+项目使用 Jest 进行单元测试，遵循以下原则：
+
+**包含的范围（单元测试）**：
+- 领域模型：Task、Star、Reward 等
+- 应用服务：StarService、TaskService、RewardService、MessageService 等
+- 工具函数：dateUtils、formatUtils 等
+
+**不包含的范围（页面和UI）**：
+- 页面交互、表单提交、页面跳转
+- UI渲染、样式正确性、动画效果
+- 微信API调用、端到端流程
+
+详细的测试规范请参阅 [coding_standards.md 的测试规范章节](coding_standards.md#测试规范)。
+
+---
+
+### 测试编写工作流程
+
+#### 阶段1：设计测试方案
+
+在设计文档中编写测试方案，包括：
+- 单元测试：覆盖核心业务逻辑
+- 集成测试：测试服务间协作
+- 手动测试：主要功能场景
+- 回归测试：确保现有功能不受影响
+
+#### 阶段2：编写测试用例
+
+按照设计文档中的测试方案编写测试用例。
+
+**测试结构**：
+
+```javascript
+/**
+ * [module-name].test.js - 模块测试
+ *
+ * 测试模块的核心业务逻辑
+ */
+
+const Module = require('../../services/module');
+const { Model } = require('../../models/model');
+
+// Mock依赖
+jest.mock('../../utils/logger');
+jest.mock('../../services/other-service');
+jest.mock('../../repositories/index');
+
+describe('Module', () => {
+  let module;
+  let mockDependency;
+
+  beforeEach(() => {
+    // 重置所有mock
+    jest.clearAllMocks();
+
+    // 创建Mock依赖
+    mockDependency = {
+      method: jest.fn().mockResolvedValue({ success: true })
+    };
+
+    // 创建模块实例
+    module = new Module({
+      dependency: mockDependency
+    });
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  describe('methodName', () => {
+    it('应该成功执行操作', async () => {
+      // Arrange（准备）
+      const input = { ... };
+      const expectedOutput = { ... };
+
+      // Act（执行）
+      const result = await module.methodName(input);
+
+      // Assert（断言）
+      expect(result).toEqual(expectedOutput);
+    });
+  });
+});
+```
+
+#### 阶段3：运行测试
+
+```bash
+# 运行所有测试
+npm test
+
+# 运行特定模块测试
+npm run test:models
+npm run test:services
+npm run test:repositories
+
+# 监听模式（开发时使用）
+npm run test:watch
+
+# 生成覆盖率报告
+npm run test:coverage
+```
+
+#### 阶段4：验证覆盖率
+
+**覆盖率要求**：
+
+| 层级 | 覆盖率要求 | 说明 |
+|-----|-----------|------|
+| **领域模型** | 85%+ | 核心业务逻辑，必须充分测试 |
+| **应用服务** | 75%+ | 业务流程，重点测试主路径 |
+| **工具函数** | 90%+ | 纯函数，应全部覆盖 |
+| **仓储层** | 60%+ | 数据访问，Mock存储测试 |
+
+查看覆盖率报告：
+```bash
+# 生成报告
+npm run test:coverage
+
+# 查看HTML报告（在浏览器中打开）
+open coverage/lcov-report/index.html
+```
+
+---
+
+### Mock 策略
+
+**原则**：Mock 外部依赖，隔离测试单元
+
+#### Mock 依赖分类
+
+| 依赖类型 | Mock 策略 | 示例 |
+|---------|-----------|------|
+| **日志** | 全局 Mock（jest-setup.js） | `global.logger` |
+| **存储** | 自定义 Mock 类 | `MockStorageAdapter` |
+| **服务** | Jest mock 函数 | `jest.fn().mockResolvedValue(...)` |
+| **仓储** | Jest mock 函数 | `jest.fn().mockImplementation(...)` |
+| **微信API** | 全局 Mock（wx.js） | `jest.mock('wx')` |
+
+#### 全局 Mock 配置
+
+**测试环境设置**（test/setup/jest-setup.js）：
+
+```javascript
+/**
+ * jest-setup.js - Jest 测试环境设置
+ */
+
+// 模拟全局logger，避免在测试中调用真实logger
+global.logger = {
+  info: jest.fn(),
+  warn: jest.fn(),
+  error: jest.fn(),
+  debug: jest.fn(),
+  logEvent: jest.fn()
+};
+
+// 设置测试超时时间
+jest.setTimeout(10000);
+```
+
+#### 自定义 Mock 类
+
+**存储适配器 Mock**（test/__mocks__/storage-adapter-mock.js）：
+
+```javascript
+/**
+ * storage-adapter-mock.js - 存储适配器Mock
+ *
+ * 用于测试时模拟微信存储操作
+ */
+
+class MockStorageAdapter {
+  constructor() {
+    this.data = {};
+  }
+
+  async set(key, value) {
+    this.data[key] = value;
+    return true;
+  }
+
+  async get(key) {
+    return this.data[key] || null;
+  }
+
+  async remove(key) {
+    delete this.data[key];
+    return true;
+  }
+
+  async clear() {
+    this.data = {};
+    return true;
+  }
+
+  async getAll() {
+    return { ...this.data };
+  }
+
+  // 清空所有数据
+  clearAll() {
+    this.data = {};
+  }
+}
+
+module.exports = MockStorageAdapter;
+```
+
+#### 服务和仓储 Mock
+
+**在测试文件中 Mock 服务和仓储**：
+
+```javascript
+// Mock依赖
+jest.mock('../../utils/logger');
+jest.mock('../../services/star-service');
+jest.mock('../../services/reward-service');
+jest.mock('../../services/user-service');
+jest.mock('../../repositories/index');
+
+const StarService = require('../../services/star-service');
+const RewardService = require('../../services/reward-service');
+const UserService = require('../../services/user-service');
+const { TaskRepository } = require('../../repositories/index');
+
+describe('TaskService', () => {
+  let taskService;
+  let mockTaskRepository;
+  let mockStarService;
+  let mockEventBus;
+
+  beforeEach(() => {
+    // 重置所有mock
+    jest.clearAllMocks();
+
+    // 创建Mock仓储
+    mockTaskRepository = {
+      loadFromStorage: jest.fn().mockResolvedValue(true),
+      save: jest.fn().mockImplementation(async (task) => task),
+      getAll: jest.fn().mockResolvedValue([]),
+      getById: jest.fn().mockResolvedValue(null),
+      delete: jest.fn().mockResolvedValue(true),
+      getTodayTasks: jest.fn().mockResolvedValue([]),
+      getTasksByDate: jest.fn().mockResolvedValue([]),
+      getTasksByDateRange: jest.fn().mockResolvedValue([])
+    };
+
+    // 创建Mock服务
+    mockStarService = {
+      addStars: jest.fn().mockResolvedValue({ success: true, stars: 10 }),
+      consumeStars: jest.fn().mockResolvedValue({ success: true, consumed: 5 }),
+      calculateExpiryDate: jest.fn().mockReturnValue({ expiry: 'permanent', expiryDateStr: '永久' })
+    };
+
+    // 创建EventBus实例（使用真实实现，测试时隔离）
+    mockEventBus = new EventBus();
+    mockEventBus.emit = jest.fn();
+
+    // 创建TaskService实例，注入Mock依赖
+    taskService = new TaskService({
+      taskRepository: mockTaskRepository,
+      starService: mockStarService,
+      eventBus: mockEventBus
+    });
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+});
+```
+
+---
+
+### 测试最佳实践
+
+#### 1. 测试独立性
+
+每个测试应该独立运行，不依赖其他测试的执行顺序：
+
+```javascript
+beforeEach(() => {
+  // 每个测试前重置状态
+  jest.clearAllMocks();
+});
+```
+
+#### 2. 测试隔离性
+
+只 Mock 测试需要的方法，不实现的不需要 Mock：
+
+```javascript
+// ✅ 正确：只 Mock 需要的方法
+mockTaskRepository = {
+  save: jest.fn().mockResolvedValue(task),
+  getById: jest.fn().mockResolvedValue(task)
+};
+
+// ❌ 错误：Mock 了所有方法，增加维护成本
+mockTaskRepository = {
+  save: jest.fn(),
+  getById: jest.fn(),
+  getAll: jest.fn(),
+  delete: jest.fn(),
+  // ... 其他不需要的方法
+};
+```
+
+#### 3. 断言清晰
+
+断言应该明确验证预期结果：
+
+```javascript
+// ✅ 清晰的断言
+expect(result.success).toBe(true);
+expect(mockStarService.addStars).toHaveBeenCalledWith('child', 10);
+
+// ❌ 模糊的断言
+expect(mockStarService.addStars).toHaveBeenCalled();
+```
+
+#### 4. 测试命名
+
+测试名称应该清晰描述测试的目的：
+
+```javascript
+// ✅ 清晰的测试名称
+it('应该成功完成任务并奖励星星', () => { });
+it('任务已完成时不应该重复奖励', () => { });
+it('任务不存在时应该返回错误', () => { });
+
+// ❌ 模糊的测试名称
+it('测试完成功能', () => { });
+```
+
+#### 5. 测试覆盖
+
+确保测试覆盖：
+- 正常路径（成功场景）
+- 边界条件（最小值、最大值、空值）
+- 异常情况（错误处理）
+- 边缘情况（特殊值、空数组）
+
+---
+
+### 测试维护
+
+#### 测试更新时机
+
+在以下情况下需要更新测试：
+- 新增功能：编写新测试
+- 修改功能：更新相关测试
+- 修复 Bug：添加回归测试
+- 重构代码：保持测试不变
+
+#### 测试审查
+
+提交代码前进行测试审查：
+- [ ] 所有测试通过
+- [ ] 覆盖率达到要求
+- [ ] 测试命名清晰
+- [ ] 断言明确
+- [ ] Mock 策略合理
+
+---
+
 ## 相关文档
 
 - **[CLAUDE.md](../../CLAUDE.md)** - AI助手工作指南
 - **[编码规范](coding_standards.md)** - 详细编码规范（命名、代码风格、UI规范、日志规范等）
-- **[架构概览](../architecture/architecture.md) - 技术选型和架构决策
+- **[架构概览](../architecture/architecture.md)** - 技术选型和架构决策
 - **[设计文档指南](../design/README.md)** - 如何创建和使用设计文档
 - **[GitHub 协作](GITHUB_WORKFLOW.md)** - 团队协作和 PR 流程
 
 ---
 
-**最后更新**：2026-02-28
-**版本**：v4.0
+**最后更新**：2026-03-02
+**版本**：v4.1
 **维护者**：项目维护团队

@@ -64,55 +64,6 @@
   align-items: center;
 }
 
-/* API测试按钮样式 (临时测试用) */
-.api-test-btn {
-  width: 56rpx;
-  height: 56rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  background: rgba(255, 152, 0, 0.1);
-  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-  margin-right: 16rpx;
-}
-
-.api-test-text {
-  font-size: 20rpx;
-  font-weight: 600;
-  color: #FF9800;
-  text-transform: uppercase;
-}
-
-.api-test-btn.icon-hover {
-  background: rgba(255, 152, 0, 0.2);
-  transform: scale(1.05);
-}
-
-/* 星星测试按钮样式 */
-.star-test-btn {
-  width: 56rpx;
-  height: 56rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  background: rgba(255, 193, 7, 0.1);
-  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-  margin-right: 16rpx;
-}
-
-.star-test-text {
-  font-size: 24rpx;
-  font-weight: 600;
-  color: #FFC107;
-}
-
-.star-test-btn.icon-hover {
-  background: rgba(255, 193, 7, 0.2);
-  transform: scale(1.05);
-}
-
 /* 消息图标样式 */
 .message-icon-wrapper {
   width: 56rpx;

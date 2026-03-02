@@ -619,20 +619,20 @@ class TaskService {
       
       // 保存原始状态
       const originalStatus = task.status;
-      
+
       // 更新任务
       task.update(changes);
-      
+
       // 保存更新后的任务
       const updatedTask = await this.taskRepository.save(task);
-      
+
       logger.info('TaskService', `更新任务成功: "${updatedTask.title}", ID=${updatedTask.id}${userId ? `, 用户=${userId}` : ''}`);
-      
+
       // 触发事件
       this.eventBus.emit(EVENTS.TASK_UPDATED, {
         task: updatedTask,
         changes,
-        previousStatus,
+        previousStatus: originalStatus,
         operationType: 'update'
       });
       
