@@ -1,5 +1,4 @@
 // app.js
-const unitUtils = require('./utils/unit.js');
 const StorageAdapter = require('./adapters/storage-adapter'); // 引入存储适配器
 const serviceManager = require('./services/service-manager.js'); // 引入服务管理器
 const { UserService } = require('./services/user-service.js'); // 引入用户服务
@@ -158,12 +157,11 @@ App({
     
     // 监听字体大小变化
     this.setupFontSizeChangeListener()
-    
+
     // 设置主题
     this.setTheme();
-    
-    // 移除定时检查，改为仅在应用启动时检查一次
-    // this.startTaskChecking(); // 已删除：定时检查冗余，必做任务扣分在启动时已处理
+
+    // 必做任务扣分在启动时已处理，无需定时检查
   },
   
   // 初始化日志系统

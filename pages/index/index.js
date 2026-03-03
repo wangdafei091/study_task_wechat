@@ -2767,32 +2767,21 @@ Page({
       
       const userService = getApp().globalData.userService;
       if (!userService) {
-        console.error('❌ 用户服务不可用');
+        logger.error('Index', '用户服务不可用');
         return false;
       }
-      
+
       // 执行完整验证
       const validation = await userService.validateService();
-      
+
       if (validation.success) {
-        console.log('✅ 用户模块验证通过');
-        console.log('📊 验证结果:', validation.tests);
-        console.log('📈 服务统计:', userService.getStatistics());
+        logger.info('Index', '用户模块验证通过');
       } else {
-        console.error('❌ 用户模块验证失败');
-        console.error('🚫 错误列表:', validation.errors);
-        console.log('📊 验证结果:', validation.tests);
+        logger.warn('Index', '用户模块验证失败', { errors: validation.errors, tests: validation.tests });
       }
-      
-      // 额外的权限系统验证
-      const currentUser = userService.getCurrentUser();
-      console.log('👤 当前用户:', currentUser.toObject());
-      console.log('🔐 用户权限:', permissionUtils.getUserPermissions(currentUser.role));
-      console.log('📄 可访问页面:', permissionUtils.getAllowedPages(currentUser.role));
-      
+
       return validation.success;
     } catch (error) {
-      console.error('❌ 验证过程发生异常:', error);
       logger.error('Index', '验证用户模块失败', error);
       return false;
     }

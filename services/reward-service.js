@@ -10,9 +10,6 @@ const { StarGroupRepository, StarRecordRepository } = require('../repositories/i
 const EventBus = require('../utils/core/event-bus');
 const { EVENTS } = require('../utils/constants');
 
-// 移除静态初始化锁
-// let _initializationLock = false;
-
 class RewardService {
   // 使用静态属性存储类级别的初始化状态
   static _initialized = false;

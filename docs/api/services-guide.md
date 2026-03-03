@@ -202,10 +202,10 @@ const configService = serviceManager.get('configService');
 
 #### 星星操作
 
-##### `getStarBalance(userId)`
-获取用户当前星星余额
-- **参数**: `userId` - 用户ID
-- **返回**: `{ success: boolean, balance: number, message?: string }`
+##### `getTotalStars(userId = null)`
+获取用户总星星数量
+- **参数**: `userId` - 可选的用户ID，不传则获取所有用户的星星
+- **返回**: `Promise<Number>` - 星星总数量
 
 ##### `addStars(userId, amount, expiryType, sourceId, description)`
 添加星星（奖励）

@@ -107,20 +107,26 @@ BaseRepository提供通用的CRUD操作和缓存机制，所有具体仓储都�
 
 #### 按日期查询
 
-##### findByDate(date)
+##### getTasksByDate(date, userId = null)
 获取指定日期的任务
+- **参数**:
+  - `date` (String) - 日期字符串，格式 YYYY-MM-DD
+  - `userId` (String, 可选) - 用户ID，不传则获取所有用户的任务
+- **返回**: `Promise<Array>` - 指定日期的任务列表
 
-```
-
-##### findByDateRange(startDate, endDate)
+##### getTasksByDateRange(startDate, endDate, userId = null)
 获取日期范围内的任务
+- **参数**:
+  - `startDate` (String) - 开始日期字符串，格式 YYYY-MM-DD
+  - `endDate` (String) - 结束日期字符串，格式 YYYY-MM-DD
+  - `userId` (String, 可选) - 用户ID，不传则获取所有用户的任务
+- **返回**: `Promise<Array>` - 指定日期范围的任务列表
 
-```
-
-##### findTodayTasks()
+##### getTodayTasks(userId = null)
 获取今日任务
-
-```
+- **参数**:
+  - `userId` (String, 可选) - 用户ID，不传则获取所有用户的任务
+- **返回**: `Promise<Array>` - 今日任务列表
 
 #### 按状态查询
 
@@ -172,47 +178,50 @@ BaseRepository提供通用的CRUD操作和缓存机制，所有具体仓储都�
 
 #### 分组管理
 
-##### findByUserId(userId)
-获取用户的星星分组
+##### getNonEmptyGroups(userId = null)
+获取非空的星星分组
+- **参数**:
+  - `userId` (String, 可选) - 用户ID
+- **返回**: `Promise<Array>` - 非空分组列表
 
-```
-
-##### findActiveGroups(userId)
-获取有效的星星分组（星星数>0）
-
-```
-
-##### findExpiredGroups(userId)
-获取已过期的星星分组
-
-```
+##### getGroupsByExpiryType(expiryType, userId = null)
+按有效期类型获取分组
+- **参数**:
+  - `expiryType` (String) - 有效期类型
+  - `userId` (String, 可选) - 用户ID
+- **返回**: `Promise<Array>` - 符合条件的分组列表
 
 #### 星星操作
 
-##### addStarsToGroup(userId, amount, expiryDate, sourceId)
+##### addStarsToGroup(group, points, source)
 向分组添加星星
+- **参数**:
+  - `group` (StarGroup) - 星星分组对象
+  - `points` (Number) - 星星数量
+  - `source` (String) - 来源标识
+- **返回**: `Promise<StarGroup>` - 更新后的分组
 
-
-##### consumeStarsFromGroup(userId, amount)
+##### consumeStarsFromGroup(group, points)
 从分组消费星星（FIFO策略）
-
+- **参数**:
+  - `group` (StarGroup) - 星星分组对象
+  - `points` (Number) - 要消费的星星数量
+- **返回**: `Promise<Object>` - 包含实际消费数量和更新后分组的对象
 
 #### 统计查询
 
-##### getTotalStars(userId)
+##### getTotalPoints(userId = null)
 获取用户星星总数
+- **参数**:
+  - `userId` (String, 可选) - 用户ID
+- **返回**: `Promise<Number>` - 星星总数
 
-```
-
-##### getExpiringStars(userId, days)
-获取即将过期的星星数量
-
-```
-
-##### getStarsByExpiryType(userId, expiryType)
-按有效期类型获取星星
-
-```
+##### hasEnoughPoints(amount, userId = null)
+检查是否有足够的星星
+- **参数**:
+  - `amount` (Number) - 需要的星星数
+  - `userId` (String, 可选) - 用户ID
+- **返回**: `Promise<Boolean>` - 是否有足够的星星
 
 #### 数据维护
 
@@ -234,62 +243,91 @@ BaseRepository提供通用的CRUD操作和缓存机制，所有具体仓储都�
 
 ### 专用查询方法
 
-#### 按用户查询
-
-##### findByUserId(userId)
-获取用户所有星星记录
-
-```
-
-##### findRecentRecords(userId, days)
-获取用户最近的星星记录
-
-```
-
 #### 按类型查询
 
-##### findByType(userId, type)
+##### getRecordsByType(type, userId = null)
 按记录类型查询
+- **参数**:
+  - `type` (String) - 记录类型（earn/consume/expire）
+  - `userId` (String, 可选) - 用户ID
+- **返回**: `Promise<Array>` - 符合条件的记录列表
 
-
-##### findBySource(userId, source)
+##### getRecordsBySource(source, sourceId, userId = null)
 按来源查询记录
-
-```
+- **参数**:
+  - `source` (String) - 记录来源
+  - `sourceId` (String) - 来源ID
+  - `userId` (String, 可选) - 用户ID
+- **返回**: `Promise<Array>` - 符合条件的记录列表
 
 #### 按时间查询
 
-##### findByDateRange(userId, startDate, endDate)
+##### getRecordsByDate(date, userId = null)
+获取特定日期的记录
+- **参数**:
+  - `date` (String) - 日期字符串，格式 YYYY-MM-DD
+  - `userId` (String, 可选) - 用户ID
+- **返回**: `Promise<Array>` - 符合条件的记录列表
+
+##### getRecordsByDateRange(startDate, endDate, userId = null)
 按日期范围查询
+- **参数**:
+  - `startDate` (String) - 开始日期，格式 YYYY-MM-DD
+  - `endDate` (String) - 结束日期，格式 YYYY-MM-DD
+  - `userId` (String, 可选) - 用户ID
+- **返回**: `Promise<Array>` - 符合条件的记录列表
 
-
-##### findByMonth(userId, year, month)
+##### getRecordsByMonth(month, userId = null)
 按月查询记录
+- **参数**:
+  - `month` (String) - 月份字符串，格式 YYYY-MM
+  - `userId` (String, 可选) - 用户ID
+- **返回**: `Promise<Array>` - 符合条件的记录列表
 
-```
+##### getRecordsByTimeOrder(descending = true, limit = 0, userId = null)
+按时间顺序查询记录
+- **参数**:
+  - `descending` (Boolean, 可选) - 是否降序排序（新的在前），默认 true
+  - `limit` (Number, 可选) - 限制返回的记录数量，0 表示不限制
+  - `userId` (String, 可选) - 用户ID
+- **返回**: `Promise<Array>` - 排序后的记录列表
 
-#### 统计查询
-
-##### getStatsByType(userId, type, dateRange)
-按类型获取统计数据
-
-
-##### getDailyStats(userId, dateRange)
-获取每日统计数据
-
+##### getRecordsGroupedByMonth(options = {})
+按月份分组获取记录
+- **参数**:
+  - `options.limit` (Number, 可选) - 限制数量
+  - `options.descending` (Boolean, 可选) - 是否降序排列
+  - `options.userId` (String, 可选) - 用户ID
+- **返回**: `Promise<Array>` - 按月份分组的记录数组
 
 #### 便捷创建方法
 
-##### createEarnRecord(userId, amount, sourceId, description)
-创建获得星星记录
+##### createTaskCompleteRecord(taskId, points, description, userId = null)
+创建任务完成记录
+- **参数**:
+  - `taskId` (String) - 任务ID
+  - `points` (Number) - 获得的星星数
+  - `description` (String) - 描述
+  - `userId` (String, 可选) - 用户ID
+- **返回**: `Promise<StarRecord>` - 创建的记录
 
+##### createRewardExchangeRecord(rewardId, points, description, userId = null)
+创建奖励兑换记录
+- **参数**:
+  - `rewardId` (String) - 奖励ID
+  - `points` (Number) - 消费的星星数
+  - `description` (String) - 描述
+  - `userId` (String, 可选) - 用户ID
+- **返回**: `Promise<StarRecord>` - 创建的记录
 
-##### createConsumeRecord(userId, amount, sourceId, description)
-创建消费星星记录
-
-
-##### createExpireRecord(userId, amount, sourceId, description)
-创建过期星星记录
+##### createExpiredRecord(points, expiryType, description, userId = null)
+创建星星过期记录
+- **参数**:
+  - `points` (Number) - 过期的星星数
+  - `expiryType` (String) - 过期类型
+  - `description` (String) - 描述
+  - `userId` (String, 可选) - 用户ID
+- **返回**: `Promise<StarRecord>` - 创建的记录
 
 
 ## RewardRepository - 奖励仓储

@@ -4,6 +4,42 @@
 
 ---
 
+## [3.3.0] - 2026-03-03
+
+### 代码清理
+- **删除未使用代码**：删除完全未使用的 utils/unit.js 文件
+  - 删除 app.js 中的导入语句
+  - 更新 architecture.md 中的引用说明
+- **清理调试输出**：删除生产环境的 console 调试输出
+  - 清理 pages/index/index.js 中的用户模块验证调试输出
+  - 优化 packageChart/index.js，只在开发环境输出性能日志
+- **删除注释代码**：删除注释掉的废弃代码
+  - 清理 services/reward-service.js 中的静态初始化锁注释
+  - 清理 app.js 中的定时检查注释代码
+  - 清理 utils/deviceInfo.js 中的 logger 导入注释
+- **清理过时标记**：更新 docs/development/coding_standards.md
+  - 删除已实现的 TODO: 添加惩罚通知（已通过 EventBus 实现）
+  - 删除已实现的 FIXME: 固定惩罚金额（已改为可配置）
+
+### 文档
+- **ROADMAP更新**：创建代码清理里程碑规划
+  - 里程碑-01：代码清理（已完成）
+  - 里程碑-02：文档修复（待启动）
+  - 里程碑-03：重构重复代码（待启动）
+  - 里程碑-04：测试核心逻辑（待启动）
+
+### 文档
+- **API文档修正**：修正 services-guide.md 中的方法名称错误
+  - StarService: `getStarBalance()` → `getTotalStars()`
+  - 修正方法返回值描述
+- **仓储文档完善**：完善 repositories.md 中的方法描述
+  - 修正 TaskRepository 方法名：`findByDate()` → `getTasksByDate()`
+  - 修正 StarGroupRepository 方法名：`addStarsToGroup(userId, amount, expiryDate, sourceId)` → `addStarsToGroup(group, points, source)`
+  - 修正 StarRecordRepository 方法名：`findByType(userId, type)` → `getRecordsByType(type, userId = null)`
+  - 添加详细的参数和返回值说明
+
+---
+
 ## [3.2.0] - 2026-03-02
 
 ### 新增
@@ -11,7 +47,11 @@
   - 在`jest-setup.js`中添加wx对象的完整mock
   - 支持getDeviceInfo、getWindowInfo、getAppBaseInfo等关键API
   - 解决测试环境中wx未定义的问题
+  - 添加StorageAdapter的mock实现，支持本地存储操作
+  - 添加logger的mock实现，支持日志记录功能
   - 所有测试（364个测试用例）稳定通过
+  - 支持设备信息、窗口信息、系统信息的mock
+  - 支持wx.request等网络API的mock
 
 ### 修复
 - **测试环境问题**：修复deviceInfo模块在测试环境中的错误
@@ -55,6 +95,9 @@
 
 ### 新增
 - **任务管理**：完整的任务CRUD、状态管理、必做任务惩罚
+  - `checkTasksStatus()`：检查过期任务和必做任务，自动执行惩罚
+  - `handleRequiredTaskPenalty()`：处理必做任务惩罚，扣除相应星星
+  - 必做任务未完成时自动扣除星星，并通过EventBus触发惩罚通知
 - **星星积分系统**：星星获取、分组、FIFO消费策略、过期处理
 - **奖励兑换**：奖励管理、库存管理、兑换流程、状态跟踪
 - **消息通知**：系统消息、任务提醒、奖励通知、过期预警

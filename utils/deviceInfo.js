@@ -5,9 +5,7 @@
  * 提供统一的设备信息获取接口
  */
 
-// 移除logger依赖，使用console作为日志输出
-// const logger = require('./logger');
-
+// 使用console作为日志输出（避免与logger循环依赖）
 const deviceInfo = {
   /**
    * 获取完整的系统信息

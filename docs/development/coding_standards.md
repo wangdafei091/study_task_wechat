@@ -193,9 +193,9 @@ class StarService {
 if (task.isRequired && !task.isCompleted) {
   // 计算惩罚金额
   const penaltyAmount = this._calculatePenalty(task);
-  
-  // TODO: 添加惩罚通知
-  // FIXME: 临时使用固定惩罚金额，后续需要配置化
+
+  // 惩罚通知通过 EventBus 自动触发
+  // 惩罚金额可配置：使用任务积分或默认5分
 }
 ```
 
