@@ -245,10 +245,10 @@ async performOperation(data) {
 
     // 2. 业务逻辑
     const result = await this._executeBusinessLogic(data);
-    
+
     // 3. 日志记录
     logger.info('ServiceName', '操作成功', { data, result });
-    
+
     // 4. 返回结果
     return { success: true, result };
   } catch (error) {
@@ -258,6 +258,53 @@ async performOperation(data) {
   }
 }
 ```
+
+### 错误处理日志规范
+
+**关键原则**：
+1. 错误日志必须包含关键参数（如用户ID、任务ID、星星数量等）
+2. 错误日志必须传递 error 对象给 logger
+3. 日志描述简洁明确，便于问题定位
+
+**推荐格式**：
+
+```javascript
+// ✅ 正确的日志格式
+logger.error('ServiceName', `操作失败, 参数信息, 错误=${error.message}`, error);
+
+// ❌ 不推荐的日志格式（缺少关键参数）
+logger.error('ServiceName', '操作失败', error);
+
+// ❌ 不推荐的日志格式（不传递 error 对象）
+logger.error('ServiceName', `操作失败: ${error.message}`);
+```
+
+**示例**：
+
+```javascript
+// 任务服务示例
+} catch (error) {
+  logger.error('TaskService', `创建任务失败, 标题=${task.title}, 类型=${task.type}, 错误=${error.message}`, error);
+  return { success: false, message: '创建任务失败' };
+}
+
+// 星星服务示例
+} catch (error) {
+  logger.error('StarService', `添加星星失败, 用户=${userId}, 数量=${points}, 类型=${expiryType}, 错误=${error.message}`, error);
+  return { success: false, message: '添加星星失败' };
+}
+
+// 奖励服务示例
+} catch (error) {
+  logger.error('RewardService', `兑换奖励失败, 奖励ID=${rewardId}, 用户=${userId}, 错误=${error.message}`, error);
+  return { success: false, message: '兑换奖励失败' };
+}
+```
+
+**注意事项**：
+- 日志描述使用简洁的中文
+- 关键参数信息使用模板字符串包含
+- 始终传递完整的 error 对象给 logger，便于调试
 
 ## 仓储层规范
 
