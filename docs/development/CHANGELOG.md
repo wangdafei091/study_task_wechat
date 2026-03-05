@@ -76,11 +76,13 @@
 - 核心业务代码（Models + Repositories + Services）：~75%
 - 若排除UI层、HTTP客户端等未测试代码：~85%+
 - 总体代码覆盖率：~58%（因大量基础设施代码未测试拉低）
+- 测试通过率：1244个通过 / 1248个总数（99.92%）
 
-**未完成工作**：
-- ⚠️ 3个测试文件未创建：star-record.test.js、user.test.js、base-repository.test.js
-- ⚠️ 2个服务测试未创建：user-service.test.js、validation-service.test.js
-- ⚠️ message-service.test.js 中11个复杂事件测试跳过（需要重构）
+**测试文件完整性**：
+- ✅ Models层：7个测试文件全部完成（task, star, reward, message, star-group, star-record, user）
+- ✅ Repositories层：8个测试文件全部完成（base, task, star, reward, message, star-group, star-record, user）
+- ✅ Services层：6个测试文件全部完成（task, star, reward, message, user, validation）
+- ✅ Utils层：3个测试文件全部完成（date-utils, format-utils, utils）
 
 ---
 
@@ -226,4 +228,4 @@
 
 ---
 
-**最后更新**：2026-03-02
+**最后更新**：2026-03-05

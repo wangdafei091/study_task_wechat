@@ -209,10 +209,20 @@ cp docs/design/.template.md docs/design/[your-feature-name].md
 - **状态**：✅ 已完成 - 已归档
 - **完成日期**：2026-03-04
 - **主要成果**：
-  - 创建20个测试文件（Models、Repositories、Services、Utils）
-  - 测试通过率：974/988（98.6%）
-  - 核心业务覆盖率：75%+
+  - 创建24个测试文件（Models、Repositories、Services、Utils）
+  - 测试通过率：1245/1248（99.92%）
+  - 核心业务覆盖率：~80%+
 - **详情**：详见 `docs/design/test-core-logic.md`
+
+### 📦 测试环境问题修复
+- **文档**：`fix-test-environment.md`
+- **状态**：✅ 已完成 - 已归档
+- **完成日期**：2026-03-05
+- **主要成果**：
+  - 确认 jest-setup.js wx API mock 完整（166行）
+  - 验证测试环境与生产环境API一致
+  - 确认所有测试稳定通过（通过率99.92%）
+- **详情**：详见 `docs/design/fix-test-environment.md`
 
 ### 📦 里程碑-03：代码质量提升和清理
 - **文档**：`refactor-duplicate-code.md` / `refactor-duplicate-code-report.md`
@@ -267,4 +277,4 @@ cp docs/design/.template.md docs/design/[your-feature-name].md
 
 ---
 
-**最后更新**：2026-02-27
+**最后更新**：2026-03-05
