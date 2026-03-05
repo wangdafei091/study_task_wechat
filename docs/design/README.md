@@ -196,6 +196,33 @@ cp docs/design/.template.md docs/design/[your-feature-name].md
 - 🟢 **审核通过** - 可以实施
 - 🔵 **实施中** - 正在编码
 - ✅ **已完成** - 功能已实现
+- 📦 **已完成 - 已归档** - 已完成并精简归档
+
+---
+
+## 📦 已归档设计文档
+
+以下设计文档已完成并归档：
+
+### 📦 里程碑-04：测试核心逻辑和主干流程
+- **文档**：`test-core-logic.md`
+- **状态**：✅ 已完成 - 已归档
+- **完成日期**：2026-03-04
+- **主要成果**：
+  - 创建20个测试文件（Models、Repositories、Services、Utils）
+  - 测试通过率：974/988（98.6%）
+  - 核心业务覆盖率：75%+
+- **详情**：详见 `docs/design/test-core-logic.md`
+
+### 📦 里程碑-03：代码质量提升和清理
+- **文档**：`refactor-duplicate-code.md` / `refactor-duplicate-code-report.md`
+- **状态**：✅ 已完成 - 已归档
+- **完成日期**：2026-03-03
+- **主要成果**：
+  - 删除重复代码约75行
+  - 补充错误处理日志规范
+  - 测试覆盖率提升至30.59%
+- **详情**：详见 `docs/design/refactor-duplicate-code.md` 和 `refactor-duplicate-code-report.md`
 
 ---
 
@@ -234,7 +261,8 @@ cp docs/design/.template.md docs/design/[your-feature-name].md
 
 - **[CLAUDE.md](../../CLAUDE.md)** - AI 助手工作指南
 - **[架构文档](../architecture/architecture.md)** - 项目架构决策和DDD分层实现
-- **[开发指南](../development/workflow.md)** - 开发流程和文档维护规范
+- **[开发指南](../development/workflow.md)** - 开发流程和设计文档管理
+- **[文档维护指南](../DOCUMENTATION_MAINTENANCE.md)** - 文档维护规范和场景说明
 - **[更新日志](../development/CHANGELOG.md)** - 开发进度
 
 ---

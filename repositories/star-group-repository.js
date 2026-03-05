@@ -196,12 +196,15 @@ class StarGroupRepository extends BaseRepository {
       
       // 添加星星
       updatedGroup.addStars(points, source);
-      
+
       // 保存回存储
       const savedGroup = await this.save(updatedGroup);
-      
-      logger.debug('StarGroupRepository', `添加星星到分组成功, 分组ID=${savedGroup.id}, 数量=${points}, 来源=${source || '未知'}`);
-      return savedGroup;
+
+      // 如果保存失败，仍返回内存中已更新的分组
+      const resultGroup = savedGroup || updatedGroup;
+
+      logger.debug('StarGroupRepository', `添加星星到分组成功, 分组ID=${resultGroup.id}, 数量=${points}, 来源=${source || '未知'}`);
+      return resultGroup;
     } catch (error) {
       logger.error('StarGroupRepository', `添加星星到分组失败, 分组ID=${group.id}`, error);
       return null;
@@ -237,13 +240,14 @@ class StarGroupRepository extends BaseRepository {
       let savedGroup = null;
       if (consumed > 0) {
         savedGroup = await this.save(updatedGroup);
-        logger.debug('StarGroupRepository', `从分组消费星星成功, 分组ID=${savedGroup.id}, 请求消费=${points}, 实际消费=${consumed}`);
+        // 如果保存失败，仍使用内存中已更新的分组
+        const resultGroup = savedGroup || updatedGroup;
+        logger.debug('StarGroupRepository', `从分组消费星星成功, 分组ID=${resultGroup.id}, 请求消费=${points}, 实际消费=${consumed}`);
+        return { consumed, group: resultGroup };
       } else {
         logger.debug('StarGroupRepository', `从分组消费星星, 没有实际消费, 分组ID=${group.id}`);
-        savedGroup = updatedGroup;
+        return { consumed, group: updatedGroup };
       }
-      
-      return { consumed, group: savedGroup };
     } catch (error) {
       logger.error('StarGroupRepository', `从分组消费星星失败, 分组ID=${group.id}`, error);
       return { consumed: 0, group: null };

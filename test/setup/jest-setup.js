@@ -85,6 +85,28 @@ global.wx = {
     microphoneAuthorized: true
   })),
 
+  // 网络请求相关
+  request: jest.fn((options) => {
+    // 默认模拟成功响应（测试中可以通过mockImplementationOverride覆盖）
+    setTimeout(() => {
+      if (options && options.success) {
+        options.success({
+          statusCode: 200,
+          data: {
+            success: true,
+            data: options.data || null,
+            message: 'success'
+          },
+          header: {},
+          cookies: []
+        });
+      }
+      if (options && options.complete) {
+        options.complete();
+      }
+    }, 0);
+  }),
+
   // 存储相关
   getStorageInfo: jest.fn((options) => {
     if (options && options.success) {
@@ -94,8 +116,51 @@ global.wx = {
         limitSize: 10240
       });
     }
-  })
-};
+  }),
 
-// 设置测试超时时间
-jest.setTimeout(10000);
+  getStorage: jest.fn((options) => {
+    if (options && options.success) {
+      options.success({
+        data: null
+      });
+    }
+  }),
+
+  setStorage: jest.fn((options) => {
+    setTimeout(() => {
+      if (options && options.success) {
+        options.success();
+      }
+      if (options && options.complete) {
+        options.complete();
+      }
+    }, 0);
+  }),
+
+  removeStorage: jest.fn((options) => {
+    setTimeout(() => {
+      if (options && options.success) {
+        options.success();
+      }
+      if (options && options.complete) {
+        options.complete();
+      }
+    }, 0);
+  }),
+
+  // 同步存储API
+  getStorageSync: jest.fn(() => null),
+  setStorageSync: jest.fn(),
+  removeStorageSync: jest.fn(),
+  clearStorage: jest.fn((options) => {
+    setTimeout(() => {
+      if (options && options.success) {
+        options.success();
+      }
+      if (options && options.complete) {
+        options.complete();
+      }
+    }, 0);
+  }),
+  clearStorageSync: jest.fn()
+};

@@ -112,7 +112,7 @@ npm run health-check            # 项目健康检查
 - [ ] 更新 [仓储 API](api/repositories.md)
 
 ### 新增功能
-- [ ] 更新 [开发流程](development/development/CHANGELOG.md)（如果存在）
+- [ ] 更新 [开发流程](development/CHANGELOG.md)（如果存在）
 - [ ] 创建/更新 [设计文档](design/)
 
 ### 修复 Bug
@@ -130,7 +130,7 @@ npm run health-check            # 项目健康检查
 
 ## 📖 文档维护规范
 
-详细的文档维护规范请参阅：[开发流程 > 文档维护](development/workflow.md#文档维护)
+详细的文档维护规范请参阅：[文档维护指南](DOCUMENTATION_MAINTENANCE.md)
 
 ### 核心原则
 

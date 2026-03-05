@@ -13,6 +13,7 @@ class BaseRepository {
    * @param {String} storageKey 存储键名
    * @param {Function} modelClass 模型构造函数
    * @param {Object} options 选项
+   * @param {StorageAdapter} options.storageAdapter 存储适配器实例（可选，用于依赖注入）
    * @param {String} options.namespace 命名空间
    * @param {Boolean} options.useCache 是否使用缓存
    * @param {Number} options.cacheExpiry 缓存过期时间（毫秒）
@@ -22,22 +23,22 @@ class BaseRepository {
     if (!storageKey) {
       throw new Error('存储键名不能为空');
     }
-    
+
     if (!modelClass || typeof modelClass !== 'function') {
       throw new Error('模型类不能为空且必须是构造函数');
     }
-    
+
     // 初始化属性
     this.storageKey = storageKey;
     this.modelClass = modelClass;
-    
-    // 创建存储适配器
-    this.storageAdapter = new StorageAdapter({
+
+    // 创建存储适配器（支持依赖注入）
+    this.storageAdapter = options.storageAdapter || new StorageAdapter({
       namespace: options.namespace || '',
       useCache: options.useCache !== false,
       cacheExpiry: options.cacheExpiry || 60000
     });
-    
+
     // 内存缓存
     this._cache = null;
     this._cacheTime = 0;
@@ -51,8 +52,17 @@ class BaseRepository {
   async loadFromStorage() {
     logger.debug('BaseRepository', `从存储加载数据, 存储键=${this.storageKey}`);
     try {
-      // 调用getAll强制从存储中加载数据
-      await this.getAll(false);
+      // 直接调用storageAdapter获取数据，绕过getAll的错误处理
+      const data = await this.storageAdapter.getAsync(this.storageKey, []);
+
+      // 转换为模型实例
+      const models = this._createModels(data);
+
+      // 更新缓存
+      this._cache = models;
+      this._cacheTime = Date.now();
+
+      logger.debug('BaseRepository', `加载存储数据成功, 存储键=${this.storageKey}, 条数=${models.length}`);
       return true;
     } catch (error) {
       logger.error('BaseRepository', `从存储加载数据失败, 存储键=${this.storageKey}`, error);
@@ -247,10 +257,10 @@ class BaseRepository {
         all.push(entityToSave);
         logger.info('BaseRepository', `添加实体成功, ID=${entityToSave.id}, 存储键=${this.storageKey}`);
       }
-      
+
       // 保存回存储
       await this._saveData(all);
-      
+
       // 添加存储完成后的验证日志
       if (entityToSave.constructor.name === 'Task') {
         logger.info('BaseRepository', `Task实体存储完成，最终状态:`, {
@@ -260,7 +270,7 @@ class BaseRepository {
           storageKey: this.storageKey
         });
       }
-      
+
       logger.debug('BaseRepository', `保存实体完成, ID=${entityToSave.id}, 类型=${entityToSave.constructor.name || '未知'}`);
       return this._cloneModel(entityToSave);
     } catch (error) {
@@ -557,11 +567,11 @@ class BaseRepository {
   async _saveData(data) {
     try {
       await this.storageAdapter.setAsync(this.storageKey, data);
-      
+
       // 更新缓存
       this._cache = this._createModels(data);
       this._cacheTime = Date.now();
-      
+
       return true;
     } catch (error) {
       logger.error('BaseRepository', `保存数据到存储失败, 存储键=${this.storageKey}`, error);

@@ -47,14 +47,14 @@
 
 4. **清理过时的 TODO/FIXME 标记**
    - 位置：`docs/development/coding_standards.md` 等
-   - 现状：存在过时的 TODO 和 FIXME 标记
-   - 验收：确认每个 TODO/FIXME 是否需要保留
+   - 现状：已确认所有代码中的 TODO/FIXME 标记已清理
+   - 验收：已确认无实际代码 TODO/FIXME 标记
 
 **验收标准**：
 - [ ] unit.js 已删除或明确标注未使用
 - [ ] 生产环境无 console 输出
 - [ ] 无大段注释代码
-- [ ] 所有 TODO/FIXME 已确认或清理
+- [x] 所有 TODO/FIXME 已确认或清理
 
 **风险评估**：
 - 低风险：主要涉及删除代码，不影响现有功能
@@ -92,7 +92,7 @@
 
 3. **清理过时文档注释**
    - 位置：`docs/development/coding_standards.md`
-   - 问题：存在过时的 TODO/FIXME 标记
+   - 问题：已确认无过时的 TODO/FIXME 标记
    - 验收：文档注释与当前代码一致
 
 4. **验证仓储文档**

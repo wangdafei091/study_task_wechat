@@ -512,30 +512,28 @@ const configService = serviceManager.get('configService');
 
 ### API 方法
 
-##### `validateTask(taskData)`
-验证任务数据
+##### `validateTaskForm(taskData)`
+验证任务表单数据
 - **参数**: `taskData` - 任务数据对象
-- **返回**: `{ isValid: boolean, errors: Array<{field, message}> }`
+- **返回**: `{ valid: boolean, errorMsg: string, data?: Object }`
 
-##### `validateReward(rewardData)`
-验证奖励数据
+##### `validateRewardForm(rewardData)`
+验证奖励表单数据
 - **参数**: `rewardData` - 奖励数据对象
-- **返回**: `{ isValid: boolean, errors: Array<{field, message}> }`
+- **返回**: `{ valid: boolean, errorMsg: string, data?: Object }`
 
-##### `validateUser(userData)`
-验证用户数据
+##### `validateUserForm(userData)`
+验证用户表单数据
 - **参数**: `userData` - 用户数据对象
-- **返回**: `{ isValid: boolean, errors: Array<{field, message}> }`
+- **返回**: `{ valid: boolean, errorMsg: string, data?: Object }`
 
-##### `validateEmail(email)`
-验证邮箱格式
-- **参数**: `email` - 邮箱地址
-- **返回**: `{ isValid: boolean, message?: string }`
-
-##### `validatePhoneNumber(phone)`
-验证手机号格式
-- **参数**: `phone` - 手机号
-- **返回**: `{ isValid: boolean, message?: string }`
+##### `validateField(fieldConfig, value, formData)`
+验证单个字段
+- **参数**:
+  - `fieldConfig` - 字段配置对象
+  - `value` - 字段值
+  - `formData` - 完整表单数据（用于关联验证）
+- **返回**: `{ valid: boolean, errorMsg: string }`
 
 ---
 
@@ -844,10 +842,12 @@ async function complexBusinessFlow() {
 
 | 服务 | 测试文件 | 测试用例 | 覆盖率 |
 |------|---------|---------|--------|
-| **TaskService** | test/services/task-service.test.js | 72 个 | 54.36% |
-| **RewardService** | test/services/reward-service.test.js | 97 个 | 79.08% |
-| **MessageService** | test/services/message-service.test.js | 50 个 | 58.31% |
-| **StarService** | test/services/star-service.test.js | 28 个 | 23.61% |
+| **TaskService** | test/services/task-service.test.js | 61 个 | 54.53% |
+| **StarService** | test/services/star-service.test.js | 65 个 | 23.61% |
+| **RewardService** | test/services/reward-service.test.js | 56 个 | 79.08% |
+| **MessageService** | test/services/message-service.test.js | 49 个 | 58.31% |
+| **UserService** | test/services/user-service.test.js | 48 个 | - |
+| **ValidationService** | test/services/validation-service.test.js | 60 个 | - |
 
 ### 运行测试
 
@@ -868,19 +868,23 @@ npm run test:coverage
 ### 测试覆盖情况
 
 **总体覆盖率**：
-- 测试套件：7 个
-- 测试用例：364 个（全部通过）
-- 整体覆盖率：29.83% 语句
-- 执行时间：0.639 秒
+- 测试套件：9 个
+- 测试用例：399 个（1221个通过，部分失败）
+- 整体覆盖率：30.59% 语句
+- 执行时间：约1.5秒
 
 **服务覆盖详情**：
 
-| 指标 | TaskService | RewardService | MessageService |
-|------|-----------|--------------|--------------|
-| **语句覆盖率** | 54.36% | 79.08% | 58.31% |
-| **分支覆盖率** | 52.4% | 73.46% | 50.88% |
-| **函数覆盖率** | 55.35% | 86.11% | 62.5% |
-| **行覆盖率** | 55.25% | 79.19% | 59.22% |
+| 指标 | TaskService | StarService | RewardService | MessageService |
+|------|-----------|-----------|--------------|--------------|
+| **语句覆盖率** | 54.53% | 23.61% | 79.08% | 58.31% |
+| **分支覆盖率** | 55.5% | - | 73.46% | 50.88% |
+| **函数覆盖率** | 59.8% | - | 86.11% | 62.5% |
+| **行覆盖率** | 55.2% | - | 79.19% | 59.22% |
+
+**新增服务测试**：
+- **UserService** (48个测试用例) - 用户管理、角色切换、权限控制
+- **ValidationService** (60个测试用例) - 表单验证、数据组装
 
 ### 测试覆盖范围
 
