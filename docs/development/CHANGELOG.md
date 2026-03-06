@@ -4,6 +4,40 @@
 
 ---
 
+## [3.4.1] - 2026-03-06
+
+### 测试环境和仓储错误处理优化
+
+**总体成果**：
+- ✅ **错误处理改进**：BaseRepository 保存失败时改为抛出异常，提高错误可见性
+- ✅ **测试用例同步**：更新所有相关测试以匹配新的错误处理逻辑
+- ✅ **测试覆盖提升**：新增2个服务层测试，完善测试体系
+- ✅ **配置优化**：优化 Jest 配置，精确控制覆盖率收集路径
+- ✅ **文档清理**：删除过时的改进计划文档和备份文件
+
+**错误处理改进**：
+- BaseRepository.save()：保存失败时抛出异常而非返回 null
+- BaseRepository.saveAll()：批量保存失败时抛出异常
+- BaseRepository.clear()：清空失败时返回 false
+
+**测试文件更新**：
+- 修改 base-repository.test.js：更新保存失败测试场景
+- 修改 star-record-repository.test.js：同步错误处理测试
+- 修改 star-repository.test.js：同步错误处理测试
+- 新增 config-service.test.js：配置服务测试覆盖
+- 新增 service-manager.test.js：服务管理器测试覆盖
+
+**配置优化**：
+- Jest 配置优化：将 utils/**/*.js 替换为更精确的路径配置
+- 精确控制覆盖率收集，避免测试文件被统计
+
+**文档维护**：
+- 更新 repositories.md：补充 save 和 saveAll 方法的异常说明
+- 删除 SHORT_TERM_IMPROVEMENTS.md：已完成的历史计划文档
+- 删除 workflow.md.backup：清理工作文件备份
+
+---
+
 ## [3.4.0] - 2026-03-04
 
 ### 里程碑-04收尾：完成剩余测试和文档维护
