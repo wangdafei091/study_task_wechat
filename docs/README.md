@@ -56,6 +56,7 @@
 
 ### AI 工作指南
 - [Claude Code 工作指南](../CLAUDE.md) - Claude Code AI 助手工作指南
+- [GPT5 Codex 工作指南](../AGENTS.md) - GPT5 Codex AI 助手工作指南
 
 ---
 
@@ -158,9 +159,10 @@ git commit -m "feat: 添加新服务
 - 功能开发问题：查阅 [开发流程](development/workflow.md)
 - 编码规范问题：查阅 [编码规范](development/coding_standards.md)
 - API 使用问题：查阅 [服务 API](api/services-guide.md) 或 [仓储 API](api/repositories.md)
+- GPT5 Codex 协作约束：查阅 [GPT5 Codex 工作指南](../AGENTS.md)
 - 常见陷阱：查阅 [Claude Code 工作指南](../CLAUDE.md) 的"常见陷阱"部分
 
 ---
 
-**最后更新**：2026-02-28
+**最后更新**：2026-03-06
 **维护者**：开发团队

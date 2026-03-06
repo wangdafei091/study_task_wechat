@@ -76,6 +76,7 @@ npm install
 | 查看组件文档 | [组件指南](docs/api/components-guide.md) |
 | 查看工具函数 | [工具函数指南](docs/api/utils_guide.md) |
 | 提交 PR | [GitHub 协作](docs/development/GITHUB_WORKFLOW.md) |
+| AI 协作约束（GPT5 Codex） | [AGENTS.md](AGENTS.md) |
 
 ### 新人指南（约30分钟）
 
@@ -175,10 +176,11 @@ npm run lint:fix
 - 功能开发问题：查阅 [开发流程](docs/development/workflow.md)
 - 编码规范问题：查阅 [编码规范](docs/development/coding_standards.md)
 - API 使用问题：查阅 [API 文档](docs/api/)
+- GPT5 Codex 协作约束：查阅 [AGENTS.md](AGENTS.md)
 - 常见陷阱：查阅 [Claude Code 工作指南](CLAUDE.md) 的"常见陷阱"部分
 
 ---
 
 **版本**：v2.0
-**最后更新**：2026-02-28
+**最后更新**：2026-03-06
 **维护者**：项目维护团队
