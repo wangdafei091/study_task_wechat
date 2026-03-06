@@ -1134,17 +1134,13 @@ describe('StarRecord Repository', () => {
     });
 
     it('应该处理保存错误', async () => {
-      // 注意：BaseRepository的_saveData内部有try-catch，存储失败不会抛出异常
-      // 存储失败时，数据仍会保存在内存缓存中，save方法仍返回实体
       mockStorageAdapter.getAsync.mockResolvedValue([]);
       mockStorageAdapter.setAsync.mockRejectedValue(new Error('存储错误'));
 
       const record = new StarRecord(TestDataFactory.createStarRecord());
       const savedRecord = await repository.save(record);
 
-      // 存储失败但缓存成功，仍返回实体
-      expect(savedRecord).not.toBeNull();
-      expect(savedRecord.id).toBe(record.id);
+      expect(savedRecord).toBeNull();
     });
   });
 });

@@ -861,10 +861,7 @@ describe('Star Repository', () => {
 
       const savedStar = await repository.save(star);
 
-      // 注意：BaseRepository的save方法即使失败也返回克隆的模型
-      // 这是因为它在调用_saveData之前就已经返回了
-      expect(savedStar).not.toBeNull();
-      expect(savedStar.value).toBe(5);
+      expect(savedStar).toBeNull();
     });
 
     it('应该处理删除不存在的星星', async () => {

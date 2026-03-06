@@ -282,16 +282,14 @@ describe('BaseRepository', () => {
       expect(result).toBeNull();
     });
 
-    it('保存失败时应该仍返回克隆的实体', async () => {
+    it('保存失败时应该返回null', async () => {
       mockStorageAdapter.getAsync.mockResolvedValue([]);
       mockStorageAdapter.setAsync.mockRejectedValue(new Error('保存失败'));
 
       const task = new Task({ id: 'task_1', title: '任务' });
       const result = await repository.save(task);
 
-      // 存储失败但不阻止返回克隆的实体，只记录错误
-      expect(result).not.toBeNull();
-      expect(result.id).toBe('task_1');
+      expect(result).toBeNull();
     });
   });
 
@@ -357,7 +355,7 @@ describe('BaseRepository', () => {
       expect(result).toHaveLength(2);
     });
 
-    it('保存失败时应该仍返回克隆的实体数组', async () => {
+    it('保存失败时应该返回空数组', async () => {
       mockStorageAdapter.getAsync.mockResolvedValue([]);
       mockStorageAdapter.setAsync.mockRejectedValue(new Error('保存失败'));
 
@@ -365,9 +363,7 @@ describe('BaseRepository', () => {
 
       const result = await repository.saveAll(entities);
 
-      // 存储失败但不阻止返回克隆的实体，只记录错误
-      expect(result).toHaveLength(1);
-      expect(result[0].id).toBe('task_1');
+      expect(result).toEqual([]);
     });
   });
 
@@ -475,13 +471,12 @@ describe('BaseRepository', () => {
       expect(mockStorageAdapter.setAsync).toHaveBeenCalledWith('test_tasks', []);
     });
 
-    it('清空失败时应该仍返回true（内存已清空）', async () => {
+    it('清空失败时应该返回false', async () => {
       mockStorageAdapter.setAsync.mockRejectedValue(new Error('清空失败'));
 
       const result = await repository.clear();
 
-      // 存储失败但内存缓存已清空，仍返回true
-      expect(result).toBe(true);
+      expect(result).toBe(false);
     });
   });
 

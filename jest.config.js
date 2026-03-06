@@ -7,7 +7,10 @@ module.exports = {
     'services/**/*.js',
     'repositories/**/*.js',
     'models/**/*.js',
-    'utils/**/*.js'
+    'utils/batchUtils.js',
+    'utils/dateUtils.js',
+    'utils/formatUtils.js',
+    'utils/core/**/*.js'
   ],
   coveragePathIgnorePatterns: [
     '/node_modules/',

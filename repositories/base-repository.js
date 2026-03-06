@@ -575,7 +575,7 @@ class BaseRepository {
       return true;
     } catch (error) {
       logger.error('BaseRepository', `保存数据到存储失败, 存储键=${this.storageKey}`, error);
-      return false;
+      throw error;
     }
   }
   
