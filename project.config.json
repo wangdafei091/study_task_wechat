@@ -23,6 +23,10 @@
         "value": ".git"
       },
       {
+        "type": "folder",
+        "value": "backend"
+      },
+      {
         "type": "file",
         "value": "jest.config.js"
       },
