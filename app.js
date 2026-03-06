@@ -381,7 +381,7 @@ App({
       return;
     }
     
-    const minVersion = '2.8.0';
+    const minVersion = '2.20.1';
     const versionCompare = deviceInfo._compareVersion(SDKVersion, minVersion);
     
     if (versionCompare < 0) {

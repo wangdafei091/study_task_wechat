@@ -5,7 +5,8 @@
 
 const API_CONFIG = {
   // 基础配置
-  BASE_URL: 'http://todoceo.xyz',
+  ENABLE_API: false,  // 暂时禁用 API，使用本地存储模式
+  BASE_URL: 'http://todoceo.xyz',  // 保留原值，待服务器配置 HTTPS 后启用
   TIMEOUT: 10000, // 10秒超时
   RETRY_COUNT: 2, // 重试2次
   

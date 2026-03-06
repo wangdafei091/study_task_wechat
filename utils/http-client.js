@@ -19,7 +19,14 @@ class HttpClient {
    */
   static async request(options) {
     const { url, method = 'GET', data, params } = options;
-    
+
+    // 检查 API 是否启用
+    if (!API_CONFIG.ENABLE_API) {
+      const errorMsg = 'API已禁用，使用本地存储模式';
+      logger.warn('HttpClient', errorMsg);
+      return Promise.reject(new Error(errorMsg));
+    }
+
     // 构建完整URL
     let fullUrl = API_CONFIG.BASE_URL + url;
     
