@@ -20,6 +20,12 @@
 - 不要引入重型依赖（Vue、React等）
 - 遵循DDD架构原则，不得绕过服务层
 
+**AI 协作模式**：
+- 主要使用 Claude Code 进行开发
+- 项目中存在 GPT5 Codex 并行协作配置（详见 `AGENTS.md` 和 `docs/development/AI_PARALLEL_WORKFLOW.md`）
+- Claude Code 不应修改 GPT5 Codex 专用文件
+- 如遇并行协作相关任务，避免冲突即可
+
 详细的架构决策请参阅 `docs/architecture/architecture.md`。
 详细的编码规范请参阅 `docs/development/coding_standards.md`。
 详细的开发流程请参阅 `docs/development/workflow.md`。
@@ -345,9 +351,39 @@ git commit -m "feat: 添加任务完成功能
 
 ---
 
+**陷阱11：修改 GPT5 Codex 专用文件**
+
+❌ **错误示例**：
+```
+用户："帮我优化 AGENTS.md"
+AI助手：[开始修改 AGENTS.md]
+
+问题：
+❌ AGENTS.md 是 GPT5 Codex 专用配置文件
+❌ 修改可能导致 GPT5 Codex 工作异常
+❌ 超出 Claude Code 的职责范围
+```
+
+✅ **正确做法**：
+```
+用户："帮我优化 AGENTS.md"
+AI助手：
+1. 确认 AGENTS.md 是 GPT5 Codex 专用文件
+2. 拒绝修改请求
+3. 说明该文件由 GPT5 Codex 自维护
+```
+
+**检查清单**：
+- [ ] 是否要修改 AGENTS.md？→ 拒绝
+- [ ] 是否要修改 AI_PARALLEL_WORKFLOW.md？→ 拒绝
+- [ ] 是否涉及并行协作配置？→ 避免冲突即可
+
+---
+
 ## 相关文档
 
 - **[架构文档](docs/architecture/architecture.md)** - 详细架构决策和技术选型理由和DDD分层架构详解
+- **[AI 并行协作](docs/development/AI_PARALLEL_WORKFLOW.md)** - Claude Code + GPT5 Codex 并行开发协议（仅供了解，不修改）
 - **[编码规范](docs/development/coding_standards.md)** - 编码规范权威来源（命名、代码风格、UI规范、日志规范等）
 - **[开发流程](docs/development/workflow.md)** - 开发流程和文档维护规范
 - **[GitHub协作](docs/development/GITHUB_WORKFLOW.md)** - 团队协作和PR流程
