@@ -1186,6 +1186,17 @@ class RewardService {
       return false;
     }
   }
+
+  /**
+   * 更新用户服务实例
+   * @param {UserService} userService 新的用户服务实例
+   */
+  updateUserService(userService) {
+    if (this.userService !== userService) {
+      this.userService = userService;
+      logger.info('RewardService', 'UserService已更新');
+    }
+  }
 }
 
 module.exports = RewardService; 

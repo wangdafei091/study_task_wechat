@@ -35,7 +35,41 @@ class ServiceManager {
    */
   setUserService(userService) {
     this.userService = userService;
+
+    // 如果其他服务已经初始化，确保它们能够访问到更新后的UserService
+    // 重新初始化其他服务以注入UserService依赖
+    this._reinitDependentServices();
+
     logger.info('ServiceManager', '用户服务已注入到服务管理器');
+  }
+
+  /**
+   * 重新初始化依赖UserService的服务
+   */
+  _reinitDependentServices() {
+    // 如果某些服务在构造或初始化时缓存了UserService实例
+    // 需要更新它们以获得最新的UserService
+
+    // 检查TaskService（使用正确的this.services路径）
+    if (this.services.taskService && this.services.taskService.updateUserService) {
+      this.services.taskService.updateUserService(this.userService);
+      logger.info('ServiceManager', 'TaskService已更新UserService');
+    }
+
+    // 检查RewardService（使用正确的this.services路径）
+    if (this.services.rewardService && this.services.rewardService.updateUserService) {
+      this.services.rewardService.updateUserService(this.userService);
+      logger.info('ServiceManager', 'RewardService已更新UserService');
+    }
+
+    // 检查MessageService（使用正确的this.services路径）
+    if (this.services.messageService && this.services.messageService.updateUserService) {
+      this.services.messageService.updateUserService(this.userService);
+      logger.info('ServiceManager', 'MessageService已更新UserService');
+    }
+
+    // 检查其他可能需要UserService更新的服务
+    // 如果需要，可以在这里添加更多的检查和更新逻辑
   }
   
   /**

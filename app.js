@@ -5,29 +5,97 @@ const { UserService } = require('./services/user-service.js'); // 引入用户�
 const logger = require('./utils/logger');
 const logConfig = require('./utils/log-config');
 const deviceInfo = require('./utils/deviceInfo'); // 引入设备信息工具
+const API_CONFIG = require('./utils/api-config'); // 引入API配置
+const TokenManager = require('./utils/token-manager'); // 引入Token管理
 
 App({
   onLaunch: async function () {
+    // 🆕 自动初始化API配置（微信小程序环境）
+    if (typeof wx !== 'undefined') {
+      // 检查并设置默认配置
+      const enableApi = wx.getStorageSync('ENABLE_API');
+      const baseUrl = wx.getStorageSync('API_BASE_URL');
+
+      // 只有在未明确设置时才启用API，保留用户的明确配置（包括'false'）
+      if (enableApi === undefined || enableApi === null || enableApi === '') {
+        wx.setStorageSync('ENABLE_API', 'true');
+        console.log('✅ 已自动设置ENABLE_API配置');
+      } else {
+        console.log('✅ 保留用户配置的API模式:', enableApi);
+      }
+
+      if (!baseUrl) {
+        wx.setStorageSync('API_BASE_URL', 'http://localhost:3000');
+        console.log('✅ 已自动设置API_BASE_URL配置');
+      }
+    }
+
     // 初始化日志系统
     this.initLogSystem();
-    
+
     // 初始化存储数据
     logger.info('App', '初始化存储数据');
     StorageAdapter.initializeApplicationStorage();
-    
+
     // 确定是否为开发环境，用于配置事件总线
     let isDevEnv = deviceInfo.isDevelopmentEnv();
-    
-    // 初始化用户服务
-    logger.info('App', '初始化用户服务');
-    const userStorageAdapter = new StorageAdapter({ namespace: 'user_' });
-    this.globalData.userService = new UserService({
-      storageAdapter: userStorageAdapter
+
+    // 检查API是否启用
+    logger.info('App', 'API配置', {
+      ENABLE_API: API_CONFIG.ENABLE_API,
+      BASE_URL: API_CONFIG.BASE_URL
     });
-    await this.globalData.userService.initialize();
+
+    if (API_CONFIG.ENABLE_API) {
+      // ✅ API启用模式：云端登录
+      logger.info('App', 'API已启用，使用云端登录模式');
+
+      // 1. 检查是否有token
+      const token = TokenManager.getToken();
+
+      if (token && TokenManager.isAuthenticated()) {
+        logger.info('App', '发现已有token，初始化UserService');
+
+        // 2. 有token，初始化UserService（云端模式）
+        const userStorageAdapter = new StorageAdapter({ namespace: 'user_' });
+        this.globalData.userService = new UserService({
+          storageAdapter: userStorageAdapter,
+          useCloudStorage: true  // 标记使用云端存储
+        });
+        const initialized = await this.globalData.userService.initialize();
+        if (initialized) {
+          logger.info('App', 'UserService初始化完成（云端模式）');
+        } else {
+          logger.warn('App', 'UserService初始化降级（云端模式），继续使用默认用户态');
+        }
+      } else {
+        logger.info('App', '没有token，等待用户登录');
+        // 3. 没有token，不初始化UserService，等待用户登录
+        this.globalData.userService = null;
+      }
+    } else {
+      // ❌ API禁用模式：本地存储
+      logger.info('App', 'API已禁用，使用本地存储模式');
+
+      // 初始化用户服务
+      logger.info('App', '初始化用户服务');
+      const userStorageAdapter = new StorageAdapter({ namespace: 'user_' });
+      this.globalData.userService = new UserService({
+        storageAdapter: userStorageAdapter,
+        useCloudStorage: false  // 标记使用本地存储
+      });
+      const initialized = await this.globalData.userService.initialize();
+      if (!initialized) {
+        logger.warn('App', 'UserService初始化降级（本地模式），继续使用默认用户态');
+      }
+    }
     
-    // 注入用户服务到服务管理器
-    serviceManager.setUserService(this.globalData.userService);
+    // 注入用户服务到服务管理器（仅当UserService已初始化时）
+    if (this.globalData.userService) {
+      serviceManager.setUserService(this.globalData.userService);
+    } else {
+      logger.info('App', 'UserService未初始化，延迟到登录后注入');
+    }
     
     // 初始化服务管理器
     logger.info('App', '初始化服务管理器');
@@ -129,23 +197,73 @@ App({
 
     // 登录
     wx.login({
-      success: res => {
-        // 发送 res.code 到后台换取 openId, sessionKey, unionId
-        logger.info('App', '登录成功', res);
-        
-        // 添加安全检查以防止后续操作失败
+      success: async res => {
+        logger.info('App', 'wx.login成功', { code: res.code });
+
         try {
-          // 使用现代API替代废弃的getUserProfile
-          this.globalData.canIUseGetUserProfile = false; // 默认禁用
-          
-          // 检查是否支持open-data
-          this.globalData.canIUseOpenData = wx.canIUse('open-data.type.userAvatarUrl') && 
-                                          wx.canIUse('open-data.type.userNickName');
-          
-          logger.info('App', '用户登录处理完成，已添加防御性检查');
+          if (API_CONFIG.ENABLE_API) {
+            // ✅ 云端登录模式：调用后端API
+            logger.info('App', '使用云端登录模式');
+
+            const HttpClient = require('./utils/http-client');
+            const loginResult = await HttpClient.post(API_CONFIG.ENDPOINTS.AUTH_LOGIN, { code: res.code });
+
+            if (loginResult) {
+              logger.info('App', '云端登录成功', {
+                token: loginResult.token,
+                user: loginResult.user
+              });
+
+              // 保存token
+              TokenManager.setToken(loginResult.token);
+
+              // 初始化UserService（云端模式）
+              const userStorageAdapter = new StorageAdapter({ namespace: 'user_' });
+              this.globalData.userService = new UserService({
+                storageAdapter: userStorageAdapter,
+                useCloudStorage: true
+              });
+              const initialized = await this.globalData.userService.initialize();
+
+              // 注入用户服务到服务管理器
+              // 直接注入，不管ServiceManager是否已初始化
+              // 因为用户登录可能发生在ServiceManager初始化之后
+              serviceManager.setUserService(this.globalData.userService);
+
+              if (initialized) {
+                logger.info('App', 'UserService初始化完成（云端模式）');
+              } else {
+                logger.warn('App', 'UserService初始化降级（云端模式），继续使用默认用户态');
+              }
+            }
+          } else {
+            // ❌ 本地存储模式：使用原有逻辑
+            logger.info('App', '使用本地存储模式');
+
+            // 添加安全检查以防止后续操作失败
+            this.globalData.canIUseGetUserProfile = false; // 默认禁用
+
+            // 检查是否支持open-data
+            this.globalData.canIUseOpenData = wx.canIUse('open-data.type.userAvatarUrl') &&
+                                            wx.canIUse('open-data.type.userNickName');
+
+            logger.info('App', '用户登录处理完成，已添加防御性检查');
+          }
         } catch (error) {
-          logger.error('App', '登录后处理用户信息出错:', error);
+          logger.error('App', '登录处理失败:', error);
+
+          // 云端登录失败时的错误处理
+          if (API_CONFIG.ENABLE_API) {
+            wx.showModal({
+              title: '登录失败',
+              content: '网络错误，请检查连接',
+              showCancel: false
+            });
+          }
         }
+      },
+      fail: error => {
+        logger.error('App', 'wx.login失败:', error);
       }
     })
     
@@ -617,5 +735,99 @@ App({
 记住：先设置奖励，再创建任务，效果更好哦！
 
 祝您和孩子使用愉快！ 📚✨`;
+  },
+
+  /**
+   * 供页面调用的云端登录方法
+   * 用于需要重新登录的场景
+   */
+  doCloudLogin: async function() {
+    if (!API_CONFIG.ENABLE_API) {
+      logger.warn('App', 'API未启用，无法进行云端登录');
+      return false;
+    }
+
+    try {
+      logger.info('App', '开始云端登录');
+
+      // 调用wx.login
+      const { code } = await new Promise((resolve, reject) => {
+        wx.login({
+          success: resolve,
+          fail: reject
+        });
+      });
+
+      // 调用后端登录接口
+      const HttpClient = require('./utils/http-client');
+      const loginResult = await HttpClient.post(API_CONFIG.ENDPOINTS.AUTH_LOGIN, { code });
+
+      if (loginResult) {
+        logger.info('App', '云端登录成功', {
+          token: loginResult.token,
+          user: loginResult.user
+        });
+
+        // 保存token
+        TokenManager.setToken(loginResult.token);
+
+        // 初始化UserService
+        const userStorageAdapter = new StorageAdapter({ namespace: 'user_' });
+        this.globalData.userService = new UserService({
+          storageAdapter: userStorageAdapter,
+          useCloudStorage: true
+        });
+        const initialized = await this.globalData.userService.initialize();
+
+        // 注入用户服务到服务管理器
+        serviceManager.setUserService(this.globalData.userService);
+
+        if (!initialized) {
+          logger.warn('App', '云端登录后UserService初始化降级，继续使用默认用户态');
+        }
+
+        return true;
+      }
+    } catch (error) {
+      logger.error('App', '云端登录失败:', error);
+      wx.showModal({
+        title: '登录失败',
+        content: error.message || '网络错误，请稍后重试',
+        showCancel: false
+      });
+      return false;
+    }
+  },
+
+  /**
+   * 退出登录（云端模式）
+   */
+  doCloudLogout: function() {
+    if (!API_CONFIG.ENABLE_API) {
+      logger.warn('App', 'API未启用，无法进行云端登出');
+      return;
+    }
+
+    logger.info('App', '开始云端登出');
+
+    try {
+      // 清除token
+      TokenManager.clearToken();
+
+      // 清除UserService
+      this.globalData.userService = null;
+
+      // 清除用户服务到服务管理器
+      serviceManager.setUserService(null);
+
+      logger.info('App', '云端登出成功');
+
+      // 重新加载小程序
+      wx.reLaunch({
+        url: '/pages/index/index'
+      });
+    } catch (error) {
+      logger.error('App', '云端登出失败:', error);
+    }
   }
 }) 

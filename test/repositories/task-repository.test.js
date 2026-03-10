@@ -8,6 +8,19 @@ const TaskRepository = require('../../repositories/task-repository');
 const { Task, TaskType, TaskStatus } = require('../../models/task');
 const TestDataFactory = require('../utils/test-data-factory');
 
+function formatLocalDate(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function getLocalDateWithOffset(daysOffset) {
+  const date = new Date();
+  date.setDate(date.getDate() + daysOffset);
+  return formatLocalDate(date);
+}
+
 describe('Task Repository', () => {
   let repository;
   let mockStorageAdapter;
@@ -41,7 +54,7 @@ describe('Task Repository', () => {
   // ====== getTodayTasks ======
   describe('getTodayTasks', () => {
     it('应该返回今天的任务', async () => {
-      const today = new Date().toISOString().split('T')[0];
+      const today = formatLocalDate();
       const mockTasks = [
         TestDataFactory.createTask({ date: today, type: TaskType.STUDY }),
         TestDataFactory.createTask({ date: today, type: TaskType.HABIT })
@@ -57,7 +70,7 @@ describe('Task Repository', () => {
 
     it('应该过滤用户ID', async () => {
       const userId = 'user_123';
-      const today = new Date().toISOString().split('T')[0];
+      const today = formatLocalDate();
       const mockTasks = [
         TestDataFactory.createTask({ date: today, userId: 'user_456' }),
         TestDataFactory.createTask({ date: today, userId: userId })
@@ -72,7 +85,7 @@ describe('Task Repository', () => {
     });
 
     it('应该对任务进行排序（必做优先）', async () => {
-      const today = new Date().toISOString().split('T')[0];
+      const today = formatLocalDate();
       const mockTasks = [
         TestDataFactory.createTask({ date: today, isRequired: false, startTime: '09:00' }),
         TestDataFactory.createTask({ date: today, isRequired: true, startTime: '' })
@@ -164,7 +177,7 @@ describe('Task Repository', () => {
   // ====== getExpiredIncompleteTask ======
   describe('getExpiredIncompleteTask', () => {
     it('应该返回过期未完成的任务', async () => {
-      const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+      const yesterday = getLocalDateWithOffset(-1);
       const mockTasks = [
         TestDataFactory.createTask({ date: yesterday, status: TaskStatus.PENDING, title: '过期任务' }),
         TestDataFactory.createTask({ date: yesterday, status: TaskStatus.COMPLETED, title: '已完成任务' })
@@ -179,7 +192,7 @@ describe('Task Repository', () => {
     });
 
     it('应该排除已完成的过期任务', async () => {
-      const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+      const yesterday = getLocalDateWithOffset(-1);
       const mockTasks = [
         TestDataFactory.createTask({ date: yesterday, status: TaskStatus.COMPLETED })
       ];
@@ -247,7 +260,7 @@ describe('Task Repository', () => {
   // ====== 边界场景 ======
   describe('边界场景', () => {
     it('应该处理空用户ID', async () => {
-      const today = new Date().toISOString().split('T')[0];
+      const today = formatLocalDate();
       const mockTasks = [
         TestDataFactory.createTask({ date: today, userId: '' })
       ];

@@ -30,16 +30,17 @@ class User {
   constructor(data = {}) {
     // 基础信息 - 修改：将id字段改为userId，与后端保持一致
     this.userId = data.userId || '';
-    this.name = data.name || '';
+    // 兼容前后端字段：优先使用nickname（后端API），降级到name（本地存储）
+    this.name = data.nickname || data.name || '';
     this.displayName = data.displayName || '';
     this.role = data.role || UserRole.PARENT;
     this.avatar = data.avatar || '';
     this.status = data.status || UserStatus.ACTIVE;
-    
+
     // 时间戳
     this.createTime = data.createTime || Date.now();
     this.modifyTime = data.modifyTime || Date.now();
-    
+
     logger.debug('User', '创建用户实例', { userId: this.userId, role: this.role });
   }
   

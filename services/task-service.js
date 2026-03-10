@@ -1,6 +1,6 @@
 /**
  * task-service.js - 任务服务
- * 
+ *
  * 提供任务相关的业务逻辑，包括任务的创建、编辑、状态管理等
  */
 
@@ -11,6 +11,8 @@ const EventBus = require('../utils/core/event-bus');
 const { Task, TaskStatus, TaskType, RepeatType, StarExpiryType } = require('../models/task');
 const dateUtils = require('../utils/dateUtils');
 const { EVENTS, ERROR_MESSAGES } = require('../utils/constants');
+const HttpClient = require('../utils/http-client'); // 新增：HTTP客户端
+const API_CONFIG = require('../utils/api-config'); // 新增：API配置
 
 class TaskService {
   /**
@@ -25,16 +27,21 @@ class TaskService {
   constructor(options = {}) {
     // 初始化仓储
     this.taskRepository = options.taskRepository || new TaskRepository();
-    
+
     // 关联服务
     this.starService = options.starService;
     this.rewardService = options.rewardService;
     this.userService = options.userService; // 新增：注入用户服务
-    
+
     // 事件总线
     this.eventBus = options.eventBus || new EventBus();
-    
-    logger.info('TaskService', '初始化任务服务');
+
+    // 检查是否启用云端API
+    this.enableCloudStorage = API_CONFIG.ENABLE_API;
+
+    logger.info('TaskService', '初始化任务服务', {
+      enableCloudStorage: this.enableCloudStorage
+    });
   }
   
   /**
@@ -52,26 +59,80 @@ class TaskService {
       return false;
     }
   }
+
+  /**
+   * 更新用户服务实例
+   * @param {UserService} userService 新的用户服务实例
+   */
+  updateUserService(userService) {
+    if (this.userService !== userService) {
+      this.userService = userService;
+      logger.info('TaskService', 'UserService已更新');
+    }
+  }
   
   /**
-   * 获取所有任务
+   * 获取所有任务（支持双写策略）
    * @param {String} userId 可选的用户ID，不传则获取所有用户的任务
    * @returns {Promise<Array>} 任务列表
    */
   async getAllTasks(userId = null) {
     try {
       let tasks;
-      
-      if (userId) {
-        // 获取指定用户的所有任务
-        const allTasks = await this.taskRepository.getAll();
-        tasks = allTasks.filter(task => task.userId === userId);
+
+      if (this.enableCloudStorage) {
+        // 云端模式：先从云端获取，失败则从本地获取
+        try {
+          tasks = await this._fetchTasksFromCloud(userId);
+          logger.info('TaskService', `从云端获取任务成功: ${tasks?.length || 0}个`, {
+            userId,
+            taskCount: tasks?.length || 0
+          });
+        } catch (cloudError) {
+          // 云端获取失败，降级到本地
+          logger.warn('TaskService', '云端获取失败，降级到本地存储', {
+            userId,
+            error: cloudError.message
+          });
+
+          try {
+            if (userId) {
+              // 获取指定用户的所有任务
+              const allTasks = await this.taskRepository.getAll();
+              tasks = allTasks.filter(task => task.userId === userId);
+            } else {
+              // 获取所有用户的任务
+              tasks = await this.taskRepository.getAll();
+            }
+
+            logger.info('TaskService', `降级成功，从本地获取任务: ${tasks?.length || 0}个`, {
+              userId,
+              taskCount: tasks?.length || 0
+            });
+          } catch (localError) {
+            logger.error('TaskService', '本地获取任务也失败', {
+              userId,
+              error: localError.message
+            });
+            return [];
+          }
+        }
       } else {
-        // 获取所有用户的任务
-        tasks = await this.taskRepository.getAll();
+        // 本地模式：直接从本地获取
+        if (userId) {
+          const allTasks = await this.taskRepository.getAll();
+          tasks = allTasks.filter(task => task.userId === userId);
+        } else {
+          tasks = await this.taskRepository.getAll();
+        }
+
+        logger.info('TaskService', `从本地获取任务成功: ${tasks?.length || 0}个`, {
+          userId,
+          taskCount: tasks?.length || 0,
+          mode: 'local'
+        });
       }
-      
-      logger.info('TaskService', `获取所有任务成功${userId ? `, 用户=${userId}` : ''}, 数量=${tasks.length}`);
+
       return tasks;
     } catch (error) {
       logger.error('TaskService', '获取所有任务失败', error);
@@ -366,6 +427,25 @@ class TaskService {
       // 保存任务
       const savedTask = await this.taskRepository.save(task);
       logger.info('TaskService', `创建任务成功: "${savedTask.title}", ID=${savedTask.id}`);
+
+      // 新增：双写策略 - 尝试同步到云端
+      if (this.enableCloudStorage) {
+        try {
+          await this._syncTaskToCloud(savedTask);
+          logger.info('TaskService', `任务已同步到云端: ID=${savedTask.id}`);
+        } catch (cloudError) {
+          logger.warn('TaskService', `云端同步失败，使用本地数据: ${cloudError.message}`, {
+            taskId: savedTask.id,
+            taskTitle: savedTask.title
+          });
+          // 云端失败，本地数据已保存，继续使用本地数据
+        }
+      } else {
+        logger.info('TaskService', '云端模式未启用，仅使用本地存储', {
+            taskId: savedTask.id,
+            taskTitle: savedTask.title
+          });
+      }
       
       // 检查是否需要生成重复任务
       let createdTasks = [savedTask];
@@ -1676,8 +1756,81 @@ class TaskService {
       logger.warn('TaskService', '无法获取小朋友用户ID，使用默认child用户ID');
       childUserId = 'child'; // 兜底方案
     }
-    
+
     return childUserId;
+  }
+
+  /**
+   * 同步任务到云端（双写策略的云端部分）
+   * @param {Task} task 任务对象
+   * @returns {Promise<void>} 同步结果
+   */
+  async _syncTaskToCloud(task) {
+    try {
+      // 准备发送给云端的数据
+      // 注意：不发送userId和taskId，让后端使用认证中间件中的userId和自动生成taskId
+      const cloudData = {
+        taskId: task.id, // 使用前端Task对象的id字段
+        title: task.title,
+        description: task.description,
+        type: task.type,
+        date: task.date,
+        startTime: task.startTime,
+        endTime: task.endTime,
+        points: task.points,
+        pointsExpiry: task.pointsExpiry,
+        isRequired: task.isRequired,
+        status: task.status,
+        isAllDay: task.isAllDay,
+        repeat: task.repeat,
+      };
+
+      // 调用后端API创建任务
+      await HttpClient.post(API_CONFIG.ENDPOINTS.TASKS, cloudData);
+
+      logger.info('TaskService', '任务已同步到云端', {
+        taskId: task.taskId,
+        title: task.title
+      });
+    } catch (cloudError) {
+      // 云端同步失败，不影响本地数据
+      logger.warn('TaskService', '云端同步失败，本地数据已保存', {
+        taskId: task.taskId,
+        title: task.title,
+        error: cloudError.message
+      });
+      throw cloudError;
+    }
+  }
+
+  /**
+   * 从云端获取任务（双写策略的读取部分）
+   * @param {string} userId 用户ID
+   * @returns {Promise<Array>} 任务列表
+   */
+  async _fetchTasksFromCloud(userId) {
+    try {
+      const response = await HttpClient.get(API_CONFIG.ENDPOINTS.TASKS);
+      // 后端返回格式: { tasks: [...], total: ... }
+      const backendTasks = response?.tasks || [];
+
+      // 字段映射：后端taskId -> 前端id
+      const mappedTasks = backendTasks.map(task => ({
+        ...task,
+        id: task.taskId, // 映射taskId为id
+        taskId: undefined // 移除taskId字段避免混淆
+      }));
+
+      logger.info('TaskService', `从云端获取任务成功: ${mappedTasks.length}个任务`);
+      return mappedTasks;
+    } catch (cloudError) {
+      // 云端获取失败，降级到本地
+      logger.warn('TaskService', '云端获取失败，降级到本地', {
+        userId,
+        error: cloudError.message
+      });
+      throw cloudError;
+    }
   }
 }
 

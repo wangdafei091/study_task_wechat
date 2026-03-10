@@ -322,14 +322,15 @@ class UserService {
   async _loadUserState() {
     try {
       // 1. 从API加载所有用户到缓存
-      const allUsers = await HttpClient.getAllUsers();
+      const response = await HttpClient.getAllUsers();
+      const users = response.users || response; // 兼容后端返回 { users, total } 或直接返回数组
       this.userCache.clear();
-      allUsers.forEach(userData => {
+      users.forEach(userData => {
         const user = new User(userData);
         this.userCache.set(user.userId, user);
       });
       
-      logger.info('UserService', `加载用户列表成功: ${allUsers.length}个用户`);
+      logger.info('UserService', `加载用户列表成功: ${users.length}个用户`);
       
       // 2. 恢复会话用户（仅从本地获取会话ID，用户数据从API缓存获取）
       let savedUserId = null;
@@ -480,14 +481,15 @@ class UserService {
    */
   async refreshUserCache() {
     try {
-      const allUsers = await HttpClient.getAllUsers();
+      const response = await HttpClient.getAllUsers();
+      const users = response.users || response; // 兼容后端返回 { users, total } 或直接返回数组
       this.userCache.clear();
-      allUsers.forEach(userData => {
+      users.forEach(userData => {
         const user = new User(userData);
         this.userCache.set(user.userId, user);
       });
-      
-      logger.info('UserService', `刷新用户缓存成功: ${allUsers.length}个用户`);
+
+      logger.info('UserService', `刷新用户缓存成功: ${users.length}个用户`);
       return true;
     } catch (error) {
       logger.error('UserService', '刷新用户缓存失败', error);
@@ -530,7 +532,8 @@ class UserService {
       
       // 测试4: 检查API连接
       try {
-        const users = await HttpClient.getAllUsers();
+        const response = await HttpClient.getAllUsers();
+        const users = response.users || response; // 兼容后端返回 { users, total } 或直接返回数组
         results.tests.apiConnection = Array.isArray(users) && users.length > 0;
         if (!results.tests.apiConnection) {
           results.errors.push('API连接异常或返回数据为空');

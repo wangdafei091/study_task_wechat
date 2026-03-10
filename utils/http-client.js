@@ -5,6 +5,7 @@
 
 const API_CONFIG = require('./api-config');
 const logger = require('./logger');
+const TokenManager = require('./token-manager');
 
 class HttpClient {
   
@@ -27,6 +28,14 @@ class HttpClient {
       return Promise.reject(new Error(errorMsg));
     }
 
+    // 自动添加JWT token到Authorization头
+    const headers = { ...API_CONFIG.HEADERS };
+    const token = TokenManager.getToken();
+
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
     // 构建完整URL
     let fullUrl = API_CONFIG.BASE_URL + url;
     
@@ -45,7 +54,7 @@ class HttpClient {
         url: fullUrl,
         method: method,
         data: data,
-        header: API_CONFIG.HEADERS,
+        header: headers,
         timeout: API_CONFIG.TIMEOUT,
         success: (res) => {
           logger.info('HttpClient', `请求成功: ${res.statusCode}`, res.data);
