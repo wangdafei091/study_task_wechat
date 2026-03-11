@@ -966,5 +966,22 @@ const taskService = new TaskService({
 
 ---
 
-**最后更新**：2026-03-02
+### 云端任务服务
+
+任务服务支持云端存储模式，可通过 `ENABLE_API` 配置开启。
+
+#### API 配置
+云端API通过 `API_CONFIG` 进行配置，详见 `utils/api-config.js`。
+
+#### 云端存储模式
+系统支持三种存储模式（优先级从高到低）：
+1. **云端优先模式**（推荐）
+2. **本地优先模式**（离线）
+3. **本地仅用模式**（测试）
+
+详细说明请参阅：[docs/design/milestone-05b-task-management.md](../design/milestone-05b-task-management.md)
+
+---
+
+**最后更新**：2026-03-11
 **维护者**：项目维护团队
