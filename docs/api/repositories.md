@@ -31,13 +31,16 @@ BaseRepository提供通用的CRUD操作和缓存机制，所有具体仓储都�
 
 #### 基础操作
 
-##### findAll()
+##### getAll(useCache = true)
 获取所有记录
+- **参数**: `useCache` (Boolean, 可选) - 是否使用缓存，默认 true
+- **返回**: `Promise<Array>` - 实体列表
+- **说明**: 支持异步和同步版本（`getAllSync`）
 
-```
-
-##### findById(id)
+##### getById(id)
 根据ID查找记录
+- **参数**: `id` (String) - 实体ID
+- **返回**: `Promise<Object|null>` - 实体对象或null
 
 ```
 
@@ -84,8 +87,8 @@ BaseRepository提供通用的CRUD操作和缓存机制，所有具体仓储都�
 
 ##### findByIds(ids)
 根据ID列表查找记录
-
-```
+- **参数**: `ids` (Array) - ID数组
+- **返回**: `Promise<Array>` - 实体列表
 
 #### 缓存管理
 
@@ -354,86 +357,100 @@ BaseRepository提供通用的CRUD操作和缓存机制，所有具体仓储都�
 
 #### 按状态查询
 
-##### findAvailable()
+##### getAvailableRewards(includeExamples = false, userId = null)
 获取可用奖励
+- **参数**:
+  - `includeExamples` (Boolean) - 是否包含示例奖励
+  - `userId` (String, 可选) - 用户ID
+- **返回**: `Promise<Array>` - 可用的奖励列表
 
-```
-
-##### findClaimed()
+##### getClaimedRewards(onlyPending = false, userId = null)
 获取已兑换奖励
+- **参数**: `onlyPending` - 是否只获取待领取的奖励，默认false
+- **返回**: `Promise<Array>` - 已兑换的奖励列表
+
+#### 按状态查询
+
+##### getDeliveredRewards(userId = null)
+获取已领取的奖励
+- **参数**: `userId` (String, 可选) - 用户ID
+- **返回**: `Promise<Array>` - 已领取的奖励列表
+
+##### getRewardsByPointsOrder(ascending = true, onlyAvailable = true, userId = null)
+按星星数量排序获取奖励
+- **参数**:
+  - `ascending` (Boolean, 可选) - 是否升序排列，默认true
+  - `onlyAvailable` (Boolean, 可选) - 只获取可兑换的奖励，默认true
+  - `userId` (String, 可选) - 用户ID
+- **返回**: `Promise<Array>` - 排序后的奖励列表
+
+##### getExchangeableRewards(availablePoints, userId = null)
+获取可兑换的奖励
+- **参数**:
+  - `availablePoints` (Number) - 可用的星星数
+  - `userId` (String, 可选) - 用户ID
+- **返回**: `Promise<Array>` - 可兑换的奖励列表
+
+#### 兑换管理
+
+##### claimReward(rewardId)
+兑换奖励
+- **参数**: `rewardId` (String) - 奖励ID
+- **返回**: `Promise<Reward|null>` - 兑换后的奖励或null
+
+##### deliverReward(rewardId)
+标记奖励为已领取
+- **参数**: `rewardId` (String) - 奖励ID
+- **返回**: `Promise<Reward|null>` - 更新后的奖励或null
+
+##### unclaimReward(rewardId)
+取消奖励兑换
+- **参数**: `rewardId` (String) - 奖励ID
+- **返回**: `Promise<Reward|null>` - 更新后的奖励或null
+
+#### 状态管理
+
+##### setRewardEnabled(rewardId, enable)
+启用/禁用奖励
+- **参数**:
+  - `rewardId` (String) - 奖励ID
+  - `enable` (Boolean) - 是否启用
+- **返回**: `Promise<Reward|null>` - 更新后的奖励或null
+
+#### 初始化方法
+
+##### getDefaultRewards()
+获取默认奖励
+- **返回**: `Promise<Array>` - 默认奖励列表
+
+##### initializeDefaultRewards()
+初始化默认奖励
+- **返回**: `Promise<Array>` - 保存的默认奖励列表
+
+##### ensureExampleRewardsEnabled()
+确保示例奖励启用
+- **返回**: `Promise<Number>` - 更新的奖励数量
 
 ```
 
-##### findDelivered()
-获取已领取奖励
-
-```
-
-##### findDisabled()
-获取已禁用奖励
-
-```
-
-#### 按类别查询
-
-##### findByCategory(category)
-按类别查询奖励
-
-
-#### 按成本查询
-
-##### findByCostRange(minCost, maxCost)
-按成本范围查询
-
-```
-
-##### findAffordable(starBalance)
-获取用户可负担的奖励
-
-```
-
-#### 库存查询
-
-##### findInStock()
-获取有库存的奖励
-
-```
-
-##### findOutOfStock()
-获取无库存的奖励
-
-```
-
-#### 特殊查询
-
-##### findSampleRewards()
-获取示例奖励
-
-```
-
-##### findPopularRewards(limit)
 获取热门奖励（按兑换次数排序）
 
 ```
 
 #### 状态更新
 
-##### updateStatus(rewardId, newStatus)
 更新奖励状态
 
 ```
 
-##### updateStock(rewardId, remainingCount)
 更新库存数量
 
 ```
 
-##### decrementStock(rewardId)
 减少库存（兑换时调用）
 
 ```
 
-##### incrementStock(rewardId)
 增加库存（取消兑换时调用）
 
 ```
@@ -448,82 +465,76 @@ BaseRepository提供通用的CRUD操作和缓存机制，所有具体仓储都�
 
 #### 按用户查询
 
-##### findByUserId(userId)
 获取用户所有消息
 
 ```
 
-##### findRecentMessages(userId, limit)
 获取用户最近的消息
 
 ```
 
 #### 按状态查询
 
-##### findUnread(userId)
+##### getUnreadMessages(userId = null)
 获取未读消息
+- **参数**: `userId` (String, 可选) - 用户ID
+- **返回**: `Promise<Array>` - 未读消息列表
 
-```
+##### getUnreadCount(userId = null)
+获取未读消息数量
+- **参数**: `userId` (String, 可选) - 用户ID
+- **返回**: `Promise<Number>` - 未读消息数量
 
-##### findRead(userId)
-获取已读消息
-
-```
-
-##### findArchived(userId)
-获取已归档消息
-
-```
+##### markAsRead(messageId)
+标记消息为已读
+- **参数**: `messageId` (String) - 消息ID
+- **返回**: `Promise<Object|null>` - 更新后的消息对象或null
 
 #### 按类型查询
 
-##### findByType(userId, type)
+##### getMessagesByType(type, userId = null)
 按消息类型查询
+- **参数**:
+  - `type` (String) - 消息类型
+  - `userId` (String, 可选) - 用户ID
+- **返回**: `Promise<Array>` - 指定类型的消息列表
 
-
-##### findBySubType(userId, type, subType)
-按子类型查询
-
-```
+##### getMessagesByNotificationType(notificationType, userId = null)
+按通知子类型查询
+- **参数**:
+  - `notificationType` (String) - 通知子类型
+  - `userId` (String, 可选) - 用户ID
+- **返回**: `Promise<Array>` - 指定通知类型的消息列表
 
 #### 按优先级查询
 
-##### findByPriority(userId, priority)
-按优先级查询
-
-```
-
-##### findHighPriorityUnread(userId)
+##### getHighPriorityMessages(userId = null)
 获取高优先级未读消息
-
-```
+- **参数**: `userId` (String, 可选) - 用户ID
+- **返回**: `Promise<Array>` - 高优先级未读消息列表
 
 #### 统计查询
 
-##### countUnread(userId)
-统计未读消息数量
-
-```
-
-##### countByType(userId, type)
-按类型统计消息数量
+##### getMessageStats()
+获取消息统计信息
+- **返回**: `Promise<Object>` - 消息统计数据
 
 ```
 
 #### 批量状态更新
 
-##### markAllAsRead(userId)
+##### markAllAsRead(userId = null)
 标记所有消息为已读
+- **参数**: `userId` (String, 可选) - 用户ID
+- **返回**: `Promise<Number>` - 更新的消息数量
 
-```
-
-##### markAsReadByIds(messageIds)
+##### markManyAsRead(messageIds)
 批量标记消息为已读
+- **参数**: `messageIds` (Array) - 消息ID数组
+- **返回**: `Promise<Number>` - 成功标记的消息数量
 
-```
+---
 
-##### archiveOldMessages(userId, olderThanDays)
-归档旧消息
-
-```
+**最后更新**：2026-03-11
+**维护者**：项目维护团队
 
