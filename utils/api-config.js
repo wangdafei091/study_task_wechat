@@ -40,7 +40,7 @@ if (typeof wx !== 'undefined') {
     console.log('✅ 保留用户配置的API模式:', enableApiEnv);
   }
 
-  // 🔧 修复：使用 HTTPS 地址而不是硬编码的 HTTP 地址
+  // 🔧 配置：默认使用 HTTPS 地址，可通过环境变量或小程序存储覆盖
   if (!apiBaseUrlEnv || apiBaseUrlEnv === '') {
     finalBaseUrl = 'https://api.todoceo.xyz';
     console.log('✅ 微信小程序环境：使用默认HTTPS地址');
@@ -52,7 +52,7 @@ if (typeof wx !== 'undefined') {
 const API_CONFIG = {
   // 基础配置
   ENABLE_API: finalEnableApi === 'true' || finalEnableApi === true,  // 支持字符串和布尔值，默认关闭
-  BASE_URL: finalBaseUrl || 'http://121.4.38.122:8080',  // 运行时安全读取环境变量
+  BASE_URL: finalBaseUrl || 'https://api.todoceo.xyz',  // 运行时安全读取环境变量
   TIMEOUT: 10000, // 10秒超时
   RETRY_COUNT: 2, // 重试2次
 

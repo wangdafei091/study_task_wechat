@@ -1789,13 +1789,13 @@ class TaskService {
       await HttpClient.post(API_CONFIG.ENDPOINTS.TASKS, cloudData);
 
       logger.info('TaskService', '任务已同步到云端', {
-        taskId: task.taskId,
+        taskId: task.id,
         title: task.title
       });
     } catch (cloudError) {
       // 云端同步失败，不影响本地数据
       logger.warn('TaskService', '云端同步失败，本地数据已保存', {
-        taskId: task.taskId,
+        taskId: task.id,
         title: task.title,
         error: cloudError.message
       });
