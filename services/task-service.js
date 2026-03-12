@@ -169,20 +169,35 @@ class TaskService {
    * @returns {Promise<Array>} 今日任务列表
    */
   async getTodayTasks(userId = null) {
-    // 如果不传userId，则获取所有任务（共享模式）
-    const tasks = await this.taskRepository.getTodayTasks(userId);
-    return tasks;
+    const today = new Date().toISOString().slice(0, 10);
+    return await this.getTasksByDate(today, userId);
   }
   
   /**
-   * 按日期获取任务
+   * 按日期获取任务（支持云端模式）
    * @param {String} date 日期字符串，格式为YYYY-MM-DD
    * @param {String} userId 可选的用户ID，不传则获取所有用户的任务
    * @returns {Promise<Array>} 指定日期的任务列表
    */
   async getTasksByDate(date, userId = null) {
     try {
-      const tasks = await this.taskRepository.getTasksByDate(date, userId);
+      let tasks;
+
+      if (this.enableCloudStorage) {
+        // 云端模式：带日期参数查询云端，失败则降级本地
+        try {
+          tasks = await this._fetchTasksFromCloud(userId, { date });
+          logger.info('TaskService', `从云端获取${date}任务成功: ${tasks.length}个`);
+        } catch (cloudError) {
+          logger.warn('TaskService', `云端获取${date}任务失败，降级到本地`, {
+            error: cloudError.message
+          });
+          tasks = await this.taskRepository.getTasksByDate(date, userId);
+        }
+      } else {
+        tasks = await this.taskRepository.getTasksByDate(date, userId);
+      }
+
       logger.info('TaskService', `获取${date}任务成功${userId ? `, 用户=${userId}` : ''}, 数量=${tasks.length}`);
       return tasks;
     } catch (error) {
@@ -1806,11 +1821,12 @@ class TaskService {
   /**
    * 从云端获取任务（双写策略的读取部分）
    * @param {string} userId 用户ID
+   * @param {Object} params 可选查询参数，如 { date: 'YYYY-MM-DD' }
    * @returns {Promise<Array>} 任务列表
    */
-  async _fetchTasksFromCloud(userId) {
+  async _fetchTasksFromCloud(userId, params = {}) {
     try {
-      const response = await HttpClient.get(API_CONFIG.ENDPOINTS.TASKS);
+      const response = await HttpClient.get(API_CONFIG.ENDPOINTS.TASKS, params);
       // 后端返回格式: { tasks: [...], total: ... }
       const backendTasks = response?.tasks || [];
 

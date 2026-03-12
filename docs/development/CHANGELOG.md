@@ -32,6 +32,13 @@
 - 离线降级机制实现并验证成功
 - 完整集成测试（前端1237/1241测试通过，后端18/18通过）
 
+### 🐛 后续修复（2026-03-12）
+- ✅ 修复首页日期切换无法显示云端任务的Bug
+- ✅ 配置MySQL dateStrings: true确保日期格式统一
+- ✅ 完善getTasksByDate云端逻辑，支持按日期查询云端任务
+- ✅ 优化getTodayTasks复用云端逻辑
+- ✅ 增强_fetchTasksFromCloud支持查询参数传递
+
 ### 📖 详细实施记录
 [里程碑-05B：任务管理](../design/milestone-05b-task-management.md)
 

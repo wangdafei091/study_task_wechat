@@ -76,6 +76,12 @@ echo "或者直接启动："
 echo "   cd /var/www/backend"
 echo "   node server.js"
 echo ""
+echo "# PM2常用命令："
+echo "pm2 list                    # 查看所有服务"
+echo "pm2 stop task-wechat-api     # 停止服务"
+echo "pm2 restart task-wechat-api  # 重启服务"
+echo "pm2 logs task-wechat-api     # 查看日志"
+echo ""
 
 # 7. 检查PM2是否安装
 echo "🔧 检查PM2："
