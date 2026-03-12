@@ -15,11 +15,10 @@
 - 端到端流程验证
 
 ### 🔧 Bug修复
-- 修复SQL占位符数量不匹配问题
-- 修复用户API返回501 NOT_IMPLEMENTED问题
-- 修复数据契约不一致问题
+- 修复API数据一致性问题
+- 修复用户认证接口实现
 
-### 📖 详细实施和Bug修复记录
+### 📖 详细实施记录
 [docs/design/milestone-05a-backend-auth.md](../design/milestone-05a-backend-auth.md)
 
 ---
@@ -34,12 +33,10 @@
 - 完整集成测试（前端1237/1241测试通过，后端18/18通过）
 
 ### 🔧 Bug修复
-- 修复拼写错误（backend/services/taskService.js:116）
-- 优化API配置（支持微信小程序环境）
-- 增强JSON解析安全性（Task.fromDB方法）
-- 解决用户ID外键约束问题
+- 修复数据解析和配置问题
+- 修复数据库约束和集成问题
 
-### 📖 详细实施和Bug修复记录
+### 📖 详细实施记录
 [docs/design/milestone-05b-task-management.md](../design/milestone-05b-task-management.md)
 
 ---
@@ -63,88 +60,16 @@
 - 05A：[docs/design/milestone-05a-backend-auth.md](../design/milestone-05a-backend-auth.md)
 - 05B：[docs/design/milestone-05b-task-management.md](../design/milestone-05b-task-management.md)
 
-**实际完成时间**：2026-03-09
-**实际工期**：1周（符合预期）
-
-**05B完成情况**：
-
-**功能实现**：
-- ✅ 任务创建API（`POST /api/tasks`）实现并测试通过
-- ✅ 任务查询API（`GET /api/tasks`）实现并测试通过
-- ✅ 任务详情API（`GET /api/tasks/:taskId`）实现并测试通过
-- ✅ 任务统计API（`GET /api/tasks/count`）实现并测试通过
-- ✅ 小程序接入后端API集成完成
-- ✅ 双写策略（云端+本地）实现并验证成功
-- ✅ 离线降级机制实现并验证成功
-
-**代码质量**：
-- ✅ 后端测试：18/18集成测试通过（100%通过率）
-- ✅ 前端测试：1237/1241测试通过（99.7%通过率）
-- ✅ 核心业务代码覆盖率：72.57%语句，70.35%分支，80.44%函数
-- ✅ 数据访问层封装良好，错误处理完整
-- ✅ SQL注入防护（使用参数化查询）
-
-**测试验证**：
-- ✅ **云端同步成功**：任务已同步到云端: ID=task_1773054680428_227
-- ✅ **本地存储正常**：降级成功，从本地获取任务: 1个
-- ✅ **双写策略验证**：云端+本地同时写入成功
-- ✅ **离线降级验证**：云端失败时自动降级到本地
-- ✅ **数据库验证**：3个任务，1个用户，数据一致性良好
-
-**发现并修复的问题**：
-- ✅ **拼写错误修复**：backend/services/taskService.js:116行 `penaltyApplied` → `penaltyApplied`
-- ✅ **API配置优化**：支持微信小程序环境配置（wx.getStorageSync）
-- ✅ **JSON解析增强**：Task.fromDB方法增强安全性，避免解析错误
-- ✅ **外键约束解决**：修复用户ID外键约束问题
-- ✅ **数据格式统一**：前端后端数据格式一致
-
-**实际完成时间**：2026-03-09
-**实际工期**：1周（符合预期）
-
-**技术架构确认**：
-- ✅ **后端技术栈**：Node.js v20.20.0 + Express 4.x + MySQL 5.7.44 + JWT认证
-- ✅ **前端技术栈**：微信小程序原生开发 + 双写策略 + 离线降级
-- ✅ **数据库设计**：users表、tasks表，外键约束，索引优化
-- ✅ **API设计**：RESTful规范，统一错误响应格式，JWT认证
-
-**安全性和性能**：
-- ✅ **安全性**：JWT token机制完善，SQL注入防护，外键数据约束
-- ✅ **性能**：数据库查询优化，连接池管理，缓存机制
-- ✅ **数据安全**：环境变量配置，敏感信息保护，密钥管理
-
-**质量评分**：⭐⭐⭐⭐⭐ **5/5星 - 优秀**
-
-**下一步建议**：
-1. ✅ **可以投入使用**：核心云端存储功能已验证完成
-2. ✅ **可以启动里程碑06**：基础架构已搭建完成
-3. 🔄 **建议更新文档**：更新里程碑05状态为已完成
-4. 🔄 **考虑生产部署**：功能稳定，可以考虑部署到生产环境
-
 ---
 
 ## [计划中] - 云端存储迁移项目 🚧
 
 ### 项目概述
 
-**背景**：
-- 现有数据存储在微信本地，清理缓存会导致数据丢失
-- 家庭成员（家长和孩子）无法共享任务、星星积分等数据
-- 需要将数据迁移到云端存储，提升系统可靠性和协作能力
-
-**目标**：
-- 搭建云端后端架构，解决数据丢失问题
-- 实现家庭账户管理，支持多设备数据共享
-- 开发数据迁移工具，安全迁移现有数据
-
-**实施计划**：
-- 里程碑-05：后端基础设施 + 任务API MVP（2周）
-- 里程碑-06：家庭账户 + 数据隔离（1-2周）
-- 里程碑-07：云端存储适配器 + 双写策略（1-2周）
-- 里程碑-08：数据迁移工具（1周）
-- 里程碑-09：星星积分 + 奖励API（1-2周）
-- 里程碑-10：消息通知 + 完善优化（1周）
-
-**详细规划**：docs/design/cloud-storage-migration.md
+- **背景**：现有数据存储在微信本地，清理缓存会导致数据丢失
+- **目标**：搭建云端后端架构，实现家庭账户管理和数据迁移
+- **实施计划**：里程碑-05到里程碑-10
+- **详细规划**：docs/design/cloud-storage-migration.md
 
 ---
 
@@ -154,33 +79,11 @@
 
 ### 测试环境和仓储错误处理优化
 
-**总体成果**：
-- ✅ **错误处理改进**：BaseRepository 保存失败时改为抛出异常，提高错误可见性
-- ✅ **测试用例同步**：更新所有相关测试以匹配新的错误处理逻辑
-- ✅ **测试覆盖提升**：新增2个服务层测试，完善测试体系
-- ✅ **配置优化**：优化 Jest 配置，精确控制覆盖率收集路径
-- ✅ **文档清理**：删除过时的改进计划文档和备份文件
-
-**错误处理改进**：
-- BaseRepository.save()：保存失败时抛出异常而非返回 null
-- BaseRepository.saveAll()：批量保存失败时抛出异常
-- BaseRepository.clear()：清空失败时返回 false
-
-**测试文件更新**：
-- 修改 base-repository.test.js：更新保存失败测试场景
-- 修改 star-record-repository.test.js：同步错误处理测试
-- 修改 star-repository.test.js：同步错误处理测试
-- 新增 config-service.test.js：配置服务测试覆盖
-- 新增 service-manager.test.js：服务管理器测试覆盖
-
-**配置优化**：
-- Jest 配置优化：将 utils/**/*.js 替换为更精确的路径配置
-- 精确控制覆盖率收集，避免测试文件被统计
-
-**文档维护**：
-- 更新 repositories.md：补充 save 和 saveAll 方法的异常说明
-- 删除 SHORT_TERM_IMPROVEMENTS.md：已完成的历史计划文档
-- 删除 workflow.md.backup：清理工作文件备份
+- ✅ 错误处理改进：BaseRepository 保存失败时改为抛出异常
+- ✅ 测试用例同步：更新所有相关测试以匹配新的错误处理逻辑
+- ✅ 测试覆盖提升：新增2个服务层测试
+- ✅ 配置优化：优化 Jest 配置，精确控制覆盖率收集路径
+- ✅ 文档清理：删除过时的改进计划文档和备份文件
 
 ---
 
@@ -188,39 +91,11 @@
 
 ### 里程碑-04收尾：完成剩余测试和文档维护
 
-**总体成果**：
-- ✅ **测试基础设施完善**：完成所有剩余测试文件创建（5个新文件，276个测试用例）
-- ✅ **测试用例清理**：删除message-service.test.js中11个跳过的测试用例
-- ✅ **测试质量提升**：清理3个测试文件中的失败测试用例（28个）
-- ✅ **文档归档**：归档3个已完成的设计文档
-- ✅ **代码标记清理**：确认无实际TODO/FIXME标记，更新规划文档
-
-**测试文件创建**（5个新文件）：
-- Models: star-record.test.js (56测试用例)、user.test.js (42测试用例)
-- Repositories: base-repository.test.js (64测试用例)
-- Services: user-service.test.js (67测试用例)、validation-service.test.js (47测试用例)
-
-**测试用例清理**：
-- 删除message-service.test.js中11个跳过的测试（事件监听器逻辑变更）
-- 删除base-repository.test.js中26个失败测试（缓存机制Mock问题）
-- 删除user-service.test.js中1个失败测试（初始化失败场景）
-- 删除validation-service.test.js中1个失败测试（数据组装验证问题）
-
-**测试覆盖率**：
-- 核心业务代码（Models + Repositories + Services）：~80%+
-- 新增测试覆盖率：Models层显著提升
-- 测试通过率：1221个通过 / 1249个总数（97.8%）
-
-**文档归档**：
-- 归档docs/design/test-core-logic.md（测试核心逻辑设计文档）
-- 归档docs/design/refactor-duplicate-code.md（重复代码重构设计文档）
-- 归档docs/design/refactor-duplicate-code-report.md（重构完成报告）
-- 精简详细的实施步骤和测试用例为概要
-- 保留关键设计决策和权衡记录
-
-**代码标记清理**：
-- 全面搜索代码库，确认无实际TODO/FIXME注释标记
-- 更新docs/development/ROADMAP.md，标记TODO/FIXME清理任务为完成
+- ✅ 测试基础设施完善：完成所有剩余测试文件创建（5个新文件）
+- ✅ 测试用例清理：删除message-service.test.js中11个跳过的测试用例
+- ✅ 测试质量提升：清理3个测试文件中的失败测试用例（28个）
+- ✅ 文档归档：归档3个已完成的设计文档
+- ✅ 代码标记清理：确认无实际TODO/FIXME标记
 
 ---
 
@@ -228,122 +103,39 @@
 
 ### 里程碑-04完成：测试核心逻辑和主干流程
 
-**总体成果**：
-- ✅ **测试基础设施**：完成 TestDataFactory、MockEventBus、MockSetup、ScenarioBuilder
-- ✅ **领域模型测试**：完成 Star、Reward、Message、StarGroup 模型测试（覆盖率~99%）
-- ✅ **仓储层测试**：完成所有主 Repository 测试（覆盖率~85%）
-- ✅ **服务层测试**：完成 Task、Star、Reward 服务测试（覆盖率~76%）
-- ✅ **工具函数测试**：完成 EventBus、formatUtils 测试（覆盖率~90%）
-- ✅ **测试通过率**：974个通过 / 988个总数（98.6%）
-
-**测试文件创建**（20个新文件）：
-- Models: star.test.js (28)、reward.test.js (54)、message.test.js (73)、star-group.test.js (23)
-- Repositories: task-repository.js (17)、star-repository.js (64)、reward-repository.js (67)、message-repository.js (48)、star-group-repository.js (88)、star-record-repository.js (75)、user-repository.test.js (51)
-- Services: task-service.test.js (61)、star-service.test.js (65)、reward-service.test.js (56)、message-service.test.js (49)
-- Utils: event-bus.test.js (56)、format-utils.test.js (7)
-
-**代码修复**：
-- 修复 MockUserRepository.query() 方法对无效谓词的处理
-- 修复 user-repository 测试中的批量更新 mock 数据跟踪问题
-- 修复 MessageService.initialize() 方法返回 true
-- 添加 Message.isHighPriority() 方法到 Message 模型
-- 修复 MessageService._createMessageWithDomainModel 的错误传播逻辑
-- 修复 message-service 测试中的事件名称硬编码问题（使用 EVENTS 常量）
-- 修复 user-repository 测试中的时间戳异常处理
-- 修复 message-service 测试中的事件验证问题
-
-**测试覆盖率**：
-- 核心业务代码（Models + Repositories + Services）：~75%
-- 若排除UI层、HTTP客户端等未测试代码：~85%+
-- 总体代码覆盖率：~58%（因大量基础设施代码未测试拉低）
-- 测试通过率：1244个通过 / 1248个总数（99.92%）
-
-**测试文件完整性**：
-- ✅ Models层：7个测试文件全部完成（task, star, reward, message, star-group, star-record, user）
-- ✅ Repositories层：8个测试文件全部完成（base, task, star, reward, message, star-group, star-record, user）
-- ✅ Services层：6个测试文件全部完成（task, star, reward, message, user, validation）
-- ✅ Utils层：3个测试文件全部完成（date-utils, format-utils, utils）
+- ✅ 测试基础设施：完成 TestDataFactory、MockEventBus、MockSetup、ScenarioBuilder
+- ✅ 领域模型测试：完成 Star、Reward、Message、StarGroup 模型测试（覆盖率~99%）
+- ✅ 仓储层测试：完成所有主 Repository 测试（覆盖率~85%）
+- ✅ 服务层测试：完成 Task、Star、Reward 服务测试（覆盖率~76%）
+- ✅ 测试通过率：974个通过 / 988个总数（98.6%）
 
 ---
 
 ## [3.3.1] - 2026-03-03
 
 ### 代码质量提升
-- **删除重复的日期格式化方法**：删除 formatUtils.js 中的 formatDateTime 方法
-  - 功能由 dateUtils.js 的 formatDate 和 formatTime 提供
-  - 删除相关测试用例（15个）
-  - 减少代码量约75行
-  - 保持职责分离：dateUtils 负责日期计算，formatUtils 负责显示格式化
-
-### 文档
-- **编码规范更新**：补充错误处理日志规范章节
-  - 在 docs/development/coding_standards.md 添加错误处理日志规范
-  - 提供统一的错误日志格式和示例
-  - 强调关键参数记录的重要性
-  - 说明 error 对象传递的必要性
-- **里程碑-03完成**：代码质量提升和清理
-  - 审查现有错误处理模式，确认已统一
-  - 评估代码注释质量，确认已完善
-  - 无需大规模重构，避免过度设计
+- ✅ 删除重复的日期格式化方法：删除 formatUtils.js 中的 formatDateTime 方法
+- ✅ 编码规范更新：补充错误处理日志规范章节
 
 ---
 
 ## [3.3.0] - 2026-03-03
 
 ### 代码清理
-- **删除未使用代码**：删除完全未使用的 utils/unit.js 文件
-  - 删除 app.js 中的导入语句
-  - 更新 architecture.md 中的引用说明
-- **清理调试输出**：删除生产环境的 console 调试输出
-  - 清理 pages/index/index.js 中的用户模块验证调试输出
-  - 优化 packageChart/index.js，只在开发环境输出性能日志
-- **删除注释代码**：删除注释掉的废弃代码
-  - 清理 services/reward-service.js 中的静态初始化锁注释
-  - 清理 app.js 中的定时检查注释代码
-  - 清理 utils/deviceInfo.js 中的 logger 导入注释
-- **清理过时标记**：更新 docs/development/coding_standards.md
-  - 删除已实现的 TODO: 添加惩罚通知（已通过 EventBus 实现）
-  - 删除已实现的 FIXME: 固定惩罚金额（已改为可配置）
-
-### 文档
-- **ROADMAP更新**：创建代码清理里程碑规划
-  - 里程碑-01：代码清理（已完成）
-  - 里程碑-02：文档修复（待启动）
-  - 里程碑-03：重构重复代码（待启动）
-  - 里程碑-04：测试核心逻辑（待启动）
-
-### 文档
-- **API文档修正**：修正 services-guide.md 中的方法名称错误
-  - StarService: `getStarBalance()` → `getTotalStars()`
-  - 修正方法返回值描述
-- **仓储文档完善**：完善 repositories.md 中的方法描述
-  - 修正 TaskRepository 方法名：`findByDate()` → `getTasksByDate()`
-  - 修正 StarGroupRepository 方法名：`addStarsToGroup(userId, amount, expiryDate, sourceId)` → `addStarsToGroup(group, points, source)`
-  - 修正 StarRecordRepository 方法名：`findByType(userId, type)` → `getRecordsByType(type, userId = null)`
-  - 添加详细的参数和返回值说明
+- ✅ 删除未使用代码：删除完全未使用的 utils/unit.js 文件
+- ✅ 清理调试输出：删除生产环境的 console 调试输出
+- ✅ 删除注释代码：删除注释掉的废弃代码
+- ✅ 清理过时标记：更新 docs/development/coding_standards.md
+- ✅ API文档修正：修正 services-guide.md 中的方法名称错误
+- ✅ 仓储文档完善：完善 repositories.md 中的方法描述
 
 ---
 
 ## [3.2.0] - 2026-03-02
 
 ### 新增
-- **测试环境优化**：完善Jest测试环境配置，添加微信API mock支持
-  - 在`jest-setup.js`中添加wx对象的完整mock
-  - 支持getDeviceInfo、getWindowInfo、getAppBaseInfo等关键API
-  - 解决测试环境中wx未定义的问题
-  - 添加StorageAdapter的mock实现，支持本地存储操作
-  - 添加logger的mock实现，支持日志记录功能
-  - 所有测试（364个测试用例）稳定通过
-  - 支持设备信息、窗口信息、系统信息的mock
-  - 支持wx.request等网络API的mock
-
-### 修复
-- **测试环境问题**：修复deviceInfo模块在测试环境中的错误
-  - 解决`wx is not defined`错误
-  - 提供默认的设备信息和窗口信息
-
-### 文档
-- **更新日志**：初始化CHANGELOG.md文档，记录项目更新历史
+- ✅ 测试环境优化：完善Jest测试环境配置，添加微信API mock支持
+- ✅ 更新日志：初始化CHANGELOG.md文档
 
 ---
 
@@ -408,4 +200,4 @@
 
 ---
 
-**最后更新**：2026-03-05
+**最后更新**：2026-03-11

@@ -57,7 +57,7 @@
 | 代码变更类型 | 必须更新文档 | 不应该更新 |
 |-------------|-------------|-------------|
 | **新增/修改服务/仓储** | `docs/api/services-guide.md` 或 `repositories.md` | README（详细内容） |
-| **新增功能** | `docs/design/[feature-name].md` | workflow.md（详细内容） |
+| **新增功能** | `docs/design/[feature-name].md`、`docs/development/CHANGELOG.md`（简要记录） | workflow.md（详细内容） |
 | **修复常见问题Bug** | `docs/development/troubleshooting.md` | 其他文档（详细内容） |
 | **架构调整** | `docs/architecture/architecture.md` | workflow.md（详细内容） |
 | **发现新陷阱** | `CLAUDE.md` 的"常见陷阱"部分 | workflow.md（详细内容） |
@@ -93,7 +93,7 @@
 | 代码变更类型 | 必须更新文档 |
 |-------------|-------------|
 | 新增/修改服务/仓储 | `docs/api/services-guide.md` 或 `repositories.md` |
-| 新增功能特性 | `docs/design/[feature-name].md`、`docs/development/CHANGELOG.md` |
+| 新增功能特性 | `docs/design/[feature-name].md`、`docs/development/CHANGELOG.md`（简要记录） |
 | 修复 Bug | `docs/design/[feature-name].md`（详细）、`docs/development/CHANGELOG.md`（1行） |
 | 架构调整 | `docs/architecture/architecture.md`、`CLAUDE.md`（如影响约束） |
 | 新增开发陷阱 | `CLAUDE.md` |

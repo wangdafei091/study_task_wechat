@@ -62,7 +62,8 @@
 ```markdown
 ✅ 正确做法：
 <!-- workflow.md -->
-详细的陷阱说明请参阅 [CLAUDE.md 的常见陷阱章节](../../CLAUDE.md#常见陷阱)
+详细的陷阱说明请参阅 [CLAUDE.md 的常见陷阱章节](../CLAUDE.md#常见陷阱)
+注意：CLAUDE.md 位于项目根目录
 
 ❌ 错误做法：
 <!-- workflow.md -->
@@ -394,7 +395,7 @@ grep -r "批量处理" docs/*.md
 ```markdown
 ✅ 正确：
 <!-- README.md -->
-详细的 API 文档请参阅 [docs/api/services-guide.md](docs/api/services-guide.md)
+详细的 API 文档请参阅 [docs/api/services-guide.md](./api/services-guide.md)
 
 ❌ 错误：
 <!-- README.md -->
@@ -598,11 +599,11 @@ git commit -m "feat: 添加任务完成功能
 
 ## 相关文档
 
-- [开发工作流程](workflow.md) - 开发流程和设计文档管理
-- [编码规范](coding_standards.md) - 详细编码规范
-- [设计文档指南](../design/README.md) - 如何创建和使用设计文档
-- [架构概览](../architecture/architecture.md) - 项目架构决策和DDD分层实现
-- [CLAUDE.md](../../CLAUDE.md) - AI助手工作指南
+- [开发工作流程](./development/workflow.md) - 开发流程和设计文档管理
+- [编码规范](./development/coding_standards.md) - 详细编码规范
+- [设计文档指南](./design/README.md) - 如何创建和使用设计文档
+- [架构概览](./architecture/architecture.md) - 项目架构决策和DDD分层实现
+- [CLAUDE.md](../CLAUDE.md) - AI助手工作指南
 
 ---
 

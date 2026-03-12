@@ -7,9 +7,16 @@ const logConfig = require('./utils/log-config');
 const deviceInfo = require('./utils/deviceInfo'); // 引入设备信息工具
 const API_CONFIG = require('./utils/api-config'); // 引入API配置
 const TokenManager = require('./utils/token-manager'); // 引入Token管理
+const EventBus = require('./utils/core/event-bus'); // 引入事件总线
 
 App({
   onLaunch: async function () {
+    // 初始化全局数据
+    this.globalData = {
+      appReady: false,
+      userServiceReady: false,
+      servicesInitialized: false
+    };
     // 🆕 自动初始化API配置（微信小程序环境）
     if (typeof wx !== 'undefined') {
       // 检查并设置默认配置
@@ -25,8 +32,13 @@ App({
       }
 
       if (!baseUrl) {
-        wx.setStorageSync('API_BASE_URL', 'http://localhost:3000');
+        wx.setStorageSync('API_BASE_URL', 'https://api.todoceo.xyz');
+        logger.info('App', 'onLaunch中设置API_BASE_URL:', 'https://api.todoceo.xyz');
+        console.log('📍 onLaunch设置API地址：', 'https://api.todoceo.xyz');
         console.log('✅ 已自动设置API_BASE_URL配置');
+      } else {
+        logger.info('App', 'onLaunch检测到已有API_BASE_URL:', baseUrl);
+        console.log('📍 onLaunch检测到API地址：', baseUrl);
       }
     }
 
@@ -69,9 +81,38 @@ App({
           logger.warn('App', 'UserService初始化降级（云端模式），继续使用默认用户态');
         }
       } else {
-        logger.info('App', '没有token，等待用户登录');
-        // 3. 没有token，不初始化UserService，等待用户登录
-        this.globalData.userService = null;
+        logger.info('App', '没有token，尝试自动重新登录');
+
+        // 尝试从微信缓存恢复用户信息
+        const cachedUserInfo = wx.getStorageSync('lastUserInfo');
+        if (cachedUserInfo) {
+          logger.info('App', '发现缓存用户信息，尝试自动登录');
+
+          try {
+            // 自动登录流程
+            const loginSuccess = await this.autoLogin();
+            if (loginSuccess) {
+              logger.info('App', '自动登录成功，初始化UserService');
+              // 登录成功后，重新初始化UserService
+              const userStorageAdapter = new StorageAdapter({ namespace: 'user_' });
+              this.globalData.userService = new UserService({
+                storageAdapter: userStorageAdapter,
+                useCloudStorage: true
+              });
+              await this.globalData.userService.initialize();
+              logger.info('App', 'UserService自动初始化完成（云端模式）');
+            } else {
+              logger.warn('App', '自动登录失败，等待用户手动登录');
+              this.globalData.userService = null;
+            }
+          } catch (error) {
+            logger.error('App', '自动登录异常', error);
+            this.globalData.userService = null;
+          }
+        } else {
+          logger.info('App', '没有缓存用户信息，等待用户登录');
+          this.globalData.userService = null;
+        }
       }
     } else {
       // ❌ API禁用模式：本地存储
@@ -110,73 +151,13 @@ App({
       
       logger.info('App', '初始化服务管理器，配置选项:', serviceOptions);
       
-      // 等待服务管理器初始化完成，确保所有服务都已经准备好
+      // 等待服务管理器初始化完成，但跳过需要认证的操作
       const initialized = await serviceManager.initialize(serviceOptions);
       if (initialized) {
-        logger.info('App', '服务管理器初始化成功');
-        
-        // 获取任务服务、消息服务和星星服务
-        const taskService = serviceManager.getTaskService();
-        const messageService = serviceManager.getMessageService();
-        const starService = serviceManager.getStarService();
-        
-        // 先处理任务惩罚，再清理过期星星（确保惩罚时有足够星星）
-        if (taskService) {
-          // 修复存量任务数据的penaltyApplied字段
-          await this.fixLegacyTaskData(taskService);
-          
-          // 检查任务状态和处理惩罚
-          logger.info('App', '开始检查任务状态和处理必做任务惩罚');
-          await taskService.checkTasksStatus();
-          
-          // 检查即将到期的任务
-          await taskService.checkUpcomingTasks();
-        }
-        
-        // 任务惩罚处理完毕后，先进行奖励保护，再初始化星星服务并清理过期星星
-        if (starService) {
-          try {
-            // 计算即将过期的星星数量
-            logger.info('App', '检查即将过期的星星并进行奖励保护');
-            const expiredStars = await starService.calculatePendingExpiry();
-            
-            if (expiredStars > 0) {
-              // 获取小朋友用户ID进行保护
-              const userService = serviceManager.getUserService();
-              const childUserId = userService ? userService.getChildUserId() : 'child';
-              
-              logger.info('App', `发现${expiredStars}颗即将过期的星星，为用户${childUserId}进行奖励保护`);
-              const protectionResult = await starService.protectRewardsByExpiry(expiredStars, childUserId);
-              
-              if (protectionResult.success && protectionResult.protectedCount > 0) {
-                logger.info('App', `奖励保护成功，保护了${protectionResult.protectedCount}个奖励`);
-              }
-            }
-            
-            logger.info('App', '初始化星星服务并清理过期星星');
-            await starService.initialize();
-            
-            logger.info('App', '开始检查并修复星星数据一致性');
-            const repairResult = await starService.checkAndRepairDataConsistency();
-            
-            if (repairResult.success) {
-              if (repairResult.repairResult.repairedCount > 0) {
-                logger.info('App', `星星数据修复完成，修复了${repairResult.repairResult.repairedCount}条记录`);
-              } else {
-                logger.info('App', '星星数据一致性检查通过，无需修复');
-              }
-            } else {
-              logger.error('App', `星星数据修复失败: ${repairResult.error}`);
-            }
-          } catch (error) {
-            logger.error('App', '星星数据一致性检查失败', error);
-          }
-        }
-        
-        // 检查首次启动并创建欢迎消息
-        if (messageService) {
-          await this.checkFirstLaunch(messageService);
-        }
+        logger.info('App', '服务管理器初始化成功（基础服务）');
+
+        // 标记服务管理器已就绪，但延迟需要认证的操作
+        this.globalData.servicesInitialized = true;
       } else {
         logger.error('App', '服务管理器初始化失败');
       }
@@ -235,6 +216,9 @@ App({
               } else {
                 logger.warn('App', 'UserService初始化降级（云端模式），继续使用默认用户态');
               }
+
+              // 登录成功后，执行需要认证的操作
+              await this.postLoginInitialization();
             }
           } else {
             // ❌ 本地存储模式：使用原有逻辑
@@ -248,6 +232,9 @@ App({
                                             wx.canIUse('open-data.type.userNickName');
 
             logger.info('App', '用户登录处理完成，已添加防御性检查');
+
+            // 本地存储模式下也执行初始化
+            await this.postLoginInitialization();
           }
         } catch (error) {
           logger.error('App', '登录处理失败:', error);
@@ -281,7 +268,143 @@ App({
 
     // 必做任务扣分在启动时已处理，无需定时检查
   },
-  
+
+  /**
+   * 小程序显示时的处理
+   * 修复清理缓存后重新进入的连接问题
+   */
+  onShow: function(options) {
+    logger.info('App', 'onShow触发，检查API配置');
+
+    // 每次小程序显示时都检查并设置API_BASE_URL
+    const baseUrl = wx.getStorageSync('API_BASE_URL');
+
+    if (!baseUrl || baseUrl === '') {
+      logger.warn('App', 'API_BASE_URL为空或不存在，重新设置');
+      wx.setStorageSync('API_BASE_URL', 'https://api.todoceo.xyz');
+      console.log('📍 onShow重新设置API地址：', 'https://api.todoceo.xyz');
+    } else {
+      logger.info('App', 'onShow检测到已有API_BASE_URL:', baseUrl);
+      console.log('📍 onShow检测到API地址：', baseUrl);
+    }
+
+    // 同时检查 ENABLE_API 配置
+    const enableApi = wx.getStorageSync('ENABLE_API');
+    if (enableApi === undefined || enableApi === null || enableApi === '') {
+      logger.warn('App', 'ENABLE_API为空，重新设置');
+      wx.setStorageSync('ENABLE_API', 'true');
+      console.log('✅ onShow设置ENABLE_API');
+    } else {
+      logger.info('App', 'onShow检测到ENABLE_API:', enableApi);
+    }
+  },
+
+  /**
+   * 登录成功后的初始化方法
+   * 处理需要认证的服务初始化操作
+   */
+  postLoginInitialization: async function() {
+    try {
+      logger.info('App', '开始登录成功后的初始化');
+
+      // 服务管理器已经在 onLaunch 中初始化，直接获取服务
+
+      // 获取任务服务、消息服务和星星服务
+      const taskService = serviceManager.getTaskService();
+      logger.info('App', '获取任务服务:', taskService ? '成功' : '失败');
+
+      const messageService = serviceManager.getMessageService();
+      logger.info('App', '获取消息服务:', messageService ? '成功' : '失败');
+
+      const starService = serviceManager.getStarService();
+      logger.info('App', '获取星星服务:', starService ? '成功' : '失败');
+
+      // 先处理任务惩罚，再清理过期星星（确保惩罚时有足够星星）
+      if (taskService) {
+        // 修复存量任务数据的penaltyApplied字段
+        await this.fixLegacyTaskData(taskService);
+
+        // 检查任务状态和处理惩罚
+        logger.info('App', '开始检查任务状态和处理必做任务惩罚');
+        await taskService.checkTasksStatus();
+
+        // 检查即将到期的任务
+        await taskService.checkUpcomingTasks();
+      }
+
+      // 任务惩罚处理完毕后，先进行奖励保护，再初始化星星服务并清理过期星星
+      if (starService) {
+        try {
+          // 计算即将过期的星星数量
+          logger.info('App', '检查即将过期的星星并进行奖励保护');
+          const expiredStars = await starService.calculatePendingExpiry();
+
+          if (expiredStars > 0) {
+            // 获取小朋友用户ID进行保护
+            const userService = serviceManager.getUserService();
+            const childUserId = userService ? userService.getChildUserId() : 'child';
+
+            logger.info('App', `发现${expiredStars}颗即将过期的星星，为用户${childUserId}进行奖励保护`);
+            const protectionResult = await starService.protectRewardsByExpiry(expiredStars, childUserId);
+
+            if (protectionResult.success && protectionResult.protectedCount > 0) {
+              logger.info('App', `奖励保护成功，保护了${protectionResult.protectedCount}个奖励`);
+            }
+          }
+
+          logger.info('App', '初始化星星服务并清理过期星星');
+          await starService.initialize();
+
+          logger.info('App', '开始检查并修复星星数据一致性');
+          const repairResult = await starService.checkAndRepairDataConsistency();
+
+          if (repairResult.success) {
+            if (repairResult.repairResult.repairedCount > 0) {
+              logger.info('App', `星星数据修复完成，修复了${repairResult.repairResult.repairedCount}条记录`);
+            } else {
+              logger.info('App', '星星数据一致性检查通过，无需修复');
+            }
+          } else {
+            logger.error('App', `星星数据修复失败: ${repairResult.error}`);
+          }
+        } catch (error) {
+          logger.error('App', '星星服务初始化失败', error);
+        }
+      }
+
+      // 初始化消息服务
+      if (messageService) {
+        logger.info('App', '初始化消息服务');
+        await messageService.initialize();
+
+        // 获取并显示所有消息
+        const messages = await messageService.getAllMessages();
+        logger.info('App', `消息服务初始化完成，共${messages.length}条消息`);
+      }
+
+      // 检查首次启动状态并创建欢迎消息（统一逻辑）
+      logger.info('App', '检查首次启动状态');
+      if (messageService) {
+        await this.checkFirstLaunch(messageService);
+      } else {
+        logger.warn('App', 'messageService 未初始化，跳过首次启动检查');
+      }
+
+      // 设置主题
+      this.setTheme();
+
+      logger.info('App', '登录成功后初始化完成');
+
+      // 发出应用就绪事件
+      if (typeof this.globalData.appReadyCallback === 'function') {
+        this.globalData.appReadyCallback();
+      }
+
+    } catch (error) {
+      logger.error('App', '登录成功后初始化失败', error);
+    }
+  },
+
   // 初始化日志系统
   initLogSystem: function() {
     try {
@@ -646,6 +769,12 @@ App({
   // 检查首次启动并创建欢迎消息
   checkFirstLaunch: async function(messageService) {
     try {
+      // 检查 messageService 是否存在
+      if (!messageService) {
+        logger.warn('App', 'messageService 未提供，跳过首次启动检查');
+        return;
+      }
+
       logger.info('App', '检查首次启动状态');
       
       // 通过配置服务检查首次启动状态（仅在服务已初始化时）
@@ -829,5 +958,78 @@ App({
     } catch (error) {
       logger.error('App', '云端登出失败:', error);
     }
+  },
+
+  /**
+   * 自动登录方法
+   * 用于在token丢失时自动重新登录
+   * @returns {Promise<boolean>} 登录是否成功
+   */
+  async autoLogin() {
+    try {
+      logger.info('App', '开始自动登录流程');
+
+      // 获取微信登录code
+      const loginCode = await this.getWxLoginCode();
+      if (!loginCode) {
+        logger.error('App', '获取微信登录code失败');
+        return false;
+      }
+
+      logger.info('App', '获取到微信登录code:', loginCode);
+
+      // 调用后端登录接口
+      const loginResult = await wx.request({
+        url: `${API_CONFIG.BASE_URL}/api/auth/login`,
+        method: 'POST',
+        data: { code: loginCode },
+        timeout: 10000
+      });
+
+      logger.info('App', '后端登录响应:', loginResult);
+
+      if (loginResult.data && loginResult.data.success && loginResult.data.data) {
+        // 保存token
+        TokenManager.setToken(loginResult.data.data.token);
+        logger.info('App', 'Token已保存');
+
+        // 保存用户信息
+        wx.setStorageSync('lastUserInfo', loginResult.data.data.user);
+        logger.info('App', '用户信息已保存');
+
+        // 重新初始化API配置（确保使用最新的token）
+        if (typeof wx !== 'undefined') {
+          wx.setStorageSync('ENABLE_API', 'true');
+        }
+
+        logger.info('App', '自动登录成功');
+        return true;
+      } else {
+        logger.error('App', '自动登录失败:', loginResult.data);
+        return false;
+      }
+    } catch (error) {
+      logger.error('App', '自动登录异常:', error);
+      return false;
+    }
+  },
+
+  /**
+   * 获取微信登录code
+   * @returns {Promise<string|null>} 微信登录code
+   */
+  getWxLoginCode() {
+    return new Promise((resolve) => {
+      wx.login({
+        success: (res) => {
+          logger.info('App', 'wx.login成功，code:', res.code);
+          resolve(res.code);
+        },
+        fail: (error) => {
+          logger.error('App', 'wx.login失败:', error);
+          resolve(null);
+        }
+      });
+    });
   }
 }) 

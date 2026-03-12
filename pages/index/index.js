@@ -198,12 +198,12 @@ Page({
     
     // 注册事件监听
     this.registerEventListeners();
-    
-    // 初始化多用户系统
-    this.initializeMultiUserSystem();
-    
+
     // 初始化日期导航
     this.initializeDateNavigation();
+
+    // 延迟初始化多用户系统，等待用户服务就绪
+    this.initializeMultiUserSystemDelayed();
   },
   
   /**
@@ -386,10 +386,13 @@ Page({
    */
   onShow: async function() {
     logger.info('Index', '页面显示');
-    
+
     // 等待服务管理器完全初始化
     await this.waitForServicesReady();
-    
+
+    // 等待登录完成（云端模式）
+    await this.waitForLoginComplete();
+
     // 检查奖励完成跳转状态
     const app = getApp();
     if (app.globalData.fromRewardCompletion) {
@@ -399,13 +402,51 @@ Page({
       this.loadAllPageData();
       return;
     }
-    
+
     // 正常页面显示流程 - 先检查过期任务和星星，再批量加载数据
     logger.debug('Index', '页面显示时检查过期任务和星星');
     await this.checkExpiredTasksAndStars();
-    
+
     logger.debug('Index', '页面显示时批量加载所有数据');
     this.loadAllPageData();
+  },
+
+  /**
+   * 等待登录完成
+   * 在云端模式下，确保token已获取后再继续执行
+   */
+  waitForLoginComplete: async function() {
+    const API_CONFIG = require('../../utils/api-config');
+
+    // 如果API未启用，直接返回（本地模式）
+    if (!API_CONFIG.ENABLE_API) {
+      logger.debug('Index', '本地模式，无需等待登录');
+      return;
+    }
+
+    const TokenManager = require('../../utils/token-manager');
+    const maxWaitTime = 5000; // 5秒超时
+    const startTime = Date.now();
+
+    // 检查token是否已存在
+    if (TokenManager.getToken()) {
+      logger.info('Index', 'Token已存在，无需等待登录');
+      return;
+    }
+
+    logger.info('Index', '等待登录完成，获取token...');
+
+    // 轮询等待token
+    while (Date.now() - startTime < maxWaitTime) {
+      if (TokenManager.getToken()) {
+        logger.info('Index', 'Token已获取，登录完成');
+        return;
+      }
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+
+    // 超时处理
+    logger.warn('Index', '等待登录超时，继续执行（可能导致云端API调用失败）');
   },
 
   /**
@@ -2487,6 +2528,39 @@ Page({
     } catch (error) {
       logger.error('Index', '初始化多用户系统失败', error);
     }
+  },
+
+  /**
+   * 延迟初始化多用户系统
+   * 等待用户服务初始化完成后再进行初始化
+   */
+  initializeMultiUserSystemDelayed: async function() {
+    logger.info('Index', '开始延迟初始化多用户系统');
+
+    // 等待登录完成（云端模式）
+    await this.waitForLoginComplete();
+
+    // 等待用户服务就绪
+    const maxWaitTime = 3000; // 3秒超时
+    const startTime = Date.now();
+
+    while (Date.now() - startTime < maxWaitTime) {
+      const app = getApp();
+      if (app.globalData && app.globalData.userService) {
+        logger.info('Index', '用户服务已就绪，开始初始化多用户系统');
+        await this.initializeMultiUserSystem();
+        return;
+      }
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+
+    // 超时处理
+    logger.warn('Index', '用户服务初始化超时，稍后重试');
+
+    // 可以在这里添加重试逻辑或者显示提示
+    setTimeout(() => {
+      this.initializeMultiUserSystemDelayed();
+    }, 2000);
   },
 
   /**

@@ -22,32 +22,37 @@ function getWechatStorage(key) {
   }
 }
 
+// ✅ 微信小程序环境：始终使用 wx.getStorageSync 的配置
 // 优先从环境变量读取，支持微信小程序存储
 const enableApiEnv = getNodeEnv('ENABLE_API') || getWechatStorage('ENABLE_API');
 const apiBaseUrlEnv = getNodeEnv('API_BASE_URL') || getWechatStorage('API_BASE_URL');
 
-// 🆕 微信小程序环境：如果没有配置，默认启用API
+// 🆕 微信小程序环境：如果没有配置，默认使用HTTPS地址
 let finalEnableApi = enableApiEnv;
 let finalBaseUrl = apiBaseUrlEnv;
 
-// 只有在未明确设置时才启用API，保留用户的明确配置（包括'false'）
-if (typeof wx !== 'undefined' && (enableApiEnv === undefined || enableApiEnv === null || enableApiEnv === '')) {
-  // 微信小程序环境且没有配置时，默认启用API
-  finalEnableApi = 'true';
-  console.log('✅ 微信小程序环境：默认启用API模式');
-} else {
-  console.log('✅ 保留用户配置的API模式:', finalEnableApi);
-}
+if (typeof wx !== 'undefined') {
+  // 只有在未明确设置时才启用API，保留用户的明确配置（包括'false'）
+  if (enableApiEnv === undefined || enableApiEnv === null || enableApiEnv === '') {
+    finalEnableApi = 'true';
+    console.log('✅ 微信小程序环境：默认启用API模式');
+  } else {
+    console.log('✅ 保留用户配置的API模式:', enableApiEnv);
+  }
 
-if (!apiBaseUrlEnv) {
-  finalBaseUrl = 'http://localhost:3000';
-  console.log('✅ 微信小程序环境：使用默认API地址');
+  // 🔧 修复：使用 HTTPS 地址而不是硬编码的 HTTP 地址
+  if (!apiBaseUrlEnv || apiBaseUrlEnv === '') {
+    finalBaseUrl = 'https://api.todoceo.xyz';
+    console.log('✅ 微信小程序环境：使用默认HTTPS地址');
+  } else {
+    console.log('✅ 保留用户配置的API地址:', apiBaseUrlEnv);
+  }
 }
 
 const API_CONFIG = {
   // 基础配置
   ENABLE_API: finalEnableApi === 'true' || finalEnableApi === true,  // 支持字符串和布尔值，默认关闭
-  BASE_URL: finalBaseUrl || 'http://localhost:3000',  // 运行时安全读取环境变量
+  BASE_URL: finalBaseUrl || 'http://121.4.38.122:8080',  // 运行时安全读取环境变量
   TIMEOUT: 10000, // 10秒超时
   RETRY_COUNT: 2, // 重试2次
 

@@ -231,7 +231,7 @@ graph LR
 - [编码规范](../development/coding_standards.md)
 - [开发流程](../development/workflow.md)
 - [项目路线图](../development/ROADMAP.md)
-- [评审记录](./refactor-duplicate-code-review.md)
+- [评审记录](./refactor-duplicate-code-report.md)
 
 ### 相关 Issue/PR
 
