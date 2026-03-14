@@ -2,7 +2,7 @@
 
 > **设计状态**：🔴 待审核
 > **创建日期**：2026-03-12
-> **最后更新**：2026-03-12（v38：修正 Codex 评审——1. permission-utils 结构纠正（按角色分组数组，不是 roles 对象）；2. 昵称编辑链路经 UserService 服务层；自评修复：消息预览停止加载明确、搜索过滤补充实施 checkbox、PIN 重置流程设计、末尾版本号对齐）
+> **最后更新**：2026-03-12（v40：采纳 GLM 评审意见——1. 补充家庭视角完成/重置禁用的 UX 风险和用户引导说明；2. 新增数据修复承诺区块强调优先级；3. 明确 openid 唯一性校验的具体代码位置；4. 补充 permission-utils 修改前后代码对比；反驳：JWT 刷新/错误码/i18n 已覆盖或超出项目范围）
 > **设计者**：Claude Code
 > **审核者**：项目维护者
 > **预计工期**：2周
@@ -152,6 +152,14 @@
 | `task-service.js` `handleRequiredTaskPenalty` `:1218` | 必做任务逾期惩罚扣星同样使用 `_getChildUserId()`，`index.js:521` 的 `checkTasksStatus()` 周期调用 | **每次刷新首页都可能把罚星扣到错误孩子**，数据持续损坏 | 改用 `task.userId`（同上） |
 | `star-service.js` 星星过期保护 `:1222/1258` | `app.js:336` 启动时汇总所有用户的即将过期星星，然后把保护动作打到 `getChildUserId()`（`user-service.js:112`）返回的第一个孩子——不是展示错误，而是**直接将过期保护写到错误孩子账户** | **多孩子家庭下星星数据持续损坏**，与 `handleRequiredTaskPenalty` 同等级 | 改造星星过期保护链路使其按**真实拥有者**操作：只扫 `loginUserId` 的星星（设备登录者）；或按实际 `star.userId` 精确操作；不得依赖 `getChildUserId()` |
 
+> 🔴 **数据修复承诺（实施优先级最高）**：以下四处 `_getChildUserId()` 调用在多孩子家庭下会将积分/扣分错误地归属到第一个孩子，导致数据持续损坏。**必须在 M6 上线前完成，否则多孩子家庭数据将不可逆地损坏**：
+> - `task-service.js` `completeTask`（`:851`）→ 改用 `task.userId`
+> - `task-service.js` `resetTask`（`:1012`）→ 改用 `task.userId`
+> - `task-service.js` `handleRequiredTaskPenalty`（`:1218`）→ 改用 `task.userId`
+> - `star-service.js` 星星过期保护（`:1222/1258`）→ 改为只处理 `loginUserId` 的星星
+>
+> 详见实施步骤第6步第0项。
+
 **结论**：本里程碑后，多孩子家庭的**任务读取**和**单次任务创建**的归属均可正确工作；`completeTask`/`resetTask`/`handleRequiredTaskPenalty` 的**星星归属**（扣/加哪个孩子）修复正确；**切换到孩子视角后完成/重置功能在 UI 层禁用**（避免操作结果被云端读取立即覆盖）；**重复/周期任务的后续实例**仅在本地生成，不同步云端——这是现有重复任务功能的存量限制，不在本里程碑修复范围内；消息通知和奖励功能仍基于单孩子假设，不做承诺。
 
 ---
@@ -250,6 +258,23 @@
 **实施要求**：
 - `index.js` 中 `getUserPermissions(currentUser.role)` 改为 `getUserPermissions(loginUser.role)`（涉及 `:2514`、`:2623`、`:2794` 三处）
 - **`utils/permission-utils.js` 的 `PAGE_PERMISSIONS` 表中显式新增 `family-settings` 路径**：`PAGE_PERMISSIONS` 的实际结构是**按角色分组的页面路径数组**（`{ [UserRole.PARENT]: [...], [UserRole.CHILD]: [...] }`），**不是**按页面配置 `roles` 的对象——正确做法是把 `/packageManage/pages/family-settings/family-settings` 加入 `[UserRole.PARENT]` 数组，**不加入** `[UserRole.CHILD]` 数组；不新增此条目则所有走权限表的入口均将该页面判为无权限
+  ```javascript
+  // 修改前
+  [UserRole.PARENT]: [
+    '/pages/index/index',
+    '/pages/task-edit/task-edit',
+    // ...其他页面
+  ],
+
+  // 修改后（新增最后一行）
+  [UserRole.PARENT]: [
+    '/pages/index/index',
+    '/pages/task-edit/task-edit',
+    // ...其他页面
+    '/packageManage/pages/family-settings/family-settings',  // ← 新增
+  ],
+  // [UserRole.CHILD] 数组不做修改，family-settings 对孩子不可见
+  ```
 - **`models/user.js` 的 `getAccessiblePages()` 中显式新增 `family-settings` 的 parent 映射**；同样，不在此处新增则模型级权限方法调用时会遗漏该页面
 - `UserService.hasPageAccess()` 和 `getAccessiblePages()`（`user-service.js:267/275`）当前代理到 `currentUser`——在有家庭的场景下也应改为代理到 `loginUser`，避免与 `permission-utils.js` 产生"一处放行、一处拒绝"的矛盾；如暂不修改，调用方必须统一使用 `permission-utils.js` 而非模型级方法
 - 任务列表、任务数量统计等数据展示继续用 `currentUser.userId` 作为 targetUserId
@@ -402,7 +427,7 @@ getLoginUserId() {
 CREATE TABLE IF NOT EXISTS families (
     family_id              VARCHAR(36)  PRIMARY KEY,
     name                   VARCHAR(100) NOT NULL    COMMENT '家庭名称',
-    invite_code            VARCHAR(8)   UNIQUE      COMMENT '邀请码（6位字母数字）',
+    invite_code            VARCHAR(8)   UNIQUE      COMMENT '邀请码（最长8位字母数字）',
     invite_code_role       VARCHAR(20)              COMMENT '邀请码绑定的目标角色：parent | child，加入者角色由此决定',
     invite_code_expires_at TIMESTAMP                COMMENT '邀请码过期时间（24小时）',
     invite_code_used_at    TIMESTAMP                COMMENT '邀请码使用时间，不为NULL即已使用（一次性）',
@@ -1125,7 +1150,7 @@ confirmPIN() {
   - `user-switcher.wxml`：在每个成员 item 行尾新增"编辑"图标/文字按钮，`wx:if="{{item.userId === currentUser.userId || canManageMembers}}"`（本人或家长可编辑）
   - `user-switcher.js`：新增 `showEditNickname(e)` 方法，读取 `e.currentTarget.dataset.userId`，弹出 `wx.showModal` 输入框（或内联 input 弹窗）让用户输入新昵称
   - `user-switcher.js`：确认后触发 `nicknameEdit` 事件，payload 为 `{ userId, newNickname }`
-  - `pages/index/index.js`：绑定 `bind:nicknameEdit="handleNicknameEdit"`，调用 **`userService.updateNickname(userId, newNickname)`**（遵循 DDD 分层，页面层不直接调后端接口；`UserService.updateNickname` 负责封装 `HttpClient.patch`、错误处理和缓存刷新）
+  - `pages/index/index.js`：绑定 `bind:nicknameEdit="handleNicknameEdit"`，调用 **`userService.updateNickname(userId, newNickname)`**（遵循 DDD 分层，页面层不直接调后端接口；`UserService.updateNickname` 负责封装 `HttpClient.patch`、错误处理和缓存刷新——**缓存刷新策略：直接更新 `userCache` 中对应成员对象的 `name` 字段**，不重新调用 `loadFamilyMembers()`，避免不必要的网络请求；API 失败时缓存保持原值）
 - [ ] `services/reward-service.js`：**新增 `getLastExchangeTimeByUser(userId)` 方法**（独立于原 `getLastExchangeTime(taskId)`，原方法签名和 `index.js:1085` 调用点**不动**，避免 taskId 被误当 userId）；**`calculateNextAvailableReward()` 新增可选 `userId` 参数并透传给内部的 `getAvailableRewards()` 调用**（`reward-service.js:871`，向下兼容）
 - [ ] `pages/index/index.js`：`handleUserAdd` 改为跳转 family-settings；`handleUserDelete` 调用新的软删除逻辑；初始化及用户切换后，向 user-switcher 传入 `canManageMembers: loginUser.role === 'parent'` 和 `loginUserId: loginUser.userId`；**切换视角时计算 `isReadonlyView: currentUser.userId !== loginUser.userId` 并 `setData`**；**`loadStarsAndRewards()`（`:1858`）中以下四个调用均显式传入 `loginUserId`**（不传 null）：`getTotalStars(loginUserId)`、`getAvailableRewards(true, false, loginUserId)`（签名：`includeClaimed, includeExamples, userId`）、**`getLastExchangeTimeByUser(loginUserId)`**（新方法，不是原 `getLastExchangeTime`）、`calculateNextAvailableReward(userPoints, loginUserId)`；**`checkRewardUnlock()`（`:1805`）中 `starService.getTotalStars()` 改为 `getTotalStars(loginUserId)`、`rewardService.getAvailableRewards(true)` 改为 `getAvailableRewards(true, false, loginUserId)`**——此函数决定是否弹出奖励达成提示，若不加 userId 作用域则按全量/混合数据触发，与"首页只展示 loginUser 数据"口径冲突
 - [ ] `pages/index/index.js` 搜索逻辑（`:1706`）：`getAllTasks()` 结果在**家庭视角（`isReadonlyView = true`）下按 `currentUserId` 过滤**后展示搜索结果（保留搜索入口体验；`getAllTasks()` 自身不加过滤，避免影响热力图/星星记录等复用场景）
@@ -1265,6 +1290,8 @@ confirmPIN() {
 - **奖励页、星星记录页、消息页在家庭视角下禁止进入**：这三个页面内部服务读取均无 userId 作用域，家庭视角（`currentUser !== loginUser`）下进入会显示聚合/错误数据；M6 统一在入口处禁用（`isReadonlyView = true` 时不显示/不可点击入口）；`loginUser` 自己的视角下正常访问；完整多用户支持留后续版本
 - 多孩子家庭中，消息通知功能仍取第一个孩子
 - **家庭视角（切换后）完成/重置禁用**：`currentUser !== loginUser` 时完成/重置按钮在 UI 层禁用，不允许操作——因为无法提供持久化保证（云端优先读取会立即覆盖）；`loginUser` 自己的任务正常可操作；里程碑07补齐云端 PATCH 接口后解除禁用
+  - **用户体验影响**：家长切换到孩子视角后无法帮孩子打卡，仅支持查看和创建。孩子需在自己的设备（场景B）或家长切回自己视角后（场景A）完成任务
+  - **建议 App 内引导文案**：在家庭视角下，完成/重置按钮置灰并可添加提示文字，如"请切换回孩子身份完成任务"（场景B）或"孩子在家长手机上操作任务，请切换回孩子视角"（场景A）；具体文案由 UI 设计确定，不在本里程碑范围强制实现
 - **重复/周期任务后续实例不上云**：云端同步只覆盖首个 `savedTask`，后续重复实例在本地生成，跨设备不可见——这是现有重复任务功能的存量限制，不在本里程碑修复范围内
 - **场景B家庭视角下任务操作范围**：家长可查看和创建孩子任务；完成/重置在 M6 中 UI 禁用（见"不包含"章节）；里程碑07解除禁用后将同时评估只读保护需求
 - **编辑/删除孩子任务不做家庭场景适配**：`updateTask`/`deleteTask` 为纯本地操作，切换到孩子视角后编辑/删除只影响本地存储，不上云、不鉴权、不跨设备——这是有意的范围限定，不作为 M6 bug 验收
@@ -1284,7 +1311,7 @@ confirmPIN() {
 
 | 风险项 | 影响 | 概率 | 应对措施 |
 |--------|------|------|---------|
-| `openid` 改为可空后影响唯一索引 | 中 | 低 | MySQL NULL 不参与 UNIQUE 约束（已验证原理）；应用层保证非虚拟用户 openid 唯一 |
+| `openid` 改为可空后影响唯一索引 | 中 | 低 | MySQL NULL 不参与 UNIQUE 约束（已验证原理）；应用层校验位置：`backend/services/userService.js` 的 `createUser` 方法中，当 `is_virtual=false` 时须校验 openid 不为空且不与现有真实用户重复（`SELECT COUNT(*) WHERE openid = ? AND is_virtual = false`） |
 | `ALTER TABLE` 影响存量数据 | 高 | 低 | 存量用户 openid 均有值，新增字段默认值安全；先在测试环境验证 |
 | TaskService 改造引入回归 | 高 | 中 | 无家庭用户不传 targetUserId，后端行为不变；加充分的回归测试 |
 | user-switcher 删除按钮逻辑遗漏 | 中 | 中 | 严格测试真实成员无删除按钮场景 |
@@ -1298,6 +1325,7 @@ confirmPIN() {
 | PIN 码仅存本地，换设备后失效 | 低 | 中 | 已知限制，文档说明；首次使用提示家长在新设备重新设置 |
 | 家长忘记 PIN 码 | 中 | 低 | family-settings 提供重置入口（清除旧 PIN 重新设置）|
 | 家长误删虚拟孩子档案 | 高 | 低 | 软删除保障 DB 完整性；删除前确认弹窗；历史任务物理保留但无用户侧入口恢复（有意设计，与"完全透明"一致） |
+| **家庭视角下完成/重置禁用影响用户体验** | 中 | 高（M6 上线即必现）| M6 已知限制，将在里程碑07补齐 PATCH 接口后解除；用户侧通过置灰按钮和引导文案（见已知限制章节）告知正确操作路径 |
 
 ---
 
@@ -1362,5 +1390,5 @@ confirmPIN() {
 
 ---
 
-**最后更新**：2026-03-12（v38）
+**最后更新**：2026-03-12（v40）
 **维护者**：项目维护团队
