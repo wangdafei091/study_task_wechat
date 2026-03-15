@@ -3,6 +3,7 @@
  */
 
 const taskService = require('../services/taskService');
+const familyService = require('../services/familyService');
 const Task = require('../models/Task');
 const { createLogger } = require('../utils/logger');
 const { success, error } = require('../utils/response');
@@ -19,13 +20,19 @@ class TaskController {
    */
   async getTasks(req, res) {
     try {
-      const userId = req.user.userId;
-      const { date, status } = req.query;
+      const { userId, role, familyId } = req.user;
+      const { date, status, targetUserId } = req.query;
 
-      logger.info('获取任务列表', { userId, date, status });
+      // 确定实际查询用户
+      const effectiveUserId = await this._resolveTargetUserId(req, targetUserId);
+      if (effectiveUserId === null) {
+        return res.status(403).json(error('无权访问该成员数据', 'FAMILY_MEMBER_ACCESS_DENIED'));
+      }
+
+      logger.info('获取任务列表', { userId, effectiveUserId, date, status });
 
       // 获取任务列表
-      const tasks = await taskService.getTasksByUser(userId, { date, status });
+      const tasks = await taskService.getTasksByUser(effectiveUserId, { date, status });
 
       // 统计任务数量
       const total = tasks.length;
@@ -55,24 +62,21 @@ class TaskController {
   async getTaskById(req, res) {
     try {
       const taskId = req.params.taskId;
-      const userId = req.user.userId;
+      const { userId, familyId } = req.user;
+      const { targetUserId } = req.query;
 
-      logger.info('获取任务详情', { taskId, userId });
+      logger.info('获取任务详情', { taskId, userId, targetUserId });
 
-      // 获取任务
       const task = await taskService.getTaskById(taskId);
 
       if (!task) {
-        return res.status(404).json(
-          error('任务不存在', 'TASK_NOT_FOUND')
-        );
+        return res.status(404).json(error('任务不存在', 'TASK_NOT_FOUND'));
       }
 
-      // 验证任务所有权
-      if (task.userId !== userId) {
-        return res.status(403).json(
-          error('无权访问此任务', 'TASK_FORBIDDEN')
-        );
+      // 验证访问权限：本人任务，或家长访问同家庭成员任务
+      const effectiveUserId = await this._resolveTargetUserId(req, targetUserId || task.userId);
+      if (effectiveUserId === null || task.userId !== effectiveUserId) {
+        return res.status(403).json(error('无权访问此任务', 'TASK_FORBIDDEN'));
       }
 
       res.json(success(task.toJSON(), '获取成功'));
@@ -91,10 +95,30 @@ class TaskController {
    */
   async createTask(req, res) {
     try {
-      const userId = req.user.userId;
-      const taskData = req.body;
+      const { userId, role, familyId } = req.user;
+      const { targetUserId, userId: _bodyUserId, ...taskData } = req.body; // 显式剔除越权字段
 
-      logger.info('创建任务', { userId, taskData });
+      // 确定任务归属用户（防止客户端越权覆盖）
+      let effectiveUserId = userId;
+      if (targetUserId) {
+        if (role !== 'parent') {
+          return res.status(403).json(error('孩子账号不能代他人创建任务', 'FAMILY_TASK_CREATE_DENIED'));
+        }
+        if (!familyId) {
+          return res.status(403).json(error('您尚未加入家庭', 'FAMILY_NOT_JOINED'));
+        }
+        // 验证 targetUserId 与操作者同家庭，且目标用户必须是孩子
+        const targetInfo = await familyService.getUserFamilyAndRole(targetUserId);
+        if (!targetInfo || targetInfo.familyId !== familyId) {
+          return res.status(403).json(error('无权为该成员创建任务', 'FAMILY_TASK_CREATE_DENIED'));
+        }
+        if (targetInfo.role !== 'child') {
+          return res.status(403).json(error('只能为孩子创建任务', 'FAMILY_TASK_CREATE_DENIED'));
+        }
+        effectiveUserId = targetUserId;
+      }
+
+      logger.info('创建任务', { userId, effectiveUserId });
 
       // 参数验证
       const validation = Task.validate(taskData, false);
@@ -104,8 +128,7 @@ class TaskController {
         );
       }
 
-      // 创建任务
-      const task = await taskService.createTask(userId, taskData);
+      const task = await taskService.createTask(effectiveUserId, taskData);
 
       res.json(success(task.toJSON(), '任务创建成功'));
     } catch (err) {
@@ -124,18 +147,22 @@ class TaskController {
    */
   async countTasks(req, res) {
     try {
-      const userId = req.user.userId;
-      const { date, status } = req.query;
+      const { date, status, targetUserId } = req.query;
 
-      logger.info('统计任务', { userId, date, status });
+      const effectiveUserId = await this._resolveTargetUserId(req, targetUserId);
+      if (effectiveUserId === null) {
+        return res.status(403).json(error('无权访问该成员数据', 'FAMILY_MEMBER_ACCESS_DENIED'));
+      }
 
-      const count = await taskService.countTasks(userId, { date, status });
+      logger.info('统计任务', { userId: req.user.userId, effectiveUserId, date, status });
+
+      const count = await taskService.countTasks(effectiveUserId, { date, status });
 
       res.json(
         success(
           {
             count,
-            userId,
+            userId: effectiveUserId,
           },
           '统计成功'
         )
@@ -146,6 +173,40 @@ class TaskController {
         error('统计任务失败', 'TASK_COUNT_FAILED')
       );
     }
+  }
+
+  /**
+   * 解析 targetUserId：校验权限并返回实际查询用户ID
+   * 返回 null 表示无权限
+   */
+  async _resolveTargetUserId(req, targetUserId) {
+    const { userId, role, familyId } = req.user;
+
+    // 未传 targetUserId 或与自己一样，直接用自己
+    if (!targetUserId || targetUserId === userId) {
+      return userId;
+    }
+
+    // 孩子账号不能代查他人
+    if (role !== 'parent') {
+      return null;
+    }
+
+    // 未加入家庭不能代查
+    if (!familyId) {
+      return null;
+    }
+
+    // 验证 targetUserId 与操作者同家庭，且目标用户必须是孩子
+    const targetInfo = await familyService.getUserFamilyAndRole(targetUserId);
+    if (!targetInfo || targetInfo.familyId !== familyId) {
+      return null;
+    }
+    if (targetInfo.role !== 'child') {
+      return null;
+    }
+
+    return targetUserId;
   }
 }
 

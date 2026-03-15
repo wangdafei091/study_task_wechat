@@ -4,6 +4,41 @@
 
 ---
 
+## [里程碑-06] - 2026-03-15
+
+### ✅ 完成情况
+
+**家庭账户 + 数据隔离**
+
+- 家庭账户后端 API：创建家庭、邀请码加入、成员管理（虚拟成员、软删除）
+- 角色权限分离：`loginUser`（设备拥有者，控制权限）vs `currentUser`（数据视角）
+- 家长视角默认显示第一个孩子的任务，支持多孩子切换
+- 孩子视角只读（不能创建/编辑/删除任务），支持打卡（完成/重置）
+- 家长为孩子创建任务云端持久化（`targetUserId` 链路）
+- PIN 保护：共享设备孩子视角切回家长视角需输入 PIN
+- 家庭设置页面：邀请码生成、成员添加/删除、昵称编辑
+- 多孩子积分归属修复（`completeTask`、`resetTask`、`handleRequiredTaskPenalty`）
+
+### 🔧 Bug 修复
+
+- 修复多孩子家庭下积分错误归属到第一个孩子
+- 修复孩子设备启动时可能恢复到他人视角（强制回正到 loginUser）
+- 修复后端 `createTask`/`_resolveTargetUserId` 允许操作其他家长数据（补加角色校验）
+- 修复 `_restoreSession` 绕过 `storageAdapter` 直接调用 `wx.setStorageSync`
+- 修复 `FEATURE_PERMISSIONS.child.task.reset` 语义错误（改为 `true`）
+
+### ⚠️ 已知限制（M7 解决）
+
+- 编辑/删除/打卡状态的跨设备实时同步
+- 分析页按孩子视角过滤
+
+### 📖 详细实施记录
+
+- [里程碑-06：家庭账户](../design/milestone-06-family-account.md)
+- [M6 补充设计：家长角色定位](../design/milestone-06-supplement-parent-role.md)
+
+---
+
 ## [里程碑-05A] - 2026-03-09
 
 ### ✅ 完成情况

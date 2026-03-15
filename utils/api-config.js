@@ -83,6 +83,18 @@ const API_CONFIG = {
     TASKS: '/api/tasks',
     TASK_BY_ID: '/api/tasks/{taskId}',
 
+    // 用户昵称修改
+    USER_NICKNAME: '/api/users/{userId}/nickname',
+
+    // 家庭相关API
+    FAMILIES: '/api/families',
+    FAMILIES_JOIN: '/api/families/join',
+    FAMILIES_CURRENT: '/api/families/current',
+    FAMILIES_MEMBERS: '/api/families/current/members',
+    FAMILIES_INVITE_CODE: '/api/families/current/invite-code',
+    FAMILIES_ADD_MEMBER: '/api/families/members',
+    FAMILIES_DELETE_MEMBER: '/api/families/members/{userId}',
+
     // 健康检查
     HEALTH: '/health'
   },

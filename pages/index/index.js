@@ -145,6 +145,10 @@ Page({
     availableUsers: [], // 可用用户列表
     showUserSwitcher: false, // 是否显示用户切换界面
     userPermissions: {}, // 当前用户权限
+    loginUserId: null,         // 设备拥有者ID（权限依据）
+    canManageMembers: false,   // 是否可管理家庭成员（家长专属）
+    isReadonlyView: false,     // 孩子设备只读（loginUser.role==='child'），家长始终为 false
+    lastActiveChildId: null,   // 家长最近查看的孩子ID（家长视角时任务仍显示该孩子）
 
     // 日期导航相关
     currentViewDate: null, // 当前查看的日期（YYYY-MM-DD格式）
@@ -312,7 +316,8 @@ Page({
       }
       
       // 刷新今日任务
-      taskService.getTodayTasks().then(todayTasks => {
+      const currentUserId1 = this.getEffectiveTaskUserId();
+      taskService.getTodayTasks(currentUserId1).then(todayTasks => {
         this.setData({ 
           tasks: todayTasks,
           hasTodayTasks: (todayTasks && todayTasks.length > 0),
@@ -344,7 +349,8 @@ Page({
       return;
     }
     
-    taskService.getTodayTasks().then(todayTasks => {
+    const currentUserId2 = this.getEffectiveTaskUserId();
+    taskService.getTodayTasks(currentUserId2).then(todayTasks => {
       this.setData({ 
         tasks: todayTasks,
         hasTodayTasks: (todayTasks && todayTasks.length > 0)
@@ -425,28 +431,24 @@ Page({
     }
 
     const TokenManager = require('../../utils/token-manager');
-    const maxWaitTime = 5000; // 5秒超时
+    const maxWaitTime = 5000;
     const startTime = Date.now();
 
-    // 检查token是否已存在
-    if (TokenManager.getToken()) {
-      logger.info('Index', 'Token已存在，无需等待登录');
-      return;
-    }
-
-    logger.info('Index', '等待登录完成，获取token...');
-
-    // 轮询等待token
+    // 同时等待：token 已获取 且 UserService 已初始化完成（含家庭成员加载和会话恢复）
     while (Date.now() - startTime < maxWaitTime) {
-      if (TokenManager.getToken()) {
-        logger.info('Index', 'Token已获取，登录完成');
+      const hasToken = !!TokenManager.getToken();
+      const us = serviceManager.getUserService();
+      const isUserServiceReady = us && us.initialized;
+      if (hasToken && isUserServiceReady) {
+        logger.info('Index', '登录完成，用户服务已就绪', {
+          loginUserId: us.loginUser && us.loginUser.userId,
+          currentUserId: us.currentUser && us.currentUser.userId
+        });
         return;
       }
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise(resolve => setTimeout(resolve, 50));
     }
-
-    // 超时处理
-    logger.warn('Index', '等待登录超时，继续执行（可能导致云端API调用失败）');
+    logger.warn('Index', '等待登录/用户服务超时，继续执行');
   },
 
   /**
@@ -619,15 +621,16 @@ Page({
       let tasks;
       let targetDate;
       
+      const currentUserId = this.getEffectiveTaskUserId();
       if (date) {
         // 加载指定日期的任务
         targetDate = date;
-        tasks = await taskService.getTasksByDate(date);
+        tasks = await taskService.getTasksByDate(date, currentUserId);
         logger.info('Index', `指定日期任务加载成功（共享模式）, 日期=${date}, 任务数量: ${tasks.length}`);
       } else {
         // 加载今日任务
         targetDate = dateUtils.getTodayString();
-        tasks = await taskService.getTodayTasks();
+        tasks = await taskService.getTodayTasks(currentUserId);
         logger.info('Index', `今日任务加载成功（共享模式）, 任务数量: ${tasks.length}`);
       }
       
@@ -693,9 +696,9 @@ Page({
   // 注意：消息设计为按用户分别显示，每个用户只看到自己的消息和共享消息
   loadMessageData: async function() {
     try {
-      // 获取当前用户ID
-      const { currentUser } = this.data;
-      const userId = currentUser && currentUser.id ? currentUser.id : null;
+      // 消息归属 loginUser（设备拥有者），不随 currentUser 切换
+      const { loginUserId, currentUser } = this.data;
+      const userId = loginUserId || (currentUser && currentUser.id ? currentUser.id : null);
       
       const messageService = serviceManager.getMessageService();
       
@@ -837,8 +840,9 @@ Page({
         return;
       }
       
-      // 获取即将到期的任务
-      const upcomingResult = await taskService.checkUpcomingTasks();
+      // 获取即将到期的任务（按当前视角用户过滤）
+      const upcomingUserId = this.getEffectiveTaskUserId();
+      const upcomingResult = await taskService.checkUpcomingTasks(upcomingUserId);
       logger.info('Index', '任务服务返回结果', upcomingResult);
       
       // 检查返回结果的结构
@@ -1282,8 +1286,10 @@ Page({
   // 跳转到任务编辑页面
   navigateToTaskEdit: function(e) {
     const type = e.detail.type || 'study';
+    const effectiveUserId = this.getEffectiveTaskUserId();
+    const targetParam = effectiveUserId ? `&targetUserId=${effectiveUserId}` : '';
     wx.navigateTo({
-      url: `/pages/task-edit/task-edit?mode=create&taskType=${type}`
+      url: `/pages/task-edit/task-edit?mode=create&taskType=${type}${targetParam}`
     });
   },
   
@@ -1602,8 +1608,10 @@ Page({
     // 根据选项处理
     if (item && item.id === 'habit') {
       logger.debug('Index', '点击任务菜单项，跳转到任务编辑页面');
+      const effectiveUserId = this.getEffectiveTaskUserId();
+      const targetParam = effectiveUserId ? `&targetUserId=${effectiveUserId}` : '';
       wx.navigateTo({
-        url: `/pages/task-edit/task-edit?mode=create`
+        url: `/pages/task-edit/task-edit?mode=create${targetParam}`
       });
     } else if (item && item.id === 'study') {
       logger.debug('Index', '点击分析菜单项，跳转到分析页面');
@@ -1629,6 +1637,11 @@ Page({
       logger.debug('Index', '点击奖励管理菜单项，跳转到奖励管理页面');
       wx.navigateTo({
         url: '/packageManage/pages/reward-manage/reward-manage'
+      });
+    } else if (item && item.id === 'family-settings') {
+      logger.debug('Index', '点击家庭设置菜单项，跳转到家庭设置页面');
+      wx.navigateTo({
+        url: '/packageManage/pages/family-settings/family-settings'
       });
     }
   },
@@ -1695,10 +1708,25 @@ Page({
     }
   },
   
-  // 更新搜索输入
+  // 获取任务查询时应使用的用户ID
+  // 家长在自己视角时，仍显示最后查看的孩子的任务；孩子视角始终用 currentUser.id
+  getEffectiveTaskUserId: function() {
+    const { currentUser, loginUserId, canManageMembers, lastActiveChildId, availableUsers } = this.data;
+    if (canManageMembers && currentUser && currentUser.role === 'parent') {
+      // 家长在自己的视角：优先用最后查看的孩子，否则用第一个孩子
+      if (lastActiveChildId) return lastActiveChildId;
+      const firstChild = availableUsers && availableUsers.find(u => u.role === 'child');
+      return firstChild ? firstChild.id : null;
+    }
+    return currentUser ? currentUser.id : null;
+  },
+
+  // 更新搜索输入并实时触发搜索
   updateSearchQuery: function(e) {
     this.setData({
       searchQuery: e.detail.value
+    }, () => {
+      this.performSearch();
     });
   },
   
@@ -1707,9 +1735,15 @@ Page({
     const query = this.data.searchQuery.toLowerCase().trim();
     const filters = this.data.searchFilters;
     
-    // 从全局获取所有任务
+    // 从全局获取所有任务，按有效目标用户过滤（与主任务列表保持一致）
     const taskService = serviceManager.getTaskService();
-    taskService.getAllTasks().then(allTasks => {
+    const effectiveUserId = this.getEffectiveTaskUserId();
+    taskService.getAllTasks().then(allTasksRaw => {
+      // 按有效目标用户过滤（家长视角时用 getEffectiveTaskUserId，孩子视角时用 currentUser.id）
+      const allTasks = effectiveUserId
+        ? allTasksRaw.filter(t => !t.userId || t.userId === effectiveUserId)
+        : allTasksRaw;
+
       // 基于关键词搜索
       let results = [];
       
@@ -1801,11 +1835,14 @@ Page({
         logger.error('Index', '无法获取服务实例，跳过奖励检查');
         return;
       }
+
+      // 奖励检查始终基于 loginUser（不随视角切换变化）
+      const loginUserId = getApp().globalData?.userService?.getLoginUserId() || null;
       
       // 获取当前星星数和所有可用奖励
       const [userPoints, allRewards] = await Promise.all([
-        starService.getTotalStars(),
-        rewardService.getAvailableRewards(true)
+        starService.getTotalStars(loginUserId),
+        rewardService.getAvailableRewards(true, false, loginUserId)
       ]);
       
       logger.info('Index', '奖励检查数据', { userPoints, rewardCount: allRewards.length });
@@ -1853,7 +1890,7 @@ Page({
   },
 
   /**
-   * 加载用户星星和奖励信息
+   * 加载用户星星和奖励信息（冻结展示 loginUser 自己的数据，不随视角切换变化）
    */
   loadStarsAndRewards: async function() {
     try {
@@ -1865,15 +1902,18 @@ Page({
         logger.error('Index', '无法获取服务实例');
         return;
       }
+
+      // 星星/奖励卡片始终展示 loginUser 自己的数据（不随 currentUser 视角切换）
+      const loginUserId = getApp().globalData?.userService?.getLoginUserId() || null;
       
       // 获取星星信息和最后兑换时间
       const [userPoints, lastExchangeTime] = await Promise.all([
-        starService.getTotalStars(),
-        rewardService.getLastExchangeTime()
+        starService.getTotalStars(loginUserId),
+        rewardService.getLastExchangeTimeByUser(loginUserId)
       ]);
       const formattedPoints = formatUtils.formatPoints(userPoints, true);
       
-      logger.info('Index', '🔒 当前用户星星数', { userPoints });
+      logger.info('Index', '🔒 当前用户星星数', { userPoints, loginUserId });
       logger.info('Index', '🔒 最后兑换时间详细信息', { 
         lastExchangeTime: lastExchangeTime,
         lastExchangeTimeDate: lastExchangeTime ? new Date(lastExchangeTime).toLocaleString() : '从未兑换',
@@ -1884,8 +1924,8 @@ Page({
       // 调用奖励服务方法，传递已获取的星星数确保数据一致性
       logger.info('Index', '开始获取奖励数据，使用已获取的星星数确保一致性');
       const [nextReward, visibleRewards] = await Promise.all([
-        rewardService.calculateNextAvailableReward(userPoints),
-        rewardService.getAvailableRewards(true)
+        rewardService.calculateNextAvailableReward(userPoints, loginUserId),
+        rewardService.getAvailableRewards(true, false, loginUserId)
       ]);
       
       logger.info('Index', '获取到下一个可达成奖励', { name: nextReward ? nextReward.name : '无' });
@@ -2002,15 +2042,17 @@ Page({
         logger.error('Index', '无法获取服务实例');
         return;
       }
+
+      const loginUserId = getApp().globalData?.userService?.getLoginUserId() || null;
       
       // 获取当前实际星星数（确保数据一致性）
-      const actualUserPoints = await starService.getTotalStars();
+      const actualUserPoints = await starService.getTotalStars(loginUserId);
       
       // 格式化星星数展示
       const formattedPoints = formatUtils.formatPoints(actualUserPoints);
       
       // 获取可见奖励信息，用于更新奖励指示器
-      const visibleRewards = await rewardService.getAvailableRewards(true);
+      const visibleRewards = await rewardService.getAvailableRewards(true, false, loginUserId);
       const visibleRewardsToShow = visibleRewards.slice(0, 3).map(reward => ({
         id: reward.id,
         name: reward.name,
@@ -2137,14 +2179,16 @@ Page({
         logger.error('Index', '无法获取服务实例');
         return;
       }
+
+      const loginUserId = getApp().globalData?.userService?.getLoginUserId() || null;
       
       // 获取当前星星数
-      const userPoints = await starService.getTotalStars();
+      const userPoints = await starService.getTotalStars(loginUserId);
       logger.debug('Index', `当前星星数: ${userPoints}`);
       
       // 获取下一个可达成奖励，传递已获取的星星数确保一致性
       logger.debug('Index', '获取下一个可达成奖励');
-      const nextReward = await rewardService.calculateNextAvailableReward(userPoints);
+      const nextReward = await rewardService.calculateNextAvailableReward(userPoints, loginUserId);
       logger.debug('Index', `新目标信息: 下一目标=${nextReward ? nextReward.name : '无'}, 需要星星=${nextReward ? nextReward.points : 0}`);
       
       // 格式化星星数
@@ -2506,18 +2550,28 @@ Page({
       
       // 获取当前用户
       const currentUser = userService.getCurrentUser();
-      
+
+      // 获取登录用户（设备拥有者，权限依据）
+      const loginUser = userService.getLoginUser() || currentUser;
+
       // 获取所有可用用户
       const availableUsers = userService.getAllUsers();
-      
-      // 获取当前用户权限
-      const userPermissions = permissionUtils.getUserPermissions(currentUser.role);
-      
+
+      // 权限由 loginUser 决定，不随视角切换变化
+      const userPermissions = permissionUtils.getUserPermissions(loginUser.role);
+
+      // 只读视角：孩子设备（loginUser.role=child）或家长切到孩子视角时均为只读
+      // 家长只有在自己的视角下（currentUser === loginUser）才有管理权限
+      const isReadonlyView = loginUser.role === 'child' || loginUser.userId !== currentUser.userId;
+
       // 更新页面数据
       this.setData({
         currentUser,
         availableUsers,
-        userPermissions
+        userPermissions,
+        loginUserId: loginUser.userId,
+        canManageMembers: loginUser.role === 'parent',
+        isReadonlyView,
       });
       
       // 根据权限过滤菜单项
@@ -2619,14 +2673,26 @@ Page({
       
       // 获取新的当前用户
       const currentUser = userService.getCurrentUser();
-      const availableUsers = userService.getAllUsers(); // 添加这行
+      const availableUsers = userService.getAllUsers();
       const userPermissions = permissionUtils.getUserPermissions(currentUser.role);
+      const loginUser = userService.getLoginUser ? userService.getLoginUser() : null;
+      // 只读视角：孩子设备或家长切到孩子视角均为只读
+      const isReadonlyView = loginUser
+        ? (loginUser.role === 'child' || loginUser.userId !== currentUser.userId)
+        : false;
+
+      // 切换到孩子视角时记录，供家长回到自己视角时继续显示该孩子的任务
+      const lastActiveChildId = currentUser.role === 'child'
+        ? currentUser.id
+        : this.data.lastActiveChildId;
       
       // 更新页面状态
       this.setData({
         currentUser,
-        availableUsers, // 添加这行
+        availableUsers,
         userPermissions,
+        isReadonlyView,
+        lastActiveChildId,
         showUserSwitcher: false
       });
       
@@ -2653,67 +2719,51 @@ Page({
   },
 
   /**
-   * 处理添加用户事件
+   * 处理添加成员事件（M6：跳转到家庭设置页）
    */
   async handleUserAdd(e) {
+    logger.info('Index', '跳转到家庭设置页添加成员');
+    wx.navigateTo({
+      url: '/packageManage/pages/family-settings/family-settings'
+    });
+  },
+
+  /**
+   * 处理昵称编辑事件
+   */
+  async handleNicknameEdit(e) {
     try {
-      const { name, role } = e.detail;
-      logger.info('Index', `添加用户: 姓名=${name}, 角色=${role}`);
-      
+      const { userId, nickname } = e.detail;
       const userService = getApp().globalData.userService;
-      if (!userService) {
-        logger.error('Index', '用户服务不可用');
-        return;
+      if (!userService) return;
+
+      const result = await userService.updateNickname(userId, nickname);
+      if (result.success) {
+        // 刷新用户列表显示
+        const availableUsers = userService.getAllUsers();
+        const currentUser = userService.getCurrentUser();
+        this.setData({ availableUsers, currentUser });
+        wx.showToast({ title: '昵称已更新', icon: 'success' });
+      } else {
+        wx.showToast({ title: result.message || '修改失败', icon: 'none' });
       }
-      
-      // 添加用户
-      const result = await userService.createUser(name, role);
-      if (!result.success) {
-        wx.showToast({
-          title: result.message || '添加用户失败',
-          icon: 'none'
-        });
-        return;
-      }
-      
-      // 刷新用户列表
-      const availableUsers = userService.getAllUsers();
-      this.setData({
-        availableUsers
-      });
-      
-      wx.showToast({
-        title: `用户 ${name} 添加成功`,
-        icon: 'success'
-      });
-      
-      logger.info('Index', `用户添加成功: ${name}(${role})`);
-      
     } catch (error) {
-      logger.error('Index', '处理添加用户失败', error);
-      wx.showToast({
-        title: '添加用户失败',
-        icon: 'none'
-      });
+      logger.error('Index', '处理昵称编辑失败', error);
     }
   },
 
   /**
-   * 处理删除用户事件
+   * 处理删除成员事件（M6：软删除虚拟成员）
    */
   async handleUserDelete(e) {
     try {
       const { userId } = e.detail;
-      logger.info('Index', `删除用户: 用户ID=${userId}`);
-      
+      logger.info('Index', `删除家庭成员: ${userId}`);
+
       const userService = getApp().globalData.userService;
-      if (!userService) {
-        logger.error('Index', '用户服务不可用');
-        return;
-      }
-      
-      // 删除用户
-      const result = await userService.deleteUser(userId);
+      if (!userService) return;
+
+      const result = await userService.deleteFamilyMember(userId);
       if (!result.success) {
         wx.showToast({
           title: result.message || '删除用户失败',
@@ -2737,11 +2787,11 @@ Page({
       }
       
       wx.showToast({
-        title: '用户删除成功',
+        title: '成员已删除',
         icon: 'success'
       });
-      
-      logger.info('Index', '用户删除成功');
+
+      logger.info('Index', '家庭成员删除成功');
       
     } catch (error) {
       logger.error('Index', '处理删除用户失败', error);
@@ -2759,7 +2809,7 @@ Page({
     const { currentUser } = this.data;
     logger.debug('Index', `根据用户权限更新菜单: ${currentUser.role}`);
     
-    // 原始菜单项
+    // 原始菜单项（家庭设置不放在加号菜单，应通过其他入口访问）
     const originalMenuItems = [
       {
         id: 'study',
@@ -2790,14 +2840,22 @@ Page({
       }
     ];
     
-    // 根据权限过滤菜单项
-    const filteredMenuItems = permissionUtils.filterMenuItems(originalMenuItems, currentUser.role);
+    // 权限由 loginUser 决定（不随视角切换变化）
+    const app = getApp();
+    const loginUser = app.globalData?.userService?.getLoginUser() || currentUser;
+    const filteredMenuItems = permissionUtils.filterMenuItems(originalMenuItems, loginUser.role);
+
+    // 只读视角（孩子视角）下额外过滤掉任务创建和奖励管理入口
+    const { isReadonlyView } = this.data;
+    const finalMenuItems = isReadonlyView
+      ? filteredMenuItems.filter(item => item.id !== 'habit' && item.id !== 'reward-manage')
+      : filteredMenuItems;
     
     this.setData({
-      menuItems: filteredMenuItems
+      menuItems: finalMenuItems
     });
     
-    logger.info('Index', `菜单项更新完成: ${originalMenuItems.length} -> ${filteredMenuItems.length}`);
+    logger.info('Index', `菜单项更新完成: ${originalMenuItems.length} -> ${finalMenuItems.length}`);
   },
 
   /**

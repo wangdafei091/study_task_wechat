@@ -335,20 +335,20 @@ App({
       // 任务惩罚处理完毕后，先进行奖励保护，再初始化星星服务并清理过期星星
       if (starService) {
         try {
-          // 计算即将过期的星星数量
+          // 计算即将过期的星星数量（仅计算 loginUser 的，防止多孩子家庭串账）
           logger.info('App', '检查即将过期的星星并进行奖励保护');
-          const expiredStars = await starService.calculatePendingExpiry();
+          const userService = serviceManager.getUserService();
+          const loginUserId = userService ? userService.getLoginUserId() : null;
+          const expiredStars = await starService.calculatePendingExpiry(loginUserId);
 
           if (expiredStars > 0) {
-            // 获取小朋友用户ID进行保护
-            const userService = serviceManager.getUserService();
-            const childUserId = userService ? userService.getChildUserId() : 'child';
+            if (loginUserId) {
+              logger.info('App', `发现${expiredStars}颗即将过期的星星，为登录用户${loginUserId}进行奖励保护`);
+              const protectionResult = await starService.protectRewardsByExpiry(expiredStars, loginUserId);
 
-            logger.info('App', `发现${expiredStars}颗即将过期的星星，为用户${childUserId}进行奖励保护`);
-            const protectionResult = await starService.protectRewardsByExpiry(expiredStars, childUserId);
-
-            if (protectionResult.success && protectionResult.protectedCount > 0) {
-              logger.info('App', `奖励保护成功，保护了${protectionResult.protectedCount}个奖励`);
+              if (protectionResult.success && protectionResult.protectedCount > 0) {
+                logger.info('App', `奖励保护成功，保护了${protectionResult.protectedCount}个奖励`);
+              }
             }
           }
 

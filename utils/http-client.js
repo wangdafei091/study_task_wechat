@@ -155,6 +155,13 @@ class HttpClient {
   }
   
   /**
+   * PATCH请求
+   */
+  static patch(url, data, params) {
+    return this.request({ url, method: 'PATCH', data, params });
+  }
+
+  /**
    * DELETE请求
    */
   static delete(url, params) {

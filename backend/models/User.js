@@ -5,12 +5,15 @@
 class User {
   constructor({
     userId,
-    openid,
+    openid = null,
     unionid = null,
     name,
     avatar = '',
     role = 'parent',
     status = 'active',
+    familyId = null,
+    isVirtual = false,
+    createdByUserId = null,
     createdAt = null,
     updatedAt = null,
   } = {}) {
@@ -21,6 +24,9 @@ class User {
     this.avatar = avatar;
     this.role = role;
     this.status = status;
+    this.familyId = familyId;
+    this.isVirtual = isVirtual;
+    this.createdByUserId = createdByUserId;
     this.createdAt = createdAt;
     this.updatedAt = updatedAt;
   }
@@ -35,10 +41,13 @@ class User {
       userId: dbRecord.user_id,
       openid: dbRecord.openid,
       unionid: dbRecord.unionid,
-      name: dbRecord.nickname, // 数据库字段是nickname
+      name: dbRecord.nickname,
       avatar: dbRecord.avatar,
       role: dbRecord.role,
       status: dbRecord.status,
+      familyId: dbRecord.family_id || null,
+      isVirtual: Boolean(dbRecord.is_virtual),
+      createdByUserId: dbRecord.created_by_user_id || null,
       createdAt: dbRecord.created_at,
       updatedAt: dbRecord.updated_at,
     });
@@ -53,10 +62,13 @@ class User {
       user_id: this.userId,
       openid: this.openid,
       unionid: this.unionid,
-      nickname: this.name, // 数据库字段是nickname
+      nickname: this.name,
       avatar: this.avatar,
       role: this.role,
       status: this.status,
+      family_id: this.familyId,
+      is_virtual: this.isVirtual,
+      created_by_user_id: this.createdByUserId,
     };
   }
 
@@ -67,11 +79,14 @@ class User {
   toJSON() {
     return {
       userId: this.userId,
-      openid: this.openid, // 添加openid字段，与认证响应文档保持一致
-      nickname: this.name, // API使用nickname字段名，与数据库保持一致
+      openid: this.openid,
+      nickname: this.name,
       avatar: this.avatar,
       role: this.role,
       status: this.status,
+      familyId: this.familyId,
+      isVirtual: this.isVirtual,
+      createdByUserId: this.createdByUserId,
       createdAt: this.createdAt,
     };
   }

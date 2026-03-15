@@ -39,11 +39,12 @@ function authMiddleware(req, res, next) {
       });
     }
 
-    // 将用户信息添加到请求对象中
+    // 将用户信息添加到请求对象中（包含 familyId，用于家庭数据隔离）
     req.user = {
       userId: payload.userId,
       openid: payload.openid,
       role: payload.role,
+      familyId: payload.familyId || null,
     };
 
     logger.info('用户认证成功', { userId: req.user.userId });
@@ -83,6 +84,7 @@ function optionalAuthMiddleware(req, res, next) {
         userId: payload.userId,
         openid: payload.openid,
         role: payload.role,
+        familyId: payload.familyId || null,
       };
     }
 

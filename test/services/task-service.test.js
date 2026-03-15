@@ -66,7 +66,8 @@ describe('TaskService', () => {
 
     mockUserService = {
       getCurrentUserId: jest.fn().mockReturnValue('parent'),
-      getUserByRole: jest.fn().mockReturnValue({ id: 'child' })
+      getUserByRole: jest.fn().mockReturnValue({ id: 'child' }),
+      getLoginUserId: jest.fn().mockReturnValue(null)
     };
 
     // 创建 EventBus Mock
@@ -411,7 +412,7 @@ describe('TaskService', () => {
       expect(result.success).toBe(true);
       expect(result.task.status).toBe(TaskStatus.COMPLETED);
 
-      // 验证星星分配（使用实际调用参数）
+      // 验证星星分配（M6后使用任务自身的userId，而非getChildUserId）
       expect(mockStarService.addStars).toHaveBeenCalledWith(
         10,
         'week', // 实际传递的pointsExpiry
@@ -419,7 +420,7 @@ describe('TaskService', () => {
         expect.objectContaining({
           sourceType: 'task_complete',
           sourceId: 'task_1',
-          userId: 'child'
+          userId: 'parent'
         })
       );
 
@@ -989,7 +990,8 @@ describe('TaskService', () => {
         })
       ];
 
-      mockTaskRepository.getTodayTasks.mockResolvedValue(tasks);
+      // M6后 calculateTaskProgress 通过 getTasksByDate 而非 getTodayTasks 获取任务
+      mockTaskRepository.getTasksByDate.mockResolvedValue(tasks);
 
       const result = await taskService.calculateTaskProgress();
 

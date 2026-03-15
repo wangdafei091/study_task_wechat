@@ -492,66 +492,91 @@ const configService = serviceManager.get('configService');
 
 ## UserService - 用户管理服务
 
-用户服务管理用户账户、角色、权限等功能。
+用户服务管理用户账户、角色切换、家庭成员缓存等功能。M6 起引入 `loginUser`（设备拥有者）与 `currentUser`（当前数据视角）双轨模型。
+
+### 核心概念（M6）
+
+| 字段 | 含义 | 生命周期 |
+|------|------|---------|
+| `loginUser` | 设备登录者（JWT 持有者），决定权限和功能可见性 | 应用启动后不变 |
+| `currentUser` | 当前数据视角，家长可切换到孩子 | 随用户切换变化 |
+
+- **`isReadonlyView`**（首页计算属性）：`loginUser.role === 'child' || loginUser.userId !== currentUser.userId`。只要在孩子视角下（无论哪种原因），管理类入口均隐藏。
+- **任务创建归属**：家长在孩子视角创建任务时，任务通过 `targetUserId` 正确归属到孩子。
 
 ### 核心功能
-- 用户CRUD操作
-- 角色管理（家长/孩子）
-- 权限控制
-- 用户配置管理
+- 登录用户（loginUser）初始化与维护
+- 家庭成员缓存（userCache）加载与刷新
+- 用户视角切换（currentUser）及会话恢复
+- 基于角色的用户列表过滤
 
 ### API 方法
 
-#### 用户管理
+#### 登录用户
+
+##### `getLoginUser()`
+获取设备登录用户（设备拥有者，生命周期内不变）
+- **返回**: `User | null`
+
+##### `getLoginUserId()`
+获取登录用户 ID
+- **返回**: `string | null`
+
+---
+
+#### 当前视角用户
 
 ##### `getCurrentUser()`
-获取当前登录用户
-- **返回**: `{ success: boolean, user?: User, message?: string }`
+获取当前视角用户（家长可切换到孩子）
+- **返回**: `User`
 
 ##### `getCurrentUserId()`
-获取当前用户ID
-- **返回**: `string` (用户ID) 或 `null`
+获取当前视角用户 ID
+- **返回**: `string`
 
-##### `createUser(name, role)`
-创建新用户
-- **参数**:
-  - `name` (String) - 用户名称
-  - `role` (String) - 用户角色 'parent' | 'child'
-- **返回**: `{ success: boolean, user?: User, message?: string }`
-- **返回**: `{ success: boolean, user?: User, message?: string }`
-
-更新用户信息
-- **参数**: `userId` - 用户ID, `updateData` - 更新数据对象
-- **返回**: `{ success: boolean, user?: User, message?: string }`
+##### `getCurrentUserRole()`
+获取当前视角用户角色
+- **返回**: `'parent' | 'child'`
 
 ---
 
-#### 角色和权限
+#### 用户列表与查找
+
+##### `getAllUsers()`
+获取可用用户列表（家庭感知）
+- **返回**: `User[]`
+- **说明**：
+  - 孩子设备（`loginUser.role === 'child'`）：只返回自身
+  - 家长设备：返回 loginUser + 家庭中所有孩子，不含其他家长
+
+##### `getUserById(userId)`
+从缓存获取用户（同步）
+- **参数**: `userId` (string)
+- **返回**: `User | null`
+
+##### `getUserByIdAsync(userId)`
+获取用户，缓存未命中时从 API 拉取（异步）
+- **参数**: `userId` (string)
+- **返回**: `Promise<User | null>`
+
+---
+
+#### 用户切换
 
 ##### `switchToUser(userId)`
-切换到指定用户
-- **参数**: `userId` - 目标用户ID
-- **返回**: `{ success: boolean, user?: User, message?: string }`
-
-##### `switchToParent()`
-切换到家长模式
-- **返回**: `{ success: boolean, user?: User, message?: string }`
-
-##### `switchToChild()`
-切换到孩子模式
-- **返回**: `{ success: boolean, user?: User, message?: string }`
+切换当前视角到指定用户
+- **参数**: `userId` (string)
+- **返回**: `Promise<{ success: boolean, user?: User, message?: string }>`
+- **限制**：孩子设备（`loginUser.role === 'child'`）禁止切换；家长只能切换到孩子，不能切换到其他家长
 
 ---
 
-#### 用户配置
+#### 家庭成员
 
-获取用户配置
-- **参数**: `userId` - 用户ID, `key` - 配置键
-- **返回**: `{ success: boolean, value: any, message?: string }`
-
-设置用户配置
-- **参数**: `userId` - 用户ID, `key` - 配置键, `value` - 配置值
-- **返回**: `{ success: boolean, message?: string }`
+##### `loadFamilyMembers()`
+从云端加载家庭成员并更新本地缓存
+- **返回**: `Promise<void>`
+- **说明**：登录用户无家庭（`loginUser.familyId` 为 null）时静默跳过
 
 ---
 

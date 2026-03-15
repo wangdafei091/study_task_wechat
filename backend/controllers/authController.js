@@ -42,11 +42,12 @@ class AuthController {
         unionid: wechatData.unionid,
       });
 
-      // 3. 生成JWT token
+      // 3. 生成JWT token（包含 familyId，支持家庭数据隔离）
       const token = generateToken({
         userId: user.userId,
         openid: user.openid,
         role: user.role,
+        familyId: user.familyId || null,
       });
 
       logger.info('登录成功，生成token', {

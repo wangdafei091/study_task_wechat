@@ -10,7 +10,7 @@
     <view class="panel-title">选择用户</view>
     <view class="panel-close" bindtap="closeUserSwitcher">×</view>
   </view>
-  
+
   <!-- 当前用户信息 -->
   <view class="current-user-section" wx:if="{{currentUser}}">
     <view class="section-title">当前用户</view>
@@ -24,19 +24,23 @@
       </view>
       <view class="user-status">
         <text class="current-badge">当前</text>
+        <!-- 当前用户可编辑自己的昵称 -->
+        <view class="edit-icon" data-user-id="{{currentUser.userId}}" bindtap="showNicknameEdit">✎</view>
       </view>
     </view>
   </view>
-  
+
   <!-- 用户列表 -->
-  <view class="user-list-section">
-    <view class="section-title">切换到</view>
+  <view class="user-list-header">
+    <view class="section-title">{{canManageMembers ? '选择孩子' : '切换到'}}</view>
+  </view>
+  <scroll-view class="user-list-section" scroll-y>
     <view class="user-list">
       <block wx:for="{{availableUsers}}" wx:key="userId">
-        <view 
-          class="user-item {{currentUser && item.userId === currentUser.userId ? 'disabled' : ''}}" 
+        <view
+          class="user-item"
           wx:if="{{!currentUser || item.userId !== currentUser.userId}}"
-          data-user-id="{{item.userId}}" 
+          data-user-id="{{item.userId}}"
           bindtap="switchToUser">
           <view class="user-avatar">
             <text class="user-icon">{{item.role === 'parent' ? '👩‍💼' : '👶'}}</text>
@@ -46,86 +50,87 @@
             <view class="user-role">{{item.role === 'parent' ? '家长' : '孩子'}}</view>
           </view>
           <view class="user-actions">
-            <view class="switch-icon">→</view>
-            <!-- 权限控制：只有家长才能看到删除按钮 -->
-            <view class="delete-btn" 
-                  wx:if="{{currentUser.role === 'parent'}}"
-                  data-user-id="{{item.userId}}" 
-                  bindtap="deleteUser" 
+            <!-- 家长可编辑虚拟成员昵称 -->
+            <view class="edit-icon"
+                  wx:if="{{canManageMembers && item.isVirtual}}"
+                  data-user-id="{{item.userId}}"
+                  bindtap="showNicknameEdit"
+                  catchtap>✎</view>
+            <!-- 仅虚拟成员显示删除按钮（由 canManageMembers 控制，不依赖 currentUser.role）-->
+            <view class="delete-btn"
+                  wx:if="{{canManageMembers && item.isVirtual}}"
+                  data-user-id="{{item.userId}}"
+                  bindtap="deleteUser"
                   catchtap>
               <text class="delete-icon">×</text>
             </view>
+            <view class="switch-icon" wx:else>→</view>
           </view>
         </view>
       </block>
-      
+
       <!-- 空状态 -->
       <view class="empty-users" wx:if="{{availableUsers.length <= 1}}">
         <view class="empty-icon">👥</view>
-        <view class="empty-text">还没有其他用户</view>
-        <!-- 根据角色显示不同的提示 -->
-        <view class="empty-tip" wx:if="{{currentUser.role === 'parent'}}">
-          点击下方按钮添加新用户
-        </view>
-        <view class="empty-tip" wx:else>
-          请切换到家长账号添加用户
-        </view>
+        <view class="empty-text">还没有其他成员</view>
+        <view class="empty-tip" wx:if="{{canManageMembers}}">点击下方按钮添加孩子</view>
+        <view class="empty-tip" wx:else>请联系家长添加成员</view>
       </view>
     </view>
-  </view>
-  
-  <!-- 添加用户按钮 - 权限控制：只有家长才能看到 -->
-  <view class="add-user-section" wx:if="{{showAddUser && currentUser.role === 'parent'}}">
+  </scroll-view>
+
+  <!-- 添加成员按钮（家长专属，由 canManageMembers 控制）-->
+  <view class="add-user-section" wx:if="{{showAddUser && canManageMembers}}">
     <view class="add-user-btn" bindtap="showAddUserDialog">
       <text class="add-icon">+</text>
-      <text class="add-text">添加新用户</text>
+      <text class="add-text">添加成员</text>
     </view>
   </view>
 </view>
 
-<!-- 添加用户对话框 -->
-<view class="add-user-mask" wx:if="{{showAddUserDialog}}" bindtap="hideAddUserDialog"></view>
-<view class="add-user-dialog" wx:if="{{showAddUserDialog}}" animation="{{addDialogAnimation}}" catchtap="preventBubble">
+<!-- PIN 验证对话框 -->
+<view class="add-user-mask" wx:if="{{showPinDialog}}" bindtap="cancelPin"></view>
+<view class="add-user-dialog" wx:if="{{showPinDialog}}" catchtap="preventBubble">
   <view class="dialog-header">
-    <view class="dialog-title">添加新用户</view>
-    <view class="dialog-close" bindtap="hideAddUserDialog">×</view>
+    <view class="dialog-title">请输入家长密码</view>
+    <view class="dialog-close" bindtap="cancelPin">×</view>
   </view>
-  
   <view class="dialog-content">
-    <!-- 用户名输入 -->
     <view class="input-group">
-      <view class="input-label">用户名</view>
-      <input 
-        class="user-name-input" 
-        placeholder="请输入用户名" 
-        value="{{newUserName}}"
-        bindinput="onUserNameInput"
+      <input
+        class="user-name-input"
+        placeholder="请输入PIN码"
+        password
+        value="{{pinInput}}"
+        bindinput="onPinInput"
+        maxlength="6" />
+    </view>
+  </view>
+  <view class="dialog-actions">
+    <view class="dialog-btn cancel" bindtap="cancelPin">取消</view>
+    <view class="dialog-btn confirm" bindtap="confirmPin">确认</view>
+  </view>
+</view>
+
+<!-- 昵称编辑对话框 -->
+<view class="add-user-mask" wx:if="{{showNicknameDialog}}" bindtap="cancelNicknameEdit"></view>
+<view class="add-user-dialog" wx:if="{{showNicknameDialog}}" catchtap="preventBubble">
+  <view class="dialog-header">
+    <view class="dialog-title">修改昵称</view>
+    <view class="dialog-close" bindtap="cancelNicknameEdit">×</view>
+  </view>
+  <view class="dialog-content">
+    <view class="input-group">
+      <input
+        class="user-name-input"
+        placeholder="请输入新昵称"
+        value="{{nicknameInput}}"
+        bindinput="onNicknameInput"
         maxlength="10" />
     </view>
-    
-    <!-- 角色选择 -->
-    <view class="input-group">
-      <view class="input-label">用户角色</view>
-      <view class="role-options">
-        <block wx:for="{{roleOptions}}" wx:key="value">
-          <view 
-            class="role-option {{newUserRole === item.value ? 'selected' : ''}}"
-            data-role="{{item.value}}"
-            bindtap="selectRole">
-            <view class="role-header">
-              <text class="role-icon">{{item.icon}}</text>
-              <text class="role-label">{{item.label}}</text>
-              <view class="role-check" wx:if="{{newUserRole === item.value}}">✓</view>
-            </view>
-            <view class="role-description">{{item.description}}</view>
-          </view>
-        </block>
-      </view>
-    </view>
   </view>
-  
   <view class="dialog-actions">
-    <view class="dialog-btn cancel" bindtap="hideAddUserDialog">取消</view>
-    <view class="dialog-btn confirm" bindtap="confirmAddUser">确认</view>
+    <view class="dialog-btn cancel" bindtap="cancelNicknameEdit">取消</view>
+    <view class="dialog-btn confirm" bindtap="confirmNicknameEdit">确认</view>
   </view>
-</view> 
+</view>

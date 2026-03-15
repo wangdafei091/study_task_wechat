@@ -68,17 +68,30 @@ class TokenManager {
         return null;
       }
 
-      // 使用Buffer替代atob，提高兼容性
-      const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
+      // 小程序环境使用 atob 解码 base64
+      const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+      const payload = JSON.parse(decodeURIComponent(
+        atob(base64).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')
+      ));
       return {
         userId: payload.userId,
         openid: payload.openid,
         role: payload.role,
+        familyId: payload.familyId || null,
       };
     } catch (error) {
       console.error('解析token失败:', error);
       return null;
     }
+  }
+
+  /**
+   * 从 token 中获取 familyId
+   * @returns {string|null} familyId
+   */
+  static getFamilyId() {
+    const info = this.getUserInfo();
+    return info ? info.familyId : null;
   }
 
   /**
@@ -97,8 +110,10 @@ class TokenManager {
         return true;
       }
 
-      // 使用Buffer替代atob，提高兼容性
-      const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
+      const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+      const payload = JSON.parse(decodeURIComponent(
+        atob(base64).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')
+      ));
       const exp = payload.exp * 1000; // 转换为毫秒
       const now = Date.now();
       const remaining = exp - now;

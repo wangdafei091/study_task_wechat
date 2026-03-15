@@ -4,6 +4,7 @@
  */
 
 const userService = require('../services/userService');
+const familyService = require('../services/familyService');
 const { success, error } = require('../utils/response');
 const { createLogger } = require('../utils/logger');
 
@@ -63,33 +64,56 @@ class UserController {
   async getUserById(req, res) {
     try {
       const { userId } = req.params;
-      const currentUserId = req.user?.userId;
+      const { userId: currentUserId, familyId: operatorFamilyId } = req.user;
 
       logger.info('获取用户详情', { userId, currentUserId });
 
-      // 所有权校验：只能查看自己的信息
-      if (userId !== currentUserId) {
-        return res.status(403).json(
-          error('无权访问其他用户信息', 'USER_ACCESS_DENIED')
-        );
-      }
-
       const user = await userService.findById(userId);
-
       if (!user) {
-        return res.status(404).json(
-          error('用户不存在', 'USER_NOT_FOUND')
-        );
+        return res.status(404).json(error('用户不存在', 'USER_NOT_FOUND'));
       }
 
-      res.json(
-        success(user.toJSON(), '获取成功')
-      );
+      // 自己直接放行；同家庭成员互查放行
+      const isSelf = userId === currentUserId;
+      const isSameFamily = operatorFamilyId && user.familyId === operatorFamilyId;
+      if (!isSelf && !isSameFamily) {
+        return res.status(403).json(error('无权访问该用户信息', 'USER_ACCESS_DENIED'));
+      }
+
+      res.json(success(user.toJSON(), '获取成功'));
     } catch (err) {
       logger.error('获取用户详情失败', err);
-      res.status(500).json(
-        error('获取用户详情失败', 'USER_GET_FAILED')
-      );
+      res.status(500).json(error('获取用户详情失败', 'USER_GET_FAILED'));
+    }
+  }
+
+  /**
+   * 修改用户昵称
+   * PATCH /api/users/:userId/nickname
+   */
+  async updateNickname(req, res) {
+    try {
+      const { userId: targetUserId } = req.params;
+      const { userId: operatorId, role: operatorRole, familyId: operatorFamilyId } = req.user;
+      const { nickname } = req.body;
+
+      if (!nickname || !nickname.trim()) {
+        return res.status(400).json(error('昵称不能为空', 'INVALID_PARAMS'));
+      }
+
+      logger.info('修改昵称', { operatorId, targetUserId, nickname });
+      await familyService.updateNickname(operatorId, operatorRole, operatorFamilyId, targetUserId, nickname.trim());
+
+      res.json(success({ userId: targetUserId, nickname: nickname.trim() }, '昵称修改成功'));
+    } catch (err) {
+      if (err.code === 'FAMILY_MEMBER_ACCESS_DENIED') {
+        return res.status(403).json(error('无权修改该成员昵称', err.code));
+      }
+      if (err.code === 'USER_NOT_FOUND') {
+        return res.status(404).json(error('用户不存在', err.code));
+      }
+      logger.error('修改昵称失败', err);
+      res.status(500).json(error('修改昵称失败', 'USER_UPDATE_FAILED'));
     }
   }
 

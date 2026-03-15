@@ -51,6 +51,13 @@ router.post('/', authMiddleware, userController.createUser.bind(userController))
 router.post('/switch', authMiddleware, userController.switchUser.bind(userController));
 
 /**
+ * @route   PATCH /api/users/:userId/nickname
+ * @desc    修改用户昵称
+ * @access  Private
+ */
+router.patch('/:userId/nickname', authMiddleware, userController.updateNickname.bind(userController));
+
+/**
  * @route   DELETE /api/users/:userId
  * @desc    删除用户
  * @access  Private

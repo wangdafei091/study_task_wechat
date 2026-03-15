@@ -1,0 +1,111 @@
+<!--packageManage/pages/family-settings/family-settings.wxml-->
+<view class="container">
+  <!-- 未加入家庭 -->
+  <view class="no-family-section" wx:if="{{!loading && !family}}">
+    <view class="no-family-icon">👨‍👩‍👧</view>
+    <view class="no-family-title">还没有家庭</view>
+    <view class="no-family-desc">创建家庭或通过邀请码加入</view>
+    <view class="action-group">
+      <view wx:if="{{isParent}}" class="btn-primary" bindtap="showCreateFamily">创建家庭</view>
+      <view class="btn-secondary" bindtap="showJoinFamily">输入邀请码加入</view>
+    </view>
+  </view>
+
+  <!-- 已加入家庭 -->
+  <view wx:elif="{{!loading && family}}">
+    <!-- 家庭信息卡片 -->
+    <view class="card">
+      <view class="card-title">{{family.name}}</view>
+      <view class="card-sub">家庭ID：{{family.familyId}}</view>
+    </view>
+
+    <!-- 邀请码区域 -->
+    <view class="card">
+      <view class="section-title">邀请码</view>
+      <view class="invite-code-row">
+        <view class="invite-code">{{inviteCode || '暂无邀请码'}}</view>
+        <view class="copy-btn" bindtap="copyInviteCode">复制</view>
+      </view>
+      <view class="invite-code-meta" wx:if="{{inviteCode}}">
+        <text>{{inviteCodeRole === 'parent' ? '家长邀请码' : '孩子邀请码'}}</text>
+      </view>
+      <view class="role-selector">
+        <text class="selector-label">邀请类型：</text>
+        <radio-group bindchange="onInviteCodeRoleChange">
+          <label class="role-label"><radio value="child" checked="{{inviteCodeRole === 'child'}}"/>孩子</label>
+          <label class="role-label"><radio value="parent" checked="{{inviteCodeRole === 'parent'}}"/>家长</label>
+        </radio-group>
+      </view>
+      <view class="btn-outline" bindtap="refreshInviteCode">刷新邀请码</view>
+    </view>
+
+    <!-- 成员列表 -->
+    <view class="card">
+      <view class="section-title-row">
+        <view class="section-title">家庭成员</view>
+        <view class="add-member-btn" bindtap="addVirtualMember">+ 添加孩子</view>
+      </view>
+      <view class="member-list">
+        <view class="member-item" wx:for="{{members}}" wx:key="userId">
+          <view class="member-icon">{{item.role === 'parent' ? '👩‍💼' : '👶'}}</view>
+          <view class="member-info">
+            <view class="member-name">{{item.nickname}}</view>
+            <view class="member-role">{{item.role === 'parent' ? '家长' : (item.isVirtual ? '孩子（共享设备）' : '孩子')}}</view>
+          </view>
+          <view class="delete-btn" wx:if="{{item.isVirtual}}"
+                data-user-id="{{item.userId}}" data-name="{{item.nickname}}"
+                bindtap="deleteMember">删除</view>
+        </view>
+      </view>
+    </view>
+
+    <!-- PIN 码设置 -->
+    <view class="card">
+      <view class="section-title">切换密码（PIN）</view>
+      <view class="section-desc">设置后，孩子切换回家长视角需输入此密码</view>
+      <view class="btn-row">
+        <view class="btn-outline" bindtap="showPinSetting">设置/修改PIN码</view>
+        <view class="btn-danger-text" bindtap="clearPin">清除PIN码</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 加载中 -->
+  <view class="loading" wx:if="{{loading}}">
+    <view class="loading-text">加载中...</view>
+  </view>
+
+  <!-- 创建家庭对话框 -->
+  <view class="dialog-mask" wx:if="{{showCreateDialog}}" bindtap="cancelCreateFamily"></view>
+  <view class="dialog" wx:if="{{showCreateDialog}}" catchtap="noop">
+    <view class="dialog-title">创建家庭</view>
+    <input class="dialog-input" placeholder="请输入家庭名称" value="{{familyNameInput}}" bindinput="onFamilyNameInput" maxlength="20"/>
+    <view class="dialog-actions">
+      <view class="dialog-btn cancel" bindtap="cancelCreateFamily">取消</view>
+      <view class="dialog-btn confirm" bindtap="confirmCreateFamily">创建</view>
+    </view>
+  </view>
+
+  <!-- 加入家庭对话框 -->
+  <view class="dialog-mask" wx:if="{{showJoinDialog}}" bindtap="cancelJoinFamily"></view>
+  <view class="dialog" wx:if="{{showJoinDialog}}" catchtap="noop">
+    <view class="dialog-title">加入家庭</view>
+    <input class="dialog-input" placeholder="请输入8位邀请码" value="{{joinCodeInput}}" bindinput="onJoinCodeInput" maxlength="8"/>
+    <view class="dialog-actions">
+      <view class="dialog-btn cancel" bindtap="cancelJoinFamily">取消</view>
+      <view class="dialog-btn confirm" bindtap="confirmJoinFamily">加入</view>
+    </view>
+  </view>
+
+  <!-- PIN 设置对话框 -->
+  <view class="dialog-mask" wx:if="{{showPinDialog}}" bindtap="cancelSetPin"></view>
+  <view class="dialog" wx:if="{{showPinDialog}}" catchtap="noop">
+    <view class="dialog-title">设置PIN码</view>
+    <input class="dialog-input" placeholder="请输入PIN码（4-6位）" password value="{{pinInput}}" bindinput="onPinInput" maxlength="6"/>
+    <input class="dialog-input" placeholder="再次确认PIN码" password value="{{pinConfirmInput}}" bindinput="onPinConfirmInput" maxlength="6"/>
+    <view class="dialog-actions">
+      <view class="dialog-btn cancel" bindtap="cancelSetPin">取消</view>
+      <view class="dialog-btn confirm" bindtap="confirmSetPin">确定</view>
+    </view>
+  </view>
+</view>

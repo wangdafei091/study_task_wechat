@@ -5,6 +5,7 @@ const dateUtils = require('../../utils/dateUtils.js');
 const logger = require('../../utils/logger');
 const serviceManager = require('../../services/service-manager.js');
 const pageStorageHelper = require('../../utils/page-storage-helper');
+const permissionUtils = require('../../utils/permission-utils');
 
 Page({
   /**
@@ -15,6 +16,7 @@ Page({
     heatmapYear: new Date().getFullYear(),
     heatmapMonthIndex: new Date().getMonth(),
     heatmapMonth: '',
+    targetUserId: null, // 家长代孩子创建任务时的目标用户ID（由首页传入）
     // 添加新任务表单数据
     newTask: {
       title: '',
@@ -81,7 +83,29 @@ Page({
    */
   onLoad: function(options) {
     logger.info('TaskEdit', '页面加载');
+
+    // 权限守卫：孩子设备或家长切到孩子视角时均无权限进入任务编辑页
+    // 冷启动 userService 可能为 null，此时放行，登录流程会在完成后重新校验
+    const userService = serviceManager.getUserService();
+    if (userService) {
+      const loginUser = userService.getLoginUser && userService.getLoginUser();
+      const currentUser = userService.getCurrentUser && userService.getCurrentUser();
+      const loginRole = loginUser ? loginUser.role : currentUser?.role;
+      const isChildView = loginRole === 'child' || (loginUser && currentUser && loginUser.userId !== currentUser.userId);
+      if (isChildView) {
+        logger.warn('TaskEdit', '无权限访问任务编辑页，已拦截', { loginRole, isChildView });
+        wx.showToast({ title: '暂无操作权限', icon: 'none', duration: 1500 });
+        wx.navigateBack({ delta: 1 });
+        return;
+      }
+    }
     
+    // 家长代孩子创建任务时，首页会传入 targetUserId
+    if (options.targetUserId) {
+      this.setData({ targetUserId: options.targetUserId });
+      logger.info('TaskEdit', '家长代孩子创建任务，targetUserId已记录', { targetUserId: options.targetUserId });
+    }
+
     // 记录UI优化日志
     uiUtils.logUIOptimization('task-edit', '页面加载', {
       'cardSpacing': '20rpx',
@@ -851,6 +875,12 @@ Page({
         mask: true
       });
       
+      // 家长代孩子创建任务时，将目标孩子的 userId 注入 taskData
+      if (this.data.targetUserId) {
+        taskData.userId = this.data.targetUserId;
+        logger.info('TaskEdit', '任务将归属到目标孩子', { targetUserId: this.data.targetUserId });
+      }
+
       // 创建任务
       const result = await taskService.createTask(taskData);
       
