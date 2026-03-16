@@ -35,7 +35,22 @@
 ### 📖 详细实施记录
 
 - [里程碑-06：家庭账户](../design/milestone-06-family-account.md)
-- [M6 补充设计：家长角色定位](../design/milestone-06-supplement-parent-role.md)
+- [M6 补充设计：家长角色定位 v4](../design/milestone-06-supplement-parent-role.md)
+
+### 🔍 实施验证与优化（2026-03-16）
+
+**验证结果**：
+- ✅ 首页星星/奖励卡片冻结到loginUser（`calculateNextAvailableReward`、`getAvailableRewards` 已传入 `loginUserId`）
+- ✅ 星星过期保护使用正确userId（`app.js:347` 已传入 `loginUserId`）
+- ✅ 分析页入口全局禁用（所有视角均显示"分析功能即将上线"）
+- ✅ 任务加载按用户过滤（所有任务加载调用都传入 `currentUserId`）
+- ✅ 用户服务初始化等待优化（同时等待token和用户服务初始化完成）
+
+**代码优化**：
+- `index.js`：优化用户服务初始化等待逻辑，提升启动稳定性
+- `index.js`：全局禁用分析页入口，待M10补齐数据隔离后开放
+- `index.js`：所有任务加载调用都传入 `currentUserId`，确保用户隔离
+- `.gitignore`：添加临时工作文件忽略规则（`*.tar.gz`、`findings.md`、`progress.md`、`task_plan.md`）
 
 ---
 
@@ -223,4 +238,4 @@
 
 ---
 
-**最后更新**：2026-03-12
+**最后更新**：2026-03-16

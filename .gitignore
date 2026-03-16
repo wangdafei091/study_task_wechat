@@ -22,3 +22,9 @@ yarn.lock
 
 # Environment variables
 .env
+
+# Temporary work files
+*.tar.gz
+findings.md
+progress.md
+task_plan.md

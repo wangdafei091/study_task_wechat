@@ -147,7 +147,7 @@ Page({
     userPermissions: {}, // 当前用户权限
     loginUserId: null,         // 设备拥有者ID（权限依据）
     canManageMembers: false,   // 是否可管理家庭成员（家长专属）
-    isReadonlyView: false,     // 孩子设备只读（loginUser.role==='child'），家长始终为 false
+    isReadonlyView: false,     // 孩子视角只读：孩子设备（loginUser.role==='child'）或家长切到孩子视角（loginUser.userId !== currentUser.userId）
     lastActiveChildId: null,   // 家长最近查看的孩子ID（家长视角时任务仍显示该孩子）
 
     // 日期导航相关
@@ -1039,9 +1039,10 @@ Page({
       const rewardService = serviceManager.getService('rewardService');
       
       if (rewardService) {
-        // 获取当前奖励状态信息
-        const nextReward = await rewardService.calculateNextAvailableReward();
-        const visibleRewards = await rewardService.getAvailableRewards(true);
+        // 获取当前奖励状态信息（按 loginUser 查询，不随视角切换变化）
+        const loginUserId = getApp().globalData?.userService?.getLoginUserId() || null;
+        const nextReward = await rewardService.calculateNextAvailableReward(undefined, loginUserId);
+        const visibleRewards = await rewardService.getAvailableRewards(true, false, loginUserId);
         
         // 扩展的触发条件检查
         const hasNoRealReward = !nextReward || nextReward.isDefault;
@@ -1647,26 +1648,9 @@ Page({
   },
   
   // 触发进度圆环点击
+  // 分析页暂时对所有视角禁用（内部无 userId 过滤，M10 补齐后开放）
   onRingTap: function(e) {
-    logger.debug('Index', '点击进度圆环，跳转到分析页面');
-    wx.showLoading({
-      title: '加载中...',
-      mask: true
-    });
-    wx.navigateTo({
-      url: '/packageChart/pages/analysis/analysis',
-      success: () => {
-        setTimeout(() => wx.hideLoading(), 500);
-      },
-      fail: (err) => {
-        wx.hideLoading();
-        wx.showToast({
-          title: '加载失败，请重试',
-          icon: 'none'
-        });
-        logger.error('Index', '跳转到分析页面失败', err);
-      }
-    });
+    wx.showToast({ title: '分析功能即将上线', icon: 'none' });
   },
   
   // 处理进度条完成事件
@@ -2846,10 +2830,11 @@ Page({
     const filteredMenuItems = permissionUtils.filterMenuItems(originalMenuItems, loginUser.role);
 
     // 只读视角（孩子视角）下额外过滤掉任务创建和奖励管理入口
+    // 分析页（study）因内部 getAllTasks() 无 userId 过滤，所有视角均暂时禁用，待 M10 补齐数据隔离后开放
     const { isReadonlyView } = this.data;
-    const finalMenuItems = isReadonlyView
-      ? filteredMenuItems.filter(item => item.id !== 'habit' && item.id !== 'reward-manage')
-      : filteredMenuItems;
+    const finalMenuItems = filteredMenuItems
+      .filter(item => item.id !== 'study')
+      .filter(item => !isReadonlyView || (item.id !== 'habit' && item.id !== 'reward-manage'));
     
     this.setData({
       menuItems: finalMenuItems
