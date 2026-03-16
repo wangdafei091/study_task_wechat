@@ -15,9 +15,11 @@ const TestDataFactory = require('../utils/test-data-factory');
 jest.mock('../../utils/logger');
 jest.mock('../../utils/http-client');
 jest.mock('../../adapters/storage-adapter');
+jest.mock('../../utils/token-manager');
 
 const HttpClient = require('../../utils/http-client');
 const StorageAdapter = require('../../adapters/storage-adapter');
+const TokenManager = require('../../utils/token-manager');
 
 describe('UserService', () => {
   let userService;
@@ -29,6 +31,9 @@ describe('UserService', () => {
     // 重置所有mock
     jest.clearAllMocks();
 
+    // Mock TokenManager：模拟已登录的家长用户（initialize() 依赖此信息设置 loginUser）
+    TokenManager.getUserInfo = jest.fn().mockReturnValue({ userId: 'parent', role: 'parent', familyId: null });
+
     // 创建 HttpClient Mock
     mockHttpClient = {
       getUser: jest.fn(),
@@ -38,7 +43,8 @@ describe('UserService', () => {
       delete: jest.fn(),
       userExists: jest.fn(),
       validateSession: jest.fn(),
-      get: jest.fn().mockResolvedValue(null)  // M6新增，默认返回null
+      get: jest.fn().mockResolvedValue(null),  // M6新增，默认返回null
+      patch: jest.fn()  // M6 updateNickname
     };
 
     // 创建 StorageAdapter Mock
@@ -56,6 +62,7 @@ describe('UserService', () => {
     HttpClient.userExists = mockHttpClient.userExists;
     HttpClient.validateSession = mockHttpClient.validateSession;
     HttpClient.get = mockHttpClient.get;  // M6新增
+    HttpClient.patch = mockHttpClient.patch;  // M6 updateNickname
 
     // Mock StorageAdapter 模块
     StorageAdapter.prototype.get = mockStorageAdapter.get;
@@ -203,6 +210,19 @@ describe('UserService', () => {
       expect(users[0].userId).toBe('parent');
     });
 
+    it('孩子设备(非虚拟)getAllUsers只返回自己', () => {
+      const childUser = new User({ userId: 'child', name: '孩子', role: 'child', isVirtual: false });
+      userService.loginUser = childUser;
+      userService.currentUser = childUser;
+      userService.userCache.set('parent', new User({ userId: 'parent', role: 'parent' }));
+      userService.userCache.set('child', childUser);
+
+      const users = userService.getAllUsers();
+
+      expect(users).toHaveLength(1);
+      expect(users[0].userId).toBe('child');
+    });
+
     it('getUserByRole应该根据角色返回用户', () => {
       const parentUser = new User({ userId: 'parent', name: '家长', role: 'parent' });
       const childUser = new User({ userId: 'child', name: '孩子', role: 'child' });
@@ -304,6 +324,28 @@ describe('UserService', () => {
 
       expect(result.success).toBe(true);
       expect(result.user.userId).toBe('child');
+    });
+
+    it('孩子设备(非虚拟)禁止切换用户', async () => {
+      const childUser = new User({ userId: 'child', name: '孩子', role: 'child', isVirtual: false });
+      userService.loginUser = childUser;
+      userService.currentUser = childUser; // 当前是child，尝试切换到parent → 触发child设备拦截
+
+      const result = await userService.switchToUser('parent');
+
+      expect(result.success).toBe(false);
+      expect(result.message).toContain('孩子账号不支持切换用户');
+    });
+
+    it('家长不能切换到其他家长视角', async () => {
+      userService.loginUser = new User({ userId: 'parent', name: '家长', role: 'parent' });
+      const otherParent = new User({ userId: 'parent2', name: '家长2', role: 'parent', status: 'active' });
+      userService.userCache.set('parent2', otherParent);
+
+      const result = await userService.switchToUser('parent2');
+
+      expect(result.success).toBe(false);
+      expect(result.message).toContain('不支持切换到其他家长账号');
     });
   });
 
@@ -543,6 +585,8 @@ describe('UserService', () => {
         { userId: 'child', name: '孩子', role: 'child', status: 'active' }
       ];
       mockHttpClient.getAllUsers.mockResolvedValue(mockUsers);
+      // validateService 内部通过 HttpClient.get(AUTH_CURRENT) 验证 API 连接
+      mockHttpClient.get.mockResolvedValue({ userId: 'parent', role: 'parent' });
 
       // M6: validateService 检查 loginUser 是否设置、缓存是否有数据
       // 直接设置好所需状态，不依赖 initialize() 的完整流程
@@ -594,6 +638,116 @@ describe('UserService', () => {
       expect(roles).toBe(UserRole);
       expect(roles.PARENT).toBe('parent');
       expect(roles.CHILD).toBe('child');
+    });
+  });
+
+  describe('M6 家庭管理方法', () => {
+    it('updateNickname应该成功更新昵称', async () => {
+      mockHttpClient.patch.mockResolvedValue({});
+      const childUser = new User({ userId: 'child', name: '孩子', role: 'child' });
+      userService.userCache.set('child', childUser);
+
+      const result = await userService.updateNickname('child', '新名字');
+
+      expect(result.success).toBe(true);
+      expect(childUser.name).toBe('新名字');
+    });
+
+    it('updateNickname失败时应该返回错误', async () => {
+      mockHttpClient.patch.mockRejectedValue(new Error('更新失败'));
+
+      const result = await userService.updateNickname('child', '新名字');
+
+      expect(result.success).toBe(false);
+      expect(result.message).toContain('更新失败');
+    });
+
+    it('createFamily应该成功创建家庭', async () => {
+      mockHttpClient.post.mockResolvedValue({ familyId: 'f1' });
+
+      const result = await userService.createFamily('我的家庭');
+
+      expect(result.success).toBe(true);
+      expect(result.familyId).toBe('f1');
+    });
+
+    it('createFamily失败时应该返回错误', async () => {
+      mockHttpClient.post.mockRejectedValue(new Error('创建失败'));
+
+      const result = await userService.createFamily('我的家庭');
+
+      expect(result.success).toBe(false);
+      expect(result.message).toContain('创建失败');
+    });
+
+    it('joinFamily应该成功加入家庭', async () => {
+      mockHttpClient.post.mockResolvedValue({ success: true });
+
+      const result = await userService.joinFamily('INVITE123');
+
+      expect(result.success).toBe(true);
+    });
+
+    it('joinFamily失败时应该返回错误', async () => {
+      mockHttpClient.post.mockRejectedValue(new Error('加入失败'));
+
+      const result = await userService.joinFamily('INVALID');
+
+      expect(result.success).toBe(false);
+      expect(result.message).toContain('加入失败');
+    });
+
+    it('getFamilyInfo应该返回家庭信息', async () => {
+      const familyData = { familyId: 'f1', name: '我的家庭' };
+      mockHttpClient.get.mockResolvedValue(familyData);
+
+      const result = await userService.getFamilyInfo();
+
+      expect(result).toEqual(familyData);
+    });
+
+    it('getFamilyInfo失败时应该返回null', async () => {
+      mockHttpClient.get.mockRejectedValue(new Error('获取失败'));
+
+      const result = await userService.getFamilyInfo();
+
+      expect(result).toBeNull();
+    });
+
+    it('createVirtualMember应该成功创建虚拟成员', async () => {
+      const memberData = { userId: 'child2', name: '小明', role: 'child' };
+      mockHttpClient.post.mockResolvedValue(memberData);
+      mockHttpClient.get.mockResolvedValue({ members: [] });
+
+      const result = await userService.createVirtualMember('小明');
+
+      expect(result.success).toBe(true);
+      expect(result.member).toEqual(memberData);
+    });
+
+    it('createVirtualMember失败时应该返回错误', async () => {
+      mockHttpClient.post.mockRejectedValue(new Error('创建失败'));
+
+      const result = await userService.createVirtualMember('小明');
+
+      expect(result.success).toBe(false);
+    });
+
+    it('deleteFamilyMember应该成功删除成员', async () => {
+      mockHttpClient.delete.mockResolvedValue({});
+      mockHttpClient.get.mockResolvedValue({ members: [] });
+
+      const result = await userService.deleteFamilyMember('child2');
+
+      expect(result.success).toBe(true);
+    });
+
+    it('deleteFamilyMember失败时应该返回错误', async () => {
+      mockHttpClient.delete.mockRejectedValue(new Error('删除失败'));
+
+      const result = await userService.deleteFamilyMember('child2');
+
+      expect(result.success).toBe(false);
     });
   });
 

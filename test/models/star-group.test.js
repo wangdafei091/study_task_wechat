@@ -317,3 +317,221 @@ describe('StarGroup FIFO消费策略', () => {
     });
   });
 });
+
+// ====== StarGroup 领域模型完整方法测试 ======
+describe('StarGroup 领域模型', () => {
+  describe('构造函数和默认名称', () => {
+    it('应该为month类型设置正确默认名称', () => {
+      const group = new StarGroup({ type: 'month' });
+      expect(group.name).toBe('本月有效');
+    });
+
+    it('应该为quarter类型设置正确默认名称', () => {
+      const group = new StarGroup({ type: 'quarter' });
+      expect(group.name).toBe('本季度有效');
+    });
+
+    it('未知类型应使用默认名称', () => {
+      const group = new StarGroup({ type: 'unknown' });
+      expect(group.name).toBe('星星分组');
+    });
+
+    it('无参数构造应使用默认值', () => {
+      const group = new StarGroup();
+      expect(group.type).toBe('permanent');
+      expect(group.stars).toBe(0);
+    });
+  });
+
+  describe('validate - 数据验证', () => {
+    it('有效数据应返回空数组', () => {
+      const group = new StarGroup({ type: 'permanent', stars: 5, maxStars: 0 });
+      expect(group.validate()).toEqual([]);
+    });
+
+    it('星星数量为负数应返回错误', () => {
+      const group = new StarGroup({ type: 'permanent' });
+      group.stars = -1;
+      const errors = group.validate();
+      expect(errors).toContain('星星数量不能为负数');
+    });
+
+    it('maxStars为负数应返回错误', () => {
+      const group = new StarGroup({ type: 'permanent' });
+      group.maxStars = -1;
+      const errors = group.validate();
+      expect(errors).toContain('最大星星数不能为负数');
+    });
+
+    it('超过maxStars限制应返回错误', () => {
+      const group = new StarGroup({ type: 'permanent', stars: 10, maxStars: 5 });
+      const errors = group.validate();
+      expect(errors).toContain('星星数量不能超过最大星星数');
+    });
+
+    it('无效过期日期应返回错误', () => {
+      const group = new StarGroup({ type: 'week', expiryDate: 'invalid-date' });
+      const errors = group.validate();
+      expect(errors).toContain('过期日期格式无效');
+    });
+
+    it('有效过期日期不应返回日期错误', () => {
+      const group = new StarGroup({ type: 'week', expiryDate: '2026-12-31' });
+      const errors = group.validate();
+      expect(errors).not.toContain('过期日期格式无效');
+    });
+  });
+
+  describe('addStars - 添加星星', () => {
+    it('添加正数应增加星星', () => {
+      const group = new StarGroup({ stars: 5 });
+      const result = group.addStars(3);
+      expect(result).toBe(8);
+      expect(group.stars).toBe(8);
+    });
+
+    it('添加0或负数不应改变星星数', () => {
+      const group = new StarGroup({ stars: 5 });
+      expect(group.addStars(0)).toBe(5);
+      expect(group.addStars(-3)).toBe(5);
+    });
+
+    it('有maxStars限制时不超过上限', () => {
+      const group = new StarGroup({ stars: 8, maxStars: 10 });
+      const result = group.addStars(5);
+      expect(result).toBe(10);
+      expect(group.stars).toBe(10);
+    });
+  });
+
+  describe('isExpired - 过期检查', () => {
+    it('永久类型不应过期', () => {
+      const group = new StarGroup({ type: 'permanent' });
+      expect(group.isExpired()).toBe(false);
+    });
+
+    it('无过期日期不应过期', () => {
+      const group = new StarGroup({ type: 'week', expiryDate: '' });
+      expect(group.isExpired()).toBe(false);
+    });
+
+    it('过期日期无效时视为未过期', () => {
+      const group = new StarGroup({ type: 'week', expiryDate: 'invalid' });
+      expect(group.isExpired()).toBe(false);
+    });
+
+    it('已过期的分组应返回true', () => {
+      const group = new StarGroup({ type: 'week', expiryDate: '2020-01-01' });
+      expect(group.isExpired()).toBe(true);
+    });
+
+    it('未到期的分组应返回false', () => {
+      const group = new StarGroup({ type: 'week', expiryDate: '2099-12-31' });
+      expect(group.isExpired()).toBe(false);
+    });
+  });
+
+  describe('getRemainingDays - 剩余天数', () => {
+    it('永久类型应返回-1', () => {
+      const group = new StarGroup({ type: 'permanent' });
+      expect(group.getRemainingDays()).toBe(-1);
+    });
+
+    it('无过期日期应返回-1', () => {
+      const group = new StarGroup({ type: 'week', expiryDate: '' });
+      expect(group.getRemainingDays()).toBe(-1);
+    });
+
+    it('无效过期日期应返回-1', () => {
+      const group = new StarGroup({ type: 'week', expiryDate: 'invalid' });
+      expect(group.getRemainingDays()).toBe(-1);
+    });
+
+    it('已过期应返回0', () => {
+      const group = new StarGroup({ type: 'week', expiryDate: '2020-01-01' });
+      expect(group.getRemainingDays()).toBe(0);
+    });
+
+    it('未过期应返回正数天数', () => {
+      const group = new StarGroup({ type: 'week', expiryDate: '2099-12-31' });
+      expect(group.getRemainingDays()).toBeGreaterThan(0);
+    });
+  });
+
+  describe('resetStars - 重置星星', () => {
+    it('应该重置为指定数量', () => {
+      const group = new StarGroup({ stars: 10 });
+      expect(group.resetStars(5)).toBe(5);
+      expect(group.stars).toBe(5);
+    });
+
+    it('负数应重置为0', () => {
+      const group = new StarGroup({ stars: 10 });
+      expect(group.resetStars(-3)).toBe(0);
+    });
+
+    it('超过maxStars应限制到上限', () => {
+      const group = new StarGroup({ stars: 5, maxStars: 10 });
+      expect(group.resetStars(20)).toBe(10);
+    });
+  });
+
+  describe('setExpiryDate - 设置过期日期', () => {
+    it('空字符串应清除过期日期', () => {
+      const group = new StarGroup({ expiryDate: '2026-12-31' });
+      expect(group.setExpiryDate('')).toBe(true);
+      expect(group.expiryDate).toBe('');
+    });
+
+    it('无效日期应返回false', () => {
+      const group = new StarGroup({});
+      expect(group.setExpiryDate('invalid-date')).toBe(false);
+    });
+
+    it('有效日期应设置成功', () => {
+      const group = new StarGroup({});
+      expect(group.setExpiryDate('2099-12-31')).toBe(true);
+      expect(group.expiryDate).toBe('2099-12-31');
+    });
+  });
+
+  describe('isEmpty - 是否为空', () => {
+    it('stars为0应返回true', () => {
+      const group = new StarGroup({ stars: 0 });
+      expect(group.isEmpty()).toBe(true);
+    });
+
+    it('stars大于0应返回false', () => {
+      const group = new StarGroup({ stars: 5 });
+      expect(group.isEmpty()).toBe(false);
+    });
+  });
+
+  describe('clone - 克隆', () => {
+    it('默认应生成新ID', () => {
+      const group = new StarGroup({ id: 'group_1', stars: 5 });
+      const cloned = group.clone();
+      expect(cloned.id).not.toBe('group_1');
+      expect(cloned.stars).toBe(5);
+    });
+
+    it('generateNewId=false应保留原ID', () => {
+      const group = new StarGroup({ id: 'group_1', stars: 5 });
+      const cloned = group.clone({}, false);
+      expect(cloned.id).toBe('group_1');
+    });
+
+    it('overrides应覆盖原属性', () => {
+      const group = new StarGroup({ stars: 5 });
+      const cloned = group.clone({ stars: 10 });
+      expect(cloned.stars).toBe(10);
+    });
+  });
+
+  describe('sortByExpiryDate - 非数组输入', () => {
+    it('非数组输入应返回空数组', () => {
+      expect(StarGroup.sortByExpiryDate(null)).toEqual([]);
+      expect(StarGroup.sortByExpiryDate('invalid')).toEqual([]);
+    });
+  });
+});
