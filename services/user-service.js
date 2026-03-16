@@ -852,11 +852,10 @@ class UserService {
         results.success = false;
       }
       
-      // 测试4: 检查API连接
+      // 测试4: 检查API连接（通过获取当前用户信息验证，不依赖旧的 getAllUsers 接口）
       try {
-        const response = await HttpClient.getAllUsers();
-        const users = response.users || response; // 兼容后端返回 { users, total } 或直接返回数组
-        results.tests.apiConnection = Array.isArray(users) && users.length > 0;
+        const response = await HttpClient.get(API_CONFIG.ENDPOINTS.AUTH_CURRENT);
+        results.tests.apiConnection = !!(response && response.userId);
         if (!results.tests.apiConnection) {
           results.errors.push('API连接异常或返回数据为空');
           results.success = false;

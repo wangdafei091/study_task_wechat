@@ -111,17 +111,22 @@ describe('UserService', () => {
     });
 
 
-    it('本地会话为空时应该使用parent用户', async () => {
+    it('本地会话为空时，家长设备应默认选第一个孩子', async () => {
       const mockUsers = [
         { userId: 'parent', name: '家长', role: 'parent', status: 'active' },
         { userId: 'child', name: '孩子', role: 'child', status: 'active' }
       ];
-      mockHttpClient.getAllUsers.mockResolvedValue(mockUsers);
+      // M6: loginUser = parent，空会话 → 默认选第一个孩子
+      mockHttpClient.get.mockImplementation(async (url) => {
+        if (url && url.includes('families')) return { members: mockUsers };
+        return mockUsers[0]; // AUTH_CURRENT 返回 parent
+      });
       mockStorageAdapter.get.mockReturnValue(null);
 
       await userService.initialize();
 
-      expect(userService.currentUser.id).toBe('parent');
+      // 家长设备 + 空会话 → currentUser 应为第一个孩子
+      expect(userService.currentUser.id).toBe('child');
     });
   });
 

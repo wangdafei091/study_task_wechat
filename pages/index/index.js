@@ -2250,6 +2250,12 @@ Page({
     
     logger.debug('Index', `点击奖励指示器: ${reward.name}, 状态: ${reward.status}`);
     
+    // 家庭视角（isReadonlyView）下奖池页暂不支持多用户隔离，禁止进入
+    if (this.data.isReadonlyView) {
+      wx.showToast({ title: '请切换回家长视角查看奖励', icon: 'none' });
+      return;
+    }
+
     // 已解锁或已领取状态，跳转到奖池
     if (reward.status === 'unlocked' || reward.status === 'claimed') {
       wx.switchTab({
@@ -2266,6 +2272,11 @@ Page({
   
   // 显示所有奖励
   showAllRewards: function() {
+    // 家庭视角（isReadonlyView）下奖池页暂不支持多用户隔离，禁止进入
+    if (this.data.isReadonlyView) {
+      wx.showToast({ title: '请切换回家长视角查看奖励', icon: 'none' });
+      return;
+    }
     logger.debug('Index', '查看所有奖励');
     wx.switchTab({
       url: '/pages/rewards/rewards'
