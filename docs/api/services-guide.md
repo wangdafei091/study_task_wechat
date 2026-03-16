@@ -575,8 +575,49 @@ const configService = serviceManager.get('configService');
 
 ##### `loadFamilyMembers()`
 从云端加载家庭成员并更新本地缓存
-- **返回**: `Promise<void>`
-- **说明**：登录用户无家庭（`loginUser.familyId` 为 null）时静默跳过
+- **返回**: `Promise<boolean>`
+- **说明**：登录用户无家庭（`loginUser.familyId` 为 null）时静默跳过，失败时缓存保留仅含 loginUser
+
+##### `createFamily(name)`
+创建家庭（M6新增）
+- **参数**: `name` (string) - 家庭名称
+- **返回**: `Promise<{ success: boolean, familyId?: string, message?: string }>`
+- **说明**：创建成功后若后端返回新 token，自动保存并重新初始化 UserService
+
+##### `joinFamily(inviteCode)`
+通过邀请码加入家庭（M6新增）
+- **参数**: `inviteCode` (string) - 邀请码
+- **返回**: `Promise<{ success: boolean, message?: string }>`
+- **说明**：加入成功后若后端返回新 token，自动保存并重新初始化 UserService
+
+##### `getFamilyInfo()`
+获取当前家庭信息（M6新增）
+- **返回**: `Promise<Object | null>`
+- **说明**：失败时静默返回 null
+
+##### `refreshInviteCode(role)`
+刷新家庭邀请码（M6新增）
+- **参数**: `role` ('parent' | 'child') - 目标角色
+- **返回**: `Promise<Object>` - 包含新邀请码的响应对象
+- **说明**：失败时直接抛出异常，调用方需自行捕获
+
+##### `createVirtualMember(name)`
+创建虚拟成员（场景A共享设备，无独立微信账号的孩子）（M6新增）
+- **参数**: `name` (string) - 成员名称
+- **返回**: `Promise<{ success: boolean, member?: Object, message?: string }>`
+- **说明**：创建成功后自动调用 `loadFamilyMembers()` 刷新缓存
+
+##### `deleteFamilyMember(userId)`
+软删除家庭成员（仅虚拟成员）（M6新增）
+- **参数**: `userId` (string) - 目标用户ID
+- **返回**: `Promise<{ success: boolean, message?: string }>`
+- **说明**：删除成功后自动调用 `loadFamilyMembers()` 刷新缓存
+
+##### `updateNickname(userId, nickname)`
+更新成员昵称（M6新增）
+- **参数**: `userId` (string) - 目标用户ID, `nickname` (string) - 新昵称
+- **返回**: `Promise<{ success: boolean, message?: string }>`
+- **说明**：更新成功后直接同步 userCache 和 currentUser/loginUser，不重新拉取
 
 ---
 

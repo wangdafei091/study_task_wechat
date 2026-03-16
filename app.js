@@ -26,19 +26,16 @@ App({
       // 只有在未明确设置时才启用API，保留用户的明确配置（包括'false'）
       if (enableApi === undefined || enableApi === null || enableApi === '') {
         wx.setStorageSync('ENABLE_API', 'true');
-        console.log('✅ 已自动设置ENABLE_API配置');
+        logger.info('App', '已自动设置ENABLE_API配置');
       } else {
-        console.log('✅ 保留用户配置的API模式:', enableApi);
+        logger.info('App', '保留用户配置的API模式', { enableApi });
       }
 
       if (!baseUrl) {
         wx.setStorageSync('API_BASE_URL', 'https://api.todoceo.xyz');
         logger.info('App', 'onLaunch中设置API_BASE_URL:', 'https://api.todoceo.xyz');
-        console.log('📍 onLaunch设置API地址：', 'https://api.todoceo.xyz');
-        console.log('✅ 已自动设置API_BASE_URL配置');
       } else {
         logger.info('App', 'onLaunch检测到已有API_BASE_URL:', baseUrl);
-        console.log('📍 onLaunch检测到API地址：', baseUrl);
       }
     }
 
@@ -282,10 +279,8 @@ App({
     if (!baseUrl || baseUrl === '') {
       logger.warn('App', 'API_BASE_URL为空或不存在，重新设置');
       wx.setStorageSync('API_BASE_URL', 'https://api.todoceo.xyz');
-      console.log('📍 onShow重新设置API地址：', 'https://api.todoceo.xyz');
     } else {
       logger.info('App', 'onShow检测到已有API_BASE_URL:', baseUrl);
-      console.log('📍 onShow检测到API地址：', baseUrl);
     }
 
     // 同时检查 ENABLE_API 配置
@@ -293,7 +288,6 @@ App({
     if (enableApi === undefined || enableApi === null || enableApi === '') {
       logger.warn('App', 'ENABLE_API为空，重新设置');
       wx.setStorageSync('ENABLE_API', 'true');
-      console.log('✅ onShow设置ENABLE_API');
     } else {
       logger.info('App', 'onShow检测到ENABLE_API:', enableApi);
     }

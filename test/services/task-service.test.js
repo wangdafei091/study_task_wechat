@@ -1218,6 +1218,140 @@ describe('TaskService', () => {
     });
   });
 
+  describe('getAllTasks - 云端模式分支', () => {
+    beforeEach(() => {
+      taskService.enableCloudStorage = true;
+    });
+
+    afterEach(() => {
+      taskService.enableCloudStorage = false;
+    });
+
+    it('云端模式：成功从云端获取任务', async () => {
+      const tasks = [TestDataFactory.createTask({ id: 't1' })];
+      taskService._fetchTasksFromCloud = jest.fn().mockResolvedValue(tasks);
+
+      const result = await taskService.getAllTasks();
+      expect(result).toEqual(tasks);
+      expect(taskService._fetchTasksFromCloud).toHaveBeenCalledWith(null);
+    });
+
+    it('云端模式：云端失败时降级到本地(无userId)', async () => {
+      const localTasks = [TestDataFactory.createTask({ id: 't1' })];
+      taskService._fetchTasksFromCloud = jest.fn().mockRejectedValue(new Error('cloud error'));
+      mockTaskRepository.getAll.mockResolvedValue(localTasks);
+
+      const result = await taskService.getAllTasks();
+      expect(result).toEqual(localTasks);
+    });
+
+    it('云端模式：云端失败时降级到本地(带userId过滤)', async () => {
+      const localTasks = [
+        TestDataFactory.createTask({ id: 't1', userId: 'u1' }),
+        TestDataFactory.createTask({ id: 't2', userId: 'u2' })
+      ];
+      taskService._fetchTasksFromCloud = jest.fn().mockRejectedValue(new Error('cloud error'));
+      mockTaskRepository.getAll.mockResolvedValue(localTasks);
+
+      const result = await taskService.getAllTasks('u1');
+      expect(result).toHaveLength(1);
+      expect(result[0].userId).toBe('u1');
+    });
+
+    it('云端和本地都失败时应该返回空数组', async () => {
+      taskService._fetchTasksFromCloud = jest.fn().mockRejectedValue(new Error('cloud error'));
+      mockTaskRepository.getAll.mockRejectedValue(new Error('local error'));
+
+      const result = await taskService.getAllTasks();
+      expect(result).toEqual([]);
+    });
+  });
+
+  describe('getTaskById - 访问权限和错误分支', () => {
+    it('任务userId与传入userId不匹配时应该返回null', async () => {
+      const task = TestDataFactory.createTask({ id: 't1', userId: 'owner' });
+      mockTaskRepository.getById.mockResolvedValue(new Task(task));
+
+      const result = await taskService.getTaskById('t1', 'other_user');
+      expect(result).toBeNull();
+    });
+
+    it('仓储抛出异常时应该返回null', async () => {
+      mockTaskRepository.getById.mockRejectedValue(new Error('db error'));
+
+      const result = await taskService.getTaskById('t1');
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('updateUserService - 更新UserService引用', () => {
+    it('传入相同UserService时不应该更新', () => {
+      taskService.userService = mockUserService;
+      taskService.updateUserService(mockUserService);
+      expect(taskService.userService).toBe(mockUserService);
+    });
+
+    it('传入不同UserService时应该更新引用', () => {
+      const newUserService = { getCurrentUserId: jest.fn().mockReturnValue('user2') };
+      taskService.updateUserService(newUserService);
+      expect(taskService.userService).toBe(newUserService);
+    });
+  });
+
+  describe('checkUpcomingTasks - 提醒检查', () => {
+    it('没有今日任务时应该返回count=0', async () => {
+      mockTaskRepository.getTodayTasks.mockResolvedValue([]);
+      const result = await taskService.checkUpcomingTasks();
+      expect(result.success).toBe(true);
+      expect(result.count).toBe(0);
+    });
+
+    it('传入userId时应该过滤用户任务', async () => {
+      const task = TestDataFactory.createTask({
+        id: 't1', userId: 'u1',
+        status: TaskStatus.PENDING,
+        date: dateUtils.getTodayString()
+      });
+      mockTaskRepository.getTodayTasks.mockResolvedValue([new Task(task)]);
+      const result = await taskService.checkUpcomingTasks('u2');
+      expect(result.count).toBe(0);
+    });
+
+    it('未完成且无提醒的任务应该跳过', async () => {
+      const taskData = TestDataFactory.createTask({
+        id: 't1', userId: 'u1',
+        status: TaskStatus.PENDING,
+        date: dateUtils.getTodayString()
+      });
+      const task = new Task(taskData);
+      task.reminder = null;
+      mockTaskRepository.getTodayTasks.mockResolvedValue([task]);
+      const result = await taskService.checkUpcomingTasks('u1');
+      expect(result.count).toBe(0);
+    });
+
+    it('全天任务且reminder.time!==-1时应该跳过', async () => {
+      const taskData = TestDataFactory.createTask({
+        id: 't1', userId: 'u1',
+        status: TaskStatus.PENDING,
+        date: dateUtils.getTodayString(),
+        isAllDay: true
+      });
+      const task = new Task(taskData);
+      task.reminder = { enabled: true, time: 30 };
+      task.startTime = null;
+      mockTaskRepository.getTodayTasks.mockResolvedValue([task]);
+      const result = await taskService.checkUpcomingTasks('u1');
+      expect(result.count).toBe(0);
+    });
+
+    it('仓储抛出异常时应该返回success=false', async () => {
+      mockTaskRepository.getTodayTasks.mockRejectedValue(new Error('db error'));
+      const result = await taskService.checkUpcomingTasks();
+      expect(result.success).toBe(false);
+    });
+  });
+
   describe('边條条件和错误处理', () => {
     it('deleteTask suppressMessage为true时不应该触发事件', async () => {
       const taskData = TestDataFactory.createTask({ id: 'task_1', userId: 'parent' });
