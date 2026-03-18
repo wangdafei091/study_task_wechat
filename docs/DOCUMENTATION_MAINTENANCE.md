@@ -1,7 +1,7 @@
 # 文档维护指南
 
 > 如何在编码完成后及时同步更新文档，并严格遵守文档定位和规范
-> **最后更新**：2026-03-04
+> **最后更新**：2026-03-12
 
 ---
 
@@ -62,7 +62,8 @@
 ```markdown
 ✅ 正确做法：
 <!-- workflow.md -->
-详细的陷阱说明请参阅 [CLAUDE.md 的常见陷阱章节](../../CLAUDE.md#常见陷阱)
+详细的陷阱说明请参阅 [CLAUDE.md 的常见陷阱章节](../CLAUDE.md#常见陷阱)
+注意：CLAUDE.md 位于项目根目录
 
 ❌ 错误做法：
 <!-- workflow.md -->
@@ -214,16 +215,23 @@
 **影响范围**：
 - `docs/design/[feature-name].md`（详细记录）✅
 - `docs/development/CHANGELOG.md`（简要提及，1行）✅
+- `docs/codex-fixes-summary.md`（Codex复核修复）✅
+- `docs/documentation-fixes-summary.md`（文档质量修复）✅
 
 **规则**：
 1. **功能特定 Bug** → 记录在该功能的设计文档"Bug 修复记录"部分
 2. **框架级 Bug** → 记录在功能设计文档，标记"需要迁移到框架文档"
+3. **复核修复记录** → 分别记录在对应的修复总结文档中
 
-> Bug 修复记录模板请参阅 `docs/design/.template.md` 的"Bug 修复记录"部分
+**文档分层说明**：
+- `codex-fixes-summary.md`：记录Codex复核活动的修复过程
+- `documentation-fixes-summary.md`：记录文档质量标准的修复过程
+- 两者记录不同维度的修复活动，各有明确职责
 
 **不应该做的**：
 - ❌ 在 CHANGELOG.md 中展开技术细节（超过3行）
-- ❌ 在多个地方重复记录相同的 Bug
+- ❌ 在同一层面重复记录相同的 Bug
+- ❌ 将修复总结文档内容复制到其他地方
 
 **文档管理原则**：
 1. **Single Source of Truth**：Bug 的详细技术描述只有一个权威来源（design/*.md）
@@ -394,7 +402,7 @@ grep -r "批量处理" docs/*.md
 ```markdown
 ✅ 正确：
 <!-- README.md -->
-详细的 API 文档请参阅 [docs/api/services-guide.md](docs/api/services-guide.md)
+详细的 API 文档请参阅 [docs/api/services-guide.md](./api/services-guide.md)
 
 ❌ 错误：
 <!-- README.md -->
@@ -598,13 +606,13 @@ git commit -m "feat: 添加任务完成功能
 
 ## 相关文档
 
-- [开发工作流程](workflow.md) - 开发流程和设计文档管理
-- [编码规范](coding_standards.md) - 详细编码规范
-- [设计文档指南](../design/README.md) - 如何创建和使用设计文档
-- [架构概览](../architecture/architecture.md) - 项目架构决策和DDD分层实现
-- [CLAUDE.md](../../CLAUDE.md) - AI助手工作指南
+- [开发工作流程](./development/workflow.md) - 开发流程和设计文档管理
+- [编码规范](./development/coding_standards.md) - 详细编码规范
+- [设计文档指南](./design/README.md) - 如何创建和使用设计文档
+- [架构概览](./architecture/architecture.md) - 项目架构决策和DDD分层实现
+- [CLAUDE.md](../CLAUDE.md) - AI助手工作指南
 
 ---
 
-**最后更新**：2026-03-04
+**最后更新**：2026-03-12
 **维护者**：项目维护团队

@@ -1516,6 +1516,17 @@ class MessageService {
       return Promise.resolve(false);
     }
   }
+
+  /**
+   * 更新用户服务实例
+   * @param {UserService} userService 新的用户服务实例
+   */
+  updateUserService(userService) {
+    if (this.userService !== userService) {
+      this.userService = userService;
+      logger.info('MessageService', 'UserService已更新');
+    }
+  }
 }
 
 /**
@@ -1525,6 +1536,6 @@ class MessageService {
  */
 MessageService.getNotificationTypes = function() {
   return NotificationType;
-};
+}
 
-module.exports = MessageService; 
+module.exports = MessageService;

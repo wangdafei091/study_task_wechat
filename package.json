@@ -11,7 +11,11 @@
     "test:integration": "jest test/integration",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "test:report": "jest --coverage --coverageReporters=html"
+    "test:report": "jest --coverage --coverageReporters=html",
+    "docs:check": "node scripts/docs-check.js",
+    "docs:link-check": "node scripts/docs-link-check.js",
+    "docs:contract-check": "node scripts/docs-contract-check.js",
+    "docs:final-check": "node scripts/docs-final-check.js"
   },
   "keywords": [
     "wechat",
@@ -20,6 +24,7 @@
     "education"
   ],
   "devDependencies": {
-    "jest": "^29.5.0"
+    "jest": "^29.5.0",
+    "jsonwebtoken": "^9.0.3"
   }
 }

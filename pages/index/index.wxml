@@ -10,6 +10,7 @@
       <view class="header-title">{{currentMotivation}}</view>
     </view>
     <view class="header-actions">
+      <!-- 消息入口：所有视角均可访问 -->
       <view class="message-icon-wrapper" hover-class="icon-hover" bindtap="toggleMessagePreview">
         <view class="message-icon">
           <image src="/assets/icons/message/message.svg" mode="aspectFit"></image>
@@ -75,7 +76,7 @@
       <input class="search-input" 
         placeholder="输入关键词搜索任务" 
         value="{{searchQuery}}"
-        bindinput="inputSearch" 
+        bindinput="updateSearchQuery" 
         confirm-type="search" />
     </view>
     
@@ -85,13 +86,13 @@
         <view class="filter-title">任务类型</view>
         <view class="filter-options">
           <view class="filter-option {{searchFilters.type === 'habit' ? 'active' : ''}}" 
-                data-type="type" data-value="habit" bindtap="selectFilter"
+                data-type="type" data-value="habit" bindtap="updateSearchFilter"
                 animation="{{filterAnimation.type.habit}}">
             <text class="filter-icon">⏰</text>
             <text>生活习惯</text>
           </view>
           <view class="filter-option {{searchFilters.type === 'study' ? 'active' : ''}}" 
-                data-type="type" data-value="study" bindtap="selectFilter"
+                data-type="type" data-value="study" bindtap="updateSearchFilter"
                 animation="{{filterAnimation.type.study}}">
             <text class="filter-icon">📝</text>
             <text>学习任务</text>
@@ -103,10 +104,10 @@
         <view class="filter-title">完成状态</view>
         <view class="filter-options">
           <view class="filter-option {{searchFilters.status === '0' ? 'active' : ''}}" 
-                data-type="status" data-value="0" bindtap="selectFilter"
+                data-type="status" data-value="0" bindtap="updateSearchFilter"
                 animation="{{filterAnimation.status['0']}}">待完成</view>
           <view class="filter-option {{searchFilters.status === '1' ? 'active' : ''}}" 
-                data-type="status" data-value="1" bindtap="selectFilter"
+                data-type="status" data-value="1" bindtap="updateSearchFilter"
                 animation="{{filterAnimation.status['1']}}">已完成</view>
         </view>
       </view>
@@ -115,19 +116,19 @@
         <view class="filter-title">时间范围</view>
         <view class="filter-options">
           <view class="filter-option {{searchFilters.dateRange === 'today' ? 'active' : ''}}" 
-                data-type="dateRange" data-value="today" bindtap="selectFilter"
+                data-type="dateRange" data-value="today" bindtap="updateSearchFilter"
                 animation="{{filterAnimation.dateRange.today}}">今天</view>
           <view class="filter-option {{searchFilters.dateRange === 'week' ? 'active' : ''}}" 
-                data-type="dateRange" data-value="week" bindtap="selectFilter"
+                data-type="dateRange" data-value="week" bindtap="updateSearchFilter"
                 animation="{{filterAnimation.dateRange.week}}">本周</view>
           <view class="filter-option {{searchFilters.dateRange === 'month' ? 'active' : ''}}" 
-                data-type="dateRange" data-value="month" bindtap="selectFilter"
+                data-type="dateRange" data-value="month" bindtap="updateSearchFilter"
                 animation="{{filterAnimation.dateRange.month}}">本月</view>
         </view>
       </view>
       
       <view class="filter-actions">
-        <view class="filter-clear" bindtap="clearFilters">清除筛选</view>
+        <view class="filter-clear" bindtap="clearSearchFilters">清除筛选</view>
       </view>
     </view>
     
@@ -139,6 +140,7 @@
           <index-task-item 
             task="{{item}}"
             lastExchangeTime="{{lastExchangeTime}}"
+            readonly="{{false}}"
             bind:complete="completeTask"
             style="--delay: {{item.animationDelay}}"
           />
@@ -258,13 +260,27 @@
           <index-task-item 
             task="{{item}}"
             lastExchangeTime="{{lastExchangeTime}}"
+            readonly="{{false}}"
             bind:complete="completeTask"
           />
         </view>
       </block>
       
-      <view class="empty-task-list" wx:if="{{tasks.length === 0}}">
-        暂无任务，点击右下角"+"按钮添加
+      <!-- 家长在孩子视角：无任务 -->
+      <view class="empty-task-list" wx:if="{{tasks.length === 0 && canManageMembers && currentUser && currentUser.role === 'child'}}">
+        暂无任务，请切换到家长视角后点击"+"添加任务
+      </view>
+      <!-- 家长在自己视角（管理模式）：无任务，可直接创建 -->
+      <view class="empty-task-list" wx:if="{{tasks.length === 0 && canManageMembers && currentUser && currentUser.role === 'parent' && availableUsers.length > 1}}">
+        点击右下角"+"按钮添加任务
+      </view>
+      <!-- 家长尚无孩子成员 -->
+      <view class="empty-task-list" wx:if="{{tasks.length === 0 && canManageMembers && availableUsers.length <= 1}}">
+        还没有孩子成员，请前往家庭设置添加孩子
+      </view>
+      <!-- 孩子视角空态 -->
+      <view class="empty-task-list" wx:if="{{tasks.length === 0 && !canManageMembers}}">
+        暂无任务
       </view>
     </view>
   </view>
@@ -272,8 +288,8 @@
   <!-- 底部导航占位 -->
   <view class="bottom-nav-placeholder"></view>
   
-  <!-- 添加任务按钮及浮动菜单组件 -->
-  <float-menu 
+  <!-- 浮动菜单：任务创建项在只读视角下已从 menuItems 过滤掉 -->
+  <float-menu
     menuItems="{{menuItems}}"
     position="bottom-right"
     bind:itemtap="handleMenuItemTap"
@@ -344,8 +360,11 @@
   currentUser="{{currentUser}}"
   availableUsers="{{availableUsers}}"
   showAddUser="{{true}}"
+  loginUserId="{{loginUserId}}"
+  canManageMembers="{{canManageMembers}}"
   bind:userSwitch="handleUserSwitch"
   bind:userAdd="handleUserAdd"
   bind:userDelete="handleUserDelete"
+  bind:nicknameEdit="handleNicknameEdit"
   bind:close="hideUserSwitcher"
 />

@@ -149,7 +149,12 @@ global.wx = {
   }),
 
   // 同步存储API
-  getStorageSync: jest.fn(() => null),
+  getStorageSync: jest.fn((key) => {
+    // 测试环境默认禁用API模式，防止误触发云端逻辑
+    if (key === 'ENABLE_API') return 'false';
+    if (key === 'API_BASE_URL') return '';
+    return null;
+  }),
   setStorageSync: jest.fn(),
   removeStorageSync: jest.fn(),
   clearStorage: jest.fn((options) => {

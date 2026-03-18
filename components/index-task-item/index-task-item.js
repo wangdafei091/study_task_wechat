@@ -111,6 +111,11 @@ Component({
     showCheckbox: {
       type: Boolean,
       value: true
+    },
+    // 家庭视角下设为 true，禁用完成/重置操作
+    readonly: {
+      type: Boolean,
+      value: false
     }
   },
 
@@ -144,6 +149,12 @@ Component({
   methods: {
     // 点击复选框完成任务
     onCheckboxTap: function(e) {
+      // 家庭视角只读模式：禁用完成/重置操作
+      if (this.properties.readonly) {
+        wx.showToast({ title: '请在自己设备上操作', icon: 'none', duration: 1500 });
+        return;
+      }
+
       logger.debug('index-task-item', '任务完成状态切换:', this.properties.task.id);
       
       // 防止重复点击

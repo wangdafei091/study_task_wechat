@@ -117,7 +117,7 @@ npm run health-check            # 项目健康检查
 - [ ] 创建/更新 [设计文档](design/)
 
 ### 修复 Bug
-- [ ] 如是常见问题，更新 [开发流程](development/workflow.md)（文档维护章节）
+- [ ] 如是常见问题，更新 [故障排除指南](development/troubleshooting.md)
 - [ ] 如是功能 Bug，更新对应 [设计文档](design/)
 
 ### 架构调整

@@ -46,13 +46,14 @@ const configService = serviceManager.get('configService');
 
 #### 基础操作
 
-##### `getAllTasks()`
+##### `getAllTasks(userId = null)`
 获取所有任务列表
+- **参数**: `userId` - 可选的用户ID，不传则获取所有用户的任务
 - **返回**: `{ success: boolean, tasks: Task[], message?: string }`
 
-##### `getTaskById(taskId)`
+##### `getTaskById(taskId, userId = null)`
 根据ID获取特定任务
-- **参数**: `taskId` - 任务ID
+- **参数**: `taskId` - 任务ID, `userId` - 可选的用户ID
 - **返回**: `{ success: boolean, task?: Task, message?: string }`
 
 ##### `createTask(taskData)`
@@ -74,91 +75,89 @@ const configService = serviceManager.get('configService');
   ```
 - **返回**: `{ success: boolean, task?: Task, message?: string }`
 
-##### `updateTask(taskId, updateData)`
+##### `updateTask(taskId, changes, userId = null)`
 更新任务信息
-- **参数**: `taskId` - 任务ID, `updateData` - 更新数据对象
+- **参数**: `taskId` - 任务ID, `changes` - 更新数据对象, `userId` - 可选的用户ID
 - **返回**: `{ success: boolean, task?: Task, message?: string }`
 
-##### `deleteTask(taskId)`
+##### `deleteTask(taskId, userId = null, suppressMessage = false)`
 删除任务
-- **参数**: `taskId` - 任务ID
+- **参数**: `taskId` - 任务ID, `userId` - 可选的用户ID, `suppressMessage` - 是否禁用消息推送，默认false
 - **返回**: `{ success: boolean, message?: string }`
 
 ---
 
 #### 状态管理
 
-##### `completeTask(taskId, userId)`
+##### `completeTask(taskId, userId = null)`
 完成任务（核心业务流程）
-- **参数**: `taskId` - 任务ID, `userId` - 用户ID
+- **参数**: `taskId` - 任务ID, `userId` - 可选的用户ID
 - **返回**: `{ success: boolean, task?: Task, starReward?: number, message?: string }`
 - **内部流程**：验证状态 → 更新为完成 → 计算星星 → 发布事件 → 创建消息
 
-##### `resetTask(taskId, userId)`
+##### `resetTask(taskId, userId = null)`
 重置任务状态
-- **参数**: `taskId` - 任务ID, `userId` - 用户ID
+- **参数**: `taskId` - 任务ID, `userId` - 可选的用户ID
 - **返回**: `{ success: boolean, task?: Task, starDeduction?: number, message?: string }`
 
-##### `updateTaskStatus(taskId, status, userId)`
+##### `updateTaskStatus(taskId, status, userId = null)`
 更新任务状态
-- **参数**: `taskId` - 任务ID, `status` - 状态(0=未完成, 1=已完成), `userId` - 用户ID
+- **参数**: `taskId` - 任务ID, `status` - 状态(0=未完成, 1=已完成), `userId` - 可选的用户ID
 - **返回**: `{ success: boolean, task?: Task, message?: string }`
 
 ---
 
 #### 必做任务功能
 
-##### `markTaskAsRequired(taskId, userId)`
+##### `markTaskAsRequired(taskId, userId = null)`
 标记任务为必做
-- **参数**: `taskId` - 任务ID, `userId` - 用户ID
+- **参数**: `taskId` - 任务ID, `userId` - 可选的用户ID
 - **返回**: `{ success: boolean, task?: Task, message?: string }`
 
-##### `unmarkTaskAsRequired(taskId, userId)`
+##### `unmarkTaskAsRequired(taskId, userId = null)`
 取消必做任务标记
-- **参数**: `taskId` - 任务ID, `userId` - 用户ID
+- **参数**: `taskId` - 任务ID, `userId` - 可选的用户ID
 - **返回**: `{ success: boolean, task?: Task, message?: string }`
 
-##### `checkRequiredTasks(date, userId)`
-检查指定日期的必做任务惩罚状态
-- **参数**: `date` - 日期字符串, `userId` - 用户ID
+##### `checkRequiredTasks()`
+检查必做任务惩罚状态（兼容方法，内部调用checkTasksStatus）
 - **返回**: `{ success: boolean, tasks: Task[], message?: string }`
 
-##### `handleRequiredTaskPenalty(taskId)`
+##### `handleRequiredTaskPenalty(task)`
 应用必做任务惩罚
-- **参数**: `taskId` - 任务ID
+- **参数**: `task` - 任务对象
 - **返回**: `{ success: boolean, message?: string }`
 
 ---
 
 #### 任务查询
 
-##### `getTasksByDate(date, userId)`
+##### `getTasksByDate(date, userId = null)`
 获取指定日期的任务
-- **参数**: `date` - 日期字符串, `userId` - 用户ID
+- **参数**: `date` - 日期字符串, `userId` - 可选的用户ID
 - **返回**: `{ success: boolean, tasks: Task[], message?: string }`
 
-##### `getTodayTasks(userId)`
+##### `getTodayTasks(userId = null)`
 获取今日任务
-- **参数**: `userId` - 用户ID
+- **参数**: `userId` - 可选的用户ID
 - **返回**: `{ success: boolean, tasks: Task[], message?: string }`
 
-##### `getUpcomingTasks(userId)`
-获取即将开始的任务
-- **参数**: `userId` - 用户ID
+##### `checkUpcomingTasks()`
+检查即将开始的任务
 - **返回**: `{ success: boolean, tasks: Task[], message?: string }`
 
 ##### `checkTasksStatus()`
 检查所有任务状态（应用启动时调用）
 - **返回**: `{ success: boolean, message?: string }`
 
-##### `getExpiredIncompleteTasks(userId)`
+##### `getExpiredIncompleteTasks(userId = null)`
 获取已过期且未完成的任务
-- **参数**: `userId` - 用户ID
+- **参数**: `userId` - 可选的用户ID
 - **返回**: `{ success: boolean, tasks: Task[], message?: string }`
 
-##### `calculateTaskProgress(date, userId)`
-计算指定日期的任务进度
-- **参数**: `date` - 日期字符串, `userId` - 用户ID
+##### `calculateTaskProgress(tasks = null)`
+计算任务进度
+- **参数**: `tasks` - 可选的任务列表，不传则自动获取今日任务
 - **返回**:
   ```javascript
   {
@@ -172,9 +171,9 @@ const configService = serviceManager.get('configService');
 
 #### 任务统计
 
-##### `getTaskStatistics(date, userId)`
+##### `getTaskStatistics(dateRange = {})`
 获取任务统计数据
-- **参数**: `date` - 日期字符串, `userId` - 用户ID
+- **参数**: `dateRange` - 可选的日期范围对象 `{ startDate, endDate }`
 - **返回**:
   ```javascript
   {
@@ -310,15 +309,10 @@ const configService = serviceManager.get('configService');
 
 #### 奖励管理
 
-##### `getAllRewards(userId)`
+##### `getAllRewards(userId = null)`
 获取所有奖励列表
-- **参数**: `userId` - 用户ID
+- **参数**: `userId` - 可选的用户ID，不传则获取所有用户的奖励
 - **返回**: `{ success: boolean, rewards: Reward[], message?: string }`
-
-##### `getRewardById(rewardId)`
-根据ID获取奖励
-- **参数**: `rewardId` - 奖励ID
-- **返回**: `{ success: boolean, reward?: Reward, message?: string }`
 
 ##### `createReward(rewardData)`
 创建新奖励
@@ -335,9 +329,9 @@ const configService = serviceManager.get('configService');
   ```
 - **返回**: `{ success: boolean, reward?: Reward, message?: string }`
 
-##### `updateReward(rewardId, updateData)`
+##### `updateReward(rewardId, rewardData)`
 更新奖励信息
-- **参数**: `rewardId` - 奖励ID, `updateData` - 更新数据对象
+- **参数**: `rewardId` - 奖励ID, `rewardData` - 更新数据对象
 - **返回**: `{ success: boolean, reward?: Reward, message?: string }`
 
 ##### `deleteReward(rewardId)`
@@ -349,53 +343,47 @@ const configService = serviceManager.get('configService');
 
 #### 奖励兑换
 
-##### `getAvailableRewards(userId)`
+##### `getAvailableRewards(includeClaimed = false, includeExamples = false, userId = null)`
 获取可兑换奖励
-- **参数**: `userId` - 用户ID
+- **参数**:
+  - `includeClaimed` - 是否包含已兑换奖励，默认false
+  - `includeExamples` - 是否包含示例奖励，默认false
+  - `userId` - 用户ID，可选
 - **返回**: `{ success: boolean, rewards: Reward[], message?: string }`
 
-##### `claimReward(rewardId, userId)`
+##### `exchangeReward(rewardId, userId = null)`
 兑换奖励
-- **参数**: `rewardId` - 奖励ID, `userId` - 用户ID
+- **参数**: `rewardId` - 奖励ID, `userId` - 用户ID（可选，默认使用当前用户）
 - **返回**: `{ success: boolean, starCost: number, message?: string }`
 - **内部流程**：验证库存 → 消费星星 → 标记已兑换 → 发布事件 → 创建消息
 
-##### `unclaimReward(rewardId, userId)`
+##### `cancelRewardExchange(rewardId)`
 取消兑换
-- **参数**: `rewardId` - 奖励ID, `userId` - 用户ID
+- **参数**: `rewardId` - 奖励ID
 - **返回**: `{ success: boolean, message?: string }`
 
-##### `deliverReward(rewardId, userId)`
+##### `markRewardAsDelivered(rewardId)`
 标记奖励为已领取
-- **参数**: `rewardId` - 奖励ID, `userId` - 用户ID
+- **参数**: `rewardId` - 奖励ID
 - **返回**: `{ success: boolean, message?: string }`
+- **注意**: 此方法已废弃，用户兑换时直接设置为delivered状态
 
 ---
 
 #### 奖励状态管理
 
-##### `enableReward(rewardId)`
-启用奖励
-- **参数**: `rewardId` - 奖励ID
+##### `toggleRewardStatus(rewardId, enabled)`
+切换奖励启用/禁用状态
+- **参数**: `rewardId` - 奖励ID, `enabled` - 是否启用
 - **返回**: `{ success: boolean, message?: string }`
-
-##### `disableReward(rewardId)`
-禁用奖励
-- **参数**: `rewardId` - 奖励ID
-- **返回**: `{ success: boolean, message?: string }`
-
-##### `initializeDefaultRewards()`
-初始化默认奖励
-- **返回**: `{ success: boolean, initializedCount: number, message?: string }`
 
 ---
 
-#### 兑换记录
+#### 其他方法
 
-##### `getClaimRecords(userId, filters?)`
-获取兑换记录
-- **参数**: `userId` - 用户ID, `filters?` - `{ startDate, endDate, status }`
-- **返回**: `{ success: boolean, records: Array, message?: string }`
+##### `getLastExchangeTime()`
+获取最后一次兑换时间
+- **返回**: `Promise<number>` - 时间戳
 
 ---
 
@@ -414,31 +402,13 @@ const configService = serviceManager.get('configService');
 
 #### 消息管理
 
-##### `createMessage(messageData)`
-创建新消息
+##### `createSystemMessage(content, type = 'system', options = {})`
+创建系统消息
 - **参数**:
-  ```javascript
-  {
-    userId: string,
-    type: 'system' | 'task' | 'reward' | 'warning',
-    subType?: string,
-    title: string,
-    content: string,
-    priority?: 'high' | 'normal' | 'low',
-    expiryDate?: string
-  }
-  ```
+  - `content` - 消息内容字符串
+  - `type` - 消息类型（默认 'system'）
+  - `options` - 可选配置 `{ title, priority, userId, subType, expiryDate }`
 - **返回**: `{ success: boolean, message?: Message, messageId?: string }`
-
-##### `getMessageById(messageId)`
-根据ID获取消息
-- **参数**: `messageId` - 消息ID
-- **返回**: `{ success: boolean, message?: Message, content?: string }`
-
-##### `updateMessage(messageId, updateData)`
-更新消息
-- **参数**: `messageId` - 消息ID, `updateData` - 更新数据对象
-- **返回**: `{ success: boolean, message?: Message, messageContent?: string }`
 
 ##### `deleteMessage(messageId)`
 删除消息
@@ -449,53 +419,36 @@ const configService = serviceManager.get('configService');
 
 #### 消息查询
 
-##### `getMessages(userId, filters?)`
-获取消息列表
-- **参数**: `userId` - 用户ID, `filters?` - `{ type, status, limit, offset }`
+##### `getAllMessages()`
+获取所有消息列表
 - **返回**: `{ success: boolean, messages: Message[], total?: number, message?: string }`
 
-##### `getUnreadCount(userId)`
+##### `getUnreadCount()`
 获取未读消息数量
-- **参数**: `userId` - 用户ID
 - **返回**: `{ success: boolean, count: number, message?: string }`
-
-##### `getMessagesByType(userId, type)`
-根据类型获取消息
-- **参数**: `userId` - 用户ID, `type` - 消息类型
-- **返回**: `{ success: boolean, messages: Message[], message?: string }`
 
 ---
 
 #### 消息操作
 
-##### `markAsRead(messageId, userId)`
+##### `markMessageAsRead(messageId)`
 标记消息为已读
-- **参数**: `messageId` - 消息ID, `userId` - 用户ID
+- **参数**: `messageId` - 消息ID
 - **返回**: `{ success: boolean, message?: string }`
 
-##### `markAllAsRead(userId)`
+##### `markAllMessagesAsRead()`
 标记所有消息为已读
-- **参数**: `userId` - 用户ID
 - **返回**: `{ success: boolean, affectedCount: number, message?: string }`
 
-##### `batchCreateMessages(messages, userId)`
-批量创建消息
-- **参数**: `messages` - 消息数组, `userId` - 用户ID
-- **返回**: `{ success: boolean, createdCount: number, messageIds: string[], message?: string }`
 
 ---
 
 #### 消息清理
 
-##### `cleanExpiredMessages(userId)`
-清理过期消息
-- **参数**: `userId` - 用户ID
-- **返回**: `{ success: boolean, deletedCount: number, message?: string }`
-
-##### `cleanOldMessages(userId, days)`
-清理指定天数之前的消息
-- **参数**: `userId` - 用户ID, `days` - 天数
-- **返回**: `{ success: boolean, deletedCount: number, message?: string }`
+##### `_cleanExpiredMessages(expiryDays = 30)`
+清理过期消息（内部方法）
+- **参数**: `expiryDays` - 过期天数，默认30天
+- **返回**: `Promise<boolean>`
 
 ---
 
@@ -539,76 +492,132 @@ const configService = serviceManager.get('configService');
 
 ## UserService - 用户管理服务
 
-用户服务管理用户账户、角色、权限等功能。
+用户服务管理用户账户、角色切换、家庭成员缓存等功能。M6 起引入 `loginUser`（设备拥有者）与 `currentUser`（当前数据视角）双轨模型。
+
+### 核心概念（M6）
+
+| 字段 | 含义 | 生命周期 |
+|------|------|---------|
+| `loginUser` | 设备登录者（JWT 持有者），决定权限和功能可见性 | 应用启动后不变 |
+| `currentUser` | 当前数据视角，家长可切换到孩子 | 随用户切换变化 |
+
+- **`isReadonlyView`**（首页计算属性）：`loginUser.role === 'child' || loginUser.userId !== currentUser.userId`。只要在孩子视角下（无论哪种原因），管理类入口均隐藏。
+- **任务创建归属**：家长在孩子视角创建任务时，任务通过 `targetUserId` 正确归属到孩子。
 
 ### 核心功能
-- 用户CRUD操作
-- 角色管理（家长/孩子）
-- 权限控制
-- 用户配置管理
+- 登录用户（loginUser）初始化与维护
+- 家庭成员缓存（userCache）加载与刷新
+- 用户视角切换（currentUser）及会话恢复
+- 基于角色的用户列表过滤
 
 ### API 方法
 
-#### 用户管理
+#### 登录用户
+
+##### `getLoginUser()`
+获取设备登录用户（设备拥有者，生命周期内不变）
+- **返回**: `User | null`
+
+##### `getLoginUserId()`
+获取登录用户 ID
+- **返回**: `string | null`
+
+---
+
+#### 当前视角用户
 
 ##### `getCurrentUser()`
-获取当前登录用户
-- **返回**: `{ success: boolean, user?: User, message?: string }`
+获取当前视角用户（家长可切换到孩子）
+- **返回**: `User`
 
 ##### `getCurrentUserId()`
-获取当前用户ID
-- **返回**: `string` (用户ID) 或 `null`
+获取当前视角用户 ID
+- **返回**: `string`
 
-##### `createUser(userData)`
-创建新用户
-- **参数**:
-  ```javascript
-  {
-    name: string,
-    displayName?: string,
-    role: 'parent' | 'child',
-    avatar?: string
-  }
-  ```
-- **返回**: `{ success: boolean, user?: User, message?: string }`
-
-##### `updateUser(userId, updateData)`
-更新用户信息
-- **参数**: `userId` - 用户ID, `updateData` - 更新数据对象
-- **返回**: `{ success: boolean, user?: User, message?: string }`
+##### `getCurrentUserRole()`
+获取当前视角用户角色
+- **返回**: `'parent' | 'child'`
 
 ---
 
-#### 角色和权限
+#### 用户列表与查找
 
-##### `switchRole(role)`
-切换用户角色
-- **参数**: `role` - 'parent' | 'child'
-- **返回**: `{ success: boolean, user?: User, message?: string }`
+##### `getAllUsers()`
+获取可用用户列表（家庭感知）
+- **返回**: `User[]`
+- **说明**：
+  - 孩子设备（`loginUser.role === 'child'`）：只返回自身
+  - 家长设备：返回 loginUser + 家庭中所有孩子，不含其他家长
 
-##### `hasPermission(userId, permission)`
-检查用户权限
-- **参数**: `userId` - 用户ID, `permission` - 权限标识
-- **返回**: `boolean`
+##### `getUserById(userId)`
+从缓存获取用户（同步）
+- **参数**: `userId` (string)
+- **返回**: `User | null`
 
-##### `getAccessiblePages(userId)`
-获取用户可访问的页面列表
-- **参数**: `userId` - 用户ID
-- **返回**: `Array<{ path, name, requiredRole }>`
+##### `getUserByIdAsync(userId)`
+获取用户，缓存未命中时从 API 拉取（异步）
+- **参数**: `userId` (string)
+- **返回**: `Promise<User | null>`
 
 ---
 
-#### 用户配置
+#### 用户切换
 
-##### `getUserConfig(userId, key)`
-获取用户配置
-- **参数**: `userId` - 用户ID, `key` - 配置键
-- **返回**: `{ success: boolean, value: any, message?: string }`
+##### `switchToUser(userId)`
+切换当前视角到指定用户
+- **参数**: `userId` (string)
+- **返回**: `Promise<{ success: boolean, user?: User, message?: string }>`
+- **限制**：孩子设备（`loginUser.role === 'child'`）禁止切换；家长只能切换到孩子，不能切换到其他家长
 
-##### `setUserConfig(userId, key, value)`
-设置用户配置
-- **参数**: `userId` - 用户ID, `key` - 配置键, `value` - 配置值
-- **返回**: `{ success: boolean, message?: string }`
+---
+
+#### 家庭成员
+
+##### `loadFamilyMembers()`
+从云端加载家庭成员并更新本地缓存
+- **返回**: `Promise<boolean>`
+- **说明**：登录用户无家庭（`loginUser.familyId` 为 null）时静默跳过，失败时缓存保留仅含 loginUser
+
+##### `createFamily(name)`
+创建家庭（M6新增）
+- **参数**: `name` (string) - 家庭名称
+- **返回**: `Promise<{ success: boolean, familyId?: string, message?: string }>`
+- **说明**：创建成功后若后端返回新 token，自动保存并重新初始化 UserService
+
+##### `joinFamily(inviteCode)`
+通过邀请码加入家庭（M6新增）
+- **参数**: `inviteCode` (string) - 邀请码
+- **返回**: `Promise<{ success: boolean, message?: string }>`
+- **说明**：加入成功后若后端返回新 token，自动保存并重新初始化 UserService
+
+##### `getFamilyInfo()`
+获取当前家庭信息（M6新增）
+- **返回**: `Promise<Object | null>`
+- **说明**：失败时静默返回 null
+
+##### `refreshInviteCode(role)`
+刷新家庭邀请码（M6新增）
+- **参数**: `role` ('parent' | 'child') - 目标角色
+- **返回**: `Promise<Object>` - 包含新邀请码的响应对象
+- **说明**：失败时直接抛出异常，调用方需自行捕获
+
+##### `createVirtualMember(name)`
+创建虚拟成员（场景A共享设备，无独立微信账号的孩子）（M6新增）
+- **参数**: `name` (string) - 成员名称
+- **返回**: `Promise<{ success: boolean, member?: Object, message?: string }>`
+- **说明**：创建成功后自动调用 `loadFamilyMembers()` 刷新缓存
+
+##### `deleteFamilyMember(userId)`
+软删除家庭成员（仅虚拟成员）（M6新增）
+- **参数**: `userId` (string) - 目标用户ID
+- **返回**: `Promise<{ success: boolean, message?: string }>`
+- **说明**：删除成功后自动调用 `loadFamilyMembers()` 刷新缓存
+
+##### `updateNickname(userId, nickname)`
+更新成员昵称（M6新增）
+- **参数**: `userId` (string) - 目标用户ID, `nickname` (string) - 新昵称
+- **返回**: `Promise<{ success: boolean, message?: string }>`
+- **说明**：更新成功后直接同步 userCache 和 currentUser/loginUser，不重新拉取
 
 ---
 
@@ -626,47 +635,52 @@ const configService = serviceManager.get('configService');
 
 #### 系统配置
 
-##### `getConfig(key)`
-获取系统配置
-- **参数**: `key` - 配置键
+##### `get(key, defaultValue = null)`
+获取配置值
+- **参数**: `key` - 配置键, `defaultValue` - 可选默认值
 - **返回**: 配置值
 
-##### `setConfig(key, value)`
-设置系统配置
+##### `set(key, value)`
+设置配置值
 - **参数**: `key` - 配置键, `value` - 配置值
-- **返回**: `{ success: boolean, message?: string }`
+- **返回**: `boolean` - 是否成功
 
-##### `getAllConfigs()`
-获取所有系统配置
-- **返回**: `Object` (配置对象)
+##### `remove(key)`
+删除配置
+- **参数**: `key` - 配置键
+- **返回**: `boolean` - 是否成功
 
 ---
 
 #### 用户偏好
 
-##### `getPreference(userId, key)`
+##### `getUserPreference(key, defaultValue = null)`
 获取用户偏好
-- **参数**: `userId` - 用户ID, `key` - 偏好键
+- **参数**: `key` - 偏好键, `defaultValue` - 可选默认值
 - **返回**: 偏好值
 
-##### `setPreference(userId, key, value)`
+##### `setUserPreference(key, value)`
 设置用户偏好
-- **参数**: `userId` - 用户ID, `key` - 偏好键, `value` - 偏好值
-- **返回**: `{ success: boolean, message?: string }`
+- **参数**: `key` - 偏好键, `value` - 偏好值
+- **返回**: `boolean` - 是否成功
 
-##### `getAllPreferences(userId)`
-获取用户所有偏好
-- **参数**: `userId` - 用户ID
-- **返回**: `Object` (偏好对象)
+##### `getBatch(keys)`
+批量获取配置
+- **参数**: `keys` (Array) - 配置键数组
+- **返回**: `Object` - 配置对象
+
+##### `setBatch(configs)`
+批量设置配置
+- **参数**: `configs` (Object) - 配置对象
+- **返回**: `boolean` - 是否全部成功
 
 ---
 
-#### 配置重置
+#### 批量操作
 
-##### `resetToDefaults(userId)`
-重置用户配置为默认值
-- **参数**: `userId` - 用户ID
-- **返回**: `{ success: boolean, message?: string }`
+##### `clearAll()`
+清除所有配置（谨慎使用）
+- **返回**: `Promise<boolean>` - 是否成功
 
 ---
 
@@ -966,5 +980,22 @@ const taskService = new TaskService({
 
 ---
 
-**最后更新**：2026-03-02
+### 云端任务服务
+
+任务服务支持云端存储模式，可通过 `ENABLE_API` 配置开启。
+
+#### API 配置
+云端API通过 `API_CONFIG` 进行配置，详见 `utils/api-config.js`。
+
+#### 云端存储模式
+系统支持三种存储模式（优先级从高到低）：
+1. **云端优先模式**（推荐）
+2. **本地优先模式**（离线）
+3. **本地仅用模式**（测试）
+
+详细说明请参阅：[docs/design/milestone-05b-task-management.md](../design/milestone-05b-task-management.md)
+
+---
+
+**最后更新**：2026-03-11
 **维护者**：项目维护团队

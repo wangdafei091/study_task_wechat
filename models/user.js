@@ -28,18 +28,24 @@ class User {
    * @param {Object} data 用户数据
    */
   constructor(data = {}) {
-    // 基础信息 - 修改：将id字段改为userId，与后端保持一致
+    // 基础信息
     this.userId = data.userId || '';
-    this.name = data.name || '';
+    // 兼容前后端字段：优先使用nickname（后端API），降级到name（本地存储）
+    this.name = data.nickname || data.name || '';
     this.displayName = data.displayName || '';
     this.role = data.role || UserRole.PARENT;
     this.avatar = data.avatar || '';
     this.status = data.status || UserStatus.ACTIVE;
-    
+
+    // 家庭相关字段（M6新增）
+    this.familyId = data.familyId || null;
+    this.isVirtual = Boolean(data.isVirtual);
+    this.createdByUserId = data.createdByUserId || null;
+
     // 时间戳
     this.createTime = data.createTime || Date.now();
     this.modifyTime = data.modifyTime || Date.now();
-    
+
     logger.debug('User', '创建用户实例', { userId: this.userId, role: this.role });
   }
   
@@ -112,38 +118,44 @@ class User {
   
   /**
    * 获取页面访问权限
+   * 权限由 loginUser（设备拥有者）决定，不随视角切换变化
+   * @param {User} loginUser 登录用户（设备拥有者），不传则用自身
    * @returns {Array} 可访问的页面列表
    */
-  getAccessiblePages() {
+  getAccessiblePages(loginUser) {
+    // 权限判断基于 loginUser（不随 currentUser 变化）
+    const effectiveRole = loginUser ? loginUser.role : this.role;
+
     const commonPages = [
-      'pages/index/index',           // 首页/任务日历
-      'pages/rewards/rewards',       // 奖池页
-      'pages/star-records/star-records',  // 星星记录
-      'pages/my-exchanges/my-exchanges',   // 我的兑换
-      'pages/message/message',       // 消息页
-      'packageChart/pages/analysis/analysis'  // 分析页
+      'pages/index/index',
+      'pages/rewards/rewards',
+      'pages/star-records/star-records',
+      'pages/my-exchanges/my-exchanges',
+      'pages/message/message',
+      'packageChart/pages/analysis/analysis'
     ];
-    
-    if (this.isParent()) {
-      // 家长可以访问所有页面
+
+    if (effectiveRole === UserRole.PARENT) {
       return [
         ...commonPages,
-        'pages/task-edit/task-edit',         // 任务编辑
-        'pages/reward-manage/reward-manage'  // 奖励管理
+        'pages/task-edit/task-edit',
+        'pages/reward-manage/reward-manage',
+        'packageManage/pages/family-settings/family-settings'
       ];
     }
-    
-    // 孩子只能访问基础页面
+
     return commonPages;
   }
-  
+
   /**
    * 检查是否有页面访问权限
+   * 权限由 loginUser 决定，不随视角切换变化
    * @param {String} pagePath 页面路径
+   * @param {User} loginUser 登录用户（设备拥有者），不传则用自身
    * @returns {Boolean} 是否有权限
    */
-  hasPageAccess(pagePath) {
-    const accessiblePages = this.getAccessiblePages();
+  hasPageAccess(pagePath, loginUser) {
+    const accessiblePages = this.getAccessiblePages(loginUser);
     return accessiblePages.includes(pagePath);
   }
   
@@ -174,6 +186,9 @@ class User {
       role: this.role,
       avatar: this.avatar,
       status: this.status,
+      familyId: this.familyId,
+      isVirtual: this.isVirtual,
+      createdByUserId: this.createdByUserId,
       createTime: this.createTime,
       modifyTime: this.modifyTime
     };

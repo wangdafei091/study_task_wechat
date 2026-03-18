@@ -12,28 +12,31 @@ Component({
    * 组件的属性列表
    */
   properties: {
-    // 当前用户信息
     currentUser: {
       type: Object,
       value: null
     },
-    
-    // 可用用户列表
     availableUsers: {
       type: Array,
       value: []
     },
-    
-    // 是否显示切换界面
     visible: {
       type: Boolean,
       value: false
     },
-    
-    // 是否显示添加用户按钮
     showAddUser: {
       type: Boolean,
       value: true
+    },
+    // 设备登录用户ID（PIN key 作用域隔离，由父页面传入）
+    loginUserId: {
+      type: String,
+      value: ''
+    },
+    // 是否有管理权限（由父页面根据 loginUser.role 计算）
+    canManageMembers: {
+      type: Boolean,
+      value: false
     }
   },
 
@@ -41,27 +44,16 @@ Component({
    * 组件的初始数据
    */
   data: {
-    showAddUserDialog: false,
-    newUserName: '',
-    newUserRole: UserRole.CHILD,
     switchAnimation: {},
     addDialogAnimation: {},
-    
-    // 角色选项
-    roleOptions: [
-      {
-        value: UserRole.CHILD,
-        label: '孩子',
-        icon: '👶',
-        description: '可以完成任务、兑换奖励'
-      },
-      {
-        value: UserRole.PARENT,
-        label: '家长',
-        icon: '👩‍💼',
-        description: '可以管理任务、奖励和查看统计'
-      }
-    ]
+    // PIN 相关
+    showPinDialog: false,
+    pinInput: '',
+    pinTargetUserId: '',
+    // 昵称编辑相关
+    showNicknameDialog: false,
+    nicknameInput: '',
+    nicknameTargetUserId: '',
   },
 
   /**
@@ -111,9 +103,6 @@ Component({
     'currentUser': function(currentUser) {
       if (currentUser) {
         logger.info('UserSwitcher', `当前用户更新: ${currentUser.name} (${currentUser.role})`);
-        // 记录权限状态
-        const canManageUsers = currentUser.role === UserRole.PARENT;
-        logger.info('UserSwitcher', `用户管理权限: ${canManageUsers ? '有权限' : '无权限'}`);
       }
     }
   },
@@ -145,183 +134,97 @@ Component({
     },
 
     /**
-     * 检查当前用户是否为家长
-     */
-    isCurrentUserParent() {
-      return this.data.currentUser && this.data.currentUser.role === UserRole.PARENT;
-    },
-
-    /**
-     * 切换用户
+     * 切换用户（含 PIN 保护：孩子切回家长时检查 PIN）
      */
     switchToUser(e) {
       const { userId } = e.currentTarget.dataset;
+      const currentUser = this.data.currentUser;
       const user = this.data.availableUsers.find(u => u.userId === userId);
-      
+
       if (!user) {
         logger.warn('UserSwitcher', `切换用户失败: 未找到用户 ${userId}`);
-        wx.showToast({
-          title: '用户不存在',
-          icon: 'error'
-        });
+        wx.showToast({ title: '用户不存在', icon: 'error' });
         return;
       }
-      
-      logger.info('UserSwitcher', `切换到用户: ${user.name} (${user.role})`);
-      
-      // 触发用户切换事件
-      this.triggerEvent('userSwitch', {
-        userId: user.userId,
-        user: user,
-        previousUser: this.data.currentUser
-      });
-      
-      // 关闭切换界面
+
+      // 孩子切换到家长时检查 PIN
+      const isChildToParent = currentUser?.role === UserRole.CHILD && user.role === UserRole.PARENT;
+      if (isChildToParent) {
+        const loginUserId = this.data.loginUserId;
+        const pinKey = loginUserId ? `family_pin_${loginUserId}` : 'family_pin';
+        const storedPin = wx.getStorageSync(pinKey);
+
+        if (storedPin) {
+          // 有 PIN，显示输入对话框
+          this.setData({ showPinDialog: true, pinInput: '', pinTargetUserId: userId });
+          return;
+        }
+        // 无 PIN，自由切换
+      }
+
+      logger.info('UserSwitcher', `切换到用户: ${user.name}`);
+      this.triggerEvent('userSwitch', { userId });
+      this.closeUserSwitcher();
+    },
+
+    /** PIN 输入 */
+    onPinInput(e) {
+      this.setData({ pinInput: e.detail.value });
+    },
+
+    /** 确认 PIN */
+    confirmPin() {
+      const { pinInput, pinTargetUserId, loginUserId } = this.data;
+      const pinKey = loginUserId ? `family_pin_${loginUserId}` : 'family_pin';
+      const storedPin = wx.getStorageSync(pinKey);
+
+      if (pinInput === storedPin) {
+        this.setData({ showPinDialog: false, pinInput: '' });
+        this.triggerEvent('userSwitch', { userId: pinTargetUserId });
+        this.closeUserSwitcher();
+      } else {
+        wx.showToast({ title: '密码错误', icon: 'error' });
+        this.setData({ pinInput: '' });
+      }
+    },
+
+    /** 取消 PIN */
+    cancelPin() {
+      this.setData({ showPinDialog: false, pinInput: '' });
+    },
+
+    /**
+     * 显示添加用户（触发事件，由父页面处理跳转）
+     */
+    showAddUserDialog() {
+      if (!this.data.canManageMembers) {
+        wx.showToast({ title: '只有家长可以添加成员', icon: 'error' });
+        return;
+      }
+      this.triggerEvent('userAdd', {});
       this.closeUserSwitcher();
     },
 
     /**
-     * 显示添加用户对话框
-     */
-    showAddUserDialog() {
-      // 权限检查
-      if (!this.isCurrentUserParent()) {
-        logger.warn('UserSwitcher', '无权限打开添加用户对话框: 当前用户非家长');
-        wx.showToast({
-          title: '只有家长可以添加用户',
-          icon: 'error'
-        });
-        return;
-      }
-      
-      logger.info('UserSwitcher', '显示添加用户对话框');
-      
-      this.setData({
-        showAddUserDialog: true,
-        newUserName: '',
-        newUserRole: UserRole.CHILD
-      });
-      
-      // 播放显示动画
-      this.addDialogAnimation.scale(1).opacity(1).step();
-      this.setData({
-        addDialogAnimation: this.addDialogAnimation.export()
-      });
-    },
-
-    /**
-     * 隐藏添加用户对话框
-     */
-    hideAddUserDialog() {
-      logger.info('UserSwitcher', '隐藏添加用户对话框');
-      
-      // 播放隐藏动画
-      this.addDialogAnimation.scale(0.8).opacity(0).step();
-      this.setData({
-        addDialogAnimation: this.addDialogAnimation.export()
-      });
-      
-      // 延迟隐藏
-      setTimeout(() => {
-        this.setData({
-          showAddUserDialog: false
-        });
-      }, 250);
-    },
-
-    /**
-     * 处理用户名输入
-     */
-    onUserNameInput(e) {
-      this.setData({
-        newUserName: e.detail.value.trim()
-      });
-    },
-
-    /**
-     * 选择角色
-     */
-    selectRole(e) {
-      const { role } = e.currentTarget.dataset;
-      logger.info('UserSwitcher', `选择角色: ${role}`);
-      
-      this.setData({
-        newUserRole: role
-      });
-    },
-
-    /**
-     * 确认添加用户
-     */
-    confirmAddUser() {
-      // 权限检查
-      if (!this.isCurrentUserParent()) {
-        logger.warn('UserSwitcher', '无权限添加用户: 当前用户非家长');
-        wx.showToast({
-          title: '只有家长可以添加用户',
-          icon: 'error'
-        });
-        return;
-      }
-      
-      const { newUserName, newUserRole } = this.data;
-      
-      if (!newUserName) {
-        wx.showToast({
-          title: '请输入用户名',
-          icon: 'error'
-        });
-        return;
-      }
-      
-      // 检查用户名是否已存在
-      const exists = this.data.availableUsers.some(u => u.name === newUserName);
-      if (exists) {
-        wx.showToast({
-          title: '用户名已存在',
-          icon: 'error'
-        });
-        return;
-      }
-      
-      logger.info('UserSwitcher', `添加新用户: ${newUserName} (${newUserRole})`);
-      
-      // 触发添加用户事件
-      this.triggerEvent('userAdd', {
-        name: newUserName,
-        role: newUserRole
-      });
-      
-      // 隐藏对话框
-      this.hideAddUserDialog();
-    },
-
-    /**
-     * 删除用户
+     * 删除用户（仅虚拟成员）
      */
     deleteUser(e) {
-      // 权限检查
-      if (!this.isCurrentUserParent()) {
-        logger.warn('UserSwitcher', '无权限删除用户: 当前用户非家长');
-        wx.showToast({
-          title: '只有家长可以删除用户',
-          icon: 'error'
-        });
+      if (!this.data.canManageMembers) {
+        wx.showToast({ title: '只有家长可以删除成员', icon: 'error' });
         return;
       }
-      
+
       const { userId } = e.currentTarget.dataset;
       const user = this.data.availableUsers.find(u => u.userId === userId);
-      
+
       if (!user) {
         logger.warn('UserSwitcher', `删除用户失败: 未找到用户 ${userId}`);
         return;
       }
-      
-      // 确认删除
+
       wx.showModal({
         title: '确认删除',
-        content: `确定要删除用户"${user.name}"吗？此操作将删除该用户的所有数据。`,
+        content: `确定要删除"${user.name}"吗？`,
         confirmText: '删除',
         confirmColor: '#FF4444',
         success: (res) => {
@@ -335,6 +238,42 @@ Component({
           }
         }
       });
+    },
+
+    /**
+     * 显示昵称编辑对话框
+     */
+    showNicknameEdit(e) {
+      const { userId } = e.currentTarget.dataset;
+      const user = this.data.availableUsers.find(u => u.userId === userId)
+        || this.data.currentUser;
+      if (!user) return;
+      this.setData({
+        showNicknameDialog: true,
+        nicknameInput: user.name || '',
+        nicknameTargetUserId: userId,
+      });
+    },
+
+    onNicknameInput(e) {
+      this.setData({ nicknameInput: e.detail.value });
+    },
+
+    confirmNicknameEdit() {
+      const { nicknameInput, nicknameTargetUserId } = this.data;
+      if (!nicknameInput.trim()) {
+        wx.showToast({ title: '昵称不能为空', icon: 'error' });
+        return;
+      }
+      this.triggerEvent('nicknameEdit', {
+        userId: nicknameTargetUserId,
+        nickname: nicknameInput.trim(),
+      });
+      this.setData({ showNicknameDialog: false });
+    },
+
+    cancelNicknameEdit() {
+      this.setData({ showNicknameDialog: false, nicknameInput: '' });
     },
 
     /**

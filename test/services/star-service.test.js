@@ -999,6 +999,222 @@ describe('StarService', () => {
     });
   });
 
+  // ==================== 查询分支测试 ====================
+
+  describe('getStarRecords - 查询分支', () => {
+    it('传入type和date时应该调用getRecordsByTypeAndDate', async () => {
+      mockStarRecordRepository.getRecordsByTypeAndDate.mockResolvedValue([{ id: 'r1' }]);
+      const result = await starService.getStarRecords({ type: 'income', date: '2026-03-01' });
+      expect(result).toHaveLength(1);
+      expect(mockStarRecordRepository.getRecordsByTypeAndDate).toHaveBeenCalledWith('income', '2026-03-01', undefined);
+    });
+
+    it('仅传入type时应该调用getRecordsByType', async () => {
+      mockStarRecordRepository.getRecordsByType.mockResolvedValue([{ id: 'r2' }]);
+      const result = await starService.getStarRecords({ type: 'expense' });
+      expect(result).toHaveLength(1);
+      expect(mockStarRecordRepository.getRecordsByType).toHaveBeenCalledWith('expense', undefined);
+    });
+
+    it('仅传入date时应该调用getRecordsByDate', async () => {
+      mockStarRecordRepository.getRecordsByDate.mockResolvedValue([{ id: 'r3' }]);
+      const result = await starService.getStarRecords({ date: '2026-03-01' });
+      expect(result).toHaveLength(1);
+      expect(mockStarRecordRepository.getRecordsByDate).toHaveBeenCalledWith('2026-03-01', undefined);
+    });
+
+    it('传入userId时应该透传给仓储', async () => {
+      mockStarRecordRepository.getRecordsByType.mockResolvedValue([]);
+      await starService.getStarRecords({ type: 'income', userId: 'user_1' });
+      expect(mockStarRecordRepository.getRecordsByType).toHaveBeenCalledWith('income', 'user_1');
+    });
+
+    it('仓储抛出异常时应该返回空数组', async () => {
+      mockStarRecordRepository.getRecordsByType.mockRejectedValue(new Error('db error'));
+      const result = await starService.getStarRecords({ type: 'income' });
+      expect(result).toEqual([]);
+    });
+  });
+
+  describe('getStarRecordsByMonth/DateRange/Date - 查询方法', () => {
+    it('getStarRecordsByMonth成功时应该返回分组记录', async () => {
+      mockStarRecordRepository.getRecordsGroupedByMonth.mockResolvedValue([{ month: '2026-03', records: [] }]);
+      const result = await starService.getStarRecordsByMonth('user_1');
+      expect(result).toHaveLength(1);
+      expect(mockStarRecordRepository.getRecordsGroupedByMonth).toHaveBeenCalledWith({ userId: 'user_1' });
+    });
+
+    it('getStarRecordsByMonth失败时应该返回空数组', async () => {
+      mockStarRecordRepository.getRecordsGroupedByMonth.mockRejectedValue(new Error('db error'));
+      const result = await starService.getStarRecordsByMonth();
+      expect(result).toEqual([]);
+    });
+
+    it('getStarRecordsByDateRange成功时应该返回记录', async () => {
+      mockStarRecordRepository.getRecordsByDateRange.mockResolvedValue([{ id: 'r1' }]);
+      const result = await starService.getStarRecordsByDateRange('2026-03-01', '2026-03-31', 'user_1');
+      expect(result).toHaveLength(1);
+    });
+
+    it('getStarRecordsByDateRange失败时应该返回空数组', async () => {
+      mockStarRecordRepository.getRecordsByDateRange.mockRejectedValue(new Error('db error'));
+      const result = await starService.getStarRecordsByDateRange('2026-03-01', '2026-03-31');
+      expect(result).toEqual([]);
+    });
+
+    it('getStarRecordsByDate成功时应该返回记录', async () => {
+      mockStarRecordRepository.getRecordsByDate.mockResolvedValue([{ id: 'r1' }]);
+      const result = await starService.getStarRecordsByDate('2026-03-01', 'user_1');
+      expect(result).toHaveLength(1);
+    });
+
+    it('getStarRecordsByDate失败时应该返回空数组', async () => {
+      mockStarRecordRepository.getRecordsByDate.mockRejectedValue(new Error('db error'));
+      const result = await starService.getStarRecordsByDate('2026-03-01');
+      expect(result).toEqual([]);
+    });
+  });
+
+  describe('validateConsistency - 数据一致性验证', () => {
+    it('分组总数与记录余额一致时应该返回isConsistent=true', async () => {
+      mockStarGroupRepository.getAll = jest.fn().mockResolvedValue([{ stars: 10 }, { stars: 5 }]);
+      mockStarRecordRepository.getAll = jest.fn().mockResolvedValue([{ points: 15 }]);
+
+      const result = await starService.validateConsistency();
+      expect(result.isConsistent).toBe(true);
+      expect(result.groupsTotal).toBe(15);
+    });
+
+    it('分组总数与记录余额不一致时应该返回isConsistent=false', async () => {
+      mockStarGroupRepository.getAll = jest.fn().mockResolvedValue([{ stars: 20 }]);
+      mockStarRecordRepository.getAll = jest.fn().mockResolvedValue([{ points: 10 }]);
+
+      const result = await starService.validateConsistency();
+      expect(result.isConsistent).toBe(false);
+      expect(result.difference).toBe(10);
+    });
+
+    it('仓储抛出异常时应该返回isConsistent=false', async () => {
+      mockStarGroupRepository.getAll = jest.fn().mockRejectedValue(new Error('db error'));
+      const result = await starService.validateConsistency();
+      expect(result.isConsistent).toBe(false);
+      expect(result.error).toBeDefined();
+    });
+  });
+
+  describe('getExpiringStarsInfo - 即将过期星星', () => {
+    it('没有即将过期分组时应该返回points=0', async () => {
+      mockStarGroupRepository.getAll = jest.fn().mockResolvedValue([]);
+      const result = await starService.getExpiringStarsInfo();
+      expect(result.points).toBe(0);
+    });
+
+    it('有即将过期分组时应该返回最早过期信息', async () => {
+      const futureDate = Date.now() + 7 * 24 * 60 * 60 * 1000;
+      const mockGroup = {
+        id: 'g1',
+        stars: 20,
+        expiryType: 'month',
+        expiryDate: futureDate,
+        expiryDateStr: '2026-04-01',
+        isExpired: jest.fn().mockReturnValue(false)
+      };
+      mockStarGroupRepository.getAll = jest.fn().mockResolvedValue([mockGroup]);
+
+      const result = await starService.getExpiringStarsInfo();
+      expect(result.points).toBe(20);
+      expect(result.expiryDateText).toBe('2026-04-01');
+    });
+
+    it('仓储抛出异常时应该返回points=0', async () => {
+      mockStarGroupRepository.getAll = jest.fn().mockRejectedValue(new Error('db error'));
+      const result = await starService.getExpiringStarsInfo();
+      expect(result.points).toBe(0);
+    });
+  });
+
+  describe('checkAndRepairDataConsistency - 数据修复', () => {
+    it('应该成功执行检查和修复', async () => {
+      mockStarGroupRepository.getAll = jest.fn().mockResolvedValue([{ stars: 10 }]);
+      mockStarRecordRepository.getAll = jest.fn().mockResolvedValue([{ points: 10 }]);
+      mockStarRecordRepository.repairRecordBalances.mockResolvedValue({ success: true, repairedCount: 0 });
+
+      const result = await starService.checkAndRepairDataConsistency();
+      expect(result.success).toBe(true);
+      expect(result.repairResult).toBeDefined();
+    });
+
+    it('初始不一致修复后应包含initialConsistency和finalConsistency字段', async () => {
+      mockStarGroupRepository.getAll = jest.fn().mockResolvedValue([{ stars: 20 }]);
+      mockStarRecordRepository.getAll = jest.fn().mockResolvedValue([{ points: 10 }]);
+      mockStarRecordRepository.repairRecordBalances.mockResolvedValue({ success: true, repairedCount: 1 });
+
+      const result = await starService.checkAndRepairDataConsistency();
+      expect(result.success).toBe(true);
+      expect(result.initialConsistency.isConsistent).toBe(false);
+      expect(result.repairResult.repairedCount).toBe(1);
+    });
+  });
+
+  describe('verifyOperationConsistency - 操作一致性验证', () => {
+    it('一致时应该返回true', async () => {
+      mockStarGroupRepository.getTotalPoints.mockResolvedValue(10);
+      mockStarRecordRepository.getAll = jest.fn().mockResolvedValue([{ points: 10 }]);
+
+      const result = await starService.verifyOperationConsistency('addStars', {});
+      expect(result).toBe(true);
+    });
+
+    it('不一致时应该返回false', async () => {
+      mockStarGroupRepository.getTotalPoints.mockResolvedValue(20);
+      mockStarRecordRepository.getAll = jest.fn().mockResolvedValue([{ points: 10 }]);
+
+      const result = await starService.verifyOperationConsistency('addStars', {});
+      expect(result).toBe(false);
+    });
+
+    it('仓储抛出异常时应该返回false', async () => {
+      mockStarGroupRepository.getTotalPoints.mockRejectedValue(new Error('db error'));
+      const result = await starService.verifyOperationConsistency('addStars', {});
+      expect(result).toBe(false);
+    });
+  });
+
+  describe('clearCache - 缓存清理', () => {
+    it('仓储有clearCache方法时应该调用', () => {
+      mockStarGroupRepository.clearCache = jest.fn();
+      mockStarRecordRepository.clearCache = jest.fn();
+      starService.clearCache();
+      expect(mockStarGroupRepository.clearCache).toHaveBeenCalled();
+      expect(mockStarRecordRepository.clearCache).toHaveBeenCalled();
+    });
+  });
+
+  describe('calculatePendingExpiry - 计算即将过期', () => {
+    it('没有即将过期分组时应该返回0', async () => {
+      mockStarGroupRepository.getAll = jest.fn().mockResolvedValue([]);
+      const result = await starService.calculatePendingExpiry();
+      expect(result).toBe(0);
+    });
+
+    it('传入userId时应该过滤用户分组', async () => {
+      const now = Date.now();
+      const groups = [
+        { userId: 'u1', expiryType: 'month', expiryDate: now + 1000, stars: 5 },
+        { userId: 'u2', expiryType: 'month', expiryDate: now + 1000, stars: 10 }
+      ];
+      mockStarGroupRepository.getAll = jest.fn().mockResolvedValue(groups);
+      const result = await starService.calculatePendingExpiry('u1');
+      expect(result).toBe(5);
+    });
+
+    it('仓储抛出异常时应该返回0', async () => {
+      mockStarGroupRepository.getAll = jest.fn().mockRejectedValue(new Error('db error'));
+      const result = await starService.calculatePendingExpiry();
+      expect(result).toBe(0);
+    });
+  });
+
   // ==================== 修复工具方法测试 ====================
 
   describe('repairStarRecordBalances - 修复星星记录余额', () => {

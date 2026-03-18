@@ -5,6 +5,7 @@
 
 const API_CONFIG = require('./api-config');
 const logger = require('./logger');
+const TokenManager = require('./token-manager');
 
 class HttpClient {
   
@@ -27,6 +28,14 @@ class HttpClient {
       return Promise.reject(new Error(errorMsg));
     }
 
+    // 自动添加JWT token到Authorization头
+    const headers = { ...API_CONFIG.HEADERS };
+    const token = TokenManager.getToken();
+
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
     // 构建完整URL
     let fullUrl = API_CONFIG.BASE_URL + url;
     
@@ -45,11 +54,62 @@ class HttpClient {
         url: fullUrl,
         method: method,
         data: data,
-        header: API_CONFIG.HEADERS,
+        header: headers,
         timeout: API_CONFIG.TIMEOUT,
-        success: (res) => {
+        success: async (res) => {
           logger.info('HttpClient', `请求成功: ${res.statusCode}`, res.data);
-          
+
+          // 处理401错误（认证失败）
+          if (res.statusCode === 401) {
+            logger.warn('HttpClient', '认证失败，尝试自动重新登录');
+
+            try {
+              // 获取小程序实例
+              const app = getApp();
+              // 尝试自动重新登录
+              const loginSuccess = await app.autoLogin();
+
+              if (loginSuccess) {
+                // 重新发起请求
+                logger.info('HttpClient', '重新登录成功，重新发起请求');
+                const newHeaders = { ...API_CONFIG.HEADERS };
+                const newToken = TokenManager.getToken();
+                if (newToken) {
+                  newHeaders['Authorization'] = `Bearer ${newToken}`;
+                }
+
+                // 重新发起请求
+                wx.request({
+                  url: fullUrl,
+                  method: method,
+                  data: data,
+                  header: newHeaders,
+                  timeout: API_CONFIG.TIMEOUT,
+                  success: (res) => {
+                    if (res.statusCode === 200 && res.data && res.data.success) {
+                      resolve(res.data.data);
+                    } else {
+                      const errorMsg = res.data?.message || '重新请求失败';
+                      logger.error('HttpClient', '重新请求失败', errorMsg);
+                      reject(new Error(errorMsg));
+                    }
+                  },
+                  fail: (err) => {
+                    logger.error('HttpClient', '重新请求失败', err);
+                    reject(new Error(`网络请求失败: ${err.errMsg || '未知错误'}`));
+                  }
+                });
+              } else {
+                logger.error('HttpClient', '自动重新登录失败');
+                reject(new Error('认证失败，请重新登录'));
+              }
+            } catch (error) {
+              logger.error('HttpClient', '自动重新登录异常', error);
+              reject(new Error('认证异常，请重新登录'));
+            }
+            return;
+          }
+
           if (res.statusCode === 200) {
             // 后端统一返回格式 Result<T>
             if (res.data && res.data.success) {
@@ -94,6 +154,13 @@ class HttpClient {
     return this.request({ url, method: 'PUT', data, params });
   }
   
+  /**
+   * PATCH请求
+   */
+  static patch(url, data, params) {
+    return this.request({ url, method: 'PATCH', data, params });
+  }
+
   /**
    * DELETE请求
    */
