@@ -4,9 +4,25 @@
 
 ---
 
-## [里程碑-08] - 实施中
+## [里程碑-08b] - 2026-03-19
 
-### 🔵 当前进度
+### ✅ 完成情况
+
+**前置任务归属迁移**：家长在添加孩子之前创建的任务，在创建第一个孩子时自动迁移到孩子名下
+
+- 后端新增 `POST /api/tasks/transfer` 接口（安全校验：仅家长、目标必须是同家庭孩子、fromUserId 来自 JWT）
+- 前端 `task-service.js` 新增 `_migrateTasksToChild`：云端先行，云端失败则本地不改动，`syncedToCloud` 保持不变
+- `family-settings.js` 在创建第一个孩子时触发迁移，合并 Toast（"成员添加成功，已将 X 个任务归属给[name]"）
+- `utils/api-config.js` 新增 `TASKS_TRANSFER` 端点
+- 新增 5 个单元测试（全部通过）：云端成功更新本地、syncedToCloud 不变、云端失败不改本地、本地为空仍调用云端、重复触发无副作用
+
+- 设计文档：[milestone-08b-task-ownership-migration.md](../design/milestone-08b-task-ownership-migration.md)
+
+---
+
+## [里程碑-08] - 2026-03-19
+
+### ✅ 完成情况
 
 **前置条件A：parentTaskId 云端支持**
 
@@ -43,6 +59,18 @@
 
 - `backend/services/taskService.createTask` 新增幂等逻辑：客户端传 `taskId` 时先查 DB（含软删除），命中时幂等返回或恢复并覆盖字段；归属不匹配时抛 `TASK_ID_USER_MISMATCH`
 - `backend/controllers/taskController.createTask` 补 targeted catch：`TASK_ID_USER_MISMATCH` → 409
+
+**测试**
+
+- 前端单元测试新增 23 个 M08 场景（`test/services/task-service.test.js`）
+- 后端真实 DB 集成测试：`backend/test/integration/task-api-m08-real.test.js`（6 个场景，使用真实路由 + 中间件 + DB）
+- 后端真实 DB 集成测试：`backend/test/integration/task-api-m08b-real.test.js`（6 个场景，覆盖 POST /api/tasks/transfer）
+
+**集成测试执行修复（2026-03-19）**
+
+- 修复 `taskService.createTask` INSERT/UPDATE SQL 列名错误：驼峰（`startTime`、`endTime`、`isRequired`、`isAllDay`、`penaltyApplied`、`pointsExpiry`）改为下划线（`start_time`、`end_time`、`is_required`、`is_all_day`、`penalty_applied`、`points_expiry`）
+- 修复 M08/M08b 集成测试中响应码断言字段错误：`res.body.code` → `res.body.error_code`（与 `response.js` 实际结构一致）
+- 修复 M08b 测试数据插入顺序：`families.created_by` 有外键约束，改为先插入 users 再插入 families
 
 ---
 
@@ -229,7 +257,7 @@
 
 | 里程碑 | 内容 | 状态 |
 |--------|------|------|
-| M08 | 云端同步完善（重复任务同步 + 冲突解决） | 🔵 实施中 |
+| M08 | 云端同步完善（重复任务同步 + 冲突解决） | ✅ 已完成 |
 | M09 | 星星积分 + 奖励云端同步 | 🔴 未启动 |
 | M10 | 消息通知 + 完善优化 | 🔴 未启动 |
 

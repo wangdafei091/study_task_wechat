@@ -454,6 +454,47 @@ App({
 });
 ```
 
+## 后端集成测试常见问题
+
+### 问题1：INSERT 报 `Unknown column 'startTime' in 'field list'`
+
+**原因**：`backend/services/taskService.js` 的 `createTask` SQL 使用了驼峰列名，但数据库实际是下划线命名。
+
+**正确做法**：SQL 中的列名必须与数据库保持一致（下划线），`toDB()` 返回的驼峰键只用于取值，不用于列名。
+
+```javascript
+// ❌ 错误
+INSERT INTO tasks (startTime, isRequired, ...) VALUES (...)
+
+// ✅ 正确
+INSERT INTO tasks (start_time, is_required, ...) VALUES (...)
+```
+
+---
+
+### 问题2：集成测试断言 `res.body.code` 取不到值
+
+**原因**：`backend/utils/response.js` 的 `error()` 函数返回的字段名是 `error_code`，不是 `code`。
+
+**正确做法**：
+```javascript
+// ❌ 错误
+expect(res.body.code).toBe('SOME_ERROR_CODE');
+
+// ✅ 正确
+expect(res.body.error_code).toBe('SOME_ERROR_CODE');
+```
+
+---
+
+### 问题3：集成测试 INSERT families 报外键约束错误
+
+**原因**：`families.created_by` 有外键约束指向 `users.user_id`，若先插入 families 再插入 users，会触发外键校验失败。
+
+**正确做法**：测试数据插入顺序必须是：先 users → 再 families → 再更新 user 的 family_id 关联。
+
+---
+
 ## 联系支持
 
 如果遇到无法解决的问题，请提供以下信息：
