@@ -1958,6 +1958,8 @@ class TaskService {
       const task = new Task({ ...raw, id: raw.taskId || raw.id });
       const loginUserId = this.userService ? this.userService.getLoginUserId() : null;
       if (loginUserId && task.userId === loginUserId) {
+        // 来自云端的任务标记为已同步，确保 _cleanupStaleTasks 能正确清理
+        task.syncedToCloud = true;
         await this.taskRepository.save(task);
       }
       return task;
@@ -2039,6 +2041,10 @@ class TaskService {
       const response = await HttpClient.get(API_CONFIG.ENDPOINTS.TASKS, requestParams);
       const backendTasks = response?.tasks || [];
 
+      // 保留原始 modifyTime（Task 构造函数会把 null 转为 Date.now()，破坏 null 比较语义）
+      const rawModifyTimeMap = {};
+      backendTasks.forEach(raw => { rawModifyTimeMap[raw.taskId] = raw.modifyTime; });
+
       // 将后端数据转成前端 Task 模型实例
       const tasks = backendTasks.map(raw => new Task({
         ...raw,
@@ -2050,6 +2056,14 @@ class TaskService {
       // 一次读取 + 一次 saveAll，避免 N² 写放大
       if (loginUserId) {
         const ownTasks = tasks.filter(t => t.userId === loginUserId);
+
+        // 全量拉取时清理陈旧任务（即使云端返回0条也需清理，须在 upsert 和 localOnly 合并前执行）
+        const isFullFetch = !params.date && !params.startDate && !params.endDate && !params.scope;
+        if (isFullFetch) {
+          const cloudTaskIds = new Set(ownTasks.map(t => t.id));
+          await this._cleanupStaleTasks(cloudTaskIds, loginUserId);
+        }
+
         if (ownTasks.length > 0) {
           try {
             const localTaskMap = {};
@@ -2059,8 +2073,10 @@ class TaskService {
             const tasksToSaveToLocal = [];
             ownTasks.forEach(cloudTask => {
               const localTask = localTaskMap[cloudTask.id];
+              // 使用原始 modifyTime（null 视为 0），防止 Task 构造函数的 Date.now() 默认值干扰比较
+              const cloudRawModifyTime = rawModifyTimeMap[cloudTask.id];
 
-              if (localTask && localTask.modifyTime > (cloudTask.modifyTime || 0)) {
+              if (localTask && localTask.modifyTime > (cloudRawModifyTime || 0)) {
                 // 本地更新：用本地字段覆盖云端对象，让本次 UI 展示最新内容
                 Object.assign(cloudTask, {
                   title: localTask.title,
@@ -2095,13 +2111,6 @@ class TaskService {
               cloudTask.syncedToCloud = true;
               tasksToSaveToLocal.push(cloudTask);
             });
-
-            // 全量拉取时清理陈旧任务（先清理再 saveAll，避免被 localOnly 合并重新加回）
-            const isFullFetch = !params.date && !params.startDate && !params.endDate && !params.scope;
-            if (isFullFetch) {
-              const cloudTaskIds = new Set(ownTasks.map(t => t.id));
-              await this._cleanupStaleTasks(cloudTaskIds, loginUserId);
-            }
 
             await this.taskRepository.saveAll(tasksToSaveToLocal);
           } catch (upsertErr) {
