@@ -713,7 +713,9 @@ class TaskService {
             });
 
             if (syncedTasks.length > 0) {
-              await this.taskRepository.saveAll(syncedTasks);
+              await this.taskRepository.saveAll(syncedTasks).catch(err => {
+                logger.warn('TaskService', '更新 syncedToCloud 标记失败', { error: err.message });
+              });
             }
 
             if (i + batchSize < tasks.length) {
@@ -1915,11 +1917,6 @@ class TaskService {
   }
 
   /**
-   * 同步任务到云端（双写策略的云端部分）
-   * @param {Task} task 任务对象
-   * @returns {Promise<void>} 同步结果
-   */
-  /**
    * 清理陈旧任务：删除本地有但云端无、且曾成功同步过的任务。
    * syncedToCloud=false 的任务（从未上云）一律跳过，避免误删未同步数据。
    * @param {Set<string>} cloudTaskIds 云端任务ID集合
@@ -2100,7 +2097,7 @@ class TaskService {
             });
 
             // 全量拉取时清理陈旧任务（先清理再 saveAll，避免被 localOnly 合并重新加回）
-            const isFullFetch = !params.startDate && !params.endDate && !params.scope;
+            const isFullFetch = !params.date && !params.startDate && !params.endDate && !params.scope;
             if (isFullFetch) {
               const cloudTaskIds = new Set(ownTasks.map(t => t.id));
               await this._cleanupStaleTasks(cloudTaskIds, loginUserId);

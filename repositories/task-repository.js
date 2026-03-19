@@ -307,6 +307,10 @@ class TaskRepository extends BaseRepository {
    * @returns {Promise<Array>} 该用户的任务列表
    */
   async getByUserId(userId) {
+    if (!userId) {
+      logger.warn('TaskRepository', 'getByUserId: userId 为空');
+      return [];
+    }
     try {
       const tasks = await this.query(task => task.userId === userId);
       logger.debug('TaskRepository', `按用户ID查询任务, userId=${userId}, 数量=${tasks.length}`);
