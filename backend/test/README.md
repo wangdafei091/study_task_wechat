@@ -35,9 +35,9 @@ FLUSH PRIVILEGES;
 
 ```bash
 # 方式1：通过MySQL命令行
-mysql -h your-remote-db-host.com -u test_user -p task_wechat_test < backend/database/test-setup.sql
+mysql -h your-remote-db-host.com -u test_user -p task_wechat_test < backend/database/test-setup-modern.sql
 
-# 方式2：如果使用MySQL客户端工具，直接导入 backend/database/test-setup.sql 文件
+# 方式2：如果使用MySQL客户端工具，直接导入 backend/database/test-setup-modern.sql 文件
 ```
 
 ## 🚀 运行测试

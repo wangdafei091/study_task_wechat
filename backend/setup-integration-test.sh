@@ -94,15 +94,15 @@ fi
 
 echo ""
 echo "📋 步骤4：初始化测试数据库结构..."
-if [ -f "database/test-setup.sql" ]; then
+if [ -f "database/test-setup-modern.sql" ]; then
     if command -v mysql &> /dev/null; then
-        mysql -h"$DB_HOST" -u"$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" < database/test-setup.sql
+        mysql -h"$DB_HOST" -u"$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" < database/test-setup-modern.sql
         echo "✅ 测试数据库初始化完成"
     else
-        echo "⚠️  未找到mysql命令，请手动导入 database/test-setup.sql"
+        echo "⚠️  未找到mysql命令，请手动导入 database/test-setup-modern.sql"
     fi
 else
-    echo "⚠️  未找到database/test-setup.sql文件"
+    echo "⚠️  未找到database/test-setup-modern.sql文件"
 fi
 
 echo ""
@@ -130,5 +130,5 @@ echo ""
 echo "测试文件位置："
 echo "- 配置文件: .env.test"
 echo "- 测试代码: test/integration/task-api-m07-real.test.js"
-echo "- 数据库初始化: database/test-setup.sql"
+echo "- 数据库初始化: database/test-setup-modern.sql"
 echo "- 测试指南: test/README.md"
