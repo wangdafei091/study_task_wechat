@@ -11,6 +11,11 @@ Component({
     days: {
       type: Number,
       value: 7
+    },
+    // 分析范围选项，由 analysis.js 传入：{ scope: 'family' } 或 { userId: '...' }
+    analysisOptions: {
+      type: Object,
+      value: null
     }
   },
 
@@ -43,8 +48,19 @@ Component({
       // 计算并设置日期范围文本
       this.updateDateRangeText();
       
+      // 标记已挂载（供 observers 判断是否可触发刷新）
+      this._attached = true;
       // 加载数据
       this.loadStarTrendData();
+    }
+  },
+
+  observers: {
+    'analysisOptions': function() {
+      // analysisOptions 变化（如角色/视角切换）时重新加载趋势数据
+      if (this._attached) {
+        this.loadStarTrendData();
+      }
     }
   },
 
@@ -634,8 +650,11 @@ Component({
           return;
         }
         
-        // 使用新的分析服务API计算可用星星余额和预测
-        const data = await analyticsService.calculateHistoricalBalance(this.data.currentRange);
+        const analysisOptions = this.properties.analysisOptions || {};
+        const data = await analyticsService.calculateHistoricalBalance(
+          this.data.currentRange,
+          analysisOptions.userId || null
+        );
         
         if (!data || !data.historyData || data.historyData.length === 0) {
           logger.warn('star-trend', '没有星星记录');
@@ -681,16 +700,25 @@ Component({
         
         logger.info('star-trend', '趋势数据加载完成，准备渲染图表');
         
-        // 直接初始化图表，不需要延迟
-        this.initChart();
+        // 如果图表已初始化，直接更新 option，避免重复 init 导致多图表实例叠加
+        const ecComp = this.selectComponent('#starTrendChart');
+        if (ecComp && ecComp.chart) {
+          this.setChartOption(ecComp.chart);
+        } else {
+          this.initChart();
+        }
       } catch (error) {
         logger.error('star-trend', '加载星星趋势数据失败', error);
         this.setData({
           hasStarRecords: false,
           isLoading: false
         });
-        // 直接初始化图表，不需要延迟
-        this.initChart();
+        const ecComp = this.selectComponent('#starTrendChart');
+        if (ecComp && ecComp.chart) {
+          this.setChartOption(ecComp.chart);
+        } else {
+          this.initChart();
+        }
       }
     }
   }

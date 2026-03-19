@@ -1,6 +1,6 @@
 # 里程碑-07：普通任务云端同步 + 分析页用户隔离
 
-> **设计状态**：🔴 待审核
+> **设计状态**：✅ 审核通过
 > **创建日期**：2026-03-16
 > **设计者**：Claude Code
 > **审核者**：项目维护者
@@ -214,7 +214,14 @@ async _syncUpdateToCloud(task) {
   if (!this.enableCloudStorage) return;
   try {
     const url = API_CONFIG.ENDPOINTS.TASK_BY_ID.replace('{taskId}', task.id);
-    await HttpClient.put(url, { title: task.title, /* ... */ });
+    // 字段与 PUT 白名单完全对齐（见接口设计表格）
+    await HttpClient.put(url, {
+      title: task.title, description: task.description, date: task.date,
+      type: task.type, startTime: task.startTime, endTime: task.endTime,
+      duration: task.duration, isAllDay: task.isAllDay, isRequired: task.isRequired,
+      penaltyApplied: task.penaltyApplied, points: task.points, pointsExpiry: task.pointsExpiry,
+      tags: task.tags, hasNoEndDate: task.hasNoEndDate, repeat: task.repeat,
+    });
     logger.info('TaskService', '任务更新已同步到云端', { taskId: task.id });
   } catch (err) {
     logger.warn('TaskService', '云端更新同步失败（本地已保存）', { taskId: task.id, error: err.message });
@@ -277,7 +284,7 @@ async _fetchTasksFromCloud(userId, params = {}) {
   // ⚠️ 家长代操作孩子任务时，本地 getById 会 miss（孩子任务未批量回灌）
   //    补丁：写操作中 getById 返回 null 时，通过 GET /api/tasks/{taskId} 拉取单条并 upsert
   //    （见"修复B补丁"，只写被操作的特定任务，隔离边界可控）
-  const loginUserId = this.userService ? this.userService.getLoginUserId() : null;
+  // loginUserId 复用上方已声明的变量
   for (const task of tasks) {
     if (loginUserId && task.userId !== loginUserId) continue; // 非本机用户，跳过
     try {
@@ -475,16 +482,18 @@ async updateTask(req, res) {
 | `parent` | `{ scope: 'family' }` | 家庭所有孩子的任务汇总 |
 | `child` | `{ userId: loginUser.id }` | 该孩子自己的数据 |
 
-- [ ] **任务**：`analysis.js` 在 `onLoad` 中只读 `loginUser.role`，计算 `analysisOptions`
+- [ ] **任务**：`analysis.js` 中将 `analysisOptions` 计算逻辑提取为独立的 `getAnalysisOptions(loginUser)` 函数（供单元测试直接调用），在 `onLoad` 中调用：
   ```javascript
-  // analysis.js onLoad 示例
-  const userService = app.globalData.userService;
-  const loginUser = userService.getLoginUser();
-  // 分析页不跟随首页视角切换，只看 loginUser 角色
-  const analysisOptions = (loginUser?.role === 'parent')
-    ? { scope: 'family' }
-    : { userId: loginUser?.id };
-  this.setData({ analysisOptions });
+  // analysis.js — 提取为可测辅助函数
+  getAnalysisOptions(loginUser) {
+    return (loginUser?.role === 'parent')
+      ? { scope: 'family' }
+      : { userId: loginUser?.id };
+  },
+  onLoad() {
+    const loginUser = app.globalData.userService.getLoginUser();
+    this.setData({ analysisOptions: this.getAnalysisOptions(loginUser) });
+  }
   ```
 - [ ] **任务**：`task-service.js` 新增 `getTasksByScope(options)` 方法（不改动 `getAllTasks`）：`options.scope === 'family'` 时调用 `_fetchTasksFromCloud(null, { scope: 'family' })`（云端）或全量本地任务（本地）；`options.userId` 时委托 `getAllTasks(options.userId)`
 - [ ] **任务**：`analysis.wxml` 给 `<star-calendar>` 和 `<star-trend>` 组件增加 `analysisOptions` 属性绑定（两组件当前无任何 prop 传入，这是数据隔离的前置条件）
@@ -503,7 +512,20 @@ async updateTask(req, res) {
 2. **`getAllTasks(userId: string)` 签名不变**，现有首页/编辑页/统计的调用零修改
 3. **当前分析页有两条并行数据链**，均从 `analysisOptions` 取值，无第二套决策逻辑：
    - **star-trend 链**：`star-trend.js` → `analyticsService.calculateHistoricalBalance(days, analysisOptions.userId)` → `starService.getStarRecords({ userId })`（星星数据，按 userId 过滤；家长传 undefined = 全量本地星星）
-   - **star-calendar 链**：`star-calendar.js` → 月视图初始化时调 `taskService.getTasksByDateRange(startDate, endDate, userId, analysisOptions)` 一次批量拉取 + 内存缓存，`_calculateEarnedStarsFromTasks` 改为从缓存过滤（⚠️ 原来逐日调 `getTasksByDate` 在云端模式下会产生 ~30 次并发 HTTP 请求，家庭 scope 下更严重）；星星记录仍调 `getStarRecordsByDateRange/ByDate(start, end, analysisOptions.userId)`
+   - **star-calendar 链**：`star-calendar.js` → 月视图初始化时调 `taskService.getTasksByDateRange(startDate, endDate, userId, analysisOptions)` 一次批量拉取 + 内存缓存（存为 `this._cachedMonthTasks`），`_calculateEarnedStarsFromTasks` 改为从缓存 filter（⚠️ 原来逐日调 `getTasksByDate` 在云端模式下会产生 ~30 次并发 HTTP 请求，家庭 scope 下更严重）；星星记录仍调 `getStarRecordsByDateRange/ByDate(start, end, analysisOptions.userId)`。⚠️ **此改造涉及 `updateCalendarWithStars` 的调用时机重构**（原来由 star 记录加载触发后逐日 async 调用），实际改动量比"传参"更大，建议额外预留 0.5 小时。前端 `getTasksByDateRange` 云端支持扩展：
+     ```javascript
+     // task-service.js getTasksByDateRange 扩展（云端支持）
+     async getTasksByDateRange(startDate, endDate, userId = null, options = {}) {
+       if (this.enableCloudStorage) {
+         try {
+           return await this._fetchTasksFromCloud(userId, { startDate, endDate, ...options });
+         } catch (err) {
+           logger.warn('TaskService', '云端日期范围查询失败，降级本地', { error: err.message });
+         }
+       }
+       return this.taskRepository.getTasksByDateRange(startDate, endDate, userId);
+     }
+     ```
 4. `getTasksByScope(options)` 供 `analytics-service` 内的 `getTaskStarCalendarData` / `getTaskCompletionStats` 改造使用（代码准确性，不影响当前分析页实际调用链）；`analytics-service` 不做角色判断
 
 5. **新方法 `getTasksByScope` 示例**：
@@ -745,18 +767,18 @@ async updateTask(req, res) {
 
 ### 审核要点
 
-- [ ] **符合DDD架构**：是否遵循 DDD 分层原则
-- [ ] **技术方案合理**：双写策略是否合适
-- [ ] **实施步骤清晰**：6步是否可独立执行
-- [ ] **风险评估充分**：离线冲突风险是否可接受
-- [ ] **测试方案完整**：是否覆盖云端失败降级场景
+- [x] **符合DDD架构**：是否遵循 DDD 分层原则
+- [x] **技术方案合理**：双写策略是否合适
+- [x] **实施步骤清晰**：7步可独立执行，步骤4与步骤2/3无依赖可并行
+- [x] **风险评估充分**：离线冲突、隔离边界、resetTask 语义保证均已覆盖
+- [x] **测试方案完整**：覆盖云端失败降级、跨设备拒绝分支、scope 透传、backend 集成测试门槛
 - [ ] **后端真实集成测试**：第7步测试是否全部通过（准入门槛，不通过不允许合并）
 
 ### 审核意见
 
 **审核者**：项目维护者
-**审核日期**：—
-**审核结果**：🔴 待审核
+**审核日期**：2026-03-18
+**审核结果**：✅ 通过
 
 **已确认的设计决策**（独立于整体审核结果）：
 1. **分析页开放策略**：✅ 所有视角均可进入分析页。数据范围**只看 `loginUser.role`**：家长设备始终传 `{ scope: 'family' }` 显示全家孩子汇总，孩子设备传 `{ userId: loginUser.id }` 只看自己。分析页不跟随首页 `currentUser` 视角切换。`getAllTasks(userId: string)` 签名保持不变。

@@ -35,4 +35,25 @@ router.get('/:taskId', authMiddleware, taskController.getTaskById.bind(taskContr
  */
 router.post('/', authMiddleware, taskController.createTask.bind(taskController));
 
+/**
+ * @route   PUT /api/tasks/:taskId
+ * @desc    更新任务（字段白名单过滤）
+ * @access  Private
+ */
+router.put('/:taskId', authMiddleware, taskController.updateTask.bind(taskController));
+
+/**
+ * @route   DELETE /api/tasks/:taskId
+ * @desc    软删除任务
+ * @access  Private
+ */
+router.delete('/:taskId', authMiddleware, taskController.deleteTask.bind(taskController));
+
+/**
+ * @route   PATCH /api/tasks/:taskId/status
+ * @desc    更新任务状态（只接受 status:0/1）
+ * @access  Private
+ */
+router.patch('/:taskId/status', authMiddleware, taskController.updateTaskStatus.bind(taskController));
+
 module.exports = router;

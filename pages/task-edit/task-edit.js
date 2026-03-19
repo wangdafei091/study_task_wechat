@@ -216,14 +216,15 @@ Page({
         return;
       }
       
-      // 使用任务服务获取所有任务
-      const allTasks = await taskService.getAllTasks();
+      // 家长为孩子创建任务时，获取孩子的任务；否则获取登录用户的任务
+      const targetUserId = this.data.targetUserId || null;
+      const allTasks = await taskService.getAllTasks(targetUserId);
       
       this.setData({ 
         allTasks: allTasks
       });
       
-      logger.info('TaskEdit', '任务数据加载成功', { taskCount: allTasks.length });
+      logger.info('TaskEdit', '任务数据加载成功', { taskCount: allTasks.length, targetUserId });
     } catch (error) {
       logger.error('TaskEdit', '加载任务数据失败', error);
       
@@ -308,9 +309,10 @@ Page({
         return;
       }
       
-      // 直接从服务获取最新数据
-      const latestTasks = await taskService.getAllTasks();
-      logger.info('TaskEdit', '已获取最新任务数据', { taskCount: latestTasks.length });
+      // 热力图刷新也需要使用 targetUserId，保持与 loadAllTasks 一致
+      const targetUserId = this.data.targetUserId || null;
+      const latestTasks = await taskService.getAllTasks(targetUserId);
+      logger.info('TaskEdit', '已获取最新任务数据', { taskCount: latestTasks.length, targetUserId });
       
       // 确保使用新引用更新数据，触发观察器
       this.setData({ 

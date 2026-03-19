@@ -7,7 +7,7 @@ const mysql = require('mysql2/promise');
 /**
  * 数据库连接池配置
  */
-const poolConfig = {
+const getPoolConfig = () => ({
   host: process.env.DB_HOST || 'localhost',
   port: process.env.DB_PORT || 3306,
   user: process.env.DB_USER || 'root',
@@ -19,19 +19,40 @@ const poolConfig = {
   enableKeepAlive: true,
   keepAliveInitialDelay: 0,
   dateStrings: true,
-};
+});
 
 /**
- * 创建数据库连接池
+ * 创建数据库连接池（延迟初始化）
  */
-const pool = mysql.createPool(poolConfig);
+let pool = null;
+
+function getPool() {
+  if (!pool) {
+    const poolConfig = getPoolConfig();
+    console.log('🔧 初始化数据库连接池:', {
+      host: poolConfig.host,
+      user: poolConfig.user,
+      database: poolConfig.database
+    });
+    pool = mysql.createPool(poolConfig);
+  }
+  return pool;
+}
+
+// 向后兼容：直接访问pool属性时会触发�ization
+Object.defineProperty(module.exports, 'pool', {
+  get() { return getPool(); },
+  enumerable: true,
+  configurable: true
+});
 
 /**
  * 测试数据库连接
  */
 async function testConnection() {
   try {
-    const connection = await pool.getConnection();
+    const currentPool = getPool();
+    const connection = await currentPool.getConnection();
     console.log('数据库连接成功');
     connection.release();
     return true;
@@ -48,7 +69,8 @@ async function testConnection() {
  * @returns {Promise<Array>} 查询结果
  */
 async function query(sql, params = []) {
-  const [rows] = await pool.execute(sql, params);
+  const currentPool = getPool();
+  const [rows] = await currentPool.execute(sql, params);
   return rows;
 }
 
@@ -59,7 +81,8 @@ async function query(sql, params = []) {
  * @returns {Promise<Object>} 执行结果
  */
 async function execute(sql, params = []) {
-  const [result] = await pool.execute(sql, params);
+  const currentPool = getPool();
+  const [result] = await currentPool.execute(sql, params);
   return result;
 }
 
@@ -68,18 +91,32 @@ async function execute(sql, params = []) {
  */
 async function closePool() {
   try {
-    await pool.end();
-    console.log('数据库连接池已关闭');
+    if (pool) {
+      await pool.end();
+      pool = null;
+      console.log('数据库连接池已关闭');
+    }
   } catch (error) {
     console.error('关闭数据库连接池失败:', error.message);
   }
 }
 
 module.exports = {
-  pool,
-  poolConfig,
+  getPool,
+  getPoolConfig,
   testConnection,
   query,
   execute,
   closePool,
 };
+
+// 向后兼容：导出pool和poolConfig的getter
+Object.defineProperty(module.exports, 'pool', {
+  get() { return getPool(); },
+  enumerable: true,
+});
+
+Object.defineProperty(module.exports, 'poolConfig', {
+  get() { return getPoolConfig(); },
+  enumerable: true,
+});

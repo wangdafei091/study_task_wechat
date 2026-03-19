@@ -3,12 +3,12 @@
   <view class="content">
     <!-- 星星日历卡片 -->
       <card title="任务星星日历 - 记录你的小小成就" customClass="calendar-card">
-        <star-calendar class="star-calendar"></star-calendar>
+        <star-calendar class="star-calendar" analysisOptions="{{analysisOptions}}"></star-calendar>
       </card>
       
     <!-- 星星趋势图卡片 -->
       <card title="可用星星趋势图 - 看看你的星星余额" customClass="trend-card">
-        <star-trend days="7"></star-trend>
+        <star-trend days="7" analysisOptions="{{analysisOptions}}"></star-trend>
       </card>
   </view>
- </view> 
+</view> 

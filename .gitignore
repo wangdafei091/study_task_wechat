@@ -22,6 +22,8 @@ yarn.lock
 
 # Environment variables
 .env
+.env.test
+.env.local
 
 # Temporary work files
 *.tar.gz
@@ -29,3 +31,4 @@ findings.md
 progress.md
 task_plan.md
 .vscode/
+*.log

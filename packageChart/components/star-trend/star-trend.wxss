@@ -16,6 +16,14 @@
   font-weight: 500;
 }
 
+/* 星星数据免责提示 */
+.star-trend-disclaimer {
+  font-size: 22rpx;
+  color: #999999;
+  text-align: center;
+  padding: 12rpx 30rpx 0;
+}
+
 /* 筛选控件样式 */
 .filter-container {
   width: 100%;

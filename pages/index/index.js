@@ -399,6 +399,10 @@ Page({
     // 等待登录完成（云端模式）
     await this.waitForLoginComplete();
 
+    // 同步用户数据（availableUsers/currentUser），确保 getEffectiveTaskUserId() 能拿到正确 ID
+    // 修复竞态：onLoad 的 initializeMultiUserSystemDelayed 可能晚于 loadAllPageData 完成
+    await this.initializeMultiUserSystem();
+
     // 检查奖励完成跳转状态
     const app = getApp();
     if (app.globalData.fromRewardCompletion) {
@@ -1650,7 +1654,14 @@ Page({
   // 触发进度圆环点击
   // 分析页暂时对所有视角禁用（内部无 userId 过滤，M10 补齐后开放）
   onRingTap: function(e) {
-    wx.showToast({ title: '分析功能即将上线', icon: 'none' });
+    // M07：分析页已支持按角色隔离，直接跳转，analysis.js 内部决定数据范围
+    wx.navigateTo({
+      url: '/packageChart/pages/analysis/analysis',
+      fail: (err) => {
+        logger.error('Index', '跳转到分析页面失败', err);
+        wx.showToast({ title: '加载失败，请重试', icon: 'none' });
+      }
+    });
   },
   
   // 处理进度条完成事件
@@ -1820,12 +1831,13 @@ Page({
         return;
       }
 
-      // 奖励检查始终基于 loginUser（不随视角切换变化）
+      // 星星用 effectiveUserId（与 loadStarsAndRewards 口径一致），奖励用 loginUserId（家长创建管理）
       const loginUserId = getApp().globalData?.userService?.getLoginUserId() || null;
+      const effectiveUserId = this.getEffectiveTaskUserId() || loginUserId;
       
       // 获取当前星星数和所有可用奖励
       const [userPoints, allRewards] = await Promise.all([
-        starService.getTotalStars(loginUserId),
+        starService.getTotalStars(effectiveUserId),
         rewardService.getAvailableRewards(true, false, loginUserId)
       ]);
       
@@ -1887,12 +1899,14 @@ Page({
         return;
       }
 
-      // 星星/奖励卡片始终展示 loginUser 自己的数据（不随 currentUser 视角切换）
+      // 星星用 effectiveUserId（孩子视角用孩子的星星），奖励用 loginUserId（奖励由家长创建管理）
+      // 进度条含义：孩子当前 N 颗星 vs 家长设置的奖励门槛
       const loginUserId = getApp().globalData?.userService?.getLoginUserId() || null;
+      const effectiveUserId = this.getEffectiveTaskUserId() || loginUserId;
       
-      // 获取星星信息和最后兑换时间
+      // 获取星星信息（用 effectiveUserId）和最后兑换时间（用 loginUserId，兑换是家长行为）
       const [userPoints, lastExchangeTime] = await Promise.all([
-        starService.getTotalStars(loginUserId),
+        starService.getTotalStars(effectiveUserId),
         rewardService.getLastExchangeTimeByUser(loginUserId)
       ]);
       const formattedPoints = formatUtils.formatPoints(userPoints, true);
@@ -1907,6 +1921,7 @@ Page({
       
       // 调用奖励服务方法，传递已获取的星星数确保数据一致性
       logger.info('Index', '开始获取奖励数据，使用已获取的星星数确保一致性');
+      // 奖励用 loginUserId（家长账户下的奖励），星星数用已取到的 userPoints（孩子的星星）
       const [nextReward, visibleRewards] = await Promise.all([
         rewardService.calculateNextAvailableReward(userPoints, loginUserId),
         rewardService.getAvailableRewards(true, false, loginUserId)
@@ -2680,6 +2695,12 @@ Page({
       const lastActiveChildId = currentUser.role === 'child'
         ? currentUser.id
         : this.data.lastActiveChildId;
+
+      // 同步到 globalData，供其他页面（如奖池）获取最近操作的孩子
+      const app = getApp();
+      if (app && app.globalData) {
+        app.globalData.lastActiveChildId = lastActiveChildId;
+      }
       
       // 更新页面状态
       this.setData({
@@ -2841,10 +2862,9 @@ Page({
     const filteredMenuItems = permissionUtils.filterMenuItems(originalMenuItems, loginUser.role);
 
     // 只读视角（孩子视角）下额外过滤掉任务创建和奖励管理入口
-    // 分析页（study）因内部 getAllTasks() 无 userId 过滤，所有视角均暂时禁用，待 M10 补齐数据隔离后开放
+    // M07：分析页已支持按角色隔离数据，全面开放所有视角均可进入
     const { isReadonlyView } = this.data;
     const finalMenuItems = filteredMenuItems
-      .filter(item => item.id !== 'study')
       .filter(item => !isReadonlyView || (item.id !== 'habit' && item.id !== 'reward-manage'));
     
     this.setData({

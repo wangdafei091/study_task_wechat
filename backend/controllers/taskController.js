@@ -29,10 +29,20 @@ class TaskController {
         return res.status(403).json(error('无权访问该成员数据', 'FAMILY_MEMBER_ACCESS_DENIED'));
       }
 
-      logger.info('获取任务列表', { userId, effectiveUserId, date, status });
+      const { scope, startDate, endDate } = req.query;
 
-      // 获取任务列表
-      const tasks = await taskService.getTasksByUser(effectiveUserId, { date, status });
+      logger.info('获取任务列表', { userId, effectiveUserId, date, status, scope });
+
+      let tasks;
+      // scope=family：仅家长角色有效，孩子调用返回 403
+      if (scope === 'family') {
+        if (role !== 'parent') {
+          return res.status(403).json(error('仅家长角色可访问家庭聚合数据', 'PERMISSION_DENIED'));
+        }
+        tasks = await taskService.getTasksByFamily(familyId, { date, status, startDate, endDate });
+      } else {
+        tasks = await taskService.getTasksByUser(effectiveUserId, { date, status, startDate, endDate });
+      }
 
       // 统计任务数量
       const total = tasks.length;
@@ -172,6 +182,139 @@ class TaskController {
       res.status(500).json(
         error('统计任务失败', 'TASK_COUNT_FAILED')
       );
+    }
+  }
+
+  /**
+   * 更新任务
+   * 业务规则：孩子操作自己的任务，或家长操作同家庭任意孩子的任务
+   */
+  async updateTask(req, res) {
+    try {
+      const { taskId } = req.params;
+      const { userId, role, familyId } = req.user;
+
+      const existing = await taskService.getTaskById(taskId);
+      if (!existing) {
+        return res.status(404).json(error('任务不存在', 'TASK_NOT_FOUND'));
+      }
+
+      const isOwner = existing.userId === userId;
+      let isParentProxy = false;
+      if (!isOwner && role === 'parent' && familyId) {
+        const targetInfo = await familyService.getUserFamilyAndRole(existing.userId);
+        isParentProxy = targetInfo && targetInfo.familyId === familyId && targetInfo.role === 'child';
+      }
+      if (!isOwner && !isParentProxy) {
+        return res.status(403).json(error('无权限操作', 'PERMISSION_DENIED'));
+      }
+
+      const ALLOWED_FIELDS = [
+        'title', 'description', 'date', 'type', 'startTime', 'endTime',
+        'duration', 'isAllDay', 'isRequired', 'penaltyApplied',
+        'points', 'pointsExpiry', 'tags', 'hasNoEndDate', 'repeat',
+      ];
+      const safeChanges = {};
+      ALLOWED_FIELDS.forEach(field => {
+        if (req.body[field] !== undefined) safeChanges[field] = req.body[field];
+      });
+
+      if (Object.keys(safeChanges).length === 0) {
+        return res.status(400).json(error('请求体中没有可更新的字段', 'NO_UPDATABLE_FIELDS'));
+      }
+
+      const validation = Task.validate(safeChanges, true);
+      if (!validation.valid) {
+        return res.status(400).json(error(validation.errors.join('; '), 'INVALID_TASK_DATA'));
+      }
+
+      const updated = await taskService.updateTask(taskId, safeChanges);
+      if (!updated) {
+        return res.status(404).json(error('任务不存在或已删除', 'TASK_NOT_FOUND'));
+      }
+
+      logger.info('任务更新成功', { taskId, userId });
+      res.json(success({ task: updated.toJSON() }, '更新成功'));
+    } catch (err) {
+      logger.error('更新任务失败', err);
+      res.status(500).json(error('更新任务失败', 'TASK_UPDATE_FAILED'));
+    }
+  }
+
+  /**
+   * 软删除任务
+   */
+  async deleteTask(req, res) {
+    try {
+      const { taskId } = req.params;
+      const { userId, role, familyId } = req.user;
+
+      const existing = await taskService.getTaskById(taskId);
+      if (!existing) {
+        return res.status(404).json(error('任务不存在', 'TASK_NOT_FOUND'));
+      }
+
+      const isOwner = existing.userId === userId;
+      let isParentProxy = false;
+      if (!isOwner && role === 'parent' && familyId) {
+        const targetInfo = await familyService.getUserFamilyAndRole(existing.userId);
+        isParentProxy = targetInfo && targetInfo.familyId === familyId && targetInfo.role === 'child';
+      }
+      if (!isOwner && !isParentProxy) {
+        return res.status(403).json(error('无权限操作', 'PERMISSION_DENIED'));
+      }
+
+      const deleted = await taskService.softDeleteTask(taskId);
+      if (!deleted) {
+        return res.status(404).json(error('任务不存在或已删除', 'TASK_NOT_FOUND'));
+      }
+
+      logger.info('任务软删除成功', { taskId, userId });
+      res.json(success({ taskId }, '删除成功'));
+    } catch (err) {
+      logger.error('删除任务失败', err);
+      res.status(500).json(error('删除任务失败', 'TASK_DELETE_FAILED'));
+    }
+  }
+
+  /**
+   * 更新任务状态（只接受 status 字段，其余字段服务端推导）
+   */
+  async updateTaskStatus(req, res) {
+    try {
+      const { taskId } = req.params;
+      const { userId, role, familyId } = req.user;
+      const { status } = req.body;
+
+      if (status !== 0 && status !== 1) {
+        return res.status(400).json(error('status 必须为 0 或 1', 'INVALID_STATUS'));
+      }
+
+      const existing = await taskService.getTaskById(taskId);
+      if (!existing) {
+        return res.status(404).json(error('任务不存在', 'TASK_NOT_FOUND'));
+      }
+
+      const isOwner = existing.userId === userId;
+      let isParentProxy = false;
+      if (!isOwner && role === 'parent' && familyId) {
+        const targetInfo = await familyService.getUserFamilyAndRole(existing.userId);
+        isParentProxy = targetInfo && targetInfo.familyId === familyId && targetInfo.role === 'child';
+      }
+      if (!isOwner && !isParentProxy) {
+        return res.status(403).json(error('无权限操作', 'PERMISSION_DENIED'));
+      }
+
+      const updated = await taskService.updateTaskStatus(taskId, status);
+      if (!updated) {
+        return res.status(404).json(error('任务不存在或已删除', 'TASK_NOT_FOUND'));
+      }
+
+      logger.info('任务状态更新成功', { taskId, status, userId });
+      res.json(success({ task: updated.toJSON() }, '状态更新成功'));
+    } catch (err) {
+      logger.error('更新任务状态失败', err);
+      res.status(500).json(error('更新任务状态失败', 'TASK_STATUS_UPDATE_FAILED'));
     }
   }
 

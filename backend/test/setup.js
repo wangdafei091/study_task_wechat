@@ -3,19 +3,24 @@
  * 处理测试环境配置和数据库连接
  */
 
-// 加载测试环境变量
+// 🔥 关键：必须在任何其他模块之前加载环境变量
 require('dotenv').config({ path: '.env.test' });
+
+// 设置测试环境标识
+if (!process.env.NODE_ENV) {
+  process.env.NODE_ENV = 'test';
+}
 
 // 如果没有.env.test，使用默认测试配置
 if (!process.env.DB_NAME) {
   console.warn('⚠️  未找到.env.test文件，使用默认测试数据库配置');
   process.env.DB_NAME = 'task_wechat_test';
   process.env.JWT_SECRET = 'test-secret-key-for-testing-only';
-  process.env.NODE_ENV = 'test';
 }
 
 console.log('🧪 Jest测试环境配置:');
-console.log('- 数据库:', process.env.DB_NAME);
+console.log('- 数据库:', process.env.DB_HOST);
+console.log('- 数据库名称:', process.env.DB_NAME);
 console.log('- JWT密钥:', process.env.JWT_SECRET ? '已设置' : '未设置');
 console.log('- 环境:', process.env.NODE_ENV);
 

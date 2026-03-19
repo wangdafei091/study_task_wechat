@@ -186,6 +186,36 @@ const configService = serviceManager.get('configService');
 
 ---
 
+#### 云端同步（M07 新增）
+
+##### `getTasksByScope(options)`
+按作用域获取任务（分析页专用，不修改 `getAllTasks` 默认语义）
+- **参数**:
+  ```javascript
+  {
+    scope?: 'family',   // 家长看全家孩子任务（需云端支持）
+    userId?: string     // 孩子看自己的任务
+  }
+  ```
+- **返回**: `Task[]`
+- **说明**: `scope=family` 时调用云端 `GET /api/tasks?scope=family`，结果不写入本地仓储（维护 M06 隔离）
+
+##### `getTasksByDateRange(startDate, endDate, userId = null, options = {})`
+按日期范围批量获取任务（分析页月视图专用，避免逐日请求风暴）
+- **参数**: `startDate`/`endDate` - `YYYY-MM-DD` 格式, `userId` - 可选用户 ID, `options` - 作用域选项（同 `getTasksByScope`）
+- **返回**: `Task[]`
+
+##### `_syncUpdateToCloud(task)` *(私有)*
+任务编辑后异步同步到云端，接收完整 Task 对象，内部提取白名单字段发送 PUT，失败仅记 warn 日志，不影响本地结果
+
+##### `_syncDeleteToCloud(taskId)` *(私有)*
+任务删除后异步同步到云端；HTTP 404 视为成功（本地重复实例从未上云）
+
+##### `_syncStatusToCloud(task)` *(私有)*
+完成/重置状态异步同步到云端，接收完整 Task 对象，只发送 `{ status: task.status }`（数字 `0`/`1`）
+
+---
+
 ## StarService - 星星积分服务
 
 星星服务负责星星的获取、消费、过期管理等核心积分逻辑。
@@ -382,8 +412,14 @@ const configService = serviceManager.get('configService');
 #### 其他方法
 
 ##### `getLastExchangeTime()`
-获取最后一次兑换时间
+获取最后一次兑换时间（当前 loginUser）
 - **返回**: `Promise<number>` - 时间戳
+
+##### `getLastExchangeTimeByUser(userId)` *(M07 新增)*
+获取指定用户最后一次兑换时间
+- **参数**: `userId` - 用户 ID
+- **返回**: `Promise<number|null>` - 时间戳；无记录或出错时返回 `null`
+- **说明**: 用于首页进度条按 `loginUserId` 计算兑换保护边界
 
 ---
 

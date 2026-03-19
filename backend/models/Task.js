@@ -24,6 +24,13 @@ class Task {
     penaltyApplied = false,
     createdAt = null,
     updatedAt = null,
+    deletedAt = null,
+    completionTime = null,
+    starAwarded = false,
+    modifyTime = null,
+    duration = 0,
+    hasNoEndDate = false,
+    tags = null,
   } = {}) {
     this.taskId = taskId;
     this.userId = userId;
@@ -42,6 +49,13 @@ class Task {
     this.penaltyApplied = penaltyApplied;
     this.createdAt = createdAt;
     this.updatedAt = updatedAt;
+    this.deletedAt = deletedAt;
+    this.completionTime = completionTime;
+    this.starAwarded = Boolean(starAwarded);
+    this.modifyTime = modifyTime;
+    this.duration = duration || 0;
+    this.hasNoEndDate = Boolean(hasNoEndDate);
+    this.tags = tags;
   }
 
   /**
@@ -65,6 +79,15 @@ class Task {
       }
     }
 
+    let tags = null;
+    if (dbRecord.tags) {
+      try {
+        tags = typeof dbRecord.tags === 'string' ? JSON.parse(dbRecord.tags) : dbRecord.tags;
+      } catch (e) {
+        tags = null;
+      }
+    }
+
     return new Task({
       taskId: dbRecord.task_id,
       userId: dbRecord.user_id,
@@ -83,6 +106,13 @@ class Task {
       penaltyApplied: dbRecord.penaltyApplied,
       createdAt: dbRecord.created_at,
       updatedAt: dbRecord.updated_at,
+      deletedAt: dbRecord.deleted_at || null,
+      completionTime: dbRecord.completion_time || null,
+      starAwarded: Boolean(dbRecord.star_awarded),
+      modifyTime: dbRecord.modify_time || null,
+      duration: dbRecord.duration || 0,
+      hasNoEndDate: Boolean(dbRecord.has_no_end_date),
+      tags,
     });
   }
 
@@ -107,6 +137,12 @@ class Task {
       repeat: this.repeat ? JSON.stringify(this.repeat) : null,
       isAllDay: this.isAllDay,
       penaltyApplied: this.penaltyApplied,
+      completion_time: this.completionTime || null,
+      star_awarded: this.starAwarded ? 1 : 0,
+      modify_time: this.modifyTime || null,
+      duration: this.duration || 0,
+      has_no_end_date: this.hasNoEndDate ? 1 : 0,
+      tags: this.tags ? JSON.stringify(this.tags) : null,
     };
   }
 
@@ -132,6 +168,13 @@ class Task {
       isAllDay: this.isAllDay,
       penaltyApplied: this.penaltyApplied,
       createdAt: this.createdAt,
+      completionTime: this.completionTime,
+      starAwarded: this.starAwarded,
+      modifyTime: this.modifyTime,
+      duration: this.duration,
+      hasNoEndDate: this.hasNoEndDate,
+      tags: this.tags,
+      // deletedAt 不对外暴露
     };
   }
 

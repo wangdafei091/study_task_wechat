@@ -4,6 +4,68 @@
 
 ---
 
+## [里程碑-07] - 2026-03-19
+
+### ✅ 完成情况
+
+**普通任务云端同步（CRUD全链路）**
+
+- 后端新增 `PUT /api/tasks/:taskId`（字段白名单、权限校验、Task.validate）
+- 后端新增 `DELETE /api/tasks/:taskId`（软删除，`deleted_at`）
+- 后端新增 `PATCH /api/tasks/:taskId/status`（仅接受数字 0/1，服务端推导时间字段）
+- 后端新增 `GET /api/tasks?scope=family`（家长才可访问，孩子返回 403）
+- 数据库迁移 `005_alter_tasks_add_fields.sql`：新增 `deleted_at`、`completion_time`、`star_awarded`、`modify_time`、`duration`、`has_no_end_date`、`tags` 字段
+- 全量读路径（`getTasksByUser`/`getTaskById`/`countTasks`/`getTasksByFamily`）添加 `AND deleted_at IS NULL` 过滤
+
+**前端云端双写同步**
+
+- 新增 `_syncUpdateToCloud`：任务编辑后异步同步到云端，失败静默降级
+- 新增 `_syncDeleteToCloud`：任务删除后异步同步，404 视为成功（本地重复实例从未上云）
+- 新增 `_syncStatusToCloud`：完成/重置后异步同步状态
+- `updateTask`、`deleteTask`、`updateTaskStatus`、`resetTask` 均已挂载对应同步方法
+
+**跨设备健壮性**
+
+- `_fetchTasksFromCloud`：只回灌 `loginUserId` 的任务（维护 M06 隔离），新增 `status`/`starAwarded` 合并规则防本地状态被覆盖
+- 新增 `_fetchSingleTaskFromCloud`：写操作本地 miss 时补拉单条任务，只持久化 `loginUserId` 的任务
+- `getAllTasks` 合并本地 localOnly 任务（解决重复任务实例热力图缺失）
+- `resetTask` 跨设备显式拒绝（`crossDeviceLimit: true`），防止星星账目错误
+- 新增 `getTasksByScope(options)`：支持 `scope=family`（家长看全家）或 `userId`（孩子看自己）
+
+**分析页用户隔离重新上线**
+
+- `analysis.js` 提取 `getAnalysisOptions(loginUser)` 函数，家长返回 `{ scope: 'family' }`，孩子返回 `{ userId }`
+- `analysis.wxml` 把 `analysisOptions` 传给 `star-calendar` 和 `star-trend` 子组件
+- `star-calendar` 改为 `getTasksByDateRange` 整月批量拉取，避免 ~30 次并发请求
+- `star-trend` 新增 `observers` 监听 `analysisOptions` 变化，账号/角色切换后自动刷新
+- `analytics-service` 的 `getTaskStarCalendarData`/`getTaskCompletionStats` 改用 `getTasksByScope`
+- 星星趋势图添加免责提示："星星数据仅含本设备记录，完整数据 M09 上线"
+- 首页分析入口（菜单 + 进度环）全面开放
+
+### 🔧 Bug 修复
+
+- 修复 `_fetchTasksFromCloud` N² 写放大：改为 `saveAll` 批量持久化
+- 修复任务完成后状态闪回：云端读取时合并本地 `modifyTime` 更新的状态
+- 修复 `task-edit` 热力图显示家长自己的任务：改为传 `targetUserId`
+- 修复家长视角首页任务进度为 0：`onShow` 中确保 `availableUsers` 在 `loadAllPageData` 前就绪
+- 修复 `star-calendar` `detached` 事件解绑错误名（`TASK_STATUS_CHANGED` → `TASK_STATUS_UPDATED`）
+- 修复奖池页面显示家长 0 颗星：改为读有效孩子的星星数
+- 修复奖池代孩子兑换取第一个孩子：改为优先取 `lastActiveChildId`
+- 修复 `star-calendar` 降级路径用 `starAwarded` 判断星星收入：改为 `points > 0`
+
+### ⚠️ 已知限制（后续解决）
+
+- 重复任务实例不上云，跨设备下重复任务分析数据可能不完整（M08/M09 处理）
+- 云端写失败后本地更新会在下次从云端读取时被覆盖（无重试队列，M08 处理）
+- `resetTask` 跨设备操作因本地无对应星星记录而拒绝（M09 星星同步后解决）
+- 奖励未做云端同步，孩子在自己设备上看不到家长创建的奖励（M09 处理）
+
+### 📖 详细实施记录
+
+- [里程碑-07：普通任务云端同步 + 分析页隔离](../design/milestone-07-task-sync.md)
+
+---
+
 ## [里程碑-06] - 2026-03-15
 
 ### ✅ 完成情况

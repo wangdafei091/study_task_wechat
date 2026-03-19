@@ -82,6 +82,7 @@ const API_CONFIG = {
     // 任务相关API
     TASKS: '/api/tasks',
     TASK_BY_ID: '/api/tasks/{taskId}',
+    TASK_STATUS: '/api/tasks/{taskId}/status',
 
     // 用户昵称修改
     USER_NICKNAME: '/api/users/{userId}/nickname',

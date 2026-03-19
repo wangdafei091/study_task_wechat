@@ -9,21 +9,30 @@ const jwt = require('jsonwebtoken');
  */
 const JWT_CONFIG = {
   secret: (() => {
+    let secret;
+
     // 生产环境强制配置JWT_SECRET
     if (process.env.NODE_ENV === 'production') {
       if (!process.env.JWT_SECRET) {
         throw new Error('❌ 生产环境必须配置JWT_SECRET环境变量');
       }
-      return process.env.JWT_SECRET;
+      secret = process.env.JWT_SECRET;
     }
-
-    // 开发/测试环境使用默认密钥
-    if (process.env.NODE_ENV === 'test' || process.env.NODE_ENV === 'development') {
-      return 'test-secret-key-for-dev-testing-only';
+    // 测试环境：优先使用.env.test中的JWT_SECRET，否则使用默认密钥
+    else if (process.env.NODE_ENV === 'test') {
+      secret = process.env.JWT_SECRET || 'test-secret-key-for-dev-testing-only';
     }
-
+    // 开发环境使用默认密钥
+    else if (process.env.NODE_ENV === 'development') {
+      secret = 'test-secret-key-for-dev-testing-only';
+    }
     // 其他环境（未明确）也使用默认密钥
-    return process.env.JWT_SECRET || 'test-secret-key-for-dev-testing-only';
+    else {
+      secret = process.env.JWT_SECRET || 'test-secret-key-for-dev-testing-only';
+    }
+
+    console.log(`JWT配置: 环境=${process.env.NODE_ENV}, secret=${secret}`);
+    return secret;
   })(),
   expiresIn: process.env.JWT_EXPIRES_IN || '7d',
 };

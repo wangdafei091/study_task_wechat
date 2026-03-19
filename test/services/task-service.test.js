@@ -20,11 +20,21 @@ jest.mock('../../services/star-service');
 jest.mock('../../services/reward-service');
 jest.mock('../../services/user-service');
 jest.mock('../../repositories/index');
+jest.mock('../../utils/http-client');
+jest.mock('../../utils/api-config', () => ({
+  ENABLE_API: false,
+  ENDPOINTS: {
+    TASKS: '/api/tasks',
+    TASK_BY_ID: '/api/tasks/{taskId}',
+    TASK_STATUS: '/api/tasks/{taskId}/status',
+  }
+}));
 
 const StarService = require('../../services/star-service');
 const RewardService = require('../../services/reward-service');
 const UserService = require('../../services/user-service');
 const { TaskRepository } = require('../../repositories/index');
+const HttpClient = require('../../utils/http-client');
 
 describe('TaskService', () => {
   let taskService;
@@ -1428,6 +1438,164 @@ describe('TaskService', () => {
       const result = await taskService.createTask(taskData);
 
       expect(result.success).toBe(true);
+    });
+  });
+
+  // ============================================================
+  // M07：云端同步失败降级测试
+  // ============================================================
+
+  describe('M07 - 云端写操作失败降级', () => {
+    beforeEach(() => {
+      taskService.enableCloudStorage = true;
+    });
+
+    afterEach(() => {
+      taskService.enableCloudStorage = false;
+    });
+
+    it('updateTask：本地成功但云端失败时应返回成功并打warn', async () => {
+      const task = new Task(TestDataFactory.createTask({ id: 't1', userId: 'u1' }));
+      mockTaskRepository.getById.mockResolvedValue(task);
+      mockTaskRepository.save.mockResolvedValue(task);
+      HttpClient.put = jest.fn().mockRejectedValue(new Error('cloud error'));
+
+      const result = await taskService.updateTask('t1', { title: '新标题' });
+
+      expect(result.success).toBe(true);
+    });
+
+    it('deleteTask：本地成功但云端失败时应返回成功并打warn', async () => {
+      const task = new Task(TestDataFactory.createTask({ id: 't1', userId: 'u1' }));
+      mockTaskRepository.getById.mockResolvedValue(task);
+      mockTaskRepository.delete.mockResolvedValue(true);
+      HttpClient.delete = jest.fn().mockRejectedValue(new Error('cloud error'));
+
+      const result = await taskService.deleteTask('t1');
+
+      expect(result.success).toBe(true);
+    });
+
+    it('updateTaskStatus：本地成功但云端失败时应返回成功并打warn', async () => {
+      const task = new Task(TestDataFactory.createTask({ id: 't1', userId: 'u1', status: 0, isRequired: true }));
+      mockTaskRepository.getById.mockResolvedValue(task);
+      mockTaskRepository.save.mockResolvedValue(task);
+      HttpClient.patch = jest.fn().mockRejectedValue(new Error('cloud error'));
+
+      const result = await taskService.updateTaskStatus('t1', 1);
+
+      expect(result.success).toBe(true);
+    });
+
+    it('resetTask：本地成功但云端失败时应返回成功并打warn', async () => {
+      const task = new Task(TestDataFactory.createTask({
+        id: 't1', userId: 'u1', status: 1, starAwarded: true, points: 0, isRequired: false
+      }));
+      mockTaskRepository.getById.mockResolvedValue(task);
+      mockTaskRepository.save.mockResolvedValue(task);
+      HttpClient.patch = jest.fn().mockRejectedValue(new Error('cloud error'));
+
+      const result = await taskService.resetTask('t1');
+
+      expect(result.success).toBe(true);
+    });
+  });
+
+  // ============================================================
+  // M07：_fetchTasksFromCloud 云端读取契约测试
+  // ============================================================
+
+  describe('M07 - _fetchTasksFromCloud 云端读取契约', () => {
+    it('应该返回 Task 模型实例而非普通对象', async () => {
+      const rawTasks = [
+        { taskId: 't1', userId: 'u1', title: '任务1', date: '2026-03-01', type: 'study', points: 5, status: 0 }
+      ];
+      HttpClient.get = jest.fn().mockResolvedValue({ tasks: rawTasks, total: 1 });
+      taskService.userService = { getLoginUserId: jest.fn().mockReturnValue('u1') };
+
+      const tasks = await taskService._fetchTasksFromCloud('u1');
+
+      expect(tasks).toHaveLength(1);
+      expect(tasks[0]).toBeInstanceOf(Task);
+    });
+
+    it('应该将 taskId 映射为 id', async () => {
+      const rawTasks = [
+        { taskId: 'task_abc', userId: 'u1', title: '测试任务', date: '2026-03-01', type: 'study', points: 0, status: 0 }
+      ];
+      HttpClient.get = jest.fn().mockResolvedValue({ tasks: rawTasks, total: 1 });
+      taskService.userService = { getLoginUserId: jest.fn().mockReturnValue('u1') };
+
+      const tasks = await taskService._fetchTasksFromCloud('u1');
+
+      expect(tasks[0].id).toBe('task_abc');
+    });
+  });
+
+  // ============================================================
+  // M07：resetTask 跨设备拒绝测试
+  // ============================================================
+
+  describe('M07 - resetTask 跨设备拒绝检测', () => {
+    it('跨设备完成的任务（已完成+未奖星+有积分+非必做）应显式拒绝', async () => {
+      const task = new Task(TestDataFactory.createTask({
+        id: 't1', userId: 'u1', status: 1, starAwarded: false, points: 5, isRequired: false
+      }));
+      mockTaskRepository.getById.mockResolvedValue(task);
+
+      const result = await taskService.resetTask('t1');
+
+      expect(result.success).toBe(false);
+      expect(result.crossDeviceLimit).toBe(true);
+    });
+
+    it('points=0 的已完成任务应允许重置（不涉及积分）', async () => {
+      const task = new Task(TestDataFactory.createTask({
+        id: 't1', userId: 'u1', status: 1, starAwarded: false, points: 0, isRequired: false
+      }));
+      mockTaskRepository.getById.mockResolvedValue(task);
+      mockTaskRepository.save.mockImplementation(async (t) => t);
+
+      const result = await taskService.resetTask('t1');
+
+      expect(result.crossDeviceLimit).toBeUndefined();
+    });
+
+    it('isRequired=true 的已完成任务应允许重置（必做任务不涉及积分）', async () => {
+      const task = new Task(TestDataFactory.createTask({
+        id: 't1', userId: 'u1', status: 1, starAwarded: false, points: 5, isRequired: true
+      }));
+      mockTaskRepository.getById.mockResolvedValue(task);
+      mockTaskRepository.save.mockImplementation(async (t) => t);
+
+      const result = await taskService.resetTask('t1');
+
+      expect(result.crossDeviceLimit).toBeUndefined();
+    });
+  });
+
+  // ============================================================
+  // M07：getTasksByScope 方法测试
+  // ============================================================
+
+  describe('M07 - getTasksByScope', () => {
+    it('传入 userId 时应委托给 getAllTasks', async () => {
+      const tasks = [new Task(TestDataFactory.createTask({ id: 't1', userId: 'u1' }))];
+      mockTaskRepository.getAll.mockResolvedValue(tasks);
+
+      const result = await taskService.getTasksByScope({ userId: 'u1' });
+
+      expect(mockTaskRepository.getAll).toHaveBeenCalled();
+    });
+
+    it('传入 scope=family 且无云端时应返回全量本地任务', async () => {
+      taskService.enableCloudStorage = false;
+      const tasks = [new Task(TestDataFactory.createTask({ id: 't1' }))];
+      mockTaskRepository.getAll.mockResolvedValue(tasks);
+
+      const result = await taskService.getTasksByScope({ scope: 'family' });
+
+      expect(result).toEqual(tasks);
     });
   });
 });

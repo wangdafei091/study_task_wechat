@@ -12,10 +12,7 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "test:report": "jest --coverage --coverageReporters=html",
-    "docs:check": "node scripts/docs-check.js",
-    "docs:link-check": "node scripts/docs-link-check.js",
-    "docs:contract-check": "node scripts/docs-contract-check.js",
-    "docs:final-check": "node scripts/docs-final-check.js"
+    "health-check": "echo '文档校验脚本已移除（scripts目录为空），请手动检查docs/'"
   },
   "keywords": [
     "wechat",
@@ -25,6 +22,7 @@
   ],
   "devDependencies": {
     "jest": "^29.5.0",
-    "jsonwebtoken": "^9.0.3"
+    "jsonwebtoken": "^9.0.3",
+    "supertest": "^7.2.2"
   }
 }
