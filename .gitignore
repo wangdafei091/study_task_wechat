@@ -32,3 +32,4 @@ progress.md
 task_plan.md
 .vscode/
 *.log
+.gstack/
