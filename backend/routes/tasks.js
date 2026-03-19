@@ -56,4 +56,11 @@ router.delete('/:taskId', authMiddleware, taskController.deleteTask.bind(taskCon
  */
 router.patch('/:taskId/status', authMiddleware, taskController.updateTaskStatus.bind(taskController));
 
+/**
+ * @route   POST /api/tasks/transfer
+ * @desc    将家长名下任务批量转移给指定孩子（首次添加孩子时调用）
+ * @access  Private（仅家长）
+ */
+router.post('/transfer', authMiddleware, taskController.transferTasks.bind(taskController));
+
 module.exports = router;

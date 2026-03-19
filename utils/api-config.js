@@ -83,6 +83,7 @@ const API_CONFIG = {
     TASKS: '/api/tasks',
     TASK_BY_ID: '/api/tasks/{taskId}',
     TASK_STATUS: '/api/tasks/{taskId}/status',
+    TASKS_TRANSFER: '/api/tasks/transfer',
 
     // 用户昵称修改
     USER_NICKNAME: '/api/users/{userId}/nickname',

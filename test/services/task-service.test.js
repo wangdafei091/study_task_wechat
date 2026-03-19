@@ -1741,6 +1741,41 @@ describe('TaskService', () => {
       expect(tasks.find(t => t.id === 't3').title).toBe('本地标题');
     });
 
+    it('本地 modifyTime=0（无时间戳）、云端 modifyTime=null 时走原有覆盖逻辑（云端版本回灌）', async () => {
+      const localTask = new Task(TestDataFactory.createTask({ id: 't5', userId: 'u1', title: '本地标题' }));
+      // 手动置 0，模拟"本地无 modifyTime"状态（Task 构造函数默认赋 Date.now()）
+      localTask.modifyTime = 0;
+      mockTaskRepository.getByUserId.mockResolvedValue([localTask]);
+
+      HttpClient.get = jest.fn().mockResolvedValue({
+        tasks: [{ taskId: 't5', userId: 'u1', title: '云端标题', date: '2026-03-01', type: 'study', points: 0, status: 0, modifyTime: null }]
+      });
+
+      const tasks = await taskService._fetchTasksFromCloud('u1');
+      // 0 > (null || 0) = 0 > 0 → false，云端覆盖本地
+      expect(tasks.find(t => t.id === 't5').title).toBe('云端标题');
+      const saved = mockTaskRepository.saveAll.mock.calls[0][0];
+      expect(saved.find(t => t.id === 't5')).toBeDefined();
+    });
+
+    it('modifyTime 保护与 starAwarded 保护共存：本地更新时 starAwarded 应正确保留', async () => {
+      const localTask = new Task(TestDataFactory.createTask({
+        id: 't6', userId: 'u1', title: '本地标题', modifyTime: 2000, starAwarded: true
+      }));
+      mockTaskRepository.getByUserId.mockResolvedValue([localTask]);
+
+      HttpClient.get = jest.fn().mockResolvedValue({
+        tasks: [{ taskId: 't6', userId: 'u1', title: '云端旧标题', date: '2026-03-01', type: 'study', points: 0, status: 0, modifyTime: 1000, starAwarded: false }]
+      });
+
+      const tasks = await taskService._fetchTasksFromCloud('u1');
+      const result = tasks.find(t => t.id === 't6');
+      // 本地版本更新：title 保留本地
+      expect(result.title).toBe('本地标题');
+      // starAwarded 也应保留本地值（通过 Object.assign 携带）
+      expect(result.starAwarded).toBe(true);
+    });
+
     it('回灌任务应被标记 syncedToCloud=true', async () => {
       mockTaskRepository.getByUserId.mockResolvedValue([]);
 
@@ -1851,6 +1886,84 @@ describe('TaskService', () => {
     it('带 scope=family 的拉取不应触发 _cleanupStaleTasks', async () => {
       await taskService._fetchTasksFromCloud('u1', { scope: 'family' });
       expect(taskService._cleanupStaleTasks).not.toHaveBeenCalled();
+    });
+
+    it('家长代孩子查任务（userId != loginUserId）不应触发 _cleanupStaleTasks', async () => {
+      // loginUserId = 'u1'（家长），userId = 'child1'（孩子）
+      taskService.userService = { getLoginUserId: jest.fn().mockReturnValue('u1') };
+      await taskService._fetchTasksFromCloud('child1');
+      expect(taskService._cleanupStaleTasks).not.toHaveBeenCalled();
+    });
+  });
+
+  // ===== M08b: _migrateTasksToChild =====
+  describe('M08b _migrateTasksToChild', () => {
+    let mockSaveAll;
+
+    beforeEach(() => {
+      mockSaveAll = jest.fn().mockResolvedValue(undefined);
+      taskService.taskRepository = {
+        getByUserId: jest.fn(),
+        saveAll: mockSaveAll,
+      };
+      HttpClient.post = jest.fn();
+    });
+
+    it('云端成功时返回云端 count，并更新本地 userId', async () => {
+      const task = { id: 't1', userId: 'parent1', syncedToCloud: true };
+      taskService.taskRepository.getByUserId.mockResolvedValue([task]);
+      HttpClient.post.mockResolvedValue({ count: 1 });
+
+      const result = await taskService._migrateTasksToChild('parent1', 'child1');
+
+      expect(result).toEqual({ success: true, count: 1 });
+      expect(task.userId).toBe('child1');
+      expect(mockSaveAll).toHaveBeenCalled();
+    });
+
+    it('云端成功时 syncedToCloud 保持不变', async () => {
+      const t1 = { id: 't1', userId: 'parent1', syncedToCloud: true };
+      const t2 = { id: 't2', userId: 'parent1', syncedToCloud: false };
+      taskService.taskRepository.getByUserId.mockResolvedValue([t1, t2]);
+      HttpClient.post.mockResolvedValue({ count: 2 });
+
+      await taskService._migrateTasksToChild('parent1', 'child1');
+
+      expect(t1.syncedToCloud).toBe(true);
+      expect(t2.syncedToCloud).toBe(false);
+    });
+
+    it('云端失败时不修改本地，返回 success=false', async () => {
+      const task = { id: 't1', userId: 'parent1', syncedToCloud: true };
+      taskService.taskRepository.getByUserId.mockResolvedValue([task]);
+      HttpClient.post.mockRejectedValue(new Error('网络错误'));
+
+      const result = await taskService._migrateTasksToChild('parent1', 'child1');
+
+      expect(result).toEqual({ success: false, count: 0 });
+      expect(task.userId).toBe('parent1');
+      expect(mockSaveAll).not.toHaveBeenCalled();
+    });
+
+    it('本地为空时仍调用云端，count 来自 affectedRows', async () => {
+      taskService.taskRepository.getByUserId.mockResolvedValue([]);
+      HttpClient.post.mockResolvedValue({ count: 3 });
+
+      const result = await taskService._migrateTasksToChild('parent1', 'child1');
+
+      expect(HttpClient.post).toHaveBeenCalled();
+      expect(result).toEqual({ success: true, count: 3 });
+      expect(mockSaveAll).not.toHaveBeenCalled();
+    });
+
+    it('重复触发时云端 count=0 且本地为空，无副作用', async () => {
+      taskService.taskRepository.getByUserId.mockResolvedValue([]);
+      HttpClient.post.mockResolvedValue({ count: 0 });
+
+      const result = await taskService._migrateTasksToChild('parent1', 'child1');
+
+      expect(result).toEqual({ success: true, count: 0 });
+      expect(mockSaveAll).not.toHaveBeenCalled();
     });
   });
 });

@@ -356,6 +356,37 @@ class TaskController {
 
     return targetUserId;
   }
+
+  /**
+   * POST /api/tasks/transfer
+   * 将家长名下的所有任务转移给指定孩子（仅限首次添加孩子场景）
+   */
+  async transferTasks(req, res) {
+    try {
+      const { userId, role, familyId } = req.user;
+      const { toUserId } = req.body;
+
+      if (role !== 'parent') {
+        return res.status(403).json(error('只有家长可以转移任务', 'TRANSFER_PARENT_REQUIRED'));
+      }
+      if (!familyId) {
+        return res.status(400).json(error('您尚未加入家庭', 'FAMILY_NOT_JOINED'));
+      }
+      if (!toUserId) {
+        return res.status(400).json(error('目标用户不能为空', 'INVALID_PARAMS'));
+      }
+
+      const count = await taskService.transferTasksToChild(userId, toUserId, familyId);
+      logger.info('任务归属转移成功', { fromUserId: userId, toUserId, count });
+      res.json(success({ count }, '转移成功'));
+    } catch (err) {
+      if (err.code === 'TRANSFER_TARGET_INVALID') {
+        return res.status(400).json(error(err.message, err.code));
+      }
+      logger.error('任务归属转移失败', err);
+      res.status(500).json(error('转移失败', 'TASK_TRANSFER_FAILED'));
+    }
+  }
 }
 
 // 创建单例实例

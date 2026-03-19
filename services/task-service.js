@@ -1917,6 +1917,38 @@ class TaskService {
   }
 
   /**
+   * 将家长名下的任务迁移到指定孩子（M08b：前置任务归属迁移）
+   * 顺序：云端先行，云端成功后再更新本地；syncedToCloud 保持不变
+   * @param {string} fromUserId 家长 userId
+   * @param {string} toUserId   目标孩子 userId
+   * @returns {{ success: boolean, count: number }}
+   */
+  async _migrateTasksToChild(fromUserId, toUserId) {
+    logger.info('TaskService', '开始前置任务归属迁移', { fromUserId, toUserId });
+    try {
+      // 1. 云端先行（不依赖本地缓存，count 来自 affectedRows，清缓存场景也准确）
+      const cloudResult = await HttpClient.post(API_CONFIG.ENDPOINTS.TASKS_TRANSFER, { toUserId });
+      const cloudCount = cloudResult?.count ?? 0;
+      logger.info('TaskService', '云端迁移成功', { cloudCount });
+
+      // 2. 云端成功后更新本地（本地可能为空，无副作用；syncedToCloud 不改动）
+      const tasks = await this.taskRepository.getByUserId(fromUserId);
+      if (tasks.length > 0) {
+        tasks.forEach(task => {
+          task.userId = toUserId;
+        });
+        await this.taskRepository.saveAll(tasks);
+        logger.info('TaskService', '本地迁移完成', { count: tasks.length });
+      }
+
+      return { success: true, count: cloudCount };
+    } catch (error) {
+      logger.error('TaskService', '前置任务归属迁移失败', error);
+      return { success: false, count: 0 };
+    }
+  }
+
+  /**
    * 清理陈旧任务：删除本地有但云端无、且曾成功同步过的任务。
    * syncedToCloud=false 的任务（从未上云）一律跳过，避免误删未同步数据。
    * @param {Set<string>} cloudTaskIds 云端任务ID集合
@@ -2058,8 +2090,12 @@ class TaskService {
         const ownTasks = tasks.filter(t => t.userId === loginUserId);
 
         // 全量拉取时清理陈旧任务（即使云端返回0条也需清理，须在 upsert 和 localOnly 合并前执行）
+        // ⚠️ 仅当查询目标 = 登录用户自己时才清理：
+        //   家长代孩子查任务时，云端只返回孩子的任务，ownTasks 为空，
+        //   若此时运行清理，cloudTaskIds 是空集，会把家长所有已同步本地任务误删。
+        const isViewingOwnTasks = !userId || userId === loginUserId;
         const isFullFetch = !params.date && !params.startDate && !params.endDate && !params.scope;
-        if (isFullFetch) {
+        if (isFullFetch && isViewingOwnTasks) {
           const cloudTaskIds = new Set(ownTasks.map(t => t.id));
           await this._cleanupStaleTasks(cloudTaskIds, loginUserId);
         }
@@ -2098,6 +2134,7 @@ class TaskService {
                   completionTime: localTask.completionTime,
                   starAwarded: localTask.starAwarded,
                   modifyTime: localTask.modifyTime,
+                  parentTaskId: localTask.parentTaskId,
                 });
                 logger.debug('TaskService', `modifyTime保护: 本地版本较新，保留本地数据 ID=${cloudTask.id}`);
               } else {

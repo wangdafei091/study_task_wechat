@@ -116,8 +116,8 @@ class TaskService {
             `UPDATE tasks SET
               deleted_at = NULL,
               title = ?, description = ?, type = ?, date = ?,
-              startTime = ?, endTime = ?, points = ?, pointsExpiry = ?,
-              isRequired = ?, \`repeat\` = ?, isAllDay = ?, penaltyApplied = ?,
+              start_time = ?, end_time = ?, points = ?, points_expiry = ?,
+              is_required = ?, \`repeat\` = ?, is_all_day = ?, penalty_applied = ?,
               duration = ?, has_no_end_date = ?, tags = ?,
               parent_task_id = ?, modify_time = ?,
               status = 0, completion_time = NULL, star_awarded = 0
@@ -166,8 +166,8 @@ class TaskService {
       await execute(
         `INSERT INTO tasks (
           task_id, user_id, title, description, type, date,
-          startTime, endTime, points, pointsExpiry,
-          isRequired, status, \`repeat\`, isAllDay, penaltyApplied,
+          start_time, end_time, points, points_expiry,
+          is_required, status, \`repeat\`, is_all_day, penalty_applied,
           duration, has_no_end_date, tags, modify_time, parent_task_id
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
@@ -368,6 +368,31 @@ class TaskService {
       logger.error('获取家庭任务列表失败', error);
       throw error;
     }
+  }
+
+  /**
+   * 将家长名下的所有任务批量转移给指定孩子
+   * @param {string} fromUserId 家长 userId（来自 JWT，不信任客户端）
+   * @param {string} toUserId   目标孩子 userId
+   * @param {string} familyId   家长所属家庭 ID
+   * @returns {number} 实际迁移的任务数量
+   */
+  async transferTasksToChild(fromUserId, toUserId, familyId) {
+    const targetRows = await query(
+      "SELECT user_id FROM users WHERE user_id = ? AND family_id = ? AND role = 'child' AND status = 'active' LIMIT 1",
+      [toUserId, familyId]
+    );
+    if (!targetRows.length) {
+      const err = new Error('目标用户不是同家庭的孩子成员');
+      err.code = 'TRANSFER_TARGET_INVALID';
+      throw err;
+    }
+    const result = await execute(
+      'UPDATE tasks SET user_id = ? WHERE user_id = ?',
+      [toUserId, fromUserId]
+    );
+    logger.info('任务归属转移完成', { fromUserId, toUserId, count: result.affectedRows });
+    return result.affectedRows;
   }
 }
 
