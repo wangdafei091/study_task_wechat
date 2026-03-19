@@ -71,6 +71,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   completion_time BIGINT DEFAULT NULL COMMENT 'epoch ms',
   star_awarded TINYINT(1) DEFAULT 0,
   modify_time BIGINT DEFAULT NULL COMMENT 'epoch ms',
+  parent_task_id VARCHAR(100) DEFAULT NULL COMMENT '重复任务的父任务ID，普通任务为NULL',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   deleted_at DATETIME DEFAULT NULL,

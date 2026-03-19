@@ -142,6 +142,11 @@ class TaskController {
 
       res.json(success(task.toJSON(), '任务创建成功'));
     } catch (err) {
+      if (err.code === 'TASK_ID_USER_MISMATCH') {
+        return res.status(409).json(
+          error('taskId 已被其他用户使用', 'TASK_ID_USER_MISMATCH')
+        );
+      }
       logger.error('创建任务失败', err);
       res.status(500).json(
         error('创建任务失败', 'TASK_CREATE_FAILED')

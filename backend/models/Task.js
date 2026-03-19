@@ -31,6 +31,7 @@ class Task {
     duration = 0,
     hasNoEndDate = false,
     tags = null,
+    parentTaskId = null,
   } = {}) {
     this.taskId = taskId;
     this.userId = userId;
@@ -56,6 +57,7 @@ class Task {
     this.duration = duration || 0;
     this.hasNoEndDate = Boolean(hasNoEndDate);
     this.tags = tags;
+    this.parentTaskId = parentTaskId || null;
   }
 
   /**
@@ -113,6 +115,7 @@ class Task {
       duration: dbRecord.duration || 0,
       hasNoEndDate: Boolean(dbRecord.has_no_end_date),
       tags,
+      parentTaskId: dbRecord.parent_task_id || null,
     });
   }
 
@@ -143,6 +146,7 @@ class Task {
       duration: this.duration || 0,
       has_no_end_date: this.hasNoEndDate ? 1 : 0,
       tags: this.tags ? JSON.stringify(this.tags) : null,
+      parent_task_id: this.parentTaskId || null,
     };
   }
 
@@ -174,6 +178,7 @@ class Task {
       duration: this.duration,
       hasNoEndDate: this.hasNoEndDate,
       tags: this.tags,
+      parentTaskId: this.parentTaskId,
       // deletedAt 不对外暴露
     };
   }

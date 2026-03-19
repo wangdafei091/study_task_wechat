@@ -4,6 +4,48 @@
 
 ---
 
+## [里程碑-08] - 实施中
+
+### 🔵 当前进度
+
+**前置条件A：parentTaskId 云端支持**
+
+- 新增数据库迁移 `006_alter_tasks_add_parent_task_id.sql`：tasks 表添加 `parent_task_id` 字段
+- 更新测试库 schema（`test-setup-fixed.sql`、`test-setup-modern.sql`）同步添加 `parent_task_id`
+- 后端 `Task` 模型新增 `parentTaskId` 字段（constructor / fromDB / toDB / toJSON）
+- 前端 `_syncTaskToCloud` payload 新增 `parentTaskId` 和 `modifyTime`
+- 后端 `taskService.createTask` INSERT 新增 `modify_time`、`parent_task_id` 字段
+
+**前置条件B：syncedToCloud 本地标记**
+
+- 前端 `models/task.js` 新增 `syncedToCloud = false` 字段
+
+**重复任务批量云端同步**
+
+- `_createRepeatTaskInstance` 显式重置 `syncedToCloud: false`，防继承父任务状态
+- `_generateRepeatTasks` 重构：本地 `saveAll` 后，异步 `syncInBatches`（`Promise.allSettled`，batchSize=10）
+- 同步成功的实例更新 `syncedToCloud = true` 并批量持久化
+- `createTask` 主流程：云端同步成功后设置 `syncedToCloud = true`
+
+**modifyTime 冲突保护**
+
+- `_fetchTasksFromCloud` 重构 upsert 逻辑：本地 `modifyTime > (cloudTask.modifyTime || 0)` 时，`Object.assign` 覆盖云端对象，保证本次 UI 展示本地最新内容
+- 所有回灌任务统一设置 `syncedToCloud = true`
+- 改用 `taskRepository.getByUserId` 替代 `getAll`，避免加载其他用户数据
+
+**安全陈旧任务清理**
+
+- `task-repository.js` 新增 `getByUserId(userId)` 方法
+- `task-service.js` 新增 `_cleanupStaleTasks(cloudTaskIds, loginUserId)`：仅删除 `syncedToCloud=true` 且云端不存在的任务
+- `_fetchTasksFromCloud` 在全量拉取时 `await _cleanupStaleTasks`（先清后写，防 localOnly 合并脏数据）
+
+**后端幂等创建升级**
+
+- `backend/services/taskService.createTask` 新增幂等逻辑：客户端传 `taskId` 时先查 DB（含软删除），命中时幂等返回或恢复并覆盖字段；归属不匹配时抛 `TASK_ID_USER_MISMATCH`
+- `backend/controllers/taskController.createTask` 补 targeted catch：`TASK_ID_USER_MISMATCH` → 409
+
+---
+
 ## [里程碑-07] - 2026-03-19
 
 ### ✅ 完成情况
@@ -187,7 +229,7 @@
 
 | 里程碑 | 内容 | 状态 |
 |--------|------|------|
-| M08 | 云端同步完善（重复任务同步 + 冲突解决） | 🟡 设计中 |
+| M08 | 云端同步完善（重复任务同步 + 冲突解决） | 🔵 实施中 |
 | M09 | 星星积分 + 奖励云端同步 | 🔴 未启动 |
 | M10 | 消息通知 + 完善优化 | 🔴 未启动 |
 

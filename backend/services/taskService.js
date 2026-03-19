@@ -88,12 +88,78 @@ class TaskService {
    */
   async createTask(userId, taskData) {
     try {
-      const taskId = Task.generateId();
+      // 幂等检查：客户端传入 taskId 时，先查是否已存在（含软删除）
+      if (taskData.taskId) {
+        const existing = await query(
+          'SELECT * FROM tasks WHERE task_id = ? LIMIT 1',
+          [taskData.taskId]
+        );
+        const existingRaw = existing && existing[0];
+
+        if (existingRaw) {
+          // 归属校验：taskId 已存在但归属不同用户，拒绝
+          if (existingRaw.user_id !== userId) {
+            const err = new Error('taskId 归属用户不匹配');
+            err.code = 'TASK_ID_USER_MISMATCH';
+            throw err;
+          }
+
+          if (!existingRaw.deleted_at) {
+            // 未软删除：幂等返回已有任务
+            logger.info('创建任务幂等：taskId 已存在，直接返回', { taskId: taskData.taskId, userId });
+            return Task.fromDB(existingRaw);
+          }
+
+          // 已软删除：恢复并覆盖所有业务字段，重置完成状态
+          const now = Date.now();
+          await execute(
+            `UPDATE tasks SET
+              deleted_at = NULL,
+              title = ?, description = ?, type = ?, date = ?,
+              startTime = ?, endTime = ?, points = ?, pointsExpiry = ?,
+              isRequired = ?, \`repeat\` = ?, isAllDay = ?, penaltyApplied = ?,
+              duration = ?, has_no_end_date = ?, tags = ?,
+              parent_task_id = ?, modify_time = ?,
+              status = 0, completion_time = NULL, star_awarded = 0
+            WHERE task_id = ?`,
+            [
+              taskData.title,
+              taskData.description || '',
+              taskData.type,
+              taskData.date,
+              taskData.startTime || '',
+              taskData.endTime || '',
+              taskData.points || 0,
+              taskData.pointsExpiry || 'permanent',
+              taskData.isRequired ? 1 : 0,
+              taskData.repeat ? JSON.stringify(taskData.repeat) : null,
+              taskData.isAllDay ? 1 : 0,
+              taskData.penaltyApplied ? 1 : 0,
+              taskData.duration || 0,
+              taskData.hasNoEndDate ? 1 : 0,
+              taskData.tags ? JSON.stringify(taskData.tags) : null,
+              taskData.parentTaskId || null,
+              taskData.modifyTime || now,
+              taskData.taskId,
+            ]
+          );
+          logger.info('创建任务幂等：恢复软删除任务', { taskId: taskData.taskId, userId });
+          const restored = await query(
+            'SELECT * FROM tasks WHERE task_id = ? LIMIT 1',
+            [taskData.taskId]
+          );
+          return Task.fromDB(restored[0]);
+        }
+      }
+
+      // 正常创建：优先使用客户端提供的 taskId
+      const taskId = taskData.taskId || Task.generateId();
       const task = new Task({
         taskId,
         userId,
         ...taskData,
         status: 0, // 默认为未完成
+        modifyTime: taskData.modifyTime || Date.now(),
       });
 
       const dbData = task.toDB();
@@ -102,8 +168,8 @@ class TaskService {
           task_id, user_id, title, description, type, date,
           startTime, endTime, points, pointsExpiry,
           isRequired, status, \`repeat\`, isAllDay, penaltyApplied,
-          duration, has_no_end_date, tags
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          duration, has_no_end_date, tags, modify_time, parent_task_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           dbData.task_id,
           dbData.user_id,
@@ -123,6 +189,8 @@ class TaskService {
           dbData.duration,
           dbData.has_no_end_date,
           dbData.tags,
+          dbData.modify_time,
+          dbData.parent_task_id,
         ]
       );
 
