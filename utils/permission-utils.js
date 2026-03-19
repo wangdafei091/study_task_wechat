@@ -20,7 +20,8 @@ const PAGE_PERMISSIONS = {
     '/packageManage/pages/reward-manage/reward-manage', // 奖励管理
     '/packageManage/pages/my-exchanges/my-exchanges',   // 我的兑换
     '/packageMessage/pages/star-records/star-records',   // 星星记录
-    '/packageMessage/pages/message/message'        // 消息中心
+    '/packageMessage/pages/message/message',             // 消息中心
+    '/packageManage/pages/family-settings/family-settings' // 家庭设置（家长专属）
   ],
   
   // 孩子权限页面（受限权限）
@@ -29,8 +30,8 @@ const PAGE_PERMISSIONS = {
     '/pages/rewards/rewards',       // 奖池页面
     '/packageManage/pages/my-exchanges/my-exchanges',   // 我的兑换
     '/packageMessage/pages/star-records/star-records',   // 星星记录
-    '/packageMessage/pages/message/message'        // 消息中心
-    // 注意：孩子不能访问任务编辑和奖励管理页面
+    '/packageMessage/pages/message/message',             // 消息中心
+    '/packageManage/pages/family-settings/family-settings' // 未加入家庭时可访问（输入邀请码加入）
   ]
 };
 
@@ -87,7 +88,7 @@ const FEATURE_PERMISSIONS = {
       edit: false,        // 不能编辑任务
       delete: false,      // 不能删除任务
       complete: true,     // 可以完成任务
-      reset: false,       // 不能重置任务
+      reset: true,        // 可以重置任务（打卡）
       markRequired: false // 不能标记必做任务
     },
     

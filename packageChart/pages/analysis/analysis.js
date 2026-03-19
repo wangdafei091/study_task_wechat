@@ -1,38 +1,47 @@
-// 获取应用实例和工具类
 const app = getApp();
-const dateUtils = require('../../../utils/dateUtils.js');
 const logger = require('../../../utils/logger.js');
 
 Page({
   data: {
-    loading: false // 加载状态
+    loading: false,
+    analysisOptions: null, // { scope: 'family' } 或 { userId: '...' }
   },
-  
+
   /**
-   * 生命周期函数--监听页面加载
+   * 根据登录用户角色决定分析数据范围
+   * - 家长：看家庭所有孩子数据（scope=family）
+   * - 孩子：看自己数据（userId=loginUser.id）
+   * 此函数提取为独立方法便于单测
    */
-  onLoad: function (options) {
+  getAnalysisOptions(loginUser) {
+    return (loginUser && loginUser.role === 'parent')
+      ? { scope: 'family' }
+      : { userId: loginUser && loginUser.id };
+  },
+
+  onLoad: function () {
     logger.info('analysis', '页面加载');
-    logger.info('analysis', '调整卡片样式: 移除自定义样式，使用默认卡片样式');
-    // 允许页面DOM先渲染，优化加载时序避免组件间数据冲突
-    this.setData({ loading: true });
+    const loginUser = app.globalData && app.globalData.userService
+      ? app.globalData.userService.getLoginUser()
+      : null;
+    const analysisOptions = this.getAnalysisOptions(loginUser);
+    logger.info('analysis', '分析范围', analysisOptions);
+    this.setData({ loading: true, analysisOptions });
     setTimeout(() => {
       this.loadData();
     }, 300);
   },
-  
-  /**
-   * 生命周期函数--监听页面显示
-   */
+
   onShow: function () {
-    // 每次页面显示时刷新数据
     logger.info('analysis', '页面显示');
-    // 允许页面DOM先渲染，延长等待时间避免组件间数据冲突
-    this.setData({ loading: true });
+    // 每次显示时重新计算 analysisOptions，以应对账号视角切换
+    const loginUser = app.globalData && app.globalData.userService
+      ? app.globalData.userService.getLoginUser()
+      : null;
+    const analysisOptions = this.getAnalysisOptions(loginUser);
+    this.setData({ loading: true, analysisOptions });
     setTimeout(() => {
       this.loadData();
-      
-      // 延迟触发星星日历刷新，避免与趋势图同时加载造成重复查询
       setTimeout(() => {
         const starCalendar = this.selectComponent('.star-calendar');
         if (starCalendar) {
@@ -44,23 +53,16 @@ Page({
       }, 200);
     }, 300);
   },
-  
-  /**
-   * 加载数据
-   */
-  loadData: function() {
+
+  loadData: function () {
     logger.info('analysis', '加载数据');
-    
     try {
-      // 通过app实例获取任务服务
       const taskService = app.getTaskService();
       if (!taskService) {
         logger.error('analysis', '无法获取任务服务');
         this.setData({ loading: false });
         return;
       }
-      
-      // 延迟加载数据，然后隐藏加载状态
       setTimeout(() => {
         this.setData({ loading: false });
         logger.info('analysis', '数据加载完成');
@@ -68,11 +70,7 @@ Page({
     } catch (err) {
       logger.error('analysis', '加载数据失败:', err);
       this.setData({ loading: false });
-      wx.showToast({
-        title: '数据加载失败',
-        icon: 'none',
-        duration: 2000
-      });
+      wx.showToast({ title: '数据加载失败', icon: 'none', duration: 2000 });
     }
   }
-}) 
+});

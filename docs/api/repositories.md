@@ -31,18 +31,28 @@ BaseRepository提供通用的CRUD操作和缓存机制，所有具体仓储都�
 
 #### 基础操作
 
-##### findAll()
+##### getAll(useCache = true)
 获取所有记录
+- **参数**: `useCache` (Boolean, 可选) - 是否使用缓存，默认 true
+- **返回**: `Promise<Array>` - 实体列表
+- **说明**: 支持异步和同步版本（`getAllSync`）
 
-```
-
-##### findById(id)
+##### getById(id)
 根据ID查找记录
+- **参数**: `id` (String) - 实体ID
+- **返回**: `Promise<Object|null>` - 实体对象或null
 
 ```
 
 ##### save(entity)
 保存实体（新增或更新）
+
+**返回值**:
+- 成功：返回保存后的实体
+- 失败：抛出异常
+
+**异常**:
+- 保存失败时抛出 Error 异常，包含详细错误信息
 
 ```
 
@@ -61,6 +71,13 @@ BaseRepository提供通用的CRUD操作和缓存机制，所有具体仓储都�
 ##### saveAll(entities)
 批量保存实体
 
+**返回值**:
+- 成功：返回保存后的实体数组
+- 失败：抛出异常
+
+**异常**:
+- 保存失败时抛出 Error 异常，包含详细错误信息
+
 ```
 
 ##### deleteAll(ids)
@@ -70,8 +87,8 @@ BaseRepository提供通用的CRUD操作和缓存机制，所有具体仓储都�
 
 ##### findByIds(ids)
 根据ID列表查找记录
-
-```
+- **参数**: `ids` (Array) - ID数组
+- **返回**: `Promise<Array>` - 实体列表
 
 #### 缓存管理
 
@@ -107,20 +124,26 @@ BaseRepository提供通用的CRUD操作和缓存机制，所有具体仓储都�
 
 #### 按日期查询
 
-##### findByDate(date)
+##### getTasksByDate(date, userId = null)
 获取指定日期的任务
+- **参数**:
+  - `date` (String) - 日期字符串，格式 YYYY-MM-DD
+  - `userId` (String, 可选) - 用户ID，不传则获取所有用户的任务
+- **返回**: `Promise<Array>` - 指定日期的任务列表
 
-```
-
-##### findByDateRange(startDate, endDate)
+##### getTasksByDateRange(startDate, endDate, userId = null)
 获取日期范围内的任务
+- **参数**:
+  - `startDate` (String) - 开始日期字符串，格式 YYYY-MM-DD
+  - `endDate` (String) - 结束日期字符串，格式 YYYY-MM-DD
+  - `userId` (String, 可选) - 用户ID，不传则获取所有用户的任务
+- **返回**: `Promise<Array>` - 指定日期范围的任务列表
 
-```
-
-##### findTodayTasks()
+##### getTodayTasks(userId = null)
 获取今日任务
-
-```
+- **参数**:
+  - `userId` (String, 可选) - 用户ID，不传则获取所有用户的任务
+- **返回**: `Promise<Array>` - 今日任务列表
 
 #### 按状态查询
 
@@ -172,47 +195,50 @@ BaseRepository提供通用的CRUD操作和缓存机制，所有具体仓储都�
 
 #### 分组管理
 
-##### findByUserId(userId)
-获取用户的星星分组
+##### getNonEmptyGroups(userId = null)
+获取非空的星星分组
+- **参数**:
+  - `userId` (String, 可选) - 用户ID
+- **返回**: `Promise<Array>` - 非空分组列表
 
-```
-
-##### findActiveGroups(userId)
-获取有效的星星分组（星星数>0）
-
-```
-
-##### findExpiredGroups(userId)
-获取已过期的星星分组
-
-```
+##### getGroupsByExpiryType(expiryType, userId = null)
+按有效期类型获取分组
+- **参数**:
+  - `expiryType` (String) - 有效期类型
+  - `userId` (String, 可选) - 用户ID
+- **返回**: `Promise<Array>` - 符合条件的分组列表
 
 #### 星星操作
 
-##### addStarsToGroup(userId, amount, expiryDate, sourceId)
+##### addStarsToGroup(group, points, source)
 向分组添加星星
+- **参数**:
+  - `group` (StarGroup) - 星星分组对象
+  - `points` (Number) - 星星数量
+  - `source` (String) - 来源标识
+- **返回**: `Promise<StarGroup>` - 更新后的分组
 
-
-##### consumeStarsFromGroup(userId, amount)
+##### consumeStarsFromGroup(group, points)
 从分组消费星星（FIFO策略）
-
+- **参数**:
+  - `group` (StarGroup) - 星星分组对象
+  - `points` (Number) - 要消费的星星数量
+- **返回**: `Promise<Object>` - 包含实际消费数量和更新后分组的对象
 
 #### 统计查询
 
-##### getTotalStars(userId)
+##### getTotalPoints(userId = null)
 获取用户星星总数
+- **参数**:
+  - `userId` (String, 可选) - 用户ID
+- **返回**: `Promise<Number>` - 星星总数
 
-```
-
-##### getExpiringStars(userId, days)
-获取即将过期的星星数量
-
-```
-
-##### getStarsByExpiryType(userId, expiryType)
-按有效期类型获取星星
-
-```
+##### hasEnoughPoints(amount, userId = null)
+检查是否有足够的星星
+- **参数**:
+  - `amount` (Number) - 需要的星星数
+  - `userId` (String, 可选) - 用户ID
+- **返回**: `Promise<Boolean>` - 是否有足够的星星
 
 #### 数据维护
 
@@ -234,62 +260,91 @@ BaseRepository提供通用的CRUD操作和缓存机制，所有具体仓储都�
 
 ### 专用查询方法
 
-#### 按用户查询
-
-##### findByUserId(userId)
-获取用户所有星星记录
-
-```
-
-##### findRecentRecords(userId, days)
-获取用户最近的星星记录
-
-```
-
 #### 按类型查询
 
-##### findByType(userId, type)
+##### getRecordsByType(type, userId = null)
 按记录类型查询
+- **参数**:
+  - `type` (String) - 记录类型（earn/consume/expire）
+  - `userId` (String, 可选) - 用户ID
+- **返回**: `Promise<Array>` - 符合条件的记录列表
 
-
-##### findBySource(userId, source)
+##### getRecordsBySource(source, sourceId, userId = null)
 按来源查询记录
-
-```
+- **参数**:
+  - `source` (String) - 记录来源
+  - `sourceId` (String) - 来源ID
+  - `userId` (String, 可选) - 用户ID
+- **返回**: `Promise<Array>` - 符合条件的记录列表
 
 #### 按时间查询
 
-##### findByDateRange(userId, startDate, endDate)
+##### getRecordsByDate(date, userId = null)
+获取特定日期的记录
+- **参数**:
+  - `date` (String) - 日期字符串，格式 YYYY-MM-DD
+  - `userId` (String, 可选) - 用户ID
+- **返回**: `Promise<Array>` - 符合条件的记录列表
+
+##### getRecordsByDateRange(startDate, endDate, userId = null)
 按日期范围查询
+- **参数**:
+  - `startDate` (String) - 开始日期，格式 YYYY-MM-DD
+  - `endDate` (String) - 结束日期，格式 YYYY-MM-DD
+  - `userId` (String, 可选) - 用户ID
+- **返回**: `Promise<Array>` - 符合条件的记录列表
 
-
-##### findByMonth(userId, year, month)
+##### getRecordsByMonth(month, userId = null)
 按月查询记录
+- **参数**:
+  - `month` (String) - 月份字符串，格式 YYYY-MM
+  - `userId` (String, 可选) - 用户ID
+- **返回**: `Promise<Array>` - 符合条件的记录列表
 
-```
+##### getRecordsByTimeOrder(descending = true, limit = 0, userId = null)
+按时间顺序查询记录
+- **参数**:
+  - `descending` (Boolean, 可选) - 是否降序排序（新的在前），默认 true
+  - `limit` (Number, 可选) - 限制返回的记录数量，0 表示不限制
+  - `userId` (String, 可选) - 用户ID
+- **返回**: `Promise<Array>` - 排序后的记录列表
 
-#### 统计查询
-
-##### getStatsByType(userId, type, dateRange)
-按类型获取统计数据
-
-
-##### getDailyStats(userId, dateRange)
-获取每日统计数据
-
+##### getRecordsGroupedByMonth(options = {})
+按月份分组获取记录
+- **参数**:
+  - `options.limit` (Number, 可选) - 限制数量
+  - `options.descending` (Boolean, 可选) - 是否降序排列
+  - `options.userId` (String, 可选) - 用户ID
+- **返回**: `Promise<Array>` - 按月份分组的记录数组
 
 #### 便捷创建方法
 
-##### createEarnRecord(userId, amount, sourceId, description)
-创建获得星星记录
+##### createTaskCompleteRecord(taskId, points, description, userId = null)
+创建任务完成记录
+- **参数**:
+  - `taskId` (String) - 任务ID
+  - `points` (Number) - 获得的星星数
+  - `description` (String) - 描述
+  - `userId` (String, 可选) - 用户ID
+- **返回**: `Promise<StarRecord>` - 创建的记录
 
+##### createRewardExchangeRecord(rewardId, points, description, userId = null)
+创建奖励兑换记录
+- **参数**:
+  - `rewardId` (String) - 奖励ID
+  - `points` (Number) - 消费的星星数
+  - `description` (String) - 描述
+  - `userId` (String, 可选) - 用户ID
+- **返回**: `Promise<StarRecord>` - 创建的记录
 
-##### createConsumeRecord(userId, amount, sourceId, description)
-创建消费星星记录
-
-
-##### createExpireRecord(userId, amount, sourceId, description)
-创建过期星星记录
+##### createExpiredRecord(points, expiryType, description, userId = null)
+创建星星过期记录
+- **参数**:
+  - `points` (Number) - 过期的星星数
+  - `expiryType` (String) - 过期类型
+  - `description` (String) - 描述
+  - `userId` (String, 可选) - 用户ID
+- **返回**: `Promise<StarRecord>` - 创建的记录
 
 
 ## RewardRepository - 奖励仓储
@@ -302,86 +357,100 @@ BaseRepository提供通用的CRUD操作和缓存机制，所有具体仓储都�
 
 #### 按状态查询
 
-##### findAvailable()
+##### getAvailableRewards(includeExamples = false, userId = null)
 获取可用奖励
+- **参数**:
+  - `includeExamples` (Boolean) - 是否包含示例奖励
+  - `userId` (String, 可选) - 用户ID
+- **返回**: `Promise<Array>` - 可用的奖励列表
 
-```
-
-##### findClaimed()
+##### getClaimedRewards(onlyPending = false, userId = null)
 获取已兑换奖励
+- **参数**: `onlyPending` - 是否只获取待领取的奖励，默认false
+- **返回**: `Promise<Array>` - 已兑换的奖励列表
+
+#### 按状态查询
+
+##### getDeliveredRewards(userId = null)
+获取已领取的奖励
+- **参数**: `userId` (String, 可选) - 用户ID
+- **返回**: `Promise<Array>` - 已领取的奖励列表
+
+##### getRewardsByPointsOrder(ascending = true, onlyAvailable = true, userId = null)
+按星星数量排序获取奖励
+- **参数**:
+  - `ascending` (Boolean, 可选) - 是否升序排列，默认true
+  - `onlyAvailable` (Boolean, 可选) - 只获取可兑换的奖励，默认true
+  - `userId` (String, 可选) - 用户ID
+- **返回**: `Promise<Array>` - 排序后的奖励列表
+
+##### getExchangeableRewards(availablePoints, userId = null)
+获取可兑换的奖励
+- **参数**:
+  - `availablePoints` (Number) - 可用的星星数
+  - `userId` (String, 可选) - 用户ID
+- **返回**: `Promise<Array>` - 可兑换的奖励列表
+
+#### 兑换管理
+
+##### claimReward(rewardId)
+兑换奖励
+- **参数**: `rewardId` (String) - 奖励ID
+- **返回**: `Promise<Reward|null>` - 兑换后的奖励或null
+
+##### deliverReward(rewardId)
+标记奖励为已领取
+- **参数**: `rewardId` (String) - 奖励ID
+- **返回**: `Promise<Reward|null>` - 更新后的奖励或null
+
+##### unclaimReward(rewardId)
+取消奖励兑换
+- **参数**: `rewardId` (String) - 奖励ID
+- **返回**: `Promise<Reward|null>` - 更新后的奖励或null
+
+#### 状态管理
+
+##### setRewardEnabled(rewardId, enable)
+启用/禁用奖励
+- **参数**:
+  - `rewardId` (String) - 奖励ID
+  - `enable` (Boolean) - 是否启用
+- **返回**: `Promise<Reward|null>` - 更新后的奖励或null
+
+#### 初始化方法
+
+##### getDefaultRewards()
+获取默认奖励
+- **返回**: `Promise<Array>` - 默认奖励列表
+
+##### initializeDefaultRewards()
+初始化默认奖励
+- **返回**: `Promise<Array>` - 保存的默认奖励列表
+
+##### ensureExampleRewardsEnabled()
+确保示例奖励启用
+- **返回**: `Promise<Number>` - 更新的奖励数量
 
 ```
 
-##### findDelivered()
-获取已领取奖励
-
-```
-
-##### findDisabled()
-获取已禁用奖励
-
-```
-
-#### 按类别查询
-
-##### findByCategory(category)
-按类别查询奖励
-
-
-#### 按成本查询
-
-##### findByCostRange(minCost, maxCost)
-按成本范围查询
-
-```
-
-##### findAffordable(starBalance)
-获取用户可负担的奖励
-
-```
-
-#### 库存查询
-
-##### findInStock()
-获取有库存的奖励
-
-```
-
-##### findOutOfStock()
-获取无库存的奖励
-
-```
-
-#### 特殊查询
-
-##### findSampleRewards()
-获取示例奖励
-
-```
-
-##### findPopularRewards(limit)
 获取热门奖励（按兑换次数排序）
 
 ```
 
 #### 状态更新
 
-##### updateStatus(rewardId, newStatus)
 更新奖励状态
 
 ```
 
-##### updateStock(rewardId, remainingCount)
 更新库存数量
 
 ```
 
-##### decrementStock(rewardId)
 减少库存（兑换时调用）
 
 ```
 
-##### incrementStock(rewardId)
 增加库存（取消兑换时调用）
 
 ```
@@ -396,82 +465,76 @@ BaseRepository提供通用的CRUD操作和缓存机制，所有具体仓储都�
 
 #### 按用户查询
 
-##### findByUserId(userId)
 获取用户所有消息
 
 ```
 
-##### findRecentMessages(userId, limit)
 获取用户最近的消息
 
 ```
 
 #### 按状态查询
 
-##### findUnread(userId)
+##### getUnreadMessages(userId = null)
 获取未读消息
+- **参数**: `userId` (String, 可选) - 用户ID
+- **返回**: `Promise<Array>` - 未读消息列表
 
-```
+##### getUnreadCount(userId = null)
+获取未读消息数量
+- **参数**: `userId` (String, 可选) - 用户ID
+- **返回**: `Promise<Number>` - 未读消息数量
 
-##### findRead(userId)
-获取已读消息
-
-```
-
-##### findArchived(userId)
-获取已归档消息
-
-```
+##### markAsRead(messageId)
+标记消息为已读
+- **参数**: `messageId` (String) - 消息ID
+- **返回**: `Promise<Object|null>` - 更新后的消息对象或null
 
 #### 按类型查询
 
-##### findByType(userId, type)
+##### getMessagesByType(type, userId = null)
 按消息类型查询
+- **参数**:
+  - `type` (String) - 消息类型
+  - `userId` (String, 可选) - 用户ID
+- **返回**: `Promise<Array>` - 指定类型的消息列表
 
-
-##### findBySubType(userId, type, subType)
-按子类型查询
-
-```
+##### getMessagesByNotificationType(notificationType, userId = null)
+按通知子类型查询
+- **参数**:
+  - `notificationType` (String) - 通知子类型
+  - `userId` (String, 可选) - 用户ID
+- **返回**: `Promise<Array>` - 指定通知类型的消息列表
 
 #### 按优先级查询
 
-##### findByPriority(userId, priority)
-按优先级查询
-
-```
-
-##### findHighPriorityUnread(userId)
+##### getHighPriorityMessages(userId = null)
 获取高优先级未读消息
-
-```
+- **参数**: `userId` (String, 可选) - 用户ID
+- **返回**: `Promise<Array>` - 高优先级未读消息列表
 
 #### 统计查询
 
-##### countUnread(userId)
-统计未读消息数量
-
-```
-
-##### countByType(userId, type)
-按类型统计消息数量
+##### getMessageStats()
+获取消息统计信息
+- **返回**: `Promise<Object>` - 消息统计数据
 
 ```
 
 #### 批量状态更新
 
-##### markAllAsRead(userId)
+##### markAllAsRead(userId = null)
 标记所有消息为已读
+- **参数**: `userId` (String, 可选) - 用户ID
+- **返回**: `Promise<Number>` - 更新的消息数量
 
-```
-
-##### markAsReadByIds(messageIds)
+##### markManyAsRead(messageIds)
 批量标记消息为已读
+- **参数**: `messageIds` (Array) - 消息ID数组
+- **返回**: `Promise<Number>` - 成功标记的消息数量
 
-```
+---
 
-##### archiveOldMessages(userId, olderThanDays)
-归档旧消息
-
-```
+**最后更新**：2026-03-11
+**维护者**：项目维护团队
 

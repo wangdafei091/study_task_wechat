@@ -15,7 +15,8 @@
       "root": "packageManage",
       "pages": [
         "pages/reward-manage/reward-manage",
-        "pages/my-exchanges/my-exchanges"
+        "pages/my-exchanges/my-exchanges",
+        "pages/family-settings/family-settings"
       ]
     },
     {

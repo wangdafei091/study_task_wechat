@@ -9,6 +9,8 @@ const logger = require('../utils/logger');
 const { User, UserRole, UserStatus } = require('../models/user');
 const EventBus = require('../utils/core/event-bus');
 const HttpClient = require('../utils/http-client');
+const TokenManager = require('../utils/token-manager');
+const API_CONFIG = require('../utils/api-config');
 
 class UserService {
   /**
@@ -17,7 +19,10 @@ class UserService {
    * @param {StorageAdapter} options.storageAdapter 存储适配器
    */
   constructor(options = {}) {
-    // 当前用户缓存（默认家长，避免初始化异常）
+    // loginUser：设备登录用户，应用生命周期内不变（不随 switchToUser 变化）
+    this.loginUser = null;
+
+    // currentUser：当前视角用户，可通过 switchToUser 切换
     this.currentUser = new User({
       userId: 'parent',
       name: '家长',
@@ -51,15 +56,38 @@ class UserService {
    */
   async initialize() {
     try {
-      // 从API加载用户数据并恢复会话
-      await this._loadUserState();
-      
+      // 1. 从 JWT 解析 loginUser（设备登录者，生命周期内不变）
+      const tokenInfo = TokenManager.getUserInfo();
+      if (tokenInfo && tokenInfo.userId) {
+        const userDataFromAPI = await HttpClient.get(
+          API_CONFIG.ENDPOINTS.AUTH_CURRENT
+        ).catch(() => null);
+        if (userDataFromAPI) {
+          this.loginUser = new User(userDataFromAPI);
+        } else {
+          // 降级：用 token 信息构造 loginUser
+          this.loginUser = new User({
+            userId: tokenInfo.userId,
+            role: tokenInfo.role || UserRole.PARENT,
+            familyId: tokenInfo.familyId || null,
+          });
+        }
+      }
+
+      // 2. 加载家庭成员（异步，失败不阻塞）
+      await this.loadFamilyMembers();
+
+      // 3. 恢复会话，应用非法会话回正规则
+      await this._restoreSession();
+
       this.initialized = true;
-      logger.info('UserService', '用户服务初始化完成（API模式）', { currentUserId: this.currentUser.id });
+      logger.info('UserService', '用户服务初始化完成', {
+        loginUserId: this.loginUser?.userId,
+        currentUserId: this.currentUser.id,
+      });
       return true;
     } catch (error) {
       logger.error('UserService', '初始化用户服务失败，使用默认用户', error);
-      // 初始化失败时保持默认用户，确保系统可用
       this.initialized = true;
       return false;
     }
@@ -106,7 +134,23 @@ class UserService {
   }
 
   /**
-   * 获取小朋友用户ID（兼容性方法）
+   * 获取登录用户（设备拥有者，生命周期内不变）
+   * @returns {User|null}
+   */
+  getLoginUser() {
+    return this.loginUser;
+  }
+
+  /**
+   * 获取登录用户ID
+   * @returns {String|null}
+   */
+  getLoginUserId() {
+    return this.loginUser ? this.loginUser.userId : null;
+  }
+
+  /**
+   * 获取小朋友用户ID（兼容性方法，已弃用：多孩子场景下请使用 task.userId）
    * @returns {String} 小朋友用户ID
    */
   getChildUserId() {
@@ -119,9 +163,22 @@ class UserService {
    * @returns {Array} 用户列表
    */
   getAllUsers() {
-    // 返回缓存中的用户列表，如果缓存为空则返回当前用户
-    const users = Array.from(this.userCache.values());
-    return users.length > 0 ? users : [this.currentUser];
+    if (!this.loginUser) {
+      // 未登录 / 测试环境：返回所有缓存用户
+      const users = Array.from(this.userCache.values())
+        .filter(u => u.status !== UserStatus.INACTIVE);
+      return users.length > 0 ? users : [this.currentUser];
+    }
+    // 场景B孩子设备：loginUser 是真实孩子账号，只显示自己
+    if (this.loginUser.role === UserRole.CHILD && !this.loginUser.isVirtual) {
+      return [this.currentUser];
+    }
+    // 家长设备：显示 loginUser 自己 + 家庭中所有孩子（不含其他家长）
+    // 家长可以在切换器中选择孩子查看任务，也可以切回自己进行管理操作
+    const users = Array.from(this.userCache.values())
+      .filter(u => u.status !== UserStatus.INACTIVE)
+      .filter(u => u.userId === this.loginUser.userId || u.role === UserRole.CHILD);
+    return users.length > 0 ? users : [this.loginUser];
   }
   
   /**
@@ -184,25 +241,37 @@ class UserService {
         logger.info('UserService', '用户切换跳过: 已是当前用户', { userId });
         return { success: true, message: '已经是当前用户', user: this.currentUser };
       }
-      
+
+      // 孩子设备禁止切换到其他用户
+      if (this.loginUser?.role === UserRole.CHILD && !this.loginUser?.isVirtual) {
+        logger.warn('UserService', '孩子设备禁止切换用户', { loginUserId: this.loginUser.userId });
+        return { success: false, message: '孩子账号不支持切换用户' };
+      }
+
       // 先检查本地缓存中是否有目标用户
       let targetUser = this.userCache.get(userId);
-      
+
       if (!targetUser) {
-        // 如果缓存中没有，尝试从API获取
+        // 缓存 miss 时从 API 获取（同家庭成员互查已在后端开放）
         logger.info('UserService', '本地缓存中未找到用户，从API获取', { userId });
-        const userData = await HttpClient.getUser(userId);
+        const url = API_CONFIG.ENDPOINTS.USER_BY_ID.replace('{userId}', userId);
+        const userData = await HttpClient.get(url);
+        if (!userData || !userData.userId) {
+          logger.warn('UserService', '用户不存在', { userId });
+          return { success: false, message: '切换失败: 用户不存在' };
+        }
         targetUser = new User(userData);
         this.userCache.set(targetUser.userId, targetUser);
       }
-      
-      // 调用后端API验证用户切换（可选，如果后端需要记录切换行为）
-      try {
-        await HttpClient.switchToUser(userId);
-        logger.info('UserService', 'API用户切换验证成功', { userId });
-      } catch (apiError) {
-        logger.warn('UserService', 'API用户切换验证失败，继续本地切换', { userId, error: apiError.message });
-        // API验证失败不阻止本地切换，因为用户数据已从API获取
+
+      // 家长不能切换到其他家长视角（只能切到孩子）
+      if (
+        this.loginUser?.role === UserRole.PARENT &&
+        targetUser.role === UserRole.PARENT &&
+        targetUser.userId !== this.loginUser.userId
+      ) {
+        logger.warn('UserService', '家长不能切换到其他家长视角', { targetUserId: userId });
+        return { success: false, message: '不支持切换到其他家长账号' };
       }
       
       const previousUser = this.currentUser;
@@ -260,20 +329,20 @@ class UserService {
   }
   
   /**
-   * 检查当前用户是否有页面访问权限
+   * 检查是否有页面访问权限（由 loginUser 决定，不随视角切换变化）
    * @param {String} pagePath 页面路径
    * @returns {Boolean} 是否有权限
    */
   hasPageAccess(pagePath) {
-    return this.currentUser.hasPageAccess(pagePath);
+    return this.currentUser.hasPageAccess(pagePath, this.loginUser);
   }
-  
+
   /**
-   * 获取当前用户可访问的页面列表
+   * 获取可访问的页面列表（由 loginUser 决定，不随视角切换变化）
    * @returns {Array} 页面路径列表
    */
   getAccessiblePages() {
-    return this.currentUser.getAccessiblePages();
+    return this.currentUser.getAccessiblePages(this.loginUser);
   }
   
   /**
@@ -316,20 +385,267 @@ class UserService {
   }
   
   /**
-   * 从API加载用户状态和数据
+   * 加载家庭成员到 userCache（clear + loginUser保底 + 重建）
+   */
+  async loadFamilyMembers() {
+    try {
+      const data = await HttpClient.get(API_CONFIG.ENDPOINTS.FAMILIES_MEMBERS);
+      const members = (data.members || []).map(m => new User(m));
+
+      this.userCache.clear();
+      // loginUser 必须始终在缓存中
+      if (this.loginUser) {
+        this.userCache.set(this.loginUser.userId, this.loginUser);
+      }
+      members.forEach(u => this.userCache.set(u.userId, u));
+      logger.info('UserService', `家庭成员加载: ${members.length}人`);
+
+      // 软删除回退：currentUser 已被删除时仅在内存中回退到 loginUser
+      // 不写存储——_restoreSession() 会根据存储值与缓存的对比做最终处理
+      if (this.currentUser && !this.userCache.has(this.currentUser.userId)) {
+        logger.warn('UserService', '当前视角成员已被删除，内存回退到 loginUser', { userId: this.currentUser.userId });
+        this.currentUser = this.loginUser;
+      }
+      return true;
+    } catch (error) {
+      // 无家庭或网络失败：保持仅含 loginUser 的缓存
+      if (this.loginUser) {
+        this.userCache.clear();
+        this.userCache.set(this.loginUser.userId, this.loginUser);
+      }
+      logger.warn('UserService', '加载家庭成员失败，使用本地缓存', error);
+      return false;
+    }
+  }
+
+  /**
+   * 恢复会话并应用非法会话回正规则
+   * @private
+   */
+  async _restoreSession() {
+    let savedUserId = null;
+    try {
+      savedUserId = this.storageAdapter
+        ? this.storageAdapter.get('currentUserId')
+        : wx.getStorageSync('currentUserId');
+    } catch (e) {
+      logger.warn('UserService', '读取本地会话失败', e);
+    }
+
+    const forceReset = (reason) => {
+      this.currentUser = this.loginUser || this.currentUser;
+      const uid = this.loginUser?.userId;
+      if (uid) {
+        try {
+          if (this.storageAdapter) {
+            this.storageAdapter.set('currentUserId', uid);
+          } else {
+            wx.setStorageSync('currentUserId', uid);
+          }
+        } catch (e) { /* ignore */ }
+      }
+      logger.info('UserService', `会话回正到 loginUser：${reason}`, { userId: uid });
+    };
+
+    if (this.loginUser?.role === UserRole.CHILD && !this.loginUser?.isVirtual) {
+      // 孩子设备：忽略 savedUserId，始终使用 loginUser
+      forceReset('孩子设备');
+    } else if (savedUserId && this.userCache.has(savedUserId)) {
+      const savedUser = this.userCache.get(savedUserId);
+      if (
+        this.loginUser?.role === UserRole.PARENT &&
+        savedUser.role === UserRole.PARENT &&
+        savedUserId !== this.loginUser.userId
+      ) {
+        // 家长设备恢复到其他家长视角：非法，回正
+        forceReset('家长设备不允许恢复其他家长视角');
+      } else {
+        this.currentUser = savedUser;
+      }
+    } else {
+      // 兜底：家长默认选第一个孩子，孩子设备默认为自己
+      if (this.loginUser?.role === UserRole.PARENT) {
+        const children = this.getAllUsers().filter(u => u.role === UserRole.CHILD);
+        this.currentUser = children.length > 0 ? children[0] : this.loginUser;
+        if (children.length > 0) {
+          logger.info('UserService', '家长首次启动，默认选第一个孩子', { childId: children[0].userId });
+          if (this.storageAdapter) {
+            this.storageAdapter.set('currentUserId', children[0].userId);
+          } else {
+            wx.setStorageSync('currentUserId', children[0].userId);
+          }
+        }
+      } else if (this.loginUser) {
+        this.currentUser = this.loginUser;
+      }
+    }
+
+    // 最终校验：家长设备的 currentUser 必须在有效列表（只含孩子）中
+    // 防止 savedUserId 指向家长自己导致看不到孩子任务
+    const validUsers = this.getAllUsers();
+    if (
+      this.loginUser?.role === UserRole.PARENT &&
+      this.currentUser &&
+      !validUsers.some(u => u.userId === this.currentUser.userId)
+    ) {
+      const fallback = validUsers[0] || this.loginUser;
+      logger.info('UserService', '家长currentUser不在有效列表，重定向', { to: fallback.userId });
+      this.currentUser = fallback;
+      try {
+        if (this.storageAdapter) {
+          this.storageAdapter.set('currentUserId', fallback.userId);
+        } else {
+          wx.setStorageSync('currentUserId', fallback.userId);
+        }
+      } catch (e) { /* ignore */ }
+    }
+  }
+
+  /**
+   * 更新成员昵称（通过 API），更新成功后直接刷新本地 userCache
+   * @param {String} userId 目标用户ID
+   * @param {String} nickname 新昵称
+   * @returns {Promise<Object>}
+   */
+  async updateNickname(userId, nickname) {
+    try {
+      const url = API_CONFIG.ENDPOINTS.USER_NICKNAME.replace('{userId}', userId);
+      await HttpClient.patch(url, { nickname });
+
+      // 直接更新 userCache，不重新拉取（减少网络请求）
+      const cached = this.userCache.get(userId);
+      if (cached) {
+        cached.name = nickname;
+      }
+      if (this.currentUser?.userId === userId) {
+        this.currentUser.name = nickname;
+      }
+      if (this.loginUser?.userId === userId) {
+        this.loginUser.name = nickname;
+      }
+
+      logger.info('UserService', '更新昵称成功', { userId, nickname });
+      return { success: true };
+    } catch (error) {
+      logger.error('UserService', '更新昵称失败', error);
+      return { success: false, message: error.message };
+    }
+  }
+
+  /**
+   * 创建家庭
+   * @param {String} name 家庭名称
+   */
+  async createFamily(name) {
+    try {
+      const result = await HttpClient.post(API_CONFIG.ENDPOINTS.FAMILIES, { name });
+      // 保存新 token（包含 familyId）
+      if (result.token) {
+        TokenManager.setToken(result.token);
+        // 重新初始化以刷新 loginUser 和成员缓存
+        await this.initialize();
+      }
+      logger.info('UserService', '创建家庭成功', { familyId: result.familyId });
+      return { success: true, ...result };
+    } catch (error) {
+      logger.error('UserService', '创建家庭失败', error);
+      return { success: false, message: error.message };
+    }
+  }
+
+  /**
+   * 加入家庭
+   * @param {String} inviteCode 邀请码
+   */
+  async joinFamily(inviteCode) {
+    try {
+      const result = await HttpClient.post(API_CONFIG.ENDPOINTS.FAMILIES_JOIN, { inviteCode });
+      if (result.token) {
+        TokenManager.setToken(result.token);
+        await this.initialize();
+      }
+      logger.info('UserService', '加入家庭成功');
+      return { success: true };
+    } catch (error) {
+      logger.error('UserService', '加入家庭失败', error);
+      return { success: false, message: error.message };
+    }
+  }
+
+  /**
+   * 获取家庭信息
+   */
+  async getFamilyInfo() {
+    try {
+      return await HttpClient.get(API_CONFIG.ENDPOINTS.FAMILIES_CURRENT);
+    } catch (error) {
+      logger.warn('UserService', '获取家庭信息失败', error);
+      return null;
+    }
+  }
+
+  /**
+   * 刷新邀请码
+   * @param {String} role 目标角色 parent|child
+   */
+  async refreshInviteCode(role) {
+    try {
+      return await HttpClient.post(API_CONFIG.ENDPOINTS.FAMILIES_INVITE_CODE, { role });
+    } catch (error) {
+      logger.error('UserService', '刷新邀请码失败', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 创建虚拟成员（场景A共享设备）
+   * @param {String} name 成员名称
+   */
+  async createVirtualMember(name) {
+    try {
+      const member = await HttpClient.post(API_CONFIG.ENDPOINTS.FAMILIES_ADD_MEMBER, { name });
+      await this.loadFamilyMembers();
+      logger.info('UserService', '创建虚拟成员成功', { name });
+      return { success: true, member };
+    } catch (error) {
+      logger.error('UserService', '创建虚拟成员失败', error);
+      return { success: false, message: error.message };
+    }
+  }
+
+  /**
+   * 软删除家庭成员（仅虚拟成员）
+   * @param {String} userId 目标用户ID
+   */
+  async deleteFamilyMember(userId) {
+    try {
+      const url = API_CONFIG.ENDPOINTS.FAMILIES_DELETE_MEMBER.replace('{userId}', userId);
+      await HttpClient.delete(url);
+      await this.loadFamilyMembers();
+      logger.info('UserService', '删除家庭成员成功', { userId });
+      return { success: true };
+    } catch (error) {
+      logger.error('UserService', '删除家庭成员失败', error);
+      return { success: false, message: error.message };
+    }
+  }
+
+  /**
+   * 从API加载用户状态和数据（旧方法保留以兼容，M6后不推荐直接调用）
    * @private
    */
   async _loadUserState() {
     try {
       // 1. 从API加载所有用户到缓存
-      const allUsers = await HttpClient.getAllUsers();
+      const response = await HttpClient.getAllUsers();
+      const users = response.users || response; // 兼容后端返回 { users, total } 或直接返回数组
       this.userCache.clear();
-      allUsers.forEach(userData => {
+      users.forEach(userData => {
         const user = new User(userData);
         this.userCache.set(user.userId, user);
       });
       
-      logger.info('UserService', `加载用户列表成功: ${allUsers.length}个用户`);
+      logger.info('UserService', `加载用户列表成功: ${users.length}个用户`);
       
       // 2. 恢复会话用户（仅从本地获取会话ID，用户数据从API缓存获取）
       let savedUserId = null;
@@ -475,19 +791,27 @@ class UserService {
   }
 
   /**
-   * 刷新用户缓存（从API重新加载）
+   * 刷新用户缓存（家庭模式下使用 loadFamilyMembers，保持缓存一致性）
    * @returns {Promise<Boolean>} 刷新结果
    */
   async refreshUserCache() {
     try {
-      const allUsers = await HttpClient.getAllUsers();
-      this.userCache.clear();
-      allUsers.forEach(userData => {
-        const user = new User(userData);
-        this.userCache.set(user.userId, user);
-      });
-      
-      logger.info('UserService', `刷新用户缓存成功: ${allUsers.length}个用户`);
+      if (this.loginUser?.familyId) {
+        // 家庭模式：通过 loadFamilyMembers 刷新（clear + 重建，防止幽灵成员）
+        const ok = await this.loadFamilyMembers();
+        if (!ok) throw new Error('loadFamilyMembers failed');
+      } else {
+        // 非家庭模式：只更新 loginUser 最新信息
+        const userData = await HttpClient.get(API_CONFIG.ENDPOINTS.AUTH_CURRENT);
+        if (userData) {
+          const user = new User(userData);
+          this.userCache.set(user.userId, user);
+          if (this.loginUser) {
+            this.loginUser = user;
+          }
+        }
+      }
+      logger.info('UserService', '刷新用户缓存成功');
       return true;
     } catch (error) {
       logger.error('UserService', '刷新用户缓存失败', error);
@@ -528,10 +852,10 @@ class UserService {
         results.success = false;
       }
       
-      // 测试4: 检查API连接
+      // 测试4: 检查API连接（通过获取当前用户信息验证，不依赖旧的 getAllUsers 接口）
       try {
-        const users = await HttpClient.getAllUsers();
-        results.tests.apiConnection = Array.isArray(users) && users.length > 0;
+        const response = await HttpClient.get(API_CONFIG.ENDPOINTS.AUTH_CURRENT);
+        results.tests.apiConnection = !!(response && response.userId);
         if (!results.tests.apiConnection) {
           results.errors.push('API连接异常或返回数据为空');
           results.success = false;
@@ -542,12 +866,10 @@ class UserService {
         results.success = false;
       }
       
-      // 测试5: 检查权限系统集成
-      const hasParent = !!this.getUserByRole('parent');
-      const hasChild = !!this.getUserByRole('child');
-      results.tests.roleSystem = hasParent && hasChild;
-      if (!results.tests.roleSystem) {
-        results.errors.push('角色系统不完整（缺少parent或child用户）');
+      // 测试5: 检查 loginUser 已设置
+      results.tests.roleSystem = !!this.loginUser;
+      if (!this.loginUser) {
+        results.errors.push('loginUser 未设置（JWT 解析失败或未登录）');
         results.success = false;
       }
       

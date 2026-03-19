@@ -162,7 +162,7 @@ class Message {
     this.isPinned = !this.isPinned;
     return this;
   }
-  
+
   /**
    * 归档消息
    * @returns {Message} 当前消息实例
@@ -171,13 +171,23 @@ class Message {
     this.isArchived = true;
     return this;
   }
-  
+
   /**
    * 取消归档
    * @returns {Message} 当前消息实例
    */
   unarchive() {
     this.isArchived = false;
+    return this;
+  }
+
+  /**
+   * 更新消息属性
+   * @param {Object} updates 要更新的属性
+   * @returns {Message} 当前消息实例
+   */
+  update(updates = {}) {
+    Object.assign(this, updates);
     return this;
   }
   
@@ -349,6 +359,14 @@ class Message {
     }
     
     return true;
+  }
+
+  /**
+   * 检查是否为高优先级消息
+   * @returns {Boolean} 是否为高优先级
+   */
+  isHighPriority() {
+    return this.priority >= MessagePriority.MEDIUM;
   }
 }
 

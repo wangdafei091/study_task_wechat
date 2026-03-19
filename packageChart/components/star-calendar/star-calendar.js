@@ -22,6 +22,11 @@ Component({
     initialMonth: {
       type: String,
       value: ''
+    },
+    // 分析范围选项，由 analysis.js 传入：{ scope: 'family' } 或 { userId: '...' }
+    analysisOptions: {
+      type: Object,
+      value: null
     }
   },
 
@@ -55,49 +60,84 @@ Component({
       logger.debug('星星日历', '组件初始化');
       this.initCalendar();
       
-      // 订阅任务状态变更事件
+      // 订阅任务状态变更事件，保存 callback 引用以便精确解绑
       const app = getApp();
       if (app && app.globalData && app.globalData.eventBus) {
-        app.globalData.eventBus.on(EVENTS.TASK_STATUS_CHANGED, (data) => {
+        this._onTaskStatusUpdated = (data) => {
           logger.debug('星星日历', '接收到任务状态变更事件:', data);
           
           if (data && data.task && data.task.date) {
-            // 解析任务日期，获取年月
+            // 解析任务日期，统一使用 YYYY-MM 格式（与 _monthTaskCache.key 一致）
             const taskDate = new Date(data.task.date + 'T00:00:00');
             const year = taskDate.getFullYear();
-            const month = taskDate.getMonth();
-            const monthKey = `${year}-${month}`;
+            const month = taskDate.getMonth() + 1;
+            const monthKey = `${year}-${String(month).padStart(2, '0')}`;
             
-            // 清除对应月份的缓存
-            if (this.data.monthCache[monthKey]) {
-              delete this.data.monthCache[monthKey];
-              this.setData({
-                monthCache: this.data.monthCache
-              });
+            // 清除批量任务缓存（_monthTaskCache）
+            if (this._monthTaskCache && this._monthTaskCache.key === monthKey) {
+              this._monthTaskCache = null;
+              logger.debug('星星日历', `已清除月份 ${monthKey} 的任务缓存`);
             }
-            
-            // 标记月份需要刷新
-            this.monthsToRefresh.add(monthKey);
-            logger.debug('星星日历', `标记月份 ${monthKey} 需要刷新`);
-            
+
+            // 同时清除星星记录缓存（monthCache），否则 loadStarRecords 会命中旧缓存提前返回
+            const cachedMonthData = this.data.monthCache || {};
+            if (cachedMonthData[monthKey]) {
+              const newMonthCache = { ...cachedMonthData };
+              delete newMonthCache[monthKey];
+              this.setData({ monthCache: newMonthCache });
+              logger.debug('星星日历', `已清除月份 ${monthKey} 的星星记录缓存`);
+            }
+
             // 如果是当前显示月份，立即刷新
-            const currentMonthKey = `${this.properties.currentYear}-${String(this.properties.currentMonth + 1).padStart(2, '0')}`;
+            const currentMonthKey = `${this.data.currentYear}-${String(this.data.currentMonth + 1).padStart(2, '0')}`;
             if (monthKey === currentMonthKey) {
+              logger.debug('星星日历', `任务状态变更命中当前月份 ${monthKey}，触发刷新`);
               this.loadStarRecords();
             }
           }
-        });
-        
-        logger.debug('星星日历', '已订阅任务状态变更事件');
+        };
+        app.globalData.eventBus.on(EVENTS.TASK_STATUS_UPDATED, this._onTaskStatusUpdated);
+
+        // 订阅任务创建事件：新建任务也需要刷新热力图
+        this._onTaskCreated = (data) => {
+          logger.debug('星星日历', '接收到任务创建事件:', data);
+          if (data && data.task && data.task.date) {
+            const taskDate = new Date(data.task.date + 'T00:00:00');
+            const year = taskDate.getFullYear();
+            const month = taskDate.getMonth() + 1;
+            const monthKey = `${year}-${String(month).padStart(2, '0')}`;
+            if (this._monthTaskCache && this._monthTaskCache.key === monthKey) {
+              this._monthTaskCache = null;
+            }
+            const cachedMonthData = this.data.monthCache || {};
+            if (cachedMonthData[monthKey]) {
+              const newMonthCache = { ...cachedMonthData };
+              delete newMonthCache[monthKey];
+              this.setData({ monthCache: newMonthCache });
+            }
+            const currentMonthKey = `${this.data.currentYear}-${String(this.data.currentMonth + 1).padStart(2, '0')}`;
+            if (monthKey === currentMonthKey) {
+              logger.debug('星星日历', `新建任务命中当前月份 ${monthKey}，触发刷新`);
+              this.loadStarRecords();
+            }
+          }
+        };
+        app.globalData.eventBus.on(EVENTS.TASK_CREATED, this._onTaskCreated);
+        logger.debug('星星日历', '已订阅任务状态变更和创建事件');
       }
     },
     
     detached: function() {
-      // 取消事件订阅
+      // 精确解绑：传入 callback 引用，不影响其他组件的同名事件监听器
       const app = getApp();
-      if (app && app.globalData && app.globalData.eventBus) {
-        app.globalData.eventBus.off(EVENTS.TASK_STATUS_CHANGED);
+      if (app && app.globalData && app.globalData.eventBus && this._onTaskStatusUpdated) {
+        app.globalData.eventBus.off(EVENTS.TASK_STATUS_UPDATED, this._onTaskStatusUpdated);
+        this._onTaskStatusUpdated = null;
         logger.debug('星星日历', '已取消任务状态变更事件订阅');
+      }
+      if (app && app.globalData && app.globalData.eventBus && this._onTaskCreated) {
+        app.globalData.eventBus.off(EVENTS.TASK_CREATED, this._onTaskCreated);
+        this._onTaskCreated = null;
       }
     }
   },
@@ -296,8 +336,23 @@ Component({
       const startDate = `${year}-${String(month + 1).padStart(2, '0')}-01`;
       const endDate = `${year}-${String(month + 1).padStart(2, '0')}-${new Date(year, month + 1, 0).getDate()}`;
       
-      serviceManager.getStarService().getStarRecordsByDateRange(startDate, endDate)
-        .then(records => {
+      const analysisOptions = this.properties.analysisOptions || {};
+      const starUserId = analysisOptions.userId || null;
+
+      // 批量拉取当月任务（避免按天循环发起 HTTP 请求）
+      const taskService = serviceManager.getTaskService();
+      const taskFetchOptions = analysisOptions.scope ? { scope: analysisOptions.scope } : {};
+      const taskPromise = taskService
+        ? taskService.getTasksByDateRange(startDate, endDate, starUserId, taskFetchOptions)
+            .then(tasks => { this._monthTaskCache = { key: monthKey, tasks }; })
+            .catch(() => { this._monthTaskCache = { key: monthKey, tasks: [] }; })
+        : Promise.resolve();
+
+      const starPromise = serviceManager.getStarService()
+        .getStarRecordsByDateRange(startDate, endDate, starUserId);
+
+      Promise.all([starPromise, taskPromise])
+        .then(([records]) => {
           logger.debug('星星日历', `获取到 ${records.length} 条星星记录`);
           
           // 清除刷新标志
@@ -431,29 +486,40 @@ Component({
     _calculateEarnedStarsFromTasks: function(dateString) {
       return new Promise((resolve, reject) => {
         try {
-          // 通过serviceManager获取任务服务
+          // 优先使用本月任务缓存（批量拉取，避免逐日 HTTP 请求）
+          const cache = this._monthTaskCache;
+          const currentMonthKey = `${this.data.currentYear}-${String(this.data.currentMonth + 1).padStart(2, '0')}`;
+          if (cache && cache.tasks && cache.key === currentMonthKey) {
+            const tasks = cache.tasks.filter(t => t.date === dateString);
+            let earnedStars = 0;
+            tasks.forEach(task => {
+              // 云端任务 star_awarded 始终为 false，不用于展示层判断
+              // 对日历显示而言：已完成 + 非必做 + 有积分 = 已获星星
+              if (task.status === 1 && !task.isRequired && task.points > 0) {
+                earnedStars += Number(task.points || 0);
+              }
+            });
+            logger.debug('星星日历', `日期${dateString}(缓存)收入星星: ${earnedStars}颗`);
+            resolve(earnedStars);
+            return;
+          }
+
+          // 降级：单日 HTTP 查询（兜底，无缓存时）
+          const analysisOptions = this.properties.analysisOptions || {};
           const taskService = serviceManager.getTaskService();
           if (!taskService) {
-            logger.error('星星日历', '无法获取任务服务实例');
             resolve(0);
             return;
           }
-          
-          // 获取指定日期的任务
-          taskService.getTasksByDate(dateString)
+          taskService.getTasksByDate(dateString, analysisOptions.userId || null, analysisOptions.scope ? analysisOptions : {})
             .then(tasks => {
               let earnedStars = 0;
-              
-                             // 遍历任务，计算实际获得的星星
-               tasks.forEach(task => {
-                 // 只计算已完成且非必做的任务获得的星星
-                 if (task.status === 1 && !task.isRequired && task.starAwarded) {
-                   earnedStars += Number(task.points || 0);
-                   logger.debug('星星日历', `任务${task.title}获得星星: ${task.points}颗`);
-                 }
-               });
-              
-              logger.debug('星星日历', `日期${dateString}基于任务计算收入星星: ${earnedStars}颗，任务数量: ${tasks.length}`);
+              tasks.forEach(task => {
+                if (task.status === 1 && !task.isRequired && task.points > 0) {
+                  earnedStars += Number(task.points || 0);
+                }
+              });
+              logger.debug('星星日历', `日期${dateString}基于任务计算收入星星: ${earnedStars}颗`);
               resolve(earnedStars);
             })
             .catch(error => {
@@ -481,7 +547,8 @@ Component({
       
       logger.debug('星星日历', '更新今日星星数据');
       
-      serviceManager.getStarService().getStarRecordsByDate(today)
+      const todayAnalysisOptions = this.properties.analysisOptions || {};
+      serviceManager.getStarService().getStarRecordsByDate(today, todayAnalysisOptions.userId || null)
         .then(records => {
           // 使用基于任务状态的方式计算收入星星
           this._calculateEarnedStarsFromTasks(today)

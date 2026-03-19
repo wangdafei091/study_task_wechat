@@ -260,8 +260,13 @@ Page({
         rewardService.clearCache();
       }
       
+      // 使用有效孩子ID取星星数；奖励属于家长账号（家庭奖励池）
+      const effectiveChildId = this._getEffectiveChildUserId();
+      const rewardOwnerId = this._getRewardOwnerUserId();
+      logger.info('rewards', `有效孩子ID: ${effectiveChildId}, 奖励归属ID: ${rewardOwnerId}`);
+
       // 使用新架构获取用户星星数
-      const totalPoints = await starService.getTotalStars();
+      const totalPoints = await starService.getTotalStars(effectiveChildId);
       logger.info('rewards', `获取到用户星星: ${totalPoints}`);
       
       // 格式化星星数量
@@ -270,8 +275,8 @@ Page({
       // 获取即将到期积分信息
       const expiringPointsInfo = await this.getExpiringPoints();
       
-      // 获取所有奖励（包括已领取的）
-      const allRewards = await rewardService.getAvailableRewards(true);
+      // 获取所有奖励（包括已领取的），按家庭奖励池查询
+      const allRewards = await rewardService.getAvailableRewards(true, false, rewardOwnerId);
       logger.info('rewards', `获取到可用奖励: ${allRewards.length}个`);
       
       // 检查是否存在自定义奖励标记（通过服务层）
@@ -336,8 +341,8 @@ Page({
       // 计算已解锁奖励数量
       const unlockedRewards = rewards.filter(reward => reward.unlocked).length;
       
-      // 计算下一个可达成的奖励
-      const nextReward = await rewardService.calculateNextAvailableReward();
+      // 计算下一个可达成的奖励（用孩子的星星数 vs 家长的奖励池）
+      const nextReward = await rewardService.calculateNextAvailableReward(totalPoints, rewardOwnerId);
       logger.debug('rewards', `下一个可达成奖励: ${nextReward ? nextReward.name : '无'}, 需要${nextReward ? nextReward.points : 0}颗星星`);
       
       // 添加即将设置到页面的数据日志
@@ -635,8 +640,11 @@ Page({
       rewardService.clearCache();
     }
     
-    // 计算下一个可用奖励
-    const nextReward = await rewardService.calculateNextAvailableReward();
+    // 计算下一个可用奖励（用孩子的星星 vs 家长的奖励池）
+    const rewardOwnerId = this._getRewardOwnerUserId();
+    const effectiveChildId = this._getEffectiveChildUserId();
+    const currentStars = await starService.getTotalStars(effectiveChildId);
+    const nextReward = await rewardService.calculateNextAvailableReward(currentStars, rewardOwnerId);
     logger.info('rewards', `领取奖励后计算下一个可用奖励: ${nextReward.name}, 需要${nextReward.points}颗星星`);
     
     // 关闭弹窗并更新数据
@@ -792,28 +800,54 @@ Page({
    * @returns {String} 小朋友用户ID
    * @private
    */
-  _getChildUserId: function() {
-    let childUserId = 'child'; // 默认用户ID
-    
+  /**
+   * 获取有效孩子userId（用于星星扣减/展示）
+   * 家长视角：优先取最近操作的孩子，否则取第一个孩子
+   * 孩子视角（孩子设备）：取loginUser自身
+   */
+  _getEffectiveChildUserId: function() {
     const userService = serviceManager.getUserService();
-    if (userService) {
-      const childUser = userService.getUserByRole('child');
-      if (childUser) {
-        childUserId = childUser.id;
-        logger.info('rewards', `获取小朋友用户ID成功: ${childUserId}`);
-      } else {
-        logger.warn('rewards', '未找到小朋友用户，使用默认child用户ID');
-        childUserId = 'child'; // 使用默认ID
-      }
-    } else {
-      logger.warn('rewards', '无法获取用户服务，使用默认child用户ID');
+    if (!userService) {
+      logger.warn('rewards', '无法获取用户服务');
+      return 'child';
     }
-    
-    if (!childUserId) {
-      logger.warn('rewards', '无法获取小朋友用户ID，使用默认child用户ID');
-      childUserId = 'child'; // 兜底方案
+    const loginUser = userService.getLoginUser ? userService.getLoginUser() : null;
+    // 孩子设备：loginUser 本身就是孩子
+    if (loginUser && loginUser.role === 'child') {
+      return loginUser.userId || loginUser.id;
     }
-    
-    return childUserId;
+    // 家长设备：优先用最近操作的孩子
+    const app = getApp();
+    const lastActiveChildId = app && app.globalData && app.globalData.lastActiveChildId;
+    if (lastActiveChildId) {
+      logger.info('rewards', `使用最近活跃孩子ID: ${lastActiveChildId}`);
+      return lastActiveChildId;
+    }
+    // 兜底：取第一个孩子
+    const firstChild = userService.getUserByRole('child');
+    if (firstChild) {
+      logger.info('rewards', `使用第一个孩子ID: ${firstChild.id}`);
+      return firstChild.id;
+    }
+    logger.warn('rewards', '未找到孩子用户，使用默认child');
+    return 'child';
+  },
+
+  /**
+   * 获取奖励归属userId（家庭奖励池，由家长账号管理）
+   * 家长设备：loginUserId（家长）
+   * 孩子设备：loginUserId（孩子本身，M07已知限制：奖励未云端同步时不可见）
+   */
+  _getRewardOwnerUserId: function() {
+    const userService = serviceManager.getUserService();
+    if (userService && userService.getLoginUserId) {
+      return userService.getLoginUserId();
+    }
+    return null;
+  },
+
+  // 兼容旧调用，内部改为使用 _getEffectiveChildUserId
+  _getChildUserId: function() {
+    return this._getEffectiveChildUserId();
   }
 })

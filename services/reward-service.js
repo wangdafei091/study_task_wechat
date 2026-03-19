@@ -10,9 +10,6 @@ const { StarGroupRepository, StarRecordRepository } = require('../repositories/i
 const EventBus = require('../utils/core/event-bus');
 const { EVENTS } = require('../utils/constants');
 
-// 移除静态初始化锁
-// let _initializationLock = false;
-
 class RewardService {
   // 使用静态属性存储类级别的初始化状态
   static _initialized = false;
@@ -871,7 +868,7 @@ class RewardService {
    * @param {Number|null} knownStarCount 已知的星星数量，如果提供则不重新查询
    * @returns {Promise<Object>} 下一个可用奖励，或默认奖励
    */
-  async calculateNextAvailableReward(knownStarCount = null) {
+  async calculateNextAvailableReward(knownStarCount = null, userId = null) {
     try {
       // 确保服务已初始化，使用新的初始化机制
       if (!this.initialized && !RewardService._initialized) {
@@ -886,15 +883,15 @@ class RewardService {
       
       logger.info('RewardService', `使用星星数量: ${availablePoints}${knownStarCount !== null ? '(传入参数)' : '(查询获取)'}`);
       
-      // 获取所有可用奖励
-      let availableRewards = await this.getAvailableRewards(false, false);
+      // 获取所有可用奖励（按 userId 过滤）
+      let availableRewards = await this.getAvailableRewards(false, false, userId);
       
       // 如果没有可用奖励，检查是否存在已兑换奖励
       if (availableRewards.length === 0) {
         logger.info('RewardService', '没有可用奖励，检查是否存在已兑换奖励');
         
         // 获取所有奖励（包括已兑换的），但不包括禁用的
-        const allRewards = await this.getAvailableRewards(true);
+        const allRewards = await this.getAvailableRewards(true, false, userId);
         
         // 进一步过滤：只考虑真正已兑换的奖励，排除禁用的奖励
         const actuallyClaimedRewards = allRewards.filter(reward => 
@@ -1146,6 +1143,30 @@ class RewardService {
   }
 
   /**
+   * 获取指定用户的最后一次兑换时间（用于家庭视角展示，不影响现有 taskId 调用）
+   * @param {String} userId 用户ID
+   * @returns {Promise<Number|null>} 最后一次兑换的时间戳
+   */
+  async getLastExchangeTimeByUser(userId) {
+    try {
+      const claimedRewards = await this.rewardRepository.getClaimedRewards();
+      if (!claimedRewards || claimedRewards.length === 0) return null;
+
+      const userRewards = userId
+        ? claimedRewards.filter(r => r.userId === userId)
+        : claimedRewards;
+
+      if (userRewards.length === 0) return null;
+
+      const lastTime = Math.max(...userRewards.map(r => r.claimTime || 0));
+      return lastTime > 0 ? lastTime : null;
+    } catch (error) {
+      logger.error('RewardService', '获取用户最后兑换时间失败', error);
+      return null;
+    }
+  }
+
+  /**
    * 星星扣除回滚处理（私有方法）
    * @param {Number} actualCost 需要回滚的星星数量
    * @param {Object} reward 奖励对象
@@ -1187,6 +1208,17 @@ class RewardService {
     } catch (rollbackError) {
       logger.error('RewardService', '星星回滚失败', rollbackError);
       return false;
+    }
+  }
+
+  /**
+   * 更新用户服务实例
+   * @param {UserService} userService 新的用户服务实例
+   */
+  updateUserService(userService) {
+    if (this.userService !== userService) {
+      this.userService = userService;
+      logger.info('RewardService', 'UserService已更新');
     }
   }
 }

@@ -33,12 +33,12 @@ class AnalyticsService {
    * 只获取任务完成获得的星星和未完成必做任务扣除的星星
    * @returns {Promise<Array>} 记录数组
    */
-  async getTaskStarCalendarData() {
-    logger.info('AnalyticsService', `开始获取任务星星日历数据`);
+  async getTaskStarCalendarData(options = {}) {
+    logger.info('AnalyticsService', `开始获取任务星星日历数据`, options);
     
     try {
-      // 使用taskService获取任务数据
-      const tasks = await this.taskService.getAllTasks();
+      // 使用 getTasksByScope 支持 userId 和 scope=family 两种场景
+      const tasks = await this.taskService.getTasksByScope(options);
       
       const records = [];
       
@@ -210,12 +210,14 @@ class AnalyticsService {
    * @param {Number} days 历史天数（7或30）
    * @returns {Promise<Object>} 历史余额数据和预测数据
    */
-  async calculateHistoricalBalance(days) {
-    logger.info('AnalyticsService', `计算最近${days}天的可用星星余额`);
+  async calculateHistoricalBalance(days, userId = null) {
+    logger.info('AnalyticsService', `计算最近${days}天的可用星星余额`, { userId });
     
     try {
-      // 获取所有星星记录
-      const records = await this.getAllStarRecords();
+      // 获取星星记录（userId=null 时取当前登录用户的记录）
+      const records = userId
+        ? await this.starService.getStarRecords({ userId })
+        : await this.getAllStarRecords();
       
       if (!records || records.length === 0) {
         logger.warn('AnalyticsService', '没有星星记录，返回空数据');
@@ -507,8 +509,8 @@ class AnalyticsService {
    * @param {String} dateRange 日期范围
    * @returns {Promise<Object>} 统计数据
    */
-  async getTaskCompletionStats(dateRange) {
-    logger.info('AnalyticsService', `获取任务完成情况统计数据，日期范围: ${dateRange}`);
+  async getTaskCompletionStats(dateRange, options = {}) {
+    logger.info('AnalyticsService', `获取任务完成情况统计数据，日期范围: ${dateRange}`, options);
     
     try {
       if (!this.taskService) {
@@ -516,8 +518,8 @@ class AnalyticsService {
         return {};
       }
       
-      // 获取所有任务
-      const tasks = await this.taskService.getAllTasks();
+      // 使用 getTasksByScope 支持 userId 和 scope=family 两种场景
+      const tasks = await this.taskService.getTasksByScope(options);
       
       // 根据日期范围筛选任务
       let filteredTasks = tasks;

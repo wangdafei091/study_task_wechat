@@ -58,10 +58,10 @@ class MessageService {
         logger.warn('MessageService', '清理过期消息失败', error);
       }
       
-      return Promise.resolve();
+      return true;
     } catch (error) {
       logger.error('MessageService', '初始化消息服务失败', error);
-      return Promise.resolve(); // 仍然返回resolved Promise以避免阻止应用启动
+      return true; // 仍然返回true以避免阻止应用启动
     }
   }
   
@@ -708,7 +708,7 @@ class MessageService {
       return savedMessage;
     } catch (error) {
       logger.error('MessageService', '使用领域模型创建消息失败', error);
-      return null;
+      throw error;
     }
   }
   
@@ -1516,6 +1516,17 @@ class MessageService {
       return Promise.resolve(false);
     }
   }
+
+  /**
+   * 更新用户服务实例
+   * @param {UserService} userService 新的用户服务实例
+   */
+  updateUserService(userService) {
+    if (this.userService !== userService) {
+      this.userService = userService;
+      logger.info('MessageService', 'UserService已更新');
+    }
+  }
 }
 
 /**
@@ -1525,6 +1536,6 @@ class MessageService {
  */
 MessageService.getNotificationTypes = function() {
   return NotificationType;
-};
+}
 
-module.exports = MessageService; 
+module.exports = MessageService;

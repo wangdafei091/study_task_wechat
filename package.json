@@ -1,6 +1,6 @@
 {
   "name": "study-task-wechat",
-  "version": "3.1.0",
+  "version": "3.2.0",
   "description": "学习任务小程序",
   "main": "app.js",
   "scripts": {
@@ -11,7 +11,8 @@
     "test:integration": "jest test/integration",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "test:report": "jest --coverage --coverageReporters=html"
+    "test:report": "jest --coverage --coverageReporters=html",
+    "health-check": "echo '文档校验脚本已移除（scripts目录为空），请手动检查docs/'"
   },
   "keywords": [
     "wechat",
@@ -20,6 +21,8 @@
     "education"
   ],
   "devDependencies": {
-    "jest": "^29.5.0"
+    "jest": "^29.5.0",
+    "jsonwebtoken": "^9.0.3",
+    "supertest": "^7.2.2"
   }
-} 
+}

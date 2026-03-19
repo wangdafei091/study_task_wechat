@@ -231,23 +231,21 @@ Component({
         ]
       });
       
-      // 获取窗口信息，判断屏幕宽度
-      wx.getWindowInfo({
-        success: (res) => {
-          const screenWidth = res.screenWidth;
-          logger.debug(`[taskHeatmap] 设备屏幕宽度: ${screenWidth}px, 是否采用垂直布局: ${screenWidth <= 520}`);
-          this.setData({
-            windowWidth: res.windowWidth
-          });
-        },
-        fail: (err) => {
-          logger.error('[taskHeatmap] 获取窗口信息失败:', err);
-          // 设置默认值
-          this.setData({
-            windowWidth: 375
-          });
-        }
-      });
+      // 获取窗口信息，判断屏幕宽度（同步 API）
+      try {
+        const res = wx.getWindowInfo();
+        const screenWidth = res.screenWidth;
+        logger.debug(`[taskHeatmap] 设备屏幕宽度: ${screenWidth}px, 是否采用垂直布局: ${screenWidth <= 520}`);
+        this.setData({
+          windowWidth: res.windowWidth
+        });
+      } catch (err) {
+        logger.error('[taskHeatmap] 获取窗口信息失败:', err);
+        // 设置默认值
+        this.setData({
+          windowWidth: 375
+        });
+      }
       
       // 设置当前日期字符串
       const today = new Date();

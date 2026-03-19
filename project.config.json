@@ -23,6 +23,10 @@
         "value": ".git"
       },
       {
+        "type": "folder",
+        "value": "backend"
+      },
+      {
         "type": "file",
         "value": "jest.config.js"
       },
@@ -99,7 +103,7 @@
   },
   "compileType": "miniprogram",
   "libVersion": "3.0.2",
-  "minLibVersion": "2.14.0",
+  "minLibVersion": "2.20.1",
   "appid": "wx9d400fd6fcb1e263",
   "projectname": "学习任务",
   "condition": {},
