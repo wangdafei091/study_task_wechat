@@ -51,9 +51,9 @@
 
 **验收标准**：
 - [ ] unit.js 已删除或明确标注未使用
-- [ ] 生产环境无 console 输出
+- [~] 前端无 console 输出（已完成）；后端启动诊断 console 合理保留，JWT secret 已脱敏
 - [ ] 无大段注释代码
-- [x] 所有 TODO/FIXME 已确认或清理
+- [~] 前端 TODO/FIXME 已清理；后端遗留 TODO（如 `userController.js:27`）作为已知技术债记录
 
 **风险评估**：
 - 低风险：主要涉及删除代码，不影响现有功能

@@ -89,14 +89,13 @@
 
 ### 开发相关
 ```bash
-npm test                          # 运行测试
+npm test                          # 运行前端单元测试（稳定质量闸门）
 npm run test:models             # 运行模型测试
 npm run test:services            # 运行服务测试
 npm run test:coverage           # 生成覆盖率报告
-npm run lint                    # 代码规范检查
-npm run lint:fix                # 自动修复规范问题
-npm run format                   # 代码格式化
-npm run health-check            # 项目健康检查
+
+# 后端集成测试（需配置 backend/.env.test 连接远程 DB）
+cd backend && NODE_ENV=test npx jest test/integration --runInBand
 ```
 
 ---
