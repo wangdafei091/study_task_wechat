@@ -902,7 +902,7 @@ async function complexBusinessFlow() {
 ### 运行测试
 
 ```bash
-# 运行所有测试
+# 运行前端单元测试（稳定质量闸门）
 npm test
 
 # 运行特定服务测试
