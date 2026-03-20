@@ -31,7 +31,7 @@ const JWT_CONFIG = {
       secret = process.env.JWT_SECRET || 'test-secret-key-for-dev-testing-only';
     }
 
-    console.log(`JWT配置: 环境=${process.env.NODE_ENV}, secret=${secret}`);
+    console.log(`JWT配置: 环境=${process.env.NODE_ENV}, secret=${secret.slice(0, 4)}****`);
     return secret;
   })(),
   expiresIn: process.env.JWT_EXPIRES_IN || '7d',

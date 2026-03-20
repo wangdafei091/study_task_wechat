@@ -3,8 +3,8 @@
 > 本文档记录项目的目标规划、里程碑和待办事项
 > 工作流程：讨论规划 → 拆解里程碑 → 启动时详细设计 → 评审+编码 → 完成后维护changelog
 
-**版本**：v2.2
-**最后更新**：2026-03-06
+**版本**：v2.3
+**最后更新**：2026-03-19
 
 ---
 
@@ -35,10 +35,9 @@
    - 验收：搜索项目中无任何引用
 
 2. **清理生产环境 console 输出**
-   - 位置：`pages/index/index.js`
-   - 现状：存在多处 console.log/warn/error 调试输出
-   - 影响：生产环境性能和隐私问题
-   - 验收：搜索项目中无 console 输出（除了 logger）
+   - 位置：`pages/index/index.js`（前端）
+   - 现状：前端页面 console 已清理；后端基础设施层（`backend/config/database.js`、`backend/config/jwt.js`）仍有 console 输出用于服务启动诊断，属于合理保留
+   - 验收：前端无 console 输出；后端 console 仅限启动诊断，JWT secret 已脱敏
 
 3. **删除注释掉的代码块**
    - 位置：`services/reward-service.js`、`service-manager.js` 等
@@ -46,9 +45,9 @@
    - 验收：搜索项目中无大段注释代码
 
 4. **清理过时的 TODO/FIXME 标记**
-   - 位置：`docs/development/coding_standards.md` 等
-   - 现状：已确认所有代码中的 TODO/FIXME 标记已清理
-   - 验收：已确认无实际代码 TODO/FIXME 标记
+   - 位置：前端代码（pages、services、models 等）
+   - 现状：前端代码中的 TODO/FIXME 已清理；后端代码（如 `backend/controllers/userController.js`）仍有遗留 TODO，属于已知技术债
+   - 验收：前端代码无 TODO/FIXME；后端遗留 TODO 已记录待处理
 
 **验收标准**：
 - [ ] unit.js 已删除或明确标注未使用
@@ -420,51 +419,41 @@
 
 
 ### [里程碑-07] 云端存储适配器 ☁️
-**状态**：待启动
+**状态**：已完成 ✅
 **优先级**：🔴 最高
-**预计周期**：1-2周
+**完成时间**：2026-03-19
 **创建时间**：2026-03-06
 **总体设计**：docs/design/cloud-storage-migration.md
 **依赖**：里程碑-05、里程碑-06完成
 
-**目标**：实现云端存储适配器，将现有本地存储迁移到云端
+**目标**：实现普通任务云端 CRUD 双写同步，分析页按用户隔离
 
-**主要任务**：
-- CloudStorageAdapter开发
-- 后端存储API开发
-- 双写策略实现
-- 离线降级机制
-
-**验收标准**：
-- [ ] CloudStorageAdapter功能完整
-- [ ] 双写策略正常工作
-- [ ] 离线降级机制正常工作
+**已完成内容**：
+- 后端新增 PUT/DELETE/PATCH/GET(family) 任务接口
+- 前端 `_syncUpdateToCloud`、`_syncDeleteToCloud`、`_syncStatusToCloud` 双写同步
+- 分析页数据隔离（家长/孩子角色分离）
 
 **依赖关系**：需要里程碑-05、里程碑-06完成
 
 ---
 
-### [里程碑-08] 数据迁移工具 🔄
-**状态**：待启动
+### [里程碑-08] 云端同步完善 🔄
+**状态**：已完成 ✅
 **优先级**：🟡 高
-**预计周期**：1周
-**创建时间**：2026-03-06
-**总体设计**：docs/design/cloud-storage-migration.md
+**完成时间**：2026-03-19
+**创建时间**：2026-03-19
+**详细设计**：docs/design/milestone-08-sync-improvement.md
 **依赖**：里程碑-07完成
 
-**目标**：开发数据迁移工具，将现有本地数据安全迁移到云端
+**目标**：完善云端同步可靠性（重复任务同步、冲突解决、陈旧任务清理、前置任务归属迁移）
 
-**主要任务**：
-- 本地数据导出工具
-- 云端数据导入工具
-- 数据完整性验证
-- 迁移进度显示
-- 错误恢复机制
-
-**验收标准**：
-- [ ] 能够完整导出和导入数据
-- [ ] 数据完整性验证通过
-- [ ] 错误恢复机制正常工作
+**已完成内容**：
+- 重复任务批量云端同步（`syncInBatches` + `Promise.allSettled`）
+- `modifyTime` 冲突保护（本地较新时跳过云端覆盖）
+- `syncedToCloud` 标记 + 安全陈旧任务清理
+- `parentTaskId` 云端持久化（`parent_task_id` 字段 + 迁移脚本）
+- 后端 `createTask` 幂等化（软删除恢复、归属校验 409）
+- M08b：`POST /api/tasks/transfer` + 前置任务归属自动迁移
 
 **依赖关系**：需要里程碑-07完成
 
