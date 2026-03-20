@@ -2,6 +2,7 @@ module.exports = {
   testEnvironment: 'node',
   moduleFileExtensions: ['js'],
   testMatch: ['**/test/**/*.test.js'],
+  testPathIgnorePatterns: ['/node_modules/', '/backend/'],
   coverageDirectory: 'coverage',
   collectCoverageFrom: [
     'services/**/*.js',
