@@ -7,6 +7,7 @@ const familyService = require('../services/familyService');
 const Task = require('../models/Task');
 const { createLogger } = require('../utils/logger');
 const { success, error } = require('../utils/response');
+const { resolveTargetUserId } = require('../utils/resolveTargetUserId');
 const logger = createLogger('TaskController');
 
 /**
@@ -142,6 +143,11 @@ class TaskController {
 
       res.json(success(task.toJSON(), '任务创建成功'));
     } catch (err) {
+      if (err.code === 'TASK_ID_USER_MISMATCH') {
+        return res.status(409).json(
+          error('taskId 已被其他用户使用', 'TASK_ID_USER_MISMATCH')
+        );
+      }
       logger.error('创建任务失败', err);
       res.status(500).json(
         error('创建任务失败', 'TASK_CREATE_FAILED')
@@ -284,10 +290,14 @@ class TaskController {
     try {
       const { taskId } = req.params;
       const { userId, role, familyId } = req.user;
-      const { status } = req.body;
+      const { status, starAwarded } = req.body;
 
       if (status !== 0 && status !== 1) {
         return res.status(400).json(error('status 必须为 0 或 1', 'INVALID_STATUS'));
+      }
+
+      if (starAwarded !== undefined && typeof starAwarded !== 'boolean') {
+        return res.status(400).json(error('starAwarded 必须为布尔值', 'INVALID_STAR_AWARDED'));
       }
 
       const existing = await taskService.getTaskById(taskId);
@@ -305,7 +315,7 @@ class TaskController {
         return res.status(403).json(error('无权限操作', 'PERMISSION_DENIED'));
       }
 
-      const updated = await taskService.updateTaskStatus(taskId, status);
+      const updated = await taskService.updateTaskStatus(taskId, { status, starAwarded });
       if (!updated) {
         return res.status(404).json(error('任务不存在或已删除', 'TASK_NOT_FOUND'));
       }
@@ -323,33 +333,38 @@ class TaskController {
    * 返回 null 表示无权限
    */
   async _resolveTargetUserId(req, targetUserId) {
-    const { userId, role, familyId } = req.user;
+    return resolveTargetUserId(req, targetUserId);
+  }
 
-    // 未传 targetUserId 或与自己一样，直接用自己
-    if (!targetUserId || targetUserId === userId) {
-      return userId;
-    }
+  /**
+   * POST /api/tasks/transfer
+   * 将家长名下的所有任务转移给指定孩子（仅限首次添加孩子场景）
+   */
+  async transferTasks(req, res) {
+    try {
+      const { userId, role, familyId } = req.user;
+      const { toUserId } = req.body;
 
-    // 孩子账号不能代查他人
-    if (role !== 'parent') {
-      return null;
-    }
+      if (role !== 'parent') {
+        return res.status(403).json(error('只有家长可以转移任务', 'TRANSFER_PARENT_REQUIRED'));
+      }
+      if (!familyId) {
+        return res.status(400).json(error('您尚未加入家庭', 'FAMILY_NOT_JOINED'));
+      }
+      if (!toUserId) {
+        return res.status(400).json(error('目标用户不能为空', 'INVALID_PARAMS'));
+      }
 
-    // 未加入家庭不能代查
-    if (!familyId) {
-      return null;
+      const count = await taskService.transferTasksToChild(userId, toUserId, familyId);
+      logger.info('任务归属转移成功', { fromUserId: userId, toUserId, count });
+      res.json(success({ count }, '转移成功'));
+    } catch (err) {
+      if (err.code === 'TRANSFER_TARGET_INVALID') {
+        return res.status(400).json(error(err.message, err.code));
+      }
+      logger.error('任务归属转移失败', err);
+      res.status(500).json(error('转移失败', 'TASK_TRANSFER_FAILED'));
     }
-
-    // 验证 targetUserId 与操作者同家庭，且目标用户必须是孩子
-    const targetInfo = await familyService.getUserFamilyAndRole(targetUserId);
-    if (!targetInfo || targetInfo.familyId !== familyId) {
-      return null;
-    }
-    if (targetInfo.role !== 'child') {
-      return null;
-    }
-
-    return targetUserId;
   }
 }
 

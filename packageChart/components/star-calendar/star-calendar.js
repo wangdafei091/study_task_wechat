@@ -314,6 +314,30 @@ Component({
     },
 
     /**
+     * 判断是否为任务完成获得的收入记录
+     * 优先使用真实星星流水，兼容历史 source=task 和云端同步后的 source=task_complete
+     * @param {Object} record 星星记录
+     * @returns {Boolean} 是否为任务完成收入
+     */
+    isTaskIncomeRecord: function(record) {
+      if (!record || !record.isIncome()) {
+        return false;
+      }
+
+      const source = record.source || '';
+      return source === 'task' || source === 'task_complete';
+    },
+
+    /**
+     * 汇总任务相关流水，避免“完成后重置”仍显示为获得星星
+     * @param {Array<Object>} records 指定日期的星星流水
+     * @returns {Object} 汇总结果
+     */
+    summarizeTaskRecords: function(records) {
+      return analyticsUtils.summarizeTaskStarRecords(records || []);
+    },
+
+    /**
      * 加载星星记录
      */
     loadStarRecords: function() {
@@ -338,6 +362,7 @@ Component({
       
       const analysisOptions = this.properties.analysisOptions || {};
       const starUserId = analysisOptions.userId || null;
+      const starService = serviceManager.getStarService();
 
       // 批量拉取当月任务（避免按天循环发起 HTTP 请求）
       const taskService = serviceManager.getTaskService();
@@ -348,8 +373,16 @@ Component({
             .catch(() => { this._monthTaskCache = { key: monthKey, tasks: [] }; })
         : Promise.resolve();
 
-      const starPromise = serviceManager.getStarService()
-        .getStarRecordsByDateRange(startDate, endDate, starUserId);
+      const starPromise = this._refreshStarsForAnalysis(starService, analysisOptions)
+        .catch(error => {
+          logger.warn('星星日历', '加载前刷新云端星星失败，继续使用本地数据', error);
+        })
+        .then(() => {
+          if (!starService) {
+            return [];
+          }
+          return starService.getStarRecordsByDateRange(startDate, endDate, starUserId);
+        });
 
       Promise.all([starPromise, taskPromise])
         .then(([records]) => {
@@ -393,9 +426,17 @@ Component({
         
         // 查找该日期的星星记录，使用getDate()方法获取日期
         const dayRecords = starRecords.filter(record => record.getDisplayDate() === day.dateString);
-        
+
+        // 优先使用真实星星流水的净额；只有没有任务相关流水时，才回退到任务状态推导
+        const taskSummary = this.summarizeTaskRecords(dayRecords);
+        const earnedStarsFromRecords = taskSummary.earnedStars;
+
+        const earnedStarsPromise = taskSummary.hasTaskRecords
+          ? Promise.resolve(earnedStarsFromRecords)
+          : this._calculateEarnedStarsFromTasks(day.dateString);
+
         // 获取该日期的任务数据来计算实际收入星星
-        this._calculateEarnedStarsFromTasks(day.dateString)
+        earnedStarsPromise
           .then(earnedStars => {
             // 计算惩罚性扣除的星星数量
             const deductedStars = dayRecords
@@ -432,9 +473,7 @@ Component({
             logger.error('星星日历', `计算日期${day.dateString}的任务星星失败:`, error);
             
             // 发生错误时，使用原有逻辑作为备选方案
-            const earnedStars = dayRecords
-              .filter(record => record.isIncome())
-              .reduce((sum, record) => sum + Number(record.points || 0), 0);
+            const earnedStars = this.summarizeTaskRecords(dayRecords).earnedStars;
               
             const deductedStars = dayRecords
               .filter(record => this.isPenaltyDeduction(record))
@@ -548,10 +587,27 @@ Component({
       logger.debug('星星日历', '更新今日星星数据');
       
       const todayAnalysisOptions = this.properties.analysisOptions || {};
-      serviceManager.getStarService().getStarRecordsByDate(today, todayAnalysisOptions.userId || null)
+      const starService = serviceManager.getStarService();
+      this._refreshStarsForAnalysis(starService, todayAnalysisOptions)
+        .catch(error => {
+          logger.warn('星星日历', '更新今日前刷新云端星星失败，继续使用本地数据', error);
+        })
+        .then(() => {
+          if (!starService) {
+            return [];
+          }
+          return starService.getStarRecordsByDate(today, todayAnalysisOptions.userId || null);
+        })
         .then(records => {
-          // 使用基于任务状态的方式计算收入星星
-          this._calculateEarnedStarsFromTasks(today)
+          // 使用任务相关流水净额计算收入星星
+          const taskSummary = this.summarizeTaskRecords(records);
+          const earnedStarsFromRecords = taskSummary.earnedStars;
+
+          const earnedStarsPromise = taskSummary.hasTaskRecords
+            ? Promise.resolve(earnedStarsFromRecords)
+            : this._calculateEarnedStarsFromTasks(today);
+
+          earnedStarsPromise
             .then(earnedStars => {
               // 计算惩罚性扣除的星星数量
               const deductedStars = records
@@ -578,12 +634,10 @@ Component({
               logger.debug('星星日历', `今日星星数据更新完成: 任务获得${earnedStars}颗，惩罚扣除${deductedStars}颗`);
             })
             .catch(error => {
-              logger.error('星星日历', '计算今日任务星星失败，使用备选方案:', error);
+            logger.error('星星日历', '计算今日任务星星失败，使用备选方案:', error);
               
               // 发生错误时，使用原有逻辑作为备选方案
-              const earnedStars = records
-                .filter(record => record.isIncome())
-                .reduce((sum, record) => sum + Number(record.points || 0), 0);
+              const earnedStars = this.summarizeTaskRecords(records).earnedStars;
                 
               const deductedStars = records
                 .filter(record => this.isPenaltyDeduction(record))
@@ -611,6 +665,22 @@ Component({
         .catch(error => {
           logger.error('星星日历', '更新今日星星数据失败:', error);
         });
+    },
+
+    _refreshStarsForAnalysis: function(starService, analysisOptions = {}) {
+      if (!starService || typeof starService.refreshStarsFromCloud !== 'function') {
+        return Promise.resolve();
+      }
+
+      if (analysisOptions.scope === 'family') {
+        return starService.refreshStarsFromCloud(null, { scope: 'family' });
+      }
+
+      if (analysisOptions.userId) {
+        return starService.refreshStarsFromCloud(analysisOptions.userId);
+      }
+
+      return Promise.resolve();
     },
     
     /**

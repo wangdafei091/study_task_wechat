@@ -82,6 +82,8 @@ class Task {
     this.createTime = data.createTime || Date.now();
     this.modifyTime = data.modifyTime || Date.now();
     this.tags = data.tags || [];
+    // 云端同步状态：true 表示曾经成功同步到云端，用于安全清理陈旧任务
+    this.syncedToCloud = data.syncedToCloud || false;
     
     // 初始化默认值
     this._initDefaults();

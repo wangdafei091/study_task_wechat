@@ -19,6 +19,16 @@ const ScenarioBuilder = require('../../test/utils/scenario-builder');
 const { Reward } = require('../../models/reward');
 const { EVENTS } = require('../../utils/constants');
 
+jest.mock('../../utils/http-client', () => ({
+  get: jest.fn(),
+  post: jest.fn(),
+  put: jest.fn(),
+  patch: jest.fn(),
+  delete: jest.fn()
+}));
+
+const HttpClient = require('../../utils/http-client');
+
 // Mock 日志模块
 jest.mock('../../utils/logger', () => ({
   info: jest.fn(),
@@ -70,6 +80,7 @@ describe('RewardService', () => {
       getAvailableRewards: jest.fn().mockResolvedValue([]),
       getExchangeableRewards: jest.fn().mockResolvedValue([]),
       invalidateCache: jest.fn(),
+      _saveData: jest.fn().mockResolvedValue(true),
       getAllSync: jest.fn().mockReturnValue([]),
       unclaimReward: jest.fn().mockImplementation(async (id) => {
         const reward = new Reward({
@@ -542,6 +553,34 @@ describe('RewardService', () => {
         expect.stringContaining('更新奖励状态失败回滚'),
         'user_123'
       );
+    });
+  });
+
+  describe('云端刷新去重', () => {
+    it('应按 reward.id 去重本地未同步奖励', async () => {
+      HttpClient.get.mockResolvedValue({
+        rewards: [
+          {
+            rewardId: 'reward_1',
+            userId: 'parent_1',
+            name: '云端奖励',
+            points: 10
+          }
+        ]
+      });
+      mockRewardRepository.getAll.mockResolvedValue([
+        new Reward({ id: 'reward_1', userId: 'parent_1', name: '本地旧副本', points: 10, syncedToCloud: false }),
+        new Reward({ id: 'reward_2', userId: 'parent_1', name: '本地草稿', points: 5, syncedToCloud: false })
+      ]);
+
+      await rewardService._fetchRewardsFromCloud();
+
+      expect(mockRewardRepository._saveData).toHaveBeenCalled();
+      const mergedRewards = mockRewardRepository._saveData.mock.calls[0][0];
+      expect(mergedRewards).toHaveLength(2);
+      expect(mergedRewards.some(reward => reward.id === 'reward_1' && reward.syncedToCloud === true)).toBe(true);
+      expect(mergedRewards.some(reward => reward.id === 'reward_2')).toBe(true);
+      expect(mockRewardRepository.invalidateCache).toHaveBeenCalled();
     });
   });
 

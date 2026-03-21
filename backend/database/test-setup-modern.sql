@@ -5,6 +5,9 @@
 USE task_wechat_test;
 
 SET FOREIGN_KEY_CHECKS = 0;
+DROP TABLE IF EXISTS rewards;
+DROP TABLE IF EXISTS star_groups;
+DROP TABLE IF EXISTS star_records;
 DROP TABLE IF EXISTS tasks;
 DROP TABLE IF EXISTS families;
 DROP TABLE IF EXISTS users;
@@ -63,7 +66,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   is_required TINYINT(1) DEFAULT 0,
   penalty_applied TINYINT(1) DEFAULT 0,
   points INT DEFAULT 0,
-  points_expiry ENUM('1day', '7day', '30day', 'permanent') DEFAULT 'permanent',
+  points_expiry VARCHAR(20) DEFAULT 'permanent',
   status INT DEFAULT 0 COMMENT '0=未完成, 1=已完成',
   `repeat` JSON COMMENT '重复任务配置',
   has_no_end_date TINYINT(1) DEFAULT 0,
@@ -71,6 +74,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   completion_time BIGINT DEFAULT NULL COMMENT 'epoch ms',
   star_awarded TINYINT(1) DEFAULT 0,
   modify_time BIGINT DEFAULT NULL COMMENT 'epoch ms',
+  parent_task_id VARCHAR(100) DEFAULT NULL COMMENT '重复任务的父任务ID，普通任务为NULL',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   deleted_at DATETIME DEFAULT NULL,
@@ -78,6 +82,74 @@ CREATE TABLE IF NOT EXISTS tasks (
   INDEX idx_date (date),
   INDEX idx_status (status),
   INDEX idx_deleted_at (deleted_at),
+  FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS star_records (
+  record_id VARCHAR(100) PRIMARY KEY,
+  user_id VARCHAR(36) NOT NULL,
+  type ENUM('income', 'expense') NOT NULL,
+  source VARCHAR(50) NOT NULL,
+  source_id VARCHAR(100) DEFAULT NULL,
+  points INT NOT NULL,
+  description VARCHAR(255) DEFAULT NULL,
+  expiry_type VARCHAR(50) DEFAULT NULL,
+  expiry_date VARCHAR(20) DEFAULT NULL,
+  balance INT DEFAULT 0,
+  previous_balance INT DEFAULT 0,
+  original_task_date VARCHAR(20) DEFAULT NULL,
+  requested_points INT DEFAULT NULL,
+  idempotency_key VARCHAR(150) DEFAULT NULL,
+  data JSON DEFAULT NULL,
+  modify_time BIGINT DEFAULT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  deleted_at DATETIME DEFAULT NULL,
+  INDEX idx_star_records_user_id (user_id),
+  INDEX idx_star_records_source_id (source_id),
+  UNIQUE KEY uk_star_records_idempotency_key (idempotency_key),
+  FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS star_groups (
+  group_id VARCHAR(100) PRIMARY KEY,
+  user_id VARCHAR(36) NOT NULL,
+  type VARCHAR(50) NOT NULL,
+  stars INT DEFAULT 0,
+  expiry_date VARCHAR(20) DEFAULT NULL,
+  modify_time BIGINT DEFAULT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_star_groups_user_id (user_id),
+  UNIQUE KEY uk_star_groups_user_type_expiry (user_id, type, expiry_date),
+  FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS rewards (
+  reward_id VARCHAR(100) PRIMARY KEY,
+  user_id VARCHAR(36) NOT NULL,
+  family_id VARCHAR(36) DEFAULT NULL,
+  name VARCHAR(100) NOT NULL,
+  description VARCHAR(500) DEFAULT NULL,
+  type VARCHAR(50) DEFAULT 'item',
+  points INT NOT NULL,
+  icon VARCHAR(50) DEFAULT NULL,
+  enabled TINYINT(1) DEFAULT 1,
+  claimed TINYINT(1) DEFAULT 0,
+  claim_time BIGINT DEFAULT NULL,
+  claim_status VARCHAR(50) DEFAULT 'available',
+  delivery_time BIGINT DEFAULT NULL,
+  exchange_user_id VARCHAR(36) DEFAULT NULL,
+  is_example TINYINT(1) DEFAULT 0,
+  tags JSON DEFAULT NULL,
+  notes TEXT,
+  protected_by_expiry TINYINT(1) DEFAULT 0,
+  partial_protection INT DEFAULT 0,
+  modify_time BIGINT DEFAULT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  deleted_at DATETIME DEFAULT NULL,
+  INDEX idx_rewards_user_id (user_id),
+  INDEX idx_rewards_family_id (family_id),
   FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -113,6 +185,14 @@ INSERT INTO tasks (task_id, user_id, title, type, date, points, status, star_awa
 -- 软删除测试任务
 INSERT INTO tasks (task_id, user_id, title, type, date, points, status, deleted_at) VALUES
 ('task_deleted_001', 'child_001', '已删除的任务', 'study', CURDATE(), 1, 0, NOW());
+
+INSERT INTO star_groups (group_id, user_id, type, stars, expiry_date, modify_time) VALUES
+('group_test_week_001', 'child_001', 'week', 5, '2026-03-28', 1742400000000),
+('group_test_month_001', 'child_001', 'month', 8, '2026-03-31', 1742400000001),
+('group_test_perm_001', 'child_002', 'permanent', 10, NULL, 1742400000002);
+
+INSERT INTO rewards (reward_id, user_id, family_id, name, description, type, points, enabled, claimed, claim_status, modify_time) VALUES
+('reward_seed_001', 'parent_001', 'family_001', '周末看电影', '家庭奖励示例', 'activity', 8, 1, 0, 'available', 1742400000003);
 
 SELECT '✅ 测试数据库初始化完成！（现代版本：JSON类型）' as status;
 SELECT '📊 数据统计：' as info;

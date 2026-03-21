@@ -7,6 +7,7 @@
 const BaseRepository = require('./base-repository');
 const { Reward, RewardStatus } = require('../models/reward');
 const logger = require('../utils/logger');
+const API_CONFIG = require('../utils/api-config');
 
 class RewardRepository extends BaseRepository {
   /**
@@ -45,7 +46,9 @@ class RewardRepository extends BaseRepository {
       const allRewards = await this.getAll();
       
       // 用户过滤
-      const userRewards = userId ? allRewards.filter(r => r.userId === userId) : allRewards;
+      const userRewards = (API_CONFIG.ENABLE_API || API_CONFIG.enableCloudStorage)
+        ? allRewards
+        : (userId ? allRewards.filter(r => r.userId === userId) : allRewards);
       
       // 检查是否有自定义奖励
       const hasCustomRewards = userRewards.some(r => !r.isExample && r.enabled);

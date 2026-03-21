@@ -98,6 +98,35 @@ describe('M07 后端 Task 模型字段测试', () => {
     expect(task.hasNoEndDate).toBe(true);
   });
 
+  it('fromDB 应兼容新旧字段命名', () => {
+    const dbRecord = {
+      task_id: 'task_legacy_modern_mix',
+      user_id: 'user_001',
+      title: '任务兼容测试',
+      type: 'study',
+      date: '2026-03-01',
+      start_time: '09:00',
+      end_time: '10:00',
+      points: 1,
+      points_expiry: 'week',
+      is_required: 1,
+      is_all_day: 0,
+      penalty_applied: 1,
+      parent_task_id: 'parent_001',
+      deleted_at: null,
+    };
+
+    const task = Task.fromDB(dbRecord);
+
+    expect(task.startTime).toBe('09:00');
+    expect(task.endTime).toBe('10:00');
+    expect(task.pointsExpiry).toBe('week');
+    expect(task.isRequired).toBe(true);
+    expect(task.isAllDay).toBe(false);
+    expect(task.penaltyApplied).toBe(true);
+    expect(task.parentTaskId).toBe('parent_001');
+  });
+
   it('toJSON 应包含新字段，不暴露 deletedAt', () => {
     const task = new Task({
       taskId: 'task_004',

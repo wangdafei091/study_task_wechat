@@ -94,15 +94,15 @@ fi
 
 echo ""
 echo "📋 步骤4：初始化测试数据库结构..."
-if [ -f "database/test-setup.sql" ]; then
+if [ -f "database/test-setup-modern.sql" ]; then
     if command -v mysql &> /dev/null; then
-        mysql -h"$DB_HOST" -u"$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" < database/test-setup.sql
+        mysql -h"$DB_HOST" -u"$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" < database/test-setup-modern.sql
         echo "✅ 测试数据库初始化完成"
     else
-        echo "⚠️  未找到mysql命令，请手动导入 database/test-setup.sql"
+        echo "⚠️  未找到mysql命令，请手动导入 database/test-setup-modern.sql"
     fi
 else
-    echo "⚠️  未找到database/test-setup.sql文件"
+    echo "⚠️  未找到database/test-setup-modern.sql文件"
 fi
 
 echo ""
@@ -116,19 +116,21 @@ fi
 
 echo ""
 echo "📋 步骤6：运行集成测试..."
-echo "🧪 开始执行M07真实数据库集成测试..."
-npm test test/integration/task-api-m07-real.test.js --verbose
+echo "🧪 开始执行真实数据库集成测试..."
+npm test test/integration/task-api-m07-real.test.js test/integration/task-api-m08-real.test.js test/integration/task-api-m08b-real.test.js --verbose
 
 echo ""
 echo "🎉 设置完成！"
 echo ""
 echo "后续使用："
-echo "1. 运行所有集成测试: npm test test/integration/task-api-m07-real.test.js"
-echo "2. 运行特定测试: npm test -- test/integration/task-api-m07-real.test.js -t \"测试名称\""
+echo "1. 运行所有集成测试: npm test test/integration/task-api-m07-real.test.js test/integration/task-api-m08-real.test.js test/integration/task-api-m08b-real.test.js"
+echo "2. 运行特定测试: npm test -- test/integration/task-api-m08b-real.test.js -t \"测试名称\""
 echo "3. 查看测试指南: cat test/README.md"
 echo ""
 echo "测试文件位置："
 echo "- 配置文件: .env.test"
-echo "- 测试代码: test/integration/task-api-m07-real.test.js"
-echo "- 数据库初始化: database/test-setup.sql"
+echo "- M07集成测试: test/integration/task-api-m07-real.test.js"
+echo "- M08集成测试: test/integration/task-api-m08-real.test.js"
+echo "- M08b集成测试: test/integration/task-api-m08b-real.test.js"
+echo "- 数据库初始化: database/test-setup-modern.sql"
 echo "- 测试指南: test/README.md"

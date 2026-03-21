@@ -13,6 +13,13 @@ const TestDataFactory = require('../utils/test-data-factory');
 // Mock依赖
 jest.mock('../../utils/logger');
 jest.mock('../../repositories/index');
+jest.mock('../../utils/http-client', () => ({
+  get: jest.fn(),
+  post: jest.fn(),
+  put: jest.fn(),
+  patch: jest.fn(),
+  delete: jest.fn()
+}));
 
 const { StarGroupRepository, StarRecordRepository } = require('../../repositories/index');
 
@@ -35,7 +42,9 @@ describe('StarService', () => {
       consumeStarsByExpiryOrder: jest.fn().mockResolvedValue({ success: false, consumed: 0, groupsUpdated: [] }),
       deductStarsFromSpecificExpiryType: jest.fn().mockResolvedValue({ success: false, message: '扣减失败' }),
       getTotalPoints: jest.fn().mockResolvedValue(0),
-      getAll: jest.fn().mockResolvedValue([])
+      getAll: jest.fn().mockResolvedValue([]),
+      _saveData: jest.fn().mockResolvedValue(true),
+      invalidateCache: jest.fn()
     };
 
     mockStarRecordRepository = {
@@ -49,7 +58,10 @@ describe('StarService', () => {
       getRecordsByTimeOrder: jest.fn().mockResolvedValue([]),
       getRecordsGroupedByMonth: jest.fn().mockResolvedValue([]),
       getRecordsByDateRange: jest.fn().mockResolvedValue([]),
-      repairRecordBalances: jest.fn().mockResolvedValue({ success: true, repairedCount: 0 })
+      repairRecordBalances: jest.fn().mockResolvedValue({ success: true, repairedCount: 0 }),
+      getAll: jest.fn().mockResolvedValue([]),
+      _saveData: jest.fn().mockResolvedValue(true),
+      invalidateCache: jest.fn()
     };
 
     // Mock仓储构造函数
@@ -308,7 +320,8 @@ describe('StarService', () => {
         '任务惩罚',
         'user_123',
         '2026-03-01',
-        5
+        5,
+        expect.stringContaining('task_penalty:task_1:2026-03-01:user_123:')
       );
     });
 
@@ -328,6 +341,80 @@ describe('StarService', () => {
         expect(data.groups).toBeDefined();
         expect(data.record).toBeDefined();
       });
+    });
+  });
+
+  describe('云端刷新去重', () => {
+    it('应按 idempotencyKey 去重本地未同步的通用扣星流水', async () => {
+      const localRecord = {
+        id: 'local_record_1',
+        userId: 'user_123',
+        syncedToCloud: false,
+        idempotencyKey: 'task_penalty:task_1:2026-03-21:user_123:1'
+      };
+      const cloudRecord = {
+        id: 'cloud_record_1',
+        userId: 'user_123',
+        syncedToCloud: true,
+        idempotencyKey: 'task_penalty:task_1:2026-03-21:user_123:1'
+      };
+
+      mockStarRecordRepository.getAll.mockResolvedValue([localRecord, cloudRecord]);
+
+      await starService._replaceSyncedStarRecords('user_123', [cloudRecord]);
+
+      expect(mockStarRecordRepository._saveData).toHaveBeenCalledWith([cloudRecord]);
+      expect(mockStarRecordRepository.invalidateCache).toHaveBeenCalled();
+    });
+
+    it('应按 userId + expiryType + expiryDate 去重本地快照分组', async () => {
+      const localGroup = {
+        id: 'local_group_1',
+        userId: 'user_123',
+        expiryType: 'week',
+        expiryDateStr: '2026-03-28',
+        syncedToCloud: false
+      };
+      const cloudGroup = {
+        id: 'cloud_group_1',
+        userId: 'user_123',
+        expiryType: 'week',
+        expiryDateStr: '2026-03-28',
+        syncedToCloud: true
+      };
+
+      mockStarGroupRepository.getAll.mockResolvedValue([localGroup, cloudGroup]);
+
+      await starService._replaceSyncedStarGroups('user_123', [cloudGroup]);
+
+      expect(mockStarGroupRepository._saveData).toHaveBeenCalledWith([cloudGroup]);
+      expect(mockStarGroupRepository.invalidateCache).toHaveBeenCalled();
+    });
+
+    it('云端快照为空时应清除当前用户残留的本地分组，但保留其他用户分组', async () => {
+      const staleLocalGroup = {
+        id: 'local_group_stale',
+        userId: 'user_123',
+        expiryType: 'permanent',
+        expiryDateStr: '',
+        stars: 1,
+        syncedToCloud: false
+      };
+      const otherUserGroup = {
+        id: 'other_group_1',
+        userId: 'user_other',
+        expiryType: 'permanent',
+        expiryDateStr: '',
+        stars: 3,
+        syncedToCloud: false
+      };
+
+      mockStarGroupRepository.getAll.mockResolvedValue([staleLocalGroup, otherUserGroup]);
+
+      await starService._replaceSyncedStarGroups('user_123', []);
+
+      expect(mockStarGroupRepository._saveData).toHaveBeenCalledWith([otherUserGroup]);
+      expect(mockStarGroupRepository.invalidateCache).toHaveBeenCalled();
     });
   });
 
@@ -351,8 +438,34 @@ describe('StarService', () => {
       expect(mockStarGroupRepository.deductStarsFromSpecificExpiryType).toHaveBeenCalledWith(
         10,
         'permanent',
-        '取消任务完成'
+        '取消任务完成',
+        'user_123'
       );
+      expect(mockStarRecordRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+        source: 'task_reset',
+        sourceId: 'task_1'
+      }));
+    });
+
+    it('应在任务重置扣星记录中保留任务原始日期', async () => {
+      mockStarGroupRepository.deductStarsFromSpecificExpiryType.mockResolvedValue({
+        success: true,
+        deductedGroups: [TestDataFactory.createStarGroup({ id: 'group_1', stars: 0 })]
+      });
+      mockStarRecordRepository.save.mockResolvedValue({ id: 'record_2', type: 'expense', points: -10 });
+
+      await starService.consumeStarsFromSpecificType(10, 'permanent', '取消任务完成', {
+        userId: 'user_123',
+        sourceType: 'task_reset',
+        sourceId: 'task_1',
+        originalTaskDate: '2026-03-21'
+      });
+
+      expect(mockStarRecordRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+        source: 'task_reset',
+        sourceId: 'task_1',
+        originalTaskDate: '2026-03-21'
+      }));
     });
 
     it('应该拒绝消费数量小于等于0的情况', async () => {
@@ -459,13 +572,13 @@ describe('StarService', () => {
       mockStarGroupRepository.getOrCreateGroup.mockResolvedValue(mockGroup);
       mockStarGroupRepository.addStarsToGroup.mockResolvedValue({ ...mockGroup, stars: 20 });
       mockStarRecordRepository.save.mockResolvedValue({ id: 'record_1', type: 'income' });
-      mockStarRecordRepository.createTaskCompleteRecord.mockResolvedValue({ id: 'record_2', type: 'task_complete' });
 
       const result = await starService.handleTaskCompletion(mockTask, 10);
 
       expect(result.success).toBe(true);
       expect(result.points).toBe(10);
-      expect(mockStarRecordRepository.createTaskCompleteRecord).toHaveBeenCalled();
+      expect(result.record).toEqual({ id: 'record_1', type: 'income' });
+      expect(mockStarRecordRepository.createTaskCompleteRecord).not.toHaveBeenCalled();
     });
 
     it('应该拒绝无效的任务', async () => {
@@ -487,14 +600,13 @@ describe('StarService', () => {
       mockStarGroupRepository.getOrCreateGroup.mockResolvedValue(mockGroup);
       mockStarGroupRepository.addStarsToGroup.mockResolvedValue(mockGroup);
       mockStarRecordRepository.save.mockResolvedValue({ id: 'record_1' });
-      mockStarRecordRepository.createTaskCompleteRecord.mockResolvedValue({ id: 'record_2' });
 
       await starService.handleTaskCompletion(mockTask, 10);
 
       mockEventBus.verifyEmit(EVENTS.TASK_COMPLETED_WITH_REWARD, (data) => {
         expect(data.task).toEqual(mockTask);
         expect(data.points).toBe(10);
-        expect(data.record).toBeDefined();
+        expect(data.record).toEqual({ id: 'record_1' });
       });
     });
   });

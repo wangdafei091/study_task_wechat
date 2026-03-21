@@ -197,9 +197,25 @@ Page({
         if (res.confirm && res.content?.trim()) {
           try {
             const userService = getApp().globalData?.userService;
+            const taskService = getApp().getTaskService();
+            // 在创建前记录当前孩子数量，判断是否为第一个孩子
+            const childrenBefore = userService.getAllUsers().filter(u => u.role === 'child');
+            const isFirstChild = childrenBefore.length === 0;
+
             const result = await userService.createVirtualMember(res.content.trim());
             if (result.success) {
-              wx.showToast({ title: '成员添加成功', icon: 'success' });
+              let toastTitle = '成员添加成功';
+              // 仅在创建第一个孩子时触发任务归属迁移
+              if (isFirstChild && result.member?.userId && taskService) {
+                const loginUserId = userService.getLoginUserId();
+                const migrateResult = await taskService._migrateTasksToChild(loginUserId, result.member.userId);
+                if (migrateResult.success && migrateResult.count > 0) {
+                  toastTitle = `成员添加成功，已将 ${migrateResult.count} 个任务归属给${res.content.trim()}`;
+                } else if (!migrateResult.success) {
+                  toastTitle = '成员已添加，但任务迁移失败，请稍后重试';
+                }
+              }
+              wx.showToast({ title: toastTitle, icon: 'none', duration: 2500 });
               const members = await this._loadMembers();
               this.setData({ members });
             } else {

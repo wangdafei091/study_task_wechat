@@ -4,6 +4,122 @@
 
 ---
 
+## [里程碑-09] - 2026-03-21
+
+### ✅ 完成情况
+
+**星星积分 + 奖励云端同步**
+
+- 后端完成 `star_records`、`star_groups`、`rewards` 三类数据的云端接口与真实数据库链路
+- 前端 `StarService` 完成发星、扣星、特定有效期扣星、家庭流水读取的云端同步
+- 前端 `RewardService` 完成奖励创建、更新、删除、兑换的云端同步与本地 stale cleanup
+- `TaskService._syncStatusToCloud` 同步 `starAwarded`，解除跨设备 `resetTask` 限制
+- 首页任务入口在显式用户场景下使用 `requireFreshStars: true`，保证重置前余额先与云端对齐
+- 奖励页进入时先同步孩子星星，再同步奖励列表，解决“奖励更新了但余额还是旧的”问题
+- 分析页支持孩子视角 `userId` 与家长视角 `scope=family` 两种云端读取模式
+
+### 🔧 实施后补充修复
+
+- 修复创建家庭后历史奖励缺少 `family_id` 导致孩子不可见的问题
+- 修复任务云端建档兼容性问题：`tasks` 表混用旧/新字段命名时仍可正常创建、更新、重置
+- 修复首页星星快照残留：云端刷新后当前用户 `starGroups` 改为按快照全量替换，避免完成 1 分任务显示 2 星、重置后残留 1 星
+- 修复分析页任务星星日历：同一任务的 `task_complete` 与 `task_reset` 按净额聚合，重置后不再残留绿色获得星星
+- 修复任务重置扣星记录保留 `originalTaskDate`，跨天重置时仍回到任务原日期更新分析页
+
+### 🧪 验证结果
+
+- 后端真实集成测试通过：
+  - `backend/test/integration/star-api-m09-real.test.js`
+  - `backend/test/integration/reward-api-m09-real.test.js`
+- 真实集成测试结果：`2 suites passed / 10 tests passed`
+- 前端针对性回归测试通过：
+  - `test/services/star-service.test.js`
+  - `test/services/task-service.test.js`
+  - `test/services/reward-service.test.js`
+  - `test/utils/analytics-utils.test.js`
+- 手工验证通过的关键链路：
+  - 家长创建奖励后孩子可见
+  - 任务创建后首页可见
+  - 完成 1 个 1 积分任务后首页显示 `1/10`
+  - 重置后首页回到 `0/10`
+  - 分析页星星日历完成/重置后同步正确
+
+### 📖 详细实施记录
+
+- [里程碑-09：星星积分 + 奖励云端同步](../design/milestone-09-star-reward-sync.md)
+
+---
+
+## [里程碑-08b] - 2026-03-19
+
+### ✅ 完成情况
+
+**前置任务归属迁移**：家长在添加孩子之前创建的任务，在创建第一个孩子时自动迁移到孩子名下
+
+- 后端新增 `POST /api/tasks/transfer` 接口（安全校验：仅家长、目标必须是同家庭孩子、fromUserId 来自 JWT）
+- 前端 `task-service.js` 新增 `_migrateTasksToChild`：云端先行，云端失败则本地不改动，`syncedToCloud` 保持不变
+- `family-settings.js` 在创建第一个孩子时触发迁移，合并 Toast（"成员添加成功，已将 X 个任务归属给[name]"）
+- `utils/api-config.js` 新增 `TASKS_TRANSFER` 端点
+- 新增 5 个单元测试（全部通过）：云端成功更新本地、syncedToCloud 不变、云端失败不改本地、本地为空仍调用云端、重复触发无副作用
+
+- 设计文档：[milestone-08b-task-ownership-migration.md](../design/milestone-08b-task-ownership-migration.md)
+
+---
+
+## [里程碑-08] - 2026-03-19
+
+### ✅ 完成情况
+
+**前置条件A：parentTaskId 云端支持**
+
+- 新增数据库迁移 `006_alter_tasks_add_parent_task_id.sql`：tasks 表添加 `parent_task_id` 字段
+- 更新测试库 schema（`test-setup-fixed.sql`、`test-setup-modern.sql`）同步添加 `parent_task_id`
+- 后端 `Task` 模型新增 `parentTaskId` 字段（constructor / fromDB / toDB / toJSON）
+- 前端 `_syncTaskToCloud` payload 新增 `parentTaskId` 和 `modifyTime`
+- 后端 `taskService.createTask` INSERT 新增 `modify_time`、`parent_task_id` 字段
+
+**前置条件B：syncedToCloud 本地标记**
+
+- 前端 `models/task.js` 新增 `syncedToCloud = false` 字段
+
+**重复任务批量云端同步**
+
+- `_createRepeatTaskInstance` 显式重置 `syncedToCloud: false`，防继承父任务状态
+- `_generateRepeatTasks` 重构：本地 `saveAll` 后，异步 `syncInBatches`（`Promise.allSettled`，batchSize=10）
+- 同步成功的实例更新 `syncedToCloud = true` 并批量持久化
+- `createTask` 主流程：云端同步成功后设置 `syncedToCloud = true`
+
+**modifyTime 冲突保护**
+
+- `_fetchTasksFromCloud` 重构 upsert 逻辑：本地 `modifyTime > (cloudTask.modifyTime || 0)` 时，`Object.assign` 覆盖云端对象，保证本次 UI 展示本地最新内容
+- 所有回灌任务统一设置 `syncedToCloud = true`
+- 改用 `taskRepository.getByUserId` 替代 `getAll`，避免加载其他用户数据
+
+**安全陈旧任务清理**
+
+- `task-repository.js` 新增 `getByUserId(userId)` 方法
+- `task-service.js` 新增 `_cleanupStaleTasks(cloudTaskIds, loginUserId)`：仅删除 `syncedToCloud=true` 且云端不存在的任务
+- `_fetchTasksFromCloud` 在全量拉取时 `await _cleanupStaleTasks`（先清后写，防 localOnly 合并脏数据）
+
+**后端幂等创建升级**
+
+- `backend/services/taskService.createTask` 新增幂等逻辑：客户端传 `taskId` 时先查 DB（含软删除），命中时幂等返回或恢复并覆盖字段；归属不匹配时抛 `TASK_ID_USER_MISMATCH`
+- `backend/controllers/taskController.createTask` 补 targeted catch：`TASK_ID_USER_MISMATCH` → 409
+
+**测试**
+
+- 前端单元测试新增 23 个 M08 场景（`test/services/task-service.test.js`）
+- 后端真实 DB 集成测试：`backend/test/integration/task-api-m08-real.test.js`（6 个场景，使用真实路由 + 中间件 + DB）
+- 后端真实 DB 集成测试：`backend/test/integration/task-api-m08b-real.test.js`（6 个场景，覆盖 POST /api/tasks/transfer）
+
+**集成测试执行修复（2026-03-19）**
+
+- 修复 `taskService.createTask` INSERT/UPDATE SQL 列名错误：驼峰（`startTime`、`endTime`、`isRequired`、`isAllDay`、`penaltyApplied`、`pointsExpiry`）改为下划线（`start_time`、`end_time`、`is_required`、`is_all_day`、`penalty_applied`、`points_expiry`）
+- 修复 M08/M08b 集成测试中响应码断言字段错误：`res.body.code` → `res.body.error_code`（与 `response.js` 实际结构一致）
+- 修复 M08b 测试数据插入顺序：`families.created_by` 有外键约束，改为先插入 users 再插入 families
+
+---
+
 ## [里程碑-07] - 2026-03-19
 
 ### ✅ 完成情况
@@ -179,9 +295,17 @@
 ### 项目概述
 
 - **背景**：现有数据存储在微信本地，清理缓存会导致数据丢失
-- **目标**：搭建云端后端架构，实现家庭账户管理和数据迁移
+- **目标**：搭建云端后端架构，实现家庭账户管理和多设备数据同步
 - **实施计划**：里程碑-05到里程碑-10
 - **详细规划**：docs/design/cloud-storage-migration.md
+
+### 接下来的里程碑
+
+| 里程碑 | 内容 | 状态 |
+|--------|------|------|
+| M08 | 云端同步完善（重复任务同步 + 冲突解决） | ✅ 已完成 |
+| M09 | 星星积分 + 奖励云端同步 | ✅ 已完成 |
+| M10 | 消息通知 + 完善优化 | 🔴 未启动 |
 
 ---
 

@@ -12,16 +12,16 @@
 
 - **任务管理**：支持学习、习惯、兴趣三种任务类型
 - **游戏化激励**：完成任务获得星星，星星可兑换奖励
-- **多用户支持**：家长和孩子双角色
-- **数据本地化**：使用本地存储，无云服务依赖
+- **多用户支持**：家长和孩子双角色，家庭账户数据隔离
+- **混合存储**：本地存储优先，云端（Node.js + MySQL）双写同步
 - **DDD架构**：清晰的分层架构（models → services → repositories → pages）
 
 ### 技术栈
 
 - **平台**：微信小程序原生开发
 - **架构**：领域驱动设计（DDD）
-- **存储**：微信本地存储（Storage API）
-- **测试**：Jest单元测试
+- **存储**：微信本地存储（Storage API）+ 云端（Node.js + Express + MySQL）
+- **测试**：Jest单元测试 + 后端真实 DB 集成测试
 
 ---
 
@@ -127,7 +127,7 @@ study_task_wechat/
 ## 🧪 测试
 
 ```bash
-# 运行所有测试
+# 运行前端单元测试（稳定质量闸门）
 npm test
 
 # 运行特定模块测试
@@ -138,9 +138,8 @@ npm run test:repositories
 # 生成覆盖率报告
 npm run test:coverage
 
-# 代码规范检查
-npm run lint
-npm run lint:fix
+# 后端集成测试（需配置 backend/.env.test）
+cd backend && NODE_ENV=test npx jest test/integration --runInBand
 ```
 
 ---
@@ -157,7 +156,7 @@ npm run lint:fix
 ### 🎯 项目约束
 
 - **禁止**使用跨平台框架（uni-app、Taro等）
-- **禁止**使用微信云开发（本地存储优先）
+- **禁止**使用微信云开发（已有独立 Node.js 后端，不引入微信云函数）
 - **禁止**绕过服务层直接操作数据
 - **遵循**DDD架构分层原则
 
@@ -181,6 +180,6 @@ npm run lint:fix
 
 ---
 
-**版本**：v2.0
-**最后更新**：2026-03-06
+**版本**：v2.1
+**最后更新**：2026-03-19
 **维护者**：项目维护团队

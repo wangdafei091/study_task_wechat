@@ -883,7 +883,7 @@ describe('completeTask', () => {
 ### 测试运行
 
 ```bash
-# 运行所有测试
+# 运行前端单元测试（稳定质量闸门）
 npm test
 
 # 运行特定模块测试

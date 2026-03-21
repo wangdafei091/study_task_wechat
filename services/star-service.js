@@ -8,7 +8,11 @@ const logger = require('../utils/logger');
 const { StarGroupRepository, StarRecordRepository } = require('../repositories/index');
 const EventBus = require('../utils/core/event-bus');
 const { StarExpiryType } = require('../models/star');
+const { StarRecord } = require('../models/star-record');
+const { StarGroup } = require('../models/star-group');
 const { EVENTS } = require('../utils/constants');
+const HttpClient = require('../utils/http-client');
+const API_CONFIG = require('../utils/api-config');
 
 class StarService {
   /**
@@ -33,6 +37,8 @@ class StarService {
     
     // 事件总线
     this.eventBus = options.eventBus || new EventBus();
+
+    this.enableCloudStorage = API_CONFIG.ENABLE_API;
     
     logger.info('StarService', '初始化星星服务，已注入余额计算器到StarRecordRepository');
   }
@@ -268,7 +274,10 @@ class StarService {
         sourceId: options.sourceId || '',
         points: points,
         description: source || '手动添加星星',
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        expiryType,
+        expiryDate: expiryDateStr || null,
+        syncedToCloud: false
         // balance和previousBalance将在保存时由仓储计算
       };
       
@@ -294,6 +303,15 @@ class StarService {
         group: updatedGroup,
         record
       });
+
+      if (record && this.enableCloudStorage) {
+        this._syncStarRecordToCloud(record).catch(syncError => {
+          logger.warn('StarService', '星星收入云同步失败，本地已保存', {
+            recordId: record.id,
+            error: syncError.message
+          });
+        });
+      }
       
       return {
         success: true,
@@ -327,6 +345,7 @@ class StarService {
     
     try {
       const { userId, sourceType, sourceId, originalTaskDate } = options;
+      const consumeIdempotencyKey = this._buildConsumeIdempotencyKey(options);
       
       // 直接按过期优先顺序消费星星，有多少扣多少
       const consumeResult = await this.starGroupRepository.consumeStarsByExpiryOrder(points, userId);
@@ -352,7 +371,8 @@ class StarService {
           reason, 
           userId,
           originalTaskDate,
-          points // 传递应扣数量作为requestedPoints
+          points, // 传递应扣数量作为requestedPoints
+          consumeIdempotencyKey
         );
       } else {
         // 创建普通支出记录
@@ -362,7 +382,8 @@ class StarService {
           sourceId: sourceId || '',
           points: -actualConsumed, // 负数表示支出，使用实际扣减数量
           description: reason || '手动消费星星',
-          timestamp: Date.now()
+          timestamp: Date.now(),
+          idempotencyKey: consumeIdempotencyKey
           // balance和previousBalance将在保存时由仓储计算
         };
         
@@ -391,6 +412,19 @@ class StarService {
         groups: consumeResult.groupsUpdated,
         record
       });
+
+      if (actualConsumed > 0 && this.enableCloudStorage) {
+        this._syncConsumeToCloud(points, reason, {
+          ...options,
+          requestedPoints: points,
+          idempotencyKey: consumeIdempotencyKey
+        }).catch(syncError => {
+          logger.warn('StarService', '通用扣星云同步失败，本地已保存', {
+            requestedPoints: points,
+            error: syncError.message
+          });
+        });
+      }
       
       return {
         success: actualConsumed > 0, // 只要扣减了就算成功
@@ -444,18 +478,8 @@ class StarService {
         logger.error('StarService', `处理任务完成奖励失败, 任务ID=${task.id}, 星星数=${points}${task.userId ? `, 用户=${task.userId}` : ''}`);
         return result;
       }
-      
-      // 创建任务完成记录
-      const record = await this.starRecordRepository.createTaskCompleteRecord(
-        task.id,
-        points,
-        `完成任务: ${task.name || task.id}`
-      );
-      
-      if (!record) {
-        logger.error('StarService', `处理任务完成奖励: 创建记录失败, 任务ID=${task.id}`);
-        // 继续流程，但记录错误
-      }
+
+      const record = result.record || null;
       
       logger.info('StarService', `处理任务完成奖励成功, 任务ID=${task.id}, 星星数=${points}, 过期类型=${expiryType}`);
       
@@ -885,7 +909,8 @@ class StarService {
       const deductResult = await this.starGroupRepository.deductStarsFromSpecificExpiryType(
         points,
         expiryType,
-        reason
+        reason,
+        options.userId || null
       );
       
       if (!deductResult.success) {
@@ -900,7 +925,11 @@ class StarService {
         sourceId: options.sourceId || '',
         points: -points, // 负数表示支出
         description: reason || '取消任务完成',
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        userId: options.userId || null,
+        originalTaskDate: options.originalTaskDate || null,
+        expiryType,
+        syncedToCloud: false
       });
       
       if (!record) {
@@ -918,6 +947,15 @@ class StarService {
         groups: deductResult.deductedGroups,
         record
       });
+
+      if (record && this.enableCloudStorage) {
+        this._syncStarRecordToCloud(record).catch(syncError => {
+          logger.warn('StarService', '特定类型扣星云同步失败，本地已保存', {
+            recordId: record.id,
+            error: syncError.message
+          });
+        });
+      }
       
       return {
         success: true,
@@ -1212,6 +1250,199 @@ class StarService {
     if (this.starRecordRepository && this.starRecordRepository.clearCache) {
       this.starRecordRepository.clearCache();
     }
+  }
+
+  async refreshStarsFromCloud(userId = null, options = {}) {
+    if (!this.enableCloudStorage) {
+      return { success: false, message: '云端模式未启用' };
+    }
+    return this._fetchStarsFromCloud(userId, options);
+  }
+
+  async _fetchStarsFromCloud(userId = null, options = {}) {
+    const scope = options.scope || 'user';
+
+    if (scope === 'family') {
+      const familyRecordsData = await HttpClient.get(API_CONFIG.ENDPOINTS.STAR_RECORDS, { scope: 'family' });
+      const familyRecords = (familyRecordsData.records || []).map(record => this._mapCloudRecord(record));
+      await this._replaceSyncedStarRecords(null, familyRecords, { scope: 'family' });
+      logger.info('StarService', '已从云端刷新家庭星星流水', { recordCount: familyRecords.length });
+      return { success: true, records: familyRecords, groups: [] };
+    }
+
+    if (!userId) {
+      return { success: false, message: '刷新单用户星星数据时必须传 userId' };
+    }
+
+    const starsData = await HttpClient.get(API_CONFIG.ENDPOINTS.STARS, { userId });
+    const recordData = await HttpClient.get(API_CONFIG.ENDPOINTS.STAR_RECORDS, { userId });
+    const cloudGroups = (starsData.groups || []).map(group => this._mapCloudGroup(group));
+    const cloudRecords = (recordData.records || []).map(record => this._mapCloudRecord(record));
+
+    await this._replaceSyncedStarGroups(userId, cloudGroups);
+    await this._replaceSyncedStarRecords(userId, cloudRecords);
+
+    logger.info('StarService', '已从云端刷新单用户星星数据', {
+      userId,
+      groupCount: cloudGroups.length,
+      recordCount: cloudRecords.length
+    });
+
+    return {
+      success: true,
+      groups: cloudGroups,
+      records: cloudRecords
+    };
+  }
+
+  async _syncStarRecordToCloud(record) {
+    if (!record) return;
+
+    const payload = {
+      recordId: record.id,
+      userId: record.userId,
+      type: record.type,
+      source: record.source,
+      sourceId: record.sourceId,
+      points: record.points,
+      description: record.description,
+      expiryType: record.expiryType,
+      expiryDate: record.expiryDate || null,
+      originalTaskDate: record.originalTaskDate || null,
+      requestedPoints: record.requestedPoints || null,
+      modifyTime: record.modifyTime || record.timestamp || Date.now()
+    };
+
+    await HttpClient.post(API_CONFIG.ENDPOINTS.STAR_RECORDS, payload);
+    record.syncedToCloud = true;
+    await this.starRecordRepository.save(record);
+  }
+
+  async _syncConsumeToCloud(points, reason, options = {}) {
+    const requestedPoints = Number(options.requestedPoints || points || 0);
+    if (requestedPoints <= 0) {
+      return;
+    }
+
+    const response = await HttpClient.post(API_CONFIG.ENDPOINTS.STAR_CONSUME, {
+      userId: options.userId || null,
+      requestedPoints,
+      reason: reason || '通用扣星',
+      sourceType: options.sourceType || 'system_consume',
+      sourceId: options.sourceId || '',
+      originalTaskDate: options.originalTaskDate || null,
+      idempotencyKey: options.idempotencyKey ||
+        `${options.sourceType || 'consume'}:${options.sourceId || 'manual'}:${Date.now()}`
+    });
+
+    if (response && Array.isArray(response.updatedGroupsSnapshot) && options.userId) {
+      const groups = response.updatedGroupsSnapshot.map(group => this._mapCloudGroup({
+        groupId: group.groupId,
+        userId: options.userId,
+        type: group.expiryType || group.type || 'permanent',
+        stars: group.stars,
+        expiryDate: group.expiryDate || null,
+        modifyTime: Date.now()
+      }));
+      await this._replaceSyncedStarGroups(options.userId, groups);
+    }
+  }
+
+  async _replaceSyncedStarGroups(userId, cloudGroups) {
+    const allGroups = await this.starGroupRepository.getAll(false);
+    const retainedGroups = allGroups.filter(group => group.userId !== userId);
+    await this.starGroupRepository._saveData([...retainedGroups, ...cloudGroups]);
+    this.starGroupRepository.invalidateCache();
+  }
+
+  async _replaceSyncedStarRecords(userId, cloudRecords, options = {}) {
+    const allRecords = await this.starRecordRepository.getAll(false);
+    const cloudRecordIds = new Set(cloudRecords.map(record => record.id).filter(Boolean));
+    const cloudIdempotencyKeys = new Set(
+      cloudRecords.map(record => record.idempotencyKey).filter(Boolean)
+    );
+    const retainedRecords = allRecords.filter(record => {
+      const isTargetRecord = options.scope === 'family' ? true : record.userId === userId;
+      if (!isTargetRecord) {
+        return true;
+      }
+
+      if (cloudRecordIds.has(record.id)) {
+        return false;
+      }
+
+      if (record.idempotencyKey && cloudIdempotencyKeys.has(record.idempotencyKey)) {
+        return false;
+      }
+
+      if (options.scope === 'family') {
+        return record.syncedToCloud !== true;
+      }
+      return record.userId !== userId || record.syncedToCloud !== true;
+    });
+    await this.starRecordRepository._saveData([...retainedRecords, ...cloudRecords]);
+    this.starRecordRepository.invalidateCache();
+  }
+
+  _mapCloudGroup(group) {
+    const expiryDateStr = group.expiryDate || '';
+    const expiryTimestamp = expiryDateStr ? new Date(expiryDateStr).getTime() : null;
+    return new StarGroup({
+      id: group.groupId || group.id,
+      userId: group.userId,
+      type: group.type || group.expiryType || 'permanent',
+      expiryType: group.type || group.expiryType || 'permanent',
+      stars: Number(group.stars || 0),
+      expiryDate: expiryTimestamp,
+      expiryDateStr,
+      syncedToCloud: true,
+      lastUpdated: group.modifyTime || Date.now()
+    });
+  }
+
+  _mapCloudRecord(record) {
+    return new StarRecord({
+      id: record.recordId || record.id,
+      userId: record.userId,
+      type: record.type,
+      source: record.source,
+      sourceId: record.sourceId || '',
+      points: Number(record.points || 0),
+      timestamp: record.modifyTime || Date.parse(record.createdAt || '') || Date.now(),
+      description: record.description || '',
+      expiryType: record.expiryType || null,
+      expiryDate: record.expiryDate || null,
+      balance: Number(record.balance || 0),
+      previousBalance: Number(record.previousBalance || 0),
+      originalTaskDate: record.originalTaskDate || null,
+      requestedPoints: record.requestedPoints || null,
+      syncedToCloud: true,
+      idempotencyKey: record.idempotencyKey || null,
+      modifyTime: record.modifyTime || Date.now(),
+      data: record.data || {}
+    });
+  }
+
+  _buildConsumeIdempotencyKey(options = {}) {
+    if (options.idempotencyKey) {
+      return options.idempotencyKey;
+    }
+
+    return [
+      options.sourceType || 'consume',
+      options.sourceId || 'manual',
+      options.originalTaskDate || 'na',
+      options.userId || 'anonymous',
+      Date.now()
+    ].join(':');
+  }
+
+  _buildGroupMergeKey(group) {
+    return [
+      group.userId || '',
+      group.expiryType || group.type || '',
+      group.expiryDateStr || group.expiryDate || ''
+    ].join('|');
   }
 
   /**

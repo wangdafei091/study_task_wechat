@@ -146,14 +146,11 @@ I fixed the bug where the stars weren't showing up correctly when the user compl
 
 2. **确保代码质量**
    ```bash
-   # 运行测试
+   # 运行前端单元测试（稳定质量闸门）
    npm test
 
-   # 检查代码规范
-   npm run lint
-
-   # 检查代码格式
-   npm run format:check
+   # 后端集成测试（需配置 backend/.env.test）
+   cd backend && NODE_ENV=test npx jest test/integration --runInBand
    ```
 
 3. **在 GitHub 上创建 PR**
@@ -192,8 +189,8 @@ I fixed the bug where the stars weren't showing up correctly when the user compl
 - [ ] 测试覆盖率达标 (`npm run test:coverage`，目标85%+）
 
 ## 代码质量
-- [ ] 代码符合项目规范 (`npm run lint` 无错误)
-- [ ] 代码格式符合规范 (`npm run format:check` 无差异)
+- [ ] 代码符合项目规范（人工审查，lint 工具暂未配置）
+- [ ] 无明显代码风格问题
 - [ ] 已添加必要的中文注释
 - [ ] 已添加关键操作logger日志
 - [ ] 无console.log或debugger残留
@@ -467,9 +464,9 @@ PATCH：向下兼容的Bug修复
    - 优化xxx性能
    ```
 
-3. **运行项目健康检查**
+3. **运行前端单元测试**
    ```bash
-   npm run health-check
+   npm test
    ```
 
 4. **提交到主分支**

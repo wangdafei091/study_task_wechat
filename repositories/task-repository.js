@@ -302,6 +302,26 @@ class TaskRepository extends BaseRepository {
   }
   
   /**
+   * 获取指定用户的所有任务
+   * @param {String} userId 用户ID
+   * @returns {Promise<Array>} 该用户的任务列表
+   */
+  async getByUserId(userId) {
+    if (!userId) {
+      logger.warn('TaskRepository', 'getByUserId: userId 为空');
+      return [];
+    }
+    try {
+      const tasks = await this.query(task => task.userId === userId);
+      logger.debug('TaskRepository', `按用户ID查询任务, userId=${userId}, 数量=${tasks.length}`);
+      return tasks;
+    } catch (error) {
+      logger.error('TaskRepository', `按用户ID查询任务失败, userId=${userId}`, error);
+      return [];
+    }
+  }
+
+  /**
    * 格式化日期为YYYY-MM-DD格式
    * @private
    * @param {Date} date 日期对象

@@ -19,28 +19,7 @@ export $(cat .env.test | grep -v '^#' | xargs)
 echo "📋 数据库配置：$DB_USER@$DB_HOST:$DB_PORT/$DB_NAME"
 
 # 检查MySQL版本
-echo "🔍 检测MySQL版本..."
-mysql_version=$(mysql -h"$DB_HOST" -u"$DB_USER" -p"$DB_PASSWORD" -e "SELECT VERSION();" -s 2>/dev/null)
-
-if [ $? -ne 0 ]; then
-    echo "❌ 无法连接到数据库，请检查配置"
-    exit 1
-fi
-
-echo "✅ MySQL版本: $mysql_version"
-
-# 解析版本号
-major=$(echo $mysql_version | cut -d. -f1)
-minor=$(echo $mysql_version | cut -d. -f2)
-
-# 选择合适的SQL文件
-sql_file="database/test-setup-fixed.sql"
-if [ "$major" -gt 5 ] || ([ "$major" -eq 5 ] && [ "$minor" -ge 7 ]); then
-    echo "✅ 检测到MySQL $major.$minor，使用现代版本（JSON类型）"
-    sql_file="database/test-setup-modern.sql"
-else
-    echo "⚠️  检测到MySQL $major.$minor，使用兼容版本（TEXT类型）"
-fi
+sql_file="database/test-setup-modern.sql"
 
 # 检查SQL文件是否存在
 if [ ! -f "$sql_file" ]; then

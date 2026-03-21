@@ -208,10 +208,14 @@ class AnalyticsService {
   /**
    * 计算历史每日可用星星余额
    * @param {Number} days 历史天数（7或30）
+   * @param {String|null} userId 单用户分析时的用户ID
+   * @param {Object} options 分析选项
+   * @param {String} options.scope 分析范围，支持 `user` / `family`
    * @returns {Promise<Object>} 历史余额数据和预测数据
    */
-  async calculateHistoricalBalance(days, userId = null) {
-    logger.info('AnalyticsService', `计算最近${days}天的可用星星余额`, { userId });
+  async calculateHistoricalBalance(days, userId = null, options = {}) {
+    const scope = options.scope || (userId ? 'user' : 'all');
+    logger.info('AnalyticsService', `计算最近${days}天的可用星星余额`, { userId, scope });
     
     try {
       // 获取星星记录（userId=null 时取当前登录用户的记录）
@@ -234,7 +238,10 @@ class AnalyticsService {
       const currentBalance = historyData.length > 0 ? historyData[historyData.length - 1].value : 0;
       
       // 计算预测数据
-      const forecastData = await this._calculateExpiryForecast(currentBalance);
+      const forecastData = await this._calculateExpiryForecast(currentBalance, {
+        userId,
+        scope
+      });
       
       logger.info('AnalyticsService', `余额计算完成，历史数据: ${historyData.length}项，预测数据: ${forecastData.length}项`);
       
@@ -328,11 +335,18 @@ class AnalyticsService {
   /**
    * 计算星星过期预测
    * @param {Number} currentBalance 当前星星余额
+   * @param {Object} options 分析选项
+   * @param {String|null} options.userId 单用户分析时的用户ID
+   * @param {String} options.scope 分析范围，支持 `user` / `family`
    * @returns {Promise<Array>} 预测数据
    * @private
    */
-  async _calculateExpiryForecast(currentBalance) {
-    logger.info('AnalyticsService', `计算星星过期预测，当前余额: ${currentBalance}`);
+  async _calculateExpiryForecast(currentBalance, options = {}) {
+    const scope = options.scope || (options.userId ? 'user' : 'all');
+    logger.info('AnalyticsService', `计算星星过期预测，当前余额: ${currentBalance}`, {
+      userId: options.userId || null,
+      scope
+    });
     
     try {
       // 确保当前余额是数字类型
@@ -342,9 +356,15 @@ class AnalyticsService {
         logger.error('AnalyticsService', '无法获取星星服务实例');
         return [];
       }
+
+      // 家庭分析仅基于流水，不拉取也不依赖家庭 star_groups 快照
+      if (scope === 'family') {
+        logger.info('AnalyticsService', '家庭分析模式跳过过期预测：当前作用域仅同步星星流水');
+        return [];
+      }
       
       // 获取星星分组数据
-      const starGroups = await this.starService.getStarGroups();
+      const starGroups = await this.starService.getStarGroups(options.userId || null);
       logger.info('AnalyticsService', `获取到${starGroups.length}个星星分组`);
       
       // 筛选出非永久有效的分组
@@ -451,19 +471,31 @@ class AnalyticsService {
   /**
    * 获取即将过期的星星信息
    * @param {Number} days 未来天数
+   * @param {Object} options 查询选项
+   * @param {String|null} options.userId 单用户分析时的用户ID
+   * @param {String} options.scope 分析范围，支持 `user` / `family`
    * @returns {Promise<Array>} 过期星星数据
    */
-  async getUpcomingExpiryStars(days) {
-    logger.info('AnalyticsService', `获取${days}天内即将过期的星星信息`);
+  async getUpcomingExpiryStars(days, options = {}) {
+    const scope = options.scope || (options.userId ? 'user' : 'all');
+    logger.info('AnalyticsService', `获取${days}天内即将过期的星星信息`, {
+      userId: options.userId || null,
+      scope
+    });
     
     try {
       if (!this.starService) {
         logger.error('AnalyticsService', '无法获取星星服务实例');
         return [];
       }
+
+      if (scope === 'family') {
+        logger.info('AnalyticsService', '家庭分析模式跳过即将过期星星查询：当前作用域仅同步星星流水');
+        return [];
+      }
       
       // 获取星星分组数据
-      const starGroups = await this.starService.getStarGroups();
+      const starGroups = await this.starService.getStarGroups(options.userId || null);
       
       // 筛选出非永久有效的分组
       const expiryGroups = starGroups.filter(group => 

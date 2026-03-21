@@ -50,6 +50,13 @@ class StarRecord {
     
     // 应扣数量（用于惩罚记录显示对比）
     this.requestedPoints = data.requestedPoints || null;
+
+    // M09 云同步字段
+    this.expiryType = data.expiryType || data.data?.expiryType || null;
+    this.expiryDate = data.expiryDate || data.data?.expiryDate || null;
+    this.syncedToCloud = data.syncedToCloud === true;
+    this.idempotencyKey = data.idempotencyKey || null;
+    this.modifyTime = data.modifyTime || this.timestamp;
   }
   
   /**

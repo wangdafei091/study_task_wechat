@@ -46,10 +46,12 @@ const configService = serviceManager.get('configService');
 
 #### 基础操作
 
-##### `getAllTasks(userId = null)`
+##### `getAllTasks(userId = null, options = {})`
 获取所有任务列表
-- **参数**: `userId` - 可选的用户ID，不传则获取所有用户的任务
-- **返回**: `{ success: boolean, tasks: Task[], message?: string }`
+- **参数**:
+  - `userId` - 可选的用户ID，不传则获取本地/缓存中的全部任务集合
+  - `options.requireFreshStars` - 仅在传入显式 `userId` 时生效；为 `true` 时会在云端任务读取前先执行 `starService.refreshStarsFromCloud(userId)`
+- **返回**: `Promise<Task[]>`
 
 ##### `getTaskById(taskId, userId = null)`
 根据ID获取特定任务
@@ -132,15 +134,20 @@ const configService = serviceManager.get('configService');
 
 #### 任务查询
 
-##### `getTasksByDate(date, userId = null)`
+##### `getTasksByDate(date, userId = null, options = {})`
 获取指定日期的任务
-- **参数**: `date` - 日期字符串, `userId` - 可选的用户ID
-- **返回**: `{ success: boolean, tasks: Task[], message?: string }`
+- **参数**:
+  - `date` - 日期字符串 `YYYY-MM-DD`
+  - `userId` - 可选的用户ID
+  - `options.requireFreshStars` - 显式用户首页/任务列表入口传 `true` 时，先刷新云端星星再拉任务
+- **返回**: `Promise<Task[]>`
 
-##### `getTodayTasks(userId = null)`
+##### `getTodayTasks(userId = null, options = {})`
 获取今日任务
-- **参数**: `userId` - 可选的用户ID
-- **返回**: `{ success: boolean, tasks: Task[], message?: string }`
+- **参数**:
+  - `userId` - 可选的用户ID
+  - `options.requireFreshStars` - 同 `getTasksByDate`
+- **返回**: `Promise<Task[]>`
 
 ##### `checkUpcomingTasks()`
 检查即将开始的任务
@@ -212,7 +219,7 @@ const configService = serviceManager.get('configService');
 任务删除后异步同步到云端；HTTP 404 视为成功（本地重复实例从未上云）
 
 ##### `_syncStatusToCloud(task)` *(私有)*
-完成/重置状态异步同步到云端，接收完整 Task 对象，只发送 `{ status: task.status }`（数字 `0`/`1`）
+完成/重置状态异步同步到云端，接收完整 Task 对象，发送 `{ status, starAwarded }`，保证跨设备完成/重置后 `star_awarded` 状态一致
 
 ---
 
@@ -236,24 +243,49 @@ const configService = serviceManager.get('configService');
 - **参数**: `userId` - 可选的用户ID，不传则获取所有用户的星星
 - **返回**: `Promise<Number>` - 星星总数量
 
-##### `addStars(userId, amount, expiryType, sourceId, description)`
+##### `addStars(points, expiryType, source, options = {})`
 添加星星（奖励）
 - **参数**:
-  - `userId` - 用户ID
-  - `amount` - 星星数量
+  - `points` - 星星数量
   - `expiryType` - 有效期类型：`'permanent'` | `'week'` | `'month'` | `'quarter'` | `'half_year'` | `'year'`
-  - `sourceId` - 来源ID（如任务ID）
-  - `description` - 描述
-- **返回**: `{ success: boolean, message?: string }`
+  - `source` - 来源描述
+  - `options.sourceType` - 业务来源类型，如 `task_complete`
+  - `options.sourceId` - 业务来源ID，如任务ID
+  - `options.userId` - 目标用户ID
+- **返回**: `Promise<{ success: boolean, points?: number, group?: StarGroup, record?: StarRecord, message?: string }>`
+- **说明**: 云端模式下会异步双写 `POST /api/stars/records`
 
-##### `consumeStars(userId, amount, sourceId, description)`
+##### `consumeStars(points, reason, options = {})`
 消费星星（FIFO策略：先过期先使用）
 - **参数**:
-  - `userId` - 用户ID
-  - `amount` - 消费数量
-  - `sourceId` - 来源ID（如奖励ID）
-  - `description` - 描述
-- **返回**: `{ success: boolean, consumed: number, remaining: number, message?: string }`
+  - `points` - 请求消费数量
+  - `reason` - 消费原因
+  - `options.userId` - 目标用户ID
+  - `options.sourceType` / `options.sourceId` - 业务来源
+  - `options.originalTaskDate` - 任务惩罚等需要保留原始日期语义的场景
+  - `options.requestedPoints` / `options.idempotencyKey` - 通用扣星云端命令参数
+- **返回**: `Promise<{ success: boolean, consumed: number, requested: number, groups?: StarGroup[], record?: StarRecord, message?: string }>`
+- **说明**: 云端模式下通用扣星走专用 `POST /api/stars/consume`
+
+##### `consumeStarsFromSpecificType(points, expiryType, reason, options = {})`
+从指定有效期分组扣星，主要用于 `resetTask`
+- **参数**:
+  - `points` - 扣减数量
+  - `expiryType` - 指定有效期类型
+  - `reason` - 扣减原因
+  - `options.userId` - 目标用户ID
+  - `options.sourceType` / `options.sourceId` - 业务来源，重置任务时为 `task_reset`
+  - `options.originalTaskDate` - 任务原始日期，供分析页按原日期归档
+- **返回**: `Promise<{ success: boolean, consumed?: number, groups?: StarGroup[], record?: StarRecord, message?: string }>`
+- **说明**: 云端模式下异步双写 `POST /api/stars/records`
+
+##### `refreshStarsFromCloud(userId = null, options = {})`
+从云端刷新星星流水与快照
+- **参数**:
+  - `userId` - 单用户刷新时必填
+  - `options.scope` - `'family'` 时拉取全家流水；该模式仅回灌 `starRecords`，不回灌全家 `starGroups`
+- **返回**: `Promise<{ success: boolean, groups?: StarGroup[], records?: StarRecord[], message?: string }>`
+- **说明**: 首页显式用户任务入口、奖励页、分析页都会复用此方法进行前置同步
 
 ---
 
@@ -317,10 +349,15 @@ const configService = serviceManager.get('configService');
   }
   ```
 
-##### `getStarRecords(userId, filters?)`
+##### `getStarRecords(options = {})`
 获取星星记录
-- **参数**: `userId` - 用户ID, `filters?` - `{ type, source, dateRange }`
-- **返回**: `{ success: boolean, records: StarRecord[], message?: string }`
+- **参数**: `options` - `{ userId?, type?, date?, limit? }`
+- **返回**: `Promise<StarRecord[]>`
+
+##### `getStarRecordsByDateRange(startDate, endDate, userId = null)`
+获取日期范围内的星星记录
+- **参数**: `startDate` / `endDate` - `YYYY-MM-DD`, `userId` - 可选用户ID
+- **返回**: `Promise<StarRecord[]>`
 
 ---
 
@@ -342,7 +379,7 @@ const configService = serviceManager.get('configService');
 ##### `getAllRewards(userId = null)`
 获取所有奖励列表
 - **参数**: `userId` - 可选的用户ID，不传则获取所有用户的奖励
-- **返回**: `{ success: boolean, rewards: Reward[], message?: string }`
+- **返回**: `Promise<Reward[]>`
 
 ##### `createReward(rewardData)`
 创建新奖励
@@ -351,23 +388,24 @@ const configService = serviceManager.get('configService');
   {
     name: string,
     description: string,
-    cost: number,
+    points: number,
     type: 'item' | 'privilege' | 'activity',
     icon?: string,
     customReward?: boolean
   }
   ```
-- **返回**: `{ success: boolean, reward?: Reward, message?: string }`
+- **返回**: `Promise<{ success: boolean, reward?: Reward, message?: string }>`
+- **说明**: 云端模式下本地保存成功后异步双写到 `/api/rewards`
 
 ##### `updateReward(rewardId, rewardData)`
 更新奖励信息
 - **参数**: `rewardId` - 奖励ID, `rewardData` - 更新数据对象
-- **返回**: `{ success: boolean, reward?: Reward, message?: string }`
+- **返回**: `Promise<{ success: boolean, reward?: Reward, message?: string }>`
 
 ##### `deleteReward(rewardId)`
 删除奖励
 - **参数**: `rewardId` - 奖励ID
-- **返回**: `{ success: boolean, message?: string }`
+- **返回**: `Promise<{ success: boolean, message?: string }>`
 
 ---
 
@@ -379,18 +417,26 @@ const configService = serviceManager.get('configService');
   - `includeClaimed` - 是否包含已兑换奖励，默认false
   - `includeExamples` - 是否包含示例奖励，默认false
   - `userId` - 用户ID，可选
-- **返回**: `{ success: boolean, rewards: Reward[], message?: string }`
+- **返回**: `Promise<Reward[]>`
+- **说明**: 云端模式下不再按 `reward.userId === userId` 精确过滤，而是依赖后端按家庭可见性返回
 
 ##### `exchangeReward(rewardId, userId = null)`
 兑换奖励
 - **参数**: `rewardId` - 奖励ID, `userId` - 用户ID（可选，默认使用当前用户）
-- **返回**: `{ success: boolean, starCost: number, message?: string }`
+- **返回**: `Promise<{ success: boolean, reward?: Reward, starCost?: number, actualCost?: number, message?: string }>`
 - **内部流程**：验证库存 → 消费星星 → 标记已兑换 → 发布事件 → 创建消息
+- **说明**: 云端模式下走独立 `_syncExchangeToCloud(rewardId, exchangeUserId, modifyTime)` 路径，不与通用奖励 upsert 混用
+
+##### `refreshRewardsFromCloud()`
+从云端刷新奖励列表
+- **参数**: 无
+- **返回**: `Promise<{ success: boolean, rewards?: Reward[], message?: string }>`
+- **说明**: 云端模式下执行全量 upsert + stale cleanup，本地 `syncedToCloud !== true` 的奖励会被保留
 
 ##### `cancelRewardExchange(rewardId)`
 取消兑换
 - **参数**: `rewardId` - 奖励ID
-- **返回**: `{ success: boolean, message?: string }`
+- **返回**: `Promise<{ success: boolean, message?: string }>`
 
 ##### `markRewardAsDelivered(rewardId)`
 标记奖励为已领取
@@ -415,7 +461,7 @@ const configService = serviceManager.get('configService');
 获取最后一次兑换时间（当前 loginUser）
 - **返回**: `Promise<number>` - 时间戳
 
-##### `getLastExchangeTimeByUser(userId)` *(M07 新增)*
+##### `getLastExchangeTimeByUser(userId)` *(M07 新增，M09 继续沿用)*
 获取指定用户最后一次兑换时间
 - **参数**: `userId` - 用户 ID
 - **返回**: `Promise<number|null>` - 时间戳；无记录或出错时返回 `null`
@@ -902,7 +948,7 @@ async function complexBusinessFlow() {
 ### 运行测试
 
 ```bash
-# 运行所有测试
+# 运行前端单元测试（稳定质量闸门）
 npm test
 
 # 运行特定服务测试
