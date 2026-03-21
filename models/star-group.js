@@ -30,6 +30,7 @@ class StarGroup {
     // 其他属性
     this.source = data.source || '';
     this.description = data.description || '';
+    this.syncedToCloud = data.syncedToCloud === true;
   }
   
   /**

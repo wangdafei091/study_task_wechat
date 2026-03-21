@@ -59,6 +59,8 @@ app.get('/', (req, res) => {
       auth: '/api/auth',
       users: '/api/users',
       tasks: '/api/tasks',
+      stars: '/api/stars',
+      rewards: '/api/rewards',
     },
   });
 });
@@ -68,6 +70,8 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/tasks', require('./routes/tasks'));
 app.use('/api/families', require('./routes/families'));
+app.use('/api/stars', require('./routes/stars'));
+app.use('/api/rewards', require('./routes/rewards'));
 
 // 404处理
 app.use(notFoundHandler);

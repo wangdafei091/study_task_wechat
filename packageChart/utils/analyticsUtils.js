@@ -167,6 +167,53 @@ const analyticsUtils = {
       logger.error('analyticsUtils', '计算相对时间描述出错', error);
       return '';
     }
+  },
+
+  /**
+   * 汇总指定日期内任务相关星星流水的净获得值
+   * - 任务完成收入：source=task/task_complete, type=income
+   * - 任务重置冲销：source=task_reset, type=expense
+   * 返回值中的 earnedStars 已扣除了重置影响，不会把任务重置误显示成红色惩罚
+   * @param {Array<Object>} records 某一天的星星流水
+   * @returns {Object} 汇总结果
+   */
+  summarizeTaskStarRecords: function(records = []) {
+    const taskDeltaMap = new Map();
+    let hasTaskRecords = false;
+
+    records.forEach(record => {
+      if (!record) {
+        return;
+      }
+
+      const source = record.source || '';
+      const type = record.type || '';
+      const points = Number(record.points || 0);
+      const sourceId = record.sourceId || record.id || `record_${taskDeltaMap.size}`;
+
+      if ((source === 'task' || source === 'task_complete') && type === 'income' && points > 0) {
+        hasTaskRecords = true;
+        taskDeltaMap.set(sourceId, Number(taskDeltaMap.get(sourceId) || 0) + points);
+        return;
+      }
+
+      if (source === 'task_reset' && type === 'expense' && points < 0) {
+        hasTaskRecords = true;
+        taskDeltaMap.set(sourceId, Number(taskDeltaMap.get(sourceId) || 0) + points);
+      }
+    });
+
+    let earnedStars = 0;
+    taskDeltaMap.forEach(delta => {
+      if (delta > 0) {
+        earnedStars += delta;
+      }
+    });
+
+    return {
+      hasTaskRecords,
+      earnedStars: Number(earnedStars)
+    };
   }
 };
 

@@ -6,11 +6,78 @@ const { query, execute } = require('../config/database');
 const Task = require('../models/Task');
 const { createLogger } = require('../utils/logger');
 const logger = createLogger('TaskService');
+let taskColumnMapPromise = null;
 
 /**
  * 任务服务类
  */
 class TaskService {
+  async _getTaskColumnMap(forceRefresh = false) {
+    if (forceRefresh) {
+      taskColumnMapPromise = null;
+    }
+
+    if (!taskColumnMapPromise) {
+      taskColumnMapPromise = (async () => {
+        try {
+          const rows = await query(
+            `SELECT COLUMN_NAME
+             FROM INFORMATION_SCHEMA.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tasks'`
+          );
+          const columns = new Set((rows || []).map(row => row.COLUMN_NAME));
+          const resolveColumn = (modernName, legacyName, optional = false) => {
+            if (columns.has(modernName)) return modernName;
+            if (legacyName && columns.has(legacyName)) return legacyName;
+            return optional ? null : modernName;
+          };
+
+          const columnMap = {
+            startTime: resolveColumn('start_time', 'startTime'),
+            endTime: resolveColumn('end_time', 'endTime'),
+            pointsExpiry: resolveColumn('points_expiry', 'pointsExpiry'),
+            isRequired: resolveColumn('is_required', 'isRequired'),
+            isAllDay: resolveColumn('is_all_day', 'isAllDay'),
+            penaltyApplied: resolveColumn('penalty_applied', 'penaltyApplied'),
+            deletedAt: resolveColumn('deleted_at', 'deletedAt', true),
+            completionTime: resolveColumn('completion_time', 'completionTime', true),
+            starAwarded: resolveColumn('star_awarded', 'starAwarded', true),
+            modifyTime: resolveColumn('modify_time', 'modifyTime', true),
+            duration: resolveColumn('duration', null, true),
+            hasNoEndDate: resolveColumn('has_no_end_date', 'hasNoEndDate', true),
+            tags: resolveColumn('tags', null, true),
+            parentTaskId: resolveColumn('parent_task_id', 'parentTaskId', true),
+          };
+
+          logger.info('检测到 tasks 表字段映射', columnMap);
+          return columnMap;
+        } catch (error) {
+          logger.warn('获取 tasks 表字段映射失败，回退到默认字段名', {
+            message: error.message
+          });
+          return {
+            startTime: 'start_time',
+            endTime: 'end_time',
+            pointsExpiry: 'points_expiry',
+            isRequired: 'is_required',
+            isAllDay: 'is_all_day',
+            penaltyApplied: 'penalty_applied',
+            deletedAt: 'deleted_at',
+            completionTime: 'completion_time',
+            starAwarded: 'star_awarded',
+            modifyTime: 'modify_time',
+            duration: 'duration',
+            hasNoEndDate: 'has_no_end_date',
+            tags: 'tags',
+            parentTaskId: 'parent_task_id',
+          };
+        }
+      })();
+    }
+
+    return taskColumnMapPromise;
+  }
+
   /**
    * 获取用户的任务列表
    * @param {string} userId - 用户ID
@@ -88,6 +155,8 @@ class TaskService {
    */
   async createTask(userId, taskData) {
     try {
+      const columnMap = await this._getTaskColumnMap();
+
       // 幂等检查：客户端传入 taskId 时，先查是否已存在（含软删除）
       if (taskData.taskId) {
         const existing = await query(
@@ -112,36 +181,65 @@ class TaskService {
 
           // 已软删除：恢复并覆盖所有业务字段，重置完成状态
           const now = Date.now();
+          const restoreSetClauses = ['deleted_at = NULL', 'title = ?', 'description = ?', 'type = ?', 'date = ?'];
+          const restoreParams = [
+            taskData.title,
+            taskData.description || '',
+            taskData.type,
+            taskData.date,
+            taskData.startTime || '',
+            taskData.endTime || '',
+            taskData.points || 0,
+            taskData.pointsExpiry || 'permanent',
+            taskData.isRequired ? 1 : 0,
+            taskData.repeat ? JSON.stringify(taskData.repeat) : null,
+            taskData.isAllDay ? 1 : 0,
+            taskData.penaltyApplied ? 1 : 0,
+          ];
+
+          restoreSetClauses.push(
+            `${columnMap.startTime} = ?`,
+            `${columnMap.endTime} = ?`,
+            'points = ?',
+            `${columnMap.pointsExpiry} = ?`,
+            `${columnMap.isRequired} = ?`,
+            '`repeat` = ?',
+            `${columnMap.isAllDay} = ?`,
+            `${columnMap.penaltyApplied} = ?`
+          );
+
+          if (columnMap.duration) {
+            restoreSetClauses.push(`${columnMap.duration} = ?`);
+            restoreParams.push(taskData.duration || 0);
+          }
+          if (columnMap.hasNoEndDate) {
+            restoreSetClauses.push(`${columnMap.hasNoEndDate} = ?`);
+            restoreParams.push(taskData.hasNoEndDate ? 1 : 0);
+          }
+          if (columnMap.tags) {
+            restoreSetClauses.push(`${columnMap.tags} = ?`);
+            restoreParams.push(taskData.tags ? JSON.stringify(taskData.tags) : null);
+          }
+          if (columnMap.parentTaskId) {
+            restoreSetClauses.push(`${columnMap.parentTaskId} = ?`);
+            restoreParams.push(taskData.parentTaskId || null);
+          }
+          if (columnMap.modifyTime) {
+            restoreSetClauses.push(`${columnMap.modifyTime} = ?`);
+            restoreParams.push(taskData.modifyTime || now);
+          }
+          if (columnMap.completionTime) {
+            restoreSetClauses.push(`${columnMap.completionTime} = NULL`);
+          }
+          if (columnMap.starAwarded) {
+            restoreSetClauses.push(`${columnMap.starAwarded} = 0`);
+          }
+          restoreSetClauses.push('status = 0');
+          restoreParams.push(taskData.taskId);
+
           await execute(
-            `UPDATE tasks SET
-              deleted_at = NULL,
-              title = ?, description = ?, type = ?, date = ?,
-              start_time = ?, end_time = ?, points = ?, points_expiry = ?,
-              is_required = ?, \`repeat\` = ?, is_all_day = ?, penalty_applied = ?,
-              duration = ?, has_no_end_date = ?, tags = ?,
-              parent_task_id = ?, modify_time = ?,
-              status = 0, completion_time = NULL, star_awarded = 0
-            WHERE task_id = ?`,
-            [
-              taskData.title,
-              taskData.description || '',
-              taskData.type,
-              taskData.date,
-              taskData.startTime || '',
-              taskData.endTime || '',
-              taskData.points || 0,
-              taskData.pointsExpiry || 'permanent',
-              taskData.isRequired ? 1 : 0,
-              taskData.repeat ? JSON.stringify(taskData.repeat) : null,
-              taskData.isAllDay ? 1 : 0,
-              taskData.penaltyApplied ? 1 : 0,
-              taskData.duration || 0,
-              taskData.hasNoEndDate ? 1 : 0,
-              taskData.tags ? JSON.stringify(taskData.tags) : null,
-              taskData.parentTaskId || null,
-              taskData.modifyTime || now,
-              taskData.taskId,
-            ]
+            `UPDATE tasks SET ${restoreSetClauses.join(', ')} WHERE task_id = ?`,
+            restoreParams
           );
           logger.info('创建任务幂等：恢复软删除任务', { taskId: taskData.taskId, userId });
           const restored = await query(
@@ -162,36 +260,65 @@ class TaskService {
         modifyTime: taskData.modifyTime || Date.now(),
       });
 
-      const dbData = task.toDB();
+      const insertColumns = [
+        'task_id',
+        'user_id',
+        'title',
+        'description',
+        'type',
+        'date',
+        columnMap.startTime,
+        columnMap.endTime,
+        'points',
+        columnMap.pointsExpiry,
+        columnMap.isRequired,
+        'status',
+        '`repeat`',
+        columnMap.isAllDay,
+        columnMap.penaltyApplied,
+      ];
+      const insertValues = [
+        task.taskId,
+        task.userId,
+        task.title,
+        task.description,
+        task.type,
+        task.date,
+        task.startTime || '',
+        task.endTime || '',
+        task.points || 0,
+        task.pointsExpiry || 'permanent',
+        task.isRequired ? 1 : 0,
+        task.status,
+        task.repeat ? JSON.stringify(task.repeat) : null,
+        task.isAllDay ? 1 : 0,
+        task.penaltyApplied ? 1 : 0,
+      ];
+
+      if (columnMap.duration) {
+        insertColumns.push(columnMap.duration);
+        insertValues.push(task.duration || 0);
+      }
+      if (columnMap.hasNoEndDate) {
+        insertColumns.push(columnMap.hasNoEndDate);
+        insertValues.push(task.hasNoEndDate ? 1 : 0);
+      }
+      if (columnMap.tags) {
+        insertColumns.push(columnMap.tags);
+        insertValues.push(task.tags ? JSON.stringify(task.tags) : null);
+      }
+      if (columnMap.modifyTime) {
+        insertColumns.push(columnMap.modifyTime);
+        insertValues.push(task.modifyTime || Date.now());
+      }
+      if (columnMap.parentTaskId) {
+        insertColumns.push(columnMap.parentTaskId);
+        insertValues.push(task.parentTaskId || null);
+      }
+
       await execute(
-        `INSERT INTO tasks (
-          task_id, user_id, title, description, type, date,
-          start_time, end_time, points, points_expiry,
-          is_required, status, \`repeat\`, is_all_day, penalty_applied,
-          duration, has_no_end_date, tags, modify_time, parent_task_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          dbData.task_id,
-          dbData.user_id,
-          dbData.title,
-          dbData.description,
-          dbData.type,
-          dbData.date,
-          dbData.startTime,
-          dbData.endTime,
-          dbData.points,
-          dbData.pointsExpiry,
-          dbData.isRequired,
-          dbData.status,
-          dbData.repeat,
-          dbData.isAllDay,
-          dbData.penaltyApplied,
-          dbData.duration,
-          dbData.has_no_end_date,
-          dbData.tags,
-          dbData.modify_time,
-          dbData.parent_task_id,
-        ]
+        `INSERT INTO tasks (${insertColumns.join(', ')}) VALUES (${insertColumns.map(() => '?').join(', ')})`,
+        insertValues
       );
 
       logger.info('创建任务成功', { taskId, userId });
@@ -239,6 +366,7 @@ class TaskService {
    */
   async updateTask(taskId, changes) {
     try {
+      const columnMap = await this._getTaskColumnMap();
       const ALLOWED_FIELDS = [
         'title', 'description', 'date', 'type', 'startTime', 'endTime',
         'duration', 'isAllDay', 'isRequired', 'penaltyApplied',
@@ -247,10 +375,31 @@ class TaskService {
 
       const setClauses = [];
       const params = [];
+      const fieldToColumnMap = {
+        title: 'title',
+        description: 'description',
+        date: 'date',
+        type: 'type',
+        startTime: columnMap.startTime,
+        endTime: columnMap.endTime,
+        duration: columnMap.duration,
+        isAllDay: columnMap.isAllDay,
+        isRequired: columnMap.isRequired,
+        penaltyApplied: columnMap.penaltyApplied,
+        points: 'points',
+        pointsExpiry: columnMap.pointsExpiry,
+        tags: columnMap.tags,
+        hasNoEndDate: columnMap.hasNoEndDate,
+        repeat: '`repeat`',
+      };
 
       for (const field of ALLOWED_FIELDS) {
         if (changes[field] !== undefined) {
-          const dbField = field === 'hasNoEndDate' ? 'has_no_end_date' : field;
+          const dbField = fieldToColumnMap[field];
+          if (!dbField) {
+            logger.warn('更新任务时跳过当前库结构不支持的字段', { taskId, field });
+            continue;
+          }
           if (field === 'tags' || field === 'repeat') {
             setClauses.push(`${dbField} = ?`);
             params.push(changes[field] !== null ? JSON.stringify(changes[field]) : null);
@@ -266,8 +415,10 @@ class TaskService {
       }
 
       // 更新 modify_time
-      setClauses.push('modify_time = ?');
-      params.push(Date.now());
+      if (columnMap.modifyTime) {
+        setClauses.push(`${columnMap.modifyTime} = ?`);
+        params.push(Date.now());
+      }
 
       params.push(taskId);
 
@@ -292,9 +443,10 @@ class TaskService {
    */
   async softDeleteTask(taskId) {
     try {
+      const columnMap = await this._getTaskColumnMap();
       const result = await execute(
-        'UPDATE tasks SET deleted_at = NOW(), modify_time = ? WHERE task_id = ? AND deleted_at IS NULL',
-        [Date.now(), taskId]
+        `UPDATE tasks SET deleted_at = NOW()${columnMap.modifyTime ? `, ${columnMap.modifyTime} = ?` : ''} WHERE task_id = ? AND deleted_at IS NULL`,
+        columnMap.modifyTime ? [Date.now(), taskId] : [taskId]
       );
       return result.affectedRows > 0;
     } catch (error) {
@@ -304,20 +456,47 @@ class TaskService {
   }
 
   /**
-   * 更新任务状态（只更新 status 和 completion_time，服务端推导）
+   * 更新任务状态（支持显式写入 starAwarded）
    * @param {string} taskId - 任务ID
-   * @param {number} status - 任务状态 0=未完成 1=已完成
+   * @param {Object} statusData - 状态对象
    * @returns {Promise<Task|null>} 更新后的任务
    */
-  async updateTaskStatus(taskId, status) {
+  async updateTaskStatus(taskId, statusData) {
     try {
+      const columnMap = await this._getTaskColumnMap();
+      const existing = await this.getTaskById(taskId);
+      if (!existing) {
+        return null;
+      }
+
+      const { status, starAwarded } = statusData;
       const now = Date.now();
       const completionTime = status === 1 ? now : null;
+      const resolvedStarAwarded =
+        typeof starAwarded === 'boolean'
+          ? starAwarded
+          : (status === 0 ? false : Boolean(existing.starAwarded));
 
+      const setClauses = ['status = ?'];
+      const params = [status];
+
+      if (columnMap.starAwarded) {
+        setClauses.push(`${columnMap.starAwarded} = ?`);
+        params.push(resolvedStarAwarded ? 1 : 0);
+      }
+      if (columnMap.completionTime) {
+        setClauses.push(`${columnMap.completionTime} = ?`);
+        params.push(completionTime);
+      }
+      if (columnMap.modifyTime) {
+        setClauses.push(`${columnMap.modifyTime} = ?`);
+        params.push(now);
+      }
+
+      params.push(taskId);
       const result = await execute(
-        `UPDATE tasks SET status = ?, completion_time = ?, modify_time = ?
-         WHERE task_id = ? AND deleted_at IS NULL`,
-        [status, completionTime, now, taskId]
+        `UPDATE tasks SET ${setClauses.join(', ')} WHERE task_id = ? AND deleted_at IS NULL`,
+        params
       );
 
       if (result.affectedRows === 0) {

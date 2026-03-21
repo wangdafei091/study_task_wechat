@@ -76,14 +76,25 @@ class TaskService {
    * @param {String} userId 可选的用户ID，不传则获取所有用户的任务
    * @returns {Promise<Array>} 任务列表
    */
-  async getAllTasks(userId = null) {
+  async getAllTasks(userId = null, options = {}) {
     try {
       let tasks;
 
       if (this.enableCloudStorage) {
+        if (userId && options.requireFreshStars === true && this.starService?.refreshStarsFromCloud) {
+          try {
+            await this.starService.refreshStarsFromCloud(userId);
+          } catch (refreshError) {
+            logger.warn('TaskService', '任务读取前刷新星星失败，继续按现有数据读取任务', {
+              userId,
+              error: refreshError.message
+            });
+          }
+        }
+
         // 云端模式：先从云端获取，失败则从本地获取
         try {
-          tasks = await this._fetchTasksFromCloud(userId);
+          tasks = await this._fetchTasksFromCloud(userId, options);
           logger.info('TaskService', `从云端获取任务成功: ${tasks?.length || 0}个`, {
             userId,
             taskCount: tasks?.length || 0
@@ -91,28 +102,15 @@ class TaskService {
 
           // 合并本地任务：重复任务实例只存本地不上云，需要补充到结果中
           // 这样热力图等场景能看到所有任务实例（包括后续几天）
-          try {
-            const targetId = userId || (this.userService ? this.userService.getLoginUserId() : null);
-            if (targetId) {
+          tasks = await this._mergeLocalTasksIntoCloudResult(
+            tasks,
+            userId,
+            async targetId => {
               const allLocal = await this.taskRepository.getAll();
-              const localTasks = allLocal.filter(t => t.userId === targetId);
-              if (localTasks.length > 0) {
-                const cloudIds = new Set(tasks.map(t => t.id));
-                const localOnly = localTasks.filter(t => !cloudIds.has(t.id));
-                if (localOnly.length > 0) {
-                  tasks = [...tasks, ...localOnly];
-                  logger.info('TaskService', `本地补充${localOnly.length}个未同步任务实例`, {
-                    userId: targetId,
-                    localOnlyCount: localOnly.length
-                  });
-                }
-              }
-            }
-          } catch (mergeErr) {
-            logger.warn('TaskService', '本地任务合并失败，使用纯云端结果', {
-              error: mergeErr.message
-            });
-          }
+              return allLocal.filter(t => t.userId === targetId);
+            },
+            '全量任务'
+          );
         } catch (cloudError) {
           // 云端获取失败，降级到本地
           logger.warn('TaskService', '云端获取失败，降级到本地存储', {
@@ -193,9 +191,9 @@ class TaskService {
    * @param {String} userId 可选的用户ID，不传则获取所有用户的任务
    * @returns {Promise<Array>} 今日任务列表
    */
-  async getTodayTasks(userId = null) {
+  async getTodayTasks(userId = null, options = {}) {
     const today = dateUtils.getTodayString();
-    return await this.getTasksByDate(today, userId);
+    return await this.getTasksByDate(today, userId, options);
   }
   
   /**
@@ -209,9 +207,27 @@ class TaskService {
       let tasks;
 
       if (this.enableCloudStorage) {
+        if (userId && options.requireFreshStars === true && this.starService?.refreshStarsFromCloud) {
+          try {
+            await this.starService.refreshStarsFromCloud(userId);
+          } catch (refreshError) {
+            logger.warn('TaskService', '按日期读取任务前刷新星星失败，继续按现有数据读取任务', {
+              userId,
+              date,
+              error: refreshError.message
+            });
+          }
+        }
+
         try {
           const cloudParams = { date, ...options };
           tasks = await this._fetchTasksFromCloud(userId, cloudParams);
+          tasks = await this._mergeLocalTasksIntoCloudResult(
+            tasks,
+            userId,
+            targetId => this.taskRepository.getTasksByDate(date, targetId),
+            `${date}任务`
+          );
           logger.info('TaskService', `从云端获取${date}任务成功: ${tasks.length}个`);
         } catch (cloudError) {
           logger.warn('TaskService', `云端获取${date}任务失败，降级到本地`, {
@@ -244,6 +260,12 @@ class TaskService {
       if (this.enableCloudStorage) {
         try {
           tasks = await this._fetchTasksFromCloud(userId, { startDate, endDate, ...options });
+          tasks = await this._mergeLocalTasksIntoCloudResult(
+            tasks,
+            userId,
+            targetId => this.taskRepository.getTasksByDateRange(startDate, endDate, targetId),
+            `${startDate}至${endDate}任务`
+          );
         } catch (cloudError) {
           logger.warn('TaskService', '云端日期范围查询失败，降级本地', { error: cloudError.message });
           tasks = await this.taskRepository.getTasksByDateRange(startDate, endDate, userId);
@@ -1103,20 +1125,6 @@ class TaskService {
         };
       }
       
-      // 跨设备完成检测：已完成但本地无星星记录，说明是其他设备完成的，显式拒绝
-      // 例外：无积分任务（points=0）或必做任务不涉及积分，允许重置
-      if (task.status === TaskStatus.COMPLETED
-          && !task.starAwarded
-          && task.points > 0
-          && !task.isRequired) {
-        logger.warn('TaskService', '跨设备取消打卡被拦截', { taskId: task.id });
-        return {
-          success: false,
-          message: '该任务在其他设备完成，暂不支持跨设备取消打卡（M09 上线后开放）',
-          crossDeviceLimit: true
-        };
-      }
-
       // 如果任务已获得星星，需要从对应分组扣减星星
       if (task.starAwarded && task.points > 0 && this.starService) {
         logger.info('TaskService', `准备从特定分组扣减星星: ${task.title}, 星星数=${task.points}, 有效期类型=${task.pointsExpiry}`);
@@ -1131,7 +1139,8 @@ class TaskService {
           {
             sourceType: 'task_reset',
             sourceId: task.id,
-            userId: taskUserId
+            userId: taskUserId,
+            originalTaskDate: task.date || null
           }
         );
         
@@ -2170,6 +2179,39 @@ class TaskService {
     }
   }
 
+  async _mergeLocalTasksIntoCloudResult(tasks, userId, loadLocalTasks, sceneLabel = '任务') {
+    try {
+      const targetId = userId || (this.userService ? this.userService.getLoginUserId() : null);
+      if (!targetId || typeof loadLocalTasks !== 'function') {
+        return tasks;
+      }
+
+      const localTasks = await loadLocalTasks(targetId);
+      if (!localTasks || localTasks.length === 0) {
+        return tasks;
+      }
+
+      const cloudIds = new Set((tasks || []).map(task => task.id));
+      const localOnly = localTasks.filter(task => !cloudIds.has(task.id));
+      if (localOnly.length === 0) {
+        return tasks;
+      }
+
+      logger.info('TaskService', `本地补充${localOnly.length}个${sceneLabel}`, {
+        userId: targetId,
+        localOnlyCount: localOnly.length
+      });
+
+      return [...tasks, ...localOnly];
+    } catch (mergeErr) {
+      logger.warn('TaskService', `${sceneLabel}本地合并失败，使用纯云端结果`, {
+        userId,
+        error: mergeErr.message
+      });
+      return tasks;
+    }
+  }
+
   /**
    * 同步任务更新到云端
    */
@@ -2226,14 +2268,21 @@ class TaskService {
   }
 
   /**
-   * 同步任务状态到云端（只同步 status 字段）
+   * 同步任务状态到云端（同步 status + starAwarded）
    */
   async _syncStatusToCloud(task) {
     if (!this.enableCloudStorage) return;
     try {
       const url = API_CONFIG.ENDPOINTS.TASK_STATUS.replace('{taskId}', task.id);
-      await HttpClient.patch(url, { status: task.status });
-      logger.info('TaskService', '任务状态已同步到云端', { taskId: task.id, status: task.status });
+      await HttpClient.patch(url, {
+        status: task.status,
+        starAwarded: task.starAwarded
+      });
+      logger.info('TaskService', '任务状态已同步到云端', {
+        taskId: task.id,
+        status: task.status,
+        starAwarded: task.starAwarded
+      });
     } catch (err) {
       logger.warn('TaskService', '云端状态同步失败（本地已保存）', {
         taskId: task.id,
@@ -2250,7 +2299,7 @@ class TaskService {
   async getTasksByScope(options = {}) {
     try {
       if (options.userId) {
-        return this.getAllTasks(options.userId);
+        return this.getAllTasks(options.userId, options);
       }
       if (options.scope === 'family') {
         if (this.enableCloudStorage) {
@@ -2258,7 +2307,7 @@ class TaskService {
         }
         return this.taskRepository.getAll();
       }
-      return this.getAllTasks(null);
+      return this.getAllTasks(null, options);
     } catch (error) {
       logger.error('TaskService', 'getTasksByScope 失败', error);
       return [];

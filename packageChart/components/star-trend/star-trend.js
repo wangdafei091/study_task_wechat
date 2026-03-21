@@ -638,6 +638,7 @@ Component({
         // 通过app实例获取分析服务
         const app = getApp();
         const analyticsService = app.getAnalyticsService();
+        const starService = app.getStarService ? app.getStarService() : null;
         
         if (!analyticsService) {
           logger.error('star-trend', '无法获取分析服务实例');
@@ -651,9 +652,17 @@ Component({
         }
         
         const analysisOptions = this.properties.analysisOptions || {};
+        if (starService && typeof starService.refreshStarsFromCloud === 'function') {
+          if (analysisOptions.scope === 'family') {
+            await starService.refreshStarsFromCloud(null, { scope: 'family' });
+          } else if (analysisOptions.userId) {
+            await starService.refreshStarsFromCloud(analysisOptions.userId);
+          }
+        }
         const data = await analyticsService.calculateHistoricalBalance(
           this.data.currentRange,
-          analysisOptions.userId || null
+          analysisOptions.userId || null,
+          analysisOptions
         );
         
         if (!data || !data.historyData || data.historyData.length === 0) {

@@ -54,6 +54,10 @@ class Reward {
     // 保护相关属性
     this.protectedByExpiry = data.protectedByExpiry || false; // 是否被星星过期保护
     this.partialProtection = data.partialProtection || 0; // 部分保护金额
+    this.syncedToCloud = data.syncedToCloud === true;
+    this.modifyTime = data.modifyTime || Date.now();
+    this.familyId = data.familyId || null;
+    this.exchangeUserId = data.exchangeUserId || null;
   }
   
   /**

@@ -389,7 +389,7 @@ class StarRecordRepository extends BaseRepository {
    * @param {String} originalTaskDate 任务原始截止日期（YYYY-MM-DD格式）
    * @returns {Promise<StarRecord>} 创建的记录
    */
-  async createPenaltyRecord(taskId, points, description, userId = null, originalTaskDate = null, requestedPoints = null) {
+  async createPenaltyRecord(taskId, points, description, userId = null, originalTaskDate = null, requestedPoints = null, idempotencyKey = null) {
     if (!taskId || points <= 0) {
       logger.warn('StarRecordRepository', '尝试使用无效参数创建必做任务惩罚记录');
       return null;
@@ -435,6 +435,9 @@ class StarRecordRepository extends BaseRepository {
         taskOriginalDate,
         requestedPoints
       );
+      if (idempotencyKey) {
+        record.idempotencyKey = idempotencyKey;
+      }
       
       // 保存记录
       const savedRecord = await this.save(record);
@@ -615,14 +618,16 @@ class StarRecordRepository extends BaseRepository {
         points: -record.amount, // 修复：使用points而不是amount，消费记录为负数
         type: 'expense', // 修复：使用type而不是recordType，消费记录类型为expense
         source: record.source || 'reward', // 修复：设置正确的来源
-        sourceId: record.source || '', // 添加sourceId
+        sourceId: record.sourceId || record.source || '', // 添加sourceId
         description: isFullProtection ? 
           `完全保护兑换: ${record.data?.rewardName || '未知奖励'}（消耗0颗星星）` : 
           `兑换奖励消费: ${record.data?.rewardName || '未知奖励'}`, // 添加描述
         timestamp: record.timestamp || Date.now(),
         balance, // 添加余额信息
         previousBalance, // 添加操作前余额信息
-        data: record.data || {}
+        data: record.data || {},
+        idempotencyKey: record.idempotencyKey || null,
+        modifyTime: record.modifyTime || record.timestamp || Date.now()
       });
       
       logger.info('StarRecordRepository', `StarRecord创建参数: points=${starRecord.points}, type=${starRecord.type}, source=${starRecord.source}, balance=${starRecord.balance}, previousBalance=${starRecord.previousBalance}`);

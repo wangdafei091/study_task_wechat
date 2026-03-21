@@ -84,6 +84,13 @@ const API_CONFIG = {
     TASK_BY_ID: '/api/tasks/{taskId}',
     TASK_STATUS: '/api/tasks/{taskId}/status',
     TASKS_TRANSFER: '/api/tasks/transfer',
+    STARS: '/api/stars',
+    STAR_RECORDS: '/api/stars/records',
+    STAR_GROUPS: '/api/stars/groups',
+    STAR_CONSUME: '/api/stars/consume',
+    REWARDS: '/api/rewards',
+    REWARD_BY_ID: '/api/rewards/{rewardId}',
+    REWARD_EXCHANGE: '/api/rewards/{rewardId}/exchange',
 
     // 用户昵称修改
     USER_NICKNAME: '/api/users/{userId}/nickname',
