@@ -2,9 +2,6 @@
   <!-- 标题区域 - 不需要在这里显示标题，已经有了顶部标题 -->
   <!-- <view class="chart-title">可用星星趋势图 - 看看你的星星余额</view> -->
 
-  <!-- 星星数据免责提示 -->
-  <view class="star-trend-disclaimer">星星数据仅含本设备记录，完整数据 M09 上线</view>
-
   <!-- 筛选控件区域 -->
   <view class="filter-container">
     <view class="filter-options">

@@ -66,56 +66,69 @@ class Task {
    * @returns {Task} Task实例
    */
   static fromDB(dbRecord) {
+    const readField = (...keys) => {
+      for (const key of keys) {
+        if (dbRecord[key] !== undefined) {
+          return dbRecord[key];
+        }
+      }
+      return undefined;
+    };
+
     // 安全解析repeat字段
     let repeat = null;
-    if (dbRecord.repeat && dbRecord.repeat !== 'null' && typeof dbRecord.repeat === 'string') {
+    const rawRepeat = readField('repeat');
+    if (rawRepeat && rawRepeat !== 'null' && typeof rawRepeat === 'string') {
       try {
-        repeat = JSON.parse(dbRecord.repeat);
+        repeat = JSON.parse(rawRepeat);
       } catch (e) {
         // JSON解析失败，设置为null
         logger?.warn('Task.fromDB', 'repeat字段解析失败', {
-          repeatValue: dbRecord.repeat,
+          repeatValue: rawRepeat,
           error: e.message
         });
         repeat = null;
       }
+    } else if (rawRepeat && typeof rawRepeat === 'object') {
+      repeat = rawRepeat;
     }
 
     let tags = null;
-    if (dbRecord.tags) {
+    const rawTags = readField('tags');
+    if (rawTags) {
       try {
-        tags = typeof dbRecord.tags === 'string' ? JSON.parse(dbRecord.tags) : dbRecord.tags;
+        tags = typeof rawTags === 'string' ? JSON.parse(rawTags) : rawTags;
       } catch (e) {
         tags = null;
       }
     }
 
     return new Task({
-      taskId: dbRecord.task_id,
-      userId: dbRecord.user_id,
-      title: dbRecord.title,
-      description: dbRecord.description || '',
-      type: dbRecord.type,
-      date: dbRecord.date,
-      startTime: dbRecord.startTime || '',
-      endTime: dbRecord.endTime || '',
-      points: dbRecord.points,
-      pointsExpiry: dbRecord.pointsExpiry,
-      isRequired: dbRecord.isRequired,
-      status: dbRecord.status,
+      taskId: readField('task_id', 'taskId'),
+      userId: readField('user_id', 'userId'),
+      title: readField('title'),
+      description: readField('description') || '',
+      type: readField('type'),
+      date: readField('date'),
+      startTime: readField('start_time', 'startTime') || '',
+      endTime: readField('end_time', 'endTime') || '',
+      points: readField('points'),
+      pointsExpiry: readField('points_expiry', 'pointsExpiry'),
+      isRequired: Boolean(readField('is_required', 'isRequired')),
+      status: readField('status'),
       repeat: repeat,
-      isAllDay: dbRecord.isAllDay,
-      penaltyApplied: dbRecord.penaltyApplied,
-      createdAt: dbRecord.created_at,
-      updatedAt: dbRecord.updated_at,
-      deletedAt: dbRecord.deleted_at || null,
-      completionTime: dbRecord.completion_time || null,
-      starAwarded: Boolean(dbRecord.star_awarded),
-      modifyTime: dbRecord.modify_time || null,
-      duration: dbRecord.duration || 0,
-      hasNoEndDate: Boolean(dbRecord.has_no_end_date),
+      isAllDay: Boolean(readField('is_all_day', 'isAllDay')),
+      penaltyApplied: Boolean(readField('penalty_applied', 'penaltyApplied')),
+      createdAt: readField('created_at', 'createdAt'),
+      updatedAt: readField('updated_at', 'updatedAt'),
+      deletedAt: readField('deleted_at', 'deletedAt') || null,
+      completionTime: readField('completion_time', 'completionTime') || null,
+      starAwarded: Boolean(readField('star_awarded', 'starAwarded')),
+      modifyTime: readField('modify_time', 'modifyTime') || null,
+      duration: readField('duration') || 0,
+      hasNoEndDate: Boolean(readField('has_no_end_date', 'hasNoEndDate')),
       tags,
-      parentTaskId: dbRecord.parent_task_id || null,
+      parentTaskId: readField('parent_task_id', 'parentTaskId') || null,
     });
   }
 

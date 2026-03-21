@@ -78,6 +78,15 @@ Page({
    */
   onShow: async function () {
     logger.info('RewardManage', '页面显示');
+
+    try {
+      const rewardService = serviceManager.getService('rewardService');
+      if (rewardService?.refreshRewardsFromCloud) {
+        await rewardService.refreshRewardsFromCloud();
+      }
+    } catch (syncError) {
+      logger.warn('RewardManage', '奖励管理页 onShow 云同步失败，继续使用本地数据', syncError);
+    }
     
     // 重新加载数据，确保数据最新
     await this.loadRewardsData();

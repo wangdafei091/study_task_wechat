@@ -70,17 +70,32 @@ Page({
   /**
    * 生命周期函数--监听页面显示
    */
-  onShow: function() {
+  onShow: async function() {
     // 记录页面显示
     logger.info('rewards', '页面显示');
+
+    try {
+      const starService = serviceManager.getService('starService');
+      const rewardService = serviceManager.getService('rewardService');
+      const effectiveChildId = this._getEffectiveChildUserId();
+
+      if (starService?.refreshStarsFromCloud && effectiveChildId) {
+        await starService.refreshStarsFromCloud(effectiveChildId);
+      }
+      if (rewardService?.refreshRewardsFromCloud) {
+        await rewardService.refreshRewardsFromCloud();
+      }
+    } catch (syncError) {
+      logger.warn('rewards', '奖励页 onShow 云同步失败，继续使用本地数据', syncError);
+    }
     
     // 检查是否有奖励数据变更标记
     if (app.globalData.needRefreshReward) {
       logger.info('rewards', '检测到奖励数据变更标记，强制刷新');
       app.globalData.needRefreshReward = false;
-      this.loadRewardsData(true); // 强制刷新
+      await this.loadRewardsData(true); // 强制刷新
     } else {
-      this.loadRewardsData();
+      await this.loadRewardsData();
     }
     
     // 检查是否从其他页面跳转回来

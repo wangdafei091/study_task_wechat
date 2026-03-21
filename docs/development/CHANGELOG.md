@@ -4,6 +4,52 @@
 
 ---
 
+## [里程碑-09] - 2026-03-21
+
+### ✅ 完成情况
+
+**星星积分 + 奖励云端同步**
+
+- 后端完成 `star_records`、`star_groups`、`rewards` 三类数据的云端接口与真实数据库链路
+- 前端 `StarService` 完成发星、扣星、特定有效期扣星、家庭流水读取的云端同步
+- 前端 `RewardService` 完成奖励创建、更新、删除、兑换的云端同步与本地 stale cleanup
+- `TaskService._syncStatusToCloud` 同步 `starAwarded`，解除跨设备 `resetTask` 限制
+- 首页任务入口在显式用户场景下使用 `requireFreshStars: true`，保证重置前余额先与云端对齐
+- 奖励页进入时先同步孩子星星，再同步奖励列表，解决“奖励更新了但余额还是旧的”问题
+- 分析页支持孩子视角 `userId` 与家长视角 `scope=family` 两种云端读取模式
+
+### 🔧 实施后补充修复
+
+- 修复创建家庭后历史奖励缺少 `family_id` 导致孩子不可见的问题
+- 修复任务云端建档兼容性问题：`tasks` 表混用旧/新字段命名时仍可正常创建、更新、重置
+- 修复首页星星快照残留：云端刷新后当前用户 `starGroups` 改为按快照全量替换，避免完成 1 分任务显示 2 星、重置后残留 1 星
+- 修复分析页任务星星日历：同一任务的 `task_complete` 与 `task_reset` 按净额聚合，重置后不再残留绿色获得星星
+- 修复任务重置扣星记录保留 `originalTaskDate`，跨天重置时仍回到任务原日期更新分析页
+
+### 🧪 验证结果
+
+- 后端真实集成测试通过：
+  - `backend/test/integration/star-api-m09-real.test.js`
+  - `backend/test/integration/reward-api-m09-real.test.js`
+- 真实集成测试结果：`2 suites passed / 10 tests passed`
+- 前端针对性回归测试通过：
+  - `test/services/star-service.test.js`
+  - `test/services/task-service.test.js`
+  - `test/services/reward-service.test.js`
+  - `test/utils/analytics-utils.test.js`
+- 手工验证通过的关键链路：
+  - 家长创建奖励后孩子可见
+  - 任务创建后首页可见
+  - 完成 1 个 1 积分任务后首页显示 `1/10`
+  - 重置后首页回到 `0/10`
+  - 分析页星星日历完成/重置后同步正确
+
+### 📖 详细实施记录
+
+- [里程碑-09：星星积分 + 奖励云端同步](../design/milestone-09-star-reward-sync.md)
+
+---
+
 ## [里程碑-08b] - 2026-03-19
 
 ### ✅ 完成情况
@@ -258,7 +304,7 @@
 | 里程碑 | 内容 | 状态 |
 |--------|------|------|
 | M08 | 云端同步完善（重复任务同步 + 冲突解决） | ✅ 已完成 |
-| M09 | 星星积分 + 奖励云端同步 | 🔴 未启动 |
+| M09 | 星星积分 + 奖励云端同步 | ✅ 已完成 |
 | M10 | 消息通知 + 完善优化 | 🔴 未启动 |
 
 ---

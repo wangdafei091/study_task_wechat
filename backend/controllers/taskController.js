@@ -7,6 +7,7 @@ const familyService = require('../services/familyService');
 const Task = require('../models/Task');
 const { createLogger } = require('../utils/logger');
 const { success, error } = require('../utils/response');
+const { resolveTargetUserId } = require('../utils/resolveTargetUserId');
 const logger = createLogger('TaskController');
 
 /**
@@ -289,10 +290,14 @@ class TaskController {
     try {
       const { taskId } = req.params;
       const { userId, role, familyId } = req.user;
-      const { status } = req.body;
+      const { status, starAwarded } = req.body;
 
       if (status !== 0 && status !== 1) {
         return res.status(400).json(error('status 必须为 0 或 1', 'INVALID_STATUS'));
+      }
+
+      if (starAwarded !== undefined && typeof starAwarded !== 'boolean') {
+        return res.status(400).json(error('starAwarded 必须为布尔值', 'INVALID_STAR_AWARDED'));
       }
 
       const existing = await taskService.getTaskById(taskId);
@@ -310,7 +315,7 @@ class TaskController {
         return res.status(403).json(error('无权限操作', 'PERMISSION_DENIED'));
       }
 
-      const updated = await taskService.updateTaskStatus(taskId, status);
+      const updated = await taskService.updateTaskStatus(taskId, { status, starAwarded });
       if (!updated) {
         return res.status(404).json(error('任务不存在或已删除', 'TASK_NOT_FOUND'));
       }
@@ -328,33 +333,7 @@ class TaskController {
    * 返回 null 表示无权限
    */
   async _resolveTargetUserId(req, targetUserId) {
-    const { userId, role, familyId } = req.user;
-
-    // 未传 targetUserId 或与自己一样，直接用自己
-    if (!targetUserId || targetUserId === userId) {
-      return userId;
-    }
-
-    // 孩子账号不能代查他人
-    if (role !== 'parent') {
-      return null;
-    }
-
-    // 未加入家庭不能代查
-    if (!familyId) {
-      return null;
-    }
-
-    // 验证 targetUserId 与操作者同家庭，且目标用户必须是孩子
-    const targetInfo = await familyService.getUserFamilyAndRole(targetUserId);
-    if (!targetInfo || targetInfo.familyId !== familyId) {
-      return null;
-    }
-    if (targetInfo.role !== 'child') {
-      return null;
-    }
-
-    return targetUserId;
+    return resolveTargetUserId(req, targetUserId);
   }
 
   /**

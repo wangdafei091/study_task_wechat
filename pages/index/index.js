@@ -317,7 +317,7 @@ Page({
       
       // 刷新今日任务
       const currentUserId1 = this.getEffectiveTaskUserId();
-      taskService.getTodayTasks(currentUserId1).then(todayTasks => {
+      taskService.getTodayTasks(currentUserId1, { requireFreshStars: true }).then(todayTasks => {
         this.setData({ 
           tasks: todayTasks,
           hasTodayTasks: (todayTasks && todayTasks.length > 0),
@@ -350,7 +350,7 @@ Page({
     }
     
     const currentUserId2 = this.getEffectiveTaskUserId();
-    taskService.getTodayTasks(currentUserId2).then(todayTasks => {
+    taskService.getTodayTasks(currentUserId2, { requireFreshStars: true }).then(todayTasks => {
       this.setData({ 
         tasks: todayTasks,
         hasTodayTasks: (todayTasks && todayTasks.length > 0)
@@ -629,12 +629,12 @@ Page({
       if (date) {
         // 加载指定日期的任务
         targetDate = date;
-        tasks = await taskService.getTasksByDate(date, currentUserId);
+        tasks = await taskService.getTasksByDate(date, currentUserId, { requireFreshStars: true });
         logger.info('Index', `指定日期任务加载成功（共享模式）, 日期=${date}, 任务数量: ${tasks.length}`);
       } else {
         // 加载今日任务
         targetDate = dateUtils.getTodayString();
-        tasks = await taskService.getTodayTasks(currentUserId);
+        tasks = await taskService.getTodayTasks(currentUserId, { requireFreshStars: true });
         logger.info('Index', `今日任务加载成功（共享模式）, 任务数量: ${tasks.length}`);
       }
       

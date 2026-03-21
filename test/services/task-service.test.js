@@ -582,7 +582,8 @@ describe('TaskService', () => {
         expect.any(String),
         expect.objectContaining({
           sourceType: 'task_reset',
-          sourceId: 'task_1'
+          sourceId: 'task_1',
+          originalTaskDate: task.date
         })
       );
 
@@ -1245,7 +1246,7 @@ describe('TaskService', () => {
 
       const result = await taskService.getAllTasks();
       expect(result).toEqual(tasks);
-      expect(taskService._fetchTasksFromCloud).toHaveBeenCalledWith(null);
+      expect(taskService._fetchTasksFromCloud).toHaveBeenCalledWith(null, {});
     });
 
     it('云端模式：云端失败时降级到本地(无userId)', async () => {
@@ -1276,6 +1277,49 @@ describe('TaskService', () => {
 
       const result = await taskService.getAllTasks();
       expect(result).toEqual([]);
+    });
+  });
+
+  describe('getTasksByDate/getTasksByDateRange - 云端结果补并本地任务', () => {
+    beforeEach(() => {
+      taskService.enableCloudStorage = true;
+    });
+
+    afterEach(() => {
+      taskService.enableCloudStorage = false;
+    });
+
+    it('按日期查询时应补并本地独有任务，避免首页因云端空结果丢任务', async () => {
+      const cloudTasks = [new Task(TestDataFactory.createTask({ id: 'cloud_1', userId: 'child_1', date: '2026-03-21' }))];
+      const localTasks = [
+        new Task(TestDataFactory.createTask({ id: 'cloud_1', userId: 'child_1', date: '2026-03-21' })),
+        new Task(TestDataFactory.createTask({ id: 'local_only_1', userId: 'child_1', date: '2026-03-21' }))
+      ];
+
+      taskService._fetchTasksFromCloud = jest.fn().mockResolvedValue(cloudTasks);
+      mockTaskRepository.getTasksByDate.mockResolvedValue(localTasks);
+
+      const result = await taskService.getTasksByDate('2026-03-21', 'child_1');
+
+      expect(taskService._fetchTasksFromCloud).toHaveBeenCalledWith('child_1', { date: '2026-03-21' });
+      expect(mockTaskRepository.getTasksByDate).toHaveBeenCalledWith('2026-03-21', 'child_1');
+      expect(result.map(task => task.id)).toEqual(['cloud_1', 'local_only_1']);
+    });
+
+    it('按日期范围查询时也应补并本地独有任务', async () => {
+      const cloudTasks = [new Task(TestDataFactory.createTask({ id: 'cloud_range_1', userId: 'child_1', date: '2026-03-21' }))];
+      const localTasks = [
+        new Task(TestDataFactory.createTask({ id: 'cloud_range_1', userId: 'child_1', date: '2026-03-21' })),
+        new Task(TestDataFactory.createTask({ id: 'local_range_1', userId: 'child_1', date: '2026-03-22' }))
+      ];
+
+      taskService._fetchTasksFromCloud = jest.fn().mockResolvedValue(cloudTasks);
+      mockTaskRepository.getTasksByDateRange.mockResolvedValue(localTasks);
+
+      const result = await taskService.getTasksByDateRange('2026-03-21', '2026-03-23', 'child_1');
+
+      expect(mockTaskRepository.getTasksByDateRange).toHaveBeenCalledWith('2026-03-21', '2026-03-23', 'child_1');
+      expect(result.map(task => task.id)).toEqual(['cloud_range_1', 'local_range_1']);
     });
   });
 
@@ -1535,20 +1579,21 @@ describe('TaskService', () => {
   });
 
   // ============================================================
-  // M07：resetTask 跨设备拒绝测试
+  // M09：resetTask 跨设备放开测试
   // ============================================================
 
   describe('M07 - resetTask 跨设备拒绝检测', () => {
-    it('跨设备完成的任务（已完成+未奖星+有积分+非必做）应显式拒绝', async () => {
+    it('跨设备完成的任务（已完成+未奖星+有积分+非必做）在 M09 中应允许重置', async () => {
       const task = new Task(TestDataFactory.createTask({
         id: 't1', userId: 'u1', status: 1, starAwarded: false, points: 5, isRequired: false
       }));
       mockTaskRepository.getById.mockResolvedValue(task);
+      mockTaskRepository.save.mockImplementation(async (t) => t);
 
       const result = await taskService.resetTask('t1');
 
-      expect(result.success).toBe(false);
-      expect(result.crossDeviceLimit).toBe(true);
+      expect(result.success).toBe(true);
+      expect(result.crossDeviceLimit).not.toBe(true);
     });
 
     it('points=0 的已完成任务应允许重置（不涉及积分）', async () => {

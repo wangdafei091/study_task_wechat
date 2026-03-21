@@ -207,9 +207,9 @@ describe('PATCH /api/tasks/:taskId/status', () => {
     const res = await request(app)
       .patch('/api/tasks/task_001/status')
       .set('Authorization', token(CHILD))
-      .send({ status: 1 });
+      .send({ status: 1, starAwarded: true });
     expect(res.status).toBe(200);
-    expect(taskService.updateTaskStatus).toHaveBeenCalledWith('task_001', 1);
+    expect(taskService.updateTaskStatus).toHaveBeenCalledWith('task_001', { status: 1, starAwarded: true });
   });
 
   it('status=0 更新成功（重置）', async () => {
@@ -219,7 +219,7 @@ describe('PATCH /api/tasks/:taskId/status', () => {
     const res = await request(app)
       .patch('/api/tasks/task_001/status')
       .set('Authorization', token(CHILD))
-      .send({ status: 0 });
+      .send({ status: 0, starAwarded: false });
     expect(res.status).toBe(200);
   });
 
@@ -247,7 +247,7 @@ describe('PATCH /api/tasks/:taskId/status', () => {
     const res = await request(app)
       .patch('/api/tasks/task_001/status')
       .set('Authorization', token(OTHER))
-      .send({ status: 1 });
+      .send({ status: 1, starAwarded: true });
     expect(res.status).toBe(403);
   });
 
@@ -259,7 +259,7 @@ describe('PATCH /api/tasks/:taskId/status', () => {
     const res = await request(app)
       .patch('/api/tasks/task_001/status')
       .set('Authorization', token(PARENT))
-      .send({ status: 1 });
+      .send({ status: 1, starAwarded: true });
     expect(res.status).toBe(200);
   });
 });

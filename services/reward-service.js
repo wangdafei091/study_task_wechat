@@ -9,6 +9,9 @@ const { RewardRepository } = require('../repositories/index');
 const { StarGroupRepository, StarRecordRepository } = require('../repositories/index');
 const EventBus = require('../utils/core/event-bus');
 const { EVENTS } = require('../utils/constants');
+const HttpClient = require('../utils/http-client');
+const API_CONFIG = require('../utils/api-config');
+const { Reward } = require('../models/reward');
 
 class RewardService {
   // 使用静态属性存储类级别的初始化状态
@@ -40,6 +43,7 @@ class RewardService {
     
     // 实例级初始化标记
     this.initialized = false;
+    this.enableCloudStorage = API_CONFIG.ENABLE_API;
     
     logger.info('RewardService', '构造奖励服务实例');
   }
@@ -70,6 +74,12 @@ class RewardService {
     // 使用Promise锁防止并发初始化
     RewardService._initializationPromise = (async () => {
       try {
+        if (this.enableCloudStorage) {
+          RewardService._initialized = true;
+          logger.info('RewardService', '云端模式下跳过默认奖励初始化，等待页面进入时拉取云端奖励');
+          return;
+        }
+
         // 尝试从本地存储加载奖励数据以确保新旧系统数据一致性
         try {
           await this.rewardRepository.loadFromStorage();
@@ -214,6 +224,15 @@ class RewardService {
       
       // 触发奖励创建事件
       this.eventBus.emit(EVENTS.REWARD_CREATED, { reward: savedReward });
+
+      if (savedReward && this.enableCloudStorage) {
+        this._syncRewardToCloud(savedReward).catch(syncError => {
+          logger.warn('RewardService', '奖励创建云同步失败，本地已保存', {
+            rewardId: savedReward.id,
+            error: syncError.message
+          });
+        });
+      }
       
       return { success: true, reward: savedReward, message: '创建成功' };
     } catch (error) {
@@ -252,6 +271,7 @@ class RewardService {
           updatedFields.push(`${key}: ${oldValue} → ${rewardData[key]}`);
         }
       });
+      existingReward.modifyTime = Date.now();
       
       logger.info('RewardService', `奖励更新字段: ${updatedFields.join(', ')}`);
       
@@ -265,6 +285,15 @@ class RewardService {
         reward: updatedReward,
         previous: existingReward
       });
+
+      if (updatedReward && this.enableCloudStorage) {
+        this._syncRewardToCloud(updatedReward).catch(syncError => {
+          logger.warn('RewardService', '奖励更新云同步失败，本地已保存', {
+            rewardId: updatedReward.id,
+            error: syncError.message
+          });
+        });
+      }
       
       return { success: true, reward: updatedReward, message: '更新成功' };
     } catch (error) {
@@ -306,6 +335,15 @@ class RewardService {
       
       // 触发奖励删除事件
       this.eventBus.emit(EVENTS.REWARD_DELETED, { reward });
+
+      if (this.enableCloudStorage) {
+        this._syncDeleteRewardToCloud(rewardId).catch(syncError => {
+          logger.warn('RewardService', '奖励删除云同步失败，本地已删除', {
+            rewardId,
+            error: syncError.message
+          });
+        });
+      }
       
       return { success: true, message: '删除成功' };
     } catch (error) {
@@ -444,7 +482,7 @@ class RewardService {
       let rewards;
       if (includeClaimed) {
         // 获取指定用户的所有奖励
-        if (userId) {
+        if (userId && !this.enableCloudStorage) {
           const allRewards = await this.rewardRepository.getAll();
           rewards = allRewards.filter(r => r.userId === userId);
         } else {
@@ -480,6 +518,105 @@ class RewardService {
       logger.error('RewardService', '获取可用奖励失败', error);
       return [];
     }
+  }
+
+  async refreshRewardsFromCloud() {
+    if (!this.enableCloudStorage) {
+      return { success: false, message: '云端模式未启用' };
+    }
+    return this._fetchRewardsFromCloud();
+  }
+
+  async _fetchRewardsFromCloud() {
+    const response = await HttpClient.get(API_CONFIG.ENDPOINTS.REWARDS);
+    const cloudRewards = (response.rewards || []).map(item => this._mapCloudReward(item));
+    const allLocal = await this.rewardRepository.getAll(false);
+    const cloudRewardIds = new Set(cloudRewards.map(reward => reward.id).filter(Boolean));
+    const retainedRewards = allLocal.filter(reward => {
+      if (cloudRewardIds.has(reward.id)) {
+        return false;
+      }
+
+      return reward.syncedToCloud !== true;
+    });
+    await this.rewardRepository._saveData([...retainedRewards, ...cloudRewards]);
+    this.rewardRepository.invalidateCache();
+    logger.info('RewardService', '已从云端刷新奖励列表', { rewardCount: cloudRewards.length });
+    return { success: true, rewards: cloudRewards };
+  }
+
+  async _syncRewardToCloud(reward) {
+    if (!reward) return;
+
+    const payload = {
+      rewardId: reward.id,
+      name: reward.name,
+      description: reward.description,
+      type: reward.type,
+      points: reward.points,
+      icon: reward.icon,
+      enabled: reward.enabled,
+      claimed: reward.claimed,
+      claimTime: reward.claimTime || 0,
+      claimStatus: reward.claimStatus,
+      deliveryTime: reward.deliveryTime || 0,
+      isExample: reward.isExample || false,
+      tags: reward.tags || [],
+      notes: reward.notes || '',
+      protectedByExpiry: reward.protectedByExpiry || false,
+      partialProtection: reward.partialProtection || 0,
+      modifyTime: reward.modifyTime || Date.now()
+    };
+
+    if (reward.syncedToCloud) {
+      const url = API_CONFIG.ENDPOINTS.REWARD_BY_ID.replace('{rewardId}', reward.id);
+      await HttpClient.put(url, payload);
+    } else {
+      await HttpClient.post(API_CONFIG.ENDPOINTS.REWARDS, payload);
+    }
+
+    reward.syncedToCloud = true;
+    reward.modifyTime = payload.modifyTime;
+    await this.rewardRepository.save(reward);
+  }
+
+  async _syncDeleteRewardToCloud(rewardId) {
+    const url = API_CONFIG.ENDPOINTS.REWARD_BY_ID.replace('{rewardId}', rewardId);
+    await HttpClient.delete(url);
+  }
+
+  async _syncExchangeToCloud(rewardId, exchangeUserId, modifyTime) {
+    const url = API_CONFIG.ENDPOINTS.REWARD_EXCHANGE.replace('{rewardId}', rewardId);
+    return HttpClient.patch(url, {
+      exchangeUserId,
+      modifyTime
+    });
+  }
+
+  _mapCloudReward(item) {
+    return new Reward({
+      id: item.rewardId || item.id,
+      userId: item.userId,
+      familyId: item.familyId || null,
+      name: item.name,
+      description: item.description || '',
+      type: item.type || 'item',
+      points: Number(item.points || 0),
+      icon: item.icon || '🎁',
+      enabled: item.enabled !== false,
+      claimed: item.claimed === true,
+      claimTime: item.claimTime || 0,
+      claimStatus: item.claimStatus || (item.claimed ? 'delivered' : 'available'),
+      deliveryTime: item.deliveryTime || 0,
+      isExample: item.isExample === true,
+      tags: item.tags || [],
+      notes: item.notes || '',
+      protectedByExpiry: item.protectedByExpiry === true,
+      partialProtection: Number(item.partialProtection || 0),
+      syncedToCloud: true,
+      modifyTime: item.modifyTime || Date.now(),
+      exchangeUserId: item.exchangeUserId || null
+    });
   }
   
   /**
@@ -576,6 +713,7 @@ class RewardService {
       try {
         logger.info('RewardService', `===== 开始兑换奖励事务 =====`);
         logger.info('RewardService', `事务参数: 奖励=${reward.name}, 原价=${reward.points}颗, 保护金额=${reward.partialProtection || 0}颗, 实际消耗=${actualCost}颗(${reward.protectedByExpiry ? (actualCost > 0 ? '部分保护' : '完全保护') : '普通兑换'}), 用户=${userId}`);
+        const exchangeModifyTime = Date.now();
         
         // 1. 扣除用户星星（计算实际扣除数量）
         if (actualCost > 0) {
@@ -603,8 +741,11 @@ class RewardService {
               (actualCost > 0 ? 'partial_protected_exchange' : 'protected_exchange') : 
               'exchange', // 部分保护兑换、完全保护兑换或普通兑换
             source: `reward_${rewardId}`,
-            timestamp: Date.now(),
+            sourceId: reward.id,
+            timestamp: exchangeModifyTime,
             userId: userId,
+            idempotencyKey: `reward_exchange:${reward.id}:${userId}:${exchangeModifyTime}`,
+            modifyTime: exchangeModifyTime,
             data: {
               rewardId: reward.id,
               rewardName: reward.name,
@@ -632,6 +773,9 @@ class RewardService {
         // 3. 更新奖励状态为已领取
         try {
           reward.claim(); // 使用Reward模型的标准方法，现在直接设置为delivered状态
+          reward.claimTime = exchangeModifyTime;
+          reward.deliveryTime = exchangeModifyTime;
+          reward.modifyTime = exchangeModifyTime;
           logger.info('RewardService', `奖励状态设置: claimed=${reward.claimed}, claimStatus=${reward.claimStatus}, claimTime=${reward.claimTime}, deliveryTime=${reward.deliveryTime}, 用户=${userId}`);
           const savedReward = await this.rewardRepository.save(reward);
           
@@ -719,6 +863,16 @@ class RewardService {
         const successMessage = reward.protectedByExpiry ? 
           (actualCost > 0 ? '部分保护奖励兑换成功' : '完全保护奖励兑换成功') : 
           '兑换成功';
+
+        if (this.enableCloudStorage) {
+          this._syncExchangeToCloud(reward.id, userId, reward.modifyTime || reward.claimTime || Date.now()).catch(syncError => {
+            logger.warn('RewardService', '奖励兑换云同步失败，本地已保存', {
+              rewardId: reward.id,
+              userId,
+              error: syncError.message
+            });
+          });
+        }
         
         return { 
           success: true, 

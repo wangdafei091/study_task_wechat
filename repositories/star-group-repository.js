@@ -642,7 +642,7 @@ class StarGroupRepository extends BaseRepository {
    * @param {String} reason 扣减原因
    * @returns {Promise<Object>} 扣减结果
    */
-  async deductStarsFromSpecificExpiryType(amount, expiryType, reason) {
+  async deductStarsFromSpecificExpiryType(amount, expiryType, reason, userId = null) {
     if (!amount || amount <= 0) {
       logger.warn('StarGroupRepository', `从特定类型扣减星星失败：无效的数量 ${amount}`);
       return { success: false, message: '扣减数量无效' };
@@ -657,7 +657,7 @@ class StarGroupRepository extends BaseRepository {
       logger.info('StarGroupRepository', `开始从特定类型扣减${amount}颗星星，有效期类型=${expiryType}`);
       
       // 获取指定有效期类型的分组
-      const groups = await this.getGroupsByExpiryType(expiryType);
+      const groups = await this.getGroupsByExpiryType(expiryType, userId);
       
       if (!groups || groups.length === 0) {
         logger.warn('StarGroupRepository', `未找到有效期类型为${expiryType}的分组`);

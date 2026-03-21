@@ -32,9 +32,24 @@ class FamilyService {
         [familyId, userId]
       );
 
+      const rewardModifyTime = Date.now();
+      const [rewardResult] = await conn.execute(
+        `UPDATE rewards
+         SET family_id = ?, modify_time = ?
+         WHERE user_id = ?
+           AND family_id IS NULL
+           AND deleted_at IS NULL`,
+        [familyId, rewardModifyTime, userId]
+      );
+
       await conn.commit();
 
-      logger.info('创建家庭成功', { familyId, userId, name });
+      logger.info('创建家庭成功', {
+        familyId,
+        userId,
+        name,
+        migratedRewardCount: rewardResult?.affectedRows || 0
+      });
       return { familyId, name, inviteCode, inviteCodeExpiresAt: expiresAt };
     } catch (error) {
       await conn.rollback();
