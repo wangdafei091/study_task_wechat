@@ -2,9 +2,10 @@
  * 任务服务
  */
 
-const { query, execute } = require('../config/database');
+const { getPool, query, execute } = require('../config/database');
 const Task = require('../models/Task');
 const { createLogger } = require('../utils/logger');
+const messageService = require('./messageService');
 const logger = createLogger('TaskService');
 let taskColumnMapPromise = null;
 
@@ -153,176 +154,189 @@ class TaskService {
    * @param {Object} taskData - 任务数据
    * @returns {Promise<Task>} 创建的任务实例
    */
-  async createTask(userId, taskData) {
+  async createTask(userId, taskData, options = {}) {
     try {
       const columnMap = await this._getTaskColumnMap();
+      const pool = getPool();
+      const connection = await pool.getConnection();
+      const modifyTime = Number(taskData.modifyTime || options.modifyTime || Date.now());
+      const operationKey = String(options.operationKey || taskData.operationKey || modifyTime);
 
-      // 幂等检查：客户端传入 taskId 时，先查是否已存在（含软删除）
-      if (taskData.taskId) {
-        const existing = await query(
-          'SELECT * FROM tasks WHERE task_id = ? LIMIT 1',
-          [taskData.taskId]
-        );
-        const existingRaw = existing && existing[0];
+      try {
+        await connection.beginTransaction();
 
-        if (existingRaw) {
-          // 归属校验：taskId 已存在但归属不同用户，拒绝
-          if (existingRaw.user_id !== userId) {
-            const err = new Error('taskId 归属用户不匹配');
-            err.code = 'TASK_ID_USER_MISMATCH';
-            throw err;
-          }
+        // 幂等检查：客户端传入 taskId 时，先查是否已存在（含软删除）
+        if (taskData.taskId) {
+          const existingRaw = await this._getTaskByIdConn(connection, taskData.taskId, true);
 
-          if (!existingRaw.deleted_at) {
-            // 未软删除：幂等返回已有任务
-            logger.info('创建任务幂等：taskId 已存在，直接返回', { taskId: taskData.taskId, userId });
-            return Task.fromDB(existingRaw);
-          }
+          if (existingRaw) {
+            // 归属校验：taskId 已存在但归属不同用户，拒绝
+            if (existingRaw.user_id !== userId) {
+              const err = new Error('taskId 归属用户不匹配');
+              err.code = 'TASK_ID_USER_MISMATCH';
+              throw err;
+            }
 
-          // 已软删除：恢复并覆盖所有业务字段，重置完成状态
-          const now = Date.now();
-          const restoreSetClauses = ['deleted_at = NULL', 'title = ?', 'description = ?', 'type = ?', 'date = ?'];
-          const restoreParams = [
-            taskData.title,
-            taskData.description || '',
-            taskData.type,
-            taskData.date,
-            taskData.startTime || '',
-            taskData.endTime || '',
-            taskData.points || 0,
-            taskData.pointsExpiry || 'permanent',
-            taskData.isRequired ? 1 : 0,
-            taskData.repeat ? JSON.stringify(taskData.repeat) : null,
-            taskData.isAllDay ? 1 : 0,
-            taskData.penaltyApplied ? 1 : 0,
-          ];
+            if (!existingRaw.deleted_at) {
+              const existingTask = Task.fromDB(existingRaw);
+              await this._createTaskMessagesAfterMutation(existingTask, 'create', options, operationKey, connection);
+              await connection.commit();
+              logger.info('创建任务幂等：taskId 已存在，直接返回', { taskId: taskData.taskId, userId });
+              return existingTask;
+            }
 
-          restoreSetClauses.push(
-            `${columnMap.startTime} = ?`,
-            `${columnMap.endTime} = ?`,
-            'points = ?',
-            `${columnMap.pointsExpiry} = ?`,
-            `${columnMap.isRequired} = ?`,
-            '`repeat` = ?',
-            `${columnMap.isAllDay} = ?`,
-            `${columnMap.penaltyApplied} = ?`
-          );
+            // 已软删除：恢复并覆盖所有业务字段，重置完成状态
+            const restoreSetClauses = ['deleted_at = NULL', 'title = ?', 'description = ?', 'type = ?', 'date = ?'];
+            const restoreParams = [
+              taskData.title,
+              taskData.description || '',
+              taskData.type,
+              taskData.date,
+              taskData.startTime || '',
+              taskData.endTime || '',
+              taskData.points || 0,
+              taskData.pointsExpiry || 'permanent',
+              taskData.isRequired ? 1 : 0,
+              taskData.repeat ? JSON.stringify(taskData.repeat) : null,
+              taskData.isAllDay ? 1 : 0,
+              taskData.penaltyApplied ? 1 : 0,
+            ];
 
-          if (columnMap.duration) {
-            restoreSetClauses.push(`${columnMap.duration} = ?`);
-            restoreParams.push(taskData.duration || 0);
-          }
-          if (columnMap.hasNoEndDate) {
-            restoreSetClauses.push(`${columnMap.hasNoEndDate} = ?`);
-            restoreParams.push(taskData.hasNoEndDate ? 1 : 0);
-          }
-          if (columnMap.tags) {
-            restoreSetClauses.push(`${columnMap.tags} = ?`);
-            restoreParams.push(taskData.tags ? JSON.stringify(taskData.tags) : null);
-          }
-          if (columnMap.parentTaskId) {
-            restoreSetClauses.push(`${columnMap.parentTaskId} = ?`);
-            restoreParams.push(taskData.parentTaskId || null);
-          }
-          if (columnMap.modifyTime) {
-            restoreSetClauses.push(`${columnMap.modifyTime} = ?`);
-            restoreParams.push(taskData.modifyTime || now);
-          }
-          if (columnMap.completionTime) {
-            restoreSetClauses.push(`${columnMap.completionTime} = NULL`);
-          }
-          if (columnMap.starAwarded) {
-            restoreSetClauses.push(`${columnMap.starAwarded} = 0`);
-          }
-          restoreSetClauses.push('status = 0');
-          restoreParams.push(taskData.taskId);
+            restoreSetClauses.push(
+              `${columnMap.startTime} = ?`,
+              `${columnMap.endTime} = ?`,
+              'points = ?',
+              `${columnMap.pointsExpiry} = ?`,
+              `${columnMap.isRequired} = ?`,
+              '`repeat` = ?',
+              `${columnMap.isAllDay} = ?`,
+              `${columnMap.penaltyApplied} = ?`
+            );
 
-          await execute(
-            `UPDATE tasks SET ${restoreSetClauses.join(', ')} WHERE task_id = ?`,
-            restoreParams
-          );
-          logger.info('创建任务幂等：恢复软删除任务', { taskId: taskData.taskId, userId });
-          const restored = await query(
-            'SELECT * FROM tasks WHERE task_id = ? LIMIT 1',
-            [taskData.taskId]
-          );
-          return Task.fromDB(restored[0]);
+            if (columnMap.duration) {
+              restoreSetClauses.push(`${columnMap.duration} = ?`);
+              restoreParams.push(taskData.duration || 0);
+            }
+            if (columnMap.hasNoEndDate) {
+              restoreSetClauses.push(`${columnMap.hasNoEndDate} = ?`);
+              restoreParams.push(taskData.hasNoEndDate ? 1 : 0);
+            }
+            if (columnMap.tags) {
+              restoreSetClauses.push(`${columnMap.tags} = ?`);
+              restoreParams.push(taskData.tags ? JSON.stringify(taskData.tags) : null);
+            }
+            if (columnMap.parentTaskId) {
+              restoreSetClauses.push(`${columnMap.parentTaskId} = ?`);
+              restoreParams.push(taskData.parentTaskId || null);
+            }
+            if (columnMap.modifyTime) {
+              restoreSetClauses.push(`${columnMap.modifyTime} = ?`);
+              restoreParams.push(modifyTime);
+            }
+            if (columnMap.completionTime) {
+              restoreSetClauses.push(`${columnMap.completionTime} = NULL`);
+            }
+            if (columnMap.starAwarded) {
+              restoreSetClauses.push(`${columnMap.starAwarded} = 0`);
+            }
+            restoreSetClauses.push('status = 0');
+            restoreParams.push(taskData.taskId);
+
+            await connection.execute(
+              `UPDATE tasks SET ${restoreSetClauses.join(', ')} WHERE task_id = ?`,
+              restoreParams
+            );
+            const restoredRaw = await this._getTaskByIdConn(connection, taskData.taskId);
+            const restoredTask = Task.fromDB(restoredRaw);
+            await this._createTaskMessagesAfterMutation(restoredTask, 'create', options, operationKey, connection);
+            await connection.commit();
+            logger.info('创建任务幂等：恢复软删除任务', { taskId: taskData.taskId, userId });
+            return restoredTask;
+          }
         }
-      }
 
-      // 正常创建：优先使用客户端提供的 taskId
-      const taskId = taskData.taskId || Task.generateId();
-      const task = new Task({
-        taskId,
-        userId,
-        ...taskData,
-        status: 0, // 默认为未完成
-        modifyTime: taskData.modifyTime || Date.now(),
-      });
+        // 正常创建：优先使用客户端提供的 taskId
+        const taskId = taskData.taskId || Task.generateId();
+        const task = new Task({
+          taskId,
+          userId,
+          ...taskData,
+          status: 0,
+          modifyTime,
+        });
 
-      const insertColumns = [
-        'task_id',
-        'user_id',
-        'title',
-        'description',
-        'type',
-        'date',
-        columnMap.startTime,
-        columnMap.endTime,
-        'points',
-        columnMap.pointsExpiry,
-        columnMap.isRequired,
-        'status',
-        '`repeat`',
-        columnMap.isAllDay,
-        columnMap.penaltyApplied,
-      ];
-      const insertValues = [
-        task.taskId,
-        task.userId,
-        task.title,
-        task.description,
-        task.type,
-        task.date,
-        task.startTime || '',
-        task.endTime || '',
-        task.points || 0,
-        task.pointsExpiry || 'permanent',
-        task.isRequired ? 1 : 0,
-        task.status,
-        task.repeat ? JSON.stringify(task.repeat) : null,
-        task.isAllDay ? 1 : 0,
-        task.penaltyApplied ? 1 : 0,
-      ];
+        const insertColumns = [
+          'task_id',
+          'user_id',
+          'title',
+          'description',
+          'type',
+          'date',
+          columnMap.startTime,
+          columnMap.endTime,
+          'points',
+          columnMap.pointsExpiry,
+          columnMap.isRequired,
+          'status',
+          '`repeat`',
+          columnMap.isAllDay,
+          columnMap.penaltyApplied,
+        ];
+        const insertValues = [
+          task.taskId,
+          task.userId,
+          task.title,
+          task.description,
+          task.type,
+          task.date,
+          task.startTime || '',
+          task.endTime || '',
+          task.points || 0,
+          task.pointsExpiry || 'permanent',
+          task.isRequired ? 1 : 0,
+          task.status,
+          task.repeat ? JSON.stringify(task.repeat) : null,
+          task.isAllDay ? 1 : 0,
+          task.penaltyApplied ? 1 : 0,
+        ];
 
-      if (columnMap.duration) {
-        insertColumns.push(columnMap.duration);
-        insertValues.push(task.duration || 0);
-      }
-      if (columnMap.hasNoEndDate) {
-        insertColumns.push(columnMap.hasNoEndDate);
-        insertValues.push(task.hasNoEndDate ? 1 : 0);
-      }
-      if (columnMap.tags) {
-        insertColumns.push(columnMap.tags);
-        insertValues.push(task.tags ? JSON.stringify(task.tags) : null);
-      }
-      if (columnMap.modifyTime) {
-        insertColumns.push(columnMap.modifyTime);
-        insertValues.push(task.modifyTime || Date.now());
-      }
-      if (columnMap.parentTaskId) {
-        insertColumns.push(columnMap.parentTaskId);
-        insertValues.push(task.parentTaskId || null);
-      }
+        if (columnMap.duration) {
+          insertColumns.push(columnMap.duration);
+          insertValues.push(task.duration || 0);
+        }
+        if (columnMap.hasNoEndDate) {
+          insertColumns.push(columnMap.hasNoEndDate);
+          insertValues.push(task.hasNoEndDate ? 1 : 0);
+        }
+        if (columnMap.tags) {
+          insertColumns.push(columnMap.tags);
+          insertValues.push(task.tags ? JSON.stringify(task.tags) : null);
+        }
+        if (columnMap.modifyTime) {
+          insertColumns.push(columnMap.modifyTime);
+          insertValues.push(task.modifyTime || Date.now());
+        }
+        if (columnMap.parentTaskId) {
+          insertColumns.push(columnMap.parentTaskId);
+          insertValues.push(task.parentTaskId || null);
+        }
 
-      await execute(
-        `INSERT INTO tasks (${insertColumns.join(', ')}) VALUES (${insertColumns.map(() => '?').join(', ')})`,
-        insertValues
-      );
+        await connection.execute(
+          `INSERT INTO tasks (${insertColumns.join(', ')}) VALUES (${insertColumns.map(() => '?').join(', ')})`,
+          insertValues
+        );
 
-      logger.info('创建任务成功', { taskId, userId });
-      return task;
+        await this._createTaskMessagesAfterMutation(task, 'create', options, operationKey, connection);
+        await connection.commit();
+
+        logger.info('创建任务成功', { taskId, userId });
+        return task;
+      } catch (error) {
+        await connection.rollback();
+        throw error;
+      } finally {
+        connection.release();
+      }
     } catch (error) {
       logger.error('创建任务失败', error);
       throw error;
@@ -364,9 +378,11 @@ class TaskService {
    * @param {Object} changes - 允许更新的字段（已白名单过滤）
    * @returns {Promise<Task>} 更新后的任务
    */
-  async updateTask(taskId, changes) {
+  async updateTask(taskId, changes, options = {}) {
     try {
       const columnMap = await this._getTaskColumnMap();
+      const pool = getPool();
+      const connection = await pool.getConnection();
       const ALLOWED_FIELDS = [
         'title', 'description', 'date', 'type', 'startTime', 'endTime',
         'duration', 'isAllDay', 'isRequired', 'penaltyApplied',
@@ -414,22 +430,37 @@ class TaskService {
         throw new Error('没有可更新的字段');
       }
 
-      // 更新 modify_time
+      const modifyTime = Number(changes.modifyTime || options.modifyTime || Date.now());
+      const operationKey = String(options.operationKey || changes.operationKey || modifyTime);
+
       if (columnMap.modifyTime) {
         setClauses.push(`${columnMap.modifyTime} = ?`);
-        params.push(Date.now());
+        params.push(modifyTime);
       }
 
       params.push(taskId);
 
-      const sql = `UPDATE tasks SET ${setClauses.join(', ')} WHERE task_id = ? AND deleted_at IS NULL`;
-      const result = await execute(sql, params);
+      try {
+        await connection.beginTransaction();
+        const sql = `UPDATE tasks SET ${setClauses.join(', ')} WHERE task_id = ? AND deleted_at IS NULL`;
+        const [result] = await connection.execute(sql, params);
 
-      if (result.affectedRows === 0) {
-        return null;
+        if (result.affectedRows === 0) {
+          await connection.rollback();
+          return null;
+        }
+
+        const updatedRaw = await this._getTaskByIdConn(connection, taskId);
+        const updatedTask = Task.fromDB(updatedRaw);
+        await this._createTaskMessagesAfterMutation(updatedTask, 'update', options, operationKey, connection);
+        await connection.commit();
+        return updatedTask;
+      } catch (error) {
+        await connection.rollback();
+        throw error;
+      } finally {
+        connection.release();
       }
-
-      return this.getTaskById(taskId);
     } catch (error) {
       logger.error('更新任务失败', error);
       throw error;
@@ -441,14 +472,40 @@ class TaskService {
    * @param {string} taskId - 任务ID
    * @returns {Promise<boolean>} 是否成功
    */
-  async softDeleteTask(taskId) {
+  async softDeleteTask(taskId, options = {}) {
     try {
       const columnMap = await this._getTaskColumnMap();
-      const result = await execute(
-        `UPDATE tasks SET deleted_at = NOW()${columnMap.modifyTime ? `, ${columnMap.modifyTime} = ?` : ''} WHERE task_id = ? AND deleted_at IS NULL`,
-        columnMap.modifyTime ? [Date.now(), taskId] : [taskId]
-      );
-      return result.affectedRows > 0;
+      const pool = getPool();
+      const connection = await pool.getConnection();
+      const modifyTime = Number(options.modifyTime || Date.now());
+      const operationKey = String(options.operationKey || modifyTime);
+
+      try {
+        await connection.beginTransaction();
+        const existingRaw = await this._getTaskByIdConn(connection, taskId);
+        if (!existingRaw) {
+          await connection.rollback();
+          return false;
+        }
+
+        const [result] = await connection.execute(
+          `UPDATE tasks SET deleted_at = NOW()${columnMap.modifyTime ? `, ${columnMap.modifyTime} = ?` : ''} WHERE task_id = ? AND deleted_at IS NULL`,
+          columnMap.modifyTime ? [modifyTime, taskId] : [taskId]
+        );
+        if (result.affectedRows === 0) {
+          await connection.rollback();
+          return false;
+        }
+
+        await this._createTaskMessagesAfterMutation(Task.fromDB(existingRaw), 'delete', options, operationKey, connection);
+        await connection.commit();
+        return true;
+      } catch (error) {
+        await connection.rollback();
+        throw error;
+      } finally {
+        connection.release();
+      }
     } catch (error) {
       logger.error('软删除任务失败', error);
       throw error;
@@ -461,49 +518,69 @@ class TaskService {
    * @param {Object} statusData - 状态对象
    * @returns {Promise<Task|null>} 更新后的任务
    */
-  async updateTaskStatus(taskId, statusData) {
+  async updateTaskStatus(taskId, statusData, options = {}) {
     try {
       const columnMap = await this._getTaskColumnMap();
-      const existing = await this.getTaskById(taskId);
-      if (!existing) {
-        return null;
+      const pool = getPool();
+      const connection = await pool.getConnection();
+
+      try {
+        await connection.beginTransaction();
+        const existingRaw = await this._getTaskByIdConn(connection, taskId);
+        if (!existingRaw) {
+          await connection.rollback();
+          return null;
+        }
+
+        const existing = Task.fromDB(existingRaw);
+        const { status, starAwarded } = statusData;
+        const now = Number(statusData.modifyTime || options.modifyTime || Date.now());
+        const operationKey = String(options.operationKey || statusData.operationKey || now);
+        const completionTime = status === 1 ? now : null;
+        const resolvedStarAwarded =
+          typeof starAwarded === 'boolean'
+            ? starAwarded
+            : (status === 0 ? false : Boolean(existing.starAwarded));
+
+        const setClauses = ['status = ?'];
+        const params = [status];
+
+        if (columnMap.starAwarded) {
+          setClauses.push(`${columnMap.starAwarded} = ?`);
+          params.push(resolvedStarAwarded ? 1 : 0);
+        }
+        if (columnMap.completionTime) {
+          setClauses.push(`${columnMap.completionTime} = ?`);
+          params.push(completionTime);
+        }
+        if (columnMap.modifyTime) {
+          setClauses.push(`${columnMap.modifyTime} = ?`);
+          params.push(now);
+        }
+
+        params.push(taskId);
+        const [result] = await connection.execute(
+          `UPDATE tasks SET ${setClauses.join(', ')} WHERE task_id = ? AND deleted_at IS NULL`,
+          params
+        );
+
+        if (result.affectedRows === 0) {
+          await connection.rollback();
+          return null;
+        }
+
+        const updatedRaw = await this._getTaskByIdConn(connection, taskId);
+        const updatedTask = Task.fromDB(updatedRaw);
+        const action = status === 1 ? 'complete' : 'reset';
+        await this._createTaskMessagesAfterMutation(updatedTask, action, options, operationKey, connection);
+        await connection.commit();
+        return updatedTask;
+      } catch (error) {
+        await connection.rollback();
+        throw error;
+      } finally {
+        connection.release();
       }
-
-      const { status, starAwarded } = statusData;
-      const now = Date.now();
-      const completionTime = status === 1 ? now : null;
-      const resolvedStarAwarded =
-        typeof starAwarded === 'boolean'
-          ? starAwarded
-          : (status === 0 ? false : Boolean(existing.starAwarded));
-
-      const setClauses = ['status = ?'];
-      const params = [status];
-
-      if (columnMap.starAwarded) {
-        setClauses.push(`${columnMap.starAwarded} = ?`);
-        params.push(resolvedStarAwarded ? 1 : 0);
-      }
-      if (columnMap.completionTime) {
-        setClauses.push(`${columnMap.completionTime} = ?`);
-        params.push(completionTime);
-      }
-      if (columnMap.modifyTime) {
-        setClauses.push(`${columnMap.modifyTime} = ?`);
-        params.push(now);
-      }
-
-      params.push(taskId);
-      const result = await execute(
-        `UPDATE tasks SET ${setClauses.join(', ')} WHERE task_id = ? AND deleted_at IS NULL`,
-        params
-      );
-
-      if (result.affectedRows === 0) {
-        return null;
-      }
-
-      return this.getTaskById(taskId);
     } catch (error) {
       logger.error('更新任务状态失败', error);
       throw error;
@@ -572,6 +649,25 @@ class TaskService {
     );
     logger.info('任务归属转移完成', { fromUserId, toUserId, count: result.affectedRows });
     return result.affectedRows;
+  }
+
+  async _getTaskByIdConn(connection, taskId, includeDeleted = false) {
+    const sql = includeDeleted
+      ? 'SELECT * FROM tasks WHERE task_id = ? LIMIT 1'
+      : 'SELECT * FROM tasks WHERE task_id = ? AND deleted_at IS NULL LIMIT 1';
+    const [rows] = await connection.execute(sql, [taskId]);
+    return rows[0] || null;
+  }
+
+  async _createTaskMessagesAfterMutation(task, action, options, operationKey, connection) {
+    await messageService.createTaskMessages({
+      task,
+      familyId: options.familyId || null,
+      action,
+      actorUserId: options.actorUserId || task.userId,
+      actorRole: options.actorRole || 'system',
+      operationKey,
+    }, connection);
   }
 }
 

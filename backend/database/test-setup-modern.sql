@@ -5,6 +5,7 @@
 USE task_wechat_test;
 
 SET FOREIGN_KEY_CHECKS = 0;
+DROP TABLE IF EXISTS messages;
 DROP TABLE IF EXISTS rewards;
 DROP TABLE IF EXISTS star_groups;
 DROP TABLE IF EXISTS star_records;
@@ -151,6 +152,38 @@ CREATE TABLE IF NOT EXISTS rewards (
   INDEX idx_rewards_user_id (user_id),
   INDEX idx_rewards_family_id (family_id),
   FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS messages (
+  message_id VARCHAR(100) PRIMARY KEY,
+  family_id VARCHAR(100) DEFAULT NULL,
+  user_id VARCHAR(100) DEFAULT NULL,
+  actor_user_id VARCHAR(100) DEFAULT NULL,
+  subject_user_id VARCHAR(100) DEFAULT NULL,
+  operation_key VARCHAR(100) DEFAULT NULL,
+  message_event_key VARCHAR(255) NOT NULL,
+  visibility_scope VARCHAR(20) NOT NULL,
+  type VARCHAR(50) NOT NULL,
+  notification_type VARCHAR(50) NOT NULL,
+  related_id VARCHAR(100) DEFAULT NULL,
+  related_type VARCHAR(50) DEFAULT NULL,
+  title VARCHAR(200) NOT NULL,
+  summary VARCHAR(500) NOT NULL,
+  content TEXT DEFAULT NULL,
+  icon VARCHAR(50) DEFAULT NULL,
+  priority TINYINT DEFAULT 1,
+  is_read TINYINT(1) DEFAULT 0,
+  read_time BIGINT DEFAULT NULL,
+  is_archived TINYINT(1) DEFAULT 0,
+  create_time BIGINT NOT NULL,
+  deleted_at DATETIME DEFAULT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_message_event_scope (message_event_key, visibility_scope),
+  INDEX idx_messages_family_scope_time (family_id, visibility_scope, create_time),
+  INDEX idx_messages_user_scope_time (user_id, visibility_scope, create_time),
+  INDEX idx_messages_related (related_type, related_id),
+  INDEX idx_messages_deleted_at (deleted_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 插入测试数据

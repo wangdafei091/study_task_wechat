@@ -471,14 +471,21 @@ const configService = serviceManager.get('configService');
 
 ## MessageService - 消息通知服务
 
-消息服务处理系统消息的创建、查询、标记已读等功能。
+消息服务负责消息主流读取、家长/孩子视角 scope 解析、本地缓存回灌，以及云端消息状态同步。M10 起，任务/奖励正式消息以云端为权威来源，前端仅负责读取、状态同步和失败时的 provisional 兜底。
 
 ### 核心功能
-- 消息CRUD操作
-- 消息类型管理
-- 批量操作
-- 过期处理
-- 消息统计
+- 家长家庭流 / 孩子个人流作用域解析
+- 云端消息全量刷新与本地 stale cleanup
+- 单条已读、全部已读、删除的云端同步
+- provisional 消息保留与 legacy 消息归档
+- 兼容旧接口 `getAllMessages()` / `getUnreadCount()`
+
+### 作用域规则（M10）
+
+- 家长处于家长视角时，默认读取 `scope='family'`
+- 家长切到孩子视角时，默认读取 `scope='user'` 且 `userId=currentUserId`
+- 孩子设备默认读取 `scope='user'` 且 `userId=currentUserId/loginUserId`
+- 无登录上下文时回退到本地 `scope='all'`
 
 ### API 方法
 
@@ -490,48 +497,78 @@ const configService = serviceManager.get('configService');
   - `content` - 消息内容字符串
   - `type` - 消息类型（默认 'system'）
   - `options` - 可选配置 `{ title, priority, userId, subType, expiryDate }`
-- **返回**: `{ success: boolean, message?: Message, messageId?: string }`
+- **返回**: `Promise<Message>`
+- **说明**: 主要用于本地系统类消息；任务/奖励正式消息在云端模式下由后端主写路径生成
 
-##### `deleteMessage(messageId)`
-删除消息
-- **参数**: `messageId` - 消息ID
-- **返回**: `{ success: boolean, message?: string }`
+##### `createTaskMessage(task, type, options = {})`
+创建任务消息（兼容本地路径）
+- **参数**:
+  - `task` - 任务对象
+  - `type` - 通知类型
+  - `options` - 附加选项，如 `{ priority, operatorUserId }`
+- **返回**: `Promise<Message|null>`
+- **说明**: M10 云端模式下，任务/奖励正式消息不再由前端直接持久化；该方法主要用于兼容旧本地路径或非云端消息类型
 
 ---
 
 #### 消息查询
 
-##### `getAllMessages()`
-获取所有消息列表
-- **返回**: `{ success: boolean, messages: Message[], total?: number, message?: string }`
+##### `refreshMessagesFromCloud(userId = null, options = {})`
+按 scope 从云端拉取消息并回灌本地
+- **参数**:
+  - `userId` - `scope='user'` 时的目标用户 ID；家长家庭流可为空
+  - `options.scope` - `'user' | 'family'`
+- **返回**: `Promise<Message[]>`
+- **说明**: 云端模式下会先读取 `/api/messages`，再执行 `archiveLegacyMessages`、`replaceSyncedMessagesByScope` 与 `cleanupStaleMessages`
 
-##### `getUnreadCount()`
+##### `getMessagesByScope(options = {})`
+按 scope 获取消息，必要时先刷新云端
+- **参数**:
+  - `options.scope` - `'user' | 'family' | 'all'`
+  - `options.userId` - 个人流目标用户 ID
+  - `options.requireFresh` - 为 `true` 时先调用 `refreshMessagesFromCloud`
+- **返回**: `Promise<Message[]>`
+
+##### `getAllMessages(options = {})`
+兼容接口，内部委托到 `getMessagesByScope`
+- **参数**: `options` - 同 `getMessagesByScope`
+- **返回**: `Promise<Message[]>`
+
+##### `getUnreadCount(options = {})`
 获取未读消息数量
-- **返回**: `{ success: boolean, count: number, message?: string }`
+- **参数**: `options` - 同 `getMessagesByScope`
+- **返回**: `Promise<number>`
+- **说明**: 有登录上下文时按当前主消息流统计；无上下文时回退本地仓储 `getUnreadCount`
 
 ---
 
 #### 消息操作
 
-##### `markMessageAsRead(messageId)`
+##### `markMessageAsRead(messageId, options = {})`
 标记消息为已读
-- **参数**: `messageId` - 消息ID
-- **返回**: `{ success: boolean, message?: string }`
+- **参数**:
+  - `messageId` - 消息ID
+  - `options` - 可选 scope 参数
+- **返回**: `Promise<boolean>`
+- **说明**: 对正式云端消息会先调用 `PATCH /api/messages/:messageId/read`；若云端失败，本地已读状态不会先落库
 
-##### `markAllMessagesAsRead()`
-标记所有消息为已读
-- **返回**: `{ success: boolean, affectedCount: number, message?: string }`
+##### `markAllMessagesAsRead(options = {})`
+标记当前 scope 下的所有消息为已读
+- **参数**:
+  - `options.scope` - `'user' | 'family'`
+  - `options.userId` - `scope='user'` 时可选
+- **返回**: `Promise<number>`
+- **说明**: 对正式云端消息会先调用 `PATCH /api/messages/read-all`；若云端失败，本地不会先批量改已读
 
+##### `deleteMessage(messageId, options = {})`
+删除消息
+- **参数**:
+  - `messageId` - 消息ID
+  - `options` - 可选 scope 参数
+- **返回**: `Promise<boolean>`
+- **说明**: 对正式云端消息会先调用 `DELETE /api/messages/:messageId`；若云端失败，本地不会先删除
 
 ---
-
-#### 消息清理
-
-##### `_cleanExpiredMessages(expiryDays = 30)`
-清理过期消息（内部方法）
-- **参数**: `expiryDays` - 过期天数，默认30天
-- **返回**: `Promise<boolean>`
-
 ---
 
 ## ValidationService - 表单验证服务

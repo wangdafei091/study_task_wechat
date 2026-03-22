@@ -31,6 +31,31 @@ class RewardRepository extends BaseRepository {
     
     logger.info('RewardRepository', '初始化奖励仓储');
   }
+
+  async getDeleteTombstones() {
+    return this.storageAdapter.getAsync('rewardDeleteTombstones', []);
+  }
+
+  async saveDeleteTombstone(tombstone) {
+    if (!tombstone || !tombstone.entityId) {
+      return false;
+    }
+
+    const tombstones = await this.getDeleteTombstones();
+    const next = tombstones.filter(item => item.entityId !== tombstone.entityId);
+    next.push(tombstone);
+    return this.storageAdapter.setAsync('rewardDeleteTombstones', next);
+  }
+
+  async removeDeleteTombstone(entityId) {
+    if (!entityId) {
+      return false;
+    }
+
+    const tombstones = await this.getDeleteTombstones();
+    const next = tombstones.filter(item => item.entityId !== entityId);
+    return this.storageAdapter.setAsync('rewardDeleteTombstones', next);
+  }
   
   /**
    * 获取可用的奖励

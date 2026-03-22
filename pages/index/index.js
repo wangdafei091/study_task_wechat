@@ -3,6 +3,7 @@ const formatUtils = require('../../utils/formatUtils');
 const dateUtils = require('../../utils/dateUtils');
 const logger = require('../../utils/logger');
 const permissionUtils = require('../../utils/permission-utils');
+const viewScopeUtils = require('../../utils/view-scope');
 const { UserService } = require('../../services/user-service');
 const MessageService = require('../../services/message-service');
 const pageStorageHelper = require('../../utils/page-storage-helper');
@@ -174,6 +175,15 @@ Page({
     
     // 获取全局app实例
     const app = getApp();
+
+    this._eventHandlers = {
+      taskChanged: this.handleTaskDataChanged.bind(this),
+      taskCreated: this.handleTaskCreated.bind(this),
+      messageChanged: this.handleMessageDataChanged.bind(this),
+      rewardClaimed: this.handleRewardClaimed.bind(this),
+      rewardUpdated: this.handleRewardUpdated.bind(this),
+      progressbarComplete: this.handleProgressBarComplete.bind(this)
+    };
     
     // 设置当前日期字符串
     const now = new Date();
@@ -217,24 +227,26 @@ Page({
     // 使用serviceManager获取EventBus
     const eventBus = serviceManager.getEventBus();
     if (eventBus) {
+      const handlers = this._eventHandlers || {};
+
       // 监听任务数据变化
-      eventBus.on('task:changed', this.handleTaskDataChanged.bind(this));
+      eventBus.on('task:changed', handlers.taskChanged);
       
       // 监听任务创建事件
-      eventBus.on('task:created', this.handleTaskCreated.bind(this));
+      eventBus.on('task:created', handlers.taskCreated);
       
       // 监听消息数据变化
-      eventBus.on('message:changed', this.handleMessageDataChanged.bind(this));
+      eventBus.on('message:changed', handlers.messageChanged);
       
       // 监听奖励领取事件
-      eventBus.on('reward:claimed', this.handleRewardClaimed.bind(this));
+      eventBus.on('reward:claimed', handlers.rewardClaimed);
       
       // 监听奖励更新相关事件
-      eventBus.on('reward:updated', this.handleRewardUpdated.bind(this));
-      eventBus.on('reward:examples_cleared', this.handleRewardUpdated.bind(this));
+      eventBus.on('reward:updated', handlers.rewardUpdated);
+      eventBus.on('reward:examples_cleared', handlers.rewardUpdated);
       
       // 监听进度条完成事件
-      eventBus.on('progressbar:complete', this.handleProgressBarComplete.bind(this));
+      eventBus.on('progressbar:complete', handlers.progressbarComplete);
     }
   },
   
@@ -364,10 +376,30 @@ Page({
   /**
    * 处理消息数据变化事件
    */
-  handleMessageDataChanged: function() {
-    logger.info('Index', '收到消息数据变更事件，主动加载最新消息数据');
-    
-    // 主动加载消息数据，不依赖事件参数
+  handleMessageDataChanged: function(eventData) {
+    logger.info('Index', '收到消息数据变更事件');
+
+    if (Array.isArray(eventData)) {
+      const processedMessages = [...eventData]
+        .sort((a, b) => {
+          if (a.isRead !== b.isRead) return a.isRead ? 1 : -1;
+          return b.createTime - a.createTime;
+        })
+        .slice(0, 3)
+        .map(msg => ({
+          ...msg,
+          timeDisplay: dateUtils.formatRelativeTime(msg.createTime)
+        }));
+
+      const unreadCount = eventData.filter(msg => !msg.isRead).length;
+
+      this.setData({
+        messages: processedMessages,
+        unreadCount
+      });
+      return;
+    }
+
     this.loadMessageData();
   },
   
@@ -485,14 +517,15 @@ Page({
   onUnload: function() {
     // 解除事件监听
     const eventBus = serviceManager.getEventBus();
+    const handlers = this._eventHandlers || {};
     if (eventBus) {
-      eventBus.off('task:changed', this.handleTaskDataChanged);
-      eventBus.off('task:created', this.handleTaskCreated);
-      eventBus.off('message:changed', this.handleMessageDataChanged);
-      eventBus.off('reward:claimed', this.handleRewardClaimed);
-      eventBus.off('reward:updated', this.handleRewardUpdated);
-      eventBus.off('reward:examples_cleared', this.handleRewardUpdated);
-      eventBus.off('progressbar:complete', this.handleProgressBarComplete);
+      eventBus.off('task:changed', handlers.taskChanged);
+      eventBus.off('task:created', handlers.taskCreated);
+      eventBus.off('message:changed', handlers.messageChanged);
+      eventBus.off('reward:claimed', handlers.rewardClaimed);
+      eventBus.off('reward:updated', handlers.rewardUpdated);
+      eventBus.off('reward:examples_cleared', handlers.rewardUpdated);
+      eventBus.off('progressbar:complete', handlers.progressbarComplete);
     }
   },
 
@@ -700,34 +733,15 @@ Page({
   // 注意：消息设计为按用户分别显示，每个用户只看到自己的消息和共享消息
   loadMessageData: async function() {
     try {
-      // 消息归属 loginUser（设备拥有者），不随 currentUser 切换
-      const { loginUserId, currentUser } = this.data;
-      const userId = loginUserId || (currentUser && currentUser.id ? currentUser.id : null);
-      
       const messageService = serviceManager.getMessageService();
-      
-      // 获取所有消息
-      const allMessages = await messageService.getAllMessages();
-      
-      // 根据用户筛选消息：包含用户自己的消息和共享消息
-      let messages;
-      if (userId) {
-        // 获取指定用户的消息 + 共享消息
-        messages = allMessages.filter(msg => 
-          msg.userId === userId || msg.userId === 'shared'
-        );
-        logger.info('Index', `消息过滤完成，用户ID=${userId}，包含共享消息`, {
-          总消息数: allMessages.length,
-          可见消息数: messages.length
-        });
-      } else {
-        // 如果没有用户ID，显示所有消息
-        messages = allMessages;
-        logger.info('Index', '未指定用户ID，显示所有消息');
-      }
+      const scopeOptions = this.getMessageScopeOptions();
+      const messages = await messageService.getMessagesByScope({
+        ...scopeOptions,
+        requireFresh: true
+      });
       
       // 为消息添加时间显示字段，统一使用createTime
-      const processedMessages = messages
+      const processedMessages = [...messages]
         .sort((a, b) => {
           // 未读消息优先，相同状态按时间倒序
           if (a.isRead !== b.isRead) return a.isRead ? 1 : -1;
@@ -749,7 +763,7 @@ Page({
         unreadCount
       });
       
-      logger.info('Index', `消息数据加载成功, 用户ID=${userId || '全部'}`, {
+      logger.info('Index', `消息数据加载成功, scope=${scopeOptions.scope}`, {
         消息总数: messages.length,
         显示数量: processedMessages.length,
         未读数量: unreadCount
@@ -761,6 +775,13 @@ Page({
         unreadCount: 0
       });
     }
+  },
+
+  getMessageScopeOptions: function() {
+    const userService = getApp().globalData?.userService;
+    const loginUser = userService?.getLoginUser?.() || null;
+    const currentUser = userService?.getCurrentUser?.() || null;
+    return viewScopeUtils.resolveMessageScopeOptions(loginUser, currentUser);
   },
   
   /**
@@ -811,10 +832,14 @@ Page({
         startDate: null, // 使用服务默认值
         endDate: null    // 使用服务默认值
       };
-      
-      // 获取任务统计数据（不按用户过滤，共享模式）
-      const stats = await taskService.getTaskStatistics(dateRange);
+
+      const effectiveUserId = this.getEffectiveTaskUserId();
+      const scopeOptions = effectiveUserId ? { userId: effectiveUserId } : {};
+
+      // 获取任务统计数据，口径与首页当前任务列表保持一致
+      const stats = await taskService.getTaskStatistics(dateRange, scopeOptions);
       logger.info('Index', '任务统计获取成功（共享模式）', {
+        effectiveUserId,
         totalTasks: stats.totalTasks,
         completedTasks: stats.completedTasks,
         completionRate: stats.completionRate,
@@ -1452,7 +1477,7 @@ Page({
     
     const messageService = serviceManager.getMessageService();
     
-    messageService.markMessageAsRead(messageId)
+    messageService.markMessageAsRead(messageId, this.getMessageScopeOptions())
       .then(success => {
         logger.info('Index', `标记消息已读${success ? '成功' : '失败'}: ${messageId}`);
         if (success) {
@@ -1469,9 +1494,29 @@ Page({
    */
   markAllMessagesAsRead: function() {
     const messageService = serviceManager.getMessageService();
+    const unreadCount = this.data.messages.filter(msg => !msg.isRead).length;
+
+    if (unreadCount === 0) {
+      wx.showToast({
+        title: '暂无未读消息',
+        icon: 'none',
+        duration: 1500
+      });
+      return;
+    }
     
-    messageService.markAllMessagesAsRead()
+    messageService.markAllMessagesAsRead(this.getMessageScopeOptions())
       .then(count => {
+        if (count <= 0) {
+          logger.warn('Index', '标记全部消息已读未成功写入');
+          wx.showToast({
+            title: '操作失败',
+            icon: 'none',
+            duration: 1500
+          });
+          return;
+        }
+
         logger.info('Index', `标记全部消息已读成功, 数量: ${count}`);
         this.getUnreadMessageCount();
         
@@ -1496,7 +1541,7 @@ Page({
   getUnreadMessageCount: function() {
     const messageService = serviceManager.getMessageService();
     
-    messageService.getUnreadCount()
+    messageService.getUnreadCount(this.getMessageScopeOptions())
       .then(count => {
         this.setData({
           unreadCount: count
@@ -1671,8 +1716,10 @@ Page({
     // 获取当前进度数据
     const oldProgress = this.data.rewardProgress || { current: 0, total: 10 };
     
-    // 获取当前用户星星数
-    const userPoints = this.data.userPoints || serviceManager.getUserPoints();
+    // 使用页面已持有的星星数，避免调用不存在的 serviceManager.getUserPoints
+    const userPoints = Number.isFinite(this.data.userPoints)
+      ? this.data.userPoints
+      : (Number.isFinite(oldProgress.current) ? oldProgress.current : 0);
     
     // 添加日志
     logger.debug('Index', `处理奖励完成事件: 当前进度=${JSON.stringify(oldProgress)}, 星星数=${userPoints}`);
@@ -2043,9 +2090,10 @@ Page({
       }
 
       const loginUserId = getApp().globalData?.userService?.getLoginUserId() || null;
+      const effectiveUserId = this.getEffectiveTaskUserId() || loginUserId;
       
       // 获取当前实际星星数（确保数据一致性）
-      const actualUserPoints = await starService.getTotalStars(loginUserId);
+      const actualUserPoints = await starService.getTotalStars(effectiveUserId);
       
       // 格式化星星数展示
       const formattedPoints = formatUtils.formatPoints(actualUserPoints);
@@ -2180,9 +2228,10 @@ Page({
       }
 
       const loginUserId = getApp().globalData?.userService?.getLoginUserId() || null;
+      const effectiveUserId = this.getEffectiveTaskUserId() || loginUserId;
       
       // 获取当前星星数
-      const userPoints = await starService.getTotalStars(loginUserId);
+      const userPoints = await starService.getTotalStars(effectiveUserId);
       logger.debug('Index', `当前星星数: ${userPoints}`);
       
       // 获取下一个可达成奖励，传递已获取的星星数确保一致性

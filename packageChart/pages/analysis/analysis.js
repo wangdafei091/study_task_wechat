@@ -1,5 +1,6 @@
 const app = getApp();
 const logger = require('../../../utils/logger.js');
+const viewScopeUtils = require('../../../utils/view-scope');
 
 Page({
   data: {
@@ -8,23 +9,23 @@ Page({
   },
 
   /**
-   * 根据登录用户角色决定分析数据范围
-   * - 家长：看家庭所有孩子数据（scope=family）
-   * - 孩子：看自己数据（userId=loginUser.id）
+   * 根据当前视角决定分析数据范围
+   * - 家长视角：看家庭所有孩子数据（scope=family）
+   * - 孩子视角：看当前孩子数据（userId=currentUser.id）
    * 此函数提取为独立方法便于单测
    */
-  getAnalysisOptions(loginUser) {
-    return (loginUser && loginUser.role === 'parent')
-      ? { scope: 'family' }
-      : { userId: loginUser && loginUser.id };
+  getAnalysisOptions(loginUser, currentUser) {
+    return viewScopeUtils.resolveAnalysisOptions(loginUser, currentUser);
   },
 
   onLoad: function () {
     logger.info('analysis', '页面加载');
-    const loginUser = app.globalData && app.globalData.userService
-      ? app.globalData.userService.getLoginUser()
+    const userService = app.globalData && app.globalData.userService
+      ? app.globalData.userService
       : null;
-    const analysisOptions = this.getAnalysisOptions(loginUser);
+    const loginUser = userService ? userService.getLoginUser() : null;
+    const currentUser = userService ? userService.getCurrentUser() : null;
+    const analysisOptions = this.getAnalysisOptions(loginUser, currentUser);
     logger.info('analysis', '分析范围', analysisOptions);
     this.setData({ loading: true, analysisOptions });
     setTimeout(() => {
@@ -35,10 +36,12 @@ Page({
   onShow: function () {
     logger.info('analysis', '页面显示');
     // 每次显示时重新计算 analysisOptions，以应对账号视角切换
-    const loginUser = app.globalData && app.globalData.userService
-      ? app.globalData.userService.getLoginUser()
+    const userService = app.globalData && app.globalData.userService
+      ? app.globalData.userService
       : null;
-    const analysisOptions = this.getAnalysisOptions(loginUser);
+    const loginUser = userService ? userService.getLoginUser() : null;
+    const currentUser = userService ? userService.getCurrentUser() : null;
+    const analysisOptions = this.getAnalysisOptions(loginUser, currentUser);
     this.setData({ loading: true, analysisOptions });
     setTimeout(() => {
       this.loadData();

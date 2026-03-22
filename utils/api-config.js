@@ -91,6 +91,10 @@ const API_CONFIG = {
     REWARDS: '/api/rewards',
     REWARD_BY_ID: '/api/rewards/{rewardId}',
     REWARD_EXCHANGE: '/api/rewards/{rewardId}/exchange',
+    MESSAGES: '/api/messages',
+    MESSAGE_BY_ID: '/api/messages/{messageId}',
+    MESSAGE_READ: '/api/messages/{messageId}/read',
+    MESSAGE_READ_ALL: '/api/messages/read-all',
 
     // 用户昵称修改
     USER_NICKNAME: '/api/users/{userId}/nickname',

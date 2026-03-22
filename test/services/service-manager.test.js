@@ -126,6 +126,7 @@ describe('ServiceManager', () => {
     });
     expect(mocks.RewardService).toHaveBeenCalledWith({
       eventBus: mocks.eventBusInstance,
+      starService: mocks.instances.starServiceInstance,
       userService,
       storageAdapter: expect.any(Object)
     });

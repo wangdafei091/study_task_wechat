@@ -70,6 +70,145 @@ class TaskService {
       logger.info('TaskService', 'UserService已更新');
     }
   }
+
+  _createOperationKey(seed = null) {
+    return String(seed || Date.now());
+  }
+
+  _getOperatorContext(targetUserId = null) {
+    const loginUser = this.userService?.getLoginUser?.();
+    const currentUser = this.userService?.getCurrentUser?.();
+
+    return {
+      actorUserId: loginUser?.userId || loginUser?.id || currentUser?.id || null,
+      actorRole: loginUser?.role || currentUser?.role || 'system',
+      familyId: loginUser?.familyId || currentUser?.familyId || null,
+      targetUserId: targetUserId || null
+    };
+  }
+
+  _buildTaskPendingSyncMeta(task, action, overrides = {}) {
+    const operatorContext = overrides.operatorContext || this._getOperatorContext(task?.userId || null);
+    const operationKey = this._createOperationKey(
+      overrides.operationKey ||
+      overrides.modifyTime ||
+      task?.modifyTime
+    );
+
+    return {
+      operationKey,
+      action,
+      operatorUserId: overrides.operatorUserId || operatorContext.actorUserId || null,
+      operatorRole: overrides.operatorRole || operatorContext.actorRole || 'system',
+      familyId: overrides.familyId || operatorContext.familyId || null,
+      targetUserId: overrides.targetUserId || operatorContext.targetUserId || task?.userId || null,
+      notificationType: overrides.notificationType || `task_${action}`,
+      modifyTime: Number(overrides.modifyTime || task?.modifyTime || Date.now())
+    };
+  }
+
+  async _markTaskSynced(task, overrides = {}) {
+    if (!task) {
+      return null;
+    }
+
+    task.syncedToCloud = true;
+    task.pendingSyncMeta = null;
+    if (overrides.modifyTime) {
+      task.modifyTime = overrides.modifyTime;
+    }
+    return this.taskRepository.save(task);
+  }
+
+  async _emitTaskCloudSyncFailure(action, task, error, extra = {}) {
+    const pendingSyncMeta = extra.pendingSyncMeta || task?.pendingSyncMeta || this._buildTaskPendingSyncMeta(task, action, extra);
+    if (task) {
+      task.pendingSyncMeta = pendingSyncMeta;
+      task.syncedToCloud = false;
+      await this.taskRepository.save(task).catch(() => null);
+    }
+
+    this.eventBus.emit(EVENTS.TASK_CLOUD_SYNC_FAILED, {
+      action,
+      task,
+      taskId: task?.id || extra.taskId || null,
+      error,
+      pendingSyncMeta,
+      taskSnapshot: extra.taskSnapshot || (task ? { ...task } : null)
+    });
+  }
+
+  async _getDeleteTombstones() {
+    if (typeof this.taskRepository.getDeleteTombstones !== 'function') {
+      return [];
+    }
+    return this.taskRepository.getDeleteTombstones().catch(() => []);
+  }
+
+  async _saveDeleteTombstone(tombstone) {
+    if (typeof this.taskRepository.saveDeleteTombstone !== 'function') {
+      return null;
+    }
+    return this.taskRepository.saveDeleteTombstone(tombstone).catch(() => null);
+  }
+
+  async _removeDeleteTombstone(entityId) {
+    if (typeof this.taskRepository.removeDeleteTombstone !== 'function') {
+      return null;
+    }
+    return this.taskRepository.removeDeleteTombstone(entityId).catch(() => null);
+  }
+
+  async _flushPendingTaskSyncs() {
+    if (!this.enableCloudStorage) {
+      return;
+    }
+
+    const tasks = await this.taskRepository.getAll();
+    for (const task of tasks) {
+      if (!task?.pendingSyncMeta) {
+        continue;
+      }
+
+      try {
+        if (!task.syncedToCloud) {
+          await this._syncTaskToCloud(task);
+          continue;
+        }
+
+        switch (task.pendingSyncMeta.action) {
+          case 'update':
+            await this._syncUpdateToCloud(task);
+            break;
+          case 'complete':
+          case 'reset':
+            await this._syncStatusToCloud(task);
+            break;
+          default:
+            await this._syncUpdateToCloud(task);
+            break;
+        }
+      } catch (error) {
+        logger.warn('TaskService', '补云任务同步失败，保留待同步状态', {
+          taskId: task.id,
+          action: task.pendingSyncMeta.action,
+          error: error.message
+        });
+      }
+    }
+
+    const tombstones = await this._getDeleteTombstones();
+    for (const tombstone of tombstones) {
+      try {
+        await this._syncDeleteToCloud(tombstone.entityId, tombstone);
+      } catch (error) {
+        logger.warn('TaskService', '任务删除 tombstone 补云失败，保留待同步状态', {
+          taskId: tombstone.entityId,
+          error: error.message
+        });
+      }
+    }
+  }
   
   /**
    * 获取所有任务（支持双写策略）
@@ -496,6 +635,14 @@ class TaskService {
         }
       }
       
+      const initialModifyTime = Number(task.modifyTime || Date.now());
+      task.modifyTime = initialModifyTime;
+      task.pendingSyncMeta = this._buildTaskPendingSyncMeta(task, 'create', {
+        operationKey: taskData.operationKey || initialModifyTime,
+        modifyTime: initialModifyTime,
+        targetUserId: task.userId
+      });
+
       // 保存任务
       const savedTask = await this.taskRepository.save(task);
       logger.info('TaskService', `创建任务成功: "${savedTask.title}", ID=${savedTask.id}`);
@@ -504,15 +651,14 @@ class TaskService {
       if (this.enableCloudStorage) {
         try {
           await this._syncTaskToCloud(savedTask);
-          savedTask.syncedToCloud = true;
-          await this.taskRepository.save(savedTask);
+          await this._markTaskSynced(savedTask);
           logger.info('TaskService', `任务已同步到云端: ID=${savedTask.id}`);
         } catch (cloudError) {
           logger.warn('TaskService', `云端同步失败，使用本地数据: ${cloudError.message}`, {
             taskId: savedTask.id,
             taskTitle: savedTask.title
           });
-          // 云端失败，本地数据已保存，继续使用本地数据
+          await this._emitTaskCloudSyncFailure('create', savedTask, cloudError);
         }
       } else {
         logger.info('TaskService', '云端模式未启用，仅使用本地存储', {
@@ -726,11 +872,13 @@ class TaskService {
             results.forEach((result, idx) => {
               if (result.status === 'fulfilled') {
                 batch[idx].syncedToCloud = true;
+                batch[idx].pendingSyncMeta = null;
                 syncedTasks.push(batch[idx]);
               } else {
                 logger.warn('TaskService', `重复任务实例云端同步失败: ID=${batch[idx].id}`, {
                   error: result.reason?.message
                 });
+                this._emitTaskCloudSyncFailure('create', batch[idx], result.reason).catch(() => null);
               }
             });
 
@@ -785,6 +933,11 @@ class TaskService {
     
     // 创建新任务实例
     const taskInstance = new Task(taskData);
+    taskInstance.pendingSyncMeta = this._buildTaskPendingSyncMeta(taskInstance, 'create', {
+      operationKey: taskInstance.modifyTime,
+      modifyTime: taskInstance.modifyTime,
+      targetUserId: taskInstance.userId
+    });
     
     logger.info('TaskService', `创建重复任务实例: ${dateStr}, 父任务ID: ${taskInstance.parentTaskId}`);
     
@@ -822,6 +975,12 @@ class TaskService {
 
       // 更新任务
       task.update(changes);
+      task.pendingSyncMeta = this._buildTaskPendingSyncMeta(task, 'update', {
+        operationKey: changes.operationKey || changes.modifyTime || task.modifyTime,
+        modifyTime: task.modifyTime,
+        targetUserId: task.userId
+      });
+      task.syncedToCloud = false;
 
       // 保存更新后的任务
       const updatedTask = await this.taskRepository.save(task);
@@ -837,7 +996,13 @@ class TaskService {
       });
 
       // 异步同步到云端（失败不影响本地结果）
-      this._syncUpdateToCloud(updatedTask);
+      this._syncUpdateToCloud(updatedTask).catch(async syncError => {
+        logger.warn('TaskService', '任务更新云同步失败，本地保留待同步状态', {
+          taskId: updatedTask.id,
+          error: syncError.message
+        });
+        await this._emitTaskCloudSyncFailure('update', updatedTask, syncError);
+      });
 
       return { success: true, task: updatedTask };
     } catch (error) {
@@ -871,6 +1036,22 @@ class TaskService {
         logger.warn('TaskService', `用户${userId}尝试删除不属于自己的任务${taskId}`);
         return { success: false, message: '无权限操作此任务' };
       }
+
+      const deleteMeta = {
+        entityType: 'task',
+        entityId: taskId,
+        operationKey: this._createOperationKey(Date.now()),
+        operatorUserId: this._getOperatorContext(taskInfo.userId).actorUserId,
+        operatorRole: this._getOperatorContext(taskInfo.userId).actorRole,
+        familyId: this._getOperatorContext(taskInfo.userId).familyId,
+        subjectUserId: taskInfo.userId || null,
+        notificationType: 'task_delete',
+        title: taskInfo.title,
+        summary: `任务“${taskInfo.title}”已删除`,
+        createTime: Date.now()
+      };
+
+      await this._saveDeleteTombstone(deleteMeta);
       
       // 删除任务
       await this.taskRepository.delete(taskId);
@@ -892,7 +1073,19 @@ class TaskService {
       }
 
       // 异步同步到云端
-      this._syncDeleteToCloud(taskId);
+      this._syncDeleteToCloud(taskId, deleteMeta).catch(async syncError => {
+        logger.warn('TaskService', '云端删除同步失败（本地已删除）', {
+          taskId,
+          error: syncError.message
+        });
+        this.eventBus.emit(EVENTS.TASK_CLOUD_SYNC_FAILED, {
+          action: 'delete',
+          taskId,
+          error: syncError,
+          pendingSyncMeta: deleteMeta,
+          taskSnapshot: taskInfo
+        });
+      });
 
       return { success: true };
     } catch (error) {
@@ -992,8 +1185,16 @@ class TaskService {
         logger.info('TaskService', `任务 "${task.title}" 是必做任务，完成后不获得星星奖励`);
       }
 
+      const syncAction = status === TaskStatus.COMPLETED ? 'complete' : 'reset';
+
       // 更新修改时间
       task.modifyTime = Date.now();
+      task.pendingSyncMeta = this._buildTaskPendingSyncMeta(task, syncAction, {
+        operationKey: task.modifyTime,
+        modifyTime: task.modifyTime,
+        targetUserId: task.userId
+      });
+      task.syncedToCloud = false;
       
       // 添加保存前的详细日志
       logger.info('TaskService', `准备保存任务: ${task.title}`, {
@@ -1063,7 +1264,14 @@ class TaskService {
       }
 
       // 异步同步状态到云端
-      this._syncStatusToCloud(savedTask);
+      this._syncStatusToCloud(savedTask).catch(async syncError => {
+        logger.warn('TaskService', '任务状态云同步失败，本地保留待同步状态', {
+          taskId: savedTask.id,
+          action: operationType,
+          error: syncError.message
+        });
+        await this._emitTaskCloudSyncFailure(operationType === 'complete' ? 'complete' : 'reset', savedTask, syncError);
+      });
 
       return { success: true, task: savedTask };
     } catch (error) {
@@ -1160,6 +1368,12 @@ class TaskService {
       task.reset();
       task.starAwarded = false;
       task.modifyTime = Date.now();
+      task.pendingSyncMeta = this._buildTaskPendingSyncMeta(task, 'reset', {
+        operationKey: task.modifyTime,
+        modifyTime: task.modifyTime,
+        targetUserId: task.userId
+      });
+      task.syncedToCloud = false;
       
       // 保存任务
       const savedTask = await this.taskRepository.save(task);
@@ -1173,7 +1387,13 @@ class TaskService {
       });
 
       // 异步同步状态到云端
-      this._syncStatusToCloud(savedTask);
+      this._syncStatusToCloud(savedTask).catch(async syncError => {
+        logger.warn('TaskService', '任务重置云同步失败，本地保留待同步状态', {
+          taskId: savedTask.id,
+          error: syncError.message
+        });
+        await this._emitTaskCloudSyncFailure('reset', savedTask, syncError);
+      });
 
       return { success: true, task: savedTask };
     } catch (error) {
@@ -1716,14 +1936,24 @@ class TaskService {
    * @param {Object} dateRange 日期范围对象 {startDate, endDate}
    * @returns {Promise<Object>} 统计数据
    */
-  async getTaskStatistics(dateRange = {}) {
+  async getTaskStatistics(dateRange = {}, scopeOptions = {}) {
     try {
-      logger.info('TaskService', '获取任务统计数据', dateRange);
+      logger.info('TaskService', '获取任务统计数据', {
+        ...dateRange,
+        ...scopeOptions
+      });
       
       // 使用日期范围获取任务，如果没有指定范围则获取所有任务
       let tasks;
       if (dateRange.startDate && dateRange.endDate) {
-        tasks = await this.getTasksByDateRange(dateRange.startDate, dateRange.endDate);
+        tasks = await this.getTasksByDateRange(
+          dateRange.startDate,
+          dateRange.endDate,
+          scopeOptions.userId || null,
+          scopeOptions.scope ? { scope: scopeOptions.scope } : {}
+        );
+      } else if (scopeOptions.userId || scopeOptions.scope) {
+        tasks = await this.getTasksByScope(scopeOptions);
       } else {
         tasks = await this.getAllTasks();
       }
@@ -2011,7 +2241,9 @@ class TaskService {
   }
 
   async _syncTaskToCloud(task) {
+    if (!this.enableCloudStorage || !task) return;
     try {
+      const pendingSyncMeta = task.pendingSyncMeta || this._buildTaskPendingSyncMeta(task, 'create');
       const cloudData = {
         taskId: task.id,
         title: task.title,
@@ -2030,7 +2262,13 @@ class TaskService {
         hasNoEndDate: task.hasNoEndDate,
         tags: task.tags,
         penaltyApplied: task.penaltyApplied,
-        modifyTime: task.modifyTime,
+        modifyTime: pendingSyncMeta.modifyTime || task.modifyTime,
+        operationKey: pendingSyncMeta.operationKey,
+        operatorContext: {
+          actorUserId: pendingSyncMeta.operatorUserId,
+          actorRole: pendingSyncMeta.operatorRole,
+          familyId: pendingSyncMeta.familyId
+        },
         parentTaskId: task.parentTaskId || null,
       };
 
@@ -2045,6 +2283,8 @@ class TaskService {
 
       // 调用后端API创建任务
       await HttpClient.post(API_CONFIG.ENDPOINTS.TASKS, cloudData);
+
+      await this._markTaskSynced(task, { modifyTime: cloudData.modifyTime });
 
       logger.info('TaskService', '任务已同步到云端', {
         taskId: task.id,
@@ -2069,6 +2309,7 @@ class TaskService {
    */
   async _fetchTasksFromCloud(userId, params = {}) {
     try {
+      await this._flushPendingTaskSyncs();
       const loginUserId = this.userService ? this.userService.getLoginUserId() : null;
       const requestParams = { ...params };
 
@@ -2216,8 +2457,9 @@ class TaskService {
    * 同步任务更新到云端
    */
   async _syncUpdateToCloud(task) {
-    if (!this.enableCloudStorage) return;
+    if (!this.enableCloudStorage || !task) return;
     try {
+      const pendingSyncMeta = task.pendingSyncMeta || this._buildTaskPendingSyncMeta(task, 'update');
       const url = API_CONFIG.ENDPOINTS.TASK_BY_ID.replace('{taskId}', task.id);
       await HttpClient.put(url, {
         title: task.title,
@@ -2235,28 +2477,51 @@ class TaskService {
         tags: task.tags,
         hasNoEndDate: task.hasNoEndDate,
         repeat: task.repeat,
+        modifyTime: pendingSyncMeta.modifyTime || task.modifyTime,
+        operationKey: pendingSyncMeta.operationKey,
+        operatorContext: {
+          actorUserId: pendingSyncMeta.operatorUserId,
+          actorRole: pendingSyncMeta.operatorRole,
+          familyId: pendingSyncMeta.familyId
+        },
       });
+      await this._markTaskSynced(task, { modifyTime: pendingSyncMeta.modifyTime || task.modifyTime });
       logger.info('TaskService', '任务更新已同步到云端', { taskId: task.id });
     } catch (err) {
       logger.warn('TaskService', '云端更新同步失败（本地已保存）', {
         taskId: task.id,
         error: err.message
       });
+      throw err;
     }
   }
 
   /**
    * 同步任务删除到云端
    */
-  async _syncDeleteToCloud(taskId) {
+  async _syncDeleteToCloud(taskId, deleteMeta = null) {
     if (!this.enableCloudStorage) return;
     try {
       const url = API_CONFIG.ENDPOINTS.TASK_BY_ID.replace('{taskId}', taskId);
-      await HttpClient.delete(url);
+      const payload = deleteMeta ? {
+        operationKey: deleteMeta.operationKey,
+        operatorContext: {
+          actorUserId: deleteMeta.operatorUserId,
+          actorRole: deleteMeta.operatorRole,
+          familyId: deleteMeta.familyId
+        }
+      } : null;
+      await HttpClient.request({
+        url,
+        method: 'DELETE',
+        data: payload
+      });
+      await this._removeDeleteTombstone(taskId);
       logger.info('TaskService', '任务删除已同步到云端', { taskId });
     } catch (err) {
       // 404 表示云端本就不存在该任务（如本地重复任务实例从未上云），视为成功
       if (err.message && err.message.includes('404')) {
+        await this._removeDeleteTombstone(taskId);
         logger.info('TaskService', '云端无此任务（可能为本地重复实例），跳过云端删除', { taskId });
         return;
       }
@@ -2264,6 +2529,7 @@ class TaskService {
         taskId,
         error: err.message
       });
+      throw err;
     }
   }
 
@@ -2271,13 +2537,22 @@ class TaskService {
    * 同步任务状态到云端（同步 status + starAwarded）
    */
   async _syncStatusToCloud(task) {
-    if (!this.enableCloudStorage) return;
+    if (!this.enableCloudStorage || !task) return;
     try {
+      const pendingSyncMeta = task.pendingSyncMeta || this._buildTaskPendingSyncMeta(task, task.status === TaskStatus.COMPLETED ? 'complete' : 'reset');
       const url = API_CONFIG.ENDPOINTS.TASK_STATUS.replace('{taskId}', task.id);
       await HttpClient.patch(url, {
         status: task.status,
-        starAwarded: task.starAwarded
+        starAwarded: task.starAwarded,
+        modifyTime: pendingSyncMeta.modifyTime || task.modifyTime,
+        operationKey: pendingSyncMeta.operationKey,
+        operatorContext: {
+          actorUserId: pendingSyncMeta.operatorUserId,
+          actorRole: pendingSyncMeta.operatorRole,
+          familyId: pendingSyncMeta.familyId
+        }
       });
+      await this._markTaskSynced(task, { modifyTime: pendingSyncMeta.modifyTime || task.modifyTime });
       logger.info('TaskService', '任务状态已同步到云端', {
         taskId: task.id,
         status: task.status,
@@ -2288,6 +2563,7 @@ class TaskService {
         taskId: task.id,
         error: err.message
       });
+      throw err;
     }
   }
 

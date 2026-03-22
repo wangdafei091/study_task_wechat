@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# M07 真实数据库集成测试快速设置脚本
+# 后端真实数据库集成测试快速设置脚本
 # 使用方法: bash setup-integration-test.sh (在backend目录下执行)
 
 set -e
 
-echo "🚀 开始设置M07真实数据库集成测试环境..."
+echo "🚀 开始设置后端真实数据库集成测试环境..."
 
 # 检查是否在backend目录
 if [ ! -f "package.json" ]; then
@@ -117,14 +117,21 @@ fi
 echo ""
 echo "📋 步骤6：运行集成测试..."
 echo "🧪 开始执行真实数据库集成测试..."
-npm test test/integration/task-api-m07-real.test.js test/integration/task-api-m08-real.test.js test/integration/task-api-m08b-real.test.js --verbose
+npm test -- \
+    test/integration/task-api-m07-real.test.js \
+    test/integration/task-api-m08-real.test.js \
+    test/integration/task-api-m08b-real.test.js \
+    test/integration/star-api-m09-real.test.js \
+    test/integration/reward-api-m09-real.test.js \
+    test/integration/message-api-m10-real.test.js \
+    --verbose
 
 echo ""
 echo "🎉 设置完成！"
 echo ""
 echo "后续使用："
-echo "1. 运行所有集成测试: npm test test/integration/task-api-m07-real.test.js test/integration/task-api-m08-real.test.js test/integration/task-api-m08b-real.test.js"
-echo "2. 运行特定测试: npm test -- test/integration/task-api-m08b-real.test.js -t \"测试名称\""
+echo "1. 运行所有集成测试: npm test -- test/integration/task-api-m07-real.test.js test/integration/task-api-m08-real.test.js test/integration/task-api-m08b-real.test.js test/integration/star-api-m09-real.test.js test/integration/reward-api-m09-real.test.js test/integration/message-api-m10-real.test.js"
+echo "2. 运行特定测试: npm test -- test/integration/message-api-m10-real.test.js -t \"测试名称\""
 echo "3. 查看测试指南: cat test/README.md"
 echo ""
 echo "测试文件位置："
@@ -132,5 +139,8 @@ echo "- 配置文件: .env.test"
 echo "- M07集成测试: test/integration/task-api-m07-real.test.js"
 echo "- M08集成测试: test/integration/task-api-m08-real.test.js"
 echo "- M08b集成测试: test/integration/task-api-m08b-real.test.js"
+echo "- M09星星集成测试: test/integration/star-api-m09-real.test.js"
+echo "- M09奖励集成测试: test/integration/reward-api-m09-real.test.js"
+echo "- M10消息集成测试: test/integration/message-api-m10-real.test.js"
 echo "- 数据库初始化: database/test-setup-modern.sql"
 echo "- 测试指南: test/README.md"

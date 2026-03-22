@@ -43,6 +43,7 @@ module.exports = {
     TASK_MARKED_REQUIRED: 'task:marked_required',
     TASK_UNMARKED_REQUIRED: 'task:unmarked_required',
     TASK_COMPLETED_WITH_REWARD: 'task:completed_with_reward',
+    TASK_CLOUD_SYNC_FAILED: 'task:cloud_sync_failed',
     
     // 星星相关事件
     STAR_EARNED: 'star:earned',
@@ -83,6 +84,7 @@ module.exports = {
     REWARD_DUPLICATED: 'reward:duplicated',
     REWARD_DELETED_BATCH: 'reward:deleted_batch',
     REWARD_EXAMPLES_CLEARED: 'reward:examples_cleared',
+    REWARD_CLOUD_SYNC_FAILED: 'reward:cloud_sync_failed',
     
     // UI事件
     PROGRESS_BAR_COMPLETE: 'progressbar:complete',

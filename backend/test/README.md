@@ -46,7 +46,13 @@ mysql -h your-remote-db-host.com -u test_user -p task_wechat_test < backend/data
 
 ```bash
 cd backend
-npm test -- test/integration/task-api-m07-real.test.js
+npm test -- \
+  test/integration/task-api-m07-real.test.js \
+  test/integration/task-api-m08-real.test.js \
+  test/integration/task-api-m08b-real.test.js \
+  test/integration/star-api-m09-real.test.js \
+  test/integration/reward-api-m09-real.test.js \
+  test/integration/message-api-m10-real.test.js
 ```
 
 ### 运行特定测试套件
@@ -55,50 +61,60 @@ npm test -- test/integration/task-api-m07-real.test.js
 # 只测试更新任务API
 npm test -- test/integration/task-api-m07-real.test.js -t "PUT /api/tasks"
 
-# 只测试软删除
-npm test -- test/integration/task-api-m07-real.test.js -t "DELETE /api/tasks"
+# 只测试奖励兑换
+npm test -- test/integration/reward-api-m09-real.test.js -t "PATCH /api/rewards/:rewardId/exchange"
 
-# 只测试家庭聚合查询
-npm test-- test/integration/task-api-m07-real.test.js -t "scope=family"
+# 只测试消息路由与已读同步
+npm test -- test/integration/message-api-m10-real.test.js -t "read-all"
 ```
 
 ### 查看测试覆盖率
 
 ```bash
-npm test -- test/integration/task-api-m07-real.test.js --coverage
+npm test -- test/integration/message-api-m10-real.test.js --coverage
 ```
 
 ## 🔍 测试内容
 
-M07真实集成测试覆盖以下场景：
+当前真实集成测试覆盖以下里程碑场景：
 
-### 1. PUT /api/tasks/:taskId - 更新任务
+### 1. M07 / M08 任务链路
 - ✅ 任务所有者更新成功
 - ✅ 家长代孩子更新成功
 - ✅ 跨家庭用户返回403
 - ✅ 不存在的任务返回404
 - ✅ 字段白名单过滤生效
-
-### 2. DELETE /api/tasks/:taskId - 软删除任务
 - ✅ 软删除成功（deleted_at设置）
 - ✅ 软删除后任务不在列表中出现
-- ✅ 跨家庭用户返回403
 - ✅ 软删除任务通过ID查询返回404
-
-### 3. PATCH /api/tasks/:taskId/status - 更新任务状态
 - ✅ 完成任务成功，completionTime设置
 - ✅ 重置任务成功
-- ✅ 家长代孩子更新成功
 - ✅ 无效状态值返回400
 - ✅ completionTime/modifyTime字段正确
-
-### 4. GET /api/tasks?scope=family - 家庭聚合查询
 - ✅ 家长获取所有孩子任务
 - ✅ 孩子请求返回403
 - ✅ 不包含其他家庭任务
 - ✅ 支持日期/状态过滤
 
-### 5. deleted_at IS NULL 过滤验证
+### 2. M09 星星链路
+- ✅ 记账写入与分组快照维护
+- ✅ 星星扣减分摊与幂等重试
+- ✅ 家庭权限隔离
+
+### 3. M09 奖励链路
+- ✅ 奖励创建后家庭成员可见
+- ✅ 历史个人奖励自动补齐 `family_id`
+- ✅ 孩子不可越权创建奖励
+- ✅ 奖励兑换扣星、幂等与跨家庭隔离
+
+### 4. M10 消息链路
+- ✅ `messages` 表迁移与消息 API 查询
+- ✅ 任务创建/完成后同时生成孩子个人流与家长家庭流消息
+- ✅ 家长代理孩子个人流时不读取入家前旧消息
+- ✅ `PATCH /api/messages/read-all` 只更新当前授权范围内消息
+- ✅ 奖励创建/兑换消息进入正确消息流
+
+### 5. deleted_at / soft delete 过滤验证
 - ✅ 所有读接口正确过滤软删除任务
 - ✅ 软删除任务不在普通查询中出现
 
@@ -120,7 +136,15 @@ Duplicate entry for key 'PRIMARY'
 **解决方案**：
 ```bash
 # 清理测试数据后重新运行
-mysql -h your-host -u user -p task_wechat_test -e "DELETE FROM tasks WHERE task_id LIKE '%_test_%'; DELETE FROM users WHERE user_id LIKE '%_test_%';"
+mysql -h your-host -u user -p task_wechat_test -e "
+DELETE FROM messages WHERE related_id LIKE 'm10_msg_%';
+DELETE FROM rewards WHERE reward_id LIKE 'm09_reward_%';
+DELETE FROM star_records WHERE record_id LIKE 'm09_%' OR record_id LIKE 'm10_%';
+DELETE FROM star_groups WHERE group_id LIKE 'm09_%' OR group_id LIKE 'm10_%';
+DELETE FROM tasks WHERE task_id LIKE 'm07_%' OR task_id LIKE 'm08_%' OR task_id LIKE 'm09_%' OR task_id LIKE 'm10_%';
+DELETE FROM users WHERE user_id LIKE 'm09_%' OR user_id LIKE 'm10_%';
+DELETE FROM families WHERE family_id LIKE 'm09_%' OR family_id LIKE 'm10_%';
+"
 ```
 
 ### 问题3：JWT认证失败
@@ -186,7 +210,13 @@ DELETE FROM families WHERE family_id LIKE '%_test_%';
 - name: Run integration tests
   run: |
     cd backend
-    npm test -- test/integration/task-api-m07-real.test.js
+    npm test -- \
+      test/integration/task-api-m07-real.test.js \
+      test/integration/task-api-m08-real.test.js \
+      test/integration/task-api-m08b-real.test.js \
+      test/integration/star-api-m09-real.test.js \
+      test/integration/reward-api-m09-real.test.js \
+      test/integration/message-api-m10-real.test.js
   env:
     DB_HOST: ${{ secrets.TEST_DB_HOST }}
     DB_USER: ${{ secrets.TEST_DB_USER }}

@@ -12,6 +12,7 @@ const analyticsUtils = require('../../utils/analyticsUtils.js');
 const { EVENTS } = require('../../../utils/constants.js');
 const serviceManager = require('../../../services/service-manager.js');
 const logger = require('../../../utils/logger.js');
+const viewScopeUtils = require('../../../utils/view-scope');
 
 Component({
   /**
@@ -56,9 +57,13 @@ Component({
     attached: function() {
       // 初始化monthsToRefresh作为组件实例属性，避免Set在data中序列化问题
       this.monthsToRefresh = new Set();
+      this._attached = true;
+      this._didInitialScopedLoad = false;
       
       logger.debug('星星日历', '组件初始化');
-      this.initCalendar();
+      this.initCalendar({
+        skipDataLoad: !viewScopeUtils.hasResolvedAnalysisOptions(this.properties.analysisOptions)
+      });
       
       // 订阅任务状态变更事件，保存 callback 引用以便精确解绑
       const app = getApp();
@@ -128,6 +133,7 @@ Component({
     },
     
     detached: function() {
+      this._attached = false;
       // 精确解绑：传入 callback 引用，不影响其他组件的同名事件监听器
       const app = getApp();
       if (app && app.globalData && app.globalData.eventBus && this._onTaskStatusUpdated) {
@@ -142,6 +148,19 @@ Component({
     }
   },
 
+  observers: {
+    'analysisOptions': function() {
+      if (!this._attached || !viewScopeUtils.hasResolvedAnalysisOptions(this.properties.analysisOptions)) {
+        return;
+      }
+      if (this._didInitialScopedLoad) {
+        return;
+      }
+      this._didInitialScopedLoad = true;
+      this.smartRefresh();
+    }
+  },
+
   /**
    * 组件的方法列表
    */
@@ -149,7 +168,7 @@ Component({
     /**
      * 初始化日历
      */
-    initCalendar: function() {
+    initCalendar: function(options = {}) {
       // 设置初始月份
       let year = this.data.currentYear;
       let month = this.data.currentMonth;
@@ -171,8 +190,10 @@ Component({
       // 生成日历数据
       this.generateCalendarDays();
       
-      // 获取星星记录
-      this.loadStarRecords();
+      if (!options.skipDataLoad) {
+        this._didInitialScopedLoad = true;
+        this.loadStarRecords();
+      }
       
       logger.debug('星星日历', `初始化完成，当前显示: ${year}年${month + 1}月`);
     },
