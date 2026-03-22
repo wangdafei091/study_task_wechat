@@ -1,6 +1,11 @@
 jest.mock('../../config/database', () => ({
+  getPool: jest.fn(),
   query: jest.fn(),
   execute: jest.fn()
+}));
+
+jest.mock('../../services/messageService', () => ({
+  createTaskMessages: jest.fn().mockResolvedValue([])
 }));
 
 jest.mock('../../utils/logger', () => ({
@@ -15,14 +20,23 @@ describe('backend TaskService schema compatibility', () => {
   });
 
   it('createTask 应兼容旧版 camelCase tasks 字段', async () => {
-    const { query, execute } = require('../../config/database');
+    const { getPool, query } = require('../../config/database');
+    const connection = {
+      beginTransaction: jest.fn().mockResolvedValue(),
+      execute: jest.fn().mockResolvedValue([[], undefined]),
+      commit: jest.fn().mockResolvedValue(),
+      rollback: jest.fn().mockResolvedValue(),
+      release: jest.fn()
+    };
+    getPool.mockReturnValue({
+      getConnection: jest.fn().mockResolvedValue(connection)
+    });
     query.mockResolvedValueOnce(createColumnRows([
       'task_id', 'user_id', 'title', 'description', 'type', 'date',
       'startTime', 'endTime', 'points', 'pointsExpiry', 'isRequired',
       'status', 'repeat', 'isAllDay', 'penaltyApplied', 'deleted_at',
       'completion_time', 'star_awarded', 'modify_time'
     ]));
-    execute.mockResolvedValue({ affectedRows: 1 });
 
     const service = require('../../services/taskService');
 
@@ -32,7 +46,7 @@ describe('backend TaskService schema compatibility', () => {
       date: '2026-03-21'
     });
 
-    const [sql] = execute.mock.calls[0];
+    const [sql] = connection.execute.mock.calls[0];
     expect(sql).toContain('startTime');
     expect(sql).toContain('endTime');
     expect(sql).toContain('pointsExpiry');
@@ -43,7 +57,17 @@ describe('backend TaskService schema compatibility', () => {
   });
 
   it('createTask 应兼容新版 snake_case tasks 字段', async () => {
-    const { query, execute } = require('../../config/database');
+    const { getPool, query } = require('../../config/database');
+    const connection = {
+      beginTransaction: jest.fn().mockResolvedValue(),
+      execute: jest.fn().mockResolvedValue([[], undefined]),
+      commit: jest.fn().mockResolvedValue(),
+      rollback: jest.fn().mockResolvedValue(),
+      release: jest.fn()
+    };
+    getPool.mockReturnValue({
+      getConnection: jest.fn().mockResolvedValue(connection)
+    });
     query.mockResolvedValueOnce(createColumnRows([
       'task_id', 'user_id', 'title', 'description', 'type', 'date',
       'start_time', 'end_time', 'points', 'points_expiry', 'is_required',
@@ -51,7 +75,6 @@ describe('backend TaskService schema compatibility', () => {
       'completion_time', 'star_awarded', 'modify_time', 'duration',
       'has_no_end_date', 'tags', 'parent_task_id'
     ]));
-    execute.mockResolvedValue({ affectedRows: 1 });
 
     const service = require('../../services/taskService');
 
@@ -63,7 +86,7 @@ describe('backend TaskService schema compatibility', () => {
       hasNoEndDate: false
     });
 
-    const [sql] = execute.mock.calls[0];
+    const [sql] = connection.execute.mock.calls[0];
     expect(sql).toContain('start_time');
     expect(sql).toContain('end_time');
     expect(sql).toContain('points_expiry');

@@ -30,6 +30,31 @@ class TaskRepository extends BaseRepository {
     
     logger.info('TaskRepository', '初始化任务仓储');
   }
+
+  async getDeleteTombstones() {
+    return this.storageAdapter.getAsync('taskDeleteTombstones', []);
+  }
+
+  async saveDeleteTombstone(tombstone) {
+    if (!tombstone || !tombstone.entityId) {
+      return false;
+    }
+
+    const tombstones = await this.getDeleteTombstones();
+    const next = tombstones.filter(item => item.entityId !== tombstone.entityId);
+    next.push(tombstone);
+    return this.storageAdapter.setAsync('taskDeleteTombstones', next);
+  }
+
+  async removeDeleteTombstone(entityId) {
+    if (!entityId) {
+      return false;
+    }
+
+    const tombstones = await this.getDeleteTombstones();
+    const next = tombstones.filter(item => item.entityId !== entityId);
+    return this.storageAdapter.setAsync('taskDeleteTombstones', next);
+  }
   
   /**
    * 获取今天的任务

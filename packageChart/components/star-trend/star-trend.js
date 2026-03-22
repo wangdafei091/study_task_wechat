@@ -1,6 +1,7 @@
 const logger = require('../../../utils/logger.js');
 const analyticsUtils = require('../../utils/analyticsUtils.js');
 const dateUtils = require('../../../utils/dateUtils.js');
+const viewScopeUtils = require('../../../utils/view-scope');
 
 Component({
   /**
@@ -50,15 +51,18 @@ Component({
       
       // 标记已挂载（供 observers 判断是否可触发刷新）
       this._attached = true;
-      // 加载数据
-      this.loadStarTrendData();
+      if (viewScopeUtils.hasResolvedAnalysisOptions(this.properties.analysisOptions)) {
+        this.loadStarTrendData();
+      } else {
+        logger.info('星星趋势图', '等待分析范围就绪后再加载趋势数据');
+      }
     }
   },
 
   observers: {
     'analysisOptions': function() {
       // analysisOptions 变化（如角色/视角切换）时重新加载趋势数据
-      if (this._attached) {
+      if (this._attached && viewScopeUtils.hasResolvedAnalysisOptions(this.properties.analysisOptions)) {
         this.loadStarTrendData();
       }
     }

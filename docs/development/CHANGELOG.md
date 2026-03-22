@@ -4,6 +4,40 @@
 
 ---
 
+## [里程碑-10] - 2026-03-22
+
+### ✅ 完成情况
+
+**消息通知云端同步 + 多孩子路由修复**
+
+- 后端新增 `messages` 表、消息模型、消息服务、控制器与路由，补齐消息域云端主链路
+- 任务与奖励云端主写路径在成功后生成消息，统一落为孩子个人流（`scope=user`）与家长家庭流（`scope=family`）双记录
+- 前端 `MessageService` 完成 `refreshMessagesFromCloud`、`getMessagesByScope`、单条已读同步、批量已读同步、删除同步
+- 前端 `MessageRepository` 支持按 scope 回灌云端消息、`legacy` 归档、stale cleanup 与 provisional 消息保留
+- 首页消息预览与消息中心页面按视角切换：家长默认读取家庭流，孩子或家长切到孩子视角时读取个人流
+- 任务/奖励本地补云链路已持久化 `pendingSyncMeta` 与删除 tombstone；云同步失败时通过 `TASK_CLOUD_SYNC_FAILED` / `REWARD_CLOUD_SYNC_FAILED` 生成本地 provisional 消息
+- 集成测试库初始化脚本 `backend/database/test-setup-modern.sql` 已补齐 `messages` 表，M10 真实集成测试可直接覆盖消息链路
+
+### 🧪 验证结果
+
+- 后端真实集成测试已补齐：
+  - `backend/test/integration/message-api-m10-real.test.js`
+- 后端真实链路已覆盖的关键场景：
+  - 任务创建/完成后同时生成孩子个人流与家长家庭流消息
+  - 家长代理读取孩子个人流时，不读取入家前旧消息
+  - `PATCH /api/messages/read-all` 仅更新当前授权范围内消息
+  - 奖励创建只进入家庭流，兑换后进入个人流与家庭流
+- 前端 `MessageService` 已补齐 M10 语义测试：
+  - `test/services/message-service.test.js`
+- 后端测试说明已纳入 M10：
+  - `backend/test/README.md`
+
+### 📖 详细实施记录
+
+- [里程碑-10：消息通知云端同步 + 多孩子路由修复](../design/milestone-10-message-notification-sync.md)
+
+---
+
 ## [里程碑-09] - 2026-03-21
 
 ### ✅ 完成情况
@@ -305,7 +339,7 @@
 |--------|------|------|
 | M08 | 云端同步完善（重复任务同步 + 冲突解决） | ✅ 已完成 |
 | M09 | 星星积分 + 奖励云端同步 | ✅ 已完成 |
-| M10 | 消息通知 + 完善优化 | 🔴 未启动 |
+| M10 | 消息通知 + 完善优化 | ✅ 已完成 |
 
 ---
 

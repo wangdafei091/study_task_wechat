@@ -25,6 +25,7 @@ class RewardService {
    * @param {RewardRepository} options.rewardRepository 奖励仓储
    * @param {StarGroupRepository} options.starGroupRepository 星星分组仓储
    * @param {StarRecordRepository} options.starRecordRepository 星星记录仓储
+   * @param {StarService} options.starService 星星服务
    * @param {UserService} options.userService 用户服务
    * @param {EventBus} options.eventBus 事件总线
    */
@@ -35,6 +36,7 @@ class RewardService {
     this.starRecordRepository = options.starRecordRepository || new StarRecordRepository();
     
     // 关联服务
+    this.starService = options.starService || null;
     this.userService = options.userService; // 新增：注入用户服务
     this.storageAdapter = options.storageAdapter; // 注入存储适配器
     
@@ -46,6 +48,35 @@ class RewardService {
     this.enableCloudStorage = API_CONFIG.ENABLE_API;
     
     logger.info('RewardService', '构造奖励服务实例');
+  }
+
+  async _getUserAvailableStars(userId = null, options = {}) {
+    const shouldPreferStarService = this.enableCloudStorage &&
+      this.starService &&
+      typeof this.starService.getTotalStars === 'function';
+
+    if (shouldPreferStarService) {
+      const shouldRefresh = options.refreshBeforeRead !== false &&
+        userId &&
+        typeof this.starService.refreshStarsFromCloud === 'function';
+
+      if (shouldRefresh) {
+        try {
+          await this.starService.refreshStarsFromCloud(userId);
+          logger.info('RewardService', `兑换前已刷新云端星星数据, 用户=${userId}`);
+        } catch (refreshError) {
+          logger.warn('RewardService', `刷新云端星星数据失败，将继续使用当前本地快照, 用户=${userId}`, refreshError);
+        }
+      }
+
+      const totalStars = await this.starService.getTotalStars(userId);
+      logger.info('RewardService', `通过StarService获取可用星星成功${userId ? `, 用户=${userId}` : ''}: ${totalStars}`);
+      return totalStars;
+    }
+
+    const totalStars = await this.starGroupRepository.getTotalPoints(userId);
+    logger.info('RewardService', `通过StarGroupRepository获取可用星星成功${userId ? `, 用户=${userId}` : ''}: ${totalStars}`);
+    return totalStars;
   }
   
   /**
@@ -145,6 +176,146 @@ class RewardService {
       RewardService._initializationPromise = null;
     }
   }
+
+  _createOperationKey(seed = null) {
+    return String(seed || Date.now());
+  }
+
+  _getOperatorContext(targetUserId = null) {
+    const loginUser = this.userService?.getLoginUser?.();
+    const currentUser = this.userService?.getCurrentUser?.();
+
+    return {
+      actorUserId: loginUser?.userId || loginUser?.id || currentUser?.id || null,
+      actorRole: loginUser?.role || currentUser?.role || 'system',
+      familyId: loginUser?.familyId || currentUser?.familyId || null,
+      targetUserId: targetUserId || null
+    };
+  }
+
+  _buildRewardPendingSyncMeta(reward, action, overrides = {}) {
+    const operatorContext = overrides.operatorContext || this._getOperatorContext(reward?.exchangeUserId || null);
+    const operationKey = this._createOperationKey(
+      overrides.operationKey ||
+      overrides.modifyTime ||
+      reward?.modifyTime
+    );
+
+    return {
+      operationKey,
+      action,
+      operatorUserId: overrides.operatorUserId || operatorContext.actorUserId || null,
+      operatorRole: overrides.operatorRole || operatorContext.actorRole || 'system',
+      familyId: overrides.familyId || operatorContext.familyId || reward?.familyId || null,
+      exchangeUserId: overrides.exchangeUserId || reward?.exchangeUserId || operatorContext.targetUserId || null,
+      notificationType: overrides.notificationType || `reward_${action}`,
+      modifyTime: Number(overrides.modifyTime || reward?.modifyTime || Date.now())
+    };
+  }
+
+  async _markRewardSynced(reward, overrides = {}) {
+    if (!reward) {
+      return null;
+    }
+
+    reward.syncedToCloud = true;
+    reward.pendingSyncMeta = null;
+    if (overrides.modifyTime) {
+      reward.modifyTime = overrides.modifyTime;
+    }
+    return this.rewardRepository.save(reward);
+  }
+
+  async _emitRewardCloudSyncFailure(action, reward, error, extra = {}) {
+    const pendingSyncMeta = extra.pendingSyncMeta || reward?.pendingSyncMeta || this._buildRewardPendingSyncMeta(reward, action, extra);
+    if (reward) {
+      reward.pendingSyncMeta = pendingSyncMeta;
+      reward.syncedToCloud = false;
+      await this.rewardRepository.save(reward).catch(() => null);
+    }
+
+    this.eventBus.emit(EVENTS.REWARD_CLOUD_SYNC_FAILED, {
+      action,
+      reward,
+      rewardId: reward?.id || extra.rewardId || null,
+      error,
+      pendingSyncMeta,
+      rewardSnapshot: extra.rewardSnapshot || (reward ? { ...reward } : null)
+    });
+  }
+
+  async _getDeleteTombstones() {
+    if (typeof this.rewardRepository.getDeleteTombstones !== 'function') {
+      return [];
+    }
+    return this.rewardRepository.getDeleteTombstones().catch(() => []);
+  }
+
+  async _saveDeleteTombstone(tombstone) {
+    if (typeof this.rewardRepository.saveDeleteTombstone !== 'function') {
+      return null;
+    }
+    return this.rewardRepository.saveDeleteTombstone(tombstone).catch(() => null);
+  }
+
+  async _removeDeleteTombstone(entityId) {
+    if (typeof this.rewardRepository.removeDeleteTombstone !== 'function') {
+      return null;
+    }
+    return this.rewardRepository.removeDeleteTombstone(entityId).catch(() => null);
+  }
+
+  async _flushPendingRewardSyncs() {
+    if (!this.enableCloudStorage) {
+      return;
+    }
+
+    const rewards = await this.rewardRepository.getAll();
+    for (const reward of rewards) {
+      if (!reward?.pendingSyncMeta) {
+        continue;
+      }
+
+      try {
+        if (!reward.syncedToCloud) {
+          await this._syncRewardToCloud(reward);
+          continue;
+        }
+
+        switch (reward.pendingSyncMeta.action) {
+          case 'exchange':
+            await this._syncExchangeToCloud(
+              reward.id,
+              reward.pendingSyncMeta.exchangeUserId || reward.exchangeUserId,
+              reward.pendingSyncMeta.modifyTime || reward.modifyTime,
+              reward
+            );
+            break;
+          default:
+            await this._syncRewardToCloud(reward);
+            break;
+        }
+      } catch (error) {
+        logger.warn('RewardService', '奖励补云失败，保留待同步状态', {
+          rewardId: reward.id,
+          action: reward.pendingSyncMeta.action,
+          error: error.message
+        });
+      }
+    }
+
+    const tombstones = await this._getDeleteTombstones();
+    for (const tombstone of tombstones) {
+      try {
+        await this._syncDeleteRewardToCloud(tombstone.entityId, tombstone);
+      } catch (error) {
+        logger.warn('RewardService', '奖励删除 tombstone 补云失败，保留待同步状态', {
+          rewardId: tombstone.entityId,
+          error: error.message
+        });
+      }
+    }
+  }
   
   /**
    * 获取所有奖励
@@ -216,6 +387,10 @@ class RewardService {
       // 创建Reward实例
       const { Reward } = require('../models/index');
       const reward = new Reward(rewardData);
+      reward.pendingSyncMeta = this._buildRewardPendingSyncMeta(reward, 'create', {
+        operationKey: rewardData.operationKey || reward.modifyTime,
+        modifyTime: reward.modifyTime
+      });
       
       // 保存奖励
       const savedReward = await this.rewardRepository.save(reward);
@@ -226,11 +401,12 @@ class RewardService {
       this.eventBus.emit(EVENTS.REWARD_CREATED, { reward: savedReward });
 
       if (savedReward && this.enableCloudStorage) {
-        this._syncRewardToCloud(savedReward).catch(syncError => {
+        this._syncRewardToCloud(savedReward).catch(async syncError => {
           logger.warn('RewardService', '奖励创建云同步失败，本地已保存', {
             rewardId: savedReward.id,
             error: syncError.message
           });
+          await this._emitRewardCloudSyncFailure('create', savedReward, syncError);
         });
       }
       
@@ -272,6 +448,11 @@ class RewardService {
         }
       });
       existingReward.modifyTime = Date.now();
+      existingReward.pendingSyncMeta = this._buildRewardPendingSyncMeta(existingReward, 'update', {
+        operationKey: rewardData.operationKey || existingReward.modifyTime,
+        modifyTime: existingReward.modifyTime
+      });
+      existingReward.syncedToCloud = false;
       
       logger.info('RewardService', `奖励更新字段: ${updatedFields.join(', ')}`);
       
@@ -287,11 +468,12 @@ class RewardService {
       });
 
       if (updatedReward && this.enableCloudStorage) {
-        this._syncRewardToCloud(updatedReward).catch(syncError => {
+        this._syncRewardToCloud(updatedReward).catch(async syncError => {
           logger.warn('RewardService', '奖励更新云同步失败，本地已保存', {
             rewardId: updatedReward.id,
             error: syncError.message
           });
+          await this._emitRewardCloudSyncFailure('update', updatedReward, syncError);
         });
       }
       
@@ -327,6 +509,23 @@ class RewardService {
         logger.warn('RewardService', `删除奖励失败: 奖励已被领取，不能删除, ID=${rewardId}`);
         return { success: false, message: '已领取的奖励不能删除' };
       }
+
+      const operatorContext = this._getOperatorContext();
+      const deleteMeta = {
+        entityType: 'reward',
+        entityId: rewardId,
+        operationKey: this._createOperationKey(Date.now()),
+        operatorUserId: operatorContext.actorUserId,
+        operatorRole: operatorContext.actorRole,
+        familyId: operatorContext.familyId || reward.familyId || null,
+        subjectUserId: null,
+        notificationType: 'reward_delete',
+        title: reward.name,
+        summary: `奖励“${reward.name}”已删除`,
+        createTime: Date.now()
+      };
+
+      await this._saveDeleteTombstone(deleteMeta);
       
       // 删除奖励
       const result = await this.rewardRepository.delete(rewardId);
@@ -337,10 +536,17 @@ class RewardService {
       this.eventBus.emit(EVENTS.REWARD_DELETED, { reward });
 
       if (this.enableCloudStorage) {
-        this._syncDeleteRewardToCloud(rewardId).catch(syncError => {
+        this._syncDeleteRewardToCloud(rewardId, deleteMeta).catch(syncError => {
           logger.warn('RewardService', '奖励删除云同步失败，本地已删除', {
             rewardId,
             error: syncError.message
+          });
+          this.eventBus.emit(EVENTS.REWARD_CLOUD_SYNC_FAILED, {
+            action: 'delete',
+            rewardId,
+            error: syncError,
+            pendingSyncMeta: deleteMeta,
+            rewardSnapshot: reward
           });
         });
       }
@@ -528,6 +734,7 @@ class RewardService {
   }
 
   async _fetchRewardsFromCloud() {
+    await this._flushPendingRewardSyncs();
     const response = await HttpClient.get(API_CONFIG.ENDPOINTS.REWARDS);
     const cloudRewards = (response.rewards || []).map(item => this._mapCloudReward(item));
     const allLocal = await this.rewardRepository.getAll(false);
@@ -547,6 +754,7 @@ class RewardService {
 
   async _syncRewardToCloud(reward) {
     if (!reward) return;
+    const pendingSyncMeta = reward.pendingSyncMeta || this._buildRewardPendingSyncMeta(reward, reward.syncedToCloud ? 'update' : 'create');
 
     const payload = {
       rewardId: reward.id,
@@ -565,7 +773,8 @@ class RewardService {
       notes: reward.notes || '',
       protectedByExpiry: reward.protectedByExpiry || false,
       partialProtection: reward.partialProtection || 0,
-      modifyTime: reward.modifyTime || Date.now()
+      modifyTime: pendingSyncMeta.modifyTime || reward.modifyTime || Date.now(),
+      operationKey: pendingSyncMeta.operationKey
     };
 
     if (reward.syncedToCloud) {
@@ -575,22 +784,49 @@ class RewardService {
       await HttpClient.post(API_CONFIG.ENDPOINTS.REWARDS, payload);
     }
 
-    reward.syncedToCloud = true;
-    reward.modifyTime = payload.modifyTime;
-    await this.rewardRepository.save(reward);
+    await this._markRewardSynced(reward, { modifyTime: payload.modifyTime });
   }
 
-  async _syncDeleteRewardToCloud(rewardId) {
+  async _syncDeleteRewardToCloud(rewardId, deleteMeta = null) {
     const url = API_CONFIG.ENDPOINTS.REWARD_BY_ID.replace('{rewardId}', rewardId);
-    await HttpClient.delete(url);
+    try {
+      await HttpClient.request({
+        url,
+        method: 'DELETE',
+        data: deleteMeta ? {
+          operationKey: deleteMeta.operationKey,
+          operatorContext: {
+            actorUserId: deleteMeta.operatorUserId,
+            actorRole: deleteMeta.operatorRole,
+            familyId: deleteMeta.familyId
+          }
+        } : null
+      });
+      await this._removeDeleteTombstone(rewardId);
+    } catch (error) {
+      if (error.message && error.message.includes('404')) {
+        await this._removeDeleteTombstone(rewardId);
+        return;
+      }
+      throw error;
+    }
   }
 
-  async _syncExchangeToCloud(rewardId, exchangeUserId, modifyTime) {
-    const url = API_CONFIG.ENDPOINTS.REWARD_EXCHANGE.replace('{rewardId}', rewardId);
-    return HttpClient.patch(url, {
-      exchangeUserId,
-      modifyTime
+  async _syncExchangeToCloud(rewardId, exchangeUserId, modifyTime, reward = null) {
+    const pendingSyncMeta = reward?.pendingSyncMeta || this._buildRewardPendingSyncMeta(reward, 'exchange', {
+      modifyTime,
+      exchangeUserId
     });
+    const url = API_CONFIG.ENDPOINTS.REWARD_EXCHANGE.replace('{rewardId}', rewardId);
+    const response = await HttpClient.patch(url, {
+      exchangeUserId,
+      modifyTime,
+      operationKey: pendingSyncMeta.operationKey
+    });
+    if (reward) {
+      await this._markRewardSynced(reward, { modifyTime });
+    }
+    return response;
   }
 
   _mapCloudReward(item) {
@@ -627,7 +863,9 @@ class RewardService {
   async getExchangeableRewards(userId = null) {
     try {
       // 获取用户可用的星星数量
-      const availablePoints = await this.starGroupRepository.getTotalPoints(userId);
+      const availablePoints = await this._getUserAvailableStars(userId, {
+        refreshBeforeRead: !!userId
+      });
       
       // 获取可兑换的奖励
       const rewards = await this.rewardRepository.getExchangeableRewards(availablePoints, userId);
@@ -692,7 +930,9 @@ class RewardService {
       
       // 获取用户当前星星总数
       logger.info('RewardService', `步骤2: 检查用户星星数量, 用户=${userId}`);
-      const userStars = await this.starGroupRepository.getTotalPoints(userId);
+      const userStars = await this._getUserAvailableStars(userId, {
+        refreshBeforeRead: true
+      });
       logger.info('RewardService', `兑换奖励前用户星星数: ${userStars}, 用户=${userId}`);
       
       // 计算实际需要扣除的星星数量
@@ -776,6 +1016,13 @@ class RewardService {
           reward.claimTime = exchangeModifyTime;
           reward.deliveryTime = exchangeModifyTime;
           reward.modifyTime = exchangeModifyTime;
+          reward.exchangeUserId = userId;
+          reward.pendingSyncMeta = this._buildRewardPendingSyncMeta(reward, 'exchange', {
+            operationKey: exchangeModifyTime,
+            modifyTime: exchangeModifyTime,
+            exchangeUserId: userId
+          });
+          reward.syncedToCloud = false;
           logger.info('RewardService', `奖励状态设置: claimed=${reward.claimed}, claimStatus=${reward.claimStatus}, claimTime=${reward.claimTime}, deliveryTime=${reward.deliveryTime}, 用户=${userId}`);
           const savedReward = await this.rewardRepository.save(reward);
           
@@ -865,11 +1112,14 @@ class RewardService {
           '兑换成功';
 
         if (this.enableCloudStorage) {
-          this._syncExchangeToCloud(reward.id, userId, reward.modifyTime || reward.claimTime || Date.now()).catch(syncError => {
+          this._syncExchangeToCloud(reward.id, userId, reward.modifyTime || reward.claimTime || Date.now(), reward).catch(async syncError => {
             logger.warn('RewardService', '奖励兑换云同步失败，本地已保存', {
               rewardId: reward.id,
               userId,
               error: syncError.message
+            });
+            await this._emitRewardCloudSyncFailure('exchange', reward, syncError, {
+              exchangeUserId: userId
             });
           });
         }
@@ -1373,6 +1623,13 @@ class RewardService {
     if (this.userService !== userService) {
       this.userService = userService;
       logger.info('RewardService', 'UserService已更新');
+    }
+  }
+
+  updateStarService(starService) {
+    if (this.starService !== starService) {
+      this.starService = starService;
+      logger.info('RewardService', 'StarService已更新');
     }
   }
 }

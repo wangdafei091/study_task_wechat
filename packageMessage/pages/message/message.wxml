@@ -22,11 +22,11 @@
       任务
       <view class="tab-badge" wx:if="{{taskUnreadCount > 0}}">{{taskUnreadCount}}</view>
     </view>
-    <view class="tab {{activeTab === 'achievement' ? 'active' : ''}}" 
-          data-tab="achievement" 
+    <view class="tab {{activeTab === 'reward' ? 'active' : ''}}" 
+          data-tab="reward" 
           bindtap="switchTab">
-      成就
-      <view class="tab-badge" wx:if="{{achievementUnreadCount > 0}}">{{achievementUnreadCount}}</view>
+      奖励
+      <view class="tab-badge" wx:if="{{rewardUnreadCount > 0}}">{{rewardUnreadCount}}</view>
     </view>
     <view class="tab {{activeTab === 'system' ? 'active' : ''}}" 
           data-tab="system" 

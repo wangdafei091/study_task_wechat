@@ -97,7 +97,7 @@ describe('UserService', () => {
 
     it('初始化应该加载用户数据', async () => {
       const mockUsers = [
-        { userId: 'parent', name: '家长', role: 'parent', status: 'active' },
+        { userId: 'parent', name: '家长', role: 'parent', status: 'active', familyId: 'family_1' },
         { userId: 'child', name: '孩子', role: 'child', status: 'active' }
       ];
       // M6: initialize 通过 HttpClient.get 加载成员（loadFamilyMembers）
@@ -117,10 +117,26 @@ describe('UserService', () => {
       expect(mockHttpClient.get).toHaveBeenCalled();
     });
 
+    it('未加入家庭时不应请求家庭成员接口', async () => {
+      mockHttpClient.get.mockResolvedValue({
+        userId: 'parent',
+        nickname: '家长',
+        role: 'parent',
+        familyId: null
+      });
+      mockStorageAdapter.get.mockReturnValue(null);
+
+      const initialized = await userService.initialize();
+
+      expect(initialized).toBe(true);
+      expect(mockHttpClient.get).toHaveBeenCalledTimes(1);
+      expect(userService.currentUser.id).toBe('parent');
+    });
+
 
     it('本地会话为空时，家长设备应默认选第一个孩子', async () => {
       const mockUsers = [
-        { userId: 'parent', name: '家长', role: 'parent', status: 'active' },
+        { userId: 'parent', name: '家长', role: 'parent', status: 'active', familyId: 'family_1' },
         { userId: 'child', name: '孩子', role: 'child', status: 'active' }
       ];
       // M6: loginUser = parent，空会话 → 默认选第一个孩子

@@ -8,9 +8,18 @@
 const logger = require('../utils/logger');
 const EventBus = require('../utils/core/event-bus');
 const { MessageRepository } = require('../repositories/index');
-const { Message, MessageType, NotificationType, MessagePriority } = require('../models/message');
+const {
+  Message,
+  MessageType,
+  NotificationType,
+  MessagePriority,
+  MessageVisibilityScope
+} = require('../models/message');
 const batchUtils = require('../utils/batchUtils');
 const { EVENTS } = require('../utils/constants');
+const HttpClient = require('../utils/http-client');
+const API_CONFIG = require('../utils/api-config');
+const viewScopeUtils = require('../utils/view-scope');
 
 class MessageService {
   /**
@@ -29,6 +38,7 @@ class MessageService {
     
     // 用户服务
     this.userService = options.userService || null;
+    this.enableCloudStorage = API_CONFIG.ENABLE_API;
     
     logger.info('MessageService', '初始化消息服务');
     
@@ -80,6 +90,7 @@ class MessageService {
     this.eventBus.on(EVENTS.TASK_PENALTY_APPLIED, this._handleTaskPenalty.bind(this));
     this.eventBus.on(EVENTS.TASK_MARKED_REQUIRED, this._handleTaskMarkedRequired.bind(this));
     this.eventBus.on(EVENTS.TASK_UNMARKED_REQUIRED, this._handleTaskUnmarkedRequired.bind(this));
+    this.eventBus.on(EVENTS.TASK_CLOUD_SYNC_FAILED, this._handleTaskCloudSyncFailed.bind(this));
     
     // 奖励相关事件
     this.eventBus.on(EVENTS.REWARD_CREATED, this._handleRewardCreated.bind(this));
@@ -88,6 +99,7 @@ class MessageService {
     this.eventBus.on(EVENTS.REWARD_UNCLAIMED, this._handleRewardUnclaimed.bind(this));
     this.eventBus.on(EVENTS.REWARD_DELETED_BATCH, this._handleRewardDeletedBatch.bind(this));
     this.eventBus.on(EVENTS.REWARD_EXAMPLES_CLEARED, this._handleRewardExamplesCleared.bind(this));
+    this.eventBus.on(EVENTS.REWARD_CLOUD_SYNC_FAILED, this._handleRewardCloudSyncFailed.bind(this));
     
     // 领域模型事件
     this.eventBus.on(EVENTS.DOMAIN_MESSAGE_CREATED, this._handleDomainMessageCreated.bind(this));
@@ -98,6 +110,361 @@ class MessageService {
     
     logger.info('MessageService', '已注册事件监听器');
   }
+
+  _getLoginUser() {
+    return this.userService?.getLoginUser?.() || null;
+  }
+
+  _getCurrentUser() {
+    return this.userService?.getCurrentUser?.() || null;
+  }
+
+  _resolveScopeOptions(options = {}) {
+    const loginUser = this._getLoginUser();
+    const currentUser = this._getCurrentUser();
+    if (!options.scope && !loginUser && !currentUser) {
+      return {
+        scope: 'all',
+        userId: null,
+        familyId: null,
+        requireFresh: false,
+        preferScope: null
+      };
+    }
+    const currentUserId = options.userId || viewScopeUtils.getUserIdentifier(currentUser) || viewScopeUtils.getUserIdentifier(loginUser);
+    const familyId = loginUser?.familyId || currentUser?.familyId || null;
+    const defaultScope = viewScopeUtils.resolveMessageScopeOptions(loginUser, currentUser).scope || MessageVisibilityScope.USER;
+    const scope = options.scope || defaultScope;
+
+    return {
+      scope,
+      userId: scope === MessageVisibilityScope.USER ? currentUserId : null,
+      familyId,
+      requireFresh: options.requireFresh === true,
+      preferScope: options.preferScope || null
+    };
+  }
+
+  _sortMessages(messages = []) {
+    return [...messages].sort((a, b) => b.createTime - a.createTime);
+  }
+
+  _mapCloudMessage(item) {
+    return new Message({
+      id: item.messageId || item.id,
+      familyId: item.familyId || null,
+      userId: item.userId || '',
+      actorUserId: item.actorUserId || null,
+      subjectUserId: item.subjectUserId || null,
+      operationKey: item.operationKey || null,
+      messageEventKey: item.messageEventKey || null,
+      visibilityScope: item.visibilityScope || (item.userId ? MessageVisibilityScope.USER : MessageVisibilityScope.FAMILY),
+      type: item.type || MessageType.NOTIFICATION,
+      notificationType: item.notificationType || NotificationType.INFO,
+      title: item.title || '',
+      summary: item.summary || '',
+      content: item.content || '',
+      relatedId: item.relatedId || '',
+      relatedType: item.relatedType || '',
+      isRead: item.isRead === true,
+      isArchived: item.isArchived === true,
+      readTime: item.readTime || 0,
+      createTime: item.createTime || Date.now(),
+      icon: item.icon || '',
+      priority: item.priority ?? MessagePriority.MEDIUM,
+      syncedToCloud: true,
+      isLegacy: false,
+      isProvisional: false
+    });
+  }
+
+  async refreshMessagesFromCloud(userId = null, options = {}) {
+    const resolved = this._resolveScopeOptions({ ...options, userId });
+
+    if (!this.enableCloudStorage) {
+      const localMessages = resolved.scope === 'all'
+        ? await this.messageRepository.getAll()
+        : await this.messageRepository.getMessagesByScope(resolved);
+      return this._sortMessages(localMessages);
+    }
+
+    if (resolved.scope === 'all') {
+      return this._sortMessages(await this.messageRepository.getAll());
+    }
+
+    const params = {
+      scope: resolved.scope
+    };
+    if (resolved.scope === MessageVisibilityScope.USER && resolved.userId) {
+      params.userId = resolved.userId;
+    }
+
+    const response = await HttpClient.get(API_CONFIG.ENDPOINTS.MESSAGES, params);
+    const cloudMessages = (response.messages || []).map(item => this._mapCloudMessage(item));
+    await this.messageRepository.archiveLegacyMessages(resolved.scope, resolved.userId);
+    await this.messageRepository.replaceSyncedMessagesByScope(resolved.scope, resolved.userId, cloudMessages);
+    await this.messageRepository.cleanupStaleMessages(
+      resolved.scope,
+      resolved.userId,
+      cloudMessages.map(message => message.id)
+    );
+
+    await this._emitMessageChangedEvent();
+    return this._sortMessages(cloudMessages);
+  }
+
+  async getMessagesByScope(options = {}) {
+    const resolved = this._resolveScopeOptions(options);
+    if (resolved.requireFresh && this.enableCloudStorage) {
+      await this.refreshMessagesFromCloud(resolved.userId, resolved);
+    }
+
+    const messages = resolved.scope === 'all'
+      ? await this.messageRepository.getAll()
+      : await this.messageRepository.getMessagesByScope(resolved);
+    return this._sortMessages(messages);
+  }
+
+  async _syncReadToCloud(message) {
+    if (!this.enableCloudStorage || !message || message.syncedToCloud !== true || message.isProvisional) {
+      return;
+    }
+
+    const url = API_CONFIG.ENDPOINTS.MESSAGE_READ.replace('{messageId}', message.id);
+    await HttpClient.patch(url, {
+      readTime: message.readTime || Date.now()
+    });
+  }
+
+  async _syncDeleteToCloud(message) {
+    if (!this.enableCloudStorage || !message || message.syncedToCloud !== true || message.isProvisional) {
+      return;
+    }
+
+    const url = API_CONFIG.ENDPOINTS.MESSAGE_BY_ID.replace('{messageId}', message.id);
+    await HttpClient.delete(url);
+  }
+
+  async _syncMarkAllReadToCloud(options = {}) {
+    if (!this.enableCloudStorage) {
+      return;
+    }
+
+    const resolved = this._resolveScopeOptions(options);
+    await HttpClient.patch(API_CONFIG.ENDPOINTS.MESSAGE_READ_ALL, {
+      scope: resolved.scope,
+      userId: resolved.userId || undefined,
+      readTime: Date.now()
+    });
+  }
+
+  async _createProvisionalMessages(eventType, payload = {}) {
+    if (!payload || !payload.pendingSyncMeta) {
+      return [];
+    }
+
+    const pendingSyncMeta = payload.pendingSyncMeta;
+    if (eventType === 'task') {
+      return this._createTaskProvisionalMessages(payload.taskSnapshot || payload.task, pendingSyncMeta);
+    }
+    if (eventType === 'reward') {
+      return this._createRewardProvisionalMessages(payload.rewardSnapshot || payload.reward, pendingSyncMeta);
+    }
+    return [];
+  }
+
+  async _createTaskProvisionalMessages(task, pendingSyncMeta) {
+    if (!task || !pendingSyncMeta) {
+      return [];
+    }
+
+    const createTime = pendingSyncMeta.modifyTime || pendingSyncMeta.createTime || Date.now();
+    const familyId = pendingSyncMeta.familyId || null;
+    const subjectUserId = pendingSyncMeta.targetUserId || task.userId || null;
+    const action = pendingSyncMeta.action || 'create';
+    const messages = [];
+    const eventKey = ['task', task.id || task.taskId, `task_${action}`, subjectUserId || 'none', pendingSyncMeta.operatorUserId || 'none', pendingSyncMeta.operationKey].join(':');
+
+    const actionCopy = {
+      create: {
+        userTitle: '新任务待同步',
+        userSummary: `你的任务“${task.title}”已保存到本机，等待同步`,
+        familySummary: `任务“${task.title}”待同步到家庭消息流`,
+        icon: '📝'
+      },
+      update: {
+        userTitle: '任务更新待同步',
+        userSummary: `你的任务“${task.title}”更新已保存到本机，等待同步`,
+        familySummary: `任务“${task.title}”更新待同步到家庭消息流`,
+        icon: '✏️'
+      },
+      delete: {
+        userTitle: '任务删除待同步',
+        userSummary: `任务“${task.title}”删除已保存在本机，等待同步`,
+        familySummary: `任务“${task.title}”删除待同步到家庭消息流`,
+        icon: '🗑️'
+      },
+      complete: {
+        userTitle: '任务完成待同步',
+        userSummary: `你完成了任务“${task.title}”，等待同步`,
+        familySummary: `任务“${task.title}”完成记录待同步到家庭消息流`,
+        icon: '✅'
+      },
+      reset: {
+        userTitle: '任务重置待同步',
+        userSummary: `你的任务“${task.title}”重置已保存到本机，等待同步`,
+        familySummary: `任务“${task.title}”重置待同步到家庭消息流`,
+        icon: '↩️'
+      }
+    }[action] || {
+      userTitle: '任务待同步',
+      userSummary: `任务“${task.title}”变更已保存到本机，等待同步`,
+      familySummary: `任务“${task.title}”变更待同步到家庭消息流`,
+      icon: '📝'
+    };
+
+    if (subjectUserId) {
+      messages.push(new Message({
+        userId: subjectUserId,
+        familyId,
+        subjectUserId,
+        actorUserId: pendingSyncMeta.operatorUserId || null,
+        operationKey: pendingSyncMeta.operationKey,
+        messageEventKey: eventKey,
+        visibilityScope: MessageVisibilityScope.USER,
+        type: MessageType.TASK,
+        notificationType: pendingSyncMeta.notificationType || `task_${action}`,
+        title: actionCopy.userTitle,
+        summary: actionCopy.userSummary,
+        relatedId: task.id || task.taskId || '',
+        relatedType: 'task',
+        icon: actionCopy.icon,
+        priority: MessagePriority.MEDIUM,
+        createTime,
+        isProvisional: true,
+        syncedToCloud: false
+      }));
+    }
+
+    if (familyId) {
+      messages.push(new Message({
+        familyId,
+        subjectUserId,
+        actorUserId: pendingSyncMeta.operatorUserId || null,
+        operationKey: pendingSyncMeta.operationKey,
+        messageEventKey: eventKey,
+        visibilityScope: MessageVisibilityScope.FAMILY,
+        type: MessageType.TASK,
+        notificationType: pendingSyncMeta.notificationType || `task_${action}`,
+        title: actionCopy.userTitle,
+        summary: actionCopy.familySummary,
+        relatedId: task.id || task.taskId || '',
+        relatedType: 'task',
+        icon: actionCopy.icon,
+        priority: MessagePriority.MEDIUM,
+        createTime,
+        isProvisional: true,
+        syncedToCloud: false
+      }));
+    }
+
+    if (messages.length > 0) {
+      await this.messageRepository.batchAddMessages(messages);
+      await this._emitMessageChangedEvent();
+    }
+
+    return messages;
+  }
+
+  async _createRewardProvisionalMessages(reward, pendingSyncMeta) {
+    if (!reward || !pendingSyncMeta) {
+      return [];
+    }
+
+    const createTime = pendingSyncMeta.modifyTime || pendingSyncMeta.createTime || Date.now();
+    const familyId = pendingSyncMeta.familyId || reward.familyId || null;
+    const action = pendingSyncMeta.action || 'create';
+    const subjectUserId = pendingSyncMeta.exchangeUserId || reward.exchangeUserId || null;
+    const messages = [];
+    const eventKey = ['reward', reward.id || reward.rewardId, `reward_${action}`, subjectUserId || 'none', pendingSyncMeta.operatorUserId || 'none', pendingSyncMeta.operationKey].join(':');
+
+    const actionCopy = {
+      create: { title: '奖励创建待同步', summary: `奖励“${reward.name}”已保存在本机，等待同步`, icon: '🎁' },
+      update: { title: '奖励更新待同步', summary: `奖励“${reward.name}”更新已保存在本机，等待同步`, icon: '🎁' },
+      delete: { title: '奖励删除待同步', summary: `奖励“${reward.name}”删除已保存在本机，等待同步`, icon: '🗑️' },
+      exchange: { title: '奖励兑换待同步', summary: `奖励“${reward.name}”兑换已保存在本机，等待同步`, icon: '⭐' }
+    }[action] || { title: '奖励待同步', summary: `奖励“${reward.name}”变更已保存在本机，等待同步`, icon: '🎁' };
+
+    if (action === 'exchange' && subjectUserId) {
+      messages.push(new Message({
+        userId: subjectUserId,
+        familyId,
+        subjectUserId,
+        actorUserId: pendingSyncMeta.operatorUserId || null,
+        operationKey: pendingSyncMeta.operationKey,
+        messageEventKey: eventKey,
+        visibilityScope: MessageVisibilityScope.USER,
+        type: MessageType.REWARD,
+        notificationType: pendingSyncMeta.notificationType || 'reward_exchange',
+        title: actionCopy.title,
+        summary: actionCopy.summary,
+        relatedId: reward.id || reward.rewardId || '',
+        relatedType: 'reward',
+        icon: actionCopy.icon,
+        priority: MessagePriority.MEDIUM,
+        createTime,
+        isProvisional: true,
+        syncedToCloud: false
+      }));
+    }
+
+    if (familyId) {
+      messages.push(new Message({
+        familyId,
+        subjectUserId,
+        actorUserId: pendingSyncMeta.operatorUserId || null,
+        operationKey: pendingSyncMeta.operationKey,
+        messageEventKey: eventKey,
+        visibilityScope: MessageVisibilityScope.FAMILY,
+        type: MessageType.REWARD,
+        notificationType: pendingSyncMeta.notificationType || `reward_${action}`,
+        title: actionCopy.title,
+        summary: actionCopy.summary,
+        relatedId: reward.id || reward.rewardId || '',
+        relatedType: 'reward',
+        icon: actionCopy.icon,
+        priority: MessagePriority.MEDIUM,
+        createTime,
+        isProvisional: true,
+        syncedToCloud: false
+      }));
+    }
+
+    if (messages.length > 0) {
+      await this.messageRepository.batchAddMessages(messages);
+      await this._emitMessageChangedEvent();
+    }
+
+    return messages;
+  }
+
+  _handleTaskCloudSyncFailed(payload) {
+    if (!this.enableCloudStorage) {
+      return;
+    }
+    this._createProvisionalMessages('task', payload).catch(error => {
+      logger.warn('MessageService', '创建任务 provisional 消息失败', error);
+    });
+  }
+
+  _handleRewardCloudSyncFailed(payload) {
+    if (!this.enableCloudStorage) {
+      return;
+    }
+    this._createProvisionalMessages('reward', payload).catch(error => {
+      logger.warn('MessageService', '创建奖励 provisional 消息失败', error);
+    });
+  }
   
   /**
    * 处理任务创建事件
@@ -105,6 +472,9 @@ class MessageService {
    * @private
    */
   _handleTaskCreated(data) {
+    if (this.enableCloudStorage) {
+      return;
+    }
     logger.info('MessageService', '处理任务创建事件', data);
     
     // 防御性检查，确保data对象和task存在
@@ -147,6 +517,9 @@ class MessageService {
    * @private
    */
   _handleTaskStatusUpdated(data) {
+    if (this.enableCloudStorage) {
+      return;
+    }
     const { task, previousStatus, operationType, operatorUserId } = data;
     
     if (operationType === 'complete') {
@@ -166,6 +539,9 @@ class MessageService {
    * @private
    */
   _handleTaskUpdated(data) {
+    if (this.enableCloudStorage) {
+      return;
+    }
     const { task, changes, batchInfo, operatorUserId } = data;
     
     logger.info('MessageService', `处理任务更新事件: ${task.title}, 操作者=${operatorUserId || '未指定'}`);
@@ -188,6 +564,9 @@ class MessageService {
    * @private
    */
   _handleTaskDeleted(data) {
+    if (this.enableCloudStorage) {
+      return;
+    }
     const { taskId, taskInfo, batchInfo, operatorUserId } = data;
     
     logger.info('MessageService', `处理任务删除事件: ${taskInfo.title || taskId}, 操作者=${operatorUserId || '未指定'}`);
@@ -210,6 +589,9 @@ class MessageService {
    * @private
    */
   _handleTaskCompleted(data) {
+    if (this.enableCloudStorage) {
+      return;
+    }
     const { task, operatorUserId } = data;
     
     logger.info('MessageService', `处理任务完成事件: ${task.title}, 操作者=${operatorUserId || '未指定'}`);
@@ -291,6 +673,9 @@ class MessageService {
    * @private
    */
   _handleRewardClaimed(data) {
+    if (this.enableCloudStorage) {
+      return;
+    }
     logger.info('MessageService', '收到奖励领取事件，原始数据:', data);
     
     // 兼容不同的事件数据格式
@@ -334,6 +719,9 @@ class MessageService {
    * @private
    */
   _handleRewardDelivered(data) {
+    if (this.enableCloudStorage) {
+      return;
+    }
     const { reward } = data;
     
     logger.info('MessageService', `处理奖励交付事件: ${reward.name}`);
@@ -348,6 +736,9 @@ class MessageService {
    * @private
    */
   _handleRewardUnclaimed(data) {
+    if (this.enableCloudStorage) {
+      return;
+    }
     const { reward } = data;
     
     logger.info('MessageService', `处理奖励取消领取事件: ${reward.name}`);
@@ -362,6 +753,9 @@ class MessageService {
    * @private
    */
   _handleRewardDeletedBatch(data) {
+    if (this.enableCloudStorage) {
+      return;
+    }
     const { rewardIds } = data;
     
     logger.info('MessageService', `处理奖励批量删除事件: 删除了${rewardIds.length}个奖励`);
@@ -376,6 +770,9 @@ class MessageService {
    * @private
    */
   _handleRewardExamplesCleared(data) {
+    if (this.enableCloudStorage) {
+      return;
+    }
     const { count } = data;
     
     logger.info('MessageService', `处理示例奖励清理事件: 清理了${count}个示例奖励`);
@@ -390,6 +787,9 @@ class MessageService {
    * @private
    */
   _handleRewardCreated(data) {
+    if (this.enableCloudStorage) {
+      return;
+    }
     const { reward } = data;
     
     if (!reward) {
@@ -529,11 +929,11 @@ class MessageService {
    * 获取所有消息
    * @returns {Promise<Array>} 消息数组
    */
-  async getAllMessages() {
+  async getAllMessages(options = {}) {
     logger.info('MessageService', '获取所有消息');
     
     try {
-      const messages = await this._getAllMessagesWithDomainModel();
+      const messages = await this.getMessagesByScope(options);
       return Promise.resolve(messages);
     } catch (error) {
       logger.error('MessageService', '获取所有消息失败', error);
@@ -545,11 +945,16 @@ class MessageService {
    * 获取未读消息数量
    * @returns {Promise<Number>} 未读消息数量
    */
-  async getUnreadCount() {
+  async getUnreadCount(options = {}) {
     logger.info('MessageService', '获取未读消息数量');
     
     try {
-      const count = await this._getUnreadCountWithDomainModel();
+      if (!this._getLoginUser() && !this._getCurrentUser() && !options.scope && typeof this.messageRepository.getUnreadCount === 'function') {
+        const count = await this.messageRepository.getUnreadCount();
+        return Promise.resolve(count);
+      }
+      const messages = await this.getMessagesByScope(options);
+      const count = messages.filter(message => !message.isRead).length;
       return Promise.resolve(count);
     } catch (error) {
       logger.error('MessageService', '获取未读消息数量失败', error);
@@ -562,10 +967,28 @@ class MessageService {
    * @param {String} messageId 消息ID
    * @returns {Promise<Boolean>} 标记结果
    */
-  async markMessageAsRead(messageId) {
+  async markMessageAsRead(messageId, options = {}) {
     logger.info('MessageService', `标记消息为已读: ${messageId}`);
     
     try {
+      if (!this._getLoginUser() && !this._getCurrentUser() && !options.scope) {
+        const result = await this._markMessageAsReadWithDomainModel(messageId);
+        return Promise.resolve(result);
+      }
+      const message = await this.messageRepository.getById(messageId);
+      if (!message) {
+        return Promise.resolve(false);
+      }
+
+      if (this.enableCloudStorage && message.isProvisional !== true && message.syncedToCloud === true) {
+        try {
+          await this._syncReadToCloud({ ...message, isRead: true, readTime: Date.now() });
+        } catch (syncError) {
+          logger.warn('MessageService', '单条消息已读同步失败，放弃本地已读写入', syncError);
+          return Promise.resolve(false);
+        }
+      }
+
       const result = await this._markMessageAsReadWithDomainModel(messageId);
       return Promise.resolve(result);
     } catch (error) {
@@ -578,11 +1001,33 @@ class MessageService {
    * 标记所有消息为已读
    * @returns {Promise<Number>} 标记的消息数量
    */
-  async markAllMessagesAsRead() {
+  async markAllMessagesAsRead(options = {}) {
     logger.info('MessageService', '标记所有消息为已读');
     
     try {
-      const count = await this._markAllMessagesAsReadWithDomainModel();
+      if (!this._getLoginUser() && !this._getCurrentUser() && !options.scope) {
+        const count = typeof this.messageRepository.markAllAsRead === 'function'
+          ? await this.messageRepository.markAllAsRead()
+          : await this._markAllMessagesAsReadWithDomainModel();
+        return Promise.resolve(count);
+      }
+      const resolved = this._resolveScopeOptions(options);
+      const scopedMessages = await this.messageRepository.getMessagesByScope(resolved);
+      const unreadMessages = scopedMessages.filter(message => !message.isRead);
+      const hasFormalCloudMessages = unreadMessages.some(
+        message => message.isProvisional !== true && message.syncedToCloud === true
+      );
+
+      if (hasFormalCloudMessages) {
+        try {
+          await this._syncMarkAllReadToCloud(resolved);
+        } catch (syncError) {
+          logger.warn('MessageService', '批量已读同步失败，放弃本地已读写入', syncError);
+          return Promise.resolve(0);
+        }
+      }
+
+      const count = await this._markAllMessagesAsReadWithDomainModel(resolved);
       return Promise.resolve(count);
     } catch (error) {
       logger.error('MessageService', '标记所有消息为已读失败', error);
@@ -595,10 +1040,20 @@ class MessageService {
    * @param {String} messageId 消息ID
    * @returns {Promise<Boolean>} 删除结果
    */
-  async deleteMessage(messageId) {
+  async deleteMessage(messageId, options = {}) {
     logger.info('MessageService', `删除消息: ${messageId}`);
     
     try {
+      const message = await this.messageRepository.getById(messageId);
+      if (this.enableCloudStorage && message && message.isProvisional !== true && message.syncedToCloud === true) {
+        try {
+          await this._syncDeleteToCloud(message);
+        } catch (syncError) {
+          logger.warn('MessageService', '消息删除同步失败，放弃本地删除', syncError);
+          return Promise.resolve(false);
+        }
+      }
+
       const result = await this._deleteMessageWithDomainModel(messageId);
       return Promise.resolve(result);
     } catch (error) {
@@ -898,11 +1353,12 @@ class MessageService {
    * @returns {Promise<Array>} 消息列表
    * @private
    */
-  async _getAllMessagesWithDomainModel() {
+  async _getAllMessagesWithDomainModel(options = {}) {
     try {
-      const messages = await this.messageRepository.getAll();
+      const resolved = this._resolveScopeOptions(options);
+      const messages = await this.messageRepository.getMessagesByScope(resolved);
       logger.info('MessageService', `使用领域模型获取所有消息成功: ${messages.length}条`);
-      return messages;
+      return this._sortMessages(messages);
     } catch (error) {
       logger.error('MessageService', '使用领域模型获取所有消息失败', error);
       return [];
@@ -914,9 +1370,10 @@ class MessageService {
    * @returns {Promise<Number>} 未读消息数量
    * @private
    */
-  async _getUnreadCountWithDomainModel() {
+  async _getUnreadCountWithDomainModel(options = {}) {
     try {
-      const count = await this.messageRepository.getUnreadCount();
+      const messages = await this._getAllMessagesWithDomainModel(options);
+      const count = messages.filter(message => !message.isRead).length;
       logger.info('MessageService', `使用领域模型获取未读消息数量成功: ${count}条`);
       return count;
     } catch (error) {
@@ -955,9 +1412,18 @@ class MessageService {
    * @returns {Promise<Number>} 标记为已读的消息数量
    * @private
    */
-  async _markAllMessagesAsReadWithDomainModel() {
+  async _markAllMessagesAsReadWithDomainModel(options = {}) {
     try {
-      const count = await this.messageRepository.markAllAsRead();
+      const resolved = this._resolveScopeOptions(options);
+      const messages = await this.messageRepository.getMessagesByScope(resolved);
+      const unreadMessages = messages.filter(message => !message.isRead);
+      const count = unreadMessages.length;
+
+      if (count === 0) {
+        return 0;
+      }
+
+      await this.messageRepository.batchMarkAsRead(unreadMessages.map(message => message.markAsRead()));
       
       if (count > 0) {
         // 触发领域消息全部已读事件

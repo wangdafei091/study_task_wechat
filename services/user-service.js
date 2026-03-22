@@ -74,8 +74,13 @@ class UserService {
         }
       }
 
-      // 2. 加载家庭成员（异步，失败不阻塞）
-      await this.loadFamilyMembers();
+      // 2. 仅在已加入家庭时拉取家庭成员，避免未入家庭时产生预期内 400 噪音
+      if (this.loginUser?.familyId) {
+        await this.loadFamilyMembers();
+      } else if (this.loginUser) {
+        this.userCache.clear();
+        this.userCache.set(this.loginUser.userId, this.loginUser);
+      }
 
       // 3. 恢复会话，应用非法会话回正规则
       await this._restoreSession();

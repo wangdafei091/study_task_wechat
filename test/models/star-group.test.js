@@ -301,19 +301,19 @@ describe('StarGroup FIFO消费策略', () => {
 
   // ====== 数据更新验证 ======
   describe('数据更新', () => {
-    it('应该正确设置lastUpdated时间', async () => {
+    it('应该正确设置lastUpdated时间', () => {
       const group = new StarGroup(TestDataFactory.createStarGroup({
         id: 'group_1',
         stars: 10
       }));
 
-      const createTime = group.createTime;
-      // 添加小延迟确保时间戳不同
-      await new Promise(resolve => setTimeout(resolve, 1));
+      const currentLastUpdated = group.lastUpdated;
+      const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(currentLastUpdated + 10);
       group.removeStars(5);
 
-      expect(group.lastUpdated).toBeGreaterThan(createTime);
+      expect(group.lastUpdated).toBe(currentLastUpdated + 10);
       expect(group.stars).toBe(5);
+      nowSpy.mockRestore();
     });
   });
 });

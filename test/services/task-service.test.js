@@ -1099,6 +1099,23 @@ describe('TaskService', () => {
       expect(mockTaskRepository.getTasksByDateRange).not.toHaveBeenCalled();
     });
 
+    it('无日期范围但传入userId时应该按目标用户统计', async () => {
+      const tasks = [
+        TestDataFactory.createTask({ id: 'task_1', userId: 'child_1', type: TaskType.HABIT, status: TaskStatus.COMPLETED }),
+        TestDataFactory.createTask({ id: 'task_2', userId: 'child_1', type: TaskType.STUDY, status: TaskStatus.PENDING })
+      ];
+
+      const getTasksByScopeSpy = jest.spyOn(taskService, 'getTasksByScope').mockResolvedValue(tasks);
+
+      const result = await taskService.getTaskStatistics({}, { userId: 'child_1' });
+
+      expect(getTasksByScopeSpy).toHaveBeenCalledWith({ userId: 'child_1' });
+      expect(result.totalTasks).toBe(2);
+      expect(result.completedTasks).toBe(1);
+
+      getTasksByScopeSpy.mockRestore();
+    });
+
     it('应该计算类型完成率', async () => {
       const tasks = [
         TestDataFactory.createTask({ id: 'task_1', type: TaskType.HABIT, status: TaskStatus.COMPLETED }),

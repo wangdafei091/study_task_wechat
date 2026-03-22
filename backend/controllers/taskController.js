@@ -14,6 +14,23 @@ const logger = createLogger('TaskController');
  * 任务控制器类
  */
 class TaskController {
+  _buildOperatorContext(req, subjectUserId = null, fallbackOperationKey = null) {
+    return {
+      actorUserId: req.user.userId,
+      actorRole: req.user.role,
+      familyId: req.user.familyId || null,
+      subjectUserId: subjectUserId || null,
+      operationKey: String(
+        req.body.operationKey ||
+        req.query.operationKey ||
+        req.body.modifyTime ||
+        fallbackOperationKey ||
+        Date.now()
+      ),
+      modifyTime: Number(req.body.modifyTime || fallbackOperationKey || Date.now()),
+    };
+  }
+
   /**
    * 获取当前用户的任务列表
    * @param {Object} req - Express请求对象
@@ -139,7 +156,11 @@ class TaskController {
         );
       }
 
-      const task = await taskService.createTask(effectiveUserId, taskData);
+      const task = await taskService.createTask(
+        effectiveUserId,
+        taskData,
+        this._buildOperatorContext(req, effectiveUserId, taskData.modifyTime)
+      );
 
       res.json(success(task.toJSON(), '任务创建成功'));
     } catch (err) {
@@ -234,7 +255,11 @@ class TaskController {
         return res.status(400).json(error(validation.errors.join('; '), 'INVALID_TASK_DATA'));
       }
 
-      const updated = await taskService.updateTask(taskId, safeChanges);
+      const updated = await taskService.updateTask(
+        taskId,
+        safeChanges,
+        this._buildOperatorContext(req, existing.userId, safeChanges.modifyTime)
+      );
       if (!updated) {
         return res.status(404).json(error('任务不存在或已删除', 'TASK_NOT_FOUND'));
       }
@@ -270,7 +295,10 @@ class TaskController {
         return res.status(403).json(error('无权限操作', 'PERMISSION_DENIED'));
       }
 
-      const deleted = await taskService.softDeleteTask(taskId);
+      const deleted = await taskService.softDeleteTask(
+        taskId,
+        this._buildOperatorContext(req, existing.userId)
+      );
       if (!deleted) {
         return res.status(404).json(error('任务不存在或已删除', 'TASK_NOT_FOUND'));
       }
@@ -315,7 +343,16 @@ class TaskController {
         return res.status(403).json(error('无权限操作', 'PERMISSION_DENIED'));
       }
 
-      const updated = await taskService.updateTaskStatus(taskId, { status, starAwarded });
+      const updated = await taskService.updateTaskStatus(
+        taskId,
+        {
+          status,
+          starAwarded,
+          modifyTime: req.body.modifyTime,
+          operationKey: req.body.operationKey,
+        },
+        this._buildOperatorContext(req, existing.userId, req.body.modifyTime)
+      );
       if (!updated) {
         return res.status(404).json(error('任务不存在或已删除', 'TASK_NOT_FOUND'));
       }

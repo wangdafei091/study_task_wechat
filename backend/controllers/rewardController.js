@@ -10,6 +10,22 @@ const { resolveTargetUserId } = require('../utils/resolveTargetUserId');
 const logger = createLogger('RewardController');
 
 class RewardController {
+  _buildOperatorContext(req, fallbackOperationKey = null) {
+    return {
+      actorUserId: req.user.userId,
+      actorRole: req.user.role,
+      familyId: req.user.familyId || null,
+      operationKey: String(
+        req.body.operationKey ||
+        req.query.operationKey ||
+        req.body.modifyTime ||
+        fallbackOperationKey ||
+        Date.now()
+      ),
+      modifyTime: Number(req.body.modifyTime || fallbackOperationKey || Date.now()),
+    };
+  }
+
   _ensureRewardManagePermission(req, res) {
     if (req.user.familyId && req.user.role !== 'parent') {
       res.status(403).json(error('仅家长可管理奖励', 'PERMISSION_DENIED'));
@@ -42,7 +58,12 @@ class RewardController {
         return;
       }
 
-      const reward = await rewardService.createReward(req.user.userId, req.user.familyId, req.body);
+      const reward = await rewardService.createReward(
+        req.user.userId,
+        req.user.familyId,
+        req.body,
+        this._buildOperatorContext(req, req.body.modifyTime)
+      );
       return res.json(success(reward.toJSON(), '创建成功'));
     } catch (err) {
       logger.error('创建奖励失败', err);
@@ -56,7 +77,12 @@ class RewardController {
         return;
       }
 
-      const reward = await rewardService.updateReward(req.params.rewardId, req.user.userId, req.body);
+      const reward = await rewardService.updateReward(
+        req.params.rewardId,
+        req.user.userId,
+        req.body,
+        this._buildOperatorContext(req, req.body.modifyTime)
+      );
       return res.json(success(reward.toJSON(), '更新成功'));
     } catch (err) {
       logger.error('更新奖励失败', err);
@@ -70,7 +96,11 @@ class RewardController {
         return;
       }
 
-      await rewardService.deleteReward(req.params.rewardId, req.user.userId);
+      await rewardService.deleteReward(
+        req.params.rewardId,
+        req.user.userId,
+        this._buildOperatorContext(req)
+      );
       return res.json(success({ rewardId: req.params.rewardId }, '删除成功'));
     } catch (err) {
       logger.error('删除奖励失败', err);
@@ -94,7 +124,8 @@ class RewardController {
       const result = await rewardService.exchangeReward(
         req.params.rewardId,
         effectiveUserId,
-        req.body.modifyTime
+        req.body.modifyTime,
+        this._buildOperatorContext(req, req.body.modifyTime)
       );
 
       return res.json(success({

@@ -5,7 +5,7 @@
  */
 
 const BaseRepository = require('./base-repository');
-const { Message, MessageType, MessagePriority } = require('../models/message');
+const { Message, MessageType, MessagePriority, MessageVisibilityScope } = require('../models/message');
 const logger = require('../utils/logger');
 const batchUtils = require('../utils/batchUtils'); // 引入batchUtils
 
@@ -30,6 +30,125 @@ class MessageRepository extends BaseRepository {
     }
     
     logger.info('MessageRepository', '初始化消息仓储');
+  }
+
+  _getLegacyStorageKey() {
+    return `${this.storageKey}:legacy`;
+  }
+
+  _getMigrationStorageKey(scope, userId = null) {
+    return `${this.storageKey}:migrated:${scope}:${userId || 'all'}`;
+  }
+
+  async getMessagesByScope({ scope, userId = null, familyId = null }) {
+    return this.query(message => {
+      if (message.visibilityScope !== scope) {
+        return false;
+      }
+
+      if (scope === MessageVisibilityScope.USER) {
+        if (message.userId !== userId) {
+          return false;
+        }
+        return !familyId || !message.familyId || message.familyId === familyId;
+      }
+
+      return !familyId || !message.familyId || message.familyId === familyId;
+    });
+  }
+
+  async replaceSyncedMessagesByScope(scope, userId, cloudMessages) {
+    const allMessages = await this.getAll(false);
+    const eventKeys = new Set((cloudMessages || []).map(message => message.messageEventKey).filter(Boolean));
+    const retainedMessages = allMessages.filter(message => {
+      const sameScope = message.visibilityScope === scope;
+      const sameUser = scope !== MessageVisibilityScope.USER || message.userId === userId;
+
+      if (!sameScope || !sameUser) {
+        return true;
+      }
+
+      if (message.isProvisional) {
+        return !message.messageEventKey || !eventKeys.has(message.messageEventKey);
+      }
+
+      return message.syncedToCloud !== true;
+    });
+
+    const normalizedCloudMessages = (cloudMessages || []).map(message => new Message({
+      ...message,
+      syncedToCloud: true,
+      isLegacy: false,
+      isProvisional: false
+    }));
+
+    await this._saveData([...retainedMessages, ...normalizedCloudMessages]);
+    this.invalidateCache();
+    return normalizedCloudMessages;
+  }
+
+  async cleanupStaleMessages(scope, userId, validMessageIds) {
+    const validIds = new Set(validMessageIds || []);
+    const allMessages = await this.getAll(false);
+    const filteredMessages = allMessages.filter(message => {
+      const sameScope = message.visibilityScope === scope;
+      const sameUser = scope !== MessageVisibilityScope.USER || message.userId === userId;
+
+      if (!sameScope || !sameUser) {
+        return true;
+      }
+
+      if (message.isProvisional || message.syncedToCloud !== true) {
+        return true;
+      }
+
+      return validIds.has(message.id);
+    });
+
+    await this._saveData(filteredMessages);
+    this.invalidateCache();
+    return true;
+  }
+
+  async archiveLegacyMessages(scope, userId = null) {
+    const migrationKey = this._getMigrationStorageKey(scope, userId);
+    const migrated = await this.storageAdapter.getAsync(migrationKey, false);
+    if (migrated) {
+      return [];
+    }
+
+    const allMessages = await this.getAll(false);
+    const legacyCandidates = allMessages.filter(message => {
+      if (message.syncedToCloud === true || message.isProvisional || message.isLegacy) {
+        return false;
+      }
+      if (message.visibilityScope !== scope) {
+        return false;
+      }
+      if (scope === MessageVisibilityScope.USER) {
+        return message.userId === userId;
+      }
+      return true;
+    });
+
+    if (legacyCandidates.length === 0) {
+      await this.storageAdapter.setAsync(migrationKey, true);
+      return [];
+    }
+
+    const legacyMessages = await this.storageAdapter.getAsync(this._getLegacyStorageKey(), []);
+    const nextLegacyMessages = legacyMessages.concat(
+      legacyCandidates.map(message => ({ ...message, isLegacy: true }))
+    );
+    await this.storageAdapter.setAsync(this._getLegacyStorageKey(), nextLegacyMessages);
+
+    const legacyIds = new Set(legacyCandidates.map(message => message.id));
+    const retainedMessages = allMessages.filter(message => !legacyIds.has(message.id));
+    await this._saveData(retainedMessages);
+    await this.storageAdapter.setAsync(migrationKey, true);
+    this.invalidateCache();
+
+    return legacyCandidates;
   }
   
   /**

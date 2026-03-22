@@ -1,6 +1,6 @@
 # 里程碑-10：消息通知云端同步 + 多孩子路由修复 详细设计文档
 
-> **设计状态**：🔴 待审核
+> **设计状态**：🟢 已实施并完成文档收口
 > **创建日期**：2026-03-21
 > **设计者**：GPT5 Codex
 > **审核者**：项目维护者
@@ -34,6 +34,16 @@ M09 已完成任务、星星和奖励的云端同步，但消息系统仍停留�
 - [x] 技术价值：补齐游戏化主链路最后一个仍未云端化的业务域，使任务、星星、奖励、消息四条核心链路口径一致。
 - [x] 业务价值：解决多孩子家庭消息错发和首页消息预览不稳定问题，并让家长侧能看到“当前家庭孩子行为流”，为后续提醒、通知和体验优化打基础。
 
+### 实施结果（2026-03-22）
+
+- ✅ 后端已落地 `messages` 表、消息模型、消息服务、控制器和路由，消息域已纳入云端主链路
+- ✅ 后端任务/奖励成功写路径已接入消息生成，按个人流 / 家庭流双记录落库
+- ✅ 前端 `MessageService` 已完成 scope 读取、云端回灌、已读同步、删除同步、provisional 兜底
+- ✅ 任务/奖励本地补云链路已持久化 `pendingSyncMeta` 与删除 tombstone，应用重启后仍可继续补云
+- ✅ 后端真实集成测试已补齐：`backend/test/integration/message-api-m10-real.test.js`
+- ✅ 前端消息服务单元测试已补齐：`test/services/message-service.test.js`
+- ✅ 集成测试库 schema 已同步补充 `messages` 表：`backend/database/test-setup-modern.sql`
+
 ### 功能范围
 
 **包含**：
@@ -54,8 +64,8 @@ M09 已完成任务、星星和奖励的云端同步，但消息系统仍停留�
 
 ### 优先级
 
-- **优先级**：P1
-- **理由**：M10 不再是补核心账本，但消息中心是当前唯一仍未进入云端闭环的业务域，同时直接影响多孩子家庭的可用性和跨设备一致性。
+- **优先级**：P1（已完成）
+- **理由**：M10 不再是补核心账本，但消息中心是当时唯一仍未进入云端闭环的业务域，同时直接影响多孩子家庭的可用性和跨设备一致性。
 
 ---
 
@@ -115,22 +125,22 @@ M10 对一致性机制再补一条硬约束：**不引入独立消息重试队�
 ### DDD分层设计
 
 **领域层（models/）**：
-- [ ] 新建模型：`backend/models/Message.js`
-- [ ] 修改模型：`models/message.js`
-- [ ] 修改模型：`models/task.js`
-- [ ] 修改模型：`models/reward.js`
+- [x] 新建模型：`backend/models/Message.js`
+- [x] 修改模型：`models/message.js`
+- [x] 修改模型：`models/task.js`
+- [x] 修改模型：`models/reward.js`
 - 说明：
   - 前端 `Message` 模型补充 `familyId`、`actorUserId`、`syncedToCloud` 等字段
-  - 前端 `Task` / `Reward` 模型补充最小同步元数据：`operationKey`、`lastOperatorUserId`、`lastOperatorRole`、`lastSyncTargetUserId`、`lastSyncFamilyId`
+  - 前端 `Task` / `Reward` 模型补充 `pendingSyncMeta`，用于持久化最近一次待补云操作元数据
   - 保留 `userId` 作为个人消息接收者 ID；新增 `subjectUserId` 标识本条消息关联的孩子
   - 通过 `scope` / `visibilityScope` 区分“孩子个人消息”和“家长家庭消息”，不再允许任务/奖励消息使用 `'parent'/'child'` 占位符
   - 后端 `Message` 模型与数据库字段映射，承载消息合法性校验
 
 **服务层（services/）**：
-- [ ] 新建服务：`backend/services/messageService.js`
-- [ ] 修改服务：`services/message-service.js`
-- [ ] 修改服务：`backend/services/taskService.js`
-- [ ] 修改服务：`backend/services/rewardService.js`
+- [x] 新建服务：`backend/services/messageService.js`
+- [x] 修改服务：`services/message-service.js`
+- [x] 修改服务：`backend/services/taskService.js`
+- [x] 修改服务：`backend/services/rewardService.js`
 - 说明：
   - 后端 `messageService` 负责消息 CRUD、读状态变更、按用户/家庭查询
   - 后端任务/奖励服务在业务成功后调用消息服务创建对应消息
@@ -142,10 +152,10 @@ M10 对一致性机制再补一条硬约束：**不引入独立消息重试队�
   - 前端任务/奖励同步请求需统一携带 `operationKey`；对“谁触发了动作”敏感的链路，还需透传 `operatorContext` 或其等价字段，确保后续补云时仍能还原 `actorUserId`、`subjectUserId` 和消息文案
 
 **仓储层（repositories/）**：
-- [ ] 修改仓储：`repositories/message-repository.js`
-- [ ] 修改仓储：`repositories/task-repository.js`
-- [ ] 修改仓储：`repositories/reward-repository.js`
-- [ ] 新建仓储：后端服务内部数据访问逻辑可先内聚在 `backend/services/messageService.js`，后续如复杂再独立仓储
+- [x] 修改仓储：`repositories/message-repository.js`
+- [x] 修改仓储：`repositories/task-repository.js`
+- [x] 修改仓储：`repositories/reward-repository.js`
+- [x] 新建仓储：后端服务内部数据访问逻辑可先内聚在 `backend/services/messageService.js`，后续如复杂再独立仓储
 - 说明：
   - 前端仓储增加 `getByUserId`、`getFamilyFeedMessages`、`replaceSyncedMessagesByScope`、`cleanupStaleMessages`、`archiveLegacyMessages` 等能力
   - 前端任务/奖励仓储需原样持久化同步元数据，保证“本地成功、补云失败、应用重启后再补云”仍能拿到 `operationKey` 与最近一次操作者上下文
@@ -153,13 +163,13 @@ M10 对一致性机制再补一条硬约束：**不引入独立消息重试队�
   - 旧本地历史正式消息在首次切换时归档到 `legacyMessages`，不再参与主消息流查询
 
 **适配器层（adapters/）**：
-- [ ] 修改适配器：`utils/api-config.js`
+- [x] 修改适配器：`utils/api-config.js`
 - 说明：
   - 新增消息相关 API 端点配置
 
 **表现层（pages/、components/）**：
-- [ ] 修改页面：`packageMessage/pages/message/message.js`
-- [ ] 修改页面：`pages/index/index.js`
+- [x] 修改页面：`packageMessage/pages/message/message.js`
+- [x] 修改页面：`pages/index/index.js`
 - 说明：
   - 首页消息预览和消息中心页面都改为显式按 scope 刷新：家长读家庭流，孩子读个人流
   - 页面不再依赖 `'shared'` 作为任务/奖励消息跨用户可见策略；改为使用明确的 `visibilityScope`
@@ -330,6 +340,7 @@ interface PendingDeleteMeta {
 - `backend/test/integration/message-api-m10-real.test.js` - M10 真实集成测试
 
 **修改文件**：
+- `backend/database/test-setup-modern.sql` - 集成测试库 schema 补充 `messages` 表
 - `services/message-service.js` - 接入云端同步与接收者解析
 - `repositories/message-repository.js` - 支持按用户回灌与 stale cleanup
 - `models/message.js` - 补充云端字段
@@ -355,13 +366,13 @@ interface PendingDeleteMeta {
 ```javascript
 // backend/services/messageService.js
 class MessageService {
-  async getMessages(scope, userId, familyId, options = {}) {}
-  async markAsRead(messageId, userId, familyId, options = {}) {}
-  async markAllAsRead(scope, userId, familyId) {}
-  async deleteMessage(messageId, userId, familyId) {}
-  async createTaskNotification(payload) {}
-  async createRewardNotification(payload) {}
-  buildMessageEventKey(payload) {}
+  async getMessages(scope, viewer, options = {}) {}
+  async markAsRead(messageId, viewer, readTime = Date.now()) {}
+  async markAllAsRead(scope, viewer, options = {}) {}
+  async deleteMessage(messageId, viewer) {}
+  async createTaskMessages(input, connection) {}
+  async createRewardMessages(input, connection) {}
+  _buildMessageEventKey(payload) {}
 }
 
 // services/message-service.js
@@ -370,52 +381,39 @@ class MessageService {
   async getMessagesByScope(options = {}) {}
   async getAllMessages(options = {}) {}
   async getUnreadCount(options = {}) {}
-  async markMessageAsRead(messageId) {}
+  async markMessageAsRead(messageId, options = {}) {}
   async markAllMessagesAsRead(options = {}) {}
-  async deleteMessage(messageId) {}
-  handleCloudSyncFailure(payload) {}
-  _resolveMessageAudience(context) {}
-  _buildMessageEventKey(context) {}
-  _archiveLegacyMessages(messages, options = {}) {}
+  async deleteMessage(messageId, options = {}) {}
+  async _createProvisionalMessages(eventType, payload = {}) {}
+  _handleTaskCloudSyncFailed(payload) {}
+  _handleRewardCloudSyncFailed(payload) {}
 }
 ```
 
 ### 关键函数
 
-**函数1**：`_resolveMessageAudience(context)`
-- **输入**：任务/奖励对象、操作类型、操作者 ID、任务归属用户 ID、家庭成员缓存
-- **输出**：`{ subjectUserId, recipientUserId, visibilityScope }`
-- **职责**：替换当前 `'parent'/'child'` 字面量路由，确保多孩子家庭消息归属正确，并把“孩子个人流 / 家长家庭流”一次解析出来
-- **依赖**：`UserService` 当前登录用户、家庭成员缓存；后端侧依赖家庭关系校验
-
-**函数1.1**：`buildMessageEventKey(payload)` / `_buildMessageEventKey(context)`
+**函数1**：`_buildMessageEventKey(payload)`
 - **输入**：`sourceType`、`relatedId`、`notificationType`、`subjectUserId`、`actorUserId`、`operationKey`
 - **输出**：稳定的 `messageEventKey`
-- **职责**：确保 provisional 回收、云端幂等和双记录配对都基于“同一操作实例”，而不是粗粒度的“同一业务对象”
-- **依赖**：任务/奖励写接口传下来的 `modifyTime` 或后端生成事件 ID
+- **职责**：确保云端双记录、provisional 回收与幂等判断都基于“同一操作实例”，而不是粗粒度的“同一业务对象”
+- **依赖**：任务/奖励写接口透传的 `operationKey`
 
-**函数1.2**：`handleCloudSyncFailure(payload)`
-- **输入**：`sourceType`、`relatedId`、`notificationType`、`operatorContext`、`subjectUserId`、`operationKey`、`localEntitySnapshot`
+**函数2**：`_createProvisionalMessages(eventType, payload)`
+- **输入**：`eventType`、`task/reward snapshot`、`pendingSyncMeta`
 - **输出**：本地 provisional 消息或空
-- **职责**：只在云同步失败信号触发时创建 provisional 消息；替代当前“先收业务事件、后猜是否需要 provisional”的不确定路径
-- **依赖**：`TASK_CLOUD_SYNC_FAILED`、`REWARD_CLOUD_SYNC_FAILED` 事件，`MessageRepository`
+- **职责**：只在 `TASK_CLOUD_SYNC_FAILED` / `REWARD_CLOUD_SYNC_FAILED` 到达时创建 provisional 消息，避免普通业务事件提前落正式消息
+- **依赖**：`MessageRepository`、事件总线失败信号
 
-**函数2**：`refreshMessagesFromCloud(userId, options)`
+**函数3**：`refreshMessagesFromCloud(userId, options)`
 - **输入**：目标用户 ID + scope
 - **输出**：云端消息数组
 - **职责**：从云端拉取消息、全量回灌本地、清理已同步陈旧消息
 - **依赖**：`HttpClient`、`MessageRepository`
 
-**函数3**：`_archiveLegacyMessages(messages, options)`
-- **输入**：切换前的本地消息集合 + 当前 scope
-- **输出**：归档结果
-- **职责**：将无法映射到云端主流的旧本地正式消息迁移到 `legacyMessages`，避免和新消息混流
-- **依赖**：`MessageRepository`
-
-**函数4**：`createTaskNotification(payload)`
-- **输入**：任务业务事件数据
+**函数4**：`createTaskMessages(input, connection)` / `createRewardMessages(input, connection)`
+- **输入**：任务或奖励业务事件数据、操作者上下文、`operationKey`
 - **输出**：已创建的消息记录
-- **职责**：在后端任务主链路成功后生成消息，保证跨设备一致
+- **职责**：在后端任务/奖励主链路成功后生成个人流与家庭流双记录，保证跨设备一致
 - **依赖**：后端 `Message` 模型与家庭用户鉴权逻辑
 
 ---
@@ -424,9 +422,9 @@ class MessageService {
 
 ### 第1步：消息领域模型与后端 API 落地（预计2天）
 
-- [ ] **任务**：新增 `messages` 表、后端模型、服务、控制器和路由
-- [ ] **验证**：可以通过 API 查询、标记已读、批量已读、删除消息
-- [ ] **依赖**：复用现有 JWT、`resolveTargetUserId` / 家庭鉴权模式
+- [x] **任务**：新增 `messages` 表、后端模型、服务、控制器和路由
+- [x] **验证**：可以通过 API 查询、标记已读、批量已读、删除消息
+- [x] **依赖**：复用现有 JWT、`resolveTargetUserId` / 家庭鉴权模式
 
 **实施要点**：
 1. 表结构至少包含 `family_id`、`user_id`、`actor_user_id`、`subject_user_id`、`visibility_scope`、`type`、`notification_type`、`related_id`、`title`、`summary`、`is_read`、`read_time`、`create_time`
@@ -443,9 +441,9 @@ class MessageService {
 
 ### 第2步：后端任务/奖励写路径接入消息生成（预计1.5天）
 
-- [ ] **任务**：在任务/奖励业务成功后生成对应消息
-- [ ] **验证**：任务创建/完成、奖励创建/兑换后可在云端查到消息
-- [ ] **依赖**：第1步消息服务已可用
+- [x] **任务**：在任务/奖励业务成功后生成对应消息
+- [x] **验证**：任务创建/完成、奖励创建/兑换后可在云端查到消息
+- [x] **依赖**：第1步消息服务已可用
 
 **实施要点**：
 1. 以现有业务成功点为准生成消息，避免失败后脏消息；在后端云端路径中，消息写入必须纳入与主业务同一个成功单元，不能出现“任务/奖励成功但消息漏写”
@@ -463,15 +461,15 @@ class MessageService {
 
 ### 第3步：前端 MessageService 云端刷新与状态同步（预计1.5天）
 
-- [ ] **任务**：前端消息服务接入云端拉取、已读同步、删除同步
-- [ ] **验证**：跨设备已读/删除状态一致，本地缓存可正确回灌
-- [ ] **依赖**：第1步完成
+- [x] **任务**：前端消息服务接入云端拉取、已读同步、删除同步
+- [x] **验证**：跨设备已读/删除状态一致，本地缓存可正确回灌
+- [x] **依赖**：第1步完成
 
 **实施要点**：
 1. 读路径参考 M07/M09 的全量刷新 + stale cleanup
 2. 写路径失败时不阻断本地交互，但记录 warn 日志
 3. 对于“本地业务成功、云端失败”的场景，需要保留 provisional 本地消息，并在该业务实体后续成功同步到云端后按业务幂等键去重/回收；M10 不额外建设消息专用重试队列
-4. provisional 创建入口明确为专用失败信号，而不是普通业务事件：`MessageService` 监听 `TASK_CLOUD_SYNC_FAILED` / `REWARD_CLOUD_SYNC_FAILED`，或由 task/reward service 在失败分支直接调用 `handleCloudSyncFailure(payload)`，二者择一但必须唯一，避免双触发
+4. provisional 创建入口明确为专用失败信号，而不是普通业务事件：当前实现由 `MessageService` 监听 `TASK_CLOUD_SYNC_FAILED` / `REWARD_CLOUD_SYNC_FAILED` 创建 provisional 消息，避免普通业务事件在“不知道云端结果”的时点提前落库
 5. 任务创建/更新/状态同步、奖励创建/更新/兑换、任务/奖励删除等前端云同步请求都要显式透传 `operationKey`；删除场景在本地删除前先生成一次 `operationKey`
 6. 云端托管消息类型对应的普通 `TASK_*` / `REWARD_*` 监听器只保留 UI 刷新、副作用编排或非云消息职责，不再承担 provisional 创建
 7. 应用重启后的补云流程必须优先从本地 task/reward 实体或其 `pendingSyncMeta` 中恢复 `operationKey`、`operatorContext`、目标孩子信息，而不是重新生成
@@ -485,9 +483,9 @@ class MessageService {
 
 ### 第4步：首页与消息中心页面改造（预计1天）
 
-- [ ] **任务**：首页消息预览、消息页改为按“家长家庭流 / 孩子个人流”读取消息
-- [ ] **验证**：家长视角看到当前家庭孩子行为流，孩子设备只看到自己的消息
-- [ ] **依赖**：第3步完成
+- [x] **任务**：首页消息预览、消息页改为按“家长家庭流 / 孩子个人流”读取消息
+- [x] **验证**：家长视角看到当前家庭孩子行为流，孩子设备只看到自己的消息
+- [x] **依赖**：第3步完成
 
 **实施要点**：
 1. 页面进入时显式调用 `refreshMessagesFromCloud(null, { scope: 'family' })` 或 `refreshMessagesFromCloud(currentUserId, { scope: 'user' })`
@@ -499,9 +497,9 @@ class MessageService {
 
 ### 第5步：测试与文档同步（预计1天）
 
-- [ ] **任务**：补齐单元测试、真实集成测试、文档更新
-- [ ] **验证**：测试通过，文档与实现一致
-- [ ] **依赖**：前 4 步完成
+- [x] **任务**：补齐单元测试、真实集成测试、文档更新
+- [x] **验证**：测试通过，文档与实现一致
+- [x] **依赖**：前 4 步完成
 
 **实施要点**：
 1. 新增消息 API 真实集成测试
@@ -511,6 +509,8 @@ class MessageService {
 ---
 
 ## 测试方案
+
+> 说明：以下为设计阶段的验证清单；其中当前已有自动化或真实集成测试覆盖的关键项已标记为 ✅，其余保留为后续扩展回归项。
 
 ### 单元测试
 
@@ -531,10 +531,10 @@ class MessageService {
 
 ### 集成测试
 
-- [ ] 场景1：家长为孩子创建任务，云端生成孩子消息
-- [ ] 场景2：孩子完成任务，云端生成家长消息
-- [ ] 场景3：家长创建任务，家长家庭流出现“谁给哪个孩子创建了任务”
-- [ ] 场景4：消息标记已读后跨设备读取状态一致
+- [x] 场景1：家长为孩子创建任务，云端生成孩子消息
+- [x] 场景2：孩子完成任务，云端生成家长消息
+- [x] 场景3：家长创建任务，家长家庭流出现“谁给哪个孩子创建了任务”
+- [x] 场景4：消息标记已读后跨设备读取状态一致
 - [ ] 场景5：删除消息后云端与本地都不再返回
 - [ ] 场景6：云端写失败时本地 provisional 消息可见，后续补齐后不重复
 - [ ] 场景7：孩子个人流已读后，家长家庭流仍保持未读
@@ -616,10 +616,10 @@ class MessageService {
 
 ## 审核检查清单
 
-- [ ] M10 范围是否明确聚焦消息通知，而非重复 M07/M09 已完成内容
-- [ ] 消息接收者路由是否彻底摆脱 `'parent'/'child'` 字面量，并与任务归属解析保持一致
-- [ ] 后端生成消息的成功点是否足够清晰，能避免重复/漏发
-- [ ] 本地缓存、provisional 消息与云端权威的边界是否明确
-- [ ] 家长家庭流与孩子个人流的读取口径是否明确
-- [ ] 双记录策略与奖励规则矩阵是否已定型，不再留待实现时拍板
+- [x] M10 范围是否明确聚焦消息通知，而非重复 M07/M09 已完成内容
+- [x] 消息接收者路由是否彻底摆脱 `'parent'/'child'` 字面量，并与任务归属解析保持一致
+- [x] 后端生成消息的成功点是否足够清晰，能避免重复/漏发
+- [x] 本地缓存、provisional 消息与云端权威的边界是否明确
+- [x] 家长家庭流与孩子个人流的读取口径是否明确
+- [x] 双记录策略与奖励规则矩阵是否已定型，不再留待实现时拍板
 - [ ] 手动测试是否覆盖多孩子家庭和跨设备场景

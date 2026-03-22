@@ -171,7 +171,17 @@ describe('DELETE /api/tasks/:taskId', () => {
       .delete('/api/tasks/task_001')
       .set('Authorization', token(CHILD));
     expect(res.status).toBe(200);
-    expect(taskService.softDeleteTask).toHaveBeenCalledWith('task_001');
+    expect(taskService.softDeleteTask).toHaveBeenCalledWith(
+      'task_001',
+      expect.objectContaining({
+        actorUserId: 'child_1',
+        actorRole: 'child',
+        familyId: 'fam_1',
+        subjectUserId: 'child_1',
+        operationKey: expect.any(String),
+        modifyTime: expect.any(Number),
+      })
+    );
   });
 
   it('家长可以代孩子删除任务', async () => {
@@ -209,7 +219,23 @@ describe('PATCH /api/tasks/:taskId/status', () => {
       .set('Authorization', token(CHILD))
       .send({ status: 1, starAwarded: true });
     expect(res.status).toBe(200);
-    expect(taskService.updateTaskStatus).toHaveBeenCalledWith('task_001', { status: 1, starAwarded: true });
+    expect(taskService.updateTaskStatus).toHaveBeenCalledWith(
+      'task_001',
+      {
+        status: 1,
+        starAwarded: true,
+        modifyTime: undefined,
+        operationKey: undefined,
+      },
+      expect.objectContaining({
+        actorUserId: 'child_1',
+        actorRole: 'child',
+        familyId: 'fam_1',
+        subjectUserId: 'child_1',
+        operationKey: expect.any(String),
+        modifyTime: expect.any(Number),
+      })
+    );
   });
 
   it('status=0 更新成功（重置）', async () => {
