@@ -52,6 +52,27 @@ class TokenManager {
   }
 
   /**
+   * Base64解码（微信小程序兼容版本）
+   * @param {string} str - base64编码的字符串
+   * @returns {string} 解码后的字符串
+   */
+  static base64Decode(str) {
+    // 处理URL安全的base64格式
+    const base64 = str.replace(/-/g, '+').replace(/_/g, '/');
+
+    // 使用微信小程序API解码
+    const arrayBuffer = wx.base64ToArrayBuffer(base64);
+
+    // 转换ArrayBuffer为字符串
+    const uint8Array = new Uint8Array(arrayBuffer);
+    let decoded = '';
+    for (let i = 0; i < uint8Array.length; i++) {
+      decoded += String.fromCharCode(uint8Array[i]);
+    }
+    return decoded;
+  }
+
+  /**
    * 解析token获取用户信息
    * @returns {Object|null} 用户信息，如果token无效返回null
    */
@@ -68,11 +89,9 @@ class TokenManager {
         return null;
       }
 
-      // 小程序环境使用 atob 解码 base64
-      const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-      const payload = JSON.parse(decodeURIComponent(
-        atob(base64).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')
-      ));
+      // 使用微信小程序兼容的 base64 解码
+      const decoded = this.base64Decode(parts[1]);
+      const payload = JSON.parse(decoded);
       return {
         userId: payload.userId,
         openid: payload.openid,
@@ -110,10 +129,9 @@ class TokenManager {
         return true;
       }
 
-      const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-      const payload = JSON.parse(decodeURIComponent(
-        atob(base64).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')
-      ));
+      // 使用微信小程序兼容的 base64 解码
+      const decoded = this.base64Decode(parts[1]);
+      const payload = JSON.parse(decoded);
       const exp = payload.exp * 1000; // 转换为毫秒
       const now = Date.now();
       const remaining = exp - now;
