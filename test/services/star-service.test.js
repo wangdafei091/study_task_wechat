@@ -22,6 +22,7 @@ jest.mock('../../utils/http-client', () => ({
 }));
 
 const { StarGroupRepository, StarRecordRepository } = require('../../repositories/index');
+const HttpClient = require('../../utils/http-client');
 
 describe('StarService', () => {
   let starService;
@@ -1101,6 +1102,124 @@ describe('StarService', () => {
       const initialized = await starService.initialize();
 
       expect(initialized).toBe(false);
+    });
+
+    it('存在本地待同步星星流水时应跳过云端覆盖', async () => {
+      starService.enableCloudStorage = true;
+
+      const localGroup = TestDataFactory.createStarGroup({
+        id: 'group_local_1',
+        userId: 'user_123',
+        stars: 8,
+        expiryType: 'week'
+      });
+      const localPendingRecord = {
+        id: 'record_pending_1',
+        userId: 'user_123',
+        syncedToCloud: false,
+        points: -3
+      };
+
+      mockStarGroupRepository.getAll.mockResolvedValue([localGroup]);
+      mockStarRecordRepository.getAll.mockResolvedValue([localPendingRecord]);
+
+      const result = await starService.refreshStarsFromCloud('user_123');
+
+      expect(result.success).toBe(true);
+      expect(result.skipped).toBe(true);
+      expect(result.reason).toBe('pending_local_records');
+      expect(result.groups).toEqual([localGroup]);
+      expect(result.records).toEqual([localPendingRecord]);
+      expect(HttpClient.get).not.toHaveBeenCalled();
+    });
+
+    it('星星流水同步成功后应回灌服务端返回的最新分组快照', async () => {
+      const record = {
+        id: 'record_sync_1',
+        userId: 'user_123',
+        type: 'expense',
+        source: 'task_reset',
+        sourceId: 'task_1',
+        points: -5,
+        description: '取消完成任务',
+        expiryType: 'week',
+        expiryDate: '2026-03-28',
+        syncedToCloud: false,
+        modifyTime: 1742716800000
+      };
+
+      HttpClient.post.mockResolvedValue({
+        updatedGroupsSnapshot: [
+          {
+            groupId: 'cloud_group_1',
+            userId: 'user_123',
+            type: 'week',
+            stars: 0,
+            expiryDate: '2026-03-28',
+            modifyTime: 1742716801000
+          }
+        ]
+      });
+      mockStarRecordRepository.getAll.mockResolvedValue([]);
+      mockStarGroupRepository.getAll.mockResolvedValue([]);
+
+      await starService._syncStarRecordToCloud(record);
+
+      expect(record.syncedToCloud).toBe(true);
+      expect(mockStarRecordRepository.save).toHaveBeenCalledWith(record);
+      expect(mockStarGroupRepository._saveData).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: 'cloud_group_1',
+            userId: 'user_123',
+            stars: 0,
+            syncedToCloud: true
+          })
+        ])
+      );
+      expect(mockStarGroupRepository.invalidateCache).toHaveBeenCalled();
+    });
+
+    it('存在其他待同步本地流水时不应回灌服务端分组快照', async () => {
+      const record = {
+        id: 'record_sync_2',
+        userId: 'user_123',
+        type: 'expense',
+        source: 'task_reset',
+        sourceId: 'task_2',
+        points: -5,
+        description: '取消完成任务',
+        expiryType: 'week',
+        expiryDate: '2026-03-28',
+        syncedToCloud: false,
+        modifyTime: 1742716800000
+      };
+
+      HttpClient.post.mockResolvedValue({
+        updatedGroupsSnapshot: [
+          {
+            groupId: 'cloud_group_2',
+            userId: 'user_123',
+            type: 'week',
+            stars: 2,
+            expiryDate: '2026-03-28',
+            modifyTime: 1742716801000
+          }
+        ]
+      });
+      mockStarRecordRepository.getAll.mockResolvedValue([
+        {
+          id: 'record_pending_2',
+          userId: 'user_123',
+          syncedToCloud: false,
+          points: -2
+        }
+      ]);
+
+      await starService._syncStarRecordToCloud(record);
+
+      expect(record.syncedToCloud).toBe(true);
+      expect(mockStarGroupRepository._saveData).not.toHaveBeenCalled();
     });
 
     it('应该成功清除缓存', () => {

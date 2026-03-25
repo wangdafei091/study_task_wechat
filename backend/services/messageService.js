@@ -169,6 +169,7 @@ class MessageService {
       actorUserId,
       actorName,
       subjectName,
+      subjectUserId,
     });
 
     const records = [];
@@ -296,9 +297,21 @@ class MessageService {
     return records;
   }
 
-  _buildTaskContent({ action, taskTitle, actorRole, actorUserId, actorName, subjectName }) {
-    const safeSubjectName = subjectName || '孩子';
-    const safeActorName = actorName || (actorRole === 'parent' ? '家长' : '孩子');
+  _getRoleDisplayName(role) {
+    return role === 'parent' ? '家长' : '孩子';
+  }
+
+  _normalizeDisplayName(name, role) {
+    if (name && name !== '用户') {
+      return name;
+    }
+    return this._getRoleDisplayName(role);
+  }
+
+  _buildTaskContent({ action, taskTitle, actorRole, actorUserId, actorName, subjectName, subjectUserId }) {
+    const safeSubjectName = this._normalizeDisplayName(subjectName, 'child');
+    const safeActorName = this._normalizeDisplayName(actorName, actorRole);
+    const isSelfAction = Boolean(actorUserId && subjectUserId && actorUserId === subjectUserId);
 
     switch (action) {
       case 'create':
@@ -307,11 +320,15 @@ class MessageService {
           priority: 1,
           user: {
             title: '新任务已创建',
-            summary: `你的任务“${taskTitle}”已加入计划`,
+            summary: isSelfAction
+              ? `你给自己安排了任务“${taskTitle}”`
+              : `${safeActorName}给你安排了任务“${taskTitle}”`,
           },
           family: {
             title: '任务已创建',
-            summary: `${safeActorName}给${safeSubjectName}创建了任务“${taskTitle}”`,
+            summary: isSelfAction
+              ? `${safeSubjectName}创建了任务“${taskTitle}”`
+              : `${safeActorName}给${safeSubjectName}创建了任务“${taskTitle}”`,
           },
         };
       case 'update':
@@ -320,11 +337,15 @@ class MessageService {
           priority: 1,
           user: {
             title: '任务已更新',
-            summary: `你的任务“${taskTitle}”已更新`,
+            summary: isSelfAction
+              ? `你的任务“${taskTitle}”已更新`
+              : `${safeActorName}更新了你的任务“${taskTitle}”`,
           },
           family: {
             title: '任务已更新',
-            summary: `${safeActorName}更新了${safeSubjectName}的任务“${taskTitle}”`,
+            summary: isSelfAction
+              ? `${safeSubjectName}更新了任务“${taskTitle}”`
+              : `${safeActorName}更新了${safeSubjectName}的任务“${taskTitle}”`,
           },
         };
       case 'delete':
@@ -333,11 +354,15 @@ class MessageService {
           priority: 1,
           user: {
             title: '任务已删除',
-            summary: `你的任务“${taskTitle}”已删除`,
+            summary: isSelfAction
+              ? `你的任务“${taskTitle}”已删除`
+              : `${safeActorName}删除了你的任务“${taskTitle}”`,
           },
           family: {
             title: '任务已删除',
-            summary: `${safeActorName}删除了${safeSubjectName}的任务“${taskTitle}”`,
+            summary: isSelfAction
+              ? `${safeSubjectName}删除了任务“${taskTitle}”`
+              : `${safeActorName}删除了${safeSubjectName}的任务“${taskTitle}”`,
           },
         };
       case 'complete':
@@ -346,13 +371,15 @@ class MessageService {
           priority: 2,
           user: {
             title: '任务已完成',
-            summary: `你完成了任务“${taskTitle}”`,
+            summary: isSelfAction
+              ? `你完成了任务“${taskTitle}”`
+              : `${safeActorName}代你完成了任务“${taskTitle}”`,
           },
           family: {
             title: '任务已完成',
-            summary: actorRole === 'parent'
-              ? `${safeActorName}为${safeSubjectName}完成了任务“${taskTitle}”`
-              : `${safeSubjectName}完成了任务“${taskTitle}”`,
+            summary: isSelfAction
+              ? `${safeSubjectName}完成了任务“${taskTitle}”`
+              : `${safeActorName}代${safeSubjectName}完成了任务“${taskTitle}”`,
           },
         };
       case 'reset':
@@ -361,11 +388,15 @@ class MessageService {
           priority: 1,
           user: {
             title: '任务已重置',
-            summary: `你的任务“${taskTitle}”已重置为未完成`,
+            summary: isSelfAction
+              ? `你的任务“${taskTitle}”已重置为未完成`
+              : `${safeActorName}将你的任务“${taskTitle}”重置为未完成`,
           },
           family: {
             title: '任务已重置',
-            summary: `${safeActorName}将${safeSubjectName}的任务“${taskTitle}”重置为未完成`,
+            summary: isSelfAction
+              ? `${safeSubjectName}将任务“${taskTitle}”重置为未完成`
+              : `${safeActorName}将${safeSubjectName}的任务“${taskTitle}”重置为未完成`,
           },
         };
       default:
@@ -559,7 +590,7 @@ class MessageService {
       if (rows.length === 0) {
         return null;
       }
-      return rows[0].nickname || (rows[0].role === 'parent' ? '家长' : '孩子');
+      return this._normalizeDisplayName(rows[0].nickname, rows[0].role);
     } catch (error) {
       logger.warn('获取用户昵称失败，回退默认名称', { userId, error: error.message });
       return null;

@@ -40,6 +40,7 @@ describe('pages/index reward flow', () => {
   let appMock;
   let starService;
   let rewardService;
+  let taskService;
 
   function cloneData(data) {
     return JSON.parse(JSON.stringify(data));
@@ -110,17 +111,27 @@ describe('pages/index reward flow', () => {
       refreshStarsFromCloud: jest.fn()
     };
 
+    taskService = {
+      updateTaskStatus: jest.fn(),
+      completeTask: jest.fn(),
+      resetTask: jest.fn()
+    };
+
     rewardService = {
       getLastExchangeTimeByUser: jest.fn(),
       calculateNextAvailableReward: jest.fn(),
-      getAvailableRewards: jest.fn()
+      getAvailableRewards: jest.fn(),
+      refreshRewardsFromCloud: jest.fn()
     };
 
     serviceManager.getService.mockImplementation((serviceName) => {
       if (serviceName === 'starService') return starService;
       if (serviceName === 'rewardService') return rewardService;
+      if (serviceName === 'reward') return rewardService;
+      if (serviceName === 'task') return taskService;
       return null;
     });
+    serviceManager.getTaskService.mockReturnValue(taskService);
 
     appMock = {
       globalData: {
@@ -131,6 +142,13 @@ describe('pages/index reward flow', () => {
     };
 
     global.getApp = jest.fn(() => appMock);
+    global.wx.showModal = jest.fn(({ success }) => {
+      if (typeof success === 'function') {
+        success({ confirm: true, cancel: false });
+      }
+    });
+    global.wx.showToast = jest.fn();
+    global.wx.vibrateShort = jest.fn();
 
     loadPageModule();
   });
@@ -239,6 +257,29 @@ describe('pages/index reward flow', () => {
     ]);
   });
 
+  it('completeTask 在取消完成前应按任务归属用户预检查锁定状态', async () => {
+    const page = createPageInstance();
+    page.data.tasks = [{
+      id: 'task-1',
+      userId: 'child-1',
+      title: '已完成任务',
+      status: 1,
+      starAwarded: true,
+      points: 5,
+      completionTime: Date.now() - 7200000
+    }];
+
+    rewardService.getLastExchangeTimeByUser.mockResolvedValue(Date.now() - 3600000);
+
+    await page.completeTask({ detail: { taskId: 'task-1' } });
+
+    expect(rewardService.getLastExchangeTimeByUser).toHaveBeenCalledWith('child-1');
+    expect(taskService.resetTask).not.toHaveBeenCalled();
+    expect(global.wx.showModal).toHaveBeenCalledWith(expect.objectContaining({
+      title: '无法取消完成'
+    }));
+  });
+
   it('transitionToNewTarget 应按 effectiveUserId 读取孩子剩余星星并更新进度条', async () => {
     const page = createPageInstance();
     const progressBar = {
@@ -265,5 +306,51 @@ describe('pages/index reward flow', () => {
     expect(progressBar.setData).toHaveBeenCalledWith({ current: 6, total: 10 });
     expect(page.data.rewardProgress).toEqual({ current: 6, total: 10 });
     expect(page.data.userPoints).toBe(6);
+  });
+
+  it('refreshTaskDataForCurrentView 应按当前选中日期刷新任务', async () => {
+    const page = createPageInstance();
+    page.data.currentViewDate = '2026-03-20';
+    page.loadTaskDataOnly = jest.fn().mockResolvedValue([]);
+    page.checkUpcomingTasks = jest.fn().mockResolvedValue();
+
+    await page.refreshTaskDataForCurrentView();
+
+    expect(page.loadTaskDataOnly).toHaveBeenCalledWith('2026-03-20');
+    expect(page.checkUpcomingTasks).toHaveBeenCalledTimes(1);
+  });
+
+  it('taskItemStatusToggle 应刷新当前视图日期任务，不跳回今天', async () => {
+    const page = createPageInstance();
+    page.data.currentViewDate = '2026-03-20';
+    page.transitionToNewTarget = jest.fn();
+    page.refreshTaskDataForCurrentView = jest.fn().mockResolvedValue();
+    taskService.updateTaskStatus.mockResolvedValue({ success: true });
+
+    await page.taskItemStatusToggle({
+      detail: {
+        id: 'task-1',
+        newStatus: 1
+      }
+    });
+
+    expect(taskService.updateTaskStatus).toHaveBeenCalledWith('task-1', 1);
+    expect(page.transitionToNewTarget).toHaveBeenCalledTimes(1);
+    expect(page.refreshTaskDataForCurrentView).toHaveBeenCalledTimes(1);
+  });
+
+  it('onShow 应先刷新云端奖励再加载首页数据', async () => {
+    const page = createPageInstance();
+    page.waitForServicesReady = jest.fn().mockResolvedValue();
+    page.waitForLoginComplete = jest.fn().mockResolvedValue();
+    page.initializeMultiUserSystem = jest.fn().mockResolvedValue();
+    page.checkExpiredTasksAndStars = jest.fn().mockResolvedValue();
+    page.loadAllPageData = jest.fn();
+
+    await page.onShow();
+
+    expect(rewardService.refreshRewardsFromCloud).toHaveBeenCalledTimes(1);
+    expect(page.checkExpiredTasksAndStars).toHaveBeenCalledTimes(1);
+    expect(page.loadAllPageData).toHaveBeenCalledTimes(1);
   });
 });

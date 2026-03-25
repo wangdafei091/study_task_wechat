@@ -69,7 +69,7 @@ class Task {
     
     // 星星奖励
     this.points = data.points || 0;
-    this.pointsExpiry = data.pointsExpiry || StarExpiryType.PERMANENT;
+    this.pointsExpiry = data.pointsExpiry || data.pointsValidPeriod || StarExpiryType.PERMANENT;
     this.pointsExpiryDate = data.pointsExpiryDate || '';
     this.starAwarded = data.starAwarded || false;
     
@@ -115,11 +115,6 @@ class Task {
     // 确保有积分有效期字段
     if (!this.pointsExpiry) {
       this.pointsExpiry = StarExpiryType.PERMANENT;
-    }
-    
-    // 兼容旧数据，将pointsValidPeriod转换为pointsExpiry
-    if (!this.pointsExpiry && data && data.pointsValidPeriod) {
-      this.pointsExpiry = data.pointsValidPeriod;
     }
   }
   

@@ -149,6 +149,104 @@ class MessageService {
     return [...messages].sort((a, b) => b.createTime - a.createTime);
   }
 
+  _getRoleDisplayName(role) {
+    return role === 'parent' ? '家长' : '孩子';
+  }
+
+  _normalizeDisplayName(name, role) {
+    if (name && name !== '用户') {
+      return name;
+    }
+    return this._getRoleDisplayName(role);
+  }
+
+  _getLocalUserDisplayName(userId, roleHint = null) {
+    if (!userId) {
+      return this._normalizeDisplayName(null, roleHint);
+    }
+    const user = this.userService?.getUserById?.(userId) || null;
+    const rawName = user?.name || user?.nickname || null;
+    return this._normalizeDisplayName(rawName, user?.role || roleHint);
+  }
+
+  _buildTaskMessageCopy({ action, taskTitle, actorUserId = null, actorRole = null, subjectUserId = null, actorName = null, subjectName = null, pending = false }) {
+    const safeActorName = actorName || this._normalizeDisplayName(null, actorRole);
+    const safeSubjectName = subjectName || this._normalizeDisplayName(null, 'child');
+    const isSelfAction = Boolean(actorUserId && subjectUserId && actorUserId === subjectUserId);
+    const suffix = pending ? '，等待同步' : '';
+
+    switch (action) {
+      case 'create':
+        return {
+          userTitle: pending ? '新任务待同步' : '新任务已创建',
+          userSummary: isSelfAction
+            ? `你给自己安排了任务“${taskTitle}”${suffix}`
+            : `${safeActorName}给你安排了任务“${taskTitle}”${suffix}`,
+          familyTitle: pending ? '新任务待同步' : '任务已创建',
+          familySummary: isSelfAction
+            ? `${safeSubjectName}创建了任务“${taskTitle}”${suffix}`
+            : `${safeActorName}给${safeSubjectName}创建了任务“${taskTitle}”${suffix}`,
+          icon: '📝'
+        };
+      case 'update':
+        return {
+          userTitle: pending ? '任务更新待同步' : '任务已更新',
+          userSummary: isSelfAction
+            ? `你的任务“${taskTitle}”已更新${suffix}`
+            : `${safeActorName}更新了你的任务“${taskTitle}”${suffix}`,
+          familyTitle: pending ? '任务更新待同步' : '任务已更新',
+          familySummary: isSelfAction
+            ? `${safeSubjectName}更新了任务“${taskTitle}”${suffix}`
+            : `${safeActorName}更新了${safeSubjectName}的任务“${taskTitle}”${suffix}`,
+          icon: '✏️'
+        };
+      case 'delete':
+        return {
+          userTitle: pending ? '任务删除待同步' : '任务已删除',
+          userSummary: isSelfAction
+            ? `你的任务“${taskTitle}”已删除${suffix}`
+            : `${safeActorName}删除了你的任务“${taskTitle}”${suffix}`,
+          familyTitle: pending ? '任务删除待同步' : '任务已删除',
+          familySummary: isSelfAction
+            ? `${safeSubjectName}删除了任务“${taskTitle}”${suffix}`
+            : `${safeActorName}删除了${safeSubjectName}的任务“${taskTitle}”${suffix}`,
+          icon: '🗑️'
+        };
+      case 'complete':
+        return {
+          userTitle: pending ? '任务完成待同步' : '任务已完成',
+          userSummary: isSelfAction
+            ? `你完成了任务“${taskTitle}”${suffix}`
+            : `${safeActorName}代你完成了任务“${taskTitle}”${suffix}`,
+          familyTitle: pending ? '任务完成待同步' : '任务已完成',
+          familySummary: isSelfAction
+            ? `${safeSubjectName}完成了任务“${taskTitle}”${suffix}`
+            : `${safeActorName}代${safeSubjectName}完成了任务“${taskTitle}”${suffix}`,
+          icon: '✅'
+        };
+      case 'reset':
+        return {
+          userTitle: pending ? '任务重置待同步' : '任务已重置',
+          userSummary: isSelfAction
+            ? `你的任务“${taskTitle}”已重置为未完成${suffix}`
+            : `${safeActorName}将你的任务“${taskTitle}”重置为未完成${suffix}`,
+          familyTitle: pending ? '任务重置待同步' : '任务已重置',
+          familySummary: isSelfAction
+            ? `${safeSubjectName}将任务“${taskTitle}”重置为未完成${suffix}`
+            : `${safeActorName}将${safeSubjectName}的任务“${taskTitle}”重置为未完成${suffix}`,
+          icon: '↩️'
+        };
+      default:
+        return {
+          userTitle: pending ? '任务待同步' : '任务通知',
+          userSummary: `任务“${taskTitle}”有新的状态变更${suffix}`,
+          familyTitle: pending ? '任务待同步' : '任务通知',
+          familySummary: `任务“${taskTitle}”有新的状态变更${suffix}`,
+          icon: '📝'
+        };
+    }
+  }
+
   _mapCloudMessage(item) {
     return new Message({
       id: item.messageId || item.id,
@@ -284,44 +382,20 @@ class MessageService {
     const action = pendingSyncMeta.action || 'create';
     const messages = [];
     const eventKey = ['task', task.id || task.taskId, `task_${action}`, subjectUserId || 'none', pendingSyncMeta.operatorUserId || 'none', pendingSyncMeta.operationKey].join(':');
-
-    const actionCopy = {
-      create: {
-        userTitle: '新任务待同步',
-        userSummary: `你的任务“${task.title}”已保存到本机，等待同步`,
-        familySummary: `任务“${task.title}”待同步到家庭消息流`,
-        icon: '📝'
-      },
-      update: {
-        userTitle: '任务更新待同步',
-        userSummary: `你的任务“${task.title}”更新已保存到本机，等待同步`,
-        familySummary: `任务“${task.title}”更新待同步到家庭消息流`,
-        icon: '✏️'
-      },
-      delete: {
-        userTitle: '任务删除待同步',
-        userSummary: `任务“${task.title}”删除已保存在本机，等待同步`,
-        familySummary: `任务“${task.title}”删除待同步到家庭消息流`,
-        icon: '🗑️'
-      },
-      complete: {
-        userTitle: '任务完成待同步',
-        userSummary: `你完成了任务“${task.title}”，等待同步`,
-        familySummary: `任务“${task.title}”完成记录待同步到家庭消息流`,
-        icon: '✅'
-      },
-      reset: {
-        userTitle: '任务重置待同步',
-        userSummary: `你的任务“${task.title}”重置已保存到本机，等待同步`,
-        familySummary: `任务“${task.title}”重置待同步到家庭消息流`,
-        icon: '↩️'
-      }
-    }[action] || {
-      userTitle: '任务待同步',
-      userSummary: `任务“${task.title}”变更已保存到本机，等待同步`,
-      familySummary: `任务“${task.title}”变更待同步到家庭消息流`,
-      icon: '📝'
-    };
+    const actorUserId = pendingSyncMeta.operatorUserId || null;
+    const actorRole = pendingSyncMeta.operatorRole || null;
+    const actorName = this._getLocalUserDisplayName(actorUserId, actorRole);
+    const subjectName = this._getLocalUserDisplayName(subjectUserId, 'child');
+    const actionCopy = this._buildTaskMessageCopy({
+      action,
+      taskTitle: task.title,
+      actorUserId,
+      actorRole,
+      subjectUserId,
+      actorName,
+      subjectName,
+      pending: true
+    });
 
     if (subjectUserId) {
       messages.push(new Message({
@@ -356,7 +430,7 @@ class MessageService {
         visibilityScope: MessageVisibilityScope.FAMILY,
         type: MessageType.TASK,
         notificationType: pendingSyncMeta.notificationType || `task_${action}`,
-        title: actionCopy.userTitle,
+        title: actionCopy.familyTitle,
         summary: actionCopy.familySummary,
         relatedId: task.id || task.taskId || '',
         relatedType: 'task',

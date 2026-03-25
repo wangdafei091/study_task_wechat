@@ -75,20 +75,26 @@ class TaskService {
     return String(seed || Date.now());
   }
 
-  _getOperatorContext(targetUserId = null) {
+  _getOperatorContext(targetUserId = null, mode = 'execute') {
     const loginUser = this.userService?.getLoginUser?.();
     const currentUser = this.userService?.getCurrentUser?.();
+    const preferCurrentUser = mode === 'execute';
 
     return {
-      actorUserId: loginUser?.userId || loginUser?.id || currentUser?.id || null,
-      actorRole: loginUser?.role || currentUser?.role || 'system',
+      actorUserId: preferCurrentUser
+        ? (currentUser?.userId || currentUser?.id || loginUser?.userId || loginUser?.id || null)
+        : (loginUser?.userId || loginUser?.id || currentUser?.userId || currentUser?.id || null),
+      actorRole: preferCurrentUser
+        ? (currentUser?.role || loginUser?.role || 'system')
+        : (loginUser?.role || currentUser?.role || 'system'),
       familyId: loginUser?.familyId || currentUser?.familyId || null,
       targetUserId: targetUserId || null
     };
   }
 
   _buildTaskPendingSyncMeta(task, action, overrides = {}) {
-    const operatorContext = overrides.operatorContext || this._getOperatorContext(task?.userId || null);
+    const operatorMode = ['complete', 'reset'].includes(action) ? 'execute' : 'manage';
+    const operatorContext = overrides.operatorContext || this._getOperatorContext(task?.userId || null, operatorMode);
     const operationKey = this._createOperationKey(
       overrides.operationKey ||
       overrides.modifyTime ||
@@ -735,6 +741,7 @@ class TaskService {
       
       // 解析开始日期和结束日期
       const startDate = new Date(task.repeat.startDate);
+      const effectiveStartDate = new Date(startDate);
       let endDate = null;
       
       // 处理结束日期
@@ -764,42 +771,45 @@ class TaskService {
       // 确保开始日期不早于今天
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      if (startDate < today) {
-        startDate.setTime(today.getTime());
+      if (effectiveStartDate < today) {
+        effectiveStartDate.setTime(today.getTime());
       }
       
       // 确保结束日期不早于开始日期
-      if (endDate < startDate) {
+      if (endDate < effectiveStartDate) {
         logger.error('TaskService', '错误: 结束日期早于开始日期，无法生成任务');
         return [];
       }
       
       // 计算日期范围
-      const diffTime = Math.abs(endDate - startDate);
+      const diffTime = Math.abs(endDate - effectiveStartDate);
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // +1包含开始日期
       logger.info('TaskService', `任务将生成: ${diffDays}天的内容`);
       
       // 生成重复日期列表
       const repeatDates = [];
+      const parentTaskDate = task.date || dateUtils.formatDate(startDate);
       
       switch (task.repeat.type) {
         case RepeatType.DAILY:
           // 每天重复
-          for (let date = new Date(startDate); date <= endDate; date.setDate(date.getDate() + 1)) {
+          for (let date = new Date(effectiveStartDate); date <= endDate; date.setDate(date.getDate() + 1)) {
             repeatDates.push(new Date(date));
           }
           break;
           
         case RepeatType.WEEKLY:
-          // 每周重复
+          // 每周重复需保留原始起点节奏，不能因为今天截断而改变周期对齐
           for (let date = new Date(startDate); date <= endDate; date.setDate(date.getDate() + 7)) {
-            repeatDates.push(new Date(date));
+            if (date >= effectiveStartDate) {
+              repeatDates.push(new Date(date));
+            }
           }
           break;
           
         case 'workdays':
           // 工作日重复
-          for (let date = new Date(startDate); date <= endDate; date.setDate(date.getDate() + 1)) {
+          for (let date = new Date(effectiveStartDate); date <= endDate; date.setDate(date.getDate() + 1)) {
             const day = date.getDay();
             if (day >= 1 && day <= 5) { // 周一到周五
               repeatDates.push(new Date(date));
@@ -809,7 +819,7 @@ class TaskService {
           
         case 'weekends':
           // 周末重复
-          for (let date = new Date(startDate); date <= endDate; date.setDate(date.getDate() + 1)) {
+          for (let date = new Date(effectiveStartDate); date <= endDate; date.setDate(date.getDate() + 1)) {
             const day = date.getDay();
             if (day === 0 || day === 6) { // 周六和周日
               repeatDates.push(new Date(date));
@@ -825,7 +835,7 @@ class TaskService {
             
             logger.info('TaskService', `自定义重复任务生成: 选择的星期=${selectedDays}, 日期范围=${task.repeat.startDate}到${task.repeat.endDate}`);
             
-            for (let date = new Date(startDate); date <= endDate; date.setDate(date.getDate() + 1)) {
+            for (let date = new Date(effectiveStartDate); date <= endDate; date.setDate(date.getDate() + 1)) {
               const day = date.getDay();
               const dateStr = require('../utils/dateUtils').formatDate(date);
               
@@ -845,8 +855,8 @@ class TaskService {
       // 生成实例并批量保存到本地
       const repeatTasks = [];
       for (const date of repeatDates) {
-        // 跳过第一个日期（因为原始任务已经创建）
-        if (date.getTime() === startDate.getTime()) {
+        // 跳过父任务自身对应的日期，避免重复创建同一天实例
+        if (dateUtils.formatDate(date) === parentTaskDate) {
           continue;
         }
         const repeatTask = this._createRepeatTaskInstance(task, date);
@@ -1321,7 +1331,11 @@ class TaskService {
       // 检查任务是否可以取消打勾（锁定状态检查）
       let lastExchangeTime = null;
       if (this.rewardService) {
-        lastExchangeTime = await this.rewardService.getLastExchangeTime();
+        if (typeof this.rewardService.getLastExchangeTimeByUser === 'function') {
+          lastExchangeTime = await this.rewardService.getLastExchangeTimeByUser(task.userId || userId || null);
+        } else {
+          lastExchangeTime = await this.rewardService.getLastExchangeTime();
+        }
       }
       
       if (!task.canBeUnchecked(lastExchangeTime)) {

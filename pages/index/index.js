@@ -1,4 +1,5 @@
 const serviceManager = require('../../services/service-manager.js');
+const { Task } = require('../../models/task');
 const formatUtils = require('../../utils/formatUtils');
 const dateUtils = require('../../utils/dateUtils');
 const logger = require('../../utils/logger');
@@ -435,6 +436,15 @@ Page({
     // 修复竞态：onLoad 的 initializeMultiUserSystemDelayed 可能晚于 loadAllPageData 完成
     await this.initializeMultiUserSystem();
 
+    try {
+      const rewardService = serviceManager.getService('rewardService');
+      if (rewardService?.refreshRewardsFromCloud) {
+        await rewardService.refreshRewardsFromCloud();
+      }
+    } catch (syncError) {
+      logger.warn('Index', '首页奖励云同步失败，继续使用本地数据', syncError);
+    }
+
     // 检查奖励完成跳转状态
     const app = getApp();
     if (app.globalData.fromRewardCompletion) {
@@ -721,6 +731,28 @@ Page({
       await this.checkUpcomingTasks();
     } catch (error) {
       logger.error('Index', '加载任务数据失败', error);
+      wx.showToast({
+        title: '加载数据失败',
+        icon: 'none',
+        duration: 2000
+      });
+    }
+  },
+
+  /**
+   * 刷新当前视图日期的任务数据，避免操作后跳回今天
+   */
+  refreshTaskDataForCurrentView: async function() {
+    const targetDate = this.data.currentViewDate || null;
+
+    try {
+      await this.loadTaskDataOnly(targetDate);
+      await this.checkUpcomingTasks();
+    } catch (error) {
+      logger.error('Index', '刷新当前视图任务数据失败', {
+        currentViewDate: targetDate,
+        error
+      });
       wx.showToast({
         title: '加载数据失败',
         icon: 'none',
@@ -1115,8 +1147,14 @@ Page({
     // 检查是否是取消完成操作且已获得星星
     if (newStatus === 0 && wasStarAwarded) {
       // 在显示确认框之前，先检查任务是否被锁定
-      const rewardService = serviceManager.getService('reward');
-      const isLocked = await rewardService.getLastExchangeTime(id);
+      const rewardService = serviceManager.getService('rewardService');
+      const taskForLockCheck = currentTask instanceof Task ? currentTask : new Task(currentTask);
+      let isLocked = false;
+
+      if (rewardService && typeof rewardService.getLastExchangeTimeByUser === 'function') {
+        const lastExchangeTime = await rewardService.getLastExchangeTimeByUser(taskForLockCheck.userId || null);
+        isLocked = !taskForLockCheck.canBeUnchecked(lastExchangeTime);
+      }
       
       if (isLocked) {
         // 任务已被锁定，直接显示锁定提示，不显示确认框
@@ -1180,7 +1218,7 @@ Page({
         // 任务状态变更成功的处理逻辑
         logger.info('Index', '任务状态变更，刷新任务列表');
         
-        await this.loadTaskData();
+        await this.refreshTaskDataForCurrentView();
         
         // 根据操作类型和任务状态提供合适的提示
         if (newStatus === 1) {  // 完成任务
@@ -2519,7 +2557,7 @@ Page({
       
       // 刷新进度条动画和任务数据
       this.transitionToNewTarget();
-      this.loadTaskData();
+      this.refreshTaskDataForCurrentView();
     } catch (error) {
       logger.error('Index', '更新任务状态失败', error);
       
@@ -2588,7 +2626,7 @@ Page({
     logger.info('Index', '收到任务创建事件', data);
     
     // 重新加载任务数据
-    this.loadTaskData();
+    this.refreshTaskDataForCurrentView();
   },
 
   // ============= 多用户系统相关方法 =============
@@ -2934,7 +2972,7 @@ Page({
       
       // 重新加载所有数据，传入用户ID进行筛选
       await Promise.all([
-        this.loadTaskData(),
+        this.refreshTaskDataForCurrentView(),
         this.loadStarsAndRewards(),
         this.loadMessageData()
       ]);

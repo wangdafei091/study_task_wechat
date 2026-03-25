@@ -117,7 +117,8 @@ npm run health-check
 1. **先阅读文档**
    - `docs/architecture/architecture.md` - DDD架构
    - `docs/development/workflow.md` - 编码规范
-   - `docs/development/CHANGELOG.md` - 当前进度
+   - `docs/development/ROADMAP.md` - 当前阶段和未来里程碑
+   - `docs/development/CHANGELOG.md` - 最近已完成变更
 
 2. **检查现有实现**
    - 搜索相关功能（避免重复造轮子）
@@ -150,13 +151,14 @@ npm run health-check
    - 代码和文档**必须同时提交**
    - 根据代码变更类型，更新对应文档：
      - 新增/修改服务/仓储 → 更新 `docs/api/services-guide.md` 或 `repositories.md`
-     - 新功能 → 更新 `docs/development/CHANGELOG.md`、`docs/design/[feature-name].md`
+     - 新功能 → 更新 `docs/design/[feature-name].md`，并按阶段更新 `ROADMAP.md` / `CHANGELOG.md`
      - 修复常见问题 → 更新 `docs/development/troubleshooting.md`
      - 架构调整 → 更新 `docs/architecture/*.md`
      - 发现新陷阱 → 更新 CLAUDE.md 的"常见陷阱"部分
    - **检查清单**：
+     - [ ] 是否涉及未来里程碑规划或阶段状态调整？→ 更新 `docs/development/ROADMAP.md`
      - [ ] 是否新增/修改了服务/仓储？→ 更新 API文档
-     - [ ] 是否新增了功能？→ 更新 CHANGELOG.md、design/[feature].md
+     - [ ] 是否新增了功能并已交付完成？→ 更新 `docs/development/CHANGELOG.md`、`docs/design/[feature].md`
      - [ ] 是否改变了配置？→ 更新相关文档
      - [ ] 是否修复了常见问题？→ 更新 troubleshooting.md
      - [ ] 是否改变了架构设计？→ 更新 architecture/*.md
@@ -346,7 +348,7 @@ git commit -m "feat: 添加任务完成功能
 
 - 新增 completeTask 接口
 - 更新服务API文档
-- 更新更新日志"
+- 更新已完成变更记录"
 ```
 
 ---
@@ -386,12 +388,13 @@ AI助手：
 - **[AI 并行协作](docs/development/AI_PARALLEL_WORKFLOW.md)** - Claude Code + GPT5 Codex 并行开发协议（仅供了解，不修改）
 - **[编码规范](docs/development/coding_standards.md)** - 编码规范权威来源（命名、代码风格、UI规范、日志规范等）
 - **[开发流程](docs/development/workflow.md)** - 开发流程和文档维护规范
+- **[项目路线图](docs/development/ROADMAP.md)** - 当前阶段和未来里程碑
 - **[GitHub协作](docs/development/GITHUB_WORKFLOW.md)** - 团队协作和PR流程
-- **[更新日志](docs/development/CHANGELOG.md)** - 开发进度
+- **[更新日志](docs/development/CHANGELOG.md)** - 已完成变更历史
 - **[设计文档指南](docs/design/README.md)** - 如何创建和使用设计文档
 
 ---
 
-**版本**：v2.0
-**最后更新**：2026-02-27
+**版本**：v2.1
+**最后更新**：2026-03-25
 **维护者**：项目维护团队

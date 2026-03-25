@@ -100,7 +100,10 @@ const configService = serviceManager.get('configService');
 ##### `resetTask(taskId, userId = null)`
 重置任务状态
 - **参数**: `taskId` - 任务ID, `userId` - 可选的用户ID
-- **返回**: `{ success: boolean, task?: Task, starDeduction?: number, message?: string }`
+- **返回**: `{ success: boolean, task?: Task, starDeduction?: number, message?: string, locked?: boolean }`
+- **说明**:
+  - 奖励锁定判断按任务归属用户执行，而不是按全局最后兑换时间执行
+  - 若任务在对应用户最近一次奖励兑换之前完成，则返回 `locked=true`，且不会执行状态回退或扣星
 
 ##### `updateTaskStatus(taskId, status, userId = null)`
 更新任务状态
@@ -465,7 +468,10 @@ const configService = serviceManager.get('configService');
 获取指定用户最后一次兑换时间
 - **参数**: `userId` - 用户 ID
 - **返回**: `Promise<number|null>` - 时间戳；无记录或出错时返回 `null`
-- **说明**: 用于首页进度条按 `loginUserId` 计算兑换保护边界
+- **说明**:
+  - 用于首页按目标用户计算奖励兑换保护边界
+  - `TaskService.resetTask()` 与首页取消完成前预检查都复用此方法，确保锁定语义一致
+  - 不再用 `getLastExchangeTime()` 替代此用户级判断
 
 ---
 
@@ -1101,10 +1107,15 @@ const taskService = new TaskService({
 
 ### 云端任务服务
 
-任务服务支持云端存储模式，可通过 `ENABLE_API` 配置开启。
+任务服务支持云端存储模式，但只有在显式配置 `ENABLE_API=true` 且显式提供 `API_BASE_URL` 时才会启用。
 
 #### API 配置
 云端API通过 `API_CONFIG` 进行配置，详见 `utils/api-config.js`。
+
+#### 启用条件
+- 未配置 `ENABLE_API` / `API_BASE_URL`：保持本地模式
+- 配置 `ENABLE_API=true` 但未配置 `API_BASE_URL`：仍保持本地模式
+- 配置 `ENABLE_API=true` 且配置有效 `API_BASE_URL`：启用云端模式
 
 #### 云端存储模式
 系统支持三种存储模式（优先级从高到低）：

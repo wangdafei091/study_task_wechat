@@ -411,11 +411,11 @@ viewMessageDetail: function(e) {
     
     const date = new Date(createTime);
     const now = new Date();
-    const diffDays = Math.floor((now - date) / (24 * 60 * 60 * 1000));
+    const diffDays = dateUtils.getDaysBetween(date, now);
     
-    if (diffDays === 0) {
+    if (dateUtils.isToday(date)) {
       return '今天';
-    } else if (diffDays === 1) {
+    } else if (dateUtils.isYesterday(date)) {
       return '昨天';
     } else if (diffDays === 2) {
       return '前天';

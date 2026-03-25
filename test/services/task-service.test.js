@@ -73,7 +73,8 @@ describe('TaskService', () => {
     };
 
     mockRewardService = {
-      getLastExchangeTime: jest.fn().mockResolvedValue(null)
+      getLastExchangeTime: jest.fn().mockResolvedValue(null),
+      getLastExchangeTimeByUser: jest.fn().mockResolvedValue(null)
     };
 
     mockUserService = {
@@ -151,6 +152,43 @@ describe('TaskService', () => {
       mockTaskRepository.getAll.mockRejectedValue(new Error('获取失败'));
       const result = await taskService.getAllTasks();
       expect(result).toEqual([]);
+    });
+  });
+
+  describe('操作者视角解析', () => {
+    beforeEach(() => {
+      mockUserService.getLoginUser = jest.fn().mockReturnValue({
+        userId: 'parent_1',
+        role: 'parent',
+        familyId: 'fam_1'
+      });
+      mockUserService.getCurrentUser = jest.fn().mockReturnValue({
+        userId: 'child_1',
+        role: 'child',
+        familyId: 'fam_1'
+      });
+    });
+
+    it('共享设备切到孩子视角时，执行动作应优先使用 currentUser 作为操作者', () => {
+      const operatorContext = taskService._getOperatorContext('child_1', 'execute');
+
+      expect(operatorContext).toEqual({
+        actorUserId: 'child_1',
+        actorRole: 'child',
+        familyId: 'fam_1',
+        targetUserId: 'child_1'
+      });
+    });
+
+    it('共享设备切到孩子视角时，管理动作应优先使用 loginUser 作为操作者', () => {
+      const operatorContext = taskService._getOperatorContext('child_1', 'manage');
+
+      expect(operatorContext).toEqual({
+        actorUserId: 'parent_1',
+        actorRole: 'parent',
+        familyId: 'fam_1',
+        targetUserId: 'child_1'
+      });
     });
   });
 
@@ -645,13 +683,41 @@ describe('TaskService', () => {
 
       const task = new Task(taskData);
       mockTaskRepository.getById.mockResolvedValue(task);
-      mockRewardService.getLastExchangeTime.mockResolvedValue(Date.now() - 3600000); // 1小时前兑换
+      mockRewardService.getLastExchangeTimeByUser.mockResolvedValue(Date.now() - 3600000); // 1小时前兑换
 
       const result = await taskService.resetTask('task_1');
 
       expect(result.success).toBe(false);
       expect(result.message).toBe(ERROR_MESSAGES.TASK_LOCKED);
       expect(result.locked).toBe(true);
+      expect(mockRewardService.getLastExchangeTimeByUser).toHaveBeenCalledWith('parent');
+      expect(mockRewardService.getLastExchangeTime).not.toHaveBeenCalled();
+    });
+
+    it('应按任务归属用户查询最后兑换时间，避免无关用户的兑换记录误锁任务', async () => {
+      const taskData = TestDataFactory.createTask({
+        id: 'task_2',
+        userId: 'child-1',
+        status: TaskStatus.COMPLETED,
+        starAwarded: true,
+        points: 5,
+        completionTime: Date.now() - 7200000
+      });
+
+      const task = new Task(taskData);
+      mockTaskRepository.getById.mockResolvedValue(task);
+      mockRewardService.getLastExchangeTimeByUser.mockResolvedValue(null);
+      mockTaskRepository.save.mockResolvedValue({
+        ...task,
+        status: TaskStatus.PENDING,
+        starAwarded: false,
+        completionTime: null
+      });
+
+      const result = await taskService.resetTask('task_2');
+
+      expect(result.success).toBe(true);
+      expect(mockRewardService.getLastExchangeTimeByUser).toHaveBeenCalledWith('child-1');
     });
 
     it('重置失败时应该捕获异常', async () => {
@@ -1718,6 +1784,22 @@ describe('TaskService', () => {
       const result = await taskService._generateRepeatTasks(parentTask);
 
       expect(result.length).toBeGreaterThan(0);
+    });
+
+    it('开始日期早于今天的每周重复任务应保留原始周期，只生成未来对齐实例', async () => {
+      HttpClient.post = jest.fn().mockResolvedValue({ taskId: 'x', status: 0 });
+
+      const parentTask = new Task(TestDataFactory.createTask({
+        id: 'parent_3b',
+        userId: 'u1',
+        date: '2026-03-17',
+        repeat: { type: 'weekly', startDate: '2026-03-17', endDate: '2026-03-31' }
+      }));
+
+      const result = await taskService._generateRepeatTasks(parentTask);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].date).toBe('2026-03-31');
     });
 
     it('_createRepeatTaskInstance 应重置 syncedToCloud 为 false', () => {
