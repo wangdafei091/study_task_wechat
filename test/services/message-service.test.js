@@ -41,6 +41,7 @@ describe('MessageService', () => {
     mockMessageRepository = {
       loadFromStorage: jest.fn().mockResolvedValue(true),
       addMessage: jest.fn().mockImplementation(async (message) => message),
+      batchAddMessages: jest.fn().mockImplementation(async (messages) => messages),
       getAll: jest.fn().mockResolvedValue([]),
       getMessagesByScope: jest.fn().mockResolvedValue([]),
       getById: jest.fn().mockResolvedValue(null),
@@ -72,7 +73,8 @@ describe('MessageService', () => {
     mockUserService = {
       getCurrentUserId: jest.fn().mockReturnValue('parent'),
       getCurrentUser: jest.fn().mockReturnValue(null),
-      getLoginUser: jest.fn().mockReturnValue(null)
+      getLoginUser: jest.fn().mockReturnValue(null),
+      getUserById: jest.fn().mockReturnValue(null)
     };
 
     // 创建EventBus实例
@@ -885,6 +887,71 @@ describe('MessageService', () => {
 
       expect(result).toBe(false);
       expect(mockMessageRepository.delete).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('任务待同步文案视角', () => {
+    it('家长给孩子创建任务时，孩子个人待同步消息应显示家长给你安排了任务', async () => {
+      mockUserService.getUserById.mockImplementation(userId => ({
+        parent_1: { userId: 'parent_1', name: '妈妈', role: 'parent' },
+        child_1: { userId: 'child_1', name: '爱上', role: 'child' }
+      }[userId] || null));
+
+      const messages = await messageService._createTaskProvisionalMessages(
+        { id: 'task_1', title: '数学', userId: 'child_1' },
+        {
+          action: 'create',
+          operatorUserId: 'parent_1',
+          operatorRole: 'parent',
+          targetUserId: 'child_1',
+          familyId: 'family_1',
+          operationKey: 'op_1',
+          notificationType: 'task_create',
+          modifyTime: 1
+        }
+      );
+
+      expect(messages).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            visibilityScope: 'user',
+            summary: '妈妈给你安排了任务“数学”，等待同步'
+          }),
+          expect.objectContaining({
+            visibilityScope: 'family',
+            summary: '妈妈给爱上创建了任务“数学”，等待同步'
+          })
+        ])
+      );
+    });
+
+    it('孩子自己完成任务时，家庭待同步消息应显示孩子完成了任务', async () => {
+      mockUserService.getUserById.mockImplementation(userId => ({
+        child_1: { userId: 'child_1', name: '爱上', role: 'child' }
+      }[userId] || null));
+
+      const messages = await messageService._createTaskProvisionalMessages(
+        { id: 'task_2', title: '数学', userId: 'child_1' },
+        {
+          action: 'complete',
+          operatorUserId: 'child_1',
+          operatorRole: 'child',
+          targetUserId: 'child_1',
+          familyId: 'family_1',
+          operationKey: 'op_2',
+          notificationType: 'task_complete',
+          modifyTime: 2
+        }
+      );
+
+      expect(messages).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            visibilityScope: 'family',
+            summary: '爱上完成了任务“数学”，等待同步'
+          })
+        ])
+      );
     });
   });
 });

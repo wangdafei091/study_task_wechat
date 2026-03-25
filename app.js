@@ -17,26 +17,12 @@ App({
       userServiceReady: false,
       servicesInitialized: false
     };
-    // 🆕 自动初始化API配置（微信小程序环境）
+    // 读取当前环境配置，但不再自动写入默认测试环境
     if (typeof wx !== 'undefined') {
-      // 检查并设置默认配置
       const enableApi = wx.getStorageSync('ENABLE_API');
       const baseUrl = wx.getStorageSync('API_BASE_URL');
 
-      // 只有在未明确设置时才启用API，保留用户的明确配置（包括'false'）
-      if (enableApi === undefined || enableApi === null || enableApi === '') {
-        wx.setStorageSync('ENABLE_API', 'true');
-        logger.info('App', '已自动设置ENABLE_API配置');
-      } else {
-        logger.info('App', '保留用户配置的API模式', { enableApi });
-      }
-
-      if (!baseUrl) {
-        wx.setStorageSync('API_BASE_URL', 'https://api.todoceo.xyz');
-        logger.info('App', 'onLaunch中设置API_BASE_URL:', 'https://api.todoceo.xyz');
-      } else {
-        logger.info('App', 'onLaunch检测到已有API_BASE_URL:', baseUrl);
-      }
+      logger.info('App', 'onLaunch环境配置检查', { enableApi, baseUrl });
     }
 
     // 初始化日志系统
@@ -273,24 +259,9 @@ App({
   onShow: function(options) {
     logger.info('App', 'onShow触发，检查API配置');
 
-    // 每次小程序显示时都检查并设置API_BASE_URL
     const baseUrl = wx.getStorageSync('API_BASE_URL');
-
-    if (!baseUrl || baseUrl === '') {
-      logger.warn('App', 'API_BASE_URL为空或不存在，重新设置');
-      wx.setStorageSync('API_BASE_URL', 'https://api.todoceo.xyz');
-    } else {
-      logger.info('App', 'onShow检测到已有API_BASE_URL:', baseUrl);
-    }
-
-    // 同时检查 ENABLE_API 配置
     const enableApi = wx.getStorageSync('ENABLE_API');
-    if (enableApi === undefined || enableApi === null || enableApi === '') {
-      logger.warn('App', 'ENABLE_API为空，重新设置');
-      wx.setStorageSync('ENABLE_API', 'true');
-    } else {
-      logger.info('App', 'onShow检测到ENABLE_API:', enableApi);
-    }
+    logger.info('App', 'onShow环境配置检查', { enableApi, baseUrl });
   },
 
   /**
@@ -990,11 +961,6 @@ App({
         // 保存用户信息
         wx.setStorageSync('lastUserInfo', loginResult.data.data.user);
         logger.info('App', '用户信息已保存');
-
-        // 重新初始化API配置（确保使用最新的token）
-        if (typeof wx !== 'undefined') {
-          wx.setStorageSync('ENABLE_API', 'true');
-        }
 
         logger.info('App', '自动登录成功');
         return true;

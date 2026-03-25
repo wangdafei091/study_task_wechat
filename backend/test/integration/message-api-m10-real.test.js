@@ -164,18 +164,23 @@ describe('M10 messages API 真实数据库集成测试', () => {
           notificationType: 'task_create',
           visibilityScope: 'user',
           userId: 'm10_msg_child_001',
+          summary: 'M10家长给你安排了任务“M10数学作业”',
         })
       ])
     );
 
     const completeRes = await request(app)
       .patch('/api/tasks/m10_msg_task_001/status')
-      .set('Authorization', `Bearer ${childToken}`)
+      .set('Authorization', `Bearer ${parentToken}`)
       .send({
         status: 1,
         starAwarded: true,
         modifyTime: 1742600010002,
         operationKey: 'm10_msg_task_complete_op_001',
+        operatorContext: {
+          actorUserId: 'm10_msg_child_001',
+          actorRole: 'child',
+        },
       });
 
     expect(completeRes.status).toBe(200);
@@ -191,6 +196,7 @@ describe('M10 messages API 真实数据库集成测试', () => {
           relatedId: 'm10_msg_task_001',
           notificationType: 'task_complete',
           visibilityScope: 'family',
+          summary: 'M10孩子1完成了任务“M10数学作业”',
         })
       ])
     );
@@ -205,6 +211,52 @@ describe('M10 messages API 真实数据库集成测试', () => {
           relatedId: 'm10_msg_task_001',
           notificationType: 'task_complete',
           visibilityScope: 'user',
+          summary: '你完成了任务“M10数学作业”',
+        })
+      ])
+    );
+  });
+
+  it('家长自己视角代孩子完成任务时，家庭消息应显示代操作文案', async () => {
+    const createRes = await request(app)
+      .post('/api/tasks')
+      .set('Authorization', `Bearer ${parentToken}`)
+      .send({
+        taskId: 'm10_msg_task_002',
+        targetUserId: 'm10_msg_child_001',
+        title: 'M10英语作业',
+        type: 'study',
+        date: '2026-03-22',
+        points: 2,
+        modifyTime: 1742600010011,
+        operationKey: 'm10_msg_task_create_op_002',
+      });
+
+    expect(createRes.status).toBe(200);
+
+    const completeRes = await request(app)
+      .patch('/api/tasks/m10_msg_task_002/status')
+      .set('Authorization', `Bearer ${parentToken}`)
+      .send({
+        status: 1,
+        starAwarded: true,
+        modifyTime: 1742600010012,
+        operationKey: 'm10_msg_task_complete_op_002',
+      });
+
+    expect(completeRes.status).toBe(200);
+
+    const familyMessages = await request(app)
+      .get('/api/messages?scope=family')
+      .set('Authorization', `Bearer ${parentToken}`);
+
+    expect(familyMessages.body.data.messages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          relatedId: 'm10_msg_task_002',
+          notificationType: 'task_complete',
+          visibilityScope: 'family',
+          summary: 'M10家长代M10孩子1完成了任务“M10英语作业”',
         })
       ])
     );

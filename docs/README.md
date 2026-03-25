@@ -48,6 +48,7 @@
 ### 开发指南
 - [编码规范](development/coding_standards.md) - 命名、代码风格、UI规范、日志规范
 - [开发流程](development/workflow.md) - 功能开发流程、文档维护规范
+- [项目路线图](development/ROADMAP.md) - 未来里程碑、阶段状态与目标摘要
 - [GitHub 协作](development/GITHUB_WORKFLOW.md) - 团队协作和 PR 流程
 
 ### 设计文档
@@ -112,7 +113,8 @@ cd backend && NODE_ENV=test npx jest test/integration --runInBand
 - [ ] 更新 [仓储 API](api/repositories.md)
 
 ### 新增功能
-- [ ] 更新 [开发流程](development/CHANGELOG.md)（如果存在）
+- [ ] 如涉及未来里程碑或阶段状态，更新 [项目路线图](development/ROADMAP.md)
+- [ ] 功能完成后，更新 [更新日志](development/CHANGELOG.md)
 - [ ] 创建/更新 [设计文档](design/)
 
 ### 修复 Bug
@@ -163,5 +165,5 @@ git commit -m "feat: 添加新服务
 
 ---
 
-**最后更新**：2026-03-06
+**最后更新**：2026-03-25
 **维护者**：开发团队

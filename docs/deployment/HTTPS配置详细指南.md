@@ -496,24 +496,23 @@ curl -X POST https://api.yourdomain.com/api/auth/login \
 
 ### 步骤19：修改API_BASE_URL
 
-**在小程序项目中，编辑 `app.js` 文件：**
+**在微信开发者工具 Console 中显式写入环境配置：**
 
-找到第34行左右的代码：
 ```javascript
-// 修改前
-wx.setStorageSync('API_BASE_URL', 'http://121.4.38.122:8080');
-```
-
-**修改为：**
-```javascript
-// 修改后（请替换为你的域名）
+wx.setStorageSync('ENABLE_API', 'true');
 wx.setStorageSync('API_BASE_URL', 'https://api.yourdomain.com');
 ```
 
 **示例：**
 ```javascript
+wx.setStorageSync('ENABLE_API', 'true');
 wx.setStorageSync('API_BASE_URL', 'https://api.study-task.com');
 ```
+
+**说明：**
+- 当前版本不再通过 `app.js` 自动写入默认后端地址
+- 如果没有显式写入 `ENABLE_API=true` 和 `API_BASE_URL`，应用会保持本地模式
+- 写入后需要清缓存并重新编译，确保启动阶段读取到最新配置
 
 ---
 
@@ -684,7 +683,7 @@ Unable to connect to IPv4 or IPv6
 - [ ] Nginx反向代理配置正确
 - [ ] HTTPS访问正常（浏览器测试）
 - [ ] 后端API访问正常（curl测试）
-- [ ] 小程序API_BASE_URL已修改
+- [ ] 小程序 `ENABLE_API` 与 `API_BASE_URL` 已显式写入
 - [ ] 微信公众平台域名已配置
 - [ ] 小程序代码已上传发布
 - [ ] 真机测试通过

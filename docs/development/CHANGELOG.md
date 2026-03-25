@@ -4,6 +4,37 @@
 
 ---
 
+## [里程碑-11] - 2026-03-25
+
+### ✅ 完成情况
+
+**稳定性收口**
+
+- 修复 `TaskService._generateRepeatTasks()` 在周重复任务 `startDate < today` 时破坏原始节奏的问题，恢复 M08 重复任务主测试套件稳定
+- `TaskService.resetTask()` 改为按任务归属用户查询最后兑换时间，避免多孩子场景下被无关兑换记录误锁
+- 首页取消完成前的预检查已改为调用 `rewardService.getLastExchangeTimeByUser(currentTask.userId)`，并复用 `Task.canBeUnchecked(...)` 统一锁定语义
+- `utils/api-config.js` 与 `app.js` 已改为显式配置才启用 API；空配置默认回到本地模式，保留测试/正式双环境显式切换能力
+- 移除 `autoLogin()` 成功后自动回写 `ENABLE_API=true` 的残余行为，使实现与显式配置口径完全一致
+- `Task` 模型已兼容旧字段 `pointsValidPeriod`，并清理 `_initDefaults()` 中不可达分支
+- 部署文档已统一改为显式写入 `ENABLE_API` + `API_BASE_URL` 的环境配置方式
+
+### 🧪 验证结果
+
+- 前端针对性回归测试通过：
+  - `test/services/task-service.test.js`
+  - `test/pages/index.reward-flow.test.js`
+  - `test/models/task.test.js`
+  - `test/utils/api-config.test.js`
+  - `test/services/user-service.test.js`
+  - `test/services/service-manager.test.js`
+- 前端全量 Jest 套件通过：`npm test -- --runInBand`
+
+### 📖 详细实施记录
+
+- [里程碑-11：稳定性收口](../design/milestone-11-stability-hardening.md)
+
+---
+
 ## [里程碑-10] - 2026-03-22
 
 ### ✅ 完成情况
@@ -458,4 +489,4 @@
 
 ---
 
-**最后更新**：2026-03-16
+**最后更新**：2026-03-25

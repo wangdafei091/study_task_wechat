@@ -1,7 +1,7 @@
 # 文档维护指南
 
 > 如何在编码完成后及时同步更新文档，并严格遵守文档定位和规范
-> **最后更新**：2026-03-12
+> **最后更新**：2026-03-25
 
 ---
 
@@ -47,7 +47,8 @@
 | 服务 API 端点详细说明 | `docs/api/services-guide.md` | architecture.md、README.md |
 | 仓储 API 端点详细说明 | `docs/api/repositories.md` | services-guide.md |
 | 编码规范 | `docs/development/coding_standards.md` | CLAUDE.md |
-| 进度跟踪 | `docs/development/CHANGELOG.md` | 所有其他文档 |
+| 路线图 / 未来规划 | `docs/development/ROADMAP.md` | 所有其他文档 |
+| 已完成变更记录 | `docs/development/CHANGELOG.md` | 所有其他文档 |
 | 技术选型理由 | `docs/architecture/architecture.md` | 所有其他文档 |
 | 测试方法论 | `test/` 目录 | 其他文档 |
 | 功能详细设计 | `docs/design/*.md` | README.md（简化版） |
@@ -173,14 +174,16 @@
 - 代码：新增功能
 - 文档：
   - `docs/design/[feature-name].md`（必需）✅
-  - `docs/development/CHANGELOG.md`（如存在）✅
+  - `docs/development/ROADMAP.md`（如涉及里程碑状态）✅
+  - `docs/development/CHANGELOG.md`（完成后简要记录）✅
 
 **更新步骤**：
-1. 在设计文档中更新实施状态
-2. 在 `CHANGELOG.md` 更新：
-   - 标记为"已完成"
-   - 更新进度百分比
-   - 移除"待办任务"清单
+1. 如果是未来阶段规划或里程碑状态变化，在 `ROADMAP.md` 更新状态或目标摘要
+2. 进入实施后，在设计文档中更新实施状态
+3. 功能/阶段完成后，在 `CHANGELOG.md` 更新：
+   - 标记为已完成事实
+   - 记录关键变更和验证结果
+   - 链接对应设计文档
 
 **不应该做的**：
 - ❌ 在 `workflow.md` 添加功能说明（这是项目进度）
@@ -206,7 +209,7 @@
 
 **不应该做的**：
 - ❌ 在 `README.md` 记录 Bug（除非是已知限制）
-- ❌ 在 `CHANGELOG.md` 记录（除非是进度相关）
+- ❌ 仅为过程中的零碎修复更新 `CHANGELOG.md`（除非该修复已形成需要对外记录的完成事实）
 
 ---
 
@@ -366,7 +369,8 @@
 | 仓储 API 端点详细说明 | `docs/api/repositories.md` | services-guide.md |
 | 编码规范（命名、注释） | `docs/development/coding_standards.md` | CLAUDE.md |
 | 技术选型理由 | `docs/architecture/architecture.md` | 所有其他文档 |
-| 进度跟踪 | `docs/development/CHANGELOG.md` | 所有其他文档 |
+| 路线图 / 未来规划 | `docs/development/ROADMAP.md` | 所有其他文档 |
+| 已完成变更记录 | `docs/development/CHANGELOG.md` | 所有其他文档 |
 | 功能详细设计 | `docs/design/*.md` | README.md（简化版） |
 | 文档维护指南 | `docs/DOCUMENTATION_MAINTENANCE.md`（本文档） | 所有其他文档 |
 | GitHub 协作流程 | `docs/development/GITHUB_WORKFLOW.md` | 所有其他文档 |
@@ -423,7 +427,8 @@ grep -r "批量处理" docs/*.md
 | **architecture/architecture.md** | ⭐⭐⭐ 中等（为什么） | "选择DDD架构的3个理由" |
 | **services-guide.md** | ⭐⭐⭐⭐⭐ 详细（完整参考） | "方法名、参数、返回值、示例" |
 | **design/*.md** | ⭐⭐⭐⭐⭐ 极详细（实施步骤） | "步骤1.1-1.8，包含代码" |
-| **CHANGELOG.md** | ⭐ 概览（简要说明） | "新增功能A、修复Bug #1" |
+| **ROADMAP.md** | ⭐ 概览（未来计划） | "M11 稳定性收口，当前计划中" |
+| **CHANGELOG.md** | ⭐ 概览（已完成记录） | "新增功能A、修复Bug #1" |
 | **coding_standards.md** | ⭐⭐⭐ 实用（代码模板） | "命名约定、函数结构、UI规范" |
 | **CLAUDE.md** | ⭐⭐⭐ 完整（AI必须知道） | "项目约束、工作流程、陷阱" |
 
@@ -439,7 +444,7 @@ grep -r "批量处理" docs/*.md
 | **人类开发者** | `docs/development/coding_standards.md`、`docs/api/*.md` | 详细、可操作 |
 | **新开发者** | `README.md`、`docs/README.md` | 简单、清晰 |
 | **架构师** | `docs/architecture/architecture.md`、`docs/design/*.md` | 技术深度 |
-| **项目管理者** | `docs/development/CHANGELOG.md` | 进度、规划 |
+| **项目管理者** | `docs/development/ROADMAP.md`、`docs/development/CHANGELOG.md` | 规划、阶段状态、已完成记录 |
 
 ---
 
@@ -575,7 +580,7 @@ git commit -m "feat: 添加任务完成功能
 | **修改服务API** | `docs/api/services-guide.md` | - |
 | **新增仓储** | `docs/api/repositories.md` | - |
 | **修改仓储API** | `docs/api/repositories.md` | - |
-| **新增功能特性** | `docs/design/[feature-name].md` | `docs/development/CHANGELOG.md`（如存在） |
+| **新增功能特性** | `docs/design/[feature-name].md` | `docs/development/ROADMAP.md`（如涉及里程碑规划）、`docs/development/CHANGELOG.md`（完成后记录） |
 | **修复用户常见问题Bug** | `docs/development/troubleshooting.md` | - |
 | **修复功能实施中的Bug** | **`docs/design/[feature-name].md`**（详细）+ **`docs/development/CHANGELOG.md`**（1行） | - |
 | **架构调整** | `docs/architecture/architecture.md` | `CLAUDE.md`（如影响约束） |
@@ -596,7 +601,8 @@ git commit -m "feat: 添加任务完成功能
 | 记录新 API | `docs/api/services-guide.md` 或 `repositories.md` | `README.md`（详细API） |
 | 说明新功能 | `docs/design/[feature-name].md` | workflow.md（详细内容） |
 | 记录技术决策 | `docs/architecture/architecture.md` | 所有其他文档 |
-| 更新进度 | `docs/development/CHANGELOG.md` | 所有其他文档 |
+| 更新路线图 / 规划 | `docs/development/ROADMAP.md` | 所有其他文档 |
+| 更新已完成记录 | `docs/development/CHANGELOG.md` | 所有其他文档 |
 | 添加配置说明 | `docs/development/setup.md`（如需） | `README.md`（详细） |
 | 记录 Bug 解决 | `docs/development/troubleshooting.md` 或 `design/[feature-name].md` | `README.md` |
 | 记录陷阱 | `CLAUDE.md` | 所有其他文档 |
@@ -607,6 +613,7 @@ git commit -m "feat: 添加任务完成功能
 ## 相关文档
 
 - [开发工作流程](./development/workflow.md) - 开发流程和设计文档管理
+- [项目路线图](./development/ROADMAP.md) - 未来里程碑和阶段状态
 - [编码规范](./development/coding_standards.md) - 详细编码规范
 - [设计文档指南](./design/README.md) - 如何创建和使用设计文档
 - [架构概览](./architecture/architecture.md) - 项目架构决策和DDD分层实现
@@ -614,5 +621,5 @@ git commit -m "feat: 添加任务完成功能
 
 ---
 
-**最后更新**：2026-03-12
+**最后更新**：2026-03-25
 **维护者**：项目维护团队

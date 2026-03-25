@@ -277,9 +277,10 @@ cp docs/design/.template.md docs/design/[your-feature-name].md
 - **[CLAUDE.md](../../CLAUDE.md)** - AI 助手工作指南
 - **[架构文档](../architecture/architecture.md)** - 项目架构决策和DDD分层实现
 - **[开发指南](../development/workflow.md)** - 开发流程和设计文档管理
+- **[项目路线图](../development/ROADMAP.md)** - 当前阶段和未来里程碑
 - **[文档维护指南](../DOCUMENTATION_MAINTENANCE.md)** - 文档维护规范和场景说明
-- **[更新日志](../development/CHANGELOG.md)** - 开发进度
+- **[更新日志](../development/CHANGELOG.md)** - 已完成变更历史
 
 ---
 
-**最后更新**：2026-03-12
+**最后更新**：2026-03-25
