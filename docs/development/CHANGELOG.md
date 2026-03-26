@@ -4,6 +4,34 @@
 
 ---
 
+## [里程碑-13] - 2026-03-26
+
+### ✅ 完成情况
+
+**质量闸门升级**
+
+- 新增 `jest.quality.config.js`，正式建立“根级稳定闸门 + 前端覆盖率闸门”的分层质量入口
+- 根 `package.json` 已补齐 `test:quality`、`test:app`、`test:pages`、`test:adapters`、`test:backend:unit`、`test:backend:integration:memory`、`test:backend:integration:real`
+- `backend/package.json` 已细分 `test:unit`、`test:integration:memory`、`test:integration:real`
+- `app.js`、`utils/app/*`、`pages/index/*`、`pages/rewards/rewards.js`、`packageMessage/pages/message/message.js`、`adapters/storage-adapter.js` 已纳入正式覆盖率闸门
+- `utils/logger.js` 完成测试环境静默开关治理，`ENABLE_TEST_LOGS=true` 时可显式恢复日志
+- `utils/api-config.js` 已补充测试环境静默控制，避免质量闸门输出被配置日志噪声污染
+
+### 🧪 验证结果
+
+- 根级稳定闸门通过：`npm test -- --runInBand`
+- 前端覆盖率闸门通过：`npm run test:quality -- --runInBand --coverageReporters=text-summary`
+- 覆盖率报告入口通过：`npm run test:coverage -- --runInBand --coverageReporters=text-summary`
+- 当前前端覆盖率汇总：
+  - statements `89.83%`
+  - branches `75.93%`
+  - functions `91.36%`
+  - lines `90%`
+
+### 📖 详细实施记录
+
+- [里程碑-13：质量闸门升级](../design/milestone-13-quality-gate-upgrade.md)
+
 ## [里程碑-12] - 2026-03-26
 
 ### ✅ 完成情况

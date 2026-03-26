@@ -10,6 +10,13 @@ function getNodeEnv(name) {
   return process.env[name];
 }
 
+function shouldLogConfig() {
+  return !(
+    getNodeEnv('NODE_ENV') === 'test' &&
+    getNodeEnv('ENABLE_TEST_LOGS') !== 'true'
+  );
+}
+
 // 支持微信小程序环境配置
 function getWechatStorage(key) {
   if (typeof wx === 'undefined' || !wx) {
@@ -35,17 +42,25 @@ if (typeof wx !== 'undefined') {
   // 未显式配置时保持本地模式，不再自动启用测试后端
   if (enableApiEnv === undefined || enableApiEnv === null || enableApiEnv === '') {
     finalEnableApi = 'false';
-    console.log('ℹ️ 微信小程序环境：未配置 ENABLE_API，默认使用本地模式');
+    if (shouldLogConfig()) {
+      console.log('ℹ️ 微信小程序环境：未配置 ENABLE_API，默认使用本地模式');
+    }
   } else {
-    console.log('✅ 保留用户配置的API模式:', enableApiEnv);
+    if (shouldLogConfig()) {
+      console.log('✅ 保留用户配置的API模式:', enableApiEnv);
+    }
   }
 
   // 未显式配置地址时，不再自动落到测试环境地址
   if (!apiBaseUrlEnv || apiBaseUrlEnv === '') {
     finalBaseUrl = '';
-    console.log('ℹ️ 微信小程序环境：未配置 API_BASE_URL');
+    if (shouldLogConfig()) {
+      console.log('ℹ️ 微信小程序环境：未配置 API_BASE_URL');
+    }
   } else {
-    console.log('✅ 保留用户配置的API地址:', apiBaseUrlEnv);
+    if (shouldLogConfig()) {
+      console.log('✅ 保留用户配置的API地址:', apiBaseUrlEnv);
+    }
   }
 }
 

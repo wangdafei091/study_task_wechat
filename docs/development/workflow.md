@@ -114,10 +114,15 @@
 - 应用服务：StarService、TaskService、RewardService、MessageService 等
 - 工具函数：dateUtils、formatUtils 等
 
-**不包含的范围（页面和UI）**：
-- 页面交互、表单提交、页面跳转
-- UI渲染、样式正确性、动画效果
-- 微信API调用、端到端流程
+**不包含的范围（仍以手工验证为主）**：
+- UI渲染细节、样式正确性、动画效果
+- 真机/模拟器差异和真实微信运行时问题
+- 完整端到端流程
+
+**已纳入自动化的页面范围**：
+- `app.js` 和 `utils/app/*` 启动链路
+- `pages/index/*` 首页壳层与模块编排
+- `pages/rewards/rewards.js`、`packageMessage/pages/message/message.js` 关键页面契约/行为
 
 ---
 
@@ -131,10 +136,16 @@
 ### 快速命令参考
 
 ```bash
-# 运行前端单元测试（稳定质量闸门，不含后端集成测试）
+# 根级稳定质量闸门（含 app / pages / services / models / repositories / utils / 根级契约）
 npm test
 
+# 前端覆盖率质量闸门
+npm run test:quality
+
 # 运行特定模块测试
+npm run test:app
+npm run test:pages
+npm run test:adapters
 npm run test:models
 npm run test:services
 npm run test:repositories
@@ -142,8 +153,13 @@ npm run test:repositories
 # 监听模式（开发时使用）
 npm run test:watch
 
-# 生成覆盖率报告
+# 生成前端覆盖率报告
 npm run test:coverage
+
+# 后端测试入口
+npm run test:backend:unit
+npm run test:backend:integration:memory
+npm run test:backend:integration:real
 ```
 
 ---
@@ -169,6 +185,6 @@ npm run test:coverage
 
 ---
 
-**最后更新**：2026-03-25
-**版本**：v4.3
+**最后更新**：2026-03-26
+**版本**：v4.4
 **维护者**：项目维护团队
