@@ -1,22 +1,22 @@
 // app.js
 const StorageAdapter = require('./adapters/storage-adapter'); // 引入存储适配器
 const serviceManager = require('./services/service-manager.js'); // 引入服务管理器
-const { UserService } = require('./services/user-service.js'); // 引入用户服务
 const logger = require('./utils/logger');
 const logConfig = require('./utils/log-config');
 const deviceInfo = require('./utils/deviceInfo'); // 引入设备信息工具
-const API_CONFIG = require('./utils/api-config'); // 引入API配置
-const TokenManager = require('./utils/token-manager'); // 引入Token管理
 const EventBus = require('./utils/core/event-bus'); // 引入事件总线
+const bootstrapAuth = require('./utils/app/bootstrap-auth');
+const bootstrapServices = require('./utils/app/bootstrap-services');
+const postLoginBootstrap = require('./utils/app/post-login-bootstrap');
+const runtimeObservers = require('./utils/app/runtime-observers');
 
 App({
   onLaunch: async function () {
-    // 初始化全局数据
-    this.globalData = {
-      appReady: false,
-      userServiceReady: false,
-      servicesInitialized: false
-    };
+    // 原地补齐启动状态，避免覆盖默认 globalData 契约和 getter。
+    this.globalData.appReady = false;
+    this.globalData.userServiceReady = false;
+    this.globalData.servicesInitialized = false;
+    this.globalData.eventCallbacks = this.globalData.eventCallbacks || {};
     // 读取当前环境配置，但不再自动写入默认测试环境
     if (typeof wx !== 'undefined') {
       const enableApi = wx.getStorageSync('ENABLE_API');
@@ -33,120 +33,9 @@ App({
     StorageAdapter.initializeApplicationStorage();
 
     // 确定是否为开发环境，用于配置事件总线
-    let isDevEnv = deviceInfo.isDevelopmentEnv();
-
-    // 检查API是否启用
-    logger.info('App', 'API配置', {
-      ENABLE_API: API_CONFIG.ENABLE_API,
-      BASE_URL: API_CONFIG.BASE_URL
-    });
-
-    if (API_CONFIG.ENABLE_API) {
-      // ✅ API启用模式：云端登录
-      logger.info('App', 'API已启用，使用云端登录模式');
-
-      // 1. 检查是否有token
-      const token = TokenManager.getToken();
-
-      if (token && TokenManager.isAuthenticated()) {
-        logger.info('App', '发现已有token，初始化UserService');
-
-        // 2. 有token，初始化UserService（云端模式）
-        const userStorageAdapter = new StorageAdapter({ namespace: 'user_' });
-        this.globalData.userService = new UserService({
-          storageAdapter: userStorageAdapter,
-          useCloudStorage: true  // 标记使用云端存储
-        });
-        const initialized = await this.globalData.userService.initialize();
-        if (initialized) {
-          logger.info('App', 'UserService初始化完成（云端模式）');
-        } else {
-          logger.warn('App', 'UserService初始化降级（云端模式），继续使用默认用户态');
-        }
-      } else {
-        logger.info('App', '没有token，尝试自动重新登录');
-
-        // 尝试从微信缓存恢复用户信息
-        const cachedUserInfo = wx.getStorageSync('lastUserInfo');
-        if (cachedUserInfo) {
-          logger.info('App', '发现缓存用户信息，尝试自动登录');
-
-          try {
-            // 自动登录流程
-            const loginSuccess = await this.autoLogin();
-            if (loginSuccess) {
-              logger.info('App', '自动登录成功，初始化UserService');
-              // 登录成功后，重新初始化UserService
-              const userStorageAdapter = new StorageAdapter({ namespace: 'user_' });
-              this.globalData.userService = new UserService({
-                storageAdapter: userStorageAdapter,
-                useCloudStorage: true
-              });
-              await this.globalData.userService.initialize();
-              logger.info('App', 'UserService自动初始化完成（云端模式）');
-            } else {
-              logger.warn('App', '自动登录失败，等待用户手动登录');
-              this.globalData.userService = null;
-            }
-          } catch (error) {
-            logger.error('App', '自动登录异常', error);
-            this.globalData.userService = null;
-          }
-        } else {
-          logger.info('App', '没有缓存用户信息，等待用户登录');
-          this.globalData.userService = null;
-        }
-      }
-    } else {
-      // ❌ API禁用模式：本地存储
-      logger.info('App', 'API已禁用，使用本地存储模式');
-
-      // 初始化用户服务
-      logger.info('App', '初始化用户服务');
-      const userStorageAdapter = new StorageAdapter({ namespace: 'user_' });
-      this.globalData.userService = new UserService({
-        storageAdapter: userStorageAdapter,
-        useCloudStorage: false  // 标记使用本地存储
-      });
-      const initialized = await this.globalData.userService.initialize();
-      if (!initialized) {
-        logger.warn('App', 'UserService初始化降级（本地模式），继续使用默认用户态');
-      }
-    }
-    
-    // 注入用户服务到服务管理器（仅当UserService已初始化时）
-    if (this.globalData.userService) {
-      serviceManager.setUserService(this.globalData.userService);
-    } else {
-      logger.info('App', 'UserService未初始化，延迟到登录后注入');
-    }
-    
-    // 初始化服务管理器
-    logger.info('App', '初始化服务管理器');
-    try {
-      // 配置事件总线优化和调试设置
-      const serviceOptions = {
-        // 始终启用事件优化
-        enableEventOptimization: true,
-        // 仅在开发环境启用事件调试
-        enableEventDebug: isDevEnv
-      };
-      
-      logger.info('App', '初始化服务管理器，配置选项:', serviceOptions);
-      
-      // 等待服务管理器初始化完成，但跳过需要认证的操作
-      const initialized = await serviceManager.initialize(serviceOptions);
-      if (initialized) {
-        logger.info('App', '服务管理器初始化成功（基础服务）');
-
-        // 标记服务管理器已就绪，但延迟需要认证的操作
-        this.globalData.servicesInitialized = true;
-      } else {
-        logger.error('App', '服务管理器初始化失败');
-      }
-    } catch (error) {
-      logger.error('App', '服务管理器初始化失败:', error);
-    }
+    const isDevEnv = deviceInfo.isDevelopmentEnv();
+    await bootstrapAuth.prepareUserService(this);
+    await bootstrapServices.initialize(this, { isDevEnv });
     
     // 检查基础库版本兼容性
     this.checkCompatibility()
@@ -159,95 +48,9 @@ App({
     logs.unshift(Date.now())
     wx.setStorageSync('logs', logs)
 
-    // 登录
-    wx.login({
-      success: async res => {
-        logger.info('App', 'wx.login成功', { code: res.code });
-
-        try {
-          if (API_CONFIG.ENABLE_API) {
-            // ✅ 云端登录模式：调用后端API
-            logger.info('App', '使用云端登录模式');
-
-            const HttpClient = require('./utils/http-client');
-            const loginResult = await HttpClient.post(API_CONFIG.ENDPOINTS.AUTH_LOGIN, { code: res.code });
-
-            if (loginResult) {
-              logger.info('App', '云端登录成功', {
-                token: loginResult.token,
-                user: loginResult.user
-              });
-
-              // 保存token
-              TokenManager.setToken(loginResult.token);
-
-              // 初始化UserService（云端模式）
-              const userStorageAdapter = new StorageAdapter({ namespace: 'user_' });
-              this.globalData.userService = new UserService({
-                storageAdapter: userStorageAdapter,
-                useCloudStorage: true
-              });
-              const initialized = await this.globalData.userService.initialize();
-
-              // 注入用户服务到服务管理器
-              // 直接注入，不管ServiceManager是否已初始化
-              // 因为用户登录可能发生在ServiceManager初始化之后
-              serviceManager.setUserService(this.globalData.userService);
-
-              if (initialized) {
-                logger.info('App', 'UserService初始化完成（云端模式）');
-              } else {
-                logger.warn('App', 'UserService初始化降级（云端模式），继续使用默认用户态');
-              }
-
-              // 登录成功后，执行需要认证的操作
-              await this.postLoginInitialization();
-            }
-          } else {
-            // ❌ 本地存储模式：使用原有逻辑
-            logger.info('App', '使用本地存储模式');
-
-            // 添加安全检查以防止后续操作失败
-            this.globalData.canIUseGetUserProfile = false; // 默认禁用
-
-            // 检查是否支持open-data
-            this.globalData.canIUseOpenData = wx.canIUse('open-data.type.userAvatarUrl') &&
-                                            wx.canIUse('open-data.type.userNickName');
-
-            logger.info('App', '用户登录处理完成，已添加防御性检查');
-
-            // 本地存储模式下也执行初始化
-            await this.postLoginInitialization();
-          }
-        } catch (error) {
-          logger.error('App', '登录处理失败:', error);
-
-          // 云端登录失败时的错误处理
-          if (API_CONFIG.ENABLE_API) {
-            wx.showModal({
-              title: '登录失败',
-              content: '网络错误，请检查连接',
-              showCancel: false
-            });
-          }
-        }
-      },
-      fail: error => {
-        logger.error('App', 'wx.login失败:', error);
-      }
-    })
+    await bootstrapAuth.runWxLogin(this);
     
-    // 监听设备方向变化，用于处理横竖屏切换
-    this.setupOrientationListener()
-    
-    // 监听系统主题变化
-    this.setupThemeChangeListener()
-    
-    // 监听字体大小变化
-    this.setupFontSizeChangeListener()
-
-    // 设置主题
-    this.setTheme();
+    runtimeObservers.install(this);
 
     // 必做任务扣分在启动时已处理，无需定时检查
   },
@@ -269,105 +72,7 @@ App({
    * 处理需要认证的服务初始化操作
    */
   postLoginInitialization: async function() {
-    try {
-      logger.info('App', '开始登录成功后的初始化');
-
-      // 服务管理器已经在 onLaunch 中初始化，直接获取服务
-
-      // 获取任务服务、消息服务和星星服务
-      const taskService = serviceManager.getTaskService();
-      logger.info('App', '获取任务服务:', taskService ? '成功' : '失败');
-
-      const messageService = serviceManager.getMessageService();
-      logger.info('App', '获取消息服务:', messageService ? '成功' : '失败');
-
-      const starService = serviceManager.getStarService();
-      logger.info('App', '获取星星服务:', starService ? '成功' : '失败');
-
-      // 先处理任务惩罚，再清理过期星星（确保惩罚时有足够星星）
-      if (taskService) {
-        // 修复存量任务数据的penaltyApplied字段
-        await this.fixLegacyTaskData(taskService);
-
-        // 检查任务状态和处理惩罚
-        logger.info('App', '开始检查任务状态和处理必做任务惩罚');
-        await taskService.checkTasksStatus();
-
-        // 检查即将到期的任务
-        await taskService.checkUpcomingTasks();
-      }
-
-      // 任务惩罚处理完毕后，先进行奖励保护，再初始化星星服务并清理过期星星
-      if (starService) {
-        try {
-          // 计算即将过期的星星数量（仅计算 loginUser 的，防止多孩子家庭串账）
-          logger.info('App', '检查即将过期的星星并进行奖励保护');
-          const userService = serviceManager.getUserService();
-          const loginUserId = userService ? userService.getLoginUserId() : null;
-          const expiredStars = await starService.calculatePendingExpiry(loginUserId);
-
-          if (expiredStars > 0) {
-            if (loginUserId) {
-              logger.info('App', `发现${expiredStars}颗即将过期的星星，为登录用户${loginUserId}进行奖励保护`);
-              const protectionResult = await starService.protectRewardsByExpiry(expiredStars, loginUserId);
-
-              if (protectionResult.success && protectionResult.protectedCount > 0) {
-                logger.info('App', `奖励保护成功，保护了${protectionResult.protectedCount}个奖励`);
-              }
-            }
-          }
-
-          logger.info('App', '初始化星星服务并清理过期星星');
-          await starService.initialize();
-
-          logger.info('App', '开始检查并修复星星数据一致性');
-          const repairResult = await starService.checkAndRepairDataConsistency();
-
-          if (repairResult.success) {
-            if (repairResult.repairResult.repairedCount > 0) {
-              logger.info('App', `星星数据修复完成，修复了${repairResult.repairResult.repairedCount}条记录`);
-            } else {
-              logger.info('App', '星星数据一致性检查通过，无需修复');
-            }
-          } else {
-            logger.error('App', `星星数据修复失败: ${repairResult.error}`);
-          }
-        } catch (error) {
-          logger.error('App', '星星服务初始化失败', error);
-        }
-      }
-
-      // 初始化消息服务
-      if (messageService) {
-        logger.info('App', '初始化消息服务');
-        await messageService.initialize();
-
-        // 获取并显示所有消息
-        const messages = await messageService.getAllMessages();
-        logger.info('App', `消息服务初始化完成，共${messages.length}条消息`);
-      }
-
-      // 检查首次启动状态并创建欢迎消息（统一逻辑）
-      logger.info('App', '检查首次启动状态');
-      if (messageService) {
-        await this.checkFirstLaunch(messageService);
-      } else {
-        logger.warn('App', 'messageService 未初始化，跳过首次启动检查');
-      }
-
-      // 设置主题
-      this.setTheme();
-
-      logger.info('App', '登录成功后初始化完成');
-
-      // 发出应用就绪事件
-      if (typeof this.globalData.appReadyCallback === 'function') {
-        this.globalData.appReadyCallback();
-      }
-
-    } catch (error) {
-      logger.error('App', '登录成功后初始化失败', error);
-    }
+    return postLoginBootstrap.run(this);
   },
 
   // 初始化日志系统
@@ -458,108 +163,27 @@ App({
   
   // 监听设备方向变化
   setupOrientationListener: function() {
-    // 不是所有设备都支持方向监听，先检查是否可用
-    if (typeof wx.onDeviceOrientationChange === 'function') {
-      wx.onDeviceOrientationChange((res) => {
-        const isLandscape = res.value === 'landscape';
-        this.globalData.isLandscape = isLandscape;
-        
-        // 更新设备信息
-        this.globalData.deviceInfo.isLandscape = isLandscape;
-        
-        // 更新高度相关参数
-        this.updateHeightParams(isLandscape);
-        
-        // 触发自定义事件，通知页面方向已变化
-        if (this.orientationChangeCallback) {
-          this.orientationChangeCallback(res);
-        }
-        
-        // 触发全局事件，供所有页面监听
-        this.globalEvent('orientationChange', res);
-      });
-    }
+    return runtimeObservers.setupOrientationListener(this);
   },
   
   // 监听系统主题变化
   setupThemeChangeListener: function() {
-    // 移除主题监听功能，统一使用亮色主题
-    logger.info('App', '使用统一亮色主题，不支持暗黑模式');
-    
-    // 设置默认亮色主题
-    this.globalData.systemTheme = 'light';
+    return runtimeObservers.setupThemeChangeListener(this);
   },
   
   // 监听字体大小变化
   setupFontSizeChangeListener: function() {
-    if (typeof wx.onWindowResize === 'function') {
-      wx.onWindowResize((res) => {
-        // 重新计算高度参数
-        this.updateHeightParams(this.globalData.isLandscape);
-        
-        // 通知页面尺寸已变化
-        this.globalEvent('windowResize', res);
-      });
-    }
+    return runtimeObservers.setupFontSizeChangeListener(this);
   },
   
   // 触发全局事件
   globalEvent: function(eventName, eventData) {
-    if (this.globalData.eventCallbacks[eventName]) {
-      const callbacks = this.globalData.eventCallbacks[eventName];
-      callbacks.forEach(callback => {
-        try {
-          callback(eventData);
-        } catch (error) {
-          logger.error('App', `执行全局事件回调出错: ${eventName}`, error);
-        }
-      });
-    }
+    return runtimeObservers.globalEvent(this, eventName, eventData);
   },
   
   // 更新高度相关参数
   updateHeightParams: function(isLandscape) {
-    try {
-      // 获取设备信息
-      const {
-        windowHeight,
-        windowWidth,
-        statusBarHeight,
-        screenHeight,
-        safeArea
-      } = this.globalData.deviceInfo;
-      
-      // 更新安全区域信息
-      if (safeArea) {
-        const { top, bottom, left, right } = safeArea;
-        this.globalData.safeArea = {
-          top,
-          bottom: screenHeight - bottom,
-          left,
-          right: windowWidth - right
-        };
-      }
-      
-      // 计算主内容区高度
-      let contentHeight = windowHeight;
-      
-      // 主内容区计算逻辑
-      if (isLandscape) {
-        // 横屏模式计算
-        contentHeight = windowHeight * 0.9; // 横屏时考虑底部安全边距
-      } else {
-        // 竖屏默认留出底部标签栏高度
-        contentHeight -= 50;
-      }
-      
-      // 保存计算结果
-      this.globalData.contentHeight = contentHeight;
-      this.globalData.statusBarHeight = statusBarHeight;
-      
-      logger.info('App', `更新高度参数: 内容区=${contentHeight}, 状态栏=${statusBarHeight}`);
-    } catch (error) {
-      logger.error('App', '更新高度参数失败', error);
-    }
+    return runtimeObservers.updateHeightParams(this, isLandscape);
   },
 
   // 初始化单位系统
@@ -617,19 +241,7 @@ App({
 
   // 设置主题
   setTheme: function() {
-    // 统一使用亮色主题
-    this.globalData.theme = 'light';
-    
-    // 设置主题色
-    this.globalData.themeColors = {
-      primary: '#4285F4',
-      secondary: '#4CAF50',
-      accent: '#FF9800',
-      background: '#FFFFFF',
-      surface: '#F5F5F5',
-      text: '#333333',
-      lightText: '#757575'
-    };
+    return runtimeObservers.setTheme(this);
   },
 
   // 全局数据
@@ -701,134 +313,22 @@ App({
   
   // 修复存量任务数据的penaltyApplied字段
   fixLegacyTaskData: async function(taskService) {
-    try {
-      logger.info('App', '开始修复存量任务数据的penaltyApplied字段');
-      
-      // 获取所有任务
-      const allTasks = await taskService.getAllTasks();
-      let fixedCount = 0;
-      
-      for (const task of allTasks) {
-        // 检查是否需要修复penaltyApplied字段
-        if (task.penaltyApplied === undefined) {
-          task.penaltyApplied = false;
-          
-          // 保存修复后的任务
-          await taskService.taskRepository.save(task);
-          fixedCount++;
-          
-          logger.debug('App', `修复任务penaltyApplied字段: ${task.title}`);
-        }
-      }
-      
-      if (fixedCount > 0) {
-        logger.info('App', `存量数据修复完成，修复了${fixedCount}个任务的penaltyApplied字段`);
-      } else {
-        logger.info('App', '存量数据检查完成，无需修复penaltyApplied字段');
-      }
-    } catch (error) {
-      logger.error('App', '修复存量任务数据失败', error);
-    }
+    return postLoginBootstrap.fixLegacyTaskData(taskService);
   },
 
   // 检查首次启动并创建欢迎消息
   checkFirstLaunch: async function(messageService) {
-    try {
-      // 检查 messageService 是否存在
-      if (!messageService) {
-        logger.warn('App', 'messageService 未提供，跳过首次启动检查');
-        return;
-      }
-
-      logger.info('App', '检查首次启动状态');
-      
-      // 通过配置服务检查首次启动状态（仅在服务已初始化时）
-      let isFirstLaunch = false;
-      
-      if (serviceManager.isInitialized) {
-        const configService = serviceManager.getService('config');
-        if (configService) {
-          isFirstLaunch = configService.isFirstLaunch();
-        } else {
-          // 降级处理：直接使用存储
-          const hasWelcomed = wx.getStorageSync('has_welcomed_user');
-          isFirstLaunch = !hasWelcomed;
-        }
-      } else {
-        // 服务未初始化，使用降级处理：直接使用存储
-        const hasWelcomed = wx.getStorageSync('has_welcomed_user');
-        isFirstLaunch = !hasWelcomed;
-        logger.warn('App', '配置服务未就绪，使用降级存储访问');
-      }
-      
-      if (isFirstLaunch) {
-        logger.info('App', '检测到首次启动，创建欢迎消息');
-        
-        // 创建欢迎消息
-        await this.createWelcomeMessage(messageService);
-        
-        // 设置已欢迎标记
-        if (serviceManager.isInitialized) {
-          const configService = serviceManager.getService('config');
-          if (configService) {
-            configService.markUserWelcomed();
-          } else {
-            // 降级处理：直接使用存储
-            wx.setStorageSync('has_welcomed_user', true);
-          }
-        } else {
-          // 服务未初始化，使用降级处理：直接使用存储
-          wx.setStorageSync('has_welcomed_user', true);
-          logger.warn('App', '配置服务未就绪，使用降级存储访问');
-        }
-        
-        logger.info('App', '首次启动处理完成，已设置欢迎标记');
-      } else {
-        logger.info('App', '非首次启动，跳过欢迎消息创建');
-      }
-    } catch (error) {
-      logger.error('App', '检查首次启动失败', error);
-    }
+    return postLoginBootstrap.checkFirstLaunch(this, messageService);
   },
   
   // 创建欢迎消息
   createWelcomeMessage: async function(messageService) {
-    try {
-      const welcomeContent = this.getWelcomeContent();
-      
-      const result = await messageService.createSystemMessage(welcomeContent, 'welcome', {
-        title: '欢迎使用小CEO日程表',
-        summary: '帮助孩子建立学习习惯的时间管理工具，支持任务管理和星星奖励'
-      });
-      
-      if (result) {
-        logger.info('App', '欢迎消息创建成功', { messageId: result.id });
-      } else {
-        logger.warn('App', '欢迎消息创建失败', result);
-      }
-    } catch (error) {
-      logger.error('App', '创建欢迎消息出错', error);
-    }
+    return postLoginBootstrap.createWelcomeMessage(messageService);
   },
   
   // 获取欢迎内容
   getWelcomeContent: function() {
-    return `这是一个帮助孩子建立良好学习习惯的时间管理工具：
-
-✨ 核心功能
-• 创建学习、习惯、兴趣任务
-• 通过星星积分激励完成
-• 用积分兑换心仪的奖励
-
-🚀 开始使用
-1. 点击主页右下角的"+"按钮，选择"奖励"
-2. 添加孩子喜欢的奖励作为激励目标
-3. 点击"+"按钮，选择"任务"创建第一个任务
-4. 开始您的时间管理之旅
-
-记住：先设置奖励，再创建任务，效果更好哦！
-
-祝您和孩子使用愉快！ 📚✨`;
+    return postLoginBootstrap.getWelcomeContent();
   },
 
   /**
@@ -836,93 +336,14 @@ App({
    * 用于需要重新登录的场景
    */
   doCloudLogin: async function() {
-    if (!API_CONFIG.ENABLE_API) {
-      logger.warn('App', 'API未启用，无法进行云端登录');
-      return false;
-    }
-
-    try {
-      logger.info('App', '开始云端登录');
-
-      // 调用wx.login
-      const { code } = await new Promise((resolve, reject) => {
-        wx.login({
-          success: resolve,
-          fail: reject
-        });
-      });
-
-      // 调用后端登录接口
-      const HttpClient = require('./utils/http-client');
-      const loginResult = await HttpClient.post(API_CONFIG.ENDPOINTS.AUTH_LOGIN, { code });
-
-      if (loginResult) {
-        logger.info('App', '云端登录成功', {
-          token: loginResult.token,
-          user: loginResult.user
-        });
-
-        // 保存token
-        TokenManager.setToken(loginResult.token);
-
-        // 初始化UserService
-        const userStorageAdapter = new StorageAdapter({ namespace: 'user_' });
-        this.globalData.userService = new UserService({
-          storageAdapter: userStorageAdapter,
-          useCloudStorage: true
-        });
-        const initialized = await this.globalData.userService.initialize();
-
-        // 注入用户服务到服务管理器
-        serviceManager.setUserService(this.globalData.userService);
-
-        if (!initialized) {
-          logger.warn('App', '云端登录后UserService初始化降级，继续使用默认用户态');
-        }
-
-        return true;
-      }
-    } catch (error) {
-      logger.error('App', '云端登录失败:', error);
-      wx.showModal({
-        title: '登录失败',
-        content: error.message || '网络错误，请稍后重试',
-        showCancel: false
-      });
-      return false;
-    }
+    return bootstrapAuth.doCloudLogin(this);
   },
 
   /**
    * 退出登录（云端模式）
    */
   doCloudLogout: function() {
-    if (!API_CONFIG.ENABLE_API) {
-      logger.warn('App', 'API未启用，无法进行云端登出');
-      return;
-    }
-
-    logger.info('App', '开始云端登出');
-
-    try {
-      // 清除token
-      TokenManager.clearToken();
-
-      // 清除UserService
-      this.globalData.userService = null;
-
-      // 清除用户服务到服务管理器
-      serviceManager.setUserService(null);
-
-      logger.info('App', '云端登出成功');
-
-      // 重新加载小程序
-      wx.reLaunch({
-        url: '/pages/index/index'
-      });
-    } catch (error) {
-      logger.error('App', '云端登出失败:', error);
-    }
+    return bootstrapAuth.doCloudLogout(this);
   },
 
   /**
@@ -931,47 +352,7 @@ App({
    * @returns {Promise<boolean>} 登录是否成功
    */
   async autoLogin() {
-    try {
-      logger.info('App', '开始自动登录流程');
-
-      // 获取微信登录code
-      const loginCode = await this.getWxLoginCode();
-      if (!loginCode) {
-        logger.error('App', '获取微信登录code失败');
-        return false;
-      }
-
-      logger.info('App', '获取到微信登录code:', loginCode);
-
-      // 调用后端登录接口
-      const loginResult = await wx.request({
-        url: `${API_CONFIG.BASE_URL}/api/auth/login`,
-        method: 'POST',
-        data: { code: loginCode },
-        timeout: 10000
-      });
-
-      logger.info('App', '后端登录响应:', loginResult);
-
-      if (loginResult.data && loginResult.data.success && loginResult.data.data) {
-        // 保存token
-        TokenManager.setToken(loginResult.data.data.token);
-        logger.info('App', 'Token已保存');
-
-        // 保存用户信息
-        wx.setStorageSync('lastUserInfo', loginResult.data.data.user);
-        logger.info('App', '用户信息已保存');
-
-        logger.info('App', '自动登录成功');
-        return true;
-      } else {
-        logger.error('App', '自动登录失败:', loginResult.data);
-        return false;
-      }
-    } catch (error) {
-      logger.error('App', '自动登录异常:', error);
-      return false;
-    }
+    return bootstrapAuth.autoLogin(this);
   },
 
   /**
@@ -979,17 +360,6 @@ App({
    * @returns {Promise<string|null>} 微信登录code
    */
   getWxLoginCode() {
-    return new Promise((resolve) => {
-      wx.login({
-        success: (res) => {
-          logger.info('App', 'wx.login成功，code:', res.code);
-          resolve(res.code);
-        },
-        fail: (error) => {
-          logger.error('App', 'wx.login失败:', error);
-          resolve(null);
-        }
-      });
-    });
+    return bootstrapAuth.getWxLoginCode();
   }
 }) 

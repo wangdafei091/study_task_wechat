@@ -1,6 +1,4 @@
 const serviceManager = require('../../services/service-manager.js');
-const { Task } = require('../../models/task');
-const formatUtils = require('../../utils/formatUtils');
 const dateUtils = require('../../utils/dateUtils');
 const logger = require('../../utils/logger');
 const permissionUtils = require('../../utils/permission-utils');
@@ -8,6 +6,11 @@ const viewScopeUtils = require('../../utils/view-scope');
 const { UserService } = require('../../services/user-service');
 const MessageService = require('../../services/message-service');
 const pageStorageHelper = require('../../utils/page-storage-helper');
+const lifecycleModule = require('./modules/index-lifecycle');
+const refreshCoordinator = require('./modules/index-refresh-coordinator');
+const userContextModule = require('./modules/index-user-context');
+const taskActionsModule = require('./modules/index-task-actions');
+const rewardFlowModule = require('./modules/index-reward-flow');
 
 Page({
   data: {
@@ -163,62 +166,7 @@ Page({
    * 生命周期函数--监听页面加载
    */
   onLoad: function (options) {
-    logger.info('Index', '首页加载');
-    logger.info('Index', 'UI优化已实施：示例标识优化、移除箭头指示器、任务排序优化、任务条高度调整、标签背景色优化');
-    logger.info('Index', '示例标识位置进一步优化：调整到 top: -18rpx, right: -18rpx，字体减小到 16rpx');
-    logger.info('Index', '标签样式冗余代码清理：移除冗余选择器、提高CSS优先级、使用CSS变量统一颜色');
-    logger.info('Index', '标签背景色修复：将CSS变量替换为硬编码颜色值，解决微信小程序组件样式隔离问题');
-    logger.info('Index', '标签背景色最终修复：在组件配置文件中添加 styleIsolation: apply-shared，完全解决样式隔离问题');
-    logger.info('Index', '🎯 标签样式重大简化：采用内联样式方案，删除50+行复杂CSS，移除样式隔离配置，实现简单可靠的标签背景色显示');
-    logger.info('Index', '✨ 标签样式专业优化：采用渐变色彩+柔和阴影，提升视觉层次感和现代感，符合少儿教育心理学设计原则');
-    logger.info('Index', '🎯 标签视觉权重调和：缩小尺寸(36→28rpx)、柔化色彩、减少阴影，让标签回归辅助角色，突出任务内容主导地位');
-    logger.info('Index', '🚀 页面初始化优化：合并重复数据加载逻辑，统一批量处理，减少重复调用和UI闪烁');
-    
-    // 获取全局app实例
-    const app = getApp();
-
-    this._eventHandlers = {
-      taskChanged: this.handleTaskDataChanged.bind(this),
-      taskCreated: this.handleTaskCreated.bind(this),
-      messageChanged: this.handleMessageDataChanged.bind(this),
-      rewardClaimed: this.handleRewardClaimed.bind(this),
-      rewardUpdated: this.handleRewardUpdated.bind(this),
-      progressbarComplete: this.handleProgressBarComplete.bind(this)
-    };
-    
-    // 设置当前日期字符串
-    const now = new Date();
-    
-    // 设置随机的鼓励语
-    this.setRandomMotivation();
-    
-    // 初始化消息预览动画实例在toggleMessagePreview中创建，这里不需要预创建
-    
-    // 检查用户信息
-    if (app.globalData.userInfo) {
-      this.setData({
-        userInfo: app.globalData.userInfo,
-        hasUserInfo: true
-      });
-    } else if (this.data.canIUse) {
-      // 由于 getUserInfo 是网络请求，可能会在 Page.onLoad 之后才返回
-      // 所以此处加入 callback 以防止这种情况
-      app.userInfoReadyCallback = res => {
-        this.setData({
-          userInfo: res.userInfo,
-          hasUserInfo: true
-        });
-      };
-    }
-    
-    // 注册事件监听
-    this.registerEventListeners();
-
-    // 初始化日期导航
-    this.initializeDateNavigation();
-
-    // 延迟初始化多用户系统，等待用户服务就绪
-    this.initializeMultiUserSystemDelayed();
+    return lifecycleModule.onLoad(this, options);
   },
   
   /**
@@ -255,17 +203,7 @@ Page({
    * 处理奖励更新事件
    */
   handleRewardUpdated: function(data) {
-    logger.debug('Index', '收到奖励更新事件', data);
-    
-    // 设置标记，下次页面显示时会通过needRefreshReward标记进行刷新
-    const app = getApp();
-    app.globalData.needRefreshReward = true;
-    
-    // 立即刷新当前页面的奖励数据
-    if (this.isCurrentPage()) {
-      logger.debug('Index', '当前在首页，立即刷新奖励数据');
-      this.loadStarsAndRewards();
-    }
+    return refreshCoordinator.handleRewardUpdated(this, data);
   },
 
   /**
@@ -310,157 +248,28 @@ Page({
    * @param {Object} eventData 事件数据对象，包含tasks数组和变更类型等信息
    */
   handleTaskDataChanged: function(eventData) {
-    // 获取所有必要的事件信息
-    const allTasks = eventData.tasks || [];
-    const changeType = eventData.changeType || 'unknown';
-    const timestamp = eventData.timestamp || Date.now();
-    
-    logger.info('Index', `收到任务数据变更事件: 类型=${changeType}, 任务数量=${allTasks.length}`);
-    
-    // 删除操作需要特殊处理，确保热力图更新
-    if (changeType === 'delete') {
-      logger.info('Index', '检测到删除操作，确保热力图得到完全刷新');
-      
-      // 获取任务服务
-      const taskService = serviceManager.getService('task');
-      if (!taskService) {
-        logger.error('Index', '无法获取任务服务');
-        return;
-      }
-      
-      // 刷新今日任务
-      const currentUserId1 = this.getEffectiveTaskUserId();
-      taskService.getTodayTasks(currentUserId1, { requireFreshStars: true }).then(todayTasks => {
-        this.setData({ 
-          tasks: todayTasks,
-          hasTodayTasks: (todayTasks && todayTasks.length > 0),
-          "__dataUpdateTimestamp": timestamp // 添加时间戳属性以确保视图刷新
-        });
-        
-        // 更新任务进度和即将到期任务
-        this.calculateProgress(todayTasks);
-        this.checkUpcomingTasks();
-        
-        // 通过调度器延迟处理，确保数据变化后UI完全刷新
-        setTimeout(() => {
-          // 找到热力图组件并强制刷新
-          const heatmapComponent = this.selectComponent('#taskHeatmap');
-          if (heatmapComponent) {
-            logger.info('Index', '触发热力图强制刷新');
-            heatmapComponent.refreshTaskList();
-          }
-        }, 300);
-      });
-      
-      return;
-    }
-    
-    // 非删除操作的常规处理
-    const taskService = serviceManager.getService('task');
-    if (!taskService) {
-      logger.error('Index', '无法获取任务服务');
-      return;
-    }
-    
-    const currentUserId2 = this.getEffectiveTaskUserId();
-    taskService.getTodayTasks(currentUserId2, { requireFreshStars: true }).then(todayTasks => {
-      this.setData({ 
-        tasks: todayTasks,
-        hasTodayTasks: (todayTasks && todayTasks.length > 0)
-      });
-      
-      // 更新任务进度（checkUpcomingTasks在loadTaskData中已调用，避免重复）
-      this.calculateProgress(todayTasks);
-    });
+    return refreshCoordinator.handleTaskDataChanged(this, eventData);
   },
   
   /**
    * 处理消息数据变化事件
    */
   handleMessageDataChanged: function(eventData) {
-    logger.info('Index', '收到消息数据变更事件');
-
-    if (Array.isArray(eventData)) {
-      const processedMessages = [...eventData]
-        .sort((a, b) => {
-          if (a.isRead !== b.isRead) return a.isRead ? 1 : -1;
-          return b.createTime - a.createTime;
-        })
-        .slice(0, 3)
-        .map(msg => ({
-          ...msg,
-          timeDisplay: dateUtils.formatRelativeTime(msg.createTime)
-        }));
-
-      const unreadCount = eventData.filter(msg => !msg.isRead).length;
-
-      this.setData({
-        messages: processedMessages,
-        unreadCount
-      });
-      return;
-    }
-
-    this.loadMessageData();
+    return refreshCoordinator.handleMessageDataChanged(this, eventData);
   },
   
   /**
    * 处理奖励领取事件
    */
   handleRewardClaimed: function(eventData) {
-    logger.debug('Index', `收到奖励领取事件: 奖励ID=${eventData.rewardId}, 消耗星星=${eventData.points}, 剩余星星=${eventData.newTotalPoints}`);
-    
-    // 只记录奖励已被领取，但不立即更新UI
-    const app = getApp();
-    app.globalData.rewardClaimedInfo = eventData;
-    app.globalData.needRefreshReward = true;
-    logger.debug('Index', '已记录奖励领取信息，等待返回首页时更新');
-    
-    // 不立即调用loadStarsAndRewards或transitionToNewTarget
-    // 等待用户返回首页时再更新
+    return refreshCoordinator.handleRewardClaimed(this, eventData);
   },
   
   /**
    * 生命周期函数--监听页面显示
    */
   onShow: async function() {
-    logger.info('Index', '页面显示');
-
-    // 等待服务管理器完全初始化
-    await this.waitForServicesReady();
-
-    // 等待登录完成（云端模式）
-    await this.waitForLoginComplete();
-
-    // 同步用户数据（availableUsers/currentUser），确保 getEffectiveTaskUserId() 能拿到正确 ID
-    // 修复竞态：onLoad 的 initializeMultiUserSystemDelayed 可能晚于 loadAllPageData 完成
-    await this.initializeMultiUserSystem();
-
-    try {
-      const rewardService = serviceManager.getService('rewardService');
-      if (rewardService?.refreshRewardsFromCloud) {
-        await rewardService.refreshRewardsFromCloud();
-      }
-    } catch (syncError) {
-      logger.warn('Index', '首页奖励云同步失败，继续使用本地数据', syncError);
-    }
-
-    // 检查奖励完成跳转状态
-    const app = getApp();
-    if (app.globalData.fromRewardCompletion) {
-      app.globalData.fromRewardCompletion = false;
-      logger.info('Index', '从奖励完成页面返回，跳过过期检查');
-      // 直接加载数据，不做过期检查
-      this.loadAllPageData();
-      return;
-    }
-
-    // 正常页面显示流程 - 先检查过期任务和星星，再批量加载数据
-    logger.debug('Index', '页面显示时检查过期任务和星星');
-    await this.checkExpiredTasksAndStars();
-
-    logger.debug('Index', '页面显示时批量加载所有数据');
-    this.loadAllPageData();
+    return lifecycleModule.onShow(this);
   },
 
   /**
@@ -468,57 +277,14 @@ Page({
    * 在云端模式下，确保token已获取后再继续执行
    */
   waitForLoginComplete: async function() {
-    const API_CONFIG = require('../../utils/api-config');
-
-    // 如果API未启用，直接返回（本地模式）
-    if (!API_CONFIG.ENABLE_API) {
-      logger.debug('Index', '本地模式，无需等待登录');
-      return;
-    }
-
-    const TokenManager = require('../../utils/token-manager');
-    const maxWaitTime = 5000;
-    const startTime = Date.now();
-
-    // 同时等待：token 已获取 且 UserService 已初始化完成（含家庭成员加载和会话恢复）
-    while (Date.now() - startTime < maxWaitTime) {
-      const hasToken = !!TokenManager.getToken();
-      const us = serviceManager.getUserService();
-      const isUserServiceReady = us && us.initialized;
-      if (hasToken && isUserServiceReady) {
-        logger.info('Index', '登录完成，用户服务已就绪', {
-          loginUserId: us.loginUser && us.loginUser.userId,
-          currentUserId: us.currentUser && us.currentUser.userId
-        });
-        return;
-      }
-      await new Promise(resolve => setTimeout(resolve, 50));
-    }
-    logger.warn('Index', '等待登录/用户服务超时，继续执行');
+    return lifecycleModule.waitForLoginComplete(this);
   },
 
   /**
    * 等待服务准备就绪
    */
   waitForServicesReady: async function() {
-    try {
-      logger.info('Index', '等待服务管理器初始化完成');
-      
-      const isReady = await serviceManager.waitForInitialization(10000);
-      
-      if (isReady) {
-        logger.info('Index', '服务管理器已就绪');
-      } else {
-        logger.error('Index', '服务管理器初始化超时，将使用降级处理');
-        wx.showToast({
-          title: '服务加载中，请稍候',
-          icon: 'none',
-          duration: 2000
-        });
-      }
-    } catch (error) {
-      logger.error('Index', '等待服务就绪失败', error);
-    }
+    return lifecycleModule.waitForServicesReady(this);
   },
   
   /**
@@ -544,68 +310,7 @@ Page({
    * 每次进入首页时检查，但有5分钟间隔控制，避免频繁执行
    */
   checkExpiredTasksAndStars: async function() {
-    try {
-      // 获取配置服务
-      const configService = serviceManager.getService('config');
-      const now = Date.now();
-      const checkInterval = 5 * 60 * 1000; // 5分钟检查间隔
-      
-      // 检查上次检查时间，避免频繁检查
-      let lastCheckTime = 0;
-      if (configService) {
-        lastCheckTime = configService.getLastExpiryCheckTime();
-      } else {
-        // 降级处理：直接使用存储
-        lastCheckTime = wx.getStorageSync('last_expiry_check_time') || 0;
-        logger.warn('Index', '配置服务不可用，使用降级存储访问');
-      }
-      
-      if (now - lastCheckTime < checkInterval) {
-        logger.debug('Index', '距离上次检查时间过短，跳过检查');
-        return;
-      }
-      
-      logger.info('Index', '开始检查过期任务和星星');
-      
-      const taskService = serviceManager.getService('task');
-      const starService = serviceManager.getService('star');
-      
-      // 并行执行检查
-      const [taskResult, starResult] = await Promise.allSettled([
-        taskService ? taskService.checkTasksStatus() : Promise.resolve(),
-        starService ? starService.cleanupExpiredStars() : Promise.resolve()
-      ]);
-      
-      // 记录检查时间
-      if (configService) {
-        configService.setLastExpiryCheckTime(now);
-      } else {
-        // 降级处理：直接使用存储
-        wx.setStorageSync('last_expiry_check_time', now);
-        logger.warn('Index', '配置服务不可用，使用降级存储访问');
-      }
-      
-      // 检查结果并判断是否需要刷新数据
-      let needRefresh = false;
-      
-      if (taskResult.status === 'fulfilled' && taskResult.value?.penaltyResults?.length > 0) {
-        logger.info('Index', `执行了${taskResult.value.penaltyResults.length}个必做任务惩罚`);
-        needRefresh = true;
-      }
-      
-      if (starResult.status === 'fulfilled' && starResult.value?.expiredCount > 0) {
-        logger.info('Index', `清理了${starResult.value.expiredCount}个过期星星分组`);
-        needRefresh = true;
-      }
-      
-      // 如果有变更，标记需要刷新（在loadAllPageData中会重新加载）
-      if (needRefresh) {
-        logger.info('Index', '检查发现变更，将在数据加载时刷新显示');
-      }
-      
-    } catch (error) {
-      logger.error('Index', '检查过期任务和星星失败', error);
-    }
+    return refreshCoordinator.checkExpiredTasksAndStars(this);
   },
 
   /**
@@ -613,41 +318,7 @@ Page({
    * 统一处理所有数据加载，避免重复调用和多次UI更新
    */
   loadAllPageData: async function() {
-    try {
-      logger.info('Index', '开始批量加载页面数据');
-      
-      // 并行加载所有数据
-      const [tasksResult, messagesResult, starsResult] = await Promise.allSettled([
-        this.loadTaskDataOnly(),
-        this.loadMessageData(),
-        this.loadStarsAndRewards()
-      ]);
-      
-      // 检查加载结果
-      if (tasksResult.status === 'rejected') {
-        logger.error('Index', '任务数据加载失败', tasksResult.reason);
-      }
-      if (messagesResult.status === 'rejected') {
-        logger.error('Index', '消息数据加载失败', messagesResult.reason);
-      }
-      if (starsResult.status === 'rejected') {
-        logger.error('Index', '星星奖励数据加载失败', starsResult.reason);
-      }
-      
-      // 最后检查即将到期任务（依赖任务数据）
-      if (tasksResult.status === 'fulfilled') {
-        await this.checkUpcomingTasks();
-      }
-      
-      logger.info('Index', '页面数据批量加载完成');
-    } catch (error) {
-      logger.error('Index', '批量加载页面数据失败', error);
-      wx.showToast({
-        title: '加载数据失败',
-        icon: 'none',
-        duration: 2000
-      });
-    }
+    return refreshCoordinator.loadAllPageData(this);
   },
 
   /**
@@ -742,23 +413,8 @@ Page({
   /**
    * 刷新当前视图日期的任务数据，避免操作后跳回今天
    */
-  refreshTaskDataForCurrentView: async function() {
-    const targetDate = this.data.currentViewDate || null;
-
-    try {
-      await this.loadTaskDataOnly(targetDate);
-      await this.checkUpcomingTasks();
-    } catch (error) {
-      logger.error('Index', '刷新当前视图任务数据失败', {
-        currentViewDate: targetDate,
-        error
-      });
-      wx.showToast({
-        title: '加载数据失败',
-        icon: 'none',
-        duration: 2000
-      });
-    }
+  refreshTaskDataForCurrentView: async function(options = {}) {
+    return refreshCoordinator.refreshTaskDataForCurrentView(this, options);
   },
   
   // 从消息管理器加载消息数据（按用户分别显示）
@@ -1050,296 +706,7 @@ Page({
 
   // 完成任务
   async completeTask(e) {
-    const id = e.detail.taskId;
-    
-    if (!id) {
-      logger.warn('Index', '完成任务失败: 任务ID为空');
-      return;
-    }
-    
-    logger.info('Index', '完成任务:', { taskId: id });
-    
-    // 防止重复点击
-    if (this.data.processingTaskId === id) {
-      logger.warn('Index', '任务正在处理中，忽略重复点击');
-      return;
-    }
-    
-    // 设置处理中状态
-    this.setData({
-      processingTaskId: id
-    });
-    
-    // 获取任务当前状态，用于判断是完成还是取消完成
-    logger.info('Index', `当前任务列表数量: ${this.data.tasks ? this.data.tasks.length : 0}`);
-    const currentTask = this.data.tasks.find(task => task.id === id);
-    if (!currentTask) {
-      logger.warn('Index', '未找到指定任务', { 
-        taskId: id, 
-        availableTasks: this.data.tasks ? this.data.tasks.map(t => t.id) : [] 
-      });
-      this.setData({ processingTaskId: null });
-      return;
-    }
-    
-    const newStatus = currentTask.status === 1 ? 0 : 1; // 切换状态
-    const wasStarAwarded = currentTask.starAwarded || false; // 保存原始星星状态
-    const taskPoints = currentTask.points || 0; // 保存任务积分
-    const isRequired = currentTask.isRequired || false; // 保存必做任务状态
-    
-    logger.info('Index', `任务详细信息: ID=${id}, 标题=${currentTask.title}, 当前状态=${currentTask.status}, 新状态=${newStatus}`);
-    logger.info('Index', `任务星星信息: starAwarded=${currentTask.starAwarded}(${typeof currentTask.starAwarded}), points=${taskPoints}`);
-    logger.info('Index', `任务原始星星状态: ${wasStarAwarded ? '已获得' : '未获得'}`);
-    logger.info('Index', `任务类型信息: isRequired=${isRequired}, 任务类型=${isRequired ? '必做任务' : '普通任务'}`);
-    
-    // 🚨 扩展：检查奖励设置 - 只在尝试完成任务时检查
-    if (newStatus === 1) {
-      logger.info('Index', '检查奖励设置状态');
-      
-      // 获取奖励服务
-      const rewardService = serviceManager.getService('rewardService');
-      
-      if (rewardService) {
-        // 获取当前奖励状态信息（按 loginUser 查询，不随视角切换变化）
-        const loginUserId = getApp().globalData?.userService?.getLoginUserId() || null;
-        const nextReward = await rewardService.calculateNextAvailableReward(undefined, loginUserId);
-        const visibleRewards = await rewardService.getAvailableRewards(true, false, loginUserId);
-        
-        // 扩展的触发条件检查
-        const hasNoRealReward = !nextReward || nextReward.isDefault;
-        const hasOnlyExampleRewards = visibleRewards.length > 0 && 
-          visibleRewards.every(reward => reward.isExample === true);
-        
-        // 判断是否需要阻止任务完成并显示提示
-        if ((hasNoRealReward && visibleRewards.length === 0) || hasOnlyExampleRewards) {
-          if (hasOnlyExampleRewards) {
-            logger.info('Index', '检测到只有示例奖励，阻止任务完成并更新提示信息');
-          } else {
-            logger.info('Index', '检测到无真实奖励，阻止任务完成并更新提示信息');
-          }
-          
-          // 清除处理中状态
-          this.setData({ processingTaskId: null });
-          
-          // 更新奖励提示信息（设置showSetupTip标记）
-          if (nextReward) {
-            nextReward.showSetupTip = true;
-          }
-          
-          // 更新UI状态，显示提示信息
-          this.setData({
-            nextReward: nextReward
-          });
-          
-          // 显示提示对话框
-          wx.showModal({
-            title: '需要设置奖励',
-            content: '还没有设置奖励哦！',
-            showCancel: false,
-            confirmText: '我知道了'
-          });
-          
-          return; // 阻止任务状态更新
-        }
-      }
-    }
-    
-    // 检查是否是取消完成操作且已获得星星
-    if (newStatus === 0 && wasStarAwarded) {
-      // 在显示确认框之前，先检查任务是否被锁定
-      const rewardService = serviceManager.getService('rewardService');
-      const taskForLockCheck = currentTask instanceof Task ? currentTask : new Task(currentTask);
-      let isLocked = false;
-
-      if (rewardService && typeof rewardService.getLastExchangeTimeByUser === 'function') {
-        const lastExchangeTime = await rewardService.getLastExchangeTimeByUser(taskForLockCheck.userId || null);
-        isLocked = !taskForLockCheck.canBeUnchecked(lastExchangeTime);
-      }
-      
-      if (isLocked) {
-        // 任务已被锁定，直接显示锁定提示，不显示确认框
-        logger.info('Index', '任务已锁定，直接显示锁定提示', { taskId: id });
-        wx.showModal({
-          title: '无法取消完成',
-          content: '奖励已兑换，任务不可取消',
-          showCancel: false,
-          confirmText: '我知道了'
-        });
-        
-        // 清除处理中状态
-        this.setData({ processingTaskId: null });
-        return;
-      }
-      
-      // 任务未被锁定，显示确认对话框
-      const result = await new Promise((resolve) => {
-        wx.showModal({
-          title: '确认取消完成',
-          content: '取消完成任务将扣除已获得的星星，确定要继续吗？',
-          confirmText: '确定',
-          cancelText: '取消',
-          success: (res) => resolve(res.confirm),
-          fail: () => resolve(false)
-        });
-      });
-      
-      if (!result) {
-        // 用户取消操作
-        this.setData({ processingTaskId: null });
-        return;
-      }
-    }
-    
-    try {
-      // 获取当前用户ID
-      const { currentUser } = this.data;
-      const currentUserId = currentUser && currentUser.id ? currentUser.id : null;
-      
-      // 使用任务服务更新任务状态
-      const taskService = serviceManager.getService('task');
-      let result;
-      
-      if (newStatus === 1) {
-        // 使用completeTask方法直接完成任务，传递当前用户ID
-        result = await taskService.completeTask(id, currentUserId);
-        logger.info('Index', `调用完成任务: 任务ID=${id}, 当前用户=${currentUserId}`);
-      } else {
-        // 使用resetTask方法重置任务状态，传递当前用户ID
-        result = await taskService.resetTask(id, currentUserId);
-        logger.info('Index', `调用重置任务: 任务ID=${id}, 当前用户=${currentUserId}`);
-      }
-      
-      // 清除处理中状态
-      this.setData({
-        processingTaskId: null
-      });
-      
-      if (result && result.success) {
-        // 任务状态变更成功的处理逻辑
-        logger.info('Index', '任务状态变更，刷新任务列表');
-        
-        await this.refreshTaskDataForCurrentView();
-        
-        // 根据操作类型和任务状态提供合适的提示
-        if (newStatus === 1) {  // 完成任务
-          // 检查是否为必做任务（使用之前定义的变量）
-          if (isRequired) {
-            // 必做任务完成提示
-            wx.showToast({
-              title: '必做任务已完成！',
-              icon: 'success',
-              duration: 2000
-            });
-            
-            // 轻微震动反馈（区别于普通任务）
-            if (wx.vibrateShort) {
-              wx.vibrateShort({ type: 'medium' });
-            }
-            
-            // 记录必做任务完成日志
-            logger.info('Index', `必做任务完成: ${currentTask.title}, 避免了扣除${taskPoints}颗星星的惩罚`);
-            
-            // 更新奖励进度信息（虽然不获得星星，但需要更新UI）
-            this.loadStarsAndRewards();
-          } else {
-            // 普通任务完成提示（保持原有逻辑）
-            if (!wasStarAwarded) {
-              // 首次完成任务，获得星星
-              wx.showToast({
-                title: `获得${taskPoints}颗星星！`,
-                icon: 'success',
-                duration: 2000
-              });
-              
-              // 震动反馈
-              if (wx.vibrateShort) {
-                wx.vibrateShort({ type: 'heavy' });
-              }
-              
-              // 立即检查奖励达成
-              logger.info('Index', '立即检查奖励达成状态');
-              this.checkRewardUnlock();
-            } else {
-              // 再次完成任务，不会获得星星
-              wx.showToast({
-                title: '已获得过星星',
-                icon: 'none',
-                duration: 1500
-              });
-              
-              this.loadStarsAndRewards();
-            }
-          }
-          
-          // 仅当完成任务时触发庆祝动画
-          setTimeout(() => {
-            const progressBar = this.selectComponent('#progressBar');
-            if (progressBar) {
-              progressBar.playAnimation('complete');
-            }
-          }, 300);
-        } else {  // 取消完成
-          // 根据任务类型显示不同的提示信息
-          if (isRequired) {
-            // 必做任务取消完成提示
-            wx.showToast({
-              title: '必做任务已重置',
-              icon: 'none',
-              duration: 1500
-            });
-          } else {
-            // 普通任务取消完成提示
-            wx.showToast({
-              title: `已扣除${taskPoints}颗星星`,
-              icon: 'none',
-              duration: 1500
-            });
-          }
-          
-          // 更新奖励进度信息
-          this.loadStarsAndRewards();
-        }
-      } else {
-        // 统一的错误处理：所有锁定相关错误都显示为modal
-        logger.info('Index', '统一处理任务操作结果', {
-          taskId: id,
-          operation: newStatus === 1 ? 'complete' : 'reset',
-          success: result?.success,
-          locked: result?.locked,
-          message: result?.message
-        });
-        
-        if (result?.locked || (result?.message && result.message.includes('奖励已兑换'))) {
-          // 锁定状态统一使用modal
-          wx.showModal({
-            title: '无法取消完成',
-            content: result?.message || '奖励已兑换，任务不可取消',
-            showCancel: false,
-            confirmText: '我知道了'
-          });
-        } else {
-          // 其他错误使用toast
-          wx.showToast({
-            title: result?.message || '操作失败',
-            icon: 'none',
-            duration: 2000
-          });
-        }
-      }
-    } catch (error) {
-      // 异常处理
-      logger.error('Index', '完成任务失败', error);
-      wx.showToast({
-        title: '操作失败，请重试',
-        icon: 'none',
-        duration: 2000
-      });
-      
-      // 清除处理中状态
-      this.setData({
-        processingTaskId: null
-      });
-    }
+    return taskActionsModule.completeTask(this, e);
   },
   
   // 设置随机的鼓励语
@@ -1749,21 +1116,7 @@ Page({
   
   // 处理进度条完成事件
   onRewardComplete: function(e) {
-    logger.debug('Index', '收到进度条完成事件', e.detail);
-    
-    // 获取当前进度数据
-    const oldProgress = this.data.rewardProgress || { current: 0, total: 10 };
-    
-    // 使用页面已持有的星星数，避免调用不存在的 serviceManager.getUserPoints
-    const userPoints = Number.isFinite(this.data.userPoints)
-      ? this.data.userPoints
-      : (Number.isFinite(oldProgress.current) ? oldProgress.current : 0);
-    
-    // 添加日志
-    logger.debug('Index', `处理奖励完成事件: 当前进度=${JSON.stringify(oldProgress)}, 星星数=${userPoints}`);
-    
-    // 正确传递参数
-    this._handleRewardCompletion(oldProgress, userPoints);
+    return rewardFlowModule.onRewardComplete(this, e);
   },
   
   // 显示/隐藏搜索面板
@@ -1904,211 +1257,14 @@ Page({
    * 在任务完成后检查是否有奖励达成，如有则显示奖励选择对话框
    */
   checkRewardUnlock: async function() {
-    try {
-      logger.info('Index', '开始检查奖励解锁状态');
-      
-      // 获取服务实例
-      const starService = serviceManager.getService('starService');
-      const rewardService = serviceManager.getService('rewardService');
-      
-      if (!starService || !rewardService) {
-        logger.error('Index', '无法获取服务实例，跳过奖励检查');
-        return;
-      }
-
-      // 星星用 effectiveUserId（与 loadStarsAndRewards 口径一致），奖励用 loginUserId（家长创建管理）
-      const loginUserId = getApp().globalData?.userService?.getLoginUserId() || null;
-      const effectiveUserId = this.getEffectiveTaskUserId() || loginUserId;
-      
-      // 获取当前星星数和所有可用奖励
-      const [userPoints, allRewards] = await Promise.all([
-        starService.getTotalStars(effectiveUserId),
-        rewardService.getAvailableRewards(true, false, loginUserId)
-      ]);
-      
-      logger.info('Index', '奖励检查数据', { userPoints, rewardCount: allRewards.length });
-      
-      // 找到所有已解锁但未领取的奖励
-      const unlockedRewards = allRewards.filter(reward => 
-        !reward.claimed && reward.points <= userPoints
-      );
-      
-      logger.info('Index', '已解锁未领取奖励', { count: unlockedRewards.length });
-      
-      if (unlockedRewards.length > 0) {
-        // 选择点数最低的已解锁奖励作为达成奖励
-        const achievedReward = unlockedRewards.sort((a, b) => a.points - b.points)[0];
-        
-        logger.info('Index', '检测到奖励达成', { 
-          rewardName: achievedReward.name, 
-          requiredPoints: achievedReward.points,
-          userPoints: userPoints
-        });
-        
-        // 先设置进度条为满值状态
-        await this._handleRewardCompletion(null, achievedReward.points);
-        
-        // 设置完成的奖励信息
-        this.setData({
-          completedReward: achievedReward,
-          completedRewardTotal: achievedReward.points
-        });
-        
-        // 延迟显示奖励选择对话框，让满值动效先播放
-        setTimeout(() => {
-          this.showRewardChoiceDialog();
-        }, 500);
-      } else {
-        logger.info('Index', '暂无奖励达成，正常刷新奖励信息');
-        
-        // 没有奖励达成时，正常刷新奖励信息
-        this.loadStarsAndRewards();
-      }
-      
-    } catch (error) {
-      logger.error('Index', '检查奖励解锁状态失败', error);
-    }
+    return rewardFlowModule.checkRewardUnlock(this);
   },
 
   /**
    * 加载用户星星和奖励信息（冻结展示 loginUser 自己的数据，不随视角切换变化）
    */
   loadStarsAndRewards: async function() {
-    try {
-      // 获取服务实例
-      const starService = serviceManager.getService('starService');
-      const rewardService = serviceManager.getService('rewardService');
-      
-      if (!starService || !rewardService) {
-        logger.error('Index', '无法获取服务实例');
-        return;
-      }
-
-      // 星星用 effectiveUserId（孩子视角用孩子的星星），奖励用 loginUserId（奖励由家长创建管理）
-      // 进度条含义：孩子当前 N 颗星 vs 家长设置的奖励门槛
-      const loginUserId = getApp().globalData?.userService?.getLoginUserId() || null;
-      const effectiveUserId = this.getEffectiveTaskUserId() || loginUserId;
-      
-      // 获取星星信息（用 effectiveUserId）和最后兑换时间（用 loginUserId，兑换是家长行为）
-      const [userPoints, lastExchangeTime] = await Promise.all([
-        starService.getTotalStars(effectiveUserId),
-        rewardService.getLastExchangeTimeByUser(loginUserId)
-      ]);
-      const formattedPoints = formatUtils.formatPoints(userPoints, true);
-      
-      logger.info('Index', '🔒 当前用户星星数', { userPoints, loginUserId });
-      logger.info('Index', '🔒 最后兑换时间详细信息', { 
-        lastExchangeTime: lastExchangeTime,
-        lastExchangeTimeDate: lastExchangeTime ? new Date(lastExchangeTime).toLocaleString() : '从未兑换',
-        hasExchanged: !!lastExchangeTime,
-        type: typeof lastExchangeTime
-      });
-      
-      // 调用奖励服务方法，传递已获取的星星数确保数据一致性
-      logger.info('Index', '开始获取奖励数据，使用已获取的星星数确保一致性');
-      // 奖励用 loginUserId（家长账户下的奖励），星星数用已取到的 userPoints（孩子的星星）
-      const [nextReward, visibleRewards] = await Promise.all([
-        rewardService.calculateNextAvailableReward(userPoints, loginUserId),
-        rewardService.getAvailableRewards(true, false, loginUserId)
-      ]);
-      
-      logger.info('Index', '获取到下一个可达成奖励', { name: nextReward ? nextReward.name : '无' });
-      logger.info('Index', '获取到可见奖励', { count: visibleRewards.length });
-      
-      // 扩展的触发条件判断：
-      // 1. 当没有任何真实奖励时（只有默认占位奖励或完全没有奖励）
-      // 2. 当奖励图序中只有示例奖励时
-      const hasNoRealReward = !nextReward || nextReward.isDefault;
-      const hasOnlyExampleRewards = visibleRewards.length > 0 && 
-        visibleRewards.every(reward => reward.isExample === true);
-      
-      if ((hasNoRealReward && visibleRewards.length === 0) || hasOnlyExampleRewards) {
-        if (hasOnlyExampleRewards) {
-          logger.info('Index', '检测到只有示例奖励，显示设置奖励提示');
-        } else {
-          logger.info('Index', '检测到无真实奖励，显示设置奖励提示');
-        }
-        
-        // 设置nextReward的适当参数，以便在进度条下方显示合适的信息
-        if (nextReward) {
-          nextReward.showSetupTip = true; // 添加标记，用于进度条下方的条件渲染
-        }
-      }
-      
-      // 如果没有可见奖励，但存在nextReward，需区分是否为默认占位奖励
-      let visibleRewardsToShow = [...visibleRewards];
-      if (visibleRewardsToShow.length === 0 && nextReward) {
-        // 记录详细日志便于诊断
-        logger.info('Index', '检查奖励信息', {
-          name: nextReward.name,
-          id: nextReward.id,
-          isDefault: nextReward.isDefault,
-          showSetupTip: nextReward.showSetupTip
-        });
-        
-        // 如果是默认占位奖励(有isDefault属性)，不添加到显示列表
-        if (nextReward.isDefault) {
-          logger.info('Index', '检测到默认占位奖励，不添加到显示列表');
-        }
-        // 只有真实奖励（有id属性）才添加到显示列表
-        else if (nextReward.id) {
-          logger.info('Index', '无可见奖励但存在有效奖励，添加到显示列表');
-          visibleRewardsToShow = [nextReward];
-        }
-      }
-      
-      // 计算进度条的total值 - 简化逻辑，移除重复的奖励达成检测
-      let progressTotal;
-      if (nextReward.allClaimed || nextReward.isDefault || nextReward.showSetupTip) {
-        // 没有真实奖励时设置更大的total值，确保进度条显示一致
-        progressTotal = Math.max(userPoints * 2, 100);
-      } else {
-        // 使用下一个奖励的点数，确保进度条不会意外显示满值
-        // 如果下一个奖励的点数小于当前星星数，说明有奖励可以领取，但进度条应该显示正常状态
-        progressTotal = nextReward && nextReward.points ? 
-          Math.max(nextReward.points, userPoints + 1) : // 确保total始终大于current
-          Math.max(userPoints + 1, 100);
-      }
-      
-      // 记录进度条状态，便于调试
-      logger.info('Index', '进度条状态计算', {
-        current: userPoints,
-        total: progressTotal,
-        nextRewardPoints: nextReward?.points,
-        nextRewardName: nextReward?.name,
-        willTriggerComplete: userPoints >= progressTotal
-      });
-      
-      // 更新UI状态
-      this.setData({
-        userPoints,
-        formattedPoints,
-        nextReward,
-        lastExchangeTime,
-        visibleRewards: visibleRewardsToShow.slice(0, 3).map(reward => ({
-          id: reward.id,
-          name: reward.name,
-          points: reward.points,
-          icon: reward.icon,
-          status: reward.claimed ? 'claimed' : (reward.points <= userPoints ? 'unlocked' : 'current'),
-          isExample: !!reward.isExample // 确保传递示例奖励标记
-        })),
-        hasMoreRewards: visibleRewardsToShow.length > 3,
-        rewardProgress: {
-          current: userPoints,
-          total: progressTotal
-        }
-      });
-      
-      logger.info('Index', '🔒 页面数据已更新，lastExchangeTime已设置', { 
-        lastExchangeTime: lastExchangeTime,
-        setDataSuccess: true,
-        taskCount: this.data.tasks ? this.data.tasks.length : 0
-      });
-      
-    } catch (error) {
-      logger.error('Index', '加载星星和奖励信息失败', error);
-    }
+    return rewardFlowModule.loadStarsAndRewards(this);
   },
   
   /**
@@ -2116,199 +1272,28 @@ Page({
    * 独立函数处理满值逻辑，避免代码重复
    */
   _handleRewardCompletion: async function(oldProgress, userPoints) {
-    try {
-      logger.info('Index', '处理奖励完成状态', { targetPoints: userPoints });
-      
-      const starService = serviceManager.getService('starService');
-      const rewardService = serviceManager.getService('rewardService');
-      
-      if (!starService || !rewardService) {
-        logger.error('Index', '无法获取服务实例');
-        return;
-      }
-
-      const loginUserId = getApp().globalData?.userService?.getLoginUserId() || null;
-      const effectiveUserId = this.getEffectiveTaskUserId() || loginUserId;
-      
-      // 获取当前实际星星数（确保数据一致性）
-      const actualUserPoints = await starService.getTotalStars(effectiveUserId);
-      
-      // 格式化星星数展示
-      const formattedPoints = formatUtils.formatPoints(actualUserPoints);
-      
-      // 获取可见奖励信息，用于更新奖励指示器
-      const visibleRewards = await rewardService.getAvailableRewards(true, false, loginUserId);
-      const visibleRewardsToShow = visibleRewards.slice(0, 3).map(reward => ({
-        id: reward.id,
-        name: reward.name,
-        points: reward.points,
-        icon: reward.icon,
-        status: reward.claimed ? 'claimed' : (reward.points <= actualUserPoints ? 'unlocked' : 'current'),
-        isExample: !!reward.isExample
-      }));
-      
-      // 更新UI显示满值状态，同时更新奖励指示器
-      this.setData({
-        userPoints: actualUserPoints,
-        rewardProgress: {
-          current: userPoints, // 使用目标点数显示满值
-          total: userPoints
-        },
-        formattedPoints: formattedPoints,
-        visibleRewards: visibleRewardsToShow,
-        hasMoreRewards: visibleRewards.length > 3,
-        forceKeepFullValue: true,
-        completedRewardTotal: userPoints,
-        rewardTextState: 'achieved',
-        transitionInProgress: true
-      });
-      
-      logger.info('Index', '奖励完成状态设置完毕');
-    } catch (error) {
-      logger.error('Index', '处理奖励完成状态失败', error);
-    }
+    return rewardFlowModule.handleRewardCompletion(this, oldProgress, userPoints);
   },
   
   /**
    * 显示奖励选择对话框
    */
   showRewardChoiceDialog: function() {
-    logger.debug('Index', '显示奖励选择对话框');
-    
-    // 如果对话框已显示，不重复操作
-    if (this.data.showRewardChoice) {
-      return;
-    }
-    
-    // 震动反馈
-    if (wx.vibrateShort) {
-      wx.vibrateShort({ type: 'heavy' });
-    }
-    
-    // 创建动画实例
-    const animation = wx.createAnimation({
-      duration: 300,
-      timingFunction: 'ease',
-    });
-    
-    // 设置初始状态（缩小并透明）
-    animation.scale(0.8).opacity(0).step({ duration: 0 });
-    
-    // 设置数据并显示对话框
-    this.setData({
-      showRewardChoice: true,
-      choiceDialogTitle: `恭喜！已达成"${this.data.completedReward.name}"`,
-      choiceDialogAnimation: animation.export()
-    });
-    
-    // 执行显示动画
-    setTimeout(() => {
-      animation.scale(1).opacity(1).step();
-      this.setData({
-        choiceDialogAnimation: animation.export()
-      });
-    }, 50);
+    return rewardFlowModule.showRewardChoiceDialog(this);
   },
   
   /**
    * 点击继续积累
    */
   continueCollecting: function() {
-    logger.debug('Index', '用户选择继续积累星星');
-    
-    // 创建动画实例
-    const animation = wx.createAnimation({
-      duration: 300,
-      timingFunction: 'ease-out',
-    });
-    
-    // 设置隐藏动画
-    animation.scale(0.8).opacity(0).step();
-    
-    this.setData({
-      choiceDialogAnimation: animation.export()
-    });
-    
-    // 延迟关闭对话框，然后开始过渡
-    setTimeout(() => {
-      this.setData({
-        showRewardChoice: false,
-        forceKeepFullValue: false // 解除满值保护
-      });
-      
-      // 执行过渡到新目标的动画
-      this.transitionToNewTarget();
-    }, 300);
+    return rewardFlowModule.continueCollecting(this);
   },
   
   /**
    * 过渡到新目标
    */
   transitionToNewTarget: async function() {
-    logger.debug('Index', '执行过渡到新目标的动画');
-    
-    try {
-      // 清除所有满值相关状态
-      this.setData({
-        forceKeepFullValue: false,
-        transitionInProgress: false,
-        showRewardChoice: false,
-        rewardTextState: 'newTarget'
-      });
-      
-      // 获取服务实例
-      const starService = serviceManager.getService('starService');
-      const rewardService = serviceManager.getService('rewardService');
-      
-      if (!starService || !rewardService) {
-        logger.error('Index', '无法获取服务实例');
-        return;
-      }
-
-      const loginUserId = getApp().globalData?.userService?.getLoginUserId() || null;
-      const effectiveUserId = this.getEffectiveTaskUserId() || loginUserId;
-      
-      // 获取当前星星数
-      const userPoints = await starService.getTotalStars(effectiveUserId);
-      logger.debug('Index', `当前星星数: ${userPoints}`);
-      
-      // 获取下一个可达成奖励，传递已获取的星星数确保一致性
-      logger.debug('Index', '获取下一个可达成奖励');
-      const nextReward = await rewardService.calculateNextAvailableReward(userPoints, loginUserId);
-      logger.debug('Index', `新目标信息: 下一目标=${nextReward ? nextReward.name : '无'}, 需要星星=${nextReward ? nextReward.points : 0}`);
-      
-      // 格式化星星数
-      const formattedPoints = formatUtils.formatPoints(userPoints, true);
-      
-      // 获取进度条组件并平滑过渡
-      const progressBar = this.selectComponent('#progressBar');
-      if (progressBar) {
-        logger.debug('Index', '进度条平滑过渡到新目标');
-        progressBar.setData({
-          current: userPoints,
-          // 没有真实奖励时设置更大的total值，确保进度条显示一致
-          total: (nextReward.allClaimed || nextReward.isDefault || nextReward.showSetupTip) ? 
-                 Math.max(userPoints * 2, 100) : // 设置为当前星星数的两倍或至少100
-                 (isFinite(parseInt(nextReward.points)) ? parseInt(nextReward.points) : 100)
-        });
-      }
-      
-      // 更新数据到新目标
-      this.setData({
-        userPoints: userPoints,
-        formattedPoints: formattedPoints,
-        nextReward: nextReward,
-        rewardProgress: {
-          current: userPoints,
-          // 没有真实奖励时设置更大的total值，确保进度条显示一致
-          total: (nextReward.allClaimed || nextReward.isDefault || nextReward.showSetupTip) ? 
-                 Math.max(userPoints * 2, 100) : // 设置为当前星星数的两倍或至少100
-                 (nextReward.points || 100)
-        }
-      });
-    } catch (error) {
-      logger.error('Index', '过渡到新目标时出错', error);
-    }
+    return rewardFlowModule.transitionToNewTarget(this);
   },
   
   // 点击查看奖池
@@ -2535,43 +1520,7 @@ Page({
 
   // 任务状态切换处理函数
   taskItemStatusToggle: async function(e) {
-    try {
-      // 获取任务ID和新状态
-      const { id, newStatus } = e.detail;
-      
-      // 记录当前处理的任务ID，用于UI加载状态显示
-      this.setData({
-        processingTaskId: id
-      });
-      
-      logger.info('Index', `切换任务状态: 任务ID=${id}, 新状态=${newStatus}`);
-      
-      // 使用任务服务更新任务状态
-      const taskService = serviceManager.getTaskService();
-      const updatedTask = await taskService.updateTaskStatus(id, newStatus);
-      
-      // 清除处理中状态
-      this.setData({
-        processingTaskId: null
-      });
-      
-      // 刷新进度条动画和任务数据
-      this.transitionToNewTarget();
-      this.refreshTaskDataForCurrentView();
-    } catch (error) {
-      logger.error('Index', '更新任务状态失败', error);
-      
-      // 清除处理中状态
-      this.setData({
-        processingTaskId: null
-      });
-      
-      // 提示错误
-      wx.showToast({
-        title: '操作失败',
-        icon: 'none'
-      });
-    }
+    return taskActionsModule.taskItemStatusToggle(this, e);
   },
 
   // 搜索任务
@@ -2623,10 +1572,7 @@ Page({
    * @param {Object} data 事件数据
    */
   handleTaskCreated: function(data) {
-    logger.info('Index', '收到任务创建事件', data);
-    
-    // 重新加载任务数据
-    this.refreshTaskDataForCurrentView();
+    return refreshCoordinator.handleTaskCreated(this, data);
   },
 
   // ============= 多用户系统相关方法 =============
@@ -2635,50 +1581,7 @@ Page({
    * 初始化多用户系统
    */
   async initializeMultiUserSystem() {
-    try {
-      logger.info('Index', '初始化多用户系统');
-      
-      // 从app全局状态获取用户服务
-      const userService = getApp().globalData.userService;
-      if (!userService) {
-        logger.error('Index', '用户服务未初始化');
-        return;
-      }
-      
-      // 获取当前用户
-      const currentUser = userService.getCurrentUser();
-
-      // 获取登录用户（设备拥有者，权限依据）
-      const loginUser = userService.getLoginUser() || currentUser;
-
-      // 获取所有可用用户
-      const availableUsers = userService.getAllUsers();
-
-      // 权限由 loginUser 决定，不随视角切换变化
-      const userPermissions = permissionUtils.getUserPermissions(loginUser.role);
-
-      // 只读视角：孩子设备（loginUser.role=child）或家长切到孩子视角时均为只读
-      // 家长只有在自己的视角下（currentUser === loginUser）才有管理权限
-      const isReadonlyView = loginUser.role === 'child' || loginUser.userId !== currentUser.userId;
-
-      // 更新页面数据
-      this.setData({
-        currentUser,
-        availableUsers,
-        userPermissions,
-        loginUserId: loginUser.userId,
-        canManageMembers: loginUser.role === 'parent',
-        isReadonlyView,
-      });
-      
-      // 根据权限过滤菜单项
-      this.updateMenuItemsWithPermissions();
-      
-      logger.info('Index', `多用户系统初始化完成，当前用户: ${currentUser.name}(${currentUser.role})`);
-      
-    } catch (error) {
-      logger.error('Index', '初始化多用户系统失败', error);
-    }
+    return userContextModule.initializeMultiUserSystem(this);
   },
 
   /**
@@ -2686,32 +1589,11 @@ Page({
    * 等待用户服务初始化完成后再进行初始化
    */
   initializeMultiUserSystemDelayed: async function() {
-    logger.info('Index', '开始延迟初始化多用户系统');
+    return userContextModule.initializeMultiUserSystemDelayed(this);
+  },
 
-    // 等待登录完成（云端模式）
-    await this.waitForLoginComplete();
-
-    // 等待用户服务就绪
-    const maxWaitTime = 3000; // 3秒超时
-    const startTime = Date.now();
-
-    while (Date.now() - startTime < maxWaitTime) {
-      const app = getApp();
-      if (app.globalData && app.globalData.userService) {
-        logger.info('Index', '用户服务已就绪，开始初始化多用户系统');
-        await this.initializeMultiUserSystem();
-        return;
-      }
-      await new Promise(resolve => setTimeout(resolve, 100));
-    }
-
-    // 超时处理
-    logger.warn('Index', '用户服务初始化超时，稍后重试');
-
-    // 可以在这里添加重试逻辑或者显示提示
-    setTimeout(() => {
-      this.initializeMultiUserSystemDelayed();
-    }, 2000);
+  async refreshDataForCurrentUser() {
+    return refreshCoordinator.refreshDataForCurrentUser(this);
   },
 
   /**
@@ -2959,29 +1841,6 @@ Page({
     });
     
     logger.info('Index', `菜单项更新完成: ${originalMenuItems.length} -> ${finalMenuItems.length}`);
-  },
-
-  /**
-   * 为当前用户刷新数据
-   */
-  async refreshDataForCurrentUser() {
-    try {
-      logger.info('Index', '为当前用户刷新数据');
-      
-      const { currentUser } = this.data;
-      
-      // 重新加载所有数据，传入用户ID进行筛选
-      await Promise.all([
-        this.refreshTaskDataForCurrentView(),
-        this.loadStarsAndRewards(),
-        this.loadMessageData()
-      ]);
-      
-      logger.info('Index', `用户数据刷新完成: ${currentUser.name}`);
-      
-    } catch (error) {
-      logger.error('Index', '刷新用户数据失败', error);
-    }
   },
 
   /**
