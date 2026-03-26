@@ -37,16 +37,27 @@
 ### 常用命令
 
 ```bash
-# 运行测试
+# 根级稳定质量闸门
 npm test
 
+# 前端覆盖率质量闸门
+npm run test:quality
+
 # 运行特定模块测试
+npm run test:app
+npm run test:pages
+npm run test:adapters
 npm run test:models
 npm run test:services
 npm run test:repositories
 
 # 生成测试覆盖率报告
 npm run test:coverage
+
+# 后端测试入口
+npm run test:backend:unit
+npm run test:backend:integration:memory
+npm run test:backend:integration:real
 
 # 代码规范检查
 npm run lint

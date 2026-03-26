@@ -1,6 +1,64 @@
-# 后端真实数据库集成测试指南
+# 后端测试说明
+
+> 项目级后端测试入口已在根 `package.json` 暴露，真实数据库集成仅是其中一类
+> **最后更新**：2026-03-26
+
+---
+
+## 📋 测试入口分层
+
+### 1. 后端单元测试
+
+项目根目录运行：
+
+```bash
+npm run test:backend:unit
+```
+
+或在 `backend/` 目录运行：
+
+```bash
+npm run test:unit
+```
+
+### 2. 后端轻量集成测试（非真实数据库）
+
+项目根目录运行：
+
+```bash
+npm run test:backend:integration:memory
+```
+
+或在 `backend/` 目录运行：
+
+```bash
+npm run test:integration:memory
+```
+
+### 3. 后端真实数据库集成测试
+
+项目根目录运行：
+
+```bash
+npm run test:backend:integration:real
+```
+
+或在 `backend/` 目录运行：
+
+```bash
+npm run test:integration:real
+```
+
+说明：
+- `unit`：后端服务/控制器等本地单元测试
+- `integration:memory`：默认推荐的后端集成入口，不依赖远程测试数据库
+- `integration:real`：手工阻塞闸门，依赖 `backend/.env.test` 和远程测试数据库
+
+---
 
 ## 📋 准备工作
+
+以下准备工作仅针对 **真实数据库集成测试**。
 
 ### 1. 配置测试数据库连接
 
@@ -45,19 +103,14 @@ mysql -h your-remote-db-host.com -u test_user -p task_wechat_test < backend/data
 ### 运行所有真实集成测试
 
 ```bash
-cd backend
-npm test -- \
-  test/integration/task-api-m07-real.test.js \
-  test/integration/task-api-m08-real.test.js \
-  test/integration/task-api-m08b-real.test.js \
-  test/integration/star-api-m09-real.test.js \
-  test/integration/reward-api-m09-real.test.js \
-  test/integration/message-api-m10-real.test.js
+npm run test:backend:integration:real
 ```
 
 ### 运行特定测试套件
 
 ```bash
+# 在 backend/ 目录中执行
+
 # 只测试更新任务API
 npm test -- test/integration/task-api-m07-real.test.js -t "PUT /api/tasks"
 

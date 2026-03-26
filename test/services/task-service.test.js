@@ -79,8 +79,10 @@ describe('TaskService', () => {
 
     mockUserService = {
       getCurrentUserId: jest.fn().mockReturnValue('parent'),
+      getCurrentUser: jest.fn().mockReturnValue({ userId: 'parent', role: 'parent' }),
       getUserByRole: jest.fn().mockReturnValue({ id: 'child' }),
-      getLoginUserId: jest.fn().mockReturnValue(null)
+      getLoginUserId: jest.fn().mockReturnValue(null),
+      getAllUsers: jest.fn().mockReturnValue([])
     };
 
     // 创建 EventBus Mock
@@ -1661,6 +1663,118 @@ describe('TaskService', () => {
     });
   });
 
+  describe('M12 - _syncTaskToCloud 历史占位 userId 兼容', () => {
+    beforeEach(() => {
+      taskService.enableCloudStorage = true;
+      taskService._markTaskSynced = jest.fn().mockResolvedValue(true);
+      taskService.userService = {
+        getLoginUserId: jest.fn().mockReturnValue('parent_real'),
+        getCurrentUser: jest.fn().mockReturnValue({ userId: 'parent_real', role: 'parent' }),
+        getAllUsers: jest.fn().mockReturnValue([
+          { userId: 'parent_real', role: 'parent' },
+          { userId: 'child_real', role: 'child' }
+        ])
+      };
+      HttpClient.post = jest.fn().mockResolvedValue({ success: true });
+    });
+
+    afterEach(() => {
+      taskService.enableCloudStorage = false;
+    });
+
+    it('历史 parent 占位任务补云时不应携带 targetUserId=parent', async () => {
+      const task = new Task(TestDataFactory.createTask({
+        id: 'legacy_parent_task',
+        userId: 'parent'
+      }));
+      task.pendingSyncMeta = {
+        action: 'create',
+        modifyTime: 1001,
+        operationKey: 'op_1001',
+        operatorUserId: 'parent_real',
+        operatorRole: 'parent',
+        familyId: 'fam_1',
+        targetUserId: 'parent'
+      };
+
+      await taskService._syncTaskToCloud(task);
+
+      const payload = HttpClient.post.mock.calls[0][1];
+      expect(payload.targetUserId).toBeUndefined();
+      expect(task.userId).toBe('parent_real');
+      expect(taskService._markTaskSynced).toHaveBeenCalledWith(task, { modifyTime: 1001 });
+    });
+
+    it('真实孩子任务补云时应保留 targetUserId', async () => {
+      const task = new Task(TestDataFactory.createTask({
+        id: 'child_task',
+        userId: 'child_real'
+      }));
+      task.pendingSyncMeta = {
+        action: 'create',
+        modifyTime: 1002,
+        operationKey: 'op_1002',
+        operatorUserId: 'parent_real',
+        operatorRole: 'parent',
+        familyId: 'fam_1',
+        targetUserId: 'child_real'
+      };
+
+      await taskService._syncTaskToCloud(task);
+
+      const payload = HttpClient.post.mock.calls[0][1];
+      expect(payload.targetUserId).toBe('child_real');
+    });
+
+    it('历史 child 占位任务在单孩子家庭中应映射到真实孩子ID', async () => {
+      const task = new Task(TestDataFactory.createTask({
+        id: 'legacy_child_task',
+        userId: 'child'
+      }));
+      task.pendingSyncMeta = {
+        action: 'create',
+        modifyTime: 1003,
+        operationKey: 'op_1003',
+        operatorUserId: 'parent_real',
+        operatorRole: 'parent',
+        familyId: 'fam_1',
+        targetUserId: 'child'
+      };
+
+      await taskService._syncTaskToCloud(task);
+
+      const payload = HttpClient.post.mock.calls[0][1];
+      expect(task.userId).toBe('child_real');
+      expect(payload.targetUserId).toBe('child_real');
+    });
+
+    it('无法解析的历史 child 占位任务不应错误上云', async () => {
+      taskService.userService.getAllUsers.mockReturnValue([
+        { userId: 'parent_real', role: 'parent' },
+        { userId: 'child_a', role: 'child' },
+        { userId: 'child_b', role: 'child' }
+      ]);
+      taskService.userService.getCurrentUser.mockReturnValue({ userId: 'parent_real', role: 'parent' });
+
+      const task = new Task(TestDataFactory.createTask({
+        id: 'legacy_child_ambiguous',
+        userId: 'child'
+      }));
+      task.pendingSyncMeta = {
+        action: 'create',
+        modifyTime: 1004,
+        operationKey: 'op_1004',
+        operatorUserId: 'parent_real',
+        operatorRole: 'parent',
+        familyId: 'fam_1',
+        targetUserId: 'child'
+      };
+
+      await expect(taskService._syncTaskToCloud(task)).rejects.toThrow('历史任务归属未映射');
+      expect(HttpClient.post).not.toHaveBeenCalled();
+    });
+  });
+
   // ============================================================
   // M09：resetTask 跨设备放开测试
   // ============================================================
@@ -2037,6 +2151,17 @@ describe('TaskService', () => {
       taskService.userService = { getLoginUserId: jest.fn().mockReturnValue('u1') };
       await taskService._fetchTasksFromCloud('child1');
       expect(taskService._cleanupStaleTasks).not.toHaveBeenCalled();
+    });
+
+    it('按指定孩子读取任务时不应重复透传 userId 查询参数', async () => {
+      taskService.userService = { getLoginUserId: jest.fn().mockReturnValue('u1') };
+
+      await taskService._fetchTasksFromCloud('child1', { userId: 'child1', date: '2026-03-19' });
+
+      expect(HttpClient.get).toHaveBeenCalledWith('/api/tasks', {
+        date: '2026-03-19',
+        targetUserId: 'child1'
+      });
     });
   });
 

@@ -353,4 +353,83 @@ describe('pages/index reward flow', () => {
     expect(page.checkExpiredTasksAndStars).toHaveBeenCalledTimes(1);
     expect(page.loadAllPageData).toHaveBeenCalledTimes(1);
   });
+
+  it('奖励流模块应覆盖无上下文、无达成奖励和设置奖励提示分支', async () => {
+    const page = createPageInstance();
+    page.loadStarsAndRewards = jest.fn().mockResolvedValue();
+
+    serviceManager.getService.mockReturnValueOnce(null);
+    await page.loadStarsAndRewards();
+
+    serviceManager.getService.mockImplementation((serviceName) => {
+      if (serviceName === 'starService') return starService;
+      if (serviceName === 'rewardService') return rewardService;
+      return null;
+    });
+
+    page.getEffectiveTaskUserId = jest.fn(() => 'child-1');
+    starService.getTotalStars.mockResolvedValue(3);
+    rewardService.getAvailableRewards.mockResolvedValue([{ id: 'reward-2', name: '大奖励', points: 10, claimed: false }]);
+    await page.checkRewardUnlock();
+    expect(page.loadStarsAndRewards).toHaveBeenCalled();
+
+    page.loadStarsAndRewards = pageConfig.loadStarsAndRewards.bind(page);
+    rewardService.getLastExchangeTimeByUser.mockResolvedValue(null);
+    rewardService.calculateNextAvailableReward.mockResolvedValue({
+      id: 'default',
+      name: '默认奖励',
+      isDefault: true
+    });
+    rewardService.getAvailableRewards.mockResolvedValue([]);
+    await page.loadStarsAndRewards();
+    expect(page.data.nextReward.showSetupTip).toBe(true);
+    expect(page.data.rewardProgress.total).toBe(100);
+  });
+
+  it('奖励对话框与继续积累应覆盖重复打开和关闭动画分支', async () => {
+    jest.useFakeTimers();
+    const page = createPageInstance();
+    page.data.completedReward = { name: '看动画片' };
+    page.transitionToNewTarget = jest.fn();
+
+    global.wx.createAnimation = jest.fn(() => ({
+      scale: jest.fn().mockReturnThis(),
+      opacity: jest.fn().mockReturnThis(),
+      step: jest.fn().mockReturnThis(),
+      export: jest.fn(() => ({ ok: true }))
+    }));
+
+    page.showRewardChoiceDialog();
+    page.showRewardChoiceDialog();
+    jest.runOnlyPendingTimers();
+    expect(page.data.showRewardChoice).toBe(true);
+
+    page.continueCollecting();
+    jest.runAllTimers();
+    expect(page.transitionToNewTarget).toHaveBeenCalled();
+    expect(page.data.showRewardChoice).toBe(false);
+  });
+
+  it('transitionToNewTarget 在无上下文或无进度条时应安全处理', async () => {
+    const page = createPageInstance();
+    page.selectComponent.mockReturnValue(null);
+
+    serviceManager.getService.mockReturnValueOnce(null);
+    await expect(page.transitionToNewTarget()).resolves.toBeUndefined();
+
+    serviceManager.getService.mockImplementation((serviceName) => {
+      if (serviceName === 'starService') return starService;
+      if (serviceName === 'rewardService') return rewardService;
+      return null;
+    });
+    starService.getTotalStars.mockResolvedValue(5);
+    rewardService.calculateNextAvailableReward.mockResolvedValue({
+      id: 'reward-1',
+      name: '看动画片',
+      points: 10
+    });
+
+    await page.transitionToNewTarget();
+    expect(page.data.rewardProgress).toEqual({ current: 5, total: 10 });
+  });
 });

@@ -1,0 +1,326 @@
+const { Task } = require('../../../models/task');
+const serviceManager = require('../../../services/service-manager.js');
+const logger = require('../../../utils/logger');
+
+function clearProcessing(page) {
+  page.setData({
+    processingTaskId: null
+  });
+}
+
+async function ensureRewardSetupForCompletion(page) {
+  logger.info('Index', '检查奖励设置状态');
+
+  const rewardService = serviceManager.getService('rewardService');
+  if (!rewardService) {
+    return true;
+  }
+
+  const loginUserId = getApp().globalData?.userService?.getLoginUserId() || null;
+  const nextReward = await rewardService.calculateNextAvailableReward(undefined, loginUserId);
+  const visibleRewards = await rewardService.getAvailableRewards(true, false, loginUserId);
+
+  const hasNoRealReward = !nextReward || nextReward.isDefault;
+  const hasOnlyExampleRewards = visibleRewards.length > 0 &&
+    visibleRewards.every((reward) => reward.isExample === true);
+
+  if ((hasNoRealReward && visibleRewards.length === 0) || hasOnlyExampleRewards) {
+    if (hasOnlyExampleRewards) {
+      logger.info('Index', '检测到只有示例奖励，阻止任务完成并更新提示信息');
+    } else {
+      logger.info('Index', '检测到无真实奖励，阻止任务完成并更新提示信息');
+    }
+
+    clearProcessing(page);
+
+    if (nextReward) {
+      nextReward.showSetupTip = true;
+    }
+
+    page.setData({
+      nextReward
+    });
+
+    wx.showModal({
+      title: '需要设置奖励',
+      content: '还没有设置奖励哦！',
+      showCancel: false,
+      confirmText: '我知道了'
+    });
+
+    return false;
+  }
+
+  return true;
+}
+
+async function confirmResetIfNeeded(page, currentTask, taskId, newStatus, wasStarAwarded) {
+  if (newStatus !== 0 || !wasStarAwarded) {
+    return true;
+  }
+
+  const rewardService = serviceManager.getService('rewardService');
+  const taskForLockCheck = currentTask instanceof Task ? currentTask : new Task(currentTask);
+  let isLocked = false;
+
+  if (rewardService && typeof rewardService.getLastExchangeTimeByUser === 'function') {
+    const lastExchangeTime = await rewardService.getLastExchangeTimeByUser(taskForLockCheck.userId || null);
+    isLocked = !taskForLockCheck.canBeUnchecked(lastExchangeTime);
+  }
+
+  if (isLocked) {
+    logger.info('Index', '任务已锁定，直接显示锁定提示', { taskId });
+    wx.showModal({
+      title: '无法取消完成',
+      content: '奖励已兑换，任务不可取消',
+      showCancel: false,
+      confirmText: '我知道了'
+    });
+    clearProcessing(page);
+    return false;
+  }
+
+  const confirmed = await new Promise((resolve) => {
+    wx.showModal({
+      title: '确认取消完成',
+      content: '取消完成任务将扣除已获得的星星，确定要继续吗？',
+      confirmText: '确定',
+      cancelText: '取消',
+      success: (res) => resolve(res.confirm),
+      fail: () => resolve(false)
+    });
+  });
+
+  if (!confirmed) {
+    clearProcessing(page);
+    return false;
+  }
+
+  return true;
+}
+
+async function executeStatusChange(taskId, newStatus, currentUserId) {
+  const taskService = serviceManager.getService('task');
+
+  if (newStatus === 1) {
+    const result = await taskService.completeTask(taskId, currentUserId);
+    logger.info('Index', `调用完成任务: 任务ID=${taskId}, 当前用户=${currentUserId}`);
+    return result;
+  }
+
+  const result = await taskService.resetTask(taskId, currentUserId);
+  logger.info('Index', `调用重置任务: 任务ID=${taskId}, 当前用户=${currentUserId}`);
+  return result;
+}
+
+function handleSuccess(page, resultContext) {
+  const {
+    newStatus,
+    wasStarAwarded,
+    taskPoints,
+    isRequired,
+    currentTask
+  } = resultContext;
+
+  logger.info('Index', '任务状态变更，刷新任务列表');
+
+  return page.refreshTaskDataForCurrentView().then(async () => {
+    if (newStatus === 1) {
+      if (isRequired) {
+        wx.showToast({
+          title: '必做任务已完成！',
+          icon: 'success',
+          duration: 2000
+        });
+
+        if (wx.vibrateShort) {
+          wx.vibrateShort({ type: 'medium' });
+        }
+
+        logger.info('Index', `必做任务完成: ${currentTask.title}, 避免了扣除${taskPoints}颗星星的惩罚`);
+        page.loadStarsAndRewards();
+      } else if (!wasStarAwarded) {
+        wx.showToast({
+          title: `获得${taskPoints}颗星星！`,
+          icon: 'success',
+          duration: 2000
+        });
+
+        if (wx.vibrateShort) {
+          wx.vibrateShort({ type: 'heavy' });
+        }
+
+        logger.info('Index', '立即检查奖励达成状态');
+        page.checkRewardUnlock();
+      } else {
+        wx.showToast({
+          title: '已获得过星星',
+          icon: 'none',
+          duration: 1500
+        });
+
+        page.loadStarsAndRewards();
+      }
+
+      setTimeout(() => {
+        const progressBar = page.selectComponent('#progressBar');
+        if (progressBar) {
+          progressBar.playAnimation('complete');
+        }
+      }, 300);
+      return;
+    }
+
+    wx.showToast({
+      title: isRequired ? '必做任务已重置' : `已扣除${taskPoints}颗星星`,
+      icon: 'none',
+      duration: 1500
+    });
+
+    page.loadStarsAndRewards();
+  });
+}
+
+function handleFailure(result) {
+  logger.info('Index', '统一处理任务操作结果', {
+    taskId: result?.taskId,
+    operation: result?.operation,
+    success: result?.success,
+    locked: result?.locked,
+    message: result?.message
+  });
+
+  if (result?.locked || (result?.message && result.message.includes('奖励已兑换'))) {
+    wx.showModal({
+      title: '无法取消完成',
+      content: result?.message || '奖励已兑换，任务不可取消',
+      showCancel: false,
+      confirmText: '我知道了'
+    });
+    return;
+  }
+
+  wx.showToast({
+    title: result?.message || '操作失败',
+    icon: 'none',
+    duration: 2000
+  });
+}
+
+async function completeTask(page, e) {
+  const taskId = e.detail.taskId;
+
+  if (!taskId) {
+    logger.warn('Index', '完成任务失败: 任务ID为空');
+    return;
+  }
+
+  logger.info('Index', '完成任务:', { taskId });
+
+  if (page.data.processingTaskId === taskId) {
+    logger.warn('Index', '任务正在处理中，忽略重复点击');
+    return;
+  }
+
+  page.setData({
+    processingTaskId: taskId
+  });
+
+  logger.info('Index', `当前任务列表数量: ${page.data.tasks ? page.data.tasks.length : 0}`);
+  const currentTask = page.data.tasks.find((task) => task.id === taskId);
+  if (!currentTask) {
+    logger.warn('Index', '未找到指定任务', {
+      taskId,
+      availableTasks: page.data.tasks ? page.data.tasks.map((task) => task.id) : []
+    });
+    clearProcessing(page);
+    return;
+  }
+
+  const newStatus = currentTask.status === 1 ? 0 : 1;
+  const wasStarAwarded = currentTask.starAwarded || false;
+  const taskPoints = currentTask.points || 0;
+  const isRequired = currentTask.isRequired || false;
+
+  logger.info('Index', `任务详细信息: ID=${taskId}, 标题=${currentTask.title}, 当前状态=${currentTask.status}, 新状态=${newStatus}`);
+  logger.info('Index', `任务星星信息: starAwarded=${currentTask.starAwarded}(${typeof currentTask.starAwarded}), points=${taskPoints}`);
+  logger.info('Index', `任务原始星星状态: ${wasStarAwarded ? '已获得' : '未获得'}`);
+  logger.info('Index', `任务类型信息: isRequired=${isRequired}, 任务类型=${isRequired ? '必做任务' : '普通任务'}`);
+
+  if (newStatus === 1) {
+    const canContinue = await ensureRewardSetupForCompletion(page);
+    if (!canContinue) {
+      return;
+    }
+  }
+
+  const canContinue = await confirmResetIfNeeded(page, currentTask, taskId, newStatus, wasStarAwarded);
+  if (!canContinue) {
+    return;
+  }
+
+  try {
+    const { currentUser } = page.data;
+    const currentUserId = currentUser && currentUser.id ? currentUser.id : null;
+    const result = await executeStatusChange(taskId, newStatus, currentUserId);
+
+    clearProcessing(page);
+
+    if (result && result.success) {
+      await handleSuccess(page, {
+        newStatus,
+        wasStarAwarded,
+        taskPoints,
+        isRequired,
+        currentTask
+      });
+      return;
+    }
+
+    handleFailure({
+      ...result,
+      taskId,
+      operation: newStatus === 1 ? 'complete' : 'reset'
+    });
+  } catch (error) {
+    logger.error('Index', '完成任务失败', error);
+    wx.showToast({
+      title: '操作失败，请重试',
+      icon: 'none',
+      duration: 2000
+    });
+    clearProcessing(page);
+  }
+}
+
+async function taskItemStatusToggle(page, e) {
+  try {
+    const { id, newStatus } = e.detail;
+
+    page.setData({
+      processingTaskId: id
+    });
+
+    logger.info('Index', `切换任务状态: 任务ID=${id}, 新状态=${newStatus}`);
+
+    const taskService = serviceManager.getTaskService();
+    await taskService.updateTaskStatus(id, newStatus);
+
+    clearProcessing(page);
+
+    page.transitionToNewTarget();
+    page.refreshTaskDataForCurrentView();
+  } catch (error) {
+    logger.error('Index', '更新任务状态失败', error);
+    clearProcessing(page);
+    wx.showToast({
+      title: '操作失败',
+      icon: 'none'
+    });
+  }
+}
+
+module.exports = {
+  completeTask,
+  taskItemStatusToggle
+};

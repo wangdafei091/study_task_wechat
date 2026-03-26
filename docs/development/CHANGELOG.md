@@ -4,6 +4,69 @@
 
 ---
 
+## [里程碑-13] - 2026-03-26
+
+### ✅ 完成情况
+
+**质量闸门升级**
+
+- 新增 `jest.quality.config.js`，正式建立“根级稳定闸门 + 前端覆盖率闸门”的分层质量入口
+- 根 `package.json` 已补齐 `test:quality`、`test:app`、`test:pages`、`test:adapters`、`test:backend:unit`、`test:backend:integration:memory`、`test:backend:integration:real`
+- `backend/package.json` 已细分 `test:unit`、`test:integration:memory`、`test:integration:real`
+- `app.js`、`utils/app/*`、`pages/index/*`、`pages/rewards/rewards.js`、`packageMessage/pages/message/message.js`、`adapters/storage-adapter.js` 已纳入正式覆盖率闸门
+- `utils/logger.js` 完成测试环境静默开关治理，`ENABLE_TEST_LOGS=true` 时可显式恢复日志
+- `utils/api-config.js` 已补充测试环境静默控制，避免质量闸门输出被配置日志噪声污染
+
+### 🧪 验证结果
+
+- 根级稳定闸门通过：`npm test -- --runInBand`
+- 前端覆盖率闸门通过：`npm run test:quality -- --runInBand --coverageReporters=text-summary`
+- 覆盖率报告入口通过：`npm run test:coverage -- --runInBand --coverageReporters=text-summary`
+- 当前前端覆盖率汇总：
+  - statements `89.83%`
+  - branches `75.93%`
+  - functions `91.36%`
+  - lines `90%`
+
+### 📖 详细实施记录
+
+- [里程碑-13：质量闸门升级](../design/milestone-13-quality-gate-upgrade.md)
+
+## [里程碑-12] - 2026-03-26
+
+### ✅ 完成情况
+
+**前端结构治理**
+
+- `app.js` 已收敛为应用生命周期壳层，启动认证、服务初始化、登录后补偿和运行时监听拆分到 `utils/app/` 模块
+- 首页脚本已拆分为生命周期、用户上下文、刷新协调、任务动作、奖励流转五类模块，保留页面对外入口不变
+- `TaskService` 已收敛为 facade，查询、写入、重复任务、惩罚与云同步拆分到 `services/task-service/` 内部模块
+- 首页任务刷新已统一为当前视图口径，事件回流不再回退到“今天任务”的硬编码路径
+- 启动链、首页结构与服务内部拆分后，原有对外服务访问、登录语义、双环境切换方式保持兼容
+
+### 🔧 实施后补充修复
+
+- 修复历史本地任务补云时误发 `targetUserId=parent`，避免被后端按越权创建拒绝
+- 修复任务读取请求同时透传 `userId` 与 `targetUserId` 的冗余 query 组装
+
+### 🧪 验证结果
+
+- 新增结构治理相关测试：
+  - `test/app/app-bootstrap.test.js`
+  - `test/app/app-contract.test.js`
+  - `test/pages/index.page-contract.test.js`
+- 关键回归测试通过：
+  - `test/services/task-service.test.js`
+- 已完成多轮模拟器手工复核，覆盖：
+  - 创建家庭、添加孩子、历史任务迁移
+  - 家长按孩子视角读取任务与统计
+  - 孩子任务完成、发星、状态同步、任务同步
+  - 家庭聚合读取与首页刷新主路径
+
+### 📖 详细实施记录
+
+- [里程碑-12：前端结构治理](../design/milestone-12-frontend-structure-governance.md)
+
 ## [里程碑-11] - 2026-03-25
 
 ### ✅ 完成情况

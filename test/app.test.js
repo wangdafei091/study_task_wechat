@@ -1,11 +1,16 @@
 describe('app.js 自动登录环境配置', () => {
   let appConfig;
   let setTokenMock;
+  let httpPostMock;
 
   beforeEach(() => {
     jest.resetModules();
     appConfig = null;
     setTokenMock = jest.fn();
+    httpPostMock = jest.fn().mockResolvedValue({
+      token: 'mock-token',
+      user: { id: 'user-1', nickname: 'Tester' }
+    });
 
     global.App = jest.fn((config) => {
       appConfig = config;
@@ -82,6 +87,10 @@ describe('app.js 自动登录环境配置', () => {
     jest.doMock('../utils/core/event-bus', () => {
       return class MockEventBus {};
     });
+
+    jest.doMock('../utils/http-client', () => ({
+      post: httpPostMock
+    }));
   });
 
   afterEach(() => {
@@ -97,11 +106,13 @@ describe('app.js 自动登录环境配置', () => {
     const loginSuccess = await appConfig.autoLogin();
 
     expect(loginSuccess).toBe(true);
+    expect(httpPostMock).toHaveBeenCalledWith('/api/auth/login', { code: 'mock-code' });
     expect(setTokenMock).toHaveBeenCalledWith('mock-token');
     expect(global.wx.setStorageSync).toHaveBeenCalledWith('lastUserInfo', {
       id: 'user-1',
       nickname: 'Tester'
     });
     expect(global.wx.setStorageSync).not.toHaveBeenCalledWith('ENABLE_API', 'true');
+    expect(global.wx.request).not.toHaveBeenCalled();
   });
 });
