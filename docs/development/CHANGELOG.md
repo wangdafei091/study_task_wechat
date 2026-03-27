@@ -4,6 +4,30 @@
 
 ---
 
+## [里程碑-14B] - 2026-03-27
+
+### ✅ 完成情况
+
+**文档统一**
+
+- 新增后端 REST 契约文档，统一描述 `/api/auth`、`/api/users`、`/api/tasks`、`/api/families`、`/api/stars`、`/api/rewards`、`/api/messages` 的 HTTP 契约
+- 新增项目级测试策略总览文档，统一测试分层、命令入口、覆盖率口径和手工回归原则
+- `README.md` 与 `docs/README.md` 已区分前端服务 API、后端 REST API 和测试策略入口
+- `workflow.md`、`coding_standards.md`、`services-guide.md` 已完成测试口径收敛，不再分别维护同层级的项目测试总览
+- `DOCUMENTATION_MAINTENANCE.md` 已正式吸收“后端 REST 契约”和“项目级测试策略”两类权威文档，补齐对应维护规则
+
+### 🧪 验证结果
+
+- 文档事实已与 `backend/server.js`、`backend/routes/*.js`、主要 controller 和真实集成测试交叉核对
+- 从 `README.md` 与 `docs/README.md` 均可定位到后端 REST 契约文档和测试策略总览文档
+- 现有文档中高漂移的测试命令、覆盖率和接口入口说明已收敛到权威文档
+
+### 📖 详细实施记录
+
+- [里程碑-14B：文档统一](../design/milestone-14b-documentation-unification.md)
+
+---
+
 ## [里程碑-14A] - 2026-03-27
 
 ### ✅ 完成情况

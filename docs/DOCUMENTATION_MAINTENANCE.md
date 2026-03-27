@@ -44,13 +44,16 @@
 | 信息类型 | 权威文档 | 不应该出现在 |
 |---------|---------|-------------|
 | 项目约束（不要做什么） | `CLAUDE.md` | workflow.md |
-| 服务 API 端点详细说明 | `docs/api/services-guide.md` | architecture.md、README.md |
+| 前端服务 API 端点详细说明 | `docs/api/services-guide.md` | architecture.md、README.md |
+| 后端 REST API 契约 | `docs/api/backend-rest-api.md` | services-guide.md、README.md（详细内容） |
 | 仓储 API 端点详细说明 | `docs/api/repositories.md` | services-guide.md |
 | 编码规范 | `docs/development/coding_standards.md` | CLAUDE.md |
+| 项目级测试策略 | `docs/development/testing-strategy.md` | workflow.md、coding_standards.md（完整总览） |
+| 测试编写规范 | `docs/development/coding_standards.md` | workflow.md、README.md |
+| 后端真实数据库集成测试细节 | `backend/test/README.md` | workflow.md、README.md |
 | 路线图 / 未来规划 | `docs/development/ROADMAP.md` | 所有其他文档 |
 | 已完成变更记录 | `docs/development/CHANGELOG.md` | 所有其他文档 |
 | 技术选型理由 | `docs/architecture/architecture.md` | 所有其他文档 |
-| 测试方法论 | `test/` 目录 | 其他文档 |
 | 功能详细设计 | `docs/design/*.md` | README.md（简化版） |
 | AI 编码工作流程 | `CLAUDE.md` | workflow.md（仅引用） |
 | 文档维护指南 | `docs/DOCUMENTATION_MAINTENANCE.md`（本文档） | 所有其他文档 |
@@ -168,7 +171,28 @@
 
 ---
 
-### 场景3：新增功能特性
+### 场景3：新增/修改后端 REST 接口
+
+**影响范围**：
+- 代码：`backend/routes/*.js`、`backend/controllers/*.js`
+- 文档：`docs/api/backend-rest-api.md`（必需）✅
+
+**更新步骤**：
+1. 确认路由路径、方法、认证方式和关键参数
+2. 在 `docs/api/backend-rest-api.md` 更新：
+   - 接口路径和方法
+   - 关键 query/body 字段
+   - 成功响应结构
+   - 常见错误码和状态码
+3. 如果接口变更影响测试入口或手工回归方式，再检查 `docs/development/testing-strategy.md`
+
+**不应该做的**：
+- ❌ 在 `docs/api/services-guide.md` 里补写 HTTP 契约
+- ❌ 在 `README.md` 或 `workflow.md` 里展开维护接口细节
+
+---
+
+### 场景4：新增功能特性
 
 **影响范围**：
 - 代码：新增功能
@@ -191,7 +215,7 @@
 
 ---
 
-### 场景4：修复 Bug
+### 场景5：修复 Bug
 
 **影响范围**：
 - 代码：修复 Bug
@@ -213,7 +237,7 @@
 
 ---
 
-### 场景5：功能实施过程中的 Bug 修复
+### 场景6：功能实施过程中的 Bug 修复
 
 **影响范围**：
 - `docs/design/[feature-name].md`（详细记录）✅
@@ -243,7 +267,7 @@
 
 ---
 
-### 场景6：改变技术决策
+### 场景7：改变技术决策
 
 **影响范围**：
 - 代码：架构变更
@@ -282,6 +306,7 @@
 
 - [ ] **接口一致性检查**
   - [ ] 是否需要更新 `docs/api/services-guide.md`
+  - [ ] 是否需要更新 `docs/api/backend-rest-api.md`
   - [ ] 是否需要更新 `docs/api/repositories.md`
   - [ ] 公开接口是否有完整的JSDoc注释
 
@@ -335,7 +360,7 @@
 
 ---
 
-### 场景7：新增开发陷阱
+### 场景8：新增开发陷阱
 
 **影响范围**：
 - 发现新的常见错误模式
@@ -365,9 +390,12 @@
 | 信息类型 | 正确位置 | ❌ 错误位置 |
 |---------|---------|-----------|
 | 项目约束（不要做什么） | `CLAUDE.md` | workflow.md |
-| 服务 API 端点详细说明 | `docs/api/services-guide.md` | architecture.md、README.md |
+| 前端服务 API 端点详细说明 | `docs/api/services-guide.md` | architecture.md、README.md |
+| 后端 REST API 契约 | `docs/api/backend-rest-api.md` | services-guide.md、README.md（详细内容） |
 | 仓储 API 端点详细说明 | `docs/api/repositories.md` | services-guide.md |
 | 编码规范（命名、注释） | `docs/development/coding_standards.md` | CLAUDE.md |
+| 项目级测试策略 | `docs/development/testing-strategy.md` | workflow.md、coding_standards.md（完整总览） |
+| 后端真实数据库集成测试细节 | `backend/test/README.md` | workflow.md、README.md |
 | 技术选型理由 | `docs/architecture/architecture.md` | 所有其他文档 |
 | 路线图 / 未来规划 | `docs/development/ROADMAP.md` | 所有其他文档 |
 | 已完成变更记录 | `docs/development/CHANGELOG.md` | 所有其他文档 |
@@ -406,12 +434,13 @@ grep -r "批量处理" docs/*.md
 ```markdown
 ✅ 正确：
 <!-- README.md -->
-详细的 API 文档请参阅 [docs/api/services-guide.md](./api/services-guide.md)
+前端服务 API 请参阅 [docs/api/services-guide.md](./api/services-guide.md)
+后端 REST 契约请参阅 [docs/api/backend-rest-api.md](./api/backend-rest-api.md)
 
 ❌ 错误：
 <!-- README.md -->
 ## API 接口
-（复制 services-guide.md 的所有内容）
+（复制 services-guide.md 和 backend-rest-api.md 的所有内容）
 ```
 
 ---
@@ -423,9 +452,9 @@ grep -r "批量处理" docs/*.md
 | 文档类型 | 详细程度 | 示例 |
 |---------|---------|------|
 | **README.md** | ⭐⭐ 简要（1-2句话） | "采用DDD架构设计" |
-| **docs/README.md** | ⭐⭐ 导航（链接列表） | "services-guide.md - 服务API文档" |
+| **docs/README.md** | ⭐⭐ 导航（链接列表） | "services-guide.md - 前端服务API文档" |
 | **architecture/architecture.md** | ⭐⭐⭐ 中等（为什么） | "选择DDD架构的3个理由" |
-| **services-guide.md** | ⭐⭐⭐⭐⭐ 详细（完整参考） | "方法名、参数、返回值、示例" |
+| **services-guide.md / backend-rest-api.md** | ⭐⭐⭐⭐⭐ 详细（完整参考） | "方法名、路径、参数、返回值、示例" |
 | **design/*.md** | ⭐⭐⭐⭐⭐ 极详细（实施步骤） | "步骤1.1-1.8，包含代码" |
 | **ROADMAP.md** | ⭐ 概览（未来计划） | "M11 稳定性收口，当前计划中" |
 | **CHANGELOG.md** | ⭐ 概览（已完成记录） | "新增功能A、修复Bug #1" |
@@ -537,6 +566,26 @@ git commit -m "feat: 添加任务完成功能
 - [ ] 没有与其他文档重复
 ```
 
+#### 新增/修改后端 REST 接口模板
+
+```markdown
+## 变更说明
+新增或修改了 xxx 后端接口
+
+## 文档更新
+- [ ] docs/api/backend-rest-api.md - 更新接口契约
+  - [ ] 方法与路径
+  - [ ] 认证方式
+  - [ ] 关键 query/body 字段
+  - [ ] 成功响应与关键错误码
+- [ ] 如影响测试入口或手工回归范围，更新 docs/development/testing-strategy.md
+
+## 检查清单
+- [ ] REST 契约与 route/controller/集成测试一致
+- [ ] 没有把 HTTP 契约混写到 services-guide.md
+- [ ] 入口文档只保留链接，不复制细节
+```
+
 #### 修复 Bug 模板
 
 ```markdown
@@ -578,6 +627,7 @@ git commit -m "feat: 添加任务完成功能
 |---------|-------------|-------------|
 | **新增服务** | `docs/api/services-guide.md` | - |
 | **修改服务API** | `docs/api/services-guide.md` | - |
+| **新增/修改后端 REST 接口** | `docs/api/backend-rest-api.md` | `docs/development/testing-strategy.md`（如影响测试入口或回归范围） |
 | **新增仓储** | `docs/api/repositories.md` | - |
 | **修改仓储API** | `docs/api/repositories.md` | - |
 | **新增功能特性** | `docs/design/[feature-name].md` | `docs/development/ROADMAP.md`（如涉及里程碑规划）、`docs/development/CHANGELOG.md`（完成后记录） |
@@ -586,6 +636,7 @@ git commit -m "feat: 添加任务完成功能
 | **架构调整** | `docs/architecture/architecture.md` | `CLAUDE.md`（如影响约束） |
 | **新增配置项** | `docs/development/setup.md`（如需） | README（简化版） |
 | **新增开发陷阱** | `CLAUDE.md` | - |
+| **测试入口/覆盖率口径调整** | `docs/development/testing-strategy.md` | `backend/test/README.md`（如真实 DB 操作步骤变化） |
 | **新增测试用例** | - | - |
 | **UI变更** | - | `docs/development/coding_standards.md`（如涉及规范） |
 | **新增组件** | `docs/api/components-guide.md`（如需） | - |
@@ -598,7 +649,9 @@ git commit -m "feat: 添加任务完成功能
 
 | 我想... | 应该更新 | ❌ 不要更新 |
 |---------|----------|--------------|
-| 记录新 API | `docs/api/services-guide.md` 或 `repositories.md` | `README.md`（详细API） |
+| 记录前端服务 / 仓储 API | `docs/api/services-guide.md` 或 `repositories.md` | `README.md`（详细API） |
+| 记录后端 HTTP 接口 | `docs/api/backend-rest-api.md` | `services-guide.md`、`README.md`（详细契约） |
+| 更新项目级测试策略 | `docs/development/testing-strategy.md` | `workflow.md`、`coding_standards.md`（完整总览） |
 | 说明新功能 | `docs/design/[feature-name].md` | workflow.md（详细内容） |
 | 记录技术决策 | `docs/architecture/architecture.md` | 所有其他文档 |
 | 更新路线图 / 规划 | `docs/development/ROADMAP.md` | 所有其他文档 |
@@ -621,5 +674,5 @@ git commit -m "feat: 添加任务完成功能
 
 ---
 
-**最后更新**：2026-03-25
+**最后更新**：2026-03-27
 **维护者**：项目维护团队
