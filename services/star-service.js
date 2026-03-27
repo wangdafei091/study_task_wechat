@@ -1252,6 +1252,29 @@ class StarService {
     }
   }
 
+  async hasPendingLocalStarRecords(userId = null, options = {}) {
+    try {
+      const allRecords = await this.starRecordRepository.getAll(false);
+      const excludeRecordId = options.excludeRecordId || null;
+
+      return allRecords.some(record => {
+        if (userId && record.userId !== userId) {
+          return false;
+        }
+        if (excludeRecordId && record.id === excludeRecordId) {
+          return false;
+        }
+        return record.syncedToCloud !== true;
+      });
+    } catch (error) {
+      logger.warn('StarService', '检查本地待同步星星流水失败，按存在待同步处理', {
+        userId,
+        error: error.message
+      });
+      return true;
+    }
+  }
+
   async refreshStarsFromCloud(userId = null, options = {}) {
     if (!this.enableCloudStorage) {
       return { success: false, message: '云端模式未启用' };
@@ -1272,6 +1295,23 @@ class StarService {
 
     if (!userId) {
       return { success: false, message: '刷新单用户星星数据时必须传 userId' };
+    }
+
+    const hasPendingLocalRecords = await this.hasPendingLocalStarRecords(userId);
+    if (hasPendingLocalRecords) {
+      logger.info('StarService', '检测到本地待同步星星流水，跳过云端星星覆盖', { userId });
+      const [localGroups, localRecords] = await Promise.all([
+        this.starGroupRepository.getAll(false),
+        this.starRecordRepository.getAll(false)
+      ]);
+
+      return {
+        success: true,
+        skipped: true,
+        reason: 'pending_local_records',
+        groups: localGroups.filter(group => group.userId === userId),
+        records: localRecords.filter(record => record.userId === userId)
+      };
     }
 
     const starsData = await HttpClient.get(API_CONFIG.ENDPOINTS.STARS, { userId });
@@ -1313,9 +1353,18 @@ class StarService {
       modifyTime: record.modifyTime || record.timestamp || Date.now()
     };
 
-    await HttpClient.post(API_CONFIG.ENDPOINTS.STAR_RECORDS, payload);
+    const response = await HttpClient.post(API_CONFIG.ENDPOINTS.STAR_RECORDS, payload);
     record.syncedToCloud = true;
     await this.starRecordRepository.save(record);
+
+    const hasOtherPendingLocalRecords = await this.hasPendingLocalStarRecords(record.userId, {
+      excludeRecordId: record.id
+    });
+
+    if (!hasOtherPendingLocalRecords && response && Array.isArray(response.updatedGroupsSnapshot) && record.userId) {
+      const groups = response.updatedGroupsSnapshot.map(group => this._mapCloudGroup(group));
+      await this._replaceSyncedStarGroups(record.userId, groups);
+    }
   }
 
   async _syncConsumeToCloud(points, reason, options = {}) {

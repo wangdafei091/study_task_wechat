@@ -31,7 +31,13 @@ Component({
     // 设备登录用户ID（PIN key 作用域隔离，由父页面传入）
     loginUserId: {
       type: String,
-      value: ''
+      value: '',
+      observer: function(newVal) {
+        // 确保 null 转换为空字符串，避免类型警告
+        if (newVal === null || newVal === undefined) {
+          this.setData({ loginUserId: '' });
+        }
+      }
     },
     // 是否有管理权限（由父页面根据 loginUser.role 计算）
     canManageMembers: {

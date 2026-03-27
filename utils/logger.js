@@ -39,6 +39,13 @@ try {
   console.warn('无法加载设备信息工具，将使用默认日志级别');
 }
 
+function getNodeEnvValue(name) {
+  if (typeof process === 'undefined' || !process || !process.env) {
+    return undefined;
+  }
+  return process.env[name];
+}
+
 const Logger = {
   // 当前日志级别
   _currentLevel: null,
@@ -235,6 +242,11 @@ const Logger = {
    * @returns {Boolean} 是否应该记录
    */
   _shouldLog(level) {
+    if (getNodeEnvValue('NODE_ENV') === 'test' &&
+        getNodeEnvValue('ENABLE_TEST_LOGS') !== 'true') {
+      return false;
+    }
+
     const currentLevel = this._getCurrentLevel();
     const currentValue = LogLevelMap[currentLevel.toLowerCase()] || LogLevel.INFO;
     const messageValue = LogLevelMap[level.toUpperCase()] || LogLevelMap[level.toLowerCase()] || LogLevel.INFO;

@@ -12,7 +12,8 @@ const MessageType = {
   SYSTEM: 'system',             // 系统消息
   TASK: 'task',                 // 任务相关
   REWARD: 'reward',             // 奖励相关
-  STAR: 'star'                  // 星星相关
+  STAR: 'star',                 // 星星相关
+  PENALTY: 'penalty'            // 惩罚消息
 };
 
 /**
@@ -41,6 +42,11 @@ const MessagePriority = {
   HIGH: 2      // 高优先级
 };
 
+const MessageVisibilityScope = {
+  USER: 'user',
+  FAMILY: 'family'
+};
+
 class Message {
   /**
    * 构造函数
@@ -50,6 +56,12 @@ class Message {
     // 基础信息
     this.id = data.id || `msg_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
     this.userId = data.userId || ''; // 用户ID，标识消息归属
+    this.familyId = data.familyId || null;
+    this.actorUserId = data.actorUserId || null;
+    this.subjectUserId = data.subjectUserId || null;
+    this.operationKey = data.operationKey || null;
+    this.messageEventKey = data.messageEventKey || null;
+    this.visibilityScope = data.visibilityScope || (this.userId ? MessageVisibilityScope.USER : MessageVisibilityScope.FAMILY);
     this.type = data.type || MessageType.NOTIFICATION;
     this.notificationType = data.notificationType || NotificationType.INFO;
     
@@ -66,6 +78,9 @@ class Message {
     this.isRead = data.isRead || false;
     this.isPinned = data.isPinned || false;
     this.isArchived = data.isArchived || false;
+    this.isLegacy = data.isLegacy === true;
+    this.isProvisional = data.isProvisional === true;
+    this.syncedToCloud = data.syncedToCloud === true;
     
     // 时间相关
     this.createTime = data.createTime || Date.now();
@@ -118,6 +133,14 @@ class Message {
     
     if (!this.title && !this.content) {
       errors.push('消息必须有标题或内容');
+    }
+
+    if (!this.visibilityScope || !Object.values(MessageVisibilityScope).includes(this.visibilityScope)) {
+      errors.push('消息可见范围无效');
+    }
+
+    if (this.visibilityScope === MessageVisibilityScope.USER && !this.userId) {
+      errors.push('个人消息必须指定 userId');
     }
     
     // 验证日期
@@ -301,6 +324,11 @@ class Message {
     if (!other || !(other instanceof Message)) {
       return false;
     }
+
+    if (this.messageEventKey && other.messageEventKey) {
+      return this.messageEventKey === other.messageEventKey &&
+        this.visibilityScope === other.visibilityScope;
+    }
     
     // 基本类型和通知类型必须相同
     if (this.type !== other.type || this.notificationType !== other.notificationType) {
@@ -374,5 +402,6 @@ module.exports = {
   Message,
   MessageType,
   NotificationType,
-  MessagePriority
-}; 
+  MessagePriority,
+  MessageVisibilityScope
+};

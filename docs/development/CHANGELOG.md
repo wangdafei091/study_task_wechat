@@ -4,6 +4,178 @@
 
 ---
 
+## [里程碑-14B] - 2026-03-27
+
+### ✅ 完成情况
+
+**文档统一**
+
+- 新增后端 REST 契约文档，统一描述 `/api/auth`、`/api/users`、`/api/tasks`、`/api/families`、`/api/stars`、`/api/rewards`、`/api/messages` 的 HTTP 契约
+- 新增项目级测试策略总览文档，统一测试分层、命令入口、覆盖率口径和手工回归原则
+- `README.md` 与 `docs/README.md` 已区分前端服务 API、后端 REST API 和测试策略入口
+- `workflow.md`、`coding_standards.md`、`services-guide.md` 已完成测试口径收敛，不再分别维护同层级的项目测试总览
+- `DOCUMENTATION_MAINTENANCE.md` 已正式吸收“后端 REST 契约”和“项目级测试策略”两类权威文档，补齐对应维护规则
+
+### 🧪 验证结果
+
+- 文档事实已与 `backend/server.js`、`backend/routes/*.js`、主要 controller 和真实集成测试交叉核对
+- 从 `README.md` 与 `docs/README.md` 均可定位到后端 REST 契约文档和测试策略总览文档
+- 现有文档中高漂移的测试命令、覆盖率和接口入口说明已收敛到权威文档
+
+### 📖 详细实施记录
+
+- [里程碑-14B：文档统一](../design/milestone-14b-documentation-unification.md)
+
+---
+
+## [里程碑-14A] - 2026-03-27
+
+### ✅ 完成情况
+
+**体验统一**
+
+- 首页已移除“未配置正式奖励时阻断完成任务”的旧交互，任务完成后继续正常发星并刷新奖励反馈
+- 首页奖励区已统一“无真实奖励”语义，按当前视角输出家长/孩子文案，不再把示例奖励混入正式摘要
+- 奖池页已补显式空态卡，过滤示例奖励后无正式奖励时，家长显示配置引导，孩子仅显示解释性提示
+- 共享设备场景已按当前视角解析 CTA 资格与文案，家长切到孩子视角时不再显示配置 CTA
+
+### 🧪 验证结果
+
+- 页面回归测试通过：`./node_modules/.bin/jest test/pages --runInBand`
+- 当前页面测试套件结果：`12` 个 suite、`81` 个测试全部通过
+
+### 📖 详细实施记录
+
+- [里程碑-14A：体验统一](../design/milestone-14a-experience-unification.md)
+
+## [里程碑-13] - 2026-03-26
+
+### ✅ 完成情况
+
+**质量闸门升级**
+
+- 新增 `jest.quality.config.js`，正式建立“根级稳定闸门 + 前端覆盖率闸门”的分层质量入口
+- 根 `package.json` 已补齐 `test:quality`、`test:app`、`test:pages`、`test:adapters`、`test:backend:unit`、`test:backend:integration:memory`、`test:backend:integration:real`
+- `backend/package.json` 已细分 `test:unit`、`test:integration:memory`、`test:integration:real`
+- `app.js`、`utils/app/*`、`pages/index/*`、`pages/rewards/rewards.js`、`packageMessage/pages/message/message.js`、`adapters/storage-adapter.js` 已纳入正式覆盖率闸门
+- `utils/logger.js` 完成测试环境静默开关治理，`ENABLE_TEST_LOGS=true` 时可显式恢复日志
+- `utils/api-config.js` 已补充测试环境静默控制，避免质量闸门输出被配置日志噪声污染
+
+### 🧪 验证结果
+
+- 根级稳定闸门通过：`npm test -- --runInBand`
+- 前端覆盖率闸门通过：`npm run test:quality -- --runInBand --coverageReporters=text-summary`
+- 覆盖率报告入口通过：`npm run test:coverage -- --runInBand --coverageReporters=text-summary`
+- 当前前端覆盖率汇总：
+  - statements `89.83%`
+  - branches `75.93%`
+  - functions `91.36%`
+  - lines `90%`
+
+### 📖 详细实施记录
+
+- [里程碑-13：质量闸门升级](../design/milestone-13-quality-gate-upgrade.md)
+
+## [里程碑-12] - 2026-03-26
+
+### ✅ 完成情况
+
+**前端结构治理**
+
+- `app.js` 已收敛为应用生命周期壳层，启动认证、服务初始化、登录后补偿和运行时监听拆分到 `utils/app/` 模块
+- 首页脚本已拆分为生命周期、用户上下文、刷新协调、任务动作、奖励流转五类模块，保留页面对外入口不变
+- `TaskService` 已收敛为 facade，查询、写入、重复任务、惩罚与云同步拆分到 `services/task-service/` 内部模块
+- 首页任务刷新已统一为当前视图口径，事件回流不再回退到“今天任务”的硬编码路径
+- 启动链、首页结构与服务内部拆分后，原有对外服务访问、登录语义、双环境切换方式保持兼容
+
+### 🔧 实施后补充修复
+
+- 修复历史本地任务补云时误发 `targetUserId=parent`，避免被后端按越权创建拒绝
+- 修复任务读取请求同时透传 `userId` 与 `targetUserId` 的冗余 query 组装
+
+### 🧪 验证结果
+
+- 新增结构治理相关测试：
+  - `test/app/app-bootstrap.test.js`
+  - `test/app/app-contract.test.js`
+  - `test/pages/index.page-contract.test.js`
+- 关键回归测试通过：
+  - `test/services/task-service.test.js`
+- 已完成多轮模拟器手工复核，覆盖：
+  - 创建家庭、添加孩子、历史任务迁移
+  - 家长按孩子视角读取任务与统计
+  - 孩子任务完成、发星、状态同步、任务同步
+  - 家庭聚合读取与首页刷新主路径
+
+### 📖 详细实施记录
+
+- [里程碑-12：前端结构治理](../design/milestone-12-frontend-structure-governance.md)
+
+## [里程碑-11] - 2026-03-25
+
+### ✅ 完成情况
+
+**稳定性收口**
+
+- 修复 `TaskService._generateRepeatTasks()` 在周重复任务 `startDate < today` 时破坏原始节奏的问题，恢复 M08 重复任务主测试套件稳定
+- `TaskService.resetTask()` 改为按任务归属用户查询最后兑换时间，避免多孩子场景下被无关兑换记录误锁
+- 首页取消完成前的预检查已改为调用 `rewardService.getLastExchangeTimeByUser(currentTask.userId)`，并复用 `Task.canBeUnchecked(...)` 统一锁定语义
+- `utils/api-config.js` 与 `app.js` 已改为显式配置才启用 API；空配置默认回到本地模式，保留测试/正式双环境显式切换能力
+- 移除 `autoLogin()` 成功后自动回写 `ENABLE_API=true` 的残余行为，使实现与显式配置口径完全一致
+- `Task` 模型已兼容旧字段 `pointsValidPeriod`，并清理 `_initDefaults()` 中不可达分支
+- 部署文档已统一改为显式写入 `ENABLE_API` + `API_BASE_URL` 的环境配置方式
+
+### 🧪 验证结果
+
+- 前端针对性回归测试通过：
+  - `test/services/task-service.test.js`
+  - `test/pages/index.reward-flow.test.js`
+  - `test/models/task.test.js`
+  - `test/utils/api-config.test.js`
+  - `test/services/user-service.test.js`
+  - `test/services/service-manager.test.js`
+- 前端全量 Jest 套件通过：`npm test -- --runInBand`
+
+### 📖 详细实施记录
+
+- [里程碑-11：稳定性收口](../design/milestone-11-stability-hardening.md)
+
+---
+
+## [里程碑-10] - 2026-03-22
+
+### ✅ 完成情况
+
+**消息通知云端同步 + 多孩子路由修复**
+
+- 后端新增 `messages` 表、消息模型、消息服务、控制器与路由，补齐消息域云端主链路
+- 任务与奖励云端主写路径在成功后生成消息，统一落为孩子个人流（`scope=user`）与家长家庭流（`scope=family`）双记录
+- 前端 `MessageService` 完成 `refreshMessagesFromCloud`、`getMessagesByScope`、单条已读同步、批量已读同步、删除同步
+- 前端 `MessageRepository` 支持按 scope 回灌云端消息、`legacy` 归档、stale cleanup 与 provisional 消息保留
+- 首页消息预览与消息中心页面按视角切换：家长默认读取家庭流，孩子或家长切到孩子视角时读取个人流
+- 任务/奖励本地补云链路已持久化 `pendingSyncMeta` 与删除 tombstone；云同步失败时通过 `TASK_CLOUD_SYNC_FAILED` / `REWARD_CLOUD_SYNC_FAILED` 生成本地 provisional 消息
+- 集成测试库初始化脚本 `backend/database/test-setup-modern.sql` 已补齐 `messages` 表，M10 真实集成测试可直接覆盖消息链路
+
+### 🧪 验证结果
+
+- 后端真实集成测试已补齐：
+  - `backend/test/integration/message-api-m10-real.test.js`
+- 后端真实链路已覆盖的关键场景：
+  - 任务创建/完成后同时生成孩子个人流与家长家庭流消息
+  - 家长代理读取孩子个人流时，不读取入家前旧消息
+  - `PATCH /api/messages/read-all` 仅更新当前授权范围内消息
+  - 奖励创建只进入家庭流，兑换后进入个人流与家庭流
+- 前端 `MessageService` 已补齐 M10 语义测试：
+  - `test/services/message-service.test.js`
+- 后端测试说明已纳入 M10：
+  - `backend/test/README.md`
+
+### 📖 详细实施记录
+
+- [里程碑-10：消息通知云端同步 + 多孩子路由修复](../design/milestone-10-message-notification-sync.md)
+
+---
+
 ## [里程碑-09] - 2026-03-21
 
 ### ✅ 完成情况
@@ -305,7 +477,7 @@
 |--------|------|------|
 | M08 | 云端同步完善（重复任务同步 + 冲突解决） | ✅ 已完成 |
 | M09 | 星星积分 + 奖励云端同步 | ✅ 已完成 |
-| M10 | 消息通知 + 完善优化 | 🔴 未启动 |
+| M10 | 消息通知 + 完善优化 | ✅ 已完成 |
 
 ---
 
@@ -424,4 +596,4 @@
 
 ---
 
-**最后更新**：2026-03-16
+**最后更新**：2026-03-25

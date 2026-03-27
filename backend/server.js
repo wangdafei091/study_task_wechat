@@ -61,6 +61,7 @@ app.get('/', (req, res) => {
       tasks: '/api/tasks',
       stars: '/api/stars',
       rewards: '/api/rewards',
+      messages: '/api/messages',
     },
   });
 });
@@ -72,6 +73,7 @@ app.use('/api/tasks', require('./routes/tasks'));
 app.use('/api/families', require('./routes/families'));
 app.use('/api/stars', require('./routes/stars'));
 app.use('/api/rewards', require('./routes/rewards'));
+app.use('/api/messages', require('./routes/messages'));
 
 // 404处理
 app.use(notFoundHandler);

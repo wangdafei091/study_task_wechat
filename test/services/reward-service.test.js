@@ -48,6 +48,7 @@ describe('RewardService', () => {
   let mockRewardRepository;
   let mockStarGroupRepository;
   let mockStarRecordRepository;
+  let mockStarService;
   let mockUserService;
   let mockEventBus;
   let mockConfig;
@@ -146,6 +147,15 @@ describe('RewardService', () => {
       })
     };
 
+    mockStarService = {
+      getTotalStars: jest.fn().mockResolvedValue(100),
+      refreshStarsFromCloud: jest.fn().mockResolvedValue({
+        success: true,
+        groups: [],
+        records: []
+      })
+    };
+
     // 创建 Mock 用户服务
     mockUserService = {
       getCurrentUserId: jest.fn().mockReturnValue('user_123')
@@ -166,6 +176,7 @@ describe('RewardService', () => {
       rewardRepository: mockRewardRepository,
       starGroupRepository: mockStarGroupRepository,
       starRecordRepository: mockStarRecordRepository,
+      starService: mockStarService,
       userService: mockUserService,
       eventBus: mockEventBus
     });
@@ -553,6 +564,28 @@ describe('RewardService', () => {
         expect.stringContaining('更新奖励状态失败回滚'),
         'user_123'
       );
+    });
+
+    it('云端模式下兑换奖励应优先使用StarService中的最新星星数', async () => {
+      const reward = new Reward({
+        id: 'reward_1',
+        name: '云端奖励',
+        points: 10,
+        enabled: true,
+        claimed: false
+      });
+
+      rewardService.enableCloudStorage = true;
+      mockRewardRepository.getById.mockResolvedValue(reward);
+      mockStarGroupRepository.getTotalPoints.mockResolvedValue(1);
+      mockStarService.getTotalStars.mockResolvedValue(16);
+
+      const result = await rewardService.exchangeReward('reward_1', 'user_child');
+
+      expect(result.success).toBe(true);
+      expect(mockStarService.refreshStarsFromCloud).toHaveBeenCalledWith('user_child');
+      expect(mockStarService.getTotalStars).toHaveBeenCalledWith('user_child');
+      expect(mockStarGroupRepository.deductStars).toHaveBeenCalledWith(10, 'user_child');
     });
   });
 

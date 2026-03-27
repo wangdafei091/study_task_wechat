@@ -73,13 +73,16 @@ describe('TaskService', () => {
     };
 
     mockRewardService = {
-      getLastExchangeTime: jest.fn().mockResolvedValue(null)
+      getLastExchangeTime: jest.fn().mockResolvedValue(null),
+      getLastExchangeTimeByUser: jest.fn().mockResolvedValue(null)
     };
 
     mockUserService = {
       getCurrentUserId: jest.fn().mockReturnValue('parent'),
+      getCurrentUser: jest.fn().mockReturnValue({ userId: 'parent', role: 'parent' }),
       getUserByRole: jest.fn().mockReturnValue({ id: 'child' }),
-      getLoginUserId: jest.fn().mockReturnValue(null)
+      getLoginUserId: jest.fn().mockReturnValue(null),
+      getAllUsers: jest.fn().mockReturnValue([])
     };
 
     // 创建 EventBus Mock
@@ -151,6 +154,43 @@ describe('TaskService', () => {
       mockTaskRepository.getAll.mockRejectedValue(new Error('获取失败'));
       const result = await taskService.getAllTasks();
       expect(result).toEqual([]);
+    });
+  });
+
+  describe('操作者视角解析', () => {
+    beforeEach(() => {
+      mockUserService.getLoginUser = jest.fn().mockReturnValue({
+        userId: 'parent_1',
+        role: 'parent',
+        familyId: 'fam_1'
+      });
+      mockUserService.getCurrentUser = jest.fn().mockReturnValue({
+        userId: 'child_1',
+        role: 'child',
+        familyId: 'fam_1'
+      });
+    });
+
+    it('共享设备切到孩子视角时，执行动作应优先使用 currentUser 作为操作者', () => {
+      const operatorContext = taskService._getOperatorContext('child_1', 'execute');
+
+      expect(operatorContext).toEqual({
+        actorUserId: 'child_1',
+        actorRole: 'child',
+        familyId: 'fam_1',
+        targetUserId: 'child_1'
+      });
+    });
+
+    it('共享设备切到孩子视角时，管理动作应优先使用 loginUser 作为操作者', () => {
+      const operatorContext = taskService._getOperatorContext('child_1', 'manage');
+
+      expect(operatorContext).toEqual({
+        actorUserId: 'parent_1',
+        actorRole: 'parent',
+        familyId: 'fam_1',
+        targetUserId: 'child_1'
+      });
     });
   });
 
@@ -645,13 +685,41 @@ describe('TaskService', () => {
 
       const task = new Task(taskData);
       mockTaskRepository.getById.mockResolvedValue(task);
-      mockRewardService.getLastExchangeTime.mockResolvedValue(Date.now() - 3600000); // 1小时前兑换
+      mockRewardService.getLastExchangeTimeByUser.mockResolvedValue(Date.now() - 3600000); // 1小时前兑换
 
       const result = await taskService.resetTask('task_1');
 
       expect(result.success).toBe(false);
       expect(result.message).toBe(ERROR_MESSAGES.TASK_LOCKED);
       expect(result.locked).toBe(true);
+      expect(mockRewardService.getLastExchangeTimeByUser).toHaveBeenCalledWith('parent');
+      expect(mockRewardService.getLastExchangeTime).not.toHaveBeenCalled();
+    });
+
+    it('应按任务归属用户查询最后兑换时间，避免无关用户的兑换记录误锁任务', async () => {
+      const taskData = TestDataFactory.createTask({
+        id: 'task_2',
+        userId: 'child-1',
+        status: TaskStatus.COMPLETED,
+        starAwarded: true,
+        points: 5,
+        completionTime: Date.now() - 7200000
+      });
+
+      const task = new Task(taskData);
+      mockTaskRepository.getById.mockResolvedValue(task);
+      mockRewardService.getLastExchangeTimeByUser.mockResolvedValue(null);
+      mockTaskRepository.save.mockResolvedValue({
+        ...task,
+        status: TaskStatus.PENDING,
+        starAwarded: false,
+        completionTime: null
+      });
+
+      const result = await taskService.resetTask('task_2');
+
+      expect(result.success).toBe(true);
+      expect(mockRewardService.getLastExchangeTimeByUser).toHaveBeenCalledWith('child-1');
     });
 
     it('重置失败时应该捕获异常', async () => {
@@ -1097,6 +1165,23 @@ describe('TaskService', () => {
       expect(result.totalTasks).toBe(1);
       expect(mockTaskRepository.getAll).toHaveBeenCalled();
       expect(mockTaskRepository.getTasksByDateRange).not.toHaveBeenCalled();
+    });
+
+    it('无日期范围但传入userId时应该按目标用户统计', async () => {
+      const tasks = [
+        TestDataFactory.createTask({ id: 'task_1', userId: 'child_1', type: TaskType.HABIT, status: TaskStatus.COMPLETED }),
+        TestDataFactory.createTask({ id: 'task_2', userId: 'child_1', type: TaskType.STUDY, status: TaskStatus.PENDING })
+      ];
+
+      const getTasksByScopeSpy = jest.spyOn(taskService, 'getTasksByScope').mockResolvedValue(tasks);
+
+      const result = await taskService.getTaskStatistics({}, { userId: 'child_1' });
+
+      expect(getTasksByScopeSpy).toHaveBeenCalledWith({ userId: 'child_1' });
+      expect(result.totalTasks).toBe(2);
+      expect(result.completedTasks).toBe(1);
+
+      getTasksByScopeSpy.mockRestore();
     });
 
     it('应该计算类型完成率', async () => {
@@ -1578,6 +1663,118 @@ describe('TaskService', () => {
     });
   });
 
+  describe('M12 - _syncTaskToCloud 历史占位 userId 兼容', () => {
+    beforeEach(() => {
+      taskService.enableCloudStorage = true;
+      taskService._markTaskSynced = jest.fn().mockResolvedValue(true);
+      taskService.userService = {
+        getLoginUserId: jest.fn().mockReturnValue('parent_real'),
+        getCurrentUser: jest.fn().mockReturnValue({ userId: 'parent_real', role: 'parent' }),
+        getAllUsers: jest.fn().mockReturnValue([
+          { userId: 'parent_real', role: 'parent' },
+          { userId: 'child_real', role: 'child' }
+        ])
+      };
+      HttpClient.post = jest.fn().mockResolvedValue({ success: true });
+    });
+
+    afterEach(() => {
+      taskService.enableCloudStorage = false;
+    });
+
+    it('历史 parent 占位任务补云时不应携带 targetUserId=parent', async () => {
+      const task = new Task(TestDataFactory.createTask({
+        id: 'legacy_parent_task',
+        userId: 'parent'
+      }));
+      task.pendingSyncMeta = {
+        action: 'create',
+        modifyTime: 1001,
+        operationKey: 'op_1001',
+        operatorUserId: 'parent_real',
+        operatorRole: 'parent',
+        familyId: 'fam_1',
+        targetUserId: 'parent'
+      };
+
+      await taskService._syncTaskToCloud(task);
+
+      const payload = HttpClient.post.mock.calls[0][1];
+      expect(payload.targetUserId).toBeUndefined();
+      expect(task.userId).toBe('parent_real');
+      expect(taskService._markTaskSynced).toHaveBeenCalledWith(task, { modifyTime: 1001 });
+    });
+
+    it('真实孩子任务补云时应保留 targetUserId', async () => {
+      const task = new Task(TestDataFactory.createTask({
+        id: 'child_task',
+        userId: 'child_real'
+      }));
+      task.pendingSyncMeta = {
+        action: 'create',
+        modifyTime: 1002,
+        operationKey: 'op_1002',
+        operatorUserId: 'parent_real',
+        operatorRole: 'parent',
+        familyId: 'fam_1',
+        targetUserId: 'child_real'
+      };
+
+      await taskService._syncTaskToCloud(task);
+
+      const payload = HttpClient.post.mock.calls[0][1];
+      expect(payload.targetUserId).toBe('child_real');
+    });
+
+    it('历史 child 占位任务在单孩子家庭中应映射到真实孩子ID', async () => {
+      const task = new Task(TestDataFactory.createTask({
+        id: 'legacy_child_task',
+        userId: 'child'
+      }));
+      task.pendingSyncMeta = {
+        action: 'create',
+        modifyTime: 1003,
+        operationKey: 'op_1003',
+        operatorUserId: 'parent_real',
+        operatorRole: 'parent',
+        familyId: 'fam_1',
+        targetUserId: 'child'
+      };
+
+      await taskService._syncTaskToCloud(task);
+
+      const payload = HttpClient.post.mock.calls[0][1];
+      expect(task.userId).toBe('child_real');
+      expect(payload.targetUserId).toBe('child_real');
+    });
+
+    it('无法解析的历史 child 占位任务不应错误上云', async () => {
+      taskService.userService.getAllUsers.mockReturnValue([
+        { userId: 'parent_real', role: 'parent' },
+        { userId: 'child_a', role: 'child' },
+        { userId: 'child_b', role: 'child' }
+      ]);
+      taskService.userService.getCurrentUser.mockReturnValue({ userId: 'parent_real', role: 'parent' });
+
+      const task = new Task(TestDataFactory.createTask({
+        id: 'legacy_child_ambiguous',
+        userId: 'child'
+      }));
+      task.pendingSyncMeta = {
+        action: 'create',
+        modifyTime: 1004,
+        operationKey: 'op_1004',
+        operatorUserId: 'parent_real',
+        operatorRole: 'parent',
+        familyId: 'fam_1',
+        targetUserId: 'child'
+      };
+
+      await expect(taskService._syncTaskToCloud(task)).rejects.toThrow('历史任务归属未映射');
+      expect(HttpClient.post).not.toHaveBeenCalled();
+    });
+  });
+
   // ============================================================
   // M09：resetTask 跨设备放开测试
   // ============================================================
@@ -1701,6 +1898,22 @@ describe('TaskService', () => {
       const result = await taskService._generateRepeatTasks(parentTask);
 
       expect(result.length).toBeGreaterThan(0);
+    });
+
+    it('开始日期早于今天的每周重复任务应保留原始周期，只生成未来对齐实例', async () => {
+      HttpClient.post = jest.fn().mockResolvedValue({ taskId: 'x', status: 0 });
+
+      const parentTask = new Task(TestDataFactory.createTask({
+        id: 'parent_3b',
+        userId: 'u1',
+        date: '2026-03-17',
+        repeat: { type: 'weekly', startDate: '2026-03-17', endDate: '2026-03-31' }
+      }));
+
+      const result = await taskService._generateRepeatTasks(parentTask);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].date).toBe('2026-03-31');
     });
 
     it('_createRepeatTaskInstance 应重置 syncedToCloud 为 false', () => {
@@ -1938,6 +2151,17 @@ describe('TaskService', () => {
       taskService.userService = { getLoginUserId: jest.fn().mockReturnValue('u1') };
       await taskService._fetchTasksFromCloud('child1');
       expect(taskService._cleanupStaleTasks).not.toHaveBeenCalled();
+    });
+
+    it('按指定孩子读取任务时不应重复透传 userId 查询参数', async () => {
+      taskService.userService = { getLoginUserId: jest.fn().mockReturnValue('u1') };
+
+      await taskService._fetchTasksFromCloud('child1', { userId: 'child1', date: '2026-03-19' });
+
+      expect(HttpClient.get).toHaveBeenCalledWith('/api/tasks', {
+        date: '2026-03-19',
+        targetUserId: 'child1'
+      });
     });
   });
 

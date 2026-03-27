@@ -10,6 +10,13 @@ function getNodeEnv(name) {
   return process.env[name];
 }
 
+function shouldLogConfig() {
+  return !(
+    getNodeEnv('NODE_ENV') === 'test' &&
+    getNodeEnv('ENABLE_TEST_LOGS') !== 'true'
+  );
+}
+
 // 支持微信小程序环境配置
 function getWechatStorage(key) {
   if (typeof wx === 'undefined' || !wx) {
@@ -27,38 +34,50 @@ function getWechatStorage(key) {
 const enableApiEnv = getNodeEnv('ENABLE_API') || getWechatStorage('ENABLE_API');
 const apiBaseUrlEnv = getNodeEnv('API_BASE_URL') || getWechatStorage('API_BASE_URL');
 
-// 🆕 微信小程序环境：如果没有配置，默认使用HTTPS地址
+// 微信小程序环境：显式配置优先，未配置时回落本地模式
 let finalEnableApi = enableApiEnv;
 let finalBaseUrl = apiBaseUrlEnv;
 
 if (typeof wx !== 'undefined') {
-  // 只有在未明确设置时才启用API，保留用户的明确配置（包括'false'）
+  // 未显式配置时保持本地模式，不再自动启用测试后端
   if (enableApiEnv === undefined || enableApiEnv === null || enableApiEnv === '') {
-    finalEnableApi = 'true';
-    console.log('✅ 微信小程序环境：默认启用API模式');
+    finalEnableApi = 'false';
+    if (shouldLogConfig()) {
+      console.log('ℹ️ 微信小程序环境：未配置 ENABLE_API，默认使用本地模式');
+    }
   } else {
-    console.log('✅ 保留用户配置的API模式:', enableApiEnv);
+    if (shouldLogConfig()) {
+      console.log('✅ 保留用户配置的API模式:', enableApiEnv);
+    }
   }
 
-  // 🔧 配置：默认使用 HTTPS 地址，可通过环境变量或小程序存储覆盖
+  // 未显式配置地址时，不再自动落到测试环境地址
   if (!apiBaseUrlEnv || apiBaseUrlEnv === '') {
-    finalBaseUrl = 'https://api.todoceo.xyz';
-    console.log('✅ 微信小程序环境：使用默认HTTPS地址');
+    finalBaseUrl = '';
+    if (shouldLogConfig()) {
+      console.log('ℹ️ 微信小程序环境：未配置 API_BASE_URL');
+    }
   } else {
-    console.log('✅ 保留用户配置的API地址:', apiBaseUrlEnv);
+    if (shouldLogConfig()) {
+      console.log('✅ 保留用户配置的API地址:', apiBaseUrlEnv);
+    }
   }
 }
 
+const apiExplicitlyEnabled = finalEnableApi === 'true' || finalEnableApi === true;
+const hasExplicitBaseUrl = typeof finalBaseUrl === 'string' && finalBaseUrl.trim() !== '';
+const finalApiEnabled = apiExplicitlyEnabled && hasExplicitBaseUrl;
+
 const API_CONFIG = {
   // 基础配置
-  ENABLE_API: finalEnableApi === 'true' || finalEnableApi === true,  // 支持字符串和布尔值，默认关闭
-  BASE_URL: finalBaseUrl || 'https://api.todoceo.xyz',  // 运行时安全读取环境变量
+  ENABLE_API: finalApiEnabled,
+  BASE_URL: hasExplicitBaseUrl ? finalBaseUrl : '',
   TIMEOUT: 10000, // 10秒超时
   RETRY_COUNT: 2, // 重试2次
 
   // 🆕 云端存储模式标识 - 添加缺失的属性
-  useCloudStorage: finalEnableApi === 'true' || finalEnableApi === true,
-  enableCloudStorage: finalEnableApi === 'true' || finalEnableApi === true, // 添加useCloudStorage和enableCloudStorage属性
+  useCloudStorage: finalApiEnabled,
+  enableCloudStorage: finalApiEnabled, // 添加useCloudStorage和enableCloudStorage属性
 
   // API端点
   ENDPOINTS: {
@@ -91,6 +110,10 @@ const API_CONFIG = {
     REWARDS: '/api/rewards',
     REWARD_BY_ID: '/api/rewards/{rewardId}',
     REWARD_EXCHANGE: '/api/rewards/{rewardId}/exchange',
+    MESSAGES: '/api/messages',
+    MESSAGE_BY_ID: '/api/messages/{messageId}',
+    MESSAGE_READ: '/api/messages/{messageId}/read',
+    MESSAGE_READ_ALL: '/api/messages/read-all',
 
     // 用户昵称修改
     USER_NICKNAME: '/api/users/{userId}/nickname',

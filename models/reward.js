@@ -58,6 +58,7 @@ class Reward {
     this.modifyTime = data.modifyTime || Date.now();
     this.familyId = data.familyId || null;
     this.exchangeUserId = data.exchangeUserId || null;
+    this.pendingSyncMeta = data.pendingSyncMeta ? { ...data.pendingSyncMeta } : null;
   }
   
   /**
@@ -194,7 +195,10 @@ class Reward {
    */
   clone(overrides = {}, generateNewId = true) {
     // 准备基础数据
-    const baseData = { ...this };
+    const baseData = {
+      ...this,
+      pendingSyncMeta: this.pendingSyncMeta ? { ...this.pendingSyncMeta } : null
+    };
     
     // 如果需要生成新ID
     if (generateNewId) {

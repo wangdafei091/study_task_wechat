@@ -42,12 +42,15 @@
 - [架构概览](architecture/architecture.md) - 技术选型和架构决策、DDD分层实现详解
 
 ### API 参考
-- [服务 API](api/services-guide.md) - 服务层 API 参考
+- [服务 API](api/services-guide.md) - 前端服务层 API 参考
+- [后端 REST 契约](api/backend-rest-api.md) - 后端 HTTP/REST 接口契约
 - [仓储 API](api/repositories.md) - 仓储层 API 参考
 
 ### 开发指南
 - [编码规范](development/coding_standards.md) - 命名、代码风格、UI规范、日志规范
 - [开发流程](development/workflow.md) - 功能开发流程、文档维护规范
+- [测试策略总览](development/testing-strategy.md) - 测试分层、命令入口、覆盖率口径与手工回归原则
+- [项目路线图](development/ROADMAP.md) - 未来里程碑、阶段状态与目标摘要
 - [GitHub 协作](development/GITHUB_WORKFLOW.md) - 团队协作和 PR 流程
 
 ### 设计文档
@@ -68,7 +71,8 @@
 3. 提交审核
 
 ### 我想编写代码
-- 查 API：[服务 API](api/services-guide.md) 或 [仓储 API](api/repositories.md)
+- 查前端 API：[服务 API](api/services-guide.md) 或 [仓储 API](api/repositories.md)
+- 查后端 HTTP 接口：[后端 REST 契约](api/backend-rest-api.md)
 - 查规范：[编码规范](development/coding_standards.md)
 
 ### 我遇到问题
@@ -81,6 +85,10 @@
 ### 我想提交 PR
 - 阅读：[GitHub 协作](development/GITHUB_WORKFLOW.md)
 
+### 我想跑测试或看测试范围
+- 阅读：[测试策略总览](development/testing-strategy.md)
+- 如需真实数据库集成测试准备，阅读：[backend/test/README.md](../backend/test/README.md)
+
 ---
 
 ## 🔧 快速命令参考
@@ -89,14 +97,13 @@
 
 ### 开发相关
 ```bash
-npm test                          # 运行前端单元测试（稳定质量闸门）
-npm run test:models             # 运行模型测试
-npm run test:services            # 运行服务测试
-npm run test:coverage           # 生成覆盖率报告
-
-# 后端集成测试（需配置 backend/.env.test 连接远程 DB）
-cd backend && NODE_ENV=test npx jest test/integration --runInBand
+npm test                        # 根级稳定闸门
+npm run test:quality           # 前端覆盖率闸门
+npm run test:backend:unit      # 后端单元测试
+npm run test:backend:integration:memory   # 后端轻量集成测试
 ```
+
+更完整的测试入口和适用场景请参阅：[测试策略总览](development/testing-strategy.md)
 
 ---
 
@@ -108,11 +115,16 @@ cd backend && NODE_ENV=test npx jest test/integration --runInBand
 - [ ] 更新 [服务 API](api/services-guide.md)
 - [ ] 更新 [编码规范](development/coding_standards.md)（如涉及架构）
 
+### 新增/修改后端 REST 接口
+- [ ] 更新 [后端 REST 契约](api/backend-rest-api.md)
+- [ ] 如影响测试入口或回归范围，更新 [测试策略总览](development/testing-strategy.md)
+
 ### 新增/修改仓储
 - [ ] 更新 [仓储 API](api/repositories.md)
 
 ### 新增功能
-- [ ] 更新 [开发流程](development/CHANGELOG.md)（如果存在）
+- [ ] 如涉及未来里程碑或阶段状态，更新 [项目路线图](development/ROADMAP.md)
+- [ ] 功能完成后，更新 [更新日志](development/CHANGELOG.md)
 - [ ] 创建/更新 [设计文档](design/)
 
 ### 修复 Bug
@@ -157,11 +169,13 @@ git commit -m "feat: 添加新服务
 
 - 功能开发问题：查阅 [开发流程](development/workflow.md)
 - 编码规范问题：查阅 [编码规范](development/coding_standards.md)
-- API 使用问题：查阅 [服务 API](api/services-guide.md) 或 [仓储 API](api/repositories.md)
+- 前端内部 API：查阅 [服务 API](api/services-guide.md) 或 [仓储 API](api/repositories.md)
+- 后端 HTTP 接口：查阅 [后端 REST 契约](api/backend-rest-api.md)
+- 测试策略问题：查阅 [测试策略总览](development/testing-strategy.md)
 - GPT5 Codex 协作约束：查阅 [GPT5 Codex 工作指南](../AGENTS.md)
 - 常见陷阱：查阅 [Claude Code 工作指南](../CLAUDE.md) 的"常见陷阱"部分
 
 ---
 
-**最后更新**：2026-03-06
+**最后更新**：2026-03-27
 **维护者**：开发团队

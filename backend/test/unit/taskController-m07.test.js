@@ -171,7 +171,17 @@ describe('DELETE /api/tasks/:taskId', () => {
       .delete('/api/tasks/task_001')
       .set('Authorization', token(CHILD));
     expect(res.status).toBe(200);
-    expect(taskService.softDeleteTask).toHaveBeenCalledWith('task_001');
+    expect(taskService.softDeleteTask).toHaveBeenCalledWith(
+      'task_001',
+      expect.objectContaining({
+        actorUserId: 'child_1',
+        actorRole: 'child',
+        familyId: 'fam_1',
+        subjectUserId: 'child_1',
+        operationKey: expect.any(String),
+        modifyTime: expect.any(Number),
+      })
+    );
   });
 
   it('家长可以代孩子删除任务', async () => {
@@ -209,7 +219,23 @@ describe('PATCH /api/tasks/:taskId/status', () => {
       .set('Authorization', token(CHILD))
       .send({ status: 1, starAwarded: true });
     expect(res.status).toBe(200);
-    expect(taskService.updateTaskStatus).toHaveBeenCalledWith('task_001', { status: 1, starAwarded: true });
+    expect(taskService.updateTaskStatus).toHaveBeenCalledWith(
+      'task_001',
+      {
+        status: 1,
+        starAwarded: true,
+        modifyTime: undefined,
+        operationKey: undefined,
+      },
+      expect.objectContaining({
+        actorUserId: 'child_1',
+        actorRole: 'child',
+        familyId: 'fam_1',
+        subjectUserId: 'child_1',
+        operationKey: expect.any(String),
+        modifyTime: expect.any(Number),
+      })
+    );
   });
 
   it('status=0 更新成功（重置）', async () => {
@@ -261,5 +287,64 @@ describe('PATCH /api/tasks/:taskId/status', () => {
       .set('Authorization', token(PARENT))
       .send({ status: 1, starAwarded: true });
     expect(res.status).toBe(200);
+  });
+
+  it('家长共享设备切到孩子视角时，应允许将操作者解析为孩子', async () => {
+    const task = makeTask();
+    taskService.getTaskById = jest.fn().mockResolvedValue(task);
+    familyService.getUserFamilyAndRole = jest.fn().mockResolvedValue({ familyId: 'fam_1', role: 'child' });
+    taskService.updateTaskStatus = jest.fn().mockResolvedValue(task);
+
+    const res = await request(app)
+      .patch('/api/tasks/task_001/status')
+      .set('Authorization', token(PARENT))
+      .send({
+        status: 1,
+        starAwarded: true,
+        operatorContext: {
+          actorUserId: 'child_1',
+          actorRole: 'child'
+        }
+      });
+
+    expect(res.status).toBe(200);
+    expect(taskService.updateTaskStatus).toHaveBeenCalledWith(
+      'task_001',
+      expect.any(Object),
+      expect.objectContaining({
+        actorUserId: 'child_1',
+        actorRole: 'child',
+        subjectUserId: 'child_1'
+      })
+    );
+  });
+
+  it('家长不能把其他孩子伪装成当前任务的操作者', async () => {
+    const task = makeTask();
+    taskService.getTaskById = jest.fn().mockResolvedValue(task);
+    taskService.updateTaskStatus = jest.fn().mockResolvedValue(task);
+
+    const res = await request(app)
+      .patch('/api/tasks/task_001/status')
+      .set('Authorization', token(PARENT))
+      .send({
+        status: 1,
+        starAwarded: true,
+        operatorContext: {
+          actorUserId: 'child_2',
+          actorRole: 'child'
+        }
+      });
+
+    expect(res.status).toBe(200);
+    expect(taskService.updateTaskStatus).toHaveBeenCalledWith(
+      'task_001',
+      expect.any(Object),
+      expect.objectContaining({
+        actorUserId: 'parent_1',
+        actorRole: 'parent',
+        subjectUserId: 'child_1'
+      })
+    );
   });
 });

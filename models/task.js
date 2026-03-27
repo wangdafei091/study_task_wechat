@@ -69,7 +69,7 @@ class Task {
     
     // 星星奖励
     this.points = data.points || 0;
-    this.pointsExpiry = data.pointsExpiry || StarExpiryType.PERMANENT;
+    this.pointsExpiry = data.pointsExpiry || data.pointsValidPeriod || StarExpiryType.PERMANENT;
     this.pointsExpiryDate = data.pointsExpiryDate || '';
     this.starAwarded = data.starAwarded || false;
     
@@ -84,6 +84,7 @@ class Task {
     this.tags = data.tags || [];
     // 云端同步状态：true 表示曾经成功同步到云端，用于安全清理陈旧任务
     this.syncedToCloud = data.syncedToCloud || false;
+    this.pendingSyncMeta = data.pendingSyncMeta ? { ...data.pendingSyncMeta } : null;
     
     // 初始化默认值
     this._initDefaults();
@@ -114,11 +115,6 @@ class Task {
     // 确保有积分有效期字段
     if (!this.pointsExpiry) {
       this.pointsExpiry = StarExpiryType.PERMANENT;
-    }
-    
-    // 兼容旧数据，将pointsValidPeriod转换为pointsExpiry
-    if (!this.pointsExpiry && data && data.pointsValidPeriod) {
-      this.pointsExpiry = data.pointsValidPeriod;
     }
   }
   
@@ -390,7 +386,9 @@ class Task {
       hasNoEndDate: this.hasNoEndDate,
       createTime: this.createTime,
       modifyTime: this.modifyTime,
-      tags: this.tags ? [...this.tags] : []
+      tags: this.tags ? [...this.tags] : [],
+      syncedToCloud: this.syncedToCloud === true,
+      pendingSyncMeta: this.pendingSyncMeta ? { ...this.pendingSyncMeta } : null
     };
     
     if (generateNewId) {

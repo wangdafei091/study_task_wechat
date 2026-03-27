@@ -100,7 +100,10 @@ const configService = serviceManager.get('configService');
 ##### `resetTask(taskId, userId = null)`
 重置任务状态
 - **参数**: `taskId` - 任务ID, `userId` - 可选的用户ID
-- **返回**: `{ success: boolean, task?: Task, starDeduction?: number, message?: string }`
+- **返回**: `{ success: boolean, task?: Task, starDeduction?: number, message?: string, locked?: boolean }`
+- **说明**:
+  - 奖励锁定判断按任务归属用户执行，而不是按全局最后兑换时间执行
+  - 若任务在对应用户最近一次奖励兑换之前完成，则返回 `locked=true`，且不会执行状态回退或扣星
 
 ##### `updateTaskStatus(taskId, status, userId = null)`
 更新任务状态
@@ -465,20 +468,30 @@ const configService = serviceManager.get('configService');
 获取指定用户最后一次兑换时间
 - **参数**: `userId` - 用户 ID
 - **返回**: `Promise<number|null>` - 时间戳；无记录或出错时返回 `null`
-- **说明**: 用于首页进度条按 `loginUserId` 计算兑换保护边界
+- **说明**:
+  - 用于首页按目标用户计算奖励兑换保护边界
+  - `TaskService.resetTask()` 与首页取消完成前预检查都复用此方法，确保锁定语义一致
+  - 不再用 `getLastExchangeTime()` 替代此用户级判断
 
 ---
 
 ## MessageService - 消息通知服务
 
-消息服务处理系统消息的创建、查询、标记已读等功能。
+消息服务负责消息主流读取、家长/孩子视角 scope 解析、本地缓存回灌，以及云端消息状态同步。M10 起，任务/奖励正式消息以云端为权威来源，前端仅负责读取、状态同步和失败时的 provisional 兜底。
 
 ### 核心功能
-- 消息CRUD操作
-- 消息类型管理
-- 批量操作
-- 过期处理
-- 消息统计
+- 家长家庭流 / 孩子个人流作用域解析
+- 云端消息全量刷新与本地 stale cleanup
+- 单条已读、全部已读、删除的云端同步
+- provisional 消息保留与 legacy 消息归档
+- 兼容旧接口 `getAllMessages()` / `getUnreadCount()`
+
+### 作用域规则（M10）
+
+- 家长处于家长视角时，默认读取 `scope='family'`
+- 家长切到孩子视角时，默认读取 `scope='user'` 且 `userId=currentUserId`
+- 孩子设备默认读取 `scope='user'` 且 `userId=currentUserId/loginUserId`
+- 无登录上下文时回退到本地 `scope='all'`
 
 ### API 方法
 
@@ -490,48 +503,78 @@ const configService = serviceManager.get('configService');
   - `content` - 消息内容字符串
   - `type` - 消息类型（默认 'system'）
   - `options` - 可选配置 `{ title, priority, userId, subType, expiryDate }`
-- **返回**: `{ success: boolean, message?: Message, messageId?: string }`
+- **返回**: `Promise<Message>`
+- **说明**: 主要用于本地系统类消息；任务/奖励正式消息在云端模式下由后端主写路径生成
 
-##### `deleteMessage(messageId)`
-删除消息
-- **参数**: `messageId` - 消息ID
-- **返回**: `{ success: boolean, message?: string }`
+##### `createTaskMessage(task, type, options = {})`
+创建任务消息（兼容本地路径）
+- **参数**:
+  - `task` - 任务对象
+  - `type` - 通知类型
+  - `options` - 附加选项，如 `{ priority, operatorUserId }`
+- **返回**: `Promise<Message|null>`
+- **说明**: M10 云端模式下，任务/奖励正式消息不再由前端直接持久化；该方法主要用于兼容旧本地路径或非云端消息类型
 
 ---
 
 #### 消息查询
 
-##### `getAllMessages()`
-获取所有消息列表
-- **返回**: `{ success: boolean, messages: Message[], total?: number, message?: string }`
+##### `refreshMessagesFromCloud(userId = null, options = {})`
+按 scope 从云端拉取消息并回灌本地
+- **参数**:
+  - `userId` - `scope='user'` 时的目标用户 ID；家长家庭流可为空
+  - `options.scope` - `'user' | 'family'`
+- **返回**: `Promise<Message[]>`
+- **说明**: 云端模式下会先读取 `/api/messages`，再执行 `archiveLegacyMessages`、`replaceSyncedMessagesByScope` 与 `cleanupStaleMessages`
 
-##### `getUnreadCount()`
+##### `getMessagesByScope(options = {})`
+按 scope 获取消息，必要时先刷新云端
+- **参数**:
+  - `options.scope` - `'user' | 'family' | 'all'`
+  - `options.userId` - 个人流目标用户 ID
+  - `options.requireFresh` - 为 `true` 时先调用 `refreshMessagesFromCloud`
+- **返回**: `Promise<Message[]>`
+
+##### `getAllMessages(options = {})`
+兼容接口，内部委托到 `getMessagesByScope`
+- **参数**: `options` - 同 `getMessagesByScope`
+- **返回**: `Promise<Message[]>`
+
+##### `getUnreadCount(options = {})`
 获取未读消息数量
-- **返回**: `{ success: boolean, count: number, message?: string }`
+- **参数**: `options` - 同 `getMessagesByScope`
+- **返回**: `Promise<number>`
+- **说明**: 有登录上下文时按当前主消息流统计；无上下文时回退本地仓储 `getUnreadCount`
 
 ---
 
 #### 消息操作
 
-##### `markMessageAsRead(messageId)`
+##### `markMessageAsRead(messageId, options = {})`
 标记消息为已读
-- **参数**: `messageId` - 消息ID
-- **返回**: `{ success: boolean, message?: string }`
+- **参数**:
+  - `messageId` - 消息ID
+  - `options` - 可选 scope 参数
+- **返回**: `Promise<boolean>`
+- **说明**: 对正式云端消息会先调用 `PATCH /api/messages/:messageId/read`；若云端失败，本地已读状态不会先落库
 
-##### `markAllMessagesAsRead()`
-标记所有消息为已读
-- **返回**: `{ success: boolean, affectedCount: number, message?: string }`
+##### `markAllMessagesAsRead(options = {})`
+标记当前 scope 下的所有消息为已读
+- **参数**:
+  - `options.scope` - `'user' | 'family'`
+  - `options.userId` - `scope='user'` 时可选
+- **返回**: `Promise<number>`
+- **说明**: 对正式云端消息会先调用 `PATCH /api/messages/read-all`；若云端失败，本地不会先批量改已读
 
+##### `deleteMessage(messageId, options = {})`
+删除消息
+- **参数**:
+  - `messageId` - 消息ID
+  - `options` - 可选 scope 参数
+- **返回**: `Promise<boolean>`
+- **说明**: 对正式云端消息会先调用 `DELETE /api/messages/:messageId`；若云端失败，本地不会先删除
 
 ---
-
-#### 消息清理
-
-##### `_cleanExpiredMessages(expiryDays = 30)`
-清理过期消息（内部方法）
-- **参数**: `expiryDays` - 过期天数，默认30天
-- **返回**: `Promise<boolean>`
-
 ---
 
 ## ValidationService - 表单验证服务
@@ -932,55 +975,34 @@ async function complexBusinessFlow() {
 
 ## 服务测试
 
+### 文档边界
+
+- 本章节只说明服务层测试相关的事实来源、Mock 策略和可测试性设计
+- 项目级测试分层、命令入口、覆盖率口径请参阅 [testing-strategy.md](../development/testing-strategy.md)
+- 后端真实数据库集成测试请参阅 [backend/test/README.md](../../backend/test/README.md)
+
 ### 测试文件
 
 所有核心服务都有对应的单元测试文件，测试文件位于 `test/services/` 目录：
 
-| 服务 | 测试文件 | 测试用例 | 覆盖率 |
-|------|---------|---------|--------|
-| **TaskService** | test/services/task-service.test.js | 61 个 | 54.53% |
-| **StarService** | test/services/star-service.test.js | 65 个 | 23.61% |
-| **RewardService** | test/services/reward-service.test.js | 56 个 | 79.08% |
-| **MessageService** | test/services/message-service.test.js | 49 个 | 58.31% |
-| **UserService** | test/services/user-service.test.js | 48 个 | - |
-| **ValidationService** | test/services/validation-service.test.js | 60 个 | - |
+| 服务 | 测试文件 |
+|------|---------|
+| **TaskService** | `test/services/task-service.test.js` |
+| **StarService** | `test/services/star-service.test.js` |
+| **RewardService** | `test/services/reward-service.test.js` |
+| **MessageService** | `test/services/message-service.test.js` |
+| **UserService** | `test/services/user-service.test.js` |
+| **ValidationService** | `test/services/validation-service.test.js` |
 
 ### 运行测试
 
 ```bash
-# 运行前端单元测试（稳定质量闸门）
-npm test
-
 # 运行特定服务测试
 npm run test:services
 
 # 运行单个服务测试
 npm test test/services/task-service.test.js
-
-# 生成覆盖率报告
-npm run test:coverage
 ```
-
-### 测试覆盖情况
-
-**总体覆盖率**：
-- 测试套件：9 个
-- 测试用例：399 个（1221个通过，部分失败）
-- 整体覆盖率：30.59% 语句
-- 执行时间：约1.5秒
-
-**服务覆盖详情**：
-
-| 指标 | TaskService | StarService | RewardService | MessageService |
-|------|-----------|-----------|--------------|--------------|
-| **语句覆盖率** | 54.53% | 23.61% | 79.08% | 58.31% |
-| **分支覆盖率** | 55.5% | - | 73.46% | 50.88% |
-| **函数覆盖率** | 59.8% | - | 86.11% | 62.5% |
-| **行覆盖率** | 55.2% | - | 79.19% | 59.22% |
-
-**新增服务测试**：
-- **UserService** (48个测试用例) - 用户管理、角色切换、权限控制
-- **ValidationService** (60个测试用例) - 表单验证、数据组装
 
 ### 测试覆盖范围
 
@@ -1064,10 +1086,15 @@ const taskService = new TaskService({
 
 ### 云端任务服务
 
-任务服务支持云端存储模式，可通过 `ENABLE_API` 配置开启。
+任务服务支持云端存储模式，但只有在显式配置 `ENABLE_API=true` 且显式提供 `API_BASE_URL` 时才会启用。
 
 #### API 配置
 云端API通过 `API_CONFIG` 进行配置，详见 `utils/api-config.js`。
+
+#### 启用条件
+- 未配置 `ENABLE_API` / `API_BASE_URL`：保持本地模式
+- 配置 `ENABLE_API=true` 但未配置 `API_BASE_URL`：仍保持本地模式
+- 配置 `ENABLE_API=true` 且配置有效 `API_BASE_URL`：启用云端模式
 
 #### 云端存储模式
 系统支持三种存储模式（优先级从高到低）：
@@ -1079,5 +1106,5 @@ const taskService = new TaskService({
 
 ---
 
-**最后更新**：2026-03-11
+**最后更新**：2026-03-27
 **维护者**：项目维护团队

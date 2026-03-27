@@ -57,13 +57,16 @@
 | 代码变更类型 | 必须更新文档 | 不应该更新 |
 |-------------|-------------|-------------|
 | **新增/修改服务/仓储** | `docs/api/services-guide.md` 或 `repositories.md` | README（详细内容） |
-| **新增功能** | `docs/design/[feature-name].md`、`docs/development/CHANGELOG.md`（简要记录） | workflow.md（详细内容） |
+| **新增/修改后端 REST 接口** | `docs/api/backend-rest-api.md` | README、services-guide.md（详细内容） |
+| **新增功能** | `docs/design/[feature-name].md`、`docs/development/CHANGELOG.md`（完成后简要记录） | workflow.md（详细内容） |
 | **修复常见问题Bug** | `docs/development/troubleshooting.md` | 其他文档（详细内容） |
 | **架构调整** | `docs/architecture/architecture.md` | workflow.md（详细内容） |
 | **发现新陷阱** | `CLAUDE.md` 的"常见陷阱"部分 | workflow.md（详细内容） |
 
 **检查清单**：
+- [ ] 是否涉及未来里程碑规划或阶段状态调整？→ 更新 `docs/development/ROADMAP.md`
 - [ ] 是否新增/修改了服务/仓储？→ 更新 API 文档
+- [ ] 是否新增/修改了后端 REST 接口？→ 更新 `docs/api/backend-rest-api.md`
 - [ ] 是否新增了功能？→ 更新设计文档
 - [ ] 是否修复了 Bug？→ 更新 troubleshooting.md
 - [ ] 是否改变了架构设计？→ 更新架构文档
@@ -86,6 +89,7 @@
 1. **代码与文档同步更新**：代码变更后必须同步更新文档，一起提交到 Git
 2. **单一数据源**：每类信息只有一个权威来源，避免重复
 3. **引用而非重复**：使用链接引用，不要复制粘贴
+4. **规划与变更分离**：未来里程碑写入 `ROADMAP.md`，已完成事项记录到 `CHANGELOG.md`
 
 ### 快速参考
 
@@ -93,63 +97,23 @@
 | 代码变更类型 | 必须更新文档 |
 |-------------|-------------|
 | 新增/修改服务/仓储 | `docs/api/services-guide.md` 或 `repositories.md` |
-| 新增功能特性 | `docs/design/[feature-name].md`、`docs/development/CHANGELOG.md`（简要记录） |
+| 新增/修改后端 REST 接口 | `docs/api/backend-rest-api.md` |
+| 新增功能特性 | `docs/design/[feature-name].md`、`docs/development/CHANGELOG.md`（完成后简要记录） |
 | 修复 Bug | `docs/design/[feature-name].md`（详细）、`docs/development/CHANGELOG.md`（1行） |
 | 架构调整 | `docs/architecture/architecture.md`、`CLAUDE.md`（如影响约束） |
 | 新增开发陷阱 | `CLAUDE.md` |
+
+**补充说明**：
+- 未来里程碑、阶段边界、当前状态变化 → 更新 `docs/development/ROADMAP.md`
+- 已完成功能、里程碑和验证结果 → 更新 `docs/development/CHANGELOG.md`
+
 ## 测试流程
 
-### 测试范围说明
+项目级测试分层、命令入口、覆盖率口径和手工回归原则，请参阅：
 
-项目使用 Jest 进行单元测试，遵循以下原则：
-
-**包含的范围（单元测试）**：
-- 领域模型：Task、Star、Reward 等
-- 应用服务：StarService、TaskService、RewardService、MessageService 等
-- 工具函数：dateUtils、formatUtils 等
-
-**不包含的范围（页面和UI）**：
-- 页面交互、表单提交、页面跳转
-- UI渲染、样式正确性、动画效果
-- 微信API调用、端到端流程
-
----
-
-### 测试规范参考
-
-详细的测试编写规范、Mock策略、最佳实践等内容，请参阅：
-**[编码规范 - 测试规范章节](coding_standards.md#测试规范)**
-
----
-
-### 快速命令参考
-
-```bash
-# 运行前端单元测试（稳定质量闸门，不含后端集成测试）
-npm test
-
-# 运行特定模块测试
-npm run test:models
-npm run test:services
-npm run test:repositories
-
-# 监听模式（开发时使用）
-npm run test:watch
-
-# 生成覆盖率报告
-npm run test:coverage
-```
-
----
-
-### 覆盖率要求
-
-| 层级 | 覆盖率要求 | 说明 |
-|-----|-----------|------|
-| **领域模型** | 85%+ | 核心业务逻辑，必须充分测试 |
-| **应用服务** | 75%+ | 业务流程，重点测试主路径 |
-| **工具函数** | 90%+ | 纯函数，应全部覆盖 |
-| **仓储层** | 60%+ | 数据访问，Mock存储测试 |
+- **[测试策略总览](testing-strategy.md)** - 统一测试入口、闸门和覆盖率口径
+- **[编码规范 - 测试规范章节](coding_standards.md#测试规范)** - 测试编写规范、命名、Mock 和断言约束
+- **[后端测试说明](../../backend/test/README.md)** - 真实数据库集成测试准备与执行细节
 
 ---
 
@@ -157,12 +121,13 @@ npm run test:coverage
 
 - **[CLAUDE.md](../../CLAUDE.md)** - AI助手工作指南
 - **[编码规范](coding_standards.md)** - 详细编码规范（命名、代码风格、UI规范、日志规范等）
+- **[测试策略总览](testing-strategy.md)** - 项目级测试分层、命令入口和覆盖率口径
 - **[架构概览](../architecture/architecture.md)** - 技术选型和架构决策
 - **[设计文档指南](../design/README.md)** - 如何创建和使用设计文档
 - **[GitHub 协作](GITHUB_WORKFLOW.md)** - 团队协作和 PR 流程
 
 ---
 
-**最后更新**：2026-03-04
-**版本**：v4.2
+**最后更新**：2026-03-27
+**版本**：v4.5
 **维护者**：项目维护团队

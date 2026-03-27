@@ -8,6 +8,7 @@ const { getPool, query, execute } = require('../config/database');
 const Reward = require('../models/Reward');
 const { createLogger } = require('../utils/logger');
 const starService = require('./starService');
+const messageService = require('./messageService');
 
 const logger = createLogger('RewardService');
 
@@ -53,10 +54,11 @@ class RewardService {
     return this._promoteLegacyRewardIfNeeded(Reward.fromDB(rows[0]));
   }
 
-  async createReward(ownerUserId, familyId, rewardData) {
+  async createReward(ownerUserId, familyId, rewardData, options = {}) {
     const payload = this._normalizeRewardPayload(ownerUserId, familyId, rewardData);
     const pool = getPool();
     const connection = await pool.getConnection();
+    const operationKey = String(options.operationKey || rewardData.operationKey || payload.modifyTime);
 
     try {
       await connection.beginTransaction();
@@ -70,6 +72,14 @@ class RewardService {
         }
 
         if (!existingRow.deleted_at) {
+          await messageService.createRewardMessages({
+            reward: Reward.fromDB(existingRow),
+            familyId: payload.familyId,
+            action: 'create',
+            actorUserId: options.actorUserId || ownerUserId,
+            actorRole: options.actorRole || 'parent',
+            operationKey,
+          }, connection);
           await connection.commit();
           return Reward.fromDB(existingRow);
         }
@@ -105,6 +115,14 @@ class RewardService {
         );
 
         const restoredRow = await this._getRewardByIdConn(connection, payload.rewardId);
+        await messageService.createRewardMessages({
+          reward: Reward.fromDB(restoredRow),
+          familyId: payload.familyId,
+          action: 'create',
+          actorUserId: options.actorUserId || ownerUserId,
+          actorRole: options.actorRole || 'parent',
+          operationKey,
+        }, connection);
         await connection.commit();
         return Reward.fromDB(restoredRow);
       }
@@ -139,8 +157,17 @@ class RewardService {
         ]
       );
 
+      const createdReward = new Reward(payload);
+      await messageService.createRewardMessages({
+        reward: createdReward,
+        familyId: payload.familyId,
+        action: 'create',
+        actorUserId: options.actorUserId || ownerUserId,
+        actorRole: options.actorRole || 'parent',
+        operationKey,
+      }, connection);
       await connection.commit();
-      return new Reward(payload);
+      return createdReward;
     } catch (error) {
       await connection.rollback();
       logger.error('创建奖励失败', { ownerUserId, error: error.message });
@@ -150,7 +177,7 @@ class RewardService {
     }
   }
 
-  async updateReward(rewardId, operatorUserId, rewardData) {
+  async updateReward(rewardId, operatorUserId, rewardData, options = {}) {
     const existing = await this.getRewardById(rewardId);
     if (!existing) {
       const error = new Error('奖励不存在');
@@ -227,6 +254,7 @@ class RewardService {
 
     const pool = getPool();
     const connection = await pool.getConnection();
+    const operationKey = String(options.operationKey || rewardData.operationKey || nextReward.modifyTime);
     try {
       await connection.beginTransaction();
       await connection.execute(
@@ -234,6 +262,14 @@ class RewardService {
         params
       );
       const updatedRow = await this._getRewardByIdConn(connection, rewardId);
+      await messageService.createRewardMessages({
+        reward: Reward.fromDB(updatedRow),
+        familyId: existing.familyId,
+        action: 'update',
+        actorUserId: options.actorUserId || operatorUserId,
+        actorRole: options.actorRole || 'parent',
+        operationKey,
+      }, connection);
       await connection.commit();
       return Reward.fromDB(updatedRow);
     } catch (error) {
@@ -245,7 +281,7 @@ class RewardService {
     }
   }
 
-  async deleteReward(rewardId, operatorUserId) {
+  async deleteReward(rewardId, operatorUserId, options = {}) {
     const existing = await this.getRewardById(rewardId);
     if (!existing) {
       const error = new Error('奖励不存在');
@@ -259,17 +295,42 @@ class RewardService {
       throw error;
     }
 
-    const result = await execute(
-      'UPDATE rewards SET deleted_at = NOW(), modify_time = ? WHERE reward_id = ? AND deleted_at IS NULL',
-      [Date.now(), rewardId]
-    );
-    return result;
+    const pool = getPool();
+    const connection = await pool.getConnection();
+    const modifyTime = Number(options.modifyTime || Date.now());
+    const operationKey = String(options.operationKey || modifyTime);
+
+    try {
+      await connection.beginTransaction();
+      const [result] = await connection.execute(
+        'UPDATE rewards SET deleted_at = NOW(), modify_time = ? WHERE reward_id = ? AND deleted_at IS NULL',
+        [modifyTime, rewardId]
+      );
+      if (result.affectedRows > 0) {
+        await messageService.createRewardMessages({
+          reward: existing,
+          familyId: existing.familyId,
+          action: 'delete',
+          actorUserId: options.actorUserId || operatorUserId,
+          actorRole: options.actorRole || 'parent',
+          operationKey,
+        }, connection);
+      }
+      await connection.commit();
+      return result;
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
   }
 
-  async exchangeReward(rewardId, exchangeUserId, modifyTime) {
+  async exchangeReward(rewardId, exchangeUserId, modifyTime, options = {}) {
     const commandModifyTime = Number(modifyTime || Date.now());
     const pool = getPool();
     const connection = await pool.getConnection();
+    const operationKey = String(options.operationKey || commandModifyTime);
 
     try {
       await connection.beginTransaction();
@@ -288,10 +349,19 @@ class RewardService {
         throw error;
       }
 
-      if (reward.claimed) {
-        if (reward.modifyTime === commandModifyTime && reward.exchangeUserId === exchangeUserId) {
+        if (reward.claimed) {
+          if (reward.modifyTime === commandModifyTime && reward.exchangeUserId === exchangeUserId) {
           const existingRecord = await this._findExchangeRecordConn(connection, rewardId, exchangeUserId, commandModifyTime);
           const groups = await starService.getStarGroupsByUserWithConnection(connection, exchangeUserId);
+          await messageService.createRewardMessages({
+            reward,
+            familyId: reward.familyId,
+            action: 'exchange',
+            actorUserId: options.actorUserId || exchangeUserId,
+            actorRole: options.actorRole || 'child',
+            exchangeUserId,
+            operationKey,
+          }, connection);
           await connection.commit();
           return {
             reward,
@@ -352,6 +422,15 @@ class RewardService {
       );
 
       const updatedRewardRow = await this._getRewardByIdConn(connection, rewardId);
+      await messageService.createRewardMessages({
+        reward: Reward.fromDB(updatedRewardRow),
+        familyId: reward.familyId,
+        action: 'exchange',
+        actorUserId: options.actorUserId || exchangeUserId,
+        actorRole: options.actorRole || 'child',
+        exchangeUserId,
+        operationKey,
+      }, connection);
       await connection.commit();
 
       return {

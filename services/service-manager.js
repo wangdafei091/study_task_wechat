@@ -62,6 +62,11 @@ class ServiceManager {
       logger.info('ServiceManager', 'RewardService已更新UserService');
     }
 
+    if (this.services.rewardService && this.services.starService && this.services.rewardService.updateStarService) {
+      this.services.rewardService.updateStarService(this.services.starService);
+      logger.info('ServiceManager', 'RewardService已更新StarService');
+    }
+
     // 检查MessageService（使用正确的this.services路径）
     if (this.services.messageService && this.services.messageService.updateUserService) {
       this.services.messageService.updateUserService(this.userService);
@@ -168,6 +173,7 @@ class ServiceManager {
       
       this.services.rewardService = new RewardService({
         eventBus: this.eventBus,
+        starService: this.services.starService,
         userService: this.userService, // 注入用户服务
         storageAdapter: this.storageAdapter // 注入存储适配器
       });

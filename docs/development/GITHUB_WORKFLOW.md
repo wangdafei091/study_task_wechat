@@ -1,8 +1,8 @@
 # GitHub 协作流程
 
 > 团队协作规范、PR流程、Issue管理
-> **最后更新**：2026-03-04
-> **版本**：v2.1
+> **最后更新**：2026-03-25
+> **版本**：v2.2
 
 ---
 
@@ -217,9 +217,11 @@ I fixed the bug where the stars weren't showing up correctly when the user compl
 ## 文档更新
 - [ ] 已更新相关文档（参考 workflow.md 的文档维护章节）
   - [ ] 新增/修改服务/仓储 → 更新 `docs/api/services-guide.md` 或 `repositories.md`
+  - [ ] 新增/修改后端 REST 接口 → 更新 `docs/api/backend-rest-api.md`
   - [ ] 新功能 → 创建或更新 `docs/design/[feature-name].md`
   - [ ] 修复常见问题 → 更新 `docs/development/troubleshooting.md`
   - [ ] 架构调整 → 更新 `docs/architecture/*.md`
+  - [ ] 测试入口或覆盖率口径调整 → 更新 `docs/development/testing-strategy.md`
   - [ ] 发现新陷阱 → 更新 `CLAUDE.md`
   - [ ] 更新 CHANGELOG（合并到 develop 时）
 
@@ -673,10 +675,11 @@ git push origin feature/your-feature
 
 - **[CLAUDE.md](../../CLAUDE.md)** - AI 助手工作指南
 - **[开发指南](workflow.md)** - 开发流程和文档维护规范
+- **[项目路线图](ROADMAP.md)** - 当前阶段和未来里程碑
 - **[编码规范](coding_standards.md)** - 编码规范权威来源（命名、代码风格、UI规范、日志规范等）
 - **[更新日志](CHANGELOG.md)** - 版本变更历史
 
 ---
 
-**最后更新**：2026-02-27
+**最后更新**：2026-03-27
 **维护者**：项目维护团队

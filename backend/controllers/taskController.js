@@ -14,6 +14,46 @@ const logger = createLogger('TaskController');
  * 任务控制器类
  */
 class TaskController {
+  async _buildOperatorContext(req, subjectUserId = null, fallbackOperationKey = null, options = {}) {
+    const requestedActorUserId = req.body?.operatorContext?.actorUserId || req.user.userId;
+    let actorUserId = req.user.userId;
+    let actorRole = req.user.role;
+    const allowSubjectActorOverride = options.allowSubjectActorOverride === true;
+
+    // 家长设备允许把“当前视角孩子”作为消息操作者透传到后端；
+    // 仅限执行类状态动作使用；创建/编辑/删除仍按管理者本人记述。
+    if (
+      allowSubjectActorOverride &&
+      req.user.role === 'parent' &&
+      req.user.familyId &&
+      subjectUserId &&
+      requestedActorUserId &&
+      requestedActorUserId !== req.user.userId &&
+      requestedActorUserId === subjectUserId
+    ) {
+      const actorInfo = await familyService.getUserFamilyAndRole(requestedActorUserId);
+      if (actorInfo && actorInfo.familyId === req.user.familyId && actorInfo.role === 'child') {
+        actorUserId = requestedActorUserId;
+        actorRole = 'child';
+      }
+    }
+
+    return {
+      actorUserId,
+      actorRole,
+      familyId: req.user.familyId || null,
+      subjectUserId: subjectUserId || null,
+      operationKey: String(
+        req.body.operationKey ||
+        req.query.operationKey ||
+        req.body.modifyTime ||
+        fallbackOperationKey ||
+        Date.now()
+      ),
+      modifyTime: Number(req.body.modifyTime || fallbackOperationKey || Date.now()),
+    };
+  }
+
   /**
    * 获取当前用户的任务列表
    * @param {Object} req - Express请求对象
@@ -139,7 +179,11 @@ class TaskController {
         );
       }
 
-      const task = await taskService.createTask(effectiveUserId, taskData);
+      const task = await taskService.createTask(
+        effectiveUserId,
+        taskData,
+        await this._buildOperatorContext(req, effectiveUserId, taskData.modifyTime)
+      );
 
       res.json(success(task.toJSON(), '任务创建成功'));
     } catch (err) {
@@ -234,7 +278,11 @@ class TaskController {
         return res.status(400).json(error(validation.errors.join('; '), 'INVALID_TASK_DATA'));
       }
 
-      const updated = await taskService.updateTask(taskId, safeChanges);
+      const updated = await taskService.updateTask(
+        taskId,
+        safeChanges,
+        await this._buildOperatorContext(req, existing.userId, safeChanges.modifyTime)
+      );
       if (!updated) {
         return res.status(404).json(error('任务不存在或已删除', 'TASK_NOT_FOUND'));
       }
@@ -270,7 +318,10 @@ class TaskController {
         return res.status(403).json(error('无权限操作', 'PERMISSION_DENIED'));
       }
 
-      const deleted = await taskService.softDeleteTask(taskId);
+      const deleted = await taskService.softDeleteTask(
+        taskId,
+        await this._buildOperatorContext(req, existing.userId)
+      );
       if (!deleted) {
         return res.status(404).json(error('任务不存在或已删除', 'TASK_NOT_FOUND'));
       }
@@ -315,7 +366,18 @@ class TaskController {
         return res.status(403).json(error('无权限操作', 'PERMISSION_DENIED'));
       }
 
-      const updated = await taskService.updateTaskStatus(taskId, { status, starAwarded });
+      const updated = await taskService.updateTaskStatus(
+        taskId,
+        {
+          status,
+          starAwarded,
+          modifyTime: req.body.modifyTime,
+          operationKey: req.body.operationKey,
+        },
+        await this._buildOperatorContext(req, existing.userId, req.body.modifyTime, {
+          allowSubjectActorOverride: true
+        })
+      );
       if (!updated) {
         return res.status(404).json(error('任务不存在或已删除', 'TASK_NOT_FOUND'));
       }

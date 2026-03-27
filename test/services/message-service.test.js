@@ -15,8 +15,14 @@ const { EVENTS } = require('../../utils/constants');
 // Mock依赖
 jest.mock('../../utils/logger');
 jest.mock('../../repositories/index');
+jest.mock('../../utils/http-client', () => ({
+  get: jest.fn(),
+  patch: jest.fn(),
+  delete: jest.fn()
+}));
 
 const { MessageRepository } = require('../../repositories/index');
+const HttpClient = require('../../utils/http-client');
 
 describe('MessageService', () => {
   let messageService;
@@ -35,16 +41,22 @@ describe('MessageService', () => {
     mockMessageRepository = {
       loadFromStorage: jest.fn().mockResolvedValue(true),
       addMessage: jest.fn().mockImplementation(async (message) => message),
+      batchAddMessages: jest.fn().mockImplementation(async (messages) => messages),
       getAll: jest.fn().mockResolvedValue([]),
+      getMessagesByScope: jest.fn().mockResolvedValue([]),
       getById: jest.fn().mockResolvedValue(null),
       delete: jest.fn().mockResolvedValue(true),
       markAsRead: jest.fn().mockResolvedValue(true),
       markAllAsRead: jest.fn().mockResolvedValue(0),
+      batchMarkAsRead: jest.fn().mockResolvedValue(0),
       getUnreadCount: jest.fn().mockResolvedValue(0),
       getUnreadMessages: jest.fn().mockResolvedValue([]),
       deleteRelatedMessages: jest.fn().mockResolvedValue(0),
       updateTaskMessages: jest.fn().mockResolvedValue(0),
       cleanExpiredMessages: jest.fn().mockResolvedValue(0),
+      archiveLegacyMessages: jest.fn().mockResolvedValue([]),
+      replaceSyncedMessagesByScope: jest.fn().mockResolvedValue([]),
+      cleanupStaleMessages: jest.fn().mockResolvedValue(true),
       getMessageStats: jest.fn().mockResolvedValue({
         total: 0,
         unread: 0,
@@ -59,7 +71,10 @@ describe('MessageService', () => {
 
     // 创建Mock用户服务
     mockUserService = {
-      getCurrentUserId: jest.fn().mockReturnValue('parent')
+      getCurrentUserId: jest.fn().mockReturnValue('parent'),
+      getCurrentUser: jest.fn().mockReturnValue(null),
+      getLoginUser: jest.fn().mockReturnValue(null),
+      getUserById: jest.fn().mockReturnValue(null)
     };
 
     // 创建EventBus实例
@@ -106,6 +121,31 @@ describe('MessageService', () => {
       const initialized = await messageService.initialize();
 
       expect(initialized).toBe(true);
+    });
+  });
+
+  describe('_resolveScopeOptions', () => {
+    it('家长切到孩子视角时默认按孩子个人消息流解析', () => {
+      mockUserService.getLoginUser.mockReturnValue({
+        id: 'parent_1',
+        role: 'parent',
+        familyId: 'family_1'
+      });
+      mockUserService.getCurrentUser.mockReturnValue({
+        id: 'child_1',
+        role: 'child',
+        familyId: 'family_1'
+      });
+
+      const result = messageService._resolveScopeOptions();
+
+      expect(result).toEqual({
+        scope: 'user',
+        userId: 'child_1',
+        familyId: 'family_1',
+        requireFresh: false,
+        preferScope: null
+      });
     });
   });
 
@@ -226,6 +266,71 @@ describe('MessageService', () => {
       const result = await messageService.getAllMessages();
 
       expect(result).toEqual([]);
+    });
+  });
+
+  describe('_resolveScopeOptions - 默认消息范围', () => {
+    it('未加入家庭的家长默认应回退到个人流', () => {
+      mockUserService.getLoginUser.mockReturnValue({
+        userId: 'parent_1',
+        id: 'parent_1',
+        role: 'parent',
+        familyId: null
+      });
+      mockUserService.getCurrentUser.mockReturnValue({
+        userId: 'parent_1',
+        id: 'parent_1',
+        role: 'parent',
+        familyId: null
+      });
+
+      const result = messageService._resolveScopeOptions();
+
+      expect(result.scope).toBe('user');
+      expect(result.userId).toBe('parent_1');
+      expect(result.familyId).toBeNull();
+    });
+
+    it('家长切到孩子视角时默认应使用孩子个人流', () => {
+      mockUserService.getLoginUser.mockReturnValue({
+        userId: 'parent_1',
+        id: 'parent_1',
+        role: 'parent',
+        familyId: 'family_1'
+      });
+      mockUserService.getCurrentUser.mockReturnValue({
+        userId: 'child_1',
+        id: 'child_1',
+        role: 'child',
+        familyId: 'family_1'
+      });
+
+      const result = messageService._resolveScopeOptions();
+
+      expect(result.scope).toBe('user');
+      expect(result.userId).toBe('child_1');
+      expect(result.familyId).toBe('family_1');
+    });
+
+    it('家长处于家长视角时默认应使用家庭流', () => {
+      mockUserService.getLoginUser.mockReturnValue({
+        userId: 'parent_1',
+        id: 'parent_1',
+        role: 'parent',
+        familyId: 'family_1'
+      });
+      mockUserService.getCurrentUser.mockReturnValue({
+        userId: 'parent_1',
+        id: 'parent_1',
+        role: 'parent',
+        familyId: 'family_1'
+      });
+
+      const result = messageService._resolveScopeOptions();
+
+      expect(result.scope).toBe('family');
+      expect(result.userId).toBeNull();
+      expect(result.familyId).toBe('family_1');
     });
   });
 
@@ -692,6 +797,161 @@ describe('MessageService', () => {
 
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe('msg_2');
+    });
+  });
+
+  describe('M10 云端消息语义', () => {
+    beforeEach(() => {
+      messageService.enableCloudStorage = true;
+      mockUserService.getLoginUser.mockReturnValue({
+        userId: 'child_1',
+        role: 'child',
+        familyId: 'family_1'
+      });
+      mockUserService.getCurrentUser.mockReturnValue({
+        id: 'child_1',
+        familyId: 'family_1'
+      });
+    });
+
+    afterEach(() => {
+      messageService.enableCloudStorage = false;
+    });
+
+    it('云端刷新失败时不应先归档 legacy 消息', async () => {
+      HttpClient.get.mockRejectedValue(new Error('cloud failed'));
+
+      await expect(
+        messageService.refreshMessagesFromCloud('child_1', { scope: 'user' })
+      ).rejects.toThrow('cloud failed');
+
+      expect(mockMessageRepository.archiveLegacyMessages).not.toHaveBeenCalled();
+    });
+
+    it('正式云端消息单条已读失败时不应先改本地', async () => {
+      const message = new Message({
+        id: 'msg_cloud_1',
+        userId: 'child_1',
+        visibilityScope: 'user',
+        type: MessageType.TASK,
+        notificationType: 'task_create',
+        title: '云端消息',
+        summary: '待测试',
+        syncedToCloud: true
+      });
+      mockMessageRepository.getById.mockResolvedValue(message);
+      HttpClient.patch.mockRejectedValue(new Error('cloud failed'));
+
+      const result = await messageService.markMessageAsRead('msg_cloud_1', { scope: 'user' });
+
+      expect(result).toBe(false);
+      expect(mockMessageRepository.markAsRead).not.toHaveBeenCalled();
+    });
+
+    it('正式云端消息批量已读失败时不应改本地', async () => {
+      const message = new Message({
+        id: 'msg_cloud_2',
+        userId: 'child_1',
+        visibilityScope: 'user',
+        type: MessageType.TASK,
+        notificationType: 'task_complete',
+        title: '云端消息',
+        summary: '待测试',
+        syncedToCloud: true,
+        isRead: false
+      });
+      mockMessageRepository.getMessagesByScope.mockResolvedValue([message]);
+      HttpClient.patch.mockRejectedValue(new Error('cloud failed'));
+
+      const result = await messageService.markAllMessagesAsRead({ scope: 'user', userId: 'child_1' });
+
+      expect(result).toBe(0);
+      expect(mockMessageRepository.batchMarkAsRead).not.toHaveBeenCalled();
+    });
+
+    it('正式云端消息删除失败时不应先删本地', async () => {
+      const message = new Message({
+        id: 'msg_cloud_3',
+        userId: 'child_1',
+        visibilityScope: 'user',
+        type: MessageType.REWARD,
+        notificationType: 'reward_exchange',
+        title: '云端奖励消息',
+        summary: '待测试',
+        syncedToCloud: true
+      });
+      mockMessageRepository.getById.mockResolvedValue(message);
+      HttpClient.delete.mockRejectedValue(new Error('cloud failed'));
+
+      const result = await messageService.deleteMessage('msg_cloud_3', { scope: 'user' });
+
+      expect(result).toBe(false);
+      expect(mockMessageRepository.delete).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('任务待同步文案视角', () => {
+    it('家长给孩子创建任务时，孩子个人待同步消息应显示家长给你安排了任务', async () => {
+      mockUserService.getUserById.mockImplementation(userId => ({
+        parent_1: { userId: 'parent_1', name: '妈妈', role: 'parent' },
+        child_1: { userId: 'child_1', name: '爱上', role: 'child' }
+      }[userId] || null));
+
+      const messages = await messageService._createTaskProvisionalMessages(
+        { id: 'task_1', title: '数学', userId: 'child_1' },
+        {
+          action: 'create',
+          operatorUserId: 'parent_1',
+          operatorRole: 'parent',
+          targetUserId: 'child_1',
+          familyId: 'family_1',
+          operationKey: 'op_1',
+          notificationType: 'task_create',
+          modifyTime: 1
+        }
+      );
+
+      expect(messages).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            visibilityScope: 'user',
+            summary: '妈妈给你安排了任务“数学”，等待同步'
+          }),
+          expect.objectContaining({
+            visibilityScope: 'family',
+            summary: '妈妈给爱上创建了任务“数学”，等待同步'
+          })
+        ])
+      );
+    });
+
+    it('孩子自己完成任务时，家庭待同步消息应显示孩子完成了任务', async () => {
+      mockUserService.getUserById.mockImplementation(userId => ({
+        child_1: { userId: 'child_1', name: '爱上', role: 'child' }
+      }[userId] || null));
+
+      const messages = await messageService._createTaskProvisionalMessages(
+        { id: 'task_2', title: '数学', userId: 'child_1' },
+        {
+          action: 'complete',
+          operatorUserId: 'child_1',
+          operatorRole: 'child',
+          targetUserId: 'child_1',
+          familyId: 'family_1',
+          operationKey: 'op_2',
+          notificationType: 'task_complete',
+          modifyTime: 2
+        }
+      );
+
+      expect(messages).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            visibilityScope: 'family',
+            summary: '爱上完成了任务“数学”，等待同步'
+          })
+        ])
+      );
     });
   });
 });

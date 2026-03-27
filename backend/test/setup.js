@@ -4,7 +4,11 @@
  */
 
 // 🔥 关键：必须在任何其他模块之前加载环境变量
-require('dotenv').config({ path: '.env.test' });
+try {
+  require('dotenv').config({ path: '.env.test' });
+} catch (error) {
+  console.warn('⚠️  未安装 dotenv，跳过 .env.test 加载，改用默认测试配置');
+}
 
 // 设置测试环境标识
 if (!process.env.NODE_ENV) {

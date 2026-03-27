@@ -71,10 +71,12 @@ npm install
 | 了解如何开发 | [开发流程](docs/development/workflow.md) |
 | 了解编码规范 | [编码规范](docs/development/coding_standards.md) |
 | 了解系统架构 | [架构概览](docs/architecture/architecture.md) |
-| 查看服务 API | [服务 API](docs/api/services-guide.md) |
+| 查看前端服务 API | [服务 API](docs/api/services-guide.md) |
+| 查看后端 REST API | [后端 REST 契约](docs/api/backend-rest-api.md) |
 | 查看仓储 API | [仓储 API](docs/api/repositories.md) |
 | 查看组件文档 | [组件指南](docs/api/components-guide.md) |
 | 查看工具函数 | [工具函数指南](docs/api/utils_guide.md) |
+| 查看测试策略 | [测试策略总览](docs/development/testing-strategy.md) |
 | 提交 PR | [GitHub 协作](docs/development/GITHUB_WORKFLOW.md) |
 | AI 协作约束（GPT5 Codex） | [AGENTS.md](AGENTS.md) |
 
@@ -126,21 +128,10 @@ study_task_wechat/
 
 ## 🧪 测试
 
-```bash
-# 运行前端单元测试（稳定质量闸门）
-npm test
+测试分层、命令入口、覆盖率口径与手工回归原则请参阅：
 
-# 运行特定模块测试
-npm run test:models
-npm run test:services
-npm run test:repositories
-
-# 生成覆盖率报告
-npm run test:coverage
-
-# 后端集成测试（需配置 backend/.env.test）
-cd backend && NODE_ENV=test npx jest test/integration --runInBand
-```
+- [项目测试策略总览](docs/development/testing-strategy.md)
+- [后端测试说明](backend/test/README.md)
 
 ---
 
@@ -174,12 +165,14 @@ cd backend && NODE_ENV=test npx jest test/integration --runInBand
 
 - 功能开发问题：查阅 [开发流程](docs/development/workflow.md)
 - 编码规范问题：查阅 [编码规范](docs/development/coding_standards.md)
-- API 使用问题：查阅 [API 文档](docs/api/)
+- 前端内部 API：查阅 [服务 API](docs/api/services-guide.md) 或 [仓储 API](docs/api/repositories.md)
+- 后端 HTTP 接口：查阅 [后端 REST 契约](docs/api/backend-rest-api.md)
+- 测试与回归：查阅 [测试策略总览](docs/development/testing-strategy.md)
 - GPT5 Codex 协作约束：查阅 [AGENTS.md](AGENTS.md)
 - 常见陷阱：查阅 [Claude Code 工作指南](CLAUDE.md) 的"常见陷阱"部分
 
 ---
 
-**版本**：v2.1
-**最后更新**：2026-03-19
+**版本**：v3.2.0
+**最后更新**：2026-03-27
 **维护者**：项目维护团队

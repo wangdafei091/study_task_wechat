@@ -2,6 +2,7 @@
 const serviceManager = require('../../../services/service-manager.js');
 const dateUtils = require('../../../utils/dateUtils');
 const logger = require('../../../utils/logger');
+const viewScopeUtils = require('../../../utils/view-scope');
 
 Page({
   /**
@@ -12,7 +13,7 @@ Page({
     filteredMessages: [], // 过滤后的消息
     unreadCount: 0,       // 未读消息总数
     taskUnreadCount: 0,   // 任务类未读消息数
-    achievementUnreadCount: 0, // 成就类未读消息数
+    rewardUnreadCount: 0, // 奖励类未读消息数
     systemUnreadCount: 0, // 系统类未读消息数
     activeTab: 'all',     // 当前选中的标签
     activeTabName: '',    // 当前标签名称
@@ -55,32 +56,14 @@ Page({
   loadMessageData: function() {
     logger.info('MessagePage', '开始加载消息数据');
     const messageService = serviceManager.getMessageService();
-    
-    // 获取当前用户信息
-    const userService = getApp().globalData.userService;
-    const currentUserId = userService ? userService.getCurrentUserId() : null;
-    
-    messageService.getAllMessages()
-      .then(allMessages => {
-        logger.info('MessagePage', `获取所有消息成功, 数量=${allMessages.length}`);
-        
-        // 根据用户筛选消息：包含用户自己的消息和共享消息
-        let messages;
-        if (currentUserId) {
-          messages = allMessages.filter(msg => 
-            msg.userId === currentUserId || msg.userId === 'shared'
-          );
-          logger.info('MessagePage', `消息过滤完成，用户ID=${currentUserId}，包含共享消息`, {
-            总消息数: allMessages.length,
-            可见消息数: messages.length
-          });
-        } else {
-          // 如果没有用户ID，显示所有消息
-          messages = allMessages;
-          logger.info('MessagePage', '未指定用户ID，显示所有消息');
-        }
-        
-        logger.info('MessagePage', `加载消息数据成功, 用户ID=${currentUserId || '全部'}, 消息数量=${messages.length}`);
+    const scopeOptions = this.getMessageScopeOptions();
+
+    messageService.getMessagesByScope({
+      ...scopeOptions,
+      requireFresh: true
+    })
+      .then(messages => {
+        logger.info('MessagePage', `加载消息数据成功, scope=${scopeOptions.scope}, 消息数量=${messages.length}`);
         this.processMessages(messages);
       })
       .catch(error => {
@@ -90,16 +73,23 @@ Page({
       });
   },
 
+  getMessageScopeOptions: function() {
+    const userService = getApp().globalData.userService;
+    const loginUser = userService?.getLoginUser?.() || null;
+    const currentUser = userService?.getCurrentUser?.() || null;
+    return viewScopeUtils.resolveMessageScopeOptions(loginUser, currentUser);
+  },
+
   /**
    * 处理消息数据，添加日期分隔符和计算未读数量
    */
   processMessages: function(messages) {
     // 按时间降序排序 - 统一使用createTime
-    messages.sort((a, b) => b.createTime - a.createTime);
+    const sortedMessages = [...messages].sort((a, b) => b.createTime - a.createTime);
     
     // 添加日期分隔符
     let lastDate = '';
-    const processedMessages = messages.map(msg => {
+    const processedMessages = sortedMessages.map(msg => {
       const date = this.formatDate(msg.createTime);
       const showDateDivider = date !== lastDate;
       lastDate = date;
@@ -115,7 +105,7 @@ Page({
     // 计算各类型未读消息数量
     const unreadCount = processedMessages.filter(msg => !msg.isRead).length;
     const taskUnreadCount = processedMessages.filter(msg => !msg.isRead && msg.type === 'task').length;
-    const achievementUnreadCount = processedMessages.filter(msg => !msg.isRead && msg.type === 'achievement').length;
+    const rewardUnreadCount = processedMessages.filter(msg => !msg.isRead && msg.type === 'reward').length;
     const systemUnreadCount = processedMessages.filter(msg => !msg.isRead && msg.type === 'system').length;
     
     // 更新数据
@@ -123,7 +113,7 @@ Page({
       messages: processedMessages,
       unreadCount,
       taskUnreadCount,
-      achievementUnreadCount,
+      rewardUnreadCount,
       systemUnreadCount,
       hasMoreMessages: processedMessages.length > this.data.pageSize
     });
@@ -151,7 +141,7 @@ Page({
     let tabName = '';
     switch(activeTab) {
       case 'task': tabName = '任务'; break;
-      case 'achievement': tabName = '成就'; break;
+      case 'reward': tabName = '奖励'; break;
       case 'system': tabName = '系统'; break;
       default: tabName = '';
     }
@@ -188,7 +178,7 @@ viewMessageDetail: function(e) {
   
   if (message) {
     // 1. 标记该消息为已读（保持现有逻辑）
-    messageService.markMessageAsRead(messageId);
+    messageService.markMessageAsRead(messageId, this.getMessageScopeOptions());
     
     // 记录日志
     logger.info('MessagePage', `标记消息已读: ${message.title}`);
@@ -211,9 +201,29 @@ viewMessageDetail: function(e) {
   markAllAsRead: function() {
     logger.info('MessagePage', '标记所有消息为已读');
     const messageService = serviceManager.getMessageService();
+    const unreadCount = this.data.messages.filter(msg => !msg.isRead).length;
+
+    if (unreadCount === 0) {
+      wx.showToast({
+        title: '暂无未读消息',
+        icon: 'none',
+        duration: 1500
+      });
+      return;
+    }
     
-    messageService.markAllMessagesAsRead()
+    messageService.markAllMessagesAsRead(this.getMessageScopeOptions())
       .then(count => {
+        if (count <= 0) {
+          logger.warn('MessagePage', '标记所有消息为已读未成功写入');
+          wx.showToast({
+            title: '操作失败',
+            icon: 'none',
+            duration: 1500
+          });
+          return;
+        }
+
         logger.info('MessagePage', `标记所有消息为已读成功, 数量=${count}`);
         
         // 更新本地数据
@@ -259,7 +269,7 @@ viewMessageDetail: function(e) {
       content: '确定要删除这条消息吗？',
       success: (res) => {
         if (res.confirm) {
-          messageService.deleteMessage(messageId)
+          messageService.deleteMessage(messageId, this.getMessageScopeOptions())
             .then(success => {
               if (success) {
                 logger.info('MessagePage', `删除消息成功: ${messageId}`);
@@ -304,14 +314,14 @@ viewMessageDetail: function(e) {
   showMessageOptions: function(e) {
     const index = e.currentTarget.dataset.index;
     const message = this.data.filteredMessages[index];
+    const itemList = message.isRead ? ['删除'] : ['标记为已读', '删除'];
     
     wx.showActionSheet({
-      itemList: [message.isRead ? '标记为未读' : '标记为已读', '删除'],
+      itemList,
       success: (res) => {
-        if (res.tapIndex === 0) {
-          // 切换已读/未读状态
-          this.toggleMessageReadStatus({ currentTarget: { dataset: { id: message.id } } });
-        } else if (res.tapIndex === 1) {
+        if (!message.isRead && res.tapIndex === 0) {
+          this.markMessageAsRead({ currentTarget: { dataset: { id: message.id } } });
+        } else if ((message.isRead && res.tapIndex === 0) || (!message.isRead && res.tapIndex === 1)) {
           // 删除消息
           this.deleteMessage({ currentTarget: { dataset: { id: message.id } } });
         }
@@ -320,65 +330,46 @@ viewMessageDetail: function(e) {
   },
 
   /**
-   * 切换消息已读状态
+   * 标记消息为已读
    */
-  toggleMessageReadStatus: function(e) {
+  markMessageAsRead: function(e) {
     const messageId = e.currentTarget.dataset.id;
     const messageService = serviceManager.getMessageService();
     const message = this.data.messages.find(m => m.id === messageId);
-    
-    if (message) {
-      if (message.isRead) {
-        // 已读变未读
-        this.setMessageReadStatus(messageId, false);
-        wx.showToast({
-          title: '已标记为未读',
-          icon: 'success',
-          duration: 1500
-        });
-      } else {
-        // 未读变已读
-        messageService.markMessageAsRead(messageId);
-        
-        // 重新加载消息数据
+
+    if (!message || message.isRead) {
+      return;
+    }
+
+    messageService.markMessageAsRead(messageId, this.getMessageScopeOptions())
+      .then(success => {
+        if (!success) {
+          wx.showToast({
+            title: '操作失败',
+            icon: 'none',
+            duration: 1500
+          });
+          return;
+        }
+
         setTimeout(() => {
           this.loadMessageData();
         }, 300);
-        
+
         wx.showToast({
           title: '已标记为已读',
           icon: 'success',
           duration: 1500
         });
-      }
-    }
-  },
-
-  /**
-   * 设置消息已读状态
-   */
-  setMessageReadStatus: function(messageId, isRead) {
-    wx.getStorage({
-      key: 'messageData',
-      success: (res) => {
-        let messages = res.data || [];
-        const messageIndex = messages.findIndex(m => m.id === messageId);
-        
-        if (messageIndex > -1) {
-          messages[messageIndex].isRead = isRead;
-          
-          // 保存更新后的消息
-          wx.setStorage({
-            key: 'messageData',
-            data: messages,
-            success: () => {
-              // 更新本地数据
-              this.loadMessageData();
-            }
-          });
-        }
-      }
-    });
+      })
+      .catch(error => {
+        logger.error('MessagePage', `标记消息已读出错: ${messageId}`, error);
+        wx.showToast({
+          title: '操作失败',
+          icon: 'none',
+          duration: 1500
+        });
+      });
   },
 
   /**
@@ -420,11 +411,11 @@ viewMessageDetail: function(e) {
     
     const date = new Date(createTime);
     const now = new Date();
-    const diffDays = Math.floor((now - date) / (24 * 60 * 60 * 1000));
+    const diffDays = dateUtils.getDaysBetween(date, now);
     
-    if (diffDays === 0) {
+    if (dateUtils.isToday(date)) {
       return '今天';
-    } else if (diffDays === 1) {
+    } else if (dateUtils.isYesterday(date)) {
       return '昨天';
     } else if (diffDays === 2) {
       return '前天';

@@ -56,6 +56,15 @@ describe('Task 模型', () => {
       const pattern = /^\d{4}-\d{2}-\d{2}$/;
       expect(task.date).toMatch(pattern);
     });
+
+    it('应兼容旧字段 pointsValidPeriod 并映射到 pointsExpiry', () => {
+      const task = new Task({
+        title: '旧数据任务',
+        pointsValidPeriod: StarExpiryType.WEEK
+      });
+
+      expect(task.pointsExpiry).toBe(StarExpiryType.WEEK);
+    });
   });
 
   describe('validate', () => {

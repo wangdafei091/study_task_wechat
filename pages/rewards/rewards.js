@@ -7,6 +7,58 @@ const formatUtils = require('../../utils/formatUtils');
 const logger = require('../../utils/logger');
 const uiUtils = require('../../utils/uiUtils');
 
+const REWARD_MANAGE_URL = '/packageManage/pages/reward-manage/reward-manage';
+
+function resolveRewardPageViewMode(userService) {
+  const loginUser = userService?.getLoginUser ? userService.getLoginUser() : null;
+  const currentUser = userService?.getCurrentUser ? userService.getCurrentUser() : null;
+  const activeUser = currentUser || loginUser || null;
+  const activeUserId = activeUser ? (activeUser.userId || activeUser.id) : null;
+  const isReadonlyView = loginUser
+    ? (loginUser.role === 'child' || loginUser.userId !== activeUserId)
+    : !!(activeUser && activeUser.role === 'child');
+
+  return {
+    loginUser,
+    currentUser: activeUser,
+    isReadonlyView,
+    viewMode: activeUser && activeUser.role === 'parent' && !isReadonlyView
+      ? 'parent-manage'
+      : 'child-no-manage'
+  };
+}
+
+function buildRewardPageState({ rewards, hasRewardHistoryHint, viewMode }) {
+  if (Array.isArray(rewards) && rewards.length > 0) {
+    return {
+      emptyMode: 'none',
+      emptyTitle: '',
+      emptyDescription: '',
+      emptyHistoryHint: '',
+      ctaVisible: false,
+      ctaText: ''
+    };
+  }
+
+  const isParentManageView = viewMode === 'parent-manage';
+  const emptyTitle = isParentManageView
+    ? (hasRewardHistoryHint ? '目前还没有可用的正式奖励' : '还没有正式奖励')
+    : '现在还没有可用奖励';
+
+  return {
+    emptyMode: isParentManageView ? 'parent-setup' : 'child-explain',
+    emptyTitle,
+    emptyDescription: isParentManageView
+      ? '去设置一个正式奖励吧，孩子完成任务后就能看到努力目标了'
+      : '奖励由家长来设置，现在完成任务也会正常积累星星',
+    emptyHistoryHint: isParentManageView && hasRewardHistoryHint
+      ? '如果之前清理过奖励，也可以重新添加一个正式奖励'
+      : '',
+    ctaVisible: isParentManageView,
+    ctaText: '去设置第一个奖励'
+  };
+}
+
 Page({
 
   /**
@@ -33,6 +85,12 @@ Page({
     showTabs: false,           // 是否显示Tab切换
     availableRewards: [],      // 可获得的奖励
     claimedRewards: [],        // 已领取的奖励
+    rewardEmptyMode: 'none',
+    rewardEmptyTitle: '',
+    rewardEmptyDescription: '',
+    rewardEmptyHistoryHint: '',
+    showManageRewardCTA: false,
+    manageRewardCTAText: '',
     
     // 架构示例页面相关
     demoClickCount: 0,  // 添加点击计数
@@ -290,6 +348,9 @@ Page({
       // 获取即将到期积分信息
       const expiringPointsInfo = await this.getExpiringPoints();
       
+      const userService = serviceManager.getUserService();
+      const { viewMode } = resolveRewardPageViewMode(userService);
+
       // 获取所有奖励（包括已领取的），按家庭奖励池查询
       const allRewards = await rewardService.getAvailableRewards(true, false, rewardOwnerId);
       logger.info('rewards', `获取到可用奖励: ${allRewards.length}个`);
@@ -316,18 +377,28 @@ Page({
         logger.warn('rewards', '获取自定义奖励标记失败', e);
       }
       
-      // 如果没有奖励但存在自定义奖励标记，不需要初始化示例奖励
-      if (allRewards.length === 0 && hasCustomRewards) {
-        logger.info('rewards', '检测到有自定义奖励标记但无奖励数据，用户可能已清理所有奖励');
+      const realRewards = allRewards.filter((reward) => !this.isExampleReward(reward));
+      const rewardPageState = buildRewardPageState({
+        rewards: realRewards,
+        hasRewardHistoryHint: hasCustomRewards,
+        viewMode
+      });
+
+      // 如果过滤示例奖励后没有正式奖励，展示空态而不是空白奖励网格
+      if (realRewards.length === 0) {
+        logger.info('rewards', '过滤示例奖励后无正式奖励，展示显式空态', {
+          hasRewardHistoryHint: hasCustomRewards,
+          viewMode
+        });
         wx.hideLoading();
-        
+
         this.setData({
           rewards: [],
           availableRewards: [],
           claimedRewards: [],
           showTabs: false,
           activeTab: 'available',
-          showClaimedRewards: true, 
+          showClaimedRewards: true,
           currentProgress: totalPoints,
           totalPoints: totalPoints,
           formattedPoints: formattedPoints,
@@ -335,14 +406,20 @@ Page({
           expiryDate: expiringPointsInfo.date,
           rewardsEarned: 0,
           currentLevel: Math.floor(totalPoints / 20) + 1,
-          nextReward: null
+          nextReward: null,
+          rewardEmptyMode: rewardPageState.emptyMode,
+          rewardEmptyTitle: rewardPageState.emptyTitle,
+          rewardEmptyDescription: rewardPageState.emptyDescription,
+          rewardEmptyHistoryHint: rewardPageState.emptyHistoryHint,
+          showManageRewardCTA: rewardPageState.ctaVisible,
+          manageRewardCTAText: rewardPageState.ctaText
         });
-        
+
         return;
       }
       
       // 计算解锁状态
-      const rewards = allRewards.map(r => ({
+      const rewards = realRewards.map(r => ({
         ...r,
         unlocked: totalPoints >= r.points
       }));
@@ -358,6 +435,9 @@ Page({
       
       // 计算下一个可达成的奖励（用孩子的星星数 vs 家长的奖励池）
       const nextReward = await rewardService.calculateNextAvailableReward(totalPoints, rewardOwnerId);
+      const normalizedNextReward = nextReward && !nextReward.isDefault && !this.isExampleReward(nextReward)
+        ? nextReward
+        : null;
       logger.debug('rewards', `下一个可达成奖励: ${nextReward ? nextReward.name : '无'}, 需要${nextReward ? nextReward.points : 0}颗星星`);
       
       // 添加即将设置到页面的数据日志
@@ -397,7 +477,13 @@ Page({
         expiryDate: expiringPointsInfo.date,
         rewardsEarned: unlockedRewards,
         currentLevel: Math.floor(totalPoints / 20) + 1, // 每20点升一级
-        nextReward: nextReward
+        nextReward: normalizedNextReward,
+        rewardEmptyMode: 'none',
+        rewardEmptyTitle: '',
+        rewardEmptyDescription: '',
+        rewardEmptyHistoryHint: '',
+        showManageRewardCTA: false,
+        manageRewardCTAText: ''
       });
       
       logger.info('rewards', `设置总星星: ${totalPoints}, 即将过期总星星: ${expiringPointsInfo.points}, 最早到期日期: ${expiringPointsInfo.date}`);
@@ -509,6 +595,17 @@ Page({
     logger.info('rewards', '导航到星星记录页面');
     wx.navigateTo({
       url: '/packageMessage/pages/star-records/star-records'
+    });
+  },
+
+  navigateToRewardManage: function() {
+    if (!this.data.showManageRewardCTA) {
+      return;
+    }
+
+    logger.info('rewards', '从奖池空态跳转到奖励管理页');
+    wx.navigateTo({
+      url: REWARD_MANAGE_URL
     });
   },
 
@@ -827,9 +924,14 @@ Page({
       return 'child';
     }
     const loginUser = userService.getLoginUser ? userService.getLoginUser() : null;
+    const currentUser = userService.getCurrentUser ? userService.getCurrentUser() : null;
     // 孩子设备：loginUser 本身就是孩子
     if (loginUser && loginUser.role === 'child') {
       return loginUser.userId || loginUser.id;
+    }
+    // 家长切到孩子视角时，优先使用当前视角孩子
+    if (currentUser && currentUser.role === 'child') {
+      return currentUser.userId || currentUser.id;
     }
     // 家长设备：优先用最近操作的孩子
     const app = getApp();
