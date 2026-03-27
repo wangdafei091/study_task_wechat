@@ -46,6 +46,7 @@ describe('task-repeat direct behavior', () => {
 
   it('云同步阶段应覆盖失败补偿与 saveAll 降级分支', async () => {
     jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-03-26T08:00:00Z'));
 
     const firstSaveAll = jest.fn()
       .mockResolvedValueOnce([])
@@ -88,6 +89,9 @@ describe('task-repeat direct behavior', () => {
   });
 
   it('syncInBatches 意外失败时应走最外层 catch', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-03-26T08:00:00Z'));
+
     const service = {
       enableCloudStorage: true,
       taskRepository: {
@@ -108,6 +112,7 @@ describe('task-repeat direct behavior', () => {
     await Promise.resolve();
     await Promise.resolve();
 
+    expect(service._createRepeatTaskInstance).toHaveBeenCalledTimes(2);
     expect(result).toHaveLength(2);
     expect(logger.warn).toHaveBeenCalledWith(
       'TaskService',
