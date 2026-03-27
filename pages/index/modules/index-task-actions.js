@@ -8,52 +8,6 @@ function clearProcessing(page) {
   });
 }
 
-async function ensureRewardSetupForCompletion(page) {
-  logger.info('Index', '检查奖励设置状态');
-
-  const rewardService = serviceManager.getService('rewardService');
-  if (!rewardService) {
-    return true;
-  }
-
-  const loginUserId = getApp().globalData?.userService?.getLoginUserId() || null;
-  const nextReward = await rewardService.calculateNextAvailableReward(undefined, loginUserId);
-  const visibleRewards = await rewardService.getAvailableRewards(true, false, loginUserId);
-
-  const hasNoRealReward = !nextReward || nextReward.isDefault;
-  const hasOnlyExampleRewards = visibleRewards.length > 0 &&
-    visibleRewards.every((reward) => reward.isExample === true);
-
-  if ((hasNoRealReward && visibleRewards.length === 0) || hasOnlyExampleRewards) {
-    if (hasOnlyExampleRewards) {
-      logger.info('Index', '检测到只有示例奖励，阻止任务完成并更新提示信息');
-    } else {
-      logger.info('Index', '检测到无真实奖励，阻止任务完成并更新提示信息');
-    }
-
-    clearProcessing(page);
-
-    if (nextReward) {
-      nextReward.showSetupTip = true;
-    }
-
-    page.setData({
-      nextReward
-    });
-
-    wx.showModal({
-      title: '需要设置奖励',
-      content: '还没有设置奖励哦！',
-      showCancel: false,
-      confirmText: '我知道了'
-    });
-
-    return false;
-  }
-
-  return true;
-}
-
 async function confirmResetIfNeeded(page, currentTask, taskId, newStatus, wasStarAwarded) {
   if (newStatus !== 0 || !wasStarAwarded) {
     return true;
@@ -246,13 +200,6 @@ async function completeTask(page, e) {
   logger.info('Index', `任务星星信息: starAwarded=${currentTask.starAwarded}(${typeof currentTask.starAwarded}), points=${taskPoints}`);
   logger.info('Index', `任务原始星星状态: ${wasStarAwarded ? '已获得' : '未获得'}`);
   logger.info('Index', `任务类型信息: isRequired=${isRequired}, 任务类型=${isRequired ? '必做任务' : '普通任务'}`);
-
-  if (newStatus === 1) {
-    const canContinue = await ensureRewardSetupForCompletion(page);
-    if (!canContinue) {
-      return;
-    }
-  }
 
   const canContinue = await confirmResetIfNeeded(page, currentTask, taskId, newStatus, wasStarAwarded);
   if (!canContinue) {

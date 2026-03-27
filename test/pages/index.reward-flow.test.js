@@ -206,6 +206,57 @@ describe('pages/index reward flow', () => {
         status: 'current'
       })
     ]);
+    expect(page.data.rewardHintText).toBe('');
+  });
+
+  it('loadStarsAndRewards 在共享设备孩子视角且无正式奖励时，应显示孩子提示并过滤示例奖励', async () => {
+    const page = createPageInstance();
+    page.getEffectiveTaskUserId = jest.fn(() => 'child-1');
+    page.data.currentUser = { id: 'child-1', role: 'child', name: '孩子' };
+    page.data.isReadonlyView = true;
+
+    starService.getTotalStars.mockResolvedValue(8);
+    rewardService.getLastExchangeTimeByUser.mockResolvedValue(null);
+    rewardService.calculateNextAvailableReward.mockResolvedValue({
+      id: 'reward_1_1',
+      name: '示例奖励',
+      points: 20,
+      icon: '🎁',
+      isExample: true
+    });
+    rewardService.getAvailableRewards.mockResolvedValue([
+      {
+        id: 'reward_1_1',
+        name: '示例奖励',
+        points: 20,
+        icon: '🎁',
+        claimed: false,
+        isExample: true
+      }
+    ]);
+
+    await page.loadStarsAndRewards();
+
+    expect(page.data.nextReward.showSetupTip).toBe(true);
+    expect(page.data.visibleRewards).toEqual([]);
+    expect(page.data.rewardHintText).toBe('现在还没有可用奖励，完成任务也会正常积累星星');
+  });
+
+  it('loadStarsAndRewards 在家长视角且无正式奖励时，应显示家长提示文案', async () => {
+    const page = createPageInstance();
+    page.getEffectiveTaskUserId = jest.fn(() => 'child-1');
+    page.data.currentUser = { id: 'parent-1', role: 'parent', name: '家长' };
+    page.data.isReadonlyView = false;
+
+    starService.getTotalStars.mockResolvedValue(8);
+    rewardService.getLastExchangeTimeByUser.mockResolvedValue(null);
+    rewardService.calculateNextAvailableReward.mockResolvedValue({ id: 'default', isDefault: true, icon: '🎁' });
+    rewardService.getAvailableRewards.mockResolvedValue([]);
+
+    await page.loadStarsAndRewards();
+
+    expect(page.data.nextReward.showSetupTip).toBe(true);
+    expect(page.data.rewardHintText).toBe('还没有设置奖励，可以去奖励管理添加一个正式奖励');
   });
 
   it('checkRewardUnlock 应按当前孩子星星检查达成奖励，并在动画后弹出奖励对话框', async () => {
@@ -257,6 +308,25 @@ describe('pages/index reward flow', () => {
     ]);
   });
 
+  it('checkRewardUnlock 应忽略示例奖励，不把它们当成正式达成目标', async () => {
+    const page = createPageInstance();
+    page.getEffectiveTaskUserId = jest.fn(() => 'child-1');
+    page._handleRewardCompletion = jest.fn().mockResolvedValue();
+    page.showRewardChoiceDialog = jest.fn();
+    page.loadStarsAndRewards = jest.fn();
+
+    starService.getTotalStars.mockResolvedValue(30);
+    rewardService.getAvailableRewards.mockResolvedValue([
+      { id: 'reward_1_1', name: '示例奖励', points: 10, claimed: false, isExample: true }
+    ]);
+
+    await page.checkRewardUnlock();
+
+    expect(page._handleRewardCompletion).not.toHaveBeenCalled();
+    expect(page.showRewardChoiceDialog).not.toHaveBeenCalled();
+    expect(page.loadStarsAndRewards).toHaveBeenCalled();
+  });
+
   it('completeTask 在取消完成前应按任务归属用户预检查锁定状态', async () => {
     const page = createPageInstance();
     page.data.tasks = [{
@@ -298,6 +368,9 @@ describe('pages/index reward flow', () => {
       isDefault: false,
       showSetupTip: false
     });
+    rewardService.getAvailableRewards.mockResolvedValue([
+      { id: 'reward-1', name: '看动画片', points: 10, icon: '🎁', claimed: false }
+    ]);
 
     await page.transitionToNewTarget();
 
@@ -306,6 +379,9 @@ describe('pages/index reward flow', () => {
     expect(progressBar.setData).toHaveBeenCalledWith({ current: 6, total: 10 });
     expect(page.data.rewardProgress).toEqual({ current: 6, total: 10 });
     expect(page.data.userPoints).toBe(6);
+    expect(page.data.visibleRewards).toEqual([
+      expect.objectContaining({ id: 'reward-1', status: 'current' })
+    ]);
   });
 
   it('refreshTaskDataForCurrentView 应按当前选中日期刷新任务', async () => {

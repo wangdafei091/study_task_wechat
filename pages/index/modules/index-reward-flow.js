@@ -2,6 +2,61 @@ const serviceManager = require('../../../services/service-manager.js');
 const formatUtils = require('../../../utils/formatUtils');
 const logger = require('../../../utils/logger');
 
+function isExampleReward(reward) {
+  if (!reward) {
+    return false;
+  }
+
+  if (reward.isExample === true) {
+    return true;
+  }
+
+  return typeof reward.id === 'string' && /reward_\d+_(1|2|3)$/.test(reward.id);
+}
+
+function resolveHomeViewMode(page) {
+  const currentUser = page?.data?.currentUser || null;
+  const isReadonlyView = !!page?.data?.isReadonlyView;
+  const isParentManageView = currentUser && currentUser.role === 'parent' && !isReadonlyView;
+  return isParentManageView ? 'parent-manage' : 'child-no-manage';
+}
+
+function getHomeSetupHintText(page) {
+  return resolveHomeViewMode(page) === 'parent-manage'
+    ? '还没有设置奖励，可以去奖励管理添加一个正式奖励'
+    : '现在还没有可用奖励，完成任务也会正常积累星星';
+}
+
+function buildHomeRewardState(page, nextReward, visibleRewards) {
+  const safeVisibleRewards = Array.isArray(visibleRewards) ? visibleRewards : [];
+  const realVisibleRewards = safeVisibleRewards.filter((reward) => !isExampleReward(reward));
+  const realNextReward = nextReward && !nextReward.isDefault && !isExampleReward(nextReward)
+    ? { ...nextReward }
+    : null;
+
+  const hasAllRewardsClaimed = !!realNextReward?.allClaimed;
+  const shouldShowSetupTip = realVisibleRewards.length === 0 && !hasAllRewardsClaimed && !realNextReward;
+  const effectiveNextReward = realNextReward || (nextReward ? { ...nextReward } : {
+    name: '',
+    points: 0,
+    icon: '🎁'
+  });
+
+  if (shouldShowSetupTip) {
+    effectiveNextReward.showSetupTip = true;
+  }
+
+  const normalizedVisibleRewards = realVisibleRewards.length === 0 && realNextReward && realNextReward.id && !hasAllRewardsClaimed
+    ? [realNextReward]
+    : realVisibleRewards;
+
+  return {
+    nextReward: effectiveNextReward,
+    visibleRewards: normalizedVisibleRewards,
+    hintText: shouldShowSetupTip ? getHomeSetupHintText(page) : ''
+  };
+}
+
 function buildVisibleRewards(visibleRewards, userPoints, limit = 3) {
   return visibleRewards.slice(0, limit).map((reward) => ({
     id: reward.id,
@@ -9,7 +64,7 @@ function buildVisibleRewards(visibleRewards, userPoints, limit = 3) {
     points: reward.points,
     icon: reward.icon,
     status: reward.claimed ? 'claimed' : (reward.points <= userPoints ? 'unlocked' : 'current'),
-    isExample: !!reward.isExample
+    isExample: false
   }));
 }
 
@@ -80,7 +135,7 @@ async function checkRewardUnlock(page) {
     logger.info('Index', '奖励检查数据', { userPoints, rewardCount: allRewards.length });
 
     const unlockedRewards = allRewards.filter((reward) =>
-      !reward.claimed && reward.points <= userPoints
+      !isExampleReward(reward) && !reward.claimed && reward.points <= userPoints
     );
 
     logger.info('Index', '已解锁未领取奖励', { count: unlockedRewards.length });
@@ -150,52 +205,25 @@ async function loadStarsAndRewards(page) {
 
     logger.info('Index', '获取到下一个可达成奖励', { name: nextReward ? nextReward.name : '无' });
     logger.info('Index', '获取到可见奖励', { count: visibleRewards.length });
-
-    const hasNoRealReward = !nextReward || nextReward.isDefault;
-    const hasOnlyExampleRewards = visibleRewards.length > 0 &&
-      visibleRewards.every((reward) => reward.isExample === true);
-
-    if ((hasNoRealReward && visibleRewards.length === 0) || hasOnlyExampleRewards) {
-      logger.info('Index', hasOnlyExampleRewards ? '检测到只有示例奖励，显示设置奖励提示' : '检测到无真实奖励，显示设置奖励提示');
-      if (nextReward) {
-        nextReward.showSetupTip = true;
-      }
-    }
-
-    let visibleRewardsToShow = [...visibleRewards];
-    if (visibleRewardsToShow.length === 0 && nextReward) {
-      logger.info('Index', '检查奖励信息', {
-        name: nextReward.name,
-        id: nextReward.id,
-        isDefault: nextReward.isDefault,
-        showSetupTip: nextReward.showSetupTip
-      });
-
-      if (nextReward.isDefault) {
-        logger.info('Index', '检测到默认占位奖励，不添加到显示列表');
-      } else if (nextReward.id) {
-        logger.info('Index', '无可见奖励但存在有效奖励，添加到显示列表');
-        visibleRewardsToShow = [nextReward];
-      }
-    }
-
-    const progressTotal = calculateProgressTotal(userPoints, nextReward);
+    const homeRewardState = buildHomeRewardState(page, nextReward, visibleRewards);
+    const progressTotal = calculateProgressTotal(userPoints, homeRewardState.nextReward);
 
     logger.info('Index', '进度条状态计算', {
       current: userPoints,
       total: progressTotal,
-      nextRewardPoints: nextReward?.points,
-      nextRewardName: nextReward?.name,
+      nextRewardPoints: homeRewardState.nextReward?.points,
+      nextRewardName: homeRewardState.nextReward?.name,
       willTriggerComplete: userPoints >= progressTotal
     });
 
     page.setData({
       userPoints,
       formattedPoints,
-      nextReward,
+      nextReward: homeRewardState.nextReward,
       lastExchangeTime,
-      visibleRewards: buildVisibleRewards(visibleRewardsToShow, userPoints),
-      hasMoreRewards: visibleRewardsToShow.length > 3,
+      visibleRewards: buildVisibleRewards(homeRewardState.visibleRewards, userPoints),
+      hasMoreRewards: homeRewardState.visibleRewards.length > 3,
+      rewardHintText: homeRewardState.hintText,
       rewardProgress: {
         current: userPoints,
         total: progressTotal
@@ -231,6 +259,7 @@ async function handleRewardCompletion(page, oldProgress, userPoints) {
     const actualUserPoints = await starService.getTotalStars(effectiveUserId);
     const formattedPoints = formatUtils.formatPoints(actualUserPoints);
     const visibleRewards = await rewardService.getAvailableRewards(true, false, loginUserId);
+    const homeRewardState = buildHomeRewardState(page, null, visibleRewards);
 
     page.setData({
       userPoints: actualUserPoints,
@@ -239,8 +268,8 @@ async function handleRewardCompletion(page, oldProgress, userPoints) {
         total: userPoints
       },
       formattedPoints,
-      visibleRewards: buildVisibleRewards(visibleRewards, actualUserPoints),
-      hasMoreRewards: visibleRewards.length > 3,
+      visibleRewards: buildVisibleRewards(homeRewardState.visibleRewards, actualUserPoints),
+      hasMoreRewards: homeRewardState.visibleRewards.length > 3,
       forceKeepFullValue: true,
       completedRewardTotal: userPoints,
       rewardTextState: 'achieved',
@@ -335,11 +364,15 @@ async function transitionToNewTarget(page) {
     const userPoints = await starService.getTotalStars(effectiveUserId);
     logger.debug('Index', `当前星星数: ${userPoints}`);
 
-    const nextReward = await rewardService.calculateNextAvailableReward(userPoints, loginUserId);
-    logger.debug('Index', `新目标信息: 下一目标=${nextReward ? nextReward.name : '无'}, 需要星星=${nextReward ? nextReward.points : 0}`);
+    const [nextReward, visibleRewards] = await Promise.all([
+      rewardService.calculateNextAvailableReward(userPoints, loginUserId),
+      rewardService.getAvailableRewards(true, false, loginUserId)
+    ]);
+    const homeRewardState = buildHomeRewardState(page, nextReward, visibleRewards);
+    logger.debug('Index', `新目标信息: 下一目标=${homeRewardState.nextReward ? homeRewardState.nextReward.name : '无'}, 需要星星=${homeRewardState.nextReward ? homeRewardState.nextReward.points : 0}`);
 
     const formattedPoints = formatUtils.formatPoints(userPoints, true);
-    const progressTotal = calculateProgressTotal(userPoints, nextReward);
+    const progressTotal = calculateProgressTotal(userPoints, homeRewardState.nextReward);
 
     const progressBar = page.selectComponent('#progressBar');
     if (progressBar) {
@@ -353,7 +386,10 @@ async function transitionToNewTarget(page) {
     page.setData({
       userPoints,
       formattedPoints,
-      nextReward,
+      nextReward: homeRewardState.nextReward,
+      visibleRewards: buildVisibleRewards(homeRewardState.visibleRewards, userPoints),
+      hasMoreRewards: homeRewardState.visibleRewards.length > 3,
+      rewardHintText: homeRewardState.hintText,
       rewardProgress: {
         current: userPoints,
         total: progressTotal
