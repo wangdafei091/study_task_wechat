@@ -975,55 +975,34 @@ async function complexBusinessFlow() {
 
 ## 服务测试
 
+### 文档边界
+
+- 本章节只说明服务层测试相关的事实来源、Mock 策略和可测试性设计
+- 项目级测试分层、命令入口、覆盖率口径请参阅 [testing-strategy.md](../development/testing-strategy.md)
+- 后端真实数据库集成测试请参阅 [backend/test/README.md](../../backend/test/README.md)
+
 ### 测试文件
 
 所有核心服务都有对应的单元测试文件，测试文件位于 `test/services/` 目录：
 
-| 服务 | 测试文件 | 测试用例 | 覆盖率 |
-|------|---------|---------|--------|
-| **TaskService** | test/services/task-service.test.js | 61 个 | 54.53% |
-| **StarService** | test/services/star-service.test.js | 65 个 | 23.61% |
-| **RewardService** | test/services/reward-service.test.js | 56 个 | 79.08% |
-| **MessageService** | test/services/message-service.test.js | 49 个 | 58.31% |
-| **UserService** | test/services/user-service.test.js | 48 个 | - |
-| **ValidationService** | test/services/validation-service.test.js | 60 个 | - |
+| 服务 | 测试文件 |
+|------|---------|
+| **TaskService** | `test/services/task-service.test.js` |
+| **StarService** | `test/services/star-service.test.js` |
+| **RewardService** | `test/services/reward-service.test.js` |
+| **MessageService** | `test/services/message-service.test.js` |
+| **UserService** | `test/services/user-service.test.js` |
+| **ValidationService** | `test/services/validation-service.test.js` |
 
 ### 运行测试
 
 ```bash
-# 运行前端单元测试（稳定质量闸门）
-npm test
-
 # 运行特定服务测试
 npm run test:services
 
 # 运行单个服务测试
 npm test test/services/task-service.test.js
-
-# 生成覆盖率报告
-npm run test:coverage
 ```
-
-### 测试覆盖情况
-
-**总体覆盖率**：
-- 测试套件：9 个
-- 测试用例：399 个（1221个通过，部分失败）
-- 整体覆盖率：30.59% 语句
-- 执行时间：约1.5秒
-
-**服务覆盖详情**：
-
-| 指标 | TaskService | StarService | RewardService | MessageService |
-|------|-----------|-----------|--------------|--------------|
-| **语句覆盖率** | 54.53% | 23.61% | 79.08% | 58.31% |
-| **分支覆盖率** | 55.5% | - | 73.46% | 50.88% |
-| **函数覆盖率** | 59.8% | - | 86.11% | 62.5% |
-| **行覆盖率** | 55.2% | - | 79.19% | 59.22% |
-
-**新增服务测试**：
-- **UserService** (48个测试用例) - 用户管理、角色切换、权限控制
-- **ValidationService** (60个测试用例) - 表单验证、数据组装
 
 ### 测试覆盖范围
 
@@ -1127,5 +1106,5 @@ const taskService = new TaskService({
 
 ---
 
-**最后更新**：2026-03-11
+**最后更新**：2026-03-27
 **维护者**：项目维护团队

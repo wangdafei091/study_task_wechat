@@ -1,10 +1,16 @@
 # M14B 文档统一详细设计文档
 
-> **设计状态**：🔴 待审核
+> **设计状态**：🟢 已完成
 > **创建日期**：2026-03-27
 > **设计者**：GPT-5 Codex
 > **审核者**：项目维护者
 > **预计工期**：1-2天
+
+> **实施结果（2026-03-27）**
+> - 已新增 `docs/api/backend-rest-api.md`，覆盖认证、统一响应格式和主要路由族的 HTTP 契约
+> - 已新增 `docs/development/testing-strategy.md`，统一测试分层、命令入口、覆盖率口径与手工回归原则
+> - 已完成 `README.md`、`docs/README.md`、`workflow.md`、`coding_standards.md`、`services-guide.md`、`DOCUMENTATION_MAINTENANCE.md`、`GITHUB_WORKFLOW.md` 的入口与治理规则收敛
+> - 已完成 `ROADMAP.md`、`CHANGELOG.md` 状态同步，并修正仓库内文档链接为相对路径
 
 ---
 
@@ -277,9 +283,9 @@ const docBoundaries = {
 
 ### 第1步：建立文档事实基线（预计2小时）
 
-- [ ] **任务**：盘点后端路由、统一响应格式、测试入口和现有文档引用关系
-- [ ] **验证**：形成明确的“权威来源清单”和“重复内容清单”
-- [ ] **依赖**：无
+- [x] **任务**：盘点后端路由、统一响应格式、测试入口和现有文档引用关系
+- [x] **验证**：形成明确的“权威来源清单”和“重复内容清单”
+- [x] **依赖**：无
 
 **实施要点**：
 1. REST 契约事实来源优先取 `backend/server.js`、`backend/routes/*.js`、controller、真实集成测试
@@ -290,9 +296,9 @@ const docBoundaries = {
 
 ### 第2步：编写后端 REST 契约文档（预计4小时）
 
-- [ ] **任务**：新增 `docs/api/backend-rest-api.md`
-- [ ] **验证**：覆盖所有已挂载路由族和统一响应格式
-- [ ] **依赖**：第1步完成
+- [x] **任务**：新增 `docs/api/backend-rest-api.md`
+- [x] **验证**：覆盖所有已挂载路由族和统一响应格式
+- [x] **依赖**：第1步完成
 
 **实施要点**：
 1. 先写公共约定：基础地址、认证方式、统一响应、错误码口径
@@ -309,9 +315,9 @@ const docBoundaries = {
 
 ### 第3步：编写测试策略总览文档（预计3小时）
 
-- [ ] **任务**：新增 `docs/development/testing-strategy.md`
-- [ ] **验证**：能回答“测什么、怎么跑、哪些是闸门、哪些是手工验证、覆盖率怎么看”
-- [ ] **依赖**：第1步完成
+- [x] **任务**：新增 `docs/development/testing-strategy.md`
+- [x] **验证**：能回答“测什么、怎么跑、哪些是闸门、哪些是手工验证、覆盖率怎么看”
+- [x] **依赖**：第1步完成
 
 **实施要点**：
 1. 明确前端单元测试、页面契约/行为测试、后端单元测试、后端轻量集成、后端真实 DB 集成的分层
@@ -323,9 +329,9 @@ const docBoundaries = {
 
 ### 第4步：收敛文档入口与重复内容（预计3小时）
 
-- [ ] **任务**：更新入口文档与引用关系
-- [ ] **验证**：从 `README.md` 和 `docs/README.md` 出发能正确找到 REST 契约和测试总览
-- [ ] **依赖**：第2步、第3步完成
+- [x] **任务**：更新入口文档与引用关系
+- [x] **验证**：从 `README.md` 和 `docs/README.md` 出发能正确找到 REST 契约和测试总览
+- [x] **依赖**：第2步、第3步完成
 
 **实施要点**：
 1. `docs/README.md` 与 `README.md` 中区分前端 API 文档和后端 REST 文档
@@ -339,9 +345,9 @@ const docBoundaries = {
 
 ### 第5步：完成收尾与状态同步（预计1小时）
 
-- [ ] **任务**：更新 `ROADMAP.md` / `CHANGELOG.md` / 设计文档状态
-- [ ] **验证**：M14B 完成后路线图、变更记录和设计文档状态一致
-- [ ] **依赖**：前四步完成
+- [x] **任务**：更新 `ROADMAP.md` / `CHANGELOG.md` / 设计文档状态
+- [x] **验证**：M14B 完成后路线图、变更记录和设计文档状态一致
+- [x] **依赖**：前四步完成
 
 **实施要点**：
 1. `ROADMAP.md` 将 M14B 从“计划中/实施中”流转到“已完成”
@@ -364,26 +370,26 @@ M14B 主要为文档治理，不新增业务代码单元测试。
 
 ### 集成测试
 
-- [ ] 场景1：从 `README.md` 能找到 REST 契约和测试总览
-- [ ] 场景2：从 `docs/development/workflow.md` 能跳转到项目级测试策略文档
-- [ ] 场景3：从 `docs/development/coding_standards.md` 能明确区分“测试编写规范”与“项目测试策略总览”
-- [ ] 场景4：从 `docs/api/services-guide.md` 能明确区分“前端服务接口”与“项目测试策略”
+- [x] 场景1：从 `README.md` 能找到 REST 契约和测试总览
+- [x] 场景2：从 `docs/development/workflow.md` 能跳转到项目级测试策略文档
+- [x] 场景3：从 `docs/development/coding_standards.md` 能明确区分“测试编写规范”与“项目测试策略总览”
+- [x] 场景4：从 `docs/api/services-guide.md` 能明确区分“前端服务接口”与“项目测试策略”
 
 ### 手动测试
 
 1. **文档正确性测试**：
-   - [ ] 随机抽取 `tasks`、`rewards`、`messages` 三类接口，验证文档与 route/controller/test 一致
-   - [ ] 验证统一响应格式描述与 `backend/utils/response.js` 一致
+   - [x] 随机抽取 `tasks`、`rewards`、`messages` 三类接口，验证文档与 route/controller/test 一致
+   - [x] 验证统一响应格式描述与 `backend/utils/response.js` 一致
 
 2. **入口可达性测试**：
-   - [ ] 根 `README.md` 文档入口清晰
-   - [ ] `docs/README.md` 文档入口清晰
-   - [ ] 开发流程文档不再重复维护大段测试总览
-   - [ ] 编码规范文档不再重复维护项目级测试范围、命令和覆盖率总览
+   - [x] 根 `README.md` 文档入口清晰
+   - [x] `docs/README.md` 文档入口清晰
+   - [x] 开发流程文档不再重复维护大段测试总览
+   - [x] 编码规范文档不再重复维护项目级测试范围、命令和覆盖率总览
 
 3. **回归测试**：
-   - [ ] 确认现有文档引用未断裂
-   - [ ] 确认 M14A、M13 等近期设计文档不被误改范围
+   - [x] 确认现有文档引用未断裂
+   - [x] 确认 M14A、M13 等近期设计文档不被误改范围
 
 ### 测试覆盖率目标
 
@@ -392,11 +398,11 @@ M14B 主要为文档治理，不新增业务代码单元测试。
 
 ### 文档验收标准
 
-- [ ] 所有已挂载的后端路由族都在 REST 契约文档中有对应章节
-- [ ] 所有项目级测试命令都能在测试策略文档中找到对应入口
-- [ ] 从 `README.md` 和 `docs/README.md` 出发能找到后端 REST 契约文档与测试策略总览文档
-- [ ] `workflow.md`、`coding_standards.md`、`services-guide.md` 中不再分别维护同层级的项目测试总览
-- [ ] `DOCUMENTATION_MAINTENANCE.md` 已正式吸收新增文档类型与维护规则
+- [x] 所有已挂载的后端路由族都在 REST 契约文档中有对应章节
+- [x] 所有项目级测试命令都能在测试策略文档中找到对应入口
+- [x] 从 `README.md` 和 `docs/README.md` 出发能找到后端 REST 契约文档与测试策略总览文档
+- [x] `workflow.md`、`coding_standards.md`、`services-guide.md` 中不再分别维护同层级的项目测试总览
+- [x] `DOCUMENTATION_MAINTENANCE.md` 已正式吸收新增文档类型与维护规则
 
 ---
 
