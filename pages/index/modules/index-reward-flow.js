@@ -44,6 +44,7 @@ function buildHomeRewardState(page, nextReward, visibleRewards) {
 
   if (shouldShowSetupTip) {
     effectiveNextReward.showSetupTip = true;
+    effectiveNextReward.name = '';
   }
 
   const normalizedVisibleRewards = realVisibleRewards.length === 0 && realNextReward && realNextReward.id && !hasAllRewardsClaimed

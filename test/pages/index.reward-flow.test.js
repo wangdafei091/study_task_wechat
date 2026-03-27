@@ -238,6 +238,7 @@ describe('pages/index reward flow', () => {
     await page.loadStarsAndRewards();
 
     expect(page.data.nextReward.showSetupTip).toBe(true);
+    expect(page.data.nextReward.name).toBe('');
     expect(page.data.visibleRewards).toEqual([]);
     expect(page.data.rewardHintText).toBe('现在还没有可用奖励，完成任务也会正常积累星星');
   });
@@ -256,6 +257,7 @@ describe('pages/index reward flow', () => {
     await page.loadStarsAndRewards();
 
     expect(page.data.nextReward.showSetupTip).toBe(true);
+    expect(page.data.nextReward.name).toBe('');
     expect(page.data.rewardHintText).toBe('还没有设置奖励，可以去奖励管理添加一个正式奖励');
   });
 
