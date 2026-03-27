@@ -102,6 +102,7 @@ describe('pages/rewards/rewards behavior', () => {
     serviceManager.getUserService.mockReturnValue({
       getLoginUser: jest.fn(() => ({ role: 'parent', userId: 'parent-1' })),
       getLoginUserId: jest.fn(() => 'parent-1'),
+      getCurrentUser: jest.fn(() => ({ role: 'parent', userId: 'parent-1', id: 'parent-1' })),
       getUserByRole: jest.fn(() => ({ id: 'child-1' }))
     });
 
@@ -134,7 +135,7 @@ describe('pages/rewards/rewards behavior', () => {
     expect(appMock.globalData.eventBus.off).toHaveBeenCalled();
   });
 
-  it('loadRewardsData 在无服务实例和自定义奖励清空场景下应正确降级', async () => {
+  it('loadRewardsData 在无服务实例和历史配置提示场景下应正确降级为显式空态', async () => {
     const page = createPageInstance();
 
     serviceManager.getService.mockReturnValueOnce(null);
@@ -160,6 +161,7 @@ describe('pages/rewards/rewards behavior', () => {
     serviceManager.getUserService.mockReturnValue({
       getLoginUser: jest.fn(() => ({ role: 'parent', userId: 'parent-1' })),
       getLoginUserId: jest.fn(() => 'parent-1'),
+      getCurrentUser: jest.fn(() => ({ role: 'parent', userId: 'parent-1', id: 'parent-1' })),
       getUserByRole: jest.fn(() => ({ id: 'child-1' }))
     });
 
@@ -173,6 +175,54 @@ describe('pages/rewards/rewards behavior', () => {
     expect(page.data.claimedRewards).toEqual([]);
     expect(page.data.showTabs).toBe(false);
     expect(page.data.totalPoints).toBe(12);
+    expect(page.data.rewardEmptyMode).toBe('parent-setup');
+    expect(page.data.rewardEmptyTitle).toBe('目前还没有可用的正式奖励');
+    expect(page.data.showManageRewardCTA).toBe(true);
+  });
+
+  it('loadRewardsData 在只有示例奖励时应过滤示例并展示孩子空态', async () => {
+    const page = createPageInstance();
+    const starService = {
+      clearCache: jest.fn(),
+      getTotalStars: jest.fn().mockResolvedValue(9)
+    };
+    const rewardService = {
+      clearCache: jest.fn(),
+      getAvailableRewards: jest.fn().mockResolvedValue([
+        { id: 'reward_1_1', name: '示例奖励', points: 6, claimed: false, isExample: true }
+      ]),
+      calculateNextAvailableReward: jest.fn().mockResolvedValue({
+        id: 'reward_1_1',
+        name: '示例奖励',
+        points: 6,
+        isExample: true
+      })
+    };
+    const configService = {
+      hasCustomRewards: jest.fn(() => false)
+    };
+
+    serviceManager.getService.mockImplementation((name) => {
+      if (name === 'starService') return starService;
+      if (name === 'rewardService') return rewardService;
+      if (name === 'config') return configService;
+      return null;
+    });
+    serviceManager.getUserService.mockReturnValue({
+      getLoginUser: jest.fn(() => ({ role: 'parent', userId: 'parent-1' })),
+      getLoginUserId: jest.fn(() => 'parent-1'),
+      getCurrentUser: jest.fn(() => ({ role: 'child', userId: 'child-1', id: 'child-1' })),
+      getUserByRole: jest.fn(() => ({ id: 'child-1' }))
+    });
+
+    page.getExpiringPoints = jest.fn().mockResolvedValue({ points: 0, date: '' });
+
+    await page.loadRewardsData();
+
+    expect(page.data.rewards).toEqual([]);
+    expect(page.data.rewardEmptyMode).toBe('child-explain');
+    expect(page.data.rewardEmptyDescription).toContain('奖励由家长来设置');
+    expect(page.data.showManageRewardCTA).toBe(false);
   });
 
   it('getExpiringPoints 在服务不可用或异常时应返回默认值', async () => {
@@ -229,6 +279,7 @@ describe('pages/rewards/rewards behavior', () => {
     serviceManager.getUserService.mockReturnValue({
       getLoginUser: jest.fn(() => ({ role: 'parent', userId: 'parent-1' })),
       getLoginUserId: jest.fn(() => 'parent-1'),
+      getCurrentUser: jest.fn(() => ({ role: 'parent', userId: 'parent-1', id: 'parent-1' })),
       getUserByRole: jest.fn(() => ({ id: 'child-1' }))
     });
 
@@ -293,6 +344,7 @@ describe('pages/rewards/rewards behavior', () => {
     serviceManager.getUserService.mockReturnValue({
       getLoginUser: jest.fn(() => ({ role: 'parent', userId: 'parent-1' })),
       getLoginUserId: jest.fn(() => 'parent-1'),
+      getCurrentUser: jest.fn(() => ({ role: 'parent', userId: 'parent-1', id: 'parent-1' })),
       getUserByRole: jest.fn(() => ({ id: 'child-1' }))
     });
 

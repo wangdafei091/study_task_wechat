@@ -28,6 +28,19 @@
   
   <!-- 奖励列表 -->
   <view class="rewards-list">
+    <view class="reward-empty-card" wx:if="{{rewardEmptyMode !== 'none'}}">
+      <view class="reward-empty-icon">{{rewardEmptyMode === 'parent-setup' ? '🏆' : '⭐'}}</view>
+      <view class="reward-empty-title">{{rewardEmptyTitle}}</view>
+      <view class="reward-empty-description">{{rewardEmptyDescription}}</view>
+      <view class="reward-empty-history" wx:if="{{rewardEmptyHistoryHint}}">{{rewardEmptyHistoryHint}}</view>
+      <button
+        class="reward-empty-action"
+        wx:if="{{showManageRewardCTA}}"
+        bindtap="navigateToRewardManage">
+        {{manageRewardCTAText}}
+      </button>
+    </view>
+
     <!-- Tab导航 - 只在两种奖励都存在时显示 -->
     <view class="rewards-tabs" wx:if="{{showTabs}}">
       <view class="tab-item {{activeTab === 'available' ? 'active' : ''}}" 
@@ -43,7 +56,7 @@
     </view>
     
     <!-- 单一标题 - 只在不显示Tab时使用 -->
-    <view class="section-title" wx:if="{{!showTabs}}">
+    <view class="section-title" wx:if="{{rewardEmptyMode === 'none' && !showTabs}}">
       <text wx:if="{{availableRewards.length > 0}}">可获得的奖励</text>
       <text wx:elif="{{claimedRewards.length > 0}}">已领取的奖励</text>
     </view>
@@ -92,7 +105,7 @@
     </view>
     
     <!-- 引导提示 - 只在有可获得奖励但无已领取奖励时显示 -->
-    <view class="guide-tip" wx:if="{{availableRewards.length > 0 && claimedRewards.length === 0 && !showTabs}}">
+    <view class="guide-tip" wx:if="{{rewardEmptyMode === 'none' && availableRewards.length > 0 && claimedRewards.length === 0 && !showTabs}}">
       <text>💡 兑换后可在"我的兑换"中查看领取记录</text>
     </view>
   </view>

@@ -73,14 +73,13 @@ describe('pages/index/modules/index-task-actions', () => {
     };
   }
 
-  it('无真实奖励时应阻止完成任务并清理处理中状态', async () => {
-    const rewardService = {
-      calculateNextAvailableReward: jest.fn().mockResolvedValue({ id: 'default', isDefault: true }),
-      getAvailableRewards: jest.fn().mockResolvedValue([])
+  it('无真实奖励时仍应允许完成任务并继续刷新奖励反馈', async () => {
+    const taskService = {
+      completeTask: jest.fn().mockResolvedValue({ success: true }),
+      resetTask: jest.fn()
     };
     serviceManager.getService.mockImplementation((name) => {
-      if (name === 'rewardService') return rewardService;
-      if (name === 'task') return { completeTask: jest.fn(), resetTask: jest.fn() };
+      if (name === 'task') return taskService;
       return null;
     });
 
@@ -88,10 +87,10 @@ describe('pages/index/modules/index-task-actions', () => {
     await taskActions.completeTask(page, { detail: { taskId: 'task-1' } });
 
     expect(page.data.processingTaskId).toBe(null);
-    expect(page.setData).toHaveBeenCalledWith(expect.objectContaining({
-      nextReward: expect.objectContaining({ showSetupTip: true })
-    }));
-    expect(global.wx.showModal).toHaveBeenCalledWith(expect.objectContaining({
+    expect(taskService.completeTask).toHaveBeenCalledWith('task-1', 'child-1');
+    expect(page.refreshTaskDataForCurrentView).toHaveBeenCalled();
+    expect(page.checkRewardUnlock).toHaveBeenCalled();
+    expect(global.wx.showModal).not.toHaveBeenCalledWith(expect.objectContaining({
       title: '需要设置奖励'
     }));
   });
@@ -124,15 +123,10 @@ describe('pages/index/modules/index-task-actions', () => {
   });
 
   it('完成任务成功后应刷新任务并检查奖励解锁', async () => {
-    const rewardService = {
-      calculateNextAvailableReward: jest.fn().mockResolvedValue({ id: 'reward-1', isDefault: false }),
-      getAvailableRewards: jest.fn().mockResolvedValue([{ id: 'reward-1', isExample: false }])
-    };
     const taskService = {
       completeTask: jest.fn().mockResolvedValue({ success: true })
     };
     serviceManager.getService.mockImplementation((name) => {
-      if (name === 'rewardService') return rewardService;
       if (name === 'task') return taskService;
       return null;
     });
@@ -173,8 +167,6 @@ describe('pages/index/modules/index-task-actions', () => {
 
   it('completeTask 应覆盖空任务、重复点击、取消确认和失败结果分支', async () => {
     const rewardService = {
-      calculateNextAvailableReward: jest.fn().mockResolvedValue({ id: 'reward-1', isDefault: false }),
-      getAvailableRewards: jest.fn().mockResolvedValue([{ id: 'reward-1', isExample: false }]),
       getLastExchangeTimeByUser: jest.fn().mockResolvedValue(null)
     };
     const taskService = {
@@ -220,15 +212,10 @@ describe('pages/index/modules/index-task-actions', () => {
   });
 
   it('必做任务和已获星任务完成后应分别走不同反馈分支', async () => {
-    const rewardService = {
-      calculateNextAvailableReward: jest.fn().mockResolvedValue({ id: 'reward-1', isDefault: false }),
-      getAvailableRewards: jest.fn().mockResolvedValue([{ id: 'reward-1', isExample: false }])
-    };
     const taskService = {
       completeTask: jest.fn().mockResolvedValue({ success: true })
     };
     serviceManager.getService.mockImplementation((name) => {
-      if (name === 'rewardService') return rewardService;
       if (name === 'task') return taskService;
       return null;
     });
