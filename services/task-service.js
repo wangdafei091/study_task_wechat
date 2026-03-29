@@ -193,6 +193,10 @@ class TaskService {
           case 'reset':
             await this._syncStatusToCloud(task);
             break;
+          case 'required':
+          case 'unrequired':
+            await this._syncRequiredStateToCloud(task);
+            break;
           default:
             await this._syncUpdateToCloud(task);
             break;
@@ -631,6 +635,13 @@ class TaskService {
    */
   async _syncStatusToCloud(task) {
     return taskSync.syncStatusToCloud(this, task);
+  }
+
+  /**
+   * 同步任务必做状态到云端
+   */
+  async _syncRequiredStateToCloud(task) {
+    return taskSync.syncRequiredStateToCloud(this, task);
   }
 
   /**

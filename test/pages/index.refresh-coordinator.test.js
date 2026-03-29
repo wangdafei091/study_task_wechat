@@ -102,6 +102,28 @@ describe('pages/index/modules/index-refresh-coordinator', () => {
     });
   });
 
+  it('数组消息事件应沿用首页预览契约：未读优先，未读数基于完整集合', async () => {
+    const page = {
+      setData: jest.fn()
+    };
+
+    await coordinator.handleMessageDataChanged(page, [
+      { id: 'm-read-new', isRead: true, type: 'system', createTime: 100 },
+      { id: 'm-unread-mid', isRead: false, type: 'reward', createTime: 50 },
+      { id: 'm-unread-old', isRead: false, type: 'task', createTime: 10 },
+      { id: 'm-read-old', isRead: true, type: 'task', createTime: 5 }
+    ]);
+
+    expect(page.setData).toHaveBeenCalledWith({
+      messages: [
+        expect.objectContaining({ id: 'm-unread-mid', timeDisplay: '刚刚' }),
+        expect.objectContaining({ id: 'm-unread-old', timeDisplay: '刚刚' }),
+        expect.objectContaining({ id: 'm-read-new', timeDisplay: '刚刚' })
+      ],
+      unreadCount: 2
+    });
+  });
+
   it('任务创建和普通任务变更应走当前视图刷新主路径', async () => {
     const page = {
       data: {

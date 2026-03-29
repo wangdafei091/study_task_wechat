@@ -16,7 +16,7 @@
 
   <!-- 图表容器 - 始终存在 -->
   <view class="chart-container">
-    <ec-canvas id="starTrendChart" canvas-id="starTrendChart" ec="{{ ec }}" force-use-old-canvas="{{isSimulator}}"></ec-canvas>
+    <ec-canvas id="starTrendChart" class="trend-canvas" canvas-id="starTrendChart" ec="{{ ec }}" force-use-old-canvas="{{isSimulator}}"></ec-canvas>
     
     <!-- 状态覆盖层 -->
     <view wx:if="{{isLoading}}" class="status-overlay">

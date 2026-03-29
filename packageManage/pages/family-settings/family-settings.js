@@ -30,18 +30,19 @@ Page({
     const userService = app.globalData?.userService;
     if (!userService) return;
 
-    const loginUser = userService.getLoginUser();
-    if (!loginUser) return;
+    // 本地存储模式下 loginUser 为 null，降级使用 currentUser
+    const effectiveUser = userService.getLoginUser() || userService.getCurrentUser();
+    if (!effectiveUser) return;
 
     // 已加入家庭的孩子不需要再进入此页面（家庭管理由家长负责）
-    if (loginUser.role === 'child' && loginUser.familyId) {
+    if (effectiveUser.role === 'child' && effectiveUser.familyId) {
       logger.warn('FamilySettings', '已加入家庭的孩子无需访问，重定向');
       wx.showToast({ title: '家庭设置仅家长可管理', icon: 'none' });
       wx.navigateBack({ delta: 1 });
       return;
     }
     // 记录当前登录用户角色，供 WXML 控制按钮显示
-    this.setData({ isParent: loginUser.role === 'parent' });
+    this.setData({ isParent: effectiveUser.role === 'parent' });
     // 未加入家庭的用户（包括 child 角色）允许访问，以便输入邀请码加入家庭
     this._loadFamilyData();
   },
@@ -84,9 +85,26 @@ Page({
 
   async _loadMembers() {
     try {
-      // 直接调用 API 获取全量成员（含其他家长），不经 getAllUsers() 过滤
-      const HttpClient = require('../../../utils/http-client');
       const API_CONFIG = require('../../../utils/api-config');
+      // 本地模式：从本地存储读取成员数据
+      if (!API_CONFIG.ENABLE_API) {
+        const app = getApp();
+        const userService = app.globalData?.userService;
+
+        const localMembers = userService?.storageAdapter?.get('localFamilyMembers') || [];
+        // 补上家长自身
+        const loginUser = userService?.getLoginUser();
+        const parentMember = loginUser ? [{
+          userId: loginUser.userId || loginUser.id,
+          nickname: loginUser.name || loginUser.displayName || '家长',
+          role: 'parent',
+          isVirtual: false,
+        }] : [];
+        return [...parentMember, ...localMembers];
+      }
+
+      // 云端模式：直接调用 API 获取全量成员（含其他家长），不经 getAllUsers() 过滤
+      const HttpClient = require('../../../utils/http-client');
       const data = await HttpClient.get(API_CONFIG.ENDPOINTS.FAMILIES_MEMBERS);
       return data.members || [];
     } catch (e) {
@@ -161,6 +179,8 @@ Page({
   cancelJoinFamily() {
     this.setData({ showJoinDialog: false });
   },
+
+  noop() {},
 
   // ===== 邀请码刷新 =====
   onInviteCodeRoleChange(e) {

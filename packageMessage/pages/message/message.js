@@ -2,6 +2,7 @@
 const serviceManager = require('../../../services/service-manager.js');
 const dateUtils = require('../../../utils/dateUtils');
 const logger = require('../../../utils/logger');
+const messageDisplay = require('../../../utils/message-display');
 const viewScopeUtils = require('../../../utils/view-scope');
 
 Page({
@@ -37,17 +38,24 @@ Page({
         activeTab: options.tab
       });
     }
-    
+
+    this._skipNextOnShowRefresh = true;
+
     // 加载消息数据
-    this.loadMessageData();
+    return this.loadMessageData();
   },
 
   /**
    * 生命周期函数--监听页面显示
    */
   onShow: function () {
+    if (this._skipNextOnShowRefresh) {
+      this._skipNextOnShowRefresh = false;
+      return Promise.resolve();
+    }
+
     // 刷新消息数据
-    this.loadMessageData();
+    return this.loadMessageData();
   },
 
   /**
@@ -58,7 +66,7 @@ Page({
     const messageService = serviceManager.getMessageService();
     const scopeOptions = this.getMessageScopeOptions();
 
-    messageService.getMessagesByScope({
+    return messageService.getMessagesByScope({
       ...scopeOptions,
       requireFresh: true
     })
@@ -84,22 +92,8 @@ Page({
    * 处理消息数据，添加日期分隔符和计算未读数量
    */
   processMessages: function(messages) {
-    // 按时间降序排序 - 统一使用createTime
-    const sortedMessages = [...messages].sort((a, b) => b.createTime - a.createTime);
-    
-    // 添加日期分隔符
-    let lastDate = '';
-    const processedMessages = sortedMessages.map(msg => {
-      const date = this.formatDate(msg.createTime);
-      const showDateDivider = date !== lastDate;
-      lastDate = date;
-      
-      return {
-        ...msg,
-        timeDisplay: this.formatMessageTime(msg.createTime),
-        showDateDivider,
-        dateDivider: date
-      };
+    const processedMessages = messageDisplay.buildTimelineMessages(messages, {
+      formatMessageTime: (createTime) => this.formatMessageTime(createTime)
     });
     
     // 计算各类型未读消息数量
@@ -137,6 +131,10 @@ Page({
     
     // 分页加载
     const paged = filtered.slice(0, pageSize * currentPage);
+    const displayMessages = messageDisplay.recomputeDateDividers(
+      paged,
+      (createTime) => this.formatDate(createTime)
+    );
     
     let tabName = '';
     switch(activeTab) {
@@ -147,7 +145,7 @@ Page({
     }
     
     this.setData({
-      filteredMessages: paged,
+      filteredMessages: displayMessages,
       activeTabName: tabName,
       hasMoreMessages: filtered.length > paged.length
     });

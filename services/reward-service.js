@@ -291,6 +291,14 @@ class RewardService {
               reward
             );
             break;
+          case 'unclaim':
+            await this._syncCancelExchangeToCloud(
+              reward.id,
+              reward.pendingSyncMeta.exchangeUserId || reward.exchangeUserId,
+              reward.pendingSyncMeta.modifyTime || reward.modifyTime,
+              reward
+            );
+            break;
           default:
             await this._syncRewardToCloud(reward);
             break;
@@ -829,6 +837,23 @@ class RewardService {
     return response;
   }
 
+  async _syncCancelExchangeToCloud(rewardId, exchangeUserId, modifyTime, reward = null) {
+    const pendingSyncMeta = reward?.pendingSyncMeta || this._buildRewardPendingSyncMeta(reward, 'unclaim', {
+      modifyTime,
+      exchangeUserId
+    });
+    const url = API_CONFIG.ENDPOINTS.REWARD_CANCEL_EXCHANGE.replace('{rewardId}', rewardId);
+    const response = await HttpClient.patch(url, {
+      exchangeUserId,
+      modifyTime,
+      operationKey: pendingSyncMeta.operationKey
+    });
+    if (reward) {
+      await this._markRewardSynced(reward, { modifyTime });
+    }
+    return response;
+  }
+
   _mapCloudReward(item) {
     return new Reward({
       id: item.rewardId || item.id,
@@ -842,7 +867,7 @@ class RewardService {
       enabled: item.enabled !== false,
       claimed: item.claimed === true,
       claimTime: item.claimTime || 0,
-      claimStatus: item.claimStatus || (item.claimed ? 'delivered' : 'available'),
+      claimStatus: item.claimStatus || (item.claimed ? 'claimed' : 'available'),
       deliveryTime: item.deliveryTime || 0,
       isExample: item.isExample === true,
       tags: item.tags || [],
@@ -1010,11 +1035,10 @@ class RewardService {
           };
         }
         
-        // 3. 更新奖励状态为已领取
+        // 3. 更新奖励状态为已兑换未领取
         try {
-          reward.claim(); // 使用Reward模型的标准方法，现在直接设置为delivered状态
+          reward.claim();
           reward.claimTime = exchangeModifyTime;
-          reward.deliveryTime = exchangeModifyTime;
           reward.modifyTime = exchangeModifyTime;
           reward.exchangeUserId = userId;
           reward.pendingSyncMeta = this._buildRewardPendingSyncMeta(reward, 'exchange', {
@@ -1168,11 +1192,57 @@ class RewardService {
         logger.warn('RewardService', `取消奖励兑换失败: 未找到ID为${rewardId}的奖励`);
         return { success: false, message: '未找到指定的奖励' };
       }
-      
+
       // 检查奖励是否已兑换
       if (!reward.claimed) {
         logger.info('RewardService', `奖励尚未兑换, 无需取消, ID=${rewardId}`);
         return { success: true, reward, message: '奖励尚未兑换' };
+      }
+
+      if (this.enableCloudStorage) {
+        const exchangeUserId = reward.exchangeUserId || this.userService?.getCurrentUserId?.() || null;
+        const modifyTime = Date.now();
+        const response = await this._syncCancelExchangeToCloud(
+          rewardId,
+          exchangeUserId,
+          modifyTime
+        );
+
+        const cloudReward = this._mapCloudReward(response.reward || {
+          ...reward,
+          rewardId: reward.id,
+          claimed: false,
+          claimTime: 0,
+          claimStatus: 'available',
+          deliveryTime: 0,
+          exchangeUserId: null,
+          modifyTime
+        });
+        cloudReward.pendingSyncMeta = null;
+        cloudReward.syncedToCloud = true;
+        await this.rewardRepository.save(cloudReward);
+
+        if (this.starService?.refreshStarsFromCloud && exchangeUserId) {
+          await this.starService.refreshStarsFromCloud(exchangeUserId).catch(() => null);
+        }
+
+        const pointsRefunded = Number(response.refundedPoints || 0);
+        this.eventBus.emit(EVENTS.REWARD_UNCLAIMED, {
+          reward: cloudReward,
+          pointsRefunded
+        });
+        this.eventBus.emit(EVENTS.REWARD_EXCHANGE_CANCELLED, {
+          reward: cloudReward,
+          pointsRefunded,
+          record: response.refundRecord || null
+        });
+
+        return {
+          success: true,
+          reward: cloudReward,
+          pointsRefunded,
+          message: '取消兑换成功'
+        };
       }
       
       // 检查奖励是否已领取

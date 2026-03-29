@@ -40,8 +40,16 @@ class MessageRepository extends BaseRepository {
     return `${this.storageKey}:migrated:${scope}:${userId || 'all'}`;
   }
 
+  _isArchivedMessage(message) {
+    return message && message.isArchived === true;
+  }
+
   async getMessagesByScope({ scope, userId = null, familyId = null }) {
     return this.query(message => {
+      if (this._isArchivedMessage(message)) {
+        return false;
+      }
+
       if (message.visibilityScope !== scope) {
         return false;
       }
@@ -159,6 +167,10 @@ class MessageRepository extends BaseRepository {
   async getUnreadMessages(userId = null) {
     try {
       const messages = await this.query(message => {
+        if (this._isArchivedMessage(message)) {
+          return false;
+        }
+
         // 用户过滤
         if (userId && message.userId !== userId) {
           return false;
@@ -261,6 +273,10 @@ class MessageRepository extends BaseRepository {
     
     try {
       const messages = await this.query(message => {
+        if (this._isArchivedMessage(message)) {
+          return false;
+        }
+
         // 用户过滤
         if (userId && message.userId !== userId) {
           return false;

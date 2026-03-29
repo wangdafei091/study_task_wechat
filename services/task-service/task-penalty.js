@@ -1,9 +1,24 @@
 const logger = require('../../utils/logger');
 const { TaskStatus } = require('../../models/task');
 const { EVENTS } = require('../../utils/constants');
+const HttpClient = require('../../utils/http-client');
+const API_CONFIG = require('../../utils/api-config');
 
 async function checkTasksStatus(service) {
   try {
+    if (service.enableCloudStorage) {
+      const response = await HttpClient.post(API_CONFIG.ENDPOINTS.TASK_PENALTIES_SYNC, {});
+      const payload = response || {};
+      return {
+        success: true,
+        expiredTasks: [],
+        requiredTasks: [],
+        penaltyResults: Array.isArray(payload.penaltyResults) ? payload.penaltyResults : [],
+        penaltyCount: Number(payload.penaltyCount || 0),
+        affectedTaskIds: payload.affectedTaskIds || []
+      };
+    }
+
     const loginUserId = service.userService ? service.userService.getLoginUserId() : null;
 
     let scanUserIds = null;

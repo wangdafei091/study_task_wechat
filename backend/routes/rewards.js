@@ -16,5 +16,6 @@ router.post('/', rewardController.createReward.bind(rewardController));
 router.put('/:rewardId', rewardController.updateReward.bind(rewardController));
 router.delete('/:rewardId', rewardController.deleteReward.bind(rewardController));
 router.patch('/:rewardId/exchange', rewardController.exchangeReward.bind(rewardController));
+router.patch('/:rewardId/cancel-exchange', rewardController.cancelRewardExchange.bind(rewardController));
 
 module.exports = router;

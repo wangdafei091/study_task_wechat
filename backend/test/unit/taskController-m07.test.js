@@ -80,6 +80,151 @@ describe('GET /api/tasks?scope=family', () => {
   });
 });
 
+describe('POST /api/tasks', () => {
+  let app;
+  beforeAll(() => { app = buildApp(); });
+
+  it('创建任务时应过滤 penaltyApplied 字段', async () => {
+    const task = makeTask();
+    let capturedTaskData;
+    taskService.createTask = jest.fn().mockImplementation((userId, taskData) => {
+      capturedTaskData = taskData;
+      return Promise.resolve(task);
+    });
+
+    const res = await request(app)
+      .post('/api/tasks')
+      .set('Authorization', token(CHILD))
+      .send({
+        title: '新任务',
+        type: 'study',
+        date: '2026-03-01',
+        penaltyApplied: true,
+        isRequired: true
+      });
+
+    expect(res.status).toBe(200);
+    expect(capturedTaskData).not.toHaveProperty('penaltyApplied');
+    expect(capturedTaskData).toHaveProperty('isRequired', true);
+  });
+});
+
+describe('POST /api/tasks/penalties/sync', () => {
+  let app;
+  beforeAll(() => { app = buildApp(); });
+
+  it('家长默认按家庭范围同步 penalty', async () => {
+    taskService.syncRequiredTaskPenalties = jest.fn().mockResolvedValue({
+      success: true,
+      penaltyCount: 1,
+      affectedTaskIds: ['task_001'],
+      penaltyResults: [{ success: true, taskId: 'task_001', penaltyPoints: 5 }]
+    });
+
+    const res = await request(app)
+      .post('/api/tasks/penalties/sync')
+      .set('Authorization', token(PARENT))
+      .send({});
+
+    expect(res.status).toBe(200);
+    expect(taskService.syncRequiredTaskPenalties).toHaveBeenCalledWith(expect.objectContaining({
+      viewerUserId: 'parent_1',
+      viewerRole: 'parent',
+      familyId: 'fam_1',
+      scope: 'family',
+      targetUserId: null
+    }));
+  });
+
+  it('家长按个人范围同步指定孩子 penalty 时应校验 targetUserId', async () => {
+    familyService.getUserFamilyAndRole = jest.fn().mockResolvedValue({ familyId: 'fam_1', role: 'child' });
+    taskService.syncRequiredTaskPenalties = jest.fn().mockResolvedValue({
+      success: true,
+      penaltyCount: 0,
+      affectedTaskIds: [],
+      penaltyResults: []
+    });
+
+    const res = await request(app)
+      .post('/api/tasks/penalties/sync')
+      .set('Authorization', token(PARENT))
+      .send({ scope: 'user', targetUserId: 'child_1' });
+
+    expect(res.status).toBe(200);
+    expect(taskService.syncRequiredTaskPenalties).toHaveBeenCalledWith(expect.objectContaining({
+      scope: 'user',
+      targetUserId: 'child_1'
+    }));
+  });
+});
+
+describe('POST /api/tasks/upcoming/sync', () => {
+  let app;
+  beforeAll(() => { app = buildApp(); });
+
+  it('家长默认按家庭范围同步 upcoming', async () => {
+    taskService.syncUpcomingTaskMessages = jest.fn().mockResolvedValue({
+      success: true,
+      createdCount: 1,
+      dedupedCount: 0,
+      archivedCount: 0,
+      activeCount: 2,
+      affectedTaskIds: ['task_001']
+    });
+
+    const res = await request(app)
+      .post('/api/tasks/upcoming/sync')
+      .set('Authorization', token(PARENT))
+      .send({});
+
+    expect(res.status).toBe(200);
+    expect(taskService.syncUpcomingTaskMessages).toHaveBeenCalledWith(expect.objectContaining({
+      viewerUserId: 'parent_1',
+      viewerRole: 'parent',
+      familyId: 'fam_1',
+      scope: 'family',
+      targetUserId: null
+    }));
+  });
+
+  it('家长按个人范围同步指定孩子 upcoming 时应校验 targetUserId', async () => {
+    familyService.getUserFamilyAndRole = jest.fn().mockResolvedValue({ familyId: 'fam_1', role: 'child' });
+    taskService.syncUpcomingTaskMessages = jest.fn().mockResolvedValue({
+      success: true,
+      createdCount: 0,
+      dedupedCount: 1,
+      archivedCount: 0,
+      activeCount: 1,
+      affectedTaskIds: ['task_001']
+    });
+
+    const res = await request(app)
+      .post('/api/tasks/upcoming/sync')
+      .set('Authorization', token(PARENT))
+      .send({ scope: 'user', targetUserId: 'child_1' });
+
+    expect(res.status).toBe(200);
+    expect(taskService.syncUpcomingTaskMessages).toHaveBeenCalledWith(expect.objectContaining({
+      scope: 'user',
+      targetUserId: 'child_1'
+    }));
+  });
+
+  it('schema 缺失时应显式返回 TASK_REMINDER_SCHEMA_MISSING', async () => {
+    const schemaError = new Error('同步 upcoming 任务消息失败：tasks 表缺少 reminder 字段，请先执行数据库迁移');
+    schemaError.code = 'TASK_REMINDER_SCHEMA_MISSING';
+    taskService.syncUpcomingTaskMessages = jest.fn().mockRejectedValue(schemaError);
+
+    const res = await request(app)
+      .post('/api/tasks/upcoming/sync')
+      .set('Authorization', token(PARENT))
+      .send({});
+
+    expect(res.status).toBe(503);
+    expect(res.body.error_code).toBe('TASK_REMINDER_SCHEMA_MISSING');
+  });
+});
+
 describe('PUT /api/tasks/:taskId', () => {
   let app;
   beforeAll(() => { app = buildApp(); });
@@ -156,6 +301,26 @@ describe('PUT /api/tasks/:taskId', () => {
     expect(capturedChanges).not.toHaveProperty('status');
     expect(capturedChanges).not.toHaveProperty('userId');
     expect(capturedChanges).toHaveProperty('title', '新标题');
+  });
+
+  it('更新任务时应过滤 penaltyApplied 字段', async () => {
+    const task = makeTask();
+    taskService.getTaskById = jest.fn().mockResolvedValue(task);
+    let capturedChanges;
+    taskService.updateTask = jest.fn().mockImplementation((id, changes) => {
+      capturedChanges = changes;
+      return Promise.resolve(task);
+    });
+
+    const res = await request(app)
+      .put('/api/tasks/task_001')
+      .set('Authorization', token(CHILD))
+      .send({ title: '新标题', penaltyApplied: true, isRequired: true });
+
+    expect(res.status).toBe(200);
+    expect(capturedChanges).not.toHaveProperty('penaltyApplied');
+    expect(capturedChanges).toHaveProperty('title', '新标题');
+    expect(capturedChanges).not.toHaveProperty('isRequired');
   });
 });
 
@@ -344,6 +509,90 @@ describe('PATCH /api/tasks/:taskId/status', () => {
         actorUserId: 'parent_1',
         actorRole: 'parent',
         subjectUserId: 'child_1'
+      })
+    );
+  });
+});
+
+describe('PATCH /api/tasks/:taskId/required', () => {
+  let app;
+  beforeAll(() => { app = buildApp(); });
+
+  it('任务所有者可以标记必做', async () => {
+    const task = makeTask();
+    taskService.getTaskById = jest.fn().mockResolvedValue(task);
+    taskService.markTaskRequired = jest.fn().mockResolvedValue(task);
+
+    const res = await request(app)
+      .patch('/api/tasks/task_001/required')
+      .set('Authorization', token(CHILD))
+      .send({ modifyTime: 123456 });
+
+    expect(res.status).toBe(200);
+    expect(taskService.markTaskRequired).toHaveBeenCalledWith(
+      'task_001',
+      expect.objectContaining({
+        actorUserId: 'child_1',
+        actorRole: 'child',
+        familyId: 'fam_1',
+        subjectUserId: 'child_1',
+        modifyTime: 123456
+      })
+    );
+  });
+
+  it('家长可以代孩子标记必做', async () => {
+    const task = makeTask();
+    taskService.getTaskById = jest.fn().mockResolvedValue(task);
+    familyService.getUserFamilyAndRole = jest.fn().mockResolvedValue({ familyId: 'fam_1', role: 'child' });
+    taskService.markTaskRequired = jest.fn().mockResolvedValue(task);
+
+    const res = await request(app)
+      .patch('/api/tasks/task_001/required')
+      .set('Authorization', token(PARENT))
+      .send({});
+
+    expect(res.status).toBe(200);
+  });
+
+  it('跨家庭用户标记必做返回 403', async () => {
+    const task = makeTask();
+    taskService.getTaskById = jest.fn().mockResolvedValue(task);
+    familyService.getUserFamilyAndRole = jest.fn().mockResolvedValue({ familyId: 'fam_2', role: 'child' });
+
+    const res = await request(app)
+      .patch('/api/tasks/task_001/required')
+      .set('Authorization', token(OTHER))
+      .send({});
+
+    expect(res.status).toBe(403);
+    expect(res.body.error_code).toBe('PERMISSION_DENIED');
+  });
+});
+
+describe('PATCH /api/tasks/:taskId/unrequired', () => {
+  let app;
+  beforeAll(() => { app = buildApp(); });
+
+  it('任务所有者可以取消必做', async () => {
+    const task = makeTask({ isRequired: 1 });
+    taskService.getTaskById = jest.fn().mockResolvedValue(task);
+    taskService.unmarkTaskRequired = jest.fn().mockResolvedValue(task);
+
+    const res = await request(app)
+      .patch('/api/tasks/task_001/unrequired')
+      .set('Authorization', token(CHILD))
+      .send({ modifyTime: 223344 });
+
+    expect(res.status).toBe(200);
+    expect(taskService.unmarkTaskRequired).toHaveBeenCalledWith(
+      'task_001',
+      expect.objectContaining({
+        actorUserId: 'child_1',
+        actorRole: 'child',
+        familyId: 'fam_1',
+        subjectUserId: 'child_1',
+        modifyTime: 223344
       })
     );
   });

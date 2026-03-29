@@ -1,6 +1,7 @@
 const serviceManager = require('../../../services/service-manager.js');
 const dateUtils = require('../../../utils/dateUtils');
 const logger = require('../../../utils/logger');
+const messageDisplay = require('../../../utils/message-display');
 
 async function handleRewardUpdated(page, data) {
   logger.debug('Index', '收到奖励更新事件', data);
@@ -48,16 +49,10 @@ async function handleMessageDataChanged(page, eventData) {
   logger.info('Index', '收到消息数据变更事件');
 
   if (Array.isArray(eventData)) {
-    const processedMessages = [...eventData]
-      .sort((a, b) => {
-        if (a.isRead !== b.isRead) return a.isRead ? 1 : -1;
-        return b.createTime - a.createTime;
-      })
-      .slice(0, 3)
-      .map((msg) => ({
-        ...msg,
-        timeDisplay: dateUtils.formatRelativeTime(msg.createTime)
-      }));
+    const processedMessages = messageDisplay.buildPreviewMessages(eventData, {
+      limit: 3,
+      formatMessageTime: (createTime) => dateUtils.formatRelativeTime(createTime)
+    });
 
     const unreadCount = eventData.filter((msg) => !msg.isRead).length;
     page.setData({

@@ -39,6 +39,7 @@ class StarService {
     this.eventBus = options.eventBus || new EventBus();
 
     this.enableCloudStorage = API_CONFIG.ENABLE_API;
+    this._cloudRefreshInFlight = new Map();
     
     logger.info('StarService', '初始化星星服务，已注入余额计算器到StarRecordRepository');
   }
@@ -1279,7 +1280,28 @@ class StarService {
     if (!this.enableCloudStorage) {
       return { success: false, message: '云端模式未启用' };
     }
-    return this._fetchStarsFromCloud(userId, options);
+    const scope = options.scope || 'user';
+    const scopeKey = scope === 'family'
+      ? 'family'
+      : `user:${userId || 'missing'}`;
+    const inFlightRequest = this._cloudRefreshInFlight.get(scopeKey);
+    if (inFlightRequest) {
+      logger.info('StarService', '复用进行中的云端星星刷新请求', {
+        scope,
+        userId: userId || null
+      });
+      return inFlightRequest;
+    }
+
+    const request = this._fetchStarsFromCloud(userId, options)
+      .finally(() => {
+        if (this._cloudRefreshInFlight.get(scopeKey) === request) {
+          this._cloudRefreshInFlight.delete(scopeKey);
+        }
+      });
+
+    this._cloudRefreshInFlight.set(scopeKey, request);
+    return request;
   }
 
   async _fetchStarsFromCloud(userId = null, options = {}) {

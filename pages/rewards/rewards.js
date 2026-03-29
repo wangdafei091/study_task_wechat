@@ -5,6 +5,7 @@ const app = getApp();
 const serviceManager = require('../../services/service-manager');
 const formatUtils = require('../../utils/formatUtils');
 const logger = require('../../utils/logger');
+const rewardStatus = require('../../utils/reward-status');
 const uiUtils = require('../../utils/uiUtils');
 
 const REWARD_MANAGE_URL = '/packageManage/pages/reward-manage/reward-manage';
@@ -59,6 +60,18 @@ function buildRewardPageState({ rewards, hasRewardHistoryHint, viewMode }) {
   };
 }
 
+function decorateRewardForDisplay(reward, totalPoints) {
+  const unlocked = totalPoints >= reward.points;
+
+  return {
+    ...reward,
+    unlocked,
+    claimDisplayStatus: rewardStatus.resolveRewardClaimStatus(reward),
+    poolStatusLabel: rewardStatus.getRewardPoolStatusLabel({ ...reward, unlocked }),
+    poolActionLabel: rewardStatus.getRewardPoolActionLabel({ ...reward, unlocked })
+  };
+}
+
 Page({
 
   /**
@@ -84,7 +97,7 @@ Page({
     activeTab: 'available',    // 当前激活的Tab: 'available' | 'claimed'
     showTabs: false,           // 是否显示Tab切换
     availableRewards: [],      // 可获得的奖励
-    claimedRewards: [],        // 已领取的奖励
+    claimedRewards: [],        // 已兑换/已领取的奖励
     rewardEmptyMode: 'none',
     rewardEmptyTitle: '',
     rewardEmptyDescription: '',
@@ -139,6 +152,8 @@ Page({
 
       if (starService?.refreshStarsFromCloud && effectiveChildId) {
         await starService.refreshStarsFromCloud(effectiveChildId);
+      } else if (!effectiveChildId) {
+        logger.info('rewards', '奖励页跳过孩子星星云同步：当前没有可用的孩子视角');
       }
       if (rewardService?.refreshRewardsFromCloud) {
         await rewardService.refreshRewardsFromCloud();
@@ -339,7 +354,9 @@ Page({
       logger.info('rewards', `有效孩子ID: ${effectiveChildId}, 奖励归属ID: ${rewardOwnerId}`);
 
       // 使用新架构获取用户星星数
-      const totalPoints = await starService.getTotalStars(effectiveChildId);
+      const totalPoints = effectiveChildId
+        ? await starService.getTotalStars(effectiveChildId)
+        : 0;
       logger.info('rewards', `获取到用户星星: ${totalPoints}`);
       
       // 格式化星星数量
@@ -418,17 +435,14 @@ Page({
         return;
       }
       
-      // 计算解锁状态
-      const rewards = realRewards.map(r => ({
-        ...r,
-        unlocked: totalPoints >= r.points
-      }));
+      // 计算页面展示状态
+      const rewards = realRewards.map((reward) => decorateRewardForDisplay(reward, totalPoints));
       
-      // 区分可用和已领取的奖励
-      const availableRewards = rewards.filter(r => !r.claimed);
-      const claimedRewards = rewards.filter(r => r.claimed);
+      // 区分可兑换和已兑换/已领取的奖励
+      const availableRewards = rewards.filter((reward) => !rewardStatus.isRewardExchanged(reward));
+      const claimedRewards = rewards.filter((reward) => rewardStatus.isRewardExchanged(reward));
       
-      logger.debug('rewards', `可用奖励: ${availableRewards.length}个, 已领取奖励: ${claimedRewards.length}个`);
+      logger.debug('rewards', `可兑换奖励: ${availableRewards.length}个, 已兑换奖励: ${claimedRewards.length}个`);
       
       // 计算已解锁奖励数量
       const unlockedRewards = rewards.filter(reward => reward.unlocked).length;
@@ -461,7 +475,7 @@ Page({
         activeTab = availableRewards.length > 0 ? 'available' : 'claimed';
       }
       
-      logger.info('rewards', `Tab显示逻辑: showTabs=${showTabs}, activeTab=${activeTab}, 可获得=${availableRewards.length}, 已领取=${claimedRewards.length}`);
+      logger.info('rewards', `Tab显示逻辑: showTabs=${showTabs}, activeTab=${activeTab}, 可获得=${availableRewards.length}, 已兑换=${claimedRewards.length}`);
 
       this.setData({
         rewards: rewards,
@@ -469,7 +483,7 @@ Page({
         claimedRewards: claimedRewards,
         showTabs: showTabs,
         activeTab: activeTab,
-        showClaimedRewards: true, // 显示已领取的奖励
+        showClaimedRewards: true, // 显示已兑换/已领取的奖励
         currentProgress: totalPoints,
         totalPoints: totalPoints,
         formattedPoints: formattedPoints,
@@ -624,22 +638,24 @@ Page({
       return;
     }
 
-    if (reward.claimed) {
+    const claimDisplayStatus = rewardStatus.resolveRewardClaimStatus(reward);
+
+    if (claimDisplayStatus !== rewardStatus.RewardClaimDisplayStatus.AVAILABLE) {
       wx.showToast({
-        title: '奖励已领取',
+        title: claimDisplayStatus === rewardStatus.RewardClaimDisplayStatus.DELIVERED ? '奖励已领取' : '奖励已兑换',
         icon: 'none'
       });
       return;
     }
 
     // 添加二次确认
-    let confirmTitle = '确认领取';
+    let confirmTitle = '确认兑换';
     let confirmContent = '';
     
     if (reward.protectedByExpiry) {
-      confirmContent = `【${reward.name}】为星星过期保护奖励，兑换无需消耗星星！确定要领取吗？`;
+      confirmContent = `【${reward.name}】为星星过期保护奖励，兑换无需消耗星星。确定现在兑换吗？`;
     } else {
-      confirmContent = `确定要用 ${reward.points} 颗星星兑换【${reward.name}】吗？领取后星星将不能退回哦！`;
+      confirmContent = `确定要用 ${reward.points} 颗星星兑换【${reward.name}】吗？兑换后星星将不能退回哦！`;
     }
     
     wx.showModal({
@@ -675,6 +691,14 @@ Page({
       
       // 获取小朋友用户ID（统一使用小朋友账户进行星星操作）
       const childUserId = this._getChildUserId();
+      if (!childUserId) {
+        wx.hideLoading();
+        wx.showToast({
+          title: '请先添加孩子',
+          icon: 'none'
+        });
+        return;
+      }
       logger.info('rewards', `使用小朋友用户ID进行奖励兑换: ${childUserId}`);
       
       // 保存原始星星数和目标星星数
@@ -921,7 +945,7 @@ Page({
     const userService = serviceManager.getUserService();
     if (!userService) {
       logger.warn('rewards', '无法获取用户服务');
-      return 'child';
+      return null;
     }
     const loginUser = userService.getLoginUser ? userService.getLoginUser() : null;
     const currentUser = userService.getCurrentUser ? userService.getCurrentUser() : null;
@@ -937,8 +961,14 @@ Page({
     const app = getApp();
     const lastActiveChildId = app && app.globalData && app.globalData.lastActiveChildId;
     if (lastActiveChildId) {
-      logger.info('rewards', `使用最近活跃孩子ID: ${lastActiveChildId}`);
-      return lastActiveChildId;
+      const lastActiveChild = typeof userService.getUserById === 'function'
+        ? userService.getUserById(lastActiveChildId)
+        : null;
+      if (lastActiveChild && lastActiveChild.role === 'child') {
+        logger.info('rewards', `使用最近活跃孩子ID: ${lastActiveChildId}`);
+        return lastActiveChildId;
+      }
+      logger.info('rewards', `忽略失效的最近活跃孩子ID: ${lastActiveChildId}`);
     }
     // 兜底：取第一个孩子
     const firstChild = userService.getUserByRole('child');
@@ -946,8 +976,8 @@ Page({
       logger.info('rewards', `使用第一个孩子ID: ${firstChild.id}`);
       return firstChild.id;
     }
-    logger.warn('rewards', '未找到孩子用户，使用默认child');
-    return 'child';
+    logger.info('rewards', '当前没有可用的孩子视角，返回空孩子ID');
+    return null;
   },
 
   /**

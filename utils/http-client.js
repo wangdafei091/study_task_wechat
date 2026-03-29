@@ -36,8 +36,13 @@ class HttpClient {
       headers['Authorization'] = `Bearer ${token}`;
     }
 
-    // 构建完整URL
-    let fullUrl = API_CONFIG.BASE_URL + url;
+    // 构建完整URL，避免 base/path 拼接产生双斜杠
+    const isAbsoluteUrl = /^https?:\/\//.test(url);
+    const normalizedBaseUrl = (API_CONFIG.BASE_URL || '').replace(/\/+$/, '');
+    const normalizedPath = `/${String(url || '').replace(/^\/+/, '')}`;
+    let fullUrl = isAbsoluteUrl
+      ? url
+      : `${normalizedBaseUrl}${normalizedPath}`;
     
     // 添加查询参数
     if (params && Object.keys(params).length > 0) {

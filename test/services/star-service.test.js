@@ -1133,6 +1133,35 @@ describe('StarService', () => {
       expect(HttpClient.get).not.toHaveBeenCalled();
     });
 
+    it('同一用户并发刷新星星时应复用进行中的云请求', async () => {
+      starService.enableCloudStorage = true;
+
+      mockStarGroupRepository.getAll.mockResolvedValue([]);
+      mockStarRecordRepository.getAll.mockResolvedValue([]);
+      HttpClient.get
+        .mockResolvedValueOnce({ groups: [] })
+        .mockResolvedValueOnce({ records: [] });
+
+      const [result1, result2] = await Promise.all([
+        starService.refreshStarsFromCloud('user_123'),
+        starService.refreshStarsFromCloud('user_123')
+      ]);
+
+      expect(HttpClient.get).toHaveBeenCalledTimes(2);
+      expect(HttpClient.get).toHaveBeenNthCalledWith(1, '/api/stars', { userId: 'user_123' });
+      expect(HttpClient.get).toHaveBeenNthCalledWith(2, '/api/stars/records', { userId: 'user_123' });
+      expect(result1).toEqual(expect.objectContaining({
+        success: true,
+        groups: [],
+        records: []
+      }));
+      expect(result2).toEqual(expect.objectContaining({
+        success: true,
+        groups: [],
+        records: []
+      }));
+    });
+
     it('星星流水同步成功后应回灌服务端返回的最新分组快照', async () => {
       const record = {
         id: 'record_sync_1',

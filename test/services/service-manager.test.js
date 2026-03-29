@@ -57,11 +57,11 @@ const loadServiceManager = (options = {}) => {
   jest.doMock('../../services/config-service', () => ConfigService);
 
   if (throwAnalyticsRequire) {
-    jest.doMock('../../packageChart/services/analytics-service', () => {
+    jest.doMock('../../services/analytics-service', () => {
       throw new Error('analytics require failed');
     });
   } else {
-    jest.doMock('../../packageChart/services/analytics-service', () => AnalyticsService);
+    jest.doMock('../../services/analytics-service', () => AnalyticsService);
   }
 
   const serviceManager = require('../../services/service-manager');

@@ -27,6 +27,9 @@ jest.mock('../../utils/api-config', () => ({
     TASKS: '/api/tasks',
     TASK_BY_ID: '/api/tasks/{taskId}',
     TASK_STATUS: '/api/tasks/{taskId}/status',
+    TASK_REQUIRED: '/api/tasks/{taskId}/required',
+    TASK_UNREQUIRED: '/api/tasks/{taskId}/unrequired',
+    TASK_PENALTIES_SYNC: '/api/tasks/penalties/sync',
   }
 }));
 
@@ -350,6 +353,56 @@ describe('TaskService', () => {
       const result = await taskService.createTask(repeatTaskData);
 
       expect(result.success).toBe(true);
+    });
+
+    it('自定义重复任务在日期范围内无匹配星期时应返回兜底错误', async () => {
+      const startDate = new Date();
+      const selectedDay = (startDate.getDay() + 1) % 7;
+      const repeatTaskData = TestDataFactory.createTask({
+        userId: 'parent',
+        title: '无可用日期的自定义重复任务',
+        type: TaskType.HABIT,
+        date: dateUtils.formatDate(startDate),
+        repeat: {
+          type: 'custom',
+          days: [selectedDay],
+          startDate: dateUtils.formatDate(startDate),
+          endDate: dateUtils.formatDate(startDate)
+        }
+      });
+
+      const result = await taskService.createTask(repeatTaskData);
+
+      expect(result.success).toBe(false);
+      expect(result.message).toContain('无法在日期范围');
+      expect(result.message).toContain('重复星期');
+      expect(mockTaskRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('周末重复任务在日期范围内无匹配日期时应返回兜底错误', async () => {
+      const startDate = new Date();
+      while ([0, 6].includes(startDate.getDay())) {
+        startDate.setDate(startDate.getDate() + 1);
+      }
+
+      const repeatTaskData = TestDataFactory.createTask({
+        userId: 'parent',
+        title: '无可用日期的周末任务',
+        type: TaskType.HABIT,
+        date: dateUtils.formatDate(startDate),
+        repeat: {
+          type: 'weekends',
+          startDate: dateUtils.formatDate(startDate),
+          endDate: dateUtils.formatDate(startDate)
+        }
+      });
+
+      const result = await taskService.createTask(repeatTaskData);
+
+      expect(result.success).toBe(false);
+      expect(result.message).toContain('无法在日期范围');
+      expect(result.message).toContain('周末重复条件');
+      expect(mockTaskRepository.save).not.toHaveBeenCalled();
     });
 
     it('创建失败时应该返回错误', async () => {
@@ -953,6 +1006,62 @@ describe('TaskService', () => {
 
       expect(result.success).toBe(true);
       expect(result.unchanged).toBe(true);
+    });
+
+    it('云端模式下标记必做应写入待同步元数据并调用正式同步入口', async () => {
+      taskService.enableCloudStorage = true;
+      taskService._syncRequiredStateToCloud = jest.fn().mockResolvedValue(true);
+
+      const task = new Task(TestDataFactory.createTask({
+        id: 'task_required_cloud',
+        userId: 'parent',
+        isRequired: false
+      }));
+      mockTaskRepository.getById.mockResolvedValue(task);
+      mockTaskRepository.save.mockImplementation(async (savedTask) => savedTask);
+
+      const result = await taskService.markTaskAsRequired('task_required_cloud');
+
+      expect(result.success).toBe(true);
+      expect(result.task.isRequired).toBe(true);
+      expect(result.task.syncedToCloud).toBe(false);
+      expect(result.task.pendingSyncMeta).toEqual(expect.objectContaining({
+        action: 'required',
+        notificationType: 'task_required',
+        targetUserId: 'parent'
+      }));
+      expect(taskService._syncRequiredStateToCloud).toHaveBeenCalledWith(expect.objectContaining({
+        id: 'task_required_cloud',
+        isRequired: true
+      }));
+    });
+
+    it('云端模式下取消必做应写入待同步元数据并调用正式同步入口', async () => {
+      taskService.enableCloudStorage = true;
+      taskService._syncRequiredStateToCloud = jest.fn().mockResolvedValue(true);
+
+      const task = new Task(TestDataFactory.createTask({
+        id: 'task_unrequired_cloud',
+        userId: 'parent',
+        isRequired: true
+      }));
+      mockTaskRepository.getById.mockResolvedValue(task);
+      mockTaskRepository.save.mockImplementation(async (savedTask) => savedTask);
+
+      const result = await taskService.unmarkTaskAsRequired('task_unrequired_cloud');
+
+      expect(result.success).toBe(true);
+      expect(result.task.isRequired).toBe(false);
+      expect(result.task.syncedToCloud).toBe(false);
+      expect(result.task.pendingSyncMeta).toEqual(expect.objectContaining({
+        action: 'unrequired',
+        notificationType: 'task_unrequired',
+        targetUserId: 'parent'
+      }));
+      expect(taskService._syncRequiredStateToCloud).toHaveBeenCalledWith(expect.objectContaining({
+        id: 'task_unrequired_cloud',
+        isRequired: false
+      }));
     });
   });
 
@@ -1607,6 +1716,22 @@ describe('TaskService', () => {
       expect(result.success).toBe(true);
     });
 
+    it('deleteTask：云端删除失败后应发出待补偿事件', async () => {
+      const task = new Task(TestDataFactory.createTask({ id: 't_delete_fail', userId: 'u1' }));
+      mockTaskRepository.getById.mockResolvedValue(task);
+      mockTaskRepository.delete.mockResolvedValue(true);
+      HttpClient.request = jest.fn().mockRejectedValue(new Error('cloud request error'));
+
+      const result = await taskService.deleteTask('t_delete_fail');
+      await new Promise(setImmediate);
+
+      expect(result.success).toBe(true);
+      mockEventBus.verifyEmit(EVENTS.TASK_CLOUD_SYNC_FAILED, {
+        action: 'delete',
+        taskId: 't_delete_fail'
+      });
+    });
+
     it('updateTaskStatus：本地成功但云端失败时应返回成功并打warn', async () => {
       const task = new Task(TestDataFactory.createTask({ id: 't1', userId: 'u1', status: 0, isRequired: true }));
       mockTaskRepository.getById.mockResolvedValue(task);
@@ -1629,6 +1754,44 @@ describe('TaskService', () => {
       const result = await taskService.resetTask('t1');
 
       expect(result.success).toBe(true);
+    });
+  });
+
+  describe('M15A - pendingSync required/unrequired 补云', () => {
+    beforeEach(() => {
+      taskService.enableCloudStorage = true;
+      taskService._syncRequiredStateToCloud = jest.fn().mockResolvedValue(true);
+      taskService._getDeleteTombstones = jest.fn().mockResolvedValue([]);
+    });
+
+    afterEach(() => {
+      taskService.enableCloudStorage = false;
+    });
+
+    it('应将 required/unrequired 待同步任务路由到专用同步入口', async () => {
+      const requiredTask = new Task(TestDataFactory.createTask({
+        id: 'required_task',
+        userId: 'u1',
+        isRequired: true
+      }));
+      requiredTask.syncedToCloud = true;
+      requiredTask.pendingSyncMeta = { action: 'required' };
+
+      const unrequiredTask = new Task(TestDataFactory.createTask({
+        id: 'unrequired_task',
+        userId: 'u1',
+        isRequired: false
+      }));
+      unrequiredTask.syncedToCloud = true;
+      unrequiredTask.pendingSyncMeta = { action: 'unrequired' };
+
+      mockTaskRepository.getAll.mockResolvedValue([requiredTask, unrequiredTask]);
+
+      await taskService._flushPendingTaskSyncs();
+
+      expect(taskService._syncRequiredStateToCloud).toHaveBeenCalledTimes(2);
+      expect(taskService._syncRequiredStateToCloud).toHaveBeenNthCalledWith(1, requiredTask);
+      expect(taskService._syncRequiredStateToCloud).toHaveBeenNthCalledWith(2, unrequiredTask);
     });
   });
 

@@ -97,7 +97,7 @@
   padding: 0 10rpx;
 }
 
-.chart-container ec-canvas {
+.trend-canvas {
   width: 100%;
   height: 100%;
 }

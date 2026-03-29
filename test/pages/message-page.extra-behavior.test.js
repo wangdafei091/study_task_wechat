@@ -205,4 +205,27 @@ describe('packageMessage/pages/message/message extra behavior', () => {
     expect(page.showMessageDetail).toHaveBeenCalled();
     expect(page.loadMessageData).toHaveBeenCalled();
   });
+
+  it('loadMoreMessages 后应按扩展后的当前展示序列重新计算日期分隔', () => {
+    const page = createPageInstance();
+    page.data.pageSize = 1;
+    page.data.activeTab = 'task';
+    page.formatDate = jest.fn((createTime) => (createTime >= 300 ? '今天' : '昨天'));
+    page.formatMessageTime = jest.fn(() => '刚刚');
+
+    page.processMessages([
+      { id: 'm1', type: 'reward', isRead: false, createTime: 400 },
+      { id: 'm2', type: 'task', isRead: false, createTime: 350 },
+      { id: 'm3', type: 'task', isRead: false, createTime: 100 }
+    ]);
+
+    expect(page.data.filteredMessages.map((message) => message.id)).toEqual(['m2']);
+    expect(page.data.filteredMessages[0].showDateDivider).toBe(true);
+
+    page.loadMoreMessages();
+
+    expect(page.data.filteredMessages.map((message) => message.id)).toEqual(['m2', 'm3']);
+    expect(page.data.filteredMessages.map((message) => message.showDateDivider)).toEqual([true, true]);
+    expect(page.data.filteredMessages.map((message) => message.dateDivider)).toEqual(['今天', '昨天']);
+  });
 });

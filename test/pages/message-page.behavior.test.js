@@ -86,14 +86,25 @@ describe('packageMessage/pages/message/message behavior', () => {
     delete global.wx;
   });
 
-  it('onLoad 和 onShow 应走统一数据加载入口', async () => {
+  it('onLoad 首次进入应加载一次，首次 onShow 不应重复拉取', async () => {
     const page = createPageInstance();
     page.loadMessageData = jest.fn();
 
     page.onLoad({ tab: 'reward' });
-    page.onShow();
+    await page.onShow();
 
     expect(page.data.activeTab).toBe('reward');
+    expect(page.loadMessageData).toHaveBeenCalledTimes(1);
+  });
+
+  it('首次进入后再次 onShow 应刷新消息数据', async () => {
+    const page = createPageInstance();
+    page.loadMessageData = jest.fn();
+
+    page.onLoad({});
+    await page.onShow();
+    await page.onShow();
+
     expect(page.loadMessageData).toHaveBeenCalledTimes(2);
   });
 
@@ -166,5 +177,23 @@ describe('packageMessage/pages/message/message behavior', () => {
     expect(page.preventBubble({ stopPropagation, preventDefault })).toBe(false);
     expect(stopPropagation).toHaveBeenCalled();
     expect(preventDefault).toHaveBeenCalled();
+  });
+
+  it('按 Tab 过滤后应基于最终展示序列重算日期分隔', () => {
+    const page = createPageInstance();
+    page.formatDate = jest.fn((createTime) => (createTime >= 300 ? '今天' : '昨天'));
+    page.formatMessageTime = jest.fn(() => '刚刚');
+
+    page.processMessages([
+      { id: 'm1', type: 'reward', isRead: false, createTime: 400 },
+      { id: 'm2', type: 'task', isRead: false, createTime: 350 },
+      { id: 'm3', type: 'task', isRead: true, createTime: 100 }
+    ]);
+
+    page.switchTab({ currentTarget: { dataset: { tab: 'task' } } });
+
+    expect(page.data.filteredMessages.map((message) => message.id)).toEqual(['m2', 'm3']);
+    expect(page.data.filteredMessages.map((message) => message.showDateDivider)).toEqual([true, true]);
+    expect(page.data.filteredMessages.map((message) => message.dateDivider)).toEqual(['今天', '昨天']);
   });
 });

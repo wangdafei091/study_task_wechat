@@ -5,10 +5,25 @@ jest.mock('../../utils/logger', () => ({
   debug: jest.fn()
 }));
 
+const mockHttpClient = {
+  post: jest.fn()
+};
+
+jest.mock('../../utils/http-client', () => mockHttpClient);
+jest.mock('../../utils/api-config', () => ({
+  ENDPOINTS: {
+    TASK_PENALTIES_SYNC: '/api/tasks/penalties/sync'
+  }
+}));
+
 const taskPenalty = require('../../services/task-service/task-penalty');
 const { TaskStatus } = require('../../models/task');
 
 describe('task-penalty direct behavior', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
   it('checkTasksStatus 应过滤虚拟孩子并处理异常分支', async () => {
     const service = {
       userService: {
@@ -36,6 +51,29 @@ describe('task-penalty direct behavior', () => {
     await expect(taskPenalty.checkTasksStatus(service)).resolves.toEqual({
       success: false,
       message: '检查任务状态失败: expired fail'
+    });
+  });
+
+  it('云端模式下 checkTasksStatus 应改走后端 penalty sync', async () => {
+    const service = {
+      enableCloudStorage: true
+    };
+    mockHttpClient.post.mockResolvedValue({
+      penaltyCount: 1,
+      affectedTaskIds: ['task_cloud_1'],
+      penaltyResults: [{ success: true, taskId: 'task_cloud_1', penaltyPoints: 5 }]
+    });
+
+    const result = await taskPenalty.checkTasksStatus(service);
+
+    expect(mockHttpClient.post).toHaveBeenCalledWith('/api/tasks/penalties/sync', {});
+    expect(result).toEqual({
+      success: true,
+      expiredTasks: [],
+      requiredTasks: [],
+      penaltyResults: [{ success: true, taskId: 'task_cloud_1', penaltyPoints: 5 }],
+      penaltyCount: 1,
+      affectedTaskIds: ['task_cloud_1']
     });
   });
 

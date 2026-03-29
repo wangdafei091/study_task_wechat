@@ -5,6 +5,46 @@ const { createLogger } = require('../utils/logger');
 const logger = createLogger('MessageService');
 
 class MessageService {
+  _isRepeatPlanTask(task) {
+    if (!task || !task.repeat || task.parentTaskId) {
+      return false;
+    }
+
+    if (task.hasNoEndDate === true) {
+      return true;
+    }
+
+    const startDate = task.repeat.startDate || task.date || null;
+    const endDate = task.repeat.endDate || null;
+    if (!startDate || !endDate) {
+      return false;
+    }
+
+    return startDate !== endDate;
+  }
+
+  _formatTaskPlanRange(task) {
+    if (!task || !task.repeat) {
+      return '';
+    }
+
+    const startDate = task.repeat.startDate || task.date || null;
+    if (!startDate) {
+      return '';
+    }
+
+    if (task.hasNoEndDate === true) {
+      return `${startDate}起`;
+    }
+
+    const endDate = task.repeat.endDate || null;
+    if (!endDate || endDate === startDate) {
+      return startDate;
+    }
+
+    return `${startDate}至${endDate}`;
+  }
+
   _buildUserScopeClause(viewer, targetUserId, params) {
     const resolvedTargetUserId = targetUserId || viewer.userId;
 
@@ -32,7 +72,7 @@ class MessageService {
     const sql = [];
     const params = [];
 
-    sql.push('SELECT * FROM messages WHERE deleted_at IS NULL');
+    sql.push('SELECT * FROM messages WHERE deleted_at IS NULL AND is_archived = 0');
 
     if (resolvedScope === 'family') {
       if (viewer.role !== 'parent' || !viewer.familyId) {
@@ -92,6 +132,7 @@ class MessageService {
          WHERE visibility_scope = 'family'
            AND family_id = ?
            AND deleted_at IS NULL
+           AND is_archived = 0
            AND is_read = 0`,
         [readTime, viewer.familyId]
       );
@@ -101,6 +142,7 @@ class MessageService {
         'UPDATE messages',
         'SET is_read = 1, read_time = ?',
         'WHERE deleted_at IS NULL',
+        'AND is_archived = 0',
         'AND is_read = 0'
       ];
       const params = [readTime];
@@ -130,11 +172,13 @@ class MessageService {
 
   async createTaskMessages(input, connection) {
     const records = await this._buildTaskMessageRecords(input);
+    await this._archiveFoldableMessages(records, connection);
     return this._upsertMessages(records, connection);
   }
 
   async createRewardMessages(input, connection) {
     const records = await this._buildRewardMessageRecords(input);
+    await this._archiveFoldableMessages(records, connection);
     return this._upsertMessages(records, connection);
   }
 
@@ -145,8 +189,15 @@ class MessageService {
     actorUserId,
     actorRole = 'system',
     operationKey,
+    penaltyPoints = null,
+    upcomingMeta = null,
+    createTimeOverride = null,
   }) {
     if (!task || !action) {
+      return [];
+    }
+
+    if (action === 'create' && task.parentTaskId) {
       return [];
     }
 
@@ -170,6 +221,9 @@ class MessageService {
       actorName,
       subjectName,
       subjectUserId,
+      penaltyPoints,
+      upcomingMeta,
+      task,
     });
 
     const records = [];
@@ -190,7 +244,7 @@ class MessageService {
         summary: content.user.summary,
         icon: content.icon,
         priority: content.priority,
-        createTime: Number(operationKey || task.modifyTime || Date.now()),
+        createTime: Number(createTimeOverride || task.modifyTime || Date.now()),
       }));
     }
 
@@ -210,7 +264,7 @@ class MessageService {
         summary: content.family.summary,
         icon: content.icon,
         priority: content.priority,
-        createTime: Number(operationKey || task.modifyTime || Date.now()),
+        createTime: Number(createTimeOverride || task.modifyTime || Date.now()),
       }));
     }
 
@@ -225,22 +279,15 @@ class MessageService {
     actorRole = 'system',
     exchangeUserId = null,
     operationKey,
+    pointsOverride = null,
   }) {
     if (!reward || !action) {
       return [];
     }
 
-    const subjectUserId = action === 'exchange' ? (exchangeUserId || reward.exchangeUserId) : null;
     const actorName = await this._getUserDisplayName(actorUserId);
+    const subjectUserId = action === 'exchange' ? (exchangeUserId || reward.exchangeUserId) : null;
     const subjectName = await this._getUserDisplayName(subjectUserId);
-    const eventKey = this._buildMessageEventKey({
-      sourceType: 'reward',
-      relatedId: reward.rewardId,
-      notificationType: `reward_${action}`,
-      subjectUserId,
-      actorUserId,
-      operationKey,
-    });
 
     const content = this._buildRewardContent({
       action,
@@ -249,18 +296,26 @@ class MessageService {
       actorUserId,
       actorName,
       subjectName,
-      points: reward.points,
+      points: pointsOverride === null || pointsOverride === undefined ? reward.points : pointsOverride,
     });
 
     const records = [];
     if (content.user && subjectUserId) {
+      const userEventKey = this._buildMessageEventKey({
+        sourceType: 'reward',
+        relatedId: reward.rewardId,
+        notificationType: `reward_${action}`,
+        subjectUserId,
+        actorUserId,
+        operationKey,
+      });
       records.push(new Message({
         familyId,
         userId: subjectUserId,
         actorUserId,
         subjectUserId,
         operationKey,
-        messageEventKey: eventKey,
+        messageEventKey: userEventKey,
         visibilityScope: 'user',
         type: 'reward',
         notificationType: `reward_${action}`,
@@ -275,12 +330,20 @@ class MessageService {
     }
 
     if (content.family && familyId) {
+      const familyEventKey = this._buildMessageEventKey({
+        sourceType: 'reward',
+        relatedId: reward.rewardId,
+        notificationType: `reward_${action}`,
+        subjectUserId: null,
+        actorUserId,
+        operationKey,
+      });
       records.push(new Message({
         familyId,
         actorUserId,
         subjectUserId,
         operationKey,
-        messageEventKey: eventKey,
+        messageEventKey: familyEventKey,
         visibilityScope: 'family',
         type: 'reward',
         notificationType: `reward_${action}`,
@@ -294,11 +357,49 @@ class MessageService {
       }));
     }
 
+    if (content.user && familyId && ['create', 'update', 'delete'].includes(action)) {
+      const activeChildren = await this._getActiveChildMembers(familyId);
+      activeChildren.forEach((child) => {
+        const childEventKey = this._buildMessageEventKey({
+          sourceType: 'reward',
+          relatedId: reward.rewardId,
+          notificationType: `reward_${action}`,
+          subjectUserId: child.userId,
+          actorUserId,
+          operationKey,
+        });
+        records.push(new Message({
+          familyId,
+          userId: child.userId,
+          actorUserId,
+          subjectUserId: child.userId,
+          operationKey,
+          messageEventKey: childEventKey,
+          visibilityScope: 'user',
+          type: 'reward',
+          notificationType: `reward_${action}`,
+          relatedId: reward.rewardId,
+          relatedType: 'reward',
+          title: content.user.title,
+          summary: content.user.summary,
+          icon: content.icon,
+          priority: content.priority,
+          createTime: Number(operationKey || reward.modifyTime || Date.now()),
+        }));
+      });
+    }
+
     return records;
   }
 
   _getRoleDisplayName(role) {
-    return role === 'parent' ? '家长' : '孩子';
+    if (role === 'parent') {
+      return '家长';
+    }
+    if (role === 'child') {
+      return '孩子';
+    }
+    return '系统';
   }
 
   _normalizeDisplayName(name, role) {
@@ -308,10 +409,18 @@ class MessageService {
     return this._getRoleDisplayName(role);
   }
 
-  _buildTaskContent({ action, taskTitle, actorRole, actorUserId, actorName, subjectName, subjectUserId }) {
+  _buildTaskContent({ action, taskTitle, actorRole, actorUserId, actorName, subjectName, subjectUserId, penaltyPoints = null, upcomingMeta = null, task = null }) {
     const safeSubjectName = this._normalizeDisplayName(subjectName, 'child');
     const safeActorName = this._normalizeDisplayName(actorName, actorRole);
     const isSelfAction = Boolean(actorUserId && subjectUserId && actorUserId === subjectUserId);
+    const resolvedPenaltyPoints = Number(penaltyPoints || 0);
+    const remainingText = upcomingMeta?.remainingText || '稍后';
+    const taskLabel = upcomingMeta?.isRequired ? `必做任务“${taskTitle}”` : `任务“${taskTitle}”`;
+    const upcomingStartText = upcomingMeta?.dayLabel
+      ? `${taskLabel}将于${upcomingMeta.dayLabel}开始`
+      : `${taskLabel}将在${remainingText}后开始`;
+    const isRepeatPlanTask = this._isRepeatPlanTask(task);
+    const planRangeText = this._formatTaskPlanRange(task);
 
     switch (action) {
       case 'create':
@@ -319,16 +428,24 @@ class MessageService {
           icon: '📝',
           priority: 1,
           user: {
-            title: '新任务已创建',
-            summary: isSelfAction
-              ? `你给自己安排了任务“${taskTitle}”`
-              : `${safeActorName}给你安排了任务“${taskTitle}”`,
+            title: isRepeatPlanTask ? `多天任务计划：${taskTitle}` : `新任务：${taskTitle}`,
+            summary: isRepeatPlanTask
+              ? (isSelfAction
+                ? `你给自己创建了多天任务计划“${taskTitle}”${planRangeText ? `（${planRangeText}）` : ''}`
+                : `${safeActorName}给你创建了多天任务计划“${taskTitle}”${planRangeText ? `（${planRangeText}）` : ''}`)
+              : (isSelfAction
+                ? `你给自己安排了任务“${taskTitle}”`
+                : `${safeActorName}给你安排了任务“${taskTitle}”`),
           },
           family: {
-            title: '任务已创建',
-            summary: isSelfAction
-              ? `${safeSubjectName}创建了任务“${taskTitle}”`
-              : `${safeActorName}给${safeSubjectName}创建了任务“${taskTitle}”`,
+            title: isRepeatPlanTask ? `多天任务计划：${taskTitle}` : `任务已创建：${taskTitle}`,
+            summary: isRepeatPlanTask
+              ? (isSelfAction
+                ? `${safeSubjectName}创建了多天任务计划“${taskTitle}”${planRangeText ? `（${planRangeText}）` : ''}`
+                : `${safeActorName}给${safeSubjectName}创建了多天任务计划“${taskTitle}”${planRangeText ? `（${planRangeText}）` : ''}`)
+              : (isSelfAction
+                ? `${safeSubjectName}创建了任务“${taskTitle}”`
+                : `${safeActorName}给${safeSubjectName}创建了任务“${taskTitle}”`),
           },
         };
       case 'update':
@@ -336,13 +453,13 @@ class MessageService {
           icon: '✏️',
           priority: 1,
           user: {
-            title: '任务已更新',
+            title: `任务已更新：${taskTitle}`,
             summary: isSelfAction
               ? `你的任务“${taskTitle}”已更新`
               : `${safeActorName}更新了你的任务“${taskTitle}”`,
           },
           family: {
-            title: '任务已更新',
+            title: `任务已更新：${taskTitle}`,
             summary: isSelfAction
               ? `${safeSubjectName}更新了任务“${taskTitle}”`
               : `${safeActorName}更新了${safeSubjectName}的任务“${taskTitle}”`,
@@ -353,13 +470,13 @@ class MessageService {
           icon: '🗑️',
           priority: 1,
           user: {
-            title: '任务已删除',
+            title: `任务已删除：${taskTitle}`,
             summary: isSelfAction
               ? `你的任务“${taskTitle}”已删除`
               : `${safeActorName}删除了你的任务“${taskTitle}”`,
           },
           family: {
-            title: '任务已删除',
+            title: `任务已删除：${taskTitle}`,
             summary: isSelfAction
               ? `${safeSubjectName}删除了任务“${taskTitle}”`
               : `${safeActorName}删除了${safeSubjectName}的任务“${taskTitle}”`,
@@ -370,13 +487,13 @@ class MessageService {
           icon: '✅',
           priority: 2,
           user: {
-            title: '任务已完成',
+            title: `完成任务：${taskTitle}`,
             summary: isSelfAction
               ? `你完成了任务“${taskTitle}”`
               : `${safeActorName}代你完成了任务“${taskTitle}”`,
           },
           family: {
-            title: '任务已完成',
+            title: `完成任务：${taskTitle}`,
             summary: isSelfAction
               ? `${safeSubjectName}完成了任务“${taskTitle}”`
               : `${safeActorName}代${safeSubjectName}完成了任务“${taskTitle}”`,
@@ -387,16 +504,78 @@ class MessageService {
           icon: '↩️',
           priority: 1,
           user: {
-            title: '任务已重置',
+            title: `任务已重置：${taskTitle}`,
             summary: isSelfAction
               ? `你的任务“${taskTitle}”已重置为未完成`
               : `${safeActorName}将你的任务“${taskTitle}”重置为未完成`,
           },
           family: {
-            title: '任务已重置',
+            title: `任务已重置：${taskTitle}`,
             summary: isSelfAction
               ? `${safeSubjectName}将任务“${taskTitle}”重置为未完成`
               : `${safeActorName}将${safeSubjectName}的任务“${taskTitle}”重置为未完成`,
+          },
+        };
+      case 'required':
+        return {
+          icon: '📌',
+          priority: 2,
+          user: {
+            title: `任务已设为必做：${taskTitle}`,
+            summary: isSelfAction
+              ? `任务“${taskTitle}”已设为必做`
+              : `${safeActorName}将你的任务“${taskTitle}”设为必做`,
+          },
+          family: {
+            title: `任务已设为必做：${taskTitle}`,
+            summary: isSelfAction
+              ? `${safeSubjectName}将任务“${taskTitle}”设为必做`
+              : `${safeActorName}将${safeSubjectName}的任务“${taskTitle}”设为必做`,
+          },
+        };
+      case 'unrequired':
+        return {
+          icon: '📍',
+          priority: 1,
+          user: {
+            title: `任务已取消必做：${taskTitle}`,
+            summary: isSelfAction
+              ? `任务“${taskTitle}”已取消必做`
+              : `${safeActorName}取消了你的任务“${taskTitle}”的必做标记`,
+          },
+          family: {
+            title: `任务已取消必做：${taskTitle}`,
+            summary: isSelfAction
+              ? `${safeSubjectName}取消了任务“${taskTitle}”的必做标记`
+              : `${safeActorName}取消了${safeSubjectName}的任务“${taskTitle}”的必做标记`,
+          },
+        };
+      case 'penalty':
+        return {
+          icon: '⚠️',
+          priority: 2,
+          user: {
+            title: `必做任务已扣星：${taskTitle}`,
+            summary: `必做任务“${taskTitle}”未完成，已扣除${resolvedPenaltyPoints}颗星星`,
+          },
+          family: {
+            title: `必做任务已扣星：${taskTitle}`,
+            summary: `${safeSubjectName}未完成必做任务“${taskTitle}”，已扣除${resolvedPenaltyPoints}颗星星`,
+          },
+        };
+      case 'upcoming':
+        return {
+          icon: '⏰',
+          priority: upcomingMeta?.isRequired ? 2 : 1,
+          user: {
+            title: upcomingMeta?.isRequired ? `必做任务即将开始：${taskTitle}` : `任务即将开始：${taskTitle}`,
+            summary: upcomingMeta?.isAllDay ? upcomingStartText : `${taskLabel}将在${remainingText}后开始`,
+          },
+          family: {
+            title: upcomingMeta?.isRequired ? `必做任务即将开始：${taskTitle}` : `任务即将开始：${taskTitle}`,
+            summary: upcomingMeta?.isAllDay
+              ? `${safeSubjectName}的${upcomingStartText}`
+              : `${safeSubjectName}的${taskLabel}将在${remainingText}后开始`,
           },
         };
       default:
@@ -413,24 +592,36 @@ class MessageService {
         return {
           icon: '🎁',
           priority: 1,
+          user: {
+            title: '奖励池新增奖励',
+            summary: `${safeActorName}新增了奖励“${rewardName}”，需要${points}颗星星兑换`,
+          },
           family: {
             title: '新奖励已创建',
-            summary: `${safeActorName}创建了奖励“${rewardName}”`,
+            summary: `${safeActorName}创建了奖励“${rewardName}”，需要${points}颗星星兑换`,
           },
         };
       case 'update':
         return {
           icon: '🎁',
           priority: 1,
+          user: {
+            title: '奖励池调整',
+            summary: `${safeActorName}更新了奖励“${rewardName}”，当前需要${points}颗星星兑换`,
+          },
           family: {
             title: '奖励已更新',
-            summary: `${safeActorName}更新了奖励“${rewardName}”`,
+            summary: `${safeActorName}更新了奖励“${rewardName}”，当前需要${points}颗星星兑换`,
           },
         };
       case 'delete':
         return {
           icon: '🗑️',
           priority: 1,
+          user: {
+            title: '奖励池移除奖励',
+            summary: `${safeActorName}移除了奖励“${rewardName}”`,
+          },
           family: {
             title: '奖励已删除',
             summary: `${safeActorName}删除了奖励“${rewardName}”`,
@@ -449,6 +640,21 @@ class MessageService {
             summary: actorRole === 'parent'
               ? `${safeActorName}为${safeSubjectName}兑换了奖励“${rewardName}”`
               : `${safeSubjectName}兑换了奖励“${rewardName}”`,
+          },
+        };
+      case 'unclaim':
+        return {
+          icon: '↩️',
+          priority: 1,
+          user: {
+            title: '奖励兑换已取消',
+            summary: `奖励“${rewardName}”的兑换已取消，已退回${points}颗星星`,
+          },
+          family: {
+            title: '奖励兑换已取消',
+            summary: actorRole === 'parent'
+              ? `${safeActorName}取消了${safeSubjectName}兑换的奖励“${rewardName}”，已退回${points}颗星星`
+              : `${safeSubjectName}取消了奖励“${rewardName}”的兑换，已退回${points}颗星星`,
           },
         };
       default:
@@ -472,6 +678,75 @@ class MessageService {
       actorUserId || 'none',
       operationKey || 'none',
     ].join(':');
+  }
+
+  _getFoldGroup(notificationType) {
+    const foldGroups = [
+      ['task_create', 'task_update', 'task_required', 'task_unrequired'],
+      ['reward_create', 'reward_update']
+    ];
+
+    return foldGroups.find((group) => group.includes(notificationType)) || null;
+  }
+
+  async _archiveFoldableMessages(messages, connection = null) {
+    if (!Array.isArray(messages) || messages.length === 0) {
+      return;
+    }
+
+    const conn = connection || { execute };
+    const archivedTargets = new Set();
+
+    for (const message of messages) {
+      const foldGroup = this._getFoldGroup(message.notificationType);
+      if (!foldGroup || !message.relatedId || !message.relatedType) {
+        continue;
+      }
+
+      const targetKey = [
+        message.visibilityScope,
+        message.userId || '',
+        message.familyId || '',
+        message.relatedType,
+        message.relatedId,
+        foldGroup.join(',')
+      ].join('|');
+
+      if (archivedTargets.has(targetKey)) {
+        continue;
+      }
+      archivedTargets.add(targetKey);
+
+      const sql = [
+        'UPDATE messages',
+        'SET is_archived = 1',
+        'WHERE deleted_at IS NULL',
+        'AND is_archived = 0',
+        'AND is_read = 0',
+        'AND related_id = ?',
+        'AND related_type = ?',
+        `AND notification_type IN (${foldGroup.map(() => '?').join(', ')})`,
+        'AND visibility_scope = ?',
+        'AND message_event_key <> ?'
+      ];
+      const params = [
+        message.relatedId,
+        message.relatedType,
+        ...foldGroup,
+        message.visibilityScope,
+        message.messageEventKey
+      ];
+
+      if (message.visibilityScope === 'user') {
+        sql.push('AND user_id = ?');
+        params.push(message.userId);
+      } else if (message.visibilityScope === 'family') {
+        sql.push('AND family_id = ?');
+        params.push(message.familyId);
+      }
+
+      await conn.execute(sql.join(' '), params);
+    }
   }
 
   async _upsertMessages(messages, connection = null) {
@@ -595,6 +870,28 @@ class MessageService {
       logger.warn('获取用户昵称失败，回退默认名称', { userId, error: error.message });
       return null;
     }
+  }
+
+  async _getActiveChildMembers(familyId) {
+    if (!familyId) {
+      return [];
+    }
+
+    const rows = await query(
+      `SELECT user_id, nickname, role
+       FROM users
+       WHERE family_id = ?
+         AND role = 'child'
+         AND status = 'active'
+       ORDER BY created_at ASC`,
+      [familyId]
+    );
+
+    return rows.map((row) => ({
+      userId: row.user_id,
+      nickname: row.nickname,
+      role: row.role,
+    }));
   }
 }
 

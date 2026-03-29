@@ -54,6 +54,19 @@ class TaskController {
     };
   }
 
+  async _canManageTask(user, taskOwnerUserId) {
+    if (taskOwnerUserId === user.userId) {
+      return true;
+    }
+
+    if (user.role !== 'parent' || !user.familyId) {
+      return false;
+    }
+
+    const targetInfo = await familyService.getUserFamilyAndRole(taskOwnerUserId);
+    return Boolean(targetInfo && targetInfo.familyId === user.familyId && targetInfo.role === 'child');
+  }
+
   /**
    * 获取当前用户的任务列表
    * @param {Object} req - Express请求对象
@@ -147,7 +160,12 @@ class TaskController {
   async createTask(req, res) {
     try {
       const { userId, role, familyId } = req.user;
-      const { targetUserId, userId: _bodyUserId, ...taskData } = req.body; // 显式剔除越权字段
+      const {
+        targetUserId,
+        userId: _bodyUserId,
+        penaltyApplied: _penaltyApplied,
+        ...taskData
+      } = req.body; // 显式剔除越权字段与服务端事务字段
 
       // 确定任务归属用户（防止客户端越权覆盖）
       let effectiveUserId = userId;
@@ -190,6 +208,11 @@ class TaskController {
       if (err.code === 'TASK_ID_USER_MISMATCH') {
         return res.status(409).json(
           error('taskId 已被其他用户使用', 'TASK_ID_USER_MISMATCH')
+        );
+      }
+      if (err.code === 'TASK_REMINDER_SCHEMA_MISSING') {
+        return res.status(503).json(
+          error(err.message, 'TASK_REMINDER_SCHEMA_MISSING')
         );
       }
       logger.error('创建任务失败', err);
@@ -261,7 +284,7 @@ class TaskController {
 
       const ALLOWED_FIELDS = [
         'title', 'description', 'date', 'type', 'startTime', 'endTime',
-        'duration', 'isAllDay', 'isRequired', 'penaltyApplied',
+        'duration', 'isAllDay', 'reminder',
         'points', 'pointsExpiry', 'tags', 'hasNoEndDate', 'repeat',
       ];
       const safeChanges = {};
@@ -290,6 +313,9 @@ class TaskController {
       logger.info('任务更新成功', { taskId, userId });
       res.json(success({ task: updated.toJSON() }, '更新成功'));
     } catch (err) {
+      if (err.code === 'TASK_REMINDER_SCHEMA_MISSING') {
+        return res.status(503).json(error(err.message, 'TASK_REMINDER_SCHEMA_MISSING'));
+      }
       logger.error('更新任务失败', err);
       res.status(500).json(error('更新任务失败', 'TASK_UPDATE_FAILED'));
     }
@@ -331,6 +357,133 @@ class TaskController {
     } catch (err) {
       logger.error('删除任务失败', err);
       res.status(500).json(error('删除任务失败', 'TASK_DELETE_FAILED'));
+    }
+  }
+
+  async markTaskRequired(req, res) {
+    try {
+      const { taskId } = req.params;
+      const existing = await taskService.getTaskById(taskId);
+      if (!existing) {
+        return res.status(404).json(error('任务不存在', 'TASK_NOT_FOUND'));
+      }
+
+      const permitted = await this._canManageTask(req.user, existing.userId);
+      if (!permitted) {
+        return res.status(403).json(error('无权限操作', 'PERMISSION_DENIED'));
+      }
+
+      const updated = await taskService.markTaskRequired(
+        taskId,
+        await this._buildOperatorContext(req, existing.userId, req.body?.modifyTime)
+      );
+
+      if (!updated) {
+        return res.status(404).json(error('任务不存在或已删除', 'TASK_NOT_FOUND'));
+      }
+
+      return res.json(success({ task: updated.toJSON() }, '设置成功'));
+    } catch (err) {
+      logger.error('标记必做任务失败', err);
+      return res.status(500).json(error('标记必做任务失败', 'TASK_REQUIRED_UPDATE_FAILED'));
+    }
+  }
+
+  async unmarkTaskRequired(req, res) {
+    try {
+      const { taskId } = req.params;
+      const existing = await taskService.getTaskById(taskId);
+      if (!existing) {
+        return res.status(404).json(error('任务不存在', 'TASK_NOT_FOUND'));
+      }
+
+      const permitted = await this._canManageTask(req.user, existing.userId);
+      if (!permitted) {
+        return res.status(403).json(error('无权限操作', 'PERMISSION_DENIED'));
+      }
+
+      const updated = await taskService.unmarkTaskRequired(
+        taskId,
+        await this._buildOperatorContext(req, existing.userId, req.body?.modifyTime)
+      );
+
+      if (!updated) {
+        return res.status(404).json(error('任务不存在或已删除', 'TASK_NOT_FOUND'));
+      }
+
+      return res.json(success({ task: updated.toJSON() }, '设置成功'));
+    } catch (err) {
+      logger.error('取消必做任务失败', err);
+      return res.status(500).json(error('取消必做任务失败', 'TASK_REQUIRED_UPDATE_FAILED'));
+    }
+  }
+
+  async syncRequiredTaskPenalties(req, res) {
+    try {
+      const requestedScope = req.body?.scope || req.query?.scope;
+      const scope = requestedScope === 'user' ? 'user' : (req.user.role === 'parent' ? 'family' : 'user');
+      let targetUserId = null;
+
+      if (scope === 'user') {
+        targetUserId = await this._resolveTargetUserId(
+          req,
+          req.body?.targetUserId || req.query?.targetUserId || req.user.userId
+        );
+        if (!targetUserId) {
+          return res.status(403).json(error('无权访问该成员数据', 'FAMILY_MEMBER_ACCESS_DENIED'));
+        }
+      }
+
+      const result = await taskService.syncRequiredTaskPenalties({
+        viewerUserId: req.user.userId,
+        viewerRole: req.user.role,
+        familyId: req.user.familyId || null,
+        scope,
+        targetUserId,
+        operationKey: String(req.body?.operationKey || req.query?.operationKey || Date.now()),
+        modifyTime: Number(req.body?.modifyTime || req.query?.modifyTime || Date.now()),
+      });
+
+      return res.json(success(result, '同步成功'));
+    } catch (err) {
+      logger.error('同步必做任务惩罚失败', err);
+      return res.status(500).json(error('同步必做任务惩罚失败', 'TASK_PENALTY_SYNC_FAILED'));
+    }
+  }
+
+  async syncUpcomingTaskMessages(req, res) {
+    try {
+      const requestedScope = req.body?.scope || req.query?.scope;
+      const scope = requestedScope === 'user' ? 'user' : (req.user.role === 'parent' ? 'family' : 'user');
+      let targetUserId = null;
+
+      if (scope === 'user') {
+        targetUserId = await this._resolveTargetUserId(
+          req,
+          req.body?.targetUserId || req.query?.targetUserId || req.user.userId
+        );
+        if (!targetUserId) {
+          return res.status(403).json(error('无权访问该成员数据', 'FAMILY_MEMBER_ACCESS_DENIED'));
+        }
+      }
+
+      const result = await taskService.syncUpcomingTaskMessages({
+        viewerUserId: req.user.userId,
+        viewerRole: req.user.role,
+        familyId: req.user.familyId || null,
+        scope,
+        targetUserId,
+        operationKey: String(req.body?.operationKey || req.query?.operationKey || Date.now()),
+        modifyTime: Number(req.body?.modifyTime || req.query?.modifyTime || Date.now()),
+      });
+
+      return res.json(success(result, '同步成功'));
+    } catch (err) {
+      if (err.code === 'TASK_REMINDER_SCHEMA_MISSING') {
+        return res.status(503).json(error(err.message, 'TASK_REMINDER_SCHEMA_MISSING'));
+      }
+      logger.error('同步 upcoming 任务消息失败', err);
+      return res.status(500).json(error('同步 upcoming 任务消息失败', 'TASK_UPCOMING_SYNC_FAILED'));
     }
   }
 

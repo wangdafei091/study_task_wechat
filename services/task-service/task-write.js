@@ -617,7 +617,7 @@ async function resetTask(service, taskId, userId = null) {
 
 async function markTaskAsRequired(service, taskId, userId = null) {
   try {
-    const task = await service.taskRepository.getById(taskId);
+    const task = await loadTaskForWrite(service, taskId, '标记任务为必做');
     if (!task) {
       return buildNotFoundResult();
     }
@@ -633,10 +633,26 @@ async function markTaskAsRequired(service, taskId, userId = null) {
 
     task.isRequired = true;
     task.modifyTime = Date.now();
+    task.pendingSyncMeta = service._buildTaskPendingSyncMeta(task, 'required', {
+      operationKey: task.modifyTime,
+      modifyTime: task.modifyTime,
+      targetUserId: task.userId
+    });
+    task.syncedToCloud = false;
 
     const updatedTask = await service.taskRepository.save(task);
     logger.info('TaskService', `将任务标记为必做: "${updatedTask.title}", ID=${updatedTask.id}${userId ? `, 用户=${userId}` : ''}`);
     service.eventBus.emit(EVENTS.TASK_MARKED_REQUIRED, { task: updatedTask });
+
+    if (service.enableCloudStorage) {
+      service._syncRequiredStateToCloud(updatedTask).catch(async (syncError) => {
+        logger.warn('TaskService', '任务必做标记云同步失败，本地保留待同步状态', {
+          taskId: updatedTask.id,
+          error: syncError.message
+        });
+        await service._emitTaskCloudSyncFailure('required', updatedTask, syncError);
+      });
+    }
 
     return { success: true, task: updatedTask };
   } catch (error) {
@@ -647,7 +663,7 @@ async function markTaskAsRequired(service, taskId, userId = null) {
 
 async function unmarkTaskAsRequired(service, taskId, userId = null) {
   try {
-    const task = await service.taskRepository.getById(taskId);
+    const task = await loadTaskForWrite(service, taskId, '取消任务必做标记');
     if (!task) {
       return buildNotFoundResult();
     }
@@ -663,10 +679,26 @@ async function unmarkTaskAsRequired(service, taskId, userId = null) {
 
     task.isRequired = false;
     task.modifyTime = Date.now();
+    task.pendingSyncMeta = service._buildTaskPendingSyncMeta(task, 'unrequired', {
+      operationKey: task.modifyTime,
+      modifyTime: task.modifyTime,
+      targetUserId: task.userId
+    });
+    task.syncedToCloud = false;
 
     const updatedTask = await service.taskRepository.save(task);
     logger.info('TaskService', `取消任务的必做标记: "${updatedTask.title}", ID=${updatedTask.id}${userId ? `, 用户=${userId}` : ''}`);
     service.eventBus.emit(EVENTS.TASK_UNMARKED_REQUIRED, { task: updatedTask });
+
+    if (service.enableCloudStorage) {
+      service._syncRequiredStateToCloud(updatedTask).catch(async (syncError) => {
+        logger.warn('TaskService', '任务取消必做云同步失败，本地保留待同步状态', {
+          taskId: updatedTask.id,
+          error: syncError.message
+        });
+        await service._emitTaskCloudSyncFailure('unrequired', updatedTask, syncError);
+      });
+    }
 
     return { success: true, task: updatedTask };
   } catch (error) {

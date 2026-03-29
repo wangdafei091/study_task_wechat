@@ -189,8 +189,8 @@ describe('Reward 领域模型', () => {
 
       expect(reward.claimed).toBe(true);
       expect(reward.claimTime).toBeGreaterThan(0);
-      expect(reward.claimStatus).toBe(RewardStatus.DELIVERED);
-      expect(reward.deliveryTime).toBeGreaterThan(0);
+      expect(reward.claimStatus).toBe(RewardStatus.CLAIMED);
+      expect(reward.deliveryTime).toBe(0);
     });
 
     it('已兑换的奖励不能重复兑换', () => {

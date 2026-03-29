@@ -72,6 +72,15 @@ Component({
    * 组件的方法列表
    */
   methods: {
+    _buildLoadSignature: function() {
+      const analysisOptions = this.properties.analysisOptions || {};
+      return JSON.stringify({
+        days: this.data.currentRange,
+        scope: analysisOptions.scope || null,
+        userId: analysisOptions.userId || null
+      });
+    },
+
     /**
      * 检测运行环境，确定使用哪种Canvas模式
      */
@@ -635,6 +644,14 @@ Component({
      * 加载星星趋势数据
      */
     loadStarTrendData: async function() {
+      const signature = this._buildLoadSignature();
+      if (this._loadPromise && this._activeLoadSignature === signature) {
+        logger.info('star-trend', '复用进行中的星星趋势数据加载');
+        return this._loadPromise;
+      }
+
+      this._activeLoadSignature = signature;
+      this._loadPromise = (async () => {
       logger.info('star-trend', '开始加载星星趋势数据');
       this.setData({ isLoading: true });
       
@@ -731,6 +748,16 @@ Component({
           this.setChartOption(ecComp.chart);
         } else {
           this.initChart();
+        }
+      }
+      })();
+
+      try {
+        return await this._loadPromise;
+      } finally {
+        if (this._activeLoadSignature === signature) {
+          this._activeLoadSignature = null;
+          this._loadPromise = null;
         }
       }
     }

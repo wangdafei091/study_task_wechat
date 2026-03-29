@@ -146,6 +146,52 @@ describe('utils/app/post-login-bootstrap', () => {
     expect(app.setTheme).toHaveBeenCalled();
   });
 
+  it('云端模式启动时仍应执行任务状态检查链路', async () => {
+    const taskService = {
+      enableCloudStorage: true,
+      getAllTasks: jest.fn().mockResolvedValue([]),
+      taskRepository: { save: jest.fn() },
+      checkTasksStatus: jest.fn().mockResolvedValue({
+        penaltyResults: [],
+        penaltyCount: 0,
+        affectedTaskIds: []
+      }),
+      checkUpcomingTasks: jest.fn().mockResolvedValue()
+    };
+    const starService = {
+      calculatePendingExpiry: jest.fn().mockResolvedValue(0),
+      initialize: jest.fn().mockResolvedValue(),
+      checkAndRepairDataConsistency: jest.fn().mockResolvedValue({
+        success: true,
+        repairResult: { repairedCount: 0 }
+      })
+    };
+    const messageService = {
+      initialize: jest.fn().mockResolvedValue(),
+      getAllMessages: jest.fn().mockResolvedValue([])
+    };
+
+    serviceManager.getTaskService.mockReturnValue(taskService);
+    serviceManager.getStarService.mockReturnValue(starService);
+    serviceManager.getMessageService.mockReturnValue(messageService);
+    serviceManager.getUserService.mockReturnValue({
+      getLoginUserId: jest.fn(() => 'parent-1')
+    });
+    serviceManager.getService.mockReturnValue({
+      isFirstLaunch: jest.fn(() => false)
+    });
+
+    const app = {
+      globalData: {},
+      setTheme: jest.fn()
+    };
+
+    await postLoginBootstrap.run(app);
+
+    expect(taskService.checkTasksStatus).toHaveBeenCalledTimes(1);
+    expect(taskService.checkUpcomingTasks).toHaveBeenCalledTimes(1);
+  });
+
   it('checkFirstLaunch 非首次启动和 createWelcomeMessage 失败时应安全返回', async () => {
     const configService = {
       isFirstLaunch: jest.fn(() => false),

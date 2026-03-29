@@ -620,7 +620,7 @@ describe('RewardService', () => {
   // ==================== 测试组3：奖励交付 ====================
 
   describe('奖励交付', () => {
-    it('兑换奖励时应该自动设置为已交付状态', async () => {
+    it('兑换奖励时应该先设置为已兑换未领取状态', async () => {
       // 准备测试数据
       const reward = new Reward({
         id: 'reward_1',
@@ -635,17 +635,17 @@ describe('RewardService', () => {
       // 执行操作
       const result = await rewardService.exchangeReward('reward_1', 'user_123');
 
-      // 验证结果 - 奖励应该被标记为已领取且已交付
+      // 验证结果 - 奖励应该被标记为已兑换未领取
       expect(result.success).toBe(true);
       expect(result.reward.claimed).toBe(true);
-      expect(result.reward.claimStatus).toBe('delivered');
+      expect(result.reward.claimStatus).toBe('claimed');
 
       // 验证保存操作被调用，且奖励状态已更新
       expect(mockRewardRepository.save).toHaveBeenCalledWith(
         expect.objectContaining({
           claimed: true,
-          claimStatus: 'delivered',
-          deliveryTime: expect.any(Number)
+          claimStatus: 'claimed',
+          deliveryTime: 0
         })
       );
     });
@@ -825,6 +825,54 @@ describe('RewardService', () => {
       expect(result.pointsRefunded).toBe(50);
       expect(mockStarGroupRepository.addStarsToGroup).toHaveBeenCalled();
       expect(mockRewardRepository.unclaimReward).toHaveBeenCalledWith('reward_1');
+    });
+
+    it('云端模式下应调用正式 cancel-exchange 接口并刷新本地奖励与星星', async () => {
+      rewardService.enableCloudStorage = true;
+      const reward = new Reward({
+        id: 'reward_1',
+        name: '云端待取消奖励',
+        points: 50,
+        claimed: true,
+        claimStatus: 'pending',
+        exchangeUserId: 'user_child'
+      });
+      mockRewardRepository.getById.mockResolvedValue(reward);
+      HttpClient.patch.mockResolvedValue({
+        reward: {
+          rewardId: 'reward_1',
+          name: '云端待取消奖励',
+          points: 50,
+          claimed: false,
+          claimStatus: 'available',
+          exchangeUserId: null,
+          modifyTime: 123456
+        },
+        refundedPoints: 50
+      });
+
+      const result = await rewardService.cancelRewardExchange('reward_1');
+
+      expect(result.success).toBe(true);
+      expect(result.pointsRefunded).toBe(50);
+      expect(HttpClient.patch).toHaveBeenCalledWith(
+        '/api/rewards/reward_1/cancel-exchange',
+        expect.objectContaining({
+          exchangeUserId: 'user_child'
+        })
+      );
+      expect(mockRewardRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+        id: 'reward_1',
+        claimed: false,
+        claimStatus: 'available',
+        syncedToCloud: true
+      }));
+      expect(mockStarService.refreshStarsFromCloud).toHaveBeenCalledWith('user_child');
+      mockEventBus.verifyEmit(EVENTS.REWARD_EXCHANGE_CANCELLED, (eventData) => {
+        expect(eventData.pointsRefunded).toBe(50);
+      });
+
+      rewardService.enableCloudStorage = false;
     });
 
     it('取消兑换时应触发 REWARD_EXCHANGE_CANCELLED 事件', async () => {
@@ -1437,7 +1485,7 @@ describe('RewardService', () => {
         expect.objectContaining({
           id: 'reward_1',
           claimed: true,
-          claimStatus: 'delivered'
+          claimStatus: 'claimed'
         })
       );
 

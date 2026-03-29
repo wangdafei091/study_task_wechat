@@ -115,8 +115,8 @@ class Reward {
     
     this.claimed = true;
     this.claimTime = Date.now();
-    this.claimStatus = RewardStatus.DELIVERED;
-    this.deliveryTime = Date.now();
+    this.claimStatus = RewardStatus.CLAIMED;
+    this.deliveryTime = 0;
     
     return this;
   }

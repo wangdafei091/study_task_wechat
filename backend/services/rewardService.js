@@ -413,12 +413,12 @@ class RewardService {
         `UPDATE rewards SET
            claimed = 1,
            claim_time = ?,
-           claim_status = 'delivered',
-           delivery_time = ?,
+           claim_status = 'claimed',
+           delivery_time = NULL,
            exchange_user_id = ?,
            modify_time = ?
          WHERE reward_id = ? AND deleted_at IS NULL`,
-        [commandModifyTime, commandModifyTime, exchangeUserId, commandModifyTime, rewardId]
+        [commandModifyTime, exchangeUserId, commandModifyTime, rewardId]
       );
 
       const updatedRewardRow = await this._getRewardByIdConn(connection, rewardId);
@@ -452,6 +452,131 @@ class RewardService {
     }
   }
 
+  async cancelRewardExchange(rewardId, cancelUserId, modifyTime, options = {}) {
+    const commandModifyTime = Number(modifyTime || Date.now());
+    const pool = getPool();
+    const connection = await pool.getConnection();
+    const operationKey = String(options.operationKey || commandModifyTime);
+
+    try {
+      await connection.beginTransaction();
+
+      const rewardRow = await this._getRewardByIdConn(connection, rewardId);
+      if (!rewardRow) {
+        const error = new Error('奖励不存在');
+        error.code = 'REWARD_NOT_FOUND';
+        throw error;
+      }
+
+      const reward = Reward.fromDB(rewardRow);
+      const resolvedExchangeUserId = cancelUserId || reward.exchangeUserId || null;
+
+      if (!reward.claimed) {
+        await connection.commit();
+        return {
+          reward,
+          refundRecord: null,
+          refundedPoints: 0,
+          updatedGroupsSnapshot: await starService.getStarGroupsByUserWithConnection(connection, resolvedExchangeUserId),
+          idempotent: true,
+        };
+      }
+
+      if (reward.claimStatus === 'delivered') {
+        const error = new Error('已领取的奖励不可取消兑换');
+        error.code = 'REWARD_DELIVERED';
+        throw error;
+      }
+
+      if (reward.exchangeUserId && resolvedExchangeUserId && reward.exchangeUserId !== resolvedExchangeUserId) {
+        const error = new Error('无权取消该奖励兑换');
+        error.code = 'PERMISSION_DENIED';
+        throw error;
+      }
+
+      const latestExchangeRecord = await this._findLatestExchangeRecordConn(
+        connection,
+        rewardId,
+        resolvedExchangeUserId || reward.exchangeUserId
+      );
+      const refundedPoints = latestExchangeRecord
+        ? Math.abs(Number(latestExchangeRecord.points || 0))
+        : (reward.protectedByExpiry
+          ? Math.max(0, reward.points - reward.partialProtection)
+          : reward.points);
+
+      let refundRecord = null;
+      let updatedGroupsSnapshot = [];
+
+      if (refundedPoints > 0 && (resolvedExchangeUserId || reward.exchangeUserId)) {
+        const targetUserId = resolvedExchangeUserId || reward.exchangeUserId;
+        const idempotencyKey = `reward_unclaim:${rewardId}:${targetUserId}:${commandModifyTime}`;
+        const recordId = starService._buildRecordId('reward_unclaim', idempotencyKey);
+        const refundResult = await starService._upsertStarRecordWithConnection(connection, targetUserId, {
+          recordId,
+          type: 'income',
+          source: 'reward',
+          sourceId: rewardId,
+          points: refundedPoints,
+          description: `取消兑换奖励: ${reward.name}`,
+          expiryType: 'permanent',
+          expiryDate: null,
+          requestedPoints: refundedPoints,
+          idempotencyKey,
+          data: {
+            sourceType: 'reward_unclaim',
+            rewardId,
+            rewardName: reward.name,
+          },
+          modifyTime: commandModifyTime,
+        });
+        refundRecord = refundResult.record;
+        updatedGroupsSnapshot = (refundResult.updatedGroupsSnapshot || []).map(group =>
+          group.toJSON ? group.toJSON() : group
+        );
+      }
+
+      await connection.execute(
+        `UPDATE rewards SET
+           claimed = 0,
+           claim_time = NULL,
+           claim_status = 'available',
+           delivery_time = NULL,
+           exchange_user_id = NULL,
+           modify_time = ?
+         WHERE reward_id = ? AND deleted_at IS NULL`,
+        [commandModifyTime, rewardId]
+      );
+
+      const updatedRewardRow = await this._getRewardByIdConn(connection, rewardId);
+      await messageService.createRewardMessages({
+        reward: Reward.fromDB(updatedRewardRow),
+        familyId: reward.familyId,
+        action: 'unclaim',
+        actorUserId: options.actorUserId || resolvedExchangeUserId,
+        actorRole: options.actorRole || 'child',
+        exchangeUserId: resolvedExchangeUserId,
+        operationKey,
+        pointsOverride: refundedPoints,
+      }, connection);
+      await connection.commit();
+
+      return {
+        reward: Reward.fromDB(updatedRewardRow),
+        refundRecord,
+        refundedPoints,
+        updatedGroupsSnapshot,
+        idempotent: false,
+      };
+    } catch (error) {
+      await connection.rollback();
+      logger.error('取消奖励兑换失败', { rewardId, cancelUserId, error: error.message });
+      throw error;
+    } finally {
+      connection.release();
+    }
+  }
+
   _normalizeRewardPayload(ownerUserId, familyId, rewardData) {
     if (!rewardData || !rewardData.name || Number(rewardData.points || 0) <= 0) {
       const error = new Error('奖励名称和积分不能为空');
@@ -471,7 +596,7 @@ class RewardService {
       enabled: rewardData.enabled !== false,
       claimed: Boolean(rewardData.claimed),
       claimTime: rewardData.claimTime || null,
-      claimStatus: rewardData.claimStatus || (rewardData.claimed ? 'delivered' : 'available'),
+      claimStatus: rewardData.claimStatus || (rewardData.claimed ? 'claimed' : 'available'),
       deliveryTime: rewardData.deliveryTime || null,
       exchangeUserId: rewardData.exchangeUserId || null,
       isExample: Boolean(rewardData.isExample),
@@ -498,6 +623,17 @@ class RewardService {
        ORDER BY created_at DESC
        LIMIT 1`,
       [rewardId, exchangeUserId, modifyTime]
+    );
+    return rows.length > 0 ? require('../models/StarRecord').fromDB(rows[0]) : null;
+  }
+
+  async _findLatestExchangeRecordConn(connection, rewardId, exchangeUserId) {
+    const [rows] = await connection.execute(
+      `SELECT * FROM star_records
+       WHERE source = 'reward' AND source_id = ? AND user_id = ? AND type = 'expense' AND deleted_at IS NULL
+       ORDER BY modify_time DESC, created_at DESC
+       LIMIT 1`,
+      [rewardId, exchangeUserId]
     );
     return rows.length > 0 ? require('../models/StarRecord').fromDB(rows[0]) : null;
   }

@@ -203,7 +203,7 @@
         <text class="reward-hint-secondary">可前往奖池查看</text>
       </block>
       <block wx:elif="{{nextReward.allClaimed}}">
-        <text class="reward-hint-primary status-success">恭喜！您已领取所有奖励，可以继续积累星星</text>
+        <text class="reward-hint-primary status-success">恭喜！当前奖励都已兑换，可以继续积累星星</text>
       </block>
       <block wx:elif="{{nextReward.showSetupTip}}">
         <text class="reward-hint-primary status-normal">{{rewardHintText}}</text>
