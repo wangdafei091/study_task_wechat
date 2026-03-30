@@ -4,6 +4,50 @@
 
 ---
 
+## [里程碑-15A] - 2026-03-29
+
+### ✅ 完成情况
+
+**消息语义审计与通知体验治理**
+
+- **消息场景矩阵**：系统梳理任务/奖励/系统三类消息的触发时机、通知对象和阅读视角文案，形成完整矩阵基线
+- **后端正式消息能力补齐**：
+  - 新增 `POST /api/tasks/upcoming/sync`：任务即将到期提醒云端 materialize，支持幂等与活跃提醒替换
+  - 新增 `POST /api/tasks/penalties/sync`：必做任务惩罚云端事务执行，扣星/流水/状态/消息同事务完成
+  - 新增 `PATCH /api/tasks/:taskId/required` / `unrequired`：必做标记专用 command，避免与通用 task update 双发消息
+  - 新增 `PATCH /api/rewards/:rewardId/cancel-exchange`：奖励撤销兑换独立 command，退款/状态回退/消息同事务完成
+  - 奖励 create/update/delete 补齐活跃孩子个人流 fan-out，满足"家庭每个成员都能感知"
+- **消息展示语义统一**：
+  - 首页预览保持"未读优先 + 时间倒序，取前 3 条"的提醒预览职责
+  - 消息中心保持"完整历史，纯时间倒序"的职责
+  - 消息页日期分隔改为按最终展示序列重算，修复 Tab 过滤后分隔不准问题
+  - 新增 `utils/message-display.js` 统一消息排序、时间展示和日期分隔计算
+- **降级路径治理**：云端模式下为 upcoming/penalty/required 本地兼容处理增加显式 guard，避免与正式云端消息重复
+- **前端奖励/兑换链路优化**：
+  - 新增 `utils/reward-status.js` 统一奖励状态解析
+  - `my-exchanges`、`reward-manage`、`rewards` 页面简化状态判断和展示逻辑
+  - `analytics-service` 拆分为前端服务层 `services/analytics-service.js`，分析页接入正式服务
+- **API 配置**：`utils/api-config.js` 补齐 upcoming-sync、penalties-sync、cancel-exchange 等端点
+
+### 🧪 验证结果
+
+- 前端全量测试通过：67 个 suite、1594 个测试全部通过
+- 后端新增单元测试覆盖：
+  - `taskService-m15a-message-sync.test.js`：消息同步场景
+  - `messageService.test.js`：消息服务契约（429 行）
+  - `rewardService.test.js` / `rewardController.test.js`：奖励维护消息
+  - `taskController-m07.test.js`：任务控制器契约
+- 前端新增测试覆盖：
+  - 消息服务、消息仓库、消息页行为、首页预览行为
+  - 奖励状态、消息展示、事件总线、HTTP 客户端工具
+  - 奖励管理页、兑换记录页、分析页、星星趋势组件
+
+### 📖 详细实施记录
+
+- [里程碑-15A：消息语义审计与通知体验治理](../design/milestone-15a-message-semantics-audit.md)
+
+---
+
 ## [里程碑-14B] - 2026-03-27
 
 ### ✅ 完成情况
@@ -596,4 +640,4 @@
 
 ---
 
-**最后更新**：2026-03-25
+**最后更新**：2026-03-30
