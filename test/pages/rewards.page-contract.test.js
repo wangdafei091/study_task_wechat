@@ -68,7 +68,8 @@ describe('pages/rewards/rewards contract', () => {
       showToast: jest.fn(),
       showModal: jest.fn(({ success }) => success({ confirm: true })),
       navigateTo: jest.fn(),
-      vibrateShort: jest.fn()
+      vibrateShort: jest.fn(),
+      stopPullDownRefresh: jest.fn()
     };
 
     loadPageModule();
@@ -234,6 +235,69 @@ describe('pages/rewards/rewards contract', () => {
     page._performClaimReward = jest.fn();
     page.claimReward({});
     expect(page._performClaimReward).toHaveBeenCalledWith(page.data.rewards[2]);
+  });
+
+  it('onShow 检测到奖励变更标记时应强制刷新云端奖励', async () => {
+    appMock.globalData.needRefreshReward = true;
+    const rewardService = {
+      refreshRewardsFromCloud: jest.fn().mockResolvedValue({ success: true })
+    };
+    const starService = {
+      refreshStarsFromCloud: jest.fn().mockResolvedValue({ success: true })
+    };
+
+    serviceManager.getService.mockImplementation((name) => {
+      if (name === 'rewardService') return rewardService;
+      if (name === 'starService') return starService;
+      return null;
+    });
+    serviceManager.getUserService.mockReturnValue({
+      getLoginUser: jest.fn(() => ({ role: 'parent', userId: 'parent-1' })),
+      getLoginUserId: jest.fn(() => 'parent-1'),
+      getCurrentUser: jest.fn(() => ({ role: 'parent', userId: 'parent-1', id: 'parent-1' })),
+      getUserById: jest.fn(() => ({ id: 'child-2', role: 'child' })),
+      getUserByRole: jest.fn(() => ({ id: 'child-1' }))
+    });
+
+    const page = createPageInstance();
+    page.loadRewardsData = jest.fn().mockResolvedValue();
+
+    await page.onShow();
+
+    expect(rewardService.refreshRewardsFromCloud).toHaveBeenCalledWith({ force: true });
+    expect(page.loadRewardsData).toHaveBeenCalledWith(true);
+    expect(appMock.globalData.needRefreshReward).toBe(false);
+  });
+
+  it('下拉刷新应强制拉取最新奖励并停止刷新动画', async () => {
+    const rewardService = {
+      refreshRewardsFromCloud: jest.fn().mockResolvedValue({ success: true })
+    };
+    const starService = {
+      refreshStarsFromCloud: jest.fn().mockResolvedValue({ success: true })
+    };
+
+    serviceManager.getService.mockImplementation((name) => {
+      if (name === 'rewardService') return rewardService;
+      if (name === 'starService') return starService;
+      return null;
+    });
+    serviceManager.getUserService.mockReturnValue({
+      getLoginUser: jest.fn(() => ({ role: 'parent', userId: 'parent-1' })),
+      getLoginUserId: jest.fn(() => 'parent-1'),
+      getCurrentUser: jest.fn(() => ({ role: 'parent', userId: 'parent-1', id: 'parent-1' })),
+      getUserById: jest.fn(() => ({ id: 'child-2', role: 'child' })),
+      getUserByRole: jest.fn(() => ({ id: 'child-1' }))
+    });
+
+    const page = createPageInstance();
+    page.loadRewardsData = jest.fn().mockResolvedValue();
+
+    await page.onPullDownRefresh();
+
+    expect(rewardService.refreshRewardsFromCloud).toHaveBeenCalledWith({ force: true });
+    expect(page.loadRewardsData).toHaveBeenCalledWith(true);
+    expect(global.wx.stopPullDownRefresh).toHaveBeenCalled();
   });
 
   it('应按当前设备视角解析孩子和奖励归属用户', () => {

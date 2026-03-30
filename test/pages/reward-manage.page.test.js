@@ -14,6 +14,7 @@ jest.mock('../../utils/uiUtils', () => ({}));
 describe('packageManage/pages/reward-manage/reward-manage', () => {
   let pageConfig;
   let serviceManager;
+  let appMock;
 
   function loadPageModule() {
     pageConfig = null;
@@ -41,19 +42,22 @@ describe('packageManage/pages/reward-manage/reward-manage', () => {
     jest.clearAllMocks();
     serviceManager = require('../../services/service-manager');
 
-    global.getApp = jest.fn(() => ({
+    appMock = {
       globalData: {
+        needRefreshReward: false,
         eventBus: {
           emit: jest.fn()
         }
       }
-    }));
+    };
+    global.getApp = jest.fn(() => appMock);
 
     global.wx = {
       showLoading: jest.fn(),
       hideLoading: jest.fn(),
       showToast: jest.fn(),
-      getStorageSync: jest.fn(() => false)
+      getStorageSync: jest.fn(() => false),
+      stopPullDownRefresh: jest.fn()
     };
 
     loadPageModule();
@@ -128,5 +132,49 @@ describe('packageManage/pages/reward-manage/reward-manage', () => {
       recordTimeLabel: '兑换时间',
       recordTimestamp: 1000
     }));
+  });
+
+  it('onShow 检测到奖励变更标记时应强制刷新云端奖励', async () => {
+    appMock.globalData.needRefreshReward = true;
+    const rewardService = {
+      refreshRewardsFromCloud: jest.fn().mockResolvedValue({ success: true })
+    };
+
+    serviceManager.getService.mockImplementation((name) => {
+      if (name === 'rewardService') return rewardService;
+      return null;
+    });
+
+    const page = createPageInstance();
+    page.loadRewardsData = jest.fn().mockResolvedValue();
+    page.loadClaimedRecords = jest.fn().mockResolvedValue();
+
+    await page.onShow();
+
+    expect(rewardService.refreshRewardsFromCloud).toHaveBeenCalledWith({ force: true });
+    expect(page.loadRewardsData).toHaveBeenCalled();
+    expect(page.loadClaimedRecords).toHaveBeenCalled();
+  });
+
+  it('下拉刷新应强制拉取最新奖励并停止刷新动画', async () => {
+    const rewardService = {
+      refreshRewardsFromCloud: jest.fn().mockResolvedValue({ success: true })
+    };
+
+    serviceManager.getService.mockImplementation((name) => {
+      if (name === 'rewardService') return rewardService;
+      return null;
+    });
+
+    const page = createPageInstance();
+    page.loadRewardsData = jest.fn().mockResolvedValue();
+    page.loadClaimedRecords = jest.fn().mockResolvedValue();
+
+    await page.onPullDownRefresh();
+
+    expect(rewardService.refreshRewardsFromCloud).toHaveBeenCalledWith({ force: true });
+    expect(page.loadRewardsData).toHaveBeenCalled();
+    expect(page.loadClaimedRecords).toHaveBeenCalled();
+    expect(global.wx.stopPullDownRefresh).toHaveBeenCalled();
   });
 });

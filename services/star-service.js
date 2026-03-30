@@ -50,31 +50,17 @@ class StarService {
    */
   async initialize() {
     try {
-      // 清理过期星星分组
-      const expiredGroups = await this.starGroupRepository.cleanupExpiredGroups();
-      
-      if (expiredGroups.length > 0) {
-        logger.info('StarService', `清理过期星星分组成功, 数量=${expiredGroups.length}`);
-        
-        // 创建过期记录
-        for (const group of expiredGroups) {
-          if (group.stars > 0) {
-            await this.starRecordRepository.createExpiredRecord(
-              group.stars, 
-              group.expiryType, 
-              `星星过期: ${group.expiryType} 类型`
-            );
-          }
-        }
+      // 复用 cleanupExpiredStars 完整链路：过期分组清理 → 记录创建 → STARS_EXPIRED 事件 → 空组清理
+      // 不传 userId，保持全量清理语义
+      const result = await this.cleanupExpiredStars();
+      if (!result.success) {
+        logger.error('StarService', '初始化清理过期星星失败', result.message);
+        return false;
       }
-      
-      // 清理空分组
-      const emptyGroupsCount = await this.starGroupRepository.cleanupEmptyGroups();
-      
-      if (emptyGroupsCount > 0) {
-        logger.info('StarService', `清理空星星分组成功, 数量=${emptyGroupsCount}`);
+      if (result.expiredCount > 0) {
+        logger.info('StarService', `初始化清理过期星星完成, 过期${result.expiredCount}组, 共${result.totalPoints}颗`);
       }
-      
+
       logger.info('StarService', '星星服务初始化完成');
       return true;
     } catch (error) {

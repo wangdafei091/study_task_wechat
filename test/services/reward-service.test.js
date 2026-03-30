@@ -615,6 +615,69 @@ describe('RewardService', () => {
       expect(mergedRewards.some(reward => reward.id === 'reward_2')).toBe(true);
       expect(mockRewardRepository.invalidateCache).toHaveBeenCalled();
     });
+
+    it('短窗口去重时也应先执行待同步补云', async () => {
+      rewardService.enableCloudStorage = true;
+      rewardService._lastCloudRewardsSyncTime = Date.now();
+
+      const flushSpy = jest.spyOn(rewardService, '_flushPendingRewardSyncs').mockResolvedValue();
+      const fetchSpy = jest.spyOn(rewardService, '_fetchRewardsFromCloud').mockResolvedValue({
+        success: true,
+        rewards: []
+      });
+
+      const result = await rewardService.refreshRewardsFromCloud();
+
+      expect(result).toEqual(expect.objectContaining({
+        success: true,
+        skipped: true,
+        reason: 'throttled'
+      }));
+      expect(flushSpy).toHaveBeenCalledTimes(1);
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
+    it('force=true 时应绕过短窗口去重并拉取最新奖励', async () => {
+      rewardService.enableCloudStorage = true;
+      rewardService._lastCloudRewardsSyncTime = Date.now();
+
+      const flushSpy = jest.spyOn(rewardService, '_flushPendingRewardSyncs').mockResolvedValue();
+      const fetchSpy = jest.spyOn(rewardService, '_fetchRewardsFromCloud').mockResolvedValue({
+        success: true,
+        rewards: [{ id: 'reward_remote_1' }]
+      });
+
+      const result = await rewardService.refreshRewardsFromCloud({ force: true });
+
+      expect(result).toEqual(expect.objectContaining({
+        success: true,
+        rewards: [{ id: 'reward_remote_1' }]
+      }));
+      expect(flushSpy).toHaveBeenCalledTimes(1);
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('并发刷新时应复用进行中的请求', async () => {
+      rewardService.enableCloudStorage = true;
+
+      const flushSpy = jest.spyOn(rewardService, '_flushPendingRewardSyncs').mockResolvedValue();
+      let resolveFetch;
+      const fetchPromise = new Promise((resolve) => {
+        resolveFetch = resolve;
+      });
+      const fetchSpy = jest.spyOn(rewardService, '_fetchRewardsFromCloud').mockReturnValue(fetchPromise);
+
+      const firstCall = rewardService.refreshRewardsFromCloud({ force: true });
+      const secondCall = rewardService.refreshRewardsFromCloud({ force: true });
+
+      resolveFetch({ success: true, rewards: [] });
+      const [firstResult, secondResult] = await Promise.all([firstCall, secondCall]);
+
+      expect(firstResult).toEqual({ success: true, rewards: [] });
+      expect(secondResult).toEqual({ success: true, rewards: [] });
+      expect(flushSpy).toHaveBeenCalledTimes(1);
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
   });
 
   // ==================== 测试组3：奖励交付 ====================

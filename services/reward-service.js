@@ -13,6 +13,8 @@ const HttpClient = require('../utils/http-client');
 const API_CONFIG = require('../utils/api-config');
 const { Reward } = require('../models/reward');
 
+const REWARD_CLOUD_REFRESH_MIN_INTERVAL_MS = 3 * 1000;
+
 class RewardService {
   // 使用静态属性存储类级别的初始化状态
   static _initialized = false;
@@ -46,6 +48,8 @@ class RewardService {
     // 实例级初始化标记
     this.initialized = false;
     this.enableCloudStorage = API_CONFIG.ENABLE_API;
+    this._lastCloudRewardsSyncTime = 0;
+    this._cloudRewardsRefreshInFlight = null;
     
     logger.info('RewardService', '构造奖励服务实例');
   }
@@ -734,15 +738,49 @@ class RewardService {
     }
   }
 
-  async refreshRewardsFromCloud() {
+  async refreshRewardsFromCloud(options = {}) {
     if (!this.enableCloudStorage) {
       return { success: false, message: '云端模式未启用' };
     }
-    return this._fetchRewardsFromCloud();
+
+    const {
+      force = false,
+      minIntervalMs = REWARD_CLOUD_REFRESH_MIN_INTERVAL_MS
+    } = options;
+
+    // in-flight 复用：已在进行中的请求直接复用，避免并发重复
+    if (this._cloudRewardsRefreshInFlight) {
+      logger.debug('RewardService', '复用进行中的奖励云同步请求');
+      return this._cloudRewardsRefreshInFlight;
+    }
+
+    const request = (async () => {
+      // 待同步补云属于一致性自愈链路，不应被读取节流挡住
+      await this._flushPendingRewardSyncs();
+
+      const now = Date.now();
+      const lastSyncTime = this._lastCloudRewardsSyncTime || 0;
+      if (!force && minIntervalMs > 0 && now - lastSyncTime < minIntervalMs) {
+        logger.debug('RewardService', '奖励云同步被短窗口去重跳过', {
+          elapsed: now - lastSyncTime,
+          minIntervalMs
+        });
+        return { success: true, skipped: true, reason: 'throttled' };
+      }
+
+      const result = await this._fetchRewardsFromCloud();
+        this._lastCloudRewardsSyncTime = Date.now();
+        return result;
+      })()
+      .finally(() => {
+        this._cloudRewardsRefreshInFlight = null;
+      });
+
+    this._cloudRewardsRefreshInFlight = request;
+    return request;
   }
 
   async _fetchRewardsFromCloud() {
-    await this._flushPendingRewardSyncs();
     const response = await HttpClient.get(API_CONFIG.ENDPOINTS.REWARDS);
     const cloudRewards = (response.rewards || []).map(item => this._mapCloudReward(item));
     const allLocal = await this.rewardRepository.getAll(false);

@@ -1092,12 +1092,17 @@ describe('StarService', () => {
       const initialized = await starService.initialize();
 
       expect(initialized).toBe(true);
+      // initialize 内部复用 cleanupExpiredStars，会调用底层 cleanupExpiredGroups
       expect(mockStarGroupRepository.cleanupExpiredGroups).toHaveBeenCalled();
-      expect(mockStarGroupRepository.cleanupEmptyGroups).toHaveBeenCalled();
     });
 
     it('初始化失败时应该返回false', async () => {
+      // cleanupExpiredStars 内部 catch 后返回 { success: false }，不再抛异常
       mockStarGroupRepository.cleanupExpiredGroups.mockRejectedValue(new Error('初始化失败'));
+      // cleanupEmptyGroups 也需要 mock，避免 cleanupExpiredStars 内部再次报错
+      mockStarGroupRepository.cleanupEmptyGroups.mockResolvedValue(0);
+      // createExpiredRecord 也需要 mock
+      mockStarRecordRepository.createExpiredRecord.mockRejectedValue(new Error('初始化失败'));
 
       const initialized = await starService.initialize();
 

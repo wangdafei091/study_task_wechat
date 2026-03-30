@@ -98,7 +98,9 @@ Page({
     try {
       const rewardService = serviceManager.getService('rewardService');
       if (rewardService?.refreshRewardsFromCloud) {
-        await rewardService.refreshRewardsFromCloud();
+        await rewardService.refreshRewardsFromCloud({
+          force: app.globalData.needRefreshReward === true
+        });
       }
     } catch (syncError) {
       logger.warn('RewardManage', '奖励管理页 onShow 云同步失败，继续使用本地数据', syncError);
@@ -107,6 +109,28 @@ Page({
     // 重新加载数据，确保数据最新
     await this.loadRewardsData();
     await this.loadClaimedRecords();
+  },
+
+  onPullDownRefresh: async function() {
+    try {
+      const rewardService = serviceManager.getService('rewardService');
+      if (rewardService?.refreshRewardsFromCloud) {
+        await rewardService.refreshRewardsFromCloud({ force: true });
+      }
+
+      await this.loadRewardsData();
+      await this.loadClaimedRecords();
+    } catch (error) {
+      logger.warn('RewardManage', '奖励管理页下拉强制刷新失败，继续保留当前数据', error);
+      wx.showToast({
+        title: '刷新失败，请稍后重试',
+        icon: 'none'
+      });
+    } finally {
+      if (typeof wx.stopPullDownRefresh === 'function') {
+        wx.stopPullDownRefresh();
+      }
+    }
   },
   
   /**

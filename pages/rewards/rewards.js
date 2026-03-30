@@ -149,6 +149,7 @@ Page({
       const starService = serviceManager.getService('starService');
       const rewardService = serviceManager.getService('rewardService');
       const effectiveChildId = this._getEffectiveChildUserId();
+      const shouldForceRewardRefresh = app.globalData.needRefreshReward === true;
 
       if (starService?.refreshStarsFromCloud && effectiveChildId) {
         await starService.refreshStarsFromCloud(effectiveChildId);
@@ -156,7 +157,9 @@ Page({
         logger.info('rewards', '奖励页跳过孩子星星云同步：当前没有可用的孩子视角');
       }
       if (rewardService?.refreshRewardsFromCloud) {
-        await rewardService.refreshRewardsFromCloud();
+        await rewardService.refreshRewardsFromCloud({
+          force: shouldForceRewardRefresh
+        });
       }
     } catch (syncError) {
       logger.warn('rewards', '奖励页 onShow 云同步失败，继续使用本地数据', syncError);
@@ -204,8 +207,31 @@ Page({
   /**
    * 页面相关事件处理函数--监听用户下拉动作
    */
-  onPullDownRefresh() {
+  onPullDownRefresh: async function() {
+    try {
+      const starService = serviceManager.getService('starService');
+      const rewardService = serviceManager.getService('rewardService');
+      const effectiveChildId = this._getEffectiveChildUserId();
 
+      if (starService?.refreshStarsFromCloud && effectiveChildId) {
+        await starService.refreshStarsFromCloud(effectiveChildId);
+      }
+      if (rewardService?.refreshRewardsFromCloud) {
+        await rewardService.refreshRewardsFromCloud({ force: true });
+      }
+
+      await this.loadRewardsData(true);
+    } catch (error) {
+      logger.warn('rewards', '奖励页下拉强制刷新失败，继续保留当前数据', error);
+      wx.showToast({
+        title: '刷新失败，请稍后重试',
+        icon: 'none'
+      });
+    } finally {
+      if (typeof wx.stopPullDownRefresh === 'function') {
+        wx.stopPullDownRefresh();
+      }
+    }
   },
 
   /**

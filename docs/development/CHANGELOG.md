@@ -4,6 +4,27 @@
 
 ---
 
+## [里程碑-15A+] - 2026-03-30
+
+### ✅ 完成情况
+
+**主动行为审计修复**
+
+- **P5**：`StarService.initialize()` 改为复用 `cleanupExpiredStars()` 完整链路，补齐过期记录创建与 `STARS_EXPIRED` 事件通知
+- **P8**：`RewardService.refreshRewardsFromCloud()` 增加 3 秒共享节流 + in-flight 复用 + `force` 参数，首页/rewards/reward-manage 三入口共享同一窗口，页面下拉刷新支持 force 强刷
+- **P7**：`app.js` logs 数组添加 50 条上限
+
+### 🧪 验证结果
+
+- 前端全量测试通过：67 个 suite、1605 个测试全部通过
+- 新增 7 个测试覆盖：奖励云同步节流、force 绕过、并发 in-flight 复用、页面 force 信号
+
+### 📖 详细实施记录
+
+- [M15A+：主动行为审计结论与修复设计](../design/milestone-15a-proactive-behavior-audit.md)
+
+---
+
 ## [里程碑-15A] - 2026-03-29
 
 ### ✅ 完成情况
