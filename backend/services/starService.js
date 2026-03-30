@@ -32,7 +32,7 @@ class StarService {
                 created_at ASC`,
       [userId]
     );
-    return rows.map(row => StarGroup.fromDB(row));
+    return this._filterActiveGroupRows(rows).map(row => StarGroup.fromDB(row));
   }
 
   async getStarGroupsByUserWithConnection(connection, userId) {
@@ -469,7 +469,129 @@ class StarService {
                 created_at ASC`,
       [userId]
     );
-    return rows;
+    return this._filterActiveGroupRows(rows);
+  }
+
+  _filterActiveGroupRows(rows = []) {
+    return rows.filter(row => this._isActiveGroupRow(row));
+  }
+
+  _isActiveGroupRow(row) {
+    if (!row) {
+      return false;
+    }
+
+    const type = String(row.type || '').trim();
+    if (type === 'permanent') {
+      return true;
+    }
+
+    const normalizedExpiryDate = this._normalizeExpiryDate(row);
+    if (!normalizedExpiryDate) {
+      return false;
+    }
+
+    return normalizedExpiryDate >= this._getTodayDateString();
+  }
+
+  _normalizeExpiryDate(rowOrExpiryDate) {
+    const row = rowOrExpiryDate && typeof rowOrExpiryDate === 'object'
+      ? rowOrExpiryDate
+      : { expiry_date: rowOrExpiryDate };
+    const expiryDate = row.expiry_date;
+    if (expiryDate === null || expiryDate === undefined) {
+      return null;
+    }
+
+    const trimmed = String(expiryDate).trim();
+    if (!trimmed || trimmed === '永久') {
+      return null;
+    }
+
+    const anchorDate = this._resolveExpiryAnchorDate(row) || new Date();
+    if (trimmed === '今天到期' || trimmed === '今天') {
+      return this._formatDateString(anchorDate);
+    }
+
+    if (trimmed === '明天到期' || trimmed === '明天') {
+      const tomorrow = new Date(anchorDate.getTime());
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      return this._formatDateString(tomorrow);
+    }
+
+    const dateOnlyMatch = trimmed.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:\s*到期)?$/);
+    if (!dateOnlyMatch) {
+      return null;
+    }
+
+    const year = Number(dateOnlyMatch[1]);
+    const month = Number(dateOnlyMatch[2]);
+    const day = Number(dateOnlyMatch[3]);
+    if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
+      return null;
+    }
+
+    const parsedDate = new Date(year, month - 1, day);
+    if (
+      Number.isNaN(parsedDate.getTime()) ||
+      parsedDate.getFullYear() !== year ||
+      parsedDate.getMonth() !== month - 1 ||
+      parsedDate.getDate() !== day
+    ) {
+      return null;
+    }
+
+    return this._formatDateString(parsedDate);
+  }
+
+  _getTodayDateString() {
+    return this._formatDateString(new Date());
+  }
+
+  _resolveExpiryAnchorDate(row) {
+    if (!row || typeof row !== 'object') {
+      return null;
+    }
+
+    const candidates = [row.modify_time, row.updated_at, row.created_at];
+    for (const candidate of candidates) {
+      const parsed = this._parseDateCandidate(candidate);
+      if (parsed) {
+        return parsed;
+      }
+    }
+    return null;
+  }
+
+  _parseDateCandidate(value) {
+    if (value === null || value === undefined || value === '') {
+      return null;
+    }
+
+    if (typeof value === 'number') {
+      const parsedFromNumber = new Date(value);
+      return Number.isNaN(parsedFromNumber.getTime()) ? null : parsedFromNumber;
+    }
+
+    const trimmed = String(value).trim();
+    if (!trimmed) {
+      return null;
+    }
+
+    if (/^\d+$/.test(trimmed)) {
+      const parsedFromTimestamp = new Date(Number(trimmed));
+      return Number.isNaN(parsedFromTimestamp.getTime()) ? null : parsedFromTimestamp;
+    }
+
+    const parsed = new Date(trimmed);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  _formatDateString(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   }
 
   async _getRecordByIdConn(connection, recordId) {

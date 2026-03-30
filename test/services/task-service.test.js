@@ -1549,11 +1549,16 @@ describe('TaskService', () => {
   });
 
   describe('checkUpcomingTasks - 提醒检查', () => {
-    it('没有今日任务时应该返回count=0', async () => {
-      mockTaskRepository.getTodayTasks.mockResolvedValue([]);
+    it('今天到明天都没有任务时应该返回count=0', async () => {
+      mockTaskRepository.getTasksByDateRange.mockResolvedValue([]);
       const result = await taskService.checkUpcomingTasks();
       expect(result.success).toBe(true);
       expect(result.count).toBe(0);
+      expect(mockTaskRepository.getTasksByDateRange).toHaveBeenCalledWith(
+        dateUtils.getTodayString(),
+        dateUtils.getTomorrowString(),
+        null
+      );
     });
 
     it('传入userId时应该过滤用户任务', async () => {
@@ -1562,9 +1567,14 @@ describe('TaskService', () => {
         status: TaskStatus.PENDING,
         date: dateUtils.getTodayString()
       });
-      mockTaskRepository.getTodayTasks.mockResolvedValue([new Task(task)]);
+      mockTaskRepository.getTasksByDateRange.mockResolvedValue([new Task(task)]);
       const result = await taskService.checkUpcomingTasks('u2');
       expect(result.count).toBe(0);
+      expect(mockTaskRepository.getTasksByDateRange).toHaveBeenCalledWith(
+        dateUtils.getTodayString(),
+        dateUtils.getTomorrowString(),
+        'u2'
+      );
     });
 
     it('未完成且无提醒的任务应该跳过', async () => {
@@ -1575,7 +1585,7 @@ describe('TaskService', () => {
       });
       const task = new Task(taskData);
       task.reminder = null;
-      mockTaskRepository.getTodayTasks.mockResolvedValue([task]);
+      mockTaskRepository.getTasksByDateRange.mockResolvedValue([task]);
       const result = await taskService.checkUpcomingTasks('u1');
       expect(result.count).toBe(0);
     });
@@ -1590,13 +1600,47 @@ describe('TaskService', () => {
       const task = new Task(taskData);
       task.reminder = { enabled: true, time: 30 };
       task.startTime = null;
-      mockTaskRepository.getTodayTasks.mockResolvedValue([task]);
+      mockTaskRepository.getTasksByDateRange.mockResolvedValue([task]);
       const result = await taskService.checkUpcomingTasks('u1');
       expect(result.count).toBe(0);
     });
 
+    it('明天全天任务配置提前1天提醒时应该进入提醒列表', async () => {
+      jest.useFakeTimers();
+      try {
+        jest.setSystemTime(new Date(`${dateUtils.getTodayString()}T20:30:00`));
+
+        const task = new Task(TestDataFactory.createTask({
+          id: 't2',
+          userId: 'u1',
+          title: '明天全天任务',
+          status: TaskStatus.PENDING,
+          date: dateUtils.getTomorrowString(),
+          isAllDay: true
+        }));
+        task.reminder = { enabled: true, time: -1 };
+        task.startTime = null;
+        mockTaskRepository.getTasksByDateRange.mockResolvedValue([task]);
+
+        const result = await taskService.checkUpcomingTasks('u1');
+
+        expect(result.success).toBe(true);
+        expect(result.count).toBe(1);
+        expect(result.tasks[0]).toEqual(expect.objectContaining({
+          task,
+          reminderType: '提前1天晚上8点'
+        }));
+        mockEventBus.verifyEmit(EVENTS.TASK_UPCOMING, expect.objectContaining({
+          task: expect.objectContaining({ id: 't2', userId: 'u1' }),
+          timeRemaining: expect.any(Number)
+        }));
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
     it('仓储抛出异常时应该返回success=false', async () => {
-      mockTaskRepository.getTodayTasks.mockRejectedValue(new Error('db error'));
+      mockTaskRepository.getTasksByDateRange.mockRejectedValue(new Error('db error'));
       const result = await taskService.checkUpcomingTasks();
       expect(result.success).toBe(false);
     });

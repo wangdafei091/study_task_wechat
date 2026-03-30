@@ -7,6 +7,7 @@ jest.mock('../../utils/logger', () => ({
 
 jest.mock('../../utils/dateUtils', () => ({
   getTodayString: jest.fn(() => '2026-03-26'),
+  getTomorrowString: jest.fn(() => '2026-03-27'),
   formatDate: jest.fn((date) => {
     const d = new Date(date);
     const yyyy = d.getFullYear();
@@ -94,7 +95,7 @@ describe('task-query direct behavior', () => {
 
     const service = {
       taskRepository: {
-        getTodayTasks: jest.fn(async () => [
+        getTasksByDateRange: jest.fn(async () => [
           {
             id: 'completed_1',
             title: '已完成任务',
@@ -146,6 +147,7 @@ describe('task-query direct behavior', () => {
       success: true,
       count: 1
     }));
+    expect(service.taskRepository.getTasksByDateRange).toHaveBeenCalledWith('2026-03-26', '2026-03-27', null);
     expect(service.eventBus.emit).toHaveBeenCalledTimes(1);
   });
 

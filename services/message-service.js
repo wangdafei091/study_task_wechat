@@ -19,6 +19,8 @@ const batchUtils = require('../utils/batchUtils');
 const { EVENTS } = require('../utils/constants');
 const HttpClient = require('../utils/http-client');
 const API_CONFIG = require('../utils/api-config');
+
+const UPCOMING_SYNC_MIN_INTERVAL_MS = 30 * 1000;
 const viewScopeUtils = require('../utils/view-scope');
 
 class MessageService {
@@ -369,7 +371,7 @@ class MessageService {
     const now = Date.now();
     const scopeKey = this._buildUpcomingSyncScopeKey(resolved);
     const lastSyncTime = this._upcomingSyncTimestamps.get(scopeKey) || 0;
-    if (now - lastSyncTime < 5 * 60 * 1000) {
+    if (now - lastSyncTime < UPCOMING_SYNC_MIN_INTERVAL_MS) {
       return;
     }
 

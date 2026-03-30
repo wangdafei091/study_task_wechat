@@ -173,6 +173,7 @@ describe('pages/index reward flow', () => {
     const page = createPageInstance();
     page.getEffectiveTaskUserId = jest.fn(() => 'child-1');
 
+    starService.refreshStarsFromCloud.mockResolvedValue({ success: true });
     starService.getTotalStars.mockResolvedValue(6);
     rewardService.getLastExchangeTimeByUser.mockResolvedValue(1774157832799);
     rewardService.calculateNextAvailableReward.mockResolvedValue({
@@ -193,10 +194,13 @@ describe('pages/index reward flow', () => {
 
     await page.loadStarsAndRewards();
 
+    expect(starService.refreshStarsFromCloud).toHaveBeenCalledWith('child-1');
     expect(starService.getTotalStars).toHaveBeenCalledWith('child-1');
     expect(rewardService.getLastExchangeTimeByUser).toHaveBeenCalledWith('parent-1');
     expect(rewardService.calculateNextAvailableReward).toHaveBeenCalledWith(6, 'parent-1');
     expect(rewardService.getAvailableRewards).toHaveBeenCalledWith(true, false, 'parent-1');
+    expect(starService.refreshStarsFromCloud.mock.invocationCallOrder[0])
+      .toBeLessThan(starService.getTotalStars.mock.invocationCallOrder[0]);
     expect(formatUtils.formatPoints).toHaveBeenCalledWith(6, true);
     expect(page.data.userPoints).toBe(6);
     expect(page.data.rewardProgress).toEqual({ current: 6, total: 10 });
@@ -215,6 +219,7 @@ describe('pages/index reward flow', () => {
     page.data.currentUser = { id: 'child-1', role: 'child', name: '孩子' };
     page.data.isReadonlyView = true;
 
+    starService.refreshStarsFromCloud.mockResolvedValue({ success: true });
     starService.getTotalStars.mockResolvedValue(8);
     rewardService.getLastExchangeTimeByUser.mockResolvedValue(null);
     rewardService.calculateNextAvailableReward.mockResolvedValue({
@@ -249,6 +254,7 @@ describe('pages/index reward flow', () => {
     page.data.currentUser = { id: 'parent-1', role: 'parent', name: '家长' };
     page.data.isReadonlyView = false;
 
+    starService.refreshStarsFromCloud.mockResolvedValue({ success: true });
     starService.getTotalStars.mockResolvedValue(8);
     rewardService.getLastExchangeTimeByUser.mockResolvedValue(null);
     rewardService.calculateNextAvailableReward.mockResolvedValue({ id: 'default', isDefault: true, icon: '🎁' });
@@ -452,6 +458,7 @@ describe('pages/index reward flow', () => {
     expect(page.loadStarsAndRewards).toHaveBeenCalled();
 
     page.loadStarsAndRewards = pageConfig.loadStarsAndRewards.bind(page);
+    starService.refreshStarsFromCloud.mockResolvedValue({ success: true });
     rewardService.getLastExchangeTimeByUser.mockResolvedValue(null);
     rewardService.calculateNextAvailableReward.mockResolvedValue({
       id: 'default',
@@ -462,6 +469,30 @@ describe('pages/index reward flow', () => {
     await page.loadStarsAndRewards();
     expect(page.data.nextReward.showSetupTip).toBe(true);
     expect(page.data.rewardProgress.total).toBe(100);
+  });
+
+  it('loadStarsAndRewards 在云端刷新失败时应降级读取本地星星数据', async () => {
+    const page = createPageInstance();
+    page.getEffectiveTaskUserId = jest.fn(() => 'child-1');
+
+    starService.refreshStarsFromCloud.mockRejectedValue(new Error('network down'));
+    starService.getTotalStars.mockResolvedValue(4);
+    rewardService.getLastExchangeTimeByUser.mockResolvedValue(null);
+    rewardService.calculateNextAvailableReward.mockResolvedValue({
+      id: 'reward-1',
+      name: '看动画片',
+      points: 10,
+      icon: '🎁'
+    });
+    rewardService.getAvailableRewards.mockResolvedValue([
+      { id: 'reward-1', name: '看动画片', points: 10, icon: '🎁', claimed: false }
+    ]);
+
+    await page.loadStarsAndRewards();
+
+    expect(starService.refreshStarsFromCloud).toHaveBeenCalledWith('child-1');
+    expect(starService.getTotalStars).toHaveBeenCalledWith('child-1');
+    expect(page.data.userPoints).toBe(4);
   });
 
   it('奖励对话框与继续积累应覆盖重复打开和关闭动画分支', async () => {

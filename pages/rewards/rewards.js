@@ -556,9 +556,14 @@ Page({
       }
       
       logger.info('rewards', '星星服务实例获取成功，开始调用getExpiringStarsInfo');
+      const effectiveChildId = this._getEffectiveChildUserId();
+      if (!effectiveChildId) {
+        logger.info('rewards', '没有有效孩子视角，跳过即将过期星星提示');
+        return { points: 0, date: '' };
+      }
       
       // 获取即将过期的星星信息
-      const expiringInfo = await starService.getExpiringStarsInfo();
+      const expiringInfo = await starService.getExpiringStarsInfo(effectiveChildId);
       
       logger.info('rewards', `星星服务返回的原始数据:`, expiringInfo);
       logger.info('rewards', `即将过期星星: ${expiringInfo.points}颗, 最早到期日期: ${expiringInfo.expiryDateText}, 过期时间戳: ${expiringInfo.expiryTimestamp}`);

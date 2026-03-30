@@ -263,7 +263,7 @@ class StarService {
         description: source || '手动添加星星',
         timestamp: Date.now(),
         expiryType,
-        expiryDate: expiryDateStr || null,
+        expiryDate: this._normalizeExpiryDateValue(expiryDate),
         syncedToCloud: false
         // balance和previousBalance将在保存时由仓储计算
       };
@@ -658,6 +658,89 @@ class StarService {
     return result;
   }
 
+  _buildEndOfDayDate(year, monthIndex, day) {
+    return new Date(year, monthIndex, day, 23, 59, 59, 999);
+  }
+
+  _parseExpiryDateValue(expiryValue) {
+    if (expiryValue === null || expiryValue === undefined || expiryValue === '') {
+      return null;
+    }
+
+    if (expiryValue instanceof Date) {
+      return Number.isNaN(expiryValue.getTime()) ? null : new Date(expiryValue.getTime());
+    }
+
+    if (typeof expiryValue === 'number') {
+      if (!Number.isFinite(expiryValue)) {
+        return null;
+      }
+      const parsedFromNumber = new Date(expiryValue);
+      return Number.isNaN(parsedFromNumber.getTime()) ? null : parsedFromNumber;
+    }
+
+    if (typeof expiryValue !== 'string') {
+      return null;
+    }
+
+    const trimmed = expiryValue.trim();
+    if (!trimmed || trimmed === '永久') {
+      return null;
+    }
+
+    if (trimmed === '今天到期' || trimmed === '今天') {
+      const today = new Date();
+      return this._buildEndOfDayDate(today.getFullYear(), today.getMonth(), today.getDate());
+    }
+
+    if (trimmed === '明天到期' || trimmed === '明天') {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      return this._buildEndOfDayDate(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate());
+    }
+
+    const dateOnlyMatch = trimmed.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:\s*到期)?$/);
+    if (dateOnlyMatch) {
+      const year = Number(dateOnlyMatch[1]);
+      const monthIndex = Number(dateOnlyMatch[2]) - 1;
+      const day = Number(dateOnlyMatch[3]);
+      const parsedDate = this._buildEndOfDayDate(year, monthIndex, day);
+      return Number.isNaN(parsedDate.getTime()) ? null : parsedDate;
+    }
+
+    const parsed = new Date(trimmed);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  _normalizeExpiryDateValue(expiryValue) {
+    const parsedDate = this._parseExpiryDateValue(expiryValue);
+    if (!parsedDate) {
+      return null;
+    }
+
+    const year = parsedDate.getFullYear();
+    const month = String(parsedDate.getMonth() + 1).padStart(2, '0');
+    const day = String(parsedDate.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  _resolveExpiryMetadata(expiryValue, fallbackDisplayText = '') {
+    const parsedDate = this._parseExpiryDateValue(expiryValue);
+    if (!parsedDate) {
+      return {
+        normalizedDate: null,
+        timestamp: null,
+        displayText: fallbackDisplayText || ''
+      };
+    }
+
+    return {
+      normalizedDate: this._normalizeExpiryDateValue(parsedDate),
+      timestamp: parsedDate.getTime(),
+      displayText: this._formatExpiryDate(parsedDate)
+    };
+  }
+
   /**
    * 计算过期日期
    * @private
@@ -796,13 +879,33 @@ class StarService {
 
   /**
    * 获取即将过期的星星信息
+   * @param {String} userId 可选的用户ID，不传则统计全部用户
    * @returns {Promise<Object>} 包含过期星星数和最早过期日期的对象
    */
-  async getExpiringStarsInfo() {
+  async getExpiringStarsInfo(userId = null) {
     try {
       // 获取所有星星分组
-      const groups = await this.starGroupRepository.getAll();
-      logger.info('StarService', `获取到${groups.length}个星星分组`);
+      const allGroups = await this.starGroupRepository.getAll();
+      const groups = (userId
+        ? allGroups.filter((group) => group.userId === userId)
+        : allGroups).map((group) => {
+          const expiryMeta = this._resolveExpiryMetadata(
+            group.expiryDate || group.expiryDateStr,
+            group.expiryDateStr || ''
+          );
+          if (expiryMeta.timestamp === null) {
+            return group;
+          }
+
+          return new StarGroup({
+            ...group,
+            type: group.type || group.expiryType || 'permanent',
+            expiryType: group.expiryType || group.type || 'permanent',
+            expiryDate: expiryMeta.timestamp,
+            expiryDateStr: expiryMeta.displayText
+          });
+        });
+      logger.info('StarService', `获取到${groups.length}个星星分组${userId ? `, 用户=${userId}` : ''}`);
       
       // 添加详细的分组信息日志
       groups.forEach((group, index) => {
@@ -1324,7 +1427,9 @@ class StarService {
 
     const starsData = await HttpClient.get(API_CONFIG.ENDPOINTS.STARS, { userId });
     const recordData = await HttpClient.get(API_CONFIG.ENDPOINTS.STAR_RECORDS, { userId });
-    const cloudGroups = (starsData.groups || []).map(group => this._mapCloudGroup(group));
+    const cloudGroups = (starsData.groups || [])
+      .map(group => this._mapCloudGroup(group))
+      .filter(group => !group.isExpired());
     const cloudRecords = (recordData.records || []).map(record => this._mapCloudRecord(record));
 
     await this._replaceSyncedStarGroups(userId, cloudGroups);
@@ -1345,6 +1450,7 @@ class StarService {
 
   async _syncStarRecordToCloud(record) {
     if (!record) return;
+    const normalizedExpiryDate = this._normalizeExpiryDateValue(record.expiryDate);
 
     const payload = {
       recordId: record.id,
@@ -1355,13 +1461,14 @@ class StarService {
       points: record.points,
       description: record.description,
       expiryType: record.expiryType,
-      expiryDate: record.expiryDate || null,
+      expiryDate: normalizedExpiryDate,
       originalTaskDate: record.originalTaskDate || null,
       requestedPoints: record.requestedPoints || null,
       modifyTime: record.modifyTime || record.timestamp || Date.now()
     };
 
     const response = await HttpClient.post(API_CONFIG.ENDPOINTS.STAR_RECORDS, payload);
+    record.expiryDate = normalizedExpiryDate;
     record.syncedToCloud = true;
     await this.starRecordRepository.save(record);
 
@@ -1442,16 +1549,15 @@ class StarService {
   }
 
   _mapCloudGroup(group) {
-    const expiryDateStr = group.expiryDate || '';
-    const expiryTimestamp = expiryDateStr ? new Date(expiryDateStr).getTime() : null;
+    const expiryMeta = this._resolveExpiryMetadata(group.expiryDate, group.expiryDate || '');
     return new StarGroup({
       id: group.groupId || group.id,
       userId: group.userId,
       type: group.type || group.expiryType || 'permanent',
       expiryType: group.type || group.expiryType || 'permanent',
       stars: Number(group.stars || 0),
-      expiryDate: expiryTimestamp,
-      expiryDateStr,
+      expiryDate: expiryMeta.timestamp,
+      expiryDateStr: expiryMeta.displayText,
       syncedToCloud: true,
       lastUpdated: group.modifyTime || Date.now()
     });
@@ -1468,7 +1574,7 @@ class StarService {
       timestamp: record.modifyTime || Date.parse(record.createdAt || '') || Date.now(),
       description: record.description || '',
       expiryType: record.expiryType || null,
-      expiryDate: record.expiryDate || null,
+      expiryDate: this._normalizeExpiryDateValue(record.expiryDate),
       balance: Number(record.balance || 0),
       previousBalance: Number(record.previousBalance || 0),
       originalTaskDate: record.originalTaskDate || null,

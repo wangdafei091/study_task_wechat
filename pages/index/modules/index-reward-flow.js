@@ -184,6 +184,17 @@ async function loadStarsAndRewards(page) {
       effectiveUserId
     } = context;
 
+    if (effectiveUserId && typeof starService.refreshStarsFromCloud === 'function') {
+      try {
+        await starService.refreshStarsFromCloud(effectiveUserId);
+      } catch (refreshError) {
+        logger.warn('Index', '首页星星云端刷新失败，降级使用本地缓存', {
+          effectiveUserId,
+          error: refreshError.message
+        });
+      }
+    }
+
     const [userPoints, lastExchangeTime] = await Promise.all([
       starService.getTotalStars(effectiveUserId),
       rewardService.getLastExchangeTimeByUser(loginUserId)
