@@ -632,32 +632,45 @@ class TaskService {
         return {
           success: true,
           penaltyCount: 0,
+          failureCount: 0,
           affectedTaskIds: [],
           penaltyResults: [],
+          failedTaskIds: [],
         };
       }
 
       const tasks = await this._getExpiredRequiredTasksForPenalty(scanUserIds);
       const baseOperationKey = String(options.operationKey || options.modifyTime || Date.now());
       const penaltyResults = [];
+      const failedTaskIds = [];
 
       for (const task of tasks) {
-        const result = await this._applyRequiredTaskPenalty(task.taskId, {
-          actorUserId: null,
-          actorRole: 'system',
-          familyId: options.familyId || null,
-          operationKey: `${baseOperationKey}:${task.taskId}`,
-          modifyTime: Number(options.modifyTime || Date.now()),
-        });
+        try {
+          const result = await this._applyRequiredTaskPenalty(task.taskId, {
+            actorUserId: null,
+            actorRole: 'system',
+            familyId: options.familyId || null,
+            operationKey: `${baseOperationKey}:${task.taskId}`,
+            modifyTime: Number(options.modifyTime || Date.now()),
+          });
 
-        if (result?.success) {
-          penaltyResults.push(result);
+          if (result?.success) {
+            penaltyResults.push(result);
+          }
+        } catch (error) {
+          failedTaskIds.push(task.taskId);
+          logger.error('同步必做任务惩罚时单任务执行失败', {
+            taskId: task.taskId,
+            userId: task.userId,
+            error: error.message,
+          });
         }
       }
 
       return {
         success: true,
         penaltyCount: penaltyResults.length,
+        failureCount: failedTaskIds.length,
         affectedTaskIds: penaltyResults.map(result => result.task.taskId),
         penaltyResults: penaltyResults.map(result => ({
           success: true,
@@ -665,6 +678,7 @@ class TaskService {
           penaltyPoints: result.penaltyPoints,
           targetUserId: result.targetUserId,
         })),
+        failedTaskIds,
       };
     } catch (error) {
       logger.error('同步必做任务惩罚失败', error);

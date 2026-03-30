@@ -21,6 +21,8 @@ jest.mock('../../services/starService', () => ({
   consumeStarsWithConnection: jest.fn()
 }));
 
+const Task = require('../../models/Task');
+
 describe('backend TaskService M15A message sync', () => {
   let database;
   let messageService;
@@ -171,6 +173,41 @@ describe('backend TaskService M15A message sync', () => {
       archivedCount: 1,
       activeCount: 2,
       affectedTaskIds: ['task_upcoming_1']
+    });
+  });
+
+  it('penalty sync 中单任务失败时应记录失败并继续其他任务', async () => {
+    jest.spyOn(taskService, '_resolvePenaltyScanUserIds').mockResolvedValue(['child_1']);
+    jest.spyOn(taskService, '_getExpiredRequiredTasksForPenalty').mockResolvedValue([
+      Task.fromDB(createTaskRow({ task_id: 'task_fail' })),
+      Task.fromDB(createTaskRow({ task_id: 'task_ok', title: '阅读', user_id: 'child_2' }))
+    ]);
+    jest.spyOn(taskService, '_applyRequiredTaskPenalty')
+      .mockRejectedValueOnce(new Error('message fail'))
+      .mockResolvedValueOnce({
+        success: true,
+        task: { taskId: 'task_ok' },
+        penaltyPoints: 3,
+        targetUserId: 'child_2'
+      });
+
+    const result = await taskService.syncRequiredTaskPenalties({
+      familyId: 'family_1',
+      modifyTime: 1000
+    });
+
+    expect(result).toEqual({
+      success: true,
+      penaltyCount: 1,
+      failureCount: 1,
+      affectedTaskIds: ['task_ok'],
+      penaltyResults: [{
+        success: true,
+        taskId: 'task_ok',
+        penaltyPoints: 3,
+        targetUserId: 'child_2'
+      }],
+      failedTaskIds: ['task_fail']
     });
   });
 });
