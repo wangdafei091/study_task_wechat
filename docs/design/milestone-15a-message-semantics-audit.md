@@ -915,3 +915,41 @@ function recomputeDateDividers(messages) {
 
 **选择原因**：
 - 这是当前成本最低、结论最稳定的推进方式
+
+---
+
+## 附录：消息语义降级边界
+
+> 本节记录前端消息系统三套语义路径的边界、标记和降级规则，作为 M15A 审计产出的正式基线。
+
+### 三条消息路径
+
+| 路径 | 触发条件 | 存储标记 | 职责 |
+|------|---------|---------|------|
+| **本地传统消息** | `enableCloudStorage = false`（纯本地模式） | `isLegacy: true` | API 未启用时的正式消息来源，由前端事件监听直接创建 |
+| **云端正式消息** | `enableCloudStorage = true`，后端命令事务成功 | `syncedToCloud: true` | 权威消息来源，跨设备一致，由后端在业务事务内生成并通过 `refreshMessagesFromCloud` 回灌前端 |
+| **Provisional 临时消息** | `enableCloudStorage = true`，但云端操作失败 | `isProvisional: true`，摘要带"待同步"后缀 | 云端失败时的临时占位，保证用户在离线/网络异常时仍能看到本地发生的变化 |
+
+### 降级链路
+
+```
+云端模式启用时：
+  正常路径 → 后端事务成功 → 云端正式消息（权威）
+  失败路径 → 云端操作失败 → Provisional 临时消息（占位）
+  恢复路径 → 下次 refresh 成功 → Provisional 被正式消息替换并归档
+
+纯本地模式：
+  直接走本地传统消息，不涉及云端和 Provisional
+```
+
+### 前端 MessageService guard 规则
+
+- 事件处理器（`_handleTaskStatusUpdated`、`_handleTaskCompleted` 等）在 `enableCloudStorage = true` 时直接 return，避免与云端正式消息重复
+- 本地模式（`enableCloudStorage = false`）下继续走传统事件创建链路
+- Provisional 消息通过 `replaceSyncedMessagesByScope` 在云端回灌时被正式消息替换
+
+### 查询与展示规则
+
+- 主消息流查询默认只返回 `deleted_at IS NULL && isArchived = false` 的消息
+- 首页预览和消息中心共享同一 scope 消息源
+- Provisional 消息在正式消息到达后自动从主流移除
