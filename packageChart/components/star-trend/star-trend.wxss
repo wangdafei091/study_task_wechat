@@ -84,7 +84,7 @@
   margin-right: 6rpx;
 }
 
-.date-range text {
+.date-range-text {
   font-size: 20rpx;
   color: #999999;
 }
