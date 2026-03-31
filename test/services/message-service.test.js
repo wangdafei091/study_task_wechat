@@ -991,7 +991,7 @@ describe('MessageService', () => {
       expect(mockMessageRepository.archiveLegacyMessages).not.toHaveBeenCalled();
     });
 
-    it('云端刷新前应先触发 upcoming sync，且失败不阻塞消息读取', async () => {
+    it('云端刷新前应先触发正式提醒 sync，且单路失败不阻塞消息读取', async () => {
       HttpClient.post.mockRejectedValueOnce(new Error('sync failed'));
       HttpClient.get.mockResolvedValueOnce({ messages: [] });
 
@@ -1006,13 +1006,20 @@ describe('MessageService', () => {
           targetUserId: 'child_1'
         })
       );
+      expect(HttpClient.post).toHaveBeenCalledWith(
+        '/api/stars/expiring-reminders/sync',
+        expect.objectContaining({
+          scope: 'user',
+          targetUserId: 'child_1'
+        })
+      );
       expect(HttpClient.get).toHaveBeenCalledWith('/api/messages', {
         scope: 'user',
         userId: 'child_1'
       });
     });
 
-    it('upcoming sync 在节流窗口内不应重复触发', async () => {
+    it('正式提醒 sync 在节流窗口内不应重复触发', async () => {
       HttpClient.post.mockClear();
       HttpClient.get.mockClear();
       HttpClient.post.mockResolvedValue({ success: true });
@@ -1021,15 +1028,14 @@ describe('MessageService', () => {
       await messageService.refreshMessagesFromCloud('child_1', { scope: 'user' });
       await messageService.refreshMessagesFromCloud('child_1', { scope: 'user' });
 
-      expect(HttpClient.post).toHaveBeenCalledTimes(1);
+      expect(HttpClient.post).toHaveBeenCalledTimes(2);
       expect(HttpClient.get).toHaveBeenCalledTimes(2);
     });
 
-    it('upcoming sync 失败后下一次刷新应允许立即重试', async () => {
+    it('正式提醒 sync 单路失败后仍应进入节流窗口，避免短时间重复打点', async () => {
       HttpClient.post.mockClear();
       HttpClient.get.mockClear();
       HttpClient.post.mockRejectedValueOnce(new Error('sync failed'));
-      HttpClient.post.mockResolvedValueOnce({ success: true });
       HttpClient.get.mockResolvedValue({ messages: [] });
 
       await messageService.refreshMessagesFromCloud('child_1', { scope: 'user' });

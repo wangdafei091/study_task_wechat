@@ -115,6 +115,45 @@ class StarController {
     }
   }
 
+  async syncExpiringReminders(req, res) {
+    try {
+      const requestedScope = req.body?.scope || req.query?.scope;
+      const scope = requestedScope === 'user' ? 'user' : (req.user.role === 'parent' ? 'family' : 'user');
+      let targetUserId = null;
+
+      if (scope === 'family') {
+        if (req.user.role !== 'parent' || !req.user.familyId) {
+          return res.status(403).json(error('仅家长可同步家庭星星提醒', 'PERMISSION_DENIED'));
+        }
+      } else {
+        targetUserId = await resolveTargetUserId(
+          req,
+          req.body?.targetUserId || req.query?.targetUserId || req.user.userId
+        );
+        if (!targetUserId) {
+          return res.status(403).json(error('无权访问该成员数据', 'FAMILY_MEMBER_ACCESS_DENIED'));
+        }
+      }
+
+      const result = await starService.syncExpiringStarMessages({
+        viewerUserId: req.user.userId,
+        viewerRole: req.user.role,
+        familyId: req.user.familyId || null,
+        scope,
+        targetUserId,
+        modifyTime: Number(req.body?.modifyTime || req.query?.modifyTime || Date.now()),
+        operationKey: String(req.body?.operationKey || req.query?.operationKey || Date.now()),
+      });
+
+      return res.json(success(result, '同步成功'));
+    } catch (err) {
+      logger.error('同步星星即将过期提醒失败', err);
+      return res.status(this._statusForError(err.code)).json(
+        error(err.message || '同步星星即将过期提醒失败', err.code || 'STAR_EXPIRING_SYNC_FAILED')
+      );
+    }
+  }
+
   _statusForError(errorCode) {
     switch (errorCode) {
       case 'INVALID_PARAMS':

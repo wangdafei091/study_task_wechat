@@ -453,6 +453,37 @@ describe('backend MessageService reward maintenance fan-out', () => {
   });
 });
 
+describe('backend MessageService star expiring reminders', () => {
+  beforeEach(() => {
+    jest.resetModules();
+  });
+
+  it('应生成孩子个人流和家庭流的 star_expiring 正式消息，且类型保持 system', async () => {
+    const { query } = require('../../config/database');
+    query.mockResolvedValueOnce([{ nickname: '小明', role: 'child' }]);
+
+    const service = require('../../services/messageService');
+    const records = await service._buildStarMessageRecords({
+      familyId: 'family_1',
+      action: 'expiring',
+      subjectUserId: 'child_1',
+      operationKey: '2026-04-02',
+      points: 8,
+      expiryDate: '2026-04-02',
+      expiryDateText: '2026-04-02',
+      daysUntilExpiry: 2,
+      createTimeOverride: 12345
+    });
+
+    expect(records).toHaveLength(2);
+    expect(records.map((record) => record.visibilityScope).sort()).toEqual(['family', 'user']);
+    expect(records.every((record) => record.type === 'system')).toBe(true);
+    expect(records.every((record) => record.notificationType === 'star_expiring')).toBe(true);
+    expect(records[0].messageEventKey).toBe('star:summary:star_expiring:child_1:none:2026-04-02');
+    expect(records[0].content).toContain('"reminderCategory":"stars_expiring"');
+  });
+});
+
 describe('backend MessageService reward copy', () => {
   beforeEach(() => {
     jest.resetModules();

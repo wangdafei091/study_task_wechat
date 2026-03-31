@@ -28,6 +28,9 @@ async function run(app) {
     if (messageService) {
       logger.info('App', '初始化消息服务');
       await messageService.initialize();
+      if (typeof messageService.syncFormalRemindersIfNeeded === 'function') {
+        await messageService.syncFormalRemindersIfNeeded();
+      }
       const messages = await messageService.getAllMessages();
       logger.info('App', `消息服务初始化完成，共${messages.length}条消息`);
     }

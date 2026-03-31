@@ -1,6 +1,6 @@
 # 里程碑-16A：主动提醒与星星时效治理 详细设计文档
 
-> **设计状态**：🔴 待审核
+> **设计状态**：✅ 已完成
 > **创建日期**：2026-03-31
 > **设计者**：GPT5 Codex
 > **审核者**：项目维护者
@@ -117,6 +117,7 @@ M16A 采用“先统一提醒语义，再收敛触发策略”的方案。核心
 | upcoming / 星星提醒承载 | 复用正式消息表 + `is_archived` | 新建独立提醒表 | 当前消息表已具备正式读取、权限、未读、归档能力，增量最小 |
 | 星星即将过期正式入口 | 新增 `POST /api/stars/expiring-reminders/sync` | 复用 message sync 或奖池读取接口 | 星星提醒有独立扫描口径，独立端点更清晰，避免把消息读取接口变成业务杂糅入口 |
 | 活跃提醒识别 | 复用 `notification_type` + `message_event_key` 约定 | 新增 `reminder_category` 列 | 当前 schema 足够，不必为 M16A 引入迁移 |
+| 星星提醒消息分类 | 继续写入 `type = 'system'` | 新增 `type = 'star'` | 当前消息中心 Tab 和未读统计按 `task/reward/system` 分类，本期不扩消息中心信息架构 |
 | 客户端触发策略 | 共享秒级节流 + in-flight 复用 | 每页各自请求 | 服务层统一更稳，能避免重复打点 |
 | 星星提醒聚合粒度 | 每个孩子 1 条“最近到期批次”活跃提醒 | 按每个星星分组逐条提醒 | 更接近当前奖池展示习惯，噪声更低 |
 
@@ -189,6 +190,7 @@ graph LR
 - 孩子个人流：每个孩子最多 1 条“最近到期批次”活跃提醒
 - 家庭流：按孩子维度展开，不做“全家合并为 1 条”的超聚合
 - 提醒内容聚合“该孩子最近一个到期日上的全部星星数”，不按每个星星分组逐条发消息
+- 消息分类继续使用 `type = 'system'`，`notification_type = 'star_expiring'`，避免现有消息中心 Tab/未读统计漏计
 
 正式入口采用独立端点：
 
@@ -337,7 +339,7 @@ interface ActiveReminderMeta {
 
 | 方法 | 说明 | 参数 | 返回值 |
 |------|------|------|--------|
-| `syncUpcomingTaskMessages(options)` | 统一 upcoming 活跃提醒生成/替换/归档 | `{ userId, familyId, force, modifyTime }` | `{ success, createdCount, updatedCount, archivedCount }` |
+| `syncUpcomingTaskMessages(options)` | 统一 upcoming 活跃提醒生成/替换/归档 | `{ viewerUserId, viewerRole, familyId, scope, targetUserId, force, modifyTime, operationKey }` | `{ success, createdCount, updatedCount, archivedCount }` |
 | `syncExpiringStarMessages(options)` | 统一星星即将过期提醒生成/替换/归档 | `{ viewerUserId, viewerRole, familyId, scope, targetUserId, force, modifyTime }` | `{ success, createdCount, updatedCount, archivedCount }` |
 | `syncFormalRemindersIfNeeded(options)` | 前端共享提醒 sync helper，统一 upcoming + star expiring 触发 | `{ scope, userId, familyId, force }` | `{ success, upcoming, stars }` |
 | `getExpiringStarsInfo(options)` | 统一奖池展示与提醒窗口计算 | `{ userId, now }` | `{ groups, remindWindowDays, protectWindowDays }` |

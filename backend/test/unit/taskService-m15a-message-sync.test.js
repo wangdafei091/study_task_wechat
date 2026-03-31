@@ -187,7 +187,7 @@ describe('backend TaskService M15A message sync', () => {
         date: '2026-03-30',
         reminder: { enabled: true, time: 30 }
       },
-      slotKey: 'task_upcoming_1:30m',
+      instanceKey: '2026-03-30',
       reminderTime: 1000,
       remainingMinutes: 30,
       remainingText: '30分钟'
@@ -197,7 +197,7 @@ describe('backend TaskService M15A message sync', () => {
       {
         messageId: 'msg_family_existing',
         visibility_scope: 'family',
-        message_event_key: 'task:task_upcoming_1:task_upcoming:child_1:none:task_upcoming_1:30m'
+        message_event_key: 'task:task_upcoming_1:task_upcoming:child_1:none:2026-03-30'
       },
       {
         messageId: 'msg_stale',
@@ -210,13 +210,13 @@ describe('backend TaskService M15A message sync', () => {
       {
         messageId: 'msg_family_existing',
         visibilityScope: 'family',
-        messageEventKey: 'task:task_upcoming_1:task_upcoming:child_1:none:task_upcoming_1:30m',
+        messageEventKey: 'task:task_upcoming_1:task_upcoming:child_1:none:2026-03-30',
         relatedId: 'task_upcoming_1'
       },
       {
         messageId: 'msg_user_new',
         visibilityScope: 'user',
-        messageEventKey: 'task:task_upcoming_1:task_upcoming:child_1:none:task_upcoming_1:30m:user',
+        messageEventKey: 'task:task_upcoming_1:task_upcoming:child_1:none:2026-03-30:user',
         relatedId: 'task_upcoming_1'
       }
     ]);
@@ -235,6 +235,7 @@ describe('backend TaskService M15A message sync', () => {
     expect(result).toEqual({
       success: true,
       createdCount: 1,
+      updatedCount: 1,
       dedupedCount: 1,
       archivedCount: 1,
       activeCount: 2,

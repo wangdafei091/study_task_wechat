@@ -16,5 +16,6 @@ router.get('/records', starController.getRecords.bind(starController));
 router.post('/records', starController.createRecord.bind(starController));
 router.post('/consume', starController.consume.bind(starController));
 router.get('/groups', starController.getGroups.bind(starController));
+router.post('/expiring-reminders/sync', starController.syncExpiringReminders.bind(starController));
 
 module.exports = router;

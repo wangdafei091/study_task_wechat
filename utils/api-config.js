@@ -111,6 +111,7 @@ const API_CONFIG = {
     STAR_RECORDS: '/api/stars/records',
     STAR_GROUPS: '/api/stars/groups',
     STAR_CONSUME: '/api/stars/consume',
+    STAR_EXPIRING_REMINDERS_SYNC: '/api/stars/expiring-reminders/sync',
     REWARDS: '/api/rewards',
     REWARD_BY_ID: '/api/rewards/{rewardId}',
     REWARD_EXCHANGE: '/api/rewards/{rewardId}/exchange',

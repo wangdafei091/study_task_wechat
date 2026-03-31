@@ -45,6 +45,7 @@ async function ensureM09Tables() {
   const migrationFiles = [
     '../../database/migrations/007_create_star_records.sql',
     '../../database/migrations/008_create_star_groups.sql',
+    '../../database/migrations/010_create_messages.sql',
   ];
 
   for (const relativeFile of migrationFiles) {
@@ -54,6 +55,7 @@ async function ensureM09Tables() {
 }
 
 async function cleanupTestData() {
+  await db.query("DELETE FROM messages WHERE related_id LIKE 'm09_star_%' OR message_event_key LIKE 'star:summary:star_expiring:m09_star_%'");
   await db.query("DELETE FROM star_records WHERE record_id LIKE 'm09_star_%' OR idempotency_key LIKE 'm09_star_%' OR user_id LIKE 'm09_star_%'");
   await db.query("DELETE FROM star_groups WHERE group_id LIKE 'm09_star_%' OR user_id LIKE 'm09_star_%'");
   await db.query("DELETE FROM users WHERE user_id LIKE 'm09_star_%'");
@@ -125,6 +127,7 @@ describe('M09 stars API 真实数据库集成测试', () => {
   }, 30000);
 
   afterEach(async () => {
+    await db.query("DELETE FROM messages WHERE related_id LIKE 'm09_star_%' OR message_event_key LIKE 'star:summary:star_expiring:m09_star_%'");
     await db.query("DELETE FROM star_records WHERE record_id LIKE 'm09_star_%' OR idempotency_key LIKE 'm09_star_%' OR user_id LIKE 'm09_star_%'");
     await db.query("DELETE FROM star_groups WHERE group_id LIKE 'm09_star_%' OR user_id LIKE 'm09_star_%'");
   });
@@ -260,6 +263,79 @@ describe('M09 stars API 真实数据库集成测试', () => {
       .set('Authorization', `Bearer ${otherChildToken}`);
 
     expect(forbidden.status).toBe(403);
+  });
+
+  it('POST /api/stars/expiring-reminders/sync 应生成孩子个人流和家庭流提醒，并在过窗后归档', async () => {
+    await db.query(
+      `INSERT INTO star_groups (group_id, user_id, type, stars, expiry_date, modify_time) VALUES
+        ('m09_star_group_expiring_001', 'm09_star_child_001', 'week', 3, ?, 1742400004001),
+        ('m09_star_group_expiring_002', 'm09_star_child_001', 'month', 5, ?, 1742400004002)`,
+      [formatDateOffset(1), formatDateOffset(1)]
+    );
+
+    const first = await request(app)
+      .post('/api/stars/expiring-reminders/sync')
+      .set('Authorization', `Bearer ${parentToken}`)
+      .send({
+        scope: 'user',
+        targetUserId: 'm09_star_child_001',
+        modifyTime: Date.now(),
+        operationKey: 'm09_star_expiring_sync_001'
+      });
+
+    expect(first.status).toBe(200);
+    expect(first.body.success).toBe(true);
+    expect(first.body.data.activeCount).toBe(2);
+
+    const messageRows = await db.query(
+      `SELECT notification_type, visibility_scope, type, subject_user_id, is_archived
+       FROM messages
+       WHERE message_event_key = 'star:summary:star_expiring:m09_star_child_001:none:${formatDateOffset(1)}'
+       ORDER BY visibility_scope ASC`
+    );
+
+    expect(messageRows).toEqual([
+      expect.objectContaining({
+        notification_type: 'star_expiring',
+        visibility_scope: 'family',
+        type: 'system',
+        subject_user_id: 'm09_star_child_001',
+        is_archived: 0
+      }),
+      expect.objectContaining({
+        notification_type: 'star_expiring',
+        visibility_scope: 'user',
+        type: 'system',
+        subject_user_id: 'm09_star_child_001',
+        is_archived: 0
+      })
+    ]);
+
+    await db.query("DELETE FROM star_groups WHERE group_id IN ('m09_star_group_expiring_001', 'm09_star_group_expiring_002')");
+
+    const second = await request(app)
+      .post('/api/stars/expiring-reminders/sync')
+      .set('Authorization', `Bearer ${parentToken}`)
+      .send({
+        scope: 'user',
+        targetUserId: 'm09_star_child_001',
+        modifyTime: Date.now() + 1000,
+        operationKey: 'm09_star_expiring_sync_002'
+      });
+
+    expect(second.status).toBe(200);
+    expect(second.body.data.archivedCount).toBe(2);
+
+    const archivedRows = await db.query(
+      `SELECT visibility_scope, is_archived
+       FROM messages
+       WHERE message_event_key = 'star:summary:star_expiring:m09_star_child_001:none:${formatDateOffset(1)}'
+       ORDER BY visibility_scope ASC`
+    );
+    expect(archivedRows).toEqual([
+      expect.objectContaining({ visibility_scope: 'family', is_archived: 1 }),
+      expect.objectContaining({ visibility_scope: 'user', is_archived: 1 })
+    ]);
   });
 
   it('GET /api/stars/records?scope=family 家长可获取全家流水，孩子返回 403', async () => {

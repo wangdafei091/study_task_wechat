@@ -727,7 +727,7 @@ class TaskService {
             action: 'upcoming',
             actorUserId: null,
             actorRole: 'system',
-            operationKey: candidate.slotKey,
+            operationKey: candidate.instanceKey,
             upcomingMeta: {
               remainingMinutes: candidate.remainingMinutes,
               remainingText: candidate.remainingText,
@@ -772,6 +772,7 @@ class TaskService {
         return {
           success: true,
           createdCount,
+          updatedCount: dedupedCount,
           dedupedCount,
           archivedCount: staleMessageIds.length,
           activeCount: activeCompositeKeys.size,
@@ -1018,14 +1019,14 @@ class TaskService {
       return null;
     }
 
-      return {
-        task,
-        slotKey: `upcoming:${task.taskId}:${reminderOffset}`,
-        reminderTime: reminderTime.getTime(),
-        remainingMinutes,
-        remainingText: this._formatUpcomingRemainingText(remainingMinutes),
-        dayLabel: !task.startTime ? this._formatUpcomingDayLabel(task.date, nowTimestamp) : null,
-      };
+    return {
+      task,
+      instanceKey: task.date || task.taskId,
+      reminderTime: reminderTime.getTime(),
+      remainingMinutes,
+      remainingText: this._formatUpcomingRemainingText(remainingMinutes),
+      dayLabel: !task.startTime ? this._formatUpcomingDayLabel(task.date, nowTimestamp) : null,
+    };
   }
 
   _formatUpcomingRemainingText(remainingMinutes) {

@@ -14,6 +14,9 @@ const { EVENTS } = require('../utils/constants');
 const HttpClient = require('../utils/http-client');
 const API_CONFIG = require('../utils/api-config');
 
+const STAR_REMIND_WINDOW_DAYS = 3;
+const STAR_PROTECT_WINDOW_HOURS = 48;
+
 class StarService {
   /**
    * 构造函数
@@ -912,10 +915,11 @@ class StarService {
         logger.info('StarService', `分组${index + 1}: ID=${group.id}, 星星数=${group.stars}, 过期类型=${group.expiryType}, 过期时间=${group.expiryDate}, 过期日期字符串=${group.expiryDateStr}`);
       });
       
-      // 过滤出非永久有效且未过期的分组
+      // 过滤出非永久有效、未过期且在提醒窗口内的分组
       const expiringGroups = groups.filter(group => 
         group.expiryType !== StarExpiryType.PERMANENT && 
-        !group.isExpired()
+        !group.isExpired() &&
+        this._isGroupWithinReminderWindow(group)
       );
       
       logger.info('StarService', `过滤后的即将过期分组数量: ${expiringGroups.length}`);
@@ -925,7 +929,9 @@ class StarService {
         return { 
           points: 0, 
           expiryDateText: '',
-          expiryTimestamp: 0
+          expiryTimestamp: 0,
+          remindWindowDays: STAR_REMIND_WINDOW_DAYS,
+          protectWindowDays: STAR_PROTECT_WINDOW_HOURS / 24
         };
       }
       
@@ -956,7 +962,9 @@ class StarService {
       const result = {
         points: expiringPoints,
         expiryDateText: earliestGroup.expiryDateStr || '',
-        expiryTimestamp: earliestGroup.expiryDate || 0
+        expiryTimestamp: earliestGroup.expiryDate || 0,
+        remindWindowDays: STAR_REMIND_WINDOW_DAYS,
+        protectWindowDays: STAR_PROTECT_WINDOW_HOURS / 24
       };
       
       logger.info('StarService', `即将过期星星信息计算完成:`, result);
@@ -967,7 +975,9 @@ class StarService {
       return { 
         points: 0, 
         expiryDateText: '',
-        expiryTimestamp: 0
+        expiryTimestamp: 0,
+        remindWindowDays: STAR_REMIND_WINDOW_DAYS,
+        protectWindowDays: STAR_PROTECT_WINDOW_HOURS / 24
       };
     }
   }
@@ -1608,6 +1618,25 @@ class StarService {
     ].join('|');
   }
 
+  _isGroupWithinReminderWindow(group, nowTimestamp = Date.now()) {
+    const expiryTimestamp = Number(group?.expiryDate || 0);
+    if (!expiryTimestamp || Number.isNaN(expiryTimestamp)) {
+      return false;
+    }
+
+    const now = new Date(nowTimestamp);
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const expiryDate = new Date(expiryTimestamp);
+    const expiryDayStart = new Date(
+      expiryDate.getFullYear(),
+      expiryDate.getMonth(),
+      expiryDate.getDate()
+    ).getTime();
+    const diffDays = Math.round((expiryDayStart - todayStart) / (24 * 60 * 60 * 1000));
+
+    return diffDays >= 0 && diffDays < STAR_REMIND_WINDOW_DAYS;
+  }
+
   /**
    * 计算即将过期的星星数量（不实际清理）
    * @param {String} userId 可选的用户ID，不传则计算所有用户的即将过期星星
@@ -1629,7 +1658,7 @@ class StarService {
         group.expiryType !== StarExpiryType.PERMANENT && 
         group.expiryDate && 
         group.expiryDate > now && // 还没过期
-        group.expiryDate <= (now + 48 * 60 * 60 * 1000) // 48小时内过期
+        group.expiryDate <= (now + STAR_PROTECT_WINDOW_HOURS * 60 * 60 * 1000) // 48小时内过期
       );
       
       // 计算即将过期总数量

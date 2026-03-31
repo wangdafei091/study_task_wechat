@@ -52,6 +52,7 @@ describe('utils/app/post-login-bootstrap', () => {
     };
     const messageService = {
       initialize: jest.fn().mockResolvedValue(),
+      syncFormalRemindersIfNeeded: jest.fn().mockResolvedValue({ success: true }),
       getAllMessages: jest.fn().mockResolvedValue([{ id: 'msg-1' }]),
       createSystemMessage: jest.fn().mockResolvedValue({ id: 'welcome-1' })
     };
@@ -87,6 +88,7 @@ describe('utils/app/post-login-bootstrap', () => {
     expect(taskService.checkUpcomingTasks).toHaveBeenCalled();
     expect(starService.initialize).toHaveBeenCalled();
     expect(messageService.initialize).toHaveBeenCalled();
+    expect(messageService.syncFormalRemindersIfNeeded).toHaveBeenCalled();
     expect(messageService.createSystemMessage).toHaveBeenCalled();
     expect(configService.markUserWelcomed).toHaveBeenCalled();
     expect(app.setTheme).toHaveBeenCalled();
@@ -168,6 +170,7 @@ describe('utils/app/post-login-bootstrap', () => {
     };
     const messageService = {
       initialize: jest.fn().mockResolvedValue(),
+      syncFormalRemindersIfNeeded: jest.fn().mockResolvedValue({ success: true }),
       getAllMessages: jest.fn().mockResolvedValue([])
     };
 
@@ -190,6 +193,7 @@ describe('utils/app/post-login-bootstrap', () => {
 
     expect(taskService.checkTasksStatus).toHaveBeenCalledTimes(1);
     expect(taskService.checkUpcomingTasks).toHaveBeenCalledTimes(1);
+    expect(messageService.syncFormalRemindersIfNeeded).toHaveBeenCalledTimes(1);
   });
 
   it('checkFirstLaunch 非首次启动和 createWelcomeMessage 失败时应安全返回', async () => {

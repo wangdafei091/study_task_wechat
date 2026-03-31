@@ -828,6 +828,33 @@ Authorization: Bearer <token>
 - `403` - `FAMILY_MEMBER_ACCESS_DENIED`
 - `500` - `STAR_GROUPS_GET_FAILED`
 
+### 7.6 同步星星即将过期提醒
+
+- Method: `POST`
+- Path: `/api/stars/expiring-reminders/sync`
+- Auth: `Bearer Token`
+- Query / Body（关键字段）：
+  - `scope` - 可选，`family | user`；未传时家长默认 `family`，孩子默认 `user`
+  - `targetUserId` - `scope=user` 时可选；家长可指定同家庭孩子，孩子本人固定为自己
+  - `modifyTime`
+  - `operationKey`
+
+成功响应：
+- Status: `200`
+- Body：`data.createdCount`、`data.updatedCount`、`data.dedupedCount`、`data.archivedCount`、`data.activeCount`、`data.affectedUserIds`
+
+常见错误：
+- `403` - `PERMISSION_DENIED` / `FAMILY_MEMBER_ACCESS_DENIED`
+- `500` - `STAR_EXPIRING_SYNC_FAILED`
+
+说明：
+- 该接口用于将“星星即将过期”提醒 materialize 为正式云端消息，消息类型为 `type=system`、`notification_type=star_expiring`
+- 孩子 + `scope=user`：仅同步自己的提醒
+- 家长 + `scope=user`：仅同步 `targetUserId` 对应成员的提醒；未传时回落到当前请求用户
+- 家长 + `scope=family`：同步家庭下全部活跃孩子，并按孩子分别生成个人流与家庭流提醒
+- 非家长无权请求 `scope=family`
+- 同一孩子仅保留 1 条“最近到期批次”活跃提醒；到期批次变化或不再满足提醒窗口时，旧提醒会被归档
+
 ---
 
 ## 8. 奖励接口

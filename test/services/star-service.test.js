@@ -1458,8 +1458,8 @@ describe('StarService', () => {
       expect(result.points).toBe(0);
     });
 
-    it('有即将过期分组时应该返回最早过期信息', async () => {
-      const futureDate = Date.now() + 7 * 24 * 60 * 60 * 1000;
+    it('仅 3 天窗口内的分组才应进入即将过期信息', async () => {
+      const futureDate = Date.now() + 2 * 24 * 60 * 60 * 1000;
       const mockGroup = {
         id: 'g1',
         userId: 'child_1',
@@ -1473,11 +1473,12 @@ describe('StarService', () => {
 
       const result = await starService.getExpiringStarsInfo();
       expect(result.points).toBe(20);
-      expect(result.expiryDateText).toMatch(/到期$/);
+      expect(result.remindWindowDays).toBe(3);
+      expect(result.protectWindowDays).toBe(2);
     });
 
-    it('传入userId时应该只统计对应用户的即将过期星星', async () => {
-      const futureDate = Date.now() + 7 * 24 * 60 * 60 * 1000;
+    it('传入userId时应该只统计对应用户且在窗口内的即将过期星星', async () => {
+      const futureDate = Date.now() + 2 * 24 * 60 * 60 * 1000;
       mockStarGroupRepository.getAll = jest.fn().mockResolvedValue([
         {
           id: 'g1',
@@ -1502,7 +1503,25 @@ describe('StarService', () => {
       const result = await starService.getExpiringStarsInfo('child_1');
 
       expect(result.points).toBe(20);
-      expect(result.expiryDateText).toMatch(/到期$/);
+      expect(result.remindWindowDays).toBe(3);
+    });
+
+    it('超过 3 天窗口的分组不应显示为即将过期', async () => {
+      const futureDate = Date.now() + 7 * 24 * 60 * 60 * 1000;
+      mockStarGroupRepository.getAll = jest.fn().mockResolvedValue([
+        {
+          id: 'g1',
+          userId: 'child_1',
+          stars: 20,
+          expiryType: 'month',
+          expiryDate: futureDate,
+          expiryDateStr: '2026-04-01',
+          isExpired: jest.fn().mockReturnValue(false)
+        }
+      ]);
+
+      const result = await starService.getExpiringStarsInfo();
+      expect(result.points).toBe(0);
     });
 
     it('历史展示型过期日期不应把已过期分组继续算进即将过期星星', async () => {

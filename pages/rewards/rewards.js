@@ -561,6 +561,14 @@ Page({
         logger.info('rewards', '没有有效孩子视角，跳过即将过期星星提示');
         return { points: 0, date: '' };
       }
+
+      const messageService = serviceManager.getService('messageService');
+      if (messageService?.syncFormalRemindersIfNeeded) {
+        await messageService.syncFormalRemindersIfNeeded({
+          scope: 'user',
+          userId: effectiveChildId
+        });
+      }
       
       // 获取即将过期的星星信息
       const expiringInfo = await starService.getExpiringStarsInfo(effectiveChildId);

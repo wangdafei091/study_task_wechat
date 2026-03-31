@@ -182,6 +182,11 @@ class MessageService {
     return this._upsertMessages(records, connection);
   }
 
+  async createStarMessages(input, connection) {
+    const records = await this._buildStarMessageRecords(input);
+    return this._upsertMessages(records, connection);
+  }
+
   async _buildTaskMessageRecords({
     task,
     familyId = null,
@@ -389,6 +394,95 @@ class MessageService {
           createTime: Number(operationKey || reward.modifyTime || Date.now()),
         }));
       });
+    }
+
+    return records;
+  }
+
+  async _buildStarMessageRecords({
+    familyId = null,
+    action,
+    subjectUserId,
+    operationKey,
+    points,
+    expiryDate,
+    expiryDateText = '',
+    daysUntilExpiry = null,
+    createTimeOverride = null,
+  }) {
+    if (action !== 'expiring' || !subjectUserId || Number(points || 0) <= 0 || !expiryDate) {
+      return [];
+    }
+
+    const subjectName = await this._getUserDisplayName(subjectUserId);
+    const eventKey = this._buildMessageEventKey({
+      sourceType: 'star',
+      relatedId: 'summary',
+      notificationType: 'star_expiring',
+      subjectUserId,
+      actorUserId: null,
+      operationKey,
+    });
+    const content = this._buildStarContent({
+      action,
+      subjectName,
+      points,
+      expiryDateText,
+      daysUntilExpiry,
+    });
+
+    const records = [];
+    if (content.user) {
+      records.push(new Message({
+        familyId,
+        userId: subjectUserId,
+        subjectUserId,
+        operationKey,
+        messageEventKey: eventKey,
+        visibilityScope: 'user',
+        type: 'system',
+        notificationType: 'star_expiring',
+        relatedId: subjectUserId,
+        relatedType: 'star',
+        title: content.user.title,
+        summary: content.user.summary,
+        icon: content.icon,
+        priority: content.priority,
+        content: JSON.stringify({
+          reminderCategory: 'stars_expiring',
+          expiryDate,
+          expiryDateText,
+          daysUntilExpiry,
+          points: Number(points),
+        }),
+        createTime: Number(createTimeOverride || Date.now()),
+      }));
+    }
+
+    if (content.family && familyId) {
+      records.push(new Message({
+        familyId,
+        subjectUserId,
+        operationKey,
+        messageEventKey: eventKey,
+        visibilityScope: 'family',
+        type: 'system',
+        notificationType: 'star_expiring',
+        relatedId: subjectUserId,
+        relatedType: 'star',
+        title: content.family.title,
+        summary: content.family.summary,
+        icon: content.icon,
+        priority: content.priority,
+        content: JSON.stringify({
+          reminderCategory: 'stars_expiring',
+          expiryDate,
+          expiryDateText,
+          daysUntilExpiry,
+          points: Number(points),
+        }),
+        createTime: Number(createTimeOverride || Date.now()),
+      }));
     }
 
     return records;
@@ -679,6 +773,43 @@ class MessageService {
       default:
         return null;
     }
+  }
+
+  _buildStarContent({ action, subjectName, points, expiryDateText = '', daysUntilExpiry = null }) {
+    if (action !== 'expiring') {
+      return null;
+    }
+
+    const safeSubjectName = this._normalizeDisplayName(subjectName, 'child');
+    const safePoints = Number(points || 0);
+    const expiryText = expiryDateText || '近期';
+    const dueText = this._formatStarExpiryDueText(expiryText, daysUntilExpiry);
+
+    return {
+      icon: '⏳',
+      priority: 2,
+      user: {
+        title: '星星即将过期',
+        summary: `你的${safePoints}颗星星将在${dueText}到期`,
+      },
+      family: {
+        title: '星星即将过期',
+        summary: `${safeSubjectName}有${safePoints}颗星星将在${dueText}到期`,
+      },
+    };
+  }
+
+  _formatStarExpiryDueText(expiryDateText = '', daysUntilExpiry = null) {
+    if (daysUntilExpiry === 0) {
+      return '今天';
+    }
+    if (daysUntilExpiry === 1) {
+      return '明天';
+    }
+    if (typeof daysUntilExpiry === 'number' && daysUntilExpiry > 1) {
+      return `${daysUntilExpiry}天后（${expiryDateText}）`;
+    }
+    return expiryDateText || '近期';
   }
 
   _buildMessageEventKey({

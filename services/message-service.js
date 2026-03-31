@@ -20,7 +20,7 @@ const { EVENTS } = require('../utils/constants');
 const HttpClient = require('../utils/http-client');
 const API_CONFIG = require('../utils/api-config');
 
-const UPCOMING_SYNC_MIN_INTERVAL_MS = 30 * 1000;
+const FORMAL_REMINDER_SYNC_MIN_INTERVAL_MS = 10 * 1000;
 const viewScopeUtils = require('../utils/view-scope');
 
 class MessageService {
@@ -41,8 +41,8 @@ class MessageService {
     // 用户服务
     this.userService = options.userService || null;
     this.enableCloudStorage = API_CONFIG.ENABLE_API;
-    this._upcomingSyncTimestamps = new Map();
-    this._upcomingSyncInFlight = new Map();
+    this._formalReminderSyncTimestamps = new Map();
+    this._formalReminderSyncInFlight = new Map();
     
     logger.info('MessageService', '初始化消息服务');
     
@@ -336,7 +336,7 @@ class MessageService {
       return this._compactMessagesForDisplay(await this.messageRepository.getAll());
     }
 
-    await this._syncUpcomingMessagesIfNeeded(resolved);
+    await this.syncFormalRemindersIfNeeded(resolved);
 
     const params = {
       scope: resolved.scope
@@ -359,51 +359,84 @@ class MessageService {
     return this._compactMessagesForDisplay(cloudMessages);
   }
 
-  _buildUpcomingSyncScopeKey(resolved) {
+  _buildFormalReminderSyncScopeKey(resolved) {
     return `${resolved.scope}:${resolved.userId || resolved.familyId || 'all'}`;
   }
 
-  async _syncUpcomingMessagesIfNeeded(resolved) {
+  async syncFormalRemindersIfNeeded(options = {}) {
+    const resolved = this._resolveScopeOptions(options);
     if (!this.enableCloudStorage || !resolved || resolved.scope === 'all') {
-      return;
+      return { success: false, skipped: true };
     }
 
     const now = Date.now();
-    const scopeKey = this._buildUpcomingSyncScopeKey(resolved);
-    const lastSyncTime = this._upcomingSyncTimestamps.get(scopeKey) || 0;
-    if (now - lastSyncTime < UPCOMING_SYNC_MIN_INTERVAL_MS) {
-      return;
+    const scopeKey = this._buildFormalReminderSyncScopeKey(resolved);
+    const lastSyncTime = this._formalReminderSyncTimestamps.get(scopeKey) || 0;
+    if (now - lastSyncTime < FORMAL_REMINDER_SYNC_MIN_INTERVAL_MS) {
+      return { success: true, skipped: true, reason: 'throttled' };
     }
 
-    const inFlightSync = this._upcomingSyncInFlight.get(scopeKey);
+    const inFlightSync = this._formalReminderSyncInFlight.get(scopeKey);
     if (inFlightSync) {
-      await inFlightSync;
-      return;
+      return inFlightSync;
     }
 
     const syncPromise = (async () => {
+      const payload = {
+        scope: resolved.scope,
+        targetUserId: resolved.scope === MessageVisibilityScope.USER ? resolved.userId : undefined,
+        modifyTime: now,
+        operationKey: `message_refresh:${scopeKey}:${now}`
+      };
+
       try {
-        await HttpClient.post(API_CONFIG.ENDPOINTS.TASK_UPCOMING_SYNC, {
-          scope: resolved.scope,
-          targetUserId: resolved.scope === MessageVisibilityScope.USER ? resolved.userId : undefined,
-          modifyTime: now,
-          operationKey: `message_refresh:${scopeKey}:${now}`
-        });
-        this._upcomingSyncTimestamps.set(scopeKey, Date.now());
+        const [upcomingResult, starsResult] = await Promise.allSettled([
+          HttpClient.post(API_CONFIG.ENDPOINTS.TASK_UPCOMING_SYNC, payload),
+          HttpClient.post(API_CONFIG.ENDPOINTS.STAR_EXPIRING_REMINDERS_SYNC, payload)
+        ]);
+        this._formalReminderSyncTimestamps.set(scopeKey, Date.now());
+
+        if (upcomingResult.status === 'rejected') {
+          logger.warn('MessageService', 'upcoming 正式提醒同步失败，继续读取现有正式消息', {
+            scope: resolved.scope,
+            userId: resolved.userId || null,
+            error: upcomingResult.reason?.message || 'unknown'
+          });
+        }
+
+        if (starsResult.status === 'rejected') {
+          logger.warn('MessageService', 'star_expiring 正式提醒同步失败，继续读取现有正式消息', {
+            scope: resolved.scope,
+            userId: resolved.userId || null,
+            error: starsResult.reason?.message || 'unknown'
+          });
+        }
+
+        return {
+          success: upcomingResult.status === 'fulfilled' || starsResult.status === 'fulfilled',
+          skipped: false,
+          upcoming: upcomingResult.status === 'fulfilled',
+          stars: starsResult.status === 'fulfilled',
+        };
       } catch (error) {
-        logger.warn('MessageService', 'upcoming 消息同步失败，继续读取现有正式消息', {
+        logger.warn('MessageService', '正式提醒同步失败，继续读取现有正式消息', {
           scope: resolved.scope,
           userId: resolved.userId || null,
           error: error.message
         });
+        return { success: false, skipped: false, error: error.message };
       } finally {
-        this._upcomingSyncInFlight.delete(scopeKey);
+        this._formalReminderSyncInFlight.delete(scopeKey);
       }
     })();
 
-    this._upcomingSyncInFlight.set(scopeKey, syncPromise);
+    this._formalReminderSyncInFlight.set(scopeKey, syncPromise);
 
-    await syncPromise;
+    return syncPromise;
+  }
+
+  async _syncUpcomingMessagesIfNeeded(resolved) {
+    return this.syncFormalRemindersIfNeeded(resolved);
   }
 
   async getMessagesByScope(options = {}) {

@@ -8,8 +8,10 @@ const { getPool, query } = require('../config/database');
 const StarRecord = require('../models/StarRecord');
 const StarGroup = require('../models/StarGroup');
 const { createLogger } = require('../utils/logger');
+const messageService = require('./messageService');
 
 const logger = createLogger('StarService');
+const STAR_EXPIRING_REMINDER_WINDOW_DAYS = 3;
 
 class StarService {
   async getStarSummary(userId) {
@@ -59,6 +61,102 @@ class StarService {
       [familyId]
     );
     return rows.map(row => StarRecord.fromDB(row));
+  }
+
+  async syncExpiringStarMessages(options = {}) {
+    const scanUserIds = await this._resolveReminderScanUserIds(options);
+    if (scanUserIds.length === 0) {
+      return {
+        success: true,
+        createdCount: 0,
+        updatedCount: 0,
+        dedupedCount: 0,
+        archivedCount: 0,
+        activeCount: 0,
+        affectedUserIds: [],
+      };
+    }
+
+    const now = Number(options.modifyTime || Date.now());
+    const candidates = await this._buildExpiringStarReminderCandidates(scanUserIds, now);
+    const pool = getPool();
+    const connection = await pool.getConnection();
+
+    try {
+      await connection.beginTransaction();
+
+      const existingMessages = await this._getActiveStarReminderMessagesBySubjectConn(connection, scanUserIds);
+      const existingCompositeKeys = new Set(
+        existingMessages.map(message => this._buildReminderMessageCompositeKey(message))
+      );
+      const activeCompositeKeys = new Set();
+      const affectedUserIds = new Set();
+
+      for (const candidate of candidates) {
+        const savedMessages = await messageService.createStarMessages({
+          familyId: options.familyId || null,
+          action: 'expiring',
+          subjectUserId: candidate.subjectUserId,
+          operationKey: candidate.expiryDate,
+          points: candidate.points,
+          expiryDate: candidate.expiryDate,
+          expiryDateText: candidate.expiryDateText,
+          daysUntilExpiry: candidate.daysUntilExpiry,
+          createTimeOverride: now,
+        }, connection);
+
+        savedMessages.forEach((message) => {
+          activeCompositeKeys.add(this._buildReminderMessageCompositeKey(message));
+          if (message.subjectUserId) {
+            affectedUserIds.add(message.subjectUserId);
+          }
+        });
+      }
+
+      const staleMessageIds = existingMessages
+        .filter(message => !activeCompositeKeys.has(this._buildReminderMessageCompositeKey(message)))
+        .map(message => message.messageId || message.message_id)
+        .filter(Boolean);
+
+      if (staleMessageIds.length > 0) {
+        const placeholders = staleMessageIds.map(() => '?').join(', ');
+        await connection.execute(
+          `UPDATE messages
+           SET is_archived = 1
+           WHERE message_id IN (${placeholders})
+             AND deleted_at IS NULL`,
+          staleMessageIds
+        );
+      }
+
+      await connection.commit();
+
+      let createdCount = 0;
+      let dedupedCount = 0;
+      activeCompositeKeys.forEach((key) => {
+        if (existingCompositeKeys.has(key)) {
+          dedupedCount += 1;
+        } else {
+          createdCount += 1;
+        }
+      });
+
+      return {
+        success: true,
+        createdCount,
+        updatedCount: dedupedCount,
+        dedupedCount,
+        archivedCount: staleMessageIds.length,
+        activeCount: activeCompositeKeys.size,
+        affectedUserIds: Array.from(affectedUserIds),
+      };
+    } catch (error) {
+      await connection.rollback();
+      logger.error('同步星星即将过期提醒失败', { error: error.message });
+      throw error;
+    } finally {
+      connection.release();
+    }
   }
 
   async upsertStarRecord(userId, recordData) {
@@ -592,6 +690,159 @@ class StarService {
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
+  }
+
+  async _resolveReminderScanUserIds(options = {}) {
+    const { viewerUserId, viewerRole, familyId, scope = null, targetUserId = null } = options;
+
+    if (!viewerUserId) {
+      return [];
+    }
+
+    if (scope === 'user') {
+      return [targetUserId || viewerUserId];
+    }
+
+    if (viewerRole === 'parent' && familyId) {
+      const members = await query(
+        `SELECT user_id
+         FROM users
+         WHERE family_id = ?
+           AND role = 'child'
+           AND status = 'active'`,
+        [familyId]
+      );
+      return members.map(row => row.user_id);
+    }
+
+    return [viewerUserId];
+  }
+
+  async _buildExpiringStarReminderCandidates(userIds = [], nowTimestamp = Date.now()) {
+    const groupsByUser = await this._getExpiringReminderGroupsByUser(userIds, nowTimestamp);
+    const candidates = [];
+
+    groupsByUser.forEach((groups, subjectUserId) => {
+      if (!Array.isArray(groups) || groups.length === 0) {
+        return;
+      }
+
+      const sortedGroups = [...groups].sort((a, b) => a.expiryDate.localeCompare(b.expiryDate));
+      const nearestExpiryDate = sortedGroups[0].expiryDate;
+      const nearestGroups = sortedGroups.filter(group => group.expiryDate === nearestExpiryDate);
+      const totalPoints = nearestGroups.reduce((sum, group) => sum + Number(group.stars || 0), 0);
+      if (totalPoints <= 0) {
+        return;
+      }
+
+      candidates.push({
+        subjectUserId,
+        expiryDate: nearestExpiryDate,
+        expiryDateText: this._formatExpiryDateText(nearestExpiryDate, nowTimestamp),
+        daysUntilExpiry: this._diffDaysFromToday(nearestExpiryDate, nowTimestamp),
+        points: totalPoints,
+      });
+    });
+
+    return candidates;
+  }
+
+  async _getExpiringReminderGroupsByUser(userIds = [], nowTimestamp = Date.now()) {
+    if (!Array.isArray(userIds) || userIds.length === 0) {
+      return new Map();
+    }
+
+    const placeholders = userIds.map(() => '?').join(', ');
+    const rows = await query(
+      `SELECT *
+       FROM star_groups
+       WHERE user_id IN (${placeholders})
+         AND type <> 'permanent'
+       ORDER BY expiry_date ASC, created_at ASC`,
+      userIds
+    );
+
+    const groupsByUser = new Map();
+    rows.forEach((row) => {
+      if (!this._isGroupWithinReminderWindow(row, nowTimestamp)) {
+        return;
+      }
+
+      const normalizedExpiryDate = this._normalizeExpiryDate(row);
+      if (!normalizedExpiryDate) {
+        return;
+      }
+
+      const bucket = groupsByUser.get(row.user_id) || [];
+      bucket.push({
+        groupId: row.group_id,
+        userId: row.user_id,
+        stars: Number(row.stars || 0),
+        expiryDate: normalizedExpiryDate,
+      });
+      groupsByUser.set(row.user_id, bucket);
+    });
+
+    return groupsByUser;
+  }
+
+  _isGroupWithinReminderWindow(row, nowTimestamp = Date.now()) {
+    if (!this._isActiveGroupRow(row)) {
+      return false;
+    }
+
+    const normalizedExpiryDate = this._normalizeExpiryDate(row);
+    if (!normalizedExpiryDate) {
+      return false;
+    }
+
+    const diffDays = this._diffDaysFromToday(normalizedExpiryDate, nowTimestamp);
+    return diffDays >= 0 && diffDays < STAR_EXPIRING_REMINDER_WINDOW_DAYS;
+  }
+
+  _diffDaysFromToday(expiryDate, nowTimestamp = Date.now()) {
+    const today = new Date(nowTimestamp);
+    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const target = new Date(`${expiryDate}T00:00:00`);
+    if (Number.isNaN(target.getTime())) {
+      return Number.POSITIVE_INFINITY;
+    }
+
+    return Math.round((target.getTime() - todayStart.getTime()) / (24 * 60 * 60 * 1000));
+  }
+
+  _formatExpiryDateText(expiryDate, nowTimestamp = Date.now()) {
+    const diffDays = this._diffDaysFromToday(expiryDate, nowTimestamp);
+    if (diffDays === 0) {
+      return '今天';
+    }
+    if (diffDays === 1) {
+      return '明天';
+    }
+    return expiryDate;
+  }
+
+  async _getActiveStarReminderMessagesBySubjectConn(connection, subjectUserIds = []) {
+    if (!Array.isArray(subjectUserIds) || subjectUserIds.length === 0) {
+      return [];
+    }
+
+    const placeholders = subjectUserIds.map(() => '?').join(', ');
+    const [rows] = await connection.execute(
+      `SELECT *
+       FROM messages
+       WHERE deleted_at IS NULL
+         AND is_archived = 0
+         AND notification_type = 'star_expiring'
+         AND subject_user_id IN (${placeholders})`,
+      subjectUserIds
+    );
+
+    return rows;
+  }
+
+  _buildReminderMessageCompositeKey(message) {
+    return `${message.visibilityScope || message.visibility_scope}:${message.messageEventKey || message.message_event_key}`;
   }
 
   async _getRecordByIdConn(connection, recordId) {
