@@ -2055,6 +2055,15 @@ describe('TaskService', () => {
   // ============================================================
 
   describe('M08 - _generateRepeatTasks 批量云端同步', () => {
+    // 动态日期：确保测试在任意日期运行时稳定
+    const _day = 86400000;
+    const _now = new Date(); _now.setHours(0, 0, 0, 0);
+    const _futureStart = dateUtils.formatDate(new Date(_now.getTime() + 7 * _day));
+    const _futureEnd = dateUtils.formatDate(new Date(_now.getTime() + 28 * _day));
+    // 过去起点 + 未来终点：测试 effectiveStartDate 对齐逻辑
+    const _pastStart = dateUtils.formatDate(new Date(_now.getTime() - 14 * _day));
+    const _todayStr = dateUtils.formatDate(_now);
+
     beforeEach(() => {
       mockTaskRepository.saveAll = jest.fn().mockImplementation(async (tasks) => tasks);
       mockTaskRepository.getByUserId = jest.fn().mockResolvedValue([]);
@@ -2067,8 +2076,8 @@ describe('TaskService', () => {
       HttpClient.post = jest.fn();
 
       const parentTask = new Task(TestDataFactory.createTask({
-        id: 'parent_1', userId: 'u1',
-        repeat: { type: 'weekly', startDate: '2026-03-17', endDate: '2026-03-31' }
+        id: 'parent_1', userId: 'u1', date: _futureStart,
+        repeat: { type: 'weekly', startDate: _futureStart, endDate: _futureEnd }
       }));
       await taskService._generateRepeatTasks(parentTask);
 
@@ -2081,8 +2090,8 @@ describe('TaskService', () => {
       HttpClient.post = jest.fn().mockResolvedValue({ taskId: 'x', status: 0 });
 
       const parentTask = new Task(TestDataFactory.createTask({
-        id: 'parent_2', userId: 'u1',
-        repeat: { type: 'weekly', startDate: '2026-03-17', endDate: '2026-03-31' }
+        id: 'parent_2', userId: 'u1', date: _futureStart,
+        repeat: { type: 'weekly', startDate: _futureStart, endDate: _futureEnd }
       }));
       await taskService._generateRepeatTasks(parentTask);
 
@@ -2099,8 +2108,8 @@ describe('TaskService', () => {
       HttpClient.post = jest.fn().mockRejectedValue(new Error('network error'));
 
       const parentTask = new Task(TestDataFactory.createTask({
-        id: 'parent_3', userId: 'u1',
-        repeat: { type: 'weekly', startDate: '2026-03-17', endDate: '2026-03-31' }
+        id: 'parent_3', userId: 'u1', date: _futureStart,
+        repeat: { type: 'weekly', startDate: _futureStart, endDate: _futureEnd }
       }));
       const result = await taskService._generateRepeatTasks(parentTask);
 
@@ -2109,25 +2118,26 @@ describe('TaskService', () => {
 
     it('开始日期早于今天的每周重复任务应保留原始周期，只生成未来对齐实例', async () => {
       HttpClient.post = jest.fn().mockResolvedValue({ taskId: 'x', status: 0 });
-
+      // endDate 设为今天，effectiveStartDate 对齐到今天后，
+      // 每周从 pastStart 迭代，只有今天这周的对齐日落在 [today, endDate] 区间
       const parentTask = new Task(TestDataFactory.createTask({
         id: 'parent_3b',
         userId: 'u1',
-        date: '2026-03-17',
-        repeat: { type: 'weekly', startDate: '2026-03-17', endDate: '2026-03-31' }
+        date: _pastStart,
+        repeat: { type: 'weekly', startDate: _pastStart, endDate: _todayStr }
       }));
 
       const result = await taskService._generateRepeatTasks(parentTask);
 
       expect(result).toHaveLength(1);
-      expect(result[0].date).toBe('2026-03-31');
+      expect(result[0].date).toBe(_todayStr);
     });
 
     it('_createRepeatTaskInstance 应重置 syncedToCloud 为 false', () => {
       const parentTask = new Task(TestDataFactory.createTask({
         id: 'parent_4', userId: 'u1', syncedToCloud: true
       }));
-      const instance = taskService._createRepeatTaskInstance(parentTask, new Date('2026-03-20'));
+      const instance = taskService._createRepeatTaskInstance(parentTask, new Date(Date.now() + 7 * _day));
 
       expect(instance.syncedToCloud).toBe(false);
     });
