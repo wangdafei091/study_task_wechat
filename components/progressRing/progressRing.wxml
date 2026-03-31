@@ -4,6 +4,16 @@
       bindtap="onRingTap"
       style="width: {{sizeRpx}}rpx; height: {{sizeRpx}}rpx; color: {{type === 'default' ? color : ''}};">
   <canvas
+    wx:if="{{use2dCanvas}}"
+    class="ring-canvas"
+    type="2d"
+    canvas-id="progress-ring-canvas"
+    style="width: {{sizeRpx}}rpx; height: {{sizeRpx}}rpx;"
+    width="{{canvasSizePx}}"
+    height="{{canvasSizePx}}"
+  ></canvas>
+  <canvas
+    wx:else
     class="ring-canvas"
     canvas-id="progress-ring-canvas"
     style="width: {{sizeRpx}}rpx; height: {{sizeRpx}}rpx;"

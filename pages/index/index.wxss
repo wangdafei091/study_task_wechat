@@ -1308,10 +1308,6 @@
   transition: transform var(--transition-fast);
 }
 
-.ring-item:active {
-  transform: scale(0.95);
-}
-
 .ring-item-label {
   font-size: 24rpx;
   color: var(--text-secondary);
