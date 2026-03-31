@@ -148,6 +148,7 @@ describe('TaskService helpers and delegators', () => {
           { id: 'create_1', syncedToCloud: false, pendingSyncMeta: { action: 'create' } },
           { id: 'update_1', syncedToCloud: true, pendingSyncMeta: { action: 'update' } },
           { id: 'complete_1', syncedToCloud: true, pendingSyncMeta: { action: 'complete' } },
+          { id: 'complete_pending_1', syncedToCloud: false, pendingSyncMeta: { action: 'complete' } },
           { id: 'reset_1', syncedToCloud: true, pendingSyncMeta: { action: 'reset' } },
           { id: 'default_1', syncedToCloud: true, pendingSyncMeta: { action: 'other' } },
           { id: 'skip_1' }
@@ -187,7 +188,9 @@ describe('TaskService helpers and delegators', () => {
     expect(service._syncUpdateToCloud).toHaveBeenCalledWith(expect.objectContaining({ id: 'update_1' }));
     expect(service._syncUpdateToCloud).toHaveBeenCalledWith(expect.objectContaining({ id: 'default_1' }));
     expect(service._syncStatusToCloud).toHaveBeenCalledWith(expect.objectContaining({ id: 'complete_1' }));
+    expect(service._syncStatusToCloud).toHaveBeenCalledWith(expect.objectContaining({ id: 'complete_pending_1' }));
     expect(service._syncStatusToCloud).toHaveBeenCalledWith(expect.objectContaining({ id: 'reset_1' }));
+    expect(service._syncTaskToCloud).not.toHaveBeenCalledWith(expect.objectContaining({ id: 'complete_pending_1' }));
     expect(service._syncDeleteToCloud).toHaveBeenCalledTimes(2);
   });
 

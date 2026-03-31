@@ -180,12 +180,10 @@ class TaskService {
       }
 
       try {
-        if (!task.syncedToCloud) {
-          await this._syncTaskToCloud(task);
-          continue;
-        }
-
         switch (task.pendingSyncMeta.action) {
+          case 'create':
+            await this._syncTaskToCloud(task);
+            break;
           case 'update':
             await this._syncUpdateToCloud(task);
             break;
@@ -198,7 +196,11 @@ class TaskService {
             await this._syncRequiredStateToCloud(task);
             break;
           default:
-            await this._syncUpdateToCloud(task);
+            if (!task.syncedToCloud) {
+              await this._syncTaskToCloud(task);
+            } else {
+              await this._syncUpdateToCloud(task);
+            }
             break;
         }
       } catch (error) {
