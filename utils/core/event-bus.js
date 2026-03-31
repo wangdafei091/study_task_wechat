@@ -7,7 +7,7 @@
 const logger = require('../logger');
 
 class EventBus {
-  constructor() {
+  constructor(options = {}) {
     this.listeners = {};
     this.oneShotListeners = {};
     this.history = {};
@@ -32,6 +32,11 @@ class EventBus {
     // 配置选项
     this.optimizePayload = true; // 启用性能优化
     this.debugMode = false;      // 调试模式
+    this.optionalNoListenerEvents = new Set(options.optionalNoListenerEvents || [
+      'config:changed',
+      'stars:added',
+      'user:switched'
+    ]);
   }
   
   /**
@@ -187,7 +192,8 @@ class EventBus {
     // 检查是否存在监听器
     const hasListeners = this.hasListeners(event);
     if (!hasListeners) {
-      logger.warn('EventBus', `事件没有监听器: ${event}`);
+      const noListenerLogLevel = this.optionalNoListenerEvents.has(event) ? 'info' : 'warn';
+      logger[noListenerLogLevel]('EventBus', `事件没有监听器: ${event}`);
     }
     
     // 调用普通监听器

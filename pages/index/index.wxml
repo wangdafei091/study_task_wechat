@@ -1,4 +1,5 @@
 <!--pages/index/index.wxml-->
+<page-meta page-style="{{showMessagePreview ? 'overflow: hidden; height: 100vh;' : ''}}"></page-meta>
 <view class="container">
   <!-- 顶部导航栏 -->
   <view class="header-container">
@@ -36,6 +37,7 @@
           type="habit"
           percent="{{taskProgress.habit}}"
           size="large"
+          enableHover="{{false}}"
           bind:tap="onRingTap">
         </progress-ring>
         <text class="ring-item-label">习惯</text>
@@ -47,6 +49,7 @@
           type="study"
           percent="{{taskProgress.study}}"
           size="large"
+          enableHover="{{false}}"
           bind:tap="onRingTap">
         </progress-ring>
         <text class="ring-item-label">学习</text>
@@ -58,6 +61,7 @@
           type="interest"
           percent="{{taskProgress.interest}}"
           size="large"
+          enableHover="{{false}}"
           bind:tap="onRingTap">
         </progress-ring>
         <text class="ring-item-label">兴趣</text>
@@ -203,7 +207,7 @@
         <text class="reward-hint-secondary">可前往奖池查看</text>
       </block>
       <block wx:elif="{{nextReward.allClaimed}}">
-        <text class="reward-hint-primary status-success">恭喜！您已领取所有奖励，可以继续积累星星</text>
+        <text class="reward-hint-primary status-success">恭喜！当前奖励都已兑换，可以继续积累星星</text>
       </block>
       <block wx:elif="{{nextReward.showSetupTip}}">
         <text class="reward-hint-primary status-normal">{{rewardHintText}}</text>
@@ -299,10 +303,11 @@
 
 <!-- 消息中心组件（移到最外层） -->
 <view class="message-overlay" wx:if="{{showMessagePreview}}" bindtap="toggleMessagePreview" catchtouchmove="preventTouchMove"></view>
-<view class="message-center-container" wx:if="{{showMessagePreview}}">
+<view class="message-center-container" wx:if="{{showMessagePreview}}" catchtouchmove="preventBubble">
   <view class="message-preview-panel" 
         animation="{{messageAnimation}}"
-        catchtap="preventBubble">
+        catchtap="preventBubble"
+        catchtouchmove="preventBubble">
     <view class="message-preview-header">
       <view class="section-title">消息中心</view>
       <view class="message-preview-close" bindtap="toggleMessagePreview">×</view>

@@ -13,6 +13,8 @@ const HttpClient = require('../utils/http-client');
 const API_CONFIG = require('../utils/api-config');
 const { Reward } = require('../models/reward');
 
+const REWARD_CLOUD_REFRESH_MIN_INTERVAL_MS = 3 * 1000;
+
 class RewardService {
   // 使用静态属性存储类级别的初始化状态
   static _initialized = false;
@@ -46,6 +48,8 @@ class RewardService {
     // 实例级初始化标记
     this.initialized = false;
     this.enableCloudStorage = API_CONFIG.ENABLE_API;
+    this._lastCloudRewardsSyncTime = 0;
+    this._cloudRewardsRefreshInFlight = null;
     
     logger.info('RewardService', '构造奖励服务实例');
   }
@@ -285,6 +289,14 @@ class RewardService {
         switch (reward.pendingSyncMeta.action) {
           case 'exchange':
             await this._syncExchangeToCloud(
+              reward.id,
+              reward.pendingSyncMeta.exchangeUserId || reward.exchangeUserId,
+              reward.pendingSyncMeta.modifyTime || reward.modifyTime,
+              reward
+            );
+            break;
+          case 'unclaim':
+            await this._syncCancelExchangeToCloud(
               reward.id,
               reward.pendingSyncMeta.exchangeUserId || reward.exchangeUserId,
               reward.pendingSyncMeta.modifyTime || reward.modifyTime,
@@ -726,15 +738,49 @@ class RewardService {
     }
   }
 
-  async refreshRewardsFromCloud() {
+  async refreshRewardsFromCloud(options = {}) {
     if (!this.enableCloudStorage) {
       return { success: false, message: '云端模式未启用' };
     }
-    return this._fetchRewardsFromCloud();
+
+    const {
+      force = false,
+      minIntervalMs = REWARD_CLOUD_REFRESH_MIN_INTERVAL_MS
+    } = options;
+
+    // in-flight 复用：已在进行中的请求直接复用，避免并发重复
+    if (this._cloudRewardsRefreshInFlight) {
+      logger.debug('RewardService', '复用进行中的奖励云同步请求');
+      return this._cloudRewardsRefreshInFlight;
+    }
+
+    const request = (async () => {
+      // 待同步补云属于一致性自愈链路，不应被读取节流挡住
+      await this._flushPendingRewardSyncs();
+
+      const now = Date.now();
+      const lastSyncTime = this._lastCloudRewardsSyncTime || 0;
+      if (!force && minIntervalMs > 0 && now - lastSyncTime < minIntervalMs) {
+        logger.debug('RewardService', '奖励云同步被短窗口去重跳过', {
+          elapsed: now - lastSyncTime,
+          minIntervalMs
+        });
+        return { success: true, skipped: true, reason: 'throttled' };
+      }
+
+      const result = await this._fetchRewardsFromCloud();
+        this._lastCloudRewardsSyncTime = Date.now();
+        return result;
+      })()
+      .finally(() => {
+        this._cloudRewardsRefreshInFlight = null;
+      });
+
+    this._cloudRewardsRefreshInFlight = request;
+    return request;
   }
 
   async _fetchRewardsFromCloud() {
-    await this._flushPendingRewardSyncs();
     const response = await HttpClient.get(API_CONFIG.ENDPOINTS.REWARDS);
     const cloudRewards = (response.rewards || []).map(item => this._mapCloudReward(item));
     const allLocal = await this.rewardRepository.getAll(false);
@@ -829,6 +875,23 @@ class RewardService {
     return response;
   }
 
+  async _syncCancelExchangeToCloud(rewardId, exchangeUserId, modifyTime, reward = null) {
+    const pendingSyncMeta = reward?.pendingSyncMeta || this._buildRewardPendingSyncMeta(reward, 'unclaim', {
+      modifyTime,
+      exchangeUserId
+    });
+    const url = API_CONFIG.ENDPOINTS.REWARD_CANCEL_EXCHANGE.replace('{rewardId}', rewardId);
+    const response = await HttpClient.patch(url, {
+      exchangeUserId,
+      modifyTime,
+      operationKey: pendingSyncMeta.operationKey
+    });
+    if (reward) {
+      await this._markRewardSynced(reward, { modifyTime });
+    }
+    return response;
+  }
+
   _mapCloudReward(item) {
     return new Reward({
       id: item.rewardId || item.id,
@@ -842,7 +905,7 @@ class RewardService {
       enabled: item.enabled !== false,
       claimed: item.claimed === true,
       claimTime: item.claimTime || 0,
-      claimStatus: item.claimStatus || (item.claimed ? 'delivered' : 'available'),
+      claimStatus: item.claimStatus || (item.claimed ? 'claimed' : 'available'),
       deliveryTime: item.deliveryTime || 0,
       isExample: item.isExample === true,
       tags: item.tags || [],
@@ -1010,11 +1073,10 @@ class RewardService {
           };
         }
         
-        // 3. 更新奖励状态为已领取
+        // 3. 更新奖励状态为已兑换未领取
         try {
-          reward.claim(); // 使用Reward模型的标准方法，现在直接设置为delivered状态
+          reward.claim();
           reward.claimTime = exchangeModifyTime;
-          reward.deliveryTime = exchangeModifyTime;
           reward.modifyTime = exchangeModifyTime;
           reward.exchangeUserId = userId;
           reward.pendingSyncMeta = this._buildRewardPendingSyncMeta(reward, 'exchange', {
@@ -1168,11 +1230,57 @@ class RewardService {
         logger.warn('RewardService', `取消奖励兑换失败: 未找到ID为${rewardId}的奖励`);
         return { success: false, message: '未找到指定的奖励' };
       }
-      
+
       // 检查奖励是否已兑换
       if (!reward.claimed) {
         logger.info('RewardService', `奖励尚未兑换, 无需取消, ID=${rewardId}`);
         return { success: true, reward, message: '奖励尚未兑换' };
+      }
+
+      if (this.enableCloudStorage) {
+        const exchangeUserId = reward.exchangeUserId || this.userService?.getCurrentUserId?.() || null;
+        const modifyTime = Date.now();
+        const response = await this._syncCancelExchangeToCloud(
+          rewardId,
+          exchangeUserId,
+          modifyTime
+        );
+
+        const cloudReward = this._mapCloudReward(response.reward || {
+          ...reward,
+          rewardId: reward.id,
+          claimed: false,
+          claimTime: 0,
+          claimStatus: 'available',
+          deliveryTime: 0,
+          exchangeUserId: null,
+          modifyTime
+        });
+        cloudReward.pendingSyncMeta = null;
+        cloudReward.syncedToCloud = true;
+        await this.rewardRepository.save(cloudReward);
+
+        if (this.starService?.refreshStarsFromCloud && exchangeUserId) {
+          await this.starService.refreshStarsFromCloud(exchangeUserId).catch(() => null);
+        }
+
+        const pointsRefunded = Number(response.refundedPoints || 0);
+        this.eventBus.emit(EVENTS.REWARD_UNCLAIMED, {
+          reward: cloudReward,
+          pointsRefunded
+        });
+        this.eventBus.emit(EVENTS.REWARD_EXCHANGE_CANCELLED, {
+          reward: cloudReward,
+          pointsRefunded,
+          record: response.refundRecord || null
+        });
+
+        return {
+          success: true,
+          reward: cloudReward,
+          pointsRefunded,
+          message: '取消兑换成功'
+        };
       }
       
       // 检查奖励是否已领取

@@ -17,6 +17,16 @@ const app = express();
 app.use(express.json());
 app.use('/api/rewards', authMiddleware, rewardRoutes);
 
+function formatDateOffset(days) {
+  const date = new Date();
+  date.setHours(0, 0, 0, 0);
+  date.setDate(date.getDate() + days);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 function generateToken(user) {
   const secret = process.env.JWT_SECRET || 'test-secret-key-for-dev-testing-only';
   return jwt.sign(
@@ -195,6 +205,9 @@ describe('M09 rewards API 真实数据库集成测试', () => {
   });
 
   it('PATCH /api/rewards/:rewardId/exchange 孩子兑换应扣减星星并支持幂等重试', async () => {
+    const nextWeek = formatDateOffset(7);
+    const nextMonth = formatDateOffset(30);
+
     await db.query(
       `INSERT INTO rewards (
         reward_id, user_id, family_id, name, description, type, points, icon,
@@ -205,8 +218,9 @@ describe('M09 rewards API 真实数据库集成测试', () => {
 
     await db.query(
       `INSERT INTO star_groups (group_id, user_id, type, stars, expiry_date, modify_time) VALUES
-        ('m09_reward_group_week_001', 'm09_reward_child_001', 'week', 2, '2026-03-28', 1742400011001),
-        ('m09_reward_group_month_001', 'm09_reward_child_001', 'month', 4, '2026-03-31', 1742400011002)`
+        ('m09_reward_group_week_001', 'm09_reward_child_001', 'week', 2, ?, 1742400011001),
+        ('m09_reward_group_month_001', 'm09_reward_child_001', 'month', 4, ?, 1742400011002)`,
+      [nextWeek, nextMonth]
     );
 
     const payload = {

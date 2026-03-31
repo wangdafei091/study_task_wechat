@@ -19,6 +19,9 @@ jest.mock('../../utils/api-config', () => ({
     TASKS: '/tasks',
     TASK_BY_ID: '/tasks/{taskId}',
     TASK_STATUS: '/tasks/{taskId}/status',
+    TASK_UPCOMING_SYNC: '/tasks/upcoming/sync',
+    TASK_REQUIRED: '/tasks/{taskId}/required',
+    TASK_UNREQUIRED: '/tasks/{taskId}/unrequired',
     TASKS_TRANSFER: '/tasks/transfer'
   }
 }));
@@ -97,6 +100,7 @@ describe('task-sync direct behavior', () => {
       endTime: '19:00',
       duration: 60,
       isAllDay: false,
+      reminder: { enabled: true, time: 30 },
       isRequired: false,
       penaltyApplied: false,
       points: 5,
@@ -112,6 +116,9 @@ describe('task-sync direct behavior', () => {
     service.enableCloudStorage = true;
     mockHttpClient.put.mockResolvedValueOnce({});
     await expect(taskSync.syncUpdateToCloud(service, task)).resolves.toBeUndefined();
+    expect(mockHttpClient.put).toHaveBeenCalledWith('/tasks/task_1', expect.objectContaining({
+      reminder: { enabled: true, time: 30 }
+    }));
 
     mockHttpClient.put.mockRejectedValueOnce(new Error('put fail'));
     await expect(taskSync.syncUpdateToCloud(service, task)).rejects.toThrow('put fail');
@@ -166,5 +173,56 @@ describe('task-sync direct behavior', () => {
       ...task,
       status: TaskStatus.COMPLETED
     })).rejects.toThrow('patch fail');
+  });
+
+  it('syncRequiredStateToCloud 应根据动作选择 required/unrequired 端点', async () => {
+    const service = {
+      enableCloudStorage: true,
+      _buildTaskPendingSyncMeta: jest.fn(() => ({
+        operationKey: 'op_required',
+        modifyTime: 303,
+        operatorUserId: 'parent_1',
+        operatorRole: 'parent',
+        familyId: 'family_1'
+      })),
+      _markTaskSynced: jest.fn(async () => true)
+    };
+
+    mockHttpClient.patch.mockResolvedValueOnce({});
+    await expect(taskSync.syncRequiredStateToCloud(service, {
+      id: 'task_required',
+      isRequired: true,
+      modifyTime: 300
+    })).resolves.toBeUndefined();
+    expect(mockHttpClient.patch).toHaveBeenLastCalledWith('/tasks/task_required/required', expect.objectContaining({
+      modifyTime: 303,
+      operationKey: 'op_required'
+    }));
+
+    mockHttpClient.patch.mockResolvedValueOnce({});
+    await expect(taskSync.syncRequiredStateToCloud(service, {
+      id: 'task_unrequired',
+      isRequired: false,
+      modifyTime: 301,
+      pendingSyncMeta: {
+        action: 'unrequired',
+        modifyTime: 304,
+        operationKey: 'op_unrequired',
+        operatorUserId: 'parent_1',
+        operatorRole: 'parent',
+        familyId: 'family_1'
+      }
+    })).resolves.toBeUndefined();
+    expect(mockHttpClient.patch).toHaveBeenLastCalledWith('/tasks/task_unrequired/unrequired', expect.objectContaining({
+      modifyTime: 304,
+      operationKey: 'op_unrequired'
+    }));
+
+    mockHttpClient.patch.mockRejectedValueOnce(new Error('required fail'));
+    await expect(taskSync.syncRequiredStateToCloud(service, {
+      id: 'task_fail',
+      isRequired: true,
+      modifyTime: 305
+    })).rejects.toThrow('required fail');
   });
 });

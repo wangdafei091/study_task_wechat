@@ -154,6 +154,9 @@ describe('StarService', () => {
 
       expect(result.success).toBe(true);
       expect(result.points).toBe(10);
+      expect(mockStarRecordRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+        expiryDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/)
+      }));
       expect(mockEventBus.events['stars:added']).toBeDefined();
     });
 
@@ -1092,12 +1095,17 @@ describe('StarService', () => {
       const initialized = await starService.initialize();
 
       expect(initialized).toBe(true);
+      // initialize 内部复用 cleanupExpiredStars，会调用底层 cleanupExpiredGroups
       expect(mockStarGroupRepository.cleanupExpiredGroups).toHaveBeenCalled();
-      expect(mockStarGroupRepository.cleanupEmptyGroups).toHaveBeenCalled();
     });
 
     it('初始化失败时应该返回false', async () => {
+      // cleanupExpiredStars 内部 catch 后返回 { success: false }，不再抛异常
       mockStarGroupRepository.cleanupExpiredGroups.mockRejectedValue(new Error('初始化失败'));
+      // cleanupEmptyGroups 也需要 mock，避免 cleanupExpiredStars 内部再次报错
+      mockStarGroupRepository.cleanupEmptyGroups.mockResolvedValue(0);
+      // createExpiredRecord 也需要 mock
+      mockStarRecordRepository.createExpiredRecord.mockRejectedValue(new Error('初始化失败'));
 
       const initialized = await starService.initialize();
 
@@ -1131,6 +1139,87 @@ describe('StarService', () => {
       expect(result.groups).toEqual([localGroup]);
       expect(result.records).toEqual([localPendingRecord]);
       expect(HttpClient.get).not.toHaveBeenCalled();
+    });
+
+    it('同一用户并发刷新星星时应复用进行中的云请求', async () => {
+      starService.enableCloudStorage = true;
+
+      mockStarGroupRepository.getAll.mockResolvedValue([]);
+      mockStarRecordRepository.getAll.mockResolvedValue([]);
+      HttpClient.get
+        .mockResolvedValueOnce({ groups: [] })
+        .mockResolvedValueOnce({ records: [] });
+
+      const [result1, result2] = await Promise.all([
+        starService.refreshStarsFromCloud('user_123'),
+        starService.refreshStarsFromCloud('user_123')
+      ]);
+
+      expect(HttpClient.get).toHaveBeenCalledTimes(2);
+      expect(HttpClient.get).toHaveBeenNthCalledWith(1, '/api/stars', { userId: 'user_123' });
+      expect(HttpClient.get).toHaveBeenNthCalledWith(2, '/api/stars/records', { userId: 'user_123' });
+      expect(result1).toEqual(expect.objectContaining({
+        success: true,
+        groups: [],
+        records: []
+      }));
+      expect(result2).toEqual(expect.objectContaining({
+        success: true,
+        groups: [],
+        records: []
+      }));
+    });
+
+    it('云端刷新时应过滤已过期的云端星星分组', async () => {
+      jest.useFakeTimers();
+      try {
+        jest.setSystemTime(new Date('2026-03-30T19:49:47'));
+        starService.enableCloudStorage = true;
+
+        mockStarGroupRepository.getAll.mockResolvedValue([]);
+        mockStarRecordRepository.getAll.mockResolvedValue([]);
+        HttpClient.get
+          .mockResolvedValueOnce({
+            groups: [
+              {
+                groupId: 'expired_group',
+                userId: 'user_123',
+                type: 'week',
+                stars: 2,
+                expiryDate: '2026-03-29'
+              },
+              {
+                groupId: 'future_group',
+                userId: 'user_123',
+                type: 'week',
+                stars: 7,
+                expiryDate: '2026-04-05'
+              }
+            ]
+          })
+          .mockResolvedValueOnce({ records: [] });
+
+        const result = await starService.refreshStarsFromCloud('user_123');
+
+        expect(result.success).toBe(true);
+        expect(result.groups).toHaveLength(1);
+        expect(result.groups[0]).toEqual(expect.objectContaining({
+          id: 'future_group',
+          stars: 7
+        }));
+        expect(mockStarGroupRepository._saveData).toHaveBeenCalledWith(
+          expect.arrayContaining([
+            expect.objectContaining({ id: 'future_group' })
+          ])
+        );
+        expect(mockStarGroupRepository._saveData).not.toHaveBeenCalledWith(
+          expect.arrayContaining([
+            expect.objectContaining({ id: 'expired_group' })
+          ])
+        );
+      } finally {
+        jest.useRealTimers();
+      }
     });
 
     it('星星流水同步成功后应回灌服务端返回的最新分组快照', async () => {
@@ -1220,6 +1309,35 @@ describe('StarService', () => {
 
       expect(record.syncedToCloud).toBe(true);
       expect(mockStarGroupRepository._saveData).not.toHaveBeenCalled();
+    });
+
+    it('补云星星流水时应将历史展示型 expiryDate 归一化为原始日期', async () => {
+      const record = {
+        id: 'record_sync_legacy',
+        userId: 'user_123',
+        type: 'expense',
+        source: 'task_reset',
+        sourceId: 'task_legacy',
+        points: -2,
+        description: '历史脏数据',
+        expiryType: 'week',
+        expiryDate: '2026-03-28 到期',
+        syncedToCloud: false,
+        modifyTime: 1742716800000
+      };
+
+      HttpClient.post.mockResolvedValue({ updatedGroupsSnapshot: [] });
+      mockStarRecordRepository.getAll.mockResolvedValue([]);
+
+      await starService._syncStarRecordToCloud(record);
+
+      expect(HttpClient.post).toHaveBeenCalledWith(
+        '/api/stars/records',
+        expect.objectContaining({
+          expiryDate: '2026-03-28'
+        })
+      );
+      expect(record.expiryDate).toBe('2026-03-28');
     });
 
     it('应该成功清除缓存', () => {
@@ -1340,10 +1458,11 @@ describe('StarService', () => {
       expect(result.points).toBe(0);
     });
 
-    it('有即将过期分组时应该返回最早过期信息', async () => {
-      const futureDate = Date.now() + 7 * 24 * 60 * 60 * 1000;
+    it('仅 3 天窗口内的分组才应进入即将过期信息', async () => {
+      const futureDate = Date.now() + 2 * 24 * 60 * 60 * 1000;
       const mockGroup = {
         id: 'g1',
+        userId: 'child_1',
         stars: 20,
         expiryType: 'month',
         expiryDate: futureDate,
@@ -1354,7 +1473,89 @@ describe('StarService', () => {
 
       const result = await starService.getExpiringStarsInfo();
       expect(result.points).toBe(20);
-      expect(result.expiryDateText).toBe('2026-04-01');
+      expect(result.remindWindowDays).toBe(3);
+      expect(result.protectWindowDays).toBe(2);
+    });
+
+    it('传入userId时应该只统计对应用户且在窗口内的即将过期星星', async () => {
+      const futureDate = Date.now() + 2 * 24 * 60 * 60 * 1000;
+      mockStarGroupRepository.getAll = jest.fn().mockResolvedValue([
+        {
+          id: 'g1',
+          userId: 'child_1',
+          stars: 20,
+          expiryType: 'month',
+          expiryDate: futureDate,
+          expiryDateStr: '2026-04-01',
+          isExpired: jest.fn().mockReturnValue(false)
+        },
+        {
+          id: 'g2',
+          userId: 'child_2',
+          stars: 99,
+          expiryType: 'month',
+          expiryDate: futureDate,
+          expiryDateStr: '2026-04-01',
+          isExpired: jest.fn().mockReturnValue(false)
+        }
+      ]);
+
+      const result = await starService.getExpiringStarsInfo('child_1');
+
+      expect(result.points).toBe(20);
+      expect(result.remindWindowDays).toBe(3);
+    });
+
+    it('超过 3 天窗口的分组不应显示为即将过期', async () => {
+      const futureDate = Date.now() + 7 * 24 * 60 * 60 * 1000;
+      mockStarGroupRepository.getAll = jest.fn().mockResolvedValue([
+        {
+          id: 'g1',
+          userId: 'child_1',
+          stars: 20,
+          expiryType: 'month',
+          expiryDate: futureDate,
+          expiryDateStr: '2026-04-01',
+          isExpired: jest.fn().mockReturnValue(false)
+        }
+      ]);
+
+      const result = await starService.getExpiringStarsInfo();
+      expect(result.points).toBe(0);
+    });
+
+    it('历史展示型过期日期不应把已过期分组继续算进即将过期星星', async () => {
+      jest.useFakeTimers();
+      try {
+        jest.setSystemTime(new Date('2026-03-30T19:49:47'));
+        mockStarGroupRepository.getAll = jest.fn().mockResolvedValue([
+          {
+            id: 'expired_legacy',
+            userId: 'child_1',
+            stars: 2,
+            expiryType: 'week',
+            expiryDate: '',
+            expiryDateStr: '2026-03-29 到期',
+            isExpired: jest.fn().mockReturnValue(false)
+          },
+          {
+            id: 'today_group',
+            userId: 'child_1',
+            stars: 7,
+            expiryType: 'week',
+            expiryDate: '',
+            expiryDateStr: '今天到期',
+            isExpired: jest.fn().mockReturnValue(false)
+          }
+        ]);
+
+        const result = await starService.getExpiringStarsInfo('child_1');
+
+        expect(result.points).toBe(7);
+        expect(result.expiryDateText).toBe('今天到期');
+      } finally {
+        jest.useRealTimers();
+      }
     });
 
     it('仓储抛出异常时应该返回points=0', async () => {

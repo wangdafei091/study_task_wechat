@@ -64,7 +64,11 @@ Component({
     progress: 0,
     sizeClass: 'medium',
     isComplete: false,
-    progressClass: 'progress-ring-zero'
+    progressClass: 'progress-ring-zero',
+    use2dCanvas: false,
+    sizeRpx: 130,
+    canvasSizePx: 65,
+    strokeWidthPx: 4
   },
   
   /**
@@ -83,6 +87,28 @@ Component({
       } else {
         this.setData({ sizeClass: 'custom' });
       }
+      this._refreshLayout();
+    },
+    'type,color,borderWidth': function() {
+      this._drawRing();
+    }
+  },
+
+  lifetimes: {
+    attached() {
+      this._systemInfo = wx.getSystemInfoSync();
+      const use2dCanvas = this._shouldUse2dCanvas();
+      this.setData({ use2dCanvas });
+      this._refreshLayout();
+    },
+    ready() {
+      this._initCanvas();
+    },
+    detached() {
+      this._canvasNode = null;
+      this._ctx2d = null;
+      this._legacyCanvasContext = null;
+      this._isCanvasReady = false;
     }
   },
   
@@ -115,11 +141,197 @@ Component({
         progress: percent,
         progressClass: progressClass
       });
-      
-      // 使用setData设置进度角度，供WXML使用
-      this.setData({
-        progressAngle: percent * 3.6
-      });
+
+      this._drawRing();
+    },
+
+    _refreshLayout() {
+      const sizeRpx = this._resolveSizeRpx(this.data.sizeClass, this.properties.size);
+      const canvasSizePx = Math.max(1, Math.round(this._rpxToPx(sizeRpx)));
+      const strokeWidthPx = Math.max(2, this._rpxToPx(this.properties.borderWidth));
+
+      this.setData(
+        {
+          sizeRpx,
+          canvasSizePx,
+          strokeWidthPx
+        },
+        () => {
+          this._syncCanvasViewport();
+          this._scheduleDraw();
+        }
+      );
+    },
+
+    _resolveSizeRpx(sizeClass, rawSize) {
+      if (sizeClass === 'large') return 160;
+      if (sizeClass === 'small') return 110;
+      if (sizeClass === 'medium') return 130;
+
+      const customSize = Number(rawSize);
+      if (!Number.isFinite(customSize) || customSize <= 0) {
+        return 130;
+      }
+      return customSize;
+    },
+
+    _rpxToPx(rpx) {
+      const windowWidth = this._systemInfo?.windowWidth || 375;
+      return Number(rpx || 0) * windowWidth / 750;
+    },
+
+    _shouldUse2dCanvas() {
+      const platform = this._systemInfo?.platform || '';
+      return platform !== 'devtools';
+    },
+
+    _resolveRingColor() {
+      if (this.properties.type === 'default') {
+        return this.properties.color || '#4285F4';
+      }
+
+      const colorMap = {
+        habit: '#4285F4',
+        study: '#34A853',
+        interest: '#FBBC05'
+      };
+      return colorMap[this.properties.type] || '#4285F4';
+    },
+
+    _resolveTrackColor() {
+      const colorMap = {
+        default: 'rgba(66, 133, 244, 0.12)',
+        habit: 'rgba(66, 133, 244, 0.12)',
+        study: 'rgba(52, 168, 83, 0.12)',
+        interest: 'rgba(251, 188, 5, 0.14)'
+      };
+      return colorMap[this.properties.type] || colorMap.default;
+    },
+
+    _initCanvas() {
+      if (!this.data.use2dCanvas || typeof this.createSelectorQuery !== 'function') {
+        this._legacyCanvasContext = wx.createCanvasContext('progress-ring-canvas', this);
+        this._ctx2d = null;
+        this._canvasNode = null;
+        this._isCanvasReady = true;
+        this._drawRing();
+        return;
+      }
+
+      const query = typeof this.createSelectorQuery === 'function'
+        ? this.createSelectorQuery()
+        : wx.createSelectorQuery().in(this);
+
+      query.select('.ring-canvas').fields({ node: true, size: true }, (res) => {
+        if (res && res.node && typeof res.node.getContext === 'function') {
+          this._canvasNode = res.node;
+          this._ctx2d = res.node.getContext('2d');
+          this._legacyCanvasContext = null;
+          this._isCanvasReady = true;
+          this._syncCanvasViewport(res.width, res.height);
+          this._drawRing();
+          return;
+        }
+
+        // 在测试环境或旧环境中退回旧式 canvas，上层行为仍可继续运行。
+        this._legacyCanvasContext = wx.createCanvasContext('progress-ring-canvas', this);
+        this._ctx2d = null;
+        this._canvasNode = null;
+        this._isCanvasReady = true;
+        this._drawRing();
+      }).exec();
+    },
+
+    _syncCanvasViewport(viewportWidth, viewportHeight) {
+      if (!this._canvasNode || !this._ctx2d) {
+        return;
+      }
+
+      const displayWidth = Math.max(1, Math.round(viewportWidth || this.data.canvasSizePx || 1));
+      const displayHeight = Math.max(1, Math.round(viewportHeight || this.data.canvasSizePx || 1));
+      const dpr = this._systemInfo?.pixelRatio || 1;
+
+      this._canvasDisplayWidth = displayWidth;
+      this._canvasDisplayHeight = displayHeight;
+      this._canvasNode.width = Math.max(1, Math.round(displayWidth * dpr));
+      this._canvasNode.height = Math.max(1, Math.round(displayHeight * dpr));
+
+      if (typeof this._ctx2d.setTransform === 'function') {
+        this._ctx2d.setTransform(dpr, 0, 0, dpr, 0, 0);
+      } else if (typeof this._ctx2d.scale === 'function') {
+        this._ctx2d.scale(dpr, dpr);
+      }
+    },
+
+    _scheduleDraw() {
+      const drawTask = () => this._drawRing();
+      if (typeof wx.nextTick === 'function') {
+        wx.nextTick(drawTask);
+        return;
+      }
+
+      setTimeout(drawTask, 0);
+    },
+
+    _drawRing() {
+      if (!this._isCanvasReady) {
+        return;
+      }
+
+      const canvasSizePx = this._canvasDisplayWidth || this.data.canvasSizePx || 65;
+      const strokeWidthPx = this.data.strokeWidthPx || 4;
+      const radius = Math.max(0, (canvasSizePx - strokeWidthPx) / 2);
+      const center = canvasSizePx / 2;
+      const startAngle = Math.PI / 2;
+      const ratio = Math.max(0, Math.min(1, (this.data.progress || 0) / 100));
+      const endAngle = startAngle + ratio * Math.PI * 2;
+
+      if (this._ctx2d) {
+        const ctx = this._ctx2d;
+        ctx.clearRect(0, 0, canvasSizePx, canvasSizePx);
+
+        ctx.beginPath();
+        ctx.lineWidth = strokeWidthPx;
+        ctx.strokeStyle = this._resolveTrackColor();
+        ctx.lineCap = 'round';
+        ctx.arc(center, center, radius, 0, Math.PI * 2, false);
+        ctx.stroke();
+
+        if (ratio > 0) {
+          ctx.beginPath();
+          ctx.lineWidth = strokeWidthPx;
+          ctx.strokeStyle = this._resolveRingColor();
+          ctx.lineCap = 'round';
+          ctx.arc(center, center, radius, startAngle, endAngle, false);
+          ctx.stroke();
+        }
+        return;
+      }
+
+      const ctx = this._legacyCanvasContext;
+      if (!ctx) {
+        return;
+      }
+
+      ctx.clearRect(0, 0, canvasSizePx, canvasSizePx);
+
+      ctx.beginPath();
+      ctx.setLineWidth(strokeWidthPx);
+      ctx.setStrokeStyle(this._resolveTrackColor());
+      ctx.setLineCap('round');
+      ctx.arc(center, center, radius, 0, Math.PI * 2, false);
+      ctx.stroke();
+
+      if (ratio > 0) {
+        ctx.beginPath();
+        ctx.setLineWidth(strokeWidthPx);
+        ctx.setStrokeStyle(this._resolveRingColor());
+        ctx.setLineCap('round');
+        ctx.arc(center, center, radius, startAngle, endAngle, false);
+        ctx.stroke();
+      }
+
+      ctx.draw();
     }
   }
-}) 
+})

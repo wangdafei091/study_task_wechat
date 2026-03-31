@@ -4,8 +4,10 @@
 
 const { getPool, query, execute } = require('../config/database');
 const Task = require('../models/Task');
+const Message = require('../models/Message');
 const { createLogger } = require('../utils/logger');
 const messageService = require('./messageService');
+const starService = require('./starService');
 const logger = createLogger('TaskService');
 let taskColumnMapPromise = null;
 
@@ -13,6 +15,22 @@ let taskColumnMapPromise = null;
  * 任务服务类
  */
 class TaskService {
+  _createSchemaError(code, message) {
+    const error = new Error(message);
+    error.code = code;
+    return error;
+  }
+
+  _assertReminderColumnAvailable(columnMap, context, reminderPayload) {
+    const hasReminderPayload = reminderPayload !== undefined && reminderPayload !== null;
+    if (hasReminderPayload && !columnMap.reminder) {
+      throw this._createSchemaError(
+        'TASK_REMINDER_SCHEMA_MISSING',
+        `${context}失败：tasks 表缺少 reminder 字段，请先执行数据库迁移`
+      );
+    }
+  }
+
   async _getTaskColumnMap(forceRefresh = false) {
     if (forceRefresh) {
       taskColumnMapPromise = null;
@@ -37,6 +55,7 @@ class TaskService {
             startTime: resolveColumn('start_time', 'startTime'),
             endTime: resolveColumn('end_time', 'endTime'),
             pointsExpiry: resolveColumn('points_expiry', 'pointsExpiry'),
+            reminder: resolveColumn('reminder', null, true),
             isRequired: resolveColumn('is_required', 'isRequired'),
             isAllDay: resolveColumn('is_all_day', 'isAllDay'),
             penaltyApplied: resolveColumn('penalty_applied', 'penaltyApplied'),
@@ -60,6 +79,7 @@ class TaskService {
             startTime: 'start_time',
             endTime: 'end_time',
             pointsExpiry: 'points_expiry',
+            reminder: 'reminder',
             isRequired: 'is_required',
             isAllDay: 'is_all_day',
             penaltyApplied: 'penalty_applied',
@@ -157,6 +177,7 @@ class TaskService {
   async createTask(userId, taskData, options = {}) {
     try {
       const columnMap = await this._getTaskColumnMap();
+      this._assertReminderColumnAvailable(columnMap, '创建任务', taskData.reminder);
       const pool = getPool();
       const connection = await pool.getConnection();
       const modifyTime = Number(taskData.modifyTime || options.modifyTime || Date.now());
@@ -205,6 +226,7 @@ class TaskService {
             restoreSetClauses.push(
               `${columnMap.startTime} = ?`,
               `${columnMap.endTime} = ?`,
+              ...(columnMap.reminder ? [`${columnMap.reminder} = ?`] : []),
               'points = ?',
               `${columnMap.pointsExpiry} = ?`,
               `${columnMap.isRequired} = ?`,
@@ -212,6 +234,10 @@ class TaskService {
               `${columnMap.isAllDay} = ?`,
               `${columnMap.penaltyApplied} = ?`
             );
+
+            if (columnMap.reminder) {
+              restoreParams.splice(6, 0, taskData.reminder ? JSON.stringify(taskData.reminder) : null);
+            }
 
             if (columnMap.duration) {
               restoreSetClauses.push(`${columnMap.duration} = ?`);
@@ -304,6 +330,10 @@ class TaskService {
           insertColumns.push(columnMap.duration);
           insertValues.push(task.duration || 0);
         }
+        if (columnMap.reminder) {
+          insertColumns.push(columnMap.reminder);
+          insertValues.push(task.reminder ? JSON.stringify(task.reminder) : null);
+        }
         if (columnMap.hasNoEndDate) {
           insertColumns.push(columnMap.hasNoEndDate);
           insertValues.push(task.hasNoEndDate ? 1 : 0);
@@ -381,11 +411,12 @@ class TaskService {
   async updateTask(taskId, changes, options = {}) {
     try {
       const columnMap = await this._getTaskColumnMap();
+      this._assertReminderColumnAvailable(columnMap, '更新任务', changes.reminder);
       const pool = getPool();
       const connection = await pool.getConnection();
       const ALLOWED_FIELDS = [
         'title', 'description', 'date', 'type', 'startTime', 'endTime',
-        'duration', 'isAllDay', 'isRequired', 'penaltyApplied',
+        'duration', 'isAllDay', 'reminder',
         'points', 'pointsExpiry', 'tags', 'hasNoEndDate', 'repeat',
       ];
 
@@ -400,8 +431,7 @@ class TaskService {
         endTime: columnMap.endTime,
         duration: columnMap.duration,
         isAllDay: columnMap.isAllDay,
-        isRequired: columnMap.isRequired,
-        penaltyApplied: columnMap.penaltyApplied,
+        reminder: columnMap.reminder,
         points: 'points',
         pointsExpiry: columnMap.pointsExpiry,
         tags: columnMap.tags,
@@ -416,7 +446,7 @@ class TaskService {
             logger.warn('更新任务时跳过当前库结构不支持的字段', { taskId, field });
             continue;
           }
-          if (field === 'tags' || field === 'repeat') {
+          if (field === 'tags' || field === 'repeat' || field === 'reminder') {
             setClauses.push(`${dbField} = ?`);
             params.push(changes[field] !== null ? JSON.stringify(changes[field]) : null);
           } else {
@@ -587,6 +617,179 @@ class TaskService {
     }
   }
 
+  async markTaskRequired(taskId, options = {}) {
+    return this._updateTaskRequiredState(taskId, true, options);
+  }
+
+  async unmarkTaskRequired(taskId, options = {}) {
+    return this._updateTaskRequiredState(taskId, false, options);
+  }
+
+  async syncRequiredTaskPenalties(options = {}) {
+    try {
+      const scanUserIds = await this._resolvePenaltyScanUserIds(options);
+      if (scanUserIds.length === 0) {
+        return {
+          success: true,
+          penaltyCount: 0,
+          failureCount: 0,
+          affectedTaskIds: [],
+          penaltyResults: [],
+          failedTaskIds: [],
+        };
+      }
+
+      const tasks = await this._getExpiredRequiredTasksForPenalty(scanUserIds);
+      const baseOperationKey = String(options.operationKey || options.modifyTime || Date.now());
+      const penaltyResults = [];
+      const failedTaskIds = [];
+
+      for (const task of tasks) {
+        try {
+          const result = await this._applyRequiredTaskPenalty(task.taskId, {
+            actorUserId: null,
+            actorRole: 'system',
+            familyId: options.familyId || null,
+            operationKey: `${baseOperationKey}:${task.taskId}`,
+            modifyTime: Number(options.modifyTime || Date.now()),
+          });
+
+          if (result?.success) {
+            penaltyResults.push(result);
+          }
+        } catch (error) {
+          failedTaskIds.push(task.taskId);
+          logger.error('同步必做任务惩罚时单任务执行失败', {
+            taskId: task.taskId,
+            userId: task.userId,
+            error: error.message,
+          });
+        }
+      }
+
+      return {
+        success: true,
+        penaltyCount: penaltyResults.length,
+        failureCount: failedTaskIds.length,
+        affectedTaskIds: penaltyResults.map(result => result.task.taskId),
+        penaltyResults: penaltyResults.map(result => ({
+          success: true,
+          taskId: result.task.taskId,
+          penaltyPoints: result.penaltyPoints,
+          targetUserId: result.targetUserId,
+        })),
+        failedTaskIds,
+      };
+    } catch (error) {
+      logger.error('同步必做任务惩罚失败', error);
+      throw error;
+    }
+  }
+
+  async syncUpcomingTaskMessages(options = {}) {
+    try {
+      const scanUserIds = await this._resolvePenaltyScanUserIds(options);
+      const columnMap = await this._getTaskColumnMap();
+      if (scanUserIds.length === 0) {
+        return {
+          success: true,
+          createdCount: 0,
+          dedupedCount: 0,
+          archivedCount: 0,
+          activeCount: 0,
+          affectedTaskIds: [],
+        };
+      }
+      this._assertReminderColumnAvailable(columnMap, '同步 upcoming 任务消息', { enabled: true });
+
+      const tasks = await this._getUpcomingTasksForReminder(scanUserIds);
+      const now = Number(options.modifyTime || Date.now());
+      const candidates = tasks
+        .map(task => this._resolveUpcomingReminderCandidate(task, now))
+        .filter(Boolean);
+
+      const pool = getPool();
+      const connection = await pool.getConnection();
+      try {
+        await connection.beginTransaction();
+
+        const existingMessages = await this._getActiveUpcomingMessagesBySubjectConn(connection, scanUserIds);
+        const existingCompositeKeys = new Set(
+          existingMessages.map(message => this._buildUpcomingMessageCompositeKey(message))
+        );
+        const activeCompositeKeys = new Set();
+        const affectedTaskIds = new Set();
+
+        for (const candidate of candidates) {
+          const savedMessages = await messageService.createTaskMessages({
+            task: candidate.task,
+            familyId: options.familyId || null,
+            action: 'upcoming',
+            actorUserId: null,
+            actorRole: 'system',
+            operationKey: candidate.instanceKey,
+            upcomingMeta: {
+              remainingMinutes: candidate.remainingMinutes,
+              remainingText: candidate.remainingText,
+              isRequired: candidate.task.isRequired === true,
+            },
+            createTimeOverride: candidate.reminderTime,
+          }, connection);
+
+          savedMessages.forEach((message) => {
+            activeCompositeKeys.add(this._buildUpcomingMessageCompositeKey(message));
+            affectedTaskIds.add(message.relatedId);
+          });
+        }
+
+        const staleMessageIds = existingMessages
+          .filter(message => !activeCompositeKeys.has(this._buildUpcomingMessageCompositeKey(message)))
+          .map(message => message.messageId);
+
+        if (staleMessageIds.length > 0) {
+          const placeholders = staleMessageIds.map(() => '?').join(', ');
+          await connection.execute(
+            `UPDATE messages
+             SET is_archived = 1
+             WHERE message_id IN (${placeholders})
+               AND deleted_at IS NULL`,
+            staleMessageIds
+          );
+        }
+
+        await connection.commit();
+
+        let createdCount = 0;
+        let dedupedCount = 0;
+        activeCompositeKeys.forEach((key) => {
+          if (existingCompositeKeys.has(key)) {
+            dedupedCount += 1;
+          } else {
+            createdCount += 1;
+          }
+        });
+
+        return {
+          success: true,
+          createdCount,
+          updatedCount: dedupedCount,
+          dedupedCount,
+          archivedCount: staleMessageIds.length,
+          activeCount: activeCompositeKeys.size,
+          affectedTaskIds: Array.from(affectedTaskIds),
+        };
+      } catch (error) {
+        await connection.rollback();
+        throw error;
+      } finally {
+        connection.release();
+      }
+    } catch (error) {
+      logger.error('同步 upcoming 任务消息失败', error);
+      throw error;
+    }
+  }
+
   /**
    * 获取同一家庭下所有孩子的任务
    * @param {string} familyId - 家庭ID
@@ -631,24 +834,70 @@ class TaskService {
    * @param {string} fromUserId 家长 userId（来自 JWT，不信任客户端）
    * @param {string} toUserId   目标孩子 userId
    * @param {string} familyId   家长所属家庭 ID
+   * @param {Object} options    操作上下文
    * @returns {number} 实际迁移的任务数量
    */
-  async transferTasksToChild(fromUserId, toUserId, familyId) {
-    const targetRows = await query(
-      "SELECT user_id FROM users WHERE user_id = ? AND family_id = ? AND role = 'child' AND status = 'active' LIMIT 1",
-      [toUserId, familyId]
-    );
-    if (!targetRows.length) {
-      const err = new Error('目标用户不是同家庭的孩子成员');
-      err.code = 'TRANSFER_TARGET_INVALID';
-      throw err;
+  async transferTasksToChild(fromUserId, toUserId, familyId, options = {}) {
+    const pool = getPool();
+    const connection = await pool.getConnection();
+    const modifyTime = Number(options.modifyTime || Date.now());
+    const operationKey = String(options.operationKey || modifyTime);
+
+    try {
+      await connection.beginTransaction();
+
+      const [targetRows] = await connection.execute(
+        "SELECT user_id FROM users WHERE user_id = ? AND family_id = ? AND role = 'child' AND status = 'active' LIMIT 1",
+        [toUserId, familyId]
+      );
+      if (!targetRows.length) {
+        const err = new Error('目标用户不是同家庭的孩子成员');
+        err.code = 'TRANSFER_TARGET_INVALID';
+        throw err;
+      }
+
+      const [taskRows] = await connection.execute(
+        'SELECT * FROM tasks WHERE user_id = ? AND deleted_at IS NULL ORDER BY created_at ASC',
+        [fromUserId]
+      );
+
+      if (!taskRows.length) {
+        await connection.commit();
+        logger.info('任务归属转移完成', { fromUserId, toUserId, count: 0 });
+        return 0;
+      }
+
+      const [result] = await connection.execute(
+        'UPDATE tasks SET user_id = ? WHERE user_id = ? AND deleted_at IS NULL',
+        [toUserId, fromUserId]
+      );
+
+      for (const row of taskRows) {
+        const transferredTask = Task.fromDB({
+          ...row,
+          user_id: toUserId,
+          modify_time: modifyTime,
+        });
+        await messageService.createTaskMessages({
+          task: transferredTask,
+          familyId,
+          action: 'assign',
+          actorUserId: fromUserId,
+          actorRole: options.actorRole || 'parent',
+          operationKey: `${operationKey}:${transferredTask.taskId}`,
+          createTimeOverride: modifyTime,
+        }, connection);
+      }
+
+      await connection.commit();
+      logger.info('任务归属转移完成', { fromUserId, toUserId, count: result.affectedRows });
+      return result.affectedRows;
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
     }
-    const result = await execute(
-      'UPDATE tasks SET user_id = ? WHERE user_id = ?',
-      [toUserId, fromUserId]
-    );
-    logger.info('任务归属转移完成', { fromUserId, toUserId, count: result.affectedRows });
-    return result.affectedRows;
   }
 
   async _getTaskByIdConn(connection, taskId, includeDeleted = false) {
@@ -657,6 +906,368 @@ class TaskService {
       : 'SELECT * FROM tasks WHERE task_id = ? AND deleted_at IS NULL LIMIT 1';
     const [rows] = await connection.execute(sql, [taskId]);
     return rows[0] || null;
+  }
+
+  async _resolvePenaltyScanUserIds(options = {}) {
+    const { viewerUserId, viewerRole, familyId, scope = null, targetUserId = null } = options;
+
+    if (!viewerUserId) {
+      return [];
+    }
+
+    if (scope === 'user') {
+      return [targetUserId || viewerUserId];
+    }
+
+    if (viewerRole === 'parent' && familyId) {
+      const members = await query(
+        `SELECT user_id
+         FROM users
+         WHERE family_id = ?
+           AND role = 'child'
+           AND status = 'active'`,
+        [familyId]
+      );
+      return members.map(row => row.user_id);
+    }
+
+    return [viewerUserId];
+  }
+
+  async _getExpiredRequiredTasksForPenalty(userIds = []) {
+    if (!Array.isArray(userIds) || userIds.length === 0) {
+      return [];
+    }
+
+    const columnMap = await this._getTaskColumnMap();
+    const placeholders = userIds.map(() => '?').join(', ');
+    const rows = await query(
+      `SELECT * FROM tasks
+       WHERE user_id IN (${placeholders})
+         AND deleted_at IS NULL
+         AND date < CURDATE()
+         AND ${columnMap.isRequired} = 1
+         AND ${columnMap.penaltyApplied} = 0
+         AND status <> 1
+       ORDER BY date ASC, created_at ASC`,
+      userIds
+    );
+
+    return rows.map(row => Task.fromDB(row));
+  }
+
+  async _getUpcomingTasksForReminder(userIds = []) {
+    if (!Array.isArray(userIds) || userIds.length === 0) {
+      return [];
+    }
+
+    const columnMap = await this._getTaskColumnMap();
+    if (!columnMap.reminder) {
+      return [];
+    }
+
+    const placeholders = userIds.map(() => '?').join(', ');
+    const rows = await query(
+      `SELECT * FROM tasks
+       WHERE user_id IN (${placeholders})
+         AND deleted_at IS NULL
+         AND status = 0
+         AND ${columnMap.reminder} IS NOT NULL
+         AND date >= CURDATE()
+         AND date <= DATE_ADD(CURDATE(), INTERVAL 1 DAY)
+       ORDER BY date ASC, created_at ASC`,
+      userIds
+    );
+
+    return rows.map(row => Task.fromDB(row));
+  }
+
+  _resolveUpcomingReminderCandidate(task, nowTimestamp = Date.now()) {
+    if (!task || !task.reminder || task.reminder.enabled !== true) {
+      return null;
+    }
+
+    let taskStartTime = null;
+    if (task.startTime) {
+      taskStartTime = new Date(`${task.date}T${task.startTime}`);
+    } else if (Number(task.reminder.time) === -1) {
+      taskStartTime = new Date(`${task.date}T00:00:00`);
+    } else {
+      return null;
+    }
+
+    if (Number.isNaN(taskStartTime.getTime())) {
+      return null;
+    }
+
+    let reminderTime = null;
+    const reminderOffset = Number(task.reminder.time);
+    if (reminderOffset === -1) {
+      reminderTime = new Date(taskStartTime.getTime() - 24 * 60 * 60 * 1000);
+      reminderTime.setHours(20, 0, 0, 0);
+    } else {
+      reminderTime = new Date(taskStartTime.getTime() - reminderOffset * 60 * 1000);
+    }
+
+    if (Number.isNaN(reminderTime.getTime())) {
+      return null;
+    }
+
+    const remainingMinutes = Math.floor((taskStartTime.getTime() - nowTimestamp) / (1000 * 60));
+    const reminderDiffMinutes = Math.floor((reminderTime.getTime() - nowTimestamp) / (1000 * 60));
+    if (reminderDiffMinutes > 0 || remainingMinutes <= 0) {
+      return null;
+    }
+
+    return {
+      task,
+      instanceKey: task.date || task.taskId,
+      reminderTime: reminderTime.getTime(),
+      remainingMinutes,
+      remainingText: this._formatUpcomingRemainingText(remainingMinutes),
+      dayLabel: !task.startTime ? this._formatUpcomingDayLabel(task.date, nowTimestamp) : null,
+    };
+  }
+
+  _formatUpcomingRemainingText(remainingMinutes) {
+    const totalMinutes = Math.max(1, Number(remainingMinutes || 0));
+    if (totalMinutes < 60) {
+      return `${totalMinutes}分钟`;
+    }
+
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    if (minutes === 0) {
+      return `${hours}小时`;
+    }
+    return `${hours}小时${minutes}分钟`;
+  }
+
+  _formatUpcomingDayLabel(taskDate, nowTimestamp = Date.now()) {
+    if (!taskDate) {
+      return '当天';
+    }
+
+    const now = new Date(nowTimestamp);
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const target = new Date(`${taskDate}T00:00:00`);
+    if (Number.isNaN(target.getTime())) {
+      return taskDate;
+    }
+
+    const diffDays = Math.round((target.getTime() - today.getTime()) / (24 * 60 * 60 * 1000));
+    if (diffDays === 0) {
+      return '今天';
+    }
+    if (diffDays === 1) {
+      return '明天';
+    }
+    return taskDate;
+  }
+
+  async _getActiveUpcomingMessagesBySubjectConn(connection, subjectUserIds = []) {
+    if (!Array.isArray(subjectUserIds) || subjectUserIds.length === 0) {
+      return [];
+    }
+
+    const placeholders = subjectUserIds.map(() => '?').join(', ');
+    const [rows] = await connection.execute(
+      `SELECT * FROM messages
+       WHERE deleted_at IS NULL
+         AND is_archived = 0
+         AND notification_type = 'task_upcoming'
+         AND subject_user_id IN (${placeholders})`,
+      subjectUserIds
+    );
+    return rows.map(row => Message.fromDB ? Message.fromDB(row) : row);
+  }
+
+  _buildUpcomingMessageCompositeKey(message) {
+    return `${message.visibilityScope || message.visibility_scope}:${message.messageEventKey || message.message_event_key}`;
+  }
+
+  async _applyRequiredTaskPenalty(taskId, options = {}) {
+    try {
+      const columnMap = await this._getTaskColumnMap();
+      const pool = getPool();
+      const connection = await pool.getConnection();
+      const modifyTime = Number(options.modifyTime || Date.now());
+      const operationKey = String(options.operationKey || modifyTime);
+
+      try {
+        await connection.beginTransaction();
+        const existingRaw = await this._getTaskByIdConn(connection, taskId);
+        if (!existingRaw) {
+          await connection.rollback();
+          return null;
+        }
+
+        const existingTask = Task.fromDB(existingRaw);
+        const today = new Date().toISOString().slice(0, 10);
+        if (
+          !existingTask.isRequired ||
+          existingTask.penaltyApplied ||
+          existingTask.status === 1 ||
+          !existingTask.date ||
+          existingTask.date >= today
+        ) {
+          await connection.commit();
+          return {
+            success: false,
+            skipped: true,
+            task: existingTask,
+            penaltyPoints: 0,
+            targetUserId: existingTask.userId,
+          };
+        }
+
+        const requestedPoints = Number(existingTask.points || 5);
+        let consumedPoints = 0;
+
+        if (requestedPoints > 0) {
+          const consumeResult = await starService.consumeStarsWithConnection(
+            connection,
+            existingTask.userId,
+            {
+              requestedPoints,
+              reason: `必做任务惩罚: ${existingTask.title}`,
+              sourceType: 'task_penalty',
+              sourceId: existingTask.taskId,
+              originalTaskDate: existingTask.date || null,
+              idempotencyKey: `task_penalty:${existingTask.taskId}`,
+              modifyTime,
+            },
+            {
+              allowPartial: true,
+              recordPrefix: 'task_penalty',
+            }
+          );
+
+          consumedPoints = Number(consumeResult?.consumedPoints || 0);
+          if (consumedPoints === 0) {
+            await connection.rollback();
+            return {
+              success: false,
+              task: existingTask,
+              penaltyPoints: 0,
+              targetUserId: existingTask.userId,
+              message: '惩罚执行失败: 没有可扣除的星星',
+            };
+          }
+        }
+
+        const updateParams = [1];
+        const updateClauses = [`${columnMap.penaltyApplied} = ?`];
+
+        if (columnMap.modifyTime) {
+          updateClauses.push(`${columnMap.modifyTime} = ?`);
+          updateParams.push(modifyTime);
+        }
+
+        updateParams.push(taskId);
+        const [updateResult] = await connection.execute(
+          `UPDATE tasks SET ${updateClauses.join(', ')} WHERE task_id = ? AND deleted_at IS NULL`,
+          updateParams
+        );
+
+        if (updateResult.affectedRows === 0) {
+          await connection.rollback();
+          return null;
+        }
+
+        const updatedRaw = await this._getTaskByIdConn(connection, taskId);
+        const updatedTask = Task.fromDB(updatedRaw);
+        await messageService.createTaskMessages({
+          task: updatedTask,
+          familyId: options.familyId || null,
+          action: 'penalty',
+          actorUserId: options.actorUserId || null,
+          actorRole: options.actorRole || 'system',
+          operationKey,
+          penaltyPoints: consumedPoints,
+        }, connection);
+
+        await connection.commit();
+        return {
+          success: true,
+          task: updatedTask,
+          penaltyPoints: consumedPoints,
+          targetUserId: updatedTask.userId,
+        };
+      } catch (error) {
+        await connection.rollback();
+        throw error;
+      } finally {
+        connection.release();
+      }
+    } catch (error) {
+      logger.error('执行必做任务惩罚失败', error);
+      throw error;
+    }
+  }
+
+  async _updateTaskRequiredState(taskId, isRequired, options = {}) {
+    try {
+      const columnMap = await this._getTaskColumnMap();
+      const pool = getPool();
+      const connection = await pool.getConnection();
+      const modifyTime = Number(options.modifyTime || Date.now());
+      const operationKey = String(options.operationKey || modifyTime);
+
+      try {
+        await connection.beginTransaction();
+        const existingRaw = await this._getTaskByIdConn(connection, taskId);
+        if (!existingRaw) {
+          await connection.rollback();
+          return null;
+        }
+
+        const existingTask = Task.fromDB(existingRaw);
+        if (existingTask.isRequired === isRequired) {
+          await connection.commit();
+          return existingTask;
+        }
+
+        const params = [isRequired ? 1 : 0];
+        const setClauses = [`${columnMap.isRequired} = ?`];
+
+        if (columnMap.modifyTime) {
+          setClauses.push(`${columnMap.modifyTime} = ?`);
+          params.push(modifyTime);
+        }
+
+        params.push(taskId);
+        const [result] = await connection.execute(
+          `UPDATE tasks SET ${setClauses.join(', ')} WHERE task_id = ? AND deleted_at IS NULL`,
+          params
+        );
+
+        if (result.affectedRows === 0) {
+          await connection.rollback();
+          return null;
+        }
+
+        const updatedRaw = await this._getTaskByIdConn(connection, taskId);
+        const updatedTask = Task.fromDB(updatedRaw);
+        await this._createTaskMessagesAfterMutation(
+          updatedTask,
+          isRequired ? 'required' : 'unrequired',
+          options,
+          operationKey,
+          connection
+        );
+        await connection.commit();
+        return updatedTask;
+      } catch (error) {
+        await connection.rollback();
+        throw error;
+      } finally {
+        connection.release();
+      }
+    } catch (error) {
+      logger.error('更新任务必做状态失败', error);
+      throw error;
+    }
   }
 
   async _createTaskMessagesAfterMutation(task, action, options, operationKey, connection) {

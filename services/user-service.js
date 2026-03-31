@@ -82,13 +82,19 @@ class UserService {
         this.userCache.set(this.loginUser.userId, this.loginUser);
       }
 
-      // 3. 恢复会话，应用非法会话回正规则
+      // 3. 本地模式：加载本地持久化的家庭和成员数据
+      if (!this.loginUser) {
+        this._loadLocalFamilyData();
+      }
+
+      // 4. 恢复会话，应用非法会话回正规则
       await this._restoreSession();
 
       this.initialized = true;
       logger.info('UserService', '用户服务初始化完成', {
         loginUserId: this.loginUser?.userId,
         currentUserId: this.currentUser.id,
+        localMode: !API_CONFIG.ENABLE_API,
       });
       return true;
     } catch (error) {
@@ -156,11 +162,11 @@ class UserService {
 
   /**
    * 获取小朋友用户ID（兼容性方法，已弃用：多孩子场景下请使用 task.userId）
-   * @returns {String} 小朋友用户ID
+   * @returns {String|null} 小朋友用户ID；无孩子时返回 null，避免占位ID泄漏到云端接口
    */
   getChildUserId() {
     const childUser = this.getUserByRole('child');
-    return childUser ? childUser.id : 'child';
+    return childUser ? childUser.id : null;
   }
   
   /**
@@ -542,6 +548,28 @@ class UserService {
    * @param {String} name 家庭名称
    */
   async createFamily(name) {
+    // 本地模式：在本地存储创建虚拟家庭
+    if (this._isLocalMode()) {
+      const familyId = 'local_' + Date.now();
+      const localFamily = { familyId, name, createdAt: new Date().toISOString() };
+      this.storageAdapter?.set('localFamily', localFamily);
+      this.storageAdapter?.set('localFamilyMembers', []);
+
+      // 以 currentUser 为基础设置 loginUser
+      this.loginUser = new User({
+        userId: this.currentUser.userId || 'parent',
+        name: this.currentUser.name || '家长',
+        displayName: this.currentUser.displayName || '家长模式',
+        role: UserRole.PARENT,
+        avatar: this.currentUser.avatar || '👩‍💼',
+        familyId,
+      });
+      this.userCache.set(this.loginUser.userId, this.loginUser);
+
+      logger.info('UserService', '本地模式创建家庭成功', { familyId, name });
+      return { success: true, familyId };
+    }
+
     try {
       const result = await HttpClient.post(API_CONFIG.ENDPOINTS.FAMILIES, { name });
       // 保存新 token（包含 familyId）
@@ -581,6 +609,12 @@ class UserService {
    * 获取家庭信息
    */
   async getFamilyInfo() {
+    // 本地模式：从本地存储读取
+    if (this._isLocalMode()) {
+      const localFamily = this.storageAdapter?.get('localFamily');
+      return localFamily ? { data: localFamily } : null;
+    }
+
     try {
       return await HttpClient.get(API_CONFIG.ENDPOINTS.FAMILIES_CURRENT);
     } catch (error) {
@@ -607,6 +641,32 @@ class UserService {
    * @param {String} name 成员名称
    */
   async createVirtualMember(name) {
+    // 本地模式：在本地存储创建虚拟成员
+    if (this._isLocalMode()) {
+      const userId = 'child_' + Date.now();
+      const childData = {
+        userId,
+        name,
+        nickname: name,
+        displayName: name,
+        role: UserRole.CHILD,
+        isVirtual: true,
+        familyId: this.loginUser?.familyId || null,
+        avatar: '👶',
+        status: UserStatus.ACTIVE,
+      };
+      const childUser = new User(childData);
+      this.userCache.set(userId, childUser);
+
+      // 持久化到本地存储
+      const members = this.storageAdapter?.get('localFamilyMembers') || [];
+      members.push(childData);
+      this.storageAdapter?.set('localFamilyMembers', members);
+
+      logger.info('UserService', '本地模式创建虚拟成员成功', { name, userId });
+      return { success: true, member: childUser };
+    }
+
     try {
       const member = await HttpClient.post(API_CONFIG.ENDPOINTS.FAMILIES_ADD_MEMBER, { name });
       await this.loadFamilyMembers();
@@ -623,6 +683,23 @@ class UserService {
    * @param {String} userId 目标用户ID
    */
   async deleteFamilyMember(userId) {
+    // 本地模式：从本地存储删除成员
+    if (this._isLocalMode()) {
+      this.userCache.delete(userId);
+      const members = this.storageAdapter?.get('localFamilyMembers') || [];
+      const filtered = members.filter(m => m.userId !== userId);
+      this.storageAdapter?.set('localFamilyMembers', filtered);
+
+      // 如果删除的是 currentUser，回退到 loginUser
+      if (this.currentUser?.userId === userId && this.loginUser) {
+        this.currentUser = this.loginUser;
+        this.storageAdapter?.set('currentUserId', this.loginUser.userId);
+      }
+
+      logger.info('UserService', '本地模式删除家庭成员成功', { userId });
+      return { success: true };
+    }
+
     try {
       const url = API_CONFIG.ENDPOINTS.FAMILIES_DELETE_MEMBER.replace('{userId}', userId);
       await HttpClient.delete(url);
@@ -632,6 +709,50 @@ class UserService {
     } catch (error) {
       logger.error('UserService', '删除家庭成员失败', error);
       return { success: false, message: error.message };
+    }
+  }
+
+  /**
+   * 判断是否为本地存储模式
+   * @returns {Boolean}
+   * @private
+   */
+  _isLocalMode() {
+    return !API_CONFIG.ENABLE_API;
+  }
+
+  /**
+   * 本地模式：从 StorageAdapter 加载持久化的家庭和成员数据
+   * @private
+   */
+  _loadLocalFamilyData() {
+    if (!this.storageAdapter) return;
+
+    const localFamily = this.storageAdapter.get('localFamily');
+    if (localFamily) {
+      // 从 currentUser 构建 loginUser（补充 familyId）
+      this.loginUser = new User({
+        userId: this.currentUser.userId || 'parent',
+        name: this.currentUser.name || '家长',
+        displayName: this.currentUser.displayName || '家长模式',
+        role: UserRole.PARENT,
+        avatar: this.currentUser.avatar || '👩‍💼',
+        familyId: localFamily.familyId,
+      });
+      this.userCache.set(this.loginUser.userId, this.loginUser);
+    }
+
+    // 加载本地虚拟成员
+    const members = this.storageAdapter.get('localFamilyMembers') || [];
+    members.forEach(m => {
+      this.userCache.set(m.userId, new User(m));
+    });
+
+    if (localFamily || members.length > 0) {
+      logger.info('UserService', '本地模式加载家庭数据', {
+        familyId: localFamily?.familyId,
+        membersCount: members.length,
+      });
     }
   }
 

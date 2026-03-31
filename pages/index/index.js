@@ -1,6 +1,7 @@
 const serviceManager = require('../../services/service-manager.js');
 const dateUtils = require('../../utils/dateUtils');
 const logger = require('../../utils/logger');
+const messageDisplay = require('../../utils/message-display');
 const permissionUtils = require('../../utils/permission-utils');
 const viewScopeUtils = require('../../utils/view-scope');
 const { UserService } = require('../../services/user-service');
@@ -428,22 +429,12 @@ Page({
         requireFresh: true
       });
       
-      // 为消息添加时间显示字段，统一使用createTime
-      const processedMessages = [...messages]
-        .sort((a, b) => {
-          // 未读消息优先，相同状态按时间倒序
-          if (a.isRead !== b.isRead) return a.isRead ? 1 : -1;
-          return b.createTime - a.createTime;
-        })
-        .slice(0, 3) // 只显示最新3条消息
-        .map(msg => {
-          return {
-            ...msg,
-            timeDisplay: dateUtils.formatRelativeTime(msg.createTime)
-          };
-        });
+      const processedMessages = messageDisplay.buildPreviewMessages(messages, {
+        limit: 3,
+        formatMessageTime: (createTime) => dateUtils.formatRelativeTime(createTime)
+      });
       
-      // 计算未读消息数量（基于过滤后的消息）
+      // 计算未读消息数量（基于完整 scope 消息集合）
       const unreadCount = messages.filter(msg => !msg.isRead).length;
       
       this.setData({

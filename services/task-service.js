@@ -180,12 +180,10 @@ class TaskService {
       }
 
       try {
-        if (!task.syncedToCloud) {
-          await this._syncTaskToCloud(task);
-          continue;
-        }
-
         switch (task.pendingSyncMeta.action) {
+          case 'create':
+            await this._syncTaskToCloud(task);
+            break;
           case 'update':
             await this._syncUpdateToCloud(task);
             break;
@@ -193,8 +191,16 @@ class TaskService {
           case 'reset':
             await this._syncStatusToCloud(task);
             break;
+          case 'required':
+          case 'unrequired':
+            await this._syncRequiredStateToCloud(task);
+            break;
           default:
-            await this._syncUpdateToCloud(task);
+            if (!task.syncedToCloud) {
+              await this._syncTaskToCloud(task);
+            } else {
+              await this._syncUpdateToCloud(task);
+            }
             break;
         }
       } catch (error) {
@@ -631,6 +637,13 @@ class TaskService {
    */
   async _syncStatusToCloud(task) {
     return taskSync.syncStatusToCloud(this, task);
+  }
+
+  /**
+   * 同步任务必做状态到云端
+   */
+  async _syncRequiredStateToCloud(task) {
+    return taskSync.syncRequiredStateToCloud(this, task);
   }
 
   /**

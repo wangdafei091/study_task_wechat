@@ -16,6 +16,20 @@ jest.mock('../../utils/logger');
 jest.mock('../../utils/http-client');
 jest.mock('../../adapters/storage-adapter');
 jest.mock('../../utils/token-manager');
+jest.mock('../../utils/api-config', () => ({
+  ENABLE_API: true,
+  ENDPOINTS: {
+    AUTH_CURRENT: '/api/auth/current',
+    FAMILIES: '/api/families',
+    FAMILIES_CURRENT: '/api/families/current',
+    FAMILIES_JOIN: '/api/families/join',
+    FAMILIES_INVITE_CODE: '/api/families/invite-code',
+    FAMILIES_MEMBERS: '/api/families/members',
+    FAMILIES_ADD_MEMBER: '/api/families/members',
+    FAMILIES_DELETE_MEMBER: '/api/families/members/{userId}',
+    USER_NICKNAME: '/api/users/{userId}/nickname',
+  },
+}));
 
 const HttpClient = require('../../utils/http-client');
 const StorageAdapter = require('../../adapters/storage-adapter');
@@ -203,6 +217,15 @@ describe('UserService', () => {
       const childUserId = userService.getChildUserId();
 
       expect(childUserId).toBe('child');
+    });
+
+    it('getChildUserId在没有孩子成员时应返回null', () => {
+      const parentUser = new User({ userId: 'parent', name: '家长', role: 'parent' });
+      userService.userCache.set('parent', parentUser);
+
+      const childUserId = userService.getChildUserId();
+
+      expect(childUserId).toBeNull();
     });
 
     it('getAllUsers应该返回所有用户', () => {

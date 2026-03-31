@@ -313,6 +313,7 @@ describe('pages/index/index shell behavior', () => {
     });
     expect(page.data.messages).toHaveLength(3);
     expect(page.data.unreadCount).toBe(3);
+    expect(page.data.messages.map((message) => message.id)).toEqual(['msg-4', 'msg-3', 'msg-1']);
 
     messageService.getMessagesByScope.mockRejectedValueOnce(new Error('fail'));
     await page.loadMessageData();
@@ -330,6 +331,24 @@ describe('pages/index/index shell behavior', () => {
     taskService.checkUpcomingTasks.mockResolvedValueOnce({ success: true, tasks: [] });
     await page.checkUpcomingTasks();
     expect(page.data.showUpcomingTask).toBe(false);
+  });
+
+  it('首页消息预览应保持未读优先，但未读总数基于完整消息集合', async () => {
+    messageService.getMessagesByScope.mockResolvedValueOnce([
+      { id: 'msg-read-new', title: '已读新消息', type: 'system', isRead: true, createTime: 100 },
+      { id: 'msg-unread-old', title: '未读旧消息', type: 'task', isRead: false, createTime: 10 },
+      { id: 'msg-unread-mid', title: '未读中间消息', type: 'reward', isRead: false, createTime: 50 },
+      { id: 'msg-read-old', title: '已读旧消息', type: 'system', isRead: true, createTime: 5 }
+    ]);
+
+    await page.loadMessageData();
+
+    expect(page.data.messages.map((message) => message.id)).toEqual([
+      'msg-unread-mid',
+      'msg-unread-old',
+      'msg-read-new'
+    ]);
+    expect(page.data.unreadCount).toBe(2);
   });
 
   it('日期导航与日期切换应处理缺参、重复点击、成功和失败分支', async () => {

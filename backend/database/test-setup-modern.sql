@@ -62,6 +62,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   date DATE NOT NULL,
   start_time TIME,
   end_time TIME,
+  reminder JSON COMMENT '提醒配置',
   duration INT DEFAULT 0 COMMENT '时长（分钟）',
   is_all_day TINYINT(1) DEFAULT 0,
   is_required TINYINT(1) DEFAULT 0,

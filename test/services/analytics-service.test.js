@@ -9,7 +9,7 @@ jest.mock('../../utils/core/event-bus', () => jest.fn(() => ({
   off: jest.fn()
 })));
 
-const AnalyticsService = require('../../packageChart/services/analytics-service');
+const AnalyticsService = require('../../services/analytics-service');
 
 describe('AnalyticsService', () => {
   let analyticsService;

@@ -267,13 +267,21 @@ async function checkUpcomingTasks(service, userId = null) {
   try {
     logger.info('TaskService', '开始检查即将到期任务');
 
-    let tasks = await service.taskRepository.getTodayTasks();
-    if (userId) {
-      tasks = tasks.filter((task) => !task.userId || task.userId === userId);
+    const today = dateUtils.getTodayString();
+    const tomorrow = dateUtils.getTomorrowString();
+
+    let tasks;
+    if (typeof service.taskRepository.getTasksByDateRange === 'function') {
+      tasks = await service.taskRepository.getTasksByDateRange(today, tomorrow, userId);
+    } else {
+      tasks = await service.taskRepository.getTodayTasks();
+      if (userId) {
+        tasks = tasks.filter((task) => !task.userId || task.userId === userId);
+      }
     }
 
     if (!tasks || tasks.length === 0) {
-      logger.info('TaskService', '今天没有任务');
+      logger.info('TaskService', '今天至明天没有需要检查的任务');
       return { success: true, count: 0, tasks: [] };
     }
 

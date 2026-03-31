@@ -60,6 +60,14 @@ class Task {
     this.endTime = data.endTime || '';
     this.duration = data.duration || 0;
     this.isAllDay = data.isAllDay || false;  // 添加全天任务标志
+    this.reminder = data.reminder
+      ? {
+        enabled: data.reminder.enabled === true,
+        time: typeof data.reminder.time === 'number'
+          ? data.reminder.time
+          : Number(data.reminder.time || 0)
+      }
+      : { enabled: false };
     
     // 状态相关
     this.status = data.status ?? TaskStatus.PENDING;
@@ -259,6 +267,16 @@ class Task {
     if (data.isAllDay !== undefined) this.isAllDay = data.isAllDay;  // 添加isAllDay字段更新支持
     if (data.isRequired !== undefined) this.isRequired = data.isRequired;
     if (data.penaltyApplied !== undefined) this.penaltyApplied = data.penaltyApplied;
+    if (data.reminder !== undefined) {
+      this.reminder = data.reminder
+        ? {
+          enabled: data.reminder.enabled === true,
+          time: typeof data.reminder.time === 'number'
+            ? data.reminder.time
+            : Number(data.reminder.time || 0)
+        }
+        : { enabled: false };
+    }
     if (data.points !== undefined) this.points = data.points;
     if (data.pointsExpiry !== undefined) this.pointsExpiry = data.pointsExpiry;
     if (data.starAwarded !== undefined) this.starAwarded = data.starAwarded;
@@ -373,6 +391,7 @@ class Task {
       endTime: this.endTime,
       duration: this.duration,
       isAllDay: this.isAllDay,  // 添加isAllDay字段到克隆数据
+      reminder: this.reminder ? { ...this.reminder } : { enabled: false },
       status: this.status,
       isRequired: this.isRequired,
       penaltyApplied: this.penaltyApplied,

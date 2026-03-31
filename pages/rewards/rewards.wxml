@@ -51,14 +51,14 @@
       <view class="tab-item {{activeTab === 'claimed' ? 'active' : ''}}" 
             bindtap="switchTab" 
             data-tab="claimed">
-        已领取{{claimedRewards.length > 0 ? '(' + claimedRewards.length + ')' : ''}}
+        已兑换{{claimedRewards.length > 0 ? '(' + claimedRewards.length + ')' : ''}}
       </view>
     </view>
     
     <!-- 单一标题 - 只在不显示Tab时使用 -->
     <view class="section-title" wx:if="{{rewardEmptyMode === 'none' && !showTabs}}">
       <text wx:if="{{availableRewards.length > 0}}">可获得的奖励</text>
-      <text wx:elif="{{claimedRewards.length > 0}}">已领取的奖励</text>
+      <text wx:elif="{{claimedRewards.length > 0}}">已兑换的奖励</text>
     </view>
     
     <!-- 可获得的奖励 -->
@@ -75,9 +75,7 @@
             <text class="protected-text">免费</text>
           </view>
           <view class="reward-status">
-            <text wx:if="{{item.claimed}}">已领取</text>
-            <text wx:elif="{{item.unlocked}}">可领取</text>
-            <text wx:else>未解锁</text>
+            <text>{{item.poolStatusLabel}}</text>
           </view>
           
           <!-- 保护标识 -->
@@ -88,7 +86,7 @@
       </block>
     </view>
     
-    <!-- 已领取的奖励 -->
+    <!-- 已兑换/已领取的奖励 -->
     <view class="rewards-grid" wx:if="{{(!showTabs && claimedRewards.length > 0 && availableRewards.length === 0) || (showTabs && activeTab === 'claimed')}}">
       <block wx:for="{{claimedRewards}}" wx:key="id">
         <view class="reward-item claimed"
@@ -98,15 +96,15 @@
           <view class="reward-name">{{item.name}}</view>
           <view class="reward-points">{{item.points}}颗</view>
           <view class="reward-status">
-            <text>已领取</text>
+            <text>{{item.poolStatusLabel}}</text>
           </view>
         </view>
       </block>
     </view>
     
-    <!-- 引导提示 - 只在有可获得奖励但无已领取奖励时显示 -->
+    <!-- 引导提示 - 只在有可获得奖励但无兑换记录时显示 -->
     <view class="guide-tip" wx:if="{{rewardEmptyMode === 'none' && availableRewards.length > 0 && claimedRewards.length === 0 && !showTabs}}">
-      <text>💡 兑换后可在"我的兑换"中查看领取记录</text>
+      <text>💡 兑换后可在"我的兑换"中查看兑换记录</text>
     </view>
   </view>
   
@@ -149,7 +147,7 @@
         </view>
         <view class="rule-item">
           <text class="rule-bullet">•</text>
-          <text class="rule-text">点击礼物，再点"领取"，礼物就是你的啦</text>
+          <text class="rule-text">点击礼物，再点"兑换"，就能把礼物加入你的兑换记录</text>
         </view>
       </view>
     </view>
@@ -189,8 +187,9 @@
         </view>
         
         <view class="reward-status-text">
-          <text wx:if="{{selectedReward.claimed}}" class="status-claimed">已领取</text>
-          <text wx:elif="{{selectedReward.unlocked}}" class="status-unlocked">已解锁</text>
+          <text wx:if="{{selectedReward.claimDisplayStatus === 'delivered'}}" class="status-claimed">已领取</text>
+          <text wx:elif="{{selectedReward.claimDisplayStatus === 'claimed'}}" class="status-claimed">已兑换</text>
+          <text wx:elif="{{selectedReward.unlocked}}" class="status-unlocked">可兑换</text>
           <text wx:else class="status-locked">未解锁</text>
         </view>
         
@@ -206,8 +205,8 @@
         <button class="btn-cancel" bindtap="closeModal">关闭</button>
         <button class="btn-claim" 
                 bindtap="claimReward" 
-                disabled="{{!selectedReward.unlocked || selectedReward.claimed}}">
-          {{selectedReward.claimed ? '已领取' : (selectedReward.unlocked ? '领取奖励' : '未解锁')}}
+                disabled="{{!selectedReward.unlocked || selectedReward.claimDisplayStatus !== 'available'}}">
+          {{selectedReward.poolActionLabel}}
         </button>
       </view>
     </view>

@@ -3,7 +3,23 @@ const { EVENTS } = require('../../../utils/constants');
 // 新架构服务引入
 const serviceManager = require('../../../services/service-manager');
 const logger = require('../../../utils/logger');
+const rewardStatus = require('../../../utils/reward-status');
 const uiUtils = require('../../../utils/uiUtils');
+
+function decorateRewardForManage(page, reward) {
+  const recordTime = rewardStatus.getRewardPrimaryRecordTime(reward);
+  const exchanged = rewardStatus.isRewardExchanged(reward);
+
+  return {
+    ...reward,
+    claimDisplayStatus: rewardStatus.resolveRewardClaimStatus(reward),
+    manageStatusLabel: exchanged ? rewardStatus.getRewardManageStatusLabel(reward) : '',
+    recordStatusLabel: exchanged ? rewardStatus.getRewardRecordStatusLabel(reward) : '',
+    recordTimeLabel: exchanged ? rewardStatus.getRewardRecordTimeLabel(reward) : '',
+    recordTimestamp: recordTime,
+    claimTimeDisplay: exchanged ? page.formatTimeStamp(recordTime) : ''
+  };
+}
 
 Page({
   /**
@@ -11,13 +27,13 @@ Page({
    */
   data: {
     // 标签页状态
-    activeTab: 'manage', // 当前激活的标签页：manage(奖励设置) / claimed(领取记录)
+    activeTab: 'manage', // 当前激活的标签页：manage(奖励设置) / claimed(兑换记录)
     
     // 奖励数据
     rewards: [], // 所有奖励
     
-    // 领取记录数据
-    claimedRecords: [], // 所有领取记录
+    // 兑换记录数据
+    claimedRecords: [], // 所有兑换记录
     
     // 添加/编辑奖励相关
     showRewardModal: false, // 是否显示奖励编辑模态框
@@ -64,7 +80,7 @@ Page({
     // 加载奖励数据
     await this.loadRewardsData();
     
-    // 加载领取记录
+    // 加载兑换记录
     await this.loadClaimedRecords();
     
     // 初始化表情列表
@@ -82,7 +98,9 @@ Page({
     try {
       const rewardService = serviceManager.getService('rewardService');
       if (rewardService?.refreshRewardsFromCloud) {
-        await rewardService.refreshRewardsFromCloud();
+        await rewardService.refreshRewardsFromCloud({
+          force: app.globalData.needRefreshReward === true
+        });
       }
     } catch (syncError) {
       logger.warn('RewardManage', '奖励管理页 onShow 云同步失败，继续使用本地数据', syncError);
@@ -91,6 +109,28 @@ Page({
     // 重新加载数据，确保数据最新
     await this.loadRewardsData();
     await this.loadClaimedRecords();
+  },
+
+  onPullDownRefresh: async function() {
+    try {
+      const rewardService = serviceManager.getService('rewardService');
+      if (rewardService?.refreshRewardsFromCloud) {
+        await rewardService.refreshRewardsFromCloud({ force: true });
+      }
+
+      await this.loadRewardsData();
+      await this.loadClaimedRecords();
+    } catch (error) {
+      logger.warn('RewardManage', '奖励管理页下拉强制刷新失败，继续保留当前数据', error);
+      wx.showToast({
+        title: '刷新失败，请稍后重试',
+        icon: 'none'
+      });
+    } finally {
+      if (typeof wx.stopPullDownRefresh === 'function') {
+        wx.stopPullDownRefresh();
+      }
+    }
   },
   
   /**
@@ -105,7 +145,7 @@ Page({
         activeTab: tab
       });
       
-      // 如果切换到领取记录标签，刷新领取记录
+      // 如果切换到兑换记录标签，刷新兑换记录
       if (tab === 'claimed') {
         this.loadClaimedRecords();
       }
@@ -169,8 +209,10 @@ Page({
         logger.info('RewardManage', '检测到自定义奖励标记，但当前没有奖励数据，可能是用户已清理所有奖励');
       }
       
+      const displayRewards = allRewards.map((reward) => decorateRewardForManage(this, reward));
+
       // 直接设置奖励数据
-      this.setData({ rewards: allRewards });
+      this.setData({ rewards: displayRewards });
       
       wx.hideLoading();
     } catch (error) {
@@ -184,10 +226,10 @@ Page({
   },
   
   /**
-   * 加载领取记录
+   * 加载兑换记录
    */
   loadClaimedRecords: async function() {
-    logger.debug('RewardManage', `加载领取记录`);
+    logger.debug('RewardManage', `加载兑换记录`);
     
     try {
       // 获取服务实例
@@ -198,26 +240,22 @@ Page({
         return;
       }
       
-      // 获取已领取的奖励
+      // 获取已兑换的奖励
       const claimedRewards = await rewardService.getClaimedRewards();
-      logger.debug('RewardManage', `获取到 ${claimedRewards.length} 个已领取奖励`);
+      logger.debug('RewardManage', `获取到 ${claimedRewards.length} 个已兑换奖励`);
       
-      // 处理记录，添加显示用的时间格式
-      const records = claimedRewards.map(r => ({
-        ...r,
-        claimTimeDisplay: this.formatTimeStamp(r.claimTime || r.createTime)
-      }));
+      const records = claimedRewards.map((reward) => decorateRewardForManage(this, reward));
       
-      // 按领取时间倒序排列
-      records.sort((a, b) => b.claimTime - a.claimTime);
+      // 按最新兑换/领取时间倒序排列
+      records.sort((a, b) => b.recordTimestamp - a.recordTimestamp);
       
       this.setData({
         claimedRecords: records
       });
       
-      logger.debug('RewardManage', `加载了 ${records.length} 条领取记录`);
+      logger.debug('RewardManage', `加载了 ${records.length} 条兑换记录`);
     } catch (error) {
-      logger.error('RewardManage', '加载领取记录失败', error);
+      logger.error('RewardManage', '加载兑换记录失败', error);
       wx.showToast({
         title: '加载记录失败',
         icon: 'none'

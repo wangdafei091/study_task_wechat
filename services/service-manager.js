@@ -304,7 +304,7 @@ class ServiceManager {
   }
   
   /**
-   * 获取分析服务（动态加载分包中的服务）
+   * 获取分析服务
    * @returns {AnalyticsService} 分析服务实例
    */
   getAnalyticsService() {
@@ -314,8 +314,7 @@ class ServiceManager {
     }
     
     try {
-      // 动态加载分包中的AnalyticsService
-      const AnalyticsService = require('../packageChart/services/analytics-service');
+      const AnalyticsService = require('./analytics-service');
       
       // 初始化分析服务
       this.services.analyticsService = new AnalyticsService({
@@ -324,10 +323,10 @@ class ServiceManager {
         taskService: this.services.taskService
       });
       
-      logger.info('ServiceManager', '动态加载分包AnalyticsService成功');
+      logger.info('ServiceManager', '加载AnalyticsService成功');
       return this.services.analyticsService;
     } catch (error) {
-      logger.error('ServiceManager', '动态加载分包AnalyticsService失败', error);
+      logger.error('ServiceManager', '加载AnalyticsService失败', error);
       return null;
     }
   }

@@ -17,6 +17,7 @@ jest.mock('../../utils/logger');
 jest.mock('../../repositories/index');
 jest.mock('../../utils/http-client', () => ({
   get: jest.fn(),
+  post: jest.fn(),
   patch: jest.fn(),
   delete: jest.fn()
 }));
@@ -269,6 +270,131 @@ describe('MessageService', () => {
     });
   });
 
+  describe('display compaction - 展示压缩', () => {
+    it('同一任务的多条 upcoming 正式消息应只展示最新一条', async () => {
+      mockUserService.getLoginUser.mockReturnValue({
+        userId: 'parent_1',
+        id: 'parent_1',
+        role: 'parent',
+        familyId: 'family_1'
+      });
+      mockUserService.getCurrentUser.mockReturnValue({
+        userId: 'child_1',
+        id: 'child_1',
+        role: 'child',
+        familyId: 'family_1'
+      });
+
+      mockMessageRepository.getMessagesByScope.mockResolvedValue([
+        TestDataFactory.createMessage({
+          id: 'msg_upcoming_old',
+          userId: 'child_1',
+          familyId: 'family_1',
+          type: 'task',
+          notificationType: 'task_upcoming',
+          relatedId: 'task_1',
+          relatedType: 'task',
+          title: '任务即将开始：数学',
+          createTime: 100
+        }),
+        TestDataFactory.createMessage({
+          id: 'msg_upcoming_new',
+          userId: 'child_1',
+          familyId: 'family_1',
+          type: 'task',
+          notificationType: 'task_upcoming',
+          relatedId: 'task_1',
+          relatedType: 'task',
+          title: '任务即将开始：数学',
+          createTime: 200
+        }),
+        TestDataFactory.createMessage({
+          id: 'msg_complete',
+          userId: 'child_1',
+          familyId: 'family_1',
+          type: 'task',
+          notificationType: 'task_complete',
+          relatedId: 'task_1',
+          relatedType: 'task',
+          title: '完成任务：数学',
+          createTime: 150
+        })
+      ]);
+
+      const result = await messageService.getMessagesByScope();
+
+      expect(result.map((message) => message.id)).toEqual([
+        'msg_upcoming_new',
+        'msg_complete'
+      ]);
+    });
+
+    it('同一任务配置流应只展示最新状态消息', async () => {
+      mockUserService.getLoginUser.mockReturnValue({
+        userId: 'parent_1',
+        id: 'parent_1',
+        role: 'parent',
+        familyId: 'family_1'
+      });
+      mockUserService.getCurrentUser.mockReturnValue({
+        userId: 'child_1',
+        id: 'child_1',
+        role: 'child',
+        familyId: 'family_1'
+      });
+
+      mockMessageRepository.getMessagesByScope.mockResolvedValue([
+        TestDataFactory.createMessage({
+          id: 'msg_task_create',
+          userId: 'child_1',
+          familyId: 'family_1',
+          type: 'task',
+          notificationType: 'task_create',
+          relatedId: 'task_2',
+          relatedType: 'task',
+          createTime: 100
+        }),
+        TestDataFactory.createMessage({
+          id: 'msg_task_required',
+          userId: 'child_1',
+          familyId: 'family_1',
+          type: 'task',
+          notificationType: 'task_required',
+          relatedId: 'task_2',
+          relatedType: 'task',
+          createTime: 200
+        }),
+        TestDataFactory.createMessage({
+          id: 'msg_reward_create',
+          userId: 'child_1',
+          familyId: 'family_1',
+          type: 'reward',
+          notificationType: 'reward_create',
+          relatedId: 'reward_1',
+          relatedType: 'reward',
+          createTime: 120
+        }),
+        TestDataFactory.createMessage({
+          id: 'msg_reward_update',
+          userId: 'child_1',
+          familyId: 'family_1',
+          type: 'reward',
+          notificationType: 'reward_update',
+          relatedId: 'reward_1',
+          relatedType: 'reward',
+          createTime: 220
+        })
+      ]);
+
+      const result = await messageService.getMessagesByScope();
+
+      expect(result.map((message) => message.id)).toEqual([
+        'msg_reward_update',
+        'msg_task_required'
+      ]);
+    });
+  });
+
   describe('_resolveScopeOptions - 默认消息范围', () => {
     it('未加入家庭的家长默认应回退到个人流', () => {
       mockUserService.getLoginUser.mockReturnValue({
@@ -358,6 +484,43 @@ describe('MessageService', () => {
       const result = await messageService.getUnreadCount();
 
       expect(result).toBe(0);
+    });
+  });
+
+  describe('cloud-mode local task handlers', () => {
+    it('云端模式下不应创建本地 upcoming 消息', () => {
+      const createSpy = jest.spyOn(messageService, '_createTaskMessageWithDomainModel').mockReturnValue(null);
+      messageService.enableCloudStorage = true;
+
+      messageService._handleUpcomingTask({
+        task: TestDataFactory.createTask({ id: 'task_1', title: '即将开始任务' }),
+        timeRemaining: 10
+      });
+
+      expect(createSpy).not.toHaveBeenCalled();
+    });
+
+    it('云端模式下不应创建本地 penalty 消息', () => {
+      const createSpy = jest.spyOn(messageService, '_createPenaltyMessageWithDomainModel').mockReturnValue(null);
+      messageService.enableCloudStorage = true;
+
+      messageService._handleTaskPenalty({
+        task: TestDataFactory.createTask({ id: 'task_1', title: '必做任务' }),
+        penaltyPoints: 5
+      });
+
+      expect(createSpy).not.toHaveBeenCalled();
+    });
+
+    it('云端模式下不应创建本地 required 消息', () => {
+      const createSpy = jest.spyOn(messageService, '_createTaskMessageWithDomainModel').mockReturnValue(null);
+      messageService.enableCloudStorage = true;
+
+      messageService._handleTaskMarkedRequired({
+        task: TestDataFactory.createTask({ id: 'task_1', title: '必做任务' })
+      });
+
+      expect(createSpy).not.toHaveBeenCalled();
     });
   });
 
@@ -826,6 +989,60 @@ describe('MessageService', () => {
       ).rejects.toThrow('cloud failed');
 
       expect(mockMessageRepository.archiveLegacyMessages).not.toHaveBeenCalled();
+    });
+
+    it('云端刷新前应先触发正式提醒 sync，且单路失败不阻塞消息读取', async () => {
+      HttpClient.post.mockRejectedValueOnce(new Error('sync failed'));
+      HttpClient.get.mockResolvedValueOnce({ messages: [] });
+
+      await expect(
+        messageService.refreshMessagesFromCloud('child_1', { scope: 'user' })
+      ).resolves.toEqual([]);
+
+      expect(HttpClient.post).toHaveBeenCalledWith(
+        '/api/tasks/upcoming/sync',
+        expect.objectContaining({
+          scope: 'user',
+          targetUserId: 'child_1'
+        })
+      );
+      expect(HttpClient.post).toHaveBeenCalledWith(
+        '/api/stars/expiring-reminders/sync',
+        expect.objectContaining({
+          scope: 'user',
+          targetUserId: 'child_1'
+        })
+      );
+      expect(HttpClient.get).toHaveBeenCalledWith('/api/messages', {
+        scope: 'user',
+        userId: 'child_1'
+      });
+    });
+
+    it('正式提醒 sync 在节流窗口内不应重复触发', async () => {
+      HttpClient.post.mockClear();
+      HttpClient.get.mockClear();
+      HttpClient.post.mockResolvedValue({ success: true });
+      HttpClient.get.mockResolvedValue({ messages: [] });
+
+      await messageService.refreshMessagesFromCloud('child_1', { scope: 'user' });
+      await messageService.refreshMessagesFromCloud('child_1', { scope: 'user' });
+
+      expect(HttpClient.post).toHaveBeenCalledTimes(2);
+      expect(HttpClient.get).toHaveBeenCalledTimes(2);
+    });
+
+    it('正式提醒 sync 单路失败后仍应进入节流窗口，避免短时间重复打点', async () => {
+      HttpClient.post.mockClear();
+      HttpClient.get.mockClear();
+      HttpClient.post.mockRejectedValueOnce(new Error('sync failed'));
+      HttpClient.get.mockResolvedValue({ messages: [] });
+
+      await messageService.refreshMessagesFromCloud('child_1', { scope: 'user' });
+      await messageService.refreshMessagesFromCloud('child_1', { scope: 'user' });
+
+      expect(HttpClient.post).toHaveBeenCalledTimes(2);
+      expect(HttpClient.get).toHaveBeenCalledTimes(2);
     });
 
     it('正式云端消息单条已读失败时不应先改本地', async () => {

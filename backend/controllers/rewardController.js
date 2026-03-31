@@ -142,11 +142,45 @@ class RewardController {
     }
   }
 
+  async cancelRewardExchange(req, res) {
+    try {
+      const reward = await rewardService.getRewardById(req.params.rewardId);
+      if (!reward || !rewardService.canUserAccessReward(reward, req.user)) {
+        return res.status(404).json(error('奖励不存在', 'REWARD_NOT_FOUND'));
+      }
+
+      const targetUserId = req.body.exchangeUserId || reward.exchangeUserId || req.user.userId;
+      const effectiveUserId = await resolveTargetUserId(req, targetUserId);
+      if (!effectiveUserId) {
+        return res.status(403).json(error('无权为该成员取消奖励兑换', 'FAMILY_MEMBER_ACCESS_DENIED'));
+      }
+
+      const result = await rewardService.cancelRewardExchange(
+        req.params.rewardId,
+        effectiveUserId,
+        req.body.modifyTime,
+        this._buildOperatorContext(req, req.body.modifyTime)
+      );
+
+      return res.json(success({
+        reward: result.reward.toJSON(),
+        refundRecord: result.refundRecord ? result.refundRecord.toJSON() : null,
+        refundedPoints: result.refundedPoints,
+        updatedGroupsSnapshot: result.updatedGroupsSnapshot,
+        idempotent: result.idempotent,
+      }, '取消兑换成功'));
+    } catch (err) {
+      logger.error('取消兑换奖励失败', err);
+      return res.status(this._statusForError(err.code)).json(error(err.message || '取消兑换奖励失败', err.code || 'REWARD_CANCEL_EXCHANGE_FAILED'));
+    }
+  }
+
   _statusForError(errorCode) {
     switch (errorCode) {
       case 'INVALID_PARAMS':
       case 'INSUFFICIENT_STARS':
       case 'REWARD_DISABLED':
+      case 'REWARD_DELIVERED':
         return 400;
       case 'PERMISSION_DENIED':
       case 'FAMILY_MEMBER_ACCESS_DENIED':

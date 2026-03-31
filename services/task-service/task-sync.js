@@ -153,6 +153,7 @@ async function syncTaskToCloud(service, task) {
       endTime: task.endTime,
       points: task.points,
       pointsExpiry: task.pointsExpiry,
+      reminder: task.reminder || { enabled: false },
       isRequired: task.isRequired,
       status: task.status,
       isAllDay: task.isAllDay,
@@ -256,6 +257,7 @@ async function fetchTasksFromCloud(service, userId, params = {}) {
                 endTime: localTask.endTime,
                 points: localTask.points,
                 pointsExpiry: localTask.pointsExpiry,
+                reminder: localTask.reminder,
                 isRequired: localTask.isRequired,
                 status: localTask.status,
                 isAllDay: localTask.isAllDay,
@@ -346,8 +348,7 @@ async function syncUpdateToCloud(service, task) {
       endTime: task.endTime,
       duration: task.duration,
       isAllDay: task.isAllDay,
-      isRequired: task.isRequired,
-      penaltyApplied: task.penaltyApplied,
+      reminder: task.reminder || { enabled: false },
       points: task.points,
       pointsExpiry: task.pointsExpiry,
       tags: task.tags,
@@ -439,6 +440,41 @@ async function syncStatusToCloud(service, task) {
   }
 }
 
+async function syncRequiredStateToCloud(service, task) {
+  if (!service.enableCloudStorage || !task) return;
+  try {
+    const action = task?.pendingSyncMeta?.action === 'unrequired' || task?.isRequired === false
+      ? 'unrequired'
+      : 'required';
+    const pendingSyncMeta = task.pendingSyncMeta || service._buildTaskPendingSyncMeta(task, action);
+    const endpoint = action === 'required'
+      ? API_CONFIG.ENDPOINTS.TASK_REQUIRED
+      : API_CONFIG.ENDPOINTS.TASK_UNREQUIRED;
+    const url = endpoint.replace('{taskId}', task.id);
+
+    await HttpClient.patch(url, {
+      modifyTime: pendingSyncMeta.modifyTime || task.modifyTime,
+      operationKey: pendingSyncMeta.operationKey,
+      operatorContext: {
+        actorUserId: pendingSyncMeta.operatorUserId,
+        actorRole: pendingSyncMeta.operatorRole,
+        familyId: pendingSyncMeta.familyId
+      }
+    });
+    await service._markTaskSynced(task, { modifyTime: pendingSyncMeta.modifyTime || task.modifyTime });
+    logger.info('TaskService', '任务必做状态已同步到云端', {
+      taskId: task.id,
+      action
+    });
+  } catch (err) {
+    logger.warn('TaskService', '云端必做状态同步失败（本地已保存）', {
+      taskId: task.id,
+      error: err.message
+    });
+    throw err;
+  }
+}
+
 async function migrateTasksToChild(service, fromUserId, toUserId) {
   logger.info('TaskService', '开始前置任务归属迁移', { fromUserId, toUserId });
   try {
@@ -471,5 +507,6 @@ module.exports = {
   syncUpdateToCloud,
   syncDeleteToCloud,
   syncStatusToCloud,
+  syncRequiredStateToCloud,
   migrateTasksToChild
 };

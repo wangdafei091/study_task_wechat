@@ -19,6 +19,8 @@ const batchUtils = require('../utils/batchUtils');
 const { EVENTS } = require('../utils/constants');
 const HttpClient = require('../utils/http-client');
 const API_CONFIG = require('../utils/api-config');
+
+const FORMAL_REMINDER_SYNC_MIN_INTERVAL_MS = 10 * 1000;
 const viewScopeUtils = require('../utils/view-scope');
 
 class MessageService {
@@ -39,6 +41,8 @@ class MessageService {
     // 用户服务
     this.userService = options.userService || null;
     this.enableCloudStorage = API_CONFIG.ENABLE_API;
+    this._formalReminderSyncTimestamps = new Map();
+    this._formalReminderSyncInFlight = new Map();
     
     logger.info('MessageService', '初始化消息服务');
     
@@ -147,6 +151,48 @@ class MessageService {
 
   _sortMessages(messages = []) {
     return [...messages].sort((a, b) => b.createTime - a.createTime);
+  }
+
+  _getDisplayCompactGroup(notificationType) {
+    const compactGroups = [
+      ['task_upcoming'],
+      ['task_create', 'task_update', 'task_required', 'task_unrequired'],
+      ['reward_create', 'reward_update']
+    ];
+
+    return compactGroups.find((group) => group.includes(notificationType)) || null;
+  }
+
+  _compactMessagesForDisplay(messages = []) {
+    const sortedMessages = this._sortMessages(messages);
+    const compactedMessages = [];
+    const seenKeys = new Set();
+
+    sortedMessages.forEach((message) => {
+      const compactGroup = this._getDisplayCompactGroup(message.notificationType);
+      if (!compactGroup || !message.relatedId) {
+        compactedMessages.push(message);
+        return;
+      }
+
+      const compactKey = [
+        message.visibilityScope || 'unknown',
+        message.userId || '',
+        message.familyId || '',
+        message.relatedType || '',
+        message.relatedId,
+        compactGroup.join(',')
+      ].join('|');
+
+      if (seenKeys.has(compactKey)) {
+        return;
+      }
+
+      seenKeys.add(compactKey);
+      compactedMessages.push(message);
+    });
+
+    return compactedMessages;
   }
 
   _getRoleDisplayName(role) {
@@ -283,12 +329,14 @@ class MessageService {
       const localMessages = resolved.scope === 'all'
         ? await this.messageRepository.getAll()
         : await this.messageRepository.getMessagesByScope(resolved);
-      return this._sortMessages(localMessages);
+      return this._compactMessagesForDisplay(localMessages);
     }
 
     if (resolved.scope === 'all') {
-      return this._sortMessages(await this.messageRepository.getAll());
+      return this._compactMessagesForDisplay(await this.messageRepository.getAll());
     }
+
+    await this.syncFormalRemindersIfNeeded(resolved);
 
     const params = {
       scope: resolved.scope
@@ -308,7 +356,87 @@ class MessageService {
     );
 
     await this._emitMessageChangedEvent();
-    return this._sortMessages(cloudMessages);
+    return this._compactMessagesForDisplay(cloudMessages);
+  }
+
+  _buildFormalReminderSyncScopeKey(resolved) {
+    return `${resolved.scope}:${resolved.userId || resolved.familyId || 'all'}`;
+  }
+
+  async syncFormalRemindersIfNeeded(options = {}) {
+    const resolved = this._resolveScopeOptions(options);
+    if (!this.enableCloudStorage || !resolved || resolved.scope === 'all') {
+      return { success: false, skipped: true };
+    }
+
+    const now = Date.now();
+    const scopeKey = this._buildFormalReminderSyncScopeKey(resolved);
+    const lastSyncTime = this._formalReminderSyncTimestamps.get(scopeKey) || 0;
+    if (now - lastSyncTime < FORMAL_REMINDER_SYNC_MIN_INTERVAL_MS) {
+      return { success: true, skipped: true, reason: 'throttled' };
+    }
+
+    const inFlightSync = this._formalReminderSyncInFlight.get(scopeKey);
+    if (inFlightSync) {
+      return inFlightSync;
+    }
+
+    const syncPromise = (async () => {
+      const payload = {
+        scope: resolved.scope,
+        targetUserId: resolved.scope === MessageVisibilityScope.USER ? resolved.userId : undefined,
+        modifyTime: now,
+        operationKey: `message_refresh:${scopeKey}:${now}`
+      };
+
+      try {
+        const [upcomingResult, starsResult] = await Promise.allSettled([
+          HttpClient.post(API_CONFIG.ENDPOINTS.TASK_UPCOMING_SYNC, payload),
+          HttpClient.post(API_CONFIG.ENDPOINTS.STAR_EXPIRING_REMINDERS_SYNC, payload)
+        ]);
+        this._formalReminderSyncTimestamps.set(scopeKey, Date.now());
+
+        if (upcomingResult.status === 'rejected') {
+          logger.warn('MessageService', 'upcoming 正式提醒同步失败，继续读取现有正式消息', {
+            scope: resolved.scope,
+            userId: resolved.userId || null,
+            error: upcomingResult.reason?.message || 'unknown'
+          });
+        }
+
+        if (starsResult.status === 'rejected') {
+          logger.warn('MessageService', 'star_expiring 正式提醒同步失败，继续读取现有正式消息', {
+            scope: resolved.scope,
+            userId: resolved.userId || null,
+            error: starsResult.reason?.message || 'unknown'
+          });
+        }
+
+        return {
+          success: upcomingResult.status === 'fulfilled' || starsResult.status === 'fulfilled',
+          skipped: false,
+          upcoming: upcomingResult.status === 'fulfilled',
+          stars: starsResult.status === 'fulfilled',
+        };
+      } catch (error) {
+        logger.warn('MessageService', '正式提醒同步失败，继续读取现有正式消息', {
+          scope: resolved.scope,
+          userId: resolved.userId || null,
+          error: error.message
+        });
+        return { success: false, skipped: false, error: error.message };
+      } finally {
+        this._formalReminderSyncInFlight.delete(scopeKey);
+      }
+    })();
+
+    this._formalReminderSyncInFlight.set(scopeKey, syncPromise);
+
+    return syncPromise;
+  }
+
+  async _syncUpcomingMessagesIfNeeded(resolved) {
+    return this.syncFormalRemindersIfNeeded(resolved);
   }
 
   async getMessagesByScope(options = {}) {
@@ -320,7 +448,7 @@ class MessageService {
     const messages = resolved.scope === 'all'
       ? await this.messageRepository.getAll()
       : await this.messageRepository.getMessagesByScope(resolved);
-    return this._sortMessages(messages);
+    return this._compactMessagesForDisplay(messages);
   }
 
   async _syncReadToCloud(message) {
@@ -683,6 +811,9 @@ class MessageService {
    * @private
    */
   _handleUpcomingTask(data) {
+    if (this.enableCloudStorage) {
+      return;
+    }
     const { task, timeRemaining } = data;
     
     logger.info('MessageService', `处理即将到期任务: ${task.title}, 剩余时间: ${timeRemaining}分钟`);
@@ -704,6 +835,9 @@ class MessageService {
    * @private
    */
   _handleTaskPenalty(data) {
+    if (this.enableCloudStorage) {
+      return;
+    }
     const { task, penaltyPoints } = data;
     
     logger.info('MessageService', `处理任务惩罚事件: ${task.title}, 扣除星星: ${penaltyPoints}`);
@@ -718,6 +852,9 @@ class MessageService {
    * @private
    */
   _handleTaskMarkedRequired(data) {
+    if (this.enableCloudStorage) {
+      return;
+    }
     const { task } = data;
     
     logger.info('MessageService', `处理任务标记为必做事件: ${task.title}`);
@@ -734,6 +871,9 @@ class MessageService {
    * @private
    */
   _handleTaskUnmarkedRequired(data) {
+    if (this.enableCloudStorage) {
+      return;
+    }
     const { task } = data;
     
     logger.info('MessageService', `处理任务取消必做标记事件: ${task.title}`);
@@ -1432,7 +1572,7 @@ class MessageService {
       const resolved = this._resolveScopeOptions(options);
       const messages = await this.messageRepository.getMessagesByScope(resolved);
       logger.info('MessageService', `使用领域模型获取所有消息成功: ${messages.length}条`);
-      return this._sortMessages(messages);
+      return this._compactMessagesForDisplay(messages);
     } catch (error) {
       logger.error('MessageService', '使用领域模型获取所有消息失败', error);
       return [];

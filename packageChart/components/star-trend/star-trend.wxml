@@ -10,13 +10,13 @@
     </view>
     <view class="date-range">
       <image class="date-icon" src="/assets/icons/calendar.png"></image>
-      <text>{{dateRangeText}}  (虚线为预测趋势)</text>
+      <text class="date-range-text">{{dateRangeText}}  (虚线为预测趋势)</text>
     </view>
   </view>
 
   <!-- 图表容器 - 始终存在 -->
   <view class="chart-container">
-    <ec-canvas id="starTrendChart" canvas-id="starTrendChart" ec="{{ ec }}" force-use-old-canvas="{{isSimulator}}"></ec-canvas>
+    <ec-canvas id="starTrendChart" class="trend-canvas" canvas-id="starTrendChart" ec="{{ ec }}" force-use-old-canvas="{{isSimulator}}"></ec-canvas>
     
     <!-- 状态覆盖层 -->
     <view wx:if="{{isLoading}}" class="status-overlay">

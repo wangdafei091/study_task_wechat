@@ -79,6 +79,11 @@ function handleSuccess(page, resultContext) {
   logger.info('Index', '任务状态变更，刷新任务列表');
 
   return page.refreshTaskDataForCurrentView().then(async () => {
+    const followUpLoads = [];
+    if (typeof page.loadMessageData === 'function') {
+      followUpLoads.push(page.loadMessageData());
+    }
+
     if (newStatus === 1) {
       if (isRequired) {
         wx.showToast({
@@ -92,7 +97,9 @@ function handleSuccess(page, resultContext) {
         }
 
         logger.info('Index', `必做任务完成: ${currentTask.title}, 避免了扣除${taskPoints}颗星星的惩罚`);
-        page.loadStarsAndRewards();
+        if (typeof page.loadStarsAndRewards === 'function') {
+          followUpLoads.push(page.loadStarsAndRewards());
+        }
       } else if (!wasStarAwarded) {
         wx.showToast({
           title: `获得${taskPoints}颗星星！`,
@@ -105,7 +112,9 @@ function handleSuccess(page, resultContext) {
         }
 
         logger.info('Index', '立即检查奖励达成状态');
-        page.checkRewardUnlock();
+        if (typeof page.checkRewardUnlock === 'function') {
+          followUpLoads.push(page.checkRewardUnlock());
+        }
       } else {
         wx.showToast({
           title: '已获得过星星',
@@ -113,7 +122,13 @@ function handleSuccess(page, resultContext) {
           duration: 1500
         });
 
-        page.loadStarsAndRewards();
+        if (typeof page.loadStarsAndRewards === 'function') {
+          followUpLoads.push(page.loadStarsAndRewards());
+        }
+      }
+
+      if (followUpLoads.length > 0) {
+        await Promise.allSettled(followUpLoads);
       }
 
       setTimeout(() => {
@@ -131,7 +146,13 @@ function handleSuccess(page, resultContext) {
       duration: 1500
     });
 
-    page.loadStarsAndRewards();
+    if (typeof page.loadStarsAndRewards === 'function') {
+      followUpLoads.push(page.loadStarsAndRewards());
+    }
+
+    if (followUpLoads.length > 0) {
+      await Promise.allSettled(followUpLoads);
+    }
   });
 }
 

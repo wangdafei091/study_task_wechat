@@ -8,8 +8,10 @@ const { getPool, query } = require('../config/database');
 const StarRecord = require('../models/StarRecord');
 const StarGroup = require('../models/StarGroup');
 const { createLogger } = require('../utils/logger');
+const messageService = require('./messageService');
 
 const logger = createLogger('StarService');
+const STAR_EXPIRING_REMINDER_WINDOW_DAYS = 3;
 
 class StarService {
   async getStarSummary(userId) {
@@ -32,7 +34,7 @@ class StarService {
                 created_at ASC`,
       [userId]
     );
-    return rows.map(row => StarGroup.fromDB(row));
+    return this._filterActiveGroupRows(rows).map(row => StarGroup.fromDB(row));
   }
 
   async getStarGroupsByUserWithConnection(connection, userId) {
@@ -59,6 +61,102 @@ class StarService {
       [familyId]
     );
     return rows.map(row => StarRecord.fromDB(row));
+  }
+
+  async syncExpiringStarMessages(options = {}) {
+    const scanUserIds = await this._resolveReminderScanUserIds(options);
+    if (scanUserIds.length === 0) {
+      return {
+        success: true,
+        createdCount: 0,
+        updatedCount: 0,
+        dedupedCount: 0,
+        archivedCount: 0,
+        activeCount: 0,
+        affectedUserIds: [],
+      };
+    }
+
+    const now = Number(options.modifyTime || Date.now());
+    const candidates = await this._buildExpiringStarReminderCandidates(scanUserIds, now);
+    const pool = getPool();
+    const connection = await pool.getConnection();
+
+    try {
+      await connection.beginTransaction();
+
+      const existingMessages = await this._getActiveStarReminderMessagesBySubjectConn(connection, scanUserIds);
+      const existingCompositeKeys = new Set(
+        existingMessages.map(message => this._buildReminderMessageCompositeKey(message))
+      );
+      const activeCompositeKeys = new Set();
+      const affectedUserIds = new Set();
+
+      for (const candidate of candidates) {
+        const savedMessages = await messageService.createStarMessages({
+          familyId: options.familyId || null,
+          action: 'expiring',
+          subjectUserId: candidate.subjectUserId,
+          operationKey: candidate.expiryDate,
+          points: candidate.points,
+          expiryDate: candidate.expiryDate,
+          expiryDateText: candidate.expiryDateText,
+          daysUntilExpiry: candidate.daysUntilExpiry,
+          createTimeOverride: now,
+        }, connection);
+
+        savedMessages.forEach((message) => {
+          activeCompositeKeys.add(this._buildReminderMessageCompositeKey(message));
+          if (message.subjectUserId) {
+            affectedUserIds.add(message.subjectUserId);
+          }
+        });
+      }
+
+      const staleMessageIds = existingMessages
+        .filter(message => !activeCompositeKeys.has(this._buildReminderMessageCompositeKey(message)))
+        .map(message => message.messageId || message.message_id)
+        .filter(Boolean);
+
+      if (staleMessageIds.length > 0) {
+        const placeholders = staleMessageIds.map(() => '?').join(', ');
+        await connection.execute(
+          `UPDATE messages
+           SET is_archived = 1
+           WHERE message_id IN (${placeholders})
+             AND deleted_at IS NULL`,
+          staleMessageIds
+        );
+      }
+
+      await connection.commit();
+
+      let createdCount = 0;
+      let dedupedCount = 0;
+      activeCompositeKeys.forEach((key) => {
+        if (existingCompositeKeys.has(key)) {
+          dedupedCount += 1;
+        } else {
+          createdCount += 1;
+        }
+      });
+
+      return {
+        success: true,
+        createdCount,
+        updatedCount: dedupedCount,
+        dedupedCount,
+        archivedCount: staleMessageIds.length,
+        activeCount: activeCompositeKeys.size,
+        affectedUserIds: Array.from(affectedUserIds),
+      };
+    } catch (error) {
+      await connection.rollback();
+      logger.error('同步星星即将过期提醒失败', { error: error.message });
+      throw error;
+    } finally {
+      connection.release();
+    }
   }
 
   async upsertStarRecord(userId, recordData) {
@@ -469,7 +567,282 @@ class StarService {
                 created_at ASC`,
       [userId]
     );
+    return this._filterActiveGroupRows(rows);
+  }
+
+  _filterActiveGroupRows(rows = []) {
+    return rows.filter(row => this._isActiveGroupRow(row));
+  }
+
+  _isActiveGroupRow(row) {
+    if (!row) {
+      return false;
+    }
+
+    const type = String(row.type || '').trim();
+    if (type === 'permanent') {
+      return true;
+    }
+
+    const normalizedExpiryDate = this._normalizeExpiryDate(row);
+    if (!normalizedExpiryDate) {
+      return false;
+    }
+
+    return normalizedExpiryDate >= this._getTodayDateString();
+  }
+
+  _normalizeExpiryDate(rowOrExpiryDate) {
+    const row = rowOrExpiryDate && typeof rowOrExpiryDate === 'object'
+      ? rowOrExpiryDate
+      : { expiry_date: rowOrExpiryDate };
+    const expiryDate = row.expiry_date;
+    if (expiryDate === null || expiryDate === undefined) {
+      return null;
+    }
+
+    const trimmed = String(expiryDate).trim();
+    if (!trimmed || trimmed === '永久') {
+      return null;
+    }
+
+    const anchorDate = this._resolveExpiryAnchorDate(row) || new Date();
+    if (trimmed === '今天到期' || trimmed === '今天') {
+      return this._formatDateString(anchorDate);
+    }
+
+    if (trimmed === '明天到期' || trimmed === '明天') {
+      const tomorrow = new Date(anchorDate.getTime());
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      return this._formatDateString(tomorrow);
+    }
+
+    const dateOnlyMatch = trimmed.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:\s*到期)?$/);
+    if (!dateOnlyMatch) {
+      return null;
+    }
+
+    const year = Number(dateOnlyMatch[1]);
+    const month = Number(dateOnlyMatch[2]);
+    const day = Number(dateOnlyMatch[3]);
+    if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
+      return null;
+    }
+
+    const parsedDate = new Date(year, month - 1, day);
+    if (
+      Number.isNaN(parsedDate.getTime()) ||
+      parsedDate.getFullYear() !== year ||
+      parsedDate.getMonth() !== month - 1 ||
+      parsedDate.getDate() !== day
+    ) {
+      return null;
+    }
+
+    return this._formatDateString(parsedDate);
+  }
+
+  _getTodayDateString() {
+    return this._formatDateString(new Date());
+  }
+
+  _resolveExpiryAnchorDate(row) {
+    if (!row || typeof row !== 'object') {
+      return null;
+    }
+
+    const candidates = [row.modify_time, row.updated_at, row.created_at];
+    for (const candidate of candidates) {
+      const parsed = this._parseDateCandidate(candidate);
+      if (parsed) {
+        return parsed;
+      }
+    }
+    return null;
+  }
+
+  _parseDateCandidate(value) {
+    if (value === null || value === undefined || value === '') {
+      return null;
+    }
+
+    if (typeof value === 'number') {
+      const parsedFromNumber = new Date(value);
+      return Number.isNaN(parsedFromNumber.getTime()) ? null : parsedFromNumber;
+    }
+
+    const trimmed = String(value).trim();
+    if (!trimmed) {
+      return null;
+    }
+
+    if (/^\d+$/.test(trimmed)) {
+      const parsedFromTimestamp = new Date(Number(trimmed));
+      return Number.isNaN(parsedFromTimestamp.getTime()) ? null : parsedFromTimestamp;
+    }
+
+    const parsed = new Date(trimmed);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  _formatDateString(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  async _resolveReminderScanUserIds(options = {}) {
+    const { viewerUserId, viewerRole, familyId, scope = null, targetUserId = null } = options;
+
+    if (!viewerUserId) {
+      return [];
+    }
+
+    if (scope === 'user') {
+      return [targetUserId || viewerUserId];
+    }
+
+    if (viewerRole === 'parent' && familyId) {
+      const members = await query(
+        `SELECT user_id
+         FROM users
+         WHERE family_id = ?
+           AND role = 'child'
+           AND status = 'active'`,
+        [familyId]
+      );
+      return members.map(row => row.user_id);
+    }
+
+    return [viewerUserId];
+  }
+
+  async _buildExpiringStarReminderCandidates(userIds = [], nowTimestamp = Date.now()) {
+    const groupsByUser = await this._getExpiringReminderGroupsByUser(userIds, nowTimestamp);
+    const candidates = [];
+
+    groupsByUser.forEach((groups, subjectUserId) => {
+      if (!Array.isArray(groups) || groups.length === 0) {
+        return;
+      }
+
+      const sortedGroups = [...groups].sort((a, b) => a.expiryDate.localeCompare(b.expiryDate));
+      const nearestExpiryDate = sortedGroups[0].expiryDate;
+      const nearestGroups = sortedGroups.filter(group => group.expiryDate === nearestExpiryDate);
+      const totalPoints = nearestGroups.reduce((sum, group) => sum + Number(group.stars || 0), 0);
+      if (totalPoints <= 0) {
+        return;
+      }
+
+      candidates.push({
+        subjectUserId,
+        expiryDate: nearestExpiryDate,
+        expiryDateText: this._formatExpiryDateText(nearestExpiryDate, nowTimestamp),
+        daysUntilExpiry: this._diffDaysFromToday(nearestExpiryDate, nowTimestamp),
+        points: totalPoints,
+      });
+    });
+
+    return candidates;
+  }
+
+  async _getExpiringReminderGroupsByUser(userIds = [], nowTimestamp = Date.now()) {
+    if (!Array.isArray(userIds) || userIds.length === 0) {
+      return new Map();
+    }
+
+    const placeholders = userIds.map(() => '?').join(', ');
+    const rows = await query(
+      `SELECT *
+       FROM star_groups
+       WHERE user_id IN (${placeholders})
+         AND type <> 'permanent'
+       ORDER BY expiry_date ASC, created_at ASC`,
+      userIds
+    );
+
+    const groupsByUser = new Map();
+    rows.forEach((row) => {
+      if (!this._isGroupWithinReminderWindow(row, nowTimestamp)) {
+        return;
+      }
+
+      const normalizedExpiryDate = this._normalizeExpiryDate(row);
+      if (!normalizedExpiryDate) {
+        return;
+      }
+
+      const bucket = groupsByUser.get(row.user_id) || [];
+      bucket.push({
+        groupId: row.group_id,
+        userId: row.user_id,
+        stars: Number(row.stars || 0),
+        expiryDate: normalizedExpiryDate,
+      });
+      groupsByUser.set(row.user_id, bucket);
+    });
+
+    return groupsByUser;
+  }
+
+  _isGroupWithinReminderWindow(row, nowTimestamp = Date.now()) {
+    if (!this._isActiveGroupRow(row)) {
+      return false;
+    }
+
+    const normalizedExpiryDate = this._normalizeExpiryDate(row);
+    if (!normalizedExpiryDate) {
+      return false;
+    }
+
+    const diffDays = this._diffDaysFromToday(normalizedExpiryDate, nowTimestamp);
+    return diffDays >= 0 && diffDays < STAR_EXPIRING_REMINDER_WINDOW_DAYS;
+  }
+
+  _diffDaysFromToday(expiryDate, nowTimestamp = Date.now()) {
+    const today = new Date(nowTimestamp);
+    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const target = new Date(`${expiryDate}T00:00:00`);
+    if (Number.isNaN(target.getTime())) {
+      return Number.POSITIVE_INFINITY;
+    }
+
+    return Math.round((target.getTime() - todayStart.getTime()) / (24 * 60 * 60 * 1000));
+  }
+
+  _formatExpiryDateText(expiryDate, nowTimestamp = Date.now()) {
+    const diffDays = this._diffDaysFromToday(expiryDate, nowTimestamp);
+    if (diffDays === 0) {
+      return '今天';
+    }
+    if (diffDays === 1) {
+      return '明天';
+    }
+    return expiryDate;
+  }
+
+  async _getActiveStarReminderMessagesBySubjectConn(connection, subjectUserIds = []) {
+    if (!Array.isArray(subjectUserIds) || subjectUserIds.length === 0) {
+      return [];
+    }
+
+    const placeholders = subjectUserIds.map(() => '?').join(', ');
+    const [rows] = await connection.execute(
+      `SELECT *
+       FROM messages
+       WHERE deleted_at IS NULL
+         AND is_archived = 0
+         AND notification_type = 'star_expiring'
+         AND subject_user_id IN (${placeholders})`,
+      subjectUserIds
+    );
+
     return rows;
+  }
+
+  _buildReminderMessageCompositeKey(message) {
+    return `${message.visibilityScope || message.visibility_scope}:${message.messageEventKey || message.message_event_key}`;
   }
 
   async _getRecordByIdConn(connection, recordId) {

@@ -15,6 +15,7 @@ class Task {
     date,
     startTime = '',
     endTime = '',
+    reminder = null,
     points = 0,
     pointsExpiry = 'permanent',
     isRequired = false,
@@ -41,6 +42,14 @@ class Task {
     this.date = date;
     this.startTime = startTime;
     this.endTime = endTime;
+    this.reminder = reminder
+      ? {
+        enabled: reminder.enabled === true,
+        time: typeof reminder.time === 'number'
+          ? reminder.time
+          : Number(reminder.time || 0)
+      }
+      : null;
     this.points = points;
     this.pointsExpiry = pointsExpiry;
     this.isRequired = isRequired;
@@ -103,6 +112,16 @@ class Task {
       }
     }
 
+    let reminder = null;
+    const rawReminder = readField('reminder');
+    if (rawReminder) {
+      try {
+        reminder = typeof rawReminder === 'string' ? JSON.parse(rawReminder) : rawReminder;
+      } catch (e) {
+        reminder = null;
+      }
+    }
+
     return new Task({
       taskId: readField('task_id', 'taskId'),
       userId: readField('user_id', 'userId'),
@@ -112,6 +131,7 @@ class Task {
       date: readField('date'),
       startTime: readField('start_time', 'startTime') || '',
       endTime: readField('end_time', 'endTime') || '',
+      reminder,
       points: readField('points'),
       pointsExpiry: readField('points_expiry', 'pointsExpiry'),
       isRequired: Boolean(readField('is_required', 'isRequired')),
@@ -146,6 +166,7 @@ class Task {
       date: this.date,
       startTime: this.startTime,
       endTime: this.endTime,
+      reminder: this.reminder ? JSON.stringify(this.reminder) : null,
       points: this.points,
       pointsExpiry: this.pointsExpiry,
       isRequired: this.isRequired,
@@ -177,6 +198,7 @@ class Task {
       date: this.date,
       startTime: this.startTime,
       endTime: this.endTime,
+      reminder: this.reminder,
       points: this.points,
       pointsExpiry: this.pointsExpiry,
       isRequired: this.isRequired,
@@ -263,6 +285,19 @@ class Task {
 
     if (taskData.isAllDay !== undefined && typeof taskData.isAllDay !== 'boolean') {
       errors.push('isAllDay必须为布尔值');
+    }
+
+    if (taskData.reminder !== undefined && taskData.reminder !== null) {
+      if (typeof taskData.reminder !== 'object') {
+        errors.push('reminder必须为对象');
+      } else {
+        if (taskData.reminder.enabled !== undefined && typeof taskData.reminder.enabled !== 'boolean') {
+          errors.push('reminder.enabled必须为布尔值');
+        }
+        if (taskData.reminder.time !== undefined && Number.isNaN(Number(taskData.reminder.time))) {
+          errors.push('reminder.time必须为数字');
+        }
+      }
     }
 
     if (taskData.penaltyApplied !== undefined && typeof taskData.penaltyApplied !== 'boolean') {

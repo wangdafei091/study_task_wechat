@@ -237,6 +237,26 @@ describe('pages/rewards/rewards behavior', () => {
     await expect(page.getExpiringPoints()).resolves.toEqual({ points: 0, date: '' });
   });
 
+  it('getExpiringPoints 应按当前孩子视角查询对应孩子的即将过期星星', async () => {
+    const page = createPageInstance();
+    const getExpiringStarsInfo = jest.fn().mockResolvedValue({
+      points: 6,
+      expiryDateText: '明天',
+      expiryTimestamp: Date.now() + 86400000
+    });
+
+    serviceManager.getService.mockReturnValue({ getExpiringStarsInfo });
+    serviceManager.getUserService.mockReturnValue({
+      getLoginUser: jest.fn(() => ({ role: 'parent', userId: 'parent-1' })),
+      getLoginUserId: jest.fn(() => 'parent-1'),
+      getCurrentUser: jest.fn(() => ({ role: 'child', userId: 'child-1', id: 'child-1' })),
+      getUserByRole: jest.fn(() => ({ id: 'child-1' }))
+    });
+
+    await expect(page.getExpiringPoints()).resolves.toEqual({ points: 6, date: '明天' });
+    expect(getExpiringStarsInfo).toHaveBeenCalledWith('child-1');
+  });
+
   it('查看奖励、页面跳转与领取确认应覆盖动画拦截和保护奖励提示', () => {
     const page = createPageInstance();
     page.data.rewards = [

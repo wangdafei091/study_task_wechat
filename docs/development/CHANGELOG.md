@@ -4,6 +4,134 @@
 
 ---
 
+## [里程碑-16A] - 2026-03-31
+
+### ✅ 完成情况
+
+**主动提醒与星星时效治理**
+
+- **正式提醒能力补齐**：
+  - 新增 `POST /api/stars/expiring-reminders/sync`，把“星星即将过期”正式纳入云端消息体系
+  - `task_upcoming` 正式消息改为按任务实例聚合，同一实例只保留 1 条活跃提醒
+  - 活跃提醒统一走创建 / 去重 / 归档模型，避免旧提醒在消息中心长期堆积
+- **前端统一触发策略**：
+  - `services/message-service.js` 将 `upcoming + star_expiring` 收敛为共享正式提醒 sync helper
+  - 共享节流窗口收紧为 `10 秒`，并保留 in-flight 复用与“失败不阻塞读消息”语义
+  - 登录后 bootstrap、首页消息读取、消息中心、奖池页统一接入正式提醒保鲜链路
+- **星星时效口径统一**：
+  - 奖池页进入时先同步正式提醒，再读取即将过期信息
+  - 星星即将过期展示窗口统一为 `3 天`
+  - 保护窗口保持 `48 小时`，与展示/提醒口径完成收敛
+
+### 🧪 验证结果
+
+- 前端全量测试通过：68 个 suite、1615 个测试全部通过
+- 后端单元测试通过：7 个 suite、63 个测试全部通过
+- 后端轻量集成通过：2 个 suite、24 个测试全部通过
+- 后端真实集成通过：8 个 suite、57 个测试全部通过
+
+### 📖 详细实施记录
+
+- [里程碑-16A：主动提醒与星星时效治理](../design/milestone-16a-proactive-reminder-validity-governance.md)
+
+---
+
+## [里程碑-15B] - 2026-03-31
+
+### ✅ 完成情况
+
+**真实环境验证与交付级收口**
+
+- **后端真实集成补测**：
+  - 新增 `backend/test/integration/task-api-m15a-real.test.js`，补齐 `POST /api/tasks/penalties/sync`、`POST /api/tasks/upcoming/sync`、`PATCH /api/tasks/:taskId/required`、`PATCH /api/tasks/:taskId/unrequired`
+  - 新增 `backend/test/integration/reward-api-m15a-real.test.js`，补齐 `PATCH /api/rewards/:rewardId/cancel-exchange`
+- **真实闸门基线修复**：
+  - 修复 `star-api-m09-real.test.js`、`reward-api-m09-real.test.js` 中已过期的固定日期夹具，改为动态未来日期
+  - 修复 `message-api-m10-real.test.js` 对奖励维护 fan-out 语义的过时断言
+- **消息语义实现补强**：
+  - `reward_unclaim` 补齐孩子个人流 + 家庭流双记录，保证撤销兑换后本人和家庭都能感知
+- **文档收口**：
+  - `docs/api/backend-rest-api.md` 补齐 M15A 新增 5 个正式端点契约
+  - `ROADMAP.md`、M15B 设计文档同步为已完成状态
+
+### 🧪 验证结果
+
+- 前端全量测试通过：68 个 suite、1614 个测试全部通过
+- 后端单元测试通过：7 个 suite、58 个测试全部通过
+- 后端轻量集成通过：2 个 suite、24 个测试全部通过
+- 后端真实集成通过：8 个 suite、51 个测试全部通过
+
+### 📖 详细实施记录
+
+- [M15B：真实环境验证与交付级收口](../design/milestone-15b-real-env-verification.md)
+
+---
+
+## [里程碑-15A+] - 2026-03-30
+
+### ✅ 完成情况
+
+**主动行为审计修复**
+
+- **P5**：`StarService.initialize()` 改为复用 `cleanupExpiredStars()` 完整链路，补齐过期记录创建与 `STARS_EXPIRED` 事件通知
+- **P8**：`RewardService.refreshRewardsFromCloud()` 增加 3 秒共享节流 + in-flight 复用 + `force` 参数，首页/rewards/reward-manage 三入口共享同一窗口，页面下拉刷新支持 force 强刷
+- **P7**：`app.js` logs 数组添加 50 条上限
+
+### 🧪 验证结果
+
+- 前端全量测试通过：67 个 suite、1605 个测试全部通过
+- 新增 7 个测试覆盖：奖励云同步节流、force 绕过、并发 in-flight 复用、页面 force 信号
+
+### 📖 详细实施记录
+
+- [M15A+：主动行为审计结论与修复设计](../design/milestone-15a-proactive-behavior-audit.md)
+
+---
+
+## [里程碑-15A] - 2026-03-29
+
+### ✅ 完成情况
+
+**消息语义审计与通知体验治理**
+
+- **消息场景矩阵**：系统梳理任务/奖励/系统三类消息的触发时机、通知对象和阅读视角文案，形成完整矩阵基线
+- **后端正式消息能力补齐**：
+  - 新增 `POST /api/tasks/upcoming/sync`：任务即将到期提醒云端 materialize，支持幂等与活跃提醒替换
+  - 新增 `POST /api/tasks/penalties/sync`：必做任务惩罚云端事务执行，扣星/流水/状态/消息同事务完成
+  - 新增 `PATCH /api/tasks/:taskId/required` / `unrequired`：必做标记专用 command，避免与通用 task update 双发消息
+  - 新增 `PATCH /api/rewards/:rewardId/cancel-exchange`：奖励撤销兑换独立 command，退款/状态回退/消息同事务完成
+  - 奖励 create/update/delete 补齐活跃孩子个人流 fan-out，满足"家庭每个成员都能感知"
+- **消息展示语义统一**：
+  - 首页预览保持"未读优先 + 时间倒序，取前 3 条"的提醒预览职责
+  - 消息中心保持"完整历史，纯时间倒序"的职责
+  - 消息页日期分隔改为按最终展示序列重算，修复 Tab 过滤后分隔不准问题
+  - 新增 `utils/message-display.js` 统一消息排序、时间展示和日期分隔计算
+- **降级路径治理**：云端模式下为 upcoming/penalty/required 本地兼容处理增加显式 guard，避免与正式云端消息重复
+- **前端奖励/兑换链路优化**：
+  - 新增 `utils/reward-status.js` 统一奖励状态解析
+  - `my-exchanges`、`reward-manage`、`rewards` 页面简化状态判断和展示逻辑
+  - `analytics-service` 拆分为前端服务层 `services/analytics-service.js`，分析页接入正式服务
+- **API 配置**：`utils/api-config.js` 补齐 upcoming-sync、penalties-sync、cancel-exchange 等端点
+
+### 🧪 验证结果
+
+- 前端全量测试通过：67 个 suite、1594 个测试全部通过
+- 后端新增单元测试覆盖：
+  - `taskService-m15a-message-sync.test.js`：消息同步场景
+  - `messageService.test.js`：消息服务契约（429 行）
+  - `rewardService.test.js` / `rewardController.test.js`：奖励维护消息
+  - `taskController-m07.test.js`：任务控制器契约
+- 前端新增测试覆盖：
+  - 消息服务、消息仓库、消息页行为、首页预览行为
+  - 奖励状态、消息展示、事件总线、HTTP 客户端工具
+  - 奖励管理页、兑换记录页、分析页、星星趋势组件
+
+### 📖 详细实施记录
+
+- [里程碑-15A：消息语义审计与通知体验治理](../design/milestone-15a-message-semantics-audit.md)
+
+---
+
 ## [里程碑-14B] - 2026-03-27
 
 ### ✅ 完成情况
@@ -596,4 +724,4 @@
 
 ---
 
-**最后更新**：2026-03-25
+**最后更新**：2026-03-30
