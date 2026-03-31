@@ -197,7 +197,7 @@ class MessageService {
       return [];
     }
 
-    if (action === 'create' && task.parentTaskId) {
+    if (['create', 'assign'].includes(action) && task.parentTaskId) {
       return [];
     }
 
@@ -286,7 +286,9 @@ class MessageService {
     }
 
     const actorName = await this._getUserDisplayName(actorUserId);
-    const subjectUserId = action === 'exchange' ? (exchangeUserId || reward.exchangeUserId) : null;
+    const subjectUserId = ['exchange', 'unclaim'].includes(action)
+      ? (exchangeUserId || reward.exchangeUserId)
+      : null;
     const subjectName = await this._getUserDisplayName(subjectUserId);
 
     const content = this._buildRewardContent({
@@ -446,6 +448,23 @@ class MessageService {
               : (isSelfAction
                 ? `${safeSubjectName}创建了任务“${taskTitle}”`
                 : `${safeActorName}给${safeSubjectName}创建了任务“${taskTitle}”`),
+          },
+        };
+      case 'assign':
+        return {
+          icon: '📬',
+          priority: 1,
+          user: {
+            title: isRepeatPlanTask ? `多天任务计划已分配：${taskTitle}` : `任务已分配：${taskTitle}`,
+            summary: isRepeatPlanTask
+              ? `${safeActorName}给你分配了多天任务计划“${taskTitle}”${planRangeText ? `（${planRangeText}）` : ''}`
+              : `${safeActorName}给你分配了任务“${taskTitle}”`,
+          },
+          family: {
+            title: isRepeatPlanTask ? `多天任务计划已分配：${taskTitle}` : `任务已分配：${taskTitle}`,
+            summary: isRepeatPlanTask
+              ? `${safeActorName}给${safeSubjectName}分配了多天任务计划“${taskTitle}”${planRangeText ? `（${planRangeText}）` : ''}`
+              : `${safeActorName}给${safeSubjectName}分配了任务“${taskTitle}”`,
           },
         };
       case 'update':

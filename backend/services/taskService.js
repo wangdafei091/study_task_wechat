@@ -833,24 +833,70 @@ class TaskService {
    * @param {string} fromUserId 家长 userId（来自 JWT，不信任客户端）
    * @param {string} toUserId   目标孩子 userId
    * @param {string} familyId   家长所属家庭 ID
+   * @param {Object} options    操作上下文
    * @returns {number} 实际迁移的任务数量
    */
-  async transferTasksToChild(fromUserId, toUserId, familyId) {
-    const targetRows = await query(
-      "SELECT user_id FROM users WHERE user_id = ? AND family_id = ? AND role = 'child' AND status = 'active' LIMIT 1",
-      [toUserId, familyId]
-    );
-    if (!targetRows.length) {
-      const err = new Error('目标用户不是同家庭的孩子成员');
-      err.code = 'TRANSFER_TARGET_INVALID';
-      throw err;
+  async transferTasksToChild(fromUserId, toUserId, familyId, options = {}) {
+    const pool = getPool();
+    const connection = await pool.getConnection();
+    const modifyTime = Number(options.modifyTime || Date.now());
+    const operationKey = String(options.operationKey || modifyTime);
+
+    try {
+      await connection.beginTransaction();
+
+      const [targetRows] = await connection.execute(
+        "SELECT user_id FROM users WHERE user_id = ? AND family_id = ? AND role = 'child' AND status = 'active' LIMIT 1",
+        [toUserId, familyId]
+      );
+      if (!targetRows.length) {
+        const err = new Error('目标用户不是同家庭的孩子成员');
+        err.code = 'TRANSFER_TARGET_INVALID';
+        throw err;
+      }
+
+      const [taskRows] = await connection.execute(
+        'SELECT * FROM tasks WHERE user_id = ? AND deleted_at IS NULL ORDER BY created_at ASC',
+        [fromUserId]
+      );
+
+      if (!taskRows.length) {
+        await connection.commit();
+        logger.info('任务归属转移完成', { fromUserId, toUserId, count: 0 });
+        return 0;
+      }
+
+      const [result] = await connection.execute(
+        'UPDATE tasks SET user_id = ? WHERE user_id = ? AND deleted_at IS NULL',
+        [toUserId, fromUserId]
+      );
+
+      for (const row of taskRows) {
+        const transferredTask = Task.fromDB({
+          ...row,
+          user_id: toUserId,
+          modify_time: modifyTime,
+        });
+        await messageService.createTaskMessages({
+          task: transferredTask,
+          familyId,
+          action: 'assign',
+          actorUserId: fromUserId,
+          actorRole: options.actorRole || 'parent',
+          operationKey: `${operationKey}:${transferredTask.taskId}`,
+          createTimeOverride: modifyTime,
+        }, connection);
+      }
+
+      await connection.commit();
+      logger.info('任务归属转移完成', { fromUserId, toUserId, count: result.affectedRows });
+      return result.affectedRows;
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
     }
-    const result = await execute(
-      'UPDATE tasks SET user_id = ? WHERE user_id = ?',
-      [toUserId, fromUserId]
-    );
-    logger.info('任务归属转移完成', { fromUserId, toUserId, count: result.affectedRows });
-    return result.affectedRows;
   }
 
   async _getTaskByIdConn(connection, taskId, includeDeleted = false) {

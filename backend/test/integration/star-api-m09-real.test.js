@@ -17,6 +17,16 @@ const app = express();
 app.use(express.json());
 app.use('/api/stars', authMiddleware, starRoutes);
 
+function formatDateOffset(days) {
+  const date = new Date();
+  date.setHours(0, 0, 0, 0);
+  date.setDate(date.getDate() + days);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 function generateToken(user) {
   const secret = process.env.JWT_SECRET || 'test-secret-key-for-dev-testing-only';
   return jwt.sign(
@@ -125,6 +135,8 @@ describe('M09 stars API 真实数据库集成测试', () => {
   });
 
   it('POST /api/stars/records 应写入单分组流水并维护快照，重复请求幂等', async () => {
+    const nextWeek = formatDateOffset(7);
+
     const payload = {
       recordId: 'm09_star_record_income_001',
       userId: 'm09_star_child_001',
@@ -134,7 +146,7 @@ describe('M09 stars API 真实数据库集成测试', () => {
       points: 5,
       description: '完成任务获得5颗星星',
       expiryType: 'week',
-      expiryDate: '2026-03-28',
+      expiryDate: nextWeek,
       modifyTime: 1742400001000,
     };
 
@@ -172,10 +184,14 @@ describe('M09 stars API 真实数据库集成测试', () => {
   });
 
   it('POST /api/stars/consume 应支持部分扣减并返回分摊结果，同一幂等键不重复扣减', async () => {
+    const nextWeek = formatDateOffset(7);
+    const nextMonth = formatDateOffset(30);
+
     await db.query(
       `INSERT INTO star_groups (group_id, user_id, type, stars, expiry_date, modify_time) VALUES
-        ('m09_star_group_week_001', 'm09_star_child_001', 'week', 1, '2026-03-28', 1742400001001),
-        ('m09_star_group_month_001', 'm09_star_child_001', 'month', 2, '2026-03-31', 1742400001002)`
+        ('m09_star_group_week_001', 'm09_star_child_001', 'week', 1, ?, 1742400001001),
+        ('m09_star_group_month_001', 'm09_star_child_001', 'month', 2, ?, 1742400001002)`,
+      [nextWeek, nextMonth]
     );
 
     const payload = {
@@ -247,13 +263,17 @@ describe('M09 stars API 真实数据库集成测试', () => {
   });
 
   it('GET /api/stars/records?scope=family 家长可获取全家流水，孩子返回 403', async () => {
+    const nextWeek = formatDateOffset(7);
+    const nextMonth = formatDateOffset(30);
+
     await db.query(
       `INSERT INTO star_records (
         record_id, user_id, type, source, source_id, points, description,
         expiry_type, expiry_date, balance, previous_balance, modify_time
       ) VALUES
-        ('m09_star_family_record_001', 'm09_star_child_001', 'income', 'task', 'task_a', 3, '孩子1得星', 'week', '2026-03-28', 3, 0, 1742400004000),
-        ('m09_star_family_record_002', 'm09_star_child_002', 'income', 'task', 'task_b', 4, '孩子2得星', 'month', '2026-03-31', 4, 0, 1742400004001)`
+        ('m09_star_family_record_001', 'm09_star_child_001', 'income', 'task', 'task_a', 3, '孩子1得星', 'week', ?, 3, 0, 1742400004000),
+        ('m09_star_family_record_002', 'm09_star_child_002', 'income', 'task', 'task_b', 4, '孩子2得星', 'month', ?, 4, 0, 1742400004001)`,
+      [nextWeek, nextMonth]
     );
 
     const parentRes = await request(app)

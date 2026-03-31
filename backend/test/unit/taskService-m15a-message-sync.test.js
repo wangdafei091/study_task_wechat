@@ -103,6 +103,72 @@ describe('backend TaskService M15A message sync', () => {
     expect(connection.release).toHaveBeenCalled();
   });
 
+  it('任务迁移成功时应为每个任务创建 task_assign 正式消息', async () => {
+    connection.execute
+      .mockResolvedValueOnce([[{ user_id: 'child_1' }]])
+      .mockResolvedValueOnce([[
+        createTaskRow({ task_id: 'task_transfer_1', user_id: 'parent_1', title: '数学作业' }),
+        createTaskRow({ task_id: 'task_transfer_2', user_id: 'parent_1', title: '英语作业' })
+      ]])
+      .mockResolvedValueOnce([{ affectedRows: 2 }]);
+
+    messageService.createTaskMessages.mockResolvedValue([]);
+
+    const count = await taskService.transferTasksToChild('parent_1', 'child_1', 'family_1', {
+      actorRole: 'parent',
+      modifyTime: 2000,
+      operationKey: 'transfer_op_1'
+    });
+
+    expect(count).toBe(2);
+    expect(connection.beginTransaction).toHaveBeenCalled();
+    expect(connection.commit).toHaveBeenCalled();
+    expect(messageService.createTaskMessages).toHaveBeenCalledTimes(2);
+    expect(messageService.createTaskMessages).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      familyId: 'family_1',
+      action: 'assign',
+      actorUserId: 'parent_1',
+      actorRole: 'parent',
+      createTimeOverride: 2000,
+      operationKey: 'transfer_op_1:task_transfer_1',
+      task: expect.objectContaining({
+        taskId: 'task_transfer_1',
+        userId: 'child_1',
+        title: '数学作业'
+      })
+    }), connection);
+    expect(messageService.createTaskMessages).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      operationKey: 'transfer_op_1:task_transfer_2',
+      task: expect.objectContaining({
+        taskId: 'task_transfer_2',
+        userId: 'child_1',
+        title: '英语作业'
+      })
+    }), connection);
+  });
+
+  it('任务迁移消息创建失败时应整体回滚事务', async () => {
+    connection.execute
+      .mockResolvedValueOnce([[{ user_id: 'child_1' }]])
+      .mockResolvedValueOnce([[
+        createTaskRow({ task_id: 'task_transfer_1', user_id: 'parent_1', title: '数学作业' })
+      ]])
+      .mockResolvedValueOnce([{ affectedRows: 1 }]);
+
+    messageService.createTaskMessages.mockRejectedValue(new Error('assign message fail'));
+
+    await expect(taskService.transferTasksToChild('parent_1', 'child_1', 'family_1', {
+      actorRole: 'parent',
+      modifyTime: 2000,
+      operationKey: 'transfer_op_2'
+    })).rejects.toThrow('assign message fail');
+
+    expect(connection.beginTransaction).toHaveBeenCalled();
+    expect(connection.commit).not.toHaveBeenCalled();
+    expect(connection.rollback).toHaveBeenCalled();
+    expect(connection.release).toHaveBeenCalled();
+  });
+
   it('upcoming sync 应归档 stale 提醒并区分新增与去重记录', async () => {
     jest.spyOn(taskService, '_resolvePenaltyScanUserIds').mockResolvedValue(['child_1']);
     jest.spyOn(taskService, '_getUpcomingTasksForReminder').mockResolvedValue([

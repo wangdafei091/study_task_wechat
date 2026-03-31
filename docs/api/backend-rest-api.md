@@ -1,7 +1,7 @@
 # 后端 REST API 契约
 
 > 项目后端 HTTP/REST 接口的权威说明文档
-> **最后更新**：2026-03-27
+> **最后更新**：2026-03-31
 > **维护者**：项目维护团队
 
 ---
@@ -609,7 +609,99 @@ Authorization: Bearer <token>
 - `404` - `TASK_NOT_FOUND`
 - `500` - `TASK_STATUS_UPDATE_FAILED`
 
-### 6.8 转移家长名下任务
+### 6.8 同步必做任务惩罚
+
+- Method: `POST`
+- Path: `/api/tasks/penalties/sync`
+- Auth: `Bearer Token`
+- Query / Body（关键字段）：
+  - `scope` - 可选，`family | user`；未传时家长默认 `family`，孩子默认 `user`
+  - `targetUserId` - `scope=user` 时可选，家长可为同家庭孩子执行
+  - `operationKey`
+  - `modifyTime`
+
+成功响应：
+- Status: `200`
+- Body：`data.penaltyCount`、`data.affectedTaskIds`、`data.results`
+
+常见错误：
+- `403` - `FAMILY_MEMBER_ACCESS_DENIED`
+- `500` - `TASK_PENALTY_SYNC_FAILED`
+
+说明：
+- 对已完成或已处理过惩罚的任务保持幂等，不重复扣星
+- 扣星流水、任务状态更新与消息写入在同一事务内完成
+
+### 6.9 同步 upcoming 任务提醒
+
+- Method: `POST`
+- Path: `/api/tasks/upcoming/sync`
+- Auth: `Bearer Token`
+- Query / Body（关键字段）：
+  - `scope` - 可选，`family | user`；未传时家长默认 `family`，孩子默认 `user`
+  - `targetUserId` - `scope=user` 时可选，家长可为同家庭孩子执行
+  - `operationKey`
+  - `modifyTime`
+
+成功响应：
+- Status: `200`
+- Body：`data.createdCount`、`data.dedupedCount`、`data.activeCount`、`data.affectedTaskIds`
+
+常见错误：
+- `403` - `FAMILY_MEMBER_ACCESS_DENIED`
+- `503` - `TASK_REMINDER_SCHEMA_MISSING`
+- `500` - `TASK_UPCOMING_SYNC_FAILED`
+
+说明：
+- upcoming 提醒采用活跃提醒模型，同一任务重复 sync 时会幂等去重并替换旧提醒
+
+### 6.10 标记任务为必做
+
+- Method: `PATCH`
+- Path: `/api/tasks/:taskId/required`
+- Auth: `Bearer Token`
+- Query: 无
+- Body（关键字段）：
+  - `modifyTime`
+  - `operationKey`
+
+成功响应：
+- Status: `200`
+- Body：`data.task`
+
+常见错误：
+- `403` - `PERMISSION_DENIED`
+- `404` - `TASK_NOT_FOUND`
+- `500` - `TASK_REQUIRED_UPDATE_FAILED`
+
+说明：
+- 仅任务本人或同家庭家长可操作
+- 对已是必做状态的任务保持幂等
+
+### 6.11 取消任务必做
+
+- Method: `PATCH`
+- Path: `/api/tasks/:taskId/unrequired`
+- Auth: `Bearer Token`
+- Query: 无
+- Body（关键字段）：
+  - `modifyTime`
+  - `operationKey`
+
+成功响应：
+- Status: `200`
+- Body：`data.task`
+
+常见错误：
+- `403` - `PERMISSION_DENIED`
+- `404` - `TASK_NOT_FOUND`
+- `500` - `TASK_REQUIRED_UPDATE_FAILED`
+
+说明：
+- 仅任务本人或同家庭家长可操作
+- 对非必做任务保持幂等
+
+### 6.12 转移家长名下任务
 
 - Method: `POST`
 - Path: `/api/tasks/transfer`
@@ -835,6 +927,31 @@ Authorization: Bearer <token>
 - `404` - `REWARD_NOT_FOUND`
 - `409` - `REWARD_ALREADY_EXCHANGED`
 - `500` - `REWARD_EXCHANGE_FAILED`
+
+### 8.6 取消奖励兑换
+
+- Method: `PATCH`
+- Path: `/api/rewards/:rewardId/cancel-exchange`
+- Auth: `Bearer Token`
+- Query: 无
+- Body（关键字段）：
+  - `exchangeUserId` - 可选；家长可为同家庭孩子取消兑换
+  - `modifyTime`
+  - `operationKey`
+
+成功响应：
+- Status: `200`
+- Body：`data.reward`、`data.refundRecord`、`data.refundedPoints`、`data.updatedGroupsSnapshot`、`data.idempotent`
+
+常见错误：
+- `400` - `REWARD_DELIVERED`
+- `403` - `FAMILY_MEMBER_ACCESS_DENIED` / `PERMISSION_DENIED`
+- `404` - `REWARD_NOT_FOUND`
+- `500` - `REWARD_CANCEL_EXCHANGE_FAILED`
+
+说明：
+- 已撤销或未兑换状态按幂等成功返回，不重复退款
+- 退款流水、奖励状态回退与消息写入在同一事务内完成
 
 ---
 

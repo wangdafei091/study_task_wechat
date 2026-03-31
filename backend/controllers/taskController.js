@@ -570,7 +570,11 @@ class TaskController {
         return res.status(400).json(error('目标用户不能为空', 'INVALID_PARAMS'));
       }
 
-      const count = await taskService.transferTasksToChild(userId, toUserId, familyId);
+      const count = await taskService.transferTasksToChild(userId, toUserId, familyId, {
+        actorRole: role,
+        modifyTime: req.body.modifyTime,
+        operationKey: req.body.operationKey,
+      });
       logger.info('任务归属转移成功', { fromUserId: userId, toUserId, count });
       res.json(success({ count }, '转移成功'));
     } catch (err) {

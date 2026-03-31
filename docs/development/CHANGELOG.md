@@ -4,6 +4,37 @@
 
 ---
 
+## [里程碑-15B] - 2026-03-31
+
+### ✅ 完成情况
+
+**真实环境验证与交付级收口**
+
+- **后端真实集成补测**：
+  - 新增 `backend/test/integration/task-api-m15a-real.test.js`，补齐 `POST /api/tasks/penalties/sync`、`POST /api/tasks/upcoming/sync`、`PATCH /api/tasks/:taskId/required`、`PATCH /api/tasks/:taskId/unrequired`
+  - 新增 `backend/test/integration/reward-api-m15a-real.test.js`，补齐 `PATCH /api/rewards/:rewardId/cancel-exchange`
+- **真实闸门基线修复**：
+  - 修复 `star-api-m09-real.test.js`、`reward-api-m09-real.test.js` 中已过期的固定日期夹具，改为动态未来日期
+  - 修复 `message-api-m10-real.test.js` 对奖励维护 fan-out 语义的过时断言
+- **消息语义实现补强**：
+  - `reward_unclaim` 补齐孩子个人流 + 家庭流双记录，保证撤销兑换后本人和家庭都能感知
+- **文档收口**：
+  - `docs/api/backend-rest-api.md` 补齐 M15A 新增 5 个正式端点契约
+  - `ROADMAP.md`、M15B 设计文档同步为已完成状态
+
+### 🧪 验证结果
+
+- 前端全量测试通过：68 个 suite、1614 个测试全部通过
+- 后端单元测试通过：7 个 suite、58 个测试全部通过
+- 后端轻量集成通过：2 个 suite、24 个测试全部通过
+- 后端真实集成通过：8 个 suite、51 个测试全部通过
+
+### 📖 详细实施记录
+
+- [M15B：真实环境验证与交付级收口](../design/milestone-15b-real-env-verification.md)
+
+---
+
 ## [里程碑-15A+] - 2026-03-30
 
 ### ✅ 完成情况

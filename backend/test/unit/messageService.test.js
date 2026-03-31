@@ -206,6 +206,54 @@ describe('backend MessageService task required copy', () => {
     expect(completeContent.user.summary).toBe('你完成了任务“数学作业”');
   });
 
+  it('task assign 应使用分配语义，避免与任务创建混淆', async () => {
+    const service = require('../../services/messageService');
+    const assignContent = service._buildTaskContent({
+      action: 'assign',
+      taskTitle: '数学作业',
+      actorRole: 'parent',
+      actorUserId: 'parent_1',
+      actorName: '妈妈',
+      subjectName: '小明',
+      subjectUserId: 'child_1'
+    });
+
+    expect(assignContent.user.title).toBe('任务已分配：数学作业');
+    expect(assignContent.user.summary).toBe('妈妈给你分配了任务“数学作业”');
+    expect(assignContent.family.summary).toBe('妈妈给小明分配了任务“数学作业”');
+  });
+
+  it('重复任务子实例 assign 不应单独产生日志消息', async () => {
+    const { query } = require('../../config/database');
+    query
+      .mockResolvedValueOnce([{ nickname: '妈妈', role: 'parent' }])
+      .mockResolvedValueOnce([{ nickname: '小明', role: 'child' }]);
+
+    const service = require('../../services/messageService');
+    const childRecords = await service._buildTaskMessageRecords({
+      task: {
+        taskId: 'task_plan_1_child',
+        userId: 'child_1',
+        title: '背单词',
+        date: '2026-03-30',
+        repeat: {
+          type: 'daily',
+          startDate: '2026-03-29',
+          endDate: '2026-04-02'
+        },
+        parentTaskId: 'task_plan_1',
+        modifyTime: 124
+      },
+      familyId: 'family_1',
+      action: 'assign',
+      actorUserId: 'parent_1',
+      actorRole: 'parent',
+      operationKey: 'op_task_assign_1_child'
+    });
+
+    expect(childRecords).toEqual([]);
+  });
+
   it('task create/update/required/unrequired 应归档同任务旧未读折叠消息', async () => {
     const { execute } = require('../../config/database');
     execute.mockResolvedValue({ affectedRows: 1 });
@@ -408,6 +456,36 @@ describe('backend MessageService reward maintenance fan-out', () => {
 describe('backend MessageService reward copy', () => {
   beforeEach(() => {
     jest.resetModules();
+  });
+
+  it('unclaim 应生成孩子个人流 + 家庭流，避免真实接口只留下家庭消息', async () => {
+    const { query } = require('../../config/database');
+    query
+      .mockResolvedValueOnce([{ nickname: '小明', role: 'child' }])
+      .mockResolvedValueOnce([{ nickname: '小明', role: 'child' }]);
+
+    const service = require('../../services/messageService');
+    const records = await service._buildRewardMessageRecords({
+      reward: {
+        rewardId: 'reward_1',
+        name: '冰淇淋',
+        points: 20,
+        exchangeUserId: 'child_1',
+        modifyTime: 123
+      },
+      familyId: 'family_1',
+      action: 'unclaim',
+      actorUserId: 'child_1',
+      actorRole: 'child',
+      exchangeUserId: 'child_1',
+      operationKey: 'op_reward_unclaim_1',
+      pointsOverride: 20
+    });
+
+    expect(records).toHaveLength(2);
+    expect(records.map((record) => record.visibilityScope).sort()).toEqual(['family', 'user']);
+    expect(records.find((record) => record.visibilityScope === 'user').userId).toBe('child_1');
+    expect(records.find((record) => record.visibilityScope === 'family').subjectUserId).toBe('child_1');
   });
 
   it('孩子自己取消兑换时，家庭流和个人流文案应保持阅读者视角正确', async () => {
