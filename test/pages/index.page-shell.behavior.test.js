@@ -309,7 +309,8 @@ describe('pages/index/index shell behavior', () => {
     expect(messageService.getMessagesByScope).toHaveBeenCalledWith({
       scope: 'user',
       userId: 'child-1',
-      requireFresh: true
+      requireFresh: true,
+      skipExpiryAuthoritySyncBeforeFormalReminders: false
     });
     expect(page.data.messages).toHaveLength(3);
     expect(page.data.unreadCount).toBe(3);
