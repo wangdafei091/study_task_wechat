@@ -1278,6 +1278,7 @@ class TaskService {
       actorUserId: options.actorUserId || task.userId,
       actorRole: options.actorRole || 'system',
       operationKey,
+      createTimeOverride: action === 'delete' ? Date.now() : null,
     }, connection);
   }
 }
