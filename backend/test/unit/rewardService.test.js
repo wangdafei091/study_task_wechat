@@ -10,6 +10,7 @@ jest.mock('../../utils/logger', () => ({
 
 jest.mock('../../services/starService', () => ({
   getStarGroupsByUserWithConnection: jest.fn(),
+  getExpiringProtectionSummaryWithConnection: jest.fn(),
   consumeStarsWithConnection: jest.fn(),
   _buildRecordId: jest.fn()
 }));
@@ -70,6 +71,25 @@ describe('backend RewardService exchange state machine', () => {
           modify_time: 100
         }
       ]])
+      .mockResolvedValueOnce([[
+        {
+          reward_id: 'reward_1',
+          user_id: 'parent_1',
+          family_id: 'fam_1',
+          name: '冰淇淋',
+          points: 20,
+          enabled: 1,
+          claimed: 0,
+          claim_status: 'available',
+          claim_time: null,
+          delivery_time: null,
+          exchange_user_id: null,
+          protected_by_expiry: 0,
+          partial_protection: 0,
+          deleted_at: null,
+          modify_time: 100
+        }
+      ]])
       .mockResolvedValueOnce([{ affectedRows: 1 }])
       .mockResolvedValueOnce([[
         {
@@ -96,6 +116,10 @@ describe('backend RewardService exchange state machine', () => {
     });
 
     starService.getStarGroupsByUserWithConnection.mockResolvedValue([]);
+    starService.getExpiringProtectionSummaryWithConnection.mockResolvedValue({
+      pendingPoints: 0,
+      groups: []
+    });
     starService.consumeStarsWithConnection.mockResolvedValue({
       record: null,
       consumedPoints: 20,
@@ -115,5 +139,42 @@ describe('backend RewardService exchange state machine', () => {
     expect(updateCall[0]).toContain('delivery_time = NULL');
     expect(result.reward.claimStatus).toBe('claimed');
     expect(connection.commit).toHaveBeenCalled();
+  });
+
+  it('保护分配应忽略已禁用奖励，避免吞掉正式奖励的保护额度', async () => {
+    const service = require('../../services/rewardService');
+    const Reward = require('../../models/Reward');
+
+    const protectionMap = service._buildEffectiveProtectionMapFromInputs(
+      [
+        new Reward({
+          rewardId: 'reward_disabled',
+          userId: 'parent_1',
+          name: '禁用高价奖励',
+          points: 100,
+          enabled: false,
+          claimed: false
+        }),
+        new Reward({
+          rewardId: 'reward_visible',
+          userId: 'parent_1',
+          name: '正式奖励',
+          points: 80,
+          enabled: true,
+          claimed: false
+        })
+      ],
+      [],
+      80
+    );
+
+    expect(protectionMap.get('reward_disabled')).toEqual({
+      protectedByExpiry: false,
+      partialProtection: 0
+    });
+    expect(protectionMap.get('reward_visible')).toEqual({
+      protectedByExpiry: true,
+      partialProtection: 80
+    });
   });
 });

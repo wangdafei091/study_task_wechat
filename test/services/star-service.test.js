@@ -1141,6 +1141,80 @@ describe('StarService', () => {
       expect(HttpClient.get).not.toHaveBeenCalled();
     });
 
+    it('权威同步后的强制云端覆盖应绕过 pending local records 保护', async () => {
+      starService.enableCloudStorage = true;
+
+      const localGroup = TestDataFactory.createStarGroup({
+        id: 'local_pending_group',
+        userId: 'user_123',
+        stars: 8,
+        expiryType: 'week'
+      });
+      const localPendingRecord = {
+        id: 'record_pending_1',
+        userId: 'user_123',
+        syncedToCloud: false,
+        points: -3
+      };
+
+      mockStarGroupRepository.getAll.mockResolvedValue([localGroup]);
+      mockStarRecordRepository.getAll.mockResolvedValue([localPendingRecord]);
+      HttpClient.get
+        .mockResolvedValueOnce({
+          groups: [
+            {
+              groupId: 'cloud_group_1',
+              userId: 'user_123',
+              type: 'week',
+              stars: 5,
+              expiryDate: '2026-04-01'
+            }
+          ]
+        })
+        .mockResolvedValueOnce({ records: [] });
+
+      const result = await starService.refreshStarsFromCloud('user_123', {
+        forceCloudAfterAuthority: true
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.skipped).not.toBe(true);
+      expect(HttpClient.get).toHaveBeenCalledTimes(2);
+      expect(mockStarGroupRepository._saveData).toHaveBeenCalled();
+    });
+
+    it('syncExpiryAuthorityIfNeeded 应调用正式结算接口并在节流窗口内复用结果', async () => {
+      starService.enableCloudStorage = true;
+      HttpClient.post.mockResolvedValue({
+        affectedUserIds: ['user_123'],
+        settledGroupCount: 1,
+        settledPoints: 5,
+        createdRecordCount: 1,
+        invalidGroupCount: 0
+      });
+
+      const result1 = await starService.syncExpiryAuthorityIfNeeded({
+        scope: 'user',
+        userId: 'user_123'
+      });
+      const result2 = await starService.syncExpiryAuthorityIfNeeded({
+        scope: 'user',
+        userId: 'user_123'
+      });
+
+      expect(HttpClient.post).toHaveBeenCalledTimes(1);
+      expect(HttpClient.post).toHaveBeenCalledWith('/api/stars/expiry-authority/sync', expect.objectContaining({
+        scope: 'user',
+        targetUserId: 'user_123'
+      }));
+      expect(result1.success).toBe(true);
+      expect(result2).toEqual(expect.objectContaining({
+        success: true,
+        skipped: true,
+        reason: 'throttled'
+      }));
+    });
+
     it('同一用户并发刷新星星时应复用进行中的云请求', async () => {
       starService.enableCloudStorage = true;
 

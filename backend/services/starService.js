@@ -42,6 +42,120 @@ class StarService {
     return rows.map(row => StarGroup.fromDB(row));
   }
 
+  async getExpiringProtectionSummary(userId, options = {}) {
+    const pool = getPool();
+    const connection = await pool.getConnection();
+    try {
+      return await this.getExpiringProtectionSummaryWithConnection(connection, userId, options);
+    } finally {
+      connection.release();
+    }
+  }
+
+  async settleExpiredGroupsWithConnection(connection, userId, options = {}) {
+    const modifyTime = Number(options.modifyTime || Date.now());
+    const allRows = await this._getAllGroupsByUserConn(connection, userId, { forUpdate: true });
+    const expiredRows = [];
+    let invalidGroups = 0;
+
+    allRows.forEach((row) => {
+      const type = String(row.type || '').trim();
+      if (type === 'permanent') {
+        return;
+      }
+
+      const normalizedExpiryDate = this._normalizeExpiryDate(row);
+      if (!normalizedExpiryDate) {
+        invalidGroups += 1;
+        return;
+      }
+
+      if (normalizedExpiryDate >= this._getDateStringForTimestamp(modifyTime)) {
+        return;
+      }
+
+      expiredRows.push({
+        ...row,
+        normalizedExpiryDate,
+      });
+    });
+
+    expiredRows.sort((a, b) => {
+      if (a.normalizedExpiryDate !== b.normalizedExpiryDate) {
+        return a.normalizedExpiryDate.localeCompare(b.normalizedExpiryDate);
+      }
+      return String(a.group_id).localeCompare(String(b.group_id));
+    });
+
+    let runningBalance = this._sumGroupStars(allRows);
+    let settledGroups = 0;
+    let settledPoints = 0;
+    let createdRecords = 0;
+
+    for (const row of expiredRows) {
+      const groupPoints = Number(row.stars || 0);
+      await connection.execute('DELETE FROM star_groups WHERE group_id = ?', [row.group_id]);
+
+      if (groupPoints <= 0) {
+        continue;
+      }
+
+      const idempotencyKey = this._buildExpirySettlementIdempotencyKey(
+        userId,
+        row.group_id,
+        row.normalizedExpiryDate
+      );
+      const nextBalance = runningBalance - groupPoints;
+      const record = new StarRecord({
+        recordId: this._buildRecordId('star_expiry', idempotencyKey),
+        userId,
+        type: 'expense',
+        source: 'system',
+        sourceId: row.group_id,
+        points: -groupPoints,
+        description: '星星到期结算',
+        expiryType: row.type || null,
+        expiryDate: row.expiry_date || null,
+        balance: nextBalance,
+        previousBalance: runningBalance,
+        requestedPoints: groupPoints,
+        idempotencyKey,
+        data: {
+          sourceType: 'star_expiry_settlement',
+          groupId: row.group_id,
+          normalizedExpiryDate: row.normalizedExpiryDate,
+          settledAt: modifyTime,
+        },
+        modifyTime,
+      });
+
+      await this._insertRecordConn(connection, record);
+      runningBalance = nextBalance;
+      settledGroups += 1;
+      settledPoints += groupPoints;
+      createdRecords += 1;
+    }
+
+    return {
+      settledGroups,
+      settledPoints,
+      createdRecords,
+      invalidGroups,
+    };
+  }
+
+  async getExpiringProtectionSummaryWithConnection(connection, userId, options = {}) {
+    const nowTimestamp = Number(options.nowTimestamp || Date.now());
+    const rows = await this._getAllGroupsByUserConn(connection, userId);
+    const expiringGroups = rows.filter((row) => this._isProtectionWindowGroup(row, nowTimestamp));
+    const pendingPoints = expiringGroups.reduce((sum, row) => sum + Number(row.stars || 0), 0);
+
+    return {
+      pendingPoints,
+      groups: expiringGroups,
+    };
+  }
+
   async getStarRecordsByUser(userId) {
     const rows = await query(
       `SELECT * FROM star_records
@@ -559,15 +673,21 @@ class StarService {
   }
 
   async _getGroupsByUserConn(connection, userId) {
+    const rows = await this._getAllGroupsByUserConn(connection, userId);
+    return this._filterActiveGroupRows(rows);
+  }
+
+  async _getAllGroupsByUserConn(connection, userId, options = {}) {
+    const lockClause = options.forUpdate === true ? ' FOR UPDATE' : '';
     const [rows] = await connection.execute(
       `SELECT * FROM star_groups
        WHERE user_id = ?
        ORDER BY CASE WHEN type = 'permanent' THEN 1 ELSE 0 END ASC,
                 expiry_date ASC,
-                created_at ASC`,
+                created_at ASC${lockClause}`,
       [userId]
     );
-    return this._filterActiveGroupRows(rows);
+    return rows;
   }
 
   _filterActiveGroupRows(rows = []) {
@@ -644,6 +764,44 @@ class StarService {
 
   _getTodayDateString() {
     return this._formatDateString(new Date());
+  }
+
+  _getDateStringForTimestamp(timestamp) {
+    return this._formatDateString(new Date(timestamp));
+  }
+
+  _buildEndOfDayTimestamp(normalizedDate) {
+    const parsed = new Date(`${normalizedDate}T23:59:59.999Z`);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.getTime();
+    }
+
+    const [year, month, day] = String(normalizedDate).split('-').map(Number);
+    return new Date(year, month - 1, day, 23, 59, 59, 999).getTime();
+  }
+
+  _isProtectionWindowGroup(row, nowTimestamp = Date.now()) {
+    if (!this._isActiveGroupRow(row)) {
+      return false;
+    }
+
+    const type = String(row.type || '').trim();
+    if (type === 'permanent') {
+      return false;
+    }
+
+    const normalizedExpiryDate = this._normalizeExpiryDate(row);
+    if (!normalizedExpiryDate) {
+      return false;
+    }
+
+    const expiryTimestamp = this._buildEndOfDayTimestamp(normalizedExpiryDate);
+    const windowEnd = nowTimestamp + (48 * 60 * 60 * 1000);
+    return expiryTimestamp > nowTimestamp && expiryTimestamp <= windowEnd;
+  }
+
+  _buildExpirySettlementIdempotencyKey(userId, groupId, normalizedExpiryDate) {
+    return `star_expiry:${userId}:${groupId}:${normalizedExpiryDate}`;
   }
 
   _resolveExpiryAnchorDate(row) {

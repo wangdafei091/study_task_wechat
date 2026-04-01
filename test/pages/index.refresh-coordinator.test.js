@@ -150,25 +150,21 @@ describe('pages/index/modules/index-refresh-coordinator', () => {
   });
 
   it('过期检查和页面批量刷新应调用对应服务', async () => {
-    const configService = {
-      getLastExpiryCheckTime: jest.fn(() => 0),
-      setLastExpiryCheckTime: jest.fn()
-    };
     const taskService = {
       checkTasksStatus: jest.fn().mockResolvedValue({ penaltyResults: [{}] })
     };
     const starService = {
-      cleanupExpiredStars: jest.fn().mockResolvedValue({ expiredCount: 1 })
+      syncExpiryAuthorityIfNeeded: jest.fn().mockResolvedValue({ settledGroupCount: 1 })
     };
     serviceManager.getService.mockImplementation((name) => {
-      if (name === 'config') return configService;
       if (name === 'task') return taskService;
-      if (name === 'star') return starService;
+      if (name === 'starService' || name === 'star') return starService;
       return null;
     });
 
     const page = {
       data: { currentUser: { name: '小明' } },
+      getEffectiveTaskUserId: jest.fn(() => 'child-1'),
       loadTaskDataOnly: jest.fn().mockResolvedValue(),
       loadMessageData: jest.fn().mockResolvedValue(),
       loadStarsAndRewards: jest.fn().mockResolvedValue(),
@@ -180,9 +176,11 @@ describe('pages/index/modules/index-refresh-coordinator', () => {
     await coordinator.loadAllPageData(page);
     await coordinator.refreshDataForCurrentUser(page);
 
-    expect(configService.setLastExpiryCheckTime).toHaveBeenCalled();
     expect(taskService.checkTasksStatus).toHaveBeenCalled();
-    expect(starService.cleanupExpiredStars).toHaveBeenCalled();
+    expect(starService.syncExpiryAuthorityIfNeeded).toHaveBeenCalledWith({
+      scope: 'user',
+      userId: 'child-1'
+    });
     expect(page.checkUpcomingTasks).toHaveBeenCalled();
     expect(page.loadMessageData).toHaveBeenCalled();
     expect(page.loadStarsAndRewards).toHaveBeenCalled();
@@ -194,25 +192,27 @@ describe('pages/index/modules/index-refresh-coordinator', () => {
       checkTasksStatus: jest.fn().mockResolvedValue({ penaltyResults: [] })
     };
     const starService = {
-      cleanupExpiredStars: jest.fn().mockResolvedValue({ expiredCount: 0 })
+      syncExpiryAuthorityIfNeeded: jest.fn().mockResolvedValue({ settledGroupCount: 0 })
     };
 
     serviceManager.getService.mockImplementation((name) => {
       if (name === 'task') return taskService;
-      if (name === 'star') return starService;
+      if (name === 'starService' || name === 'star') return starService;
       return null;
     });
 
-    global.wx.getStorageSync.mockReturnValueOnce(0);
-    await coordinator.checkExpiredTasksAndStars({});
+    await coordinator.checkExpiredTasksAndStars({
+      getEffectiveTaskUserId: jest.fn(() => 'child-2')
+    });
 
-    expect(global.wx.setStorageSync).toHaveBeenCalledWith('last_expiry_check_time', expect.any(Number));
     expect(taskService.checkTasksStatus).toHaveBeenCalled();
-    expect(starService.cleanupExpiredStars).toHaveBeenCalled();
+    expect(starService.syncExpiryAuthorityIfNeeded).toHaveBeenCalledWith({
+      scope: 'user',
+      userId: 'child-2'
+    });
 
     jest.clearAllMocks();
     serviceManager.getService.mockReturnValue(null);
-    global.wx.getStorageSync.mockReturnValue(Date.now());
 
     await coordinator.checkExpiredTasksAndStars({});
 

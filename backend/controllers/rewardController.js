@@ -37,9 +37,15 @@ class RewardController {
 
   async getRewards(req, res) {
     try {
+      const effectiveUserId = await resolveTargetUserId(req, req.query.userId || req.user.userId);
+      if (!effectiveUserId) {
+        return res.status(403).json(error('无权访问该成员奖励数据', 'FAMILY_MEMBER_ACCESS_DENIED'));
+      }
+
       const rewards = await rewardService.getVisibleRewards({
         familyId: req.user.familyId,
         userId: req.user.userId,
+        targetUserId: effectiveUserId,
       });
 
       return res.json(success({

@@ -4,6 +4,42 @@
 
 ---
 
+## [里程碑-16B] - 2026-04-01
+
+### ✅ 完成情况
+
+**星星到期后端权威结算**
+
+- **后端权威结算入口**：
+  - 新增 `POST /api/stars/expiry-authority/sync`，统一承接云端模式下的已到期星星结算
+  - 新增 `backend/services/starExpiryGovernanceService.js`，按用户独立事务执行到期结算汇总
+  - 到期结算正式落到 `star_records + star_groups`：创建负向结算流水并删除已到期分组
+- **奖励保护权威迁移**：
+  - 奖励保护改为后端在奖励读取/兑换时按 `exchangeUserId` 即时计算
+  - 共享 `rewards.protected_by_expiry / partial_protection` 不再作为多孩子家庭下的全局权威
+  - 修复保护分配误纳入禁用奖励的问题，避免不可见奖励吞掉保护额度
+- **前端云端模式迁移**：
+  - `services/star-service.js` 在云端模式下跳过本地 `cleanupExpiredStars()` / `calculatePendingExpiry()` / `protectRewardsByExpiry()`
+  - bootstrap、首页、奖池页、消息正式提醒链路统一改为：权威结算 sync → 强制刷新云端星星/奖励 → 继续读取
+  - 奖励撤销兑换后补齐强制星星刷新，避免退款成功后页面继续短暂显示旧余额
+- **测试补齐**：
+  - 新增 `backend/test/integration/star-expiry-authority-m16b-real.test.js`
+  - 覆盖单用户结算、重复调用幂等、家庭范围结算与 `scope=family` 权限拒绝
+
+### 🧪 验证结果
+
+- 前端全量测试通过：68 个 suite、1617 个测试全部通过
+- 后端单元测试通过：7 个 suite、65 个测试全部通过
+- 新增后端真实集成测试通过：
+  - `npx jest test/integration/star-expiry-authority-m16b-real.test.js --runInBand`
+  - 1 个 suite、3 个测试全部通过
+
+### 📖 详细实施记录
+
+- [里程碑-16B：星星到期后端权威结算](../design/milestone-16b-star-expiry-authority-settlement.md)
+
+---
+
 ## [里程碑-16A] - 2026-03-31
 
 ### ✅ 完成情况

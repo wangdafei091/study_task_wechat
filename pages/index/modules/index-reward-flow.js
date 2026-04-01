@@ -184,11 +184,41 @@ async function loadStarsAndRewards(page) {
       effectiveUserId
     } = context;
 
+    if (effectiveUserId && typeof starService.syncExpiryAuthorityIfNeeded === 'function') {
+      try {
+        await starService.syncExpiryAuthorityIfNeeded({
+          scope: 'user',
+          userId: effectiveUserId
+        });
+      } catch (syncError) {
+        logger.warn('Index', '首页星星到期权威同步失败，继续使用现有缓存', {
+          effectiveUserId,
+          error: syncError.message
+        });
+      }
+    }
+
     if (effectiveUserId && typeof starService.refreshStarsFromCloud === 'function') {
       try {
-        await starService.refreshStarsFromCloud(effectiveUserId);
+        await starService.refreshStarsFromCloud(effectiveUserId, {
+          forceCloudAfterAuthority: true
+        });
       } catch (refreshError) {
         logger.warn('Index', '首页星星云端刷新失败，降级使用本地缓存', {
+          effectiveUserId,
+          error: refreshError.message
+        });
+      }
+    }
+
+    if (effectiveUserId && typeof rewardService.refreshRewardsFromCloud === 'function') {
+      try {
+        await rewardService.refreshRewardsFromCloud({
+          force: true,
+          userId: effectiveUserId
+        });
+      } catch (refreshError) {
+        logger.warn('Index', '首页奖励云端刷新失败，降级使用本地缓存', {
           effectiveUserId,
           error: refreshError.message
         });

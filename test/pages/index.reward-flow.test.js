@@ -108,7 +108,8 @@ describe('pages/index reward flow', () => {
 
     starService = {
       getTotalStars: jest.fn(),
-      refreshStarsFromCloud: jest.fn()
+      refreshStarsFromCloud: jest.fn(),
+      syncExpiryAuthorityIfNeeded: jest.fn().mockResolvedValue({ success: true })
     };
 
     taskService = {
@@ -194,7 +195,17 @@ describe('pages/index reward flow', () => {
 
     await page.loadStarsAndRewards();
 
-    expect(starService.refreshStarsFromCloud).toHaveBeenCalledWith('child-1');
+    expect(starService.syncExpiryAuthorityIfNeeded).toHaveBeenCalledWith({
+      scope: 'user',
+      userId: 'child-1'
+    });
+    expect(starService.refreshStarsFromCloud).toHaveBeenCalledWith('child-1', {
+      forceCloudAfterAuthority: true
+    });
+    expect(rewardService.refreshRewardsFromCloud).toHaveBeenCalledWith({
+      force: true,
+      userId: 'child-1'
+    });
     expect(starService.getTotalStars).toHaveBeenCalledWith('child-1');
     expect(rewardService.getLastExchangeTimeByUser).toHaveBeenCalledWith('parent-1');
     expect(rewardService.calculateNextAvailableReward).toHaveBeenCalledWith(6, 'parent-1');
@@ -490,7 +501,9 @@ describe('pages/index reward flow', () => {
 
     await page.loadStarsAndRewards();
 
-    expect(starService.refreshStarsFromCloud).toHaveBeenCalledWith('child-1');
+    expect(starService.refreshStarsFromCloud).toHaveBeenCalledWith('child-1', {
+      forceCloudAfterAuthority: true
+    });
     expect(starService.getTotalStars).toHaveBeenCalledWith('child-1');
     expect(page.data.userPoints).toBe(4);
   });

@@ -390,6 +390,7 @@ class MessageService {
       };
 
       try {
+        await this._syncExpiryAuthorityBeforeFormalReminders(resolved);
         const [upcomingResult, starsResult] = await Promise.allSettled([
           HttpClient.post(API_CONFIG.ENDPOINTS.TASK_UPCOMING_SYNC, payload),
           HttpClient.post(API_CONFIG.ENDPOINTS.STAR_EXPIRING_REMINDERS_SYNC, payload)
@@ -433,6 +434,28 @@ class MessageService {
     this._formalReminderSyncInFlight.set(scopeKey, syncPromise);
 
     return syncPromise;
+  }
+
+  async _syncExpiryAuthorityBeforeFormalReminders(resolved) {
+    try {
+      const serviceManager = require('./service-manager');
+      const starService = serviceManager.getService('starService') || serviceManager.getService('star');
+      if (!starService || typeof starService.syncExpiryAuthorityIfNeeded !== 'function') {
+        return;
+      }
+
+      await starService.syncExpiryAuthorityIfNeeded({
+        scope: resolved.scope,
+        userId: resolved.userId || null,
+        familyId: resolved.familyId || null
+      });
+    } catch (error) {
+      logger.warn('MessageService', '正式提醒前的星星到期权威同步失败，继续执行提醒同步', {
+        scope: resolved.scope,
+        userId: resolved.userId || null,
+        error: error.message
+      });
+    }
   }
 
   async _syncUpcomingMessagesIfNeeded(resolved) {

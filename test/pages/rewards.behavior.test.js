@@ -114,7 +114,9 @@ describe('pages/rewards/rewards behavior', () => {
 
     await page.onShow();
 
-    expect(starService.refreshStarsFromCloud).toHaveBeenCalledWith('child-1');
+    expect(starService.refreshStarsFromCloud).toHaveBeenCalledWith('child-1', {
+      forceCloudAfterAuthority: true
+    });
     expect(page.loadRewardsData).toHaveBeenCalledWith(true);
     expect(appMock.globalData.needRefreshReward).toBe(false);
     expect(appMock.globalData.hasRedirectedToReward).toBe(false);

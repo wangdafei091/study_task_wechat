@@ -264,7 +264,10 @@ describe('pages/rewards/rewards contract', () => {
 
     await page.onShow();
 
-    expect(rewardService.refreshRewardsFromCloud).toHaveBeenCalledWith({ force: true });
+    expect(rewardService.refreshRewardsFromCloud).toHaveBeenCalledWith({
+      force: true,
+      userId: 'child-2'
+    });
     expect(page.loadRewardsData).toHaveBeenCalledWith(true);
     expect(appMock.globalData.needRefreshReward).toBe(false);
   });
@@ -295,7 +298,10 @@ describe('pages/rewards/rewards contract', () => {
 
     await page.onPullDownRefresh();
 
-    expect(rewardService.refreshRewardsFromCloud).toHaveBeenCalledWith({ force: true });
+    expect(rewardService.refreshRewardsFromCloud).toHaveBeenCalledWith({
+      force: true,
+      userId: 'child-2'
+    });
     expect(page.loadRewardsData).toHaveBeenCalledWith(true);
     expect(global.wx.stopPullDownRefresh).toHaveBeenCalled();
   });

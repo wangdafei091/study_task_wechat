@@ -828,7 +828,34 @@ Authorization: Bearer <token>
 - `403` - `FAMILY_MEMBER_ACCESS_DENIED`
 - `500` - `STAR_GROUPS_GET_FAILED`
 
-### 7.6 同步星星即将过期提醒
+### 7.6 执行星星到期权威结算
+
+- Method: `POST`
+- Path: `/api/stars/expiry-authority/sync`
+- Auth: `Bearer Token`
+- Query / Body（关键字段）：
+  - `scope` - 可选，`family | user`；未传时默认 `user`
+  - `targetUserId` - `scope=user` 时可选；家长可指定同家庭孩子，孩子本人固定为自己
+  - `modifyTime`
+  - `operationKey`
+
+成功响应：
+- Status: `200`
+- Body：`data.affectedUserIds`、`data.settledGroupCount`、`data.settledPoints`、`data.createdRecordCount`、`data.invalidGroupCount`
+
+常见错误：
+- `403` - `PERMISSION_DENIED` / `FAMILY_MEMBER_ACCESS_DENIED`
+- `500` - `STAR_EXPIRY_AUTHORITY_FAILED`
+
+说明：
+- 该接口用于把“已到期星星”正式结算为后端权威流水，并删除对应已到期分组
+- 孩子 + `scope=user`：仅允许为自己触发结算
+- 家长 + `scope=user`：可为当前家庭下目标孩子触发结算；未传 `targetUserId` 时回落到当前请求用户
+- 家长 + `scope=family`：扫描家庭下全部活跃孩子，并逐个在独立事务中执行结算
+- 结算幂等键采用“用户 + 分组 + 规范化到期日”构造，重复触发不会重复落账
+- 该接口只处理到期结算，不负责 materialize 提醒消息；提醒仍使用 `/api/stars/expiring-reminders/sync`
+
+### 7.7 同步星星即将过期提醒
 
 - Method: `POST`
 - Path: `/api/stars/expiring-reminders/sync`

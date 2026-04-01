@@ -151,14 +151,24 @@ Page({
       const effectiveChildId = this._getEffectiveChildUserId();
       const shouldForceRewardRefresh = app.globalData.needRefreshReward === true;
 
+      if (starService?.syncExpiryAuthorityIfNeeded && effectiveChildId) {
+        await starService.syncExpiryAuthorityIfNeeded({
+          scope: 'user',
+          userId: effectiveChildId
+        });
+      }
+
       if (starService?.refreshStarsFromCloud && effectiveChildId) {
-        await starService.refreshStarsFromCloud(effectiveChildId);
+        await starService.refreshStarsFromCloud(effectiveChildId, {
+          forceCloudAfterAuthority: true
+        });
       } else if (!effectiveChildId) {
         logger.info('rewards', '奖励页跳过孩子星星云同步：当前没有可用的孩子视角');
       }
       if (rewardService?.refreshRewardsFromCloud) {
         await rewardService.refreshRewardsFromCloud({
-          force: shouldForceRewardRefresh
+          force: shouldForceRewardRefresh || !!effectiveChildId,
+          userId: effectiveChildId || undefined
         });
       }
     } catch (syncError) {
@@ -213,11 +223,24 @@ Page({
       const rewardService = serviceManager.getService('rewardService');
       const effectiveChildId = this._getEffectiveChildUserId();
 
+      if (starService?.syncExpiryAuthorityIfNeeded && effectiveChildId) {
+        await starService.syncExpiryAuthorityIfNeeded({
+          scope: 'user',
+          userId: effectiveChildId,
+          force: true
+        });
+      }
+
       if (starService?.refreshStarsFromCloud && effectiveChildId) {
-        await starService.refreshStarsFromCloud(effectiveChildId);
+        await starService.refreshStarsFromCloud(effectiveChildId, {
+          forceCloudAfterAuthority: true
+        });
       }
       if (rewardService?.refreshRewardsFromCloud) {
-        await rewardService.refreshRewardsFromCloud({ force: true });
+        await rewardService.refreshRewardsFromCloud({
+          force: true,
+          userId: effectiveChildId || undefined
+        });
       }
 
       await this.loadRewardsData(true);

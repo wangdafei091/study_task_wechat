@@ -16,6 +16,7 @@ const API_CONFIG = require('../utils/api-config');
 
 const STAR_REMIND_WINDOW_DAYS = 3;
 const STAR_PROTECT_WINDOW_HOURS = 48;
+const EXPIRY_AUTHORITY_SYNC_MIN_INTERVAL_MS = 10 * 1000;
 
 class StarService {
   /**
@@ -43,6 +44,8 @@ class StarService {
 
     this.enableCloudStorage = API_CONFIG.ENABLE_API;
     this._cloudRefreshInFlight = new Map();
+    this._expiryAuthoritySyncTimestamps = new Map();
+    this._expiryAuthoritySyncInFlight = new Map();
     
     logger.info('StarService', '初始化星星服务，已注入余额计算器到StarRecordRepository');
   }
@@ -53,6 +56,11 @@ class StarService {
    */
   async initialize() {
     try {
+      if (this.enableCloudStorage) {
+        logger.info('StarService', '云端模式跳过本地过期星星初始化清理');
+        return true;
+      }
+
       // 复用 cleanupExpiredStars 完整链路：过期分组清理 → 记录创建 → STARS_EXPIRED 事件 → 空组清理
       // 不传 userId，保持全量清理语义
       const result = await this.cleanupExpiredStars();
@@ -1419,7 +1427,7 @@ class StarService {
     }
 
     const hasPendingLocalRecords = await this.hasPendingLocalStarRecords(userId);
-    if (hasPendingLocalRecords) {
+    if (hasPendingLocalRecords && options.forceCloudAfterAuthority !== true) {
       logger.info('StarService', '检测到本地待同步星星流水，跳过云端星星覆盖', { userId });
       const [localGroups, localRecords] = await Promise.all([
         this.starGroupRepository.getAll(false),
@@ -1456,6 +1464,71 @@ class StarService {
       groups: cloudGroups,
       records: cloudRecords
     };
+  }
+
+  _buildExpiryAuthorityScopeKey(options = {}) {
+    const scope = options.scope === 'family' ? 'family' : 'user';
+    if (scope === 'family') {
+      return `family:${options.familyId || 'default'}`;
+    }
+    return `user:${options.userId || 'missing'}`;
+  }
+
+  async syncExpiryAuthorityIfNeeded(options = {}) {
+    if (!this.enableCloudStorage) {
+      return { success: false, skipped: true, reason: 'local_mode' };
+    }
+
+    const scope = options.scope === 'family' ? 'family' : 'user';
+    const scopeKey = this._buildExpiryAuthorityScopeKey({ ...options, scope });
+    const minIntervalMs = Number(options.minIntervalMs || EXPIRY_AUTHORITY_SYNC_MIN_INTERVAL_MS);
+    const force = options.force === true;
+    const now = Date.now();
+    const lastSyncTime = this._expiryAuthoritySyncTimestamps.get(scopeKey) || 0;
+
+    if (!force && now - lastSyncTime < minIntervalMs) {
+      return { success: true, skipped: true, reason: 'throttled' };
+    }
+
+    const inFlight = this._expiryAuthoritySyncInFlight.get(scopeKey);
+    if (inFlight) {
+      return inFlight;
+    }
+
+    const syncPromise = (async () => {
+      const payload = {
+        scope,
+        targetUserId: scope === 'user' ? options.userId : undefined,
+        modifyTime: now,
+        operationKey: `star_expiry_authority:${scopeKey}:${now}`,
+      };
+
+      try {
+        const response = await HttpClient.post(API_CONFIG.ENDPOINTS.STAR_EXPIRY_AUTHORITY_SYNC, payload);
+        this._expiryAuthoritySyncTimestamps.set(scopeKey, Date.now());
+        return {
+          success: true,
+          skipped: false,
+          affectedUserIds: response.affectedUserIds || [],
+          settledGroupCount: Number(response.settledGroupCount || 0),
+          settledPoints: Number(response.settledPoints || 0),
+          createdRecordCount: Number(response.createdRecordCount || 0),
+          invalidGroupCount: Number(response.invalidGroupCount || 0),
+        };
+      } catch (error) {
+        logger.warn('StarService', '星星到期权威结算同步失败，继续使用现有缓存', {
+          scope,
+          userId: options.userId || null,
+          error: error.message
+        });
+        return { success: false, skipped: false, error: error.message };
+      } finally {
+        this._expiryAuthoritySyncInFlight.delete(scopeKey);
+      }
+    })();
+
+    this._expiryAuthoritySyncInFlight.set(scopeKey, syncPromise);
+    return syncPromise;
   }
 
   async _syncStarRecordToCloud(record) {
@@ -1643,6 +1716,10 @@ class StarService {
    * @returns {Promise<Number>} 即将过期的星星数量
    */
   async calculatePendingExpiry(userId = null) {
+    if (this.enableCloudStorage) {
+      logger.info('StarService', '云端模式跳过本地即将过期星星计算');
+      return 0;
+    }
     try {
       // 获取所有分组
       const allGroups = await this.starGroupRepository.getAll();
@@ -1679,6 +1756,10 @@ class StarService {
    * @returns {Promise<Object>} 保护结果
    */
   async protectRewardsByExpiry(expiredStars, userId) {
+    if (this.enableCloudStorage) {
+      logger.info('StarService', '云端模式跳过本地奖励过期保护');
+      return { success: true, protectedCount: 0, protectedRewards: [], skipped: true };
+    }
     // 添加调试：方法开始
     logger.info('StarService', `🔍 保护调试开始: expiredStars=${expiredStars}, userId=${userId}`);
     
@@ -1787,6 +1868,16 @@ class StarService {
    * @returns {Promise<Object>} 清理结果包含：success, expiredCount, totalPoints, records
    */
   async cleanupExpiredStars(userId = null) {
+    if (this.enableCloudStorage) {
+      logger.info('StarService', '云端模式跳过本地过期星星清理');
+      return {
+        success: true,
+        expiredCount: 0,
+        totalPoints: 0,
+        skipped: true,
+        message: '云端模式由后端权威处理'
+      };
+    }
     try {
       // 清理过期分组
       const expiredGroups = await this.starGroupRepository.cleanupExpiredGroups(userId);
