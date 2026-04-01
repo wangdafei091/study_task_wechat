@@ -209,7 +209,7 @@ describe('pages/index reward flow', () => {
     expect(starService.getTotalStars).toHaveBeenCalledWith('child-1');
     expect(rewardService.getLastExchangeTimeByUser).toHaveBeenCalledWith('parent-1');
     expect(rewardService.calculateNextAvailableReward).toHaveBeenCalledWith(6, 'parent-1');
-    expect(rewardService.getAvailableRewards).toHaveBeenCalledWith(true, false, 'parent-1');
+    expect(rewardService.getAvailableRewards).toHaveBeenCalledWith(false, false, 'parent-1');
     expect(starService.refreshStarsFromCloud.mock.invocationCallOrder[0])
       .toBeLessThan(starService.getTotalStars.mock.invocationCallOrder[0]);
     expect(formatUtils.formatPoints).toHaveBeenCalledWith(6, true);
@@ -318,7 +318,7 @@ describe('pages/index reward flow', () => {
     await page.checkRewardUnlock();
 
     expect(starService.getTotalStars).toHaveBeenCalledWith('child-1');
-    expect(rewardService.getAvailableRewards).toHaveBeenCalledWith(true, false, 'parent-1');
+    expect(rewardService.getAvailableRewards).toHaveBeenCalledWith(false, false, 'parent-1');
     expect(page._handleRewardCompletion).toHaveBeenCalledWith(null, 10);
     expect(page.data.completedReward).toEqual(expect.objectContaining({ id: 'reward-1', name: '看动画片' }));
     expect(page.data.completedRewardTotal).toBe(10);
@@ -339,7 +339,7 @@ describe('pages/index reward flow', () => {
     await page._handleRewardCompletion({ current: 6, total: 10 }, 10);
 
     expect(starService.getTotalStars).toHaveBeenCalledWith('child-1');
-    expect(rewardService.getAvailableRewards).toHaveBeenCalledWith(true, false, 'parent-1');
+    expect(rewardService.getAvailableRewards).toHaveBeenCalledWith(false, false, 'parent-1');
     expect(page.data.userPoints).toBe(6);
     expect(page.data.rewardProgress).toEqual({ current: 10, total: 10 });
     expect(page.data.visibleRewards).toEqual([

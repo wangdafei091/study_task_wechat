@@ -106,8 +106,9 @@ async function checkExpiredTasksAndStars(page) {
 async function loadAllPageData(page, options = {}) {
   try {
     logger.info('Index', '开始批量加载页面数据');
+    const targetDate = page.data.currentViewDate || null;
     const [tasksResult, messagesResult, starsResult] = await Promise.allSettled([
-      page.loadTaskDataOnly(),
+      page.loadTaskDataOnly(targetDate),
       page.loadMessageData({
         skipExpiryAuthoritySyncBeforeFormalReminders:
           options.skipExpiryAuthoritySyncBeforeFormalReminders === true

@@ -13,6 +13,15 @@ const userContextModule = require('./modules/index-user-context');
 const taskActionsModule = require('./modules/index-task-actions');
 const rewardFlowModule = require('./modules/index-reward-flow');
 
+function getMondayOfWeek(date) {
+  const target = new Date(date);
+  const day = target.getDay();
+  const diff = (day + 6) % 7;
+  target.setDate(target.getDate() - diff);
+  target.setHours(0, 0, 0, 0);
+  return target;
+}
+
 Page({
   data: {
     userInfo: {},
@@ -157,6 +166,13 @@ Page({
     lastActiveChildId: null,   // 家长最近查看的孩子ID（家长视角时任务仍显示该孩子）
 
     // 日期导航相关
+    weekOffset: 0, // 0=本周, -1=上周
+    weekLabel: '本周',
+    canGoPrevWeek: true,
+    canGoNextWeek: false,
+    isViewingToday: true,
+    isViewingPast: false,
+    isViewingFuture: false,
     currentViewDate: null, // 当前查看的日期（YYYY-MM-DD格式）
     dateNavigation: [], // 日期导航数据数组
     pageTitle: '今日任务', // 页面标题，根据选择的日期动态更新
@@ -377,8 +393,10 @@ Page({
         tasks: tasks,
         hasTodayTasks: (tasks && tasks.length > 0),
         currentViewDate: targetDate,
-        pageTitle: isToday ? '今日任务' : `${this.formatDateTitle(targetDate)}任务`
+        pageTitle: this.getPageTitleForDate(targetDate)
       });
+
+      this._updateViewState(targetDate);
       
       // 检查任务进度
       await this.calculateProgress(tasks);
@@ -542,6 +560,17 @@ Page({
       logger.info('Index', '开始检查即将到期任务');
       logger.info('Index', '当前upcomingTask状态', this.data.upcomingTask);
       logger.info('Index', '当前showUpcomingTask状态', this.data.showUpcomingTask);
+
+      const todayString = dateUtils.getTodayString();
+      if (this.data.currentViewDate && this.data.currentViewDate !== todayString) {
+        logger.info('Index', '当前不是今天视图，隐藏即将到期任务提醒', {
+          currentViewDate: this.data.currentViewDate
+        });
+        this.setData({
+          showUpcomingTask: false
+        });
+        return;
+      }
       
       // 获取任务服务
       const taskService = serviceManager.getService('task');
@@ -606,31 +635,74 @@ Page({
     return `${month}月${day}日`;
   },
 
+  getPageTitleForDate: function(dateString) {
+    const todayString = dateUtils.getTodayString();
+    if (!dateString || dateString === todayString) {
+      return '今日任务';
+    }
+
+    if (dateString > todayString) {
+      return `${this.formatDateTitle(dateString)}任务（预览）`;
+    }
+
+    return `${this.formatDateTitle(dateString)}任务`;
+  },
+
   /**
    * 生成日期导航数据
    * @returns {Array} 日期导航数组
    */
   generateDateNavigation: function() {
     const dates = [];
-    const today = new Date();
-    const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
-    
-    // 生成7天：今天往前推6天到今天
-    for (let i = -6; i <= 0; i++) {
-      const date = new Date(today);
+    const todayString = dateUtils.getTodayString();
+    const weekdays = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+    const monday = getMondayOfWeek(new Date(todayString));
+    monday.setDate(monday.getDate() + (this.data.weekOffset || 0) * 7);
+
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(monday);
       date.setDate(date.getDate() + i);
       const dateString = dateUtils.formatDate(date);
-      const weekday = weekdays[date.getDay()];
-      
+
       dates.push({
-        dateString: dateString,
-        label: i === 0 ? '今天' : weekday,
-        isToday: i === 0,
-        isHistorical: i < 0
+        dateString,
+        label: dateString === todayString ? '今天' : weekdays[i],
+        isToday: dateString === todayString,
+        isPast: dateString < todayString,
+        isFuture: dateString > todayString,
+        dayOfWeek: i + 1
       });
     }
     
     return dates;
+  },
+
+  getDefaultSelectedDateForCurrentWeek: function() {
+    if ((this.data.weekOffset || 0) === 0) {
+      return dateUtils.getTodayString();
+    }
+
+    const dateNavigation = this.generateDateNavigation();
+    return dateNavigation[0] ? dateNavigation[0].dateString : dateUtils.getTodayString();
+  },
+
+  _updateViewState: function(selectedDate) {
+    const todayString = dateUtils.getTodayString();
+    const isViewingToday = selectedDate === todayString;
+    const isViewingPast = selectedDate < todayString;
+    const isViewingFuture = selectedDate > todayString;
+    const weekOffset = this.data.weekOffset || 0;
+
+    this.setData({
+      isViewingToday,
+      isViewingPast,
+      isViewingFuture,
+      weekLabel: weekOffset === 0 ? '本周' : '上周',
+      canGoPrevWeek: weekOffset > -1,
+      canGoNextWeek: weekOffset < 0
+    });
+
+    this.updateMenuItemsWithPermissions();
   },
 
   /**
@@ -641,15 +713,154 @@ Page({
     const todayString = dateUtils.getTodayString();
     
     this.setData({
+      weekOffset: 0,
       dateNavigation: dateNavigation,
       currentViewDate: todayString,
-      pageTitle: '今日任务'
+      pageTitle: this.getPageTitleForDate(todayString),
+      weekLabel: '本周',
+      canGoPrevWeek: true,
+      canGoNextWeek: false,
+      isViewingToday: true,
+      isViewingPast: false,
+      isViewingFuture: false
     });
     
     logger.info('Index', '日期导航初始化完成', {
       dateCount: dateNavigation.length,
       currentDate: todayString
     });
+  },
+
+  _captureDateViewSnapshot: function() {
+    return JSON.parse(JSON.stringify({
+      weekOffset: this.data.weekOffset,
+      weekLabel: this.data.weekLabel,
+      canGoPrevWeek: this.data.canGoPrevWeek,
+      canGoNextWeek: this.data.canGoNextWeek,
+      isViewingToday: this.data.isViewingToday,
+      isViewingPast: this.data.isViewingPast,
+      isViewingFuture: this.data.isViewingFuture,
+      currentViewDate: this.data.currentViewDate,
+      dateNavigation: this.data.dateNavigation || [],
+      pageTitle: this.data.pageTitle,
+      tasks: this.data.tasks || [],
+      hasTodayTasks: this.data.hasTodayTasks,
+      taskProgress: this.data.taskProgress || {},
+      stats: this.data.stats || {},
+      showUpcomingTask: this.data.showUpcomingTask,
+      upcomingTask: this.data.upcomingTask || null,
+      menuItems: this.data.menuItems || []
+    }));
+  },
+
+  _refreshUpcomingTasksAfterDateChange: async function() {
+    try {
+      await this.checkUpcomingTasks();
+    } catch (error) {
+      logger.error('Index', '刷新即将到期任务提醒失败', error);
+    }
+  },
+
+  onDateNavTouchStart: function(e) {
+    const touch = e && e.touches && e.touches[0];
+    if (!touch) {
+      return;
+    }
+
+    this._dateNavTouchStartX = Number.isFinite(touch.pageX) ? touch.pageX : touch.clientX;
+    this._dateNavTouchStartY = Number.isFinite(touch.pageY) ? touch.pageY : touch.clientY;
+  },
+
+  onDateNavTouchEnd: function(e) {
+    const touch = (e && e.changedTouches && e.changedTouches[0])
+      || (e && e.touches && e.touches[0]);
+    if (!touch || typeof this._dateNavTouchStartX !== 'number') {
+      return;
+    }
+
+    const endX = Number.isFinite(touch.pageX) ? touch.pageX : touch.clientX;
+    const endY = Number.isFinite(touch.pageY) ? touch.pageY : touch.clientY;
+    if (!Number.isFinite(endX) || !Number.isFinite(endY)) {
+      this._dateNavTouchStartX = null;
+      this._dateNavTouchStartY = null;
+      return;
+    }
+
+    const deltaX = endX - this._dateNavTouchStartX;
+    const deltaY = endY - (this._dateNavTouchStartY || 0);
+    this._dateNavTouchStartX = null;
+    this._dateNavTouchStartY = null;
+
+    if (Math.abs(deltaX) < 50 || Math.abs(deltaX) <= Math.abs(deltaY)) {
+      return;
+    }
+
+    if (deltaX < 0) {
+      this.onPrevWeek();
+      return;
+    }
+
+    this.onNextWeek();
+  },
+
+  _refreshAfterWeekChange: async function(targetWeekOffset) {
+    const snapshot = this._captureDateViewSnapshot();
+    this.setData({
+      weekOffset: targetWeekOffset
+    });
+
+    const dateNavigation = this.generateDateNavigation();
+    const selectedDate = this.getDefaultSelectedDateForCurrentWeek();
+
+    this.setData({
+      dateNavigation,
+      currentViewDate: selectedDate
+    });
+    this._updateViewState(selectedDate);
+
+    try {
+      wx.showLoading({
+        title: '加载中...',
+        mask: true
+      });
+      await this.loadTaskDataOnly(selectedDate);
+      await this._refreshUpcomingTasksAfterDateChange();
+    } catch (error) {
+      logger.error('Index', '翻周后刷新任务失败', error);
+      this.setData(snapshot);
+      wx.showToast({
+        title: '加载失败',
+        icon: 'none',
+        duration: 2000
+      });
+    } finally {
+      wx.hideLoading();
+    }
+  },
+
+  onPrevWeek: function() {
+    if ((this.data.weekOffset || 0) === -1) {
+      return;
+    }
+
+    return this._refreshAfterWeekChange((this.data.weekOffset || 0) - 1);
+  },
+
+  onNextWeek: function() {
+    if ((this.data.weekOffset || 0) === 0) {
+      return;
+    }
+
+    return this._refreshAfterWeekChange((this.data.weekOffset || 0) + 1);
+  },
+
+  onBackToToday: async function() {
+    const todayString = dateUtils.getTodayString();
+    if (this.data.currentViewDate === todayString && (this.data.weekOffset || 0) === 0) {
+      return;
+    }
+
+    return this._refreshAfterWeekChange(0);
   },
 
   /**
@@ -683,6 +894,7 @@ Page({
       
       // 加载指定日期的任务
       await this.loadTaskDataOnly(date);
+      await this._refreshUpcomingTasksAfterDateChange();
       
       logger.info('Index', `日期切换成功: ${date}`);
     } catch (error) {
@@ -1825,9 +2037,23 @@ Page({
 
     // 只读视角（孩子视角）下额外过滤掉任务创建和奖励管理入口
     // M07：分析页已支持按角色隔离数据，全面开放所有视角均可进入
-    const { isReadonlyView } = this.data;
+    const { isReadonlyView, isViewingToday } = this.data;
     const finalMenuItems = filteredMenuItems
-      .filter(item => !isReadonlyView || (item.id !== 'habit' && item.id !== 'reward-manage'));
+      .filter((item) => {
+        if (item.id === 'study') {
+          return true;
+        }
+
+        if (!isViewingToday) {
+          return false;
+        }
+
+        if (isReadonlyView && (item.id === 'habit' || item.id === 'reward-manage')) {
+          return false;
+        }
+
+        return true;
+      });
     
     this.setData({
       menuItems: finalMenuItems

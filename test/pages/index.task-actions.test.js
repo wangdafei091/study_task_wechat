@@ -49,6 +49,7 @@ describe('pages/index/modules/index-task-actions', () => {
       data: {
         processingTaskId: null,
         currentUser: { id: 'child-1' },
+        isViewingFuture: false,
         tasks: [{
           id: 'task-1',
           title: '任务1',
@@ -165,6 +166,37 @@ describe('pages/index/modules/index-task-actions', () => {
     });
     expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({
       title: '操作失败'
+    }));
+  });
+
+  it('未来日期下应阻止完成和切换任务状态', async () => {
+    const taskService = {
+      completeTask: jest.fn(),
+      resetTask: jest.fn(),
+      updateTaskStatus: jest.fn()
+    };
+    serviceManager.getService.mockImplementation((name) => {
+      if (name === 'task') return taskService;
+      return null;
+    });
+    serviceManager.getTaskService.mockReturnValue(taskService);
+
+    const page = createPage();
+    page.data.isViewingFuture = true;
+
+    await taskActions.completeTask(page, { detail: { taskId: 'task-1' } });
+    expect(taskService.completeTask).not.toHaveBeenCalled();
+    expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({
+      title: '未来日期仅支持查看'
+    }));
+
+    global.wx.showToast.mockClear();
+    await taskActions.taskItemStatusToggle(page, {
+      detail: { id: 'task-1', newStatus: 1 }
+    });
+    expect(taskService.updateTaskStatus).not.toHaveBeenCalled();
+    expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({
+      title: '未来日期仅支持查看'
     }));
   });
 

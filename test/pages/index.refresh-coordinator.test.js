@@ -163,7 +163,7 @@ describe('pages/index/modules/index-refresh-coordinator', () => {
     });
 
     const page = {
-      data: { currentUser: { name: '小明' } },
+      data: { currentUser: { name: '小明' }, currentViewDate: '2026-03-20' },
       getEffectiveTaskUserId: jest.fn(() => 'child-1'),
       loadTaskDataOnly: jest.fn().mockResolvedValue(),
       loadMessageData: jest.fn().mockResolvedValue(),
@@ -183,6 +183,7 @@ describe('pages/index/modules/index-refresh-coordinator', () => {
       scope: 'user',
       userId: 'child-1'
     });
+    expect(page.loadTaskDataOnly).toHaveBeenCalledWith('2026-03-20');
     expect(page.checkUpcomingTasks).toHaveBeenCalled();
     expect(page.loadMessageData).toHaveBeenCalledWith({
       skipExpiryAuthoritySyncBeforeFormalReminders: true
@@ -227,6 +228,7 @@ describe('pages/index/modules/index-refresh-coordinator', () => {
 
   it('loadAllPageData 遇到同步异常时应提示失败', async () => {
     const page = {
+      data: { currentViewDate: '2026-03-26' },
       loadTaskDataOnly: jest.fn(() => {
         throw new Error('sync task error');
       }),

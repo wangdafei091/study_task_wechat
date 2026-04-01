@@ -116,6 +116,10 @@ Component({
     readonly: {
       type: Boolean,
       value: false
+    },
+    readonlyReason: {
+      type: String,
+      value: ''
     }
   },
 
@@ -151,7 +155,10 @@ Component({
     onCheckboxTap: function(e) {
       // 家庭视角只读模式：禁用完成/重置操作
       if (this.properties.readonly) {
-        wx.showToast({ title: '请在自己设备上操作', icon: 'none', duration: 1500 });
+        const title = this.properties.readonlyReason === 'future-date'
+          ? '未来日期仅支持查看'
+          : '请在自己设备上操作';
+        wx.showToast({ title, icon: 'none', duration: 1500 });
         return;
       }
 

@@ -18,7 +18,13 @@ jest.mock('../../services/service-manager.js', () => ({
 jest.mock('../../utils/dateUtils', () => ({
   formatRelativeTime: jest.fn(() => '刚刚'),
   getTodayString: jest.fn(() => '2026-03-26'),
-  formatDate: jest.fn(() => '2026-03-26')
+  formatDate: jest.fn((date) => {
+    const target = new Date(date);
+    const year = target.getFullYear();
+    const month = String(target.getMonth() + 1).padStart(2, '0');
+    const day = String(target.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  })
 }));
 
 jest.mock('../../utils/permission-utils', () => ({
@@ -286,16 +292,22 @@ describe('pages/index/index shell behavior', () => {
     page.data.currentUser = { id: 'child-1', role: 'child' };
     page.calculateProgress = jest.fn().mockResolvedValue();
     page.updateTaskStats = jest.fn().mockResolvedValue();
-    page.checkUpcomingTasks = jest.fn().mockResolvedValue();
 
     await page.loadTaskDataOnly();
     expect(taskService.getTodayTasks).toHaveBeenCalledWith('child-1', { requireFreshStars: true });
     expect(page.data.currentViewDate).toBe('2026-03-26');
     expect(page.data.pageTitle).toBe('今日任务');
+    expect(page.data.isViewingToday).toBe(true);
 
     await page.loadTaskDataOnly('2026-03-20');
     expect(taskService.getTasksByDate).toHaveBeenCalledWith('2026-03-20', 'child-1', { requireFreshStars: true });
     expect(page.data.pageTitle).toBe('3月20日任务');
+    expect(page.data.isViewingPast).toBe(true);
+
+    taskService.getTasksByDate.mockResolvedValueOnce([{ id: 'task-3', title: '未来任务', status: 0 }]);
+    await page.loadTaskDataOnly('2026-03-28');
+    expect(page.data.pageTitle).toBe('3月28日任务（预览）');
+    expect(page.data.isViewingFuture).toBe(true);
 
     page.loadTaskDataOnly = jest.fn().mockRejectedValue(new Error('boom'));
     await page.loadTaskData();
@@ -325,11 +337,16 @@ describe('pages/index/index shell behavior', () => {
     await page.updateTaskStats();
     expect(page.data.stats.totalTasks).toBe(2);
 
+    page.data.currentViewDate = '2026-03-26';
     await page.checkUpcomingTasks();
     expect(page.data.showUpcomingTask).toBe(true);
     expect(page.data.upcomingTask.id).toBe('task-upcoming');
 
     taskService.checkUpcomingTasks.mockResolvedValueOnce({ success: true, tasks: [] });
+    await page.checkUpcomingTasks();
+    expect(page.data.showUpcomingTask).toBe(false);
+
+    page.data.currentViewDate = '2026-03-27';
     await page.checkUpcomingTasks();
     expect(page.data.showUpcomingTask).toBe(false);
   });
@@ -352,10 +369,60 @@ describe('pages/index/index shell behavior', () => {
     expect(page.data.unreadCount).toBe(2);
   });
 
-  it('日期导航与日期切换应处理缺参、重复点击、成功和失败分支', async () => {
+  it('日期导航、翻周与日期切换应处理缺参、边界、手势、成功和失败分支', async () => {
     page.initializeDateNavigation();
     expect(page.data.currentViewDate).toBe('2026-03-26');
     expect(page.data.dateNavigation).toHaveLength(7);
+    expect(page.data.dateNavigation.map((item) => item.dateString)).toEqual([
+      '2026-03-23',
+      '2026-03-24',
+      '2026-03-25',
+      '2026-03-26',
+      '2026-03-27',
+      '2026-03-28',
+      '2026-03-29'
+    ]);
+
+    page.loadTaskDataOnly = jest.fn().mockResolvedValue();
+    page.checkUpcomingTasks = jest.fn().mockResolvedValue();
+    await page.onPrevWeek();
+    expect(page.loadTaskDataOnly).toHaveBeenCalledWith('2026-03-16');
+    expect(page.checkUpcomingTasks).toHaveBeenCalled();
+    expect(page.data.weekOffset).toBe(-1);
+    expect(page.data.canGoPrevWeek).toBe(false);
+    expect(page.data.canGoNextWeek).toBe(true);
+
+    page.loadTaskDataOnly.mockClear();
+    page.checkUpcomingTasks.mockClear();
+    await page.onPrevWeek();
+    expect(page.loadTaskDataOnly).not.toHaveBeenCalled();
+    expect(page.checkUpcomingTasks).not.toHaveBeenCalled();
+
+    page.checkUpcomingTasks.mockClear();
+    await page.onNextWeek();
+    expect(page.loadTaskDataOnly).toHaveBeenCalledWith('2026-03-26');
+    expect(page.checkUpcomingTasks).toHaveBeenCalled();
+    expect(page.data.weekOffset).toBe(0);
+    expect(page.data.canGoPrevWeek).toBe(true);
+    expect(page.data.canGoNextWeek).toBe(false);
+
+    page.onDateNavTouchStart({ touches: [{ clientX: 200, clientY: 10 }] });
+    page.onPrevWeek = jest.fn();
+    page.onDateNavTouchEnd({ changedTouches: [{ clientX: 120, clientY: 14 }] });
+    expect(page.onPrevWeek).toHaveBeenCalled();
+
+    page.onDateNavTouchStart({ touches: [{ clientX: 120, clientY: 10 }] });
+    page.onNextWeek = jest.fn();
+    page.onDateNavTouchEnd({ changedTouches: [{ clientX: 200, clientY: 16 }] });
+    expect(page.onNextWeek).toHaveBeenCalled();
+
+    page.onDateNavTouchStart({ touches: [{ pageX: 220, pageY: 10 }] });
+    page.onPrevWeek = jest.fn();
+    page.onDateNavTouchEnd({ changedTouches: [{ pageX: 120, pageY: 18 }] });
+    expect(page.onPrevWeek).toHaveBeenCalled();
+
+    global.wx.showLoading.mockClear();
+    global.wx.hideLoading.mockClear();
 
     await page.onDateButtonTap({ currentTarget: { dataset: {} } });
     expect(global.wx.showLoading).not.toHaveBeenCalled();
@@ -364,9 +431,11 @@ describe('pages/index/index shell behavior', () => {
     expect(global.wx.showLoading).not.toHaveBeenCalled();
 
     page.loadTaskDataOnly = jest.fn().mockResolvedValue();
-    await page.onDateButtonTap({ currentTarget: { dataset: { date: '2026-03-25' } } });
+    page.checkUpcomingTasks = jest.fn().mockResolvedValue();
+    await page.onDateButtonTap({ currentTarget: { dataset: { date: '2026-03-27' } } });
     expect(global.wx.showLoading).toHaveBeenCalled();
-    expect(page.loadTaskDataOnly).toHaveBeenCalledWith('2026-03-25');
+    expect(page.loadTaskDataOnly).toHaveBeenCalledWith('2026-03-27');
+    expect(page.checkUpcomingTasks).toHaveBeenCalled();
     expect(global.wx.hideLoading).toHaveBeenCalled();
 
     page.loadTaskDataOnly.mockRejectedValueOnce(new Error('boom'));
@@ -374,6 +443,50 @@ describe('pages/index/index shell behavior', () => {
     expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({
       title: '加载失败'
     }));
+
+    global.wx.showLoading.mockClear();
+    global.wx.hideLoading.mockClear();
+    page.loadTaskDataOnly = jest.fn().mockResolvedValue();
+    page.checkUpcomingTasks = jest.fn().mockResolvedValue();
+    page.setData({
+      weekOffset: -1,
+      currentViewDate: '2026-03-16',
+      isViewingToday: false
+    });
+
+    await page.onBackToToday();
+    expect(page.data.weekOffset).toBe(0);
+    expect(page.data.currentViewDate).toBe('2026-03-26');
+    expect(page.loadTaskDataOnly).toHaveBeenCalledWith('2026-03-26');
+    expect(page.checkUpcomingTasks).toHaveBeenCalled();
+    expect(global.wx.showLoading).toHaveBeenCalled();
+    expect(global.wx.hideLoading).toHaveBeenCalled();
+
+    global.wx.showLoading.mockClear();
+    page.loadTaskDataOnly.mockClear();
+    page.checkUpcomingTasks.mockClear();
+    await page.onBackToToday();
+    expect(global.wx.showLoading).not.toHaveBeenCalled();
+    expect(page.loadTaskDataOnly).not.toHaveBeenCalled();
+    expect(page.checkUpcomingTasks).not.toHaveBeenCalled();
+
+    page.initializeDateNavigation();
+    page.setData({
+      tasks: [{ id: 'task-old', title: '旧任务' }],
+      pageTitle: '今日任务',
+      weekOffset: 0,
+      currentViewDate: '2026-03-26',
+      isViewingToday: true
+    });
+    page.loadTaskDataOnly = jest.fn().mockRejectedValue(new Error('week-fail'));
+    page.checkUpcomingTasks = jest.fn();
+
+    await page.onPrevWeek();
+    expect(page.data.weekOffset).toBe(0);
+    expect(page.data.currentViewDate).toBe('2026-03-26');
+    expect(page.data.pageTitle).toBe('今日任务');
+    expect(page.data.tasks).toEqual([{ id: 'task-old', title: '旧任务' }]);
+    expect(page.checkUpcomingTasks).not.toHaveBeenCalled();
   });
 
   it('导航、消息预览和基础事件拦截应按预期工作', () => {
@@ -600,6 +713,16 @@ describe('pages/index/index shell behavior', () => {
     page.updateMenuItemsWithPermissions();
     expect(page.data.menuItems).toHaveLength(1);
     expect(page.data.menuItems[0]).toEqual(expect.objectContaining({ id: 'study' }));
+
+    permissionUtils.filterMenuItems.mockReturnValueOnce([
+      { id: 'study' },
+      { id: 'habit' },
+      { id: 'reward-manage' }
+    ]);
+    page.data.isReadonlyView = false;
+    page.data.isViewingToday = false;
+    page.updateMenuItemsWithPermissions();
+    expect(page.data.menuItems).toEqual([{ id: 'study' }]);
 
     page.showUserSwitcher = jest.fn();
     page.navigateToUserProfile();
