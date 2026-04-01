@@ -24,7 +24,7 @@
   background: linear-gradient(to bottom, #ffffff, #fefeff);
   position: sticky;
   top: 0;
-  z-index: 10;
+  z-index: 30;
   box-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.05);
   margin-bottom: 10rpx;
   transition: all var(--transition-normal);
