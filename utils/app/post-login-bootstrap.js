@@ -94,6 +94,11 @@ async function bootstrapStarService(starService) {
     logger.info('App', '初始化星星服务并清理过期星星');
     await starService.initialize();
 
+    if (starService.enableCloudStorage) {
+      logger.info('App', '云端模式跳过本地星星一致性检查和修复');
+      return;
+    }
+
     logger.info('App', '开始检查并修复星星数据一致性');
     const repairResult = await starService.checkAndRepairDataConsistency();
     if (repairResult.success) {

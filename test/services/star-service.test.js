@@ -1640,6 +1640,18 @@ describe('StarService', () => {
   });
 
   describe('checkAndRepairDataConsistency - 数据修复', () => {
+    it('云端模式下应跳过本地一致性检查和修复', async () => {
+      starService.enableCloudStorage = true;
+
+      const result = await starService.checkAndRepairDataConsistency();
+
+      expect(result.success).toBe(true);
+      expect(result.skipped).toBe(true);
+      expect(result.reason).toBe('cloud_mode');
+      expect(mockStarGroupRepository.getAll).not.toHaveBeenCalled();
+      expect(mockStarRecordRepository.repairRecordBalances).not.toHaveBeenCalled();
+    });
+
     it('应该成功执行检查和修复', async () => {
       mockStarGroupRepository.getAll = jest.fn().mockResolvedValue([{ stars: 10 }]);
       mockStarRecordRepository.getAll = jest.fn().mockResolvedValue([{ points: 10 }]);

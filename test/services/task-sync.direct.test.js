@@ -175,6 +175,42 @@ describe('task-sync direct behavior', () => {
     })).rejects.toThrow('patch fail');
   });
 
+  it('syncStatusToCloud 对相同 operationKey 的并发调用应复用同一次请求', async () => {
+    let resolvePatch;
+    const patchPromise = new Promise((resolve) => {
+      resolvePatch = resolve;
+    });
+    const service = {
+      enableCloudStorage: true,
+      _buildTaskPendingSyncMeta: jest.fn(() => ({
+        operationKey: 'op_reuse',
+        modifyTime: 303,
+        operatorUserId: 'parent_1',
+        operatorRole: 'parent',
+        familyId: 'family_1'
+      })),
+      _markTaskSynced: jest.fn(async () => true)
+    };
+    const task = {
+      id: 'task_reuse',
+      status: TaskStatus.COMPLETED,
+      starAwarded: true,
+      modifyTime: 300
+    };
+
+    mockHttpClient.patch.mockReturnValueOnce(patchPromise);
+
+    const firstCall = taskSync.syncStatusToCloud(service, task);
+    const secondCall = taskSync.syncStatusToCloud(service, task);
+
+    expect(mockHttpClient.patch).toHaveBeenCalledTimes(1);
+
+    resolvePatch({});
+    await Promise.all([firstCall, secondCall]);
+
+    expect(service._markTaskSynced).toHaveBeenCalledTimes(1);
+  });
+
   it('syncRequiredStateToCloud 应根据动作选择 required/unrequired 端点', async () => {
     const service = {
       enableCloudStorage: true,
@@ -224,5 +260,25 @@ describe('task-sync direct behavior', () => {
       isRequired: true,
       modifyTime: 305
     })).rejects.toThrow('required fail');
+  });
+
+  it('migrateTasksToChild 在本地模式下应直接迁移本地任务', async () => {
+    const task1 = { id: 'task_1', userId: 'parent_1' };
+    const task2 = { id: 'task_2', userId: 'parent_1' };
+    const service = {
+      enableCloudStorage: false,
+      taskRepository: {
+        getByUserId: jest.fn().mockResolvedValue([task1, task2]),
+        saveAll: jest.fn().mockResolvedValue([task1, task2])
+      }
+    };
+
+    const result = await taskSync.migrateTasksToChild(service, 'parent_1', 'child_1');
+
+    expect(result).toEqual({ success: true, count: 2 });
+    expect(mockHttpClient.post).not.toHaveBeenCalled();
+    expect(task1.userId).toBe('child_1');
+    expect(task2.userId).toBe('child_1');
+    expect(service.taskRepository.saveAll).toHaveBeenCalledWith([task1, task2]);
   });
 });

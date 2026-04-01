@@ -75,7 +75,9 @@ async function onShow(page) {
   await page.checkExpiredTasksAndStars();
 
   logger.debug('Index', '页面显示时批量加载所有数据');
-  page.loadAllPageData();
+  page.loadAllPageData({
+    skipExpiryAuthoritySyncBeforeFormalReminders: true
+  });
 }
 
 async function waitForLoginComplete(page) {

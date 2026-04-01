@@ -224,6 +224,29 @@ describe('pages/index reward flow', () => {
     expect(page.data.rewardHintText).toBe('');
   });
 
+  it('loadStarsAndRewards 在 skipAuthoritySync=true 时不应重复触发 authority sync', async () => {
+    const page = createPageInstance();
+    page.getEffectiveTaskUserId = jest.fn(() => 'child-1');
+
+    starService.refreshStarsFromCloud.mockResolvedValue({ success: true });
+    starService.getTotalStars.mockResolvedValue(6);
+    rewardService.getLastExchangeTimeByUser.mockResolvedValue(null);
+    rewardService.calculateNextAvailableReward.mockResolvedValue({
+      id: 'reward-1',
+      name: '看动画片',
+      points: 10,
+      icon: '🎁'
+    });
+    rewardService.getAvailableRewards.mockResolvedValue([]);
+
+    await page.loadStarsAndRewards({ skipAuthoritySync: true });
+
+    expect(starService.syncExpiryAuthorityIfNeeded).not.toHaveBeenCalled();
+    expect(starService.refreshStarsFromCloud).toHaveBeenCalledWith('child-1', {
+      forceCloudAfterAuthority: true
+    });
+  });
+
   it('loadStarsAndRewards 在共享设备孩子视角且无正式奖励时，应显示孩子提示并过滤示例奖励', async () => {
     const page = createPageInstance();
     page.getEffectiveTaskUserId = jest.fn(() => 'child-1');

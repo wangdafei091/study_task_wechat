@@ -3,6 +3,7 @@
  */
 
 const rewardService = require('../services/rewardService');
+const familyService = require('../services/familyService');
 const { success, error } = require('../utils/response');
 const { createLogger } = require('../utils/logger');
 const { resolveTargetUserId } = require('../utils/resolveTargetUserId');
@@ -10,10 +11,31 @@ const { resolveTargetUserId } = require('../utils/resolveTargetUserId');
 const logger = createLogger('RewardController');
 
 class RewardController {
-  _buildOperatorContext(req, fallbackOperationKey = null) {
+  async _buildOperatorContext(req, subjectUserId = null, fallbackOperationKey = null, options = {}) {
+    const requestedActorUserId = req.body?.operatorContext?.actorUserId || req.user.userId;
+    let actorUserId = req.user.userId;
+    let actorRole = req.user.role;
+    const allowSubjectActorOverride = options.allowSubjectActorOverride === true;
+
+    if (
+      allowSubjectActorOverride &&
+      req.user.role === 'parent' &&
+      req.user.familyId &&
+      subjectUserId &&
+      requestedActorUserId &&
+      requestedActorUserId !== req.user.userId &&
+      requestedActorUserId === subjectUserId
+    ) {
+      const actorInfo = await familyService.getUserFamilyAndRole(requestedActorUserId);
+      if (actorInfo && actorInfo.familyId === req.user.familyId && actorInfo.role === 'child') {
+        actorUserId = requestedActorUserId;
+        actorRole = 'child';
+      }
+    }
+
     return {
-      actorUserId: req.user.userId,
-      actorRole: req.user.role,
+      actorUserId,
+      actorRole,
       familyId: req.user.familyId || null,
       operationKey: String(
         req.body.operationKey ||
@@ -68,7 +90,7 @@ class RewardController {
         req.user.userId,
         req.user.familyId,
         req.body,
-        this._buildOperatorContext(req, req.body.modifyTime)
+        await this._buildOperatorContext(req, null, req.body.modifyTime)
       );
       return res.json(success(reward.toJSON(), '创建成功'));
     } catch (err) {
@@ -87,7 +109,7 @@ class RewardController {
         req.params.rewardId,
         req.user.userId,
         req.body,
-        this._buildOperatorContext(req, req.body.modifyTime)
+        await this._buildOperatorContext(req, null, req.body.modifyTime)
       );
       return res.json(success(reward.toJSON(), '更新成功'));
     } catch (err) {
@@ -105,7 +127,7 @@ class RewardController {
       await rewardService.deleteReward(
         req.params.rewardId,
         req.user.userId,
-        this._buildOperatorContext(req)
+        await this._buildOperatorContext(req)
       );
       return res.json(success({ rewardId: req.params.rewardId }, '删除成功'));
     } catch (err) {
@@ -131,7 +153,9 @@ class RewardController {
         req.params.rewardId,
         effectiveUserId,
         req.body.modifyTime,
-        this._buildOperatorContext(req, req.body.modifyTime)
+        await this._buildOperatorContext(req, effectiveUserId, req.body.modifyTime, {
+          allowSubjectActorOverride: true
+        })
       );
 
       return res.json(success({
@@ -165,7 +189,9 @@ class RewardController {
         req.params.rewardId,
         effectiveUserId,
         req.body.modifyTime,
-        this._buildOperatorContext(req, req.body.modifyTime)
+        await this._buildOperatorContext(req, effectiveUserId, req.body.modifyTime, {
+          allowSubjectActorOverride: true
+        })
       );
 
       return res.json(success({

@@ -103,13 +103,18 @@ async function checkExpiredTasksAndStars(page) {
   }
 }
 
-async function loadAllPageData(page) {
+async function loadAllPageData(page, options = {}) {
   try {
     logger.info('Index', '开始批量加载页面数据');
     const [tasksResult, messagesResult, starsResult] = await Promise.allSettled([
       page.loadTaskDataOnly(),
-      page.loadMessageData(),
-      page.loadStarsAndRewards()
+      page.loadMessageData({
+        skipExpiryAuthoritySyncBeforeFormalReminders:
+          options.skipExpiryAuthoritySyncBeforeFormalReminders === true
+      }),
+      page.loadStarsAndRewards({
+        skipAuthoritySync: true
+      })
     ]);
 
     if (tasksResult.status === 'rejected') {

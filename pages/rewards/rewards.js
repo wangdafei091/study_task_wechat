@@ -72,6 +72,70 @@ function decorateRewardForDisplay(reward, totalPoints) {
   };
 }
 
+function resolveExchangeActualCost(source = {}, fallbackPoints = null) {
+  const explicitActualCost = Number(source.actualCost);
+  if (Number.isFinite(explicitActualCost)) {
+    return Math.max(0, explicitActualCost);
+  }
+
+  const originalPoints = Number(
+    fallbackPoints !== null && fallbackPoints !== undefined
+      ? fallbackPoints
+      : source.points
+  );
+  const partialProtection = Number(source.partialProtection || 0);
+
+  if (source.protectedByExpiry === true) {
+    return Math.max(0, originalPoints - partialProtection);
+  }
+
+  return Math.max(0, originalPoints);
+}
+
+function buildRewardExchangeMeta(source = {}, fallbackPoints = null) {
+  const originalPoints = Number(
+    fallbackPoints !== null && fallbackPoints !== undefined
+      ? fallbackPoints
+      : source.points
+  );
+  const actualCost = resolveExchangeActualCost(source, fallbackPoints);
+  const isProtected = source.protectedByExpiry === true;
+
+  if (isProtected && actualCost <= 0) {
+    return {
+      kind: 'fully_protected',
+      actualCost: 0,
+      confirmContent: `【${source.name}】为星星过期完全保护奖励，兑换无需消耗星星。确定现在兑换吗？`,
+      confirmLogLabel: '完全保护奖励，消耗星星: 0',
+      successLogLabel: '完全保护奖励，消耗星星: 0',
+      toastTitle: '完全保护奖励兑换成功',
+      skipAnimation: true
+    };
+  }
+
+  if (isProtected && actualCost < originalPoints) {
+    return {
+      kind: 'partial_protected',
+      actualCost,
+      confirmContent: `【${source.name}】为星星过期部分保护奖励，本次将消耗 ${actualCost} 颗星星（原价 ${originalPoints} 颗）。确定现在兑换吗？`,
+      confirmLogLabel: `部分保护奖励，消耗星星: ${actualCost}/${originalPoints}`,
+      successLogLabel: `部分保护奖励，消耗星星: ${actualCost}/${originalPoints}`,
+      toastTitle: '部分保护奖励兑换成功',
+      skipAnimation: false
+    };
+  }
+
+  return {
+    kind: 'normal',
+    actualCost,
+    confirmContent: `确定要用 ${originalPoints} 颗星星兑换【${source.name}】吗？兑换后星星将不能退回哦！`,
+    confirmLogLabel: `消耗星星: ${originalPoints}`,
+    successLogLabel: `消耗星星: ${actualCost || originalPoints}`,
+    toastTitle: '兑换成功',
+    skipAnimation: false
+  };
+}
+
 Page({
 
   /**
@@ -711,21 +775,15 @@ Page({
     }
 
     // 添加二次确认
-    let confirmTitle = '确认兑换';
-    let confirmContent = '';
-    
-    if (reward.protectedByExpiry) {
-      confirmContent = `【${reward.name}】为星星过期保护奖励，兑换无需消耗星星。确定现在兑换吗？`;
-    } else {
-      confirmContent = `确定要用 ${reward.points} 颗星星兑换【${reward.name}】吗？兑换后星星将不能退回哦！`;
-    }
+    const confirmTitle = '确认兑换';
+    const exchangeMeta = buildRewardExchangeMeta(reward);
     
     wx.showModal({
       title: confirmTitle,
-      content: confirmContent,
+      content: exchangeMeta.confirmContent,
       success: (res) => {
         if (res.confirm) {
-          logger.info('rewards', `用户确认领取奖励: ${reward.name}, ${reward.protectedByExpiry ? '保护奖励' : '消耗星星: ' + reward.points}`);
+          logger.info('rewards', `用户确认领取奖励: ${reward.name}, ${exchangeMeta.confirmLogLabel}`);
           this._performClaimReward(reward);
         } else {
           logger.info('rewards', `用户取消领取奖励: ${reward.name}`);
@@ -763,9 +821,8 @@ Page({
       }
       logger.info('rewards', `使用小朋友用户ID进行奖励兑换: ${childUserId}`);
       
-      // 保存原始星星数和目标星星数
+      // 保存原始星星数
       const originalPoints = this.data.totalPoints;
-      const targetPoints = originalPoints - reward.points;
       
       logger.info('rewards', `领取奖励前星星数: ${originalPoints}, 用户: ${childUserId}`);
       
@@ -782,30 +839,30 @@ Page({
         return;
       }
       
-      logger.info('rewards', `兑换奖励成功: ${reward.name}, ID=${reward.id}, ${result.protectedByExpiry ? '保护奖励' : '消耗星星: ' + reward.points}, 用户: ${childUserId}`);
+      const exchangeMeta = buildRewardExchangeMeta(result, reward.points);
+      const targetPoints = Math.max(0, originalPoints - exchangeMeta.actualCost);
+
+      logger.info('rewards', `兑换奖励成功: ${reward.name}, ID=${reward.id}, ${exchangeMeta.successLogLabel}, 用户: ${childUserId}`);
       
       // 隐藏加载提示
       wx.hideLoading();
       
-      // 如果是保护奖励，直接处理结果；否则播放动画
-      if (result.protectedByExpiry) {
-        logger.info('rewards', '保护奖励无需动画，直接处理结果');
+      // 仅完全保护奖励无需扣星动画；部分保护和普通兑换仍需展示真实扣星结果
+      if (exchangeMeta.skipAnimation) {
+        logger.info('rewards', '完全保护奖励无需动画，直接处理结果');
         await this._handleExchangeSuccess(result, reward, childUserId);
-        
-        // 显示保护奖励兑换成功提示
+
         wx.showToast({
-          title: '保护奖励兑换成功',
+          title: exchangeMeta.toastTitle,
           icon: 'success',
           duration: 2000
         });
       } else {
-        // 普通奖励播放星星减少动画
         this.animateStarsCount(originalPoints, targetPoints, async () => {
           await this._handleExchangeSuccess(result, reward, childUserId);
-          
-          // 显示普通兑换成功提示
+
           wx.showToast({
-            title: '兑换成功',
+            title: exchangeMeta.toastTitle,
             icon: 'success',
             duration: 2000
           });
@@ -854,33 +911,7 @@ Page({
     // 重新加载奖励数据以更新UI
     await this.loadRewardsData();
     
-    // 通知首页更新星星和奖励进度
-    const app = getApp();
-    if (app && app.globalData && app.globalData.eventBus) {
-      logger.info('rewards', '发送奖励领取事件通知');
-      
-      const actualCost = result.actualCost !== undefined ? result.actualCost : 
-        (result.protectedByExpiry ? 0 : reward.points);
-      const exchangeType = result.protectedByExpiry ? 
-        (actualCost > 0 ? 'partial_protected' : 'fully_protected') : 'normal';
-      
-      app.globalData.eventBus.emit(EVENTS.REWARD_CLAIMED, {
-        rewardId: reward.id,
-        rewardName: reward.name,
-        points: actualCost, // 兼容字段
-        actualCost: actualCost, // 实际消耗数量
-        originalPoints: reward.points, // 原始奖励积分
-        displayPoints: actualCost, // 用于显示的消耗数量
-        protectedByExpiry: result.protectedByExpiry || false,
-        partialProtection: result.partialProtection || 0,
-        exchangeType: exchangeType,
-        userId: childUserId,
-        operatorUserId: childUserId,
-        newTotalPoints: this.data.totalPoints, // 使用当前最新的星星总数
-        nextReward: nextReward,
-        timestamp: Date.now()
-      });
-    }
+    logger.info('rewards', '奖励兑换后的页面刷新完成，业务事件已由服务层统一发布');
   },
   
   /**

@@ -185,20 +185,27 @@ class RewardService {
     return String(seed || Date.now());
   }
 
-  _getOperatorContext(targetUserId = null) {
+  _getOperatorContext(targetUserId = null, mode = 'manage') {
     const loginUser = this.userService?.getLoginUser?.();
     const currentUser = this.userService?.getCurrentUser?.();
+    const fallbackCurrentUserId = this.userService?.getCurrentUserId?.() || null;
+    const preferCurrentUser = mode === 'execute';
 
     return {
-      actorUserId: loginUser?.userId || loginUser?.id || currentUser?.id || null,
-      actorRole: loginUser?.role || currentUser?.role || 'system',
+      actorUserId: preferCurrentUser
+        ? (currentUser?.userId || currentUser?.id || fallbackCurrentUserId || loginUser?.userId || loginUser?.id || null)
+        : (loginUser?.userId || loginUser?.id || currentUser?.userId || currentUser?.id || fallbackCurrentUserId || null),
+      actorRole: preferCurrentUser
+        ? (currentUser?.role || loginUser?.role || 'system')
+        : (loginUser?.role || currentUser?.role || 'system'),
       familyId: loginUser?.familyId || currentUser?.familyId || null,
       targetUserId: targetUserId || null
     };
   }
 
   _buildRewardPendingSyncMeta(reward, action, overrides = {}) {
-    const operatorContext = overrides.operatorContext || this._getOperatorContext(reward?.exchangeUserId || null);
+    const operatorMode = ['exchange', 'unclaim'].includes(action) ? 'execute' : 'manage';
+    const operatorContext = overrides.operatorContext || this._getOperatorContext(reward?.exchangeUserId || null, operatorMode);
     const operationKey = this._createOperationKey(
       overrides.operationKey ||
       overrides.modifyTime ||
@@ -872,7 +879,12 @@ class RewardService {
     const response = await HttpClient.patch(url, {
       exchangeUserId,
       modifyTime,
-      operationKey: pendingSyncMeta.operationKey
+      operationKey: pendingSyncMeta.operationKey,
+      operatorContext: {
+        actorUserId: pendingSyncMeta.operatorUserId,
+        actorRole: pendingSyncMeta.operatorRole,
+        familyId: pendingSyncMeta.familyId
+      }
     });
     if (reward) {
       await this._markRewardSynced(reward, { modifyTime });
@@ -889,7 +901,12 @@ class RewardService {
     const response = await HttpClient.patch(url, {
       exchangeUserId,
       modifyTime,
-      operationKey: pendingSyncMeta.operationKey
+      operationKey: pendingSyncMeta.operationKey,
+      operatorContext: {
+        actorUserId: pendingSyncMeta.operatorUserId,
+        actorRole: pendingSyncMeta.operatorRole,
+        familyId: pendingSyncMeta.familyId
+      }
     });
     if (reward) {
       await this._markRewardSynced(reward, { modifyTime });
@@ -1334,9 +1351,11 @@ class RewardService {
         }
 
         const pointsRefunded = Number(response.refundedPoints || 0);
+        const operatorContext = this._getOperatorContext(exchangeUserId, 'execute');
         this.eventBus.emit(EVENTS.REWARD_UNCLAIMED, {
           reward: cloudReward,
-          pointsRefunded
+          pointsRefunded,
+          operatorUserId: operatorContext.actorUserId || null
         });
         this.eventBus.emit(EVENTS.REWARD_EXCHANGE_CANCELLED, {
           reward: cloudReward,

@@ -79,6 +79,10 @@ function calculateProgressTotal(userPoints, nextReward) {
     : Math.max(userPoints + 1, 100);
 }
 
+function shouldSyncAuthorityBeforeRewards(options = {}) {
+  return options.skipAuthoritySync !== true;
+}
+
 function getRewardContext(page) {
   const starService = serviceManager.getService('starService');
   const rewardService = serviceManager.getService('rewardService');
@@ -170,7 +174,7 @@ async function checkRewardUnlock(page) {
   }
 }
 
-async function loadStarsAndRewards(page) {
+async function loadStarsAndRewards(page, options = {}) {
   try {
     const context = getRewardContext(page);
     if (!context) {
@@ -184,7 +188,11 @@ async function loadStarsAndRewards(page) {
       effectiveUserId
     } = context;
 
-    if (effectiveUserId && typeof starService.syncExpiryAuthorityIfNeeded === 'function') {
+    if (
+      shouldSyncAuthorityBeforeRewards(options) &&
+      effectiveUserId &&
+      typeof starService.syncExpiryAuthorityIfNeeded === 'function'
+    ) {
       try {
         await starService.syncExpiryAuthorityIfNeeded({
           scope: 'user',

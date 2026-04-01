@@ -303,6 +303,7 @@ class MessageService {
       actorUserId,
       actorName,
       subjectName,
+      subjectUserId,
       points: pointsOverride === null || pointsOverride === undefined ? reward.points : pointsOverride,
     });
 
@@ -696,9 +697,10 @@ class MessageService {
     }
   }
 
-  _buildRewardContent({ action, rewardName, actorRole, actorName, subjectName, points }) {
+  _buildRewardContent({ action, rewardName, actorRole, actorUserId = null, actorName, subjectName, subjectUserId = null, points }) {
     const safeActorName = actorName || (actorRole === 'parent' ? '家长' : '孩子');
     const safeSubjectName = subjectName || '孩子';
+    const isSelfAction = Boolean(actorUserId && subjectUserId && actorUserId === subjectUserId);
 
     switch (action) {
       case 'create':
@@ -746,7 +748,9 @@ class MessageService {
           priority: 2,
           user: {
             title: '奖励已兑换',
-            summary: `你已兑换奖励“${rewardName}”`,
+            summary: isSelfAction
+              ? `你已兑换奖励“${rewardName}”`
+              : `${safeActorName}为你兑换了奖励“${rewardName}”`,
           },
           family: {
             title: '奖励已兑换',
@@ -761,7 +765,9 @@ class MessageService {
           priority: 1,
           user: {
             title: '奖励兑换已取消',
-            summary: `奖励“${rewardName}”的兑换已取消，已退回${points}颗星星`,
+            summary: isSelfAction
+              ? `你已取消兑换奖励“${rewardName}”，已退回${points}颗星星`
+              : `${safeActorName}取消了你兑换的奖励“${rewardName}”，已退回${points}颗星星`,
           },
           family: {
             title: '奖励兑换已取消',

@@ -173,7 +173,9 @@ describe('pages/index/modules/index-refresh-coordinator', () => {
     };
 
     await coordinator.checkExpiredTasksAndStars(page);
-    await coordinator.loadAllPageData(page);
+    await coordinator.loadAllPageData(page, {
+      skipExpiryAuthoritySyncBeforeFormalReminders: true
+    });
     await coordinator.refreshDataForCurrentUser(page);
 
     expect(taskService.checkTasksStatus).toHaveBeenCalled();
@@ -182,8 +184,12 @@ describe('pages/index/modules/index-refresh-coordinator', () => {
       userId: 'child-1'
     });
     expect(page.checkUpcomingTasks).toHaveBeenCalled();
-    expect(page.loadMessageData).toHaveBeenCalled();
-    expect(page.loadStarsAndRewards).toHaveBeenCalled();
+    expect(page.loadMessageData).toHaveBeenCalledWith({
+      skipExpiryAuthoritySyncBeforeFormalReminders: true
+    });
+    expect(page.loadStarsAndRewards).toHaveBeenCalledWith({
+      skipAuthoritySync: true
+    });
     expect(page.refreshTaskDataForCurrentView).toHaveBeenCalled();
   });
 

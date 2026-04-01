@@ -21,9 +21,13 @@ jest.mock('../../utils/http-client', () => ({
   patch: jest.fn(),
   delete: jest.fn()
 }));
+jest.mock('../../services/service-manager.js', () => ({
+  getService: jest.fn()
+}));
 
 const { MessageRepository } = require('../../repositories/index');
 const HttpClient = require('../../utils/http-client');
+const serviceManager = require('../../services/service-manager.js');
 
 describe('MessageService', () => {
   let messageService;
@@ -87,6 +91,8 @@ describe('MessageService', () => {
       messageRepository: mockMessageRepository,
       userService: mockUserService
     });
+    serviceManager.getService.mockReset();
+    serviceManager.getService.mockReturnValue(null);
 
     // 创建Mock消息
     mockMessage = TestDataFactory.createMessage({
@@ -145,7 +151,8 @@ describe('MessageService', () => {
         userId: 'child_1',
         familyId: 'family_1',
         requireFresh: false,
-        preferScope: null
+        preferScope: null,
+        skipExpiryAuthoritySyncBeforeFormalReminders: false
       });
     });
   });
@@ -1045,6 +1052,43 @@ describe('MessageService', () => {
       expect(HttpClient.get).toHaveBeenCalledTimes(2);
     });
 
+    it('首页已先做 authority sync 时，正式提醒同步应跳过重复 authority 调用', async () => {
+      const starService = {
+        syncExpiryAuthorityIfNeeded: jest.fn().mockResolvedValue({ settledGroupCount: 0 })
+      };
+      serviceManager.getService.mockImplementation((name) => {
+        if (name === 'starService' || name === 'star') {
+          return starService;
+        }
+        return null;
+      });
+      HttpClient.post.mockClear();
+      HttpClient.get.mockClear();
+      HttpClient.post.mockResolvedValue({ success: true });
+      HttpClient.get.mockResolvedValue({ messages: [] });
+
+      await messageService.refreshMessagesFromCloud('child_1', {
+        scope: 'user',
+        skipExpiryAuthoritySyncBeforeFormalReminders: true
+      });
+
+      expect(starService.syncExpiryAuthorityIfNeeded).not.toHaveBeenCalled();
+      expect(HttpClient.post).toHaveBeenCalledWith(
+        '/api/tasks/upcoming/sync',
+        expect.objectContaining({
+          scope: 'user',
+          targetUserId: 'child_1'
+        })
+      );
+      expect(HttpClient.post).toHaveBeenCalledWith(
+        '/api/stars/expiring-reminders/sync',
+        expect.objectContaining({
+          scope: 'user',
+          targetUserId: 'child_1'
+        })
+      );
+    });
+
     it('正式云端消息单条已读失败时不应先改本地', async () => {
       const message = new Message({
         id: 'msg_cloud_1',
@@ -1169,6 +1213,48 @@ describe('MessageService', () => {
           })
         ])
       );
+    });
+  });
+
+  describe('奖励兼容文案视角', () => {
+    it('家长代孩子兑换时，兼容消息应明确为家长代兑', async () => {
+      mockUserService.getCurrentUserId.mockReturnValue('child_1');
+
+      const result = await messageService._createRewardMessageWithDomainModel(
+        {
+          id: 'reward_1',
+          name: '动画片',
+          points: 10,
+          exchangeUserId: 'child_1'
+        },
+        'claimed',
+        {
+          operatorUserId: 'parent_1'
+        }
+      );
+
+      expect(result).toBeDefined();
+      expect(result.summary).toBe('家长为您兑换了奖励"动画片"，花费了10颗星星');
+    });
+
+    it('家长代孩子取消兑换时，兼容消息应明确为家长代取消', async () => {
+      mockUserService.getCurrentUserId.mockReturnValue('child_1');
+
+      const result = await messageService._createRewardMessageWithDomainModel(
+        {
+          id: 'reward_2',
+          name: '动画片',
+          points: 10,
+          exchangeUserId: 'child_1'
+        },
+        'unclaimed',
+        {
+          operatorUserId: 'parent_1'
+        }
+      );
+
+      expect(result).toBeDefined();
+      expect(result.summary).toBe('家长取消了您兑换的奖励"动画片"，退回10颗星星');
     });
   });
 });

@@ -318,8 +318,8 @@ Page({
    * 批量加载页面所有数据
    * 统一处理所有数据加载，避免重复调用和多次UI更新
    */
-  loadAllPageData: async function() {
-    return refreshCoordinator.loadAllPageData(this);
+  loadAllPageData: async function(options = {}) {
+    return refreshCoordinator.loadAllPageData(this, options);
   },
 
   /**
@@ -418,15 +418,17 @@ Page({
     return refreshCoordinator.refreshTaskDataForCurrentView(this, options);
   },
   
-  // 从消息管理器加载消息数据（按用户分别显示）
-  // 注意：消息设计为按用户分别显示，每个用户只看到自己的消息和共享消息
-  loadMessageData: async function() {
+  // 从消息管理器加载消息数据
+  // 孩子视角读取个人流，家长视角优先读取家庭动态流
+  loadMessageData: async function(options = {}) {
     try {
       const messageService = serviceManager.getMessageService();
       const scopeOptions = this.getMessageScopeOptions();
       const messages = await messageService.getMessagesByScope({
         ...scopeOptions,
-        requireFresh: true
+        requireFresh: true,
+        skipExpiryAuthoritySyncBeforeFormalReminders:
+          options.skipExpiryAuthoritySyncBeforeFormalReminders === true
       });
       
       const processedMessages = messageDisplay.buildPreviewMessages(messages, {
@@ -1254,8 +1256,8 @@ Page({
   /**
    * 加载用户星星和奖励信息（冻结展示 loginUser 自己的数据，不随视角切换变化）
    */
-  loadStarsAndRewards: async function() {
-    return rewardFlowModule.loadStarsAndRewards(this);
+  loadStarsAndRewards: async function(options = {}) {
+    return rewardFlowModule.loadStarsAndRewards(this, options);
   },
   
   /**

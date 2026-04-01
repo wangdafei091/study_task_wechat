@@ -528,11 +528,46 @@ describe('backend MessageService reward copy', () => {
       actorUserId: 'child_1',
       actorName: '小明',
       subjectName: '小明',
+      subjectUserId: 'child_1',
       points: 20
     });
 
     expect(content.user.title).toBe('奖励兑换已取消');
-    expect(content.user.summary).toContain('奖励“冰淇淋”的兑换已取消');
+    expect(content.user.summary).toBe('你已取消兑换奖励“冰淇淋”，已退回20颗星星');
     expect(content.family.summary).toBe('小明取消了奖励“冰淇淋”的兑换，已退回20颗星星');
+  });
+
+  it('家长代孩子兑换时，孩子个人流文案应明确是家长代兑', async () => {
+    const service = require('../../services/messageService');
+    const content = service._buildRewardContent({
+      action: 'exchange',
+      rewardName: '冰淇淋',
+      actorRole: 'parent',
+      actorUserId: 'parent_1',
+      actorName: '妈妈',
+      subjectName: '小明',
+      subjectUserId: 'child_1',
+      points: 20
+    });
+
+    expect(content.user.summary).toBe('妈妈为你兑换了奖励“冰淇淋”');
+    expect(content.family.summary).toBe('妈妈为小明兑换了奖励“冰淇淋”');
+  });
+
+  it('家长代孩子取消兑换时，孩子个人流文案应明确是家长代取消', async () => {
+    const service = require('../../services/messageService');
+    const content = service._buildRewardContent({
+      action: 'unclaim',
+      rewardName: '冰淇淋',
+      actorRole: 'parent',
+      actorUserId: 'parent_1',
+      actorName: '妈妈',
+      subjectName: '小明',
+      subjectUserId: 'child_1',
+      points: 20
+    });
+
+    expect(content.user.summary).toBe('妈妈取消了你兑换的奖励“冰淇淋”，已退回20颗星星');
+    expect(content.family.summary).toBe('妈妈取消了小明兑换的奖励“冰淇淋”，已退回20颗星星');
   });
 });

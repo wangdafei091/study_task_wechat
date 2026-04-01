@@ -90,6 +90,7 @@ describe('utils/app/post-login-bootstrap', () => {
     expect(taskService.checkTasksStatus).toHaveBeenCalled();
     expect(taskService.checkUpcomingTasks).toHaveBeenCalled();
     expect(starService.initialize).toHaveBeenCalled();
+    expect(starService.checkAndRepairDataConsistency).toHaveBeenCalledTimes(1);
     expect(messageService.initialize).toHaveBeenCalled();
     expect(messageService.syncFormalRemindersIfNeeded).toHaveBeenCalled();
     expect(messageService.createSystemMessage).toHaveBeenCalled();
@@ -150,6 +151,7 @@ describe('utils/app/post-login-bootstrap', () => {
 
     expect(starService.protectRewardsByExpiry).toHaveBeenCalledWith(3, 'parent-1');
     expect(starService.initialize).toHaveBeenCalled();
+    expect(starService.checkAndRepairDataConsistency).toHaveBeenCalledTimes(1);
     expect(app.setTheme).toHaveBeenCalled();
   });
 
@@ -217,6 +219,7 @@ describe('utils/app/post-login-bootstrap', () => {
       force: true,
       userId: 'parent-1'
     });
+    expect(starService.checkAndRepairDataConsistency).not.toHaveBeenCalled();
     expect(messageService.syncFormalRemindersIfNeeded).toHaveBeenCalledTimes(1);
   });
 

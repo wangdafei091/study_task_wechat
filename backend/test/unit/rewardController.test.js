@@ -135,3 +135,115 @@ describe('PATCH /api/rewards/:rewardId/cancel-exchange', () => {
     expect(res.body.error_code).toBe('FAMILY_MEMBER_ACCESS_DENIED');
   });
 });
+
+describe('PATCH /api/rewards/:rewardId/exchange', () => {
+  let app;
+
+  beforeAll(() => {
+    app = buildApp();
+  });
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('孩子可兑换自己的奖励', async () => {
+    const reward = makeReward({ claimed: false, claimStatus: 'available', exchangeUserId: null });
+    rewardService.getRewardById = jest.fn().mockResolvedValue(reward);
+    rewardService.canUserAccessReward = jest.fn().mockReturnValue(true);
+    rewardService.exchangeReward = jest.fn().mockResolvedValue({
+      reward,
+      record: null,
+      consumedPoints: 20,
+      deductionBreakdown: [],
+      updatedGroupsSnapshot: [],
+      idempotent: false,
+    });
+
+    const res = await request(app)
+      .patch('/api/rewards/reward_001/exchange')
+      .set('Authorization', token(CHILD))
+      .send({ modifyTime: 123456 });
+
+    expect(res.status).toBe(200);
+    expect(rewardService.exchangeReward).toHaveBeenCalledWith(
+      'reward_001',
+      'child_1',
+      123456,
+      expect.objectContaining({
+        actorUserId: 'child_1',
+        actorRole: 'child',
+        familyId: 'fam_1',
+      })
+    );
+  });
+
+  it('家长在孩子视角下兑换时，应将孩子作为消息操作者透传', async () => {
+    const reward = makeReward({ claimed: false, claimStatus: 'available', exchangeUserId: null });
+    rewardService.getRewardById = jest.fn().mockResolvedValue(reward);
+    rewardService.canUserAccessReward = jest.fn().mockReturnValue(true);
+    familyService.getUserFamilyAndRole = jest.fn().mockResolvedValue({ familyId: 'fam_1', role: 'child' });
+    rewardService.exchangeReward = jest.fn().mockResolvedValue({
+      reward,
+      record: null,
+      consumedPoints: 20,
+      deductionBreakdown: [],
+      updatedGroupsSnapshot: [],
+      idempotent: false,
+    });
+
+    const res = await request(app)
+      .patch('/api/rewards/reward_001/exchange')
+      .set('Authorization', token(PARENT))
+      .send({
+        exchangeUserId: 'child_1',
+        operatorContext: {
+          actorUserId: 'child_1',
+          actorRole: 'child'
+        }
+      });
+
+    expect(res.status).toBe(200);
+    expect(rewardService.exchangeReward).toHaveBeenCalledWith(
+      'reward_001',
+      'child_1',
+      undefined,
+      expect.objectContaining({
+        actorUserId: 'child_1',
+        actorRole: 'child',
+        familyId: 'fam_1',
+      })
+    );
+  });
+
+  it('家长默认代孩子兑换时，应保持家长作为操作者', async () => {
+    const reward = makeReward({ claimed: false, claimStatus: 'available', exchangeUserId: null });
+    rewardService.getRewardById = jest.fn().mockResolvedValue(reward);
+    rewardService.canUserAccessReward = jest.fn().mockReturnValue(true);
+    rewardService.exchangeReward = jest.fn().mockResolvedValue({
+      reward,
+      record: null,
+      consumedPoints: 20,
+      deductionBreakdown: [],
+      updatedGroupsSnapshot: [],
+      idempotent: false,
+    });
+
+    const res = await request(app)
+      .patch('/api/rewards/reward_001/exchange')
+      .set('Authorization', token(PARENT))
+      .send({ exchangeUserId: 'child_1' });
+
+    expect(res.status).toBe(200);
+    expect(rewardService.exchangeReward).toHaveBeenCalledWith(
+      'reward_001',
+      'child_1',
+      undefined,
+      expect.objectContaining({
+        actorUserId: 'parent_1',
+        actorRole: 'parent',
+        familyId: 'fam_1',
+      })
+    );
+  });
+});

@@ -1113,6 +1113,23 @@ class StarService {
     logger.info('StarService', '开始检查并修复数据一致性');
     
     try {
+      if (this.enableCloudStorage) {
+        logger.info('StarService', '云端模式跳过本地星星一致性检查和修复');
+        return {
+          success: true,
+          skipped: true,
+          reason: 'cloud_mode',
+          initialConsistency: null,
+          repairResult: {
+            success: true,
+            repairedCount: 0,
+            skipped: true
+          },
+          finalConsistency: null,
+          isFixed: true
+        };
+      }
+
       // 1. 验证数据一致性
       const consistencyResult = await this.validateConsistency();
       

@@ -576,6 +576,16 @@ describe('RewardService', () => {
       });
 
       rewardService.enableCloudStorage = true;
+      mockUserService.getLoginUser = jest.fn().mockReturnValue({
+        userId: 'parent_1',
+        role: 'parent',
+        familyId: 'fam_1'
+      });
+      mockUserService.getCurrentUser = jest.fn().mockReturnValue({
+        userId: 'user_child',
+        role: 'child',
+        familyId: 'fam_1'
+      });
       mockRewardRepository.getById.mockResolvedValue(reward);
       HttpClient.patch.mockResolvedValue({
         reward: {
@@ -599,7 +609,17 @@ describe('RewardService', () => {
       const result = await rewardService.exchangeReward('reward_1', 'user_child');
 
       expect(result.success).toBe(true);
-      expect(HttpClient.patch).toHaveBeenCalled();
+      expect(HttpClient.patch).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          exchangeUserId: 'user_child',
+          operatorContext: expect.objectContaining({
+            actorUserId: 'user_child',
+            actorRole: 'child',
+            familyId: 'fam_1'
+          })
+        })
+      );
       expect(mockStarService.refreshStarsFromCloud).toHaveBeenCalledWith('user_child', {
         forceCloudAfterAuthority: true
       });
@@ -608,6 +628,57 @@ describe('RewardService', () => {
         userId: 'user_child'
       });
       expect(mockStarGroupRepository.deductStars).not.toHaveBeenCalled();
+      mockEventBus.verifyEmitCount(EVENTS.REWARD_CLAIMED, 1);
+    });
+
+    it('云端模式下取消兑换应透传当前视角操作者上下文', async () => {
+      rewardService.enableCloudStorage = true;
+      mockUserService.getLoginUser = jest.fn().mockReturnValue({
+        userId: 'parent_1',
+        role: 'parent',
+        familyId: 'fam_1'
+      });
+      mockUserService.getCurrentUser = jest.fn().mockReturnValue({
+        userId: 'user_child',
+        role: 'child',
+        familyId: 'fam_1'
+      });
+      const reward = new Reward({
+        id: 'reward_1',
+        name: '云端待取消奖励',
+        points: 50,
+        claimed: true,
+        claimStatus: 'pending',
+        exchangeUserId: 'user_child'
+      });
+      mockRewardRepository.getById.mockResolvedValue(reward);
+      HttpClient.patch.mockResolvedValue({
+        reward: {
+          rewardId: 'reward_1',
+          name: '云端待取消奖励',
+          points: 50,
+          claimed: false,
+          claimStatus: 'available',
+          exchangeUserId: null,
+          modifyTime: 123456
+        },
+        refundedPoints: 50
+      });
+
+      const result = await rewardService.cancelRewardExchange('reward_1');
+
+      expect(result.success).toBe(true);
+      expect(HttpClient.patch).toHaveBeenCalledWith(
+        expect.stringContaining('/cancel-exchange'),
+        expect.objectContaining({
+          exchangeUserId: 'user_child',
+          operatorContext: expect.objectContaining({
+            actorUserId: 'user_child',
+            actorRole: 'child',
+            familyId: 'fam_1'
+          })
+        })
+      );
     });
   });
 
@@ -954,6 +1025,10 @@ describe('RewardService', () => {
       }));
       expect(mockStarService.refreshStarsFromCloud).toHaveBeenCalledWith('user_child', {
         forceCloudAfterAuthority: true
+      });
+      mockEventBus.verifyEmit(EVENTS.REWARD_UNCLAIMED, (eventData) => {
+        expect(eventData.pointsRefunded).toBe(50);
+        expect(eventData.operatorUserId).toBe('user_123');
       });
       mockEventBus.verifyEmit(EVENTS.REWARD_EXCHANGE_CANCELLED, (eventData) => {
         expect(eventData.pointsRefunded).toBe(50);
