@@ -200,6 +200,27 @@ describe('pages/index/modules/index-task-actions', () => {
     }));
   });
 
+  it('孩子或家长切到孩子视角时，今日与历史任务仍允许打卡', async () => {
+    const taskService = {
+      completeTask: jest.fn().mockResolvedValue({ success: true }),
+      resetTask: jest.fn()
+    };
+    serviceManager.getService.mockImplementation((name) => {
+      if (name === 'task') return taskService;
+      return null;
+    });
+
+    const page = createPage();
+    page.data.isReadonlyView = true;
+
+    await taskActions.completeTask(page, { detail: { taskId: 'task-1' } });
+
+    expect(taskService.completeTask).toHaveBeenCalledWith('task-1', 'child-1');
+    expect(global.wx.showToast).not.toHaveBeenCalledWith(expect.objectContaining({
+      title: '请在自己设备上操作'
+    }));
+  });
+
   it('completeTask 应覆盖空任务、重复点击、取消确认和失败结果分支', async () => {
     const rewardService = {
       getLastExchangeTimeByUser: jest.fn().mockResolvedValue(null)

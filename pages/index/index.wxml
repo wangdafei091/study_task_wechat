@@ -279,8 +279,8 @@
           <index-task-item 
             task="{{item}}"
             lastExchangeTime="{{lastExchangeTime}}"
-            readonly="{{isReadonlyView || isViewingFuture}}"
-            readonlyReason="{{isViewingFuture ? 'future-date' : (isReadonlyView ? 'cross-device' : '')}}"
+            readonly="{{isViewingFuture}}"
+            readonlyReason="{{isViewingFuture ? 'future-date' : ''}}"
             bind:complete="completeTask"
           />
         </view>

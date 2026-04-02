@@ -636,6 +636,48 @@ describe('TaskService', () => {
       expect(result.task.completionTime).toBeGreaterThan(0);
       expect(result.task.completionTime).toBeLessThanOrEqual(Date.now());
     });
+
+    it('逾期补做已扣星任务时应退回实际扣除星星且不标记普通奖励', async () => {
+      const task = new Task(TestDataFactory.createTask({
+        id: 'task_makeup_1',
+        userId: 'child_1',
+        title: '补做任务',
+        status: TaskStatus.PENDING,
+        isRequired: false,
+        penaltyApplied: true,
+        penaltyDeductedPoints: 4,
+        penaltyRefunded: false,
+        points: 10,
+        starAwarded: false
+      }));
+
+      mockTaskRepository.getById.mockResolvedValue(task);
+      mockStarService.addStars.mockResolvedValue({ success: true, stars: 4 });
+      mockTaskRepository.save.mockImplementation(async (savedTask) => savedTask);
+
+      const result = await taskService.completeTask('task_makeup_1');
+
+      expect(result.success).toBe(true);
+      expect(mockStarService.addStars).toHaveBeenCalledWith(
+        4,
+        'permanent',
+        expect.stringContaining('逾期补做退回'),
+        expect.objectContaining({
+          sourceType: 'task_makeup_refund',
+          sourceId: 'task_makeup_1',
+          userId: 'child_1'
+        })
+      );
+      expect(result.task.penaltyRefunded).toBe(true);
+      expect(result.task.penaltyRefundTime).toBeGreaterThan(0);
+      expect(result.task.starAwarded).toBe(false);
+
+      mockEventBus.verifyEmit(EVENTS.TASK_STATUS_UPDATED, {
+        task: expect.any(Object),
+        previousStatus: TaskStatus.PENDING,
+        operationType: 'makeup_complete'
+      });
+    });
   });
 
   describe('任务重置逻辑 - resetTask', () => {
@@ -782,6 +824,77 @@ describe('TaskService', () => {
 
       expect(result.success).toBe(false);
       expect(result.message).toContain('重置任务失败');
+    });
+
+    it('重置逾期补做任务时应先全额回滚永久星星退回', async () => {
+      const task = new Task(TestDataFactory.createTask({
+        id: 'task_reset_makeup_1',
+        userId: 'child_1',
+        title: '已补做任务',
+        status: TaskStatus.COMPLETED,
+        isRequired: false,
+        penaltyApplied: true,
+        penaltyDeductedPoints: 3,
+        penaltyRefunded: true,
+        penaltyRefundTime: Date.now(),
+        points: 0,
+        starAwarded: false,
+        completionTime: Date.now()
+      }));
+
+      mockTaskRepository.getById.mockResolvedValue(task);
+      mockStarService.consumeStarsFromSpecificType.mockResolvedValue({
+        success: true,
+        consumed: 3
+      });
+      mockTaskRepository.save.mockImplementation(async (savedTask) => savedTask);
+
+      const result = await taskService.resetTask('task_reset_makeup_1');
+
+      expect(result.success).toBe(true);
+      expect(mockStarService.consumeStarsFromSpecificType).toHaveBeenCalledWith(
+        3,
+        'permanent',
+        expect.stringContaining('撤销逾期补做退星'),
+        expect.objectContaining({
+          sourceType: 'task_makeup_refund_revoke',
+          sourceId: 'task_reset_makeup_1',
+          userId: 'child_1'
+        })
+      );
+      expect(result.task.penaltyRefunded).toBe(false);
+      expect(result.task.penaltyRefundTime).toBe(0);
+    });
+
+    it('逾期补做退星已被消费时，reset 应直接失败', async () => {
+      const task = new Task(TestDataFactory.createTask({
+        id: 'task_reset_makeup_2',
+        userId: 'child_1',
+        title: '退星不足任务',
+        status: TaskStatus.COMPLETED,
+        isRequired: false,
+        penaltyApplied: true,
+        penaltyDeductedPoints: 5,
+        penaltyRefunded: true,
+        penaltyRefundTime: Date.now(),
+        points: 0,
+        starAwarded: false,
+        completionTime: Date.now()
+      }));
+
+      mockTaskRepository.getById.mockResolvedValue(task);
+      mockStarService.consumeStarsFromSpecificType.mockResolvedValue({
+        success: false,
+        message: '该类型分组星星不足'
+      });
+
+      const result = await taskService.resetTask('task_reset_makeup_2');
+
+      expect(result).toEqual({
+        success: false,
+        message: '永久星星不足，无法撤销逾期补做退星'
+      });
+      expect(mockTaskRepository.save).not.toHaveBeenCalled();
     });
   });
 

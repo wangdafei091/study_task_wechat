@@ -59,6 +59,9 @@ class TaskService {
             isRequired: resolveColumn('is_required', 'isRequired'),
             isAllDay: resolveColumn('is_all_day', 'isAllDay'),
             penaltyApplied: resolveColumn('penalty_applied', 'penaltyApplied'),
+            penaltyDeductedPoints: resolveColumn('penalty_deducted_points', 'penaltyDeductedPoints', true),
+            penaltyRefunded: resolveColumn('penalty_refunded', 'penaltyRefunded', true),
+            penaltyRefundTime: resolveColumn('penalty_refund_time', 'penaltyRefundTime', true),
             deletedAt: resolveColumn('deleted_at', 'deletedAt', true),
             completionTime: resolveColumn('completion_time', 'completionTime', true),
             starAwarded: resolveColumn('star_awarded', 'starAwarded', true),
@@ -83,6 +86,9 @@ class TaskService {
             isRequired: 'is_required',
             isAllDay: 'is_all_day',
             penaltyApplied: 'penalty_applied',
+            penaltyDeductedPoints: 'penalty_deducted_points',
+            penaltyRefunded: 'penalty_refunded',
+            penaltyRefundTime: 'penalty_refund_time',
             deletedAt: 'deleted_at',
             completionTime: 'completion_time',
             starAwarded: 'star_awarded',
@@ -265,6 +271,18 @@ class TaskService {
             if (columnMap.starAwarded) {
               restoreSetClauses.push(`${columnMap.starAwarded} = 0`);
             }
+            if (columnMap.penaltyDeductedPoints) {
+              restoreSetClauses.push(`${columnMap.penaltyDeductedPoints} = ?`);
+              restoreParams.push(Number(taskData.penaltyDeductedPoints || 0));
+            }
+            if (columnMap.penaltyRefunded) {
+              restoreSetClauses.push(`${columnMap.penaltyRefunded} = ?`);
+              restoreParams.push(taskData.penaltyRefunded ? 1 : 0);
+            }
+            if (columnMap.penaltyRefundTime) {
+              restoreSetClauses.push(`${columnMap.penaltyRefundTime} = ?`);
+              restoreParams.push(taskData.penaltyRefundTime || null);
+            }
             restoreSetClauses.push('status = 0');
             restoreParams.push(taskData.taskId);
 
@@ -349,6 +367,18 @@ class TaskService {
         if (columnMap.parentTaskId) {
           insertColumns.push(columnMap.parentTaskId);
           insertValues.push(task.parentTaskId || null);
+        }
+        if (columnMap.penaltyDeductedPoints) {
+          insertColumns.push(columnMap.penaltyDeductedPoints);
+          insertValues.push(Number(task.penaltyDeductedPoints || 0));
+        }
+        if (columnMap.penaltyRefunded) {
+          insertColumns.push(columnMap.penaltyRefunded);
+          insertValues.push(task.penaltyRefunded ? 1 : 0);
+        }
+        if (columnMap.penaltyRefundTime) {
+          insertColumns.push(columnMap.penaltyRefundTime);
+          insertValues.push(task.penaltyRefundTime || null);
         }
 
         await connection.execute(
@@ -572,6 +602,11 @@ class TaskService {
             ? starAwarded
             : (status === 0 ? false : Boolean(existing.starAwarded));
 
+        if (existing.status === status && Boolean(existing.starAwarded) === resolvedStarAwarded) {
+          await connection.rollback();
+          return existing;
+        }
+
         const setClauses = ['status = ?'];
         const params = [status];
 
@@ -583,6 +618,49 @@ class TaskService {
           setClauses.push(`${columnMap.completionTime} = ?`);
           params.push(completionTime);
         }
+
+        let messageAction = status === 1 ? 'complete' : 'reset';
+        let refundPoints = 0;
+
+        if (status === 1 && existing.status !== 1) {
+          const refundResult = await this._applyLateMakeupRefundIfNeeded(
+            connection,
+            existing,
+            now,
+            operationKey
+          );
+          if (refundResult.refunded) {
+            refundPoints = refundResult.refundPoints;
+            messageAction = 'makeup_complete';
+            if (columnMap.penaltyRefunded) {
+              setClauses.push(`${columnMap.penaltyRefunded} = ?`);
+              params.push(1);
+            }
+            if (columnMap.penaltyRefundTime) {
+              setClauses.push(`${columnMap.penaltyRefundTime} = ?`);
+              params.push(now);
+            }
+          }
+        }
+
+        if (status === 0 && existing.status === 1) {
+          const revokeResult = await this._revokeLateMakeupRefundIfNeeded(
+            connection,
+            existing,
+            operationKey,
+            now
+          );
+          if (revokeResult.revoked) {
+            if (columnMap.penaltyRefunded) {
+              setClauses.push(`${columnMap.penaltyRefunded} = ?`);
+              params.push(0);
+            }
+            if (columnMap.penaltyRefundTime) {
+              setClauses.push(`${columnMap.penaltyRefundTime} = NULL`);
+            }
+          }
+        }
+
         if (columnMap.modifyTime) {
           setClauses.push(`${columnMap.modifyTime} = ?`);
           params.push(now);
@@ -601,8 +679,16 @@ class TaskService {
 
         const updatedRaw = await this._getTaskByIdConn(connection, taskId);
         const updatedTask = Task.fromDB(updatedRaw);
-        const action = status === 1 ? 'complete' : 'reset';
-        await this._createTaskMessagesAfterMutation(updatedTask, action, options, operationKey, connection);
+        await this._createTaskMessagesAfterMutation(
+          updatedTask,
+          messageAction,
+          {
+            ...options,
+            refundPoints,
+          },
+          operationKey,
+          connection
+        );
         await connection.commit();
         return updatedTask;
       } catch (error) {
@@ -1086,6 +1172,82 @@ class TaskService {
     return `${message.visibilityScope || message.visibility_scope}:${message.messageEventKey || message.message_event_key}`;
   }
 
+  async _applyLateMakeupRefundIfNeeded(connection, task, modifyTime, operationKey) {
+    const penaltyDeductedPoints = Number(task?.penaltyDeductedPoints || 0);
+    if (!task || !task.penaltyApplied || task.penaltyRefunded || penaltyDeductedPoints <= 0) {
+      return {
+        refunded: false,
+        refundPoints: 0,
+      };
+    }
+
+    const refundIdempotencyKey = `task_makeup_refund:${task.taskId}:${operationKey}`;
+    await starService.grantStarsWithConnection(
+      connection,
+      task.userId,
+      {
+        recordId: `task_makeup_refund_${task.taskId}_${operationKey}`,
+        source: 'task',
+        sourceId: task.taskId,
+        requestedPoints: penaltyDeductedPoints,
+        reason: `逾期补做退回: ${task.title}`,
+        expiryType: 'permanent',
+        expiryDate: null,
+        idempotencyKey: refundIdempotencyKey,
+        data: {
+          sourceType: 'task_makeup_refund',
+          taskId: task.taskId,
+          operationKey,
+        },
+        modifyTime,
+      }
+    );
+
+    return {
+      refunded: true,
+      refundPoints: penaltyDeductedPoints,
+    };
+  }
+
+  async _revokeLateMakeupRefundIfNeeded(connection, task, operationKey, modifyTime) {
+    const penaltyDeductedPoints = Number(task?.penaltyDeductedPoints || 0);
+    if (!task || !task.penaltyRefunded || penaltyDeductedPoints <= 0) {
+      return {
+        revoked: false,
+        revokePoints: 0,
+      };
+    }
+
+    await starService.upsertStarRecordWithConnection(
+      connection,
+      task.userId,
+      {
+        recordId: `task_makeup_refund_revoke_${task.taskId}_${operationKey}`,
+        type: 'expense',
+        source: 'task',
+        sourceId: task.taskId,
+        points: -penaltyDeductedPoints,
+        description: `撤销逾期补做退星: ${task.title}`,
+        expiryType: 'permanent',
+        expiryDate: null,
+        originalTaskDate: task.date || null,
+        requestedPoints: penaltyDeductedPoints,
+        idempotencyKey: `task_makeup_refund_revoke:${task.taskId}:${operationKey}`,
+        data: {
+          sourceType: 'task_makeup_refund_revoke',
+          taskId: task.taskId,
+          operationKey,
+        },
+        modifyTime,
+      }
+    );
+
+    return {
+      revoked: true,
+      revokePoints: penaltyDeductedPoints,
+    };
+  }
+
   async _applyRequiredTaskPenalty(taskId, options = {}) {
     try {
       const columnMap = await this._getTaskColumnMap();
@@ -1158,6 +1320,18 @@ class TaskService {
 
         const updateParams = [1];
         const updateClauses = [`${columnMap.penaltyApplied} = ?`];
+
+        if (columnMap.penaltyDeductedPoints) {
+          updateClauses.push(`${columnMap.penaltyDeductedPoints} = ?`);
+          updateParams.push(consumedPoints);
+        }
+        if (columnMap.penaltyRefunded) {
+          updateClauses.push(`${columnMap.penaltyRefunded} = ?`);
+          updateParams.push(0);
+        }
+        if (columnMap.penaltyRefundTime) {
+          updateClauses.push(`${columnMap.penaltyRefundTime} = NULL`);
+        }
 
         if (columnMap.modifyTime) {
           updateClauses.push(`${columnMap.modifyTime} = ?`);
@@ -1278,6 +1452,7 @@ class TaskService {
       actorUserId: options.actorUserId || task.userId,
       actorRole: options.actorRole || 'system',
       operationKey,
+      refundPoints: Number(options.refundPoints || 0),
       createTimeOverride: action === 'delete' ? Date.now() : null,
     }, connection);
   }

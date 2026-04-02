@@ -399,7 +399,40 @@ async function updateTaskStatus(service, taskId, status, userId = null) {
       logger.info('TaskService', `任务状态已设置: ${task.title}, 状态=${task.status}, 类型=${typeof task.status}`);
     }
 
-    if (!task.starAwarded && !task.isRequired && service.starService) {
+    let operationType = 'update';
+
+    if (
+      !service.enableCloudStorage &&
+      status === TaskStatus.COMPLETED &&
+      task.penaltyApplied &&
+      !task.penaltyRefunded &&
+      Number(task.penaltyDeductedPoints || 0) > 0 &&
+      service.starService
+    ) {
+      const refundPoints = Number(task.penaltyDeductedPoints || 0);
+      const refundUserId = task.userId || task.assignedTo;
+      const refundResult = await service.starService.addStars(
+        refundPoints,
+        'permanent',
+        `逾期补做退回: ${task.title}`,
+        {
+          sourceType: 'task_makeup_refund',
+          sourceId: task.id,
+          userId: refundUserId
+        }
+      );
+
+      if (!refundResult.success) {
+        return {
+          success: false,
+          message: refundResult.message || '逾期补做退星失败'
+        };
+      }
+
+      task.penaltyRefunded = true;
+      task.penaltyRefundTime = task.completionTime || Date.now();
+      operationType = 'makeup_complete';
+    } else if (!task.starAwarded && !task.penaltyApplied && !task.isRequired && service.starService) {
       logger.info('TaskService', `开始为任务分配积分: ${task.title}, 积分=${task.points}, 有效期=${task.pointsExpiry}`);
       logger.info('TaskService', `任务当前starAwarded状态: ${task.starAwarded}, 类型: ${typeof task.starAwarded}`);
 
@@ -433,10 +466,15 @@ async function updateTaskStatus(service, taskId, status, userId = null) {
           logger.warn('TaskService', `任务 "${task.title}" 积分添加失败: ${addResult.message}`);
         }
       }
+      operationType = 'complete';
     } else if (task.starAwarded) {
       logger.info('TaskService', `任务 "${task.title}" 已经获得过星星，跳过积分分配`);
     } else if (task.isRequired) {
       logger.info('TaskService', `任务 "${task.title}" 是必做任务，完成后不获得星星奖励`);
+      operationType = 'complete';
+    } else if (task.penaltyApplied) {
+      logger.info('TaskService', `任务 "${task.title}" 存在历史必做惩罚，本次完成不走普通奖励`);
+      operationType = 'complete';
     }
 
     const syncAction = status === TaskStatus.COMPLETED ? 'complete' : 'reset';
@@ -466,10 +504,7 @@ async function updateTaskStatus(service, taskId, status, userId = null) {
       saveSuccess: !!savedTask
     });
 
-    let operationType = 'update';
-    if (status === TaskStatus.COMPLETED) {
-      operationType = 'complete';
-    } else if (previousStatus === TaskStatus.COMPLETED) {
+    if (previousStatus === TaskStatus.COMPLETED && status !== TaskStatus.COMPLETED) {
       operationType = 'uncomplete';
     }
 
@@ -491,7 +526,7 @@ async function updateTaskStatus(service, taskId, status, userId = null) {
       operatorUserId: userId
     });
 
-    if (status === TaskStatus.COMPLETED) {
+    if (status === TaskStatus.COMPLETED && operationType !== 'makeup_complete') {
       logger.logEvent(EVENTS.TASK_COMPLETED, {
         taskId: savedTask.id,
         title: savedTask.title
@@ -552,6 +587,36 @@ async function resetTask(service, taskId, userId = null) {
         message: ERROR_MESSAGES.TASK_LOCKED,
         locked: true
       };
+    }
+
+    if (
+      !service.enableCloudStorage &&
+      task.penaltyRefunded &&
+      Number(task.penaltyDeductedPoints || 0) > 0 &&
+      service.starService
+    ) {
+      const refundUserId = task.userId || task.assignedTo;
+      const revokeResult = await service.starService.consumeStarsFromSpecificType(
+        Number(task.penaltyDeductedPoints || 0),
+        'permanent',
+        `撤销逾期补做退星: ${task.title}`,
+        {
+          sourceType: 'task_makeup_refund_revoke',
+          sourceId: task.id,
+          userId: refundUserId,
+          originalTaskDate: task.date || null
+        }
+      );
+
+      if (!revokeResult.success) {
+        return {
+          success: false,
+          message: '永久星星不足，无法撤销逾期补做退星'
+        };
+      }
+
+      task.penaltyRefunded = false;
+      task.penaltyRefundTime = 0;
     }
 
     if (task.starAwarded && task.points > 0 && service.starService) {

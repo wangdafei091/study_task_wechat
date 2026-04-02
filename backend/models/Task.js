@@ -23,6 +23,9 @@ class Task {
     repeat = null,
     isAllDay = false,
     penaltyApplied = false,
+    penaltyDeductedPoints = 0,
+    penaltyRefunded = false,
+    penaltyRefundTime = null,
     createdAt = null,
     updatedAt = null,
     deletedAt = null,
@@ -57,6 +60,9 @@ class Task {
     this.repeat = repeat;
     this.isAllDay = isAllDay;
     this.penaltyApplied = penaltyApplied;
+    this.penaltyDeductedPoints = Number(penaltyDeductedPoints || 0);
+    this.penaltyRefunded = Boolean(penaltyRefunded);
+    this.penaltyRefundTime = penaltyRefundTime || null;
     this.createdAt = createdAt;
     this.updatedAt = updatedAt;
     this.deletedAt = deletedAt;
@@ -139,6 +145,9 @@ class Task {
       repeat: repeat,
       isAllDay: Boolean(readField('is_all_day', 'isAllDay')),
       penaltyApplied: Boolean(readField('penalty_applied', 'penaltyApplied')),
+      penaltyDeductedPoints: Number(readField('penalty_deducted_points', 'penaltyDeductedPoints') || 0),
+      penaltyRefunded: Boolean(readField('penalty_refunded', 'penaltyRefunded')),
+      penaltyRefundTime: readField('penalty_refund_time', 'penaltyRefundTime') || null,
       createdAt: readField('created_at', 'createdAt'),
       updatedAt: readField('updated_at', 'updatedAt'),
       deletedAt: readField('deleted_at', 'deletedAt') || null,
@@ -174,6 +183,9 @@ class Task {
       repeat: this.repeat ? JSON.stringify(this.repeat) : null,
       isAllDay: this.isAllDay,
       penaltyApplied: this.penaltyApplied,
+      penalty_deducted_points: this.penaltyDeductedPoints,
+      penalty_refunded: this.penaltyRefunded ? 1 : 0,
+      penalty_refund_time: this.penaltyRefundTime || null,
       completion_time: this.completionTime || null,
       star_awarded: this.starAwarded ? 1 : 0,
       modify_time: this.modifyTime || null,
@@ -206,6 +218,9 @@ class Task {
       repeat: this.repeat,
       isAllDay: this.isAllDay,
       penaltyApplied: this.penaltyApplied,
+      penaltyDeductedPoints: this.penaltyDeductedPoints,
+      penaltyRefunded: this.penaltyRefunded,
+      penaltyRefundTime: this.penaltyRefundTime,
       createdAt: this.createdAt,
       completionTime: this.completionTime,
       starAwarded: this.starAwarded,
@@ -302,6 +317,17 @@ class Task {
 
     if (taskData.penaltyApplied !== undefined && typeof taskData.penaltyApplied !== 'boolean') {
       errors.push('penaltyApplied必须为布尔值');
+    }
+
+    if (taskData.penaltyDeductedPoints !== undefined) {
+      const penaltyDeductedPoints = Number(taskData.penaltyDeductedPoints);
+      if (!Number.isInteger(penaltyDeductedPoints) || penaltyDeductedPoints < 0) {
+        errors.push('penaltyDeductedPoints必须为大于等于0的整数');
+      }
+    }
+
+    if (taskData.penaltyRefunded !== undefined && typeof taskData.penaltyRefunded !== 'boolean') {
+      errors.push('penaltyRefunded必须为布尔值');
     }
 
     return {

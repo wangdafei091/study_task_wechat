@@ -538,6 +538,9 @@ class TaskController {
       logger.info('任务状态更新成功', { taskId, status, userId });
       res.json(success({ task: updated.toJSON() }, '状态更新成功'));
     } catch (err) {
+      if (err.code === 'INSUFFICIENT_STARS') {
+        return res.status(409).json(error('撤销逾期补做失败：当前永久星星不足，无法回滚退星', 'INSUFFICIENT_STARS'));
+      }
       logger.error('更新任务状态失败', err);
       res.status(500).json(error('更新任务状态失败', 'TASK_STATUS_UPDATE_FAILED'));
     }

@@ -79,7 +79,9 @@ describe('MessageService', () => {
       getCurrentUserId: jest.fn().mockReturnValue('parent'),
       getCurrentUser: jest.fn().mockReturnValue(null),
       getLoginUser: jest.fn().mockReturnValue(null),
-      getUserById: jest.fn().mockReturnValue(null)
+      getUserById: jest.fn().mockReturnValue(null),
+      getUserByRole: jest.fn().mockReturnValue(null),
+      getAllUsers: jest.fn().mockReturnValue([])
     };
 
     // 创建EventBus实例
@@ -890,6 +892,34 @@ describe('MessageService', () => {
       expect(mockMessageRepository.addMessage).not.toHaveBeenCalled();
     });
 
+    it('孩子真实用户ID完成任务时，应给真实家长ID创建消息', async () => {
+      const task = TestDataFactory.createTask({
+        id: 'task_2',
+        title: '测试任务',
+        userId: 'child_1'
+      });
+
+      mockUserService.getUserById.mockImplementation((userId) => ({
+        parent_1: { userId: 'parent_1', role: 'parent' },
+        child_1: { userId: 'child_1', role: 'child' }
+      }[userId] || null));
+      mockUserService.getUserByRole.mockImplementation((role) => ({
+        parent: { userId: 'parent_1', role: 'parent' },
+        child: { userId: 'child_1', role: 'child' }
+      }[role] || null));
+
+      const result = await messageService._createTaskMessageWithDomainModel(
+        task,
+        NotificationType.COMPLETED,
+        {
+          operatorUserId: 'child_1'
+        }
+      );
+
+      expect(result).toBeDefined();
+      expect(result.userId).toBe('parent_1');
+      expect(result.summary).toBe('您的孩子完成了任务"测试任务"');
+    });
   });
 
   describe('消息统计', () => {
@@ -1217,8 +1247,45 @@ describe('MessageService', () => {
   });
 
   describe('奖励兼容文案视角', () => {
-    it('家长代孩子兑换时，兼容消息应明确为家长代兑', async () => {
+    it('孩子真实用户ID兑换奖励时，兼容消息应发送给真实家长ID', async () => {
       mockUserService.getCurrentUserId.mockReturnValue('child_1');
+      mockUserService.getUserById.mockImplementation((userId) => ({
+        parent_1: { userId: 'parent_1', role: 'parent' },
+        child_1: { userId: 'child_1', role: 'child' }
+      }[userId] || null));
+      mockUserService.getUserByRole.mockImplementation((role) => ({
+        parent: { userId: 'parent_1', role: 'parent' },
+        child: { userId: 'child_1', role: 'child' }
+      }[role] || null));
+
+      const result = await messageService._createRewardMessageWithDomainModel(
+        {
+          id: 'reward_child_1',
+          name: '动画片',
+          points: 10,
+          exchangeUserId: 'child_1'
+        },
+        'claimed',
+        {
+          operatorUserId: 'child_1'
+        }
+      );
+
+      expect(result).toBeDefined();
+      expect(result.userId).toBe('parent_1');
+      expect(result.summary).toBe('您的孩子兑换了奖励"动画片"，花费了10颗星星');
+    });
+
+    it('家长代孩子兑换时，兼容消息应明确为家长代兑且不能被跳过', async () => {
+      mockUserService.getCurrentUserId.mockReturnValue('child_1');
+      mockUserService.getUserById.mockImplementation((userId) => ({
+        parent_1: { userId: 'parent_1', role: 'parent' },
+        child_1: { userId: 'child_1', role: 'child' }
+      }[userId] || null));
+      mockUserService.getUserByRole.mockImplementation((role) => ({
+        parent: { userId: 'parent_1', role: 'parent' },
+        child: { userId: 'child_1', role: 'child' }
+      }[role] || null));
 
       const result = await messageService._createRewardMessageWithDomainModel(
         {
@@ -1234,6 +1301,7 @@ describe('MessageService', () => {
       );
 
       expect(result).toBeDefined();
+      expect(result.userId).toBe('child_1');
       expect(result.summary).toBe('家长为您兑换了奖励"动画片"，花费了10颗星星');
     });
 
@@ -1255,6 +1323,35 @@ describe('MessageService', () => {
 
       expect(result).toBeDefined();
       expect(result.summary).toBe('家长取消了您兑换的奖励"动画片"，退回10颗星星');
+    });
+
+    it('孩子真实用户ID取消兑换时，兼容消息应使用家长视角文案', async () => {
+      mockUserService.getCurrentUserId.mockReturnValue('child_1');
+      mockUserService.getUserById.mockImplementation((userId) => ({
+        parent_1: { userId: 'parent_1', role: 'parent' },
+        child_1: { userId: 'child_1', role: 'child' }
+      }[userId] || null));
+      mockUserService.getUserByRole.mockImplementation((role) => ({
+        parent: { userId: 'parent_1', role: 'parent' },
+        child: { userId: 'child_1', role: 'child' }
+      }[role] || null));
+
+      const result = await messageService._createRewardMessageWithDomainModel(
+        {
+          id: 'reward_3',
+          name: '动画片',
+          points: 10,
+          exchangeUserId: 'child_1'
+        },
+        'unclaimed',
+        {
+          operatorUserId: 'child_1'
+        }
+      );
+
+      expect(result).toBeDefined();
+      expect(result.userId).toBe('parent_1');
+      expect(result.summary).toBe('您的孩子取消了兑换奖励"动画片"，退回10颗星星');
     });
   });
 });

@@ -1,3 +1,6 @@
+const fs = require('fs');
+const path = require('path');
+
 jest.mock('../../utils/logger', () => ({
   info: jest.fn(),
   warn: jest.fn(),
@@ -198,6 +201,17 @@ describe('pages/index page contract', () => {
     expect(page.data.loginUserId).toBe('parent-1');
     expect(page.data.canManageMembers).toBe(true);
     expect(page.data.isReadonlyView).toBe(true);
+  });
+
+  it('首页任务项只应在未来日期下只读，孩子视角不应阻止打卡', () => {
+    const wxml = fs.readFileSync(
+      path.join(__dirname, '../../pages/index/index.wxml'),
+      'utf8'
+    );
+
+    expect(wxml).toContain('readonly="{{isViewingFuture}}"');
+    expect(wxml).toContain('readonlyReason="{{isViewingFuture ? \'future-date\' : \'\'}}"');
+    expect(wxml).not.toContain('readonly="{{isReadonlyView || isViewingFuture}}"');
   });
 
   it('onLoad 不应直接触发多用户初始化，避免与 onShow 双入口竞争', async () => {

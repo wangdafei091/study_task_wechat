@@ -112,11 +112,14 @@ async function handleRequiredTaskPenalty(service, task) {
       logger.info('TaskService', message);
     }
 
+    const actualDeducted = consumeResult ? consumeResult.consumed : 0;
     task.penaltyApplied = true;
+    task.penaltyDeductedPoints = actualDeducted;
+    task.penaltyRefunded = false;
+    task.penaltyRefundTime = 0;
     task.modifyTime = Date.now();
 
     const updatedTask = await service.taskRepository.save(task);
-    const actualDeducted = consumeResult ? consumeResult.consumed : 0;
 
     logger.info('TaskService', `已对必做任务应用惩罚: "${task.title}", 扣除${actualDeducted}颗星, 目标用户=${taskUserId}`);
 

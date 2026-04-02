@@ -4,6 +4,75 @@
 
 ---
 
+## [里程碑-16C] - 2026-04-02
+
+### ✅ 完成情况
+
+**必做任务逾期补做语义治理**
+
+- **任务事实补齐**：
+  - `tasks` 新增 `penalty_deducted_points`、`penalty_refunded`、`penalty_refund_time`
+  - 必做任务逾期惩罚时持久化“实际扣除星星数”，不再只保留 `penaltyApplied=true`
+- **补做退星正式化**：
+  - 继续复用 `PATCH /api/tasks/:taskId/status` 作为完成 / 重置入口
+  - 逾期后首次补做完成时，后端在同一事务内退回此前实际扣除的星星
+  - 已补做退星的任务重置时，要求全额回滚退星；当前永久星星不足时返回 `409 INSUFFICIENT_STARS`
+- **消息与分析口径统一**：
+  - 新增 `task_makeup_complete` / `makeup_completed` 语义，区分普通完成与“逾期后补做并退星”
+  - 分析页同时保留“逾期扣星”和“补做退回”两条事实，不再因后续取消必做或已补做而抹掉历史
+- **测试补齐**：
+  - 新增 `backend/test/unit/taskService-m16c-makeup.test.js`
+  - 新增 `backend/test/integration/task-api-m16c-real.test.js`
+  - 前端补齐任务写链路、消息服务、分析服务与首页任务操作相关测试
+
+### 🧪 验证结果
+
+- 前端定向回归通过：
+  - `npx jest test/services/message-service.test.js --runInBand`
+  - `npx jest test/services/task-service.test.js test/services/analytics-service.test.js test/pages/index.task-actions.test.js test/pages/index.page-contract.test.js --runInBand`
+- 后端单元测试通过：
+  - `npx jest test/unit/taskService-m16c-makeup.test.js test/unit/messageService.test.js --runInBand`
+- 后端真实集成测试通过：
+  - `npx jest test/integration/task-api-m16c-real.test.js --runInBand`
+- 模拟器手工回归通过：逾期惩罚、过去日期补做、家长/孩子消息视角、分析页双事实、reset 回滚退星链路均已复核
+
+### 📖 详细实施记录
+
+- [里程碑-16C：必做任务逾期补做语义治理](../design/milestone-16c-required-task-overdue-makeup-governance.md)
+
+---
+
+## [里程碑-17] - 2026-04-02
+
+### ✅ 完成情况
+
+**首页日期导航升级**
+
+- **自然周导航正式落地**：
+  - 首页日期导航由“最近 7 天滚动”升级为“周一到周日”的自然周视图
+  - 支持本周 / 上周切换，并补齐“回到今天”快捷入口
+- **日期操作边界收敛**：
+  - 未来日期任务保持只读，仅支持查看
+  - 过去日期允许补打卡，首页任务操作链路不再把历史日期误判为跨设备只读
+- **页面联动修复**：
+  - 日期切换后首页标题、任务列表、进度圆环与相关入口状态按当前选中日期联动刷新
+  - 补齐日期导航与首页容器层级问题，避免真机/模拟器下圆环和弹层层级异常
+- **测试补齐**：
+  - 新增 `test/components/index-task-item.test.js`
+  - 补强 `test/pages/index.page-shell.behavior.test.js`
+  - 补齐首页日期导航、只读提示、翻周与返回今天相关断言
+
+### 🧪 验证结果
+
+- 首页相关前端测试已补齐并通过，覆盖日期导航、未来日期只读、历史补打卡与任务操作提示
+- 模拟器与手工回归通过：自然周导航、上周/本周切换、回到今天、未来日期只读、过去日期补打卡均已确认正常
+
+### 📖 详细实施记录
+
+- [M17 首页日期导航升级](../design/m17-date-navigation-upgrade.md)
+
+---
+
 ## [里程碑-16B] - 2026-04-01
 
 ### ✅ 完成情况

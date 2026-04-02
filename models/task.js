@@ -73,6 +73,9 @@ class Task {
     this.status = data.status ?? TaskStatus.PENDING;
     this.isRequired = data.isRequired || false;
     this.penaltyApplied = data.penaltyApplied || false;
+    this.penaltyDeductedPoints = Number(data.penaltyDeductedPoints || 0);
+    this.penaltyRefunded = data.penaltyRefunded || false;
+    this.penaltyRefundTime = data.penaltyRefundTime || 0;
     this.completionTime = data.completionTime || 0;
     
     // 星星奖励
@@ -267,6 +270,9 @@ class Task {
     if (data.isAllDay !== undefined) this.isAllDay = data.isAllDay;  // 添加isAllDay字段更新支持
     if (data.isRequired !== undefined) this.isRequired = data.isRequired;
     if (data.penaltyApplied !== undefined) this.penaltyApplied = data.penaltyApplied;
+    if (data.penaltyDeductedPoints !== undefined) this.penaltyDeductedPoints = Number(data.penaltyDeductedPoints || 0);
+    if (data.penaltyRefunded !== undefined) this.penaltyRefunded = data.penaltyRefunded;
+    if (data.penaltyRefundTime !== undefined) this.penaltyRefundTime = data.penaltyRefundTime || 0;
     if (data.reminder !== undefined) {
       this.reminder = data.reminder
         ? {
@@ -395,6 +401,9 @@ class Task {
       status: this.status,
       isRequired: this.isRequired,
       penaltyApplied: this.penaltyApplied,
+      penaltyDeductedPoints: this.penaltyDeductedPoints,
+      penaltyRefunded: this.penaltyRefunded,
+      penaltyRefundTime: this.penaltyRefundTime,
       completionTime: this.completionTime,
       points: this.points,
       pointsExpiry: this.pointsExpiry,
@@ -415,6 +424,10 @@ class Task {
       baseData.createTime = Date.now();
       baseData.modifyTime = Date.now();
       baseData.status = TaskStatus.PENDING;
+      baseData.penaltyApplied = false;
+      baseData.penaltyDeductedPoints = 0;
+      baseData.penaltyRefunded = false;
+      baseData.penaltyRefundTime = 0;
       baseData.completionTime = 0;
       
       // 生成新ID

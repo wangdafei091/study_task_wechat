@@ -294,6 +294,51 @@ class StarService {
     }
   }
 
+  async upsertStarRecordWithConnection(connection, userId, recordData) {
+    const payload = this._normalizeRecordPayload(userId, recordData);
+    return this._upsertStarRecordWithConnection(connection, userId, payload);
+  }
+
+  async grantStarsWithConnection(connection, userId, commandData) {
+    const requestedPoints = Number(commandData?.requestedPoints || commandData?.points || 0);
+    if (requestedPoints <= 0) {
+      const error = new Error('requestedPoints 必须大于 0');
+      error.code = 'INVALID_PARAMS';
+      throw error;
+    }
+
+    if (!commandData?.idempotencyKey) {
+      const error = new Error('idempotencyKey 不能为空');
+      error.code = 'INVALID_PARAMS';
+      throw error;
+    }
+
+    const recordId = commandData.recordId || this._buildRecordId(
+      commandData.recordPrefix || 'grant',
+      commandData.idempotencyKey
+    );
+
+    const payload = this._normalizeRecordPayload(userId, {
+      recordId,
+      type: 'income',
+      source: commandData.source || this._mapSource(commandData.sourceType),
+      sourceId: commandData.sourceId || null,
+      points: requestedPoints,
+      description: commandData.reason || '通用加星',
+      expiryType: commandData.expiryType || 'permanent',
+      expiryDate: commandData.expiryDate || null,
+      requestedPoints,
+      idempotencyKey: commandData.idempotencyKey,
+      data: {
+        sourceType: commandData.sourceType || 'system',
+        ...(commandData.data || {}),
+      },
+      modifyTime: Number(commandData.modifyTime || Date.now()),
+    });
+
+    return this._upsertStarRecordWithConnection(connection, userId, payload);
+  }
+
   async consumeStars(userId, commandData) {
     const payload = this._normalizeConsumePayload(userId, commandData);
     const pool = getPool();

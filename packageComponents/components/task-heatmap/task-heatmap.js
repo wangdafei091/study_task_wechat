@@ -3,6 +3,8 @@ const uiUtils = require('../../../utils/uiUtils.js');
 const serviceManager = require('../../../services/service-manager.js');
 const logger = require('../../../utils/logger.js');
 
+let taskHeatmapLoadingCounter = 0;
+
 /**
  * 任务热力图组件 (task-heatmap)
  * 
@@ -280,7 +282,7 @@ Component({
       // 确保关闭任何可能存在的加载提示
       try {
         logger.debug('[task-heatmap] 组件销毁，确保关闭加载提示');
-        wx.hideLoading();
+        this._hideLoading(true);
       } catch (error) {
         logger.error('[task-heatmap] 组件销毁时关闭加载提示出错:', error);
       }
@@ -288,6 +290,30 @@ Component({
   },
   
   methods: {
+    _showLoading(options) {
+      taskHeatmapLoadingCounter += 1;
+      wx.showLoading(options);
+    },
+
+    _hideLoading(force = false) {
+      if (force) {
+        if (taskHeatmapLoadingCounter > 0) {
+          taskHeatmapLoadingCounter = 0;
+          wx.hideLoading();
+        }
+        return;
+      }
+
+      if (taskHeatmapLoadingCounter <= 0) {
+        return;
+      }
+
+      taskHeatmapLoadingCounter -= 1;
+      if (taskHeatmapLoadingCounter === 0) {
+        wx.hideLoading();
+      }
+    },
+
     // 生成日历数据
     generateCalendar() {
       const logger = require('../../../utils/logger');
@@ -1506,7 +1532,7 @@ Component({
       logger.info('task-heatmap', `更新任务${task.id}，是否必做: ${task.isRequired ? '是' : '否'}, 积分只读: ${this.data.pointsReadOnly ? '是' : '否'}, 更新字段:`, updateData);
       
       // 显示加载中
-      wx.showLoading({
+      this._showLoading({
         title: '保存中...',
         mask: true
       });
@@ -1590,7 +1616,7 @@ Component({
         });
       } finally {
         // 隐藏加载提示
-        wx.hideLoading();
+        this._hideLoading(true);
         
         // 关闭编辑区域
         this.cancelEdit();
@@ -1967,7 +1993,7 @@ Component({
       });
       
       // 显示加载状态
-      wx.showLoading({
+      this._showLoading({
         title: '正在分析任务系列...',
         mask: true
       });
@@ -2042,7 +2068,7 @@ Component({
         // 任务数量安全检查
         const MAX_SAFE_TASKS = 100;
         if (seriesTasks.length > MAX_SAFE_TASKS) {
-          wx.hideLoading();
+          this._hideLoading();
           
           // 用户确认对话框
           const userConfirmed = await new Promise((resolve) => {
@@ -2069,7 +2095,7 @@ Component({
           }
           
           logger.info('task-heatmap', `用户确认继续处理大量任务: ${seriesTasks.length}个`);
-          wx.showLoading({
+          this._showLoading({
             title: '准备删除...',
             mask: true
           });
@@ -2089,7 +2115,7 @@ Component({
           
           // 更新进度提示（每5个任务更新一次）
           if (i % 5 === 0 || i === seriesTasks.length - 1) {
-            wx.showLoading({
+            this._showLoading({
               title: `删除中(${i + 1}/${seriesTasks.length})`,
               mask: true
             });
@@ -2142,10 +2168,10 @@ Component({
           this.refreshTaskList();
           
           // 修复：确保关闭加载提示
-          wx.hideLoading();
+          this._hideLoading();
         } else {
           // 修复：确保关闭加载提示
-          wx.hideLoading();
+          this._hideLoading(true);
           
           wx.showToast({
             title: '删除失败',
@@ -2162,7 +2188,7 @@ Component({
         }
       } catch (error) {
         // 确保加载提示被关闭
-        wx.hideLoading();
+        this._hideLoading(true);
         
         logger.error('task-heatmap', '删除任务系列过程中出错:', error);
         
@@ -2373,7 +2399,7 @@ Component({
       });
       
       // 显示加载提示
-      wx.showLoading({
+      this._showLoading({
         title: '正在分析任务系列...',
         mask: true
       });
@@ -2417,7 +2443,7 @@ Component({
         const MAX_SAFE_TASKS = 100;
         if (seriesTasks.length > MAX_SAFE_TASKS) {
           // 确保先隐藏之前的加载提示
-          wx.hideLoading();
+          this._hideLoading();
           
           // 使用Promise封装用户确认对话框
           const userConfirmed = await new Promise((resolve) => {
@@ -2440,7 +2466,7 @@ Component({
           logger.info('task-heatmap', `用户确认继续处理大量任务: ${seriesTasks.length}个`);
           
           // 用户确认继续，显示加载提示
-          wx.showLoading({
+          this._showLoading({
             title: '准备更新...',
             mask: true
           });
@@ -2474,7 +2500,7 @@ Component({
           const batch = seriesTasks.slice(i, i + batchSize);
           
           // 更新进度提示
-          wx.showLoading({
+          this._showLoading({
             title: `更新中(${processedCount}/${seriesTasks.length})`,
             mask: true
           });
@@ -2527,7 +2553,7 @@ Component({
         return { success: false, count: 0 };
       } finally {
         // 确保隐藏加载提示
-        wx.hideLoading();
+        this._hideLoading(true);
       }
     },
 
