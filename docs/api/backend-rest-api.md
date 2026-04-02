@@ -1,7 +1,7 @@
 # 后端 REST API 契约
 
 > 项目后端 HTTP/REST 接口的权威说明文档
-> **最后更新**：2026-03-31
+> **最后更新**：2026-04-02
 > **维护者**：项目维护团队
 
 ---
@@ -607,7 +607,13 @@ Authorization: Bearer <token>
 - `400` - `INVALID_STATUS` / `INVALID_STAR_AWARDED`
 - `403` - `PERMISSION_DENIED`
 - `404` - `TASK_NOT_FOUND`
+- `409` - `INSUFFICIENT_STARS`
 - `500` - `TASK_STATUS_UPDATE_FAILED`
+
+说明：
+- 同一接口统一承接普通完成、过去日期补做完成和任务重置三类状态变更
+- 当任务满足“已逾期且此前已实际扣星”条件时，首次完成会在同一事务内退回 `penaltyDeductedPoints` 对应的星星；返回的任务对象会同步反映 `penaltyRefunded` 与 `penaltyRefundTime`
+- 当任务已发生“逾期补做退星”后再次重置为未完成，如果当前永久星星不足以全额回滚这笔退星，接口返回 `409 INSUFFICIENT_STARS`
 
 ### 6.8 同步必做任务惩罚
 
