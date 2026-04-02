@@ -111,4 +111,43 @@ describe('AnalyticsService', () => {
       expect(result).toEqual([]);
     });
   });
+
+  describe('getTaskStarCalendarData', () => {
+    it('应基于事实字段生成惩罚与逾期补做退星记录，不依赖当前 isRequired', async () => {
+      mockTaskService.getTasksByScope.mockResolvedValue([
+        {
+          id: 'task_penalty_1',
+          title: '昨天的必做任务',
+          date: '2026-03-20',
+          isRequired: false,
+          penaltyApplied: true,
+          penaltyDeductedPoints: 3,
+          penaltyRefunded: true,
+          penaltyRefundTime: new Date('2026-03-21T08:30:00').getTime(),
+          starAwarded: false,
+          points: 5,
+          isCompleted: () => false
+        }
+      ]);
+
+      const result = await analyticsService.getTaskStarCalendarData({
+        userId: 'child-1'
+      });
+
+      expect(result).toEqual([
+        expect.objectContaining({
+          title: '逾期补做退星：昨天的必做任务',
+          points: 3,
+          type: 'income',
+          source: 'task_makeup_refund'
+        }),
+        expect.objectContaining({
+          title: '未完成必做任务：昨天的必做任务',
+          points: -3,
+          type: 'penalty',
+          source: 'task'
+        })
+      ]);
+    });
+  });
 });

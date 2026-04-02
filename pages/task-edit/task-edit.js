@@ -7,6 +7,8 @@ const serviceManager = require('../../services/service-manager.js');
 const pageStorageHelper = require('../../utils/page-storage-helper');
 const permissionUtils = require('../../utils/permission-utils');
 
+let taskEditLoadingCounter = 0;
+
 Page({
   /**
    * 页面的初始数据
@@ -631,7 +633,7 @@ Page({
                  {title: newTask.title, type: newTask.type, date: newTask.date});
       
       // 显示加载提示
-      wx.showLoading({
+      this._showLoading({
         title: '添加中...',
         mask: true
       });
@@ -639,7 +641,7 @@ Page({
       // 添加超时保护，确保加载提示不会一直显示
       this.loadingTimeout = setTimeout(() => {
         logger.warn('TaskEdit', '任务添加操作超时，强制关闭加载提示');
-        wx.hideLoading();
+        this._hideLoading(true);
         
         // 提示用户操作耗时过长
         wx.showToast({
@@ -653,7 +655,7 @@ Page({
       const taskService = serviceManager.getService('task');
       if (!taskService) {
         logger.error('TaskEdit', '无法获取任务服务');
-        wx.hideLoading();
+        this._hideLoading(true);
         wx.showToast({
           title: '系统错误，请重试',
           icon: 'none',
@@ -665,7 +667,7 @@ Page({
       // 检查特殊类型的任务并做预处理
       if (newTask.type === 'study') {
         // 任务加载中的提示文本优化
-        wx.showLoading({
+        this._showLoading({
           title: '创建学习任务...',
           mask: true
         });
@@ -697,7 +699,7 @@ Page({
             newTask.duration = durationMinutes;
             
             // 确保进度条更新正常
-            wx.showLoading({
+            this._showLoading({
               title: '处理长时间任务...',
               mask: true
             });
@@ -747,7 +749,7 @@ Page({
       logger.error('TaskEdit', '添加任务时发生错误', error);
       
       // 确保错误时也关闭加载提示
-      wx.hideLoading();
+      this._hideLoading(true);
       
       // 清除超时计时器（如果存在）
       if (this.loadingTimeout) {
@@ -856,7 +858,7 @@ Page({
         logger.error('TaskEdit', '任务数据验证失败', taskData);
         
         // 关闭加载提示
-        wx.hideLoading();
+        this._hideLoading(true);
         
         // 显示错误信息
         wx.showToast({
@@ -876,7 +878,7 @@ Page({
       });
       
       // 更新loading文本，指示正在创建任务
-      wx.showLoading({
+      this._showLoading({
         title: '创建任务中...',
         mask: true
       });
@@ -900,7 +902,7 @@ Page({
       });
       
       // 关闭加载提示
-      wx.hideLoading();
+      this._hideLoading();
       
       if (!result || !result.success) {
         logger.error('TaskEdit', '任务创建失败', result);
@@ -931,7 +933,7 @@ Page({
       logger.error('TaskEdit', '任务创建过程中发生异常', error);
       
       // 确保关闭加载提示
-      wx.hideLoading();
+      this._hideLoading(true);
       
       // 显示错误信息
       wx.showToast({
@@ -1185,11 +1187,13 @@ Page({
         });
         
         // 在设置结束时间前，先确保之后的UI更新正常
-        wx.showLoading({
+        this._showLoading({
           title: '处理中...',
           mask: false,
-          duration: 300
         });
+        setTimeout(() => {
+          this._hideLoading();
+        }, 300);
       }
     }
     
@@ -2009,7 +2013,7 @@ Page({
     
     // 确保关闭任何可能存在的加载提示
     try {
-      wx.hideLoading();
+      this._hideLoading(true);
     } catch (error) {
       logger.error('task-edit', '页面隐藏时关闭加载提示出错:', error);
     }
@@ -2023,9 +2027,33 @@ Page({
     
     // 确保关闭任何可能存在的加载提示
     try {
-      wx.hideLoading();
+      this._hideLoading(true);
     } catch (error) {
       logger.error('task-edit', '页面卸载时关闭加载提示出错:', error);
+    }
+  },
+
+  _showLoading: function(options) {
+    taskEditLoadingCounter += 1;
+    wx.showLoading(options);
+  },
+
+  _hideLoading: function(force = false) {
+    if (force) {
+      if (taskEditLoadingCounter > 0) {
+        taskEditLoadingCounter = 0;
+        wx.hideLoading();
+      }
+      return;
+    }
+
+    if (taskEditLoadingCounter <= 0) {
+      return;
+    }
+
+    taskEditLoadingCounter -= 1;
+    if (taskEditLoadingCounter === 0) {
+      wx.hideLoading();
     }
   },
 

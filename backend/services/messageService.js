@@ -195,6 +195,7 @@ class MessageService {
     actorRole = 'system',
     operationKey,
     penaltyPoints = null,
+    refundPoints = null,
     upcomingMeta = null,
     createTimeOverride = null,
   }) {
@@ -227,6 +228,7 @@ class MessageService {
       subjectName,
       subjectUserId,
       penaltyPoints,
+      refundPoints,
       upcomingMeta,
       task,
     });
@@ -506,11 +508,12 @@ class MessageService {
     return this._getRoleDisplayName(role);
   }
 
-  _buildTaskContent({ action, taskTitle, actorRole, actorUserId, actorName, subjectName, subjectUserId, penaltyPoints = null, upcomingMeta = null, task = null }) {
+  _buildTaskContent({ action, taskTitle, actorRole, actorUserId, actorName, subjectName, subjectUserId, penaltyPoints = null, refundPoints = null, upcomingMeta = null, task = null }) {
     const safeSubjectName = this._normalizeDisplayName(subjectName, 'child');
     const safeActorName = this._normalizeDisplayName(actorName, actorRole);
     const isSelfAction = Boolean(actorUserId && subjectUserId && actorUserId === subjectUserId);
     const resolvedPenaltyPoints = Number(penaltyPoints || 0);
+    const resolvedRefundPoints = Number(refundPoints || 0);
     const remainingText = upcomingMeta?.remainingText || '稍后';
     const taskLabel = upcomingMeta?.isRequired ? `必做任务“${taskTitle}”` : `任务“${taskTitle}”`;
     const upcomingStartText = upcomingMeta?.dayLabel
@@ -611,6 +614,23 @@ class MessageService {
             summary: isSelfAction
               ? `${safeSubjectName}完成了任务“${taskTitle}”`
               : `${safeActorName}代${safeSubjectName}完成了任务“${taskTitle}”`,
+          },
+        };
+      case 'makeup_complete':
+        return {
+          icon: '♻️',
+          priority: 2,
+          user: {
+            title: `逾期后补做：${taskTitle}`,
+            summary: isSelfAction
+              ? `你逾期后补做了任务“${taskTitle}”，已退回${resolvedRefundPoints}颗星星`
+              : `${safeActorName}代你逾期后补做了任务“${taskTitle}”，已退回${resolvedRefundPoints}颗星星`,
+          },
+          family: {
+            title: `逾期后补做：${taskTitle}`,
+            summary: isSelfAction
+              ? `${safeSubjectName}逾期后补做了任务“${taskTitle}”，已退回${resolvedRefundPoints}颗星星`
+              : `${safeActorName}代${safeSubjectName}逾期后补做了任务“${taskTitle}”，已退回${resolvedRefundPoints}颗星星`,
           },
         };
       case 'reset':

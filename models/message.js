@@ -27,6 +27,7 @@ const NotificationType = {
   UPCOMING: 'upcoming',   // 即将到期提醒
   EXPIRED: 'expired',     // 过期提醒
   COMPLETED: 'completed', // 完成提醒
+  MAKEUP_COMPLETED: 'makeup_completed', // 逾期补做提醒
   NEW: 'new',            // 新建提醒
   UPDATED: 'updated',    // 更新提醒
   DELETED: 'deleted',    // 删除提醒

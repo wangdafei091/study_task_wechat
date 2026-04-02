@@ -162,7 +162,7 @@ Page({
     userPermissions: {}, // 当前用户权限
     loginUserId: null,         // 设备拥有者ID（权限依据）
     canManageMembers: false,   // 是否可管理家庭成员（家长专属）
-    isReadonlyView: false,     // 孩子视角只读：孩子设备（loginUser.role==='child'）或家长切到孩子视角（loginUser.userId !== currentUser.userId）
+    isReadonlyView: false,     // 管理入口只读：孩子设备或家长切到孩子视角时不可创建/编辑/删除，但今日/历史任务仍可打卡
     lastActiveChildId: null,   // 家长最近查看的孩子ID（家长视角时任务仍显示该孩子）
 
     // 日期导航相关
@@ -1860,7 +1860,7 @@ Page({
       const availableUsers = userService.getAllUsers();
       const userPermissions = permissionUtils.getUserPermissions(currentUser.role);
       const loginUser = userService.getLoginUser ? userService.getLoginUser() : null;
-      // 只读视角：孩子设备或家长切到孩子视角均为只读
+      // 管理入口只读：孩子设备或家长切到孩子视角均不可进入管理能力
       const isReadonlyView = loginUser
         ? (loginUser.role === 'child' || loginUser.userId !== currentUser.userId)
         : false;

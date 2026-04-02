@@ -52,7 +52,7 @@ describe('backend MessageService task required copy', () => {
     jest.resetModules();
   });
 
-  it('required/unrequired/penalty/upcoming 应生成可辨识的任务文案', async () => {
+  it('required/unrequired/penalty/upcoming/makeup_complete 应生成可辨识的任务文案', async () => {
     const service = require('../../services/messageService');
 
     const requiredContent = service._buildTaskContent({
@@ -83,6 +83,16 @@ describe('backend MessageService task required copy', () => {
       subjectUserId: 'child_1',
       penaltyPoints: 3
     });
+    const makeupContent = service._buildTaskContent({
+      action: 'makeup_complete',
+      taskTitle: '背单词',
+      actorRole: 'child',
+      actorUserId: 'child_1',
+      actorName: '小明',
+      subjectName: '小明',
+      subjectUserId: 'child_1',
+      refundPoints: 3
+    });
     const upcomingContent = service._buildTaskContent({
       action: 'upcoming',
       taskTitle: '背单词',
@@ -103,6 +113,9 @@ describe('backend MessageService task required copy', () => {
     expect(unrequiredContent.family.summary).toContain('取消');
     expect(penaltyContent.user.summary).toContain('扣除3颗星星');
     expect(penaltyContent.family.summary).toContain('扣除3颗星星');
+    expect(makeupContent.user.summary).toContain('逾期后补做');
+    expect(makeupContent.user.summary).toContain('退回3颗星星');
+    expect(makeupContent.family.summary).toContain('退回3颗星星');
     expect(upcomingContent.user.title).toContain('必做任务');
     expect(upcomingContent.user.summary).toContain('30分钟');
     expect(upcomingContent.family.summary).toContain('小明');

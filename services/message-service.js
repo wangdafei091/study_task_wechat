@@ -123,6 +123,152 @@ class MessageService {
     return this.userService?.getCurrentUser?.() || null;
   }
 
+  _getUserIdentifier(user) {
+    return viewScopeUtils.getUserIdentifier(user) || null;
+  }
+
+  _resolveOperatorIdentity(operatorUserId = null) {
+    const fallbackUserId = operatorUserId || this.userService?.getCurrentUserId?.() || 'parent';
+
+    if (fallbackUserId === 'parent' || fallbackUserId === 'child') {
+      return {
+        userId: fallbackUserId,
+        role: fallbackUserId
+      };
+    }
+
+    const currentUser = this._getCurrentUser();
+    if (this._getUserIdentifier(currentUser) === fallbackUserId) {
+      return {
+        userId: fallbackUserId,
+        role: currentUser?.role || null
+      };
+    }
+
+    const loginUser = this._getLoginUser();
+    if (this._getUserIdentifier(loginUser) === fallbackUserId) {
+      return {
+        userId: fallbackUserId,
+        role: loginUser?.role || null
+      };
+    }
+
+    const cachedUser = this.userService?.getUserById?.(fallbackUserId) || null;
+    return {
+      userId: fallbackUserId,
+      role: cachedUser?.role || null
+    };
+  }
+
+  _getUserIdByRole(role) {
+    const currentUser = this._getCurrentUser();
+    if (currentUser?.role === role) {
+      return this._getUserIdentifier(currentUser) || role;
+    }
+
+    const loginUser = this._getLoginUser();
+    if (loginUser?.role === role) {
+      return this._getUserIdentifier(loginUser) || role;
+    }
+
+    const roleUser = this.userService?.getUserByRole?.(role) || null;
+    if (roleUser) {
+      return this._getUserIdentifier(roleUser) || role;
+    }
+
+    const allUsers = this.userService?.getAllUsers?.() || [];
+    const matchedUser = allUsers.find(user => user?.role === role);
+    return this._getUserIdentifier(matchedUser) || role;
+  }
+
+  _buildTaskLocalMessageMeta(task, notificationType, options = {}) {
+    const { isBatchOperation, batchCount, priority, operatorUserId } = options;
+    const operator = this._resolveOperatorIdentity(operatorUserId);
+    const isChildOperator = operator.role === 'child';
+    const isParentOperator = operator.role === 'parent';
+
+    if (
+      [NotificationType.COMPLETED, NotificationType.MAKEUP_COMPLETED, NotificationType.UPDATED].includes(notificationType) &&
+      isParentOperator
+    ) {
+      logger.info('MessageService', `家长操作，跳过消息创建: ${task.title}, 操作类型=${notificationType}, 操作者=${operator.userId}`);
+      return null;
+    }
+
+    let title, summary, icon;
+
+    switch(notificationType) {
+      case NotificationType.NEW:
+        title = '新任务提醒';
+        summary = isBatchOperation
+          ? `您有${batchCount}个"${task.title}"循环任务已添加到计划中`
+          : `您有新的任务"${task.title}"已添加到计划中`;
+        icon = '📝';
+        break;
+      case NotificationType.UPCOMING:
+        title = '任务即将到期';
+        summary = `您的任务"${task.title}"将在不久后到期，请及时完成`;
+        icon = '⏰';
+        break;
+      case NotificationType.UPDATED:
+        title = '任务已更新';
+        summary = isBatchOperation
+          ? `已更新${batchCount}个"${task.title}"循环任务`
+          : `任务"${task.title}"的内容已被更新`;
+        icon = '✏️';
+        break;
+      case NotificationType.COMPLETED:
+        title = '任务已完成';
+        summary = isChildOperator
+          ? `您的孩子完成了任务"${task.title}"`
+          : `恭喜您完成了任务"${task.title}"`;
+        icon = '✅';
+        break;
+      case NotificationType.MAKEUP_COMPLETED:
+        title = '任务已逾期补做';
+        summary = isChildOperator
+          ? `您的孩子逾期后补做了任务"${task.title}"，已退回星星`
+          : `您逾期后补做了任务"${task.title}"，已退回星星`;
+        icon = '♻️';
+        break;
+      case NotificationType.REQUIRED:
+        title = '必做任务提醒';
+        summary = `请务必完成任务"${task.title}"，否则将扣除星星`;
+        icon = '⚠️';
+        break;
+      case NotificationType.DELETED:
+        title = '任务已删除';
+        summary = isBatchOperation
+          ? `已删除${batchCount}个"${task.title}"循环任务`
+          : `任务"${task.title}"已被删除`;
+        icon = '🗑️';
+        break;
+      default:
+        title = '任务通知';
+        summary = `任务"${task.title}"有新的状态变更`;
+        icon = '🔔';
+    }
+
+    let targetUserId;
+    if (isChildOperator) {
+      targetUserId = this._getUserIdByRole('parent');
+      logger.info('MessageService', `小朋友操作，任务消息发给家长: ${task.title}, 操作类型=${notificationType}`);
+    } else if (isParentOperator && notificationType === NotificationType.NEW) {
+      targetUserId = task.userId || this._getUserIdByRole('child');
+      logger.info('MessageService', `家长创建任务，消息发给小朋友: ${task.title}`);
+    } else {
+      targetUserId = task.userId || this.userService?.getCurrentUserId?.() || 'parent';
+    }
+
+    return {
+      userId: targetUserId,
+      title,
+      summary,
+      icon,
+      priority: priority || MessagePriority.MEDIUM
+    };
+  }
+
   _resolveScopeOptions(options = {}) {
     const loginUser = this._getLoginUser();
     const currentUser = this._getCurrentUser();
@@ -751,13 +897,16 @@ class MessageService {
     }
     const { task, previousStatus, operationType, operatorUserId } = data;
     
-    if (operationType === 'complete') {
+    if (operationType === 'complete' || operationType === 'makeup_complete') {
       logger.info('MessageService', `处理任务完成事件: ${task.title}, 操作者=${operatorUserId || '未指定'}`);
-      
-      // 直接创建领域模型消息，传递操作者信息
-      this._createTaskMessageWithDomainModel(task, NotificationType.COMPLETED, {
+
+      const notificationType = operationType === 'makeup_complete'
+        ? NotificationType.MAKEUP_COMPLETED
+        : NotificationType.COMPLETED;
+
+      this._createTaskMessageWithDomainModel(task, notificationType, {
         priority: MessagePriority.HIGH,
-        operatorUserId: operatorUserId // 传递操作者信息
+        operatorUserId: operatorUserId
       });
     }
   }
@@ -1420,98 +1569,22 @@ class MessageService {
    * @private
    */
   async _createTaskMessageWithDomainModel(task, notificationType, options = {}) {
-    const { isBatchOperation, batchCount, priority, operatorUserId } = options;
-    
-    // 获取当前操作者，优先使用传入的operatorUserId
-    const currentOperatorId = operatorUserId || (this.userService ? this.userService.getCurrentUserId() : 'parent');
-    
-    // 对于特定消息类型，如果是家长操作则不创建消息
-    const skipMessagesForParentOperator = [
-      NotificationType.COMPLETED,
-      NotificationType.UPDATED
-    ];
-    
-    if (skipMessagesForParentOperator.includes(notificationType) && currentOperatorId === 'parent') {
-      logger.info('MessageService', `家长操作，跳过消息创建: ${task.title}, 操作类型=${notificationType}, 操作者=${currentOperatorId}`);
-      return null; // 不创建消息
-    }
-    
-    let title, summary, icon;
-    
-    switch(notificationType) {
-      case NotificationType.NEW:
-        title = '新任务提醒';
-        summary = isBatchOperation 
-          ? `您有${batchCount}个"${task.title}"循环任务已添加到计划中` 
-          : `您有新的任务"${task.title}"已添加到计划中`;
-        icon = '📝';
-        break;
-      case NotificationType.UPCOMING:
-        title = '任务即将到期';
-        summary = `您的任务"${task.title}"将在不久后到期，请及时完成`;
-        icon = '⏰';
-        break;
-      case NotificationType.UPDATED:
-        title = '任务已更新';
-        summary = isBatchOperation 
-          ? `已更新${batchCount}个"${task.title}"循环任务` 
-          : `任务"${task.title}"的内容已被更新`;
-        icon = '✏️';
-        break;
-      case NotificationType.COMPLETED:
-        title = '任务已完成';
-        // 根据操作者调整文本：小朋友完成发给家长的消息
-        if (currentOperatorId === 'child') {
-          summary = `您的孩子完成了任务"${task.title}"`;
-        } else {
-          summary = `恭喜您完成了任务"${task.title}"`;
-        }
-        icon = '✅';
-        break;
-      case NotificationType.REQUIRED:
-        title = '必做任务提醒';
-        summary = `请务必完成任务"${task.title}"，否则将扣除星星`;
-        icon = '⚠️';
-        break;
-      case NotificationType.DELETED:
-        title = '任务已删除';
-        summary = isBatchOperation 
-          ? `已删除${batchCount}个"${task.title}"循环任务` 
-          : `任务"${task.title}"已被删除`;
-        icon = '🗑️';
-        break;
-      default:
-        title = '任务通知';
-        summary = `任务"${task.title}"有新的状态变更`;
-        icon = '🔔';
-    }
-    
-    // 确定消息接收者：小朋友操作发给家长，家长创建任务发给小朋友
-    let targetUserId;
-    if (currentOperatorId === 'child') {
-      // 小朋友操作：消息发给家长
-      targetUserId = 'parent';
-      logger.info('MessageService', `小朋友操作，任务消息发给家长: ${task.title}, 操作类型=${notificationType}`);
-    } else if (currentOperatorId === 'parent' && notificationType === NotificationType.NEW) {
-      // 家长创建任务：消息发给小朋友
-      targetUserId = 'child';
-      logger.info('MessageService', `家长创建任务，消息发给小朋友: ${task.title}`);
-    } else {
-      // 其他情况：使用任务的userId或默认为parent
-      targetUserId = task.userId || 'parent';
+    const messageMeta = this._buildTaskLocalMessageMeta(task, notificationType, options);
+    if (!messageMeta) {
+      return null;
     }
     
     const messageData = {
-      userId: targetUserId,
+      userId: messageMeta.userId,
       type: MessageType.TASK,
       notificationType,
       relatedId: task.id,
-      title,
-      summary,
-      icon,
-      isBatchOperation,
-      batchCount,
-      priority: priority || MessagePriority.MEDIUM
+      title: messageMeta.title,
+      summary: messageMeta.summary,
+      icon: messageMeta.icon,
+      isBatchOperation: options.isBatchOperation,
+      batchCount: options.batchCount,
+      priority: messageMeta.priority
     };
     
     return this._createMessageWithDomainModel(messageData);
@@ -1862,23 +1935,15 @@ class MessageService {
    */
   async _createRewardMessageWithDomainModel(reward, action, options = {}) {
     const { operatorUserId } = options;
-    
-    // 获取当前操作者，优先使用传入的operatorUserId
-    const currentOperatorId = operatorUserId || (this.userService ? this.userService.getCurrentUserId() : 'parent');
-    
-    // 对于特定消息类型，如果是家长操作则不创建消息
-    const skipMessagesForParentOperator = ['claimed'];
-    
-    if (skipMessagesForParentOperator.includes(action) && currentOperatorId === 'parent') {
-      logger.info('MessageService', `家长操作，跳过奖励消息创建: ${reward.name}, 操作类型=${action}, 操作者=${currentOperatorId}`);
-      return null; // 不创建消息
-    }
+    const operator = this._resolveOperatorIdentity(operatorUserId);
+    const isChildOperator = operator.role === 'child';
+    const isParentOperator = operator.role === 'parent';
 
     const exchangeUserId = reward.exchangeUserId || reward.userId || null;
     const isProxyAction = Boolean(
-      currentOperatorId &&
+      operator.userId &&
       exchangeUserId &&
-      currentOperatorId !== exchangeUserId
+      operator.userId !== exchangeUserId
     );
     
     let title, summary, icon;
@@ -1891,9 +1956,13 @@ class MessageService {
         break;
       case 'claimed':
         title = '奖励已兑换';
-        summary = isProxyAction
-          ? `家长为您兑换了奖励"${reward.name}"，花费了${reward.points}颗星星`
-          : `您已成功兑换奖励"${reward.name}"，花费了${reward.points}颗星星`;
+        if (isProxyAction) {
+          summary = `家长为您兑换了奖励"${reward.name}"，花费了${reward.points}颗星星`;
+        } else if (isChildOperator) {
+          summary = `您的孩子兑换了奖励"${reward.name}"，花费了${reward.points}颗星星`;
+        } else {
+          summary = `您已成功兑换奖励"${reward.name}"，花费了${reward.points}颗星星`;
+        }
         icon = '🎁';
         break;
       case 'delivered':
@@ -1903,9 +1972,13 @@ class MessageService {
         break;
       case 'unclaimed':
         title = '奖励兑换已取消';
-        summary = isProxyAction
-          ? `家长取消了您兑换的奖励"${reward.name}"，退回${reward.points}颗星星`
-          : `您已取消兑换奖励"${reward.name}"，退回${reward.points}颗星星`;
+        if (isProxyAction) {
+          summary = `家长取消了您兑换的奖励"${reward.name}"，退回${reward.points}颗星星`;
+        } else if (isChildOperator) {
+          summary = `您的孩子取消了兑换奖励"${reward.name}"，退回${reward.points}颗星星`;
+        } else {
+          summary = `您已取消兑换奖励"${reward.name}"，退回${reward.points}颗星星`;
+        }
         icon = '↩️';
         break;
       default:
@@ -1916,13 +1989,13 @@ class MessageService {
     
     // 确定消息接收者：小朋友操作发给家长，家长创建奖励发给小朋友
     let targetUserId;
-    if (currentOperatorId === 'child') {
+    if (isChildOperator) {
       // 小朋友操作：消息发给家长
-      targetUserId = 'parent';
+      targetUserId = this._getUserIdByRole('parent');
       logger.info('MessageService', `小朋友操作，奖励消息发给家长: ${reward.name}, 操作类型=${action}`);
-    } else if (currentOperatorId === 'parent' && action === 'created') {
+    } else if (isParentOperator && action === 'created') {
       // 家长创建奖励：消息发给小朋友
-      targetUserId = 'child';
+      targetUserId = this._getUserIdByRole('child');
       logger.info('MessageService', `家长创建奖励，消息发给小朋友: ${reward.name}`);
     } else {
       // 其他情况：使用原逻辑
@@ -2086,6 +2159,7 @@ class MessageService {
       'upcoming': NotificationType.UPCOMING,
       'edited': NotificationType.UPDATED,
       'completed': NotificationType.COMPLETED,
+      'makeup_completed': NotificationType.MAKEUP_COMPLETED,
       'required': NotificationType.REQUIRED,
       'deleted': NotificationType.DELETED
     };
@@ -2102,72 +2176,22 @@ class MessageService {
    * @private
    */
   _prepareTaskMessageData(task, notificationType, options = {}) {
-    const { isBatchOperation, batchCount, priority, operatorUserId } = options;
-    
-    // 获取操作者信息
-    const currentOperatorId = operatorUserId || (this.userService ? this.userService.getCurrentUserId() : 'parent');
-    
-    let title, summary, icon;
-    
-    switch(notificationType) {
-      case NotificationType.NEW:
-        title = '新任务提醒';
-        summary = isBatchOperation 
-          ? `您有${batchCount}个"${task.title}"循环任务已添加到计划中` 
-          : `您有新的任务"${task.title}"已添加到计划中`;
-        icon = '📝';
-        break;
-      case NotificationType.UPCOMING:
-        title = '任务即将到期';
-        summary = `您的任务"${task.title}"将在不久后到期，请及时完成`;
-        icon = '⏰';
-        break;
-      case NotificationType.UPDATED:
-        title = '任务已更新';
-        summary = isBatchOperation 
-          ? `已更新${batchCount}个"${task.title}"循环任务` 
-          : `任务"${task.title}"的内容已被更新`;
-        icon = '✏️';
-        break;
-      case NotificationType.COMPLETED:
-        title = '任务已完成';
-        // 根据操作者调整文本：小朋友完成发给家长的消息
-        if (currentOperatorId === 'child') {
-          summary = `您的孩子完成了任务"${task.title}"`;
-        } else {
-          summary = `恭喜您完成了任务"${task.title}"`;
-        }
-        icon = '✅';
-        break;
-      case NotificationType.REQUIRED:
-        title = '必做任务提醒';
-        summary = `请务必完成任务"${task.title}"，否则将扣除星星`;
-        icon = '⚠️';
-        break;
-      case NotificationType.DELETED:
-        title = '任务已删除';
-        summary = isBatchOperation 
-          ? `已删除${batchCount}个"${task.title}"循环任务` 
-          : `任务"${task.title}"已被删除`;
-        icon = '🗑️';
-        break;
-      default:
-        title = '任务通知';
-        summary = `任务"${task.title}"有新的状态变更`;
-        icon = '🔔';
+    const messageMeta = this._buildTaskLocalMessageMeta(task, notificationType, options);
+    if (!messageMeta) {
+      return null;
     }
     
     return {
-      userId: this.userService ? this.userService.getCurrentUserId() : 'parent', // 获取当前用户ID，默认为parent
+      userId: messageMeta.userId,
       type: MessageType.TASK,
       notificationType,
       relatedId: task.id,
-      title,
-      summary,
-      icon,
-      isBatchOperation,
-      batchCount,
-      priority: priority || MessagePriority.MEDIUM
+      title: messageMeta.title,
+      summary: messageMeta.summary,
+      icon: messageMeta.icon,
+      isBatchOperation: options.isBatchOperation,
+      batchCount: options.batchCount,
+      priority: messageMeta.priority
     };
   }
   
