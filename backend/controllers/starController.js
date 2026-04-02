@@ -154,6 +154,48 @@ class StarController {
     }
   }
 
+  async syncExpiryAuthority(req, res) {
+    try {
+      const requestedScope = req.body?.scope || req.query?.scope;
+      const scope = requestedScope === 'family'
+        ? 'family'
+        : 'user';
+      let targetUserId = null;
+
+      if (scope === 'family') {
+        if (req.user.role !== 'parent' || !req.user.familyId) {
+          return res.status(403).json(error('仅家长可执行家庭星星到期结算', 'PERMISSION_DENIED'));
+        }
+      } else {
+        targetUserId = await resolveTargetUserId(
+          req,
+          req.body?.targetUserId || req.query?.targetUserId || req.user.userId
+        );
+        if (!targetUserId) {
+          return res.status(403).json(error('无权访问该成员数据', 'FAMILY_MEMBER_ACCESS_DENIED'));
+        }
+      }
+
+      const expiryGovernanceService = require('../services/starExpiryGovernanceService');
+      const result = await expiryGovernanceService.syncExpiryAuthority({
+        viewerUserId: req.user.userId,
+        viewerRole: req.user.role,
+        familyId: req.user.familyId || null,
+        scope,
+        targetUserId,
+        modifyTime: Number(req.body?.modifyTime || req.query?.modifyTime || Date.now()),
+        operationKey: String(req.body?.operationKey || req.query?.operationKey || Date.now()),
+      });
+
+      return res.json(success(result, '同步成功'));
+    } catch (err) {
+      logger.error('执行星星到期权威结算失败', err);
+      return res.status(this._statusForError(err.code)).json(
+        error(err.message || '执行星星到期权威结算失败', err.code || 'STAR_EXPIRY_AUTHORITY_FAILED')
+      );
+    }
+  }
+
   _statusForError(errorCode) {
     switch (errorCode) {
       case 'INVALID_PARAMS':

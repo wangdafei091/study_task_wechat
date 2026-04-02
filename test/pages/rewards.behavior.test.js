@@ -114,7 +114,9 @@ describe('pages/rewards/rewards behavior', () => {
 
     await page.onShow();
 
-    expect(starService.refreshStarsFromCloud).toHaveBeenCalledWith('child-1');
+    expect(starService.refreshStarsFromCloud).toHaveBeenCalledWith('child-1', {
+      forceCloudAfterAuthority: true
+    });
     expect(page.loadRewardsData).toHaveBeenCalledWith(true);
     expect(appMock.globalData.needRefreshReward).toBe(false);
     expect(appMock.globalData.hasRedirectedToReward).toBe(false);
@@ -260,7 +262,15 @@ describe('pages/rewards/rewards behavior', () => {
   it('查看奖励、页面跳转与领取确认应覆盖动画拦截和保护奖励提示', () => {
     const page = createPageInstance();
     page.data.rewards = [
-      { id: 'reward-1', name: '奖励1', points: 10, unlocked: true, claimed: false, protectedByExpiry: true }
+      {
+        id: 'reward-1',
+        name: '奖励1',
+        points: 10,
+        unlocked: true,
+        claimed: false,
+        protectedByExpiry: true,
+        partialProtection: 10
+      }
     ];
 
     page.data.isRewardAnimating = true;
@@ -321,11 +331,30 @@ describe('pages/rewards/rewards behavior', () => {
       'child-1'
     );
     expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({
-      title: '保护奖励兑换成功'
+      title: '完全保护奖励兑换成功'
     }));
 
     page._handleExchangeSuccess.mockClear();
     page.animateStarsCount = jest.fn((start, end, callback) => callback());
+    rewardService.exchangeReward.mockResolvedValueOnce({
+      success: true,
+      protectedByExpiry: true,
+      actualCost: 4,
+      partialProtection: 6
+    });
+    await page._performClaimReward({ id: 'reward-2b', name: '部分保护奖励', points: 10 });
+    expect(page.animateStarsCount).toHaveBeenCalledWith(20, 16, expect.any(Function));
+    expect(page._handleExchangeSuccess).toHaveBeenCalledWith(
+      expect.objectContaining({ protectedByExpiry: true, actualCost: 4 }),
+      expect.objectContaining({ id: 'reward-2b' }),
+      'child-1'
+    );
+    expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({
+      title: '部分保护奖励兑换成功'
+    }));
+
+    page._handleExchangeSuccess.mockClear();
+    page.animateStarsCount.mockClear();
     rewardService.exchangeReward.mockResolvedValueOnce({
       success: true,
       protectedByExpiry: false
@@ -342,7 +371,7 @@ describe('pages/rewards/rewards behavior', () => {
     }));
   });
 
-  it('_handleExchangeSuccess 应刷新数据并发送奖励领取事件', async () => {
+  it('_handleExchangeSuccess 应刷新数据且不重复发送奖励领取事件', async () => {
     const rewardService = {
       clearCache: jest.fn(),
       calculateNextAvailableReward: jest.fn().mockResolvedValue({
@@ -382,15 +411,7 @@ describe('pages/rewards/rewards behavior', () => {
     expect(rewardService.clearCache).toHaveBeenCalled();
     expect(page.loadRewardsData).toHaveBeenCalled();
     expect(page.data.showModal).toBe(false);
-    expect(appMock.globalData.eventBus.emit).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.objectContaining({
-        rewardId: 'reward-1',
-        actualCost: 5,
-        exchangeType: 'normal',
-        userId: 'child-1'
-      })
-    );
+    expect(appMock.globalData.eventBus.emit).not.toHaveBeenCalled();
   });
 
   it('animateStarsCount、onStarsAreaTap、switchTab 和示例判断应按预期工作', () => {

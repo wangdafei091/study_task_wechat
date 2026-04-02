@@ -408,36 +408,61 @@ async function syncDeleteToCloud(service, taskId, deleteMeta = null) {
 
 async function syncStatusToCloud(service, task) {
   if (!service.enableCloudStorage || !task) return;
-  try {
-    const pendingSyncMeta = task.pendingSyncMeta || service._buildTaskPendingSyncMeta(
-      task,
-      task.status === TaskStatus.COMPLETED ? 'complete' : 'reset'
-    );
-    const url = API_CONFIG.ENDPOINTS.TASK_STATUS.replace('{taskId}', task.id);
-    await HttpClient.patch(url, {
-      status: task.status,
-      starAwarded: task.starAwarded,
-      modifyTime: pendingSyncMeta.modifyTime || task.modifyTime,
-      operationKey: pendingSyncMeta.operationKey,
-      operatorContext: {
-        actorUserId: pendingSyncMeta.operatorUserId,
-        actorRole: pendingSyncMeta.operatorRole,
-        familyId: pendingSyncMeta.familyId
-      }
-    });
-    await service._markTaskSynced(task, { modifyTime: pendingSyncMeta.modifyTime || task.modifyTime });
-    logger.info('TaskService', '任务状态已同步到云端', {
-      taskId: task.id,
-      status: task.status,
-      starAwarded: task.starAwarded
-    });
-  } catch (err) {
-    logger.warn('TaskService', '云端状态同步失败（本地已保存）', {
-      taskId: task.id,
-      error: err.message
-    });
-    throw err;
+  const pendingSyncMeta = task.pendingSyncMeta || service._buildTaskPendingSyncMeta(
+    task,
+    task.status === TaskStatus.COMPLETED ? 'complete' : 'reset'
+  );
+  const syncKey = [
+    task.id,
+    pendingSyncMeta.operationKey || pendingSyncMeta.modifyTime || task.modifyTime || task.status
+  ].join(':');
+
+  if (!service._statusSyncInFlight) {
+    service._statusSyncInFlight = new Map();
   }
+
+  const inFlightPromise = service._statusSyncInFlight.get(syncKey);
+  if (inFlightPromise) {
+    logger.info('TaskService', '复用进行中的任务状态同步请求', {
+      taskId: task.id,
+      operationKey: pendingSyncMeta.operationKey || null
+    });
+    return inFlightPromise;
+  }
+
+  const syncPromise = (async () => {
+    try {
+      const url = API_CONFIG.ENDPOINTS.TASK_STATUS.replace('{taskId}', task.id);
+      await HttpClient.patch(url, {
+        status: task.status,
+        starAwarded: task.starAwarded,
+        modifyTime: pendingSyncMeta.modifyTime || task.modifyTime,
+        operationKey: pendingSyncMeta.operationKey,
+        operatorContext: {
+          actorUserId: pendingSyncMeta.operatorUserId,
+          actorRole: pendingSyncMeta.operatorRole,
+          familyId: pendingSyncMeta.familyId
+        }
+      });
+      await service._markTaskSynced(task, { modifyTime: pendingSyncMeta.modifyTime || task.modifyTime });
+      logger.info('TaskService', '任务状态已同步到云端', {
+        taskId: task.id,
+        status: task.status,
+        starAwarded: task.starAwarded
+      });
+    } catch (err) {
+      logger.warn('TaskService', '云端状态同步失败（本地已保存）', {
+        taskId: task.id,
+        error: err.message
+      });
+      throw err;
+    } finally {
+      service._statusSyncInFlight.delete(syncKey);
+    }
+  })();
+
+  service._statusSyncInFlight.set(syncKey, syncPromise);
+  return syncPromise;
 }
 
 async function syncRequiredStateToCloud(service, task) {
@@ -478,11 +503,22 @@ async function syncRequiredStateToCloud(service, task) {
 async function migrateTasksToChild(service, fromUserId, toUserId) {
   logger.info('TaskService', '开始前置任务归属迁移', { fromUserId, toUserId });
   try {
+    const tasks = await service.taskRepository.getByUserId(fromUserId);
+    if (!service.enableCloudStorage) {
+      if (tasks.length > 0) {
+        tasks.forEach((task) => {
+          task.userId = toUserId;
+        });
+        await service.taskRepository.saveAll(tasks);
+      }
+      logger.info('TaskService', '本地模式前置任务归属迁移完成', { count: tasks.length });
+      return { success: true, count: tasks.length };
+    }
+
     const cloudResult = await HttpClient.post(API_CONFIG.ENDPOINTS.TASKS_TRANSFER, { toUserId });
     const cloudCount = cloudResult?.count ?? 0;
     logger.info('TaskService', '云端迁移成功', { cloudCount });
 
-    const tasks = await service.taskRepository.getByUserId(fromUserId);
     if (tasks.length > 0) {
       tasks.forEach((task) => {
         task.userId = toUserId;

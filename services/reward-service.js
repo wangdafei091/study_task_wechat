@@ -48,8 +48,8 @@ class RewardService {
     // 实例级初始化标记
     this.initialized = false;
     this.enableCloudStorage = API_CONFIG.ENABLE_API;
-    this._lastCloudRewardsSyncTime = 0;
-    this._cloudRewardsRefreshInFlight = null;
+    this._lastCloudRewardsSyncTimes = new Map();
+    this._cloudRewardsRefreshInFlight = new Map();
     
     logger.info('RewardService', '构造奖励服务实例');
   }
@@ -185,20 +185,27 @@ class RewardService {
     return String(seed || Date.now());
   }
 
-  _getOperatorContext(targetUserId = null) {
+  _getOperatorContext(targetUserId = null, mode = 'manage') {
     const loginUser = this.userService?.getLoginUser?.();
     const currentUser = this.userService?.getCurrentUser?.();
+    const fallbackCurrentUserId = this.userService?.getCurrentUserId?.() || null;
+    const preferCurrentUser = mode === 'execute';
 
     return {
-      actorUserId: loginUser?.userId || loginUser?.id || currentUser?.id || null,
-      actorRole: loginUser?.role || currentUser?.role || 'system',
+      actorUserId: preferCurrentUser
+        ? (currentUser?.userId || currentUser?.id || fallbackCurrentUserId || loginUser?.userId || loginUser?.id || null)
+        : (loginUser?.userId || loginUser?.id || currentUser?.userId || currentUser?.id || fallbackCurrentUserId || null),
+      actorRole: preferCurrentUser
+        ? (currentUser?.role || loginUser?.role || 'system')
+        : (loginUser?.role || currentUser?.role || 'system'),
       familyId: loginUser?.familyId || currentUser?.familyId || null,
       targetUserId: targetUserId || null
     };
   }
 
   _buildRewardPendingSyncMeta(reward, action, overrides = {}) {
-    const operatorContext = overrides.operatorContext || this._getOperatorContext(reward?.exchangeUserId || null);
+    const operatorMode = ['exchange', 'unclaim'].includes(action) ? 'execute' : 'manage';
+    const operatorContext = overrides.operatorContext || this._getOperatorContext(reward?.exchangeUserId || null, operatorMode);
     const operationKey = this._createOperationKey(
       overrides.operationKey ||
       overrides.modifyTime ||
@@ -747,11 +754,13 @@ class RewardService {
       force = false,
       minIntervalMs = REWARD_CLOUD_REFRESH_MIN_INTERVAL_MS
     } = options;
+    const scopeKey = `user:${options.userId || 'default'}`;
 
     // in-flight 复用：已在进行中的请求直接复用，避免并发重复
-    if (this._cloudRewardsRefreshInFlight) {
+    const inFlight = this._cloudRewardsRefreshInFlight.get(scopeKey);
+    if (inFlight) {
       logger.debug('RewardService', '复用进行中的奖励云同步请求');
-      return this._cloudRewardsRefreshInFlight;
+      return inFlight;
     }
 
     const request = (async () => {
@@ -759,29 +768,32 @@ class RewardService {
       await this._flushPendingRewardSyncs();
 
       const now = Date.now();
-      const lastSyncTime = this._lastCloudRewardsSyncTime || 0;
+      const lastSyncTime = this._lastCloudRewardsSyncTimes.get(scopeKey) || 0;
       if (!force && minIntervalMs > 0 && now - lastSyncTime < minIntervalMs) {
         logger.debug('RewardService', '奖励云同步被短窗口去重跳过', {
+          scopeKey,
           elapsed: now - lastSyncTime,
           minIntervalMs
         });
         return { success: true, skipped: true, reason: 'throttled' };
       }
 
-      const result = await this._fetchRewardsFromCloud();
-        this._lastCloudRewardsSyncTime = Date.now();
-        return result;
+      const result = await this._fetchRewardsFromCloud(options);
+      this._lastCloudRewardsSyncTimes.set(scopeKey, Date.now());
+      return result;
       })()
       .finally(() => {
-        this._cloudRewardsRefreshInFlight = null;
+        this._cloudRewardsRefreshInFlight.delete(scopeKey);
       });
 
-    this._cloudRewardsRefreshInFlight = request;
+    this._cloudRewardsRefreshInFlight.set(scopeKey, request);
     return request;
   }
 
-  async _fetchRewardsFromCloud() {
-    const response = await HttpClient.get(API_CONFIG.ENDPOINTS.REWARDS);
+  async _fetchRewardsFromCloud(options = {}) {
+    const response = await HttpClient.get(API_CONFIG.ENDPOINTS.REWARDS, options.userId ? {
+      userId: options.userId
+    } : {});
     const cloudRewards = (response.rewards || []).map(item => this._mapCloudReward(item));
     const allLocal = await this.rewardRepository.getAll(false);
     const cloudRewardIds = new Set(cloudRewards.map(reward => reward.id).filter(Boolean));
@@ -867,7 +879,12 @@ class RewardService {
     const response = await HttpClient.patch(url, {
       exchangeUserId,
       modifyTime,
-      operationKey: pendingSyncMeta.operationKey
+      operationKey: pendingSyncMeta.operationKey,
+      operatorContext: {
+        actorUserId: pendingSyncMeta.operatorUserId,
+        actorRole: pendingSyncMeta.operatorRole,
+        familyId: pendingSyncMeta.familyId
+      }
     });
     if (reward) {
       await this._markRewardSynced(reward, { modifyTime });
@@ -884,7 +901,12 @@ class RewardService {
     const response = await HttpClient.patch(url, {
       exchangeUserId,
       modifyTime,
-      operationKey: pendingSyncMeta.operationKey
+      operationKey: pendingSyncMeta.operationKey,
+      operatorContext: {
+        actorUserId: pendingSyncMeta.operatorUserId,
+        actorRole: pendingSyncMeta.operatorRole,
+        familyId: pendingSyncMeta.familyId
+      }
     });
     if (reward) {
       await this._markRewardSynced(reward, { modifyTime });
@@ -991,6 +1013,68 @@ class RewardService {
         return { success: false, message: '该奖励已被兑换' };
       }
       
+      if (this.enableCloudStorage) {
+        const exchangeModifyTime = Date.now();
+        const response = await this._syncExchangeToCloud(
+          reward.id,
+          userId,
+          exchangeModifyTime,
+          reward
+        );
+        const cloudReward = this._mapCloudReward(response.reward || {
+          ...reward,
+          rewardId: reward.id,
+          claimed: true,
+          claimTime: exchangeModifyTime,
+          claimStatus: 'claimed',
+          exchangeUserId: userId,
+          modifyTime: exchangeModifyTime
+        });
+        cloudReward.pendingSyncMeta = null;
+        cloudReward.syncedToCloud = true;
+        await this.rewardRepository.save(cloudReward);
+
+        if (this.starService?.refreshStarsFromCloud) {
+          await this.starService.refreshStarsFromCloud(userId, {
+            forceCloudAfterAuthority: true
+          }).catch(() => null);
+        }
+        await this.refreshRewardsFromCloud({
+          force: true,
+          userId
+        }).catch(() => null);
+
+        const actualCost = Number(response.consumedPoints || 0);
+        this.eventBus.emit(EVENTS.REWARD_CLAIMED, {
+          rewardId: cloudReward.id,
+          rewardName: cloudReward.name,
+          points: actualCost,
+          actualCost,
+          originalPoints: cloudReward.points,
+          displayPoints: actualCost,
+          protectedByExpiry: cloudReward.protectedByExpiry || false,
+          partialProtection: cloudReward.partialProtection || 0,
+          exchangeType: cloudReward.protectedByExpiry
+            ? (actualCost > 0 ? 'partial_protected' : 'fully_protected')
+            : 'normal',
+          userId,
+          operatorUserId: userId,
+          timestamp: Date.now()
+        });
+
+        return {
+          success: true,
+          reward: cloudReward,
+          message: cloudReward.protectedByExpiry
+            ? (actualCost > 0 ? '部分保护奖励兑换成功' : '完全保护奖励兑换成功')
+            : '兑换成功',
+          protectedByExpiry: cloudReward.protectedByExpiry || false,
+          partialProtection: cloudReward.partialProtection || 0,
+          actualCost,
+          userId
+        };
+      }
+
       // 获取用户当前星星总数
       logger.info('RewardService', `步骤2: 检查用户星星数量, 用户=${userId}`);
       const userStars = await this._getUserAvailableStars(userId, {
@@ -1261,13 +1345,17 @@ class RewardService {
         await this.rewardRepository.save(cloudReward);
 
         if (this.starService?.refreshStarsFromCloud && exchangeUserId) {
-          await this.starService.refreshStarsFromCloud(exchangeUserId).catch(() => null);
+          await this.starService.refreshStarsFromCloud(exchangeUserId, {
+            forceCloudAfterAuthority: true
+          }).catch(() => null);
         }
 
         const pointsRefunded = Number(response.refundedPoints || 0);
+        const operatorContext = this._getOperatorContext(exchangeUserId, 'execute');
         this.eventBus.emit(EVENTS.REWARD_UNCLAIMED, {
           reward: cloudReward,
-          pointsRefunded
+          pointsRefunded,
+          operatorUserId: operatorContext.actorUserId || null
         });
         this.eventBus.emit(EVENTS.REWARD_EXCHANGE_CANCELLED, {
           reward: cloudReward,

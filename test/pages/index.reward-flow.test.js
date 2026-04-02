@@ -108,7 +108,8 @@ describe('pages/index reward flow', () => {
 
     starService = {
       getTotalStars: jest.fn(),
-      refreshStarsFromCloud: jest.fn()
+      refreshStarsFromCloud: jest.fn(),
+      syncExpiryAuthorityIfNeeded: jest.fn().mockResolvedValue({ success: true })
     };
 
     taskService = {
@@ -194,11 +195,21 @@ describe('pages/index reward flow', () => {
 
     await page.loadStarsAndRewards();
 
-    expect(starService.refreshStarsFromCloud).toHaveBeenCalledWith('child-1');
+    expect(starService.syncExpiryAuthorityIfNeeded).toHaveBeenCalledWith({
+      scope: 'user',
+      userId: 'child-1'
+    });
+    expect(starService.refreshStarsFromCloud).toHaveBeenCalledWith('child-1', {
+      forceCloudAfterAuthority: true
+    });
+    expect(rewardService.refreshRewardsFromCloud).toHaveBeenCalledWith({
+      force: true,
+      userId: 'child-1'
+    });
     expect(starService.getTotalStars).toHaveBeenCalledWith('child-1');
     expect(rewardService.getLastExchangeTimeByUser).toHaveBeenCalledWith('parent-1');
     expect(rewardService.calculateNextAvailableReward).toHaveBeenCalledWith(6, 'parent-1');
-    expect(rewardService.getAvailableRewards).toHaveBeenCalledWith(true, false, 'parent-1');
+    expect(rewardService.getAvailableRewards).toHaveBeenCalledWith(false, false, 'parent-1');
     expect(starService.refreshStarsFromCloud.mock.invocationCallOrder[0])
       .toBeLessThan(starService.getTotalStars.mock.invocationCallOrder[0]);
     expect(formatUtils.formatPoints).toHaveBeenCalledWith(6, true);
@@ -211,6 +222,29 @@ describe('pages/index reward flow', () => {
       })
     ]);
     expect(page.data.rewardHintText).toBe('');
+  });
+
+  it('loadStarsAndRewards 在 skipAuthoritySync=true 时不应重复触发 authority sync', async () => {
+    const page = createPageInstance();
+    page.getEffectiveTaskUserId = jest.fn(() => 'child-1');
+
+    starService.refreshStarsFromCloud.mockResolvedValue({ success: true });
+    starService.getTotalStars.mockResolvedValue(6);
+    rewardService.getLastExchangeTimeByUser.mockResolvedValue(null);
+    rewardService.calculateNextAvailableReward.mockResolvedValue({
+      id: 'reward-1',
+      name: '看动画片',
+      points: 10,
+      icon: '🎁'
+    });
+    rewardService.getAvailableRewards.mockResolvedValue([]);
+
+    await page.loadStarsAndRewards({ skipAuthoritySync: true });
+
+    expect(starService.syncExpiryAuthorityIfNeeded).not.toHaveBeenCalled();
+    expect(starService.refreshStarsFromCloud).toHaveBeenCalledWith('child-1', {
+      forceCloudAfterAuthority: true
+    });
   });
 
   it('loadStarsAndRewards 在共享设备孩子视角且无正式奖励时，应显示孩子提示并过滤示例奖励', async () => {
@@ -284,7 +318,7 @@ describe('pages/index reward flow', () => {
     await page.checkRewardUnlock();
 
     expect(starService.getTotalStars).toHaveBeenCalledWith('child-1');
-    expect(rewardService.getAvailableRewards).toHaveBeenCalledWith(true, false, 'parent-1');
+    expect(rewardService.getAvailableRewards).toHaveBeenCalledWith(false, false, 'parent-1');
     expect(page._handleRewardCompletion).toHaveBeenCalledWith(null, 10);
     expect(page.data.completedReward).toEqual(expect.objectContaining({ id: 'reward-1', name: '看动画片' }));
     expect(page.data.completedRewardTotal).toBe(10);
@@ -305,7 +339,7 @@ describe('pages/index reward flow', () => {
     await page._handleRewardCompletion({ current: 6, total: 10 }, 10);
 
     expect(starService.getTotalStars).toHaveBeenCalledWith('child-1');
-    expect(rewardService.getAvailableRewards).toHaveBeenCalledWith(true, false, 'parent-1');
+    expect(rewardService.getAvailableRewards).toHaveBeenCalledWith(false, false, 'parent-1');
     expect(page.data.userPoints).toBe(6);
     expect(page.data.rewardProgress).toEqual({ current: 10, total: 10 });
     expect(page.data.visibleRewards).toEqual([
@@ -490,7 +524,9 @@ describe('pages/index reward flow', () => {
 
     await page.loadStarsAndRewards();
 
-    expect(starService.refreshStarsFromCloud).toHaveBeenCalledWith('child-1');
+    expect(starService.refreshStarsFromCloud).toHaveBeenCalledWith('child-1', {
+      forceCloudAfterAuthority: true
+    });
     expect(starService.getTotalStars).toHaveBeenCalledWith('child-1');
     expect(page.data.userPoints).toBe(4);
   });

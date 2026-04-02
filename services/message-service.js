@@ -145,7 +145,9 @@ class MessageService {
       userId: scope === MessageVisibilityScope.USER ? currentUserId : null,
       familyId,
       requireFresh: options.requireFresh === true,
-      preferScope: options.preferScope || null
+      preferScope: options.preferScope || null,
+      skipExpiryAuthoritySyncBeforeFormalReminders:
+        options.skipExpiryAuthoritySyncBeforeFormalReminders === true
     };
   }
 
@@ -390,6 +392,9 @@ class MessageService {
       };
 
       try {
+        if (!resolved.skipExpiryAuthoritySyncBeforeFormalReminders) {
+          await this._syncExpiryAuthorityBeforeFormalReminders(resolved);
+        }
         const [upcomingResult, starsResult] = await Promise.allSettled([
           HttpClient.post(API_CONFIG.ENDPOINTS.TASK_UPCOMING_SYNC, payload),
           HttpClient.post(API_CONFIG.ENDPOINTS.STAR_EXPIRING_REMINDERS_SYNC, payload)
@@ -433,6 +438,28 @@ class MessageService {
     this._formalReminderSyncInFlight.set(scopeKey, syncPromise);
 
     return syncPromise;
+  }
+
+  async _syncExpiryAuthorityBeforeFormalReminders(resolved) {
+    try {
+      const serviceManager = require('./service-manager');
+      const starService = serviceManager.getService('starService') || serviceManager.getService('star');
+      if (!starService || typeof starService.syncExpiryAuthorityIfNeeded !== 'function') {
+        return;
+      }
+
+      await starService.syncExpiryAuthorityIfNeeded({
+        scope: resolved.scope,
+        userId: resolved.userId || null,
+        familyId: resolved.familyId || null
+      });
+    } catch (error) {
+      logger.warn('MessageService', '正式提醒前的星星到期权威同步失败，继续执行提醒同步', {
+        scope: resolved.scope,
+        userId: resolved.userId || null,
+        error: error.message
+      });
+    }
   }
 
   async _syncUpcomingMessagesIfNeeded(resolved) {
@@ -954,11 +981,14 @@ class MessageService {
       return;
     }
     const { reward } = data;
+    const operatorUserId = data.operatorUserId || data.userId || null;
     
     logger.info('MessageService', `处理奖励取消领取事件: ${reward.name}`);
     
     // 创建奖励取消领取消息
-    this._createRewardMessageWithDomainModel(reward, 'unclaimed');
+    this._createRewardMessageWithDomainModel(reward, 'unclaimed', {
+      operatorUserId
+    });
   }
   
   /**
@@ -1843,6 +1873,13 @@ class MessageService {
       logger.info('MessageService', `家长操作，跳过奖励消息创建: ${reward.name}, 操作类型=${action}, 操作者=${currentOperatorId}`);
       return null; // 不创建消息
     }
+
+    const exchangeUserId = reward.exchangeUserId || reward.userId || null;
+    const isProxyAction = Boolean(
+      currentOperatorId &&
+      exchangeUserId &&
+      currentOperatorId !== exchangeUserId
+    );
     
     let title, summary, icon;
     
@@ -1854,7 +1891,9 @@ class MessageService {
         break;
       case 'claimed':
         title = '奖励已兑换';
-        summary = `您已成功兑换奖励"${reward.name}"，花费了${reward.points}颗星星`;
+        summary = isProxyAction
+          ? `家长为您兑换了奖励"${reward.name}"，花费了${reward.points}颗星星`
+          : `您已成功兑换奖励"${reward.name}"，花费了${reward.points}颗星星`;
         icon = '🎁';
         break;
       case 'delivered':
@@ -1864,7 +1903,9 @@ class MessageService {
         break;
       case 'unclaimed':
         title = '奖励兑换已取消';
-        summary = `您已取消兑换奖励"${reward.name}"，退回${reward.points}颗星星`;
+        summary = isProxyAction
+          ? `家长取消了您兑换的奖励"${reward.name}"，退回${reward.points}颗星星`
+          : `您已取消兑换奖励"${reward.name}"，退回${reward.points}颗星星`;
         icon = '↩️';
         break;
       default:

@@ -156,4 +156,79 @@ describe('backend StarService active group filtering', () => {
       expect.objectContaining({ group_id: 'group_future' })
     ]);
   });
+
+  it('settleExpiredGroupsWithConnection 应删除已过期分组并创建幂等结算流水', async () => {
+    const service = require('../../services/starService');
+    const connection = {
+      execute: jest.fn()
+    };
+
+    connection.execute
+      .mockResolvedValueOnce([[
+        {
+          group_id: 'group_expired',
+          user_id: 'child_1',
+          type: 'week',
+          stars: 7,
+          expiry_date: '2026-03-28'
+        },
+        {
+          group_id: 'group_active',
+          user_id: 'child_1',
+          type: 'week',
+          stars: 5,
+          expiry_date: '2026-03-31'
+        }
+      ]])
+      .mockResolvedValue([{ affectedRows: 1 }]);
+
+    const result = await service.settleExpiredGroupsWithConnection(connection, 'child_1', {
+      modifyTime: new Date('2026-03-30T09:00:00.000Z').getTime()
+    });
+
+    expect(result).toEqual(expect.objectContaining({
+      settledGroups: 1,
+      settledPoints: 7,
+      createdRecords: 1,
+      invalidGroups: 0
+    }));
+    expect(connection.execute).toHaveBeenCalledWith('DELETE FROM star_groups WHERE group_id = ?', ['group_expired']);
+    expect(connection.execute.mock.calls.some(([sql]) => sql.includes('INSERT INTO star_records'))).toBe(true);
+  });
+
+  it('getExpiringProtectionSummaryWithConnection 应只统计 48 小时内仍有效的分组', async () => {
+    const service = require('../../services/starService');
+    const connection = {
+      execute: jest.fn().mockResolvedValue([[
+        {
+          group_id: 'group_today',
+          user_id: 'child_1',
+          type: 'week',
+          stars: 4,
+          expiry_date: '2026-03-30'
+        },
+        {
+          group_id: 'group_tomorrow',
+          user_id: 'child_1',
+          type: 'week',
+          stars: 6,
+          expiry_date: '2026-03-31'
+        },
+        {
+          group_id: 'group_far',
+          user_id: 'child_1',
+          type: 'week',
+          stars: 8,
+          expiry_date: '2026-04-03'
+        }
+      ]])
+    };
+
+    const result = await service.getExpiringProtectionSummaryWithConnection(connection, 'child_1', {
+      nowTimestamp: new Date('2026-03-30T09:00:00.000Z').getTime()
+    });
+
+    expect(result.pendingPoints).toBe(10);
+    expect(result.groups.map((group) => group.group_id)).toEqual(['group_today', 'group_tomorrow']);
+  });
 });

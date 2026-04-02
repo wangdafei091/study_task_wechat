@@ -3,6 +3,7 @@ jest.mock('../../services/service-manager.js', () => ({
   getTaskService: jest.fn(),
   getMessageService: jest.fn(),
   getStarService: jest.fn(),
+  getRewardService: jest.fn(),
   getUserService: jest.fn(),
   getService: jest.fn()
 }));
@@ -48,7 +49,8 @@ describe('utils/app/post-login-bootstrap', () => {
       checkAndRepairDataConsistency: jest.fn().mockResolvedValue({
         success: true,
         repairResult: { repairedCount: 0 }
-      })
+      }),
+      enableCloudStorage: false
     };
     const messageService = {
       initialize: jest.fn().mockResolvedValue(),
@@ -63,6 +65,7 @@ describe('utils/app/post-login-bootstrap', () => {
 
     serviceManager.getTaskService.mockReturnValue(taskService);
     serviceManager.getStarService.mockReturnValue(starService);
+    serviceManager.getRewardService.mockReturnValue(null);
     serviceManager.getMessageService.mockReturnValue(messageService);
     serviceManager.getUserService.mockReturnValue({
       getLoginUserId: jest.fn(() => 'parent-1')
@@ -87,6 +90,7 @@ describe('utils/app/post-login-bootstrap', () => {
     expect(taskService.checkTasksStatus).toHaveBeenCalled();
     expect(taskService.checkUpcomingTasks).toHaveBeenCalled();
     expect(starService.initialize).toHaveBeenCalled();
+    expect(starService.checkAndRepairDataConsistency).toHaveBeenCalledTimes(1);
     expect(messageService.initialize).toHaveBeenCalled();
     expect(messageService.syncFormalRemindersIfNeeded).toHaveBeenCalled();
     expect(messageService.createSystemMessage).toHaveBeenCalled();
@@ -126,11 +130,13 @@ describe('utils/app/post-login-bootstrap', () => {
       checkAndRepairDataConsistency: jest.fn().mockResolvedValue({
         success: false,
         error: 'repair failed'
-      })
+      }),
+      enableCloudStorage: false
     };
 
     serviceManager.getTaskService.mockReturnValue(taskService);
     serviceManager.getStarService.mockReturnValue(starService);
+    serviceManager.getRewardService.mockReturnValue(null);
     serviceManager.getMessageService.mockReturnValue(null);
     serviceManager.getUserService.mockReturnValue({
       getLoginUserId: jest.fn(() => 'parent-1')
@@ -145,6 +151,7 @@ describe('utils/app/post-login-bootstrap', () => {
 
     expect(starService.protectRewardsByExpiry).toHaveBeenCalledWith(3, 'parent-1');
     expect(starService.initialize).toHaveBeenCalled();
+    expect(starService.checkAndRepairDataConsistency).toHaveBeenCalledTimes(1);
     expect(app.setTheme).toHaveBeenCalled();
   });
 
@@ -162,11 +169,17 @@ describe('utils/app/post-login-bootstrap', () => {
     };
     const starService = {
       calculatePendingExpiry: jest.fn().mockResolvedValue(0),
+      syncExpiryAuthorityIfNeeded: jest.fn().mockResolvedValue({ success: true }),
+      refreshStarsFromCloud: jest.fn().mockResolvedValue({ success: true }),
       initialize: jest.fn().mockResolvedValue(),
       checkAndRepairDataConsistency: jest.fn().mockResolvedValue({
         success: true,
         repairResult: { repairedCount: 0 }
-      })
+      }),
+      enableCloudStorage: true
+    };
+    const rewardService = {
+      refreshRewardsFromCloud: jest.fn().mockResolvedValue({ success: true })
     };
     const messageService = {
       initialize: jest.fn().mockResolvedValue(),
@@ -176,6 +189,7 @@ describe('utils/app/post-login-bootstrap', () => {
 
     serviceManager.getTaskService.mockReturnValue(taskService);
     serviceManager.getStarService.mockReturnValue(starService);
+    serviceManager.getRewardService.mockReturnValue(rewardService);
     serviceManager.getMessageService.mockReturnValue(messageService);
     serviceManager.getUserService.mockReturnValue({
       getLoginUserId: jest.fn(() => 'parent-1')
@@ -193,6 +207,19 @@ describe('utils/app/post-login-bootstrap', () => {
 
     expect(taskService.checkTasksStatus).toHaveBeenCalledTimes(1);
     expect(taskService.checkUpcomingTasks).toHaveBeenCalledTimes(1);
+    expect(starService.syncExpiryAuthorityIfNeeded).toHaveBeenCalledWith({
+      scope: 'user',
+      userId: 'parent-1',
+      force: true
+    });
+    expect(starService.refreshStarsFromCloud).toHaveBeenCalledWith('parent-1', {
+      forceCloudAfterAuthority: true
+    });
+    expect(rewardService.refreshRewardsFromCloud).toHaveBeenCalledWith({
+      force: true,
+      userId: 'parent-1'
+    });
+    expect(starService.checkAndRepairDataConsistency).not.toHaveBeenCalled();
     expect(messageService.syncFormalRemindersIfNeeded).toHaveBeenCalledTimes(1);
   });
 

@@ -55,22 +55,49 @@ async function run(app) {
 
 async function bootstrapStarService(starService) {
   try {
-    logger.info('App', '检查即将过期的星星并进行奖励保护');
     const userService = serviceManager.getUserService();
     const loginUserId = userService ? userService.getLoginUserId() : null;
-    const expiredStars = await starService.calculatePendingExpiry(loginUserId);
+    const rewardService = serviceManager.getRewardService();
 
-    if (expiredStars > 0 && loginUserId) {
-      logger.info('App', `发现${expiredStars}颗即将过期的星星，为登录用户${loginUserId}进行奖励保护`);
-      const protectionResult = await starService.protectRewardsByExpiry(expiredStars, loginUserId);
+    if (starService.enableCloudStorage && loginUserId && typeof starService.syncExpiryAuthorityIfNeeded === 'function') {
+      logger.info('App', '云端模式执行星星到期权威同步');
+      await starService.syncExpiryAuthorityIfNeeded({
+        scope: 'user',
+        userId: loginUserId,
+        force: true
+      });
+      if (typeof starService.refreshStarsFromCloud === 'function') {
+        await starService.refreshStarsFromCloud(loginUserId, {
+          forceCloudAfterAuthority: true
+        });
+      }
+      if (rewardService?.refreshRewardsFromCloud) {
+        await rewardService.refreshRewardsFromCloud({
+          force: true,
+          userId: loginUserId
+        });
+      }
+    } else {
+      logger.info('App', '本地模式检查即将过期的星星并进行奖励保护');
+      const expiredStars = await starService.calculatePendingExpiry(loginUserId);
 
-      if (protectionResult.success && protectionResult.protectedCount > 0) {
-        logger.info('App', `奖励保护成功，保护了${protectionResult.protectedCount}个奖励`);
+      if (expiredStars > 0 && loginUserId) {
+        logger.info('App', `发现${expiredStars}颗即将过期的星星，为登录用户${loginUserId}进行奖励保护`);
+        const protectionResult = await starService.protectRewardsByExpiry(expiredStars, loginUserId);
+
+        if (protectionResult.success && protectionResult.protectedCount > 0) {
+          logger.info('App', `奖励保护成功，保护了${protectionResult.protectedCount}个奖励`);
+        }
       }
     }
 
     logger.info('App', '初始化星星服务并清理过期星星');
     await starService.initialize();
+
+    if (starService.enableCloudStorage) {
+      logger.info('App', '云端模式跳过本地星星一致性检查和修复');
+      return;
+    }
 
     logger.info('App', '开始检查并修复星星数据一致性');
     const repairResult = await starService.checkAndRepairDataConsistency();

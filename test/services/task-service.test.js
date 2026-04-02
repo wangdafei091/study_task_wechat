@@ -2395,7 +2395,23 @@ describe('TaskService', () => {
       HttpClient.post = jest.fn();
     });
 
+    it('本地模式应直接迁移本地任务且不调用云端', async () => {
+      taskService.enableCloudStorage = false;
+      const t1 = { id: 't1', userId: 'parent1' };
+      const t2 = { id: 't2', userId: 'parent1' };
+      taskService.taskRepository.getByUserId.mockResolvedValue([t1, t2]);
+
+      const result = await taskService._migrateTasksToChild('parent1', 'child1');
+
+      expect(result).toEqual({ success: true, count: 2 });
+      expect(HttpClient.post).not.toHaveBeenCalled();
+      expect(t1.userId).toBe('child1');
+      expect(t2.userId).toBe('child1');
+      expect(mockSaveAll).toHaveBeenCalledWith([t1, t2]);
+    });
+
     it('云端成功时返回云端 count，并更新本地 userId', async () => {
+      taskService.enableCloudStorage = true;
       const task = { id: 't1', userId: 'parent1', syncedToCloud: true };
       taskService.taskRepository.getByUserId.mockResolvedValue([task]);
       HttpClient.post.mockResolvedValue({ count: 1 });
@@ -2408,6 +2424,7 @@ describe('TaskService', () => {
     });
 
     it('云端成功时 syncedToCloud 保持不变', async () => {
+      taskService.enableCloudStorage = true;
       const t1 = { id: 't1', userId: 'parent1', syncedToCloud: true };
       const t2 = { id: 't2', userId: 'parent1', syncedToCloud: false };
       taskService.taskRepository.getByUserId.mockResolvedValue([t1, t2]);
@@ -2420,6 +2437,7 @@ describe('TaskService', () => {
     });
 
     it('云端失败时不修改本地，返回 success=false', async () => {
+      taskService.enableCloudStorage = true;
       const task = { id: 't1', userId: 'parent1', syncedToCloud: true };
       taskService.taskRepository.getByUserId.mockResolvedValue([task]);
       HttpClient.post.mockRejectedValue(new Error('网络错误'));
@@ -2432,6 +2450,7 @@ describe('TaskService', () => {
     });
 
     it('本地为空时仍调用云端，count 来自 affectedRows', async () => {
+      taskService.enableCloudStorage = true;
       taskService.taskRepository.getByUserId.mockResolvedValue([]);
       HttpClient.post.mockResolvedValue({ count: 3 });
 
@@ -2443,6 +2462,7 @@ describe('TaskService', () => {
     });
 
     it('重复触发时云端 count=0 且本地为空，无副作用', async () => {
+      taskService.enableCloudStorage = true;
       taskService.taskRepository.getByUserId.mockResolvedValue([]);
       HttpClient.post.mockResolvedValue({ count: 0 });
 

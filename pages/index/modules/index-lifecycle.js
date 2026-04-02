@@ -50,9 +50,14 @@ async function onShow(page) {
   await page.initializeMultiUserSystemDelayed();
 
   try {
+    const effectiveUserId = typeof page.getEffectiveTaskUserId === 'function'
+      ? page.getEffectiveTaskUserId()
+      : null;
     const rewardService = serviceManager.getService('rewardService');
     if (rewardService?.refreshRewardsFromCloud) {
-      await rewardService.refreshRewardsFromCloud();
+      await rewardService.refreshRewardsFromCloud({
+        userId: effectiveUserId || undefined
+      });
     }
   } catch (syncError) {
     logger.warn('Index', '首页奖励云同步失败，继续使用本地数据', syncError);
@@ -70,7 +75,9 @@ async function onShow(page) {
   await page.checkExpiredTasksAndStars();
 
   logger.debug('Index', '页面显示时批量加载所有数据');
-  page.loadAllPageData();
+  page.loadAllPageData({
+    skipExpiryAuthoritySyncBeforeFormalReminders: true
+  });
 }
 
 async function waitForLoginComplete(page) {

@@ -190,6 +190,15 @@ async function completeTask(page, e) {
     return;
   }
 
+  if (page.data.isViewingFuture) {
+    wx.showToast({
+      title: '未来日期仅支持查看',
+      icon: 'none',
+      duration: 2000
+    });
+    return;
+  }
+
   logger.info('Index', '完成任务:', { taskId });
 
   if (page.data.processingTaskId === taskId) {
@@ -263,6 +272,14 @@ async function completeTask(page, e) {
 
 async function taskItemStatusToggle(page, e) {
   try {
+    if (page.data.isViewingFuture) {
+      wx.showToast({
+        title: '未来日期仅支持查看',
+        icon: 'none'
+      });
+      return;
+    }
+
     const { id, newStatus } = e.detail;
 
     page.setData({

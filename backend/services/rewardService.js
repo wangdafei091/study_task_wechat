@@ -25,7 +25,7 @@ class RewardService {
     return reward.userId === viewer.userId;
   }
 
-  async getVisibleRewards({ familyId, userId }) {
+  async getVisibleRewards({ familyId, userId, targetUserId = null }) {
     if (familyId) {
       await this._promoteLegacyRewardsForFamily(familyId);
     }
@@ -39,7 +39,8 @@ class RewardService {
          ORDER BY modify_time DESC, created_at DESC`;
     const params = [familyId || userId];
     const rows = await query(sql, params);
-    return rows.map(row => Reward.fromDB(row));
+    const rewards = rows.map(row => Reward.fromDB(row));
+    return this._decorateRewardsWithEffectiveProtection(rewards, targetUserId || userId);
   }
 
   async getRewardById(rewardId) {
@@ -201,8 +202,6 @@ class RewardService {
       'isExample',
       'tags',
       'notes',
-      'protectedByExpiry',
-      'partialProtection',
     ];
 
     const nextReward = new Reward({
@@ -225,14 +224,6 @@ class RewardService {
         case 'isExample':
           fields.push('is_example = ?');
           params.push(nextReward.isExample ? 1 : 0);
-          break;
-        case 'protectedByExpiry':
-          fields.push('protected_by_expiry = ?');
-          params.push(nextReward.protectedByExpiry ? 1 : 0);
-          break;
-        case 'partialProtection':
-          fields.push('partial_protection = ?');
-          params.push(nextReward.partialProtection);
           break;
         case 'tags':
           fields.push('tags = ?');
@@ -342,7 +333,7 @@ class RewardService {
         throw error;
       }
 
-      const reward = Reward.fromDB(rewardRow);
+      const reward = await this._promoteLegacyRewardIfNeeded(Reward.fromDB(rewardRow));
       if (!reward.enabled) {
         const error = new Error('奖励已禁用');
         error.code = 'REWARD_DISABLED';
@@ -378,9 +369,19 @@ class RewardService {
         throw error;
       }
 
-      const actualCost = reward.protectedByExpiry
-        ? Math.max(0, reward.points - reward.partialProtection)
-        : reward.points;
+      const effectiveProtection = await this.resolveEffectiveRewardProtection(
+        connection,
+        reward,
+        exchangeUserId,
+        { modifyTime: commandModifyTime }
+      );
+      const effectiveReward = new Reward({
+        ...reward.toJSON(),
+        rewardId: reward.rewardId,
+        protectedByExpiry: effectiveProtection.protectedByExpiry,
+        partialProtection: effectiveProtection.partialProtection,
+      });
+      const actualCost = effectiveProtection.actualCost;
 
       let consumeResult = {
         success: true,
@@ -434,7 +435,12 @@ class RewardService {
       await connection.commit();
 
       return {
-        reward: Reward.fromDB(updatedRewardRow),
+        reward: new Reward({
+          ...Reward.fromDB(updatedRewardRow).toJSON(),
+          rewardId: reward.rewardId,
+          protectedByExpiry: effectiveReward.protectedByExpiry,
+          partialProtection: effectiveReward.partialProtection,
+        }),
         record: consumeResult.record,
         consumedPoints: consumeResult.consumedPoints || 0,
         deductionBreakdown: consumeResult.deductionBreakdown || [],
@@ -468,7 +474,7 @@ class RewardService {
         throw error;
       }
 
-      const reward = Reward.fromDB(rewardRow);
+      const reward = await this._promoteLegacyRewardIfNeeded(Reward.fromDB(rewardRow));
       const resolvedExchangeUserId = cancelUserId || reward.exchangeUserId || null;
 
       if (!reward.claimed) {
@@ -501,9 +507,7 @@ class RewardService {
       );
       const refundedPoints = latestExchangeRecord
         ? Math.abs(Number(latestExchangeRecord.points || 0))
-        : (reward.protectedByExpiry
-          ? Math.max(0, reward.points - reward.partialProtection)
-          : reward.points);
+        : reward.points;
 
       let refundRecord = null;
       let updatedGroupsSnapshot = [];
@@ -602,8 +606,8 @@ class RewardService {
       isExample: Boolean(rewardData.isExample),
       tags: Array.isArray(rewardData.tags) ? rewardData.tags : [],
       notes: rewardData.notes || '',
-      protectedByExpiry: Boolean(rewardData.protectedByExpiry),
-      partialProtection: Number(rewardData.partialProtection || 0),
+      protectedByExpiry: false,
+      partialProtection: 0,
       modifyTime: Number(rewardData.modifyTime || Date.now()),
     };
   }
@@ -636,6 +640,142 @@ class RewardService {
       [rewardId, exchangeUserId]
     );
     return rows.length > 0 ? require('../models/StarRecord').fromDB(rows[0]) : null;
+  }
+
+  async resolveEffectiveRewardProtection(connection, rewardOrId, exchangeUserId, options = {}) {
+    const reward = typeof rewardOrId === 'string'
+      ? Reward.fromDB(await this._getRewardByIdConn(connection, rewardOrId))
+      : rewardOrId;
+
+    if (!reward) {
+      const error = new Error('奖励不存在');
+      error.code = 'REWARD_NOT_FOUND';
+      throw error;
+    }
+
+    if (!exchangeUserId) {
+      return {
+        protectedByExpiry: false,
+        partialProtection: 0,
+        actualCost: reward.points,
+      };
+    }
+
+    const siblingRows = await this._getVisibleRewardRowsConn(connection, reward.familyId, reward.userId);
+    const siblingRewards = Array.isArray(siblingRows) && siblingRows.length > 0
+      ? siblingRows.map((row) => Reward.fromDB(row))
+      : [reward];
+    const protectionMap = await this._buildEffectiveProtectionMap(
+      connection,
+      siblingRewards,
+      exchangeUserId,
+      options
+    );
+    const protection = protectionMap.get(reward.rewardId) || { protectedByExpiry: false, partialProtection: 0 };
+
+    return {
+      protectedByExpiry: protection.protectedByExpiry,
+      partialProtection: protection.partialProtection,
+      actualCost: Math.max(0, reward.points - protection.partialProtection),
+    };
+  }
+
+  async _decorateRewardsWithEffectiveProtection(rewards = [], exchangeUserId, options = {}) {
+    if (!Array.isArray(rewards) || rewards.length === 0 || !exchangeUserId) {
+      return rewards;
+    }
+
+    const protectionMap = options.connection
+      ? await this._buildEffectiveProtectionMap(options.connection, rewards, exchangeUserId, options)
+      : await this._buildEffectiveProtectionMapWithoutConnection(rewards, exchangeUserId, options);
+
+    return rewards.map((reward) => {
+      const protection = protectionMap.get(reward.rewardId) || {
+        protectedByExpiry: false,
+        partialProtection: 0,
+      };
+      return new Reward({
+        ...reward.toJSON(),
+        rewardId: reward.rewardId,
+        protectedByExpiry: protection.protectedByExpiry,
+        partialProtection: protection.partialProtection,
+      });
+    });
+  }
+
+  async _buildEffectiveProtectionMapWithoutConnection(rewards, exchangeUserId, options = {}) {
+    const groups = await starService.getStarGroupsByUser(exchangeUserId);
+    const expiringSummary = await starService.getExpiringProtectionSummary(exchangeUserId, options);
+    return this._buildEffectiveProtectionMapFromInputs(
+      rewards,
+      groups,
+      Number(expiringSummary.pendingPoints || 0)
+    );
+  }
+
+  async _buildEffectiveProtectionMap(connection, rewards, exchangeUserId, options = {}) {
+    const groups = await starService.getStarGroupsByUserWithConnection(connection, exchangeUserId);
+    const expiringSummary = await starService.getExpiringProtectionSummaryWithConnection(connection, exchangeUserId, options);
+    return this._buildEffectiveProtectionMapFromInputs(
+      rewards,
+      groups,
+      Number(expiringSummary.pendingPoints || 0)
+    );
+  }
+
+  _buildEffectiveProtectionMapFromInputs(rewards = [], groups = [], pendingProtectionPoints = 0) {
+    const map = new Map();
+    const currentStars = (groups || []).reduce((sum, group) => sum + Number(group.stars || 0), 0);
+    let remainingProtection = Number(pendingProtectionPoints || 0);
+    const sortedRewards = [...rewards]
+      .filter((reward) => reward && reward.claimed !== true && reward.enabled !== false)
+      .sort((a, b) => {
+        if (Number(b.points || 0) !== Number(a.points || 0)) {
+          return Number(b.points || 0) - Number(a.points || 0);
+        }
+        return String(a.rewardId).localeCompare(String(b.rewardId));
+      });
+
+    sortedRewards.forEach((reward) => {
+      const rewardPoints = Number(reward.points || 0);
+      if (currentStars + remainingProtection < rewardPoints) {
+        map.set(reward.rewardId, {
+          protectedByExpiry: false,
+          partialProtection: 0,
+        });
+        return;
+      }
+
+      const partialProtection = Math.min(remainingProtection, rewardPoints);
+      remainingProtection = Math.max(0, remainingProtection - partialProtection);
+      map.set(reward.rewardId, {
+        protectedByExpiry: true,
+        partialProtection,
+      });
+    });
+
+    rewards.forEach((reward) => {
+      if (!map.has(reward.rewardId)) {
+        map.set(reward.rewardId, {
+          protectedByExpiry: false,
+          partialProtection: 0,
+        });
+      }
+    });
+
+    return map;
+  }
+
+  async _getVisibleRewardRowsConn(connection, familyId, userId) {
+    const sql = familyId
+      ? `SELECT * FROM rewards
+         WHERE family_id = ? AND deleted_at IS NULL
+         ORDER BY modify_time DESC, created_at DESC`
+      : `SELECT * FROM rewards
+         WHERE user_id = ? AND deleted_at IS NULL
+         ORDER BY modify_time DESC, created_at DESC`;
+    const [rows] = await connection.execute(sql, [familyId || userId]);
+    return rows;
   }
 
   _toSnakeCase(field) {

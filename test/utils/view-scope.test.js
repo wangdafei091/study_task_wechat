@@ -25,6 +25,18 @@ describe('view-scope utils', () => {
         userId: null
       });
     });
+
+    it('家长未加入家庭时应该回退到家长个人消息流', () => {
+      const result = viewScopeUtils.resolveMessageScopeOptions(
+        { role: 'parent', id: 'parent_1' },
+        { role: 'parent', id: 'parent_1' }
+      );
+
+      expect(result).toEqual({
+        scope: 'user',
+        userId: 'parent_1'
+      });
+    });
   });
 
   describe('resolveAnalysisOptions', () => {

@@ -179,7 +179,6 @@
           <view class="reward-icon">{{item.icon}}</view>
           <view class="reward-stars">{{item.points}}⭐</view>
           <view wx:if="{{item.status === 'unlocked'}}" class="indicator-status unlocked">可领</view>
-          <view wx:if="{{item.status === 'claimed'}}" class="indicator-status claimed">已领</view>
           <view wx:if="{{item.status === 'current'}}" class="indicator-arrow"></view>
           <view wx:if="{{item.isExample}}" class="indicator-example">示例</view>
         </view>
@@ -245,12 +244,28 @@
   <view class="task-list-container">
     <view class="task-list-header">
       <view class="task-list-title">{{pageTitle}} ({{tasks.length}}个任务)</view>
+      <view class="week-switcher">
+        <view
+          wx:if="{{!isViewingToday}}"
+          class="back-today-btn"
+          bindtap="onBackToToday"
+        >回到今天</view>
+        <view
+          class="week-nav-btn {{canGoPrevWeek ? 'enabled' : 'disabled'}}"
+          bindtap="onPrevWeek"
+        >‹</view>
+        <view class="week-label {{weekOffset === 0 ? 'current' : 'history'}}">{{weekLabel}}</view>
+        <view
+          class="week-nav-btn {{canGoNextWeek ? 'enabled' : 'disabled'}}"
+          bindtap="onNextWeek"
+        >›</view>
+      </view>
     </view>
     
     <!-- 日期导航栏 -->
-    <view class="date-navigation">
+    <view class="date-navigation" bindtouchstart="onDateNavTouchStart" bindtouchend="onDateNavTouchEnd">
       <block wx:for="{{dateNavigation}}" wx:key="dateString">
-        <view class="date-button {{currentViewDate === item.dateString ? 'active' : ''}}" 
+        <view class="date-button {{currentViewDate === item.dateString ? 'active' : ''}} {{item.isPast ? 'past' : ''}} {{item.isFuture ? 'future' : ''}}" 
               data-date="{{item.dateString}}"
               bindtap="onDateButtonTap">
           {{item.label}}
@@ -264,7 +279,8 @@
           <index-task-item 
             task="{{item}}"
             lastExchangeTime="{{lastExchangeTime}}"
-            readonly="{{false}}"
+            readonly="{{isReadonlyView || isViewingFuture}}"
+            readonlyReason="{{isViewingFuture ? 'future-date' : (isReadonlyView ? 'cross-device' : '')}}"
             bind:complete="completeTask"
           />
         </view>
