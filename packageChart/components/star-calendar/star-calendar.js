@@ -165,6 +165,29 @@ Component({
    * 组件的方法列表
    */
   methods: {
+    _getFamilyAnalysisChildUserIds: function(analysisOptions = {}) {
+      if (analysisOptions.scope !== 'family' || !Array.isArray(analysisOptions.childUserIds)) {
+        return [];
+      }
+      return analysisOptions.childUserIds.filter(Boolean);
+    },
+
+    _filterRecordsByAnalysisScope: function(records = [], analysisOptions = {}) {
+      const childUserIds = this._getFamilyAnalysisChildUserIds(analysisOptions);
+      if (childUserIds.length === 0) {
+        return records || [];
+      }
+      return (records || []).filter((record) => childUserIds.includes(record.userId));
+    },
+
+    _filterTasksByAnalysisScope: function(tasks = [], analysisOptions = {}) {
+      const childUserIds = this._getFamilyAnalysisChildUserIds(analysisOptions);
+      if (childUserIds.length === 0) {
+        return tasks || [];
+      }
+      return (tasks || []).filter((task) => childUserIds.includes(task.userId));
+    },
+
     /**
      * 初始化日历
      */
@@ -390,7 +413,12 @@ Component({
       const taskFetchOptions = analysisOptions.scope ? { scope: analysisOptions.scope } : {};
       const taskPromise = taskService
         ? taskService.getTasksByDateRange(startDate, endDate, starUserId, taskFetchOptions)
-            .then(tasks => { this._monthTaskCache = { key: monthKey, tasks }; })
+            .then(tasks => {
+              this._monthTaskCache = {
+                key: monthKey,
+                tasks: this._filterTasksByAnalysisScope(tasks, analysisOptions)
+              };
+            })
             .catch(() => { this._monthTaskCache = { key: monthKey, tasks: [] }; })
         : Promise.resolve();
 
@@ -407,7 +435,8 @@ Component({
 
       Promise.all([starPromise, taskPromise])
         .then(([records]) => {
-          logger.debug('星星日历', `获取到 ${records.length} 条星星记录`);
+          const filteredRecords = this._filterRecordsByAnalysisScope(records, analysisOptions);
+          logger.debug('星星日历', `获取到 ${filteredRecords.length} 条星星记录`);
           
           // 清除刷新标志
           this.monthsToRefresh.delete(monthKey);
@@ -415,7 +444,7 @@ Component({
           // 更新缓存
           const updatedCache = {...this.data.monthCache};
           updatedCache[monthKey] = {
-            records: records,
+            records: filteredRecords,
             needsRefresh: false,
             lastUpdate: Date.now()
           };
@@ -426,7 +455,7 @@ Component({
           });
           
           // 更新日历显示
-          this.updateCalendarWithStars(records);
+          this.updateCalendarWithStars(filteredRecords);
         })
         .catch(error => {
           logger.error('星星日历', '获取星星记录失败:', error);
@@ -571,10 +600,15 @@ Component({
             resolve(0);
             return;
           }
-          taskService.getTasksByDate(dateString, analysisOptions.userId || null, analysisOptions.scope ? analysisOptions : {})
+          taskService.getTasksByDate(
+            dateString,
+            analysisOptions.userId || null,
+            analysisOptions.scope ? { scope: analysisOptions.scope } : {}
+          )
             .then(tasks => {
+              const filteredTasks = this._filterTasksByAnalysisScope(tasks, analysisOptions);
               let earnedStars = 0;
-              tasks.forEach(task => {
+              filteredTasks.forEach(task => {
                 if (task.status === 1 && !task.isRequired && task.points > 0) {
                   earnedStars += Number(task.points || 0);
                 }
@@ -620,8 +654,9 @@ Component({
           return starService.getStarRecordsByDate(today, todayAnalysisOptions.userId || null);
         })
         .then(records => {
+          const filteredRecords = this._filterRecordsByAnalysisScope(records, todayAnalysisOptions);
           // 使用任务相关流水净额计算收入星星
-          const taskSummary = this.summarizeTaskRecords(records);
+          const taskSummary = this.summarizeTaskRecords(filteredRecords);
           const earnedStarsFromRecords = taskSummary.earnedStars;
 
           const earnedStarsPromise = taskSummary.hasTaskRecords
@@ -631,7 +666,7 @@ Component({
           earnedStarsPromise
             .then(earnedStars => {
               // 计算惩罚性扣除的星星数量
-              const deductedStars = records
+              const deductedStars = filteredRecords
                 .filter(record => this.isPenaltyDeduction(record)) // 只计算惩罚性扣减
                 .reduce((sum, record) => sum + Math.abs(Number(record.points || 0)), 0); // 支出记录points是负数，取绝对值
               
@@ -645,7 +680,7 @@ Component({
               updatedDays[todayIndex] = {
                 ...updatedDays[todayIndex],
                 starInfo: starInfo,
-                starRecords: records
+                starRecords: filteredRecords
               };
               
               this.setData({
@@ -655,12 +690,12 @@ Component({
               logger.debug('星星日历', `今日星星数据更新完成: 任务获得${earnedStars}颗，惩罚扣除${deductedStars}颗`);
             })
             .catch(error => {
-            logger.error('星星日历', '计算今日任务星星失败，使用备选方案:', error);
+              logger.error('星星日历', '计算今日任务星星失败，使用备选方案:', error);
               
               // 发生错误时，使用原有逻辑作为备选方案
-              const earnedStars = this.summarizeTaskRecords(records).earnedStars;
+              const earnedStars = this.summarizeTaskRecords(filteredRecords).earnedStars;
                 
-              const deductedStars = records
+              const deductedStars = filteredRecords
                 .filter(record => this.isPenaltyDeduction(record))
                 .reduce((sum, record) => sum + Math.abs(Number(record.points || 0)), 0);
               
@@ -673,7 +708,7 @@ Component({
               updatedDays[todayIndex] = {
                 ...updatedDays[todayIndex],
                 starInfo: starInfo,
-                starRecords: records
+                starRecords: filteredRecords
               };
               
               this.setData({

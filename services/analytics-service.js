@@ -38,7 +38,10 @@ class AnalyticsService {
 
     try {
       // 使用 getTasksByScope 支持 userId 和 scope=family 两种场景
-      const tasks = await this.taskService.getTasksByScope(options);
+      const tasks = this._filterTasksByChildUserIds(
+        await this.taskService.getTasksByScope(options),
+        options.childUserIds
+      );
 
       const records = [];
 
@@ -242,29 +245,68 @@ class AnalyticsService {
     logger.info('AnalyticsService', `计算最近${days}天的可用星星余额`, { userId, scope });
 
     try {
-      // 获取星星记录（userId=null 时取当前登录用户的记录）
-      const records = userId
-        ? await this.starService.getStarRecords({ userId })
-        : await this.getAllStarRecords();
+      let records = [];
+      let starGroups = [];
+      let historyData = [];
+      let currentBalance = 0;
 
-      if (!records || records.length === 0) {
-        logger.warn('AnalyticsService', '没有星星记录，返回空数据');
+      if (scope === 'user' && userId) {
+        [records, starGroups] = await Promise.all([
+          this.starService.getStarRecords({ userId }),
+          this.starService.getStarGroups(userId)
+        ]);
+
+        currentBalance = this._sumStarGroups(starGroups);
+        historyData = this._calculateAnchoredDailyBalance(records || [], days, currentBalance);
+
+        const recordsBalance = this._sumRecordNetPoints(records || []);
+        const difference = Number(recordsBalance) - Number(currentBalance);
+        if (difference !== 0) {
+          logger.warn('AnalyticsService', '检测到星星流水净额与活跃分组快照不一致，趋势图将以当前活跃分组为准', {
+            userId,
+            recordsBalance,
+            groupsBalance: currentBalance,
+            difference
+          });
+        }
+      } else {
+        if (scope === 'family') {
+          records = this._filterRecordsByChildUserIds(
+            await this.getAllStarRecords(),
+            options.childUserIds
+          );
+        } else {
+          // 获取星星记录（userId=null 时取当前登录用户的记录）
+          records = userId
+            ? await this.starService.getStarRecords({ userId })
+            : await this.getAllStarRecords();
+        }
+
+        if (!records || records.length === 0) {
+          logger.warn('AnalyticsService', '没有星星记录，返回空数据');
+          return {
+            historyData: [],
+            forecastData: []
+          };
+        }
+
+        historyData = this._calculateDailyBalance(records, days);
+        currentBalance = historyData.length > 0 ? historyData[historyData.length - 1].value : 0;
+      }
+
+      if (historyData.length === 0) {
+        logger.warn('AnalyticsService', '没有可用于绘制趋势图的历史数据');
         return {
           historyData: [],
           forecastData: []
         };
       }
 
-      // 计算历史余额数据
-      const historyData = this._calculateDailyBalance(records, days);
-
-      // 获取当前余额，用于预测
-      const currentBalance = historyData.length > 0 ? historyData[historyData.length - 1].value : 0;
-
       // 计算预测数据
       const forecastData = await this._calculateExpiryForecast(currentBalance, {
         userId,
-        scope
+        scope,
+        starGroups
       });
 
       logger.info('AnalyticsService', `余额计算完成，历史数据: ${historyData.length}项，预测数据: ${forecastData.length}项`);
@@ -358,6 +400,103 @@ class AnalyticsService {
   }
 
   /**
+   * 基于当前活跃分组余额反推历史每日余额，确保趋势图最后一个点与当前可用星星一致
+   * @param {Array} records 星星记录数组
+   * @param {Number} days 历史天数
+   * @param {Number} currentBalance 当前活跃分组总余额
+   * @returns {Array} 每日余额数据
+   * @private
+   */
+  _calculateAnchoredDailyBalance(records, days, currentBalance) {
+    logger.info('AnalyticsService', `基于当前余额锚点反推${days}天的每日余额变化`, {
+      currentBalance: Number(currentBalance || 0)
+    });
+
+    const { dateArray, formattedDates } = this._calculateDateRange(days);
+    const dailySummary = {};
+
+    dateArray.forEach((dateStr) => {
+      dailySummary[dateStr] = {
+        delta: 0,
+        earned: 0,
+        spent: 0,
+        penalty: 0
+      };
+    });
+
+    (records || []).forEach((record) => {
+      if (!record || !record.timestamp) {
+        return;
+      }
+
+      const recordDateStr = this._getRecordDateString(record);
+      if (!dailySummary[recordDateStr]) {
+        return;
+      }
+
+      const points = Number(record.points || 0);
+      dailySummary[recordDateStr].delta += points;
+
+      if (points > 0) {
+        dailySummary[recordDateStr].earned += points;
+      } else if (points < 0) {
+        if (record.source === 'task' && record.type === 'expense' && record.originalTaskDate) {
+          dailySummary[recordDateStr].penalty += Math.abs(points);
+        } else {
+          dailySummary[recordDateStr].spent += Math.abs(points);
+        }
+      }
+    });
+
+    const endingBalanceByDate = {};
+    let runningBalance = Number(currentBalance || 0);
+
+    for (let i = dateArray.length - 1; i >= 0; i -= 1) {
+      const dateStr = dateArray[i];
+      endingBalanceByDate[dateStr] = runningBalance;
+      runningBalance -= Number(dailySummary[dateStr].delta || 0);
+    }
+
+    let cumulativeEarned = 0;
+    let cumulativeSpent = 0;
+    let cumulativePenalty = 0;
+
+    const result = dateArray.map((dateStr, index) => {
+      cumulativeEarned += Number(dailySummary[dateStr].earned || 0);
+      cumulativeSpent += Number(dailySummary[dateStr].spent || 0);
+      cumulativePenalty += Number(dailySummary[dateStr].penalty || 0);
+
+      return {
+        date: formattedDates[index],
+        value: Number(endingBalanceByDate[dateStr] || 0),
+        earned: Number(cumulativeEarned),
+        spent: Number(cumulativeSpent),
+        penalty: Number(cumulativePenalty)
+      };
+    });
+
+    logger.info('AnalyticsService', `锚点余额反推完成，共${result.length}天的数据`);
+    return result;
+  }
+
+  _getRecordDateString(record) {
+    if (record.source === 'task' && record.type === 'expense' && record.originalTaskDate) {
+      return record.originalTaskDate;
+    }
+
+    const recordDate = new Date(record.timestamp);
+    return dateUtils.formatDate(recordDate);
+  }
+
+  _sumStarGroups(groups = []) {
+    return groups.reduce((sum, group) => sum + Number(group.stars || 0), 0);
+  }
+
+  _sumRecordNetPoints(records = []) {
+    return records.reduce((sum, record) => sum + Number(record.points || 0), 0);
+  }
+
+  /**
    * 计算星星过期预测
    * @param {Number} currentBalance 当前星星余额
    * @param {Object} options 分析选项
@@ -389,7 +528,9 @@ class AnalyticsService {
       }
 
       // 获取星星分组数据
-      const starGroups = await this.starService.getStarGroups(options.userId || null);
+      const starGroups = Array.isArray(options.starGroups) && options.starGroups.length > 0
+        ? options.starGroups
+        : await this.starService.getStarGroups(options.userId || null);
       logger.info('AnalyticsService', `获取到${starGroups.length}个星星分组`);
 
       // 筛选出非永久有效的分组
@@ -577,7 +718,10 @@ class AnalyticsService {
       }
 
       // 使用 getTasksByScope 支持 userId 和 scope=family 两种场景
-      const tasks = await this.taskService.getTasksByScope(options);
+      const tasks = this._filterTasksByChildUserIds(
+        await this.taskService.getTasksByScope(options),
+        options.childUserIds
+      );
 
       // 根据日期范围筛选任务
       let filteredTasks = tasks;
@@ -638,6 +782,20 @@ class AnalyticsService {
       logger.error('AnalyticsService', '获取任务完成情况统计数据出错', error);
       return {};
     }
+  }
+
+  _filterRecordsByChildUserIds(records = [], childUserIds = []) {
+    if (!Array.isArray(childUserIds) || childUserIds.length === 0) {
+      return records || [];
+    }
+    return (records || []).filter((record) => childUserIds.includes(record.userId));
+  }
+
+  _filterTasksByChildUserIds(tasks = [], childUserIds = []) {
+    if (!Array.isArray(childUserIds) || childUserIds.length === 0) {
+      return tasks || [];
+    }
+    return (tasks || []).filter((task) => childUserIds.includes(task.userId));
   }
 }
 

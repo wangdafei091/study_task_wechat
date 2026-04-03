@@ -11,6 +11,7 @@ jest.mock('../../utils/view-scope', () => ({
 
 describe('packageChart/pages/analysis/analysis', () => {
   let pageConfig;
+  let viewScopeUtils;
 
   function loadPageModule() {
     pageConfig = null;
@@ -40,12 +41,17 @@ describe('packageChart/pages/analysis/analysis', () => {
     jest.resetModules();
     jest.clearAllMocks();
     jest.useFakeTimers();
+    viewScopeUtils = require('../../utils/view-scope');
 
     global.getApp = jest.fn(() => ({
       globalData: {
         userService: {
           getLoginUser: jest.fn(() => ({ userId: 'parent-1', role: 'parent' })),
-          getCurrentUser: jest.fn(() => ({ userId: 'child-1', role: 'child' }))
+          getCurrentUser: jest.fn(() => ({ userId: 'child-1', role: 'child' })),
+          getAllUsers: jest.fn(() => [
+            { userId: 'parent-1', role: 'parent', status: 'active' },
+            { userId: 'child-1', role: 'child', status: 'active' }
+          ])
         }
       },
       getTaskService: jest.fn(() => ({}))
@@ -74,6 +80,14 @@ describe('packageChart/pages/analysis/analysis', () => {
     jest.advanceTimersByTime(300);
 
     expect(page.data.analysisOptions).toEqual({ userId: 'child-1' });
+    expect(viewScopeUtils.resolveAnalysisOptions).toHaveBeenCalledWith(
+      { userId: 'parent-1', role: 'parent' },
+      { userId: 'child-1', role: 'child' },
+      [
+        { userId: 'parent-1', role: 'parent', status: 'active' },
+        { userId: 'child-1', role: 'child', status: 'active' }
+      ]
+    );
     expect(page.loadData).toHaveBeenCalledTimes(1);
   });
 
