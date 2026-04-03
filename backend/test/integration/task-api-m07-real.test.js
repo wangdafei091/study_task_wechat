@@ -83,6 +83,7 @@ async function setupTestData() {
     `INSERT INTO users (user_id, openid, nickname, avatar, role, status, family_id, is_virtual, created_by_user_id) VALUES
       ('child_test_001', 'child_test_openid', '测试孩子', NULL, 'child', 'active', 'family_test_001', 0, NULL),
       ('child_test_002', 'child_test_openid_2', '测试孩子2', NULL, 'child', 'active', 'family_test_001', 0, NULL),
+      ('child_test_004', 'child_test_openid_4', '停用孩子', NULL, 'child', 'inactive', 'family_test_001', 0, NULL),
       ('child_test_003', 'child_test_openid_3', '外部孩子', NULL, 'child', 'active', 'family_test_002', 0, NULL)`
   );
 }
@@ -320,6 +321,7 @@ describe('M07 真实数据库集成测试', () => {
           ('family_task_1', 'child_test_001', '孩子1的任务', 'study', '2026-03-19', 5, 0),
           ('family_task_2', 'child_test_001', '孩子1的任务2', 'study', '2026-03-19', 3, 1),
           ('family_task_3', 'child_test_002', '孩子2的任务', 'habit', '2026-03-19', 2, 0),
+          ('family_task_inactive', 'child_test_004', '停用孩子任务', 'study', '2026-03-19', 1, 0),
           ('family_task_4', 'child_test_003', '外部孩子任务', 'study', '2026-03-19', 4, 0)`
       );
     });
@@ -341,6 +343,7 @@ describe('M07 真实数据库集成测试', () => {
       expect(taskIds).toContain('family_task_1');
       expect(taskIds).toContain('family_task_2');
       expect(taskIds).toContain('family_task_3');
+      expect(taskIds).not.toContain('family_task_inactive');
       expect(taskIds).not.toContain('family_task_4');
     });
 

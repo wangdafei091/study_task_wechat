@@ -90,6 +90,7 @@ async function setupTestData() {
     `INSERT INTO users (user_id, openid, nickname, avatar, role, status, family_id, is_virtual, created_by_user_id) VALUES
       ('m09_star_child_001', 'm09_star_child_openid_1', 'M09孩子1', NULL, 'child', 'active', 'm09_star_family_001', 0, NULL),
       ('m09_star_child_002', 'm09_star_child_openid_2', 'M09孩子2', NULL, 'child', 'active', 'm09_star_family_001', 0, NULL),
+      ('m09_star_child_004', 'm09_star_child_openid_4', 'M09停用孩子', NULL, 'child', 'inactive', 'm09_star_family_001', 0, NULL),
       ('m09_star_child_003', 'm09_star_child_openid_3', 'M09外部孩子', NULL, 'child', 'active', 'm09_star_family_002', 0, NULL)`
   );
 }
@@ -338,7 +339,7 @@ describe('M09 stars API 真实数据库集成测试', () => {
     ]);
   });
 
-  it('GET /api/stars/records?scope=family 家长可获取全家流水，孩子返回 403', async () => {
+  it('GET /api/stars/records?scope=family 家长可获取全家活跃孩子流水，孩子返回 403', async () => {
     const nextWeek = formatDateOffset(7);
     const nextMonth = formatDateOffset(30);
 
@@ -347,9 +348,11 @@ describe('M09 stars API 真实数据库集成测试', () => {
         record_id, user_id, type, source, source_id, points, description,
         expiry_type, expiry_date, balance, previous_balance, modify_time
       ) VALUES
+        ('m09_star_family_record_parent', 'm09_star_parent_001', 'income', 'task', 'task_parent', 8, '家长得星', 'week', ?, 8, 0, 1742400003999),
         ('m09_star_family_record_001', 'm09_star_child_001', 'income', 'task', 'task_a', 3, '孩子1得星', 'week', ?, 3, 0, 1742400004000),
-        ('m09_star_family_record_002', 'm09_star_child_002', 'income', 'task', 'task_b', 4, '孩子2得星', 'month', ?, 4, 0, 1742400004001)`,
-      [nextWeek, nextMonth]
+        ('m09_star_family_record_002', 'm09_star_child_002', 'income', 'task', 'task_b', 4, '孩子2得星', 'month', ?, 4, 0, 1742400004001),
+        ('m09_star_family_record_003', 'm09_star_child_004', 'income', 'task', 'task_c', 6, '停用孩子得星', 'month', ?, 6, 0, 1742400004002)`,
+      [nextWeek, nextWeek, nextMonth, nextMonth]
     );
 
     const parentRes = await request(app)
@@ -359,6 +362,11 @@ describe('M09 stars API 真实数据库集成测试', () => {
 
     expect(parentRes.status).toBe(200);
     expect(parentRes.body.data.records).toHaveLength(2);
+    const recordIds = parentRes.body.data.records.map(record => record.recordId);
+    expect(recordIds).toContain('m09_star_family_record_001');
+    expect(recordIds).toContain('m09_star_family_record_002');
+    expect(recordIds).not.toContain('m09_star_family_record_parent');
+    expect(recordIds).not.toContain('m09_star_family_record_003');
 
     const childRes = await request(app)
       .get('/api/stars/records')

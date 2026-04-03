@@ -14,7 +14,10 @@ Page({
       : null;
     const loginUser = userService ? userService.getLoginUser() : null;
     const currentUser = userService ? userService.getCurrentUser() : null;
-    return this.getAnalysisOptions(loginUser, currentUser);
+    const availableUsers = userService && typeof userService.getAllUsers === 'function'
+      ? userService.getAllUsers()
+      : [];
+    return this.getAnalysisOptions(loginUser, currentUser, availableUsers);
   },
 
   _scheduleLoadData(refreshStarCalendar = false) {
@@ -38,12 +41,12 @@ Page({
 
   /**
    * 根据当前视角决定分析数据范围
-   * - 家长视角：看家庭所有孩子数据（scope=family）
    * - 孩子视角：看当前孩子数据（userId=currentUser.id）
+   * - 家长视角：根据活跃孩子数量决定是看单个孩子还是 family 汇总
    * 此函数提取为独立方法便于单测
    */
-  getAnalysisOptions(loginUser, currentUser) {
-    return viewScopeUtils.resolveAnalysisOptions(loginUser, currentUser);
+  getAnalysisOptions(loginUser, currentUser, availableUsers = []) {
+    return viewScopeUtils.resolveAnalysisOptions(loginUser, currentUser, availableUsers);
   },
 
   onLoad: function () {

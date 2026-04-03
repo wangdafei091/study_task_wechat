@@ -170,7 +170,7 @@ class StarService {
     const rows = await query(
       `SELECT sr.* FROM star_records sr
        INNER JOIN users u ON sr.user_id = u.user_id
-       WHERE u.family_id = ? AND u.status = 'active' AND sr.deleted_at IS NULL
+       WHERE u.family_id = ? AND u.role = 'child' AND u.status = 'active' AND sr.deleted_at IS NULL
        ORDER BY sr.modify_time DESC, sr.created_at DESC`,
       [familyId]
     );

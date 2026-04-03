@@ -801,7 +801,7 @@ class TaskService {
       const { date, status, startDate, endDate } = filters;
       let sql = `SELECT t.* FROM tasks t
         INNER JOIN users u ON t.user_id = u.user_id
-        WHERE u.family_id = ? AND u.role = 'child' AND t.deleted_at IS NULL`;
+        WHERE u.family_id = ? AND u.role = 'child' AND u.status = 'active' AND t.deleted_at IS NULL`;
       const params = [familyId];
 
       if (date) {

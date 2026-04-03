@@ -43,16 +43,36 @@ function resolveMessageScopeOptions(loginUser, currentUser) {
   };
 }
 
-function resolveAnalysisOptions(loginUser, currentUser) {
+function resolveAnalysisOptions(loginUser, currentUser, availableUsers = []) {
   if (isChildView(loginUser, currentUser)) {
     return {
       userId: getUserIdentifier(currentUser) || getUserIdentifier(loginUser)
     };
   }
 
+  const activeChildren = availableUsers
+    .filter((user) => user && user.role === 'child' && user.status !== 'inactive');
+
+  if (activeChildren.length === 1) {
+    return {
+      userId: getUserIdentifier(activeChildren[0])
+    };
+  }
+
+  if (activeChildren.length >= 2) {
+    return {
+      scope: MessageVisibilityScope.FAMILY,
+      childUserIds: activeChildren
+        .map((user) => getUserIdentifier(user))
+        .filter(Boolean)
+    };
+  }
+
   const familyId = loginUser?.familyId || currentUser?.familyId || null;
   if (familyId) {
-    return { scope: MessageVisibilityScope.FAMILY };
+    return {
+      userId: getUserIdentifier(currentUser) || getUserIdentifier(loginUser)
+    };
   }
 
   return {
