@@ -110,6 +110,7 @@ const API_CONFIG = {
     STARS: '/api/stars',
     STAR_RECORDS: '/api/stars/records',
     STAR_GROUPS: '/api/stars/groups',
+    STAR_FAMILY_SUMMARY: '/api/stars/family-summary',
     STAR_CONSUME: '/api/stars/consume',
     STAR_EXPIRY_AUTHORITY_SYNC: '/api/stars/expiry-authority/sync',
     STAR_EXPIRING_REMINDERS_SYNC: '/api/stars/expiring-reminders/sync',

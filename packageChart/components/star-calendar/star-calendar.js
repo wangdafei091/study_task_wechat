@@ -28,6 +28,14 @@ Component({
     analysisOptions: {
       type: Object,
       value: null
+    },
+    currentMonthKey: {
+      type: String,
+      value: ''
+    },
+    readModelVersion: {
+      type: Number,
+      value: 0
     }
   },
 
@@ -62,7 +70,7 @@ Component({
       
       logger.debug('星星日历', '组件初始化');
       this.initCalendar({
-        skipDataLoad: !viewScopeUtils.hasResolvedAnalysisOptions(this.properties.analysisOptions)
+        skipDataLoad: !viewScopeUtils.hasResolvedAnalysisOptions(this.properties.analysisOptions) || this._usesPreparedReadModel()
       });
       
       // 订阅任务状态变更事件，保存 callback 引用以便精确解绑
@@ -149,15 +157,27 @@ Component({
   },
 
   observers: {
-    'analysisOptions': function() {
+    'analysisOptions, currentMonthKey, readModelVersion': function() {
       if (!this._attached || !viewScopeUtils.hasResolvedAnalysisOptions(this.properties.analysisOptions)) {
         return;
       }
-      if (this._didInitialScopedLoad) {
+
+      if (this.properties.currentMonthKey) {
+        this._setCurrentMonthByKey(this.properties.currentMonthKey);
+      }
+
+      if (this._usesPreparedReadModel()) {
+        if (Number(this.properties.readModelVersion || 0) > 0) {
+          this._didInitialScopedLoad = true;
+          this.loadStarRecords();
+        }
         return;
       }
-      this._didInitialScopedLoad = true;
-      this.smartRefresh();
+
+      if (!this._didInitialScopedLoad) {
+        this._didInitialScopedLoad = true;
+        this.smartRefresh();
+      }
     }
   },
 
@@ -165,6 +185,34 @@ Component({
    * 组件的方法列表
    */
   methods: {
+    _usesPreparedReadModel: function() {
+      return Boolean(this.properties.currentMonthKey);
+    },
+
+    _setCurrentMonthByKey: function(monthKey) {
+      if (!monthKey) {
+        return;
+      }
+
+      const [yearText, monthText] = String(monthKey).split('-');
+      const year = Number(yearText);
+      const month = Number(monthText) - 1;
+      if (!Number.isFinite(year) || !Number.isFinite(month)) {
+        return;
+      }
+
+      if (this.data.currentYear === year && this.data.currentMonth === month) {
+        return;
+      }
+
+      this.setData({
+        currentYear: year,
+        currentMonth: month
+      });
+      this.updateMonthTitle();
+      this.generateCalendarDays();
+    },
+
     _getFamilyAnalysisChildUserIds: function(analysisOptions = {}) {
       if (analysisOptions.scope !== 'family' || !Array.isArray(analysisOptions.childUserIds)) {
         return [];
@@ -198,6 +246,12 @@ Component({
       
       if (this.properties.initialMonth) {
         const [y, m] = this.properties.initialMonth.split('-');
+        year = parseInt(y);
+        month = parseInt(m) - 1;
+      }
+
+      if (this.properties.currentMonthKey) {
+        const [y, m] = this.properties.currentMonthKey.split('-');
         year = parseInt(y);
         month = parseInt(m) - 1;
       }
@@ -388,6 +442,52 @@ Component({
       const year = this.data.currentYear;
       const month = this.data.currentMonth;
       const monthKey = `${year}-${String(month + 1).padStart(2, '0')}`;
+
+      if (this._usesPreparedReadModel()) {
+        const app = getApp();
+        const analyticsService = app && typeof app.getAnalyticsService === 'function'
+          ? app.getAnalyticsService()
+          : null;
+        const preparedMonthData = analyticsService && typeof analyticsService.getPreparedMonthData === 'function'
+          ? analyticsService.getPreparedMonthData({
+            analysisOptions: this.properties.analysisOptions || {},
+            monthKey
+          })
+          : null;
+
+        if (preparedMonthData) {
+          const analysisOptions = this.properties.analysisOptions || {};
+          const filteredTasks = this._filterTasksByAnalysisScope(preparedMonthData.tasks || [], analysisOptions);
+          const filteredRecords = this._filterRecordsByAnalysisScope(preparedMonthData.records || [], analysisOptions);
+
+          this._monthTaskCache = {
+            key: monthKey,
+            tasks: filteredTasks
+          };
+
+          const updatedCache = { ...this.data.monthCache };
+          updatedCache[monthKey] = {
+            records: filteredRecords,
+            needsRefresh: false,
+            lastUpdate: preparedMonthData.refreshedAt || Date.now()
+          };
+
+          this.monthsToRefresh.delete(monthKey);
+          this.setData({
+            monthCache: updatedCache,
+            isLoading: false
+          });
+          this.updateCalendarWithStars(filteredRecords);
+          return;
+        }
+
+        logger.debug('星星日历', '统一读模型模式下未命中已准备月份快照，等待页面完成准备', {
+          monthKey,
+          readModelVersion: Number(this.properties.readModelVersion || 0)
+        });
+        this.setData({ isLoading: false });
+        return;
+      }
       
       // 检查缓存
       const cachedData = this.data.monthCache[monthKey];
@@ -631,6 +731,11 @@ Component({
      * 仅更新今日数据（性能优化）
      */
     updateTodayDataOnly: function() {
+      if (this._usesPreparedReadModel()) {
+        this.smartRefresh();
+        return;
+      }
+
       const today = dateUtils.getTodayString();
       const todayIndex = this.data.calendarDays.findIndex(day => day.dateString === today);
       
@@ -758,7 +863,13 @@ Component({
       
       this.updateMonthTitle();
       this.generateCalendarDays();
-      this.loadStarRecords();
+      if (this._usesPreparedReadModel()) {
+        this.triggerEvent('monthchange', {
+          monthKey: `${year}-${String(month + 1).padStart(2, '0')}`
+        });
+      } else {
+        this.loadStarRecords();
+      }
       
       logger.debug('星星日历', `切换到上月: ${year}年${month + 1}月`);
     },
@@ -782,7 +893,13 @@ Component({
       
       this.updateMonthTitle();
       this.generateCalendarDays();
-      this.loadStarRecords();
+      if (this._usesPreparedReadModel()) {
+        this.triggerEvent('monthchange', {
+          monthKey: `${year}-${String(month + 1).padStart(2, '0')}`
+        });
+      } else {
+        this.loadStarRecords();
+      }
       
       logger.debug('星星日历', `切换到下月: ${year}年${month + 1}月`);
     },
@@ -802,7 +919,13 @@ Component({
       
       this.updateMonthTitle();
       this.generateCalendarDays();
-      this.loadStarRecords();
+      if (this._usesPreparedReadModel()) {
+        this.triggerEvent('monthchange', {
+          monthKey: `${year}-${String(month + 1).padStart(2, '0')}`
+        });
+      } else {
+        this.loadStarRecords();
+      }
       
       logger.debug('星星日历', `回到今天: ${year}年${month + 1}月`);
     },
@@ -948,7 +1071,14 @@ Component({
       this.setData({ 
         monthCache: {} 
       });
-      
+
+      if (this._usesPreparedReadModel()) {
+        this.triggerEvent('monthchange', {
+          monthKey: `${this.data.currentYear}-${String(this.data.currentMonth + 1).padStart(2, '0')}`
+        });
+        return;
+      }
+
       // 重新加载当前月份数据
       this.loadStarRecords();
     }

@@ -12,6 +12,7 @@ const router = express.Router();
 router.use(authMiddleware);
 
 router.get('/', starController.getStars.bind(starController));
+router.get('/family-summary', starController.getFamilySummary.bind(starController));
 router.get('/records', starController.getRecords.bind(starController));
 router.post('/records', starController.createRecord.bind(starController));
 router.post('/consume', starController.consume.bind(starController));

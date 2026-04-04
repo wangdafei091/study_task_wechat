@@ -177,6 +177,39 @@ class StarService {
     return rows.map(row => StarRecord.fromDB(row));
   }
 
+  async getFamilyStarSummary(familyId) {
+    const activeChildrenRows = await query(
+      `SELECT user_id
+       FROM users
+       WHERE family_id = ? AND role = 'child' AND status = 'active'
+       ORDER BY user_id ASC`,
+      [familyId]
+    );
+    const rows = await query(
+      `SELECT sg.*
+       FROM star_groups sg
+       INNER JOIN users u ON sg.user_id = u.user_id
+       WHERE u.family_id = ? AND u.role = 'child' AND u.status = 'active'
+       ORDER BY CASE WHEN sg.type = 'permanent' THEN 1 ELSE 0 END ASC,
+                sg.expiry_date ASC,
+                sg.created_at ASC`,
+      [familyId]
+    );
+
+    const activeRows = this._filterActiveGroupRows(rows).filter((row) => Number(row.stars || 0) > 0);
+    const groups = activeRows.map(row => StarGroup.fromDB(row));
+    const subjectUserIds = Array.from(new Set(
+      (activeChildrenRows || []).map((row) => row.user_id).filter(Boolean)
+    ));
+    const totalPoints = groups.reduce((sum, group) => sum + Number(group.stars || 0), 0);
+
+    return {
+      subjectUserIds,
+      totalPoints,
+      groups,
+    };
+  }
+
   async syncExpiringStarMessages(options = {}) {
     const scanUserIds = await this._resolveReminderScanUserIds(options);
     if (scanUserIds.length === 0) {

@@ -102,6 +102,46 @@ describe('backend StarService active group filtering', () => {
     expect(summary.groups[0].groupId).toBe('group_active');
   });
 
+  it('getFamilyStarSummary 应只统计活跃孩子的未过期非空分组', async () => {
+    const { query } = require('../../config/database');
+    query
+      .mockResolvedValueOnce([
+        { user_id: 'child_1' },
+        { user_id: 'child_2' }
+      ])
+      .mockResolvedValueOnce([
+        {
+          group_id: 'group_child_active',
+          user_id: 'child_1',
+          type: 'week',
+          stars: 6,
+          expiry_date: '2026-03-31'
+        },
+        {
+          group_id: 'group_child_zero',
+          user_id: 'child_1',
+          type: 'week',
+          stars: 0,
+          expiry_date: '2026-03-31'
+        },
+        {
+          group_id: 'group_child_expired',
+          user_id: 'child_2',
+          type: 'week',
+          stars: 9,
+          expiry_date: '2026-03-29'
+        }
+      ]);
+
+    const service = require('../../services/starService');
+    const summary = await service.getFamilyStarSummary('family_1');
+
+    expect(summary.subjectUserIds).toEqual(['child_1', 'child_2']);
+    expect(summary.totalPoints).toBe(6);
+    expect(summary.groups).toHaveLength(1);
+    expect(summary.groups[0].groupId).toBe('group_child_active');
+  });
+
   it('历史相对文案 expiry_date 应基于分组自身时间锚点判断是否过期', async () => {
     const { query } = require('../../config/database');
     query.mockResolvedValue([

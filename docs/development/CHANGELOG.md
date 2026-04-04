@@ -4,6 +4,40 @@
 
 ---
 
+## [里程碑-19C] - 2026-04-04
+
+### ✅ 完成情况
+
+**分析读模型治理**
+
+- **页面级统一读模型保鲜**：
+  - `analysis.js` 正式接管分析页主入口，持有 `visibleMonthKey`、`trendDays`、`readModelVersion`
+  - `AnalyticsService.prepareReadModel()` 负责统一准备分析页所需 scoped facts，并提供 30 秒 TTL 与 in-flight 复用
+- **family 当前余额锚定补齐**：
+  - 后端新增 `GET /api/stars/family-summary`
+  - family 模式下趋势图不再仅依赖流水净额，而是使用当前家庭活跃孩子分组快照锚定 `currentBalance`，同时恢复过期预测
+- **组件读链路收口**：
+  - `star-calendar` / `star-trend` 改为优先消费 `AnalyticsService` 已准备好的快照
+  - 翻月和 7/30 天切换由页面统一触发重新准备读模型，组件不再各自决定主刷新时机
+- **分析范围语义修正**：
+  - 家长视角进入分析页统一使用 `scope='family'`
+  - 单孩子家庭也走 family 视角，只是 `childUserIds` 仅包含一个活跃孩子
+
+### 🧪 验证结果
+
+- 前端定向测试通过：
+  - `npm test -- --runInBand test/pages/star-calendar.component.test.js test/pages/star-trend.component.test.js test/pages/analysis.page.test.js test/services/analytics-service.test.js test/utils/view-scope.test.js`
+- 后端定向测试通过：
+  - `cd backend && npx jest test/unit/starService.test.js --runInBand`
+  - `cd backend && npx jest test/unit/starController.test.js --runInBand`
+- 模拟器手工回归通过：
+  - 分析页首次进入、翻月、7/30 天切换、家长视角进入 family 分析链路已由多轮日志复核
+  - 最新 `l1.log` 已确认家长视角进入分析页时日志稳定为 `{ userId: null, scope: "family" }`
+
+### 📖 详细实施记录
+
+- [里程碑-19C：分析读模型治理](../design/milestone-19c-analysis-read-model-governance.md)
+
 ## [里程碑-19B] - 2026-04-04
 
 ### ✅ 完成情况

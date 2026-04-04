@@ -46,6 +46,8 @@ class StarService {
     this._cloudRefreshInFlight = new Map();
     this._expiryAuthoritySyncTimestamps = new Map();
     this._expiryAuthoritySyncInFlight = new Map();
+    this._familySummaryInFlight = null;
+    this._familySummaryCache = null;
     
     logger.info('StarService', '初始化星星服务，已注入余额计算器到StarRecordRepository');
   }
@@ -1375,6 +1377,9 @@ class StarService {
     if (this.starRecordRepository && this.starRecordRepository.clearCache) {
       this.starRecordRepository.clearCache();
     }
+
+    this._familySummaryCache = null;
+    this._familySummaryInFlight = null;
   }
 
   async hasPendingLocalStarRecords(userId = null, options = {}) {
@@ -1425,6 +1430,49 @@ class StarService {
       });
 
     this._cloudRefreshInFlight.set(scopeKey, request);
+    return request;
+  }
+
+  async getFamilyStarSummary(options = {}) {
+    if (!this.enableCloudStorage) {
+      return {
+        success: false,
+        skipped: true,
+        reason: 'local_mode',
+        scope: 'family',
+        subjectUserIds: [],
+        totalPoints: 0,
+        groups: []
+      };
+    }
+
+    if (!options.force && this._familySummaryCache) {
+      return this._familySummaryCache;
+    }
+
+    if (this._familySummaryInFlight) {
+      return this._familySummaryInFlight;
+    }
+
+    const request = HttpClient.get(API_CONFIG.ENDPOINTS.STAR_FAMILY_SUMMARY)
+      .then((data) => {
+        const groups = (data.groups || []).map(group => this._mapCloudGroup(group));
+        const summary = {
+          success: true,
+          scope: 'family',
+          subjectUserIds: Array.isArray(data.subjectUserIds) ? data.subjectUserIds.filter(Boolean) : [],
+          totalPoints: Number(data.totalPoints || 0),
+          groups,
+          fetchedAt: Date.now()
+        };
+        this._familySummaryCache = summary;
+        return summary;
+      })
+      .finally(() => {
+        this._familySummaryInFlight = null;
+      });
+
+    this._familySummaryInFlight = request;
     return request;
   }
 

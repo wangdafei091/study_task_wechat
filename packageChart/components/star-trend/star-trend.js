@@ -17,6 +17,10 @@ Component({
     analysisOptions: {
       type: Object,
       value: null
+    },
+    readModelVersion: {
+      type: Number,
+      value: 0
     }
   },
 
@@ -51,7 +55,9 @@ Component({
       
       // 标记已挂载（供 observers 判断是否可触发刷新）
       this._attached = true;
-      if (viewScopeUtils.hasResolvedAnalysisOptions(this.properties.analysisOptions)) {
+      if (viewScopeUtils.hasResolvedAnalysisOptions(this.properties.analysisOptions) &&
+        this.properties.readModelVersion > 0) {
+        this._lastRequestedReadModelVersion = Number(this.properties.readModelVersion || 0);
         this.loadStarTrendData();
       } else {
         logger.info('星星趋势图', '等待分析范围就绪后再加载趋势数据');
@@ -60,9 +66,19 @@ Component({
   },
 
   observers: {
-    'analysisOptions': function() {
-      // analysisOptions 变化（如角色/视角切换）时重新加载趋势数据
-      if (this._attached && viewScopeUtils.hasResolvedAnalysisOptions(this.properties.analysisOptions)) {
+    'analysisOptions, readModelVersion, days': function() {
+      if (!this._attached || !viewScopeUtils.hasResolvedAnalysisOptions(this.properties.analysisOptions)) {
+        return;
+      }
+
+      this.setData({
+        currentRange: Number(this.properties.days || this.data.currentRange || 7)
+      });
+      this.updateDateRangeText();
+
+      const nextReadModelVersion = Number(this.properties.readModelVersion || 0);
+      if (nextReadModelVersion > 0 && nextReadModelVersion !== Number(this._lastRequestedReadModelVersion || 0)) {
+        this._lastRequestedReadModelVersion = nextReadModelVersion;
         this.loadStarTrendData();
       }
     }
@@ -139,8 +155,7 @@ Component({
       // 更新日期范围文本
       this.updateDateRangeText();
       
-      // 重新加载数据
-      this.loadStarTrendData();
+      this.triggerEvent('rangechange', { days });
     },
     
     /**
@@ -659,7 +674,6 @@ Component({
         // 通过app实例获取分析服务
         const app = getApp();
         const analyticsService = app.getAnalyticsService();
-        const starService = app.getStarService ? app.getStarService() : null;
         
         if (!analyticsService) {
           logger.error('star-trend', '无法获取分析服务实例');
@@ -673,13 +687,6 @@ Component({
         }
         
         const analysisOptions = this.properties.analysisOptions || {};
-        if (starService && typeof starService.refreshStarsFromCloud === 'function') {
-          if (analysisOptions.scope === 'family') {
-            await starService.refreshStarsFromCloud(null, { scope: 'family' });
-          } else if (analysisOptions.userId) {
-            await starService.refreshStarsFromCloud(analysisOptions.userId);
-          }
-        }
         const data = await analyticsService.calculateHistoricalBalance(
           this.data.currentRange,
           analysisOptions.userId || null,

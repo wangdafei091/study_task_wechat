@@ -23,6 +23,7 @@ describe('AnalyticsService', () => {
     jest.setSystemTime(new Date('2026-03-21T12:00:00'));
 
     mockStarService = {
+      enableCloudStorage: true,
       getStarRecords: jest.fn().mockResolvedValue([
         {
           id: 'record-1',
@@ -32,11 +33,26 @@ describe('AnalyticsService', () => {
           type: 'income'
         }
       ]),
-      getStarGroups: jest.fn().mockResolvedValue([])
+      getStarGroups: jest.fn().mockResolvedValue([]),
+      getStarRecordsByDateRange: jest.fn().mockResolvedValue([]),
+      refreshStarsFromCloud: jest.fn().mockResolvedValue({ success: true, records: [], groups: [] }),
+      syncExpiryAuthorityIfNeeded: jest.fn().mockResolvedValue({ success: true, skipped: false }),
+      getFamilyStarSummary: jest.fn().mockResolvedValue({
+        success: true,
+        scope: 'family',
+        subjectUserIds: ['child-1'],
+        totalPoints: 0,
+        groups: []
+      })
     };
 
     mockTaskService = {
-      getTasksByScope: jest.fn().mockResolvedValue([])
+      enableCloudStorage: true,
+      getTasksByScope: jest.fn().mockResolvedValue([]),
+      getTasksByDateRange: jest.fn().mockResolvedValue([]),
+      taskRepository: {
+        getTasksByDateRange: jest.fn().mockResolvedValue([])
+      }
     };
 
     analyticsService = new AnalyticsService({
@@ -50,6 +66,44 @@ describe('AnalyticsService', () => {
   });
 
   describe('calculateHistoricalBalance', () => {
+    it('prepareReadModel 应在 TTL 内复用已准备快照', async () => {
+      mockStarService.getStarGroups.mockResolvedValue([
+        {
+          id: 'group-1',
+          stars: 5,
+          expiryType: 'permanent',
+          expiryDate: null
+        }
+      ]);
+      mockStarService.getStarRecordsByDateRange.mockResolvedValue([
+        {
+          id: 'record-1',
+          userId: 'child-1',
+          points: 5,
+          timestamp: new Date('2026-03-21T09:00:00').getTime(),
+          source: 'task',
+          type: 'income'
+        }
+      ]);
+
+      const first = await analyticsService.prepareReadModel({
+        analysisOptions: { userId: 'child-1' },
+        monthKey: '2026-03',
+        days: 7,
+        force: false
+      });
+      const second = await analyticsService.prepareReadModel({
+        analysisOptions: { userId: 'child-1' },
+        monthKey: '2026-03',
+        days: 7,
+        force: false
+      });
+
+      expect(first.snapshot.signature).toBe(second.snapshot.signature);
+      expect(mockStarService.refreshStarsFromCloud).toHaveBeenCalledTimes(1);
+      expect(mockTaskService.getTasksByDateRange).toHaveBeenCalledTimes(1);
+    });
+
     it('单用户分析应只读取对应 userId 的 star groups', async () => {
       mockStarService.getStarGroups.mockResolvedValue([
         {
@@ -122,7 +176,7 @@ describe('AnalyticsService', () => {
       );
     });
 
-    it('家庭分析应跳过基于 star groups 的过期预测', async () => {
+    it('家庭分析在存在 prepared family snapshot 时应使用正式余额锚定并生成预测', async () => {
       mockStarService.getStarRecords.mockResolvedValue([
         {
           id: 'parent-record',
@@ -135,12 +189,37 @@ describe('AnalyticsService', () => {
         {
           id: 'child-record',
           userId: 'child-1',
-          points: 2,
+          points: 7,
           timestamp: new Date('2026-03-21T10:00:00').getTime(),
           source: 'task',
           type: 'income'
         }
       ]);
+      mockStarService.getFamilyStarSummary.mockResolvedValue({
+        success: true,
+        scope: 'family',
+        subjectUserIds: ['child-1'],
+        totalPoints: 3,
+        groups: [
+          {
+            id: 'group-1',
+            userId: 'child-1',
+            stars: 3,
+            expiryType: 'week',
+            expiryDate: new Date('2026-03-22T12:00:00').getTime()
+          }
+        ]
+      });
+
+      await analyticsService.prepareReadModel({
+        analysisOptions: {
+          scope: 'family',
+          childUserIds: ['child-1']
+        },
+        monthKey: '2026-03',
+        days: 7,
+        force: true
+      });
 
       const result = await analyticsService.calculateHistoricalBalance(1, null, {
         scope: 'family',
@@ -148,10 +227,11 @@ describe('AnalyticsService', () => {
       });
 
       expect(mockStarService.getStarRecords).toHaveBeenCalledWith();
-      expect(mockStarService.getStarGroups).not.toHaveBeenCalled();
+      expect(mockStarService.getFamilyStarSummary).toHaveBeenCalled();
       expect(result.historyData).toHaveLength(1);
-      expect(result.historyData[0].value).toBe(2);
-      expect(result.forecastData).toEqual([]);
+      expect(result.historyData[0].value).toBe(3);
+      expect(result.forecastData.length).toBeGreaterThan(0);
+      expect(result.forecastData[result.forecastData.length - 1].value).toBe(0);
     });
   });
 
@@ -172,6 +252,22 @@ describe('AnalyticsService', () => {
       expect(result.completedTasks).toBe(1);
       expect(result.typeCounts.study).toBe(1);
       expect(result.typeCounts.habit).toBe(0);
+    });
+
+    it('family 分析在 childUserIds 为空时应返回空统计', async () => {
+      mockTaskService.getTasksByScope.mockResolvedValue([
+        { userId: 'parent-1', type: 'study', date: '2026-03-21', isCompleted: () => true },
+        { userId: 'child-1', type: 'study', date: '2026-03-21', isCompleted: () => true }
+      ]);
+
+      const result = await analyticsService.getTaskCompletionStats('today', {
+        scope: 'family',
+        childUserIds: []
+      });
+
+      expect(result.totalTasks).toBe(0);
+      expect(result.completedTasks).toBe(0);
+      expect(result.completionRate).toBe(0);
     });
   });
 

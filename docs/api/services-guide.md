@@ -332,6 +332,32 @@ const configService = serviceManager.get('configService');
 - **返回**: `Promise<{ success: boolean, groups?: StarGroup[], records?: StarRecord[], message?: string }>`
 - **说明**: 首页显式用户任务入口、奖励页、分析页都会复用此方法进行前置同步
 
+##### `getFamilyStarSummary(options = {})`
+获取家庭当前星星汇总与分组快照
+- **参数**:
+  - `options.force` - 为 `true` 时忽略前端内存缓存，重新请求后端 `GET /api/stars/family-summary`
+- **返回**:
+  ```javascript
+  Promise<{
+    success: boolean,
+    scope: 'family',
+    subjectUserIds: string[],
+    totalPoints: number,
+    groups: StarGroup[],
+    fetchedAt?: number
+  }>
+  ```
+- **说明**: 供分析页 family 模式读取当前余额锚点与分组快照；仅云端模式可用
+
+##### `syncExpiryAuthorityIfNeeded(options = {})`
+按需触发星星到期权威结算同步
+- **参数**:
+  - `options.scope` - `'user' | 'family'`
+  - `options.userId` - `scope='user'` 时的目标用户
+  - `options.force` - 是否忽略本地节流窗口
+- **返回**: `Promise<{ success: boolean, skipped?: boolean, reason?: string }>`
+- **说明**: 分析页、首页、奖励页等正式读取链路会先经过该方法，确保当前余额与过期预测基线一致
+
 ---
 
 #### 过期管理
@@ -856,44 +882,107 @@ const configService = serviceManager.get('configService');
 数据分析服务提供任务和星星数据的统计分析功能。
 
 ### 核心功能
-- 任务统计分析
-- 星星趋势分析
+- 分析页统一读模型准备
+- 星星趋势分析与余额锚定
+- 任务/星星 scoped facts 轻聚合
 - 数据可视化支持
-- 报表生成
 
 ### API 方法
 
-##### `getTaskAnalytics(userId, dateRange)`
-获取任务分析数据
-- **参数**: `userId` - 用户ID, `dateRange` - `{ startDate, endDate }`
+##### `prepareReadModel({ analysisOptions, monthKey, days, force })`
+统一准备分析页所需读模型
+- **参数**:
+  ```javascript
+  {
+    analysisOptions: { userId?: string, scope?: 'family', childUserIds?: string[] },
+    monthKey?: string, // YYYY-MM
+    days?: number,     // 趋势天数，默认 7
+    force?: boolean
+  }
+  ```
+- **返回**:
+  ```javascript
+  {
+    success: boolean,
+    fallback?: boolean,
+    snapshot: {
+      scope: 'user' | 'family',
+      monthKey: string,
+      days: number,
+      currentBalance: number,
+      tasks: Object[],
+      records: Object[],
+      refreshedAt: number
+    }
+  }
+  ```
+- **说明**: M19C 起分析页入口统一调用此方法，负责 TTL 复用、in-flight 复用、云端主路径与 fallback 选择
+
+##### `getPreparedMonthData({ analysisOptions, monthKey })`
+读取最近一次已准备好的月份任务/星星事实
+- **参数**: `analysisOptions`、`monthKey`
+- **返回**:
+  ```javascript
+  {
+    tasks: Object[],
+    records: Object[],
+    refreshedAt: number,
+    fallback: boolean
+  } | null
+  ```
+
+##### `getPreparedFamilyGroupSnapshot(analysisOptions)`
+读取最近一次 family 分组快照
+- **参数**: `analysisOptions` - family 范围配置
+- **返回**:
+  ```javascript
+  {
+    currentBalance: number,
+    groupsByUser: Record<string, StarGroup[]>,
+    refreshedAt: number,
+    fallback: boolean
+  } | null
+  ```
+
+##### `calculateHistoricalBalance(days, userId = null, options = {})`
+计算历史余额趋势与过期预测
+- **参数**:
+  - `days` - 历史趋势天数
+  - `userId` - 单用户模式目标用户
+  - `options.scope` - `'user' | 'family'`
+  - `options.childUserIds` - family 模式下的活跃孩子集合
+- **返回**:
+  ```javascript
+  {
+    historyData: Array<{ date, value, earned, spent, penalty }>,
+    forecastData: Array<{ date, value, expiringAmount }>
+  }
+  ```
+
+##### `getTaskCompletionStats(dateRange, options = {})`
+获取任务完成情况统计
+- **参数**:
+  - `dateRange` - `'today' | 'week' | 'month'` 或日期范围对象
+  - `options.userId` / `options.scope` / `options.childUserIds`
 - **返回**:
   ```javascript
   {
     totalTasks: number,
     completedTasks: number,
     completionRate: number,
-    byType: { study: number, habit: number, interest: number },
-    byDate: Array<{date, completed, total}>
+    typeCounts: { study: number, habit: number, interest: number }
   }
   ```
 
-##### `getStarAnalytics(userId, dateRange)`
-获取星星分析数据
-- **参数**: `userId` - 用户ID, `dateRange` - `{ startDate, endDate }`
-- **返回**:
-  ```javascript
-  {
-    totalEarned: number,
-    totalConsumed: number,
-    balanceChange: number,
-    dailyData: Array<{date, earned, consumed, balance}>
-  }
-  ```
+##### `getTaskStarCalendarData(options = {})`
+获取分析页日历所需任务星星事实
+- **参数**: `options.userId` 或 `options.scope='family'`
+- **返回**: `Promise<Array<{ title, points, type, source, timestamp }>>`
 
-##### `getCompletionTrend(userId, days)`
-获取完成任务趋势
-- **参数**: `userId` - 用户ID, `days` - 统计天数
-- **返回**: `Array<{ date, completedRate, streak }>`
+##### `getUpcomingExpiryStars(days, options = {})`
+获取即将过期的星星预测输入
+- **参数**: `days`、`options.userId` / `options.scope`
+- **返回**: `Promise<Array<{ date, points, userId? }>>`
 
 ---
 
