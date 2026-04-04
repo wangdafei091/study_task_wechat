@@ -181,6 +181,7 @@ describe('TaskService', () => {
         actorUserId: 'child_1',
         actorRole: 'child',
         familyId: 'fam_1',
+        loginUserId: 'parent_1',
         targetUserId: 'child_1'
       });
     });
@@ -192,6 +193,7 @@ describe('TaskService', () => {
         actorUserId: 'parent_1',
         actorRole: 'parent',
         familyId: 'fam_1',
+        loginUserId: 'parent_1',
         targetUserId: 'child_1'
       });
     });
@@ -2250,6 +2252,29 @@ describe('TaskService', () => {
         action: 'delete',
         taskId: 't_delete_fail'
       });
+    });
+
+    it('deleteTask：接入离线队列后应将删除补偿写入 queue', async () => {
+      const task = new Task(TestDataFactory.createTask({ id: 't_delete_queue', userId: 'u1' }));
+      mockTaskRepository.getById.mockResolvedValue(task);
+      mockTaskRepository.delete.mockResolvedValue(true);
+      HttpClient.request = jest.fn().mockRejectedValue(new Error('cloud request error'));
+      taskService.offlineQueueService = {
+        enqueueMutation: jest.fn().mockResolvedValue({ id: 'queue_item_1' })
+      };
+
+      const result = await taskService.deleteTask('t_delete_queue');
+      await new Promise(setImmediate);
+
+      expect(result.success).toBe(true);
+      expect(taskService.offlineQueueService.enqueueMutation).toHaveBeenCalledWith(expect.objectContaining({
+        domain: 'task',
+        entityId: 't_delete_queue',
+        operation: 'delete',
+        payload: expect.objectContaining({
+          taskId: 't_delete_queue'
+        })
+      }));
     });
 
     it('updateTaskStatus：本地成功但云端失败时应返回成功并打warn', async () => {

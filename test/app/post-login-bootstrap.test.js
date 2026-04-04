@@ -1,5 +1,6 @@
 jest.mock('../../services/service-manager.js', () => ({
   isInitialized: true,
+  getOfflineQueueService: jest.fn(),
   getTaskService: jest.fn(),
   getMessageService: jest.fn(),
   getStarService: jest.fn(),
@@ -21,6 +22,7 @@ const postLoginBootstrap = require('../../utils/app/post-login-bootstrap');
 describe('utils/app/post-login-bootstrap', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    serviceManager.getOfflineQueueService.mockReturnValue(null);
 
     global.wx = {
       getStorageSync: jest.fn(),
@@ -33,6 +35,10 @@ describe('utils/app/post-login-bootstrap', () => {
   });
 
   it('run 应串起任务、星星、消息和首次启动初始化', async () => {
+    const offlineQueueService = {
+      initialize: jest.fn().mockResolvedValue(true),
+      drain: jest.fn().mockResolvedValue({ success: true })
+    };
     const taskRepository = { save: jest.fn().mockResolvedValue(true) };
     const taskService = {
       getAllTasks: jest.fn().mockResolvedValue([
@@ -63,6 +69,7 @@ describe('utils/app/post-login-bootstrap', () => {
       markUserWelcomed: jest.fn()
     };
 
+    serviceManager.getOfflineQueueService.mockReturnValue(offlineQueueService);
     serviceManager.getTaskService.mockReturnValue(taskService);
     serviceManager.getStarService.mockReturnValue(starService);
     serviceManager.getRewardService.mockReturnValue(null);
@@ -83,6 +90,11 @@ describe('utils/app/post-login-bootstrap', () => {
 
     await postLoginBootstrap.run(app);
 
+    expect(offlineQueueService.initialize).toHaveBeenCalledTimes(1);
+    expect(offlineQueueService.drain).toHaveBeenCalledWith({
+      reason: 'post_login_bootstrap',
+      force: true
+    });
     expect(taskRepository.save).toHaveBeenCalledWith(expect.objectContaining({
       id: 'task-1',
       penaltyApplied: false
@@ -117,6 +129,10 @@ describe('utils/app/post-login-bootstrap', () => {
   });
 
   it('run 应覆盖奖励保护、修复失败和 messageService 缺失分支', async () => {
+    const offlineQueueService = {
+      initialize: jest.fn().mockResolvedValue(true),
+      drain: jest.fn().mockResolvedValue({ success: true })
+    };
     const taskService = {
       getAllTasks: jest.fn().mockResolvedValue([]),
       taskRepository: { save: jest.fn() },
@@ -134,6 +150,7 @@ describe('utils/app/post-login-bootstrap', () => {
       enableCloudStorage: false
     };
 
+    serviceManager.getOfflineQueueService.mockReturnValue(offlineQueueService);
     serviceManager.getTaskService.mockReturnValue(taskService);
     serviceManager.getStarService.mockReturnValue(starService);
     serviceManager.getRewardService.mockReturnValue(null);
@@ -156,6 +173,10 @@ describe('utils/app/post-login-bootstrap', () => {
   });
 
   it('云端模式启动时仍应执行任务状态检查链路', async () => {
+    const offlineQueueService = {
+      initialize: jest.fn().mockResolvedValue(true),
+      drain: jest.fn().mockResolvedValue({ success: true })
+    };
     const taskService = {
       enableCloudStorage: true,
       getAllTasks: jest.fn().mockResolvedValue([]),
@@ -187,6 +208,7 @@ describe('utils/app/post-login-bootstrap', () => {
       getAllMessages: jest.fn().mockResolvedValue([])
     };
 
+    serviceManager.getOfflineQueueService.mockReturnValue(offlineQueueService);
     serviceManager.getTaskService.mockReturnValue(taskService);
     serviceManager.getStarService.mockReturnValue(starService);
     serviceManager.getRewardService.mockReturnValue(rewardService);

@@ -34,6 +34,7 @@ jest.mock('../../utils/api-config', () => ({
 const HttpClient = require('../../utils/http-client');
 const StorageAdapter = require('../../adapters/storage-adapter');
 const TokenManager = require('../../utils/token-manager');
+const logger = require('../../utils/logger');
 
 describe('UserService', () => {
   let userService;
@@ -164,6 +165,63 @@ describe('UserService', () => {
 
       // 家长设备 + 空会话 → currentUser 应为第一个孩子
       expect(userService.currentUser.id).toBe('child');
+    });
+
+    it('loadFamilyMembers 发现失效 currentUser 时应回退到 loginUser 并回正持久化会话', async () => {
+      const loginUser = new User({
+        userId: 'parent',
+        name: '家长',
+        role: 'parent',
+        status: 'active',
+        familyId: 'family_1'
+      });
+      userService.loginUser = loginUser;
+      userService.currentUser = new User({
+        userId: 'deleted_child',
+        name: '旧孩子',
+        role: 'child',
+        status: 'active',
+        familyId: 'family_1'
+      });
+
+      mockHttpClient.get.mockResolvedValue({
+        members: [
+          { userId: 'child_1', name: '孩子1', role: 'child', status: 'active', familyId: 'family_1' }
+        ]
+      });
+
+      const loaded = await userService.loadFamilyMembers();
+
+      expect(loaded).toBe(true);
+      expect(userService.currentUser.id).toBe('parent');
+      expect(mockStorageAdapter.set).toHaveBeenCalledWith('currentUserId', 'parent');
+    });
+
+    it('默认占位 currentUser 不应误报成员被删除 warning', async () => {
+      const loginUser = { userId: 'real_parent', name: '家长', role: 'parent', status: 'active', familyId: 'family_1' };
+      const onlyChild = { userId: 'child_1', name: '孩子1', role: 'child', status: 'active', familyId: 'family_1' };
+
+      mockHttpClient.get.mockImplementation(async (url) => {
+        if (url && url.includes('families')) {
+          return { members: [onlyChild] };
+        }
+        return loginUser;
+      });
+      mockStorageAdapter.get.mockReturnValue(null);
+
+      const initialized = await userService.initialize();
+
+      expect(initialized).toBe(true);
+      expect(logger.warn).not.toHaveBeenCalledWith(
+        'UserService',
+        '当前视角成员已被删除，内存回退到 loginUser',
+        expect.any(Object)
+      );
+      expect(logger.info).toHaveBeenCalledWith(
+        'UserService',
+        '检测到初始化占位视角，自动回正到 loginUser',
+        expect.objectContaining({ userId: 'parent' })
+      );
     });
   });
 

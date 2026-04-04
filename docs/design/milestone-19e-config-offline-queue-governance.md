@@ -1,6 +1,6 @@
 # 里程碑-19E：配置与离线队列治理 详细设计文档
 
-> **设计状态**：🟢 终审通过（待实施）
+> **设计状态**：✅ 已实施完成
 > **创建日期**：2026-04-05
 > **设计者**：GPT5 Codex
 > **审核者**：项目维护者
@@ -94,16 +94,16 @@
 
 **领域层（models/）**：
 - [x] 新建模型：`models/offline-queue-item.js`
-- [ ] 修改模型：无强制要求，任务/奖励/星星模型尽量不扩散额外状态
+- [x] 修改模型：任务/奖励模型继续保留过渡期兼容镜像字段，不额外扩散星星模型
 - 说明：`OfflineQueueItem` 作为离线待同步动作的统一表达，承载 domain、operation、payload、snapshot、attempt 元数据。
 
 **服务层（services/）**：
 - [x] 新建服务：`services/offline-queue-service.js`
-- [ ] 修改服务：`services/task-service.js`
-- [ ] 修改服务：`services/reward-service.js`
-- [ ] 修改服务：`services/star-service.js`
-- [ ] 修改服务：`services/message-service.js`
-- [ ] 修改服务：`services/service-manager.js`
+- [x] 修改服务：`services/task-service.js`
+- [x] 修改服务：`services/reward-service.js`
+- [x] 修改服务：`services/star-service.js`
+- [x] 修改服务：`services/message-service.js`
+- [x] 修改服务：`services/service-manager.js`
 - 说明：
   - `OfflineQueueService` 负责编排队列入队、去重、drain、重试退避和迁移
   - `TaskService / RewardService` 负责把本地写操作转为 queue item，并提供 adapter 执行云端同步
@@ -112,25 +112,25 @@
 
 **仓储层（repositories/）**：
 - [x] 新建仓储：`repositories/offline-queue-repository.js`
-- [ ] 修改仓储：`repositories/task-repository.js`
-- [ ] 修改仓储：`repositories/reward-repository.js`
+- [x] 修改仓储：`repositories/task-repository.js`
+- [x] 修改仓储：`repositories/reward-repository.js`
 - 说明：
   - `OfflineQueueRepository` 持久化 queue item
   - `TaskRepository / RewardRepository` 保留业务实体存储，但不再作为 pending/tombstone 的最终权威来源
 
 **适配器层（adapters/、utils/）**：
 - [x] 新建工具：`utils/runtime-config.js`
-- [ ] 修改工具：`utils/api-config.js`
-- [ ] 修改工具：`utils/http-client.js`
-- [ ] 修改工具：`utils/app/bootstrap-auth.js`
-- [ ] 修改工具：`utils/app/post-login-bootstrap.js`
+- [x] 修改工具：`utils/api-config.js`
+- [x] 修改工具：`utils/http-client.js`
+- [x] 修改工具：`utils/app/bootstrap-auth.js`
+- [x] 修改工具：`utils/app/post-login-bootstrap.js`
 - 说明：
   - `runtime-config.js` 负责读写原始 API 模式配置并做校验
   - `api-config.js` 只负责把原始配置解析为当前会话快照
   - 启动链路只消费解析后的快照，不再直接访问 `wx.getStorageSync('ENABLE_API'/'API_BASE_URL')`
 
 **表现层（pages/、components/）**：
-- [ ] 修改页面：仅必要时调整读取前 drain 调用，不新增页面功能
+- [x] 修改页面：首页/奖励等读取链路继续保持页面无感知，仅消费统一后的服务行为
 - 说明：M19E 不新增 UI，页面层原则上不直接感知离线队列内部细节。
 
 ### 架构图
@@ -538,9 +538,9 @@ async function executeTaskQueueItem(item) {
 
 ### 第0步：补齐现状基线测试（预计4小时）
 
-- [ ] **任务**：为现有任务/奖励 pendingSyncMeta、tombstone、读取前 flush 行为补齐基线测试
-- [ ] **验证**：在未引入统一队列前，现有离线语义被测试固化
-- [ ] **依赖**：当前 M19D 主干已稳定
+- [x] **任务**：为现有任务/奖励 pendingSyncMeta、tombstone、读取前 flush 行为补齐基线测试
+- [x] **验证**：在未引入统一队列前，现有离线语义被测试固化
+- [x] **依赖**：当前 M19D 主干已稳定
 
 **实施要点**：
 1. 固化任务域 create/update/delete/status/reset/required/unrequired 的待同步行为。
@@ -551,9 +551,9 @@ async function executeTaskQueueItem(item) {
 
 ### 第1步：运行模式配置治理（预计6小时）
 
-- [ ] **任务**：新增 `runtime-config.js`，收敛原始 API 配置读写与校验
-- [ ] **验证**：`api-config.js` 只负责生成运行时快照；运行时代码不再直接读 `wx` 原始键
-- [ ] **依赖**：现有 `api-config.js`、`app.js`、`bootstrap-auth.js`
+- [x] **任务**：新增 `runtime-config.js`，收敛原始 API 配置读写与校验
+- [x] **验证**：`api-config.js` 只负责生成运行时快照；运行时代码不再直接读 `wx` 原始键
+- [x] **依赖**：现有 `api-config.js`、`app.js`、`bootstrap-auth.js`
 
 **实施要点**：
 1. 区分“原始持久化配置”和“运行时快照”。
@@ -566,9 +566,9 @@ async function executeTaskQueueItem(item) {
 
 ### 第2步：统一离线队列核心能力（预计8小时）
 
-- [ ] **任务**：新增 `OfflineQueueItem / OfflineQueueRepository / OfflineQueueService`
-- [ ] **验证**：能完成 queue item 持久化、去重、退避和按 adapter drain
-- [ ] **依赖**：第0步基线测试已存在
+- [x] **任务**：新增 `OfflineQueueItem / OfflineQueueRepository / OfflineQueueService`
+- [x] **验证**：能完成 queue item 持久化、去重、退避和按 adapter drain
+- [x] **依赖**：第0步基线测试已存在
 
 **实施要点**：
 1. 队列项要能覆盖普通变更和删除变更两类场景。
@@ -580,9 +580,9 @@ async function executeTaskQueueItem(item) {
 
 ### 第3步：任务域接入统一队列（预计6小时）
 
-- [ ] **任务**：把任务域的离线补云主路径切到统一队列
-- [ ] **验证**：任务写失败后由 queue 接管，读前 flush 改为 queue drain
-- [ ] **依赖**：第2步队列核心能力完成
+- [x] **任务**：把任务域的离线补云主路径切到统一队列
+- [x] **验证**：任务写失败后由 queue 接管，读前 flush 改为 queue drain
+- [x] **依赖**：第2步队列核心能力完成
 
 **实施要点**：
 1. `taskDeleteTombstones` 不再作为主路径新写入。
@@ -594,9 +594,9 @@ async function executeTaskQueueItem(item) {
 
 ### 第4步：奖励域接入统一队列（预计4小时）
 
-- [ ] **任务**：把奖励域的离线补云主路径切到统一队列
-- [ ] **验证**：奖励写失败后由 queue 接管，读前 flush 改为 queue drain
-- [ ] **依赖**：第3步任务域已稳定
+- [x] **任务**：把奖励域的离线补云主路径切到统一队列
+- [x] **验证**：奖励写失败后由 queue 接管，读前 flush 改为 queue drain
+- [x] **依赖**：第3步任务域已稳定
 
 **实施要点**：
 1. `rewardDeleteTombstones` 不再作为主路径新写入。
@@ -608,9 +608,9 @@ async function executeTaskQueueItem(item) {
 
 ### 第5步：启动链路与星星域兼容治理（预计6小时）
 
-- [ ] **任务**：把 post-login/bootstrap 的补云入口统一接入 queue，并固化星星域兼容规则
-- [ ] **验证**：应用启动后能统一 drain；星星域不被错误纳入 task/reward 队列
-- [ ] **依赖**：第4步完成
+- [x] **任务**：把 post-login/bootstrap 的补云入口统一接入 queue，并固化星星域兼容规则
+- [x] **验证**：应用启动后能统一 drain；星星域不被错误纳入 task/reward 队列
+- [x] **依赖**：第4步完成
 
 **实施要点**：
 1. `serviceManager.initialize()` 后必须先完成 `OfflineQueueService.initialize()`。
@@ -622,9 +622,9 @@ async function executeTaskQueueItem(item) {
 
 ### 第6步：文档、测试与真实场景验证（预计6小时）
 
-- [ ] **任务**：补齐设计回写、API 文档、CHANGELOG/ROADMAP 和手工验证清单
-- [ ] **验证**：定向测试、模拟器手工验证、真实链路日志复核通过
-- [ ] **依赖**：前 5 步已完成
+- [x] **任务**：补齐设计回写、API 文档、CHANGELOG/ROADMAP 和手工验证清单
+- [x] **验证**：定向测试、模拟器手工验证、真实链路日志复核通过
+- [x] **依赖**：前 5 步已完成
 
 **实施要点**：
 1. 设计文档要回写“迁移策略”“兼容窗口”“双写退出条件”。
@@ -634,6 +634,19 @@ async function executeTaskQueueItem(item) {
 ---
 
 ## 测试方案
+
+### 实际验证结果
+
+- 全量前端测试通过：`npm test`
+  - 结果：`73 suites / 1686 tests` 全绿
+- M19E 关键定向测试通过：
+  - `npx jest test/utils/runtime-config.test.js test/utils/api-config.test.js test/services/offline-queue-service.test.js`
+  - `npx jest test/app/bootstrap-services.test.js test/app/post-login-bootstrap.test.js`
+  - `npx jest test/services/task-service.test.js test/services/reward-service.test.js`
+- 模拟器与日志复核通过：
+  - 本地模式：启动、首页、奖励页、消息页主链路正常
+  - 云端模式：登录后离线队列补偿、首页、奖励页、消息页主链路正常
+  - 历史问题复核：`user-switcher` 类型告警消失，`currentUser` 占位态误报警告已消失
 
 ### 单元测试
 
@@ -752,4 +765,4 @@ async function executeTaskQueueItem(item) {
 
 ---
 
-**最后更新**：2026-04-05
+**最后更新**：2026-04-05（已实施完成并通过回归）

@@ -35,6 +35,7 @@ class TaskService {
     this.starService = options.starService;
     this.rewardService = options.rewardService;
     this.userService = options.userService; // 新增：注入用户服务
+    this.offlineQueueService = options.offlineQueueService || null;
 
     // 事件总线
     this.eventBus = options.eventBus || new EventBus();
@@ -74,6 +75,13 @@ class TaskService {
     }
   }
 
+  updateOfflineQueueService(offlineQueueService) {
+    this.offlineQueueService = offlineQueueService || null;
+    if (this.offlineQueueService) {
+      this.offlineQueueService.registerAdapter('task', this._executeTaskQueueItem.bind(this));
+    }
+  }
+
   _createOperationKey(seed = null) {
     return String(seed || Date.now());
   }
@@ -91,6 +99,7 @@ class TaskService {
         ? (currentUser?.role || loginUser?.role || 'system')
         : (loginUser?.role || currentUser?.role || 'system'),
       familyId: loginUser?.familyId || currentUser?.familyId || null,
+      loginUserId: loginUser?.userId || loginUser?.id || null,
       targetUserId: targetUserId || null
     };
   }
@@ -110,10 +119,114 @@ class TaskService {
       operatorUserId: overrides.operatorUserId || operatorContext.actorUserId || null,
       operatorRole: overrides.operatorRole || operatorContext.actorRole || 'system',
       familyId: overrides.familyId || operatorContext.familyId || null,
+      loginUserId: overrides.loginUserId || operatorContext.loginUserId || null,
       targetUserId: overrides.targetUserId || operatorContext.targetUserId || task?.userId || null,
       notificationType: overrides.notificationType || `task_${action}`,
       modifyTime: Number(overrides.modifyTime || task?.modifyTime || Date.now())
     };
+  }
+
+  _buildOfflineQueueContextFromPendingSyncMeta(pendingSyncMeta = {}) {
+    return {
+      familyId: pendingSyncMeta.familyId || null,
+      loginUserId: pendingSyncMeta.loginUserId || this.userService?.getLoginUserId?.() || null,
+      actorUserId: pendingSyncMeta.operatorUserId || null,
+      actorRole: pendingSyncMeta.operatorRole || 'system',
+      targetUserId: pendingSyncMeta.targetUserId || null
+    };
+  }
+
+  async _enqueueTaskMutation(action, task, extra = {}) {
+    if (!this.offlineQueueService) {
+      return null;
+    }
+
+    const pendingSyncMeta = extra.pendingSyncMeta || task?.pendingSyncMeta || this._buildTaskPendingSyncMeta(task, action, extra);
+    const snapshot = extra.taskSnapshot || (task ? { ...task } : null);
+
+    return this.offlineQueueService.enqueueMutation({
+      domain: 'task',
+      entityId: task?.id || extra.taskId || null,
+      operation: action,
+      operationKey: pendingSyncMeta.operationKey,
+      payload: {
+        pendingSyncMeta,
+        taskId: task?.id || extra.taskId || null,
+        deleteMeta: extra.deleteMeta || null
+      },
+      snapshot,
+      context: this._buildOfflineQueueContextFromPendingSyncMeta(pendingSyncMeta)
+    });
+  }
+
+  async _executeTaskQueueItem(item) {
+    const snapshot = item.snapshot ? new Task(item.snapshot) : null;
+    const storedTask = item.entityId ? await this.taskRepository.getById(item.entityId) : null;
+    const task = storedTask || snapshot;
+
+    if (task && item.payload?.pendingSyncMeta) {
+      task.pendingSyncMeta = { ...item.payload.pendingSyncMeta };
+    }
+
+    switch (item.operation) {
+      case 'create':
+        return this._syncTaskToCloud(task);
+      case 'update':
+        return this._syncUpdateToCloud(task);
+      case 'delete':
+        return this._syncDeleteToCloud(
+          item.entityId,
+          item.payload?.deleteMeta || item.payload?.pendingSyncMeta || item.snapshot?.pendingSyncMeta || null
+        );
+      case 'complete':
+      case 'reset':
+        return this._syncStatusToCloud(task);
+      case 'required':
+      case 'unrequired':
+        return this._syncRequiredStateToCloud(task);
+      default:
+        return this._syncUpdateToCloud(task);
+    }
+  }
+
+  async buildLegacyQueueCandidates() {
+    const [tasks, tombstones] = await Promise.all([
+      this.taskRepository.getAll(),
+      this._getDeleteTombstones()
+    ]);
+
+    const taskItems = (tasks || [])
+      .filter((task) => task?.pendingSyncMeta)
+      .map((task) => {
+        const pendingSyncMeta = task.pendingSyncMeta || {};
+        const operation = pendingSyncMeta.action || (task.syncedToCloud ? 'update' : 'create');
+        return {
+          domain: 'task',
+          entityId: task.id,
+          operation,
+          operationKey: pendingSyncMeta.operationKey || `${task.id}:${operation}`,
+          payload: { pendingSyncMeta },
+          snapshot: { ...task },
+          context: this._buildOfflineQueueContextFromPendingSyncMeta(pendingSyncMeta),
+          legacyMigrationKey: `task:pending:${task.id}:${operation}`
+        };
+      });
+
+    const tombstoneItems = (tombstones || []).map((tombstone) => ({
+      domain: 'task',
+      entityId: tombstone.entityId,
+      operation: 'delete',
+      operationKey: tombstone.operationKey || `${tombstone.entityId}:delete`,
+      payload: {
+        deleteMeta: tombstone,
+        pendingSyncMeta: tombstone
+      },
+      snapshot: null,
+      context: this._buildOfflineQueueContextFromPendingSyncMeta(tombstone),
+      legacyMigrationKey: `task:tombstone:${tombstone.entityId}:delete`
+    }));
+
+    return [...taskItems, ...tombstoneItems];
   }
 
   async _markTaskSynced(task, overrides = {}) {
@@ -290,6 +403,12 @@ class TaskService {
       await this.taskRepository.save(task).catch(() => null);
     }
 
+    await this._enqueueTaskMutation(action, task, {
+      ...extra,
+      pendingSyncMeta,
+      taskSnapshot: extra.taskSnapshot || (task ? { ...task } : null)
+    }).catch(() => null);
+
     this.eventBus.emit(EVENTS.TASK_CLOUD_SYNC_FAILED, {
       action,
       task,
@@ -322,6 +441,17 @@ class TaskService {
   }
 
   async _flushPendingTaskSyncs() {
+    if (this.offlineQueueService) {
+      if (typeof this.offlineQueueService.initialize === 'function') {
+        await this.offlineQueueService.initialize();
+      }
+      await this.offlineQueueService.drain({
+        domains: ['task'],
+        reason: 'before_task_read'
+      });
+      return;
+    }
+
     if (!this.enableCloudStorage) {
       return;
     }

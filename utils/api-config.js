@@ -3,6 +3,8 @@
  * 统一管理所有API接口地址和配置参数
  */
 
+const { resolveRuntimeApiConfig } = require('./runtime-config');
+
 function getNodeEnv(name) {
   if (typeof process === 'undefined' || !process || !process.env) {
     return undefined;
@@ -17,67 +19,35 @@ function shouldLogConfig() {
   );
 }
 
-// 支持微信小程序环境配置
-function getWechatStorage(key) {
-  if (typeof wx === 'undefined' || !wx) {
-    return undefined;
+const runtimeApiConfig = resolveRuntimeApiConfig();
+
+if (typeof wx !== 'undefined' && shouldLogConfig()) {
+  if (!runtimeApiConfig.explicitlyEnabled) {
+    console.log('ℹ️ 微信小程序环境：未配置 ENABLE_API，默认使用本地模式');
+  } else {
+    console.log('✅ 保留用户配置的API模式:', runtimeApiConfig.enableApiRaw);
   }
-  try {
-    return wx.getStorageSync(key);
-  } catch (error) {
-    return undefined;
+
+  if (!runtimeApiConfig.hasBaseUrl) {
+    console.log('ℹ️ 微信小程序环境：未配置 API_BASE_URL');
+  } else if (!runtimeApiConfig.baseUrl) {
+    console.log('⚠️ 微信小程序环境：API_BASE_URL 非法，回退本地模式');
+  } else {
+    console.log('✅ 保留用户配置的API地址:', runtimeApiConfig.baseUrl);
   }
 }
-
-// ✅ 微信小程序环境：始终使用 wx.getStorageSync 的配置
-// 优先从环境变量读取，支持微信小程序存储
-const enableApiEnv = getNodeEnv('ENABLE_API') || getWechatStorage('ENABLE_API');
-const apiBaseUrlEnv = getNodeEnv('API_BASE_URL') || getWechatStorage('API_BASE_URL');
-
-// 微信小程序环境：显式配置优先，未配置时回落本地模式
-let finalEnableApi = enableApiEnv;
-let finalBaseUrl = apiBaseUrlEnv;
-
-if (typeof wx !== 'undefined') {
-  // 未显式配置时保持本地模式，不再自动启用测试后端
-  if (enableApiEnv === undefined || enableApiEnv === null || enableApiEnv === '') {
-    finalEnableApi = 'false';
-    if (shouldLogConfig()) {
-      console.log('ℹ️ 微信小程序环境：未配置 ENABLE_API，默认使用本地模式');
-    }
-  } else {
-    if (shouldLogConfig()) {
-      console.log('✅ 保留用户配置的API模式:', enableApiEnv);
-    }
-  }
-
-  // 未显式配置地址时，不再自动落到测试环境地址
-  if (!apiBaseUrlEnv || apiBaseUrlEnv === '') {
-    finalBaseUrl = '';
-    if (shouldLogConfig()) {
-      console.log('ℹ️ 微信小程序环境：未配置 API_BASE_URL');
-    }
-  } else {
-    if (shouldLogConfig()) {
-      console.log('✅ 保留用户配置的API地址:', apiBaseUrlEnv);
-    }
-  }
-}
-
-const apiExplicitlyEnabled = finalEnableApi === 'true' || finalEnableApi === true;
-const hasExplicitBaseUrl = typeof finalBaseUrl === 'string' && finalBaseUrl.trim() !== '';
-const finalApiEnabled = apiExplicitlyEnabled && hasExplicitBaseUrl;
 
 const API_CONFIG = {
   // 基础配置
-  ENABLE_API: finalApiEnabled,
-  BASE_URL: hasExplicitBaseUrl ? finalBaseUrl : '',
+  ENABLE_API: runtimeApiConfig.enabled,
+  BASE_URL: runtimeApiConfig.baseUrl,
   TIMEOUT: 10000, // 10秒超时
   RETRY_COUNT: 2, // 重试2次
 
   // 🆕 云端存储模式标识 - 添加缺失的属性
-  useCloudStorage: finalApiEnabled,
-  enableCloudStorage: finalApiEnabled, // 添加useCloudStorage和enableCloudStorage属性
+  useCloudStorage: runtimeApiConfig.enabled,
+  enableCloudStorage: runtimeApiConfig.enabled, // 添加useCloudStorage和enableCloudStorage属性
+  RUNTIME: runtimeApiConfig,
 
   // API端点
   ENDPOINTS: {

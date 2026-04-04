@@ -411,11 +411,18 @@ class UserService {
       members.forEach(u => this.userCache.set(u.userId, u));
       logger.info('UserService', `家庭成员加载: ${members.length}人`);
 
-      // 软删除回退：currentUser 已被删除时仅在内存中回退到 loginUser
-      // 不写存储——_restoreSession() 会根据存储值与缓存的对比做最终处理
       if (this.currentUser && !this.userCache.has(this.currentUser.userId)) {
-        logger.warn('UserService', '当前视角成员已被删除，内存回退到 loginUser', { userId: this.currentUser.userId });
+        const isPlaceholderUser = this._isLegacyPlaceholderUserId(this.currentUser.userId);
+        const logMethod = isPlaceholderUser ? 'info' : 'warn';
+        logger[logMethod](
+          'UserService',
+          isPlaceholderUser
+            ? '检测到初始化占位视角，自动回正到 loginUser'
+            : '当前视角成员已被删除，内存回退到 loginUser',
+          { userId: this.currentUser.userId }
+        );
         this.currentUser = this.loginUser;
+        this._persistCurrentUserId(this.loginUser?.userId || null);
       }
       return true;
     } catch (error) {
@@ -445,16 +452,8 @@ class UserService {
 
     const forceReset = (reason) => {
       this.currentUser = this.loginUser || this.currentUser;
-      const uid = this.loginUser?.userId;
-      if (uid) {
-        try {
-          if (this.storageAdapter) {
-            this.storageAdapter.set('currentUserId', uid);
-          } else {
-            wx.setStorageSync('currentUserId', uid);
-          }
-        } catch (e) { /* ignore */ }
-      }
+      const uid = this.loginUser?.userId || null;
+      this._persistCurrentUserId(uid);
       logger.info('UserService', `会话回正到 loginUser：${reason}`, { userId: uid });
     };
 
@@ -480,14 +479,11 @@ class UserService {
         this.currentUser = children.length > 0 ? children[0] : this.loginUser;
         if (children.length > 0) {
           logger.info('UserService', '家长首次启动，默认选第一个孩子', { childId: children[0].userId });
-          if (this.storageAdapter) {
-            this.storageAdapter.set('currentUserId', children[0].userId);
-          } else {
-            wx.setStorageSync('currentUserId', children[0].userId);
-          }
+          this._persistCurrentUserId(children[0].userId);
         }
       } else if (this.loginUser) {
         this.currentUser = this.loginUser;
+        this._persistCurrentUserId(this.loginUser.userId);
       }
     }
 
@@ -502,14 +498,30 @@ class UserService {
       const fallback = validUsers[0] || this.loginUser;
       logger.info('UserService', '家长currentUser不在有效列表，重定向', { to: fallback.userId });
       this.currentUser = fallback;
-      try {
-        if (this.storageAdapter) {
-          this.storageAdapter.set('currentUserId', fallback.userId);
-        } else {
-          wx.setStorageSync('currentUserId', fallback.userId);
-        }
-      } catch (e) { /* ignore */ }
+      this._persistCurrentUserId(fallback.userId);
     }
+  }
+
+  _persistCurrentUserId(userId) {
+    if (!userId) {
+      return false;
+    }
+
+    try {
+      if (this.storageAdapter) {
+        this.storageAdapter.set('currentUserId', userId);
+      } else {
+        wx.setStorageSync('currentUserId', userId);
+      }
+      return true;
+    } catch (error) {
+      logger.warn('UserService', '持久化 currentUserId 失败', { userId, error: error.message });
+      return false;
+    }
+  }
+
+  _isLegacyPlaceholderUserId(userId) {
+    return userId === 'parent' || userId === 'child';
   }
 
   /**

@@ -5,6 +5,9 @@ async function run(app) {
   try {
     logger.info('App', '开始登录成功后的初始化');
 
+    const offlineQueueService = serviceManager.getOfflineQueueService();
+    logger.info('App', '获取离线队列服务:', offlineQueueService ? '成功' : '失败');
+
     const taskService = serviceManager.getTaskService();
     logger.info('App', '获取任务服务:', taskService ? '成功' : '失败');
 
@@ -13,6 +16,18 @@ async function run(app) {
 
     const starService = serviceManager.getStarService();
     logger.info('App', '获取星星服务:', starService ? '成功' : '失败');
+
+    if (offlineQueueService?.initialize) {
+      await offlineQueueService.initialize();
+    }
+
+    if (offlineQueueService?.drain) {
+      await offlineQueueService.drain({
+        reason: 'post_login_bootstrap',
+        force: true
+      });
+      logger.info('App', '登录后离线队列补偿完成');
+    }
 
     if (taskService) {
       await fixLegacyTaskData(taskService);
