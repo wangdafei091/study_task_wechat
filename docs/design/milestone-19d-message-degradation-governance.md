@@ -1,7 +1,8 @@
 # 里程碑-19D：消息语义与降级治理 详细设计文档
 
-> **设计状态**：🟢 审核通过
+> **设计状态**：✅ 已完成
 > **创建日期**：2026-04-04
+> **完成日期**：2026-04-04
 > **设计者**：GPT5 Codex
 > **审核者**：项目维护者
 > **预计工期**：3-4天
@@ -532,6 +533,27 @@ class MessageService {
 
 - 最低要求：85%
 - 推荐目标：90%
+
+### 实施结果（2026-04-04）
+
+- ✅ `MessageService` 已按设计拆分为：
+  - 本地模式业务监听
+  - 云端失败降级监听
+  - 领域观察者
+- ✅ 云端模式主消息流已显式过滤为 `formal + provisional`
+- ✅ `refreshMessagesFromCloud()` 兼容入口已保留，并与正式镜像刷新职责收口对齐
+- ✅ `getUnreadCount()` 保留了无用户上下文的仓储早返回兼容分支
+- ✅ `message:changed` 继续沿用“当前有效 scope 快照”语义，没有扩成 all-scope 事件负载
+
+### 验证结果（2026-04-04）
+
+- 前端消息域定向测试通过：
+  - `npx jest test/services/message-service.test.js --runInBand`
+  - `npx jest test/repositories/message-repository.test.js --runInBand`
+  - `npx jest test/pages/message-page.behavior.test.js test/pages/message-page.extra-behavior.test.js --runInBand`
+- 首页与启动链路回归通过：
+  - `npx jest test/app/post-login-bootstrap.test.js --runInBand`
+  - `npx jest test/pages/index* -i`
 
 ---
 

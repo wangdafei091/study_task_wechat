@@ -84,6 +84,14 @@ class MessageService {
    * @private
    */
   _registerEventListeners() {
+    this._registerLocalModeListeners();
+    this._registerCloudFallbackListeners();
+    this._registerDomainObservers();
+
+    logger.info('MessageService', '已注册事件监听器');
+  }
+
+  _registerLocalModeListeners() {
     // 任务相关事件
     this.eventBus.on(EVENTS.TASK_CREATED, this._handleTaskCreated.bind(this));
     this.eventBus.on(EVENTS.TASK_COMPLETED, this._handleTaskCompleted.bind(this));
@@ -94,8 +102,7 @@ class MessageService {
     this.eventBus.on(EVENTS.TASK_PENALTY_APPLIED, this._handleTaskPenalty.bind(this));
     this.eventBus.on(EVENTS.TASK_MARKED_REQUIRED, this._handleTaskMarkedRequired.bind(this));
     this.eventBus.on(EVENTS.TASK_UNMARKED_REQUIRED, this._handleTaskUnmarkedRequired.bind(this));
-    this.eventBus.on(EVENTS.TASK_CLOUD_SYNC_FAILED, this._handleTaskCloudSyncFailed.bind(this));
-    
+
     // 奖励相关事件
     this.eventBus.on(EVENTS.REWARD_CREATED, this._handleRewardCreated.bind(this));
     this.eventBus.on(EVENTS.REWARD_CLAIMED, this._handleRewardClaimed.bind(this));
@@ -103,16 +110,19 @@ class MessageService {
     this.eventBus.on(EVENTS.REWARD_UNCLAIMED, this._handleRewardUnclaimed.bind(this));
     this.eventBus.on(EVENTS.REWARD_DELETED_BATCH, this._handleRewardDeletedBatch.bind(this));
     this.eventBus.on(EVENTS.REWARD_EXAMPLES_CLEARED, this._handleRewardExamplesCleared.bind(this));
+  }
+
+  _registerCloudFallbackListeners() {
+    this.eventBus.on(EVENTS.TASK_CLOUD_SYNC_FAILED, this._handleTaskCloudSyncFailed.bind(this));
     this.eventBus.on(EVENTS.REWARD_CLOUD_SYNC_FAILED, this._handleRewardCloudSyncFailed.bind(this));
-    
-    // 领域模型事件
+  }
+
+  _registerDomainObservers() {
     this.eventBus.on(EVENTS.DOMAIN_MESSAGE_CREATED, this._handleDomainMessageCreated.bind(this));
     this.eventBus.on(EVENTS.DOMAIN_MESSAGE_UPDATED, this._handleDomainMessageUpdated.bind(this));
     this.eventBus.on(EVENTS.DOMAIN_MESSAGE_DELETED, this._handleDomainMessageDeleted.bind(this));
     this.eventBus.on(EVENTS.DOMAIN_MESSAGE_READ, this._handleDomainMessageRead.bind(this));
     this.eventBus.on(EVENTS.DOMAIN_MESSAGE_ALL_READ, this._handleDomainMessageAllRead.bind(this));
-    
-    logger.info('MessageService', '已注册事件监听器');
   }
 
   _getLoginUser() {
@@ -470,22 +480,41 @@ class MessageService {
     });
   }
 
-  async refreshMessagesFromCloud(userId = null, options = {}) {
-    const resolved = this._resolveScopeOptions({ ...options, userId });
+  _isFormalMessage(message) {
+    return Boolean(message && message.syncedToCloud === true && message.isProvisional !== true && message.isLegacy !== true);
+  }
 
-    if (!this.enableCloudStorage) {
-      const localMessages = resolved.scope === 'all'
-        ? await this.messageRepository.getAll()
-        : await this.messageRepository.getMessagesByScope(resolved);
-      return this._compactMessagesForDisplay(localMessages);
+  _isProvisionalMessage(message) {
+    return Boolean(message && message.isProvisional === true && message.syncedToCloud !== true);
+  }
+
+  _isLegacyMessage(message) {
+    return Boolean(message && message.isLegacy === true);
+  }
+
+  _isCurrentScopeCompatibleMessage(message) {
+    return Boolean(message && !this._isFormalMessage(message) && !this._isProvisionalMessage(message) && !this._isLegacyMessage(message));
+  }
+
+  async _getRawMessagesByScope(resolved) {
+    return resolved.scope === 'all'
+      ? this.messageRepository.getAll()
+      : this.messageRepository.getMessagesByScope(resolved);
+  }
+
+  async _getScopedMessagesForDisplay(resolved) {
+    const rawMessages = await this._getRawMessagesByScope(resolved);
+
+    if (!this.enableCloudStorage || resolved.scope === 'all') {
+      return rawMessages;
     }
 
-    if (resolved.scope === 'all') {
-      return this._compactMessagesForDisplay(await this.messageRepository.getAll());
-    }
+    return rawMessages.filter((message) => (
+      this._isFormalMessage(message) || this._isProvisionalMessage(message)
+    ));
+  }
 
-    await this.syncFormalRemindersIfNeeded(resolved);
-
+  async _refreshFormalMessagesFromCloud(resolved) {
     const params = {
       scope: resolved.scope
     };
@@ -503,8 +532,26 @@ class MessageService {
       cloudMessages.map(message => message.id)
     );
 
+    return cloudMessages;
+  }
+
+  async refreshMessagesFromCloud(userId = null, options = {}) {
+    const resolved = this._resolveScopeOptions({ ...options, userId });
+
+    if (!this.enableCloudStorage) {
+      const localMessages = await this._getScopedMessagesForDisplay(resolved);
+      return this._compactMessagesForDisplay(localMessages);
+    }
+
+    if (resolved.scope === 'all') {
+      return this._compactMessagesForDisplay(await this._getScopedMessagesForDisplay(resolved));
+    }
+
+    await this.syncFormalRemindersIfNeeded(resolved);
+    await this._refreshFormalMessagesFromCloud(resolved);
+
     await this._emitMessageChangedEvent();
-    return this._compactMessagesForDisplay(cloudMessages);
+    return this._compactMessagesForDisplay(await this._getScopedMessagesForDisplay(resolved));
   }
 
   _buildFormalReminderSyncScopeKey(resolved) {
@@ -618,9 +665,7 @@ class MessageService {
       await this.refreshMessagesFromCloud(resolved.userId, resolved);
     }
 
-    const messages = resolved.scope === 'all'
-      ? await this.messageRepository.getAll()
-      : await this.messageRepository.getMessagesByScope(resolved);
+    const messages = await this._getScopedMessagesForDisplay(resolved);
     return this._compactMessagesForDisplay(messages);
   }
 
@@ -1405,10 +1450,10 @@ class MessageService {
         return Promise.resolve(count);
       }
       const resolved = this._resolveScopeOptions(options);
-      const scopedMessages = await this.messageRepository.getMessagesByScope(resolved);
+      const scopedMessages = await this._getScopedMessagesForDisplay(resolved);
       const unreadMessages = scopedMessages.filter(message => !message.isRead);
       const hasFormalCloudMessages = unreadMessages.some(
-        message => message.isProvisional !== true && message.syncedToCloud === true
+        message => this._isFormalMessage(message)
       );
 
       if (hasFormalCloudMessages) {
@@ -1420,7 +1465,7 @@ class MessageService {
         }
       }
 
-      const count = await this._markAllMessagesAsReadWithDomainModel(resolved);
+      const count = await this._markAllMessagesAsReadWithDomainModel(resolved, scopedMessages);
       return Promise.resolve(count);
     } catch (error) {
       logger.error('MessageService', '标记所有消息为已读失败', error);
@@ -1673,7 +1718,7 @@ class MessageService {
   async _getAllMessagesWithDomainModel(options = {}) {
     try {
       const resolved = this._resolveScopeOptions(options);
-      const messages = await this.messageRepository.getMessagesByScope(resolved);
+      const messages = await this._getScopedMessagesForDisplay(resolved);
       logger.info('MessageService', `使用领域模型获取所有消息成功: ${messages.length}条`);
       return this._compactMessagesForDisplay(messages);
     } catch (error) {
@@ -1729,10 +1774,10 @@ class MessageService {
    * @returns {Promise<Number>} 标记为已读的消息数量
    * @private
    */
-  async _markAllMessagesAsReadWithDomainModel(options = {}) {
+  async _markAllMessagesAsReadWithDomainModel(options = {}, visibleMessages = null) {
     try {
       const resolved = this._resolveScopeOptions(options);
-      const messages = await this.messageRepository.getMessagesByScope(resolved);
+      const messages = visibleMessages || await this._getScopedMessagesForDisplay(resolved);
       const unreadMessages = messages.filter(message => !message.isRead);
       const count = unreadMessages.length;
 

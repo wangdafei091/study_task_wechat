@@ -4,6 +4,42 @@
 
 ---
 
+## [里程碑-19D] - 2026-04-04
+
+### ✅ 完成情况
+
+**消息语义与降级治理**
+
+- **消息读取主路径收口**：
+  - `MessageService` 在云端模式下已显式区分 `formal / provisional / legacy`
+  - 主消息流展示只保留 `formal + provisional`，历史本地兼容消息不再混入云端模式主流
+- **兼容入口语义固定**：
+  - `refreshMessagesFromCloud()` 继续保留公开兼容入口
+  - `getAllMessages()` / `getUnreadCount()` 继续沿用兼容接口，但默认代表“当前有效 scope”
+  - `getUnreadCount()` 保留了无用户上下文时直连仓储的早返回路径
+- **监听职责治理**：
+  - 监听注册按“本地模式业务监听 / 云端失败降级监听 / 领域观察者”拆分
+  - 云端模式下失败兜底仅通过 `TASK_CLOUD_SYNC_FAILED / REWARD_CLOUD_SYNC_FAILED` 生成 provisional
+- **事件语义固定**：
+  - `message:changed` 继续传递当前有效 scope 的消息快照
+  - 没有扩展为 all-scope 负载，避免首页预览和未读数串视角
+
+### 🧪 验证结果
+
+- 前端消息域定向测试通过：
+  - `npx jest test/services/message-service.test.js --runInBand`
+  - `npx jest test/repositories/message-repository.test.js --runInBand`
+  - `npx jest test/pages/message-page.behavior.test.js test/pages/message-page.extra-behavior.test.js --runInBand`
+- 启动与首页消息链路回归通过：
+  - `npx jest test/app/post-login-bootstrap.test.js --runInBand`
+  - `npx jest test/pages/index* -i`
+
+### 📖 详细实施记录
+
+- [里程碑-19D：消息语义与降级治理](../design/milestone-19d-message-degradation-governance.md)
+
+---
+
 ## [里程碑-19C] - 2026-04-04
 
 ### ✅ 完成情况
