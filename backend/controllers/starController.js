@@ -28,6 +28,25 @@ class StarController {
     }
   }
 
+  async getFamilySummary(req, res) {
+    try {
+      if (req.user.role !== 'parent' || !req.user.familyId) {
+        return res.status(403).json(error('仅家长可访问家庭星星汇总', 'PERMISSION_DENIED'));
+      }
+
+      const result = await starService.getFamilyStarSummary(req.user.familyId);
+      return res.json(success({
+        scope: 'family',
+        subjectUserIds: result.subjectUserIds,
+        totalPoints: result.totalPoints,
+        groups: result.groups.map(group => group.toJSON()),
+      }, '获取成功'));
+    } catch (err) {
+      logger.error('获取家庭星星汇总失败', err);
+      return res.status(500).json(error('获取家庭星星汇总失败', 'STAR_FAMILY_SUMMARY_GET_FAILED'));
+    }
+  }
+
   async getRecords(req, res) {
     try {
       const { scope, userId } = req.query;

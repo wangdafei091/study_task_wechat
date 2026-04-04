@@ -6,6 +6,11 @@ Page({
   data: {
     loading: false,
     analysisOptions: null, // { scope: 'family' } 或 { userId: '...' }
+    visibleMonthKey: '',
+    trendDays: 7,
+    readModelVersion: 0,
+    readModelFallback: false,
+    readModelReadyAt: 0
   },
 
   _resolveAnalysisOptions() {
@@ -20,23 +25,8 @@ Page({
     return this.getAnalysisOptions(loginUser, currentUser, availableUsers);
   },
 
-  _scheduleLoadData(refreshStarCalendar = false) {
-    setTimeout(() => {
-      this.loadData();
-      if (!refreshStarCalendar) {
-        return;
-      }
-
-      setTimeout(() => {
-        const starCalendar = this.selectComponent('.star-calendar');
-        if (starCalendar) {
-          logger.info('analysis', '触发星星日历智能刷新');
-          starCalendar.smartRefresh();
-        } else {
-          logger.warn('analysis', '未找到星星日历组件');
-        }
-      }, 200);
-    }, 300);
+  _getCurrentMonthKey() {
+    return `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
   },
 
   /**
@@ -53,46 +43,79 @@ Page({
     logger.info('analysis', '页面加载');
     const analysisOptions = this._resolveAnalysisOptions();
     logger.info('analysis', '分析范围', analysisOptions);
-    this._skipNextOnShowRefresh = true;
-    this.setData({ loading: true, analysisOptions });
-    this._scheduleLoadData(false);
+    this.setData({
+      loading: true,
+      analysisOptions,
+      visibleMonthKey: this._getCurrentMonthKey(),
+      trendDays: 7
+    });
   },
 
-  onShow: function () {
+  onShow: async function () {
     logger.info('analysis', '页面显示');
     const analysisOptions = this._resolveAnalysisOptions();
     const previousOptions = this.data.analysisOptions || null;
     const hasScopeChanged = JSON.stringify(previousOptions) !== JSON.stringify(analysisOptions);
 
-    if (this._skipNextOnShowRefresh) {
-      this._skipNextOnShowRefresh = false;
-      if (hasScopeChanged) {
-        this.setData({ analysisOptions });
-      }
-      return;
-    }
+    this.setData({
+      loading: true,
+      analysisOptions,
+      visibleMonthKey: this.data.visibleMonthKey || this._getCurrentMonthKey(),
+      trendDays: this.data.trendDays || 7
+    });
 
-    this.setData({ loading: true, analysisOptions });
-    this._scheduleLoadData(true);
+    await this.loadData({ force: true, scopeChanged: hasScopeChanged });
   },
 
-  loadData: function () {
+  async loadData(options = {}) {
     logger.info('analysis', '加载数据');
     try {
-      const taskService = app.getTaskService();
-      if (!taskService) {
-        logger.error('analysis', '无法获取任务服务');
+      const analyticsService = app.getAnalyticsService();
+      if (!analyticsService || typeof analyticsService.prepareReadModel !== 'function') {
+        logger.error('analysis', '无法获取分析服务');
         this.setData({ loading: false });
         return;
       }
-      setTimeout(() => {
-        this.setData({ loading: false });
-        logger.info('analysis', '数据加载完成');
-      }, 500);
+
+      const result = await analyticsService.prepareReadModel({
+        analysisOptions: this.data.analysisOptions,
+        monthKey: this.data.visibleMonthKey || this._getCurrentMonthKey(),
+        days: Number(this.data.trendDays || 7),
+        force: options.force === true
+      });
+
+      this.setData({
+        loading: false,
+        readModelVersion: Number(this.data.readModelVersion || 0) + 1,
+        readModelFallback: result?.fallback === true,
+        readModelReadyAt: result?.snapshot?.refreshedAt || Date.now()
+      });
+      logger.info('analysis', '数据加载完成', {
+        fallback: result?.fallback === true,
+        scopeChanged: options.scopeChanged === true
+      });
     } catch (err) {
       logger.error('analysis', '加载数据失败:', err);
       this.setData({ loading: false });
       wx.showToast({ title: '数据加载失败', icon: 'none', duration: 2000 });
     }
+  },
+
+  onCalendarMonthChange: async function(e) {
+    const monthKey = e?.detail?.monthKey || this.data.visibleMonthKey || this._getCurrentMonthKey();
+    this.setData({
+      visibleMonthKey: monthKey,
+      loading: true
+    });
+    await this.loadData({ force: false });
+  },
+
+  onTrendRangeChange: async function(e) {
+    const trendDays = Number(e?.detail?.days || this.data.trendDays || 7);
+    this.setData({
+      trendDays,
+      loading: true
+    });
+    await this.loadData({ force: false });
   }
 });

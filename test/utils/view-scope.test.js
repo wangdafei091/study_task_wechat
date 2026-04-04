@@ -60,17 +60,20 @@ describe('view-scope utils', () => {
       expect(result).toEqual({ userId: 'parent_1' });
     });
 
-    it('有家庭但没有孩子时家长视角应该返回家长自己', () => {
+    it('有家庭但没有孩子时家长视角应该返回空 childUserIds 的 family scope', () => {
       const result = viewScopeUtils.resolveAnalysisOptions(
         { role: 'parent', familyId: 'family_1', id: 'parent_1' },
         { role: 'parent', id: 'parent_1', familyId: 'family_1' },
         [{ role: 'parent', id: 'parent_1', familyId: 'family_1', status: 'active' }]
       );
 
-      expect(result).toEqual({ userId: 'parent_1' });
+      expect(result).toEqual({
+        scope: 'family',
+        childUserIds: []
+      });
     });
 
-    it('单孩子家庭下家长视角应该返回该孩子 userId', () => {
+    it('单孩子家庭下家长视角应该返回 family scope 与单个 childUserId', () => {
       const result = viewScopeUtils.resolveAnalysisOptions(
         { role: 'parent', familyId: 'family_1', id: 'parent_1' },
         { role: 'parent', id: 'parent_1', familyId: 'family_1' },
@@ -80,7 +83,10 @@ describe('view-scope utils', () => {
         ]
       );
 
-      expect(result).toEqual({ userId: 'child_1' });
+      expect(result).toEqual({
+        scope: 'family',
+        childUserIds: ['child_1']
+      });
     });
 
     it('多孩子家庭下家长视角应该返回 family scope 与 childUserIds', () => {

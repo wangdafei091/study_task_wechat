@@ -52,26 +52,15 @@ function resolveAnalysisOptions(loginUser, currentUser, availableUsers = []) {
 
   const activeChildren = availableUsers
     .filter((user) => user && user.role === 'child' && user.status !== 'inactive');
-
-  if (activeChildren.length === 1) {
-    return {
-      userId: getUserIdentifier(activeChildren[0])
-    };
-  }
-
-  if (activeChildren.length >= 2) {
-    return {
-      scope: MessageVisibilityScope.FAMILY,
-      childUserIds: activeChildren
-        .map((user) => getUserIdentifier(user))
-        .filter(Boolean)
-    };
-  }
-
+  const activeChildUserIds = activeChildren
+    .map((user) => getUserIdentifier(user))
+    .filter(Boolean);
   const familyId = loginUser?.familyId || currentUser?.familyId || null;
+
   if (familyId) {
     return {
-      userId: getUserIdentifier(currentUser) || getUserIdentifier(loginUser)
+      scope: MessageVisibilityScope.FAMILY,
+      childUserIds: activeChildUserIds
     };
   }
 

@@ -861,7 +861,29 @@ Authorization: Bearer <token>
 - `403` - `FAMILY_MEMBER_ACCESS_DENIED`
 - `500` - `STAR_GROUPS_GET_FAILED`
 
-### 7.6 执行星星到期权威结算
+### 7.6 获取家庭星星汇总
+
+- Method: `GET`
+- Path: `/api/stars/family-summary`
+- Auth: `Bearer Token`
+- Query: 无
+- Body: 无
+
+成功响应：
+- Status: `200`
+- Body：`data.scope`、`data.subjectUserIds`、`data.totalPoints`、`data.groups`
+
+常见错误：
+- `403` - `PERMISSION_DENIED`
+- `500` - `STAR_FAMILY_SUMMARY_GET_FAILED`
+
+说明：
+- 仅家长且已加入家庭时可访问
+- `subjectUserIds` 只包含当前家庭下 `status=active` 的孩子
+- `groups` 只包含活跃孩子名下“未过期且星星数大于 0”的分组快照，并保留 `userId`
+- 该接口为分析页 family 余额锚定提供正式当前余额输入，不替代 `/api/stars/records?scope=family`
+
+### 7.7 执行星星到期权威结算
 
 - Method: `POST`
 - Path: `/api/stars/expiry-authority/sync`
@@ -888,7 +910,7 @@ Authorization: Bearer <token>
 - 结算幂等键采用“用户 + 分组 + 规范化到期日”构造，重复触发不会重复落账
 - 该接口只处理到期结算，不负责 materialize 提醒消息；提醒仍使用 `/api/stars/expiring-reminders/sync`
 
-### 7.7 同步星星即将过期提醒
+### 7.8 同步星星即将过期提醒
 
 - Method: `POST`
 - Path: `/api/stars/expiring-reminders/sync`

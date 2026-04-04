@@ -1,6 +1,6 @@
 # 里程碑-19C：分析读模型治理 详细设计文档
 
-> **设计状态**：🟢 评审通过，待实施
+> **设计状态**：✅ 已实施完成
 > **创建日期**：2026-04-04
 > **设计者**：GPT5 Codex
 > **审核者**：GPT5 Codex
@@ -26,7 +26,7 @@
 
 ### 功能描述
 
-`M18` 已经把分析页“看谁”的范围语义收口为单孩子 / 多孩子两套稳定规则，`M19B` 又把任务写路径进一步收口为后端权威。但分析页本身仍然没有形成一套正式的“读模型权威边界”：页面壳层只负责解析 `analysisOptions`，真正的数据保鲜和聚合却分散在 `star-calendar`、`star-trend` 和 `services/analytics-service.js` 里，各自直接访问 `taskService` / `starService` / 本地仓储。
+`M18` 已经把分析页“看谁”的基础范围语义引入到页面层，`M19B` 又把任务写路径进一步收口为后端权威。但分析页本身仍然没有形成一套正式的“读模型权威边界”：页面壳层只负责解析 `analysisOptions`，真正的数据保鲜和聚合却分散在 `star-calendar`、`star-trend` 和 `services/analytics-service.js` 里，各自直接访问 `taskService` / `starService` / 本地仓储。
 
 这导致当前分析页虽然“结果大体可用”，但底层仍是典型的混合读链路：有的组件会先刷新云端事实，有的直接读本地缓存；单用户趋势图会用 `star_groups` 锚定当前余额，family 模式却只能基于 `star_records` 近似推导，并直接跳过过期预测；分析页入口没有统一的保鲜入口，因此同一次进入页面，组件之间也可能拿到不同新鲜度的数据。`M19C` 的目标就是把这条读链路治理清楚，形成“云端模式下分析页读取哪份权威事实、由谁统一保鲜、family 余额如何锚定、本地模式如何降级，以及月份/趋势范围切换时由谁重新准备读模型”的正式方案。
 
@@ -40,11 +40,11 @@
 
 #### 1. 分析页范围语义已初步对齐，但读链路仍是分散式
 
-`utils/view-scope.js#resolveAnalysisOptions()` 现在已经支持：
+`utils/view-scope.js#resolveAnalysisOptions()` 当前正式语义为：
 
 - 孩子视角返回单孩子 `userId`
-- 家长单孩子场景返回该孩子 `userId`
-- 家长多孩子场景返回 `{ scope: 'family', childUserIds }`
+- 家长视角统一返回 `{ scope: 'family', childUserIds }`
+- 单孩子家庭下 `childUserIds` 只包含 1 个活跃孩子，因此 family 结果自然等价于该孩子数据
 
 但 `packageChart/pages/analysis/analysis.js` 当前只负责把这份 `analysisOptions` 写到页面状态，并没有统一负责“读模型保鲜”。
 
@@ -383,7 +383,10 @@ interface FamilyStarSummaryResponse {
 - `docs/design/milestone-19c-analysis-read-model-governance.md` - M19C 设计文档
 
 **修改文件**：
-- `docs/development/ROADMAP.md` - 回写 M19C 设计已通过、待实施
+- `docs/development/ROADMAP.md` - 回写 M19C 已完成与阶段状态
+- `docs/development/CHANGELOG.md` - 回写 M19C 已完成事实与验证结果
+- `docs/api/backend-rest-api.md` - 补 `GET /api/stars/family-summary` REST 契约
+- `docs/api/services-guide.md` - 补 `StarService` / `AnalyticsService` 的 M19C 公开契约
 - `packageChart/pages/analysis/analysis.js` - 页面级统一保鲜入口，持有 `visibleMonthKey` / `trendDays` / `readModelVersion`
 - `packageChart/components/star-calendar/star-calendar.js` - 改为消费统一读模型，向页面上报 `monthchange`
 - `packageChart/components/star-trend/star-trend.js` - 改为消费统一读模型与 family 当前余额锚定，向页面上报 `rangechange`
@@ -495,9 +498,9 @@ async function prepareReadModel({ analysisOptions, monthKey, days, force }) {
 
 ### 第1步：定义分析读模型边界与页面主入口（预计6小时）
 
-- [ ] **任务**：为分析页建立统一的 `prepareReadModel()` 入口，并让 `analysis.js` 真正负责准备数据
-- [ ] **验证**：分析页首次进入和再次显示时，只存在一条分析读模型保鲜主路径
-- [ ] **依赖**：无
+- [x] **任务**：为分析页建立统一的 `prepareReadModel()` 入口，并让 `analysis.js` 真正负责准备数据
+- [x] **验证**：分析页首次进入和再次显示时，只存在一条分析读模型保鲜主路径
+- [x] **依赖**：无
 
 **实施要点**：
 1. 在 `analysis.js` 显式引入 `visibleMonthKey`、`trendDays`、`readModelVersion`
@@ -509,9 +512,9 @@ async function prepareReadModel({ analysisOptions, monthKey, days, force }) {
 
 ### 第2步：补齐 family 星星分组快照能力（预计8小时）
 
-- [ ] **任务**：后端提供 family 当前余额和分组快照能力
-- [ ] **验证**：family 模式下趋势图可得到正式 `currentBalance` 与过期预测输入，不再直接返回空预测
-- [ ] **依赖**：第1步完成后可并行实施
+- [x] **任务**：后端提供 family 当前余额和分组快照能力
+- [x] **验证**：family 模式下趋势图可得到正式 `currentBalance` 与过期预测输入，不再直接返回空预测
+- [x] **依赖**：第1步完成后可并行实施
 
 **实施要点**：
 1. 新增 `GET /api/stars/family-summary`
@@ -524,9 +527,9 @@ async function prepareReadModel({ analysisOptions, monthKey, days, force }) {
 
 ### 第3步：分析组件切换到统一读模型消费（预计8小时）
 
-- [ ] **任务**：让 `star-calendar` / `star-trend` 改为依赖 `AnalyticsService` 准备好的 scoped facts
-- [ ] **验证**：分析页进入时不再出现组件各自重复刷新任务 / 星星的链路
-- [ ] **依赖**：第1步、第2步
+- [x] **任务**：让 `star-calendar` / `star-trend` 改为依赖 `AnalyticsService` 准备好的 scoped facts
+- [x] **验证**：分析页进入时不再出现组件各自重复刷新任务 / 星星的链路
+- [x] **依赖**：第1步、第2步
 
 **实施要点**：
 1. `star-trend` 去掉组件内直接 `refreshStarsFromCloud` 的主路径，改为由页面先准备读模型
@@ -539,9 +542,9 @@ async function prepareReadModel({ analysisOptions, monthKey, days, force }) {
 
 ### 第4步：保留 fallback 并补测试（预计6小时）
 
-- [ ] **任务**：补本地模式、云端失败和 family 聚合的回归测试
-- [ ] **验证**：云端失败时分析页仍可回退可用，本地模式不回归
-- [ ] **依赖**：第1~3步
+- [x] **任务**：补本地模式、云端失败和 family 聚合的回归测试
+- [x] **验证**：云端失败时分析页仍可回退可用，本地模式不回归
+- [x] **依赖**：第1~3步
 
 **实施要点**：
 1. 补 `AnalyticsService` 的 user / family / fallback 三类单测
@@ -660,6 +663,29 @@ async function prepareReadModel({ analysisOptions, monthKey, days, force }) {
 
 **结论**：
 - 采用
+
+---
+
+## 实施完成回写（2026-04-04）
+
+### 实际完成结果
+
+- 已在 `analysis.js` 建立页面级统一读模型准备入口，页面负责 `visibleMonthKey`、`trendDays`、`readModelVersion`
+- 已在 `AnalyticsService` 落地 30 秒 TTL、in-flight 复用、prepared snapshot 查询与 fallback 读模型
+- 已新增后端 `GET /api/stars/family-summary`，并由 `StarService` / `AnalyticsService` 接入 family 当前余额锚定
+- 已将 `star-calendar` / `star-trend` 改为优先消费统一读模型，翻月与 7/30 天切换改由页面统一重准备
+- 已补齐“家长视角进入分析页统一使用 family scope”的实现与测试；单孩子家庭下仍走 family，只是 `childUserIds` 仅包含一个活跃孩子
+
+### 实际验证结果
+
+- 前端定向测试通过：
+  - `npm test -- --runInBand test/pages/star-calendar.component.test.js test/pages/star-trend.component.test.js test/pages/analysis.page.test.js test/services/analytics-service.test.js test/utils/view-scope.test.js`
+- 后端定向测试通过：
+  - `cd backend && npx jest test/unit/starService.test.js --runInBand`
+  - `cd backend && npx jest test/unit/starController.test.js --runInBand`
+- 模拟器日志复核通过：
+  - 分析页统一保鲜主路径、翻月、7/30 天切换已多轮复核
+  - 最新 `l1.log` 已确认家长视角进入分析页时日志稳定为 `{ userId: null, scope: "family" }`
 
 ---
 

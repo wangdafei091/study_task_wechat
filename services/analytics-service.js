@@ -24,8 +24,37 @@ class AnalyticsService {
 
     // 事件总线
     this.eventBus = options.eventBus || new EventBus();
+    this.prepareSnapshotTtlMs = Number(options.prepareSnapshotTtlMs || 30 * 1000);
+    this._preparedSnapshots = new Map();
+    this._prepareInflight = new Map();
+    this._latestPreparedSignatures = new Map();
+    this._installInvalidationListeners();
 
     logger.info('AnalyticsService', '初始化分析服务');
+  }
+
+  _installInvalidationListeners() {
+    if (!this.eventBus || typeof this.eventBus.on !== 'function') {
+      return;
+    }
+
+    const invalidate = () => this.invalidatePreparedSnapshots();
+    [
+      EVENTS.TASK_CREATED,
+      EVENTS.TASK_UPDATED,
+      EVENTS.TASK_DELETED,
+      EVENTS.TASK_STATUS_UPDATED,
+      EVENTS.STARS_ADDED,
+      EVENTS.STARS_CONSUMED,
+      EVENTS.STARS_EXPIRED
+    ].forEach((eventName) => {
+      this.eventBus.on(eventName, invalidate);
+    });
+  }
+
+  invalidatePreparedSnapshots() {
+    this._preparedSnapshots.clear();
+    this._latestPreparedSignatures.clear();
   }
 
   /**
@@ -166,6 +195,228 @@ class AnalyticsService {
     return result;
   }
 
+  async prepareReadModel({ analysisOptions = {}, monthKey, days = 7, force = false } = {}) {
+    const context = this._resolveAnalysisContext(analysisOptions);
+    const normalizedMonthKey = monthKey || dateUtils.formatDate(new Date()).slice(0, 7);
+    const normalizedDays = Number(days || 7);
+    const signature = this._buildAnalysisSignature(context, normalizedMonthKey, normalizedDays);
+    const scopeKey = this._buildAnalysisScopeKey(context);
+    const cachedSnapshot = this._preparedSnapshots.get(signature);
+
+    if (!force && cachedSnapshot && Number(cachedSnapshot.expiresAt || 0) > Date.now()) {
+      this._latestPreparedSignatures.set(scopeKey, signature);
+      return { success: true, snapshot: cachedSnapshot, fallback: cachedSnapshot.mode === 'fallback' };
+    }
+
+    const inFlight = this._prepareInflight.get(signature);
+    if (inFlight) {
+      return inFlight;
+    }
+
+    const request = this._prepareReadModelInternal({
+      context,
+      monthKey: normalizedMonthKey,
+      days: normalizedDays,
+      signature
+    }).then((result) => {
+      if (result && result.snapshot) {
+        this._preparedSnapshots.set(signature, result.snapshot);
+        this._latestPreparedSignatures.set(scopeKey, signature);
+      }
+      return result;
+    }).finally(() => {
+      this._prepareInflight.delete(signature);
+    });
+
+    this._prepareInflight.set(signature, request);
+    return request;
+  }
+
+  getPreparedMonthData({ analysisOptions = {}, monthKey } = {}) {
+    const snapshot = this._findPreparedSnapshot(analysisOptions, monthKey);
+    if (!snapshot) {
+      return null;
+    }
+
+    return {
+      tasks: snapshot.tasks || [],
+      records: snapshot.records || [],
+      refreshedAt: snapshot.refreshedAt || 0,
+      fallback: snapshot.mode === 'fallback'
+    };
+  }
+
+  getPreparedFamilyGroupSnapshot(analysisOptions = {}) {
+    const snapshot = this._findPreparedSnapshot(analysisOptions);
+    if (!snapshot || snapshot.scope !== 'family') {
+      return null;
+    }
+
+    return {
+      currentBalance: Number(snapshot.currentBalance || 0),
+      groupsByUser: snapshot.familyGroupSnapshots || {},
+      refreshedAt: snapshot.refreshedAt || 0,
+      fallback: snapshot.mode === 'fallback'
+    };
+  }
+
+  _findPreparedSnapshot(analysisOptions = {}, monthKey = null) {
+    const now = Date.now();
+    const context = this._resolveAnalysisContext(analysisOptions);
+    const scopeKey = this._buildAnalysisScopeKey(context);
+    const latestSignature = this._latestPreparedSignatures.get(scopeKey);
+    const latestSnapshot = latestSignature ? this._preparedSnapshots.get(latestSignature) : null;
+    const isSnapshotActive = (snapshot) => snapshot && Number(snapshot.expiresAt || 0) > now;
+
+    if (isSnapshotActive(latestSnapshot) && (!monthKey || latestSnapshot.monthKey === monthKey)) {
+      return latestSnapshot;
+    }
+
+    if (!monthKey) {
+      return null;
+    }
+
+    for (const snapshot of this._preparedSnapshots.values()) {
+      if (isSnapshotActive(snapshot) && snapshot.scopeKey === scopeKey && snapshot.monthKey === monthKey) {
+        return snapshot;
+      }
+    }
+
+    return null;
+  }
+
+  async _prepareReadModelInternal({ context, monthKey, days, signature }) {
+    const cloudEnabled = this._isCloudEnabled();
+    const { startDate, endDate } = this._getMonthDateRange(monthKey);
+
+    if (!cloudEnabled) {
+      const snapshot = await this._buildLocalPreparedSnapshot({
+        context,
+        monthKey,
+        days,
+        signature,
+        reason: 'local_mode'
+      });
+      return { success: true, fallback: true, snapshot };
+    }
+
+    try {
+      if (context.scope === 'family') {
+        const authorityResult = await this.starService.syncExpiryAuthorityIfNeeded({ scope: 'family' });
+        if (authorityResult?.success === false && authorityResult?.skipped !== true) {
+          const snapshot = await this._buildLocalPreparedSnapshot({
+            context,
+            monthKey,
+            days,
+            signature,
+            reason: 'cloud_failed'
+          });
+          return { success: true, fallback: true, snapshot };
+        }
+
+        const [taskResult, starRefreshResult, familySummary] = await Promise.all([
+          this._loadScopedTasksByDateRange(startDate, endDate, context),
+          this.starService.refreshStarsFromCloud(null, { scope: 'family' }),
+          this.starService.getFamilyStarSummary({ force: true })
+        ]);
+
+        if (!starRefreshResult?.success || !familySummary?.success) {
+          const snapshot = await this._buildLocalPreparedSnapshot({
+            context,
+            monthKey,
+            days,
+            signature,
+            reason: 'cloud_failed'
+          });
+          return { success: true, fallback: true, snapshot };
+        }
+
+        const records = await this._loadScopedStarRecordsByDateRange(startDate, endDate, context);
+        const snapshot = this._buildPreparedSnapshot({
+          context,
+          signature,
+          monthKey,
+          days,
+          tasks: taskResult,
+          records,
+          currentBalance: Number(familySummary.totalPoints || 0),
+          familyGroupSnapshots: this._groupFamilySummaryByUser(familySummary.groups || [])
+        });
+        return { success: true, fallback: false, snapshot };
+      }
+
+      const authorityResult = await this.starService.syncExpiryAuthorityIfNeeded({
+        scope: 'user',
+        userId: context.userId
+      });
+      if (authorityResult?.success === false && authorityResult?.skipped !== true) {
+        const snapshot = await this._buildLocalPreparedSnapshot({
+          context,
+          monthKey,
+          days,
+          signature,
+          reason: 'cloud_failed'
+        });
+        return { success: true, fallback: true, snapshot };
+      }
+
+      const starRefreshResult = await this.starService.refreshStarsFromCloud(context.userId);
+      if (starRefreshResult?.skipped && starRefreshResult?.reason === 'pending_local_records') {
+        const snapshot = await this._buildLocalPreparedSnapshot({
+          context,
+          monthKey,
+          days,
+          signature,
+          reason: 'pending_local_overlay'
+        });
+        return { success: true, fallback: true, snapshot };
+      }
+
+      if (!starRefreshResult?.success) {
+        const snapshot = await this._buildLocalPreparedSnapshot({
+          context,
+          monthKey,
+          days,
+          signature,
+          reason: 'cloud_failed'
+        });
+        return { success: true, fallback: true, snapshot };
+      }
+
+      const [tasks, records, starGroups] = await Promise.all([
+        this._loadScopedTasksByDateRange(startDate, endDate, context),
+        this._loadScopedStarRecordsByDateRange(startDate, endDate, context),
+        this.starService.getStarGroups(context.userId)
+      ]);
+
+      const snapshot = this._buildPreparedSnapshot({
+        context,
+        signature,
+        monthKey,
+        days,
+        tasks,
+        records,
+        currentBalance: this._sumStarGroups(starGroups)
+      });
+
+      return { success: true, fallback: false, snapshot };
+    } catch (error) {
+      logger.warn('AnalyticsService', 'prepareReadModel 云端主路径失败，回退本地快照', {
+        scope: context.scope,
+        userId: context.userId || null,
+        error: error.message
+      });
+      const snapshot = await this._buildLocalPreparedSnapshot({
+        context,
+        monthKey,
+        days,
+        signature,
+        reason: 'cloud_failed'
+      });
+      return { success: true, fallback: true, snapshot };
+    }
+  }
+
   /**
    * 获取所有星星记录（包括获取、消费和过期）
    * @returns {Promise<Array>} 星星记录数组
@@ -275,6 +526,12 @@ class AnalyticsService {
             await this.getAllStarRecords(),
             options.childUserIds
           );
+          const familySnapshot = this._findPreparedSnapshot(options);
+          if (familySnapshot && familySnapshot.scope === 'family') {
+            starGroups = this._flattenFamilyGroupSnapshots(familySnapshot.familyGroupSnapshots);
+            currentBalance = Number(familySnapshot.currentBalance || 0);
+            historyData = this._calculateAnchoredDailyBalance(records || [], days, currentBalance);
+          }
         } else {
           // 获取星星记录（userId=null 时取当前登录用户的记录）
           records = userId
@@ -290,8 +547,10 @@ class AnalyticsService {
           };
         }
 
-        historyData = this._calculateDailyBalance(records, days);
-        currentBalance = historyData.length > 0 ? historyData[historyData.length - 1].value : 0;
+        if (historyData.length === 0) {
+          historyData = this._calculateDailyBalance(records, days);
+          currentBalance = historyData.length > 0 ? historyData[historyData.length - 1].value : 0;
+        }
       }
 
       if (historyData.length === 0) {
@@ -518,12 +777,6 @@ class AnalyticsService {
 
       if (!this.starService) {
         logger.error('AnalyticsService', '无法获取星星服务实例');
-        return [];
-      }
-
-      // 家庭分析仅基于流水，不拉取也不依赖家庭 star_groups 快照
-      if (scope === 'family') {
-        logger.info('AnalyticsService', '家庭分析模式跳过过期预测：当前作用域仅同步星星流水');
         return [];
       }
 
@@ -784,18 +1037,211 @@ class AnalyticsService {
     }
   }
 
-  _filterRecordsByChildUserIds(records = [], childUserIds = []) {
-    if (!Array.isArray(childUserIds) || childUserIds.length === 0) {
+  _filterRecordsByChildUserIds(records = [], childUserIds) {
+    if (!Array.isArray(childUserIds)) {
       return records || [];
+    }
+    if (childUserIds.length === 0) {
+      return [];
     }
     return (records || []).filter((record) => childUserIds.includes(record.userId));
   }
 
-  _filterTasksByChildUserIds(tasks = [], childUserIds = []) {
-    if (!Array.isArray(childUserIds) || childUserIds.length === 0) {
+  _filterTasksByChildUserIds(tasks = [], childUserIds) {
+    if (!Array.isArray(childUserIds)) {
       return tasks || [];
     }
+    if (childUserIds.length === 0) {
+      return [];
+    }
     return (tasks || []).filter((task) => childUserIds.includes(task.userId));
+  }
+
+  _resolveAnalysisContext(analysisOptions = {}) {
+    if (analysisOptions.scope === 'family') {
+      const childUserIds = Array.isArray(analysisOptions.childUserIds)
+        ? analysisOptions.childUserIds.filter(Boolean)
+        : [];
+      return {
+        scope: 'family',
+        userId: null,
+        childUserIds,
+        subjectUserIds: childUserIds
+      };
+    }
+
+    const userId = analysisOptions.userId || null;
+    return {
+      scope: 'user',
+      userId,
+      childUserIds: [],
+      subjectUserIds: userId ? [userId] : []
+    };
+  }
+
+  _buildAnalysisSignature(context, monthKey, days) {
+    return JSON.stringify({
+      scope: context.scope,
+      userId: context.userId || null,
+      childUserIds: context.childUserIds || [],
+      monthKey,
+      days: Number(days || 7)
+    });
+  }
+
+  _buildAnalysisScopeKey(context) {
+    if (context.scope === 'family') {
+      return `family:${(context.childUserIds || []).join(',')}`;
+    }
+    return `user:${context.userId || 'unknown'}`;
+  }
+
+  _isCloudEnabled() {
+    return Boolean(this.starService?.enableCloudStorage || this.taskService?.enableCloudStorage);
+  }
+
+  _getMonthDateRange(monthKey) {
+    const [yearText, monthText] = String(monthKey || '').split('-');
+    const year = Number(yearText);
+    const month = Number(monthText);
+    const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+    const lastDay = new Date(year, month, 0).getDate();
+    const endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    return { startDate, endDate };
+  }
+
+  async _loadScopedTasksByDateRange(startDate, endDate, context) {
+    if (!this.taskService) {
+      return [];
+    }
+
+    const tasks = await this.taskService.getTasksByDateRange(
+      startDate,
+      endDate,
+      context.userId || null,
+      context.scope === 'family' ? { scope: 'family' } : {}
+    );
+    return this._filterTasksByChildUserIds(tasks, context.childUserIds);
+  }
+
+  async _loadLocalScopedTasksByDateRange(startDate, endDate, context) {
+    if (!this.taskService?.taskRepository?.getTasksByDateRange) {
+      return [];
+    }
+
+    if (context.scope === 'family') {
+      const allTasks = await this.taskService.taskRepository.getTasksByDateRange(startDate, endDate, null);
+      return this._filterTasksByChildUserIds(allTasks, context.childUserIds);
+    }
+
+    return this.taskService.taskRepository.getTasksByDateRange(startDate, endDate, context.userId || null);
+  }
+
+  async _loadScopedStarRecordsByDateRange(startDate, endDate, context) {
+    if (!this.starService) {
+      return [];
+    }
+
+    if (context.scope !== 'family') {
+      return this.starService.getStarRecordsByDateRange(startDate, endDate, context.userId || null);
+    }
+
+    const allRecords = await this.starService.getStarRecords();
+    return this._filterRecordsByChildUserIds(allRecords, context.childUserIds).filter((record) => {
+      const recordDate = this._getRecordDateString(record);
+      return recordDate >= startDate && recordDate <= endDate;
+    });
+  }
+
+  async _buildLocalPreparedSnapshot({ context, monthKey, days, signature, reason }) {
+    const { startDate, endDate } = this._getMonthDateRange(monthKey);
+    const [tasks, records] = await Promise.all([
+      this._loadLocalScopedTasksByDateRange(startDate, endDate, context),
+      this._loadScopedStarRecordsByDateRange(startDate, endDate, context)
+    ]);
+
+    let currentBalance = 0;
+    let familyGroupSnapshots = undefined;
+
+    if (context.scope === 'family') {
+      const allGroups = await Promise.all(
+        (context.childUserIds || []).map(async (userId) => ({
+          userId,
+          groups: await this.starService.getStarGroups(userId)
+        }))
+      );
+      familyGroupSnapshots = {};
+      allGroups.forEach(({ userId, groups }) => {
+        familyGroupSnapshots[userId] = groups || [];
+        currentBalance += this._sumStarGroups(groups || []);
+      });
+    } else {
+      const starGroups = await this.starService.getStarGroups(context.userId || null);
+      currentBalance = this._sumStarGroups(starGroups);
+    }
+
+    return this._buildPreparedSnapshot({
+      context,
+      signature,
+      monthKey,
+      days,
+      tasks,
+      records,
+      currentBalance,
+      familyGroupSnapshots,
+      mode: 'fallback',
+      fallbackReason: reason
+    });
+  }
+
+  _buildPreparedSnapshot({
+    context,
+    signature,
+    monthKey,
+    days,
+    tasks = [],
+    records = [],
+    currentBalance = 0,
+    familyGroupSnapshots = undefined,
+    mode = 'authoritative',
+    fallbackReason = undefined
+  }) {
+    return {
+      scope: context.scope,
+      scopeKey: this._buildAnalysisScopeKey(context),
+      subjectUserIds: context.subjectUserIds || [],
+      monthKey,
+      days: Number(days || 7),
+      signature,
+      refreshedAt: Date.now(),
+      expiresAt: Date.now() + this.prepareSnapshotTtlMs,
+      currentBalance: Number(currentBalance || 0),
+      mode,
+      fallbackReason,
+      tasks,
+      records,
+      familyGroupSnapshots
+    };
+  }
+
+  _groupFamilySummaryByUser(groups = []) {
+    return (groups || []).reduce((result, group) => {
+      const userId = group.userId;
+      if (!userId) {
+        return result;
+      }
+      if (!result[userId]) {
+        result[userId] = [];
+      }
+      result[userId].push(group);
+      return result;
+    }, {});
+  }
+
+  _flattenFamilyGroupSnapshots(groupsByUser = {}) {
+    return Object.values(groupsByUser || {}).reduce((result, groups) => {
+      return result.concat(groups || []);
+    }, []);
   }
 }
 
