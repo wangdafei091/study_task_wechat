@@ -2,6 +2,7 @@
  * 任务服务
  */
 
+const { createHash } = require('crypto');
 const { getPool, query, execute } = require('../config/database');
 const Task = require('../models/Task');
 const Message = require('../models/Message');
@@ -19,6 +20,50 @@ class TaskService {
     const error = new Error(message);
     error.code = code;
     return error;
+  }
+
+  _serializeTaskMutationTask(task) {
+    if (!task) {
+      return null;
+    }
+
+    if (typeof task.toJSON === 'function') {
+      return task.toJSON();
+    }
+
+    return { ...task };
+  }
+
+  buildTaskMutationResponse({
+    primaryTask = null,
+    affectedTasks = null,
+    operation = 'update',
+    idempotent = false,
+    taskId = null,
+  } = {}) {
+    const serializedPrimaryTask = this._serializeTaskMutationTask(primaryTask);
+    const serializedAffectedTasks = Array.isArray(affectedTasks)
+      ? affectedTasks.map(task => this._serializeTaskMutationTask(task)).filter(Boolean)
+      : (serializedPrimaryTask ? [serializedPrimaryTask] : []);
+
+    const response = {
+      primaryTask: serializedPrimaryTask,
+      affectedTasks: serializedAffectedTasks,
+      operation,
+      task: serializedPrimaryTask,
+      tasks: serializedAffectedTasks,
+    };
+
+    if (idempotent) {
+      response.idempotent = true;
+    }
+
+    const resolvedTaskId = taskId || serializedPrimaryTask?.taskId || serializedPrimaryTask?.id || null;
+    if (resolvedTaskId || operation === 'delete') {
+      response.taskId = resolvedTaskId || null;
+    }
+
+    return response;
   }
 
   _assertReminderColumnAvailable(columnMap, context, reminderPayload) {
@@ -105,6 +150,165 @@ class TaskService {
     return taskColumnMapPromise;
   }
 
+  _formatDate(date) {
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+      return null;
+    }
+
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  _normalizeRepeatDays(days = []) {
+    return days
+      .map(day => Number(day))
+      .filter(day => Number.isInteger(day) && day >= 0 && day <= 6);
+  }
+
+  _supportsRepeatMaterialization(task) {
+    const repeatType = task?.repeat?.type;
+    if (!task || task.parentTaskId || !repeatType) {
+      return false;
+    }
+
+    return ['daily', 'weekly', 'custom', 'workdays', 'weekends'].includes(repeatType);
+  }
+
+  _buildRepeatTaskId(parentTaskId, instanceDate, ownerUserId) {
+    const digest = createHash('sha1')
+      .update(`${parentTaskId}:${instanceDate}:${ownerUserId}`)
+      .digest('hex');
+    return `task_repeat_${digest.slice(0, 24)}`;
+  }
+
+  _resolveRepeatMatcher(task) {
+    switch (task?.repeat?.type) {
+      case 'workdays':
+        return (date) => {
+          const day = date.getDay();
+          return day >= 1 && day <= 5;
+        };
+      case 'weekends':
+        return (date) => {
+          const day = date.getDay();
+          return day === 0 || day === 6;
+        };
+      case 'custom': {
+        const selectedDays = this._normalizeRepeatDays(task?.repeat?.days);
+        if (selectedDays.length === 0) {
+          return null;
+        }
+        return (date) => selectedDays.includes(date.getDay());
+      }
+      default:
+        return null;
+    }
+  }
+
+  _findFirstRepeatDateWithinWindow(startDate, endDate, matcher, maxDays = 21) {
+    if (!(startDate instanceof Date) || Number.isNaN(startDate.getTime())) {
+      return null;
+    }
+    if (!(endDate instanceof Date) || Number.isNaN(endDate.getTime())) {
+      return null;
+    }
+    if (typeof matcher !== 'function') {
+      return null;
+    }
+
+    const cursor = new Date(startDate.getTime());
+    for (let index = 0; index < maxDays; index += 1) {
+      if (cursor > endDate) {
+        return null;
+      }
+      if (matcher(cursor)) {
+        return new Date(cursor.getTime());
+      }
+      cursor.setDate(cursor.getDate() + 1);
+    }
+
+    return null;
+  }
+
+  _buildRepeatDateStrings(task) {
+    if (!this._supportsRepeatMaterialization(task) || !task.repeat?.startDate) {
+      return [];
+    }
+
+    const startDate = new Date(`${task.repeat.startDate}T00:00:00`);
+    if (Number.isNaN(startDate.getTime())) {
+      return [];
+    }
+
+    let endDate = null;
+    if (task.repeat.endDate) {
+      endDate = new Date(`${task.repeat.endDate}T00:00:00`);
+    } else if (task.hasNoEndDate === true) {
+      endDate = new Date(startDate.getTime());
+      endDate.setDate(endDate.getDate() + (task.repeat.type === 'daily' ? 90 : 30));
+    }
+
+    if (!(endDate instanceof Date) || Number.isNaN(endDate.getTime())) {
+      return [];
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const effectiveStartDate = new Date(startDate.getTime());
+    if (effectiveStartDate < today) {
+      effectiveStartDate.setTime(today.getTime());
+    }
+
+    if (endDate < effectiveStartDate) {
+      return [];
+    }
+
+    const parentTaskDate = task.date || this._formatDate(startDate);
+    const repeatDates = [];
+
+    switch (task.repeat.type) {
+      case 'daily':
+        for (let date = new Date(effectiveStartDate); date <= endDate; date.setDate(date.getDate() + 1)) {
+          repeatDates.push(this._formatDate(date));
+        }
+        break;
+      case 'weekly':
+        for (let date = new Date(startDate); date <= endDate; date.setDate(date.getDate() + 7)) {
+          if (date >= effectiveStartDate) {
+            repeatDates.push(this._formatDate(date));
+          }
+        }
+        break;
+      case 'workdays':
+      case 'weekends':
+      case 'custom': {
+        const repeatMatcher = this._resolveRepeatMatcher(task);
+        const firstMatchDate = this._findFirstRepeatDateWithinWindow(
+          effectiveStartDate,
+          endDate,
+          repeatMatcher,
+          21
+        );
+        if (!firstMatchDate) {
+          return [];
+        }
+
+        for (let date = new Date(firstMatchDate); date <= endDate; date.setDate(date.getDate() + 1)) {
+          if (repeatMatcher(date)) {
+            repeatDates.push(this._formatDate(date));
+          }
+        }
+        break;
+      }
+      default:
+        return [];
+    }
+
+    return repeatDates.filter(date => date && date !== parentTaskDate);
+  }
+
   /**
    * 获取用户的任务列表
    * @param {string} userId - 用户ID
@@ -174,223 +378,295 @@ class TaskService {
     }
   }
 
-  /**
-   * 创建新任务
-   * @param {string} userId - 用户ID
-   * @param {Object} taskData - 任务数据
-   * @returns {Promise<Task>} 创建的任务实例
-   */
-  async createTask(userId, taskData, options = {}) {
+  async _createTaskRecordWithConnection(connection, userId, taskData, options = {}) {
+    const columnMap = options.columnMap || await this._getTaskColumnMap();
+    this._assertReminderColumnAvailable(columnMap, '创建任务', taskData.reminder);
+
+    const modifyTime = Number(taskData.modifyTime || options.modifyTime || Date.now());
+    const operationKey = String(options.operationKey || taskData.operationKey || modifyTime);
+    const shouldCreateMessages = options.createMessages !== false;
+
+    if (taskData.taskId) {
+      const existingRaw = await this._getTaskByIdConn(connection, taskData.taskId, true);
+
+      if (existingRaw) {
+        if (existingRaw.user_id !== userId) {
+          const err = new Error('taskId 归属用户不匹配');
+          err.code = 'TASK_ID_USER_MISMATCH';
+          throw err;
+        }
+
+        if (!existingRaw.deleted_at) {
+          const existingTask = Task.fromDB(existingRaw);
+          if (shouldCreateMessages) {
+            await this._createTaskMessagesAfterMutation(existingTask, 'create', options, operationKey, connection);
+          }
+          return {
+            task: existingTask,
+            idempotent: true,
+          };
+        }
+
+        const restoreSetClauses = ['deleted_at = NULL', 'title = ?', 'description = ?', 'type = ?', 'date = ?'];
+        const restoreParams = [
+          taskData.title,
+          taskData.description || '',
+          taskData.type,
+          taskData.date,
+          taskData.startTime || '',
+          taskData.endTime || '',
+          taskData.points || 0,
+          taskData.pointsExpiry || 'permanent',
+          taskData.isRequired ? 1 : 0,
+          taskData.repeat ? JSON.stringify(taskData.repeat) : null,
+          taskData.isAllDay ? 1 : 0,
+          taskData.penaltyApplied ? 1 : 0,
+        ];
+
+        restoreSetClauses.push(
+          `${columnMap.startTime} = ?`,
+          `${columnMap.endTime} = ?`,
+          ...(columnMap.reminder ? [`${columnMap.reminder} = ?`] : []),
+          'points = ?',
+          `${columnMap.pointsExpiry} = ?`,
+          `${columnMap.isRequired} = ?`,
+          '`repeat` = ?',
+          `${columnMap.isAllDay} = ?`,
+          `${columnMap.penaltyApplied} = ?`
+        );
+
+        if (columnMap.reminder) {
+          restoreParams.splice(6, 0, taskData.reminder ? JSON.stringify(taskData.reminder) : null);
+        }
+        if (columnMap.duration) {
+          restoreSetClauses.push(`${columnMap.duration} = ?`);
+          restoreParams.push(taskData.duration || 0);
+        }
+        if (columnMap.hasNoEndDate) {
+          restoreSetClauses.push(`${columnMap.hasNoEndDate} = ?`);
+          restoreParams.push(taskData.hasNoEndDate ? 1 : 0);
+        }
+        if (columnMap.tags) {
+          restoreSetClauses.push(`${columnMap.tags} = ?`);
+          restoreParams.push(taskData.tags ? JSON.stringify(taskData.tags) : null);
+        }
+        if (columnMap.parentTaskId) {
+          restoreSetClauses.push(`${columnMap.parentTaskId} = ?`);
+          restoreParams.push(taskData.parentTaskId || null);
+        }
+        if (columnMap.modifyTime) {
+          restoreSetClauses.push(`${columnMap.modifyTime} = ?`);
+          restoreParams.push(modifyTime);
+        }
+        if (columnMap.completionTime) {
+          restoreSetClauses.push(`${columnMap.completionTime} = NULL`);
+        }
+        if (columnMap.starAwarded) {
+          restoreSetClauses.push(`${columnMap.starAwarded} = 0`);
+        }
+        if (columnMap.penaltyDeductedPoints) {
+          restoreSetClauses.push(`${columnMap.penaltyDeductedPoints} = ?`);
+          restoreParams.push(Number(taskData.penaltyDeductedPoints || 0));
+        }
+        if (columnMap.penaltyRefunded) {
+          restoreSetClauses.push(`${columnMap.penaltyRefunded} = ?`);
+          restoreParams.push(taskData.penaltyRefunded ? 1 : 0);
+        }
+        if (columnMap.penaltyRefundTime) {
+          restoreSetClauses.push(`${columnMap.penaltyRefundTime} = ?`);
+          restoreParams.push(taskData.penaltyRefundTime || null);
+        }
+        restoreSetClauses.push('status = 0');
+        restoreParams.push(taskData.taskId);
+
+        await connection.execute(
+          `UPDATE tasks SET ${restoreSetClauses.join(', ')} WHERE task_id = ?`,
+          restoreParams
+        );
+        const restoredRaw = await this._getTaskByIdConn(connection, taskData.taskId);
+        const restoredTask = Task.fromDB(restoredRaw);
+        if (shouldCreateMessages) {
+          await this._createTaskMessagesAfterMutation(restoredTask, 'create', options, operationKey, connection);
+        }
+        return {
+          task: restoredTask,
+          idempotent: true,
+        };
+      }
+    }
+
+    const taskId = taskData.taskId || Task.generateId();
+    const task = new Task({
+      taskId,
+      userId,
+      ...taskData,
+      status: 0,
+      modifyTime,
+    });
+
+    const insertColumns = [
+      'task_id',
+      'user_id',
+      'title',
+      'description',
+      'type',
+      'date',
+      columnMap.startTime,
+      columnMap.endTime,
+      'points',
+      columnMap.pointsExpiry,
+      columnMap.isRequired,
+      'status',
+      '`repeat`',
+      columnMap.isAllDay,
+      columnMap.penaltyApplied,
+    ];
+    const insertValues = [
+      task.taskId,
+      task.userId,
+      task.title,
+      task.description,
+      task.type,
+      task.date,
+      task.startTime || '',
+      task.endTime || '',
+      task.points || 0,
+      task.pointsExpiry || 'permanent',
+      task.isRequired ? 1 : 0,
+      task.status,
+      task.repeat ? JSON.stringify(task.repeat) : null,
+      task.isAllDay ? 1 : 0,
+      task.penaltyApplied ? 1 : 0,
+    ];
+
+    if (columnMap.duration) {
+      insertColumns.push(columnMap.duration);
+      insertValues.push(task.duration || 0);
+    }
+    if (columnMap.reminder) {
+      insertColumns.push(columnMap.reminder);
+      insertValues.push(task.reminder ? JSON.stringify(task.reminder) : null);
+    }
+    if (columnMap.hasNoEndDate) {
+      insertColumns.push(columnMap.hasNoEndDate);
+      insertValues.push(task.hasNoEndDate ? 1 : 0);
+    }
+    if (columnMap.tags) {
+      insertColumns.push(columnMap.tags);
+      insertValues.push(task.tags ? JSON.stringify(task.tags) : null);
+    }
+    if (columnMap.modifyTime) {
+      insertColumns.push(columnMap.modifyTime);
+      insertValues.push(task.modifyTime || Date.now());
+    }
+    if (columnMap.parentTaskId) {
+      insertColumns.push(columnMap.parentTaskId);
+      insertValues.push(task.parentTaskId || null);
+    }
+    if (columnMap.penaltyDeductedPoints) {
+      insertColumns.push(columnMap.penaltyDeductedPoints);
+      insertValues.push(Number(task.penaltyDeductedPoints || 0));
+    }
+    if (columnMap.penaltyRefunded) {
+      insertColumns.push(columnMap.penaltyRefunded);
+      insertValues.push(task.penaltyRefunded ? 1 : 0);
+    }
+    if (columnMap.penaltyRefundTime) {
+      insertColumns.push(columnMap.penaltyRefundTime);
+      insertValues.push(task.penaltyRefundTime || null);
+    }
+
+    await connection.execute(
+      `INSERT INTO tasks (${insertColumns.join(', ')}) VALUES (${insertColumns.map(() => '?').join(', ')})`,
+      insertValues
+    );
+
+    if (shouldCreateMessages) {
+      await this._createTaskMessagesAfterMutation(task, 'create', options, operationKey, connection);
+    }
+
+    return {
+      task,
+      idempotent: false,
+    };
+  }
+
+  async _materializeRepeatTasksWithConnection(connection, primaryTask, userId, options = {}) {
+    if (!this._supportsRepeatMaterialization(primaryTask)) {
+      return [];
+    }
+
+    const repeatDates = this._buildRepeatDateStrings(primaryTask);
+    if (repeatDates.length === 0) {
+      return [];
+    }
+
+    const materializedTasks = [];
+    const baseModifyTime = Number(primaryTask.modifyTime || options.modifyTime || Date.now());
+
+    for (const instanceDate of repeatDates) {
+      const childTaskId = this._buildRepeatTaskId(primaryTask.taskId, instanceDate, userId);
+      const childTaskData = {
+        ...primaryTask.toJSON(),
+        taskId: childTaskId,
+        date: instanceDate,
+        parentTaskId: primaryTask.taskId,
+        status: 0,
+        starAwarded: false,
+        penaltyApplied: false,
+        penaltyDeductedPoints: 0,
+        penaltyRefunded: false,
+        penaltyRefundTime: null,
+        completionTime: null,
+        modifyTime: baseModifyTime,
+      };
+
+      const { task } = await this._createTaskRecordWithConnection(
+        connection,
+        userId,
+        childTaskData,
+        {
+          ...options,
+          createMessages: false,
+          columnMap: options.columnMap,
+        }
+      );
+      materializedTasks.push(task);
+    }
+
+    return materializedTasks;
+  }
+
+  async createTaskWithRepeatMaterialization(userId, taskData, options = {}) {
     try {
       const columnMap = await this._getTaskColumnMap();
       this._assertReminderColumnAvailable(columnMap, '创建任务', taskData.reminder);
       const pool = getPool();
       const connection = await pool.getConnection();
-      const modifyTime = Number(taskData.modifyTime || options.modifyTime || Date.now());
-      const operationKey = String(options.operationKey || taskData.operationKey || modifyTime);
 
       try {
         await connection.beginTransaction();
-
-        // 幂等检查：客户端传入 taskId 时，先查是否已存在（含软删除）
-        if (taskData.taskId) {
-          const existingRaw = await this._getTaskByIdConn(connection, taskData.taskId, true);
-
-          if (existingRaw) {
-            // 归属校验：taskId 已存在但归属不同用户，拒绝
-            if (existingRaw.user_id !== userId) {
-              const err = new Error('taskId 归属用户不匹配');
-              err.code = 'TASK_ID_USER_MISMATCH';
-              throw err;
-            }
-
-            if (!existingRaw.deleted_at) {
-              const existingTask = Task.fromDB(existingRaw);
-              await this._createTaskMessagesAfterMutation(existingTask, 'create', options, operationKey, connection);
-              await connection.commit();
-              logger.info('创建任务幂等：taskId 已存在，直接返回', { taskId: taskData.taskId, userId });
-              return existingTask;
-            }
-
-            // 已软删除：恢复并覆盖所有业务字段，重置完成状态
-            const restoreSetClauses = ['deleted_at = NULL', 'title = ?', 'description = ?', 'type = ?', 'date = ?'];
-            const restoreParams = [
-              taskData.title,
-              taskData.description || '',
-              taskData.type,
-              taskData.date,
-              taskData.startTime || '',
-              taskData.endTime || '',
-              taskData.points || 0,
-              taskData.pointsExpiry || 'permanent',
-              taskData.isRequired ? 1 : 0,
-              taskData.repeat ? JSON.stringify(taskData.repeat) : null,
-              taskData.isAllDay ? 1 : 0,
-              taskData.penaltyApplied ? 1 : 0,
-            ];
-
-            restoreSetClauses.push(
-              `${columnMap.startTime} = ?`,
-              `${columnMap.endTime} = ?`,
-              ...(columnMap.reminder ? [`${columnMap.reminder} = ?`] : []),
-              'points = ?',
-              `${columnMap.pointsExpiry} = ?`,
-              `${columnMap.isRequired} = ?`,
-              '`repeat` = ?',
-              `${columnMap.isAllDay} = ?`,
-              `${columnMap.penaltyApplied} = ?`
-            );
-
-            if (columnMap.reminder) {
-              restoreParams.splice(6, 0, taskData.reminder ? JSON.stringify(taskData.reminder) : null);
-            }
-
-            if (columnMap.duration) {
-              restoreSetClauses.push(`${columnMap.duration} = ?`);
-              restoreParams.push(taskData.duration || 0);
-            }
-            if (columnMap.hasNoEndDate) {
-              restoreSetClauses.push(`${columnMap.hasNoEndDate} = ?`);
-              restoreParams.push(taskData.hasNoEndDate ? 1 : 0);
-            }
-            if (columnMap.tags) {
-              restoreSetClauses.push(`${columnMap.tags} = ?`);
-              restoreParams.push(taskData.tags ? JSON.stringify(taskData.tags) : null);
-            }
-            if (columnMap.parentTaskId) {
-              restoreSetClauses.push(`${columnMap.parentTaskId} = ?`);
-              restoreParams.push(taskData.parentTaskId || null);
-            }
-            if (columnMap.modifyTime) {
-              restoreSetClauses.push(`${columnMap.modifyTime} = ?`);
-              restoreParams.push(modifyTime);
-            }
-            if (columnMap.completionTime) {
-              restoreSetClauses.push(`${columnMap.completionTime} = NULL`);
-            }
-            if (columnMap.starAwarded) {
-              restoreSetClauses.push(`${columnMap.starAwarded} = 0`);
-            }
-            if (columnMap.penaltyDeductedPoints) {
-              restoreSetClauses.push(`${columnMap.penaltyDeductedPoints} = ?`);
-              restoreParams.push(Number(taskData.penaltyDeductedPoints || 0));
-            }
-            if (columnMap.penaltyRefunded) {
-              restoreSetClauses.push(`${columnMap.penaltyRefunded} = ?`);
-              restoreParams.push(taskData.penaltyRefunded ? 1 : 0);
-            }
-            if (columnMap.penaltyRefundTime) {
-              restoreSetClauses.push(`${columnMap.penaltyRefundTime} = ?`);
-              restoreParams.push(taskData.penaltyRefundTime || null);
-            }
-            restoreSetClauses.push('status = 0');
-            restoreParams.push(taskData.taskId);
-
-            await connection.execute(
-              `UPDATE tasks SET ${restoreSetClauses.join(', ')} WHERE task_id = ?`,
-              restoreParams
-            );
-            const restoredRaw = await this._getTaskByIdConn(connection, taskData.taskId);
-            const restoredTask = Task.fromDB(restoredRaw);
-            await this._createTaskMessagesAfterMutation(restoredTask, 'create', options, operationKey, connection);
-            await connection.commit();
-            logger.info('创建任务幂等：恢复软删除任务', { taskId: taskData.taskId, userId });
-            return restoredTask;
-          }
-        }
-
-        // 正常创建：优先使用客户端提供的 taskId
-        const taskId = taskData.taskId || Task.generateId();
-        const task = new Task({
-          taskId,
-          userId,
-          ...taskData,
-          status: 0,
-          modifyTime,
+        const primaryResult = await this._createTaskRecordWithConnection(connection, userId, taskData, {
+          ...options,
+          columnMap,
+          createMessages: options.createMessages !== false,
         });
-
-        const insertColumns = [
-          'task_id',
-          'user_id',
-          'title',
-          'description',
-          'type',
-          'date',
-          columnMap.startTime,
-          columnMap.endTime,
-          'points',
-          columnMap.pointsExpiry,
-          columnMap.isRequired,
-          'status',
-          '`repeat`',
-          columnMap.isAllDay,
-          columnMap.penaltyApplied,
-        ];
-        const insertValues = [
-          task.taskId,
-          task.userId,
-          task.title,
-          task.description,
-          task.type,
-          task.date,
-          task.startTime || '',
-          task.endTime || '',
-          task.points || 0,
-          task.pointsExpiry || 'permanent',
-          task.isRequired ? 1 : 0,
-          task.status,
-          task.repeat ? JSON.stringify(task.repeat) : null,
-          task.isAllDay ? 1 : 0,
-          task.penaltyApplied ? 1 : 0,
-        ];
-
-        if (columnMap.duration) {
-          insertColumns.push(columnMap.duration);
-          insertValues.push(task.duration || 0);
-        }
-        if (columnMap.reminder) {
-          insertColumns.push(columnMap.reminder);
-          insertValues.push(task.reminder ? JSON.stringify(task.reminder) : null);
-        }
-        if (columnMap.hasNoEndDate) {
-          insertColumns.push(columnMap.hasNoEndDate);
-          insertValues.push(task.hasNoEndDate ? 1 : 0);
-        }
-        if (columnMap.tags) {
-          insertColumns.push(columnMap.tags);
-          insertValues.push(task.tags ? JSON.stringify(task.tags) : null);
-        }
-        if (columnMap.modifyTime) {
-          insertColumns.push(columnMap.modifyTime);
-          insertValues.push(task.modifyTime || Date.now());
-        }
-        if (columnMap.parentTaskId) {
-          insertColumns.push(columnMap.parentTaskId);
-          insertValues.push(task.parentTaskId || null);
-        }
-        if (columnMap.penaltyDeductedPoints) {
-          insertColumns.push(columnMap.penaltyDeductedPoints);
-          insertValues.push(Number(task.penaltyDeductedPoints || 0));
-        }
-        if (columnMap.penaltyRefunded) {
-          insertColumns.push(columnMap.penaltyRefunded);
-          insertValues.push(task.penaltyRefunded ? 1 : 0);
-        }
-        if (columnMap.penaltyRefundTime) {
-          insertColumns.push(columnMap.penaltyRefundTime);
-          insertValues.push(task.penaltyRefundTime || null);
-        }
-
-        await connection.execute(
-          `INSERT INTO tasks (${insertColumns.join(', ')}) VALUES (${insertColumns.map(() => '?').join(', ')})`,
-          insertValues
+        const repeatTasks = await this._materializeRepeatTasksWithConnection(
+          connection,
+          primaryResult.task,
+          userId,
+          {
+            ...options,
+            columnMap,
+          }
         );
 
-        await this._createTaskMessagesAfterMutation(task, 'create', options, operationKey, connection);
         await connection.commit();
-
-        logger.info('创建任务成功', { taskId, userId });
-        return task;
+        return {
+          primaryTask: primaryResult.task,
+          affectedTasks: [primaryResult.task, ...repeatTasks],
+          idempotent: primaryResult.idempotent,
+        };
       } catch (error) {
         await connection.rollback();
         throw error;
@@ -401,6 +677,17 @@ class TaskService {
       logger.error('创建任务失败', error);
       throw error;
     }
+  }
+
+  /**
+   * 创建新任务
+   * @param {string} userId - 用户ID
+   * @param {Object} taskData - 任务数据
+   * @returns {Promise<Task>} 创建的任务实例
+   */
+  async createTask(userId, taskData, options = {}) {
+    const result = await this.createTaskWithRepeatMaterialization(userId, taskData, options);
+    return result.primaryTask;
   }
 
   /**

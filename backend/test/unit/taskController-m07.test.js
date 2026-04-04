@@ -58,6 +58,32 @@ function makeTask(overrides = {}) {
   });
 }
 
+beforeEach(() => {
+  jest.clearAllMocks();
+  taskService.buildTaskMutationResponse = jest.fn().mockImplementation(({
+    primaryTask = null,
+    affectedTasks = null,
+    operation = 'update',
+    taskId = null,
+  } = {}) => {
+    const serializedPrimaryTask = primaryTask && typeof primaryTask.toJSON === 'function'
+      ? primaryTask.toJSON()
+      : primaryTask;
+    const serializedAffectedTasks = Array.isArray(affectedTasks)
+      ? affectedTasks.map(task => (task && typeof task.toJSON === 'function' ? task.toJSON() : task))
+      : (serializedPrimaryTask ? [serializedPrimaryTask] : []);
+
+    return {
+      primaryTask: serializedPrimaryTask,
+      affectedTasks: serializedAffectedTasks,
+      operation,
+      task: serializedPrimaryTask,
+      tasks: serializedAffectedTasks,
+      taskId: taskId ?? serializedPrimaryTask?.taskId ?? serializedPrimaryTask?.id ?? (operation === 'delete' ? null : null),
+    };
+  });
+});
+
 describe('GET /api/tasks?scope=family', () => {
   let app;
   beforeAll(() => { app = buildApp(); });
@@ -87,9 +113,13 @@ describe('POST /api/tasks', () => {
   it('创建任务时应过滤 penaltyApplied 字段', async () => {
     const task = makeTask();
     let capturedTaskData;
-    taskService.createTask = jest.fn().mockImplementation((userId, taskData) => {
+    taskService.createTaskWithRepeatMaterialization = jest.fn().mockImplementation((userId, taskData) => {
       capturedTaskData = taskData;
-      return Promise.resolve(task);
+      return Promise.resolve({
+        primaryTask: task,
+        affectedTasks: [task],
+        idempotent: false
+      });
     });
 
     const res = await request(app)
@@ -106,6 +136,10 @@ describe('POST /api/tasks', () => {
     expect(res.status).toBe(200);
     expect(capturedTaskData).not.toHaveProperty('penaltyApplied');
     expect(capturedTaskData).toHaveProperty('isRequired', true);
+    expect(res.body.data.operation).toBe('create');
+    expect(res.body.data.taskId).toBe('task_001');
+    expect(res.body.data.primaryTask.taskId).toBe('task_001');
+    expect(res.body.data.affectedTasks).toHaveLength(1);
   });
 });
 
@@ -239,6 +273,8 @@ describe('PUT /api/tasks/:taskId', () => {
       .send({ title: '新标题' });
     expect(res.status).toBe(200);
     expect(taskService.updateTask).toHaveBeenCalled();
+    expect(res.body.data.operation).toBe('update');
+    expect(res.body.data.primaryTask.taskId).toBe('task_001');
   });
 
   it('家长可以代孩子更新任务', async () => {
@@ -347,6 +383,8 @@ describe('DELETE /api/tasks/:taskId', () => {
         modifyTime: expect.any(Number),
       })
     );
+    expect(res.body.data.operation).toBe('delete');
+    expect(res.body.data.taskId).toBe('task_001');
   });
 
   it('家长可以代孩子删除任务', async () => {
@@ -384,6 +422,7 @@ describe('PATCH /api/tasks/:taskId/status', () => {
       .set('Authorization', token(CHILD))
       .send({ status: 1, starAwarded: true });
     expect(res.status).toBe(200);
+    expect(res.body.data.operation).toBe('complete');
     expect(taskService.updateTaskStatus).toHaveBeenCalledWith(
       'task_001',
       {
@@ -412,6 +451,7 @@ describe('PATCH /api/tasks/:taskId/status', () => {
       .set('Authorization', token(CHILD))
       .send({ status: 0, starAwarded: false });
     expect(res.status).toBe(200);
+    expect(res.body.data.operation).toBe('reset');
   });
 
   it('status 为字符串 "completed" 返回 400', async () => {

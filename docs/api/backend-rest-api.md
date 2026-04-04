@@ -1,7 +1,7 @@
 # 后端 REST API 契约
 
 > 项目后端 HTTP/REST 接口的权威说明文档
-> **最后更新**：2026-04-02
+> **最后更新**：2026-04-04
 > **维护者**：项目维护团队
 
 ---
@@ -448,6 +448,27 @@ Authorization: Bearer <token>
 
 ## 6. 任务接口
 
+### 6.0 任务写接口统一返回约定
+
+自 `M19B` 起，任务写接口统一返回 `TaskMutationResponse`，并在过渡期保留兼容字段：
+
+```json
+{
+  "primaryTask": {},
+  "affectedTasks": [],
+  "operation": "create",
+  "task": {},
+  "tasks": [],
+  "taskId": "task_xxx"
+}
+```
+
+说明：
+- `primaryTask` 是当前操作的主任务；删除场景可为 `null`
+- `affectedTasks` 是本次受影响任务集合；重复任务创建时包含主任务和后端展开的子任务
+- `operation` 取值：`create | update | delete | complete | reset | required | unrequired`
+- `task / tasks / taskId` 为过渡期兼容字段，调用方应优先读取 `primaryTask / affectedTasks`
+
 ### 6.1 获取任务列表
 
 - Method: `GET`
@@ -525,13 +546,17 @@ Authorization: Bearer <token>
 
 成功响应：
 - Status: `200`
-- Body：新任务对象
+- Body：`data` 为 `TaskMutationResponse`
 
 常见错误：
 - `400` - `TASK_INVALID_PARAMS`
 - `403` - `FAMILY_TASK_CREATE_DENIED` / `FAMILY_NOT_JOINED`
 - `409` - `TASK_ID_USER_MISMATCH`
 - `500` - `TASK_CREATE_FAILED`
+
+说明：
+- 云端模式下，重复任务实例由后端在事务内展开
+- 创建重复任务时，`data.affectedTasks` 会一次性返回主任务与已展开的子任务集合
 
 ### 6.5 更新任务
 
@@ -558,7 +583,7 @@ Authorization: Bearer <token>
 
 成功响应：
 - Status: `200`
-- Body：`data.task`
+- Body：`data` 为 `TaskMutationResponse`
 
 常见错误：
 - `400` - `NO_UPDATABLE_FIELDS` / `INVALID_TASK_DATA`
@@ -576,7 +601,7 @@ Authorization: Bearer <token>
 
 成功响应：
 - Status: `200`
-- Body：`data.taskId`
+- Body：`data` 为 `TaskMutationResponse`
 
 常见错误：
 - `403` - `PERMISSION_DENIED`
@@ -585,6 +610,7 @@ Authorization: Bearer <token>
 
 说明：
 - 当前为软删除语义
+- 删除场景下 `data.primaryTask` 为空，`data.taskId` 保留被删除任务 ID 兼容字段
 
 ### 6.7 更新任务状态
 
@@ -601,7 +627,7 @@ Authorization: Bearer <token>
 
 成功响应：
 - Status: `200`
-- Body：`data.task`
+- Body：`data` 为 `TaskMutationResponse`
 
 常见错误：
 - `400` - `INVALID_STATUS` / `INVALID_STAR_AWARDED`
@@ -614,6 +640,7 @@ Authorization: Bearer <token>
 - 同一接口统一承接普通完成、过去日期补做完成和任务重置三类状态变更
 - 当任务满足“已逾期且此前已实际扣星”条件时，首次完成会在同一事务内退回 `penaltyDeductedPoints` 对应的星星；返回的任务对象会同步反映 `penaltyRefunded` 与 `penaltyRefundTime`
 - 当任务已发生“逾期补做退星”后再次重置为未完成，如果当前永久星星不足以全额回滚这笔退星，接口返回 `409 INSUFFICIENT_STARS`
+- `data.operation` 会按本次状态流转返回 `complete` 或 `reset`
 
 ### 6.8 同步必做任务惩罚
 
@@ -673,7 +700,7 @@ Authorization: Bearer <token>
 
 成功响应：
 - Status: `200`
-- Body：`data.task`
+- Body：`data` 为 `TaskMutationResponse`
 
 常见错误：
 - `403` - `PERMISSION_DENIED`
@@ -696,7 +723,7 @@ Authorization: Bearer <token>
 
 成功响应：
 - Status: `200`
-- Body：`data.task`
+- Body：`data` 为 `TaskMutationResponse`
 
 常见错误：
 - `403` - `PERMISSION_DENIED`

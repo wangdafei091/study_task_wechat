@@ -30,6 +30,17 @@ const taskSync = require('../../services/task-service/task-sync');
 const { TaskStatus } = require('../../models/task');
 
 describe('task-sync direct behavior', () => {
+  function normalizeTaskMutationResponse(rawMutation, fallbackOperation = 'update') {
+    return {
+      primaryTask: rawMutation?.primaryTask ?? rawMutation?.task ?? null,
+      affectedTasks: rawMutation?.affectedTasks ?? rawMutation?.tasks ?? [],
+      operation: rawMutation?.operation || fallbackOperation,
+      task: rawMutation?.task ?? rawMutation?.primaryTask ?? null,
+      tasks: rawMutation?.tasks ?? rawMutation?.affectedTasks ?? [],
+      taskId: rawMutation?.taskId || rawMutation?.task?.taskId || rawMutation?.primaryTask?.taskId || null
+    };
+  }
+
   beforeEach(() => {
     jest.clearAllMocks();
   });
@@ -88,7 +99,8 @@ describe('task-sync direct behavior', () => {
         operatorRole: 'parent',
         familyId: 'family_1'
       })),
-      _markTaskSynced: jest.fn(async () => true)
+      _markTaskSynced: jest.fn(async () => true),
+      _normalizeTaskMutationResponse: jest.fn(normalizeTaskMutationResponse)
     };
     const task = {
       id: 'task_1',
@@ -114,8 +126,11 @@ describe('task-sync direct behavior', () => {
     await expect(taskSync.syncUpdateToCloud(service, task)).resolves.toBeUndefined();
 
     service.enableCloudStorage = true;
-    mockHttpClient.put.mockResolvedValueOnce({});
-    await expect(taskSync.syncUpdateToCloud(service, task)).resolves.toBeUndefined();
+    mockHttpClient.put.mockResolvedValueOnce({ task: { taskId: 'task_1' } });
+    await expect(taskSync.syncUpdateToCloud(service, task)).resolves.toEqual(expect.objectContaining({
+      operation: 'update',
+      taskId: 'task_1'
+    }));
     expect(mockHttpClient.put).toHaveBeenCalledWith('/tasks/task_1', expect.objectContaining({
       reminder: { enabled: true, time: 30 }
     }));
@@ -156,7 +171,8 @@ describe('task-sync direct behavior', () => {
         operatorRole: 'parent',
         familyId: 'family_1'
       })),
-      _markTaskSynced: jest.fn(async () => true)
+      _markTaskSynced: jest.fn(async () => true),
+      _normalizeTaskMutationResponse: jest.fn(normalizeTaskMutationResponse)
     };
     const task = {
       id: 'task_status',
@@ -165,8 +181,11 @@ describe('task-sync direct behavior', () => {
       modifyTime: 100
     };
 
-    mockHttpClient.patch.mockResolvedValueOnce({});
-    await expect(taskSync.syncStatusToCloud(service, task)).resolves.toBeUndefined();
+    mockHttpClient.patch.mockResolvedValueOnce({ task: { taskId: 'task_status' } });
+    await expect(taskSync.syncStatusToCloud(service, task)).resolves.toEqual(expect.objectContaining({
+      operation: 'reset',
+      taskId: 'task_status'
+    }));
 
     mockHttpClient.patch.mockRejectedValueOnce(new Error('patch fail'));
     await expect(taskSync.syncStatusToCloud(service, {
@@ -189,7 +208,8 @@ describe('task-sync direct behavior', () => {
         operatorRole: 'parent',
         familyId: 'family_1'
       })),
-      _markTaskSynced: jest.fn(async () => true)
+      _markTaskSynced: jest.fn(async () => true),
+      _normalizeTaskMutationResponse: jest.fn(normalizeTaskMutationResponse)
     };
     const task = {
       id: 'task_reuse',
@@ -205,7 +225,7 @@ describe('task-sync direct behavior', () => {
 
     expect(mockHttpClient.patch).toHaveBeenCalledTimes(1);
 
-    resolvePatch({});
+    resolvePatch({ task: { taskId: 'task_reuse' } });
     await Promise.all([firstCall, secondCall]);
 
     expect(service._markTaskSynced).toHaveBeenCalledTimes(1);
@@ -221,21 +241,25 @@ describe('task-sync direct behavior', () => {
         operatorRole: 'parent',
         familyId: 'family_1'
       })),
-      _markTaskSynced: jest.fn(async () => true)
+      _markTaskSynced: jest.fn(async () => true),
+      _normalizeTaskMutationResponse: jest.fn(normalizeTaskMutationResponse)
     };
 
-    mockHttpClient.patch.mockResolvedValueOnce({});
+    mockHttpClient.patch.mockResolvedValueOnce({ task: { taskId: 'task_required' } });
     await expect(taskSync.syncRequiredStateToCloud(service, {
       id: 'task_required',
       isRequired: true,
       modifyTime: 300
-    })).resolves.toBeUndefined();
+    })).resolves.toEqual(expect.objectContaining({
+      operation: 'required',
+      taskId: 'task_required'
+    }));
     expect(mockHttpClient.patch).toHaveBeenLastCalledWith('/tasks/task_required/required', expect.objectContaining({
       modifyTime: 303,
       operationKey: 'op_required'
     }));
 
-    mockHttpClient.patch.mockResolvedValueOnce({});
+    mockHttpClient.patch.mockResolvedValueOnce({ task: { taskId: 'task_unrequired' } });
     await expect(taskSync.syncRequiredStateToCloud(service, {
       id: 'task_unrequired',
       isRequired: false,
@@ -248,7 +272,10 @@ describe('task-sync direct behavior', () => {
         operatorRole: 'parent',
         familyId: 'family_1'
       }
-    })).resolves.toBeUndefined();
+    })).resolves.toEqual(expect.objectContaining({
+      operation: 'unrequired',
+      taskId: 'task_unrequired'
+    }));
     expect(mockHttpClient.patch).toHaveBeenLastCalledWith('/tasks/task_unrequired/unrequired', expect.objectContaining({
       modifyTime: 304,
       operationKey: 'op_unrequired'

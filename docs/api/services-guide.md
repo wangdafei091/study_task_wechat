@@ -44,6 +44,35 @@ const configService = serviceManager.get('configService');
 
 ### API 方法
 
+#### 结果结构补充说明（M19B）
+
+任务写方法对页面层继续保持兼容返回结构：
+
+```javascript
+{
+  success: boolean,
+  task?: Task | null,
+  tasks?: Task[],
+  taskId?: string | null,
+  message?: string,
+  fallback?: boolean,
+  mutation?: {
+    primaryTask: Object | null,
+    affectedTasks: Object[],
+    operation: 'create' | 'update' | 'delete' | 'complete' | 'reset' | 'required' | 'unrequired',
+    task?: Object | null,
+    tasks?: Object[],
+    taskId?: string | null
+  }
+}
+```
+
+说明：
+- 云端模式下，正常主路径采用 API 优先，成功后回写本地仓储
+- `fallback=true` 表示云端写入失败，已降级为本地保存 / 待同步路径
+- 页面层若只关心兼容契约，可继续读取 `success / task / taskId`
+- 新链路与测试可读取 `mutation` 查看权威写结果
+
 #### 基础操作
 
 ##### `getAllTasks(userId = null, options = {})`
@@ -72,20 +101,29 @@ const configService = serviceManager.get('configService');
     points: number,          // 奖励星星数
     pointsExpiry: string,     // 有效期类型
     isRequired: boolean,      // 是否必做任务
-    repeat?: Object          // 重复配置
+    repeat?: Object,         // 重复配置
+    targetUserId?: string,   // 家长代孩子创建时传入
+    operationKey?: string,
+    modifyTime?: number
   }
   ```
-- **返回**: `{ success: boolean, task?: Task, message?: string }`
+- **返回**: `Promise<{ success: boolean, task?: Task, tasks?: Task[], createdTasks?: Task[], fallback?: boolean, mutation?: Object, message?: string }>`
+- **说明**:
+  - 云端模式下先调用后端创建接口，再把权威结果回写到本地缓存
+  - 重复任务在云端模式下由后端展开，`tasks / createdTasks` 会包含主任务和受影响实例
+  - 若云端创建失败，降级时仅本地保存主任务；重复任务会标记 `pendingSyncMeta.repeatMaterializationPending=true`
 
 ##### `updateTask(taskId, changes, userId = null)`
 更新任务信息
 - **参数**: `taskId` - 任务ID, `changes` - 更新数据对象, `userId` - 可选的用户ID
-- **返回**: `{ success: boolean, task?: Task, message?: string }`
+- **返回**: `Promise<{ success: boolean, task?: Task, fallback?: boolean, mutation?: Object, message?: string }>`
+- **说明**: 云端模式下为 API 优先；失败时降级为本地保存并保留待同步元数据
 
 ##### `deleteTask(taskId, userId = null, suppressMessage = false)`
 删除任务
 - **参数**: `taskId` - 任务ID, `userId` - 可选的用户ID, `suppressMessage` - 是否禁用消息推送，默认false
-- **返回**: `{ success: boolean, message?: string }`
+- **返回**: `Promise<{ success: boolean, taskId?: string, fallback?: boolean, mutation?: Object, message?: string }>`
+- **说明**: 云端模式下删除成功后直接删除本地缓存；失败时写入 delete tombstone 走待同步链路
 
 ---
 
@@ -94,13 +132,13 @@ const configService = serviceManager.get('configService');
 ##### `completeTask(taskId, userId = null)`
 完成任务（核心业务流程）
 - **参数**: `taskId` - 任务ID, `userId` - 可选的用户ID
-- **返回**: `{ success: boolean, task?: Task, starReward?: number, message?: string }`
+- **返回**: `Promise<{ success: boolean, task?: Task, fallback?: boolean, mutation?: Object, message?: string }>`
 - **内部流程**：验证状态 → 更新为完成 → 计算星星 → 发布事件 → 创建消息
 
 ##### `resetTask(taskId, userId = null)`
 重置任务状态
 - **参数**: `taskId` - 任务ID, `userId` - 可选的用户ID
-- **返回**: `{ success: boolean, task?: Task, starDeduction?: number, message?: string, locked?: boolean }`
+- **返回**: `Promise<{ success: boolean, task?: Task, fallback?: boolean, mutation?: Object, message?: string, locked?: boolean }>`
 - **说明**:
   - 奖励锁定判断按任务归属用户执行，而不是按全局最后兑换时间执行
   - 若任务在对应用户最近一次奖励兑换之前完成，则返回 `locked=true`，且不会执行状态回退或扣星
@@ -108,7 +146,8 @@ const configService = serviceManager.get('configService');
 ##### `updateTaskStatus(taskId, status, userId = null)`
 更新任务状态
 - **参数**: `taskId` - 任务ID, `status` - 状态(0=未完成, 1=已完成), `userId` - 可选的用户ID
-- **返回**: `{ success: boolean, task?: Task, message?: string }`
+- **返回**: `Promise<{ success: boolean, task?: Task, fallback?: boolean, mutation?: Object, message?: string }>`
+- **说明**: 云端模式下优先使用后端状态权威返回，本地模式仍保留原有本地写路径
 
 ---
 
@@ -117,12 +156,12 @@ const configService = serviceManager.get('configService');
 ##### `markTaskAsRequired(taskId, userId = null)`
 标记任务为必做
 - **参数**: `taskId` - 任务ID, `userId` - 可选的用户ID
-- **返回**: `{ success: boolean, task?: Task, message?: string }`
+- **返回**: `Promise<{ success: boolean, task?: Task, fallback?: boolean, mutation?: Object, message?: string }>`
 
 ##### `unmarkTaskAsRequired(taskId, userId = null)`
 取消必做任务标记
 - **参数**: `taskId` - 任务ID, `userId` - 可选的用户ID
-- **返回**: `{ success: boolean, task?: Task, message?: string }`
+- **返回**: `Promise<{ success: boolean, task?: Task, fallback?: boolean, mutation?: Object, message?: string }>`
 
 ##### `checkRequiredTasks()`
 检查必做任务惩罚状态（兼容方法，内部调用checkTasksStatus）
@@ -216,13 +255,16 @@ const configService = serviceManager.get('configService');
 - **返回**: `Task[]`
 
 ##### `_syncUpdateToCloud(task)` *(私有)*
-任务编辑后异步同步到云端，接收完整 Task 对象，内部提取白名单字段发送 PUT，失败仅记 warn 日志，不影响本地结果
+任务编辑云端写入口，接收完整 Task 对象，发送 PUT 并返回标准化后的 `TaskMutationResponse`
 
 ##### `_syncDeleteToCloud(taskId)` *(私有)*
-任务删除后异步同步到云端；HTTP 404 视为成功（本地重复实例从未上云）
+任务删除云端写入口；HTTP `404` 视为成功，返回 `TaskMutationResponse`
 
 ##### `_syncStatusToCloud(task)` *(私有)*
-完成/重置状态异步同步到云端，接收完整 Task 对象，发送 `{ status, starAwarded }`，保证跨设备完成/重置后 `star_awarded` 状态一致
+完成/重置状态云端写入口，接收完整 Task 对象，发送 `{ status, starAwarded }` 并返回 `TaskMutationResponse`
+
+##### `_syncRequiredStateToCloud(task)` *(私有)*
+必做/取消必做云端写入口，返回 `TaskMutationResponse`
 
 ---
 
@@ -1106,5 +1148,5 @@ const taskService = new TaskService({
 
 ---
 
-**最后更新**：2026-03-27
+**最后更新**：2026-04-04
 **维护者**：项目维护团队

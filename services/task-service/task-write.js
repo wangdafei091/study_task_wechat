@@ -22,6 +22,126 @@ function buildNotFoundResult(message = '未找到指定的任务') {
   return { success: false, message };
 }
 
+function cloneTaskForCloudWrite(task) {
+  if (!task) {
+    return null;
+  }
+
+  if (typeof task.clone === 'function') {
+    return task.clone({}, false);
+  }
+
+  return new Task(task);
+}
+
+function assignPendingSyncMeta(service, task, action, overrides = {}) {
+  if (!task) {
+    return task;
+  }
+
+  task.pendingSyncMeta = {
+    ...service._buildTaskPendingSyncMeta(task, action, {
+      operationKey: overrides.operationKey || task.modifyTime,
+      modifyTime: overrides.modifyTime || task.modifyTime,
+      targetUserId: overrides.targetUserId || task.userId
+    }),
+    ...(overrides.extraMeta || {})
+  };
+  task.syncedToCloud = false;
+  return task;
+}
+
+function emitTaskUpdatedEvent(service, task, changes, previousStatus) {
+  service.eventBus.emit(EVENTS.TASK_UPDATED, {
+    task,
+    changes,
+    previousStatus,
+    operationType: 'update'
+  });
+}
+
+function emitTaskDeletedEvent(service, taskId, taskInfo, suppressMessage) {
+  if (suppressMessage) {
+    return;
+  }
+
+  service.eventBus.emit(EVENTS.TASK_DELETED, {
+    taskId,
+    taskInfo: {
+      id: taskInfo.id,
+      title: taskInfo.title,
+      type: taskInfo.type,
+      date: taskInfo.date,
+      status: taskInfo.status
+    }
+  });
+}
+
+function emitRequiredStateEvent(service, eventName, task) {
+  service.eventBus.emit(eventName, { task });
+}
+
+function emitTaskStatusEvents(service, task, status, previousStatus, operationType, userId = null) {
+  logger.logEvent(EVENTS.TASK_STATUS_UPDATED, {
+    taskId: task.id,
+    title: task.title,
+    status,
+    previousStatus,
+    operationType
+  }, {
+    module: 'TaskService',
+    direction: 'emit'
+  });
+
+  service.eventBus.emit(EVENTS.TASK_STATUS_UPDATED, {
+    task,
+    previousStatus,
+    operationType,
+    operatorUserId: userId
+  });
+
+  if (status === TaskStatus.COMPLETED && operationType !== 'makeup_complete') {
+    logger.logEvent(EVENTS.TASK_COMPLETED, {
+      taskId: task.id,
+      title: task.title
+    }, {
+      module: 'TaskService',
+      direction: 'emit'
+    });
+
+    service.eventBus.emit(EVENTS.TASK_COMPLETED, {
+      task,
+      operatorUserId: userId
+    });
+  }
+}
+
+function emitTaskResetEvent(service, task) {
+  service.eventBus.emit(EVENTS.TASK_RESET, {
+    task,
+    starsDeducted: task.points || 0
+  });
+}
+
+async function createTaskLocally(service, task, options = {}) {
+  task.syncedToCloud = false;
+  const savedTask = await service.taskRepository.save(task);
+  let createdTasks = [savedTask];
+
+  if (options.materializeRepeats !== false && task.isRepeating()) {
+    const repeatTasks = await service._generateRepeatTasks(savedTask);
+    if (repeatTasks.length > 0) {
+      createdTasks = createdTasks.concat(repeatTasks);
+      logger.info('TaskService', `生成了${repeatTasks.length}个重复任务实例`);
+    }
+  }
+
+  return {
+    task: savedTask,
+    createdTasks
+  };
+}
+
 async function loadTaskForWrite(service, taskId, actionLabel) {
   let task = await service.taskRepository.getById(taskId);
   if (!task && service.enableCloudStorage) {
@@ -191,52 +311,76 @@ async function createTask(service, taskData) {
 
     const initialModifyTime = Number(task.modifyTime || Date.now());
     task.modifyTime = initialModifyTime;
-    task.pendingSyncMeta = service._buildTaskPendingSyncMeta(task, 'create', {
+    assignPendingSyncMeta(service, task, 'create', {
       operationKey: taskData.operationKey || initialModifyTime,
       modifyTime: initialModifyTime,
       targetUserId: task.userId
     });
 
-    const savedTask = await service.taskRepository.save(task);
-    logger.info('TaskService', `创建任务成功: "${savedTask.title}", ID=${savedTask.id}`);
+    let effectiveTask = task;
+    let createdTasks = [task];
+    let authoritativeMutation = null;
 
     if (service.enableCloudStorage) {
       try {
-        await service._syncTaskToCloud(savedTask);
-        await service._markTaskSynced(savedTask);
-        logger.info('TaskService', `任务已同步到云端: ID=${savedTask.id}`);
+        authoritativeMutation = await service._createTaskViaCloud(task);
+        const authoritativeCache = await service._applyAuthoritativeTaskMutation(authoritativeMutation, {
+          fallbackOperation: 'create'
+        });
+
+        if (authoritativeCache.task) {
+          effectiveTask = authoritativeCache.task;
+        }
+        if (authoritativeCache.tasks && authoritativeCache.tasks.length > 0) {
+          createdTasks = authoritativeCache.tasks;
+        } else if (effectiveTask) {
+          createdTasks = [effectiveTask];
+        }
+
+        logger.info('TaskService', `任务已通过云端创建: ID=${effectiveTask.id}`);
       } catch (cloudError) {
         logger.warn('TaskService', `云端同步失败，使用本地数据: ${cloudError.message}`, {
-          taskId: savedTask.id,
-          taskTitle: savedTask.title
+          taskId: task.id,
+          taskTitle: task.title
         });
-        await service._emitTaskCloudSyncFailure('create', savedTask, cloudError);
+
+        if (task.isRepeating() && task.pendingSyncMeta) {
+          task.pendingSyncMeta = {
+            ...task.pendingSyncMeta,
+            repeatMaterializationPending: true
+          };
+        }
+
+        const fallbackResult = await createTaskLocally(service, task, {
+          materializeRepeats: false
+        });
+        effectiveTask = fallbackResult.task;
+        createdTasks = fallbackResult.createdTasks;
+        await service._emitTaskCloudSyncFailure('create', effectiveTask, cloudError);
       }
     } else {
+      const localResult = await createTaskLocally(service, task, {
+        materializeRepeats: true
+      });
+      effectiveTask = localResult.task;
+      createdTasks = localResult.createdTasks;
       logger.info('TaskService', '云端模式未启用，仅使用本地存储', {
-        taskId: savedTask.id,
-        taskTitle: savedTask.title
+        taskId: effectiveTask.id,
+        taskTitle: effectiveTask.title
       });
     }
 
-    let createdTasks = [savedTask];
-    if (task.isRepeating()) {
-      const repeatTasks = await service._generateRepeatTasks(savedTask);
-      if (repeatTasks.length > 0) {
-        createdTasks = createdTasks.concat(repeatTasks);
-        logger.info('TaskService', `生成了${repeatTasks.length}个重复任务实例`);
-      }
-    }
+    logger.info('TaskService', `创建任务成功: "${effectiveTask.title}", ID=${effectiveTask.id}`);
 
     logger.info('TaskService', '触发任务创建事件，包含完整任务对象', {
-      taskId: savedTask.id,
-      title: savedTask.title,
+      taskId: effectiveTask.id,
+      title: effectiveTask.title,
       tasksCount: createdTasks.length
     });
 
     logger.logEvent(EVENTS.TASK_CREATED, {
-      taskId: savedTask.id,
-      title: savedTask.title,
+      taskId: effectiveTask.id,
+      title: effectiveTask.title,
       tasksCount: createdTasks.length
     }, {
       module: 'TaskService',
@@ -244,16 +388,17 @@ async function createTask(service, taskData) {
     });
 
     service.eventBus.emit(EVENTS.TASK_CREATED, {
-      task: savedTask,
+      task: effectiveTask,
       tasks: createdTasks,
-      originalTask: savedTask
+      originalTask: effectiveTask
     });
 
-    return {
-      success: true,
-      task: savedTask,
-      createdTasks
-    };
+    return service._buildTaskServiceMutationResult(authoritativeMutation, {
+      task: effectiveTask,
+      tasks: createdTasks,
+      createdTasks,
+      fallback: !authoritativeMutation && service.enableCloudStorage
+    });
   } catch (error) {
     logger.error('TaskService', '创建任务失败', error);
     return { success: false, message: `创建任务失败: ${error.message}` };
@@ -273,34 +418,54 @@ async function updateTask(service, taskId, changes, userId = null) {
     }
 
     const originalStatus = task.status;
+    const cloudTask = cloneTaskForCloudWrite(task);
+    cloudTask.update(changes);
+    assignPendingSyncMeta(service, cloudTask, 'update', {
+      operationKey: changes.operationKey || changes.modifyTime || cloudTask.modifyTime,
+      modifyTime: cloudTask.modifyTime,
+      targetUserId: cloudTask.userId
+    });
+
+    if (service.enableCloudStorage) {
+      try {
+        const mutation = await service._syncUpdateToCloud(cloudTask);
+        const authoritativeCache = await service._applyAuthoritativeTaskMutation(mutation, {
+          fallbackOperation: 'update'
+        });
+        const effectiveTask = authoritativeCache.task || cloudTask;
+
+        logger.info('TaskService', `更新任务成功（云端权威）: "${effectiveTask.title}", ID=${effectiveTask.id}${userId ? `, 用户=${userId}` : ''}`);
+        emitTaskUpdatedEvent(service, effectiveTask, changes, originalStatus);
+
+        return service._buildTaskServiceMutationResult(mutation, { task: effectiveTask });
+      } catch (syncError) {
+        logger.warn('TaskService', '任务更新云同步失败，降级为本地保存', {
+          taskId,
+          error: syncError.message
+        });
+      }
+    }
+
     task.update(changes);
-    task.pendingSyncMeta = service._buildTaskPendingSyncMeta(task, 'update', {
+    assignPendingSyncMeta(service, task, 'update', {
       operationKey: changes.operationKey || changes.modifyTime || task.modifyTime,
       modifyTime: task.modifyTime,
       targetUserId: task.userId
     });
-    task.syncedToCloud = false;
 
     const updatedTask = await service.taskRepository.save(task);
 
     logger.info('TaskService', `更新任务成功: "${updatedTask.title}", ID=${updatedTask.id}${userId ? `, 用户=${userId}` : ''}`);
+    emitTaskUpdatedEvent(service, updatedTask, changes, originalStatus);
 
-    service.eventBus.emit(EVENTS.TASK_UPDATED, {
+    if (service.enableCloudStorage) {
+      await service._emitTaskCloudSyncFailure('update', updatedTask, new Error('任务更新已降级为本地待同步'));
+    }
+
+    return service._buildTaskServiceMutationResult(null, {
       task: updatedTask,
-      changes,
-      previousStatus: originalStatus,
-      operationType: 'update'
+      fallback: service.enableCloudStorage
     });
-
-    service._syncUpdateToCloud(updatedTask).catch(async (syncError) => {
-      logger.warn('TaskService', '任务更新云同步失败，本地保留待同步状态', {
-        taskId: updatedTask.id,
-        error: syncError.message
-      });
-      await service._emitTaskCloudSyncFailure('update', updatedTask, syncError);
-    });
-
-    return { success: true, task: updatedTask };
   } catch (error) {
     logger.error('TaskService', `更新任务失败: ${error.message}`, error);
     return { success: false, message: `更新任务失败: ${error.message}` };
@@ -334,39 +499,43 @@ async function deleteTask(service, taskId, userId = null, suppressMessage = fals
       createTime: Date.now()
     };
 
+    if (service.enableCloudStorage) {
+      try {
+        const mutation = await service._syncDeleteToCloud(taskId, deleteMeta);
+        await service.taskRepository.delete(taskId);
+
+        logger.info('TaskService', `删除任务成功（云端权威）: ${taskId}${userId ? `, 用户=${userId}` : ''}${suppressMessage ? ', 抑制消息' : ''}`);
+        emitTaskDeletedEvent(service, taskId, taskInfo, suppressMessage);
+
+        return service._buildTaskServiceMutationResult(mutation, { taskId });
+      } catch (syncError) {
+        logger.warn('TaskService', '云端删除失败，降级为本地删除', {
+          taskId,
+          error: syncError.message
+        });
+      }
+    }
+
     await service._saveDeleteTombstone(deleteMeta);
     await service.taskRepository.delete(taskId);
 
     logger.info('TaskService', `删除任务成功: ${taskId}${userId ? `, 用户=${userId}` : ''}${suppressMessage ? ', 抑制消息' : ''}`);
+    emitTaskDeletedEvent(service, taskId, taskInfo, suppressMessage);
 
-    if (!suppressMessage) {
-      service.eventBus.emit(EVENTS.TASK_DELETED, {
-        taskId,
-        taskInfo: {
-          id: taskInfo.id,
-          title: taskInfo.title,
-          type: taskInfo.type,
-          date: taskInfo.date,
-          status: taskInfo.status
-        }
-      });
-    }
-
-    service._syncDeleteToCloud(taskId, deleteMeta).catch(async (syncError) => {
-      logger.warn('TaskService', '云端删除同步失败（本地已删除）', {
-        taskId,
-        error: syncError.message
-      });
+    if (service.enableCloudStorage) {
       service.eventBus.emit(EVENTS.TASK_CLOUD_SYNC_FAILED, {
         action: 'delete',
         taskId,
-        error: syncError,
+        error: new Error('任务删除已降级为本地待同步'),
         pendingSyncMeta: deleteMeta,
         taskSnapshot: taskInfo
       });
-    });
+    }
 
-    return { success: true };
+    return service._buildTaskServiceMutationResult(null, {
+      taskId,
+      fallback: service.enableCloudStorage
+    });
   } catch (error) {
     logger.error('TaskService', `删除任务失败: ${error.message}`, error);
     return { success: false, message: `删除任务失败: ${error.message}` };
@@ -486,6 +655,37 @@ async function updateTaskStatus(service, taskId, status, userId = null) {
     });
     task.syncedToCloud = false;
 
+    if (previousStatus === TaskStatus.COMPLETED && status !== TaskStatus.COMPLETED) {
+      operationType = 'uncomplete';
+    }
+
+    if (service.enableCloudStorage) {
+      try {
+        const mutation = await service._syncStatusToCloud(task);
+        const authoritativeCache = await service._applyAuthoritativeTaskMutation(mutation, {
+          fallbackOperation: syncAction
+        });
+        const effectiveTask = authoritativeCache.task || task;
+
+        logger.info('TaskService', `任务状态更新成功（云端权威）: ${effectiveTask.title}`, {
+          id: effectiveTask.id,
+          status: effectiveTask.status,
+          operationType
+        });
+        emitTaskStatusEvents(service, effectiveTask, status, previousStatus, operationType, userId);
+
+        return service._buildTaskServiceMutationResult(mutation, {
+          task: effectiveTask
+        });
+      } catch (syncError) {
+        logger.warn('TaskService', '任务状态云同步失败，降级为本地保存', {
+          taskId: task.id,
+          action: operationType,
+          error: syncError.message
+        });
+      }
+    }
+
     logger.info('TaskService', `准备保存任务: ${task.title}`, {
       id: task.id,
       status: task.status,
@@ -496,7 +696,7 @@ async function updateTaskStatus(service, taskId, status, userId = null) {
 
     const savedTask = await service.taskRepository.save(task);
 
-    logger.info('TaskService', `任务保存完成: ${task.title}`, {
+    logger.info('TaskService', `任务保存完成: ${savedTask.title}`, {
       id: savedTask.id,
       status: savedTask.status,
       starAwarded: savedTask.starAwarded,
@@ -504,53 +704,16 @@ async function updateTaskStatus(service, taskId, status, userId = null) {
       saveSuccess: !!savedTask
     });
 
-    if (previousStatus === TaskStatus.COMPLETED && status !== TaskStatus.COMPLETED) {
-      operationType = 'uncomplete';
+    emitTaskStatusEvents(service, savedTask, status, previousStatus, operationType, userId);
+
+    if (service.enableCloudStorage) {
+      await service._emitTaskCloudSyncFailure(syncAction, savedTask, new Error('任务状态更新已降级为本地待同步'));
     }
 
-    logger.logEvent(EVENTS.TASK_STATUS_UPDATED, {
-      taskId: savedTask.id,
-      title: savedTask.title,
-      status,
-      previousStatus,
-      operationType
-    }, {
-      module: 'TaskService',
-      direction: 'emit'
-    });
-
-    service.eventBus.emit(EVENTS.TASK_STATUS_UPDATED, {
+    return service._buildTaskServiceMutationResult(null, {
       task: savedTask,
-      previousStatus,
-      operationType,
-      operatorUserId: userId
+      fallback: service.enableCloudStorage
     });
-
-    if (status === TaskStatus.COMPLETED && operationType !== 'makeup_complete') {
-      logger.logEvent(EVENTS.TASK_COMPLETED, {
-        taskId: savedTask.id,
-        title: savedTask.title
-      }, {
-        module: 'TaskService',
-        direction: 'emit'
-      });
-
-      service.eventBus.emit(EVENTS.TASK_COMPLETED, {
-        task: savedTask,
-        operatorUserId: userId
-      });
-    }
-
-    service._syncStatusToCloud(savedTask).catch(async (syncError) => {
-      logger.warn('TaskService', '任务状态云同步失败，本地保留待同步状态', {
-        taskId: savedTask.id,
-        action: operationType,
-        error: syncError.message
-      });
-      await service._emitTaskCloudSyncFailure(operationType === 'complete' ? 'complete' : 'reset', savedTask, syncError);
-    });
-
-    return { success: true, task: savedTask };
   } catch (error) {
     logger.error('TaskService', `更新任务状态失败: ${error.message}`, error);
     return { success: false, message: `更新任务状态失败: ${error.message}` };
@@ -657,23 +820,40 @@ async function resetTask(service, taskId, userId = null) {
     });
     task.syncedToCloud = false;
 
+    if (service.enableCloudStorage) {
+      try {
+        const mutation = await service._syncStatusToCloud(task);
+        const authoritativeCache = await service._applyAuthoritativeTaskMutation(mutation, {
+          fallbackOperation: 'reset'
+        });
+        const effectiveTask = authoritativeCache.task || task;
+
+        logger.info('TaskService', `任务重置成功（云端权威）: ${effectiveTask.title}, ID=${effectiveTask.id}${userId ? `, 用户=${userId}` : ''}`);
+        emitTaskResetEvent(service, effectiveTask);
+
+        return service._buildTaskServiceMutationResult(mutation, {
+          task: effectiveTask
+        });
+      } catch (syncError) {
+        logger.warn('TaskService', '任务重置云同步失败，降级为本地保存', {
+          taskId: task.id,
+          error: syncError.message
+        });
+      }
+    }
+
     const savedTask = await service.taskRepository.save(task);
     logger.info('TaskService', `任务重置成功: ${savedTask.title}, ID=${savedTask.id}${userId ? `, 用户=${userId}` : ''}`);
+    emitTaskResetEvent(service, savedTask);
 
-    service.eventBus.emit(EVENTS.TASK_RESET, {
+    if (service.enableCloudStorage) {
+      await service._emitTaskCloudSyncFailure('reset', savedTask, new Error('任务重置已降级为本地待同步'));
+    }
+
+    return service._buildTaskServiceMutationResult(null, {
       task: savedTask,
-      starsDeducted: task.points || 0
+      fallback: service.enableCloudStorage
     });
-
-    service._syncStatusToCloud(savedTask).catch(async (syncError) => {
-      logger.warn('TaskService', '任务重置云同步失败，本地保留待同步状态', {
-        taskId: savedTask.id,
-        error: syncError.message
-      });
-      await service._emitTaskCloudSyncFailure('reset', savedTask, syncError);
-    });
-
-    return { success: true, task: savedTask };
   } catch (error) {
     logger.error('TaskService', `重置任务失败: ${error.message}`, error);
     return { success: false, message: `重置任务失败: ${error.message}` };
@@ -696,30 +876,55 @@ async function markTaskAsRequired(service, taskId, userId = null) {
       return { success: true, task, unchanged: true };
     }
 
+    const cloudTask = cloneTaskForCloudWrite(task);
+    cloudTask.isRequired = true;
+    cloudTask.modifyTime = Date.now();
+    assignPendingSyncMeta(service, cloudTask, 'required', {
+      operationKey: cloudTask.modifyTime,
+      modifyTime: cloudTask.modifyTime,
+      targetUserId: cloudTask.userId
+    });
+
+    if (service.enableCloudStorage) {
+      try {
+        const mutation = await service._syncRequiredStateToCloud(cloudTask);
+        const authoritativeCache = await service._applyAuthoritativeTaskMutation(mutation, {
+          fallbackOperation: 'required'
+        });
+        const effectiveTask = authoritativeCache.task || cloudTask;
+
+        logger.info('TaskService', `将任务标记为必做（云端权威）: "${effectiveTask.title}", ID=${effectiveTask.id}${userId ? `, 用户=${userId}` : ''}`);
+        emitRequiredStateEvent(service, EVENTS.TASK_MARKED_REQUIRED, effectiveTask);
+
+        return service._buildTaskServiceMutationResult(mutation, { task: effectiveTask });
+      } catch (syncError) {
+        logger.warn('TaskService', '任务必做标记云同步失败，降级为本地保存', {
+          taskId,
+          error: syncError.message
+        });
+      }
+    }
+
     task.isRequired = true;
     task.modifyTime = Date.now();
-    task.pendingSyncMeta = service._buildTaskPendingSyncMeta(task, 'required', {
+    assignPendingSyncMeta(service, task, 'required', {
       operationKey: task.modifyTime,
       modifyTime: task.modifyTime,
       targetUserId: task.userId
     });
-    task.syncedToCloud = false;
 
     const updatedTask = await service.taskRepository.save(task);
     logger.info('TaskService', `将任务标记为必做: "${updatedTask.title}", ID=${updatedTask.id}${userId ? `, 用户=${userId}` : ''}`);
-    service.eventBus.emit(EVENTS.TASK_MARKED_REQUIRED, { task: updatedTask });
+    emitRequiredStateEvent(service, EVENTS.TASK_MARKED_REQUIRED, updatedTask);
 
     if (service.enableCloudStorage) {
-      service._syncRequiredStateToCloud(updatedTask).catch(async (syncError) => {
-        logger.warn('TaskService', '任务必做标记云同步失败，本地保留待同步状态', {
-          taskId: updatedTask.id,
-          error: syncError.message
-        });
-        await service._emitTaskCloudSyncFailure('required', updatedTask, syncError);
-      });
+      await service._emitTaskCloudSyncFailure('required', updatedTask, new Error('任务必做标记已降级为本地待同步'));
     }
 
-    return { success: true, task: updatedTask };
+    return service._buildTaskServiceMutationResult(null, {
+      task: updatedTask,
+      fallback: service.enableCloudStorage
+    });
   } catch (error) {
     logger.error('TaskService', `标记必做任务失败: ${error.message}`, error);
     return { success: false, message: `标记必做任务失败: ${error.message}` };
@@ -742,30 +947,55 @@ async function unmarkTaskAsRequired(service, taskId, userId = null) {
       return { success: true, task, unchanged: true };
     }
 
+    const cloudTask = cloneTaskForCloudWrite(task);
+    cloudTask.isRequired = false;
+    cloudTask.modifyTime = Date.now();
+    assignPendingSyncMeta(service, cloudTask, 'unrequired', {
+      operationKey: cloudTask.modifyTime,
+      modifyTime: cloudTask.modifyTime,
+      targetUserId: cloudTask.userId
+    });
+
+    if (service.enableCloudStorage) {
+      try {
+        const mutation = await service._syncRequiredStateToCloud(cloudTask);
+        const authoritativeCache = await service._applyAuthoritativeTaskMutation(mutation, {
+          fallbackOperation: 'unrequired'
+        });
+        const effectiveTask = authoritativeCache.task || cloudTask;
+
+        logger.info('TaskService', `取消任务的必做标记（云端权威）: "${effectiveTask.title}", ID=${effectiveTask.id}${userId ? `, 用户=${userId}` : ''}`);
+        emitRequiredStateEvent(service, EVENTS.TASK_UNMARKED_REQUIRED, effectiveTask);
+
+        return service._buildTaskServiceMutationResult(mutation, { task: effectiveTask });
+      } catch (syncError) {
+        logger.warn('TaskService', '任务取消必做云同步失败，降级为本地保存', {
+          taskId,
+          error: syncError.message
+        });
+      }
+    }
+
     task.isRequired = false;
     task.modifyTime = Date.now();
-    task.pendingSyncMeta = service._buildTaskPendingSyncMeta(task, 'unrequired', {
+    assignPendingSyncMeta(service, task, 'unrequired', {
       operationKey: task.modifyTime,
       modifyTime: task.modifyTime,
       targetUserId: task.userId
     });
-    task.syncedToCloud = false;
 
     const updatedTask = await service.taskRepository.save(task);
     logger.info('TaskService', `取消任务的必做标记: "${updatedTask.title}", ID=${updatedTask.id}${userId ? `, 用户=${userId}` : ''}`);
-    service.eventBus.emit(EVENTS.TASK_UNMARKED_REQUIRED, { task: updatedTask });
+    emitRequiredStateEvent(service, EVENTS.TASK_UNMARKED_REQUIRED, updatedTask);
 
     if (service.enableCloudStorage) {
-      service._syncRequiredStateToCloud(updatedTask).catch(async (syncError) => {
-        logger.warn('TaskService', '任务取消必做云同步失败，本地保留待同步状态', {
-          taskId: updatedTask.id,
-          error: syncError.message
-        });
-        await service._emitTaskCloudSyncFailure('unrequired', updatedTask, syncError);
-      });
+      await service._emitTaskCloudSyncFailure('unrequired', updatedTask, new Error('任务取消必做已降级为本地待同步'));
     }
 
-    return { success: true, task: updatedTask };
+    return service._buildTaskServiceMutationResult(null, {
+      task: updatedTask,
+      fallback: service.enableCloudStorage
+    });
   } catch (error) {
     logger.error('TaskService', `取消必做任务标记失败: ${error.message}`, error);
     return { success: false, message: `取消必做任务标记失败: ${error.message}` };

@@ -4,6 +4,44 @@
 
 ---
 
+## [里程碑-19B] - 2026-04-04
+
+### ✅ 完成情况
+
+**任务域边界收口**
+
+- **任务写接口统一返回**：
+  - 后端 `POST /api/tasks`、`PUT /api/tasks/:taskId`、`DELETE /api/tasks/:taskId`、`PATCH /api/tasks/:taskId/status`、`PATCH /api/tasks/:taskId/required`、`PATCH /api/tasks/:taskId/unrequired` 统一返回 `TaskMutationResponse`
+  - 过渡期继续保留 `task / tasks / taskId` 兼容字段，避免页面层和历史补云链路被一次性打断
+- **云端模式任务写路径收口**：
+  - 前端 `TaskService` 在云端模式下改为优先采用后端权威返回，再回写本地缓存
+  - 创建、编辑、删除、完成、重置、必做标记共用统一的权威结果适配与缓存回写能力
+- **重复任务实例治理**：
+  - 后端接管重复任务实例生成，`POST /api/tasks` 可返回主任务与受影响任务集合
+  - 新增后端重复任务单测，覆盖稳定子任务 ID、重复规则与兼容返回结构
+- **手工验收补修**：
+  - 修复家长代孩子视角下“删除循环任务 / 批量更新循环任务”错误读取家长任务全集的问题
+  - `task-edit` 页面向热力图组件透传 `targetUserId`，组件按目标孩子任务全集执行批量删改
+
+### 🧪 验证结果
+
+- 前端任务服务测试通过：
+  - `npm test -- --runInBand test/services/task-service.helpers.test.js test/services/task-service.test.js test/services/task-sync.direct.test.js`
+- 后端单元测试通过：
+  - `npm run test:backend:unit -- taskController-m07.test.js taskService-m19b-repeat.test.js`
+- 页面测试通过：
+  - `npm run test:pages`
+- 模拟器手工回归通过：
+  - 创建、编辑、完成、重置、删除链路已分别由 `B.log`、`C.log`、`E.log`、`F.log`、`l16.log` 复核
+
+### 📖 详细实施记录
+
+- [里程碑-19A：前后端权威边界审计](../design/milestone-19a-authority-boundary-audit.md)
+- [里程碑-19A：前后端权威边界审计结论](../design/milestone-19a-authority-boundary-audit-report.md)
+- [里程碑-19B：任务域边界收口](../design/milestone-19b-task-boundary-convergence.md)
+
+---
+
 ## [专项修复：重复刷新治理] - 2026-04-04
 
 ### ✅ 完成情况
