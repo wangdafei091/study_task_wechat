@@ -457,19 +457,20 @@ describe('pages/index reward flow', () => {
     expect(page.refreshTaskDataForCurrentView).toHaveBeenCalledTimes(1);
   });
 
-  it('onShow 应先刷新云端奖励再加载首页数据', async () => {
+  it('onShow 应通过统一批量入口加载首页数据', async () => {
     const page = createPageInstance();
     page.waitForServicesReady = jest.fn().mockResolvedValue();
     page.waitForLoginComplete = jest.fn().mockResolvedValue();
     page.initializeMultiUserSystem = jest.fn().mockResolvedValue();
     page.checkExpiredTasksAndStars = jest.fn().mockResolvedValue();
-    page.loadAllPageData = jest.fn();
+    page.loadAllPageData = jest.fn().mockResolvedValue();
 
     await page.onShow();
 
-    expect(rewardService.refreshRewardsFromCloud).toHaveBeenCalledTimes(1);
     expect(page.checkExpiredTasksAndStars).toHaveBeenCalledTimes(1);
-    expect(page.loadAllPageData).toHaveBeenCalledTimes(1);
+    expect(page.loadAllPageData).toHaveBeenCalledWith({
+      skipExpiryAuthoritySyncBeforeFormalReminders: true
+    });
   });
 
   it('奖励流模块应覆盖无上下文、无达成奖励和设置奖励提示分支', async () => {

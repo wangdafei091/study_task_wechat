@@ -145,7 +145,7 @@ describe('packageMessage/pages/message/message extra behavior', () => {
 
   it('markMessageAsRead 在已读、失败和异常场景下应正确处理', async () => {
     const page = createPageInstance();
-    page.loadMessageData = jest.fn();
+    page.processMessages = jest.fn();
     page.data.messages = [
       { id: 'm1', isRead: true, type: 'task', createTime: 1 },
       { id: 'm2', isRead: false, type: 'task', createTime: 2 }
@@ -169,7 +169,7 @@ describe('packageMessage/pages/message/message extra behavior', () => {
     }));
   });
 
-  it('loadMoreMessages、formatMessageTime、formatDate 和 viewMessageDetail 应覆盖边界分支', () => {
+  it('loadMoreMessages、formatMessageTime、formatDate 和 viewMessageDetail 应覆盖边界分支', async () => {
     const page = createPageInstance();
     page.data.messages = [
       { id: 'm1', title: '消息1', isRead: false, type: 'task', createTime: 1, content: '详情' }
@@ -199,11 +199,11 @@ describe('packageMessage/pages/message/message extra behavior', () => {
     expect(page.formatDate(new Date('2025-03-01').getTime())).toContain('2025年');
 
     page.showMessageDetail = jest.fn();
-    page.loadMessageData = jest.fn();
-    page.viewMessageDetail({ currentTarget: { dataset: { id: 'm1' } } });
-    jest.runAllTimers();
+    page.processMessages = jest.fn();
+    messageService.markMessageAsRead.mockResolvedValueOnce(true);
+    await page.viewMessageDetail({ currentTarget: { dataset: { id: 'm1' } } });
     expect(page.showMessageDetail).toHaveBeenCalled();
-    expect(page.loadMessageData).toHaveBeenCalled();
+    expect(page.processMessages).toHaveBeenCalled();
   });
 
   it('loadMoreMessages 后应按扩展后的当前展示序列重新计算日期分隔', () => {

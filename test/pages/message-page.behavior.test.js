@@ -133,7 +133,6 @@ describe('packageMessage/pages/message/message behavior', () => {
       { id: 'm2', type: 'reward', isRead: false, createTime: 2 }
     ];
     page.processMessages = jest.fn();
-    page.loadMessageData = jest.fn();
 
     messageService.markAllMessagesAsRead.mockResolvedValue(2);
     page.markAllAsRead();
@@ -143,8 +142,7 @@ describe('packageMessage/pages/message/message behavior', () => {
     messageService.markMessageAsRead.mockResolvedValue(true);
     page.markMessageAsRead({ currentTarget: { dataset: { id: 'm1' } } });
     await Promise.resolve();
-    jest.runAllTimers();
-    expect(page.loadMessageData).toHaveBeenCalled();
+    expect(page.processMessages).toHaveBeenCalledTimes(2);
 
     messageService.deleteMessage.mockResolvedValue(true);
     page.processMessages.mockClear();

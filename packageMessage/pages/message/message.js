@@ -81,6 +81,18 @@ Page({
       });
   },
 
+  applyReadStateLocally: function(messageId) {
+    if (!messageId) {
+      return;
+    }
+
+    const nextMessages = this.data.messages.map((message) => (
+      message.id === messageId ? { ...message, isRead: true } : message
+    ));
+
+    this.processMessages(nextMessages);
+  },
+
   getMessageScopeOptions: function() {
     const userService = getApp().globalData.userService;
     const loginUser = userService?.getLoginUser?.() || null;
@@ -174,23 +186,33 @@ viewMessageDetail: function(e) {
   const messageService = serviceManager.getMessageService();
   const message = this.data.messages.find(m => m.id === messageId);
   
-  if (message) {
-    // 1. 标记该消息为已读（保持现有逻辑）
-    messageService.markMessageAsRead(messageId, this.getMessageScopeOptions());
-    
-    // 记录日志
-    logger.info('MessagePage', `标记消息已读: ${message.title}`);
-    
-    // 2. 如果消息有详细内容，显示详情面板
-    if (message.content && message.content.trim()) {
-      this.showMessageDetail(message);
-    }
-    
-    // 3. 重新加载消息数据（保持现有逻辑）
-    setTimeout(() => {
-      this.loadMessageData();
-    }, 300);
+  if (!message) {
+    return Promise.resolve(false);
   }
+
+  let markReadPromise = Promise.resolve(false);
+  if (!message.isRead && messageService && typeof messageService.markMessageAsRead === 'function') {
+    markReadPromise = Promise.resolve()
+      .then(() => messageService.markMessageAsRead(messageId, this.getMessageScopeOptions()))
+      .then((success) => {
+        if (success) {
+          this.applyReadStateLocally(messageId);
+        }
+        return success;
+      })
+      .catch(error => {
+        logger.error('MessagePage', `标记消息已读出错: ${messageId}`, error);
+        return false;
+      });
+  }
+
+  logger.info('MessagePage', `标记消息已读: ${message.title}`);
+
+  if (message.content && message.content.trim()) {
+    this.showMessageDetail(message);
+  }
+
+  return markReadPromise;
 },
 
   /**
@@ -350,9 +372,7 @@ viewMessageDetail: function(e) {
           return;
         }
 
-        setTimeout(() => {
-          this.loadMessageData();
-        }, 300);
+        this.applyReadStateLocally(messageId);
 
         wx.showToast({
           title: '已标记为已读',

@@ -122,6 +122,17 @@ describe('pages/rewards/rewards behavior', () => {
     expect(appMock.globalData.hasRedirectedToReward).toBe(false);
   });
 
+  it('首次 onShow 不应因兑换成功后的跳过标记再次刷新', async () => {
+    const page = createPageInstance();
+    page._skipNextOnShowRefresh = true;
+    page.loadRewardsData = jest.fn().mockResolvedValue();
+
+    await page.onShow();
+
+    expect(page.loadRewardsData).not.toHaveBeenCalled();
+    expect(page._skipNextOnShowRefresh).toBe(false);
+  });
+
   it('clearAllTimers、onHide 和 onUnload 应清理计时器并移除事件监听', () => {
     const page = createPageInstance();
     page.animationSafetyTimer = setTimeout(() => {}, 1000);
@@ -409,8 +420,9 @@ describe('pages/rewards/rewards behavior', () => {
 
     expect(starService.clearCache).toHaveBeenCalled();
     expect(rewardService.clearCache).toHaveBeenCalled();
-    expect(page.loadRewardsData).toHaveBeenCalled();
+    expect(page.loadRewardsData).toHaveBeenCalledWith(true);
     expect(page.data.showModal).toBe(false);
+    expect(page._skipNextOnShowRefresh).toBe(true);
     expect(appMock.globalData.eventBus.emit).not.toHaveBeenCalled();
   });
 

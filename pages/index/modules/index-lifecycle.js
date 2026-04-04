@@ -49,25 +49,13 @@ async function onShow(page) {
   await page.waitForServicesReady();
   await page.initializeMultiUserSystemDelayed();
 
-  try {
-    const effectiveUserId = typeof page.getEffectiveTaskUserId === 'function'
-      ? page.getEffectiveTaskUserId()
-      : null;
-    const rewardService = serviceManager.getService('rewardService');
-    if (rewardService?.refreshRewardsFromCloud) {
-      await rewardService.refreshRewardsFromCloud({
-        userId: effectiveUserId || undefined
-      });
-    }
-  } catch (syncError) {
-    logger.warn('Index', '首页奖励云同步失败，继续使用本地数据', syncError);
-  }
-
   const app = getApp();
   if (app.globalData.fromRewardCompletion) {
     app.globalData.fromRewardCompletion = false;
     logger.info('Index', '从奖励完成页面返回，跳过过期检查');
-    page.loadAllPageData();
+    await page.loadAllPageData({
+      skipExpiryAuthoritySyncBeforeFormalReminders: true
+    });
     return;
   }
 
@@ -75,7 +63,7 @@ async function onShow(page) {
   await page.checkExpiredTasksAndStars();
 
   logger.debug('Index', '页面显示时批量加载所有数据');
-  page.loadAllPageData({
+  await page.loadAllPageData({
     skipExpiryAuthoritySyncBeforeFormalReminders: true
   });
 }
