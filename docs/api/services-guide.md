@@ -26,7 +26,90 @@ const messageService = serviceManager.get('messageService');
 const userService = serviceManager.get('userService');
 const validationService = serviceManager.get('validationService');
 const configService = serviceManager.get('configService');
+const offlineQueueService = serviceManager.get('offlineQueueService');
 ```
+
+补充说明：
+- `offlineQueueService` 为 M19E 引入的统一待同步队列服务，负责承接任务域与奖励域的离线待同步动作。
+- `ENABLE_API / API_BASE_URL` 不属于 `ConfigService` 管辖范围，而是由 `utils/runtime-config.js` 与 `utils/api-config.js` 统一解析为启动时运行模式快照。
+
+---
+
+## OfflineQueueService - 统一离线队列服务
+
+离线队列服务负责统一承接任务域、奖励域在云端失败后的待同步动作，并在登录后补偿或读取前补偿阶段顺序 drain。
+
+### 核心功能
+- 统一入队任务域 / 奖励域 mutation
+- 队列项去重与冲突折叠
+- 按当前会话上下文过滤并执行 drain
+- 兼容历史 `pendingSyncMeta / tombstone` 迁移
+
+### API 方法
+
+##### `initialize()`
+初始化离线队列元数据与迁移状态。
+- **返回**: `Promise<boolean>`
+
+##### `enqueueMutation(input)`
+将待同步动作写入统一离线队列。
+- **参数**:
+  ```javascript
+  {
+    domain: 'task' | 'reward',
+    entityId: string,
+    operation: string,
+    operationKey?: string,
+    payload?: Object,
+    snapshot?: Object | null,
+    context?: {
+      familyId?: string | null,
+      loginUserId?: string | null,
+      actorUserId?: string | null,
+      actorRole?: 'parent' | 'child' | null,
+      targetUserId?: string | null
+    },
+    source?: 'live_write' | 'legacy_migration'
+  }
+  ```
+- **返回**: `Promise<OfflineQueueItem>`
+- **说明**:
+  - 对同一实体的连续 mutation 会按设计规则折叠
+  - 过渡期仍允许任务/奖励实体保留 `pendingSyncMeta` 兼容镜像
+
+##### `drain(options = {})`
+按当前登录上下文执行待同步项。
+- **参数**:
+  ```javascript
+  {
+    domains?: Array<'task' | 'reward'>,
+    reason?: string,
+    force?: boolean,
+    limit?: number
+  }
+  ```
+- **返回**:
+  ```javascript
+  {
+    success: boolean,
+    processed: number,
+    skipped: number,
+    failed: number,
+    partial: boolean,
+    remaining: number
+  }
+  ```
+- **说明**:
+  - 登录后补偿和任务/奖励读取前补偿都走该入口
+  - 上下文不匹配、未到退避窗口的项会被跳过，不会误回放
+
+##### `migrateLegacyPendingState()`
+把历史 `pendingSyncMeta / delete tombstone` 导入统一队列。
+- **返回**: `Promise<{ success: boolean, migratedCount: number, skippedCount: number }>`
+
+##### `getPendingSummary(filter = {})`
+返回当前待同步概览。
+- **返回**: `Promise<{ total: number, byDomain: Object }>`
 
 ---
 

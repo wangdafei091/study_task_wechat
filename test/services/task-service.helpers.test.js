@@ -228,6 +228,23 @@ describe('TaskService helpers and delegators', () => {
     expect(taskRepository.getAll).not.toHaveBeenCalled();
   });
 
+  it('_flushPendingTaskSyncs 在接入离线队列后应委托给 offlineQueueService', async () => {
+    const { service, taskRepository } = loadTaskService();
+    service.offlineQueueService = {
+      initialize: jest.fn(async () => true),
+      drain: jest.fn(async () => ({ success: true }))
+    };
+
+    await service._flushPendingTaskSyncs();
+
+    expect(service.offlineQueueService.initialize).toHaveBeenCalledTimes(1);
+    expect(service.offlineQueueService.drain).toHaveBeenCalledWith({
+      domains: ['task'],
+      reason: 'before_task_read'
+    });
+    expect(taskRepository.getAll).not.toHaveBeenCalled();
+  });
+
   it('batchProcessTasks 应覆盖 delay 分支并累积结果', async () => {
     jest.useFakeTimers();
     const { service } = loadTaskService();

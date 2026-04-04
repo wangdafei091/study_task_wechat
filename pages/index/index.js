@@ -160,7 +160,7 @@ Page({
     availableUsers: [], // 可用用户列表
     showUserSwitcher: false, // 是否显示用户切换界面
     userPermissions: {}, // 当前用户权限
-    loginUserId: null,         // 设备拥有者ID（权限依据）
+    loginUserId: '',           // 设备拥有者ID（权限依据）
     canManageMembers: false,   // 是否可管理家庭成员（家长专属）
     isReadonlyView: false,     // 管理入口只读：孩子设备或家长切到孩子视角时不可创建/编辑/删除，但今日/历史任务仍可打卡
     lastActiveChildId: null,   // 家长最近查看的孩子ID（家长视角时任务仍显示该孩子）

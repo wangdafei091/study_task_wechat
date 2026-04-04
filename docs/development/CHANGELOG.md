@@ -4,6 +4,45 @@
 
 ---
 
+## [里程碑-19E] - 2026-04-05
+
+### ✅ 完成情况
+
+**配置与离线队列治理**
+
+- **运行模式配置治理**：
+  - 新增 `utils/runtime-config.js`，统一收敛 `ENABLE_API / API_BASE_URL` 的原始配置解析、校验和落盘语义
+  - `utils/api-config.js` 改为只负责生成运行时快照，明确配置变更需下次启动生效
+- **统一离线队列落地**：
+  - 新增 `OfflineQueueItem / OfflineQueueRepository / OfflineQueueService`
+  - 任务域与奖励域写失败后改由统一 queue 承接待同步动作，不再继续扩散分散 flush 逻辑
+- **启动与读取链路收口**：
+  - `ServiceManager` 正式注入 `offlineQueueService`
+  - `bootstrap-services` / `post-login-bootstrap` 增加 queue 初始化与登录后补偿 drain
+  - 任务/奖励读取前补云改为统一委托 queue drain
+- **兼容边界固化**：
+  - 继续保留 `pendingSyncMeta + syncedToCloud + modifyTime` 作为过渡期兼容保护
+  - 消息域继续消费 `TASK_CLOUD_SYNC_FAILED / REWARD_CLOUD_SYNC_FAILED`，不改变 provisional 语义
+  - 星星域继续保留本地待同步流水保护，不强行纳入本期统一队列
+
+### 🧪 验证结果
+
+- 全量前端测试通过：
+  - `npm test`
+  - 结果：`73 suites / 1686 tests` 全绿
+- M19E 关键定向测试通过：
+  - `npx jest test/utils/runtime-config.test.js test/utils/api-config.test.js test/services/offline-queue-service.test.js`
+  - `npx jest test/app/bootstrap-services.test.js test/app/post-login-bootstrap.test.js`
+  - `npx jest test/services/task-service.test.js test/services/reward-service.test.js`
+- 模拟器手工回归与日志复核通过：
+  - 本地模式、云端模式、登录后补偿、首页/奖励页/消息页主链路已完成多轮日志复核
+
+### 📖 详细实施记录
+
+- [里程碑-19E：配置与离线队列治理](../design/milestone-19e-config-offline-queue-governance.md)
+
+---
+
 ## [里程碑-19D] - 2026-04-04
 
 ### ✅ 完成情况

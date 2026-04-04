@@ -77,6 +77,9 @@ describe('RewardService', () => {
       getById: jest.fn(),
       delete: jest.fn().mockResolvedValue(true),
       deleteMany: jest.fn().mockResolvedValue(1),
+      getDeleteTombstones: jest.fn().mockResolvedValue([]),
+      saveDeleteTombstone: jest.fn().mockResolvedValue(true),
+      removeDeleteTombstone: jest.fn().mockResolvedValue(true),
       getClaimedRewards: jest.fn().mockResolvedValue([]),
       getAvailableRewards: jest.fn().mockResolvedValue([]),
       getExchangeableRewards: jest.fn().mockResolvedValue([]),
@@ -158,7 +161,18 @@ describe('RewardService', () => {
 
     // 创建 Mock 用户服务
     mockUserService = {
-      getCurrentUserId: jest.fn().mockReturnValue('user_123')
+      getCurrentUserId: jest.fn().mockReturnValue('user_123'),
+      getCurrentUser: jest.fn().mockReturnValue({
+        userId: 'user_123',
+        role: 'child',
+        familyId: 'family_1'
+      }),
+      getLoginUser: jest.fn().mockReturnValue({
+        userId: 'parent_1',
+        role: 'parent',
+        familyId: 'family_1'
+      }),
+      getLoginUserId: jest.fn().mockReturnValue('parent_1')
     };
 
     // 将仓储和服务添加到 Mock 配置
@@ -300,6 +314,57 @@ describe('RewardService', () => {
       expect(result.success).toBe(true);
       expect(result.message).toBe('删除成功');
       expect(mockRewardRepository.delete).toHaveBeenCalledWith('reward_1');
+    });
+
+    it('deleteReward：云端删除失败后应发出待补偿事件', async () => {
+      rewardService.enableCloudStorage = true;
+      const reward = new Reward({
+        id: 'reward_delete_fail',
+        name: '待补偿奖励',
+        claimed: false,
+        familyId: 'family_1'
+      });
+      mockRewardRepository.getById.mockResolvedValue(reward);
+      mockRewardRepository.delete.mockResolvedValue(true);
+      jest.spyOn(rewardService, '_syncDeleteRewardToCloud').mockRejectedValue(new Error('cloud delete failed'));
+
+      const result = await rewardService.deleteReward('reward_delete_fail');
+      await new Promise(setImmediate);
+
+      expect(result.success).toBe(true);
+      mockEventBus.verifyEmit(EVENTS.REWARD_CLOUD_SYNC_FAILED, {
+        action: 'delete',
+        rewardId: 'reward_delete_fail'
+      });
+    });
+
+    it('deleteReward：接入离线队列后应将删除补偿写入 queue', async () => {
+      rewardService.enableCloudStorage = true;
+      rewardService.offlineQueueService = {
+        enqueueMutation: jest.fn().mockResolvedValue({ id: 'queue_item_1' })
+      };
+      const reward = new Reward({
+        id: 'reward_delete_queue',
+        name: '待补偿奖励',
+        claimed: false,
+        familyId: 'family_1'
+      });
+      mockRewardRepository.getById.mockResolvedValue(reward);
+      mockRewardRepository.delete.mockResolvedValue(true);
+      jest.spyOn(rewardService, '_syncDeleteRewardToCloud').mockRejectedValue(new Error('cloud delete failed'));
+
+      const result = await rewardService.deleteReward('reward_delete_queue');
+      await new Promise(setImmediate);
+
+      expect(result.success).toBe(true);
+      expect(rewardService.offlineQueueService.enqueueMutation).toHaveBeenCalledWith(expect.objectContaining({
+        domain: 'reward',
+        entityId: 'reward_delete_queue',
+        operation: 'delete',
+        payload: expect.objectContaining({
+          rewardId: 'reward_delete_queue'
+        })
+      }));
     });
 
     it('应该拒绝删除已领取的奖励', async () => {
@@ -770,6 +835,108 @@ describe('RewardService', () => {
       expect(secondResult).toEqual({ success: true, rewards: [] });
       expect(flushSpy).toHaveBeenCalledTimes(1);
       expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('_flushPendingRewardSyncs 应按动作路由并容忍同步失败', async () => {
+      rewardService.enableCloudStorage = true;
+      const createReward = new Reward({ id: 'reward_create', name: '创建奖励' });
+      createReward.syncedToCloud = false;
+      createReward.pendingSyncMeta = { action: 'create' };
+
+      const updateReward = new Reward({ id: 'reward_update', name: '更新奖励' });
+      updateReward.syncedToCloud = true;
+      updateReward.pendingSyncMeta = { action: 'update' };
+
+      const exchangeReward = new Reward({
+        id: 'reward_exchange',
+        name: '兑换奖励',
+        exchangeUserId: 'child_1'
+      });
+      exchangeReward.syncedToCloud = true;
+      exchangeReward.pendingSyncMeta = {
+        action: 'exchange',
+        exchangeUserId: 'child_1',
+        modifyTime: 111
+      };
+
+      const unclaimReward = new Reward({
+        id: 'reward_unclaim',
+        name: '取消兑换奖励',
+        exchangeUserId: 'child_2'
+      });
+      unclaimReward.syncedToCloud = true;
+      unclaimReward.pendingSyncMeta = {
+        action: 'unclaim',
+        exchangeUserId: 'child_2',
+        modifyTime: 222
+      };
+
+      const failedReward = new Reward({ id: 'reward_failed', name: '失败奖励' });
+      failedReward.syncedToCloud = true;
+      failedReward.pendingSyncMeta = { action: 'update' };
+
+      mockRewardRepository.getAll.mockResolvedValue([
+        createReward,
+        updateReward,
+        exchangeReward,
+        unclaimReward,
+        failedReward,
+        new Reward({ id: 'reward_skip', name: '跳过奖励' })
+      ]);
+      mockRewardRepository.getDeleteTombstones.mockResolvedValue([
+        { entityId: 'reward_delete_ok' },
+        { entityId: 'reward_delete_fail' }
+      ]);
+
+      const syncRewardSpy = jest.spyOn(rewardService, '_syncRewardToCloud').mockImplementation(async (reward) => {
+        if (reward.id === 'reward_failed') {
+          throw new Error('sync failed');
+        }
+        return true;
+      });
+      const exchangeSpy = jest.spyOn(rewardService, '_syncExchangeToCloud').mockResolvedValue(true);
+      const unclaimSpy = jest.spyOn(rewardService, '_syncCancelExchangeToCloud').mockResolvedValue(true);
+      const deleteSpy = jest.spyOn(rewardService, '_syncDeleteRewardToCloud').mockImplementation(async (rewardId) => {
+        if (rewardId === 'reward_delete_fail') {
+          throw new Error('delete failed');
+        }
+        return true;
+      });
+
+      await rewardService._flushPendingRewardSyncs();
+
+      expect(syncRewardSpy).toHaveBeenCalledWith(createReward);
+      expect(syncRewardSpy).toHaveBeenCalledWith(updateReward);
+      expect(syncRewardSpy).toHaveBeenCalledWith(failedReward);
+      expect(exchangeSpy).toHaveBeenCalledWith('reward_exchange', 'child_1', 111, exchangeReward);
+      expect(unclaimSpy).toHaveBeenCalledWith('reward_unclaim', 'child_2', 222, unclaimReward);
+      expect(deleteSpy).toHaveBeenCalledTimes(2);
+    });
+
+    it('_flushPendingRewardSyncs 在云端关闭时应直接返回', async () => {
+      rewardService.enableCloudStorage = false;
+
+      await rewardService._flushPendingRewardSyncs();
+
+      expect(mockRewardRepository.getAll).not.toHaveBeenCalled();
+      expect(mockRewardRepository.getDeleteTombstones).not.toHaveBeenCalled();
+    });
+
+    it('_flushPendingRewardSyncs 在接入离线队列后应委托给 offlineQueueService', async () => {
+      rewardService.offlineQueueService = {
+        initialize: jest.fn().mockResolvedValue(true),
+        drain: jest.fn().mockResolvedValue({ success: true })
+      };
+
+      await rewardService._flushPendingRewardSyncs();
+
+      expect(rewardService.offlineQueueService.initialize).toHaveBeenCalledTimes(1);
+      expect(rewardService.offlineQueueService.drain).toHaveBeenCalledWith({
+        domains: ['reward'],
+        reason: 'before_reward_read'
+      });
+      expect(mockRewardRepository.getAll).not.toHaveBeenCalled();
+      expect(mockRewardRepository.getDeleteTombstones).not.toHaveBeenCalled();
     });
   });
 

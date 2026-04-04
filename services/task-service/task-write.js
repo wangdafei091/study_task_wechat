@@ -523,12 +523,11 @@ async function deleteTask(service, taskId, userId = null, suppressMessage = fals
     emitTaskDeletedEvent(service, taskId, taskInfo, suppressMessage);
 
     if (service.enableCloudStorage) {
-      service.eventBus.emit(EVENTS.TASK_CLOUD_SYNC_FAILED, {
-        action: 'delete',
+      await service._emitTaskCloudSyncFailure('delete', null, new Error('任务删除已降级为本地待同步'), {
         taskId,
-        error: new Error('任务删除已降级为本地待同步'),
         pendingSyncMeta: deleteMeta,
-        taskSnapshot: taskInfo
+        taskSnapshot: taskInfo,
+        deleteMeta
       });
     }
 

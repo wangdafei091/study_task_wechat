@@ -41,6 +41,7 @@ class RewardService {
     this.starService = options.starService || null;
     this.userService = options.userService; // 新增：注入用户服务
     this.storageAdapter = options.storageAdapter; // 注入存储适配器
+    this.offlineQueueService = options.offlineQueueService || null;
     
     // 事件总线
     this.eventBus = options.eventBus || new EventBus();
@@ -199,6 +200,7 @@ class RewardService {
         ? (currentUser?.role || loginUser?.role || 'system')
         : (loginUser?.role || currentUser?.role || 'system'),
       familyId: loginUser?.familyId || currentUser?.familyId || null,
+      loginUserId: loginUser?.userId || loginUser?.id || null,
       targetUserId: targetUserId || null
     };
   }
@@ -218,10 +220,128 @@ class RewardService {
       operatorUserId: overrides.operatorUserId || operatorContext.actorUserId || null,
       operatorRole: overrides.operatorRole || operatorContext.actorRole || 'system',
       familyId: overrides.familyId || operatorContext.familyId || reward?.familyId || null,
+      loginUserId: overrides.loginUserId || operatorContext.loginUserId || null,
       exchangeUserId: overrides.exchangeUserId || reward?.exchangeUserId || operatorContext.targetUserId || null,
       notificationType: overrides.notificationType || `reward_${action}`,
       modifyTime: Number(overrides.modifyTime || reward?.modifyTime || Date.now())
     };
+  }
+
+  updateOfflineQueueService(offlineQueueService) {
+    this.offlineQueueService = offlineQueueService || null;
+    if (this.offlineQueueService) {
+      this.offlineQueueService.registerAdapter('reward', this._executeRewardQueueItem.bind(this));
+    }
+  }
+
+  _buildOfflineQueueContextFromPendingSyncMeta(pendingSyncMeta = {}) {
+    return {
+      familyId: pendingSyncMeta.familyId || null,
+      loginUserId: pendingSyncMeta.loginUserId || this.userService?.getLoginUserId?.() || null,
+      actorUserId: pendingSyncMeta.operatorUserId || null,
+      actorRole: pendingSyncMeta.operatorRole || 'system',
+      exchangeUserId: pendingSyncMeta.exchangeUserId || null
+    };
+  }
+
+  async _enqueueRewardMutation(action, reward, extra = {}) {
+    if (!this.offlineQueueService) {
+      return null;
+    }
+
+    const pendingSyncMeta = extra.pendingSyncMeta || reward?.pendingSyncMeta || this._buildRewardPendingSyncMeta(reward, action, extra);
+    const snapshot = extra.rewardSnapshot || (reward ? { ...reward } : null);
+
+    return this.offlineQueueService.enqueueMutation({
+      domain: 'reward',
+      entityId: reward?.id || extra.rewardId || null,
+      operation: action,
+      operationKey: pendingSyncMeta.operationKey,
+      payload: {
+        pendingSyncMeta,
+        rewardId: reward?.id || extra.rewardId || null,
+        deleteMeta: extra.deleteMeta || null
+      },
+      snapshot,
+      context: this._buildOfflineQueueContextFromPendingSyncMeta(pendingSyncMeta)
+    });
+  }
+
+  async _executeRewardQueueItem(item) {
+    const snapshot = item.snapshot ? new Reward(item.snapshot) : null;
+    const storedReward = item.entityId ? await this.rewardRepository.getById(item.entityId) : null;
+    const reward = storedReward || snapshot;
+
+    if (reward && item.payload?.pendingSyncMeta) {
+      reward.pendingSyncMeta = { ...item.payload.pendingSyncMeta };
+    }
+
+    switch (item.operation) {
+      case 'create':
+      case 'update':
+        return this._syncRewardToCloud(reward);
+      case 'delete':
+        return this._syncDeleteRewardToCloud(
+          item.entityId,
+          item.payload?.deleteMeta || item.payload?.pendingSyncMeta || item.snapshot?.pendingSyncMeta || null
+        );
+      case 'exchange':
+        return this._syncExchangeToCloud(
+          item.entityId,
+          item.payload?.pendingSyncMeta?.exchangeUserId || reward?.exchangeUserId || null,
+          item.payload?.pendingSyncMeta?.modifyTime || reward?.modifyTime || Date.now(),
+          reward
+        );
+      case 'unclaim':
+        return this._syncCancelExchangeToCloud(
+          item.entityId,
+          item.payload?.pendingSyncMeta?.exchangeUserId || reward?.exchangeUserId || null,
+          item.payload?.pendingSyncMeta?.modifyTime || reward?.modifyTime || Date.now(),
+          reward
+        );
+      default:
+        return this._syncRewardToCloud(reward);
+    }
+  }
+
+  async buildLegacyQueueCandidates() {
+    const [rewards, tombstones] = await Promise.all([
+      this.rewardRepository.getAll(),
+      this._getDeleteTombstones()
+    ]);
+
+    const rewardItems = (rewards || [])
+      .filter((reward) => reward?.pendingSyncMeta)
+      .map((reward) => {
+        const pendingSyncMeta = reward.pendingSyncMeta || {};
+        const operation = pendingSyncMeta.action || (reward.syncedToCloud ? 'update' : 'create');
+        return {
+          domain: 'reward',
+          entityId: reward.id,
+          operation,
+          operationKey: pendingSyncMeta.operationKey || `${reward.id}:${operation}`,
+          payload: { pendingSyncMeta },
+          snapshot: { ...reward },
+          context: this._buildOfflineQueueContextFromPendingSyncMeta(pendingSyncMeta),
+          legacyMigrationKey: `reward:pending:${reward.id}:${operation}`
+        };
+      });
+
+    const tombstoneItems = (tombstones || []).map((tombstone) => ({
+      domain: 'reward',
+      entityId: tombstone.entityId,
+      operation: 'delete',
+      operationKey: tombstone.operationKey || `${tombstone.entityId}:delete`,
+      payload: {
+        deleteMeta: tombstone,
+        pendingSyncMeta: tombstone
+      },
+      snapshot: null,
+      context: this._buildOfflineQueueContextFromPendingSyncMeta(tombstone),
+      legacyMigrationKey: `reward:tombstone:${tombstone.entityId}:delete`
+    }));
+
+    return [...rewardItems, ...tombstoneItems];
   }
 
   async _markRewardSynced(reward, overrides = {}) {
@@ -239,11 +359,17 @@ class RewardService {
 
   async _emitRewardCloudSyncFailure(action, reward, error, extra = {}) {
     const pendingSyncMeta = extra.pendingSyncMeta || reward?.pendingSyncMeta || this._buildRewardPendingSyncMeta(reward, action, extra);
-    if (reward) {
+    if (reward && action !== 'delete') {
       reward.pendingSyncMeta = pendingSyncMeta;
       reward.syncedToCloud = false;
       await this.rewardRepository.save(reward).catch(() => null);
     }
+
+    await this._enqueueRewardMutation(action, reward, {
+      ...extra,
+      pendingSyncMeta,
+      rewardSnapshot: extra.rewardSnapshot || (reward ? { ...reward } : null)
+    }).catch(() => null);
 
     this.eventBus.emit(EVENTS.REWARD_CLOUD_SYNC_FAILED, {
       action,
@@ -277,6 +403,17 @@ class RewardService {
   }
 
   async _flushPendingRewardSyncs() {
+    if (this.offlineQueueService) {
+      if (typeof this.offlineQueueService.initialize === 'function') {
+        await this.offlineQueueService.initialize();
+      }
+      await this.offlineQueueService.drain({
+        domains: ['reward'],
+        reason: 'before_reward_read'
+      });
+      return;
+    }
+
     if (!this.enableCloudStorage) {
       return;
     }
@@ -560,12 +697,11 @@ class RewardService {
             rewardId,
             error: syncError.message
           });
-          this.eventBus.emit(EVENTS.REWARD_CLOUD_SYNC_FAILED, {
-            action: 'delete',
+          this._emitRewardCloudSyncFailure('delete', null, syncError, {
             rewardId,
-            error: syncError,
             pendingSyncMeta: deleteMeta,
-            rewardSnapshot: reward
+            rewardSnapshot: reward,
+            deleteMeta
           });
         });
       }

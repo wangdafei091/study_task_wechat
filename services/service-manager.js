@@ -8,7 +8,8 @@ const {
   TaskService, 
   RewardService, 
   StarService, 
-  MessageService
+  MessageService,
+  OfflineQueueService
 } = require('./index');
 const ValidationService = require('./validation-service');
 const ConfigService = require('./config-service');
@@ -27,6 +28,20 @@ class ServiceManager {
     this.initializationPromise = null; // 初始化Promise，避免重复初始化
     
     logger.info('ServiceManager', '服务管理器初始化');
+  }
+
+  _resolveOfflineQueueContext() {
+    const loginUser = this.userService?.getLoginUser?.();
+    const currentUser = this.userService?.getCurrentUser?.();
+    const fallbackCurrentUserId = this.userService?.getCurrentUserId?.() || null;
+
+    return {
+      familyId: loginUser?.familyId || currentUser?.familyId || null,
+      loginUserId: loginUser?.userId || loginUser?.id || null,
+      actorUserId: currentUser?.userId || currentUser?.id || fallbackCurrentUserId || loginUser?.userId || loginUser?.id || null,
+      actorRole: currentUser?.role || loginUser?.role || 'system',
+      targetUserId: currentUser?.userId || currentUser?.id || fallbackCurrentUserId || null
+    };
   }
   
   /**
@@ -193,6 +208,19 @@ class ServiceManager {
       this.services.configService = new ConfigService({
         eventBus: this.eventBus
       });
+
+      this.services.offlineQueueService = new OfflineQueueService({
+        eventBus: this.eventBus,
+        storageAdapter: this.storageAdapter,
+        contextResolver: () => this._resolveOfflineQueueContext(),
+        migrators: [
+          () => this.services.taskService.buildLegacyQueueCandidates(),
+          () => this.services.rewardService.buildLegacyQueueCandidates()
+        ]
+      });
+
+      this.services.taskService.updateOfflineQueueService(this.services.offlineQueueService);
+      this.services.rewardService.updateOfflineQueueService(this.services.offlineQueueService);
       
       logger.info('ServiceManager', '所有服务初始化完成');
     } catch (error) {
@@ -238,6 +266,10 @@ class ServiceManager {
       'config': 'configService',
       'configService': 'configService',
       'ConfigService': 'configService',
+
+      'offlineQueue': 'offlineQueueService',
+      'offlineQueueService': 'offlineQueueService',
+      'OfflineQueueService': 'offlineQueueService',
       
       'eventBus': 'eventBus'
     };
@@ -285,6 +317,10 @@ class ServiceManager {
    */
   getMessageService() {
     return this.services.messageService;
+  }
+
+  getOfflineQueueService() {
+    return this.services.offlineQueueService;
   }
   
   /**

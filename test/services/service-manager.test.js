@@ -29,10 +29,20 @@ const loadServiceManager = (options = {}) => {
   const starServiceInstance = { name: 'starService' };
   const messageServiceInstance = { name: 'messageService' };
   const rewardServiceInstance = { name: 'rewardService' };
-  const taskServiceInstance = { name: 'taskService' };
+  const taskServiceInstance = {
+    name: 'taskService',
+    buildLegacyQueueCandidates: jest.fn(async () => []),
+    updateOfflineQueueService: jest.fn(),
+    updateUserService: jest.fn()
+  };
+  rewardServiceInstance.buildLegacyQueueCandidates = jest.fn(async () => []);
+  rewardServiceInstance.updateOfflineQueueService = jest.fn();
+  rewardServiceInstance.updateUserService = jest.fn();
+  rewardServiceInstance.updateStarService = jest.fn();
   const validationServiceInstance = { name: 'validationService' };
   const configServiceInstance = { name: 'configService' };
   const analyticsServiceInstance = { name: 'analyticsService' };
+  const offlineQueueServiceInstance = { name: 'offlineQueueService' };
 
   const StarService = jest.fn(() => starServiceInstance);
   const MessageService = jest.fn(() => messageServiceInstance);
@@ -45,13 +55,15 @@ const loadServiceManager = (options = {}) => {
   });
   const ValidationService = jest.fn(() => validationServiceInstance);
   const ConfigService = jest.fn(() => configServiceInstance);
+  const OfflineQueueService = jest.fn(() => offlineQueueServiceInstance);
   const AnalyticsService = jest.fn(() => analyticsServiceInstance);
 
   jest.doMock('../../services/index', () => ({
     TaskService,
     RewardService,
     StarService,
-    MessageService
+    MessageService,
+    OfflineQueueService
   }));
   jest.doMock('../../services/validation-service', () => ValidationService);
   jest.doMock('../../services/config-service', () => ConfigService);
@@ -78,6 +90,7 @@ const loadServiceManager = (options = {}) => {
       TaskService,
       ValidationService,
       ConfigService,
+      OfflineQueueService,
       AnalyticsService,
       instances: {
         starServiceInstance,
@@ -86,7 +99,8 @@ const loadServiceManager = (options = {}) => {
         taskServiceInstance,
         validationServiceInstance,
         configServiceInstance,
-        analyticsServiceInstance
+        analyticsServiceInstance,
+        offlineQueueServiceInstance
       }
     }
   };
@@ -140,6 +154,18 @@ describe('ServiceManager', () => {
     expect(mocks.ConfigService).toHaveBeenCalledWith({
       eventBus: mocks.eventBusInstance
     });
+    expect(mocks.OfflineQueueService).toHaveBeenCalledWith(expect.objectContaining({
+      eventBus: mocks.eventBusInstance,
+      storageAdapter: expect.any(Object),
+      contextResolver: expect.any(Function),
+      migrators: expect.any(Array)
+    }));
+    expect(mocks.instances.taskServiceInstance.updateOfflineQueueService).toHaveBeenCalledWith(
+      mocks.instances.offlineQueueServiceInstance
+    );
+    expect(mocks.instances.rewardServiceInstance.updateOfflineQueueService).toHaveBeenCalledWith(
+      mocks.instances.offlineQueueServiceInstance
+    );
   });
 
   it('重复初始化应直接返回 true 且不重复构建', async () => {
@@ -166,6 +192,7 @@ describe('ServiceManager', () => {
     expect(serviceManager.getService('TaskService')).toBe(mocks.instances.taskServiceInstance);
     expect(serviceManager.getService('message')).toBe(mocks.instances.messageServiceInstance);
     expect(serviceManager.getService('config')).toBe(mocks.instances.configServiceInstance);
+    expect(serviceManager.getService('offlineQueue')).toBe(mocks.instances.offlineQueueServiceInstance);
     expect(serviceManager.getService('eventBus')).toBe(mocks.eventBusInstance);
     expect(serviceManager.getService('not-exist')).toBeNull();
   });

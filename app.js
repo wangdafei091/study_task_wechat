@@ -9,6 +9,7 @@ const bootstrapAuth = require('./utils/app/bootstrap-auth');
 const bootstrapServices = require('./utils/app/bootstrap-services');
 const postLoginBootstrap = require('./utils/app/post-login-bootstrap');
 const runtimeObservers = require('./utils/app/runtime-observers');
+const { resolveRuntimeApiConfig } = require('./utils/runtime-config');
 
 App({
   onLaunch: async function () {
@@ -17,13 +18,13 @@ App({
     this.globalData.userServiceReady = false;
     this.globalData.servicesInitialized = false;
     this.globalData.eventCallbacks = this.globalData.eventCallbacks || {};
-    // 读取当前环境配置，但不再自动写入默认测试环境
-    if (typeof wx !== 'undefined') {
-      const enableApi = wx.getStorageSync('ENABLE_API');
-      const baseUrl = wx.getStorageSync('API_BASE_URL');
-
-      logger.info('App', 'onLaunch环境配置检查', { enableApi, baseUrl });
-    }
+    const runtimeApiConfig = resolveRuntimeApiConfig();
+    logger.info('App', 'onLaunch环境配置检查', {
+      enableApi: runtimeApiConfig.enableApiRaw,
+      baseUrl: runtimeApiConfig.baseUrlRaw,
+      enabled: runtimeApiConfig.enabled,
+      source: runtimeApiConfig.source
+    });
 
     // 初始化日志系统
     this.initLogSystem();
@@ -62,9 +63,13 @@ App({
   onShow: function(options) {
     logger.info('App', 'onShow触发，检查API配置');
 
-    const baseUrl = wx.getStorageSync('API_BASE_URL');
-    const enableApi = wx.getStorageSync('ENABLE_API');
-    logger.info('App', 'onShow环境配置检查', { enableApi, baseUrl });
+    const runtimeApiConfig = resolveRuntimeApiConfig();
+    logger.info('App', 'onShow环境配置检查', {
+      enableApi: runtimeApiConfig.enableApiRaw,
+      baseUrl: runtimeApiConfig.baseUrlRaw,
+      enabled: runtimeApiConfig.enabled,
+      source: runtimeApiConfig.source
+    });
   },
 
   /**
