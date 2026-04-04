@@ -197,13 +197,19 @@ class TaskController {
         );
       }
 
-      const task = await taskService.createTask(
+      const mutationResult = await taskService.createTaskWithRepeatMaterialization(
         effectiveUserId,
         taskData,
         await this._buildOperatorContext(req, effectiveUserId, taskData.modifyTime)
       );
 
-      res.json(success(task.toJSON(), '任务创建成功'));
+      res.json(success(
+        taskService.buildTaskMutationResponse({
+          ...mutationResult,
+          operation: 'create'
+        }),
+        '任务创建成功'
+      ));
     } catch (err) {
       if (err.code === 'TASK_ID_USER_MISMATCH') {
         return res.status(409).json(
@@ -311,7 +317,14 @@ class TaskController {
       }
 
       logger.info('任务更新成功', { taskId, userId });
-      res.json(success({ task: updated.toJSON() }, '更新成功'));
+      res.json(success(
+        taskService.buildTaskMutationResponse({
+          primaryTask: updated,
+          affectedTasks: [updated],
+          operation: 'update'
+        }),
+        '更新成功'
+      ));
     } catch (err) {
       if (err.code === 'TASK_REMINDER_SCHEMA_MISSING') {
         return res.status(503).json(error(err.message, 'TASK_REMINDER_SCHEMA_MISSING'));
@@ -353,7 +366,13 @@ class TaskController {
       }
 
       logger.info('任务软删除成功', { taskId, userId });
-      res.json(success({ taskId }, '删除成功'));
+      res.json(success(
+        taskService.buildTaskMutationResponse({
+          operation: 'delete',
+          taskId
+        }),
+        '删除成功'
+      ));
     } catch (err) {
       logger.error('删除任务失败', err);
       res.status(500).json(error('删除任务失败', 'TASK_DELETE_FAILED'));
@@ -382,7 +401,14 @@ class TaskController {
         return res.status(404).json(error('任务不存在或已删除', 'TASK_NOT_FOUND'));
       }
 
-      return res.json(success({ task: updated.toJSON() }, '设置成功'));
+      return res.json(success(
+        taskService.buildTaskMutationResponse({
+          primaryTask: updated,
+          affectedTasks: [updated],
+          operation: 'required'
+        }),
+        '设置成功'
+      ));
     } catch (err) {
       logger.error('标记必做任务失败', err);
       return res.status(500).json(error('标记必做任务失败', 'TASK_REQUIRED_UPDATE_FAILED'));
@@ -411,7 +437,14 @@ class TaskController {
         return res.status(404).json(error('任务不存在或已删除', 'TASK_NOT_FOUND'));
       }
 
-      return res.json(success({ task: updated.toJSON() }, '设置成功'));
+      return res.json(success(
+        taskService.buildTaskMutationResponse({
+          primaryTask: updated,
+          affectedTasks: [updated],
+          operation: 'unrequired'
+        }),
+        '设置成功'
+      ));
     } catch (err) {
       logger.error('取消必做任务失败', err);
       return res.status(500).json(error('取消必做任务失败', 'TASK_REQUIRED_UPDATE_FAILED'));
@@ -536,7 +569,14 @@ class TaskController {
       }
 
       logger.info('任务状态更新成功', { taskId, status, userId });
-      res.json(success({ task: updated.toJSON() }, '状态更新成功'));
+      res.json(success(
+        taskService.buildTaskMutationResponse({
+          primaryTask: updated,
+          affectedTasks: [updated],
+          operation: status === 1 ? 'complete' : 'reset'
+        }),
+        '状态更新成功'
+      ));
     } catch (err) {
       if (err.code === 'INSUFFICIENT_STARS') {
         return res.status(409).json(error('撤销逾期补做失败：当前永久星星不足，无法回滚退星', 'INSUFFICIENT_STARS'));

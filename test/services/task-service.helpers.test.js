@@ -157,9 +157,14 @@ describe('TaskService helpers and delegators', () => {
     });
 
     service.enableCloudStorage = true;
+    service._applyAuthoritativeTaskMutation = jest.fn(async () => ({
+      task: null,
+      tasks: [],
+      mutation: null
+    }));
     service._syncTaskToCloud = jest.fn(async (task) => {
       if (task.id === 'create_1') {
-        return true;
+        return { task: { taskId: 'create_1' }, tasks: [{ taskId: 'create_1' }], operation: 'create' };
       }
       throw new Error('create failed');
     });
@@ -167,9 +172,13 @@ describe('TaskService helpers and delegators', () => {
       if (task.id === 'default_1') {
         throw new Error('default failed');
       }
-      return true;
+      return { task: { taskId: task.id }, tasks: [{ taskId: task.id }], operation: 'update' };
     });
-    service._syncStatusToCloud = jest.fn(async () => true);
+    service._syncStatusToCloud = jest.fn(async (task) => ({
+      task: { taskId: task.id },
+      tasks: [{ taskId: task.id }],
+      operation: task.pendingSyncMeta?.action === 'reset' ? 'reset' : 'complete'
+    }));
     service._getDeleteTombstones = jest.fn(async () => [
       { entityId: 'delete_ok' },
       { entityId: 'delete_fail' }
@@ -192,6 +201,22 @@ describe('TaskService helpers and delegators', () => {
     expect(service._syncStatusToCloud).toHaveBeenCalledWith(expect.objectContaining({ id: 'reset_1' }));
     expect(service._syncTaskToCloud).not.toHaveBeenCalledWith(expect.objectContaining({ id: 'complete_pending_1' }));
     expect(service._syncDeleteToCloud).toHaveBeenCalledTimes(2);
+    expect(service._applyAuthoritativeTaskMutation).toHaveBeenCalledWith(
+      expect.objectContaining({ operation: 'create' }),
+      expect.objectContaining({ fallbackOperation: 'create' })
+    );
+    expect(service._applyAuthoritativeTaskMutation).toHaveBeenCalledWith(
+      expect.objectContaining({ operation: 'update' }),
+      expect.objectContaining({ fallbackOperation: 'update' })
+    );
+    expect(service._applyAuthoritativeTaskMutation).toHaveBeenCalledWith(
+      expect.objectContaining({ operation: 'complete' }),
+      expect.objectContaining({ fallbackOperation: 'complete' })
+    );
+    expect(service._applyAuthoritativeTaskMutation).toHaveBeenCalledWith(
+      expect.objectContaining({ operation: 'reset' }),
+      expect.objectContaining({ fallbackOperation: 'reset' })
+    );
   });
 
   it('_flushPendingTaskSyncs 在云端关闭时应直接返回', async () => {

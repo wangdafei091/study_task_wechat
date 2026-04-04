@@ -3,9 +3,11 @@
  * 处理测试环境配置和数据库连接
  */
 
+const path = require('path');
+
 // 🔥 关键：必须在任何其他模块之前加载环境变量
 try {
-  require('dotenv').config({ path: '.env.test' });
+  require('dotenv').config({ path: path.join(__dirname, '..', '.env.test') });
 } catch (error) {
   console.warn('⚠️  未安装 dotenv，跳过 .env.test 加载，改用默认测试配置');
 }

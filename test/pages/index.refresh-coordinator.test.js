@@ -149,6 +149,34 @@ describe('pages/index/modules/index-refresh-coordinator', () => {
     });
   });
 
+  it('任务显式操作设置了跳过标记时，应只抑制一次 task:changed 刷新', async () => {
+    const page = {
+      _skipNextTaskChangedRefresh: true,
+      data: {
+        currentViewDate: '2026-03-26'
+      },
+      loadTaskDataOnly: jest.fn().mockResolvedValue(),
+      checkUpcomingTasks: jest.fn().mockResolvedValue(),
+      setData: jest.fn()
+    };
+
+    await coordinator.handleTaskDataChanged(page, {
+      changeType: 'update',
+      timestamp: 100
+    });
+    expect(page._skipNextTaskChangedRefresh).toBe(false);
+    expect(page.loadTaskDataOnly).not.toHaveBeenCalled();
+
+    await coordinator.handleTaskDataChanged(page, {
+      changeType: 'update',
+      timestamp: 101
+    });
+    expect(page.loadTaskDataOnly).toHaveBeenCalledWith('2026-03-26');
+    expect(page.setData).toHaveBeenCalledWith({
+      __dataUpdateTimestamp: 101
+    });
+  });
+
   it('过期检查和页面批量刷新应调用对应服务', async () => {
     const taskService = {
       checkTasksStatus: jest.fn().mockResolvedValue({ penaltyResults: [{}] })

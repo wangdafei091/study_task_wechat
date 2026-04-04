@@ -179,7 +179,7 @@ Page({
    */
   onLoad: async function (options) {
     logger.info('rewards', '页面加载');
-    await this.loadRewardsData();
+    this._skipNextOnShowRefresh = false;
     
     // 清除已跳转标记
     const app = getApp();
@@ -208,6 +208,12 @@ Page({
   onShow: async function() {
     // 记录页面显示
     logger.info('rewards', '页面显示');
+
+    if (this._skipNextOnShowRefresh) {
+      this._skipNextOnShowRefresh = false;
+      logger.info('rewards', '跳过本轮 onShow 刷新，避免兑换成功后的重复回刷');
+      return;
+    }
 
     try {
       const starService = serviceManager.getService('starService');
@@ -436,7 +442,7 @@ Page({
   /**
    * 加载奖励数据
    */
-  loadRewardsData: async function () {
+  loadRewardsData: async function (forceRefresh = false) {
     logger.info('rewards', '开始加载奖励数据');
     
     try {
@@ -453,11 +459,11 @@ Page({
       }
       
       // 强制清除所有相关缓存，确保获取最新数据
-      logger.info('rewards', '强制清除缓存以获取最新数据');
-      if (starService.clearCache) {
+      logger.info('rewards', `准备读取奖励页数据，forceRefresh=${forceRefresh}`);
+      if (forceRefresh && starService.clearCache) {
         starService.clearCache();
       }
-      if (rewardService.clearCache) {
+      if (forceRefresh && rewardService.clearCache) {
         rewardService.clearCache();
       }
       
@@ -909,7 +915,8 @@ Page({
     });
     
     // 重新加载奖励数据以更新UI
-    await this.loadRewardsData();
+    await this.loadRewardsData(true);
+    this._skipNextOnShowRefresh = true;
     
     logger.info('rewards', '奖励兑换后的页面刷新完成，业务事件已由服务层统一发布');
   },

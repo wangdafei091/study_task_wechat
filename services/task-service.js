@@ -8,7 +8,7 @@ const logger = require('../utils/logger');
 const { TaskRepository } = require('../repositories/index');
 const { StarService } = require('./index');
 const EventBus = require('../utils/core/event-bus');
-const { TaskStatus } = require('../models/task');
+const { Task, TaskStatus } = require('../models/task');
 const { EVENTS } = require('../utils/constants');
 const API_CONFIG = require('../utils/api-config'); // 新增：API配置
 const taskQuery = require('./task-service/task-query');
@@ -129,6 +129,159 @@ class TaskService {
     return this.taskRepository.save(task);
   }
 
+  _normalizeTaskMutationResponse(rawMutation, fallbackOperation = 'update') {
+    if (!rawMutation || typeof rawMutation !== 'object') {
+      return null;
+    }
+
+    const looksLikeMutation =
+      rawMutation.primaryTask !== undefined ||
+      rawMutation.affectedTasks !== undefined ||
+      rawMutation.operation !== undefined;
+
+    const looksLikeCompatEnvelope =
+      rawMutation.task !== undefined ||
+      rawMutation.tasks !== undefined ||
+      rawMutation.taskId !== undefined;
+
+    const looksLikeTask =
+      rawMutation.id !== undefined ||
+      rawMutation.taskId !== undefined ||
+      (rawMutation.title !== undefined && rawMutation.date !== undefined && rawMutation.type !== undefined);
+
+    if (!looksLikeMutation && !looksLikeCompatEnvelope && !looksLikeTask) {
+      return null;
+    }
+
+    const primaryTask = looksLikeMutation
+      ? (rawMutation.primaryTask ?? rawMutation.task ?? null)
+      : (looksLikeCompatEnvelope ? (rawMutation.task ?? null) : rawMutation);
+
+    const affectedTasks = Array.isArray(rawMutation.affectedTasks)
+      ? rawMutation.affectedTasks
+      : Array.isArray(rawMutation.tasks)
+        ? rawMutation.tasks
+        : (primaryTask ? [primaryTask] : []);
+
+    return {
+      primaryTask,
+      affectedTasks,
+      operation: rawMutation.operation || fallbackOperation,
+      idempotent: rawMutation.idempotent === true,
+      task: rawMutation.task !== undefined ? rawMutation.task : primaryTask,
+      tasks: Array.isArray(rawMutation.tasks) ? rawMutation.tasks : affectedTasks,
+      taskId: rawMutation.taskId || primaryTask?.taskId || primaryTask?.id || null
+    };
+  }
+
+  _toAuthoritativeTask(rawTask, overrides = {}) {
+    if (!rawTask) {
+      return null;
+    }
+
+    const taskData = rawTask instanceof Task
+      ? { ...rawTask, ...overrides }
+      : {
+          ...rawTask,
+          id: rawTask.id || rawTask.taskId,
+          ...overrides
+        };
+
+    return new Task(taskData);
+  }
+
+  async _applyAuthoritativeTaskMutation(rawMutation, options = {}) {
+    const mutation = this._normalizeTaskMutationResponse(rawMutation, options.fallbackOperation);
+    if (!mutation) {
+      return {
+        mutation: null,
+        task: null,
+        tasks: [],
+        taskId: null
+      };
+    }
+
+    const uniqueTasks = [];
+    const seenTaskIds = new Set();
+
+    (mutation.tasks || mutation.affectedTasks || []).forEach((rawTask) => {
+      const task = this._toAuthoritativeTask(rawTask, {
+        syncedToCloud: true,
+        pendingSyncMeta: null
+      });
+
+      if (!task || !task.id || seenTaskIds.has(task.id)) {
+        return;
+      }
+
+      seenTaskIds.add(task.id);
+      uniqueTasks.push(task);
+    });
+
+    const savedTasks = uniqueTasks.length > 0
+      ? await this.taskRepository.saveAll(uniqueTasks)
+      : [];
+
+    const primaryTaskId = mutation.primaryTask?.taskId || mutation.primaryTask?.id || mutation.taskId || null;
+    const primaryTask = primaryTaskId
+      ? (savedTasks.find(task => task.id === primaryTaskId) || this._toAuthoritativeTask(mutation.primaryTask, {
+          syncedToCloud: true,
+          pendingSyncMeta: null
+        }))
+      : null;
+
+    return {
+      mutation,
+      task: primaryTask,
+      tasks: savedTasks,
+      taskId: mutation.taskId || primaryTask?.id || null
+    };
+  }
+
+  _buildTaskServiceMutationResult(rawMutation, options = {}) {
+    const mutation = rawMutation
+      ? this._normalizeTaskMutationResponse(rawMutation, options.fallbackOperation)
+      : null;
+
+    const result = {
+      success: options.success !== false
+    };
+
+    const task = options.task !== undefined
+      ? options.task
+      : (options.primaryTask !== undefined
+        ? options.primaryTask
+        : null);
+    const tasks = options.tasks !== undefined ? options.tasks : undefined;
+    const taskId = options.taskId !== undefined
+      ? options.taskId
+      : (mutation?.taskId || task?.id || null);
+
+    if (task !== undefined) {
+      result.task = task;
+    }
+    if (tasks !== undefined) {
+      result.tasks = tasks;
+    }
+    if (options.createdTasks !== undefined) {
+      result.createdTasks = options.createdTasks;
+    }
+    if (taskId) {
+      result.taskId = taskId;
+    }
+    if (options.message) {
+      result.message = options.message;
+    }
+    if (options.fallback) {
+      result.fallback = true;
+    }
+    if (mutation) {
+      result.mutation = mutation;
+    }
+
+    return result;
+  }
+
   async _emitTaskCloudSyncFailure(action, task, error, extra = {}) {
     const pendingSyncMeta = extra.pendingSyncMeta || task?.pendingSyncMeta || this._buildTaskPendingSyncMeta(task, action, extra);
     if (task) {
@@ -180,28 +333,35 @@ class TaskService {
       }
 
       try {
+        let mutation = null;
         switch (task.pendingSyncMeta.action) {
           case 'create':
-            await this._syncTaskToCloud(task);
+            mutation = await this._syncTaskToCloud(task);
             break;
           case 'update':
-            await this._syncUpdateToCloud(task);
+            mutation = await this._syncUpdateToCloud(task);
             break;
           case 'complete':
           case 'reset':
-            await this._syncStatusToCloud(task);
+            mutation = await this._syncStatusToCloud(task);
             break;
           case 'required':
           case 'unrequired':
-            await this._syncRequiredStateToCloud(task);
+            mutation = await this._syncRequiredStateToCloud(task);
             break;
           default:
             if (!task.syncedToCloud) {
-              await this._syncTaskToCloud(task);
+              mutation = await this._syncTaskToCloud(task);
             } else {
-              await this._syncUpdateToCloud(task);
+              mutation = await this._syncUpdateToCloud(task);
             }
             break;
+        }
+
+        if (mutation) {
+          await this._applyAuthoritativeTaskMutation(mutation, {
+            fallbackOperation: task.pendingSyncMeta.action || (task.syncedToCloud ? 'update' : 'create')
+          });
         }
       } catch (error) {
         logger.warn('TaskService', '补云任务同步失败，保留待同步状态', {
@@ -598,6 +758,10 @@ class TaskService {
    */
   async _fetchSingleTaskFromCloud(taskId) {
     return taskSync.fetchSingleTaskFromCloud(this, taskId);
+  }
+
+  async _createTaskViaCloud(task) {
+    return taskSync.createTaskViaCloud(this, task);
   }
 
   async _syncTaskToCloud(task) {

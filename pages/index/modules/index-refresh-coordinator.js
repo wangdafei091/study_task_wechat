@@ -23,6 +23,12 @@ function handleRewardClaimed(page, eventData) {
 }
 
 async function handleTaskDataChanged(page, eventData = {}) {
+  if (page._skipNextTaskChangedRefresh) {
+    logger.info('Index', '跳过当前轮 task:changed 刷新，避免与页面显式刷新重复');
+    page._skipNextTaskChangedRefresh = false;
+    return;
+  }
+
   const allTasks = eventData.tasks || [];
   const changeType = eventData.changeType || 'unknown';
   const timestamp = eventData.timestamp || Date.now();

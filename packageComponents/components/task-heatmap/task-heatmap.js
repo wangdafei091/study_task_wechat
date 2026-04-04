@@ -123,6 +123,10 @@ Component({
         // 不需要再进行数据比较，直接生成日历
         this.generateCalendar();
       }
+    },
+    targetUserId: {
+      type: String,
+      value: ''
     }
   },
   
@@ -2000,7 +2004,14 @@ Component({
       
       try {
         // 获取所有任务
-        const allTasks = await taskService.getAllTasks();
+        const queryUserId = this._resolveTaskQueryUserId();
+        const allTasks = await taskService.getAllTasks(queryUserId, {
+          requireFreshStars: !!queryUserId
+        });
+        logger.info('task-heatmap', '删除任务系列时加载任务全集', {
+          queryUserId,
+          taskCount: allTasks.length
+        });
           
         // 获取父任务ID
         let parentId = task.parentTaskId;
@@ -2225,6 +2236,19 @@ Component({
       // 改为依赖正常的数据流：父组件获取数据 -> properties.tasks.observer -> calculateHeatMap
       logger.info('task-heatmap', '已通知父组件刷新数据，等待数据流更新热力图');
     },
+
+    _resolveTaskQueryUserId() {
+      if (this.properties.targetUserId) {
+        return this.properties.targetUserId;
+      }
+
+      const userService = serviceManager.getUserService ? serviceManager.getUserService() : null;
+      if (userService && typeof userService.getCurrentUserId === 'function') {
+        return userService.getCurrentUserId();
+      }
+
+      return null;
+    },
     
     // 格式化重复任务的天数显示
     formatRepeatDays(days) {
@@ -2406,7 +2430,14 @@ Component({
       
       try {
         // 获取所有任务
-        const allTasks = await taskService.getAllTasks();
+        const queryUserId = this._resolveTaskQueryUserId();
+        const allTasks = await taskService.getAllTasks(queryUserId, {
+          requireFreshStars: !!queryUserId
+        });
+        logger.info('task-heatmap', '更新任务系列时加载任务全集', {
+          queryUserId,
+          taskCount: allTasks.length
+        });
           
         // 获取父任务ID
         let parentId = task.parentTaskId;

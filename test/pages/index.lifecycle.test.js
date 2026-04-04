@@ -110,26 +110,22 @@ describe('pages/index/modules/index-lifecycle', () => {
     });
   });
 
-  it('onShow 应刷新奖励并在正常路径下检查过期数据', async () => {
-    const rewardService = {
-      refreshRewardsFromCloud: jest.fn().mockResolvedValue()
-    };
-    serviceManager.getService.mockReturnValue(rewardService);
-
+  it('onShow 应通过批量入口加载页面数据并在正常路径下检查过期数据', async () => {
     const page = {
       waitForServicesReady: jest.fn().mockResolvedValue(),
       initializeMultiUserSystemDelayed: jest.fn().mockResolvedValue(),
       checkExpiredTasksAndStars: jest.fn().mockResolvedValue(),
-      loadAllPageData: jest.fn()
+      loadAllPageData: jest.fn().mockResolvedValue()
     };
 
     await lifecycle.onShow(page);
 
     expect(page.waitForServicesReady).toHaveBeenCalled();
     expect(page.initializeMultiUserSystemDelayed).toHaveBeenCalled();
-    expect(rewardService.refreshRewardsFromCloud).toHaveBeenCalled();
     expect(page.checkExpiredTasksAndStars).toHaveBeenCalled();
-    expect(page.loadAllPageData).toHaveBeenCalled();
+    expect(page.loadAllPageData).toHaveBeenCalledWith({
+      skipExpiryAuthoritySyncBeforeFormalReminders: true
+    });
   });
 
   it('waitForServicesReady 初始化超时时应提示用户', async () => {
@@ -149,24 +145,22 @@ describe('pages/index/modules/index-lifecycle', () => {
     expect(global.wx.showToast).not.toHaveBeenCalled();
   });
 
-  it('onShow 在从奖励完成页返回或同步失败时应走降级路径', async () => {
-    const rewardService = {
-      refreshRewardsFromCloud: jest.fn().mockRejectedValue(new Error('sync fail'))
-    };
-    serviceManager.getService.mockReturnValue(rewardService);
+  it('onShow 在从奖励完成页返回时应跳过过期检查并走统一批量入口', async () => {
     app.globalData.fromRewardCompletion = true;
 
     const page = {
       waitForServicesReady: jest.fn().mockResolvedValue(),
       initializeMultiUserSystemDelayed: jest.fn().mockResolvedValue(),
       checkExpiredTasksAndStars: jest.fn().mockResolvedValue(),
-      loadAllPageData: jest.fn()
+      loadAllPageData: jest.fn().mockResolvedValue()
     };
 
     await lifecycle.onShow(page);
 
     expect(page.checkExpiredTasksAndStars).not.toHaveBeenCalled();
-    expect(page.loadAllPageData).toHaveBeenCalled();
+    expect(page.loadAllPageData).toHaveBeenCalledWith({
+      skipExpiryAuthoritySyncBeforeFormalReminders: true
+    });
     expect(app.globalData.fromRewardCompletion).toBe(false);
   });
 

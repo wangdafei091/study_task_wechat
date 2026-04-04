@@ -80,9 +80,6 @@ function handleSuccess(page, resultContext) {
 
   return page.refreshTaskDataForCurrentView().then(async () => {
     const followUpLoads = [];
-    if (typeof page.loadMessageData === 'function') {
-      followUpLoads.push(page.loadMessageData());
-    }
 
     if (newStatus === 1) {
       if (isRequired) {
@@ -239,6 +236,7 @@ async function completeTask(page, e) {
   try {
     const { currentUser } = page.data;
     const currentUserId = currentUser && currentUser.id ? currentUser.id : null;
+    page._skipNextTaskChangedRefresh = true;
     const result = await executeStatusChange(taskId, newStatus, currentUserId);
 
     clearProcessing(page);
@@ -261,6 +259,7 @@ async function completeTask(page, e) {
     });
   } catch (error) {
     logger.error('Index', '完成任务失败', error);
+    page._skipNextTaskChangedRefresh = false;
     wx.showToast({
       title: '操作失败，请重试',
       icon: 'none',
@@ -289,6 +288,7 @@ async function taskItemStatusToggle(page, e) {
     logger.info('Index', `切换任务状态: 任务ID=${id}, 新状态=${newStatus}`);
 
     const taskService = serviceManager.getTaskService();
+    page._skipNextTaskChangedRefresh = true;
     await taskService.updateTaskStatus(id, newStatus);
 
     clearProcessing(page);
@@ -297,6 +297,7 @@ async function taskItemStatusToggle(page, e) {
     page.refreshTaskDataForCurrentView();
   } catch (error) {
     logger.error('Index', '更新任务状态失败', error);
+    page._skipNextTaskChangedRefresh = false;
     clearProcessing(page);
     wx.showToast({
       title: '操作失败',

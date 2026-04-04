@@ -91,7 +91,7 @@ describe('pages/index/modules/index-task-actions', () => {
     expect(page.data.processingTaskId).toBe(null);
     expect(taskService.completeTask).toHaveBeenCalledWith('task-1', 'child-1');
     expect(page.refreshTaskDataForCurrentView).toHaveBeenCalled();
-    expect(page.loadMessageData).toHaveBeenCalled();
+    expect(page.loadMessageData).not.toHaveBeenCalled();
     expect(page.checkRewardUnlock).toHaveBeenCalled();
     expect(global.wx.showModal).not.toHaveBeenCalledWith(expect.objectContaining({
       title: '需要设置奖励'
@@ -140,7 +140,7 @@ describe('pages/index/modules/index-task-actions', () => {
 
     expect(taskService.completeTask).toHaveBeenCalledWith('task-1', 'child-1');
     expect(page.refreshTaskDataForCurrentView).toHaveBeenCalled();
-    expect(page.loadMessageData).toHaveBeenCalled();
+    expect(page.loadMessageData).not.toHaveBeenCalled();
     expect(page.checkRewardUnlock).toHaveBeenCalled();
     expect(page._progressBar.playAnimation).toHaveBeenCalledWith('complete');
   });
@@ -278,12 +278,12 @@ describe('pages/index/modules/index-task-actions', () => {
 
     const requiredPage = createPage({ isRequired: true });
     await taskActions.completeTask(requiredPage, { detail: { taskId: 'task-1' } });
-    expect(requiredPage.loadMessageData).toHaveBeenCalled();
+    expect(requiredPage.loadMessageData).not.toHaveBeenCalled();
     expect(requiredPage.loadStarsAndRewards).toHaveBeenCalled();
 
     const awardedPage = createPage({ starAwarded: true });
     await taskActions.completeTask(awardedPage, { detail: { taskId: 'task-1' } });
-    expect(awardedPage.loadMessageData).toHaveBeenCalled();
+    expect(awardedPage.loadMessageData).not.toHaveBeenCalled();
     expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({
       title: '已获得过星星'
     }));
