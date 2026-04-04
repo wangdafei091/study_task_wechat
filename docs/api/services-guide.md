@@ -552,6 +552,7 @@ const configService = serviceManager.get('configService');
 - 云端消息全量刷新与本地 stale cleanup
 - 单条已读、全部已读、删除的云端同步
 - provisional 消息保留与 legacy 消息归档
+- 云端模式主流展示过滤（仅 `formal + provisional`）
 - 兼容旧接口 `getAllMessages()` / `getUnreadCount()`
 
 ### 作用域规则（M10）
@@ -593,7 +594,10 @@ const configService = serviceManager.get('configService');
   - `userId` - `scope='user'` 时的目标用户 ID；家长家庭流可为空
   - `options.scope` - `'user' | 'family'`
 - **返回**: `Promise<Message[]>`
-- **说明**: 云端模式下会先读取 `/api/messages`，再执行 `archiveLegacyMessages`、`replaceSyncedMessagesByScope` 与 `cleanupStaleMessages`
+- **说明**:
+  - 云端模式下会先做正式提醒保鲜，再读取 `/api/messages`
+  - 随后执行 `archiveLegacyMessages`、`replaceSyncedMessagesByScope` 与 `cleanupStaleMessages`
+  - 返回值是当前 scope 下允许进入展示层的消息数组，而不是“未经筛选的仓储原始消息”
 
 ##### `getMessagesByScope(options = {})`
 按 scope 获取消息，必要时先刷新云端
@@ -602,17 +606,23 @@ const configService = serviceManager.get('configService');
   - `options.userId` - 个人流目标用户 ID
   - `options.requireFresh` - 为 `true` 时先调用 `refreshMessagesFromCloud`
 - **返回**: `Promise<Message[]>`
+- **说明**:
+  - 云端模式下主流展示只保留 `formal + provisional`
+  - `scope='all'` 仅用于无登录上下文、初始化兼容或测试场景，不作为页面正式读取口径
 
 ##### `getAllMessages(options = {})`
 兼容接口，内部委托到 `getMessagesByScope`
 - **参数**: `options` - 同 `getMessagesByScope`
 - **返回**: `Promise<Message[]>`
+- **说明**: 默认继续代表“当前有效 scope”的消息快照
 
 ##### `getUnreadCount(options = {})`
 获取未读消息数量
 - **参数**: `options` - 同 `getMessagesByScope`
 - **返回**: `Promise<number>`
-- **说明**: 有登录上下文时按当前主消息流统计；无上下文时回退本地仓储 `getUnreadCount`
+- **说明**:
+  - 有登录上下文时按当前主消息流统计
+  - 无上下文且无显式 `scope` 时，回退本地仓储 `getUnreadCount`
 
 ---
 

@@ -469,6 +469,109 @@ describe('MessageService', () => {
     });
   });
 
+  describe('listener registration governance', () => {
+    it('应注册本地模式监听、云端降级监听和领域观察者', () => {
+      expect(mockEventBus.getSubscriberCount(EVENTS.TASK_CREATED)).toBe(1);
+      expect(mockEventBus.getSubscriberCount(EVENTS.REWARD_CREATED)).toBe(1);
+      expect(mockEventBus.getSubscriberCount(EVENTS.TASK_CLOUD_SYNC_FAILED)).toBe(1);
+      expect(mockEventBus.getSubscriberCount(EVENTS.REWARD_CLOUD_SYNC_FAILED)).toBe(1);
+      expect(mockEventBus.getSubscriberCount(EVENTS.DOMAIN_MESSAGE_CREATED)).toBe(1);
+      expect(mockEventBus.getSubscriberCount(EVENTS.DOMAIN_MESSAGE_ALL_READ)).toBe(1);
+    });
+  });
+
+  describe('scope compatibility and cloud display filtering', () => {
+    afterEach(() => {
+      messageService.enableCloudStorage = false;
+    });
+
+    it('云端模式下展示结果应只保留 formal 和 provisional 消息', async () => {
+      messageService.enableCloudStorage = true;
+      mockUserService.getLoginUser.mockReturnValue({
+        userId: 'child_1',
+        role: 'child',
+        familyId: 'family_1'
+      });
+      mockUserService.getCurrentUser.mockReturnValue({
+        id: 'child_1',
+        userId: 'child_1',
+        role: 'child',
+        familyId: 'family_1'
+      });
+
+      mockMessageRepository.getMessagesByScope.mockResolvedValue([
+        new Message({
+          id: 'msg_formal',
+          userId: 'child_1',
+          familyId: 'family_1',
+          visibilityScope: 'user',
+          type: 'task',
+          notificationType: 'task_create',
+          title: '正式消息',
+          summary: '正式消息',
+          syncedToCloud: true
+        }),
+        new Message({
+          id: 'msg_provisional',
+          userId: 'child_1',
+          familyId: 'family_1',
+          visibilityScope: 'user',
+          type: 'task',
+          notificationType: 'task_create',
+          title: '待同步消息',
+          summary: '待同步消息',
+          isProvisional: true,
+          syncedToCloud: false
+        }),
+        new Message({
+          id: 'msg_local_compat',
+          userId: 'child_1',
+          familyId: 'family_1',
+          visibilityScope: 'user',
+          type: 'task',
+          notificationType: 'task_create',
+          title: '旧本地消息',
+          summary: '旧本地消息'
+        }),
+        new Message({
+          id: 'msg_legacy',
+          userId: 'child_1',
+          familyId: 'family_1',
+          visibilityScope: 'user',
+          type: 'task',
+          notificationType: 'task_create',
+          title: 'legacy 消息',
+          summary: 'legacy 消息',
+          isLegacy: true
+        })
+      ]);
+
+      const result = await messageService.getMessagesByScope({ scope: 'user', userId: 'child_1' });
+
+      expect(result.map((message) => message.id)).toEqual(['msg_formal', 'msg_provisional']);
+    });
+
+    it('scope=all 兼容分支应直接读取仓储，不触发云端保鲜或过滤', async () => {
+      messageService.enableCloudStorage = true;
+      mockMessageRepository.getAll.mockResolvedValue([
+        new Message({
+          id: 'msg_local_only',
+          type: 'system',
+          title: '本地兼容消息',
+          summary: '本地兼容消息'
+        })
+      ]);
+
+      const result = await messageService.getMessagesByScope();
+
+      expect(result.map((message) => message.id)).toEqual(['msg_local_only']);
+      expect(mockMessageRepository.getAll).toHaveBeenCalled();
+      expect(mockMessageRepository.getMessagesByScope).not.toHaveBeenCalled();
+      expect(HttpClient.get).not.toHaveBeenCalled();
+      expect(HttpClient.post).not.toHaveBeenCalled();
+    });
+  });
+
   describe('getUnreadCount - 获取未读消息数量', () => {
     it('应该获取未读消息数量', async () => {
       mockMessageRepository.getUnreadCount.mockResolvedValue(5);
@@ -493,6 +596,50 @@ describe('MessageService', () => {
       const result = await messageService.getUnreadCount();
 
       expect(result).toBe(0);
+    });
+
+    it('有用户上下文时应改为基于 scope 读取结果计算未读数', async () => {
+      mockUserService.getLoginUser.mockReturnValue({
+        userId: 'child_1',
+        role: 'child',
+        familyId: 'family_1'
+      });
+      mockUserService.getCurrentUser.mockReturnValue({
+        id: 'child_1',
+        userId: 'child_1',
+        role: 'child',
+        familyId: 'family_1'
+      });
+      mockMessageRepository.getMessagesByScope.mockResolvedValue([
+        new Message({
+          id: 'msg_1',
+          userId: 'child_1',
+          visibilityScope: 'user',
+          type: 'task',
+          notificationType: 'task_create',
+          title: '未读',
+          summary: '未读',
+          syncedToCloud: true,
+          isRead: false
+        }),
+        new Message({
+          id: 'msg_2',
+          userId: 'child_1',
+          visibilityScope: 'user',
+          type: 'task',
+          notificationType: 'task_complete',
+          title: '已读',
+          summary: '已读',
+          syncedToCloud: true,
+          isRead: true
+        })
+      ]);
+
+      const result = await messageService.getUnreadCount();
+
+      expect(result).toBe(1);
+      expect(mockMessageRepository.getUnreadCount).not.toHaveBeenCalled();
+      expect(mockMessageRepository.getMessagesByScope).toHaveBeenCalled();
     });
   });
 
@@ -1026,6 +1173,31 @@ describe('MessageService', () => {
       ).rejects.toThrow('cloud failed');
 
       expect(mockMessageRepository.archiveLegacyMessages).not.toHaveBeenCalled();
+    });
+
+    it('公开 refresh 入口应委托到正式镜像刷新 helper', async () => {
+      const refreshSpy = jest.spyOn(messageService, '_refreshFormalMessagesFromCloud').mockResolvedValue([]);
+      const syncSpy = jest.spyOn(messageService, 'syncFormalRemindersIfNeeded').mockResolvedValue({ success: true, skipped: false });
+      const emitSpy = jest.spyOn(messageService, '_emitMessageChangedEvent').mockResolvedValue();
+      const displaySpy = jest.spyOn(messageService, '_getScopedMessagesForDisplay').mockResolvedValue([]);
+
+      await expect(
+        messageService.refreshMessagesFromCloud('child_1', { scope: 'user' })
+      ).resolves.toEqual([]);
+
+      expect(syncSpy).toHaveBeenCalledWith(expect.objectContaining({
+        scope: 'user',
+        userId: 'child_1'
+      }));
+      expect(refreshSpy).toHaveBeenCalledWith(expect.objectContaining({
+        scope: 'user',
+        userId: 'child_1'
+      }));
+      expect(displaySpy).toHaveBeenCalledWith(expect.objectContaining({
+        scope: 'user',
+        userId: 'child_1'
+      }));
+      expect(emitSpy).toHaveBeenCalled();
     });
 
     it('云端刷新前应先触发正式提醒 sync，且单路失败不阻塞消息读取', async () => {
