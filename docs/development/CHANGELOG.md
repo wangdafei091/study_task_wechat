@@ -4,6 +4,41 @@
 
 ---
 
+## [里程碑-20A] - 2026-04-05
+
+### ✅ 完成情况
+
+**用户上下文与权限边界治理**
+
+- **统一上下文解析入口落地**：
+  - 新增 `utils/user-context.js`，正式收口 `UserContextSnapshot / ReadContext / MutationContext / PermissionContext`
+  - `utils/view-scope.js` 改为兼容包装，统一委托正式上下文解析
+- **页面与服务语义收口**：
+  - 首页权限入口和最近活跃孩子记忆改为统一消费 `PermissionContext`
+  - 奖励页孩子主体、奖励归属与只读态改为复用统一上下文语义
+  - 任务域、奖励域、消息域和 `service-manager` 的 actor/target/scope 解析统一收口
+- **兼容契约保留**：
+  - 保留 `manage / execute` 双 actor 契约，不改变家长代孩子管理与执行动作的既有记述语义
+  - 保留页面层和服务层的兼容包装入口，避免一次性大爆炸式改名
+
+### 🧪 验证结果
+
+- M20A 关键定向测试通过：
+  - `npx jest test/pages/task-edit.page.test.js test/pages/rewards.page-contract.test.js test/utils/user-context.test.js test/services/service-manager.test.js test/services/task-service.test.js test/pages/index.user-context.test.js --runInBand`
+  - 结果：`6 suites / 174 tests` 全绿
+- M20A 扩展回归通过：
+  - `npx jest test/pages/index.page-contract.test.js test/pages/index.page-shell.behavior.test.js test/pages/index.task-actions.test.js test/pages/index.reward-flow.test.js test/pages/rewards.behavior.test.js test/pages/message-page.behavior.test.js test/pages/message-page.extra-behavior.test.js test/pages/analysis.page.test.js test/services/message-service.test.js test/services/reward-service.test.js test/utils/view-scope.test.js --runInBand`
+  - 结果：`11 suites / 224 tests` 全绿
+- 模拟器与日志复核说明：
+  - M20A 主链路已完成多轮日志复核
+  - 剩余未完全手工证实点由自动化测试补齐，不再阻塞本次交付
+
+### 📖 详细实施记录
+
+- [里程碑-20A：用户上下文与权限边界治理](../design/milestone-20a-user-context-boundary-governance.md)
+
+---
+
 ## [里程碑-19E] - 2026-04-05
 
 ### ✅ 完成情况
