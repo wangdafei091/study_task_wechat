@@ -153,6 +153,51 @@ describe('pages/rewards/rewards contract', () => {
     expect(page.data.rewardEmptyMode).toBe('none');
   });
 
+  it('loadRewardsData 在没有 lastActiveChildId 时应回退到首个活跃孩子', async () => {
+    appMock.globalData.lastActiveChildId = null;
+
+    const starService = {
+      clearCache: jest.fn(),
+      getTotalStars: jest.fn().mockResolvedValue(9)
+    };
+    const rewardService = {
+      clearCache: jest.fn(),
+      getAvailableRewards: jest.fn().mockResolvedValue([]),
+      calculateNextAvailableReward: jest.fn().mockResolvedValue(null),
+      hasCustomRewards: jest.fn().mockResolvedValue(false)
+    };
+    const configService = {
+      hasCustomRewards: jest.fn(() => false)
+    };
+
+    serviceManager.getService.mockImplementation((name) => {
+      if (name === 'starService') return starService;
+      if (name === 'rewardService') return rewardService;
+      if (name === 'config') return configService;
+      return null;
+    });
+    serviceManager.getUserService.mockReturnValue({
+      getLoginUser: jest.fn(() => ({ role: 'parent', userId: 'parent-1', familyId: 'family-1' })),
+      getLoginUserId: jest.fn(() => 'parent-1'),
+      getCurrentUser: jest.fn(() => ({ role: 'parent', userId: 'parent-1', id: 'parent-1', familyId: 'family-1' })),
+      getAllUsers: jest.fn(() => [
+        { userId: 'parent-1', role: 'parent', familyId: 'family-1' },
+        { userId: 'child-1', role: 'child', familyId: 'family-1' },
+        { userId: 'child-2', role: 'child', familyId: 'family-1', status: 'inactive' }
+      ]),
+      getUserById: jest.fn(() => null),
+      getUserByRole: jest.fn(() => ({ id: 'child-fallback' }))
+    });
+
+    const page = createPageInstance();
+    page.getExpiringPoints = jest.fn().mockResolvedValue({ points: 0, date: '' });
+
+    await page.loadRewardsData();
+
+    expect(starService.getTotalStars).toHaveBeenCalledWith('child-1');
+    expect(rewardService.getAvailableRewards).toHaveBeenCalledWith(true, false, 'parent-1');
+  });
+
   it('loadRewardsData 在共享设备孩子视角无正式奖励时，应按孩子视角展示空态且不显示 CTA', async () => {
     const starService = {
       clearCache: jest.fn(),

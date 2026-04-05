@@ -11,6 +11,7 @@ const EventBus = require('../utils/core/event-bus');
 const { Task, TaskStatus } = require('../models/task');
 const { EVENTS } = require('../utils/constants');
 const API_CONFIG = require('../utils/api-config'); // 新增：API配置
+const userContextUtils = require('../utils/user-context');
 const taskQuery = require('./task-service/task-query');
 const taskRepeat = require('./task-service/task-repeat');
 const taskSync = require('./task-service/task-sync');
@@ -86,21 +87,40 @@ class TaskService {
     return String(seed || Date.now());
   }
 
-  _getOperatorContext(targetUserId = null, mode = 'execute') {
-    const loginUser = this.userService?.getLoginUser?.();
-    const currentUser = this.userService?.getCurrentUser?.();
-    const preferCurrentUser = mode === 'execute';
+  _getUserContextInput() {
+    const loginUser = this.userService?.getLoginUser?.() || null;
+    const currentUser = this.userService?.getCurrentUser?.() || null;
+    const currentUserId = this.userService?.getCurrentUserId?.() || null;
+    const availableUsers = this.userService?.getAllUsers?.() || [];
 
     return {
-      actorUserId: preferCurrentUser
-        ? (currentUser?.userId || currentUser?.id || loginUser?.userId || loginUser?.id || null)
-        : (loginUser?.userId || loginUser?.id || currentUser?.userId || currentUser?.id || null),
-      actorRole: preferCurrentUser
-        ? (currentUser?.role || loginUser?.role || 'system')
-        : (loginUser?.role || currentUser?.role || 'system'),
-      familyId: loginUser?.familyId || currentUser?.familyId || null,
-      loginUserId: loginUser?.userId || loginUser?.id || null,
-      targetUserId: targetUserId || null
+      loginUser,
+      currentUser,
+      currentUserId,
+      availableUsers
+    };
+  }
+
+  _getOperatorContext(targetUserId = null, mode = 'execute') {
+    const mutationContext = userContextUtils.resolveMutationContext(
+      this._getUserContextInput(),
+      {
+        targetUserId,
+        operationMode: mode
+      }
+    );
+    const isManageMode = mutationContext.operationMode === 'manage';
+
+    return {
+      actorUserId: isManageMode
+        ? mutationContext.managementActorUserId
+        : mutationContext.executionActorUserId,
+      actorRole: isManageMode
+        ? mutationContext.managementActorRole
+        : mutationContext.executionActorRole,
+      familyId: mutationContext.familyId || null,
+      loginUserId: mutationContext.loginUserId || null,
+      targetUserId: mutationContext.targetUserId || null
     };
   }
 

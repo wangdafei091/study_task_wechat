@@ -7,22 +7,28 @@ const formatUtils = require('../../utils/formatUtils');
 const logger = require('../../utils/logger');
 const rewardStatus = require('../../utils/reward-status');
 const uiUtils = require('../../utils/uiUtils');
+const userContextUtils = require('../../utils/user-context');
 
 const REWARD_MANAGE_URL = '/packageManage/pages/reward-manage/reward-manage';
 
 function resolveRewardPageViewMode(userService) {
   const loginUser = userService?.getLoginUser ? userService.getLoginUser() : null;
   const currentUser = userService?.getCurrentUser ? userService.getCurrentUser() : null;
+  const availableUsers = userService?.getAllUsers ? userService.getAllUsers() : [];
   const activeUser = currentUser || loginUser || null;
-  const activeUserId = activeUser ? (activeUser.userId || activeUser.id) : null;
-  const isReadonlyView = loginUser
-    ? (loginUser.role === 'child' || loginUser.userId !== activeUserId)
-    : !!(activeUser && activeUser.role === 'child');
+  const permissionContext = userContextUtils.resolvePermissionContext({
+    loginUser,
+    currentUser,
+    availableUsers
+  }, {
+    lastActiveChildId: app?.globalData?.lastActiveChildId || null
+  });
+  const isReadonlyView = permissionContext.isReadonlyView;
 
   return {
     loginUser,
     currentUser: activeUser,
-    isReadonlyView,
+    isReadonlyView: permissionContext.isReadonlyView,
     viewMode: activeUser && activeUser.role === 'parent' && !isReadonlyView
       ? 'parent-manage'
       : 'child-no-manage'
@@ -1049,17 +1055,20 @@ Page({
     }
     const loginUser = userService.getLoginUser ? userService.getLoginUser() : null;
     const currentUser = userService.getCurrentUser ? userService.getCurrentUser() : null;
-    // 孩子设备：loginUser 本身就是孩子
-    if (loginUser && loginUser.role === 'child') {
-      return loginUser.userId || loginUser.id;
+    const availableUsers = userService.getAllUsers ? userService.getAllUsers() : [];
+    const snapshot = userContextUtils.createUserContextSnapshot({
+      loginUser,
+      currentUser,
+      availableUsers
+    });
+    const defaultSubjectUserId = userContextUtils.resolveDefaultSubjectUserId(snapshot);
+
+    if (defaultSubjectUserId) {
+      return defaultSubjectUserId;
     }
-    // 家长切到孩子视角时，优先使用当前视角孩子
-    if (currentUser && currentUser.role === 'child') {
-      return currentUser.userId || currentUser.id;
-    }
-    // 家长设备：优先用最近操作的孩子
-    const app = getApp();
-    const lastActiveChildId = app && app.globalData && app.globalData.lastActiveChildId;
+
+    const appInstance = getApp();
+    const lastActiveChildId = appInstance?.globalData?.lastActiveChildId || null;
     if (lastActiveChildId) {
       const lastActiveChild = typeof userService.getUserById === 'function'
         ? userService.getUserById(lastActiveChildId)
@@ -1070,11 +1079,20 @@ Page({
       }
       logger.info('rewards', `忽略失效的最近活跃孩子ID: ${lastActiveChildId}`);
     }
-    // 兜底：取第一个孩子
+
+    const firstChildId = Array.isArray(snapshot.activeChildUserIds) && snapshot.activeChildUserIds.length > 0
+      ? snapshot.activeChildUserIds[0]
+      : null;
+    if (firstChildId) {
+      logger.info('rewards', `使用第一个孩子ID: ${firstChildId}`);
+      return firstChildId;
+    }
+
     const firstChild = userService.getUserByRole('child');
     if (firstChild) {
-      logger.info('rewards', `使用第一个孩子ID: ${firstChild.id}`);
-      return firstChild.id;
+      const firstChildUserId = firstChild.userId || firstChild.id || null;
+      logger.info('rewards', `使用第一个孩子ID: ${firstChildUserId}`);
+      return firstChildUserId;
     }
     logger.info('rewards', '当前没有可用的孩子视角，返回空孩子ID');
     return null;
@@ -1087,10 +1105,17 @@ Page({
    */
   _getRewardOwnerUserId: function() {
     const userService = serviceManager.getUserService();
-    if (userService && userService.getLoginUserId) {
-      return userService.getLoginUserId();
+    if (!userService) {
+      return null;
     }
-    return null;
+
+    const snapshot = userContextUtils.createUserContextSnapshot({
+      loginUser: userService.getLoginUser ? userService.getLoginUser() : null,
+      currentUser: userService.getCurrentUser ? userService.getCurrentUser() : null,
+      availableUsers: userService.getAllUsers ? userService.getAllUsers() : []
+    });
+
+    return snapshot.loginUserId || snapshot.viewUserId || null;
   },
 
   // 兼容旧调用，内部改为使用 _getEffectiveChildUserId
