@@ -133,6 +133,10 @@ class MessageService {
     return this.userService?.getCurrentUser?.() || null;
   }
 
+  _getAvailableUsers() {
+    return this.userService?.getAllUsers?.() || [];
+  }
+
   _getUserIdentifier(user) {
     return viewScopeUtils.getUserIdentifier(user) || null;
   }
@@ -282,6 +286,7 @@ class MessageService {
   _resolveScopeOptions(options = {}) {
     const loginUser = this._getLoginUser();
     const currentUser = this._getCurrentUser();
+    const availableUsers = this._getAvailableUsers();
     if (!options.scope && !loginUser && !currentUser) {
       return {
         scope: 'all',
@@ -293,7 +298,7 @@ class MessageService {
     }
     const currentUserId = options.userId || viewScopeUtils.getUserIdentifier(currentUser) || viewScopeUtils.getUserIdentifier(loginUser);
     const familyId = loginUser?.familyId || currentUser?.familyId || null;
-    const defaultScope = viewScopeUtils.resolveMessageScopeOptions(loginUser, currentUser).scope || MessageVisibilityScope.USER;
+    const defaultScope = viewScopeUtils.resolveMessageScopeOptions(loginUser, currentUser, availableUsers).scope || MessageVisibilityScope.USER;
     const scope = options.scope || defaultScope;
 
     return {

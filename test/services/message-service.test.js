@@ -487,6 +487,7 @@ describe('MessageService', () => {
 
     it('云端模式下展示结果应只保留 formal 和 provisional 消息', async () => {
       messageService.enableCloudStorage = true;
+      const now = Date.now();
       mockUserService.getLoginUser.mockReturnValue({
         userId: 'child_1',
         role: 'child',
@@ -509,6 +510,7 @@ describe('MessageService', () => {
           notificationType: 'task_create',
           title: '正式消息',
           summary: '正式消息',
+          createTime: now - 1000,
           syncedToCloud: true
         }),
         new Message({
@@ -520,6 +522,7 @@ describe('MessageService', () => {
           notificationType: 'task_create',
           title: '待同步消息',
           summary: '待同步消息',
+          createTime: now,
           isProvisional: true,
           syncedToCloud: false
         }),
@@ -548,7 +551,7 @@ describe('MessageService', () => {
 
       const result = await messageService.getMessagesByScope({ scope: 'user', userId: 'child_1' });
 
-      expect(result.map((message) => message.id)).toEqual(['msg_formal', 'msg_provisional']);
+      expect(result.map((message) => message.id)).toEqual(['msg_provisional', 'msg_formal']);
     });
 
     it('scope=all 兼容分支应直接读取仓储，不触发云端保鲜或过滤', async () => {

@@ -168,6 +168,39 @@ describe('ServiceManager', () => {
     );
   });
 
+  it('离线队列默认上下文应复用统一执行态语义', async () => {
+    const { serviceManager, mocks } = loadServiceManager();
+    const userService = {
+      getLoginUser: jest.fn(() => ({
+        userId: 'parent-1',
+        role: 'parent',
+        familyId: 'family-1'
+      })),
+      getCurrentUser: jest.fn(() => ({
+        userId: 'child-1',
+        role: 'child',
+        familyId: 'family-1'
+      })),
+      getCurrentUserId: jest.fn(() => 'child-1'),
+      getAllUsers: jest.fn(() => [
+        { userId: 'parent-1', role: 'parent', familyId: 'family-1' },
+        { userId: 'child-1', role: 'child', familyId: 'family-1' }
+      ])
+    };
+
+    serviceManager.setUserService(userService);
+    await serviceManager.initialize();
+
+    const contextResolver = mocks.OfflineQueueService.mock.calls[0][0].contextResolver;
+    expect(contextResolver()).toEqual({
+      familyId: 'family-1',
+      loginUserId: 'parent-1',
+      actorUserId: 'child-1',
+      actorRole: 'child',
+      targetUserId: 'child-1'
+    });
+  });
+
   it('重复初始化应直接返回 true 且不重复构建', async () => {
     const { serviceManager, mocks } = loadServiceManager();
     const first = await serviceManager.initialize();

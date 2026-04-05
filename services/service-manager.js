@@ -17,6 +17,7 @@ const ConfigService = require('./config-service');
 const logger = require('../utils/logger');
 const EventBus = require('../utils/core/event-bus');
 const StorageAdapter = require('../adapters/storage-adapter');
+const userContextUtils = require('../utils/user-context');
 
 class ServiceManager {
   constructor() {
@@ -31,16 +32,21 @@ class ServiceManager {
   }
 
   _resolveOfflineQueueContext() {
-    const loginUser = this.userService?.getLoginUser?.();
-    const currentUser = this.userService?.getCurrentUser?.();
-    const fallbackCurrentUserId = this.userService?.getCurrentUserId?.() || null;
+    const mutationContext = userContextUtils.resolveMutationContext({
+      loginUser: this.userService?.getLoginUser?.() || null,
+      currentUser: this.userService?.getCurrentUser?.() || null,
+      currentUserId: this.userService?.getCurrentUserId?.() || null,
+      availableUsers: this.userService?.getAllUsers?.() || []
+    }, {
+      operationMode: 'execute'
+    });
 
     return {
-      familyId: loginUser?.familyId || currentUser?.familyId || null,
-      loginUserId: loginUser?.userId || loginUser?.id || null,
-      actorUserId: currentUser?.userId || currentUser?.id || fallbackCurrentUserId || loginUser?.userId || loginUser?.id || null,
-      actorRole: currentUser?.role || loginUser?.role || 'system',
-      targetUserId: currentUser?.userId || currentUser?.id || fallbackCurrentUserId || null
+      familyId: mutationContext.familyId || null,
+      loginUserId: mutationContext.loginUserId || null,
+      actorUserId: mutationContext.executionActorUserId || null,
+      actorRole: mutationContext.executionActorRole || 'system',
+      targetUserId: mutationContext.targetUserId || null
     };
   }
   

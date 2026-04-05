@@ -3,6 +3,7 @@ const dateUtils = require('../../utils/dateUtils');
 const logger = require('../../utils/logger');
 const messageDisplay = require('../../utils/message-display');
 const permissionUtils = require('../../utils/permission-utils');
+const userContextUtils = require('../../utils/user-context');
 const viewScopeUtils = require('../../utils/view-scope');
 const { UserService } = require('../../services/user-service');
 const MessageService = require('../../services/message-service');
@@ -1857,32 +1858,34 @@ Page({
       
       // 获取新的当前用户
       const currentUser = userService.getCurrentUser();
-      const availableUsers = userService.getAllUsers();
-      const userPermissions = permissionUtils.getUserPermissions(currentUser.role);
       const loginUser = userService.getLoginUser ? userService.getLoginUser() : null;
-      // 管理入口只读：孩子设备或家长切到孩子视角均不可进入管理能力
-      const isReadonlyView = loginUser
-        ? (loginUser.role === 'child' || loginUser.userId !== currentUser.userId)
-        : false;
-
-      // 切换到孩子视角时记录，供家长回到自己视角时继续显示该孩子的任务
+      const availableUsers = userService.getAllUsers();
       const lastActiveChildId = currentUser.role === 'child'
-        ? currentUser.id
+        ? userContextUtils.getUserIdentifier(currentUser)
         : this.data.lastActiveChildId;
+      const permissionContext = userContextUtils.resolvePermissionContext({
+        loginUser,
+        currentUser,
+        availableUsers
+      }, {
+        lastActiveChildId
+      });
 
       // 同步到 globalData，供其他页面（如奖池）获取最近操作的孩子
       const app = getApp();
       if (app && app.globalData) {
-        app.globalData.lastActiveChildId = lastActiveChildId;
+        app.globalData.lastActiveChildId = permissionContext.lastActiveChildId;
       }
       
       // 更新页面状态
       this.setData({
         currentUser,
         availableUsers,
-        userPermissions,
-        isReadonlyView,
-        lastActiveChildId,
+        userPermissions: permissionContext.userPermissions,
+        loginUserId: permissionContext.loginUserId || '',
+        canManageMembers: permissionContext.canManageMembers,
+        isReadonlyView: permissionContext.isReadonlyView,
+        lastActiveChildId: permissionContext.lastActiveChildId,
         showUserSwitcher: false
       });
       
