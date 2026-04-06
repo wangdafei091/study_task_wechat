@@ -85,11 +85,14 @@ describe('pages/rewards/rewards contract', () => {
   it('onLoad、事件监听与动画锁定应正常工作', async () => {
     const page = createPageInstance();
     page.setupProgressBarListener = jest.fn();
+    page.loadRewardsData = jest.fn().mockResolvedValue();
 
     await page.onLoad({});
     expect(page._skipNextOnShowRefresh).toBe(false);
-    expect(page.setupProgressBarListener).toHaveBeenCalled();
     expect(appMock.globalData.hasRedirectedToReward).toBe(false);
+
+    await page.onShow();
+    expect(page.setupProgressBarListener).toHaveBeenCalled();
 
     page.handleProgressBarComplete();
     expect(page.data.isRewardAnimating).toBe(true);

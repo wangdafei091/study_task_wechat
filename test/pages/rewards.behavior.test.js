@@ -129,23 +129,51 @@ describe('pages/rewards/rewards behavior', () => {
 
     await page.onShow();
 
+    expect(appMock.globalData.eventBus.on).toHaveBeenCalledTimes(1);
     expect(page.loadRewardsData).not.toHaveBeenCalled();
     expect(page._skipNextOnShowRefresh).toBe(false);
   });
 
-  it('clearAllTimers、onHide 和 onUnload 应清理计时器并移除事件监听', () => {
+  it('clearAllTimers、onHide 和 onUnload 应清理计时器并按页面生命周期移除事件监听', async () => {
+    const starService = {
+      refreshStarsFromCloud: jest.fn().mockResolvedValue({})
+    };
+    const rewardService = {
+      refreshRewardsFromCloud: jest.fn().mockResolvedValue({})
+    };
+    serviceManager.getService.mockImplementation((name) => {
+      if (name === 'starService') return starService;
+      if (name === 'rewardService') return rewardService;
+      return null;
+    });
+    serviceManager.getUserService.mockReturnValue({
+      getLoginUser: jest.fn(() => ({ role: 'parent', userId: 'parent-1' })),
+      getLoginUserId: jest.fn(() => 'parent-1'),
+      getCurrentUser: jest.fn(() => ({ role: 'parent', userId: 'parent-1', id: 'parent-1' })),
+      getUserByRole: jest.fn(() => ({ id: 'child-1' }))
+    });
+
     const page = createPageInstance();
     page.animationSafetyTimer = setTimeout(() => {}, 1000);
     page.rewardTimer = setTimeout(() => {}, 1000);
     page.data.demoClickTimeout = setTimeout(() => {}, 1000);
+    page.loadRewardsData = jest.fn().mockResolvedValue();
+
+    await page.onShow();
 
     page.onHide();
     expect(page.animationSafetyTimer).toBeNull();
     expect(page.rewardTimer).toBeNull();
     expect(page.data.demoClickTimeout).toBeNull();
+    expect(appMock.globalData.eventBus.off).toHaveBeenCalledTimes(1);
 
     page.onUnload();
-    expect(appMock.globalData.eventBus.off).toHaveBeenCalled();
+    expect(appMock.globalData.eventBus.on).toHaveBeenCalledTimes(1);
+    expect(appMock.globalData.eventBus.off).toHaveBeenCalledTimes(1);
+    expect(appMock.globalData.eventBus.off).toHaveBeenCalledWith(
+      expect.any(String),
+      appMock.globalData.eventBus.on.mock.calls[0][1]
+    );
   });
 
   it('loadRewardsData 在无服务实例和历史配置提示场景下应正确降级为显式空态', async () => {
@@ -424,6 +452,41 @@ describe('pages/rewards/rewards behavior', () => {
     expect(page.data.showModal).toBe(false);
     expect(page._skipNextOnShowRefresh).toBe(true);
     expect(appMock.globalData.eventBus.emit).not.toHaveBeenCalled();
+  });
+
+  it('_handleExchangeSuccess 在没有下一个奖励时也应安全刷新', async () => {
+    const rewardService = {
+      clearCache: jest.fn(),
+      calculateNextAvailableReward: jest.fn().mockResolvedValue(null)
+    };
+    const starService = {
+      clearCache: jest.fn(),
+      getTotalStars: jest.fn().mockResolvedValue(0)
+    };
+
+    serviceManager.getService.mockImplementation((name) => {
+      if (name === 'rewardService') return rewardService;
+      if (name === 'starService') return starService;
+      return null;
+    });
+    serviceManager.getUserService.mockReturnValue({
+      getLoginUser: jest.fn(() => ({ role: 'parent', userId: 'parent-1' })),
+      getLoginUserId: jest.fn(() => 'parent-1'),
+      getCurrentUser: jest.fn(() => ({ role: 'parent', userId: 'parent-1', id: 'parent-1' })),
+      getUserByRole: jest.fn(() => ({ id: 'child-1' }))
+    });
+
+    const page = createPageInstance();
+    page.loadRewardsData = jest.fn().mockResolvedValue();
+
+    await expect(page._handleExchangeSuccess(
+      { success: true },
+      { id: 'reward-last', name: '最后一个奖励', points: 3 },
+      'child-1'
+    )).resolves.toBeUndefined();
+
+    expect(page.data.nextReward).toBeNull();
+    expect(page.loadRewardsData).toHaveBeenCalledWith(true);
   });
 
   it('animateStarsCount、onStarsAreaTap、switchTab 和示例判断应按预期工作', () => {

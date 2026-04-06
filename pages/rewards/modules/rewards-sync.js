@@ -1,0 +1,360 @@
+const serviceManager = require('../../../services/service-manager');
+const formatUtils = require('../../../utils/formatUtils');
+const logger = require('../../../utils/logger');
+const rewardStatus = require('../../../utils/reward-status');
+const rewardsUserContextModule = require('./rewards-user-context');
+
+function buildRewardPageState({ rewards, hasRewardHistoryHint, viewMode }) {
+  if (Array.isArray(rewards) && rewards.length > 0) {
+    return {
+      emptyMode: 'none',
+      emptyTitle: '',
+      emptyDescription: '',
+      emptyHistoryHint: '',
+      ctaVisible: false,
+      ctaText: ''
+    };
+  }
+
+  const isParentManageView = viewMode === 'parent-manage';
+  const emptyTitle = isParentManageView
+    ? (hasRewardHistoryHint ? '目前还没有可用的正式奖励' : '还没有正式奖励')
+    : '现在还没有可用奖励';
+
+  return {
+    emptyMode: isParentManageView ? 'parent-setup' : 'child-explain',
+    emptyTitle,
+    emptyDescription: isParentManageView
+      ? '去设置一个正式奖励吧，孩子完成任务后就能看到努力目标了'
+      : '奖励由家长来设置，现在完成任务也会正常积累星星',
+    emptyHistoryHint: isParentManageView && hasRewardHistoryHint
+      ? '如果之前清理过奖励，也可以重新添加一个正式奖励'
+      : '',
+    ctaVisible: isParentManageView,
+    ctaText: '去设置第一个奖励'
+  };
+}
+
+function decorateRewardForDisplay(reward, totalPoints) {
+  const unlocked = totalPoints >= reward.points;
+
+  return {
+    ...reward,
+    unlocked,
+    claimDisplayStatus: rewardStatus.resolveRewardClaimStatus(reward),
+    poolStatusLabel: rewardStatus.getRewardPoolStatusLabel({ ...reward, unlocked }),
+    poolActionLabel: rewardStatus.getRewardPoolActionLabel({ ...reward, unlocked })
+  };
+}
+
+async function onShow(page) {
+  logger.info('rewards', '页面显示');
+
+  if (page._skipNextOnShowRefresh) {
+    page._skipNextOnShowRefresh = false;
+    logger.info('rewards', '跳过本轮 onShow 刷新，避免兑换成功后的重复回刷');
+    return;
+  }
+
+  const app = getApp();
+
+  try {
+    const starService = serviceManager.getService('starService');
+    const rewardService = serviceManager.getService('rewardService');
+    const effectiveChildId = page._getEffectiveChildUserId();
+    const shouldForceRewardRefresh = app.globalData.needRefreshReward === true;
+
+    if (starService?.syncExpiryAuthorityIfNeeded && effectiveChildId) {
+      await starService.syncExpiryAuthorityIfNeeded({
+        scope: 'user',
+        userId: effectiveChildId
+      });
+    }
+
+    if (starService?.refreshStarsFromCloud && effectiveChildId) {
+      await starService.refreshStarsFromCloud(effectiveChildId, {
+        forceCloudAfterAuthority: true
+      });
+    } else if (!effectiveChildId) {
+      logger.info('rewards', '奖励页跳过孩子星星云同步：当前没有可用的孩子视角');
+    }
+
+    if (rewardService?.refreshRewardsFromCloud) {
+      await rewardService.refreshRewardsFromCloud({
+        force: shouldForceRewardRefresh || !!effectiveChildId,
+        userId: effectiveChildId || undefined
+      });
+    }
+  } catch (syncError) {
+    logger.warn('rewards', '奖励页 onShow 云同步失败，继续使用本地数据', syncError);
+  }
+
+  if (app.globalData.needRefreshReward) {
+    logger.info('rewards', '检测到奖励数据变更标记，强制刷新');
+    app.globalData.needRefreshReward = false;
+    await page.loadRewardsData(true);
+  } else {
+    await page.loadRewardsData();
+  }
+
+  if (app.globalData.hasRedirectedToReward) {
+    logger.info('rewards', '清除已跳转标记');
+    app.globalData.hasRedirectedToReward = false;
+  }
+}
+
+async function onPullDownRefresh(page) {
+  try {
+    const starService = serviceManager.getService('starService');
+    const rewardService = serviceManager.getService('rewardService');
+    const effectiveChildId = page._getEffectiveChildUserId();
+
+    if (starService?.syncExpiryAuthorityIfNeeded && effectiveChildId) {
+      await starService.syncExpiryAuthorityIfNeeded({
+        scope: 'user',
+        userId: effectiveChildId,
+        force: true
+      });
+    }
+
+    if (starService?.refreshStarsFromCloud && effectiveChildId) {
+      await starService.refreshStarsFromCloud(effectiveChildId, {
+        forceCloudAfterAuthority: true
+      });
+    }
+
+    if (rewardService?.refreshRewardsFromCloud) {
+      await rewardService.refreshRewardsFromCloud({
+        force: true,
+        userId: effectiveChildId || undefined
+      });
+    }
+
+    await page.loadRewardsData(true);
+  } catch (error) {
+    logger.warn('rewards', '奖励页下拉强制刷新失败，继续保留当前数据', error);
+    wx.showToast({
+      title: '刷新失败，请稍后重试',
+      icon: 'none'
+    });
+  } finally {
+    if (typeof wx.stopPullDownRefresh === 'function') {
+      wx.stopPullDownRefresh();
+    }
+  }
+}
+
+async function loadRewardsData(page, forceRefresh = false) {
+  logger.info('rewards', '开始加载奖励数据');
+
+  try {
+    wx.showLoading({ title: '加载中' });
+
+    const starService = serviceManager.getService('starService');
+    const rewardService = serviceManager.getService('rewardService');
+
+    if (!starService || !rewardService) {
+      logger.error('rewards', '无法获取服务实例');
+      wx.hideLoading();
+      return;
+    }
+
+    logger.info('rewards', `准备读取奖励页数据，forceRefresh=${forceRefresh}`);
+    if (forceRefresh && starService.clearCache) {
+      starService.clearCache();
+    }
+    if (forceRefresh && rewardService.clearCache) {
+      rewardService.clearCache();
+    }
+
+    const effectiveChildId = page._getEffectiveChildUserId();
+    const rewardOwnerId = page._getRewardOwnerUserId();
+    logger.info('rewards', `有效孩子ID: ${effectiveChildId}, 奖励归属ID: ${rewardOwnerId}`);
+
+    const totalPoints = effectiveChildId
+      ? await starService.getTotalStars(effectiveChildId)
+      : 0;
+    logger.info('rewards', `获取到用户星星: ${totalPoints}`);
+
+    const formattedPoints = formatUtils.formatPoints(totalPoints, true);
+    const expiringPointsInfo = await page.getExpiringPoints();
+
+    const userService = serviceManager.getUserService();
+    const { viewMode } = rewardsUserContextModule.resolveRewardPageViewMode(userService);
+    const allRewards = await rewardService.getAvailableRewards(true, false, rewardOwnerId);
+    logger.info('rewards', `获取到可用奖励: ${allRewards.length}个`);
+
+    let hasCustomRewards = false;
+    try {
+      const configService = serviceManager.getService('config');
+      if (configService) {
+        hasCustomRewards = configService.hasCustomRewards();
+      } else if (rewardService && typeof rewardService.hasCustomRewards === 'function') {
+        hasCustomRewards = await rewardService.hasCustomRewards();
+      } else {
+        hasCustomRewards = wx.getStorageSync('has_custom_rewards') === true;
+        logger.warn('rewards', '配置服务不可用，使用降级存储访问');
+      }
+      if (hasCustomRewards) {
+        logger.debug('rewards', '检测到自定义奖励标记');
+      }
+    } catch (error) {
+      logger.warn('rewards', '获取自定义奖励标记失败', error);
+    }
+
+    const realRewards = allRewards.filter((reward) => !page.isExampleReward(reward));
+    const rewardPageState = buildRewardPageState({
+      rewards: realRewards,
+      hasRewardHistoryHint: hasCustomRewards,
+      viewMode
+    });
+
+    if (realRewards.length === 0) {
+      logger.info('rewards', '过滤示例奖励后无正式奖励，展示显式空态', {
+        hasRewardHistoryHint: hasCustomRewards,
+        viewMode
+      });
+      wx.hideLoading();
+
+      page.setData({
+        rewards: [],
+        availableRewards: [],
+        claimedRewards: [],
+        showTabs: false,
+        activeTab: 'available',
+        showClaimedRewards: true,
+        currentProgress: totalPoints,
+        totalPoints,
+        formattedPoints,
+        expiringPoints: expiringPointsInfo.points,
+        expiryDate: expiringPointsInfo.date,
+        rewardsEarned: 0,
+        currentLevel: Math.floor(totalPoints / 20) + 1,
+        nextReward: null,
+        rewardEmptyMode: rewardPageState.emptyMode,
+        rewardEmptyTitle: rewardPageState.emptyTitle,
+        rewardEmptyDescription: rewardPageState.emptyDescription,
+        rewardEmptyHistoryHint: rewardPageState.emptyHistoryHint,
+        showManageRewardCTA: rewardPageState.ctaVisible,
+        manageRewardCTAText: rewardPageState.ctaText
+      });
+
+      return;
+    }
+
+    const rewards = realRewards.map((reward) => decorateRewardForDisplay(reward, totalPoints));
+    const availableRewards = rewards.filter((reward) => !rewardStatus.isRewardExchanged(reward));
+    const claimedRewards = rewards.filter((reward) => rewardStatus.isRewardExchanged(reward));
+
+    logger.debug('rewards', `可兑换奖励: ${availableRewards.length}个, 已兑换奖励: ${claimedRewards.length}个`);
+
+    const unlockedRewards = rewards.filter((reward) => reward.unlocked).length;
+    const nextReward = await rewardService.calculateNextAvailableReward(totalPoints, rewardOwnerId);
+    const normalizedNextReward = nextReward && !nextReward.isDefault && !page.isExampleReward(nextReward)
+      ? nextReward
+      : null;
+
+    logger.debug('rewards', `下一个可达成奖励: ${nextReward ? nextReward.name : '无'}, 需要${nextReward ? nextReward.points : 0}颗星星`);
+    logger.info('rewards', `准备设置页面数据: 总星星=${totalPoints}, 即将过期星星=${expiringPointsInfo.points}, 过期日期=${expiringPointsInfo.date}`);
+    logger.info('rewards', '过期信息详细数据:', expiringPointsInfo);
+
+    const showTabs = availableRewards.length > 0 && claimedRewards.length > 0;
+    let activeTab = page.data.activeTab;
+
+    if (showTabs) {
+      if (!activeTab || (activeTab === 'available' && availableRewards.length === 0)) {
+        activeTab = 'claimed';
+      } else if (activeTab === 'claimed' && claimedRewards.length === 0) {
+        activeTab = 'available';
+      }
+    } else {
+      activeTab = availableRewards.length > 0 ? 'available' : 'claimed';
+    }
+
+    logger.info('rewards', `Tab显示逻辑: showTabs=${showTabs}, activeTab=${activeTab}, 可获得=${availableRewards.length}, 已兑换=${claimedRewards.length}`);
+
+    page.setData({
+      rewards,
+      availableRewards,
+      claimedRewards,
+      showTabs,
+      activeTab,
+      showClaimedRewards: true,
+      currentProgress: totalPoints,
+      totalPoints,
+      formattedPoints,
+      expiringPoints: expiringPointsInfo.points,
+      expiryDate: expiringPointsInfo.date,
+      rewardsEarned: unlockedRewards,
+      currentLevel: Math.floor(totalPoints / 20) + 1,
+      nextReward: normalizedNextReward,
+      rewardEmptyMode: 'none',
+      rewardEmptyTitle: '',
+      rewardEmptyDescription: '',
+      rewardEmptyHistoryHint: '',
+      showManageRewardCTA: false,
+      manageRewardCTAText: ''
+    });
+
+    logger.info('rewards', `设置总星星: ${totalPoints}, 即将过期总星星: ${expiringPointsInfo.points}, 最早到期日期: ${expiringPointsInfo.date}`);
+    wx.hideLoading();
+  } catch (error) {
+    logger.error('rewards', '加载奖励数据失败', error);
+    wx.hideLoading();
+    wx.showToast({
+      title: '加载失败，请重试',
+      icon: 'none'
+    });
+  }
+}
+
+async function getExpiringPoints(page) {
+  logger.info('rewards', '获取即将过期的星星信息');
+
+  try {
+    const starService = serviceManager.getService('starService');
+
+    if (!starService) {
+      logger.error('rewards', '无法获取星星服务实例');
+      return { points: 0, date: '' };
+    }
+
+    logger.info('rewards', '星星服务实例获取成功，开始调用getExpiringStarsInfo');
+    const effectiveChildId = page._getEffectiveChildUserId();
+    if (!effectiveChildId) {
+      logger.info('rewards', '没有有效孩子视角，跳过即将过期星星提示');
+      return { points: 0, date: '' };
+    }
+
+    const messageService = serviceManager.getService('messageService');
+    if (messageService?.syncFormalRemindersIfNeeded) {
+      await messageService.syncFormalRemindersIfNeeded({
+        scope: 'user',
+        userId: effectiveChildId
+      });
+    }
+
+    const expiringInfo = await starService.getExpiringStarsInfo(effectiveChildId);
+
+    logger.info('rewards', '星星服务返回的原始数据:', expiringInfo);
+    logger.info('rewards', `即将过期星星: ${expiringInfo.points}颗, 最早到期日期: ${expiringInfo.expiryDateText}, 过期时间戳: ${expiringInfo.expiryTimestamp}`);
+
+    const result = {
+      points: expiringInfo.points,
+      date: expiringInfo.expiryDateText
+    };
+
+    logger.info('rewards', '奖池页面返回的过期信息:', result);
+    return result;
+  } catch (error) {
+    logger.error('rewards', '获取即将过期的星星信息失败', error);
+    return { points: 0, date: '' };
+  }
+}
+
+module.exports = {
+  onShow,
+  onPullDownRefresh,
+  loadRewardsData,
+  getExpiringPoints
+};
