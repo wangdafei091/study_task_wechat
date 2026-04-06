@@ -833,6 +833,7 @@ Component({
         return Promise.resolve();
       }
 
+      // 这里只保留非统一读模型下的兼容 refresh；统一读模型场景必须继续依赖页面已准备好的 snapshot。
       if (analysisOptions.scope === 'family') {
         return starService.refreshStarsFromCloud(null, { scope: 'family' });
       }

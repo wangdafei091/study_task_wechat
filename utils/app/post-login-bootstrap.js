@@ -82,6 +82,7 @@ async function bootstrapStarService(starService) {
         force: true
       });
       if (typeof starService.refreshStarsFromCloud === 'function') {
+        // 启动链路是正式 user-scope 顺序：authority -> stars -> rewards。
         await starService.refreshStarsFromCloud(loginUserId, {
           forceCloudAfterAuthority: true
         });

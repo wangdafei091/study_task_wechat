@@ -10,6 +10,7 @@ async function getAllTasks(service, userId = null, options = {}) {
     if (service.enableCloudStorage) {
       if (userId && options.requireFreshStars === true && service.starService?.refreshStarsFromCloud) {
         try {
+          // M09 既有契约：允许 resetTask 等可写任务页面在云读取前显式对齐星星余额。
           await service.starService.refreshStarsFromCloud(userId);
         } catch (refreshError) {
           logger.warn('TaskService', '任务读取前刷新星星失败，继续按现有数据读取任务', {
@@ -111,6 +112,7 @@ async function getTasksByDate(service, date, userId = null, options = {}) {
     if (service.enableCloudStorage) {
       if (userId && options.requireFreshStars === true && service.starService?.refreshStarsFromCloud) {
         try {
+          // 该路径属于任务域读前余额对齐，不并入页面层的统一刷新 orchestration。
           await service.starService.refreshStarsFromCloud(userId);
         } catch (refreshError) {
           logger.warn('TaskService', '按日期读取任务前刷新星星失败，继续按现有数据读取任务', {
