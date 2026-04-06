@@ -1,10 +1,11 @@
 # 里程碑-20C：前端复杂度治理 2.0 详细设计文档
 
-> **设计状态**：🔴 待审核
+> **设计状态**：🟢 已完成
 > **创建日期**：2026-04-06
 > **设计者**：GPT5 Codex
 > **审核者**：项目维护者
 > **预计工期**：4-6天
+> **完成日期**：2026-04-07
 
 ---
 
@@ -14,6 +15,7 @@
 - [技术方案](#技术方案)
 - [代码结构](#代码结构)
 - [实施步骤](#实施步骤)
+- [实施结果](#实施结果)
 - [测试方案](#测试方案)
 - [风险评估](#风险评估)
 - [替代方案](#替代方案)
@@ -41,8 +43,8 @@
 ### 前置状态
 
 - `M20A` 已完成并落地，用户上下文与权限边界以已实施版本为准。
-- `M20B` 已完成并落地，星星域相关正式边界以已实施版本为准。
-- `M20C` 不重新打开上述里程碑已经稳定的语义，只在此前提下做结构治理。
+- `M20B` 当时仍处于设计治理范围内，本期实现不依赖其单独落地状态，而是以当前仓库中的正式星星域行为为准。
+- `M20C` 不重新打开既有稳定语义，只在此前提下做结构治理。
 
 ### 业务价值
 
@@ -557,6 +559,88 @@ class MessageService {
 1. 对比拆分前后的热点文件规模和职责分布，确认不是“移动代码”式伪优化。
 2. 重点回归首页、奖励页、消息中心、奖励兑换和多用户切换链路。
 3. 如实施结果表明 `MessageService` 切片应延期，必须在设计与完成说明中明确记录原因和停留点。
+
+---
+
+## 实施结果
+
+### 完成状态
+
+- [x] 第0步：补齐复杂度基线与保护测试
+- [x] 第1步：首页 page shell 继续瘦身
+- [x] 第2步：奖励页首次模块化
+- [x] 第3步：MessageService 内部职责切片
+- [x] 第4步：回归、文档和复杂度复盘
+
+### 实际交付结果
+
+#### 1. 首页 page shell
+
+- 已新增：
+  - `pages/index/modules/index-date-navigation.js`
+  - `pages/index/modules/index-message-preview.js`
+  - `pages/index/modules/index-search-panel.js`
+  - `pages/index/modules/index-user-switcher.js`
+- 现有 `index-reward-flow.js` 已继续承接 reward UI 壳层
+- `pages/index/index.js` 实际行数：`1183`
+- 对照验收标准：满足 `<= 1400`
+
+#### 2. 奖励页模块化
+
+- 已新增：
+  - `pages/rewards/modules/rewards-sync.js`
+  - `pages/rewards/modules/rewards-exchange-flow.js`
+  - `pages/rewards/modules/rewards-animation.js`
+  - `pages/rewards/modules/rewards-user-context.js`
+- `pages/rewards/rewards.js` 实际行数：`412`
+- 对照验收标准：满足 `<= 700`
+- 补充修复：
+  - 进度条完成事件监听改为显示期注册、隐藏期解绑
+  - 兑换成功后 `nextReward === null` 分支已补齐
+  - `rewards-user-context.js` 已清理未使用的 `page` 参数
+
+#### 3. MessageService 切片
+
+- 已新增：
+  - `services/message-service/message-provisional.js`
+  - `services/message-service/message-domain.js`
+  - `services/message-service/message-handlers.js`
+- `services/message-service.js` 实际行数：`1526`
+- 对照验收标准：满足 `<= 1600`
+- 当前停留点：
+  - `message-handlers.js` 已承担稳定 listener map
+  - 22 个 `_handleXxx` 逻辑体仍保留在 facade 主文件，作为后续可继续治理的空间
+  - `message-scope.js` / `message-sync.js` / `message-operations.js` 未进入本期
+
+#### 4. 超阈值模块说明
+
+- `message-domain.js` 实际约 `470` 行，超过设计中的推荐阈值 `<= 450`
+- 保持单模块的原因：
+  - 当前内容仍保持“领域消息构造 + 批量领域读写 + 迁移 helper”的高内聚职责
+  - 若继续机械拆分，会把共享 helper 分散到更多模块，增加 facade 与 helper 间的扇出依赖
+  - 本期优先满足 facade 主文件体量和稳定性目标，暂不为追求数字阈值继续细拆
+
+#### 5. 量化验收对照
+
+| 对象 | 基线 | 目标 | 实际 | 结果 |
+|------|------|------|------|------|
+| `pages/index/index.js` | 2105 | `<= 1400` | `1183` | ✅ |
+| `pages/rewards/rewards.js` | 1127 | `<= 700` | `412` | ✅ |
+| `services/message-service.js` | 2336 | `<= 1600` | `1526` | ✅ |
+
+### 实际测试结果
+
+- 页面大范围回归通过：
+  - `npm run test:pages -- --runInBand`
+  - 结果：`21 suites / 136 tests` 全绿
+- MessageService 定向回归通过：
+  - `npx jest test/services/message-service.test.js test/services/message-service.modules.test.js --runInBand`
+- 首页与奖励页模块级回归通过：
+  - `npx jest test/pages/index.modules.test.js test/pages/rewards.behavior.test.js test/pages/rewards.modules.test.js test/pages/rewards.page-contract.test.js --runInBand`
+
+### 提交记录
+
+- 实施提交：`d1a117c` `feat: complete M20C frontend complexity governance`
 
 ---
 

@@ -1,10 +1,11 @@
 # 里程碑-20B：星星域边界治理轻量收口 详细设计文档
 
-> **设计状态**：🟢 审核通过
+> **设计状态**：🟢 已完成
 > **创建日期**：2026-04-06
 > **设计者**：GPT5 Codex
 > **审核者**：项目维护者
 > **预计工期**：1-2天
+> **完成日期**：2026-04-06
 
 ---
 
@@ -14,6 +15,7 @@
 - [技术方案](#技术方案)
 - [代码结构](#代码结构)
 - [实施步骤](#实施步骤)
+- [实施结果](#实施结果)
 - [测试方案](#测试方案)
 - [风险评估](#风险评估)
 - [替代方案](#替代方案)
@@ -242,7 +244,7 @@ family 视角下有两个并行正式来源：
 ### 文件变更清单
 
 **新增文件**：
-- `docs/design/milestone-20b-star-domain-boundary-governance.md` - M20B 轻量治理设计文档
+- 无
 
 **修改文件**：
 - `services/star-service.js` - 补齐正式边界注释与必要结构化日志
@@ -349,9 +351,9 @@ class AnalyticsService {
 
 ### 第1步：收口正式边界表述（预计0.5天）
 
-- [ ] **任务**：在 `star-service.js`、`analytics-service.js`、`reward-service.js`、`task-query.js` 中补齐必要注释
-- [ ] **验证**：关键边界在代码注释、设计文档和测试名中表述一致
-- [ ] **依赖**：无
+- [x] **任务**：在 `star-service.js`、`analytics-service.js`、`reward-service.js`、`task-query.js` 中补齐必要注释
+- [x] **验证**：关键边界在代码注释、设计文档和测试名中表述一致
+- [x] **依赖**：无
 
 实施要点：
 
@@ -363,9 +365,9 @@ class AnalyticsService {
 
 ### 第2步：补齐核心测试矩阵（预计0.5-1天）
 
-- [ ] **任务**：补齐星星域、奖励域、分析页、启动链路、首页定时检查的边界测试
-- [ ] **验证**：新增测试能锁定现有正式行为
-- [ ] **依赖**：第1步完成
+- [x] **任务**：补齐星星域、奖励域、分析页、启动链路、首页定时检查的边界测试
+- [x] **验证**：新增测试能锁定现有正式行为
+- [x] **依赖**：第1步完成
 
 实施要点：
 
@@ -376,15 +378,58 @@ class AnalyticsService {
 
 ### 第3步：只修真实不一致点（预计0-0.5天）
 
-- [ ] **任务**：若测试暴露出现有调用点存在真实漂移，再做最小代码修正
-- [ ] **验证**：所有相关测试通过
-- [ ] **依赖**：第2步完成
+- [x] **任务**：若测试暴露出现有调用点存在真实漂移，再做最小代码修正
+- [x] **验证**：所有相关测试通过
+- [x] **依赖**：第2步完成
 
 实施要点：
 
 1. 不以“统一形式”为目标做重构。
 2. 仅修“行为与正式矩阵不一致”的点。
 3. 若确需抽公共逻辑，优先提炼私有 helper，不新增公开 wrapper。
+
+---
+
+## 实施结果
+
+### 实际落地范围
+
+本次实现采用了设计约束中的轻量方案，未新增新的公开 wrapper，也未引入新的星星域编排接口。
+
+- `services/star-service.js`
+  - 补齐 authority sync、pending-local、`_syncConsumeToCloud()` 等正式边界注释
+- `services/analytics-service.js`
+  - 固化 family 双读模型的 owner 与并行语义说明
+- `services/reward-service.js`
+  - 固化奖励域读前补星、写后强刷的既有边界
+- `services/task-service/task-query.js`
+  - 固化 `requireFreshStars` 作为 M09 既有契约
+- `utils/app/post-login-bootstrap.js`
+  - 补齐登录后 `authority -> stars -> rewards` 顺序说明
+- `pages/index/modules/index-refresh-coordinator.js`
+  - 固化首页定时检查只负责 authority 检查的边界
+- `pages/rewards/rewards.js`
+  - 固化奖励页 `onShow` 与下拉刷新在 authority force 语义上的差异
+- `packageChart/components/star-calendar/star-calendar.js`
+  - 固化 fallback 仅为兼容路径，不抢分析页 owner
+
+### 测试补齐结果
+
+- `test/services/star-service.test.js`
+  - 补齐 pending-local、authority 节流、`_syncConsumeToCloud()` 与 group 回灌保护测试
+- `test/services/analytics-service.test.js`
+  - 补齐 family 模式下 `authority -> Promise.all(records, summary)` 的边界测试
+- `test/pages/rewards.page-contract.test.js`
+  - 补齐奖励页 `onShow / onPullDownRefresh` force 差异测试
+- `test/pages/star-calendar.component.test.js`
+  - 补齐 fallback 兼容边界测试
+
+### 完成结论
+
+- 已按设计完成轻量治理收口
+- 未新增 `prepareStarCloudSnapshot()` / `prepareFamilyStarReadModel()` 等公开接口
+- 未把星星域迁入 `OfflineQueueService`
+- 实际落地与提交 `1da4d8f` 一致
 
 ---
 
