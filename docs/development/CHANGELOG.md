@@ -4,6 +4,82 @@
 
 ---
 
+## [里程碑-20B] - 2026-04-06
+
+### ✅ 完成情况
+
+**星星域边界治理轻量收口**
+
+- **正式边界固化**：
+  - 明确 `syncExpiryAuthorityIfNeeded()` 仅代表 authority sync，不等于本地镜像已刷新
+  - 明确 `refreshStarsFromCloud()` 的 pending-local 保护与 `forceCloudAfterAuthority` 既有语义
+  - 明确 `getFamilyStarSummary()` 与 family records refresh 共同组成 family 双读模型
+- **跨域入口收口**：
+  - 固化登录后初始化、首页定时过期检查、奖励页刷新、任务查询读前补星等既有边界
+  - 保留 `task-query.js` 的 `requireFreshStars` 既有契约，不把星星域迁入统一离线队列
+- **测试与注释补齐**：
+  - 补齐 `star-service`、`analytics-service`、奖励页、星星日历组件等边界测试
+  - 补齐启动链路、奖励服务、首页刷新协调器等关键调用点的正式说明
+
+### 🧪 验证结果
+
+- M20B 定向测试通过：
+  - `test/services/star-service.test.js`
+  - `test/services/analytics-service.test.js`
+  - `test/pages/rewards.page-contract.test.js`
+  - `test/pages/star-calendar.component.test.js`
+- 本次实施以轻量治理为主：
+  - 未新增公开 wrapper
+  - 未调整存储模型
+  - 未将星星域接入 `OfflineQueueService`
+
+### 📖 详细实施记录
+
+- [里程碑-20B：星星域边界治理轻量收口](../design/milestone-20b-star-domain-boundary-governance.md)
+
+---
+
+## [里程碑-20C] - 2026-04-07
+
+### ✅ 完成情况
+
+**前端复杂度治理 2.0**
+
+- **首页 page shell 继续瘦身**：
+  - 新增 `index-date-navigation.js`、`index-message-preview.js`、`index-search-panel.js`、`index-user-switcher.js`
+  - 首页 reward UI 壳层进一步收口到 `index-reward-flow.js`
+  - `pages/index/index.js` 从 `2105` 行下降到 `1183` 行
+- **奖励页首次模块化**：
+  - 新增 `rewards-sync.js`、`rewards-exchange-flow.js`、`rewards-animation.js`、`rewards-user-context.js`
+  - `pages/rewards/rewards.js` 从 `1127` 行下降到 `412` 行
+  - 修复奖励页进度条完成监听生命周期不对称问题，改为显示期注册、隐藏期解绑
+- **MessageService 内部职责切片**：
+  - 新增 `message-provisional.js`、`message-domain.js`、`message-handlers.js`
+  - `services/message-service.js` 从 `2336` 行下降到 `1526` 行
+  - 保留 facade 对外接口不变，listener map 稳定化落地
+- **收尾修复**：
+  - 修复奖励兑换成功后 `nextReward` 为空时的安全分支
+  - 修复首页消息预览快速开关时的定时器竞争问题
+  - 清理奖励页用户上下文适配层中的死参数，统一参数签名
+
+### 🧪 验证结果
+
+- 页面大范围回归通过：
+  - `npm run test:pages -- --runInBand`
+  - 结果：`21 suites / 136 tests` 全绿
+- MessageService 定向回归通过：
+  - `npx jest test/services/message-service.test.js test/services/message-service.modules.test.js --runInBand`
+  - 结果：`2 suites / 83 tests` 全绿
+- 首页与奖励页模块级定向回归通过：
+  - `npx jest test/pages/index.modules.test.js test/pages/rewards.behavior.test.js test/pages/rewards.modules.test.js test/pages/rewards.page-contract.test.js --runInBand`
+  - 结果：相关新增边界与生命周期测试全部通过
+
+### 📖 详细实施记录
+
+- [里程碑-20C：前端复杂度治理 2.0](../design/milestone-20c-frontend-complexity-governance-2.md)
+
+---
+
 ## [里程碑-20A] - 2026-04-05
 
 ### ✅ 完成情况

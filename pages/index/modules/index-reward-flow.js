@@ -1,6 +1,7 @@
 const serviceManager = require('../../../services/service-manager.js');
 const formatUtils = require('../../../utils/formatUtils');
 const logger = require('../../../utils/logger');
+const pageStorageHelper = require('../../../utils/page-storage-helper');
 
 function isExampleReward(reward) {
   if (!reward) {
@@ -450,6 +451,186 @@ async function transitionToNewTarget(page) {
   }
 }
 
+function viewRewardPool(page) {
+  logger.debug('Index', '用户选择查看奖池');
+
+  const app = getApp();
+  app.globalData.hasRedirectedToReward = true;
+  app.globalData.completedRewardInfo = {
+    reward: page.data.completedReward,
+    total: page.data.completedRewardTotal
+  };
+
+  pageStorageHelper.setPageState('fromRewardCompletion', true);
+  pageStorageHelper.setPageState('completedRewardInfo', {
+    reward: page.data.completedReward,
+    total: page.data.completedRewardTotal
+  });
+
+  page.setData({
+    showRewardChoice: false
+  });
+
+  setTimeout(() => {
+    wx.switchTab({
+      url: '/pages/rewards/rewards'
+    });
+  }, 300);
+}
+
+function onRewardIndicatorTap(page, e) {
+  const rewardId = e.currentTarget.dataset.id;
+  const reward = page.data.visibleRewards.find((item) => item.id === rewardId);
+
+  if (!reward) {
+    return;
+  }
+
+  logger.debug('Index', `点击奖励指示器: ${reward.name}, 状态: ${reward.status}`);
+
+  if (page.data.isReadonlyView) {
+    wx.showToast({ title: '请切换回家长视角查看奖励', icon: 'none' });
+    return;
+  }
+
+  if (reward.status === 'unlocked' || reward.status === 'claimed') {
+    wx.switchTab({
+      url: '/pages/rewards/rewards'
+    });
+    return;
+  }
+
+  if (reward.status === 'current') {
+    wx.showToast({
+      title: `目标: ${reward.name}`,
+      icon: 'none'
+    });
+  }
+}
+
+function showAllRewards(page) {
+  if (page.data.isReadonlyView) {
+    wx.showToast({ title: '请切换回家长视角查看奖励', icon: 'none' });
+    return;
+  }
+
+  logger.debug('Index', '查看所有奖励');
+  wx.switchTab({
+    url: '/pages/rewards/rewards'
+  });
+}
+
+function generateRewardHintText(page, userPoints, allRewards) {
+  const unlockedRewards = allRewards.filter((reward) => userPoints >= reward.points);
+  const unlockedCount = unlockedRewards.length;
+
+  let hintText = '';
+  if (unlockedCount > 1) {
+    hintText = `恭喜！您已达成${unlockedCount}个奖品，可前往奖池查看`;
+  } else if (unlockedCount === 1) {
+    hintText = `恭喜！已达成${unlockedRewards[0].name}，可前往奖池查看`;
+  } else {
+    hintText = null;
+  }
+
+  page.setData({
+    rewardHintText: hintText
+  });
+}
+
+function hasOnlyExampleRewards() {
+  logger.debug('Index', '检查是否只有示例奖励可用');
+
+  const rewardService = serviceManager.getRewardService();
+  const result = rewardService.hasOnlyExampleRewardsSync();
+
+  logger.debug('Index', `是否只有示例奖励: ${result}`);
+  return result;
+}
+
+function showSetupRewardTip(page) {
+  logger.debug('Index', '显示设置奖励提示');
+
+  const animation = wx.createAnimation({
+    duration: 300,
+    timingFunction: 'ease'
+  });
+
+  animation.scale(0.8).opacity(0).step({ duration: 0 });
+
+  page.setData({
+    showSetupRewardTip: true,
+    setupRewardTipAnimation: animation.export()
+  });
+
+  setTimeout(() => {
+    animation.scale(1).opacity(1).step();
+    page.setData({
+      setupRewardTipAnimation: animation.export()
+    });
+  }, 50);
+}
+
+function closeSetupRewardTip(page) {
+  logger.debug('Index', '关闭设置奖励提示');
+
+  const animation = wx.createAnimation({
+    duration: 300,
+    timingFunction: 'ease-out'
+  });
+
+  animation.scale(0.8).opacity(0).step();
+
+  page.setData({
+    setupRewardTipAnimation: animation.export()
+  });
+
+  setTimeout(() => {
+    page.setData({
+      showSetupRewardTip: false
+    });
+  }, 300);
+}
+
+function navigateToRewardManage(page) {
+  logger.debug('Index', '跳转到奖励管理页面');
+  page.closeSetupRewardTip();
+
+  setTimeout(() => {
+    wx.navigateTo({
+      url: '/packageManage/pages/reward-manage/reward-manage'
+    });
+  }, 300);
+}
+
+function prepareRewardIndicators(page) {
+  logger.debug('Index', `准备显示奖品指示器: ${page.data.visibleRewards.length}个, 状态分布: ${page.data.visibleRewards.map(r => r.status).join(',')}`);
+
+  const rewardService = serviceManager.getRewardService();
+  const processedRewards = page.data.visibleRewards.map((reward) => {
+    let status = 'locked';
+
+    if (reward.claimed) {
+      status = 'claimed';
+    } else if (page.data.userPoints >= reward.points) {
+      status = 'unlocked';
+    } else if (page.data.nextReward && page.data.nextReward.id === reward.id) {
+      status = 'current';
+    }
+
+    return {
+      ...reward,
+      status,
+      isExample: rewardService._isExampleReward(reward)
+    };
+  });
+
+  page.setData({
+    visibleRewards: processedRewards.slice(0, 5),
+    hasMoreRewards: processedRewards.length > 5
+  });
+}
+
 module.exports = {
   onRewardComplete,
   checkRewardUnlock,
@@ -457,5 +638,14 @@ module.exports = {
   handleRewardCompletion,
   showRewardChoiceDialog,
   continueCollecting,
-  transitionToNewTarget
+  transitionToNewTarget,
+  viewRewardPool,
+  onRewardIndicatorTap,
+  showAllRewards,
+  generateRewardHintText,
+  hasOnlyExampleRewards,
+  showSetupRewardTip,
+  closeSetupRewardTip,
+  navigateToRewardManage,
+  prepareRewardIndicators
 };
