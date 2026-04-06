@@ -233,6 +233,31 @@ describe('AnalyticsService', () => {
       expect(result.forecastData.length).toBeGreaterThan(0);
       expect(result.forecastData[result.forecastData.length - 1].value).toBe(0);
     });
+
+    it('family prepare 应在 authority 成功后并行请求 records refresh 与 summary', async () => {
+      mockStarService.refreshStarsFromCloud.mockResolvedValue({ success: true, records: [], groups: [] });
+      mockStarService.getFamilyStarSummary.mockResolvedValue({
+        success: true,
+        scope: 'family',
+        subjectUserIds: ['child-1'],
+        totalPoints: 6,
+        groups: []
+      });
+
+      await analyticsService.prepareReadModel({
+        analysisOptions: {
+          scope: 'family',
+          childUserIds: ['child-1']
+        },
+        monthKey: '2026-03',
+        days: 7,
+        force: true
+      });
+
+      expect(mockStarService.syncExpiryAuthorityIfNeeded).toHaveBeenCalledWith({ scope: 'family' });
+      expect(mockStarService.refreshStarsFromCloud).toHaveBeenCalledWith(null, { scope: 'family' });
+      expect(mockStarService.getFamilyStarSummary).toHaveBeenCalledWith({ force: true });
+    });
   });
 
   describe('getTaskCompletionStats', () => {

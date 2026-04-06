@@ -287,6 +287,7 @@ describe('pages/rewards/rewards contract', () => {
       refreshRewardsFromCloud: jest.fn().mockResolvedValue({ success: true })
     };
     const starService = {
+      syncExpiryAuthorityIfNeeded: jest.fn().mockResolvedValue({ success: true }),
       refreshStarsFromCloud: jest.fn().mockResolvedValue({ success: true })
     };
 
@@ -308,6 +309,13 @@ describe('pages/rewards/rewards contract', () => {
 
     await page.onShow();
 
+    expect(starService.syncExpiryAuthorityIfNeeded).toHaveBeenCalledWith({
+      scope: 'user',
+      userId: 'child-2'
+    });
+    expect(starService.refreshStarsFromCloud).toHaveBeenCalledWith('child-2', {
+      forceCloudAfterAuthority: true
+    });
     expect(rewardService.refreshRewardsFromCloud).toHaveBeenCalledWith({
       force: true,
       userId: 'child-2'
@@ -321,6 +329,7 @@ describe('pages/rewards/rewards contract', () => {
       refreshRewardsFromCloud: jest.fn().mockResolvedValue({ success: true })
     };
     const starService = {
+      syncExpiryAuthorityIfNeeded: jest.fn().mockResolvedValue({ success: true }),
       refreshStarsFromCloud: jest.fn().mockResolvedValue({ success: true })
     };
 
@@ -342,6 +351,14 @@ describe('pages/rewards/rewards contract', () => {
 
     await page.onPullDownRefresh();
 
+    expect(starService.syncExpiryAuthorityIfNeeded).toHaveBeenCalledWith({
+      scope: 'user',
+      userId: 'child-2',
+      force: true
+    });
+    expect(starService.refreshStarsFromCloud).toHaveBeenCalledWith('child-2', {
+      forceCloudAfterAuthority: true
+    });
     expect(rewardService.refreshRewardsFromCloud).toHaveBeenCalledWith({
       force: true,
       userId: 'child-2'

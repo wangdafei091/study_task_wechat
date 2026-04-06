@@ -1385,6 +1385,45 @@ describe('StarService', () => {
       expect(mockStarGroupRepository._saveData).not.toHaveBeenCalled();
     });
 
+    it('消费补云成功后应回写服务端返回的最新分组快照', async () => {
+      HttpClient.post.mockResolvedValue({
+        updatedGroupsSnapshot: [
+          {
+            groupId: 'consume_group_1',
+            stars: 4,
+            expiryType: 'week',
+            expiryDate: '2026-03-28'
+          }
+        ]
+      });
+      mockStarGroupRepository.getAll.mockResolvedValue([]);
+
+      await starService._syncConsumeToCloud(6, '奖励兑换', {
+        userId: 'user_123',
+        sourceType: 'reward_exchange',
+        sourceId: 'reward_1'
+      });
+
+      expect(HttpClient.post).toHaveBeenCalledWith('/api/stars/consume', expect.objectContaining({
+        userId: 'user_123',
+        requestedPoints: 6,
+        reason: '奖励兑换',
+        sourceType: 'reward_exchange',
+        sourceId: 'reward_1'
+      }));
+      expect(mockStarGroupRepository._saveData).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: 'consume_group_1',
+            userId: 'user_123',
+            stars: 4,
+            syncedToCloud: true
+          })
+        ])
+      );
+      expect(mockStarGroupRepository.invalidateCache).toHaveBeenCalled();
+    });
+
     it('补云星星流水时应将历史展示型 expiryDate 归一化为原始日期', async () => {
       const record = {
         id: 'record_sync_legacy',

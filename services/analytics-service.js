@@ -314,6 +314,7 @@ class AnalyticsService {
           return { success: true, fallback: true, snapshot };
         }
 
+        // family 分析是正式双读模型：authority 成功后，并行刷新家庭流水与家庭 summary。
         const [taskResult, starRefreshResult, familySummary] = await Promise.all([
           this._loadScopedTasksByDateRange(startDate, endDate, context),
           this.starService.refreshStarsFromCloud(null, { scope: 'family' }),

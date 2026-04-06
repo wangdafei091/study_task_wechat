@@ -168,4 +168,21 @@ describe('packageChart/components/star-calendar/star-calendar', () => {
     expect(serviceManager.getTaskService).not.toHaveBeenCalled();
     expect(component.updateCalendarWithStars).not.toHaveBeenCalled();
   });
+
+  it('非统一读模型 fallback 仍允许按 analysis scope 直连刷新星星', async () => {
+    const refreshStarsFromCloud = jest.fn().mockResolvedValue();
+
+    const component = createComponentInstance();
+
+    await component._refreshStarsForAnalysis({ refreshStarsFromCloud }, {
+      scope: 'family',
+      childUserIds: ['child-1']
+    });
+    await component._refreshStarsForAnalysis({ refreshStarsFromCloud }, {
+      userId: 'child-1'
+    });
+
+    expect(refreshStarsFromCloud).toHaveBeenNthCalledWith(1, null, { scope: 'family' });
+    expect(refreshStarsFromCloud).toHaveBeenNthCalledWith(2, 'child-1');
+  });
 });

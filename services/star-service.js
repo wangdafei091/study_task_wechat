@@ -1480,6 +1480,7 @@ class StarService {
     const scope = options.scope || 'user';
 
     if (scope === 'family') {
+      // family refresh 只回灌家庭流水镜像；当前余额和分组快照仍以 family summary 为正式来源。
       const familyRecordsData = await HttpClient.get(API_CONFIG.ENDPOINTS.STAR_RECORDS, { scope: 'family' });
       const familyRecords = (familyRecordsData.records || []).map(record => this._mapCloudRecord(record));
       await this._replaceSyncedStarRecords(null, familyRecords, { scope: 'family' });
@@ -1493,6 +1494,7 @@ class StarService {
 
     const hasPendingLocalRecords = await this.hasPendingLocalStarRecords(userId);
     if (hasPendingLocalRecords && options.forceCloudAfterAuthority !== true) {
+      // 单用户星星余额属于资产快照。若本地仍有未补云流水，普通 refresh 不能直接覆盖本地镜像。
       logger.info('StarService', '检测到本地待同步星星流水，跳过云端星星覆盖', { userId });
       const [localGroups, localRecords] = await Promise.all([
         this.starGroupRepository.getAll(false),
@@ -1561,6 +1563,7 @@ class StarService {
     }
 
     const syncPromise = (async () => {
+      // authority sync 只代表后端权威结算已触发；调用方若需要最新本地镜像，仍需后续显式 refresh。
       const payload = {
         scope,
         targetUserId: scope === 'user' ? options.userId : undefined,
@@ -1636,6 +1639,7 @@ class StarService {
       return;
     }
 
+    // 扣星/消费和加星流水一样，都是星星域正式写路径补云能力，而不是离线队列 drain。
     const response = await HttpClient.post(API_CONFIG.ENDPOINTS.STAR_CONSUME, {
       userId: options.userId || null,
       requestedPoints,

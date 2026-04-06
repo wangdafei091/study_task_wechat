@@ -228,6 +228,7 @@ Page({
       const shouldForceRewardRefresh = app.globalData.needRefreshReward === true;
 
       if (starService?.syncExpiryAuthorityIfNeeded && effectiveChildId) {
+        // onShow 走普通 authority 检查；强制刷新只发生在下拉刷新链路。
         await starService.syncExpiryAuthorityIfNeeded({
           scope: 'user',
           userId: effectiveChildId
@@ -300,6 +301,7 @@ Page({
       const effectiveChildId = this._getEffectiveChildUserId();
 
       if (starService?.syncExpiryAuthorityIfNeeded && effectiveChildId) {
+        // 下拉刷新是奖励页唯一显式强制 authority 刷新入口。
         await starService.syncExpiryAuthorityIfNeeded({
           scope: 'user',
           userId: effectiveChildId,

@@ -62,6 +62,7 @@ class RewardService {
       typeof this.starService.getTotalStars === 'function';
 
     if (shouldPreferStarService) {
+      // 这是奖励域自己的读前余额对齐路径，保留既有 refreshBeforeRead 契约，不并入页面刷新编排。
       const shouldRefresh = options.refreshBeforeRead !== false &&
         userId &&
         typeof this.starService.refreshStarsFromCloud === 'function';
@@ -1190,6 +1191,7 @@ class RewardService {
         await this.rewardRepository.save(cloudReward);
 
         if (this.starService?.refreshStarsFromCloud) {
+          // 兑换成功意味着云端权威余额已变化，本次允许强制回刷最新星星镜像。
           await this.starService.refreshStarsFromCloud(userId, {
             forceCloudAfterAuthority: true
           }).catch(() => null);
@@ -1500,6 +1502,7 @@ class RewardService {
         await this.rewardRepository.save(cloudReward);
 
         if (this.starService?.refreshStarsFromCloud && exchangeUserId) {
+          // 取消兑换成功后同样需要按最新云端余额回刷孩子星星镜像。
           await this.starService.refreshStarsFromCloud(exchangeUserId, {
             forceCloudAfterAuthority: true
           }).catch(() => null);

@@ -119,6 +119,7 @@ async function loadAllPageData(page, options = {}) {
         skipExpiryAuthoritySyncBeforeFormalReminders:
           options.skipExpiryAuthoritySyncBeforeFormalReminders === true
       }),
+      // authority 可能已在前序过期检查中完成；这里必须跳过重复 authority，只做后续 stars/rewards 刷新。
       page.loadStarsAndRewards({
         skipAuthoritySync: true
       })
