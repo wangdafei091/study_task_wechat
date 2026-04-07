@@ -592,12 +592,6 @@ const offlineQueueService = serviceManager.get('offlineQueueService');
 - **参数**: `rewardId` - 奖励ID
 - **返回**: `Promise<{ success: boolean, message?: string }>`
 
-##### `markRewardAsDelivered(rewardId)`
-标记奖励为已领取
-- **参数**: `rewardId` - 奖励ID
-- **返回**: `{ success: boolean, message?: string }`
-- **注意**: 此方法已废弃，用户兑换时直接设置为delivered状态
-
 ---
 
 #### 奖励状态管理

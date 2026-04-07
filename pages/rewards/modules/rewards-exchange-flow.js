@@ -115,7 +115,7 @@ async function performClaimReward(page, reward) {
       return;
     }
 
-    const childUserId = page._getChildUserId();
+    const childUserId = page._getEffectiveChildUserId();
     if (!childUserId) {
       wx.hideLoading();
       wx.showToast({

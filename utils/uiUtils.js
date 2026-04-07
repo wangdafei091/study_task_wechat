@@ -174,37 +174,6 @@ const updateState = function(page, dataKey, value, options = {}) {
 };
 
 /**
- * 切换组件显示状态 (保留向后兼容)
- * @param {Object} page - 页面实例
- * @param {String} componentName - 组件的数据路径
- * @param {Boolean} status - 要设置的状态，不提供则切换当前状态
- */
-const toggleComponent = function(page, componentName, status) {
-  return updateState(page, componentName, status);
-};
-
-/**
- * 切换遮罩层状态 (保留向后兼容)
- * @param {Object} page - 页面实例
- * @param {Boolean} status - 要设置的状态，不提供则切换当前状态
- * @returns {Boolean} 设置后的状态
- */
-const toggleMask = function(page, status) {
-  return updateState(page, 'isMaskVisible', status);
-};
-
-/**
- * 显示加载状态 (保留向后兼容)
- * @param {Object} page - 页面实例
- * @param {String} loadingKey - 加载状态的数据路径，如'isLoading'
- * @param {Boolean} status - 要设置的状态
- * @returns {Boolean} 设置后的状态
- */
-const setLoading = function(page, loadingKey = 'isLoading', status = true) {
-  return updateState(page, loadingKey, status);
-};
-
-/**
  * 滚动到指定元素
  * @param {String} selector - 元素选择器
  * @param {Object} context - 组件实例或页面实例
@@ -402,9 +371,6 @@ const logButtonLayoutOptimization = function(page, layoutInfo = {}) {
 module.exports = {
   setTheme,
   getCurrentTheme,
-  toggleComponent,
-  toggleMask,
-  setLoading,
   scrollToElement,
   createAnimation,
   slideAnimation,

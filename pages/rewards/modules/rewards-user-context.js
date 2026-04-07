@@ -93,13 +93,8 @@ function getRewardOwnerUserId(serviceManager) {
   return snapshot.loginUserId || snapshot.viewUserId || null;
 }
 
-function getChildUserId(serviceManager) {
-  return getEffectiveChildUserId(serviceManager);
-}
-
 module.exports = {
   resolveRewardPageViewMode,
   getEffectiveChildUserId,
-  getRewardOwnerUserId,
-  getChildUserId
+  getRewardOwnerUserId
 };

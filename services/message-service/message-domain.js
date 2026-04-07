@@ -305,71 +305,6 @@ async function updateTaskMessagesWithDomainModel(service, task) {
   }
 }
 
-async function getMessageStatsWithDomainModel(service) {
-  try {
-    const stats = await service.messageRepository.getMessageStats();
-    logger.info('MessageService', '使用领域模型获取消息统计信息成功');
-    return stats;
-  } catch (error) {
-    logger.error('MessageService', '使用领域模型获取消息统计信息失败', error);
-    return {
-      total: 0,
-      unread: 0,
-      today: 0,
-      highPriority: 0,
-      byType: {}
-    };
-  }
-}
-
-async function cleanExpiredMessagesWithDomainModel(service, expiryDays = 30) {
-  try {
-    const count = await service.messageRepository.cleanExpiredMessages(expiryDays);
-    if (count > 0) {
-      service.eventBus.emit(EVENTS.DOMAIN_MESSAGE_CLEANED, { count, expiryDays });
-    }
-    logger.info('MessageService', `使用领域模型清理过期消息成功: ${count}条`);
-    return count;
-  } catch (error) {
-    logger.error('MessageService', '使用领域模型清理过期消息失败', error);
-    return 0;
-  }
-}
-
-async function getHighPriorityMessagesWithDomainModel(service) {
-  try {
-    const unreadMessages = await service.messageRepository.getUnreadMessages();
-    const highPriorityMessages = unreadMessages.filter((message) => message.isHighPriority());
-    logger.info('MessageService', `使用领域模型获取高优先级未读消息成功: ${highPriorityMessages.length}条`);
-    return highPriorityMessages;
-  } catch (error) {
-    logger.error('MessageService', '使用领域模型获取高优先级未读消息失败', error);
-    return [];
-  }
-}
-
-async function migrateMessageData(service) {
-  try {
-    logger.info('MessageService', '开始迁移消息数据到领域模型');
-    const oldMessages = await new Promise((resolve) => {
-      service.messageManager.getAllMessages((messages) => resolve(messages || []));
-    });
-
-    if (oldMessages.length === 0) {
-      logger.info('MessageService', '没有消息需要迁移');
-      return { migrated: 0, total: 0 };
-    }
-
-    const newMessages = oldMessages.map((old) => new Message(old));
-    await service.messageRepository.saveAll(newMessages);
-    logger.info('MessageService', `成功迁移${newMessages.length}条消息数据到领域模型`);
-    return { migrated: newMessages.length, total: oldMessages.length };
-  } catch (error) {
-    logger.error('MessageService', '迁移消息数据到领域模型失败', error);
-    return { migrated: 0, total: 0, error: error.message };
-  }
-}
-
 async function createRewardMessageWithDomainModel(service, reward, action, options = {}) {
   const { operatorUserId } = options;
   const operator = service._resolveOperatorIdentity(operatorUserId);
@@ -450,7 +385,6 @@ async function createRewardMessageWithDomainModel(service, reward, action, optio
 
 module.exports = {
   buildTaskLocalMessageMeta,
-  prepareTaskMessageData,
   createMessageWithDomainModel,
   createTaskMessageWithDomainModel,
   createSystemMessageWithDomainModel,
@@ -462,9 +396,5 @@ module.exports = {
   deleteMessageWithDomainModel,
   deleteRelatedMessagesWithDomainModel,
   updateTaskMessagesWithDomainModel,
-  getMessageStatsWithDomainModel,
-  cleanExpiredMessagesWithDomainModel,
-  getHighPriorityMessagesWithDomainModel,
-  migrateMessageData,
   createRewardMessageWithDomainModel
 };

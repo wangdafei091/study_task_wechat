@@ -973,48 +973,6 @@ describe('RewardService', () => {
       );
     });
 
-    it('应该支持 markRewardAsDelivered 方法（已废弃）', async () => {
-      // 准备测试数据
-      const reward = new Reward({
-        id: 'reward_1',
-        name: '测试奖励',
-        claimed: true,
-        claimStatus: 'pending'
-      });
-      mockRewardRepository.getById.mockResolvedValue(reward);
-
-      // 执行操作
-      const result = await rewardService.markRewardAsDelivered('reward_1');
-
-      // 验证结果
-      expect(result.success).toBe(true);
-      expect(result.message).toBe('奖励已标记为已领取');
-      expect(result.reward.claimStatus).toBe('delivered');
-      expect(mockRewardRepository.save).toHaveBeenCalled();
-
-      // 验证事件
-      mockEventBus.verifyEmit(EVENTS.REWARD_DELIVERED, (eventData) => {
-        expect(eventData.reward.id).toBe('reward_1');
-      });
-    });
-
-    it('markRewardAsDelivered 应拒绝未兑换的奖励', async () => {
-      // 准备测试数据
-      const reward = new Reward({
-        id: 'reward_1',
-        name: '未兑换奖励',
-        claimed: false
-      });
-      mockRewardRepository.getById.mockResolvedValue(reward);
-
-      // 执行操作
-      const result = await rewardService.markRewardAsDelivered('reward_1');
-
-      // 验证结果
-      expect(result.success).toBe(false);
-      expect(result.message).toBe('奖励尚未被兑换');
-      expect(mockRewardRepository.save).not.toHaveBeenCalled();
-    });
   });
 
   // ==================== 测试组4：奖励保护逻辑 ====================

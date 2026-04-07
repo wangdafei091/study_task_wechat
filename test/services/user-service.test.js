@@ -262,30 +262,6 @@ describe('UserService', () => {
   });
 
   describe('用户查询', () => {
-    it('getChildUserId应该返回孩子用户ID', () => {
-      const mockUsers = [
-        { userId: 'parent', name: '家长', role: 'parent', status: 'active' },
-        { userId: 'child', name: '孩子', role: 'child', status: 'active' }
-      ];
-      mockHttpClient.getAllUsers.mockResolvedValue(mockUsers);
-
-      userService.userCache.set('parent', new User(mockUsers[0]));
-      userService.userCache.set('child', new User(mockUsers[1]));
-
-      const childUserId = userService.getChildUserId();
-
-      expect(childUserId).toBe('child');
-    });
-
-    it('getChildUserId在没有孩子成员时应返回null', () => {
-      const parentUser = new User({ userId: 'parent', name: '家长', role: 'parent' });
-      userService.userCache.set('parent', parentUser);
-
-      const childUserId = userService.getChildUserId();
-
-      expect(childUserId).toBeNull();
-    });
-
     it('getAllUsers应该返回所有用户', () => {
       const parentUser = new User({ userId: 'parent', name: '家长', role: 'parent' });
       const childUser = new User({ userId: 'child', name: '孩子', role: 'child' });

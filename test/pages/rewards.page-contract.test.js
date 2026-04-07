@@ -391,7 +391,6 @@ describe('pages/rewards/rewards contract', () => {
     });
     expect(page._getEffectiveChildUserId()).toBe('child-2');
     expect(page._getRewardOwnerUserId()).toBe('parent-1');
-    expect(page._getChildUserId()).toBe('child-2');
   });
 
   it('无可用孩子视角时应安静降级，不记录误导性 warn', () => {
