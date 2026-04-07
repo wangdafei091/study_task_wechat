@@ -13,7 +13,7 @@
 - **服务层收口**：
   - 修复 `MessageService.batchMarkMessagesAsRead()` 对旧 `messageManager` 的失效依赖，改为委托 `MessageRepository`
   - 清理 `MessageService` 中无生产调用的历史接口与残链，包括 `batchCreateTaskMessages()`、`getUpcomingTaskNotifications()`、`_migrateMessageData()` 和一组无调用 domain facade 壳方法
-  - 清理 `UserService.getChildUserId()`、`UserService._loadUserState()` 和 `RewardService.markRewardAsDelivered()`
+  - 清理 `UserService.getChildUserId()`、`UserService._loadUserState()`、`TaskService._getChildUserId()` 和 `RewardService.markRewardAsDelivered()`
 - **页面与工具层收口**：
   - 奖励页兑换流统一改用 `_getEffectiveChildUserId()`，删除 `_getChildUserId()` 兼容壳与对应模块 helper
   - 删除 `utils/log-analyzer.js` 及 `app.js` 中的 dev-only 入口
@@ -28,15 +28,17 @@
   - `test/services/message-service.test.js`
   - `test/services/message-service.modules.test.js`
   - `test/services/user-service.test.js`
+  - `test/services/task-service.helpers.test.js`
   - `test/services/reward-service.test.js`
   - `test/pages/rewards.page-contract.test.js`
   - `test/pages/rewards.modules.test.js`
   - `test/pages/rewards.behavior.test.js`
   - `test/app.test.js`
   - `test/app/app-shell.behavior.test.js`
+  - `test/pages/index.page-shell.behavior.test.js`
   - `test/pages/task-edit.page.test.js`
 - 本次实施共验证：
-  - `10 suites / 250 tests` 全绿
+  - `12 suites / 267 tests` 全绿
 
 ### 📖 详细实施记录
 

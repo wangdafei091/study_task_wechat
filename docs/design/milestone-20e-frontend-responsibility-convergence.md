@@ -399,6 +399,8 @@ class MessageService {
 - `UserService`
   - 删除 `getChildUserId()`
   - 删除 `_loadUserState()`
+- `TaskService`
+  - 删除仅测试引用的遗留 helper `_getChildUserId()`
 - `RewardService`
   - 删除废弃接口 `markRewardAsDelivered()`
   - 同步更新 `docs/api/services-guide.md`
@@ -415,14 +417,16 @@ class MessageService {
   - `test/services/message-service.test.js`
   - `test/services/message-service.modules.test.js`
   - `test/services/user-service.test.js`
+  - `test/services/task-service.helpers.test.js`
   - `test/services/reward-service.test.js`
   - `test/pages/rewards.page-contract.test.js`
   - `test/pages/rewards.modules.test.js`
   - `test/pages/rewards.behavior.test.js`
   - `test/app.test.js`
   - `test/app/app-shell.behavior.test.js`
+  - `test/pages/index.page-shell.behavior.test.js`
   - `test/pages/task-edit.page.test.js`
-- 本轮验证结果：`10` 个 suite、`250` 个测试全部通过
+- 本轮验证结果：`12` 个 suite、`267` 个测试全部通过
 
 ---
 

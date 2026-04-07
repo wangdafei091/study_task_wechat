@@ -845,38 +845,6 @@ class TaskService {
     return taskQuery.calculateStreak(tasks);
   }
 
-
-
-  /**
-   * 获取小朋友用户ID（统一方法）
-   * @returns {String} 小朋友用户ID
-   * @private
-   */
-  _getChildUserId() {
-    let childUserId = 'child'; // 默认用户ID
-    
-    if (this.serviceManager) {
-      const userService = this.serviceManager.getUserService();
-      if (userService) {
-        const childUser = userService.getUserByRole('child');
-        if (childUser) {
-          childUserId = childUser.id;
-          logger.info('TaskService', `获取小朋友用户ID成功: ${childUserId}`);
-        } else {
-          logger.warn('TaskService', '未找到小朋友用户，使用默认child用户ID');
-          childUserId = 'child'; // 使用默认ID
-        }
-      }
-    }
-    
-    if (!childUserId) {
-      logger.warn('TaskService', '无法获取小朋友用户ID，使用默认child用户ID');
-      childUserId = 'child'; // 兜底方案
-    }
-
-    return childUserId;
-  }
-
   /**
    * 将家长名下的任务迁移到指定孩子（M08b：前置任务归属迁移）
    * 顺序：云端先行，云端成功后再更新本地；syncedToCloud 保持不变

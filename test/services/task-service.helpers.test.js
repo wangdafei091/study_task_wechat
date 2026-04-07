@@ -266,31 +266,6 @@ describe('TaskService helpers and delegators', () => {
     }));
   });
 
-  it('_getChildUserId 应覆盖用户存在、缺失和兜底分支', () => {
-    const { service } = loadTaskService();
-
-    service.serviceManager = {
-      getUserService: jest.fn(() => ({
-        getUserByRole: jest.fn(() => ({ id: 'child_real' }))
-      }))
-    };
-    expect(service._getChildUserId()).toBe('child_real');
-
-    service.serviceManager = {
-      getUserService: jest.fn(() => ({
-        getUserByRole: jest.fn(() => null)
-      }))
-    };
-    expect(service._getChildUserId()).toBe('child');
-
-    service.serviceManager = {
-      getUserService: jest.fn(() => ({
-        getUserByRole: jest.fn(() => ({ id: '' }))
-      }))
-    };
-    expect(service._getChildUserId()).toBe('child');
-  });
-
   it('TaskService wrapper 方法应继续委托到子模块', async () => {
     const {
       service,
