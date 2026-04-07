@@ -150,17 +150,6 @@ App({
       
       logger.info('App', '日志系统初始化完成');
       
-      // 开发环境下，尝试加载日志分析器
-      if (isDevEnv) {
-        try {
-          const logAnalyzer = require('./utils/log-analyzer');
-          setTimeout(() => {
-            logger.info('App', '初始化日志分析器');
-          }, 300);
-        } catch (e) {
-          logger.warn('App', '加载日志分析器失败', e);
-        }
-      }
     } catch (error) {
       console.error('初始化日志系统失败:', error);
     }

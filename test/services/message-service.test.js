@@ -50,9 +50,11 @@ describe('MessageService', () => {
       getAll: jest.fn().mockResolvedValue([]),
       getMessagesByScope: jest.fn().mockResolvedValue([]),
       getById: jest.fn().mockResolvedValue(null),
+      query: jest.fn().mockResolvedValue([]),
       delete: jest.fn().mockResolvedValue(true),
       markAsRead: jest.fn().mockResolvedValue(true),
       markAllAsRead: jest.fn().mockResolvedValue(0),
+      markManyAsRead: jest.fn().mockResolvedValue(0),
       batchMarkAsRead: jest.fn().mockResolvedValue(0),
       getUnreadCount: jest.fn().mockResolvedValue(0),
       getUnreadMessages: jest.fn().mockResolvedValue([]),
@@ -130,6 +132,57 @@ describe('MessageService', () => {
       const initialized = await messageService.initialize();
 
       expect(initialized).toBe(true);
+    });
+  });
+
+  describe('batchMarkMessagesAsRead / markRelatedMessagesAsRead', () => {
+    it('batchMarkMessagesAsRead 应委托给 messageRepository.markManyAsRead', async () => {
+      mockMessageRepository.markManyAsRead.mockResolvedValue(2);
+
+      const result = await messageService.batchMarkMessagesAsRead(['msg_1', 'msg_2']);
+
+      expect(result).toBe(2);
+      expect(mockMessageRepository.markManyAsRead).toHaveBeenCalledWith(['msg_1', 'msg_2']);
+    });
+
+    it('batchMarkMessagesAsRead 在空数组时应直接返回 0', async () => {
+      const result = await messageService.batchMarkMessagesAsRead([]);
+
+      expect(result).toBe(0);
+      expect(mockMessageRepository.markManyAsRead).not.toHaveBeenCalled();
+    });
+
+    it('markRelatedMessagesAsRead 应走完整仓储链路并返回成功', async () => {
+      mockMessageRepository.query.mockResolvedValue([
+        TestDataFactory.createMessage({
+          id: 'msg_1',
+          relatedId: 'task_1',
+          type: MessageType.TASK,
+          isRead: false
+        }),
+        TestDataFactory.createMessage({
+          id: 'msg_2',
+          relatedId: 'task_1',
+          type: MessageType.TASK,
+          isRead: false
+        })
+      ]);
+      mockMessageRepository.markManyAsRead.mockResolvedValue(2);
+
+      const result = await messageService.markRelatedMessagesAsRead('task_1');
+
+      expect(result).toBe(true);
+      expect(mockMessageRepository.query).toHaveBeenCalled();
+      expect(mockMessageRepository.markManyAsRead).toHaveBeenCalledWith(['msg_1', 'msg_2']);
+    });
+
+    it('markRelatedMessagesAsRead 在没有未读消息时应返回 false', async () => {
+      mockMessageRepository.query.mockResolvedValue([]);
+
+      const result = await messageService.markRelatedMessagesAsRead('task_1');
+
+      expect(result).toBe(false);
+      expect(mockMessageRepository.markManyAsRead).not.toHaveBeenCalled();
     });
   });
 
@@ -764,43 +817,6 @@ describe('MessageService', () => {
     });
   });
 
-  describe('getUpcomingTaskNotifications - 获取即将到期任务通知', () => {
-    it('应该获取即将到期任务的通知', async () => {
-      const task = TestDataFactory.createTask({
-        id: 'task_1',
-        title: '即将到期的任务',
-        date: new Date().toISOString().split('T')[0],
-        startTime: '23:00'
-      });
-
-      const result = await messageService.getUpcomingTaskNotifications([task]);
-
-      expect(result).toHaveLength(1);
-      expect(result[0].taskId).toBe('task_1');
-      expect(result[0].title).toBe('即将到期的任务');
-    });
-
-    it('应该识别必做任务', async () => {
-      const task = TestDataFactory.createTask({
-        id: 'task_1',
-        title: '必做任务',
-        isRequired: true
-      });
-
-      const result = await messageService.getUpcomingTaskNotifications([task]);
-
-      expect(result).toHaveLength(1);
-      expect(result[0].messageType).toBe('required');
-      expect(result[0].priority).toBe('high');
-    });
-
-    it('空任务列表应该返回空数组', async () => {
-      const result = await messageService.getUpcomingTaskNotifications([]);
-
-      expect(result).toHaveLength(0);
-    });
-  });
-
   describe('事件处理 - 任务相关', () => {
     it('应该处理任务创建事件', () => {
       const task = TestDataFactory.createTask({
@@ -968,9 +984,9 @@ describe('MessageService', () => {
     });
 
     it('应该处理批量操作中的空数组', async () => {
-      const result = await messageService.getUpcomingTaskNotifications([]);
+      const result = await messageService.batchMarkMessagesAsRead([]);
 
-      expect(result).toEqual([]);
+      expect(result).toBe(0);
     });
   });
 

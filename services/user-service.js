@@ -161,15 +161,6 @@ class UserService {
   }
 
   /**
-   * 获取小朋友用户ID（兼容性方法，已弃用：多孩子场景下请使用 task.userId）
-   * @returns {String|null} 小朋友用户ID；无孩子时返回 null，避免占位ID泄漏到云端接口
-   */
-  getChildUserId() {
-    const childUser = this.getUserByRole('child');
-    return childUser ? childUser.id : null;
-  }
-  
-  /**
    * 获取所有可用用户
    * @returns {Array} 用户列表
    */
@@ -768,55 +759,6 @@ class UserService {
     }
   }
 
-  /**
-   * 从API加载用户状态和数据（旧方法保留以兼容，M6后不推荐直接调用）
-   * @private
-   */
-  async _loadUserState() {
-    try {
-      // 1. 从API加载所有用户到缓存
-      const response = await HttpClient.getAllUsers();
-      const users = response.users || response; // 兼容后端返回 { users, total } 或直接返回数组
-      this.userCache.clear();
-      users.forEach(userData => {
-        const user = new User(userData);
-        this.userCache.set(user.userId, user);
-      });
-      
-      logger.info('UserService', `加载用户列表成功: ${users.length}个用户`);
-      
-      // 2. 恢复会话用户（仅从本地获取会话ID，用户数据从API缓存获取）
-      let savedUserId = null;
-      try {
-        if (this.storageAdapter) {
-          savedUserId = this.storageAdapter.get('currentUserId');
-        } else {
-          savedUserId = wx.getStorageSync('currentUserId');
-        }
-      } catch (error) {
-        logger.warn('UserService', '读取本地会话失败，使用默认用户', error);
-      }
-      
-      // 3. 设置当前用户（优先使用API数据）
-      if (savedUserId && this.userCache.has(savedUserId)) {
-        this.currentUser = this.userCache.get(savedUserId);
-        logger.info('UserService', '恢复用户会话成功', { userId: savedUserId });
-      } else {
-        // 默认使用parent用户（从API缓存获取）
-        const parentUser = this.userCache.get('parent');
-        if (parentUser) {
-          this.currentUser = parentUser;
-          logger.info('UserService', '使用默认用户: parent（从API获取）');
-        } else {
-          logger.warn('UserService', 'API中未找到parent用户，保持构造函数默认用户');
-        }
-      }
-    } catch (error) {
-      logger.error('UserService', 'API加载用户失败，使用默认用户', error);
-      // API失败时保持构造函数中的默认用户，确保系统可用
-    }
-  }
-  
   /**
    * 保存会话状态到本地存储（仅保存用户ID，用户数据从API获取）
    * @private

@@ -2,7 +2,7 @@
  * services/message-service.js - 消息服务
  * 
  * 处理系统消息相关的业务逻辑，包括任务消息、系统通知等
- * 采用适配器模式，内部仍调用现有messageManager
+ * 基于 MessageRepository、领域模型 helper 与云端同步能力协作完成消息读写
  */
 
 const logger = require('../utils/logger');
@@ -1187,35 +1187,6 @@ class MessageService {
   }
   
   /**
-   * 获取即将到期任务的通知
-   * @param {Array} upcomingTasks 即将到期的任务
-   * @returns {Promise<Object>} 通知信息
-   */
-  async getUpcomingTaskNotifications(upcomingTasks) {
-    // 生成即将到期任务的通知
-    const notifications = [];
-    
-    upcomingTasks.forEach(task => {
-      const remainingTime = this._calculateRemainingTime(task);
-      
-      if (!remainingTime) return;
-      
-      const isRequired = task.isRequired === true;
-      const messageType = isRequired ? 'required' : 'upcoming';
-      
-      notifications.push({
-        taskId: task.id,
-        title: task.title,
-        remainingTime,
-        messageType,
-        priority: isRequired ? 'high' : 'medium'
-      });
-    });
-    
-    return notifications;
-  }
-  
-  /**
    * 计算任务剩余时间（分钟）
    * @param {Object} task 任务对象
    * @returns {Number} 剩余分钟数
@@ -1266,78 +1237,7 @@ class MessageService {
   async _deleteMessageWithDomainModel(messageId) { return messageDomain.deleteMessageWithDomainModel(this, messageId); }
   async _deleteRelatedMessagesWithDomainModel(entityId) { return messageDomain.deleteRelatedMessagesWithDomainModel(this, entityId); }
   async _updateTaskMessagesWithDomainModel(task) { return messageDomain.updateTaskMessagesWithDomainModel(this, task); }
-  async _getMessageStatsWithDomainModel() { return messageDomain.getMessageStatsWithDomainModel(this); }
-  async _cleanExpiredMessagesWithDomainModel(expiryDays = 30) { return messageDomain.cleanExpiredMessagesWithDomainModel(this, expiryDays); }
-  async _getHighPriorityMessagesWithDomainModel() { return messageDomain.getHighPriorityMessagesWithDomainModel(this); }
-  async _migrateMessageData() { return messageDomain.migrateMessageData(this); }
   async _createRewardMessageWithDomainModel(reward, action, options = {}) { return messageDomain.createRewardMessageWithDomainModel(this, reward, action, options); }
-  
-  /**
-   * 批量创建任务消息
-   * @param {Array} tasks 任务数组
-   * @param {String} type 消息类型
-   * @param {Object} options 附加选项
-   * @returns {Promise<Number>} 创建的消息数量
-   */
-  async batchCreateTaskMessages(tasks, type, options = {}) {
-    if (!Array.isArray(tasks) || tasks.length === 0) {
-      logger.warn('MessageService', '批量创建任务消息失败: 任务数组为空');
-      return 0;
-    }
-    
-    logger.info('MessageService', `批量创建任务消息开始: 数量=${tasks.length}, 类型=${type}`);
-    
-    let createdCount = 0;
-    const isBatchOperation = options.isBatchOperation !== false;
-    
-    // 调用现有逻辑
-    for (const task of tasks) {
-      try {
-        const message = this.messageManager.createTaskMessage(task, type, {
-          ...options,
-          isBatchOperation: true,
-          batchCount: tasks.length
-        });
-        
-        if (message) {
-          createdCount++;
-        }
-      } catch (error) {
-        logger.error('MessageService', `批量创建任务消息失败, 任务ID=${task.id}`, error);
-      }
-    }
-    
-    // 同时使用领域模型批量创建
-    try {
-      const domainMessages = [];
-      
-      // 准备领域消息数据
-      tasks.forEach(task => {
-        const notificationType = this._mapMessageTypeToNotificationType(type);
-        
-        // 创建消息数据
-        const messageData = this._prepareTaskMessageData(task, notificationType, {
-          ...options,
-          isBatchOperation: true,
-          batchCount: tasks.length
-        });
-        
-        if (messageData) {
-          domainMessages.push(new Message(messageData));
-        }
-      });
-      
-      // 批量添加消息到仓储
-      if (domainMessages.length > 0) {
-        await this.messageRepository.batchAddMessages(domainMessages);
-      }
-    } catch (error) {
-      logger.error('MessageService', '使用领域模型批量创建任务消息失败', error);
-    }
-    
-    logger.info('MessageService', `批量创建任务消息完成: 成功=${createdCount}/${tasks.length}`);
-    return createdCount;
-  }
   
   /**
    * 批量标记消息为已读
@@ -1351,14 +1251,21 @@ class MessageService {
     }
     
     logger.info('MessageService', `批量标记消息为已读开始: 数量=${messageIds.length}`);
-    
-    // 调用现有逻辑
-    return new Promise((resolve) => {
-      this.messageManager.markManyAsRead(messageIds, (count) => {
-        logger.info('MessageService', `批量标记消息为已读完成: 成功=${count}/${messageIds.length}`);
-        resolve(count);
-      });
-    });
+
+    try {
+      const count = typeof this.messageRepository.markManyAsRead === 'function'
+        ? await this.messageRepository.markManyAsRead(messageIds)
+        : await this.messageRepository.batchMarkAsRead(
+          (await Promise.all(messageIds.map((id) => this.messageRepository.getById(id))))
+            .filter((message) => message && !message.isRead)
+        );
+
+      logger.info('MessageService', `批量标记消息为已读完成: 成功=${count}/${messageIds.length}`);
+      return count;
+    } catch (error) {
+      logger.error('MessageService', '批量标记消息为已读失败', error);
+      return 0;
+    }
   }
   
   /**
@@ -1401,38 +1308,6 @@ class MessageService {
         }
       );
     });
-  }
-  
-  /**
-   * 将消息类型映射到通知类型
-   * @param {String} messageType 消息类型
-   * @returns {String} 通知类型
-   * @private
-   */
-  _mapMessageTypeToNotificationType(messageType) {
-    const mapping = {
-      'new': NotificationType.NEW,
-      'upcoming': NotificationType.UPCOMING,
-      'edited': NotificationType.UPDATED,
-      'completed': NotificationType.COMPLETED,
-      'makeup_completed': NotificationType.MAKEUP_COMPLETED,
-      'required': NotificationType.REQUIRED,
-      'deleted': NotificationType.DELETED
-    };
-    
-    return mapping[messageType] || messageType;
-  }
-  
-  /**
-   * 准备任务消息数据
-   * @param {Object} task 任务对象
-   * @param {String} notificationType 通知类型
-   * @param {Object} options 选项
-   * @returns {Object} 消息数据
-   * @private
-   */
-  _prepareTaskMessageData(task, notificationType, options = {}) {
-    return messageDomain.prepareTaskMessageData(this, task, notificationType, options);
   }
   
   /**

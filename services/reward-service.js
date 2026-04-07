@@ -793,59 +793,6 @@ class RewardService {
   }
   
   /**
-   * 标记奖励为已领取
-   * @deprecated 此方法已废弃，现在用户兑换时直接设置为delivered状态
-   * @param {String} rewardId 奖励ID
-   * @returns {Promise<Object>} 操作结果
-   */
-  async markRewardAsDelivered(rewardId) {
-    logger.warn('RewardService', '调用了已废弃的方法: markRewardAsDelivered，现在用户兑换时直接设置为delivered状态');
-    
-    if (!rewardId) {
-      logger.warn('RewardService', '标记奖励为已领取失败: 缺少奖励ID');
-      return { success: false, message: '奖励ID不能为空' };
-    }
-    
-    try {
-      // 获取奖励
-      const reward = await this.rewardRepository.getById(rewardId);
-      
-      if (!reward) {
-        logger.warn('RewardService', `标记奖励为已领取失败: 未找到ID为${rewardId}的奖励`);
-        return { success: false, message: '未找到指定的奖励' };
-      }
-      
-      // 如果奖励未被领取，不能标记为已领取
-      if (!reward.claimed) {
-        logger.warn('RewardService', `标记奖励为已领取失败: 奖励尚未被兑换, ID=${rewardId}`);
-        return { success: false, message: '奖励尚未被兑换' };
-      }
-      
-      // 如果奖励已经是已领取状态，直接返回成功
-      if (reward.claimStatus === 'delivered') {
-        logger.info('RewardService', `奖励已经是已领取状态, ID=${rewardId}`);
-        return { success: true, reward, message: '奖励已经是已领取状态' };
-      }
-      
-      // 更新奖励状态
-      reward.deliver();
-      logger.info('RewardService', `标记奖励为已领取: ${reward.name}, ID=${rewardId}`);
-      
-      const updatedReward = await this.rewardRepository.save(reward);
-      
-      logger.info('RewardService', `标记奖励为已领取成功: ${updatedReward.name}, ID=${rewardId}`);
-      
-      // 触发奖励领取状态变更事件
-      this.eventBus.emit(EVENTS.REWARD_DELIVERED, { reward: updatedReward });
-      
-      return { success: true, reward: updatedReward, message: '奖励已标记为已领取' };
-    } catch (error) {
-      logger.error('RewardService', `标记奖励为已领取失败, ID=${rewardId}`, error);
-      return { success: false, message: '操作过程中发生错误' };
-    }
-  }
-  
-  /**
    * 获取可用奖励列表
    * @param {Boolean} includeClaimed 是否包含已领取的奖励
    * @param {Boolean} includeExamples 是否包含示例奖励，默认为false

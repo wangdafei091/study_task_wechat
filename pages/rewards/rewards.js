@@ -403,10 +403,5 @@ Page({
    */
   _getRewardOwnerUserId: function() {
     return rewardsUserContextModule.getRewardOwnerUserId(serviceManager);
-  },
-
-  // 兼容旧调用，内部改为使用 _getEffectiveChildUserId
-  _getChildUserId: function() {
-    return rewardsUserContextModule.getChildUserId(serviceManager);
   }
 })
