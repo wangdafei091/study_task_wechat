@@ -288,4 +288,64 @@ describe('pages/index/modules/index-task-actions', () => {
       title: '已获得过星星'
     }));
   });
+
+  it('completeTask 应覆盖重置成功、锁定失败、确认失败和异常分支', async () => {
+    const rewardService = {
+      getLastExchangeTimeByUser: jest.fn().mockResolvedValue(null)
+    };
+    const taskService = {
+      completeTask: jest.fn(),
+      resetTask: jest.fn()
+        .mockResolvedValueOnce({ success: true })
+        .mockResolvedValueOnce({ success: false, locked: true, message: '奖励已兑换，任务不可取消' })
+        .mockRejectedValueOnce(new Error('boom'))
+    };
+    serviceManager.getService.mockImplementation((name) => {
+      if (name === 'rewardService') return rewardService;
+      if (name === 'task') return taskService;
+      return null;
+    });
+
+    const resetPage = createPage({
+      status: 1,
+      starAwarded: true,
+      isRequired: false
+    });
+    await taskActions.completeTask(resetPage, { detail: { taskId: 'task-1' } });
+    expect(taskService.resetTask).toHaveBeenCalledWith('task-1', 'child-1');
+    expect(resetPage.loadStarsAndRewards).toHaveBeenCalled();
+    expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({
+      title: '已扣除5颗星星'
+    }));
+
+    const lockedPage = createPage({
+      status: 1,
+      starAwarded: true
+    });
+    await taskActions.completeTask(lockedPage, { detail: { taskId: 'task-1' } });
+    expect(global.wx.showModal).toHaveBeenCalledWith(expect.objectContaining({
+      title: '无法取消完成'
+    }));
+
+    const cancelPage = createPage({
+      status: 1,
+      starAwarded: true
+    });
+    global.wx.showModal.mockImplementationOnce(({ fail }) => {
+      if (typeof fail === 'function') {
+        fail(new Error('cancel-fail'));
+      }
+    });
+    await taskActions.completeTask(cancelPage, { detail: { taskId: 'task-1' } });
+    expect(taskService.resetTask).toHaveBeenCalledTimes(2);
+    expect(cancelPage.data.processingTaskId).toBe(null);
+
+    const errorPage = createPage();
+    taskService.completeTask.mockRejectedValueOnce(new Error('complete-fail'));
+    await taskActions.completeTask(errorPage, { detail: { taskId: 'task-1' } });
+    expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({
+      title: '操作失败，请重试'
+    }));
+    expect(errorPage.data.processingTaskId).toBe(null);
+  });
 });

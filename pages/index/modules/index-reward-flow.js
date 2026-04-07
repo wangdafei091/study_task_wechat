@@ -3,16 +3,17 @@ const formatUtils = require('../../../utils/formatUtils');
 const logger = require('../../../utils/logger');
 const pageStorageHelper = require('../../../utils/page-storage-helper');
 
+function getRewardServiceInstance() {
+  return serviceManager.getService('rewardService') || serviceManager.getService('reward');
+}
+
 function isExampleReward(reward) {
-  if (!reward) {
+  const rewardService = getRewardServiceInstance();
+  if (!rewardService || typeof rewardService.isExampleReward !== 'function') {
     return false;
   }
 
-  if (reward.isExample === true) {
-    return true;
-  }
-
-  return typeof reward.id === 'string' && /reward_\d+_(1|2|3)$/.test(reward.id);
+  return rewardService.isExampleReward(reward);
 }
 
 function resolveHomeViewMode(page) {
@@ -86,7 +87,7 @@ function shouldSyncAuthorityBeforeRewards(options = {}) {
 
 function getRewardContext(page) {
   const starService = serviceManager.getService('starService');
-  const rewardService = serviceManager.getService('rewardService');
+  const rewardService = getRewardServiceInstance();
 
   if (!starService || !rewardService) {
     logger.error('Index', '无法获取服务实例');
@@ -621,7 +622,7 @@ function prepareRewardIndicators(page) {
     return {
       ...reward,
       status,
-      isExample: rewardService._isExampleReward(reward)
+      isExample: isExampleReward(reward)
     };
   });
 

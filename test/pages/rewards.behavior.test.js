@@ -92,7 +92,8 @@ describe('pages/rewards/rewards behavior', () => {
       refreshStarsFromCloud: jest.fn().mockRejectedValue(new Error('sync fail'))
     };
     const rewardService = {
-      refreshRewardsFromCloud: jest.fn()
+      refreshRewardsFromCloud: jest.fn(),
+      isExampleReward: jest.fn((reward) => reward?.isExample === true || reward?.id === 'reward_1_1')
     };
     serviceManager.getService.mockImplementation((name) => {
       if (name === 'starService') return starService;
@@ -139,7 +140,8 @@ describe('pages/rewards/rewards behavior', () => {
       refreshStarsFromCloud: jest.fn().mockResolvedValue({})
     };
     const rewardService = {
-      refreshRewardsFromCloud: jest.fn().mockResolvedValue({})
+      refreshRewardsFromCloud: jest.fn().mockResolvedValue({}),
+      isExampleReward: jest.fn((reward) => reward?.isExample === true || reward?.id === 'reward_1_1')
     };
     serviceManager.getService.mockImplementation((name) => {
       if (name === 'starService') return starService;
@@ -190,7 +192,8 @@ describe('pages/rewards/rewards behavior', () => {
     const rewardService = {
       clearCache: jest.fn(),
       getAvailableRewards: jest.fn().mockResolvedValue([]),
-      hasCustomRewards: jest.fn().mockResolvedValue(true)
+      hasCustomRewards: jest.fn().mockResolvedValue(true),
+      isExampleReward: jest.fn((reward) => reward?.isExample === true || reward?.id === 'reward_1_1')
     };
 
     serviceManager.getService.mockImplementation((name) => {
@@ -237,7 +240,8 @@ describe('pages/rewards/rewards behavior', () => {
         name: '示例奖励',
         points: 6,
         isExample: true
-      })
+      }),
+      isExampleReward: jest.fn((reward) => reward?.isExample === true || reward?.id === 'reward_1_1')
     };
     const configService = {
       hasCustomRewards: jest.fn(() => false)
@@ -337,7 +341,8 @@ describe('pages/rewards/rewards behavior', () => {
     page._handleExchangeSuccess = jest.fn().mockResolvedValue();
 
     const rewardService = {
-      exchangeReward: jest.fn()
+      exchangeReward: jest.fn(),
+      isExampleReward: jest.fn((reward) => reward?.isExample === true || reward?.id === 'reward_1_1')
     };
     const starService = {};
     serviceManager.getService.mockImplementation((name) => {
@@ -417,7 +422,8 @@ describe('pages/rewards/rewards behavior', () => {
         id: 'reward-next',
         name: '下一个奖励',
         points: 18
-      })
+      }),
+      isExampleReward: jest.fn((reward) => reward?.isExample === true || reward?.id === 'reward_1_1')
     };
     const starService = {
       clearCache: jest.fn(),
@@ -457,7 +463,8 @@ describe('pages/rewards/rewards behavior', () => {
   it('_handleExchangeSuccess 在没有下一个奖励时也应安全刷新', async () => {
     const rewardService = {
       clearCache: jest.fn(),
-      calculateNextAvailableReward: jest.fn().mockResolvedValue(null)
+      calculateNextAvailableReward: jest.fn().mockResolvedValue(null),
+      isExampleReward: jest.fn((reward) => reward?.isExample === true || reward?.id === 'reward_1_1')
     };
     const starService = {
       clearCache: jest.fn(),
@@ -508,9 +515,51 @@ describe('pages/rewards/rewards behavior', () => {
       url: '/pages/architecture-demo/demo'
     });
 
+    const rewardService = {
+      isExampleReward: jest.fn((reward) => reward?.isExample === true || reward?.id === 'reward_1_1')
+    };
+    serviceManager.getService.mockImplementation((name) => {
+      if (name === 'rewardService') return rewardService;
+      return null;
+    });
+
     page.switchTab({ currentTarget: { dataset: { tab: 'claimed' } } });
     expect(page.data.activeTab).toBe('claimed');
     expect(page.isExampleReward({ isExample: true })).toBe(true);
     expect(page.isExampleReward({ id: 'reward_1_1' })).toBe(true);
+    expect(page.isExampleReward(null)).toBe(false);
+    expect(rewardService.isExampleReward).toHaveBeenCalledTimes(3);
+  });
+
+  it('奖励页导航与星星点击应覆盖剩余边界分支', () => {
+    const page = createPageInstance();
+
+    serviceManager.getService.mockReturnValue(null);
+    expect(page.isExampleReward({ id: 'reward_1_1' })).toBe(false);
+
+    page.data.isRewardAnimating = false;
+    page.navigateToMyExchanges();
+    page.navigateToStarRecords();
+    expect(global.wx.navigateTo).toHaveBeenCalledWith(expect.objectContaining({
+      url: '/packageManage/pages/my-exchanges/my-exchanges'
+    }));
+    expect(global.wx.navigateTo).toHaveBeenCalledWith(expect.objectContaining({
+      url: '/packageMessage/pages/star-records/star-records'
+    }));
+
+    global.wx.navigateTo.mockClear();
+    page.data.showManageRewardCTA = false;
+    page.navigateToRewardManage();
+    expect(global.wx.navigateTo).not.toHaveBeenCalled();
+
+    page.data.showManageRewardCTA = true;
+    page.navigateToRewardManage();
+    expect(global.wx.navigateTo).toHaveBeenCalledWith(expect.objectContaining({
+      url: '/packageManage/pages/reward-manage/reward-manage'
+    }));
+
+    page.onStarsAreaTap();
+    jest.advanceTimersByTime(2100);
+    expect(page.data.demoClickCount).toBe(0);
   });
 });

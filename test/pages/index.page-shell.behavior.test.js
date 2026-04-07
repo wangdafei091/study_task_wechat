@@ -189,6 +189,7 @@ describe('pages/index/index shell behavior', () => {
     };
     rewardService = {
       hasOnlyExampleRewardsSync: jest.fn(() => false),
+      isExampleReward: jest.fn((reward) => reward.id === 'example'),
       _isExampleReward: jest.fn((reward) => reward.id === 'example')
     };
 

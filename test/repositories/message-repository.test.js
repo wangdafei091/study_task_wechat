@@ -705,6 +705,55 @@ describe('Message Repository', () => {
     });
   });
 
+  describe('batchDeleteMessages', () => {
+    it('应按批顺序等待删除完成后再处理下一批', async () => {
+      const messages = Array.from({ length: 55 }, (_, index) => createMessage({
+        id: `msg_${index + 1}`
+      }));
+
+      let resolveFirstBatch;
+      const firstBatchPromise = new Promise((resolve) => {
+        resolveFirstBatch = resolve;
+      });
+
+      repository.deleteMany = jest.fn()
+        .mockImplementationOnce(() => firstBatchPromise)
+        .mockResolvedValueOnce(5);
+
+      const deletingPromise = repository.batchDeleteMessages(messages);
+
+      expect(repository.deleteMany).toHaveBeenCalledTimes(1);
+      expect(repository.deleteMany).toHaveBeenCalledWith(
+        messages.slice(0, 50).map((message) => message.id)
+      );
+
+      resolveFirstBatch(50);
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(repository.deleteMany).toHaveBeenCalledTimes(2);
+      expect(repository.deleteMany).toHaveBeenLastCalledWith(
+        messages.slice(50).map((message) => message.id)
+      );
+      await expect(deletingPromise).resolves.toBe(55);
+    });
+
+    it('单批失败时应继续后续批次并返回成功删除总数', async () => {
+      const messages = Array.from({ length: 55 }, (_, index) => createMessage({
+        id: `msg_${index + 1}`
+      }));
+
+      repository.deleteMany = jest.fn()
+        .mockResolvedValueOnce(50)
+        .mockRejectedValueOnce(new Error('delete failed'));
+
+      const count = await repository.batchDeleteMessages(messages);
+
+      expect(count).toBe(50);
+      expect(repository.deleteMany).toHaveBeenCalledTimes(2);
+    });
+  });
+
   // ====== 消息清理 ======
   describe('cleanExpiredMessages', () => {
     it('应该清理过期消息', async () => {

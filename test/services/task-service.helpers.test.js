@@ -36,7 +36,8 @@ function loadTaskService(overrides = {}) {
     mergeLocalTasksIntoCloudResult: jest.fn(),
     syncUpdateToCloud: jest.fn(),
     syncDeleteToCloud: jest.fn(),
-    syncStatusToCloud: jest.fn()
+    syncStatusToCloud: jest.fn(),
+    syncRequiredStateToCloud: jest.fn()
   };
   const taskWrite = {
     createTask: jest.fn(),
@@ -44,7 +45,9 @@ function loadTaskService(overrides = {}) {
     deleteTask: jest.fn(),
     updateTaskStatus: jest.fn(),
     resetTask: jest.fn(),
-    toggleTaskRequired: jest.fn()
+    toggleTaskRequired: jest.fn(),
+    markTaskAsRequired: jest.fn(),
+    unmarkTaskAsRequired: jest.fn()
   };
   const taskPenalty = {
     checkTasksStatus: jest.fn(),
@@ -283,6 +286,7 @@ describe('TaskService helpers and delegators', () => {
     taskSync.syncUpdateToCloud.mockResolvedValue(true);
     taskSync.syncDeleteToCloud.mockResolvedValue(true);
     taskSync.syncStatusToCloud.mockResolvedValue(true);
+    taskSync.syncRequiredStateToCloud.mockResolvedValue(true);
     taskPenalty.checkTasksStatus.mockResolvedValue({ success: true });
 
     await expect(service.getTasksByScope({ scope: 'family' })).resolves.toEqual(['scope-task']);
@@ -293,6 +297,7 @@ describe('TaskService helpers and delegators', () => {
     await expect(service._syncUpdateToCloud({ id: 'task_3' })).resolves.toBe(true);
     await expect(service._syncDeleteToCloud('task_4')).resolves.toBe(true);
     await expect(service._syncStatusToCloud({ id: 'task_5' })).resolves.toBe(true);
+    await expect(service._syncRequiredStateToCloud({ id: 'task_6' })).resolves.toBe(true);
     await expect(service.checkTasksStatus()).resolves.toEqual({ success: true });
 
     expect(taskQuery.getTasksByScope).toHaveBeenCalledWith(service, { scope: 'family' });
@@ -301,5 +306,71 @@ describe('TaskService helpers and delegators', () => {
     expect(taskSync.migrateTasksToChild).toHaveBeenCalledWith(service, 'parent_1', 'child_1');
     expect(taskSync.fetchSingleTaskFromCloud).toHaveBeenCalledWith(service, 'task_2');
     expect(taskPenalty.checkTasksStatus).toHaveBeenCalledWith(service);
+  });
+
+  it('TaskService 顶层 helper 应覆盖队列适配、mutation 归一化与失败补偿分支', async () => {
+    const { service, taskRepository, taskSync, eventBus } = loadTaskService({
+      taskRepository: {
+        save: jest.fn(async (task) => task),
+        getById: jest.fn(async (id) => (id === 'stored' ? { id: 'stored' } : null)),
+        getAll: jest.fn(async () => [
+          { id: 'fallback-create', syncedToCloud: false, pendingSyncMeta: { action: null } },
+          { id: 'fallback-update', syncedToCloud: true, pendingSyncMeta: { action: null } }
+        ]),
+        getDeleteTombstones: jest.fn(async () => []),
+        saveAll: jest.fn(async (tasks) => tasks)
+      },
+      eventBus: {
+        emit: jest.fn()
+      }
+    });
+
+    const offlineQueueService = {
+      registerAdapter: jest.fn(),
+      enqueueMutation: jest.fn(async () => true)
+    };
+    service.updateOfflineQueueService(offlineQueueService);
+    expect(offlineQueueService.registerAdapter).toHaveBeenCalledWith('task', expect.any(Function));
+    service.updateOfflineQueueService(null);
+
+    service._syncTaskToCloud = jest.fn(async () => ({ operation: 'create', task: { taskId: 'created' }, tasks: [{ taskId: 'created' }] }));
+    service._syncUpdateToCloud = jest.fn(async () => ({ operation: 'update', task: { taskId: 'updated' }, tasks: [{ taskId: 'updated' }] }));
+    service._syncDeleteToCloud = jest.fn(async () => true);
+    service._syncStatusToCloud = jest.fn(async () => ({ operation: 'complete' }));
+    service._syncRequiredStateToCloud = jest.fn(async () => ({ operation: 'required' }));
+    service._applyAuthoritativeTaskMutation = jest.fn(async () => ({ task: null, tasks: [] }));
+
+    await expect(service._executeTaskQueueItem({ operation: 'create', snapshot: { id: 'create' }, payload: {} })).resolves.toEqual(expect.objectContaining({ operation: 'create' }));
+    await expect(service._executeTaskQueueItem({ operation: 'update', entityId: 'stored', payload: {} })).resolves.toEqual(expect.objectContaining({ operation: 'update' }));
+    await expect(service._executeTaskQueueItem({ operation: 'delete', entityId: 'delete-id', payload: { deleteMeta: { entityId: 'delete-id' } } })).resolves.toBe(true);
+    await expect(service._executeTaskQueueItem({ operation: 'required', snapshot: { id: 'required' }, payload: {} })).resolves.toEqual(expect.objectContaining({ operation: 'required' }));
+    await expect(service._executeTaskQueueItem({ operation: 'other', snapshot: { id: 'fallback' }, payload: {} })).resolves.toEqual(expect.objectContaining({ operation: 'update' }));
+
+    const legacyItems = await service.buildLegacyQueueCandidates();
+    expect(legacyItems).toHaveLength(2);
+
+    expect(service._normalizeTaskMutationResponse(null)).toBeNull();
+    expect(service._toAuthoritativeTask(null)).toBeNull();
+    expect(service._buildTaskServiceMutationResult({ taskId: 'task-x' }, {
+      task: { id: 'task-x' },
+      tasks: [],
+      message: 'ok',
+      fallback: true
+    })).toEqual(expect.objectContaining({
+      success: true,
+      taskId: 'task-x',
+      message: 'ok',
+      fallback: true
+    }));
+
+    taskRepository.save.mockRejectedValueOnce(new Error('save-fail'));
+    offlineQueueService.enqueueMutation.mockRejectedValueOnce(new Error('queue-fail'));
+    await service._emitTaskCloudSyncFailure('update', { id: 'task-fail', pendingSyncMeta: { action: 'update' } }, new Error('sync-fail'));
+    expect(eventBus.emit).toHaveBeenCalled();
+
+    service.enableCloudStorage = true;
+    await service._flushPendingTaskSyncs();
+    expect(service._syncTaskToCloud).toHaveBeenCalledWith(expect.objectContaining({ id: 'fallback-create' }));
+    expect(service._syncUpdateToCloud).toHaveBeenCalledWith(expect.objectContaining({ id: 'fallback-update' }));
   });
 });

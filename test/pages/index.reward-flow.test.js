@@ -122,7 +122,8 @@ describe('pages/index reward flow', () => {
       getLastExchangeTimeByUser: jest.fn(),
       calculateNextAvailableReward: jest.fn(),
       getAvailableRewards: jest.fn(),
-      refreshRewardsFromCloud: jest.fn()
+      refreshRewardsFromCloud: jest.fn(),
+      isExampleReward: jest.fn((reward) => reward?.isExample === true)
     };
 
     serviceManager.getService.mockImplementation((serviceName) => {
@@ -280,6 +281,43 @@ describe('pages/index reward flow', () => {
     expect(page.data.nextReward.name).toBe('');
     expect(page.data.visibleRewards).toEqual([]);
     expect(page.data.rewardHintText).toBe('现在还没有可用奖励，完成任务也会正常积累星星');
+  });
+
+  it('loadStarsAndRewards 应委托 RewardService.isExampleReward，避免把正式默认格式奖励误判为示例', async () => {
+    const page = createPageInstance();
+    page.getEffectiveTaskUserId = jest.fn(() => 'child-1');
+
+    starService.refreshStarsFromCloud.mockResolvedValue({ success: true });
+    starService.getTotalStars.mockResolvedValue(12);
+    rewardService.getLastExchangeTimeByUser.mockResolvedValue(null);
+    rewardService.isExampleReward.mockImplementation((reward) => reward?.isExample === true);
+    rewardService.calculateNextAvailableReward.mockResolvedValue({
+      id: 'reward_1712476800000_88',
+      name: '正式奖励',
+      points: 20,
+      icon: '🎁',
+      isDefault: false
+    });
+    rewardService.getAvailableRewards.mockResolvedValue([
+      { id: 'reward_1712476800000_1', name: '示例奖励', points: 6, claimed: false, isExample: true },
+      { id: 'reward_1712476800000_88', name: '正式奖励', points: 20, claimed: false }
+    ]);
+
+    await page.loadStarsAndRewards();
+
+    expect(rewardService.isExampleReward).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'reward_1712476800000_1' })
+    );
+    expect(rewardService.isExampleReward).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'reward_1712476800000_88' })
+    );
+    expect(page.data.visibleRewards).toEqual([
+      expect.objectContaining({ id: 'reward_1712476800000_88' })
+    ]);
+    expect(page.data.nextReward).toEqual(expect.objectContaining({
+      id: 'reward_1712476800000_88'
+    }));
+    expect(page.data.nextReward.showSetupTip).not.toBe(true);
   });
 
   it('loadStarsAndRewards 在家长视角且无正式奖励时，应显示家长提示文案', async () => {

@@ -581,41 +581,24 @@ class MessageRepository extends BaseRepository {
       return 0;
     }
     
-    return new Promise((resolve) => {
-      const messageIds = messages.map(message => message.id);
-      let successCount = 0;
-      let batchCount = Math.ceil(messageIds.length / 50);
-      
-      // 创建批次
-      const batches = batchUtils.chunk(messageIds, 50);
-      
-      // 处理每个批次
-      let processedBatches = 0;
-      
-      batches.forEach(async (batch, index) => {
-        try {
-          const deleteCount = await this.deleteMany(batch);
-          successCount += deleteCount;
-          processedBatches++;
-          
-          logger.info('MessageRepository', `删除消息批次${index + 1}/${batches.length}完成, 已删除${deleteCount}条`);
-          
-          // 所有批次处理完成
-          if (processedBatches === batches.length) {
-            logger.info('MessageRepository', `批量删除消息完成, 共删除${successCount}条`);
-            resolve(successCount);
-          }
-        } catch (error) {
-          logger.error('MessageRepository', `删除消息批次${index + 1}失败`, error);
-          processedBatches++;
-          
-          // 即使失败也要继续处理其他批次
-          if (processedBatches === batches.length) {
-            resolve(successCount);
-          }
-        }
-      });
-    });
+    const messageIds = messages.map(message => message.id);
+    const batches = batchUtils.chunk(messageIds, 50);
+    let successCount = 0;
+
+    for (let index = 0; index < batches.length; index += 1) {
+      const batch = batches[index];
+
+      try {
+        const deleteCount = await this.deleteMany(batch);
+        successCount += deleteCount;
+        logger.info('MessageRepository', `删除消息批次${index + 1}/${batches.length}完成, 已删除${deleteCount}条`);
+      } catch (error) {
+        logger.error('MessageRepository', `删除消息批次${index + 1}失败`, error);
+      }
+    }
+
+    logger.info('MessageRepository', `批量删除消息完成, 共删除${successCount}条`);
+    return successCount;
   }
   
   /**

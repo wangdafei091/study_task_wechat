@@ -1,15 +1,17 @@
 # 里程碑-21A：正确性与质量闸门修复 详细设计文档
 
-> **设计状态**：🔴 待审核
+> **设计状态**：🟢 已完成
 > **创建日期**：2026-04-07
 > **设计者**：GPT5 Codex
 > **审核者**：项目维护者
 > **预计工期**：1-2天
+> **完成日期**：2026-04-07
 
 ---
 
 ## 📋 目录
 
+- [实施结果](#实施结果)
 - [需求分析](#需求分析)
 - [技术方案](#技术方案)
 - [代码结构](#代码结构)
@@ -17,6 +19,40 @@
 - [测试方案](#测试方案)
 - [风险评估](#风险评估)
 - [替代方案](#替代方案)
+
+---
+
+## 实施结果
+
+### 实际完成情况
+
+- 已完成奖励域“示例奖励”单一 owner 收口：`RewardService.isExampleReward()` 成为正式公开入口，首页与奖励页页面层统一改为委托，不再保留自有正则判断。
+- 已删除 `RewardService` 中无效的一致性校验分支，避免继续保留“看似存在、实际无效”的假保护。
+- 已修复 `StarRecord.clone()` 的稳定性与浅拷贝问题：生成新记录时保证时间戳单调递增，并对嵌套 `data` 做独立拷贝。
+- 已将 `MessageRepository.batchDeleteMessages()` 改为显式 `for...of` 顺序批处理，等待语义清晰。
+- 已补齐本期相关页面、服务、模型与仓储测试，恢复正式质量闸门。
+
+### 实际验证结果
+
+- `npm test -- --runInBand`：通过，`78 suites / 1735 tests` 全绿
+- `npm run test:quality -- --runInBand`：通过，`78 suites / 1735 tests` 全绿
+- 本期新增/补强验证覆盖：
+  - `test/services/reward-service.test.js`
+  - `test/models/star-record.test.js`
+  - `test/repositories/message-repository.test.js`
+  - `test/pages/index.reward-flow.test.js`
+  - `test/pages/rewards.behavior.test.js`
+  - `test/pages/rewards.page-contract.test.js`
+  - `test/pages/index.page-shell.behavior.test.js`
+  - `test/pages/index.user-context.test.js`
+  - `test/pages/index.modules.test.js`
+  - `test/pages/index.task-actions.test.js`
+  - `test/services/task-service.helpers.test.js`
+
+### 本期明确未处理项
+
+- `RewardService` 静态初始化状态问题未纳入本期，仍留给后续治理里程碑处理。
+- 本期未扩展为文档治理或服务层基础设施去重，仍按 `M21C / M21D` 边界推进。
 
 ---
 
@@ -223,8 +259,8 @@ clone(overrides = {}, generateNewId = true) {
 
 ### 第1步：奖励示例判定收口（预计4小时）
 
-- [ ] **任务**：统一 `RewardService` 为示例奖励唯一正式 owner，并移除页面层第二套判断规则
-- [ ] **验证**：页面层仅委托，不再内置正则；补齐“默认生成 ID 不应误判”为测试
+- [x] **任务**：统一 `RewardService` 为示例奖励唯一正式 owner，并移除页面层第二套判断规则
+- [x] **验证**：页面层仅委托，不再内置正则；补齐“默认生成 ID 不应误判”为测试
 - [ ] **依赖**：无
 
 **实施要点**：
@@ -238,8 +274,8 @@ clone(overrides = {}, generateNewId = true) {
 
 ### 第2步：无效保护分支与脆弱实现修复（预计3小时）
 
-- [ ] **任务**：收口 `RewardService` 无效一致性校验分支，并修正 `StarRecord.clone()` 稳定性问题
-- [ ] **验证**：去掉假保护后不影响现有主链路；`StarRecord` 相关测试稳定通过
+- [x] **任务**：收口 `RewardService` 无效一致性校验分支，并修正 `StarRecord.clone()` 稳定性问题
+- [x] **验证**：去掉假保护后不影响现有主链路；`StarRecord` 相关测试稳定通过
 - [ ] **依赖**：第1步完成后继续
 
 **实施要点**：
@@ -252,8 +288,8 @@ clone(overrides = {}, generateNewId = true) {
 
 ### 第3步：恢复正式质量闸门（预计4小时）
 
-- [ ] **任务**：补齐 `test:quality` 当前红灯文件的 branch coverage，使正式闸门恢复为绿
-- [ ] **验证**：`npm run test:quality -- --runInBand` 全绿
+- [x] **任务**：补齐 `test:quality` 当前红灯文件的 branch coverage，使正式闸门恢复为绿
+- [x] **验证**：`npm run test:quality -- --runInBand` 全绿
 - [ ] **依赖**：前两步完成
 
 **实施要点**：
@@ -267,8 +303,8 @@ clone(overrides = {}, generateNewId = true) {
 
 ### 第4步：顺手收口低风险实现问题（预计2小时）
 
-- [ ] **任务**：在不扩范围前提下，收口 1-2 个与本期直接相关的低风险实现瑕疵
-- [ ] **验证**：实现更直接、测试无回归
+- [x] **任务**：在不扩范围前提下，收口 1-2 个与本期直接相关的低风险实现瑕疵
+- [x] **验证**：实现更直接、测试无回归
 - [ ] **依赖**：前3步完成后执行
 
 **实施要点**：
@@ -293,9 +329,9 @@ clone(overrides = {}, generateNewId = true) {
 
 ### 集成测试
 
-- [ ] `npm test -- --runInBand` 全绿
-- [ ] `npm run test:quality -- --runInBand` 全绿
-- [ ] 奖励兑换、首页奖励提示、奖励页空态相关测试不回归
+- [x] `npm test -- --runInBand` 全绿
+- [x] `npm run test:quality -- --runInBand` 全绿
+- [x] 奖励兑换、首页奖励提示、奖励页空态相关测试不回归
 
 ### 手动测试
 

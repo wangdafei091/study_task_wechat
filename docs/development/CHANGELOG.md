@@ -4,6 +4,39 @@
 
 ---
 
+## [里程碑-21A] - 2026-04-07
+
+### ✅ 完成情况
+
+**正确性与质量闸门修复**
+
+- **奖励域正确性收口**：
+  - `RewardService` 新增正式公开入口 `isExampleReward()`，统一“示例奖励”判定 owner
+  - 首页奖励流与奖励页统一改为委托服务层，不再各自维护页面内正则规则
+  - 收窄历史兼容 fallback，只兼容历史默认示例奖励 ID，避免正常奖励被误判为示例奖励
+- **脆弱实现修复**：
+  - 删除 `RewardService` 中无效的一致性校验分支，移除“假保护”残留
+  - 修复 `StarRecord.clone()` 的时间戳稳定性与嵌套 `data` 拷贝问题
+  - 修复 `MessageRepository.batchDeleteMessages()` 的异步批处理实现，改为显式顺序等待
+- **质量闸门恢复**：
+  - 补齐首页模块、奖励页、奖励服务、星星记录模型和消息仓储相关测试
+  - 恢复 `npm test` 与 `npm run test:quality` 双绿基线
+
+### 🧪 验证结果
+
+- 全量主测试树通过：
+  - `npm test -- --runInBand`
+  - 结果：`78 suites / 1735 tests` 全绿
+- 正式质量闸门通过：
+  - `npm run test:quality -- --runInBand`
+  - 结果：`78 suites / 1735 tests` 全绿
+
+### 📖 详细实施记录
+
+- [里程碑-21A：正确性与质量闸门修复](../design/milestone-21a-correctness-quality-gate-fixes.md)
+
+---
+
 ## [里程碑-20E] - 2026-04-07
 
 ### ✅ 完成情况

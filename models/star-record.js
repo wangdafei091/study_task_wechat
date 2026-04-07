@@ -194,12 +194,17 @@ class StarRecord {
    */
   clone(overrides = {}, generateNewId = true) {
     // 准备基础数据
-    const baseData = { ...this };
+    const baseData = {
+      ...this,
+      data: this.data ? JSON.parse(JSON.stringify(this.data)) : {}
+    };
     
     // 如果需要生成新ID
     if (generateNewId) {
-      baseData.id = `record_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
-      baseData.timestamp = Date.now();
+      const nextTimestamp = Math.max(Date.now(), this.timestamp + 1);
+      baseData.id = `record_${nextTimestamp}_${Math.floor(Math.random() * 1000)}`;
+      baseData.timestamp = nextTimestamp;
+      baseData.modifyTime = nextTimestamp;
     }
     
     // 应用覆盖属性

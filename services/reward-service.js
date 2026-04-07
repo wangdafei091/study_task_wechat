@@ -15,6 +15,10 @@ const { Reward } = require('../models/reward');
 const userContextUtils = require('../utils/user-context');
 
 const REWARD_CLOUD_REFRESH_MIN_INTERVAL_MS = 3 * 1000;
+const LEGACY_EXAMPLE_REWARD_ID_PATTERNS = [
+  /^reward_example_/,
+  /^reward_\d+_(1|2|3)$/
+];
 
 class RewardService {
   // 使用静态属性存储类级别的初始化状态
@@ -1321,42 +1325,6 @@ class RewardService {
           `${actualCost}颗星星`;
         logger.info('RewardService', `兑换奖励成功: ${reward.name}, 消耗${costDescription}, 用户=${userId}`);
         
-        // 5. 验证操作后的数据一致性
-        try {
-          const starService = this.serviceManager?.getStarService?.();
-          if (starService && starService.verifyOperationConsistency) {
-            const consistencyData = {
-              operation: '兑换奖励',
-              rewardId: reward.id,
-              rewardName: reward.name,
-              actualCost: actualCost, // 实际消耗数量
-              originalPoints: reward.points, // 原始积分
-              protectedByExpiry: reward.protectedByExpiry || false,
-              partialProtection: reward.partialProtection || 0,
-              exchangeType: reward.protectedByExpiry ? 
-                (actualCost > 0 ? 'partial_protected' : 'fully_protected') : 'normal',
-              userId: userId,
-              timestamp: Date.now()
-            };
-            
-            const isConsistent = await starService.verifyOperationConsistency('兑换奖励', consistencyData);
-            
-            if (!isConsistent) {
-              logger.error('RewardService', `兑换奖励后数据不一致！`, {
-                reward: reward.name,
-                actualCost: actualCost,
-                originalPoints: reward.points,
-                exchangeType: consistencyData.exchangeType,
-                userId: userId
-              });
-            } else {
-              logger.info('RewardService', `数据一致性检查通过: ${reward.name}, 用户=${userId}`);
-            }
-          }
-        } catch (consistencyError) {
-          logger.warn('RewardService', '数据一致性检查失败', consistencyError);
-        }
-        
         const successMessage = reward.protectedByExpiry ? 
           (actualCost > 0 ? '部分保护奖励兑换成功' : '完全保护奖励兑换成功') : 
           '兑换成功';
@@ -1789,7 +1757,7 @@ class RewardService {
       }
       
       // 检查是否所有启用的奖励都是示例奖励
-      const hasCustomReward = enabledRewards.some(reward => !this._isExampleReward(reward));
+      const hasCustomReward = enabledRewards.some(reward => !this.isExampleReward(reward));
       
       logger.debug('RewardService', `是否只有示例奖励: ${!hasCustomReward}, 启用奖励数: ${enabledRewards.length}`);
       return !hasCustomReward;
@@ -1801,24 +1769,27 @@ class RewardService {
   
   /**
    * 判断奖励是否示例奖励
-   * @private
    * @param {Object} reward 奖励对象
    * @returns {Boolean} 是否示例奖励
    */
-  _isExampleReward(reward) {
-    if (!reward) return false;
-    
-    // 直接检查isExample属性
-    if (reward.isExample === true) return true;
-    
-    // 兼容旧的判断逻辑：示例奖励ID格式判断
-    if (reward.id && typeof reward.id === 'string') {
-      return reward.id.startsWith('reward_example_') || 
-             reward.id.includes('_example_') || 
-             /reward_\d+_\d+/.test(reward.id);
+  isExampleReward(reward) {
+    if (!reward) {
+      return false;
     }
-    
-    return false;
+
+    if (reward.isExample === true) {
+      return true;
+    }
+
+    if (typeof reward.id !== 'string') {
+      return false;
+    }
+
+    return LEGACY_EXAMPLE_REWARD_ID_PATTERNS.some((pattern) => pattern.test(reward.id));
+  }
+
+  _isExampleReward(reward) {
+    return this.isExampleReward(reward);
   }
 
   /**

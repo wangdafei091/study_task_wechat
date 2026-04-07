@@ -119,7 +119,8 @@ describe('pages/rewards/rewards contract', () => {
         name: '奖励2',
         points: 20
       }),
-      hasCustomRewards: jest.fn().mockResolvedValue(false)
+      hasCustomRewards: jest.fn().mockResolvedValue(false),
+      isExampleReward: jest.fn((reward) => reward?.isExample === true || reward?.id === 'reward_1_1')
     };
     const configService = {
       hasCustomRewards: jest.fn(() => false)
@@ -167,7 +168,8 @@ describe('pages/rewards/rewards contract', () => {
       clearCache: jest.fn(),
       getAvailableRewards: jest.fn().mockResolvedValue([]),
       calculateNextAvailableReward: jest.fn().mockResolvedValue(null),
-      hasCustomRewards: jest.fn().mockResolvedValue(false)
+      hasCustomRewards: jest.fn().mockResolvedValue(false),
+      isExampleReward: jest.fn((reward) => reward?.isExample === true || reward?.id === 'reward_1_1')
     };
     const configService = {
       hasCustomRewards: jest.fn(() => false)
@@ -216,7 +218,8 @@ describe('pages/rewards/rewards contract', () => {
         name: '示例奖励',
         points: 8,
         isExample: true
-      })
+      }),
+      isExampleReward: jest.fn((reward) => reward?.isExample === true || reward?.id === 'reward_1_1')
     };
     const configService = {
       hasCustomRewards: jest.fn(() => true)
@@ -417,7 +420,8 @@ describe('pages/rewards/rewards contract', () => {
       clearCache: jest.fn(),
       refreshRewardsFromCloud: jest.fn().mockResolvedValue({}),
       getAvailableRewards: jest.fn().mockResolvedValue([]),
-      calculateNextAvailableReward: jest.fn().mockResolvedValue(null)
+      calculateNextAvailableReward: jest.fn().mockResolvedValue(null),
+      isExampleReward: jest.fn((reward) => reward?.isExample === true || reward?.id === 'reward_1_1')
     };
     const configService = {
       hasCustomRewards: jest.fn(() => false)

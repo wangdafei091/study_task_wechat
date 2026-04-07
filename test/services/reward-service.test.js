@@ -1420,6 +1420,15 @@ describe('RewardService', () => {
   // ==================== 测试组9：示例奖励检测 ====================
 
   describe('示例奖励检测', () => {
+    it('公开的 isExampleReward 应只识别显式标记和历史示例ID', () => {
+      expect(rewardService.isExampleReward(null)).toBe(false);
+      expect(rewardService.isExampleReward({ isExample: true })).toBe(true);
+      expect(rewardService.isExampleReward({ id: 'reward_example_1' })).toBe(true);
+      expect(rewardService.isExampleReward({ id: 'reward_1712476800000_2' })).toBe(true);
+      expect(rewardService.isExampleReward({ id: 'reward_1712476800000_88' })).toBe(false);
+      expect(rewardService.isExampleReward({ id: 'custom_reward_1' })).toBe(false);
+    });
+
     it('应该正确识别只有示例奖励的情况', () => {
       // 准备测试数据
       const exampleRewards = [
@@ -1467,6 +1476,21 @@ describe('RewardService', () => {
       const result = rewardService.hasOnlyExampleRewardsSync();
 
       // 验证结果
+      expect(result).toBe(false);
+    });
+
+    it('默认生成格式的正式奖励ID不应被误判为示例奖励', () => {
+      const rewards = [
+        new Reward({
+          id: 'reward_1712476800000_88',
+          name: '正式奖励',
+          enabled: true
+        })
+      ];
+      mockRewardRepository.getAllSync.mockReturnValue(rewards);
+
+      const result = rewardService.hasOnlyExampleRewardsSync();
+
       expect(result).toBe(false);
     });
 

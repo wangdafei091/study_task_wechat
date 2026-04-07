@@ -152,17 +152,15 @@ Page({
 
   /**
    * 判断是否为示例奖励
-   * 通过ID格式或标记识别示例奖励
+   * 委托 RewardService 统一判断示例奖励
    */
   isExampleReward: function(reward) {
-    // 检查是否有明确的示例标记
-    if (reward.isExample === true) {
-      return true;
+    const rewardService = serviceManager.getService('rewardService');
+    if (!rewardService || typeof rewardService.isExampleReward !== 'function') {
+      return false;
     }
-    
-    // 使用ID前缀/后缀识别初始默认示例
-    // 初始三个示例奖励的ID结尾为_1, _2, _3
-    return /reward_\d+_(1|2|3)$/.test(reward.id);
+
+    return rewardService.isExampleReward(reward);
   },
 
   /**

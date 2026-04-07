@@ -308,9 +308,8 @@ describe('StarRecord 领域模型', () => {
       expect(clonedRecord).not.toBe(originalRecord);
     });
 
-    it('克隆记录应该生成新时间戳', async () => {
-      const originalRecord = new StarRecord({ points: 10 });
-      await new Promise(resolve => setTimeout(resolve, 1));
+    it('克隆记录应该生成新时间戳', () => {
+      const originalRecord = new StarRecord({ points: 10, timestamp: 1000 });
       const clonedRecord = originalRecord.clone();
       expect(clonedRecord.timestamp).toBeGreaterThan(originalRecord.timestamp);
     });
@@ -329,6 +328,24 @@ describe('StarRecord 领域模型', () => {
       });
       const clonedRecord = originalRecord.clone({}, false);
       expect(clonedRecord.id).toBe(originalRecord.id);
+    });
+
+    it('克隆记录时应复制 data，避免与原对象共享嵌套引用', () => {
+      const originalRecord = new StarRecord({
+        id: 'record_123',
+        points: 10,
+        data: {
+          expiry: {
+            type: 'daily'
+          }
+        }
+      });
+
+      const clonedRecord = originalRecord.clone();
+      clonedRecord.data.expiry.type = 'weekly';
+
+      expect(originalRecord.data.expiry.type).toBe('daily');
+      expect(clonedRecord.data.expiry.type).toBe('weekly');
     });
   });
 
