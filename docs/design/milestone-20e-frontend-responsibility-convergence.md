@@ -1,10 +1,11 @@
 # 里程碑-20E：前端职责收口与存量代码清理评估 详细设计文档
 
-> **设计状态**：🔴 待审核
+> **设计状态**：🟢 已完成
 > **创建日期**：2026-04-07
 > **设计者**：GPT5 Codex
 > **审核者**：项目维护者
 > **预计工期**：2-3天
+> **完成日期**：2026-04-07
 
 ---
 
@@ -14,6 +15,7 @@
 - [技术方案](#技术方案)
 - [代码结构](#代码结构)
 - [实施步骤](#实施步骤)
+- [实施结果](#实施结果)
 - [测试方案](#测试方案)
 - [风险评估](#风险评估)
 - [替代方案](#替代方案)
@@ -383,6 +385,44 @@ class MessageService {
    - `test/services/reward-service.test.js`
    - `test/pages/rewards.page-contract.test.js`
    - `test/pages/index.page-shell.behavior.test.js`
+
+---
+
+## 实施结果
+
+### 已完成收口
+
+- `MessageService`
+  - 修复 `batchMarkMessagesAsRead()` 对不存在 `messageManager` 的崩溃依赖，改为委托 `messageRepository.markManyAsRead()`
+  - 删除 `batchCreateTaskMessages()`、`getUpcomingTaskNotifications()`、`_migrateMessageData()`
+  - 删除无生产调用的 domain facade 壳方法，并同步移除 helper 导出与过时文件头说明
+- `UserService`
+  - 删除 `getChildUserId()`
+  - 删除 `_loadUserState()`
+- `RewardService`
+  - 删除废弃接口 `markRewardAsDelivered()`
+  - 同步更新 `docs/api/services-guide.md`
+- 奖励页
+  - 兑换流从 `_getChildUserId()` 迁移到正式 `_getEffectiveChildUserId()`
+  - 删除奖励页兼容壳与 `rewards-user-context` 中的同名 helper
+- 工具层
+  - 删除 `utils/log-analyzer.js` 及 `app.js` 中对应 dev-only 入口
+  - 删除 `uiUtils` 中无调用的 `toggleComponent / toggleMask / setLoading` 兼容包装
+
+### 验证结果
+
+- 定向回归通过：
+  - `test/services/message-service.test.js`
+  - `test/services/message-service.modules.test.js`
+  - `test/services/user-service.test.js`
+  - `test/services/reward-service.test.js`
+  - `test/pages/rewards.page-contract.test.js`
+  - `test/pages/rewards.modules.test.js`
+  - `test/pages/rewards.behavior.test.js`
+  - `test/app.test.js`
+  - `test/app/app-shell.behavior.test.js`
+  - `test/pages/task-edit.page.test.js`
+- 本轮验证结果：`10` 个 suite、`250` 个测试全部通过
 
 ---
 

@@ -4,6 +4,46 @@
 
 ---
 
+## [里程碑-20E] - 2026-04-07
+
+### ✅ 完成情况
+
+**前端职责收口与存量代码清理评估**
+
+- **服务层收口**：
+  - 修复 `MessageService.batchMarkMessagesAsRead()` 对旧 `messageManager` 的失效依赖，改为委托 `MessageRepository`
+  - 清理 `MessageService` 中无生产调用的历史接口与残链，包括 `batchCreateTaskMessages()`、`getUpcomingTaskNotifications()`、`_migrateMessageData()` 和一组无调用 domain facade 壳方法
+  - 清理 `UserService.getChildUserId()`、`UserService._loadUserState()` 和 `RewardService.markRewardAsDelivered()`
+- **页面与工具层收口**：
+  - 奖励页兑换流统一改用 `_getEffectiveChildUserId()`，删除 `_getChildUserId()` 兼容壳与对应模块 helper
+  - 删除 `utils/log-analyzer.js` 及 `app.js` 中的 dev-only 入口
+  - 删除 `uiUtils` 中无调用的 `toggleComponent / toggleMask / setLoading` 兼容包装
+- **文档与契约同步**：
+  - 同步更新 `docs/api/services-guide.md`，移除已删除废弃接口说明
+  - 保留 `test/backend/message-service-copy.test.js` 作为根级后端契约测试事实，不在本期为历史命名做额外扰动
+
+### 🧪 验证结果
+
+- M20E 定向回归通过：
+  - `test/services/message-service.test.js`
+  - `test/services/message-service.modules.test.js`
+  - `test/services/user-service.test.js`
+  - `test/services/reward-service.test.js`
+  - `test/pages/rewards.page-contract.test.js`
+  - `test/pages/rewards.modules.test.js`
+  - `test/pages/rewards.behavior.test.js`
+  - `test/app.test.js`
+  - `test/app/app-shell.behavior.test.js`
+  - `test/pages/task-edit.page.test.js`
+- 本次实施共验证：
+  - `10 suites / 250 tests` 全绿
+
+### 📖 详细实施记录
+
+- [里程碑-20E：前端职责收口与存量代码清理评估](../design/milestone-20e-frontend-responsibility-convergence.md)
+
+---
+
 ## [里程碑-20B] - 2026-04-06
 
 ### ✅ 完成情况
