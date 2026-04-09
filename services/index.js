@@ -9,6 +9,7 @@ const StarService = require('./star-service');
 const TaskService = require('./task-service');
 const MessageService = require('./message-service');
 const OfflineQueueService = require('./offline-queue-service');
+const TaskTemplateService = require('./task-template-service');
 const { UserService } = require('./user-service');
 const ValidationService = require('./validation-service');
 const ConfigService = require('./config-service');
@@ -28,6 +29,9 @@ module.exports = {
 
   // 离线队列服务
   OfflineQueueService,
+
+  // 任务模板服务
+  TaskTemplateService,
   
   // 用户服务
   UserService,

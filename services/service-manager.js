@@ -9,7 +9,8 @@ const {
   RewardService, 
   StarService, 
   MessageService,
-  OfflineQueueService
+  OfflineQueueService,
+  TaskTemplateService
 } = require('./index');
 const ValidationService = require('./validation-service');
 const ConfigService = require('./config-service');
@@ -96,6 +97,10 @@ class ServiceManager {
 
     // 检查其他可能需要UserService更新的服务
     // 如果需要，可以在这里添加更多的检查和更新逻辑
+    if (this.services.taskTemplateService && this.services.taskTemplateService.updateUserService) {
+      this.services.taskTemplateService.updateUserService(this.userService);
+      logger.info('ServiceManager', 'TaskTemplateService已更新UserService');
+    }
   }
   
   /**
@@ -215,6 +220,12 @@ class ServiceManager {
         eventBus: this.eventBus
       });
 
+      this.services.taskTemplateService = new TaskTemplateService({
+        eventBus: this.eventBus,
+        userService: this.userService,
+        storageAdapter: this.storageAdapter
+      });
+
       this.services.offlineQueueService = new OfflineQueueService({
         eventBus: this.eventBus,
         storageAdapter: this.storageAdapter,
@@ -276,6 +287,10 @@ class ServiceManager {
       'offlineQueue': 'offlineQueueService',
       'offlineQueueService': 'offlineQueueService',
       'OfflineQueueService': 'offlineQueueService',
+
+      'taskTemplate': 'taskTemplateService',
+      'taskTemplateService': 'taskTemplateService',
+      'TaskTemplateService': 'taskTemplateService',
       
       'eventBus': 'eventBus'
     };
@@ -327,6 +342,10 @@ class ServiceManager {
 
   getOfflineQueueService() {
     return this.services.offlineQueueService;
+  }
+
+  getTaskTemplateService() {
+    return this.services.taskTemplateService;
   }
   
   /**

@@ -13,6 +13,8 @@ const { resolveRuntimeApiConfig } = require('./utils/runtime-config');
 
 App({
   onLaunch: async function () {
+    wx.setStorageSync('ENABLE_API', 'true');
+    wx.setStorageSync('API_BASE_URL', 'https://api.todoceo.xyz');
     // 原地补齐启动状态，避免覆盖默认 globalData 契约和 getter。
     this.globalData.appReady = false;
     this.globalData.userServiceReady = false;

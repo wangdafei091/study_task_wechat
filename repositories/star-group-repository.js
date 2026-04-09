@@ -499,11 +499,11 @@ class StarGroupRepository extends BaseRepository {
     
     switch (expiryType) {
       case StarExpiryType.WEEK:
-        return `本周有效（${year}-${month}-${day}到期）`;
+        return `本周结束（${year}-${month}-${day}到期）`;
       case StarExpiryType.MONTH:
-        return `本月有效（${year}-${month}-${day}到期）`;
+        return `本月结束（${year}-${month}-${day}到期）`;
       case StarExpiryType.QUARTER:
-        return `三个月内有效（${year}-${month}-${day}到期）`;
+        return `本季度结束（${year}-${month}-${day}到期）`;
       default:
         return `${year}-${month}-${day}到期`;
     }

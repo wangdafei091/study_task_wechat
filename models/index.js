@@ -11,6 +11,7 @@ const { Reward, RewardStatus, RewardType } = require('./reward');
 const { StarRecord, RecordType, RecordSource } = require('./star-record');
 const { Message, MessageType, NotificationType } = require('./message');
 const { User, UserRole, UserStatus } = require('./user');
+const TaskTemplate = require('./task-template');
 
 module.exports = {
   // 任务模型
@@ -44,5 +45,8 @@ module.exports = {
   // 用户模型
   User,
   UserRole,
-  UserStatus
+  UserStatus,
+
+  // 任务模板模型
+  TaskTemplate
 }; 

@@ -4,6 +4,48 @@
 
 ---
 
+## [里程碑-21B1] - 2026-04-08
+
+### ✅ 完成情况
+
+**模板基础闭环**
+
+- **模板实体与同步主链路**：
+  - 新增 `TaskTemplate` 前后端模型、前端仓储与服务、后端 `task_templates` 表及 REST 接口
+  - `ServiceManager` 正式接入 `TaskTemplateService`，模板读写走统一服务入口
+  - 模板持久化采用独立实体，不再复用任务实例或历史任务临时复制
+- **管理与编辑页面**：
+  - 新增独立的任务模板管理页与模板编辑页
+  - 支持模板搜索、类型筛选、状态筛选、最近使用/使用次数排序、启用/停用、删除和手工创建/编辑
+  - 管理页在 `select` 模式下可直接回传模板给 `task-edit` 页面完成快速填表
+- **`task-edit` 模板快速填充**：
+  - 在“添加任务”卡片内新增“从模板快速填充”模块，支持 3-5 个最近模板胶囊项和“查看全部”入口
+  - 选择模板后自动填充现有任务表单，并同步更新 `repeatText / reminderText / pointsExpiryText / repeatPreviewText`
+  - 真实任务创建成功后，以 best-effort 方式回写模板使用次数，不影响任务创建成功结果
+- **兼容与显示层治理**：
+  - 新增共享 helper，统一任务模板应用后的重复文案、提醒文案、有效期文案与重复预览生成逻辑
+  - `task-edit` 重复面板补齐 `不重复 / 每周` 选项，并恢复“无结束日期”开关，保证模板填充后的字段可继续手工调整
+
+### 🧪 验证结果
+
+- M21B1 定向测试通过：
+  - `test/models/task-template.test.js`
+  - `test/repositories/task-template-repository.test.js`
+  - `test/services/task-template-service.test.js`
+  - `test/pages/task-template-manage.page.test.js`
+  - `test/pages/task-template-edit.page.test.js`
+  - `test/pages/task-edit.page.test.js`
+  - `test/services/service-manager.test.js`
+- 全量前端测试通过：
+  - `npm test -- --runInBand`
+  - 结果：`83 suites / 1735 tests` 全绿
+
+### 📖 详细实施记录
+
+- [里程碑-21B1：模板基础闭环](../design/milestone-21b1-task-template-foundation.md)
+
+---
+
 ## [里程碑-20E] - 2026-04-07
 
 ### ✅ 完成情况

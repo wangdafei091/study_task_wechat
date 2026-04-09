@@ -1,10 +1,12 @@
 # 里程碑-21B1：模板基础闭环 详细设计文档
 
-> **设计状态**：🟢 已通过
+> **设计状态**：✅ 基础闭环已实现，补充修订已审核通过，待实施
 > **创建日期**：2026-04-07
 > **设计者**：GPT5 Codex
 > **审核者**：项目维护者
 > **预计工期**：3-4天
+> **实现结果**：2026-04-08 已完成，`npm test -- --runInBand` 通过（`83 suites / 1735 tests`）
+> **后续说明**：模板日期语义已在 [milestone-21b1-ux-refinement.md](/Users/wangdafei/code/study_task_wechat/docs/design/milestone-21b1-ux-refinement.md) 中进入二次设计复审；本文件保留 `M21B1` 基础闭环的实现基线，不再作为日期字段最终交互语义的唯一依据。星星有效期语义在本轮补充修订中统一收敛为“自然周期结束”表达：`week=本周结束`、`month=本月结束`、`quarter=本季度结束`；本轮不引入“到账后7天”滚动过期能力。
 
 ---
 
@@ -176,7 +178,7 @@ interface TaskTemplate {
     title: string;
     type: 'habit' | 'study' | 'interest';
     points: number;
-    pointsExpiry: 'permanent' | 'week' | 'month' | '3months' | '6months' | '12months';
+    pointsExpiry: 'permanent' | 'week' | 'month' | 'quarter';
     description?: string; // 真实任务描述，应用模板时填入任务表单
     isRequired: boolean;
     isAllDay: boolean;
@@ -199,6 +201,8 @@ interface TaskTemplate {
   dateStrategy: {
     mode: 'today' | 'inherit-repeat-rule';
     autoShiftExpiredEndDate: boolean;
+    endMode?: 'same-day' | 'duration' | 'week-end' | 'month-end' | 'no-end';
+    durationDays?: number | null;
   };
   enabled: boolean;
   usageCount: number;
@@ -228,7 +232,14 @@ interface TaskTemplate {
 - `taskPayload.repeat.type` 以当前任务创建表单和服务层已实际支持的值为准：
   - `'none' | 'daily' | 'weekly' | 'workdays' | 'weekends' | 'custom'`
 - `taskPayload.pointsExpiry` 以当前前端表单和星星服务已实际支持的值为准：
-  - `'permanent' | 'week' | 'month' | '3months' | '6months' | '12months'`
+  - `'permanent' | 'week' | 'month' | 'quarter'`
+- `taskPayload.pointsExpiry` 的业务语义固定为“自然周期结束”，不是“到账后持续 N 天”：
+  - `'week'`：本周结束
+  - `'month'`：本月结束
+  - `'quarter'`：本季度结束
+- 模板日期语义的最终交互与持久化收敛，以 [milestone-21b1-ux-refinement.md](/Users/wangdafei/code/study_task_wechat/docs/design/milestone-21b1-ux-refinement.md) 为准：
+  - 重复模板通过 `dateStrategy.endMode` 表达结束方式
+  - `durationDays` 仅在 `endMode='duration'` 时生效，且语义为“包含开始当天的总持续天数”
 - 模板层不以 [models/task.js](/Users/wangdafei/code/study_task_wechat/models/task.js) 中的旧枚举覆盖上述持久化约定；如后续需要统一领域枚举，应在独立治理里程碑中完成，而不是在 `M21B1` 内临时改写业务语义。
 - 创建/编辑模板时，若来源是 `task-edit` 表单，则按表单当前值原样入模板；不额外转换为旧领域枚举。
 - 若后续出现历史模板值与当前 canonical contract 不一致，读取时由 `TaskTemplateService` 做兼容归一化。
@@ -366,6 +377,11 @@ interface TaskTemplate {
    - `TaskTemplate.taskPayload.description` 表示真实任务描述，应用模板时填充到 `newTask.description`。
    - 两者语义不同，不能混用，也不能在应用模板时互相覆盖。
    - `pointsExpiryDate` 在 `M21B1` 中不作为模板持久化字段。首版模板只保存 `pointsExpiry` 档位值；任何展示文案或派生日期都在运行时计算。
+   - `pointsExpiry` 的正式语义统一为“自然周期结束”：
+     - `week = 本周结束`
+     - `month = 本月结束`
+     - `quarter = 本季度结束`
+   - 本轮不新增“到账后7天”或其他滚动过期能力，避免把“自然周期截止”和“滚动时长截止”混为一谈。
 
 6. **搜索语义规则**  
    - 搜索应进入第一版。因为模板管理页一旦只有筛选和排序，模板量上来后会明显影响查找效率。
@@ -391,9 +407,14 @@ interface TaskTemplate {
        - `'monthly' -> 'none'`，并记录兼容日志；`M21B1` 不为月重复模板提供自动迁移语义
      - 读取到未知值时，降级为 `'none'`
    - `pointsExpiry` 兼容规则：
-     - 模板存储值优先使用 `'permanent' | 'week' | 'month' | '3months' | '6months' | '12months'`
-     - 已知旧值映射：
-       - `'quarter' -> '3months'`
+     - 模板存储值优先使用 `'permanent' | 'week' | 'month' | 'quarter'`
+     - 模板管理页、模板编辑页、任务编辑页中的展示文案统一使用：
+       - `'permanent' -> '永久'`
+       - `'week' -> '本周结束'`
+       - `'month' -> '本月结束'`
+       - `'quarter' -> '本季度结束'`
+     - 本轮修订后，`'3months' | '6months' | '12months'` 不再属于正式 contract
+     - 由于模板功能尚未正式上线，不要求保留这三个旧值的线上兼容；若开发/测试环境已有旧数据，可在验证前清空 `task_templates` 表和本地模板缓存
      - 读取到未知值时，降级为 `'permanent'`
    - `applyTemplateToTaskForm()` 负责把 canonical value 映射成 `task-edit` 运行所需的：
      - `newTask.pointsExpiry`
@@ -599,6 +620,7 @@ Page({
 5. 模板持久化字段与 `task-edit` 的 `newTask` 结构保持对齐，不持久化 `repeatText / reminderText / pointsExpiryText` 这类纯展示态字段。
 6. 数据库迁移文件名明确使用 `013_create_task_templates.sql`，与现有迁移序号保持连续。
 7. 模板层不持久化 `pointsExpiryDate`；若读取到历史兼容字段，进入服务层后即做归一化，不继续回写为正式字段。
+8. 星星有效期文案必须在任务编辑页、模板编辑页、模板管理页和预览胶囊中保持一致，统一表达为“本周结束 / 本月结束 / 本季度结束”，不得再回退为“ 一周 / 一个月 / 三个月 ”这类滚动时长易混淆表达。
 
 ---
 
@@ -667,7 +689,7 @@ Page({
 | 模板服务 | `test/services/task-template-service.test.js` | CRUD、应用表单、使用统计回写逻辑正确 |
 | `task-edit` 模板填表 | `test/pages/task-edit.page.test.js` 或新增模块测试 | 选择模板后 `newTask`、`repeatText`、`reminderText` 被正确填充 |
 | 使用统计回写 | `test/pages/task-edit.page.test.js` 或服务测试 | 仅在创建成功后调用 `recordTemplateUsage()`，失败时不影响任务创建成功提示 |
-| 枚举兼容映射 | `test/services/task-template-service.test.js` | `repeat.type`、`pointsExpiry` 的 canonical value 与降级逻辑正确 |
+| 枚举兼容与语义映射 | `test/services/task-template-service.test.js` | `repeat.type`、`pointsExpiry` 的 canonical value、自然周期语义文案与降级逻辑正确 |
 | 离线写保护 | `test/pages/task-template-manage.page.test.js` 或页面行为测试 | 离线时模板写操作不可用，缓存浏览仍可用 |
 | 删除确认 | `test/pages/task-template-manage.page.test.js` | 删除前需要二次确认，且提示“不影响已创建任务” |
 | 零模板空态 | `test/pages/task-edit.page.test.js` / `test/pages/task-template-manage.page.test.js` | 无模板时展示空态和首个创建入口，而不是空列表或空标签区 |
@@ -686,7 +708,7 @@ Page({
 1. **模板管理**
    - [ ] 家长能进入独立模板页
    - [ ] 可手工创建、编辑、删除、启用/停用模板
-   - [ ] 搜索、任务类型筛选、最近使用/使用次数排序可用
+   - [ ] 搜索、任务类型筛选和固定排序结果符合预期
 
 2. **模板使用**
    - [ ] `task-edit` 页“从模板快速填充”模块展示最近模板标签

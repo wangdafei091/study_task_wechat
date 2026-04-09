@@ -1645,10 +1645,6 @@
   color: #666666 !important; /* 添加!important确保优先级 */
 }
 
-.task-points-mini.required-points text {
-  color: #666666 !important; /* 确保text标签也应用灰色 */
-}
-
 /* 必做任务的惩罚星星样式 */
 .required-penalty {
   font-size: 20rpx;

@@ -161,7 +161,7 @@ describe('ValidationService', () => {
         description: '任务描述',
         points: 10,
         pointsExpiry: 'week',
-        pointsExpiryText: '一周',
+        pointsExpiryText: '本周结束',
         isRequired: true,
         isAllDay: true
       };
@@ -175,7 +175,7 @@ describe('ValidationService', () => {
       expect(result.data.description).toBe('任务描述');
       expect(result.data.points).toBe(10);
       expect(result.data.pointsExpiry).toBe('week');
-      expect(result.data.pointsExpiryDate).toBe('一周');
+      expect(result.data.pointsExpiryDate).toBe('本周结束');
       expect(result.data.isRequired).toBe(true);
       expect(result.data.isAllDay).toBe(true);
       expect(result.data.startTime).toBe('');

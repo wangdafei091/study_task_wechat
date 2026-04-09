@@ -968,29 +968,19 @@ describe('StarService', () => {
       expect(text).toBe('永久');
     });
 
-    it('应该返回"一周"文本', () => {
+    it('应该返回"本周结束"文本', () => {
       const text = starService.getExpiryText('week');
-      expect(text).toBe('一周');
+      expect(text).toBe('本周结束');
     });
 
-    it('应该返回"一个月"文本', () => {
+    it('应该返回"本月结束"文本', () => {
       const text = starService.getExpiryText('month');
-      expect(text).toBe('一个月');
+      expect(text).toBe('本月结束');
     });
 
-    it('应该返回"三个月"文本', () => {
-      const text = starService.getExpiryText('3months');
-      expect(text).toBe('三个月');
-    });
-
-    it('应该返回"六个月"文本', () => {
-      const text = starService.getExpiryText('6months');
-      expect(text).toBe('六个月');
-    });
-
-    it('应该返回"十二个月"文本', () => {
-      const text = starService.getExpiryText('12months');
-      expect(text).toBe('十二个月');
+    it('应该返回"本季度结束"文本', () => {
+      const text = starService.getExpiryText('quarter');
+      expect(text).toBe('本季度结束');
     });
 
     it('应该对未知类型返回"永久"', () => {
@@ -1534,6 +1524,20 @@ describe('StarService', () => {
       mockStarRecordRepository.getRecordsByDate.mockRejectedValue(new Error('db error'));
       const result = await starService.getStarRecordsByDate('2026-03-01');
       expect(result).toEqual([]);
+    });
+  });
+
+  describe('filterRecords - 前端记录筛选', () => {
+    it('timeFilter=3months 时应保留近三个月内的记录', () => {
+      const now = Date.now();
+      const records = [
+        { id: 'recent', type: 'income', points: 1, timestamp: now - 30 * 24 * 60 * 60 * 1000 },
+        { id: 'expired', type: 'income', points: 1, timestamp: now - 120 * 24 * 60 * 60 * 1000 }
+      ];
+
+      const result = starService.filterRecords(records, 'all', '3months');
+
+      expect(result.map((item) => item.id)).toEqual(['recent']);
     });
   });
 

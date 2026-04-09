@@ -43,10 +43,15 @@ const loadServiceManager = (options = {}) => {
   const configServiceInstance = { name: 'configService' };
   const analyticsServiceInstance = { name: 'analyticsService' };
   const offlineQueueServiceInstance = { name: 'offlineQueueService' };
+  const taskTemplateServiceInstance = {
+    name: 'taskTemplateService',
+    updateUserService: jest.fn()
+  };
 
   const StarService = jest.fn(() => starServiceInstance);
   const MessageService = jest.fn(() => messageServiceInstance);
   const RewardService = jest.fn(() => rewardServiceInstance);
+  const TaskTemplateService = jest.fn(() => taskTemplateServiceInstance);
   const TaskService = jest.fn(() => {
     if (throwTaskCtor) {
       throw new Error('task ctor failed');
@@ -63,7 +68,8 @@ const loadServiceManager = (options = {}) => {
     RewardService,
     StarService,
     MessageService,
-    OfflineQueueService
+    OfflineQueueService,
+    TaskTemplateService
   }));
   jest.doMock('../../services/validation-service', () => ValidationService);
   jest.doMock('../../services/config-service', () => ConfigService);
@@ -91,12 +97,14 @@ const loadServiceManager = (options = {}) => {
       ValidationService,
       ConfigService,
       OfflineQueueService,
+      TaskTemplateService,
       AnalyticsService,
       instances: {
         starServiceInstance,
         messageServiceInstance,
         rewardServiceInstance,
         taskServiceInstance,
+        taskTemplateServiceInstance,
         validationServiceInstance,
         configServiceInstance,
         analyticsServiceInstance,
@@ -153,6 +161,11 @@ describe('ServiceManager', () => {
     expect(mocks.ValidationService).toHaveBeenCalledTimes(1);
     expect(mocks.ConfigService).toHaveBeenCalledWith({
       eventBus: mocks.eventBusInstance
+    });
+    expect(mocks.TaskTemplateService).toHaveBeenCalledWith({
+      eventBus: mocks.eventBusInstance,
+      userService,
+      storageAdapter: expect.any(Object)
     });
     expect(mocks.OfflineQueueService).toHaveBeenCalledWith(expect.objectContaining({
       eventBus: mocks.eventBusInstance,
@@ -226,6 +239,7 @@ describe('ServiceManager', () => {
     expect(serviceManager.getService('message')).toBe(mocks.instances.messageServiceInstance);
     expect(serviceManager.getService('config')).toBe(mocks.instances.configServiceInstance);
     expect(serviceManager.getService('offlineQueue')).toBe(mocks.instances.offlineQueueServiceInstance);
+    expect(serviceManager.getService('taskTemplate')).toBe(mocks.instances.taskTemplateServiceInstance);
     expect(serviceManager.getService('eventBus')).toBe(mocks.eventBusInstance);
     expect(serviceManager.getService('not-exist')).toBeNull();
   });

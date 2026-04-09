@@ -36,6 +36,31 @@
     <!-- 添加任务卡片 -->
     <card title="添加任务" customClass="add-task-card">
       <view class="add-task-content">
+        <view class="template-quick-fill" wx:if="{{hasTemplates || templateEntryLoadedOnce}}">
+          <view class="template-quick-fill-head">
+            <text class="template-quick-fill-title">快捷填充</text>
+            <view wx:if="{{hasTemplates}}" class="template-quick-fill-link" bindtap="openTemplateSelectPage">更多模板 ></view>
+          </view>
+
+          <scroll-view wx:if="{{hasTemplates}}" class="template-chip-scroll" scroll-x="{{true}}" show-scrollbar="{{false}}">
+            <view class="template-chip-row">
+              <block wx:for="{{recentTemplates}}" wx:key="id">
+                <view
+                  class="template-chip {{selectedTemplateId === item.id ? 'active' : ''}} {{item.taskPayload.type || 'habit'}}"
+                  bindtap="onUseRecentTemplate"
+                  data-id="{{item.id}}"
+                >
+                  <text class="template-chip-name">{{item.displayName || item.name || item.taskPayload.title}}</text>
+                </view>
+              </block>
+            </view>
+          </scroll-view>
+
+          <view wx:else class="template-quick-fill-empty">
+            <view class="template-quick-fill-empty-link" bindtap="openTemplateCreatePage">还没有模板，去创建 ></view>
+          </view>
+        </view>
+
         <!-- 任务基本信息区 -->
         <view class="task-info-area">
           <!-- 任务名称 -->
@@ -160,12 +185,11 @@
             </view>
           </view>
           
-          <!-- 无结束日期选项 
+          <!-- 无结束日期选项 -->
           <view class="input-item switch-item">
             <text class="input-label">无结束日期</text>
             <switch checked="{{newTask.hasNoEndDate}}" bindchange="toggleNoEndDate" color="#4285F4" />
           </view>
-          -->
           <!-- 重复选项 -->
           <view class="input-item">
             <view class="input-item-header" bindtap="togglePanel" data-panel="repeatPanel">
@@ -239,8 +263,18 @@
       <!-- 重复类型选择（在type模式下显示） -->
       <view class="option-list" wx:if="{{repeatPanelMode === 'type'}}">
         <view class="option-item-container">
+          <view class="option-item {{newTask.repeat.type === 'none' ? 'selected' : ''}}" 
+                bindtap="selectRepeatType" data-type="none">不重复</view>
+        </view>
+
+        <view class="option-item-container">
           <view class="option-item {{newTask.repeat.type === 'daily' ? 'selected' : ''}}" 
                 bindtap="selectRepeatType" data-type="daily">每天</view>
+        </view>
+
+        <view class="option-item-container">
+          <view class="option-item {{newTask.repeat.type === 'weekly' ? 'selected' : ''}}" 
+                bindtap="selectRepeatType" data-type="weekly">每周</view>
         </view>
         
         <view class="option-item-container">
@@ -349,15 +383,11 @@
         <view class="option-item {{newTask.pointsExpiry === 'permanent' ? 'selected' : ''}}" 
               bindtap="selectPointsExpiry" data-expiry="permanent">永久</view>
         <view class="option-item {{newTask.pointsExpiry === 'week' ? 'selected' : ''}}" 
-              bindtap="selectPointsExpiry" data-expiry="week">一周</view>
+              bindtap="selectPointsExpiry" data-expiry="week">本周结束</view>
         <view class="option-item {{newTask.pointsExpiry === 'month' ? 'selected' : ''}}" 
-              bindtap="selectPointsExpiry" data-expiry="month">一个月</view>
-        <view class="option-item {{newTask.pointsExpiry === '3months' ? 'selected' : ''}}" 
-              bindtap="selectPointsExpiry" data-expiry="3months">三个月</view>
-        <view class="option-item {{newTask.pointsExpiry === '6months' ? 'selected' : ''}}" 
-              bindtap="selectPointsExpiry" data-expiry="6months">六个月</view>
-        <view class="option-item {{newTask.pointsExpiry === '12months' ? 'selected' : ''}}" 
-              bindtap="selectPointsExpiry" data-expiry="12months">十二个月</view>
+              bindtap="selectPointsExpiry" data-expiry="month">本月结束</view>
+        <view class="option-item {{newTask.pointsExpiry === 'quarter' ? 'selected' : ''}}" 
+              bindtap="selectPointsExpiry" data-expiry="quarter">本季度结束</view>
       </view>
     </view>
   </view>

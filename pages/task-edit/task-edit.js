@@ -6,8 +6,10 @@ const logger = require('../../utils/logger');
 const serviceManager = require('../../services/service-manager.js');
 const pageStorageHelper = require('../../utils/page-storage-helper');
 const permissionUtils = require('../../utils/permission-utils');
+const taskFormDisplay = require('../../utils/task-form-display');
+const taskTemplateEntry = require('./modules/task-template-entry');
 
-let taskEditLoadingCounter = 0;
+let taskEditLoadingVisible = false;
 
 Page({
   /**
@@ -18,7 +20,7 @@ Page({
     heatmapYear: new Date().getFullYear(),
     heatmapMonthIndex: new Date().getMonth(),
     heatmapMonth: '',
-    targetUserId: null, // 家长代孩子创建任务时的目标用户ID（由首页传入）
+    targetUserId: '', // 家长代孩子创建任务时的目标用户ID（由首页传入）
     // 添加新任务表单数据
     newTask: {
       title: '',
@@ -77,7 +79,14 @@ Page({
     isRepeatOptionDisabled: true, // 默认为true,因为初始日期是同一天
     
     // 提醒选项列表（动态生成）
-    reminderOptions: []
+    reminderOptions: [],
+
+    // 模板快速填充
+    templateEntryLoading: true,
+    templateEntryLoadedOnce: false,
+    hasTemplates: false,
+    recentTemplates: [],
+    selectedTemplateId: null
   },
 
   /**
@@ -145,9 +154,6 @@ Page({
     // 初始化日期时间数据
     this.initDateTimeData();
     
-    // 加载所有任务
-    this.loadAllTasks();
-    
     // 确保所有面板初始状态为关闭
     this.setData({
       startDatePanel: false,
@@ -199,6 +205,7 @@ Page({
     logger.info('TaskEdit', '时间选择区域布局优化已应用，提高了用户理解度和操作便捷性');
     
     this.loadAllTasks();
+    this.loadRecentTaskTemplates();
   },
 
   /**
@@ -238,6 +245,78 @@ Page({
         duration: 2000
       });
     }
+  },
+
+  loadRecentTaskTemplates: async function() {
+    const taskTemplateService = serviceManager.getService('taskTemplate');
+    if (!taskTemplateService) {
+      this.setData({
+        templateEntryLoading: false,
+        templateEntryLoadedOnce: true,
+        hasTemplates: false,
+        recentTemplates: []
+      });
+      return [];
+    }
+
+    return taskTemplateEntry.loadRecentTemplates(this, taskTemplateService, 5);
+  },
+
+  openTemplateSelectPage: function() {
+    wx.navigateTo({
+      url: '/packageManage/pages/task-template-manage/task-template-manage?mode=select',
+      success: (res) => {
+        const eventChannel = res.eventChannel;
+        if (eventChannel && typeof eventChannel.on === 'function') {
+          eventChannel.on('templateSelected', (payload) => {
+            if (payload && payload.template) {
+              this.applyTemplateSelection(payload.template);
+            }
+          });
+        }
+      }
+    });
+  },
+
+  openTemplateCreatePage: function() {
+    wx.navigateTo({
+      url: '/packageManage/pages/task-template-edit/task-template-edit?mode=create'
+    });
+  },
+
+  onUseRecentTemplate: function(e) {
+    const templateId = e.currentTarget.dataset.id;
+    const template = this.data.recentTemplates.find((item) => item.id === templateId);
+    if (!template) {
+      return;
+    }
+
+    this.applyTemplateSelection(template);
+  },
+
+  applyTemplateSelection: function(template) {
+    const taskTemplateService = serviceManager.getService('taskTemplate');
+    if (!taskTemplateService) {
+      wx.showToast({
+        title: '模板服务未就绪',
+        icon: 'none'
+      });
+      return;
+    }
+
+    const result = taskTemplateEntry.applyTemplateToTaskEditForm(this, taskTemplateService, template);
+    if (result && result.formPatch) {
+      const displayName = taskTemplateEntry.getTemplateDisplayName(template);
+      wx.showToast({
+        title: displayName ? `已填充：${displayName}` : '已填充模板',
+        icon: 'none',
+        duration: 1600
+      });
+    }
+  },
+
+  clearSelectedTemplateState: function() {
+    taskTemplateEntry.resetSelectedTemplate(this);
   },
 
   /**
@@ -448,7 +527,8 @@ Page({
       'newTask.reminder': {
         enabled: false,
         time: 0
-      }
+      },
+      selectedTemplateId: null
     });
     
     // 重新初始化日期时间数据
@@ -770,6 +850,8 @@ Page({
    * @private
    */
   _handleTaskCreationSuccess: function(result, newTask) {
+    const usedTemplateId = this.data.selectedTemplateId;
+
     // 添加成功，记录详细日志
     logger.info('TaskEdit', '新任务添加成功', {
       id: result.task ? result.task.id : '未知',
@@ -806,7 +888,8 @@ Page({
       'newTask.reminder': {
         enabled: false,
         time: 0
-      }
+      },
+      selectedTemplateId: null
     });
     
     // 重新初始化日期时间数据
@@ -826,6 +909,10 @@ Page({
         logger.info('TaskEdit', '开始延迟刷新热力图');
         heatmap.calculateHeatMap();
       }, 300);
+    }
+
+    if (usedTemplateId) {
+      this.recordSelectedTemplateUsage(usedTemplateId);
     }
   },
   
@@ -958,6 +1045,20 @@ Page({
   doAddTask: function() {
     logger.warn('TaskEdit', '警告：调用了已废弃的doAddTask函数，请使用addTask代替');
     this.addTask();
+  },
+
+  recordSelectedTemplateUsage: async function(templateId) {
+    const taskTemplateService = serviceManager.getService('taskTemplate');
+    if (!taskTemplateService || !templateId) {
+      return;
+    }
+
+    try {
+      await taskTemplateService.recordTemplateUsage(templateId);
+      await this.loadRecentTaskTemplates();
+    } catch (error) {
+      logger.warn('TaskEdit', '记录模板使用次数失败，不影响任务创建成功结果', error);
+    }
   },
 
   /**
@@ -1557,23 +1658,16 @@ Page({
    */
   selectRepeatType: function(e) {
     const type = e.currentTarget.dataset.type;
-    
-    let repeatText = '';
-    switch (type) {
-      case 'daily':
-        repeatText = '每天';
-        break;
-      case 'workdays':
-        repeatText = '工作日';
-        break;
-      case 'weekends':
-        repeatText = '休息日';
-        break;
-    }
-    
+
     this.setData({
       'newTask.repeat.type': type,
-      repeatText: repeatText,
+      'newTask.repeat.days': type === 'custom' ? this.data.newTask.repeat.days : [],
+      repeatText: taskFormDisplay.buildRepeatText({
+        type,
+        days: type === 'custom' ? this.data.newTask.repeat.days : []
+      }, {
+        isRepeatOptionDisabled: this.data.isRepeatOptionDisabled
+      }),
       repeatPreviewText: this.generateRepeatPreviewText(type)
     });
     
@@ -1586,18 +1680,11 @@ Page({
   selectReminderType: function(e) {
     const enabled = e.currentTarget.dataset.enabled === 'true';
     const time = parseInt(e.currentTarget.dataset.time || 0);
-    
-    let reminderText = '无';
-    if (enabled) {
-      if (time === 0) {
-        reminderText = '准时';
-      } else if (time === -1) {
-        reminderText = '提前1天(晚上8点)';
-      } else {
-        reminderText = `提前${time}分钟`;
-      }
-    }
-    
+    const reminderText = taskFormDisplay.buildReminderText({
+      enabled,
+      time
+    });
+
     this.setData({
       'newTask.reminder.enabled': enabled,
       'newTask.reminder.time': time,
@@ -1826,88 +1913,13 @@ Page({
    * @returns {string} 预览文本
    */
   generateRepeatPreviewText: function(repeatType) {
-    // 如果没有选择重复类型，返回空
-    if (!repeatType || repeatType === 'none') {
-      return '';
-    }
-    
-    logger.info('TaskEdit', '生成重复预览文本', { repeatType: repeatType });
-    
-    // 获取开始日期
-    const startDate = new Date(this.data.newTask.startDate.replace(/-/g, '/'));
-    const todayStr = this.data.newTask.startDate;
-    
-    // 获取结束日期字符串
-    let endDateStr = '';
-    if (!this.data.newTask.hasNoEndDate) {
-      endDateStr = `直到${this.data.newTask.endDate}结束`;
-    }
-    
-    // 日期的星期信息
-    const dayOfWeek = startDate.getDay(); // 0是周日，6是周六
-    const dayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
-    const dayName = dayNames[dayOfWeek];
-    
-    let previewText = '';
-    let warningExists = false;
-    
-    // 首先检查是否有日期冲突
+    const previewText = taskFormDisplay.buildRepeatPreviewText(this.data.newTask, repeatType);
     const conflictCheck = this.checkRepeatDateConflict(repeatType);
-    
-    if (conflictCheck.hasConflict) {
-      // 如果有冲突，使用冲突的预览文本
-      previewText = conflictCheck.previewText;
-      warningExists = true;
-      logger.info('TaskEdit', '使用警告预览文本:', previewText.substring(0, 30));
-    } else {
-      // 如果没有冲突，生成正常的预览文本
-      switch (repeatType) {
-        case 'daily':
-          previewText = `从${todayStr}开始每天执行${endDateStr ? '，' + endDateStr : ''}`;
-          break;
-          
-        case 'workdays':
-          previewText = `从${todayStr}开始每个工作日执行${endDateStr ? '，' + endDateStr : ''}`;
-          break;
-          
-        case 'weekends':
-          previewText = `从${todayStr}开始每个休息日执行${endDateStr ? '，' + endDateStr : ''}`;
-          break;
-          
-        case 'custom':
-          // 获取选中的星期
-          const selectedDays = this.data.newTask.repeat.days ? 
-                              this.data.newTask.repeat.days.map(day => parseInt(day)) : 
-                              [];
-          if (selectedDays.length > 0) {
-            const selectedDayNames = selectedDays.map(day => dayNames[day]).join('、');
-            previewText = `从${todayStr}开始每${selectedDayNames}执行${endDateStr ? '，' + endDateStr : ''}`;
-          } else {
-            previewText = '请选择重复的星期';
-          }
-          break;
-      }
-    }
-    
-    // 更新警告状态
-    if (this.data.repeatTypeWarning !== warningExists) {
-      logger.info('TaskEdit', '警告状态变化:', {
-        oldWarning: this.data.repeatTypeWarning,
-        newWarning: warningExists
-      });
-    }
-    
+
     this.setData({
-      repeatTypeWarning: warningExists
+      repeatTypeWarning: conflictCheck.hasConflict
     });
-    
-    // 使用简化的日志记录
-    if (previewText.length > 30) {
-      logger.info('TaskEdit', '生成预览:', previewText.substring(0, 30));
-    } else {
-      logger.info('TaskEdit', '生成预览:', previewText);
-    }
-    
+
     return previewText;
   },
   
@@ -1918,91 +1930,7 @@ Page({
    * @returns {Object} 包含是否冲突和预览文本的对象
    */
   checkRepeatDateConflict: function(repeatType) {
-    // 获取开始日期信息
-    const startDate = new Date(this.data.newTask.startDate.replace(/-/g, '/'));
-    const todayStr = this.data.newTask.startDate;
-    const dayOfWeek = startDate.getDay(); // 0是周日，6是周六
-    const dayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
-    const dayName = dayNames[dayOfWeek];
-    
-    // 获取结束日期字符串
-    let endDateStr = '';
-    if (!this.data.newTask.hasNoEndDate) {
-      endDateStr = `直到${this.data.newTask.endDate}结束`;
-    }
-    
-    let previewText = '';
-    let hasConflict = false;
-    let conflictType = '';
-    
-    // 检查各种冲突情况
-    switch (repeatType) {
-      case 'workdays':
-        // 判断开始日期是否是工作日（周一至周五）
-        if (dayOfWeek === 0 || dayOfWeek === 6) {
-          previewText = `注意：开始日期(${todayStr}，${dayName})是休息日，系统将只创建周一至周五的任务实例。`;
-          hasConflict = true;
-          conflictType = '工作日任务不能从周末开始';
-        }
-        break;
-        
-      case 'weekends':
-        // 判断开始日期是否是周末（周六或周日）
-        if (dayOfWeek !== 0 && dayOfWeek !== 6) {
-          previewText = `注意：开始日期(${todayStr}，${dayName})是工作日，系统将只创建周六和周日的任务实例。`;
-          hasConflict = true;
-          conflictType = '休息日任务不能从工作日开始';
-        }
-        break;
-        
-              case 'custom':
-          // 自定义重复的冲突检查
-          if (this.data.newTask.repeat.days && this.data.newTask.repeat.days.length > 0) {
-            // 确保selectedDays中的元素是数字类型
-            const selectedDays = this.data.newTask.repeat.days.map(day => parseInt(day));
-            const selectedDayNames = selectedDays.map(day => dayNames[day]).join('、');
-            
-            if (!selectedDays.includes(dayOfWeek)) {
-              // 开始日期的星期不在所选星期中
-              previewText = `注意：开始日期(${todayStr}，${dayName})不在所选重复星期(${selectedDayNames})内，系统将自动调整到第一个符合条件的日期。`;
-              hasConflict = true;
-              conflictType = '开始日期的星期不在所选星期中';
-              
-              logger.info('TaskEdit', '检测到冲突:', {
-                today: todayStr,
-                dayName: dayName,
-                selectedDays: selectedDayNames
-              });
-            } else {
-              // 无冲突，记录正常情况
-              logger.info('TaskEdit', '无冲突:', {
-                today: todayStr,
-                dayName: dayName,
-                selectedDays: selectedDayNames
-              });
-            }
-          } else {
-            // 没有选择任何星期
-            previewText = `请至少选择一个重复的星期`;
-            hasConflict = true;
-            conflictType = '未选择任何重复星期';
-            
-            logger.warn('TaskEdit', '检测到问题: 未选择任何重复星期');
-          }
-          break;
-    }
-    
-    if (hasConflict) {
-      logger.info('TaskEdit', '检查冲突:', {
-        conflictType: conflictType
-      });
-    }
-    
-    return {
-      hasConflict: hasConflict,
-      previewText: previewText,
-      conflictType: conflictType
-    };
+    return taskFormDisplay.checkRepeatDateConflict(this.data.newTask, repeatType);
   },
 
   /**
@@ -2010,6 +1938,11 @@ Page({
    */
   onHide: function() {
     logger.info('task-edit', '页面隐藏');
+
+    if (this.loadingTimeout) {
+      clearTimeout(this.loadingTimeout);
+      this.loadingTimeout = null;
+    }
     
     // 确保关闭任何可能存在的加载提示
     try {
@@ -2024,6 +1957,11 @@ Page({
    */
   onUnload: function() {
     logger.info('task-edit', '页面卸载');
+
+    if (this.loadingTimeout) {
+      clearTimeout(this.loadingTimeout);
+      this.loadingTimeout = null;
+    }
     
     // 确保关闭任何可能存在的加载提示
     try {
@@ -2034,27 +1972,17 @@ Page({
   },
 
   _showLoading: function(options) {
-    taskEditLoadingCounter += 1;
+    taskEditLoadingVisible = true;
     wx.showLoading(options);
   },
 
   _hideLoading: function(force = false) {
-    if (force) {
-      if (taskEditLoadingCounter > 0) {
-        taskEditLoadingCounter = 0;
-        wx.hideLoading();
-      }
+    if (!taskEditLoadingVisible) {
       return;
     }
 
-    if (taskEditLoadingCounter <= 0) {
-      return;
-    }
-
-    taskEditLoadingCounter -= 1;
-    if (taskEditLoadingCounter === 0) {
-      wx.hideLoading();
-    }
+    taskEditLoadingVisible = false;
+    wx.hideLoading();
   },
 
   /**
@@ -2094,15 +2022,10 @@ Page({
    */
   selectPointsExpiry: function(e) {
     const expiry = e.currentTarget.dataset.expiry;
-    
-    // 使用常量中的文本映射
-    const expiryText = Constants.POINTS_EXPIRY.TEXT[expiry];
-    
-    logger.info('TaskEdit', '设置积分有效期:', expiryText);
-    
+
     this.setData({
       'newTask.pointsExpiry': expiry,
-      pointsExpiryText: expiryText
+      pointsExpiryText: taskFormDisplay.buildPointsExpiryText(expiry)
     });
   },
 })

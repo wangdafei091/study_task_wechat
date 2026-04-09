@@ -11,6 +11,7 @@ const StarGroupRepository = require('./star-group-repository');
 const RewardRepository = require('./reward-repository');
 const StarRecordRepository = require('./star-record-repository');
 const MessageRepository = require('./message-repository');
+const TaskTemplateRepository = require('./task-template-repository');
 
 module.exports = {
   // 基础仓储
@@ -30,5 +31,8 @@ module.exports = {
   StarRecordRepository,
   
   // 消息仓储
-  MessageRepository
+  MessageRepository,
+
+  // 模板仓储
+  TaskTemplateRepository
 }; 
