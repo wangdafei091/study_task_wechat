@@ -61,6 +61,7 @@ app.get('/', (req, res) => {
       tasks: '/api/tasks',
       stars: '/api/stars',
       rewards: '/api/rewards',
+      taskTemplates: '/api/task-templates',
       messages: '/api/messages',
     },
   });
@@ -73,6 +74,7 @@ app.use('/api/tasks', require('./routes/tasks'));
 app.use('/api/families', require('./routes/families'));
 app.use('/api/stars', require('./routes/stars'));
 app.use('/api/rewards', require('./routes/rewards'));
+app.use('/api/task-templates', require('./routes/taskTemplates'));
 app.use('/api/messages', require('./routes/messages'));
 
 // 404处理

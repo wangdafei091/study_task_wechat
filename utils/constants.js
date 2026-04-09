@@ -13,18 +13,14 @@ module.exports = {
     PERMANENT: 'permanent',
     WEEK: 'week',
     MONTH: 'month',
-    THREE_MONTHS: '3months',
-    SIX_MONTHS: '6months',
-    TWELVE_MONTHS: '12months',
+    QUARTER: 'quarter',
     
     // 文本映射
     TEXT: {
       'permanent': '永久',
-      'week': '一周',
-      'month': '一个月',
-      '3months': '三个月',
-      '6months': '六个月',
-      '12months': '十二个月'
+      'week': '本周结束',
+      'month': '本月结束',
+      'quarter': '本季度结束'
     }
   },
   

@@ -558,11 +558,11 @@ class StarService {
       case StarExpiryType.PERMANENT:
         return '永久有效';
       case StarExpiryType.WEEK:
-        return '本周有效';
+        return '本周结束';
       case StarExpiryType.MONTH:
-        return '本月有效';
+        return '本月结束';
       case StarExpiryType.QUARTER:
-        return '本季度有效';
+        return '本季度结束';
       default:
         return expiryType;
     }
@@ -624,15 +624,11 @@ class StarService {
       case 'permanent':
         return '永久';
       case 'week':
-        return '一周';
+        return '本周结束';
       case 'month':
-        return '一个月';
-      case '3months':
-        return '三个月';
-      case '6months':
-        return '六个月';
-      case '12months':
-        return '十二个月';
+        return '本月结束';
+      case 'quarter':
+        return '本季度结束';
       default:
         return '永久';
     }

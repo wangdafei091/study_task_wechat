@@ -44,11 +44,11 @@ class StarGroup {
       case 'permanent':
         return '永久有效';
       case 'week':
-        return '本周有效';
+        return '本周结束';
       case 'month':
-        return '本月有效';
+        return '本月结束';
       case 'quarter':
-        return '本季度有效';
+        return '本季度结束';
       default:
         return '星星分组';
     }

@@ -323,12 +323,12 @@ describe('StarGroup 领域模型', () => {
   describe('构造函数和默认名称', () => {
     it('应该为month类型设置正确默认名称', () => {
       const group = new StarGroup({ type: 'month' });
-      expect(group.name).toBe('本月有效');
+      expect(group.name).toBe('本月结束');
     });
 
     it('应该为quarter类型设置正确默认名称', () => {
       const group = new StarGroup({ type: 'quarter' });
-      expect(group.name).toBe('本季度有效');
+      expect(group.name).toBe('本季度结束');
     });
 
     it('未知类型应使用默认名称', () => {
