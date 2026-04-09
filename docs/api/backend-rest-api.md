@@ -1,7 +1,7 @@
 # 后端 REST API 契约
 
 > 项目后端 HTTP/REST 接口的权威说明文档
-> **最后更新**：2026-04-04
+> **最后更新**：2026-04-09
 > **维护者**：项目维护团队
 
 ---
@@ -751,6 +751,138 @@ Authorization: Bearer <token>
 - `400` - `INVALID_PARAMS` / `FAMILY_NOT_JOINED` / `TRANSFER_TARGET_INVALID`
 - `403` - `TRANSFER_PARENT_REQUIRED`
 - `500` - `TASK_TRANSFER_FAILED`
+
+### 6.13 获取任务模板列表
+
+- Method: `GET`
+- Path: `/api/task-templates`
+- Auth: `Bearer Token`
+- Query：
+  - `keyword` - 可选，按模板名称 / 模板说明 / 任务标题搜索
+  - `type` - 可选，`all | study | habit | interest`
+  - `status` - 可选，`all | enabled | disabled`
+  - `sortBy` - 可选，`recent | usage`
+- Body: 无
+
+成功响应：
+- Status: `200`
+- Body：`data.templates`、`data.total`
+
+说明：
+- 服务端按当前登录用户所属 `familyId` 返回同家庭模板
+- `taskPayload` 与 `dateStrategy` 按模板契约返回为 JSON 对象
+
+常见错误：
+- `401` - `AUTH_INVALID_TOKEN`
+- `500` - `TASK_TEMPLATE_LIST_FAILED`
+
+### 6.14 创建任务模板
+
+- Method: `POST`
+- Path: `/api/task-templates`
+- Auth: `Bearer Token`
+- Query: 无
+- Body：
+  - `name` - 模板显示名称
+  - `description` - 模板说明，可选
+  - `enabled` - 是否启用，可选
+  - `taskPayload` - 模板内任务表单快照
+  - `dateStrategy` - 模板日期策略
+
+成功响应：
+- Status: `200`
+- Body：`data.template`
+
+说明：
+- 服务端会自动补齐 `familyId`、`createdByUserId`、`usageCount`、`lastUsedAt`
+- `taskPayload.repeat`、`taskPayload.reminder`、`dateStrategy` 会按模板契约做归一化
+
+常见错误：
+- `400` - `TASK_TEMPLATE_INVALID_PARAMS`
+- `401` - `AUTH_INVALID_TOKEN`
+- `500` - `TASK_TEMPLATE_CREATE_FAILED`
+
+### 6.15 更新任务模板
+
+- Method: `PUT`
+- Path: `/api/task-templates/:templateId`
+- Auth: `Bearer Token`
+- Query: 无
+- Body：
+  - `name` - 可选，模板显示名称
+  - `description` - 可选，模板说明
+  - `enabled` - 可选，是否启用
+  - `taskPayload` - 可选，局部或完整任务表单快照
+  - `dateStrategy` - 可选，局部或完整日期策略
+
+成功响应：
+- Status: `200`
+- Body：`data.template`
+
+常见错误：
+- `400` - `TASK_TEMPLATE_INVALID_PARAMS`
+- `401` - `AUTH_INVALID_TOKEN`
+- `404` - `TASK_TEMPLATE_NOT_FOUND`
+- `500` - `TASK_TEMPLATE_UPDATE_FAILED`
+
+### 6.16 启用或停用任务模板
+
+- Method: `PATCH`
+- Path: `/api/task-templates/:templateId/enabled`
+- Auth: `Bearer Token`
+- Query: 无
+- Body：
+  - `enabled` - `true | false`
+
+成功响应：
+- Status: `200`
+- Body：`data.template`
+
+常见错误：
+- `400` - `TASK_TEMPLATE_INVALID_PARAMS`
+- `401` - `AUTH_INVALID_TOKEN`
+- `404` - `TASK_TEMPLATE_NOT_FOUND`
+- `500` - `TASK_TEMPLATE_SET_ENABLED_FAILED`
+
+### 6.17 删除任务模板
+
+- Method: `DELETE`
+- Path: `/api/task-templates/:templateId`
+- Auth: `Bearer Token`
+- Query: 无
+- Body: 无
+
+成功响应：
+- Status: `200`
+- Body：`data.deleted = true`
+
+说明：
+- 删除模板不会影响已经创建出的真实任务实例
+
+常见错误：
+- `401` - `AUTH_INVALID_TOKEN`
+- `404` - `TASK_TEMPLATE_NOT_FOUND`
+- `500` - `TASK_TEMPLATE_DELETE_FAILED`
+
+### 6.18 回写任务模板使用统计
+
+- Method: `POST`
+- Path: `/api/task-templates/:templateId/usage`
+- Auth: `Bearer Token`
+- Query: 无
+- Body: 无
+
+成功响应：
+- Status: `200`
+- Body：`data.template`
+
+说明：
+- 成功后模板的 `usageCount` 会自增，`lastUsedAt` 会更新为最新时间
+
+常见错误：
+- `401` - `AUTH_INVALID_TOKEN`
+- `404` - `TASK_TEMPLATE_NOT_FOUND`
+- `500` - `TASK_TEMPLATE_RECORD_USAGE_FAILED`
 
 ---
 

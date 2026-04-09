@@ -27,11 +27,13 @@ const userService = serviceManager.get('userService');
 const validationService = serviceManager.get('validationService');
 const configService = serviceManager.get('configService');
 const offlineQueueService = serviceManager.get('offlineQueueService');
+const taskTemplateService = serviceManager.get('taskTemplateService');
 ```
 
 补充说明：
 - `offlineQueueService` 为 M19E 引入的统一待同步队列服务，负责承接任务域与奖励域的离线待同步动作。
 - `ENABLE_API / API_BASE_URL` 不属于 `ConfigService` 管辖范围，而是由 `utils/runtime-config.js` 与 `utils/api-config.js` 统一解析为启动时运行模式快照。
+- `taskTemplateService` 同时支持别名 `taskTemplate` / `TaskTemplateService`，由 `ServiceManager` 统一映射。
 
 ---
 
@@ -110,6 +112,154 @@ const offlineQueueService = serviceManager.get('offlineQueueService');
 ##### `getPendingSummary(filter = {})`
 返回当前待同步概览。
 - **返回**: `Promise<{ total: number, byDomain: Object }>`
+
+---
+
+## TaskTemplateService - 任务模板服务
+
+任务模板服务负责模板的 CRUD、云端同步、本地镜像、模板回填任务表单以及最近模板推荐。
+
+### 核心功能
+- 任务模板创建、编辑、删除、启停
+- 模板列表 / 最近模板查询
+- 模板应用到 `task-edit` 表单
+- 模板使用次数回写
+- 云端模板列表刷新与本地镜像替换
+
+### API 方法
+
+##### `getTemplateById(templateId, options = {})`
+根据模板 ID 获取单个模板。
+- **参数**:
+  - `templateId` - 模板 ID
+  - `options.force` - `true` 时先强制云端刷新
+- **返回**: `Promise<TaskTemplate | null>`
+
+##### `getRecentTemplates(limit = 5, options = {})`
+获取最近使用的启用模板。
+- **参数**:
+  - `limit` - 返回数量上限
+  - `options.skipRefresh` - `true` 时跳过云端刷新
+- **返回**:
+  ```javascript
+  {
+    templates: TaskTemplate[]
+  }
+  ```
+
+##### `getTemplates(options = {})`
+获取模板列表。
+- **参数**:
+  ```javascript
+  {
+    keyword?: string,
+    type?: 'all' | 'study' | 'habit' | 'interest',
+    status?: 'all' | 'enabled' | 'disabled',
+    enabledOnly?: boolean,
+    sortBy?: 'recent' | 'usage',
+    skipRefresh?: boolean,
+    force?: boolean
+  }
+  ```
+- **返回**:
+  ```javascript
+  {
+    templates: TaskTemplate[]
+  }
+  ```
+
+##### `createTemplate(input = {})`
+创建任务模板。
+- **参数**:
+  ```javascript
+  {
+    name: string,
+    description?: string,
+    enabled?: boolean,
+    taskPayload: Object,
+    dateStrategy?: Object,
+    familyId?: string,
+    createdByUserId?: string
+  }
+  ```
+- **返回**:
+  ```javascript
+  {
+    success: true,
+    template: TaskTemplate
+  }
+  ```
+
+##### `updateTemplate(templateId, input = {})`
+更新任务模板。
+- **返回**:
+  ```javascript
+  {
+    success: true,
+    template: TaskTemplate
+  }
+  ```
+
+##### `setTemplateEnabled(templateId, enabled)`
+启用或停用模板。
+- **返回**:
+  ```javascript
+  {
+    success: true,
+    template: TaskTemplate
+  }
+  ```
+
+##### `deleteTemplate(templateId)`
+删除模板。
+- **返回**:
+  ```javascript
+  {
+    success: true
+  }
+  ```
+
+##### `recordTemplateUsage(templateId)`
+回写模板使用次数和最近使用时间。
+- **返回**:
+  ```javascript
+  {
+    success: boolean,
+    template?: TaskTemplate
+  }
+  ```
+
+##### `applyTemplateToTaskForm(template, context = {})`
+将模板映射为 `task-edit` 可直接 `setData` 的表单补丁。
+- **参数**:
+  - `template` - `TaskTemplate` 或普通模板对象
+  - `context.today` - 可选，指定回填参考日期
+- **返回**:
+  ```javascript
+  {
+    formPatch: {
+      newTask: Object,
+      repeatText: string,
+      reminderText: string,
+      pointsExpiryText: string,
+      repeatPreviewText: string,
+      repeatTypeWarning: boolean,
+      weekdaySelection: boolean[],
+      isRepeatOptionDisabled: boolean,
+      selectedTemplateId: string
+    }
+  }
+  ```
+
+##### `refreshTemplatesFromCloud(options = {})`
+主动从云端刷新模板列表并替换本地镜像。
+- **返回**:
+  ```javascript
+  {
+    success: boolean,
+    templates: TaskTemplate[]
+  }
+  ```
 
 ---
 
