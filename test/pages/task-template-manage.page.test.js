@@ -225,6 +225,74 @@ describe('packageManage/pages/task-template-manage/task-template-manage', () => 
     expect(page.data.hasTemplates).toBe(false);
   });
 
+  it('loadTemplates 在管理模板 tab 无正式模板但有推荐时应默认收起推荐区并隐藏搜索筛选', async () => {
+    serviceManager.getService.mockReturnValue({
+      getTemplates: jest.fn().mockResolvedValue({
+        templates: []
+      }),
+      getRecommendedTemplateCandidates: jest.fn().mockResolvedValue({
+        candidates: [
+          {
+            candidateKey: 'c1',
+            displayName: '晚间阅读',
+            reasonText: '近60天出现 4 次',
+            taskPayload: {
+              title: '晚间阅读',
+              type: 'study',
+              isAllDay: false,
+              startTime: '19:00',
+              endTime: '19:30',
+              repeat: { type: 'daily', days: [] },
+              reminder: { enabled: false, time: 0 }
+            }
+          }
+        ],
+        total: 1
+      })
+    });
+
+    const page = createPageInstance();
+    page.data.activeTab = 'manage';
+
+    await page.loadTemplates();
+
+    expect(page.data.hasTemplates).toBe(false);
+    expect(page.data.recommendationCount).toBe(1);
+    expect(page.data.recommendationExpanded).toBe(false);
+    expect(page.data.showSearchTools).toBe(false);
+    expect(page.data.recommendedCandidates[0]).toEqual(expect.objectContaining({
+      displayName: '晚间阅读',
+      metaChips: expect.arrayContaining(['每天'])
+    }));
+  });
+
+  it('loadTemplates 开始加载时应先清空旧推荐态，避免保存返回后的残影错觉', async () => {
+    const deferred = createDeferred();
+    serviceManager.getService.mockReturnValue({
+      getTemplates: jest.fn().mockReturnValue(deferred.promise),
+      getRecommendedTemplateCandidates: jest.fn().mockReturnValue(deferred.promise)
+    });
+
+    const page = createPageInstance();
+    page.data.activeTab = 'manage';
+    page.data.recommendedCandidates = [{ candidateKey: 'stale' }];
+    page.data.recommendationCount = 3;
+    page.data.recommendationExpanded = true;
+
+    const loadingPromise = page.loadTemplates();
+
+    expect(page.data.recommendedCandidates).toEqual([]);
+    expect(page.data.recommendationCount).toBe(0);
+    expect(page.data.recommendationExpanded).toBe(false);
+
+    deferred.resolve({
+      templates: [],
+      candidates: [],
+      total: 0
+    });
+    await loadingPromise;
+  });
+
   it('loadTemplates 应忽略过期请求回写，避免旧结果覆盖当前 tab', async () => {
     const firstRequest = createDeferred();
     const secondRequest = createDeferred();
@@ -433,6 +501,191 @@ describe('packageManage/pages/task-template-manage/task-template-manage', () => 
     expect(page.loadTemplates).toHaveBeenCalledTimes(1);
   });
 
+  it('onSaveRecommendedCandidate 应通过 eventChannel 打开预填模板草稿页', () => {
+    const emit = jest.fn();
+    const on = jest.fn();
+    global.wx.navigateTo.mockImplementation(({ success }) => {
+      success({
+        eventChannel: {
+          on,
+          emit
+        }
+      });
+    });
+    serviceManager.getService.mockReturnValue({
+      buildTemplateDraftFromCandidate: jest.fn(() => ({
+        draftInput: {
+          name: '晚间阅读',
+          taskPayload: {
+            title: '晚间阅读'
+          },
+          dateStrategy: {
+            mode: 'today',
+            endMode: 'same-day',
+            durationDays: 1
+          },
+          enabled: true
+        },
+        sourceMeta: {
+          sourceType: 'template-manage-candidate'
+        }
+      }))
+    });
+
+    const page = createPageInstance();
+    page.data.recommendedCandidates = [
+      {
+        candidateKey: 'c1',
+        displayName: '晚间阅读',
+        taskPayload: {
+          title: '晚间阅读'
+        }
+      }
+    ];
+
+    page.onSaveRecommendedCandidate({
+      currentTarget: {
+        dataset: {
+          key: 'c1'
+        }
+      }
+    });
+
+    expect(global.wx.navigateTo).toHaveBeenCalledWith(expect.objectContaining({
+      url: '/packageManage/pages/task-template-edit/task-template-edit?mode=create',
+      success: expect.any(Function)
+    }));
+    expect(emit).toHaveBeenCalledWith('templateDraftReady', expect.objectContaining({
+      draft: expect.objectContaining({
+        draftInput: expect.objectContaining({
+          name: '晚间阅读'
+        })
+      })
+    }));
+    expect(on).toHaveBeenCalledWith('templateSaved', expect.any(Function));
+  });
+
+  it('推荐草稿保存回传后应先本地移除候选并在返回时强制刷新', async () => {
+    let savedHandler = null;
+    global.wx.navigateTo.mockImplementation(({ success }) => {
+      success({
+        eventChannel: {
+          on: jest.fn((eventName, handler) => {
+            if (eventName === 'templateSaved') {
+              savedHandler = handler;
+            }
+          }),
+          emit: jest.fn()
+        }
+      });
+    });
+    serviceManager.getService.mockReturnValue({
+      buildTemplateDraftFromCandidate: jest.fn(() => ({
+        draftInput: {
+          name: '晚间阅读',
+          taskPayload: {
+            title: '晚间阅读'
+          },
+          dateStrategy: {
+            mode: 'today',
+            endMode: 'same-day',
+            durationDays: 1
+          },
+          enabled: true
+        },
+        sourceMeta: {
+          sourceType: 'template-manage-candidate',
+          candidateKey: 'c1'
+        }
+      })),
+      getTemplates: jest.fn().mockResolvedValue({
+        templates: []
+      }),
+      getRecommendedTemplateCandidates: jest.fn().mockResolvedValue({
+        candidates: [],
+        total: 0
+      })
+    });
+
+    const page = createPageInstance();
+    page.data.activeTab = 'manage';
+    page.data.recommendedCandidates = [
+      {
+        candidateKey: 'c1',
+        displayName: '晚间阅读',
+        taskPayload: {
+          title: '晚间阅读'
+        }
+      },
+      {
+        candidateKey: 'c2',
+        displayName: '晨跑',
+        taskPayload: {
+          title: '晨跑'
+        }
+      }
+    ];
+    page.data.recommendationCount = 2;
+    page.data.recommendationExpanded = true;
+
+    page.onSaveRecommendedCandidate({
+      currentTarget: {
+        dataset: {
+          key: 'c1'
+        }
+      }
+    });
+
+    savedHandler({
+      sourceMeta: {
+        candidateKey: 'c1'
+      }
+    });
+
+    expect(page.data.recommendedCandidates.map((item) => item.candidateKey)).toEqual(['c2']);
+    expect(page.data.recommendationCount).toBe(1);
+
+    const loadTemplatesSpy = jest.spyOn(page, 'loadTemplates').mockResolvedValue();
+    page.onShow();
+    expect(loadTemplatesSpy).toHaveBeenCalledWith({ force: true });
+  });
+
+  it('force 刷新时应清空本地 suppress 集合，避免删除模板后推荐仍被隐藏', async () => {
+    serviceManager.getService.mockReturnValue({
+      getTemplates: jest.fn().mockResolvedValue({
+        templates: []
+      }),
+      getRecommendedTemplateCandidates: jest.fn().mockResolvedValue({
+        candidates: [
+          {
+            candidateKey: 'c1',
+            displayName: '晚间阅读',
+            reasonText: '已连续 2 周按这个节奏出现',
+            taskPayload: {
+              title: '晚间阅读',
+              type: 'study',
+              isAllDay: false,
+              startTime: '19:00',
+              endTime: '19:30',
+              repeat: { type: 'custom', days: [1, 3, 5] },
+              reminder: { enabled: false, time: 0 }
+            }
+          }
+        ],
+        total: 1
+      })
+    });
+
+    const page = createPageInstance();
+    page.data.activeTab = 'manage';
+    page._suppressedRecommendationCandidateKeys = new Set(['c1']);
+
+    await page.loadTemplates({ force: true });
+
+    expect(page.data.recommendedCandidates.map((item) => item.candidateKey)).toEqual(['c1']);
+    expect(page.data.recommendationCount).toBe(1);
+  });
+
   it('clearKeyword 应取消未触发的旧搜索防抖，只立即加载一次', () => {
     const page = createPageInstance();
     page.loadTemplates = jest.fn();
@@ -461,6 +714,7 @@ describe('packageManage/pages/task-template-manage/task-template-manage', () => 
     expect(wxml).toContain('点击模板即可回填到任务表单');
     expect(wxml).toContain('当前没有可用模板');
     expect(wxml).toContain('去管理模板');
+    expect(wxml).toContain('class="recommendation-scroll"');
     expect(wxml).toContain('重新加载');
     expect(wxml).not.toContain('title="{{pageTitle}}"');
     expect(wxml).not.toContain('全部状态');

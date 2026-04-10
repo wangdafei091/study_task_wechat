@@ -10,6 +10,28 @@ const taskFormDisplay = require('../../utils/task-form-display');
 const taskTemplateEntry = require('./modules/task-template-entry');
 
 let taskEditLoadingVisible = false;
+const TEMPLATE_RECOMMENDATION_CARD_LIMIT = 2;
+
+function decorateTemplateRecommendation(candidate = {}) {
+  const payload = candidate.taskPayload || {};
+  const preview = taskFormDisplay.buildTaskFormDisplayState({
+    ...payload,
+    repeat: payload.repeat || { type: 'none', days: [] },
+    reminder: payload.reminder || { enabled: false, time: 0 }
+  }, {
+    ignoreRepeatOptionDisabled: true
+  });
+
+  return {
+    ...candidate,
+    displayName: String(candidate.displayName || payload.title || '').trim(),
+    typeClass: payload.type || 'habit',
+    repeatLabel: preview.repeatText || '不重复',
+    timeLabel: payload.isAllDay === true
+      ? '全天'
+      : `${payload.startTime || '--:--'} - ${payload.endTime || '--:--'}`
+  };
+}
 
 Page({
   /**
@@ -86,7 +108,11 @@ Page({
     templateEntryLoadedOnce: false,
     hasTemplates: false,
     recentTemplates: [],
-    selectedTemplateId: null
+    selectedTemplateId: null,
+    recommendedTemplates: [],
+    templateRecommendationCount: 0,
+    templateFillUndoVisible: false,
+    templateFillUndoText: ''
   },
 
   /**
@@ -254,12 +280,37 @@ Page({
         templateEntryLoading: false,
         templateEntryLoadedOnce: true,
         hasTemplates: false,
-        recentTemplates: []
+        recentTemplates: [],
+        recommendedTemplates: [],
+        templateRecommendationCount: 0
       });
       return [];
     }
 
-    return taskTemplateEntry.loadRecentTemplates(this, taskTemplateService, 5);
+    const templates = await taskTemplateEntry.loadRecentTemplates(this, taskTemplateService, 5);
+
+    try {
+      const recommendationResult = await taskTemplateService.getRecommendedTemplateCandidates({
+        limit: 5
+      });
+      const candidates = Array.isArray(recommendationResult?.candidates)
+        ? recommendationResult.candidates.map(decorateTemplateRecommendation)
+        : [];
+      const recommendationCount = Number(recommendationResult?.total || candidates.length);
+
+      this.setData({
+        recommendedTemplates: candidates.slice(0, TEMPLATE_RECOMMENDATION_CARD_LIMIT),
+        templateRecommendationCount: recommendationCount
+      });
+    } catch (error) {
+      logger.warn('TaskEdit', '加载模板推荐失败，忽略推荐展示', error);
+      this.setData({
+        recommendedTemplates: [],
+        templateRecommendationCount: 0
+      });
+    }
+
+    return templates;
   },
 
   openTemplateSelectPage: function() {
@@ -294,6 +345,16 @@ Page({
     this.applyTemplateSelection(template);
   },
 
+  onUseRecommendedTemplate: function(e) {
+    const candidateKey = e.currentTarget.dataset.key;
+    const candidate = this.data.recommendedTemplates.find((item) => item.candidateKey === candidateKey);
+    if (!candidate) {
+      return;
+    }
+
+    this.openRecommendedTemplateDraft(candidate, 'task-edit-recommendation');
+  },
+
   applyTemplateSelection: function(template) {
     const taskTemplateService = serviceManager.getService('taskTemplate');
     if (!taskTemplateService) {
@@ -304,19 +365,103 @@ Page({
       return;
     }
 
+    if (!this._templateFillUndoSnapshot) {
+      this._templateFillUndoSnapshot = this.captureTemplateFillSnapshot();
+    }
     const result = taskTemplateEntry.applyTemplateToTaskEditForm(this, taskTemplateService, template);
     if (result && result.formPatch) {
       const displayName = taskTemplateEntry.getTemplateDisplayName(template);
-      wx.showToast({
-        title: displayName ? `已填充：${displayName}` : '已填充模板',
-        icon: 'none',
-        duration: 1600
+      this.setData({
+        templateFillUndoVisible: true,
+        templateFillUndoText: displayName ? `已填充 ${displayName}，可恢复原内容` : '已填充模板，可恢复原内容'
       });
     }
   },
 
   clearSelectedTemplateState: function() {
     taskTemplateEntry.resetSelectedTemplate(this);
+  },
+
+  captureTemplateFillSnapshot: function() {
+    return JSON.parse(JSON.stringify({
+      newTask: this.data.newTask,
+      errors: this.data.errors,
+      repeatText: this.data.repeatText,
+      reminderText: this.data.reminderText,
+      pointsExpiryText: this.data.pointsExpiryText,
+      repeatPreviewText: this.data.repeatPreviewText,
+      repeatTypeWarning: this.data.repeatTypeWarning,
+      weekdaySelection: this.data.weekdaySelection,
+      repeatPanelMode: this.data.repeatPanelMode,
+      isRepeatOptionDisabled: this.data.isRepeatOptionDisabled,
+      selectedTemplateId: this.data.selectedTemplateId,
+      reminderOptions: this.data.reminderOptions
+    }));
+  },
+
+  clearTemplateFillUndoState: function() {
+    this._templateFillUndoSnapshot = null;
+    this.setData({
+      templateFillUndoVisible: false,
+      templateFillUndoText: ''
+    });
+  },
+
+  markTemplateFillUndoDirty: function() {
+    if (!this._templateFillUndoSnapshot || this.data.templateFillUndoVisible !== true) {
+      return;
+    }
+
+    this.clearTemplateFillUndoState();
+  },
+
+  undoTemplateFill: function() {
+    if (!this._templateFillUndoSnapshot) {
+      return;
+    }
+
+    const snapshot = this._templateFillUndoSnapshot;
+    this._templateFillUndoSnapshot = null;
+    this.setData({
+      ...snapshot,
+      templateFillUndoVisible: false,
+      templateFillUndoText: ''
+    });
+  },
+
+  openRecommendedTemplateDraft: function(candidate, sourceType = 'task-edit-recommendation') {
+    const taskTemplateService = serviceManager.getService('taskTemplate');
+    if (!taskTemplateService || !candidate) {
+      wx.showToast({
+        title: '模板服务未就绪',
+        icon: 'none'
+      });
+      return;
+    }
+
+    try {
+      const draft = taskTemplateService.buildTemplateDraftFromCandidate(candidate, {
+        sourceType
+      });
+
+      wx.navigateTo({
+        url: '/packageManage/pages/task-template-edit/task-template-edit?mode=create',
+        success: (res) => {
+          const eventChannel = res.eventChannel;
+          if (eventChannel && typeof eventChannel.emit === 'function') {
+            eventChannel.emit('templateDraftReady', {
+              draft
+            });
+          }
+        }
+      });
+    } catch (error) {
+      logger.warn('TaskEdit', '打开推荐模板草稿失败', error);
+      wx.showToast({
+        title: '推荐草稿生成失败',
+        icon: 'none'
+      });
+    }
   },
 
   /**
@@ -441,6 +586,7 @@ Page({
    * 处理任务标题输入
    */
   onTaskTitleInput: function(e) {
+    this.markTemplateFillUndoDirty();
     this.setData({
       'newTask.title': e.detail.value,
       'errors.title': ''
@@ -451,6 +597,7 @@ Page({
    * 选择任务类型
    */
   selectTaskType: function(e) {
+    this.markTemplateFillUndoDirty();
     const type = e.currentTarget.dataset.type;
     this.setData({
       'newTask.type': type
@@ -461,6 +608,7 @@ Page({
    * 更改积分
    */
   changePoints: function(e) {
+    this.markTemplateFillUndoDirty();
     const action = e.currentTarget.dataset.action;
     let points = this.data.newTask.points;
     
@@ -479,6 +627,7 @@ Page({
    * 处理积分输入
    */
   onPointsInput: function(e) {
+    this.markTemplateFillUndoDirty();
     const points = Number(e.detail.value) || 0;
     this.setData({
       'newTask.points': points
@@ -489,6 +638,7 @@ Page({
    * 处理描述输入
    */
   onDescriptionInput: function(e) {
+    this.markTemplateFillUndoDirty();
     const logger = require('../../utils/logger');
     logger.info('TaskEdit', '描述输入', `长度: ${e.detail.value.length}/${this.data.descMaxLength}`);
     
@@ -502,6 +652,7 @@ Page({
    */
   clearTaskForm: function() {
     logger.info('TaskEdit', '清空任务表单');
+    this.clearTemplateFillUndoState();
     
     // 重置任务为默认状态
     this.setData({
@@ -851,6 +1002,7 @@ Page({
    */
   _handleTaskCreationSuccess: function(result, newTask) {
     const usedTemplateId = this.data.selectedTemplateId;
+    this._templateFillUndoSnapshot = null;
 
     // 添加成功，记录详细日志
     logger.info('TaskEdit', '新任务添加成功', {
@@ -889,7 +1041,9 @@ Page({
         enabled: false,
         time: 0
       },
-      selectedTemplateId: null
+      selectedTemplateId: null,
+      templateFillUndoVisible: false,
+      templateFillUndoText: ''
     });
     
     // 重新初始化日期时间数据
@@ -1123,6 +1277,7 @@ Page({
    * 全天开关切换
    */
   toggleAllDay: function(e) {
+    this.markTemplateFillUndoDirty();
     const isAllDay = e.detail.value;
     
     // 准备更新数据
@@ -1179,6 +1334,7 @@ Page({
    * 无结束日期开关切换
    */
   toggleNoEndDate: function(e) {
+    this.markTemplateFillUndoDirty();
     const hasNoEndDate = e.detail.value;
     
     this.setData({
@@ -1216,6 +1372,7 @@ Page({
    * 开始时间选择
    */
   onStartTimeChange: function(e) {
+    this.markTemplateFillUndoDirty();
     const time = e.detail.value;
     
     this.setData({
@@ -1248,6 +1405,7 @@ Page({
    * 结束时间选择
    */
   onEndTimeChange: function(e) {
+    this.markTemplateFillUndoDirty();
     const time = e.detail.value;
     const isSameDay = this.data.newTask.startDate === this.data.newTask.endDate;
     
@@ -1542,6 +1700,7 @@ Page({
    * 切换星期选择状态
    */
   toggleWeekdaySelection: function(e) {
+    this.markTemplateFillUndoDirty();
     const day = parseInt(e.currentTarget.dataset.day);
     const newSelection = [...this.data.weekdaySelection];
     
@@ -1657,6 +1816,7 @@ Page({
    * 选择重复类型
    */
   selectRepeatType: function(e) {
+    this.markTemplateFillUndoDirty();
     const type = e.currentTarget.dataset.type;
 
     this.setData({
@@ -1678,6 +1838,7 @@ Page({
    * 选择提醒类型
    */
   selectReminderType: function(e) {
+    this.markTemplateFillUndoDirty();
     const enabled = e.currentTarget.dataset.enabled === 'true';
     const time = parseInt(e.currentTarget.dataset.time || 0);
     const reminderText = taskFormDisplay.buildReminderText({
@@ -1789,6 +1950,7 @@ Page({
    * 处理开始日期选择事件
    */
   onStartDateSelected: function(e) {
+    this.markTemplateFillUndoDirty();
     const date = e.detail.date;
     
     this.setData({
@@ -1843,6 +2005,7 @@ Page({
    * 处理结束日期选择事件
    */
   onEndDateSelected: function(e) {
+    this.markTemplateFillUndoDirty();
     const date = e.detail.date;
     
     this.setData({
@@ -1957,6 +2120,7 @@ Page({
    */
   onUnload: function() {
     logger.info('task-edit', '页面卸载');
+    this._templateFillUndoSnapshot = null;
 
     if (this.loadingTimeout) {
       clearTimeout(this.loadingTimeout);
@@ -1989,6 +2153,7 @@ Page({
    * 切换必做任务状态
    */
   toggleRequiredTask: function(e) {
+    this.markTemplateFillUndoDirty();
     const isRequired = e.detail.value;
     logger.info('TaskEdit', '切换必做任务状态:', isRequired);
     
@@ -2021,6 +2186,7 @@ Page({
    * 选择积分有效期
    */
   selectPointsExpiry: function(e) {
+    this.markTemplateFillUndoDirty();
     const expiry = e.currentTarget.dataset.expiry;
 
     this.setData({

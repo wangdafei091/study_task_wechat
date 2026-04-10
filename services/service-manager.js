@@ -101,6 +101,11 @@ class ServiceManager {
       this.services.taskTemplateService.updateUserService(this.userService);
       logger.info('ServiceManager', 'TaskTemplateService已更新UserService');
     }
+
+    if (this.services.taskTemplateService && this.services.taskTemplateService.updateTaskService) {
+      this.services.taskTemplateService.updateTaskService(this.services.taskService || null);
+      logger.info('ServiceManager', 'TaskTemplateService已更新TaskService');
+    }
   }
   
   /**
@@ -223,7 +228,8 @@ class ServiceManager {
       this.services.taskTemplateService = new TaskTemplateService({
         eventBus: this.eventBus,
         userService: this.userService,
-        storageAdapter: this.storageAdapter
+        storageAdapter: this.storageAdapter,
+        taskService: this.services.taskService
       });
 
       this.services.offlineQueueService = new OfflineQueueService({

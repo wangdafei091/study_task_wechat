@@ -137,6 +137,47 @@ function decorateTemplate(template) {
   };
 }
 
+function decorateRecommendationCandidate(candidate) {
+  const payload = candidate.taskPayload || {};
+  const form = {
+    ...payload,
+    repeat: payload.repeat || { type: 'none', days: [] },
+    reminder: payload.reminder || { enabled: false, time: 0 },
+    hasNoEndDate: payload.hasNoEndDate === true
+  };
+  const displayState = taskFormDisplay.buildTaskFormDisplayState(form, {
+    ignoreRepeatOptionDisabled: true
+  });
+  const metaChips = [
+    displayState.repeatText || '不重复',
+    payload.isAllDay === true ? '全天' : `${payload.startTime || '--:--'} - ${payload.endTime || '--:--'}`
+  ].filter(Boolean).slice(0, 2);
+
+  return {
+    ...candidate,
+    displayName: String(candidate.displayName || payload.title || '').trim(),
+    typeClass: payload.type || 'habit',
+    metaChips
+  };
+}
+
+function shouldShowManageSearchTools(templates = [], hasActiveFilters = false) {
+  if (hasActiveFilters) {
+    return true;
+  }
+
+  return Array.isArray(templates) && templates.length >= 6;
+}
+
+function filterSuppressedRecommendations(candidates = [], suppressedKeys) {
+  if (!(suppressedKeys instanceof Set) || suppressedKeys.size === 0) {
+    return Array.isArray(candidates) ? candidates : [];
+  }
+
+  return (Array.isArray(candidates) ? candidates : [])
+    .filter((candidate) => !suppressedKeys.has(candidate.candidateKey));
+}
+
 Page({
   data: {
     activeTab: TAB_SELECT,
@@ -147,10 +188,16 @@ Page({
     templates: [],
     hasTemplates: false,
     hasAnyTemplates: false,
-    hasActiveFilters: false
+    hasActiveFilters: false,
+    recommendedCandidates: [],
+    recommendationCount: 0,
+    recommendationExpanded: false,
+    showSearchTools: true
   },
 
   onLoad(options = {}) {
+    this._suppressedRecommendationCandidateKeys = new Set();
+    this._forceReloadOnShow = false;
     const userService = serviceManager.getUserService();
     const loginUser = userService?.getLoginUser?.();
     const currentUser = userService?.getCurrentUser?.();
@@ -180,7 +227,9 @@ Page({
   },
 
   onShow() {
-    this.loadTemplates();
+    const force = this._forceReloadOnShow === true;
+    this._forceReloadOnShow = false;
+    this.loadTemplates({ force });
   },
 
   onUnload() {
@@ -220,6 +269,10 @@ Page({
       return;
     }
 
+    if (options.force === true && this._suppressedRecommendationCandidateKeys instanceof Set) {
+      this._suppressedRecommendationCandidateKeys.clear();
+    }
+
     const activeTab = this.data.activeTab || TAB_SELECT;
     const keyword = String(this.data.keyword || '');
     const typeFilter = String(this.data.typeFilter || '');
@@ -232,17 +285,33 @@ Page({
 
     this.setData({
       loading: true,
-      loadFailed: false
+      loadFailed: false,
+      recommendedCandidates: [],
+      recommendationCount: 0,
+      recommendationExpanded: false
     });
 
     try {
-      const result = await taskTemplateService.getTemplates({
-        keyword,
-        type: typeFilter || 'all',
-        status: 'all',
-        sortBy: 'recent',
-        force: options.force === true
-      });
+      const recommendationPromise = activeTab === TAB_MANAGE &&
+        typeof taskTemplateService.getRecommendedTemplateCandidates === 'function'
+        ? taskTemplateService.getRecommendedTemplateCandidates({
+            limit: 5,
+            force: options.force === true
+          })
+        : Promise.resolve({
+            candidates: [],
+            total: 0
+          });
+      const [result, recommendationResult] = await Promise.all([
+        taskTemplateService.getTemplates({
+          keyword,
+          type: typeFilter || 'all',
+          status: 'all',
+          sortBy: 'recent',
+          force: options.force === true
+        }),
+        recommendationPromise
+      ]);
 
       if (requestId !== this._loadRequestSeq) {
         return;
@@ -253,12 +322,32 @@ Page({
         ? decoratedTemplates.filter((template) => template.enabled === true)
         : decoratedTemplates;
       const templates = sortTemplates(visibleTemplates, activeTab);
+      const recommendedCandidates = Array.isArray(recommendationResult?.candidates)
+        ? recommendationResult.candidates.map(decorateRecommendationCandidate)
+        : [];
+      const visibleRecommendedCandidates = filterSuppressedRecommendations(
+        recommendedCandidates,
+        this._suppressedRecommendationCandidateKeys
+      );
+      const recommendationCount = visibleRecommendedCandidates.length;
+      const hasTemplates = templates.length > 0;
+      const recommendationExpanded = activeTab === TAB_MANAGE && recommendationCount > 0
+        ? (
+            this.data.recommendationExpanded === true
+          )
+        : false;
 
       this.setData({
         templates,
-        hasTemplates: templates.length > 0,
+        hasTemplates,
         hasAnyTemplates: decoratedTemplates.length > 0,
         hasActiveFilters,
+        recommendedCandidates: visibleRecommendedCandidates,
+        recommendationCount,
+        recommendationExpanded,
+        showSearchTools: activeTab === TAB_SELECT
+          ? true
+          : shouldShowManageSearchTools(templates, hasActiveFilters),
         loadFailed: false,
         loading: false
       });
@@ -298,6 +387,10 @@ Page({
       templates: [],
       hasTemplates: false,
       hasAnyTemplates: false,
+      recommendedCandidates: [],
+      recommendationCount: 0,
+      recommendationExpanded: false,
+      showSearchTools: nextTab === TAB_SELECT,
       hasActiveFilters: false,
       loadFailed: false
     });
@@ -345,6 +438,92 @@ Page({
   onCreateTemplate() {
     wx.navigateTo({
       url: '/packageManage/pages/task-template-edit/task-template-edit?mode=create'
+    });
+  },
+
+  toggleRecommendationSection() {
+    if (this.data.recommendationCount <= 0) {
+      return;
+    }
+
+    this.setData({
+      recommendationExpanded: !this.data.recommendationExpanded
+    });
+  },
+
+  onSaveRecommendedCandidate(e) {
+    const candidateKey = e.currentTarget.dataset.key;
+    const candidate = this.data.recommendedCandidates.find((item) => item.candidateKey === candidateKey);
+    if (!candidate) {
+      return;
+    }
+
+    const taskTemplateService = serviceManager.getService('taskTemplate');
+    if (!taskTemplateService) {
+      wx.showToast({
+        title: '模板服务未就绪',
+        icon: 'none'
+      });
+      return;
+    }
+
+    try {
+      const draft = taskTemplateService.buildTemplateDraftFromCandidate(candidate, {
+        sourceType: 'template-manage-candidate'
+      });
+
+      wx.navigateTo({
+        url: '/packageManage/pages/task-template-edit/task-template-edit?mode=create',
+        success: (res) => {
+          const eventChannel = res.eventChannel;
+          if (eventChannel && typeof eventChannel.on === 'function') {
+            eventChannel.on('templateSaved', (payload = {}) => {
+              const savedCandidateKey = String(
+                payload?.sourceMeta?.candidateKey || candidateKey || ''
+              ).trim();
+              if (!savedCandidateKey) {
+                return;
+              }
+
+              this.suppressRecommendationCandidate(savedCandidateKey);
+              this._forceReloadOnShow = true;
+            });
+          }
+          if (eventChannel && typeof eventChannel.emit === 'function') {
+            eventChannel.emit('templateDraftReady', {
+              draft
+            });
+          }
+        }
+      });
+    } catch (error) {
+      logger.warn('TaskTemplateManage', '打开推荐模板草稿失败', error);
+      wx.showToast({
+        title: '推荐草稿生成失败',
+        icon: 'none'
+      });
+    }
+  },
+
+  suppressRecommendationCandidate(candidateKey) {
+    const normalizedKey = String(candidateKey || '').trim();
+    if (!normalizedKey) {
+      return;
+    }
+
+    if (!(this._suppressedRecommendationCandidateKeys instanceof Set)) {
+      this._suppressedRecommendationCandidateKeys = new Set();
+    }
+    this._suppressedRecommendationCandidateKeys.add(normalizedKey);
+
+    const recommendedCandidates = (this.data.recommendedCandidates || [])
+      .filter((item) => item.candidateKey !== normalizedKey);
+    const recommendationCount = recommendedCandidates.length;
+
+    this.setData({
+      recommendedCandidates,
+      recommendationCount,
+      recommendationExpanded: recommendationCount > 0 && this.data.recommendationExpanded === true
     });
   },
 

@@ -2,6 +2,9 @@ describe('TaskTemplateService', () => {
   let TaskTemplateService;
   let repository;
   let HttpClient;
+  let taskService;
+  let eventHandlers;
+  let eventBus;
 
   function setupModules(enableApi = false) {
     jest.doMock('../../repositories/task-template-repository', () => (
@@ -46,6 +49,16 @@ describe('TaskTemplateService', () => {
       save: jest.fn(async (value) => value),
       replaceAll: jest.fn(async (value) => value),
       delete: jest.fn().mockResolvedValue(true)
+    };
+    taskService = {
+      getTasksByScope: jest.fn().mockResolvedValue([])
+    };
+    eventHandlers = {};
+    eventBus = {
+      on: jest.fn((eventName, handler) => {
+        eventHandlers[eventName] = handler;
+        return jest.fn();
+      })
     };
 
     setupModules(false);
@@ -574,5 +587,339 @@ describe('TaskTemplateService', () => {
 
     expect(result).toEqual({ id: 'tpl_local' });
     expect(repository.getById).toHaveBeenCalledWith('tpl_local');
+  });
+
+  it('getRecommendedTemplateCandidates 应按家庭任务生成候选并命中缓存', async () => {
+    const service = new TaskTemplateService({
+      taskService,
+      eventBus
+    });
+    repository.getAll.mockResolvedValue([]);
+    taskService.getTasksByScope.mockResolvedValue([
+      {
+        id: 'task_1',
+        title: '晚间阅读',
+        type: 'study',
+        points: 2,
+        pointsExpiry: 'week',
+        description: '',
+        isRequired: false,
+        isAllDay: false,
+        date: '2026-04-01',
+        startDate: '2026-04-01',
+        endDate: '2026-04-01',
+        startTime: '19:00',
+        endTime: '19:30',
+        hasNoEndDate: false,
+        repeat: {
+          type: 'none',
+          days: [],
+          startDate: '2026-04-01',
+          endDate: '2026-04-01'
+        },
+        reminder: {
+          enabled: false,
+          time: 0
+        },
+        createdAt: 1
+      },
+      {
+        id: 'task_2',
+        title: '晚间阅读',
+        type: 'study',
+        points: 2,
+        pointsExpiry: 'week',
+        description: '',
+        isRequired: false,
+        isAllDay: false,
+        date: '2026-04-05',
+        startDate: '2026-04-05',
+        endDate: '2026-04-05',
+        startTime: '19:00',
+        endTime: '19:30',
+        hasNoEndDate: false,
+        repeat: {
+          type: 'none',
+          days: [],
+          startDate: '2026-04-05',
+          endDate: '2026-04-05'
+        },
+        reminder: {
+          enabled: false,
+          time: 0
+        },
+        createdAt: 2
+      }
+    ]);
+
+    const first = await service.getRecommendedTemplateCandidates({
+      today: '2026-04-09'
+    });
+    const second = await service.getRecommendedTemplateCandidates({
+      today: '2026-04-09'
+    });
+
+    expect(first.candidates).toHaveLength(1);
+    expect(first.candidates[0]).toEqual(expect.objectContaining({
+      displayName: '晚间阅读',
+      reasonCode: 'high-frequency'
+    }));
+    expect(second.cached).toBe(true);
+    expect(taskService.getTasksByScope).toHaveBeenCalledTimes(1);
+  });
+
+  it('任务事件触发后应失效推荐缓存并重新计算', async () => {
+    const service = new TaskTemplateService({
+      taskService,
+      eventBus
+    });
+    repository.getAll.mockResolvedValue([]);
+    taskService.getTasksByScope.mockResolvedValue([
+      {
+        id: 'task_1',
+        title: '晚间阅读',
+        type: 'study',
+        points: 2,
+        pointsExpiry: 'week',
+        isRequired: false,
+        isAllDay: false,
+        date: '2026-04-01',
+        startDate: '2026-04-01',
+        endDate: '2026-04-01',
+        startTime: '19:00',
+        endTime: '19:30',
+        hasNoEndDate: false,
+        repeat: {
+          type: 'none',
+          days: [],
+          startDate: '2026-04-01',
+          endDate: '2026-04-01'
+        },
+        reminder: {
+          enabled: false,
+          time: 0
+        }
+      },
+      {
+        id: 'task_2',
+        title: '晚间阅读',
+        type: 'study',
+        points: 2,
+        pointsExpiry: 'week',
+        isRequired: false,
+        isAllDay: false,
+        date: '2026-04-05',
+        startDate: '2026-04-05',
+        endDate: '2026-04-05',
+        startTime: '19:00',
+        endTime: '19:30',
+        hasNoEndDate: false,
+        repeat: {
+          type: 'none',
+          days: [],
+          startDate: '2026-04-05',
+          endDate: '2026-04-05'
+        },
+        reminder: {
+          enabled: false,
+          time: 0
+        }
+      }
+    ]);
+
+    await service.getRecommendedTemplateCandidates({
+      today: '2026-04-09'
+    });
+    eventHandlers['task:created']({});
+    await service.getRecommendedTemplateCandidates({
+      today: '2026-04-09'
+    });
+
+    expect(eventBus.on).toHaveBeenCalled();
+    expect(taskService.getTasksByScope).toHaveBeenCalledTimes(2);
+  });
+
+  it('已有同任务节奏模板时应抑制仅次要字段不同的推荐候选', async () => {
+    const service = new TaskTemplateService({
+      taskService,
+      eventBus
+    });
+    repository.getAll.mockResolvedValue([
+      {
+        id: 'tpl_1',
+        name: '晚间阅读模板',
+        taskPayload: {
+          title: '晚间阅读',
+          type: 'study',
+          points: 5,
+          pointsExpiry: 'quarter',
+          description: '',
+          isRequired: true,
+          isAllDay: false,
+          startDate: '2026-04-07',
+          endDate: '2026-04-13',
+          startTime: '19:00',
+          endTime: '19:30',
+          hasNoEndDate: false,
+          repeat: {
+            type: 'custom',
+            days: [1, 3, 5],
+            startDate: '2026-04-07',
+            endDate: '2026-04-13'
+          },
+          reminder: {
+            enabled: true,
+            time: 15
+          }
+        },
+        dateStrategy: {
+          mode: 'inherit-repeat-rule',
+          autoShiftExpiredEndDate: true,
+          endMode: 'duration',
+          durationDays: 7
+        }
+      }
+    ]);
+    taskService.getTasksByScope.mockResolvedValue([
+      {
+        id: 'task_1',
+        title: '晚间阅读',
+        type: 'study',
+        points: 2,
+        pointsExpiry: 'week',
+        description: '',
+        isRequired: false,
+        isAllDay: false,
+        date: '2026-04-07',
+        startDate: '2026-04-07',
+        endDate: '2026-04-13',
+        startTime: '19:00',
+        endTime: '19:30',
+        hasNoEndDate: false,
+        repeat: {
+          type: 'custom',
+          days: [1, 3, 5],
+          startDate: '2026-04-07',
+          endDate: '2026-04-13'
+        },
+        reminder: {
+          enabled: false,
+          time: 0
+        }
+      },
+      {
+        id: 'task_2',
+        title: '晚间阅读',
+        type: 'study',
+        points: 2,
+        pointsExpiry: 'week',
+        description: '',
+        isRequired: false,
+        isAllDay: false,
+        date: '2026-04-14',
+        startDate: '2026-04-14',
+        endDate: '2026-04-20',
+        startTime: '19:00',
+        endTime: '19:30',
+        hasNoEndDate: false,
+        repeat: {
+          type: 'custom',
+          days: [1, 3, 5],
+          startDate: '2026-04-14',
+          endDate: '2026-04-20'
+        },
+        reminder: {
+          enabled: false,
+          time: 0
+        }
+      }
+    ]);
+
+    const result = await service.getRecommendedTemplateCandidates({
+      today: '2026-04-20'
+    });
+
+    expect(result.candidates).toEqual([]);
+  });
+
+  it('updateUserService 后应使推荐缓存失效并切换上下文缓存键', async () => {
+    const firstUserService = {
+      getLoginUser: jest.fn(() => ({ familyId: 'family_1' })),
+      getLoginUserId: jest.fn(() => 'login_1'),
+      getCurrentUserId: jest.fn(() => 'current_1')
+    };
+    const secondUserService = {
+      getLoginUser: jest.fn(() => ({ familyId: 'family_2' })),
+      getLoginUserId: jest.fn(() => 'login_2'),
+      getCurrentUserId: jest.fn(() => 'current_2')
+    };
+    const service = new TaskTemplateService({
+      taskService,
+      eventBus,
+      userService: firstUserService
+    });
+    repository.getAll.mockResolvedValue([]);
+    taskService.getTasksByScope.mockResolvedValue([
+      {
+        id: 'task_1',
+        title: '晚间阅读',
+        type: 'study',
+        date: '2026-04-01',
+        startDate: '2026-04-01',
+        endDate: '2026-04-01',
+        startTime: '19:00',
+        endTime: '19:30',
+        hasNoEndDate: false,
+        repeat: {
+          type: 'none',
+          days: [],
+          startDate: '2026-04-01',
+          endDate: '2026-04-01'
+        },
+        reminder: {
+          enabled: false,
+          time: 0
+        }
+      },
+      {
+        id: 'task_2',
+        title: '晚间阅读',
+        type: 'study',
+        date: '2026-04-05',
+        startDate: '2026-04-05',
+        endDate: '2026-04-05',
+        startTime: '19:00',
+        endTime: '19:30',
+        hasNoEndDate: false,
+        repeat: {
+          type: 'none',
+          days: [],
+          startDate: '2026-04-05',
+          endDate: '2026-04-05'
+        },
+        reminder: {
+          enabled: false,
+          time: 0
+        }
+      }
+    ]);
+
+    const first = await service.getRecommendedTemplateCandidates({
+      today: '2026-04-09'
+    });
+    const cached = await service.getRecommendedTemplateCandidates({
+      today: '2026-04-09'
+    });
+
+    service.updateUserService(secondUserService);
+
+    const afterSwitch = await service.getRecommendedTemplateCandidates({
+      today: '2026-04-09'
+    });
+
+    expect(first.cached).toBe(false);
+    expect(cached.cached).toBe(true);
+    expect(afterSwitch.cached).toBe(false);
+    expect(taskService.getTasksByScope).toHaveBeenCalledTimes(2);
   });
 });

@@ -2,6 +2,10 @@
   <view wx:if="{{loading}}" class="loading-state">模板加载中...</view>
 
   <view wx:else class="page-content">
+    <view wx:if="{{draftSourceHint}}" class="draft-source-banner">
+      <text class="draft-source-banner-text">{{draftSourceHint}}</text>
+    </view>
+
     <card title="任务内容" customClass="form-card">
       <view class="task-info-area">
         <view class="input-item">

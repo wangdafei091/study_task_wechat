@@ -5,21 +5,32 @@ const TaskTemplate = require('../models/task-template');
 const TaskTemplateRepository = require('../repositories/task-template-repository');
 const dateUtils = require('../utils/dateUtils');
 const taskFormDisplay = require('../utils/task-form-display');
+const { EVENTS } = require('../utils/constants');
 const {
   normalizeDateString,
   normalizeDateStrategy
 } = require('../utils/task-template-utils');
+const {
+  buildTemplateDraftFromTask,
+  buildTemplateDraftFromCandidate,
+  groupTasksToTemplateCandidates
+} = require('../utils/task-template-source');
 
 const TEMPLATE_CLOUD_REFRESH_MIN_INTERVAL_MS = 3000;
+const TEMPLATE_RECOMMENDATION_CACHE_TTL_MS = 30000;
 
 class TaskTemplateService {
   constructor(options = {}) {
     this.repository = options.repository || new TaskTemplateRepository(options.storageAdapter);
     this.userService = options.userService || null;
     this.eventBus = options.eventBus || null;
+    this.taskService = options.taskService || null;
     this.enableCloudStorage = API_CONFIG.ENABLE_API;
     this._lastCloudSyncAt = 0;
     this._cloudRefreshPromise = null;
+    this._recommendationCache = null;
+    this._taskEventUnsubscribers = [];
+    this._bindTaskEvents();
 
     logger.info('TaskTemplateService', '初始化任务模板服务', {
       enableCloudStorage: this.enableCloudStorage
@@ -28,6 +39,12 @@ class TaskTemplateService {
 
   updateUserService(userService) {
     this.userService = userService || null;
+    this.invalidateRecommendationCache();
+  }
+
+  updateTaskService(taskService) {
+    this.taskService = taskService || null;
+    this.invalidateRecommendationCache();
   }
 
   async getTemplateById(templateId, options = {}) {
@@ -87,6 +104,7 @@ class TaskTemplateService {
     }
 
     await this.repository.save(savedTemplate);
+    this.invalidateRecommendationCache();
     return {
       success: true,
       template: savedTemplate
@@ -135,6 +153,7 @@ class TaskTemplateService {
     }
 
     await this.repository.save(savedTemplate);
+    this.invalidateRecommendationCache();
     return {
       success: true,
       template: savedTemplate
@@ -161,6 +180,7 @@ class TaskTemplateService {
     }
 
     await this.repository.save(nextTemplate);
+    this.invalidateRecommendationCache();
     return {
       success: true,
       template: nextTemplate
@@ -178,6 +198,7 @@ class TaskTemplateService {
     }
 
     await this.repository.delete(templateId);
+    this.invalidateRecommendationCache();
     return {
       success: true
     };
@@ -305,6 +326,7 @@ class TaskTemplateService {
         : [];
 
       await this.repository.replaceAll(templates);
+      this.invalidateRecommendationCache();
       this._lastCloudSyncAt = Date.now();
 
       return {
@@ -320,6 +342,74 @@ class TaskTemplateService {
     }
   }
 
+  invalidateRecommendationCache() {
+    this._recommendationCache = null;
+  }
+
+  buildTemplateDraftFromTask(task, options = {}) {
+    return buildTemplateDraftFromTask(task, options);
+  }
+
+  buildTemplateDraftFromCandidate(candidate, options = {}) {
+    return buildTemplateDraftFromCandidate(candidate, options);
+  }
+
+  async getRecommendedTemplateCandidates(options = {}) {
+    const today = normalizeDateString(options.today, dateUtils.getTodayString());
+    const lookbackDays = Number.isInteger(Number(options.lookbackDays))
+      ? Math.max(1, Number(options.lookbackDays))
+      : 60;
+    const recommendationContextKey = this._buildRecommendationContextKey();
+    const cacheKey = JSON.stringify({
+      recommendationContextKey,
+      today,
+      lookbackDays
+    });
+    const limit = Number.isInteger(Number(options.limit))
+      ? Math.max(1, Number(options.limit))
+      : null;
+    const now = Date.now();
+
+    if (
+      options.force !== true &&
+      this._recommendationCache &&
+      this._recommendationCache.key === cacheKey &&
+      now - this._recommendationCache.createdAt < TEMPLATE_RECOMMENDATION_CACHE_TTL_MS
+    ) {
+      const cachedCandidates = this._recommendationCache.candidates || [];
+      return {
+        candidates: limit ? cachedCandidates.slice(0, limit) : cachedCandidates,
+        total: cachedCandidates.length,
+        cached: true
+      };
+    }
+
+    if (this.enableCloudStorage && options.skipRefresh !== true) {
+      await this._refreshTemplatesFromCloudSafely({
+        force: options.force === true
+      });
+    }
+
+    const templates = await this.repository.getAll();
+    const tasks = await this._loadFamilyTasksForRecommendations();
+    const candidates = groupTasksToTemplateCandidates(tasks, templates, {
+      today,
+      lookbackDays
+    });
+
+    this._recommendationCache = {
+      key: cacheKey,
+      createdAt: now,
+      candidates
+    };
+
+    return {
+      candidates: limit ? candidates.slice(0, limit) : candidates,
+      total: candidates.length,
+      cached: false
+    };
+  }
+
   _buildTemplateMutationPayload(template) {
     return {
       name: template.name,
@@ -328,6 +418,14 @@ class TaskTemplateService {
       dateStrategy: template.dateStrategy,
       enabled: template.enabled
     };
+  }
+
+  _buildRecommendationContextKey() {
+    return JSON.stringify({
+      familyId: this._getCurrentFamilyId() || '',
+      loginUserId: this.userService?.getLoginUserId?.() || '',
+      currentUserId: this.userService?.getCurrentUserId?.() || ''
+    });
   }
 
   async _refreshTemplatesFromCloudSafely(options = {}) {
@@ -360,6 +458,40 @@ class TaskTemplateService {
 
   _getCurrentFamilyId() {
     return this.userService?.getLoginUser?.()?.familyId || this.userService?.getCurrentUser?.()?.familyId || null;
+  }
+
+  _bindTaskEvents() {
+    if (!this.eventBus || typeof this.eventBus.on !== 'function' || this._taskEventUnsubscribers.length > 0) {
+      return;
+    }
+
+    [EVENTS.TASK_CREATED, EVENTS.TASK_UPDATED, EVENTS.TASK_DELETED].forEach((eventName) => {
+      const unsubscribe = this.eventBus.on(eventName, () => {
+        this.invalidateRecommendationCache();
+      });
+      if (typeof unsubscribe === 'function') {
+        this._taskEventUnsubscribers.push(unsubscribe);
+      }
+    });
+  }
+
+  async _loadFamilyTasksForRecommendations() {
+    if (!this.taskService || typeof this.taskService.getTasksByScope !== 'function') {
+      logger.warn('TaskTemplateService', '任务服务未就绪，无法生成推荐候选');
+      return [];
+    }
+
+    try {
+      const tasks = await this.taskService.getTasksByScope({
+        scope: 'family'
+      });
+      return Array.isArray(tasks) ? tasks : [];
+    } catch (error) {
+      logger.warn('TaskTemplateService', '加载家庭任务失败，推荐候选回退为空', {
+        error: error && error.message ? error.message : error
+      });
+      return [];
+    }
   }
 
   _resolveTemplateDates(template, today) {

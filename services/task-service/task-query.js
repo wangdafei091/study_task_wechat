@@ -535,7 +535,13 @@ async function getTasksByScope(service, options = {}) {
     }
     if (options.scope === 'family') {
       if (service.enableCloudStorage) {
-        return service._fetchTasksFromCloud(null, { scope: 'family' });
+        const cloudTasks = await service._fetchTasksFromCloud(null, { scope: 'family' });
+        const localTasks = await service.taskRepository.getAll();
+        const cloudIds = new Set((cloudTasks || []).map((task) => task.id));
+        const localOnlyTasks = (localTasks || []).filter((task) => !cloudIds.has(task.id));
+        return localOnlyTasks.length > 0
+          ? [...cloudTasks, ...localOnlyTasks]
+          : cloudTasks;
       }
       return service.taskRepository.getAll();
     }

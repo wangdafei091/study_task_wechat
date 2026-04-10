@@ -45,7 +45,8 @@ const loadServiceManager = (options = {}) => {
   const offlineQueueServiceInstance = { name: 'offlineQueueService' };
   const taskTemplateServiceInstance = {
     name: 'taskTemplateService',
-    updateUserService: jest.fn()
+    updateUserService: jest.fn(),
+    updateTaskService: jest.fn()
   };
 
   const StarService = jest.fn(() => starServiceInstance);
@@ -165,7 +166,8 @@ describe('ServiceManager', () => {
     expect(mocks.TaskTemplateService).toHaveBeenCalledWith({
       eventBus: mocks.eventBusInstance,
       userService,
-      storageAdapter: expect.any(Object)
+      storageAdapter: expect.any(Object),
+      taskService: mocks.instances.taskServiceInstance
     });
     expect(mocks.OfflineQueueService).toHaveBeenCalledWith(expect.objectContaining({
       eventBus: mocks.eventBusInstance,

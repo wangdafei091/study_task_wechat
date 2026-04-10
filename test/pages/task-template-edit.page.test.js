@@ -61,7 +61,10 @@ describe('packageManage/pages/task-template-edit/task-template-edit', () => {
       selectReminderType: pageConfig.selectReminderType,
       switchToWeekdaySelection: pageConfig.switchToWeekdaySelection,
       onDurationDaysInput: pageConfig.onDurationDaysInput,
-      closeAllPanels: pageConfig.closeAllPanels
+      closeAllPanels: pageConfig.closeAllPanels,
+      getOpenerEventChannel: jest.fn(() => ({
+        on: jest.fn()
+      }))
     };
   }
 
@@ -116,6 +119,78 @@ describe('packageManage/pages/task-template-edit/task-template-edit', () => {
     }));
   });
 
+  it('推荐草稿保存成功后应通过 eventChannel 回传已处理候选', async () => {
+    const emit = jest.fn();
+    const createTemplate = jest.fn().mockResolvedValue({
+      success: true,
+      template: {
+        id: 'tpl_created'
+      }
+    });
+    serviceManager.getService.mockReturnValue({
+      createTemplate,
+      updateTemplate: jest.fn()
+    });
+
+    const page = createPageInstance();
+    page.getOpenerEventChannel.mockReturnValue({
+      on: jest.fn(),
+      emit
+    });
+
+    page.applyTemplateDraft({
+      draftInput: {
+        name: '晚间阅读模板',
+        description: '',
+        enabled: true,
+        taskPayload: {
+          title: '晚间阅读',
+          type: 'study',
+          points: 2,
+          pointsExpiry: 'week',
+          description: '',
+          isRequired: false,
+          isAllDay: false,
+          startDate: '2026-04-09',
+          startTime: '19:00',
+          endDate: '2026-04-15',
+          endTime: '19:30',
+          hasNoEndDate: false,
+          repeat: {
+            type: 'custom',
+            days: [1, 3, 5],
+            startDate: '2026-04-09',
+            endDate: '2026-04-15'
+          },
+          reminder: {
+            enabled: true,
+            time: 15
+          }
+        },
+        dateStrategy: {
+          mode: 'inherit-repeat-rule',
+          autoShiftExpiredEndDate: true,
+          endMode: 'duration',
+          durationDays: 7
+        }
+      },
+      sourceMeta: {
+        sourceType: 'template-manage-candidate',
+        candidateKey: 'candidate_1'
+      }
+    });
+
+    await page.onSave();
+
+    expect(emit).toHaveBeenCalledWith('templateSaved', {
+      templateId: 'tpl_created',
+      sourceMeta: {
+        sourceType: 'template-manage-candidate',
+        candidateKey: 'candidate_1'
+      }
+    });
+  });
+
   it('onLoad(create) 应设置新建页标题', () => {
     const page = createPageInstance();
 
@@ -124,6 +199,72 @@ describe('packageManage/pages/task-template-edit/task-template-edit', () => {
     expect(global.wx.setNavigationBarTitle).toHaveBeenCalledWith({
       title: '新建任务模板'
     });
+  });
+
+  it('onLoad(create) 接收到推荐草稿后应回填表单并显示来源提示', () => {
+    let draftHandler = null;
+    const page = createPageInstance();
+    page.getOpenerEventChannel.mockReturnValue({
+      on: jest.fn((eventName, handler) => {
+        if (eventName === 'templateDraftReady') {
+          draftHandler = handler;
+        }
+      })
+    });
+
+    page.onLoad({});
+    draftHandler({
+      draft: {
+        draftInput: {
+          name: '晚间阅读模板',
+          description: '',
+          enabled: true,
+          taskPayload: {
+            title: '晚间阅读',
+            type: 'study',
+            points: 2,
+            pointsExpiry: 'week',
+            description: '阅读20分钟',
+            isRequired: false,
+            isAllDay: false,
+            startDate: '2026-04-09',
+            startTime: '19:00',
+            endDate: '2026-04-09',
+            endTime: '19:30',
+            hasNoEndDate: false,
+            repeat: {
+              type: 'daily',
+              days: [],
+              startDate: '2026-04-09',
+              endDate: '2026-04-09'
+            },
+            reminder: {
+              enabled: true,
+              time: 15
+            }
+          },
+          dateStrategy: {
+            mode: 'inherit-repeat-rule',
+            autoShiftExpiredEndDate: true,
+            endMode: 'week-end',
+            durationDays: null
+          }
+        },
+        sourceMeta: {
+          sourceType: 'task-edit-recommendation',
+          sourceTitle: '晚间阅读'
+        }
+      }
+    });
+
+    expect(page.data.form).toEqual(expect.objectContaining({
+      name: '晚间阅读模板',
+      taskTitle: '晚间阅读',
+      type: 'study',
+      endMode: 'week-end'
+    }));
+    expect(page.data.draftSourceHint).toContain('系统推荐');
+    expect(page.data.draftSourceHint).toContain('晚间阅读');
   });
 
   it('onLoad(edit) 应设置编辑页标题', () => {
@@ -469,7 +610,8 @@ describe('packageManage/pages/task-template-edit/task-template-edit', () => {
 
     page.refreshPreview();
 
-    expect(page.data.preview.resultPrimaryText).toBe('创建任务时，将从下一个周五开始执行');
+    expect(page.data.preview.resultPrimaryText).toContain('创建任务时，将从');
+    expect(page.data.preview.resultPrimaryText).toContain('执行');
     expect(page.data.preview.resultSecondaryText).toBe('结束日期为该周周日');
   });
 

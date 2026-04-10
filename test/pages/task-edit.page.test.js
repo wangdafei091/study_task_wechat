@@ -144,6 +144,8 @@ describe('pages/task-edit/task-edit', () => {
       selectedTemplateId: 'tpl_1',
       'errors.title': ''
     }));
+    expect(page.data.templateFillUndoVisible).toBe(true);
+    expect(page.data.templateFillUndoText).toBe('已填充 模板A，可恢复原内容');
   });
 
   it('_handleTaskCreationSuccess 应在使用模板时回写使用统计', () => {
@@ -215,6 +217,292 @@ describe('pages/task-edit/task-edit', () => {
     expect(page.data.newTask.title).toBe('已回填任务');
   });
 
+  it('loadRecentTaskTemplates 在无模板但有推荐时应回填推荐入口状态', async () => {
+    const page = createPageInstance();
+
+    serviceManager.getService.mockImplementation((name) => {
+      if (name === 'taskTemplate') {
+        return {
+          getRecentTemplates: jest.fn().mockResolvedValue({
+            templates: []
+          }),
+          getRecommendedTemplateCandidates: jest.fn().mockResolvedValue({
+            candidates: [
+              {
+                candidateKey: 'c1',
+                displayName: '晚间阅读',
+                reasonText: '近60天出现 4 次',
+                taskPayload: {
+                  title: '晚间阅读',
+                  type: 'study',
+                  isAllDay: false,
+                  startTime: '19:00',
+                  endTime: '19:30',
+                  repeat: { type: 'daily', days: [] },
+                  reminder: { enabled: false, time: 0 }
+                }
+              }
+            ],
+            total: 1
+          })
+        };
+      }
+      return null;
+    });
+
+    await pageConfig.loadRecentTaskTemplates.call(page);
+
+    expect(page.data.hasTemplates).toBe(false);
+    expect(page.data.templateRecommendationCount).toBe(1);
+    expect(page.data.recommendedTemplates).toHaveLength(1);
+    expect(page.data.recommendedTemplates[0]).toEqual(expect.objectContaining({
+      displayName: '晚间阅读',
+      repeatLabel: '每天'
+    }));
+  });
+
+  it('onUseRecommendedTemplate 应把候选草稿传给模板编辑页', () => {
+    const emit = jest.fn();
+    global.wx.navigateTo.mockImplementation(({ success }) => {
+      success({
+        eventChannel: {
+          emit
+        }
+      });
+    });
+    serviceManager.getService.mockImplementation((name) => {
+      if (name === 'taskTemplate') {
+        return {
+          buildTemplateDraftFromCandidate: jest.fn(() => ({
+            draftInput: {
+              name: '晚间阅读',
+              taskPayload: {
+                title: '晚间阅读'
+              },
+              dateStrategy: {
+                mode: 'today',
+                endMode: 'same-day',
+                durationDays: 1
+              },
+              enabled: true
+            },
+            sourceMeta: {
+              sourceType: 'task-edit-recommendation'
+            }
+          }))
+        };
+      }
+      return null;
+    });
+
+    const page = createPageInstance();
+    page.data.recommendedTemplates = [
+      {
+        candidateKey: 'c1',
+        displayName: '晚间阅读',
+        taskPayload: {
+          title: '晚间阅读'
+        }
+      }
+    ];
+
+    page.onUseRecommendedTemplate({
+      currentTarget: {
+        dataset: {
+          key: 'c1'
+        }
+      }
+    });
+
+    expect(global.wx.navigateTo).toHaveBeenCalledWith(expect.objectContaining({
+      url: '/packageManage/pages/task-template-edit/task-template-edit?mode=create',
+      success: expect.any(Function)
+    }));
+    expect(emit).toHaveBeenCalledWith('templateDraftReady', expect.objectContaining({
+      draft: expect.objectContaining({
+        draftInput: expect.objectContaining({
+          name: '晚间阅读'
+        })
+      })
+    }));
+  });
+
+  it('undoTemplateFill 应恢复到模板填充前的表单状态', () => {
+    const page = createPageInstance();
+    page.data.newTask = {
+      title: '原任务',
+      repeat: {
+        type: 'none'
+      }
+    };
+    page.data.repeatText = '当天';
+    page.data.selectedTemplateId = 'tpl_1';
+    page.data.templateFillUndoVisible = true;
+    page.data.templateFillUndoText = '已填充 模板A，可恢复原内容';
+    page._templateFillUndoSnapshot = {
+      newTask: {
+        title: '回退前任务',
+        repeat: {
+          type: 'daily'
+        }
+      },
+      errors: {
+        title: ''
+      },
+      repeatText: '每天',
+      reminderText: '无',
+      pointsExpiryText: '永久',
+      repeatPreviewText: '',
+      repeatTypeWarning: false,
+      weekdaySelection: [false, false, false, false, false, false, false],
+      repeatPanelMode: 'type',
+      isRepeatOptionDisabled: false,
+      selectedTemplateId: null,
+      reminderOptions: []
+    };
+
+    page.undoTemplateFill();
+
+    expect(page.data.newTask.title).toBe('回退前任务');
+    expect(page.data.repeatText).toBe('每天');
+    expect(page.data.templateFillUndoVisible).toBe(false);
+    expect(page.data.templateFillUndoText).toBe('');
+  });
+
+  it('连续切换多个模板后恢复原内容应回到第一次模板填充前的状态', () => {
+    const appliedTitles = ['模板A任务', '模板B任务'];
+    const applyTemplateToTaskForm = jest.fn(() => ({
+      formPatch: {
+        newTask: {
+          title: appliedTitles.shift(),
+          repeat: {
+            type: 'daily'
+          }
+        },
+        repeatText: '每天',
+        reminderText: '无',
+        selectedTemplateId: 'tpl_any'
+      }
+    }));
+
+    serviceManager.getService.mockImplementation((name) => {
+      if (name === 'taskTemplate') {
+        return {
+          applyTemplateToTaskForm
+        };
+      }
+      return null;
+    });
+
+    const page = createPageInstance();
+    page.data.newTask = {
+      title: '手工输入',
+      repeat: {
+        type: 'none'
+      }
+    };
+    page.data.repeatText = '不重复';
+
+    page.applyTemplateSelection({
+      id: 'tpl_1',
+      name: '模板A'
+    });
+    page.applyTemplateSelection({
+      id: 'tpl_2',
+      name: '模板B'
+    });
+
+    page.undoTemplateFill();
+
+    expect(page.data.newTask.title).toBe('手工输入');
+    expect(page.data.repeatText).toBe('不重复');
+    expect(page.data.templateFillUndoVisible).toBe(false);
+    expect(page.data.templateFillUndoText).toBe('');
+  });
+
+  it('markTemplateFillUndoDirty 应在用户继续编辑后清空撤销状态', () => {
+    const page = createPageInstance();
+    page.data.templateFillUndoVisible = true;
+    page.data.templateFillUndoText = '已填充 模板A，可恢复原内容';
+    page._templateFillUndoSnapshot = {
+      newTask: {
+        title: '原任务'
+      }
+    };
+
+    page.markTemplateFillUndoDirty();
+
+    expect(page._templateFillUndoSnapshot).toBeNull();
+    expect(page.data.templateFillUndoVisible).toBe(false);
+    expect(page.data.templateFillUndoText).toBe('');
+  });
+
+  it('从选择模板页返回后继续切换模板，恢复原内容仍应回到首次模板填充前的状态', () => {
+    const appliedTitles = ['模板A任务', '模板B任务'];
+    const applyTemplateToTaskForm = jest.fn(() => ({
+      formPatch: {
+        newTask: {
+          title: appliedTitles.shift(),
+          repeat: {
+            type: 'daily'
+          }
+        },
+        repeatText: '每天',
+        reminderText: '无',
+        selectedTemplateId: 'tpl_any'
+      }
+    }));
+
+    serviceManager.getService.mockImplementation((name) => {
+      if (name === 'taskTemplate') {
+        return {
+          applyTemplateToTaskForm
+        };
+      }
+      return null;
+    });
+
+    const page = createPageInstance();
+    page.data.newTask = {
+      title: '手工输入',
+      repeat: {
+        type: 'none'
+      }
+    };
+    page.data.repeatText = '不重复';
+
+    page.applyTemplateSelection({
+      id: 'tpl_1',
+      name: '模板A'
+    });
+    page.onHide.call(page);
+    page.applyTemplateSelection({
+      id: 'tpl_2',
+      name: '模板B'
+    });
+
+    page.undoTemplateFill();
+
+    expect(page.data.newTask.title).toBe('手工输入');
+    expect(page.data.repeatText).toBe('不重复');
+    expect(page.data.templateFillUndoVisible).toBe(false);
+    expect(page.data.templateFillUndoText).toBe('');
+  });
+
+  it('wxml 中模板区应保证正式模板、推荐候选和空态去创建三者互斥', () => {
+    const fs = require('fs');
+    const path = require('path');
+    const wxml = fs.readFileSync(
+      path.join(process.cwd(), 'pages/task-edit/task-edit.wxml'),
+      'utf8'
+    );
+
+    expect(wxml).toContain('<block wx:if="{{hasTemplates}}">');
+    expect(wxml).toContain('<block wx:elif="{{templateRecommendationCount > 0}}">');
+    expect(wxml).toContain('<block wx:else>');
+    expect(wxml).toContain('>更多模板<');
+  });
+
   it('重复 showLoading 后单次 hideLoading 应只关闭一次全局 loading', () => {
     const page = createPageInstance();
 
@@ -235,5 +523,18 @@ describe('pages/task-edit/task-edit', () => {
     page.onUnload.call(page);
 
     expect(global.wx.hideLoading).toHaveBeenCalledTimes(1);
+  });
+
+  it('onUnload 应清理模板恢复快照', () => {
+    const page = createPageInstance();
+    page._templateFillUndoSnapshot = {
+      newTask: {
+        title: '原任务'
+      }
+    };
+
+    page.onUnload.call(page);
+
+    expect(page._templateFillUndoSnapshot).toBeNull();
   });
 });
