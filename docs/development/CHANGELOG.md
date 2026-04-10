@@ -4,6 +4,49 @@
 
 ---
 
+## [里程碑-21B2] - 2026-04-10
+
+### ✅ 完成情况
+
+**模板来源补齐**
+
+- **推荐候选与模板草稿链路**：
+  - 新增 `utils/task-template-source.js`，补齐真实任务到推荐候选、模板草稿和模板覆盖判定的纯函数链路
+  - 支持一次性高频任务与跨自然周重复任务的轻量聚类识别
+  - 显式排除一次性多天任务与 `monthly` 重复任务，避免模板语义降级
+- **任务主线推荐感知**：
+  - `task-edit` 快捷填充区接入推荐候选展示与推荐草稿入口
+  - 无正式模板时支持推荐卡片承接；有正式模板时推荐降为次级入口，不打断主填表节奏
+  - 模板填充后的“恢复原内容”状态与跨页面返回行为完成收口
+- **模板管理页推荐承接**：
+  - 模板页正式拆分 `选择模板 / 管理模板` 双 tab 语义
+  - `管理模板` tab 新增推荐候选区，支持从推荐直接进入预填好的模板编辑页
+  - 推荐保存为模板后，正式模板列表、推荐列表与返回链路状态保持一致
+- **服务层与缓存治理**：
+  - `TaskTemplateService` 正式接入推荐候选查询、缓存与任务事件失效机制
+  - 推荐缓存已按 `familyId / loginUserId / currentUserId` 做上下文隔离
+  - family 云端查询会合并本地未同步任务，避免推荐源遗漏本地数据
+
+### 🧪 验证结果
+
+- M21B2 合并后验收通过：
+  - 手工验收：任务编辑页、模板管理页、推荐保存为模板、删除模板后推荐恢复、模板回填与恢复原内容主链路均通过
+  - 自动化验收：
+    - `test/pages/task-template-manage.page.test.js`
+    - `test/services/task-template-service.test.js`
+    - `test/pages/task-edit.page.test.js`
+    - `test/utils/task-template-source.test.js`
+    - `test/services/service-manager.test.js`
+    - `test/services/task-query.direct.test.js`
+- 定向测试结果：
+  - `6 suites / 86 tests` 全绿
+
+### 📖 详细实施记录
+
+- [里程碑-21B2：模板来源补齐](../design/milestone-21b2-template-source-completion.md)
+
+---
+
 ## [里程碑-21B1] - 2026-04-08
 
 ### ✅ 完成情况

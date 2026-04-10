@@ -1,11 +1,12 @@
 # 里程碑-21B2：模板来源补齐 详细设计文档
 
-> **设计状态**：🟢 审核通过
+> **设计状态**：✅ 已完成
 > **创建日期**：2026-04-09
 > **设计者**：GPT5 Codex
 > **审核者**：项目维护者
 > **依赖文档**：`docs/design/milestone-21b1-task-template-foundation.md`、`docs/design/milestone-21b1-ux-refinement.md`
 > **预计工期**：2-3天
+> **完成日期**：2026-04-10
 
 ---
 
