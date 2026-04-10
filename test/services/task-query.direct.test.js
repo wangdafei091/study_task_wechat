@@ -210,7 +210,26 @@ describe('task-query direct behavior', () => {
       totalTasks: 0,
       dailyStats: []
     }));
-    await expect(query.getTasksByScope(service, { scope: 'family' })).rejects.toThrow('family fail');
+    await expect(query.getTasksByScope(service, { scope: 'family' })).resolves.toEqual([]);
     expect(fallbackTasks).toEqual([]);
+  });
+
+  it('getTasksByScope 在 family 云端模式下应合并本地未同步任务', async () => {
+    const service = {
+      enableCloudStorage: true,
+      _fetchTasksFromCloud: jest.fn(async () => [
+        { id: 'cloud_1', title: '云端任务' }
+      ]),
+      taskRepository: {
+        getAll: jest.fn(async () => [
+          { id: 'cloud_1', title: '云端任务' },
+          { id: 'local_1', title: '本地任务' }
+        ])
+      }
+    };
+
+    const result = await query.getTasksByScope(service, { scope: 'family' });
+
+    expect(result.map((item) => item.id)).toEqual(['cloud_1', 'local_1']);
   });
 });

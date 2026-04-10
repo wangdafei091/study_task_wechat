@@ -71,6 +71,165 @@
   margin-top: 18rpx;
 }
 
+.recommendation-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  padding: 18rpx 20rpx;
+  border-radius: 20rpx;
+  background: #f6f8fb;
+  color: #5f6b77;
+}
+
+.recommendation-summary-text {
+  font-size: 25rpx;
+  color: #465364;
+}
+
+.recommendation-summary-arrow {
+  flex-shrink: 0;
+  font-size: 23rpx;
+  color: #7b8794;
+}
+
+.recommendation-block {
+  display: flex;
+  flex-direction: column;
+  gap: 14rpx;
+  padding: 22rpx 20rpx;
+  border-radius: 24rpx;
+  background: #fbfcfe;
+  border: 1rpx solid rgba(15, 23, 42, 0.05);
+}
+
+.recommendation-block.compact {
+  padding-top: 18rpx;
+}
+
+.recommendation-scroll {
+  height: 560rpx;
+}
+
+.recommendation-block-head {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.recommendation-block-title {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #1f2933;
+}
+
+.recommendation-block-subtitle {
+  font-size: 24rpx;
+  color: #7b8794;
+  line-height: 1.6;
+}
+
+.recommendation-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14rpx;
+}
+
+.recommendation-card {
+  padding: 18rpx;
+  border-radius: 20rpx;
+  background: #ffffff;
+  border: 1rpx solid rgba(15, 23, 42, 0.06);
+}
+
+.recommendation-card.habit {
+  border-color: rgba(66, 133, 244, 0.12);
+}
+
+.recommendation-card.study {
+  border-color: rgba(46, 125, 50, 0.12);
+}
+
+.recommendation-card.interest {
+  border-color: rgba(245, 158, 11, 0.14);
+}
+
+.recommendation-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.recommendation-card-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #1f2933;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.recommendation-card-tag {
+  flex-shrink: 0;
+  padding: 4rpx 12rpx;
+  border-radius: 999rpx;
+  background: #f3f6f9;
+  color: #7b8794;
+  font-size: 20rpx;
+}
+
+.recommendation-card-reason {
+  display: block;
+  margin-top: 10rpx;
+  font-size: 24rpx;
+  color: #52606d;
+  line-height: 1.6;
+}
+
+.recommendation-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8rpx;
+  margin-top: 14rpx;
+}
+
+.recommendation-card-chip {
+  padding: 6rpx 14rpx;
+  border-radius: 999rpx;
+  background: #f5f7fa;
+  color: #5f6b77;
+  font-size: 20rpx;
+}
+
+.recommendation-card-action-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16rpx;
+}
+
+.recommendation-card-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 148rpx;
+  height: 58rpx;
+  padding: 0 20rpx;
+  border-radius: 999rpx;
+  background: #eef4ff;
+  color: #2f6dd8;
+  font-size: 23rpx;
+  box-sizing: border-box;
+}
+
+.secondary-create-link {
+  font-size: 24rpx;
+  color: #7b8794;
+  line-height: 1.6;
+}
+
 .search-row {
   display: flex;
   align-items: center;

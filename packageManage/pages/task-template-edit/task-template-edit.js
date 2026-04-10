@@ -236,6 +236,23 @@ function buildFormFromTemplate(template) {
   };
 }
 
+function buildDraftSourceHint(sourceMeta = {}) {
+  const sourceTitle = String(sourceMeta.sourceTitle || '').trim();
+  const fallbackTitle = sourceTitle ? `“${sourceTitle}”` : '最近任务';
+
+  if (sourceMeta.sourceType === 'task-edit-recommendation') {
+    return `系统推荐：已根据${fallbackTitle}预填模板草稿，可调整后保存。`;
+  }
+
+  if (sourceMeta.sourceType === 'template-manage-candidate') {
+    return `系统推荐：已根据${fallbackTitle}整理成模板草稿，可调整后保存。`;
+  }
+
+  return sourceTitle
+    ? `已根据“${sourceTitle}”预填模板草稿，可调整后保存。`
+    : '';
+}
+
 Page({
   data: {
     mode: 'create',
@@ -257,6 +274,7 @@ Page({
     reminderPanel: false,
     repeatPanelMode: 'type',
     weekdaySelection: [false, false, false, false, false, false, false],
+    draftSourceHint: '',
     preview: {
       repeatText: '不重复',
       reminderText: '无',
@@ -272,6 +290,7 @@ Page({
   },
 
   onLoad(options = {}) {
+    this._draftSourceMeta = null;
     const userService = serviceManager.getUserService();
     const loginUser = userService?.getLoginUser?.();
     const currentUser = userService?.getCurrentUser?.();
@@ -307,12 +326,42 @@ Page({
       return;
     }
 
+    this.bindTemplateDraftChannel();
+    this.refreshPreview();
+  },
+
+  bindTemplateDraftChannel() {
+    const eventChannel = this.getOpenerEventChannel && this.getOpenerEventChannel();
+    if (!eventChannel || typeof eventChannel.on !== 'function') {
+      return;
+    }
+
+    eventChannel.on('templateDraftReady', (payload = {}) => {
+      this.applyTemplateDraft(payload.draft || null);
+    });
+  },
+
+  applyTemplateDraft(draft) {
+    if (!draft || !draft.draftInput) {
+      return;
+    }
+
+    this._draftSourceMeta = draft.sourceMeta || null;
+    this.setData({
+      form: buildFormFromTemplate({
+        ...draft.draftInput,
+        taskPayload: draft.draftInput.taskPayload || {},
+        dateStrategy: draft.draftInput.dateStrategy || {}
+      }),
+      draftSourceHint: buildDraftSourceHint(draft.sourceMeta || {})
+    });
     this.refreshPreview();
   },
 
   async loadTemplate(templateId) {
     const taskTemplateService = serviceManager.getService('taskTemplate');
     this.setData({ loading: true });
+    this._draftSourceMeta = null;
 
     try {
       const template = await taskTemplateService.getTemplateById(templateId, { force: true });
@@ -329,6 +378,7 @@ Page({
 
       this.setData({
         form: buildFormFromTemplate(template),
+        draftSourceHint: '',
         loading: false
       });
       this.refreshPreview();
@@ -621,10 +671,24 @@ Page({
     this.setData({ saving: true });
 
     try {
+      let saveResult = null;
       if (this.data.mode === 'edit' && this.data.templateId) {
-        await taskTemplateService.updateTemplate(this.data.templateId, input);
+        saveResult = await taskTemplateService.updateTemplate(this.data.templateId, input);
       } else {
-        await taskTemplateService.createTemplate(input);
+        saveResult = await taskTemplateService.createTemplate(input);
+      }
+
+      const eventChannel = this.getOpenerEventChannel && this.getOpenerEventChannel();
+      if (
+        eventChannel &&
+        typeof eventChannel.emit === 'function' &&
+        this._draftSourceMeta &&
+        this._draftSourceMeta.sourceType === 'template-manage-candidate'
+      ) {
+        eventChannel.emit('templateSaved', {
+          templateId: saveResult?.template?.id || this.data.templateId || null,
+          sourceMeta: this._draftSourceMeta
+        });
       }
 
       wx.showToast({

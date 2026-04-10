@@ -10,6 +10,19 @@
   padding: 0;
 }
 
+.draft-source-banner {
+  margin: 0 0 24rpx;
+  padding: 20rpx 24rpx;
+  border-radius: 20rpx;
+  background: #eef4ff;
+}
+
+.draft-source-banner-text {
+  font-size: 24rpx;
+  line-height: 1.7;
+  color: #526274;
+}
+
 .form-card {
   margin-bottom: 24rpx;
 }
