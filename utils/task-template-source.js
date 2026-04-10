@@ -542,20 +542,20 @@ function buildCandidateReason(latestTask, occurrences, lookbackDays, stableWeeks
   if (repeatType === 'none') {
     return {
       reasonCode: 'high-frequency',
-      reasonText: `近${lookbackDays}天出现 ${occurrences} 次`
+      reasonText: `近${lookbackDays}天出现了 ${occurrences} 次`
     };
   }
 
   if (isNoEndDateTask(latestTask)) {
     return {
       reasonCode: 'stable-repeat',
-      reasonText: '已设置为长期重复任务'
+      reasonText: '这是一个长期重复任务'
     };
   }
 
   return {
     reasonCode: 'stable-repeat',
-    reasonText: `已连续 ${stableWeeks} 周按这个节奏出现`
+    reasonText: `近${stableWeeks}周都出现了相同的重复安排`
   };
 }
 

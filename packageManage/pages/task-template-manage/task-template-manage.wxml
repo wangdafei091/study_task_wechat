@@ -8,20 +8,22 @@
         </view>
 
         <view wx:if="{{activeTab === 'select'}}" class="manage-content">
-          <view class="search-row">
-            <input
-              class="search-input"
-              placeholder="搜索模板别名、任务名称、说明"
-              value="{{keyword}}"
-              bindinput="onKeywordInput"
-            />
-            <view wx:if="{{keyword}}" class="clear-search" bindtap="clearKeyword">清空</view>
-          </view>
+          <view class="page-tools">
+            <view class="search-row">
+              <input
+                class="search-input"
+                placeholder="搜索模板别名、任务名称、说明"
+                value="{{keyword}}"
+                bindinput="onKeywordInput"
+              />
+              <view wx:if="{{keyword}}" class="clear-search" bindtap="clearKeyword">清空</view>
+            </view>
 
-          <view class="filter-row">
-            <view class="filter-pill {{typeFilter === 'habit' ? 'active' : ''}}" bindtap="selectTypeFilter" data-type="habit">习惯</view>
-            <view class="filter-pill {{typeFilter === 'study' ? 'active' : ''}}" bindtap="selectTypeFilter" data-type="study">学习</view>
-            <view class="filter-pill {{typeFilter === 'interest' ? 'active' : ''}}" bindtap="selectTypeFilter" data-type="interest">兴趣</view>
+            <view class="filter-segment-row">
+              <view class="filter-segment {{typeFilter === 'habit' ? 'active' : ''}}" bindtap="selectTypeFilter" data-type="habit">习惯</view>
+              <view class="filter-segment {{typeFilter === 'study' ? 'active' : ''}}" bindtap="selectTypeFilter" data-type="study">学习</view>
+              <view class="filter-segment {{typeFilter === 'interest' ? 'active' : ''}}" bindtap="selectTypeFilter" data-type="interest">兴趣</view>
+            </view>
           </view>
 
           <view wx:if="{{loadFailed && !hasTemplates && !loading}}" class="empty-state empty-state-search">
@@ -51,22 +53,21 @@
                     <view class="head-main">
                       <view class="template-name">{{item.displayName}}</view>
                     </view>
-                    <view class="type-badge {{item.typeClass}}">{{item.typeLabel}}</view>
+                    <view class="card-head-side">
+                      <view class="type-badge {{item.typeClass}}">{{item.typeLabel}}</view>
+                    </view>
                   </view>
 
-                  <view wx:if="{{item.description}}" class="template-desc">{{item.description}}</view>
-                  <view wx:if="{{item.taskPayload.description}}" class="task-desc">{{item.taskPayload.description}}</view>
+                  <view wx:if="{{item.primaryDescription}}" class="card-description">{{item.primaryDescription}}</view>
 
                   <view class="meta-row">
-                    <view class="meta-chip">{{item.repeatLabel}}</view>
-                    <view class="meta-chip">{{item.timeLabel}}</view>
-                    <view class="meta-chip">{{item.reminderLabel}}</view>
-                    <view class="meta-chip">{{item.validityLabel}}</view>
-                  </view>
-
-                  <view class="meta-footer">
-                    <view class="meta-foot-item">{{item.usageLabel}}</view>
-                    <view class="meta-foot-item">{{item.lastUsedLabel}}</view>
+                    <block wx:for="{{item.metaItems}}" wx:key="key" wx:for-item="meta">
+                      <view class="meta-item">
+                        <text class="meta-item-label">{{meta.label}}</text>
+                        <text class="meta-item-divider">·</text>
+                        <text class="meta-item-value">{{meta.value}}</text>
+                      </view>
+                    </block>
                   </view>
                 </view>
               </block>
@@ -88,14 +89,14 @@
             <button class="empty-btn" bindtap="onRetryLoad">重新加载</button>
           </view>
 
-          <view wx:elif="{{!hasTemplates && recommendationCount === 0 && !loading}}" class="empty-state">
+          <view wx:elif="{{!hasTemplates && recommendationCount === 0 && !loading && !hasActiveFilters}}" class="empty-state">
             <view class="empty-icon">+</view>
             <view class="empty-title">还没有任务模板</view>
             <view class="empty-desc">先创建第一个模板，后续在添加任务时就能一键快速填充。</view>
             <button class="empty-btn" bindtap="onCreateTemplate">创建第一个模板</button>
           </view>
 
-          <view wx:elif="{{!hasTemplates && recommendationCount > 0}}">
+          <view wx:elif="{{!hasTemplates && recommendationCount > 0 && !hasActiveFilters}}">
             <view wx:if="{{loading}}" class="loading-state">模板加载中...</view>
 
             <view wx:else>
@@ -123,7 +124,13 @@
                           </view>
                           <text class="recommendation-card-reason">{{item.reasonText}}</text>
                           <view class="recommendation-card-meta">
-                            <text wx:for="{{item.metaChips}}" wx:key="index" class="recommendation-card-chip">{{item}}</text>
+                            <block wx:for="{{item.metaItems}}" wx:key="key" wx:for-item="meta">
+                              <view class="meta-item recommendation-meta-item">
+                                <text class="meta-item-label">{{meta.label}}</text>
+                                <text class="meta-item-divider">·</text>
+                                <text class="meta-item-value">{{meta.value}}</text>
+                              </view>
+                            </block>
                           </view>
                           <view class="recommendation-card-action-row">
                             <view class="recommendation-card-action" bindtap="onSaveRecommendedCandidate" data-key="{{item.candidateKey}}">保存为模板</view>
@@ -141,7 +148,13 @@
                         </view>
                         <text class="recommendation-card-reason">{{item.reasonText}}</text>
                         <view class="recommendation-card-meta">
-                          <text wx:for="{{item.metaChips}}" wx:key="index" class="recommendation-card-chip">{{item}}</text>
+                          <block wx:for="{{item.metaItems}}" wx:key="key" wx:for-item="meta">
+                            <view class="meta-item recommendation-meta-item">
+                              <text class="meta-item-label">{{meta.label}}</text>
+                              <text class="meta-item-divider">·</text>
+                              <text class="meta-item-value">{{meta.value}}</text>
+                            </view>
+                          </block>
                         </view>
                         <view class="recommendation-card-action-row">
                           <view class="recommendation-card-action" bindtap="onSaveRecommendedCandidate" data-key="{{item.candidateKey}}">保存为模板</view>
@@ -155,24 +168,23 @@
           </view>
 
           <view wx:else>
-            <view class="manage-toolbar">
-              <view class="page-action-btn" bindtap="onCreateTemplate">新建模板</view>
-            </view>
+            <view wx:if="{{showSearchTools}}" class="page-tools manage-page-tools">
+              <view class="search-row manage-search-row">
+                <input
+                  class="search-input"
+                  placeholder="搜索模板别名、任务名称、说明"
+                  value="{{keyword}}"
+                  bindinput="onKeywordInput"
+                />
+                <view wx:if="{{keyword}}" class="clear-search" bindtap="clearKeyword">清空</view>
+                <view class="page-action-btn inline-create-btn" bindtap="onCreateTemplate">新建模板</view>
+              </view>
 
-            <view wx:if="{{showSearchTools}}" class="search-row">
-              <input
-                class="search-input"
-                placeholder="搜索模板别名、任务名称、说明"
-                value="{{keyword}}"
-                bindinput="onKeywordInput"
-              />
-              <view wx:if="{{keyword}}" class="clear-search" bindtap="clearKeyword">清空</view>
-            </view>
-
-            <view wx:if="{{showSearchTools}}" class="filter-row">
-              <view class="filter-pill {{typeFilter === 'habit' ? 'active' : ''}}" bindtap="selectTypeFilter" data-type="habit">习惯</view>
-              <view class="filter-pill {{typeFilter === 'study' ? 'active' : ''}}" bindtap="selectTypeFilter" data-type="study">学习</view>
-              <view class="filter-pill {{typeFilter === 'interest' ? 'active' : ''}}" bindtap="selectTypeFilter" data-type="interest">兴趣</view>
+              <view class="filter-segment-row">
+                <view class="filter-segment {{typeFilter === 'habit' ? 'active' : ''}}" bindtap="selectTypeFilter" data-type="habit">习惯</view>
+                <view class="filter-segment {{typeFilter === 'study' ? 'active' : ''}}" bindtap="selectTypeFilter" data-type="study">学习</view>
+                <view class="filter-segment {{typeFilter === 'interest' ? 'active' : ''}}" bindtap="selectTypeFilter" data-type="interest">兴趣</view>
+              </view>
             </view>
 
             <block wx:if="{{loading}}">
@@ -180,35 +192,36 @@
             </block>
 
             <block wx:elif="{{hasTemplates}}">
-              <view class="template-list">
+              <view class="template-list manage-template-list">
                 <block wx:for="{{templates}}" wx:key="id">
                   <view class="template-card editable" bindtap="onTapTemplateCard" data-id="{{item.id}}">
                     <view class="card-head">
                       <view class="head-main">
                         <view class="template-name">{{item.displayName}}</view>
-                        <view class="template-status {{item.enabled ? 'enabled' : 'disabled'}}">{{item.statusLabel}}</view>
                       </view>
-                      <view class="type-badge {{item.typeClass}}">{{item.typeLabel}}</view>
+                      <view class="card-head-side">
+                        <view class="more-action-link head-more-action" catchtap="onOpenTemplateActions" data-id="{{item.id}}">更多</view>
+                      </view>
                     </view>
 
-                    <view wx:if="{{item.description}}" class="template-desc">{{item.description}}</view>
-                    <view wx:if="{{item.taskPayload.description}}" class="task-desc">{{item.taskPayload.description}}</view>
+                    <view class="card-meta-head">
+                      <view class="template-status {{item.enabled ? 'enabled' : 'disabled'}}">{{item.statusLabel}}</view>
+                      <view class="type-tag-light {{item.typeClass}}">{{item.typeLabel}}</view>
+                    </view>
+
+                    <view wx:if="{{item.primaryDescription}}" class="card-description">{{item.primaryDescription}}</view>
 
                     <view class="meta-row">
-                      <view class="meta-chip">{{item.repeatLabel}}</view>
-                      <view class="meta-chip">{{item.timeLabel}}</view>
-                      <view class="meta-chip">{{item.reminderLabel}}</view>
-                      <view class="meta-chip">{{item.validityLabel}}</view>
+                      <block wx:for="{{item.metaItems}}" wx:key="key" wx:for-item="meta">
+                        <view class="meta-item">
+                          <text class="meta-item-label">{{meta.label}}</text>
+                          <text class="meta-item-divider">·</text>
+                          <text class="meta-item-value">{{meta.value}}</text>
+                        </view>
+                      </block>
                     </view>
 
-                    <view class="meta-footer">
-                      <view class="meta-foot-item">{{item.usageLabel}}</view>
-                      <view class="meta-foot-item">{{item.lastUsedLabel}}</view>
-                    </view>
-
-                    <view class="action-row">
-                      <view class="more-action-link" catchtap="onOpenTemplateActions" data-id="{{item.id}}">更多</view>
-                    </view>
+                    <view wx:if="{{item.usageSummary}}" class="usage-summary">{{item.usageSummary}}</view>
                   </view>
                 </block>
               </view>
@@ -222,7 +235,7 @@
               </view>
             </block>
 
-            <view wx:if="{{recommendationCount > 0}}" class="recommendation-panel">
+            <view wx:if="{{!hasActiveFilters && recommendationCount > 0}}" class="recommendation-panel">
               <view class="recommendation-summary" bindtap="toggleRecommendationSection">
                 <text class="recommendation-summary-text">发现 {{recommendationCount}} 个可补充模板</text>
                 <text class="recommendation-summary-arrow">{{recommendationExpanded ? '收起' : '展开'}} ></text>
@@ -239,7 +252,13 @@
                         </view>
                         <text class="recommendation-card-reason">{{item.reasonText}}</text>
                         <view class="recommendation-card-meta">
-                          <text wx:for="{{item.metaChips}}" wx:key="index" class="recommendation-card-chip">{{item}}</text>
+                          <block wx:for="{{item.metaItems}}" wx:key="key" wx:for-item="meta">
+                            <view class="meta-item recommendation-meta-item">
+                              <text class="meta-item-label">{{meta.label}}</text>
+                              <text class="meta-item-divider">·</text>
+                              <text class="meta-item-value">{{meta.value}}</text>
+                            </view>
+                          </block>
                         </view>
                         <view class="recommendation-card-action-row">
                           <view class="recommendation-card-action" bindtap="onSaveRecommendedCandidate" data-key="{{item.candidateKey}}">保存为模板</view>
@@ -257,7 +276,13 @@
                       </view>
                       <text class="recommendation-card-reason">{{item.reasonText}}</text>
                       <view class="recommendation-card-meta">
-                        <text wx:for="{{item.metaChips}}" wx:key="index" class="recommendation-card-chip">{{item}}</text>
+                        <block wx:for="{{item.metaItems}}" wx:key="key" wx:for-item="meta">
+                          <view class="meta-item recommendation-meta-item">
+                            <text class="meta-item-label">{{meta.label}}</text>
+                            <text class="meta-item-divider">·</text>
+                            <text class="meta-item-value">{{meta.value}}</text>
+                          </view>
+                        </block>
                       </view>
                       <view class="recommendation-card-action-row">
                         <view class="recommendation-card-action" bindtap="onSaveRecommendedCandidate" data-key="{{item.candidateKey}}">保存为模板</view>

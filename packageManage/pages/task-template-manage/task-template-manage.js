@@ -15,12 +15,12 @@ function normalizeTimestamp(value) {
 
 function formatTimestamp(timestamp) {
   if (!timestamp) {
-    return '最近未使用';
+    return '';
   }
 
   const date = new Date(Number(timestamp));
   if (Number.isNaN(date.getTime())) {
-    return '最近未使用';
+    return '';
   }
 
   const year = date.getFullYear();
@@ -89,7 +89,80 @@ function normalizeActiveTab(mode) {
   return mode === TAB_MANAGE ? TAB_MANAGE : TAB_SELECT;
 }
 
-function decorateTemplate(template) {
+function buildTemplateDescription(template = {}) {
+  const templateDescription = String(template.description || '').trim();
+  if (templateDescription) {
+    return templateDescription;
+  }
+
+  return String(template.taskPayload?.description || '').trim();
+}
+
+function buildMetaItems({ repeatLabel, timeLabel, reminderLabel, validityLabel }, activeTab, reminderEnabled) {
+  const items = [
+    {
+      key: 'repeat',
+      label: '重复',
+      value: repeatLabel || '不重复'
+    },
+    {
+      key: 'time',
+      label: '时间',
+      value: timeLabel || '--'
+    }
+  ];
+
+  if (activeTab === TAB_SELECT) {
+    if (reminderEnabled && reminderLabel) {
+      items.push({
+        key: 'reminder',
+        label: '提醒',
+        value: reminderLabel
+      });
+    } else if (validityLabel) {
+      items.push({
+        key: 'validity',
+        label: '有效期',
+        value: validityLabel
+      });
+    }
+    return items;
+  }
+
+  return items.concat([
+    {
+      key: 'reminder',
+      label: '提醒',
+      value: reminderLabel || '不提醒'
+    },
+    {
+      key: 'validity',
+      label: '有效期',
+      value: validityLabel || '默认当天完成'
+    }
+  ]);
+}
+
+function buildUsageSummary(template = {}) {
+  const usageCount = Math.max(0, Number(template.usageCount || 0));
+  const lastUsedText = formatTimestamp(template.lastUsedAt);
+
+  if (usageCount > 0 && lastUsedText) {
+    return `已使用 ${usageCount} 次 · 最近使用 ${lastUsedText}`;
+  }
+
+  if (usageCount > 0) {
+    return `已使用 ${usageCount} 次`;
+  }
+
+  if (lastUsedText) {
+    return `最近使用 ${lastUsedText}`;
+  }
+
+  return '';
+}
+
+function decorateTemplate(template, activeTab = TAB_SELECT) {
   const payload = template.taskPayload || {};
   const strategy = normalizeDateStrategy(template.dateStrategy || {}, payload);
   const form = {
@@ -104,6 +177,7 @@ function decorateTemplate(template) {
   const alias = String(template.name || '').trim();
   const taskTitle = String(payload.title || '').trim();
   const displayName = alias && alias !== taskTitle ? alias : (taskTitle || alias);
+  const reminderEnabled = form.reminder?.enabled === true;
   const validityLabel = payload.repeat?.type === 'none'
     ? '创建时默认当天完成'
     : (() => {
@@ -121,19 +195,28 @@ function decorateTemplate(template) {
         : 1;
       return `持续${durationDays}天`;
     })();
+  const repeatLabel = displayState.repeatText || '不重复';
+  const reminderLabel = displayState.reminderText;
+  const timeLabel = payload.isAllDay ? '全天' : `${payload.startTime || '--:--'} - ${payload.endTime || '--:--'}`;
 
   return {
     ...template,
     displayName,
     typeLabel: getTypeLabel(payload.type),
     typeClass: payload.type || 'habit',
-    repeatLabel: displayState.repeatText || '不重复',
-    reminderLabel: displayState.reminderText,
-    timeLabel: payload.isAllDay ? '全天' : `${payload.startTime || '--:--'} - ${payload.endTime || '--:--'}`,
+    repeatLabel,
+    reminderLabel,
+    timeLabel,
     validityLabel,
-    usageLabel: `${Number(template.usageCount || 0)}次使用`,
-    lastUsedLabel: formatTimestamp(template.lastUsedAt),
-    statusLabel: template.enabled ? '启用中' : '已停用'
+    statusLabel: template.enabled ? '启用中' : '已停用',
+    primaryDescription: buildTemplateDescription(template),
+    metaItems: buildMetaItems({
+      repeatLabel,
+      timeLabel,
+      reminderLabel,
+      validityLabel
+    }, activeTab, reminderEnabled),
+    usageSummary: activeTab === TAB_MANAGE ? buildUsageSummary(template) : ''
   };
 }
 
@@ -148,25 +231,39 @@ function decorateRecommendationCandidate(candidate) {
   const displayState = taskFormDisplay.buildTaskFormDisplayState(form, {
     ignoreRepeatOptionDisabled: true
   });
-  const metaChips = [
-    displayState.repeatText || '不重复',
-    payload.isAllDay === true ? '全天' : `${payload.startTime || '--:--'} - ${payload.endTime || '--:--'}`
-  ].filter(Boolean).slice(0, 2);
+  const strategy = normalizeDateStrategy(candidate.dateStrategy || {}, payload);
+  const validityLabel = payload.repeat?.type === 'none'
+    ? '创建时默认当天完成'
+    : (() => {
+      if (strategy.endMode === 'no-end') {
+        return '长期有效';
+      }
+      if (strategy.endMode === 'week-end') {
+        return '本周结束';
+      }
+      if (strategy.endMode === 'month-end') {
+        return '本月结束';
+      }
+      const durationDays = Number.isInteger(Number(strategy.durationDays))
+        ? Math.max(1, Number(strategy.durationDays))
+        : 1;
+      return `持续${durationDays}天`;
+    })();
+  const repeatLabel = displayState.repeatText || '不重复';
+  const timeLabel = payload.isAllDay === true ? '全天' : `${payload.startTime || '--:--'} - ${payload.endTime || '--:--'}`;
+  const reminderLabel = displayState.reminderText;
 
   return {
     ...candidate,
     displayName: String(candidate.displayName || payload.title || '').trim(),
     typeClass: payload.type || 'habit',
-    metaChips
+    metaItems: buildMetaItems({
+      repeatLabel,
+      timeLabel,
+      reminderLabel,
+      validityLabel
+    }, TAB_SELECT, form.reminder?.enabled === true)
   };
-}
-
-function shouldShowManageSearchTools(templates = [], hasActiveFilters = false) {
-  if (hasActiveFilters) {
-    return true;
-  }
-
-  return Array.isArray(templates) && templates.length >= 6;
 }
 
 function filterSuppressedRecommendations(candidates = [], suppressedKeys) {
@@ -216,7 +313,9 @@ Page({
 
     const activeTab = normalizeActiveTab(options.mode);
     this.setData({
-      activeTab
+      activeTab,
+      loading: true,
+      showSearchTools: true
     });
 
     if (typeof wx.setNavigationBarTitle === 'function') {
@@ -317,7 +416,8 @@ Page({
         return;
       }
 
-      const decoratedTemplates = (result.templates || []).map(decorateTemplate);
+      const decoratedTemplates = (result.templates || [])
+        .map((template) => decorateTemplate(template, activeTab));
       const visibleTemplates = activeTab === TAB_SELECT
         ? decoratedTemplates.filter((template) => template.enabled === true)
         : decoratedTemplates;
@@ -347,7 +447,7 @@ Page({
         recommendationExpanded,
         showSearchTools: activeTab === TAB_SELECT
           ? true
-          : shouldShowManageSearchTools(templates, hasActiveFilters),
+          : (hasTemplates || hasActiveFilters),
         loadFailed: false,
         loading: false
       });
@@ -382,6 +482,7 @@ Page({
 
     this.setData({
       activeTab: nextTab,
+      loading: true,
       keyword: '',
       typeFilter: '',
       templates: [],
@@ -390,7 +491,7 @@ Page({
       recommendedCandidates: [],
       recommendationCount: 0,
       recommendationExpanded: false,
-      showSearchTools: nextTab === TAB_SELECT,
+      showSearchTools: true,
       hasActiveFilters: false,
       loadFailed: false
     });
