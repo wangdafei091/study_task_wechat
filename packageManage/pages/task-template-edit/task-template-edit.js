@@ -3,7 +3,8 @@ const logger = require('../../../utils/logger');
 const Constants = require('../../../utils/constants');
 const dateUtils = require('../../../utils/dateUtils');
 const taskFormDisplay = require('../../../utils/task-form-display');
-const { normalizeDateStrategy } = require('../../../utils/task-template-utils');
+const taskFormCore = require('../../../utils/task-form-core');
+const taskFormAdapter = require('../../../utils/task-form-adapter');
 const viewScope = require('../../../utils/view-scope');
 const { WEEKDAY_NAMES } = require('../../../utils/task-form-display');
 
@@ -16,29 +17,7 @@ const END_MODE_OPTIONS = [
 const DEFAULT_REPEAT_END_MODE = 'week-end';
 
 function buildReminderOptions(form = {}) {
-  if (form.isAllDay === true) {
-    return [
-      { label: '无', enabled: false, time: 0 },
-      { label: '提前1天(晚上8点)', enabled: true, time: -1 }
-    ];
-  }
-
-  const hasStartTime = typeof form.startTime === 'string' && form.startTime.trim() !== '';
-  if (hasStartTime) {
-    return [
-      { label: '无', enabled: false, time: 0 },
-      { label: '准时', enabled: true, time: 0 },
-      { label: '提前5分钟', enabled: true, time: 5 },
-      { label: '提前15分钟', enabled: true, time: 15 },
-      { label: '提前30分钟', enabled: true, time: 30 },
-      { label: '提前1天(晚上8点)', enabled: true, time: -1 }
-    ];
-  }
-
-  return [
-    { label: '无', enabled: false, time: 0 },
-    { label: '提前1天(晚上8点)', enabled: true, time: -1 }
-  ];
+  return taskFormCore.buildReminderOptionsFromDraft(buildFormDraft(form));
 }
 
 function findPointsExpiryIndex(options = [], pointsExpiry) {
@@ -70,170 +49,36 @@ function resolveReminderSelection(options = [], reminderEnabled, reminderTime) {
   };
 }
 
-function inferDateStrategyMode(repeatType) {
-  return repeatType === 'none' ? 'today' : 'inherit-repeat-rule';
-}
-
-function normalizeDurationDays(value, fallback = 1) {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) {
-    return fallback;
-  }
-  return Math.max(1, Math.floor(parsed));
-}
-
-function resolveTemplateDateStrategy(template = {}) {
-  return normalizeDateStrategy(template.dateStrategy || {}, template.taskPayload || {});
-}
-
-function resolveTemplateDurationDays(template = {}) {
-  const payload = template.taskPayload || {};
-  const strategy = resolveTemplateDateStrategy(template);
-  const repeatType = payload.repeat?.type || 'none';
-
-  if (repeatType === 'none') {
-    return 1;
-  }
-
-  if (strategy.endMode !== 'duration') {
-    return 1;
-  }
-
-  if (Number.isInteger(Number(strategy.durationDays)) && Number(strategy.durationDays) >= 1) {
-    return Number(strategy.durationDays);
-  }
-
-  if (payload.startDate && payload.endDate) {
-    return Math.max(1, dateUtils.getDaysBetween(payload.startDate, payload.endDate) + 1);
-  }
-
-  return 1;
-}
-
 function createDefaultForm() {
-  return {
+  const draft = taskFormCore.createTaskFormDraft('template', {
+    today: dateUtils.getTodayString(),
+    now: new Date()
+  });
+
+  return taskFormAdapter.buildTemplateEditPatchFromDraft(draft, {
     name: '',
     description: '',
-    enabled: true,
-    taskTitle: '',
-    taskDescription: '',
-    type: 'habit',
-    points: 1,
-    pointsExpiry: 'permanent',
-    isRequired: false,
-    isAllDay: false,
-    startTime: '09:00',
-    endTime: '10:00',
-    repeatType: 'none',
-    repeatDays: [],
-    endMode: 'same-day',
-    durationDays: 1,
-    reminderEnabled: false,
-    reminderTime: 0
-  };
+    enabled: true
+  });
 }
 
-function resolvePlaceholderEndDate(todayPlaceholder, endMode, durationDays) {
-  if (endMode === 'no-end') {
-    return '';
-  }
-
-  if (endMode === 'month-end') {
-    return dateUtils.formatDate(dateUtils.getLastDayOfMonth(todayPlaceholder));
-  }
-
-  if (endMode === 'week-end') {
-    return dateUtils.formatDate(dateUtils.addDays(dateUtils.getFirstDayOfWeek(todayPlaceholder, 1), 6));
-  }
-
-  return dateUtils.formatDate(dateUtils.addDays(todayPlaceholder, durationDays - 1));
+function buildFormDraft(form = {}, options = {}) {
+  return taskFormAdapter.adaptTemplateEditFormToDraft(form, {
+    today: options.today || dateUtils.getTodayString(),
+    now: options.now
+  });
 }
 
-function buildFormPayload(form) {
-  const todayPlaceholder = dateUtils.getTodayString();
-  const isRepeatTemplate = form.repeatType !== 'none';
-  const rawEndMode = isRepeatTemplate ? (form.endMode || DEFAULT_REPEAT_END_MODE) : 'same-day';
-  const endMode = isRepeatTemplate && rawEndMode === 'same-day'
-    ? DEFAULT_REPEAT_END_MODE
-    : rawEndMode;
-  const durationDays = isRepeatTemplate && endMode === 'duration'
-    ? normalizeDurationDays(form.durationDays, 1)
-    : 1;
-  const hasNoEndDate = isRepeatTemplate && endMode === 'no-end';
-  const endDate = resolvePlaceholderEndDate(todayPlaceholder, endMode, durationDays);
+function buildFormFromTemplate(template = {}) {
+  const draft = taskFormAdapter.adaptTemplateEntityToDraft(template, {
+    today: template.taskPayload?.startDate || dateUtils.getTodayString()
+  });
 
-  return {
-    title: form.taskTitle,
-    type: form.type,
-    points: Number(form.points || 1),
-    pointsExpiry: form.pointsExpiry,
-    description: form.taskDescription,
-    isRequired: form.isRequired,
-    isAllDay: form.isAllDay,
-    startDate: todayPlaceholder,
-    startTime: form.startTime,
-    endDate,
-    endTime: form.endTime,
-    hasNoEndDate,
-    repeat: {
-      type: form.repeatType,
-      days: form.repeatType === 'custom' ? form.repeatDays : [],
-      startDate: todayPlaceholder,
-      endDate
-    },
-    reminder: {
-      enabled: form.reminderEnabled,
-      time: Number(form.reminderTime || 0)
-    }
-  };
-}
-
-function buildDateStrategyFromForm(form) {
-  const repeatType = form.repeatType || 'none';
-  const isRepeatTemplate = repeatType !== 'none';
-  const rawEndMode = isRepeatTemplate ? (form.endMode || DEFAULT_REPEAT_END_MODE) : 'same-day';
-  const endMode = isRepeatTemplate && rawEndMode === 'same-day'
-    ? DEFAULT_REPEAT_END_MODE
-    : rawEndMode;
-
-  return {
-    mode: inferDateStrategyMode(repeatType),
-    autoShiftExpiredEndDate: true,
-    endMode,
-    durationDays: !isRepeatTemplate
-      ? 1
-      : (endMode === 'duration' ? normalizeDurationDays(form.durationDays, 1) : null)
-  };
-}
-
-function buildFormFromTemplate(template) {
-  const payload = template.taskPayload || {};
-  const repeat = payload.repeat || {};
-  const reminder = payload.reminder || {};
-  const repeatType = repeat.type || 'none';
-  const isRepeatTemplate = repeatType !== 'none';
-  const dateStrategy = resolveTemplateDateStrategy(template);
-
-  return {
-    name: template.name && template.name !== payload.title ? template.name : '',
+  return taskFormAdapter.buildTemplateEditPatchFromDraft(draft, {
+    name: template.name || '',
     description: template.description || '',
-    enabled: template.enabled !== false,
-    taskTitle: payload.title || '',
-    taskDescription: payload.description || '',
-    type: payload.type || 'habit',
-    points: Number(payload.points || 1),
-    pointsExpiry: payload.pointsExpiry || 'permanent',
-    isRequired: payload.isRequired === true,
-    isAllDay: payload.isAllDay === true,
-    startTime: payload.startTime || '09:00',
-    endTime: payload.endTime || '10:00',
-    repeatType,
-    repeatDays: Array.isArray(repeat.days) ? repeat.days : [],
-    endMode: isRepeatTemplate ? dateStrategy.endMode : 'same-day',
-    durationDays: resolveTemplateDurationDays(template),
-    reminderEnabled: reminder.enabled === true,
-    reminderTime: Number(reminder.time || 0)
-  };
+    enabled: template.enabled !== false
+  });
 }
 
 function buildDraftSourceHint(sourceMeta = {}) {
@@ -424,6 +269,7 @@ Page({
     this.setData({
       'form.type': e.currentTarget.dataset.type
     });
+    this.refreshPreview();
   },
 
   onSwitchChange(e) {
@@ -600,21 +446,19 @@ Page({
   },
 
   refreshPreview() {
-    const reminderOptions = buildReminderOptions(this.data.form);
+    const draft = buildFormDraft(this.data.form);
+    const reminderOptions = taskFormCore.buildReminderOptionsFromDraft(draft);
     const reminderState = resolveReminderSelection(
       reminderOptions,
       this.data.form.reminderEnabled,
       this.data.form.reminderTime
     );
-    const payload = buildFormPayload({
+    const previewDraft = buildFormDraft({
       ...this.data.form,
       reminderEnabled: reminderState.reminderEnabled,
       reminderTime: reminderState.reminderTime
     });
-    const preview = taskFormDisplay.buildTaskFormDisplayState({
-      ...payload,
-      dateStrategy: buildDateStrategyFromForm(this.data.form)
-    }, {
+    const preview = taskFormDisplay.buildTaskFormDisplayState(previewDraft, {
       ignoreRepeatOptionDisabled: true
     });
     const update = {
@@ -658,14 +502,17 @@ Page({
       return;
     }
 
-    const payload = buildFormPayload(this.data.form);
+    const draft = buildFormDraft(this.data.form);
+    const payload = taskFormCore.buildTemplatePayloadFromDraft(draft, {
+      today: dateUtils.getTodayString()
+    });
     const resolvedName = (this.data.form.name || '').trim() || (this.data.form.taskTitle || '').trim();
     const input = {
       name: resolvedName,
       description: (this.data.form.description || '').trim(),
       enabled: this.data.form.enabled,
-      taskPayload: payload,
-      dateStrategy: buildDateStrategyFromForm(this.data.form)
+      taskPayload: payload.taskPayload,
+      dateStrategy: payload.dateStrategy
     };
 
     this.setData({ saving: true });
@@ -711,41 +558,12 @@ Page({
   },
 
   validateForm() {
-    const form = this.data.form;
+    const validation = taskFormCore.validateTaskFormDraft(this.data.form, {
+      scene: 'template',
+      templateName: this.data.form.name,
+      templateDescription: this.data.form.description
+    });
 
-    if (form.name.trim().length > 100) {
-      return '模板别名不能超过100个字符';
-    }
-
-    if ((form.description || '').trim().length > 255) {
-      return '模板说明不能超过255个字符';
-    }
-
-    if (!form.taskTitle.trim()) {
-      return '请输入任务名称';
-    }
-
-    if (!form.isAllDay && (!form.startTime || !form.endTime)) {
-      return '请设置开始和结束时间';
-    }
-
-    if (
-      !form.isAllDay &&
-      form.startTime &&
-      form.endTime &&
-      form.endTime <= form.startTime
-    ) {
-      return '结束时间不能早于开始时间';
-    }
-
-    if (form.repeatType !== 'none' && form.endMode === 'duration' && normalizeDurationDays(form.durationDays, 0) < 1) {
-      return '请输入有效的持续天数';
-    }
-
-    if (form.repeatType === 'custom' && form.repeatDays.length === 0) {
-      return '请选择至少一个重复星期';
-    }
-
-    return '';
+    return validation.valid ? '' : validation.errorMsg;
   }
 });

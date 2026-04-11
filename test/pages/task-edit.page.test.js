@@ -279,6 +279,46 @@ describe('pages/task-edit/task-edit', () => {
     });
   });
 
+  it('validateTaskFormLocal 应拒绝重复任务缺少结束日期', () => {
+    const page = createPageInstance();
+    page.data.newTask.title = '任务A';
+    page.data.newTask.startDate = '2026-04-11';
+    page.data.newTask.endDate = '';
+    page.data.newTask.isAllDay = true;
+    page.data.newTask.hasNoEndDate = false;
+    page.data.newTask.repeat = {
+      type: 'daily',
+      days: [],
+      startDate: '2026-04-11',
+      endDate: ''
+    };
+
+    const result = page.validateTaskFormLocal();
+
+    expect(result).toEqual({
+      valid: false,
+      errorMsg: '请设置重复任务的结束日期'
+    });
+  });
+
+  it('validateTaskFormLocal 应拒绝非全天任务缺少时间', () => {
+    const page = createPageInstance();
+    page.data.newTask.title = '任务A';
+    page.data.newTask.startDate = '2026-04-11';
+    page.data.newTask.endDate = '2026-04-11';
+    page.data.newTask.isAllDay = false;
+    page.data.newTask.startTime = '';
+    page.data.newTask.endTime = '';
+    page.data.newTask.repeat = { type: 'none' };
+
+    const result = page.validateTaskFormLocal();
+
+    expect(result).toEqual({
+      valid: false,
+      errorMsg: '请设置开始和结束时间'
+    });
+  });
+
   it('重复任务结束日期晚于开始日期时仍应允许设置有效结束时间', () => {
     const page = createPageInstance();
     page.data.newTask.startDate = '2026-04-11';

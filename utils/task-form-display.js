@@ -1,5 +1,5 @@
 const Constants = require('./constants');
-const dateUtils = require('./dateUtils');
+const taskFormCore = require('./task-form-core');
 
 const WEEKDAY_NAMES = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
 const PREVIEW_CHIP_LABELS = {
@@ -28,12 +28,17 @@ function buildReminderText(reminder = {}) {
   return `提前${Number(reminder.time)}分钟`;
 }
 
-function buildRepeatText(repeat = {}, options = {}) {
+function buildRepeatText(input = {}, options = {}) {
+  const draft = taskFormCore.normalizeTaskFormDraft(input, {
+    scene: input.scene || 'task',
+    today: input.startDate
+  });
+
   if (options.isRepeatOptionDisabled) {
     return '当天';
   }
 
-  switch (repeat?.type) {
+  switch (draft.repeatType) {
     case 'none':
       return '不重复';
     case 'daily':
@@ -44,175 +49,92 @@ function buildRepeatText(repeat = {}, options = {}) {
       return '工作日';
     case 'weekends':
       return '休息日';
-    case 'custom': {
-      const selectedDays = Array.isArray(repeat.days) ? repeat.days : [];
-      if (selectedDays.length === 0) {
+    case 'custom':
+      if (draft.repeatDays.length === 0) {
         return '请选择星期';
       }
-      if (selectedDays.length > 5) {
+      if (draft.repeatDays.length > 5) {
         return '每周多天';
       }
-      return `每${selectedDays.map((day) => WEEKDAY_NAMES[day]).join('、')}`;
-    }
+      return `每${draft.repeatDays.map((day) => WEEKDAY_NAMES[day]).join('、')}`;
     default:
       return '每天';
   }
 }
 
-function buildWeekdaySelection(repeat = {}) {
-  if (repeat?.type === 'custom') {
-    const selectedDays = Array.isArray(repeat.days) ? repeat.days : [];
-    return WEEKDAY_NAMES.map((_, index) => selectedDays.includes(index));
+function buildWeekdaySelection(input = {}) {
+  const draft = taskFormCore.normalizeTaskFormDraft(input, {
+    scene: input.scene || 'task',
+    today: input.startDate
+  });
+
+  if (draft.repeatType === 'custom') {
+    return WEEKDAY_NAMES.map((_, index) => draft.repeatDays.includes(index));
   }
 
-  if (repeat?.type === 'workdays') {
+  if (draft.repeatType === 'workdays') {
     return [false, true, true, true, true, true, false];
   }
 
-  if (repeat?.type === 'weekends') {
+  if (draft.repeatType === 'weekends') {
     return [true, false, false, false, false, false, true];
   }
 
   return [false, false, false, false, false, false, false];
 }
 
-function isRepeatOptionDisabled(form = {}) {
+function isRepeatOptionDisabled(input = {}) {
+  const draft = taskFormCore.normalizeTaskFormDraft(input, {
+    scene: input.scene || 'task',
+    today: input.startDate
+  });
+
   return Boolean(
-    form.repeat?.type &&
-    form.repeat.type !== 'none' &&
-    form.startDate &&
-    form.endDate &&
-    form.hasNoEndDate !== true &&
-    form.startDate === form.endDate
+    draft.repeatType &&
+    draft.repeatType !== 'none' &&
+    draft.startDate &&
+    draft.endDate &&
+    draft.hasNoEndDate !== true &&
+    draft.startDate === draft.endDate
   );
 }
 
-function parseDateString(date) {
-  if (!date) {
-    return null;
-  }
-
-  const parsedDate = new Date(String(date).replace(/-/g, '/'));
-  return Number.isNaN(parsedDate.getTime()) ? null : parsedDate;
-}
-
-function normalizeSelectedDays(repeat = {}) {
-  const selectedDays = Array.isArray(repeat.days) ? repeat.days : [];
-  return [...new Set(
-    selectedDays
-      .map((day) => Number(day))
-      .filter((day) => Number.isInteger(day) && day >= 0 && day <= 6)
-  )].sort((left, right) => left - right);
-}
-
-function resolveFirstMatchingWeekday(startDate, matcher) {
-  for (let offset = 0; offset < 7; offset += 1) {
-    const candidate = dateUtils.addDays(startDate, offset);
-    if (matcher(candidate.getDay())) {
-      return {
-        date: candidate,
-        offset
-      };
-    }
-  }
-
-  return {
-    date: startDate,
-    offset: 0
-  };
-}
-
-function resolveRepeatMatch(form = {}, repeatType) {
-  const startDate = parseDateString(form.startDate);
-  if (!startDate) {
-    return null;
-  }
-
-  const currentWeekday = startDate.getDay();
-  switch (repeatType) {
-    case 'daily':
-    case 'weekly':
-      return {
-        offset: 0,
-        date: startDate
-      };
-    case 'workdays':
-      return resolveFirstMatchingWeekday(startDate, (weekday) => weekday >= 1 && weekday <= 5);
-    case 'weekends':
-      return resolveFirstMatchingWeekday(startDate, (weekday) => weekday === 0 || weekday === 6);
-    case 'custom': {
-      const selectedDays = normalizeSelectedDays(form.repeat);
-      if (selectedDays.length === 0) {
-        return null;
+function buildRepeatResultTexts(input = {}, repeatType) {
+  const normalizedInput = repeatType
+    ? {
+        ...input,
+        repeatType,
+        repeat: {
+          ...(input.repeat || {}),
+          type: repeatType
+        }
       }
+    : input;
+  const draft = taskFormCore.normalizeTaskFormDraft(normalizedInput, {
+    scene: normalizedInput.scene || 'task',
+    today: normalizedInput.startDate
+  });
 
-      if (selectedDays.includes(currentWeekday)) {
-        return {
-          offset: 0,
-          date: startDate
-        };
-      }
-
-      return resolveFirstMatchingWeekday(startDate, (weekday) => selectedDays.includes(weekday));
-    }
-    default:
-      return {
-        offset: 0,
-        date: startDate
-      };
-  }
-}
-
-function resolveDateStrategy(form = {}) {
-  const dateStrategy = form.dateStrategy || {};
-  const explicitEndMode = form.endMode || dateStrategy.endMode;
-
-  if (explicitEndMode) {
-    return {
-      endMode: explicitEndMode,
-      durationDays: dateStrategy.durationDays
-    };
-  }
-
-  if (form.hasNoEndDate === true) {
-    return {
-      endMode: 'no-end',
-      durationDays: null
-    };
-  }
-
-  if (form.startDate && form.endDate) {
-    return {
-      endMode: 'duration',
-      durationDays: Math.max(1, dateUtils.getDaysBetween(form.startDate, form.endDate) + 1)
-    };
-  }
-
-  return {
-    endMode: '',
-    durationDays: null
-  };
-}
-
-function buildRepeatResultTexts(form = {}, repeatType) {
-  if (!repeatType || repeatType === 'none' || !form.startDate) {
+  if (!draft.repeatType || draft.repeatType === 'none' || !draft.startDate) {
     return {
       primaryText: '',
       secondaryText: ''
     };
   }
 
-  if (repeatType === 'custom') {
-    const selectedDays = normalizeSelectedDays(form.repeat);
-    if (selectedDays.length === 0) {
-      return {
-        primaryText: '请至少选择一个重复的星期',
-        secondaryText: ''
-      };
-    }
+  if (draft.repeatType === 'custom' && draft.repeatDays.length === 0) {
+    return {
+      primaryText: '请至少选择一个重复的星期',
+      secondaryText: ''
+    };
   }
 
-  const match = resolveRepeatMatch(form, repeatType);
+  const match = taskFormCore.resolveRepeatMatch({
+    startDate: draft.startDate,
+    repeatType: draft.repeatType,
+    repeatDays: draft.repeatDays
+  }, draft.repeatType);
+
   if (!match) {
     return {
       primaryText: '',
@@ -221,10 +143,10 @@ function buildRepeatResultTexts(form = {}, repeatType) {
   }
 
   const firstMatchWeekday = WEEKDAY_NAMES[match.date.getDay()];
-  const selectedDayNames = normalizeSelectedDays(form.repeat).map((day) => WEEKDAY_NAMES[day]).join('、');
+  const selectedDayNames = draft.repeatDays.map((day) => WEEKDAY_NAMES[day]).join('、');
   let primaryText = '';
 
-  switch (repeatType) {
+  switch (draft.repeatType) {
     case 'daily':
       primaryText = '创建任务时，将从今天开始每天执行';
       break;
@@ -252,15 +174,14 @@ function buildRepeatResultTexts(form = {}, repeatType) {
   }
 
   let secondaryText = '';
-  const strategy = resolveDateStrategy(form);
-  if (strategy.endMode === 'no-end') {
+  if (draft.dateStrategy.endMode === 'no-end') {
     secondaryText = '默认长期有效';
-  } else if (strategy.endMode === 'week-end') {
+  } else if (draft.dateStrategy.endMode === 'week-end') {
     secondaryText = '结束日期为该周周日';
-  } else if (strategy.endMode === 'month-end') {
+  } else if (draft.dateStrategy.endMode === 'month-end') {
     secondaryText = '结束日期为该月最后一天';
-  } else if (strategy.endMode === 'duration' && repeatType !== 'none' && Number(strategy.durationDays || 0) >= 1) {
-    secondaryText = `从实际开始日算，共持续 ${Number(strategy.durationDays)} 天`;
+  } else if (draft.dateStrategy.endMode === 'duration' && Number(draft.dateStrategy.durationDays || 0) >= 1) {
+    secondaryText = `从实际开始日算，共持续 ${Number(draft.dateStrategy.durationDays)} 天`;
   }
 
   return {
@@ -269,8 +190,23 @@ function buildRepeatResultTexts(form = {}, repeatType) {
   };
 }
 
-function checkRepeatDateConflict(form = {}, repeatType) {
-  if (!form.startDate || !repeatType || repeatType === 'none' || repeatType === 'daily' || repeatType === 'weekly') {
+function checkRepeatDateConflict(input = {}, repeatType) {
+  const normalizedInput = repeatType
+    ? {
+        ...input,
+        repeatType,
+        repeat: {
+          ...(input.repeat || {}),
+          type: repeatType
+        }
+      }
+    : input;
+  const draft = taskFormCore.normalizeTaskFormDraft(normalizedInput, {
+    scene: normalizedInput.scene || 'task',
+    today: normalizedInput.startDate
+  });
+
+  if (!draft.startDate || !draft.repeatType || draft.repeatType === 'none' || draft.repeatType === 'daily' || draft.repeatType === 'weekly') {
     return {
       hasConflict: false,
       previewText: '',
@@ -280,8 +216,8 @@ function checkRepeatDateConflict(form = {}, repeatType) {
     };
   }
 
-  const startDate = parseDateString(form.startDate);
-  if (!startDate) {
+  const startDate = new Date(String(draft.startDate).replace(/-/g, '/'));
+  if (Number.isNaN(startDate.getTime())) {
     return {
       hasConflict: false,
       previewText: '',
@@ -292,9 +228,9 @@ function checkRepeatDateConflict(form = {}, repeatType) {
   }
 
   const dayOfWeek = startDate.getDay();
-  const resultTexts = buildRepeatResultTexts(form, repeatType);
+  const resultTexts = buildRepeatResultTexts(draft, draft.repeatType);
 
-  if (repeatType === 'workdays' && (dayOfWeek === 0 || dayOfWeek === 6)) {
+  if (draft.repeatType === 'workdays' && (dayOfWeek === 0 || dayOfWeek === 6)) {
     return {
       hasConflict: true,
       previewText: `${resultTexts.primaryText}${resultTexts.secondaryText ? ` ${resultTexts.secondaryText}` : ''}`,
@@ -304,7 +240,7 @@ function checkRepeatDateConflict(form = {}, repeatType) {
     };
   }
 
-  if (repeatType === 'weekends' && dayOfWeek !== 0 && dayOfWeek !== 6) {
+  if (draft.repeatType === 'weekends' && dayOfWeek !== 0 && dayOfWeek !== 6) {
     return {
       hasConflict: true,
       previewText: `${resultTexts.primaryText}${resultTexts.secondaryText ? ` ${resultTexts.secondaryText}` : ''}`,
@@ -314,10 +250,8 @@ function checkRepeatDateConflict(form = {}, repeatType) {
     };
   }
 
-  if (repeatType === 'custom') {
-    const selectedDays = normalizeSelectedDays(form.repeat);
-
-    if (selectedDays.length === 0) {
+  if (draft.repeatType === 'custom') {
+    if (draft.repeatDays.length === 0) {
       return {
         hasConflict: true,
         previewText: resultTexts.primaryText,
@@ -327,7 +261,7 @@ function checkRepeatDateConflict(form = {}, repeatType) {
       };
     }
 
-    if (!selectedDays.includes(dayOfWeek)) {
+    if (!draft.repeatDays.includes(dayOfWeek)) {
       return {
         hasConflict: true,
         previewText: `${resultTexts.primaryText}${resultTexts.secondaryText ? ` ${resultTexts.secondaryText}` : ''}`,
@@ -347,36 +281,38 @@ function checkRepeatDateConflict(form = {}, repeatType) {
   };
 }
 
-function buildRepeatPreviewText(form = {}, repeatType) {
-  if (!repeatType || repeatType === 'none' || !form.startDate) {
-    return '';
-  }
-
-  const conflict = checkRepeatDateConflict(form, repeatType);
+function buildRepeatPreviewText(input = {}, repeatType) {
+  const conflict = checkRepeatDateConflict(input, repeatType);
   if (conflict.hasConflict) {
     return conflict.previewText;
   }
 
-  const resultTexts = buildRepeatResultTexts(form, repeatType);
+  const resultTexts = buildRepeatResultTexts(input, repeatType);
   return `${resultTexts.primaryText}${resultTexts.secondaryText ? ` ${resultTexts.secondaryText}` : ''}`;
 }
 
-function buildTaskFormDisplayState(form = {}, options = {}) {
-  const repeatType = form.repeat?.type || 'none';
+function buildTaskFormDisplayState(input = {}, options = {}) {
+  const draft = taskFormCore.normalizeTaskFormDraft(input, {
+    scene: input.scene || 'task',
+    today: input.startDate
+  });
   const repeatDisabled = options.ignoreRepeatOptionDisabled === true
     ? false
-    : isRepeatOptionDisabled(form);
-  const repeatConflict = checkRepeatDateConflict(form, repeatType);
-  const repeatResultTexts = buildRepeatResultTexts(form, repeatType);
-  const repeatText = buildRepeatText(form.repeat, { isRepeatOptionDisabled: repeatDisabled });
-  const reminderText = buildReminderText(form.reminder);
-  const pointsExpiryText = buildPointsExpiryText(form.pointsExpiry);
+    : isRepeatOptionDisabled(draft);
+  const repeatConflict = checkRepeatDateConflict(draft, draft.repeatType);
+  const repeatResultTexts = buildRepeatResultTexts(draft, draft.repeatType);
+  const repeatText = buildRepeatText(draft, { isRepeatOptionDisabled: repeatDisabled });
+  const reminderText = buildReminderText({
+    enabled: draft.reminderEnabled,
+    time: draft.reminderTime
+  });
+  const pointsExpiryText = buildPointsExpiryText(draft.pointsExpiry);
 
   return {
     repeatText,
     reminderText,
     pointsExpiryText,
-    repeatPreviewText: buildRepeatPreviewText(form, repeatType),
+    repeatPreviewText: buildRepeatPreviewText(draft, draft.repeatType),
     repeatTypeWarning: repeatConflict.hasConflict,
     resultPrimaryText: repeatConflict.primaryText || repeatResultTexts.primaryText,
     resultSecondaryText: repeatConflict.secondaryText || repeatResultTexts.secondaryText,
@@ -385,7 +321,7 @@ function buildTaskFormDisplayState(form = {}, options = {}) {
       { key: 'reminder', label: PREVIEW_CHIP_LABELS.reminder, value: reminderText },
       { key: 'pointsExpiry', label: PREVIEW_CHIP_LABELS.pointsExpiry, value: pointsExpiryText }
     ],
-    weekdaySelection: buildWeekdaySelection(form.repeat),
+    weekdaySelection: buildWeekdaySelection(draft),
     isRepeatOptionDisabled: repeatDisabled
   };
 }
@@ -402,5 +338,5 @@ module.exports = {
   buildTaskFormDisplayState,
   isRepeatOptionDisabled,
   checkRepeatDateConflict,
-  resolveRepeatMatch
+  resolveRepeatMatch: taskFormCore.resolveRepeatMatch
 };

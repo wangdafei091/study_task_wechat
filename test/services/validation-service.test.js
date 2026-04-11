@@ -197,6 +197,24 @@ describe('ValidationService', () => {
       expect(result.data.endTime).toBe('');
     });
 
+    it('未传 repeat 时应保持为不重复任务', () => {
+      const taskData = {
+        title: '测试任务',
+        startDate: '2026-03-04',
+        isAllDay: true
+      };
+
+      const result = validationService.validateTaskForm(taskData);
+
+      expect(result.valid).toBe(true);
+      expect(result.data.repeat).toEqual({
+        type: 'none',
+        days: [],
+        startDate: '2026-03-04',
+        endDate: '2026-03-04'
+      });
+    });
+
     it('验证过程异常时应该返回错误', () => {
       // 模拟异常情况
       const taskData = {

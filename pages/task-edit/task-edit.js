@@ -7,41 +7,12 @@ const serviceManager = require('../../services/service-manager.js');
 const pageStorageHelper = require('../../utils/page-storage-helper');
 const permissionUtils = require('../../utils/permission-utils');
 const taskFormDisplay = require('../../utils/task-form-display');
+const taskFormCore = require('../../utils/task-form-core');
+const taskFormAdapter = require('../../utils/task-form-adapter');
 const taskTemplateEntry = require('./modules/task-template-entry');
 
 let taskEditLoadingVisible = false;
 const TEMPLATE_RECOMMENDATION_CARD_LIMIT = 2;
-
-function parseTimeToSeconds(value) {
-  if (typeof value !== 'string') {
-    return null;
-  }
-
-  const match = value.trim().match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
-  if (!match) {
-    return null;
-  }
-
-  const hours = Number(match[1]);
-  const minutes = Number(match[2]);
-  const seconds = match[3] ? Number(match[3]) : 0;
-
-  if (
-    Number.isNaN(hours) ||
-    Number.isNaN(minutes) ||
-    Number.isNaN(seconds) ||
-    hours < 0 ||
-    hours > 23 ||
-    minutes < 0 ||
-    minutes > 59 ||
-    seconds < 0 ||
-    seconds > 59
-  ) {
-    return null;
-  }
-
-  return hours * 3600 + minutes * 60 + seconds;
-}
 
 function decorateTemplateRecommendation(candidate = {}) {
   const payload = candidate.taskPayload || {};
@@ -786,93 +757,36 @@ Page({
    * 本地验证任务表单（降级方法）
    */
   validateTaskFormLocal: function() {
-    // 创建错误信息容器
-    const result = {
-      valid: true,
-      errorMsg: ''
-    };
-    
-    // 验证标题
-    if (!this.data.newTask.title.trim()) {
-      result.valid = false;
-      result.errorMsg = '请输入任务标题';
-      return result;
-    }
-    
-    // 验证日期
-    if (!this.data.newTask.startDate) {
-      result.valid = false;
-      result.errorMsg = '请选择开始日期';
-      return result;
-    }
-    
-    // 验证重复任务的结束日期
-    if (this.data.newTask.repeat && this.data.newTask.repeat.type !== 'none') {
-      // 如果是重复任务，且没有勾选"无结束日期"，必须设置结束日期
-      if (!this.data.newTask.hasNoEndDate && !this.data.newTask.endDate) {
-        result.valid = false;
-        result.errorMsg = '请设置重复任务的结束日期';
-        logger.error('TaskEdit', '验证失败: 重复任务缺少结束日期');
-        return result;
-      }
-      
-      // 如果设置了结束日期，确保结束日期不早于开始日期
-      if (this.data.newTask.endDate && this.data.newTask.endDate < this.data.newTask.startDate) {
-        result.valid = false;
-        result.errorMsg = '结束日期不能早于开始日期';
-        logger.error('TaskEdit', '验证失败: 结束日期早于开始日期');
-        return result;
-      }
-    }
-    
-    // 验证时间
-    if (!this.data.newTask.isAllDay && (!this.data.newTask.startTime || !this.data.newTask.endTime)) {
-      result.valid = false;
-      result.errorMsg = '请设置开始和结束时间';
-      return result;
+    const validation = taskFormCore.validateTaskFormDraft(this.data.newTask, {
+      scene: 'task',
+      today: this.data.newTask.startDate
+    });
+
+    if (!validation.valid) {
+      logger.error('TaskEdit', `验证失败: ${validation.errorMsg}`);
+      return validation;
     }
 
-    if (!this.data.newTask.isAllDay && !this.isValidEndTime(this.data.newTask.startTime, this.data.newTask.endTime, true)) {
-      result.valid = false;
-      result.errorMsg = '结束时间不能早于开始时间';
-      logger.error('TaskEdit', '验证失败: 结束时间不能早于开始时间');
-      return result;
-    }
-    
-    // 验证通过后，返回完整的任务对象
     logger.info('TaskEdit', '本地表单验证通过，组装完整任务数据');
-    const taskData = {
-      title: this.data.newTask.title,
-      type: this.data.newTask.type,
-      date: this.data.newTask.startDate,
-      description: this.data.newTask.description,
-      points: this.data.newTask.points,
-      pointsExpiry: this.data.newTask.pointsExpiry,
+    const draft = taskFormAdapter.adaptTaskEditStateToDraft(this.data.newTask);
+    const normalizedPayload = taskFormCore.buildTaskPayloadFromDraft(draft);
+
+    return {
+      title: normalizedPayload.title,
+      type: normalizedPayload.type,
+      date: normalizedPayload.startDate,
+      description: normalizedPayload.description,
+      points: normalizedPayload.points,
+      pointsExpiry: normalizedPayload.pointsExpiry,
       pointsExpiryDate: this.data.pointsExpiryText,
-      isRequired: this.data.newTask.isRequired,
-      isAllDay: this.data.newTask.isAllDay,
-      startTime: this.data.newTask.isAllDay ? '' : this.data.newTask.startTime,
-      endTime: this.data.newTask.isAllDay ? '' : this.data.newTask.endTime,
-      hasNoEndDate: this.data.newTask.hasNoEndDate,
-      repeat: this.data.newTask.repeat,
-      reminder: this.data.newTask.reminder
+      isRequired: normalizedPayload.isRequired,
+      isAllDay: normalizedPayload.isAllDay,
+      startTime: normalizedPayload.startTime,
+      endTime: normalizedPayload.endTime,
+      hasNoEndDate: normalizedPayload.hasNoEndDate,
+      repeat: normalizedPayload.repeat,
+      reminder: normalizedPayload.reminder
     };
-    
-    // 确保重复任务的开始和结束日期与主任务一致
-    if (taskData.repeat.startDate !== taskData.date) {
-      logger.info('TaskEdit', '修正重复任务开始日期与主任务保持一致');
-      taskData.repeat.startDate = taskData.date;
-    }
-    
-    // 确保endDate字段和repeat.endDate字段一致
-    if (!this.data.newTask.hasNoEndDate) {
-      if (taskData.repeat.endDate !== this.data.newTask.endDate) {
-        logger.info('TaskEdit', '修正重复任务结束日期与主任务保持一致');
-        taskData.repeat.endDate = this.data.newTask.endDate;
-      }
-    }
-    
-    return taskData;
   },
 
   /**
@@ -1263,27 +1177,9 @@ Page({
     // 格式化日期为YYYY-MM-DD
     const today = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
     
-    // 获取当前小时
-    const currentHour = now.getHours();
-    
-    // 计算开始时间和结束时间，整点为单位，并确保至少有1小时间隔
-    let startHour = currentHour;
-    let endHour = currentHour + 1;
-    
-    // 如果已经是晚上，默认设为明天的早上和上午
-    if (currentHour >= 20) {
-      startHour = 9; // 第二天上午9点
-      endHour = 10; // 第二天上午10点
-    }
-    
-    // 避免超过24小时
-    if (endHour >= 24) {
-      endHour = 23;
-    }
-    
-    // 格式化为HH:00格式的时间字符串
-    const startTime = `${startHour.toString().padStart(2, '0')}:00`;
-    const endTime = `${endHour.toString().padStart(2, '0')}:00`;
+    const defaultTimeRange = taskFormCore.resolveDefaultTimeRange({ now });
+    const startTime = defaultTimeRange.startTime;
+    const endTime = defaultTimeRange.endTime;
     
     // 设置到组件数据中
     this.setData({
@@ -1330,24 +1226,9 @@ Page({
     } else {
       // 如果取消全天，且时间字段为空，设置默认时间
       if (!this.data.newTask.startTime) {
-        const now = new Date();
-        const currentHour = now.getHours();
-        let startHour = currentHour;
-        let endHour = currentHour + 1;
-        
-        // 如果已经是晚上，默认设为明天的早上和上午
-        if (currentHour >= 20) {
-          startHour = 9;
-          endHour = 10;
-        }
-        
-        // 避免超过24小时
-        if (endHour >= 24) {
-          endHour = 23;
-        }
-        
-        updateData['newTask.startTime'] = `${startHour.toString().padStart(2, '0')}:00`;
-        updateData['newTask.endTime'] = `${endHour.toString().padStart(2, '0')}:00`;
+        const defaultTimeRange = taskFormCore.resolveDefaultTimeRange({ now: new Date() });
+        updateData['newTask.startTime'] = defaultTimeRange.startTime;
+        updateData['newTask.endTime'] = defaultTimeRange.endTime;
       }
     }
     
@@ -1557,35 +1438,13 @@ Page({
    * 根据任务是否为全天任务获取可用的提醒选项
    */
   getReminderOptions: function() {
-    // 优先检查isAllDay字段，如果是全天任务则只提供简化选项
-    if (this.data.newTask.isAllDay) {
-      // 全天任务：简化选项
-      return [
-        { enabled: false, time: 0, text: '无' },
-        { enabled: true, time: -1, text: '提前1天(晚上8点)' }
-      ];
-    }
-    
-    // 非全天任务检查是否有开始时间
-    const hasStartTime = this.data.newTask.startTime && this.data.newTask.startTime.trim() !== '';
-    
-    if (hasStartTime) {
-      // 有开始时间的任务：完整选项
-      return [
-        { enabled: false, time: 0, text: '无' },
-        { enabled: true, time: 0, text: '准时' },
-        { enabled: true, time: 5, text: '提前5分钟' },
-        { enabled: true, time: 15, text: '提前15分钟' },
-        { enabled: true, time: 30, text: '提前30分钟' },
-        { enabled: true, time: -1, text: '提前1天(晚上8点)' }
-      ];
-    } else {
-      // 无开始时间的任务：简化选项
-      return [
-        { enabled: false, time: 0, text: '无' },
-        { enabled: true, time: -1, text: '提前1天(晚上8点)' }
-      ];
-    }
+    return taskFormCore.buildReminderOptionsFromDraft(
+      taskFormAdapter.adaptTaskEditStateToDraft(this.data.newTask)
+    ).map((option) => ({
+      enabled: option.enabled,
+      time: option.time,
+      text: option.label
+    }));
   },
   
   /**
@@ -1899,18 +1758,15 @@ Page({
   checkAndAdjustEndTime: function(startTime) {
     if (this.data.newTask.endTime) {
       const startTimeValue = startTime || this.data.newTask.startTime;
-      
-      // 检查时间是否有效
-      if (!this.isValidEndTime(startTimeValue, this.data.newTask.endTime, true)) {
-        // 比较开始时间和结束时间
-        const [startHours, startMinutes] = startTimeValue.split(':').map(Number);
-        
-        // 将结束时间设置为开始时间后一小时
-        const newEndHour = (startHours + 1) % 24;
-        const newEndTime = `${newEndHour.toString().padStart(2, '0')}:${startMinutes.toString().padStart(2, '0')}`;
-        
+
+      const adjusted = taskFormCore.resolveAdjustedEndTime(
+        startTimeValue,
+        this.data.newTask.endTime
+      );
+
+      if (adjusted.adjusted) {
         this.setData({
-          'newTask.endTime': newEndTime,
+          'newTask.endTime': adjusted.endTime,
         });
       }
     }
@@ -1940,8 +1796,8 @@ Page({
       return false;
     }
 
-    const startSeconds = parseTimeToSeconds(startTime);
-    const endSeconds = parseTimeToSeconds(endTime);
+    const startSeconds = taskFormCore.parseTimeToSeconds(startTime);
+    const endSeconds = taskFormCore.parseTimeToSeconds(endTime);
 
     if (startSeconds === null || endSeconds === null) {
       return true;

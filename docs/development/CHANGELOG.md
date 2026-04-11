@@ -4,6 +4,45 @@
 
 ---
 
+## [里程碑-21B4] - 2026-04-11
+
+### ✅ 完成情况
+
+**任务表单共享内核重构**
+
+- **共享草稿与适配层落地**：
+  - 新增 `utils/task-form-core.js` 与 `utils/task-form-adapter.js`，统一 `task-edit`、`task-template-edit`、模板实体回填与显示层消费的 canonical draft
+  - 前端时间解析、默认值、归一化、校验、日期策略解析、提醒选项生成与显示态输入契约正式收口到共享内核
+- **页面与服务层规则统一**：
+  - `pages/task-edit/task-edit.js` 与 `packageManage/pages/task-template-edit/task-template-edit.js` 改为先校验原始输入，再通过共享内核构建 payload / patch，避免无效输入被静默归一化
+  - `services/validation-service.js` 与 `services/task-template-service.js` 改为消费共享内核，不再各自维护独立的时间、重复和日期策略规则
+  - `utils/task-template-utils.js` 与 `utils/task-form-display.js` 完成兼容收口，既有调用点不需要整体改写
+- **重复逻辑清理与正确性补强**：
+  - 删除 `task-edit`、`validation-service`、`task-template-edit` 中多处重复默认值、时间校验、提醒选项与日期策略 helper
+  - 修复“原始无效输入先被默认值吞掉再校验”的风险，补强重复任务缺结束日期、非全天任务缺时间、模板 `durationDays` 非法值等拦截链路
+
+### 🧪 验证结果
+
+- M21B4 定向回归通过：
+  - `test/utils/task-form-core.test.js`
+  - `test/utils/task-form-adapter.test.js`
+  - `test/pages/task-edit.page.test.js`
+  - `test/pages/task-template-edit.page.test.js`
+  - `test/services/validation-service.test.js`
+- 全量前端测试通过：
+  - `npm test -- --runInBand`
+  - 结果：`88 suites / 1869 tests` 全绿
+- 手工验收通过：
+  - 全天任务创建、非全天任务创建、重复任务创建与实例展开正常
+  - 推荐模板转正式模板主链路正常
+  - 重复任务缺结束日期、非全天任务缺时间、模板 `durationDays=0/空值` 均已手工确认被拦截
+
+### 📖 详细实施记录
+
+- [里程碑-21B4：任务表单共享内核重构](../design/milestone-21b4-task-form-shared-core.md)
+
+---
+
 ## [里程碑-21B3] - 2026-04-11
 
 ### ✅ 完成情况

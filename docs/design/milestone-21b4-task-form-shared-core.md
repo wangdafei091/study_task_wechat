@@ -1,11 +1,12 @@
 # 里程碑-21B4：任务表单共享内核重构 详细设计文档
 
-> **设计状态**：🟢 审核通过
+> **设计状态**：🟢 已完成
 > **创建日期**：2026-04-11
 > **设计者**：GPT5 Codex
 > **审核者**：项目维护者
 > **依赖文档**：`docs/design/milestone-21b1-task-template-foundation.md`、`docs/design/milestone-21b1-ux-refinement.md`、`docs/design/milestone-21b2-template-source-completion.md`、`docs/design/milestone-21b3-template-page-clarity.md`
 > **预计工期**：3-4天
+> **完成日期**：2026-04-11
 
 ---
 
@@ -17,6 +18,7 @@
 - [实施步骤](#实施步骤)
 - [测试方案](#测试方案)
 - [风险评估](#风险评估)
+- [实施结果](#实施结果)
 - [替代方案](#替代方案)
 
 ---
@@ -631,6 +633,33 @@ const displayState = taskFormDisplay.buildTaskFormDisplayState(draft);
 
 - **风险说明**：`M21B4` 主要目标是统一共享规则，不是彻底拆解 `task-edit.js`。即使完成共享内核接入，页面文件仍可能维持较大体量
 - **缓解措施**：本期接受这一残余风险，但要求至少删除与共享内核重复的默认值、校验和派生逻辑；页面模块化拆分留待后续文件治理型里程碑处理
+
+---
+
+## 实施结果
+
+### 实际落地
+
+- 已新增 `utils/task-form-core.js`，统一默认值、归一化、时间校验、日期策略解析、提醒选项和 payload 构建
+- 已新增 `utils/task-form-adapter.js`，承接 `task-edit`、`task-template-edit` 与模板实体之间的 draft/patch 转换
+- `pages/task-edit/task-edit.js`、`packageManage/pages/task-template-edit/task-template-edit.js`、`services/validation-service.js`、`services/task-template-service.js` 已接入共享内核
+- `utils/task-template-utils.js` 已改为兼容导出层，内部委托共享内核
+- `task-edit` 与 `task-template-edit` 现已统一为“先校验原始输入，再构建归一化结果”的提交流程，避免无效输入被静默默认化
+
+### 实际验证
+
+- 定向回归通过：
+  - `test/utils/task-form-core.test.js`
+  - `test/utils/task-form-adapter.test.js`
+  - `test/pages/task-edit.page.test.js`
+  - `test/pages/task-template-edit.page.test.js`
+  - `test/services/validation-service.test.js`
+- 全量前端测试通过：
+  - `npm test -- --runInBand`
+  - 结果：`88 suites / 1869 tests` 全绿
+- 手工验收通过：
+  - 全天任务、非全天任务、重复任务、推荐模板转正式模板的主链路正常
+  - 重复任务缺结束日期、非全天任务缺时间、模板 `durationDays=0/空值` 的失败拦截已确认生效
 
 ---
 

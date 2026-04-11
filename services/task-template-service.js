@@ -5,10 +5,11 @@ const TaskTemplate = require('../models/task-template');
 const TaskTemplateRepository = require('../repositories/task-template-repository');
 const dateUtils = require('../utils/dateUtils');
 const taskFormDisplay = require('../utils/task-form-display');
+const taskFormCore = require('../utils/task-form-core');
+const taskFormAdapter = require('../utils/task-form-adapter');
 const { EVENTS } = require('../utils/constants');
 const {
-  normalizeDateString,
-  normalizeDateStrategy
+  normalizeDateString
 } = require('../utils/task-template-utils');
 const {
   buildTemplateDraftFromTask,
@@ -236,39 +237,20 @@ class TaskTemplateService {
       ? template
       : new TaskTemplate(template);
     const today = normalizeDateString(context.today, dateUtils.getTodayString());
-    const normalizedPayload = normalizedTemplate.taskPayload;
-    const resolvedDates = this._resolveTemplateDates(normalizedTemplate, today);
-
-    const newTask = {
-      title: normalizedPayload.title,
-      type: normalizedPayload.type,
-      points: normalizedPayload.points,
-      pointsExpiry: normalizedPayload.pointsExpiry,
-      description: normalizedPayload.description,
-      isRequired: normalizedPayload.isRequired,
-      isAllDay: normalizedPayload.isAllDay,
+    const draft = taskFormAdapter.adaptTemplateEntityToDraft(normalizedTemplate.toJSON(), {
+      today: normalizedTemplate.taskPayload?.startDate || today
+    });
+    const resolvedDates = this._resolveTemplateDates(draft, today);
+    const newTask = taskFormAdapter.buildTaskEditPatchFromDraft({
+      ...draft,
+      scene: 'task',
       startDate: resolvedDates.startDate,
-      startTime: normalizedPayload.startTime,
       endDate: resolvedDates.endDate,
-      endTime: normalizedPayload.endTime,
-      hasNoEndDate: resolvedDates.hasNoEndDate,
-      repeat: {
-        ...normalizedPayload.repeat,
-        startDate: resolvedDates.repeatStartDate,
-        endDate: resolvedDates.repeatEndDate
-      },
-      reminder: {
-        ...normalizedPayload.reminder
-      }
-    };
-
+      hasNoEndDate: resolvedDates.hasNoEndDate
+    });
     const displayState = taskFormDisplay.buildTaskFormDisplayState({
-      ...newTask,
-      startDate: today,
-      repeat: {
-        ...normalizedPayload.repeat
-      },
-      dateStrategy: normalizedTemplate.dateStrategy
+      ...draft,
+      startDate: today
     });
 
     return {
@@ -495,47 +477,19 @@ class TaskTemplateService {
   }
 
   _resolveTemplateDates(template, today) {
-    const payload = template.taskPayload || {};
-    const strategy = normalizeDateStrategy(template.dateStrategy || {}, payload);
-    const repeatType = payload.repeat?.type || 'none';
-    const normalizedDurationDays = Number.isInteger(Number(strategy.durationDays))
-      ? Math.max(1, Number(strategy.durationDays))
-      : 1;
-    let startDate = today;
-    let endDate = today;
-    let hasNoEndDate = false;
+    const draft = template instanceof TaskTemplate || template?.taskPayload
+      ? taskFormAdapter.adaptTemplateEntityToDraft(
+        template instanceof TaskTemplate ? template.toJSON() : template,
+        { today }
+      )
+      : taskFormCore.normalizeTaskFormDraft(template, {
+        scene: 'template',
+        today
+      });
 
-    if (repeatType !== 'none') {
-      const repeatMatch = taskFormDisplay.resolveRepeatMatch({
-        startDate: today,
-        repeat: payload.repeat || {}
-      }, repeatType);
-      startDate = repeatMatch?.date
-        ? dateUtils.formatDate(repeatMatch.date)
-        : today;
-
-      if (strategy.endMode === 'no-end') {
-        endDate = '';
-        hasNoEndDate = true;
-      } else if (strategy.endMode === 'week-end') {
-        endDate = dateUtils.formatDate(dateUtils.addDays(dateUtils.getFirstDayOfWeek(startDate, 1), 6));
-      } else if (strategy.endMode === 'month-end') {
-        endDate = dateUtils.formatDate(dateUtils.getLastDayOfMonth(startDate));
-      } else {
-        endDate = dateUtils.formatDate(dateUtils.addDays(startDate, normalizedDurationDays - 1));
-      }
-    }
-
-    const repeatStartDate = startDate;
-    const repeatEndDate = hasNoEndDate ? '' : endDate;
-
-    return {
-      startDate,
-      endDate,
-      hasNoEndDate,
-      repeatStartDate,
-      repeatEndDate
-    };
+    return taskFormCore.resolveTaskScheduleFromDraft(draft, {
+      today
+    });
   }
 }
 

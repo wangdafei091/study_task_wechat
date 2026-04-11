@@ -484,6 +484,50 @@ describe('packageManage/pages/task-template-edit/task-template-edit', () => {
     });
   });
 
+  it('持续天数为 0 时应阻止保存', async () => {
+    const createTemplate = jest.fn().mockResolvedValue({ success: true });
+    serviceManager.getService.mockReturnValue({
+      createTemplate,
+      updateTemplate: jest.fn()
+    });
+
+    const page = createPageInstance();
+    page.data.form.taskTitle = '任务A';
+    page.data.form.repeatType = 'daily';
+    page.data.form.endMode = 'duration';
+    page.data.form.durationDays = '0';
+
+    await page.onSave();
+
+    expect(createTemplate).not.toHaveBeenCalled();
+    expect(global.wx.showToast).toHaveBeenCalledWith({
+      title: '请输入有效的持续天数',
+      icon: 'none'
+    });
+  });
+
+  it('持续天数为空时应阻止保存', async () => {
+    const createTemplate = jest.fn().mockResolvedValue({ success: true });
+    serviceManager.getService.mockReturnValue({
+      createTemplate,
+      updateTemplate: jest.fn()
+    });
+
+    const page = createPageInstance();
+    page.data.form.taskTitle = '任务A';
+    page.data.form.repeatType = 'daily';
+    page.data.form.endMode = 'duration';
+    page.data.form.durationDays = '';
+
+    await page.onSave();
+
+    expect(createTemplate).not.toHaveBeenCalled();
+    expect(global.wx.showToast).toHaveBeenCalledWith({
+      title: '请输入有效的持续天数',
+      icon: 'none'
+    });
+  });
+
   it('togglePanel 应打开目标摘要面板并关闭其他面板', () => {
     const page = createPageInstance();
     page.data.reminderPanel = true;
