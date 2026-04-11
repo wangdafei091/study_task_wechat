@@ -153,6 +153,21 @@ describe('ValidationService', () => {
       expect(result.valid).toBe(true);
     });
 
+    it('应该拒绝结束时间早于或等于开始时间的非全天任务', () => {
+      const taskData = {
+        title: '测试任务',
+        startDate: '2026-03-04',
+        isAllDay: false,
+        startTime: '09:00',
+        endTime: '09:00'
+      };
+
+      const result = validationService.validateTaskForm(taskData);
+
+      expect(result.valid).toBe(false);
+      expect(result.errorMsg).toBe('结束时间不能早于开始时间');
+    });
+
     it('应该正确组装任务数据', () => {
       const taskData = {
         title: '  测试任务  ',

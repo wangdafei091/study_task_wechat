@@ -6,6 +6,37 @@
 
 const logger = require('../utils/logger');
 
+function parseTimeToSeconds(value) {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const match = value.trim().match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+  if (!match) {
+    return null;
+  }
+
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  const seconds = match[3] ? Number(match[3]) : 0;
+
+  if (
+    Number.isNaN(hours) ||
+    Number.isNaN(minutes) ||
+    Number.isNaN(seconds) ||
+    hours < 0 ||
+    hours > 23 ||
+    minutes < 0 ||
+    minutes > 59 ||
+    seconds < 0 ||
+    seconds > 59
+  ) {
+    return null;
+  }
+
+  return hours * 3600 + minutes * 60 + seconds;
+}
+
 class ValidationService {
   /**
    * 构造函数
@@ -70,6 +101,16 @@ class ValidationService {
         result.valid = false;
         result.errorMsg = '请设置开始和结束时间';
         logger.warn('ValidationService', '任务时间验证失败');
+        return result;
+      }
+
+      if (this._hasInvalidTimeRange(taskData.startTime, taskData.endTime, taskData.isAllDay)) {
+        result.valid = false;
+        result.errorMsg = '结束时间不能早于开始时间';
+        logger.warn('ValidationService', '任务时间范围验证失败', {
+          startTime: taskData.startTime,
+          endTime: taskData.endTime
+        });
         return result;
       }
 
@@ -339,6 +380,21 @@ class ValidationService {
 
     logger.info('ValidationService', '任务数据组装完成');
     return assembledData;
+  }
+
+  _hasInvalidTimeRange(startTime, endTime, isAllDay) {
+    if (isAllDay || !startTime || !endTime) {
+      return false;
+    }
+
+    const startSeconds = parseTimeToSeconds(startTime);
+    const endSeconds = parseTimeToSeconds(endTime);
+
+    if (startSeconds === null || endSeconds === null) {
+      return false;
+    }
+
+    return endSeconds <= startSeconds;
   }
 }
 

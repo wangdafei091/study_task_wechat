@@ -5,6 +5,37 @@
 const { createLogger } = require('../utils/logger');
 const logger = createLogger('Task');
 
+function parseTimeToSeconds(value) {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const match = value.trim().match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+  if (!match) {
+    return null;
+  }
+
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  const seconds = match[3] ? Number(match[3]) : 0;
+
+  if (
+    Number.isNaN(hours) ||
+    Number.isNaN(minutes) ||
+    Number.isNaN(seconds) ||
+    hours < 0 ||
+    hours > 23 ||
+    minutes < 0 ||
+    minutes > 59 ||
+    seconds < 0 ||
+    seconds > 59
+  ) {
+    return null;
+  }
+
+  return hours * 3600 + minutes * 60 + seconds;
+}
+
 class Task {
   constructor({
     taskId,
@@ -300,6 +331,16 @@ class Task {
 
     if (taskData.isAllDay !== undefined && typeof taskData.isAllDay !== 'boolean') {
       errors.push('isAllDay必须为布尔值');
+    }
+
+    const shouldValidateTimeRange = taskData.isAllDay !== true && taskData.startTime && taskData.endTime;
+    if (shouldValidateTimeRange) {
+      const startSeconds = parseTimeToSeconds(taskData.startTime);
+      const endSeconds = parseTimeToSeconds(taskData.endTime);
+
+      if (startSeconds !== null && endSeconds !== null && endSeconds <= startSeconds) {
+        errors.push('结束时间不能早于开始时间');
+      }
     }
 
     if (taskData.reminder !== undefined && taskData.reminder !== null) {

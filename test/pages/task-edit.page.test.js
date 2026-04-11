@@ -261,6 +261,46 @@ describe('pages/task-edit/task-edit', () => {
     }));
   });
 
+  it('validateTaskFormLocal 应拒绝结束时间早于或等于开始时间', () => {
+    const page = createPageInstance();
+    page.data.newTask.title = '任务A';
+    page.data.newTask.startDate = '2026-04-11';
+    page.data.newTask.endDate = '2026-04-11';
+    page.data.newTask.isAllDay = false;
+    page.data.newTask.startTime = '19:00';
+    page.data.newTask.endTime = '19:00';
+    page.data.newTask.repeat = { type: 'none' };
+
+    const result = page.validateTaskFormLocal();
+
+    expect(result).toEqual({
+      valid: false,
+      errorMsg: '结束时间不能早于开始时间'
+    });
+  });
+
+  it('重复任务结束日期晚于开始日期时仍应允许设置有效结束时间', () => {
+    const page = createPageInstance();
+    page.data.newTask.startDate = '2026-04-11';
+    page.data.newTask.endDate = '2026-04-18';
+    page.data.newTask.startTime = '19:00';
+    page.data.newTask.endTime = '20:00';
+    page.data.newTask.repeat = { type: 'daily' };
+
+    page.onEndTimeChange({
+      detail: {
+        value: '21:00'
+      }
+    });
+
+    expect(global.wx.showToast).not.toHaveBeenCalledWith(expect.objectContaining({
+      title: '结束时间不能早于开始时间'
+    }));
+    expect(page.setData).toHaveBeenCalledWith({
+      'newTask.endTime': '21:00'
+    });
+  });
+
   it('onUseRecommendedTemplate 应把候选草稿传给模板编辑页', () => {
     const emit = jest.fn();
     global.wx.navigateTo.mockImplementation(({ success }) => {

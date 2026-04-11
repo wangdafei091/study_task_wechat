@@ -317,6 +317,25 @@ describe('Task API Integration Tests', () => {
       expect(response.body.success).toBe(false);
       expect(response.body.error_code).toBe('TASK_INVALID_PARAMS');
     });
+
+    test('应该拒绝结束时间早于或等于开始时间的任务', async () => {
+      const response = await request(app)
+        .post('/api/tasks')
+        .set('Authorization', `Bearer ${token1}`)
+        .send({
+          title: '时间异常任务',
+          type: 'study',
+          date: '2026-03-06',
+          isAllDay: false,
+          startTime: '18:00',
+          endTime: '18:00'
+        })
+        .expect(400);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.error_code).toBe('TASK_INVALID_PARAMS');
+      expect(response.body.message).toContain('结束时间不能早于开始时间');
+    });
   });
 
   describe('获取任务列表 (GET /api/tasks)', () => {

@@ -307,6 +307,14 @@ class TaskController {
         return res.status(400).json(error(validation.errors.join('; '), 'INVALID_TASK_DATA'));
       }
 
+      const mergedValidation = Task.validate({
+        ...existing.toJSON(),
+        ...safeChanges
+      }, false);
+      if (!mergedValidation.valid) {
+        return res.status(400).json(error(mergedValidation.errors.join('; '), 'INVALID_TASK_DATA'));
+      }
+
       const updated = await taskService.updateTask(
         taskId,
         safeChanges,

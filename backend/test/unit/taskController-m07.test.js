@@ -358,6 +358,26 @@ describe('PUT /api/tasks/:taskId', () => {
     expect(capturedChanges).toHaveProperty('title', '新标题');
     expect(capturedChanges).not.toHaveProperty('isRequired');
   });
+
+  it('仅更新开始时间导致结束时间早于开始时间时应返回 400', async () => {
+    const task = makeTask({
+      start_time: '18:00',
+      end_time: '19:00',
+      is_all_day: 0
+    });
+    taskService.getTaskById = jest.fn().mockResolvedValue(task);
+    taskService.updateTask = jest.fn();
+
+    const res = await request(app)
+      .put('/api/tasks/task_001')
+      .set('Authorization', token(CHILD))
+      .send({ startTime: '20:00' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error_code).toBe('INVALID_TASK_DATA');
+    expect(res.body.message).toContain('结束时间不能早于开始时间');
+    expect(taskService.updateTask).not.toHaveBeenCalled();
+  });
 });
 
 describe('DELETE /api/tasks/:taskId', () => {

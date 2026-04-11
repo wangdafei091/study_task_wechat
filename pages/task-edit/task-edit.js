@@ -12,6 +12,37 @@ const taskTemplateEntry = require('./modules/task-template-entry');
 let taskEditLoadingVisible = false;
 const TEMPLATE_RECOMMENDATION_CARD_LIMIT = 2;
 
+function parseTimeToSeconds(value) {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const match = value.trim().match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+  if (!match) {
+    return null;
+  }
+
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  const seconds = match[3] ? Number(match[3]) : 0;
+
+  if (
+    Number.isNaN(hours) ||
+    Number.isNaN(minutes) ||
+    Number.isNaN(seconds) ||
+    hours < 0 ||
+    hours > 23 ||
+    minutes < 0 ||
+    minutes > 59 ||
+    seconds < 0 ||
+    seconds > 59
+  ) {
+    return null;
+  }
+
+  return hours * 3600 + minutes * 60 + seconds;
+}
+
 function decorateTemplateRecommendation(candidate = {}) {
   const payload = candidate.taskPayload || {};
   const preview = taskFormDisplay.buildTaskFormDisplayState({
@@ -800,6 +831,13 @@ Page({
       result.errorMsg = '请设置开始和结束时间';
       return result;
     }
+
+    if (!this.data.newTask.isAllDay && !this.isValidEndTime(this.data.newTask.startTime, this.data.newTask.endTime, true)) {
+      result.valid = false;
+      result.errorMsg = '结束时间不能早于开始时间';
+      logger.error('TaskEdit', '验证失败: 结束时间不能早于开始时间');
+      return result;
+    }
     
     // 验证通过后，返回完整的任务对象
     logger.info('TaskEdit', '本地表单验证通过，组装完整任务数据');
@@ -1407,10 +1445,9 @@ Page({
   onEndTimeChange: function(e) {
     this.markTemplateFillUndoDirty();
     const time = e.detail.value;
-    const isSameDay = this.data.newTask.startDate === this.data.newTask.endDate;
     
-    // 如果是同一天，确保结束时间不早于开始时间
-    if (!this.isValidEndTime(this.data.newTask.startTime, time, isSameDay)) {
+    // 任务编辑页的开始/结束时间始终描述单次任务当天的时间范围，不依赖重复区间结束日期
+    if (!this.isValidEndTime(this.data.newTask.startTime, time, true)) {
       wx.showToast({
         title: '结束时间不能早于开始时间',
         icon: 'none',
@@ -1420,7 +1457,7 @@ Page({
     }
     
     // 计算任务持续时间
-    if (isSameDay && this.data.newTask.startTime) {
+    if (this.data.newTask.startTime) {
       const [startHours, startMinutes] = this.data.newTask.startTime.split(':').map(Number);
       const [endHours, endMinutes] = time.split(':').map(Number);
       
@@ -1860,8 +1897,7 @@ Page({
    * 检查并调整结束时间
    */
   checkAndAdjustEndTime: function(startTime) {
-    const isSameDay = this.data.newTask.startDate === this.data.newTask.endDate;
-    if (isSameDay && this.data.newTask.endTime) {
+    if (this.data.newTask.endTime) {
       const startTimeValue = startTime || this.data.newTask.startTime;
       
       // 检查时间是否有效
@@ -1895,39 +1931,23 @@ Page({
    * 日期时间辅助函数 - 检查结束时间是否有效
    * @param {string} startTime 开始时间
    * @param {string} endTime 结束时间
-   * @returns {boolean} 结束时间是否有效（仅当同一天时检查）
+   * @returns {boolean} 结束时间是否有效（结束时间必须晚于开始时间）
    */
   isValidEndTime: function(startTime, endTime, isSameDay) {
-    if (!startTime || !endTime || !isSameDay) return true;
-    
-    const [startHours, startMinutes] = startTime.split(':').map(Number);
-    const [endHours, endMinutes] = endTime.split(':').map(Number);
-    
-    // 计算时间差（分钟）
-    let startTotalMinutes = startHours * 60 + startMinutes;
-    let endTotalMinutes = endHours * 60 + endMinutes;
-    
-    // 处理跨越午夜的情况
-    if (endTotalMinutes < startTotalMinutes) {
-      endTotalMinutes += 24 * 60; // 加上24小时的分钟数
+    if (!startTime || !endTime) return true;
+
+    if (isSameDay === false) {
+      return false;
     }
-    
-    const durationMinutes = endTotalMinutes - startTotalMinutes;
-    
-    // 记录持续时间到日志
-    logger.info('TaskEdit', '任务持续时间:', {
-      hours: Math.floor(durationMinutes / 60),
-      minutes: durationMinutes % 60
-    });
-    
-    // 如果持续时间超过3小时，特别标记
-    if (durationMinutes > 180) {
-      logger.info('TaskEdit', '检测到长时间任务');
+
+    const startSeconds = parseTimeToSeconds(startTime);
+    const endSeconds = parseTimeToSeconds(endTime);
+
+    if (startSeconds === null || endSeconds === null) {
+      return true;
     }
-    
-    if (startHours > endHours) return false;
-    if (startHours === endHours && startMinutes >= endMinutes) return false;
-    return true;
+
+    return endSeconds > startSeconds;
   },
 
   /**
