@@ -160,9 +160,13 @@ describe('packageManage/pages/task-template-manage/task-template-manage', () => 
     expect(page.data.templates[0]).toEqual(expect.objectContaining({
       displayName: '晚间阅读',
       typeLabel: '学习',
-      repeatLabel: '每天',
-      reminderLabel: '提前15分钟',
-      validityLabel: '持续7天'
+      primaryDescription: '固定晚间任务',
+      metaItems: [
+        { key: 'repeat', label: '重复', value: '每天' },
+        { key: 'time', label: '时间', value: '19:00 - 19:30' },
+        { key: 'reminder', label: '提醒', value: '提前15分钟' }
+      ],
+      usageSummary: ''
     }));
   });
 
@@ -201,6 +205,94 @@ describe('packageManage/pages/task-template-manage/task-template-manage', () => 
     await page.loadTemplates();
 
     expect(page.data.templates.map((item) => item.id)).toEqual(['tpl_enabled', 'tpl_disabled']);
+  });
+
+  it('loadTemplates 在管理模板 tab 应按设计生成弱统计摘要', async () => {
+    serviceManager.getService.mockReturnValue({
+      getTemplates: jest.fn().mockResolvedValue({
+        templates: [
+          createTemplate({
+            usageCount: 3,
+            lastUsedAt: 1712500000000
+          })
+        ]
+      })
+    });
+
+    const page = createPageInstance();
+    page.data.activeTab = 'manage';
+
+    await page.loadTemplates();
+
+    expect(page.data.templates[0]).toEqual(expect.objectContaining({
+      usageSummary: '已使用 3 次 · 最近使用 2024-04-07',
+      metaItems: [
+        { key: 'repeat', label: '重复', value: '每天' },
+        { key: 'time', label: '时间', value: '19:00 - 19:30' },
+        { key: 'reminder', label: '提醒', value: '提前15分钟' },
+        { key: 'validity', label: '有效期', value: '持续7天' }
+      ]
+    }));
+  });
+
+  it('loadTemplates 在管理模板 tab 只要存在正式模板就应显示搜索与筛选区', async () => {
+    serviceManager.getService.mockReturnValue({
+      getTemplates: jest.fn().mockResolvedValue({
+        templates: [
+          createTemplate({ id: 'tpl_only_one' })
+        ]
+      }),
+      getRecommendedTemplateCandidates: jest.fn().mockResolvedValue({
+        candidates: [],
+        total: 0
+      })
+    });
+
+    const page = createPageInstance();
+    page.data.activeTab = 'manage';
+
+    await page.loadTemplates();
+
+    expect(page.data.hasTemplates).toBe(true);
+    expect(page.data.showSearchTools).toBe(true);
+  });
+
+  it('loadTemplates 在管理模板 tab 搜索无结果时仍应保留搜索筛选态', async () => {
+    serviceManager.getService.mockReturnValue({
+      getTemplates: jest.fn().mockResolvedValue({
+        templates: []
+      }),
+      getRecommendedTemplateCandidates: jest.fn().mockResolvedValue({
+        candidates: [
+          {
+            candidateKey: 'c1',
+            displayName: '晚间阅读',
+            reasonText: '近2周都出现了相同的重复安排',
+            taskPayload: {
+              title: '晚间阅读',
+              type: 'study',
+              isAllDay: false,
+              startTime: '19:00',
+              endTime: '19:30',
+              repeat: { type: 'custom', days: [1, 3, 5] },
+              reminder: { enabled: false, time: 0 }
+            }
+          }
+        ],
+        total: 1
+      })
+    });
+
+    const page = createPageInstance();
+    page.data.activeTab = 'manage';
+    page.data.keyword = '不存在';
+
+    await page.loadTemplates();
+
+    expect(page.data.hasTemplates).toBe(false);
+    expect(page.data.hasActiveFilters).toBe(true);
+    expect(page.data.showSearchTools).toBe(true);
+    expect(page.data.recommendationCount).toBe(1);
   });
 
   it('loadTemplates 在选择模板 tab 全部停用时应保留 hasAnyTemplates 用于空态区分', async () => {
@@ -262,7 +354,50 @@ describe('packageManage/pages/task-template-manage/task-template-manage', () => 
     expect(page.data.showSearchTools).toBe(false);
     expect(page.data.recommendedCandidates[0]).toEqual(expect.objectContaining({
       displayName: '晚间阅读',
-      metaChips: expect.arrayContaining(['每天'])
+      metaItems: expect.arrayContaining([
+        expect.objectContaining({ key: 'repeat', value: '每天' })
+      ])
+    }));
+  });
+
+  it('loadTemplates 在选择模板 tab 应优先展示模板说明，并隐藏零值使用统计', async () => {
+    serviceManager.getService.mockReturnValue({
+      getTemplates: jest.fn().mockResolvedValue({
+        templates: [
+          createTemplate({
+            description: '',
+            usageCount: 0,
+            lastUsedAt: 0,
+            taskPayload: {
+              title: '阅读20分钟',
+              description: '任务描述兜底',
+              type: 'study',
+              isAllDay: false,
+              startDate: '2026-04-08',
+              endDate: '2026-04-14',
+              startTime: '19:00',
+              endTime: '19:30',
+              repeat: { type: 'daily' },
+              reminder: { enabled: false, time: 0 }
+            }
+          })
+        ]
+      })
+    });
+
+    const page = createPageInstance();
+    page.data.activeTab = 'select';
+
+    await page.loadTemplates();
+
+    expect(page.data.templates[0]).toEqual(expect.objectContaining({
+      primaryDescription: '任务描述兜底',
+      usageSummary: '',
+      metaItems: [
+        { key: 'repeat', label: '重复', value: '每天' },
+        { key: 'time', label: '时间', value: '19:00 - 19:30' },
+        { key: 'validity', label: '有效期', value: '持续7天' }
+      ]
     }));
   });
 
@@ -660,7 +795,7 @@ describe('packageManage/pages/task-template-manage/task-template-manage', () => 
           {
             candidateKey: 'c1',
             displayName: '晚间阅读',
-            reasonText: '已连续 2 周按这个节奏出现',
+            reasonText: '近2周都出现了相同的重复安排',
             taskPayload: {
               title: '晚间阅读',
               type: 'study',
@@ -716,9 +851,35 @@ describe('packageManage/pages/task-template-manage/task-template-manage', () => 
     expect(wxml).toContain('去管理模板');
     expect(wxml).toContain('class="recommendation-scroll"');
     expect(wxml).toContain('重新加载');
+    expect(wxml).toContain('class="page-tools"');
+    expect(wxml).toContain('class="page-tools manage-page-tools"');
+    expect(wxml).toContain('class="filter-segment-row"');
+    expect(wxml).toContain('class="search-row manage-search-row"');
+    expect(wxml).toContain('class="page-action-btn inline-create-btn"');
+    expect(wxml).toContain('class="template-list manage-template-list"');
+    expect(wxml).toContain('!hasTemplates && recommendationCount === 0 && !loading && !hasActiveFilters');
+    expect(wxml).toContain('!hasTemplates && recommendationCount > 0 && !hasActiveFilters');
+    expect(wxml).toContain('wx:if="{{!hasActiveFilters && recommendationCount > 0}}"');
+    expect(wxml).toContain('class="meta-item"');
+    expect(wxml).toContain('class="card-meta-head"');
+    expect(wxml).toContain('class="type-tag-light');
+    expect(wxml).toContain('class="card-head-side"');
+    expect(wxml).toContain('class="more-action-link head-more-action"');
     expect(wxml).not.toContain('title="{{pageTitle}}"');
     expect(wxml).not.toContain('全部状态');
     expect(wxml).not.toContain('最近使用</view>');
     expect(wxml).not.toContain('使用次数</view>');
+  });
+
+  it('wxss 应为选择卡片和管理卡片设置稳定的最小高度', () => {
+    const wxss = fs.readFileSync(
+      path.join(__dirname, '../../packageManage/pages/task-template-manage/task-template-manage.wxss'),
+      'utf8'
+    );
+
+    expect(wxss).toContain('.template-card.selectable');
+    expect(wxss).toContain('min-height: 206rpx;');
+    expect(wxss).toContain('.template-card.editable');
+    expect(wxss).toContain('min-height: 248rpx;');
   });
 });

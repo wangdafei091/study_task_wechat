@@ -67,7 +67,7 @@ describe('utils/task-template-source', () => {
     expect(candidates).toHaveLength(1);
     expect(candidates[0]).toEqual(expect.objectContaining({
       reasonCode: 'stable-repeat',
-      reasonText: '已连续 2 周按这个节奏出现',
+      reasonText: '近2周都出现了相同的重复安排',
       repeatSpanKey: 'duration:12'
     }));
   });
@@ -125,7 +125,7 @@ describe('utils/task-template-source', () => {
     expect(candidates).toHaveLength(1);
     expect(candidates[0]).toEqual(expect.objectContaining({
       reasonCode: 'stable-repeat',
-      reasonText: '已连续 2 周按这个节奏出现',
+      reasonText: '近2周都出现了相同的重复安排',
       repeatSpanKey: 'week-window',
       stableWeeks: 2
     }));
