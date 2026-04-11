@@ -856,6 +856,7 @@ describe('packageManage/pages/task-template-manage/task-template-manage', () => 
     expect(wxml).toContain('class="filter-segment-row"');
     expect(wxml).toContain('class="search-row manage-search-row"');
     expect(wxml).toContain('class="page-action-btn inline-create-btn"');
+    expect(wxml).toContain('class="template-card selectable {{item.typeClass}}"');
     expect(wxml).toContain('class="template-list manage-template-list"');
     expect(wxml).toContain('!hasTemplates && recommendationCount === 0 && !loading && !hasActiveFilters');
     expect(wxml).toContain('!hasTemplates && recommendationCount > 0 && !hasActiveFilters');
@@ -879,6 +880,9 @@ describe('packageManage/pages/task-template-manage/task-template-manage', () => 
 
     expect(wxss).toContain('.template-card.selectable');
     expect(wxss).toContain('min-height: 206rpx;');
+    expect(wxss).toContain('.template-card.selectable.habit');
+    expect(wxss).toContain('.template-card.selectable.study');
+    expect(wxss).toContain('.template-card.selectable.interest');
     expect(wxss).toContain('.template-card.editable');
     expect(wxss).toContain('min-height: 248rpx;');
   });

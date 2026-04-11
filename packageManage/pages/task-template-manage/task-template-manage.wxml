@@ -48,7 +48,7 @@
 
             <view wx:elif="{{hasTemplates}}" class="template-list">
               <block wx:for="{{templates}}" wx:key="id">
-                <view class="template-card selectable" bindtap="onTapTemplateCard" data-id="{{item.id}}">
+                <view class="template-card selectable {{item.typeClass}}" bindtap="onTapTemplateCard" data-id="{{item.id}}">
                   <view class="card-head">
                     <view class="head-main">
                       <view class="template-name">{{item.displayName}}</view>
