@@ -243,7 +243,11 @@
   <!-- 今日任务列表 -->
   <view class="task-list-container">
     <view class="task-list-header">
-      <view class="task-list-title">{{pageTitle}} ({{tasks.length}}个任务)</view>
+      <view class="task-list-title-group">
+        <view class="task-list-title">{{pageTitle}}</view>
+        <view wx:if="{{pageTitleBadge}}" class="task-list-badge">{{pageTitleBadge}}</view>
+        <view class="task-list-count">{{tasks.length}}个任务</view>
+      </view>
       <view class="week-switcher">
         <view
           wx:if="{{!isViewingToday}}"

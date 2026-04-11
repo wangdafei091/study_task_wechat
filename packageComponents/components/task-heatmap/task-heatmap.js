@@ -2,6 +2,7 @@ const Constants = require('../../../utils/constants.js');
 const uiUtils = require('../../../utils/uiUtils.js');
 const serviceManager = require('../../../services/service-manager.js');
 const logger = require('../../../utils/logger.js');
+const { formatDisplayTime } = require('../../../utils/formatUtils');
 
 let taskHeatmapLoadingCounter = 0;
 
@@ -453,6 +454,23 @@ Component({
         logger.error('[TaskHeatmap] 日期格式化错误:', e);
         return dateStr;
       }
+    },
+
+    formatDisplayTime(time) {
+      return formatDisplayTime(time);
+    },
+
+    formatDisplayTimeRange(startTime, endTime, isAllDay = false) {
+      if (isAllDay) {
+        return '全天';
+      }
+
+      const displayStartTime = this.formatDisplayTime(startTime);
+      const displayEndTime = this.formatDisplayTime(endTime);
+      if (displayStartTime && displayEndTime) {
+        return `${displayStartTime}-${displayEndTime}`;
+      }
+      return displayStartTime || displayEndTime || '';
     },
     
     // 获取星期几名称
@@ -1678,7 +1696,7 @@ Component({
             if (task.isAllDay) {
               timeRange = '全天';
             } else {
-              timeRange = task.endTime ? `${task.startTime}-${task.endTime}` : task.startTime;
+              timeRange = this.formatDisplayTimeRange(task.startTime, task.endTime);
             }
             
             // 单天任务已经在上面被过滤掉了，这里都是多天任务
@@ -1688,22 +1706,22 @@ Component({
             const weekDay = new Date(task.date).getDay();
             const weekDayNames = ['日', '一', '二', '三', '四', '五', '六'];
             // 根据全天任务状态决定时间显示
-            let weeklyTimeRange = task.isAllDay ? '全天' : `${task.startTime}-${task.endTime}`;
+            let weeklyTimeRange = this.formatDisplayTimeRange(task.startTime, task.endTime, task.isAllDay);
             enhancedTask.repeatInfo = `${this.formatDateRange(task.repeat.startDate, task.repeat.endDate)} 每周${weekDayNames[weekDay]} ${weeklyTimeRange}`;
             break;
           case 'workdays':
             // 根据全天任务状态决定时间显示
-            let workdaysTimeRange = task.isAllDay ? '全天' : `${task.startTime}-${task.endTime}`;
+            let workdaysTimeRange = this.formatDisplayTimeRange(task.startTime, task.endTime, task.isAllDay);
             enhancedTask.repeatInfo = `${this.formatDateRange(task.repeat.startDate, task.repeat.endDate)} 工作日 ${workdaysTimeRange}`;
             break;
           case 'weekends':
             // 根据全天任务状态决定时间显示
-            let weekendsTimeRange = task.isAllDay ? '全天' : `${task.startTime}-${task.endTime}`;
+            let weekendsTimeRange = this.formatDisplayTimeRange(task.startTime, task.endTime, task.isAllDay);
             enhancedTask.repeatInfo = `${this.formatDateRange(task.repeat.startDate, task.repeat.endDate)} 休息日 ${weekendsTimeRange}`;
             break;
           case 'custom':
             // 根据全天任务状态决定时间显示
-            let customTimeRange = task.isAllDay ? '全天' : `${task.startTime}-${task.endTime}`;
+            let customTimeRange = this.formatDisplayTimeRange(task.startTime, task.endTime, task.isAllDay);
             enhancedTask.repeatInfo = `${this.formatDateRange(task.repeat.startDate, task.repeat.endDate)} 每周${this.formatRepeatDays(task.repeat.days)} ${customTimeRange}`;
             break;
         }
@@ -1755,8 +1773,8 @@ Component({
       enhancedTask.points = task.points || 0;
       
       // 确保时间字段被正确传递
-      enhancedTask.startTime = task.startTime || '';
-      enhancedTask.endTime = task.endTime || '';
+      enhancedTask.startTime = this.formatDisplayTime(task.startTime);
+      enhancedTask.endTime = this.formatDisplayTime(task.endTime);
       
       // 确保isAllDay字段被正确传递
       enhancedTask.isAllDay = !!task.isAllDay;

@@ -23,11 +23,15 @@ function getPageTitleForDate(page, dateString) {
     return '今日任务';
   }
 
-  if (dateString > todayString) {
-    return `${formatDateTitle(page, dateString)}任务（预览）`;
-  }
-
   return `${formatDateTitle(page, dateString)}任务`;
+}
+
+function getPageTitleBadgeForDate(_page, dateString) {
+  const todayString = dateUtils.getTodayString();
+  if (dateString && dateString > todayString) {
+    return '预览';
+  }
+  return '';
 }
 
 function generateDateNavigation(page) {
@@ -92,6 +96,7 @@ function initializeDateNavigation(page) {
     dateNavigation,
     currentViewDate: todayString,
     pageTitle: getPageTitleForDate(page, todayString),
+    pageTitleBadge: getPageTitleBadgeForDate(page, todayString),
     weekLabel: '本周',
     canGoPrevWeek: true,
     canGoNextWeek: false,
@@ -118,6 +123,7 @@ function captureDateViewSnapshot(page) {
     currentViewDate: page.data.currentViewDate,
     dateNavigation: page.data.dateNavigation || [],
     pageTitle: page.data.pageTitle,
+    pageTitleBadge: page.data.pageTitleBadge || '',
     tasks: page.data.tasks || [],
     hasTodayTasks: page.data.hasTodayTasks,
     taskProgress: page.data.taskProgress || {},
@@ -279,6 +285,7 @@ async function onDateButtonTap(page, e) {
 module.exports = {
   formatDateTitle,
   getPageTitleForDate,
+  getPageTitleBadgeForDate,
   generateDateNavigation,
   getDefaultSelectedDateForCurrentWeek,
   updateViewState,

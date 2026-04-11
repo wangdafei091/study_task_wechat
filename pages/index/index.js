@@ -169,6 +169,7 @@ Page({
     currentViewDate: null, // 当前查看的日期（YYYY-MM-DD格式）
     dateNavigation: [], // 日期导航数据数组
     pageTitle: '今日任务', // 页面标题，根据选择的日期动态更新
+    pageTitleBadge: '', // 页面标题旁的轻量状态徽标，如“预览”
     hasTodayTasks: false // 是否有今日任务（用于显示空状态）
   },
   
@@ -386,7 +387,8 @@ Page({
         tasks: tasks,
         hasTodayTasks: (tasks && tasks.length > 0),
         currentViewDate: targetDate,
-        pageTitle: this.getPageTitleForDate(targetDate)
+        pageTitle: this.getPageTitleForDate(targetDate),
+        pageTitleBadge: dateNavigationModule.getPageTitleBadgeForDate(this, targetDate)
       });
 
       this._updateViewState(targetDate);

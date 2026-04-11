@@ -297,6 +297,7 @@ describe('pages/index/index shell behavior', () => {
     expect(taskService.getTodayTasks).toHaveBeenCalledWith('child-1', { requireFreshStars: true });
     expect(page.data.currentViewDate).toBe('2026-03-26');
     expect(page.data.pageTitle).toBe('今日任务');
+    expect(page.data.pageTitleBadge).toBe('');
     expect(page.data.isViewingToday).toBe(true);
 
     await page.loadTaskDataOnly('2026-03-20');
@@ -306,7 +307,8 @@ describe('pages/index/index shell behavior', () => {
 
     taskService.getTasksByDate.mockResolvedValueOnce([{ id: 'task-3', title: '未来任务', status: 0 }]);
     await page.loadTaskDataOnly('2026-03-28');
-    expect(page.data.pageTitle).toBe('3月28日任务（预览）');
+    expect(page.data.pageTitle).toBe('3月28日任务');
+    expect(page.data.pageTitleBadge).toBe('预览');
     expect(page.data.isViewingFuture).toBe(true);
 
     page.loadTaskDataOnly = jest.fn().mockRejectedValue(new Error('boom'));

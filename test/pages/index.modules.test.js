@@ -203,6 +203,7 @@ describe('pages/index helper modules', () => {
         currentViewDate: '2026-03-26',
         dateNavigation: [{ dateString: '2026-03-26' }],
         pageTitle: '今日任务',
+        pageTitleBadge: '',
         tasks: [{ id: 'task-old' }],
         hasTodayTasks: true,
         taskProgress: { habit: 1 },
@@ -223,6 +224,7 @@ describe('pages/index helper modules', () => {
     expect(page.data.weekOffset).toBe(0);
     expect(page.data.currentViewDate).toBe('2026-03-26');
     expect(page.data.pageTitle).toBe('今日任务');
+    expect(page.data.pageTitleBadge).toBe('');
     expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({
       title: '加载失败'
     }));
