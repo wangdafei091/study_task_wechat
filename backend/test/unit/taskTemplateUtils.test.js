@@ -1,6 +1,7 @@
 const {
   buildTemplateSearchText,
   normalizeDateStrategy,
+  normalizeReminder,
   normalizeTaskPayload
 } = require('../../utils/task-template-utils');
 
@@ -168,5 +169,12 @@ describe('backend task-template-utils', () => {
     expect(text).toContain('固定任务');
     expect(text).toContain('阅读20分钟');
     expect(text).toContain('睡前完成');
+  });
+
+  it('normalizeReminder 应兼容 null 并回落为默认值', () => {
+    expect(normalizeReminder(null)).toEqual({
+      enabled: false,
+      time: 0
+    });
   });
 });

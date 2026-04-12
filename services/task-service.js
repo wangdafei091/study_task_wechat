@@ -936,6 +936,18 @@ class TaskService {
   async getTasksByScope(options = {}) {
     return taskQuery.getTasksByScope(this, options);
   }
+
+  async getChildTasksByScope(options = {}) {
+    return taskQuery.getChildTasksByScope(this, options);
+  }
+
+  async getPendingLocalTasksByScope(options = {}) {
+    return taskQuery.getPendingLocalTasksByScope(this, options);
+  }
+
+  async getPendingLocalChildTasksByScope(options = {}) {
+    return taskQuery.getPendingLocalChildTasksByScope(this, options);
+  }
 }
 
 module.exports = TaskService; 

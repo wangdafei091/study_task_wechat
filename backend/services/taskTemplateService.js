@@ -23,7 +23,9 @@ class TaskTemplateService {
       [familyId]
     );
 
-    const templates = rows.map((row) => TaskTemplate.fromDB(row));
+    const templates = rows
+      .map((row) => this._safeTemplateFromDB(row, 'listTemplates'))
+      .filter(Boolean);
     const keyword = String(options.keyword || '').trim().toLowerCase();
     const type = options.type || 'all';
     const status = options.status || 'all';
@@ -67,7 +69,7 @@ class TaskTemplateService {
       return null;
     }
 
-    return TaskTemplate.fromDB(rows[0]);
+    return this._safeTemplateFromDB(rows[0], 'getTemplateById');
   }
 
   async createTemplate(familyId, operatorUserId, input = {}) {
@@ -296,7 +298,38 @@ class TaskTemplateService {
       return null;
     }
 
-    return TaskTemplate.fromDB(rows[0]);
+    return this._safeTemplateFromDB(rows[0], '_getTemplateByIdWithConnection');
+  }
+
+  _safeTemplateFromDB(row, scene = 'unknown') {
+    try {
+      if (!row || typeof row !== 'object') {
+        logger.warn('跳过无效模板记录', {
+          scene,
+          reason: 'record-is-empty'
+        });
+        return null;
+      }
+
+      const template = TaskTemplate.fromDB(row);
+      if (!template) {
+        logger.warn('跳过无效模板记录', {
+          scene,
+          reason: 'from-db-returned-empty',
+          templateId: row.template_id || null
+        });
+        return null;
+      }
+
+      return template;
+    } catch (error) {
+      logger.warn('跳过损坏模板记录', {
+        scene,
+        templateId: row?.template_id || null,
+        error: error.message
+      });
+      return null;
+    }
   }
 
   async _executeWithConnection(connection, sql, params = []) {

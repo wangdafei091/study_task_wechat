@@ -21,7 +21,10 @@ function loadTaskService(overrides = {}) {
     getTaskStatistics: jest.fn(),
     calculateDailyStats: jest.fn(() => []),
     calculateStreak: jest.fn(async () => 0),
-    getTasksByScope: jest.fn()
+    getTasksByScope: jest.fn(),
+    getChildTasksByScope: jest.fn(),
+    getPendingLocalTasksByScope: jest.fn(),
+    getPendingLocalChildTasksByScope: jest.fn()
   };
   const taskRepeat = {
     generateRepeatTasks: jest.fn(),
@@ -276,6 +279,9 @@ describe('TaskService helpers and delegators', () => {
     } = loadTaskService();
 
     taskQuery.getTasksByScope.mockResolvedValue(['scope-task']);
+    taskQuery.getChildTasksByScope.mockResolvedValue(['child-scope-task']);
+    taskQuery.getPendingLocalTasksByScope.mockResolvedValue(['pending-task']);
+    taskQuery.getPendingLocalChildTasksByScope.mockResolvedValue(['pending-child-task']);
     taskRepeat.generateRepeatTasks.mockResolvedValue(['repeat-task']);
     taskRepeat.createRepeatTaskInstance.mockReturnValue({ id: 'repeat-instance' });
     taskSync.migrateTasksToChild.mockResolvedValue({ success: true, count: 1 });
@@ -286,6 +292,9 @@ describe('TaskService helpers and delegators', () => {
     taskPenalty.checkTasksStatus.mockResolvedValue({ success: true });
 
     await expect(service.getTasksByScope({ scope: 'family' })).resolves.toEqual(['scope-task']);
+    await expect(service.getChildTasksByScope({ scope: 'family' })).resolves.toEqual(['child-scope-task']);
+    await expect(service.getPendingLocalTasksByScope({ scope: 'family' })).resolves.toEqual(['pending-task']);
+    await expect(service.getPendingLocalChildTasksByScope({ scope: 'family' })).resolves.toEqual(['pending-child-task']);
     await expect(service._generateRepeatTasks({ id: 'task_1' })).resolves.toEqual(['repeat-task']);
     expect(service._createRepeatTaskInstance({ id: 'task_1' }, new Date('2026-03-26'))).toEqual({ id: 'repeat-instance' });
     await expect(service._migrateTasksToChild('parent_1', 'child_1')).resolves.toEqual({ success: true, count: 1 });
@@ -296,6 +305,9 @@ describe('TaskService helpers and delegators', () => {
     await expect(service.checkTasksStatus()).resolves.toEqual({ success: true });
 
     expect(taskQuery.getTasksByScope).toHaveBeenCalledWith(service, { scope: 'family' });
+    expect(taskQuery.getChildTasksByScope).toHaveBeenCalledWith(service, { scope: 'family' });
+    expect(taskQuery.getPendingLocalTasksByScope).toHaveBeenCalledWith(service, { scope: 'family' });
+    expect(taskQuery.getPendingLocalChildTasksByScope).toHaveBeenCalledWith(service, { scope: 'family' });
     expect(taskRepeat.generateRepeatTasks).toHaveBeenCalledWith(service, { id: 'task_1' });
     expect(taskRepeat.createRepeatTaskInstance).toHaveBeenCalled();
     expect(taskSync.migrateTasksToChild).toHaveBeenCalledWith(service, 'parent_1', 'child_1');

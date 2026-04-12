@@ -1,4 +1,5 @@
 const taskTemplateService = require('../services/taskTemplateService');
+const taskTemplateRecommendationService = require('../services/taskTemplateRecommendationService');
 const { success, error } = require('../utils/response');
 const { createLogger } = require('../utils/logger');
 
@@ -123,6 +124,27 @@ class TaskTemplateController {
     } catch (err) {
       logger.error('记录任务模板使用次数失败', err);
       return res.status(this._statusForError(err.code)).json(error(err.message || '记录任务模板使用次数失败', err.code || 'TASK_TEMPLATE_USAGE_FAILED'));
+    }
+  }
+
+  async queryRecommendations(req, res) {
+    try {
+      if (!this._ensureManagePermission(req, res)) {
+        return;
+      }
+
+      const result = await taskTemplateRecommendationService.queryRecommendations({
+        familyId: req.user.familyId,
+        userId: req.user.userId,
+        ...(req.body || {})
+      });
+
+      return res.json(success(result, '获取成功'));
+    } catch (err) {
+      logger.error('查询任务模板推荐候选失败', err);
+      return res.status(this._statusForError(err.code)).json(
+        error(err.message || '查询任务模板推荐候选失败', err.code || 'TASK_TEMPLATE_RECOMMENDATION_FAILED')
+      );
     }
   }
 

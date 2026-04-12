@@ -97,9 +97,10 @@ function normalizeRepeatDays(days) {
 }
 
 function normalizeReminder(reminder = {}) {
+  const safeReminder = reminder && typeof reminder === 'object' ? reminder : {};
   return {
-    enabled: reminder.enabled === true,
-    time: Number.isFinite(Number(reminder.time)) ? Number(reminder.time) : 0
+    enabled: safeReminder.enabled === true,
+    time: Number.isFinite(Number(safeReminder.time)) ? Number(safeReminder.time) : 0
   };
 }
 

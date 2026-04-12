@@ -436,7 +436,7 @@ class TaskService {
         );
 
         if (columnMap.reminder) {
-          restoreParams.splice(6, 0, taskData.reminder ? JSON.stringify(taskData.reminder) : null);
+          restoreParams.splice(6, 0, JSON.stringify(Task.normalizeReminder(taskData.reminder)));
         }
         if (columnMap.duration) {
           restoreSetClauses.push(`${columnMap.duration} = ?`);
@@ -765,7 +765,11 @@ class TaskService {
           }
           if (field === 'tags' || field === 'repeat' || field === 'reminder') {
             setClauses.push(`${dbField} = ?`);
-            params.push(changes[field] !== null ? JSON.stringify(changes[field]) : null);
+            if (field === 'reminder') {
+              params.push(JSON.stringify(Task.normalizeReminder(changes[field])));
+            } else {
+              params.push(changes[field] !== null ? JSON.stringify(changes[field]) : null);
+            }
           } else {
             setClauses.push(`${dbField} = ?`);
             params.push(changes[field]);

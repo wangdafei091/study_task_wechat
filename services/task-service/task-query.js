@@ -1,5 +1,6 @@
 const logger = require('../../utils/logger');
 const dateUtils = require('../../utils/dateUtils');
+const userContextUtils = require('../../utils/user-context');
 const { TaskStatus, TaskType } = require('../../models/task');
 const { EVENTS } = require('../../utils/constants');
 
@@ -537,7 +538,7 @@ async function getTasksByScope(service, options = {}) {
       if (service.enableCloudStorage) {
         const cloudTasks = await service._fetchTasksFromCloud(null, { scope: 'family' });
         const localTasks = await service.taskRepository.getAll();
-        const cloudIds = new Set((cloudTasks || []).map((task) => task.id));
+        const cloudIds = new Set((cloudTasks || []).map((task) => task.id).filter(Boolean));
         const localOnlyTasks = (localTasks || []).filter((task) => !cloudIds.has(task.id));
         return localOnlyTasks.length > 0
           ? [...cloudTasks, ...localOnlyTasks]
@@ -548,6 +549,86 @@ async function getTasksByScope(service, options = {}) {
     return service.getAllTasks(null, options);
   } catch (error) {
     logger.error('TaskService', 'getTasksByScope 失败', error);
+    return [];
+  }
+}
+
+function getTaskOwnerUserId(task = {}) {
+  return task.userId || task.pendingSyncMeta?.targetUserId || null;
+}
+
+function isPendingLocalTask(task) {
+  return Boolean(task && (task.pendingSyncMeta || task.syncedToCloud !== true));
+}
+
+function getFamilyChildUserIds(service) {
+  const availableUsers = service.userService?.getAllUsers?.() || [];
+  return availableUsers
+    .filter((user) => user?.role === 'child' && user?.status !== 'inactive')
+    .map((user) => userContextUtils.getUserIdentifier(user))
+    .filter(Boolean);
+}
+
+function filterFamilyChildTasks(service, tasks = []) {
+  const childUserIds = getFamilyChildUserIds(service);
+  if (childUserIds.length === 0) {
+    return [];
+  }
+
+  const childUserIdSet = new Set(childUserIds);
+  return (Array.isArray(tasks) ? tasks : []).filter((task) => childUserIdSet.has(getTaskOwnerUserId(task)));
+}
+
+async function getChildTasksByScope(service, options = {}) {
+  try {
+    if (options.userId || options.scope !== 'family') {
+      return getTasksByScope(service, options);
+    }
+
+    return filterFamilyChildTasks(service, await getTasksByScope(service, options));
+  } catch (error) {
+    logger.error('TaskService', 'getChildTasksByScope 失败', error);
+    return [];
+  }
+}
+
+async function getPendingLocalTasksByScope(service, options = {}) {
+  try {
+    const localTasks = await service.taskRepository.getAll();
+    const pendingTasks = (Array.isArray(localTasks) ? localTasks : []).filter(isPendingLocalTask);
+
+    if (options.userId) {
+      return pendingTasks.filter((task) => getTaskOwnerUserId(task) === options.userId);
+    }
+
+    if (options.scope === 'family') {
+      return pendingTasks;
+    }
+
+    const currentUserId = userContextUtils.getUserIdentifier(service.userService?.getCurrentUser?.())
+      || service.userService?.getCurrentUserId?.()
+      || null;
+
+    if (currentUserId) {
+      return pendingTasks.filter((task) => getTaskOwnerUserId(task) === currentUserId);
+    }
+
+    return pendingTasks;
+  } catch (error) {
+    logger.error('TaskService', 'getPendingLocalTasksByScope 失败', error);
+    return [];
+  }
+}
+
+async function getPendingLocalChildTasksByScope(service, options = {}) {
+  try {
+    if (options.userId || options.scope !== 'family') {
+      return getPendingLocalTasksByScope(service, options);
+    }
+
+    return filterFamilyChildTasks(service, await getPendingLocalTasksByScope(service, options));
+  } catch (error) {
+    logger.error('TaskService', 'getPendingLocalChildTasksByScope 失败', error);
     return [];
   }
 }
@@ -565,5 +646,8 @@ module.exports = {
   getTaskStatistics,
   calculateDailyStats,
   calculateStreak,
-  getTasksByScope
+  getTasksByScope,
+  getChildTasksByScope,
+  getPendingLocalTasksByScope,
+  getPendingLocalChildTasksByScope
 };

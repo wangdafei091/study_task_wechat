@@ -128,4 +128,95 @@ describe('backend TaskService schema compatibility', () => {
     expect(sql).toContain('penalty_applied');
     expect(sql).toContain('parent_task_id');
   });
+
+  it('createTask 未传 reminder 时，在新版 schema 下也应写入默认提醒对象而不是 NULL', async () => {
+    const { getPool, query } = require('../../config/database');
+    const connection = {
+      beginTransaction: jest.fn().mockResolvedValue(),
+      execute: jest.fn().mockResolvedValue([[], undefined]),
+      commit: jest.fn().mockResolvedValue(),
+      rollback: jest.fn().mockResolvedValue(),
+      release: jest.fn()
+    };
+    getPool.mockReturnValue({
+      getConnection: jest.fn().mockResolvedValue(connection)
+    });
+    query.mockResolvedValueOnce(createColumnRows([
+      'task_id', 'user_id', 'title', 'description', 'type', 'date',
+      'start_time', 'end_time', 'reminder', 'points', 'points_expiry', 'is_required',
+      'status', 'repeat', 'is_all_day', 'penalty_applied', 'deleted_at',
+      'completion_time', 'star_awarded', 'modify_time', 'duration',
+      'has_no_end_date', 'tags', 'parent_task_id'
+    ]));
+
+    const service = require('../../services/taskService');
+
+    await service.createTask('user_001', {
+      title: '默认提醒任务',
+      type: 'study',
+      date: '2026-03-21'
+    });
+
+    const [, params] = connection.execute.mock.calls[0];
+    expect(params).toContain(JSON.stringify({
+      enabled: false,
+      time: 0
+    }));
+  });
+
+  it('updateTask 传入 reminder=null 时应收口为默认提醒对象而不是写入 NULL', async () => {
+    const { getPool, query } = require('../../config/database');
+    const connection = {
+      beginTransaction: jest.fn().mockResolvedValue(),
+      execute: jest.fn()
+        .mockResolvedValueOnce([{ affectedRows: 1 }, undefined])
+        .mockResolvedValueOnce([[
+          {
+            task_id: 'task_001',
+            user_id: 'user_001',
+            title: '更新后任务',
+            description: '',
+            type: 'study',
+            date: '2026-03-21',
+            start_time: '09:00',
+            end_time: '10:00',
+            reminder: JSON.stringify({ enabled: false, time: 0 }),
+            points: 1,
+            points_expiry: 'week',
+            is_required: 0,
+            status: 0,
+            repeat: null,
+            is_all_day: 0,
+            penalty_applied: 0,
+            deleted_at: null,
+            modify_time: 123
+          }
+        ], undefined]),
+      commit: jest.fn().mockResolvedValue(),
+      rollback: jest.fn().mockResolvedValue(),
+      release: jest.fn()
+    };
+    getPool.mockReturnValue({
+      getConnection: jest.fn().mockResolvedValue(connection)
+    });
+    query.mockResolvedValueOnce(createColumnRows([
+      'task_id', 'user_id', 'title', 'description', 'type', 'date',
+      'start_time', 'end_time', 'reminder', 'points', 'points_expiry', 'is_required',
+      'status', 'repeat', 'is_all_day', 'penalty_applied', 'deleted_at',
+      'completion_time', 'star_awarded', 'modify_time'
+    ]));
+
+    const service = require('../../services/taskService');
+
+    await service.updateTask('task_001', {
+      reminder: null,
+      modifyTime: 123
+    });
+
+    const [, params] = connection.execute.mock.calls[0];
+    expect(params[0]).toBe(JSON.stringify({
+      enabled: false,
+      time: 0
+    }));
+  });
 });

@@ -23,6 +23,7 @@ describe('TaskTemplateService', () => {
       ENABLE_API: enableApi,
       ENDPOINTS: {
         TASK_TEMPLATES: '/api/task-templates',
+        TASK_TEMPLATE_RECOMMENDATIONS_QUERY: '/api/task-templates/recommendations/query',
         TASK_TEMPLATE_BY_ID: '/api/task-templates/{templateId}',
         TASK_TEMPLATE_ENABLED: '/api/task-templates/{templateId}/enabled',
         TASK_TEMPLATE_USAGE: '/api/task-templates/{templateId}/usage'
@@ -51,7 +52,10 @@ describe('TaskTemplateService', () => {
       delete: jest.fn().mockResolvedValue(true)
     };
     taskService = {
-      getTasksByScope: jest.fn().mockResolvedValue([])
+      getTasksByScope: jest.fn().mockResolvedValue([]),
+      getChildTasksByScope: jest.fn().mockResolvedValue([]),
+      getPendingLocalTasksByScope: jest.fn().mockResolvedValue([]),
+      getPendingLocalChildTasksByScope: jest.fn().mockResolvedValue([])
     };
     eventHandlers = {};
     eventBus = {
@@ -595,7 +599,7 @@ describe('TaskTemplateService', () => {
       eventBus
     });
     repository.getAll.mockResolvedValue([]);
-    taskService.getTasksByScope.mockResolvedValue([
+    taskService.getChildTasksByScope.mockResolvedValue([
       {
         id: 'task_1',
         title: '晚间阅读',
@@ -665,7 +669,7 @@ describe('TaskTemplateService', () => {
       reasonCode: 'high-frequency'
     }));
     expect(second.cached).toBe(true);
-    expect(taskService.getTasksByScope).toHaveBeenCalledTimes(1);
+    expect(taskService.getChildTasksByScope).toHaveBeenCalledTimes(1);
   });
 
   it('任务事件触发后应失效推荐缓存并重新计算', async () => {
@@ -674,7 +678,7 @@ describe('TaskTemplateService', () => {
       eventBus
     });
     repository.getAll.mockResolvedValue([]);
-    taskService.getTasksByScope.mockResolvedValue([
+    taskService.getChildTasksByScope.mockResolvedValue([
       {
         id: 'task_1',
         title: '晚间阅读',
@@ -736,7 +740,7 @@ describe('TaskTemplateService', () => {
     });
 
     expect(eventBus.on).toHaveBeenCalled();
-    expect(taskService.getTasksByScope).toHaveBeenCalledTimes(2);
+    expect(taskService.getChildTasksByScope).toHaveBeenCalledTimes(2);
   });
 
   it('已有同任务节奏模板时应抑制仅次要字段不同的推荐候选', async () => {
@@ -780,7 +784,7 @@ describe('TaskTemplateService', () => {
         }
       }
     ]);
-    taskService.getTasksByScope.mockResolvedValue([
+    taskService.getChildTasksByScope.mockResolvedValue([
       {
         id: 'task_1',
         title: '晚间阅读',
@@ -842,6 +846,237 @@ describe('TaskTemplateService', () => {
     expect(result.candidates).toEqual([]);
   });
 
+  it('云端模式下应优先调用推荐查询接口，并发送本地待同步任务补丁', async () => {
+    jest.resetModules();
+    setupModules(true);
+    const service = new TaskTemplateService({
+      taskService,
+      eventBus
+    });
+
+    HttpClient.get.mockResolvedValue({ templates: [] });
+    HttpClient.post.mockResolvedValue({
+      candidates: [{
+        candidateKey: 'sig_1',
+        displayName: '晚间阅读',
+        sourceTaskId: 'task_local_1',
+        taskPayload: {
+          title: '晚间阅读',
+          type: 'study',
+          points: 2,
+          pointsExpiry: 'week',
+          description: '',
+          isRequired: false,
+          isAllDay: false,
+          startDate: '2026-04-05',
+          startTime: '19:00',
+          endDate: '2026-04-05',
+          endTime: '19:30',
+          hasNoEndDate: false,
+          repeat: {
+            type: 'none',
+            days: [],
+            startDate: '2026-04-05',
+            endDate: '2026-04-05'
+          },
+          reminder: {
+            enabled: false,
+            time: 0
+          }
+        },
+        dateStrategy: {
+          mode: 'today',
+          autoShiftExpiredEndDate: true,
+          endMode: 'same-day',
+          durationDays: 1
+        },
+        occurrences: 2,
+        stableWeeks: 0,
+        reasonCode: 'high-frequency',
+        reasonText: '近60天出现了 2 次',
+        signature: 'sig_1',
+        coverageSignature: 'cov_1',
+        repeatSpanKey: null,
+        lastSeenAt: 2
+      }],
+      total: 1
+    });
+    taskService.getPendingLocalChildTasksByScope.mockResolvedValue([
+      {
+        id: 'task_local_1',
+        title: '晚间阅读',
+        description: '',
+        type: 'study',
+        date: '2026-04-05',
+        startDate: '2026-04-05',
+        endDate: '2026-04-05',
+        startTime: '19:00',
+        endTime: '19:30',
+        hasNoEndDate: false,
+        isAllDay: false,
+        isRequired: false,
+        points: 2,
+        pointsExpiry: 'week',
+        repeat: {
+          type: 'none',
+          days: [],
+          startDate: '2026-04-05',
+          endDate: '2026-04-05'
+        },
+        reminder: {
+          enabled: false,
+          time: 0
+        },
+        syncedToCloud: false,
+        pendingSyncMeta: {
+          action: 'create'
+        },
+        modifyTime: 2
+      }
+    ]);
+
+    const result = await service.getRecommendedTemplateCandidates({
+      today: '2026-04-09',
+      limit: 1
+    });
+
+    expect(result.source).toBe('cloud');
+    expect(result.candidates).toHaveLength(1);
+    expect(taskService.getPendingLocalChildTasksByScope).toHaveBeenCalledWith({
+      scope: 'family'
+    });
+    expect(HttpClient.post).toHaveBeenCalledWith(
+      '/api/task-templates/recommendations/query',
+      expect.objectContaining({
+        today: '2026-04-09',
+        lookbackDays: 60,
+        limit: 1,
+        localPendingTasks: [
+          expect.objectContaining({
+            id: 'task_local_1',
+            title: '晚间阅读'
+          })
+        ]
+      })
+    );
+    const requestBody = HttpClient.post.mock.calls[0][1];
+    expect(requestBody.localPendingTasks[0]).not.toHaveProperty('pendingSyncMeta');
+    expect(requestBody.localPendingTasks[0]).not.toHaveProperty('syncedToCloud');
+  });
+
+  it('不同 limit 的云端推荐查询不应复用同一份缓存结果', async () => {
+    jest.resetModules();
+    setupModules(true);
+    const service = new TaskTemplateService({
+      taskService,
+      eventBus
+    });
+
+    HttpClient.get.mockResolvedValue({ templates: [] });
+    HttpClient.post
+      .mockResolvedValueOnce({
+        candidates: [{ candidateKey: 'sig_1', displayName: '模板1', taskPayload: { title: '任务1' }, dateStrategy: { mode: 'today' } }],
+        total: 3
+      })
+      .mockResolvedValueOnce({
+        candidates: [
+          { candidateKey: 'sig_1', displayName: '模板1', taskPayload: { title: '任务1' }, dateStrategy: { mode: 'today' } },
+          { candidateKey: 'sig_2', displayName: '模板2', taskPayload: { title: '任务2' }, dateStrategy: { mode: 'today' } }
+        ],
+        total: 3
+      });
+
+    await service.getRecommendedTemplateCandidates({
+      today: '2026-04-09',
+      limit: 1
+    });
+    const second = await service.getRecommendedTemplateCandidates({
+      today: '2026-04-09',
+      limit: 2
+    });
+
+    expect(HttpClient.post).toHaveBeenCalledTimes(2);
+    expect(second.candidates).toHaveLength(2);
+    expect(second.total).toBe(3);
+  });
+
+  it('云端推荐接口失败时应回退本地算法', async () => {
+    jest.resetModules();
+    setupModules(true);
+    const service = new TaskTemplateService({
+      taskService,
+      eventBus
+    });
+
+    HttpClient.get.mockResolvedValue({ templates: [] });
+    HttpClient.post.mockRejectedValue(new Error('network down'));
+    repository.getAll.mockResolvedValue([]);
+    taskService.getChildTasksByScope.mockResolvedValue([
+      {
+        id: 'task_1',
+        title: '晚间阅读',
+        type: 'study',
+        points: 2,
+        pointsExpiry: 'week',
+        description: '',
+        isRequired: false,
+        isAllDay: false,
+        date: '2026-04-01',
+        startDate: '2026-04-01',
+        endDate: '2026-04-01',
+        startTime: '19:00',
+        endTime: '19:30',
+        hasNoEndDate: false,
+        repeat: {
+          type: 'none',
+          days: [],
+          startDate: '2026-04-01',
+          endDate: '2026-04-01'
+        },
+        reminder: {
+          enabled: false,
+          time: 0
+        }
+      },
+      {
+        id: 'task_2',
+        title: '晚间阅读',
+        type: 'study',
+        points: 2,
+        pointsExpiry: 'week',
+        description: '',
+        isRequired: false,
+        isAllDay: false,
+        date: '2026-04-05',
+        startDate: '2026-04-05',
+        endDate: '2026-04-05',
+        startTime: '19:00',
+        endTime: '19:30',
+        hasNoEndDate: false,
+        repeat: {
+          type: 'none',
+          days: [],
+          startDate: '2026-04-05',
+          endDate: '2026-04-05'
+        },
+        reminder: {
+          enabled: false,
+          time: 0
+        }
+      }
+    ]);
+
+    const result = await service.getRecommendedTemplateCandidates({
+      today: '2026-04-09'
+    });
+
+    expect(result.source).toBe('local_fallback');
+    expect(result.candidates).toHaveLength(1);
+    expect(taskService.getChildTasksByScope).toHaveBeenCalledWith({
+      scope: 'family'
+    });
+  });
+
   it('updateUserService 后应使推荐缓存失效并切换上下文缓存键', async () => {
     const firstUserService = {
       getLoginUser: jest.fn(() => ({ familyId: 'family_1' })),
@@ -859,7 +1094,7 @@ describe('TaskTemplateService', () => {
       userService: firstUserService
     });
     repository.getAll.mockResolvedValue([]);
-    taskService.getTasksByScope.mockResolvedValue([
+    taskService.getChildTasksByScope.mockResolvedValue([
       {
         id: 'task_1',
         title: '晚间阅读',
@@ -920,6 +1155,6 @@ describe('TaskTemplateService', () => {
     expect(first.cached).toBe(false);
     expect(cached.cached).toBe(true);
     expect(afterSwitch.cached).toBe(false);
-    expect(taskService.getTasksByScope).toHaveBeenCalledTimes(2);
+    expect(taskService.getChildTasksByScope).toHaveBeenCalledTimes(2);
   });
 });
