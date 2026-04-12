@@ -463,6 +463,19 @@ describe('backend TaskTemplateService', () => {
     expect(template.enabled).toBe(false);
   });
 
+  it('listTemplates 遇到空记录时应跳过而不是抛错', async () => {
+    const { query } = require('../../config/database');
+    query.mockResolvedValue([
+      createRow({ template_id: 'tpl_ok' }),
+      null
+    ]);
+
+    const service = require('../../services/taskTemplateService');
+    const templates = await service.listTemplates('family_1');
+
+    expect(templates.map((item) => item.templateId)).toEqual(['tpl_ok']);
+  });
+
   it('deleteTemplate 应执行软删除', async () => {
     const { query } = require('../../config/database');
     query.mockResolvedValueOnce([createRow()]);

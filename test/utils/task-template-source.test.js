@@ -37,6 +37,57 @@ describe('utils/task-template-source', () => {
     })).toEqual([]);
   });
 
+  it('任务 reminder 为 null 时仍应能正常生成推荐候选', () => {
+    const tasks = [
+      {
+        id: 'task_1',
+        title: '晚间阅读',
+        type: 'study',
+        date: '2026-04-01',
+        startDate: '2026-04-01',
+        endDate: '2026-04-01',
+        startTime: '19:00',
+        endTime: '19:30',
+        hasNoEndDate: false,
+        repeat: {
+          type: 'none',
+          days: [],
+          startDate: '2026-04-01',
+          endDate: '2026-04-01'
+        },
+        reminder: null
+      },
+      {
+        id: 'task_2',
+        title: '晚间阅读',
+        type: 'study',
+        date: '2026-04-05',
+        startDate: '2026-04-05',
+        endDate: '2026-04-05',
+        startTime: '19:00',
+        endTime: '19:30',
+        hasNoEndDate: false,
+        repeat: {
+          type: 'none',
+          days: [],
+          startDate: '2026-04-05',
+          endDate: '2026-04-05'
+        },
+        reminder: null
+      }
+    ];
+
+    const candidates = groupTasksToTemplateCandidates(tasks, [], {
+      today: '2026-04-09'
+    });
+
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]).toEqual(expect.objectContaining({
+      displayName: '晚间阅读',
+      reasonCode: 'high-frequency'
+    }));
+  });
+
   it('已跨多个自然周的重复任务应进入候选，并保留持续天数语义', () => {
     const task = {
       id: 'task_1',

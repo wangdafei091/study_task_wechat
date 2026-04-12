@@ -7,6 +7,7 @@ const router = express.Router();
 router.use(authMiddleware);
 
 router.get('/', taskTemplateController.getTemplates.bind(taskTemplateController));
+router.post('/recommendations/query', taskTemplateController.queryRecommendations.bind(taskTemplateController));
 router.post('/', taskTemplateController.createTemplate.bind(taskTemplateController));
 router.put('/:templateId', taskTemplateController.updateTemplate.bind(taskTemplateController));
 router.patch('/:templateId/enabled', taskTemplateController.setTemplateEnabled.bind(taskTemplateController));

@@ -17,6 +17,15 @@ function formatDate(date) {
   return `${year}-${month}-${day}`;
 }
 
+function addDays(dateInput, days) {
+  const date = dateInput instanceof Date ? new Date(dateInput.getTime()) : new Date(`${dateInput}T00:00:00`);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+  date.setDate(date.getDate() + Number(days || 0));
+  return date;
+}
+
 const TASK_TEMPLATE_TYPES = ['habit', 'study', 'interest'];
 const TASK_TEMPLATE_REPEAT_TYPES = ['none', 'daily', 'weekly', 'workdays', 'weekends', 'custom'];
 const TASK_TEMPLATE_POINTS_EXPIRY = ['permanent', 'week', 'month', 'quarter'];
@@ -77,9 +86,10 @@ function normalizeRepeatDays(days) {
 }
 
 function normalizeReminder(reminder = {}) {
+  const safeReminder = reminder && typeof reminder === 'object' ? reminder : {};
   return {
-    enabled: reminder.enabled === true,
-    time: Number.isFinite(Number(reminder.time)) ? Number(reminder.time) : 0
+    enabled: safeReminder.enabled === true,
+    time: Number.isFinite(Number(safeReminder.time)) ? Number(safeReminder.time) : 0
   };
 }
 
@@ -263,7 +273,17 @@ function buildTemplateSearchText(template = {}) {
 }
 
 module.exports = {
+  addDays,
   buildTemplateSearchText,
+  formatDate,
+  getTodayString,
+  normalizeDateString,
   normalizeDateStrategy,
+  normalizePoints,
+  normalizePointsExpiry,
+  normalizeReminder,
+  normalizeRepeatDays,
+  normalizeTaskType,
+  normalizeTimeString,
   normalizeTaskPayload
 };

@@ -36,6 +36,14 @@ function parseTimeToSeconds(value) {
   return hours * 3600 + minutes * 60 + seconds;
 }
 
+function normalizeReminder(reminder) {
+  const safeReminder = reminder && typeof reminder === 'object' ? reminder : {};
+  return {
+    enabled: safeReminder.enabled === true,
+    time: Number.isFinite(Number(safeReminder.time)) ? Number(safeReminder.time) : 0
+  };
+}
+
 class Task {
   constructor({
     taskId,
@@ -76,14 +84,7 @@ class Task {
     this.date = date;
     this.startTime = startTime;
     this.endTime = endTime;
-    this.reminder = reminder
-      ? {
-        enabled: reminder.enabled === true,
-        time: typeof reminder.time === 'number'
-          ? reminder.time
-          : Number(reminder.time || 0)
-      }
-      : null;
+    this.reminder = normalizeReminder(reminder);
     this.points = points;
     this.pointsExpiry = pointsExpiry;
     this.isRequired = isRequired;
@@ -206,7 +207,7 @@ class Task {
       date: this.date,
       startTime: this.startTime,
       endTime: this.endTime,
-      reminder: this.reminder ? JSON.stringify(this.reminder) : null,
+      reminder: JSON.stringify(normalizeReminder(this.reminder)),
       points: this.points,
       pointsExpiry: this.pointsExpiry,
       isRequired: this.isRequired,
@@ -377,5 +378,7 @@ class Task {
     };
   }
 }
+
+Task.normalizeReminder = normalizeReminder;
 
 module.exports = Task;

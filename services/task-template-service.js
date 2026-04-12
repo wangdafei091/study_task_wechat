@@ -342,14 +342,15 @@ class TaskTemplateService {
       ? Math.max(1, Number(options.lookbackDays))
       : 60;
     const recommendationContextKey = this._buildRecommendationContextKey();
-    const cacheKey = JSON.stringify({
-      recommendationContextKey,
-      today,
-      lookbackDays
-    });
     const limit = Number.isInteger(Number(options.limit))
       ? Math.max(1, Number(options.limit))
       : null;
+    const cacheKey = JSON.stringify({
+      recommendationContextKey,
+      today,
+      lookbackDays,
+      limit
+    });
     const now = Date.now();
 
     if (
@@ -361,8 +362,9 @@ class TaskTemplateService {
       const cachedCandidates = this._recommendationCache.candidates || [];
       return {
         candidates: limit ? cachedCandidates.slice(0, limit) : cachedCandidates,
-        total: cachedCandidates.length,
-        cached: true
+        total: this._recommendationCache.total ?? cachedCandidates.length,
+        cached: true,
+        source: this._recommendationCache.source || 'local'
       };
     }
 
@@ -372,23 +374,58 @@ class TaskTemplateService {
       });
     }
 
-    const templates = await this.repository.getAll();
-    const tasks = await this._loadFamilyTasksForRecommendations();
-    const candidates = groupTasksToTemplateCandidates(tasks, templates, {
-      today,
-      lookbackDays
-    });
+    let candidates = [];
+    let total = 0;
+    let source = 'local';
+
+    if (this.enableCloudStorage) {
+      try {
+        const cloudResult = await this._queryRecommendationCandidatesFromCloud({
+          today,
+          lookbackDays,
+          limit
+        });
+        candidates = Array.isArray(cloudResult.candidates) ? cloudResult.candidates : [];
+        total = Number.isInteger(Number(cloudResult.total))
+          ? Number(cloudResult.total)
+          : candidates.length;
+        source = 'cloud';
+      } catch (error) {
+        logger.warn('TaskTemplateService', '云端推荐候选查询失败，回退本地算法', {
+          error: error && error.message ? error.message : error
+        });
+        const templates = await this.repository.getAll();
+        const tasks = await this._loadFamilyTasksForRecommendations();
+        candidates = groupTasksToTemplateCandidates(tasks, templates, {
+          today,
+          lookbackDays
+        });
+        total = candidates.length;
+        source = 'local_fallback';
+      }
+    } else {
+      const templates = await this.repository.getAll();
+      const tasks = await this._loadFamilyTasksForRecommendations();
+      candidates = groupTasksToTemplateCandidates(tasks, templates, {
+        today,
+        lookbackDays
+      });
+      total = candidates.length;
+    }
 
     this._recommendationCache = {
       key: cacheKey,
       createdAt: now,
-      candidates
+      candidates,
+      total,
+      source
     };
 
     return {
       candidates: limit ? candidates.slice(0, limit) : candidates,
-      total: candidates.length,
-      cached: false
+      total,
+      cached: false,
+      source
     };
   }
 
@@ -458,13 +495,17 @@ class TaskTemplateService {
   }
 
   async _loadFamilyTasksForRecommendations() {
-    if (!this.taskService || typeof this.taskService.getTasksByScope !== 'function') {
+    const loadTasks = typeof this.taskService?.getChildTasksByScope === 'function'
+      ? this.taskService.getChildTasksByScope.bind(this.taskService)
+      : this.taskService?.getTasksByScope?.bind(this.taskService);
+
+    if (typeof loadTasks !== 'function') {
       logger.warn('TaskTemplateService', '任务服务未就绪，无法生成推荐候选');
       return [];
     }
 
     try {
-      const tasks = await this.taskService.getTasksByScope({
+      const tasks = await loadTasks({
         scope: 'family'
       });
       return Array.isArray(tasks) ? tasks : [];
@@ -474,6 +515,55 @@ class TaskTemplateService {
       });
       return [];
     }
+  }
+
+  async _queryRecommendationCandidatesFromCloud(options = {}) {
+    const pendingTasks = await this._buildPendingLocalTaskSnapshots();
+    return HttpClient.post(API_CONFIG.ENDPOINTS.TASK_TEMPLATE_RECOMMENDATIONS_QUERY, {
+      today: options.today,
+      lookbackDays: options.lookbackDays,
+      limit: options.limit,
+      localPendingTasks: pendingTasks
+    });
+  }
+
+  async _buildPendingLocalTaskSnapshots() {
+    const loadPendingTasks = typeof this.taskService?.getPendingLocalChildTasksByScope === 'function'
+      ? this.taskService.getPendingLocalChildTasksByScope.bind(this.taskService)
+      : this.taskService?.getPendingLocalTasksByScope?.bind(this.taskService);
+    const localTasks = await loadPendingTasks?.({
+      scope: 'family'
+    });
+    if (!Array.isArray(localTasks)) {
+      return [];
+    }
+
+    return localTasks
+      .filter((task) => task && (task.pendingSyncMeta || task.syncedToCloud !== true))
+      .map((task) => this._buildPendingTaskSnapshot(task));
+  }
+
+  _buildPendingTaskSnapshot(task = {}) {
+    return {
+      id: task.id || task.taskId || null,
+      title: String(task.title || '').trim(),
+      description: String(task.description || '').trim(),
+      type: task.type || 'habit',
+      date: normalizeDateString(task.date, ''),
+      startDate: normalizeDateString(task.startDate, ''),
+      endDate: normalizeDateString(task.endDate, ''),
+      startTime: task.startTime || '',
+      endTime: task.endTime || '',
+      hasNoEndDate: task.hasNoEndDate === true,
+      isAllDay: task.isAllDay === true,
+      isRequired: task.isRequired === true,
+      points: task.points,
+      pointsExpiry: task.pointsExpiry,
+      repeat: task.repeat || null,
+      reminder: task.reminder || null,
+      modifyTime: task.modifyTime || null,
+      createdAt: task.createdAt || task.createTime || null
+    };
   }
 
   _resolveTemplateDates(template, today) {

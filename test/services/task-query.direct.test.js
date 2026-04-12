@@ -218,18 +218,105 @@ describe('task-query direct behavior', () => {
     const service = {
       enableCloudStorage: true,
       _fetchTasksFromCloud: jest.fn(async () => [
-        { id: 'cloud_1', title: '云端任务' }
+        { id: 'cloud_1', title: '云端任务', userId: 'child_1' }
       ]),
       taskRepository: {
         getAll: jest.fn(async () => [
-          { id: 'cloud_1', title: '云端任务' },
-          { id: 'local_1', title: '本地任务' }
+          { id: 'cloud_1', title: '云端任务', userId: 'child_1' },
+          { id: 'local_1', title: '本地孩子任务', userId: 'child_1' },
+          { id: 'local_parent', title: '本地家长任务', userId: 'parent_1' }
+        ])
+      },
+      userService: {
+        getAllUsers: jest.fn(() => [
+          { userId: 'parent_1', role: 'parent', status: 'active' },
+          { userId: 'child_1', role: 'child', status: 'active' }
         ])
       }
     };
 
     const result = await query.getTasksByScope(service, { scope: 'family' });
 
+    expect(result.map((item) => item.id)).toEqual(['cloud_1', 'local_1', 'local_parent']);
+  });
+
+  it('getChildTasksByScope 在 family 场景下应只保留当前家庭孩子任务', async () => {
+    const service = {
+      enableCloudStorage: true,
+      _fetchTasksFromCloud: jest.fn(async () => [
+        { id: 'cloud_1', title: '云端任务', userId: 'child_1' }
+      ]),
+      taskRepository: {
+        getAll: jest.fn(async () => [
+          { id: 'cloud_1', title: '云端任务', userId: 'child_1' },
+          { id: 'local_1', title: '本地孩子任务', userId: 'child_1' },
+          { id: 'local_parent', title: '本地家长任务', userId: 'parent_1' }
+        ])
+      },
+      userService: {
+        getAllUsers: jest.fn(() => [
+          { userId: 'parent_1', role: 'parent', status: 'active' },
+          { userId: 'child_1', role: 'child', status: 'active' }
+        ])
+      }
+    };
+
+    const result = await query.getChildTasksByScope(service, { scope: 'family' });
+
     expect(result.map((item) => item.id)).toEqual(['cloud_1', 'local_1']);
+  });
+
+  it('getPendingLocalTasksByScope 在 family 场景下应返回全部待同步本地任务', async () => {
+    const service = {
+      taskRepository: {
+        getAll: jest.fn(async () => [
+          { id: 'task_child_pending', userId: 'child_1', syncedToCloud: false },
+          { id: 'task_child_synced', userId: 'child_1', syncedToCloud: true },
+          { id: 'task_parent_pending', userId: 'parent_1', syncedToCloud: false },
+          { id: 'task_other_pending', userId: 'child_9', pendingSyncMeta: { action: 'create' } }
+        ])
+      },
+      userService: {
+        getAllUsers: jest.fn(() => [
+          { userId: 'parent_1', role: 'parent', status: 'active' },
+          { userId: 'child_1', role: 'child', status: 'active' }
+        ]),
+        getCurrentUser: jest.fn(() => ({ userId: 'parent_1', role: 'parent' })),
+        getCurrentUserId: jest.fn(() => 'parent_1')
+      }
+    };
+
+    const result = await query.getPendingLocalTasksByScope(service, { scope: 'family' });
+
+    expect(result.map((task) => task.id)).toEqual([
+      'task_child_pending',
+      'task_parent_pending',
+      'task_other_pending'
+    ]);
+  });
+
+  it('getPendingLocalChildTasksByScope 应只返回当前家庭孩子的待同步任务', async () => {
+    const service = {
+      taskRepository: {
+        getAll: jest.fn(async () => [
+          { id: 'task_child_pending', userId: 'child_1', syncedToCloud: false },
+          { id: 'task_child_synced', userId: 'child_1', syncedToCloud: true },
+          { id: 'task_parent_pending', userId: 'parent_1', syncedToCloud: false },
+          { id: 'task_other_pending', userId: 'child_9', pendingSyncMeta: { action: 'create' } }
+        ])
+      },
+      userService: {
+        getAllUsers: jest.fn(() => [
+          { userId: 'parent_1', role: 'parent', status: 'active' },
+          { userId: 'child_1', role: 'child', status: 'active' }
+        ]),
+        getCurrentUser: jest.fn(() => ({ userId: 'parent_1', role: 'parent' })),
+        getCurrentUserId: jest.fn(() => 'parent_1')
+      }
+    };
+
+    const result = await query.getPendingLocalChildTasksByScope(service, { scope: 'family' });
+
+    expect(result.map((task) => task.id)).toEqual(['task_child_pending']);
   });
 });

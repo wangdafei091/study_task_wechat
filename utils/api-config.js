@@ -78,6 +78,7 @@ const API_CONFIG = {
     TASK_PENALTIES_SYNC: '/api/tasks/penalties/sync',
     TASKS_TRANSFER: '/api/tasks/transfer',
     TASK_TEMPLATES: '/api/task-templates',
+    TASK_TEMPLATE_RECOMMENDATIONS_QUERY: '/api/task-templates/recommendations/query',
     TASK_TEMPLATE_BY_ID: '/api/task-templates/{templateId}',
     TASK_TEMPLATE_ENABLED: '/api/task-templates/{templateId}/enabled',
     TASK_TEMPLATE_USAGE: '/api/task-templates/{templateId}/usage',

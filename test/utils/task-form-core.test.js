@@ -50,6 +50,19 @@ describe('utils/task-form-core', () => {
     expect(draft.reminderTime).toBe(15);
   });
 
+  it('normalizeTaskFormDraft 应兼容 reminder 为 null', () => {
+    const draft = taskFormCore.normalizeTaskFormDraft({
+      title: '晚间阅读',
+      reminder: null
+    }, {
+      scene: 'task',
+      today: '2026-04-11'
+    });
+
+    expect(draft.reminderEnabled).toBe(false);
+    expect(draft.reminderTime).toBe(0);
+  });
+
   it('buildReminderOptionsFromDraft 应根据全天状态切换提醒选项', () => {
     expect(taskFormCore.buildReminderOptionsFromDraft({
       isAllDay: true
