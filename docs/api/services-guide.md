@@ -1119,9 +1119,9 @@ const taskTemplateService = serviceManager.get('taskTemplateService');
 数据分析服务提供任务和星星数据的统计分析功能。
 
 ### 核心功能
-- 分析页统一读模型准备
+- 分析页统一读模型准备与 30 秒 TTL 缓存
+- 云端 authoritative analytics 结果消费与本地兜底
 - 星星趋势分析与余额锚定
-- 任务/星星 scoped facts 轻聚合
 - 数据可视化支持
 
 ### API 方法
@@ -1149,11 +1149,14 @@ const taskTemplateService = serviceManager.get('taskTemplateService');
       currentBalance: number,
       tasks: Object[],
       records: Object[],
-      refreshedAt: number
+      historyData: Array,
+      forecastData: Array,
+      refreshedAt: number,
+      mode: 'authoritative' | 'fallback'
     }
   }
   ```
-- **说明**: M19C 起分析页入口统一调用此方法，负责 TTL 复用、in-flight 复用、云端主路径与 fallback 选择
+- **说明**: cloud 模式下优先调用后端 `/api/analytics/read-model/query` 获取 authoritative snapshot；本地模式、后端失败、以及 `scope='user'` 且存在 `pending_local_records` 时回退到本地 snapshot
 
 ##### `getPreparedMonthData({ analysisOptions, monthKey })`
 读取最近一次已准备好的月份任务/星星事实
@@ -1195,6 +1198,7 @@ const taskTemplateService = serviceManager.get('taskTemplateService');
     forecastData: Array<{ date, value, expiringAmount }>
   }
   ```
+- **说明**: 若当前命中 active authoritative snapshot，直接返回 snapshot 内的 `historyData / forecastData`；否则退回本地锚定计算逻辑
 
 ##### `getTaskCompletionStats(dateRange, options = {})`
 获取任务完成情况统计
@@ -1206,20 +1210,23 @@ const taskTemplateService = serviceManager.get('taskTemplateService');
   {
     totalTasks: number,
     completedTasks: number,
-    completionRate: number,
+    completionRate: string | number,
     typeCounts: { study: number, habit: number, interest: number }
   }
   ```
+- **说明**: cloud 模式下优先调用后端 `/api/analytics/task-completion-stats/query`；失败时回退本地任务集合统计
 
 ##### `getTaskStarCalendarData(options = {})`
 获取分析页日历所需任务星星事实
 - **参数**: `options.userId` 或 `options.scope='family'`
-- **返回**: `Promise<Array<{ title, points, type, source, timestamp }>>`
+- **返回**: `Promise<Array<{ id, title, time, points, type, source, timestamp }>>`
+- **说明**: cloud 模式下优先调用后端 `/api/analytics/task-star-calendar/query`；失败时回退本地任务事实拼装
 
 ##### `getUpcomingExpiryStars(days, options = {})`
 获取即将过期的星星预测输入
 - **参数**: `days`、`options.userId` / `options.scope`
-- **返回**: `Promise<Array<{ date, points, userId? }>>`
+- **返回**: `Promise<Array<{ id, points, expiryDate: Date|null, expiryDateStr, type }>>`
+- **说明**: cloud 模式下优先调用后端 `/api/analytics/upcoming-expiry/query`，前端会把响应中的 `expiryDate` 适配回 `Date`；当前 `scope='family'` 仍按既有产品口径返回空数组
 
 ---
 

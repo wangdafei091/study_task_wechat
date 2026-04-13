@@ -1,11 +1,12 @@
 # 里程碑-21F2：analytics 云端正式读模型后移与前端收口 详细设计文档
 
-> **设计状态**：🟢 审核通过
+> **设计状态**：🟢 已完成
 > **创建日期**：2026-04-12
 > **设计者**：GPT5 Codex
 > **审核者**：项目维护者
 > **依赖文档**：`docs/design/milestone-21f-frontend-business-backend-migration.md`
-> **预计工期**：5-6天
+> **预计工期**：6-7天
+> **完成日期**：2026-04-13
 
 ---
 
@@ -17,6 +18,7 @@
 - [实施步骤](#实施步骤)
 - [测试方案](#测试方案)
 - [风险评估](#风险评估)
+- [实施结果](#实施结果)
 - [替代方案](#替代方案)
 
 ---
@@ -42,7 +44,7 @@
 
 - [x] 职责收敛：analytics 云端正式结果改由后端 authoritative read model 输出，前端回到页面消费、缓存、展示和兜底职责。
 - [x] 一致性提升：个人和家庭分析的月度任务、月度流水、当前余额锚点、趋势图与过期预测改为单一权威来源，减少口径漂移。
-- [x] 前端减负：前端不再在 cloud 正式路径下并行拉任务、星星汇总、流水并二次聚合，analytics 主路径明显变薄。
+- [x] 前端减负：前端不再在 cloud 正式路径下并行拉任务、星星汇总、流水并二次聚合；并在本期继续后移剩余 analytics 查询能力，开始兑现前端体积下降。
 - [x] 清理收益更大：不仅清 family 正式路径冗余，也同步清掉 user 正式路径冗余，前端体积收益明显高于只做 family。
 - [x] 后续扩展更稳：后续任务统计、星星日历或 fallback 收口时，可以建立在统一的后端 read model 结构上推进。
 
@@ -53,16 +55,17 @@
 - ✅ 后端承接 `scope === 'family'` 的正式 `prepareReadModel()` 主路径
 - ✅ 后端承接 `scope === 'user'` 的正式 `prepareReadModel()` 主路径
 - ✅ 后端承接两种 scope 下 `calculateHistoricalBalance()` 所需的 `historyData / forecastData`
+- ✅ 后端承接 `getTaskCompletionStats()` 的 cloud authoritative 查询能力
+- ✅ 后端承接 `getUpcomingExpiryStars()` 的 cloud authoritative 查询能力
+- ✅ 后端承接 `getTaskStarCalendarData()` 的 cloud authoritative 查询能力
 - ✅ 前端 `AnalyticsService` 在 cloud 模式下统一切到后端 analytics read model 接口
 - ✅ 清理前端 cloud 正式路径上的 family/user 重复聚合逻辑
+- ✅ 删除已经不再被主路径命中的前端死代码与 cloud-only 冗余 helper
 - ✅ 将前端 analytics 保留边界收敛为：页面消费、缓存、本地模式、后端失败兜底
 - ✅ 保留 `scope === 'user'` 下 `pending_local_overlay` 的现有语义
 - ✅ 明确 `scope`、`userId`、`childUserIds`、缓存元数据和趋势口径契约
 
 **不包含**：
-- ❌ 不迁移 `getTaskCompletionStats()`
-- ❌ 不迁移 `getUpcomingExpiryStars()`
-- ❌ 不迁移 `getTaskStarCalendarData()`
 - ❌ 不重写分析页页面结构和组件交互
 - ❌ 不删除本地模式本身
 - ❌ 不删除后端失败场景所需的最小必要 fallback
@@ -78,21 +81,23 @@
 
 ### 方案概述
 
-`M21F2` 采用“统一后端 read model + 前端薄适配 + 最小必要兜底”的方案。
+`M21F2` 采用“统一后端 read model/query + 前端薄适配 + 最小必要兜底”的方案。
 
 核心思路：
 
 1. 后端新增统一 analytics 读模型查询接口，按 `scope` 返回 `user` 或 `family` 的 authoritative snapshot。
 2. 后端接口直接返回分析页所需的月度 `tasks / records`、当前余额锚点、`historyData / forecastData`。
-3. 前端 `AnalyticsService` 在 cloud 模式下统一调用该接口，并继续沿用现有 30 秒内存缓存。
-4. 在 `cloud + authoritative` 场景下，前端不再保留一套等价正式聚合链路。
-5. 前端仍保留本地模式和后端失败场景的最小必要 fallback。
+3. 后端继续承接 analytics 里剩余三类 cloud authoritative 查询：`task completion stats`、`upcoming expiry stars`、`task star calendar data`。
+4. 前端 `AnalyticsService` 在 cloud 模式下统一调用后端 analytics 接口，并继续沿用现有 30 秒内存缓存。
+5. 在 `cloud + authoritative` 场景下，前端不再保留一套等价正式聚合链路。
+6. 前端仍保留本地模式和后端失败场景的最小必要 fallback。
 
 这里的“最小必要 fallback”指**职责边界最小**，不是“代码行数最少”：
 
 1. 只允许服务于本地模式和后端失败兜底
 2. 不允许继续承担 cloud 正式路径
 3. 可以继续复用 `_buildLocalPreparedSnapshot()`、`_calculateAnchoredDailyBalance()`、`_calculateExpiryForecast()` 等 helper，只要它们不再被 cloud 正式链路命中
+4. 对已经不再被任何主路径或 fallback 命中的 helper，必须在本期显式删除，而不是继续挂在前端文件里
 
 ### 技术选型
 
@@ -202,6 +207,33 @@ graph LR
 - `scope: 'user'` + `userId`
 - `scope: 'family'` + `childUserIds`
 
+#### 4. 剩余 analytics 公开查询能力也应纳入本期后移
+
+当前 `services/analytics-service.js` 里仍有三类公开查询能力：
+
+- `getTaskCompletionStats()`
+- `getUpcomingExpiryStars()`
+- `getTaskStarCalendarData()`
+
+它们虽然不属于 `prepareReadModel()` 主路径，但本质上仍是 analytics 读模型/统计查询，而不是页面本地交互逻辑。
+
+如果本期只迁 `prepared snapshot`，而把这三类查询继续长期留在前端，会出现：
+
+- analytics 前后端职责仍然一半一半
+- `analytics-service.js` 体积下降有限
+- 当前里程碑只能兑现“主路径变薄”，不能兑现“前端明显减重”
+
+因此，本期扩围后要求把这三类 cloud authoritative 查询也一并后移到后端。
+
+#### 5. 当前已有可立即删除的前端死代码
+
+结合现状代码审计，以下 helper 已具备本期直接删除条件：
+
+- `_loadScopedTasksByDateRange()`：cloud 主路径已不再命中
+- `_groupFamilySummaryByUser()`：当前实现已不再使用
+
+这类代码不应留到后续里程碑清理。
+
 ### 第一阶段迁移范围
 
 `M21F2` 本期迁移的是 **analytics 云端正式读模型**，包括：
@@ -215,6 +247,9 @@ graph LR
 7. `scope === 'family'` 的当前余额锚点
 8. `scope === 'family'` 的 `familyGroupSnapshots`
 9. `scope === 'family'` 的 `historyData / forecastData`
+10. `getTaskCompletionStats()` 的 cloud authoritative 查询
+11. `getUpcomingExpiryStars()` 的 cloud authoritative 查询
+12. `getTaskStarCalendarData()` 的 cloud authoritative 查询
 
 继续保留在前端的职责：
 
@@ -222,7 +257,7 @@ graph LR
 2. `getPreparedMonthData()` 对组件的读取分发
 3. 本地模式和后端失败场景的最小必要 fallback
 4. 页面展示拼装
-5. 非本期范围内的统计类接口
+5. cloud authoritative 查询的后端结果消费与失败兜底
 
 ### 收口原则
 
@@ -242,6 +277,7 @@ graph LR
 1. `scope === 'user'` 的 cloud 正式路径前端聚合实现
 2. `scope === 'family'` 的 cloud 正式路径前端聚合实现
 3. 与后端 authoritative 结果等价、但只在“为了保险”而保留的第二套正式算法
+4. `getTaskCompletionStats()`、`getUpcomingExpiryStars()`、`getTaskStarCalendarData()` 在 cloud authoritative 场景下的长期前端正式实现
 
 说明：
 
@@ -254,12 +290,15 @@ graph LR
 
 1. `user + family` 的 cloud 正式主路径切换到后端 read model 接口
 2. 前端 `user + family` 正式路径上的重复聚合实现被删除或明确降级为 fallback-only
-3. 前端调用链能清楚区分：
+3. `getTaskCompletionStats()`、`getUpcomingExpiryStars()`、`getTaskStarCalendarData()` 的 cloud authoritative 查询切到后端
+4. 已确认不再使用的前端死代码在本期删除
+5. 前端调用链能清楚区分：
    - authoritative result
    - local/fallback result
-4. 单测和手工回归可以证明：
+6. 单测和手工回归可以证明：
    - cloud user 正式路径不再走旧的前端正式聚合链
    - cloud family 正式路径不再走旧的前端正式聚合链
+   - cloud completion stats / expiry / task calendar 不再走旧的前端正式实现
    - fallback 仍然可用
 
 ### 接口设计
@@ -397,13 +436,19 @@ graph LR
 ### 数据模型
 
 ```typescript
-interface AnalyticsReadModelQuery {
-  scope: 'user' | 'family';
-  monthKey: string;
-  trendDays?: 7 | 30;
-  userId?: string;
-  childUserIds?: string[];
-}
+type AnalyticsReadModelQuery =
+  | {
+      scope: 'user';
+      monthKey: string;
+      trendDays?: 7 | 30;
+      userId: string;
+    }
+  | {
+      scope: 'family';
+      monthKey: string;
+      trendDays?: 7 | 30;
+      childUserIds?: string[];
+    };
 
 interface PreparedAnalyticsSnapshot {
   scope: 'user' | 'family';
@@ -527,6 +572,21 @@ interface PreparedAnalyticsSnapshot {
 3. `user` scope 按 `userId` 节流，`family` scope 按 `familyId + childUserIds` 节流
 4. 即便并发绕过节流，底层到期结算也必须保持幂等，重复调用最多带来额外查询开销，不应造成重复扣减
 
+#### 3. 补充后移的 analytics 查询接口
+
+为兑现当前里程碑的职责收口与前端减重，本期补充 3 个后端 analytics 查询接口：
+
+1. `POST /api/analytics/task-completion-stats/query`
+2. `POST /api/analytics/upcoming-expiry/query`
+3. `POST /api/analytics/task-star-calendar/query`
+
+设计原则：
+
+1. 入参继续沿用统一分析上下文：`scope + userId/childUserIds`
+2. 由后端返回当前前端 public method 已消费的数据结构，避免页面和组件大改
+3. 前端 `AnalyticsService` 在 cloud authoritative 场景下仅做转发和 fallback
+4. local mode / backend failure 场景下，前端仍允许复用现有本地逻辑兜底
+
 ---
 
 ## 代码结构
@@ -534,8 +594,8 @@ interface PreparedAnalyticsSnapshot {
 ### 文件变更清单
 
 **新增文件**：
-- `backend/routes/analytics.js` - 注册 analytics 读模型查询接口
-- `backend/controllers/analyticsController.js` - 处理 read model HTTP 请求
+- `backend/routes/analytics.js` - 注册 analytics 读模型及查询接口
+- `backend/controllers/analyticsController.js` - 处理 analytics read/query HTTP 请求
 - `backend/services/analyticsReadModelService.js` - 后端读模型应用服务入口
 - `backend/services/analytics-read-model/userReadModel.js` - user snapshot / trend 纯计算与聚合 helper
 - `backend/services/analytics-read-model/familyReadModel.js` - family snapshot / trend 纯计算与聚合 helper
@@ -546,7 +606,7 @@ interface PreparedAnalyticsSnapshot {
 - `backend/server.js` - 注册 analytics 路由
 - `backend/services/taskService.js` - 视需要补 user/family 读 helper
 - `backend/services/starService.js` - 视需要补 user/family 读 helper
-- `services/analytics-service.js` - user/family cloud 主路径切换到后端聚合接口，并删除/收敛正式路径冗余
+- `services/analytics-service.js` - user/family cloud 主路径切换到后端聚合接口；其余 analytics cloud 查询转为后端 authoritative 调用，并删除/收敛正式路径冗余
 - `utils/api-config.js` - 新增 analytics 接口 endpoint
 - `test/services/analytics-service.test.js` - 更新前端 analytics user/family 主路径测试
 - `test/pages/analysis.page.test.js` - 页面层调用契约保持不变
@@ -563,6 +623,18 @@ class AnalyticsReadModelService {
     // 4. 读取任务 / summary / records
     // 5. 生成 authoritative snapshot
   }
+
+  async queryTaskCompletionStats(input = {}, viewer = {}) {
+    // cloud authoritative completion stats
+  }
+
+  async queryUpcomingExpiry(input = {}, viewer = {}) {
+    // cloud authoritative upcoming expiry
+  }
+
+  async queryTaskStarCalendar(input = {}, viewer = {}) {
+    // cloud authoritative task star calendar data
+  }
 }
 
 // services/analytics-service.js
@@ -576,6 +648,21 @@ class AnalyticsService {
     // 命中 authoritative snapshot -> 直接返回 snapshot.historyData / forecastData
     // local mode / fallback -> 最小本地计算逻辑
     // 不再保留第二套 cloud 正式计算
+  }
+
+  async getTaskCompletionStats(dateRange, options = {}) {
+    // cloud authoritative -> 走后端 analytics query
+    // local/fallback -> 复用本地逻辑
+  }
+
+  async getUpcomingExpiryStars(days, options = {}) {
+    // cloud authoritative -> 走后端 analytics query
+    // local/fallback -> 复用本地逻辑
+  }
+
+  async getTaskStarCalendarData(options = {}) {
+    // cloud authoritative -> 走后端 analytics query
+    // local/fallback -> 复用本地逻辑
   }
 }
 ```
@@ -612,15 +699,33 @@ class AnalyticsService {
 - **职责**：复刻现有前端过期预测口径
 - **依赖**：expiry grouping helper
 
+**函数6**：`analyticsReadModelService.queryTaskCompletionStats(input, viewer)`
+- **输入**：`{ scope, dateRange, userId?, childUserIds? }`
+- **输出**：当前 `getTaskCompletionStats()` 消费的统计结构
+- **职责**：承接 cloud authoritative 的任务完成统计
+- **依赖**：`taskService`
+
+**函数7**：`analyticsReadModelService.queryUpcomingExpiry(input, viewer)`
+- **输入**：`{ scope, days, userId?, childUserIds? }`
+- **输出**：当前 `getUpcomingExpiryStars()` 消费的数组结构
+- **职责**：承接 cloud authoritative 的即将过期星星查询
+- **依赖**：`starService`
+
+**函数8**：`analyticsReadModelService.queryTaskStarCalendar(input, viewer)`
+- **输入**：`{ scope, userId?, childUserIds? }`
+- **输出**：当前 `getTaskStarCalendarData()` 消费的数组结构
+- **职责**：承接 cloud authoritative 的任务星星日历查询
+- **依赖**：`taskService`
+
 ---
 
 ## 实施步骤
 
 ### 第1步：后端 unified analytics read model 落地（预计1.5天）
 
-- [ ] **任务**：新增 `analyticsReadModelService`、`userReadModel`、`familyReadModel`，完成参数校验、权限解析、snapshot/trend 计算
-- [ ] **验证**：后端单元测试覆盖 user/family 两个 scope、趋势锚点与惩罚日期归属
-- [ ] **依赖**：现有 `taskService`、`starService`、`starExpiryGovernanceService`
+- [x] **任务**：新增 `analyticsReadModelService`、`userReadModel`、`familyReadModel`，完成参数校验、权限解析、snapshot/trend 计算
+- [x] **验证**：后端单元测试覆盖 user/family 两个 scope、趋势锚点与惩罚日期归属
+- [x] **依赖**：现有 `taskService`、`starService`、`starExpiryGovernanceService`
 
 **实施要点**：
 1. `scope === 'user'` 复用现有家庭成员访问控制
@@ -630,24 +735,39 @@ class AnalyticsService {
 
 ---
 
-### 第2步：后端 HTTP 接口与路由接入（预计0.5天）
+### 第2步：后端补充剩余 analytics query 能力（预计1.5天）
 
-- [ ] **任务**：新增 controller / route / server 注册，暴露 `/api/analytics/read-model/query`
-- [ ] **验证**：接口测试覆盖 user/family 正常返回、参数非法、权限错误
-- [ ] **依赖**：第1步完成
+- [x] **任务**：新增 cloud authoritative 的 task completion stats / upcoming expiry / task star calendar 三类查询用例
+- [x] **验证**：后端单测覆盖 user/family 两个 scope、childUserIds 过滤和结构兼容
+- [x] **依赖**：第1步完成
+
+**实施要点**：
+1. 继续复用统一 `scope + subject` 权限解析
+2. 返回结构优先兼容现有前端 public method 的消费格式
+3. 家庭场景必须继续按 `childUserIds` 子集过滤
+4. 不在后端引入与前端不同的新统计口径
+
+---
+
+### 第3步：后端 HTTP 接口与路由接入（预计0.5天）
+
+- [x] **任务**：新增 controller / route / server 注册，暴露 `/api/analytics/read-model/query`、`/api/analytics/task-completion-stats/query`、`/api/analytics/upcoming-expiry/query`、`/api/analytics/task-star-calendar/query`
+- [x] **验证**：接口测试覆盖 4 个 analytics 接口的正常返回、参数非法、权限错误
+- [x] **依赖**：第1步、第2步完成
 
 **实施要点**：
 1. 响应格式必须复用 `success()/error()`
 2. `INVALID_PARAMS` 与 `FAMILY_MEMBER_ACCESS_DENIED` 语义要稳定
 3. route 不应绕过既有 auth / family permission 体系
+4. controller 层需统一复用 `scope + subject` 参数校验，避免 4 个接口各自漂移
 
 ---
 
-### 第3步：前端 AnalyticsService 切 user/family cloud 主路径（预计1天）
+### 第4步：前端 AnalyticsService 切 user/family cloud 主路径（预计1天）
 
-- [ ] **任务**：在 cloud 场景下统一接入后端 read model 接口；将 `historyData / forecastData` 从 prepared snapshot 直接分发给趋势图
-- [ ] **验证**：前端单测覆盖 TTL 复用、user/family authoritative 读取、后端失败 fallback、本地模式不受影响
-- [ ] **依赖**：第2步完成
+- [x] **任务**：在 cloud 场景下统一接入后端 read model 接口；将 `historyData / forecastData` 从 prepared snapshot 直接分发给趋势图
+- [x] **验证**：前端单测覆盖 TTL 复用、user/family authoritative 读取、后端失败 fallback、本地模式不受影响
+- [x] **依赖**：第3步完成
 
 **实施要点**：
 1. `prepareReadModel()` 的外部调用签名不变
@@ -657,24 +777,25 @@ class AnalyticsService {
 
 ---
 
-### 第4步：前端 cloud 正式路径冗余清理与 fallback 收口（预计1天）
+### 第5步：前端其余 analytics cloud 查询切换与冗余清理（预计1.5天）
 
-- [ ] **任务**：删除或下沉 user/family authoritative 正式路径上不再需要的前端重复聚合逻辑，只保留本地模式和最小必要 fallback
-- [ ] **验证**：代码层不存在“双份正式实现”；测试能证明 cloud user/family 都不再走旧正式链路
-- [ ] **依赖**：第3步完成
+- [x] **任务**：将 `getTaskCompletionStats()`、`getUpcomingExpiryStars()`、`getTaskStarCalendarData()` 的 cloud authoritative 实现切换到后端；删除不再需要的前端死代码与 cloud-only 冗余 helper
+- [x] **验证**：代码层不存在“双份正式实现”；前端死代码已删除；测试能证明 cloud user/family 不再走旧正式链路
+- [x] **依赖**：第4步完成
 
 **实施要点**：
 1. 明确哪些 helper 仍为 local mode / fallback 服务，哪些应删除
 2. 不允许保留“云端也能走一遍旧正式链路”的隐藏分支
-3. 删除后若出现测试空洞，必须补上行为断言
+3. `_loadScopedTasksByDateRange()`、`_groupFamilySummaryByUser()` 这类已无有效调用的 helper 必须在本期删除
+4. 删除后若出现测试空洞，必须补上行为断言
 
 ---
 
-### 第5步：回归与口径对比（预计0.5-1天）
+### 第6步：回归与口径对比（预计0.5-1天）
 
-- [ ] **任务**：补齐 analytics 相关测试和手工回归
-- [ ] **验证**：分析页、趋势图、星星日历在 user/family 场景下行为稳定
-- [ ] **依赖**：第4步完成
+- [x] **任务**：补齐 analytics 相关测试和手工回归
+- [x] **验证**：分析页、趋势图、星星日历在 user/family 场景下行为稳定
+- [x] **依赖**：第5步完成
 
 **实施要点**：
 1. 至少准备 1 组“流水净额与当前余额不一致”的用例
@@ -682,6 +803,7 @@ class AnalyticsService {
 3. 至少准备 1 组“后端失败 -> 前端 fallback”的用例
 4. 至少准备 1 组“cloud user authoritative 不再命中旧正式链路”的用例
 5. 至少准备 1 组“cloud family authoritative 不再命中旧正式链路”的用例
+6. 至少准备 1 组“cloud completion stats / expiry / task calendar 不再命中旧前端实现”的用例
 
 ---
 
@@ -699,6 +821,9 @@ class AnalyticsService {
   - 非法 `childUserIds`
   - 余额锚点与流水净额不一致
   - 惩罚流水 `originalTaskDate` 归属
+  - `task completion stats` 的 scope 过滤与统计口径
+  - `upcoming expiry` 的 scope 过滤与过期窗口
+  - `task star calendar` 的事实字段生成规则
 - `userReadModel` helper
   - `historyData` 反推
   - `forecastData` 过期计算
@@ -718,6 +843,9 @@ class AnalyticsService {
   - 接口失败 fallback 到本地逻辑
   - cloud user 正式路径不再命中旧正式聚合 helper
   - cloud family 正式路径不再命中旧正式聚合 helper
+  - cloud 下 `getTaskCompletionStats()` 走后端接口
+  - cloud 下 `getUpcomingExpiryStars()` 走后端接口
+  - cloud 下 `getTaskStarCalendarData()` 走后端接口
   - local mode 不受影响
 - 本期新增和修改的相关测试继续遵守项目现有质量闸门，受影响服务层的覆盖率目标不低于 85%
 
@@ -729,6 +857,15 @@ class AnalyticsService {
   - 非家长访问 family 返回 403
   - 非法 `userId` / `childUserIds` 返回 403/400
   - 非法参数返回 400
+- `POST /api/analytics/task-completion-stats/query`
+  - user/family 正常返回
+  - 权限与参数错误返回正确状态码
+- `POST /api/analytics/upcoming-expiry/query`
+  - user/family 正常返回
+  - 权限与参数错误返回正确状态码
+- `POST /api/analytics/task-star-calendar/query`
+  - user/family 正常返回
+  - 权限与参数错误返回正确状态码
 
 ### 页面回归测试
 
@@ -749,6 +886,7 @@ class AnalyticsService {
 4. 任务惩罚发生后，趋势图日期归属与星星日历一致
 5. 断网或后端异常时，分析页仍能回退到本地数据
 6. 单用户场景下若本地存在待同步星星流水，分析页继续优先展示本地数据而不是请求后端
+7. cloud 模式下任务统计、即将过期星星、任务星星日历都能正常返回
 
 ---
 
@@ -768,11 +906,11 @@ class AnalyticsService {
 ### 风险2：前端收益被高估
 
 **说明**：
-即使同时覆盖 user + family，本期仍保留 local mode / fallback，因此不可能一次性删空所有 analytics helper。
+即使同时覆盖 user + family，并把剩余三类 analytics 查询一并后移，本期仍保留 local mode / fallback，因此不可能一次性删空所有 analytics helper。
 
 **应对**：
 - 把“cloud 正式路径清理完成”纳入本期完成定义
-- 对删码收益保持诚实预期：会明显下降，但不是清空
+- 对删码收益保持诚实预期：会明显下降，但不是清空；按当前代码结构，前端净删减预估更接近 `180-320` 行，而不是一次性大幅归零
 
 ### 风险3：后端查询性能不稳定
 
@@ -791,6 +929,32 @@ class AnalyticsService {
 **应对**：
 - 保留现有前端 fallback
 - 单测和手工回归必须覆盖接口失败场景
+
+---
+
+## 实施结果
+
+### 实际落地
+
+- 已新增 `backend/services/analyticsReadModelService.js` 与 `analytics-read-model/` 内部模块，统一承接 `user / family` 两个 scope 的 authoritative snapshot 与 3 类 analytics 查询
+- 已新增 `backend/routes/analytics.js`、`backend/controllers/analyticsController.js`，并在 `backend/server.js` 完成 4 个 analytics 接口注册
+- `services/analytics-service.js` 已切到“cloud authoritative 优先、local/fallback 兜底”的新职责边界：
+  - `prepareReadModel()` 改为优先消费后端 snapshot
+  - `getTaskCompletionStats()`、`getUpcomingExpiryStars()`、`getTaskStarCalendarData()` 改为 cloud 场景优先请求后端
+  - `scope === 'user'` 的 `pending_local_overlay` 语义保留
+- 已删除不再被主路径命中的前端 cloud-only 冗余 helper，前端 analytics 主路径进一步变薄
+
+### 实际验证
+
+- 前端定向测试通过：
+  - `test/services/analytics-service.test.js`
+- 后端单元测试通过：
+  - `backend/test/unit/analyticsReadModelService.test.js`
+- 后端集成测试通过：
+  - `backend/test/integration/analytics-read-model-api.test.js`
+- 手工验收通过：
+  - user / family 分析页月度事实、趋势图、任务完成统计、即将过期星星、任务星星日历主链路正常
+  - `pending_local_overlay`、后端失败 fallback、family 子集筛选与权限边界已逐项确认
 
 ---
 
