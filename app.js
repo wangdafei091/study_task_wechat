@@ -1,4 +1,12 @@
 // app.js
+const { ensureDefaultRuntimeApiConfig, resolveRuntimeApiConfig } = require('./utils/runtime-config');
+
+// 在 require 其他依赖前补齐默认云端配置，避免冷启动时 api-config 过早读到空 storage。
+ensureDefaultRuntimeApiConfig({
+  enableApi: 'true',
+  baseUrl: 'https://api.todoceo.xyz'
+});
+
 const StorageAdapter = require('./adapters/storage-adapter'); // 引入存储适配器
 const serviceManager = require('./services/service-manager.js'); // 引入服务管理器
 const logger = require('./utils/logger');
@@ -9,12 +17,9 @@ const bootstrapAuth = require('./utils/app/bootstrap-auth');
 const bootstrapServices = require('./utils/app/bootstrap-services');
 const postLoginBootstrap = require('./utils/app/post-login-bootstrap');
 const runtimeObservers = require('./utils/app/runtime-observers');
-const { resolveRuntimeApiConfig } = require('./utils/runtime-config');
 
 App({
   onLaunch: async function () {
-    wx.setStorageSync('ENABLE_API', 'true');
-    wx.setStorageSync('API_BASE_URL', 'https://api.todoceo.xyz');
     // 原地补齐启动状态，避免覆盖默认 globalData 契约和 getter。
     this.globalData.appReady = false;
     this.globalData.userServiceReady = false;

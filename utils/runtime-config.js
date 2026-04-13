@@ -35,6 +35,10 @@ function normalizeString(value) {
   return String(value).trim();
 }
 
+function hasPersistedValue(value) {
+  return normalizeString(value) !== '';
+}
+
 function resolveConfigSource(enableApiFromEnv, baseUrlFromEnv, enableApiFromStorage, baseUrlFromStorage) {
   if (
     enableApiFromEnv !== undefined ||
@@ -120,9 +124,33 @@ function persistRuntimeApiConfig({ enableApi, baseUrl } = {}) {
   };
 }
 
+function ensureDefaultRuntimeApiConfig({ enableApi, baseUrl } = {}) {
+  const persisted = readPersistedRuntimeApiConfig();
+  const normalizedEnableApi = enableApi === true || enableApi === 'true'
+    ? 'true'
+    : 'false';
+  const normalizedBaseUrl = normalizeString(baseUrl);
+  let wrote = false;
+
+  if (!hasPersistedValue(persisted.enableApiRaw)) {
+    wrote = setWechatStorage('ENABLE_API', normalizedEnableApi) || wrote;
+  }
+
+  if (!hasPersistedValue(persisted.baseUrlRaw) && normalizedBaseUrl !== '') {
+    wrote = setWechatStorage('API_BASE_URL', normalizedBaseUrl) || wrote;
+  }
+
+  return {
+    success: wrote,
+    wroteEnableApi: !hasPersistedValue(persisted.enableApiRaw),
+    wroteBaseUrl: !hasPersistedValue(persisted.baseUrlRaw) && normalizedBaseUrl !== ''
+  };
+}
+
 module.exports = {
   readPersistedRuntimeApiConfig,
   resolveRuntimeApiConfig,
   persistRuntimeApiConfig,
+  ensureDefaultRuntimeApiConfig,
   isValidHttpUrl
 };

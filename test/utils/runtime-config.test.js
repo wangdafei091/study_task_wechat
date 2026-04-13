@@ -87,4 +87,40 @@ describe('runtime-config', () => {
     expect(global.wx.setStorageSync).toHaveBeenCalledWith('ENABLE_API', 'true');
     expect(global.wx.setStorageSync).toHaveBeenCalledWith('API_BASE_URL', 'https://api.todoceo.xyz/test/');
   });
+
+  it('ensureDefaultRuntimeApiConfig 应在 storage 缺失时补齐默认值', () => {
+    const runtimeConfig = loadModule();
+
+    const result = runtimeConfig.ensureDefaultRuntimeApiConfig({
+      enableApi: true,
+      baseUrl: 'https://api.todoceo.xyz'
+    });
+
+    expect(result).toEqual({
+      success: true,
+      wroteEnableApi: true,
+      wroteBaseUrl: true
+    });
+    expect(global.wx.setStorageSync).toHaveBeenCalledWith('ENABLE_API', 'true');
+    expect(global.wx.setStorageSync).toHaveBeenCalledWith('API_BASE_URL', 'https://api.todoceo.xyz');
+  });
+
+  it('ensureDefaultRuntimeApiConfig 不应覆盖已有用户配置', () => {
+    const runtimeConfig = loadModule({
+      enableApi: 'false',
+      baseUrl: 'https://custom.example.com'
+    });
+
+    const result = runtimeConfig.ensureDefaultRuntimeApiConfig({
+      enableApi: true,
+      baseUrl: 'https://api.todoceo.xyz'
+    });
+
+    expect(result).toEqual({
+      success: false,
+      wroteEnableApi: false,
+      wroteBaseUrl: false
+    });
+    expect(global.wx.setStorageSync).not.toHaveBeenCalled();
+  });
 });

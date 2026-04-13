@@ -102,6 +102,7 @@ describe('app.js 自动登录环境配置', () => {
     require('../app.js');
 
     expect(appConfig).toBeTruthy();
+    global.wx.setStorageSync.mockClear();
 
     const loginSuccess = await appConfig.autoLogin();
 
@@ -114,5 +115,12 @@ describe('app.js 自动登录环境配置', () => {
     });
     expect(global.wx.setStorageSync).not.toHaveBeenCalledWith('ENABLE_API', 'true');
     expect(global.wx.request).not.toHaveBeenCalled();
+  });
+
+  it('加载 app.js 时应在 require 链前补齐默认 API 配置', () => {
+    require('../app.js');
+
+    expect(global.wx.setStorageSync).toHaveBeenCalledWith('ENABLE_API', 'true');
+    expect(global.wx.setStorageSync).toHaveBeenCalledWith('API_BASE_URL', 'https://api.todoceo.xyz');
   });
 });
