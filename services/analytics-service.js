@@ -6,8 +6,12 @@
 
 const logger = require('../utils/logger.js');
 const dateUtils = require('../utils/dateUtils.js');
+const HttpClient = require('../utils/http-client');
+const API_CONFIG = require('../utils/api-config');
 const EventBus = require('../utils/core/event-bus');
 const { EVENTS } = require('../utils/constants.js');
+const { Task } = require('../models/task');
+const { StarRecord } = require('../models/star-record');
 
 class AnalyticsService {
   /**
@@ -66,11 +70,43 @@ class AnalyticsService {
     logger.info('AnalyticsService', '开始获取任务星星日历数据', options);
 
     try {
+      const context = this._resolveAnalysisContext(options);
+      if (this._canUseCloudScopedAnalyticsQuery(context)) {
+        try {
+          const response = await HttpClient.post(
+            API_CONFIG.ENDPOINTS.ANALYTICS_TASK_STAR_CALENDAR_QUERY,
+            this._buildScopedAnalyticsPayload(context, {}, options)
+          );
+          return Array.isArray(response?.records) ? response.records : [];
+        } catch (cloudError) {
+          logger.warn('AnalyticsService', '任务星星日历查询走云端 authoritative 失败，回退本地', {
+            scope: context.scope,
+            userId: context.userId || null,
+            error: cloudError.message
+          });
+        }
+      }
+
+      return this._getTaskStarCalendarDataLocal(options);
+    } catch (error) {
+      logger.error('AnalyticsService', '获取任务星星日历数据失败', error);
+      return [];
+    }
+  }
+
+  async _getTaskStarCalendarDataLocal(options = {}) {
+    try {
+      const familyChildUserIds = this._resolveFamilyChildUserIds(options);
       // 使用 getTasksByScope 支持 userId 和 scope=family 两种场景
-      const tasks = this._filterTasksByChildUserIds(
-        await this.taskService.getTasksByScope(options),
-        options.childUserIds
-      );
+      const tasks = options.scope === 'family'
+        ? this._filterTasksByResolvedChildUserIds(
+          await this.taskService.getTasksByScope(options),
+          familyChildUserIds
+        )
+        : this._filterTasksByChildUserIds(
+          await this.taskService.getTasksByScope(options),
+          options.childUserIds
+        );
 
       const records = [];
 
@@ -287,7 +323,6 @@ class AnalyticsService {
 
   async _prepareReadModelInternal({ context, monthKey, days, signature }) {
     const cloudEnabled = this._isCloudEnabled();
-    const { startDate, endDate } = this._getMonthDateRange(monthKey);
 
     if (!cloudEnabled) {
       const snapshot = await this._buildLocalPreparedSnapshot({
@@ -301,68 +336,11 @@ class AnalyticsService {
     }
 
     try {
-      if (context.scope === 'family') {
-        const authorityResult = await this.starService.syncExpiryAuthorityIfNeeded({ scope: 'family' });
-        if (authorityResult?.success === false && authorityResult?.skipped !== true) {
-          const snapshot = await this._buildLocalPreparedSnapshot({
-            context,
-            monthKey,
-            days,
-            signature,
-            reason: 'cloud_failed'
-          });
-          return { success: true, fallback: true, snapshot };
-        }
-
-        // family 分析是正式双读模型：authority 成功后，并行刷新家庭流水与家庭 summary。
-        const [taskResult, starRefreshResult, familySummary] = await Promise.all([
-          this._loadScopedTasksByDateRange(startDate, endDate, context),
-          this.starService.refreshStarsFromCloud(null, { scope: 'family' }),
-          this.starService.getFamilyStarSummary({ force: true })
-        ]);
-
-        if (!starRefreshResult?.success || !familySummary?.success) {
-          const snapshot = await this._buildLocalPreparedSnapshot({
-            context,
-            monthKey,
-            days,
-            signature,
-            reason: 'cloud_failed'
-          });
-          return { success: true, fallback: true, snapshot };
-        }
-
-        const records = await this._loadScopedStarRecordsByDateRange(startDate, endDate, context);
-        const snapshot = this._buildPreparedSnapshot({
-          context,
-          signature,
-          monthKey,
-          days,
-          tasks: taskResult,
-          records,
-          currentBalance: Number(familySummary.totalPoints || 0),
-          familyGroupSnapshots: this._groupFamilySummaryByUser(familySummary.groups || [])
-        });
-        return { success: true, fallback: false, snapshot };
-      }
-
-      const authorityResult = await this.starService.syncExpiryAuthorityIfNeeded({
-        scope: 'user',
-        userId: context.userId
-      });
-      if (authorityResult?.success === false && authorityResult?.skipped !== true) {
-        const snapshot = await this._buildLocalPreparedSnapshot({
-          context,
-          monthKey,
-          days,
-          signature,
-          reason: 'cloud_failed'
-        });
-        return { success: true, fallback: true, snapshot };
-      }
-
-      const starRefreshResult = await this.starService.refreshStarsFromCloud(context.userId);
-      if (starRefreshResult?.skipped && starRefreshResult?.reason === 'pending_local_records') {
+      if (
+        context.scope === 'user' &&
+        context.userId &&
+        await this.starService.hasPendingLocalStarRecords(context.userId)
+      ) {
         const snapshot = await this._buildLocalPreparedSnapshot({
           context,
           monthKey,
@@ -373,33 +351,12 @@ class AnalyticsService {
         return { success: true, fallback: true, snapshot };
       }
 
-      if (!starRefreshResult?.success) {
-        const snapshot = await this._buildLocalPreparedSnapshot({
-          context,
-          monthKey,
-          days,
-          signature,
-          reason: 'cloud_failed'
-        });
-        return { success: true, fallback: true, snapshot };
-      }
-
-      const [tasks, records, starGroups] = await Promise.all([
-        this._loadScopedTasksByDateRange(startDate, endDate, context),
-        this._loadScopedStarRecordsByDateRange(startDate, endDate, context),
-        this.starService.getStarGroups(context.userId)
-      ]);
-
-      const snapshot = this._buildPreparedSnapshot({
+      const snapshot = await this._queryPreparedSnapshotFromCloud({
         context,
-        signature,
         monthKey,
         days,
-        tasks,
-        records,
-        currentBalance: this._sumStarGroups(starGroups)
+        signature
       });
-
       return { success: true, fallback: false, snapshot };
     } catch (error) {
       logger.warn('AnalyticsService', 'prepareReadModel 云端主路径失败，回退本地快照', {
@@ -497,6 +454,30 @@ class AnalyticsService {
     logger.info('AnalyticsService', `计算最近${days}天的可用星星余额`, { userId, scope });
 
     try {
+      const preparedSnapshot = this._findPreparedSnapshot(
+        scope === 'family'
+          ? {
+            scope: 'family',
+            childUserIds: options.childUserIds
+          }
+          : {
+            userId: userId || options.userId || null
+          }
+      );
+
+      if (
+        preparedSnapshot &&
+        preparedSnapshot.mode === 'authoritative' &&
+        Number(preparedSnapshot.days || 0) === Number(days || 7) &&
+        Array.isArray(preparedSnapshot.historyData) &&
+        Array.isArray(preparedSnapshot.forecastData)
+      ) {
+        return {
+          historyData: preparedSnapshot.historyData,
+          forecastData: preparedSnapshot.forecastData
+        };
+      }
+
       let records = [];
       let starGroups = [];
       let historyData = [];
@@ -910,6 +891,23 @@ class AnalyticsService {
         return [];
       }
 
+      const context = this._resolveAnalysisContext(options);
+      if (this._canUseCloudScopedAnalyticsQuery(context)) {
+        try {
+          const response = await HttpClient.post(
+            API_CONFIG.ENDPOINTS.ANALYTICS_UPCOMING_EXPIRY_QUERY,
+            this._buildScopedAnalyticsPayload(context, { days }, options)
+          );
+          return this._adaptCloudUpcomingExpiryItems(response?.items);
+        } catch (cloudError) {
+          logger.warn('AnalyticsService', '即将过期星星查询走云端 authoritative 失败，回退本地', {
+            scope: context.scope,
+            userId: context.userId || null,
+            error: cloudError.message
+          });
+        }
+      }
+
       if (scope === 'family') {
         logger.info('AnalyticsService', '家庭分析模式跳过即将过期星星查询：当前作用域仅同步星星流水');
         return [];
@@ -971,11 +969,34 @@ class AnalyticsService {
         return {};
       }
 
+      const context = this._resolveAnalysisContext(options);
+      if (this._canUseCloudScopedAnalyticsQuery(context)) {
+        try {
+          const response = await HttpClient.post(
+            API_CONFIG.ENDPOINTS.ANALYTICS_TASK_COMPLETION_STATS_QUERY,
+            this._buildScopedAnalyticsPayload(context, { dateRange }, options)
+          );
+          return response?.stats || {};
+        } catch (cloudError) {
+          logger.warn('AnalyticsService', '任务完成统计走云端 authoritative 失败，回退本地', {
+            scope: context.scope,
+            userId: context.userId || null,
+            error: cloudError.message
+          });
+        }
+      }
+
       // 使用 getTasksByScope 支持 userId 和 scope=family 两种场景
-      const tasks = this._filterTasksByChildUserIds(
-        await this.taskService.getTasksByScope(options),
-        options.childUserIds
-      );
+      const familyChildUserIds = this._resolveFamilyChildUserIds(options);
+      const tasks = options.scope === 'family'
+        ? this._filterTasksByResolvedChildUserIds(
+          await this.taskService.getTasksByScope(options),
+          familyChildUserIds
+        )
+        : this._filterTasksByChildUserIds(
+          await this.taskService.getTasksByScope(options),
+          options.childUserIds
+        );
 
       // 根据日期范围筛选任务
       let filteredTasks = tasks;
@@ -1060,14 +1081,16 @@ class AnalyticsService {
 
   _resolveAnalysisContext(analysisOptions = {}) {
     if (analysisOptions.scope === 'family') {
-      const childUserIds = Array.isArray(analysisOptions.childUserIds)
+      const hasExplicitChildUserIds = Object.prototype.hasOwnProperty.call(analysisOptions, 'childUserIds');
+      const childUserIds = hasExplicitChildUserIds && Array.isArray(analysisOptions.childUserIds)
         ? analysisOptions.childUserIds.filter(Boolean)
-        : [];
+        : undefined;
       return {
         scope: 'family',
         userId: null,
         childUserIds,
-        subjectUserIds: childUserIds
+        subjectUserIds: childUserIds,
+        hasExplicitChildUserIds
       };
     }
 
@@ -1084,7 +1107,9 @@ class AnalyticsService {
     return JSON.stringify({
       scope: context.scope,
       userId: context.userId || null,
-      childUserIds: context.childUserIds || [],
+      childUserIds: context.scope === 'family'
+        ? (context.hasExplicitChildUserIds ? (context.childUserIds || []) : null)
+        : [],
       monthKey,
       days: Number(days || 7)
     });
@@ -1092,6 +1117,9 @@ class AnalyticsService {
 
   _buildAnalysisScopeKey(context) {
     if (context.scope === 'family') {
+      if (!context.hasExplicitChildUserIds) {
+        return 'family:all';
+      }
       return `family:${(context.childUserIds || []).join(',')}`;
     }
     return `user:${context.userId || 'unknown'}`;
@@ -1099,6 +1127,35 @@ class AnalyticsService {
 
   _isCloudEnabled() {
     return Boolean(this.starService?.enableCloudStorage || this.taskService?.enableCloudStorage);
+  }
+
+  _canUseCloudScopedAnalyticsQuery(context = {}) {
+    if (!this._isCloudEnabled()) {
+      return false;
+    }
+
+    if (context.scope === 'family') {
+      return true;
+    }
+
+    return Boolean(context.userId);
+  }
+
+  _buildScopedAnalyticsPayload(context = {}, extra = {}, rawOptions = {}) {
+    const payload = {
+      scope: context.scope,
+      ...extra
+    };
+
+    if (context.scope === 'family') {
+      if (Object.prototype.hasOwnProperty.call(rawOptions || {}, 'childUserIds')) {
+        payload.childUserIds = context.childUserIds || [];
+      }
+    } else if (context.userId) {
+      payload.userId = context.userId;
+    }
+
+    return payload;
   }
 
   _getMonthDateRange(monthKey) {
@@ -1111,28 +1168,15 @@ class AnalyticsService {
     return { startDate, endDate };
   }
 
-  async _loadScopedTasksByDateRange(startDate, endDate, context) {
-    if (!this.taskService) {
-      return [];
-    }
-
-    const tasks = await this.taskService.getTasksByDateRange(
-      startDate,
-      endDate,
-      context.userId || null,
-      context.scope === 'family' ? { scope: 'family' } : {}
-    );
-    return this._filterTasksByChildUserIds(tasks, context.childUserIds);
-  }
-
   async _loadLocalScopedTasksByDateRange(startDate, endDate, context) {
     if (!this.taskService?.taskRepository?.getTasksByDateRange) {
       return [];
     }
 
     if (context.scope === 'family') {
+      const resolvedChildUserIds = this._resolveFamilyChildUserIds(context);
       const allTasks = await this.taskService.taskRepository.getTasksByDateRange(startDate, endDate, null);
-      return this._filterTasksByChildUserIds(allTasks, context.childUserIds);
+      return this._filterTasksByResolvedChildUserIds(allTasks, resolvedChildUserIds);
     }
 
     return this.taskService.taskRepository.getTasksByDateRange(startDate, endDate, context.userId || null);
@@ -1147,8 +1191,9 @@ class AnalyticsService {
       return this.starService.getStarRecordsByDateRange(startDate, endDate, context.userId || null);
     }
 
+    const resolvedChildUserIds = this._resolveFamilyChildUserIds(context);
     const allRecords = await this.starService.getStarRecords();
-    return this._filterRecordsByChildUserIds(allRecords, context.childUserIds).filter((record) => {
+    return this._filterRecordsByResolvedChildUserIds(allRecords, resolvedChildUserIds).filter((record) => {
       const recordDate = this._getRecordDateString(record);
       return recordDate >= startDate && recordDate <= endDate;
     });
@@ -1165,8 +1210,9 @@ class AnalyticsService {
     let familyGroupSnapshots = undefined;
 
     if (context.scope === 'family') {
+      const resolvedChildUserIds = this._resolveFamilyChildUserIds(context);
       const allGroups = await Promise.all(
-        (context.childUserIds || []).map(async (userId) => ({
+        (resolvedChildUserIds || []).map(async (userId) => ({
           userId,
           groups: await this.starService.getStarGroups(userId)
         }))
@@ -1204,13 +1250,17 @@ class AnalyticsService {
     records = [],
     currentBalance = 0,
     familyGroupSnapshots = undefined,
+    historyData = [],
+    forecastData = [],
     mode = 'authoritative',
     fallbackReason = undefined
   }) {
     return {
       scope: context.scope,
       scopeKey: this._buildAnalysisScopeKey(context),
-      subjectUserIds: context.subjectUserIds || [],
+      subjectUserIds: context.scope === 'family'
+        ? (this._resolveFamilyChildUserIds(context) || [])
+        : (context.subjectUserIds || []),
       monthKey,
       days: Number(days || 7),
       signature,
@@ -1221,20 +1271,126 @@ class AnalyticsService {
       fallbackReason,
       tasks,
       records,
-      familyGroupSnapshots
+      familyGroupSnapshots,
+      historyData,
+      forecastData
     };
   }
 
-  _groupFamilySummaryByUser(groups = []) {
-    return (groups || []).reduce((result, group) => {
-      const userId = group.userId;
-      if (!userId) {
-        return result;
-      }
-      if (!result[userId]) {
-        result[userId] = [];
-      }
-      result[userId].push(group);
+  async _queryPreparedSnapshotFromCloud({ context, monthKey, days, signature }) {
+    const payload = {
+      scope: context.scope,
+      monthKey,
+      trendDays: Number(days || 7)
+    };
+
+    if (context.scope === 'family') {
+      payload.childUserIds = context.childUserIds;
+    } else {
+      payload.userId = context.userId;
+    }
+
+    const response = await HttpClient.post(API_CONFIG.ENDPOINTS.ANALYTICS_READ_MODEL_QUERY, payload);
+    if (!response || !response.snapshot) {
+      throw new Error('analytics read model 响应缺少 snapshot');
+    }
+
+    return this._adaptCloudPreparedSnapshot(response.snapshot, {
+      context,
+      monthKey,
+      days,
+      signature
+    });
+  }
+
+  _adaptCloudPreparedSnapshot(snapshot, { context, monthKey, days, signature }) {
+    return {
+      scope: context.scope,
+      scopeKey: this._buildAnalysisScopeKey(context),
+      subjectUserIds: Array.isArray(snapshot.subjectUserIds)
+        ? snapshot.subjectUserIds.filter(Boolean)
+        : (context.subjectUserIds || []),
+      monthKey,
+      days: Number(days || 7),
+      signature,
+      refreshedAt: Number(snapshot.refreshedAt || Date.now()),
+      expiresAt: Date.now() + this.prepareSnapshotTtlMs,
+      currentBalance: Number(snapshot.currentBalance || 0),
+      mode: 'authoritative',
+      fallbackReason: undefined,
+      tasks: this._adaptCloudTasks(snapshot.tasks || []),
+      records: this._adaptCloudRecords(snapshot.records || []),
+      familyGroupSnapshots: this._adaptCloudFamilyGroupSnapshots(snapshot.familyGroupSnapshots),
+      historyData: Array.isArray(snapshot.historyData) ? snapshot.historyData : [],
+      forecastData: Array.isArray(snapshot.forecastData) ? snapshot.forecastData : []
+    };
+  }
+
+  _adaptCloudTasks(tasks = []) {
+    return (Array.isArray(tasks) ? tasks : []).map((task) => new Task({
+      id: task.id || task.taskId,
+      userId: task.userId,
+      title: task.title,
+      description: task.description,
+      type: task.type,
+      date: task.date,
+      startTime: task.startTime,
+      endTime: task.endTime,
+      duration: task.duration,
+      isAllDay: task.isAllDay === true,
+      reminder: task.reminder,
+      status: task.status,
+      isRequired: task.isRequired === true,
+      penaltyApplied: task.penaltyApplied === true,
+      penaltyDeductedPoints: Number(task.penaltyDeductedPoints || 0),
+      penaltyRefunded: task.penaltyRefunded === true,
+      penaltyRefundTime: task.penaltyRefundTime || 0,
+      completionTime: task.completionTime || 0,
+      points: Number(task.points || 0),
+      pointsExpiry: task.pointsExpiry,
+      starAwarded: task.starAwarded === true,
+      repeat: task.repeat || { type: 'none' },
+      parentTaskId: task.parentTaskId || '',
+      hasNoEndDate: task.hasNoEndDate === true,
+      modifyTime: task.modifyTime || Date.now(),
+      createTime: Date.parse(task.createdAt || '') || Date.now(),
+      syncedToCloud: true
+    }));
+  }
+
+  _adaptCloudRecords(records = []) {
+    return (Array.isArray(records) ? records : []).map((record) => new StarRecord({
+      id: record.id || record.recordId,
+      userId: record.userId,
+      type: record.type,
+      source: record.source,
+      sourceId: record.sourceId || '',
+      points: Number(record.points || 0),
+      timestamp: record.timestamp || record.modifyTime || Date.parse(record.createdAt || '') || Date.now(),
+      description: record.description || '',
+      expiryType: record.expiryType || null,
+      expiryDate: record.expiryDate || null,
+      balance: Number(record.balance || 0),
+      previousBalance: Number(record.previousBalance || 0),
+      originalTaskDate: record.originalTaskDate || null,
+      requestedPoints: record.requestedPoints || null,
+      syncedToCloud: true,
+      idempotencyKey: record.idempotencyKey || null,
+      modifyTime: record.modifyTime || Date.now(),
+      data: record.data || {}
+    }));
+  }
+
+  _adaptCloudFamilyGroupSnapshots(groupsByUser = {}) {
+    if (!groupsByUser || typeof groupsByUser !== 'object') {
+      return undefined;
+    }
+
+    return Object.keys(groupsByUser).reduce((result, userId) => {
+      result[userId] = (groupsByUser[userId] || []).map((group) => ({
+        ...group,
+        stars: Number(group.stars || 0)
+      }));
       return result;
     }, {});
   }
@@ -1243,6 +1399,42 @@ class AnalyticsService {
     return Object.values(groupsByUser || {}).reduce((result, groups) => {
       return result.concat(groups || []);
     }, []);
+  }
+
+  _resolveFamilyChildUserIds(options = {}) {
+    if (Array.isArray(options.childUserIds)) {
+      return options.childUserIds.filter(Boolean);
+    }
+
+    const allUsers = this.taskService?.userService?.getAllUsers?.() || [];
+    const childUserIds = allUsers
+      .filter((user) => user?.role === 'child' && user?.status !== 'inactive')
+      .map((user) => user.userId || user.id)
+      .filter(Boolean);
+
+    return childUserIds.length > 0 ? childUserIds : null;
+  }
+
+  _filterTasksByResolvedChildUserIds(tasks = [], childUserIds = null) {
+    if (!Array.isArray(childUserIds)) {
+      return tasks || [];
+    }
+    return this._filterTasksByChildUserIds(tasks, childUserIds);
+  }
+
+  _filterRecordsByResolvedChildUserIds(records = [], childUserIds = null) {
+    if (!Array.isArray(childUserIds)) {
+      return records || [];
+    }
+    return this._filterRecordsByChildUserIds(records, childUserIds);
+  }
+
+  _adaptCloudUpcomingExpiryItems(items = []) {
+    return (Array.isArray(items) ? items : []).map((item) => ({
+      ...item,
+      expiryDate: item?.expiryDate ? new Date(item.expiryDate) : null,
+      points: Number(item?.points || 0)
+    }));
   }
 }
 

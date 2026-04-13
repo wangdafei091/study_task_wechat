@@ -1,7 +1,7 @@
 # 后端 REST API 契约
 
 > 项目后端 HTTP/REST 接口的权威说明文档
-> **最后更新**：2026-04-09
+> **最后更新**：2026-04-13
 > **维护者**：项目维护团队
 
 ---
@@ -1270,7 +1270,131 @@ Authorization: Bearer <token>
 
 ---
 
-## 10. 相关文档
+## 10. Analytics 接口
+
+### 10.1 查询统一分析读模型
+
+- Method: `POST`
+- Path: `/api/analytics/read-model/query`
+- Auth: `Bearer Token`
+- Query: 无
+- Body：
+  - `scope` - `user | family`
+  - `monthKey` - 月份键，格式 `YYYY-MM`
+  - `trendDays` - 趋势天数，仅支持 `7 | 30`
+  - `userId` - `scope=user` 时必填
+  - `childUserIds` - `scope=family` 时可选；不传表示当前家庭全部 active child，传空数组表示显式空结果
+
+成功响应：
+- Status: `200`
+- Body：
+  - `data.snapshot.scope`
+  - `data.snapshot.subjectUserIds`
+  - `data.snapshot.monthKey`
+  - `data.snapshot.days`
+  - `data.snapshot.currentBalance`
+  - `data.snapshot.tasks`
+  - `data.snapshot.records`
+  - `data.snapshot.familyGroupSnapshots`（仅 family）
+  - `data.snapshot.historyData`
+  - `data.snapshot.forecastData`
+  - `data.snapshot.refreshedAt`
+
+常见错误：
+- `400` - `INVALID_PARAMS`
+- `403` - `PERMISSION_DENIED` / `FAMILY_MEMBER_ACCESS_DENIED`
+- `500` - `ANALYTICS_READ_MODEL_QUERY_FAILED`
+
+### 10.2 查询任务完成统计
+
+- Method: `POST`
+- Path: `/api/analytics/task-completion-stats/query`
+- Auth: `Bearer Token`
+- Query: 无
+- Body：
+  - `scope` - `user | family`
+  - `dateRange` - `today | week | month`
+  - `userId` - `scope=user` 时必填
+  - `childUserIds` - `scope=family` 时可选
+
+成功响应：
+- Status: `200`
+- Body：
+  - `data.stats.totalTasks`
+  - `data.stats.completedTasks`
+  - `data.stats.completionRate`
+  - `data.stats.typeCounts`
+  - `data.stats.statusCounts`
+
+常见错误：
+- `400` - `INVALID_PARAMS`
+- `403` - `PERMISSION_DENIED` / `FAMILY_MEMBER_ACCESS_DENIED`
+- `500` - `ANALYTICS_TASK_COMPLETION_STATS_QUERY_FAILED`
+
+### 10.3 查询即将过期星星
+
+- Method: `POST`
+- Path: `/api/analytics/upcoming-expiry/query`
+- Auth: `Bearer Token`
+- Query: 无
+- Body：
+  - `scope` - `user | family`
+  - `days` - 正整数，默认 `7`
+  - `userId` - `scope=user` 时必填
+  - `childUserIds` - `scope=family` 时可选
+
+成功响应：
+- Status: `200`
+- Body：
+  - `data.items[]`
+  - `data.items[].id`
+  - `data.items[].points`
+  - `data.items[].expiryDate`
+  - `data.items[].expiryDateStr`
+  - `data.items[].type`
+
+说明：
+- 当前产品口径下，`scope=family` 返回空数组，用于保持与前端既有行为一致
+
+常见错误：
+- `400` - `INVALID_PARAMS`
+- `403` - `PERMISSION_DENIED` / `FAMILY_MEMBER_ACCESS_DENIED`
+- `500` - `ANALYTICS_UPCOMING_EXPIRY_QUERY_FAILED`
+
+### 10.4 查询任务星星日历事实
+
+- Method: `POST`
+- Path: `/api/analytics/task-star-calendar/query`
+- Auth: `Bearer Token`
+- Query: 无
+- Body：
+  - `scope` - `user | family`
+  - `userId` - `scope=user` 时必填
+  - `childUserIds` - `scope=family` 时可选
+
+成功响应：
+- Status: `200`
+- Body：
+  - `data.records[]`
+  - `data.records[].id`
+  - `data.records[].title`
+  - `data.records[].time`
+  - `data.records[].timestamp`
+  - `data.records[].points`
+  - `data.records[].type`
+  - `data.records[].source`
+
+说明：
+- 任务完成加星、未完成必做扣星、补做退星都由后端按事实字段统一生成
+
+常见错误：
+- `400` - `INVALID_PARAMS`
+- `403` - `PERMISSION_DENIED` / `FAMILY_MEMBER_ACCESS_DENIED`
+- `500` - `ANALYTICS_TASK_STAR_CALENDAR_QUERY_FAILED`
+
+---
+
+## 11. 相关文档
 
 - 前端服务层接口：[services-guide.md](./services-guide.md)
 - 仓储接口：[repositories.md](./repositories.md)

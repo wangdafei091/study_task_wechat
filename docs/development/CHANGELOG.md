@@ -4,6 +4,41 @@
 
 ---
 
+## [里程碑-21F2] - 2026-04-13
+
+### ✅ 完成情况
+
+**analytics 云端正式读模型后移与前端收口**
+
+- **后端 authoritative read model 落地**：
+  - 新增 `backend/services/analyticsReadModelService.js` 及 `analytics-read-model/` 内部模块，统一承接 `user / family` 两个 scope 的月度任务、星星流水、当前余额锚点、`historyData` 与 `forecastData`
+  - 新增 `backend/routes/analytics.js` 与 `backend/controllers/analyticsController.js`，正式暴露 4 个 analytics 查询接口
+  - `prepareReadModel`、任务完成统计、即将过期星星、任务星星日历的 cloud authoritative 口径全部由后端输出
+- **前端职责收口**：
+  - `services/analytics-service.js` 在 cloud 模式下改为优先消费后端 authoritative 结果，前端回到缓存、适配、展示分发和失败兜底职责
+  - 保留本地模式、后端失败和 `pending_local_overlay` 所需的最小必要 fallback，不再保留第二套 cloud 正式聚合主链路
+  - 删除已不再被主路径命中的 analytics cloud-only 冗余 helper，前端 analytics 主路径明显变薄
+- **契约与查询能力统一**：
+  - 新增 `read-model/query`、`task-completion-stats/query`、`upcoming-expiry/query`、`task-star-calendar/query` 四个 REST 契约
+  - `utils/api-config.js`、前端服务层和后端控制器/服务层的 scope、subject、返回结构已完成统一
+
+### 🧪 验证结果
+
+- 前端定向测试通过：
+  - `test/services/analytics-service.test.js`
+- 后端定向测试通过：
+  - `backend/test/unit/analyticsReadModelService.test.js`
+  - `backend/test/integration/analytics-read-model-api.test.js`
+- 手工验收通过：
+  - user / family 分析页月度事实、趋势图、任务完成统计、即将过期星星、任务星星日历主链路已逐项验证
+  - `pending_local_overlay`、后端失败 fallback、family 子集筛选等关键降级/边界场景已确认符合预期
+
+### 📖 详细实施记录
+
+- [里程碑-21F2：analytics 云端正式读模型后移与前端收口](../design/milestone-21f2-analytics-readmodel-backend-migration.md)
+
+---
+
 ## [里程碑-21B4] - 2026-04-11
 
 ### ✅ 完成情况
