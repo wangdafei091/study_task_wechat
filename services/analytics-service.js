@@ -200,37 +200,6 @@ class AnalyticsService {
     }
   }
 
-  /**
-   * 按日期分组星星记录
-   * @param {Array} records 星星记录数组
-   * @returns {Object} 按日期分组的记录对象
-   */
-  groupRecordsByDate(records) {
-    logger.info('AnalyticsService', `开始按日期分组${records.length}条星星记录`);
-
-    const result = {};
-
-    records.forEach((record) => {
-      if (!record.timestamp) {
-        return;
-      }
-
-      const date = new Date(record.timestamp);
-      const dateString = dateUtils.formatDate(date);
-
-      if (!result[dateString]) {
-        result[dateString] = [];
-      }
-
-      result[dateString].push(record);
-    });
-
-    const dateCount = Object.keys(result).length;
-    logger.info('AnalyticsService', `分组完成，共${dateCount}个日期`);
-
-    return result;
-  }
-
   async prepareReadModel({ analysisOptions = {}, monthKey, days = 7, force = false } = {}) {
     const context = this._resolveAnalysisContext(analysisOptions);
     const normalizedMonthKey = monthKey || dateUtils.formatDate(new Date()).slice(0, 7);
@@ -277,20 +246,6 @@ class AnalyticsService {
     return {
       tasks: snapshot.tasks || [],
       records: snapshot.records || [],
-      refreshedAt: snapshot.refreshedAt || 0,
-      fallback: snapshot.mode === 'fallback'
-    };
-  }
-
-  getPreparedFamilyGroupSnapshot(analysisOptions = {}) {
-    const snapshot = this._findPreparedSnapshot(analysisOptions);
-    if (!snapshot || snapshot.scope !== 'family') {
-      return null;
-    }
-
-    return {
-      currentBalance: Number(snapshot.currentBalance || 0),
-      groupsByUser: snapshot.familyGroupSnapshots || {},
       refreshedAt: snapshot.refreshedAt || 0,
       fallback: snapshot.mode === 'fallback'
     };
@@ -450,10 +405,21 @@ class AnalyticsService {
    * @returns {Promise<Object>} 历史余额数据和预测数据
    */
   async calculateHistoricalBalance(days, userId = null, options = {}) {
-    const scope = options.scope || (userId ? 'user' : 'all');
+    const scope = options.scope || (userId ? 'user' : null);
     logger.info('AnalyticsService', `计算最近${days}天的可用星星余额`, { userId, scope });
 
     try {
+      if (scope !== 'user' && scope !== 'family') {
+        logger.warn('AnalyticsService', '分析范围无效，返回空趋势数据', {
+          userId,
+          scope
+        });
+        return {
+          historyData: [],
+          forecastData: []
+        };
+      }
+
       const preparedSnapshot = this._findPreparedSnapshot(
         scope === 'family'
           ? {
@@ -502,23 +468,22 @@ class AnalyticsService {
             difference
           });
         }
-      } else {
-        if (scope === 'family') {
-          records = this._filterRecordsByChildUserIds(
-            await this.getAllStarRecords(),
-            options.childUserIds
-          );
-          const familySnapshot = this._findPreparedSnapshot(options);
-          if (familySnapshot && familySnapshot.scope === 'family') {
-            starGroups = this._flattenFamilyGroupSnapshots(familySnapshot.familyGroupSnapshots);
-            currentBalance = Number(familySnapshot.currentBalance || 0);
-            historyData = this._calculateAnchoredDailyBalance(records || [], days, currentBalance);
-          }
+      } else if (scope === 'family') {
+        records = this._filterRecordsByChildUserIds(
+          await this.getAllStarRecords(),
+          options.childUserIds
+        );
+        const familySnapshot = this._findPreparedSnapshot(options);
+        if (familySnapshot && familySnapshot.scope === 'family') {
+          starGroups = this._flattenFamilyGroupSnapshots(familySnapshot.familyGroupSnapshots);
+          currentBalance = Number(familySnapshot.currentBalance || 0);
         } else {
-          // 获取星星记录（userId=null 时取当前登录用户的记录）
-          records = userId
-            ? await this.starService.getStarRecords({ userId })
-            : await this.getAllStarRecords();
+          const resolvedChildUserIds = this._resolveFamilyChildUserIds(options);
+          const familyGroups = await Promise.all(
+            (resolvedChildUserIds || []).map((childId) => this.starService.getStarGroups(childId))
+          );
+          starGroups = familyGroups.flat().filter(Boolean);
+          currentBalance = this._sumStarGroups(starGroups);
         }
 
         if (!records || records.length === 0) {
@@ -529,10 +494,7 @@ class AnalyticsService {
           };
         }
 
-        if (historyData.length === 0) {
-          historyData = this._calculateDailyBalance(records, days);
-          currentBalance = historyData.length > 0 ? historyData[historyData.length - 1].value : 0;
-        }
+        historyData = this._calculateAnchoredDailyBalance(records || [], days, currentBalance);
       }
 
       if (historyData.length === 0) {
@@ -563,81 +525,6 @@ class AnalyticsService {
         forecastData: []
       };
     }
-  }
-
-  /**
-   * 计算每日余额变化
-   * @param {Array} records 星星记录数组
-   * @param {Number} days 历史天数
-   * @returns {Array} 每日余额数据
-   * @private
-   */
-  _calculateDailyBalance(records, days) {
-    logger.info('AnalyticsService', `计算${days}天的每日余额变化`);
-
-    // 计算日期范围
-    const { dateArray, formattedDates } = this._calculateDateRange(days);
-
-    // 按日期计算余额变化
-    const result = [];
-
-    dateArray.forEach((dateStr, index) => {
-      // 筛选当天及之前的所有记录
-      const relevantRecords = records.filter((record) => {
-        if (!record.timestamp) {
-          return false;
-        }
-
-        // 对于惩罚记录，优先使用originalTaskDate进行日期归属
-        let recordDateStr;
-        if (record.source === 'task' && record.type === 'expense' && record.originalTaskDate) {
-          recordDateStr = record.originalTaskDate;
-          logger.debug('AnalyticsService', `惩罚记录使用原始任务日期: ${recordDateStr}, 记录ID=${record.id}`);
-        } else {
-          const recordDate = new Date(record.timestamp);
-          recordDateStr = dateUtils.formatDate(recordDate);
-        }
-
-        return recordDateStr <= dateStr;
-      });
-
-      // 计算余额
-      let earned = 0;
-      let spent = 0;
-      let penalty = 0;
-
-      relevantRecords.forEach((record) => {
-        const points = Number(record.points || 0);
-
-        if (points > 0) {
-          earned += points;
-        } else if (points < 0) {
-          if (record.source === 'task' && record.type === 'expense' && record.originalTaskDate) {
-            penalty += Math.abs(points);
-          } else {
-            spent += Math.abs(points);
-          }
-        }
-      });
-
-      // 计算当前总余额 = 收入 - 支出 - 惩罚
-      const balance = earned - spent - penalty;
-
-      // 添加到结果
-      result.push({
-        date: formattedDates[index],
-        value: Number(balance),
-        earned: Number(earned),
-        spent: Number(spent),
-        penalty: Number(penalty)
-      });
-
-      logger.debug('AnalyticsService', `${dateStr} (${formattedDates[index]}) 余额: ${balance}`);
-    });
-
-    logger.info('AnalyticsService', `余额计算完成，共${result.length}天的数据`);
-
-    return result;
   }
 
   /**

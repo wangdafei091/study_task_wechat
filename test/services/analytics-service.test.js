@@ -417,6 +417,40 @@ describe('AnalyticsService', () => {
       expect(result.snapshot.subjectUserIds).toEqual(['child-1', 'child-2']);
       expect(result.snapshot.currentBalance).toBe(5);
     });
+
+    it('family fallback 快照仍应基于当前分组余额返回锚定趋势数据', async () => {
+      HttpClient.post.mockRejectedValueOnce(new Error('cloud down'));
+      mockTaskService.taskRepository.getTasksByDateRange.mockResolvedValueOnce([]);
+      mockStarService.getStarRecords.mockResolvedValueOnce([
+        {
+          userId: 'child-1',
+          id: 'record-child-1',
+          points: 2,
+          timestamp: new Date('2026-03-20T09:00:00').getTime(),
+          source: 'task',
+          type: 'income'
+        }
+      ]);
+      mockStarService.getStarGroups
+        .mockResolvedValueOnce([{ id: 'group-1', stars: 3, expiryType: 'week', expiryDate: new Date('2026-03-22T12:00:00').getTime() }])
+        .mockResolvedValueOnce([{ id: 'group-2', stars: 2, expiryType: 'week', expiryDate: new Date('2026-03-23T12:00:00').getTime() }]);
+
+      await analyticsService.prepareReadModel({
+        analysisOptions: { scope: 'family' },
+        monthKey: '2026-03',
+        days: 7,
+        force: true
+      });
+
+      const result = await analyticsService.calculateHistoricalBalance(7, null, {
+        scope: 'family'
+      });
+
+      expect(result.historyData.length).toBeGreaterThan(0);
+      expect(result.historyData[result.historyData.length - 1]).toEqual(
+        expect.objectContaining({ value: 5 })
+      );
+    });
   });
 
   describe('getTaskCompletionStats', () => {

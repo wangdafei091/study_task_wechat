@@ -9,17 +9,6 @@ jest.mock('../../utils/view-scope', () => ({
   hasResolvedAnalysisOptions: jest.fn((options) => Boolean(options && (options.scope || options.userId)))
 }));
 
-jest.mock('../../services/service-manager.js', () => ({
-  getStarService: jest.fn(() => ({
-    refreshStarsFromCloud: jest.fn(),
-    getStarRecordsByDateRange: jest.fn()
-  })),
-  getTaskService: jest.fn(() => ({
-    getTasksByDateRange: jest.fn(),
-    getTasksByDate: jest.fn()
-  }))
-}));
-
 describe('packageChart/components/star-calendar/star-calendar', () => {
   let componentConfig;
 
@@ -43,11 +32,14 @@ describe('packageChart/components/star-calendar/star-calendar', () => {
         analysisOptions: {
           scope: 'family',
           childUserIds: ['child-1', 'child-2']
-        }
+        },
+        currentMonthKey: '',
+        readModelVersion: 0
       },
       setData: jest.fn(function setData(update) {
         Object.assign(this.data, update);
-      })
+      }),
+      triggerEvent: jest.fn()
     };
 
     Object.entries(componentConfig.methods || {}).forEach(([name, fn]) => {
@@ -139,15 +131,14 @@ describe('packageChart/components/star-calendar/star-calendar', () => {
     component._attached = true;
     component.properties.currentMonthKey = '2026-04';
     component.properties.readModelVersion = 0;
-    component.smartRefresh = jest.fn();
+    component.loadStarRecords = jest.fn();
 
     componentConfig.observers['analysisOptions, currentMonthKey, readModelVersion'].call(component);
 
-    expect(component.smartRefresh).not.toHaveBeenCalled();
+    expect(component.loadStarRecords).not.toHaveBeenCalled();
   });
 
-  it('统一读模型模式未命中 prepared snapshot 时不应回退到组件自拉云', () => {
-    const serviceManager = require('../../services/service-manager.js');
+  it('统一读模型模式未命中 prepared snapshot 时应保持等待状态，不回退到组件自拉数', () => {
     global.getApp.mockReturnValue({
       getAnalyticsService: jest.fn(() => ({
         getPreparedMonthData: jest.fn(() => null)
@@ -164,25 +155,91 @@ describe('packageChart/components/star-calendar/star-calendar', () => {
 
     component.loadStarRecords();
 
-    expect(serviceManager.getStarService).not.toHaveBeenCalled();
-    expect(serviceManager.getTaskService).not.toHaveBeenCalled();
     expect(component.updateCalendarWithStars).not.toHaveBeenCalled();
+    expect(component.data.isLoading).toBe(true);
   });
 
-  it('非统一读模型 fallback 仍允许按 analysis scope 直连刷新星星', async () => {
-    const refreshStarsFromCloud = jest.fn().mockResolvedValue();
+  it('分析范围切换时应先清空旧月份展示并等待新的 prepared snapshot', () => {
+    global.getApp.mockReturnValue({
+      getAnalyticsService: jest.fn(() => ({
+        getPreparedMonthData: jest.fn(() => null)
+      }))
+    });
 
     const component = createComponentInstance();
-
-    await component._refreshStarsForAnalysis({ refreshStarsFromCloud }, {
+    component._attached = true;
+    component.properties.currentMonthKey = '2026-04';
+    component.properties.readModelVersion = 1;
+    component.properties.analysisOptions = { userId: 'child-1' };
+    component._preparedStateSignature = JSON.stringify({
       scope: 'family',
-      childUserIds: ['child-1']
+      userId: null,
+      childUserIds: ['child-1', 'child-2'],
+      monthKey: '2026-04'
     });
-    await component._refreshStarsForAnalysis({ refreshStarsFromCloud }, {
-      userId: 'child-1'
+    component.data.currentYear = 2026;
+    component.data.currentMonth = 3;
+    component.data.hasStarRecords = true;
+    component.data.monthCache = {
+      '2026-04': {
+        records: [{ id: 'stale-record' }],
+        lastUpdate: 123
+      }
+    };
+    component.data.calendarDays = [
+      {
+        dateString: '2026-04-01',
+        day: 1,
+        isCurrentMonth: true,
+        starInfo: { earned: 3, deducted: 0 }
+      }
+    ];
+    component._monthTaskCache = {
+      key: '2026-04',
+      tasks: [{ id: 'stale-task', date: '2026-04-01' }]
+    };
+
+    componentConfig.observers['analysisOptions, currentMonthKey, readModelVersion'].call(component);
+
+    expect(component.data.isLoading).toBe(true);
+    expect(component.data.hasStarRecords).toBe(false);
+    expect(component.data.monthCache).toEqual({});
+    expect(component._monthTaskCache).toBeNull();
+    expect(component.data.calendarDays[0].starInfo).toBeUndefined();
+  });
+
+  it('goToToday 应通过 monthchange(force=true) 请求页面强制重刷', () => {
+    const component = createComponentInstance();
+    component.properties.currentMonthKey = '2026-04';
+
+    component.goToToday();
+
+    expect(component.triggerEvent).toHaveBeenCalledWith('monthchange', expect.objectContaining({
+      force: true
+    }));
+  });
+
+  it('任务状态变化命中当前月份时应请求页面 force 刷新，而不是组件自行拉数', () => {
+    const eventBus = {
+      on: jest.fn(),
+      off: jest.fn()
+    };
+    global.getApp.mockReturnValue({
+      globalData: { eventBus }
+    });
+    const component = createComponentInstance();
+    component.properties.currentMonthKey = '2026-04';
+    component.data.currentYear = 2026;
+    component.data.currentMonth = 3;
+
+    componentConfig.lifetimes.attached.call(component);
+    component._onTaskStatusUpdated({
+      task: { date: '2026-04-10' }
     });
 
-    expect(refreshStarsFromCloud).toHaveBeenNthCalledWith(1, null, { scope: 'family' });
-    expect(refreshStarsFromCloud).toHaveBeenNthCalledWith(2, 'child-1');
+    expect(component.triggerEvent).toHaveBeenCalledWith('monthchange', {
+      monthKey: '2026-04',
+      force: true
+    });
   });
 });

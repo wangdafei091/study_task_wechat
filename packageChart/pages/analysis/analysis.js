@@ -103,11 +103,12 @@ Page({
 
   onCalendarMonthChange: async function(e) {
     const monthKey = e?.detail?.monthKey || this.data.visibleMonthKey || this._getCurrentMonthKey();
+    const force = e?.detail?.force === true;
     this.setData({
       visibleMonthKey: monthKey,
       loading: true
     });
-    await this.loadData({ force: false });
+    await this.loadData({ force });
   },
 
   onTrendRangeChange: async function(e) {

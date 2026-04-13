@@ -5,12 +5,11 @@
 // 3. 简化交互逻辑，统一使用 onDayTap 处理日期点击
 // 4. 添加缺少的 goToToday 方法
 // 5. 修正导航按钮的事件绑定: prevMonth -> onPrevMonth, nextMonth -> onNextMonth
-// 6. 修复Set对象在data中序列化问题：将monthsToRefresh移到实例属性，解决"has is not a function"错误
+// 6. 保持月份切换与触摸交互稳定
 
 const dateUtils = require('../../../utils/dateUtils.js');
 const analyticsUtils = require('../../utils/analyticsUtils.js');
 const { EVENTS } = require('../../../utils/constants.js');
-const serviceManager = require('../../../services/service-manager.js');
 const logger = require('../../../utils/logger.js');
 const viewScopeUtils = require('../../../utils/view-scope');
 
@@ -52,7 +51,6 @@ Component({
     touchStartX: 0,
     hasStarRecords: false, // 添加标记，表示当前月是否有星星记录
     isLoading: false, // 添加加载状态标志
-    starRecordsCache: {}, // 添加星星记录缓存
     lastTouchTime: 0, // 添加触摸时间记录，用于节流
     activeStarInfo: null, // 当前激活的星星信息（用于动画）
     monthCache: {} // 月份数据缓存
@@ -63,14 +61,11 @@ Component({
    */
   lifetimes: {
     attached: function() {
-      // 初始化monthsToRefresh作为组件实例属性，避免Set在data中序列化问题
-      this.monthsToRefresh = new Set();
       this._attached = true;
-      this._didInitialScopedLoad = false;
       
       logger.debug('星星日历', '组件初始化');
       this.initCalendar({
-        skipDataLoad: !viewScopeUtils.hasResolvedAnalysisOptions(this.properties.analysisOptions) || this._usesPreparedReadModel()
+        skipDataLoad: true
       });
       
       // 订阅任务状态变更事件，保存 callback 引用以便精确解绑
@@ -105,7 +100,7 @@ Component({
             const currentMonthKey = `${this.data.currentYear}-${String(this.data.currentMonth + 1).padStart(2, '0')}`;
             if (monthKey === currentMonthKey) {
               logger.debug('星星日历', `任务状态变更命中当前月份 ${monthKey}，触发刷新`);
-              this.loadStarRecords();
+              this._requestPreparedRefresh({ monthKey, force: true });
             }
           }
         };
@@ -131,7 +126,7 @@ Component({
             const currentMonthKey = `${this.data.currentYear}-${String(this.data.currentMonth + 1).padStart(2, '0')}`;
             if (monthKey === currentMonthKey) {
               logger.debug('星星日历', `新建任务命中当前月份 ${monthKey}，触发刷新`);
-              this.loadStarRecords();
+              this._requestPreparedRefresh({ monthKey, force: true });
             }
           }
         };
@@ -166,17 +161,14 @@ Component({
         this._setCurrentMonthByKey(this.properties.currentMonthKey);
       }
 
-      if (this._usesPreparedReadModel()) {
-        if (Number(this.properties.readModelVersion || 0) > 0) {
-          this._didInitialScopedLoad = true;
-          this.loadStarRecords();
-        }
-        return;
+      const preparedStateSignature = this._buildPreparedStateSignature();
+      if (this._preparedStateSignature !== preparedStateSignature) {
+        this._preparedStateSignature = preparedStateSignature;
+        this._enterPreparedWaitingState();
       }
 
-      if (!this._didInitialScopedLoad) {
-        this._didInitialScopedLoad = true;
-        this.smartRefresh();
+      if (this._usesPreparedReadModel() && Number(this.properties.readModelVersion || 0) > 0) {
+        this.loadStarRecords();
       }
     }
   },
@@ -187,6 +179,46 @@ Component({
   methods: {
     _usesPreparedReadModel: function() {
       return Boolean(this.properties.currentMonthKey);
+    },
+
+    _getCurrentMonthKey: function() {
+      return `${this.data.currentYear}-${String(this.data.currentMonth + 1).padStart(2, '0')}`;
+    },
+
+    _requestPreparedRefresh: function({ monthKey, force = false } = {}) {
+      if (!this._usesPreparedReadModel()) {
+        return;
+      }
+
+      this.triggerEvent('monthchange', {
+        monthKey: monthKey || this._getCurrentMonthKey(),
+        force: force === true
+      });
+    },
+
+    _buildPreparedStateSignature: function() {
+      const analysisOptions = this.properties.analysisOptions || {};
+      const childUserIds = Array.isArray(analysisOptions.childUserIds)
+        ? analysisOptions.childUserIds.filter(Boolean).slice().sort()
+        : [];
+
+      return JSON.stringify({
+        scope: analysisOptions.scope || (analysisOptions.userId ? 'user' : null),
+        userId: analysisOptions.userId || null,
+        childUserIds,
+        monthKey: this.properties.currentMonthKey || this._getCurrentMonthKey()
+      });
+    },
+
+    _enterPreparedWaitingState: function() {
+      this._monthTaskCache = null;
+      this.generateCalendarDays();
+      this.setData({
+        monthCache: {},
+        hasStarRecords: false,
+        activeStarInfo: null,
+        isLoading: true
+      });
     },
 
     _setCurrentMonthByKey: function(monthKey) {
@@ -268,7 +300,6 @@ Component({
       this.generateCalendarDays();
       
       if (!options.skipDataLoad) {
-        this._didInitialScopedLoad = true;
         this.loadStarRecords();
       }
       
@@ -435,6 +466,20 @@ Component({
       return analyticsUtils.summarizeTaskStarRecords(records || []);
     },
 
+    _calculateDeductedStars: function(records = []) {
+      return (records || [])
+        .filter(record => this.isPenaltyDeduction(record))
+        .reduce((sum, record) => sum + Math.abs(Number(record.points || 0)), 0);
+    },
+
+    _buildStarInfo: function(dayRecords = [], earnedStars = 0) {
+      const deductedStars = this._calculateDeductedStars(dayRecords);
+      return (earnedStars > 0 || deductedStars > 0) ? {
+        earned: Number(earnedStars),
+        deducted: Number(deductedStars)
+      } : null;
+    },
+
     /**
      * 加载星星记录
      */
@@ -442,125 +487,48 @@ Component({
       const year = this.data.currentYear;
       const month = this.data.currentMonth;
       const monthKey = `${year}-${String(month + 1).padStart(2, '0')}`;
-
-      if (this._usesPreparedReadModel()) {
-        const app = getApp();
-        const analyticsService = app && typeof app.getAnalyticsService === 'function'
-          ? app.getAnalyticsService()
-          : null;
-        const preparedMonthData = analyticsService && typeof analyticsService.getPreparedMonthData === 'function'
-          ? analyticsService.getPreparedMonthData({
-            analysisOptions: this.properties.analysisOptions || {},
-            monthKey
-          })
-          : null;
-
-        if (preparedMonthData) {
-          const analysisOptions = this.properties.analysisOptions || {};
-          const filteredTasks = this._filterTasksByAnalysisScope(preparedMonthData.tasks || [], analysisOptions);
-          const filteredRecords = this._filterRecordsByAnalysisScope(preparedMonthData.records || [], analysisOptions);
-
-          this._monthTaskCache = {
-            key: monthKey,
-            tasks: filteredTasks
-          };
-
-          const updatedCache = { ...this.data.monthCache };
-          updatedCache[monthKey] = {
-            records: filteredRecords,
-            needsRefresh: false,
-            lastUpdate: preparedMonthData.refreshedAt || Date.now()
-          };
-
-          this.monthsToRefresh.delete(monthKey);
-          this.setData({
-            monthCache: updatedCache,
-            isLoading: false
-          });
-          this.updateCalendarWithStars(filteredRecords);
-          return;
-        }
-
-        logger.debug('星星日历', '统一读模型模式下未命中已准备月份快照，等待页面完成准备', {
-          monthKey,
-          readModelVersion: Number(this.properties.readModelVersion || 0)
-        });
-        this.setData({ isLoading: false });
-        return;
-      }
-      
-      // 检查缓存
-      const cachedData = this.data.monthCache[monthKey];
-      if (cachedData && !this.monthsToRefresh.has(monthKey)) {
-        logger.debug('星星日历', `使用缓存数据: ${monthKey}`);
-        this.updateCalendarWithStars(cachedData.records);
-        return;
-      }
-      
-      logger.debug('星星日历', `加载星星记录: ${monthKey}`);
-      this.setData({ isLoading: true });
-      
-      // 获取当月的开始和结束日期
-      const startDate = `${year}-${String(month + 1).padStart(2, '0')}-01`;
-      const endDate = `${year}-${String(month + 1).padStart(2, '0')}-${new Date(year, month + 1, 0).getDate()}`;
-      
       const analysisOptions = this.properties.analysisOptions || {};
-      const starUserId = analysisOptions.userId || null;
-      const starService = serviceManager.getStarService();
 
-      // 批量拉取当月任务（避免按天循环发起 HTTP 请求）
-      const taskService = serviceManager.getTaskService();
-      const taskFetchOptions = analysisOptions.scope ? { scope: analysisOptions.scope } : {};
-      const taskPromise = taskService
-        ? taskService.getTasksByDateRange(startDate, endDate, starUserId, taskFetchOptions)
-            .then(tasks => {
-              this._monthTaskCache = {
-                key: monthKey,
-                tasks: this._filterTasksByAnalysisScope(tasks, analysisOptions)
-              };
-            })
-            .catch(() => { this._monthTaskCache = { key: monthKey, tasks: [] }; })
-        : Promise.resolve();
+      this.setData({ isLoading: true });
 
-      const starPromise = this._refreshStarsForAnalysis(starService, analysisOptions)
-        .catch(error => {
-          logger.warn('星星日历', '加载前刷新云端星星失败，继续使用本地数据', error);
+      const app = getApp();
+      const analyticsService = app && typeof app.getAnalyticsService === 'function'
+        ? app.getAnalyticsService()
+        : null;
+      const preparedMonthData = analyticsService && typeof analyticsService.getPreparedMonthData === 'function'
+        ? analyticsService.getPreparedMonthData({
+          analysisOptions,
+          monthKey
         })
-        .then(() => {
-          if (!starService) {
-            return [];
-          }
-          return starService.getStarRecordsByDateRange(startDate, endDate, starUserId);
-        });
+        : null;
 
-      Promise.all([starPromise, taskPromise])
-        .then(([records]) => {
-          const filteredRecords = this._filterRecordsByAnalysisScope(records, analysisOptions);
-          logger.debug('星星日历', `获取到 ${filteredRecords.length} 条星星记录`);
-          
-          // 清除刷新标志
-          this.monthsToRefresh.delete(monthKey);
-          
-          // 更新缓存
-          const updatedCache = {...this.data.monthCache};
-          updatedCache[monthKey] = {
-            records: filteredRecords,
-            needsRefresh: false,
-            lastUpdate: Date.now()
-          };
-          
-          this.setData({ 
-            monthCache: updatedCache,
-            isLoading: false
-          });
-          
-          // 更新日历显示
-          this.updateCalendarWithStars(filteredRecords);
-        })
-        .catch(error => {
-          logger.error('星星日历', '获取星星记录失败:', error);
-          this.setData({ isLoading: false });
+      if (preparedMonthData) {
+        const filteredTasks = this._filterTasksByAnalysisScope(preparedMonthData.tasks || [], analysisOptions);
+        const filteredRecords = this._filterRecordsByAnalysisScope(preparedMonthData.records || [], analysisOptions);
+
+        this._monthTaskCache = {
+          key: monthKey,
+          tasks: filteredTasks
+        };
+
+        const updatedCache = { ...this.data.monthCache };
+        updatedCache[monthKey] = {
+          records: filteredRecords,
+          lastUpdate: preparedMonthData.refreshedAt || Date.now()
+        };
+
+        this.setData({
+          monthCache: updatedCache,
+          isLoading: false
         });
+        this.updateCalendarWithStars(filteredRecords);
+        return;
+      }
+
+      logger.debug('星星日历', '统一读模型模式下未命中已准备月份快照，等待页面完成准备', {
+        monthKey,
+        readModelVersion: Number(this.properties.readModelVersion || 0)
+      });
     },
     
     /**
@@ -588,20 +556,15 @@ Component({
         // 获取该日期的任务数据来计算实际收入星星
         earnedStarsPromise
           .then(earnedStars => {
-            // 计算惩罚性扣除的星星数量
-            const deductedStars = dayRecords
-              .filter(record => this.isPenaltyDeduction(record)) // 只计算惩罚性扣减
-              .reduce((sum, record) => sum + Math.abs(Number(record.points || 0)), 0); // 支出记录points是负数，取绝对值
-            
-            // 设置starInfo对象以匹配WXML模板，确保数值类型
-            const starInfo = (earnedStars > 0 || deductedStars > 0) ? {
-              earned: Number(earnedStars),
-              deducted: Number(deductedStars)
-            } : null;
+            if (earnedStars == null) {
+              return;
+            }
+
+            const starInfo = this._buildStarInfo(dayRecords, earnedStars);
             
             // 添加调试日志
             if (starInfo) {
-              logger.debug('星星日历', `计算星星数据: 日期=${day.dateString}, 任务获得=${earnedStars}(${typeof earnedStars}), 惩罚扣除=${deductedStars}(${typeof deductedStars})`);
+              logger.debug('星星日历', `计算星星数据: 日期=${day.dateString}, 任务获得=${earnedStars}(${typeof earnedStars}), 惩罚扣除=${starInfo.deducted}(${typeof starInfo.deducted})`);
             }
             
             // 更新对应日期的数据
@@ -621,18 +584,9 @@ Component({
           })
           .catch(error => {
             logger.error('星星日历', `计算日期${day.dateString}的任务星星失败:`, error);
-            
-            // 发生错误时，使用原有逻辑作为备选方案
-            const earnedStars = this.summarizeTaskRecords(dayRecords).earnedStars;
-              
-            const deductedStars = dayRecords
-              .filter(record => this.isPenaltyDeduction(record))
-              .reduce((sum, record) => sum + Math.abs(Number(record.points || 0)), 0);
-            
-            const starInfo = (earnedStars > 0 || deductedStars > 0) ? {
-              earned: Number(earnedStars),
-              deducted: Number(deductedStars)
-            } : null;
+
+            // 渲染保护：任务缓存异常时只保留已有流水可确认的扣减，不再回退任务推导。
+            const starInfo = this._buildStarInfo(dayRecords, 0);
             
             const updatedDays = [...this.data.calendarDays];
             const dayIndex = updatedDays.findIndex(d => d.dateString === day.dateString && d.isCurrentMonth);
@@ -677,7 +631,7 @@ Component({
         try {
           // 优先使用本月任务缓存（批量拉取，避免逐日 HTTP 请求）
           const cache = this._monthTaskCache;
-          const currentMonthKey = `${this.data.currentYear}-${String(this.data.currentMonth + 1).padStart(2, '0')}`;
+          const currentMonthKey = this._getCurrentMonthKey();
           if (cache && cache.tasks && cache.key === currentMonthKey) {
             const tasks = cache.tasks.filter(t => t.date === dateString);
             let earnedStars = 0;
@@ -693,33 +647,11 @@ Component({
             return;
           }
 
-          // 降级：单日 HTTP 查询（兜底，无缓存时）
-          const analysisOptions = this.properties.analysisOptions || {};
-          const taskService = serviceManager.getTaskService();
-          if (!taskService) {
-            resolve(0);
-            return;
-          }
-          taskService.getTasksByDate(
+          logger.warn('星星日历', '任务缓存未就绪，跳过基于任务缓存的收入计算', {
             dateString,
-            analysisOptions.userId || null,
-            analysisOptions.scope ? { scope: analysisOptions.scope } : {}
-          )
-            .then(tasks => {
-              const filteredTasks = this._filterTasksByAnalysisScope(tasks, analysisOptions);
-              let earnedStars = 0;
-              filteredTasks.forEach(task => {
-                if (task.status === 1 && !task.isRequired && task.points > 0) {
-                  earnedStars += Number(task.points || 0);
-                }
-              });
-              logger.debug('星星日历', `日期${dateString}基于任务计算收入星星: ${earnedStars}颗`);
-              resolve(earnedStars);
-            })
-            .catch(error => {
-              logger.error('星星日历', `获取日期${dateString}任务失败:`, error);
-              reject(error);
-            });
+            currentMonthKey
+          });
+          resolve(null);
         } catch (error) {
           logger.error('星星日历', `计算日期${dateString}收入星星出错:`, error);
           reject(error);
@@ -731,118 +663,7 @@ Component({
      * 仅更新今日数据（性能优化）
      */
     updateTodayDataOnly: function() {
-      if (this._usesPreparedReadModel()) {
-        this.smartRefresh();
-        return;
-      }
-
-      const today = dateUtils.getTodayString();
-      const todayIndex = this.data.calendarDays.findIndex(day => day.dateString === today);
-      
-      if (todayIndex === -1) {
-        logger.debug('星星日历', '今日不在当前显示月份，跳过更新');
-        return;
-      }
-      
-      logger.debug('星星日历', '更新今日星星数据');
-      
-      const todayAnalysisOptions = this.properties.analysisOptions || {};
-      const starService = serviceManager.getStarService();
-      this._refreshStarsForAnalysis(starService, todayAnalysisOptions)
-        .catch(error => {
-          logger.warn('星星日历', '更新今日前刷新云端星星失败，继续使用本地数据', error);
-        })
-        .then(() => {
-          if (!starService) {
-            return [];
-          }
-          return starService.getStarRecordsByDate(today, todayAnalysisOptions.userId || null);
-        })
-        .then(records => {
-          const filteredRecords = this._filterRecordsByAnalysisScope(records, todayAnalysisOptions);
-          // 使用任务相关流水净额计算收入星星
-          const taskSummary = this.summarizeTaskRecords(filteredRecords);
-          const earnedStarsFromRecords = taskSummary.earnedStars;
-
-          const earnedStarsPromise = taskSummary.hasTaskRecords
-            ? Promise.resolve(earnedStarsFromRecords)
-            : this._calculateEarnedStarsFromTasks(today);
-
-          earnedStarsPromise
-            .then(earnedStars => {
-              // 计算惩罚性扣除的星星数量
-              const deductedStars = filteredRecords
-                .filter(record => this.isPenaltyDeduction(record)) // 只计算惩罚性扣减
-                .reduce((sum, record) => sum + Math.abs(Number(record.points || 0)), 0); // 支出记录points是负数，取绝对值
-              
-              // 设置starInfo对象以匹配WXML模板，确保数值类型
-              const starInfo = (earnedStars > 0 || deductedStars > 0) ? {
-                earned: Number(earnedStars),
-                deducted: Number(deductedStars)
-              } : null;
-              
-              const updatedDays = [...this.data.calendarDays];
-              updatedDays[todayIndex] = {
-                ...updatedDays[todayIndex],
-                starInfo: starInfo,
-                starRecords: filteredRecords
-              };
-              
-              this.setData({
-                calendarDays: updatedDays
-              });
-              
-              logger.debug('星星日历', `今日星星数据更新完成: 任务获得${earnedStars}颗，惩罚扣除${deductedStars}颗`);
-            })
-            .catch(error => {
-              logger.error('星星日历', '计算今日任务星星失败，使用备选方案:', error);
-              
-              // 发生错误时，使用原有逻辑作为备选方案
-              const earnedStars = this.summarizeTaskRecords(filteredRecords).earnedStars;
-                
-              const deductedStars = filteredRecords
-                .filter(record => this.isPenaltyDeduction(record))
-                .reduce((sum, record) => sum + Math.abs(Number(record.points || 0)), 0);
-              
-              const starInfo = (earnedStars > 0 || deductedStars > 0) ? {
-                earned: Number(earnedStars),
-                deducted: Number(deductedStars)
-              } : null;
-              
-              const updatedDays = [...this.data.calendarDays];
-              updatedDays[todayIndex] = {
-                ...updatedDays[todayIndex],
-                starInfo: starInfo,
-                starRecords: filteredRecords
-              };
-              
-              this.setData({
-                calendarDays: updatedDays
-              });
-              
-              logger.debug('星星日历', `今日星星数据更新完成(备选方案): 获得${earnedStars}颗，惩罚扣除${deductedStars}颗`);
-            });
-        })
-        .catch(error => {
-          logger.error('星星日历', '更新今日星星数据失败:', error);
-        });
-    },
-
-    _refreshStarsForAnalysis: function(starService, analysisOptions = {}) {
-      if (!starService || typeof starService.refreshStarsFromCloud !== 'function') {
-        return Promise.resolve();
-      }
-
-      // 这里只保留非统一读模型下的兼容 refresh；统一读模型场景必须继续依赖页面已准备好的 snapshot。
-      if (analysisOptions.scope === 'family') {
-        return starService.refreshStarsFromCloud(null, { scope: 'family' });
-      }
-
-      if (analysisOptions.userId) {
-        return starService.refreshStarsFromCloud(analysisOptions.userId);
-      }
-
-      return Promise.resolve();
+      this.smartRefresh();
     },
     
     /**
@@ -864,13 +685,10 @@ Component({
       
       this.updateMonthTitle();
       this.generateCalendarDays();
-      if (this._usesPreparedReadModel()) {
-        this.triggerEvent('monthchange', {
-          monthKey: `${year}-${String(month + 1).padStart(2, '0')}`
-        });
-      } else {
-        this.loadStarRecords();
-      }
+      this._requestPreparedRefresh({
+        monthKey: `${year}-${String(month + 1).padStart(2, '0')}`,
+        force: false
+      });
       
       logger.debug('星星日历', `切换到上月: ${year}年${month + 1}月`);
     },
@@ -894,13 +712,10 @@ Component({
       
       this.updateMonthTitle();
       this.generateCalendarDays();
-      if (this._usesPreparedReadModel()) {
-        this.triggerEvent('monthchange', {
-          monthKey: `${year}-${String(month + 1).padStart(2, '0')}`
-        });
-      } else {
-        this.loadStarRecords();
-      }
+      this._requestPreparedRefresh({
+        monthKey: `${year}-${String(month + 1).padStart(2, '0')}`,
+        force: false
+      });
       
       logger.debug('星星日历', `切换到下月: ${year}年${month + 1}月`);
     },
@@ -920,13 +735,10 @@ Component({
       
       this.updateMonthTitle();
       this.generateCalendarDays();
-      if (this._usesPreparedReadModel()) {
-        this.triggerEvent('monthchange', {
-          monthKey: `${year}-${String(month + 1).padStart(2, '0')}`
-        });
-      } else {
-        this.loadStarRecords();
-      }
+      this._requestPreparedRefresh({
+        monthKey: `${year}-${String(month + 1).padStart(2, '0')}`,
+        force: true
+      });
       
       logger.debug('星星日历', `回到今天: ${year}年${month + 1}月`);
     },
@@ -1050,15 +862,12 @@ Component({
       const month = this.data.currentMonth;
       const monthKey = `${year}-${String(month + 1).padStart(2, '0')}`;
       
-      const updatedCache = {...this.data.monthCache};
-      if (updatedCache[monthKey]) {
-        updatedCache[monthKey].needsRefresh = true;
-      }
-      
+      const updatedCache = { ...this.data.monthCache };
+      delete updatedCache[monthKey];
+
       this.setData({ monthCache: updatedCache });
       
-      // 重新加载数据
-      this.loadStarRecords();
+      this._requestPreparedRefresh({ monthKey, force: true });
     },
     
     /**
@@ -1073,15 +882,7 @@ Component({
         monthCache: {} 
       });
 
-      if (this._usesPreparedReadModel()) {
-        this.triggerEvent('monthchange', {
-          monthKey: `${this.data.currentYear}-${String(this.data.currentMonth + 1).padStart(2, '0')}`
-        });
-        return;
-      }
-
-      // 重新加载当前月份数据
-      this.loadStarRecords();
+      this._requestPreparedRefresh({ force: true });
     }
   }
 }); 
