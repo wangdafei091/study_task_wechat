@@ -1171,19 +1171,6 @@ const taskTemplateService = serviceManager.get('taskTemplateService');
   } | null
   ```
 
-##### `getPreparedFamilyGroupSnapshot(analysisOptions)`
-读取最近一次 family 分组快照
-- **参数**: `analysisOptions` - family 范围配置
-- **返回**:
-  ```javascript
-  {
-    currentBalance: number,
-    groupsByUser: Record<string, StarGroup[]>,
-    refreshedAt: number,
-    fallback: boolean
-  } | null
-  ```
-
 ##### `calculateHistoricalBalance(days, userId = null, options = {})`
 计算历史余额趋势与过期预测
 - **参数**:

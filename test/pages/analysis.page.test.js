@@ -124,4 +124,13 @@ describe('packageChart/pages/analysis/analysis', () => {
     expect(page.loadData).toHaveBeenNthCalledWith(1, { force: false });
     expect(page.loadData).toHaveBeenNthCalledWith(2, { force: false });
   });
+
+  it('月份切换带 force=true 时应透传到页面级 loadData', async () => {
+    const page = createPageInstance();
+    page.loadData = jest.fn().mockResolvedValue();
+
+    await page.onCalendarMonthChange({ detail: { monthKey: '2026-04', force: true } });
+
+    expect(page.loadData).toHaveBeenCalledWith({ force: true });
+  });
 });
