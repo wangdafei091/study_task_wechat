@@ -4,6 +4,39 @@
 
 ---
 
+## [里程碑-21F3] - 2026-04-13
+
+### ✅ 完成情况
+
+**analytics 分析页 fallback 收口与 prepared snapshot 消费统一**
+
+- **页面与组件职责进一步收口**：
+  - `pages/analysis/analysis.js` 统一承担分析页刷新编排，按场景透传 `force`，不再让分析组件自行补拉正式数据
+  - `components/star-calendar/star-calendar.js` 收口为 prepared snapshot consumer，正式链路不再直连任务/星星查询
+- **前端 analytics 主路径继续变薄**：
+  - `services/analytics-service.js` 删除已无正式主路径调用价值的历史分支和死代码，进一步收紧 fallback 边界
+  - 保留本地模式和后端失败场景所需的最小必要 fallback，不再维持额外的 cloud 正式计算编排
+- **问题修复与契约同步**：
+  - 修复分析页 scope 切换时旧日历短暂残留的问题，等待新 snapshot 前先清空旧展示态
+  - 同步清理过时 API 文档描述，移除已不再存在的 analytics 旧接口事实
+
+### 🧪 验证结果
+
+- 前端定向测试通过：
+  - `test/pages/star-calendar.component.test.js`
+  - `test/pages/analysis.page.test.js`
+  - `test/pages/star-trend.component.test.js`
+  - `test/services/analytics-service.test.js`
+- 手工验收通过：
+  - user / family 两种分析视角切换、翻月、回到今天、任务变化后刷新均已确认符合预期
+  - 组件在 prepared snapshot 未就绪时不再自行走旧拉数主链路，页面刷新责任保持单点收口
+
+### 📖 详细实施记录
+
+- [里程碑-21F3：analytics fallback 收口与 prepared snapshot 消费统一](../design/milestone-21f3-analytics-fallback-convergence.md)
+
+---
+
 ## [里程碑-21F2] - 2026-04-13
 
 ### ✅ 完成情况
