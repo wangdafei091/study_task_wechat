@@ -572,6 +572,23 @@ describe('PATCH /api/tasks/:taskId/status', () => {
       })
     );
   });
+
+  it('补打卡资格窗口已过时应返回 409 和稳定业务错误码', async () => {
+    const task = makeTask();
+    taskService.getTaskById = jest.fn().mockResolvedValue(task);
+    taskService.updateTaskStatus = jest.fn().mockRejectedValue(Object.assign(
+      new Error('该任务补打卡期限已于2026-04-12（本周结束）结束，无法再补打卡'),
+      { code: 'TASK_BACKFILL_WINDOW_EXPIRED' }
+    ));
+
+    const res = await request(app)
+      .patch('/api/tasks/task_001/status')
+      .set('Authorization', token(CHILD))
+      .send({ status: 1 });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error_code).toBe('TASK_BACKFILL_WINDOW_EXPIRED');
+  });
 });
 
 describe('PATCH /api/tasks/:taskId/required', () => {

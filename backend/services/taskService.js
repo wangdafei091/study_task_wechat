@@ -9,8 +9,13 @@ const Message = require('../models/Message');
 const { createLogger } = require('../utils/logger');
 const messageService = require('./messageService');
 const starService = require('./starService');
+const {
+  evaluateTaskBackfillWindow,
+  buildTaskBackfillExpiredMessage
+} = require('../utils/task-backfill-window');
 const logger = createLogger('TaskService');
 let taskColumnMapPromise = null;
+const TASK_BACKFILL_WINDOW_EXPIRED = 'TASK_BACKFILL_WINDOW_EXPIRED';
 
 /**
  * 任务服务类
@@ -159,6 +164,26 @@ class TaskService {
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
+  }
+
+  _buildTaskBackfillExpiredError(task, modifyTime) {
+    const result = evaluateTaskBackfillWindow({
+      taskDate: task?.date,
+      pointsExpiry: task?.pointsExpiry,
+      operationTime: modifyTime
+    });
+
+    if (!result || result.allowed !== false) {
+      return null;
+    }
+
+    const error = new Error(buildTaskBackfillExpiredMessage(result));
+    error.code = TASK_BACKFILL_WINDOW_EXPIRED;
+    error.windowType = result.windowType || null;
+    error.windowEndDate = result.windowEndDate || null;
+    error.taskDate = result.taskDate || null;
+    error.operationDate = result.operationDate || null;
+    return error;
   }
 
   _normalizeRepeatDays(days = []) {
@@ -912,8 +937,20 @@ class TaskService {
 
         let messageAction = status === 1 ? 'complete' : 'reset';
         let refundPoints = 0;
+        const backfillWindowResult =
+          status === 1 && existing.status !== 1
+            ? evaluateTaskBackfillWindow({
+              taskDate: existing.date,
+              pointsExpiry: existing.pointsExpiry,
+              operationTime: now
+            })
+            : null;
 
         if (status === 1 && existing.status !== 1) {
+          if (backfillWindowResult && backfillWindowResult.allowed === false) {
+            throw this._buildTaskBackfillExpiredError(existing, now);
+          }
+
           const refundResult = await this._applyLateMakeupRefundIfNeeded(
             connection,
             existing,
@@ -931,6 +968,8 @@ class TaskService {
               setClauses.push(`${columnMap.penaltyRefundTime} = ?`);
               params.push(now);
             }
+          } else if (backfillWindowResult?.isHistorical) {
+            messageAction = 'history_complete';
           }
         }
 

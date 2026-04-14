@@ -14,7 +14,7 @@ function buildTaskLocalMessageMeta(service, task, notificationType, options = {}
   const isParentOperator = operator.role === 'parent';
 
   if (
-    [NotificationType.COMPLETED, NotificationType.MAKEUP_COMPLETED, NotificationType.UPDATED].includes(notificationType) &&
+    [NotificationType.COMPLETED, NotificationType.HISTORY_COMPLETED, NotificationType.MAKEUP_COMPLETED, NotificationType.UPDATED].includes(notificationType) &&
     isParentOperator
   ) {
     logger.info('MessageService', `家长操作，跳过消息创建: ${task.title}, 操作类型=${notificationType}, 操作者=${operator.userId}`);
@@ -51,6 +51,13 @@ function buildTaskLocalMessageMeta(service, task, notificationType, options = {}
         ? `您的孩子完成了任务"${task.title}"`
         : `恭喜您完成了任务"${task.title}"`;
       icon = '✅';
+      break;
+    case NotificationType.HISTORY_COMPLETED:
+      title = '历史任务已补打卡';
+      summary = isChildOperator
+        ? `您的孩子补打卡完成了${task.date || '历史日期'}的任务"${task.title}"`
+        : `您补打卡完成了${task.date || '历史日期'}的任务"${task.title}"`;
+      icon = '🗂️';
       break;
     case NotificationType.MAKEUP_COMPLETED:
       title = '任务已逾期补做';

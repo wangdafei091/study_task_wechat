@@ -628,12 +628,14 @@ class MessageService {
     }
     const { task, previousStatus, operationType, operatorUserId } = data;
     
-    if (operationType === 'complete' || operationType === 'makeup_complete') {
+    if (['complete', 'history_complete', 'makeup_complete'].includes(operationType)) {
       logger.info('MessageService', `处理任务完成事件: ${task.title}, 操作者=${operatorUserId || '未指定'}`);
 
       const notificationType = operationType === 'makeup_complete'
         ? NotificationType.MAKEUP_COMPLETED
-        : NotificationType.COMPLETED;
+        : operationType === 'history_complete'
+          ? NotificationType.HISTORY_COMPLETED
+          : NotificationType.COMPLETED;
 
       this._createTaskMessageWithDomainModel(task, notificationType, {
         priority: MessagePriority.HIGH,

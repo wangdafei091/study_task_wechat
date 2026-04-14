@@ -2,6 +2,12 @@ const logger = require('../../utils/logger');
 const { Task, TaskStatus } = require('../../models/task');
 const dateUtils = require('../../utils/dateUtils');
 const { EVENTS, ERROR_MESSAGES } = require('../../utils/constants');
+const {
+  evaluateTaskBackfillWindow,
+  buildTaskBackfillExpiredMessage
+} = require('../../utils/task-backfill-window');
+
+const TASK_BACKFILL_WINDOW_EXPIRED = 'TASK_BACKFILL_WINDOW_EXPIRED';
 
 function normalizeRepeatDays(days = []) {
   return days.map((day) => (typeof day === 'string' ? parseInt(day) : day));
@@ -20,6 +26,15 @@ function buildFallbackDateErrorMessage(startDate, endDate, typeLabel) {
 
 function buildNotFoundResult(message = '未找到指定的任务') {
   return { success: false, message };
+}
+
+function buildBusinessErrorResult(message, code, extra = {}) {
+  return {
+    success: false,
+    message,
+    code,
+    ...extra
+  };
 }
 
 function cloneTaskForCloudWrite(task) {
@@ -100,7 +115,7 @@ function emitTaskStatusEvents(service, task, status, previousStatus, operationTy
     operatorUserId: userId
   });
 
-  if (status === TaskStatus.COMPLETED && operationType !== 'makeup_complete') {
+  if (status === TaskStatus.COMPLETED && operationType === 'complete') {
     logger.logEvent(EVENTS.TASK_COMPLETED, {
       taskId: task.id,
       title: task.title
@@ -557,17 +572,41 @@ async function updateTaskStatus(service, taskId, status, userId = null) {
     }
 
     logger.info('TaskService', `准备设置任务状态: ${task.title}, 当前状态=${task.status}, 新状态=${status}${userId ? `, 用户=${userId}` : ''}`);
+    const operationModifyTime = Date.now();
+    const backfillWindowResult =
+      status === TaskStatus.COMPLETED && previousStatus !== TaskStatus.COMPLETED
+        ? evaluateTaskBackfillWindow({
+          taskDate: task.date,
+          pointsExpiry: task.pointsExpiry,
+          operationTime: operationModifyTime
+        })
+        : null;
+
+    if (backfillWindowResult && backfillWindowResult.allowed === false) {
+      return buildBusinessErrorResult(
+        buildTaskBackfillExpiredMessage(backfillWindowResult),
+        TASK_BACKFILL_WINDOW_EXPIRED,
+        {
+          backfillWindowExpired: true,
+          windowEndDate: backfillWindowResult.windowEndDate || null
+        }
+      );
+    }
 
     if (status === 1 && previousStatus !== 1) {
       logger.info('TaskService', `任务状态变为完成，调用complete方法设置completionTime: ${task.title}`);
       task.complete();
+      task.completionTime = operationModifyTime;
+      task.modifyTime = operationModifyTime;
       logger.info('TaskService', `任务complete方法调用完成: ${task.title}, completionTime=${task.completionTime}`);
     } else {
       task.status = status;
+      task.modifyTime = operationModifyTime;
       logger.info('TaskService', `任务状态已设置: ${task.title}, 状态=${task.status}, 类型=${typeof task.status}`);
     }
 
     let operationType = 'update';
+    const isHistoricalCompletion = Boolean(backfillWindowResult?.isHistorical);
 
     if (
       !service.enableCloudStorage &&
@@ -634,23 +673,26 @@ async function updateTaskStatus(service, taskId, status, userId = null) {
           logger.warn('TaskService', `任务 "${task.title}" 积分添加失败: ${addResult.message}`);
         }
       }
-      operationType = 'complete';
+      operationType = isHistoricalCompletion ? 'history_complete' : 'complete';
     } else if (task.starAwarded) {
       logger.info('TaskService', `任务 "${task.title}" 已经获得过星星，跳过积分分配`);
+      operationType = isHistoricalCompletion ? 'history_complete' : 'complete';
     } else if (task.isRequired) {
       logger.info('TaskService', `任务 "${task.title}" 是必做任务，完成后不获得星星奖励`);
-      operationType = 'complete';
+      operationType = isHistoricalCompletion ? 'history_complete' : 'complete';
     } else if (task.penaltyApplied) {
       logger.info('TaskService', `任务 "${task.title}" 存在历史必做惩罚，本次完成不走普通奖励`);
-      operationType = 'complete';
+      operationType = isHistoricalCompletion ? 'history_complete' : 'complete';
     }
 
     const syncAction = status === TaskStatus.COMPLETED ? 'complete' : 'reset';
-    task.modifyTime = Date.now();
     task.pendingSyncMeta = service._buildTaskPendingSyncMeta(task, syncAction, {
-      operationKey: task.modifyTime,
-      modifyTime: task.modifyTime,
-      targetUserId: task.userId
+      operationKey: operationModifyTime,
+      modifyTime: operationModifyTime,
+      targetUserId: task.userId,
+      notificationType: status === TaskStatus.COMPLETED
+        ? `task_${operationType === 'history_complete' ? 'history_complete' : operationType === 'makeup_complete' ? 'makeup_complete' : 'complete'}`
+        : 'task_reset'
     });
     task.syncedToCloud = false;
 
@@ -677,6 +719,11 @@ async function updateTaskStatus(service, taskId, status, userId = null) {
           task: effectiveTask
         });
       } catch (syncError) {
+        if (syncError?.code === TASK_BACKFILL_WINDOW_EXPIRED) {
+          return buildBusinessErrorResult(syncError.message, syncError.code, {
+            backfillWindowExpired: true
+          });
+        }
         logger.warn('TaskService', '任务状态云同步失败，降级为本地保存', {
           taskId: task.id,
           action: operationType,

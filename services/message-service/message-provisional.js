@@ -9,6 +9,7 @@ const {
 function buildTaskMessageCopy(service, {
   action,
   taskTitle,
+  taskDate = null,
   actorUserId = null,
   actorRole = null,
   subjectUserId = null,
@@ -70,6 +71,30 @@ function buildTaskMessageCopy(service, {
           : `${safeActorName}代${safeSubjectName}完成了任务“${taskTitle}”${suffix}`,
         icon: '✅'
       };
+    case 'history_complete':
+      return {
+        userTitle: pending ? '补打卡完成待同步' : '历史任务已补打卡',
+        userSummary: isSelfAction
+          ? `你补打卡完成了${taskDate || '历史日期'}的任务“${taskTitle}”${suffix}`
+          : `${safeActorName}代你补打卡完成了${taskDate || '历史日期'}的任务“${taskTitle}”${suffix}`,
+        familyTitle: pending ? '补打卡完成待同步' : '历史任务已补打卡',
+        familySummary: isSelfAction
+          ? `${safeSubjectName}补打卡完成了${taskDate || '历史日期'}的任务“${taskTitle}”${suffix}`
+          : `${safeActorName}代${safeSubjectName}补打卡完成了${taskDate || '历史日期'}的任务“${taskTitle}”${suffix}`,
+        icon: '🗂️'
+      };
+    case 'makeup_complete':
+      return {
+        userTitle: pending ? '逾期补做待同步' : '任务已逾期补做',
+        userSummary: isSelfAction
+          ? `你逾期后补做了任务“${taskTitle}”${suffix}`
+          : `${safeActorName}代你逾期后补做了任务“${taskTitle}”${suffix}`,
+        familyTitle: pending ? '逾期补做待同步' : '任务已逾期补做',
+        familySummary: isSelfAction
+          ? `${safeSubjectName}逾期后补做了任务“${taskTitle}”${suffix}`
+          : `${safeActorName}代${safeSubjectName}逾期后补做了任务“${taskTitle}”${suffix}`,
+        icon: '♻️'
+      };
     case 'reset':
       return {
         userTitle: pending ? '任务重置待同步' : '任务已重置',
@@ -102,15 +127,22 @@ async function createTaskProvisionalMessages(service, task, pendingSyncMeta) {
   const familyId = pendingSyncMeta.familyId || null;
   const subjectUserId = pendingSyncMeta.targetUserId || task.userId || null;
   const action = pendingSyncMeta.action || 'create';
+  const notificationType = pendingSyncMeta.notificationType || `task_${action}`;
   const messages = [];
-  const eventKey = ['task', task.id || task.taskId, `task_${action}`, subjectUserId || 'none', pendingSyncMeta.operatorUserId || 'none', pendingSyncMeta.operationKey].join(':');
+  const eventKey = ['task', task.id || task.taskId, notificationType, subjectUserId || 'none', pendingSyncMeta.operatorUserId || 'none', pendingSyncMeta.operationKey].join(':');
   const actorUserId = pendingSyncMeta.operatorUserId || null;
   const actorRole = pendingSyncMeta.operatorRole || null;
   const actorName = service._getLocalUserDisplayName(actorUserId, actorRole);
   const subjectName = service._getLocalUserDisplayName(subjectUserId, 'child');
+  const semanticAction = pendingSyncMeta.notificationType === 'task_history_complete'
+    ? 'history_complete'
+    : pendingSyncMeta.notificationType === 'task_makeup_complete'
+      ? 'makeup_complete'
+      : action;
   const actionCopy = buildTaskMessageCopy(service, {
-    action,
+    action: semanticAction,
     taskTitle: task.title,
+    taskDate: task.date || null,
     actorUserId,
     actorRole,
     subjectUserId,
@@ -129,7 +161,7 @@ async function createTaskProvisionalMessages(service, task, pendingSyncMeta) {
       messageEventKey: eventKey,
       visibilityScope: MessageVisibilityScope.USER,
       type: MessageType.TASK,
-      notificationType: pendingSyncMeta.notificationType || `task_${action}`,
+      notificationType,
       title: actionCopy.userTitle,
       summary: actionCopy.userSummary,
       relatedId: task.id || task.taskId || '',
@@ -151,7 +183,7 @@ async function createTaskProvisionalMessages(service, task, pendingSyncMeta) {
       messageEventKey: eventKey,
       visibilityScope: MessageVisibilityScope.FAMILY,
       type: MessageType.TASK,
-      notificationType: pendingSyncMeta.notificationType || `task_${action}`,
+      notificationType,
       title: actionCopy.familyTitle,
       summary: actionCopy.familySummary,
       relatedId: task.id || task.taskId || '',

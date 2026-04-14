@@ -1001,6 +1001,91 @@ describe('TaskService', () => {
         operationType: 'makeup_complete'
       });
     });
+
+    it('跨自然周后补打卡周任务应直接拒绝，且不保存本地状态', async () => {
+      const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(new Date('2026-04-14T10:00:00+08:00').getTime());
+      const task = new Task(TestDataFactory.createTask({
+        id: 'task_week_expired',
+        userId: 'child_1',
+        title: '上周任务',
+        date: '2026-04-07',
+        status: TaskStatus.PENDING,
+        pointsExpiry: StarExpiryType.WEEK,
+        starAwarded: false,
+        isRequired: false
+      }));
+
+      mockTaskRepository.getById.mockResolvedValue(task);
+
+      const result = await taskService.completeTask('task_week_expired');
+
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('TASK_BACKFILL_WINDOW_EXPIRED');
+      expect(result.message).toContain('2026-04-12');
+      expect(mockTaskRepository.save).not.toHaveBeenCalled();
+      expect(mockStarService.addStars).not.toHaveBeenCalled();
+      mockEventBus.verifyNotEmit(EVENTS.TASK_STATUS_UPDATED);
+      nowSpy.mockRestore();
+    });
+
+    it('同一自然周内补打卡历史任务应走 history_complete 且不再发 TASK_COMPLETED 事件', async () => {
+      const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(new Date('2026-04-09T10:00:00+08:00').getTime());
+      const task = new Task(TestDataFactory.createTask({
+        id: 'task_history_complete',
+        userId: 'child_1',
+        title: '周内补打卡',
+        date: '2026-04-07',
+        status: TaskStatus.PENDING,
+        points: 3,
+        pointsExpiry: StarExpiryType.WEEK,
+        starAwarded: false,
+        isRequired: false
+      }));
+
+      mockTaskRepository.getById.mockResolvedValue(task);
+      mockTaskRepository.save.mockImplementation(async (savedTask) => savedTask);
+
+      const result = await taskService.completeTask('task_history_complete', 'child_1');
+
+      expect(result.success).toBe(true);
+      expect(mockStarService.addStars).toHaveBeenCalled();
+      mockEventBus.verifyEmit(EVENTS.TASK_STATUS_UPDATED, {
+        task: expect.any(Object),
+        previousStatus: TaskStatus.PENDING,
+        operationType: 'history_complete'
+      });
+      mockEventBus.verifyNotEmit(EVENTS.TASK_COMPLETED);
+      nowSpy.mockRestore();
+    });
+
+    it('云端返回补打卡窗口业务拒绝时不应降级成本地待同步', async () => {
+      taskService.enableCloudStorage = true;
+      taskService._syncStatusToCloud = jest.fn().mockRejectedValue(Object.assign(
+        new Error('该任务补打卡期限已于2026-04-12（本周结束）结束，无法再补打卡'),
+        { code: 'TASK_BACKFILL_WINDOW_EXPIRED' }
+      ));
+      taskService._applyAuthoritativeTaskMutation = jest.fn();
+
+      const task = new Task(TestDataFactory.createTask({
+        id: 'task_cloud_reject',
+        userId: 'child_1',
+        title: '云端业务拒绝',
+        date: dateUtils.getTodayString(),
+        status: TaskStatus.PENDING,
+        starAwarded: false,
+        isRequired: true,
+        pointsExpiry: StarExpiryType.WEEK
+      }));
+      mockTaskRepository.getById.mockResolvedValue(task);
+
+      const result = await taskService.completeTask('task_cloud_reject', 'child_1');
+
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('TASK_BACKFILL_WINDOW_EXPIRED');
+      expect(mockTaskRepository.save).not.toHaveBeenCalled();
+      expect(taskService._applyAuthoritativeTaskMutation).not.toHaveBeenCalled();
+      mockEventBus.verifyNotEmit(EVENTS.TASK_CLOUD_SYNC_FAILED);
+    });
   });
 
   describe('任务重置逻辑 - resetTask', () => {
