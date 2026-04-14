@@ -177,6 +177,7 @@ describe('User 领域模型', () => {
       const pages = user.getAccessiblePages();
       expect(pages).toContain('pages/index/index');
       expect(pages).toContain('pages/rewards/rewards');
+      expect(pages).toContain('packageChart/pages/analysis/analysis');
       expect(pages).toContain('pages/task-edit/task-edit');
       expect(pages).toContain('pages/reward-manage/reward-manage');
       expect(pages.length).toBeGreaterThan(0);
@@ -205,7 +206,7 @@ describe('User 领域模型', () => {
       const parentPages = parentUser.getAccessiblePages();
       const childPages = childUser.getAccessiblePages();
 
-      const commonPages = ['pages/index/index', 'pages/rewards/rewards'];
+      const commonPages = ['pages/index/index', 'pages/rewards/rewards', 'packageChart/pages/analysis/analysis'];
       commonPages.forEach(page => {
         expect(parentPages).toContain(page);
         expect(childPages).toContain(page);

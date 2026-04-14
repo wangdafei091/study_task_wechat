@@ -1114,106 +1114,97 @@ const taskTemplateService = serviceManager.get('taskTemplateService');
 
 ---
 
-## AnalyticsService - 数据分析服务
+## AnalysisBoardService - 分析页月度看板聚合服务
 
-数据分析服务提供任务和星星数据的统计分析功能。
+`services/analysis-board-service.js` 是分析页专用的轻量聚合模块，不通过 `ServiceManager` 注册实例，而是由页面直接按需调用。
 
 ### 核心功能
-- 分析页统一读模型准备与 30 秒 TTL 缓存
-- 云端 authoritative analytics 结果消费与本地兜底
-- 星星趋势分析与余额锚定
-- 数据可视化支持
+- 自然月日期列生成
+- 基于 `focusUserId + task.type + normalizedTitle` 的任务聚类
+- 单元格状态归并：`done / missed / upcoming / blank`
+- 超限任务合并为 `其他任务`
+- 生成顶部摘要与未来纯空列弱化所需元数据
 
 ### API 方法
 
-##### `prepareReadModel({ analysisOptions, monthKey, days, force })`
-统一准备分析页所需读模型
+##### `buildMonthlyBoard({ taskService, monthKey, focusUserId })`
+根据指定孩子与指定月份生成分析页月度矩阵看板。
 - **参数**:
   ```javascript
   {
-    analysisOptions: { userId?: string, scope?: 'family', childUserIds?: string[] },
+    taskService: {
+      getTasksByDateRange(startDate, endDate, userId, options): Promise<Array<Object>>
+    },
     monthKey?: string, // YYYY-MM
-    days?: number,     // 趋势天数，默认 7
-    force?: boolean
+    focusUserId: string
   }
   ```
 - **返回**:
   ```javascript
   {
-    success: boolean,
-    fallback?: boolean,
-    snapshot: {
-      scope: 'user' | 'family',
-      monthKey: string,
-      days: number,
-      currentBalance: number,
-      tasks: Object[],
-      records: Object[],
-      historyData: Array,
-      forecastData: Array,
-      refreshedAt: number,
-      mode: 'authoritative' | 'fallback'
-    }
+    monthKey: '2026-04',
+    monthTitle: '2026年4月',
+    daysInMonth: 30,
+    columns: [
+      {
+        key: '2026-04-01',
+        day: 1,
+        date: '2026-04-01',
+        weekdayLabel: '二',
+        isToday: false,
+        isWeekend: false,
+        hasPlannedTasks: true,
+        isFutureEmpty: false
+      }
+    ],
+    rows: [
+      {
+        rowKey: 'child-1|study|数学',
+        title: '数学',
+        type: 'study',
+        cells: [
+          {
+            date: '2026-04-01',
+            state: 'done',
+            symbol: '✓',
+            cellClass: 'cell-done',
+            taskIds: ['task-1'],
+            isToday: false,
+            isWeekend: false,
+            isFutureEmpty: false
+          }
+        ]
+      }
+    ],
+    summary: {
+      displayedRowCount: 6,
+      completedCount: 32,
+      missedCount: 8,
+      upcomingCount: 5
+    },
+    todayColumnDate: '2026-04-14'
   }
   ```
-- **说明**: cloud 模式下优先调用后端 `/api/analytics/read-model/query` 获取 authoritative snapshot；本地模式、后端失败、以及 `scope='user'` 且存在 `pending_local_records` 时回退到本地 snapshot
+- **说明**:
+  - `monthKey` 非法或缺失时会回退到当前月
+  - `focusUserId` 为空时返回空看板 contract，不主动抛错
+  - “今天未完成”按正式产品口径归为 `upcoming`，不显示为 `missed`
+  - `isFutureEmpty` 仅用于页面弱化未来纯空列，不改变自然月完整日期轴
 
-##### `getPreparedMonthData({ analysisOptions, monthKey })`
-读取最近一次已准备好的月份任务/星星事实
-- **参数**: `analysisOptions`、`monthKey`
-- **返回**:
-  ```javascript
-  {
-    tasks: Object[],
-    records: Object[],
-    refreshedAt: number,
-    fallback: boolean
-  } | null
-  ```
+### 使用示例
 
-##### `calculateHistoricalBalance(days, userId = null, options = {})`
-计算历史余额趋势与过期预测
-- **参数**:
-  - `days` - 历史趋势天数
-  - `userId` - 单用户模式目标用户
-  - `options.scope` - `'user' | 'family'`
-  - `options.childUserIds` - family 模式下的活跃孩子集合
-- **返回**:
-  ```javascript
-  {
-    historyData: Array<{ date, value, earned, spent, penalty }>,
-    forecastData: Array<{ date, value, expiringAmount }>
-  }
-  ```
-- **说明**: 若当前命中 active authoritative snapshot，直接返回 snapshot 内的 `historyData / forecastData`；否则退回本地锚定计算逻辑
+```javascript
+const serviceManager = require('../../services/service-manager.js');
+const { buildMonthlyBoard } = require('../../services/analysis-board-service.js');
 
-##### `getTaskCompletionStats(dateRange, options = {})`
-获取任务完成情况统计
-- **参数**:
-  - `dateRange` - `'today' | 'week' | 'month'` 或日期范围对象
-  - `options.userId` / `options.scope` / `options.childUserIds`
-- **返回**:
-  ```javascript
-  {
-    totalTasks: number,
-    completedTasks: number,
-    completionRate: string | number,
-    typeCounts: { study: number, habit: number, interest: number }
-  }
-  ```
-- **说明**: cloud 模式下优先调用后端 `/api/analytics/task-completion-stats/query`；失败时回退本地任务集合统计
+const taskService = serviceManager.getService('task');
 
-##### `getTaskStarCalendarData(options = {})`
-获取分析页日历所需任务星星事实
-- **参数**: `options.userId` 或 `options.scope='family'`
-- **返回**: `Promise<Array<{ id, title, time, points, type, source, timestamp }>>`
-- **说明**: cloud 模式下优先调用后端 `/api/analytics/task-star-calendar/query`；失败时回退本地任务事实拼装
-
-##### `getUpcomingExpiryStars(days, options = {})`
-获取即将过期的星星预测输入
-- **参数**: `days`、`options.userId` / `options.scope`
-- **返回**: `Promise<Array<{ id, points, expiryDate: Date|null, expiryDateStr, type }>>`
-- **说明**: cloud 模式下优先调用后端 `/api/analytics/upcoming-expiry/query`，前端会把响应中的 `expiryDate` 适配回 `Date`；当前 `scope='family'` 仍按既有产品口径返回空数组
+const board = await buildMonthlyBoard({
+  taskService,
+  monthKey: '2026-04',
+  focusUserId: 'child-1'
+});
+```
 
 ---
 

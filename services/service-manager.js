@@ -370,33 +370,6 @@ class ServiceManager {
     return this.eventBus;
   }
   
-  /**
-   * 获取分析服务
-   * @returns {AnalyticsService} 分析服务实例
-   */
-  getAnalyticsService() {
-    // 如果已经加载过，直接返回
-    if (this.services.analyticsService) {
-      return this.services.analyticsService;
-    }
-    
-    try {
-      const AnalyticsService = require('./analytics-service');
-      
-      // 初始化分析服务
-      this.services.analyticsService = new AnalyticsService({
-        eventBus: this.eventBus,
-        starService: this.services.starService,
-        taskService: this.services.taskService
-      });
-      
-      logger.info('ServiceManager', '加载AnalyticsService成功');
-      return this.services.analyticsService;
-    } catch (error) {
-      logger.error('ServiceManager', '加载AnalyticsService失败', error);
-      return null;
-    }
-  }
 }
 
 // 导出单例

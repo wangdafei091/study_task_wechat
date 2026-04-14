@@ -565,16 +565,14 @@ describe('pages/index/index shell behavior', () => {
     page.onMenuItemTap({ detail: { item: { id: 'reward-manage' } } });
     page.onMenuItemTap({ detail: { item: { id: 'family-settings' } } });
 
-    global.wx.navigateTo.mockImplementationOnce(({ fail }) => fail(new Error('analysis fail')));
     page.onMenuItemTap({ detail: { item: { id: 'study' } } });
-    expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({
-      title: '加载失败，请重试'
+    expect(global.wx.navigateTo).toHaveBeenCalledWith(expect.objectContaining({
+      url: '/packageChart/pages/analysis/analysis'
     }));
 
-    global.wx.navigateTo.mockImplementationOnce(({ fail }) => fail(new Error('analysis fail')));
     page.onRingTap();
-    expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({
-      title: '加载失败，请重试'
+    expect(global.wx.navigateTo).toHaveBeenLastCalledWith(expect.objectContaining({
+      url: '/packageChart/pages/analysis/analysis'
     }));
 
     page.toggleSearch();
