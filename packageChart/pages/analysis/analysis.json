@@ -1,9 +1,5 @@
 {
-  "navigationBarTitleText": "星星日历",
-  "usingComponents": {
-    "star-calendar": "../../components/star-calendar/star-calendar",
-    "star-trend": "../../components/star-trend/star-trend",
-    "card": "/components/card/card",
-    "ec-canvas": "../../ec-canvas/ec-canvas"
-  }
-} 
+  "navigationStyle": "custom",
+  "navigationBarTitleText": "",
+  "pageOrientation": "landscape"
+}

@@ -1,11 +1,12 @@
-# 里程碑-21G：分析页指标重构与轻图表收口 详细设计文档
+# 里程碑-21G：分析页重规划为横屏月度任务履约看板 详细设计文档
 
-> **设计状态**：🟢 审核通过
+> **设计状态**：🟢 已完成
 > **创建日期**：2026-04-13
+> **最近更新**：2026-04-14
 > **设计者**：GPT5 Codex
 > **审核者**：项目维护者
-> **依赖文档**：`docs/design/milestone-21f2-analytics-readmodel-backend-migration.md`、`docs/design/milestone-21f3-analytics-fallback-convergence.md`
-> **预计工期**：4-5天
+> **依赖文档**：`docs/design/milestone-21f1-task-template-recommendation-backend-migration.md`、`docs/design/milestone-21f2-analytics-readmodel-backend-migration.md`
+> **实际工期**：2026-04-13 ~ 2026-04-14
 
 ---
 
@@ -26,49 +27,69 @@
 
 ### 功能描述
 
-当前分析页仍然是“任务星星日历 + 星星余额趋势图”的旧结构，存在三类根问题：
+当前分析页的旧图表、旧 analytics 服务、旧后端 read model 与 `star-calendar / star-trend` 都已经下线，页面只保留一个占位态。这个收口是正确的，但也意味着分析页需要以新的产品目标重新定义，而不是在旧“趋势图 + 统计卡片”思路上继续修补。
 
-1. 页面价值偏离。首页已经回答“今天要做什么”，奖池页已经回答“能换什么”；分析页继续展示“星星余额怎么变”，对家长和孩子都不够直接。
-2. 工程投入失衡。`echarts` 仅服务一个趋势图组件，包体和接线复杂度明显过高。
-3. 历史包袱过重。分析页状态、服务契约、测试命名都围绕 `trendDays / historyData / forecastData / star-trend` 展开，已经不符合当前产品目标。
+新的分析页目标不是做“图表展示页”，而是做一个**横屏月度任务履约看板**，让用户在一个自然月维度内直接看清：
 
-因此，`M21G` 的目标不是“给旧趋势图换一个轻量图库”，而是：
+1. 这个月一共安排了哪些任务
+2. 每个任务在哪些日期有安排
+3. 每天的任务是已完成、未完成、未开始还是无安排
+4. 今天在整个月中的哪个位置
+5. 这个月整体有多少任务、完成了多少、没完成多少、还没开始多少
 
-1. 重做分析页产品定位，让页面围绕“统计分析与行为洞察”工作。
-2. 按角色区分家长/孩子最值得看的少量核心指标。
-3. 保留高解释力的事实层组件 `star-calendar`。
-4. 删除旧趋势图和相关正式产品链路。
-5. 将图表收缩为一个可选的轻量比较图，并统一改用 `wxcharts-min`。
+用户希望获得的是“整月任务履约事实”，不是抽象趋势推断。
+
+### 核心产品判断
+
+这页本质上不是传统“分析页”，而是一个 **月度任务履约矩阵看板**。
+
+它比旧方案更有价值，原因是：
+
+- 家长最关心的是“这个月到底安排了什么、执行得怎么样”，矩阵比抽象折线和预测更直观
+- 孩子也能一眼看到自己整个月的成果分布，成就感更强
+- 自然月视角符合家庭管理习惯
+- “打勾/打叉/空白”几乎不需要解释，理解成本低
 
 ### 业务价值
 
-- [x] 用户价值：家长更快看到需要关注的孩子和风险类型，孩子更快看到自己这一周做得怎么样、哪里需要补。
-- [x] 技术价值：删除 `echarts / ec-canvas / star-trend` 旧链路，降低分析分包体积与维护复杂度。
-- [x] 业务价值：分析页从“看起来像分析”转为“真的能支持判断和行动”，提高页面存在意义。
+- [x] 用户价值：让家长和孩子都能一眼看清整月任务安排与履约情况
+- [x] 产品价值：分析页从低价值图表页升级为高价值月度看板
+- [x] 技术价值：不再重建庞大 analytics 前后端体系，收口为轻量、稳定、可解释的矩阵方案
 
-### 功能范围
+### 包含范围
 
 **包含**：
-- ✅ 重构分析页信息架构，明确家长/孩子两套展示语义
-- ✅ 保留 `star-calendar` 作为事实层，下沉到页面后半部分
-- ✅ 删除旧 `star-trend` 趋势预测图
-- ✅ 删除 `echarts / ec-canvas` 及相关正式依赖
-- ✅ 接入 `wxcharts-min`，但只承接一个简单比较图
-- ✅ 调整 prepared read model contract，输出 `summary + chartModel + month facts`
-- ✅ 清理 `trendDays / historyData / forecastData / calculateHistoricalBalance()` 的正式产品链路
-- ✅ 同步清理旧分析页文案、状态、测试和文档契约
+
+- [x] 横屏专用分析页
+- [x] 自然月矩阵看板
+- [x] 月份切换
+- [x] 家长孩子视角切换
+- [x] 顶部轻量内联摘要指标
+- [x] 今日列定位线
+- [x] 基于任务实例的任务聚类与状态汇总
+- [x] 横屏安全区避让与灵动岛/刘海规避
+- [x] 任务按类型分组排序与行焦点轻高亮
 
 **不包含**：
-- ❌ 不重做首页和奖池页
-- ❌ 不新增 BI 报表系统、筛选器矩阵或多维自定义看板
-- ❌ 不保留“旧趋势图 + 新轻图表”双轨并存
-- ❌ 不把今日任务列表或奖池兑换事实再搬进分析页
-- ❌ 不在本期扩展更多角色体系，仅处理家长/孩子
+
+- [x] 不恢复旧 `analytics-service`
+- [x] 不恢复旧后端 `/api/analytics/*` 链路
+- [x] 不恢复 `star-calendar` / `star-trend`
+- [x] 不做复杂 BI 报表中心
+- [x] 不做“家庭汇总混合矩阵”第一版主路径
+- [x] 不做预测类图表
+- [x] 第一版不接入任何第三方图表库
+
+### 清理要求
+
+- [x] 本次设计以“旧分析实现已清空”为前提，不允许把已删除的旧 contract 再接回来
+- [x] 新实现如果需要图表，只允许作为辅助增强，不允许反过来主导页面结构
+- [x] 若后续实现中产生冗余占位代码、过渡字段、废弃样式或临时兼容分支，必须同期清理
 
 ### 优先级
 
 - **优先级**：P1
-- **理由**：这次重构同时解决产品价值不足、前端包体过重和旧职责残留问题，ROI 明显高于继续优化旧趋势图。
+- **理由**：分析页目前是空白状态，且这次方向比旧分析链路更贴近真实使用场景
 
 ---
 
@@ -76,548 +97,667 @@
 
 ### 方案概述
 
-`M21G` 采用“**summary read model + 角色化洞察页 + 轻图表最小化**”方案。
+`M21G` 正式采用“**横屏月度任务履约看板**”方案：
 
-本期的正式产品结构收口为：
+1. 页面进入后切为横屏专用看板模式
+2. 按自然月展示日期列，动态适配 `28 / 29 / 30 / 31` 天
+3. 每一行表示当月一个任务聚类
+4. 每一个日期格只表达状态：完成、未完成、未开始、无安排
+5. 顶部只保留极少量月度摘要指标
 
-1. 顶部指标总览卡
-2. 角色化洞察模块
-3. 一个轻量比较图
-4. 任务星星日历事实层
+主视觉不是图表，而是矩阵本身。第一版不依赖任何图表库。
 
-旧的 `star-trend`、`trendDays`、`historyData / forecastData`、`echarts / ec-canvas` 不再属于分析页正式产品路径。
+### 产品与视觉评审结论
 
-### 现状审计
+从产品经理和视觉交互视角，这个方案成立，但必须遵守以下原则：
 
-结合现有实现，当前问题可以明确量化：
+#### 原则1：横屏是产品形态，不是技术妥协
 
-1. `packageChart/pages/analysis/analysis.js` 仍保留 `trendDays` 和 `onTrendRangeChange`，页面状态明显围绕旧趋势图组织。
-2. `packageChart/components/star-trend/star-trend.js` 约 772 行，是分析页最重的表现层组件。
-3. `packageChart/pages/analysis/analysis.json` 仍直接依赖 `star-trend` 和 `ec-canvas`。
-4. `packageChart/ec-canvas/echarts.js` 约 502KB，而用户新增的 `wxcharts-min.js` 约 30KB，替换收益明确。
-5. `services/analytics-service.js` 与 `backend/services/analyticsReadModelService.js` 仍保留 `trendDays / historyData / forecastData` 契约，这条旧趋势链路已经穿透到服务层。
+这页不是普通页面强行横过来，而是一个专用“看板模式”页面。只有这样，用户进入分析页后看到横屏矩阵才不会觉得突兀。
 
-因此，这个里程碑必须同时解决产品、页面和服务契约三层问题，不能只做前端换库。
+#### 原则2：矩阵是主角，图表只是辅助
 
-### 产品信息架构
+这页最有价值的信息已经在矩阵里。即使没有任何图表，这页也应该成立。因此第一版直接不引入图表库，避免实现范围被辅助图形带偏。
 
-#### 决策1：分析页只展示“统计与洞察”，不重复首页/奖池页事实
+#### 原则3：信息密度高，但视觉必须克制
 
-分析页不再重复以下信息：
+页面要看起来像专业看板，而不是 Excel 或 BI 报表：
 
-- 今日任务列表
-- 奖励可兑换事实
-- 单纯的当前余额变化预测
+- 浅背景
+- 白色主体卡片
+- 极浅网格线
+- 克制配色
+- 明确层级
 
-这些事实分别由首页和奖池页承接。分析页只保留跨天、跨成员、可支持判断的统计指标与洞察。
+#### 原则4：必须“一眼读懂”
 
-#### 决策2：孩子视角只保留 4 个核心指标 + 3 个洞察
+用户打开页面后，不应该先研究图例、筛选器或复杂文案，而应该直接理解：
 
-孩子视角核心指标：
+- 这月有哪些任务
+- 哪天做了
+- 哪天没做
+- 今天在哪
 
-1. 本周完成率
-2. 连续达标天数
-3. 本周净得星星
-4. 7 天内即将过期星星
+#### 原则5：必须一屏完整展示
 
-孩子视角洞察：
+本页的核心体验是“打开即看完整月”。因此第一版冻结为：
 
-1. 最强任务类型
-2. 最弱任务类型
-3. 今日必做未完成数量
+- 不依赖横向拖动日期
+- 不依赖纵向滚动阅读主体矩阵
+- 不依赖点击展开后才能理解主信息
 
-设计原则：
+如果任务数量过多，优先通过聚类与合并控制密度，而不是把阅读负担转嫁给用户。
 
-1. 所有指标都要能被孩子理解。
-2. 不展示抽象预测，不让孩子面对“未来余额曲线”。
-3. 指标要能直接转成行为，例如“今天还差几个必做”。
+### 决策冻结
 
-#### 决策3：家长视角只保留 4 个核心指标 + 3 个洞察
+#### 决策1：页面模式采用“默认横屏”
 
-家长视角核心指标：
+分析页进入后默认横屏展示。如果运行环境无法稳定支持页面强制横屏，则退化为：
 
-1. 家庭本周完成率
-2. 需关注孩子数
-3. 本周扣星/风险事件数
-4. 7 天内即将过期星星总数
+1. 页面仍按横向看板布局渲染
+2. 首屏展示旋转提示
+3. 用户手动横持后获得完整体验
 
-家长视角洞察：
+正式实现以“可稳定落地的横屏体验”为准，不强绑某个具体平台能力写法。
 
-1. 风险孩子列表
-2. 家庭最弱任务类型
-3. 孩子完成率对比
+导航策略同步冻结为：
 
-设计原则：
+- 分析页不依赖系统原生中轴标题承载文案
+- `analysis.json` 采用自定义导航方案或等价空标题方案
+- 返回能力由页面自绘顶部控制条承载
 
-1. 家长要先知道“谁需要关注”，而不是先看抽象曲线。
-2. 洞察要支持干预和沟通，不追求展示花哨图表。
-3. 页面默认是一屏内看出重点，日历用于下钻核对事实。
+目标是彻底消除灵动岛 / 刘海对系统标题的遮挡风险，而不是在原生导航栏下再叠一层页面头部。
 
-#### 决策4：图表只保留一个简单比较图，统一改用 `wxcharts-min`
+#### 决策2：按自然月动态生成日期列
 
-本期保留的唯一图表能力：
+列数不是固定 31，而是由当前月份的实际天数决定：
 
-- 孩子视角：最近 7 天完成率柱状图
-- 家长视角：孩子本周完成率对比柱状图
+- 2 月：28 / 29 列
+- 4 / 6 / 9 / 11 月：30 列
+- 其余月份：31 列
 
-不再保留：
+矩阵必须在横屏首屏内完整展示整月，不允许把“拖动日期”作为正式交互。若极小屏下空间紧张，优先通过更克制的任务聚合、标题截断和单元格压缩解决。
 
-- 历史余额曲线
-- 未来余额预测
-- 虚线预测段
-- 过期点高亮预测图
-- 7/30 天趋势切换
+#### 决策3：矩阵单元格只保留 4 种状态
 
-说明：
+- `✓`：当日有任务且已完成
+- `✕`：当日有任务且应完成但未完成
+- `○`：当日有任务，但日期尚未到达，属于未开始
+- 空白：该任务当日无安排
 
-1. `wxcharts-min` 足以承接本期所需的简单比较图。
-2. 本期目标不是复刻 ECharts 视觉能力，而是主动放弃低价值复杂图。
-3. 如果实施后评估发现简单图也价值不足，可以继续降级为纯 summary 页面，但绝不回退到 ECharts。
+不在格子里放文字，不叠加多层标签。
 
-#### 决策5：`star-calendar` 保留，但降级为事实层而非主角
+#### 决策4：今天列必须有整列定位引导
 
-`star-calendar` 的价值依然成立，因为它回答的是：
+如果当前浏览月份包含今天：
 
-- 哪天完成了什么任务
-- 哪天得星、扣星、退星
-- 具体事实发生在哪一天
+- 顶部日期头显示 `今`
+- 今天列整列弱高亮
+- 使用一条细浅蓝竖向引导线贯穿表头与主体
 
-所以页面顺序改为“先 summary，再图表，再 calendar”。用户先看结论，再需要时看日历事实。
+如果浏览的不是当前月，不显示今天线。
 
-#### 决策6：prepared read model 继续保留，但契约改为 summary-first
+#### 决策5：每一行代表“当月任务聚类”，不是单次任务实例
 
-本期仍保留页面统一入口 `prepareReadModel()`，因为它已在 `M21F2 / M21F3` 中形成正式语义。
+一行用于收拢当月重复出现的“同类同名任务”，避免矩阵行数爆炸。
 
-但 snapshot 正式 contract 调整为：
+第一版聚类键冻结为：
 
-- `month tasks`
-- `month records`
-- `summary`
-- `chartModel`
+- `focusUserId + task.type + normalizedTitle`
 
-明确移除：
+其中 `normalizedTitle` 由标题标准化得到，去掉多余空格并做基础归一化，但不做语义模糊匹配。
 
-- `trendDays`
-- `historyData`
-- `forecastData`
-- `calculateHistoricalBalance()` 的正式产品职责
+#### 决策6：顶部摘要冻结为 4 个核心数字
 
-这意味着前端不再拿旧趋势数据做二次解释，后端也不再为分析页正式返回预测曲线。
+顶部不使用厚重卡片，只用轻量内联摘要，冻结为：
 
-#### 决策7：页面状态遵循“先 loading，再内容；失败不闪空白”
+1. `任务行数`
+2. `已完成`
+3. `未完成`
+4. `未开始`
 
-分析页在新结构下必须显式区分 4 种页面状态：
+不在首屏摘要中额外展示 `空闲天数`、`完成率`、`覆盖天数` 等次级指标，避免页面报表化。
 
-1. `loading`
-2. `ready`
-3. `empty`
-4. `error/fallback`
+上述指标口径冻结为：
 
-表现规则：
+- `任务行数 = 当前矩阵聚类行数`
+- `已完成 = state === done 的单元格数`
+- `未完成 = state === missed 的单元格数`
+- `未开始 = state === upcoming 的单元格数`
 
-1. `prepareReadModel()` 尚未完成时，页面保持 loading skeleton，不渲染空白 summary 卡。
-2. 存在 snapshot 且 `summary/cards/tasks/records` 全部为空时，展示空态文案，不渲染空图。
-3. 后端失败但存在 fallback snapshot 时，允许展示 fallback 内容，并以弱提示文案说明“当前展示的是本地兜底数据”。
-4. 后端失败且无可用 snapshot 时，展示错误空态与重试入口，不回退旧趋势图，也不渲染误导性的 0 指标。
+#### 决策7：家长主路径是“单个孩子月看板”，不是全家混合矩阵
 
-这样可以避免页面在 loading 和失败场景中出现“卡片一闪而空”或“0 指标误导用户”的体验问题。
-
-#### 决策8：导航标题与视觉语气统一为“成长分析”
-
-`analysis` 页导航标题本期统一调整为：
-
-- `成长分析`
+第一版家长进入分析页时，顶部提供孩子切换能力，但主体矩阵只展示当前焦点孩子的任务矩阵。
 
 原因：
 
-1. 比“分析”更具体，也比“星星日历”更符合新页面定位。
-2. 与孩子视角的成长反馈、家长视角的成长观察更贴合。
-3. 可以作为页面文案语气的上位约束，避免最终实现偏向冷冰冰的 BI 面板。
+- 同名任务在多个孩子之间混排会造成语义混乱
+- 第一版优先保证矩阵清晰
+- 家长切换孩子即可完成管理目标
 
-视觉语气约束：
+第一版不提供“家庭汇总矩阵”，也不提供独立的“家庭汇总摘要”查询口径；家长只通过孩子切换查看单个孩子月看板。
 
-1. 孩子视角文案偏鼓励和进展感。
-2. 家长视角文案偏关注点和提醒，但避免焦虑化表达。
-3. 页面只允许少量语义色，不做高饱和大屏报表风格。
+孩子视角进入时：
 
-### 技术选型
+- 焦点用户固定为自己
+- 不展示孩子切换器
+- 仍可看到与自己相关的整月矩阵与摘要
 
-| 技术点 | 选择方案 | 替代方案 | 选择理由 |
-|--------|---------|---------|---------|
-| 页面数据入口 | 继续使用 `prepareReadModel()` | 新增 `prepareDashboard()` | 保留统一 prepare/caching 入口，避免多一套主链路 |
-| snapshot 契约 | `summary + chartModel + month facts` | 保留 `historyData / forecastData` | 新契约更符合新页面目标，且能彻底清理旧趋势链 |
-| 图表库 | `wxcharts-min` | 继续保留 `echarts` | 本期只剩简单比较图，`echarts` 明显过重 |
-| 页面结构 | `summary -> chart -> calendar` | `calendar -> trend` | 先给洞察，再给事实，更符合分析页定位 |
-| 旧链处理 | 同期删除正式趋势链路 | 先兼容保留，后续再删 | 用户明确要求旧分析页重做并清理，分两期清理会降低 ROI |
-| 页面状态 | `loading/ready/empty/error` 显式区分 | 复用旧页面隐式状态 | 新页面以 summary 为主，必须避免 0 指标和空白闪烁误导 |
+#### 决策8：首屏不暴露“空闲天数”等次级统计
 
-### DDD分层设计
+“空闲天数”这类指标虽然有业务意义，但不属于用户打开页面的第一阅读目标。第一版不进入首屏摘要，也不单独占用视觉资源；如果后续验证确有价值，再作为二级信息评估。
 
-**领域层（models/）**：
-- [ ] 新建模型：无
-- [ ] 修改模型：无
-- 说明：本期新增的是 read model contract，不新增持久化实体。
+#### 决策9：第一版不接入第三方图表库与轻图表
 
-**服务层（services/）**：
-- [x] 修改前端服务：`services/analytics-service.js`
-- [x] 修改后端服务：`backend/services/analyticsReadModelService.js`
-- [x] 修改后端内部模块：`backend/services/analytics-read-model/userReadModel.js`
-- [x] 修改后端内部模块：`backend/services/analytics-read-model/familyReadModel.js`
-- 说明：后端负责聚合 summary 和 chartModel，前端负责页面编排、缓存和展示；旧趋势 helper 进入删除范围。
+第一版只交付：
 
-**仓储层（repositories/）**：
-- [ ] 新建仓储：无
-- [ ] 修改仓储：无
-- 说明：优先复用现有任务、星星和家庭查询能力，不为本期新增专用仓储。
+- 顶部轻量内联摘要
+- 横屏月矩阵
+- 矩阵上沿极简图例
 
-**适配器层（adapters/）**：
-- [ ] 新建适配器：无
-- [ ] 修改适配器：无
-- 说明：本期不新增适配器，图表库以 vendored 文件方式接入。
+不接入 `wxcharts-min`，也不引入其他图表依赖。后续如果矩阵上线后仍有明确需求，再单独评审是否补充顶部小图。
 
-**表现层（pages/、components/）**：
-- [x] 修改页面：`packageChart/pages/analysis/analysis`
-- [x] 修改组件：`packageChart/components/star-calendar/star-calendar`
-- [x] 新建组件：`packageChart/components/analysis-summary`
-- [x] 新建组件：`packageChart/components/analysis-insight-chart`
-- [x] 删除组件：`packageChart/components/star-trend`
-- 说明：表现层目标是“瘦页面 + 明确职责”，不保留旧趋势图兼容壳。
+#### 决策10：第一版不新增后端 analytics 专用服务
 
-### 架构图
+本次分析页重建不恢复旧后端 analytics 查询链路。正式职责划分为：
 
-```mermaid
-graph LR
-    A[analysis 页面 onShow / onMonthChange] --> B[AnalyticsService.prepareReadModel]
-    B --> C[后端 AnalyticsReadModelService]
-    C --> D[userReadModel / familyReadModel]
-    D --> E[month tasks / month records]
-    D --> F[summary]
-    D --> G[chartModel]
-    B --> H[prepared snapshot]
-    H --> I[analysis-summary]
-    H --> J[analysis-insight-chart]
-    H --> K[star-calendar]
-```
+- 任务事实查询：继续复用现有 `taskService` 和既有任务接口能力
+- 月度矩阵聚合：前端新增轻量看板 service 负责
+- 页面渲染：分析页页面内联负责
 
-### 数据模型
+如果后续月矩阵出现明确性能瓶颈，再单独评审是否需要新增后端聚合接口。
 
-```typescript
-type InsightTone = 'neutral' | 'good' | 'warning' | 'risk';
+#### 决策11：首屏去掉类型筛选与行展开
 
-interface SummaryCard {
-  label: string;
-  value: string | number;
-  tone?: InsightTone;
-  hint?: string;
-}
+第一版顶部只保留：
 
-interface AttentionItem {
-  userId?: string;
-  title: string;
-  summary: string;
-  level: 'warning' | 'risk';
-}
+- 返回
+- 月份切换
 
-interface ChildInsightSummary {
-  roleView: 'child';
-  cards: SummaryCard[];
-  highlights: {
-    strongestType: 'study' | 'habit' | 'interest' | null;
-    weakestType: 'study' | 'habit' | 'interest' | null;
-    todayRequiredPendingCount: number;
-  };
-  attentionItems: AttentionItem[];
-}
+若为家长且存在多孩子：
 
-interface FamilyChildSummary {
-  userId: string;
-  displayName: string;
-  weekCompletionRate: number;
-  todayRequiredPendingCount: number;
-  weekPenaltyCount: number;
-  weekNetStars: number;
-  weakestType: 'study' | 'habit' | 'interest' | null;
-  riskLevel: 'normal' | 'warning' | 'risk';
-}
+- 孩子切换放入顶部下方的轻量辅助条
+- 不与月份切换挤在同一行
 
-interface ParentInsightSummary {
-  roleView: 'parent';
-  cards: SummaryCard[];
-  highlights: {
-    weakestType: 'study' | 'habit' | 'interest' | null;
-  };
-  attentionItems: AttentionItem[];
-  childSummaries: FamilyChildSummary[];
-}
+不保留类型筛选，不做行展开明细，不增加额外交互层级。主看板必须在首屏直接成立，而不是依赖点击后补全信息。
 
-interface AnalysisChartModel {
-  kind: 'daily_completion_rate' | 'child_completion_compare';
-  categories: string[];
-  series: Array<{ name: string; data: number[] }>;
-  unit: '%' | '次';
-}
+返回按钮要求补充冻结为：
 
-interface PreparedAnalyticsSnapshot {
-  scope: 'user' | 'family';
-  monthKey: string;
-  tasks: object[];
-  records: object[];
-  summary: ChildInsightSummary | ParentInsightSummary;
-  chartModel: AnalysisChartModel | null;
-  refreshedAt: number;
-  mode: 'authoritative' | 'fallback';
-}
-```
+- 返回按钮必须在左上角单独可见
+- 不与月份切换共用同一视觉控件
+- 图标语义必须明确，不允许用户把“上月”误认为“返回”
+- 返回行为优先使用 `navigateBack`
+- 若当前页面栈不可回退，则回到首页
 
-说明：
+#### 决策12：矩阵必须通过聚类控制在一屏可读范围内
 
-1. `currentBalance` 不再作为分析页主展示字段进入正式 contract。
-2. 如果后端内部计算 summary 仍需用到余额，可保留为内部中间值，但不再向页面暴露为主指标。
+为保证横屏首屏完整阅读，矩阵行数采用硬约束：
 
-### 接口设计
+- 目标行数：8 行
+- 舒适上限：10 行
+- 极限上限：12 行
 
-本期继续沿用：
+超过上限时，按以下顺序收口：
 
-- `POST /api/analytics/read-model/query`
+1. 先做同类型 + 同标准化标题聚合
+2. 再把低频零散任务并入 `其他任务`
+3. `其他任务` 最多仅占 1 行
 
-但会同步调整 REST contract：
+正式实现不得以“增加滚动区域”替代密度治理。
 
-**请求体**：
+#### 决策13：视觉风格必须完全继承现有项目语言
 
-```json
+本页不是独立设计体系，必须沿用当前小程序已有视觉语言：
+
+- 页面背景延续现有浅灰蓝渐变
+- 主体为白色圆角卡片
+- 主结构色继续使用现有蓝色体系
+- 状态色只作为任务状态语义使用
+- 不引入复古纸张、手账、BI 仪表盘等割裂风格
+
+目标是让分析页看起来像“现有产品中的一个专业看板页”，而不是另一套产品。
+
+#### 决策14：左侧任务名列必须极简
+
+每一行左侧只保留：
+
+- 一条类型色条
+- 一行任务标题
+
+不显示副标题、不显示小字摘要、不显示起止时间。超长标题统一省略，避免拉高行高和破坏矩阵密度。
+
+标题截断策略冻结为：
+
+- 第一优先采用中间省略，保留标题前缀与后缀的辨识信息
+- 不采用两行换行标题
+- 仅当中间省略后仍明显影响辨识时，才允许小幅增加首列宽度
+
+原因是很多任务标题前半段相同、差异集中在后半段，尾部省略会导致多行任务难以区分。
+
+#### 决策15：横屏顶部必须避开灵动岛/刘海中轴区域
+
+横屏时系统导航中轴可能被灵动岛或刘海遮挡，因此正式布局冻结为：
+
+- 不依赖系统中轴标题承载关键信息
+- 月份切换放在左上安全区内
+- 轻量摘要放在右侧
+- 矩阵主体整体按横屏安全区右移，避免首列标题被遮挡
+
+如果设备存在横屏安全区，优先通过页面自绘顶部条和主体内边距处理，而不是继续堆叠顶部标题。
+
+#### 决策16：完整自然月日期轴保留，但未来纯空列必须弱化
+
+本页核心认知是“自然月看板”，因此正式口径为：
+
+- 保留完整自然月日期轴
+- 不因为右侧未来无任务就直接删列
+- 对“未来且整列无任务”的日期列做弱化处理
+
+弱化方式包括但不限于：
+
+- 更浅的数字颜色
+- 更弱的网格线
+- 更低的背景存在感
+
+口径归属冻结为：
+
+- 是否属于“未来纯空列”由月看板 service 统一计算
+- 页面层只消费列级元数据做样式渲染
+- 不允许页面层再次自行全表扫描推导弱化规则
+
+不采用“动态裁切后半月空列”作为第一版正式规则，避免用户失去整月节奏感。
+
+#### 决策17：矩阵行按任务类型分组排序，但标题文字保持中性色
+
+矩阵阅读顺序冻结为：
+
+1. `study`
+2. `habit`
+3. `interest`
+4. `mixed / 其他任务`
+
+同组内再按起始日期、覆盖天数与标题稳定排序。
+
+视觉上：
+
+- 保留左侧类型色条
+- 任务标题文字保持正文中性色
+- 不把整段标题染成类型色
+
+这样既能提升扫读效率，也能避免页面过花。
+
+#### 决策18：支持行焦点轻高亮，不做重交互
+
+为提升横向矩阵查阅效率，正式允许：
+
+- 当前行标题轻微加深
+- 当前行整行单元格出现极浅背景高亮
+
+第一版触发方式冻结为：
+
+- 用户点击某一任务行时，该行进入选中态并保持高亮
+- 同时只允许一个选中行
+- 点击其他任务行时切换选中目标
+- 点击页面空白区或再次点击当前行时取消选中
+
+但不允许：
+
+- 厚边框
+- 阴影膨胀
+- 动画闪烁
+
+交互必须保持安静，避免破坏极简看板气质。
+
+#### 决策19：状态符号继续使用 `✓ / ✕ / ○ / 空白`，不改成星星
+
+原因：
+
+- `✓ / ✕ / ○ / 空白` 是最低理解成本的履约状态语言
+- 星星在本产品中已有“奖励/积分”语义，若替代完成符号会造成“完成”与“得星”混淆
+
+因此第一版继续冻结为任务履约符号，而不是奖励符号。
+
+#### 决策20：今日列的“今”标记与日期数字分离呈现
+
+今天列继续保留当天的自然日数字，例如 `14`，不直接用 `今` 替代日期。
+
+视觉上改为：
+
+- 表头内仍显示当天数字
+- 今日细竖线允许轻微越出表头上边界
+- 在竖线顶端放一个很小的 `今` 标签
+
+这样既保留自然月定位能力，也强化“今天”的语义识别。
+
+### 信息架构
+
+#### 页面骨架
+
+横屏页由 3 个层次组成：
+
+1. `顶部控制条`
+2. `可选辅助条`
+3. `矩阵看板主体`
+
+#### 顶部控制条
+
+包含：
+
+- 返回
+- 月份切换
+
+布局冻结为：
+
+- 左侧承载返回与月份切换
+- 中轴不放关键标题
+- 顶部不再承载摘要和图例
+
+原因是横屏时中轴区域可能被灵动岛/刘海遮挡，不能再把核心信息放在中间。
+
+要求：
+
+- 控制条高度低
+- 不使用二级弹层堆叠
+- 切换行为原地刷新，不中断阅读
+- 不增加筛选器、标签栏、二级说明
+- 返回按钮与月份切换之间保留明确分隔，避免误触和语义混淆
+
+#### 轻量辅助条
+
+显示：
+
+- 孩子切换（仅家长且多孩子时显示）
+
+这条辅助条不是常驻结构。若当前仅有一个孩子或当前为孩子视角，则整条不渲染，避免顶部出现空白占位。
+
+#### 矩阵看板主体
+
+结构为：
+
+- 矩阵上沿 `board-meta`
+- 左侧固定任务信息列
+- 右侧日期网格
+- 顶部日期表头固定
+
+其中 `board-meta` 统一承载：
+
+- 轻量摘要
+- 极简图例
+
+左列每一行展示：
+
+- 任务标题
+- 任务类型细色条
+
+右侧日期格展示单日状态。
+
+要求：
+
+- 整个矩阵首屏完整可见
+- 不依赖横向拖动日期
+- 不依赖纵向滚动阅读主体
+- 矩阵视觉占比不低于页面主体的 70%
+- 保留完整自然月日期轴
+- 未来纯空日期列允许弱化，但不直接裁切
+- 焦点行允许轻高亮
+- 首列标题应优先保证相近任务可被区分
+
+### 视觉与交互规范
+
+#### 配色
+
+- 页面背景：延续项目现有浅灰蓝渐变
+- 主体卡片：白色
+- 网格线：极浅灰蓝
+- 完成：低饱和绿色
+- 未完成：低饱和红色
+- 未开始：灰蓝色
+- 今天定位：浅蓝
+- 任务标题：中性深灰
+- 类型表达：仅通过左侧细色条承载
+
+#### 布局比例建议
+
+- 顶部控制条：约 6%
+- 辅助条（仅多孩子时显示）：约 4%
+- 主矩阵（含摘要与图例上沿）：约 90%
+
+#### 单元格规范
+
+- 保持接近正方形
+- 不允许文字换行
+- 状态符号居中
+- 周末列仅允许轻微弱化，不额外加重背景
+- 今天列使用整列淡蓝弱高亮 + 细竖线
+- 今日细竖线允许轻微超出表头，并在顶端附一个小号 `今` 标签
+- 单元格只表达状态，不承载额外文字
+
+#### 顶部与安全区规范
+
+- 页面必须主动避让横屏安全区
+- 不依赖系统中轴标题
+- 左上角月份切换必须落在可读安全区
+- 主矩阵左侧首列必须避开灵动岛/刘海投影范围
+- 如果设备安全区更大，优先压缩顶部留白，不牺牲矩阵主体
+
+### 数据口径
+
+#### 输入数据
+
+第一版依赖现有任务服务按月份获取任务事实，范围为：
+
+- 当前焦点用户
+- 当前自然月
+
+分析页所有查询必须只依赖页面内部维护的 `focusUserId`，不能复用首页 `currentUser`、首页当前视角、近期浏览孩子或其他页面残留状态作为隐式输入。
+
+约束冻结为：
+
+- 家长进入分析页时，页面自行确定默认 `focusUserId`
+- 家长切换孩子时，只更新分析页自己的 `focusUserId`
+- 孩子进入时，`focusUserId` 固定为登录孩子本人
+- 月看板 service 的输入参数必须显式包含 `focusUserId`
+
+建议优先复用：
+
+- `taskService.getTasksByDateRange(startDate, endDate, userId, options)`
+- `taskService.getTasksByScope(options)` 的现有能力
+
+#### 任务聚类输出结构
+
+建议新增前端看板 service 输出：
+
+```js
 {
-  "scope": "user | family",
-  "monthKey": "2026-04",
-  "userId": "child-id",
-  "childUserIds": ["child-1", "child-2"]
-}
-```
-
-明确删除请求字段：
-
-- `trendDays`
-
-**成功响应核心结构**：
-
-```json
-{
-  "success": true,
-  "data": {
-    "snapshot": {
-      "scope": "user",
-      "monthKey": "2026-04",
-      "tasks": [],
-      "records": [],
-      "summary": {},
-      "chartModel": null,
-      "refreshedAt": 1770000000000,
-      "mode": "authoritative"
+  monthKey: '2026-04',
+  focusUserId: 'child-1',
+  daysInMonth: 30,
+  summary: {
+    displayedRowCount: 6,
+    completedCount: 32,
+    missedCount: 8,
+    upcomingCount: 8
+  },
+  columns: [
+    {
+      day: 1,
+      date: '2026-04-01',
+      isToday: false,
+      isWeekend: false,
+      hasPlannedTasks: true,
+      isFutureEmpty: false
+    },
+    {
+      day: 2,
+      date: '2026-04-02',
+      isToday: false,
+      isWeekend: false,
+      hasPlannedTasks: false,
+      isFutureEmpty: false
     }
-  }
+  ],
+  rows: [
+    {
+      rowKey: 'child-1|study|数学',
+      title: '数学',
+      type: 'study',
+      cells: [
+        { date: '2026-04-01', state: 'done', taskIds: ['t1'] },
+        { date: '2026-04-02', state: 'blank', taskIds: [] },
+        { date: '2026-04-03', state: 'missed', taskIds: ['t2'] }
+      ]
+    }
+  ],
+  todayColumnDate: '2026-04-13'
 }
 ```
 
-明确删除响应字段：
+其中列级字段补充约束如下：
 
-- `historyData`
-- `forecastData`
+- `hasPlannedTasks`：该日期列是否至少存在一个非空任务单元格
+- `isFutureEmpty`：该日期是否晚于今天，且整列没有任何任务安排
 
-**前端服务接口**：
+`isFutureEmpty` 仅用于视觉弱化，不改变日期轴保留策略。
 
-| 方法 | 说明 | 参数 | 返回值 |
-|------|------|------|--------|
-| `prepareReadModel` | 统一准备分析页 snapshot | `{ analysisOptions, monthKey, force }` | `{ success, snapshot, fallback }` |
-| `getPreparedMonthData` | 返回 calendar 所需 facts | `{ analysisOptions, monthKey }` | `{ tasks, records, refreshedAt, fallback } \| null` |
-| `getPreparedSummary` | 返回 summary 与轻图表模型 | `{ analysisOptions, monthKey }` | `{ summary, chartModel, refreshedAt, fallback } \| null` |
+#### 状态判定口径
 
-明确进入删除范围的前端公开接口：
+以单日单聚类为单位：
 
-- `calculateHistoricalBalance()`
+- `done`：该日存在至少一个任务实例，且该日实例全部满足已完成口径
+- `missed`：该日存在任务实例，且包含未完成实例，且该日已到或已过
+- `upcoming`：该日存在任务实例，但日期晚于今天
+- `blank`：该日无任务实例
 
-说明：
+如未来出现“同日同聚类多实例混合完成/未完成”的场景，第一版按保守口径落到 `missed`。
 
-1. 这次 contract 变更属于正式接口调整，实施时必须同步更新 `docs/api/backend-rest-api.md` 与 `docs/api/services-guide.md`。
-2. 本期目标不是兼容旧趋势图，所以不保留 `historyData / forecastData` 的兼容返回。
+#### 排序口径
+
+矩阵行输出顺序冻结为：
+
+1. 按 `type` 分组：`study -> habit -> interest -> mixed`
+2. 组内按 `firstActiveIndex` 升序
+3. 再按 `plannedCellCount` 降序
+4. 最后按标题稳定排序
+
+### 前后端职责边界
+
+#### 前端职责
+
+- 页面状态管理
+- 横屏布局渲染
+- 月矩阵聚类与状态汇总
+- 顶部内联摘要计算
+- 今日列定位
+- `focusUserId` 的独立维护与查询边界控制
+- 一屏密度治理与任务行聚合
+- 横屏安全区避让与焦点行高亮
+
+#### 后端职责
+
+- 继续提供既有任务事实查询能力
+- 不在本期重新承担 analytics 专属聚合
+
+#### 职责判断
+
+这个页面的核心难点是“矩阵可视化”和“月视图聚类”，不是重后端计算。因此第一版把聚合留在前端是合理的，也更符合“先快速稳定交付”的 ROI。
 
 ---
 
 ## 代码结构
 
-### 文件变更清单
+### 新增 / 修改文件
 
-**新增文件**：
-- `docs/design/milestone-21g-analytics-dashboard-redesign.md` - 本设计文档
-- `packageChart/components/analysis-summary/analysis-summary.js` - 指标卡与洞察列表组件
-- `packageChart/components/analysis-summary/analysis-summary.wxml` - summary 结构
-- `packageChart/components/analysis-summary/analysis-summary.wxss` - summary 样式
-- `packageChart/components/analysis-insight-chart/analysis-insight-chart.js` - 轻量比较图组件
-- `packageChart/components/analysis-insight-chart/analysis-insight-chart.wxml` - 图表结构
-- `packageChart/components/analysis-insight-chart/analysis-insight-chart.wxss` - 图表样式
-- `packageChart/vendor/wxcharts-min.js` - vendored 轻量图表库
+#### 页面层
 
-**删除文件**：
-- `packageChart/components/star-trend/star-trend.js`
-- `packageChart/components/star-trend/star-trend.wxml`
-- `packageChart/components/star-trend/star-trend.wxss`
-- `packageChart/components/star-trend/star-trend.json`
-- `packageChart/ec-canvas/echarts.js`
-- `packageChart/ec-canvas/ec-canvas.js`
-- `packageChart/ec-canvas/ec-canvas.wxml`
-- `packageChart/ec-canvas/ec-canvas.wxss`
-- `packageChart/ec-canvas/wx-canvas.js`
+- `packageChart/pages/analysis/analysis.js`
+- `packageChart/pages/analysis/analysis.wxml`
+- `packageChart/pages/analysis/analysis.wxss`
+- `packageChart/pages/analysis/analysis.json`
 
-**修改文件**：
-- `packageChart/pages/analysis/analysis.js` - 删除 `trendDays` 状态和趋势交互，改为 summary-first 页面编排
-- `packageChart/pages/analysis/analysis.wxml` - 删除旧趋势图区域，改为 summary + chart + calendar 布局
-- `packageChart/pages/analysis/analysis.json` - 删除 `star-trend/ec-canvas` 依赖，并将导航标题收口为“成长分析”
-- `packageChart/components/star-calendar/star-calendar.js` - 保持事实层职责，适配新的页面结构与刷新节奏
-- `services/analytics-service.js` - 输出 `summary/chartModel`，删除 `calculateHistoricalBalance()` 和旧趋势正式契约
-- `backend/services/analyticsReadModelService.js` - 调整 read model contract，删除 `trendDays/historyData/forecastData`
-- `backend/services/analytics-read-model/userReadModel.js` - 生成孩子视角 summary 和 chartModel
-- `backend/services/analytics-read-model/familyReadModel.js` - 生成家长视角 summary 和 chartModel
-- `test/pages/analysis.page.test.js` - 更新页面结构、角色分化和刷新契约测试
-- `test/pages/star-calendar.component.test.js` - 确认日历事实层无回归
-- `test/services/analytics-service.test.js` - 改为验证 summary/chartModel 读取，不再测试旧趋势接口
-- `backend/test/unit/analyticsReadModelService.test.js` - 补 summary 聚合和 chartModel 测试
-- `docs/api/backend-rest-api.md` - 更新 read model REST contract
-- `docs/api/services-guide.md` - 更新前端 `AnalyticsService` 服务契约
+职责：
 
-### 核心代码结构
+- 进入横屏模式
+- 管理当前月份、焦点孩子
+- 调用月看板 service
+- 驱动页面状态切换
 
-```javascript
-// services/analytics-service.js
-async prepareReadModel({ analysisOptions = {}, monthKey, force = false } = {}) {
-  const result = await this._queryReadModel({ analysisOptions, monthKey, force });
-  this._cachePreparedSnapshot(result.snapshot);
-  return {
-    success: true,
-    snapshot: result.snapshot,
-    fallback: result.snapshot.mode === 'fallback'
-  };
-}
+#### 服务层
 
-getPreparedSummary({ analysisOptions = {}, monthKey } = {}) {
-  const snapshot = this._findPreparedSnapshot(analysisOptions, monthKey);
-  if (!snapshot) return null;
+- `services/analysis-board-service.js` - 新增
 
-  return {
-    summary: snapshot.summary,
-    chartModel: snapshot.chartModel,
-    refreshedAt: snapshot.refreshedAt,
-    fallback: snapshot.mode === 'fallback'
-  };
-}
+职责：
 
-// backend/services/analytics-read-model/userReadModel.js
-function buildUserAnalyticsSnapshot(input) {
-  return {
-    scope: 'user',
-    monthKey: input.monthKey,
-    tasks: input.monthTasks,
-    records: input.monthRecords,
-    summary: buildChildSummary(input),
-    chartModel: buildChildCompletionChart(input),
-    refreshedAt: input.nowTimestamp,
-    mode: 'authoritative'
-  };
-}
-```
+- 读取月度任务事实
+- 生成 `summary + columns + rows`
+- 输出页面所需轻量 contract
 
-### 关键函数
+#### 组件层
 
-**函数1**：`buildChildSummary(input)`
-- **输入**：`summaryTasks`、`records`、`groups`、`nowTimestamp`
-- **输出**：`ChildInsightSummary`
-- **职责**：聚合孩子视角的核心指标和行为洞察
-- **依赖**：完成率、连续达标、类型统计、到期星星聚合
+- 第一版不新增分析页专用自定义组件
 
-**函数2**：`buildParentSummary(input)`
-- **输入**：`summaryTasks`、`records`、`childGroups`、`childUsers`
-- **输出**：`ParentInsightSummary`
-- **职责**：聚合家庭视角的总览、风险列表和孩子对比
-- **依赖**：按孩子维度的任务与星星聚合
+职责：
 
-**函数3**：`buildChartModel(input)`
-- **输入**：角色视角对应 summary 原始数据
-- **输出**：`AnalysisChartModel | null`
-- **职责**：生成简单比较图所需的统一模型
-- **依赖**：`wxcharts-min`
+- 主体矩阵、顶部摘要和图例都直接内联在分析页页面中实现
+- 避免额外组件装载链路与分包依赖风险
 
-**函数4**：`getPreparedSummary({ analysisOptions, monthKey })`
-- **输入**：分析范围和月份
-- **输出**：`summary + chartModel + 缓存元数据`
-- **职责**：向 summary 组件和图表组件暴露统一已准备数据
-- **依赖**：prepared snapshot 缓存
+#### 首页入口
+
+- `pages/index/index.js`
+
+职责：
+
+- 从当前“分析页正在重新规划”占位逻辑切换回正式跳转逻辑
+
+### 删除 / 保持删除的内容
+
+以下内容保持删除状态，不允许回流：
+
+- `services/analytics-service.js`
+- `backend/services/analyticsReadModelService.js`
+- `backend/routes/analytics.js`
+- `backend/controllers/analyticsController.js`
+- `packageChart/components/star-calendar/*`
+- `packageChart/components/star-trend/*`
+- `packageChart/ec-canvas/*`
 
 ---
 
 ## 实施步骤
 
-### 第1步：冻结新分析页产品边界与契约（预计0.5天）
+### 第1步：页面骨架与横屏壳层
 
-- [ ] **任务**：确认家长/孩子最终指标清单、图表数量和新 snapshot contract
-- [ ] **验证**：设计文档中明确写出“删什么、保留什么、谁看什么”
-- [ ] **依赖**：无
+- [x] 将分析页占位态改为正式横屏壳层
+- [x] 建立页面状态：`loading / ready / empty / error`
+- [x] 接入月份切换、孩子切换
+- [x] 恢复首页分析入口正式跳转
 
-**实施要点**：
-1. 明确本期目标是重做分析页，不是换库复刻旧趋势图。
-2. 明确分析页不再展示今日任务事实、奖池兑换事实、余额预测曲线。
-3. 明确 `trendDays / historyData / forecastData / calculateHistoricalBalance()` 进入删除范围。
+### 第2步：月看板聚合 service
 
----
+- [x] 新增 `analysis-board-service`
+- [x] 复用现有任务服务按月拉取任务事实
+- [x] 实现自然月列生成
+- [x] 实现任务聚类
+- [x] 实现超限任务合并与 `其他任务` 收口
+- [x] 实现 `done / missed / upcoming / blank` 状态判定
+- [x] 实现顶部摘要统计
 
-### 第2步：后端 read model 改为 summary-first（预计1.5天）
+### 第3步：矩阵组件实现
 
-- [ ] **任务**：在后端生成 `summary + chartModel + month facts`，删除趋势字段输出
-- [ ] **验证**：`user / family` 两种 scope 均能输出稳定结构
-- [ ] **依赖**：第1步
+- [x] 在分析页页面内直接实现矩阵主体
+- [x] 实现左列固定、日期表头固定、主体一屏完整布局
+- [x] 实现今天列定位线
+- [x] 实现周末弱高亮
+- [x] 实现 28 / 29 / 30 / 31 天自适应列宽
+- [x] 实现超长标题截断与极简行头
+- [x] 实现横屏安全区避让、未来纯空列弱化、按类型分组排序与行焦点轻高亮
+- [x] 恢复明确返回按钮，并让今日线越出表头、首列标题采用中间省略
 
-**实施要点**：
-1. `month tasks/records` 继续服务 `star-calendar`。
-2. `summary` 所需数据窗口以“当前周/最近7天”为主，不与翻月事实窗口混淆。
-3. 家长视角必须一次性输出 `childSummaries` 和 `attentionItems`，不允许前端循环拼。
-4. REST contract 同步删除 `trendDays / historyData / forecastData`。
+### 第4步：清理与测试
 
----
-
-### 第3步：前端页面重做为 summary-first（预计1天）
-
-- [ ] **任务**：重构分析页布局，接入 summary 组件和轻图表组件
-- [ ] **验证**：页面不再引用 `star-trend`、`trendDays`、`rangechange`
-- [ ] **依赖**：第2步
-
-**实施要点**：
-1. `analysis.js` 继续持有统一 `prepareReadModel()` 入口和翻月刷新。
-2. `analysis.wxml` 页面顺序改为 `summary -> chart -> calendar`。
-3. `analysis.json` 导航标题从“星星日历”收口为“成长分析”。
-4. 页面必须实现 `loading/ready/empty/error` 四种显式状态。
-5. `star-calendar` 只负责 month facts 展示，不再承担 summary 或趋势职责。
-
----
-
-### 第4步：删除旧趋势链并接入 `wxcharts-min`（预计1天）
-
-- [ ] **任务**：删除 `star-trend / echarts / ec-canvas`，用 `wxcharts-min` 承接单一简单图
-- [ ] **验证**：分析分包中不再存在 ECharts 依赖
-- [ ] **依赖**：第3步
-
-**实施要点**：
-1. 将用户提供的 `wxcharts-min.js` 规范落位到 `packageChart/vendor/`。
-2. 轻图表只支持本期定义的两种 chartModel。
-3. 不保留旧趋势图 fallback，也不保留 `ec-canvas` 兼容壳。
-
----
-
-### 第5步：契约与测试收口（预计1天）
-
-- [ ] **任务**：清理旧趋势相关服务方法、测试与 API 文档
-- [ ] **验证**：代码、测试、接口文档和设计文档语义一致
-- [ ] **依赖**：第4步
-
-**实施要点**：
-1. 删除 `AnalyticsService.calculateHistoricalBalance()` 及对应测试。
-2. 更新 `docs/api/backend-rest-api.md` 和 `docs/api/services-guide.md`，确保单一数据源准确。
-3. grep 确认仓库内正式实现不再引用 `star-trend / ec-canvas / trendDays / historyData / forecastData`。
+- [x] 删除临时占位逻辑
+- [x] 删除本次实现过程中产生的冗余样式和死分支
+- [x] 补齐页面、service 测试
+- [x] 执行最小回归
 
 ---
 
@@ -625,138 +765,135 @@ function buildUserAnalyticsSnapshot(input) {
 
 ### 单元测试
 
-| 测试项 | 测试方法 | 预期结果 |
-|--------|---------|---------|
-| 孩子 summary 聚合 | `backend/test/unit/analyticsReadModelService.test.js` | 正确输出孩子 4 张指标卡、洞察和图表模型 |
-| 家长 summary 聚合 | `backend/test/unit/analyticsReadModelService.test.js` | 正确输出家庭指标、风险列表和孩子对比数据 |
-| 前端 prepared summary 读取 | `test/services/analytics-service.test.js` | `prepareReadModel/getPreparedSummary` 正确消费新 contract |
-| 页面角色分化渲染 | `test/pages/analysis.page.test.js` | 家长/孩子两种布局与文案正确切换 |
-| 轻图表适配 | 组件测试或页面测试 | `wxcharts-min` 能正确渲染本期两种简单图 |
+- `test/pages/analysis.page.test.js`
+  - 页面状态流转
+  - 月份切换
+  - 孩子切换
+  - 行焦点单选高亮
+  - 再次点击当前行取消高亮
+  - 点击空白区取消高亮
+
+- `test/services/analysis-board-service.test.js` - 新增
+  - 自然月列生成
+  - 任务聚类
+  - 超限任务合并
+  - 单元格状态判定
+  - 顶部摘要统计
+  - `hasPlannedTasks / isFutureEmpty` 列级元数据生成
 
 ### 集成测试
 
-- [ ] 场景1：孩子视角进入分析页，看到孩子版 summary、轻图表和日历
-- [ ] 场景2：家长视角进入分析页，看到家庭版 summary、孩子对比图和日历
-- [ ] 场景3：翻月只刷新 `calendar facts`，summary 保持其当前周统计语义
-- [ ] 场景4：任务状态变化后，summary 与日历都刷新，不再出现趋势范围切换逻辑
-- [ ] 场景5：后端失败时，页面展示 fallback 或空态，不回退到旧趋势图
-- [ ] 场景6：prepared snapshot 未就绪时，页面保持 loading，不闪空白卡片或 0 指标
+- 首页进入分析页，验证正式跳转恢复
+- 分析页点击返回时，正常返回上一页；无页面栈时可回首页
+- 分析页切换上月/下月，矩阵与摘要同步刷新
+- 家长切换孩子，矩阵正确刷新
+- 当月 28 / 29 / 30 / 31 天场景都能正常渲染
+- 任务较多场景仍保持首屏完整展示，无横向拖动依赖
+- 横屏灵动岛 / 刘海机型下首列与顶部关键信息不被遮挡
+- 今日列竖线、未来纯空列弱化、行焦点高亮符合预期
 
-### 手动测试
+### 手工验证清单
 
-1. **孩子视角**
-   - [ ] 可看到 4 个核心指标，文案对孩子友好
-   - [ ] 轻图表展示最近 7 天完成率
-   - [ ] 星星日历仍支持翻月和回到今天
-
-2. **家长视角**
-   - [ ] 可看到家庭总览指标
-   - [ ] 风险孩子列表能指出需要关注的对象
-   - [ ] 孩子对比图与列表数据一致
-
-3. **清理回归**
-   - [ ] 页面不再出现旧趋势图
-   - [ ] 分包不再加载 `echarts / ec-canvas`
-   - [ ] 真机与开发者工具中的 `wxcharts-min` 均可正常显示
-
-4. **状态体验**
-   - [ ] loading 状态下 summary、图表和日历骨架层级清楚
-   - [ ] 空态不出现误导性的 0 指标和空图
-   - [ ] fallback/错误态有明确提示和重试入口
-
-### 测试覆盖率目标
-
-- 最低要求：85%
-- 推荐目标：90%
+- [x] 当前月打开时今天列高亮正确
+- [x] 非当前月不显示今天列定位
+- [x] 同标题多段任务落在同一行
+- [x] 无任务日期保持空白
+- [x] 未来任务显示为未开始
+- [x] 已过期未完成任务显示为打叉
+- [x] 完成任务显示为打勾
+- [x] 横屏下整月日期一屏完整可见
+- [x] 任务较多时启用聚合后仍保持一屏可读
+- [x] 横屏灵动岛 / 刘海不遮挡月份切换与首列任务标题
+- [x] 左上角返回按钮清晰可见，且不会与月份切换混淆
+- [x] 返回按钮优先回上一页；无上一页时能回首页
+- [x] 未来纯空日期列保持可见但明显弱化
+- [x] 今日列除淡蓝底外还有细竖线提示，且竖线轻微超出表头并带 `今` 标签
+- [x] 焦点行高亮不抢眼但可帮助扫读
+- [x] 相近任务标题使用中间省略后仍能区分后缀差异
+- [x] 同时只允许一个焦点行处于高亮状态
+- [x] 再次点击当前焦点行后可取消高亮
+- [x] 点击页面空白区后焦点行高亮会被清除
 
 ---
 
 ## 风险评估
 
-### 技术风险
-
-| 风险项 | 影响 | 概率 | 应对措施 |
-|--------|------|------|---------|
-| 新 summary contract 改动面较大 | 中 | 高 | 第1步先冻结 contract，再集中改服务、页面和测试 |
-| 旧趋势链残留引用导致回归 | 中 | 中 | 第5步以 grep 和定向测试做清理闸门 |
-| `wxcharts-min` 真机表现不如预期 | 中 | 中 | 图表类型限定为简单柱状图，并做真机专项回归 |
-| 家长视角字段继续膨胀 | 中 | 中 | 固定 4 卡 + 3 洞察，不允许继续堆叠指标 |
-| 周指标和月日历窗口混淆 | 中 | 中 | contract 中显式拆分 `summary` 与 `month facts` 语义 |
-
-### 业务风险
-
-| 风险项 | 影响 | 概率 | 应对措施 |
-|--------|------|------|---------|
-| 指标仍与首页/奖池重复 | 中 | 中 | 设计中写死“分析页不重复已有事实”约束 |
-| 删除趋势图后部分用户不适应 | 低 | 中 | 用更清晰的指标卡和风险列表替代，不做文案迁就 |
-| 图表仍然价值不足 | 低 | 中 | 图表组件与 summary 解耦，可后续继续降级为纯文本版 |
-
-### 收益预估
-
-本期实施后的收益应诚实表述为：
-
-1. **前端包体减重明确**：删除约 502KB 的 `echarts.js` 和整套 `ec-canvas` 适配层。
-2. **表现层复杂度明显下降**：删除 `star-trend` 这一整块约 772 行的旧趋势组件，并去掉页面层 `trendDays` 交互状态。
-3. **职责边界更清晰**：分析页正式职责从“趋势预测展示”收口为“summary 洞察 + calendar 事实”；后端正式职责从“给前端喂趋势点”收口为“提供分析页所需 summary 读模型”。
-4. **前端真正变瘦**：不只是换库，而是删除一条完整旧链路。
+| 风险 | 等级 | 说明 | 应对 |
+|------|------|------|------|
+| 横屏能力在不同环境表现不一致 | 中 | 页面横屏能力可能依赖平台能力 | 设计中预留旋转提示和兜底布局 |
+| 同日同聚类多实例导致状态语义复杂 | 中 | 可能出现一日多个实例完成状态混杂 | 第一版按保守口径归并为 `missed` |
+| 31 天矩阵在小屏设备上仍偏紧凑 | 中 | 即使横屏，窄屏机型也可能略拥挤 | 优先通过聚类、标题截断与列宽压缩解决，不引入拖拽依赖 |
+| 家庭汇总矩阵语义混乱 | 低 | 多孩子同名任务混排容易误读 | 第一版不开放混合矩阵主路径 |
+| 查询误复用首页视角状态 | 中 | `focusUserId` 若被首页上下文污染，会导致分析页看错人 | 页面内单独维护 `focusUserId`，service 参数显式传入 |
+| 摘要指标过多导致页面报表化 | 中 | 摘要若过多会挤压矩阵并削弱“一眼读懂” | 首屏摘要冻结为 4 个指标，不增加二级统计 |
 
 ---
 
 ## 替代方案
 
-### 方案A：只把 `echarts` 替换成 `wxcharts-min`，其他不动
+### 方案A：继续做传统图表分析页
 
-**不选原因**：
+不采用。原因：
 
-1. 只能解决包体问题，不能解决页面价值问题。
-2. 旧趋势图语义仍然低价值，前端仍背着一整套老状态和老契约。
-3. 最终只会变成“换了库但页面没变好”。
+- 与用户真正关心的问题不一致
+- 解释成本高
+- 旧路线已经证明价值有限
 
-### 方案B：保留旧趋势图，同时新增 summary 区域
+### 方案B：竖屏矩阵 + 横向滚动
 
-**不选原因**：
+不作为主方案。原因：
 
-1. 页面会变得更重，信息重复更严重。
-2. 前端不会变瘦，只会继续叠加复杂度。
-3. 与用户“旧分析页要重做，旧的可以清理”的诉求相悖。
+- 阅读完整自然月不够舒展
+- 进入分析页的沉浸感不足
+- 不能形成明确“看板页”心智
 
-### 方案C：彻底删图表，只做 summary + calendar
+### 方案C：恢复重后端 analytics 聚合
 
-**本期暂不选原因**：
+本期不采用。原因：
 
-1. 孩子最近 7 天表现和家长孩子间对比，仍值得保留一个轻量图。
-2. 但本期会把图表缩到只有一个组件，且后续可继续降级，不影响主体信息架构。
+- 旧 analytics 链路刚刚下线
+- 当前核心问题是看板交互，不是复杂聚合计算
+- 本期 ROI 不高
 
-### 方案D：保留 `historyData / forecastData` 兼容返回，等下期再删
+### 方案D：第一版接入 `wxcharts-min` 做顶部环图
 
-**不选原因**：
+本期不采用。原因：
 
-1. 会把旧链路继续拖入下一里程碑，收益被摊薄。
-2. 当前调用链显示这套契约几乎只为 `star-trend` 服务，同期删除更划算。
-3. 不符合“前后端职责内聚、冗余彻底清理”的目标。
+- 主价值已由矩阵承担
+- 会增加一层额外依赖和适配成本
+- 对 MVP 收益有限
 
 ---
 
 ## 审核记录
 
-### 审核要点清单
+### 审核要点检查清单
 
-- [x] 已明确本期目标是重做分析页，而不是换库复刻旧趋势图
-- [x] 已明确家长/孩子两套核心指标和洞察
-- [x] 已明确分析页不重复首页/奖池页事实
-- [x] 已明确 `star-trend / echarts / ec-canvas` 进入删除范围
-- [x] 已明确 `trendDays / historyData / forecastData / calculateHistoricalBalance()` 进入正式产品删除范围
-- [x] 已明确 `wxcharts-min` 只承接单一简单比较图
-- [x] 已明确实施后需同步更新 REST/API 文档
-- [x] 已明确 loading/empty/fallback/error 状态表现规则
-- [x] 已明确导航标题与整体视觉语气约束
+- [x] 已明确新分析页的产品目标
+- [x] 已明确横屏为正式产品形态
+- [x] 已明确矩阵主导、图表辅助
+- [x] 已明确第一版不接入第三方图表库
+- [x] 已明确自然月动态列数
+- [x] 已明确今天列定位规则
+- [x] 已明确家长/孩子主路径
+- [x] 已明确顶部指标收口为 4 个核心数字
+- [x] 已明确 `focusUserId` 为分析页唯一查询主键
+- [x] 已明确前后端职责边界
+- [x] 已明确清理要求
+- [x] 已明确一屏完整展示、不依赖拖拽与展开
+- [x] 已明确视觉风格与现有项目保持一致
 
-### 本版修改记录
+### 本轮评审结论
 
-- 基于当前分析页真实实现补充了现状审计，避免设计脱离代码现状。
-- 将本期目标从“轻图表替换”收紧为“分析页产品重构 + 旧趋势链退役”。
-- 明确写死家长/孩子各 4 个核心指标和 3 个洞察，防止指标再次膨胀。
-- 将 `trendDays / historyData / forecastData / calculateHistoricalBalance()` 从“弱化”提升为“正式删除范围”。
-- 将前端收益改为诚实表述：不仅是包体减重，更是删除 `star-trend + ec-canvas + 旧趋势契约` 整条链路。
-- 补充了 `loading/empty/fallback/error` 四种页面状态表现规则，避免新页面在数据未就绪或失败时误导用户。
-- 将导航标题和整体视觉语气统一为“成长分析”，避免实现回到旧“星星日历”语义。
+- 设计已通过评审并完成实施
+- 文档、代码、测试与手工验收事实已同步收口
+
+### 修改记录
+
+- 2026-04-13：基于“旧分析页完全清理后重新规划”的新方向，整体改写 `M21G`，从“轻图表成长分析页”切换为“横屏月度任务履约看板”
+- 2026-04-13：补充顶部指标统计单位与 `focusUserId` 查询边界，并移除 `wxcharts-min` 第一版接入计划
+- 2026-04-14：进一步收口为“一屏完整展示”的极简月度看板，移除类型筛选、行展开、拖拽兜底与次级统计，补充聚类上限、视觉一致性和密度治理规则
+- 2026-04-14：补充横屏安全区避让、完整自然月日期轴保留但未来纯空列弱化、今日细竖线、任务按类型分组排序、行焦点轻高亮与状态符号冻结规则
+- 2026-04-14：统一顶部结构为“返回 + 月份切换 + 下方孩子辅助条”，并补齐行焦点交互与未来纯空列元数据的测试/验收口径
+- 2026-04-14：补充返回按钮独立可见、中间省略标题策略，以及“今日线越出表头 + 小号今标记”的最终视觉规则
+- 2026-04-14：实施完成后按真实落地收口文档，确认顶部只保留导航、摘要与图例并入矩阵上沿、空二级工具栏移除，并同步勾选实施/验收清单

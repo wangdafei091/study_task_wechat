@@ -868,6 +868,12 @@ Page({
       showFloatMenu: !this.data.showFloatMenu
     });
   },
+
+  navigateToAnalysisPage: function() {
+    wx.navigateTo({
+      url: '/packageChart/pages/analysis/analysis'
+    });
+  },
   
   onMenuItemTap: function(e) {
     const item = e.detail.item;
@@ -886,25 +892,7 @@ Page({
         url: `/pages/task-edit/task-edit?mode=create${targetParam}`
       });
     } else if (item && item.id === 'study') {
-      logger.debug('Index', '点击分析菜单项，跳转到分析页面');
-      wx.showLoading({
-        title: '加载中...',
-        mask: true
-      });
-      wx.navigateTo({
-        url: '/packageChart/pages/analysis/analysis',
-        success: () => {
-          setTimeout(() => wx.hideLoading(), 500);
-        },
-        fail: (err) => {
-          wx.hideLoading();
-          wx.showToast({
-            title: '加载失败，请重试',
-            icon: 'none'
-          });
-          logger.error('Index', '跳转到分析页面失败', err);
-        }
-      });
+      this.navigateToAnalysisPage();
     } else if (item && item.id === 'reward-manage') {
       logger.debug('Index', '点击奖励管理菜单项，跳转到奖励管理页面');
       wx.navigateTo({
@@ -919,16 +907,8 @@ Page({
   },
   
   // 触发进度圆环点击
-  // 分析页暂时对所有视角禁用（内部无 userId 过滤，M10 补齐后开放）
   onRingTap: function(e) {
-    // M07：分析页已支持按角色隔离，直接跳转，analysis.js 内部决定数据范围
-    wx.navigateTo({
-      url: '/packageChart/pages/analysis/analysis',
-      fail: (err) => {
-        logger.error('Index', '跳转到分析页面失败', err);
-        wx.showToast({ title: '加载失败，请重试', icon: 'none' });
-      }
-    });
+    this.navigateToAnalysisPage();
   },
   
   // 处理进度条完成事件

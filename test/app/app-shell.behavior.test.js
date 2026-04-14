@@ -33,7 +33,6 @@ describe('app.js shell behavior', () => {
     };
     serviceManagerMock = {
       getService: jest.fn(() => 'named-service'),
-      getAnalyticsService: jest.fn(() => 'analytics'),
       getTaskService: jest.fn(() => 'task-service'),
       getStarService: jest.fn(() => 'star-service'),
       getEventBus: jest.fn(() => 'event-bus'),
@@ -137,7 +136,6 @@ describe('app.js shell behavior', () => {
     appConfig.globalData.userService = 'user-service';
 
     expect(appConfig.getService('reward')).toBe('named-service');
-    expect(appConfig.getAnalyticsService()).toBe('analytics');
     expect(appConfig.getTaskService()).toBe('task-service');
     expect(appConfig.getStarService()).toBe('star-service');
     expect(appConfig.getUserService()).toBe('user-service');

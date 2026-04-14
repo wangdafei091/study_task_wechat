@@ -1,25 +1,127 @@
-<view class="container">
-  <!-- 主内容区 -->
-  <view class="content">
-    <!-- 星星日历卡片 -->
-      <card title="任务星星日历 - 记录你的小小成就" customClass="calendar-card">
-        <star-calendar
-          class="star-calendar"
-          analysisOptions="{{analysisOptions}}"
-          currentMonthKey="{{visibleMonthKey}}"
-          readModelVersion="{{readModelVersion}}"
-          bindmonthchange="onCalendarMonthChange"
-        ></star-calendar>
-      </card>
-      
-    <!-- 星星趋势图卡片 -->
-      <card title="可用星星趋势图 - 看看你的星星余额" customClass="trend-card">
-        <star-trend
-          days="{{trendDays}}"
-          analysisOptions="{{analysisOptions}}"
-          readModelVersion="{{readModelVersion}}"
-          bindrangechange="onTrendRangeChange"
-        ></star-trend>
-      </card>
+<view class="page-shell" bindtap="onShellTap">
+  <view class="top-strip" wx:if="{{pageState === 'ready'}}">
+    <view class="top-left-group">
+      <view class="back-button" catchtap="onBackTap">‹</view>
+      <view class="month-switcher">
+        <view class="month-action" catchtap="onPrevMonthTap">‹</view>
+        <view class="month-title">{{monthTitle}}</view>
+        <view class="month-action" catchtap="onNextMonthTap">›</view>
+      </view>
+    </view>
   </view>
-</view> 
+
+  <view class="toolbar toolbar-secondary" wx:if="{{pageState === 'ready' && showChildSwitcher}}">
+    <view class="child-switcher" wx:if="{{showChildSwitcher}}">
+      <block wx:for="{{childOptions}}" wx:key="id">
+        <view
+          class="child-pill {{item.id === focusUserId ? 'is-active' : ''}}"
+          data-user-id="{{item.id}}"
+          catchtap="onChildTap"
+        >
+          {{item.label}}
+        </view>
+      </block>
+    </view>
+  </view>
+
+  <view class="toolbar toolbar-loading" wx:if="{{pageState !== 'ready'}}">
+    <view class="top-left-group">
+      <view class="back-button" catchtap="onBackTap">‹</view>
+      <view class="month-switcher">
+        <view class="month-action" catchtap="onPrevMonthTap">‹</view>
+        <view class="month-title">{{monthTitle}}</view>
+        <view class="month-action" catchtap="onNextMonthTap">›</view>
+      </view>
+    </view>
+  </view>
+
+  <view class="board-card">
+    <block wx:if="{{pageState === 'ready'}}">
+      <view class="month-board">
+        <view class="board-meta">
+          <view class="summary-inline">
+            <block wx:for="{{summaryItems}}" wx:key="key">
+              <view class="summary-inline-item">
+                <text class="summary-inline-label">{{item.label}}</text>
+                <text class="summary-inline-value">{{item.value}}</text>
+              </view>
+            </block>
+          </view>
+
+          <view class="legend legend-inline">
+            <block wx:for="{{legendItems}}" wx:key="key">
+              <view class="legend-item">
+                <view class="legend-swatch {{item.swatchClass}}">
+                  <text class="legend-symbol">{{item.symbol}}</text>
+                </view>
+                <text class="legend-label">{{item.label}}</text>
+              </view>
+            </block>
+          </view>
+        </view>
+
+        <view class="board-header-shell">
+          <view class="board-header">
+            <view class="row-title-header">任务</view>
+            <view class="date-header-group">
+              <block wx:for="{{board.columns}}" wx:key="key">
+                <view class="date-header-cell {{item.isToday ? 'is-today' : ''}} {{item.isFutureEmpty ? 'is-future-empty' : ''}}">
+                  <view class="today-line" wx:if="{{item.isToday}}"></view>
+                  <text class="today-badge" wx:if="{{item.isToday}}">今</text>
+                  <text class="date-number">{{item.day}}</text>
+                  <text class="date-weekday {{item.isWeekend ? 'is-weekend' : ''}}">{{item.weekdayLabel}}</text>
+                </view>
+              </block>
+            </view>
+          </view>
+        </view>
+
+        <view class="board-body">
+          <block wx:for="{{board.rows}}" wx:key="rowKey">
+            <view
+              class="board-row {{selectedRowKey === item.rowKey ? 'is-selected' : ''}}"
+              data-row-key="{{item.rowKey}}"
+              catchtap="onRowTap"
+            >
+              <view class="row-title">
+                <view class="type-indicator type-{{item.type}}"></view>
+                <text class="row-title-text">{{item.displayTitle || item.title}}</text>
+              </view>
+
+              <view class="row-cells">
+                <block wx:for="{{item.cells}}" wx:key="date">
+                  <view class="board-cell {{item.cellClass}} {{item.isToday ? 'is-today' : ''}} {{item.isFutureEmpty ? 'is-future-empty' : ''}}">
+                    <view class="today-line" wx:if="{{item.isToday}}"></view>
+                    <text class="cell-symbol">{{item.symbol}}</text>
+                  </view>
+                </block>
+              </view>
+            </view>
+          </block>
+        </view>
+      </view>
+    </block>
+
+    <block wx:if="{{pageState === 'loading'}}">
+      <view class="state-panel">
+        <text class="state-title">正在生成本月看板</text>
+        <text class="state-desc">请稍候，马上就好。</text>
+      </view>
+    </block>
+
+    <block wx:if="{{pageState === 'empty'}}">
+      <view class="state-panel">
+        <text class="state-title">{{emptyTitle}}</text>
+        <text class="state-desc">{{emptyDescription}}</text>
+      </view>
+    </block>
+
+    <block wx:if="{{pageState === 'error'}}">
+      <view class="state-panel">
+        <text class="state-title">加载失败</text>
+        <text class="state-desc">{{errorMessage}}</text>
+        <view class="retry-button" catchtap="onRetryTap">重新加载</view>
+      </view>
+    </block>
+  </view>
+</view>

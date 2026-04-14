@@ -31,7 +31,6 @@ describe('app.js launch behavior', () => {
 
     jest.doMock('../../services/service-manager.js', () => ({
       getService: getServiceMock,
-      getAnalyticsService: jest.fn(() => 'analytics'),
       getTaskService: jest.fn(() => 'task-service'),
       getStarService: jest.fn(() => 'star-service'),
       getEventBus: jest.fn(() => 'event-bus')
@@ -109,7 +108,6 @@ describe('app.js launch behavior', () => {
     expect(appConfig.globalData.deviceInfo.windowWidth).toBe(375);
     expect(appConfig.globalData.rpxRatio).toBe(2);
     expect(updateHeightParamsMock).toHaveBeenCalledWith(appConfig, false);
-    expect(appConfig.getAnalyticsService()).toBe('analytics');
     expect(appConfig.getTaskService()).toBe('task-service');
     expect(appConfig.getStarService()).toBe('star-service');
     expect(appConfig.globalData.eventBus).toBe('event-bus');

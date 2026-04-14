@@ -4,6 +4,47 @@
 
 ---
 
+## [里程碑-21G] - 2026-04-14
+
+### ✅ 完成情况
+
+**分析页重规划为横屏月度任务履约看板**
+
+- **分析页产品形态已正式切换**：
+  - `packageChart/pages/analysis/analysis.*` 改为横屏专用月度任务履约看板，统一承载 `loading / ready / empty / error` 页面状态
+  - 页面主视觉改为“自然月日期列 + 任务聚类行”的矩阵看板，支持月份切换、家长多孩子切换、今日定位线与单行焦点高亮
+  - 顶部结构收口为“返回 + 月份切换”，摘要与图例并入矩阵上沿，避免旧分析页卡片化报表布局
+- **旧分析链路已正式退役并清理完成**：
+  - 删除 `services/analytics-service.js` 与 `packageChart/services/analytics-service.js`
+  - 删除 `backend/services/analyticsReadModelService.js`、`backend/services/analytics-read-model/*`、`backend/routes/analytics.js`、`backend/controllers/analyticsController.js`
+  - 删除 `packageChart/components/star-calendar/*`、`packageChart/components/star-trend/*`
+  - 删除 `packageChart/ec-canvas/*` 与 `echarts.js`
+- **新的轻量聚合链路已落地**：
+  - 新增 `services/analysis-board-service.js`，统一负责自然月列生成、任务聚类、状态归并、未来纯空列弱化元数据与摘要统计
+  - 分析页只复用既有 `taskService.getTasksByDateRange(...)` 拉取任务事实，不再恢复任何 analytics 专用前后端聚合接口
+  - “今天未完成不打叉、显示为未开始态”的月看板规则已固化为正式口径
+
+### 🧪 验证结果
+
+- 定向自动化回归通过：
+  - `test/services/analysis-board-service.test.js`
+  - `test/pages/analysis.page.test.js`
+  - `test/app/app-launch-behavior.test.js`
+  - `test/app/app-shell.behavior.test.js`
+  - `test/pages/index.page-shell.behavior.test.js`
+  - `test/services/service-manager.test.js`
+  - `test/models/user.test.js`
+- 手工验收通过：
+  - 横屏进入分析页后整月矩阵可一屏阅读
+  - 月份切换、孩子切换、返回、今日定位线、未来纯空列弱化、相近标题中间省略、单行焦点高亮均已逐项确认符合预期
+  - 灵动岛/刘海遮挡、底部图例留空、空二级工具栏、图例尺寸不一致等视觉问题均已收口
+
+### 📖 详细实施记录
+
+- [里程碑-21G：分析页重规划为横屏月度任务履约看板](../design/milestone-21g-analytics-dashboard-redesign.md)
+
+---
+
 ## [里程碑-21F3] - 2026-04-13
 
 ### ✅ 完成情况

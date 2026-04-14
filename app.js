@@ -281,14 +281,6 @@ App({
   },
   
   /**
-   * 获取分析服务（供分包使用）
-   * @returns {Object} 分析服务实例
-   */
-  getAnalyticsService: function() {
-    return serviceManager.getAnalyticsService();
-  },
-  
-  /**
    * 获取任务服务（供分包使用）
    * @returns {Object} 任务服务实例
    */
