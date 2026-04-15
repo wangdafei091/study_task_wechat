@@ -1,7 +1,7 @@
 # 项目路线图
 
 > 记录项目未来里程碑、阶段状态与简要目标
-> **最后更新**：2026-04-14（M21G 横屏月度任务履约看板已完成并从后续规划中移出）
+> **最后更新**：2026-04-15（完成死代码治理收口，并按最新 ROI 重排 M21C / M21D / M21E 优先级）
 
 ---
 
@@ -31,9 +31,9 @@
 | M21B4 | 任务表单共享内核重构 | 已完成 | 已统一 `task-edit` 与 `task-template-edit` 的共享任务表单草稿模型、校验与显示语义，并收口 `ValidationService / TaskTemplateService` 对共享规则的消费 |
 | M21F | 前端业务后移第一阶段 | 已完成 | 已完成模板推荐候选后移、analytics 云端 authoritative 读模型/统计查询后移，以及分析页 prepared-read-model 消费收口与 fallback 边界整理 |
 | M21G | 分析页重规划为横屏月度任务履约看板 | 已完成 | 已删除旧 analytics/趋势链路，重建横屏月度矩阵看板、月份切换、孩子切换、今日定位线与一屏阅读布局 |
-| M21C | 执行文档与治理口径同步 | 计划中 | 同步修正 `CLAUDE.md`、`architecture.md`、`test/README.md`、`GITHUB_WORKFLOW.md` 等高频入口文档，消除命令、测试口径与架构事实漂移 |
-| M21D | 服务层基础设施收口与去重 | 计划中 | 收口 `TaskService / RewardService` 共用的上下文、pendingSync、离线队列等基础设施代码，降低服务层重复与全局单例耦合 |
-| M21E | 热点大文件继续拆分 | 计划中 | 继续治理 `reward-service.js`、`star-service.js`、`task-edit.js`、`task-heatmap.js` 等新的复杂度热点，在不重开既有业务语义的前提下继续收敛体量 |
+| M21D | 服务层依赖边界收口 | 计划中 | 收口 service 对 `service-manager`、`wx storage` 与运行时索引的反向依赖，统一通过注入和 `ConfigService / StorageAdapter` 消费基础设施能力，先解决低风险高收益的边界问题 |
+| M21E | 星星域与奖励域前端服务内部模块化 | 计划中 | 参考既有 `task-service/` 与 `message-service/` 切片模式，拆分 `star-service.js`、`reward-service.js` 的内部实现，在不改变对外 API 的前提下降低单体复杂度 |
+| M21C | 执行文档与治理口径同步 | 计划中 | 在核心结构治理收口后，再统一修正高频入口文档与当前代码/测试事实的漂移，避免文档先于结构再次失真 |
 | M20A | 用户上下文与权限边界治理 | 已完成 | 已统一 loginUser / currentUser / actor / target / family / scope 语义，并收口首页权限入口与跨域上下文解析 |
 | M20B | 星星域边界与离线治理补齐 | 已完成 | 已完成星星域正式边界轻量收口，固化 authority sync、records refresh、family summary 与 pending-local 保护的正式语义 |
 | M20C | 前端复杂度治理 2.0 | 已完成 | 已完成首页/奖励页模块化、MessageService helper 切片与相关页面/服务测试补齐，热点文件体量回落到目标线内 |
@@ -73,15 +73,15 @@
 
 ## 计划中里程碑
 
+- `M21D`：服务层依赖边界收口
+  - 目标是移除 service 对 `service-manager` 的反向依赖、去掉 `wx.getStorageSync / setStorageSync` 直连，并统一走依赖注入与配置/存储服务
+  - 这是当前结构治理里 ROI 最高、功能风险最低的一步，应先于大文件拆分和文档同步
+- `M21E`：星星域与奖励域前端服务内部模块化
+  - 目标是基于 `task-service/`、`message-service/` 现有模式，继续拆分 `star-service.js` 与 `reward-service.js` 的内部实现
+  - 只做内部文件切片与私有实现迁移，不改变 service 对外公开 API
 - `M21C`：执行文档与治理口径同步
   - 目标是让高频入口文档与当前代码、测试和架构事实重新对齐
-  - 以修正错误事实和统一协作口径为主，不扩展为大规模文档重写
-- `M21D`：服务层基础设施收口与去重
-  - 目标是收口 `TaskService / RewardService` 之间重复的上下文、pendingSync 与离线队列基础设施代码
-  - 为后续服务层继续拆分提供统一地基
-- `M21E`：热点大文件继续拆分
-  - 目标是继续治理新的复杂度热点，但必须以前三步完成后的稳定边界为前提
-  - 不与 `M21A` 并行启动，避免边修边拆导致返工
+  - 该项重要但 ROI 低于 `M21D / M21E`，当前不再作为下一优先项
 
 说明：
 
@@ -102,7 +102,8 @@
 - “任务模板系统”当前以 `M21B1 / M21B1-UX / M21B2 / M21B3` 的顺序推进：先完成主链路，再收口体验，再补模板来源，最后继续优化模板页的视觉语义与信息理解。
 - 原 `M20D` 为 M19 阶段复盘后登记的候选方向；结合 M13 / M15B / M20A / M20C / M20E 已形成的测试与交付基础，当前暂不作为独立里程碑推进。
 - `M21G` 已于 2026-04-14 完成，详细事实以 `CHANGELOG.md` 和对应设计文档为准。
-- `M21B1 → M21B1-UX → M21B2 → M21B3 → M21B4`、`M21F` 与 `M21G` 已完成阶段收口；当前建议顺序为 `M21C → M21D → M21E`。
+- 2026-04-15 已完成一轮独立的死代码治理收口：删除 analytics 遗留入口、孤儿工具、无绑定方法和无消费状态，当前不再作为单独 roadmap 里程碑继续推进。
+- `M21B1 → M21B1-UX → M21B2 → M21B3 → M21B4`、`M21F` 与 `M21G` 已完成阶段收口；结合最新结构审计，当前建议顺序调整为 `M21D → M21E → M21C`。
 
 ---
 
