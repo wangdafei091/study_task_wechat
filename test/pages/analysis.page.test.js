@@ -10,7 +10,7 @@ jest.mock('../../services/service-manager.js', () => ({
   getService: jest.fn()
 }));
 
-jest.mock('../../services/analysis-board-service.js', () => ({
+jest.mock('../../packageChart/services/analysis-board-service.js', () => ({
   buildMonthlyBoard: jest.fn()
 }));
 
@@ -47,7 +47,7 @@ describe('packageChart/pages/analysis/analysis', () => {
     jest.clearAllMocks();
 
     serviceManager = require('../../services/service-manager.js');
-    analysisBoardService = require('../../services/analysis-board-service.js');
+    analysisBoardService = require('../../packageChart/services/analysis-board-service.js');
 
     appMock = {
       globalData: {

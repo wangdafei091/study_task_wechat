@@ -4,6 +4,119 @@ const logger = require('../../../utils/logger');
 const rewardStatus = require('../../../utils/reward-status');
 const rewardsUserContextModule = require('./rewards-user-context');
 
+function buildEmptyAvailableStarSnapshot(userId = null) {
+  return {
+    userId,
+    totalStars: 0,
+    buckets: [],
+    expiringInfo: {
+      points: 0,
+      expiryDateText: '',
+      expiryTimestamp: 0
+    }
+  };
+}
+
+function getBucketPoints(buckets, key) {
+  const bucket = (buckets || []).find((item) => item.key === key);
+  return bucket ? Number(bucket.points || 0) : 0;
+}
+
+function formatExpiryBoundary(bucketKey) {
+  if (bucketKey === 'week') {
+    return '本周结束前';
+  }
+
+  if (bucketKey === 'month') {
+    return '本月结束前';
+  }
+
+  if (bucketKey === 'quarter') {
+    return '本季度结束前';
+  }
+
+  return '更晚';
+}
+
+function buildSingleBucketSummary(totalStars, bucketKey) {
+  if (bucketKey === 'week') {
+    return `这${totalStars}颗都将在本周结束前失效`;
+  }
+
+  if (bucketKey === 'month') {
+    return `这${totalStars}颗都将在本月结束前失效`;
+  }
+
+  if (bucketKey === 'quarter') {
+    return `这${totalStars}颗都将在本季度结束前失效`;
+  }
+
+  return `这${totalStars}颗都是永久有效`;
+}
+
+function buildRemainingSummary(remainingPoints, remainingBuckets) {
+  if (remainingPoints <= 0) {
+    return '';
+  }
+
+  const hasPermanent = getBucketPoints(remainingBuckets, 'permanent') > 0;
+  const hasLaterExpiry = ['week', 'month', 'quarter'].some((key) => getBucketPoints(remainingBuckets, key) > 0);
+
+  if (hasLaterExpiry && hasPermanent) {
+    return `其余${remainingPoints}颗将在更晚失效或永久有效`;
+  }
+
+  if (hasLaterExpiry) {
+    return `其余${remainingPoints}颗将在更晚失效`;
+  }
+
+  if (hasPermanent) {
+    return `其余${remainingPoints}颗为永久有效`;
+  }
+
+  return '';
+}
+
+function buildBalanceSummary(snapshot) {
+  const totalStars = Number(snapshot?.totalStars || 0);
+  const buckets = Array.isArray(snapshot?.buckets) ? snapshot.buckets : [];
+  const expiringInfo = snapshot?.expiringInfo || {};
+
+  if (totalStars <= 0 || buckets.length === 0) {
+    return {
+      primaryText: '',
+      secondaryText: ''
+    };
+  }
+
+  if (expiringInfo.points > 0 && expiringInfo.expiryDateText) {
+    const remainingPoints = Math.max(0, totalStars - expiringInfo.points);
+    const remainingBuckets = buckets.filter((bucket) => !bucket.emphasized);
+    return {
+      primaryText: `${expiringInfo.points}颗星星将在${expiringInfo.expiryDateText}失效`,
+      secondaryText: buildRemainingSummary(remainingPoints, remainingBuckets)
+        || '兑换时会先使用快到期的星星'
+    };
+  }
+
+  if (buckets.length === 1) {
+    return {
+      primaryText: buildSingleBucketSummary(totalStars, buckets[0].key),
+      secondaryText: ''
+    };
+  }
+
+  const primaryBucket = buckets[0];
+  const primaryPoints = Number(primaryBucket.points || 0);
+  const remainingPoints = Math.max(0, totalStars - primaryPoints);
+  const remainingBuckets = buckets.slice(1);
+
+  return {
+    primaryText: `${totalStars}颗里，有${primaryPoints}颗会在${formatExpiryBoundary(primaryBucket.key)}失效，建议优先使用`,
+    secondaryText: buildRemainingSummary(remainingPoints, remainingBuckets)
+  };
+}
+
 function buildRewardPageState({ rewards, hasRewardHistoryHint, viewMode }) {
   if (Array.isArray(rewards) && rewards.length > 0) {
     return {
@@ -171,13 +284,16 @@ async function loadRewardsData(page, forceRefresh = false) {
     const rewardOwnerId = page._getRewardOwnerUserId();
     logger.info('rewards', `有效孩子ID: ${effectiveChildId}, 奖励归属ID: ${rewardOwnerId}`);
 
-    const totalPoints = effectiveChildId
-      ? await starService.getTotalStars(effectiveChildId)
-      : 0;
+    const availableStarSnapshot = await getAvailableStarSnapshot(page);
+    const totalPoints = availableStarSnapshot.totalStars;
     logger.info('rewards', `获取到用户星星: ${totalPoints}`);
 
     const formattedPoints = formatUtils.formatPoints(totalPoints, true);
-    const expiringPointsInfo = await page.getExpiringPoints();
+    const expiringPointsInfo = {
+      points: availableStarSnapshot.expiringInfo.points,
+      date: availableStarSnapshot.expiringInfo.expiryDateText
+    };
+    const balanceSummary = buildBalanceSummary(availableStarSnapshot);
 
     const userService = serviceManager.getUserService();
     const { viewMode } = rewardsUserContextModule.resolveRewardPageViewMode(userService);
@@ -228,6 +344,8 @@ async function loadRewardsData(page, forceRefresh = false) {
         formattedPoints,
         expiringPoints: expiringPointsInfo.points,
         expiryDate: expiringPointsInfo.date,
+        balanceSummaryPrimaryText: balanceSummary.primaryText,
+        balanceSummarySecondaryText: balanceSummary.secondaryText,
         rewardsEarned: 0,
         currentLevel: Math.floor(totalPoints / 20) + 1,
         nextReward: null,
@@ -285,6 +403,8 @@ async function loadRewardsData(page, forceRefresh = false) {
       formattedPoints,
       expiringPoints: expiringPointsInfo.points,
       expiryDate: expiringPointsInfo.date,
+      balanceSummaryPrimaryText: balanceSummary.primaryText,
+      balanceSummarySecondaryText: balanceSummary.secondaryText,
       rewardsEarned: unlockedRewards,
       currentLevel: Math.floor(totalPoints / 20) + 1,
       nextReward: normalizedNextReward,
@@ -309,21 +429,29 @@ async function loadRewardsData(page, forceRefresh = false) {
 }
 
 async function getExpiringPoints(page) {
-  logger.info('rewards', '获取即将过期的星星信息');
+  const availableStarSnapshot = await getAvailableStarSnapshot(page);
+  return {
+    points: availableStarSnapshot.expiringInfo.points,
+    date: availableStarSnapshot.expiringInfo.expiryDateText
+  };
+}
+
+async function getAvailableStarSnapshot(page) {
+  logger.info('rewards', '获取当前可用星星快照');
 
   try {
     const starService = serviceManager.getService('starService');
 
     if (!starService) {
       logger.error('rewards', '无法获取星星服务实例');
-      return { points: 0, date: '' };
+      return buildEmptyAvailableStarSnapshot();
     }
 
-    logger.info('rewards', '星星服务实例获取成功，开始调用getExpiringStarsInfo');
+    logger.info('rewards', '星星服务实例获取成功，开始调用当前可用星星快照');
     const effectiveChildId = page._getEffectiveChildUserId();
     if (!effectiveChildId) {
       logger.info('rewards', '没有有效孩子视角，跳过即将过期星星提示');
-      return { points: 0, date: '' };
+      return buildEmptyAvailableStarSnapshot();
     }
 
     const messageService = serviceManager.getService('messageService');
@@ -334,27 +462,41 @@ async function getExpiringPoints(page) {
       });
     }
 
-    const expiringInfo = await starService.getExpiringStarsInfo(effectiveChildId);
+    if (typeof starService.getAvailableStarSnapshot !== 'function') {
+      const totalStars = typeof starService.getTotalStars === 'function'
+        ? await starService.getTotalStars(effectiveChildId)
+        : 0;
+      const expiringInfo = typeof starService.getExpiringStarsInfo === 'function'
+        ? await starService.getExpiringStarsInfo(effectiveChildId)
+        : { points: 0, expiryDateText: '', expiryTimestamp: 0 };
 
-    logger.info('rewards', '星星服务返回的原始数据:', expiringInfo);
-    logger.info('rewards', `即将过期星星: ${expiringInfo.points}颗, 最早到期日期: ${expiringInfo.expiryDateText}, 过期时间戳: ${expiringInfo.expiryTimestamp}`);
+      return {
+        userId: effectiveChildId,
+        totalStars,
+        buckets: [],
+        expiringInfo: {
+          points: expiringInfo.points || 0,
+          expiryDateText: expiringInfo.expiryDateText || '',
+          expiryTimestamp: expiringInfo.expiryTimestamp || 0
+        }
+      };
+    }
 
-    const result = {
-      points: expiringInfo.points,
-      date: expiringInfo.expiryDateText
-    };
+    const snapshot = await starService.getAvailableStarSnapshot(effectiveChildId);
 
-    logger.info('rewards', '奖池页面返回的过期信息:', result);
-    return result;
+    logger.info('rewards', '奖池页面返回的当前可用星星快照:', snapshot);
+    return snapshot;
   } catch (error) {
-    logger.error('rewards', '获取即将过期的星星信息失败', error);
-    return { points: 0, date: '' };
+    logger.error('rewards', '获取当前可用星星快照失败', error);
+    return buildEmptyAvailableStarSnapshot();
   }
 }
 
 module.exports = {
   onShow,
   onPullDownRefresh,
+  buildBalanceSummary,
   loadRewardsData,
-  getExpiringPoints
+  getExpiringPoints,
+  getAvailableStarSnapshot
 };

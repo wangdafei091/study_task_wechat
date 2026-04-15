@@ -7,9 +7,13 @@
       <view class="points-value-large">{{formattedPoints}}</view>
     </view>
     
-    <!-- 即将到期积分提示 -->
-    <view class="expiring-points-container" wx:if="{{expiringPoints > 0}}">
-      <text>{{expiringPoints}} 颗星星将在 {{expiryDate}}</text>
+    <view class="balance-summary" wx:if="{{balanceSummaryPrimaryText}}">
+      <view class="balance-summary-primary {{expiringPoints > 0 ? 'warning' : ''}}">
+        {{balanceSummaryPrimaryText}}
+      </view>
+      <view class="balance-summary-secondary" wx:if="{{balanceSummarySecondaryText}}">
+        {{balanceSummarySecondaryText}}
+      </view>
     </view>
     
     <!-- 底部按钮 - 改为横向布局 -->

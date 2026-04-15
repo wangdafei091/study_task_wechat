@@ -13,7 +13,7 @@ jest.mock('../../utils/dateUtils', () => {
   };
 });
 
-const { buildMonthlyBoard, __testables } = require('../../services/analysis-board-service.js');
+const { buildMonthlyBoard, __testables } = require('../../packageChart/services/analysis-board-service.js');
 
 describe('packageChart/services/analysis-board-service', () => {
   it('应按同标题同类型聚类并生成单元格状态', async () => {

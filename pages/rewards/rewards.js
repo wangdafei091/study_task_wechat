@@ -24,6 +24,8 @@ Page({
     formattedPoints: '0',      // 格式化后的总积分
     expiringPoints: 0,         // 即将到期积分
     expiryDate: '',            // 到期日期
+    balanceSummaryPrimaryText: '',
+    balanceSummarySecondaryText: '',
     rewards: [], // 改为空数组，后续从存储加载真实奖励数据
     showModal: false,
     selectedReward: null,
@@ -176,6 +178,10 @@ Page({
    */
   getExpiringPoints: async function() {
     return rewardsSyncModule.getExpiringPoints(this);
+  },
+
+  getAvailableStarSnapshot: async function() {
+    return rewardsSyncModule.getAvailableStarSnapshot(this);
   },
 
   /**

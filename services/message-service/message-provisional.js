@@ -6,10 +6,34 @@ const {
   MessageVisibilityScope
 } = require('../../models/message');
 
+const SHANGHAI_OFFSET_MS = 8 * 60 * 60 * 1000;
+
+function formatShanghaiDateFromTimestamp(timestamp) {
+  if (!Number.isFinite(timestamp)) {
+    return '';
+  }
+
+  const date = new Date(timestamp + SHANGHAI_OFFSET_MS);
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function isHistoricalTaskOccurrence(taskDate, operationTime) {
+  if (typeof taskDate !== 'string' || !taskDate) {
+    return false;
+  }
+
+  const operationDate = formatShanghaiDateFromTimestamp(Number(operationTime || 0));
+  return Boolean(operationDate && taskDate < operationDate);
+}
+
 function buildTaskMessageCopy(service, {
   action,
   taskTitle,
   taskDate = null,
+  operationTime = null,
   actorUserId = null,
   actorRole = null,
   subjectUserId = null,
@@ -95,18 +119,32 @@ function buildTaskMessageCopy(service, {
           : `${safeActorName}代${safeSubjectName}逾期后补做了任务“${taskTitle}”${suffix}`,
         icon: '♻️'
       };
-    case 'reset':
+    case 'reset': {
+      const isHistoricalReset = isHistoricalTaskOccurrence(taskDate, operationTime);
       return {
-        userTitle: pending ? '任务重置待同步' : '任务已重置',
+        userTitle: pending
+          ? (isHistoricalReset ? '历史任务重置待同步' : '任务重置待同步')
+          : (isHistoricalReset ? '历史任务已重置' : '任务已重置'),
         userSummary: isSelfAction
-          ? `你的任务“${taskTitle}”已重置为未完成${suffix}`
-          : `${safeActorName}将你的任务“${taskTitle}”重置为未完成${suffix}`,
-        familyTitle: pending ? '任务重置待同步' : '任务已重置',
+          ? (isHistoricalReset
+            ? `你将${taskDate || '历史日期'}的任务“${taskTitle}”重置为未完成${suffix}`
+            : `你的任务“${taskTitle}”已重置为未完成${suffix}`)
+          : (isHistoricalReset
+            ? `${safeActorName}将你${taskDate || '历史日期'}的任务“${taskTitle}”重置为未完成${suffix}`
+            : `${safeActorName}将你的任务“${taskTitle}”重置为未完成${suffix}`),
+        familyTitle: pending
+          ? (isHistoricalReset ? '历史任务重置待同步' : '任务重置待同步')
+          : (isHistoricalReset ? '历史任务已重置' : '任务已重置'),
         familySummary: isSelfAction
-          ? `${safeSubjectName}将任务“${taskTitle}”重置为未完成${suffix}`
-          : `${safeActorName}将${safeSubjectName}的任务“${taskTitle}”重置为未完成${suffix}`,
+          ? (isHistoricalReset
+            ? `${safeSubjectName}将${taskDate || '历史日期'}的任务“${taskTitle}”重置为未完成${suffix}`
+            : `${safeSubjectName}将任务“${taskTitle}”重置为未完成${suffix}`)
+          : (isHistoricalReset
+            ? `${safeActorName}将${safeSubjectName}${taskDate || '历史日期'}的任务“${taskTitle}”重置为未完成${suffix}`
+            : `${safeActorName}将${safeSubjectName}的任务“${taskTitle}”重置为未完成${suffix}`),
         icon: '↩️'
       };
+    }
     default:
       return {
         userTitle: pending ? '任务待同步' : '任务通知',
@@ -143,6 +181,7 @@ async function createTaskProvisionalMessages(service, task, pendingSyncMeta) {
     action: semanticAction,
     taskTitle: task.title,
     taskDate: task.date || null,
+    operationTime: createTime,
     actorUserId,
     actorRole,
     subjectUserId,

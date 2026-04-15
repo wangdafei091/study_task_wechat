@@ -1694,6 +1694,59 @@ describe('StarService', () => {
     });
   });
 
+  describe('getAvailableStarSnapshot - 当前可用星星快照', () => {
+    it('应基于同一批未过期分组同时产出总数、桶分布和即将过期信息', async () => {
+      jest.useFakeTimers();
+      try {
+        jest.setSystemTime(new Date('2026-04-15T10:00:00+08:00'));
+        mockStarGroupRepository.getAll = jest.fn().mockResolvedValue([
+          {
+            id: 'week_group',
+            userId: 'child_1',
+            stars: 3,
+            expiryType: 'week',
+            type: 'week',
+            expiryDate: new Date('2026-04-17T23:59:59+08:00').getTime(),
+            expiryDateStr: '2026-04-17'
+          },
+          {
+            id: 'permanent_group',
+            userId: 'child_1',
+            stars: 5,
+            expiryType: 'permanent',
+            type: 'permanent',
+            expiryDate: '',
+            expiryDateStr: ''
+          },
+          {
+            id: 'expired_group',
+            userId: 'child_1',
+            stars: 7,
+            expiryType: 'month',
+            type: 'month',
+            expiryDate: new Date('2026-04-01T23:59:59+08:00').getTime(),
+            expiryDateStr: '2026-04-01'
+          }
+        ]);
+
+        const snapshot = await starService.getAvailableStarSnapshot('child_1');
+
+        expect(snapshot.totalStars).toBe(8);
+        expect(snapshot.buckets).toEqual([
+          { key: 'week', label: '本周到期', points: 3, emphasized: true },
+          { key: 'permanent', label: '永久有效', points: 5, emphasized: false }
+        ]);
+        expect(snapshot.expiringInfo.points).toBe(3);
+        expect(snapshot.expiringInfo.expiryDateText).toBe('2026-04-17 到期');
+        expect(snapshot.totalStars).toBe(
+          snapshot.buckets.reduce((sum, bucket) => sum + bucket.points, 0)
+        );
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+  });
+
   describe('checkAndRepairDataConsistency - 数据修复', () => {
     it('云端模式下应跳过本地一致性检查和修复', async () => {
       starService.enableCloudStorage = true;

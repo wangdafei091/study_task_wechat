@@ -3,6 +3,39 @@ const Message = require('../models/Message');
 const { createLogger } = require('../utils/logger');
 
 const logger = createLogger('MessageService');
+const SHANGHAI_OFFSET_MS = 8 * 60 * 60 * 1000;
+
+function formatShanghaiDateFromTimestamp(timestamp) {
+  if (!Number.isFinite(timestamp)) {
+    return '';
+  }
+
+  const date = new Date(timestamp + SHANGHAI_OFFSET_MS);
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function resolveTaskOperationDate(task) {
+  if (!task) {
+    return '';
+  }
+
+  const timestamp = Number(task.modifyTime || task.completionTime || 0);
+  if (timestamp <= 0) {
+    return '';
+  }
+
+  return formatShanghaiDateFromTimestamp(timestamp);
+}
+
+function isHistoricalTaskOccurrence(task) {
+  const taskDate = task && typeof task.date === 'string' ? task.date : '';
+  const operationDate = resolveTaskOperationDate(task);
+
+  return Boolean(taskDate && operationDate && taskDate < operationDate);
+}
 
 class MessageService {
   _isRepeatPlanTask(task) {
@@ -654,23 +687,34 @@ class MessageService {
               : `${safeActorName}代${safeSubjectName}逾期后补做了任务“${taskTitle}”，已退回${resolvedRefundPoints}颗星星`,
           },
         };
-      case 'reset':
+      case 'reset': {
+        const taskDateText = task?.date || '历史日期';
+        const isHistoricalReset = isHistoricalTaskOccurrence(task);
         return {
           icon: '↩️',
           priority: 1,
           user: {
-            title: `任务已重置：${taskTitle}`,
+            title: `${isHistoricalReset ? '历史任务已重置' : '任务已重置'}：${taskTitle}`,
             summary: isSelfAction
-              ? `你的任务“${taskTitle}”已重置为未完成`
-              : `${safeActorName}将你的任务“${taskTitle}”重置为未完成`,
+              ? (isHistoricalReset
+                ? `你将${taskDateText}的任务“${taskTitle}”重置为未完成`
+                : `你的任务“${taskTitle}”已重置为未完成`)
+              : (isHistoricalReset
+                ? `${safeActorName}将你${taskDateText}的任务“${taskTitle}”重置为未完成`
+                : `${safeActorName}将你的任务“${taskTitle}”重置为未完成`),
           },
           family: {
-            title: `任务已重置：${taskTitle}`,
+            title: `${isHistoricalReset ? '历史任务已重置' : '任务已重置'}：${taskTitle}`,
             summary: isSelfAction
-              ? `${safeSubjectName}将任务“${taskTitle}”重置为未完成`
-              : `${safeActorName}将${safeSubjectName}的任务“${taskTitle}”重置为未完成`,
+              ? (isHistoricalReset
+                ? `${safeSubjectName}将${taskDateText}的任务“${taskTitle}”重置为未完成`
+                : `${safeSubjectName}将任务“${taskTitle}”重置为未完成`)
+              : (isHistoricalReset
+                ? `${safeActorName}将${safeSubjectName}${taskDateText}的任务“${taskTitle}”重置为未完成`
+                : `${safeActorName}将${safeSubjectName}的任务“${taskTitle}”重置为未完成`),
           },
         };
+      }
       case 'required':
         return {
           icon: '📌',
