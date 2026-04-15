@@ -129,8 +129,11 @@
   - 处理应用配置、用户偏好、系统标记
 - **AnalyticsService**：数据分析服务
   - 提供任务统计和趋势分析（位于packageChart）
+- **AnalysisBoardService**：分析页月度看板聚合模块
+  - 负责自然月日期列生成、任务聚类、单元格状态归并与摘要统计
+  - 由分析页按需调用，不通过 `ServiceManager` 注册实例
 
-通过ServiceManager统一管理和依赖注入。服务间通过EventBus进行事件通信。
+核心业务服务通过ServiceManager统一管理和依赖注入；分析页专用聚合模块按页面需要直接调用。服务间通过EventBus进行事件通信。
 
 #### 3. 基础设施层 (repositories/ & adapters/)
 

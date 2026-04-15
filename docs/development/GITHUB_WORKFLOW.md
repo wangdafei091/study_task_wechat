@@ -113,7 +113,7 @@ fix(star): 修复星星积分延迟问题
 
 问题：任务完成后星星没有立即显示
 原因：setData调用时机错误
-修复：合并setData调用
+修复：收口同一热路径中的重复setData更新
 
 Fixes #456
 ```
@@ -206,12 +206,12 @@ I fixed the bug where the stars weren't showing up correctly when the user compl
 - [ ] UI符合规范（颜色、间距、圆角等）
   - [ ] 卡片内边距：30rpx，圆角：16rpx
   - [ ] 按钮高度：90rpx，圆角：8rpx
-  - [ ] 任务类型颜色正确（学习#4285F4、习惯#4CAF50、兴趣#FF9800）
+  - [ ] 任务类型颜色与当前正式主题 token 和所在页面既有视觉语义一致，不以固定 hex 作为全局唯一规则
   - [ ] 字体大小符合规范（标题32rpx/500-600、正文28rpx/400、辅助24rpx/400）
-  - [ ] 间距符合规范（12rpx小间距、24rpx标准间距）
+  - [ ] 间距优先复用全局 spacing token 与页面既有节奏，不对所有页面强行套用单一固定数值
 
 ## 性能检查
-- [ ] 无性能问题（合并setData、避免频繁调用）
+- [ ] 无性能问题（避免同一热路径中对同一数据域进行可合并却未合并的频繁 `setData` 更新）
 - [ ] 大量数据使用batchUtils批量处理
 
 ## 文档更新
@@ -392,7 +392,7 @@ I fixed the bug where the stars weren't showing up correctly when the user compl
 #### 性能
 - [ ] 是否有性能问题？
 - [ ] 是否使用了batchUtils处理大量数据？
-- [ ] setData调用是否合并？
+- [ ] 是否避免了同一热路径中对同一数据域的无意义频繁 `setData` 更新？
 
 #### UI/UX（如涉及）
 - [ ] UI是否符合规范？
