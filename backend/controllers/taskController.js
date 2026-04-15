@@ -586,6 +586,9 @@ class TaskController {
         '状态更新成功'
       ));
     } catch (err) {
+      if (err.code === 'TASK_BACKFILL_WINDOW_EXPIRED') {
+        return res.status(409).json(error(err.message, 'TASK_BACKFILL_WINDOW_EXPIRED'));
+      }
       if (err.code === 'INSUFFICIENT_STARS') {
         return res.status(409).json(error('撤销逾期补做失败：当前永久星星不足，无法回滚退星', 'INSUFFICIENT_STARS'));
       }

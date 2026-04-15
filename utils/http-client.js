@@ -7,6 +7,31 @@ const API_CONFIG = require('./api-config');
 const logger = require('./logger');
 const TokenManager = require('./token-manager');
 
+function buildHttpError(message, options = {}) {
+  const error = new Error(message || '请求失败');
+  if (options.code) {
+    error.code = options.code;
+  }
+  if (options.statusCode) {
+    error.statusCode = options.statusCode;
+  }
+  if (options.responseData) {
+    error.responseData = options.responseData;
+  }
+  return error;
+}
+
+function rejectWithResponseError(reject, res, fallbackMessage) {
+  const responseData = res?.data || {};
+  const message = responseData.message || fallbackMessage || '请求失败';
+  const code = responseData.error_code || responseData.errorCode || null;
+  reject(buildHttpError(message, {
+    code,
+    statusCode: res?.statusCode || null,
+    responseData
+  }));
+}
+
 class HttpClient {
   
   /**
@@ -94,23 +119,22 @@ class HttpClient {
                     if (res.statusCode === 200 && res.data && res.data.success) {
                       resolve(res.data.data);
                     } else {
-                      const errorMsg = res.data?.message || '重新请求失败';
-                      logger.error('HttpClient', '重新请求失败', errorMsg);
-                      reject(new Error(errorMsg));
+                      logger.error('HttpClient', '重新请求失败', res.data?.message || '重新请求失败');
+                      rejectWithResponseError(reject, res, '重新请求失败');
                     }
                   },
                   fail: (err) => {
                     logger.error('HttpClient', '重新请求失败', err);
-                    reject(new Error(`网络请求失败: ${err.errMsg || '未知错误'}`));
+                    reject(buildHttpError(`网络请求失败: ${err.errMsg || '未知错误'}`));
                   }
                 });
               } else {
                 logger.error('HttpClient', '自动重新登录失败');
-                reject(new Error('认证失败，请重新登录'));
+                reject(buildHttpError('认证失败，请重新登录', { statusCode: 401 }));
               }
             } catch (error) {
               logger.error('HttpClient', '自动重新登录异常', error);
-              reject(new Error('认证异常，请重新登录'));
+              reject(buildHttpError('认证异常，请重新登录', { statusCode: 401 }));
             }
             return;
           }
@@ -120,19 +144,18 @@ class HttpClient {
             if (res.data && res.data.success) {
               resolve(res.data.data);
             } else {
-              const errorMsg = res.data?.message || '请求失败';
-              logger.error('HttpClient', '业务错误', errorMsg);
-              reject(new Error(errorMsg));
+              logger.error('HttpClient', '业务错误', res.data?.message || '请求失败');
+              rejectWithResponseError(reject, res, '请求失败');
             }
           } else {
             const errorMsg = `HTTP错误: ${res.statusCode}`;
             logger.error('HttpClient', errorMsg, res);
-            reject(new Error(errorMsg));
+            rejectWithResponseError(reject, res, errorMsg);
           }
         },
         fail: (err) => {
           logger.error('HttpClient', '网络请求失败', err);
-          reject(new Error(`网络请求失败: ${err.errMsg || '未知错误'}`));
+          reject(buildHttpError(`网络请求失败: ${err.errMsg || '未知错误'}`));
         }
       });
     });

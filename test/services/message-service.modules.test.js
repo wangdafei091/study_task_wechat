@@ -75,6 +75,29 @@ describe('message-service helper modules', () => {
     }, NotificationType.COMPLETED)).toBeNull();
   });
 
+  it('message-domain buildTaskLocalMessageMeta 应生成历史补打卡文案', () => {
+    const service = {
+      _resolveOperatorIdentity: jest.fn(() => ({ userId: 'child-1', role: 'child' })),
+      _getUserIdByRole: jest.fn(() => 'parent-1'),
+      userService: {
+        getCurrentUserId: jest.fn(() => 'child-1')
+      }
+    };
+
+    const result = messageDomain.buildTaskLocalMessageMeta(service, {
+      id: 'task-1',
+      title: '刷牙',
+      date: '2026-04-07',
+      userId: 'child-1'
+    }, NotificationType.HISTORY_COMPLETED);
+
+    expect(result).toEqual(expect.objectContaining({
+      userId: 'parent-1',
+      title: '历史任务已补打卡'
+    }));
+    expect(result.summary).toContain('2026-04-07');
+  });
+
   it('message-provisional createTaskProvisionalMessages 应创建 user 和 family 两条待同步消息', async () => {
     const service = {
       messageRepository: {

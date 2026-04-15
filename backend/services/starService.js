@@ -91,6 +91,7 @@ class StarService {
     let settledGroups = 0;
     let settledPoints = 0;
     let createdRecords = 0;
+    const settledDetails = [];
 
     for (const row of expiredRows) {
       const groupPoints = Number(row.stars || 0);
@@ -134,6 +135,14 @@ class StarService {
       settledGroups += 1;
       settledPoints += groupPoints;
       createdRecords += 1;
+      settledDetails.push({
+        groupId: row.group_id,
+        userId,
+        points: groupPoints,
+        expiryType: row.type || null,
+        expiryDate: row.expiry_date || null,
+        normalizedExpiryDate: row.normalizedExpiryDate,
+      });
     }
 
     return {
@@ -141,6 +150,7 @@ class StarService {
       settledPoints,
       createdRecords,
       invalidGroups,
+      settledDetails,
     };
   }
 

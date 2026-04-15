@@ -3,7 +3,7 @@
  */
 
 const loadServiceManager = (options = {}) => {
-  const { throwTaskCtor = false, throwAnalyticsRequire = false } = options;
+  const { throwTaskCtor = false } = options;
 
   jest.resetModules();
 
@@ -41,7 +41,6 @@ const loadServiceManager = (options = {}) => {
   rewardServiceInstance.updateStarService = jest.fn();
   const validationServiceInstance = { name: 'validationService' };
   const configServiceInstance = { name: 'configService' };
-  const analyticsServiceInstance = { name: 'analyticsService' };
   const offlineQueueServiceInstance = { name: 'offlineQueueService' };
   const taskTemplateServiceInstance = {
     name: 'taskTemplateService',
@@ -62,8 +61,6 @@ const loadServiceManager = (options = {}) => {
   const ValidationService = jest.fn(() => validationServiceInstance);
   const ConfigService = jest.fn(() => configServiceInstance);
   const OfflineQueueService = jest.fn(() => offlineQueueServiceInstance);
-  const AnalyticsService = jest.fn(() => analyticsServiceInstance);
-
   jest.doMock('../../services/index', () => ({
     TaskService,
     RewardService,
@@ -74,14 +71,6 @@ const loadServiceManager = (options = {}) => {
   }));
   jest.doMock('../../services/validation-service', () => ValidationService);
   jest.doMock('../../services/config-service', () => ConfigService);
-
-  if (throwAnalyticsRequire) {
-    jest.doMock('../../services/analytics-service', () => {
-      throw new Error('analytics require failed');
-    });
-  } else {
-    jest.doMock('../../services/analytics-service', () => AnalyticsService);
-  }
 
   const serviceManager = require('../../services/service-manager');
 
@@ -99,7 +88,6 @@ const loadServiceManager = (options = {}) => {
       ConfigService,
       OfflineQueueService,
       TaskTemplateService,
-      AnalyticsService,
       instances: {
         starServiceInstance,
         messageServiceInstance,
@@ -108,7 +96,6 @@ const loadServiceManager = (options = {}) => {
         taskTemplateServiceInstance,
         validationServiceInstance,
         configServiceInstance,
-        analyticsServiceInstance,
         offlineQueueServiceInstance
       }
     }
@@ -255,28 +242,5 @@ describe('ServiceManager', () => {
   it('waitForInitialization 超时应返回 false', async () => {
     const { serviceManager } = loadServiceManager();
     await expect(serviceManager.waitForInitialization(20)).resolves.toBe(false);
-  });
-
-  it('getAnalyticsService 应支持延迟加载和缓存复用', async () => {
-    const { serviceManager, mocks } = loadServiceManager();
-    await serviceManager.initialize();
-
-    const first = serviceManager.getAnalyticsService();
-    const second = serviceManager.getAnalyticsService();
-
-    expect(first).toBe(mocks.instances.analyticsServiceInstance);
-    expect(second).toBe(first);
-    expect(mocks.AnalyticsService).toHaveBeenCalledTimes(1);
-    expect(mocks.AnalyticsService).toHaveBeenCalledWith({
-      eventBus: mocks.eventBusInstance,
-      starService: mocks.instances.starServiceInstance,
-      taskService: mocks.instances.taskServiceInstance
-    });
-  });
-
-  it('getAnalyticsService 加载失败时应返回 null', async () => {
-    const { serviceManager } = loadServiceManager({ throwAnalyticsRequire: true });
-    await serviceManager.initialize();
-    expect(serviceManager.getAnalyticsService()).toBeNull();
   });
 });

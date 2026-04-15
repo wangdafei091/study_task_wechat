@@ -219,6 +219,27 @@ describe('backend MessageService task required copy', () => {
     expect(completeContent.user.summary).toBe('你完成了任务“数学作业”');
   });
 
+  it('task history_complete 应明确是历史补打卡并带任务日期', async () => {
+    const service = require('../../services/messageService');
+    const historyContent = service._buildTaskContent({
+      action: 'history_complete',
+      taskTitle: '数学作业',
+      actorRole: 'child',
+      actorUserId: 'child_1',
+      actorName: '小明',
+      subjectName: '小明',
+      subjectUserId: 'child_1',
+      task: {
+        date: '2026-04-07'
+      }
+    });
+
+    expect(historyContent.user.title).toBe('补打卡完成：数学作业');
+    expect(historyContent.user.summary).toContain('2026-04-07');
+    expect(historyContent.user.summary).toContain('补打卡完成');
+    expect(historyContent.family.summary).toContain('2026-04-07');
+  });
+
   it('task assign 应使用分配语义，避免与任务创建混淆', async () => {
     const service = require('../../services/messageService');
     const assignContent = service._buildTaskContent({
@@ -494,6 +515,28 @@ describe('backend MessageService star expiring reminders', () => {
     expect(records.every((record) => record.notificationType === 'star_expiring')).toBe(true);
     expect(records[0].messageEventKey).toBe('star:summary:star_expiring:child_1:none:2026-04-02');
     expect(records[0].content).toContain('"reminderCategory":"stars_expiring"');
+  });
+
+  it('应生成按到期日聚合的 star_expired 正式消息', async () => {
+    const { query } = require('../../config/database');
+    query.mockResolvedValueOnce([{ nickname: '小明', role: 'child' }]);
+
+    const service = require('../../services/messageService');
+    const records = await service._buildStarMessageRecords({
+      familyId: 'family_1',
+      action: 'expired',
+      subjectUserId: 'child_1',
+      operationKey: '2026-04-02',
+      points: 8,
+      expiryDate: '2026-04-02',
+      expiryDateText: '2026-04-02',
+      createTimeOverride: 12345
+    });
+
+    expect(records).toHaveLength(2);
+    expect(records.every((record) => record.notificationType === 'star_expired')).toBe(true);
+    expect(records[0].messageEventKey).toBe('star:summary:star_expired:child_1:none:2026-04-02');
+    expect(records[0].summary).toContain('已于2026-04-02到期并扣除');
   });
 });
 

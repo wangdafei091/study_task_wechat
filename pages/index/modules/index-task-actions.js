@@ -172,6 +172,16 @@ function handleFailure(result) {
     return;
   }
 
+  if (result?.code === 'TASK_BACKFILL_WINDOW_EXPIRED' || result?.backfillWindowExpired) {
+    wx.showModal({
+      title: '补打卡期限已结束',
+      content: result?.message || '该任务已超过补打卡期限，无法再补打卡',
+      showCancel: false,
+      confirmText: '我知道了'
+    });
+    return;
+  }
+
   wx.showToast({
     title: result?.message || '操作失败',
     icon: 'none',

@@ -123,6 +123,153 @@ describe('backend TaskService M16C makeup flow', () => {
     expect(connection.commit).toHaveBeenCalled();
   });
 
+  it('updateTaskStatus 在资格窗口内补打卡历史任务时应写入 history_complete 消息', async () => {
+    const { getPool, query } = require('../../config/database');
+    const messageService = require('../../services/messageService');
+    const starService = require('../../services/starService');
+
+    const existingRow = {
+      task_id: 'task_history_001',
+      user_id: 'child_001',
+      title: '背单词',
+      type: 'study',
+      date: '2026-03-17',
+      points: 5,
+      points_expiry: 'week',
+      is_required: 0,
+      status: 0,
+      repeat: null,
+      is_all_day: 0,
+      penalty_applied: 0,
+      penalty_deducted_points: 0,
+      penalty_refunded: 0,
+      penalty_refund_time: null,
+      star_awarded: 0,
+      modify_time: 1000,
+      deleted_at: null
+    };
+    const updatedRow = {
+      ...existingRow,
+      status: 1,
+      completion_time: new Date('2026-03-19T10:00:00+08:00').getTime(),
+      modify_time: new Date('2026-03-19T10:00:00+08:00').getTime()
+    };
+
+    let selectCount = 0;
+    const connection = {
+      beginTransaction: jest.fn().mockResolvedValue(),
+      execute: jest.fn().mockImplementation(async (sql) => {
+        if (sql.startsWith('SELECT * FROM tasks')) {
+          selectCount += 1;
+          return [[selectCount === 1 ? existingRow : updatedRow]];
+        }
+        if (sql.startsWith('UPDATE tasks SET')) {
+          return [{ affectedRows: 1 }, undefined];
+        }
+        throw new Error(`unexpected sql: ${sql}`);
+      }),
+      commit: jest.fn().mockResolvedValue(),
+      rollback: jest.fn().mockResolvedValue(),
+      release: jest.fn()
+    };
+    getPool.mockReturnValue({
+      getConnection: jest.fn().mockResolvedValue(connection)
+    });
+    query.mockResolvedValueOnce(createColumnRows([
+      'task_id', 'user_id', 'title', 'description', 'type', 'date',
+      'start_time', 'end_time', 'reminder', 'points', 'points_expiry', 'is_required',
+      'status', 'repeat', 'is_all_day', 'penalty_applied', 'penalty_deducted_points',
+      'penalty_refunded', 'penalty_refund_time', 'deleted_at', 'completion_time',
+      'star_awarded', 'modify_time'
+    ]));
+
+    const service = require('../../services/taskService');
+    const result = await service.updateTaskStatus('task_history_001', {
+      status: 1,
+      modifyTime: new Date('2026-03-19T10:00:00+08:00').getTime(),
+      operationKey: 'm21h_history_complete_001'
+    }, {
+      actorUserId: 'child_001',
+      actorRole: 'child',
+      familyId: 'family_001'
+    });
+
+    expect(result.status).toBe(1);
+    expect(starService.grantStarsWithConnection).not.toHaveBeenCalled();
+    expect(messageService.createTaskMessages).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'history_complete',
+        refundPoints: 0
+      }),
+      connection
+    );
+    expect(connection.commit).toHaveBeenCalled();
+  });
+
+  it('updateTaskStatus 跨资格窗口补打卡时应抛出 TASK_BACKFILL_WINDOW_EXPIRED', async () => {
+    const { getPool, query } = require('../../config/database');
+    const messageService = require('../../services/messageService');
+    const starService = require('../../services/starService');
+
+    const existingRow = {
+      task_id: 'task_expired_001',
+      user_id: 'child_001',
+      title: '背单词',
+      type: 'study',
+      date: '2026-03-09',
+      points: 5,
+      points_expiry: 'week',
+      is_required: 0,
+      status: 0,
+      repeat: null,
+      is_all_day: 0,
+      penalty_applied: 0,
+      penalty_deducted_points: 0,
+      penalty_refunded: 0,
+      penalty_refund_time: null,
+      star_awarded: 0,
+      modify_time: 1000,
+      deleted_at: null
+    };
+
+    const connection = {
+      beginTransaction: jest.fn().mockResolvedValue(),
+      execute: jest.fn().mockResolvedValue([[existingRow]]),
+      commit: jest.fn().mockResolvedValue(),
+      rollback: jest.fn().mockResolvedValue(),
+      release: jest.fn()
+    };
+    getPool.mockReturnValue({
+      getConnection: jest.fn().mockResolvedValue(connection)
+    });
+    query.mockResolvedValueOnce(createColumnRows([
+      'task_id', 'user_id', 'title', 'description', 'type', 'date',
+      'start_time', 'end_time', 'reminder', 'points', 'points_expiry', 'is_required',
+      'status', 'repeat', 'is_all_day', 'penalty_applied', 'penalty_deducted_points',
+      'penalty_refunded', 'penalty_refund_time', 'deleted_at', 'completion_time',
+      'star_awarded', 'modify_time'
+    ]));
+
+    const service = require('../../services/taskService');
+
+    await expect(service.updateTaskStatus('task_expired_001', {
+      status: 1,
+      modifyTime: new Date('2026-03-16T10:00:00+08:00').getTime(),
+      operationKey: 'm21h_week_expired_001'
+    }, {
+      actorUserId: 'child_001',
+      actorRole: 'child',
+      familyId: 'family_001'
+    })).rejects.toMatchObject({
+      code: 'TASK_BACKFILL_WINDOW_EXPIRED'
+    });
+
+    expect(connection.rollback).toHaveBeenCalled();
+    expect(connection.commit).not.toHaveBeenCalled();
+    expect(messageService.createTaskMessages).not.toHaveBeenCalled();
+    expect(starService.grantStarsWithConnection).not.toHaveBeenCalled();
+  });
+
   it('updateTaskStatus 重置已退星任务时应全额扣回永久星星', async () => {
     const { getPool, query } = require('../../config/database');
     const messageService = require('../../services/messageService');

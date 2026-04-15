@@ -288,4 +288,31 @@ describe('pages/index/modules/index-task-actions', () => {
       title: '已获得过星星'
     }));
   });
+
+  it('补打卡期限过期时应使用弹窗展示完整提示', async () => {
+    const taskService = {
+      completeTask: jest.fn().mockResolvedValue({
+        success: false,
+        code: 'TASK_BACKFILL_WINDOW_EXPIRED',
+        backfillWindowExpired: true,
+        message: '该任务补打卡期限已于2026-04-12（本周结束）结束，无法再补打卡'
+      })
+    };
+    serviceManager.getService.mockImplementation((name) => {
+      if (name === 'task') return taskService;
+      return null;
+    });
+
+    const page = createPage();
+    await taskActions.completeTask(page, { detail: { taskId: 'task-1' } });
+
+    expect(global.wx.showModal).toHaveBeenCalledWith(expect.objectContaining({
+      title: '补打卡期限已结束',
+      content: '该任务补打卡期限已于2026-04-12（本周结束）结束，无法再补打卡',
+      showCancel: false
+    }));
+    expect(global.wx.showToast).not.toHaveBeenCalledWith(expect.objectContaining({
+      title: '该任务补打卡期限已于2026-04-12（本周结束）结束，无法再补打卡'
+    }));
+  });
 });

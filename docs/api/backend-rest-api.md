@@ -1281,7 +1281,6 @@ Authorization: Bearer <token>
 - Body：
   - `scope` - `user | family`
   - `monthKey` - 月份键，格式 `YYYY-MM`
-  - `trendDays` - 趋势天数，仅支持 `7 | 30`
   - `userId` - `scope=user` 时必填
   - `childUserIds` - `scope=family` 时可选；不传表示当前家庭全部 active child，传空数组表示显式空结果
 
@@ -1289,15 +1288,16 @@ Authorization: Bearer <token>
 - Status: `200`
 - Body：
   - `data.snapshot.scope`
+  - `data.snapshot.scopeKey`
   - `data.snapshot.subjectUserIds`
   - `data.snapshot.monthKey`
-  - `data.snapshot.days`
-  - `data.snapshot.currentBalance`
+  - `data.snapshot.signature`
+  - `data.snapshot.expiresAt`
+  - `data.snapshot.mode`
   - `data.snapshot.tasks`
   - `data.snapshot.records`
-  - `data.snapshot.familyGroupSnapshots`（仅 family）
-  - `data.snapshot.historyData`
-  - `data.snapshot.forecastData`
+  - `data.snapshot.summary`
+  - `data.snapshot.chartModel`
   - `data.snapshot.refreshedAt`
 
 常见错误：

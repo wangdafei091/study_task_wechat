@@ -230,7 +230,15 @@ describe('backend StarService active group filtering', () => {
       settledGroups: 1,
       settledPoints: 7,
       createdRecords: 1,
-      invalidGroups: 0
+      invalidGroups: 0,
+      settledDetails: [
+        expect.objectContaining({
+          groupId: 'group_expired',
+          userId: 'child_1',
+          points: 7,
+          normalizedExpiryDate: '2026-03-28'
+        })
+      ]
     }));
     expect(connection.execute).toHaveBeenCalledWith('DELETE FROM star_groups WHERE group_id = ?', ['group_expired']);
     expect(connection.execute.mock.calls.some(([sql]) => sql.includes('INSERT INTO star_records'))).toBe(true);

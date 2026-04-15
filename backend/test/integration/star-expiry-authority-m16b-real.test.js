@@ -48,6 +48,7 @@ async function ensureM16BTables() {
 async function cleanupTestData() {
   await db.query("DELETE FROM star_records WHERE record_id LIKE 'm16b_star_%' OR idempotency_key LIKE 'star_expiry:m16b_star_%' OR user_id LIKE 'm16b_star_%'");
   await db.query("DELETE FROM star_groups WHERE group_id LIKE 'm16b_star_%' OR user_id LIKE 'm16b_star_%'");
+  await db.query("DELETE FROM messages WHERE related_id LIKE 'm16b_star_%' OR subject_user_id LIKE 'm16b_star_%' OR message_event_key LIKE 'star:summary:star_expired:m16b_star_%'");
   await db.query("DELETE FROM users WHERE user_id LIKE 'm16b_star_%'");
   await db.query("DELETE FROM families WHERE family_id LIKE 'm16b_star_%'");
 }
@@ -119,6 +120,7 @@ describe('M16B stars expiry authority API 真实数据库集成测试', () => {
   afterEach(async () => {
     await db.query("DELETE FROM star_records WHERE record_id LIKE 'm16b_star_%' OR idempotency_key LIKE 'star_expiry:m16b_star_%' OR user_id LIKE 'm16b_star_%'");
     await db.query("DELETE FROM star_groups WHERE group_id LIKE 'm16b_star_%' OR user_id LIKE 'm16b_star_%'");
+    await db.query("DELETE FROM messages WHERE related_id LIKE 'm16b_star_%' OR subject_user_id LIKE 'm16b_star_%' OR message_event_key LIKE 'star:summary:star_expired:m16b_star_%'");
   });
 
   afterAll(async () => {
@@ -162,6 +164,14 @@ describe('M16B stars expiry authority API 真实数据库集成测试', () => {
        ORDER BY created_at ASC`,
       ['m16b_star_child_001']
     );
+    const expiredMessages = await db.query(
+      `SELECT notification_type, visibility_scope, subject_user_id, summary, message_event_key
+       FROM messages
+       WHERE subject_user_id = ?
+         AND notification_type = 'star_expired'
+       ORDER BY visibility_scope ASC`,
+      ['m16b_star_child_001']
+    );
 
     expect(remainingGroups).toEqual([
       expect.objectContaining({
@@ -177,6 +187,20 @@ describe('M16B stars expiry authority API 真实数据库集成测试', () => {
       previous_balance: 10,
       balance: 6
     }));
+    expect(expiredMessages).toEqual([
+      expect.objectContaining({
+        notification_type: 'star_expired',
+        visibility_scope: 'family',
+        subject_user_id: 'm16b_star_child_001',
+        message_event_key: 'star:summary:star_expired:m16b_star_child_001:none:2026-03-31'
+      }),
+      expect.objectContaining({
+        notification_type: 'star_expired',
+        visibility_scope: 'user',
+        subject_user_id: 'm16b_star_child_001',
+        summary: '你的4颗星星已于2026-03-31到期并扣除'
+      })
+    ]);
 
     const second = await request(app)
       .post('/api/stars/expiry-authority/sync')
@@ -200,7 +224,14 @@ describe('M16B stars expiry authority API 真实数据库集成测试', () => {
       `SELECT source_id, points FROM star_records WHERE user_id = ?`,
       ['m16b_star_child_001']
     );
+    const secondPassMessages = await db.query(
+      `SELECT notification_type FROM messages
+       WHERE subject_user_id = ?
+         AND notification_type = 'star_expired'`,
+      ['m16b_star_child_001']
+    );
     expect(secondPassRecords).toHaveLength(1);
+    expect(secondPassMessages).toHaveLength(2);
   });
 
   it('POST /api/stars/expiry-authority/sync scope=family 应由家长一次性结算家庭全部孩子的到期分组', async () => {

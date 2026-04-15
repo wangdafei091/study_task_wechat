@@ -413,15 +413,17 @@ class MessageService {
     daysUntilExpiry = null,
     createTimeOverride = null,
   }) {
-    if (action !== 'expiring' || !subjectUserId || Number(points || 0) <= 0 || !expiryDate) {
+    if (!['expiring', 'expired'].includes(action) || !subjectUserId || Number(points || 0) <= 0 || !expiryDate) {
       return [];
     }
 
     const subjectName = await this._getUserDisplayName(subjectUserId);
+    const notificationType = action === 'expired' ? 'star_expired' : 'star_expiring';
+    const reminderCategory = action === 'expired' ? 'stars_expired' : 'stars_expiring';
     const eventKey = this._buildMessageEventKey({
       sourceType: 'star',
       relatedId: 'summary',
-      notificationType: 'star_expiring',
+      notificationType,
       subjectUserId,
       actorUserId: null,
       operationKey,
@@ -444,7 +446,7 @@ class MessageService {
         messageEventKey: eventKey,
         visibilityScope: 'user',
         type: 'system',
-        notificationType: 'star_expiring',
+        notificationType,
         relatedId: subjectUserId,
         relatedType: 'star',
         title: content.user.title,
@@ -452,7 +454,7 @@ class MessageService {
         icon: content.icon,
         priority: content.priority,
         content: JSON.stringify({
-          reminderCategory: 'stars_expiring',
+          reminderCategory,
           expiryDate,
           expiryDateText,
           daysUntilExpiry,
@@ -470,7 +472,7 @@ class MessageService {
         messageEventKey: eventKey,
         visibilityScope: 'family',
         type: 'system',
-        notificationType: 'star_expiring',
+        notificationType,
         relatedId: subjectUserId,
         relatedType: 'star',
         title: content.family.title,
@@ -478,7 +480,7 @@ class MessageService {
         icon: content.icon,
         priority: content.priority,
         content: JSON.stringify({
-          reminderCategory: 'stars_expiring',
+          reminderCategory,
           expiryDate,
           expiryDateText,
           daysUntilExpiry,
@@ -616,6 +618,25 @@ class MessageService {
               : `${safeActorName}代${safeSubjectName}完成了任务“${taskTitle}”`,
           },
         };
+      case 'history_complete': {
+        const taskDateText = task?.date || '历史日期';
+        return {
+          icon: '🗂️',
+          priority: 2,
+          user: {
+            title: `补打卡完成：${taskTitle}`,
+            summary: isSelfAction
+              ? `你补打卡完成了${taskDateText}的任务“${taskTitle}”`
+              : `${safeActorName}代你补打卡完成了${taskDateText}的任务“${taskTitle}”`,
+          },
+          family: {
+            title: `补打卡完成：${taskTitle}`,
+            summary: isSelfAction
+              ? `${safeSubjectName}补打卡完成了${taskDateText}的任务“${taskTitle}”`
+              : `${safeActorName}代${safeSubjectName}补打卡完成了${taskDateText}的任务“${taskTitle}”`,
+          },
+        };
+      }
       case 'makeup_complete':
         return {
           icon: '♻️',
@@ -802,27 +823,42 @@ class MessageService {
   }
 
   _buildStarContent({ action, subjectName, points, expiryDateText = '', daysUntilExpiry = null }) {
-    if (action !== 'expiring') {
-      return null;
-    }
-
     const safeSubjectName = this._normalizeDisplayName(subjectName, 'child');
     const safePoints = Number(points || 0);
     const expiryText = expiryDateText || '近期';
-    const dueText = this._formatStarExpiryDueText(expiryText, daysUntilExpiry);
 
-    return {
-      icon: '⏳',
-      priority: 2,
-      user: {
-        title: '星星即将过期',
-        summary: `你的${safePoints}颗星星将在${dueText}到期`,
-      },
-      family: {
-        title: '星星即将过期',
-        summary: `${safeSubjectName}有${safePoints}颗星星将在${dueText}到期`,
-      },
-    };
+    if (action === 'expiring') {
+      const dueText = this._formatStarExpiryDueText(expiryText, daysUntilExpiry);
+      return {
+        icon: '⏳',
+        priority: 2,
+        user: {
+          title: '星星即将过期',
+          summary: `你的${safePoints}颗星星将在${dueText}到期`,
+        },
+        family: {
+          title: '星星即将过期',
+          summary: `${safeSubjectName}有${safePoints}颗星星将在${dueText}到期`,
+        },
+      };
+    }
+
+    if (action === 'expired') {
+      return {
+        icon: '🕒',
+        priority: 2,
+        user: {
+          title: '星星已到期扣除',
+          summary: `你的${safePoints}颗星星已于${expiryText}到期并扣除`,
+        },
+        family: {
+          title: '星星已到期扣除',
+          summary: `${safeSubjectName}有${safePoints}颗星星已于${expiryText}到期并扣除`,
+        },
+      };
+    }
+
+    return null;
   }
 
   _formatStarExpiryDueText(expiryDateText = '', daysUntilExpiry = null) {

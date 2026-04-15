@@ -1,5 +1,6 @@
 const { getPool, query } = require('../config/database');
 const starService = require('./starService');
+const messageService = require('./messageService');
 const { createLogger } = require('../utils/logger');
 
 const logger = createLogger('StarExpiryGovernanceService');
@@ -23,6 +24,10 @@ class StarExpiryGovernanceService {
       try {
         await connection.beginTransaction();
         const settlement = await starService.settleExpiredGroupsWithConnection(connection, userId, options);
+        await this._createExpiredStarMessages(connection, settlement, {
+          familyId: options.familyId || null,
+          modifyTime: options.modifyTime
+        });
         await connection.commit();
 
         summary.affectedUserIds.push(userId);
@@ -72,6 +77,48 @@ class StarExpiryGovernanceService {
     }
 
     return [targetUserId || viewerUserId];
+  }
+
+  async _createExpiredStarMessages(connection, settlement = {}, options = {}) {
+    const settledDetails = Array.isArray(settlement.settledDetails) ? settlement.settledDetails : [];
+    if (settledDetails.length === 0) {
+      return [];
+    }
+
+    const grouped = new Map();
+    settledDetails.forEach((detail) => {
+      const normalizedExpiryDate = detail.normalizedExpiryDate || detail.expiryDate || null;
+      const subjectUserId = detail.userId || null;
+      if (!subjectUserId || !normalizedExpiryDate || Number(detail.points || 0) <= 0) {
+        return;
+      }
+
+      const groupKey = `${subjectUserId}:${normalizedExpiryDate}`;
+      const current = grouped.get(groupKey) || {
+        subjectUserId,
+        expiryDate: normalizedExpiryDate,
+        points: 0
+      };
+      current.points += Number(detail.points || 0);
+      grouped.set(groupKey, current);
+    });
+
+    const createdMessages = [];
+    for (const item of grouped.values()) {
+      const savedMessages = await messageService.createStarMessages({
+        familyId: options.familyId || null,
+        action: 'expired',
+        subjectUserId: item.subjectUserId,
+        operationKey: item.expiryDate,
+        points: item.points,
+        expiryDate: item.expiryDate,
+        expiryDateText: item.expiryDate,
+        createTimeOverride: Number(options.modifyTime || Date.now())
+      }, connection);
+      createdMessages.push(...savedMessages);
+    }
+
+    return createdMessages;
   }
 }
 
