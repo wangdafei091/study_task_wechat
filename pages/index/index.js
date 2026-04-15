@@ -718,16 +718,6 @@ Page({
     });
   },
   
-  // 跳转到编辑特定任务
-  editTask: function(e) {
-    const taskId = e.detail.taskId;
-    wx.navigateTo({
-      url: `/pages/task-edit/task-edit?mode=edit&taskId=${taskId}`
-    });
-  },
-  
-
-  
   // 跳转到消息中心
   navigateToMessageCenter: function(e) {
     return messagePreviewModule.navigateToMessageCenter(this, e);

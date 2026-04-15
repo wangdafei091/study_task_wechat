@@ -28,7 +28,6 @@
         currentYear="{{heatmapYear}}"
         currentMonth="{{heatmapMonthIndex}}"
         bind:monthChange="onHeatmapMonthChange"
-        bind:daySelect="onHeatmapDaySelect"
         bind:refreshTasks="onHeatmapRefreshTasks">
       </task-heatmap>
     </card>

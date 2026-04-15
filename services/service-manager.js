@@ -199,7 +199,8 @@ class ServiceManager {
       // 初始化MessageService，注入UserService依赖
       this.services.messageService = new MessageService({
         eventBus: this.eventBus,
-        userService: this.userService // 注入用户服务
+        userService: this.userService, // 注入用户服务
+        starService: this.services.starService
       });
       
       this.services.rewardService = new RewardService({
@@ -224,6 +225,16 @@ class ServiceManager {
       this.services.configService = new ConfigService({
         eventBus: this.eventBus
       });
+
+      if (this.services.rewardService.updateConfigService) {
+        this.services.rewardService.updateConfigService(this.services.configService);
+      }
+      if (this.services.starService.updateRewardService) {
+        this.services.starService.updateRewardService(this.services.rewardService);
+      }
+      if (this.services.messageService.updateStarService) {
+        this.services.messageService.updateStarService(this.services.starService);
+      }
 
       this.services.taskTemplateService = new TaskTemplateService({
         eventBus: this.eventBus,

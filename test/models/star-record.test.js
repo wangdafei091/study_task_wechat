@@ -308,11 +308,25 @@ describe('StarRecord 领域模型', () => {
       expect(clonedRecord).not.toBe(originalRecord);
     });
 
-    it('克隆记录应该生成新时间戳', async () => {
-      const originalRecord = new StarRecord({ points: 10 });
-      await new Promise(resolve => setTimeout(resolve, 1));
-      const clonedRecord = originalRecord.clone();
-      expect(clonedRecord.timestamp).toBeGreaterThan(originalRecord.timestamp);
+    it('克隆记录应该生成新时间戳', () => {
+      const originalNow = Date.now;
+      Date.now = jest.fn()
+        .mockReturnValueOnce(1001)
+        .mockReturnValueOnce(1001);
+
+      try {
+        const originalRecord = new StarRecord({
+          id: 'record_123',
+          timestamp: 1000,
+          points: 10
+        });
+        const clonedRecord = originalRecord.clone();
+
+        expect(clonedRecord.timestamp).toBe(1001);
+        expect(clonedRecord.timestamp).toBeGreaterThan(originalRecord.timestamp);
+      } finally {
+        Date.now = originalNow;
+      }
     });
 
     it('克隆记录应该覆盖属性', () => {

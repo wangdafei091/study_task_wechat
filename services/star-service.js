@@ -41,6 +41,7 @@ class StarService {
     
     // 事件总线
     this.eventBus = options.eventBus || new EventBus();
+    this.rewardService = options.rewardService || null;
 
     this.enableCloudStorage = API_CONFIG.ENABLE_API;
     this._cloudRefreshInFlight = new Map();
@@ -1834,11 +1835,7 @@ class StarService {
     }
 
     try {
-      // 获取奖励服务
-      const serviceManager = require('./service-manager');
-      const rewardService = serviceManager.getService('rewardService');
-      
-      if (!rewardService) {
+      if (!this.rewardService) {
         logger.error('StarService', '无法获取奖励服务，跳过奖励保护');
         return { success: false, message: '奖励服务不可用' };
       }
@@ -1848,7 +1845,7 @@ class StarService {
       logger.info('StarService', `🔍 用户当前星星状态: 当前=${totalStars}颗, 即将过期=${expiredStars}颗, 总可用=${totalStars + expiredStars}颗`);
       
       // 获取所有可用奖励
-      const availableRewards = await rewardService.getAvailableRewards(false, false, userId);
+      const availableRewards = await this.rewardService.getAvailableRewards(false, false, userId);
       
       // 添加调试：奖励详情
       logger.info('StarService', `🔍 获取到${availableRewards.length}个可用奖励`);
@@ -1924,6 +1921,13 @@ class StarService {
     } catch (error) {
       logger.error('StarService', '奖励保护失败', error);
       return { success: false, message: '保护过程中发生错误' };
+    }
+  }
+
+  updateRewardService(rewardService) {
+    if (this.rewardService !== rewardService) {
+      this.rewardService = rewardService || null;
+      logger.info('StarService', 'RewardService已更新');
     }
   }
 

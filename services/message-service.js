@@ -43,6 +43,7 @@ class MessageService {
     
     // 用户服务
     this.userService = options.userService || null;
+    this.starService = options.starService || null;
     this.enableCloudStorage = API_CONFIG.ENABLE_API;
     this._formalReminderSyncTimestamps = new Map();
     this._formalReminderSyncInFlight = new Map();
@@ -499,13 +500,11 @@ class MessageService {
 
   async _syncExpiryAuthorityBeforeFormalReminders(resolved) {
     try {
-      const serviceManager = require('./service-manager');
-      const starService = serviceManager.getService('starService') || serviceManager.getService('star');
-      if (!starService || typeof starService.syncExpiryAuthorityIfNeeded !== 'function') {
+      if (!this.starService || typeof this.starService.syncExpiryAuthorityIfNeeded !== 'function') {
         return;
       }
 
-      await starService.syncExpiryAuthorityIfNeeded({
+      await this.starService.syncExpiryAuthorityIfNeeded({
         scope: resolved.scope,
         userId: resolved.userId || null,
         familyId: resolved.familyId || null
@@ -1387,6 +1386,13 @@ class MessageService {
     if (this.userService !== userService) {
       this.userService = userService;
       logger.info('MessageService', 'UserService已更新');
+    }
+  }
+
+  updateStarService(starService) {
+    if (this.starService !== starService) {
+      this.starService = starService || null;
+      logger.info('MessageService', 'StarService已更新');
     }
   }
 }

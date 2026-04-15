@@ -1,6 +1,4 @@
 // pages/rewards/rewards.js
-const { EVENTS } = require('../../utils/constants');
-// 新架构服务引入
 const serviceManager = require('../../services/service-manager');
 const formatUtils = require('../../utils/formatUtils');
 const logger = require('../../utils/logger');

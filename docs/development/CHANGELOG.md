@@ -4,6 +4,42 @@
 
 ---
 
+## [维护收口] - 2026-04-15
+
+### ✅ 完成情况
+
+**死代码与陈旧胶水清理完成**
+
+- 删除已无运行时引用的 analytics 遗留入口与工具：
+  - `packageChart/index.js`
+  - `packageChart/utils/analyticsUtils.js`
+  - `packageChart/ec-canvas/ec-canvas.json`
+  - `packageComponents/index.js`
+- 删除首页和任务编辑页中已无视图绑定或零调用的历史残留：
+  - `pages/index/index.js#editTask`
+  - `pages/task-edit/task-edit.js#doAddTask`
+  - `pages/task-edit/task-edit.js#onHeatmapDaySelect`
+  - `pages/task-edit/task-edit.js` 内未使用导入与零引用 helper
+- 收口星星记录页和热力图中的无消费状态与零引用方法：
+  - `packageMessage/pages/star-records/star-records.js` 的旧筛选弹窗状态残留
+  - `packageComponents/components/task-heatmap/task-heatmap.js` 中数个全仓库零引用 helper
+- 同步删除仅用于保活死代码的测试残留：
+  - `test/utils/analytics-utils.test.js`
+  - `test/pages/index.page-shell.behavior.test.js` 中对 dead homepage method 的直接调用
+
+### 📉 收益摘要
+
+- 当前清理分支相对合并前基线共净删除 `461` 行代码
+- 其中生产代码净减少约 `378` 行，源码体积约减少 `11.4 KB`
+- 死代码治理已完成第一阶段收口，后续不再作为独立 roadmap 里程碑继续深挖
+
+### 🧪 验证结果
+
+- `git diff --check`
+- `npx jest --runInBand test/pages/task-edit.page.test.js test/pages/task-heatmap.component.test.js test/pages/rewards.modules.test.js test/pages/rewards.page-contract.test.js test/pages/rewards.behavior.test.js`
+
+---
+
 ## [里程碑-21G] - 2026-04-14
 
 ### ✅ 完成情况

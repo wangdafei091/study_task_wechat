@@ -436,7 +436,7 @@ class UserService {
     try {
       savedUserId = this.storageAdapter
         ? this.storageAdapter.get('currentUserId')
-        : wx.getStorageSync('currentUserId');
+        : null;
     } catch (e) {
       logger.warn('UserService', '读取本地会话失败', e);
     }
@@ -498,12 +498,13 @@ class UserService {
       return false;
     }
 
+    if (!this.storageAdapter || typeof this.storageAdapter.set !== 'function') {
+      logger.warn('UserService', 'StorageAdapter不可用，无法持久化 currentUserId', { userId });
+      return false;
+    }
+
     try {
-      if (this.storageAdapter) {
-        this.storageAdapter.set('currentUserId', userId);
-      } else {
-        wx.setStorageSync('currentUserId', userId);
-      }
+      this.storageAdapter.set('currentUserId', userId);
       return true;
     } catch (error) {
       logger.warn('UserService', '持久化 currentUserId 失败', { userId, error: error.message });

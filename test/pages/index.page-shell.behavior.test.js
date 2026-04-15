@@ -500,7 +500,6 @@ describe('pages/index/index shell behavior', () => {
       url: expect.stringContaining('taskType=habit')
     }));
 
-    page.editTask({ detail: { taskId: 'task-1' } });
     page.navigateToMessageCenter({ stopPropagation: jest.fn() });
     jest.runAllTimers();
     expect(page.data.showMessagePreview).toBe(false);
