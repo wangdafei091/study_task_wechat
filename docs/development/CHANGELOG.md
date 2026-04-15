@@ -4,6 +4,45 @@
 
 ---
 
+## [里程碑-21I] - 2026-04-15
+
+### ✅ 完成情况
+
+**质量闸门与自动化收口**
+
+- **覆盖率闸门已恢复零告警**：
+  - 补齐 [`pages/index/modules/index-user-context.js`](/Users/wangdafei/code/study_task_wechat/pages/index/modules/index-user-context.js) 分支覆盖
+  - 补齐 [`pages/index/modules/index-search-panel.js`](/Users/wangdafei/code/study_task_wechat/pages/index/modules/index-search-panel.js) 分支覆盖
+  - 补齐 [`pages/index/modules/index-user-switcher.js`](/Users/wangdafei/code/study_task_wechat/pages/index/modules/index-user-switcher.js) 分支覆盖
+  - 补齐 [`pages/index/modules/index-message-preview.js`](/Users/wangdafei/code/study_task_wechat/pages/index/modules/index-message-preview.js) 分支覆盖
+  - 补齐 [`services/task-service.js`](/Users/wangdafei/code/study_task_wechat/services/task-service.js) 分支覆盖
+- **基础自动化闸门已落地**：
+  - 新增 [`.github/workflows/test.yml`](/Users/wangdafei/code/study_task_wechat/.github/workflows/test.yml)
+  - workflow 固定 `Node 20`，自动执行 `npm ci`、`npm test`、`npm run test:quality`
+- **平台访问残留已完成收口**：
+  - [`services/user-service.js`](/Users/wangdafei/code/study_task_wechat/services/user-service.js) 不再回退 `wx.setStorageSync('currentUserId', ...)`
+  - `_saveUserState()` 统一复用 `_persistCurrentUserId()`，并修正持久化成功日志语义
+
+### 🧪 验证结果
+
+- 定向回归通过：
+  - `npx jest --runInBand test/pages/index.user-context.test.js test/pages/index.modules.test.js test/services/task-service.helpers.test.js test/services/user-service.test.js`
+  - `npx jest --runInBand test/services/user-service.test.js`
+- 质量闸门通过：
+  - `npm run test:quality`
+  - 结果：`85 suites / 1899 tests` 全绿，覆盖率阈值零告警
+- 全量前端测试通过：
+  - `npm test`
+  - 结果：`85 suites / 1899 tests` 全绿
+- 代码差异检查通过：
+  - `git diff --check`
+
+### 📖 详细实施记录
+
+- [里程碑-21I：质量闸门与自动化收口](../design/milestone-21i-quality-gate-automation-convergence.md)
+
+---
+
 ## [里程碑-21E] - 2026-04-15
 
 ### ✅ 完成情况
