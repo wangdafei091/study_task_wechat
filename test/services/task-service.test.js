@@ -48,6 +48,12 @@ describe('TaskService', () => {
   let mockUserService;
   let mockEventBus;
 
+  function mockNowForCurrentTaskDay() {
+    return jest.spyOn(Date, 'now').mockReturnValue(
+      new Date(`${dateUtils.getTodayString()}T10:00:00+08:00`).getTime()
+    );
+  }
+
   beforeEach(() => {
     // 重置所有mock
     jest.clearAllMocks();
@@ -347,90 +353,95 @@ describe('TaskService', () => {
     });
 
     it('云端模式下完成任务成功时应等待权威结果回写后再返回', async () => {
-      taskService.enableCloudStorage = true;
-      taskService._syncStatusToCloud = jest.fn().mockResolvedValue({
-        operation: 'complete',
-        task: {
-          taskId: 'task_complete_cloud',
-          userId: 'parent',
-          title: '云端完成任务',
-          type: TaskType.HABIT,
-          date: dateUtils.getTodayString(),
-          status: TaskStatus.COMPLETED,
-          starAwarded: true,
-          points: 10,
-          isRequired: false
-        },
-        tasks: [{
-          taskId: 'task_complete_cloud',
-          userId: 'parent',
-          title: '云端完成任务',
-          type: TaskType.HABIT,
-          date: dateUtils.getTodayString(),
-          status: TaskStatus.COMPLETED,
-          starAwarded: true,
-          points: 10,
-          isRequired: false
-        }]
-      });
+      const nowSpy = mockNowForCurrentTaskDay();
+      try {
+        taskService.enableCloudStorage = true;
+        taskService._syncStatusToCloud = jest.fn().mockResolvedValue({
+          operation: 'complete',
+          task: {
+            taskId: 'task_complete_cloud',
+            userId: 'parent',
+            title: '云端完成任务',
+            type: TaskType.HABIT,
+            date: dateUtils.getTodayString(),
+            status: TaskStatus.COMPLETED,
+            starAwarded: true,
+            points: 10,
+            isRequired: false
+          },
+          tasks: [{
+            taskId: 'task_complete_cloud',
+            userId: 'parent',
+            title: '云端完成任务',
+            type: TaskType.HABIT,
+            date: dateUtils.getTodayString(),
+            status: TaskStatus.COMPLETED,
+            starAwarded: true,
+            points: 10,
+            isRequired: false
+          }]
+        });
 
-      const authoritativeTask = new Task(TestDataFactory.createTask({
-        id: 'task_complete_cloud',
-        userId: 'parent',
-        title: '云端完成任务',
-        type: TaskType.HABIT,
-        status: TaskStatus.COMPLETED,
-        starAwarded: true,
-        points: 10,
-        isRequired: false,
-        syncedToCloud: true,
-        pendingSyncMeta: null
-      }));
-      taskService._applyAuthoritativeTaskMutation = jest.fn().mockResolvedValue({
-        mutation: {
+        const authoritativeTask = new Task(TestDataFactory.createTask({
+          id: 'task_complete_cloud',
+          userId: 'parent',
+          title: '云端完成任务',
+          type: TaskType.HABIT,
+          status: TaskStatus.COMPLETED,
+          starAwarded: true,
+          points: 10,
+          isRequired: false,
+          syncedToCloud: true,
+          pendingSyncMeta: null
+        }));
+        taskService._applyAuthoritativeTaskMutation = jest.fn().mockResolvedValue({
+          mutation: {
+            operation: 'complete',
+            taskId: 'task_complete_cloud'
+          },
+          task: authoritativeTask,
+          tasks: [authoritativeTask],
+          taskId: 'task_complete_cloud'
+        });
+
+        const task = new Task(TestDataFactory.createTask({
+          id: 'task_complete_cloud',
+          userId: 'parent',
+          title: '云端完成任务',
+          type: TaskType.HABIT,
+          status: TaskStatus.PENDING,
+          starAwarded: false,
+          isRequired: false,
+          points: 10,
+          pointsExpiry: 'week'
+        }));
+        mockTaskRepository.getById.mockResolvedValue(task);
+
+        const result = await taskService.completeTask('task_complete_cloud');
+
+        expect(result.success).toBe(true);
+        expect(result.task).toBe(authoritativeTask);
+        expect(result.mutation).toEqual(expect.objectContaining({
           operation: 'complete',
           taskId: 'task_complete_cloud'
-        },
-        task: authoritativeTask,
-        tasks: [authoritativeTask],
-        taskId: 'task_complete_cloud'
-      });
-
-      const task = new Task(TestDataFactory.createTask({
-        id: 'task_complete_cloud',
-        userId: 'parent',
-        title: '云端完成任务',
-        type: TaskType.HABIT,
-        status: TaskStatus.PENDING,
-        starAwarded: false,
-        isRequired: false,
-        points: 10,
-        pointsExpiry: 'week'
-      }));
-      mockTaskRepository.getById.mockResolvedValue(task);
-
-      const result = await taskService.completeTask('task_complete_cloud');
-
-      expect(result.success).toBe(true);
-      expect(result.task).toBe(authoritativeTask);
-      expect(result.mutation).toEqual(expect.objectContaining({
-        operation: 'complete',
-        taskId: 'task_complete_cloud'
-      }));
-      expect(taskService._syncStatusToCloud).toHaveBeenCalledWith(expect.objectContaining({
-        id: 'task_complete_cloud',
-        status: TaskStatus.COMPLETED
-      }));
-      expect(taskService._applyAuthoritativeTaskMutation).toHaveBeenCalledWith(
-        expect.objectContaining({ operation: 'complete' }),
-        expect.objectContaining({ fallbackOperation: 'complete' })
-      );
-      expect(mockTaskRepository.save).not.toHaveBeenCalled();
-      mockEventBus.verifyEmit(EVENTS.TASK_STATUS_UPDATED, {
-        task: authoritativeTask,
-        previousStatus: TaskStatus.PENDING,
-        operationType: 'complete'
-      });
+        }));
+        expect(taskService._syncStatusToCloud).toHaveBeenCalledWith(expect.objectContaining({
+          id: 'task_complete_cloud',
+          status: TaskStatus.COMPLETED
+        }));
+        expect(taskService._applyAuthoritativeTaskMutation).toHaveBeenCalledWith(
+          expect.objectContaining({ operation: 'complete' }),
+          expect.objectContaining({ fallbackOperation: 'complete' })
+        );
+        expect(mockTaskRepository.save).not.toHaveBeenCalled();
+        mockEventBus.verifyEmit(EVENTS.TASK_STATUS_UPDATED, {
+          task: authoritativeTask,
+          previousStatus: TaskStatus.PENDING,
+          operationType: 'complete'
+        });
+      } finally {
+        nowSpy.mockRestore();
+      }
     });
 
     it('云端模式下重置任务成功时应等待权威结果回写后再返回', async () => {
@@ -814,54 +825,59 @@ describe('TaskService', () => {
 
   describe('任务完成逻辑 - completeTask 和 updateTaskStatus', () => {
     it('应该成功完成任务', async () => {
-      const taskData = TestDataFactory.createTask({
-        id: 'task_1',
-        userId: 'parent',
-        title: '测试任务',
-        type: TaskType.HABIT,
-        status: TaskStatus.PENDING,
-        starAwarded: false,
-        isRequired: false,
-        points: 10,
-        pointsExpiry: 'week' // 匹配TestDataFactory默认值
-      });
+      const nowSpy = mockNowForCurrentTaskDay();
+      try {
+        const taskData = TestDataFactory.createTask({
+          id: 'task_1',
+          userId: 'parent',
+          title: '测试任务',
+          type: TaskType.HABIT,
+          status: TaskStatus.PENDING,
+          starAwarded: false,
+          isRequired: false,
+          points: 10,
+          pointsExpiry: 'week' // 匹配TestDataFactory默认值
+        });
 
-      const task = new Task(taskData);
-      mockTaskRepository.getById.mockResolvedValue(task);
-      mockTaskRepository.save.mockResolvedValue({
-        ...task,
-        status: TaskStatus.COMPLETED,
-        starAwarded: true,
-        completionTime: expect.any(Number)
-      });
+        const task = new Task(taskData);
+        mockTaskRepository.getById.mockResolvedValue(task);
+        mockTaskRepository.save.mockResolvedValue({
+          ...task,
+          status: TaskStatus.COMPLETED,
+          starAwarded: true,
+          completionTime: expect.any(Number)
+        });
 
-      const result = await taskService.completeTask('task_1');
+        const result = await taskService.completeTask('task_1');
 
-      expect(result.success).toBe(true);
-      expect(result.task.status).toBe(TaskStatus.COMPLETED);
+        expect(result.success).toBe(true);
+        expect(result.task.status).toBe(TaskStatus.COMPLETED);
 
-      // 验证星星分配（M6后使用任务自身的userId，而非getChildUserId）
-      expect(mockStarService.addStars).toHaveBeenCalledWith(
-        10,
-        'week', // 实际传递的pointsExpiry
-        '完成任务: 测试任务',
-        expect.objectContaining({
-          sourceType: 'task_complete',
-          sourceId: 'task_1',
-          userId: 'parent'
-        })
-      );
+        // 验证星星分配（M6后使用任务自身的userId，而非getChildUserId）
+        expect(mockStarService.addStars).toHaveBeenCalledWith(
+          10,
+          'week', // 实际传递的pointsExpiry
+          '完成任务: 测试任务',
+          expect.objectContaining({
+            sourceType: 'task_complete',
+            sourceId: 'task_1',
+            userId: 'parent'
+          })
+        );
 
-      // 验证事件发布
-      mockEventBus.verifyEmit(EVENTS.TASK_STATUS_UPDATED, {
-        task: expect.any(Object),
-        previousStatus: TaskStatus.PENDING,
-        operationType: 'complete'
-      });
+        // 验证事件发布
+        mockEventBus.verifyEmit(EVENTS.TASK_STATUS_UPDATED, {
+          task: expect.any(Object),
+          previousStatus: TaskStatus.PENDING,
+          operationType: 'complete'
+        });
 
-      mockEventBus.verifyEmit(EVENTS.TASK_COMPLETED, {
-        task: expect.any(Object)
-      });
+        mockEventBus.verifyEmit(EVENTS.TASK_COMPLETED, {
+          task: expect.any(Object)
+        });
+      } finally {
+        nowSpy.mockRestore();
+      }
     });
 
     it('必做任务不应该获得积分', async () => {
