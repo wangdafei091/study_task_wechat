@@ -6,7 +6,6 @@
 
 const logger = require('../utils/logger');
 const { TaskRepository } = require('../repositories/index');
-const { StarService } = require('./index');
 const EventBus = require('../utils/core/event-bus');
 const { Task, TaskStatus } = require('../models/task');
 const { EVENTS } = require('../utils/constants');
@@ -23,7 +22,7 @@ class TaskService {
    * 构造函数
    * @param {Object} options 选项
    * @param {TaskRepository} options.taskRepository 任务仓储
-   * @param {StarService} options.starService 星星服务
+   * @param {Object} options.starService 星星服务
    * @param {RewardService} options.rewardService 奖励服务
    * @param {UserService} options.userService 用户服务
    * @param {EventBus} options.eventBus 事件总线

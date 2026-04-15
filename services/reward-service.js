@@ -41,6 +41,7 @@ class RewardService {
     // 关联服务
     this.starService = options.starService || null;
     this.userService = options.userService; // 新增：注入用户服务
+    this.configService = options.configService || null;
     this.storageAdapter = options.storageAdapter; // 注入存储适配器
     this.offlineQueueService = options.offlineQueueService || null;
     
@@ -133,18 +134,10 @@ class RewardService {
         // 检查是否存在自定义奖励标记
         let hasCustomRewards = false;
         try {
-          // 尝试从ServiceManager获取ConfigService
-          const serviceManager = require('./service-manager');
-          const configService = serviceManager.getService('config');
-          
-          if (configService) {
-            hasCustomRewards = configService.hasCustomRewards();
+          if (this.configService && typeof this.configService.hasCustomRewards === 'function') {
+            hasCustomRewards = this.configService.hasCustomRewards();
           } else if (this.storageAdapter) {
             hasCustomRewards = this.storageAdapter.get('has_custom_rewards') === true;
-          } else {
-            // 降级处理：如果没有注入StorageAdapter，回退到直接调用
-            hasCustomRewards = wx.getStorageSync('has_custom_rewards') === true;
-            logger.warn('RewardService', '配置服务和StorageAdapter均不可用，使用直接wx调用');
           }
         } catch (e) {
           logger.warn('RewardService', '获取自定义奖励标记失败', e);
@@ -1931,6 +1924,13 @@ class RewardService {
     if (this.starService !== starService) {
       this.starService = starService;
       logger.info('RewardService', 'StarService已更新');
+    }
+  }
+
+  updateConfigService(configService) {
+    if (this.configService !== configService) {
+      this.configService = configService || null;
+      logger.info('RewardService', 'ConfigService已更新');
     }
   }
 }

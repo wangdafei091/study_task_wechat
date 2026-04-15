@@ -29,6 +29,7 @@ describe('StarService', () => {
   let mockStarGroupRepository;
   let mockStarRecordRepository;
   let mockEventBus;
+  let mockRewardService;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -71,12 +72,16 @@ describe('StarService', () => {
 
     // 创建EventBus实例
     mockEventBus = new MockEventBus();
+    mockRewardService = {
+      getAvailableRewards: jest.fn().mockResolvedValue([])
+    };
 
     // 创建StarService实例
     starService = new StarService({
       starGroupRepository: mockStarGroupRepository,
       starRecordRepository: mockStarRecordRepository,
-      eventBus: mockEventBus
+      eventBus: mockEventBus,
+      rewardService: mockRewardService
     });
   });
 
@@ -691,18 +696,25 @@ describe('StarService', () => {
     it('应该处理没有可保护奖励的情况', async () => {
       mockStarGroupRepository.getTotalPoints.mockResolvedValue(10);
 
-      // Mock service manager and reward service
-      jest.mock('../../services/service-manager', () => ({
-        getService: jest.fn().mockReturnValue({
-          getAvailableRewards: jest.fn().mockResolvedValue([])
-        }),
-        updateReward: jest.fn().mockResolvedValue({ success: true })
-      }));
+      const result = await starService.protectRewardsByExpiry(5, 'user_123');
+
+      expect(mockRewardService.getAvailableRewards).toHaveBeenCalledWith(false, false, 'user_123');
+      expect(result).toEqual({
+        success: true,
+        protectedCount: 0,
+        protectedRewards: []
+      });
+    });
+
+    it('未注入 rewardService 时应返回明确失败结果', async () => {
+      starService.updateRewardService(null);
 
       const result = await starService.protectRewardsByExpiry(5, 'user_123');
 
-      // 由于service-manager可能不可用，我们只验证不抛出错误
-      expect(result).toBeDefined();
+      expect(result).toEqual({
+        success: false,
+        message: '奖励服务不可用'
+      });
     });
   });
 

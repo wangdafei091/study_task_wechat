@@ -21,13 +21,9 @@ jest.mock('../../utils/http-client', () => ({
   patch: jest.fn(),
   delete: jest.fn()
 }));
-jest.mock('../../services/service-manager.js', () => ({
-  getService: jest.fn()
-}));
 
 const { MessageRepository } = require('../../repositories/index');
 const HttpClient = require('../../utils/http-client');
-const serviceManager = require('../../services/service-manager.js');
 
 describe('MessageService', () => {
   let messageService;
@@ -35,6 +31,7 @@ describe('MessageService', () => {
   let mockUserService;
   let mockEventBus;
   let mockMessage;
+  let mockStarService;
 
   beforeEach(() => {
     // 重置 MockEventBus
@@ -85,6 +82,9 @@ describe('MessageService', () => {
       getUserByRole: jest.fn().mockReturnValue(null),
       getAllUsers: jest.fn().mockReturnValue([])
     };
+    mockStarService = {
+      syncExpiryAuthorityIfNeeded: jest.fn().mockResolvedValue({ settledGroupCount: 0 })
+    };
 
     // 创建EventBus实例
     mockEventBus = new MockEventBus();
@@ -93,10 +93,9 @@ describe('MessageService', () => {
     messageService = new MessageService({
       eventBus: mockEventBus,
       messageRepository: mockMessageRepository,
-      userService: mockUserService
+      userService: mockUserService,
+      starService: mockStarService
     });
-    serviceManager.getService.mockReset();
-    serviceManager.getService.mockReturnValue(null);
 
     // 创建Mock消息
     mockMessage = TestDataFactory.createMessage({
@@ -1274,15 +1273,6 @@ describe('MessageService', () => {
     });
 
     it('首页已先做 authority sync 时，正式提醒同步应跳过重复 authority 调用', async () => {
-      const starService = {
-        syncExpiryAuthorityIfNeeded: jest.fn().mockResolvedValue({ settledGroupCount: 0 })
-      };
-      serviceManager.getService.mockImplementation((name) => {
-        if (name === 'starService' || name === 'star') {
-          return starService;
-        }
-        return null;
-      });
       HttpClient.post.mockClear();
       HttpClient.get.mockClear();
       HttpClient.post.mockResolvedValue({ success: true });
@@ -1293,7 +1283,7 @@ describe('MessageService', () => {
         skipExpiryAuthoritySyncBeforeFormalReminders: true
       });
 
-      expect(starService.syncExpiryAuthorityIfNeeded).not.toHaveBeenCalled();
+      expect(mockStarService.syncExpiryAuthorityIfNeeded).not.toHaveBeenCalled();
       expect(HttpClient.post).toHaveBeenCalledWith(
         '/api/tasks/upcoming/sync',
         expect.objectContaining({
@@ -1308,6 +1298,20 @@ describe('MessageService', () => {
           targetUserId: 'child_1'
         })
       );
+    });
+
+    it('正式提醒同步前应通过注入的 starService 触发 authority sync', async () => {
+      await messageService._syncExpiryAuthorityBeforeFormalReminders({
+        scope: 'user',
+        userId: 'child_1',
+        familyId: 'family_1'
+      });
+
+      expect(mockStarService.syncExpiryAuthorityIfNeeded).toHaveBeenCalledWith({
+        scope: 'user',
+        userId: 'child_1',
+        familyId: 'family_1'
+      });
     });
 
     it('正式云端消息单条已读失败时不应先改本地', async () => {

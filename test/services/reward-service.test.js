@@ -38,11 +38,6 @@ jest.mock('../../utils/logger', () => ({
   logEvent: jest.fn()
 }));
 
-// Mock 配置服务
-jest.mock('../../services/service-manager', () => ({
-  getService: jest.fn().mockReturnValue(null)
-}));
-
 describe('RewardService', () => {
   let rewardService;
   let mockRewardRepository;
@@ -52,6 +47,8 @@ describe('RewardService', () => {
   let mockUserService;
   let mockEventBus;
   let mockConfig;
+  let mockStorageAdapter;
+  let mockConfigService;
 
   beforeEach(() => {
     // 重置所有 Mock
@@ -175,6 +172,14 @@ describe('RewardService', () => {
       getLoginUserId: jest.fn().mockReturnValue('parent_1')
     };
 
+    mockStorageAdapter = {
+      get: jest.fn().mockReturnValue(false),
+      set: jest.fn()
+    };
+    mockConfigService = {
+      hasCustomRewards: jest.fn().mockReturnValue(false)
+    };
+
     // 将仓储和服务添加到 Mock 配置
     mockConfig.repositories = {
       reward: mockRewardRepository,
@@ -192,7 +197,9 @@ describe('RewardService', () => {
       starRecordRepository: mockStarRecordRepository,
       starService: mockStarService,
       userService: mockUserService,
-      eventBus: mockEventBus
+      eventBus: mockEventBus,
+      storageAdapter: mockStorageAdapter,
+      configService: mockConfigService
     });
 
     // 手动设置已初始化状态，跳过初始化流程
@@ -203,6 +210,46 @@ describe('RewardService', () => {
   afterEach(() => {
     // 重置所有 Mock
     MockSetup.resetAllMocks(mockConfig);
+    RewardService._initialized = false;
+    RewardService._initializationPromise = null;
+  });
+
+  describe('initialize - 配置依赖收口', () => {
+    it('应优先使用注入的 configService 判断自定义奖励标记', async () => {
+      rewardService.enableCloudStorage = false;
+      rewardService.initialized = false;
+      RewardService._initialized = false;
+      mockRewardRepository.count.mockResolvedValue(0);
+      mockConfigService.hasCustomRewards.mockReturnValue(true);
+
+      await rewardService.initialize();
+
+      expect(mockConfigService.hasCustomRewards).toHaveBeenCalledTimes(1);
+      expect(mockStorageAdapter.get).not.toHaveBeenCalled();
+      expect(mockRewardRepository.initializeDefaultRewards).not.toHaveBeenCalled();
+    });
+
+    it('未注入 configService 时应退化到 storageAdapter', async () => {
+      rewardService = new RewardService({
+        rewardRepository: mockRewardRepository,
+        starGroupRepository: mockStarGroupRepository,
+        starRecordRepository: mockStarRecordRepository,
+        starService: mockStarService,
+        userService: mockUserService,
+        eventBus: mockEventBus,
+        storageAdapter: mockStorageAdapter
+      });
+      rewardService.enableCloudStorage = false;
+      rewardService.initialized = false;
+      RewardService._initialized = false;
+      mockRewardRepository.count.mockResolvedValue(0);
+      mockStorageAdapter.get.mockReturnValue(true);
+
+      await rewardService.initialize();
+
+      expect(mockStorageAdapter.get).toHaveBeenCalledWith('has_custom_rewards');
+      expect(mockRewardRepository.initializeDefaultRewards).not.toHaveBeenCalled();
+    });
   });
 
   // ==================== 测试组1：奖励创建和管理 ====================

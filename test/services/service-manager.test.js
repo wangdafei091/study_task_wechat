@@ -26,8 +26,15 @@ const loadServiceManager = (options = {}) => {
   const StorageAdapter = jest.fn(() => storageAdapterInstance);
   jest.doMock('../../adapters/storage-adapter', () => StorageAdapter);
 
-  const starServiceInstance = { name: 'starService' };
-  const messageServiceInstance = { name: 'messageService' };
+  const starServiceInstance = {
+    name: 'starService',
+    updateRewardService: jest.fn()
+  };
+  const messageServiceInstance = {
+    name: 'messageService',
+    updateUserService: jest.fn(),
+    updateStarService: jest.fn()
+  };
   const rewardServiceInstance = { name: 'rewardService' };
   const taskServiceInstance = {
     name: 'taskService',
@@ -39,6 +46,7 @@ const loadServiceManager = (options = {}) => {
   rewardServiceInstance.updateOfflineQueueService = jest.fn();
   rewardServiceInstance.updateUserService = jest.fn();
   rewardServiceInstance.updateStarService = jest.fn();
+  rewardServiceInstance.updateConfigService = jest.fn();
   const validationServiceInstance = { name: 'validationService' };
   const configServiceInstance = { name: 'configService' };
   const offlineQueueServiceInstance = { name: 'offlineQueueService' };
@@ -132,7 +140,8 @@ describe('ServiceManager', () => {
     });
     expect(mocks.MessageService).toHaveBeenCalledWith({
       eventBus: mocks.eventBusInstance,
-      userService
+      userService,
+      starService: mocks.instances.starServiceInstance
     });
     expect(mocks.RewardService).toHaveBeenCalledWith({
       eventBus: mocks.eventBusInstance,
@@ -167,6 +176,15 @@ describe('ServiceManager', () => {
     );
     expect(mocks.instances.rewardServiceInstance.updateOfflineQueueService).toHaveBeenCalledWith(
       mocks.instances.offlineQueueServiceInstance
+    );
+    expect(mocks.instances.rewardServiceInstance.updateConfigService).toHaveBeenCalledWith(
+      mocks.instances.configServiceInstance
+    );
+    expect(mocks.instances.starServiceInstance.updateRewardService).toHaveBeenCalledWith(
+      mocks.instances.rewardServiceInstance
+    );
+    expect(mocks.instances.messageServiceInstance.updateStarService).toHaveBeenCalledWith(
+      mocks.instances.starServiceInstance
     );
   });
 
