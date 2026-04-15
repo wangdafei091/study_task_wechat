@@ -4,6 +4,35 @@
 
 ---
 
+## [里程碑-21C] - 2026-04-15
+
+### ✅ 完成情况
+
+**执行文档与治理口径同步**
+
+- **架构入口事实已同步**：
+  - [`docs/architecture/architecture.md`](/Users/wangdafei/code/study_task_wechat/docs/architecture/architecture.md) 已补齐 `AnalysisBoardService`
+  - 明确其为分析页按需调用的聚合模块，不再与 `ServiceManager` 注册服务混淆
+- **高频协作文档口径已收敛**：
+  - [`CLAUDE.md`](/Users/wangdafei/code/study_task_wechat/CLAUDE.md) 不再使用固定任务类型 hex 作为全局唯一检查标准
+  - [`docs/development/GITHUB_WORKFLOW.md`](/Users/wangdafei/code/study_task_wechat/docs/development/GITHUB_WORKFLOW.md) 已将 UI 检查改为“主题 token / 页面语义一致性”口径
+- **性能检查表述已修正**：
+  - `CLAUDE.md` 与 `GITHUB_WORKFLOW.md` 不再把“多次 `setData`”直接视为错误
+  - 正式改为关注“同一热路径、同一数据域、可合并却未合并的无意义频繁更新”
+
+### 🧪 验证结果
+
+- 文档一致性复核通过：
+  - 已确认 `AnalysisBoardService` 在架构文档与 `services-guide` 的角色表述一致
+  - 已确认 `CLAUDE.md` / `GITHUB_WORKFLOW.md` 不再保留过时的固定颜色检查项与 `setData` 教条表述
+- 本期未修改业务代码，因此未新增自动化测试执行
+
+### 📖 详细实施记录
+
+- [里程碑-21C：执行文档与治理口径同步](../design/milestone-21c-governance-alignment.md)
+
+---
+
 ## [里程碑-21I] - 2026-04-15
 
 ### ✅ 完成情况
