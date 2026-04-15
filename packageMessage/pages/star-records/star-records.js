@@ -1,6 +1,4 @@
-const app = getApp();
 const serviceManager = require('../../../services/service-manager.js');
-const formatUtils = require('../../../utils/formatUtils.js');
 const logger = require('../../../utils/logger.js');
 
 Page({
@@ -11,11 +9,8 @@ Page({
   data: {
     records: [],
     groupedRecords: [],
-    showFilterModal: false,
     selectedType: 'all',     // 筛选类型：all, income, expense
     selectedTime: 'all',     // 筛选时间：all, week, month, 3months
-    tempSelectedType: 'all', // 临时选择的类型
-    tempSelectedTime: 'all', // 临时选择的时间
     taskData: {}             // 任务数据缓存
   },
 
@@ -439,8 +434,7 @@ Page({
     }
     
     this.setData({
-      selectedType: type,
-      tempSelectedType: type
+      selectedType: type
     }, () => {
       // 重新加载并筛选记录
       this.loadStarRecords();
@@ -461,8 +455,7 @@ Page({
     }
     
     this.setData({
-      selectedTime: time,
-      tempSelectedTime: time
+      selectedTime: time
     }, () => {
       // 重新加载并筛选记录
       this.loadStarRecords();
@@ -525,4 +518,4 @@ Page({
     
     return result;
   }
-}) 
+})

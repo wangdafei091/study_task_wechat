@@ -441,21 +441,6 @@ Component({
              day === today.getDate();
     },
     
-    // 格式化日期显示
-    formatDateDisplay(dateStr) {
-      if (!dateStr) return '';
-      
-      try {
-        const [year, month, day] = dateStr.split('-').map(Number);
-        const date = new Date(year, month - 1, day);
-        const weekday = this.getWeekdayName(date.getDay());
-        return `${month}月${day}日 ${weekday}`;
-      } catch (e) {
-        logger.error('[TaskHeatmap] 日期格式化错误:', e);
-        return dateStr;
-      }
-    },
-
     formatDisplayTime(time) {
       return formatDisplayTime(time);
     },
@@ -1645,14 +1630,6 @@ Component({
       }
     },
     
-    // 获取当前月份
-    getCurrentMonth() {
-      return {
-        year: this.properties.currentYear,
-        month: this.properties.currentMonth
-      };
-    },
-
     /**
      * 增强任务数据，添加显示所需的格式化字段
      * @param {Object} task 原始任务对象
@@ -2603,51 +2580,6 @@ Component({
       } finally {
         // 确保隐藏加载提示
         this._hideLoading(true);
-      }
-    },
-
-    /**
-     * 处理任务系列更新，继续更新下一个
-     */
-    handleSeriesUpdateContinue(tasks, index, updateData, results, callback) {
-      this.updateTasksSerially(tasks, index, updateData, results, callback);
-    },
-
-    /**
-     * 任务详情渲染处理 
-     */
-    _renderTaskDetails(task) {
-      if (task) {
-        // 处理不同类型的积分有效期
-        let expiryText = '';
-        
-        if (task.pointsExpiryDate) {
-          // 已有格式化的过期日期，直接使用
-          expiryText = task.pointsExpiryDate;
-        } else if (task.pointsExpiry === 'permanent') {
-          // 永久有效的情况
-          expiryText = '永久';
-        } else if (typeof task.pointsExpiry === 'string' && Constants.POINTS_EXPIRY.TEXT[task.pointsExpiry]) {
-          // 尚未完成的任务，显示完成后的有效期类型
-          expiryText = Constants.POINTS_EXPIRY.TEXT[task.pointsExpiry];
-        } else if (typeof task.pointsExpiry === 'number') {
-          // 数字类型是时间戳，计算与当前时间的差距，格式化为"几天后"
-          const now = new Date().getTime();
-          const diffDays = Math.ceil((task.pointsExpiry - now) / (24 * 60 * 60 * 1000));
-          
-          if (diffDays <= 0) {
-            expiryText = '今日到期';
-          } else if (diffDays === 1) {
-            expiryText = '明日到期';
-          } else {
-            expiryText = `${diffDays}天后到期`;
-          }
-        } else {
-          // 默认情况
-          expiryText = '7天';
-        }
-          
-        logger.debug(`[taskHeatmap] 渲染任务详情: ${task.title}, 日期: ${task.date}, 积分有效期类型: ${typeof task.pointsExpiry}, 值: ${task.pointsExpiry}, 转换后: ${expiryText}`);
       }
     },
 
