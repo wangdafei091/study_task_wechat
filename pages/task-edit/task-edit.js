@@ -1,11 +1,8 @@
-const app = getApp();
-const Constants = require('../../utils/constants.js');
 const uiUtils = require('../../utils/uiUtils.js');
 const dateUtils = require('../../utils/dateUtils.js');
 const logger = require('../../utils/logger');
 const serviceManager = require('../../services/service-manager.js');
 const pageStorageHelper = require('../../utils/page-storage-helper');
-const permissionUtils = require('../../utils/permission-utils');
 const taskFormDisplay = require('../../utils/task-form-display');
 const taskFormCore = require('../../utils/task-form-core');
 const taskFormAdapter = require('../../utils/task-form-adapter');
@@ -380,10 +377,6 @@ Page({
     }
   },
 
-  clearSelectedTemplateState: function() {
-    taskTemplateEntry.resetSelectedTemplate(this);
-  },
-
   captureTemplateFillSnapshot: function() {
     return JSON.parse(JSON.stringify({
       newTask: this.data.newTask,
@@ -516,13 +509,6 @@ Page({
   nextHeatmapMonth: function() {
     const heatmap = this.getHeatmapComponent();
     if (heatmap) heatmap.nextMonth();
-  },
-
-  /**
-   * 处理热力图日期选择事件
-   */
-  onHeatmapDaySelect: function(e) {
-    // 日期选择事件由热力图组件内部处理
   },
 
   /**
@@ -1145,14 +1131,6 @@ Page({
     }
   },
 
-  /**
-   * @deprecated 使用统一的addTask函数代替，此函数将在未来版本移除
-   */
-  doAddTask: function() {
-    logger.warn('TaskEdit', '警告：调用了已废弃的doAddTask函数，请使用addTask代替');
-    this.addTask();
-  },
-
   recordSelectedTemplateUsage: async function(templateId) {
     const taskTemplateService = serviceManager.getService('taskTemplate');
     if (!taskTemplateService || !templateId) {
@@ -1770,17 +1748,6 @@ Page({
         });
       }
     }
-  },
-
-  /**
-   * 日期时间辅助函数 - 检查结束日期是否有效
-   * @param {string} startDate 开始日期
-   * @param {string} endDate 结束日期
-   * @returns {boolean} 结束日期是否有效
-   */
-  isValidEndDate: function(startDate, endDate) {
-    if (!startDate || !endDate) return false;
-    return endDate >= startDate;
   },
 
   /**
