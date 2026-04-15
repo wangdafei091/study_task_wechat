@@ -7,16 +7,12 @@
 const logger = require('../utils/logger');
 const { StarGroupRepository, StarRecordRepository } = require('../repositories/index');
 const EventBus = require('../utils/core/event-bus');
-const { StarExpiryType } = require('../models/star');
-const { StarRecord } = require('../models/star-record');
-const { StarGroup } = require('../models/star-group');
-const { EVENTS } = require('../utils/constants');
-const HttpClient = require('../utils/http-client');
 const API_CONFIG = require('../utils/api-config');
-
-const STAR_REMIND_WINDOW_DAYS = 3;
-const STAR_PROTECT_WINDOW_HOURS = 48;
-const EXPIRY_AUTHORITY_SYNC_MIN_INTERVAL_MS = 10 * 1000;
+const starUtils = require('./star-service/star-utils');
+const starRecords = require('./star-service/star-records');
+const starWrite = require('./star-service/star-write');
+const starCloud = require('./star-service/star-cloud');
+const starExpiry = require('./star-service/star-expiry');
 
 class StarService {
   /**
@@ -89,14 +85,7 @@ class StarService {
    * @returns {Promise<Array>} 星星分组列表
    */
   async getStarGroups(userId = null) {
-    try {
-      const groups = await this.starGroupRepository.getNonEmptyGroups(userId);
-      logger.info('StarService', `获取星星分组列表成功${userId ? `, 用户=${userId}` : ''}, 数量=${groups.length}`);
-      return groups;
-    } catch (error) {
-      logger.error('StarService', '获取星星分组列表失败', error);
-      return [];
-    }
+    return starRecords.getStarGroups(this, userId);
   }
   
   /**
@@ -105,14 +94,7 @@ class StarService {
    * @returns {Promise<Number>} 星星总数量
    */
   async getTotalStars(userId = null) {
-    try {
-      const total = await this.starGroupRepository.getTotalPoints(userId);
-      logger.info('StarService', `获取用户总星星数量成功${userId ? `, 用户=${userId}` : ''}: ${total}`);
-      return total;
-    } catch (error) {
-      logger.error('StarService', '获取用户总星星数量失败', error);
-      return 0;
-    }
+    return starRecords.getTotalStars(this, userId);
   }
   
   /**
@@ -125,30 +107,7 @@ class StarService {
    * @returns {Promise<Array>} 星星记录列表
    */
   async getStarRecords(options = {}) {
-    try {
-      let records = [];
-      const { userId } = options;
-      
-      if (options.type && options.date) {
-        // 查询特定类型和日期的记录
-        records = await this.starRecordRepository.getRecordsByTypeAndDate(options.type, options.date, userId);
-      } else if (options.type) {
-        // 查询特定类型的记录
-        records = await this.starRecordRepository.getRecordsByType(options.type, userId);
-      } else if (options.date) {
-        // 查询特定日期的记录
-        records = await this.starRecordRepository.getRecordsByDate(options.date, userId);
-      } else {
-        // 查询所有记录，并按时间排序
-        records = await this.starRecordRepository.getRecordsByTimeOrder(true, options.limit || 0, userId);
-      }
-      
-      logger.info('StarService', `获取星星记录列表成功${userId ? `, 用户=${userId}` : ''}, 数量=${records.length}`);
-      return records;
-    } catch (error) {
-      logger.error('StarService', '获取星星记录列表失败', error);
-      return [];
-    }
+    return starRecords.getStarRecords(this, options);
   }
   
   /**
@@ -157,16 +116,7 @@ class StarService {
    * @returns {Promise<Object>} 按月份分组的记录
    */
   async getStarRecordsByMonth(userId = null) {
-    try {
-      // 获取用户的记录并按月份分组
-      const groupedRecords = await this.starRecordRepository.getRecordsGroupedByMonth({ userId });
-      
-      logger.info('StarService', `获取按月份分组的星星记录成功${userId ? `, 用户=${userId}` : ''}, 月份数=${groupedRecords.length}`);
-      return groupedRecords;
-    } catch (error) {
-      logger.error('StarService', '获取按月份分组的星星记录失败', error);
-      return [];
-    }
+    return starRecords.getStarRecordsByMonth(this, userId);
   }
   
   /**
@@ -177,17 +127,7 @@ class StarService {
    * @returns {Promise<Array>} 符合条件的记录列表
    */
   async getStarRecordsByDateRange(startDate, endDate, userId = null) {
-    try {
-      logger.info('StarService', `获取日期范围星星记录: ${startDate} 至 ${endDate}${userId ? `, 用户=${userId}` : ''}`);
-      
-      const records = await this.starRecordRepository.getRecordsByDateRange(startDate, endDate, userId);
-      
-      logger.info('StarService', `获取日期范围星星记录成功, 数量=${records.length}`);
-      return records;
-    } catch (error) {
-      logger.error('StarService', `获取日期范围星星记录失败: ${startDate} 至 ${endDate}`, error);
-      return [];
-    }
+    return starRecords.getStarRecordsByDateRange(this, startDate, endDate, userId);
   }
   
   /**
@@ -197,17 +137,7 @@ class StarService {
    * @returns {Promise<Array>} 符合条件的记录列表
    */
   async getStarRecordsByDate(date, userId = null) {
-    try {
-      logger.info('StarService', `获取特定日期星星记录: ${date}${userId ? `, 用户=${userId}` : ''}`);
-      
-      const records = await this.starRecordRepository.getRecordsByDate(date, userId);
-      
-      logger.info('StarService', `获取特定日期星星记录成功, 数量=${records.length}`);
-      return records;
-    } catch (error) {
-      logger.error('StarService', `获取特定日期星星记录失败: ${date}`, error);
-      return [];
-    }
+    return starRecords.getStarRecordsByDate(this, date, userId);
   }
   
   /**
@@ -222,109 +152,7 @@ class StarService {
    * @returns {Promise<Object>} 添加结果
    */
   async addStars(points, expiryType, source, options = {}) {
-    if (points <= 0) {
-      logger.warn('StarService', `添加星星失败: 星星数量必须大于0, 实际值=${points}`);
-      return { success: false, message: '星星数量必须大于0' };
-    }
-    
-    if (!expiryType || !Object.values(StarExpiryType).includes(expiryType)) {
-      logger.warn('StarService', `添加星星失败: 无效的过期类型: ${expiryType}`);
-      return { success: false, message: '无效的过期类型' };
-    }
-    
-    try {
-      const { userId } = options;
-      
-      // 计算过期时间
-      const expiryDate = this._calculateExpiryDate(expiryType);
-      
-      // 生成过期日期字符串
-      const expiryDateStr = expiryDate ? this._formatExpiryDate(expiryDate) : '';
-      
-      logger.info('StarService', `添加星星: 过期类型=${expiryType}, 过期时间=${expiryDate ? expiryDate.getTime() : null}, 过期日期字符串=${expiryDateStr}${userId ? `, 用户=${userId}` : ''}`);
-      
-      // 获取或创建对应过期类型的分组
-      const group = await this.starGroupRepository.getOrCreateGroup(
-        expiryType,
-        expiryDate ? expiryDate.getTime() : null,
-        expiryDateStr,
-        userId // 传递用户ID
-      );
-      
-      if (!group) {
-        logger.error('StarService', `添加星星失败: 无法获取或创建星星分组, 类型=${expiryType}${userId ? `, 用户=${userId}` : ''}`);
-        return { success: false, message: '无法创建星星分组' };
-      }
-      
-      // 添加星星到分组
-      const updatedGroup = await this.starGroupRepository.addStarsToGroup(
-        group, 
-        points,
-        source
-      );
-      
-      if (!updatedGroup) {
-        logger.error('StarService', `添加星星失败: 无法添加星星到分组, 类型=${expiryType}, 数量=${points}${userId ? `, 用户=${userId}` : ''}`);
-        return { success: false, message: '无法添加星星到分组' };
-      }
-      
-      // 创建收入记录
-      const recordData = {
-        type: 'income',
-        source: options.sourceType || 'manual',
-        sourceId: options.sourceId || '',
-        points: points,
-        description: source || '手动添加星星',
-        timestamp: Date.now(),
-        expiryType,
-        expiryDate: this._normalizeExpiryDateValue(expiryDate),
-        syncedToCloud: false
-        // balance和previousBalance将在保存时由仓储计算
-      };
-      
-      // 如果有用户ID，添加到记录中
-      if (userId) {
-        recordData.userId = userId;
-      }
-      
-      const record = await this.starRecordRepository.save(recordData);
-      
-      if (!record) {
-        logger.error('StarService', `添加星星: 创建记录失败, 类型=${expiryType}, 数量=${points}${userId ? `, 用户=${userId}` : ''}`);
-        // 继续流程，但记录错误
-      }
-      
-      logger.info('StarService', `添加星星成功, 类型=${expiryType}, 数量=${points}, 来源=${source || '未知'}${userId ? `, 用户=${userId}` : ''}`);
-      logger.info('StarService', `更新后的分组信息: ID=${updatedGroup.id}, 当前星星数=${updatedGroup.stars}(${typeof updatedGroup.stars}), 过期类型=${updatedGroup.expiryType}`);
-      
-      // 触发星星添加事件
-      this.eventBus.emit(EVENTS.STARS_ADDED, {
-        points,
-        expiryType,
-        group: updatedGroup,
-        record
-      });
-
-      if (record && this.enableCloudStorage) {
-        this._syncStarRecordToCloud(record).catch(syncError => {
-          logger.warn('StarService', '星星收入云同步失败，本地已保存', {
-            recordId: record.id,
-            error: syncError.message
-          });
-        });
-      }
-      
-      return {
-        success: true,
-        points,
-        group: updatedGroup,
-        record,
-        message: '添加星星成功'
-      };
-    } catch (error) {
-      logger.error('StarService', `添加星星失败, 类型=${expiryType}, 数量=${points}`, error);
-      return { success: false, message: '添加星星过程中发生错误' };
-    }
+    return starWrite.addStars(this, points, expiryType, source, options);
   }
   
   /**
@@ -339,107 +167,7 @@ class StarService {
    * @returns {Promise<Object>} 消费结果
    */
   async consumeStars(points, reason, options = {}) {
-    if (points <= 0) {
-      logger.warn('StarService', `消费星星失败: 星星数量必须大于0, 实际值=${points}`);
-      return { success: false, message: '星星数量必须大于0' };
-    }
-    
-    try {
-      const { userId, sourceType, sourceId, originalTaskDate } = options;
-      const consumeIdempotencyKey = this._buildConsumeIdempotencyKey(options);
-      
-      // 直接按过期优先顺序消费星星，有多少扣多少
-      const consumeResult = await this.starGroupRepository.consumeStarsByExpiryOrder(points, userId);
-      
-      if (!consumeResult.success && consumeResult.consumed === 0) {
-        logger.warn('StarService', `消费星星失败: 没有可用星星${userId ? `, 用户=${userId}` : ''}`);
-        return { 
-          success: false, 
-          consumed: 0,
-          message: '没有可用的星星'
-        };
-      }
-      
-      // 实际扣减的数量
-      const actualConsumed = consumeResult.consumed || 0;
-      
-      // 如果是任务惩罚类型，使用专门的惩罚记录创建方法
-      let record;
-      if (sourceType === 'task_penalty' && sourceId) {
-        record = await this.starRecordRepository.createPenaltyRecord(
-          sourceId, 
-          actualConsumed, 
-          reason, 
-          userId,
-          originalTaskDate,
-          points, // 传递应扣数量作为requestedPoints
-          consumeIdempotencyKey
-        );
-      } else {
-        // 创建普通支出记录
-        const recordData = {
-          type: 'expense',
-          source: sourceType || 'manual',
-          sourceId: sourceId || '',
-          points: -actualConsumed, // 负数表示支出，使用实际扣减数量
-          description: reason || '手动消费星星',
-          timestamp: Date.now(),
-          idempotencyKey: consumeIdempotencyKey
-          // balance和previousBalance将在保存时由仓储计算
-        };
-        
-        // 如果有用户ID，添加到记录中
-        if (userId) {
-          recordData.userId = userId;
-        }
-        
-        record = await this.starRecordRepository.save(recordData);
-      }
-      
-      if (!record) {
-        logger.error('StarService', `消费星星: 创建记录失败, 实际扣减=${actualConsumed}, 原因=${reason || '未知'}${userId ? `, 用户=${userId}` : ''}`);
-        // 继续流程，但记录错误
-      }
-      
-      const isFullyConsumed = actualConsumed === points;
-      const resultMessage = isFullyConsumed ? '消费星星成功' : `星星余额不足，已扣减${actualConsumed}颗星星`;
-      
-      logger.info('StarService', `消费星星完成, 请求=${points}, 实际扣减=${actualConsumed}, 原因=${reason || '未知'}${userId ? `, 用户=${userId}` : ''}`);
-      
-      // 触发星星消费事件
-      this.eventBus.emit(EVENTS.STARS_CONSUMED, {
-        points: actualConsumed, // 使用实际扣减数量
-        reason,
-        groups: consumeResult.groupsUpdated,
-        record
-      });
-
-      if (actualConsumed > 0 && this.enableCloudStorage) {
-        this._syncConsumeToCloud(points, reason, {
-          ...options,
-          requestedPoints: points,
-          idempotencyKey: consumeIdempotencyKey
-        }).catch(syncError => {
-          logger.warn('StarService', '通用扣星云同步失败，本地已保存', {
-            requestedPoints: points,
-            error: syncError.message
-          });
-        });
-      }
-      
-      return {
-        success: actualConsumed > 0, // 只要扣减了就算成功
-        points: actualConsumed, // 返回实际扣减数量
-        consumed: actualConsumed,
-        requested: points, // 返回请求的数量
-        groups: consumeResult.groupsUpdated,
-        record,
-        message: resultMessage
-      };
-    } catch (error) {
-      logger.error('StarService', `消费星星失败, 数量=${points}, 原因=${reason || '未知'}`, error);
-      return { success: false, message: '消费星星过程中发生错误' };
-    }
+    return starWrite.consumeStars(this, points, reason, options);
   }
   
   /**
@@ -449,59 +177,7 @@ class StarService {
    * @returns {Promise<Object>} 处理结果
    */
   async handleTaskCompletion(task, points) {
-    if (!task || !task.id) {
-      logger.warn('StarService', '处理任务完成奖励失败: 无效的任务');
-      return { success: false, message: '无效的任务' };
-    }
-    
-    if (points <= 0) {
-      logger.warn('StarService', `处理任务完成奖励失败: 星星数量必须大于0, 实际值=${points}, 任务ID=${task.id}`);
-      return { success: false, message: '星星数量必须大于0' };
-    }
-    
-    try {
-      // 获取任务的过期类型，默认为本周有效
-      const expiryType = task.starExpiryType || StarExpiryType.WEEK;
-      
-      // 添加星星
-      const result = await this.addStars(
-        points,
-        expiryType,
-        `完成任务: ${task.name || task.id}`,
-        {
-          sourceType: 'task_complete',
-          sourceId: task.id,
-          userId: task.userId // 传递任务的用户ID
-        }
-      );
-      
-      if (!result.success) {
-        logger.error('StarService', `处理任务完成奖励失败, 任务ID=${task.id}, 星星数=${points}${task.userId ? `, 用户=${task.userId}` : ''}`);
-        return result;
-      }
-
-      const record = result.record || null;
-      
-      logger.info('StarService', `处理任务完成奖励成功, 任务ID=${task.id}, 星星数=${points}, 过期类型=${expiryType}`);
-      
-      // 触发任务完成奖励事件
-      this.eventBus.emit(EVENTS.TASK_COMPLETED_WITH_REWARD, {
-        task,
-        points,
-        expiryType,
-        record
-      });
-      
-      return {
-        ...result,
-        task,
-        record,
-        message: '任务完成奖励处理成功'
-      };
-    } catch (error) {
-      logger.error('StarService', `处理任务完成奖励失败, 任务ID=${task.id}, 星星数=${points}`, error);
-      return { success: false, message: '处理任务完成奖励过程中发生错误' };
-    }
+    return starWrite.handleTaskCompletion(this, task, points);
   }
   
   /**
@@ -515,37 +191,7 @@ class StarService {
    * @returns {Promise<Object>} 消费结果
    */
   async consumeStarsUnified(params) {
-    const { points, reason, strategy = 'expiry_order', expiryType, options = {} } = params;
-    
-    if (points <= 0) {
-      logger.warn('StarService', `统一扣星失败: 星星数量必须大于0, 实际值=${points}`);
-      return { success: false, message: '星星数量必须大于0' };
-    }
-    
-    logger.info('StarService', `使用统一接口消费星星: 数量=${points}, 策略=${strategy}, 原因=${reason}`);
-    
-    try {
-      switch (strategy) {
-        case 'expiry_order':
-          // 按过期顺序扣星（默认策略）
-          return await this.consumeStars(points, reason, options);
-          
-        case 'specific_type':
-          // 从特定类型扣星
-          if (!expiryType) {
-            logger.warn('StarService', '使用specific_type策略时必须指定expiryType');
-            return { success: false, message: '使用特定类型策略时必须指定有效期类型' };
-          }
-          return await this.consumeStarsFromSpecificType(points, expiryType, reason, options);
-          
-        default:
-          logger.warn('StarService', `未知的消费策略: ${strategy}`);
-          return { success: false, message: '未知的消费策略' };
-      }
-    } catch (error) {
-      logger.error('StarService', `统一扣星接口执行失败: 策略=${strategy}`, error);
-      return { success: false, message: '扣星操作失败' };
-    }
+    return starWrite.consumeStarsUnified(this, params);
   }
 
   /**
@@ -555,18 +201,7 @@ class StarService {
    * @returns {String} 过期类型描述
    */
   _getExpiryTypeDescription(expiryType) {
-    switch (expiryType) {
-      case StarExpiryType.PERMANENT:
-        return '永久有效';
-      case StarExpiryType.WEEK:
-        return '本周结束';
-      case StarExpiryType.MONTH:
-        return '本月结束';
-      case StarExpiryType.QUARTER:
-        return '本季度结束';
-      default:
-        return expiryType;
-    }
+    return starUtils.getExpiryTypeDescription(this, expiryType);
   }
   
   /**
@@ -575,36 +210,7 @@ class StarService {
    * @returns {Object} 包含时间戳和可读格式的有效期信息
    */
   calculateExpiryDate(expiryType) {
-    logger.info('StarService', `计算积分有效期: 类型=${expiryType}`);
-    
-    // 如果是永久有效，直接返回
-    if (expiryType === 'permanent') {
-      logger.info('StarService', '积分永久有效');
-      return {
-        expiry: 'permanent',
-        expiryDateStr: '永久'
-      };
-    }
-    
-    // 使用私有方法计算过期日期
-    const expiryDate = this._calculateExpiryDate(expiryType);
-    
-    if (!expiryDate) {
-      logger.warn('StarService', `无法计算有效期: ${expiryType}`);
-      return {
-        expiry: 'permanent',
-        expiryDateStr: '永久'
-      };
-    }
-    
-    // 格式化日期为可读格式
-    const dateStr = this._formatExpiryDate(expiryDate);
-    
-    logger.info('StarService', `计算结果: ${dateStr}`);
-    return {
-      expiry: expiryDate.getTime(),
-      expiryDateStr: dateStr
-    };
+    return starUtils.calculateExpiryDate(this, expiryType);
   }
 
   /**
@@ -613,26 +219,7 @@ class StarService {
    * @returns {String} 有效期文本描述
    */
   getExpiryText(expiryType) {
-    const Constants = require('../utils/constants');
-    
-    // 使用常量中的文本映射
-    if (Constants.POINTS_EXPIRY.TEXT[expiryType]) {
-      return Constants.POINTS_EXPIRY.TEXT[expiryType];
-    }
-    
-    // 如果常量中没有，使用默认映射
-    switch (expiryType) {
-      case 'permanent':
-        return '永久';
-      case 'week':
-        return '本周结束';
-      case 'month':
-        return '本月结束';
-      case 'quarter':
-        return '本季度结束';
-      default:
-        return '永久';
-    }
+    return starUtils.getExpiryText(this, expiryType);
   }
 
   /**
@@ -642,113 +229,23 @@ class StarService {
    * @returns {String} 格式化后的日期字符串
    */
   _formatExpiryDate(expiryDate) {
-    const logger = require('../utils/logger');
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const expiry = new Date(expiryDate.getFullYear(), expiryDate.getMonth(), expiryDate.getDate());
-    
-    // 计算天数差
-    const diffTime = expiry.getTime() - today.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
-    let result;
-    if (diffDays === 0) {
-      result = '今天到期';
-    } else if (diffDays === 1) {
-      result = '明天到期';
-    } else {
-      // 格式化为 YYYY-MM-DD 格式
-      const year = expiryDate.getFullYear();
-      const month = String(expiryDate.getMonth() + 1).padStart(2, '0');
-      const day = String(expiryDate.getDate()).padStart(2, '0');
-      result = `${year}-${month}-${day} 到期`;
-    }
-    
-    logger.info('StarService', `过期日期格式化: ${expiryDate.toISOString()} -> ${result}`);
-    return result;
+    return starUtils.formatExpiryDate(this, expiryDate);
   }
 
   _buildEndOfDayDate(year, monthIndex, day) {
-    return new Date(year, monthIndex, day, 23, 59, 59, 999);
+    return starUtils.buildEndOfDayDate(this, year, monthIndex, day);
   }
 
   _parseExpiryDateValue(expiryValue) {
-    if (expiryValue === null || expiryValue === undefined || expiryValue === '') {
-      return null;
-    }
-
-    if (expiryValue instanceof Date) {
-      return Number.isNaN(expiryValue.getTime()) ? null : new Date(expiryValue.getTime());
-    }
-
-    if (typeof expiryValue === 'number') {
-      if (!Number.isFinite(expiryValue)) {
-        return null;
-      }
-      const parsedFromNumber = new Date(expiryValue);
-      return Number.isNaN(parsedFromNumber.getTime()) ? null : parsedFromNumber;
-    }
-
-    if (typeof expiryValue !== 'string') {
-      return null;
-    }
-
-    const trimmed = expiryValue.trim();
-    if (!trimmed || trimmed === '永久') {
-      return null;
-    }
-
-    if (trimmed === '今天到期' || trimmed === '今天') {
-      const today = new Date();
-      return this._buildEndOfDayDate(today.getFullYear(), today.getMonth(), today.getDate());
-    }
-
-    if (trimmed === '明天到期' || trimmed === '明天') {
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      return this._buildEndOfDayDate(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate());
-    }
-
-    const dateOnlyMatch = trimmed.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:\s*到期)?$/);
-    if (dateOnlyMatch) {
-      const year = Number(dateOnlyMatch[1]);
-      const monthIndex = Number(dateOnlyMatch[2]) - 1;
-      const day = Number(dateOnlyMatch[3]);
-      const parsedDate = this._buildEndOfDayDate(year, monthIndex, day);
-      return Number.isNaN(parsedDate.getTime()) ? null : parsedDate;
-    }
-
-    const parsed = new Date(trimmed);
-    return Number.isNaN(parsed.getTime()) ? null : parsed;
+    return starUtils.parseExpiryDateValue(this, expiryValue);
   }
 
   _normalizeExpiryDateValue(expiryValue) {
-    const parsedDate = this._parseExpiryDateValue(expiryValue);
-    if (!parsedDate) {
-      return null;
-    }
-
-    const year = parsedDate.getFullYear();
-    const month = String(parsedDate.getMonth() + 1).padStart(2, '0');
-    const day = String(parsedDate.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    return starUtils.normalizeExpiryDateValue(this, expiryValue);
   }
 
   _resolveExpiryMetadata(expiryValue, fallbackDisplayText = '') {
-    const parsedDate = this._parseExpiryDateValue(expiryValue);
-    if (!parsedDate) {
-      return {
-        normalizedDate: null,
-        timestamp: null,
-        displayText: fallbackDisplayText || ''
-      };
-    }
-
-    return {
-      normalizedDate: this._normalizeExpiryDateValue(parsedDate),
-      timestamp: parsedDate.getTime(),
-      displayText: this._formatExpiryDate(parsedDate)
-    };
+    return starUtils.resolveExpiryMetadata(this, expiryValue, fallbackDisplayText);
   }
 
   /**
@@ -758,47 +255,7 @@ class StarService {
    * @returns {Date|null} 过期日期对象，null表示永不过期
    */
   _calculateExpiryDate(expiryType) {
-    // 永久有效，无过期日期
-    if (expiryType === StarExpiryType.PERMANENT) {
-      return null;
-    }
-    
-    const now = new Date();
-    const result = new Date(now);
-    
-    switch (expiryType) {
-      case StarExpiryType.WEEK: {
-        // 本周日的23:59:59
-        const daysUntilSunday = 7 - now.getDay(); // 0是周日，所以当天是周日时为7天
-        result.setDate(now.getDate() + (daysUntilSunday === 7 ? 0 : daysUntilSunday));
-        result.setHours(23, 59, 59, 999);
-        break;
-      }
-      
-      case StarExpiryType.MONTH: {
-        // 本月最后一天的23:59:59
-        result.setMonth(result.getMonth() + 1, 0); // 下个月的第0天就是本月最后一天
-        result.setHours(23, 59, 59, 999);
-        break;
-      }
-      
-      case StarExpiryType.QUARTER: {
-        // 计算当前季度的最后一个月
-        const currentMonth = now.getMonth(); // 0-11
-        const quarterEndMonth = Math.floor(currentMonth / 3) * 3 + 2; // 季度的最后一个月 (0->2, 1->2, 2->2, 3->5...)
-        
-        // 设置为季度最后一个月的最后一天
-        result.setMonth(quarterEndMonth + 1, 0); // 下个月的第0天就是本月最后一天
-        result.setHours(23, 59, 59, 999);
-        break;
-      }
-      
-      default:
-        // 不识别的类型，默认返回null
-        return null;
-    }
-    
-    return result;
+    return starUtils.calculateExpiryDateInternal(this, expiryType);
   }
   
   /**
@@ -806,41 +263,7 @@ class StarService {
    * @returns {Promise<Object>} 验证结果
    */
   async validateConsistency() {
-    logger.info('StarService', '开始验证星星数据一致性');
-    
-    try {
-      // 获取所有星星分组
-      const groups = await this.starGroupRepository.getAll();
-      
-      // 计算分组总和
-      const groupsTotal = groups.reduce((sum, group) => sum + (group.stars || 0), 0);
-      
-      // 获取总记录数
-      const records = await this.starRecordRepository.getAll();
-      const recordsCalculation = this._calculateBalanceFromRecords(records);
-      
-      // 检查一致性
-      const isConsistent = groupsTotal === recordsCalculation.finalBalance;
-      
-      const result = {
-        isConsistent,
-        groupsTotal,
-        recordsBalance: recordsCalculation.finalBalance,
-        difference: groupsTotal - recordsCalculation.finalBalance,
-        groupsCount: groups.length,
-        recordsCount: records.length
-      };
-      
-      logger.info('StarService', `星星数据一致性验证结果: ${JSON.stringify(result)}`);
-      
-      return result;
-    } catch (error) {
-      logger.error('StarService', '验证星星数据一致性失败', error);
-      return {
-        isConsistent: false,
-        error: error.message
-      };
-    }
+    return starRecords.validateConsistency(this);
   }
 
   /**
@@ -850,22 +273,7 @@ class StarService {
    * @returns {Object} 计算结果
    */
   _calculateBalanceFromRecords(records) {
-    let income = 0;
-    let expense = 0;
-    
-    records.forEach(record => {
-      if (record.points > 0) {
-        income += record.points;
-      } else {
-        expense += Math.abs(record.points);
-      }
-    });
-    
-    return {
-      income,
-      expense,
-      finalBalance: income - expense
-    };
+    return starRecords.calculateBalanceFromRecords(this, records);
   }
   
   /**
@@ -875,16 +283,7 @@ class StarService {
    * @returns {String} 格式化后的星星数量字符串
    */
   formatStarCount(points, useThousandSeparator = false) {
-    // 确保输入为数字
-    const numPoints = parseInt(points, 10) || 0;
-    
-    if (useThousandSeparator) {
-      // 添加千位分隔符
-      return numPoints.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-    }
-    
-    // 普通格式化，直接返回字符串
-    return numPoints.toString();
+    return starUtils.formatStarCount(this, points, useThousandSeparator);
   }
 
   /**
@@ -893,100 +292,7 @@ class StarService {
    * @returns {Promise<Object>} 包含过期星星数和最早过期日期的对象
    */
   async getExpiringStarsInfo(userId = null) {
-    try {
-      // 获取所有星星分组
-      const allGroups = await this.starGroupRepository.getAll();
-      const groups = (userId
-        ? allGroups.filter((group) => group.userId === userId)
-        : allGroups).map((group) => {
-          const expiryMeta = this._resolveExpiryMetadata(
-            group.expiryDate || group.expiryDateStr,
-            group.expiryDateStr || ''
-          );
-          if (expiryMeta.timestamp === null) {
-            return group;
-          }
-
-          return new StarGroup({
-            ...group,
-            type: group.type || group.expiryType || 'permanent',
-            expiryType: group.expiryType || group.type || 'permanent',
-            expiryDate: expiryMeta.timestamp,
-            expiryDateStr: expiryMeta.displayText
-          });
-        });
-      logger.info('StarService', `获取到${groups.length}个星星分组${userId ? `, 用户=${userId}` : ''}`);
-      
-      // 添加详细的分组信息日志
-      groups.forEach((group, index) => {
-        logger.info('StarService', `分组${index + 1}: ID=${group.id}, 星星数=${group.stars}, 过期类型=${group.expiryType}, 过期时间=${group.expiryDate}, 过期日期字符串=${group.expiryDateStr}`);
-      });
-      
-      // 过滤出非永久有效、未过期且在提醒窗口内的分组
-      const expiringGroups = groups.filter(group => 
-        group.expiryType !== StarExpiryType.PERMANENT && 
-        !group.isExpired() &&
-        this._isGroupWithinReminderWindow(group)
-      );
-      
-      logger.info('StarService', `过滤后的即将过期分组数量: ${expiringGroups.length}`);
-      
-      if (expiringGroups.length === 0) {
-        logger.info('StarService', '没有找到即将过期的星星分组');
-        return { 
-          points: 0, 
-          expiryDateText: '',
-          expiryTimestamp: 0,
-          remindWindowDays: STAR_REMIND_WINDOW_DAYS,
-          protectWindowDays: STAR_PROTECT_WINDOW_HOURS / 24
-        };
-      }
-      
-      // 添加过期分组详细信息
-      expiringGroups.forEach((group, index) => {
-        logger.info('StarService', `即将过期分组${index + 1}: ID=${group.id}, 星星数=${group.stars}, 过期类型=${group.expiryType}, 过期时间=${group.expiryDate}, 过期日期字符串=${group.expiryDateStr}, 是否过期=${group.isExpired()}`);
-      });
-      
-      // 按过期时间排序
-      expiringGroups.sort((a, b) => {
-        if (!a.expiryDate) return 1;
-        if (!b.expiryDate) return -1;
-        return a.expiryDate - b.expiryDate;
-      });
-      
-      // 获取最早过期的分组
-      const earliestGroup = expiringGroups[0];
-      logger.info('StarService', `最早过期分组: ID=${earliestGroup.id}, 过期时间=${earliestGroup.expiryDate}, 过期日期字符串=${earliestGroup.expiryDateStr}`);
-      
-      // 计算即将过期的星星数量（最早过期日期的所有星星）
-      const expiringPoints = expiringGroups
-        .filter(g => g.expiryDate === earliestGroup.expiryDate)
-        .reduce((sum, g) => sum + (g.stars || 0), 0);
-      
-      logger.info('StarService', `最早过期日期: ${earliestGroup.expiryDateStr}, 该日期星星: ${expiringPoints}`);
-      
-      // 添加返回值的详细日志
-      const result = {
-        points: expiringPoints,
-        expiryDateText: earliestGroup.expiryDateStr || '',
-        expiryTimestamp: earliestGroup.expiryDate || 0,
-        remindWindowDays: STAR_REMIND_WINDOW_DAYS,
-        protectWindowDays: STAR_PROTECT_WINDOW_HOURS / 24
-      };
-      
-      logger.info('StarService', `即将过期星星信息计算完成:`, result);
-      
-      return result;
-    } catch (error) {
-      logger.error('StarService', '获取即将过期星星信息失败', error);
-      return { 
-        points: 0, 
-        expiryDateText: '',
-        expiryTimestamp: 0,
-        remindWindowDays: STAR_REMIND_WINDOW_DAYS,
-        protectWindowDays: STAR_PROTECT_WINDOW_HOURS / 24
-      };
-    }
+    return starExpiry.getExpiringStarsInfo(this, userId);
   }
 
   /**
@@ -999,83 +305,7 @@ class StarService {
    * @returns {Promise<Object>} 消费结果
    */
   async consumeStarsFromSpecificType(points, expiryType, reason, options = {}) {
-    if (points <= 0) {
-      logger.warn('StarService', `从特定类型消费星星失败: 星星数量必须大于0, 实际值=${points}`);
-      return { success: false, message: '星星数量必须大于0' };
-    }
-    
-    if (!expiryType) {
-      logger.warn('StarService', `从特定类型消费星星失败: 未指定有效期类型`);
-      return { success: false, message: '未指定有效期类型' };
-    }
-    
-    try {
-      logger.info('StarService', `开始从特定类型消费星星, 数量=${points}, 类型=${expiryType}, 原因=${reason}`);
-      
-      // 从特定类型的分组中扣减星星
-      const deductResult = await this.starGroupRepository.deductStarsFromSpecificExpiryType(
-        points,
-        expiryType,
-        reason,
-        options.userId || null
-      );
-      
-      if (!deductResult.success) {
-        logger.error('StarService', `从特定类型消费星星失败: ${deductResult.message}`);
-        return deductResult;
-      }
-      
-      // 创建支出记录
-      const record = await this.starRecordRepository.save({
-        type: 'expense',
-        source: options.sourceType || 'task_reset',
-        sourceId: options.sourceId || '',
-        points: -points, // 负数表示支出
-        description: reason || '取消任务完成',
-        timestamp: Date.now(),
-        userId: options.userId || null,
-        originalTaskDate: options.originalTaskDate || null,
-        expiryType,
-        syncedToCloud: false
-      });
-      
-      if (!record) {
-        logger.error('StarService', `从特定类型消费星星: 创建记录失败, 数量=${points}, 类型=${expiryType}`);
-        // 继续流程，但记录错误
-      }
-      
-      logger.info('StarService', `从特定类型消费星星成功, 数量=${points}, 类型=${expiryType}, 原因=${reason}`);
-      
-      // 触发星星消费事件
-      this.eventBus.emit(EVENTS.STARS_CONSUMED, {
-        points,
-        expiryType,
-        reason,
-        groups: deductResult.deductedGroups,
-        record
-      });
-
-      if (record && this.enableCloudStorage) {
-        this._syncStarRecordToCloud(record).catch(syncError => {
-          logger.warn('StarService', '特定类型扣星云同步失败，本地已保存', {
-            recordId: record.id,
-            error: syncError.message
-          });
-        });
-      }
-      
-      return {
-        success: true,
-        points,
-        consumed: points,
-        groups: deductResult.deductedGroups,
-        record,
-        message: '从特定类型消费星星成功'
-      };
-    } catch (error) {
-      logger.error('StarService', `从特定类型消费星星失败, 数量=${points}, 类型=${expiryType}`, error);
-      return { success: false, message: '从特定类型消费星星过程中发生错误' };
-    }
+    return starWrite.consumeStarsFromSpecificType(this, points, expiryType, reason, options);
   }
 
   /**
@@ -1083,25 +313,7 @@ class StarService {
    * @returns {Promise<Object>} 修复结果
    */
   async repairStarRecordBalances() {
-    logger.info('StarService', '开始修复星星记录的余额信息');
-    
-    try {
-      const result = await this.starRecordRepository.repairRecordBalances();
-      
-      if (result.success) {
-        logger.info('StarService', `星星记录余额修复完成，共修复${result.repairedCount}条记录`);
-        
-        // 清除缓存确保数据一致性
-        this.clearCache();
-      } else {
-        logger.error('StarService', `星星记录余额修复失败: ${result.error}`);
-      }
-      
-      return result;
-    } catch (error) {
-      logger.error('StarService', '修复星星记录余额失败', error);
-      return { success: false, error: error.message };
-    }
+    return starRecords.repairStarRecordBalances(this);
   }
 
   /**
@@ -1109,54 +321,7 @@ class StarService {
    * @returns {Promise<Object>} 检查和修复结果
    */
   async checkAndRepairDataConsistency() {
-    logger.info('StarService', '开始检查并修复数据一致性');
-    
-    try {
-      if (this.enableCloudStorage) {
-        logger.info('StarService', '云端模式跳过本地星星一致性检查和修复');
-        return {
-          success: true,
-          skipped: true,
-          reason: 'cloud_mode',
-          initialConsistency: null,
-          repairResult: {
-            success: true,
-            repairedCount: 0,
-            skipped: true
-          },
-          finalConsistency: null,
-          isFixed: true
-        };
-      }
-
-      // 1. 验证数据一致性
-      const consistencyResult = await this.validateConsistency();
-      
-      // 2. 修复星星记录余额
-      const repairResult = await this.repairStarRecordBalances();
-      
-      // 3. 再次验证一致性
-      const finalConsistencyResult = await this.validateConsistency();
-      
-      const result = {
-        success: true,
-        initialConsistency: consistencyResult,
-        repairResult,
-        finalConsistency: finalConsistencyResult,
-        isFixed: finalConsistencyResult.isConsistent
-      };
-      
-      logger.info('StarService', `数据一致性检查和修复完成:`, {
-        初始一致性: consistencyResult.isConsistent,
-        修复记录数: repairResult.repairedCount,
-        最终一致性: finalConsistencyResult.isConsistent
-      });
-      
-      return result;
-    } catch (error) {
-      logger.error('StarService', '检查并修复数据一致性失败', error);
-      return { success: false, error: error.message };
-    }
+    return starRecords.checkAndRepairDataConsistency(this);
   }
 
   /**
@@ -1166,36 +331,7 @@ class StarService {
    * @returns {Promise<Boolean>} 是否一致
    */
   async verifyOperationConsistency(operation, operationData = {}) {
-    logger.info('StarService', `验证${operation}操作后的数据一致性`);
-    
-    try {
-      // 获取分组总数和记录计算结果
-      const groupsTotal = await this.starGroupRepository.getTotalPoints();
-      const records = await this.starRecordRepository.getAll();
-      const recordsCalculation = this._calculateBalanceFromRecords(records);
-      
-      const isConsistent = groupsTotal === recordsCalculation.finalBalance;
-      
-      logger.info('StarService', `${operation}操作后数据一致性检查: 分组总数=${groupsTotal}, 记录余额=${recordsCalculation.finalBalance}, 一致性=${isConsistent}`);
-      
-      if (!isConsistent) {
-        logger.error('StarService', `${operation}操作后数据不一致！`, {
-          operation,
-          operationData,
-          groupsTotal,
-          recordsBalance: recordsCalculation.finalBalance,
-          difference: groupsTotal - recordsCalculation.finalBalance
-        });
-        
-        // 可以在这里触发自动修复或告警
-        // await this.repairStarRecordBalances();
-      }
-      
-      return isConsistent;
-    } catch (error) {
-      logger.error('StarService', `验证${operation}操作后数据一致性失败`, error);
-      return false;
-    }
+    return starRecords.verifyOperationConsistency(this, operation, operationData);
   }
 
   /**
@@ -1205,30 +341,7 @@ class StarService {
    * @returns {Array} 包含余额信息的记录列表
    */
   calculateRecordBalance(records, currentBalance) {
-    logger.info('StarService', `计算记录余额，当前总星星数：${currentBalance}`);
-    
-    // 按时间从新到旧排序
-    const sortedRecords = [...records].sort((a, b) => b.timestamp - a.timestamp);
-    
-    // 计算每条记录的结束余额
-    const result = [];
-    let runningBalance = currentBalance;
-    
-    for (let i = 0; i < sortedRecords.length; i++) {
-      const record = { ...sortedRecords[i] };
-      
-      // 修复数字问题，确保没有前导零
-      record.points = parseInt(record.points);
-      record.balance = parseInt(runningBalance);
-      
-      result.push(record);
-      
-      // 根据点数变动，计算之前的余额
-      runningBalance = runningBalance - record.points;
-    }
-    
-    logger.info('StarService', `记录余额计算完成，处理了${result.length}条记录`);
-    return result;
+    return starRecords.calculateRecordBalance(this, records, currentBalance);
   }
 
   /**
@@ -1237,39 +350,7 @@ class StarService {
    * @returns {Array} 包含月度汇总的分组记录
    */
   calculateMonthSummary(groupedRecords) {
-    logger.info('StarService', `计算月度汇总，共${groupedRecords.length}个月份`);
-    
-    return groupedRecords.map(group => {
-      const records = group.records || [];
-      let incomeTotal = 0;
-      let expenseTotal = 0;
-      
-      records.forEach(record => {
-        if (record.points > 0) {
-          incomeTotal += record.points;
-        } else {
-          expenseTotal += Math.abs(record.points);
-        }
-      });
-      
-      const netChange = incomeTotal - expenseTotal;
-      let summary = '';
-      
-      // 确保数字不显示前导零，使用parseInt处理
-      if (netChange >= 0) {
-        summary = `本月共获得 ${parseInt(incomeTotal)} 颗星星`;
-      } else {
-        summary = `本月共使用 ${parseInt(expenseTotal)} 颗星星`;
-      }
-      
-      return {
-        ...group,
-        monthSummary: summary,
-        incomeTotal: parseInt(incomeTotal),
-        expenseTotal: parseInt(expenseTotal),
-        netChange: netChange
-      };
-    });
+    return starRecords.calculateMonthSummary(this, groupedRecords);
   }
 
   /**
@@ -1278,38 +359,7 @@ class StarService {
    * @returns {Array} 按月分组的记录
    */
   groupRecordsByMonth(records) {
-    logger.info('StarService', '开始按月份分组记录');
-    
-    const monthGroups = {};
-    
-    // 按月份分组
-    records.forEach(record => {
-      if (!record.timestamp) return;
-      
-      const date = new Date(record.timestamp);
-      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-      
-      if (!monthGroups[monthKey]) {
-        monthGroups[monthKey] = {
-          month: monthKey,
-          monthText: `${date.getFullYear()}年${date.getMonth() + 1}月`,
-          records: []
-        };
-      }
-      
-      monthGroups[monthKey].records.push(record);
-    });
-    
-    // 将分组转换为数组并按月份排序
-    const result = Object.values(monthGroups);
-    
-    // 按时间从新到旧排序
-    result.sort((a, b) => {
-      return b.month.localeCompare(a.month);
-    });
-    
-    logger.info('StarService', `月份分组完成，共${result.length}个月份`);
-    return result;
+    return starRecords.groupRecordsByMonth(this, records);
   }
 
   /**
@@ -1320,43 +370,7 @@ class StarService {
    * @returns {Array} 筛选后的记录列表
    */
   filterRecords(records, typeFilter, timeFilter) {
-    logger.info('StarService', `筛选记录，类型：${typeFilter}，时间：${timeFilter}`);
-    let filtered = [...records];
-    
-    // 记录筛选前的数据用于调试
-    logger.info('StarService', `筛选前记录数量：${records.length}`);
-    if (records.length > 0) {
-      logger.info('StarService', `第一条记录类型：${records[0].type}，点数：${records[0].points}，标题：${records[0].title || records[0].description}`);
-    }
-    
-    // 应用类型筛选
-    if (typeFilter !== 'all') {
-      filtered = filtered.filter(record => record.type === typeFilter);
-      logger.info('StarService', `类型筛选后记录数量：${filtered.length}`);
-    }
-    
-    // 应用时间筛选
-    if (timeFilter !== 'all') {
-      const now = Date.now();
-      let timeThreshold = now;
-      
-      if (timeFilter === 'week') {
-        // 一周前
-        timeThreshold = now - (7 * 24 * 60 * 60 * 1000);
-      } else if (timeFilter === 'month') {
-        // 一个月前
-        timeThreshold = now - (30 * 24 * 60 * 60 * 1000);
-      } else if (timeFilter === '3months') {
-        // 三个月前
-        timeThreshold = now - (90 * 24 * 60 * 60 * 1000);
-      }
-      
-      filtered = filtered.filter(record => record.timestamp >= timeThreshold);
-      logger.info('StarService', `时间筛选后记录数量：${filtered.length}`);
-    }
-    
-    logger.info('StarService', `最终筛选结果：${filtered.length}条记录`);
-    return filtered;
+    return starRecords.filterRecords(this, records, typeFilter, timeFilter);
   }
 
   /**
@@ -1364,416 +378,67 @@ class StarService {
    * 强制下次查询时重新从存储中获取数据
    */
   clearCache() {
-    logger.info('StarService', '清除星星服务缓存');
-    
-    // 清除仓储层缓存
-    if (this.starGroupRepository && this.starGroupRepository.clearCache) {
-      this.starGroupRepository.clearCache();
-    }
-    
-    if (this.starRecordRepository && this.starRecordRepository.clearCache) {
-      this.starRecordRepository.clearCache();
-    }
-
-    this._familySummaryCache = null;
-    this._familySummaryInFlight = null;
+    return starRecords.clearCache(this);
   }
 
   async hasPendingLocalStarRecords(userId = null, options = {}) {
-    try {
-      const allRecords = await this.starRecordRepository.getAll(false);
-      const excludeRecordId = options.excludeRecordId || null;
-
-      return allRecords.some(record => {
-        if (userId && record.userId !== userId) {
-          return false;
-        }
-        if (excludeRecordId && record.id === excludeRecordId) {
-          return false;
-        }
-        return record.syncedToCloud !== true;
-      });
-    } catch (error) {
-      logger.warn('StarService', '检查本地待同步星星流水失败，按存在待同步处理', {
-        userId,
-        error: error.message
-      });
-      return true;
-    }
+    return starCloud.hasPendingLocalStarRecords(this, userId, options);
   }
 
   async refreshStarsFromCloud(userId = null, options = {}) {
-    if (!this.enableCloudStorage) {
-      return { success: false, message: '云端模式未启用' };
-    }
-    const scope = options.scope || 'user';
-    const scopeKey = scope === 'family'
-      ? 'family'
-      : `user:${userId || 'missing'}`;
-    const inFlightRequest = this._cloudRefreshInFlight.get(scopeKey);
-    if (inFlightRequest) {
-      logger.info('StarService', '复用进行中的云端星星刷新请求', {
-        scope,
-        userId: userId || null
-      });
-      return inFlightRequest;
-    }
-
-    const request = this._fetchStarsFromCloud(userId, options)
-      .finally(() => {
-        if (this._cloudRefreshInFlight.get(scopeKey) === request) {
-          this._cloudRefreshInFlight.delete(scopeKey);
-        }
-      });
-
-    this._cloudRefreshInFlight.set(scopeKey, request);
-    return request;
+    return starCloud.refreshStarsFromCloud(this, userId, options);
   }
 
   async getFamilyStarSummary(options = {}) {
-    if (!this.enableCloudStorage) {
-      return {
-        success: false,
-        skipped: true,
-        reason: 'local_mode',
-        scope: 'family',
-        subjectUserIds: [],
-        totalPoints: 0,
-        groups: []
-      };
-    }
-
-    if (!options.force && this._familySummaryCache) {
-      return this._familySummaryCache;
-    }
-
-    if (this._familySummaryInFlight) {
-      return this._familySummaryInFlight;
-    }
-
-    const request = HttpClient.get(API_CONFIG.ENDPOINTS.STAR_FAMILY_SUMMARY)
-      .then((data) => {
-        const groups = (data.groups || []).map(group => this._mapCloudGroup(group));
-        const summary = {
-          success: true,
-          scope: 'family',
-          subjectUserIds: Array.isArray(data.subjectUserIds) ? data.subjectUserIds.filter(Boolean) : [],
-          totalPoints: Number(data.totalPoints || 0),
-          groups,
-          fetchedAt: Date.now()
-        };
-        this._familySummaryCache = summary;
-        return summary;
-      })
-      .finally(() => {
-        this._familySummaryInFlight = null;
-      });
-
-    this._familySummaryInFlight = request;
-    return request;
+    return starCloud.getFamilyStarSummary(this, options);
   }
 
   async _fetchStarsFromCloud(userId = null, options = {}) {
-    const scope = options.scope || 'user';
-
-    if (scope === 'family') {
-      // family refresh 只回灌家庭流水镜像；当前余额和分组快照仍以 family summary 为正式来源。
-      const familyRecordsData = await HttpClient.get(API_CONFIG.ENDPOINTS.STAR_RECORDS, { scope: 'family' });
-      const familyRecords = (familyRecordsData.records || []).map(record => this._mapCloudRecord(record));
-      await this._replaceSyncedStarRecords(null, familyRecords, { scope: 'family' });
-      logger.info('StarService', '已从云端刷新家庭星星流水', { recordCount: familyRecords.length });
-      return { success: true, records: familyRecords, groups: [] };
-    }
-
-    if (!userId) {
-      return { success: false, message: '刷新单用户星星数据时必须传 userId' };
-    }
-
-    const hasPendingLocalRecords = await this.hasPendingLocalStarRecords(userId);
-    if (hasPendingLocalRecords && options.forceCloudAfterAuthority !== true) {
-      // 单用户星星余额属于资产快照。若本地仍有未补云流水，普通 refresh 不能直接覆盖本地镜像。
-      logger.info('StarService', '检测到本地待同步星星流水，跳过云端星星覆盖', { userId });
-      const [localGroups, localRecords] = await Promise.all([
-        this.starGroupRepository.getAll(false),
-        this.starRecordRepository.getAll(false)
-      ]);
-
-      return {
-        success: true,
-        skipped: true,
-        reason: 'pending_local_records',
-        groups: localGroups.filter(group => group.userId === userId),
-        records: localRecords.filter(record => record.userId === userId)
-      };
-    }
-
-    const starsData = await HttpClient.get(API_CONFIG.ENDPOINTS.STARS, { userId });
-    const recordData = await HttpClient.get(API_CONFIG.ENDPOINTS.STAR_RECORDS, { userId });
-    const cloudGroups = (starsData.groups || [])
-      .map(group => this._mapCloudGroup(group))
-      .filter(group => !group.isExpired());
-    const cloudRecords = (recordData.records || []).map(record => this._mapCloudRecord(record));
-
-    await this._replaceSyncedStarGroups(userId, cloudGroups);
-    await this._replaceSyncedStarRecords(userId, cloudRecords);
-
-    logger.info('StarService', '已从云端刷新单用户星星数据', {
-      userId,
-      groupCount: cloudGroups.length,
-      recordCount: cloudRecords.length
-    });
-
-    return {
-      success: true,
-      groups: cloudGroups,
-      records: cloudRecords
-    };
+    return starCloud.fetchStarsFromCloud(this, userId, options);
   }
 
   _buildExpiryAuthorityScopeKey(options = {}) {
-    const scope = options.scope === 'family' ? 'family' : 'user';
-    if (scope === 'family') {
-      return `family:${options.familyId || 'default'}`;
-    }
-    return `user:${options.userId || 'missing'}`;
+    return starCloud.buildExpiryAuthorityScopeKey(this, options);
   }
 
   async syncExpiryAuthorityIfNeeded(options = {}) {
-    if (!this.enableCloudStorage) {
-      return { success: false, skipped: true, reason: 'local_mode' };
-    }
-
-    const scope = options.scope === 'family' ? 'family' : 'user';
-    const scopeKey = this._buildExpiryAuthorityScopeKey({ ...options, scope });
-    const minIntervalMs = Number(options.minIntervalMs || EXPIRY_AUTHORITY_SYNC_MIN_INTERVAL_MS);
-    const force = options.force === true;
-    const now = Date.now();
-    const lastSyncTime = this._expiryAuthoritySyncTimestamps.get(scopeKey) || 0;
-
-    if (!force && now - lastSyncTime < minIntervalMs) {
-      return { success: true, skipped: true, reason: 'throttled' };
-    }
-
-    const inFlight = this._expiryAuthoritySyncInFlight.get(scopeKey);
-    if (inFlight) {
-      return inFlight;
-    }
-
-    const syncPromise = (async () => {
-      // authority sync 只代表后端权威结算已触发；调用方若需要最新本地镜像，仍需后续显式 refresh。
-      const payload = {
-        scope,
-        targetUserId: scope === 'user' ? options.userId : undefined,
-        modifyTime: now,
-        operationKey: `star_expiry_authority:${scopeKey}:${now}`,
-      };
-
-      try {
-        const response = await HttpClient.post(API_CONFIG.ENDPOINTS.STAR_EXPIRY_AUTHORITY_SYNC, payload);
-        this._expiryAuthoritySyncTimestamps.set(scopeKey, Date.now());
-        return {
-          success: true,
-          skipped: false,
-          affectedUserIds: response.affectedUserIds || [],
-          settledGroupCount: Number(response.settledGroupCount || 0),
-          settledPoints: Number(response.settledPoints || 0),
-          createdRecordCount: Number(response.createdRecordCount || 0),
-          invalidGroupCount: Number(response.invalidGroupCount || 0),
-        };
-      } catch (error) {
-        logger.warn('StarService', '星星到期权威结算同步失败，继续使用现有缓存', {
-          scope,
-          userId: options.userId || null,
-          error: error.message
-        });
-        return { success: false, skipped: false, error: error.message };
-      } finally {
-        this._expiryAuthoritySyncInFlight.delete(scopeKey);
-      }
-    })();
-
-    this._expiryAuthoritySyncInFlight.set(scopeKey, syncPromise);
-    return syncPromise;
+    return starCloud.syncExpiryAuthorityIfNeeded(this, options);
   }
 
   async _syncStarRecordToCloud(record) {
-    if (!record) return;
-    const normalizedExpiryDate = this._normalizeExpiryDateValue(record.expiryDate);
-
-    const payload = {
-      recordId: record.id,
-      userId: record.userId,
-      type: record.type,
-      source: record.source,
-      sourceId: record.sourceId,
-      points: record.points,
-      description: record.description,
-      expiryType: record.expiryType,
-      expiryDate: normalizedExpiryDate,
-      originalTaskDate: record.originalTaskDate || null,
-      requestedPoints: record.requestedPoints || null,
-      modifyTime: record.modifyTime || record.timestamp || Date.now()
-    };
-
-    const response = await HttpClient.post(API_CONFIG.ENDPOINTS.STAR_RECORDS, payload);
-    record.expiryDate = normalizedExpiryDate;
-    record.syncedToCloud = true;
-    await this.starRecordRepository.save(record);
-
-    const hasOtherPendingLocalRecords = await this.hasPendingLocalStarRecords(record.userId, {
-      excludeRecordId: record.id
-    });
-
-    if (!hasOtherPendingLocalRecords && response && Array.isArray(response.updatedGroupsSnapshot) && record.userId) {
-      const groups = response.updatedGroupsSnapshot.map(group => this._mapCloudGroup(group));
-      await this._replaceSyncedStarGroups(record.userId, groups);
-    }
+    return starCloud.syncStarRecordToCloud(this, record);
   }
 
   async _syncConsumeToCloud(points, reason, options = {}) {
-    const requestedPoints = Number(options.requestedPoints || points || 0);
-    if (requestedPoints <= 0) {
-      return;
-    }
-
-    // 扣星/消费和加星流水一样，都是星星域正式写路径补云能力，而不是离线队列 drain。
-    const response = await HttpClient.post(API_CONFIG.ENDPOINTS.STAR_CONSUME, {
-      userId: options.userId || null,
-      requestedPoints,
-      reason: reason || '通用扣星',
-      sourceType: options.sourceType || 'system_consume',
-      sourceId: options.sourceId || '',
-      originalTaskDate: options.originalTaskDate || null,
-      idempotencyKey: options.idempotencyKey ||
-        `${options.sourceType || 'consume'}:${options.sourceId || 'manual'}:${Date.now()}`
-    });
-
-    if (response && Array.isArray(response.updatedGroupsSnapshot) && options.userId) {
-      const groups = response.updatedGroupsSnapshot.map(group => this._mapCloudGroup({
-        groupId: group.groupId,
-        userId: options.userId,
-        type: group.expiryType || group.type || 'permanent',
-        stars: group.stars,
-        expiryDate: group.expiryDate || null,
-        modifyTime: Date.now()
-      }));
-      await this._replaceSyncedStarGroups(options.userId, groups);
-    }
+    return starCloud.syncConsumeToCloud(this, points, reason, options);
   }
 
   async _replaceSyncedStarGroups(userId, cloudGroups) {
-    const allGroups = await this.starGroupRepository.getAll(false);
-    const retainedGroups = allGroups.filter(group => group.userId !== userId);
-    await this.starGroupRepository._saveData([...retainedGroups, ...cloudGroups]);
-    this.starGroupRepository.invalidateCache();
+    return starCloud.replaceSyncedStarGroups(this, userId, cloudGroups);
   }
 
   async _replaceSyncedStarRecords(userId, cloudRecords, options = {}) {
-    const allRecords = await this.starRecordRepository.getAll(false);
-    const cloudRecordIds = new Set(cloudRecords.map(record => record.id).filter(Boolean));
-    const cloudIdempotencyKeys = new Set(
-      cloudRecords.map(record => record.idempotencyKey).filter(Boolean)
-    );
-    const retainedRecords = allRecords.filter(record => {
-      const isTargetRecord = options.scope === 'family' ? true : record.userId === userId;
-      if (!isTargetRecord) {
-        return true;
-      }
-
-      if (cloudRecordIds.has(record.id)) {
-        return false;
-      }
-
-      if (record.idempotencyKey && cloudIdempotencyKeys.has(record.idempotencyKey)) {
-        return false;
-      }
-
-      if (options.scope === 'family') {
-        return record.syncedToCloud !== true;
-      }
-      return record.userId !== userId || record.syncedToCloud !== true;
-    });
-    await this.starRecordRepository._saveData([...retainedRecords, ...cloudRecords]);
-    this.starRecordRepository.invalidateCache();
+    return starCloud.replaceSyncedStarRecords(this, userId, cloudRecords, options);
   }
 
   _mapCloudGroup(group) {
-    const expiryMeta = this._resolveExpiryMetadata(group.expiryDate, group.expiryDate || '');
-    return new StarGroup({
-      id: group.groupId || group.id,
-      userId: group.userId,
-      type: group.type || group.expiryType || 'permanent',
-      expiryType: group.type || group.expiryType || 'permanent',
-      stars: Number(group.stars || 0),
-      expiryDate: expiryMeta.timestamp,
-      expiryDateStr: expiryMeta.displayText,
-      syncedToCloud: true,
-      lastUpdated: group.modifyTime || Date.now()
-    });
+    return starCloud.mapCloudGroup(this, group);
   }
 
   _mapCloudRecord(record) {
-    return new StarRecord({
-      id: record.recordId || record.id,
-      userId: record.userId,
-      type: record.type,
-      source: record.source,
-      sourceId: record.sourceId || '',
-      points: Number(record.points || 0),
-      timestamp: record.modifyTime || Date.parse(record.createdAt || '') || Date.now(),
-      description: record.description || '',
-      expiryType: record.expiryType || null,
-      expiryDate: this._normalizeExpiryDateValue(record.expiryDate),
-      balance: Number(record.balance || 0),
-      previousBalance: Number(record.previousBalance || 0),
-      originalTaskDate: record.originalTaskDate || null,
-      requestedPoints: record.requestedPoints || null,
-      syncedToCloud: true,
-      idempotencyKey: record.idempotencyKey || null,
-      modifyTime: record.modifyTime || Date.now(),
-      data: record.data || {}
-    });
+    return starCloud.mapCloudRecord(this, record);
   }
 
   _buildConsumeIdempotencyKey(options = {}) {
-    if (options.idempotencyKey) {
-      return options.idempotencyKey;
-    }
-
-    return [
-      options.sourceType || 'consume',
-      options.sourceId || 'manual',
-      options.originalTaskDate || 'na',
-      options.userId || 'anonymous',
-      Date.now()
-    ].join(':');
+    return starCloud.buildConsumeIdempotencyKey(this, options);
   }
 
   _buildGroupMergeKey(group) {
-    return [
-      group.userId || '',
-      group.expiryType || group.type || '',
-      group.expiryDateStr || group.expiryDate || ''
-    ].join('|');
+    return starCloud.buildGroupMergeKey(this, group);
   }
 
   _isGroupWithinReminderWindow(group, nowTimestamp = Date.now()) {
-    const expiryTimestamp = Number(group?.expiryDate || 0);
-    if (!expiryTimestamp || Number.isNaN(expiryTimestamp)) {
-      return false;
-    }
-
-    const now = new Date(nowTimestamp);
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-    const expiryDate = new Date(expiryTimestamp);
-    const expiryDayStart = new Date(
-      expiryDate.getFullYear(),
-      expiryDate.getMonth(),
-      expiryDate.getDate()
-    ).getTime();
-    const diffDays = Math.round((expiryDayStart - todayStart) / (24 * 60 * 60 * 1000));
-
-    return diffDays >= 0 && diffDays < STAR_REMIND_WINDOW_DAYS;
+    return starExpiry.isGroupWithinReminderWindow(this, group, nowTimestamp);
   }
 
   /**
@@ -1782,37 +447,7 @@ class StarService {
    * @returns {Promise<Number>} 即将过期的星星数量
    */
   async calculatePendingExpiry(userId = null) {
-    if (this.enableCloudStorage) {
-      logger.info('StarService', '云端模式跳过本地即将过期星星计算');
-      return 0;
-    }
-    try {
-      // 获取所有分组
-      const allGroups = await this.starGroupRepository.getAll();
-      
-      // 用户过滤
-      const userGroups = userId ? allGroups.filter(group => group.userId === userId) : allGroups;
-      
-      // 当前时间
-      const now = Date.now();
-      
-      // 找出即将过期的分组（未来48小时内过期）
-      const pendingExpiryGroups = userGroups.filter(group => 
-        group.expiryType !== StarExpiryType.PERMANENT && 
-        group.expiryDate && 
-        group.expiryDate > now && // 还没过期
-        group.expiryDate <= (now + STAR_PROTECT_WINDOW_HOURS * 60 * 60 * 1000) // 48小时内过期
-      );
-      
-      // 计算即将过期总数量
-      const pendingPoints = pendingExpiryGroups.reduce((sum, group) => sum + (group.stars || 0), 0);
-      
-      logger.info('StarService', `计算即将过期星星数量${userId ? `, 用户=${userId}` : ''}: ${pendingPoints}颗`);
-      return pendingPoints;
-    } catch (error) {
-      logger.error('StarService', '计算即将过期星星数量失败', error);
-      return 0;
-    }
+    return starExpiry.calculatePendingExpiry(this, userId);
   }
 
   /**
@@ -1822,106 +457,7 @@ class StarService {
    * @returns {Promise<Object>} 保护结果
    */
   async protectRewardsByExpiry(expiredStars, userId) {
-    if (this.enableCloudStorage) {
-      logger.info('StarService', '云端模式跳过本地奖励过期保护');
-      return { success: true, protectedCount: 0, protectedRewards: [], skipped: true };
-    }
-    // 添加调试：方法开始
-    logger.info('StarService', `🔍 保护调试开始: expiredStars=${expiredStars}, userId=${userId}`);
-    
-    if (!expiredStars || expiredStars <= 0) {
-      logger.info('StarService', '无过期星星，跳过奖励保护');
-      return { success: true, protectedCount: 0, protectedRewards: [] };
-    }
-
-    try {
-      if (!this.rewardService) {
-        logger.error('StarService', '无法获取奖励服务，跳过奖励保护');
-        return { success: false, message: '奖励服务不可用' };
-      }
-
-      // 获取用户当前星星总数
-      const totalStars = await this.getTotalStars(userId);
-      logger.info('StarService', `🔍 用户当前星星状态: 当前=${totalStars}颗, 即将过期=${expiredStars}颗, 总可用=${totalStars + expiredStars}颗`);
-      
-      // 获取所有可用奖励
-      const availableRewards = await this.rewardService.getAvailableRewards(false, false, userId);
-      
-      // 添加调试：奖励详情
-      logger.info('StarService', `🔍 获取到${availableRewards.length}个可用奖励`);
-      availableRewards.forEach((reward, index) => {
-        logger.info('StarService', `🔍 奖励${index}: "${reward.name}", ${reward.points}颗, claimed=${reward.claimed}, protected=${reward.protectedByExpiry}, userId=${reward.userId}`);
-      });
-      
-      // 筛选出可保护的奖励（当前星星+即将过期星星总额够用）
-      const claimableRewards = availableRewards.filter(reward => {
-        const totalAvailable = totalStars + expiredStars;
-        const condition1 = totalAvailable >= reward.points;
-        const condition2 = !reward.claimed;
-        const condition3 = !reward.protectedByExpiry;
-        
-        // 添加调试：筛选过程
-        logger.info('StarService', `🔍 筛选"${reward.name}": 总额够用=${condition1}(${totalAvailable}>=${reward.points}), 未领取=${condition2}, 未保护=${condition3}`);
-        
-        return condition1 && condition2 && condition3;
-      });
-      
-      logger.info('StarService', `🔍 筛选结果: ${claimableRewards.length}个可保护奖励`);
-      
-      if (claimableRewards.length === 0) {
-        logger.info('StarService', `无可保护奖励：当前${totalStars}颗+即将过期${expiredStars}颗=${totalStars + expiredStars}颗总星星`);
-        return { success: true, protectedCount: 0, protectedRewards: [] };
-      }
-      
-      logger.info('StarService', `找到${claimableRewards.length}个可保护奖励，总可用星星：${totalStars + expiredStars}颗（当前${totalStars}+过期${expiredStars}）`);
-      
-      // 按积分从高到低排序（优先保护高价值奖励）
-      claimableRewards.sort((a, b) => b.points - a.points);
-      
-      // 优化后的保护逻辑：优先保护最高价值 + 支持部分保护
-      let allocation = expiredStars;
-      const currentStars = totalStars; // 当前所有可用星星（修复：即将过期的星星仍然可用）
-      const protectedRewards = [];
-      
-      for (const reward of claimableRewards) {
-        const totalAvailable = allocation + currentStars; // 过期+现有星星总额
-        
-        if (totalAvailable >= reward.points) {
-          // 标记为保护奖励
-          reward.protectedByExpiry = true;
-          reward.partialProtection = Math.min(allocation, reward.points); // 记录保护金额
-          allocation = Math.max(0, allocation - reward.partialProtection);
-          protectedRewards.push(reward);
-          
-          logger.info('StarService', `保护奖励: ${reward.name}(${reward.points}颗星星), 保护金额=${reward.partialProtection}颗, 需额外支付=${reward.points - reward.partialProtection}颗`);
-        }
-      }
-      
-      // 保存保护状态到奖励数据
-      for (const reward of protectedRewards) {
-        await rewardService.updateReward(reward.id, { 
-          protectedByExpiry: true,
-          partialProtection: reward.partialProtection 
-        });
-      }
-      
-      logger.info('StarService', `奖励保护完成，保护了${protectedRewards.length}个奖励，使用${expiredStars - allocation}颗过期星星`);
-      
-      return {
-        success: true,
-        protectedCount: protectedRewards.length,
-        protectedRewards: protectedRewards.map(r => ({ 
-          id: r.id, 
-          name: r.name, 
-          points: r.points,
-          partialProtection: r.partialProtection || 0
-        })),
-        usedExpiredStars: expiredStars - allocation
-      };
-    } catch (error) {
-      logger.error('StarService', '奖励保护失败', error);
-      return { success: false, message: '保护过程中发生错误' };
-    }
+    return starExpiry.protectRewardsByExpiry(this, expiredStars, userId);
   }
 
   updateRewardService(rewardService) {
@@ -1937,79 +473,7 @@ class StarService {
    * @returns {Promise<Object>} 清理结果包含：success, expiredCount, totalPoints, records
    */
   async cleanupExpiredStars(userId = null) {
-    if (this.enableCloudStorage) {
-      logger.info('StarService', '云端模式跳过本地过期星星清理');
-      return {
-        success: true,
-        expiredCount: 0,
-        totalPoints: 0,
-        skipped: true,
-        message: '云端模式由后端权威处理'
-      };
-    }
-    try {
-      // 清理过期分组
-      const expiredGroups = await this.starGroupRepository.cleanupExpiredGroups(userId);
-      
-      if (expiredGroups.length === 0) {
-        logger.info('StarService', '清理过期星星: 没有发现过期星星');
-        return { 
-          success: true, 
-          expiredCount: 0, 
-          totalPoints: 0,
-          message: '没有发现过期星星'
-        };
-      }
-      
-      // 计算过期总数
-      let totalExpiredPoints = 0;
-      const expiredRecords = [];
-      
-      // 为每个过期分组创建记录
-      for (const group of expiredGroups) {
-        if (group.stars > 0) {
-          totalExpiredPoints += group.stars;
-          
-          // 创建过期记录
-          const record = await this.starRecordRepository.createExpiredRecord(
-            group.stars,
-            group.expiryType,
-            `星星过期: ${this._getExpiryTypeDescription(group.expiryType)}`
-          );
-          
-          if (record) {
-            expiredRecords.push(record);
-          } else {
-            logger.error('StarService', `清理过期星星: 创建记录失败, 分组ID=${group.id}, 星星数=${group.stars}`);
-          }
-        }
-      }
-      
-      // 清理空分组
-      await this.starGroupRepository.cleanupEmptyGroups();
-      
-      logger.info('StarService', `清理过期星星成功, 过期分组数=${expiredGroups.length}, 过期星星总数=${totalExpiredPoints}`);
-      
-      // 触发星星过期事件
-      if (totalExpiredPoints > 0) {
-        this.eventBus.emit(EVENTS.STARS_EXPIRED, {
-          expiredGroups,
-          totalExpiredPoints,
-          records: expiredRecords
-        });
-      }
-      
-      return {
-        success: true,
-        expiredCount: expiredGroups.length,
-        totalPoints: totalExpiredPoints,
-        records: expiredRecords,
-        message: `清理了${expiredGroups.length}个过期分组，共${totalExpiredPoints}颗星星`
-      };
-    } catch (error) {
-      logger.error('StarService', '清理过期星星失败', error);
-      return { success: false, message: '清理过期星星过程中发生错误' };
-    }
+    return starExpiry.cleanupExpiredStars(this, userId);
   }
 }
 
