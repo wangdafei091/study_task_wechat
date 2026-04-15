@@ -5,6 +5,23 @@ const logger = require('../../../utils/logger');
 const messageDisplay = require('../../../utils/message-display');
 const viewScopeUtils = require('../../../utils/view-scope');
 
+const SHANGHAI_OFFSET_MS = 8 * 60 * 60 * 1000;
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+const WEEKDAYS = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+
+function normalizeTimestamp(dateLike) {
+  const date = dateLike instanceof Date ? dateLike : new Date(dateLike);
+  return Number.isNaN(date.getTime()) ? NaN : date.getTime();
+}
+
+function getShanghaiDayIndex(timestamp) {
+  return Math.floor((timestamp + SHANGHAI_OFFSET_MS) / MS_PER_DAY);
+}
+
+function getShanghaiDate(timestamp) {
+  return new Date(timestamp + SHANGHAI_OFFSET_MS);
+}
+
 Page({
   /**
    * 页面的初始数据
@@ -426,26 +443,32 @@ viewMessageDetail: function(e) {
       logger.warn('MessagePage', 'formatDate: createTime参数为空');
       return '今天';
     }
-    
-    const date = new Date(createTime);
-    const now = new Date();
-    const diffDays = dateUtils.getDaysBetween(date, now);
-    
-    if (dateUtils.isToday(date)) {
+
+    const timestamp = normalizeTimestamp(createTime);
+    const nowTimestamp = Date.now();
+    if (Number.isNaN(timestamp)) {
+      logger.warn('MessagePage', 'formatDate: createTime参数无效', { createTime });
       return '今天';
-    } else if (dateUtils.isYesterday(date)) {
+    }
+
+    const date = getShanghaiDate(timestamp);
+    const now = getShanghaiDate(nowTimestamp);
+    const diffDays = getShanghaiDayIndex(nowTimestamp) - getShanghaiDayIndex(timestamp);
+
+    if (diffDays === 0) {
+      return '今天';
+    } else if (diffDays === 1) {
       return '昨天';
     } else if (diffDays === 2) {
       return '前天';
     } else if (diffDays < 7) {
-      const weekdays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
-      return weekdays[date.getDay()];
+      return WEEKDAYS[date.getUTCDay()];
     } else {
-      const year = date.getFullYear();
-      const month = (date.getMonth() + 1).toString().padStart(2, '0');
-      const day = date.getDate().toString().padStart(2, '0');
+      const year = date.getUTCFullYear();
+      const month = (date.getUTCMonth() + 1).toString().padStart(2, '0');
+      const day = date.getUTCDate().toString().padStart(2, '0');
       
-      if (year === now.getFullYear()) {
+      if (year === now.getUTCFullYear()) {
         return `${month}月${day}日`;
       } else {
         return `${year}年${month}月${day}日`;

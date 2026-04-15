@@ -52,6 +52,7 @@ describe('packageMessage/pages/message/message extra behavior', () => {
     jest.resetModules();
     jest.clearAllMocks();
     jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-03-24T06:49:04+08:00'));
 
     serviceManager = require('../../services/service-manager.js');
     dateUtils = require('../../utils/dateUtils');
@@ -189,13 +190,10 @@ describe('packageMessage/pages/message/message extra behavior', () => {
     expect(page.formatMessageTime(1)).toBe('时间未知');
     expect(page.formatDate(null)).toBe('今天');
 
-    dateUtils.getDaysBetween.mockReturnValueOnce(2);
     expect(page.formatDate(Date.now() - 2 * 86400000)).toBe('前天');
 
-    dateUtils.getDaysBetween.mockReturnValueOnce(3);
-    expect(page.formatDate(new Date('2026-03-23').getTime())).toContain('星期');
+    expect(page.formatDate(new Date('2026-03-21T10:00:00+08:00').getTime())).toContain('星期');
 
-    dateUtils.getDaysBetween.mockReturnValueOnce(10);
     expect(page.formatDate(new Date('2025-03-01').getTime())).toContain('2025年');
 
     page.showMessageDetail = jest.fn();
