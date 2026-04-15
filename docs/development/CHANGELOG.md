@@ -4,6 +4,49 @@
 
 ---
 
+## [里程碑-21E] - 2026-04-15
+
+### ✅ 完成情况
+
+**星星域与奖励域前端服务内部模块化**
+
+- **`StarService` 已完成 facade + helper 切片**：
+  - `services/star-service.js` 从单体实现收口为 facade
+  - 新增 `services/star-service/star-utils.js`
+  - 新增 `services/star-service/star-records.js`
+  - 新增 `services/star-service/star-write.js`
+  - 新增 `services/star-service/star-cloud.js`
+  - 新增 `services/star-service/star-expiry.js`
+- **`RewardService` 已完成 facade + helper 切片**：
+  - `services/reward-service.js` 从单体实现收口为 facade
+  - 新增 `services/reward-service/reward-context.js`
+  - 新增 `services/reward-service/reward-queue.js`
+  - 新增 `services/reward-service/reward-query.js`
+  - 新增 `services/reward-service/reward-write.js`
+  - 新增 `services/reward-service/reward-cloud.js`
+  - 新增 `services/reward-service/reward-exchange.js`
+- **对外契约保持稳定**：
+  - `StarService / RewardService` 对外公开 API、`ServiceManager` 初始化顺序、页面调用方式均保持不变
+  - 清理 `RewardService` 本地兑换路径里已确认的 `serviceManager` 历史死分支
+
+### 🧪 验证结果
+
+- 定向回归通过：
+  - `npx jest --runInBand test/services/star-service.test.js`
+  - `npx jest --runInBand test/services/reward-service.test.js`
+  - `npx jest --runInBand test/services/star-service.test.js test/services/reward-service.test.js test/services/service-manager.test.js test/pages/index.reward-flow.test.js test/pages/rewards.modules.test.js test/app/bootstrap-services.test.js test/app/post-login-bootstrap.test.js`
+- 提交前复核通过：
+  - `npx jest --runInBand test/services/star-service.test.js test/services/reward-service.test.js`
+- 全量前端测试通过：
+  - `npm test`
+  - 结果：`85 suites / 1878 tests` 全绿
+
+### 📖 详细实施记录
+
+- [里程碑-21E：星星域与奖励域前端服务内部模块化](../design/milestone-21e-star-reward-service-modularization.md)
+
+---
+
 ## [里程碑-21D] - 2026-04-15
 
 ### ✅ 完成情况
