@@ -133,6 +133,37 @@ describe('message-service helper modules', () => {
     expect(service._emitMessageChangedEvent).toHaveBeenCalled();
   });
 
+  it('message-provisional 历史任务 reset 应带日期并使用历史重置标题', async () => {
+    const service = {
+      messageRepository: {
+        batchAddMessages: jest.fn().mockResolvedValue()
+      },
+      _emitMessageChangedEvent: jest.fn().mockResolvedValue(),
+      _getLocalUserDisplayName: jest.fn((userId) => (userId === 'parent-1' ? '家长' : '孩子'))
+    };
+
+    const messages = await messageProvisional.createTaskProvisionalMessages(service, {
+      id: 'task-1',
+      title: '刷牙',
+      date: '2026-04-07',
+      userId: 'child-1'
+    }, {
+      familyId: 'family-1',
+      targetUserId: 'child-1',
+      operatorUserId: 'parent-1',
+      operatorRole: 'parent',
+      action: 'reset',
+      operationKey: 'op-reset-1',
+      modifyTime: new Date('2026-04-15T10:00:00+08:00').getTime()
+    });
+
+    expect(messages).toHaveLength(2);
+    expect(messages[0].title).toBe('历史任务重置待同步');
+    expect(messages[0].summary).toContain('2026-04-07');
+    expect(messages[1].title).toBe('历史任务重置待同步');
+    expect(messages[1].summary).toContain('2026-04-07');
+  });
+
   it('message-domain createTaskMessageWithDomainModel 应落仓并发送领域事件', async () => {
     const savedMessage = { id: 'msg-1' };
     const service = {

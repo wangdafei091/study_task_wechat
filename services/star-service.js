@@ -296,6 +296,15 @@ class StarService {
   }
 
   /**
+   * 获取当前可用星星快照
+   * @param {String} userId 用户ID
+   * @returns {Promise<Object>} 当前可用星星聚合视图
+   */
+  async getAvailableStarSnapshot(userId = null) {
+    return starExpiry.getAvailableStarSnapshot(this, userId);
+  }
+
+  /**
    * 从特定有效期类型的分组中消费星星
    * 专门用于任务取消完成时的星星扣减
    * @param {Number} points 星星数量
@@ -371,6 +380,10 @@ class StarService {
    */
   filterRecords(records, typeFilter, timeFilter) {
     return starRecords.filterRecords(this, records, typeFilter, timeFilter);
+  }
+
+  buildStarRecordViewModel(records, options = {}) {
+    return starRecords.buildStarRecordViewModel(this, records, options);
   }
 
   /**

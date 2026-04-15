@@ -1,6 +1,6 @@
 const logger = require('../../../utils/logger.js');
 const serviceManager = require('../../../services/service-manager.js');
-const { buildMonthlyBoard } = require('../../../services/analysis-board-service.js');
+const { buildMonthlyBoard } = require('../../services/analysis-board-service.js');
 
 function getTodayMonthKey() {
   const today = new Date();

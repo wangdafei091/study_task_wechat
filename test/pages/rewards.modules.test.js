@@ -130,12 +130,17 @@ describe('pages/rewards helper modules', () => {
     expect(global.wx.stopPullDownRefresh).toHaveBeenCalled();
   });
 
-  it('rewards-sync getExpiringPoints 应在正式提醒同步后读取孩子即将过期星星', async () => {
+  it('rewards-sync getExpiringPoints 应从当前可用星星快照派生孩子即将过期星星', async () => {
     const starService = {
-      getExpiringStarsInfo: jest.fn().mockResolvedValue({
-        points: 4,
-        expiryDateText: '明天',
-        expiryTimestamp: 123
+      getAvailableStarSnapshot: jest.fn().mockResolvedValue({
+        userId: 'child-1',
+        totalStars: 8,
+        buckets: [{ key: 'week', label: '本周到期', points: 4, emphasized: true }],
+        expiringInfo: {
+          points: 4,
+          expiryDateText: '明天',
+          expiryTimestamp: 123
+        }
       })
     };
     const messageService = {
@@ -159,6 +164,25 @@ describe('pages/rewards helper modules', () => {
     expect(messageService.syncFormalRemindersIfNeeded).toHaveBeenCalledWith({
       scope: 'user',
       userId: 'child-1'
+    });
+    expect(starService.getAvailableStarSnapshot).toHaveBeenCalledWith('child-1');
+  });
+
+  it('buildBalanceSummary 应在快过期存在时优先输出快过期句，并最多返回两行', () => {
+    expect(rewardsSyncModule.buildBalanceSummary({
+      totalStars: 13,
+      buckets: [
+        { key: 'week', label: '本周到期', points: 5, emphasized: true },
+        { key: 'permanent', label: '永久有效', points: 8, emphasized: false }
+      ],
+      expiringInfo: {
+        points: 5,
+        expiryDateText: '2026-04-20',
+        expiryTimestamp: 1
+      }
+    })).toEqual({
+      primaryText: '5颗星星将在2026-04-20失效',
+      secondaryText: '其余8颗为永久有效'
     });
   });
 

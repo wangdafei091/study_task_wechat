@@ -1116,7 +1116,7 @@ const taskTemplateService = serviceManager.get('taskTemplateService');
 
 ## AnalysisBoardService - 分析页月度看板聚合服务
 
-`services/analysis-board-service.js` 是分析页专用的轻量聚合模块，不通过 `ServiceManager` 注册实例，而是由页面直接按需调用。
+`packageChart/services/analysis-board-service.js` 是分析页专用的轻量聚合模块，不通过 `ServiceManager` 注册实例，而是由页面直接按需调用。
 
 ### 核心功能
 - 自然月日期列生成
@@ -1195,7 +1195,7 @@ const taskTemplateService = serviceManager.get('taskTemplateService');
 
 ```javascript
 const serviceManager = require('../../services/service-manager.js');
-const { buildMonthlyBoard } = require('../../services/analysis-board-service.js');
+const { buildMonthlyBoard } = require('../../packageChart/services/analysis-board-service.js');
 
 const taskService = serviceManager.getService('task');
 

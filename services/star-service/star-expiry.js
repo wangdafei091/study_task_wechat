@@ -5,92 +5,153 @@ const { EVENTS } = require('../../utils/constants');
 
 const STAR_REMIND_WINDOW_DAYS = 3;
 const STAR_PROTECT_WINDOW_HOURS = 48;
+const AVAILABLE_BUCKETS = [
+  { key: StarExpiryType.WEEK, label: '本周到期' },
+  { key: StarExpiryType.MONTH, label: '本月到期' },
+  { key: StarExpiryType.QUARTER, label: '本季度到期' },
+  { key: StarExpiryType.PERMANENT, label: '永久有效' }
+];
+
+function buildEmptyExpiringInfo() {
+  return {
+    points: 0,
+    expiryDateText: '',
+    expiryTimestamp: 0,
+    remindWindowDays: STAR_REMIND_WINDOW_DAYS,
+    protectWindowDays: STAR_PROTECT_WINDOW_HOURS / 24
+  };
+}
+
+function normalizeGroup(service, group) {
+  const expiryMeta = service._resolveExpiryMetadata(
+    group.expiryDate || group.expiryDateStr,
+    group.expiryDateStr || ''
+  );
+
+  if (expiryMeta.timestamp === null) {
+    return new StarGroup({
+      ...group,
+      type: group.type || group.expiryType || StarExpiryType.PERMANENT,
+      expiryType: group.expiryType || group.type || StarExpiryType.PERMANENT,
+      expiryDate: '',
+      expiryDateStr: expiryMeta.displayText || ''
+    });
+  }
+
+  return new StarGroup({
+    ...group,
+    type: group.type || group.expiryType || StarExpiryType.PERMANENT,
+    expiryType: group.expiryType || group.type || StarExpiryType.PERMANENT,
+    expiryDate: expiryMeta.timestamp,
+    expiryDateStr: expiryMeta.displayText
+  });
+}
+
+async function getNormalizedGroups(service, userId = null) {
+  const allGroups = await service.starGroupRepository.getAll();
+  const filteredGroups = userId
+    ? allGroups.filter((group) => group.userId === userId)
+    : allGroups;
+
+  return filteredGroups.map((group) => normalizeGroup(service, group));
+}
+
+function getValidAvailableGroups(groups) {
+  return (groups || []).filter((group) => (
+    Number(group?.stars || 0) > 0 && !group.isExpired()
+  ));
+}
+
+function buildExpiringInfo(service, validGroups) {
+  const expiringGroups = (validGroups || []).filter((group) => (
+    group.expiryType !== StarExpiryType.PERMANENT
+    && service._isGroupWithinReminderWindow(group)
+  ));
+
+  if (expiringGroups.length === 0) {
+    return buildEmptyExpiringInfo();
+  }
+
+  expiringGroups.sort((a, b) => {
+    if (!a.expiryDate) return 1;
+    if (!b.expiryDate) return -1;
+    return a.expiryDate - b.expiryDate;
+  });
+
+  const earliestGroup = expiringGroups[0];
+  const expiringPoints = expiringGroups
+    .filter((group) => group.expiryDate === earliestGroup.expiryDate)
+    .reduce((sum, group) => sum + (group.stars || 0), 0);
+
+  return {
+    points: expiringPoints,
+    expiryDateText: earliestGroup.expiryDateStr || '',
+    expiryTimestamp: earliestGroup.expiryDate || 0,
+    remindWindowDays: STAR_REMIND_WINDOW_DAYS,
+    protectWindowDays: STAR_PROTECT_WINDOW_HOURS / 24
+  };
+}
+
+function buildAvailableStarComposition(validGroups, expiringInfo) {
+  const bucketTotals = AVAILABLE_BUCKETS.reduce((result, bucket) => {
+    result[bucket.key] = 0;
+    return result;
+  }, {});
+
+  (validGroups || []).forEach((group) => {
+    const bucketKey = AVAILABLE_BUCKETS.some((bucket) => bucket.key === group.expiryType)
+      ? group.expiryType
+      : StarExpiryType.PERMANENT;
+    bucketTotals[bucketKey] += Number(group.stars || 0);
+  });
+
+  return AVAILABLE_BUCKETS
+    .map((bucket) => ({
+      key: bucket.key,
+      label: bucket.label,
+      points: bucketTotals[bucket.key],
+      emphasized: expiringInfo.expiryTimestamp > 0 && bucket.key === (
+        (validGroups || []).find((group) => group.expiryDate === expiringInfo.expiryTimestamp)?.expiryType || ''
+      )
+    }))
+    .filter((bucket) => bucket.points > 0);
+}
+
+async function getAvailableStarSnapshot(service, userId = null) {
+  try {
+    const normalizedGroups = await getNormalizedGroups(service, userId);
+    const validGroups = getValidAvailableGroups(normalizedGroups);
+    const expiringInfo = buildExpiringInfo(service, validGroups);
+    const buckets = buildAvailableStarComposition(validGroups, expiringInfo);
+    const totalStars = validGroups.reduce((sum, group) => sum + (group.stars || 0), 0);
+
+    const snapshot = {
+      userId,
+      totalStars,
+      buckets,
+      expiringInfo
+    };
+
+    logger.info('StarService', `当前可用星星快照计算完成${userId ? `, 用户=${userId}` : ''}`, snapshot);
+    return snapshot;
+  } catch (error) {
+    logger.error('StarService', '获取当前可用星星快照失败', error);
+    return {
+      userId,
+      totalStars: 0,
+      buckets: [],
+      expiringInfo: buildEmptyExpiringInfo()
+    };
+  }
+}
 
 async function getExpiringStarsInfo(service, userId = null) {
   try {
-    const allGroups = await service.starGroupRepository.getAll();
-    const groups = (userId
-      ? allGroups.filter((group) => group.userId === userId)
-      : allGroups).map((group) => {
-      const expiryMeta = service._resolveExpiryMetadata(
-        group.expiryDate || group.expiryDateStr,
-        group.expiryDateStr || ''
-      );
-      if (expiryMeta.timestamp === null) {
-        return group;
-      }
-
-      return new StarGroup({
-        ...group,
-        type: group.type || group.expiryType || 'permanent',
-        expiryType: group.expiryType || group.type || 'permanent',
-        expiryDate: expiryMeta.timestamp,
-        expiryDateStr: expiryMeta.displayText
-      });
-    });
-    logger.info('StarService', `获取到${groups.length}个星星分组${userId ? `, 用户=${userId}` : ''}`);
-
-    groups.forEach((group, index) => {
-      logger.info('StarService', `分组${index + 1}: ID=${group.id}, 星星数=${group.stars}, 过期类型=${group.expiryType}, 过期时间=${group.expiryDate}, 过期日期字符串=${group.expiryDateStr}`);
-    });
-
-    const expiringGroups = groups.filter(group =>
-      group.expiryType !== StarExpiryType.PERMANENT &&
-      !group.isExpired() &&
-      service._isGroupWithinReminderWindow(group)
-    );
-
-    logger.info('StarService', `过滤后的即将过期分组数量: ${expiringGroups.length}`);
-
-    if (expiringGroups.length === 0) {
-      logger.info('StarService', '没有找到即将过期的星星分组');
-      return {
-        points: 0,
-        expiryDateText: '',
-        expiryTimestamp: 0,
-        remindWindowDays: STAR_REMIND_WINDOW_DAYS,
-        protectWindowDays: STAR_PROTECT_WINDOW_HOURS / 24
-      };
-    }
-
-    expiringGroups.forEach((group, index) => {
-      logger.info('StarService', `即将过期分组${index + 1}: ID=${group.id}, 星星数=${group.stars}, 过期类型=${group.expiryType}, 过期时间=${group.expiryDate}, 过期日期字符串=${group.expiryDateStr}, 是否过期=${group.isExpired()}`);
-    });
-
-    expiringGroups.sort((a, b) => {
-      if (!a.expiryDate) return 1;
-      if (!b.expiryDate) return -1;
-      return a.expiryDate - b.expiryDate;
-    });
-
-    const earliestGroup = expiringGroups[0];
-    logger.info('StarService', `最早过期分组: ID=${earliestGroup.id}, 过期时间=${earliestGroup.expiryDate}, 过期日期字符串=${earliestGroup.expiryDateStr}`);
-
-    const expiringPoints = expiringGroups
-      .filter(g => g.expiryDate === earliestGroup.expiryDate)
-      .reduce((sum, g) => sum + (g.stars || 0), 0);
-
-    logger.info('StarService', `最早过期日期: ${earliestGroup.expiryDateStr}, 该日期星星: ${expiringPoints}`);
-
-    const result = {
-      points: expiringPoints,
-      expiryDateText: earliestGroup.expiryDateStr || '',
-      expiryTimestamp: earliestGroup.expiryDate || 0,
-      remindWindowDays: STAR_REMIND_WINDOW_DAYS,
-      protectWindowDays: STAR_PROTECT_WINDOW_HOURS / 24
-    };
-
-    logger.info('StarService', '即将过期星星信息计算完成:', result);
-    return result;
+    const snapshot = await getAvailableStarSnapshot(service, userId);
+    return snapshot.expiringInfo;
   } catch (error) {
     logger.error('StarService', '获取即将过期星星信息失败', error);
-    return {
-      points: 0,
-      expiryDateText: '',
-      expiryTimestamp: 0,
-      remindWindowDays: STAR_REMIND_WINDOW_DAYS,
-      protectWindowDays: STAR_PROTECT_WINDOW_HOURS / 24
-    };
+    return buildEmptyExpiringInfo();
   }
 }
 
@@ -294,7 +355,9 @@ async function cleanupExpiredStars(service, userId = null) {
 }
 
 module.exports = {
+  getAvailableStarSnapshot,
   getExpiringStarsInfo,
+  buildAvailableStarComposition,
   isGroupWithinReminderWindow,
   calculatePendingExpiry,
   protectRewardsByExpiry,

@@ -240,6 +240,27 @@ describe('backend MessageService task required copy', () => {
     expect(historyContent.family.summary).toContain('2026-04-07');
   });
 
+  it('task reset 在历史任务场景下应带任务日期并使用历史重置标题', async () => {
+    const service = require('../../services/messageService');
+    const resetContent = service._buildTaskContent({
+      action: 'reset',
+      taskTitle: '数学作业',
+      actorRole: 'child',
+      actorUserId: 'child_1',
+      actorName: '小明',
+      subjectName: '小明',
+      subjectUserId: 'child_1',
+      task: {
+        date: '2026-04-07',
+        modifyTime: new Date('2026-04-15T10:00:00+08:00').getTime()
+      }
+    });
+
+    expect(resetContent.user.title).toBe('历史任务已重置：数学作业');
+    expect(resetContent.user.summary).toContain('2026-04-07');
+    expect(resetContent.family.summary).toContain('2026-04-07');
+  });
+
   it('task assign 应使用分配语义，避免与任务创建混淆', async () => {
     const service = require('../../services/messageService');
     const assignContent = service._buildTaskContent({

@@ -1,6 +1,6 @@
-const logger = require('../utils/logger');
-const dateUtils = require('../utils/dateUtils');
-const { TaskStatus } = require('../models/task');
+const logger = require('../../utils/logger');
+const dateUtils = require('../../utils/dateUtils');
+const { TaskStatus } = require('../../models/task');
 
 const TYPE_ORDER = {
   study: 0,

@@ -106,7 +106,19 @@ describe('pages/rewards/rewards contract', () => {
   it('loadRewardsData 应按孩子星星和奖励池写入页面状态', async () => {
     const starService = {
       clearCache: jest.fn(),
-      getTotalStars: jest.fn().mockResolvedValue(18)
+      getAvailableStarSnapshot: jest.fn().mockResolvedValue({
+        userId: 'child-2',
+        totalStars: 18,
+        buckets: [
+          { key: 'week', label: '本周到期', points: 3, emphasized: true },
+          { key: 'permanent', label: '永久有效', points: 15, emphasized: false }
+        ],
+        expiringInfo: {
+          points: 3,
+          expiryDateText: '明天',
+          expiryTimestamp: 123
+        }
+      })
     };
     const rewardService = {
       clearCache: jest.fn(),
@@ -140,14 +152,17 @@ describe('pages/rewards/rewards contract', () => {
     });
 
     const page = createPageInstance();
-    page.getExpiringPoints = jest.fn().mockResolvedValue({ points: 2, date: '明天' });
 
     await page.loadRewardsData();
 
-    expect(starService.getTotalStars).toHaveBeenCalledWith('child-2');
+    expect(starService.getAvailableStarSnapshot).toHaveBeenCalledWith('child-2');
     expect(rewardService.getAvailableRewards).toHaveBeenCalledWith(true, false, 'parent-1');
     expect(page.data.totalPoints).toBe(18);
     expect(page.data.formattedPoints).toBe('fmt:18');
+    expect(page.data.expiringPoints).toBe(3);
+    expect(page.data.expiryDate).toBe('明天');
+    expect(page.data.balanceSummaryPrimaryText).toBe('3颗星星将在明天失效');
+    expect(page.data.balanceSummarySecondaryText).toBe('其余15颗为永久有效');
     expect(page.data.showTabs).toBe(true);
     expect(page.data.availableRewards).toHaveLength(1);
     expect(page.data.claimedRewards).toHaveLength(1);
