@@ -4,6 +4,39 @@
 
 ---
 
+## [里程碑-21D] - 2026-04-15
+
+### ✅ 完成情况
+
+**服务层依赖边界收口**
+
+- **服务反向依赖已显式注入化**：
+  - `services/message-service.js` 不再运行时反查 `service-manager` 获取 `starService`，改为构造注入并补齐 `updateStarService()`
+  - `services/star-service.js` 不再运行时反查 `service-manager` 获取 `rewardService`，改为显式依赖注入并补齐 `updateRewardService()`
+  - `services/reward-service.js` 不再运行时反查 `service-manager` 获取 `configService`，改为显式依赖注入并补齐 `updateConfigService()`
+- **基础设施访问边界已统一收紧**：
+  - `services/user-service.js` 去除 `currentUserId` 的直接 `wx.getStorageSync / setStorageSync` 兜底，统一走 `StorageAdapter`
+  - `services/task-service.js` 删除仅用于 JSDoc 的运行时 `require('./index')`，去掉无业务价值的隐式索引依赖
+- **初始化与回归链路已同步补强**：
+  - `services/service-manager.js` 保持原有初始化顺序不变，并补齐 `starService / rewardService / configService` 的后续更新链路
+  - 补齐 `service-manager`、`message-service`、`reward-service`、`star-service` 边界治理相关测试
+  - 修复 `test/models/star-record.test.js` 中 `clone()` 时间戳断言不稳定问题，避免全量回归偶发红灯
+
+### 🧪 验证结果
+
+- 定向回归通过：
+  - `npx jest --runInBand test/services/service-manager.test.js test/services/reward-service.test.js test/services/star-service.test.js test/services/message-service.test.js test/services/message-service.modules.test.js test/services/user-service.test.js test/services/task-service.test.js test/app/bootstrap-services.test.js test/app/post-login-bootstrap.test.js`
+  - `npx jest --runInBand test/models/star-record.test.js`
+- 全量前端测试通过：
+  - `npm test`
+  - 结果：`85 suites / 1878 tests` 全绿
+
+### 📖 详细实施记录
+
+- [里程碑-21D：服务层依赖边界收口](../design/milestone-21d-service-layer-boundary-governance.md)
+
+---
+
 ## [维护收口] - 2026-04-15
 
 ### ✅ 完成情况

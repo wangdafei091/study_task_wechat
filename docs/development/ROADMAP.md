@@ -1,7 +1,7 @@
 # 项目路线图
 
 > 记录项目未来里程碑、阶段状态与简要目标
-> **最后更新**：2026-04-15（完成死代码治理收口，并按最新 ROI 重排 M21C / M21D / M21E 优先级）
+> **最后更新**：2026-04-15（完成 M21D 服务层依赖边界收口，并更新后续优先级为 M21E → M21C）
 
 ---
 
@@ -31,7 +31,7 @@
 | M21B4 | 任务表单共享内核重构 | 已完成 | 已统一 `task-edit` 与 `task-template-edit` 的共享任务表单草稿模型、校验与显示语义，并收口 `ValidationService / TaskTemplateService` 对共享规则的消费 |
 | M21F | 前端业务后移第一阶段 | 已完成 | 已完成模板推荐候选后移、analytics 云端 authoritative 读模型/统计查询后移，以及分析页 prepared-read-model 消费收口与 fallback 边界整理 |
 | M21G | 分析页重规划为横屏月度任务履约看板 | 已完成 | 已删除旧 analytics/趋势链路，重建横屏月度矩阵看板、月份切换、孩子切换、今日定位线与一屏阅读布局 |
-| M21D | 服务层依赖边界收口 | 计划中 | 收口 service 对 `service-manager`、`wx storage` 与运行时索引的反向依赖，统一通过注入和 `ConfigService / StorageAdapter` 消费基础设施能力，先解决低风险高收益的边界问题 |
+| M21D | 服务层依赖边界收口 | 已完成 | 已收口 service 对 `service-manager`、`wx storage` 与运行时索引的反向依赖，统一通过注入和 `ConfigService / StorageAdapter` 消费基础设施能力，并补齐相关回归测试 |
 | M21E | 星星域与奖励域前端服务内部模块化 | 计划中 | 参考既有 `task-service/` 与 `message-service/` 切片模式，拆分 `star-service.js`、`reward-service.js` 的内部实现，在不改变对外 API 的前提下降低单体复杂度 |
 | M21C | 执行文档与治理口径同步 | 计划中 | 在核心结构治理收口后，再统一修正高频入口文档与当前代码/测试事实的漂移，避免文档先于结构再次失真 |
 | M20A | 用户上下文与权限边界治理 | 已完成 | 已统一 loginUser / currentUser / actor / target / family / scope 语义，并收口首页权限入口与跨域上下文解析 |
@@ -73,9 +73,6 @@
 
 ## 计划中里程碑
 
-- `M21D`：服务层依赖边界收口
-  - 目标是移除 service 对 `service-manager` 的反向依赖、去掉 `wx.getStorageSync / setStorageSync` 直连，并统一走依赖注入与配置/存储服务
-  - 这是当前结构治理里 ROI 最高、功能风险最低的一步，应先于大文件拆分和文档同步
 - `M21E`：星星域与奖励域前端服务内部模块化
   - 目标是基于 `task-service/`、`message-service/` 现有模式，继续拆分 `star-service.js` 与 `reward-service.js` 的内部实现
   - 只做内部文件切片与私有实现迁移，不改变 service 对外公开 API
@@ -103,7 +100,8 @@
 - 原 `M20D` 为 M19 阶段复盘后登记的候选方向；结合 M13 / M15B / M20A / M20C / M20E 已形成的测试与交付基础，当前暂不作为独立里程碑推进。
 - `M21G` 已于 2026-04-14 完成，详细事实以 `CHANGELOG.md` 和对应设计文档为准。
 - 2026-04-15 已完成一轮独立的死代码治理收口：删除 analytics 遗留入口、孤儿工具、无绑定方法和无消费状态，当前不再作为单独 roadmap 里程碑继续推进。
-- `M21B1 → M21B1-UX → M21B2 → M21B3 → M21B4`、`M21F` 与 `M21G` 已完成阶段收口；结合最新结构审计，当前建议顺序调整为 `M21D → M21E → M21C`。
+- `M21D` 已于 2026-04-15 完成，详细事实以 `CHANGELOG.md`、对应设计文档和 PR #26 为准。
+- `M21B1 → M21B1-UX → M21B2 → M21B3 → M21B4`、`M21F`、`M21G` 与 `M21D` 已完成阶段收口；结合最新结构审计，当前建议顺序调整为 `M21E → M21C`。
 
 ---
 
