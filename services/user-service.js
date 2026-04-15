@@ -767,13 +767,11 @@ class UserService {
   async _saveUserState() {
     try {
       const userId = this.currentUser.id;
-      
-      if (this.storageAdapter) {
-        this.storageAdapter.set('currentUserId', userId);
-      } else {
-        wx.setStorageSync('currentUserId', userId);
+      const persisted = this._persistCurrentUserId(userId);
+      if (!persisted) {
+        return;
       }
-      
+
       logger.debug('UserService', '保存用户会话成功', { userId });
     } catch (error) {
       logger.error('UserService', '保存用户会话失败', error);

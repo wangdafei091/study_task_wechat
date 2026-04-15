@@ -223,6 +223,38 @@ describe('UserService', () => {
         expect.objectContaining({ userId: 'parent' })
       );
     });
+
+    it('_saveUserState 应复用 _persistCurrentUserId 且不再回退 wx.setStorageSync', async () => {
+      userService.currentUser = new User({
+        userId: 'child_1',
+        name: '孩子1',
+        role: 'child'
+      });
+      userService._persistCurrentUserId = jest.fn().mockReturnValue(true);
+      global.wx = {
+        setStorageSync: jest.fn()
+      };
+
+      await userService._saveUserState();
+
+      expect(userService._persistCurrentUserId).toHaveBeenCalledWith('child_1');
+      expect(global.wx.setStorageSync).not.toHaveBeenCalled();
+      delete global.wx;
+    });
+
+    it('_persistCurrentUserId 在 StorageAdapter 缺失或异常时应返回 false', () => {
+      expect(userService._persistCurrentUserId('child_1')).toBe(true);
+
+      userService.storageAdapter = null;
+      expect(userService._persistCurrentUserId('child_2')).toBe(false);
+
+      userService.storageAdapter = {
+        set: jest.fn(() => {
+          throw new Error('storage-fail');
+        })
+      };
+      expect(userService._persistCurrentUserId('child_3')).toBe(false);
+    });
   });
 
   describe('获取当前用户', () => {

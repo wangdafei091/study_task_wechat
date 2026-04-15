@@ -121,6 +121,50 @@ describe('pages/index helper modules', () => {
     expect(page.data.searchResults).toEqual(results);
   });
 
+  it('search-panel getEffectiveTaskUserId 在家长视角无最近孩子时应回退到首个孩子', () => {
+    const page = {
+      data: {
+        currentUser: { id: 'parent-1', role: 'parent' },
+        canManageMembers: true,
+        lastActiveChildId: '',
+        availableUsers: [
+          { id: 'parent-1', role: 'parent' },
+          { id: 'child-1', role: 'child' }
+        ]
+      }
+    };
+
+    expect(searchPanelModule.getEffectiveTaskUserId(page)).toBe('child-1');
+
+    page.data.availableUsers = [{ id: 'parent-1', role: 'parent' }];
+    expect(searchPanelModule.getEffectiveTaskUserId(page)).toBeNull();
+  });
+
+  it('search-panel performSearch 在空关键词或任务服务缺失时应走降级分支', async () => {
+    serviceManager.getTaskService.mockReturnValueOnce({
+      getAllTasks: jest.fn().mockResolvedValue([
+        { id: 'task-1', title: '数学', description: '', status: 0, type: 'study', userId: 'child-1' }
+      ])
+    }).mockReturnValueOnce(null);
+
+    const page = {
+      data: {
+        searchQuery: '',
+        searchFilters: { type: '', status: '', dateRange: '' }
+      },
+      getEffectiveTaskUserId: jest.fn(() => 'child-1'),
+      setData: jest.fn(function setData(update) {
+        Object.assign(this.data, update);
+      })
+    };
+
+    await expect(searchPanelModule.performSearch(page)).resolves.toEqual([
+      expect.objectContaining({ id: 'task-1' })
+    ]);
+    await expect(searchPanelModule.performSearch(page)).resolves.toEqual([]);
+    expect(page.data.searchResults).toEqual([]);
+  });
+
   it('user-switcher updateMenuItemsWithPermissions 应在只读且非今日场景过滤管理入口', () => {
     permissionUtils.filterMenuItems.mockImplementation((items) => items);
 
@@ -140,6 +184,22 @@ describe('pages/index helper modules', () => {
     expect(page.data.menuItems).toEqual([
       expect.objectContaining({ id: 'study' })
     ]);
+  });
+
+  it('user-switcher showUserSwitcher 与 handleUserSwitch 在 userService 缺失时应直接返回', async () => {
+    appMock.globalData.userService = null;
+
+    const page = {
+      data: {},
+      setData: jest.fn()
+    };
+
+    userSwitcherModule.showUserSwitcher(page);
+    await expect(userSwitcherModule.handleUserSwitch(page, {
+      detail: { userId: 'child-1' }
+    })).resolves.toBeUndefined();
+
+    expect(page.setData).not.toHaveBeenCalled();
   });
 
   it('user-switcher handleUserSwitch 应刷新页面上下文并回写 lastActiveChildId', async () => {
@@ -162,6 +222,92 @@ describe('pages/index helper modules', () => {
     expect(page.refreshDataForCurrentUser).toHaveBeenCalled();
     expect(appMock.globalData.lastActiveChildId).toBe('child-1');
     expect(page.data.currentUser).toEqual(expect.objectContaining({ userId: 'parent-1' }));
+  });
+
+  it('user-switcher handleUserSwitch 失败和异常时应提示用户', async () => {
+    appMock.globalData.userService.switchToUser
+      .mockResolvedValueOnce({ success: false, message: '切换失败' })
+      .mockRejectedValueOnce(new Error('boom'));
+
+    const page = {
+      data: {
+        lastActiveChildId: null
+      },
+      setData: jest.fn(),
+      updateMenuItemsWithPermissions: jest.fn(),
+      refreshDataForCurrentUser: jest.fn().mockResolvedValue()
+    };
+
+    await userSwitcherModule.handleUserSwitch(page, { detail: { userId: 'child-1' } });
+    await userSwitcherModule.handleUserSwitch(page, { detail: { userId: 'child-1' } });
+
+    expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({ title: '切换失败' }));
+    expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({ title: '用户切换失败' }));
+  });
+
+  it('user-switcher handleNicknameEdit 应覆盖无服务、失败和成功分支', async () => {
+    const page = {
+      setData: jest.fn(function setData(update) {
+        Object.assign(this, update);
+      })
+    };
+
+    appMock.globalData.userService = null;
+    await expect(userSwitcherModule.handleNicknameEdit(page, {
+      detail: { userId: 'child-1', nickname: '新昵称' }
+    })).resolves.toBeUndefined();
+
+    appMock.globalData.userService = {
+      ...appMock.globalData.userService,
+      updateNickname: jest.fn().mockResolvedValueOnce({ success: false, message: '修改失败' }).mockResolvedValueOnce({ success: true }),
+      getAllUsers: jest.fn(() => [{ userId: 'child-1' }]),
+      getCurrentUser: jest.fn(() => ({ userId: 'child-1' }))
+    };
+    global.getApp = jest.fn(() => appMock);
+
+    await userSwitcherModule.handleNicknameEdit(page, {
+      detail: { userId: 'child-1', nickname: '新昵称' }
+    });
+    await userSwitcherModule.handleNicknameEdit(page, {
+      detail: { userId: 'child-1', nickname: '新昵称' }
+    });
+
+    expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({ title: '修改失败' }));
+    expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({ title: '昵称已更新', icon: 'success' }));
+  });
+
+  it('user-switcher handleUserDelete 应覆盖无服务、刷新和异常分支', async () => {
+    const page = {
+      data: {
+        currentUser: { id: 'parent-1' }
+      },
+      setData: jest.fn(),
+      refreshDataForCurrentUser: jest.fn().mockResolvedValue()
+    };
+
+    appMock.globalData.userService = null;
+    await expect(userSwitcherModule.handleUserDelete(page, {
+      detail: { userId: 'child-1' }
+    })).resolves.toBeUndefined();
+
+    appMock.globalData.userService = {
+      ...appMock.globalData.userService,
+      deleteFamilyMember: jest.fn().mockResolvedValueOnce({ success: true }).mockRejectedValueOnce(new Error('delete-fail')),
+      getAllUsers: jest.fn(() => [{ userId: 'child-1' }]),
+      getCurrentUser: jest.fn(() => ({ id: 'child-1', userId: 'child-1' }))
+    };
+    global.getApp = jest.fn(() => appMock);
+
+    await userSwitcherModule.handleUserDelete(page, {
+      detail: { userId: 'child-1' }
+    });
+    await userSwitcherModule.handleUserDelete(page, {
+      detail: { userId: 'child-1' }
+    });
+
+    expect(page.refreshDataForCurrentUser).toHaveBeenCalled();
+    expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({ title: '成员已删除' }));
+    expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({ title: '删除用户失败' }));
   });
 
   it('date-navigation initializeDateNavigation 与 onPrevWeek 应更新周视图并触发刷新', async () => {
@@ -255,6 +401,43 @@ describe('pages/index helper modules', () => {
     expect(page.data.showMessagePreview).toBe(false);
   });
 
+  it('message-preview clear/prevent/detail/read 分支应可覆盖', async () => {
+    const rejectError = new Error('read-fail');
+    serviceManager.getMessageService.mockReturnValue({
+      markMessageAsRead: jest.fn().mockRejectedValue(rejectError),
+      markAllMessagesAsRead: jest.fn(),
+      getUnreadCount: jest.fn()
+    });
+
+    const page = {
+      _messagePreviewOpenTimer: setTimeout(() => {}, 1000),
+      _messagePreviewCloseTimer: null,
+      data: {
+        messages: [{ id: 'msg-1', title: '标题', isRead: false }]
+      },
+      setData: jest.fn(),
+      markMessageAsRead: jest.fn(),
+      getMessageScopeOptions: jest.fn(() => ({ scope: 'user' })),
+      getUnreadMessageCount: jest.fn()
+    };
+
+    messagePreviewModule.clearPreviewTimers(page);
+    expect(page._messagePreviewOpenTimer).toBeNull();
+
+    expect(messagePreviewModule.preventBubble(page, {})).toBe(false);
+    expect(messagePreviewModule.preventTouchMove(page, {})).toBe(false);
+
+    messagePreviewModule.viewMessageDetail(page, { currentTarget: { dataset: { id: 'missing' } } });
+    expect(page.markMessageAsRead).not.toHaveBeenCalled();
+
+    messagePreviewModule.viewMessageDetail(page, { currentTarget: { dataset: { id: 'msg-1' } } });
+    expect(page.markMessageAsRead).toHaveBeenCalled();
+
+    messagePreviewModule.markMessageAsRead(page, { currentTarget: { dataset: { id: 'msg-1' } } });
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+
   it('message-preview 快速关开切换时不应被旧关闭定时器反向隐藏', () => {
     jest.useFakeTimers();
 
@@ -314,5 +497,74 @@ describe('pages/index helper modules', () => {
     await page.getUnreadMessageCount();
     await Promise.resolve();
     expect(page.data.unreadCount).toBe(0);
+  });
+
+  it('message-preview markAll/getUnread 应覆盖空态、失败和异常分支', async () => {
+    const messageService = {
+      markAllMessagesAsRead: jest.fn()
+        .mockResolvedValueOnce(0)
+        .mockRejectedValueOnce(new Error('mark-all-fail')),
+      getUnreadCount: jest.fn().mockRejectedValue(new Error('count-fail')),
+      markMessageAsRead: jest.fn()
+    };
+    serviceManager.getMessageService.mockReturnValue(messageService);
+
+    const emptyPage = {
+      data: {
+        messages: [],
+        unreadCount: 0
+      },
+      getMessageScopeOptions: jest.fn(() => ({ scope: 'user' })),
+      setData: jest.fn(function setData(update) {
+        Object.assign(this.data, update);
+      })
+    };
+
+    messagePreviewModule.markAllMessagesAsRead(emptyPage);
+    expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({ title: '暂无未读消息' }));
+
+    const page = {
+      data: {
+        messages: [{ id: 'msg-1', isRead: false }],
+        unreadCount: 1
+      },
+      getMessageScopeOptions: jest.fn(() => ({ scope: 'user' })),
+      getUnreadMessageCount: jest.fn(function getUnreadMessageCount() {
+        return messagePreviewModule.getUnreadMessageCount(this);
+      }),
+      setData: jest.fn(function setData(update) {
+        Object.assign(this.data, update);
+      })
+    };
+
+    messagePreviewModule.markAllMessagesAsRead(page);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    messagePreviewModule.markAllMessagesAsRead(page);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    messagePreviewModule.getUnreadMessageCount(page);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({ title: '操作失败' }));
+  });
+
+  it('user-switcher validateUserModule 应覆盖无服务、失败和异常分支', async () => {
+    appMock.globalData.userService = null;
+    await expect(userSwitcherModule.validateUserModule()).resolves.toBe(false);
+
+    appMock.globalData.userService = {
+      ...appMock.globalData.userService,
+      validateService: jest.fn()
+        .mockResolvedValueOnce({ success: false })
+        .mockRejectedValueOnce(new Error('validate-fail'))
+    };
+    global.getApp = jest.fn(() => appMock);
+
+    await expect(userSwitcherModule.validateUserModule()).resolves.toBe(false);
+    await expect(userSwitcherModule.validateUserModule()).resolves.toBe(false);
   });
 });

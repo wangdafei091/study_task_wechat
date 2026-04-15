@@ -122,6 +122,19 @@ describe('TaskService helpers and delegators', () => {
     expect(taskRepository.save).toHaveBeenCalledWith(task);
   });
 
+  it('updateOfflineQueueService 应注册 task adapter 并支持清空引用', () => {
+    const { service } = loadTaskService();
+    const offlineQueueService = {
+      registerAdapter: jest.fn()
+    };
+
+    service.updateOfflineQueueService(offlineQueueService);
+    expect(offlineQueueService.registerAdapter).toHaveBeenCalledWith('task', expect.any(Function));
+
+    service.updateOfflineQueueService(null);
+    expect(service.offlineQueueService).toBeNull();
+  });
+
   it('删除 tombstone 相关 helper 应覆盖缺失方法和异常降级', async () => {
     const { service } = loadTaskService({
       taskRepository: {}
@@ -248,6 +261,64 @@ describe('TaskService helpers and delegators', () => {
     expect(taskRepository.getAll).not.toHaveBeenCalled();
   });
 
+  it('_executeTaskQueueItem 与 buildLegacyQueueCandidates 应覆盖剩余队列分支', async () => {
+    const { service, taskRepository } = loadTaskService({
+      taskRepository: {
+        getById: jest.fn(async (id) => (id === 'stored_1' ? { id: 'stored_1' } : null)),
+        getAll: jest.fn(async () => [
+          { id: 'task_create', syncedToCloud: false, pendingSyncMeta: { operationKey: 'op_create' } },
+          { id: 'task_update', syncedToCloud: true, pendingSyncMeta: { action: 'update', operationKey: 'op_update' } }
+        ]),
+        getDeleteTombstones: jest.fn(async () => [
+          { entityId: 'task_delete', operationKey: 'op_delete', familyId: 'family_1' }
+        ])
+      }
+    });
+    service._syncTaskToCloud = jest.fn(async (task) => ({ kind: 'create', task }));
+    service._syncUpdateToCloud = jest.fn(async (task) => ({ kind: 'update', task }));
+    service._syncDeleteToCloud = jest.fn(async (id, meta) => ({ kind: 'delete', id, meta }));
+    service._syncStatusToCloud = jest.fn(async (task) => ({ kind: 'status', task }));
+    service._syncRequiredStateToCloud = jest.fn(async (task) => ({ kind: 'required', task }));
+
+    await expect(service._executeTaskQueueItem({
+      operation: 'create',
+      snapshot: { id: 'snapshot_1' },
+      payload: { pendingSyncMeta: { action: 'create' } }
+    })).resolves.toEqual(expect.objectContaining({ kind: 'create' }));
+    await expect(service._executeTaskQueueItem({
+      operation: 'update',
+      entityId: 'stored_1',
+      payload: {}
+    })).resolves.toEqual(expect.objectContaining({ kind: 'update' }));
+    await expect(service._executeTaskQueueItem({
+      operation: 'delete',
+      entityId: 'task_delete',
+      payload: { deleteMeta: { reason: 'cleanup' } },
+      snapshot: { pendingSyncMeta: { action: 'delete' } }
+    })).resolves.toEqual(expect.objectContaining({ kind: 'delete' }));
+    await expect(service._executeTaskQueueItem({
+      operation: 'complete',
+      snapshot: { id: 'complete_1' },
+      payload: {}
+    })).resolves.toEqual(expect.objectContaining({ kind: 'status' }));
+    await expect(service._executeTaskQueueItem({
+      operation: 'required',
+      snapshot: { id: 'required_1' },
+      payload: {}
+    })).resolves.toEqual(expect.objectContaining({ kind: 'required' }));
+    await expect(service._executeTaskQueueItem({
+      operation: 'unknown',
+      snapshot: { id: 'default_1' },
+      payload: {}
+    })).resolves.toEqual(expect.objectContaining({ kind: 'update' }));
+
+    await expect(service.buildLegacyQueueCandidates()).resolves.toEqual([
+      expect.objectContaining({ entityId: 'task_create', operation: 'create', legacyMigrationKey: 'task:pending:task_create:create' }),
+      expect.objectContaining({ entityId: 'task_update', operation: 'update', legacyMigrationKey: 'task:pending:task_update:update' }),
+      expect.objectContaining({ entityId: 'task_delete', operation: 'delete', legacyMigrationKey: 'task:tombstone:task_delete:delete' })
+    ]);
+  });
+
   it('batchProcessTasks 应覆盖 delay 分支并累积结果', async () => {
     jest.useFakeTimers();
     const { service } = loadTaskService();
@@ -267,6 +338,87 @@ describe('TaskService helpers and delegators', () => {
       total: 3,
       processed: 3
     }));
+  });
+
+  it('batchProcessTasks 在处理函数异常时应返回失败结果', async () => {
+    const { service } = loadTaskService();
+    const result = await service.batchProcessTasks([1, 2], async (item) => {
+      if (item === 2) {
+        throw new Error('process-fail');
+      }
+      return item;
+    });
+
+    expect(result).toEqual(expect.objectContaining({
+      success: true,
+      total: 2,
+      processed: 1
+    }));
+    expect(result.results).toEqual(expect.arrayContaining([
+      expect.objectContaining({ item: 2, success: false })
+    ]));
+  });
+
+  it('batchProcessTasks 在批次切片抛错时应返回失败结果', async () => {
+    const { service } = loadTaskService();
+    const items = [1, 2];
+    items.slice = jest.fn(() => {
+      throw new Error('slice-fail');
+    });
+
+    const result = await service.batchProcessTasks(items, async (item) => item);
+
+    expect(result).toEqual({
+      success: false,
+      message: '批量处理失败: slice-fail'
+    });
+  });
+
+  it('_toAuthoritativeTask、_applyAuthoritativeTaskMutation 与 _emitTaskCloudSyncFailure 应覆盖空值和降级分支', async () => {
+    const { service, taskRepository, eventBus } = loadTaskService();
+    taskRepository.saveAll = jest.fn(async (tasks) => tasks);
+    taskRepository.save = jest.fn(async (task) => task);
+    service._enqueueTaskMutation = jest.fn(async () => {
+      throw new Error('queue-fail');
+    });
+
+    expect(service._toAuthoritativeTask(null)).toBeNull();
+
+    const authoritative = await service._applyAuthoritativeTaskMutation({
+      taskId: 'task_1',
+      task: { taskId: 'task_1', title: '主任务' },
+      tasks: [
+        null,
+        { taskId: 'task_1', title: '主任务' },
+        { taskId: 'task_1', title: '重复任务' },
+        { taskId: 'task_2', title: '第二个任务' }
+      ]
+    }, {
+      fallbackOperation: 'update',
+      message: 'ok',
+      fallback: true
+    });
+
+    expect(authoritative.tasks).toHaveLength(2);
+
+    const mutationResult = service._buildTaskServiceMutationResult({
+      taskId: 'task_1',
+      operation: 'update'
+    }, {
+      task: { id: 'task_1' },
+      tasks: authoritative.tasks,
+      message: 'ok',
+      fallback: true
+    });
+
+    expect(mutationResult.message).toBe('ok');
+    expect(mutationResult.fallback).toBe(true);
+
+    await expect(service._emitTaskCloudSyncFailure('update', {
+      id: 'task_1',
+      pendingSyncMeta: { action: 'update' }
+    }, new Error('sync-fail'))).resolves.toBeUndefined();
+    expect(eventBus.emit).toHaveBeenCalled();
   });
 
   it('TaskService wrapper 方法应继续委托到子模块', async () => {
@@ -289,6 +441,7 @@ describe('TaskService helpers and delegators', () => {
     taskSync.syncUpdateToCloud.mockResolvedValue(true);
     taskSync.syncDeleteToCloud.mockResolvedValue(true);
     taskSync.syncStatusToCloud.mockResolvedValue(true);
+    taskSync.syncRequiredStateToCloud = jest.fn().mockResolvedValue(true);
     taskPenalty.checkTasksStatus.mockResolvedValue({ success: true });
 
     await expect(service.getTasksByScope({ scope: 'family' })).resolves.toEqual(['scope-task']);
@@ -302,6 +455,7 @@ describe('TaskService helpers and delegators', () => {
     await expect(service._syncUpdateToCloud({ id: 'task_3' })).resolves.toBe(true);
     await expect(service._syncDeleteToCloud('task_4')).resolves.toBe(true);
     await expect(service._syncStatusToCloud({ id: 'task_5' })).resolves.toBe(true);
+    await expect(service._syncRequiredStateToCloud({ id: 'task_6' })).resolves.toBe(true);
     await expect(service.checkTasksStatus()).resolves.toEqual({ success: true });
 
     expect(taskQuery.getTasksByScope).toHaveBeenCalledWith(service, { scope: 'family' });
@@ -312,6 +466,7 @@ describe('TaskService helpers and delegators', () => {
     expect(taskRepeat.createRepeatTaskInstance).toHaveBeenCalled();
     expect(taskSync.migrateTasksToChild).toHaveBeenCalledWith(service, 'parent_1', 'child_1');
     expect(taskSync.fetchSingleTaskFromCloud).toHaveBeenCalledWith(service, 'task_2');
+    expect(taskSync.syncRequiredStateToCloud).toHaveBeenCalledWith(service, { id: 'task_6' });
     expect(taskPenalty.checkTasksStatus).toHaveBeenCalledWith(service);
   });
 });
