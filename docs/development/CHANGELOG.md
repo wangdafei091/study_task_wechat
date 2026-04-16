@@ -4,6 +4,44 @@
 
 ---
 
+## [里程碑-21J] - 2026-04-16
+
+### ✅ 完成情况
+
+**奖池星星明细语义澄清与信息架构重构**
+
+- **奖池页已成为唯一余额解释入口**：
+  - [`pages/rewards/modules/rewards-sync.js`](/Users/wangdafei/code/study_task_wechat/pages/rewards/modules/rewards-sync.js) 已接入统一的 `getAvailableStarSnapshot(...)`
+  - 顶部总星星、快过期提示和余额说明统一复用同一份“当前可用星星快照”口径
+  - 奖池页新增轻量的两行余额说明，明确“兑换时会先使用快到期的星星”，不再把余额解释挪到记录页重复展示
+- **星星记录页已收口为纯历史变动明细页**：
+  - [`packageMessage/pages/star-records/star-records.js`](/Users/wangdafei/code/study_task_wechat/packageMessage/pages/star-records/star-records.js) 已删除顶部余额卡与周期汇总链路
+  - 页面默认时间筛选切换为“最近7天”，保留 `全部 / 任务获得 / 兑换使用 / 星星减少` 类型筛选与 `最近7天 / 本月 / 全部` 时间筛选
+  - `全部` 视图仅按自然月分组浏览历史，不再渲染月度获得/减少/净变化汇总文案
+- **星星域已补齐统一可用快照能力**：
+  - [`services/star-service/star-expiry.js`](/Users/wangdafei/code/study_task_wechat/services/star-service/star-expiry.js) 新增“当前可用星星快照”权威计算
+  - 快照统一产出 `totalStars`、`buckets`、`expiringInfo`，保证奖池页三块余额相关信息来自同一批未过期有效分组
+- **记录展示语义已完成收敛**：
+  - [`services/star-service/star-records.js`](/Users/wangdafei/code/study_task_wechat/services/star-service/star-records.js) 继续承担历史记录视图模型构建，但不再输出 `scopeSummary`
+  - 获得记录保留有效期说明，减少记录继续突出原因、金额与时间，不把历史流水伪装成“按有效期桶的总账”
+
+### 🧪 验证结果
+
+- 定向回归通过：
+  - `npx jest --runInBand test/services/star-service.test.js test/services/star-records.service.test.js test/pages/rewards.modules.test.js test/pages/rewards.page-contract.test.js test/pages/rewards.behavior.test.js test/pages/star-records.page.test.js`
+- 全量前端测试通过：
+  - `npm test`
+  - 结果：`87 suites / 1912 tests` 全绿
+- GitHub Actions 自动化验证通过：
+  - PR #28 合并后主分支验证通过
+  - 后续 UTC/上海日期边界导致的 `task-service` 测试漂移已在 PR #29 修复并重新恢复绿灯
+
+### 📖 详细实施记录
+
+- [里程碑-21J：奖池余额解释与星星记录职责重构](../design/milestone-21j-star-records-clarity-redesign.md)
+
+---
+
 ## [里程碑-21C] - 2026-04-15
 
 ### ✅ 完成情况
