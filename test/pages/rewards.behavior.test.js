@@ -376,6 +376,62 @@ describe('pages/rewards/rewards behavior', () => {
     );
   });
 
+  it('页面导航与星星快照查询应覆盖真实跳转和空态 CTA 分支', async () => {
+    const page = createPageInstance();
+    const starService = {
+      getAvailableStarSnapshot: jest.fn().mockResolvedValue({
+        userId: 'child-1',
+        totalStars: 12,
+        buckets: [],
+        expiringInfo: {
+          points: 0,
+          expiryDateText: '',
+          expiryTimestamp: null
+        }
+      })
+    };
+
+    serviceManager.getService.mockImplementation((name) => {
+      if (name === 'starService') return starService;
+      return null;
+    });
+    serviceManager.getUserService.mockReturnValue({
+      getLoginUser: jest.fn(() => ({ role: 'child', userId: 'child-1', familyId: 'family-1' })),
+      getLoginUserId: jest.fn(() => 'child-1'),
+      getCurrentUser: jest.fn(() => ({ role: 'child', userId: 'child-1', id: 'child-1', familyId: 'family-1' })),
+      getUserByRole: jest.fn(() => ({ id: 'child-1', userId: 'child-1', role: 'child', familyId: 'family-1' })),
+      getAllUsers: jest.fn(() => [{ userId: 'child-1', role: 'child', familyId: 'family-1' }])
+    });
+
+    await expect(page.getAvailableStarSnapshot()).resolves.toEqual({
+      userId: 'child-1',
+      totalStars: 12,
+      buckets: [],
+      expiringInfo: {
+        points: 0,
+        expiryDateText: '',
+        expiryTimestamp: null
+      }
+    });
+
+    page.navigateToMyExchanges();
+    page.navigateToStarRecords();
+    page.navigateToRewardManage();
+    expect(global.wx.navigateTo).toHaveBeenNthCalledWith(1, {
+      url: '/packageManage/pages/my-exchanges/my-exchanges'
+    });
+    expect(global.wx.navigateTo).toHaveBeenNthCalledWith(2, {
+      url: '/packageMessage/pages/star-records/star-records'
+    });
+    expect(global.wx.navigateTo).toHaveBeenCalledTimes(2);
+
+    page.setData({ showManageRewardCTA: true });
+    page.navigateToRewardManage();
+    expect(global.wx.navigateTo).toHaveBeenNthCalledWith(3, {
+      url: '/packageManage/pages/reward-manage/reward-manage'
+    });
+  });
+
   it('claimReward 在需要选择孩子时应先弹出孩子选择器', async () => {
     const page = createPageInstance();
     page.data.totalPoints = 20;
@@ -620,5 +676,17 @@ describe('pages/rewards/rewards behavior', () => {
     expect(page.isExampleReward({ isExample: true })).toBe(true);
     expect(page.isExampleReward({ id: 'reward_1_1' })).toBe(true);
     expect(page.isExampleReward({ id: 'reward_example_legacy' })).toBe(true);
+  });
+
+  it('onStarsAreaTap 在超时后应重置连续点击计数', () => {
+    const page = createPageInstance();
+
+    page.onStarsAreaTap();
+    page.onStarsAreaTap();
+    expect(page.data.demoClickCount).toBe(2);
+
+    jest.advanceTimersByTime(2000);
+
+    expect(page.data.demoClickCount).toBe(0);
   });
 });
