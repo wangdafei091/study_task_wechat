@@ -14,6 +14,11 @@ const RewardStatus = {
   DISABLED: 'disabled'      // 已禁用
 };
 
+const RewardFulfillmentMode = {
+  INSTANT: 'instant',
+  MANUAL: 'manual'
+};
+
 /**
  * 奖励类型枚举
  */
@@ -42,8 +47,9 @@ class Reward {
     this.enabled = data.enabled !== false; // 默认启用
     this.claimed = data.claimed || false;
     this.claimTime = data.claimTime || 0;
-    this.claimStatus = data.claimStatus || (data.claimed ? RewardStatus.CLAIMED : RewardStatus.AVAILABLE);
-    this.deliveryTime = data.deliveryTime || 0;
+    this.fulfillmentMode = Reward.resolveFulfillmentMode(data);
+    this.claimStatus = Reward.normalizeClaimStatus(data, this.fulfillmentMode);
+    this.deliveryTime = Reward.normalizeDeliveryTime(data, this.fulfillmentMode, this.claimStatus);
     
     // 其他属性
     this.createTime = data.createTime || Date.now();
@@ -115,8 +121,13 @@ class Reward {
     
     this.claimed = true;
     this.claimTime = Date.now();
-    this.claimStatus = RewardStatus.CLAIMED;
-    this.deliveryTime = 0;
+    if (this.fulfillmentMode === RewardFulfillmentMode.INSTANT) {
+      this.claimStatus = RewardStatus.DELIVERED;
+      this.deliveryTime = this.claimTime;
+    } else {
+      this.claimStatus = RewardStatus.CLAIMED;
+      this.deliveryTime = 0;
+    }
     
     return this;
   }
@@ -131,6 +142,10 @@ class Reward {
     }
     
     this.claimStatus = RewardStatus.DELIVERED;
+    this.claimed = true;
+    if (!this.claimTime) {
+      this.claimTime = Date.now();
+    }
     this.deliveryTime = Date.now();
     
     return this;
@@ -149,6 +164,7 @@ class Reward {
     this.claimed = false;
     this.claimTime = 0;
     this.claimStatus = RewardStatus.AVAILABLE;
+    this.deliveryTime = 0;
     
     return this;
   }
@@ -184,7 +200,9 @@ class Reward {
    * @returns {Boolean} 是否待领取
    */
   isPending() {
-    return this.claimed && this.claimStatus === RewardStatus.CLAIMED;
+    return this.fulfillmentMode === RewardFulfillmentMode.MANUAL &&
+      this.claimed &&
+      this.claimStatus === RewardStatus.CLAIMED;
   }
   
   /**
@@ -218,10 +236,56 @@ class Reward {
     
     return new Reward(clonedData);
   }
+
+  static resolveFulfillmentMode(data = {}) {
+    if (data.fulfillmentMode === RewardFulfillmentMode.INSTANT) {
+      return RewardFulfillmentMode.INSTANT;
+    }
+
+    if (data.fulfillmentMode === RewardFulfillmentMode.MANUAL) {
+      return RewardFulfillmentMode.MANUAL;
+    }
+
+    // 历史自定义奖励默认走家长发放；示例奖励当前也按手动模式兼容。
+    return RewardFulfillmentMode.MANUAL;
+  }
+
+  static normalizeClaimStatus(data = {}, fulfillmentMode = RewardFulfillmentMode.MANUAL) {
+    const rawStatus = data.claimStatus === 'pending'
+      ? RewardStatus.CLAIMED
+      : data.claimStatus;
+
+    if (rawStatus === RewardStatus.DELIVERED) {
+      return RewardStatus.DELIVERED;
+    }
+
+    if (fulfillmentMode === RewardFulfillmentMode.INSTANT) {
+      return data.claimed ? RewardStatus.DELIVERED : RewardStatus.AVAILABLE;
+    }
+
+    if (rawStatus === RewardStatus.CLAIMED) {
+      return RewardStatus.CLAIMED;
+    }
+
+    return data.claimed ? RewardStatus.CLAIMED : RewardStatus.AVAILABLE;
+  }
+
+  static normalizeDeliveryTime(data = {}, fulfillmentMode = RewardFulfillmentMode.MANUAL, claimStatus = RewardStatus.AVAILABLE) {
+    if (claimStatus === RewardStatus.DELIVERED) {
+      return data.deliveryTime || data.claimTime || 0;
+    }
+
+    if (fulfillmentMode === RewardFulfillmentMode.INSTANT && data.claimed) {
+      return data.claimTime || 0;
+    }
+
+    return data.deliveryTime || 0;
+  }
 }
 
 module.exports = {
   Reward,
+  RewardFulfillmentMode,
   RewardStatus,
   RewardType
 };

@@ -73,6 +73,8 @@ async function syncRewardToCloud(service, reward) {
 
   const payload = {
     rewardId: reward.id,
+    userId: reward.userId || null,
+    familyId: reward.familyId || pendingSyncMeta.familyId || null,
     name: reward.name,
     description: reward.description,
     type: reward.type,
@@ -83,13 +85,18 @@ async function syncRewardToCloud(service, reward) {
     claimTime: reward.claimTime || 0,
     claimStatus: reward.claimStatus,
     deliveryTime: reward.deliveryTime || 0,
+    fulfillmentMode: reward.fulfillmentMode || 'manual',
+    exchangeUserId: reward.exchangeUserId || pendingSyncMeta.exchangeUserId || null,
     isExample: reward.isExample || false,
     tags: reward.tags || [],
     notes: reward.notes || '',
-    protectedByExpiry: reward.protectedByExpiry || false,
-    partialProtection: reward.partialProtection || 0,
     modifyTime: pendingSyncMeta.modifyTime || reward.modifyTime || Date.now(),
-    operationKey: pendingSyncMeta.operationKey
+    operationKey: pendingSyncMeta.operationKey,
+    operatorContext: {
+      actorUserId: pendingSyncMeta.operatorUserId || null,
+      actorRole: pendingSyncMeta.operatorRole || 'system',
+      familyId: pendingSyncMeta.familyId || reward.familyId || null
+    }
   };
 
   if (reward.syncedToCloud) {
@@ -186,6 +193,7 @@ function mapCloudReward(service, item) {
     claimTime: item.claimTime || 0,
     claimStatus: item.claimStatus || (item.claimed ? 'claimed' : 'available'),
     deliveryTime: item.deliveryTime || 0,
+    fulfillmentMode: item.fulfillmentMode || null,
     isExample: item.isExample === true,
     tags: item.tags || [],
     notes: item.notes || '',

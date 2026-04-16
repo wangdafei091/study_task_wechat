@@ -95,6 +95,43 @@ describe('pages/rewards helper modules', () => {
     expect(childUserId).toBe('child-2');
   });
 
+  it('rewards-user-context 在多孩子且无最近活跃孩子时应返回待选择状态', () => {
+    appMock.globalData.lastActiveChildId = null;
+    serviceManager.getUserService.mockReturnValue({
+      getLoginUser: jest.fn(() => ({ id: 'parent-1', userId: 'parent-1', role: 'parent' })),
+      getCurrentUser: jest.fn(() => ({ id: 'parent-1', userId: 'parent-1', role: 'parent' })),
+      getAllUsers: jest.fn(() => [
+        { id: 'parent-1', userId: 'parent-1', role: 'parent' },
+        { id: 'child-1', userId: 'child-1', role: 'child', name: '孩子1' },
+        { id: 'child-2', userId: 'child-2', role: 'child', name: '孩子2' }
+      ])
+    });
+
+    const subject = rewardsUserContextModule.resolveRewardExecutionSubject(serviceManager);
+
+    expect(subject.requiresPicker).toBe(true);
+    expect(subject.targetChildUserId).toBeNull();
+    expect(subject.childOptions).toHaveLength(2);
+  });
+
+  it('rewards-user-context 在无家庭时应退化到单用户奖励范围', () => {
+    serviceManager.getUserService.mockReturnValue({
+      getLoginUser: jest.fn(() => ({ id: 'parent-1', userId: 'parent-1', role: 'parent' })),
+      getCurrentUser: jest.fn(() => ({ id: 'parent-1', userId: 'parent-1', role: 'parent' })),
+      getAllUsers: jest.fn(() => [{ id: 'parent-1', userId: 'parent-1', role: 'parent' }])
+    });
+
+    const scope = rewardsUserContextModule.getRewardFamilyScope(serviceManager);
+
+    expect(scope).toEqual({
+      familyId: null,
+      memberUserIds: ['parent-1'],
+      childUserIds: [],
+      loginUserId: 'parent-1',
+      viewUserId: 'parent-1'
+    });
+  });
+
   it('rewards-sync onPullDownRefresh 应强制拉取 authority 和奖励数据并停止下拉动画', async () => {
     const starService = {
       syncExpiryAuthorityIfNeeded: jest.fn().mockResolvedValue({}),
@@ -123,8 +160,7 @@ describe('pages/rewards helper modules', () => {
       force: true
     });
     expect(rewardService.refreshRewardsFromCloud).toHaveBeenCalledWith({
-      force: true,
-      userId: 'child-1'
+      force: true
     });
     expect(page.loadRewardsData).toHaveBeenCalledWith(true);
     expect(global.wx.stopPullDownRefresh).toHaveBeenCalled();
@@ -193,7 +229,7 @@ describe('pages/rewards helper modules', () => {
     };
     const rewardService = {
       clearCache: jest.fn(),
-      calculateNextAvailableReward: jest.fn().mockResolvedValue({
+      calculateNextAvailableRewardByFamily: jest.fn().mockResolvedValue({
         id: 'reward-next',
         name: '新奖励',
         points: 10
@@ -209,7 +245,7 @@ describe('pages/rewards helper modules', () => {
     const page = {
       data: { showModal: true, nextReward: null },
       _skipNextOnShowRefresh: false,
-      _getRewardOwnerUserId: jest.fn(() => 'parent-1'),
+      _getRewardFamilyScope: jest.fn(() => ({ familyId: 'family-1', memberUserIds: ['parent-1', 'child-1'] })),
       _getEffectiveChildUserId: jest.fn(() => 'child-1'),
       loadRewardsData: jest.fn().mockResolvedValue(),
       setData: jest.fn(function setData(update) {
@@ -234,7 +270,7 @@ describe('pages/rewards helper modules', () => {
     };
     const rewardService = {
       clearCache: jest.fn(),
-      calculateNextAvailableReward: jest.fn().mockResolvedValue(null)
+      calculateNextAvailableRewardByFamily: jest.fn().mockResolvedValue(null)
     };
 
     serviceManager.getService.mockImplementation((name) => {
@@ -246,7 +282,7 @@ describe('pages/rewards helper modules', () => {
     const page = {
       data: { showModal: true, nextReward: { id: 'old' } },
       _skipNextOnShowRefresh: false,
-      _getRewardOwnerUserId: jest.fn(() => 'parent-1'),
+      _getRewardFamilyScope: jest.fn(() => ({ familyId: 'family-1', memberUserIds: ['parent-1', 'child-1'] })),
       _getEffectiveChildUserId: jest.fn(() => 'child-1'),
       loadRewardsData: jest.fn().mockResolvedValue(),
       setData: jest.fn(function setData(update) {
@@ -260,16 +296,16 @@ describe('pages/rewards helper modules', () => {
     expect(page.loadRewardsData).toHaveBeenCalledWith(true);
   });
 
-  it('rewards-exchange-flow buildRewardExchangeMeta 应正确识别完全保护奖励', () => {
-    expect(rewardsExchangeFlowModule.buildRewardExchangeMeta({
-      name: '保护奖励',
+  it('rewards-exchange-flow buildExchangeMeta 应正确识别零消耗兑换', () => {
+    expect(rewardsExchangeFlowModule.buildExchangeMeta({
+      name: '奖励',
       points: 8,
-      protectedByExpiry: true,
-      actualCost: 0
+      actualCost: 0,
+      fulfillmentMode: 'manual'
     })).toEqual(expect.objectContaining({
-      kind: 'fully_protected',
       skipAnimation: true,
-      actualCost: 0
+      actualCost: 0,
+      toastTitle: '已加入待发放'
     }));
   });
 });

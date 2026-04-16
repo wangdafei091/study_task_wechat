@@ -1,6 +1,7 @@
 const logger = require('../../utils/logger');
-const { Reward } = require('../../models/reward');
+const { Reward, RewardFulfillmentMode } = require('../../models/reward');
 const { EVENTS } = require('../../utils/constants');
+const rewardStatus = require('../../utils/reward-status');
 
 async function createReward(service, rewardData) {
   if (!rewardData || !rewardData.name || !rewardData.points) {
@@ -9,6 +10,11 @@ async function createReward(service, rewardData) {
   }
 
   try {
+    const operatorContext = service._getOperatorContext();
+    rewardData.fulfillmentMode = rewardData.fulfillmentMode === RewardFulfillmentMode.INSTANT
+      ? RewardFulfillmentMode.INSTANT
+      : RewardFulfillmentMode.MANUAL;
+
     if (!rewardData.userId) {
       if (service.userService) {
         rewardData.userId = service.userService.getCurrentUserId();
@@ -17,6 +23,11 @@ async function createReward(service, rewardData) {
         rewardData.userId = 'parent';
         logger.warn('RewardService', '用户服务不可用，奖励用户ID设为默认值: parent');
       }
+    }
+
+    if (!rewardData.familyId && operatorContext.familyId) {
+      rewardData.familyId = operatorContext.familyId;
+      logger.info('RewardService', `为奖励补齐家庭ID: ${rewardData.familyId}`);
     }
 
     const reward = new Reward(rewardData);
@@ -69,6 +80,10 @@ async function updateReward(service, rewardId, rewardData) {
         updatedFields.push(`${key}: ${oldValue} → ${rewardData[key]}`);
       }
     });
+    if (!existingReward.familyId) {
+      const operatorContext = service._getOperatorContext();
+      existingReward.familyId = operatorContext.familyId || null;
+    }
     existingReward.modifyTime = Date.now();
     existingReward.pendingSyncMeta = service._buildRewardPendingSyncMeta(existingReward, 'update', {
       operationKey: rewardData.operationKey || existingReward.modifyTime,
@@ -236,6 +251,7 @@ async function duplicateReward(service, rewardId) {
       icon: originalReward.icon,
       tags: [...(originalReward.tags || [])],
       notes: originalReward.notes,
+      fulfillmentMode: originalReward.fulfillmentMode || RewardFulfillmentMode.MANUAL,
       enabled: true,
       claimed: false,
       originRewardId: rewardId
@@ -278,11 +294,75 @@ async function deleteRewards(service, rewardIds) {
   }
 }
 
+async function markRewardAsDelivered(service, rewardId, operatorUserId = null) {
+  if (!rewardId) {
+    logger.warn('RewardService', '标记奖励已发放失败: 缺少奖励ID');
+    return { success: false, message: '奖励ID不能为空' };
+  }
+
+  try {
+    const reward = await service.rewardRepository.getById(rewardId);
+    if (!reward) {
+      return { success: false, message: '未找到指定的奖励' };
+    }
+
+    const fulfillmentMode = rewardStatus.resolveRewardFulfillmentMode(reward);
+    if (fulfillmentMode !== RewardFulfillmentMode.MANUAL) {
+      return { success: false, message: '该奖励无需发放' };
+    }
+
+    if (!reward.claimed) {
+      return { success: false, message: '奖励尚未兑换' };
+    }
+
+    if (rewardStatus.isRewardDelivered(reward)) {
+      return { success: true, reward, message: '奖励已发放' };
+    }
+
+    const operatorContext = service._getOperatorContext(reward.exchangeUserId || null, 'manage');
+    const modifyTime = Date.now();
+    reward.claimStatus = 'delivered';
+    reward.claimed = true;
+    reward.deliveryTime = modifyTime;
+    reward.modifyTime = modifyTime;
+    reward.pendingSyncMeta = service._buildRewardPendingSyncMeta(reward, 'update', {
+      operationKey: modifyTime,
+      modifyTime,
+      operatorUserId: operatorUserId || operatorContext.actorUserId || null,
+      operatorRole: operatorContext.actorRole || 'system'
+    });
+    reward.syncedToCloud = false;
+
+    const updatedReward = await service.rewardRepository.save(reward);
+
+    if (updatedReward && service.enableCloudStorage) {
+      service._syncRewardToCloud(updatedReward).catch(async syncError => {
+        logger.warn('RewardService', '奖励发放云同步失败，本地已保存', {
+          rewardId: updatedReward.id,
+          error: syncError.message
+        });
+        await service._emitRewardCloudSyncFailure('update', updatedReward, syncError);
+      });
+    }
+
+    service.eventBus.emit(EVENTS.REWARD_DELIVERED, {
+      reward: updatedReward,
+      operatorUserId: operatorUserId || operatorContext.actorUserId || null
+    });
+
+    return { success: true, reward: updatedReward, message: '已标记发放' };
+  } catch (error) {
+    logger.error('RewardService', `标记奖励已发放失败, ID=${rewardId}`, error);
+    return { success: false, message: '标记发放失败，请重试' };
+  }
+}
+
 module.exports = {
   createReward,
   updateReward,
   deleteReward,
   toggleRewardStatus,
   duplicateReward,
-  deleteRewards
+  deleteRewards,
+  markRewardAsDelivered
 };

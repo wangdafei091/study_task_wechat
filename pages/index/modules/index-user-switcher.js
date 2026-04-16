@@ -211,6 +211,10 @@ function updateMenuItemsWithPermissions(page) {
       return true;
     }
 
+    if (!isViewingToday && (item.id === 'habit' || item.id === 'reward-manage')) {
+      return !isReadonlyView;
+    }
+
     if (!isViewingToday) {
       return false;
     }

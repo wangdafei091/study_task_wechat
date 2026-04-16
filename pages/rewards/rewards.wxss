@@ -227,6 +227,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  color: #333333;
+  font-weight: 600;
 }
 
 .reward-points::before {
@@ -273,6 +275,14 @@
 .reward-status {
   font-size: 22rpx;
   color: #999999;
+}
+
+.reward-cost-note {
+  margin-top: 6rpx;
+  font-size: 20rpx;
+  line-height: 1.4;
+  color: #8B6B1E;
+  text-align: center;
 }
 
 .unlocked .reward-status text {
@@ -645,4 +655,17 @@
   font-size: 26rpx;
   color: #FF9800;
   font-weight: 600;
-} 
+}
+
+.reward-detail-note {
+  margin-top: 12rpx;
+  font-size: 24rpx;
+  line-height: 1.5;
+  color: #666666;
+  text-align: center;
+}
+
+.reward-detail-note.emphasis {
+  color: #1A73E8;
+  font-weight: 600;
+}

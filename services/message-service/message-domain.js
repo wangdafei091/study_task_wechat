@@ -318,6 +318,8 @@ async function createRewardMessageWithDomainModel(service, reward, action, optio
   const isChildOperator = operator.role === 'child';
   const isParentOperator = operator.role === 'parent';
   const exchangeUserId = reward.exchangeUserId || reward.userId || null;
+  const claimedCost = Number(options.actualCost ?? reward.actualCost ?? reward.points ?? 0);
+  const refundedPoints = Number(options.pointsRefunded ?? reward.pointsRefunded ?? reward.points ?? 0);
   const isProxyAction = Boolean(
     operator.userId &&
     exchangeUserId &&
@@ -337,11 +339,11 @@ async function createRewardMessageWithDomainModel(service, reward, action, optio
     case 'claimed':
       title = '奖励已兑换';
       if (isProxyAction) {
-        summary = `家长为您兑换了奖励"${reward.name}"，花费了${reward.points}颗星星`;
+        summary = `家长为您兑换了奖励"${reward.name}"，花费了${claimedCost}颗星星`;
       } else if (isChildOperator) {
-        summary = `您的孩子兑换了奖励"${reward.name}"，花费了${reward.points}颗星星`;
+        summary = `您的孩子兑换了奖励"${reward.name}"，花费了${claimedCost}颗星星`;
       } else {
-        summary = `您已成功兑换奖励"${reward.name}"，花费了${reward.points}颗星星`;
+        summary = `您已成功兑换奖励"${reward.name}"，花费了${claimedCost}颗星星`;
       }
       icon = '🎁';
       break;
@@ -353,11 +355,11 @@ async function createRewardMessageWithDomainModel(service, reward, action, optio
     case 'unclaimed':
       title = '奖励兑换已取消';
       if (isProxyAction) {
-        summary = `家长取消了您兑换的奖励"${reward.name}"，退回${reward.points}颗星星`;
+        summary = `家长取消了您兑换的奖励"${reward.name}"，退回${refundedPoints}颗星星`;
       } else if (isChildOperator) {
-        summary = `您的孩子取消了兑换奖励"${reward.name}"，退回${reward.points}颗星星`;
+        summary = `您的孩子取消了兑换奖励"${reward.name}"，退回${refundedPoints}颗星星`;
       } else {
-        summary = `您已取消兑换奖励"${reward.name}"，退回${reward.points}颗星星`;
+        summary = `您已取消兑换奖励"${reward.name}"，退回${refundedPoints}颗星星`;
       }
       icon = '↩️';
       break;

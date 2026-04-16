@@ -1,4 +1,43 @@
 const logger = require('../../utils/logger');
+const rewardStatus = require('../../utils/reward-status');
+const rewardIdentity = require('../../utils/reward-identity');
+
+function normalizeFamilyScope(scope = {}) {
+  if (!scope || typeof scope !== 'object') {
+    return {
+      familyId: null,
+      memberUserIds: [],
+      childUserIds: []
+    };
+  }
+
+  return {
+    familyId: scope.familyId || null,
+    memberUserIds: Array.isArray(scope.memberUserIds) ? [...new Set(scope.memberUserIds.filter(Boolean))] : [],
+    childUserIds: Array.isArray(scope.childUserIds) ? [...new Set(scope.childUserIds.filter(Boolean))] : []
+  };
+}
+
+function rewardBelongsToFamily(reward, scope = {}) {
+  const normalizedScope = normalizeFamilyScope(scope);
+  if (!reward) {
+    return false;
+  }
+
+  if (reward.familyId) {
+    return normalizedScope.familyId && reward.familyId === normalizedScope.familyId;
+  }
+
+  return normalizedScope.memberUserIds.includes(reward.userId);
+}
+
+function rewardMatchesExchangeUser(reward, exchangeUserId, scope = {}) {
+  if (!reward || !exchangeUserId) {
+    return false;
+  }
+
+  return rewardIdentity.resolveRewardExchangeUserId(reward, scope) === exchangeUserId;
+}
 
 async function getAllRewards(service, userId = null) {
   try {
@@ -27,6 +66,132 @@ async function getClaimedRewards(service, userId = null) {
   } catch (error) {
     logger.error('RewardService', '获取已领取奖励失败', error);
     return [];
+  }
+}
+
+async function getRewardsByFamily(service, scope = {}) {
+  try {
+    const normalizedScope = normalizeFamilyScope(scope);
+    const rewards = await getAllRewards(service);
+    const familyRewards = rewards.filter((reward) => rewardBelongsToFamily(reward, normalizedScope));
+
+    logger.info('RewardService', '按家庭范围获取奖励成功', {
+      familyId: normalizedScope.familyId,
+      memberCount: normalizedScope.memberUserIds.length,
+      count: familyRewards.length
+    });
+    return familyRewards;
+  } catch (error) {
+    logger.error('RewardService', '按家庭范围获取奖励失败', error);
+    return [];
+  }
+}
+
+async function getClaimedRewardsByExchangeUser(service, exchangeUserId, scope = {}) {
+  try {
+    const familyRewards = await getRewardsByFamily(service, scope);
+    const claimedRewards = familyRewards.filter((reward) => {
+      return reward.claimed && rewardMatchesExchangeUser(reward, exchangeUserId, scope);
+    });
+
+    logger.info('RewardService', '按兑换人获取奖励记录成功', {
+      exchangeUserId: exchangeUserId || null,
+      count: claimedRewards.length
+    });
+    return claimedRewards;
+  } catch (error) {
+    logger.error('RewardService', '按兑换人获取奖励记录失败', error);
+    return [];
+  }
+}
+
+async function getFamilyClaimedRewards(service, scope = {}) {
+  try {
+    const familyRewards = await getRewardsByFamily(service, scope);
+    const claimedRewards = familyRewards.filter((reward) => reward.claimed);
+
+    logger.info('RewardService', '按家庭范围获取兑换记录成功', {
+      familyId: normalizeFamilyScope(scope).familyId,
+      count: claimedRewards.length
+    });
+    return claimedRewards;
+  } catch (error) {
+    logger.error('RewardService', '按家庭范围获取兑换记录失败', error);
+    return [];
+  }
+}
+
+async function getRewardManageViewModel(service, userId = null) {
+  try {
+    if (!service.initialized && !service.constructor._initialized) {
+      logger.info('RewardService', '奖励服务尚未初始化，先执行初始化');
+      await service.initialize();
+    }
+
+    const allRewards = await getAllRewards(service, userId);
+    const manageableRewards = allRewards.filter((reward) => {
+      return !isExampleReward(service, reward) && !rewardStatus.isRewardExchanged(reward);
+    });
+    const exampleTemplates = allRewards.filter((reward) => {
+      return isExampleReward(service, reward) && !rewardStatus.isRewardExchanged(reward);
+    });
+
+    logger.info('RewardService', `获取奖励管理视图成功${userId ? `, 用户=${userId}` : ''}, 可管理=${manageableRewards.length}, 示例=${exampleTemplates.length}`);
+    return {
+      rewardOwnerId: userId || null,
+      manageableRewards,
+      exampleTemplates
+    };
+  } catch (error) {
+    logger.error('RewardService', '获取奖励管理视图失败', error);
+    return {
+      rewardOwnerId: userId || null,
+      manageableRewards: [],
+      exampleTemplates: []
+    };
+  }
+}
+
+async function getRewardManageFamilyViewModel(service, scope = {}) {
+  try {
+    if (!service.initialized && !service.constructor._initialized) {
+      logger.info('RewardService', '奖励服务尚未初始化，先执行初始化');
+      await service.initialize();
+    }
+
+    const normalizedScope = normalizeFamilyScope(scope);
+    const allRewards = await getRewardsByFamily(service, normalizedScope);
+    const exchangeRecords = allRewards.filter((reward) => reward.claimed);
+    const manageableRewards = allRewards.filter((reward) => {
+      return !isExampleReward(service, reward) && !rewardStatus.isRewardExchanged(reward);
+    });
+    const exampleTemplates = allRewards.filter((reward) => {
+      return isExampleReward(service, reward) && !rewardStatus.isRewardExchanged(reward);
+    });
+
+    logger.info('RewardService', '获取家庭奖励管理视图成功', {
+      familyId: normalizedScope.familyId,
+      manageableCount: manageableRewards.length,
+      exampleCount: exampleTemplates.length
+    });
+    return {
+      familyId: normalizedScope.familyId,
+      memberUserIds: normalizedScope.memberUserIds,
+      childUserIds: normalizedScope.childUserIds,
+      manageableRewards,
+      exchangeRecords,
+      exampleTemplates
+    };
+  } catch (error) {
+    logger.error('RewardService', '获取家庭奖励管理视图失败', error);
+    return {
+      familyId: normalizeFamilyScope(scope).familyId,
+      memberUserIds: [],
+      childUserIds: [],
+      manageableRewards: [],
+      exchangeRecords: [],
+      exampleTemplates: []
+    };
   }
 }
 
@@ -168,6 +333,48 @@ async function calculateNextAvailableReward(service, knownStarCount = null, user
   }
 }
 
+async function calculateNextAvailableRewardByFamily(service, knownStarCount = null, scope = {}) {
+  try {
+    if (!service.initialized && !service.constructor._initialized) {
+      logger.info('RewardService', '奖励服务尚未初始化，先执行初始化');
+      await service.initialize();
+    }
+
+    const availablePoints = knownStarCount !== null
+      ? knownStarCount
+      : await service.starGroupRepository.getTotalPoints();
+    const familyRewards = await getRewardsByFamily(service, scope);
+    const formalRewards = familyRewards.filter((reward) => !isExampleReward(service, reward));
+    const availableRewards = formalRewards.filter((reward) => !rewardStatus.isRewardExchanged(reward) && reward.enabled !== false);
+
+    if (availableRewards.length === 0) {
+      return null;
+    }
+
+    const lockedRewards = availableRewards
+      .filter((reward) => reward.points > availablePoints)
+      .sort((a, b) => a.points - b.points);
+
+    if (lockedRewards.length === 0) {
+      const highestPointReward = [...availableRewards].sort((a, b) => b.points - a.points)[0];
+      return {
+        ...highestPointReward,
+        remainingStars: 0,
+        allClaimed: false
+      };
+    }
+
+    const nextReward = lockedRewards[0];
+    return {
+      ...nextReward,
+      remainingStars: Math.max(0, nextReward.points - availablePoints)
+    };
+  } catch (error) {
+    logger.error('RewardService', '按家庭范围计算下一个可用奖励失败', error);
+    return null;
+  }
+}
+
 function hasOnlyExampleRewardsSync(service) {
   try {
     logger.debug('RewardService', '同步检查是否只有示例奖励可用');
@@ -190,16 +397,7 @@ function hasOnlyExampleRewardsSync(service) {
 }
 
 function isExampleReward(service, reward) {
-  if (!reward) return false;
-  if (reward.isExample === true) return true;
-
-  if (reward.id && typeof reward.id === 'string') {
-    return reward.id.startsWith('reward_example_') ||
-      reward.id.includes('_example_') ||
-      /reward_\d+_\d+/.test(reward.id);
-  }
-
-  return false;
+  return rewardIdentity.isExampleReward(reward);
 }
 
 async function getLastExchangeTime(service) {
@@ -243,9 +441,15 @@ async function getLastExchangeTimeByUser(service, userId) {
 module.exports = {
   getAllRewards,
   getClaimedRewards,
+  getRewardsByFamily,
+  getClaimedRewardsByExchangeUser,
+  getFamilyClaimedRewards,
+  getRewardManageViewModel,
+  getRewardManageFamilyViewModel,
   getAvailableRewards,
   getExchangeableRewards,
   calculateNextAvailableReward,
+  calculateNextAvailableRewardByFamily,
   hasOnlyExampleRewardsSync,
   isExampleReward,
   getLastExchangeTime,

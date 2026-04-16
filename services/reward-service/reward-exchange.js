@@ -1,5 +1,57 @@
 const logger = require('../../utils/logger');
 const { EVENTS } = require('../../utils/constants');
+const rewardStatus = require('../../utils/reward-status');
+const rewardDisplay = require('../../utils/reward-display');
+
+async function previewRewardExchangeCost(service, rewardOrId, userId = null) {
+  const reward = typeof rewardOrId === 'string'
+    ? await service.rewardRepository.getById(rewardOrId)
+    : rewardOrId;
+
+  if (!reward) {
+    return rewardDisplay.normalizeRewardExchangeCost({ points: 0 });
+  }
+
+  let expiringStarDeduction = 0;
+
+  if (userId && service.starService?.getAvailableStarSnapshot) {
+    try {
+      const snapshot = await service.starService.getAvailableStarSnapshot(userId);
+      expiringStarDeduction = Number(snapshot?.expiringInfo?.points || 0);
+    } catch (error) {
+      logger.warn('RewardService', '读取可用星星快照失败，兑换成本预览回退到兼容模式', error);
+    }
+  }
+
+  return rewardDisplay.normalizeRewardExchangeCost({
+    originalPoints: reward.points,
+    expiringStarDeduction
+  });
+}
+
+async function getLatestRewardExchangeRecord(service, reward, exchangeUserId = null) {
+  if (!reward?.id) {
+    return null;
+  }
+
+  const sourceCandidates = [
+    { source: `reward_${reward.id}`, sourceId: reward.id },
+    { source: 'reward_exchange', sourceId: reward.id }
+  ];
+
+  for (const candidate of sourceCandidates) {
+    const records = await service.starRecordRepository.getRecordsBySource(
+      candidate.source,
+      candidate.sourceId,
+      exchangeUserId
+    );
+    if (Array.isArray(records) && records.length > 0) {
+      return records[0];
+    }
+  }
+
+  return null;
+}
 
 async function exchangeReward(service, rewardId, userId = null) {
   logger.info('RewardService', '===== 开始兑换奖励流程 =====');
@@ -72,33 +124,44 @@ async function exchangeReward(service, rewardId, userId = null) {
         userId
       }).catch(() => null);
 
-      const actualCost = Number(response.consumedPoints || 0);
+      const operatorContext = service._getOperatorContext(userId, 'execute');
+      const fulfillmentMode = rewardStatus.resolveRewardFulfillmentMode(cloudReward);
+      const costBreakdown = rewardDisplay.normalizeRewardExchangeCost({
+        originalPoints: cloudReward.points,
+        expiringStarDeduction: response.expiringStarDeduction || 0,
+        actualCost: response.consumedPoints
+      });
       service.eventBus.emit(EVENTS.REWARD_CLAIMED, {
+        reward: cloudReward,
         rewardId: cloudReward.id,
         rewardName: cloudReward.name,
-        points: actualCost,
-        actualCost,
+        points: costBreakdown.actualCost,
+        actualCost: costBreakdown.actualCost,
+        expiringStarDeduction: costBreakdown.expiringStarDeduction,
+        hasExpiringDeduction: costBreakdown.hasExpiringDeduction,
         originalPoints: cloudReward.points,
-        displayPoints: actualCost,
-        protectedByExpiry: cloudReward.protectedByExpiry || false,
-        partialProtection: cloudReward.partialProtection || 0,
-        exchangeType: cloudReward.protectedByExpiry
-          ? (actualCost > 0 ? 'partial_protected' : 'fully_protected')
-          : 'normal',
+        displayPoints: costBreakdown.actualCost,
+        fulfillmentMode,
+        exchangeType: fulfillmentMode === rewardStatus.RewardFulfillmentMode.INSTANT
+          ? 'instant'
+          : 'manual',
         userId,
-        operatorUserId: userId,
+        exchangeUserId: userId,
+        operatorUserId: operatorContext.actorUserId || userId,
         timestamp: Date.now()
       });
 
       return {
         success: true,
         reward: cloudReward,
-        message: cloudReward.protectedByExpiry
-          ? (actualCost > 0 ? '部分保护奖励兑换成功' : '完全保护奖励兑换成功')
-          : '兑换成功',
-        protectedByExpiry: cloudReward.protectedByExpiry || false,
-        partialProtection: cloudReward.partialProtection || 0,
-        actualCost,
+        message: fulfillmentMode === rewardStatus.RewardFulfillmentMode.INSTANT
+          ? '兑换成功'
+          : '已加入待发放',
+        fulfillmentMode,
+        originalPoints: costBreakdown.originalPoints,
+        expiringStarDeduction: costBreakdown.expiringStarDeduction,
+        hasExpiringDeduction: costBreakdown.hasExpiringDeduction,
+        actualCost: costBreakdown.actualCost,
         userId
       };
     }
@@ -109,12 +172,13 @@ async function exchangeReward(service, rewardId, userId = null) {
     });
     logger.info('RewardService', `兑换奖励前用户星星数: ${userStars}, 用户=${userId}`);
 
-    const actualCost = reward.protectedByExpiry ?
-      Math.max(0, reward.points - (reward.partialProtection || 0)) :
-      reward.points;
+    const operatorContext = service._getOperatorContext(userId, 'execute');
+    const fulfillmentMode = rewardStatus.resolveRewardFulfillmentMode(reward);
+    const costBreakdown = await previewRewardExchangeCost(service, reward, userId);
+    const actualCost = costBreakdown.actualCost;
 
     if (userStars < actualCost) {
-      logger.warn('RewardService', `兑换奖励失败: 星星不足, 需要${actualCost}颗, 当前${userStars}颗${reward.protectedByExpiry ? `(保护金额${reward.partialProtection || 0}颗)` : ''}, 用户=${userId}`);
+      logger.warn('RewardService', `兑换奖励失败: 星星不足, 需要${actualCost}颗, 当前${userStars}颗, 用户=${userId}`);
       return { success: false, message: '星星不足' };
     }
 
@@ -122,7 +186,7 @@ async function exchangeReward(service, rewardId, userId = null) {
 
     try {
       logger.info('RewardService', '===== 开始兑换奖励事务 =====');
-      logger.info('RewardService', `事务参数: 奖励=${reward.name}, 原价=${reward.points}颗, 保护金额=${reward.partialProtection || 0}颗, 实际消耗=${actualCost}颗(${reward.protectedByExpiry ? (actualCost > 0 ? '部分保护' : '完全保护') : '普通兑换'}), 用户=${userId}`);
+      logger.info('RewardService', `事务参数: 奖励=${reward.name}, 原价=${reward.points}颗, 快过期抵扣=${costBreakdown.expiringStarDeduction}颗, 实际消耗=${actualCost}颗, 履约=${fulfillmentMode}, 用户=${userId}`);
       const exchangeModifyTime = Date.now();
 
       if (actualCost > 0) {
@@ -138,16 +202,17 @@ async function exchangeReward(service, rewardId, userId = null) {
 
         logger.info('RewardService', `步骤3完成: 星星扣除成功，扣除${actualCost}颗, 用户=${userId}`);
       } else {
-        logger.info('RewardService', `步骤3跳过: 完全保护奖励无需扣除星星, 奖励=${reward.name}, 用户=${userId}`);
-        deductResult = { success: true, message: '完全保护奖励无需扣星' };
+        logger.info('RewardService', `步骤3跳过: 本次兑换无需扣除星星, 奖励=${reward.name}, 用户=${userId}`);
+        deductResult = { success: true, message: '本次兑换无需扣星' };
       }
 
       try {
+        const recordDescription = actualCost > 0
+          ? `兑换奖励: ${reward.name}`
+          : `兑换奖励（消耗0颗星星）: ${reward.name}`;
         const recordData = {
           amount: actualCost,
-          type: reward.protectedByExpiry ?
-            (actualCost > 0 ? 'partial_protected_exchange' : 'protected_exchange') :
-            'exchange',
+          type: actualCost > 0 ? 'exchange' : 'protected_exchange',
           source: `reward_${rewardId}`,
           sourceId: reward.id,
           timestamp: exchangeModifyTime,
@@ -158,14 +223,15 @@ async function exchangeReward(service, rewardId, userId = null) {
             rewardId: reward.id,
             rewardName: reward.name,
             originalPoints: reward.points,
-            protectedByExpiry: reward.protectedByExpiry || false,
-            partialProtection: reward.partialProtection || 0,
+            fulfillmentMode,
+            expiringStarDeduction: costBreakdown.expiringStarDeduction,
             actualCost
-          }
+          },
+          description: recordDescription
         };
 
         const consumptionRecord = await service.starRecordRepository.createStarConsumptionRecord(recordData);
-        logger.info('RewardService', `星星消费记录创建成功: ${consumptionRecord.id}, 类型=${recordData.type}, 用户=${userId}`);
+        logger.info('RewardService', `星星消费记录创建成功: ${consumptionRecord?.id || 'unknown'}, 类型=${recordData.type}, 用户=${userId}`);
       } catch (recordError) {
         logger.error('RewardService', '创建星星消费记录失败', recordError);
         const rollbackSuccess = await service._rollbackStarDeduction(actualCost, reward, userId, '创建消费记录失败');
@@ -177,14 +243,20 @@ async function exchangeReward(service, rewardId, userId = null) {
       }
 
       try {
+        reward.exchangeUserId = userId;
+        reward.fulfillmentMode = fulfillmentMode;
         reward.claim();
         reward.claimTime = exchangeModifyTime;
+        reward.deliveryTime = fulfillmentMode === rewardStatus.RewardFulfillmentMode.INSTANT
+          ? exchangeModifyTime
+          : 0;
         reward.modifyTime = exchangeModifyTime;
-        reward.exchangeUserId = userId;
         reward.pendingSyncMeta = service._buildRewardPendingSyncMeta(reward, 'exchange', {
           operationKey: exchangeModifyTime,
           modifyTime: exchangeModifyTime,
-          exchangeUserId: userId
+          exchangeUserId: userId,
+          operatorUserId: operatorContext.actorUserId || null,
+          operatorRole: operatorContext.actorRole || 'system'
         });
         reward.syncedToCloud = false;
         logger.info('RewardService', `奖励状态设置: claimed=${reward.claimed}, claimStatus=${reward.claimStatus}, claimTime=${reward.claimTime}, deliveryTime=${reward.deliveryTime}, 用户=${userId}`);
@@ -207,18 +279,22 @@ async function exchangeReward(service, rewardId, userId = null) {
 
       try {
         service.eventBus.emit(EVENTS.REWARD_CLAIMED, {
+          reward,
           rewardId: reward.id,
           rewardName: reward.name,
           points: actualCost,
           actualCost,
+          expiringStarDeduction: costBreakdown.expiringStarDeduction,
+          hasExpiringDeduction: costBreakdown.hasExpiringDeduction,
           originalPoints: reward.points,
           displayPoints: actualCost,
-          protectedByExpiry: reward.protectedByExpiry || false,
-          partialProtection: reward.partialProtection || 0,
-          exchangeType: reward.protectedByExpiry ?
-            (actualCost > 0 ? 'partial_protected' : 'fully_protected') : 'normal',
+          fulfillmentMode,
+          exchangeType: fulfillmentMode === rewardStatus.RewardFulfillmentMode.INSTANT
+            ? 'instant'
+            : 'manual',
           userId,
-          operatorUserId: userId,
+          exchangeUserId: userId,
+          operatorUserId: operatorContext.actorUserId || userId,
           timestamp: Date.now()
         });
         logger.info('RewardService', `奖励领取事件发送成功, 用户=${userId}`);
@@ -226,21 +302,23 @@ async function exchangeReward(service, rewardId, userId = null) {
         logger.warn('RewardService', '发送奖励领取事件失败', eventError);
       }
 
-      const costDescription = reward.protectedByExpiry ?
-        (actualCost > 0 ? `${actualCost}颗星星(部分保护，原价${reward.points}颗)` : '0颗星星(完全保护)') :
-        `${actualCost}颗星星`;
+      const costDescription = costBreakdown.hasExpiringDeduction
+        ? `${actualCost}颗星星(已抵扣${costBreakdown.expiringStarDeduction}颗快过期星星，原价${reward.points}颗)`
+        : `${actualCost}颗星星`;
       logger.info('RewardService', `兑换奖励成功: ${reward.name}, 消耗${costDescription}, 用户=${userId}`);
 
-      const successMessage = reward.protectedByExpiry ?
-        (actualCost > 0 ? '部分保护奖励兑换成功' : '完全保护奖励兑换成功') :
-        '兑换成功';
+      const successMessage = fulfillmentMode === rewardStatus.RewardFulfillmentMode.INSTANT
+        ? '兑换成功'
+        : '已加入待发放';
 
       return {
         success: true,
         reward,
         message: successMessage,
-        protectedByExpiry: reward.protectedByExpiry || false,
-        partialProtection: reward.partialProtection || 0,
+        fulfillmentMode,
+        originalPoints: costBreakdown.originalPoints,
+        expiringStarDeduction: costBreakdown.expiringStarDeduction,
+        hasExpiringDeduction: costBreakdown.hasExpiringDeduction,
         actualCost,
         userId
       };
@@ -333,22 +411,20 @@ async function cancelRewardExchange(service, rewardId) {
       return { success: false, message: '已领取的奖励不可取消兑换' };
     }
 
-    const exchangeRecords = await service.starRecordRepository.getRecordsBySource(
-      'reward_exchange',
-      rewardId
-    );
+    const exchangeUserId = reward.exchangeUserId || service.userService?.getCurrentUserId?.() || null;
+    const latestRecord = await getLatestRewardExchangeRecord(service, reward, exchangeUserId);
 
-    if (exchangeRecords.length === 0) {
+    if (!latestRecord) {
       logger.warn('RewardService', `取消奖励兑换: 未找到兑换记录, ID=${rewardId}`);
     }
 
-    const latestRecord = exchangeRecords[0];
     const pointsToRefund = latestRecord ? Math.abs(latestRecord.points) : reward.points;
 
     const permanentGroup = await service.starGroupRepository.getOrCreateGroup(
       'permanent',
       null,
-      '永久有效'
+      '永久有效',
+      exchangeUserId
     );
 
     if (!permanentGroup) {
@@ -368,6 +444,7 @@ async function cancelRewardExchange(service, rewardId) {
     }
 
     const refundRecord = await service.starRecordRepository.save({
+      userId: exchangeUserId,
       type: 'income',
       source: 'reward_exchange_refund',
       sourceId: rewardId,
@@ -390,6 +467,12 @@ async function cancelRewardExchange(service, rewardId) {
     }
 
     logger.info('RewardService', `取消奖励兑换成功: ${reward.name}, ID=${rewardId}, 退还星星=${pointsToRefund}`);
+    const operatorContext = service._getOperatorContext(exchangeUserId, 'execute');
+    service.eventBus.emit(EVENTS.REWARD_UNCLAIMED, {
+      reward: unclaimed,
+      pointsRefunded: pointsToRefund,
+      operatorUserId: operatorContext.actorUserId || null
+    });
     service.eventBus.emit(EVENTS.REWARD_EXCHANGE_CANCELLED, {
       reward: unclaimed,
       pointsRefunded: pointsToRefund,
@@ -445,6 +528,7 @@ async function rollbackStarDeduction(service, actualCost, reward, userId, reason
 }
 
 module.exports = {
+  previewRewardExchangeCost,
   exchangeReward,
   cancelRewardExchange,
   rollbackStarDeduction

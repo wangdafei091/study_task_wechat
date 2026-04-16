@@ -716,6 +716,36 @@ describe('StarService', () => {
         message: '奖励服务不可用'
       });
     });
+
+    it('应只返回保护预览，不再回写奖励旧保护字段', async () => {
+      mockStarGroupRepository.getTotalPoints.mockResolvedValue(10);
+      mockRewardService.updateReward = jest.fn();
+      mockRewardService.getAvailableRewards.mockResolvedValue([
+        {
+          id: 'reward_1',
+          name: '拼图',
+          points: 12,
+          claimed: false
+        }
+      ]);
+
+      const result = await starService.protectRewardsByExpiry(5, 'user_123');
+
+      expect(result).toEqual({
+        success: true,
+        protectedCount: 1,
+        protectedRewards: [
+          {
+            id: 'reward_1',
+            name: '拼图',
+            points: 12,
+            partialProtection: 5
+          }
+        ],
+        usedExpiredStars: 5
+      });
+      expect(mockRewardService.updateReward).not.toHaveBeenCalled();
+    });
   });
 
   // ==================== 主干流程测试 ====================

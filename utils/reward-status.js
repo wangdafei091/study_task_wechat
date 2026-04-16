@@ -4,14 +4,40 @@ const RewardClaimDisplayStatus = {
   DELIVERED: 'delivered'
 };
 
+const RewardFulfillmentMode = {
+  INSTANT: 'instant',
+  MANUAL: 'manual'
+};
+
+function resolveRewardFulfillmentMode(reward = {}) {
+  if (reward.fulfillmentMode === RewardFulfillmentMode.INSTANT) {
+    return RewardFulfillmentMode.INSTANT;
+  }
+
+  if (reward.fulfillmentMode === RewardFulfillmentMode.MANUAL) {
+    return RewardFulfillmentMode.MANUAL;
+  }
+
+  return RewardFulfillmentMode.MANUAL;
+}
+
 function resolveRewardClaimStatus(reward = {}) {
-  const claimStatus = reward.claimStatus;
+  const fulfillmentMode = resolveRewardFulfillmentMode(reward);
+  const claimStatus = reward.claimStatus === 'pending'
+    ? RewardClaimDisplayStatus.CLAIMED
+    : reward.claimStatus;
 
   if (claimStatus === RewardClaimDisplayStatus.DELIVERED) {
     return RewardClaimDisplayStatus.DELIVERED;
   }
 
-  if (claimStatus === RewardClaimDisplayStatus.CLAIMED || claimStatus === 'pending') {
+  if (fulfillmentMode === RewardFulfillmentMode.INSTANT) {
+    return reward.claimed
+      ? RewardClaimDisplayStatus.DELIVERED
+      : RewardClaimDisplayStatus.AVAILABLE;
+  }
+
+  if (claimStatus === RewardClaimDisplayStatus.CLAIMED) {
     return RewardClaimDisplayStatus.CLAIMED;
   }
 
@@ -30,13 +56,18 @@ function isRewardExchanged(reward = {}) {
 
 function getRewardPoolStatusLabel(reward = {}) {
   const status = resolveRewardClaimStatus(reward);
+  const fulfillmentMode = resolveRewardFulfillmentMode(reward);
 
   if (status === RewardClaimDisplayStatus.DELIVERED) {
-    return '已领取';
+    return fulfillmentMode === RewardFulfillmentMode.INSTANT ? '已兑换' : '已发放';
   }
 
   if (status === RewardClaimDisplayStatus.CLAIMED) {
-    return '已兑换';
+    return '待发放';
+  }
+
+  if (reward.requiresTargetSelection) {
+    return '待选择';
   }
 
   return reward.unlocked ? '可兑换' : '未解锁';
@@ -44,43 +75,80 @@ function getRewardPoolStatusLabel(reward = {}) {
 
 function getRewardPoolActionLabel(reward = {}) {
   const status = resolveRewardClaimStatus(reward);
+  const fulfillmentMode = resolveRewardFulfillmentMode(reward);
 
   if (status === RewardClaimDisplayStatus.DELIVERED) {
-    return '已领取';
+    return fulfillmentMode === RewardFulfillmentMode.INSTANT ? '已兑换' : '已发放';
   }
 
   if (status === RewardClaimDisplayStatus.CLAIMED) {
-    return '已兑换';
+    return '待发放';
+  }
+
+  if (reward.requiresTargetSelection) {
+    return '选择孩子兑换';
+  }
+
+  if (reward.actionSubjectLabel) {
+    return `为${reward.actionSubjectLabel}兑换`;
   }
 
   return reward.unlocked ? '兑换奖励' : '未解锁';
 }
 
 function getRewardRecordStatusLabel(reward = {}) {
-  return isRewardDelivered(reward) ? '已领取' : '待领取';
+  const status = resolveRewardClaimStatus(reward);
+  const fulfillmentMode = resolveRewardFulfillmentMode(reward);
+
+  if (status === RewardClaimDisplayStatus.DELIVERED) {
+    return fulfillmentMode === RewardFulfillmentMode.INSTANT ? '已兑换' : '已发放';
+  }
+
+  if (status === RewardClaimDisplayStatus.CLAIMED) {
+    return '待发放';
+  }
+
+  return '未兑换';
 }
 
 function getRewardRecordTimeLabel(reward = {}) {
-  return isRewardDelivered(reward) ? '领取时间' : '兑换时间';
+  const status = resolveRewardClaimStatus(reward);
+  const fulfillmentMode = resolveRewardFulfillmentMode(reward);
+
+  if (status === RewardClaimDisplayStatus.DELIVERED) {
+    return fulfillmentMode === RewardFulfillmentMode.INSTANT ? '兑换时间' : '发放时间';
+  }
+
+  return '兑换时间';
 }
 
 function getRewardManageStatusLabel(reward = {}) {
-  return isRewardDelivered(reward) ? '已领取' : '已兑换';
+  return getRewardRecordStatusLabel(reward);
 }
 
 function getRewardPrimaryRecordTime(reward = {}) {
-  if (isRewardDelivered(reward) && reward.deliveryTime) {
+  const fulfillmentMode = resolveRewardFulfillmentMode(reward);
+
+  if (isRewardDelivered(reward) && fulfillmentMode === RewardFulfillmentMode.MANUAL && reward.deliveryTime) {
     return reward.deliveryTime;
   }
 
   return reward.claimTime || reward.createTime || 0;
 }
 
+function isRewardPendingFulfillment(reward = {}) {
+  return resolveRewardFulfillmentMode(reward) === RewardFulfillmentMode.MANUAL &&
+    resolveRewardClaimStatus(reward) === RewardClaimDisplayStatus.CLAIMED;
+}
+
 module.exports = {
   RewardClaimDisplayStatus,
+  RewardFulfillmentMode,
   resolveRewardClaimStatus,
+  resolveRewardFulfillmentMode,
   isRewardDelivered,
   isRewardExchanged,
+  isRewardPendingFulfillment,
   getRewardPoolStatusLabel,
   getRewardPoolActionLabel,
   getRewardRecordStatusLabel,

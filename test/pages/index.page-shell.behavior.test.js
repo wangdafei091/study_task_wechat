@@ -561,6 +561,16 @@ describe('pages/index/index shell behavior', () => {
     expect(page.data.showFloatMenu).toBe(true);
 
     page.onMenuItemTap({ detail: { item: { id: 'habit' } } });
+    expect(global.wx.navigateTo).toHaveBeenCalledWith(expect.objectContaining({
+      url: '/pages/task-edit/task-edit?mode=create'
+    }));
+
+    page.data.isViewingToday = false;
+    page.onMenuItemTap({ detail: { item: { id: 'habit' } } });
+    expect(global.wx.navigateTo).toHaveBeenCalledWith(expect.objectContaining({
+      url: '/pages/task-edit/task-edit?mode=create&entry=index_non_today_create'
+    }));
+
     page.onMenuItemTap({ detail: { item: { id: 'reward-manage' } } });
     page.onMenuItemTap({ detail: { item: { id: 'family-settings' } } });
 
@@ -721,7 +731,11 @@ describe('pages/index/index shell behavior', () => {
     page.data.isReadonlyView = false;
     page.data.isViewingToday = false;
     page.updateMenuItemsWithPermissions();
-    expect(page.data.menuItems).toEqual([{ id: 'study' }]);
+    expect(page.data.menuItems).toEqual([
+      { id: 'study' },
+      { id: 'habit' },
+      { id: 'reward-manage' }
+    ]);
 
     page.showUserSwitcher = jest.fn();
     page.navigateToUserProfile();

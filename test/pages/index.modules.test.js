@@ -186,6 +186,29 @@ describe('pages/index helper modules', () => {
     ]);
   });
 
+  it('user-switcher updateMenuItemsWithPermissions 应在非今日家长管理视角保留全局入口', () => {
+    permissionUtils.filterMenuItems.mockImplementation((items) => items);
+
+    const page = {
+      data: {
+        currentUser: { role: 'parent' },
+        isReadonlyView: false,
+        isViewingToday: false
+      },
+      setData: jest.fn(function setData(update) {
+        Object.assign(this.data, update);
+      })
+    };
+
+    userSwitcherModule.updateMenuItemsWithPermissions(page);
+
+    expect(page.data.menuItems.map((item) => item.id)).toEqual([
+      'study',
+      'habit',
+      'reward-manage'
+    ]);
+  });
+
   it('user-switcher showUserSwitcher 与 handleUserSwitch 在 userService 缺失时应直接返回', async () => {
     appMock.globalData.userService = null;
 

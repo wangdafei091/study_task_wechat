@@ -35,6 +35,10 @@
     <!-- 添加任务卡片 -->
     <card title="添加任务" customClass="add-task-card">
       <view class="add-task-content">
+        <view class="entry-hint" wx:if="{{entryHintVisible}}">
+          <text class="entry-hint-text">{{entryHintText}}</text>
+        </view>
+
         <view class="template-quick-fill" wx:if="{{hasTemplates || templateEntryLoadedOnce}}">
           <view class="template-quick-fill-head">
             <text class="template-quick-fill-title">快捷填充</text>

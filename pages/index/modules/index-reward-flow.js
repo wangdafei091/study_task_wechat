@@ -2,17 +2,10 @@ const serviceManager = require('../../../services/service-manager.js');
 const formatUtils = require('../../../utils/formatUtils');
 const logger = require('../../../utils/logger');
 const pageStorageHelper = require('../../../utils/page-storage-helper');
+const rewardIdentity = require('../../../utils/reward-identity');
 
 function isExampleReward(reward) {
-  if (!reward) {
-    return false;
-  }
-
-  if (reward.isExample === true) {
-    return true;
-  }
-
-  return typeof reward.id === 'string' && /reward_\d+_(1|2|3)$/.test(reward.id);
+  return rewardIdentity.isExampleReward(reward);
 }
 
 function resolveHomeViewMode(page) {

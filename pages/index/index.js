@@ -878,8 +878,9 @@ Page({
       logger.debug('Index', '点击任务菜单项，跳转到任务编辑页面');
       const effectiveUserId = this.getEffectiveTaskUserId();
       const targetParam = effectiveUserId ? `&targetUserId=${effectiveUserId}` : '';
+      const entryParam = this.data.isViewingToday ? '' : '&entry=index_non_today_create';
       wx.navigateTo({
-        url: `/pages/task-edit/task-edit?mode=create${targetParam}`
+        url: `/pages/task-edit/task-edit?mode=create${targetParam}${entryParam}`
       });
     } else if (item && item.id === 'study') {
       this.navigateToAnalysisPage();
