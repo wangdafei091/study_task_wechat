@@ -1,7 +1,9 @@
 // pages/my-exchanges/my-exchanges.js
 const logger = require('../../../utils/logger');
 const serviceManager = require('../../../services/service-manager');
+const rewardIdentity = require('../../../utils/reward-identity');
 const rewardStatus = require('../../../utils/reward-status');
+const rewardsUserContextModule = require('../../../pages/rewards/modules/rewards-user-context');
 
 function decorateExchangeRecord(page, reward) {
   const recordTime = rewardStatus.getRewardPrimaryRecordTime(reward);
@@ -88,13 +90,19 @@ Page({
    */
   loadClaimedRewards: function() {
     logger.debug('MyExchanges', '加载兑换记录');
+    const exchangeUserId = rewardsUserContextModule.getMyExchangeUserId(serviceManager);
+    const rewardFamilyScope = rewardsUserContextModule.getRewardFamilyScope(serviceManager);
     
     // 通过奖励服务获取已兑换的奖励
     const rewardService = serviceManager.getService('reward');
     
     if (rewardService) {
       // 使用服务层获取已兑换奖励
-      return rewardService.getClaimedRewards()
+      const loadPromise = typeof rewardService.getClaimedRewardsByExchangeUser === 'function'
+        ? rewardService.getClaimedRewardsByExchangeUser(exchangeUserId, rewardFamilyScope)
+        : rewardService.getClaimedRewards(exchangeUserId);
+
+      return loadPromise
         .then(claimedRewards => {
           logger.info('MyExchanges', `通过奖励服务获取兑换记录成功，数量=${claimedRewards.length}`);
           
@@ -118,20 +126,20 @@ Page({
           logger.error('MyExchanges', '通过奖励服务获取兑换记录失败', error);
           
           // 降级处理：直接从存储获取
-          return this.loadClaimedRewardsFromStorage();
+          return this.loadClaimedRewardsFromStorage(exchangeUserId, rewardFamilyScope);
         });
     } else {
       logger.warn('MyExchanges', '奖励服务不可用，使用降级存储访问');
       
       // 降级处理：直接从存储获取
-      return Promise.resolve(this.loadClaimedRewardsFromStorage());
+      return Promise.resolve(this.loadClaimedRewardsFromStorage(exchangeUserId, rewardFamilyScope));
     }
   },
   
   /**
    * 降级处理：从存储直接加载兑换记录
    */
-  loadClaimedRewardsFromStorage: function() {
+  loadClaimedRewardsFromStorage: function(exchangeUserId, rewardFamilyScope = {}) {
     logger.warn('MyExchanges', '使用降级方式从存储加载兑换记录');
     
     try {
@@ -139,7 +147,24 @@ Page({
       const rewards = wx.getStorageSync('rewards') || [];
       
       // 筛选出已兑换的奖励
-      const claimedRewards = rewards.filter(r => r.claimed);
+      const familyMemberUserIds = Array.isArray(rewardFamilyScope.memberUserIds)
+        ? rewardFamilyScope.memberUserIds
+        : [];
+      const claimedRewards = rewards.filter((reward) => {
+        if (!reward || !reward.claimed) {
+          return false;
+        }
+
+        const belongsToFamily = reward.familyId
+          ? reward.familyId === rewardFamilyScope.familyId
+          : familyMemberUserIds.includes(reward.userId);
+
+        if (!belongsToFamily) {
+          return false;
+        }
+
+        return rewardIdentity.resolveRewardExchangeUserId(reward, rewardFamilyScope) === exchangeUserId;
+      });
       
       const formattedRewards = claimedRewards.map((reward) => decorateExchangeRecord(this, reward));
       

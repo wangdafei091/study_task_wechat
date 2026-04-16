@@ -2,6 +2,7 @@
 const serviceManager = require('../../services/service-manager');
 const formatUtils = require('../../utils/formatUtils');
 const logger = require('../../utils/logger');
+const rewardIdentity = require('../../utils/reward-identity');
 const rewardsAnimationModule = require('./modules/rewards-animation');
 const rewardsSyncModule = require('./modules/rewards-sync');
 const rewardsExchangeFlowModule = require('./modules/rewards-exchange-flow');
@@ -155,14 +156,7 @@ Page({
    * 通过ID格式或标记识别示例奖励
    */
   isExampleReward: function(reward) {
-    // 检查是否有明确的示例标记
-    if (reward.isExample === true) {
-      return true;
-    }
-    
-    // 使用ID前缀/后缀识别初始默认示例
-    // 初始三个示例奖励的ID结尾为_1, _2, _3
-    return /reward_\d+_(1|2|3)$/.test(reward.id);
+    return rewardIdentity.isExampleReward(reward);
   },
 
   /**
@@ -265,8 +259,8 @@ Page({
   /**
    * 执行领取奖励操作
    */
-  _performClaimReward: async function(reward) {
-    return rewardsExchangeFlowModule.performClaimReward(this, reward);
+  _performClaimReward: async function(reward, exchangeContext = null) {
+    return rewardsExchangeFlowModule.performClaimReward(this, reward, exchangeContext);
   },
   
   /**
@@ -400,12 +394,23 @@ Page({
     return rewardsUserContextModule.getEffectiveChildUserId(serviceManager);
   },
 
+  _resolveRewardExecutionSubject: function() {
+    return rewardsUserContextModule.resolveRewardExecutionSubject(serviceManager);
+  },
+
+  _getRewardFamilyScope: function() {
+    return rewardsUserContextModule.getRewardFamilyScope(serviceManager);
+  },
+
+  _getMyExchangeUserId: function() {
+    return rewardsUserContextModule.getMyExchangeUserId(serviceManager);
+  },
+
   /**
-   * 获取奖励归属userId（家庭奖励池，由家长账号管理）
-   * 家长设备：loginUserId（家长）
-   * 孩子设备：loginUserId（孩子本身，M07已知限制：奖励未云端同步时不可见）
+   * 兼容旧接口：返回当前奖励家庭范围的familyId
    */
   _getRewardOwnerUserId: function() {
-    return rewardsUserContextModule.getRewardOwnerUserId(serviceManager);
+    const rewardFamilyScope = this._getRewardFamilyScope();
+    return rewardFamilyScope.familyId || rewardFamilyScope.loginUserId || rewardFamilyScope.viewUserId || null;
   }
 })

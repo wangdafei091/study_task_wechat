@@ -12,20 +12,17 @@
     <!-- 奖励网格 -->
     <view class="rewards-grid">
       <block wx:for="{{rewards}}" wx:key="id">
-        <view class="reward-item {{item.enabled ? '' : 'disabled'}} {{item.claimed ? 'claimed' : ''}}" 
+        <view class="reward-item {{item.enabled ? '' : 'disabled'}}"
               bindlongpress="showRewardOptions" 
               data-id="{{item.id}}">
           <view class="reward-content">
             <view class="reward-icon">{{item.icon}}</view>
             <view class="reward-name">{{item.name}}</view>
             <view class="reward-points">{{item.points}}颗</view>
+            <view class="reward-mode-label">{{item.fulfillmentModeLabel}}</view>
             
             <!-- 状态标签 -->
             <view class="reward-status-label disabled" wx:if="{{!item.enabled}}">已禁用</view>
-            <view class="reward-status-label claimed" wx:elif="{{item.claimed}}">{{item.manageStatusLabel}}</view>
-            
-            <!-- 示例标签 -->
-            <view class="example-badge" wx:if="{{item.isExample === true || item.id.indexOf('_1') > 0 || item.id.indexOf('_2') > 0 || item.id.indexOf('_3') > 0}}">示例</view>
           </view>
         </view>
       </block>
@@ -47,9 +44,22 @@
           <view class="claimed-icon">{{item.icon}}</view>
           <view class="claimed-info">
             <view class="claimed-name">{{item.name}}</view>
+            <view class="claimed-owner" wx:if="{{item.exchangeUserLabel}}">兑换人：{{item.exchangeUserLabel}}</view>
             <view class="claimed-time">{{item.recordTimeLabel}}: {{item.claimTimeDisplay}}</view>
             <view class="claimed-status {{item.claimDisplayStatus === 'delivered' ? 'delivered' : 'claimed'}}">
               {{item.recordStatusLabel}}
+            </view>
+          </view>
+          <view class="claimed-actions">
+            <view
+              class="claimed-primary-btn"
+              wx:if="{{item.canMarkDelivered}}"
+              bindtap="markClaimedRewardDelivered"
+              data-id="{{item.id}}">
+              标记已发放
+            </view>
+            <view class="claimed-more-btn" bindtap="showClaimedRewardActions" data-id="{{item.id}}">
+              更多
             </view>
           </view>
         </view>
@@ -159,6 +169,26 @@
       </view>
       <view class="form-tip" wx:if="{{editingReward.claimed}}">{{editingReward.claimDisplayStatus === 'delivered' ? '已领取的奖励不可修改星星数量' : '已兑换的奖励不可修改星星数量'}}</view>
     </view>
+
+    <view class="form-item">
+      <view class="form-label">发放方式</view>
+      <view class="mode-selector">
+        <view
+          class="mode-option {{editingReward.fulfillmentMode === 'instant' ? 'active' : ''}}"
+          data-mode="instant"
+          bindtap="onFulfillmentModeChange">
+          <view class="mode-title">立即生效</view>
+          <view class="mode-desc">兑换后直接完成</view>
+        </view>
+        <view
+          class="mode-option {{editingReward.fulfillmentMode === 'manual' ? 'active' : ''}}"
+          data-mode="manual"
+          bindtap="onFulfillmentModeChange">
+          <view class="mode-title">家长发放</view>
+          <view class="mode-desc">兑换后进入待发放</view>
+        </view>
+      </view>
+    </view>
     
     <!-- 启用状态 - 仅未领取的奖励显示 -->
     <view class="form-item switch-item" wx:if="{{!editingReward.claimed}}">
@@ -193,19 +223,9 @@
   <view class="action-sheet-content">
     <view class="action-sheet-title">{{selectedReward.name}}</view>
     <view class="action-sheet-options">
-      <view class="action-option" bindtap="editReward">
-        <view class="option-icon">✏️</view>
-        <view class="option-text">编辑</view>
-      </view>
-      
-      <view class="action-option" bindtap="confirmDeleteReward" wx:if="{{!selectedReward.claimed}}">
-        <view class="option-icon">🗑️</view>
-        <view class="option-text">删除</view>
-      </view>
-      
-      <view class="action-option" bindtap="confirmReactivateReward" wx:if="{{selectedReward.claimed}}">
-        <view class="option-icon">🔄</view>
-        <view class="option-text">重新添加到奖池</view>
+      <view class="action-option" wx:for="{{actionSheetActions}}" wx:key="key" bindtap="handleActionSheetAction" data-key="{{item.key}}">
+        <view class="option-icon">{{item.icon}}</view>
+        <view class="option-text">{{item.label}}</view>
       </view>
     </view>
     <view class="action-sheet-cancel" bindtap="closeActionSheet">取消</view>

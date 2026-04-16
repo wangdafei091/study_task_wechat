@@ -857,6 +857,33 @@ describe('MessageService', () => {
       expect(mockMessageRepository.addMessage).toHaveBeenCalled();
     });
 
+    it('兼容格式奖励领取事件应透传 exchangeUserId 和实际消耗金额', () => {
+      mockUserService.getCurrentUserId.mockReturnValue('child_1');
+      mockUserService.getUserById.mockImplementation((userId) => ({
+        parent_1: { userId: 'parent_1', role: 'parent' },
+        child_1: { userId: 'child_1', role: 'child' }
+      }[userId] || null));
+      mockUserService.getUserByRole.mockImplementation((role) => ({
+        parent: { userId: 'parent_1', role: 'parent' },
+        child: { userId: 'child_1', role: 'child' }
+      }[role] || null));
+
+      mockEventBus.emit(EVENTS.REWARD_CLAIMED, {
+        rewardId: 'reward_compat_1',
+        rewardName: '动画片',
+        originalPoints: 10,
+        actualCost: 4,
+        userId: 'child_1',
+        exchangeUserId: 'child_1',
+        operatorUserId: 'parent_1'
+      });
+
+      expect(mockMessageRepository.addMessage).toHaveBeenCalledWith(expect.objectContaining({
+        userId: 'child_1',
+        summary: '家长为您兑换了奖励"动画片"，花费了4颗星星'
+      }));
+    });
+
     it('应该处理奖励交付事件', () => {
       const reward = TestDataFactory.createReward({
         id: 'reward_1',
@@ -1518,6 +1545,50 @@ describe('MessageService', () => {
 
       expect(result).toBeDefined();
       expect(result.summary).toBe('家长取消了您兑换的奖励"动画片"，退回10颗星星');
+    });
+
+    it('快过期抵扣时奖励兼容消息应展示实际消耗而不是原价', async () => {
+      mockUserService.getCurrentUserId.mockReturnValue('child_1');
+
+      const result = await messageService._createRewardMessageWithDomainModel(
+        {
+          id: 'reward_4',
+          name: '动画片',
+          points: 10,
+          actualCost: 4,
+          exchangeUserId: 'child_1'
+        },
+        'claimed',
+        {
+          operatorUserId: 'parent_1',
+          actualCost: 4
+        }
+      );
+
+      expect(result).toBeDefined();
+      expect(result.summary).toBe('家长为您兑换了奖励"动画片"，花费了4颗星星');
+    });
+
+    it('取消兑换兼容消息应展示实际退款而不是原价', async () => {
+      mockUserService.getCurrentUserId.mockReturnValue('child_1');
+
+      const result = await messageService._createRewardMessageWithDomainModel(
+        {
+          id: 'reward_5',
+          name: '动画片',
+          points: 10,
+          pointsRefunded: 0,
+          exchangeUserId: 'child_1'
+        },
+        'unclaimed',
+        {
+          operatorUserId: 'parent_1',
+          pointsRefunded: 0
+        }
+      );
+
+      expect(result).toBeDefined();
+      expect(result.summary).toBe('家长取消了您兑换的奖励"动画片"，退回0颗星星');
     });
 
     it('孩子真实用户ID取消兑换时，兼容消息应使用家长视角文案', async () => {

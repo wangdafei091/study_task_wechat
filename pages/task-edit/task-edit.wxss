@@ -1086,6 +1086,20 @@
   margin-left: 20rpx;
 }
 
+.entry-hint {
+  margin-bottom: 20rpx;
+  padding: 20rpx 24rpx;
+  border-radius: 20rpx;
+  background: #f7f4ea;
+  border: 2rpx solid #e4d7b1;
+}
+
+.entry-hint-text {
+  color: #7b5d12;
+  font-size: 24rpx;
+  line-height: 1.6;
+}
+
 /* 统一所有开关右侧对齐 */
 .switch-item switch {
   margin-right: 8rpx; 

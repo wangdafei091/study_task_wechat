@@ -45,70 +45,30 @@
       </button>
     </view>
 
-    <!-- Tab导航 - 只在两种奖励都存在时显示 -->
-    <view class="rewards-tabs" wx:if="{{showTabs}}">
-      <view class="tab-item {{activeTab === 'available' ? 'active' : ''}}" 
-            bindtap="switchTab" 
-            data-tab="available">
-        可获得{{availableRewards.length > 0 ? '(' + availableRewards.length + ')' : ''}}
-      </view>
-      <view class="tab-item {{activeTab === 'claimed' ? 'active' : ''}}" 
-            bindtap="switchTab" 
-            data-tab="claimed">
-        已兑换{{claimedRewards.length > 0 ? '(' + claimedRewards.length + ')' : ''}}
-      </view>
+    <view class="section-title" wx:if="{{rewardEmptyMode === 'none'}}">
+      <text>家庭奖池</text>
     </view>
     
-    <!-- 单一标题 - 只在不显示Tab时使用 -->
-    <view class="section-title" wx:if="{{rewardEmptyMode === 'none' && !showTabs}}">
-      <text wx:if="{{availableRewards.length > 0}}">可获得的奖励</text>
-      <text wx:elif="{{claimedRewards.length > 0}}">已兑换的奖励</text>
-    </view>
-    
-    <!-- 可获得的奖励 -->
-    <view class="rewards-grid" wx:if="{{(!showTabs && availableRewards.length > 0) || (showTabs && activeTab === 'available')}}">
+    <view class="rewards-grid" wx:if="{{availableRewards.length > 0}}">
       <block wx:for="{{availableRewards}}" wx:key="id">
         <view class="reward-item {{item.unlocked ? 'unlocked' : 'locked'}} {{item.claimed ? 'claimed' : ''}}"
               bindtap="viewReward" 
               data-id="{{item.id}}">
           <view class="reward-icon">{{item.icon}}</view>
           <view class="reward-name">{{item.name}}</view>
-          <view class="reward-points" wx:if="{{!item.protectedByExpiry}}">{{item.points}}颗</view>
-          <view class="reward-points protected" wx:else>
-            <text class="original-points">{{item.points}}颗</text>
-            <text class="protected-text">免费</text>
-          </view>
+          <view class="reward-points">{{item.costPrimaryText}}</view>
+          <view class="reward-cost-note" wx:if="{{item.costSecondaryText}}">{{item.costSecondaryText}}</view>
           <view class="reward-status">
             <text>{{item.poolStatusLabel}}</text>
           </view>
-          
-          <!-- 保护标识 -->
-          <view class="protection-badge" wx:if="{{item.protectedByExpiry}}">🛡️</view>
           <!-- 示例标签 -->
           <view class="example-badge" wx:if="{{item.isExample === true}}">示例</view>
         </view>
       </block>
     </view>
-    
-    <!-- 已兑换/已领取的奖励 -->
-    <view class="rewards-grid" wx:if="{{(!showTabs && claimedRewards.length > 0 && availableRewards.length === 0) || (showTabs && activeTab === 'claimed')}}">
-      <block wx:for="{{claimedRewards}}" wx:key="id">
-        <view class="reward-item claimed"
-              bindtap="viewReward" 
-              data-id="{{item.id}}">
-          <view class="reward-icon">{{item.icon}}</view>
-          <view class="reward-name">{{item.name}}</view>
-          <view class="reward-points">{{item.points}}颗</view>
-          <view class="reward-status">
-            <text>{{item.poolStatusLabel}}</text>
-          </view>
-        </view>
-      </block>
-    </view>
-    
-    <!-- 引导提示 - 只在有可获得奖励但无兑换记录时显示 -->
-    <view class="guide-tip" wx:if="{{rewardEmptyMode === 'none' && availableRewards.length > 0 && claimedRewards.length === 0 && !showTabs}}">
-      <text>💡 兑换后可在"我的兑换"中查看兑换记录</text>
+
+    <view class="guide-tip" wx:if="{{rewardEmptyMode === 'none' && availableRewards.length > 0}}">
+      <text>💡 兑换后的奖励会进入“我的兑换”，这里只保留当前还能兑换的家庭奖励</text>
     </view>
   </view>
   
@@ -177,30 +137,25 @@
       <view class="reward-detail">
         <view class="reward-icon large">{{selectedReward.icon}}</view>
         <view class="reward-name">{{selectedReward.name}}</view>
-        
-        <!-- 保护奖励特殊显示 -->
-        <view class="protection-notice" wx:if="{{selectedReward.protectedByExpiry}}">
-          <text class="protection-icon">🛡️</text>
-          <text class="protection-text">星星过期保护奖励</text>
+
+        <view class="reward-points">{{selectedReward.detailOriginalPointsText}}</view>
+        <view class="reward-detail-note" wx:if="{{selectedReward.costSecondaryText}}">
+          {{selectedReward.detailDeductionText}}
         </view>
-        
-        <view class="reward-points" wx:if="{{!selectedReward.protectedByExpiry}}">所需星星: {{selectedReward.points}}</view>
-        <view class="reward-points protection" wx:else>
-          <text class="original-points">原需: {{selectedReward.points}}颗</text>
-          <text class="protected-text">现已免费</text>
-        </view>
+        <view class="reward-detail-note emphasis">{{selectedReward.detailActualCostText}}</view>
         
         <view class="reward-status-text">
-          <text wx:if="{{selectedReward.claimDisplayStatus === 'delivered'}}" class="status-claimed">已领取</text>
-          <text wx:elif="{{selectedReward.claimDisplayStatus === 'claimed'}}" class="status-claimed">已兑换</text>
+          <text wx:if="{{selectedReward.claimDisplayStatus === 'delivered'}}" class="status-claimed">{{selectedReward.poolStatusLabel}}</text>
+          <text wx:elif="{{selectedReward.claimDisplayStatus === 'claimed'}}" class="status-claimed">{{selectedReward.poolStatusLabel}}</text>
           <text wx:elif="{{selectedReward.unlocked}}" class="status-unlocked">可兑换</text>
+          <text wx:elif="{{selectedReward.requiresTargetSelection}}" class="status-unlocked">先选孩子</text>
           <text wx:else class="status-locked">未解锁</text>
         </view>
         
-        <view class="progress-to-unlock" wx:if="{{!selectedReward.unlocked}}">
-          <text>还需 {{selectedReward.points - currentProgress}} 星星解锁</text>
+        <view class="progress-to-unlock" wx:if="{{!selectedReward.unlocked && !selectedReward.requiresTargetSelection}}">
+          <text>还需 {{selectedReward.exchangeCost.actualCost - currentProgress}} 星星解锁</text>
           <view class="mini-progress">
-            <view class="mini-progress-fill" style="width: {{(currentProgress / selectedReward.points) * 100}}%;"></view>
+            <view class="mini-progress-fill" style="width: {{(currentProgress / selectedReward.exchangeCost.actualCost) * 100}}%;"></view>
           </view>
         </view>
       </view>
@@ -209,7 +164,7 @@
         <button class="btn-cancel" bindtap="closeModal">关闭</button>
         <button class="btn-claim" 
                 bindtap="claimReward" 
-                disabled="{{!selectedReward.unlocked || selectedReward.claimDisplayStatus !== 'available'}}">
+                disabled="{{!selectedReward.canExchange || selectedReward.claimDisplayStatus !== 'available'}}">
           {{selectedReward.poolActionLabel}}
         </button>
       </view>

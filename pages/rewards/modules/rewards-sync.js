@@ -2,6 +2,7 @@ const serviceManager = require('../../../services/service-manager');
 const formatUtils = require('../../../utils/formatUtils');
 const logger = require('../../../utils/logger');
 const rewardStatus = require('../../../utils/reward-status');
+const rewardDisplay = require('../../../utils/reward-display');
 const rewardsUserContextModule = require('./rewards-user-context');
 
 function buildEmptyAvailableStarSnapshot(userId = null) {
@@ -148,16 +149,24 @@ function buildRewardPageState({ rewards, hasRewardHistoryHint, viewMode }) {
   };
 }
 
-function decorateRewardForDisplay(reward, totalPoints) {
-  const unlocked = totalPoints >= reward.points;
+async function decorateRewardForDisplay(page, rewardService, reward, displayContext = {}) {
+  let exchangeCost = rewardDisplay.normalizeRewardExchangeCost(reward, reward.points);
 
-  return {
-    ...reward,
-    unlocked,
-    claimDisplayStatus: rewardStatus.resolveRewardClaimStatus(reward),
-    poolStatusLabel: rewardStatus.getRewardPoolStatusLabel({ ...reward, unlocked }),
-    poolActionLabel: rewardStatus.getRewardPoolActionLabel({ ...reward, unlocked })
-  };
+  if (rewardService?.previewRewardExchangeCost && displayContext.targetChildUserId) {
+    try {
+      exchangeCost = await rewardService.previewRewardExchangeCost(reward.id, displayContext.targetChildUserId);
+    } catch (error) {
+      logger.warn('rewards', '奖励兑换成本预览失败，回退到原价展示', error);
+    }
+  }
+
+  return rewardDisplay.buildRewardDisplayModel(reward, {
+    totalPoints: displayContext.totalPoints,
+    exchangeCost,
+    requiresTargetSelection: displayContext.requiresTargetSelection,
+    isParentOwnView: displayContext.isParentOwnView,
+    targetChildName: displayContext.targetChildName
+  });
 }
 
 async function onShow(page) {
@@ -194,8 +203,7 @@ async function onShow(page) {
 
     if (rewardService?.refreshRewardsFromCloud) {
       await rewardService.refreshRewardsFromCloud({
-        force: shouldForceRewardRefresh || !!effectiveChildId,
-        userId: effectiveChildId || undefined
+        force: shouldForceRewardRefresh || !!effectiveChildId
       });
     }
   } catch (syncError) {
@@ -238,8 +246,7 @@ async function onPullDownRefresh(page) {
 
     if (rewardService?.refreshRewardsFromCloud) {
       await rewardService.refreshRewardsFromCloud({
-        force: true,
-        userId: effectiveChildId || undefined
+        force: true
       });
     }
 
@@ -281,9 +288,14 @@ async function loadRewardsData(page, forceRefresh = false) {
     }
 
     const effectiveChildId = page._getEffectiveChildUserId();
-    const rewardOwnerId = page._getRewardOwnerUserId();
-    logger.info('rewards', `有效孩子ID: ${effectiveChildId}, 奖励归属ID: ${rewardOwnerId}`);
+    const rewardFamilyScope = typeof page._getRewardFamilyScope === 'function'
+      ? page._getRewardFamilyScope()
+      : { familyId: null, memberUserIds: [] };
+    logger.info('rewards', `有效孩子ID: ${effectiveChildId}, 奖励家庭ID: ${rewardFamilyScope.familyId || 'none'}`);
 
+    const executionSubject = typeof page._resolveRewardExecutionSubject === 'function'
+      ? page._resolveRewardExecutionSubject()
+      : { targetChildUserId: effectiveChildId, requiresTargetSelection: false, isParentOwnView: false, targetChildName: '' };
     const availableStarSnapshot = await getAvailableStarSnapshot(page);
     const totalPoints = availableStarSnapshot.totalStars;
     logger.info('rewards', `获取到用户星星: ${totalPoints}`);
@@ -297,8 +309,10 @@ async function loadRewardsData(page, forceRefresh = false) {
 
     const userService = serviceManager.getUserService();
     const { viewMode } = rewardsUserContextModule.resolveRewardPageViewMode(userService);
-    const allRewards = await rewardService.getAvailableRewards(true, false, rewardOwnerId);
-    logger.info('rewards', `获取到可用奖励: ${allRewards.length}个`);
+    const allRewards = typeof rewardService.getRewardsByFamily === 'function'
+      ? await rewardService.getRewardsByFamily(rewardFamilyScope)
+      : await rewardService.getAvailableRewards(true, false);
+    logger.info('rewards', `获取到家庭奖励: ${allRewards.length}个`);
 
     let hasCustomRewards = false;
     try {
@@ -319,13 +333,14 @@ async function loadRewardsData(page, forceRefresh = false) {
     }
 
     const realRewards = allRewards.filter((reward) => !page.isExampleReward(reward));
+    const poolRewards = realRewards.filter((reward) => !rewardStatus.isRewardExchanged(reward));
     const rewardPageState = buildRewardPageState({
-      rewards: realRewards,
+      rewards: poolRewards,
       hasRewardHistoryHint: hasCustomRewards,
       viewMode
     });
 
-    if (realRewards.length === 0) {
+    if (poolRewards.length === 0) {
       logger.info('rewards', '过滤示例奖励后无正式奖励，展示显式空态', {
         hasRewardHistoryHint: hasCustomRewards,
         viewMode
@@ -360,14 +375,23 @@ async function loadRewardsData(page, forceRefresh = false) {
       return;
     }
 
-    const rewards = realRewards.map((reward) => decorateRewardForDisplay(reward, totalPoints));
-    const availableRewards = rewards.filter((reward) => !rewardStatus.isRewardExchanged(reward));
-    const claimedRewards = rewards.filter((reward) => rewardStatus.isRewardExchanged(reward));
+    const rewards = await Promise.all(poolRewards
+      .map((reward) => decorateRewardForDisplay(page, rewardService, reward, {
+        totalPoints,
+        targetChildUserId: executionSubject.targetChildUserId || null,
+        requiresTargetSelection: executionSubject.requiresPicker === true,
+        isParentOwnView: executionSubject.isParentOwnView === true,
+        targetChildName: executionSubject.targetChildName || ''
+      })));
+    const availableRewards = rewards;
+    const claimedRewards = [];
 
-    logger.debug('rewards', `可兑换奖励: ${availableRewards.length}个, 已兑换奖励: ${claimedRewards.length}个`);
+    logger.debug('rewards', `家庭可兑换奖励: ${availableRewards.length}个`);
 
     const unlockedRewards = rewards.filter((reward) => reward.unlocked).length;
-    const nextReward = await rewardService.calculateNextAvailableReward(totalPoints, rewardOwnerId);
+    const nextReward = typeof rewardService.calculateNextAvailableRewardByFamily === 'function'
+      ? await rewardService.calculateNextAvailableRewardByFamily(totalPoints, rewardFamilyScope)
+      : await rewardService.calculateNextAvailableReward(totalPoints, page._getRewardOwnerUserId());
     const normalizedNextReward = nextReward && !nextReward.isDefault && !page.isExampleReward(nextReward)
       ? nextReward
       : null;
@@ -376,20 +400,10 @@ async function loadRewardsData(page, forceRefresh = false) {
     logger.info('rewards', `准备设置页面数据: 总星星=${totalPoints}, 即将过期星星=${expiringPointsInfo.points}, 过期日期=${expiringPointsInfo.date}`);
     logger.info('rewards', '过期信息详细数据:', expiringPointsInfo);
 
-    const showTabs = availableRewards.length > 0 && claimedRewards.length > 0;
-    let activeTab = page.data.activeTab;
+    const showTabs = false;
+    const activeTab = 'available';
 
-    if (showTabs) {
-      if (!activeTab || (activeTab === 'available' && availableRewards.length === 0)) {
-        activeTab = 'claimed';
-      } else if (activeTab === 'claimed' && claimedRewards.length === 0) {
-        activeTab = 'available';
-      }
-    } else {
-      activeTab = availableRewards.length > 0 ? 'available' : 'claimed';
-    }
-
-    logger.info('rewards', `Tab显示逻辑: showTabs=${showTabs}, activeTab=${activeTab}, 可获得=${availableRewards.length}, 已兑换=${claimedRewards.length}`);
+    logger.info('rewards', `奖励页展示家庭奖池: 可获得=${availableRewards.length}`);
 
     page.setData({
       rewards,

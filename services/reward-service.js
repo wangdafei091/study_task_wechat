@@ -186,6 +186,30 @@ class RewardService {
     return rewardQuery.getClaimedRewards(this, userId);
   }
 
+  async getRewardsByFamily(scope = {}) {
+    return rewardQuery.getRewardsByFamily(this, scope);
+  }
+
+  async getClaimedRewardsByExchangeUser(exchangeUserId, scope = {}) {
+    return rewardQuery.getClaimedRewardsByExchangeUser(this, exchangeUserId, scope);
+  }
+
+  async getFamilyClaimedRewards(scope = {}) {
+    return rewardQuery.getFamilyClaimedRewards(this, scope);
+  }
+
+  async getRewardManageViewModel(userId = null) {
+    return rewardQuery.getRewardManageViewModel(this, userId);
+  }
+
+  async getRewardManageFamilyViewModel(scope = {}) {
+    return rewardQuery.getRewardManageFamilyViewModel(this, scope);
+  }
+
+  async previewRewardExchangeCost(rewardId, userId = null) {
+    return rewardExchange.previewRewardExchangeCost(this, rewardId, userId);
+  }
+
   async createReward(rewardData) {
     return rewardWrite.createReward(this, rewardData);
   }
@@ -242,12 +266,20 @@ class RewardService {
     return rewardExchange.exchangeReward(this, rewardId, userId);
   }
 
+  async markRewardAsDelivered(rewardId, operatorUserId = null) {
+    return rewardWrite.markRewardAsDelivered(this, rewardId, operatorUserId);
+  }
+
   async cancelRewardExchange(rewardId) {
     return rewardExchange.cancelRewardExchange(this, rewardId);
   }
 
   async calculateNextAvailableReward(knownStarCount = null, userId = null) {
     return rewardQuery.calculateNextAvailableReward(this, knownStarCount, userId);
+  }
+
+  async calculateNextAvailableRewardByFamily(knownStarCount = null, scope = {}) {
+    return rewardQuery.calculateNextAvailableRewardByFamily(this, knownStarCount, scope);
   }
 
   async duplicateReward(rewardId) {

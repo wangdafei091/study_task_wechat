@@ -111,7 +111,9 @@ Page({
     recommendedTemplates: [],
     templateRecommendationCount: 0,
     templateFillUndoVisible: false,
-    templateFillUndoText: ''
+    templateFillUndoText: '',
+    entryHintVisible: false,
+    entryHintText: ''
   },
 
   /**
@@ -140,6 +142,14 @@ Page({
     if (options.targetUserId) {
       this.setData({ targetUserId: options.targetUserId });
       logger.info('TaskEdit', '家长代孩子创建任务，targetUserId已记录', { targetUserId: options.targetUserId });
+    }
+
+    if (options.entry === 'index_non_today_create') {
+      this.setData({
+        entryHintVisible: true,
+        entryHintText: '这是新建任务，不会自动绑定当前查看日期'
+      });
+      logger.info('TaskEdit', '命中首页非今天日期的新建任务入口，显示一次性提示');
     }
 
     // 记录UI优化日志

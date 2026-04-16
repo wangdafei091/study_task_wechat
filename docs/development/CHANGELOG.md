@@ -4,6 +4,50 @@
 
 ---
 
+## [里程碑-21K] - 2026-04-16
+
+### ✅ 完成情况
+
+**首页入口与奖励信息架构收口**
+
+- **首页加号入口已完成全局语义收口**：
+  - [`pages/index/modules/index-user-switcher.js`](/Users/wangdafei/code/study_task_wechat/pages/index/modules/index-user-switcher.js) 已拆分“日期上下文限制”和“全局入口能力”判断
+  - 首页切到非今天日期后，`分析 / 任务 / 奖励` 不再被日期标签误伤，只保留和当前任务列表直接相关的只读限制
+  - [`pages/task-edit/task-edit.js`](/Users/wangdafei/code/study_task_wechat/pages/task-edit/task-edit.js) 已接入首页非今天入口上下文，仅在对应场景显示一次性轻提示
+- **奖励三页职责已完成分离**：
+  - [`pages/rewards/rewards.js`](/Users/wangdafei/code/study_task_wechat/pages/rewards/rewards.js) 已收口为“家庭奖池当前可兑换奖励”页面，不再承载历史记录
+  - [`packageManage/pages/my-exchanges/my-exchanges.js`](/Users/wangdafei/code/study_task_wechat/packageManage/pages/my-exchanges/my-exchanges.js) 已只展示当前孩子自己的兑换记录
+  - [`packageManage/pages/reward-manage/reward-manage.js`](/Users/wangdafei/code/study_task_wechat/packageManage/pages/reward-manage/reward-manage.js) 已收口为“家庭奖励配置 + 家庭兑换记录 + 家长发放动作”
+- **奖励履约语义已正式落地**：
+  - [`models/reward.js`](/Users/wangdafei/code/study_task_wechat/models/reward.js) 已引入 `fulfillmentMode`
+  - [`utils/reward-status.js`](/Users/wangdafei/code/study_task_wechat/utils/reward-status.js) 与 [`utils/reward-display.js`](/Users/wangdafei/code/study_task_wechat/utils/reward-display.js) 已统一 `可兑换 / 已兑换 / 待发放 / 已发放` 文案和按钮语义
+  - `instant` 奖励兑换后直接进入终态；`manual` 奖励兑换后进入 `待发放`，并由家长在管理页标记 `已发放`
+- **快过期星星动态抵扣语义已替换旧保护语义**：
+  - [`services/star-service/star-expiry.js`](/Users/wangdafei/code/study_task_wechat/services/star-service/star-expiry.js) 已停止启动链路预写 `protectedByExpiry / partialProtection`
+  - [`services/reward-service/reward-exchange.js`](/Users/wangdafei/code/study_task_wechat/services/reward-service/reward-exchange.js) 已统一 `previewRewardExchangeCost` 与真实扣费逻辑
+  - 前台不再使用 `免费 / 保护奖励 / 盾牌` 作为主展示语义，只展示原价、抵扣和本次实付
+- **奖励取消兑换与消息桥接语义已完成补强**：
+  - 本地取消兑换已按真实兑换流水回查退款金额，并退回到正确孩子账户
+  - 奖励事件与消息域已补齐 `exchangeUserId / actualCost / pointsRefunded` 透传
+  - 奖励消息文案不再错误使用原价，已改为展示实际消耗或实际退款
+
+### 🧪 验证结果
+
+- 定向回归通过：
+  - `npm test -- --runTestsByPath test/services/reward-service.test.js test/services/message-service.test.js`
+  - `npm test -- --runTestsByPath test/app/post-login-bootstrap.test.js test/services/star-service.test.js test/pages/rewards.modules.test.js`
+- 全量前端测试通过：
+  - `npm test`
+  - 结果：`89 suites / 1937 tests` 全绿
+- 提交边界已确认：
+  - 已确认本轮奖励域与消息桥接修复提交后，仅剩用户手工维护中的 `ROADMAP.md` 本地改动未纳入前一轮代码提交
+
+### 📖 详细实施记录
+
+- [里程碑-21K：首页入口与奖励信息架构收口](../design/milestone-21k-home-entry-reward-ia-convergence.md)
+
+---
+
 ## [里程碑-21J] - 2026-04-16
 
 ### ✅ 完成情况
@@ -1647,4 +1691,4 @@
 
 ---
 
-**最后更新**：2026-04-04
+**最后更新**：2026-04-16

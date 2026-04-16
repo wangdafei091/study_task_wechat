@@ -224,16 +224,15 @@ async function protectRewardsByExpiry(service, expiredStars, userId) {
     const availableRewards = await service.rewardService.getAvailableRewards(false, false, userId);
     logger.info('StarService', `🔍 获取到${availableRewards.length}个可用奖励`);
     availableRewards.forEach((reward, index) => {
-      logger.info('StarService', `🔍 奖励${index}: "${reward.name}", ${reward.points}颗, claimed=${reward.claimed}, protected=${reward.protectedByExpiry}, userId=${reward.userId}`);
+      logger.info('StarService', `🔍 奖励${index}: "${reward.name}", ${reward.points}颗, claimed=${reward.claimed}, userId=${reward.userId}`);
     });
 
     const claimableRewards = availableRewards.filter(reward => {
       const totalAvailable = totalStars + expiredStars;
       const condition1 = totalAvailable >= reward.points;
       const condition2 = !reward.claimed;
-      const condition3 = !reward.protectedByExpiry;
-      logger.info('StarService', `🔍 筛选"${reward.name}": 总额够用=${condition1}(${totalAvailable}>=${reward.points}), 未领取=${condition2}, 未保护=${condition3}`);
-      return condition1 && condition2 && condition3;
+      logger.info('StarService', `🔍 筛选"${reward.name}": 总额够用=${condition1}(${totalAvailable}>=${reward.points}), 未领取=${condition2}`);
+      return condition1 && condition2;
     });
 
     logger.info('StarService', `🔍 筛选结果: ${claimableRewards.length}个可保护奖励`);
@@ -252,20 +251,15 @@ async function protectRewardsByExpiry(service, expiredStars, userId) {
     for (const reward of claimableRewards) {
       const totalAvailable = allocation + currentStars;
       if (totalAvailable >= reward.points) {
-        reward.protectedByExpiry = true;
-        reward.partialProtection = Math.min(allocation, reward.points);
-        allocation = Math.max(0, allocation - reward.partialProtection);
-        protectedRewards.push(reward);
+        const partialProtection = Math.min(allocation, reward.points);
+        allocation = Math.max(0, allocation - partialProtection);
+        protectedRewards.push({
+          ...reward,
+          partialProtection
+        });
 
-        logger.info('StarService', `保护奖励: ${reward.name}(${reward.points}颗星星), 保护金额=${reward.partialProtection}颗, 需额外支付=${reward.points - reward.partialProtection}颗`);
+        logger.info('StarService', `保护奖励: ${reward.name}(${reward.points}颗星星), 保护金额=${partialProtection}颗, 需额外支付=${reward.points - partialProtection}颗`);
       }
-    }
-
-    for (const reward of protectedRewards) {
-      await service.rewardService.updateReward(reward.id, {
-        protectedByExpiry: true,
-        partialProtection: reward.partialProtection
-      });
     }
 
     logger.info('StarService', `奖励保护完成，保护了${protectedRewards.length}个奖励，使用${expiredStars - allocation}颗过期星星`);

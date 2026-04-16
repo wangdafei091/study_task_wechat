@@ -94,15 +94,15 @@ async function bootstrapStarService(starService) {
         });
       }
     } else {
-      logger.info('App', '本地模式检查即将过期的星星并进行奖励保护');
+      logger.info('App', '本地模式检查即将过期的星星并评估奖励抵扣预览');
       const expiredStars = await starService.calculatePendingExpiry(loginUserId);
 
       if (expiredStars > 0 && loginUserId) {
-        logger.info('App', `发现${expiredStars}颗即将过期的星星，为登录用户${loginUserId}进行奖励保护`);
+        logger.info('App', `发现${expiredStars}颗即将过期的星星，为登录用户${loginUserId}评估可抵扣奖励`);
         const protectionResult = await starService.protectRewardsByExpiry(expiredStars, loginUserId);
 
         if (protectionResult.success && protectionResult.protectedCount > 0) {
-          logger.info('App', `奖励保护成功，保护了${protectionResult.protectedCount}个奖励`);
+          logger.info('App', `奖励抵扣预览评估完成，共识别${protectionResult.protectedCount}个可抵扣奖励`);
         }
       }
     }

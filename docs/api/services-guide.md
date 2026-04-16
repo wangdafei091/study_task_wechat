@@ -667,14 +667,15 @@ const taskTemplateService = serviceManager.get('taskTemplateService');
 
 ## RewardService - 奖励管理服务
 
-奖励服务管理奖励系统，包括奖励创建、兑换、状态管理等功能。
+奖励服务负责家庭奖池读取、奖励创建/编辑/启停、兑换与取消兑换、手动发放，以及云端奖励镜像同步。
 
 ### 核心功能
-- 奖励CRUD操作
-- 奖励兑换流程
-- 库存管理
-- 星星过期保护机制
-- 兑换记录跟踪
+- 家庭奖池 / 家庭兑换记录 / 当前孩子个人兑换记录读取
+- 奖励 CRUD、启停和复制
+- 奖励兑换、取消兑换、手动发放
+- `instant / manual` 履约模式统一
+- 快过期星星动态抵扣成本预览
+- 云端奖励镜像刷新与待同步补偿
 
 ### API 方法
 
@@ -711,6 +712,53 @@ const taskTemplateService = serviceManager.get('taskTemplateService');
 - **参数**: `rewardId` - 奖励ID
 - **返回**: `Promise<{ success: boolean, message?: string }>`
 
+##### `getRewardsByFamily(scope = {})`
+获取家庭范围奖励列表。
+- **参数**:
+  ```javascript
+  {
+    familyId?: string | null,
+    memberUserIds?: string[],
+    childUserIds?: string[],
+    loginUserId?: string | null,
+    viewUserId?: string | null
+  }
+  ```
+- **返回**: `Promise<Reward[]>`
+- **说明**:
+  - 奖励页、奖励管理页统一复用该入口
+  - 无家庭场景下退化为单用户奖励池，不因 `familyId=null` 直接返回空
+
+##### `getClaimedRewardsByExchangeUser(exchangeUserId, scope = {})`
+获取某个孩子自己的兑换记录。
+- **参数**:
+  - `exchangeUserId` - 兑换孩子 userId
+  - `scope` - 同 `getRewardsByFamily`
+- **返回**: `Promise<Reward[]>`
+
+##### `getFamilyClaimedRewards(scope = {})`
+获取家庭范围内所有已兑换奖励记录。
+- **参数**: `scope` - 同 `getRewardsByFamily`
+- **返回**: `Promise<Reward[]>`
+
+##### `getRewardManageFamilyViewModel(scope = {})`
+获取奖励管理页所需聚合视图。
+- **参数**: `scope` - 同 `getRewardsByFamily`
+- **返回**:
+  ```javascript
+  {
+    familyId: string | null,
+    memberUserIds: string[],
+    childUserIds: string[],
+    manageableRewards: Reward[],
+    exchangeRecords: Reward[],
+    exampleTemplates: Reward[]
+  }
+  ```
+- **说明**:
+  - `manageableRewards` 仅包含未兑换的正式奖励
+  - `exchangeRecords` 承担家庭兑换历史，不再让已兑换奖励回流到“奖励设置”主列表
+
 ---
 
 #### 奖励兑换
@@ -727,9 +775,42 @@ const taskTemplateService = serviceManager.get('taskTemplateService');
 ##### `exchangeReward(rewardId, userId = null)`
 兑换奖励
 - **参数**: `rewardId` - 奖励ID, `userId` - 用户ID（可选，默认使用当前用户）
-- **返回**: `Promise<{ success: boolean, reward?: Reward, starCost?: number, actualCost?: number, message?: string }>`
-- **内部流程**：验证库存 → 消费星星 → 标记已兑换 → 发布事件 → 创建消息
-- **说明**: 云端模式下走独立 `_syncExchangeToCloud(rewardId, exchangeUserId, modifyTime)` 路径，不与通用奖励 upsert 混用
+- **返回**:
+  ```javascript
+  Promise<{
+    success: boolean,
+    reward?: Reward,
+    fulfillmentMode?: 'instant' | 'manual',
+    originalPoints?: number,
+    expiringStarDeduction?: number,
+    hasExpiringDeduction?: boolean,
+    actualCost?: number,
+    message?: string,
+    userId?: string
+  }>
+  ```
+- **内部流程**：验证奖励 → 预览动态抵扣成本 → 消费星星 → 推进奖励状态 → 发布事件/消息
+- **说明**:
+  - 云端模式下走独立 `_syncExchangeToCloud(rewardId, exchangeUserId, modifyTime)` 路径，不与通用奖励 upsert 混用
+  - `instant` 奖励兑换后直接进入终态；`manual` 奖励兑换后进入 `claimed`，前台展示为 `待发放`
+
+##### `previewRewardExchangeCost(rewardId, userId = null)`
+预览奖励当前兑换成本。
+- **参数**:
+  - `rewardId` - 奖励 ID
+  - `userId` - 目标孩子 userId
+- **返回**:
+  ```javascript
+  Promise<{
+    originalPoints: number,
+    expiringStarDeduction: number,
+    actualCost: number,
+    hasExpiringDeduction: boolean
+  }>
+  ```
+- **说明**:
+  - 只认“当前可用星星快照”计算出来的快过期抵扣
+  - 不再把 `protectedByExpiry / partialProtection` 作为正式展示语义来源
 
 ##### `refreshRewardsFromCloud()`
 从云端刷新奖励列表
@@ -740,7 +821,20 @@ const taskTemplateService = serviceManager.get('taskTemplateService');
 ##### `cancelRewardExchange(rewardId)`
 取消兑换
 - **参数**: `rewardId` - 奖励ID
-- **返回**: `Promise<{ success: boolean, message?: string }>`
+- **返回**: `Promise<{ success: boolean, reward?: Reward, pointsRefunded?: number, message?: string }>`
+- **说明**:
+  - 本地模式下优先按真实兑换流水回查实际退款金额
+  - 退款按 `exchangeUserId` 归属正确退回，不再默认退给当前操作者
+
+##### `markRewardAsDelivered(rewardId, operatorUserId = null)`
+家长标记手动奖励已发放。
+- **参数**:
+  - `rewardId` - 奖励 ID
+  - `operatorUserId` - 可选；管理动作操作者
+- **返回**: `Promise<{ success: boolean, reward?: Reward, message?: string }>`
+- **说明**:
+  - 仅对 `manual + claimed` 生效
+  - 奖励管理页用该方法把 `待发放` 推进到 `已发放`
 
 ---
 
@@ -767,6 +861,18 @@ const taskTemplateService = serviceManager.get('taskTemplateService');
   - 用于首页按目标用户计算奖励兑换保护边界
   - `TaskService.resetTask()` 与首页取消完成前预检查都复用此方法，确保锁定语义一致
   - 不再用 `getLastExchangeTime()` 替代此用户级判断
+
+### 奖励模型补充说明
+
+- `Reward.fulfillmentMode`
+  - `instant`：兑换即完成，前台展示为 `已兑换`
+  - `manual`：兑换后待家长处理，前台展示为 `待发放 / 已发放`
+- `Reward.exchangeUserId`
+  - 标识具体是哪个孩子兑换了该奖励
+  - 家庭兑换记录与“我的兑换”均以此字段为主归属依据
+- 旧字段 `protectedByExpiry / partialProtection`
+  - 已进入兼容保留状态
+  - 不再作为前端主展示和新写路径 contract
 
 ---
 
@@ -1459,5 +1565,5 @@ const taskService = new TaskService({
 
 ---
 
-**最后更新**：2026-04-04
+**最后更新**：2026-04-16
 **维护者**：项目维护团队

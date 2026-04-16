@@ -805,14 +805,21 @@ class MessageService {
     
     if (data.reward) {
       // 新格式：直接包含reward对象
-      reward = data.reward;
+      reward = {
+        ...data.reward,
+        exchangeUserId: data.reward.exchangeUserId || data.exchangeUserId || data.userId || null,
+        actualCost: data.actualCost ?? data.reward.actualCost ?? data.points ?? data.reward.points ?? 0
+      };
       logger.info('MessageService', '使用新格式事件数据（包含reward对象）');
     } else if (data.rewardId && data.rewardName) {
       // 兼容格式：从rewardId和rewardName构造reward对象
       reward = {
         id: data.rewardId,
         name: data.rewardName,
-        points: data.points || 0
+        points: data.originalPoints ?? data.points ?? 0,
+        actualCost: data.actualCost ?? data.points ?? 0,
+        fulfillmentMode: data.fulfillmentMode || null,
+        exchangeUserId: data.exchangeUserId || data.userId || null
       };
       logger.info('MessageService', '使用兼容格式事件数据（rewardId + rewardName）');
     } else {
@@ -828,7 +835,8 @@ class MessageService {
     // 创建奖励领取消息，传递操作者信息
     try {
       this._createRewardMessageWithDomainModel(reward, 'claimed', {
-        operatorUserId: operatorUserId // 传递操作者信息
+        operatorUserId: operatorUserId,
+        actualCost: data.actualCost ?? reward.actualCost ?? reward.points ?? 0
       });
     } catch (error) {
       logger.error('MessageService', '创建奖励领取消息失败', error);
@@ -868,7 +876,8 @@ class MessageService {
     
     // 创建奖励取消领取消息
     this._createRewardMessageWithDomainModel(reward, 'unclaimed', {
-      operatorUserId
+      operatorUserId,
+      pointsRefunded: data.pointsRefunded ?? reward.pointsRefunded ?? reward.points ?? 0
     });
   }
   

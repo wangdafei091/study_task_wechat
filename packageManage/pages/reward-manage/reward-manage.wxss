@@ -62,10 +62,6 @@
   opacity: 0.6;
 }
 
-.reward-item.claimed {
-  border: 2rpx solid #34A853;
-}
-
 .reward-content {
   display: flex;
   flex-direction: column;
@@ -104,6 +100,12 @@
   color: #FBBC05;
 }
 
+.reward-mode-label {
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  color: #7A7A7A;
+}
+
 .reward-status-label {
   position: absolute;
   top: 8rpx;
@@ -116,10 +118,6 @@
 
 .reward-status-label.disabled {
   background-color: #999999;
-}
-
-.reward-status-label.claimed {
-  background-color: #34A853;
 }
 
 /* 添加奖励按钮 */
@@ -199,6 +197,12 @@
   margin-bottom: 8rpx;
 }
 
+.claimed-owner {
+  font-size: 24rpx;
+  color: #666666;
+  margin-bottom: 8rpx;
+}
+
 .claimed-time {
   font-size: 24rpx;
   color: #999999;
@@ -219,7 +223,28 @@
 
 .claimed-actions {
   display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12rpx;
+}
+
+.claimed-primary-btn {
+  padding: 10rpx 20rpx;
+  border-radius: 999rpx;
+  background-color: #E9F4EA;
+  color: #2E7D32;
+  font-size: 24rpx;
+  line-height: 1.4;
   align-items: center;
+}
+
+.claimed-more-btn {
+  padding: 10rpx 20rpx;
+  border-radius: 999rpx;
+  background-color: #eef3ff;
+  color: #4285F4;
+  font-size: 24rpx;
+  line-height: 1.4;
 }
 
 .action-btn {
@@ -320,6 +345,37 @@
   font-size: 26rpx;
   color: #666666;
   text-align: center;
+}
+
+.mode-selector {
+  display: flex;
+  gap: 16rpx;
+}
+
+.mode-option {
+  flex: 1;
+  padding: 20rpx;
+  border-radius: 12rpx;
+  background-color: #F8F9FA;
+  border: 1rpx solid #E5E5E5;
+}
+
+.mode-option.active {
+  background-color: #EEF4FF;
+  border-color: #4285F4;
+}
+
+.mode-title {
+  font-size: 26rpx;
+  color: #333333;
+  font-weight: 500;
+}
+
+.mode-desc {
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  line-height: 1.4;
+  color: #7A7A7A;
 }
 
 /* 表情选择器 */
@@ -637,18 +693,4 @@
 .btn-confirm {
   color: #4285F4;
   border-left: 1rpx solid #EEEEEE;
-}
-
-/* 示例标签样式 */
-.example-badge {
-  display: inline-block;
-  position: absolute;
-  top: 10rpx;
-  right: 10rpx;
-  font-size: 22rpx;
-  color: #666666;
-  background-color: #f0f0f0;
-  padding: 4rpx 12rpx;
-  border-radius: 10rpx;
-  box-shadow: 0 2rpx 4rpx rgba(0, 0, 0, 0.1);
 }

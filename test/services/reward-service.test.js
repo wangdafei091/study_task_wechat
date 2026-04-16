@@ -149,6 +149,14 @@ describe('RewardService', () => {
 
     mockStarService = {
       getTotalStars: jest.fn().mockResolvedValue(100),
+      getAvailableStarSnapshot: jest.fn().mockResolvedValue({
+        totalStars: 100,
+        expiringInfo: {
+          points: 0,
+          expiryDateText: '',
+          expiryTimestamp: 0
+        }
+      }),
       refreshStarsFromCloud: jest.fn().mockResolvedValue({
         success: true,
         groups: [],
@@ -465,7 +473,8 @@ describe('RewardService', () => {
         points: 50,
         enabled: true,
         claimed: false,
-        protectedByExpiry: false
+        protectedByExpiry: false,
+        fulfillmentMode: 'instant'
       });
       mockRewardRepository.getById.mockResolvedValue(reward);
       mockStarGroupRepository.getTotalPoints.mockResolvedValue(100);
@@ -488,7 +497,8 @@ describe('RewardService', () => {
         name: '事件测试奖励',
         points: 30,
         enabled: true,
-        claimed: false
+        claimed: false,
+        fulfillmentMode: 'instant'
       });
       mockRewardRepository.getById.mockResolvedValue(reward);
       mockStarGroupRepository.getTotalPoints.mockResolvedValue(100);
@@ -500,7 +510,7 @@ describe('RewardService', () => {
       mockEventBus.verifyEmit(EVENTS.REWARD_CLAIMED, (eventData) => {
         expect(eventData.rewardName).toBe('事件测试奖励');
         expect(eventData.actualCost).toBe(30);
-        expect(eventData.exchangeType).toBe('normal');
+        expect(eventData.exchangeType).toBe('instant');
       });
     });
 
@@ -512,27 +522,34 @@ describe('RewardService', () => {
         points: 100,
         enabled: true,
         claimed: false,
-        protectedByExpiry: true,
-        partialProtection: 50
+        fulfillmentMode: 'instant'
       });
       mockRewardRepository.getById.mockResolvedValue(reward);
       mockStarGroupRepository.getTotalPoints.mockResolvedValue(100);
+      mockStarService.getAvailableStarSnapshot.mockResolvedValueOnce({
+        totalStars: 100,
+        expiringInfo: {
+          points: 50,
+          expiryDateText: '明天',
+          expiryTimestamp: 1
+        }
+      });
 
       // 执行操作
       const result = await rewardService.exchangeReward('reward_1', 'user_123');
 
       // 验证结果
       expect(result.success).toBe(true);
-      expect(result.message).toBe('部分保护奖励兑换成功');
-      expect(result.protectedByExpiry).toBe(true);
-      expect(result.partialProtection).toBe(50);
+      expect(result.message).toBe('兑换成功');
+      expect(result.expiringStarDeduction).toBe(50);
       expect(result.actualCost).toBe(50); // 100 - 50 = 50
 
       // 验证事件中的兑换类型
       mockEventBus.verifyEmit(EVENTS.REWARD_CLAIMED, (eventData) => {
-        expect(eventData.exchangeType).toBe('partial_protected');
+        expect(eventData.exchangeType).toBe('instant');
         expect(eventData.actualCost).toBe(50);
         expect(eventData.originalPoints).toBe(100);
+        expect(eventData.expiringStarDeduction).toBe(50);
       });
     });
 
@@ -544,25 +561,33 @@ describe('RewardService', () => {
         points: 50,
         enabled: true,
         claimed: false,
-        protectedByExpiry: true,
-        partialProtection: 50
+        fulfillmentMode: 'instant'
       });
       mockRewardRepository.getById.mockResolvedValue(reward);
       mockStarGroupRepository.getTotalPoints.mockResolvedValue(100);
+      mockStarService.getAvailableStarSnapshot.mockResolvedValueOnce({
+        totalStars: 100,
+        expiringInfo: {
+          points: 50,
+          expiryDateText: '明天',
+          expiryTimestamp: 1
+        }
+      });
 
       // 执行操作
       const result = await rewardService.exchangeReward('reward_1', 'user_123');
 
       // 验证结果
       expect(result.success).toBe(true);
-      expect(result.message).toBe('完全保护奖励兑换成功');
+      expect(result.message).toBe('兑换成功');
       expect(result.actualCost).toBe(0); // 完全保护，无需扣除星星
       expect(mockStarGroupRepository.deductStars).not.toHaveBeenCalled();
 
       // 验证事件中的兑换类型
       mockEventBus.verifyEmit(EVENTS.REWARD_CLAIMED, (eventData) => {
-        expect(eventData.exchangeType).toBe('fully_protected');
+        expect(eventData.exchangeType).toBe('instant');
         expect(eventData.actualCost).toBe(0);
+        expect(eventData.expiringStarDeduction).toBe(50);
       });
     });
 
@@ -634,12 +659,18 @@ describe('RewardService', () => {
         name: '部分保护奖励',
         points: 100,
         enabled: true,
-        claimed: false,
-        protectedByExpiry: true,
-        partialProtection: 30
+        claimed: false
       });
       mockRewardRepository.getById.mockResolvedValue(reward);
       mockStarGroupRepository.getTotalPoints.mockResolvedValue(50); // 星星不足（需要70）
+      mockStarService.getAvailableStarSnapshot.mockResolvedValueOnce({
+        totalStars: 50,
+        expiringInfo: {
+          points: 30,
+          expiryDateText: '明天',
+          expiryTimestamp: 1
+        }
+      });
 
       // 执行操作
       const result = await rewardService.exchangeReward('reward_1', 'user_123');
@@ -985,6 +1016,43 @@ describe('RewardService', () => {
       expect(mockRewardRepository.getAll).not.toHaveBeenCalled();
       expect(mockRewardRepository.getDeleteTombstones).not.toHaveBeenCalled();
     });
+
+    it('_syncRewardToCloud 应透传兑换人和操作者上下文且不再发送旧保护字段', async () => {
+      const reward = new Reward({
+        id: 'reward_cloud_1',
+        userId: 'parent_1',
+        familyId: 'fam_1',
+        name: '云同步奖励',
+        points: 10,
+        claimed: true,
+        claimStatus: 'claimed',
+        fulfillmentMode: 'manual',
+        exchangeUserId: 'child_1'
+      });
+      reward.pendingSyncMeta = {
+        operationKey: 'reward-op-1',
+        modifyTime: 123456,
+        operatorUserId: 'parent_1',
+        operatorRole: 'parent',
+        familyId: 'fam_1',
+        exchangeUserId: 'child_1'
+      };
+      HttpClient.post.mockResolvedValue({});
+
+      await rewardService._syncRewardToCloud(reward);
+
+      const payload = HttpClient.post.mock.calls[0][1];
+      expect(payload).toEqual(expect.objectContaining({
+        exchangeUserId: 'child_1',
+        operatorContext: {
+          actorUserId: 'parent_1',
+          actorRole: 'parent',
+          familyId: 'fam_1'
+        }
+      }));
+      expect(payload).not.toHaveProperty('protectedByExpiry');
+      expect(payload).not.toHaveProperty('partialProtection');
+    });
   });
 
   // ==================== 测试组3：奖励交付 ====================
@@ -1025,16 +1093,49 @@ describe('RewardService', () => {
   // ==================== 测试组4：奖励保护逻辑 ====================
 
   describe('奖励保护逻辑', () => {
-    it('应该正确计算部分保护奖励的实际消耗', async () => {
-      // 场景1：部分保护，需要扣除星星
-      const reward1 = new Reward({
-        id: 'reward_1',
+    it('previewRewardExchangeCost 不应回退到历史保护字段', async () => {
+      const reward = new Reward({
+        id: 'reward_legacy_protection',
         points: 100,
         protectedByExpiry: true,
         partialProtection: 40
       });
+      mockRewardRepository.getById.mockResolvedValue(reward);
+      mockStarService.getAvailableStarSnapshot.mockResolvedValueOnce({
+        totalStars: 100,
+        expiringInfo: {
+          points: 0,
+          expiryDateText: '',
+          expiryTimestamp: 0
+        }
+      });
+
+      const result = await rewardService.previewRewardExchangeCost('reward_legacy_protection', 'user_123');
+
+      expect(result).toEqual({
+        originalPoints: 100,
+        expiringStarDeduction: 0,
+        actualCost: 100,
+        hasExpiringDeduction: false
+      });
+    });
+
+    it('应该正确计算部分保护奖励的实际消耗', async () => {
+      // 场景1：部分保护，需要扣除星星
+      const reward1 = new Reward({
+        id: 'reward_1',
+        points: 100
+      });
       mockRewardRepository.getById.mockResolvedValue(reward1);
       mockStarGroupRepository.getTotalPoints.mockResolvedValue(100);
+      mockStarService.getAvailableStarSnapshot.mockResolvedValueOnce({
+        totalStars: 100,
+        expiringInfo: {
+          points: 40,
+          expiryDateText: '明天',
+          expiryTimestamp: 1
+        }
+      });
 
       let result = await rewardService.exchangeReward('reward_1', 'user_123');
       expect(result.actualCost).toBe(60); // 100 - 40 = 60
@@ -1043,13 +1144,19 @@ describe('RewardService', () => {
       // 场景2：完全保护，无需扣除星星
       const reward2 = new Reward({
         id: 'reward_2',
-        points: 50,
-        protectedByExpiry: true,
-        partialProtection: 50
+        points: 50
       });
       mockRewardRepository.getById.mockResolvedValue(reward2);
       mockStarGroupRepository.getTotalPoints.mockResolvedValue(100);
       mockStarGroupRepository.deductStars.mockClear(); // 清除之前的调用
+      mockStarService.getAvailableStarSnapshot.mockResolvedValueOnce({
+        totalStars: 100,
+        expiringInfo: {
+          points: 50,
+          expiryDateText: '明天',
+          expiryTimestamp: 1
+        }
+      });
 
       result = await rewardService.exchangeReward('reward_2', 'user_123');
       expect(result.actualCost).toBe(0); // 50 - 50 = 0
@@ -1061,7 +1168,8 @@ describe('RewardService', () => {
       const reward1 = new Reward({
         id: 'reward_1',
         points: 50,
-        protectedByExpiry: false
+        protectedByExpiry: false,
+        fulfillmentMode: 'instant'
       });
       mockRewardRepository.getById.mockResolvedValue(reward1);
       mockStarGroupRepository.getTotalPoints.mockResolvedValue(100);
@@ -1078,18 +1186,29 @@ describe('RewardService', () => {
       const reward2 = new Reward({
         id: 'reward_2',
         points: 100,
-        protectedByExpiry: true,
-        partialProtection: 30
+        fulfillmentMode: 'instant'
       });
       mockRewardRepository.getById.mockResolvedValue(reward2);
       mockStarGroupRepository.getTotalPoints.mockResolvedValue(100);
       mockStarRecordRepository.createStarConsumptionRecord.mockClear(); // 清除之前的调用
+      mockStarService.getAvailableStarSnapshot.mockResolvedValueOnce({
+        totalStars: 100,
+        expiringInfo: {
+          points: 30,
+          expiryDateText: '明天',
+          expiryTimestamp: 1
+        }
+      });
 
       await rewardService.exchangeReward('reward_2', 'user_123');
       expect(mockStarRecordRepository.createStarConsumptionRecord).toHaveBeenCalledWith(
         expect.objectContaining({
-          type: 'partial_protected_exchange',
-          amount: 70
+          type: 'exchange',
+          amount: 70,
+          data: expect.objectContaining({
+            expiringStarDeduction: 30,
+            actualCost: 70
+          })
         })
       );
 
@@ -1097,17 +1216,28 @@ describe('RewardService', () => {
       const reward3 = new Reward({
         id: 'reward_3',
         points: 30,
-        protectedByExpiry: true,
-        partialProtection: 30
+        fulfillmentMode: 'instant'
       });
       mockRewardRepository.getById.mockResolvedValue(reward3);
       mockStarGroupRepository.getTotalPoints.mockResolvedValue(100);
+      mockStarService.getAvailableStarSnapshot.mockResolvedValueOnce({
+        totalStars: 100,
+        expiringInfo: {
+          points: 30,
+          expiryDateText: '明天',
+          expiryTimestamp: 1
+        }
+      });
 
       await rewardService.exchangeReward('reward_3', 'user_123');
       expect(mockStarRecordRepository.createStarConsumptionRecord).toHaveBeenCalledWith(
         expect.objectContaining({
           type: 'protected_exchange',
-          amount: 0
+          amount: 0,
+          data: expect.objectContaining({
+            expiringStarDeduction: 30,
+            actualCost: 0
+          })
         })
       );
     });
@@ -1123,7 +1253,8 @@ describe('RewardService', () => {
         name: '待取消奖励',
         points: 50,
         claimed: true,
-        claimStatus: 'pending'
+        claimStatus: 'pending',
+        exchangeUserId: 'user_child'
       });
       mockRewardRepository.getById.mockResolvedValue(reward);
       mockStarGroupRepository.getOrCreateGroup.mockResolvedValue({
@@ -1131,17 +1262,31 @@ describe('RewardService', () => {
         name: '永久有效',
         stars: 50
       });
-      mockStarRecordRepository.getRecordsBySource.mockResolvedValue([
+      mockStarRecordRepository.getRecordsBySource
+        .mockResolvedValueOnce([
+          TestDataFactory.createStarRecord({
+            id: 'record_cancel_1',
+            points: -50,
+            type: 'income',
+            source: 'reward_reward_1',
+            sourceId: 'reward_1',
+            userId: 'user_child',
+            balance: 0,
+            previousBalance: 50
+          })
+        ])
+        .mockResolvedValueOnce([
         TestDataFactory.createStarRecord({
           id: 'record_cancel_1',
           points: -50,  // 负数表示扣除，取绝对值就是退款金额
           type: 'income',
           source: 'reward_exchange',
           sourceId: 'reward_1',
+          userId: 'user_child',
           balance: 0,
           previousBalance: 50
         })
-      ]);
+        ]);
       mockRewardRepository.unclaimReward.mockResolvedValue(reward);
 
       // 执行操作
@@ -1151,6 +1296,12 @@ describe('RewardService', () => {
       expect(result.success).toBe(true);
       expect(result.message).toBe('取消兑换成功');
       expect(result.pointsRefunded).toBe(50);
+      expect(mockStarGroupRepository.getOrCreateGroup).toHaveBeenCalledWith(
+        'permanent',
+        null,
+        '永久有效',
+        'user_child'
+      );
       expect(mockStarGroupRepository.addStarsToGroup).toHaveBeenCalled();
       expect(mockRewardRepository.unclaimReward).toHaveBeenCalledWith('reward_1');
     });
@@ -1216,7 +1367,8 @@ describe('RewardService', () => {
         name: '待取消奖励',
         points: 50,
         claimed: true,
-        claimStatus: 'pending'
+        claimStatus: 'pending',
+        exchangeUserId: 'user_child'
       });
       mockRewardRepository.getById.mockResolvedValue(reward);
       mockStarGroupRepository.getOrCreateGroup.mockResolvedValue({
@@ -1224,27 +1376,87 @@ describe('RewardService', () => {
         name: '永久有效',
         stars: 50
       });
-      mockStarRecordRepository.getRecordsBySource.mockResolvedValue([
+      mockStarRecordRepository.getRecordsBySource
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([
         TestDataFactory.createStarRecord({
           id: 'record_cancel_2',
           points: -50,
           type: 'income',
           source: 'reward_exchange',
           sourceId: 'reward_1',
+          userId: 'user_child',
           balance: 0,
           previousBalance: 50
         })
-      ]);
+        ]);
       mockRewardRepository.unclaimReward.mockResolvedValue(reward);
 
       // 执行操作
       await rewardService.cancelRewardExchange('reward_1');
 
       // 验证事件
+      mockEventBus.verifyEmit(EVENTS.REWARD_UNCLAIMED, (eventData) => {
+        expect(eventData.reward.id).toBe('reward_1');
+        expect(eventData.pointsRefunded).toBe(50);
+      });
       mockEventBus.verifyEmit(EVENTS.REWARD_EXCHANGE_CANCELLED, (eventData) => {
         expect(eventData.reward.id).toBe('reward_1');
         expect(eventData.pointsRefunded).toBe(50);
       });
+    });
+
+    it('取消部分保护兑换时应按实际消耗退款而不是按原价退款', async () => {
+      const reward = new Reward({
+        id: 'reward_1',
+        name: '部分保护奖励',
+        points: 100,
+        claimed: true,
+        claimStatus: 'pending',
+        exchangeUserId: 'user_child'
+      });
+      mockRewardRepository.getById.mockResolvedValue(reward);
+      mockStarGroupRepository.getOrCreateGroup.mockResolvedValue({
+        id: 'permanent',
+        name: '永久有效',
+        stars: 50
+      });
+      mockStarRecordRepository.getRecordsBySource
+        .mockResolvedValueOnce([
+          TestDataFactory.createStarRecord({
+            id: 'record_cancel_partial',
+            points: -70,
+            type: 'expense',
+            source: 'reward_reward_1',
+            sourceId: 'reward_1',
+            userId: 'user_child',
+            balance: 30,
+            previousBalance: 100
+          })
+        ])
+        .mockResolvedValueOnce([]);
+      mockStarRecordRepository.save.mockResolvedValue({
+        id: 'refund_record_partial',
+        source: 'reward_exchange_refund',
+        sourceId: 'reward_1',
+        points: 70,
+        userId: 'user_child'
+      });
+      mockRewardRepository.unclaimReward.mockResolvedValue(reward);
+
+      const result = await rewardService.cancelRewardExchange('reward_1');
+
+      expect(result.success).toBe(true);
+      expect(result.pointsRefunded).toBe(70);
+      expect(mockStarGroupRepository.addStarsToGroup).toHaveBeenCalledWith(
+        expect.any(Object),
+        70,
+        '取消兑换奖励: 部分保护奖励'
+      );
+      expect(mockStarRecordRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+        userId: 'user_child',
+        points: 70
+      }));
     });
 
     it('应该拒绝取消已交付的奖励', async () => {
@@ -1323,6 +1535,51 @@ describe('RewardService', () => {
       expect(result).toHaveLength(1);
       expect(result[0].userId).toBe('user_1');
       expect(result[0].name).toBe('用户1奖励');
+    });
+
+    it('应返回奖励管理页专用视图模型', async () => {
+      mockRewardRepository.getAll.mockResolvedValue([
+        new Reward({ id: 'reward_formal', name: '正式奖励', userId: 'user_1', claimed: false, enabled: true }),
+        new Reward({ id: 'reward_disabled', name: '禁用奖励', userId: 'user_1', claimed: false, enabled: false }),
+        new Reward({ id: 'reward_claimed', name: '已兑换奖励', userId: 'user_1', claimed: true, enabled: true }),
+        new Reward({ id: 'reward_example_1', name: '示例奖励', userId: 'user_1', claimed: false, enabled: true, isExample: true })
+      ]);
+
+      const result = await rewardService.getRewardManageViewModel('user_1');
+
+      expect(result).toEqual(expect.objectContaining({
+        rewardOwnerId: 'user_1',
+        manageableRewards: [
+          expect.objectContaining({ id: 'reward_formal' }),
+          expect.objectContaining({ id: 'reward_disabled' })
+        ],
+        exampleTemplates: [
+          expect.objectContaining({ id: 'reward_example_1' })
+        ]
+      }));
+      expect(result.manageableRewards).toHaveLength(2);
+    });
+
+    it('单孩子家庭的旧兑换记录缺少 exchangeUserId 时也应能按孩子查询出来', async () => {
+      mockRewardRepository.getAll.mockResolvedValue([
+        new Reward({
+          id: 'reward_legacy',
+          name: '旧兑换奖励',
+          userId: 'parent_1',
+          familyId: 'family_1',
+          claimed: true,
+          claimStatus: 'claimed'
+        })
+      ]);
+
+      const result = await rewardService.getClaimedRewardsByExchangeUser('child_1', {
+        familyId: 'family_1',
+        memberUserIds: ['parent_1', 'child_1'],
+        childUserIds: ['child_1']
+      });
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toEqual(expect.objectContaining({ id: 'reward_legacy' }));
     });
   });
 
@@ -1779,7 +2036,8 @@ describe('RewardService', () => {
         name: '完整流程奖励',
         points: 50,
         enabled: true,
-        claimed: false
+        claimed: false,
+        fulfillmentMode: 'instant'
       });
       mockRewardRepository.getById.mockResolvedValue(reward);
       mockStarGroupRepository.getTotalPoints.mockResolvedValue(100);
@@ -1819,7 +2077,7 @@ describe('RewardService', () => {
         expect.objectContaining({
           id: 'reward_1',
           claimed: true,
-          claimStatus: 'claimed'
+          claimStatus: 'delivered'
         })
       );
 
@@ -1827,7 +2085,7 @@ describe('RewardService', () => {
       mockEventBus.verifyEmit(EVENTS.REWARD_CLAIMED, (eventData) => {
         expect(eventData.rewardName).toBe('完整流程奖励');
         expect(eventData.actualCost).toBe(50);
-        expect(eventData.exchangeType).toBe('normal');
+        expect(eventData.exchangeType).toBe('instant');
       });
     });
 
@@ -1839,8 +2097,7 @@ describe('RewardService', () => {
         points: 100,
         enabled: true,
         claimed: false,
-        protectedByExpiry: true,
-        partialProtection: 30
+        fulfillmentMode: 'instant'
       });
       mockRewardRepository.getById.mockResolvedValue(reward);
       mockStarGroupRepository.getTotalPoints.mockResolvedValue(100);
@@ -1848,15 +2105,23 @@ describe('RewardService', () => {
         success: true,
         pointsDeducted: 70
       });
+      mockStarService.getAvailableStarSnapshot.mockResolvedValueOnce({
+        totalStars: 100,
+        expiringInfo: {
+          points: 30,
+          expiryDateText: '明天',
+          expiryTimestamp: 1
+        }
+      });
 
       // 执行操作
       const result = await rewardService.exchangeReward('reward_1', 'user_123');
 
       // 验证完整流程
       expect(result.success).toBe(true);
-      expect(result.message).toBe('部分保护奖励兑换成功');
+      expect(result.message).toBe('兑换成功');
       expect(result.actualCost).toBe(70);
-      expect(result.protectedByExpiry).toBe(true);
+      expect(result.expiringStarDeduction).toBe(30);
 
       // 验证扣除金额正确
       expect(mockStarGroupRepository.deductStars).toHaveBeenCalledWith(70, 'user_123');
@@ -1865,11 +2130,10 @@ describe('RewardService', () => {
       expect(mockStarRecordRepository.createStarConsumptionRecord).toHaveBeenCalledWith(
         expect.objectContaining({
           amount: 70,
-          type: 'partial_protected_exchange',
+          type: 'exchange',
           data: expect.objectContaining({
             originalPoints: 100,
-            protectedByExpiry: true,
-            partialProtection: 30,
+            expiringStarDeduction: 30,
             actualCost: 70
           })
         })
@@ -1877,9 +2141,10 @@ describe('RewardService', () => {
 
       // 验证事件中的兑换类型
       mockEventBus.verifyEmit(EVENTS.REWARD_CLAIMED, (eventData) => {
-        expect(eventData.exchangeType).toBe('partial_protected');
+        expect(eventData.exchangeType).toBe('instant');
         expect(eventData.actualCost).toBe(70);
         expect(eventData.originalPoints).toBe(100);
+        expect(eventData.expiringStarDeduction).toBe(30);
       });
     });
 
@@ -1891,18 +2156,25 @@ describe('RewardService', () => {
         points: 50,
         enabled: true,
         claimed: false,
-        protectedByExpiry: true,
-        partialProtection: 50
+        fulfillmentMode: 'instant'
       });
       mockRewardRepository.getById.mockResolvedValue(reward);
       mockStarGroupRepository.getTotalPoints.mockResolvedValue(100);
+      mockStarService.getAvailableStarSnapshot.mockResolvedValueOnce({
+        totalStars: 100,
+        expiringInfo: {
+          points: 50,
+          expiryDateText: '明天',
+          expiryTimestamp: 1
+        }
+      });
 
       // 执行操作
       const result = await rewardService.exchangeReward('reward_1', 'user_123');
 
       // 验证完整流程
       expect(result.success).toBe(true);
-      expect(result.message).toBe('完全保护奖励兑换成功');
+      expect(result.message).toBe('兑换成功');
       expect(result.actualCost).toBe(0);
 
       // 验证没有扣除星星
@@ -1915,8 +2187,7 @@ describe('RewardService', () => {
           type: 'protected_exchange',
           data: expect.objectContaining({
             originalPoints: 50,
-            protectedByExpiry: true,
-            partialProtection: 50,
+            expiringStarDeduction: 50,
             actualCost: 0
           })
         })
@@ -1924,8 +2195,9 @@ describe('RewardService', () => {
 
       // 验证事件中的兑换类型
       mockEventBus.verifyEmit(EVENTS.REWARD_CLAIMED, (eventData) => {
-        expect(eventData.exchangeType).toBe('fully_protected');
+        expect(eventData.exchangeType).toBe('instant');
         expect(eventData.actualCost).toBe(0);
+        expect(eventData.expiringStarDeduction).toBe(50);
       });
     });
   });

@@ -1,5 +1,6 @@
 jest.mock('../../services/service-manager', () => ({
-  getService: jest.fn()
+  getService: jest.fn(),
+  getUserService: jest.fn()
 }));
 
 jest.mock('../../utils/logger', () => ({
@@ -38,6 +39,15 @@ describe('packageManage/pages/my-exchanges/my-exchanges', () => {
     jest.resetModules();
     jest.clearAllMocks();
     serviceManager = require('../../services/service-manager');
+    serviceManager.getUserService.mockReturnValue({
+      getLoginUser: jest.fn(() => ({ userId: 'child_1', role: 'child', familyId: 'family_1', name: '孩子1' })),
+      getCurrentUser: jest.fn(() => ({ userId: 'child_1', role: 'child', familyId: 'family_1', name: '孩子1' })),
+      getAllUsers: jest.fn(() => [
+        { userId: 'parent_1', role: 'parent', familyId: 'family_1', name: '家长' },
+        { userId: 'child_1', role: 'child', familyId: 'family_1', name: '孩子1' }
+      ]),
+      getUserByRole: jest.fn(() => ({ userId: 'child_1', role: 'child', familyId: 'family_1', name: '孩子1' }))
+    });
 
     global.wx = {
       getStorageSync: jest.fn()
@@ -53,14 +63,15 @@ describe('packageManage/pages/my-exchanges/my-exchanges', () => {
 
   it('应按 claimStatus 生成兑换记录展示字段并按最新时间排序', async () => {
     serviceManager.getService.mockReturnValue({
-      getClaimedRewards: jest.fn().mockResolvedValue([
+      getClaimedRewardsByExchangeUser: jest.fn().mockResolvedValue([
         {
           id: 'reward-claimed',
           name: '积木',
           points: 12,
           claimed: true,
           claimStatus: 'claimed',
-          claimTime: 1000
+          claimTime: 1000,
+          fulfillmentMode: 'manual'
         },
         {
           id: 'reward-delivered',
@@ -69,7 +80,8 @@ describe('packageManage/pages/my-exchanges/my-exchanges', () => {
           claimed: true,
           claimStatus: 'delivered',
           claimTime: 900,
-          deliveryTime: 3000
+          deliveryTime: 3000,
+          fulfillmentMode: 'manual'
         }
       ])
     });
@@ -80,21 +92,21 @@ describe('packageManage/pages/my-exchanges/my-exchanges', () => {
     expect(page.data.claimedRewards).toHaveLength(2);
     expect(page.data.claimedRewards[0]).toEqual(expect.objectContaining({
       id: 'reward-delivered',
-      statusLabel: '已领取',
-      timeLabel: '领取时间',
+      statusLabel: '已发放',
+      timeLabel: '发放时间',
       recordTimestamp: 3000
     }));
     expect(page.data.claimedRewards[1]).toEqual(expect.objectContaining({
       id: 'reward-claimed',
-      statusLabel: '待领取',
+      statusLabel: '待发放',
       timeLabel: '兑换时间',
       recordTimestamp: 1000
     }));
   });
 
-  it('服务失败时应从本地存储降级加载并保留待领取状态', async () => {
+  it('服务失败时应从本地存储降级加载并保留待发放状态', async () => {
     serviceManager.getService.mockReturnValue({
-      getClaimedRewards: jest.fn().mockRejectedValue(new Error('boom'))
+      getClaimedRewardsByExchangeUser: jest.fn().mockRejectedValue(new Error('boom'))
     });
     global.wx.getStorageSync.mockReturnValue([
       {
@@ -103,7 +115,10 @@ describe('packageManage/pages/my-exchanges/my-exchanges', () => {
         points: 5,
         claimed: true,
         claimStatus: 'claimed',
-        claimTime: 1500
+        claimTime: 1500,
+        exchangeUserId: 'child_1',
+        familyId: 'family_1',
+        fulfillmentMode: 'manual'
       }
     ]);
 
@@ -113,9 +128,57 @@ describe('packageManage/pages/my-exchanges/my-exchanges', () => {
     expect(page.data.claimedRewards).toEqual([
       expect.objectContaining({
         id: 'reward-local',
-        statusLabel: '待领取',
+        statusLabel: '待发放',
         timeLabel: '兑换时间'
       })
     ]);
+  });
+
+  it('应只展示当前孩子自己的兑换记录', async () => {
+    serviceManager.getService.mockReturnValue({
+      getClaimedRewardsByExchangeUser: jest.fn().mockResolvedValue([
+        {
+          id: 'reward-self',
+          name: '自己的奖励',
+          points: 8,
+          claimed: true,
+          claimStatus: 'claimed',
+          claimTime: 1200,
+          exchangeUserId: 'child_1'
+        }
+      ])
+    });
+
+    const page = createPageInstance();
+    await page.loadClaimedRewards();
+
+    expect(page.data.claimedRewards).toHaveLength(1);
+    expect(page.data.claimedRewards[0].id).toBe('reward-self');
+  });
+
+  it('单孩子家庭的旧兑换记录缺少 exchangeUserId 时也应归属到当前孩子', async () => {
+    serviceManager.getService.mockReturnValue({
+      getClaimedRewardsByExchangeUser: jest.fn().mockResolvedValue([
+        {
+          id: 'reward-legacy',
+          name: '旧奖励',
+          points: 8,
+          claimed: true,
+          claimStatus: 'claimed',
+          claimTime: 1200,
+          userId: 'parent_1',
+          familyId: 'family_1'
+        }
+      ])
+    });
+
+    const page = createPageInstance();
+    await page.loadClaimedRewards();
+
+    expect(page.data.claimedRewards).toHaveLength(1);
+    expect(page.data.claimedRewards[0]).toEqual(expect.objectContaining({
+      id: 'reward-legacy',
+      statusLabel: '待发放'
+    }));
   });
 });

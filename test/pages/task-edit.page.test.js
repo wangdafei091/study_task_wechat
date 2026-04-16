@@ -109,6 +109,20 @@ describe('pages/task-edit/task-edit', () => {
     expect(page.data.targetUserId).toBe('');
   });
 
+  it('onLoad 在首页非今天入口下应显示一次性提示', () => {
+    serviceManager.getUserService.mockReturnValue({
+      getLoginUser: jest.fn(() => ({ userId: 'parent-1', role: 'parent' })),
+      getCurrentUser: jest.fn(() => ({ userId: 'parent-1', role: 'parent' }))
+    });
+
+    const page = createPageInstance();
+    page.onLoad.call(page, { entry: 'index_non_today_create' });
+
+    expect(page.data.entryHintVisible).toBe(true);
+    expect(page.data.entryHintText).toBe('这是新建任务，不会自动绑定当前查看日期');
+    expect(page.loadAllTasks).not.toHaveBeenCalled();
+  });
+
   it('applyTemplateSelection 应把模板映射到 task-edit 表单状态', () => {
     serviceManager.getService.mockImplementation((name) => {
       if (name === 'taskTemplate') {
