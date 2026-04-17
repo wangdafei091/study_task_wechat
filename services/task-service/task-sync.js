@@ -80,6 +80,30 @@ function resolveCloudTaskOwnership(service, task, pendingSyncMeta) {
   };
 }
 
+function buildOperatorContextPayload(pendingSyncMeta = {}) {
+  return {
+    actorUserId: pendingSyncMeta.operatorUserId,
+    actorRole: pendingSyncMeta.operatorRole,
+    familyId: pendingSyncMeta.familyId
+  };
+}
+
+function buildOccurrenceFactPayload(task) {
+  if (task?.isOccurrenceRecord !== true) {
+    return {};
+  }
+
+  return {
+    isOccurrenceRecord: true,
+    occurrenceOutcome: task.occurrenceOutcome || 'none',
+    recordedAt: Number(task.recordedAt || 0)
+  };
+}
+
+function buildActiveRangePayload(task) {
+  return task?.activeRange ? { activeRange: task.activeRange } : {};
+}
+
 async function cleanupStaleTasks(service, cloudTaskIds, loginUserId) {
   try {
     const localTasks = await service.taskRepository.getByUserId(loginUserId);
@@ -146,6 +170,7 @@ function buildCreateTaskPayload(service, task) {
     title: task.title,
     description: task.description,
     type: task.type,
+    executionMode: task.executionMode,
     date: task.date,
     startTime: task.startTime,
     endTime: task.endTime,
@@ -163,11 +188,11 @@ function buildCreateTaskPayload(service, task) {
     modifyTime: pendingSyncMeta.modifyTime || task.modifyTime,
     operationKey: pendingSyncMeta.operationKey,
     operatorContext: {
-      actorUserId: pendingSyncMeta.operatorUserId,
-      actorRole: pendingSyncMeta.operatorRole,
-      familyId: pendingSyncMeta.familyId
+      ...buildOperatorContextPayload(pendingSyncMeta)
     },
-    parentTaskId: task.parentTaskId || null
+    parentTaskId: task.parentTaskId || null,
+    ...buildActiveRangePayload(task),
+    ...buildOccurrenceFactPayload(task)
   };
 
   if (ownership.targetUserId) {
@@ -284,6 +309,7 @@ async function fetchTasksFromCloud(service, userId, params = {}) {
                 title: localTask.title,
                 description: localTask.description,
                 type: localTask.type,
+                executionMode: localTask.executionMode,
                 date: localTask.date,
                 startTime: localTask.startTime,
                 endTime: localTask.endTime,
@@ -296,6 +322,10 @@ async function fetchTasksFromCloud(service, userId, params = {}) {
                 repeat: localTask.repeat,
                 duration: localTask.duration,
                 hasNoEndDate: localTask.hasNoEndDate,
+                activeRange: localTask.activeRange,
+                isOccurrenceRecord: localTask.isOccurrenceRecord,
+                occurrenceOutcome: localTask.occurrenceOutcome,
+                recordedAt: localTask.recordedAt,
                 tags: localTask.tags,
                 penaltyApplied: localTask.penaltyApplied,
                 penaltyDeductedPoints: localTask.penaltyDeductedPoints,
@@ -379,6 +409,7 @@ async function syncUpdateToCloud(service, task) {
       description: task.description,
       date: task.date,
       type: task.type,
+      executionMode: task.executionMode,
       startTime: task.startTime,
       endTime: task.endTime,
       duration: task.duration,
@@ -391,11 +422,9 @@ async function syncUpdateToCloud(service, task) {
       repeat: task.repeat,
       modifyTime: pendingSyncMeta.modifyTime || task.modifyTime,
       operationKey: pendingSyncMeta.operationKey,
-      operatorContext: {
-        actorUserId: pendingSyncMeta.operatorUserId,
-        actorRole: pendingSyncMeta.operatorRole,
-        familyId: pendingSyncMeta.familyId
-      }
+      operatorContext: buildOperatorContextPayload(pendingSyncMeta),
+      ...buildActiveRangePayload(task),
+      ...buildOccurrenceFactPayload(task)
     });
     await service._markTaskSynced(task, { modifyTime: pendingSyncMeta.modifyTime || task.modifyTime });
     logger.info('TaskService', '任务更新已同步到云端', { taskId: task.id });
@@ -415,11 +444,7 @@ async function syncDeleteToCloud(service, taskId, deleteMeta = null) {
     const url = API_CONFIG.ENDPOINTS.TASK_BY_ID.replace('{taskId}', taskId);
     const payload = deleteMeta ? {
       operationKey: deleteMeta.operationKey,
-      operatorContext: {
-        actorUserId: deleteMeta.operatorUserId,
-        actorRole: deleteMeta.operatorRole,
-        familyId: deleteMeta.familyId
-      }
+      operatorContext: buildOperatorContextPayload(deleteMeta)
     } : null;
     const response = await HttpClient.request({
       url,
@@ -475,11 +500,7 @@ async function syncStatusToCloud(service, task) {
         starAwarded: task.starAwarded,
         modifyTime: pendingSyncMeta.modifyTime || task.modifyTime,
         operationKey: pendingSyncMeta.operationKey,
-        operatorContext: {
-          actorUserId: pendingSyncMeta.operatorUserId,
-          actorRole: pendingSyncMeta.operatorRole,
-          familyId: pendingSyncMeta.familyId
-        }
+        operatorContext: buildOperatorContextPayload(pendingSyncMeta)
       });
       await service._markTaskSynced(task, { modifyTime: pendingSyncMeta.modifyTime || task.modifyTime });
       logger.info('TaskService', '任务状态已同步到云端', {
@@ -521,11 +542,7 @@ async function syncRequiredStateToCloud(service, task) {
     const response = await HttpClient.patch(url, {
       modifyTime: pendingSyncMeta.modifyTime || task.modifyTime,
       operationKey: pendingSyncMeta.operationKey,
-      operatorContext: {
-        actorUserId: pendingSyncMeta.operatorUserId,
-        actorRole: pendingSyncMeta.operatorRole,
-        familyId: pendingSyncMeta.familyId
-      }
+      operatorContext: buildOperatorContextPayload(pendingSyncMeta)
     });
     await service._markTaskSynced(task, { modifyTime: pendingSyncMeta.modifyTime || task.modifyTime });
     logger.info('TaskService', '任务必做状态已同步到云端', {
@@ -540,6 +557,76 @@ async function syncRequiredStateToCloud(service, task) {
     });
     throw err;
   }
+}
+
+async function syncOccurrenceRecordToCloud(service, recordTask) {
+  if (!service.enableCloudStorage || !recordTask) return null;
+
+  const pendingSyncMeta = recordTask.pendingSyncMeta || service._buildTaskPendingSyncMeta(
+    recordTask,
+    'occurrence_record'
+  );
+  const configTaskId = recordTask.parentTaskId || recordTask.id;
+  const url = API_CONFIG.ENDPOINTS.TASK_OCCURRENCE_RECORD.replace('{taskId}', configTaskId);
+  const response = await HttpClient.post(url, {
+    targetUserId: recordTask.userId || pendingSyncMeta.targetUserId || null,
+    date: recordTask.date,
+    outcome: recordTask.occurrenceOutcome || 'none',
+    modifyTime: pendingSyncMeta.modifyTime || recordTask.modifyTime,
+    operationKey: pendingSyncMeta.operationKey,
+    operatorContext: buildOperatorContextPayload(pendingSyncMeta)
+  });
+
+  logger.info('TaskService', '表现记录已同步到云端', {
+    taskId: configTaskId,
+    recordId: recordTask.id,
+    outcome: recordTask.occurrenceOutcome || 'none'
+  });
+  return response;
+}
+
+async function syncDisableOccurrenceToCloud(service, task, options = {}) {
+  if (!service.enableCloudStorage || !task) return null;
+
+  const pendingSyncMeta = task.pendingSyncMeta || service._buildTaskPendingSyncMeta(
+    task,
+    'disable_occurrence'
+  );
+  const url = API_CONFIG.ENDPOINTS.TASK_OCCURRENCE_DISABLE.replace('{taskId}', task.id);
+  const response = await HttpClient.post(url, {
+    disableFromDate: options.disableFromDate || pendingSyncMeta.disableFromDate || null,
+    modifyTime: pendingSyncMeta.modifyTime || task.modifyTime,
+    operationKey: pendingSyncMeta.operationKey,
+    operatorContext: buildOperatorContextPayload(pendingSyncMeta)
+  });
+
+  logger.info('TaskService', '表现项停用已同步到云端', {
+    taskId: task.id,
+    disableFromDate: options.disableFromDate || pendingSyncMeta.disableFromDate || null
+  });
+  return response;
+}
+
+async function syncConvertOccurrenceToCloud(service, task, options = {}) {
+  if (!service.enableCloudStorage || !task) return null;
+
+  const pendingSyncMeta = task.pendingSyncMeta || service._buildTaskPendingSyncMeta(
+    task,
+    'convert_occurrence'
+  );
+  const url = API_CONFIG.ENDPOINTS.TASK_OCCURRENCE_CONVERT.replace('{taskId}', task.id);
+  const response = await HttpClient.post(url, {
+    effectiveFromDate: options.effectiveFromDate || pendingSyncMeta.effectiveFromDate || null,
+    modifyTime: pendingSyncMeta.modifyTime || task.modifyTime,
+    operationKey: pendingSyncMeta.operationKey,
+    operatorContext: buildOperatorContextPayload(pendingSyncMeta)
+  });
+
+  logger.info('TaskService', '任务切换为表现项已同步到云端', {
+    taskId: task.id,
+    effectiveFromDate: options.effectiveFromDate || pendingSyncMeta.effectiveFromDate || null
+  });
+  return response;
 }
 
 async function migrateTasksToChild(service, fromUserId, toUserId) {
@@ -587,5 +674,8 @@ module.exports = {
   syncDeleteToCloud,
   syncStatusToCloud,
   syncRequiredStateToCloud,
+  syncOccurrenceRecordToCloud,
+  syncDisableOccurrenceToCloud,
+  syncConvertOccurrenceToCloud,
   migrateTasksToChild
 };

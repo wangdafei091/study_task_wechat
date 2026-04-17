@@ -15,6 +15,36 @@ jest.mock('../../utils/logger', () => ({
 describe('backend TaskService M19B repeat materialization helpers', () => {
   let service;
 
+  function startOfDay(date) {
+    const next = new Date(date.getTime());
+    next.setHours(0, 0, 0, 0);
+    return next;
+  }
+
+  function addDays(date, delta) {
+    const next = new Date(date.getTime());
+    next.setDate(next.getDate() + delta);
+    return startOfDay(next);
+  }
+
+  function getNextWeekday(baseDate, targetDay) {
+    const current = startOfDay(baseDate);
+    const offset = (targetDay - current.getDay() + 7) % 7;
+    return addDays(current, offset === 0 ? 7 : offset);
+  }
+
+  function getLastWeekendDayWithinRange(startDate, endDate) {
+    const cursor = startOfDay(endDate);
+    while (cursor >= startDate) {
+      const day = cursor.getDay();
+      if (day === 0 || day === 6) {
+        return service._formatDate(cursor);
+      }
+      cursor.setDate(cursor.getDate() - 1);
+    }
+    return '';
+  }
+
   beforeEach(() => {
     jest.resetModules();
     service = require('../../services/taskService');
@@ -88,8 +118,9 @@ describe('backend TaskService M19B repeat materialization helpers', () => {
   });
 
   it('_buildRepeatDateStrings 在 workdays 起始不匹配时应于 21 天窗口内找到首个合法日期', () => {
-    const saturday = new Date('2026-04-04T00:00:00');
-    const monday = new Date('2026-04-06T00:00:00');
+    const saturday = getNextWeekday(new Date(), 6);
+    const monday = addDays(saturday, 2);
+    const friday = addDays(saturday, 6);
 
     const result = service._buildRepeatDateStrings({
       taskId: 'parent_workdays',
@@ -98,29 +129,32 @@ describe('backend TaskService M19B repeat materialization helpers', () => {
       repeat: {
         type: 'workdays',
         startDate: service._formatDate(saturday),
-        endDate: '2026-04-10'
+        endDate: service._formatDate(friday)
       }
     });
 
     expect(result[0]).toBe(service._formatDate(monday));
-    expect(result).toContain('2026-04-10');
+    expect(result).toContain(service._formatDate(friday));
   });
 
   it('_buildRepeatDateStrings 在 weekends + hasNoEndDate 下应使用 30 天展开窗口', () => {
-    const today = new Date('2026-04-07T00:00:00');
+    const tuesday = getNextWeekday(new Date(), 2);
+    const expectedFirstWeekend = service._formatDate(getNextWeekday(tuesday, 6));
+    const expandedEndDate = addDays(tuesday, 30);
+    const expectedLastWeekend = getLastWeekendDayWithinRange(tuesday, expandedEndDate);
 
     const result = service._buildRepeatDateStrings({
       taskId: 'parent_weekends',
       userId: 'child_1',
-      date: service._formatDate(today),
+      date: service._formatDate(tuesday),
       hasNoEndDate: true,
       repeat: {
         type: 'weekends',
-        startDate: service._formatDate(today),
+        startDate: service._formatDate(tuesday),
       }
     });
 
-    expect(result[0]).toBe('2026-04-11');
-    expect(result[result.length - 1]).toBe('2026-05-03');
+    expect(result[0]).toBe(expectedFirstWeekend);
+    expect(result[result.length - 1]).toBe(expectedLastWeekend);
   });
 });

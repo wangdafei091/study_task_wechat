@@ -14,6 +14,10 @@ jest.mock('../../packageChart/services/analysis-board-service.js', () => ({
   buildMonthlyBoard: jest.fn()
 }));
 
+jest.mock('../../utils/dateUtils', () => ({
+  getTodayString: jest.fn(() => '2026-04-14')
+}));
+
 describe('packageChart/pages/analysis/analysis', () => {
   let pageConfig;
   let serviceManager;
@@ -65,6 +69,7 @@ describe('packageChart/pages/analysis/analysis', () => {
 
     global.getApp = jest.fn(() => appMock);
     global.wx = {
+      navigateTo: jest.fn(),
       navigateBack: jest.fn(),
       switchTab: jest.fn()
     };
@@ -91,6 +96,8 @@ describe('packageChart/pages/analysis/analysis', () => {
         rowKey: 'child-2|study|数学',
         title: '数学',
         type: 'study',
+        executionMode: 'planned',
+        taskId: 'task-1',
         cells: [{
           date: '2026-04-01',
           state: 'done',
@@ -258,6 +265,38 @@ describe('packageChart/pages/analysis/analysis', () => {
     page.onShellTap();
 
     expect(page.data.selectedRowKey).toBe('');
+  });
+
+  it('点击表现项单元格应跳到记录页，未来日期不跳转', async () => {
+    const page = createPageInstance();
+    await page.onLoad();
+
+    page.onCellTap({
+      currentTarget: {
+        dataset: {
+          executionMode: 'occurrence',
+          taskId: 'occ_cfg_1',
+          date: '2026-04-10'
+        }
+      }
+    });
+
+    expect(global.wx.navigateTo).toHaveBeenCalledWith({
+      url: '/pages/task-record/task-record?taskId=occ_cfg_1&date=2026-04-10&targetUserId=child-2'
+    });
+
+    global.wx.navigateTo.mockClear();
+    page.onCellTap({
+      currentTarget: {
+        dataset: {
+          executionMode: 'occurrence',
+          taskId: 'occ_cfg_1',
+          date: '2026-04-20'
+        }
+      }
+    });
+
+    expect(global.wx.navigateTo).not.toHaveBeenCalled();
   });
 
   it('返回按钮优先回上一页', () => {

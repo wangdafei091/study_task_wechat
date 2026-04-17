@@ -34,11 +34,11 @@
     
     <!-- 添加任务卡片 -->
     <card title="添加任务" customClass="add-task-card">
+      <view wx:if="{{occurrenceEntryVisible}}" slot="action" class="occurrence-entry-action" bindtap="openOccurrenceManagePage">
+        <text class="occurrence-entry-label">新建表现项</text>
+        <text class="occurrence-entry-arrow">></text>
+      </view>
       <view class="add-task-content">
-        <view class="entry-hint" wx:if="{{entryHintVisible}}">
-          <text class="entry-hint-text">{{entryHintText}}</text>
-        </view>
-
         <view class="template-quick-fill" wx:if="{{hasTemplates || templateEntryLoadedOnce}}">
           <view class="template-quick-fill-head">
             <text class="template-quick-fill-title">快捷填充</text>

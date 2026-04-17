@@ -12,6 +12,7 @@ const { testConnection } = require('./config/database');
 const { createLogger } = require('./utils/logger');
 const corsMiddleware = require('./middleware/cors');
 const { errorHandler, notFoundHandler } = require('./middleware/error');
+const taskService = require('./services/taskService');
 
 const logger = createLogger('Server');
 
@@ -39,12 +40,20 @@ app.use((req, res, next) => {
 });
 
 // 健康检查接口
-app.get('/health', (req, res) => {
+app.get('/health', async (req, res) => {
+  let taskOccurrenceEnabled = false;
+  try {
+    taskOccurrenceEnabled = await taskService.hasOccurrenceCapability();
+  } catch (error) {
+    logger.warn('健康检查获取 occurrence 能力失败', { error: error.message });
+  }
+
   res.json({
     status: 'ok',
     timestamp: Date.now(),
     uptime: process.uptime(),
     environment: process.env.NODE_ENV || 'development',
+    taskOccurrenceEnabled,
   });
 });
 

@@ -109,11 +109,36 @@ function createColumns(monthContext) {
 }
 
 function applyColumnMetadata(columns, tasks, monthContext) {
-  const plannedDates = new Set(
-    (Array.isArray(tasks) ? tasks : [])
-      .map((task) => task && task.date)
-      .filter((date) => typeof date === 'string' && getDateIndex(date, monthContext) >= 0)
-  );
+  const plannedDates = new Set();
+
+  (Array.isArray(tasks) ? tasks : []).forEach((task) => {
+    if (!task) {
+      return;
+    }
+
+    if (task.executionMode === 'occurrence' && task.isOccurrenceRecord !== true) {
+      const startDate = task.activeRange?.startDate || task.date;
+      const endDate = task.activeRange?.hasNoEndDate ? monthContext.endDate : (task.activeRange?.endDate || monthContext.endDate);
+      let cursor = startDate;
+
+      while (cursor && cursor <= endDate) {
+        if (getDateIndex(cursor, monthContext) >= 0) {
+          plannedDates.add(cursor);
+        }
+        const nextDate = new Date(cursor);
+        nextDate.setDate(nextDate.getDate() + 1);
+        cursor = dateUtils.formatDate(nextDate);
+        if (cursor > monthContext.endDate) {
+          break;
+        }
+      }
+      return;
+    }
+
+    if (typeof task.date === 'string' && getDateIndex(task.date, monthContext) >= 0) {
+      plannedDates.add(task.date);
+    }
+  });
 
   return columns.map((column) => ({
     ...column,
@@ -155,6 +180,18 @@ function createBlankCell(column) {
 }
 
 function resolveTaskState(task, monthContext) {
+  if (task?.executionMode === 'occurrence') {
+    if (task.occurrenceOutcome === 'success') {
+      return 'done';
+    }
+
+    if (task.occurrenceOutcome === 'failure') {
+      return 'missed';
+    }
+
+    return 'blank';
+  }
+
   if (Number(task && task.status) === TaskStatus.COMPLETED) {
     return 'done';
   }
@@ -170,6 +207,14 @@ function resolveTaskState(task, monthContext) {
   return 'missed';
 }
 
+function isPendingSyncOccurrenceRecord(task) {
+  if (!task || task.executionMode !== 'occurrence' || task.isOccurrenceRecord !== true) {
+    return false;
+  }
+
+  return Boolean(task.pendingSyncMeta || task.syncedToCloud === false);
+}
+
 function mergeCellState(currentState, nextState) {
   return STATE_PRIORITY[nextState] > STATE_PRIORITY[currentState]
     ? nextState
@@ -181,9 +226,12 @@ function buildRow(columns, task, focusUserId) {
   const type = getTaskType(task);
 
   return {
-    rowKey: `${focusUserId || 'unknown'}|${type}|${normalizeTitle(title)}`,
+    rowKey: `${focusUserId || 'unknown'}|${type}|${task?.executionMode || 'planned'}|${normalizeTitle(title)}`,
     title,
     type,
+    executionMode: task?.executionMode || 'planned',
+    badgeText: task?.executionMode === 'occurrence' ? '表现' : '',
+    taskId: task?.id || '',
     firstActiveIndex: Number.MAX_SAFE_INTEGER,
     plannedCellCount: 0,
     cells: columns.map(createBlankCell)
@@ -278,7 +326,12 @@ function normalizeTask(task) {
     title: resolveTitle(task),
     type: getTaskType(task),
     date: task && task.date ? task.date : '',
-    status: Number(task && task.status !== undefined ? task.status : TaskStatus.PENDING)
+    status: Number(task && task.status !== undefined ? task.status : TaskStatus.PENDING),
+    executionMode: task?.executionMode || 'planned',
+    activeRange: task?.activeRange || null,
+    isOccurrenceRecord: task?.isOccurrenceRecord === true,
+    occurrenceOutcome: task?.occurrenceOutcome || 'none',
+    parentTaskId: task?.parentTaskId || ''
   };
 }
 
@@ -287,12 +340,20 @@ async function buildMonthlyBoard(options) {
   const monthKey = options && options.monthKey;
   const focusUserId = options && options.focusUserId;
 
-  if (!taskService || typeof taskService.getTasksByDateRange !== 'function') {
-    throw new Error('taskService 缺少 getTasksByDateRange 能力');
+  if (
+    !taskService ||
+    typeof taskService.getTasksByDateRange !== 'function' ||
+    typeof taskService.getOccurrenceTasks !== 'function' ||
+    typeof taskService.getOccurrenceRecordsByDateRange !== 'function'
+  ) {
+    throw new Error('taskService 缺少月度看板所需能力');
   }
 
   const monthContext = buildMonthContext(monthKey);
   const baseColumns = createColumns(monthContext);
+  const occurrenceEnabled = typeof taskService.isOccurrenceEnabled === 'function'
+    ? await taskService.isOccurrenceEnabled()
+    : true;
 
   if (!focusUserId) {
     const columns = applyColumnMetadata(baseColumns, [], monthContext);
@@ -314,17 +375,43 @@ async function buildMonthlyBoard(options) {
     };
   }
 
-  const tasks = await taskService.getTasksByDateRange(
-    monthContext.startDate,
-    monthContext.endDate,
-    focusUserId,
-    { requireFreshStars: true }
+  const [plannedTasks, occurrenceConfigs, occurrenceRecordsRaw] = await Promise.all([
+    taskService.getTasksByDateRange(
+      monthContext.startDate,
+      monthContext.endDate,
+      focusUserId,
+      { requireFreshStars: true }
+    ),
+    occurrenceEnabled
+      ? taskService.getOccurrenceTasks({
+        startDate: monthContext.startDate,
+        endDate: monthContext.endDate,
+        userId: focusUserId,
+        includeInactive: false
+      })
+      : Promise.resolve([]),
+    occurrenceEnabled
+      ? taskService.getOccurrenceRecordsByDateRange({
+        startDate: monthContext.startDate,
+        endDate: monthContext.endDate,
+        userId: focusUserId
+      })
+      : Promise.resolve([])
+  ]);
+  const occurrenceRecords = (Array.isArray(occurrenceRecordsRaw) ? occurrenceRecordsRaw : [])
+    .filter((task) => !isPendingSyncOccurrenceRecord(task));
+  const columns = applyColumnMetadata(
+    baseColumns,
+    []
+      .concat(plannedTasks || [])
+      .concat(occurrenceConfigs || [])
+      .concat(occurrenceRecords || []),
+    monthContext
   );
-  const columns = applyColumnMetadata(baseColumns, tasks, monthContext);
 
   const rowMap = new Map();
 
-  (Array.isArray(tasks) ? tasks : [])
+  (Array.isArray(plannedTasks) ? plannedTasks : [])
     .map(normalizeTask)
     .filter((task) => task.date && getDateIndex(task.date, monthContext) >= 0)
     .forEach((task) => {
@@ -351,6 +438,60 @@ async function buildMonthlyBoard(options) {
       row.plannedCellCount = row.cells.filter((cell) => cell.state !== 'blank').length;
     });
 
+  (Array.isArray(occurrenceConfigs) ? occurrenceConfigs : [])
+    .map(normalizeTask)
+    .forEach((task) => {
+      const rowKey = `${focusUserId}|${task.type}|occurrence|${normalizeTitle(task.title)}`;
+      if (!rowMap.has(rowKey)) {
+        rowMap.set(rowKey, buildRow(columns, task, focusUserId));
+      }
+
+      const row = rowMap.get(rowKey);
+      const firstDate = task.activeRange?.startDate || task.date;
+      const firstIndex = getDateIndex(firstDate, monthContext);
+      if (firstIndex >= 0) {
+        row.firstActiveIndex = Math.min(row.firstActiveIndex, firstIndex);
+      }
+      row.taskId = task.id;
+    });
+
+  (Array.isArray(occurrenceRecords) ? occurrenceRecords : [])
+    .map(normalizeTask)
+    .filter((task) => task.date && getDateIndex(task.date, monthContext) >= 0)
+    .forEach((task) => {
+      const configTask = (occurrenceConfigs || []).find((item) => item.id === task.parentTaskId);
+      const title = resolveTitle(configTask || task);
+      const type = getTaskType(configTask || task);
+      const rowKey = `${focusUserId}|${type}|occurrence|${normalizeTitle(title)}`;
+      if (!rowMap.has(rowKey)) {
+        rowMap.set(rowKey, buildRow(columns, {
+          ...task,
+          id: task.parentTaskId,
+          title,
+          type,
+          executionMode: 'occurrence'
+        }, focusUserId));
+      }
+
+      const row = rowMap.get(rowKey);
+      const cellIndex = getDateIndex(task.date, monthContext);
+      const nextState = resolveTaskState(task, monthContext);
+      const currentCell = row.cells[cellIndex];
+
+      row.cells[cellIndex] = decorateCell({
+        date: currentCell.date,
+        state: nextState,
+        taskIds: currentCell.taskIds.concat(task.id ? [task.id] : []),
+        isToday: currentCell.isToday,
+        isWeekend: currentCell.isWeekend,
+        isFutureEmpty: false
+      });
+
+      row.firstActiveIndex = Math.min(row.firstActiveIndex, cellIndex);
+      row.plannedCellCount = row.cells.filter((cell) => cell.state !== 'blank').length;
+      row.taskId = task.parentTaskId || row.taskId;
+    });
+
   const sortedRows = sortRows(Array.from(rowMap.values()));
   const displayedRows = mergeOverflowRows(sortedRows, columns);
   const summary = summarizeRows(displayedRows);
@@ -358,7 +499,7 @@ async function buildMonthlyBoard(options) {
   logger.info('analysis-board-service', '生成月度看板成功', {
     monthKey: monthContext.monthKey,
     focusUserId,
-    taskCount: Array.isArray(tasks) ? tasks.length : 0,
+    taskCount: (plannedTasks?.length || 0) + (occurrenceRecords?.length || 0),
     rowCount: displayedRows.length
   });
 
@@ -383,6 +524,7 @@ module.exports = {
     buildMonthContext,
     normalizeTitle,
     resolveTaskState,
-    mergeOverflowRows
+    mergeOverflowRows,
+    isPendingSyncOccurrenceRecord
   }
 };

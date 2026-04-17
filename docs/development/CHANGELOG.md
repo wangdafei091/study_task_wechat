@@ -4,6 +4,47 @@
 
 ---
 
+## [里程碑-21L] - 2026-04-17
+
+### ✅ 完成情况
+
+**按发生记录任务与分析看板空白语义治理**
+
+- **表现项全栈能力已完成闭环**：
+  - [`models/task.js`](/Users/wangdafei/code/study_task_wechat/models/task.js)、[`services/task-service.js`](/Users/wangdafei/code/study_task_wechat/services/task-service.js)、[`repositories/task-repository.js`](/Users/wangdafei/code/study_task_wechat/repositories/task-repository.js) 已补齐 `executionMode / activeRange / isOccurrenceRecord / occurrenceOutcome / recordedAt` 客户端模型与查询写入链路
+  - [`backend/models/Task.js`](/Users/wangdafei/code/study_task_wechat/backend/models/Task.js)、[`backend/services/taskService.js`](/Users/wangdafei/code/study_task_wechat/backend/services/taskService.js)、[`backend/controllers/taskController.js`](/Users/wangdafei/code/study_task_wechat/backend/controllers/taskController.js)、[`backend/routes/tasks.js`](/Users/wangdafei/code/study_task_wechat/backend/routes/tasks.js) 已补齐 occurrence 字段映射、权限校验与正式领域接口
+  - [`backend/database/migrations/014_alter_tasks_add_occurrence_fields.sql`](/Users/wangdafei/code/study_task_wechat/backend/database/migrations/014_alter_tasks_add_occurrence_fields.sql) 已提供 `tasks` 表字段与索引迁移
+- **首页、任务页与分析看板语义已完成收口**：
+  - [`pages/task-edit/task-edit.js`](/Users/wangdafei/code/study_task_wechat/pages/task-edit/task-edit.js) 已在“添加任务”卡片标题行引入 `新建表现项 >` 轻入口
+  - [`pages/task-occurrence-edit/task-occurrence-edit.js`](/Users/wangdafei/code/study_task_wechat/pages/task-occurrence-edit/task-occurrence-edit.js) 已落地表现项设置页，统一配置、编辑、停用与删除维护动作
+  - [`pages/index/index.js`](/Users/wangdafei/code/study_task_wechat/pages/index/index.js) 已落地首页 `表现记录` 区块与 `当前进度` 口径
+  - [`packageChart/services/analysis-board-service.js`](/Users/wangdafei/code/study_task_wechat/packageChart/services/analysis-board-service.js) 与 [`packageChart/pages/analysis/analysis.js`](/Users/wangdafei/code/study_task_wechat/packageChart/pages/analysis/analysis.js) 已收口为 `达成 / 未达成 / 空白` 三态
+- **正式 occurrence 云端契约已上线**：
+  - `GET /api/tasks` 已支持 `includeOccurrence / occurrenceMode / includeInactive`
+  - 已新增 `POST /api/tasks/:taskId/occurrence-record`
+  - 已新增 `POST /api/tasks/:taskId/disable-occurrence`
+  - 已新增 `POST /api/tasks/:taskId/convert-occurrence`
+- **真实数据库口径问题已被提前修复**：
+  - [`backend/test/integration/task-api-m21l-real.test.js`](/Users/wangdafei/code/study_task_wechat/backend/test/integration/task-api-m21l-real.test.js) 已补齐 M21L 真实库集成测试
+  - [`backend/services/taskService.js`](/Users/wangdafei/code/study_task_wechat/backend/services/taskService.js) 已把 occurrence record `task_id` 与星星流水 `record_id` 收口为固定长度哈希 ID，避免真实表结构下长度溢出
+
+### 🧪 验证结果
+
+- 前端全量回归通过：
+  - `npm test -- --runInBand`
+- 后端单元测试通过：
+  - `npm run test:backend:unit`
+- 后端内存集成测试通过：
+  - `npm run test:backend:integration:memory`
+- 后端真实数据库集成测试通过：
+  - `npm --prefix backend test -- --runInBand test/integration/task-api-m21l-real.test.js`
+
+### 📖 详细实施记录
+
+- [里程碑-21L：按发生记录任务与分析看板空白语义治理](../design/milestone-21l-occurrence-task-mode.md)
+
+---
+
 ## [里程碑-21K] - 2026-04-16
 
 ### ✅ 完成情况

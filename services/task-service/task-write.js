@@ -1,5 +1,11 @@
 const logger = require('../../utils/logger');
-const { Task, TaskStatus } = require('../../models/task');
+const {
+  Task,
+  TaskStatus,
+  TaskExecutionMode,
+  TaskRecordOutcome,
+  RepeatType
+} = require('../../models/task');
 const dateUtils = require('../../utils/dateUtils');
 const { EVENTS, ERROR_MESSAGES } = require('../../utils/constants');
 const {
@@ -37,6 +43,13 @@ function buildBusinessErrorResult(message, code, extra = {}) {
   };
 }
 
+function buildOccurrenceUnavailableResult() {
+  return {
+    success: false,
+    message: '云端未完成升级，暂不可使用表现项'
+  };
+}
+
 function cloneTaskForCloudWrite(task) {
   if (!task) {
     return null;
@@ -64,6 +77,104 @@ function assignPendingSyncMeta(service, task, action, overrides = {}) {
   };
   task.syncedToCloud = false;
   return task;
+}
+
+function isOccurrenceConfigTask(task) {
+  return Boolean(task && typeof task.isOccurrenceConfigTask === 'function' && task.isOccurrenceConfigTask());
+}
+
+function isOccurrenceRecordTask(task) {
+  return Boolean(task && typeof task.isOccurrenceRecordTask === 'function' && task.isOccurrenceRecordTask());
+}
+
+function buildOccurrenceRecordId(parentTaskId, userId, date) {
+  const normalizedDate = String(date || '').replace(/-/g, '');
+  return `task_occ_${parentTaskId}_${userId}_${normalizedDate}`;
+}
+
+function shiftDate(dateString, delta) {
+  const date = new Date(`${dateString}T00:00:00`);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  date.setDate(date.getDate() + delta);
+  return dateUtils.formatDate(date);
+}
+
+function createOccurrenceRecordFromConfig(task, userId, date) {
+  const record = task.clone({
+    id: buildOccurrenceRecordId(task.id, userId, date),
+    userId,
+    date,
+    parentTaskId: task.id,
+    executionMode: TaskExecutionMode.OCCURRENCE,
+    isOccurrenceRecord: true,
+    occurrenceOutcome: TaskRecordOutcome.NONE,
+    recordedAt: 0,
+    repeat: { type: RepeatType.NONE },
+    activeRange: null,
+    status: TaskStatus.PENDING,
+    completionTime: 0,
+    starAwarded: false,
+    isRequired: false,
+    startTime: '',
+    endTime: '',
+    duration: 0,
+    reminder: { enabled: false }
+  }, false);
+
+  record.id = buildOccurrenceRecordId(task.id, userId, date);
+  record.createTime = Date.now();
+  record.modifyTime = Date.now();
+  return record;
+}
+
+async function ensureOccurrenceCapabilityEnabled(service) {
+  if (!service.enableCloudStorage || typeof service.isOccurrenceEnabled !== 'function') {
+    return true;
+  }
+
+  return service.isOccurrenceEnabled();
+}
+
+async function addOccurrenceStars(service, record) {
+  if (!service.starService || Number(record?.points || 0) <= 0) {
+    return { success: true, skipped: true };
+  }
+
+  return service.starService.addStars(
+    record.points,
+    record.pointsExpiry,
+    `记录表现达成: ${record.title}`,
+    {
+      sourceType: 'task_occurrence_success',
+      sourceId: record.id,
+      userId: record.userId
+    }
+  );
+}
+
+async function revokeOccurrenceStars(service, record) {
+  if (!service.starService || Number(record?.points || 0) <= 0) {
+    return { success: true, skipped: true };
+  }
+
+  return service.starService.consumeStarsFromSpecificType(
+    record.points,
+    record.pointsExpiry,
+    `撤销表现达成: ${record.title}`,
+    {
+      sourceType: 'task_occurrence_revoke',
+      sourceId: record.id,
+      userId: record.userId,
+      originalTaskDate: record.date || null
+    }
+  );
+}
+
+function emitOccurrenceRecordEvent(service, record, previousStatus, operationType, userId = null) {
+  emitTaskStatusEvents(service, record, record.status, previousStatus, operationType, userId || record.userId || null);
 }
 
 function emitTaskUpdatedEvent(service, task, changes, previousStatus) {
@@ -308,6 +419,9 @@ async function createTask(service, taskData) {
     ensureTaskUserId(service, taskData);
 
     const task = new Task(taskData);
+    if (task.isOccurrenceMode() && !(await ensureOccurrenceCapabilityEnabled(service))) {
+      return buildOccurrenceUnavailableResult();
+    }
     const errors = task.validate();
     if (errors.length > 0) {
       logger.warn('TaskService', '创建任务失败: 数据验证不通过', { errors });
@@ -432,6 +546,10 @@ async function updateTask(service, taskId, changes, userId = null) {
       return { success: false, message: '无权限操作此任务' };
     }
 
+    if ((isOccurrenceConfigTask(task) || changes.executionMode === TaskExecutionMode.OCCURRENCE) && !(await ensureOccurrenceCapabilityEnabled(service))) {
+      return buildOccurrenceUnavailableResult();
+    }
+
     const originalStatus = task.status;
     const cloudTask = cloneTaskForCloudWrite(task);
     cloudTask.update(changes);
@@ -553,6 +671,100 @@ async function deleteTask(service, taskId, userId = null, suppressMessage = fals
   } catch (error) {
     logger.error('TaskService', `删除任务失败: ${error.message}`, error);
     return { success: false, message: `删除任务失败: ${error.message}` };
+  }
+}
+
+async function disableOccurrenceTask(service, taskId, options = {}, userId = null) {
+  try {
+    const task = await loadTaskForWrite(service, taskId, '停用表现项');
+    if (!task) {
+      return buildNotFoundResult();
+    }
+
+    if (userId && task.userId !== userId) {
+      logger.warn('TaskService', `用户${userId}尝试停用不属于自己的表现项${taskId}`);
+      return { success: false, message: '无权限操作此任务' };
+    }
+
+    if (!isOccurrenceConfigTask(task)) {
+      return { success: false, message: '当前任务不是表现项，无法停用' };
+    }
+
+    if (!(await ensureOccurrenceCapabilityEnabled(service))) {
+      return buildOccurrenceUnavailableResult();
+    }
+
+    const disableFromDate = options.disableFromDate || dateUtils.getTodayString();
+    const nextEndDate = shiftDate(disableFromDate, -1);
+    const cloudTask = cloneTaskForCloudWrite(task);
+    cloudTask.activeRange = {
+      startDate: cloudTask.activeRange?.startDate || cloudTask.date,
+      endDate: nextEndDate,
+      hasNoEndDate: false
+    };
+    cloudTask.hasNoEndDate = false;
+    cloudTask.modifyTime = Date.now();
+    assignPendingSyncMeta(service, cloudTask, 'disable_occurrence', {
+      operationKey: options.operationKey || options.modifyTime || cloudTask.modifyTime,
+      modifyTime: options.modifyTime || cloudTask.modifyTime,
+      targetUserId: cloudTask.userId,
+      extraMeta: {
+        disableFromDate
+      }
+    });
+
+    if (service.enableCloudStorage) {
+      try {
+        const mutation = await service._syncDisableOccurrenceToCloud(cloudTask, {
+          disableFromDate
+        });
+        const authoritativeCache = await service._applyAuthoritativeTaskMutation(mutation, {
+          fallbackOperation: 'disable_occurrence'
+        });
+        const effectiveTask = authoritativeCache.task || cloudTask;
+        return service._buildTaskServiceMutationResult(mutation, {
+          task: effectiveTask
+        });
+      } catch (syncError) {
+        logger.warn('TaskService', '表现项停用云同步失败，降级为本地保存', {
+          taskId,
+          error: syncError.message
+        });
+      }
+    }
+
+    task.activeRange = {
+      startDate: task.activeRange?.startDate || task.date,
+      endDate: nextEndDate,
+      hasNoEndDate: false
+    };
+    task.hasNoEndDate = false;
+    task.modifyTime = Date.now();
+    assignPendingSyncMeta(service, task, 'disable_occurrence', {
+      operationKey: options.operationKey || options.modifyTime || task.modifyTime,
+      modifyTime: options.modifyTime || task.modifyTime,
+      targetUserId: task.userId,
+      extraMeta: {
+        disableFromDate
+      }
+    });
+
+    const savedTask = await service.taskRepository.save(task);
+    if (service.enableCloudStorage) {
+      await service._emitTaskCloudSyncFailure(
+        'disable_occurrence',
+        savedTask,
+        new Error('表现项停用已降级为本地待同步')
+      );
+    }
+
+    return service._buildTaskServiceMutationResult(null, {
+      task: savedTask,
+      fallback: service.enableCloudStorage
+    });
+  } catch (error) {
+    logger.error('TaskService', `停用表现项失败: ${error.message}`, error);
+    return { success: false, message: `停用表现项失败: ${error.message}` };
   }
 }
 
@@ -906,6 +1118,274 @@ async function resetTask(service, taskId, userId = null) {
   }
 }
 
+async function recordOccurrenceResult(service, taskId, options = {}) {
+  try {
+    const outcome = options.outcome;
+    const date = options.date || dateUtils.getTodayString();
+    const today = dateUtils.getTodayString();
+    const recordUserId = options.userId || null;
+
+    if (![TaskRecordOutcome.SUCCESS, TaskRecordOutcome.FAILURE].includes(outcome)) {
+      return { success: false, message: '表现记录结果无效' };
+    }
+
+    if (date > today) {
+      return { success: false, message: '未来日期不能记录表现' };
+    }
+
+    const configTask = await loadTaskForWrite(service, taskId, '记录表现');
+    if (!configTask) {
+      return buildNotFoundResult();
+    }
+
+    if (!isOccurrenceConfigTask(configTask)) {
+      return { success: false, message: '当前任务不是表现项，无法记录结果' };
+    }
+
+    if (!(await ensureOccurrenceCapabilityEnabled(service))) {
+      return buildOccurrenceUnavailableResult();
+    }
+
+    if (!recordUserId) {
+      return { success: false, message: '未找到要记录的孩子' };
+    }
+
+    if (!configTask.canRecordOccurrenceOn(date)) {
+      return { success: false, message: '该日期不在表现项有效时间内' };
+    }
+
+    const existingRecord = await service.taskRepository.getOccurrenceRecord(configTask.id, recordUserId, date);
+    const previousOutcome = existingRecord?.occurrenceOutcome || TaskRecordOutcome.NONE;
+    const previousStatus = existingRecord?.status ?? TaskStatus.PENDING;
+
+    if (previousOutcome === outcome) {
+      return {
+        success: true,
+        task: configTask,
+        record: existingRecord,
+        unchanged: true
+      };
+    }
+
+    const operationTime = Date.now();
+    const record = existingRecord
+      ? cloneTaskForCloudWrite(existingRecord)
+      : createOccurrenceRecordFromConfig(configTask, recordUserId, date);
+
+    record.applyOccurrenceOutcome(outcome, {
+      recordedAt: operationTime,
+      date
+    });
+
+    if (previousOutcome === TaskRecordOutcome.SUCCESS && existingRecord?.starAwarded) {
+      const revokeResult = await revokeOccurrenceStars(service, existingRecord);
+      if (!revokeResult.success) {
+        return {
+          success: false,
+          message: '撤销原表现奖励失败，请稍后重试'
+        };
+      }
+      record.starAwarded = false;
+    }
+
+    if (outcome === TaskRecordOutcome.SUCCESS) {
+      const addResult = await addOccurrenceStars(service, record);
+      record.starAwarded = addResult.success === true;
+    } else {
+      record.starAwarded = false;
+    }
+
+    assignPendingSyncMeta(service, record, 'occurrence_record', {
+      operationKey: operationTime,
+      modifyTime: operationTime,
+      targetUserId: record.userId,
+      notificationType: outcome === TaskRecordOutcome.SUCCESS
+        ? 'task_complete'
+        : 'task_occurrence_failure',
+      extraMeta: {
+        configTaskId: configTask.id
+      }
+    });
+
+    let effectiveRecord = record;
+    let mutation = null;
+
+    if (service.enableCloudStorage) {
+      try {
+        mutation = await service._syncOccurrenceRecordToCloud(record);
+        const authoritativeCache = await service._applyAuthoritativeTaskMutation(mutation, {
+          fallbackOperation: 'occurrence_record'
+        });
+        const recordId = mutation?.recordTask?.taskId || mutation?.recordTask?.id || record.id;
+        const authoritativeRecord = Array.isArray(authoritativeCache.tasks)
+          ? authoritativeCache.tasks.find((taskItem) => taskItem.id === recordId)
+          : null;
+        const fallbackRecord = typeof service._toAuthoritativeTask === 'function'
+          ? service._toAuthoritativeTask(mutation?.recordTask, {
+            syncedToCloud: true,
+            pendingSyncMeta: null
+          })
+          : null;
+        effectiveRecord = authoritativeRecord
+          || fallbackRecord
+          || record;
+      } catch (syncError) {
+        logger.warn('TaskService', '表现记录云同步失败，降级为本地保存', {
+          taskId,
+          recordId: record.id,
+          error: syncError.message
+        });
+      }
+    }
+
+    if (!mutation) {
+      effectiveRecord = await service.taskRepository.save(record);
+      if (service.enableCloudStorage) {
+        await service._emitTaskCloudSyncFailure('occurrence_record', effectiveRecord, new Error('表现记录已降级为本地待同步'));
+      }
+    }
+
+    const operationType = outcome === TaskRecordOutcome.SUCCESS
+      ? 'complete'
+      : (previousOutcome === TaskRecordOutcome.SUCCESS ? 'uncomplete' : 'occurrence_failure');
+    emitOccurrenceRecordEvent(service, effectiveRecord, previousStatus, operationType, recordUserId);
+
+    const result = service._buildTaskServiceMutationResult(mutation, {
+      task: configTask,
+      fallback: !mutation && service.enableCloudStorage
+    });
+    result.record = effectiveRecord;
+    result.starsAwarded = effectiveRecord.starAwarded === true;
+    return result;
+  } catch (error) {
+    logger.error('TaskService', `记录表现失败: ${error.message}`, error);
+    return { success: false, message: `记录表现失败: ${error.message}` };
+  }
+}
+
+async function convertTaskToOccurrenceMode(service, taskId, options = {}, userId = null) {
+  try {
+    const task = await loadTaskForWrite(service, taskId, '切换为表现项');
+    if (!task) {
+      return buildNotFoundResult();
+    }
+
+    if (userId && task.userId !== userId) {
+      return { success: false, message: '无权限操作此任务' };
+    }
+
+    if (isOccurrenceConfigTask(task)) {
+      return { success: true, convertedTask: task, archivedFutureInstances: [], unchanged: true };
+    }
+
+    if (!(await ensureOccurrenceCapabilityEnabled(service))) {
+      return buildOccurrenceUnavailableResult();
+    }
+
+    const effectiveFromDate = options.effectiveFromDate || dateUtils.getTodayString();
+    let archivedFutureInstances = [];
+
+    if (service.enableCloudStorage) {
+      const cloudTask = cloneTaskForCloudWrite(task);
+      cloudTask.modifyTime = Date.now();
+      assignPendingSyncMeta(service, cloudTask, 'convert_occurrence', {
+        operationKey: options.operationKey || options.modifyTime || cloudTask.modifyTime,
+        modifyTime: options.modifyTime || cloudTask.modifyTime,
+        targetUserId: cloudTask.userId,
+        extraMeta: {
+          effectiveFromDate
+        }
+      });
+
+      try {
+        const mutation = await service._syncConvertOccurrenceToCloud(cloudTask, {
+          effectiveFromDate
+        });
+        const authoritativeCache = await service._applyAuthoritativeTaskMutation(mutation, {
+          fallbackOperation: 'convert_occurrence'
+        });
+        const effectiveTask = authoritativeCache.task || cloudTask;
+
+        return {
+          ...service._buildTaskServiceMutationResult(mutation, {
+            task: effectiveTask
+          }),
+          convertedTask: effectiveTask,
+          archivedFutureInstances: mutation?.archivedFutureTaskIds || []
+        };
+      } catch (syncError) {
+        logger.warn('TaskService', '切换表现项云同步失败，降级为本地保存', {
+          taskId,
+          error: syncError.message
+        });
+      }
+    }
+
+    if (typeof service.taskRepository.getChildTasks === 'function') {
+      const childTasks = await service.taskRepository.getChildTasks(task.id, task.userId);
+      for (const childTask of childTasks) {
+        if (childTask.date < effectiveFromDate) {
+          continue;
+        }
+        if (childTask.isCompleted() || childTask.starAwarded) {
+          continue;
+        }
+        await service.taskRepository.delete(childTask.id);
+        archivedFutureInstances.push(childTask.id);
+      }
+    }
+
+    const nextHasNoEndDate = task.hasNoEndDate || !(task.repeat?.endDate);
+    const nextActiveRange = {
+      startDate: effectiveFromDate,
+      endDate: nextHasNoEndDate ? '' : (task.repeat?.endDate || ''),
+      hasNoEndDate: nextHasNoEndDate
+    };
+
+    task.update({
+      executionMode: TaskExecutionMode.OCCURRENCE,
+      activeRange: nextActiveRange,
+      repeat: { type: RepeatType.NONE },
+      isRequired: false,
+      hasNoEndDate: nextActiveRange.hasNoEndDate,
+      date: effectiveFromDate,
+      startTime: '',
+      endTime: '',
+      duration: 0,
+      reminder: { enabled: false }
+    });
+    assignPendingSyncMeta(service, task, 'convert_occurrence', {
+      operationKey: options.operationKey || options.modifyTime || task.modifyTime,
+      modifyTime: options.modifyTime || task.modifyTime,
+      targetUserId: task.userId,
+      extraMeta: {
+        effectiveFromDate
+      }
+    });
+
+    const savedTask = await service.taskRepository.save(task);
+    if (service.enableCloudStorage) {
+      await service._emitTaskCloudSyncFailure(
+        'convert_occurrence',
+        savedTask,
+        new Error('切换表现项已降级为本地待同步')
+      );
+    }
+
+    return {
+      ...service._buildTaskServiceMutationResult(null, {
+        task: savedTask,
+        fallback: service.enableCloudStorage
+      }),
+      convertedTask: savedTask,
+      archivedFutureInstances
+    };
+  } catch (error) {
+    logger.error('TaskService', `切换表现项失败: ${error.message}`, error);
+    return { success: false, message: `切换表现项失败: ${error.message}` };
+  }
+}
+
 async function markTaskAsRequired(service, taskId, userId = null) {
   try {
     const task = await loadTaskForWrite(service, taskId, '标记任务为必做');
@@ -1054,6 +1534,9 @@ module.exports = {
   deleteTask,
   updateTaskStatus,
   resetTask,
+  recordOccurrenceResult,
+  convertTaskToOccurrenceMode,
+  disableOccurrenceTask,
   markTaskAsRequired,
   unmarkTaskAsRequired
 };

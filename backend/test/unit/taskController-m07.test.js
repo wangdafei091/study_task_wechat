@@ -106,6 +106,27 @@ describe('GET /api/tasks?scope=family', () => {
   });
 });
 
+describe('GET /api/tasks with occurrence filters', () => {
+  let app;
+  beforeAll(() => { app = buildApp(); });
+
+  it('应透传 occurrence 查询参数到 service', async () => {
+    taskService.getTasksByUser = jest.fn().mockResolvedValue([]);
+
+    const res = await request(app)
+      .get('/api/tasks?includeOccurrence=true&occurrenceMode=config&includeInactive=true&date=2026-04-17')
+      .set('Authorization', token(CHILD));
+
+    expect(res.status).toBe(200);
+    expect(taskService.getTasksByUser).toHaveBeenCalledWith('child_1', expect.objectContaining({
+      date: '2026-04-17',
+      includeOccurrence: true,
+      occurrenceMode: 'config',
+      includeInactive: true
+    }));
+  });
+});
+
 describe('POST /api/tasks', () => {
   let app;
   beforeAll(() => { app = buildApp(); });
@@ -256,6 +277,109 @@ describe('POST /api/tasks/upcoming/sync', () => {
 
     expect(res.status).toBe(503);
     expect(res.body.error_code).toBe('TASK_REMINDER_SCHEMA_MISSING');
+  });
+});
+
+describe('M21L occurrence endpoints', () => {
+  let app;
+  beforeAll(() => { app = buildApp(); });
+
+  function makeOccurrenceTask(overrides = {}) {
+    return Task.fromDB({
+      task_id: 'occ_cfg_001',
+      user_id: CHILD.userId,
+      title: '听写全对',
+      description: '',
+      type: 'study',
+      date: '2026-04-01',
+      status: 0,
+      points: 2,
+      is_required: 0,
+      execution_mode: 'occurrence',
+      active_start_date: '2026-04-01',
+      active_end_date: null,
+      active_has_no_end_date: 1,
+      is_occurrence_record: 0,
+      occurrence_outcome: 'none',
+      ...overrides
+    });
+  }
+
+  it('POST /api/tasks/:taskId/occurrence-record 应调用记录接口', async () => {
+    taskService.getTaskById = jest.fn().mockResolvedValue(makeOccurrenceTask());
+    taskService.recordOccurrenceResult = jest.fn().mockResolvedValue({
+      operation: 'occurrence_record',
+      taskId: 'occ_cfg_001'
+    });
+
+    const res = await request(app)
+      .post('/api/tasks/occ_cfg_001/occurrence-record')
+      .set('Authorization', token(CHILD))
+      .send({
+        date: '2026-04-17',
+        outcome: 'success'
+      });
+
+    expect(res.status).toBe(200);
+    expect(taskService.recordOccurrenceResult).toHaveBeenCalledWith(
+      'occ_cfg_001',
+      expect.objectContaining({
+        targetUserId: 'child_1',
+        date: '2026-04-17',
+        outcome: 'success'
+      }),
+      expect.any(Object)
+    );
+  });
+
+  it('POST /api/tasks/:taskId/disable-occurrence 应调用停用接口', async () => {
+    familyService.getUserFamilyAndRole = jest.fn().mockResolvedValue({ familyId: 'fam_1', role: 'child' });
+    taskService.getTaskById = jest.fn().mockResolvedValue(makeOccurrenceTask());
+    taskService.disableOccurrenceTask = jest.fn().mockResolvedValue({
+      operation: 'disable_occurrence',
+      taskId: 'occ_cfg_001'
+    });
+
+    const res = await request(app)
+      .post('/api/tasks/occ_cfg_001/disable-occurrence')
+      .set('Authorization', token(PARENT))
+      .send({
+        disableFromDate: '2026-04-17'
+      });
+
+    expect(res.status).toBe(200);
+    expect(taskService.disableOccurrenceTask).toHaveBeenCalledWith(
+      'occ_cfg_001',
+      expect.objectContaining({
+        disableFromDate: '2026-04-17'
+      }),
+      expect.any(Object)
+    );
+  });
+
+  it('POST /api/tasks/:taskId/convert-occurrence 应调用转换接口', async () => {
+    familyService.getUserFamilyAndRole = jest.fn().mockResolvedValue({ familyId: 'fam_1', role: 'child' });
+    taskService.getTaskById = jest.fn().mockResolvedValue(makeTask());
+    taskService.convertTaskToOccurrenceMode = jest.fn().mockResolvedValue({
+      operation: 'convert_occurrence',
+      taskId: 'task_001'
+    });
+
+    const res = await request(app)
+      .post('/api/tasks/task_001/convert-occurrence')
+      .set('Authorization', token(PARENT))
+      .send({
+        effectiveFromDate: '2026-04-17'
+      });
+
+    expect(res.status).toBe(200);
+    expect(taskService.convertTaskToOccurrenceMode).toHaveBeenCalledWith(
+      'task_001',
+      expect.objectContaining({
+        effectiveFromDate: '2026-04-17'
+      }),
+      expect.any(Object)
+    );
   });
 });
 

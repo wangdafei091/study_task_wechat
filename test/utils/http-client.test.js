@@ -22,6 +22,9 @@ describe('utils/http-client', () => {
       TIMEOUT: 10000,
       HEADERS: {
         'Content-Type': 'application/json'
+      },
+      ENDPOINTS: {
+        HEALTH: '/health'
       }
     }));
     jest.doMock('../../utils/logger', () => ({
@@ -47,6 +50,27 @@ describe('utils/http-client', () => {
 
     expect(global.wx.request).toHaveBeenCalledWith(expect.objectContaining({
       url: 'https://api.todoceo.xyz/test/api/messages?scope=family'
+    }));
+  });
+
+  it('healthCheck 应兼容未包装的健康检查响应', async () => {
+    global.wx.request.mockImplementationOnce(({ success }) => {
+      success({
+        statusCode: 200,
+        data: {
+          status: 'ok',
+          taskOccurrenceEnabled: true
+        }
+      });
+    });
+
+    await expect(HttpClient.healthCheck()).resolves.toEqual({
+      status: 'ok',
+      taskOccurrenceEnabled: true
+    });
+
+    expect(global.wx.request).toHaveBeenCalledWith(expect.objectContaining({
+      url: 'https://api.todoceo.xyz/test/health'
     }));
   });
 });

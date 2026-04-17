@@ -112,8 +112,7 @@ Page({
     templateRecommendationCount: 0,
     templateFillUndoVisible: false,
     templateFillUndoText: '',
-    entryHintVisible: false,
-    entryHintText: ''
+    occurrenceEntryVisible: false
   },
 
   /**
@@ -144,13 +143,7 @@ Page({
       logger.info('TaskEdit', '家长代孩子创建任务，targetUserId已记录', { targetUserId: options.targetUserId });
     }
 
-    if (options.entry === 'index_non_today_create') {
-      this.setData({
-        entryHintVisible: true,
-        entryHintText: '这是新建任务，不会自动绑定当前查看日期'
-      });
-      logger.info('TaskEdit', '命中首页非今天日期的新建任务入口，显示一次性提示');
-    }
+    this.refreshOccurrenceEntryVisibility();
 
     // 记录UI优化日志
     uiUtils.logUIOptimization('task-edit', '页面加载', {
@@ -322,6 +315,24 @@ Page({
     return templates;
   },
 
+  refreshOccurrenceEntryVisibility: async function() {
+    try {
+      const taskService = serviceManager.getService('task');
+      const occurrenceEntryVisible = taskService && typeof taskService.isOccurrenceEnabled === 'function'
+        ? await taskService.isOccurrenceEnabled()
+        : true;
+
+      this.setData({
+        occurrenceEntryVisible
+      });
+    } catch (error) {
+      logger.warn('TaskEdit', '获取表现项能力失败，隐藏入口', error);
+      this.setData({
+        occurrenceEntryVisible: false
+      });
+    }
+  },
+
   openTemplateSelectPage: function() {
     wx.navigateTo({
       url: '/packageManage/pages/task-template-manage/task-template-manage?mode=select',
@@ -341,6 +352,22 @@ Page({
   openTemplateCreatePage: function() {
     wx.navigateTo({
       url: '/packageManage/pages/task-template-edit/task-template-edit?mode=create'
+    });
+  },
+
+  openOccurrenceManagePage: function() {
+    if (!this.data.occurrenceEntryVisible) {
+      wx.showToast({
+        title: '云端未完成升级，暂不可使用表现项',
+        icon: 'none'
+      });
+      return;
+    }
+
+    const targetUserId = this.data.targetUserId || '';
+    const targetParam = targetUserId ? `?targetUserId=${targetUserId}` : '';
+    wx.navigateTo({
+      url: `/pages/task-occurrence-edit/task-occurrence-edit${targetParam}`
     });
   },
 

@@ -152,6 +152,9 @@ describe('pages/index/index shell behavior', () => {
     taskService = {
       getTodayTasks: jest.fn().mockResolvedValue([{ id: 'task-1', title: '任务1', status: 0 }]),
       getTasksByDate: jest.fn().mockResolvedValue([{ id: 'task-2', title: '历史任务', status: 1 }]),
+      isOccurrenceEnabled: jest.fn().mockResolvedValue(true),
+      getOccurrenceTasks: jest.fn().mockResolvedValue([]),
+      getOccurrenceRecordsByDateRange: jest.fn().mockResolvedValue([]),
       calculateTaskProgress: jest.fn().mockResolvedValue({
         taskProgress: { habit: 1, interest: 2, study: 3 },
         stats: { totalTasks: 1, completedTasks: 1, completionRate: 100, streak: 1 }
@@ -316,6 +319,76 @@ describe('pages/index/index shell behavior', () => {
     expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({
       title: '加载数据失败'
     }));
+  });
+
+  it('loadTaskDataOnly 应渲染表现记录区块并在能力关闭时隐藏', async () => {
+    page.data.currentUser = { id: 'child-1', role: 'child' };
+    page.calculateProgress = jest.fn().mockResolvedValue();
+    page.updateTaskStats = jest.fn().mockResolvedValue();
+
+    taskService.getOccurrenceTasks.mockResolvedValueOnce([
+      {
+        id: 'occ_success',
+        title: '听写全对',
+        executionMode: 'occurrence'
+      },
+      {
+        id: 'occ_failure',
+        title: '考试全对',
+        executionMode: 'occurrence'
+      }
+    ]);
+    taskService.getOccurrenceRecordsByDateRange.mockResolvedValueOnce([
+      {
+        id: 'occ_record_1',
+        parentTaskId: 'occ_success',
+        occurrenceOutcome: 'success',
+        pendingSyncMeta: {
+          action: 'occurrence_record'
+        },
+        syncedToCloud: false
+      },
+      {
+        id: 'occ_record_2',
+        parentTaskId: 'occ_failure',
+        occurrenceOutcome: 'failure'
+      }
+    ]);
+
+    await page.loadTaskDataOnly('2026-03-25');
+    expect(taskService.getOccurrenceTasks).toHaveBeenCalledWith({
+      date: '2026-03-25',
+      userId: 'child-1'
+    });
+    expect(taskService.getOccurrenceRecordsByDateRange).toHaveBeenCalledWith({
+      startDate: '2026-03-25',
+      endDate: '2026-03-25',
+      userId: 'child-1'
+    });
+    expect(page.data.showOccurrenceSection).toBe(true);
+    expect(page.data.occurrenceDateLabel).toBe('昨天');
+    expect(page.data.occurrenceTasks.map((item) => item.statusLabel)).toEqual([
+      '待同步 · 达成',
+      '已记录 · 未达成'
+    ]);
+    expect(page.data.occurrenceTasks.map((item) => item.statusTone)).toEqual([
+      'pending',
+      'failure'
+    ]);
+    expect(page.data.occurrenceTasks.map((item) => item.isPendingSync)).toEqual([
+      true,
+      false
+    ]);
+
+    taskService.isOccurrenceEnabled.mockResolvedValueOnce(false);
+    taskService.getOccurrenceTasks.mockClear();
+    taskService.getOccurrenceRecordsByDateRange.mockClear();
+
+    await page.loadTaskDataOnly('2026-03-24');
+    expect(taskService.getOccurrenceTasks).not.toHaveBeenCalled();
+    expect(taskService.getOccurrenceRecordsByDateRange).not.toHaveBeenCalled();
+    expect(page.data.showOccurrenceSection).toBe(false);
+    expect(page.data.occurrenceDateLabel).toBe('3月24日');
   });
 
   it('loadMessageData、calculateProgress、updateTaskStats 和 checkUpcomingTasks 应覆盖主路径与降级路径', async () => {
@@ -517,6 +590,92 @@ describe('pages/index/index shell behavior', () => {
     expect(page.preventTouchMove({ stopPropagation, preventDefault })).toBe(false);
   });
 
+  it('首页壳层事件代理和表现记录操作应覆盖剩余轻分支', async () => {
+    page.data.currentUser = { id: 'child-1', role: 'child' };
+    page.loadStarsAndRewards = jest.fn().mockResolvedValue();
+    page.loadTaskDataOnly = jest.fn().mockResolvedValue();
+    page.checkUpcomingTasks = jest.fn().mockResolvedValue();
+    page.refreshTaskDataForCurrentView = jest.fn().mockResolvedValue();
+    page.loadMessageData = jest.fn().mockResolvedValue();
+
+    await page.handleRewardUpdated({ source: 'test' });
+    expect(appMock.globalData.needRefreshReward).toBe(true);
+    expect(page.loadStarsAndRewards).toHaveBeenCalled();
+
+    page.handleRewardClaimed({ rewardId: 'reward-1', points: 10, newTotalPoints: 20 });
+    expect(appMock.globalData.rewardClaimedInfo).toEqual(expect.objectContaining({
+      rewardId: 'reward-1'
+    }));
+
+    await page.handleTaskDataChanged({
+      changeType: 'delete',
+      tasks: [{ id: 'task-1' }],
+      timestamp: 123
+    });
+    expect(page.loadTaskDataOnly).toHaveBeenCalled();
+    expect(page.checkUpcomingTasks).toHaveBeenCalled();
+
+    await page.handleMessageDataChanged([
+      { id: 'msg-inline-1', title: '内联消息', type: 'task', isRead: false, createTime: 2 },
+      { id: 'msg-inline-2', title: '已读消息', type: 'system', isRead: true, createTime: 1 }
+    ]);
+    expect(page.data.messages).toHaveLength(2);
+    expect(page.data.unreadCount).toBe(1);
+
+    await page.handleTaskCreated({ taskId: 'task-new' });
+    expect(page.refreshTaskDataForCurrentView).toHaveBeenCalled();
+
+    taskService.recordOccurrenceResult = jest.fn()
+      .mockResolvedValueOnce({ success: false, message: '记录失败' })
+      .mockResolvedValueOnce({ success: true, fallback: true })
+      .mockResolvedValueOnce({ success: true });
+    page.refreshTaskDataForCurrentView = jest.fn().mockResolvedValue();
+
+    await page.recordOccurrenceFromHome({ currentTarget: { dataset: {} } });
+    expect(taskService.recordOccurrenceResult).not.toHaveBeenCalled();
+
+    await page.recordOccurrenceFromHome({
+      currentTarget: { dataset: { taskId: 'occ_1', outcome: 'success' } }
+    });
+    expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({
+      title: '记录失败'
+    }));
+
+    await page.recordOccurrenceFromHome({
+      currentTarget: { dataset: { taskId: 'occ_1', outcome: 'success' } }
+    });
+    expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({
+      title: '已暂存，等待同步',
+      icon: 'none'
+    }));
+
+    await page.recordOccurrenceFromHome({
+      currentTarget: { dataset: { taskId: 'occ_1', outcome: 'failure' } }
+    });
+    expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({
+      title: '已记为未达成'
+    }));
+    expect(page.refreshTaskDataForCurrentView).toHaveBeenCalled();
+
+    page.handleMenuStateChange({ detail: { isOpen: true } });
+    expect(page.data.showFloatMenu).toBe(true);
+    page.handleMenuItemTap({ detail: { item: { id: 'reward-manage' } } });
+    expect(global.wx.navigateTo).toHaveBeenCalledWith(expect.objectContaining({
+      url: '/packageManage/pages/reward-manage/reward-manage'
+    }));
+
+    page.dismissUpcomingTask({ currentTarget: { dataset: {} } });
+    page.markTaskMessagesAsRead({ currentTarget: { dataset: {} } });
+    expect(messageService.deleteRelatedTaskMessages).toHaveBeenCalledTimes(0);
+    expect(messageService.markRelatedMessagesAsRead).toHaveBeenCalledTimes(0);
+
+    page.handleUpcomingOption({ detail: { action: 'viewMessages' } });
+    jest.runAllTimers();
+    expect(global.wx.navigateTo).toHaveBeenCalledWith(expect.objectContaining({
+      url: '/pages/message/message?tab=task'
+    }));
+  });
+
   it('消息相关交互应更新页面状态并处理提醒操作', async () => {
     page.data.messages = [
       { id: 'msg-1', title: '任务提醒', type: 'task', isRead: false, createTime: 1 },
@@ -568,7 +727,7 @@ describe('pages/index/index shell behavior', () => {
     page.data.isViewingToday = false;
     page.onMenuItemTap({ detail: { item: { id: 'habit' } } });
     expect(global.wx.navigateTo).toHaveBeenCalledWith(expect.objectContaining({
-      url: '/pages/task-edit/task-edit?mode=create&entry=index_non_today_create'
+      url: '/pages/task-edit/task-edit?mode=create'
     }));
 
     page.onMenuItemTap({ detail: { item: { id: 'reward-manage' } } });
@@ -742,5 +901,24 @@ describe('pages/index/index shell behavior', () => {
     expect(page.showUserSwitcher).toHaveBeenCalled();
 
     await expect(page.validateUserModule()).resolves.toBe(true);
+  });
+
+  it('getEffectiveTaskUserId 应统一使用标准用户标识', () => {
+    page.setData({
+      canManageMembers: false,
+      currentUser: { userId: 'child-user-only', role: 'child' }
+    });
+    expect(page.getEffectiveTaskUserId()).toBe('child-user-only');
+
+    page.setData({
+      canManageMembers: true,
+      currentUser: { userId: 'parent-1', role: 'parent' },
+      lastActiveChildId: null,
+      availableUsers: [
+        { userId: 'parent-1', role: 'parent' },
+        { userId: 'child-user-only', role: 'child' }
+      ]
+    });
+    expect(page.getEffectiveTaskUserId()).toBe('child-user-only');
   });
 });

@@ -1,5 +1,6 @@
 const serviceManager = require('../../../services/service-manager.js');
 const logger = require('../../../utils/logger');
+const userContextUtils = require('../../../utils/user-context');
 
 function toggleSearch(page) {
   if (page.data.showSearch) {
@@ -37,10 +38,10 @@ function getEffectiveTaskUserId(page) {
     const firstChild = Array.isArray(availableUsers)
       ? availableUsers.find((user) => user.role === 'child')
       : null;
-    return firstChild ? firstChild.id : null;
+    return userContextUtils.getUserIdentifier(firstChild);
   }
 
-  return currentUser ? currentUser.id : null;
+  return userContextUtils.getUserIdentifier(currentUser);
 }
 
 function applyTaskFilters(tasks, filters = {}) {

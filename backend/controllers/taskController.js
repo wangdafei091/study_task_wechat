@@ -75,7 +75,14 @@ class TaskController {
   async getTasks(req, res) {
     try {
       const { userId, role, familyId } = req.user;
-      const { date, status, targetUserId } = req.query;
+      const {
+        date,
+        status,
+        targetUserId,
+        includeOccurrence,
+        occurrenceMode,
+        includeInactive
+      } = req.query;
 
       // 确定实际查询用户
       const effectiveUserId = await this._resolveTargetUserId(req, targetUserId);
@@ -93,9 +100,25 @@ class TaskController {
         if (role !== 'parent') {
           return res.status(403).json(error('仅家长角色可访问家庭聚合数据', 'PERMISSION_DENIED'));
         }
-        tasks = await taskService.getTasksByFamily(familyId, { date, status, startDate, endDate });
+        tasks = await taskService.getTasksByFamily(familyId, {
+          date,
+          status,
+          startDate,
+          endDate,
+          includeOccurrence: includeOccurrence === 'true',
+          occurrenceMode: occurrenceMode || 'all',
+          includeInactive: includeInactive === 'true'
+        });
       } else {
-        tasks = await taskService.getTasksByUser(effectiveUserId, { date, status, startDate, endDate });
+        tasks = await taskService.getTasksByUser(effectiveUserId, {
+          date,
+          status,
+          startDate,
+          endDate,
+          includeOccurrence: includeOccurrence === 'true',
+          occurrenceMode: occurrenceMode || 'all',
+          includeInactive: includeInactive === 'true'
+        });
       }
 
       // 统计任务数量
@@ -111,6 +134,9 @@ class TaskController {
         )
       );
     } catch (err) {
+      if (err.code === 'TASK_OCCURRENCE_SCHEMA_MISSING') {
+        return res.status(503).json(error(err.message, 'TASK_OCCURRENCE_SCHEMA_MISSING'));
+      }
       logger.error('获取任务列表失败', err);
       res.status(500).json(
         error('获取任务列表失败', 'TASK_GET_FAILED')
@@ -189,6 +215,14 @@ class TaskController {
 
       logger.info('创建任务', { userId, effectiveUserId });
 
+      if (
+        taskData.isOccurrenceRecord !== undefined ||
+        taskData.occurrenceOutcome !== undefined ||
+        taskData.recordedAt !== undefined
+      ) {
+        return res.status(400).json(error('不能通过通用创建接口写入表现记录事实字段', 'TASK_OCCURRENCE_INVALID_FIELDS'));
+      }
+
       // 参数验证
       const validation = Task.validate(taskData, false);
       if (!validation.valid) {
@@ -219,6 +253,11 @@ class TaskController {
       if (err.code === 'TASK_REMINDER_SCHEMA_MISSING') {
         return res.status(503).json(
           error(err.message, 'TASK_REMINDER_SCHEMA_MISSING')
+        );
+      }
+      if (err.code === 'TASK_OCCURRENCE_SCHEMA_MISSING') {
+        return res.status(503).json(
+          error(err.message, 'TASK_OCCURRENCE_SCHEMA_MISSING')
         );
       }
       logger.error('创建任务失败', err);
@@ -292,6 +331,7 @@ class TaskController {
         'title', 'description', 'date', 'type', 'startTime', 'endTime',
         'duration', 'isAllDay', 'reminder',
         'points', 'pointsExpiry', 'tags', 'hasNoEndDate', 'repeat',
+        'executionMode', 'activeRange'
       ];
       const safeChanges = {};
       ALLOWED_FIELDS.forEach(field => {
@@ -300,6 +340,22 @@ class TaskController {
 
       if (Object.keys(safeChanges).length === 0) {
         return res.status(400).json(error('请求体中没有可更新的字段', 'NO_UPDATABLE_FIELDS'));
+      }
+
+      if (
+        req.body.isOccurrenceRecord !== undefined ||
+        req.body.occurrenceOutcome !== undefined ||
+        req.body.recordedAt !== undefined
+      ) {
+        return res.status(400).json(error('不能通过通用更新接口改写表现记录事实字段', 'TASK_OCCURRENCE_INVALID_FIELDS'));
+      }
+
+      if (safeChanges.executionMode === 'occurrence' && existing.executionMode !== 'occurrence') {
+        return res.status(400).json(error('普通任务切换为表现项必须走专用转换接口', 'TASK_OCCURRENCE_USE_CONVERT_API'));
+      }
+
+      if (safeChanges.executionMode && existing.executionMode === 'occurrence' && safeChanges.executionMode !== 'occurrence') {
+        return res.status(400).json(error('表现项不能通过通用更新接口切回普通任务', 'TASK_OCCURRENCE_INVALID_FIELDS'));
       }
 
       const validation = Task.validate(safeChanges, true);
@@ -337,8 +393,154 @@ class TaskController {
       if (err.code === 'TASK_REMINDER_SCHEMA_MISSING') {
         return res.status(503).json(error(err.message, 'TASK_REMINDER_SCHEMA_MISSING'));
       }
+      if (err.code === 'TASK_OCCURRENCE_SCHEMA_MISSING') {
+        return res.status(503).json(error(err.message, 'TASK_OCCURRENCE_SCHEMA_MISSING'));
+      }
       logger.error('更新任务失败', err);
       res.status(500).json(error('更新任务失败', 'TASK_UPDATE_FAILED'));
+    }
+  }
+
+  async recordOccurrenceResult(req, res) {
+    try {
+      const { taskId } = req.params;
+      const existing = await taskService.getTaskById(taskId);
+      if (!existing) {
+        return res.status(404).json(error('任务不存在', 'TASK_NOT_FOUND'));
+      }
+
+      const permitted = await this._canManageTask(req.user, existing.userId);
+      if (!permitted) {
+        return res.status(403).json(error('无权限操作', 'PERMISSION_DENIED'));
+      }
+
+      const targetUserId = await this._resolveTargetUserId(
+        req,
+        req.body?.targetUserId || existing.userId
+      );
+      if (!targetUserId) {
+        return res.status(403).json(error('无权访问该成员数据', 'FAMILY_MEMBER_ACCESS_DENIED'));
+      }
+
+      const result = await taskService.recordOccurrenceResult(
+        taskId,
+        {
+          targetUserId,
+          date: req.body?.date,
+          outcome: req.body?.outcome,
+          modifyTime: req.body?.modifyTime,
+          operationKey: req.body?.operationKey,
+        },
+        await this._buildOperatorContext(req, targetUserId, req.body?.modifyTime, {
+          allowSubjectActorOverride: true
+        })
+      );
+
+      if (!result) {
+        return res.status(404).json(error('任务不存在或已删除', 'TASK_NOT_FOUND'));
+      }
+
+      return res.json(success(result, '记录成功'));
+    } catch (err) {
+      if (err.code === 'TASK_OCCURRENCE_SCHEMA_MISSING') {
+        return res.status(503).json(error(err.message, 'TASK_OCCURRENCE_SCHEMA_MISSING'));
+      }
+      if (err.code === 'INVALID_PARAMS' || err.code === 'TASK_OCCURRENCE_INVALID_TASK' || err.code === 'TASK_OCCURRENCE_INVALID_FIELDS') {
+        return res.status(400).json(error(err.message, err.code));
+      }
+      if (err.code === 'TASK_OCCURRENCE_FUTURE_DATE' || err.code === 'TASK_OCCURRENCE_DATE_OUT_OF_RANGE') {
+        return res.status(409).json(error(err.message, err.code));
+      }
+      logger.error('记录表现失败', err);
+      return res.status(500).json(error('记录表现失败', 'TASK_OCCURRENCE_RECORD_FAILED'));
+    }
+  }
+
+  async disableOccurrenceTask(req, res) {
+    try {
+      const { taskId } = req.params;
+      const existing = await taskService.getTaskById(taskId);
+      if (!existing) {
+        return res.status(404).json(error('任务不存在', 'TASK_NOT_FOUND'));
+      }
+
+      if (req.user.role !== 'parent') {
+        return res.status(403).json(error('仅家长可停用表现项', 'PERMISSION_DENIED'));
+      }
+
+      const permitted = await this._canManageTask(req.user, existing.userId);
+      if (!permitted) {
+        return res.status(403).json(error('无权限操作', 'PERMISSION_DENIED'));
+      }
+
+      const result = await taskService.disableOccurrenceTask(
+        taskId,
+        {
+          disableFromDate: req.body?.disableFromDate,
+          modifyTime: req.body?.modifyTime,
+          operationKey: req.body?.operationKey,
+        },
+        await this._buildOperatorContext(req, existing.userId, req.body?.modifyTime)
+      );
+
+      if (!result) {
+        return res.status(404).json(error('任务不存在或已删除', 'TASK_NOT_FOUND'));
+      }
+
+      return res.json(success(result, '停用成功'));
+    } catch (err) {
+      if (err.code === 'TASK_OCCURRENCE_SCHEMA_MISSING') {
+        return res.status(503).json(error(err.message, 'TASK_OCCURRENCE_SCHEMA_MISSING'));
+      }
+      if (err.code === 'TASK_OCCURRENCE_INVALID_TASK' || err.code === 'INVALID_PARAMS') {
+        return res.status(400).json(error(err.message, err.code));
+      }
+      logger.error('停用表现项失败', err);
+      return res.status(500).json(error('停用表现项失败', 'TASK_OCCURRENCE_DISABLE_FAILED'));
+    }
+  }
+
+  async convertTaskToOccurrenceMode(req, res) {
+    try {
+      const { taskId } = req.params;
+      const existing = await taskService.getTaskById(taskId);
+      if (!existing) {
+        return res.status(404).json(error('任务不存在', 'TASK_NOT_FOUND'));
+      }
+
+      if (req.user.role !== 'parent') {
+        return res.status(403).json(error('仅家长可转换表现项', 'PERMISSION_DENIED'));
+      }
+
+      const permitted = await this._canManageTask(req.user, existing.userId);
+      if (!permitted) {
+        return res.status(403).json(error('无权限操作', 'PERMISSION_DENIED'));
+      }
+
+      const result = await taskService.convertTaskToOccurrenceMode(
+        taskId,
+        {
+          effectiveFromDate: req.body?.effectiveFromDate,
+          modifyTime: req.body?.modifyTime,
+          operationKey: req.body?.operationKey,
+        },
+        await this._buildOperatorContext(req, existing.userId, req.body?.modifyTime)
+      );
+
+      if (!result) {
+        return res.status(404).json(error('任务不存在或已删除', 'TASK_NOT_FOUND'));
+      }
+
+      return res.json(success(result, '转换成功'));
+    } catch (err) {
+      if (err.code === 'TASK_OCCURRENCE_SCHEMA_MISSING') {
+        return res.status(503).json(error(err.message, 'TASK_OCCURRENCE_SCHEMA_MISSING'));
+      }
+      if (err.code === 'TASK_OCCURRENCE_INVALID_TASK' || err.code === 'INVALID_PARAMS') {
+        return res.status(400).json(error(err.message, err.code));
+      }
+      logger.error('转换表现项失败', err);
+      return res.status(500).json(error('转换表现项失败', 'TASK_OCCURRENCE_CONVERT_FAILED'));
     }
   }
 

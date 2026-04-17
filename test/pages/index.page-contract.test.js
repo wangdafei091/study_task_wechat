@@ -214,6 +214,22 @@ describe('pages/index page contract', () => {
     expect(wxml).not.toContain('readonly="{{isReadonlyView || isViewingFuture}}"');
   });
 
+  it('普通任务为空但存在表现项时，不应继续显示任务空态', () => {
+    const wxml = fs.readFileSync(
+      path.join(__dirname, '../../pages/index/index.wxml'),
+      'utf8'
+    );
+
+    expect(wxml).toContain('task-list-container {{showOccurrenceSection ? \'has-occurrence-section\' : \'\'}} {{tasks.length === 0 && showOccurrenceSection ? \'occurrence-only\' : \'\'}}');
+    expect(wxml).toContain('task-list-count" wx:if="{{tasks.length > 0 || !showOccurrenceSection}}"');
+    expect(wxml).toContain('task-list {{tasks.length === 0 && showOccurrenceSection ? \'occurrence-only\' : \'\'}}');
+    expect(wxml).toContain('bottomOffset="{{showOccurrenceSection ? 150 : 0}}"');
+    expect(wxml).toContain('tasks.length === 0 && !showOccurrenceSection && canManageMembers && currentUser && currentUser.role === \'child\'');
+    expect(wxml).toContain('tasks.length === 0 && !showOccurrenceSection && canManageMembers && currentUser && currentUser.role === \'parent\' && availableUsers.length > 1');
+    expect(wxml).toContain('tasks.length === 0 && !showOccurrenceSection && canManageMembers && availableUsers.length <= 1');
+    expect(wxml).toContain('tasks.length === 0 && !showOccurrenceSection && !canManageMembers');
+  });
+
   it('onLoad 不应直接触发多用户初始化，避免与 onShow 双入口竞争', async () => {
     page.setRandomMotivation = jest.fn();
     page.registerEventListeners = jest.fn();

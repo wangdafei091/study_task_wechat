@@ -41,6 +41,23 @@ const RepeatType = {
   MONTHLY: 'monthly' // 每月重复
 };
 
+/**
+ * 任务执行方式枚举
+ */
+const TaskExecutionMode = {
+  PLANNED: 'planned',
+  OCCURRENCE: 'occurrence'
+};
+
+/**
+ * 表现记录结果枚举
+ */
+const TaskRecordOutcome = {
+  NONE: 'none',
+  SUCCESS: 'success',
+  FAILURE: 'failure'
+};
+
 class Task {
   /**
    * 构造函数
@@ -53,6 +70,7 @@ class Task {
     this.title = data.title || '';
     this.description = data.description || '';
     this.type = data.type || TaskType.STUDY;
+    this.executionMode = data.executionMode || TaskExecutionMode.PLANNED;
     
     // 时间相关
     this.date = data.date || this._formatDate(new Date());
@@ -88,6 +106,10 @@ class Task {
     this.repeat = data.repeat || { type: RepeatType.NONE };
     this.parentTaskId = data.parentTaskId || '';
     this.hasNoEndDate = data.hasNoEndDate || false;
+    this.activeRange = this._normalizeActiveRange(data.activeRange, data);
+    this.isOccurrenceRecord = data.isOccurrenceRecord === true;
+    this.occurrenceOutcome = data.occurrenceOutcome || TaskRecordOutcome.NONE;
+    this.recordedAt = Number(data.recordedAt || 0);
     
     // 其他属性
     this.createTime = data.createTime || Date.now();
@@ -127,6 +149,54 @@ class Task {
     if (!this.pointsExpiry) {
       this.pointsExpiry = StarExpiryType.PERMANENT;
     }
+
+    if (!Object.values(TaskExecutionMode).includes(this.executionMode)) {
+      this.executionMode = TaskExecutionMode.PLANNED;
+    }
+
+    if (!Object.values(TaskRecordOutcome).includes(this.occurrenceOutcome)) {
+      this.occurrenceOutcome = TaskRecordOutcome.NONE;
+    }
+
+    if (this.isOccurrenceMode()) {
+      this.repeat = { type: RepeatType.NONE };
+      this.isRequired = false;
+
+      if (this.isOccurrenceRecordTask()) {
+        if (this.occurrenceOutcome === TaskRecordOutcome.SUCCESS) {
+          this.status = TaskStatus.COMPLETED;
+          this.completionTime = Number(this.completionTime || this.recordedAt || 0);
+        } else {
+          this.status = TaskStatus.PENDING;
+          this.completionTime = 0;
+        }
+      } else {
+        this.status = TaskStatus.PENDING;
+        this.completionTime = 0;
+      }
+    }
+  }
+
+  /**
+   * 归一化有效时间
+   * @private
+   * @param {Object|null} activeRange 原始有效时间
+   * @param {Object} data 原始数据
+   * @returns {Object|null} 归一化后的有效时间
+   */
+  _normalizeActiveRange(activeRange, data = {}) {
+    if (!activeRange) {
+      return null;
+    }
+
+    const normalizedStartDate = activeRange.startDate || data.date || '';
+    const normalizedHasNoEndDate = activeRange.hasNoEndDate === true || data.hasNoEndDate === true;
+
+    return {
+      startDate: normalizedStartDate,
+      endDate: normalizedHasNoEndDate ? '' : (activeRange.endDate || ''),
+      hasNoEndDate: normalizedHasNoEndDate
+    };
   }
   
   /**
@@ -191,7 +261,7 @@ class Task {
     }
     
     // 验证类型特定字段
-    if (this.type === TaskType.STUDY) {
+    if (this.type === TaskType.STUDY && !this.isOccurrenceMode()) {
       // 对于全天任务，跳过时间验证
       if (this.isAllDay) {
         // 全天任务不需要验证时间字段
@@ -220,6 +290,40 @@ class Task {
         
         if (endDate < startDate) {
           errors.push('重复任务的结束日期必须大于等于开始日期');
+        }
+      }
+    }
+
+    if (!Object.values(TaskExecutionMode).includes(this.executionMode)) {
+      errors.push('任务执行方式无效');
+    }
+
+    if (this.isOccurrenceMode()) {
+      if (this.repeat && this.repeat.type !== RepeatType.NONE) {
+        errors.push('按发生记录任务不能设置重复');
+      }
+
+      if (this.isRequired) {
+        errors.push('按发生记录任务不能设置为必做');
+      }
+
+      if (this.isOccurrenceRecordTask()) {
+        if (!this.parentTaskId) {
+          errors.push('表现记录实例必须关联父任务');
+        }
+
+        if (!Object.values(TaskRecordOutcome).includes(this.occurrenceOutcome)) {
+          errors.push('表现记录结果无效');
+        }
+      } else {
+        if (!this.activeRange || !this.activeRange.startDate) {
+          errors.push('表现项必须设置适用开始日期');
+        } else if (
+          !this.activeRange.hasNoEndDate &&
+          this.activeRange.endDate &&
+          this.activeRange.endDate < this.activeRange.startDate
+        ) {
+          errors.push('表现项的结束日期必须大于等于开始日期');
         }
       }
     }
@@ -264,6 +368,7 @@ class Task {
     if (data.description !== undefined) this.description = data.description;
     if (data.date !== undefined) this.date = data.date;
     if (data.type !== undefined) this.type = data.type;
+    if (data.executionMode !== undefined) this.executionMode = data.executionMode;
     if (data.startTime !== undefined) this.startTime = data.startTime;
     if (data.endTime !== undefined) this.endTime = data.endTime;
     if (data.duration !== undefined) this.duration = data.duration;
@@ -287,6 +392,10 @@ class Task {
     if (data.pointsExpiry !== undefined) this.pointsExpiry = data.pointsExpiry;
     if (data.starAwarded !== undefined) this.starAwarded = data.starAwarded;
     if (data.tags !== undefined) this.tags = [...data.tags];
+    if (data.activeRange !== undefined) this.activeRange = this._normalizeActiveRange(data.activeRange, data) || null;
+    if (data.isOccurrenceRecord !== undefined) this.isOccurrenceRecord = data.isOccurrenceRecord === true;
+    if (data.occurrenceOutcome !== undefined) this.occurrenceOutcome = data.occurrenceOutcome || TaskRecordOutcome.NONE;
+    if (data.recordedAt !== undefined) this.recordedAt = Number(data.recordedAt || 0);
     
     // 更新重复设置
     if (data.repeat) {
@@ -312,6 +421,30 @@ class Task {
    */
   isRepeating() {
     return this.repeat && this.repeat.type !== RepeatType.NONE;
+  }
+
+  /**
+   * 是否为按发生记录任务
+   * @returns {Boolean} 是否为按发生记录
+   */
+  isOccurrenceMode() {
+    return this.executionMode === TaskExecutionMode.OCCURRENCE;
+  }
+
+  /**
+   * 是否为表现项配置任务
+   * @returns {Boolean} 是否为配置任务
+   */
+  isOccurrenceConfigTask() {
+    return this.isOccurrenceMode() && !this.isOccurrenceRecord;
+  }
+
+  /**
+   * 是否为表现记录实例
+   * @returns {Boolean} 是否为记录实例
+   */
+  isOccurrenceRecordTask() {
+    return this.isOccurrenceMode() && this.isOccurrenceRecord === true;
   }
   
   /**
@@ -346,6 +479,68 @@ class Task {
   isToday() {
     const today = this._formatDate(new Date());
     return this.date === today;
+  }
+
+  /**
+   * 判断某天是否允许记录表现
+   * @param {String} date 目标日期
+   * @returns {Boolean} 是否允许记录
+   */
+  canRecordOccurrenceOn(date) {
+    if (!this.isOccurrenceConfigTask() || !date) {
+      return false;
+    }
+
+    const startDate = this.activeRange?.startDate || this.date;
+    const endDate = this.activeRange?.hasNoEndDate
+      ? null
+      : (this.activeRange?.endDate || null);
+
+    if (startDate && date < startDate) {
+      return false;
+    }
+
+    if (endDate && date > endDate) {
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * 应用表现记录结果
+   * @param {String} outcome 记录结果
+   * @param {Object} options 额外选项
+   * @returns {Task} 当前任务实例
+   */
+  applyOccurrenceOutcome(outcome, options = {}) {
+    if (!this.isOccurrenceMode()) {
+      return this;
+    }
+
+    const normalizedOutcome = Object.values(TaskRecordOutcome).includes(outcome)
+      ? outcome
+      : TaskRecordOutcome.NONE;
+    const recordedAt = Number(options.recordedAt || Date.now());
+
+    this.isOccurrenceRecord = true;
+    this.occurrenceOutcome = normalizedOutcome;
+    this.recordedAt = normalizedOutcome === TaskRecordOutcome.NONE ? 0 : recordedAt;
+    this.modifyTime = recordedAt;
+
+    if (options.date) {
+      this.date = options.date;
+    }
+
+    if (normalizedOutcome === TaskRecordOutcome.SUCCESS) {
+      this.status = TaskStatus.COMPLETED;
+      this.completionTime = recordedAt;
+    } else {
+      this.status = TaskStatus.PENDING;
+      this.completionTime = 0;
+    }
+
+    return this;
   }
   
   /**
@@ -392,6 +587,7 @@ class Task {
       title: this.title,
       description: this.description,
       type: this.type,
+      executionMode: this.executionMode,
       date: this.date,
       startTime: this.startTime,
       endTime: this.endTime,
@@ -412,6 +608,10 @@ class Task {
       repeat: this.repeat ? { ...this.repeat } : { type: RepeatType.NONE },
       parentTaskId: this.parentTaskId,
       hasNoEndDate: this.hasNoEndDate,
+      activeRange: this.activeRange ? { ...this.activeRange } : null,
+      isOccurrenceRecord: this.isOccurrenceRecord === true,
+      occurrenceOutcome: this.occurrenceOutcome,
+      recordedAt: this.recordedAt,
       createTime: this.createTime,
       modifyTime: this.modifyTime,
       tags: this.tags ? [...this.tags] : [],
@@ -505,5 +705,7 @@ module.exports = {
   TaskType,
   TaskStatus,
   StarExpiryType,
-  RepeatType
-}; 
+  RepeatType,
+  TaskExecutionMode,
+  TaskRecordOutcome
+};
