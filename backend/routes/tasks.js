@@ -43,6 +43,27 @@ router.post('/upcoming/sync', authMiddleware, taskController.syncUpcomingTaskMes
 router.get('/:taskId', authMiddleware, taskController.getTaskById.bind(taskController));
 
 /**
+ * @route   POST /api/tasks/:taskId/occurrence-record
+ * @desc    记录表现项结果
+ * @access  Private
+ */
+router.post('/:taskId/occurrence-record', authMiddleware, taskController.recordOccurrenceResult.bind(taskController));
+
+/**
+ * @route   POST /api/tasks/:taskId/disable-occurrence
+ * @desc    停用表现项
+ * @access  Private
+ */
+router.post('/:taskId/disable-occurrence', authMiddleware, taskController.disableOccurrenceTask.bind(taskController));
+
+/**
+ * @route   POST /api/tasks/:taskId/convert-occurrence
+ * @desc    将任务转换为表现项
+ * @access  Private
+ */
+router.post('/:taskId/convert-occurrence', authMiddleware, taskController.convertTaskToOccurrenceMode.bind(taskController));
+
+/**
  * @route   POST /api/tasks
  * @desc    创建新任务
  * @access  Private

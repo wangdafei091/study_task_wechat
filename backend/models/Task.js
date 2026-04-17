@@ -44,6 +44,32 @@ function normalizeReminder(reminder) {
   };
 }
 
+const TASK_TYPES = ['study', 'habit', 'interest'];
+const TASK_STATUSES = [0, 1];
+const STAR_EXPIRY_TYPES = ['permanent', 'week', 'month', 'quarter'];
+const TASK_EXECUTION_MODES = ['planned', 'occurrence'];
+const TASK_RECORD_OUTCOMES = ['none', 'success', 'failure'];
+
+function normalizeActiveRange(activeRange, fallbackDate = '') {
+  if (!activeRange || typeof activeRange !== 'object') {
+    return null;
+  }
+
+  const startDate = String(activeRange.startDate || fallbackDate || '').trim();
+  const hasNoEndDate = activeRange.hasNoEndDate === true;
+  const endDate = hasNoEndDate ? '' : String(activeRange.endDate || '').trim();
+
+  if (!startDate) {
+    return null;
+  }
+
+  return {
+    startDate,
+    endDate,
+    hasNoEndDate,
+  };
+}
+
 class Task {
   constructor({
     taskId,
@@ -75,6 +101,11 @@ class Task {
     hasNoEndDate = false,
     tags = null,
     parentTaskId = null,
+    executionMode = 'planned',
+    activeRange = null,
+    isOccurrenceRecord = false,
+    occurrenceOutcome = 'none',
+    recordedAt = null,
   } = {}) {
     this.taskId = taskId;
     this.userId = userId;
@@ -105,6 +136,13 @@ class Task {
     this.hasNoEndDate = Boolean(hasNoEndDate);
     this.tags = tags;
     this.parentTaskId = parentTaskId || null;
+    this.executionMode = TASK_EXECUTION_MODES.includes(executionMode) ? executionMode : 'planned';
+    this.activeRange = normalizeActiveRange(activeRange, date);
+    this.isOccurrenceRecord = Boolean(isOccurrenceRecord);
+    this.occurrenceOutcome = TASK_RECORD_OUTCOMES.includes(occurrenceOutcome)
+      ? occurrenceOutcome
+      : 'none';
+    this.recordedAt = Number(recordedAt || 0) || null;
   }
 
   /**
@@ -160,6 +198,12 @@ class Task {
       }
     }
 
+    const activeRange = normalizeActiveRange({
+      startDate: readField('active_start_date', 'activeStartDate'),
+      endDate: readField('active_end_date', 'activeEndDate'),
+      hasNoEndDate: Boolean(readField('active_has_no_end_date', 'activeHasNoEndDate'))
+    }, readField('date'));
+
     return new Task({
       taskId: readField('task_id', 'taskId'),
       userId: readField('user_id', 'userId'),
@@ -190,6 +234,11 @@ class Task {
       hasNoEndDate: Boolean(readField('has_no_end_date', 'hasNoEndDate')),
       tags,
       parentTaskId: readField('parent_task_id', 'parentTaskId') || null,
+      executionMode: readField('execution_mode', 'executionMode') || 'planned',
+      activeRange,
+      isOccurrenceRecord: Boolean(readField('is_occurrence_record', 'isOccurrenceRecord')),
+      occurrenceOutcome: readField('occurrence_outcome', 'occurrenceOutcome') || 'none',
+      recordedAt: readField('recorded_at', 'recordedAt') || null,
     });
   }
 
@@ -225,6 +274,13 @@ class Task {
       has_no_end_date: this.hasNoEndDate ? 1 : 0,
       tags: this.tags ? JSON.stringify(this.tags) : null,
       parent_task_id: this.parentTaskId || null,
+      execution_mode: this.executionMode,
+      active_start_date: this.activeRange?.startDate || null,
+      active_end_date: this.activeRange?.hasNoEndDate ? null : (this.activeRange?.endDate || null),
+      active_has_no_end_date: this.activeRange?.hasNoEndDate ? 1 : 0,
+      is_occurrence_record: this.isOccurrenceRecord ? 1 : 0,
+      occurrence_outcome: this.occurrenceOutcome || 'none',
+      recorded_at: this.recordedAt || null,
     };
   }
 
@@ -261,8 +317,72 @@ class Task {
       hasNoEndDate: this.hasNoEndDate,
       tags: this.tags,
       parentTaskId: this.parentTaskId,
+      executionMode: this.executionMode,
+      activeRange: this.activeRange,
+      isOccurrenceRecord: this.isOccurrenceRecord,
+      occurrenceOutcome: this.occurrenceOutcome,
+      recordedAt: this.recordedAt,
       // deletedAt 不对外暴露
     };
+  }
+
+  isOccurrenceMode() {
+    return this.executionMode === 'occurrence';
+  }
+
+  isOccurrenceConfigTask() {
+    return this.isOccurrenceMode() && this.isOccurrenceRecord !== true;
+  }
+
+  isOccurrenceRecordTask() {
+    return this.isOccurrenceMode() && this.isOccurrenceRecord === true;
+  }
+
+  canRecordOccurrenceOn(date) {
+    if (!this.isOccurrenceConfigTask() || !date) {
+      return false;
+    }
+
+    const startDate = this.activeRange?.startDate || this.date;
+    const endDate = this.activeRange?.hasNoEndDate ? null : (this.activeRange?.endDate || null);
+
+    if (startDate && date < startDate) {
+      return false;
+    }
+
+    if (endDate && date > endDate) {
+      return false;
+    }
+
+    return true;
+  }
+
+  applyOccurrenceOutcome(outcome, options = {}) {
+    if (!this.isOccurrenceMode()) {
+      return this;
+    }
+
+    const normalizedOutcome = TASK_RECORD_OUTCOMES.includes(outcome) ? outcome : 'none';
+    const recordedAt = Number(options.recordedAt || Date.now());
+
+    this.isOccurrenceRecord = true;
+    this.occurrenceOutcome = normalizedOutcome;
+    this.recordedAt = normalizedOutcome === 'none' ? null : recordedAt;
+    this.modifyTime = recordedAt;
+
+    if (options.date) {
+      this.date = options.date;
+    }
+
+    if (normalizedOutcome === 'success') {
+      this.status = 1;
+      this.completionTime = recordedAt;
+    } else {
+      this.status = 0;
+      this.completionTime = null;
+    }
+
+    return this;
   }
 
   /**
@@ -294,7 +414,7 @@ class Task {
     }
 
     if (taskData.type !== undefined) {
-      if (!taskData.type || !['study', 'habit', 'interest'].includes(taskData.type)) {
+      if (!taskData.type || !TASK_TYPES.includes(taskData.type)) {
         errors.push('任务类型必须为 study/habit/interest 之一');
       }
     } else if (!isUpdate) {
@@ -316,14 +436,18 @@ class Task {
     }
 
     if (taskData.pointsExpiry !== undefined) {
-      if (!['permanent', 'week', 'month', 'quarter'].includes(taskData.pointsExpiry)) {
+      if (!STAR_EXPIRY_TYPES.includes(taskData.pointsExpiry)) {
         errors.push('星星有效期必须为 permanent/week/month/quarter 之一');
       }
     }
 
     // 其他业务规则验证
-    if (taskData.status !== undefined && ![0, 1].includes(taskData.status)) {
+    if (taskData.status !== undefined && !TASK_STATUSES.includes(taskData.status)) {
       errors.push('任务状态必须为 0（未完成）或 1（已完成）');
+    }
+
+    if (taskData.executionMode !== undefined && !TASK_EXECUTION_MODES.includes(taskData.executionMode)) {
+      errors.push('executionMode 必须为 planned/occurrence 之一');
     }
 
     if (taskData.isRequired !== undefined && typeof taskData.isRequired !== 'boolean') {
@@ -372,6 +496,34 @@ class Task {
       errors.push('penaltyRefunded必须为布尔值');
     }
 
+    if (taskData.isOccurrenceRecord !== undefined && typeof taskData.isOccurrenceRecord !== 'boolean') {
+      errors.push('isOccurrenceRecord必须为布尔值');
+    }
+
+    if (taskData.occurrenceOutcome !== undefined && !TASK_RECORD_OUTCOMES.includes(taskData.occurrenceOutcome)) {
+      errors.push('occurrenceOutcome 必须为 none/success/failure 之一');
+    }
+
+    if (taskData.recordedAt !== undefined && Number.isNaN(Number(taskData.recordedAt))) {
+      errors.push('recordedAt必须为数字');
+    }
+
+    const activeRange = normalizeActiveRange(taskData.activeRange, taskData.date);
+    if (taskData.activeRange !== undefined && !activeRange) {
+      errors.push('activeRange.startDate不能为空');
+    }
+
+    const resolvedExecutionMode = taskData.executionMode || 'planned';
+    if (resolvedExecutionMode === 'occurrence' && taskData.isOccurrenceRecord !== true) {
+      if (!isUpdate || taskData.activeRange !== undefined) {
+        if (!activeRange) {
+          errors.push('occurrence 配置任务必须提供有效的 activeRange');
+        } else if (!activeRange.hasNoEndDate && activeRange.endDate && activeRange.endDate < activeRange.startDate) {
+          errors.push('activeRange 结束日期不能早于开始日期');
+        }
+      }
+    }
+
     return {
       valid: errors.length === 0,
       errors,
@@ -380,5 +532,8 @@ class Task {
 }
 
 Task.normalizeReminder = normalizeReminder;
+Task.normalizeActiveRange = normalizeActiveRange;
+Task.TASK_EXECUTION_MODES = TASK_EXECUTION_MODES;
+Task.TASK_RECORD_OUTCOMES = TASK_RECORD_OUTCOMES;
 
 module.exports = Task;

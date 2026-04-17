@@ -109,20 +109,6 @@ describe('pages/task-edit/task-edit', () => {
     expect(page.data.targetUserId).toBe('');
   });
 
-  it('onLoad 在首页非今天入口下应显示一次性提示', () => {
-    serviceManager.getUserService.mockReturnValue({
-      getLoginUser: jest.fn(() => ({ userId: 'parent-1', role: 'parent' })),
-      getCurrentUser: jest.fn(() => ({ userId: 'parent-1', role: 'parent' }))
-    });
-
-    const page = createPageInstance();
-    page.onLoad.call(page, { entry: 'index_non_today_create' });
-
-    expect(page.data.entryHintVisible).toBe(true);
-    expect(page.data.entryHintText).toBe('这是新建任务，不会自动绑定当前查看日期');
-    expect(page.loadAllTasks).not.toHaveBeenCalled();
-  });
-
   it('applyTemplateSelection 应把模板映射到 task-edit 表单状态', () => {
     serviceManager.getService.mockImplementation((name) => {
       if (name === 'taskTemplate') {
@@ -595,6 +581,23 @@ describe('pages/task-edit/task-edit', () => {
     expect(wxml).toContain('<block wx:elif="{{templateRecommendationCount > 0}}">');
     expect(wxml).toContain('<block wx:else>');
     expect(wxml).toContain('>更多模板<');
+  });
+
+  it('新建表现项入口应挂在添加任务卡片标题右侧 action slot', () => {
+    const fs = require('fs');
+    const path = require('path');
+    const taskEditWxml = fs.readFileSync(
+      path.join(process.cwd(), 'pages/task-edit/task-edit.wxml'),
+      'utf8'
+    );
+    const cardJs = fs.readFileSync(
+      path.join(process.cwd(), 'components/card/card.js'),
+      'utf8'
+    );
+
+    expect(taskEditWxml).toContain('slot="action"');
+    expect(taskEditWxml).toContain('class="occurrence-entry-action"');
+    expect(cardJs).toContain('multipleSlots: true');
   });
 
   it('重复 showLoading 后单次 hideLoading 应只关闭一次全局 loading', () => {

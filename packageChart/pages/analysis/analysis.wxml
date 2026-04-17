@@ -77,22 +77,29 @@
         </view>
 
         <view class="board-body">
-          <block wx:for="{{board.rows}}" wx:key="rowKey">
+          <block wx:for="{{board.rows}}" wx:key="rowKey" wx:for-item="row">
             <view
-              class="board-row {{selectedRowKey === item.rowKey ? 'is-selected' : ''}}"
-              data-row-key="{{item.rowKey}}"
+              class="board-row {{selectedRowKey === row.rowKey ? 'is-selected' : ''}}"
+              data-row-key="{{row.rowKey}}"
               catchtap="onRowTap"
             >
               <view class="row-title">
-                <view class="type-indicator type-{{item.type}}"></view>
-                <text class="row-title-text">{{item.displayTitle || item.title}}</text>
+                <view class="type-indicator type-{{row.type}}"></view>
+                <text class="row-title-text">{{row.displayTitle || row.title}}</text>
+                <text class="row-badge" wx:if="{{row.badgeText}}">{{row.badgeText}}</text>
               </view>
 
               <view class="row-cells">
-                <block wx:for="{{item.cells}}" wx:key="date">
-                  <view class="board-cell {{item.cellClass}} {{item.isToday ? 'is-today' : ''}} {{item.isFutureEmpty ? 'is-future-empty' : ''}}">
-                    <view class="today-line" wx:if="{{item.isToday}}"></view>
-                    <text class="cell-symbol">{{item.symbol}}</text>
+                <block wx:for="{{row.cells}}" wx:key="date" wx:for-item="cell">
+                  <view
+                    class="board-cell {{cell.cellClass}} {{cell.isToday ? 'is-today' : ''}} {{cell.isFutureEmpty ? 'is-future-empty' : ''}}"
+                    data-date="{{cell.date}}"
+                    data-task-id="{{row.taskId}}"
+                    data-execution-mode="{{row.executionMode}}"
+                    bindtap="onCellTap"
+                  >
+                    <view class="today-line" wx:if="{{cell.isToday}}"></view>
+                    <text class="cell-symbol">{{cell.symbol}}</text>
                   </view>
                 </block>
               </view>

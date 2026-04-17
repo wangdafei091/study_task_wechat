@@ -1,7 +1,7 @@
 # 后端 REST API 契约
 
 > 项目后端 HTTP/REST 接口的权威说明文档
-> **最后更新**：2026-04-13
+> **最后更新**：2026-04-17
 > **维护者**：项目维护团队
 
 ---
@@ -481,6 +481,9 @@ Authorization: Bearer <token>
   - `scope` - `family` 时仅家长可用
   - `startDate`
   - `endDate`
+  - `includeOccurrence` - 可选，`true` 时允许返回表现项数据
+  - `occurrenceMode` - 可选，`config | record | all`
+  - `includeInactive` - 可选，仅 `occurrenceMode=config` 生效；`true` 时返回全部未删除表现项配置
 - Body: 无
 
 成功响应：
@@ -489,7 +492,13 @@ Authorization: Bearer <token>
 
 常见错误：
 - `403` - `FAMILY_MEMBER_ACCESS_DENIED` / `PERMISSION_DENIED`
+- `503` - `TASK_OCCURRENCE_SCHEMA_MISSING`
 - `500` - `TASK_GET_FAILED`
+
+说明：
+- 默认仍以 planned 任务查询为主；只有显式传 `includeOccurrence=true` 才会返回表现项数据
+- `occurrenceMode=config&startDate/endDate` 按有效时间段 overlap 查询，供分析看板按月拉取表现项骨架
+- `occurrenceMode=record&startDate/endDate` 返回日期范围内的表现记录实例
 
 ### 6.2 统计任务
 
@@ -541,6 +550,8 @@ Authorization: Bearer <token>
   - `type`
   - `date`
   - `points`
+  - `executionMode` - 可选，`planned | occurrence`
+  - `activeRange` - `executionMode=occurrence` 时必填
   - `modifyTime`
   - `operationKey`
 
@@ -550,13 +561,16 @@ Authorization: Bearer <token>
 
 常见错误：
 - `400` - `TASK_INVALID_PARAMS`
+- `400` - `TASK_OCCURRENCE_INVALID_FIELDS`
 - `403` - `FAMILY_TASK_CREATE_DENIED` / `FAMILY_NOT_JOINED`
 - `409` - `TASK_ID_USER_MISMATCH`
+- `503` - `TASK_OCCURRENCE_SCHEMA_MISSING`
 - `500` - `TASK_CREATE_FAILED`
 
 说明：
 - 云端模式下，重复任务实例由后端在事务内展开
 - 创建重复任务时，`data.affectedTasks` 会一次性返回主任务与已展开的子任务集合
+- 当 `executionMode=occurrence` 时创建的是“表现项配置任务”，不能通过通用创建接口直接写入 `isOccurrenceRecord / occurrenceOutcome / recordedAt`
 
 ### 6.5 更新任务
 
@@ -580,6 +594,8 @@ Authorization: Bearer <token>
   - `tags`
   - `hasNoEndDate`
   - `repeat`
+  - `executionMode`
+  - `activeRange`
 
 成功响应：
 - Status: `200`
@@ -587,9 +603,15 @@ Authorization: Bearer <token>
 
 常见错误：
 - `400` - `NO_UPDATABLE_FIELDS` / `INVALID_TASK_DATA`
+- `400` - `TASK_OCCURRENCE_INVALID_FIELDS` / `TASK_OCCURRENCE_USE_CONVERT_API`
 - `403` - `PERMISSION_DENIED`
 - `404` - `TASK_NOT_FOUND`
+- `503` - `TASK_OCCURRENCE_SCHEMA_MISSING`
 - `500` - `TASK_UPDATE_FAILED`
+
+说明：
+- `occurrence` 配置任务允许通过该接口维护名称、类别、积分和有效时间
+- `planned -> occurrence` 必须走专用转换接口，不能直接改 `executionMode`
 
 ### 6.6 删除任务
 
@@ -641,6 +663,87 @@ Authorization: Bearer <token>
 - 当任务满足“已逾期且此前已实际扣星”条件时，首次完成会在同一事务内退回 `penaltyDeductedPoints` 对应的星星；返回的任务对象会同步反映 `penaltyRefunded` 与 `penaltyRefundTime`
 - 当任务已发生“逾期补做退星”后再次重置为未完成，如果当前永久星星不足以全额回滚这笔退星，接口返回 `409 INSUFFICIENT_STARS`
 - `data.operation` 会按本次状态流转返回 `complete` 或 `reset`
+
+### 6.7A 记录表现项结果
+
+- Method: `POST`
+- Path: `/api/tasks/:taskId/occurrence-record`
+- Auth: `Bearer Token`
+- Query: 无
+- Body（关键字段）：
+  - `targetUserId` - 家长为孩子记录时必填；孩子视角默认自己
+  - `date` - 记录日期，`YYYY-MM-DD`
+  - `outcome` - `success | failure`
+  - `modifyTime`
+  - `operationKey`
+
+成功响应：
+- Status: `200`
+- Body：`data` 包含 `configTask`、`recordTask`、`starsAwarded`、`operation='occurrence_record'`
+
+常见错误：
+- `400` - `INVALID_PARAMS` / `TASK_OCCURRENCE_INVALID_TASK` / `TASK_OCCURRENCE_INVALID_FIELDS`
+- `403` - `PERMISSION_DENIED` / `FAMILY_MEMBER_ACCESS_DENIED`
+- `404` - `TASK_NOT_FOUND`
+- `409` - `TASK_OCCURRENCE_FUTURE_DATE` / `TASK_OCCURRENCE_DATE_OUT_OF_RANGE`
+- `503` - `TASK_OCCURRENCE_SCHEMA_MISSING`
+- `500` - `TASK_OCCURRENCE_RECORD_FAILED`
+
+说明：
+- 同一表现项、同一孩子、同一天最多保留一条记录
+- 同日再次提交会复用同一记录；`success -> failure` 会在同一事务内撤回已发星星
+
+### 6.7B 停用表现项
+
+- Method: `POST`
+- Path: `/api/tasks/:taskId/disable-occurrence`
+- Auth: `Bearer Token`
+- Query: 无
+- Body（关键字段）：
+  - `disableFromDate`
+  - `modifyTime`
+  - `operationKey`
+
+成功响应：
+- Status: `200`
+- Body：`data.disabledTask`、`data.operation='disable_occurrence'`
+
+常见错误：
+- `400` - `INVALID_PARAMS` / `TASK_OCCURRENCE_INVALID_TASK`
+- `403` - `PERMISSION_DENIED`
+- `404` - `TASK_NOT_FOUND`
+- `503` - `TASK_OCCURRENCE_SCHEMA_MISSING`
+- `500` - `TASK_OCCURRENCE_DISABLE_FAILED`
+
+说明：
+- 仅家长可停用
+- 停用只收口未来有效期，不删除历史表现记录
+
+### 6.7C 转换为表现项
+
+- Method: `POST`
+- Path: `/api/tasks/:taskId/convert-occurrence`
+- Auth: `Bearer Token`
+- Query: 无
+- Body（关键字段）：
+  - `effectiveFromDate`
+  - `modifyTime`
+  - `operationKey`
+
+成功响应：
+- Status: `200`
+- Body：`data.convertedTask`、`data.archivedFutureTaskIds`、`data.operation='convert_occurrence'`
+
+常见错误：
+- `400` - `INVALID_PARAMS` / `TASK_OCCURRENCE_INVALID_TASK`
+- `403` - `PERMISSION_DENIED`
+- `404` - `TASK_NOT_FOUND`
+- `503` - `TASK_OCCURRENCE_SCHEMA_MISSING`
+- `500` - `TASK_OCCURRENCE_CONVERT_FAILED`
+
+说明：
+- 仅支持 `planned -> occurrence`
+- 仅归档未来未完成实例，历史已完成实例保留
 
 ### 6.8 同步必做任务惩罚
 

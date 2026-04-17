@@ -1,5 +1,6 @@
 const logger = require('../../../utils/logger.js');
 const serviceManager = require('../../../services/service-manager.js');
+const dateUtils = require('../../../utils/dateUtils');
 const { buildMonthlyBoard } = require('../../services/analysis-board-service.js');
 
 function getTodayMonthKey() {
@@ -62,7 +63,7 @@ function buildLegendItems() {
     { key: 'done', label: '已完成', symbol: '✓', swatchClass: 'legend-done' },
     { key: 'missed', label: '未完成', symbol: '✕', swatchClass: 'legend-missed' },
     { key: 'upcoming', label: '未开始', symbol: '○', swatchClass: 'legend-upcoming' },
-    { key: 'blank', label: '无任务', symbol: '', swatchClass: 'legend-blank' }
+    { key: 'blank', label: '无安排 / 无记录', symbol: '', swatchClass: 'legend-blank' }
   ];
 }
 
@@ -90,6 +91,9 @@ function buildDisplayBoard(board) {
     ...board,
     rows: board.rows.map((row) => ({
       ...row,
+      badgeText: row.badgeText || '',
+      executionMode: row.executionMode || 'planned',
+      taskId: row.taskId || '',
       displayTitle: truncateMiddleText(row.title, {
         maxLength: 10,
         headLength: 6,
@@ -268,6 +272,24 @@ Page({
 
     this.setData({
       selectedRowKey: ''
+    });
+  },
+
+  onCellTap(event) {
+    const date = event?.currentTarget?.dataset?.date || '';
+    const taskId = event?.currentTarget?.dataset?.taskId || '';
+    const executionMode = event?.currentTarget?.dataset?.executionMode || 'planned';
+    const today = dateUtils.getTodayString();
+    if (executionMode !== 'occurrence' || !taskId || !date) {
+      return;
+    }
+
+    if (date > today) {
+      return;
+    }
+
+    wx.navigateTo({
+      url: `/pages/task-record/task-record?taskId=${taskId}&date=${date}&targetUserId=${this.data.focusUserId}`
     });
   }
 });

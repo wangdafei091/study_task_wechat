@@ -10,6 +10,7 @@ const EventBus = require('../utils/core/event-bus');
 const { Task, TaskStatus } = require('../models/task');
 const { EVENTS } = require('../utils/constants');
 const API_CONFIG = require('../utils/api-config'); // 新增：API配置
+const HttpClient = require('../utils/http-client');
 const userContextUtils = require('../utils/user-context');
 const taskQuery = require('./task-service/task-query');
 const taskRepeat = require('./task-service/task-repeat');
@@ -42,6 +43,10 @@ class TaskService {
 
     // 检查是否启用云端API
     this.enableCloudStorage = API_CONFIG.ENABLE_API;
+    this._occurrenceCapabilityCache = {
+      value: this.enableCloudStorage ? null : true,
+      fetchedAt: 0
+    };
 
     logger.info('TaskService', '初始化任务服务', {
       enableCloudStorage: this.enableCloudStorage
@@ -203,6 +208,16 @@ class TaskService {
       case 'required':
       case 'unrequired':
         return this._syncRequiredStateToCloud(task);
+      case 'occurrence_record':
+        return this._syncOccurrenceRecordToCloud(task);
+      case 'disable_occurrence':
+        return this._syncDisableOccurrenceToCloud(task, {
+          disableFromDate: task?.pendingSyncMeta?.disableFromDate || null
+        });
+      case 'convert_occurrence':
+        return this._syncConvertOccurrenceToCloud(task, {
+          effectiveFromDate: task?.pendingSyncMeta?.effectiveFromDate || null
+        });
       default:
         return this._syncUpdateToCloud(task);
     }
@@ -498,6 +513,19 @@ class TaskService {
           case 'unrequired':
             mutation = await this._syncRequiredStateToCloud(task);
             break;
+          case 'occurrence_record':
+            mutation = await this._syncOccurrenceRecordToCloud(task);
+            break;
+          case 'disable_occurrence':
+            mutation = await this._syncDisableOccurrenceToCloud(task, {
+              disableFromDate: task?.pendingSyncMeta?.disableFromDate || null
+            });
+            break;
+          case 'convert_occurrence':
+            mutation = await this._syncConvertOccurrenceToCloud(task, {
+              effectiveFromDate: task?.pendingSyncMeta?.effectiveFromDate || null
+            });
+            break;
           default:
             if (!task.syncedToCloud) {
               mutation = await this._syncTaskToCloud(task);
@@ -581,6 +609,14 @@ class TaskService {
    */
   async getTasksByDateRange(startDate, endDate, userId = null, options = {}) {
     return taskQuery.getTasksByDateRange(this, startDate, endDate, userId, options);
+  }
+
+  async getOccurrenceTasks(scope = {}) {
+    return taskQuery.getOccurrenceTasks(this, scope);
+  }
+
+  async getOccurrenceRecordsByDateRange(scope = {}) {
+    return taskQuery.getOccurrenceRecordsByDateRange(this, scope);
   }
   
   /**
@@ -683,6 +719,18 @@ class TaskService {
    */
   async resetTask(taskId, userId = null) {
     return taskWrite.resetTask(this, taskId, userId);
+  }
+
+  async recordOccurrenceResult(taskId, options = {}) {
+    return taskWrite.recordOccurrenceResult(this, taskId, options);
+  }
+
+  async convertTaskToOccurrenceMode(taskId, options = {}, userId = null) {
+    return taskWrite.convertTaskToOccurrenceMode(this, taskId, options, userId);
+  }
+
+  async disableOccurrenceTask(taskId, options = {}, userId = null) {
+    return taskWrite.disableOccurrenceTask(this, taskId, options, userId);
   }
   
   /**
@@ -925,6 +973,55 @@ class TaskService {
    */
   async _syncRequiredStateToCloud(task) {
     return taskSync.syncRequiredStateToCloud(this, task);
+  }
+
+  async _syncOccurrenceRecordToCloud(task) {
+    return taskSync.syncOccurrenceRecordToCloud(this, task);
+  }
+
+  async _syncDisableOccurrenceToCloud(task, options = {}) {
+    return taskSync.syncDisableOccurrenceToCloud(this, task, options);
+  }
+
+  async _syncConvertOccurrenceToCloud(task, options = {}) {
+    return taskSync.syncConvertOccurrenceToCloud(this, task, options);
+  }
+
+  async isOccurrenceEnabled(options = {}) {
+    if (!this.enableCloudStorage) {
+      return true;
+    }
+
+    const cacheTtl = Number(options.cacheTtlMs || 30000);
+    const forceRefresh = options.forceRefresh === true;
+    const now = Date.now();
+
+    if (
+      !forceRefresh &&
+      this._occurrenceCapabilityCache.value !== null &&
+      (now - this._occurrenceCapabilityCache.fetchedAt) < cacheTtl
+    ) {
+      return this._occurrenceCapabilityCache.value;
+    }
+
+    try {
+      const health = await HttpClient.healthCheck();
+      const enabled = health?.taskOccurrenceEnabled === true;
+      this._occurrenceCapabilityCache = {
+        value: enabled,
+        fetchedAt: now
+      };
+      return enabled;
+    } catch (error) {
+      logger.warn('TaskService', '获取 occurrence 能力失败，按未开启处理', {
+        error: error.message
+      });
+      this._occurrenceCapabilityCache = {
+        value: false,
+        fetchedAt: now
+      };
+      return false;
+    }
   }
 
   /**

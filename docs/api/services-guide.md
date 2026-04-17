@@ -272,6 +272,7 @@ const taskTemplateService = serviceManager.get('taskTemplateService');
 - 任务状态管理和流转
 - 必做任务惩罚机制
 - 重复任务处理
+- 表现项（occurrence）配置、记录、停用与转换
 - 与星星系统的集成
 - 事件发布机制
 
@@ -335,6 +336,12 @@ const taskTemplateService = serviceManager.get('taskTemplateService');
     pointsExpiry: string,     // 有效期类型
     isRequired: boolean,      // 是否必做任务
     repeat?: Object,         // 重复配置
+    executionMode?: 'planned' | 'occurrence',
+    activeRange?: {
+      startDate: string,
+      endDate?: string,
+      hasNoEndDate?: boolean
+    },
     targetUserId?: string,   // 家长代孩子创建时传入
     operationKey?: string,
     modifyTime?: number
@@ -345,12 +352,16 @@ const taskTemplateService = serviceManager.get('taskTemplateService');
   - 云端模式下先调用后端创建接口，再把权威结果回写到本地缓存
   - 重复任务在云端模式下由后端展开，`tasks / createdTasks` 会包含主任务和受影响实例
   - 若云端创建失败，降级时仅本地保存主任务；重复任务会标记 `pendingSyncMeta.repeatMaterializationPending=true`
+  - 当 `executionMode='occurrence'` 时，表示创建“表现项配置任务”；`occurrenceOutcome / isOccurrenceRecord / recordedAt` 不允许通过该通用创建接口直传
 
 ##### `updateTask(taskId, changes, userId = null)`
 更新任务信息
 - **参数**: `taskId` - 任务ID, `changes` - 更新数据对象, `userId` - 可选的用户ID
 - **返回**: `Promise<{ success: boolean, task?: Task, fallback?: boolean, mutation?: Object, message?: string }>`
-- **说明**: 云端模式下为 API 优先；失败时降级为本地保存并保留待同步元数据
+- **说明**:
+  - 云端模式下为 API 优先；失败时降级为本地保存并保留待同步元数据
+  - `occurrence` 配置任务允许通过通用更新接口维护 `title / type / points / activeRange`
+  - 普通任务切换到 `occurrence` 必须走 `convertTaskToOccurrenceMode(...)`
 
 ##### `deleteTask(taskId, userId = null, suppressMessage = false)`
 删除任务
@@ -487,6 +498,37 @@ const taskTemplateService = serviceManager.get('taskTemplateService');
 - **参数**: `startDate`/`endDate` - `YYYY-MM-DD` 格式, `userId` - 可选用户 ID, `options` - 作用域选项（同 `getTasksByScope`）
 - **返回**: `Task[]`
 
+##### `getOccurrenceTasks(scope = {})`
+获取表现项配置任务。
+- **参数**:
+  ```javascript
+  {
+    userId?: string,
+    date?: string,
+    startDate?: string,
+    endDate?: string,
+    includeInactive?: boolean
+  }
+  ```
+- **返回**: `Promise<Task[]>`
+- **说明**:
+  - 默认按 `date` 返回当天有效的表现项配置任务
+  - 当同时传 `startDate/endDate` 时，按有效时间段 overlap 返回月看板所需骨架行
+  - `includeInactive=true` 时返回当前用户全部未删除表现项配置，供“表现项设置页”维护
+
+##### `getOccurrenceRecordsByDateRange(scope = {})`
+获取表现记录实例。
+- **参数**:
+  ```javascript
+  {
+    userId?: string,
+    startDate: string,
+    endDate: string
+  }
+  ```
+- **返回**: `Promise<Task[]>`
+- **说明**: 仅返回 `executionMode='occurrence' && isOccurrenceRecord=true` 的事实记录实例
+
 ##### `_syncUpdateToCloud(task)` *(私有)*
 任务编辑云端写入口，接收完整 Task 对象，发送 PUT 并返回标准化后的 `TaskMutationResponse`
 
@@ -498,6 +540,67 @@ const taskTemplateService = serviceManager.get('taskTemplateService');
 
 ##### `_syncRequiredStateToCloud(task)` *(私有)*
 必做/取消必做云端写入口，返回 `TaskMutationResponse`
+
+##### `recordOccurrenceResult(taskId, options = {})`
+记录表现项某一天的结果。
+- **参数**:
+  ```javascript
+  {
+    userId: string,
+    date: string,
+    outcome: 'success' | 'failure'
+  }
+  ```
+- **返回**:
+  ```javascript
+  {
+    success: boolean,
+    task?: Task,
+    record?: Task,
+    starsAwarded?: boolean,
+    unchanged?: boolean,
+    fallback?: boolean,
+    mutation?: Object,
+    message?: string
+  }
+  ```
+- **说明**:
+  - 同一表现项/同一孩子/同一天只保留一条记录
+  - 重复记录相同结果时按幂等成功返回
+  - `success -> failure` 覆盖时会在同一事务内撤回此前已发星星
+
+##### `disableOccurrenceTask(taskId, options = {}, userId = null)`
+停用表现项配置任务。
+- **参数**:
+  ```javascript
+  {
+    disableFromDate?: string
+  }
+  ```
+- **返回**: `Promise<{ success: boolean, task?: Task, disabledTask?: Task, fallback?: boolean, mutation?: Object, message?: string }>`
+- **说明**: 只让该表现项退出未来日期查询，不删除历史记录
+
+##### `convertTaskToOccurrenceMode(taskId, options = {}, userId = null)`
+把既有 planned 任务转换为表现项配置任务。
+- **参数**:
+  ```javascript
+  {
+    effectiveFromDate?: string
+  }
+  ```
+- **返回**:
+  ```javascript
+  {
+    success: boolean,
+    task?: Task,
+    convertedTask?: Task,
+    archivedFutureInstances?: string[],
+    fallback?: boolean,
+    mutation?: Object,
+    message?: string
+  }
+  ```
+- **说明**: 仅归档未来未完成实例，已完成历史实例与历史表现记录保持不动
 
 ---
 

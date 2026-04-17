@@ -1,0 +1,100 @@
+<view class="occurrence-page">
+  <view class="page-header">
+    <text class="page-subtitle">有结果再记录，没发生就留空</text>
+  </view>
+
+  <view class="child-switcher" wx:if="{{childOptions.length > 1}}">
+    <block wx:for="{{childOptions}}" wx:key="userId">
+      <view class="child-pill {{item.userId === targetUserId ? 'active' : ''}}" data-user-id="{{item.userId}}" bindtap="onChildTap">
+        {{item.label}}
+      </view>
+    </block>
+  </view>
+
+  <view class="section-card">
+    <view class="section-head">
+      <text class="section-title">已有表现项</text>
+      <text class="section-note" wx:if="{{targetUserName}}">当前：{{targetUserName}}</text>
+    </view>
+
+    <block wx:if="{{!loading && items.length > 0}}">
+      <block wx:for="{{items}}" wx:key="id">
+        <view class="item-row">
+          <view class="item-main">
+            <view class="item-topline">
+              <text class="item-title">{{item.title}}</text>
+              <text class="item-type">{{item.typeLabel}}</text>
+            </view>
+            <text class="item-meta">{{item.points}} 颗星星</text>
+            <text class="item-meta">{{item.rangeText}}</text>
+            <text class="item-meta item-status">{{item.statusText}}</text>
+          </view>
+          <view class="item-actions">
+            <text class="item-action" data-id="{{item.id}}" bindtap="onEditTap">编辑</text>
+            <text class="item-action" data-id="{{item.id}}" bindtap="onMoreTap">更多</text>
+          </view>
+        </view>
+      </block>
+    </block>
+
+    <view class="empty-panel" wx:elif="{{!loading}}">
+      <text class="empty-text">{{emptyText}}</text>
+    </view>
+  </view>
+
+  <view class="section-card">
+    <view class="section-head">
+      <text class="section-title">{{editingId ? '编辑表现项' : '新建表现项'}}</text>
+      <text class="section-note" wx:if="{{editingId}}">更新后将继续沿用原有记录</text>
+    </view>
+
+    <view class="form-item">
+      <text class="form-label">名称</text>
+      <input class="form-input" placeholder="例如：听写全对" value="{{draft.title}}" bindinput="onTitleInput" maxlength="20" />
+    </view>
+
+    <view class="form-grid two-columns">
+      <view class="form-item compact">
+        <text class="form-label">类别</text>
+        <view class="type-row compact">
+          <view class="type-pill {{draft.type === 'study' ? 'active study' : ''}}" data-type="study" bindtap="onTypeTap">学习</view>
+          <view class="type-pill {{draft.type === 'habit' ? 'active habit' : ''}}" data-type="habit" bindtap="onTypeTap">习惯</view>
+          <view class="type-pill {{draft.type === 'interest' ? 'active interest' : ''}}" data-type="interest" bindtap="onTypeTap">兴趣</view>
+        </view>
+      </view>
+
+      <view class="form-item compact">
+        <text class="form-label">星星</text>
+        <view class="points-stepper">
+          <view class="stepper-btn minus" data-action="minus" bindtap="onPointsStepTap">-</view>
+          <input class="stepper-input" type="number" value="{{draft.points}}" bindinput="onPointsInput" />
+          <view class="stepper-btn plus" data-action="plus" bindtap="onPointsStepTap">+</view>
+        </view>
+      </view>
+    </view>
+
+    <view class="form-item">
+      <text class="form-label">适用时间</text>
+      <view class="date-range-panel">
+        <view class="date-range-row">
+          <picker mode="date" value="{{draft.startDate}}" bindchange="onStartDateChange">
+            <view class="picker-value range-picker">{{draft.startDate}}</view>
+          </picker>
+          <text class="date-connector">至</text>
+          <picker mode="date" value="{{draft.endDate || draft.startDate}}" bindchange="onEndDateChange" disabled="{{draft.hasNoEndDate}}">
+            <view class="picker-value range-picker {{draft.hasNoEndDate ? 'disabled' : ''}}">{{draft.hasNoEndDate ? '长期有效' : (draft.endDate || '选择结束日期')}}</view>
+          </picker>
+        </view>
+        <view class="range-switch-row">
+          <text class="range-switch-label">长期有效</text>
+          <switch checked="{{draft.hasNoEndDate}}" bindchange="onToggleNoEndDate" color="#4285F4" />
+        </view>
+      </view>
+    </view>
+
+    <view class="form-actions">
+      <button class="secondary-btn" wx:if="{{editingId}}" bindtap="onCancelEdit">取消编辑</button>
+      <button class="primary-btn" loading="{{saving}}" bindtap="onSaveTap">{{editingId ? '保存修改' : '创建'}}</button>
+    </view>
+  </view>
+</view>

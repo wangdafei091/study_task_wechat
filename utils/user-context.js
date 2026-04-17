@@ -98,14 +98,14 @@ function createUserContextSnapshot(input = {}) {
     viewUser,
     familyId: (loginUser && loginUser.familyId) || (viewUser && viewUser.familyId) || null,
     loginUserId: getUserIdentifier(loginUser),
-    loginUserRole: loginUser?.role || null,
+    loginUserRole: (loginUser && loginUser.role) || null,
     viewUserId: getUserIdentifier(viewUser),
-    viewUserRole: viewUser?.role || null,
+    viewUserRole: (viewUser && viewUser.role) || null,
     activeChildUserIds,
-    isParentDevice: loginUser?.role === 'parent',
-    isChildDevice: loginUser?.role === 'child',
-    isParentView: viewUser?.role === 'parent',
-    isChildView: viewUser?.role === 'child'
+    isParentDevice: Boolean(loginUser && loginUser.role === 'parent'),
+    isChildDevice: Boolean(loginUser && loginUser.role === 'child'),
+    isParentView: Boolean(viewUser && viewUser.role === 'parent'),
+    isChildView: Boolean(viewUser && viewUser.role === 'child')
   };
 }
 

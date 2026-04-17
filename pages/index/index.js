@@ -15,6 +15,59 @@ const userSwitcherModule = require('./modules/index-user-switcher');
 const dateNavigationModule = require('./modules/index-date-navigation');
 const messagePreviewModule = require('./modules/index-message-preview');
 
+function formatOccurrenceDateLabel(dateString) {
+  const todayString = dateUtils.getTodayString();
+  if (!dateString || dateString === todayString) {
+    return '今天';
+  }
+
+  const yesterday = new Date(todayString);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (dateUtils.formatDate(yesterday) === dateString) {
+    return '昨天';
+  }
+
+  const date = new Date(dateString);
+  return `${date.getMonth() + 1}月${date.getDate()}日`;
+}
+
+function isPendingSyncOccurrenceRecord(record) {
+  if (!record || typeof record !== 'object') {
+    return false;
+  }
+
+  return Boolean(record.pendingSyncMeta || record.syncedToCloud === false);
+}
+
+function buildOccurrenceDisplayItems(tasks = [], records = []) {
+  const recordMap = (records || []).reduce((result, record) => {
+    result[record.parentTaskId] = record;
+    return result;
+  }, {});
+
+  return (tasks || []).map((task) => {
+    const record = recordMap[task.id] || null;
+    const outcome = record?.occurrenceOutcome || 'none';
+    const isPendingSync = isPendingSyncOccurrenceRecord(record);
+    const statusPrefix = isPendingSync ? '待同步' : '已记录';
+    const statusLabel = outcome === 'success'
+      ? `${statusPrefix} · 达成`
+      : (outcome === 'failure' ? `${statusPrefix} · 未达成` : '未记录');
+    const statusTone = outcome === 'success'
+      ? (isPendingSync ? 'pending' : 'success')
+      : (outcome === 'failure' ? (isPendingSync ? 'pending' : 'failure') : 'idle');
+
+    return {
+      ...task,
+      record,
+      outcome,
+      isPendingSync,
+      statusLabel,
+      statusTone
+    };
+  });
+}
+
 Page({
   data: {
     userInfo: {},
@@ -76,6 +129,10 @@ Page({
       interest: 0,
       study: 0
     },
+    occurrenceTasks: [],
+    occurrenceDateLabel: '今天',
+    occurrenceHelperText: '有结果再记录，没发生就留空',
+    showOccurrenceSection: false,
 
     // 消息中心相关
     showMessagePreview: false, // 是否显示消息预览
@@ -349,17 +406,43 @@ Page({
       // 根据日期参数决定加载方式
       let tasks;
       let targetDate;
+      let occurrenceTasks = [];
+      let occurrenceRecords = [];
+      const occurrenceEnabled = typeof taskService.isOccurrenceEnabled === 'function'
+        ? await taskService.isOccurrenceEnabled()
+        : true;
       
       const currentUserId = this.getEffectiveTaskUserId();
+      const loadOccurrenceTasks = occurrenceEnabled && currentUserId && typeof taskService.getOccurrenceTasks === 'function'
+        ? (targetDateValue) => taskService.getOccurrenceTasks({
+          date: targetDateValue,
+          userId: currentUserId
+        })
+        : () => Promise.resolve([]);
+      const loadOccurrenceRecords = occurrenceEnabled && currentUserId && typeof taskService.getOccurrenceRecordsByDateRange === 'function'
+        ? (targetDateValue) => taskService.getOccurrenceRecordsByDateRange({
+          startDate: targetDateValue,
+          endDate: targetDateValue,
+          userId: currentUserId
+        })
+        : () => Promise.resolve([]);
       if (date) {
         // 加载指定日期的任务
         targetDate = date;
-        tasks = await taskService.getTasksByDate(date, currentUserId, { requireFreshStars: true });
+        [tasks, occurrenceTasks, occurrenceRecords] = await Promise.all([
+          taskService.getTasksByDate(date, currentUserId, { requireFreshStars: true }),
+          loadOccurrenceTasks(date),
+          loadOccurrenceRecords(date)
+        ]);
         logger.info('Index', `指定日期任务加载成功（共享模式）, 日期=${date}, 任务数量: ${tasks.length}`);
       } else {
         // 加载今日任务
         targetDate = dateUtils.getTodayString();
-        tasks = await taskService.getTodayTasks(currentUserId, { requireFreshStars: true });
+        [tasks, occurrenceTasks, occurrenceRecords] = await Promise.all([
+          taskService.getTodayTasks(currentUserId, { requireFreshStars: true }),
+          loadOccurrenceTasks(targetDate),
+          loadOccurrenceRecords(targetDate)
+        ]);
         logger.info('Index', `今日任务加载成功（共享模式）, 任务数量: ${tasks.length}`);
       }
       
@@ -385,6 +468,9 @@ Page({
       // 更新页面数据
       this.setData({
         tasks: tasks,
+        occurrenceTasks: buildOccurrenceDisplayItems(occurrenceTasks, occurrenceRecords),
+        showOccurrenceSection: occurrenceEnabled && occurrenceTasks.length > 0,
+        occurrenceDateLabel: formatOccurrenceDateLabel(targetDate),
         hasTodayTasks: (tasks && tasks.length > 0),
         currentViewDate: targetDate,
         pageTitle: this.getPageTitleForDate(targetDate),
@@ -394,7 +480,7 @@ Page({
       this._updateViewState(targetDate);
       
       // 检查任务进度
-      await this.calculateProgress(tasks);
+      await this.calculateProgress(tasks.concat(occurrenceRecords));
       
       // 更新任务统计信息
       await this.updateTaskStats();
@@ -505,6 +591,43 @@ Page({
     } catch (error) {
       logger.error('Index', '计算任务进度失败', error);
     }
+  },
+
+  async recordOccurrenceFromHome(e) {
+    const taskId = e.currentTarget.dataset.taskId;
+    const outcome = e.currentTarget.dataset.outcome;
+    const taskService = serviceManager.getService('task');
+    const targetUserId = this.getEffectiveTaskUserId();
+    const targetDate = this.data.currentViewDate || dateUtils.getTodayString();
+
+    if (!taskService || !taskId || !outcome || !targetUserId) {
+      return;
+    }
+
+    const result = await taskService.recordOccurrenceResult(taskId, {
+      userId: targetUserId,
+      date: targetDate,
+      outcome
+    });
+
+    if (!result.success) {
+      wx.showToast({
+        title: result.message || '记录失败',
+        icon: 'none'
+      });
+      return;
+    }
+
+    wx.showToast(result.fallback
+      ? {
+        title: '已暂存，等待同步',
+        icon: 'none'
+      }
+      : {
+        title: outcome === 'success' ? '已记为达成' : '已记为未达成',
+        icon: 'success'
+      });
+    await this.refreshTaskDataForCurrentView();
   },
   
   /**
@@ -878,9 +1001,8 @@ Page({
       logger.debug('Index', '点击任务菜单项，跳转到任务编辑页面');
       const effectiveUserId = this.getEffectiveTaskUserId();
       const targetParam = effectiveUserId ? `&targetUserId=${effectiveUserId}` : '';
-      const entryParam = this.data.isViewingToday ? '' : '&entry=index_non_today_create';
       wx.navigateTo({
-        url: `/pages/task-edit/task-edit?mode=create${targetParam}${entryParam}`
+        url: `/pages/task-edit/task-edit?mode=create${targetParam}`
       });
     } else if (item && item.id === 'study') {
       this.navigateToAnalysisPage();

@@ -124,6 +124,32 @@
   padding-bottom: env(safe-area-inset-bottom, 20rpx);
 }
 
+.occurrence-entry-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6rpx;
+  min-height: 52rpx;
+  padding: 0 16rpx 0 18rpx;
+  border-radius: 999rpx;
+  background: rgba(66, 133, 244, 0.06);
+  color: #5f6f86;
+  line-height: 1;
+  box-sizing: border-box;
+}
+
+.occurrence-entry-label {
+  font-size: 22rpx;
+  font-weight: 500;
+  letter-spacing: 0.2rpx;
+}
+
+.occurrence-entry-arrow {
+  font-size: 20rpx;
+  color: #8a97aa;
+  transform: translateY(-1rpx);
+}
+
 .add-task-content {
   padding: 24rpx 20rpx;
 }
@@ -1084,20 +1110,6 @@
   font-size: 24rpx;
   color: #f94646;
   margin-left: 20rpx;
-}
-
-.entry-hint {
-  margin-bottom: 20rpx;
-  padding: 20rpx 24rpx;
-  border-radius: 20rpx;
-  background: #f7f4ea;
-  border: 2rpx solid #e4d7b1;
-}
-
-.entry-hint-text {
-  color: #7b5d12;
-  font-size: 24rpx;
-  line-height: 1.6;
 }
 
 /* 统一所有开关右侧对齐 */

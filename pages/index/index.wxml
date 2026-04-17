@@ -27,7 +27,7 @@
   <!-- 进度圆环区域 -->
   <view class="progress-rings-container">
     <!-- 共享标题区域 -->
-    <view class="rings-title">任务完成进度</view>
+    <view class="rings-title">当前进度</view>
     
     <!-- 横向排列的圆环区域 -->
     <view class="rings-row">
@@ -241,12 +241,12 @@
   </upcoming-task>
   
   <!-- 今日任务列表 -->
-  <view class="task-list-container">
+  <view class="task-list-container {{showOccurrenceSection ? 'has-occurrence-section' : ''}} {{tasks.length === 0 && showOccurrenceSection ? 'occurrence-only' : ''}}">
     <view class="task-list-header">
       <view class="task-list-title-group">
         <view class="task-list-title">{{pageTitle}}</view>
         <view wx:if="{{pageTitleBadge}}" class="task-list-badge">{{pageTitleBadge}}</view>
-        <view class="task-list-count">{{tasks.length}}个任务</view>
+        <view class="task-list-count" wx:if="{{tasks.length > 0 || !showOccurrenceSection}}">{{tasks.length}}个任务</view>
       </view>
       <view class="week-switcher">
         <view
@@ -277,7 +277,7 @@
       </block>
     </view>
     
-    <view class="task-list">
+    <view class="task-list {{tasks.length === 0 && showOccurrenceSection ? 'occurrence-only' : ''}}">
       <block wx:for="{{tasks}}" wx:key="id">
         <view class="task-wrapper">
           <index-task-item 
@@ -291,22 +291,50 @@
       </block>
       
       <!-- 家长在孩子视角：无任务 -->
-      <view class="empty-task-list" wx:if="{{tasks.length === 0 && canManageMembers && currentUser && currentUser.role === 'child'}}">
+      <view class="empty-task-list" wx:if="{{tasks.length === 0 && !showOccurrenceSection && canManageMembers && currentUser && currentUser.role === 'child'}}">
         暂无任务，请切换到家长视角后点击"+"添加任务
       </view>
       <!-- 家长在自己视角（管理模式）：无任务，可直接创建 -->
-      <view class="empty-task-list" wx:if="{{tasks.length === 0 && canManageMembers && currentUser && currentUser.role === 'parent' && availableUsers.length > 1}}">
+      <view class="empty-task-list" wx:if="{{tasks.length === 0 && !showOccurrenceSection && canManageMembers && currentUser && currentUser.role === 'parent' && availableUsers.length > 1}}">
         点击右下角"+"按钮添加任务
       </view>
       <!-- 家长尚无孩子成员 -->
-      <view class="empty-task-list" wx:if="{{tasks.length === 0 && canManageMembers && availableUsers.length <= 1}}">
+      <view class="empty-task-list" wx:if="{{tasks.length === 0 && !showOccurrenceSection && canManageMembers && availableUsers.length <= 1}}">
         还没有孩子成员，请前往家庭设置添加孩子
       </view>
       <!-- 孩子视角空态 -->
-      <view class="empty-task-list" wx:if="{{tasks.length === 0 && !canManageMembers}}">
+      <view class="empty-task-list" wx:if="{{tasks.length === 0 && !showOccurrenceSection && !canManageMembers}}">
         暂无任务
       </view>
     </view>
+  </view>
+
+  <view class="occurrence-section card" wx:if="{{showOccurrenceSection}}">
+    <view class="occurrence-header">
+      <view>
+        <view class="occurrence-title-row">
+          <text class="occurrence-title">表现记录</text>
+          <text class="occurrence-date-pill">{{occurrenceDateLabel}}</text>
+        </view>
+        <text class="occurrence-helper">{{occurrenceHelperText}}</text>
+      </view>
+    </view>
+
+    <block wx:for="{{occurrenceTasks}}" wx:key="id">
+      <view class="occurrence-item">
+        <view class="occurrence-main">
+          <text class="occurrence-name">{{item.title}}</text>
+          <view class="occurrence-state-row" wx:if="{{!isViewingFuture}}">
+            <text class="occurrence-state-pill {{item.statusTone}}">{{item.statusLabel}}</text>
+          </view>
+          <text class="occurrence-result muted" wx:else>未来日期不能记录表现</text>
+        </view>
+        <view class="occurrence-actions" wx:if="{{!isViewingFuture}}">
+          <button class="occurrence-btn success {{item.outcome === 'success' ? 'active' : ''}} {{item.outcome !== 'none' && item.outcome !== 'success' ? 'inactive' : ''}}" data-task-id="{{item.id}}" data-outcome="success" bindtap="recordOccurrenceFromHome">达成</button>
+          <button class="occurrence-btn failure {{item.outcome === 'failure' ? 'active' : ''}} {{item.outcome !== 'none' && item.outcome !== 'failure' ? 'inactive' : ''}}" data-task-id="{{item.id}}" data-outcome="failure" bindtap="recordOccurrenceFromHome">未达成</button>
+        </view>
+      </view>
+    </block>
   </view>
   
   <!-- 底部导航占位 -->
@@ -316,6 +344,7 @@
   <float-menu
     menuItems="{{menuItems}}"
     position="bottom-right"
+    bottomOffset="{{showOccurrenceSection ? 150 : 0}}"
     bind:itemtap="handleMenuItemTap"
     bind:statechange="handleMenuStateChange"
   />

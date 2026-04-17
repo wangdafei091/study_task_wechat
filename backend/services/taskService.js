@@ -81,6 +81,35 @@ class TaskService {
     }
   }
 
+  _getOccurrenceRequiredColumns(columnMap) {
+    return [
+      columnMap.executionMode,
+      columnMap.activeStartDate,
+      columnMap.activeEndDate,
+      columnMap.activeHasNoEndDate,
+      columnMap.isOccurrenceRecord,
+      columnMap.occurrenceOutcome,
+      columnMap.recordedAt
+    ];
+  }
+
+  _hasOccurrenceSchema(columnMap) {
+    return this._getOccurrenceRequiredColumns(columnMap).every(Boolean);
+  }
+
+  _assertOccurrenceSchemaAvailable(columnMap, context, shouldRequire) {
+    if (!shouldRequire) {
+      return;
+    }
+
+    if (!this._hasOccurrenceSchema(columnMap)) {
+      throw this._createSchemaError(
+        'TASK_OCCURRENCE_SCHEMA_MISSING',
+        `${context}失败：tasks 表缺少 occurrence 字段，请先执行数据库迁移`
+      );
+    }
+  }
+
   async _getTaskColumnMap(forceRefresh = false) {
     if (forceRefresh) {
       taskColumnMapPromise = null;
@@ -120,6 +149,13 @@ class TaskService {
             hasNoEndDate: resolveColumn('has_no_end_date', 'hasNoEndDate', true),
             tags: resolveColumn('tags', null, true),
             parentTaskId: resolveColumn('parent_task_id', 'parentTaskId', true),
+            executionMode: resolveColumn('execution_mode', 'executionMode', true),
+            activeStartDate: resolveColumn('active_start_date', 'activeStartDate', true),
+            activeEndDate: resolveColumn('active_end_date', 'activeEndDate', true),
+            activeHasNoEndDate: resolveColumn('active_has_no_end_date', 'activeHasNoEndDate', true),
+            isOccurrenceRecord: resolveColumn('is_occurrence_record', 'isOccurrenceRecord', true),
+            occurrenceOutcome: resolveColumn('occurrence_outcome', 'occurrenceOutcome', true),
+            recordedAt: resolveColumn('recorded_at', 'recordedAt', true),
           };
 
           logger.info('检测到 tasks 表字段映射', columnMap);
@@ -147,6 +183,13 @@ class TaskService {
             hasNoEndDate: 'has_no_end_date',
             tags: 'tags',
             parentTaskId: 'parent_task_id',
+            executionMode: 'execution_mode',
+            activeStartDate: 'active_start_date',
+            activeEndDate: 'active_end_date',
+            activeHasNoEndDate: 'active_has_no_end_date',
+            isOccurrenceRecord: 'is_occurrence_record',
+            occurrenceOutcome: 'occurrence_outcome',
+            recordedAt: 'recorded_at',
           };
         }
       })();
@@ -164,6 +207,39 @@ class TaskService {
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
+  }
+
+  _shiftDate(dateString, dayDelta) {
+    if (!dateString) {
+      return null;
+    }
+
+    const date = new Date(`${dateString}T00:00:00`);
+    if (Number.isNaN(date.getTime())) {
+      return null;
+    }
+
+    date.setDate(date.getDate() + dayDelta);
+    return this._formatDate(date);
+  }
+
+  _buildOccurrenceRecordTaskId(parentTaskId, userId, date) {
+    const digest = createHash('sha1')
+      .update(`${parentTaskId}:${userId}:${date}`)
+      .digest('hex');
+    return `task_occ_${digest.slice(0, 24)}`;
+  }
+
+  _buildOccurrenceStarRecordId(action, taskId, operationKey) {
+    const digest = createHash('sha1')
+      .update(`${action}:${taskId}:${operationKey}`)
+      .digest('hex');
+    return `task_occ_${action}_${digest.slice(0, 24)}`;
+  }
+
+  async hasOccurrenceCapability() {
+    const columnMap = await this._getTaskColumnMap();
+    return this._hasOccurrenceSchema(columnMap);
   }
 
   _buildTaskBackfillExpiredError(task, modifyTime) {
@@ -345,20 +421,54 @@ class TaskService {
   async getTasksByUser(userId, filters = {}) {
     try {
       const { date, status, startDate, endDate } = filters;
+      const includeOccurrence = filters.includeOccurrence === true;
+      const occurrenceMode = filters.occurrenceMode || 'all';
+      const includeInactive = filters.includeInactive === true;
+      const columnMap = await this._getTaskColumnMap();
+      this._assertOccurrenceSchemaAvailable(
+        columnMap,
+        '查询任务',
+        includeOccurrence || occurrenceMode !== 'all' || includeInactive
+      );
+
       let sql = 'SELECT * FROM tasks WHERE user_id = ? AND deleted_at IS NULL';
       const params = [userId];
 
-      if (date) {
+      if (this._hasOccurrenceSchema(columnMap)) {
+        if (!includeOccurrence) {
+          sql += ` AND (${columnMap.executionMode} IS NULL OR ${columnMap.executionMode} = 'planned')`;
+        } else if (occurrenceMode === 'config') {
+          sql += ` AND ${columnMap.executionMode} = 'occurrence' AND ${columnMap.isOccurrenceRecord} = 0`;
+        } else if (occurrenceMode === 'record') {
+          sql += ` AND ${columnMap.executionMode} = 'occurrence' AND ${columnMap.isOccurrenceRecord} = 1`;
+        }
+      }
+
+      const isOccurrenceConfigQuery = includeOccurrence && occurrenceMode === 'config' && this._hasOccurrenceSchema(columnMap);
+
+      if (date && isOccurrenceConfigQuery) {
+        if (includeInactive) {
+          // 表现项维护页带 includeInactive 时不过滤有效期，返回当前孩子的全部未删除配置任务。
+        } else {
+          sql += ` AND ${columnMap.activeStartDate} <= ? AND (${columnMap.activeHasNoEndDate} = 1 OR ${columnMap.activeEndDate} IS NULL OR ${columnMap.activeEndDate} >= ?)`;
+          params.push(date, date);
+        }
+      } else if (date) {
         sql += ' AND date = ?';
         params.push(date);
       }
 
-      if (startDate && endDate) {
+      if (startDate && endDate && isOccurrenceConfigQuery) {
+        if (!includeInactive) {
+          sql += ` AND ${columnMap.activeStartDate} <= ? AND (${columnMap.activeHasNoEndDate} = 1 OR ${columnMap.activeEndDate} IS NULL OR ${columnMap.activeEndDate} >= ?)`;
+          params.push(endDate, startDate);
+        }
+      } else if (startDate && endDate) {
         sql += ' AND date >= ? AND date <= ?';
         params.push(startDate, endDate);
       }
 
-      if (status !== undefined) {
+      if (status !== undefined && !isOccurrenceConfigQuery) {
         sql += ' AND status = ?';
         params.push(status);
       }
@@ -406,6 +516,15 @@ class TaskService {
   async _createTaskRecordWithConnection(connection, userId, taskData, options = {}) {
     const columnMap = options.columnMap || await this._getTaskColumnMap();
     this._assertReminderColumnAvailable(columnMap, '创建任务', taskData.reminder);
+    this._assertOccurrenceSchemaAvailable(
+      columnMap,
+      '创建任务',
+      taskData.executionMode === 'occurrence' ||
+      taskData.activeRange !== undefined ||
+      taskData.isOccurrenceRecord === true ||
+      taskData.occurrenceOutcome !== undefined ||
+      taskData.recordedAt !== undefined
+    );
 
     const modifyTime = Number(taskData.modifyTime || options.modifyTime || Date.now());
     const operationKey = String(options.operationKey || taskData.operationKey || modifyTime);
@@ -478,6 +597,34 @@ class TaskService {
         if (columnMap.parentTaskId) {
           restoreSetClauses.push(`${columnMap.parentTaskId} = ?`);
           restoreParams.push(taskData.parentTaskId || null);
+        }
+        if (columnMap.executionMode) {
+          restoreSetClauses.push(`${columnMap.executionMode} = ?`);
+          restoreParams.push(taskData.executionMode || 'planned');
+        }
+        if (columnMap.activeStartDate) {
+          restoreSetClauses.push(`${columnMap.activeStartDate} = ?`);
+          restoreParams.push(taskData.activeRange?.startDate || null);
+        }
+        if (columnMap.activeEndDate) {
+          restoreSetClauses.push(`${columnMap.activeEndDate} = ?`);
+          restoreParams.push(taskData.activeRange?.hasNoEndDate ? null : (taskData.activeRange?.endDate || null));
+        }
+        if (columnMap.activeHasNoEndDate) {
+          restoreSetClauses.push(`${columnMap.activeHasNoEndDate} = ?`);
+          restoreParams.push(taskData.activeRange?.hasNoEndDate ? 1 : 0);
+        }
+        if (columnMap.isOccurrenceRecord) {
+          restoreSetClauses.push(`${columnMap.isOccurrenceRecord} = ?`);
+          restoreParams.push(taskData.isOccurrenceRecord ? 1 : 0);
+        }
+        if (columnMap.occurrenceOutcome) {
+          restoreSetClauses.push(`${columnMap.occurrenceOutcome} = ?`);
+          restoreParams.push(taskData.occurrenceOutcome || 'none');
+        }
+        if (columnMap.recordedAt) {
+          restoreSetClauses.push(`${columnMap.recordedAt} = ?`);
+          restoreParams.push(taskData.recordedAt || null);
         }
         if (columnMap.modifyTime) {
           restoreSetClauses.push(`${columnMap.modifyTime} = ?`);
@@ -587,6 +734,34 @@ class TaskService {
     if (columnMap.parentTaskId) {
       insertColumns.push(columnMap.parentTaskId);
       insertValues.push(task.parentTaskId || null);
+    }
+    if (columnMap.executionMode) {
+      insertColumns.push(columnMap.executionMode);
+      insertValues.push(task.executionMode || 'planned');
+    }
+    if (columnMap.activeStartDate) {
+      insertColumns.push(columnMap.activeStartDate);
+      insertValues.push(task.activeRange?.startDate || null);
+    }
+    if (columnMap.activeEndDate) {
+      insertColumns.push(columnMap.activeEndDate);
+      insertValues.push(task.activeRange?.hasNoEndDate ? null : (task.activeRange?.endDate || null));
+    }
+    if (columnMap.activeHasNoEndDate) {
+      insertColumns.push(columnMap.activeHasNoEndDate);
+      insertValues.push(task.activeRange?.hasNoEndDate ? 1 : 0);
+    }
+    if (columnMap.isOccurrenceRecord) {
+      insertColumns.push(columnMap.isOccurrenceRecord);
+      insertValues.push(task.isOccurrenceRecord ? 1 : 0);
+    }
+    if (columnMap.occurrenceOutcome) {
+      insertColumns.push(columnMap.occurrenceOutcome);
+      insertValues.push(task.occurrenceOutcome || 'none');
+    }
+    if (columnMap.recordedAt) {
+      insertColumns.push(columnMap.recordedAt);
+      insertValues.push(task.recordedAt || null);
     }
     if (columnMap.penaltyDeductedPoints) {
       insertColumns.push(columnMap.penaltyDeductedPoints);
@@ -754,12 +929,22 @@ class TaskService {
     try {
       const columnMap = await this._getTaskColumnMap();
       this._assertReminderColumnAvailable(columnMap, '更新任务', changes.reminder);
+      this._assertOccurrenceSchemaAvailable(
+        columnMap,
+        '更新任务',
+        changes.executionMode !== undefined ||
+        changes.activeRange !== undefined ||
+        changes.isOccurrenceRecord !== undefined ||
+        changes.occurrenceOutcome !== undefined ||
+        changes.recordedAt !== undefined
+      );
       const pool = getPool();
       const connection = await pool.getConnection();
       const ALLOWED_FIELDS = [
         'title', 'description', 'date', 'type', 'startTime', 'endTime',
         'duration', 'isAllDay', 'reminder',
         'points', 'pointsExpiry', 'tags', 'hasNoEndDate', 'repeat',
+        'executionMode', 'activeRange', 'isOccurrenceRecord', 'occurrenceOutcome', 'recordedAt'
       ];
 
       const setClauses = [];
@@ -779,6 +964,10 @@ class TaskService {
         tags: columnMap.tags,
         hasNoEndDate: columnMap.hasNoEndDate,
         repeat: '`repeat`',
+        executionMode: columnMap.executionMode,
+        isOccurrenceRecord: columnMap.isOccurrenceRecord,
+        occurrenceOutcome: columnMap.occurrenceOutcome,
+        recordedAt: columnMap.recordedAt,
       };
 
       for (const field of ALLOWED_FIELDS) {
@@ -795,9 +984,26 @@ class TaskService {
             } else {
               params.push(changes[field] !== null ? JSON.stringify(changes[field]) : null);
             }
+          } else if (field === 'activeRange') {
+            if (columnMap.activeStartDate) {
+              setClauses.push(`${columnMap.activeStartDate} = ?`);
+              params.push(changes.activeRange?.startDate || null);
+            }
+            if (columnMap.activeEndDate) {
+              setClauses.push(`${columnMap.activeEndDate} = ?`);
+              params.push(changes.activeRange?.hasNoEndDate ? null : (changes.activeRange?.endDate || null));
+            }
+            if (columnMap.activeHasNoEndDate) {
+              setClauses.push(`${columnMap.activeHasNoEndDate} = ?`);
+              params.push(changes.activeRange?.hasNoEndDate ? 1 : 0);
+            }
           } else {
             setClauses.push(`${dbField} = ?`);
-            params.push(changes[field]);
+            if (field === 'isOccurrenceRecord') {
+              params.push(changes[field] ? 1 : 0);
+            } else {
+              params.push(changes[field]);
+            }
           }
         }
       }
@@ -1033,6 +1239,499 @@ class TaskService {
     }
   }
 
+  async recordOccurrenceResult(taskId, payload = {}, options = {}) {
+    try {
+      const columnMap = await this._getTaskColumnMap();
+      this._assertOccurrenceSchemaAvailable(columnMap, '记录表现', true);
+      const pool = getPool();
+      const connection = await pool.getConnection();
+      const outcome = payload.outcome;
+      const targetUserId = payload.targetUserId || payload.userId || null;
+      const date = payload.date || this._formatDate(new Date());
+      const modifyTime = Number(payload.modifyTime || options.modifyTime || Date.now());
+      const operationKey = String(payload.operationKey || options.operationKey || modifyTime);
+      const today = this._formatDate(new Date(modifyTime));
+
+      if (!targetUserId) {
+        const error = new Error('targetUserId 不能为空');
+        error.code = 'INVALID_PARAMS';
+        throw error;
+      }
+
+      if (!['success', 'failure'].includes(outcome)) {
+        const error = new Error('outcome 必须为 success/failure');
+        error.code = 'INVALID_PARAMS';
+        throw error;
+      }
+
+      if (date > today) {
+        const error = new Error('未来日期不能记录表现');
+        error.code = 'TASK_OCCURRENCE_FUTURE_DATE';
+        throw error;
+      }
+
+      try {
+        await connection.beginTransaction();
+        const configRaw = await this._getTaskByIdConn(connection, taskId);
+        if (!configRaw) {
+          await connection.rollback();
+          return null;
+        }
+
+        const configTask = Task.fromDB(configRaw);
+        if (!configTask.isOccurrenceConfigTask()) {
+          const error = new Error('当前任务不是表现项配置任务');
+          error.code = 'TASK_OCCURRENCE_INVALID_TASK';
+          throw error;
+        }
+
+        if (!configTask.canRecordOccurrenceOn(date)) {
+          const error = new Error('该日期不在表现项有效时间内');
+          error.code = 'TASK_OCCURRENCE_DATE_OUT_OF_RANGE';
+          throw error;
+        }
+
+        const [existingRows] = await connection.execute(
+          `SELECT * FROM tasks
+           WHERE ${columnMap.parentTaskId} = ?
+             AND user_id = ?
+             AND date = ?
+             AND deleted_at IS NULL
+             AND ${columnMap.executionMode} = 'occurrence'
+             AND ${columnMap.isOccurrenceRecord} = 1
+           LIMIT 1`,
+          [configTask.taskId, targetUserId, date]
+        );
+        const existingRecord = existingRows[0] ? Task.fromDB(existingRows[0]) : null;
+        const previousOutcome = existingRecord?.occurrenceOutcome || 'none';
+
+        if (existingRecord && previousOutcome === outcome) {
+          await connection.commit();
+          const response = this.buildTaskMutationResponse({
+            primaryTask: configTask,
+            affectedTasks: [configTask, existingRecord],
+            operation: 'occurrence_record',
+            idempotent: true,
+          });
+          response.configTask = configTask.toJSON();
+          response.recordTask = existingRecord.toJSON();
+          response.starsAwarded = existingRecord.starAwarded === true;
+          return response;
+        }
+
+        const recordTask = existingRecord || new Task({
+          ...configTask.toJSON(),
+          taskId: this._buildOccurrenceRecordTaskId(configTask.taskId, targetUserId, date),
+          userId: targetUserId,
+          date,
+          description: configTask.description || '',
+          parentTaskId: configTask.taskId,
+          executionMode: 'occurrence',
+          activeRange: null,
+          isOccurrenceRecord: true,
+          occurrenceOutcome: 'none',
+          recordedAt: null,
+          repeat: null,
+          isRequired: false,
+          isAllDay: false,
+          startTime: '',
+          endTime: '',
+          duration: 0,
+          reminder: { enabled: false, time: 0 },
+          status: 0,
+          completionTime: null,
+          starAwarded: false,
+          modifyTime,
+          hasNoEndDate: false,
+        });
+
+        recordTask.title = configTask.title;
+        recordTask.description = configTask.description || '';
+        recordTask.type = configTask.type;
+        recordTask.points = configTask.points;
+        recordTask.pointsExpiry = configTask.pointsExpiry;
+        recordTask.parentTaskId = configTask.taskId;
+        recordTask.applyOccurrenceOutcome(outcome, {
+          recordedAt: modifyTime,
+          date,
+        });
+
+        if (previousOutcome === 'success' && existingRecord?.starAwarded && Number(existingRecord.points || 0) > 0) {
+          await starService.upsertStarRecordWithConnection(
+            connection,
+            existingRecord.userId,
+            {
+              recordId: this._buildOccurrenceStarRecordId('revoke', existingRecord.taskId, operationKey),
+              type: 'expense',
+              source: 'task',
+              sourceId: existingRecord.taskId,
+              points: -Math.abs(Number(existingRecord.points || 0)),
+              description: `撤销表现达成: ${existingRecord.title}`,
+              expiryType: existingRecord.pointsExpiry || 'permanent',
+              expiryDate: null,
+              originalTaskDate: existingRecord.date || null,
+              requestedPoints: Number(existingRecord.points || 0),
+              idempotencyKey: `task_occurrence_revoke:${existingRecord.taskId}:${operationKey}`,
+              data: {
+                sourceType: 'task_occurrence_revoke',
+                taskId: existingRecord.taskId,
+                operationKey,
+              },
+              modifyTime,
+            }
+          );
+          recordTask.starAwarded = false;
+        }
+
+        if (outcome === 'success' && Number(recordTask.points || 0) > 0) {
+          await starService.grantStarsWithConnection(
+            connection,
+            recordTask.userId,
+            {
+              recordId: this._buildOccurrenceStarRecordId('success', recordTask.taskId, operationKey),
+              source: 'task',
+              sourceId: recordTask.taskId,
+              requestedPoints: Number(recordTask.points || 0),
+              reason: `记录表现达成: ${recordTask.title}`,
+              expiryType: recordTask.pointsExpiry || 'permanent',
+              expiryDate: null,
+              idempotencyKey: `task_occurrence_success:${recordTask.taskId}:${operationKey}`,
+              data: {
+                sourceType: 'task_occurrence_success',
+                taskId: recordTask.taskId,
+                operationKey,
+              },
+              modifyTime,
+            }
+          );
+          recordTask.starAwarded = true;
+        } else {
+          recordTask.starAwarded = false;
+        }
+
+        const recordDb = recordTask.toDB();
+        const existingRecordRaw = await this._getTaskByIdConn(connection, recordTask.taskId, true);
+        if (existingRecordRaw && !existingRecordRaw.deleted_at) {
+          const updateClauses = [
+            'title = ?',
+            'description = ?',
+            'type = ?',
+            'date = ?',
+            `${columnMap.pointsExpiry} = ?`,
+            'points = ?',
+            `${columnMap.executionMode} = ?`,
+            `${columnMap.isOccurrenceRecord} = ?`,
+            `${columnMap.occurrenceOutcome} = ?`,
+            `${columnMap.recordedAt} = ?`,
+            'status = ?',
+            `${columnMap.starAwarded} = ?`,
+            `${columnMap.completionTime} = ?`,
+            `${columnMap.modifyTime} = ?`
+          ];
+          const updateParams = [
+            recordDb.title,
+            recordDb.description,
+            recordDb.type,
+            recordDb.date,
+            recordDb[columnMap.pointsExpiry] || recordTask.pointsExpiry || 'permanent',
+            recordDb.points,
+            recordDb.execution_mode,
+            recordDb.is_occurrence_record,
+            recordDb.occurrence_outcome,
+            recordDb.recorded_at,
+            recordDb.status,
+            recordDb.star_awarded,
+            recordDb.completion_time,
+            modifyTime,
+            recordTask.taskId
+          ];
+
+          await connection.execute(
+            `UPDATE tasks SET ${updateClauses.join(', ')} WHERE task_id = ? AND deleted_at IS NULL`,
+            updateParams
+          );
+        } else {
+          await this._createTaskRecordWithConnection(connection, targetUserId, recordTask.toJSON(), {
+            ...options,
+            columnMap,
+            createMessages: false,
+            modifyTime,
+            operationKey
+          });
+          await connection.execute(
+            `UPDATE tasks
+             SET status = ?,
+                 ${columnMap.starAwarded} = ?,
+                 ${columnMap.completionTime} = ?,
+                 ${columnMap.modifyTime} = ?
+             WHERE task_id = ? AND deleted_at IS NULL`,
+            [
+              recordTask.status,
+              recordTask.starAwarded ? 1 : 0,
+              recordTask.completionTime || null,
+              modifyTime,
+              recordTask.taskId
+            ]
+          );
+        }
+
+        let messageAction = null;
+        if (outcome === 'success') {
+          messageAction = date < today ? 'history_complete' : 'complete';
+        } else if (previousOutcome === 'success') {
+          messageAction = 'reset';
+        }
+
+        if (messageAction) {
+          await this._createTaskMessagesAfterMutation(
+            recordTask,
+            messageAction,
+            options,
+            operationKey,
+            connection
+          );
+        }
+
+        const updatedRecordRaw = await this._getTaskByIdConn(connection, recordTask.taskId);
+        const updatedRecord = Task.fromDB(updatedRecordRaw);
+        await connection.commit();
+
+        const response = this.buildTaskMutationResponse({
+          primaryTask: configTask,
+          affectedTasks: [configTask, updatedRecord],
+          operation: 'occurrence_record',
+        });
+        response.configTask = configTask.toJSON();
+        response.recordTask = updatedRecord.toJSON();
+        response.starsAwarded = updatedRecord.starAwarded === true;
+        return response;
+      } catch (error) {
+        await connection.rollback();
+        throw error;
+      } finally {
+        connection.release();
+      }
+    } catch (error) {
+      logger.error('记录表现失败', error);
+      throw error;
+    }
+  }
+
+  async disableOccurrenceTask(taskId, payload = {}, options = {}) {
+    try {
+      const columnMap = await this._getTaskColumnMap();
+      this._assertOccurrenceSchemaAvailable(columnMap, '停用表现项', true);
+      const pool = getPool();
+      const connection = await pool.getConnection();
+      const disableFromDate = payload.disableFromDate || this._formatDate(new Date());
+      const modifyTime = Number(payload.modifyTime || options.modifyTime || Date.now());
+      const operationKey = String(payload.operationKey || options.operationKey || modifyTime);
+
+      try {
+        await connection.beginTransaction();
+        const existingRaw = await this._getTaskByIdConn(connection, taskId);
+        if (!existingRaw) {
+          await connection.rollback();
+          return null;
+        }
+
+        const existingTask = Task.fromDB(existingRaw);
+        if (!existingTask.isOccurrenceConfigTask()) {
+          const error = new Error('当前任务不是表现项配置任务');
+          error.code = 'TASK_OCCURRENCE_INVALID_TASK';
+          throw error;
+        }
+
+        const nextEndDateCandidate = this._shiftDate(disableFromDate, -1);
+        const currentEndDate = existingTask.activeRange?.hasNoEndDate
+          ? null
+          : (existingTask.activeRange?.endDate || null);
+        const nextEndDate = currentEndDate && nextEndDateCandidate
+          ? (currentEndDate < nextEndDateCandidate ? currentEndDate : nextEndDateCandidate)
+          : nextEndDateCandidate;
+
+        const [result] = await connection.execute(
+          `UPDATE tasks
+           SET ${columnMap.activeEndDate} = ?,
+               ${columnMap.activeHasNoEndDate} = 0,
+               ${columnMap.modifyTime} = ?
+           WHERE task_id = ? AND deleted_at IS NULL`,
+          [nextEndDate, modifyTime, taskId]
+        );
+
+        if (result.affectedRows === 0) {
+          await connection.rollback();
+          return null;
+        }
+
+        const updatedRaw = await this._getTaskByIdConn(connection, taskId);
+        const updatedTask = Task.fromDB(updatedRaw);
+        await connection.commit();
+
+        const response = this.buildTaskMutationResponse({
+          primaryTask: updatedTask,
+          affectedTasks: [updatedTask],
+          operation: 'disable_occurrence',
+        });
+        response.disabledTask = updatedTask.toJSON();
+        response.disabledFromDate = disableFromDate;
+        return response;
+      } catch (error) {
+        await connection.rollback();
+        throw error;
+      } finally {
+        connection.release();
+      }
+    } catch (error) {
+      logger.error('停用表现项失败', error);
+      throw error;
+    }
+  }
+
+  async convertTaskToOccurrenceMode(taskId, payload = {}, options = {}) {
+    try {
+      const columnMap = await this._getTaskColumnMap();
+      this._assertOccurrenceSchemaAvailable(columnMap, '切换表现项', true);
+      const pool = getPool();
+      const connection = await pool.getConnection();
+      const effectiveFromDate = payload.effectiveFromDate || this._formatDate(new Date());
+      const modifyTime = Number(payload.modifyTime || options.modifyTime || Date.now());
+      const operationKey = String(payload.operationKey || options.operationKey || modifyTime);
+
+      try {
+        await connection.beginTransaction();
+        const existingRaw = await this._getTaskByIdConn(connection, taskId);
+        if (!existingRaw) {
+          await connection.rollback();
+          return null;
+        }
+
+        const existingTask = Task.fromDB(existingRaw);
+        if (existingTask.isOccurrenceConfigTask()) {
+          await connection.commit();
+          const response = this.buildTaskMutationResponse({
+            primaryTask: existingTask,
+            affectedTasks: [existingTask],
+            operation: 'convert_occurrence',
+            idempotent: true,
+          });
+          response.convertedTask = existingTask.toJSON();
+          response.archivedFutureTaskIds = [];
+          return response;
+        }
+
+        if (existingTask.isOccurrenceRecordTask()) {
+          const error = new Error('表现记录实例不能切换为表现项配置');
+          error.code = 'TASK_OCCURRENCE_INVALID_TASK';
+          throw error;
+        }
+
+        const [childRows] = await connection.execute(
+          `SELECT * FROM tasks
+           WHERE ${columnMap.parentTaskId} = ?
+             AND deleted_at IS NULL
+           ORDER BY date ASC`,
+          [taskId]
+        );
+
+        const archivedFutureTaskIds = [];
+        for (const row of childRows) {
+          const childTask = Task.fromDB(row);
+          if (childTask.date < effectiveFromDate) {
+            continue;
+          }
+          if (Number(childTask.status) === 1 || childTask.starAwarded) {
+            continue;
+          }
+
+          const [deleteResult] = await connection.execute(
+            `UPDATE tasks
+             SET deleted_at = NOW(), ${columnMap.modifyTime} = ?
+             WHERE task_id = ? AND deleted_at IS NULL`,
+            [modifyTime, childTask.taskId]
+          );
+          if (deleteResult.affectedRows > 0) {
+            archivedFutureTaskIds.push(childTask.taskId);
+          }
+        }
+
+        const nextHasNoEndDate = existingTask.hasNoEndDate || !existingTask.repeat?.endDate;
+        const nextActiveRange = {
+          startDate: effectiveFromDate,
+          endDate: nextHasNoEndDate ? '' : (existingTask.repeat?.endDate || ''),
+          hasNoEndDate: nextHasNoEndDate,
+        };
+
+        const updateClauses = [
+          `date = ?`,
+          `${columnMap.executionMode} = 'occurrence'`,
+          `${columnMap.activeStartDate} = ?`,
+          `${columnMap.activeEndDate} = ?`,
+          `${columnMap.activeHasNoEndDate} = ?`,
+          `${columnMap.isRequired} = 0`,
+          `${columnMap.startTime} = ''`,
+          `${columnMap.endTime} = ''`,
+          '`repeat` = NULL',
+          `${columnMap.isAllDay} = 0`
+        ];
+        const updateParams = [
+          effectiveFromDate,
+          nextActiveRange.startDate,
+          nextActiveRange.hasNoEndDate ? null : (nextActiveRange.endDate || null),
+          nextActiveRange.hasNoEndDate ? 1 : 0
+        ];
+
+        if (columnMap.reminder) {
+          updateClauses.push(`${columnMap.reminder} = ?`);
+          updateParams.push(JSON.stringify({ enabled: false, time: 0 }));
+        }
+        if (columnMap.duration) {
+          updateClauses.push(`${columnMap.duration} = 0`);
+        }
+        if (columnMap.hasNoEndDate) {
+          updateClauses.push(`${columnMap.hasNoEndDate} = ?`);
+          updateParams.push(nextActiveRange.hasNoEndDate ? 1 : 0);
+        }
+        if (columnMap.modifyTime) {
+          updateClauses.push(`${columnMap.modifyTime} = ?`);
+          updateParams.push(modifyTime);
+        }
+
+        updateParams.push(taskId);
+        const [result] = await connection.execute(
+          `UPDATE tasks SET ${updateClauses.join(', ')} WHERE task_id = ? AND deleted_at IS NULL`,
+          updateParams
+        );
+
+        if (result.affectedRows === 0) {
+          await connection.rollback();
+          return null;
+        }
+
+        const updatedRaw = await this._getTaskByIdConn(connection, taskId);
+        const updatedTask = Task.fromDB(updatedRaw);
+        await connection.commit();
+
+        const response = this.buildTaskMutationResponse({
+          primaryTask: updatedTask,
+          affectedTasks: [updatedTask],
+          operation: 'convert_occurrence',
+        });
+        response.convertedTask = updatedTask.toJSON();
+        response.archivedFutureTaskIds = archivedFutureTaskIds;
+        return response;
+      } catch (error) {
+        await connection.rollback();
+        throw error;
+      } finally {
+        connection.release();
+      }
+    } catch (error) {
+      logger.error('切换表现项失败', error);
+      throw error;
+    }
+  }
+
   async markTaskRequired(taskId, options = {}) {
     return this._updateTaskRequiredState(taskId, true, options);
   }
@@ -1215,22 +1914,54 @@ class TaskService {
   async getTasksByFamily(familyId, filters = {}) {
     try {
       const { date, status, startDate, endDate } = filters;
+      const includeOccurrence = filters.includeOccurrence === true;
+      const occurrenceMode = filters.occurrenceMode || 'all';
+      const includeInactive = filters.includeInactive === true;
+      const columnMap = await this._getTaskColumnMap();
+      this._assertOccurrenceSchemaAvailable(
+        columnMap,
+        '查询家庭任务',
+        includeOccurrence || occurrenceMode !== 'all' || includeInactive
+      );
+
       let sql = `SELECT t.* FROM tasks t
         INNER JOIN users u ON t.user_id = u.user_id
         WHERE u.family_id = ? AND u.role = 'child' AND u.status = 'active' AND t.deleted_at IS NULL`;
       const params = [familyId];
 
-      if (date) {
+      if (this._hasOccurrenceSchema(columnMap)) {
+        if (!includeOccurrence) {
+          sql += ` AND (t.${columnMap.executionMode} IS NULL OR t.${columnMap.executionMode} = 'planned')`;
+        } else if (occurrenceMode === 'config') {
+          sql += ` AND t.${columnMap.executionMode} = 'occurrence' AND t.${columnMap.isOccurrenceRecord} = 0`;
+        } else if (occurrenceMode === 'record') {
+          sql += ` AND t.${columnMap.executionMode} = 'occurrence' AND t.${columnMap.isOccurrenceRecord} = 1`;
+        }
+      }
+
+      const isOccurrenceConfigQuery = includeOccurrence && occurrenceMode === 'config' && this._hasOccurrenceSchema(columnMap);
+
+      if (date && isOccurrenceConfigQuery) {
+        if (!includeInactive) {
+          sql += ` AND t.${columnMap.activeStartDate} <= ? AND (t.${columnMap.activeHasNoEndDate} = 1 OR t.${columnMap.activeEndDate} IS NULL OR t.${columnMap.activeEndDate} >= ?)`;
+          params.push(date, date);
+        }
+      } else if (date) {
         sql += ' AND t.date = ?';
         params.push(date);
       }
 
-      if (startDate && endDate) {
+      if (startDate && endDate && isOccurrenceConfigQuery) {
+        if (!includeInactive) {
+          sql += ` AND t.${columnMap.activeStartDate} <= ? AND (t.${columnMap.activeHasNoEndDate} = 1 OR t.${columnMap.activeEndDate} IS NULL OR t.${columnMap.activeEndDate} >= ?)`;
+          params.push(endDate, startDate);
+        }
+      } else if (startDate && endDate) {
         sql += ' AND t.date >= ? AND t.date <= ?';
         params.push(startDate, endDate);
       }
 
-      if (status !== undefined) {
+      if (status !== undefined && !isOccurrenceConfigQuery) {
         sql += ' AND t.status = ?';
         params.push(status);
       }

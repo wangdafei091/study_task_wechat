@@ -48,6 +48,11 @@ Component({
       type: Number,
       value: 100 // rpx
     },
+    // 底部额外偏移量，仅在底部定位时生效
+    bottomOffset: {
+      type: Number,
+      value: 0
+    },
     // 是否禁用震动反馈
     disableVibrate: {
       type: Boolean,
@@ -83,7 +88,7 @@ Component({
    * 属性监听器
    */
   observers: {
-    'themeColor, position, buttonSize, itemSize': function() {
+    'themeColor, position, buttonSize, itemSize, bottomOffset': function() {
       this._updateStyles();
     }
   },
@@ -96,7 +101,7 @@ Component({
      * 更新组件样式
      */
     _updateStyles: function() {
-      const { themeColor, position, buttonSize, itemSize } = this.data;
+      const { themeColor, position, buttonSize, itemSize, bottomOffset } = this.data;
       
       let mainButtonStyle = '';
       if (themeColor) {
@@ -104,8 +109,14 @@ Component({
       } else {
         mainButtonStyle = `width: ${buttonSize}rpx; height: ${buttonSize}rpx;`;
       }
+
+      let positionStyle = '';
+      if ((position === 'bottom-right' || position === 'bottom-left') && Number(bottomOffset) > 0) {
+        positionStyle = `bottom: calc(${140 + Number(bottomOffset)}rpx + env(safe-area-inset-bottom) / 2);`;
+      }
       
       this.setData({
+        positionStyle,
         mainButtonStyle,
         containerClass: `position-${position}`
       });
