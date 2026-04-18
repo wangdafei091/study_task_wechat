@@ -278,7 +278,9 @@ async function fetchTasksFromCloud(service, userId, params = {}) {
     const tasks = backendTasks.map((raw) => new Task({
       ...raw,
       id: raw.taskId,
-      taskId: undefined
+      taskId: undefined,
+      syncedToCloud: true,
+      pendingSyncMeta: null
     }));
 
     if (loginUserId) {

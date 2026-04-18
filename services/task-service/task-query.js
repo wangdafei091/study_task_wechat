@@ -52,6 +52,77 @@ function isPendingSyncOccurrenceRecord(task) {
   return Boolean(task.pendingSyncMeta || task.syncedToCloud === false);
 }
 
+function buildOccurrenceRecordSemanticKey(task = {}) {
+  const parentTaskId = task.parentTaskId || task.pendingSyncMeta?.configTaskId || '';
+  const userId = task.userId || task.pendingSyncMeta?.targetUserId || '';
+  const date = task.date || '';
+
+  if (parentTaskId && userId && date) {
+    return `${parentTaskId}::${userId}::${date}`;
+  }
+
+  return task.id ? `id:${task.id}` : '';
+}
+
+function getOccurrenceRecordPriority(task = {}) {
+  if (!task || typeof task !== 'object') {
+    return -1;
+  }
+
+  const hasPendingMeta = Boolean(task.pendingSyncMeta);
+  if (task.syncedToCloud === true && !hasPendingMeta) {
+    return 3;
+  }
+
+  if (!hasPendingMeta && task.syncedToCloud !== false) {
+    return 2;
+  }
+
+  return 1;
+}
+
+function shouldReplaceOccurrenceRecord(existingRecord, candidateRecord) {
+  if (!existingRecord) {
+    return true;
+  }
+
+  const existingPriority = getOccurrenceRecordPriority(existingRecord);
+  const candidatePriority = getOccurrenceRecordPriority(candidateRecord);
+  if (candidatePriority !== existingPriority) {
+    return candidatePriority > existingPriority;
+  }
+
+  const existingModifyTime = Number(existingRecord.modifyTime || existingRecord.recordedAt || 0);
+  const candidateModifyTime = Number(candidateRecord.modifyTime || candidateRecord.recordedAt || 0);
+  if (candidateModifyTime !== existingModifyTime) {
+    return candidateModifyTime > existingModifyTime;
+  }
+
+  return false;
+}
+
+function mergeOccurrenceRecords(cloudTasks = [], localTasks = []) {
+  const mergedMap = new Map();
+
+  (cloudTasks || []).concat(localTasks || []).forEach((task) => {
+    if (!isOccurrenceRecordTask(task)) {
+      return;
+    }
+
+    const semanticKey = buildOccurrenceRecordSemanticKey(task);
+    if (!semanticKey) {
+      return;
+    }
+
+    const existingRecord = mergedMap.get(semanticKey);
+    if (shouldReplaceOccurrenceRecord(existingRecord, task)) {
+      mergedMap.set(semanticKey, task);
+    }
+  });
+
+  return Array.from(mergedMap.values());
+}
+
 function shouldIncludeInProgressSummary(task) {
   return !isPendingSyncOccurrenceRecord(task);
 }
@@ -855,12 +926,7 @@ async function getOccurrenceRecordsByDateRange(service, scope = {}) {
           occurrenceMode: 'record'
         });
         const localTasks = await service.taskRepository.getOccurrenceRecordsByDateRange(startDate, endDate, userId);
-        const cloudIds = new Set((cloudTasks || []).map((task) => task.id));
-        const mergedTasks = (cloudTasks || []).concat(
-          (localTasks || []).filter((task) => !cloudIds.has(task.id))
-        );
-
-        return mergedTasks.filter(isOccurrenceRecordTask);
+        return mergeOccurrenceRecords(cloudTasks, localTasks);
       } catch (cloudError) {
         logger.warn('TaskService', '云端获取表现记录失败，降级到本地', {
           startDate,

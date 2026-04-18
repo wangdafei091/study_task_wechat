@@ -511,6 +511,7 @@ describe('task-sync direct behavior', () => {
     });
     expect(service._cleanupStaleTasks).not.toHaveBeenCalled();
     expect(result).toHaveLength(3);
+    expect(result.every((task) => task.syncedToCloud === true)).toBe(true);
     expect(result.find((task) => task.id === 'task_newer')).toEqual(expect.objectContaining({
       title: '本地更新版',
       description: 'local desc',

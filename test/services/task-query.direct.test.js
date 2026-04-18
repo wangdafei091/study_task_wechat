@@ -179,7 +179,7 @@ describe('task-query direct behavior', () => {
     expect(result.map((item) => item.id)).toEqual(['occ_in_range']);
   });
 
-  it('getOccurrenceRecordsByDateRange 应覆盖缺参、云端成功去重和云端失败回退', async () => {
+  it('getOccurrenceRecordsByDateRange 应覆盖缺参、语义去重和云端失败回退', async () => {
     const emptyService = {
       enableCloudStorage: false,
       taskRepository: {
@@ -196,22 +196,36 @@ describe('task-query direct behavior', () => {
       isOccurrenceEnabled: jest.fn(async () => true),
       _fetchTasksFromCloud: jest.fn(async () => [
         {
-          id: 'record_cloud',
+          id: 'record_cloud_authoritative',
+          parentTaskId: 'occ_cfg_same',
+          userId: 'child_1',
+          date: '2026-03-03',
           executionMode: 'occurrence',
           isOccurrenceRecord: true,
+          syncedToCloud: true,
           isOccurrenceRecordTask: jest.fn(() => true)
         }
       ]),
       taskRepository: {
         getOccurrenceRecordsByDateRange: jest.fn(async () => [
           {
-            id: 'record_cloud',
+            id: 'record_local_pending_legacy',
+            parentTaskId: 'occ_cfg_same',
+            userId: 'child_1',
+            date: '2026-03-03',
             executionMode: 'occurrence',
             isOccurrenceRecord: true,
+            pendingSyncMeta: {
+              action: 'occurrence_record'
+            },
+            syncedToCloud: false,
             isOccurrenceRecordTask: jest.fn(() => true)
           },
           {
             id: 'record_local',
+            parentTaskId: 'occ_cfg_local',
+            userId: 'child_1',
+            date: '2026-03-04',
             executionMode: 'occurrence',
             isOccurrenceRecord: true,
             isOccurrenceRecordTask: jest.fn(() => true)
@@ -238,7 +252,7 @@ describe('task-query direct behavior', () => {
       includeOccurrence: true,
       occurrenceMode: 'record'
     });
-    expect(cloudResult.map((item) => item.id)).toEqual(['record_cloud', 'record_local']);
+    expect(cloudResult.map((item) => item.id)).toEqual(['record_cloud_authoritative', 'record_local']);
 
     const fallbackService = {
       enableCloudStorage: true,

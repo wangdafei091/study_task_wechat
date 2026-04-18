@@ -337,6 +337,79 @@ class TaskService {
     return new Task(taskData);
   }
 
+  _isOccurrenceRecordTaskLike(task = {}) {
+    if (!task || typeof task !== 'object') {
+      return false;
+    }
+
+    if (typeof task.isOccurrenceRecordTask === 'function') {
+      return task.isOccurrenceRecordTask();
+    }
+
+    return task.isOccurrenceRecord === true && task.executionMode === 'occurrence';
+  }
+
+  _buildOccurrenceRecordSemanticKey(task = {}) {
+    const parentTaskId = task.parentTaskId || task.pendingSyncMeta?.configTaskId || '';
+    const userId = task.userId || task.pendingSyncMeta?.targetUserId || '';
+    const date = task.date || '';
+
+    if (!parentTaskId || !userId || !date) {
+      return '';
+    }
+
+    return `${parentTaskId}::${userId}::${date}`;
+  }
+
+  async _cleanupDuplicateOccurrenceRecords(tasks = []) {
+    if (
+      !this.taskRepository
+      || typeof this.taskRepository.getOccurrenceRecordsByDateRange !== 'function'
+      || typeof this.taskRepository.delete !== 'function'
+    ) {
+      return;
+    }
+
+    const processedKeys = new Set();
+    for (const task of tasks || []) {
+      if (!this._isOccurrenceRecordTaskLike(task) || task.syncedToCloud !== true) {
+        continue;
+      }
+
+      const semanticKey = this._buildOccurrenceRecordSemanticKey(task);
+      if (!semanticKey || processedKeys.has(semanticKey)) {
+        continue;
+      }
+      processedKeys.add(semanticKey);
+
+      try {
+        const sameDayRecords = await this.taskRepository.getOccurrenceRecordsByDateRange(
+          task.date,
+          task.date,
+          task.userId
+        );
+
+        for (const candidate of sameDayRecords || []) {
+          if (!candidate || candidate.id === task.id) {
+            continue;
+          }
+
+          if (this._buildOccurrenceRecordSemanticKey(candidate) === semanticKey) {
+            await this.taskRepository.delete(candidate.id);
+          }
+        }
+      } catch (error) {
+        logger.warn('TaskService', '清理重复表现记录失败，保留当前权威记录', {
+          taskId: task.id,
+          parentTaskId: task.parentTaskId || null,
+          userId: task.userId || null,
+          date: task.date || null,
+          error: error.message
+        });
+      }
+    }
+  }
+
   async _applyAuthoritativeTaskMutation(rawMutation, options = {}) {
     const mutation = this._normalizeTaskMutationResponse(rawMutation, options.fallbackOperation);
     if (!mutation) {
@@ -368,6 +441,10 @@ class TaskService {
     const savedTasks = uniqueTasks.length > 0
       ? await this.taskRepository.saveAll(uniqueTasks)
       : [];
+
+    if (savedTasks.length > 0) {
+      await this._cleanupDuplicateOccurrenceRecords(savedTasks);
+    }
 
     const primaryTaskId = mutation.primaryTask?.taskId || mutation.primaryTask?.id || mutation.taskId || null;
     const primaryTask = primaryTaskId

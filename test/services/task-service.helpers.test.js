@@ -137,6 +137,63 @@ describe('TaskService helpers and delegators', () => {
     expect(taskRepository.save).toHaveBeenCalledWith(task);
   });
 
+  it('_applyAuthoritativeTaskMutation 应清理同语义的旧表现待同步记录', async () => {
+    const { service, taskRepository } = loadTaskService({
+      taskRepository: {
+        saveAll: jest.fn(async (tasks) => tasks),
+        getOccurrenceRecordsByDateRange: jest.fn(async () => [
+          {
+            id: 'occ_cloud_1',
+            userId: 'child_1',
+            date: '2026-03-26',
+            parentTaskId: 'occ_cfg_1',
+            executionMode: 'occurrence',
+            isOccurrenceRecord: true,
+            occurrenceOutcome: 'success',
+            syncedToCloud: true
+          },
+          {
+            id: 'occ_local_legacy',
+            userId: 'child_1',
+            date: '2026-03-26',
+            parentTaskId: 'occ_cfg_1',
+            executionMode: 'occurrence',
+            isOccurrenceRecord: true,
+            occurrenceOutcome: 'success',
+            pendingSyncMeta: { action: 'occurrence_record' },
+            syncedToCloud: false
+          }
+        ]),
+        delete: jest.fn(async () => true)
+      }
+    });
+
+    const result = await service._applyAuthoritativeTaskMutation({
+      operation: 'occurrence_record',
+      tasks: [{
+        taskId: 'occ_cloud_1',
+        userId: 'child_1',
+        date: '2026-03-26',
+        parentTaskId: 'occ_cfg_1',
+        executionMode: 'occurrence',
+        isOccurrenceRecord: true,
+        occurrenceOutcome: 'success'
+      }],
+      taskId: 'occ_cloud_1'
+    });
+
+    expect(taskRepository.saveAll).toHaveBeenCalledWith([
+      expect.objectContaining({
+        id: 'occ_cloud_1',
+        syncedToCloud: true,
+        pendingSyncMeta: null
+      })
+    ]);
+    expect(taskRepository.getOccurrenceRecordsByDateRange).toHaveBeenCalledWith('2026-03-26', '2026-03-26', 'child_1');
+    expect(taskRepository.delete).toHaveBeenCalledWith('occ_local_legacy');
+    expect(result.task).toEqual(expect.objectContaining({ id: 'occ_cloud_1' }));
+  });
+
   it('updateOfflineQueueService 应注册 task adapter 并支持清空引用', () => {
     const { service } = loadTaskService();
     const offlineQueueService = {
