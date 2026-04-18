@@ -314,8 +314,8 @@ class RewardService {
     return rewardQuery.getLastExchangeTimeByUser(this, userId);
   }
 
-  async _rollbackStarDeduction(actualCost, reward, userId, reason = '兑换奖励失败') {
-    return rewardExchange.rollbackStarDeduction(this, actualCost, reward, userId, reason);
+  async _rollbackStarDeduction(deductionBreakdown, reward, userId, reason = '兑换奖励失败') {
+    return rewardExchange.rollbackStarDeduction(this, deductionBreakdown, reward, userId, reason);
   }
 
   updateUserService(userService) {

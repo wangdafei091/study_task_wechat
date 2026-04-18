@@ -213,6 +213,7 @@ class RewardController {
       case 'INSUFFICIENT_STARS':
       case 'REWARD_DISABLED':
       case 'REWARD_DELIVERED':
+      case 'REWARD_CANCEL_WINDOW_EXPIRED':
         return 400;
       case 'PERMISSION_DENIED':
       case 'FAMILY_MEMBER_ACCESS_DENIED':
