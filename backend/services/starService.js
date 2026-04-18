@@ -727,6 +727,7 @@ class StarService {
       deductionBreakdown.push({
         groupId: group.group_id,
         expiryType: group.type,
+        expiryDate: group.expiry_date || null,
         points: deductPoints,
       });
       remaining -= deductPoints;
@@ -1114,6 +1115,43 @@ class StarService {
       updatedGroupsSnapshot: groupRows.map(group => StarGroup.fromDB(group).toJSON()),
       idempotent,
     };
+  }
+
+  normalizeDeductionBreakdown(buckets = []) {
+    if (!Array.isArray(buckets)) {
+      return [];
+    }
+
+    return buckets
+      .map((bucket) => ({
+        groupId: bucket?.groupId || bucket?.group_id || null,
+        expiryType: bucket?.expiryType || bucket?.expiry_type || null,
+        expiryDate: bucket?.expiryDate || bucket?.expiry_date || null,
+        points: Number(bucket?.points || bucket?.amount || 0),
+      }))
+      .filter((bucket) => bucket.points > 0);
+  }
+
+  hasExpiredDeductionBuckets(buckets = [], modifyTime = Date.now()) {
+    const normalizedBuckets = this.normalizeDeductionBreakdown(buckets);
+    const currentDate = this._getDateStringForTimestamp(Number(modifyTime || Date.now()));
+
+    return normalizedBuckets.some((bucket) => {
+      if (!bucket.expiryType || bucket.expiryType === 'permanent') {
+        return false;
+      }
+
+      const expiryDate = this._normalizeExpiryDate({
+        expiry_date: bucket.expiryDate,
+        expiryDate: bucket.expiryDate,
+      });
+
+      if (!expiryDate) {
+        return true;
+      }
+
+      return expiryDate < currentDate;
+    });
   }
 }
 

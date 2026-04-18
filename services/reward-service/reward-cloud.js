@@ -197,8 +197,6 @@ function mapCloudReward(service, item) {
     isExample: item.isExample === true,
     tags: item.tags || [],
     notes: item.notes || '',
-    protectedByExpiry: item.protectedByExpiry === true,
-    partialProtection: Number(item.partialProtection || 0),
     syncedToCloud: true,
     modifyTime: item.modifyTime || Date.now(),
     exchangeUserId: item.exchangeUserId || null

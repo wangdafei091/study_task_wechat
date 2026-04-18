@@ -13,39 +13,51 @@ function normalizeRewardExchangeCost(input = {}, fallbackPoints = null) {
         ? input.originalPoints
         : input.points
   ));
-  // 前台只认动态计算出的快过期抵扣，不再回退历史 partialProtection 字段。
-  const explicitDeduction = input.expiringStarDeduction;
-  const expiringStarDeduction = Math.max(0, Math.min(
-    originalPoints,
-    toSafeNumber(explicitDeduction, 0)
+  const currentBalance = Math.max(0, toSafeNumber(
+    input.currentBalance !== undefined
+      ? input.currentBalance
+      : input.totalPoints
   ));
-  const explicitActualCost = input.actualCost;
-  const actualCost = Math.max(0, explicitActualCost !== undefined
-    ? toSafeNumber(explicitActualCost, originalPoints - expiringStarDeduction)
-    : originalPoints - expiringStarDeduction);
-  const hasExpiringDeduction = input.hasExpiringDeduction === true || expiringStarDeduction > 0;
+  const actualCost = Math.max(0, toSafeNumber(
+    input.actualCost !== undefined ? input.actualCost : originalPoints,
+    originalPoints
+  ));
+  const remainingBalance = Math.max(0, currentBalance - actualCost);
+  const shortage = Math.max(0, actualCost - currentBalance);
 
   return {
     originalPoints,
-    expiringStarDeduction,
     actualCost,
-    hasExpiringDeduction
+    currentBalance,
+    remainingBalance,
+    shortage,
+    hasSufficientBalance: currentBalance >= actualCost
   };
 }
 
 function buildRewardDisplayModel(reward = {}, context = {}) {
-  const exchangeCost = normalizeRewardExchangeCost(
+  const totalPoints = Math.max(0, toSafeNumber(context.totalPoints, 0));
+  let exchangeCost = normalizeRewardExchangeCost(
     context.exchangeCost || reward,
     reward.points
   );
   const requiresTargetSelection = context.requiresTargetSelection === true;
   const targetChildName = context.targetChildName || '';
-  const totalPoints = Math.max(0, toSafeNumber(context.totalPoints, 0));
+  const hasExplicitBalance = context.exchangeCost &&
+    context.exchangeCost.currentBalance !== undefined;
+
+  if (!hasExplicitBalance) {
+    exchangeCost = normalizeRewardExchangeCost({
+      ...exchangeCost,
+      currentBalance: totalPoints
+    }, reward.points);
+  }
+
   const claimDisplayStatus = rewardStatus.resolveRewardClaimStatus(reward);
   const fulfillmentMode = rewardStatus.resolveRewardFulfillmentMode(reward);
   const unlocked = requiresTargetSelection
     ? false
-    : totalPoints >= exchangeCost.actualCost;
+    : exchangeCost.currentBalance >= exchangeCost.actualCost;
   const canExchange = claimDisplayStatus === rewardStatus.RewardClaimDisplayStatus.AVAILABLE &&
     (requiresTargetSelection || unlocked);
   const actionSubjectLabel = context.isParentOwnView && targetChildName
@@ -74,17 +86,13 @@ function buildRewardDisplayModel(reward = {}, context = {}) {
       requiresTargetSelection,
       actionSubjectLabel
     }),
-    costPrimaryText: exchangeCost.hasExpiringDeduction
-      ? `本次${exchangeCost.actualCost}颗`
-      : `${exchangeCost.originalPoints}颗`,
-    costSecondaryText: exchangeCost.hasExpiringDeduction
-      ? `已抵扣${exchangeCost.expiringStarDeduction}颗快过期星星`
-      : '',
-    detailOriginalPointsText: `原价 ${exchangeCost.originalPoints} 颗`,
-    detailDeductionText: exchangeCost.hasExpiringDeduction
-      ? `已抵扣 ${exchangeCost.expiringStarDeduction} 颗快过期星星`
-      : '未使用快过期星星抵扣',
-    detailActualCostText: `本次消耗 ${exchangeCost.actualCost} 颗`
+    costPrimaryText: `${exchangeCost.originalPoints}颗`,
+    costSecondaryText: '',
+    detailOriginalPointsText: `兑换需要 ${exchangeCost.originalPoints} 颗`,
+    detailBalanceText: `当前余额 ${exchangeCost.currentBalance} 颗`,
+    detailActualCostText: exchangeCost.hasSufficientBalance
+      ? `兑换后剩余 ${exchangeCost.remainingBalance} 颗`
+      : `还差 ${exchangeCost.shortage} 颗`
   };
 }
 
@@ -96,14 +104,10 @@ function buildRewardExchangeConfirmContent(displayModel = {}, subject = {}) {
     : '确定兑换';
   const lines = [
     `${actionPrefix}兑换【${rewardName}】吗？`,
-    displayModel.detailOriginalPointsText || `原价 ${displayModel.points || 0} 颗`
+    displayModel.detailOriginalPointsText || `兑换需要 ${displayModel.points || 0} 颗`
   ];
-
-  if (displayModel.exchangeCost?.hasExpiringDeduction) {
-    lines.push(displayModel.detailDeductionText);
-  }
-
-  lines.push(displayModel.detailActualCostText || `本次消耗 ${displayModel.points || 0} 颗`);
+  lines.push(displayModel.detailBalanceText || `当前余额 ${displayModel.exchangeCost?.currentBalance || 0} 颗`);
+  lines.push(displayModel.detailActualCostText || `兑换后剩余 ${displayModel.exchangeCost?.remainingBalance || 0} 颗`);
   return lines.join('\n');
 }
 

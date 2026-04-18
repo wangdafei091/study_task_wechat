@@ -71,25 +71,6 @@ describe('backend RewardService exchange state machine', () => {
           modify_time: 100
         }
       ]])
-      .mockResolvedValueOnce([[
-        {
-          reward_id: 'reward_1',
-          user_id: 'parent_1',
-          family_id: 'fam_1',
-          name: '冰淇淋',
-          points: 20,
-          enabled: 1,
-          claimed: 0,
-          claim_status: 'available',
-          claim_time: null,
-          delivery_time: null,
-          exchange_user_id: null,
-          protected_by_expiry: 0,
-          partial_protection: 0,
-          deleted_at: null,
-          modify_time: 100
-        }
-      ]])
       .mockResolvedValueOnce([{ affectedRows: 1 }])
       .mockResolvedValueOnce([[
         {
@@ -141,40 +122,41 @@ describe('backend RewardService exchange state machine', () => {
     expect(connection.commit).toHaveBeenCalled();
   });
 
-  it('保护分配应忽略已禁用奖励，避免吞掉正式奖励的保护额度', async () => {
+  it('getVisibleRewards 不再重新计算 protection 定价字段，历史字段仅按存量数据透传', async () => {
+    const { query } = require('../../config/database');
+    const starService = require('../../services/starService');
     const service = require('../../services/rewardService');
-    const Reward = require('../../models/Reward');
+    query.mockResolvedValueOnce([
+      {
+        reward_id: 'reward_visible',
+        user_id: 'parent_1',
+        family_id: 'fam_1',
+        name: '正式奖励',
+        points: 80,
+        enabled: 1,
+        claimed: 0,
+        claim_status: 'available',
+        claim_time: null,
+        delivery_time: null,
+        exchange_user_id: null,
+        protected_by_expiry: 1,
+        partial_protection: 80,
+        deleted_at: null,
+        modify_time: 100
+      }
+    ]);
 
-    const protectionMap = service._buildEffectiveProtectionMapFromInputs(
-      [
-        new Reward({
-          rewardId: 'reward_disabled',
-          userId: 'parent_1',
-          name: '禁用高价奖励',
-          points: 100,
-          enabled: false,
-          claimed: false
-        }),
-        new Reward({
-          rewardId: 'reward_visible',
-          userId: 'parent_1',
-          name: '正式奖励',
-          points: 80,
-          enabled: true,
-          claimed: false
-        })
-      ],
-      [],
-      80
-    );
+    const rewards = await service.getVisibleRewards({
+      familyId: null,
+      userId: 'parent_1',
+      targetUserId: 'child_1'
+    });
 
-    expect(protectionMap.get('reward_disabled')).toEqual({
-      protectedByExpiry: false,
-      partialProtection: 0
-    });
-    expect(protectionMap.get('reward_visible')).toEqual({
-      protectedByExpiry: true,
-      partialProtection: 80
-    });
+    expect(rewards).toHaveLength(1);
+    expect(rewards[0].points).toBe(80);
+    expect(rewards[0].protectedByExpiry).toBe(true);
+    expect(rewards[0].partialProtection).toBe(80);
+    expect(starService.getExpiringProtectionSummaryWithConnection).not.toHaveBeenCalled();
+    expect(starService.getStarGroupsByUserWithConnection).not.toHaveBeenCalled();
   });
 });

@@ -139,9 +139,7 @@
         <view class="reward-name">{{selectedReward.name}}</view>
 
         <view class="reward-points">{{selectedReward.detailOriginalPointsText}}</view>
-        <view class="reward-detail-note" wx:if="{{selectedReward.costSecondaryText}}">
-          {{selectedReward.detailDeductionText}}
-        </view>
+        <view class="reward-detail-note">{{selectedReward.detailBalanceText}}</view>
         <view class="reward-detail-note emphasis">{{selectedReward.detailActualCostText}}</view>
         
         <view class="reward-status-text">

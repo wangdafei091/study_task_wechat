@@ -4,6 +4,43 @@
 
 ---
 
+## [里程碑-21N] - 2026-04-18
+
+### ✅ 完成情况
+
+**奖池余额心智简化与奖励兑换时效治理**
+
+- **奖池正式回到普通余额心智**：
+  - [`utils/reward-display.js`](/Users/wangdafei/code/study_task_wechat/utils/reward-display.js)、[`pages/rewards/modules/rewards-sync.js`](/Users/wangdafei/code/study_task_wechat/pages/rewards/modules/rewards-sync.js)、[`pages/rewards/modules/rewards-exchange-flow.js`](/Users/wangdafei/code/study_task_wechat/pages/rewards/modules/rewards-exchange-flow.js) 已统一奖励卡片与确认弹窗口径为“兑换需要 / 当前余额 / 兑换后剩余”
+  - 奖励卡片不再展示 `本次 0 颗`、`已抵扣 X 颗`、`保护奖励` 等动态定价语义
+- **前后端兑换正式按标价结算**：
+  - [`services/reward-service/reward-exchange.js`](/Users/wangdafei/code/study_task_wechat/services/reward-service/reward-exchange.js) 与 [`backend/services/rewardService.js`](/Users/wangdafei/code/study_task_wechat/backend/services/rewardService.js) 已统一为按奖励标价扣减余额
+  - 系统内部仍保留“先消耗临近到期星星”的结算顺序，但不再透传为用户主视图价格
+- **取消兑换时效与退款归桶已完成治理**：
+  - 本地与后端正式链路都已改为基于 `deductionBreakdown` 校验取消时效，并按原消费桶退款
+  - 本地取消兑换已补齐“退款成功但奖励状态回写失败时自动冲销退款”的补偿保护，避免半状态导致重复退款风险
+- **多孩子与奖池读数冗余问题已收口**：
+  - 领取确认在预览失败时会按当前目标孩子余额回退，不再错误复用页面上一个孩子的余额
+  - 奖励页列表在已有当前余额时，不再为每个奖励重复读取兑换预览
+
+### 🧪 验证结果
+
+- 前端质量闸门通过：
+  - `npm run test:quality`
+  - 结果：`92 suites / 1987 tests` 全绿
+- 后端单元测试通过：
+  - `npm --prefix backend run test:unit`
+  - 结果：`15 suites / 127 tests` 全绿
+- 奖励主链路定向回归通过：
+  - `npx jest test/services/reward-service.test.js test/pages/rewards.behavior.test.js test/utils/reward-display.test.js test/pages/rewards.page-contract.test.js --runInBand`
+  - `npx jest test/pages/rewards.behavior.test.js test/pages/rewards.page-contract.test.js test/pages/rewards.modules.test.js test/utils/reward-display.test.js --runInBand`
+
+### 📖 详细实施记录
+
+- [里程碑-21N：奖池余额心智简化与奖励兑换时效治理](../design/milestone-21n-reward-balance-mental-model.md)
+
+---
+
 ## [里程碑-21L] - 2026-04-17
 
 ### ✅ 完成情况

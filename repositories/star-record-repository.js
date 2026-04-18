@@ -601,9 +601,7 @@ class StarRecordRepository extends BaseRepository {
     }
     
     try {
-      const isFullProtection = record.amount === 0;
-      const logType = isFullProtection ? '完全保护兑换记录' : '星星消费记录';
-      logger.info('StarRecordRepository', `开始创建${logType}: 数量=${record.amount}, 类型=${record.type}, 来源=${record.source}${record.userId ? `, 用户=${record.userId}` : ''}`);
+      logger.info('StarRecordRepository', `开始创建星星消费记录: 数量=${record.amount}, 类型=${record.type}, 来源=${record.source}${record.userId ? `, 用户=${record.userId}` : ''}`);
       
       // 计算当前余额（按用户）
       const previousBalance = await this._calculateCurrentBalance(record.userId);
@@ -619,9 +617,7 @@ class StarRecordRepository extends BaseRepository {
         type: 'expense', // 修复：使用type而不是recordType，消费记录类型为expense
         source: record.source || 'reward', // 修复：设置正确的来源
         sourceId: record.sourceId || record.source || '', // 添加sourceId
-        description: isFullProtection ? 
-          `完全保护兑换: ${record.data?.rewardName || '未知奖励'}（消耗0颗星星）` : 
-          `兑换奖励消费: ${record.data?.rewardName || '未知奖励'}`, // 添加描述
+        description: record.description || `兑换奖励: ${record.data?.rewardName || '未知奖励'}`,
         timestamp: record.timestamp || Date.now(),
         balance, // 添加余额信息
         previousBalance, // 添加操作前余额信息
@@ -646,8 +642,7 @@ class StarRecordRepository extends BaseRepository {
         throw new Error('保存消费记录失败');
       }
       
-      const successLogType = isFullProtection ? '完全保护兑换记录' : '消费记录';
-      logger.info('StarRecordRepository', `创建${successLogType}成功: ID=${savedRecord.id}, 数量=${Math.abs(savedRecord.points)}, 类型=${savedRecord.type}, 余额=${savedRecord.balance}`);
+      logger.info('StarRecordRepository', `创建消费记录成功: ID=${savedRecord.id}, 数量=${Math.abs(savedRecord.points)}, 类型=${savedRecord.type}, 余额=${savedRecord.balance}`);
       
       return savedRecord;
     } catch (error) {

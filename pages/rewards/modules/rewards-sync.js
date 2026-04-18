@@ -150,9 +150,16 @@ function buildRewardPageState({ rewards, hasRewardHistoryHint, viewMode }) {
 }
 
 async function decorateRewardForDisplay(page, rewardService, reward, displayContext = {}) {
-  let exchangeCost = rewardDisplay.normalizeRewardExchangeCost(reward, reward.points);
+  let exchangeCost = rewardDisplay.normalizeRewardExchangeCost({
+    originalPoints: reward.points,
+    currentBalance: displayContext.totalPoints
+  }, reward.points);
 
-  if (rewardService?.previewRewardExchangeCost && displayContext.targetChildUserId) {
+  if (
+    exchangeCost.currentBalance <= 0 &&
+    rewardService?.previewRewardExchangeCost &&
+    displayContext.targetChildUserId
+  ) {
     try {
       exchangeCost = await rewardService.previewRewardExchangeCost(reward.id, displayContext.targetChildUserId);
     } catch (error) {

@@ -279,6 +279,66 @@ describe('pages/rewards/rewards behavior', () => {
     expect(page.data.showManageRewardCTA).toBe(false);
   });
 
+  it('loadRewardsData 在已有当前余额时不应为每个奖励重复预览兑换成本', async () => {
+    const page = createPageInstance();
+    const starService = {
+      clearCache: jest.fn(),
+      getAvailableStarSnapshot: jest.fn().mockResolvedValue({
+        userId: 'child-1',
+        totalStars: 21,
+        buckets: [
+          { key: 'week', label: '本周到期', points: 16, emphasized: true },
+          { key: 'permanent', label: '永久有效', points: 5, emphasized: false }
+        ],
+        expiringInfo: {
+          points: 16,
+          expiryDateText: '明天到期',
+          expiryTimestamp: Date.now() + 86400000
+        }
+      })
+    };
+    const rewardService = {
+      clearCache: jest.fn(),
+      getRewardsByFamily: jest.fn().mockResolvedValue([
+        { id: 'reward-1', name: '奖励1', points: 10, claimed: false, fulfillmentMode: 'manual' },
+        { id: 'reward-2', name: '奖励2', points: 20, claimed: false, fulfillmentMode: 'manual' },
+        { id: 'reward-3', name: '奖励3', points: 30, claimed: false, fulfillmentMode: 'manual' }
+      ]),
+      calculateNextAvailableRewardByFamily: jest.fn().mockResolvedValue(null),
+      previewRewardExchangeCost: jest.fn().mockResolvedValue({
+        originalPoints: 10,
+        actualCost: 10,
+        currentBalance: 21,
+        remainingBalance: 11,
+        shortage: 0,
+        hasSufficientBalance: true
+      })
+    };
+
+    serviceManager.getService.mockImplementation((name) => {
+      if (name === 'starService') return starService;
+      if (name === 'rewardService') return rewardService;
+      if (name === 'config') return null;
+      return null;
+    });
+    serviceManager.getUserService.mockReturnValue({
+      getLoginUser: jest.fn(() => ({ role: 'parent', userId: 'parent-1', familyId: 'family-1' })),
+      getLoginUserId: jest.fn(() => 'parent-1'),
+      getCurrentUser: jest.fn(() => ({ role: 'parent', userId: 'parent-1', id: 'parent-1', familyId: 'family-1' })),
+      getAllUsers: jest.fn(() => [
+        { userId: 'parent-1', role: 'parent', familyId: 'family-1' },
+        { userId: 'child-1', role: 'child', familyId: 'family-1' }
+      ]),
+      getUserByRole: jest.fn(() => ({ id: 'child-1', userId: 'child-1', role: 'child', familyId: 'family-1' }))
+    });
+
+    await page.loadRewardsData();
+
+    expect(rewardService.previewRewardExchangeCost).not.toHaveBeenCalled();
+    expect(page.data.totalPoints).toBe(21);
+    expect(page.data.availableRewards).toHaveLength(3);
+  });
+
   it('getExpiringPoints 在服务不可用或异常时应返回默认值', async () => {
     const page = createPageInstance();
 
@@ -345,13 +405,16 @@ describe('pages/rewards/rewards behavior', () => {
     page.data.isRewardAnimating = false;
     page.viewReward({ currentTarget: { dataset: { id: 'reward-1' } } });
     expect(page.data.selectedReward.id).toBe('reward-1');
+    page.data.totalPoints = 20;
 
     const rewardService = {
       previewRewardExchangeCost: jest.fn().mockResolvedValue({
         originalPoints: 10,
-        expiringStarDeduction: 10,
-        actualCost: 0,
-        hasExpiringDeduction: true
+        actualCost: 10,
+        currentBalance: 20,
+        remainingBalance: 10,
+        shortage: 0,
+        hasSufficientBalance: true
       })
     };
     serviceManager.getService.mockImplementation((name) => {
@@ -368,12 +431,104 @@ describe('pages/rewards/rewards behavior', () => {
     page._performClaimReward = jest.fn();
     await page.claimReward({});
     expect(global.wx.showModal).toHaveBeenCalledWith(expect.objectContaining({
-      content: expect.stringContaining('本次消耗 0 颗')
+      content: expect.stringContaining('兑换后剩余 10 颗')
     }));
     expect(page._performClaimReward).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'reward-1' }),
       expect.objectContaining({ targetChildUserId: 'child-1' })
     );
+  });
+
+  it('claimReward 在成本预览失败时应保持页面余额文案一致', async () => {
+    const page = createPageInstance();
+    page.data.totalPoints = 20;
+    page.data.selectedReward = {
+      id: 'reward-fallback',
+      name: '奖励回退',
+      points: 10,
+      claimed: false,
+      canExchange: true
+    };
+
+    const rewardService = {
+      previewRewardExchangeCost: jest.fn().mockRejectedValue(new Error('preview failed'))
+    };
+    serviceManager.getService.mockImplementation((name) => {
+      if (name === 'rewardService') return rewardService;
+      return null;
+    });
+    page._resolveRewardExecutionSubject = jest.fn(() => ({
+      targetChildUserId: 'child-1',
+      targetChildName: '孩子1',
+      requiresPicker: false,
+      isParentOwnView: false,
+      childOptions: []
+    }));
+    page._performClaimReward = jest.fn();
+
+    await page.claimReward({});
+
+    expect(global.wx.showModal).toHaveBeenCalledWith(expect.objectContaining({
+      content: expect.stringContaining('当前余额 20 颗')
+    }));
+    expect(global.wx.showModal).toHaveBeenCalledWith(expect.objectContaining({
+      content: expect.stringContaining('兑换后剩余 10 颗')
+    }));
+    expect(page._performClaimReward).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'reward-fallback' }),
+      expect.objectContaining({ targetChildUserId: 'child-1' })
+    );
+  });
+
+  it('claimReward 在多孩子选择且预览失败时应按被选孩子余额回退', async () => {
+    const page = createPageInstance();
+    page.data.totalPoints = 5;
+    page.data.selectedReward = {
+      id: 'reward-picker-fallback',
+      name: '奖励回退',
+      points: 10,
+      claimed: false,
+      canExchange: true
+    };
+
+    const rewardService = {
+      previewRewardExchangeCost: jest.fn().mockRejectedValue(new Error('preview failed'))
+    };
+    const starService = {
+      getTotalStars: jest.fn().mockResolvedValue(20)
+    };
+    serviceManager.getService.mockImplementation((name) => {
+      if (name === 'rewardService') return rewardService;
+      if (name === 'starService') return starService;
+      return null;
+    });
+    global.wx.showActionSheet.mockImplementation(({ success }) => {
+      success({ tapIndex: 1 });
+    });
+    page._resolveRewardExecutionSubject = jest.fn(() => ({
+      targetChildUserId: null,
+      targetChildName: '',
+      requiresPicker: true,
+      isParentOwnView: true,
+      childOptions: [
+        { userId: 'child-1', label: '孩子1' },
+        { userId: 'child-2', label: '孩子2' }
+      ]
+    }));
+    page._performClaimReward = jest.fn();
+
+    await page.claimReward({});
+
+    expect(starService.getTotalStars).toHaveBeenCalledWith('child-2');
+    expect(global.wx.showModal).toHaveBeenCalledWith(expect.objectContaining({
+      content: expect.stringContaining('当前余额 20 颗')
+    }));
+    expect(global.wx.showModal).toHaveBeenCalledWith(expect.objectContaining({
+      content: expect.stringContaining('兑换后剩余 10 颗')
+    }));
+    expect(global.wx.showToast).not.toHaveBeenCalledWith(expect.objectContaining({
+      title: '星星不足'
+    }));
   });
 
   it('页面导航与星星快照查询应覆盖真实跳转和空态 CTA 分支', async () => {
@@ -445,9 +600,11 @@ describe('pages/rewards/rewards behavior', () => {
     const rewardService = {
       previewRewardExchangeCost: jest.fn().mockResolvedValue({
         originalPoints: 10,
-        expiringStarDeduction: 0,
         actualCost: 10,
-        hasExpiringDeduction: false
+        currentBalance: 20,
+        remainingBalance: 10,
+        shortage: 0,
+        hasSufficientBalance: true
       })
     };
     serviceManager.getService.mockImplementation((name) => {
@@ -480,7 +637,7 @@ describe('pages/rewards/rewards behavior', () => {
     );
   });
 
-  it('_performClaimReward 应处理失败、零消耗和普通奖励动画路径', async () => {
+  it('_performClaimReward 应处理失败、手动奖励和普通奖励动画路径', async () => {
     const page = createPageInstance();
     page.data.totalPoints = 20;
     page._handleExchangeSuccess = jest.fn().mockResolvedValue();
@@ -514,15 +671,17 @@ describe('pages/rewards/rewards behavior', () => {
 
     rewardService.exchangeReward.mockResolvedValueOnce({
       success: true,
-      actualCost: 0,
+      actualCost: 8,
       fulfillmentMode: 'manual'
     });
+    page.animateStarsCount = jest.fn((start, end, callback) => callback());
     await page._performClaimReward(
       { id: 'reward-2', name: '奖励2', points: 8 },
       { targetChildUserId: 'child-1', targetChildName: '孩子1', requiresPicker: false, isParentOwnView: false }
     );
+    expect(page.animateStarsCount).toHaveBeenCalledWith(20, 12, expect.any(Function));
     expect(page._handleExchangeSuccess).toHaveBeenCalledWith(
-      expect.objectContaining({ actualCost: 0, fulfillmentMode: 'manual' }),
+      expect.objectContaining({ actualCost: 8, fulfillmentMode: 'manual' }),
       expect.objectContaining({ id: 'reward-2' }),
       'child-1'
     );

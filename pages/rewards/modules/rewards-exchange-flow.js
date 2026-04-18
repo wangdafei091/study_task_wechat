@@ -74,14 +74,32 @@ async function resolveExchangeSubject(page) {
 
 async function buildDisplayModelForClaim(page, reward, subject) {
   const rewardService = getRewardService();
-  let exchangeCost = rewardDisplay.normalizeRewardExchangeCost(reward, reward.points);
+  const starService = getStarService();
+  let fallbackBalance = Number(page.data.totalPoints || 0);
+
+  if (subject?.targetChildUserId && typeof starService?.getTotalStars === 'function') {
+    try {
+      fallbackBalance = Number(await starService.getTotalStars(subject.targetChildUserId) || 0);
+    } catch (error) {
+      logger.warn('rewards', '读取目标孩子余额失败，领取确认回退到页面余额展示', error);
+    }
+  }
+
+  let exchangeCost = rewardDisplay.normalizeRewardExchangeCost({
+    originalPoints: reward.points,
+    currentBalance: fallbackBalance
+  }, reward.points);
 
   if (rewardService?.previewRewardExchangeCost && subject?.targetChildUserId) {
-    exchangeCost = await rewardService.previewRewardExchangeCost(reward.id, subject.targetChildUserId);
+    try {
+      exchangeCost = await rewardService.previewRewardExchangeCost(reward.id, subject.targetChildUserId);
+    } catch (error) {
+      logger.warn('rewards', '奖励兑换成本预览失败，领取确认回退到页面余额展示', error);
+    }
   }
 
   return rewardDisplay.buildRewardDisplayModel(reward, {
-    totalPoints: page.data.totalPoints,
+    totalPoints: fallbackBalance,
     exchangeCost,
     requiresTargetSelection: false,
     isParentOwnView: subject?.isParentOwnView === true,

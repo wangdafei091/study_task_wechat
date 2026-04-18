@@ -9,23 +9,24 @@ async function previewRewardExchangeCost(service, rewardOrId, userId = null) {
     : rewardOrId;
 
   if (!reward) {
-    return rewardDisplay.normalizeRewardExchangeCost({ points: 0 });
+    return rewardDisplay.normalizeRewardExchangeCost({ points: 0, currentBalance: 0 });
   }
 
-  let expiringStarDeduction = 0;
+  let currentBalance = 0;
 
-  if (userId && service.starService?.getAvailableStarSnapshot) {
+  if (userId && typeof service._getUserAvailableStars === 'function') {
     try {
-      const snapshot = await service.starService.getAvailableStarSnapshot(userId);
-      expiringStarDeduction = Number(snapshot?.expiringInfo?.points || 0);
+      currentBalance = Number(await service._getUserAvailableStars(userId, {
+        refreshBeforeRead: false
+      }) || 0);
     } catch (error) {
-      logger.warn('RewardService', '读取可用星星快照失败，兑换成本预览回退到兼容模式', error);
+      logger.warn('RewardService', '读取用户可用星星失败，兑换成本预览回退到0余额', error);
     }
   }
 
   return rewardDisplay.normalizeRewardExchangeCost({
     originalPoints: reward.points,
-    expiringStarDeduction
+    currentBalance
   });
 }
 
@@ -51,6 +52,203 @@ async function getLatestRewardExchangeRecord(service, reward, exchangeUserId = n
   }
 
   return null;
+}
+
+function normalizeDeductionBreakdown(buckets = []) {
+  if (!Array.isArray(buckets)) {
+    return [];
+  }
+
+  return buckets
+    .map((bucket) => ({
+      groupId: bucket?.groupId || null,
+      expiryType: bucket?.expiryType || 'permanent',
+      expiryDate: bucket?.expiryDate || null,
+      points: Number(bucket?.points || bucket?.amount || 0)
+    }))
+    .filter((bucket) => bucket.points > 0);
+}
+
+function hasExpiredConsumedBuckets(deductionBreakdown = [], now = Date.now()) {
+  return normalizeDeductionBreakdown(deductionBreakdown).some((bucket) => {
+    if (!bucket.expiryType || bucket.expiryType === 'permanent' || !bucket.expiryDate) {
+      return false;
+    }
+
+    return Number(now) > Number(bucket.expiryDate);
+  });
+}
+
+function isSameRefundTargetGroup(group, bucket, userId) {
+  if (!group || group.userId !== userId || group.expiryType !== bucket.expiryType) {
+    return false;
+  }
+
+  if (bucket.expiryType === 'permanent') {
+    return true;
+  }
+
+  if (!group.expiryDate || !bucket.expiryDate) {
+    return false;
+  }
+
+  return new Date(group.expiryDate).toDateString() === new Date(bucket.expiryDate).toDateString();
+}
+
+function buildRefundTargetGroup(repository, bucket, userId) {
+  const GroupModel = repository?.modelClass;
+
+  if (typeof GroupModel !== 'function') {
+    return null;
+  }
+
+  return new GroupModel({
+    userId,
+    type: bucket.expiryType,
+    expiryType: bucket.expiryType,
+    expiryDate: bucket.expiryDate || '',
+    expiryDateStr: typeof repository._getExpiryDescription === 'function'
+      ? repository._getExpiryDescription(bucket.expiryType, bucket.expiryDate)
+      : '',
+    stars: 0
+  });
+}
+
+async function refundToOriginalBuckets(service, userId, deductionBreakdown = [], reason = '') {
+  const buckets = normalizeDeductionBreakdown(deductionBreakdown);
+  const repository = service.starGroupRepository;
+
+  if (!userId) {
+    logger.warn('RewardService', '退回原始星星分组失败: 缺少用户ID');
+    return false;
+  }
+
+  if (buckets.length === 0) {
+    return true;
+  }
+
+  if (
+    repository &&
+    typeof repository.getAll === 'function' &&
+    typeof repository.saveAll === 'function' &&
+    typeof repository.modelClass === 'function'
+  ) {
+    const allGroups = await repository.getAll();
+    const stagedGroups = [];
+
+    for (const bucket of buckets) {
+      let targetGroup = stagedGroups.find((group) => isSameRefundTargetGroup(group, bucket, userId));
+
+      if (!targetGroup) {
+        const existingGroup = allGroups.find((group) => isSameRefundTargetGroup(group, bucket, userId));
+        targetGroup = existingGroup
+          ? (typeof repository._cloneModel === 'function' ? repository._cloneModel(existingGroup) : { ...existingGroup })
+          : buildRefundTargetGroup(repository, bucket, userId);
+      }
+
+      if (!targetGroup) {
+        logger.error('RewardService', '退回原始星星分组失败: 无法构造目标分组', bucket);
+        return false;
+      }
+
+      if (!stagedGroups.some((group) => group.id === targetGroup.id)) {
+        stagedGroups.push(targetGroup);
+      }
+
+      targetGroup.addStars(bucket.points, reason);
+    }
+
+    const savedGroups = await repository.saveAll(stagedGroups);
+    return Array.isArray(savedGroups) && savedGroups.length === stagedGroups.length;
+  }
+
+  for (const bucket of buckets) {
+    const group = await repository.getOrCreateGroup(
+      bucket.expiryType,
+      bucket.expiryDate,
+      null,
+      userId
+    );
+
+    if (!group) {
+      return false;
+    }
+
+    const updated = await repository.addStarsToGroup(
+      group,
+      bucket.points,
+      reason
+    );
+
+    if (!updated) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+async function reverseRefundToOriginalBuckets(service, userId, deductionBreakdown = [], reason = '') {
+  const buckets = normalizeDeductionBreakdown(deductionBreakdown);
+  const repository = service.starGroupRepository;
+
+  if (!userId) {
+    logger.warn('RewardService', '冲销退款失败: 缺少用户ID');
+    return false;
+  }
+
+  if (buckets.length === 0) {
+    return true;
+  }
+
+  if (
+    repository &&
+    typeof repository.getAll === 'function' &&
+    typeof repository.saveAll === 'function' &&
+    typeof repository.modelClass === 'function'
+  ) {
+    const allGroups = await repository.getAll();
+    const stagedGroups = [];
+
+    for (const bucket of buckets) {
+      let targetGroup = stagedGroups.find((group) => isSameRefundTargetGroup(group, bucket, userId));
+
+      if (!targetGroup) {
+        const existingGroup = allGroups.find((group) => isSameRefundTargetGroup(group, bucket, userId));
+        targetGroup = existingGroup
+          ? (typeof repository._cloneModel === 'function' ? repository._cloneModel(existingGroup) : { ...existingGroup })
+          : null;
+      }
+
+      if (!targetGroup) {
+        logger.error('RewardService', '冲销退款失败: 未找到原始分组', bucket);
+        return false;
+      }
+
+      if (!stagedGroups.some((group) => group.id === targetGroup.id)) {
+        stagedGroups.push(targetGroup);
+      }
+
+      const beforeStars = Number(targetGroup.stars || 0);
+      targetGroup.removeStars(bucket.points, reason);
+      const deductedPoints = beforeStars - Number(targetGroup.stars || 0);
+
+      if (deductedPoints !== bucket.points) {
+        logger.error('RewardService', '冲销退款失败: 原始分组星星不足', {
+          bucket,
+          beforeStars,
+          deductedPoints
+        });
+        return false;
+      }
+    }
+
+    const savedGroups = await repository.saveAll(stagedGroups);
+    return Array.isArray(savedGroups) && savedGroups.length === stagedGroups.length;
+  }
+
+  logger.error('RewardService', '冲销退款失败: 当前仓储不支持原子回滚');
+  return false;
 }
 
 async function exchangeReward(service, rewardId, userId = null) {
@@ -128,8 +326,8 @@ async function exchangeReward(service, rewardId, userId = null) {
       const fulfillmentMode = rewardStatus.resolveRewardFulfillmentMode(cloudReward);
       const costBreakdown = rewardDisplay.normalizeRewardExchangeCost({
         originalPoints: cloudReward.points,
-        expiringStarDeduction: response.expiringStarDeduction || 0,
-        actualCost: response.consumedPoints
+        currentBalance: Math.max(0, Number((response.consumedPoints || 0) + (response.updatedGroupsSnapshot || [])
+          .reduce((sum, group) => sum + Number(group.stars || 0), 0)))
       });
       service.eventBus.emit(EVENTS.REWARD_CLAIMED, {
         reward: cloudReward,
@@ -137,8 +335,6 @@ async function exchangeReward(service, rewardId, userId = null) {
         rewardName: cloudReward.name,
         points: costBreakdown.actualCost,
         actualCost: costBreakdown.actualCost,
-        expiringStarDeduction: costBreakdown.expiringStarDeduction,
-        hasExpiringDeduction: costBreakdown.hasExpiringDeduction,
         originalPoints: cloudReward.points,
         displayPoints: costBreakdown.actualCost,
         fulfillmentMode,
@@ -159,8 +355,6 @@ async function exchangeReward(service, rewardId, userId = null) {
           : '已加入待发放',
         fulfillmentMode,
         originalPoints: costBreakdown.originalPoints,
-        expiringStarDeduction: costBreakdown.expiringStarDeduction,
-        hasExpiringDeduction: costBreakdown.hasExpiringDeduction,
         actualCost: costBreakdown.actualCost,
         userId
       };
@@ -186,33 +380,25 @@ async function exchangeReward(service, rewardId, userId = null) {
 
     try {
       logger.info('RewardService', '===== 开始兑换奖励事务 =====');
-      logger.info('RewardService', `事务参数: 奖励=${reward.name}, 原价=${reward.points}颗, 快过期抵扣=${costBreakdown.expiringStarDeduction}颗, 实际消耗=${actualCost}颗, 履约=${fulfillmentMode}, 用户=${userId}`);
+      logger.info('RewardService', `事务参数: 奖励=${reward.name}, 标价=${reward.points}颗, 实际消耗=${actualCost}颗, 履约=${fulfillmentMode}, 用户=${userId}`);
       const exchangeModifyTime = Date.now();
 
-      if (actualCost > 0) {
-        logger.info('RewardService', `步骤3: 开始扣除星星, 数量=${actualCost}, 用户=${userId}`);
-        deductResult = await service.starGroupRepository.deductStars(actualCost, userId);
+      logger.info('RewardService', `步骤3: 开始扣除星星, 数量=${actualCost}, 用户=${userId}`);
+      deductResult = await service.starGroupRepository.deductStars(actualCost, userId);
 
-        logger.info('RewardService', '扣除星星操作完成, 结果=', deductResult);
+      logger.info('RewardService', '扣除星星操作完成, 结果=', deductResult);
 
-        if (!deductResult.success) {
-          logger.error('RewardService', `扣除星星失败: ${deductResult.message}, 用户=${userId}`);
-          return { success: false, message: '扣除星星失败' };
-        }
-
-        logger.info('RewardService', `步骤3完成: 星星扣除成功，扣除${actualCost}颗, 用户=${userId}`);
-      } else {
-        logger.info('RewardService', `步骤3跳过: 本次兑换无需扣除星星, 奖励=${reward.name}, 用户=${userId}`);
-        deductResult = { success: true, message: '本次兑换无需扣星' };
+      if (!deductResult.success) {
+        logger.error('RewardService', `扣除星星失败: ${deductResult.message}, 用户=${userId}`);
+        return { success: false, message: '扣除星星失败' };
       }
 
+      logger.info('RewardService', `步骤3完成: 星星扣除成功，扣除${actualCost}颗, 用户=${userId}`);
+
       try {
-        const recordDescription = actualCost > 0
-          ? `兑换奖励: ${reward.name}`
-          : `兑换奖励（消耗0颗星星）: ${reward.name}`;
         const recordData = {
           amount: actualCost,
-          type: actualCost > 0 ? 'exchange' : 'protected_exchange',
+          type: 'exchange',
           source: `reward_${rewardId}`,
           sourceId: reward.id,
           timestamp: exchangeModifyTime,
@@ -224,21 +410,26 @@ async function exchangeReward(service, rewardId, userId = null) {
             rewardName: reward.name,
             originalPoints: reward.points,
             fulfillmentMode,
-            expiringStarDeduction: costBreakdown.expiringStarDeduction,
-            actualCost
+            actualCost,
+            deductionBreakdown: normalizeDeductionBreakdown(deductResult.deductionBreakdown || [])
           },
-          description: recordDescription
+          description: `兑换奖励: ${reward.name}`
         };
 
         const consumptionRecord = await service.starRecordRepository.createStarConsumptionRecord(recordData);
         logger.info('RewardService', `星星消费记录创建成功: ${consumptionRecord?.id || 'unknown'}, 类型=${recordData.type}, 用户=${userId}`);
       } catch (recordError) {
         logger.error('RewardService', '创建星星消费记录失败', recordError);
-        const rollbackSuccess = await service._rollbackStarDeduction(actualCost, reward, userId, '创建消费记录失败');
+        const rollbackSuccess = await service._rollbackStarDeduction(
+          normalizeDeductionBreakdown(deductResult?.deductionBreakdown || []),
+          reward,
+          userId,
+          '创建消费记录失败'
+        );
 
         return {
           success: false,
-          message: '创建消费记录失败' + (actualCost > 0 ? (rollbackSuccess ? '，已回滚星星扣除' : '，回滚失败') : '')
+          message: '创建消费记录失败' + (rollbackSuccess ? '，已回滚星星扣除' : '，回滚失败')
         };
       }
 
@@ -269,11 +460,16 @@ async function exchangeReward(service, rewardId, userId = null) {
         logger.info('RewardService', `奖励状态更新成功: ${reward.name}, 最终状态=${reward.claimStatus}, 用户=${userId}`);
       } catch (saveError) {
         logger.error('RewardService', '更新奖励状态失败', saveError);
-        const rollbackSuccess = await service._rollbackStarDeduction(actualCost, reward, userId, '更新奖励状态失败');
+        const rollbackSuccess = await service._rollbackStarDeduction(
+          normalizeDeductionBreakdown(deductResult?.deductionBreakdown || []),
+          reward,
+          userId,
+          '更新奖励状态失败'
+        );
 
         return {
           success: false,
-          message: '更新奖励状态失败' + (actualCost > 0 ? (rollbackSuccess ? '，已回滚星星扣除' : '，回滚失败') : '')
+          message: '更新奖励状态失败' + (rollbackSuccess ? '，已回滚星星扣除' : '，回滚失败')
         };
       }
 
@@ -284,8 +480,6 @@ async function exchangeReward(service, rewardId, userId = null) {
           rewardName: reward.name,
           points: actualCost,
           actualCost,
-          expiringStarDeduction: costBreakdown.expiringStarDeduction,
-          hasExpiringDeduction: costBreakdown.hasExpiringDeduction,
           originalPoints: reward.points,
           displayPoints: actualCost,
           fulfillmentMode,
@@ -302,10 +496,7 @@ async function exchangeReward(service, rewardId, userId = null) {
         logger.warn('RewardService', '发送奖励领取事件失败', eventError);
       }
 
-      const costDescription = costBreakdown.hasExpiringDeduction
-        ? `${actualCost}颗星星(已抵扣${costBreakdown.expiringStarDeduction}颗快过期星星，原价${reward.points}颗)`
-        : `${actualCost}颗星星`;
-      logger.info('RewardService', `兑换奖励成功: ${reward.name}, 消耗${costDescription}, 用户=${userId}`);
+      logger.info('RewardService', `兑换奖励成功: ${reward.name}, 消耗${actualCost}颗星星, 用户=${userId}`);
 
       const successMessage = fulfillmentMode === rewardStatus.RewardFulfillmentMode.INSTANT
         ? '兑换成功'
@@ -317,8 +508,6 @@ async function exchangeReward(service, rewardId, userId = null) {
         message: successMessage,
         fulfillmentMode,
         originalPoints: costBreakdown.originalPoints,
-        expiringStarDeduction: costBreakdown.expiringStarDeduction,
-        hasExpiringDeduction: costBreakdown.hasExpiringDeduction,
         actualCost,
         userId
       };
@@ -326,7 +515,12 @@ async function exchangeReward(service, rewardId, userId = null) {
       logger.error('RewardService', '兑换奖励事务处理失败', error);
 
       if (deductResult && deductResult.success) {
-        await service._rollbackStarDeduction(actualCost, reward, userId, '兑换事务处理失败');
+        await service._rollbackStarDeduction(
+          normalizeDeductionBreakdown(deductResult.deductionBreakdown || []),
+          reward,
+          userId,
+          '兑换事务处理失败'
+        );
       }
 
       return { success: false, message: '兑换过程中发生错误，请重试' };
@@ -419,28 +613,45 @@ async function cancelRewardExchange(service, rewardId) {
     }
 
     const pointsToRefund = latestRecord ? Math.abs(latestRecord.points) : reward.points;
+    const deductionBreakdown = normalizeDeductionBreakdown(latestRecord?.data?.deductionBreakdown || []);
 
-    const permanentGroup = await service.starGroupRepository.getOrCreateGroup(
-      'permanent',
-      null,
-      '永久有效',
-      exchangeUserId
-    );
-
-    if (!permanentGroup) {
-      logger.error('RewardService', `取消奖励兑换失败: 无法创建星星分组, ID=${rewardId}`);
-      return { success: false, message: '退款星星失败' };
+    if (pointsToRefund > 0 && deductionBreakdown.length === 0) {
+      logger.warn('RewardService', `取消奖励兑换失败: 缺少可退款的消费明细, ID=${rewardId}`);
+      return { success: false, message: '已过可取消时点' };
     }
 
-    const updatedGroup = await service.starGroupRepository.addStarsToGroup(
-      permanentGroup,
-      pointsToRefund,
+    if (hasExpiredConsumedBuckets(deductionBreakdown, Date.now())) {
+      logger.warn('RewardService', `取消奖励兑换失败: 已消费星星已过期, ID=${rewardId}`);
+      return { success: false, message: '已过可取消时点' };
+    }
+
+    const refundSuccess = await refundToOriginalBuckets(
+      service,
+      exchangeUserId,
+      deductionBreakdown,
       `取消兑换奖励: ${reward.name}`
     );
 
-    if (!updatedGroup) {
-      logger.error('RewardService', `取消奖励兑换失败: 添加星星到分组失败, ID=${rewardId}`);
+    if (!refundSuccess) {
+      logger.error('RewardService', `取消奖励兑换失败: 退回原星星分组失败, ID=${rewardId}`);
       return { success: false, message: '退款星星失败' };
+    }
+
+    const unclaimed = await service.rewardRepository.unclaimReward(rewardId);
+
+    if (!unclaimed) {
+      logger.error('RewardService', `取消奖励兑换: 更新奖励状态失败, ID=${rewardId}`);
+      const revertRefundSuccess = await reverseRefundToOriginalBuckets(
+        service,
+        exchangeUserId,
+        deductionBreakdown,
+        `取消兑换奖励回滚: ${reward.name}`
+      );
+
+      return {
+        success: false,
+        message: revertRefundSuccess ? '取消兑换失败，已自动回滚退款' : '取消兑换失败，回滚退款失败'
+      };
     }
 
     const refundRecord = await service.starRecordRepository.save({
@@ -452,18 +663,16 @@ async function cancelRewardExchange(service, rewardId) {
       description: `取消兑换奖励: ${reward.name}`,
       timestamp: Date.now(),
       balance: latestRecord ? latestRecord.previousBalance : pointsToRefund,
-      previousBalance: latestRecord ? latestRecord.balance : 0
+      previousBalance: latestRecord ? latestRecord.balance : 0,
+      data: {
+        rewardId,
+        rewardName: reward.name,
+        refundBreakdown: deductionBreakdown
+      }
     });
 
     if (!refundRecord) {
       logger.error('RewardService', `取消奖励兑换: 创建退款记录失败, ID=${rewardId}`);
-    }
-
-    const unclaimed = await service.rewardRepository.unclaimReward(rewardId);
-
-    if (!unclaimed) {
-      logger.error('RewardService', `取消奖励兑换: 更新奖励状态失败, ID=${rewardId}`);
-      return { success: false, message: '取消兑换失败，星星已退还' };
     }
 
     logger.info('RewardService', `取消奖励兑换成功: ${reward.name}, ID=${rewardId}, 退还星星=${pointsToRefund}`);
@@ -491,35 +700,31 @@ async function cancelRewardExchange(service, rewardId) {
   }
 }
 
-async function rollbackStarDeduction(service, actualCost, reward, userId, reason = '兑换奖励失败') {
-  if (actualCost <= 0) {
-    logger.info('RewardService', '无需回滚星星扣除，actualCost为0');
+async function rollbackStarDeduction(service, deductionBreakdown, reward, userId, reason = '兑换奖励失败') {
+  const normalizedBuckets = normalizeDeductionBreakdown(deductionBreakdown);
+  const refundPoints = normalizedBuckets.reduce((sum, bucket) => sum + Number(bucket.points || 0), 0);
+
+  if (refundPoints <= 0) {
+    logger.info('RewardService', '无需回滚星星扣除，未找到有效扣减明细');
     return true;
   }
 
   try {
-    logger.warn('RewardService', `开始回滚星星扣除操作, 用户=${userId}, 回滚数量=${actualCost}, 原因=${reason}`);
+    logger.warn('RewardService', `开始回滚星星扣除操作, 用户=${userId}, 回滚数量=${refundPoints}, 原因=${reason}`);
 
-    const permanentGroup = await service.starGroupRepository.getOrCreateGroup(
-      'permanent',
-      null,
-      '永久有效',
-      userId
+    const rollbackSuccess = await refundToOriginalBuckets(
+      service,
+      userId,
+      normalizedBuckets,
+      `${reason}回滚: ${reward.name}`
     );
 
-    if (!permanentGroup) {
-      logger.error('RewardService', '获取永久星星分组失败，回滚中止');
+    if (!rollbackSuccess) {
+      logger.error('RewardService', '回滚星星到原始分组失败');
       return false;
     }
 
-    await service.starGroupRepository.addStarsToGroup(
-      permanentGroup,
-      actualCost,
-      `${reason}回滚: ${reward.name}`,
-      userId
-    );
-
-    logger.info('RewardService', `星星回滚成功，退还${actualCost}颗星星, 用户=${userId}`);
+    logger.info('RewardService', `星星回滚成功，退还${refundPoints}颗星星, 用户=${userId}`);
     return true;
   } catch (rollbackError) {
     logger.error('RewardService', '星星回滚失败', rollbackError);
