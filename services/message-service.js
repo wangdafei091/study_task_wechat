@@ -19,6 +19,7 @@ const batchUtils = require('../utils/batchUtils');
 const { EVENTS } = require('../utils/constants');
 const HttpClient = require('../utils/http-client');
 const API_CONFIG = require('../utils/api-config');
+const messageDisplay = require('../utils/message-display');
 const messageProvisional = require('./message-service/message-provisional');
 const messageHandlers = require('./message-service/message-handlers');
 const messageDomain = require('./message-service/message-domain');
@@ -252,7 +253,7 @@ class MessageService {
   }
 
   _compactMessagesForDisplay(messages = []) {
-    const sortedMessages = this._sortMessages(messages);
+    const sortedMessages = this._sortMessages(messageDisplay.dedupeMessagesByEventKey(messages));
     const compactedMessages = [];
     const seenKeys = new Set();
 

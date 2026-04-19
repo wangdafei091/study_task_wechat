@@ -3,6 +3,7 @@ const dateUtils = require('../../utils/dateUtils');
 const logger = require('../../utils/logger');
 const messageDisplay = require('../../utils/message-display');
 const viewScopeUtils = require('../../utils/view-scope');
+const syncState = require('../../utils/sync-state');
 const { UserService } = require('../../services/user-service');
 const MessageService = require('../../services/message-service');
 const lifecycleModule = require('./modules/index-lifecycle');
@@ -31,14 +32,6 @@ function formatOccurrenceDateLabel(dateString) {
   return `${date.getMonth() + 1}月${date.getDate()}日`;
 }
 
-function isPendingSyncOccurrenceRecord(record) {
-  if (!record || typeof record !== 'object') {
-    return false;
-  }
-
-  return Boolean(record.pendingSyncMeta || record.syncedToCloud === false);
-}
-
 function buildOccurrenceDisplayItems(tasks = [], records = []) {
   const recordMap = (records || []).reduce((result, record) => {
     result[record.parentTaskId] = record;
@@ -48,7 +41,7 @@ function buildOccurrenceDisplayItems(tasks = [], records = []) {
   return (tasks || []).map((task) => {
     const record = recordMap[task.id] || null;
     const outcome = record?.occurrenceOutcome || 'none';
-    const isPendingSync = isPendingSyncOccurrenceRecord(record);
+    const isPendingSync = syncState.isPendingSyncOccurrenceRecord(record);
     const statusPrefix = isPendingSync ? '待同步' : '已记录';
     const statusLabel = outcome === 'success'
       ? `${statusPrefix} · 达成`
@@ -529,14 +522,15 @@ Page({
         skipExpiryAuthoritySyncBeforeFormalReminders:
           options.skipExpiryAuthoritySyncBeforeFormalReminders === true
       });
+      const normalizedMessages = messageDisplay.dedupeMessagesByEventKey(messages);
       
-      const processedMessages = messageDisplay.buildPreviewMessages(messages, {
+      const processedMessages = messageDisplay.buildPreviewMessages(normalizedMessages, {
         limit: 3,
         formatMessageTime: (createTime) => dateUtils.formatRelativeTime(createTime)
       });
       
       // 计算未读消息数量（基于完整 scope 消息集合）
-      const unreadCount = messages.filter(msg => !msg.isRead).length;
+      const unreadCount = normalizedMessages.filter(msg => !msg.isRead).length;
       
       this.setData({
         messages: processedMessages,
@@ -544,7 +538,7 @@ Page({
       });
       
       logger.info('Index', `消息数据加载成功, scope=${scopeOptions.scope}`, {
-        消息总数: messages.length,
+        消息总数: normalizedMessages.length,
         显示数量: processedMessages.length,
         未读数量: unreadCount
       });
@@ -620,7 +614,7 @@ Page({
 
     wx.showToast(result.fallback
       ? {
-        title: '已暂存，等待同步',
+        title: syncState.getPendingSyncToastCopy(),
         icon: 'none'
       }
       : {

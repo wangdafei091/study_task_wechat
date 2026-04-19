@@ -55,12 +55,13 @@ async function handleMessageDataChanged(page, eventData) {
   logger.info('Index', '收到消息数据变更事件');
 
   if (Array.isArray(eventData)) {
-    const processedMessages = messageDisplay.buildPreviewMessages(eventData, {
+    const normalizedMessages = messageDisplay.dedupeMessagesByEventKey(eventData);
+    const processedMessages = messageDisplay.buildPreviewMessages(normalizedMessages, {
       limit: 3,
       formatMessageTime: (createTime) => dateUtils.formatRelativeTime(createTime)
     });
 
-    const unreadCount = eventData.filter((msg) => !msg.isRead).length;
+    const unreadCount = normalizedMessages.filter((msg) => !msg.isRead).length;
     page.setData({
       messages: processedMessages,
       unreadCount

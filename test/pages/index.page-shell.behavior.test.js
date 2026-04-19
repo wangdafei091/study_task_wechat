@@ -645,7 +645,7 @@ describe('pages/index/index shell behavior', () => {
       currentTarget: { dataset: { taskId: 'occ_1', outcome: 'success' } }
     });
     expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({
-      title: '已暂存，等待同步',
+      title: '已暂存，联网后自动同步',
       icon: 'none'
     }));
 
@@ -674,6 +674,35 @@ describe('pages/index/index shell behavior', () => {
     expect(global.wx.navigateTo).toHaveBeenCalledWith(expect.objectContaining({
       url: '/pages/message/message?tab=task'
     }));
+  });
+
+  it('首页消息预览在同一事件存在 formal 与 provisional 时应优先 formal 且未读只计一次', async () => {
+    messageService.getMessagesByScope.mockResolvedValueOnce([
+      {
+        id: 'msg_provisional',
+        title: '待同步任务',
+        type: 'task',
+        isRead: false,
+        createTime: 200,
+        isProvisional: true,
+        syncedToCloud: false,
+        messageEventKey: 'task:create:1'
+      },
+      {
+        id: 'msg_formal',
+        title: '正式任务',
+        type: 'task',
+        isRead: false,
+        createTime: 100,
+        syncedToCloud: true,
+        messageEventKey: 'task:create:1'
+      }
+    ]);
+
+    await page.loadMessageData();
+
+    expect(page.data.messages.map((message) => message.id)).toEqual(['msg_formal']);
+    expect(page.data.unreadCount).toBe(1);
   });
 
   it('消息相关交互应更新页面状态并处理提醒操作', async () => {

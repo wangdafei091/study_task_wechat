@@ -37,6 +37,30 @@ describe('utils/message-display', () => {
     expect(displayMessages.map((message) => message.dateDivider)).toEqual(['今天', '昨天', '更早']);
   });
 
+  it('去重时应保留不同展示流中的同一 messageEventKey', () => {
+    const result = messageDisplay.dedupeMessagesByEventKey([
+      {
+        id: 'm-user',
+        visibilityScope: 'user',
+        userId: 'child-1',
+        familyId: 'family-1',
+        messageEventKey: 'task:create:1',
+        syncedToCloud: true,
+        createTime: 100
+      },
+      {
+        id: 'm-family',
+        visibilityScope: 'family',
+        familyId: 'family-1',
+        messageEventKey: 'task:create:1',
+        syncedToCloud: true,
+        createTime: 90
+      }
+    ]);
+
+    expect(result.map((message) => message.id)).toEqual(['m-user', 'm-family']);
+  });
+
   it('同一日多条消息只有首条显示日期分隔', () => {
     const timeline = messageDisplay.buildTimelineMessages([
       { id: 'm1', createTime: 310 },

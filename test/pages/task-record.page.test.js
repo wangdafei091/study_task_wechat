@@ -147,7 +147,7 @@ describe('pages/task-record/task-record', () => {
     });
 
     expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({
-      title: '已暂存，等待同步',
+      title: '已暂存，联网后自动同步',
       icon: 'none'
     }));
 

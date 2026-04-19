@@ -2,6 +2,7 @@ const dateUtils = require('../../utils/dateUtils');
 const logger = require('../../utils/logger');
 const serviceManager = require('../../services/service-manager');
 const occurrenceContext = require('../../utils/task-occurrence-context');
+const syncState = require('../../utils/sync-state');
 
 function getTodayString() {
   return dateUtils.getTodayString();
@@ -61,18 +62,10 @@ function buildRecordMap(records = []) {
   }, {});
 }
 
-function isPendingSyncOccurrenceRecord(record) {
-  if (!record || typeof record !== 'object') {
-    return false;
-  }
-
-  return Boolean(record.pendingSyncMeta || record.syncedToCloud === false);
-}
-
 function decorateOccurrenceItem(task, recordMap = {}) {
   const record = recordMap[task.id] || null;
   const outcome = record && record.occurrenceOutcome ? record.occurrenceOutcome : 'none';
-  const isPendingSync = isPendingSyncOccurrenceRecord(record);
+  const isPendingSync = syncState.isPendingSyncOccurrenceRecord(record);
   const statusPrefix = isPendingSync ? '待同步' : '已记录';
   const resultText = outcome === 'success'
     ? `${statusPrefix}：达成`
@@ -231,7 +224,7 @@ Page({
 
     wx.showToast(result.fallback
       ? {
-        title: '已暂存，等待同步',
+        title: syncState.getPendingSyncToastCopy(),
         icon: 'none'
       }
       : {
