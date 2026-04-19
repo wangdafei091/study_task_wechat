@@ -126,6 +126,51 @@ describe('packageMessage/pages/message/message behavior', () => {
     expect(page.data.unreadCount).toBe(1);
   });
 
+  it('同一事件存在 formal 与 provisional 时应优先保留 formal，并给剩余 provisional 打弱化标记', async () => {
+    const page = createPageInstance();
+
+    page.processMessages([
+      {
+        id: 'm_formal',
+        type: 'task',
+        isRead: false,
+        createTime: 10,
+        syncedToCloud: true,
+        messageEventKey: 'event:1'
+      },
+      {
+        id: 'm_provisional_same',
+        type: 'task',
+        isRead: false,
+        createTime: 20,
+        isProvisional: true,
+        syncedToCloud: false,
+        messageEventKey: 'event:1'
+      },
+      {
+        id: 'm_provisional_only',
+        type: 'reward',
+        isRead: false,
+        createTime: 30,
+        isProvisional: true,
+        syncedToCloud: false,
+        messageEventKey: 'event:2'
+      }
+    ]);
+
+    expect(page.data.messages.map((message) => message.id)).toEqual(['m_provisional_only', 'm_formal']);
+    expect(page.data.unreadCount).toBe(2);
+    expect(page.data.messages[0]).toEqual(expect.objectContaining({
+      id: 'm_provisional_only',
+      isWeakProvisional: true,
+      syncMetaText: '本机暂存'
+    }));
+    expect(page.data.messages[1]).toEqual(expect.objectContaining({
+      id: 'm_formal',
+      isWeakProvisional: false
+    }));
+  });
+
   it('markAllAsRead、markMessageAsRead 和 deleteMessage 应更新页面状态', async () => {
     const page = createPageInstance();
     page.data.messages = [

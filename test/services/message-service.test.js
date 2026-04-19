@@ -606,6 +606,55 @@ describe('MessageService', () => {
       expect(result.map((message) => message.id)).toEqual(['msg_provisional', 'msg_formal']);
     });
 
+    it('同一 messageEventKey 下应优先保留 formal 消息', async () => {
+      messageService.enableCloudStorage = true;
+      mockUserService.getLoginUser.mockReturnValue({
+        userId: 'child_1',
+        role: 'child',
+        familyId: 'family_1'
+      });
+      mockUserService.getCurrentUser.mockReturnValue({
+        id: 'child_1',
+        userId: 'child_1',
+        role: 'child',
+        familyId: 'family_1'
+      });
+
+      mockMessageRepository.getMessagesByScope.mockResolvedValue([
+        new Message({
+          id: 'msg_provisional',
+          userId: 'child_1',
+          familyId: 'family_1',
+          visibilityScope: 'user',
+          type: 'task',
+          notificationType: 'task_create',
+          title: '待同步消息',
+          summary: '待同步消息',
+          createTime: 200,
+          isProvisional: true,
+          syncedToCloud: false,
+          messageEventKey: 'task:create:1'
+        }),
+        new Message({
+          id: 'msg_formal',
+          userId: 'child_1',
+          familyId: 'family_1',
+          visibilityScope: 'user',
+          type: 'task',
+          notificationType: 'task_create',
+          title: '正式消息',
+          summary: '正式消息',
+          createTime: 100,
+          syncedToCloud: true,
+          messageEventKey: 'task:create:1'
+        })
+      ]);
+
+      const result = await messageService.getMessagesByScope({ scope: 'user', userId: 'child_1' });
+
+      expect(result.map((message) => message.id)).toEqual(['msg_formal']);
+    });
+
     it('scope=all 兼容分支应直接读取仓储，不触发云端保鲜或过滤', async () => {
       messageService.enableCloudStorage = true;
       mockMessageRepository.getAll.mockResolvedValue([
@@ -624,6 +673,41 @@ describe('MessageService', () => {
       expect(mockMessageRepository.getMessagesByScope).not.toHaveBeenCalled();
       expect(HttpClient.get).not.toHaveBeenCalled();
       expect(HttpClient.post).not.toHaveBeenCalled();
+    });
+
+    it('scope=all 兼容分支不应把 user/family 两条不同消息流误折叠为一条', async () => {
+      messageService.enableCloudStorage = true;
+      mockMessageRepository.getAll.mockResolvedValue([
+        new Message({
+          id: 'msg_user',
+          userId: 'child_1',
+          familyId: 'family_1',
+          visibilityScope: 'user',
+          type: 'task',
+          notificationType: 'task_create',
+          title: '孩子个人流消息',
+          summary: '孩子个人流消息',
+          messageEventKey: 'task:create:1',
+          createTime: 200,
+          syncedToCloud: true
+        }),
+        new Message({
+          id: 'msg_family',
+          familyId: 'family_1',
+          visibilityScope: 'family',
+          type: 'task',
+          notificationType: 'task_create',
+          title: '家庭流消息',
+          summary: '家庭流消息',
+          messageEventKey: 'task:create:1',
+          createTime: 100,
+          syncedToCloud: true
+        })
+      ]);
+
+      const result = await messageService.getMessagesByScope();
+
+      expect(result.map((message) => message.id)).toEqual(['msg_user', 'msg_family']);
     });
   });
 

@@ -52,8 +52,8 @@
       </view>
       
       <!-- 消息项 -->
-      <view class="message-item {{item.isRead ? '' : 'unread'}}" 
-            bindtap="viewMessageDetail" 
+      <view class="message-item {{item.isRead ? '' : 'unread'}} {{item.isWeakProvisional ? 'provisional' : ''}}"
+            bindtap="viewMessageDetail"
             data-id="{{item.id}}"
             bind:longpress="showMessageOptions"
             data-index="{{index}}">
@@ -67,7 +67,10 @@
             <view class="message-unread-dot" wx:if="{{!item.isRead}}"></view>
           </view>
           <view class="message-content">
-            <view class="message-title">{{item.title}}</view>
+            <view class="message-title-row">
+              <view class="message-title">{{item.title}}</view>
+              <view class="message-sync-chip" wx:if="{{item.syncMetaText}}">{{item.syncMetaText}}</view>
+            </view>
             <view class="message-summary">{{item.summary}}</view>
             <view class="message-time">{{item.timeDisplay}}</view>
           </view>

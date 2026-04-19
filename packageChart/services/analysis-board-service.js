@@ -1,6 +1,7 @@
 const logger = require('../../utils/logger');
 const dateUtils = require('../../utils/dateUtils');
 const { TaskStatus } = require('../../models/task');
+const syncState = require('../../utils/sync-state');
 
 const TYPE_ORDER = {
   study: 0,
@@ -208,11 +209,7 @@ function resolveTaskState(task, monthContext) {
 }
 
 function isPendingSyncOccurrenceRecord(task) {
-  if (!task || task.executionMode !== 'occurrence' || task.isOccurrenceRecord !== true) {
-    return false;
-  }
-
-  return Boolean(task.pendingSyncMeta || task.syncedToCloud === false);
+  return syncState.isPendingSyncOccurrenceRecord(task);
 }
 
 function mergeCellState(currentState, nextState) {
