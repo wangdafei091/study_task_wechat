@@ -4,6 +4,47 @@
 
 ---
 
+## [里程碑-21O] - 2026-04-19
+
+### ✅ 完成情况
+
+**核心测试覆盖与质量闸门补强**
+
+- **正式质量门禁已完成扩面**：
+  - [`jest.quality.config.js`](/Users/wangdafei/code/study_task_wechat/jest.quality.config.js) 已将 [`repositories/task-repository.js`](/Users/wangdafei/code/study_task_wechat/repositories/task-repository.js)、消息子模块与奖励子模块纳入正式质量闸门
+  - 目标文件统一执行 `branches 70% / functions 75% / lines 75% / statements 75%` 的单文件门槛
+- **弱覆盖模块测试已补齐**：
+  - [`test/repositories/task-repository.test.js`](/Users/wangdafei/code/study_task_wechat/test/repositories/task-repository.test.js)、[`test/services/message-service.modules.test.js`](/Users/wangdafei/code/study_task_wechat/test/services/message-service.modules.test.js)、[`test/services/reward-service.test.js`](/Users/wangdafei/code/study_task_wechat/test/services/reward-service.test.js) 已补齐仓储、消息 helper 与奖励查询/队列边界分支
+  - 目标文件覆盖率已过线：`task-repository 87.02% branches`、`message-provisional 70.88% branches`、`message-domain 76.27% branches`、`message-handlers 100% branches`、`reward-query 73.68% branches`、`reward-queue 70.58% branches`
+- **最小静态检查与后端 CI 已形成闭环**：
+  - 根级已新增 [`eslint.config.js`](/Users/wangdafei/code/study_task_wechat/eslint.config.js) 与 [`lint:quality`](/Users/wangdafei/code/study_task_wechat/package.json) 白名单脚本
+  - [`test.yml`](/Users/wangdafei/code/study_task_wechat/.github/workflows/test.yml) 已纳入 `npm --prefix backend ci`、`npm run test:backend:unit` 与 `npm run lint:quality`
+- **CI 配置残口已顺手修复**：
+  - 已将 [`backend/package-lock.json`](/Users/wangdafei/code/study_task_wechat/backend/package-lock.json) 纳入版本控制，修复 GitHub Actions 中 `npm --prefix backend ci` 的失败
+  - 已将 GitHub Actions 运行时从 `actions/checkout@v4` / `actions/setup-node@v4` 升级到 `v5`，消除 Node 20 弃用告警
+
+### 🧪 验证结果
+
+- 前端主测试树通过：
+  - `npm test -- --runInBand`
+  - 结果：`93 suites / 2035 tests` 全绿
+- 前端质量闸门通过：
+  - `npm run test:quality`
+  - 结果：`93 suites / 2035 tests` 全绿
+- 后端单元测试通过：
+  - `npm run test:backend:unit`
+  - 结果：`15 suites / 127 tests` 全绿
+- 最小静态检查通过：
+  - `npm run lint:quality`
+- 合并后主线 CI 通过：
+  - GitHub Actions `test` workflow（run `24619274374`）在 `develop` 分支全绿
+
+### 📖 详细实施记录
+
+- [里程碑-21O：核心测试覆盖与质量闸门补强](../design/milestone-21o-core-test-quality-gate-hardening.md)
+
+---
+
 ## [里程碑-21M] - 2026-04-19
 
 ### ✅ 完成情况

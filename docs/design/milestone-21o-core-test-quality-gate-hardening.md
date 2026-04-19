@@ -1,10 +1,11 @@
 # 里程碑-21O：核心测试覆盖与质量闸门补强 详细设计文档
 
-> **设计状态**：🔵 实施中
+> **设计状态**：✅ 已完成
 > **创建日期**：2026-04-19
 > **设计者**：GPT5 Codex
 > **审核者**：项目维护者
 > **预计工期**：3-4天
+> **完成日期**：2026-04-19
 
 ---
 
@@ -20,6 +21,27 @@
 - [替代方案](#替代方案)
 - [审核要点自检](#审核要点自检)
 - [审核记录](#审核记录)
+
+---
+
+## 完成结论
+
+`M21O` 已按本设计完成落地，正式收口为以下事实：
+
+- `task-repository`、消息子模块、奖励子模块已进入正式前端质量闸门
+- 目标文件弱覆盖分支已补齐，并全部满足单文件门槛
+- 根级已补上仅覆盖本期范围的最小静态检查基线
+- GitHub Actions 已纳入后端依赖安装、后端单元测试与 `lint:quality`
+- `backend/package-lock.json` 已纳入版本控制，修复了 `npm --prefix backend ci` 的 CI 失败
+- GitHub Actions 已从 `actions/checkout@v4`、`actions/setup-node@v4` 升级到 `v5`，消除 Node 20 运行时弃用告警
+
+### 最终验证结果
+
+- 前端主测试树通过：`npm test -- --runInBand`
+- 前端质量闸门通过：`npm run test:quality`
+- 后端单元测试通过：`npm run test:backend:unit`
+- 最小静态检查通过：`npm run lint:quality`
+- 合并后 `develop` 分支 GitHub Actions `test` workflow 通过：run `24619274374`
 
 ---
 
@@ -660,3 +682,4 @@ steps:
 
 - 2026-04-19：初稿创建，待项目维护者审核
 - 2026-04-19：最终评审通过，可进入实施
+- 2026-04-19：实施完成，已合并到 `develop`
