@@ -4,6 +4,39 @@
 
 ---
 
+## [里程碑-21M] - 2026-04-19
+
+### ✅ 完成情况
+
+**全局同步状态体验收口（M21M-A）**
+
+- **表现记录同步语义已完成统一收口**：
+  - [`utils/sync-state.js`](/Users/wangdafei/code/study_task_wechat/utils/sync-state.js)、[`pages/index/index.js`](/Users/wangdafei/code/study_task_wechat/pages/index/index.js)、[`pages/task-record/task-record.js`](/Users/wangdafei/code/study_task_wechat/pages/task-record/task-record.js)、[`packageChart/services/analysis-board-service.js`](/Users/wangdafei/code/study_task_wechat/packageChart/services/analysis-board-service.js) 已统一表现记录待同步判定口径
+  - 首页、表现记录页与分析看板不再各自维护散落的 pending 条件判断
+- **待同步提示文案已统一**：
+  - 首页与表现记录页 fallback toast 已统一为“已暂存，联网后自动同步”
+  - 待同步表达从“等待同步”收口为“本机暂存，联网后自动同步”的同一产品语义
+- **消息中心 provisional/formal 展示语义已收口**：
+  - [`utils/message-display.js`](/Users/wangdafei/code/study_task_wechat/utils/message-display.js) 与 [`services/message-service.js`](/Users/wangdafei/code/study_task_wechat/services/message-service.js) 已实现同一消息流内 `formal > provisional` 的语义去重
+  - 已修复 `scope=all` 下 `user/family` 两条不同消息流被误折叠的问题
+  - [`packageMessage/pages/message/message.wxml`](/Users/wangdafei/code/study_task_wechat/packageMessage/pages/message/message.wxml) 与 [`packageMessage/pages/message/message.wxss`](/Users/wangdafei/code/study_task_wechat/packageMessage/pages/message/message.wxss) 已为 provisional 消息增加弱化样式与“本机暂存”标记，并修复长标题布局挤压
+
+### 🧪 验证结果
+
+- 前端质量闸门通过：
+  - `npm run test:quality`
+  - 结果：`93 suites / 1997 tests` 全绿
+- 定向同步状态回归通过：
+  - `npx jest test/utils/message-display.test.js test/utils/sync-state.test.js test/services/message-service.test.js test/services/analysis-board-service.test.js test/pages/index.page-shell.behavior.test.js test/pages/index.refresh-coordinator.test.js test/pages/message-page.behavior.test.js test/pages/task-record.page.test.js --runInBand`
+- 提交质量检查通过：
+  - `git diff --check`
+
+### 📖 详细实施记录
+
+- [里程碑-21M：全局同步状态体验收口](../design/milestone-21m-global-sync-state-experience-convergence.md)
+
+---
+
 ## [里程碑-21N] - 2026-04-18
 
 ### ✅ 完成情况
