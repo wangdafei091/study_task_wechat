@@ -223,8 +223,6 @@ class TaskRepository extends BaseRepository {
    * @returns {Promise<Array>} 过期未完成的任务列表
    */
   async getExpiredIncompleteTask(userId = null) {
-    const today = this._formatDate(new Date());
-    
     try {
       const tasks = await this.query(task => {
         // 用户过滤

@@ -19,6 +19,7 @@
     "test:coverage": "jest --config jest.quality.config.js",
     "test:quality": "jest --config jest.quality.config.js --runInBand",
     "test:report": "jest --coverage --coverageReporters=html",
+    "lint:quality": "eslint repositories/task-repository.js services/message-service/message-provisional.js services/message-service/message-domain.js services/message-service/message-handlers.js services/reward-service/reward-query.js services/reward-service/reward-queue.js test/repositories/task-repository.test.js test/services/message-service.modules.test.js test/services/message-service.test.js test/services/reward-service.test.js",
     "health-check": "echo '文档校验脚本已移除（scripts目录为空），请手动检查docs/'"
   },
   "keywords": [
@@ -28,6 +29,7 @@
     "education"
   ],
   "devDependencies": {
+    "eslint": "^9.25.1",
     "jest": "^29.5.0",
     "jsonwebtoken": "^9.0.3",
     "supertest": "^7.2.2"

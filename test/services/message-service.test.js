@@ -6,9 +6,7 @@
 
 const MessageService = require('../../services/message-service');
 const MockEventBus = require('../utils/mock-event-bus');
-const MockSetup = require('../utils/mock-setup');
 const TestDataFactory = require('../utils/test-data-factory');
-const ScenarioBuilder = require('../utils/scenario-builder');
 const { Message, MessageType, NotificationType, MessagePriority } = require('../../models/message');
 const { EVENTS } = require('../../utils/constants');
 
@@ -1044,19 +1042,7 @@ describe('MessageService', () => {
     });
 
     it('应该完整执行消息清理流程', async () => {
-      // 1. 模拟有过期消息
-      const oldMessages = [
-        TestDataFactory.createMessage({
-          id: 'msg_old_1',
-          createTime: Date.now() - (40 * 24 * 60 * 60 * 1000) // 40天前
-        }),
-        TestDataFactory.createMessage({
-          id: 'msg_old_2',
-          createTime: Date.now() - (35 * 24 * 60 * 60 * 1000) // 35天前
-        })
-      ];
-
-      // 2. 清理过期消息
+      // 1. 清理过期消息
       mockMessageRepository.cleanExpiredMessages.mockResolvedValue(2);
       const cleanedCount = await messageService.messageRepository.cleanExpiredMessages(30);
       expect(cleanedCount).toBe(2);

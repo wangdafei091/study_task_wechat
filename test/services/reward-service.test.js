@@ -12,10 +12,11 @@
  */
 
 const RewardService = require('../../services/reward-service');
+const rewardQuery = require('../../services/reward-service/reward-query');
+const rewardQueue = require('../../services/reward-service/reward-queue');
 const MockSetup = require('../../test/utils/mock-setup');
 const MockEventBus = require('../../test/utils/mock-event-bus');
 const TestDataFactory = require('../../test/utils/test-data-factory');
-const ScenarioBuilder = require('../../test/utils/scenario-builder');
 const { Reward } = require('../../models/reward');
 const { StarGroup } = require('../../models/star-group');
 const StarGroupRepository = require('../../repositories/star-group-repository');
@@ -277,6 +278,423 @@ describe('RewardService', () => {
 
       expect(mockStorageAdapter.get).toHaveBeenCalledWith('has_custom_rewards');
       expect(mockRewardRepository.initializeDefaultRewards).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('reward-query direct helpers', () => {
+    it('应覆盖 getAllRewards / getClaimedRewards 的成功与失败分支', async () => {
+      const queryService = {
+        rewardRepository: {
+          getAll: jest.fn().mockResolvedValue([
+            { id: 'reward_1', userId: 'user_1' },
+            { id: 'reward_2', userId: 'user_2' }
+          ]),
+          getClaimedRewards: jest.fn().mockResolvedValue([{ id: 'reward_3' }])
+        }
+      };
+
+      await expect(rewardQuery.getAllRewards(queryService)).resolves.toHaveLength(2);
+      await expect(rewardQuery.getAllRewards(queryService, 'user_1')).resolves.toEqual([
+        expect.objectContaining({ id: 'reward_1' })
+      ]);
+      await expect(rewardQuery.getClaimedRewards(queryService, 'user_1')).resolves.toEqual([
+        { id: 'reward_3' }
+      ]);
+
+      queryService.rewardRepository.getAll.mockRejectedValueOnce(new Error('getAll fail'));
+      await expect(rewardQuery.getAllRewards(queryService)).resolves.toEqual([]);
+      queryService.rewardRepository.getClaimedRewards.mockRejectedValueOnce(new Error('claimed fail'));
+      await expect(rewardQuery.getClaimedRewards(queryService)).resolves.toEqual([]);
+    });
+
+    it('应覆盖家庭范围、兑换人过滤和家庭兑换记录查询', async () => {
+      const queryService = {
+        rewardRepository: {
+          getAll: jest.fn().mockResolvedValue([
+            { id: 'reward_1', familyId: 'family_1', claimed: true, exchangeUserId: 'child_1' },
+            { id: 'reward_2', userId: 'child_2', claimed: true, exchangeUserId: 'child_2' },
+            { id: 'reward_3', userId: 'parent_1', claimed: false }
+          ])
+        }
+      };
+      const scope = {
+        familyId: 'family_1',
+        memberUserIds: ['parent_1', 'child_1', 'child_2'],
+        childUserIds: ['child_1', 'child_2']
+      };
+
+      await expect(rewardQuery.getRewardsByFamily(queryService, scope)).resolves.toHaveLength(3);
+      await expect(rewardQuery.getClaimedRewardsByExchangeUser(queryService, 'child_2', scope)).resolves.toEqual([
+        expect.objectContaining({ id: 'reward_2' })
+      ]);
+      await expect(rewardQuery.getFamilyClaimedRewards(queryService, scope)).resolves.toHaveLength(2);
+
+      queryService.rewardRepository.getAll.mockRejectedValueOnce(new Error('family fail'));
+      await expect(rewardQuery.getRewardsByFamily(queryService, scope)).resolves.toEqual([]);
+
+      await expect(rewardQuery.getRewardsByFamily(queryService, null)).resolves.toEqual([]);
+      await expect(rewardQuery.getClaimedRewardsByExchangeUser(queryService, null, scope)).resolves.toEqual([]);
+      await expect(rewardQuery.getClaimedRewardsByExchangeUser(queryService, 'child_1', null)).resolves.toEqual([]);
+    });
+
+    it('应覆盖奖励管理视图与家庭管理视图的初始化和错误回退', async () => {
+      const queryService = {
+        initialized: false,
+        constructor: { _initialized: false },
+        initialize: jest.fn().mockResolvedValue(),
+        rewardRepository: {
+          getAll: jest.fn().mockResolvedValue([
+            { id: 'reward_example_1', userId: 'child_1', isExample: true, enabled: true, claimed: false, claimStatus: 'available' },
+            { id: 'reward_custom_1', userId: 'child_1', isExample: false, enabled: true, claimed: false, claimStatus: 'available' },
+            { id: 'reward_claimed_1', userId: 'child_1', isExample: false, enabled: true, claimed: true, claimStatus: 'pending', familyId: 'family_1' }
+          ])
+        }
+      };
+      const scope = {
+        familyId: 'family_1',
+        memberUserIds: ['child_1'],
+        childUserIds: ['child_1']
+      };
+
+      const manageView = await rewardQuery.getRewardManageViewModel(queryService, 'child_1');
+      expect(queryService.initialize).toHaveBeenCalled();
+      expect(manageView.manageableRewards).toHaveLength(1);
+      expect(manageView.exampleTemplates).toHaveLength(1);
+
+      queryService.initialized = true;
+      queryService.constructor._initialized = true;
+      queryService.rewardRepository.getAll.mockResolvedValueOnce([
+        { id: 'reward_custom_2', familyId: 'family_1', enabled: true, claimed: false, claimStatus: 'available' },
+        { id: 'reward_example_2', familyId: 'family_1', isExample: true, enabled: true, claimed: false, claimStatus: 'available' },
+        { id: 'reward_claimed_2', familyId: 'family_1', enabled: true, claimed: true, claimStatus: 'pending' }
+      ]);
+      const familyView = await rewardQuery.getRewardManageFamilyViewModel(queryService, scope);
+      expect(familyView.manageableRewards).toHaveLength(1);
+      expect(familyView.exchangeRecords).toHaveLength(1);
+      expect(familyView.exampleTemplates).toHaveLength(1);
+
+      queryService.rewardRepository.getAll.mockRejectedValueOnce(new Error('manage fail'));
+      await expect(rewardQuery.getRewardManageViewModel(queryService)).resolves.toEqual(expect.objectContaining({
+        manageableRewards: [],
+        exampleTemplates: []
+      }));
+
+      queryService.rewardRepository.getAll.mockRejectedValueOnce(new Error('family manage fail'));
+      await expect(rewardQuery.getRewardManageFamilyViewModel(queryService, scope)).resolves.toEqual(expect.objectContaining({
+        familyId: 'family_1',
+        manageableRewards: [],
+        exchangeRecords: [],
+        exampleTemplates: []
+      }));
+    });
+
+    it('应覆盖 getAvailableRewards / getExchangeableRewards 的主要分支', async () => {
+      const queryService = {
+        initialized: true,
+        constructor: { _initialized: true },
+        enableCloudStorage: false,
+        rewardRepository: {
+          getAll: jest.fn().mockResolvedValue([
+            { id: 'reward_disabled', userId: 'user_1', enabled: false, isExample: false },
+            { id: 'reward_example', userId: 'user_1', enabled: true, isExample: true },
+            { id: 'reward_custom', userId: 'user_1', enabled: true, isExample: false }
+          ]),
+          getAvailableRewards: jest.fn().mockResolvedValue([{ id: 'reward_available' }]),
+          getExchangeableRewards: jest.fn().mockResolvedValue([{ id: 'reward_exchangeable' }])
+        },
+        _getUserAvailableStars: jest.fn().mockResolvedValue(88)
+      };
+
+      await expect(rewardQuery.getAvailableRewards(queryService, true, false, 'user_1')).resolves.toEqual([
+        expect.objectContaining({ id: 'reward_custom' })
+      ]);
+      await expect(rewardQuery.getAvailableRewards(queryService, true, true, null)).resolves.toEqual([
+        expect.objectContaining({ id: 'reward_example' }),
+        expect.objectContaining({ id: 'reward_custom' })
+      ]);
+      await expect(rewardQuery.getAvailableRewards(queryService, false, true, 'user_1')).resolves.toEqual([
+        { id: 'reward_available' }
+      ]);
+      await expect(rewardQuery.getExchangeableRewards(queryService, 'user_1')).resolves.toEqual([
+        { id: 'reward_exchangeable' }
+      ]);
+
+      queryService.rewardRepository.getAvailableRewards.mockRejectedValueOnce(new Error('available fail'));
+      await expect(rewardQuery.getAvailableRewards(queryService, false, false, 'user_1')).resolves.toEqual([]);
+      queryService._getUserAvailableStars.mockRejectedValueOnce(new Error('stars fail'));
+      await expect(rewardQuery.getExchangeableRewards(queryService, 'user_1')).resolves.toEqual([]);
+    });
+
+    it('应覆盖 calculateNextAvailableReward 与家庭版本的主要分支', async () => {
+      const queryService = {
+        initialized: true,
+        constructor: { _initialized: true },
+        starGroupRepository: {
+          getTotalPoints: jest.fn().mockResolvedValue(5)
+        },
+        getAvailableRewards: jest.fn()
+      };
+
+      queryService.getAvailableRewards
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ id: 'claimed_1', points: 20, claimed: true, enabled: true }]);
+      const allClaimed = await rewardQuery.calculateNextAvailableReward(queryService, 5, 'user_1');
+      expect(allClaimed.allClaimed).toBe(true);
+
+      queryService.getAvailableRewards
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
+      const placeholder = await rewardQuery.calculateNextAvailableReward(queryService, 3, 'user_1');
+      expect(placeholder.isDefault).toBe(true);
+      expect(placeholder.remainingStars).toBe(7);
+
+      queryService.getAvailableRewards.mockResolvedValueOnce([
+        { id: 'reward_a', points: 3 },
+        { id: 'reward_b', points: 5 }
+      ]);
+      const highestUnlocked = await rewardQuery.calculateNextAvailableReward(queryService, 10, 'user_1');
+      expect(highestUnlocked.allClaimed).toBe(true);
+      expect(highestUnlocked.remainingStars).toBe(0);
+
+      queryService.getAvailableRewards.mockResolvedValueOnce([
+        { id: 'reward_c', points: 8 },
+        { id: 'reward_d', points: 12 }
+      ]);
+      const nextReward = await rewardQuery.calculateNextAvailableReward(queryService, 5, 'user_1');
+      expect(nextReward.id).toBe('reward_c');
+      expect(nextReward.remainingStars).toBe(3);
+
+      queryService.getAvailableRewards.mockRejectedValueOnce(new Error('next fail'));
+      await expect(rewardQuery.calculateNextAvailableReward(queryService, 4, 'user_1')).resolves.toEqual(
+        expect.objectContaining({ isDefault: true, remainingStars: 6 })
+      );
+
+      const familyService = {
+        initialized: true,
+        constructor: { _initialized: true },
+        starGroupRepository: {
+          getTotalPoints: jest.fn().mockResolvedValue(4)
+        },
+        rewardRepository: {
+          getAll: jest.fn().mockResolvedValue([
+            { id: 'reward_family_1', familyId: 'family_1', points: 6, enabled: true, claimed: false },
+            { id: 'reward_family_2', familyId: 'family_1', points: 3, enabled: true, claimed: false },
+            { id: 'reward_example_1', familyId: 'family_1', points: 1, enabled: true, isExample: true, claimed: false }
+          ])
+        }
+      };
+      const scope = { familyId: 'family_1', memberUserIds: [], childUserIds: [] };
+
+      const familyNext = await rewardQuery.calculateNextAvailableRewardByFamily(familyService, 2, scope);
+      expect(familyNext.id).toBe('reward_family_2');
+      expect(familyNext.remainingStars).toBe(1);
+
+      familyService.rewardRepository.getAll.mockResolvedValueOnce([
+        { id: 'reward_family_3', familyId: 'family_1', points: 2, enabled: true, claimed: false },
+        { id: 'reward_family_4', familyId: 'family_1', points: 1, enabled: true, claimed: false }
+      ]);
+      await expect(rewardQuery.calculateNextAvailableRewardByFamily(familyService, 5, scope)).resolves.toEqual(
+        expect.objectContaining({ id: 'reward_family_3', remainingStars: 0, allClaimed: false })
+      );
+
+      familyService.rewardRepository.getAll.mockResolvedValueOnce([]);
+      await expect(rewardQuery.calculateNextAvailableRewardByFamily(familyService, 2, scope)).resolves.toBeNull();
+
+      familyService.rewardRepository.getAll.mockRejectedValueOnce(new Error('family next fail'));
+      await expect(rewardQuery.calculateNextAvailableRewardByFamily(familyService, 2, scope)).resolves.toBeNull();
+    });
+
+    it('应覆盖示例奖励判断与最后兑换时间查询', async () => {
+      const queryService = {
+        rewardRepository: {
+          getAllSync: jest.fn()
+            .mockReturnValueOnce([])
+            .mockReturnValueOnce([{ id: 'reward_example_1', enabled: true, isExample: true }])
+            .mockReturnValueOnce([{ id: 'reward_custom_1', enabled: true, isExample: false }])
+            .mockImplementationOnce(() => { throw new Error('sync fail'); }),
+          getClaimedRewards: jest.fn()
+            .mockResolvedValueOnce([])
+            .mockResolvedValueOnce([{ claimTime: 100 }, { claimTime: 200 }])
+            .mockResolvedValueOnce([{ userId: 'u1', claimTime: 50 }, { userId: 'u2', claimTime: 150 }])
+            .mockResolvedValueOnce([{ userId: 'u2', claimTime: 150 }])
+            .mockRejectedValueOnce(new Error('claim fail'))
+        },
+        _isExampleReward: jest.fn((reward) => reward.isExample === true)
+      };
+
+      expect(rewardQuery.hasOnlyExampleRewardsSync(queryService)).toBe(true);
+      expect(rewardQuery.hasOnlyExampleRewardsSync(queryService)).toBe(true);
+      expect(rewardQuery.hasOnlyExampleRewardsSync(queryService)).toBe(false);
+      expect(rewardQuery.hasOnlyExampleRewardsSync(queryService)).toBe(true);
+      expect(rewardQuery.isExampleReward(queryService, { id: 'reward_example_2' })).toBe(true);
+
+      await expect(rewardQuery.getLastExchangeTime(queryService)).resolves.toBeNull();
+      await expect(rewardQuery.getLastExchangeTime(queryService)).resolves.toBe(200);
+      await expect(rewardQuery.getLastExchangeTimeByUser(queryService, 'u1')).resolves.toBe(50);
+      await expect(rewardQuery.getLastExchangeTimeByUser(queryService, 'u1')).resolves.toBeNull();
+      await expect(rewardQuery.getLastExchangeTime(queryService)).resolves.toBeNull();
+      await expect(rewardQuery.getLastExchangeTimeByUser(queryService, null)).resolves.toBeNull();
+    });
+  });
+
+  describe('reward-queue direct helpers', () => {
+    it('应覆盖 updateOfflineQueueService / enqueueRewardMutation / executeRewardQueueItem', async () => {
+      const queueService = {
+        _executeRewardQueueItem: jest.fn(),
+        _buildRewardPendingSyncMeta: jest.fn(() => ({ operationKey: 'generated-op', action: 'create' })),
+        _buildOfflineQueueContextFromPendingSyncMeta: jest.fn(() => ({ childUserId: 'child_1' })),
+        _syncRewardToCloud: jest.fn().mockResolvedValue({ ok: 'sync' }),
+        _syncDeleteRewardToCloud: jest.fn().mockResolvedValue({ ok: 'delete' }),
+        _syncExchangeToCloud: jest.fn().mockResolvedValue({ ok: 'exchange' }),
+        _syncCancelExchangeToCloud: jest.fn().mockResolvedValue({ ok: 'unclaim' }),
+        rewardRepository: {
+          getById: jest.fn().mockResolvedValue(null)
+        }
+      };
+      const offlineQueueService = {
+        registerAdapter: jest.fn(),
+        enqueueMutation: jest.fn().mockResolvedValue({ id: 'queue-item-1' })
+      };
+
+      await rewardQueue.updateOfflineQueueService(queueService, offlineQueueService);
+      expect(offlineQueueService.registerAdapter).toHaveBeenCalledWith('reward', expect.any(Function));
+
+      await expect(rewardQueue.enqueueRewardMutation({
+        _buildRewardPendingSyncMeta: queueService._buildRewardPendingSyncMeta
+      }, 'create', null)).resolves.toBeNull();
+
+      queueService.offlineQueueService = offlineQueueService;
+      const reward = { id: 'reward_1', pendingSyncMeta: { operationKey: 'reward-op-1' } };
+      await expect(rewardQueue.enqueueRewardMutation(queueService, 'update', reward)).resolves.toEqual({ id: 'queue-item-1' });
+
+      await expect(rewardQueue.executeRewardQueueItem(queueService, {
+        operation: 'create',
+        entityId: 'reward_1',
+        snapshot: { id: 'reward_1' },
+        payload: { pendingSyncMeta: { action: 'create' } }
+      })).resolves.toEqual({ ok: 'sync' });
+      await expect(rewardQueue.executeRewardQueueItem(queueService, {
+        operation: 'delete',
+        entityId: 'reward_2',
+        payload: { deleteMeta: { entityId: 'reward_2' } }
+      })).resolves.toEqual({ ok: 'delete' });
+      await expect(rewardQueue.executeRewardQueueItem(queueService, {
+        operation: 'exchange',
+        entityId: 'reward_3',
+        snapshot: { id: 'reward_3', exchangeUserId: 'child_1', modifyTime: 123 },
+        payload: { pendingSyncMeta: { exchangeUserId: 'child_1', modifyTime: 123 } }
+      })).resolves.toEqual({ ok: 'exchange' });
+      await expect(rewardQueue.executeRewardQueueItem(queueService, {
+        operation: 'unclaim',
+        entityId: 'reward_4',
+        snapshot: { id: 'reward_4', exchangeUserId: 'child_1', modifyTime: 456 },
+        payload: { pendingSyncMeta: { exchangeUserId: 'child_1', modifyTime: 456 } }
+      })).resolves.toEqual({ ok: 'unclaim' });
+      await expect(rewardQueue.executeRewardQueueItem(queueService, {
+        operation: 'other',
+        entityId: 'reward_5',
+        snapshot: { id: 'reward_5' },
+        payload: { pendingSyncMeta: { action: 'other' } }
+      })).resolves.toEqual({ ok: 'sync' });
+    });
+
+    it('应覆盖 buildLegacyQueueCandidates / markRewardSynced / tombstone helpers', async () => {
+      const queueService = {
+        rewardRepository: {
+          getAll: jest.fn().mockResolvedValue([
+            { id: 'reward_1', syncedToCloud: false, pendingSyncMeta: { action: 'create', operationKey: 'op-1' } }
+          ]),
+          getDeleteTombstones: jest.fn().mockResolvedValue([{ entityId: 'reward_2', operationKey: 'delete-op' }]),
+          saveDeleteTombstone: jest.fn().mockResolvedValue(true),
+          removeDeleteTombstone: jest.fn().mockResolvedValue(true),
+          save: jest.fn().mockImplementation(async (reward) => reward)
+        },
+        _getDeleteTombstones: jest.fn().mockResolvedValue([{ entityId: 'reward_2', operationKey: 'delete-op' }]),
+        _buildOfflineQueueContextFromPendingSyncMeta: jest.fn(() => ({ familyId: 'family_1' }))
+      };
+
+      const candidates = await rewardQueue.buildLegacyQueueCandidates(queueService);
+      expect(candidates).toHaveLength(2);
+      expect(candidates[0]).toEqual(expect.objectContaining({ legacyMigrationKey: 'reward:pending:reward_1:create' }));
+      expect(candidates[1]).toEqual(expect.objectContaining({ operation: 'delete' }));
+
+      await expect(rewardQueue.markRewardSynced(queueService, null)).resolves.toBeNull();
+      const syncedReward = await rewardQueue.markRewardSynced(queueService, {
+        id: 'reward_1',
+        syncedToCloud: false,
+        pendingSyncMeta: { action: 'create' }
+      }, {
+        modifyTime: 999
+      });
+      expect(syncedReward.syncedToCloud).toBe(true);
+      expect(syncedReward.pendingSyncMeta).toBeNull();
+      expect(syncedReward.modifyTime).toBe(999);
+
+      await expect(rewardQueue.getDeleteTombstones({ rewardRepository: {} })).resolves.toEqual([]);
+      await expect(rewardQueue.saveDeleteTombstone({ rewardRepository: {} }, { entityId: 'reward_1' })).resolves.toBeNull();
+      await expect(rewardQueue.removeDeleteTombstone({ rewardRepository: {} }, 'reward_1')).resolves.toBeNull();
+
+      queueService.rewardRepository.getDeleteTombstones.mockRejectedValueOnce(new Error('tomb fail'));
+      await expect(rewardQueue.getDeleteTombstones(queueService)).resolves.toEqual([]);
+      queueService.rewardRepository.saveDeleteTombstone.mockRejectedValueOnce(new Error('save tomb fail'));
+      await expect(rewardQueue.saveDeleteTombstone(queueService, { entityId: 'reward_1' })).resolves.toBeNull();
+      queueService.rewardRepository.removeDeleteTombstone.mockRejectedValueOnce(new Error('remove tomb fail'));
+      await expect(rewardQueue.removeDeleteTombstone(queueService, 'reward_1')).resolves.toBeNull();
+    });
+
+    it('应覆盖 emitRewardCloudSyncFailure 和 flushPendingRewardSyncs 的主要分支', async () => {
+      const eventBus = new MockEventBus();
+      const queueService = {
+        enableCloudStorage: true,
+        eventBus,
+        rewardRepository: {
+          save: jest.fn().mockImplementation(async (reward) => reward),
+          getAll: jest.fn().mockResolvedValue([
+            { id: 'reward_create', syncedToCloud: false, pendingSyncMeta: { action: 'create' } },
+            { id: 'reward_exchange', syncedToCloud: true, exchangeUserId: 'child_1', modifyTime: 100, pendingSyncMeta: { action: 'exchange', exchangeUserId: 'child_1', modifyTime: 100 } },
+            { id: 'reward_unclaim', syncedToCloud: true, exchangeUserId: 'child_1', modifyTime: 200, pendingSyncMeta: { action: 'unclaim', exchangeUserId: 'child_1', modifyTime: 200 } },
+            { id: 'reward_update', syncedToCloud: true, pendingSyncMeta: { action: 'update' } }
+          ])
+        },
+        _buildRewardPendingSyncMeta: jest.fn(() => ({ operationKey: 'generated-op', action: 'update' })),
+        _enqueueRewardMutation: jest.fn().mockResolvedValue({}),
+        _getDeleteTombstones: jest.fn().mockResolvedValue([{ entityId: 'reward_delete' }]),
+        _syncRewardToCloud: jest.fn()
+          .mockResolvedValueOnce({ ok: 'create' })
+          .mockResolvedValueOnce({ ok: 'update' })
+          .mockRejectedValueOnce(new Error('update fail')),
+        _syncExchangeToCloud: jest.fn().mockResolvedValue({ ok: 'exchange' }),
+        _syncCancelExchangeToCloud: jest.fn().mockResolvedValue({ ok: 'unclaim' }),
+        _syncDeleteRewardToCloud: jest.fn().mockResolvedValue({ ok: 'delete' })
+      };
+
+      const reward = { id: 'reward_fail', syncedToCloud: true, pendingSyncMeta: null };
+      await rewardQueue.emitRewardCloudSyncFailure(queueService, 'update', reward, new Error('cloud fail'));
+      expect(reward.pendingSyncMeta).toEqual(expect.objectContaining({ operationKey: 'generated-op' }));
+      expect(queueService.rewardRepository.save).toHaveBeenCalled();
+      expect(queueService._enqueueRewardMutation).toHaveBeenCalled();
+
+      const deleteReward = { id: 'reward_delete_fail', syncedToCloud: true };
+      await rewardQueue.emitRewardCloudSyncFailure(queueService, 'delete', deleteReward, new Error('delete fail'), {
+        rewardId: 'reward_delete_fail'
+      });
+      expect(queueService.rewardRepository.save).toHaveBeenCalledTimes(1);
+
+      await expect(rewardQueue.flushPendingRewardSyncs({
+        offlineQueueService: {
+          initialize: jest.fn().mockResolvedValue(),
+          drain: jest.fn().mockResolvedValue()
+        }
+      })).resolves.toBeUndefined();
+
+      await expect(rewardQueue.flushPendingRewardSyncs({
+        enableCloudStorage: false
+      })).resolves.toBeUndefined();
+
+      await expect(rewardQueue.flushPendingRewardSyncs(queueService)).resolves.toBeUndefined();
+      expect(queueService._syncExchangeToCloud).toHaveBeenCalled();
+      expect(queueService._syncCancelExchangeToCloud).toHaveBeenCalled();
+      expect(queueService._syncDeleteRewardToCloud).toHaveBeenCalledWith('reward_delete', { entityId: 'reward_delete' });
     });
   });
 
