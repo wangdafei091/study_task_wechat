@@ -18,6 +18,7 @@ coverage/
 
 # Dependencies
 package-lock.json
+!backend/package-lock.json
 yarn.lock
 
 # Environment variables
