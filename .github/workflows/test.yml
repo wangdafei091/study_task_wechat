@@ -19,8 +19,17 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
+      - name: Install Backend Dependencies
+        run: npm --prefix backend ci
+
       - name: Run Tests
         run: npm test
 
       - name: Run Quality Gate
         run: npm run test:quality
+
+      - name: Run Backend Unit Tests
+        run: npm run test:backend:unit
+
+      - name: Run Quality Lint
+        run: npm run lint:quality

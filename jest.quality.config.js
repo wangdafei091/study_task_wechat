@@ -1,4 +1,10 @@
 const baseConfig = require('./jest.config');
+const qualityTarget = {
+  branches: 70,
+  functions: 75,
+  lines: 75,
+  statements: 75
+};
 
 module.exports = {
   ...baseConfig,
@@ -14,7 +20,13 @@ module.exports = {
     'pages/rewards/rewards.js',
     'packageMessage/pages/message/message.js',
     'services/task-service.js',
-    'services/task-service/**/*.js'
+    'services/task-service/**/*.js',
+    'repositories/task-repository.js',
+    'services/message-service/message-provisional.js',
+    'services/message-service/message-domain.js',
+    'services/message-service/message-handlers.js',
+    'services/reward-service/reward-query.js',
+    'services/reward-service/reward-queue.js'
   ],
   coverageThreshold: {
     './app.js': {
@@ -70,6 +82,12 @@ module.exports = {
       functions: 80,
       lines: 80,
       statements: 80
-    }
+    },
+    './repositories/task-repository.js': qualityTarget,
+    './services/message-service/message-provisional.js': qualityTarget,
+    './services/message-service/message-domain.js': qualityTarget,
+    './services/message-service/message-handlers.js': qualityTarget,
+    './services/reward-service/reward-query.js': qualityTarget,
+    './services/reward-service/reward-queue.js': qualityTarget
   }
 };
