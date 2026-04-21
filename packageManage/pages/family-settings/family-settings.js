@@ -3,7 +3,6 @@
  */
 
 const logger = require('../../../utils/logger');
-const dateUtils = require('../../../utils/dateUtils');
 const userContextUtils = require('../../../utils/user-context');
 
 function getPermissionRoleLabel(role) {
@@ -60,9 +59,16 @@ function parseInviteExpiryTime(expiresAt) {
       return NaN;
     }
 
-    const parsedDate = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/.test(trimmed)
-      ? dateUtils.parseDateTime(trimmed)
-      : new Date(trimmed);
+    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/.test(trimmed)) {
+      const [datePart, timePart] = trimmed.split(' ');
+      const [year, month, day] = datePart.split('-').map(Number);
+      const [hours, minutes, seconds] = timePart.split(':').map(Number);
+      // MySQL DATETIME 不带时区，后端当前按中国本地时间写入，这里显式按 UTC+8 解析，
+      // 避免在 CI 的 UTC 环境下被误判为“晚 8 小时”。
+      return Date.UTC(year, month - 1, day, (hours || 0) - 8, minutes || 0, seconds || 0);
+    }
+
+    const parsedDate = new Date(trimmed);
 
     return parsedDate instanceof Date ? parsedDate.getTime() : NaN;
   }
