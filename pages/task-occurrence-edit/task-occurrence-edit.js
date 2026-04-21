@@ -75,6 +75,19 @@ function resolveTargetContext(explicitTargetUserId = '') {
   return context;
 }
 
+function isViewerReadonly(userService) {
+  const loginUser = userService && typeof userService.getLoginUser === 'function'
+    ? userService.getLoginUser()
+    : null;
+
+  return Boolean(
+    loginUser &&
+    loginUser.role === 'parent' &&
+    loginUser.familyId &&
+    loginUser.familyPermissionRole === 'viewer'
+  );
+}
+
 function buildOccurrenceTaskPayload(draft, targetUserId) {
   return {
     userId: targetUserId,
@@ -134,6 +147,18 @@ Page({
   },
 
   async onLoad(options = {}) {
+    const userService = getUserService();
+    if (isViewerReadonly(userService)) {
+      wx.showToast({
+        title: '当前为查看者，不能管理表现项',
+        icon: 'none'
+      });
+      if (typeof wx.navigateBack === 'function') {
+        wx.navigateBack({ delta: 1 });
+      }
+      return;
+    }
+
     const taskService = serviceManager.getService('task');
     const occurrenceEnabled = taskService && typeof taskService.isOccurrenceEnabled === 'function'
       ? await taskService.isOccurrenceEnabled()

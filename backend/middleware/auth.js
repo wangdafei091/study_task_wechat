@@ -45,6 +45,7 @@ function authMiddleware(req, res, next) {
       openid: payload.openid,
       role: payload.role,
       familyId: payload.familyId || null,
+      familyPermissionRole: payload.familyPermissionRole || null,
     };
 
     logger.info('用户认证成功', { userId: req.user.userId });
@@ -85,6 +86,7 @@ function optionalAuthMiddleware(req, res, next) {
         openid: payload.openid,
         role: payload.role,
         familyId: payload.familyId || null,
+        familyPermissionRole: payload.familyPermissionRole || null,
       };
     }
 

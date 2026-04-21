@@ -167,7 +167,7 @@ class TaskTemplateService {
         enabled: input.enabled !== undefined ? input.enabled === true : lockedTemplate.enabled
       });
 
-      this._assertTemplateValid(nextTemplate);
+      this._assertTemplateValid(nextTemplate, lockedData);
 
       await this._executeWithConnection(
         connection,
@@ -337,32 +337,16 @@ class TaskTemplateService {
     return result;
   }
 
-  _assertTemplateValid(template) {
-    if (!template.name) {
-      throw this._createError('INVALID_PARAMS', '模板名称不能为空');
-    }
-    if (template.name.length > 100) {
-      throw this._createError('INVALID_PARAMS', '模板名称不能超过100个字符');
-    }
-    if ((template.description || '').length > 255) {
-      throw this._createError('INVALID_PARAMS', '模板说明不能超过255个字符');
-    }
-    if (!template.taskPayload?.title) {
-      throw this._createError('INVALID_PARAMS', '模板任务名称不能为空');
-    }
-    if (
-      template.taskPayload?.repeat?.type === 'custom' &&
-      (!Array.isArray(template.taskPayload.repeat.days) || template.taskPayload.repeat.days.length === 0)
-    ) {
-      throw this._createError('INVALID_PARAMS', '自定义重复模板至少选择一个星期');
-    }
-    if (
-      template.taskPayload?.hasNoEndDate !== true &&
-      template.taskPayload?.startDate &&
-      template.taskPayload?.endDate &&
-      template.taskPayload.endDate < template.taskPayload.startDate
-    ) {
-      throw this._createError('INVALID_PARAMS', '模板结束日期不能早于开始日期');
+  _assertTemplateValid(template, previousTemplate = null) {
+    const validationErrors = typeof template.validate === 'function'
+      ? template.validate({ previousTemplate })
+      : [];
+
+    if (validationErrors.length > 0) {
+      const errorCode = validationErrors.includes('时间范围过长，请缩短后再保存')
+        ? 'TASK_TEMPLATE_RANGE_TOO_LARGE'
+        : 'INVALID_PARAMS';
+      throw this._createError(errorCode, validationErrors.join('；'));
     }
   }
 

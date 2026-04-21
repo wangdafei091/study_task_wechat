@@ -106,7 +106,10 @@ async function setupTestData() {
   );
 
   await db.query(
-    `UPDATE users SET family_id = 'm16c_task_family_001' WHERE user_id = 'm16c_task_parent_001'`
+    `UPDATE users
+     SET family_id = 'm16c_task_family_001',
+         family_permission_role = 'manager'
+     WHERE user_id = 'm16c_task_parent_001'`
   );
 
   await db.query(

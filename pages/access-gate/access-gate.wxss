@@ -1,0 +1,66 @@
+.access-gate-page {
+  min-height: 100vh;
+  padding: 120rpx 40rpx 40rpx;
+  box-sizing: border-box;
+  background: linear-gradient(180deg, #f7f9fc 0%, #eef3f8 100%);
+}
+
+.access-gate-shell {
+  max-width: 640rpx;
+  margin: 0 auto;
+}
+
+.access-gate-title {
+  font-size: 48rpx;
+  line-height: 1.25;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.access-gate-subtitle {
+  margin-top: 18rpx;
+  font-size: 28rpx;
+  line-height: 1.6;
+  color: #6b7280;
+}
+
+.access-gate-input {
+  margin-top: 56rpx;
+  height: 96rpx;
+  padding: 0 28rpx;
+  border-radius: 8rpx;
+  border: 2rpx solid #d8e2ee;
+  background: #ffffff;
+  font-size: 32rpx;
+  color: #111827;
+  box-sizing: border-box;
+}
+
+.access-gate-error {
+  margin-top: 20rpx;
+  font-size: 26rpx;
+  line-height: 1.5;
+  color: #cc4d37;
+}
+
+.access-gate-button {
+  margin-top: 32rpx;
+  height: 90rpx;
+  line-height: 90rpx;
+  border-radius: 8rpx;
+  background: #2f6fed;
+  font-size: 32rpx;
+  font-weight: 600;
+}
+
+.access-gate-button[disabled] {
+  background: #cfd8e3;
+  color: #7b8794;
+}
+
+.access-gate-footnote {
+  margin-top: 28rpx;
+  font-size: 24rpx;
+  line-height: 1.6;
+  color: #8b97a6;
+}

@@ -97,6 +97,7 @@ class TokenManager {
         openid: payload.openid,
         role: payload.role,
         familyId: payload.familyId || null,
+        familyPermissionRole: payload.familyPermissionRole || null,
       };
     } catch (error) {
       console.error('解析token失败:', error);

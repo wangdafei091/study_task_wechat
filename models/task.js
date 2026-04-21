@@ -4,6 +4,8 @@
  * 定义任务实体的数据结构、验证规则和业务方法
  */
 
+const taskRangeGuard = require('../utils/task-range-guard');
+
 /**
  * 任务类型枚举
  */
@@ -248,7 +250,7 @@ class Task {
    * 验证任务数据有效性
    * @returns {Array} 错误信息数组，如果没有错误则为空数组
    */
-  validate() {
+  validate(options = {}) {
     const errors = [];
     
     // 验证基本信息
@@ -326,6 +328,13 @@ class Task {
           errors.push('表现项的结束日期必须大于等于开始日期');
         }
       }
+    }
+
+    const rangeValidation = taskRangeGuard.validateTaskRangeLimits(this.toJSON(), {
+      previousTask: options.previousTask || null
+    });
+    if (!rangeValidation.valid) {
+      errors.push(rangeValidation.message);
     }
     
     return errors;
@@ -696,6 +705,46 @@ class Task {
    */
   isLocked(lastExchangeTime = null) {
     return !this.canBeUnchecked(lastExchangeTime);
+  }
+
+  toJSON() {
+    return {
+      id: this.id,
+      userId: this.userId,
+      title: this.title,
+      description: this.description,
+      type: this.type,
+      executionMode: this.executionMode,
+      date: this.date,
+      startTime: this.startTime,
+      endTime: this.endTime,
+      duration: this.duration,
+      isAllDay: this.isAllDay,
+      reminder: this.reminder ? { ...this.reminder } : { enabled: false },
+      status: this.status,
+      isRequired: this.isRequired,
+      penaltyApplied: this.penaltyApplied,
+      penaltyDeductedPoints: this.penaltyDeductedPoints,
+      penaltyRefunded: this.penaltyRefunded,
+      penaltyRefundTime: this.penaltyRefundTime,
+      completionTime: this.completionTime,
+      points: this.points,
+      pointsExpiry: this.pointsExpiry,
+      pointsExpiryDate: this.pointsExpiryDate,
+      starAwarded: this.starAwarded,
+      repeat: this.repeat ? { ...this.repeat } : { type: RepeatType.NONE },
+      parentTaskId: this.parentTaskId,
+      hasNoEndDate: this.hasNoEndDate,
+      activeRange: this.activeRange ? { ...this.activeRange } : null,
+      isOccurrenceRecord: this.isOccurrenceRecord === true,
+      occurrenceOutcome: this.occurrenceOutcome,
+      recordedAt: this.recordedAt,
+      createTime: this.createTime,
+      modifyTime: this.modifyTime,
+      tags: this.tags ? [...this.tags] : [],
+      syncedToCloud: this.syncedToCloud === true,
+      pendingSyncMeta: this.pendingSyncMeta ? { ...this.pendingSyncMeta } : null
+    };
   }
 }
 

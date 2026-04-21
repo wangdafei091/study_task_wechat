@@ -6,6 +6,11 @@ const taskService = require('../services/taskService');
 const familyService = require('../services/familyService');
 const Task = require('../models/Task');
 const { createLogger } = require('../utils/logger');
+const {
+  ensureManagerBusinessAccess,
+  ensureParentManagerBusinessAccess,
+  isViewerChildExecutionRequest
+} = require('../utils/family-permission');
 const { success, error } = require('../utils/response');
 const { resolveTargetUserId } = require('../utils/resolveTargetUserId');
 const logger = createLogger('TaskController');
@@ -14,6 +19,10 @@ const logger = createLogger('TaskController');
  * 任务控制器类
  */
 class TaskController {
+  async _ensureTaskManagePermission(req, res, options = {}) {
+    return ensureParentManagerBusinessAccess(req, res, options);
+  }
+
   async _buildOperatorContext(req, subjectUserId = null, fallbackOperationKey = null, options = {}) {
     const requestedActorUserId = req.body?.operatorContext?.actorUserId || req.user.userId;
     let actorUserId = req.user.userId;
@@ -185,6 +194,13 @@ class TaskController {
    */
   async createTask(req, res) {
     try {
+      if (!(await this._ensureTaskManagePermission(req, res, {
+        parentRequiredMessage: '仅家长可创建任务',
+        deniedMessage: '当前为查看者，不能创建任务'
+      }))) {
+        return;
+      }
+
       const { userId, role, familyId } = req.user;
       const {
         targetUserId,
@@ -227,7 +243,7 @@ class TaskController {
       const validation = Task.validate(taskData, false);
       if (!validation.valid) {
         return res.status(400).json(
-          error(validation.errors.join('; '), 'TASK_INVALID_PARAMS')
+          error(validation.errors.join('; '), validation.errorCodes[0] || 'TASK_INVALID_PARAMS')
         );
       }
 
@@ -259,6 +275,9 @@ class TaskController {
         return res.status(503).json(
           error(err.message, 'TASK_OCCURRENCE_SCHEMA_MISSING')
         );
+      }
+      if (err.code === 'TASK_REPEAT_RANGE_TOO_LARGE' || err.code === 'TASK_ACTIVE_RANGE_TOO_LARGE') {
+        return res.status(400).json(error(err.message, err.code));
       }
       logger.error('创建任务失败', err);
       res.status(500).json(
@@ -309,6 +328,13 @@ class TaskController {
    */
   async updateTask(req, res) {
     try {
+      if (!(await this._ensureTaskManagePermission(req, res, {
+        parentRequiredMessage: '仅家长可编辑任务',
+        deniedMessage: '当前为查看者，不能编辑任务'
+      }))) {
+        return;
+      }
+
       const { taskId } = req.params;
       const { userId, role, familyId } = req.user;
 
@@ -360,15 +386,23 @@ class TaskController {
 
       const validation = Task.validate(safeChanges, true);
       if (!validation.valid) {
-        return res.status(400).json(error(validation.errors.join('; '), 'INVALID_TASK_DATA'));
+        return res.status(400).json(error(
+          validation.errors.join('; '),
+          validation.errorCodes[0] || 'INVALID_TASK_DATA'
+        ));
       }
 
       const mergedValidation = Task.validate({
         ...existing.toJSON(),
         ...safeChanges
-      }, false);
+      }, false, {
+        previousTask: existing.toJSON()
+      });
       if (!mergedValidation.valid) {
-        return res.status(400).json(error(mergedValidation.errors.join('; '), 'INVALID_TASK_DATA'));
+        return res.status(400).json(error(
+          mergedValidation.errors.join('; '),
+          mergedValidation.errorCodes[0] || 'INVALID_TASK_DATA'
+        ));
       }
 
       const updated = await taskService.updateTask(
@@ -396,6 +430,9 @@ class TaskController {
       if (err.code === 'TASK_OCCURRENCE_SCHEMA_MISSING') {
         return res.status(503).json(error(err.message, 'TASK_OCCURRENCE_SCHEMA_MISSING'));
       }
+      if (err.code === 'TASK_REPEAT_RANGE_TOO_LARGE' || err.code === 'TASK_ACTIVE_RANGE_TOO_LARGE') {
+        return res.status(400).json(error(err.message, err.code));
+      }
       logger.error('更新任务失败', err);
       res.status(500).json(error('更新任务失败', 'TASK_UPDATE_FAILED'));
     }
@@ -403,6 +440,12 @@ class TaskController {
 
   async recordOccurrenceResult(req, res) {
     try {
+      if (!(await ensureManagerBusinessAccess(req, res, {
+        deniedMessage: '当前为查看者，不能记录表现'
+      }))) {
+        return;
+      }
+
       const { taskId } = req.params;
       const existing = await taskService.getTaskById(taskId);
       if (!existing) {
@@ -458,6 +501,13 @@ class TaskController {
 
   async disableOccurrenceTask(req, res) {
     try {
+      if (!(await this._ensureTaskManagePermission(req, res, {
+        parentRequiredMessage: '仅家长可停用表现项',
+        deniedMessage: '当前为查看者，不能停用表现项'
+      }))) {
+        return;
+      }
+
       const { taskId } = req.params;
       const existing = await taskService.getTaskById(taskId);
       if (!existing) {
@@ -502,6 +552,13 @@ class TaskController {
 
   async convertTaskToOccurrenceMode(req, res) {
     try {
+      if (!(await this._ensureTaskManagePermission(req, res, {
+        parentRequiredMessage: '仅家长可转换表现项',
+        deniedMessage: '当前为查看者，不能转换表现项'
+      }))) {
+        return;
+      }
+
       const { taskId } = req.params;
       const existing = await taskService.getTaskById(taskId);
       if (!existing) {
@@ -549,6 +606,13 @@ class TaskController {
    */
   async deleteTask(req, res) {
     try {
+      if (!(await this._ensureTaskManagePermission(req, res, {
+        parentRequiredMessage: '仅家长可删除任务',
+        deniedMessage: '当前为查看者，不能删除任务'
+      }))) {
+        return;
+      }
+
       const { taskId } = req.params;
       const { userId, role, familyId } = req.user;
 
@@ -591,6 +655,13 @@ class TaskController {
 
   async markTaskRequired(req, res) {
     try {
+      if (!(await this._ensureTaskManagePermission(req, res, {
+        parentRequiredMessage: '仅家长可修改任务要求',
+        deniedMessage: '当前为查看者，不能修改任务要求'
+      }))) {
+        return;
+      }
+
       const { taskId } = req.params;
       const existing = await taskService.getTaskById(taskId);
       if (!existing) {
@@ -627,6 +698,13 @@ class TaskController {
 
   async unmarkTaskRequired(req, res) {
     try {
+      if (!(await this._ensureTaskManagePermission(req, res, {
+        parentRequiredMessage: '仅家长可修改任务要求',
+        deniedMessage: '当前为查看者，不能修改任务要求'
+      }))) {
+        return;
+      }
+
       const { taskId } = req.params;
       const existing = await taskService.getTaskById(taskId);
       if (!existing) {
@@ -663,6 +741,12 @@ class TaskController {
 
   async syncRequiredTaskPenalties(req, res) {
     try {
+      if (!(await ensureManagerBusinessAccess(req, res, {
+        deniedMessage: '当前为查看者，不能同步任务惩罚'
+      }))) {
+        return;
+      }
+
       const requestedScope = req.body?.scope || req.query?.scope;
       const scope = requestedScope === 'user' ? 'user' : (req.user.role === 'parent' ? 'family' : 'user');
       let targetUserId = null;
@@ -696,6 +780,12 @@ class TaskController {
 
   async syncUpcomingTaskMessages(req, res) {
     try {
+      if (!(await ensureManagerBusinessAccess(req, res, {
+        deniedMessage: '当前为查看者，不能同步任务提醒'
+      }))) {
+        return;
+      }
+
       const requestedScope = req.body?.scope || req.query?.scope;
       const scope = requestedScope === 'user' ? 'user' : (req.user.role === 'parent' ? 'family' : 'user');
       let targetUserId = null;
@@ -750,6 +840,16 @@ class TaskController {
       const existing = await taskService.getTaskById(taskId);
       if (!existing) {
         return res.status(404).json(error('任务不存在', 'TASK_NOT_FOUND'));
+      }
+
+      const viewerChildExecution = await isViewerChildExecutionRequest(req, existing.userId);
+      const childSelfExecution = role === 'child' && existing.userId === userId;
+      if (!childSelfExecution && !viewerChildExecution) {
+        if (!(await ensureManagerBusinessAccess(req, res, {
+          deniedMessage: '当前为查看者，不能修改任务状态'
+        }))) {
+          return;
+        }
       }
 
       const isOwner = existing.userId === userId;
@@ -813,6 +913,13 @@ class TaskController {
    */
   async transferTasks(req, res) {
     try {
+      if (!(await this._ensureTaskManagePermission(req, res, {
+        parentRequiredMessage: '仅家长可转移任务',
+        deniedMessage: '当前为查看者，不能转移任务'
+      }))) {
+        return;
+      }
+
       const { userId, role, familyId } = req.user;
       const { toUserId } = req.body;
 

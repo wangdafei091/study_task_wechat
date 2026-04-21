@@ -634,6 +634,16 @@ describe('pages/index/index shell behavior', () => {
     await page.recordOccurrenceFromHome({ currentTarget: { dataset: {} } });
     expect(taskService.recordOccurrenceResult).not.toHaveBeenCalled();
 
+    page.data.isViewerReadonly = true;
+    await page.recordOccurrenceFromHome({
+      currentTarget: { dataset: { taskId: 'occ_1', outcome: 'success' } }
+    });
+    expect(taskService.recordOccurrenceResult).not.toHaveBeenCalled();
+    expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({
+      title: '当前为查看者，不能记录表现'
+    }));
+    page.data.isViewerReadonly = false;
+
     await page.recordOccurrenceFromHome({
       currentTarget: { dataset: { taskId: 'occ_1', outcome: 'success' } }
     });

@@ -82,6 +82,10 @@ async function setupTestData() {
       WHEN user_id = 'm09_star_parent_001' THEN 'm09_star_family_001'
       WHEN user_id = 'm09_star_parent_002' THEN 'm09_star_family_002'
       ELSE family_id
+    END,
+    family_permission_role = CASE
+      WHEN role = 'parent' THEN 'manager'
+      ELSE family_permission_role
     END
     WHERE user_id IN ('m09_star_parent_001', 'm09_star_parent_002')`
   );
@@ -156,7 +160,7 @@ describe('M09 stars API 真实数据库集成测试', () => {
 
     const first = await request(app)
       .post('/api/stars/records')
-      .set('Authorization', `Bearer ${childToken}`)
+      .set('Authorization', `Bearer ${parentToken}`)
       .send(payload);
 
     expect(first.status).toBe(200);
@@ -167,7 +171,7 @@ describe('M09 stars API 真实数据库集成测试', () => {
 
     const second = await request(app)
       .post('/api/stars/records')
-      .set('Authorization', `Bearer ${childToken}`)
+      .set('Authorization', `Bearer ${parentToken}`)
       .send(payload);
 
     expect(second.status).toBe(200);
@@ -211,7 +215,7 @@ describe('M09 stars API 真实数据库集成测试', () => {
 
     const first = await request(app)
       .post('/api/stars/consume')
-      .set('Authorization', `Bearer ${childToken}`)
+      .set('Authorization', `Bearer ${parentToken}`)
       .send(payload);
 
     expect(first.status).toBe(200);
@@ -222,7 +226,7 @@ describe('M09 stars API 真实数据库集成测试', () => {
 
     const second = await request(app)
       .post('/api/stars/consume')
-      .set('Authorization', `Bearer ${childToken}`)
+      .set('Authorization', `Bearer ${parentToken}`)
       .send(payload);
 
     expect(second.status).toBe(200);

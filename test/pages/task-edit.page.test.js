@@ -24,6 +24,21 @@ describe('pages/task-edit/task-edit', () => {
   let serviceManager;
   let taskTemplateEntry;
 
+  function applyPathUpdate(target, path, value) {
+    const segments = path.split('.');
+    let cursor = target;
+
+    for (let index = 0; index < segments.length - 1; index += 1) {
+      const segment = segments[index];
+      if (!cursor[segment] || typeof cursor[segment] !== 'object') {
+        cursor[segment] = {};
+      }
+      cursor = cursor[segment];
+    }
+
+    cursor[segments[segments.length - 1]] = value;
+  }
+
   function loadPageModule() {
     pageConfig = null;
     global.Page = jest.fn((config) => {
@@ -40,7 +55,13 @@ describe('pages/task-edit/task-edit', () => {
       ...pageConfig,
       data: JSON.parse(JSON.stringify(pageConfig.data)),
       setData: jest.fn(function setData(update) {
-        Object.assign(this.data, update);
+        Object.keys(update || {}).forEach((key) => {
+          if (key.includes('.')) {
+            applyPathUpdate(this.data, key, update[key]);
+          } else {
+            this.data[key] = update[key];
+          }
+        });
       }),
       initHeatmapMonth: jest.fn(),
       initDateTimeData: jest.fn(),
@@ -515,6 +536,101 @@ describe('pages/task-edit/task-edit', () => {
     expect(page._templateFillUndoSnapshot).toBeNull();
     expect(page.data.templateFillUndoVisible).toBe(false);
     expect(page.data.templateFillUndoText).toBe('');
+  });
+
+  it('单次模板回填后改结束日期为多天时应自动切回每天', () => {
+    const page = createPageInstance();
+    page.data.newTask = {
+      title: '游泳',
+      startDate: '2026-04-21',
+      endDate: '2026-04-21',
+      hasNoEndDate: false,
+      repeat: {
+        type: 'none',
+        days: [],
+        startDate: '2026-04-21',
+        endDate: '2026-04-21'
+      }
+    };
+    page.data.isRepeatOptionDisabled = true;
+
+    page.onEndDateSelected.call(page, {
+      detail: {
+        date: '2026-04-24'
+      }
+    });
+
+    expect(page.data.newTask.endDate).toBe('2026-04-24');
+    expect(page.data.newTask.repeat).toEqual(expect.objectContaining({
+      type: 'daily',
+      startDate: '2026-04-21',
+      endDate: '2026-04-24'
+    }));
+    expect(page.data.repeatText).toBe('每天');
+    expect(page.data.isRepeatOptionDisabled).toBe(false);
+  });
+
+  it('单次模板回填后改开始日期为多天时应自动切回每天', () => {
+    const page = createPageInstance();
+    page.data.newTask = {
+      title: '游泳',
+      startDate: '2026-04-21',
+      endDate: '2026-04-21',
+      hasNoEndDate: false,
+      repeat: {
+        type: 'none',
+        days: [],
+        startDate: '2026-04-21',
+        endDate: '2026-04-21'
+      }
+    };
+    page.data.isRepeatOptionDisabled = true;
+
+    page.onStartDateSelected.call(page, {
+      detail: {
+        date: '2026-04-20'
+      }
+    });
+
+    expect(page.data.newTask.startDate).toBe('2026-04-20');
+    expect(page.data.newTask.repeat).toEqual(expect.objectContaining({
+      type: 'daily',
+      startDate: '2026-04-20',
+      endDate: '2026-04-21'
+    }));
+    expect(page.data.repeatText).toBe('每天');
+    expect(page.data.isRepeatOptionDisabled).toBe(false);
+  });
+
+  it('已解锁的多天任务显式保持不重复时不应被自动改回每天', () => {
+    const page = createPageInstance();
+    page.data.newTask = {
+      title: '春游',
+      startDate: '2026-04-21',
+      endDate: '2026-04-24',
+      hasNoEndDate: false,
+      repeat: {
+        type: 'none',
+        days: [],
+        startDate: '2026-04-21',
+        endDate: '2026-04-24'
+      }
+    };
+    page.data.isRepeatOptionDisabled = false;
+
+    page.onEndDateSelected.call(page, {
+      detail: {
+        date: '2026-04-25'
+      }
+    });
+
+    expect(page.data.newTask.repeat).toEqual(expect.objectContaining({
+      type: 'none',
+      startDate: '2026-04-21',
+      endDate: '2026-04-25'
+    }));
+    expect(page.data.repeatText).toBe('不重复');
+    expect(page.data.isRepeatOptionDisabled).toBe(false);
   });
 
   it('从选择模板页返回后继续切换模板，恢复原内容仍应回到首次模板填充前的状态', () => {

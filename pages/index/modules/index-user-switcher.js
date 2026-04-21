@@ -68,8 +68,12 @@ async function handleUserSwitch(page, e) {
       availableUsers,
       userPermissions: permissionContext.userPermissions,
       loginUserId: permissionContext.loginUserId || '',
+      familyPermissionRole: permissionContext.familyPermissionRole || '',
       canManageMembers: permissionContext.canManageMembers,
       isReadonlyView: permissionContext.isReadonlyView,
+      isViewerReadonly: permissionContext.isViewerReadonly,
+      canManageFamilyGovernance: permissionContext.canManageFamilyGovernance,
+      canManageBusinessData: permissionContext.canManageBusinessData,
       lastActiveChildId: permissionContext.lastActiveChildId,
       showUserSwitcher: false
     });
@@ -205,7 +209,11 @@ function updateMenuItemsWithPermissions(page) {
 
   const app = getApp();
   const loginUser = app.globalData?.userService?.getLoginUser() || currentUser;
-  const filteredMenuItems = permissionUtils.filterMenuItems(originalMenuItems, loginUser.role);
+  const filteredMenuItems = permissionUtils.filterMenuItems(
+    originalMenuItems,
+    loginUser.role,
+    loginUser.familyPermissionRole || null
+  );
   const finalMenuItems = filteredMenuItems.filter((item) => {
     if (item.id === 'study') {
       return true;

@@ -141,7 +141,9 @@ class TaskTemplateService {
       dateStrategy: mergedDateStrategy
     });
 
-    const validationErrors = nextTemplate.validate();
+    const validationErrors = nextTemplate.validate({
+      previousTemplate: existingTemplateData
+    });
     if (validationErrors.length > 0) {
       throw new Error(validationErrors.join('；'));
     }

@@ -147,7 +147,7 @@ describe('pages/index/modules/index-task-actions', () => {
 
   it('taskItemStatusToggle 应调用 taskService 并在失败时提示', async () => {
     const taskService = {
-      updateTaskStatus: jest.fn().mockResolvedValue()
+      updateTaskStatus: jest.fn().mockResolvedValue({ success: true })
     };
     serviceManager.getTaskService.mockReturnValue(taskService);
 
@@ -166,6 +166,41 @@ describe('pages/index/modules/index-task-actions', () => {
     });
     expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({
       title: '操作失败'
+    }));
+  });
+
+  it('taskItemStatusToggle 在查看者模式下应直接拦截，在失败结果时应透传 reset 操作', async () => {
+    const taskService = {
+      updateTaskStatus: jest.fn().mockResolvedValue({
+        success: false,
+        message: '重置失败'
+      })
+    };
+    serviceManager.getTaskService.mockReturnValue(taskService);
+
+    const readonlyPage = createPage();
+    readonlyPage.data.isViewerReadonly = true;
+
+    await taskActions.taskItemStatusToggle(readonlyPage, {
+      detail: { id: 'task-1', newStatus: 0 }
+    });
+
+    expect(taskService.updateTaskStatus).not.toHaveBeenCalled();
+    expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({
+      title: '当前为查看者，不能修改任务'
+    }));
+
+    global.wx.showToast.mockClear();
+
+    const page = createPage();
+    await taskActions.taskItemStatusToggle(page, {
+      detail: { id: 'task-1', newStatus: 0 }
+    });
+
+    expect(taskService.updateTaskStatus).toHaveBeenCalledWith('task-1', 0);
+    expect(page._skipNextTaskChangedRefresh).toBe(false);
+    expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({
+      title: '重置失败'
     }));
   });
 

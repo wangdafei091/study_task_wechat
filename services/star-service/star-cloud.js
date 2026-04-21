@@ -160,9 +160,22 @@ function buildExpiryAuthorityScopeKey(service, options = {}) {
   return `user:${options.userId || 'missing'}`;
 }
 
+function isViewerReadonlyUser(service) {
+  const loginUser = service?.userService?.getLoginUser?.() || null;
+  return Boolean(
+    loginUser &&
+    loginUser.role === 'parent' &&
+    loginUser.familyPermissionRole === 'viewer'
+  );
+}
+
 async function syncExpiryAuthorityIfNeeded(service, options = {}) {
   if (!service.enableCloudStorage) {
     return { success: false, skipped: true, reason: 'local_mode' };
+  }
+
+  if (isViewerReadonlyUser(service)) {
+    return { success: true, skipped: true, reason: 'viewer_readonly', settledGroupCount: 0 };
   }
 
   const scope = options.scope === 'family' ? 'family' : 'user';
@@ -236,6 +249,16 @@ async function syncStarRecordToCloud(service, record) {
     requestedPoints: record.requestedPoints || null,
     modifyTime: record.modifyTime || record.timestamp || Date.now()
   };
+
+  if (record.data?.operatorUserId) {
+    payload.operatorContext = {
+      actorUserId: record.data.operatorUserId,
+      actorRole: record.data.operatorRole || null,
+      loginUserId: record.data.loginUserId || null,
+      familyId: record.data.familyId || null,
+      targetUserId: record.data.targetUserId || record.userId || null
+    };
+  }
 
   const response = await HttpClient.post(API_CONFIG.ENDPOINTS.STAR_RECORDS, payload);
   record.expiryDate = normalizedExpiryDate;

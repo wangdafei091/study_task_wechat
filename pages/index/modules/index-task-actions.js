@@ -2,6 +2,18 @@ const { Task } = require('../../../models/task');
 const serviceManager = require('../../../services/service-manager.js');
 const logger = require('../../../utils/logger');
 
+function isViewerReadonly(page) {
+  return page?.data?.isViewerReadonly === true;
+}
+
+function showViewerReadonlyToast() {
+  wx.showToast({
+    title: '当前为查看者，不能修改任务',
+    icon: 'none',
+    duration: 2000
+  });
+}
+
 function clearProcessing(page) {
   page.setData({
     processingTaskId: null
@@ -206,6 +218,11 @@ async function completeTask(page, e) {
     return;
   }
 
+  if (isViewerReadonly(page)) {
+    showViewerReadonlyToast();
+    return;
+  }
+
   logger.info('Index', '完成任务:', { taskId });
 
   if (page.data.processingTaskId === taskId) {
@@ -289,6 +306,11 @@ async function taskItemStatusToggle(page, e) {
       return;
     }
 
+    if (isViewerReadonly(page)) {
+      showViewerReadonlyToast();
+      return;
+    }
+
     const { id, newStatus } = e.detail;
 
     page.setData({
@@ -299,9 +321,19 @@ async function taskItemStatusToggle(page, e) {
 
     const taskService = serviceManager.getTaskService();
     page._skipNextTaskChangedRefresh = true;
-    await taskService.updateTaskStatus(id, newStatus);
+    const result = await taskService.updateTaskStatus(id, newStatus);
 
     clearProcessing(page);
+
+    if (!result?.success) {
+      page._skipNextTaskChangedRefresh = false;
+      handleFailure({
+        ...result,
+        taskId: id,
+        operation: newStatus === 1 ? 'complete' : 'reset'
+      });
+      return;
+    }
 
     page.transitionToNewTarget();
     page.refreshTaskDataForCurrentView();

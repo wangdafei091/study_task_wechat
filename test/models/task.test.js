@@ -124,6 +124,22 @@ describe('Task 模型', () => {
       const errors = task.validate();
       expect(errors).toHaveLength(0);
     });
+
+    it('应该拒绝超过 93 天的重复任务范围', () => {
+      const task = new Task({
+        title: '长期任务',
+        type: TaskType.HABIT,
+        date: '2026-04-01',
+        hasNoEndDate: false,
+        repeat: {
+          type: RepeatType.DAILY,
+          startDate: '2026-04-01',
+          endDate: '2026-07-05'
+        }
+      });
+
+      expect(task.validate()).toContain('时间范围过长，请缩短后再保存');
+    });
   });
 
   describe('complete', () => {

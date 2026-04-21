@@ -3,6 +3,7 @@
  */
 
 const { createLogger } = require('../utils/logger');
+const taskRangeGuard = require('../utils/task-range-guard');
 const logger = createLogger('Task');
 
 function parseTimeToSeconds(value) {
@@ -399,8 +400,9 @@ class Task {
    * @param {Boolean} isUpdate - 是否为更新操作
    * @returns {Object} 验证结果 { valid: boolean, errors: string[] }
    */
-  static validate(taskData, isUpdate = false) {
+  static validate(taskData, isUpdate = false, options = {}) {
     const errors = [];
+    const errorCodes = [];
 
     // 如果是更新操作，允许部分字段为空
     const isPartialUpdate = isUpdate && Object.keys(taskData).length > 0;
@@ -524,9 +526,18 @@ class Task {
       }
     }
 
+    const rangeValidation = taskRangeGuard.validateTaskRangeLimits(taskData, {
+      previousTask: options.previousTask || null
+    });
+    if (!rangeValidation.valid) {
+      errors.push(rangeValidation.message);
+      errorCodes.push(rangeValidation.code);
+    }
+
     return {
       valid: errors.length === 0,
       errors,
+      errorCodes,
     };
   }
 }

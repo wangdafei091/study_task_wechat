@@ -381,6 +381,30 @@ describe('TaskTemplateService', () => {
     expect(repository.save).not.toHaveBeenCalled();
   });
 
+  it('createTemplate 应拒绝超过 93 天的重复模板跨度', async () => {
+    const service = new TaskTemplateService({
+      userService: {
+        getLoginUser: jest.fn(() => ({ familyId: 'family_1' })),
+        getLoginUserId: jest.fn(() => 'parent_1')
+      }
+    });
+
+    await expect(service.createTemplate({
+      name: '长期模板',
+      taskPayload: {
+        title: '任务A',
+        repeat: {
+          type: 'daily'
+        }
+      },
+      dateStrategy: {
+        mode: 'inherit-repeat-rule',
+        endMode: 'duration',
+        durationDays: 96
+      }
+    })).rejects.toThrow('时间范围过长，请缩短后再保存');
+  });
+
   it('updateTemplate 在本地模式下应保存更新后的模板', async () => {
     const service = new TaskTemplateService({
       userService: {
@@ -502,6 +526,62 @@ describe('TaskTemplateService', () => {
         durationDays: 3
       })
     }));
+  });
+
+  it('updateTemplate 应允许历史超长模板只改名称，不允许继续扩张', async () => {
+    const service = new TaskTemplateService({
+      userService: {
+        getLoginUser: jest.fn(() => ({ familyId: 'family_1' }))
+      }
+    });
+    repository.getById.mockResolvedValue({
+      toJSON: () => ({
+        id: 'tpl_legacy',
+        familyId: 'family_1',
+        name: '旧模板',
+        description: '',
+        taskPayload: {
+          title: '旧任务',
+          type: 'habit',
+          points: 1,
+          pointsExpiry: 'permanent',
+          description: '',
+          isRequired: false,
+          isAllDay: false,
+          startDate: '2026-04-01',
+          startTime: '09:00',
+          endDate: '2026-07-05',
+          endTime: '10:00',
+          hasNoEndDate: false,
+          repeat: { type: 'daily', days: [], startDate: '2026-04-01', endDate: '2026-07-05' },
+          reminder: { enabled: false, time: 0 }
+        },
+        dateStrategy: {
+          mode: 'inherit-repeat-rule',
+          endMode: 'duration',
+          durationDays: 96
+        },
+        enabled: true,
+        usageCount: 0,
+        lastUsedAt: null,
+        createdByUserId: 'parent_1',
+        createdAt: 1,
+        updatedAt: 1
+      })
+    });
+
+    await expect(service.updateTemplate('tpl_legacy', {
+      name: '只改名称'
+    })).resolves.toEqual(expect.objectContaining({
+      success: true
+    }));
+
+    await expect(service.updateTemplate('tpl_legacy', {
+      dateStrategy: {
+        endMode: 'duration',
+        durationDays: 120
+      }
+    })).rejects.toThrow('时间范围过长，请缩短后再保存');
   });
 
   it('setTemplateEnabled 在本地模式下应保存启停状态', async () => {

@@ -74,6 +74,10 @@ async function setupTestData() {
       WHEN user_id = 'm15a_reward_parent_001' THEN 'm15a_reward_family_001'
       WHEN user_id = 'm15a_reward_parent_002' THEN 'm15a_reward_family_002'
       ELSE family_id
+    END,
+    family_permission_role = CASE
+      WHEN role = 'parent' THEN 'manager'
+      ELSE family_permission_role
     END
     WHERE user_id IN ('m15a_reward_parent_001', 'm15a_reward_parent_002')`
   );
@@ -124,6 +128,33 @@ describe('M15A rewards API 真实数据库集成测试', () => {
 
   it('PATCH /api/rewards/:rewardId/cancel-exchange 应退款、回退状态并写入消息', async () => {
     await db.query(
+      `INSERT INTO star_records (
+        record_id, user_id, type, source, source_id, points, description,
+        expiry_type, expiry_date, balance, previous_balance, idempotency_key, data, modify_time
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        'm15a_reward_exchange_record_001',
+        'm15a_reward_child_001',
+        'expense',
+        'reward',
+        'm15a_reward_cancel_001',
+        -6,
+        '兑换奖励扣减星星',
+        'permanent',
+        null,
+        0,
+        6,
+        'reward_exchange:m15a_reward_cancel_001:m15a_reward_child_001:1743400010000',
+        JSON.stringify({
+          deductionBreakdown: [
+            { groupId: 'm15a_reward_exchange_bucket_001', expiryType: 'permanent', expiryDate: null, points: 6 }
+          ]
+        }),
+        1743400010000
+      ]
+    );
+
+    await db.query(
       `INSERT INTO rewards (
         reward_id, user_id, family_id, name, description, type, points, icon,
         enabled, claimed, claim_time, claim_status, exchange_user_id, modify_time
@@ -163,7 +194,7 @@ describe('M15A rewards API 真实数据库集成测试', () => {
       ['m15a_reward_cancel_001']
     );
     const recordRows = await db.query(
-      "SELECT * FROM star_records WHERE source_id = 'm15a_reward_cancel_001' AND source = 'reward'"
+      "SELECT * FROM star_records WHERE source_id = 'm15a_reward_cancel_001' AND source = 'reward' AND type = 'income'"
     );
     const groupRows = await db.query(
       "SELECT * FROM star_groups WHERE user_id = 'm15a_reward_child_001'"
@@ -211,6 +242,33 @@ describe('M15A rewards API 真实数据库集成测试', () => {
   });
 
   it('PATCH /api/rewards/:rewardId/cancel-exchange 家长应可为同家庭孩子取消兑换', async () => {
+    await db.query(
+      `INSERT INTO star_records (
+        record_id, user_id, type, source, source_id, points, description,
+        expiry_type, expiry_date, balance, previous_balance, idempotency_key, data, modify_time
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        'm15a_reward_exchange_record_004',
+        'm15a_reward_child_001',
+        'expense',
+        'reward',
+        'm15a_reward_cancel_004',
+        -8,
+        '兑换奖励扣减星星',
+        'permanent',
+        null,
+        0,
+        8,
+        'reward_exchange:m15a_reward_cancel_004:m15a_reward_child_001:1743400011500',
+        JSON.stringify({
+          deductionBreakdown: [
+            { groupId: 'm15a_reward_exchange_bucket_004', expiryType: 'permanent', expiryDate: null, points: 8 }
+          ]
+        }),
+        1743400011500
+      ]
+    );
+
     await db.query(
       `INSERT INTO rewards (
         reward_id, user_id, family_id, name, description, type, points, icon,

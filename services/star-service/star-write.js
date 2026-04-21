@@ -14,7 +14,7 @@ async function addStars(service, points, expiryType, source, options = {}) {
   }
 
   try {
-    const { userId } = options;
+    const { userId, operatorContext } = options;
     const expiryDate = service._calculateExpiryDate(expiryType);
     const expiryDateStr = expiryDate ? service._formatExpiryDate(expiryDate) : '';
 
@@ -49,6 +49,16 @@ async function addStars(service, points, expiryType, source, options = {}) {
       expiryDate: service._normalizeExpiryDateValue(expiryDate),
       syncedToCloud: false
     };
+
+    if (operatorContext) {
+      recordData.data = {
+        operatorUserId: operatorContext.actorUserId || null,
+        operatorRole: operatorContext.actorRole || null,
+        loginUserId: operatorContext.loginUserId || null,
+        familyId: operatorContext.familyId || null,
+        targetUserId: operatorContext.targetUserId || userId || null
+      };
+    }
 
     if (userId) {
       recordData.userId = userId;
@@ -98,7 +108,7 @@ async function consumeStars(service, points, reason, options = {}) {
   }
 
   try {
-    const { userId, sourceType, sourceId, originalTaskDate } = options;
+    const { userId, sourceType, sourceId, originalTaskDate, operatorContext } = options;
     const consumeIdempotencyKey = service._buildConsumeIdempotencyKey(options);
     const consumeResult = await service.starGroupRepository.consumeStarsByExpiryOrder(points, userId);
 
@@ -133,6 +143,16 @@ async function consumeStars(service, points, reason, options = {}) {
         timestamp: Date.now(),
         idempotencyKey: consumeIdempotencyKey
       };
+
+      if (operatorContext) {
+        recordData.data = {
+          operatorUserId: operatorContext.actorUserId || null,
+          operatorRole: operatorContext.actorRole || null,
+          loginUserId: operatorContext.loginUserId || null,
+          familyId: operatorContext.familyId || null,
+          targetUserId: operatorContext.targetUserId || userId || null
+        };
+      }
 
       if (userId) {
         recordData.userId = userId;
@@ -291,7 +311,7 @@ async function consumeStarsFromSpecificType(service, points, expiryType, reason,
       return deductResult;
     }
 
-    const record = await service.starRecordRepository.save({
+    const recordData = {
       type: 'expense',
       source: options.sourceType || 'task_reset',
       sourceId: options.sourceId || '',
@@ -302,7 +322,19 @@ async function consumeStarsFromSpecificType(service, points, expiryType, reason,
       originalTaskDate: options.originalTaskDate || null,
       expiryType,
       syncedToCloud: false
-    });
+    };
+
+    if (options.operatorContext) {
+      recordData.data = {
+        operatorUserId: options.operatorContext.actorUserId || null,
+        operatorRole: options.operatorContext.actorRole || null,
+        loginUserId: options.operatorContext.loginUserId || null,
+        familyId: options.operatorContext.familyId || null,
+        targetUserId: options.operatorContext.targetUserId || options.userId || null
+      };
+    }
+
+    const record = await service.starRecordRepository.save(recordData);
 
     if (!record) {
       logger.error('StarService', `从特定类型消费星星: 创建记录失败, 数量=${points}, 类型=${expiryType}`);

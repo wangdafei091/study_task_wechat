@@ -41,6 +41,7 @@ function token(user) {
 const PARENT = { userId: 'parent_1', role: 'parent', familyId: 'fam_1' };
 const CHILD  = { userId: 'child_1',  role: 'child',  familyId: 'fam_1' };
 const OTHER  = { userId: 'other_1',  role: 'child',  familyId: 'fam_2' };
+const VIEWER = { userId: 'parent_viewer', role: 'parent', familyId: 'fam_1', familyPermissionRole: 'viewer' };
 
 // 构造最小 Task 实例用于 mock 返回
 function makeTask(overrides = {}) {
@@ -60,6 +61,15 @@ function makeTask(overrides = {}) {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  familyService.getUserFamilyRoleProfile = jest.fn().mockImplementation(async (userId) => {
+    if (userId === 'parent_1') {
+      return { userId, familyId: 'fam_1', role: 'parent', familyPermissionRole: 'manager' };
+    }
+    if (userId === 'parent_viewer') {
+      return { userId, familyId: 'fam_1', role: 'parent', familyPermissionRole: 'viewer' };
+    }
+    return null;
+  });
   taskService.buildTaskMutationResponse = jest.fn().mockImplementation(({
     primaryTask = null,
     affectedTasks = null,
@@ -131,7 +141,7 @@ describe('POST /api/tasks', () => {
   let app;
   beforeAll(() => { app = buildApp(); });
 
-  it('创建任务时应过滤 penaltyApplied 字段', async () => {
+  it('家长创建任务时应过滤 penaltyApplied 字段', async () => {
     const task = makeTask();
     let capturedTaskData;
     taskService.createTaskWithRepeatMaterialization = jest.fn().mockImplementation((userId, taskData) => {
@@ -145,7 +155,7 @@ describe('POST /api/tasks', () => {
 
     const res = await request(app)
       .post('/api/tasks')
-      .set('Authorization', token(CHILD))
+      .set('Authorization', token(PARENT))
       .send({
         title: '新任务',
         type: 'study',
@@ -161,6 +171,44 @@ describe('POST /api/tasks', () => {
     expect(res.body.data.taskId).toBe('task_001');
     expect(res.body.data.primaryTask.taskId).toBe('task_001');
     expect(res.body.data.affectedTasks).toHaveLength(1);
+  });
+
+  it('孩子创建任务应返回 403', async () => {
+    const res = await request(app)
+      .post('/api/tasks')
+      .set('Authorization', token(CHILD))
+      .send({
+        title: '孩子自建任务',
+        type: 'study',
+        date: '2026-03-01'
+      });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error_code).toBe('PERMISSION_DENIED');
+    expect(taskService.createTaskWithRepeatMaterialization).not.toHaveBeenCalled();
+  });
+
+  it('查看者家长创建任务应返回 403', async () => {
+    familyService.getUserFamilyRoleProfile = jest.fn().mockResolvedValue({
+      userId: 'parent_viewer',
+      familyId: 'fam_1',
+      role: 'parent',
+      familyPermissionRole: 'viewer'
+    });
+
+    const res = await request(app)
+      .post('/api/tasks')
+      .set('Authorization', token(VIEWER))
+      .send({
+        title: '新任务',
+        type: 'study',
+        date: '2026-03-01',
+        targetUserId: 'child_1'
+      });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error_code).toBe('FAMILY_MANAGER_REQUIRED');
+    expect(taskService.createTaskWithRepeatMaterialization).not.toHaveBeenCalled();
   });
 });
 
@@ -387,18 +435,30 @@ describe('PUT /api/tasks/:taskId', () => {
   let app;
   beforeAll(() => { app = buildApp(); });
 
-  it('任务所有者可以更新任务', async () => {
-    const task = makeTask();
+  it('家长可以更新自己的任务', async () => {
+    const task = makeTask({ user_id: PARENT.userId });
     taskService.getTaskById = jest.fn().mockResolvedValue(task);
     taskService.updateTask = jest.fn().mockResolvedValue(task);
     const res = await request(app)
       .put('/api/tasks/task_001')
-      .set('Authorization', token(CHILD))
+      .set('Authorization', token(PARENT))
       .send({ title: '新标题' });
     expect(res.status).toBe(200);
     expect(taskService.updateTask).toHaveBeenCalled();
     expect(res.body.data.operation).toBe('update');
     expect(res.body.data.primaryTask.taskId).toBe('task_001');
+  });
+
+  it('孩子更新自己的任务应返回 403', async () => {
+    const task = makeTask();
+    taskService.getTaskById = jest.fn().mockResolvedValue(task);
+    const res = await request(app)
+      .put('/api/tasks/task_001')
+      .set('Authorization', token(CHILD))
+      .send({ title: '新标题' });
+    expect(res.status).toBe(403);
+    expect(res.body.error_code).toBe('PERMISSION_DENIED');
+    expect(taskService.updateTask).not.toHaveBeenCalled();
   });
 
   it('家长可以代孩子更新任务', async () => {
@@ -429,25 +489,25 @@ describe('PUT /api/tasks/:taskId', () => {
     taskService.getTaskById = jest.fn().mockResolvedValue(null);
     const res = await request(app)
       .put('/api/tasks/no_such_task')
-      .set('Authorization', token(CHILD))
+      .set('Authorization', token(PARENT))
       .send({ title: '任意' });
     expect(res.status).toBe(404);
     expect(res.body.error_code).toBe('TASK_NOT_FOUND');
   });
 
   it('请求体全为非白名单字段时返回 400', async () => {
-    const task = makeTask();
+    const task = makeTask({ user_id: PARENT.userId });
     taskService.getTaskById = jest.fn().mockResolvedValue(task);
     const res = await request(app)
       .put('/api/tasks/task_001')
-      .set('Authorization', token(CHILD))
+      .set('Authorization', token(PARENT))
       .send({ status: 1, userId: 'hacker', nonExistField: 'x' });
     expect(res.status).toBe(400);
     expect(res.body.error_code).toBe('NO_UPDATABLE_FIELDS');
   });
 
   it('无效字段被过滤（status 不在白名单内）', async () => {
-    const task = makeTask();
+    const task = makeTask({ user_id: PARENT.userId });
     taskService.getTaskById = jest.fn().mockResolvedValue(task);
     let capturedChanges;
     taskService.updateTask = jest.fn().mockImplementation((id, changes) => {
@@ -456,7 +516,7 @@ describe('PUT /api/tasks/:taskId', () => {
     });
     await request(app)
       .put('/api/tasks/task_001')
-      .set('Authorization', token(CHILD))
+      .set('Authorization', token(PARENT))
       .send({ title: '新标题', status: 1, userId: 'hacker' });
     expect(capturedChanges).not.toHaveProperty('status');
     expect(capturedChanges).not.toHaveProperty('userId');
@@ -464,7 +524,7 @@ describe('PUT /api/tasks/:taskId', () => {
   });
 
   it('更新任务时应过滤 penaltyApplied 字段', async () => {
-    const task = makeTask();
+    const task = makeTask({ user_id: PARENT.userId });
     taskService.getTaskById = jest.fn().mockResolvedValue(task);
     let capturedChanges;
     taskService.updateTask = jest.fn().mockImplementation((id, changes) => {
@@ -474,7 +534,7 @@ describe('PUT /api/tasks/:taskId', () => {
 
     const res = await request(app)
       .put('/api/tasks/task_001')
-      .set('Authorization', token(CHILD))
+      .set('Authorization', token(PARENT))
       .send({ title: '新标题', penaltyApplied: true, isRequired: true });
 
     expect(res.status).toBe(200);
@@ -485,6 +545,7 @@ describe('PUT /api/tasks/:taskId', () => {
 
   it('仅更新开始时间导致结束时间早于开始时间时应返回 400', async () => {
     const task = makeTask({
+      user_id: PARENT.userId,
       start_time: '18:00',
       end_time: '19:00',
       is_all_day: 0
@@ -494,7 +555,7 @@ describe('PUT /api/tasks/:taskId', () => {
 
     const res = await request(app)
       .put('/api/tasks/task_001')
-      .set('Authorization', token(CHILD))
+      .set('Authorization', token(PARENT))
       .send({ startTime: '20:00' });
 
     expect(res.status).toBe(400);
@@ -508,27 +569,38 @@ describe('DELETE /api/tasks/:taskId', () => {
   let app;
   beforeAll(() => { app = buildApp(); });
 
-  it('任务所有者可以软删除任务', async () => {
-    const task = makeTask();
+  it('家长可以软删除自己的任务', async () => {
+    const task = makeTask({ user_id: PARENT.userId });
     taskService.getTaskById = jest.fn().mockResolvedValue(task);
     taskService.softDeleteTask = jest.fn().mockResolvedValue(task);
     const res = await request(app)
       .delete('/api/tasks/task_001')
-      .set('Authorization', token(CHILD));
+      .set('Authorization', token(PARENT));
     expect(res.status).toBe(200);
     expect(taskService.softDeleteTask).toHaveBeenCalledWith(
       'task_001',
       expect.objectContaining({
-        actorUserId: 'child_1',
-        actorRole: 'child',
+        actorUserId: 'parent_1',
+        actorRole: 'parent',
         familyId: 'fam_1',
-        subjectUserId: 'child_1',
+        subjectUserId: 'parent_1',
         operationKey: expect.any(String),
         modifyTime: expect.any(Number),
       })
     );
     expect(res.body.data.operation).toBe('delete');
     expect(res.body.data.taskId).toBe('task_001');
+  });
+
+  it('孩子删除自己的任务应返回 403', async () => {
+    const task = makeTask();
+    taskService.getTaskById = jest.fn().mockResolvedValue(task);
+    const res = await request(app)
+      .delete('/api/tasks/task_001')
+      .set('Authorization', token(CHILD));
+    expect(res.status).toBe(403);
+    expect(res.body.error_code).toBe('PERMISSION_DENIED');
+    expect(taskService.softDeleteTask).not.toHaveBeenCalled();
   });
 
   it('家长可以代孩子删除任务', async () => {
@@ -668,6 +740,50 @@ describe('PATCH /api/tasks/:taskId/status', () => {
     );
   });
 
+  it('查看者家长切到孩子视角时，应允许更新孩子任务状态', async () => {
+    const task = makeTask();
+    taskService.getTaskById = jest.fn().mockResolvedValue(task);
+    familyService.getUserFamilyAndRole = jest.fn().mockResolvedValue({ familyId: 'fam_1', role: 'child' });
+    taskService.updateTaskStatus = jest.fn().mockResolvedValue(task);
+
+    const res = await request(app)
+      .patch('/api/tasks/task_001/status')
+      .set('Authorization', token(VIEWER))
+      .send({
+        status: 1,
+        starAwarded: true,
+        operatorContext: {
+          actorUserId: 'child_1',
+          actorRole: 'child'
+        }
+      });
+
+    expect(res.status).toBe(200);
+    expect(taskService.updateTaskStatus).toHaveBeenCalledWith(
+      'task_001',
+      expect.any(Object),
+      expect.objectContaining({
+        actorUserId: 'child_1',
+        actorRole: 'child',
+        subjectUserId: 'child_1'
+      })
+    );
+  });
+
+  it('查看者家长未切到孩子视角时，更新任务状态仍应返回 403', async () => {
+    const task = makeTask();
+    taskService.getTaskById = jest.fn().mockResolvedValue(task);
+
+    const res = await request(app)
+      .patch('/api/tasks/task_001/status')
+      .set('Authorization', token(VIEWER))
+      .send({ status: 1, starAwarded: true });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error_code).toBe('FAMILY_MANAGER_REQUIRED');
+    expect(taskService.updateTaskStatus).not.toHaveBeenCalled();
+  });
+
   it('家长不能把其他孩子伪装成当前任务的操作者', async () => {
     const task = makeTask();
     taskService.getTaskById = jest.fn().mockResolvedValue(task);
@@ -719,27 +835,18 @@ describe('PATCH /api/tasks/:taskId/required', () => {
   let app;
   beforeAll(() => { app = buildApp(); });
 
-  it('任务所有者可以标记必做', async () => {
+  it('孩子标记必做应返回 403', async () => {
     const task = makeTask();
     taskService.getTaskById = jest.fn().mockResolvedValue(task);
-    taskService.markTaskRequired = jest.fn().mockResolvedValue(task);
 
     const res = await request(app)
       .patch('/api/tasks/task_001/required')
       .set('Authorization', token(CHILD))
       .send({ modifyTime: 123456 });
 
-    expect(res.status).toBe(200);
-    expect(taskService.markTaskRequired).toHaveBeenCalledWith(
-      'task_001',
-      expect.objectContaining({
-        actorUserId: 'child_1',
-        actorRole: 'child',
-        familyId: 'fam_1',
-        subjectUserId: 'child_1',
-        modifyTime: 123456
-      })
-    );
+    expect(res.status).toBe(403);
+    expect(res.body.error_code).toBe('PERMISSION_DENIED');
+    expect(taskService.markTaskRequired).not.toHaveBeenCalled();
   });
 
   it('家长可以代孩子标记必做', async () => {
@@ -775,26 +882,33 @@ describe('PATCH /api/tasks/:taskId/unrequired', () => {
   let app;
   beforeAll(() => { app = buildApp(); });
 
-  it('任务所有者可以取消必做', async () => {
+  it('孩子取消必做应返回 403', async () => {
     const task = makeTask({ isRequired: 1 });
     taskService.getTaskById = jest.fn().mockResolvedValue(task);
-    taskService.unmarkTaskRequired = jest.fn().mockResolvedValue(task);
 
     const res = await request(app)
       .patch('/api/tasks/task_001/unrequired')
       .set('Authorization', token(CHILD))
       .send({ modifyTime: 223344 });
 
-    expect(res.status).toBe(200);
-    expect(taskService.unmarkTaskRequired).toHaveBeenCalledWith(
-      'task_001',
-      expect.objectContaining({
-        actorUserId: 'child_1',
-        actorRole: 'child',
-        familyId: 'fam_1',
-        subjectUserId: 'child_1',
-        modifyTime: 223344
-      })
-    );
+    expect(res.status).toBe(403);
+    expect(res.body.error_code).toBe('PERMISSION_DENIED');
+    expect(taskService.unmarkTaskRequired).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/tasks/transfer', () => {
+  let app;
+  beforeAll(() => { app = buildApp(); });
+
+  it('孩子转移任务应返回 403', async () => {
+    const res = await request(app)
+      .post('/api/tasks/transfer')
+      .set('Authorization', token(CHILD))
+      .send({ toUserId: 'child_2' });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error_code).toBe('PERMISSION_DENIED');
+    expect(taskService.transferTasksToChild).not.toHaveBeenCalled();
   });
 });

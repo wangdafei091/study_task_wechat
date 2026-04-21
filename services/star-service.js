@@ -38,6 +38,7 @@ class StarService {
     // 事件总线
     this.eventBus = options.eventBus || new EventBus();
     this.rewardService = options.rewardService || null;
+    this.userService = options.userService || null;
 
     this.enableCloudStorage = API_CONFIG.ENABLE_API;
     this._cloudRefreshInFlight = new Map();
@@ -477,6 +478,13 @@ class StarService {
     if (this.rewardService !== rewardService) {
       this.rewardService = rewardService || null;
       logger.info('StarService', 'RewardService已更新');
+    }
+  }
+
+  updateUserService(userService) {
+    if (this.userService !== userService) {
+      this.userService = userService || null;
+      logger.info('StarService', 'UserService已更新');
     }
   }
 

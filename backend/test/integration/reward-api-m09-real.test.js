@@ -35,6 +35,7 @@ function generateToken(user) {
       openid: user.openid,
       role: user.role,
       familyId: user.family_id,
+      familyPermissionRole: user.family_permission_role || null,
     },
     secret,
     { expiresIn: '1h' }
@@ -68,7 +69,8 @@ async function setupTestData() {
   await db.query(
     `INSERT INTO users (user_id, openid, nickname, avatar, role, status, family_id, is_virtual, created_by_user_id) VALUES
       ('m09_reward_parent_001', 'm09_reward_parent_openid', 'M09奖励家长', NULL, 'parent', 'active', NULL, 0, NULL),
-      ('m09_reward_parent_002', 'm09_reward_parent_openid_2', 'M09奖励外部家长', NULL, 'parent', 'active', NULL, 0, NULL)`
+      ('m09_reward_parent_002', 'm09_reward_parent_openid_2', 'M09奖励外部家长', NULL, 'parent', 'active', NULL, 0, NULL),
+      ('m09_reward_parent_003', 'm09_reward_parent_openid_3', 'M09奖励查看者', NULL, 'parent', 'active', NULL, 0, NULL)`
   );
 
   await db.query(
@@ -81,9 +83,16 @@ async function setupTestData() {
     `UPDATE users SET family_id = CASE
       WHEN user_id = 'm09_reward_parent_001' THEN 'm09_reward_family_001'
       WHEN user_id = 'm09_reward_parent_002' THEN 'm09_reward_family_002'
+      WHEN user_id = 'm09_reward_parent_003' THEN 'm09_reward_family_001'
       ELSE family_id
+    END,
+    family_permission_role = CASE
+      WHEN user_id = 'm09_reward_parent_001' THEN 'manager'
+      WHEN user_id = 'm09_reward_parent_002' THEN 'manager'
+      WHEN user_id = 'm09_reward_parent_003' THEN 'viewer'
+      ELSE family_permission_role
     END
-    WHERE user_id IN ('m09_reward_parent_001', 'm09_reward_parent_002')`
+    WHERE user_id IN ('m09_reward_parent_001', 'm09_reward_parent_002', 'm09_reward_parent_003')`
   );
 
   await db.query(
@@ -98,6 +107,7 @@ describe('M09 rewards API 真实数据库集成测试', () => {
   let parentToken;
   let childToken;
   let otherChildToken;
+  let viewerToken;
 
   beforeAll(async () => {
     await db.testConnection();
@@ -123,6 +133,14 @@ describe('M09 rewards API 真实数据库集成测试', () => {
       openid: 'm09_reward_child_openid_3',
       role: 'child',
       family_id: 'm09_reward_family_002',
+    });
+
+    viewerToken = generateToken({
+      user_id: 'm09_reward_parent_003',
+      openid: 'm09_reward_parent_openid_3',
+      role: 'parent',
+      family_id: 'm09_reward_family_001',
+      family_permission_role: 'viewer'
     });
   }, 30000);
 
@@ -202,6 +220,20 @@ describe('M09 rewards API 真实数据库集成测试', () => {
 
     expect(createRes.status).toBe(403);
     expect(createRes.body.success).toBe(false);
+  });
+
+  it('POST /api/rewards 查看者家长不可创建奖励', async () => {
+    const createRes = await request(app)
+      .post('/api/rewards')
+      .set('Authorization', `Bearer ${viewerToken}`)
+      .send({
+        rewardId: 'm09_reward_create_viewer_001',
+        name: '查看者越权创建',
+        points: 5,
+      });
+
+    expect(createRes.status).toBe(403);
+    expect(createRes.body.error_code).toBe('FAMILY_MANAGER_REQUIRED');
   });
 
   it('PATCH /api/rewards/:rewardId/exchange 孩子兑换应扣减星星并支持幂等重试', async () => {

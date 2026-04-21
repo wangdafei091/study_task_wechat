@@ -8,6 +8,15 @@ const SEARCH_DEBOUNCE_MS = 250;
 const TAB_SELECT = 'select';
 const TAB_MANAGE = 'manage';
 
+function isViewerReadonly(loginUser) {
+  return Boolean(
+    loginUser &&
+    loginUser.role === 'parent' &&
+    loginUser.familyId &&
+    loginUser.familyPermissionRole === 'viewer'
+  );
+}
+
 function normalizeTimestamp(value) {
   const timestamp = Number(value || 0);
   return Number.isFinite(timestamp) ? timestamp : 0;
@@ -299,10 +308,11 @@ Page({
     const loginUser = userService?.getLoginUser?.();
     const currentUser = userService?.getCurrentUser?.();
     const isChildView = viewScope.isChildView(loginUser, currentUser);
+    const isViewerReadonlyUser = isViewerReadonly(loginUser);
 
-    if (!loginUser || loginUser.role !== 'parent' || isChildView) {
+    if (!loginUser || loginUser.role !== 'parent' || isChildView || isViewerReadonlyUser) {
       wx.showToast({
-        title: '暂无操作权限',
+        title: isViewerReadonlyUser ? '当前为查看者，不能管理任务模板' : '暂无操作权限',
         icon: 'none'
       });
       wx.navigateBack({
@@ -326,6 +336,19 @@ Page({
   },
 
   onShow() {
+    const userService = serviceManager.getUserService();
+    const loginUser = userService?.getLoginUser?.();
+    if (isViewerReadonly(loginUser)) {
+      wx.showToast({
+        title: '当前为查看者，不能管理任务模板',
+        icon: 'none'
+      });
+      wx.navigateBack({
+        delta: 1
+      });
+      return;
+    }
+
     const force = this._forceReloadOnShow === true;
     this._forceReloadOnShow = false;
     this.loadTemplates({ force });

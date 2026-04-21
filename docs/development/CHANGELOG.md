@@ -4,6 +4,44 @@
 
 ---
 
+## [里程碑-22A] - 2026-04-21
+
+### ✅ 完成情况
+
+**治理与准入控制**
+
+- **多家长家庭治理边界已正式落地**：
+  - [`backend/models/User.js`](/Users/wangdafei/code/study_task_wechat/backend/models/User.js)、[`models/user.js`](/Users/wangdafei/code/study_task_wechat/models/user.js)、[`utils/user-context.js`](/Users/wangdafei/code/study_task_wechat/utils/user-context.js)、[`utils/permission-utils.js`](/Users/wangdafei/code/study_task_wechat/utils/permission-utils.js) 已引入并统一消费 `familyPermissionRole`
+  - [`backend/utils/family-permission.js`](/Users/wangdafei/code/study_task_wechat/backend/utils/family-permission.js)、[`backend/controllers/familyController.js`](/Users/wangdafei/code/study_task_wechat/backend/controllers/familyController.js)、[`packageManage/pages/family-settings/family-settings.js`](/Users/wangdafei/code/study_task_wechat/packageManage/pages/family-settings/family-settings.js) 已收口 `manager / viewer` 家庭治理与业务写权限
+  - 家庭创建者默认成为 `manager`，通过家庭邀请码加入的新家长默认落为 `viewer`
+- **应用级邀请制准入已形成闭环**：
+  - [`backend/services/appAccessService.js`](/Users/wangdafei/code/study_task_wechat/backend/services/appAccessService.js)、[`backend/controllers/authController.js`](/Users/wangdafei/code/study_task_wechat/backend/controllers/authController.js)、[`backend/models/AppAccessCode.js`](/Users/wangdafei/code/study_task_wechat/backend/models/AppAccessCode.js) 已落地 `open / invite_only` 双模式和应用邀请码消费逻辑
+  - [`pages/access-gate/access-gate.js`](/Users/wangdafei/code/study_task_wechat/pages/access-gate/access-gate.js)、[`utils/app/app-access-state.js`](/Users/wangdafei/code/study_task_wechat/utils/app/app-access-state.js)、[`utils/app/bootstrap-auth.js`](/Users/wangdafei/code/study_task_wechat/utils/app/bootstrap-auth.js) 已把 `pending_app_access_code` 收口为统一 source of truth，并把新用户拒绝场景导向邀请码输入页
+- **任务/表现项/模板周期护栏已完成前后端双端收口**：
+  - [`utils/task-range-guard.js`](/Users/wangdafei/code/study_task_wechat/utils/task-range-guard.js) 与 [`backend/utils/task-range-guard.js`](/Users/wangdafei/code/study_task_wechat/backend/utils/task-range-guard.js) 已统一重复任务 `93` 天、表现项有效期 `180` 天、模板重复周期 `93` 天的限制
+  - [`models/task.js`](/Users/wangdafei/code/study_task_wechat/models/task.js)、[`backend/models/Task.js`](/Users/wangdafei/code/study_task_wechat/backend/models/Task.js)、[`models/task-template.js`](/Users/wangdafei/code/study_task_wechat/models/task-template.js)、[`backend/models/TaskTemplate.js`](/Users/wangdafei/code/study_task_wechat/backend/models/TaskTemplate.js) 已统一 authoritative 校验
+  - 已支持“历史已超限但本次未继续扩张”兼容策略，避免老数据被新规则锁死
+- **实施期回归缺陷已顺手修复**：
+  - [`pages/task-edit/task-edit.js`](/Users/wangdafei/code/study_task_wechat/pages/task-edit/task-edit.js) 已修复“单次模板回填后改成多天任务，UI 显示正确但底层仍按单天提交”的真实缺陷
+  - [`test/pages/task-edit.page.test.js`](/Users/wangdafei/code/study_task_wechat/test/pages/task-edit.page.test.js) 已补 3 个回归用例锁定该问题
+
+### 🧪 验证结果
+
+- 前端/共享层 M22A 关键回归通过：
+  - `npx jest test/utils/user-context.test.js test/app/bootstrap-auth.behavior.test.js test/app/post-login-bootstrap.test.js test/pages/access-gate.page.test.js test/pages/family-settings.page.test.js test/pages/task-edit.page.test.js test/services/task-template-service.test.js test/services/task-write.direct.test.js test/utils/task-range-guard.test.js --runInBand`
+  - 结果：`9 suites / 113 tests` 全绿
+- 后端 M22A 关键单元通过：
+  - `cd backend && npx jest test/unit/appAccessService.test.js test/unit/authController.test.js test/unit/family-permission.test.js test/unit/familyController.test.js test/unit/familyService.test.js test/unit/taskModel.test.js test/unit/taskTemplateService.test.js test/unit/taskService-schema-compat.test.js --runInBand`
+  - 结果：`8 suites / 49 tests` 全绿
+- 模拟器与后台日志抽检通过：
+  - 已验证查看者只读、孩子视角执行、家庭权限切换、模板创建任务等主链路行为与预期一致
+
+### 📖 详细实施记录
+
+- [里程碑-22A：治理与准入控制](../design/milestone-22a-governance-admission-control.md)
+
+---
+
 ## [里程碑-21O] - 2026-04-19
 
 ### ✅ 完成情况
@@ -1843,4 +1881,4 @@
 
 ---
 
-**最后更新**：2026-04-16
+**最后更新**：2026-04-21

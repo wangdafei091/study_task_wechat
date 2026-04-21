@@ -169,6 +169,28 @@ describe('backend TaskService schema compatibility', () => {
     const connection = {
       beginTransaction: jest.fn().mockResolvedValue(),
       execute: jest.fn()
+        .mockResolvedValueOnce([[
+          {
+            task_id: 'task_001',
+            user_id: 'user_001',
+            title: '原任务',
+            description: '',
+            type: 'study',
+            date: '2026-03-21',
+            start_time: '09:00',
+            end_time: '10:00',
+            reminder: JSON.stringify({ enabled: true, time: 30 }),
+            points: 1,
+            points_expiry: 'week',
+            is_required: 0,
+            status: 0,
+            repeat: null,
+            is_all_day: 0,
+            penalty_applied: 0,
+            deleted_at: null,
+            modify_time: 100
+          }
+        ], undefined])
         .mockResolvedValueOnce([{ affectedRows: 1 }, undefined])
         .mockResolvedValueOnce([[
           {
@@ -213,7 +235,10 @@ describe('backend TaskService schema compatibility', () => {
       modifyTime: 123
     });
 
-    const [, params] = connection.execute.mock.calls[0];
+    const updateCall = connection.execute.mock.calls.find(([sql]) => sql.includes('UPDATE tasks SET'));
+    expect(updateCall).toBeTruthy();
+
+    const [, params] = updateCall;
     expect(params[0]).toBe(JSON.stringify({
       enabled: false,
       time: 0

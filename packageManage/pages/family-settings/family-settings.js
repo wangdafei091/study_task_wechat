@@ -3,6 +3,108 @@
  */
 
 const logger = require('../../../utils/logger');
+const dateUtils = require('../../../utils/dateUtils');
+const userContextUtils = require('../../../utils/user-context');
+
+function getPermissionRoleLabel(role) {
+  if (role === 'manager') {
+    return '管理员';
+  }
+  if (role === 'viewer') {
+    return '查看者';
+  }
+  return '未设置';
+}
+
+function getPermissionRoleDescription(permissionContext = {}) {
+  if (permissionContext.canManageFamilyGovernance) {
+    return '可管理任务、奖励和家庭设置';
+  }
+
+  if (permissionContext.familyPermissionRole === 'viewer') {
+    return '可查看记录和进展，不能修改内容';
+  }
+
+  return '创建家庭或加入家庭后可开始协作';
+}
+
+function formatInviteRoleHint(role) {
+  if (role === 'parent') {
+    return '对方加入后默认为查看者，如需协助管理，可稍后手动设为管理员';
+  }
+
+  return '适合给孩子设备加入家庭，不具备管理权限';
+}
+
+function isLocalMode() {
+  const API_CONFIG = require('../../../utils/api-config');
+  return API_CONFIG.ENABLE_API !== true;
+}
+
+function parseInviteExpiryTime(expiresAt) {
+  if (!expiresAt) {
+    return NaN;
+  }
+
+  if (typeof expiresAt === 'number') {
+    return expiresAt;
+  }
+
+  if (expiresAt instanceof Date) {
+    return expiresAt.getTime();
+  }
+
+  if (typeof expiresAt === 'string') {
+    const trimmed = expiresAt.trim();
+    if (!trimmed) {
+      return NaN;
+    }
+
+    const parsedDate = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/.test(trimmed)
+      ? dateUtils.parseDateTime(trimmed)
+      : new Date(trimmed);
+
+    return parsedDate instanceof Date ? parsedDate.getTime() : NaN;
+  }
+
+  const parsedDate = new Date(expiresAt);
+  return parsedDate.getTime();
+}
+
+function formatInviteExpiry(expiresAt) {
+  if (!expiresAt) {
+    return '有效期未设置';
+  }
+
+  const expiresTime = parseInviteExpiryTime(expiresAt);
+  if (!Number.isFinite(expiresTime)) {
+    return '有效期未设置';
+  }
+
+  const diff = expiresTime - Date.now();
+  if (diff <= 0) {
+    return '邀请码已过期';
+  }
+
+  const hours = Math.max(1, Math.ceil(diff / (60 * 60 * 1000)));
+  return `约 ${hours} 小时后失效`;
+}
+
+function buildMemberViewModel(member, options = {}) {
+  const isParent = member.role === 'parent';
+  const familyPermissionRole = member.familyPermissionRole || null;
+  return {
+    ...member,
+    isParent,
+    isSelf: member.userId === options.loginUserId,
+    familyPermissionRole,
+    roleDisplayText: isParent
+      ? `家长 · ${getPermissionRoleLabel(familyPermissionRole)}`
+      : (member.isVirtual ? '孩子（共享设备）' : '孩子'),
+    canAdjustPermission: Boolean(options.canAdjustParentPermission && isParent),
+    canDelete: Boolean(options.canManageFamilyGovernance && member.isVirtual),
+  };
+}
 
 Page({
   data: {
@@ -10,10 +112,20 @@ Page({
     members: [],            // 家庭成员列表
     loading: true,
     isParent: false,        // loginUser 是否为家长
+    familyPermissionRole: '',
+    currentIdentityLabel: '',
+    currentIdentityDescription: '',
+    canManageFamilyGovernance: false,
+    governanceDisabledReason: '',
+    canManageInviteCode: false,
+    inviteManagementDisabledReason: '',
+    supportsParentPermissionManagement: false,
     // 邀请码相关
     inviteCode: '',
     inviteCodeExpiresAt: null,
     inviteCodeRole: 'child',
+    inviteCodeExpiryText: '',
+    inviteRoleHint: formatInviteRoleHint('child'),
     // 创建/加入家庭
     showCreateDialog: false,
     showJoinDialog: false,
@@ -65,17 +177,57 @@ Page({
       const family = familyData?.data || null;
 
       if (family) {
-        const members = await this._loadMembers();
+        const localMode = isLocalMode();
+        const loginUser = userService.getLoginUser() || userService.getCurrentUser();
+        const rawMembers = await this._loadMembers();
+        const permissionContext = userContextUtils.resolvePermissionContext({
+          loginUser,
+          currentUser: loginUser,
+          availableUsers: [loginUser].concat(rawMembers || [])
+        });
+        const canManageInviteCode = Boolean(permissionContext.canManageFamilyGovernance && !localMode);
+        const supportsParentPermissionManagement = Boolean(permissionContext.canManageFamilyGovernance && !localMode);
+        const members = (rawMembers || []).map((member) => buildMemberViewModel(member, {
+          canManageFamilyGovernance: permissionContext.canManageFamilyGovernance,
+          canAdjustParentPermission: supportsParentPermissionManagement,
+          loginUserId: loginUser?.userId || null
+        }));
         this.setData({
           family,
           members,
+          familyPermissionRole: permissionContext.familyPermissionRole || '',
+          currentIdentityLabel: getPermissionRoleLabel(permissionContext.familyPermissionRole),
+          currentIdentityDescription: getPermissionRoleDescription(permissionContext),
+          canManageFamilyGovernance: permissionContext.canManageFamilyGovernance,
+          governanceDisabledReason: permissionContext.canManageFamilyGovernance
+            ? ''
+            : '只有管理员可以邀请成员或调整权限',
+          canManageInviteCode,
+          inviteManagementDisabledReason: canManageInviteCode
+            ? ''
+            : (localMode ? '本地模式下不提供邀请码' : '只有管理员可以刷新邀请码'),
+          supportsParentPermissionManagement,
           inviteCode: family.inviteCode || '',
           inviteCodeExpiresAt: family.inviteCodeExpiresAt,
           inviteCodeRole: family.inviteCodeRole || 'child',
+          inviteCodeExpiryText: formatInviteExpiry(family.inviteCodeExpiresAt),
+          inviteRoleHint: formatInviteRoleHint(family.inviteCodeRole || 'child'),
           loading: false,
         });
       } else {
-        this.setData({ family: null, loading: false });
+        this.setData({
+          family: null,
+          members: [],
+          familyPermissionRole: '',
+          currentIdentityLabel: '',
+          currentIdentityDescription: '',
+          canManageFamilyGovernance: false,
+          governanceDisabledReason: '',
+          canManageInviteCode: false,
+          inviteManagementDisabledReason: '',
+          supportsParentPermissionManagement: false,
+          loading: false
+        });
       }
     } catch (error) {
       logger.error('FamilySettings', '加载家庭数据失败', error);
@@ -93,11 +245,12 @@ Page({
 
         const localMembers = userService?.storageAdapter?.get('localFamilyMembers') || [];
         // 补上家长自身
-        const loginUser = userService?.getLoginUser();
-        const parentMember = loginUser ? [{
-          userId: loginUser.userId || loginUser.id,
-          nickname: loginUser.name || loginUser.displayName || '家长',
+        const parentUser = userService?.getLoginUser?.() || userService?.getCurrentUser?.();
+        const parentMember = parentUser ? [{
+          userId: parentUser.userId || parentUser.id,
+          nickname: parentUser.name || parentUser.displayName || '家长',
           role: 'parent',
+          familyPermissionRole: parentUser.familyPermissionRole || 'manager',
           isVirtual: false,
         }] : [];
         return [...parentMember, ...localMembers];
@@ -184,16 +337,28 @@ Page({
 
   // ===== 邀请码刷新 =====
   onInviteCodeRoleChange(e) {
-    this.setData({ inviteCodeRole: e.detail.value });
+    const inviteCodeRole = e.detail.value;
+    this.setData({
+      inviteCodeRole,
+      inviteRoleHint: formatInviteRoleHint(inviteCodeRole)
+    });
   },
 
   async refreshInviteCode() {
+    if (!this.data.canManageInviteCode) {
+      wx.showToast({
+        title: this.data.inviteManagementDisabledReason || '当前不可刷新邀请码',
+        icon: 'none'
+      });
+      return;
+    }
     try {
       const userService = getApp().globalData?.userService;
       const result = await userService.refreshInviteCode(this.data.inviteCodeRole);
       this.setData({
         inviteCode: result.inviteCode,
         inviteCodeExpiresAt: result.inviteCodeExpiresAt,
+        inviteCodeExpiryText: formatInviteExpiry(result.inviteCodeExpiresAt),
       });
       wx.showToast({ title: '邀请码已刷新', icon: 'success' });
     } catch (e) {
@@ -209,6 +374,10 @@ Page({
 
   // ===== 添加虚拟成员 =====
   async addVirtualMember() {
+    if (!this.data.canManageFamilyGovernance) {
+      wx.showToast({ title: '当前为查看者，不能修改家庭设置', icon: 'none' });
+      return;
+    }
     wx.showModal({
       title: '添加孩子',
       editable: true,
@@ -236,8 +405,7 @@ Page({
                 }
               }
               wx.showToast({ title: toastTitle, icon: 'none', duration: 2500 });
-              const members = await this._loadMembers();
-              this.setData({ members });
+              await this._loadFamilyData();
             } else {
               wx.showToast({ title: result.message || '添加失败', icon: 'none' });
             }
@@ -251,6 +419,10 @@ Page({
 
   // ===== 删除虚拟成员 =====
   async deleteMember(e) {
+    if (!this.data.canManageFamilyGovernance) {
+      wx.showToast({ title: '当前为查看者，不能修改家庭设置', icon: 'none' });
+      return;
+    }
     const { userId, name } = e.currentTarget.dataset;
     wx.showModal({
       title: '确认删除',
@@ -263,8 +435,7 @@ Page({
             const result = await userService.deleteFamilyMember(userId);
             if (result.success) {
               wx.showToast({ title: '已删除', icon: 'success' });
-              const members = await this._loadMembers();
-              this.setData({ members });
+              await this._loadFamilyData();
             } else {
               wx.showToast({ title: result.message || '删除失败', icon: 'none' });
             }
@@ -317,5 +488,40 @@ Page({
     const pinKey = loginUserId ? `family_pin_${loginUserId}` : 'family_pin';
     wx.removeStorageSync(pinKey);
     wx.showToast({ title: '已清除PIN码', icon: 'success' });
+  },
+
+  async onPermissionRoleTap(e) {
+    const { userId, role } = e.currentTarget.dataset;
+    if (!this.data.supportsParentPermissionManagement) {
+      wx.showToast({ title: '当前模式不支持调整家长权限', icon: 'none' });
+      return;
+    }
+
+    if (!this.data.canManageFamilyGovernance) {
+      wx.showToast({ title: '当前为查看者，不能修改家庭设置', icon: 'none' });
+      return;
+    }
+
+    const targetMember = (this.data.members || []).find((member) => member.userId === userId);
+    if (!targetMember || targetMember.familyPermissionRole === role) {
+      return;
+    }
+
+    try {
+      const userService = getApp().globalData?.userService;
+      const result = await userService.updateFamilyMemberPermissionRole(userId, role);
+      if (!result.success) {
+        wx.showToast({ title: result.message || '更新失败', icon: 'none' });
+        return;
+      }
+
+      wx.showToast({
+        title: role === 'manager' ? '已设为管理员' : '已设为查看者',
+        icon: 'success'
+      });
+      await this._loadFamilyData();
+    } catch (error) {
+      wx.showToast({ title: '更新失败', icon: 'none' });
+    }
   },
 });

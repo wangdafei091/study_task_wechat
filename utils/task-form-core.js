@@ -1,4 +1,5 @@
 const dateUtils = require('./dateUtils');
+const taskRangeGuard = require('./task-range-guard');
 
 const TASK_TYPES = ['habit', 'study', 'interest'];
 const REPEAT_TYPES = ['none', 'daily', 'weekly', 'workdays', 'weekends', 'custom'];
@@ -684,6 +685,25 @@ function validateTaskFormDraft(draftInput = {}, options = {}) {
     return {
       valid: false,
       errorMsg: '请输入有效的持续天数'
+    };
+  }
+
+  const rangeValidation = scene === 'template'
+    ? taskRangeGuard.validateTemplateRangeLimits(
+      buildTemplatePayloadFromDraft(draft, {
+        today: options.today || draftInput.startDate
+      }),
+      { previousTemplate: options.previousTemplate || null }
+    )
+    : taskRangeGuard.validateTaskRangeLimits(
+      buildTaskPayloadFromDraft(draft),
+      { previousTask: options.previousTask || null }
+    );
+
+  if (!rangeValidation.valid) {
+    return {
+      valid: false,
+      errorMsg: rangeValidation.message
     };
   }
 

@@ -5,7 +5,9 @@ describe('utils/app/bootstrap-auth', () => {
     authenticated = false,
     cachedUserInfo = null,
     loginResult = { token: 'token-1', user: { id: 'user-1' } },
-    loginCode = 'wx-code'
+    loginCode = 'wx-code',
+    pendingAccessCode = '',
+    currentRoute = 'pages/index/index'
   } = {}) {
     jest.resetModules();
 
@@ -21,6 +23,7 @@ describe('utils/app/bootstrap-auth', () => {
         return null;
       }),
       setStorageSync: jest.fn(),
+      removeStorageSync: jest.fn(),
       canIUse: jest.fn(() => true),
       login: jest.fn(({ success, fail }) => {
         if (loginCode) {
@@ -32,6 +35,7 @@ describe('utils/app/bootstrap-auth', () => {
       showModal: jest.fn(),
       reLaunch: jest.fn()
     };
+    global.getCurrentPages = jest.fn(() => [{ route: currentRoute }]);
 
     jest.doMock('../../adapters/storage-adapter', () => {
       return class MockStorageAdapter {
@@ -81,20 +85,33 @@ describe('utils/app/bootstrap-auth', () => {
       post: httpPostMock
     }));
 
+    jest.doMock('../../utils/app/app-access-state', () => {
+      const actual = jest.requireActual('../../utils/app/app-access-state');
+      return {
+        ...actual,
+        loadPendingAppAccessCode: jest.fn(() => pendingAccessCode),
+        clearPendingAppAccessCode: jest.fn(),
+        savePendingAppAccessCode: jest.fn(actual.savePendingAppAccessCode)
+      };
+    });
+
     const module = require('../../utils/app/bootstrap-auth');
+    const appAccessState = require('../../utils/app/app-access-state');
     return {
       module,
       setUserServiceMock,
       initializeMock,
       setTokenMock,
       clearTokenMock,
-      httpPostMock
+      httpPostMock,
+      appAccessState
     };
   }
 
   afterEach(() => {
     jest.resetModules();
     delete global.wx;
+    delete global.getCurrentPages;
   });
 
   it('云端模式且已有有效 token 时应直接初始化 UserService', async () => {
@@ -129,15 +146,18 @@ describe('utils/app/bootstrap-auth', () => {
       setUserServiceMock,
       setTokenMock,
       clearTokenMock,
-      httpPostMock
+      httpPostMock,
+      appAccessState
     } = loadModule({
-      cachedUserInfo: { id: 'user-1' }
+      cachedUserInfo: { id: 'user-1' },
+      pendingAccessCode: 'INVITE88'
     });
     const app = { globalData: {} };
 
     await expect(module.doCloudLogin(app)).resolves.toBe(true);
-    expect(httpPostMock).toHaveBeenCalledWith('/api/auth/login', { code: 'wx-code' });
+    expect(httpPostMock).toHaveBeenCalledWith('/api/auth/login', { code: 'wx-code', accessCode: 'INVITE88' });
     expect(setTokenMock).toHaveBeenCalledWith('token-1');
+    expect(appAccessState.clearPendingAppAccessCode).toHaveBeenCalled();
     expect(setUserServiceMock).toHaveBeenCalled();
 
     module.doCloudLogout(app);
@@ -207,6 +227,49 @@ describe('utils/app/bootstrap-auth', () => {
       loginCode: null
     });
     await expect(failedWxLogin.module.getWxLoginCode()).resolves.toBeNull();
+  });
+
+  it('邀请制错误应跳转到 access-gate，且不再弹通用失败弹窗', async () => {
+    const admissionError = Object.assign(new Error('当前为邀请制体验，请先输入邀请码'), {
+      code: 'AUTH_APP_ACCESS_CODE_REQUIRED'
+    });
+    const { module, httpPostMock } = loadModule({
+      enableApi: true
+    });
+    httpPostMock.mockRejectedValueOnce(admissionError);
+    const app = {
+      globalData: {},
+      postLoginInitialization: jest.fn().mockResolvedValue()
+    };
+
+    await module.runWxLogin(app);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(global.wx.reLaunch).toHaveBeenCalledWith({
+      url: '/pages/access-gate/access-gate?reason=AUTH_APP_ACCESS_CODE_REQUIRED'
+    });
+    expect(global.wx.showModal).not.toHaveBeenCalled();
+  });
+
+  it('access-gate 主动登录时可抛出邀请制错误供页面内联展示', async () => {
+    const invalidError = Object.assign(new Error('邀请码无效，请检查后重试'), {
+      code: 'AUTH_APP_ACCESS_CODE_INVALID'
+    });
+    const { module, httpPostMock } = loadModule({
+      enableApi: true,
+      currentRoute: 'pages/access-gate/access-gate'
+    });
+    httpPostMock.mockRejectedValueOnce(invalidError);
+
+    await expect(module.doCloudLogin({ globalData: {} }, {
+      throwOnAdmissionError: true
+    })).rejects.toMatchObject({
+      code: 'AUTH_APP_ACCESS_CODE_INVALID'
+    });
+
+    expect(global.wx.reLaunch).not.toHaveBeenCalled();
+    expect(global.wx.showModal).not.toHaveBeenCalled();
   });
 
   it('doCloudLogin、doCloudLogout 和 autoLogin 应覆盖禁用与失败分支', async () => {

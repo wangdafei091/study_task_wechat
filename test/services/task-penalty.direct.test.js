@@ -56,7 +56,14 @@ describe('task-penalty direct behavior', () => {
 
   it('云端模式下 checkTasksStatus 应改走后端 penalty sync', async () => {
     const service = {
-      enableCloudStorage: true
+      enableCloudStorage: true,
+      userService: {
+        getLoginUser: jest.fn(() => ({
+          userId: 'parent_1',
+          role: 'parent',
+          familyPermissionRole: 'manager'
+        }))
+      }
     };
     mockHttpClient.post.mockResolvedValue({
       penaltyCount: 1,
@@ -74,6 +81,33 @@ describe('task-penalty direct behavior', () => {
       penaltyResults: [{ success: true, taskId: 'task_cloud_1', penaltyPoints: 5 }],
       penaltyCount: 1,
       affectedTaskIds: ['task_cloud_1']
+    });
+  });
+
+  it('云端模式下 viewer 应跳过任务惩罚同步，不发起后端请求', async () => {
+    const service = {
+      enableCloudStorage: true,
+      userService: {
+        getLoginUser: jest.fn(() => ({
+          userId: 'parent_viewer',
+          role: 'parent',
+          familyPermissionRole: 'viewer'
+        }))
+      }
+    };
+
+    const result = await taskPenalty.checkTasksStatus(service);
+
+    expect(mockHttpClient.post).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      success: true,
+      skipped: true,
+      reason: 'viewer_readonly',
+      expiredTasks: [],
+      requiredTasks: [],
+      penaltyResults: [],
+      penaltyCount: 0,
+      affectedTaskIds: []
     });
   });
 

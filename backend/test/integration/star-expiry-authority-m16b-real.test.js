@@ -73,6 +73,10 @@ async function setupTestData() {
       WHEN user_id = 'm16b_star_parent_001' THEN 'm16b_star_family_001'
       WHEN user_id = 'm16b_star_parent_002' THEN 'm16b_star_family_002'
       ELSE family_id
+    END,
+    family_permission_role = CASE
+      WHEN role = 'parent' THEN 'manager'
+      ELSE family_permission_role
     END
     WHERE user_id IN ('m16b_star_parent_001', 'm16b_star_parent_002')`
   );

@@ -20,6 +20,29 @@ function getUserService() {
     : null;
 }
 
+function isViewerReadonly(userService) {
+  const loginUser = userService && typeof userService.getLoginUser === 'function'
+    ? userService.getLoginUser()
+    : null;
+  const currentUser = userService && typeof userService.getCurrentUser === 'function'
+    ? userService.getCurrentUser()
+    : null;
+  const isExecutingChildView = Boolean(
+    loginUser &&
+    currentUser &&
+    loginUser.userId !== currentUser.userId &&
+    currentUser.role === 'child'
+  );
+
+  return Boolean(
+    loginUser &&
+    loginUser.role === 'parent' &&
+    loginUser.familyId &&
+    loginUser.familyPermissionRole === 'viewer' &&
+    !isExecutingChildView
+  );
+}
+
 function resolvePageContext(explicitTargetUserId = '') {
   const userService = getUserService();
   const loginUser = userService && typeof userService.getLoginUser === 'function'
@@ -106,6 +129,18 @@ Page({
   },
 
   async onLoad(options = {}) {
+    const userService = getUserService();
+    if (isViewerReadonly(userService)) {
+      wx.showToast({
+        title: '当前为查看者，不能记录表现',
+        icon: 'none'
+      });
+      if (typeof wx.navigateBack === 'function') {
+        wx.navigateBack({ delta: 1 });
+      }
+      return;
+    }
+
     const taskService = serviceManager.getService('task');
     const occurrenceEnabled = taskService && typeof taskService.isOccurrenceEnabled === 'function'
       ? await taskService.isOccurrenceEnabled()

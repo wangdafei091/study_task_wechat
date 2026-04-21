@@ -12,6 +12,7 @@ const {
   evaluateTaskBackfillWindow,
   buildTaskBackfillExpiredMessage
 } = require('../../utils/task-backfill-window');
+const taskRangeGuard = require('../../utils/task-range-guard');
 
 const TASK_BACKFILL_WINDOW_EXPIRED = 'TASK_BACKFILL_WINDOW_EXPIRED';
 
@@ -48,6 +49,42 @@ function buildOccurrenceUnavailableResult() {
     success: false,
     message: '云端未完成升级，暂不可使用表现项'
   };
+}
+
+function isPermissionDeniedSyncError(error) {
+  if (!error) {
+    return false;
+  }
+
+  return error.statusCode === 403
+    || error.code === 'FAMILY_MANAGER_REQUIRED'
+    || error.code === 'PERMISSION_DENIED';
+}
+
+function isViewerReadonlyUser(service) {
+  const loginUser = service?.userService?.getLoginUser?.() || null;
+  const currentUser = service?.userService?.getCurrentUser?.() || null;
+  const isExecutingChildView = Boolean(
+    loginUser &&
+    currentUser &&
+    loginUser.userId !== currentUser.userId &&
+    currentUser.role === 'child'
+  );
+  return Boolean(
+    loginUser &&
+    loginUser.role === 'parent' &&
+    loginUser.familyId &&
+    loginUser.familyPermissionRole === 'viewer' &&
+    !isExecutingChildView
+  );
+}
+
+function getExecutionOperatorContext(service, targetUserId) {
+  if (typeof service?._getOperatorContext !== 'function') {
+    return null;
+  }
+
+  return service._getOperatorContext(targetUserId, 'execute');
 }
 
 function cloneTaskForCloudWrite(task) {
@@ -553,6 +590,16 @@ async function updateTask(service, taskId, changes, userId = null) {
     const originalStatus = task.status;
     const cloudTask = cloneTaskForCloudWrite(task);
     cloudTask.update(changes);
+    const rangeValidation = taskRangeGuard.validateTaskRangeLimits(cloudTask.toJSON(), {
+      previousTask: task.toJSON()
+    });
+    if (!rangeValidation.valid) {
+      return {
+        success: false,
+        message: rangeValidation.message,
+        code: rangeValidation.code
+      };
+    }
     assignPendingSyncMeta(service, cloudTask, 'update', {
       operationKey: changes.operationKey || changes.modifyTime || cloudTask.modifyTime,
       modifyTime: cloudTask.modifyTime,
@@ -770,6 +817,13 @@ async function disableOccurrenceTask(service, taskId, options = {}, userId = nul
 
 async function updateTaskStatus(service, taskId, status, userId = null) {
   try {
+    if (isViewerReadonlyUser(service)) {
+      return buildBusinessErrorResult(
+        '当前为查看者，不能修改任务状态',
+        'FAMILY_MANAGER_REQUIRED'
+      );
+    }
+
     const task = await loadTaskForWrite(service, taskId, '更新任务状态');
     if (!task) {
       return buildNotFoundResult();
@@ -830,6 +884,7 @@ async function updateTaskStatus(service, taskId, status, userId = null) {
     ) {
       const refundPoints = Number(task.penaltyDeductedPoints || 0);
       const refundUserId = task.userId || task.assignedTo;
+      const refundOperatorContext = getExecutionOperatorContext(service, refundUserId);
       const refundResult = await service.starService.addStars(
         refundPoints,
         'permanent',
@@ -837,7 +892,8 @@ async function updateTaskStatus(service, taskId, status, userId = null) {
         {
           sourceType: 'task_makeup_refund',
           sourceId: task.id,
-          userId: refundUserId
+          userId: refundUserId,
+          operatorContext: refundOperatorContext
         }
       );
 
@@ -865,6 +921,7 @@ async function updateTaskStatus(service, taskId, status, userId = null) {
 
       if (task.points > 0) {
         const taskUserId = task.userId || task.assignedTo;
+        const executionOperatorContext = getExecutionOperatorContext(service, taskUserId);
         const addResult = await service.starService.addStars(
           task.points,
           task.pointsExpiry,
@@ -872,7 +929,8 @@ async function updateTaskStatus(service, taskId, status, userId = null) {
           {
             sourceType: 'task_complete',
             sourceId: task.id,
-            userId: taskUserId
+            userId: taskUserId,
+            operatorContext: executionOperatorContext
           }
         );
 
@@ -936,6 +994,18 @@ async function updateTaskStatus(service, taskId, status, userId = null) {
             backfillWindowExpired: true
           });
         }
+        if (isPermissionDeniedSyncError(syncError)) {
+          logger.warn('TaskService', '任务状态云同步被权限拒绝，停止本地降级保存', {
+            taskId: task.id,
+            action: operationType,
+            error: syncError.message,
+            code: syncError.code || null
+          });
+          return buildBusinessErrorResult(
+            syncError.message || '无权限操作',
+            syncError.code || 'PERMISSION_DENIED'
+          );
+        }
         logger.warn('TaskService', '任务状态云同步失败，降级为本地保存', {
           taskId: task.id,
           action: operationType,
@@ -980,6 +1050,13 @@ async function updateTaskStatus(service, taskId, status, userId = null) {
 
 async function resetTask(service, taskId, userId = null) {
   try {
+    if (isViewerReadonlyUser(service)) {
+      return buildBusinessErrorResult(
+        '当前为查看者，不能修改任务状态',
+        'FAMILY_MANAGER_REQUIRED'
+      );
+    }
+
     const task = await loadTaskForWrite(service, taskId, '重置任务');
     if (!task) {
       return buildNotFoundResult();
@@ -1017,6 +1094,7 @@ async function resetTask(service, taskId, userId = null) {
       service.starService
     ) {
       const refundUserId = task.userId || task.assignedTo;
+      const revokeOperatorContext = getExecutionOperatorContext(service, refundUserId);
       const revokeResult = await service.starService.consumeStarsFromSpecificType(
         Number(task.penaltyDeductedPoints || 0),
         'permanent',
@@ -1025,7 +1103,8 @@ async function resetTask(service, taskId, userId = null) {
           sourceType: 'task_makeup_refund_revoke',
           sourceId: task.id,
           userId: refundUserId,
-          originalTaskDate: task.date || null
+          originalTaskDate: task.date || null,
+          operatorContext: revokeOperatorContext
         }
       );
 
@@ -1044,6 +1123,7 @@ async function resetTask(service, taskId, userId = null) {
       logger.info('TaskService', `准备从特定分组扣减星星: ${task.title}, 星星数=${task.points}, 有效期类型=${task.pointsExpiry}`);
 
       const taskUserId = task.userId || task.assignedTo;
+      const resetOperatorContext = getExecutionOperatorContext(service, taskUserId);
       const consumeResult = await service.starService.consumeStarsFromSpecificType(
         task.points,
         task.pointsExpiry,
@@ -1052,7 +1132,8 @@ async function resetTask(service, taskId, userId = null) {
           sourceType: 'task_reset',
           sourceId: task.id,
           userId: taskUserId,
-          originalTaskDate: task.date || null
+          originalTaskDate: task.date || null,
+          operatorContext: resetOperatorContext
         }
       );
 
@@ -1093,6 +1174,17 @@ async function resetTask(service, taskId, userId = null) {
           task: effectiveTask
         });
       } catch (syncError) {
+        if (isPermissionDeniedSyncError(syncError)) {
+          logger.warn('TaskService', '任务重置云同步被权限拒绝，停止本地降级保存', {
+            taskId: task.id,
+            error: syncError.message,
+            code: syncError.code || null
+          });
+          return buildBusinessErrorResult(
+            syncError.message || '无权限操作',
+            syncError.code || 'PERMISSION_DENIED'
+          );
+        }
         logger.warn('TaskService', '任务重置云同步失败，降级为本地保存', {
           taskId: task.id,
           error: syncError.message
@@ -1120,6 +1212,13 @@ async function resetTask(service, taskId, userId = null) {
 
 async function recordOccurrenceResult(service, taskId, options = {}) {
   try {
+    if (isViewerReadonlyUser(service)) {
+      return buildBusinessErrorResult(
+        '当前为查看者，不能记录表现',
+        'FAMILY_MANAGER_REQUIRED'
+      );
+    }
+
     const outcome = options.outcome;
     const date = options.date || dateUtils.getTodayString();
     const today = dateUtils.getTodayString();

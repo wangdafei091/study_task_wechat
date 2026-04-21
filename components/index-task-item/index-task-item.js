@@ -160,9 +160,12 @@ Component({
     onCheckboxTap: function(e) {
       // 家庭视角只读模式：禁用完成/重置操作
       if (this.properties.readonly) {
-        const title = this.properties.readonlyReason === 'future-date'
-          ? '未来日期仅支持查看'
-          : '请在自己设备上操作';
+        let title = '请在自己设备上操作';
+        if (this.properties.readonlyReason === 'future-date') {
+          title = '未来日期仅支持查看';
+        } else if (this.properties.readonlyReason === 'viewer-readonly') {
+          title = '当前为查看者，不能修改任务';
+        }
         wx.showToast({ title, icon: 'none', duration: 1500 });
         return;
       }

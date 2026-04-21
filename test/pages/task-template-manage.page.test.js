@@ -139,6 +139,33 @@ describe('packageManage/pages/task-template-manage/task-template-manage', () => 
     });
   });
 
+  it('viewer 家长进入时应在前端直接拦截，不再进入管理页加载态', () => {
+    serviceManager.getUserService.mockReturnValue({
+      getLoginUser: jest.fn(() => ({
+        role: 'parent',
+        familyId: 'fam_1',
+        familyPermissionRole: 'viewer'
+      })),
+      getCurrentUser: jest.fn(() => ({
+        role: 'parent',
+        familyId: 'fam_1',
+        familyPermissionRole: 'viewer'
+      }))
+    });
+    const page = createPageInstance();
+
+    page.onLoad.call(page, { mode: 'manage' });
+
+    expect(global.wx.showToast).toHaveBeenCalledWith({
+      title: '当前为查看者，不能管理任务模板',
+      icon: 'none'
+    });
+    expect(global.wx.navigateBack).toHaveBeenCalledWith({
+      delta: 1
+    });
+    expect(global.wx.setNavigationBarTitle).not.toHaveBeenCalled();
+  });
+
   it('loadTemplates 在选择模板 tab 应请求全量模板并装饰展示字段', async () => {
     const getTemplates = jest.fn().mockResolvedValue({
       templates: [createTemplate()]

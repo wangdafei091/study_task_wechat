@@ -4,9 +4,32 @@ const { EVENTS } = require('../../utils/constants');
 const HttpClient = require('../../utils/http-client');
 const API_CONFIG = require('../../utils/api-config');
 
+function isViewerReadonlyUser(service) {
+  const loginUser = service?.userService?.getLoginUser?.() || null;
+  return Boolean(
+    loginUser &&
+    loginUser.role === 'parent' &&
+    loginUser.familyPermissionRole === 'viewer'
+  );
+}
+
 async function checkTasksStatus(service) {
   try {
     if (service.enableCloudStorage) {
+      if (isViewerReadonlyUser(service)) {
+        logger.info('TaskService', '查看者跳过任务惩罚云同步');
+        return {
+          success: true,
+          skipped: true,
+          reason: 'viewer_readonly',
+          expiredTasks: [],
+          requiredTasks: [],
+          penaltyResults: [],
+          penaltyCount: 0,
+          affectedTaskIds: []
+        };
+      }
+
       const response = await HttpClient.post(API_CONFIG.ENDPOINTS.TASK_PENALTIES_SYNC, {});
       const payload = response || {};
       return {

@@ -1,10 +1,11 @@
 # 里程碑-22A：治理与准入控制 详细设计文档
 
-> **设计状态**：🟢 审核通过
+> **设计状态**：✅ 已完成
 > **创建日期**：2026-04-19
 > **设计者**：GPT5 Codex
 > **审核者**：项目维护者
 > **预计工期**：5-7天
+> **完成日期**：2026-04-21
 
 ---
 
@@ -16,6 +17,7 @@
 - [代码结构](#代码结构)
 - [实施步骤](#实施步骤)
 - [测试方案](#测试方案)
+- [实施结果](#实施结果)
 - [风险评估](#风险评估)
 - [替代方案](#替代方案)
 - [审核要点自检](#审核要点自检)
@@ -1050,9 +1052,9 @@ interface FamilyInviteConfig {
 
 ### 第1步：数据模型与迁移收口（预计1.5天）
 
-- [ ] **任务**：为用户模型增加 `familyPermissionRole`，新增应用邀请码表和迁移脚本
-- [ ] **验证**：迁移可执行，历史家庭回填正确
-- [ ] **依赖**：无
+- [x] **任务**：为用户模型增加 `familyPermissionRole`，新增应用邀请码表和迁移脚本
+- [x] **验证**：迁移可执行，历史家庭回填正确
+- [x] **依赖**：无
 
 **实施要点**：
 1. 用户表新增 `family_permission_role`，允许为空。
@@ -1063,9 +1065,9 @@ interface FamilyInviteConfig {
 
 ### 第2步：家庭内权限治理落地（预计2天）
 
-- [ ] **任务**：统一前后端的家长权限口径，并接入家庭设置页与业务页
-- [ ] **验证**：`manager / viewer` 在前后端判定一致
-- [ ] **依赖**：第1步
+- [x] **任务**：统一前后端的家长权限口径，并接入家庭设置页与业务页
+- [x] **验证**：`manager / viewer` 在前后端判定一致
+- [x] **依赖**：第1步
 
 **实施要点**：
 1. 前端 `permissionContext` 增加 `familyPermissionRole` 和能力位。
@@ -1077,9 +1079,9 @@ interface FamilyInviteConfig {
 
 ### 第3步：应用级邀请制准入落地（预计1.5天）
 
-- [ ] **任务**：在登录链路中加入应用邀请码验证，并提供最小输入页
-- [ ] **验证**：新用户在 `invite_only` 模式下必须输入有效邀请码，老用户不受影响
-- [ ] **依赖**：第1步
+- [x] **任务**：在登录链路中加入应用邀请码验证，并提供最小输入页
+- [x] **验证**：新用户在 `invite_only` 模式下必须输入有效邀请码，老用户不受影响
+- [x] **依赖**：第1步
 
 **实施要点**：
 1. `auth/login` 接收可选 `accessCode`。
@@ -1092,9 +1094,9 @@ interface FamilyInviteConfig {
 
 ### 第4步：任务、表现项与模板周期护栏落地（预计2天）
 
-- [ ] **任务**：为重复任务、表现项和模板增加统一最大跨度限制
-- [ ] **验证**：前端表单和后端接口都能拒绝超长范围
-- [ ] **依赖**：无
+- [x] **任务**：为重复任务、表现项和模板增加统一最大跨度限制
+- [x] **验证**：前端表单和后端接口都能拒绝超长范围
+- [x] **依赖**：无
 
 **实施要点**：
 1. 前端表单层即时提示，避免提交后才失败。
@@ -1105,9 +1107,9 @@ interface FamilyInviteConfig {
 
 ### 第5步：测试与回归收口（预计1-1.5天）
 
-- [ ] **任务**：补齐自动化测试和关键手工回归
-- [ ] **验证**：权限、登录、周期限制主场景全绿
-- [ ] **依赖**：前四步
+- [x] **任务**：补齐自动化测试和关键手工回归
+- [x] **验证**：权限、登录、周期限制主场景全绿
+- [x] **依赖**：前四步
 
 **实施要点**：
 1. 补权限矩阵测试，覆盖 `manager / viewer / child`。
@@ -1131,16 +1133,20 @@ interface FamilyInviteConfig {
 
 ### 集成测试
 
-- [ ] 新用户在 `invite_only` 模式下无邀请码登录，返回 `AUTH_APP_ACCESS_CODE_REQUIRED`
-- [ ] 新用户带有效邀请码登录，成功创建用户并消费邀请码
-- [ ] 三条登录入口在 `invite_only` 模式下都能复用同一 `pending_app_access_code`
-- [ ] `viewer` 家长调用任务/奖励/家庭治理写接口，返回权限错误
-- [ ] `manager` 家长可管理任务奖励、家庭成员和家长权限
-- [ ] 家长邀请码生成后，加入家庭的新家长默认获得 `viewer`
-- [ ] 超长重复任务提交被前后端一致拒绝
-- [ ] 超长模板提交被前后端一致拒绝
+- [x] 新用户在 `invite_only` 模式下无邀请码登录，返回 `AUTH_APP_ACCESS_CODE_REQUIRED`
+- [x] 新用户带有效邀请码登录，成功创建用户并消费邀请码
+- [x] 三条登录入口在 `invite_only` 模式下都能复用同一 `pending_app_access_code`
+- [x] `viewer` 家长调用任务/奖励/家庭治理写接口，返回权限错误
+- [x] `manager` 家长可管理任务奖励、家庭成员和家长权限
+- [x] 家长邀请码生成后，加入家庭的新家长默认获得 `viewer`
+- [x] 超长重复任务提交被前后端一致拒绝
+- [x] 超长模板提交被前后端一致拒绝
 
 ### 手动测试
+
+说明：
+- 本期以关键自动化回归为主，结合模拟器操作日志做了主链路抽检。
+- 以下清单保留为后续发布前的手工回归模板，不等同于“未实现”。
 
 1. **功能测试**：
    - [ ] 家庭创建者默认 `manager`
@@ -1168,6 +1174,37 @@ interface FamilyInviteConfig {
 
 - 本期新增和修改核心模块维持项目现有正式质量闸门
 - 新增 `appAccessService`、权限解析和日期跨度校验的关键分支覆盖率目标：`85%+`
+
+---
+
+## 实施结果
+
+### 已交付范围
+
+- 已完成家庭内 `manager / viewer` 双层治理模型落地，前端 `permissionContext`、页面只读态、后端家庭治理/业务写接口已统一消费真实 `familyPermissionRole`。
+- 已完成应用级邀请制准入：`invite_only` 模式下新用户必须输入有效 `accessCode` 才能创建账号；已有用户继续按既有登录链路进入系统。
+- 已完成任务、表现项与模板周期护栏：重复任务上限 `93` 天、表现项有效期上限 `180` 天、模板重复周期上限 `93` 天，并保留“历史已超限但本次未继续扩张”兼容策略。
+- 已补齐家庭设置页权限调整、`access-gate` 输入页、启动链路统一邀请码 source of truth，以及对应前后端自动化测试。
+- 实施后又修复了一处真实回归问题：单次模板回填后改为多天任务时，表单会自动切回“每天重复”，避免 UI 显示多天但底层仍按单天提交。
+
+### 实际验证结果
+
+- 前端/共享层关键回归通过：
+  - `npx jest test/utils/user-context.test.js test/app/bootstrap-auth.behavior.test.js test/app/post-login-bootstrap.test.js test/pages/access-gate.page.test.js test/pages/family-settings.page.test.js test/pages/task-edit.page.test.js test/services/task-template-service.test.js test/services/task-write.direct.test.js test/utils/task-range-guard.test.js --runInBand`
+  - 结果：`9 suites / 113 tests` 全绿
+- 后端 M22A 关键单元通过：
+  - `cd backend && npx jest test/unit/appAccessService.test.js test/unit/authController.test.js test/unit/family-permission.test.js test/unit/familyController.test.js test/unit/familyService.test.js test/unit/taskModel.test.js test/unit/taskTemplateService.test.js test/unit/taskService-schema-compat.test.js --runInBand`
+  - 结果：`8 suites / 49 tests` 全绿
+- 模拟器与后台日志抽检已覆盖：
+  - 查看者家长只读限制
+  - 孩子视角执行任务完成链路
+  - 家庭权限切换后的页面与鉴权收口
+  - 模板创建任务与多天任务回填修复
+
+### 当前接受的残余风险
+
+- `softDeleteMember(...)` 尚未额外补“删除真实家长时至少保留一个 manager”的防御性兜底，但当前接口只允许删除虚拟孩子成员，不会破坏现有不变量。
+- 应用级邀请码首期仍以运维脚本管理，不提供后台可视化管理页；这属于本期范围内的有意收敛，不阻断交付。
 
 ---
 
@@ -1239,3 +1276,4 @@ interface FamilyInviteConfig {
 
 - 2026-04-19：初版设计提交，待项目维护者审核。
 - 2026-04-20：完成多轮规则、体验与视觉收口评审，审核通过，可进入实施阶段。
+- 2026-04-21：完成实施、关键自动化回归与缺陷收尾，状态翻转为“已完成”。

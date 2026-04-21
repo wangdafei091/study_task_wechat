@@ -598,6 +598,14 @@ Page({
       return;
     }
 
+    if (this.data.isViewerReadonly) {
+      wx.showToast({
+        title: '当前为查看者，不能记录表现',
+        icon: 'none'
+      });
+      return;
+    }
+
     const result = await taskService.recordOccurrenceResult(taskId, {
       userId: targetUserId,
       date: targetDate,

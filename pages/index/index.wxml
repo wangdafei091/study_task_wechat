@@ -144,7 +144,8 @@
           <index-task-item 
             task="{{item}}"
             lastExchangeTime="{{lastExchangeTime}}"
-            readonly="{{false}}"
+            readonly="{{isViewerReadonly}}"
+            readonlyReason="{{isViewerReadonly ? 'viewer-readonly' : ''}}"
             bind:complete="completeTask"
             style="--delay: {{item.animationDelay}}"
           />
@@ -283,8 +284,8 @@
           <index-task-item 
             task="{{item}}"
             lastExchangeTime="{{lastExchangeTime}}"
-            readonly="{{isViewingFuture}}"
-            readonlyReason="{{isViewingFuture ? 'future-date' : ''}}"
+            readonly="{{isViewerReadonly || isViewingFuture}}"
+            readonlyReason="{{isViewingFuture ? 'future-date' : (isViewerReadonly ? 'viewer-readonly' : '')}}"
             bind:complete="completeTask"
           />
         </view>
@@ -327,9 +328,10 @@
           <view class="occurrence-state-row" wx:if="{{!isViewingFuture}}">
             <text class="occurrence-state-pill {{item.statusTone}}">{{item.statusLabel}}</text>
           </view>
+          <text class="occurrence-result muted" wx:elif="{{isViewerReadonly}}">当前为查看者，不能记录表现</text>
           <text class="occurrence-result muted" wx:else>未来日期不能记录表现</text>
         </view>
-        <view class="occurrence-actions" wx:if="{{!isViewingFuture}}">
+        <view class="occurrence-actions" wx:if="{{!isViewingFuture && !isViewerReadonly}}">
           <button class="occurrence-btn success {{item.outcome === 'success' ? 'active' : ''}} {{item.outcome !== 'none' && item.outcome !== 'success' ? 'inactive' : ''}}" data-task-id="{{item.id}}" data-outcome="success" bindtap="recordOccurrenceFromHome">达成</button>
           <button class="occurrence-btn failure {{item.outcome === 'failure' ? 'active' : ''}} {{item.outcome !== 'none' && item.outcome !== 'failure' ? 'inactive' : ''}}" data-task-id="{{item.id}}" data-outcome="failure" bindtap="recordOccurrenceFromHome">未达成</button>
         </view>
