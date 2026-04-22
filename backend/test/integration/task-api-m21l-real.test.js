@@ -49,6 +49,25 @@ function buildModifyTime(dateString, hour = 12) {
   return new Date(`${dateString}T${String(hour).padStart(2, '0')}:00:00`).getTime();
 }
 
+function resolveExpiryDateByType(modifyTime, expiryType) {
+  const anchor = new Date(Number(modifyTime));
+  const result = new Date(anchor.getTime());
+
+  if (expiryType === 'week') {
+    const daysUntilSunday = 7 - result.getDay();
+    result.setDate(result.getDate() + (daysUntilSunday === 7 ? 0 : daysUntilSunday));
+  } else if (expiryType === 'month') {
+    result.setMonth(result.getMonth() + 1, 0);
+  } else if (expiryType === 'quarter') {
+    const quarterEndMonth = Math.floor(result.getMonth() / 3) * 3 + 2;
+    result.setMonth(quarterEndMonth + 1, 0);
+  } else {
+    return null;
+  }
+
+  return formatDate(result);
+}
+
 function buildRepeatPayload(startDate, endDate) {
   return JSON.stringify({
     type: 'weekly',
@@ -261,7 +280,7 @@ describe('M21L tasks API 真实数据库集成测试', () => {
         recordDate,
         3,
         0,
-        'permanent',
+        'week',
         'occurrence',
         recordDate,
         null,
@@ -323,7 +342,7 @@ describe('M21L tasks API 真实数据库集成测试', () => {
        WHERE parent_task_id = 'm21l_task_occ_cfg_002'`
     );
     const starRecordRows = await db.query(
-      `SELECT points, idempotency_key
+      `SELECT points, expiry_type, expiry_date, idempotency_key
        FROM star_records
        WHERE source_id = ?
        ORDER BY created_at ASC`,
@@ -345,6 +364,8 @@ describe('M21L tasks API 真实数据库集成测试', () => {
     expect(starRecordRows).toEqual(expect.arrayContaining([
       expect.objectContaining({
         points: 3,
+        expiry_type: 'week',
+        expiry_date: resolveExpiryDateByType(firstModifyTime, 'week'),
         idempotency_key: expect.stringContaining('task_occurrence_success:')
       }),
       expect.objectContaining({
@@ -454,6 +475,144 @@ describe('M21L tasks API 真实数据库集成测试', () => {
         expect.objectContaining({ taskId: 'm21l_task_occ_cfg_003' })
       ])
     );
+  });
+
+  it('历史表现项调用 PUT /api/tasks/:taskId 应返回 409 + TASK_OCCURRENCE_HISTORY_READONLY', async () => {
+    await db.query(
+      `INSERT INTO tasks (
+        task_id, user_id, title, description, type, date, points, status,
+        points_expiry, execution_mode, active_start_date, active_end_date,
+        active_has_no_end_date, is_occurrence_record, occurrence_outcome,
+        recorded_at, is_required, is_all_day, start_time, end_time,
+        duration, reminder, modify_time
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        'm21l_task_occ_cfg_history_update',
+        'm21l_task_child_001',
+        'M21L历史表现项更新',
+        '',
+        'study',
+        '2026-04-01',
+        2,
+        0,
+        'permanent',
+        'occurrence',
+        '2026-04-01',
+        '2026-04-10',
+        0,
+        0,
+        'none',
+        null,
+        0,
+        0,
+        '',
+        '',
+        0,
+        JSON.stringify({ enabled: false, time: 0 }),
+        1760000003200
+      ]
+    );
+
+    const res = await request(app)
+      .put('/api/tasks/m21l_task_occ_cfg_history_update')
+      .set('Authorization', `Bearer ${parentToken}`)
+      .send({
+        title: '试图修改历史项'
+      });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error_code).toBe('TASK_OCCURRENCE_HISTORY_READONLY');
+  });
+
+  it('历史表现项调用 POST /api/tasks/:taskId/disable-occurrence 应返回 409 + TASK_OCCURRENCE_HISTORY_READONLY', async () => {
+    await db.query(
+      `INSERT INTO tasks (
+        task_id, user_id, title, description, type, date, points, status,
+        points_expiry, execution_mode, active_start_date, active_end_date,
+        active_has_no_end_date, is_occurrence_record, occurrence_outcome,
+        recorded_at, is_required, is_all_day, start_time, end_time,
+        duration, reminder, modify_time
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        'm21l_task_occ_cfg_history_disable',
+        'm21l_task_child_001',
+        'M21L历史表现项停用',
+        '',
+        'habit',
+        '2026-04-01',
+        1,
+        0,
+        'permanent',
+        'occurrence',
+        '2026-04-01',
+        '2026-04-10',
+        0,
+        0,
+        'none',
+        null,
+        0,
+        0,
+        '',
+        '',
+        0,
+        JSON.stringify({ enabled: false, time: 0 }),
+        1760000003201
+      ]
+    );
+
+    const res = await request(app)
+      .post('/api/tasks/m21l_task_occ_cfg_history_disable/disable-occurrence')
+      .set('Authorization', `Bearer ${parentToken}`)
+      .send({
+        disableFromDate: formatDateOffset(0)
+      });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error_code).toBe('TASK_OCCURRENCE_HISTORY_READONLY');
+  });
+
+  it('历史表现项调用 DELETE /api/tasks/:taskId 应返回 409 + TASK_OCCURRENCE_HISTORY_READONLY', async () => {
+    await db.query(
+      `INSERT INTO tasks (
+        task_id, user_id, title, description, type, date, points, status,
+        points_expiry, execution_mode, active_start_date, active_end_date,
+        active_has_no_end_date, is_occurrence_record, occurrence_outcome,
+        recorded_at, is_required, is_all_day, start_time, end_time,
+        duration, reminder, modify_time
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        'm21l_task_occ_cfg_history_delete',
+        'm21l_task_child_001',
+        'M21L历史表现项删除',
+        '',
+        'study',
+        '2026-04-01',
+        1,
+        0,
+        'permanent',
+        'occurrence',
+        '2026-04-01',
+        '2026-04-10',
+        0,
+        0,
+        'none',
+        null,
+        0,
+        0,
+        '',
+        '',
+        0,
+        JSON.stringify({ enabled: false, time: 0 }),
+        1760000003202
+      ]
+    );
+
+    const res = await request(app)
+      .delete('/api/tasks/m21l_task_occ_cfg_history_delete')
+      .set('Authorization', `Bearer ${parentToken}`);
+
+    expect(res.status).toBe(409);
+    expect(res.body.error_code).toBe('TASK_OCCURRENCE_HISTORY_READONLY');
   });
 
   it('POST /api/tasks/:taskId/convert-occurrence 应只归档未来未完成实例并把父任务切成表现项', async () => {

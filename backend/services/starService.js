@@ -360,6 +360,11 @@ class StarService {
       commandData.recordPrefix || 'grant',
       commandData.idempotencyKey
     );
+    const normalizedExpiryDate = this._resolveIncomeExpiryDate(
+      commandData.expiryType || 'permanent',
+      commandData.expiryDate || null,
+      commandData.modifyTime
+    );
 
     const payload = this._normalizeRecordPayload(userId, {
       recordId,
@@ -369,7 +374,7 @@ class StarService {
       points: requestedPoints,
       description: commandData.reason || '通用加星',
       expiryType: commandData.expiryType || 'permanent',
-      expiryDate: commandData.expiryDate || null,
+      expiryDate: normalizedExpiryDate,
       requestedPoints,
       idempotencyKey: commandData.idempotencyKey,
       data: {
@@ -891,6 +896,39 @@ class StarService {
 
   _buildExpirySettlementIdempotencyKey(userId, groupId, normalizedExpiryDate) {
     return `star_expiry:${userId}:${groupId}:${normalizedExpiryDate}`;
+  }
+
+  _resolveIncomeExpiryDate(expiryType, expiryDate, modifyTime) {
+    if (expiryType === 'permanent') {
+      return null;
+    }
+
+    const normalizedExpiryDate = this._normalizeExpiryDate(expiryDate);
+    if (normalizedExpiryDate) {
+      return normalizedExpiryDate;
+    }
+
+    const anchorDate = this._parseDateCandidate(modifyTime) || new Date();
+    const resultDate = new Date(anchorDate.getTime());
+
+    switch (String(expiryType || '').trim()) {
+      case 'week': {
+        const daysUntilSunday = 7 - resultDate.getDay();
+        resultDate.setDate(resultDate.getDate() + (daysUntilSunday === 7 ? 0 : daysUntilSunday));
+        return this._formatDateString(resultDate);
+      }
+      case 'month': {
+        resultDate.setMonth(resultDate.getMonth() + 1, 0);
+        return this._formatDateString(resultDate);
+      }
+      case 'quarter': {
+        const quarterEndMonth = Math.floor(resultDate.getMonth() / 3) * 3 + 2;
+        resultDate.setMonth(quarterEndMonth + 1, 0);
+        return this._formatDateString(resultDate);
+      }
+      default:
+        return null;
+    }
   }
 
   _resolveExpiryAnchorDate(row) {

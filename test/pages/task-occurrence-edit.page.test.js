@@ -53,6 +53,7 @@ describe('pages/task-occurrence-edit/task-occurrence-edit', () => {
       title: `生效项${index}`,
       type: index % 2 === 0 ? 'study' : 'habit',
       points: index,
+      pointsExpiry: index % 2 === 0 ? 'week' : 'permanent',
       date: '2026-04-17',
       modifyTime: 200 - index,
       activeRange: {
@@ -112,6 +113,7 @@ describe('pages/task-occurrence-edit/task-occurrence-edit', () => {
           title: '新表现项',
           type: 'study',
           points: 2,
+          pointsExpiry: 'week',
           activeRange: {
             startDate: '2026-04-20',
             endDate: '',
@@ -126,6 +128,7 @@ describe('pages/task-occurrence-edit/task-occurrence-edit', () => {
           title: '已更新',
           type: 'study',
           points: 3,
+          pointsExpiry: 'quarter',
           activeRange: {
             startDate: '2026-04-17',
             endDate: '',
@@ -217,6 +220,11 @@ describe('pages/task-occurrence-edit/task-occurrence-edit', () => {
       historyCount: 1,
       totalCount: 9
     });
+    expect(page.data.activeSection.visibleItems[0]).toEqual(expect.objectContaining({
+      rewardAccentText: expect.any(String),
+      rewardExpiryMetaText: expect.any(String),
+      rewardSummaryText: expect.stringContaining('奖励')
+    }));
     expect(page.data.activeSection.visibleItems).toHaveLength(6);
     expect(page.data.secondaryPanel.upcomingSection.expanded).toBe(false);
     expect(page.data.secondaryPanel.historySection.expanded).toBe(false);
@@ -243,6 +251,8 @@ describe('pages/task-occurrence-edit/task-occurrence-edit', () => {
     expect(page.data.editorState.visible).toBe(true);
     expect(page.data.editorState.mode).toBe('create');
     expect(page.data.draft.title).toBe('');
+    expect(page.data.draft.pointsExpiry).toBe('permanent');
+    expect(page.data.pointsExpiryText).toBe('永久');
 
     page.onEditTap.call(page, {
       currentTarget: {
@@ -259,8 +269,10 @@ describe('pages/task-occurrence-edit/task-occurrence-edit', () => {
       id: 'active_1',
       title: '生效项1',
       startDate: '2026-04-17',
-      hasNoEndDate: true
+      hasNoEndDate: true,
+      pointsExpiry: 'permanent'
     }));
+    expect(page.data.pointsExpiryText).toBe('永久');
   });
 
   it('未选中孩子时点击新建应提示而不是直接进入编辑层', () => {
@@ -454,7 +466,8 @@ describe('pages/task-occurrence-edit/task-occurrence-edit', () => {
 
     await page.onSaveTap.call(page);
     expect(taskService.updateTask).toHaveBeenCalledWith('active_1', expect.objectContaining({
-      executionMode: 'occurrence'
+      executionMode: 'occurrence',
+      pointsExpiry: 'permanent'
     }), 'child_1');
 
     page.data.editingId = 'active_1';
@@ -482,6 +495,67 @@ describe('pages/task-occurrence-edit/task-occurrence-edit', () => {
     });
     expect(taskService.deleteTask).toHaveBeenCalledWith('active_1', 'child_1');
     expect(page.data.editorState.visible).toBe(false);
+  });
+
+  it('应支持选择星星有效期，并在新建保存时透传 pointsExpiry', async () => {
+    const page = createPageInstance();
+    await page.onLoad.call(page, {});
+
+    page.onCreateTap.call(page);
+    page.togglePanel.call(page, {
+      currentTarget: {
+        dataset: {
+          panel: 'pointsExpiryPanel'
+        }
+      }
+    });
+    expect(page.data.pointsExpiryPanel).toBe(true);
+
+    page.selectPointsExpiry.call(page, {
+      currentTarget: {
+        dataset: {
+          expiry: 'week'
+        }
+      }
+    });
+    expect(page.data.draft.pointsExpiry).toBe('week');
+    expect(page.data.pointsExpiryText).toBe('本周结束');
+    expect(page.data.pointsExpiryPanel).toBe(false);
+
+    page.onTitleInput.call(page, {
+      detail: {
+        value: '新表现项'
+      }
+    });
+    await page.onSaveTap.call(page);
+
+    expect(taskService.createTask).toHaveBeenCalledWith(expect.objectContaining({
+      executionMode: 'occurrence',
+      pointsExpiry: 'week'
+    }));
+  });
+
+  it('历史项不应再响应编辑和更多动作', async () => {
+    const page = createPageInstance();
+    await page.onLoad.call(page, {});
+
+    page.onEditTap.call(page, {
+      currentTarget: {
+        dataset: {
+          id: 'history_1'
+        }
+      }
+    });
+    expect(page.data.editorState.visible).toBe(false);
+
+    page.onMoreTap.call(page, {
+      currentTarget: {
+        dataset: {
+          id: 'history_1'
+        }
+      }
+    });
+    expect(global.wx.showActionSheet).not.toHaveBeenCalled();
   });
 
   it('viewer 家长进入时应直接拦截并返回上一页', async () => {
@@ -563,6 +637,9 @@ describe('pages/task-occurrence-edit/task-occurrence-edit', () => {
     expect(pageWxml).toContain('新建表现项');
     expect(pageWxml).toContain('secondaryPanel.title');
     expect(pageWxml).toContain('occurrence-card__more-icon');
+    expect(pageWxml).toContain('occurrence-card__reward-row');
+    expect(pageWxml).toContain('occurrence-card__reward-accent');
+    expect(pageWxml).toContain('occurrence-card__reward-meta');
     expect(pageWxml).toContain('manage-header__actions');
     expect(pageWxml).toContain('summary-strip--embedded');
     expect(pageWxml).toContain('switch-row__control');

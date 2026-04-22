@@ -244,6 +244,62 @@ describe('backend StarService active group filtering', () => {
     expect(connection.execute.mock.calls.some(([sql]) => sql.includes('INSERT INTO star_records'))).toBe(true);
   });
 
+  it('grantStarsWithConnection 应为非永久星星补齐规范 expiry_date', async () => {
+    const service = require('../../services/starService');
+    const modifyTime = new Date('2026-04-22T10:50:06.813Z').getTime();
+    const connection = {
+      execute: jest.fn()
+    };
+
+    connection.execute
+      .mockResolvedValueOnce([[]])
+      .mockResolvedValueOnce([[]])
+      .mockResolvedValueOnce([[]])
+      .mockResolvedValueOnce([{ affectedRows: 1 }])
+      .mockResolvedValueOnce([[
+        {
+          group_id: 'group_week_001',
+          user_id: 'child_1',
+          type: 'week',
+          stars: 2,
+          expiry_date: '2026-04-26'
+        }
+      ]])
+      .mockResolvedValueOnce([{ affectedRows: 1 }]);
+
+    const result = await service.grantStarsWithConnection(connection, 'child_1', {
+      recordId: 'task_occ_success_unit_001',
+      source: 'task',
+      sourceId: 'task_occ_unit_001',
+      requestedPoints: 2,
+      reason: '记录表现达成: 数学老师表扬',
+      expiryType: 'week',
+      expiryDate: null,
+      idempotencyKey: 'task_occurrence_success:task_occ_unit_001:1776855006813',
+      data: {
+        sourceType: 'task_occurrence_success',
+        taskId: 'task_occ_unit_001',
+        operationKey: '1776855006813'
+      },
+      modifyTime
+    });
+
+    const insertStarGroupCall = connection.execute.mock.calls.find(([sql]) => sql.includes('INSERT INTO star_groups'));
+    const insertStarRecordCall = connection.execute.mock.calls.find(([sql]) => sql.includes('INSERT INTO star_records'));
+
+    expect(insertStarGroupCall[1][4]).toBe('2026-04-26');
+    expect(insertStarRecordCall[1]).toEqual(expect.arrayContaining([
+      'week',
+      '2026-04-26'
+    ]));
+    expect(result.record).toEqual(expect.objectContaining({
+      expiryType: 'week',
+      expiryDate: '2026-04-26',
+      balance: 2,
+      previousBalance: 0
+    }));
+  });
+
   it('getExpiringProtectionSummaryWithConnection 应只统计 48 小时内仍有效的分组', async () => {
     const service = require('../../services/starService');
     const connection = {

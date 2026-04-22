@@ -9,14 +9,14 @@
         <text class="type-chip type-chip--{{item.typeTone}}">{{item.typeLabel}}</text>
       </view>
       <text class="occurrence-card__range">{{item.rangeText}}</text>
-      <view class="occurrence-card__meta-row">
-        <text class="meta-pill">{{item.pointsText}}</text>
-        <text class="status-chip status-chip--{{item.statusTone}}">{{item.statusText}}</text>
+      <view class="occurrence-card__reward-row" wx:if="{{item.statusKey === 'active' && item.rewardAccentText}}">
+        <text class="occurrence-card__reward-accent">{{item.rewardAccentText}}</text>
+        <text class="occurrence-card__reward-meta">{{item.rewardExpiryMetaText}}</text>
       </view>
     </view>
-    <view class="occurrence-card__action-rail">
-      <view class="card-action-primary" data-id="{{item.id}}" bindtap="onEditTap">编辑</view>
-      <view class="card-action-icon" data-id="{{item.id}}" bindtap="onMoreTap">
+    <view class="occurrence-card__action-rail" wx:if="{{item.canEdit || item.canOpenMore}}">
+      <view class="card-action-primary" wx:if="{{item.canEdit}}" data-id="{{item.id}}" bindtap="onEditTap">编辑</view>
+      <view class="card-action-icon" wx:if="{{item.canOpenMore}}" data-id="{{item.id}}" bindtap="onMoreTap">
         <text class="occurrence-card__more-icon">•••</text>
       </view>
     </view>
@@ -190,6 +190,14 @@
             </view>
 
             <view class="form-item">
+              <view class="input-item-header" bindtap="togglePanel" data-panel="pointsExpiryPanel">
+                <text class="input-label">星星有效期</text>
+                <text class="points-expiry-value">{{pointsExpiryText}}</text>
+                <text class="arrow-icon">↓</text>
+              </view>
+            </view>
+
+            <view class="form-item">
               <text class="input-label">适用时间</text>
               <view class="date-panel">
                 <view class="date-field-group">
@@ -242,6 +250,25 @@
           </view>
         </view>
       </scroll-view>
+    </view>
+  </view>
+
+  <view class="editor-picker-mask {{pointsExpiryPanel ? 'visible' : ''}}" bindtap="closeAllPanels" catchtouchmove="preventTouchMove"></view>
+
+  <view class="editor-picker-container {{pointsExpiryPanel ? 'expanded' : ''}}" catchtouchmove="preventTouchMove">
+    <view class="editor-picker-panel" catchtap="preventClose">
+      <view class="editor-picker-header">
+        <view class="editor-picker-header__placeholder"></view>
+        <text class="editor-picker-title">设置星星有效期</text>
+        <view class="editor-picker-close" bindtap="closeAllPanels">完成</view>
+      </view>
+
+      <view class="editor-option-list">
+        <view class="editor-option-item {{draft.pointsExpiry === 'permanent' ? 'selected' : ''}}" bindtap="selectPointsExpiry" data-expiry="permanent">永久</view>
+        <view class="editor-option-item {{draft.pointsExpiry === 'week' ? 'selected' : ''}}" bindtap="selectPointsExpiry" data-expiry="week">本周结束</view>
+        <view class="editor-option-item {{draft.pointsExpiry === 'month' ? 'selected' : ''}}" bindtap="selectPointsExpiry" data-expiry="month">本月结束</view>
+        <view class="editor-option-item {{draft.pointsExpiry === 'quarter' ? 'selected' : ''}}" bindtap="selectPointsExpiry" data-expiry="quarter">本季度结束</view>
+      </view>
     </view>
   </view>
 </view>

@@ -59,6 +59,27 @@ function makeTask(overrides = {}) {
   });
 }
 
+function makeOccurrenceTask(overrides = {}) {
+  return Task.fromDB({
+    task_id: 'occ_cfg_001',
+    user_id: CHILD.userId,
+    title: '听写全对',
+    description: '',
+    type: 'study',
+    date: '2026-04-01',
+    status: 0,
+    points: 2,
+    is_required: 0,
+    execution_mode: 'occurrence',
+    active_start_date: '2026-04-01',
+    active_end_date: null,
+    active_has_no_end_date: 1,
+    is_occurrence_record: 0,
+    occurrence_outcome: 'none',
+    ...overrides
+  });
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
   familyService.getUserFamilyRoleProfile = jest.fn().mockImplementation(async (userId) => {
@@ -332,27 +353,6 @@ describe('M21L occurrence endpoints', () => {
   let app;
   beforeAll(() => { app = buildApp(); });
 
-  function makeOccurrenceTask(overrides = {}) {
-    return Task.fromDB({
-      task_id: 'occ_cfg_001',
-      user_id: CHILD.userId,
-      title: '听写全对',
-      description: '',
-      type: 'study',
-      date: '2026-04-01',
-      status: 0,
-      points: 2,
-      is_required: 0,
-      execution_mode: 'occurrence',
-      active_start_date: '2026-04-01',
-      active_end_date: null,
-      active_has_no_end_date: 1,
-      is_occurrence_record: 0,
-      occurrence_outcome: 'none',
-      ...overrides
-    });
-  }
-
   it('POST /api/tasks/:taskId/occurrence-record 应调用记录接口', async () => {
     taskService.getTaskById = jest.fn().mockResolvedValue(makeOccurrenceTask());
     taskService.recordOccurrenceResult = jest.fn().mockResolvedValue({
@@ -403,6 +403,28 @@ describe('M21L occurrence endpoints', () => {
       }),
       expect.any(Object)
     );
+  });
+
+  it('POST /api/tasks/:taskId/disable-occurrence 对历史项只读错误应返回 409', async () => {
+    familyService.getUserFamilyAndRole = jest.fn().mockResolvedValue({ familyId: 'fam_1', role: 'child' });
+    taskService.getTaskById = jest.fn().mockResolvedValue(makeOccurrenceTask({
+      active_end_date: '2026-04-10',
+      active_has_no_end_date: 0
+    }));
+    taskService.disableOccurrenceTask = jest.fn().mockRejectedValue(Object.assign(
+      new Error('历史项仅保留查看，不支持继续修改'),
+      { code: 'TASK_OCCURRENCE_HISTORY_READONLY' }
+    ));
+
+    const res = await request(app)
+      .post('/api/tasks/occ_cfg_001/disable-occurrence')
+      .set('Authorization', token(PARENT))
+      .send({
+        disableFromDate: '2026-04-17'
+      });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error_code).toBe('TASK_OCCURRENCE_HISTORY_READONLY');
   });
 
   it('POST /api/tasks/:taskId/convert-occurrence 应调用转换接口', async () => {
@@ -563,6 +585,27 @@ describe('PUT /api/tasks/:taskId', () => {
     expect(res.body.message).toContain('结束时间不能早于开始时间');
     expect(taskService.updateTask).not.toHaveBeenCalled();
   });
+
+  it('历史表现项更新被拒绝时应返回 409 和稳定错误码', async () => {
+    const task = makeOccurrenceTask({
+      active_end_date: '2026-04-10',
+      active_has_no_end_date: 0
+    });
+    taskService.getTaskById = jest.fn().mockResolvedValue(task);
+    familyService.getUserFamilyAndRole = jest.fn().mockResolvedValue({ familyId: 'fam_1', role: 'child' });
+    taskService.updateTask = jest.fn().mockRejectedValue(Object.assign(
+      new Error('历史项仅保留查看，不支持继续修改'),
+      { code: 'TASK_OCCURRENCE_HISTORY_READONLY' }
+    ));
+
+    const res = await request(app)
+      .put('/api/tasks/occ_cfg_001')
+      .set('Authorization', token(PARENT))
+      .send({ title: '改标题' });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error_code).toBe('TASK_OCCURRENCE_HISTORY_READONLY');
+  });
 });
 
 describe('DELETE /api/tasks/:taskId', () => {
@@ -622,6 +665,26 @@ describe('DELETE /api/tasks/:taskId', () => {
       .delete('/api/tasks/task_001')
       .set('Authorization', token(OTHER));
     expect(res.status).toBe(403);
+  });
+
+  it('历史表现项删除被拒绝时应返回 409 和稳定错误码', async () => {
+    const task = makeOccurrenceTask({
+      active_end_date: '2026-04-10',
+      active_has_no_end_date: 0
+    });
+    taskService.getTaskById = jest.fn().mockResolvedValue(task);
+    familyService.getUserFamilyAndRole = jest.fn().mockResolvedValue({ familyId: 'fam_1', role: 'child' });
+    taskService.softDeleteTask = jest.fn().mockRejectedValue(Object.assign(
+      new Error('历史项仅保留查看，不支持继续修改'),
+      { code: 'TASK_OCCURRENCE_HISTORY_READONLY' }
+    ));
+
+    const res = await request(app)
+      .delete('/api/tasks/occ_cfg_001')
+      .set('Authorization', token(PARENT));
+
+    expect(res.status).toBe(409);
+    expect(res.body.error_code).toBe('TASK_OCCURRENCE_HISTORY_READONLY');
   });
 });
 

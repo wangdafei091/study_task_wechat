@@ -1,3 +1,5 @@
+const taskFormDisplay = require('./task-form-display');
+
 const ACTIVE_VISIBLE_LIMIT = 6;
 
 const TYPE_LABEL_MAP = {
@@ -46,16 +48,6 @@ function resolveStatusKey(range, today) {
   return 'active';
 }
 
-function getStatusText(statusKey) {
-  if (statusKey === 'upcoming') {
-    return '待生效';
-  }
-  if (statusKey === 'history') {
-    return '历史项';
-  }
-  return '生效中';
-}
-
 function getTypeLabel(type) {
   return TYPE_LABEL_MAP[type] || '学习';
 }
@@ -71,6 +63,21 @@ function getRangeText(range) {
   }
 
   return `${startDate} 至 ${range.endDate || '未设置'}`;
+}
+
+function buildOccurrenceRewardSummary(item = {}) {
+  const points = Number(item.points || 0);
+  const rewardAccentText = `${points}⭐`;
+  const pointsExpiryText = taskFormDisplay.buildPointsExpiryText(item.pointsExpiry || 'permanent');
+  const rewardExpiryMetaText = `有效期：${pointsExpiryText}`;
+
+  return {
+    rewardAccentText,
+    rewardExpiryMetaText,
+    pointsText: rewardAccentText,
+    pointsExpiryText,
+    rewardSummaryText: `奖励 ${rewardAccentText} · ${pointsExpiryText}`
+  };
 }
 
 function compareModifyTimeDesc(left, right) {
@@ -131,6 +138,7 @@ function buildOccurrenceCardViewModel(item = {}, today = '') {
   const range = getOccurrenceRange(item);
   const statusKey = resolveStatusKey(range, today);
   const points = Number(item.points || 0);
+  const rewardSummary = buildOccurrenceRewardSummary(item);
 
   return {
     ...item,
@@ -140,15 +148,20 @@ function buildOccurrenceCardViewModel(item = {}, today = '') {
     typeLabel: getTypeLabel(item.type),
     typeTone: getTypeTone(item.type),
     points,
-    pointsText: `${points} 颗星星`,
+    rewardAccentText: rewardSummary.rewardAccentText,
+    rewardExpiryMetaText: rewardSummary.rewardExpiryMetaText,
+    pointsText: rewardSummary.pointsText,
+    pointsExpiryText: rewardSummary.pointsExpiryText,
+    rewardSummaryText: rewardSummary.rewardSummaryText,
     startDate: range.startDate,
     endDate: range.endDate,
     hasNoEndDate: range.hasNoEndDate,
     rangeText: getRangeText(range),
     statusKey,
     groupKey: statusKey,
-    statusText: getStatusText(statusKey),
     statusTone: statusKey,
+    canEdit: statusKey !== 'history',
+    canOpenMore: statusKey !== 'history',
     modifyTime: Number(item.modifyTime || 0),
     isAnchorTarget: false
   };
@@ -294,6 +307,7 @@ function buildOccurrenceManageSections(items = [], today = '', uiState = {}) {
 
 module.exports = {
   ACTIVE_VISIBLE_LIMIT,
+  buildOccurrenceRewardSummary,
   buildOccurrenceCardViewModel,
   buildOccurrenceManageSections
 };

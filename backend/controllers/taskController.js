@@ -15,6 +15,27 @@ const { success, error } = require('../utils/response');
 const { resolveTargetUserId } = require('../utils/resolveTargetUserId');
 const logger = createLogger('TaskController');
 
+function formatTodayString() {
+  const date = new Date();
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function isHistoryOccurrenceConfigTask(task) {
+  if (!task || typeof task.isOccurrenceConfigTask !== 'function' || !task.isOccurrenceConfigTask()) {
+    return false;
+  }
+
+  const today = formatTodayString();
+  const startDate = task.activeRange?.startDate || task.date || '';
+  const hasNoEndDate = task.activeRange?.hasNoEndDate === true;
+  const endDate = hasNoEndDate ? '' : (task.activeRange?.endDate || '');
+
+  return Boolean(startDate && startDate <= today && endDate && endDate < today);
+}
+
 /**
  * 任务控制器类
  */
@@ -353,6 +374,13 @@ class TaskController {
         return res.status(403).json(error('无权限操作', 'PERMISSION_DENIED'));
       }
 
+      if (isHistoryOccurrenceConfigTask(existing)) {
+        return res.status(409).json(error(
+          '历史项仅保留查看，不支持继续修改',
+          'TASK_OCCURRENCE_HISTORY_READONLY'
+        ));
+      }
+
       const ALLOWED_FIELDS = [
         'title', 'description', 'date', 'type', 'startTime', 'endTime',
         'duration', 'isAllDay', 'reminder',
@@ -429,6 +457,9 @@ class TaskController {
       }
       if (err.code === 'TASK_OCCURRENCE_SCHEMA_MISSING') {
         return res.status(503).json(error(err.message, 'TASK_OCCURRENCE_SCHEMA_MISSING'));
+      }
+      if (err.code === 'TASK_OCCURRENCE_HISTORY_READONLY') {
+        return res.status(409).json(error(err.message, err.code));
       }
       if (err.code === 'TASK_REPEAT_RANGE_TOO_LARGE' || err.code === 'TASK_ACTIVE_RANGE_TOO_LARGE') {
         return res.status(400).json(error(err.message, err.code));
@@ -542,6 +573,9 @@ class TaskController {
       if (err.code === 'TASK_OCCURRENCE_SCHEMA_MISSING') {
         return res.status(503).json(error(err.message, 'TASK_OCCURRENCE_SCHEMA_MISSING'));
       }
+      if (err.code === 'TASK_OCCURRENCE_HISTORY_READONLY') {
+        return res.status(409).json(error(err.message, err.code));
+      }
       if (err.code === 'TASK_OCCURRENCE_INVALID_TASK' || err.code === 'INVALID_PARAMS') {
         return res.status(400).json(error(err.message, err.code));
       }
@@ -648,6 +682,9 @@ class TaskController {
         '删除成功'
       ));
     } catch (err) {
+      if (err.code === 'TASK_OCCURRENCE_HISTORY_READONLY') {
+        return res.status(409).json(error(err.message, err.code));
+      }
       logger.error('删除任务失败', err);
       res.status(500).json(error('删除任务失败', 'TASK_DELETE_FAILED'));
     }
