@@ -1,5 +1,5 @@
 {
-  "navigationBarTitleText": "表现项设置",
-  "backgroundColor": "#f5f7fb",
+  "navigationStyle": "custom",
+  "backgroundColor": "#f6f7fb",
   "backgroundTextStyle": "light"
 }
