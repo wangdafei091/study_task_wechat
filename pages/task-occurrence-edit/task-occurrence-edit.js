@@ -2,6 +2,7 @@ const dateUtils = require('../../utils/dateUtils');
 const logger = require('../../utils/logger');
 const serviceManager = require('../../services/service-manager');
 const occurrenceContext = require('../../utils/task-occurrence-context');
+const occurrenceDisplay = require('../../utils/task-occurrence-display');
 
 function getTodayString() {
   return dateUtils.getTodayString();
@@ -28,6 +29,48 @@ function getDefaultDraft() {
   };
 }
 
+function cloneDraft(draft) {
+  return {
+    id: draft.id || '',
+    title: draft.title || '',
+    type: draft.type || 'study',
+    points: normalizePointsValue(draft.points),
+    startDate: draft.startDate || getTodayString(),
+    endDate: draft.endDate || '',
+    hasNoEndDate: draft.hasNoEndDate === true
+  };
+}
+
+function normalizeDraftSnapshot(draft) {
+  const snapshot = cloneDraft(draft || getDefaultDraft());
+  return {
+    ...snapshot,
+    title: String(snapshot.title || '').trim()
+  };
+}
+
+function isSameDraft(left, right) {
+  return JSON.stringify(normalizeDraftSnapshot(left)) === JSON.stringify(normalizeDraftSnapshot(right));
+}
+
+function getDefaultEditorState() {
+  return {
+    visible: false,
+    mode: 'create',
+    dirty: false,
+    anchorTaskId: ''
+  };
+}
+
+function getDefaultSectionUiState() {
+  return {
+    activeExpanded: false,
+    upcomingExpanded: false,
+    historyExpanded: false,
+    anchorTaskId: ''
+  };
+}
+
 function getUserService() {
   const app = typeof getApp === 'function' ? getApp() : null;
   const appUserService = app && app.globalData ? app.globalData.userService : null;
@@ -40,7 +83,7 @@ function getUserService() {
     : null;
 }
 
-function resolveTargetContext(explicitTargetUserId = '') {
+function resolveTargetContext(explicitTargetUserId) {
   const userService = getUserService();
   const loginUser = userService && typeof userService.getLoginUser === 'function'
     ? userService.getLoginUser()
@@ -75,17 +118,37 @@ function resolveTargetContext(explicitTargetUserId = '') {
   return context;
 }
 
-function isViewerReadonly(userService) {
+function getPageAccessGuard(userService) {
   const loginUser = userService && typeof userService.getLoginUser === 'function'
     ? userService.getLoginUser()
     : null;
+  const currentUser = userService && typeof userService.getCurrentUser === 'function'
+    ? userService.getCurrentUser()
+    : null;
 
-  return Boolean(
+  if ((currentUser && currentUser.role === 'child') || (loginUser && loginUser.role === 'child')) {
+    return {
+      blocked: true,
+      message: '当前身份不能管理表现项'
+    };
+  }
+
+  if (
     loginUser &&
     loginUser.role === 'parent' &&
     loginUser.familyId &&
     loginUser.familyPermissionRole === 'viewer'
-  );
+  ) {
+    return {
+      blocked: true,
+      message: '当前为查看者，不能管理表现项'
+    };
+  }
+
+  return {
+    blocked: false,
+    message: ''
+  };
 }
 
 function buildOccurrenceTaskPayload(draft, targetUserId) {
@@ -112,23 +175,79 @@ function buildOccurrenceTaskPayload(draft, targetUserId) {
   };
 }
 
-function decorateItem(item) {
-  const activeRange = item.activeRange || {};
-  const hasNoEndDate = activeRange.hasNoEndDate === true;
-  const today = getTodayString();
-  let statusText = '有效中';
-  if ((activeRange.startDate || item.date || '') > today) {
-    statusText = '未生效';
-  } else if (!hasNoEndDate && (activeRange.endDate || '') && activeRange.endDate < today) {
-    statusText = '已停用';
-  }
+function buildDraftFromItem(item) {
+  const activeRange = item && item.activeRange ? item.activeRange : {};
   return {
-    ...item,
-    rangeText: hasNoEndDate
-      ? `${activeRange.startDate || item.date} 起长期有效`
-      : `${activeRange.startDate || item.date} - ${activeRange.endDate || '未设置'}`,
-    typeLabel: item.type === 'habit' ? '习惯' : (item.type === 'interest' ? '兴趣' : '学习'),
-    statusText
+    id: item && item.id ? item.id : '',
+    title: item && item.title ? item.title : '',
+    type: item && item.type ? item.type : 'study',
+    points: normalizePointsValue(item && item.points !== undefined ? item.points : 1),
+    startDate: activeRange.startDate || (item && item.date ? item.date : getTodayString()),
+    endDate: activeRange.endDate || '',
+    hasNoEndDate: activeRange.hasNoEndDate === true
+  };
+}
+
+function resolveRuntimeMetrics() {
+  const app = typeof getApp === 'function' ? getApp() : null;
+  const globalData = app && app.globalData ? app.globalData : {};
+  const safeArea = globalData.safeArea || {};
+  const statusBarHeight = Number(globalData.statusBarHeight || 0);
+  let navContentHeight = 44;
+
+  if (typeof wx !== 'undefined' && typeof wx.getMenuButtonBoundingClientRect === 'function') {
+    try {
+      const capsuleRect = wx.getMenuButtonBoundingClientRect();
+      if (capsuleRect && capsuleRect.height) {
+        const topGap = Math.max(Number(capsuleRect.top || 0) - statusBarHeight, 0);
+        navContentHeight = Math.max(44, Math.round((topGap * 2) + Number(capsuleRect.height || 0)));
+      }
+    } catch (error) {
+      logger.warn('task-occurrence-edit', '读取胶囊按钮尺寸失败，回退默认导航高度', error);
+    }
+  }
+
+  return {
+    statusBarHeight,
+    navContentHeight,
+    navBarHeight: statusBarHeight + navContentHeight,
+    safeAreaBottom: Number(safeArea.bottom || 0)
+  };
+}
+
+function resolveResultTaskId(result, fallbackTaskId) {
+  if (result && result.task && result.task.id) {
+    return result.task.id;
+  }
+  if (result && result.taskId) {
+    return result.taskId;
+  }
+  return fallbackTaskId || '';
+}
+
+function buildMutationUiPatch(taskLike) {
+  if (!taskLike || !taskLike.id) {
+    return {
+      anchorTaskId: '',
+      activeExpanded: false
+    };
+  }
+
+  const statusKey = occurrenceDisplay.buildOccurrenceCardViewModel(taskLike, getTodayString()).statusKey;
+  if (statusKey === 'upcoming') {
+    return {
+      anchorTaskId: taskLike.id,
+      upcomingExpanded: true
+    };
+  }
+  if (statusKey === 'active') {
+    return {
+      anchorTaskId: taskLike.id
+    };
+  }
+
+  return {
+    anchorTaskId: ''
   };
 }
 
@@ -140,17 +259,38 @@ Page({
     targetUserName: '',
     childOptions: [],
     requiresPicker: false,
-    items: [],
+    activeSection: null,
+    secondaryPanel: null,
+    statsBar: {
+      visible: false,
+      items: []
+    },
+    summary: {
+      activeCount: 0,
+      upcomingCount: 0,
+      historyCount: 0,
+      totalCount: 0
+    },
     draft: getDefaultDraft(),
     editingId: '',
-    emptyText: '还没有表现项，可以先创建一个。'
+    editorState: getDefaultEditorState(),
+    sectionUiStateByUser: {},
+    scrollAnchorId: '',
+    statusBarHeight: 0,
+    navContentHeight: 44,
+    navBarHeight: 44,
+    safeAreaBottom: 0
   },
 
-  async onLoad(options = {}) {
+  onLoad: async function onLoad(options) {
+    this._occurrenceItems = [];
+    this._pristineDraft = normalizeDraftSnapshot(getDefaultDraft());
+
     const userService = getUserService();
-    if (isViewerReadonly(userService)) {
+    const accessGuard = getPageAccessGuard(userService);
+    if (accessGuard.blocked) {
       wx.showToast({
-        title: '当前为查看者，不能管理表现项',
+        title: accessGuard.message,
         icon: 'none'
       });
       if (typeof wx.navigateBack === 'function') {
@@ -158,6 +298,9 @@ Page({
       }
       return;
     }
+
+    const metrics = resolveRuntimeMetrics();
+    this.setData(metrics);
 
     const taskService = serviceManager.getService('task');
     const occurrenceEnabled = taskService && typeof taskService.isOccurrenceEnabled === 'function'
@@ -175,7 +318,7 @@ Page({
       return;
     }
 
-    const targetContext = resolveTargetContext(options.targetUserId || '');
+    const targetContext = resolveTargetContext(options && options.targetUserId ? options.targetUserId : '');
     this.setData({
       targetUserId: targetContext.targetUserId || '',
       targetUserName: targetContext.targetUserName || '',
@@ -186,43 +329,129 @@ Page({
     await this.loadItems();
   },
 
-  async loadItems() {
-    const taskService = serviceManager.getService('task');
-    if (!taskService) {
-      this.setData({
-        loading: false,
-        items: []
-      });
+  getCurrentSectionUiState: function getCurrentSectionUiState() {
+    const targetUserId = this.data.targetUserId || '';
+    if (!targetUserId) {
+      return getDefaultSectionUiState();
+    }
+
+    return {
+      ...getDefaultSectionUiState(),
+      ...(this.data.sectionUiStateByUser[targetUserId] || {})
+    };
+  },
+
+  setCurrentSectionUiState: function setCurrentSectionUiState(patch) {
+    const targetUserId = this.data.targetUserId || '';
+    const currentState = this.getCurrentSectionUiState();
+    const nextState = {
+      ...currentState,
+      ...(patch || {})
+    };
+
+    if (!targetUserId) {
+      return nextState;
+    }
+
+    const nextMap = {
+      ...this.data.sectionUiStateByUser,
+      [targetUserId]: nextState
+    };
+
+    this.setData({
+      sectionUiStateByUser: nextMap
+    });
+    return nextState;
+  },
+
+  applyDisplayModel: function applyDisplayModel(items, uiState) {
+    const targetUserId = this.data.targetUserId || '';
+    const displayModel = occurrenceDisplay.buildOccurrenceManageSections(items, getTodayString(), uiState);
+    const nextMap = {
+      ...this.data.sectionUiStateByUser
+    };
+    const anchorTaskId = displayModel.uiState.anchorTaskId || '';
+    if (targetUserId) {
+      nextMap[targetUserId] = displayModel.uiState;
+    }
+
+    this.setData({
+      loading: false,
+      activeSection: displayModel.activeSection,
+      secondaryPanel: displayModel.secondaryPanel,
+      statsBar: displayModel.statsBar,
+      summary: displayModel.summary,
+      sectionUiStateByUser: nextMap,
+      scrollAnchorId: anchorTaskId ? `occ-card-${anchorTaskId}` : ''
+    });
+
+    if (anchorTaskId) {
+      this.consumeAnchorAfterRender(anchorTaskId);
+    }
+  },
+
+  consumeAnchorAfterRender: function consumeAnchorAfterRender(anchorTaskId) {
+    if (!anchorTaskId || this._anchorConsumePendingFor === anchorTaskId) {
       return;
     }
 
-    const date = getTodayString();
-    const targetUserId = this.data.targetUserId || '';
-    if (!targetUserId) {
-      this.setData({
-        loading: false,
-        items: []
+    this._anchorConsumePendingFor = anchorTaskId;
+
+    const finalize = () => {
+      if (this._anchorConsumePendingFor !== anchorTaskId) {
+        return;
+      }
+      this._anchorConsumePendingFor = '';
+
+      const currentUiState = this.getCurrentSectionUiState();
+      if (currentUiState.anchorTaskId !== anchorTaskId) {
+        return;
+      }
+
+      this.setCurrentSectionUiState({
+        anchorTaskId: ''
       });
+      this.setData({
+        scrollAnchorId: ''
+      });
+    };
+
+    if (typeof wx !== 'undefined' && typeof wx.nextTick === 'function') {
+      wx.nextTick(finalize);
+      return;
+    }
+
+    finalize();
+  },
+
+  refreshDisplayFromCache: function refreshDisplayFromCache(patch) {
+    const nextUiState = this.setCurrentSectionUiState(patch);
+    this.applyDisplayModel(this._occurrenceItems || [], nextUiState);
+  },
+
+  loadItems: async function loadItems() {
+    const taskService = serviceManager.getService('task');
+    const targetUserId = this.data.targetUserId || '';
+
+    if (!taskService || !targetUserId) {
+      this._occurrenceItems = [];
+      this.applyDisplayModel([], getDefaultSectionUiState());
       return;
     }
 
     try {
       const items = await taskService.getOccurrenceTasks({
-        date,
+        date: getTodayString(),
         userId: targetUserId,
         includeInactive: true
       });
 
-      this.setData({
-        loading: false,
-        items: items.map(decorateItem)
-      });
+      this._occurrenceItems = Array.isArray(items) ? items : [];
+      this.applyDisplayModel(this._occurrenceItems, this.getCurrentSectionUiState());
     } catch (error) {
       logger.error('task-occurrence-edit', '加载表现项失败', error);
-      this.setData({
-        loading: false,
-        items: []
-      });
+      this._occurrenceItems = [];
+      this.applyDisplayModel([], this.getCurrentSectionUiState());
       wx.showToast({
         title: '加载表现项失败',
         icon: 'none'
@@ -230,19 +459,123 @@ Page({
     }
   },
 
-  onTitleInput(e) {
+  syncEditorDirtyState: function syncEditorDirtyState() {
+    const nextDirty = !isSameDraft(this.data.draft, this._pristineDraft);
+    if (this.data.editorState.dirty === nextDirty) {
+      return;
+    }
+
+    this.setData({
+      editorState: {
+        ...this.data.editorState,
+        dirty: nextDirty
+      }
+    });
+  },
+
+  openEditor: function openEditor(mode, item) {
+    const draft = mode === 'edit' && item ? buildDraftFromItem(item) : getDefaultDraft();
+    const anchorTaskId = item && item.id ? item.id : '';
+    this._pristineDraft = normalizeDraftSnapshot(draft);
+
+    this.setData({
+      editingId: mode === 'edit' && item ? item.id : '',
+      draft,
+      editorState: {
+        visible: true,
+        mode: mode === 'edit' ? 'edit' : 'create',
+        dirty: false,
+        anchorTaskId
+      }
+    });
+  },
+
+  closeEditor: function closeEditor() {
+    const nextDraft = getDefaultDraft();
+    this._pristineDraft = normalizeDraftSnapshot(nextDraft);
+    this.setData({
+      editingId: '',
+      draft: nextDraft,
+      editorState: getDefaultEditorState()
+    });
+  },
+
+  confirmDiscardIfDirty: function confirmDiscardIfDirty() {
+    const editorState = this.data.editorState;
+    if (!editorState.visible || !editorState.dirty) {
+      return Promise.resolve(true);
+    }
+
+    return new Promise((resolve) => {
+      wx.showModal({
+        title: '放弃本次修改？',
+        content: '当前内容还没保存，离开后会丢失。',
+        confirmText: '放弃修改',
+        cancelText: '继续编辑',
+        success: function success(result) {
+          resolve(result && result.confirm === true);
+        }
+      });
+    });
+  },
+
+  findItemById: function findItemById(itemId) {
+    return (this._occurrenceItems || []).find((item) => item && item.id === itemId);
+  },
+
+  onNavBack: async function onNavBack() {
+    if (this.data.editorState.visible) {
+      const shouldDiscard = await this.confirmDiscardIfDirty();
+      if (!shouldDiscard) {
+        return;
+      }
+      this.closeEditor();
+      return;
+    }
+
+    if (typeof wx.navigateBack === 'function') {
+      wx.navigateBack({ delta: 1 });
+    }
+  },
+
+  onCreateTap: function onCreateTap() {
+    if (!this.data.targetUserId) {
+      wx.showToast({
+        title: '请先选择孩子',
+        icon: 'none'
+      });
+      return;
+    }
+    this.openEditor('create');
+  },
+
+  onCloseEditorTap: async function onCloseEditorTap() {
+    if (this.data.saving) {
+      return;
+    }
+
+    const shouldDiscard = await this.confirmDiscardIfDirty();
+    if (!shouldDiscard) {
+      return;
+    }
+    this.closeEditor();
+  },
+
+  onTitleInput: function onTitleInput(e) {
     this.setData({
       'draft.title': e.detail.value
     });
+    this.syncEditorDirtyState();
   },
 
-  onPointsInput(e) {
+  onPointsInput: function onPointsInput(e) {
     this.setData({
       'draft.points': normalizePointsValue(e.detail.value)
     });
+    this.syncEditorDirtyState();
   },
 
-  onPointsStepTap(e) {
+  onPointsStepTap: function onPointsStepTap(e) {
     const action = e.currentTarget.dataset.action;
     const currentPoints = normalizePointsValue(this.data.draft.points);
     const nextPoints = action === 'minus'
@@ -252,9 +585,10 @@ Page({
     this.setData({
       'draft.points': nextPoints
     });
+    this.syncEditorDirtyState();
   },
 
-  onStartDateChange(e) {
+  onStartDateChange: function onStartDateChange(e) {
     const nextStartDate = e.detail.value;
     const patch = {
       'draft.startDate': nextStartDate
@@ -264,24 +598,25 @@ Page({
       patch['draft.endDate'] = nextStartDate;
     }
 
-    this.setData({
-      ...patch
-    });
+    this.setData(patch);
+    this.syncEditorDirtyState();
   },
 
-  onEndDateChange(e) {
+  onEndDateChange: function onEndDateChange(e) {
     this.setData({
       'draft.endDate': e.detail.value
     });
+    this.syncEditorDirtyState();
   },
 
-  onTypeTap(e) {
+  onTypeTap: function onTypeTap(e) {
     this.setData({
       'draft.type': e.currentTarget.dataset.type
     });
+    this.syncEditorDirtyState();
   },
 
-  onToggleNoEndDate(e) {
+  onToggleNoEndDate: function onToggleNoEndDate(e) {
     const hasNoEndDate = e.detail.value;
     const patch = {
       'draft.hasNoEndDate': hasNoEndDate
@@ -293,23 +628,86 @@ Page({
       patch['draft.endDate'] = this.data.draft.startDate;
     }
 
-    this.setData({
-      ...patch
-    });
+    this.setData(patch);
+    this.syncEditorDirtyState();
   },
 
-  onChildTap(e) {
+  onChildTap: async function onChildTap(e) {
     const targetUserId = e.currentTarget.dataset.userId;
+    if (!targetUserId || targetUserId === this.data.targetUserId) {
+      return;
+    }
+
+    if (this.data.editorState.visible) {
+      const shouldDiscard = await this.confirmDiscardIfDirty();
+      if (!shouldDiscard) {
+        return;
+      }
+      this.closeEditor();
+    }
+
     const selected = this.data.childOptions.find((item) => item.userId === targetUserId);
+    const app = typeof getApp === 'function' ? getApp() : null;
+    if (app && app.globalData) {
+      app.globalData.lastActiveChildId = targetUserId;
+    }
+
     this.setData({
+      loading: true,
       targetUserId,
       targetUserName: selected ? (selected.label || '') : ''
     });
-    this.loadItems();
+    await this.loadItems();
   },
 
-  async onMoreTap(e) {
-    const taskId = e.currentTarget.dataset.id;
+  onToggleSection: function onToggleSection(e) {
+    const key = e.currentTarget.dataset.key;
+    if (key === 'active') {
+      const section = this.data.activeSection;
+      if (!section || !section.hasToggle) {
+        return;
+      }
+      this.refreshDisplayFromCache({
+        activeExpanded: !section.expanded
+      });
+      return;
+    }
+
+    if (key === 'upcoming') {
+      const panel = this.data.secondaryPanel;
+      const section = panel ? panel.upcomingSection : null;
+      if (!section || section.count === 0) {
+        return;
+      }
+      this.refreshDisplayFromCache({
+        upcomingExpanded: !section.expanded
+      });
+      return;
+    }
+
+    if (key === 'history') {
+      const panel = this.data.secondaryPanel;
+      const section = panel ? panel.historySection : null;
+      if (!section || section.count === 0) {
+        return;
+      }
+      this.refreshDisplayFromCache({
+        historyExpanded: !section.expanded
+      });
+    }
+  },
+
+  onEditTap: function onEditTap(e) {
+    const itemId = e.currentTarget.dataset.id;
+    const item = this.findItemById(itemId);
+    if (!item) {
+      return;
+    }
+    this.openEditor('edit', item);
+  },
+
+  onMoreTap: async function onMoreTap(e) {
+    const taskId = e.currentTarget.dataset.id || this.data.editingId;
     if (!taskId || typeof wx.showActionSheet !== 'function') {
       return;
     }
@@ -326,7 +724,7 @@ Page({
     });
   },
 
-  async onDisableTap(e) {
+  onDisableTap: async function onDisableTap(e) {
     const taskId = e.currentTarget.dataset.id;
     if (!taskId) {
       return;
@@ -361,46 +759,20 @@ Page({
       return;
     }
 
+    if (this.data.editingId === taskId) {
+      this.closeEditor();
+    }
+    this.setCurrentSectionUiState({
+      anchorTaskId: ''
+    });
     wx.showToast({
       title: '已停用',
       icon: 'success'
     });
     await this.loadItems();
-    if (this.data.editingId === taskId) {
-      this.onCancelEdit();
-    }
   },
 
-  onEditTap(e) {
-    const itemId = e.currentTarget.dataset.id;
-    const item = this.data.items.find((candidate) => candidate.id === itemId);
-    if (!item) {
-      return;
-    }
-
-    const activeRange = item.activeRange || {};
-    this.setData({
-      editingId: item.id,
-        draft: {
-          id: item.id,
-          title: item.title,
-          type: item.type,
-          points: normalizePointsValue(item.points),
-          startDate: activeRange.startDate || item.date || getTodayString(),
-          endDate: activeRange.endDate || '',
-          hasNoEndDate: activeRange.hasNoEndDate === true
-        }
-    });
-  },
-
-  onCancelEdit() {
-    this.setData({
-      editingId: '',
-      draft: getDefaultDraft()
-    });
-  },
-
-  async onDeleteTap(e) {
+  onDeleteTap: async function onDeleteTap(e) {
     const taskId = e.currentTarget.dataset.id;
     if (!taskId) {
       return;
@@ -432,20 +804,28 @@ Page({
       return;
     }
 
+    if (this.data.editingId === taskId) {
+      this.closeEditor();
+    }
+    this.setCurrentSectionUiState({
+      anchorTaskId: ''
+    });
     wx.showToast({
       title: '已删除',
       icon: 'success'
     });
     await this.loadItems();
-    if (this.data.editingId === taskId) {
-      this.onCancelEdit();
-    }
   },
 
-  async onSaveTap() {
+  onSaveTap: async function onSaveTap() {
+    if (this.data.saving) {
+      return;
+    }
+
     const taskService = serviceManager.getService('task');
     const targetUserId = this.data.targetUserId || '';
     const draft = this.data.draft;
+    const editingId = this.data.editingId || '';
 
     if (!taskService || !targetUserId) {
       wx.showToast({
@@ -472,10 +852,11 @@ Page({
     }
 
     this.setData({ saving: true });
+
     try {
       const payload = buildOccurrenceTaskPayload(draft, targetUserId);
-      const result = this.data.editingId
-        ? await taskService.updateTask(this.data.editingId, payload, targetUserId)
+      const result = editingId
+        ? await taskService.updateTask(editingId, payload, targetUserId)
         : await taskService.createTask(payload);
 
       if (!result.success) {
@@ -486,14 +867,19 @@ Page({
         return;
       }
 
+      const nextTaskId = resolveResultTaskId(result, editingId);
+      const nextTaskLike = {
+        ...(result && result.task ? result.task : payload),
+        id: nextTaskId || payload.id || ''
+      };
+      this.setCurrentSectionUiState(buildMutationUiPatch(nextTaskLike));
+
       wx.showToast({
-        title: this.data.editingId ? '已更新' : '已创建',
+        title: editingId ? '已更新' : '已创建',
         icon: 'success'
       });
-      this.setData({
-        editingId: '',
-        draft: getDefaultDraft()
-      });
+
+      this.closeEditor();
       await this.loadItems();
     } catch (error) {
       logger.error('task-occurrence-edit', '保存表现项失败', error);

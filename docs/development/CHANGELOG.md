@@ -4,6 +4,39 @@
 
 ---
 
+## [里程碑-22G] - 2026-04-22
+
+### ✅ 完成情况
+
+**表现项管理页信息架构与交互重构**
+
+- **表现项管理页已完成主次重构**：
+  - [`pages/task-occurrence-edit/task-occurrence-edit.js`](/Users/wangdafei/code/study_task_wechat/pages/task-occurrence-edit/task-occurrence-edit.js)、[`pages/task-occurrence-edit/task-occurrence-edit.wxml`](/Users/wangdafei/code/study_task_wechat/pages/task-occurrence-edit/task-occurrence-edit.wxml)、[`pages/task-occurrence-edit/task-occurrence-edit.wxss`](/Users/wangdafei/code/study_task_wechat/pages/task-occurrence-edit/task-occurrence-edit.wxss) 已将页面收口为“生效中主区 + 其他表现项次级容器 + 覆盖式编辑层”的稳定结构
+  - 首屏不再长期直出新建/编辑表单，历史项与待生效项不再和生效中项目同权混排
+- **顶部导航与编辑层语义已完成统一**：
+  - 页面已切为自定义导航承接返回与脏数据确认，但视觉语义统一回主流程蓝色导航体系
+  - 编辑层已移除解释型 banner，表单改为更接近既有任务编辑页的轻量控件体系，并收口“长期有效 / 结束日期”重复语义
+- **展示逻辑已从页面层抽离**：
+  - [`utils/task-occurrence-display.js`](/Users/wangdafei/code/study_task_wechat/utils/task-occurrence-display.js) 已承接表现项卡片展示模型、分组、摘要统计、折叠阈值与锚点回位规则
+  - 页面私有展示拼装逻辑不再继续堆积在页面文件内部
+- **权限与体验边界已保持闭环**：
+  - `viewer` 家长与 `child` 角色继续被拦截在表现项管理页之外
+  - 新建、编辑、停用、删除后的分组刷新、回位和折叠状态保持已通过页面测试锁定
+
+### 🧪 验证结果
+
+- 定向自动化测试通过：
+  - `npx jest test/pages/task-occurrence-edit.page.test.js test/utils/task-occurrence-display.test.js test/pages/task-record.page.test.js --runInBand`
+  - 结果：`3 suites / 28 tests` 全绿
+- 真机截图复核通过：
+  - 已确认表现项管理页首屏主次结构、编辑层长期有效/结束日期两种状态、按钮主次与页面文案均符合当前设计收口目标
+
+### 📖 详细实施记录
+
+- [里程碑-22G：表现项管理页信息架构与交互重构](../design/milestone-22g-occurrence-page-redesign.md)
+
+---
+
 ## [里程碑-22A] - 2026-04-21
 
 ### ✅ 完成情况
