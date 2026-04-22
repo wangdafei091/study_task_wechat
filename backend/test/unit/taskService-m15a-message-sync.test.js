@@ -276,5 +276,43 @@ describe('backend TaskService M15A message sync', () => {
       }],
       failedTaskIds: ['task_fail']
     });
+    expect(taskService._getExpiredRequiredTasksForPenalty).toHaveBeenCalledWith(['child_1'], '1970-01-01');
+    expect(taskService._applyRequiredTaskPenalty).toHaveBeenNthCalledWith(1, 'task_fail', expect.objectContaining({
+      asOfDate: '1970-01-01'
+    }));
+    expect(taskService._applyRequiredTaskPenalty).toHaveBeenNthCalledWith(2, 'task_ok', expect.objectContaining({
+      asOfDate: '1970-01-01'
+    }));
+  });
+
+  it('单任务惩罚应使用传入 asOfDate 判定是否过期，避免与数据库日期基准不一致', async () => {
+    jest.spyOn(taskService, '_getTaskByIdConn')
+      .mockResolvedValueOnce(createTaskRow({
+        task_id: 'task_boundary',
+        date: '2026-04-20'
+      }))
+      .mockResolvedValueOnce(createTaskRow({
+        task_id: 'task_boundary',
+        date: '2026-04-20',
+        penalty_applied: 1,
+        modify_time: 200
+      }));
+    starService.consumeStarsWithConnection.mockResolvedValue({
+      consumedPoints: 5
+    });
+    messageService.createTaskMessages.mockResolvedValue([]);
+
+    const result = await taskService._applyRequiredTaskPenalty('task_boundary', {
+      modifyTime: Date.parse('2026-04-21T00:30:00+08:00'),
+      asOfDate: '2026-04-21'
+    });
+
+    expect(result).toEqual(expect.objectContaining({
+      success: true,
+      penaltyPoints: 5,
+      targetUserId: 'child_1'
+    }));
+    expect(starService.consumeStarsWithConnection).toHaveBeenCalled();
+    expect(connection.commit).toHaveBeenCalled();
   });
 });

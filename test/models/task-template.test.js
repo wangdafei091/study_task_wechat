@@ -105,6 +105,50 @@ describe('TaskTemplate', () => {
     ]);
   });
 
+  it('validate 应拦截超过 93 天的重复模板范围', () => {
+    const template = new TaskTemplate({
+      name: '长期模板',
+      taskPayload: {
+        title: '阅读',
+        repeat: {
+          type: 'daily'
+        }
+      },
+      dateStrategy: {
+        mode: 'inherit-repeat-rule',
+        endMode: 'duration',
+        durationDays: 96
+      }
+    });
+
+    expect(template.validate()).toContain('时间范围过长，请缩短后再保存');
+  });
+
+  it('validate 应允许历史超长模板在不扩张范围时修改其他字段', () => {
+    const template = new TaskTemplate({
+      name: '长期模板',
+      description: '新说明',
+      taskPayload: {
+        title: '阅读',
+        repeat: {
+          type: 'daily'
+        }
+      },
+      dateStrategy: {
+        mode: 'inherit-repeat-rule',
+        endMode: 'duration',
+        durationDays: 96
+      }
+    });
+
+    expect(template.validate({
+      previousTemplate: {
+        taskPayload: template.taskPayload,
+        dateStrategy: template.dateStrategy
+      }
+    })).toEqual([]);
+  });
+
   it('toJSON 应返回深拷贝数据', () => {
     const template = new TaskTemplate({
       name: '整理书包',

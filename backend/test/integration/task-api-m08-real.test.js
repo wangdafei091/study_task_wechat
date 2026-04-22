@@ -49,7 +49,10 @@ async function setupTestData() {
   );
 
   await db.query(
-    `UPDATE users SET family_id = 'family_m08_test' WHERE user_id = 'parent_m08_test'`
+    `UPDATE users
+     SET family_id = 'family_m08_test',
+         family_permission_role = 'manager'
+     WHERE user_id = 'parent_m08_test'`
   );
 
   await db.query(
@@ -60,7 +63,7 @@ async function setupTestData() {
 }
 
 describe('M08 真实数据库集成测试', () => {
-  let child1Token, child2Token;
+  let parentToken, child1Token, child2Token;
 
   const TASK_ID = 'idem_m08_test';
   const CHILD_TASK_ID = 'child_m08_test';
@@ -68,6 +71,13 @@ describe('M08 真实数据库集成测试', () => {
   beforeAll(async () => {
     await db.testConnection();
     await setupTestData();
+
+    parentToken = generateToken({
+      user_id: 'parent_m08_test',
+      openid: 'parent_m08_openid',
+      role: 'parent',
+      family_id: 'family_m08_test'
+    });
 
     child1Token = generateToken({
       user_id: 'child_m08_test_1',
@@ -100,8 +110,8 @@ describe('M08 真实数据库集成测试', () => {
     it('不提供 taskId 时应正常创建（原有路径不受影响）', async () => {
       const res = await request(app)
         .post('/api/tasks')
-        .set('Authorization', `Bearer ${child1Token}`)
-        .send({ title: 'M08普通创建', type: 'study', date: '2026-03-19', points: 3 });
+        .set('Authorization', `Bearer ${parentToken}`)
+        .send({ targetUserId: 'child_m08_test_1', title: 'M08普通创建', type: 'study', date: '2026-03-19', points: 3 });
 
       expect(res.status).toBe(200);
       expect(res.body.data.taskId).toBeDefined();
@@ -112,8 +122,8 @@ describe('M08 真实数据库集成测试', () => {
     it('提供 taskId 且不存在时应正常创建，DB 中只有一条', async () => {
       const res = await request(app)
         .post('/api/tasks')
-        .set('Authorization', `Bearer ${child1Token}`)
-        .send({ taskId: TASK_ID, title: 'M08幂等首次创建', type: 'study', date: '2026-03-19', points: 3 });
+        .set('Authorization', `Bearer ${parentToken}`)
+        .send({ taskId: TASK_ID, targetUserId: 'child_m08_test_1', title: 'M08幂等首次创建', type: 'study', date: '2026-03-19', points: 3 });
 
       expect(res.status).toBe(200);
       expect(res.body.data.taskId).toBe(TASK_ID);
@@ -127,14 +137,14 @@ describe('M08 真实数据库集成测试', () => {
 
       const res1 = await request(app)
         .post('/api/tasks')
-        .set('Authorization', `Bearer ${child1Token}`)
-        .send(payload);
+        .set('Authorization', `Bearer ${parentToken}`)
+        .send({ ...payload, targetUserId: 'child_m08_test_1' });
       expect(res1.status).toBe(200);
 
       const res2 = await request(app)
         .post('/api/tasks')
-        .set('Authorization', `Bearer ${child1Token}`)
-        .send(payload);
+        .set('Authorization', `Bearer ${parentToken}`)
+        .send({ ...payload, targetUserId: 'child_m08_test_1' });
       expect(res2.status).toBe(200);
       expect(res2.body.data.taskId).toBe(TASK_ID);
 
@@ -152,8 +162,8 @@ describe('M08 真实数据库集成测试', () => {
 
       const res = await request(app)
         .post('/api/tasks')
-        .set('Authorization', `Bearer ${child1Token}`)
-        .send({ taskId: TASK_ID, title: '新标题', type: 'habit', date: '2026-03-19', points: 5 });
+        .set('Authorization', `Bearer ${parentToken}`)
+        .send({ taskId: TASK_ID, targetUserId: 'child_m08_test_1', title: '新标题', type: 'habit', date: '2026-03-19', points: 5 });
 
       expect(res.status).toBe(200);
 
@@ -175,8 +185,8 @@ describe('M08 真实数据库集成测试', () => {
 
       const res = await request(app)
         .post('/api/tasks')
-        .set('Authorization', `Bearer ${child2Token}`)
-        .send({ taskId: TASK_ID, title: '越权创建', type: 'study', date: '2026-03-19', points: 3 });
+        .set('Authorization', `Bearer ${parentToken}`)
+        .send({ taskId: TASK_ID, targetUserId: 'child_m08_test_2', title: '越权创建', type: 'study', date: '2026-03-19', points: 3 });
 
       expect(res.status).toBe(409);
       expect(res.body.error_code).toBe('TASK_ID_USER_MISMATCH');
@@ -187,9 +197,10 @@ describe('M08 真实数据库集成测试', () => {
     it('parentTaskId 应正确写入 DB 并通过 GET 回读', async () => {
       const res = await request(app)
         .post('/api/tasks')
-        .set('Authorization', `Bearer ${child1Token}`)
+        .set('Authorization', `Bearer ${parentToken}`)
         .send({
           taskId: CHILD_TASK_ID,
+          targetUserId: 'child_m08_test_1',
           title: '重复实例',
           type: 'study',
           date: '2026-03-20',

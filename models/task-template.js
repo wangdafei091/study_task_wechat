@@ -3,6 +3,7 @@ const {
   normalizeDateStrategy,
   normalizeTaskPayload
 } = require('../utils/task-template-utils');
+const taskRangeGuard = require('../utils/task-range-guard');
 
 function normalizeTimestamp(value, fallback = null) {
   if (value === null || value === undefined || value === '') {
@@ -41,7 +42,7 @@ class TaskTemplate {
     this.updatedAt = normalizeTimestamp(data.updatedAt, this.createdAt || now);
   }
 
-  validate() {
+  validate(options = {}) {
     const errors = [];
 
     if (!this.name) {
@@ -71,6 +72,13 @@ class TaskTemplate {
       this.taskPayload.endDate < this.taskPayload.startDate
     ) {
       errors.push('模板结束日期不能早于开始日期');
+    }
+
+    const rangeValidation = taskRangeGuard.validateTemplateRangeLimits(this.toJSON(), {
+      previousTemplate: options.previousTemplate || null
+    });
+    if (!rangeValidation.valid) {
+      errors.push(rangeValidation.message);
     }
 
     return errors;

@@ -413,7 +413,9 @@ class MessageService {
       return this._compactMessagesForDisplay(await this._getScopedMessagesForDisplay(resolved));
     }
 
-    await this.syncFormalRemindersIfNeeded(resolved);
+    if (!this._isViewerReadonlyUser()) {
+      await this.syncFormalRemindersIfNeeded(resolved);
+    }
     await this._refreshFormalMessagesFromCloud(resolved);
 
     await this._emitMessageChangedEvent();
@@ -424,10 +426,23 @@ class MessageService {
     return `${resolved.scope}:${resolved.userId || resolved.familyId || 'all'}`;
   }
 
+  _isViewerReadonlyUser() {
+    const loginUser = this._getLoginUser();
+    return Boolean(
+      loginUser &&
+      loginUser.role === 'parent' &&
+      loginUser.familyPermissionRole === 'viewer'
+    );
+  }
+
   async syncFormalRemindersIfNeeded(options = {}) {
     const resolved = this._resolveScopeOptions(options);
     if (!this.enableCloudStorage || !resolved || resolved.scope === 'all') {
       return { success: false, skipped: true };
+    }
+
+    if (this._isViewerReadonlyUser()) {
+      return { success: true, skipped: true, reason: 'viewer_readonly' };
     }
 
     const now = Date.now();

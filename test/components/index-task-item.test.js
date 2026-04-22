@@ -107,6 +107,20 @@ describe('components/index-task-item', () => {
     expect(component.triggerEvent).not.toHaveBeenCalled();
   });
 
+  it('viewer 只读时应提示不能修改任务', () => {
+    const component = createComponentInstance({
+      readonly: true,
+      readonlyReason: 'viewer-readonly'
+    });
+
+    component.onCheckboxTap({ currentTarget: { dataset: {} } });
+
+    expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({
+      title: '当前为查看者，不能修改任务'
+    }));
+    expect(component.triggerEvent).not.toHaveBeenCalled();
+  });
+
   it('任务时间展示应收敛为分钟，不显示秒', () => {
     const component = createComponentInstance();
 

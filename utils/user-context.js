@@ -69,8 +69,11 @@ function normalizeSnapshot(input = {}) {
       familyId: input.familyId || null,
       loginUserId: input.loginUserId || null,
       loginUserRole: input.loginUserRole || null,
+      familyPermissionRole: input.familyPermissionRole || null,
+      loginUserFamilyPermissionRole: input.loginUserFamilyPermissionRole || null,
       viewUserId: input.viewUserId || null,
       viewUserRole: input.viewUserRole || null,
+      viewUserFamilyPermissionRole: input.viewUserFamilyPermissionRole || null,
       activeChildUserIds: uniqueIds(input.activeChildUserIds),
       isParentDevice: input.isParentDevice === true,
       isChildDevice: input.isChildDevice === true,
@@ -99,8 +102,11 @@ function createUserContextSnapshot(input = {}) {
     familyId: (loginUser && loginUser.familyId) || (viewUser && viewUser.familyId) || null,
     loginUserId: getUserIdentifier(loginUser),
     loginUserRole: (loginUser && loginUser.role) || null,
+    familyPermissionRole: (loginUser && loginUser.familyPermissionRole) || null,
+    loginUserFamilyPermissionRole: (loginUser && loginUser.familyPermissionRole) || null,
     viewUserId: getUserIdentifier(viewUser),
     viewUserRole: (viewUser && viewUser.role) || null,
+    viewUserFamilyPermissionRole: (viewUser && viewUser.familyPermissionRole) || null,
     activeChildUserIds,
     isParentDevice: Boolean(loginUser && loginUser.role === 'parent'),
     isChildDevice: Boolean(loginUser && loginUser.role === 'child'),
@@ -179,19 +185,49 @@ function resolveMutationContext(input = {}, options = {}) {
 
 function resolvePermissionContext(input = {}, options = {}) {
   const snapshot = normalizeSnapshot(input);
+  const familyPermissionRole = snapshot.loginUserFamilyPermissionRole || snapshot.familyPermissionRole || null;
+  const isExecutingChildView = Boolean(snapshot.isChildView && snapshot.viewUserRole === 'child');
+  const isSwitchedChildView = snapshot.loginUserRole === 'child' || (
+    Boolean(snapshot.loginUserId) &&
+    Boolean(snapshot.viewUserId) &&
+    snapshot.loginUserId !== snapshot.viewUserId
+  );
+  const isViewerReadonly = Boolean(
+    snapshot.loginUserRole === 'parent' &&
+    snapshot.familyId &&
+    familyPermissionRole === 'viewer' &&
+    !isExecutingChildView
+  );
+  const isReadonlyView = isSwitchedChildView || isViewerReadonly;
+  const canManageFamilyGovernance = Boolean(
+    snapshot.loginUserRole === 'parent' &&
+    snapshot.familyId &&
+    familyPermissionRole === 'manager' &&
+    !isSwitchedChildView
+  );
+  const canManageBusinessData = Boolean(
+    snapshot.loginUserRole === 'parent' &&
+    (!snapshot.familyId || familyPermissionRole === 'manager') &&
+    !isSwitchedChildView
+  );
+  const permissionRole = isExecutingChildView ? null : familyPermissionRole;
+  const permissionUserRole = isExecutingChildView
+    ? (snapshot.viewUserRole || snapshot.loginUserRole)
+    : snapshot.loginUserRole;
 
   return {
     loginUserId: snapshot.loginUserId,
     loginUserRole: snapshot.loginUserRole,
+    familyPermissionRole,
     viewUserId: snapshot.viewUserId,
     viewUserRole: snapshot.viewUserRole,
+    isSwitchedChildView,
+    isViewerReadonly,
     canManageMembers: snapshot.loginUserRole === 'parent',
-    isReadonlyView: snapshot.loginUserRole === 'child' || (
-      Boolean(snapshot.loginUserId) &&
-      Boolean(snapshot.viewUserId) &&
-      snapshot.loginUserId !== snapshot.viewUserId
-    ),
-    userPermissions: permissionUtils.getUserPermissions(snapshot.loginUserRole),
+    isReadonlyView,
+    canManageFamilyGovernance,
+    canManageBusinessData,
+    userPermissions: permissionUtils.getUserPermissions(permissionUserRole, permissionRole),
     lastActiveChildId: options.lastActiveChildId || null
   };
 }

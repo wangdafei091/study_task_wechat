@@ -1411,6 +1411,36 @@ describe('MessageService', () => {
       });
     });
 
+    it('viewer 刷新正式消息时应跳过提醒生成，只读取现有云消息', async () => {
+      HttpClient.post.mockClear();
+      HttpClient.get.mockClear();
+      mockStarService.syncExpiryAuthorityIfNeeded.mockClear();
+      mockUserService.getLoginUser.mockReturnValue({
+        userId: 'parent_viewer',
+        role: 'parent',
+        familyId: 'family_1',
+        familyPermissionRole: 'viewer'
+      });
+      mockUserService.getCurrentUser.mockReturnValue({
+        userId: 'child_1',
+        role: 'child',
+        familyId: 'family_1'
+      });
+      HttpClient.get.mockResolvedValue({ messages: [] });
+
+      const result = await messageService.refreshMessagesFromCloud('child_1', {
+        scope: 'user'
+      });
+
+      expect(mockStarService.syncExpiryAuthorityIfNeeded).not.toHaveBeenCalled();
+      expect(HttpClient.post).not.toHaveBeenCalled();
+      expect(HttpClient.get).toHaveBeenCalledWith('/api/messages', {
+        scope: 'user',
+        userId: 'child_1'
+      });
+      expect(result).toEqual([]);
+    });
+
     it('正式云端消息单条已读失败时不应先改本地', async () => {
       const message = new Message({
         id: 'msg_cloud_1',

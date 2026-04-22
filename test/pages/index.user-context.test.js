@@ -55,6 +55,44 @@ describe('pages/index/modules/index-user-context', () => {
     delete global.getApp;
   });
 
+  it('viewer 家长切到孩子视角时不应把首页误标记为 viewer 只读', async () => {
+    global.getApp = jest.fn(() => ({
+      globalData: {
+        userService: {
+          getCurrentUser: jest.fn(() => ({
+            userId: 'child-1',
+            name: '小明',
+            role: 'child',
+            familyId: 'family-1'
+          })),
+          getLoginUser: jest.fn(() => ({
+            userId: 'parent-1',
+            role: 'parent',
+            familyId: 'family-1',
+            familyPermissionRole: 'viewer'
+          })),
+          getAllUsers: jest.fn(() => [
+            { userId: 'parent-1', role: 'parent', familyId: 'family-1', familyPermissionRole: 'viewer' },
+            { userId: 'child-1', role: 'child', familyId: 'family-1' }
+          ])
+        }
+      }
+    }));
+
+    const page = {
+      setData: jest.fn(),
+      updateMenuItemsWithPermissions: jest.fn()
+    };
+
+    await userContext.initializeMultiUserSystem(page);
+
+    expect(page.setData).toHaveBeenCalledWith(expect.objectContaining({
+      isReadonlyView: true,
+      isViewerReadonly: false
+    }));
+    delete global.getApp;
+  });
+
   it('initializeMultiUserSystem 在 userService 缺失时应提前返回', async () => {
     global.getApp = jest.fn(() => ({
       globalData: {}

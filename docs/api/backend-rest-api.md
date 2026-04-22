@@ -1,7 +1,7 @@
 # 后端 REST API 契约
 
 > 项目后端 HTTP/REST 接口的权威说明文档
-> **最后更新**：2026-04-17
+> **最后更新**：2026-04-21
 > **维护者**：项目维护团队
 
 ---
@@ -37,6 +37,7 @@ Authorization: Bearer <token>
   - `openid`
   - `role`
   - `familyId`
+  - `familyPermissionRole`
 
 ### 1.3 统一响应格式
 
@@ -141,6 +142,7 @@ Authorization: Bearer <token>
 - Query: 无
 - Body：
   - `code` - 微信登录 code
+  - `accessCode` - 可选；当 `APP_ACCESS_MODE=invite_only` 且当前为新用户创建时必填
 
 成功响应：
 - Status: `200`
@@ -148,7 +150,12 @@ Authorization: Bearer <token>
 
 常见错误：
 - `400` - `AUTH_INVALID_PARAMS` / `AUTH_WECHAT_LOGIN_FAILED`
+- `400` - `AUTH_APP_ACCESS_CODE_REQUIRED` / `AUTH_APP_ACCESS_CODE_INVALID` / `AUTH_APP_ACCESS_CODE_EXPIRED`
 - `500` - `AUTH_LOGIN_FAILED`
+
+说明：
+- 邀请制只拦截“新用户创建”，已有用户在 `invite_only` 模式下仍可正常登录
+- `data.user` 在家长已加入家庭时会包含 `familyPermissionRole`
 
 ### 3.2 验证 Token
 
@@ -177,6 +184,9 @@ Authorization: Bearer <token>
 成功响应：
 - Status: `200`
 - Body：当前登录用户对象
+
+说明：
+- 当前登录用户对象包含 `familyPermissionRole`；当用户是孩子或尚未加入家庭的家长时，该字段为 `null`
 
 常见错误：
 - `404` - `USER_NOT_FOUND`
@@ -212,6 +222,9 @@ Authorization: Bearer <token>
 成功响应：
 - Status: `200`
 - Body：当前登录用户对象
+
+说明：
+- 当前登录用户对象包含 `familyPermissionRole`；当前端做家庭治理和只读态判断时，应使用该字段而不是只看 `role`
 
 ### 4.3 验证会话用户
 
@@ -362,6 +375,9 @@ Authorization: Bearer <token>
 - `400` - `INVALID_PARAMS` / `FAMILY_ALREADY_JOINED` / `FAMILY_INVITE_CODE_INVALID` / `FAMILY_INVITE_CODE_EXPIRED`
 - `500` - `FAMILY_JOIN_FAILED`
 
+说明：
+- 使用“家长邀请码”加入家庭的新用户，后端会 authoritative 写入 `role='parent'` 且 `familyPermissionRole='viewer'`
+
 ### 5.3 获取当前家庭信息
 
 - Method: `GET`
@@ -390,6 +406,9 @@ Authorization: Bearer <token>
 - `400` - `FAMILY_NOT_JOINED`
 - `500` - `FAMILY_MEMBERS_GET_FAILED`
 
+说明：
+- 家庭成员对象中的家长成员会包含 `familyPermissionRole`
+
 ### 5.5 刷新邀请码
 
 - Method: `POST`
@@ -405,8 +424,12 @@ Authorization: Bearer <token>
 
 常见错误：
 - `400` - `FAMILY_NOT_JOINED` / `INVALID_PARAMS`
-- `403` - `FAMILY_PARENT_REQUIRED`
+- `403` - `FAMILY_PARENT_REQUIRED` / `FAMILY_MANAGER_REQUIRED`
 - `500` - `FAMILY_INVITE_CODE_REFRESH_FAILED`
+
+说明：
+- 当前接口由家庭内 `manager` 家长执行；`viewer` 家长会收到 `FAMILY_MANAGER_REQUIRED`
+- `role=parent` 生成的是“加入家庭的家长邀请码”，加入后默认只拥有 `viewer` 权限，不等于直接授予管理权
 
 ### 5.6 创建虚拟成员
 
@@ -423,7 +446,7 @@ Authorization: Bearer <token>
 
 常见错误：
 - `400` - `FAMILY_NOT_JOINED` / `INVALID_PARAMS` / `FAMILY_MEMBER_DUPLICATE`
-- `403` - `FAMILY_PARENT_REQUIRED`
+- `403` - `FAMILY_PARENT_REQUIRED` / `FAMILY_MANAGER_REQUIRED`
 - `500` - `FAMILY_MEMBER_CREATE_FAILED`
 
 ### 5.7 删除家庭成员
@@ -440,9 +463,31 @@ Authorization: Bearer <token>
 
 常见错误：
 - `400` - `FAMILY_NOT_JOINED` / `FAMILY_CANNOT_DELETE_SELF` / `FAMILY_VIRTUAL_MEMBER_ONLY`
-- `403` - `FAMILY_PARENT_REQUIRED` / `FAMILY_MEMBER_ACCESS_DENIED`
+- `403` - `FAMILY_PARENT_REQUIRED` / `FAMILY_MANAGER_REQUIRED` / `FAMILY_MEMBER_ACCESS_DENIED`
 - `404` - `USER_NOT_FOUND`
 - `500` - `FAMILY_MEMBER_DELETE_FAILED`
+
+### 5.8 调整家庭内家长权限
+
+- Method: `PATCH`
+- Path: `/api/families/members/:userId/permission-role`
+- Auth: `Bearer Token`
+- Query: 无
+- Body：
+  - `familyPermissionRole` - `manager | viewer`
+
+成功响应：
+- Status: `200`
+- Body：`data.userId`、`data.familyPermissionRole`，以及操作者在修改自己权限时返回的 `data.token`
+
+常见错误：
+- `400` - `INVALID_PARAMS` / `FAMILY_PARENT_MEMBER_REQUIRED` / `FAMILY_LAST_MANAGER_REQUIRED`
+- `403` - `FAMILY_PARENT_REQUIRED` / `FAMILY_MANAGER_REQUIRED`
+- `500` - `FAMILY_PERMISSION_ROLE_UPDATE_FAILED`
+
+说明：
+- 仅家庭内 `manager` 家长可调整其他家长权限
+- 当操作者修改的是自己时，后端会回发新 token，前端应立即刷新当前用户上下文
 
 ---
 
@@ -562,6 +607,7 @@ Authorization: Bearer <token>
 常见错误：
 - `400` - `TASK_INVALID_PARAMS`
 - `400` - `TASK_OCCURRENCE_INVALID_FIELDS`
+- `400` - `TASK_REPEAT_RANGE_TOO_LARGE` / `TASK_ACTIVE_RANGE_TOO_LARGE`
 - `403` - `FAMILY_TASK_CREATE_DENIED` / `FAMILY_NOT_JOINED`
 - `409` - `TASK_ID_USER_MISMATCH`
 - `503` - `TASK_OCCURRENCE_SCHEMA_MISSING`
@@ -604,6 +650,7 @@ Authorization: Bearer <token>
 常见错误：
 - `400` - `NO_UPDATABLE_FIELDS` / `INVALID_TASK_DATA`
 - `400` - `TASK_OCCURRENCE_INVALID_FIELDS` / `TASK_OCCURRENCE_USE_CONVERT_API`
+- `400` - `TASK_REPEAT_RANGE_TOO_LARGE` / `TASK_ACTIVE_RANGE_TOO_LARGE`
 - `403` - `PERMISSION_DENIED`
 - `404` - `TASK_NOT_FOUND`
 - `503` - `TASK_OCCURRENCE_SCHEMA_MISSING`
@@ -663,6 +710,7 @@ Authorization: Bearer <token>
 - 当任务满足“已逾期且此前已实际扣星”条件时，首次完成会在同一事务内退回 `penaltyDeductedPoints` 对应的星星；返回的任务对象会同步反映 `penaltyRefunded` 与 `penaltyRefundTime`
 - 当任务已发生“逾期补做退星”后再次重置为未完成，如果当前永久星星不足以全额回滚这笔退星，接口返回 `409 INSUFFICIENT_STARS`
 - `data.operation` 会按本次状态流转返回 `complete` 或 `reset`
+- 查看者家长默认没有任务治理权限；但在孩子视角下发起执行型完成/重置请求并透传 `operatorContext.actorUserId=<childId>` 时，后端允许作为“孩子执行”处理
 
 ### 6.7A 记录表现项结果
 

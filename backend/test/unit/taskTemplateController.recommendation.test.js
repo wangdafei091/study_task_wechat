@@ -1,9 +1,11 @@
 jest.mock('../../services/taskTemplateService');
 jest.mock('../../services/taskTemplateRecommendationService');
+jest.mock('../../services/familyService');
 jest.mock('../../utils/logger', () => ({
   createLogger: () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() })
 }));
 
+const familyService = require('../../services/familyService');
 const taskTemplateRecommendationService = require('../../services/taskTemplateRecommendationService');
 const controller = require('../../controllers/taskTemplateController');
 
@@ -17,6 +19,12 @@ function createRes() {
 describe('taskTemplateController.queryRecommendations', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    familyService.getUserFamilyRoleProfile.mockResolvedValue({
+      userId: 'parent_1',
+      role: 'parent',
+      familyId: 'fam_1',
+      familyPermissionRole: 'manager'
+    });
   });
 
   it('家长调用推荐查询接口应返回 200', async () => {
@@ -67,9 +75,38 @@ describe('taskTemplateController.queryRecommendations', () => {
     await controller.queryRecommendations(req, res);
 
     expect(res.status).toHaveBeenCalledWith(403);
+    expect(taskTemplateRecommendationService.queryRecommendations).not.toHaveBeenCalled();
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
       success: false,
       error_code: 'PERMISSION_DENIED'
+    }));
+  });
+
+  it('查看者家长调用推荐查询接口应返回 403，且不执行推荐查询', async () => {
+    const req = {
+      user: {
+        userId: 'parent_viewer',
+        role: 'parent',
+        familyId: 'fam_1',
+        familyPermissionRole: 'viewer'
+      },
+      body: {}
+    };
+    const res = createRes();
+    familyService.getUserFamilyRoleProfile.mockResolvedValue({
+      userId: 'parent_viewer',
+      role: 'parent',
+      familyId: 'fam_1',
+      familyPermissionRole: 'viewer'
+    });
+
+    await controller.queryRecommendations(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(taskTemplateRecommendationService.queryRecommendations).not.toHaveBeenCalled();
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+      success: false,
+      error_code: 'FAMILY_MANAGER_REQUIRED'
     }));
   });
 

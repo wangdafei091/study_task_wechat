@@ -42,8 +42,12 @@ async function initializeMultiUserSystem(page) {
       availableUsers,
       userPermissions: permissionContext.userPermissions,
       loginUserId: permissionContext.loginUserId || '',
+      familyPermissionRole: permissionContext.familyPermissionRole || '',
       canManageMembers: permissionContext.canManageMembers,
       isReadonlyView: permissionContext.isReadonlyView,
+      isViewerReadonly: permissionContext.isViewerReadonly,
+      canManageFamilyGovernance: permissionContext.canManageFamilyGovernance,
+      canManageBusinessData: permissionContext.canManageBusinessData,
       lastActiveChildId: permissionContext.lastActiveChildId
     });
 

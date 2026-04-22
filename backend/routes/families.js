@@ -28,4 +28,7 @@ router.post('/members', authMiddleware, familyController.createVirtualMember.bin
 // DELETE /api/families/members/:userId — 软删除家庭成员
 router.delete('/members/:userId', authMiddleware, familyController.deleteMember.bind(familyController));
 
+// PATCH /api/families/members/:userId/permission-role — 调整家庭内家长权限
+router.patch('/members/:userId/permission-role', authMiddleware, familyController.updateMemberPermissionRole.bind(familyController));
+
 module.exports = router;

@@ -96,6 +96,10 @@ async function setupTestData() {
       WHEN user_id = 'm15a_task_parent_001' THEN 'm15a_task_family_001'
       WHEN user_id = 'm15a_task_parent_002' THEN 'm15a_task_family_002'
       ELSE family_id
+    END,
+    family_permission_role = CASE
+      WHEN role = 'parent' THEN 'manager'
+      ELSE family_permission_role
     END
     WHERE user_id IN ('m15a_task_parent_001', 'm15a_task_parent_002')`
   );

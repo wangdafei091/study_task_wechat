@@ -7,6 +7,17 @@ const User = require('../models/User');
 const { createLogger } = require('../utils/logger');
 const logger = createLogger('UserService');
 
+function getExecuteRunner(connection = null) {
+  if (connection && typeof connection.execute === 'function') {
+    return async (sql, params = []) => {
+      const [result] = await connection.execute(sql, params);
+      return result;
+    };
+  }
+
+  return execute;
+}
+
 /**
  * 用户服务类
  */
@@ -67,7 +78,7 @@ class UserService {
    * @param {string} userData.role - 用户角色（parent/child）
    * @returns {Promise<User>} 创建的用户实例
    */
-  async createUser(userData) {
+  async createUser(userData, options = {}) {
     try {
       const userId = User.generateId();
       const user = new User({
@@ -77,9 +88,10 @@ class UserService {
       });
 
       const dbData = user.toDB();
-      await execute(
-        `INSERT INTO users (user_id, openid, unionid, nickname, avatar, role, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      const executeRunner = getExecuteRunner(options.connection);
+      await executeRunner(
+        `INSERT INTO users (user_id, openid, unionid, nickname, avatar, role, status, family_permission_role)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           dbData.user_id,
           dbData.openid,
@@ -88,6 +100,7 @@ class UserService {
           dbData.avatar,
           dbData.role,
           dbData.status,
+          dbData.family_permission_role,
         ]
       );
 
@@ -125,6 +138,10 @@ class UserService {
       if (updateData.status !== undefined) {
         updates.push('status = ?');
         values.push(updateData.status);
+      }
+      if (updateData.familyPermissionRole !== undefined) {
+        updates.push('family_permission_role = ?');
+        values.push(updateData.familyPermissionRole);
       }
 
       if (updates.length === 0) {

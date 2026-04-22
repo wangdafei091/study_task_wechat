@@ -192,34 +192,103 @@ class TaskService {
       task.pendingSyncMeta = { ...item.payload.pendingSyncMeta };
     }
 
-    switch (item.operation) {
-      case 'create':
-        return this._syncTaskToCloud(task);
-      case 'update':
-        return this._syncUpdateToCloud(task);
-      case 'delete':
-        return this._syncDeleteToCloud(
-          item.entityId,
-          item.payload?.deleteMeta || item.payload?.pendingSyncMeta || item.snapshot?.pendingSyncMeta || null
-        );
-      case 'complete':
-      case 'reset':
-        return this._syncStatusToCloud(task);
-      case 'required':
-      case 'unrequired':
-        return this._syncRequiredStateToCloud(task);
-      case 'occurrence_record':
-        return this._syncOccurrenceRecordToCloud(task);
-      case 'disable_occurrence':
-        return this._syncDisableOccurrenceToCloud(task, {
-          disableFromDate: task?.pendingSyncMeta?.disableFromDate || null
+    try {
+      switch (item.operation) {
+        case 'create':
+          return await this._syncTaskToCloud(task);
+        case 'update':
+          return await this._syncUpdateToCloud(task);
+        case 'delete':
+          return await this._syncDeleteToCloud(
+            item.entityId,
+            item.payload?.deleteMeta || item.payload?.pendingSyncMeta || item.snapshot?.pendingSyncMeta || null
+          );
+        case 'complete':
+        case 'reset':
+          return await this._syncStatusToCloud(task);
+        case 'required':
+        case 'unrequired':
+          return await this._syncRequiredStateToCloud(task);
+        case 'occurrence_record':
+          return await this._syncOccurrenceRecordToCloud(task);
+        case 'disable_occurrence':
+          return await this._syncDisableOccurrenceToCloud(task, {
+            disableFromDate: task?.pendingSyncMeta?.disableFromDate || null
+          });
+        case 'convert_occurrence':
+          return await this._syncConvertOccurrenceToCloud(task, {
+            effectiveFromDate: task?.pendingSyncMeta?.effectiveFromDate || null
+          });
+        default:
+          return await this._syncUpdateToCloud(task);
+      }
+    } catch (error) {
+      if (this._isPermissionDeniedSyncError(error)) {
+        await this._cleanupPermissionDeniedQueueItem(item, task);
+        logger.warn('TaskService', '离线任务写操作因权限拒绝被丢弃，不再重试', {
+          taskId: item.entityId || task?.id || null,
+          operation: item.operation,
+          error: error.message,
+          code: error.code || null
         });
-      case 'convert_occurrence':
-        return this._syncConvertOccurrenceToCloud(task, {
-          effectiveFromDate: task?.pendingSyncMeta?.effectiveFromDate || null
-        });
-      default:
-        return this._syncUpdateToCloud(task);
+        return {
+          success: false,
+          discarded: true,
+          reason: 'permission_denied'
+        };
+      }
+      throw error;
+    }
+  }
+
+  _isPermissionDeniedSyncError(error) {
+    if (!error) {
+      return false;
+    }
+
+    return error.statusCode === 403
+      || error.code === 'FAMILY_MANAGER_REQUIRED'
+      || error.code === 'PERMISSION_DENIED';
+  }
+
+  async _cleanupPermissionDeniedQueueItem(item, task) {
+    if (!item) {
+      return;
+    }
+
+    if (item.operation === 'occurrence_record') {
+      const recordId = item.entityId || task?.id || null;
+      if (recordId) {
+        await this.taskRepository.delete(recordId).catch(() => null);
+      }
+      return;
+    }
+
+    const taskId = item.entityId || task?.id || null;
+    if (!taskId) {
+      return;
+    }
+
+    try {
+      const authoritativeTask = await this._fetchSingleTaskFromCloud(taskId);
+      if (authoritativeTask) {
+        authoritativeTask.syncedToCloud = true;
+        authoritativeTask.pendingSyncMeta = null;
+        await this.taskRepository.save(authoritativeTask);
+        return;
+      }
+    } catch (error) {
+      logger.warn('TaskService', '清理权限拒绝的离线任务时拉取云端权威数据失败，回退清理本地待同步标记', {
+        taskId,
+        operation: item.operation,
+        error: error.message
+      });
+    }
+
+    if (task) {
+      task.syncedToCloud = true;
+      task.pendingSyncMeta = null;
+      await this.taskRepository.save(task).catch(() => null);
     }
   }
 

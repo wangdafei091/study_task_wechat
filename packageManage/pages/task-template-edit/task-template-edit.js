@@ -135,15 +135,22 @@ Page({
   },
 
   onLoad(options = {}) {
+    this._loadedTemplate = null;
     this._draftSourceMeta = null;
     const userService = serviceManager.getUserService();
     const loginUser = userService?.getLoginUser?.();
     const currentUser = userService?.getCurrentUser?.();
     const isChildView = viewScope.isChildView(loginUser, currentUser);
+    const isViewerReadonly = Boolean(
+      loginUser &&
+      loginUser.role === 'parent' &&
+      loginUser.familyId &&
+      loginUser.familyPermissionRole === 'viewer'
+    );
 
-    if (!loginUser || loginUser.role !== 'parent' || isChildView) {
+    if (!loginUser || loginUser.role !== 'parent' || isChildView || isViewerReadonly) {
       wx.showToast({
-        title: '暂无操作权限',
+        title: isViewerReadonly ? '当前为查看者，不能管理任务模板' : '暂无操作权限',
         icon: 'none'
       });
       wx.navigateBack({
@@ -221,6 +228,7 @@ Page({
         return;
       }
 
+      this._loadedTemplate = typeof template.toJSON === 'function' ? template.toJSON() : template;
       this.setData({
         form: buildFormFromTemplate(template),
         draftSourceHint: '',
@@ -561,7 +569,8 @@ Page({
     const validation = taskFormCore.validateTaskFormDraft(this.data.form, {
       scene: 'template',
       templateName: this.data.form.name,
-      templateDescription: this.data.form.description
+      templateDescription: this.data.form.description,
+      previousTemplate: this.data.mode === 'edit' ? this._loadedTemplate : null
     });
 
     return validation.valid ? '' : validation.errorMsg;

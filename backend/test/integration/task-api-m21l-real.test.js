@@ -118,6 +118,10 @@ async function setupTestData() {
       WHEN user_id = 'm21l_task_parent_001' THEN 'm21l_task_family_001'
       WHEN user_id = 'm21l_task_parent_002' THEN 'm21l_task_family_002'
       ELSE family_id
+    END,
+    family_permission_role = CASE
+      WHEN role = 'parent' THEN 'manager'
+      ELSE family_permission_role
     END
     WHERE user_id IN ('m21l_task_parent_001', 'm21l_task_parent_002')`
   );
@@ -404,10 +408,22 @@ describe('M21L tasks API 真实数据库集成测试', () => {
     expect(disableRes.body.data.disabledTask).toEqual(expect.objectContaining({
       taskId: 'm21l_task_occ_cfg_003',
       executionMode: 'occurrence',
+      hasNoEndDate: false,
       activeRange: expect.objectContaining({
         endDate: yesterday,
         hasNoEndDate: false
       })
+    }));
+
+    const disabledRows = await db.query(
+      `SELECT has_no_end_date, active_end_date, active_has_no_end_date
+         FROM tasks
+        WHERE task_id = 'm21l_task_occ_cfg_003'`
+    );
+    expect(disabledRows[0]).toEqual(expect.objectContaining({
+      has_no_end_date: 0,
+      active_end_date: yesterday,
+      active_has_no_end_date: 0
     }));
 
     const futureQueryRes = await request(app)

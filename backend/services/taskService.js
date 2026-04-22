@@ -839,6 +839,14 @@ class TaskService {
 
   async createTaskWithRepeatMaterialization(userId, taskData, options = {}) {
     try {
+      const createValidation = Task.validate(taskData, false);
+      if (!createValidation.valid) {
+        throw this._createSchemaError(
+          createValidation.errorCodes[0] || 'INVALID_PARAMS',
+          createValidation.errors.join('；')
+        );
+      }
+
       const columnMap = await this._getTaskColumnMap();
       this._assertReminderColumnAvailable(columnMap, '创建任务', taskData.reminder);
       const pool = getPool();
@@ -1024,6 +1032,27 @@ class TaskService {
 
       try {
         await connection.beginTransaction();
+        const existingRaw = await this._getTaskByIdConn(connection, taskId);
+        if (!existingRaw) {
+          await connection.rollback();
+          return null;
+        }
+
+        const existingTask = Task.fromDB(existingRaw);
+        const mergedValidation = Task.validate({
+          ...existingTask.toJSON(),
+          ...changes
+        }, false, {
+          previousTask: existingTask.toJSON()
+        });
+        if (!mergedValidation.valid) {
+          await connection.rollback();
+          throw this._createSchemaError(
+            mergedValidation.errorCodes[0] || 'INVALID_PARAMS',
+            mergedValidation.errors.join('；')
+          );
+        }
+
         const sql = `UPDATE tasks SET ${setClauses.join(', ')} WHERE task_id = ? AND deleted_at IS NULL`;
         const [result] = await connection.execute(sql, params);
 
@@ -1550,13 +1579,22 @@ class TaskService {
           ? (currentEndDate < nextEndDateCandidate ? currentEndDate : nextEndDateCandidate)
           : nextEndDateCandidate;
 
+        const updateClauses = [
+          `${columnMap.activeEndDate} = ?`,
+          `${columnMap.activeHasNoEndDate} = 0`,
+          `${columnMap.modifyTime} = ?`
+        ];
+        const updateParams = [nextEndDate, modifyTime];
+
+        if (columnMap.hasNoEndDate) {
+          updateClauses.splice(2, 0, `${columnMap.hasNoEndDate} = 0`);
+        }
+
         const [result] = await connection.execute(
           `UPDATE tasks
-           SET ${columnMap.activeEndDate} = ?,
-               ${columnMap.activeHasNoEndDate} = 0,
-               ${columnMap.modifyTime} = ?
+           SET ${updateClauses.join(', ')}
            WHERE task_id = ? AND deleted_at IS NULL`,
-          [nextEndDate, modifyTime, taskId]
+          [...updateParams, taskId]
         );
 
         if (result.affectedRows === 0) {
@@ -1743,6 +1781,7 @@ class TaskService {
   async syncRequiredTaskPenalties(options = {}) {
     try {
       const scanUserIds = await this._resolvePenaltyScanUserIds(options);
+      const asOfDate = this._formatDate(new Date(Number(options.modifyTime || Date.now()))) || this._formatDate(new Date());
       if (scanUserIds.length === 0) {
         return {
           success: true,
@@ -1754,7 +1793,7 @@ class TaskService {
         };
       }
 
-      const tasks = await this._getExpiredRequiredTasksForPenalty(scanUserIds);
+      const tasks = await this._getExpiredRequiredTasksForPenalty(scanUserIds, asOfDate);
       const baseOperationKey = String(options.operationKey || options.modifyTime || Date.now());
       const penaltyResults = [];
       const failedTaskIds = [];
@@ -1767,6 +1806,7 @@ class TaskService {
             familyId: options.familyId || null,
             operationKey: `${baseOperationKey}:${task.taskId}`,
             modifyTime: Number(options.modifyTime || Date.now()),
+            asOfDate,
           });
 
           if (result?.success) {
@@ -2081,23 +2121,24 @@ class TaskService {
     return [viewerUserId];
   }
 
-  async _getExpiredRequiredTasksForPenalty(userIds = []) {
+  async _getExpiredRequiredTasksForPenalty(userIds = [], asOfDate = null) {
     if (!Array.isArray(userIds) || userIds.length === 0) {
       return [];
     }
 
     const columnMap = await this._getTaskColumnMap();
+    const effectiveAsOfDate = asOfDate || this._formatDate(new Date());
     const placeholders = userIds.map(() => '?').join(', ');
     const rows = await query(
       `SELECT * FROM tasks
        WHERE user_id IN (${placeholders})
          AND deleted_at IS NULL
-         AND date < CURDATE()
+         AND date < ?
          AND ${columnMap.isRequired} = 1
          AND ${columnMap.penaltyApplied} = 0
          AND status <> 1
        ORDER BY date ASC, created_at ASC`,
-      userIds
+      userIds.concat(effectiveAsOfDate)
     );
 
     return rows.map(row => Task.fromDB(row));
@@ -2326,13 +2367,13 @@ class TaskService {
         }
 
         const existingTask = Task.fromDB(existingRaw);
-        const today = new Date().toISOString().slice(0, 10);
+        const asOfDate = options.asOfDate || this._formatDate(new Date(modifyTime)) || this._formatDate(new Date());
         if (
           !existingTask.isRequired ||
           existingTask.penaltyApplied ||
           existingTask.status === 1 ||
           !existingTask.date ||
-          existingTask.date >= today
+          existingTask.date >= asOfDate
         ) {
           await connection.commit();
           return {

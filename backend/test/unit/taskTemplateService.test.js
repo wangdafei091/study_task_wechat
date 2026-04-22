@@ -498,4 +498,70 @@ describe('backend TaskTemplateService', () => {
     );
     expect(connection.commit).toHaveBeenCalled();
   });
+
+  it('updateTemplate 应允许历史超长模板只改名称，但拒绝继续扩张', async () => {
+    const { query } = require('../../config/database');
+
+    const legacyRow = createRow({
+      template_id: 'tpl_legacy',
+      name: '旧模板',
+      task_payload: JSON.stringify({
+        title: '旧任务',
+        type: 'study',
+        points: 8,
+        pointsExpiry: 'quarter',
+        description: '旧描述',
+        isRequired: true,
+        isAllDay: false,
+        startDate: '2026-04-01',
+        startTime: '18:00',
+        endDate: '2026-07-05',
+        endTime: '18:30',
+        hasNoEndDate: false,
+        repeat: {
+          type: 'daily',
+          days: [],
+          startDate: '2026-04-01',
+          endDate: '2026-07-05'
+        },
+        reminder: {
+          enabled: true,
+          time: 15
+        }
+      }),
+      date_strategy: JSON.stringify({
+        mode: 'inherit-repeat-rule',
+        autoShiftExpiredEndDate: true,
+        endMode: 'duration',
+        durationDays: 96
+      })
+    });
+
+    query.mockResolvedValue([]);
+    connection.execute
+      .mockResolvedValueOnce([[legacyRow], []])
+      .mockResolvedValueOnce([{ affectedRows: 1 }, []])
+      .mockResolvedValueOnce([[createRow({
+        ...legacyRow,
+        name: '只改名称'
+      })], []]);
+
+    const service = require('../../services/taskTemplateService');
+    await expect(service.updateTemplate('tpl_legacy', 'family_1', {
+      name: '只改名称'
+    })).resolves.toEqual(expect.objectContaining({
+      name: '只改名称'
+    }));
+
+    connection.execute.mockReset();
+    connection.execute.mockResolvedValueOnce([[legacyRow], []]);
+    await expect(service.updateTemplate('tpl_legacy', 'family_1', {
+      dateStrategy: {
+        endMode: 'duration',
+        durationDays: 120
+      }
+    })).rejects.toMatchObject({
+      code: 'TASK_TEMPLATE_RANGE_TOO_LARGE'
+    });
+  });
 });

@@ -4,6 +4,10 @@
 
 const rewardService = require('../services/rewardService');
 const familyService = require('../services/familyService');
+const {
+  ensureManagerBusinessAccess,
+  ensureParentManagerBusinessAccess
+} = require('../utils/family-permission');
 const { success, error } = require('../utils/response');
 const { createLogger } = require('../utils/logger');
 const { resolveTargetUserId } = require('../utils/resolveTargetUserId');
@@ -48,13 +52,11 @@ class RewardController {
     };
   }
 
-  _ensureRewardManagePermission(req, res) {
-    if (req.user.familyId && req.user.role !== 'parent') {
-      res.status(403).json(error('仅家长可管理奖励', 'PERMISSION_DENIED'));
-      return false;
-    }
-
-    return true;
+  async _ensureRewardManagePermission(req, res) {
+    return ensureParentManagerBusinessAccess(req, res, {
+      parentRequiredMessage: '仅家长可管理奖励',
+      deniedMessage: '当前为查看者，不能修改奖励'
+    });
   }
 
   async getRewards(req, res) {
@@ -82,7 +84,7 @@ class RewardController {
 
   async createReward(req, res) {
     try {
-      if (!this._ensureRewardManagePermission(req, res)) {
+      if (!(await this._ensureRewardManagePermission(req, res))) {
         return;
       }
 
@@ -101,7 +103,7 @@ class RewardController {
 
   async updateReward(req, res) {
     try {
-      if (!this._ensureRewardManagePermission(req, res)) {
+      if (!(await this._ensureRewardManagePermission(req, res))) {
         return;
       }
 
@@ -120,7 +122,7 @@ class RewardController {
 
   async deleteReward(req, res) {
     try {
-      if (!this._ensureRewardManagePermission(req, res)) {
+      if (!(await this._ensureRewardManagePermission(req, res))) {
         return;
       }
 
@@ -138,6 +140,12 @@ class RewardController {
 
   async exchangeReward(req, res) {
     try {
+      if (!(await ensureManagerBusinessAccess(req, res, {
+        deniedMessage: '当前为查看者，不能兑换奖励'
+      }))) {
+        return;
+      }
+
       const reward = await rewardService.getRewardById(req.params.rewardId);
       if (!reward || !rewardService.canUserAccessReward(reward, req.user)) {
         return res.status(404).json(error('奖励不存在', 'REWARD_NOT_FOUND'));
@@ -174,6 +182,12 @@ class RewardController {
 
   async cancelRewardExchange(req, res) {
     try {
+      if (!(await ensureManagerBusinessAccess(req, res, {
+        deniedMessage: '当前为查看者，不能取消奖励兑换'
+      }))) {
+        return;
+      }
+
       const reward = await rewardService.getRewardById(req.params.rewardId);
       if (!reward || !rewardService.canUserAccessReward(reward, req.user)) {
         return res.status(404).json(error('奖励不存在', 'REWARD_NOT_FOUND'));

@@ -245,6 +245,75 @@ describe('utils/app/post-login-bootstrap', () => {
     expect(messageService.syncFormalRemindersIfNeeded).toHaveBeenCalledTimes(1);
   });
 
+  it('viewer 家长登录后初始化应走短路后的星星同步链路', async () => {
+    const offlineQueueService = {
+      initialize: jest.fn().mockResolvedValue(true),
+      drain: jest.fn().mockResolvedValue({ success: true })
+    };
+    const taskService = {
+      enableCloudStorage: true,
+      getAllTasks: jest.fn().mockResolvedValue([]),
+      taskRepository: { save: jest.fn() },
+      checkTasksStatus: jest.fn().mockResolvedValue({
+        penaltyResults: [],
+        penaltyCount: 0,
+        affectedTaskIds: []
+      }),
+      checkUpcomingTasks: jest.fn().mockResolvedValue()
+    };
+    const starService = {
+      calculatePendingExpiry: jest.fn().mockResolvedValue(0),
+      syncExpiryAuthorityIfNeeded: jest.fn().mockResolvedValue({
+        success: true,
+        skipped: true,
+        reason: 'viewer_readonly'
+      }),
+      refreshStarsFromCloud: jest.fn().mockResolvedValue({ success: true }),
+      initialize: jest.fn().mockResolvedValue(),
+      checkAndRepairDataConsistency: jest.fn().mockResolvedValue({
+        success: true,
+        repairResult: { repairedCount: 0 }
+      }),
+      enableCloudStorage: true
+    };
+    const rewardService = {
+      refreshRewardsFromCloud: jest.fn().mockResolvedValue({ success: true })
+    };
+    const messageService = {
+      initialize: jest.fn().mockResolvedValue(),
+      syncFormalRemindersIfNeeded: jest.fn().mockResolvedValue({ success: true }),
+      getAllMessages: jest.fn().mockResolvedValue([])
+    };
+
+    serviceManager.getOfflineQueueService.mockReturnValue(offlineQueueService);
+    serviceManager.getTaskService.mockReturnValue(taskService);
+    serviceManager.getStarService.mockReturnValue(starService);
+    serviceManager.getRewardService.mockReturnValue(rewardService);
+    serviceManager.getMessageService.mockReturnValue(messageService);
+    serviceManager.getUserService.mockReturnValue({
+      getLoginUserId: jest.fn(() => 'parent-viewer')
+    });
+    serviceManager.getService.mockReturnValue({
+      isFirstLaunch: jest.fn(() => false)
+    });
+
+    const app = {
+      globalData: {},
+      setTheme: jest.fn()
+    };
+
+    await postLoginBootstrap.run(app);
+
+    expect(starService.syncExpiryAuthorityIfNeeded).toHaveBeenCalledWith({
+      scope: 'user',
+      userId: 'parent-viewer',
+      force: true
+    });
+    expect(starService.refreshStarsFromCloud).toHaveBeenCalledWith('parent-viewer', {
+      forceCloudAfterAuthority: true
+    });
+  });
+
   it('checkFirstLaunch 非首次启动和 createWelcomeMessage 失败时应安全返回', async () => {
     const configService = {
       isFirstLaunch: jest.fn(() => false),

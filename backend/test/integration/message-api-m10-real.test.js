@@ -76,7 +76,11 @@ async function setupTestData() {
 
   await db.query(
     `UPDATE users
-     SET family_id = 'm10_msg_family_001'
+     SET family_id = 'm10_msg_family_001',
+         family_permission_role = CASE
+           WHEN role = 'parent' THEN 'manager'
+           ELSE family_permission_role
+         END
      WHERE user_id IN ('m10_msg_parent_001', 'm10_msg_child_001', 'm10_msg_child_002')`
   );
 }

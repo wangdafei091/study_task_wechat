@@ -129,9 +129,19 @@ Page({
       const currentUser = userService.getCurrentUser && userService.getCurrentUser();
       const loginRole = loginUser ? loginUser.role : currentUser?.role;
       const isChildView = loginRole === 'child' || (loginUser && currentUser && loginUser.userId !== currentUser.userId);
-      if (isChildView) {
-        logger.warn('TaskEdit', '无权限访问任务编辑页，已拦截', { loginRole, isChildView });
-        wx.showToast({ title: '暂无操作权限', icon: 'none', duration: 1500 });
+      const isViewerReadonly = Boolean(
+        loginUser &&
+        loginUser.role === 'parent' &&
+        loginUser.familyId &&
+        loginUser.familyPermissionRole === 'viewer'
+      );
+      if (isChildView || isViewerReadonly) {
+        logger.warn('TaskEdit', '无权限访问任务编辑页，已拦截', { loginRole, isChildView, isViewerReadonly });
+        wx.showToast({
+          title: isViewerReadonly ? '当前为查看者，不能创建任务' : '暂无操作权限',
+          icon: 'none',
+          duration: 1500
+        });
         wx.navigateBack({ delta: 1 });
         return;
       }
@@ -1222,6 +1232,61 @@ Page({
     logger.info('TaskEdit', '起止日期相同，重复选项设为"当天"且禁用重复面板');
   },
 
+  _buildDateRangeSyncPatch: function({ startDate, endDate, hasNoEndDate } = {}) {
+    const currentTask = this.data.newTask || {};
+    const currentRepeat = currentTask.repeat || { type: 'none', days: [] };
+    const nextStartDate = startDate || currentTask.startDate || '';
+    const nextHasNoEndDate = hasNoEndDate === true;
+    const nextEndDate = nextHasNoEndDate
+      ? ''
+      : (endDate || currentTask.endDate || nextStartDate);
+    const previousStartDate = currentTask.startDate || '';
+    const previousEndDate = currentTask.endDate || previousStartDate;
+    const wasSingleDayLocked = this.data.isRepeatOptionDisabled === true || (
+      currentTask.hasNoEndDate !== true &&
+      previousStartDate &&
+      previousEndDate &&
+      previousStartDate === previousEndDate
+    );
+    const isSameDay = !nextHasNoEndDate && nextStartDate === nextEndDate;
+
+    let nextRepeatType = currentRepeat.type || 'none';
+    if (!isSameDay && wasSingleDayLocked && nextRepeatType === 'none') {
+      nextRepeatType = 'daily';
+    }
+
+    const nextTask = {
+      ...currentTask,
+      startDate: nextStartDate,
+      endDate: nextEndDate,
+      hasNoEndDate: nextHasNoEndDate,
+      repeat: {
+        ...currentRepeat,
+        type: nextRepeatType,
+        days: nextRepeatType === 'custom' ? (currentRepeat.days || []) : [],
+        startDate: nextStartDate,
+        endDate: nextHasNoEndDate ? '' : (nextEndDate || nextStartDate)
+      }
+    };
+    const repeatText = taskFormDisplay.buildRepeatText(nextTask, {
+      isRepeatOptionDisabled: isSameDay
+    });
+    const repeatTypeWarning = nextRepeatType === 'none'
+      ? false
+      : taskFormDisplay.checkRepeatDateConflict(nextTask, nextRepeatType).hasConflict;
+    const repeatPreviewText = nextRepeatType === 'none'
+      ? ''
+      : taskFormDisplay.buildRepeatPreviewText(nextTask, nextRepeatType);
+
+    return {
+      newTask: nextTask,
+      repeatText,
+      isRepeatOptionDisabled: isSameDay,
+      repeatTypeWarning,
+      repeatPreviewText
+    };
+  },
+
   /**
    * 全天开关切换
    */
@@ -1832,52 +1897,29 @@ Page({
   onStartDateSelected: function(e) {
     this.markTemplateFillUndoDirty();
     const date = e.detail.date;
-    
-    this.setData({
-      'newTask.startDate': date
+
+    const nextEndDate = this.data.newTask.endDate < date
+      ? date
+      : this.data.newTask.endDate;
+    const syncPatch = this._buildDateRangeSyncPatch({
+      startDate: date,
+      endDate: nextEndDate,
+      hasNoEndDate: this.data.newTask.hasNoEndDate
     });
-    
-    // 如果结束日期早于开始日期，自动调整结束日期
-    if (this.data.newTask.endDate < date) {
-      this.setData({
-        'newTask.endDate': date
-      });
-    }
-    
-    // 检查起止日期是否相同
-    const isSameDay = date === this.data.newTask.endDate;
-    
-    // 当起止日期相同时，设置重复为"当天"并禁用重复选项
-    // 当起止日期不同时，如果之前是"当天"，则改为"每天"并启用重复选项
-    if (isSameDay) {
+    const update = {
+      ...syncPatch
+    };
+
+    if (syncPatch.isRepeatOptionDisabled && this.data.repeatPanel) {
       logger.info('TaskEdit', '检测到起止日期相同，设置为当天且禁用重复选项');
-      this.setData({
-        repeatText: '当天',
-        isRepeatOptionDisabled: true
-      });
-      
-      // 如果重复面板正在显示，则关闭它
-      if (this.data.repeatPanel) {
-        this.setData({
-          repeatPanel: false
-        });
-      }
-    } else if (this.data.isRepeatOptionDisabled) {
-      // 如果之前重复选项是禁用的（即起止日期是相同的），现在不同了
+      update.repeatPanel = false;
+    } else if (!syncPatch.isRepeatOptionDisabled && this.data.isRepeatOptionDisabled) {
       logger.info('TaskEdit', '检测到起止日期不同，启用重复选项');
-      this.setData({
-        repeatText: '每天', // 恢复为每天
-        isRepeatOptionDisabled: false
-      });
     }
-    
-    // 更新重复预览文本
-    if (this.data.newTask.repeat.type !== 'none') {
-      this.setData({
-        repeatPreviewText: this.generateRepeatPreviewText(this.data.newTask.repeat.type)
-      });
-    }
-    
+
+    this.setData(update);
+
+    const isSameDay = syncPatch.isRepeatOptionDisabled;
     logger.info('TaskEdit', '选择开始日期:', date, '起止日期相同:', isSameDay);
   },
   
@@ -1887,53 +1929,30 @@ Page({
   onEndDateSelected: function(e) {
     this.markTemplateFillUndoDirty();
     const date = e.detail.date;
-    
-    this.setData({
-      'newTask.endDate': date
+
+    const syncPatch = this._buildDateRangeSyncPatch({
+      startDate: this.data.newTask.startDate,
+      endDate: date,
+      hasNoEndDate: this.data.newTask.hasNoEndDate
     });
-    
-    // 检查起止日期是否相同
-    const isSameDay = this.data.newTask.startDate === date;
-    
-    // 当起止日期相同时，设置重复为"当天"并禁用重复选项
-    // 当起止日期不同时，如果之前是"当天"，则改为"每天"并启用重复选项
-    if (isSameDay) {
+    const update = {
+      ...syncPatch
+    };
+
+    if (syncPatch.isRepeatOptionDisabled && this.data.repeatPanel) {
       logger.info('TaskEdit', '检测到起止日期相同，设置为当天且禁用重复选项');
-      this.setData({
-        repeatText: '当天',
-        isRepeatOptionDisabled: true
-      });
-      
-      // 如果重复面板正在显示，则关闭它
-      if (this.data.repeatPanel) {
-        this.setData({
-          repeatPanel: false
-        });
-      }
-    } else if (this.data.isRepeatOptionDisabled) {
-      // 如果之前重复选项是禁用的（即起止日期是相同的），现在不同了
+      update.repeatPanel = false;
+    } else if (!syncPatch.isRepeatOptionDisabled && this.data.isRepeatOptionDisabled) {
       logger.info('TaskEdit', '检测到起止日期不同，启用重复选项');
-      this.setData({
-        repeatText: '每天', // 恢复为每天
-        isRepeatOptionDisabled: false
-      });
     }
-    
-    // 同时更新重复任务的结束日期，修复结束日期不同步问题
-    if (this.data.newTask.repeat && this.data.newTask.repeat.type !== 'none') {
-      logger.info('TaskEdit', '同步更新重复任务结束日期:', date);
-      this.setData({
-        'newTask.repeat.endDate': date
-      });
+
+    if (syncPatch.newTask.repeat.type !== 'none') {
+      logger.info('TaskEdit', '同步更新重复任务结束日期:', syncPatch.newTask.repeat.endDate);
     }
-    
-    // 更新重复预览文本
-    if (this.data.newTask.repeat.type !== 'none') {
-      this.setData({
-        repeatPreviewText: this.generateRepeatPreviewText(this.data.newTask.repeat.type)
-      });
-    }
-    
+
+    this.setData(update);
+
+    const isSameDay = syncPatch.isRepeatOptionDisabled;
     logger.info('TaskEdit', '选择结束日期:', date, '起止日期相同:', isSameDay);
   },
   

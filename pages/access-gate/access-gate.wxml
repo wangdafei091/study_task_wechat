@@ -1,0 +1,29 @@
+<view class="access-gate-page">
+  <view class="access-gate-shell">
+    <view class="access-gate-title">请输入邀请码</view>
+    <view class="access-gate-subtitle">当前为邀请制体验，输入邀请码后即可进入</view>
+
+    <input
+      class="access-gate-input"
+      placeholder="请输入邀请码"
+      maxlength="24"
+      value="{{accessCode}}"
+      bindinput="onInput"
+      confirm-type="done"
+    />
+
+    <view class="access-gate-error" wx:if="{{errorMessage}}">{{errorMessage}}</view>
+
+    <button
+      class="access-gate-button"
+      type="primary"
+      loading="{{submitting}}"
+      disabled="{{submitting || !accessCode}}"
+      bindtap="onSubmit"
+    >
+      继续
+    </button>
+
+    <view class="access-gate-footnote">邀请码通常由项目维护者提供</view>
+  </view>
+</view>

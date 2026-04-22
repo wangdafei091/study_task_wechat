@@ -1,3 +1,5 @@
+const taskRangeGuard = require('../utils/task-range-guard');
+
 class TaskTemplate {
   constructor({
     templateId,
@@ -79,6 +81,46 @@ class TaskTemplate {
       createdAt: this.createdAt,
       updatedAt: this.updatedAt
     };
+  }
+
+  validate(options = {}) {
+    const errors = [];
+
+    if (!this.name) {
+      errors.push('模板名称不能为空');
+    }
+    if (this.name && this.name.length > 100) {
+      errors.push('模板名称不能超过100个字符');
+    }
+    if ((this.description || '').length > 255) {
+      errors.push('模板说明不能超过255个字符');
+    }
+    if (!this.taskPayload?.title) {
+      errors.push('模板任务名称不能为空');
+    }
+    if (
+      this.taskPayload?.repeat?.type === 'custom' &&
+      (!Array.isArray(this.taskPayload.repeat.days) || this.taskPayload.repeat.days.length === 0)
+    ) {
+      errors.push('自定义重复模板至少选择一个星期');
+    }
+    if (
+      this.taskPayload?.hasNoEndDate !== true &&
+      this.taskPayload?.startDate &&
+      this.taskPayload?.endDate &&
+      this.taskPayload.endDate < this.taskPayload.startDate
+    ) {
+      errors.push('模板结束日期不能早于开始日期');
+    }
+
+    const rangeValidation = taskRangeGuard.validateTemplateRangeLimits(this.toJSON(), {
+      previousTemplate: options.previousTemplate || null
+    });
+    if (!rangeValidation.valid) {
+      errors.push(rangeValidation.message);
+    }
+
+    return errors;
   }
 
   static generateId() {

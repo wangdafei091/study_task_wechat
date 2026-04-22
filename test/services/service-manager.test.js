@@ -28,7 +28,8 @@ const loadServiceManager = (options = {}) => {
 
   const starServiceInstance = {
     name: 'starService',
-    updateRewardService: jest.fn()
+    updateRewardService: jest.fn(),
+    updateUserService: jest.fn()
   };
   const messageServiceInstance = {
     name: 'messageService',
@@ -136,7 +137,8 @@ describe('ServiceManager', () => {
     expect(mocks.eventBusInstance.setOptimization).toHaveBeenCalledWith(false);
 
     expect(mocks.StarService).toHaveBeenCalledWith({
-      eventBus: mocks.eventBusInstance
+      eventBus: mocks.eventBusInstance,
+      userService
     });
     expect(mocks.MessageService).toHaveBeenCalledWith({
       eventBus: mocks.eventBusInstance,
@@ -183,9 +185,20 @@ describe('ServiceManager', () => {
     expect(mocks.instances.starServiceInstance.updateRewardService).toHaveBeenCalledWith(
       mocks.instances.rewardServiceInstance
     );
+    expect(mocks.instances.starServiceInstance.updateUserService).not.toHaveBeenCalled();
     expect(mocks.instances.messageServiceInstance.updateStarService).toHaveBeenCalledWith(
       mocks.instances.starServiceInstance
     );
+  });
+
+  it('初始化后重新注入 userService 时应刷新 StarService 的 userService 引用', async () => {
+    const { serviceManager, mocks } = loadServiceManager();
+    await serviceManager.initialize();
+
+    const userService = { name: 'userService_v2' };
+    serviceManager.setUserService(userService);
+
+    expect(mocks.instances.starServiceInstance.updateUserService).toHaveBeenCalledWith(userService);
   });
 
   it('离线队列默认上下文应复用统一执行态语义', async () => {

@@ -27,6 +27,7 @@ jest.mock('../../utils/api-config', () => ({
     FAMILIES_MEMBERS: '/api/families/members',
     FAMILIES_ADD_MEMBER: '/api/families/members',
     FAMILIES_DELETE_MEMBER: '/api/families/members/{userId}',
+    FAMILIES_MEMBER_PERMISSION_ROLE: '/api/families/members/{userId}/permission-role',
     USER_NICKNAME: '/api/users/{userId}/nickname',
   },
 }));
@@ -35,6 +36,7 @@ const HttpClient = require('../../utils/http-client');
 const StorageAdapter = require('../../adapters/storage-adapter');
 const TokenManager = require('../../utils/token-manager');
 const logger = require('../../utils/logger');
+const API_CONFIG = require('../../utils/api-config');
 
 describe('UserService', () => {
   let userService;
@@ -45,6 +47,7 @@ describe('UserService', () => {
   beforeEach(() => {
     // 重置所有mock
     jest.clearAllMocks();
+    API_CONFIG.ENABLE_API = true;
 
     // Mock TokenManager：模拟已登录的家长用户（initialize() 依赖此信息设置 loginUser）
     TokenManager.getUserInfo = jest.fn().mockReturnValue({ userId: 'parent', role: 'parent', familyId: null });
@@ -853,6 +856,44 @@ describe('UserService', () => {
       const result = await userService.deleteFamilyMember('child2');
 
       expect(result.success).toBe(false);
+    });
+
+    it('updateFamilyMemberPermissionRole 应成功更新家长权限并刷新上下文', async () => {
+      const initializeSpy = jest.spyOn(userService, 'initialize').mockResolvedValue(true);
+      mockHttpClient.patch.mockResolvedValue({
+        userId: 'parent_2',
+        familyPermissionRole: 'viewer',
+        token: 'jwt-next'
+      });
+
+      const result = await userService.updateFamilyMemberPermissionRole('parent_2', 'viewer');
+
+      expect(mockHttpClient.patch).toHaveBeenCalledWith(
+        '/api/families/members/parent_2/permission-role',
+        { familyPermissionRole: 'viewer' }
+      );
+      expect(TokenManager.setToken).toHaveBeenCalledWith('jwt-next');
+      expect(initializeSpy).toHaveBeenCalled();
+      expect(result.success).toBe(true);
+    });
+
+    it('本地模式下 refreshInviteCode 应直接报不支持', async () => {
+      API_CONFIG.ENABLE_API = false;
+
+      await expect(userService.refreshInviteCode('child')).rejects.toThrow('本地模式暂不支持刷新邀请码');
+      expect(mockHttpClient.post).not.toHaveBeenCalled();
+    });
+
+    it('本地模式下 updateFamilyMemberPermissionRole 不应发起云端请求', async () => {
+      API_CONFIG.ENABLE_API = false;
+
+      const result = await userService.updateFamilyMemberPermissionRole('parent_2', 'viewer');
+
+      expect(result).toEqual({
+        success: false,
+        message: '本地模式暂不支持调整家长权限'
+      });
+      expect(mockHttpClient.patch).not.toHaveBeenCalled();
     });
   });
 

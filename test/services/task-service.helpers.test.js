@@ -415,6 +415,80 @@ describe('TaskService helpers and delegators', () => {
     ]);
   });
 
+  it('_executeTaskQueueItem 在任务状态同步遇到权限拒绝时应丢弃并清理本地待同步标记', async () => {
+    const storedTask = {
+      id: 'task_denied_1',
+      syncedToCloud: false,
+      pendingSyncMeta: { action: 'complete', operationKey: 'op_denied_1' }
+    };
+    const authoritativeTask = {
+      id: 'task_denied_1',
+      title: '云端任务',
+      syncedToCloud: false,
+      pendingSyncMeta: { action: 'complete' }
+    };
+    const taskRepository = {
+      getById: jest.fn(async () => storedTask),
+      save: jest.fn(async (task) => task),
+      getAll: jest.fn(async () => []),
+      getDeleteTombstones: jest.fn(async () => [])
+    };
+    const { service } = loadTaskService({ taskRepository });
+    service._syncStatusToCloud = jest.fn(async () => {
+      const error = new Error('当前为查看者，不能修改任务状态');
+      error.code = 'FAMILY_MANAGER_REQUIRED';
+      error.statusCode = 403;
+      throw error;
+    });
+    service._fetchSingleTaskFromCloud = jest.fn(async () => authoritativeTask);
+
+    await expect(service._executeTaskQueueItem({
+      operation: 'complete',
+      entityId: 'task_denied_1',
+      payload: { pendingSyncMeta: { action: 'complete', operationKey: 'op_denied_1' } }
+    })).resolves.toEqual({
+      success: false,
+      discarded: true,
+      reason: 'permission_denied'
+    });
+
+    expect(service._fetchSingleTaskFromCloud).toHaveBeenCalledWith('task_denied_1');
+    expect(taskRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+      id: 'task_denied_1',
+      syncedToCloud: true,
+      pendingSyncMeta: null
+    }));
+  });
+
+  it('_executeTaskQueueItem 在表现记录同步遇到权限拒绝时应删除本地脏记录', async () => {
+    const taskRepository = {
+      getById: jest.fn(async () => null),
+      delete: jest.fn(async () => true),
+      getAll: jest.fn(async () => []),
+      getDeleteTombstones: jest.fn(async () => [])
+    };
+    const { service } = loadTaskService({ taskRepository });
+    service._syncOccurrenceRecordToCloud = jest.fn(async () => {
+      const error = new Error('当前为查看者，不能记录表现');
+      error.code = 'FAMILY_MANAGER_REQUIRED';
+      error.statusCode = 403;
+      throw error;
+    });
+
+    await expect(service._executeTaskQueueItem({
+      operation: 'occurrence_record',
+      entityId: 'occ_local_1',
+      snapshot: { id: 'occ_local_1', parentTaskId: 'occ_cfg_1' },
+      payload: { pendingSyncMeta: { action: 'occurrence_record', operationKey: 'op_occ_1' } }
+    })).resolves.toEqual({
+      success: false,
+      discarded: true,
+      reason: 'permission_denied'
+    });
+
+    expect(taskRepository.delete).toHaveBeenCalledWith('occ_local_1');
+  });
+
   it('batchProcessTasks 应覆盖 delay 分支并累积结果', async () => {
     jest.useFakeTimers();
     const { service } = loadTaskService();
@@ -614,5 +688,21 @@ describe('TaskService helpers and delegators', () => {
 
     await expect(service.isOccurrenceEnabled({ forceRefresh: true })).resolves.toBe(false);
     expect(HttpClient.healthCheck).toHaveBeenCalledTimes(2);
+  });
+
+  it('isOccurrenceEnabled 在本地模式下应直接返回 true，且 TTL 过期后应重新探测', async () => {
+    const localEnv = loadTaskService({ enableApi: false });
+    await expect(localEnv.service.isOccurrenceEnabled()).resolves.toBe(true);
+    expect(localEnv.HttpClient.healthCheck).not.toHaveBeenCalled();
+
+    const cloudEnv = loadTaskService({ enableApi: true });
+    cloudEnv.HttpClient.healthCheck
+      .mockResolvedValueOnce({ taskOccurrenceEnabled: true })
+      .mockResolvedValueOnce({ taskOccurrenceEnabled: false });
+
+    await expect(cloudEnv.service.isOccurrenceEnabled({ cacheTtlMs: 1000 })).resolves.toBe(true);
+    cloudEnv.service._occurrenceCapabilityCache.fetchedAt = 0;
+    await expect(cloudEnv.service.isOccurrenceEnabled({ cacheTtlMs: 1000 })).resolves.toBe(false);
+    expect(cloudEnv.HttpClient.healthCheck).toHaveBeenCalledTimes(2);
   });
 });

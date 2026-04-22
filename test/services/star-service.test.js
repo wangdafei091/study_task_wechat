@@ -1217,6 +1217,13 @@ describe('StarService', () => {
 
     it('syncExpiryAuthorityIfNeeded 应调用正式结算接口并在节流窗口内复用结果', async () => {
       starService.enableCloudStorage = true;
+      starService.userService = {
+        getLoginUser: jest.fn(() => ({
+          userId: 'parent_1',
+          role: 'parent',
+          familyPermissionRole: 'manager'
+        }))
+      };
       HttpClient.post.mockResolvedValue({
         affectedUserIds: ['user_123'],
         settledGroupCount: 1,
@@ -1245,6 +1252,30 @@ describe('StarService', () => {
         skipped: true,
         reason: 'throttled'
       }));
+    });
+
+    it('syncExpiryAuthorityIfNeeded 在 viewer 下应直接跳过，不调用后端结算接口', async () => {
+      starService.enableCloudStorage = true;
+      starService.userService = {
+        getLoginUser: jest.fn(() => ({
+          userId: 'parent_viewer',
+          role: 'parent',
+          familyPermissionRole: 'viewer'
+        }))
+      };
+
+      const result = await starService.syncExpiryAuthorityIfNeeded({
+        scope: 'user',
+        userId: 'user_123'
+      });
+
+      expect(HttpClient.post).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        success: true,
+        skipped: true,
+        reason: 'viewer_readonly',
+        settledGroupCount: 0
+      });
     });
 
     it('同一用户并发刷新星星时应复用进行中的云请求', async () => {
@@ -1483,6 +1514,47 @@ describe('StarService', () => {
         })
       );
       expect(record.expiryDate).toBe('2026-03-28');
+    });
+
+    it('补云星星流水时应透传执行者上下文', async () => {
+      const record = {
+        id: 'record_sync_operator',
+        userId: 'child_1',
+        type: 'income',
+        source: 'task_complete',
+        sourceId: 'task_1',
+        points: 2,
+        description: '完成任务',
+        expiryType: 'week',
+        expiryDate: '2026-03-28',
+        syncedToCloud: false,
+        modifyTime: 1742716800000,
+        data: {
+          operatorUserId: 'child_1',
+          operatorRole: 'child',
+          loginUserId: 'parent_1',
+          familyId: 'fam_1',
+          targetUserId: 'child_1'
+        }
+      };
+
+      HttpClient.post.mockResolvedValue({ updatedGroupsSnapshot: [] });
+      mockStarRecordRepository.getAll.mockResolvedValue([]);
+
+      await starService._syncStarRecordToCloud(record);
+
+      expect(HttpClient.post).toHaveBeenCalledWith(
+        '/api/stars/records',
+        expect.objectContaining({
+          operatorContext: {
+            actorUserId: 'child_1',
+            actorRole: 'child',
+            loginUserId: 'parent_1',
+            familyId: 'fam_1',
+            targetUserId: 'child_1'
+          }
+        })
+      );
     });
 
     it('应该成功清除缓存', () => {

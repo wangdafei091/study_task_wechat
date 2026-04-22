@@ -6,7 +6,7 @@
  */
 
 const logger = require('../utils/logger');
-const { User, UserRole, UserStatus } = require('../models/user');
+const { FamilyPermissionRole, User, UserRole, UserStatus } = require('../models/user');
 const EventBus = require('../utils/core/event-bus');
 const HttpClient = require('../utils/http-client');
 const TokenManager = require('../utils/token-manager');
@@ -70,6 +70,7 @@ class UserService {
             userId: tokenInfo.userId,
             role: tokenInfo.role || UserRole.PARENT,
             familyId: tokenInfo.familyId || null,
+            familyPermissionRole: tokenInfo.familyPermissionRole || null,
           });
         }
       }
@@ -567,6 +568,7 @@ class UserService {
         role: UserRole.PARENT,
         avatar: this.currentUser.avatar || '👩‍💼',
         familyId,
+        familyPermissionRole: FamilyPermissionRole.MANAGER,
       });
       this.userCache.set(this.loginUser.userId, this.loginUser);
 
@@ -632,6 +634,10 @@ class UserService {
    * @param {String} role 目标角色 parent|child
    */
   async refreshInviteCode(role) {
+    if (this._isLocalMode()) {
+      throw new Error('本地模式暂不支持刷新邀请码');
+    }
+
     try {
       return await HttpClient.post(API_CONFIG.ENDPOINTS.FAMILIES_INVITE_CODE, { role });
     } catch (error) {
@@ -717,6 +723,32 @@ class UserService {
   }
 
   /**
+   * 调整家庭内家长权限
+   * @param {String} userId 目标用户ID
+   * @param {String} familyPermissionRole manager|viewer
+   * @returns {Promise<Object>}
+   */
+  async updateFamilyMemberPermissionRole(userId, familyPermissionRole) {
+    if (this._isLocalMode()) {
+      return { success: false, message: '本地模式暂不支持调整家长权限' };
+    }
+
+    try {
+      const url = API_CONFIG.ENDPOINTS.FAMILIES_MEMBER_PERMISSION_ROLE.replace('{userId}', userId);
+      const result = await HttpClient.patch(url, { familyPermissionRole });
+      if (result.token) {
+        TokenManager.setToken(result.token);
+      }
+      await this.initialize();
+      logger.info('UserService', '更新家长权限成功', { userId, familyPermissionRole });
+      return { success: true, ...result };
+    } catch (error) {
+      logger.error('UserService', '更新家长权限失败', error);
+      return { success: false, message: error.message };
+    }
+  }
+
+  /**
    * 判断是否为本地存储模式
    * @returns {Boolean}
    * @private
@@ -742,6 +774,7 @@ class UserService {
         role: UserRole.PARENT,
         avatar: this.currentUser.avatar || '👩‍💼',
         familyId: localFamily.familyId,
+        familyPermissionRole: FamilyPermissionRole.MANAGER,
       });
       this.userCache.set(this.loginUser.userId, this.loginUser);
     }

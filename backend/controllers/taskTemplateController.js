@@ -1,23 +1,26 @@
 const taskTemplateService = require('../services/taskTemplateService');
 const taskTemplateRecommendationService = require('../services/taskTemplateRecommendationService');
+const { ensureManagerBusinessAccess } = require('../utils/family-permission');
 const { success, error } = require('../utils/response');
 const { createLogger } = require('../utils/logger');
 
 const logger = createLogger('TaskTemplateController');
 
 class TaskTemplateController {
-  _ensureManagePermission(req, res) {
+  async _ensureManagePermission(req, res) {
     if (req.user.role !== 'parent' || !req.user.familyId) {
       res.status(403).json(error('仅家长可管理任务模板', 'PERMISSION_DENIED'));
       return false;
     }
 
-    return true;
+    return ensureManagerBusinessAccess(req, res, {
+      deniedMessage: '当前为查看者，不能管理任务模板'
+    });
   }
 
   async getTemplates(req, res) {
     try {
-      if (!this._ensureManagePermission(req, res)) {
+      if (!(await this._ensureManagePermission(req, res))) {
         return;
       }
 
@@ -34,7 +37,7 @@ class TaskTemplateController {
 
   async createTemplate(req, res) {
     try {
-      if (!this._ensureManagePermission(req, res)) {
+      if (!(await this._ensureManagePermission(req, res))) {
         return;
       }
 
@@ -55,7 +58,7 @@ class TaskTemplateController {
 
   async updateTemplate(req, res) {
     try {
-      if (!this._ensureManagePermission(req, res)) {
+      if (!(await this._ensureManagePermission(req, res))) {
         return;
       }
 
@@ -76,7 +79,7 @@ class TaskTemplateController {
 
   async setTemplateEnabled(req, res) {
     try {
-      if (!this._ensureManagePermission(req, res)) {
+      if (!(await this._ensureManagePermission(req, res))) {
         return;
       }
 
@@ -97,7 +100,7 @@ class TaskTemplateController {
 
   async deleteTemplate(req, res) {
     try {
-      if (!this._ensureManagePermission(req, res)) {
+      if (!(await this._ensureManagePermission(req, res))) {
         return;
       }
 
@@ -113,7 +116,7 @@ class TaskTemplateController {
 
   async recordTemplateUsage(req, res) {
     try {
-      if (!this._ensureManagePermission(req, res)) {
+      if (!(await this._ensureManagePermission(req, res))) {
         return;
       }
 
@@ -129,7 +132,7 @@ class TaskTemplateController {
 
   async queryRecommendations(req, res) {
     try {
-      if (!this._ensureManagePermission(req, res)) {
+      if (!(await this._ensureManagePermission(req, res))) {
         return;
       }
 
@@ -151,6 +154,7 @@ class TaskTemplateController {
   _statusForError(errorCode) {
     switch (errorCode) {
       case 'INVALID_PARAMS':
+      case 'TASK_TEMPLATE_RANGE_TOO_LARGE':
         return 400;
       case 'PERMISSION_DENIED':
         return 403;

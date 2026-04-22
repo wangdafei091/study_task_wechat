@@ -7,6 +7,7 @@ USE task_wechat_test;
 SET FOREIGN_KEY_CHECKS = 0;
 DROP TABLE IF EXISTS messages;
 DROP TABLE IF EXISTS rewards;
+DROP TABLE IF EXISTS app_access_codes;
 DROP TABLE IF EXISTS star_groups;
 DROP TABLE IF EXISTS star_records;
 DROP TABLE IF EXISTS tasks;
@@ -24,6 +25,7 @@ CREATE TABLE IF NOT EXISTS users (
   role VARCHAR(20) DEFAULT 'parent' COMMENT '角色：parent/child',
   status VARCHAR(20) DEFAULT 'active' COMMENT '状态：active/inactive',
   family_id VARCHAR(36) DEFAULT NULL COMMENT '所属家庭ID，NULL表示未加入家庭',
+  family_permission_role VARCHAR(20) DEFAULT NULL COMMENT '家庭内权限：manager/viewer，非家庭家长和孩子为NULL',
   is_virtual TINYINT(1) DEFAULT 0 COMMENT '是否虚拟成员（无独立微信号，由家长创建）',
   created_by_user_id VARCHAR(36) DEFAULT NULL COMMENT '虚拟成员的创建者user_id',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -158,6 +160,22 @@ CREATE TABLE IF NOT EXISTS rewards (
   FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS app_access_codes (
+  access_code_id VARCHAR(36) PRIMARY KEY,
+  code VARCHAR(16) NOT NULL UNIQUE,
+  status VARCHAR(20) NOT NULL DEFAULT 'active',
+  max_uses INT NOT NULL DEFAULT 1,
+  used_count INT NOT NULL DEFAULT 0,
+  expires_at TIMESTAMP NULL DEFAULT NULL,
+  bound_user_id VARCHAR(36) DEFAULT NULL,
+  note VARCHAR(255) DEFAULT '',
+  consumed_at TIMESTAMP NULL DEFAULT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_app_access_codes_status (status),
+  INDEX idx_app_access_codes_expires_at (expires_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS messages (
   message_id VARCHAR(100) PRIMARY KEY,
   family_id VARCHAR(100) DEFAULT NULL,
@@ -192,9 +210,9 @@ CREATE TABLE IF NOT EXISTS messages (
 
 -- 插入测试数据
 -- 先创建家长，再创建家庭，最后回填 family_id，避免循环外键插入失败
-INSERT INTO users (user_id, openid, nickname, avatar, role, status, family_id, is_virtual, created_by_user_id) VALUES
-('parent_001', 'parent_openid_001', '测试家长', NULL, 'parent', 'active', NULL, 0, NULL),
-('parent_002', 'parent_openid_002', '测试家长2', NULL, 'parent', 'active', NULL, 0, NULL);
+INSERT INTO users (user_id, openid, nickname, avatar, role, status, family_id, family_permission_role, is_virtual, created_by_user_id) VALUES
+('parent_001', 'parent_openid_001', '测试家长', NULL, 'parent', 'active', NULL, NULL, 0, NULL),
+('parent_002', 'parent_openid_002', '测试家长2', NULL, 'parent', 'active', NULL, NULL, 0, NULL);
 
 -- 家庭1：包含家长和孩子
 INSERT INTO families (family_id, name, invite_code, invite_code_role, created_by, status) VALUES
@@ -204,13 +222,13 @@ INSERT INTO families (family_id, name, invite_code, invite_code_role, created_by
 INSERT INTO families (family_id, name, invite_code, invite_code_role, created_by, status) VALUES
 ('family_002', '测试家庭B', 'TEST002', 'child', 'parent_002', 'active');
 
-UPDATE users SET family_id = 'family_001' WHERE user_id = 'parent_001';
-UPDATE users SET family_id = 'family_002' WHERE user_id = 'parent_002';
+UPDATE users SET family_id = 'family_001', family_permission_role = 'manager' WHERE user_id = 'parent_001';
+UPDATE users SET family_id = 'family_002', family_permission_role = 'manager' WHERE user_id = 'parent_002';
 
-INSERT INTO users (user_id, openid, nickname, avatar, role, status, family_id, is_virtual, created_by_user_id) VALUES
-('child_001', 'child_openid_001', '测试孩子', NULL, 'child', 'active', 'family_001', 0, NULL),
-('child_002', 'child_openid_002', '测试孩子2', NULL, 'child', 'active', 'family_001', 0, NULL),
-('child_003', 'child_openid_003', '测试孩子3', NULL, 'child', 'active', 'family_002', 0, NULL);
+INSERT INTO users (user_id, openid, nickname, avatar, role, status, family_id, family_permission_role, is_virtual, created_by_user_id) VALUES
+('child_001', 'child_openid_001', '测试孩子', NULL, 'child', 'active', 'family_001', NULL, 0, NULL),
+('child_002', 'child_openid_002', '测试孩子2', NULL, 'child', 'active', 'family_001', NULL, 0, NULL),
+('child_003', 'child_openid_003', '测试孩子3', NULL, 'child', 'active', 'family_002', NULL, 0, NULL);
 
 -- 任务测试数据
 INSERT INTO tasks (task_id, user_id, title, type, date, points, status, star_awarded) VALUES

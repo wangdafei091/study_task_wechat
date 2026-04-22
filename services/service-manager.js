@@ -89,6 +89,11 @@ class ServiceManager {
       logger.info('ServiceManager', 'RewardService已更新StarService');
     }
 
+    if (this.services.starService && this.services.starService.updateUserService) {
+      this.services.starService.updateUserService(this.userService);
+      logger.info('ServiceManager', 'StarService已更新UserService');
+    }
+
     // 检查MessageService（使用正确的this.services路径）
     if (this.services.messageService && this.services.messageService.updateUserService) {
       this.services.messageService.updateUserService(this.userService);
@@ -193,7 +198,8 @@ class ServiceManager {
     try {
       // 第一步：初始化不依赖其他服务的基础服务
       this.services.starService = new StarService({
-        eventBus: this.eventBus
+        eventBus: this.eventBus,
+        userService: this.userService
       });
       
       // 初始化MessageService，注入UserService依赖

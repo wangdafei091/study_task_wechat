@@ -26,6 +26,7 @@ function token(user) {
 const PARENT = { userId: 'parent_1', role: 'parent', familyId: 'fam_1' };
 const CHILD = { userId: 'child_1', role: 'child', familyId: 'fam_1' };
 const OTHER = { userId: 'other_1', role: 'child', familyId: 'fam_2' };
+const VIEWER = { userId: 'parent_viewer', role: 'parent', familyId: 'fam_1', familyPermissionRole: 'viewer' };
 
 function makeReward(overrides = {}) {
   return {
@@ -58,6 +59,15 @@ describe('PATCH /api/rewards/:rewardId/cancel-exchange', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    familyService.getUserFamilyRoleProfile = jest.fn().mockImplementation(async (userId) => {
+      if (userId === 'parent_1') {
+        return { userId, familyId: 'fam_1', role: 'parent', familyPermissionRole: 'manager' };
+      }
+      if (userId === 'parent_viewer') {
+        return { userId, familyId: 'fam_1', role: 'parent', familyPermissionRole: 'viewer' };
+      }
+      return null;
+    });
   });
 
   it('孩子可取消自己的奖励兑换', async () => {
@@ -245,5 +255,34 @@ describe('PATCH /api/rewards/:rewardId/exchange', () => {
         familyId: 'fam_1',
       })
     );
+  });
+
+  it('查看者家长兑换奖励应返回 403', async () => {
+    familyService.getUserFamilyRoleProfile = jest.fn().mockResolvedValue({
+      userId: 'parent_viewer',
+      familyId: 'fam_1',
+      role: 'parent',
+      familyPermissionRole: 'viewer'
+    });
+
+    const res = await request(app)
+      .patch('/api/rewards/reward_001/exchange')
+      .set('Authorization', token(VIEWER))
+      .send({ exchangeUserId: 'child_1' });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error_code).toBe('FAMILY_MANAGER_REQUIRED');
+    expect(rewardService.exchangeReward).not.toHaveBeenCalled();
+  });
+
+  it('孩子不能创建奖励', async () => {
+    const res = await request(app)
+      .post('/api/rewards')
+      .set('Authorization', token(CHILD))
+      .send({ title: '新奖励', pointsCost: 10 });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error_code).toBe('PERMISSION_DENIED');
+    expect(rewardService.createReward).not.toHaveBeenCalled();
   });
 });

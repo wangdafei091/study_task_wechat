@@ -11,7 +11,15 @@ describe('utils/user-context', () => {
   const parentUser = {
     userId: 'parent-1',
     role: 'parent',
-    familyId: 'family-1'
+    familyId: 'family-1',
+    familyPermissionRole: 'manager'
+  };
+
+  const viewerParentUser = {
+    userId: 'parent-viewer',
+    role: 'parent',
+    familyId: 'family-1',
+    familyPermissionRole: 'viewer'
   };
 
   const childUser = {
@@ -186,14 +194,100 @@ describe('utils/user-context', () => {
       expect(result).toEqual(expect.objectContaining({
         loginUserId: 'parent-1',
         loginUserRole: 'parent',
+        familyPermissionRole: 'manager',
         viewUserId: 'child-1',
         viewUserRole: 'child',
         canManageMembers: true,
+        isSwitchedChildView: true,
+        isViewerReadonly: false,
         isReadonlyView: true,
+        canManageFamilyGovernance: false,
+        canManageBusinessData: false,
         lastActiveChildId: 'child-1'
       }));
+      expect(result.userPermissions.task.complete).toBe(true);
+      expect(result.userPermissions.task.create).toBe(false);
+      expect(result.userPermissions.reward.exchange).toBe(true);
+      expect(result.userPermissions.reward.manage).toBe(false);
+    });
+
+    it('查看者家长看自己时应保持只读但不混同为孩子视角', () => {
+      const result = userContextUtils.resolvePermissionContext({
+        loginUser: viewerParentUser,
+        currentUser: viewerParentUser,
+        availableUsers: [viewerParentUser, childUser]
+      });
+
+      expect(result).toEqual(expect.objectContaining({
+        loginUserId: 'parent-viewer',
+        loginUserRole: 'parent',
+        familyPermissionRole: 'viewer',
+        viewUserId: 'parent-viewer',
+        viewUserRole: 'parent',
+        canManageMembers: true,
+        isSwitchedChildView: false,
+        isViewerReadonly: true,
+        isReadonlyView: true,
+        canManageFamilyGovernance: false,
+        canManageBusinessData: false
+      }));
+      expect(result.userPermissions.task.create).toBe(false);
+      expect(result.userPermissions.reward.manage).toBe(false);
+    });
+
+    it('查看者家长切到孩子视角时不应误判为 viewer 只读，执行权限应按孩子口径计算', () => {
+      const result = userContextUtils.resolvePermissionContext({
+        loginUser: viewerParentUser,
+        currentUser: childUser,
+        availableUsers: [viewerParentUser, childUser]
+      }, {
+        lastActiveChildId: 'child-1'
+      });
+
+      expect(result).toEqual(expect.objectContaining({
+        loginUserId: 'parent-viewer',
+        loginUserRole: 'parent',
+        familyPermissionRole: 'viewer',
+        viewUserId: 'child-1',
+        viewUserRole: 'child',
+        isSwitchedChildView: true,
+        isViewerReadonly: false,
+        isReadonlyView: true,
+        canManageFamilyGovernance: false,
+        canManageBusinessData: false,
+        lastActiveChildId: 'child-1'
+      }));
+      expect(result.userPermissions.task.complete).toBe(true);
+      expect(result.userPermissions.task.create).toBe(false);
+      expect(result.userPermissions.reward.exchange).toBe(true);
+      expect(result.userPermissions.reward.manage).toBe(false);
+    });
+
+    it('未加入家庭的家长不应被误判为查看者只读', () => {
+      const result = userContextUtils.resolvePermissionContext({
+        loginUser: {
+          userId: 'solo-parent',
+          role: 'parent',
+          familyId: null,
+          familyPermissionRole: null
+        },
+        currentUser: {
+          userId: 'solo-parent',
+          role: 'parent',
+          familyId: null,
+          familyPermissionRole: null
+        },
+        availableUsers: []
+      });
+
+      expect(result).toEqual(expect.objectContaining({
+        familyPermissionRole: null,
+        isViewerReadonly: false,
+        isReadonlyView: false,
+        canManageFamilyGovernance: false,
+        canManageBusinessData: true
+      }));
       expect(result.userPermissions.task.create).toBe(true);
-      expect(result.userPermissions.reward.manage).toBe(true);
     });
 
     it('未登录时应安全降级', () => {
@@ -212,10 +306,15 @@ describe('utils/user-context', () => {
       expect(permissionContext).toEqual({
         loginUserId: null,
         loginUserRole: null,
+        familyPermissionRole: null,
         viewUserId: null,
         viewUserRole: null,
         canManageMembers: false,
+        isSwitchedChildView: false,
+        isViewerReadonly: false,
         isReadonlyView: false,
+        canManageFamilyGovernance: false,
+        canManageBusinessData: false,
         userPermissions: {},
         lastActiveChildId: null
       });

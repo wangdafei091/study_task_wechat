@@ -528,6 +528,54 @@ describe('task-sync direct behavior', () => {
     await expect(taskSync.fetchTasksFromCloud(service, 'parent_1', {})).rejects.toThrow('cloud fetch fail');
   });
 
+  it('fetchTasksFromCloud 不应把任务级 hasNoEndDate 串到表现项 activeRange', async () => {
+    const service = {
+      userService: {
+        getLoginUserId: jest.fn(() => 'parent_1')
+      },
+      _flushPendingTaskSyncs: jest.fn(async () => true),
+      _cleanupStaleTasks: jest.fn(async () => true),
+      taskRepository: {
+        getByUserId: jest.fn(async () => []),
+        saveAll: jest.fn(async (tasks) => tasks)
+      }
+    };
+
+    mockHttpClient.get.mockResolvedValueOnce({
+      tasks: [
+        {
+          taskId: 'occ_cfg_ended',
+          userId: 'parent_1',
+          title: '听写全对',
+          type: 'study',
+          executionMode: 'occurrence',
+          date: '2026-04-17',
+          hasNoEndDate: true,
+          activeRange: {
+            startDate: '2026-04-17',
+            endDate: '2026-04-19',
+            hasNoEndDate: false
+          },
+          modifyTime: 200,
+          status: 0,
+          starAwarded: false
+        }
+      ]
+    });
+
+    const result = await taskSync.fetchTasksFromCloud(service, 'parent_1', {});
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toEqual(expect.objectContaining({
+      hasNoEndDate: true,
+      activeRange: {
+        startDate: '2026-04-17',
+        endDate: '2026-04-19',
+        hasNoEndDate: false
+      }
+    }));
+  });
+
   it('fetchTasksFromCloud 在全量拉取本人任务时应清理陈旧任务并尝试回灌本地', async () => {
     const service = {
       userService: {

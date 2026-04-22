@@ -83,7 +83,8 @@ describe('pages/task-record/task-record', () => {
       }
     }));
     global.wx = {
-      showToast: jest.fn()
+      showToast: jest.fn(),
+      navigateBack: jest.fn()
     };
 
     loadPageModule();
@@ -170,5 +171,73 @@ describe('pages/task-record/task-record', () => {
       icon: 'success'
     }));
     expect(page.loadItems).toHaveBeenCalled();
+  });
+
+  it('viewer 家长进入时应直接拦截并返回上一页', async () => {
+    global.getApp = jest.fn(() => ({
+      globalData: {
+        lastActiveChildId: 'child_1',
+        userService: {
+          getLoginUser: jest.fn(() => ({
+            userId: 'parent_viewer',
+            role: 'parent',
+            familyId: 'family_1',
+            familyPermissionRole: 'viewer'
+          })),
+          getCurrentUser: jest.fn(() => ({
+            userId: 'parent_viewer',
+            role: 'parent',
+            familyId: 'family_1',
+            familyPermissionRole: 'viewer'
+          })),
+          getAllUsers: jest.fn(() => [
+            { userId: 'parent_viewer', role: 'parent', familyId: 'family_1', familyPermissionRole: 'viewer', name: '查看者家长' },
+            { userId: 'child_1', role: 'child', familyId: 'family_1', name: '小明' }
+          ])
+        }
+      }
+    }));
+    loadPageModule();
+
+    const page = createPageInstance();
+    await page.onLoad.call(page, { date: '2026-04-16' });
+
+    expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({
+      title: '当前为查看者，不能记录表现'
+    }));
+    expect(global.wx.navigateBack).toHaveBeenCalledWith({ delta: 1 });
+    expect(taskService.getOccurrenceTasks).not.toHaveBeenCalled();
+  });
+
+  it('viewer 家长切到孩子视角时，进入页面不应被误拦截', async () => {
+    global.getApp = jest.fn(() => ({
+      globalData: {
+        lastActiveChildId: 'child_1',
+        userService: {
+          getLoginUser: jest.fn(() => ({
+            userId: 'parent_viewer',
+            role: 'parent',
+            familyId: 'family_1',
+            familyPermissionRole: 'viewer'
+          })),
+          getCurrentUser: jest.fn(() => ({
+            userId: 'child_1',
+            role: 'child',
+            familyId: 'family_1'
+          })),
+          getAllUsers: jest.fn(() => [
+            { userId: 'parent_viewer', role: 'parent', familyId: 'family_1', familyPermissionRole: 'viewer', name: '查看者家长' },
+            { userId: 'child_1', role: 'child', familyId: 'family_1', name: '小明' }
+          ])
+        }
+      }
+    }));
+    loadPageModule();
+
+    const page = createPageInstance();
+    await page.onLoad.call(page, { date: '2026-04-16' });
+
+    expect(global.wx.navigateBack).not.toHaveBeenCalled();
+    expect(taskService.getOccurrenceTasks).toHaveBeenCalled();
   });
 });

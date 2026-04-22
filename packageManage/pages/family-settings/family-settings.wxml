@@ -2,7 +2,18 @@
 <view class="container">
   <!-- 未加入家庭 -->
   <view class="no-family-section" wx:if="{{!loading && !family}}">
-    <view class="no-family-icon">👨‍👩‍👧</view>
+    <view class="no-family-illustration" aria-hidden="true">
+      <view class="no-family-roof"></view>
+      <view class="no-family-home">
+        <view class="no-family-window"></view>
+        <view class="no-family-window"></view>
+      </view>
+      <view class="no-family-people">
+        <view class="no-family-person large"></view>
+        <view class="no-family-person small"></view>
+        <view class="no-family-person small"></view>
+      </view>
+    </view>
     <view class="no-family-title">还没有家庭</view>
     <view class="no-family-desc">创建家庭或通过邀请码加入</view>
     <view class="action-group">
@@ -16,7 +27,16 @@
     <!-- 家庭信息卡片 -->
     <view class="card">
       <view class="card-title">{{family.name}}</view>
-      <view class="card-sub">家庭ID：{{family.familyId}}</view>
+      <view class="card-sub">已加入家庭，可邀请成员共同使用</view>
+      <view class="card-meta">家庭ID：{{family.familyId}}</view>
+    </view>
+
+    <view class="card identity-card">
+      <view class="section-title-row">
+        <view class="section-title">当前身份</view>
+        <view class="identity-badge {{familyPermissionRole === 'manager' ? 'manager' : 'viewer'}}">{{currentIdentityLabel}}</view>
+      </view>
+      <view class="identity-desc">{{currentIdentityDescription}}</view>
     </view>
 
     <!-- 邀请码区域 -->
@@ -27,8 +47,9 @@
         <view class="copy-btn" bindtap="copyInviteCode">复制</view>
       </view>
       <view class="invite-code-meta" wx:if="{{inviteCode}}">
-        <text>{{inviteCodeRole === 'parent' ? '家长邀请码' : '孩子邀请码'}}</text>
+        <text>{{inviteCodeRole === 'parent' ? '家长邀请码' : '孩子邀请码'}} · {{inviteCodeExpiryText}}</text>
       </view>
+      <view class="section-desc invite-role-hint">{{inviteRoleHint}}</view>
       <view class="role-selector">
         <text class="selector-label">邀请类型：</text>
         <radio-group bindchange="onInviteCodeRoleChange">
@@ -36,27 +57,43 @@
           <label class="role-label"><radio value="parent" checked="{{inviteCodeRole === 'parent'}}"/>家长</label>
         </radio-group>
       </view>
-      <view class="btn-outline" bindtap="refreshInviteCode">刷新邀请码</view>
+      <view class="btn-outline {{!canManageInviteCode ? 'btn-disabled' : ''}}" bindtap="refreshInviteCode">刷新邀请码</view>
+      <view class="governance-tip" wx:if="{{!canManageInviteCode}}">{{inviteManagementDisabledReason}}</view>
     </view>
 
     <!-- 成员列表 -->
     <view class="card">
       <view class="section-title-row">
         <view class="section-title">家庭成员</view>
-        <view class="add-member-btn" bindtap="addVirtualMember">+ 添加孩子</view>
+        <view class="add-member-btn {{!canManageFamilyGovernance ? 'text-disabled' : ''}}" bindtap="addVirtualMember">+ 添加孩子</view>
       </view>
       <view class="member-list">
         <view class="member-item" wx:for="{{members}}" wx:key="userId">
-          <view class="member-icon">{{item.role === 'parent' ? '👩‍💼' : '👶'}}</view>
+          <view class="member-icon">{{item.role === 'parent' ? '家' : '童'}}</view>
           <view class="member-info">
             <view class="member-name">{{item.nickname}}</view>
-            <view class="member-role">{{item.role === 'parent' ? '家长' : (item.isVirtual ? '孩子（共享设备）' : '孩子')}}</view>
+            <view class="member-role">{{item.roleDisplayText}}{{item.isSelf ? ' · 我' : ''}}</view>
+            <view class="permission-switch" wx:if="{{supportsParentPermissionManagement && item.isParent}}">
+              <view
+                class="permission-chip {{item.familyPermissionRole === 'manager' ? 'active manager' : ''}} {{!item.canAdjustPermission ? 'disabled' : ''}}"
+                data-user-id="{{item.userId}}"
+                data-role="manager"
+                bindtap="onPermissionRoleTap"
+              >管理员</view>
+              <view
+                class="permission-chip {{item.familyPermissionRole === 'viewer' ? 'active viewer' : ''}} {{!item.canAdjustPermission ? 'disabled' : ''}}"
+                data-user-id="{{item.userId}}"
+                data-role="viewer"
+                bindtap="onPermissionRoleTap"
+              >查看者</view>
+            </view>
           </view>
-          <view class="delete-btn" wx:if="{{item.isVirtual}}"
+          <view class="delete-btn {{!item.canDelete ? 'text-disabled' : ''}}" wx:if="{{item.isVirtual}}"
                 data-user-id="{{item.userId}}" data-name="{{item.nickname}}"
                 bindtap="deleteMember">删除</view>
         </view>
       </view>
+      <view class="governance-tip" wx:if="{{!canManageFamilyGovernance}}">{{governanceDisabledReason}}</view>
     </view>
 
     <!-- PIN 码设置 -->

@@ -65,7 +65,13 @@ async function setupTestData() {
 
   // 建家庭后再关联用户到家庭，并插入孩子
   await db.query(
-    `UPDATE users SET family_id = 'family_m08b_test' WHERE user_id IN ('parent_m08b_test', 'parent2_m08b_test')`
+    `UPDATE users
+     SET family_id = 'family_m08b_test',
+         family_permission_role = CASE
+           WHEN role = 'parent' THEN 'manager'
+           ELSE family_permission_role
+         END
+     WHERE user_id IN ('parent_m08b_test', 'parent2_m08b_test')`
   );
 
   await db.query(
@@ -206,14 +212,14 @@ describe('M08b 真实数据库集成测试 - POST /api/tasks/transfer', () => {
     expect(res.body.data.count).toBe(0);
   });
 
-  it('孩子身份调用应返回 403 TRANSFER_PARENT_REQUIRED', async () => {
+  it('孩子身份调用应返回 403 PERMISSION_DENIED', async () => {
     const res = await request(app)
       .post('/api/tasks/transfer')
       .set('Authorization', `Bearer ${childToken}`)
       .send({ toUserId: 'child_m08b_test' });
 
     expect(res.status).toBe(403);
-    expect(res.body.error_code).toBe('TRANSFER_PARENT_REQUIRED');
+    expect(res.body.error_code).toBe('PERMISSION_DENIED');
   });
 
   it('toUserId 不在同家庭应返回 400 TRANSFER_TARGET_INVALID', async () => {

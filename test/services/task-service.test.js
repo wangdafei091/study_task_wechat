@@ -827,9 +827,23 @@ describe('TaskService', () => {
     it('应该成功完成任务', async () => {
       const nowSpy = mockNowForCurrentTaskDay();
       try {
+        mockUserService.getLoginUser = jest.fn().mockReturnValue({
+          userId: 'parent',
+          role: 'parent',
+          familyId: 'fam_1',
+          familyPermissionRole: 'viewer'
+        });
+        mockUserService.getLoginUserId.mockReturnValue('parent');
+        mockUserService.getCurrentUser.mockReturnValue({ userId: 'child_1', role: 'child', familyId: 'fam_1' });
+        mockUserService.getCurrentUserId.mockReturnValue('child_1');
+        mockUserService.getAllUsers.mockReturnValue([
+          { userId: 'parent', role: 'parent', familyId: 'fam_1', familyPermissionRole: 'viewer' },
+          { userId: 'child_1', role: 'child', familyId: 'fam_1' }
+        ]);
+
         const taskData = TestDataFactory.createTask({
           id: 'task_1',
-          userId: 'parent',
+          userId: 'child_1',
           title: '测试任务',
           type: TaskType.HABIT,
           status: TaskStatus.PENDING,
@@ -861,7 +875,14 @@ describe('TaskService', () => {
           expect.objectContaining({
             sourceType: 'task_complete',
             sourceId: 'task_1',
-            userId: 'parent'
+            userId: 'child_1',
+            operatorContext: expect.objectContaining({
+              actorUserId: 'child_1',
+              actorRole: 'child',
+              loginUserId: 'parent',
+              familyId: 'fam_1',
+              targetUserId: 'child_1'
+            })
           })
         );
 

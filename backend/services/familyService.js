@@ -7,8 +7,34 @@ const Family = require('../models/Family');
 const User = require('../models/User');
 const { createLogger } = require('../utils/logger');
 const logger = createLogger('FamilyService');
+const FAMILY_PERMISSION_ROLE = {
+  MANAGER: 'manager',
+  VIEWER: 'viewer'
+};
 
 class FamilyService {
+  _getQueryRunner(connection = null) {
+    if (connection && typeof connection.execute === 'function') {
+      return async (sql, params = []) => {
+        const [rows] = await connection.execute(sql, params);
+        return rows;
+      };
+    }
+
+    return query;
+  }
+
+  _getExecuteRunner(connection = null) {
+    if (connection && typeof connection.execute === 'function') {
+      return async (sql, params = []) => {
+        const [result] = await connection.execute(sql, params);
+        return result;
+      };
+    }
+
+    return execute;
+  }
+
   /**
    * 创建家庭（使用事务：同时更新 families + users.family_id）
    */
@@ -28,8 +54,8 @@ class FamilyService {
       );
 
       await conn.execute(
-        'UPDATE users SET family_id = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?',
-        [familyId, userId]
+        'UPDATE users SET family_id = ?, family_permission_role = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?',
+        [familyId, FAMILY_PERMISSION_ROLE.MANAGER, userId]
       );
 
       const rewardModifyTime = Date.now();
@@ -93,11 +119,14 @@ class FamilyService {
 
       // 加入者角色由邀请码决定，不接受客户端传入
       const joinRole = family.invite_code_role || 'child';
+      const joinFamilyPermissionRole = joinRole === 'parent'
+        ? FAMILY_PERMISSION_ROLE.VIEWER
+        : null;
 
       // 更新用户的家庭信息和角色
       await conn.execute(
-        'UPDATE users SET family_id = ?, role = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?',
-        [family.family_id, joinRole, userId]
+        'UPDATE users SET family_id = ?, role = ?, family_permission_role = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?',
+        [family.family_id, joinRole, joinFamilyPermissionRole, userId]
       );
 
       // 标记邀请码已使用（一次性失效）
@@ -108,8 +137,17 @@ class FamilyService {
 
       await conn.commit();
 
-      logger.info('加入家庭成功', { userId, familyId: family.family_id, joinRole });
-      return { familyId: family.family_id, role: joinRole };
+      logger.info('加入家庭成功', {
+        userId,
+        familyId: family.family_id,
+        joinRole,
+        familyPermissionRole: joinFamilyPermissionRole
+      });
+      return {
+        familyId: family.family_id,
+        role: joinRole,
+        familyPermissionRole: joinFamilyPermissionRole
+      };
     } catch (error) {
       await conn.rollback();
       logger.error('加入家庭失败', error);
@@ -272,13 +310,180 @@ class FamilyService {
    */
   async getUserFamilyAndRole(userId) {
     const results = await query(
-      'SELECT family_id, role FROM users WHERE user_id = ? AND status = ? LIMIT 1',
+      'SELECT family_id, role, family_permission_role FROM users WHERE user_id = ? AND status = ? LIMIT 1',
       [userId, 'active']
     );
     if (results.length === 0) return null;
-    return { familyId: results[0].family_id, role: results[0].role };
+    return {
+      familyId: results[0].family_id,
+      role: results[0].role,
+      familyPermissionRole: results[0].family_permission_role || null
+    };
+  }
+
+  async getUserFamilyRoleProfile(userId, options = {}) {
+    const queryRunner = this._getQueryRunner(options.connection);
+    const results = await queryRunner(
+      `SELECT user_id, family_id, role, family_permission_role, is_virtual, nickname
+       FROM users
+       WHERE user_id = ? AND status = ?
+       LIMIT 1${options.forUpdate ? ' FOR UPDATE' : ''}`,
+      [userId, 'active']
+    );
+    if (results.length === 0) {
+      return null;
+    }
+
+    return {
+      userId: results[0].user_id,
+      familyId: results[0].family_id || null,
+      role: results[0].role,
+      familyPermissionRole: results[0].family_permission_role || null,
+      isVirtual: Boolean(results[0].is_virtual),
+      nickname: results[0].nickname || ''
+    };
+  }
+
+  async getUserFamilyRoleProfiles(userIds = [], options = {}) {
+    const normalizedUserIds = Array.from(new Set(
+      (Array.isArray(userIds) ? userIds : [userIds]).filter(Boolean)
+    )).sort();
+
+    if (normalizedUserIds.length === 0) {
+      return [];
+    }
+
+    const queryRunner = this._getQueryRunner(options.connection);
+    const placeholders = normalizedUserIds.map(() => '?').join(', ');
+    const results = await queryRunner(
+      `SELECT user_id, family_id, role, family_permission_role, is_virtual, nickname
+       FROM users
+       WHERE user_id IN (${placeholders})
+         AND status = ?
+       ORDER BY user_id ASC${options.forUpdate ? ' FOR UPDATE' : ''}`,
+      normalizedUserIds.concat('active')
+    );
+
+    return results.map((row) => ({
+      userId: row.user_id,
+      familyId: row.family_id || null,
+      role: row.role,
+      familyPermissionRole: row.family_permission_role || null,
+      isVirtual: Boolean(row.is_virtual),
+      nickname: row.nickname || ''
+    }));
+  }
+
+  async countManagers(familyId, options = {}) {
+    const queryRunner = this._getQueryRunner(options.connection);
+    const results = await queryRunner(
+      `SELECT user_id
+       FROM users
+       WHERE family_id = ?
+         AND role = 'parent'
+         AND family_permission_role = ?
+         AND status = ?${options.forUpdate ? ' FOR UPDATE' : ''}`,
+      [familyId, FAMILY_PERMISSION_ROLE.MANAGER, 'active']
+    );
+    return results.length;
+  }
+
+  async isFamilyManager(userId, familyId = null) {
+    const profile = await this.getUserFamilyRoleProfile(userId);
+    if (!profile) {
+      return false;
+    }
+
+    if (familyId && profile.familyId !== familyId) {
+      return false;
+    }
+
+    return Boolean(
+      profile.role === 'parent' &&
+      profile.familyId &&
+      profile.familyPermissionRole === FAMILY_PERMISSION_ROLE.MANAGER
+    );
+  }
+
+  async updateMemberPermissionRole(operatorUserId, operatorFamilyId, targetUserId, familyPermissionRole) {
+    if (![FAMILY_PERMISSION_ROLE.MANAGER, FAMILY_PERMISSION_ROLE.VIEWER].includes(familyPermissionRole)) {
+      throw Object.assign(new Error('家长权限无效'), { code: 'INVALID_PARAMS' });
+    }
+
+    const connection = await pool.getConnection();
+
+    try {
+      await connection.beginTransaction();
+
+      const lockedProfiles = await this.getUserFamilyRoleProfiles(
+        [operatorUserId, targetUserId],
+        { connection, forUpdate: true }
+      );
+      const profileByUserId = new Map(lockedProfiles.map((profile) => [profile.userId, profile]));
+      const operator = profileByUserId.get(operatorUserId) || null;
+      const target = profileByUserId.get(targetUserId) || null;
+
+      if (!operator || operator.familyId !== operatorFamilyId) {
+        throw Object.assign(new Error('您尚未加入家庭'), { code: 'FAMILY_NOT_JOINED' });
+      }
+
+      if (
+        operator.role !== 'parent' ||
+        operator.familyPermissionRole !== FAMILY_PERMISSION_ROLE.MANAGER
+      ) {
+        throw Object.assign(new Error('当前仅管理员可调整家长权限'), { code: 'FAMILY_MANAGER_REQUIRED' });
+      }
+
+      if (!target || target.familyId !== operatorFamilyId || target.role !== 'parent') {
+        throw Object.assign(new Error('只能调整当前家庭内家长成员的权限'), {
+          code: 'FAMILY_PARENT_MEMBER_REQUIRED'
+        });
+      }
+
+      if (
+        target.familyPermissionRole === FAMILY_PERMISSION_ROLE.MANAGER &&
+        familyPermissionRole === FAMILY_PERMISSION_ROLE.VIEWER
+      ) {
+        const managerCount = await this.countManagers(operatorFamilyId, {
+          connection,
+          forUpdate: true
+        });
+        if (managerCount <= 1) {
+          throw Object.assign(new Error('至少保留一位管理员。请先把另一位家长设为管理员，再调整当前身份'), {
+            code: 'FAMILY_LAST_MANAGER_REQUIRED'
+          });
+        }
+      }
+
+      const executeRunner = this._getExecuteRunner(connection);
+      await executeRunner(
+        `UPDATE users
+         SET family_permission_role = ?, updated_at = CURRENT_TIMESTAMP
+         WHERE user_id = ? AND family_id = ? AND status = ?`,
+        [familyPermissionRole, targetUserId, operatorFamilyId, 'active']
+      );
+
+      await connection.commit();
+
+      logger.info('更新家长权限成功', {
+        operatorUserId,
+        targetUserId,
+        familyPermissionRole
+      });
+
+      return {
+        userId: targetUserId,
+        familyPermissionRole
+      };
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
   }
 }
 
 const familyService = new FamilyService();
+familyService.FAMILY_PERMISSION_ROLE = FAMILY_PERMISSION_ROLE;
 module.exports = familyService;

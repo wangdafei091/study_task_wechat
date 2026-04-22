@@ -125,6 +125,13 @@ const taskTemplateService = serviceManager.get('taskTemplateService');
 - 模板应用到 `task-edit` 表单
 - 模板使用次数回写
 - 云端模板列表刷新与本地镜像替换
+- 模板日期策略与重复周期护栏校验
+
+### M22A 补充说明
+
+- 模板重复周期与任务周期共用同一套跨度护栏：模板重复范围最大 `93` 天。
+- 历史超长模板允许继续读取，并允许“不扩大跨度”的名称/描述类编辑；若继续拉长则会被拒绝。
+- 模板回填到 `task-edit` 后，页面仍会按当前表单日期重新推导重复语义，不再出现“UI 看起来是多天，但底层仍按单天提交”的回填残差。
 
 ### API 方法
 
@@ -189,6 +196,9 @@ const taskTemplateService = serviceManager.get('taskTemplateService');
     template: TaskTemplate
   }
   ```
+- **说明**：
+  - `dateStrategy.durationDays` 或模板重复结束日期超出 `93` 天时会拒绝保存
+  - 失败时会抛出带中文提示的校验错误，调用方应直接向用户展示
 
 ##### `updateTemplate(templateId, input = {})`
 更新任务模板。
@@ -199,6 +209,9 @@ const taskTemplateService = serviceManager.get('taskTemplateService');
     template: TaskTemplate
   }
   ```
+- **说明**：
+  - 会以“旧模板 + 本次变更”合并后的结果做完整校验
+  - 历史超长模板若本次没有继续扩大跨度，允许保存；若继续拉长会被拒绝
 
 ##### `setTemplateEnabled(templateId, enabled)`
 启用或停用模板。
@@ -275,8 +288,17 @@ const taskTemplateService = serviceManager.get('taskTemplateService');
 - 表现项（occurrence）配置、记录、停用与转换
 - 与星星系统的集成
 - 事件发布机制
+- 家庭治理权限与执行态上下文收口
+- 任务/表现项周期护栏与历史超长兼容
 
 ### API 方法
+
+#### M22A 治理补充说明
+
+- `loginUser.role='parent' && familyPermissionRole='viewer'` 时，默认不允许创建、编辑、删除、必做设置、表现项治理等管理型写操作。
+- 查看者家长切到孩子视角后，任务“执行型”操作保留例外链路：`completeTask / resetTask / updateTaskStatus` 会按孩子执行上下文透传 `operatorContext`，后端据此允许孩子自己的打卡/重置。
+- 表现项记录不属于查看者例外；`recordOccurrenceResult(...)` 仍要求孩子本人或 `manager` 家长链路。
+- 任务重复周期最大 `93` 天，表现项 `activeRange` 最大 `180` 天；历史已超限数据允许继续读取，并允许“不继续扩张”的更新。
 
 #### 结果结构补充说明（M19B）
 
@@ -353,6 +375,7 @@ const taskTemplateService = serviceManager.get('taskTemplateService');
   - 重复任务在云端模式下由后端展开，`tasks / createdTasks` 会包含主任务和受影响实例
   - 若云端创建失败，降级时仅本地保存主任务；重复任务会标记 `pendingSyncMeta.repeatMaterializationPending=true`
   - 当 `executionMode='occurrence'` 时，表示创建“表现项配置任务”；`occurrenceOutcome / isOccurrenceRecord / recordedAt` 不允许通过该通用创建接口直传
+  - 当重复周期或表现项有效期超出护栏时，返回 `{ success: false, code, message }`，其中 `code` 为 `TASK_REPEAT_RANGE_TOO_LARGE` 或 `TASK_ACTIVE_RANGE_TOO_LARGE`
 
 ##### `updateTask(taskId, changes, userId = null)`
 更新任务信息
@@ -362,6 +385,7 @@ const taskTemplateService = serviceManager.get('taskTemplateService');
   - 云端模式下为 API 优先；失败时降级为本地保存并保留待同步元数据
   - `occurrence` 配置任务允许通过通用更新接口维护 `title / type / points / activeRange`
   - 普通任务切换到 `occurrence` 必须走 `convertTaskToOccurrenceMode(...)`
+  - 历史超长任务若本次没有继续扩大跨度，允许保存；继续拉长则返回范围错误
 
 ##### `deleteTask(taskId, userId = null, suppressMessage = false)`
 删除任务
@@ -391,7 +415,9 @@ const taskTemplateService = serviceManager.get('taskTemplateService');
 更新任务状态
 - **参数**: `taskId` - 任务ID, `status` - 状态(0=未完成, 1=已完成), `userId` - 可选的用户ID
 - **返回**: `Promise<{ success: boolean, task?: Task, fallback?: boolean, mutation?: Object, message?: string }>`
-- **说明**: 云端模式下优先使用后端状态权威返回，本地模式仍保留原有本地写路径
+- **说明**:
+  - 云端模式下优先使用后端状态权威返回，本地模式仍保留原有本地写路径
+  - 查看者家长切到孩子视角后，该方法会按执行态构造 `operatorContext`，保证孩子自己的打卡链路可继续使用
 
 ---
 
@@ -568,6 +594,7 @@ const taskTemplateService = serviceManager.get('taskTemplateService');
   - 同一表现项/同一孩子/同一天只保留一条记录
   - 重复记录相同结果时按幂等成功返回
   - `success -> failure` 覆盖时会在同一事务内撤回此前已发星星
+  - 查看者家长不具备表现项记录权限；该接口只允许孩子本人或 `manager` 家长链路执行
 
 ##### `disableOccurrenceTask(taskId, options = {}, userId = null)`
 停用表现项配置任务。
@@ -1133,21 +1160,26 @@ const taskTemplateService = serviceManager.get('taskTemplateService');
 
 用户服务管理用户账户、角色切换、家庭成员缓存等功能。M6 起引入 `loginUser`（设备拥有者）与 `currentUser`（当前数据视角）双轨模型。
 
-### 核心概念（M6）
+### 核心概念（M22A 后）
 
 | 字段 | 含义 | 生命周期 |
 |------|------|---------|
 | `loginUser` | 设备登录者（JWT 持有者），决定权限和功能可见性 | 应用启动后不变 |
 | `currentUser` | 当前数据视角，家长可切换到孩子 | 随用户切换变化 |
+| `familyPermissionRole` | 家长在家庭内的治理权限，取值 `manager | viewer | null` | 随家庭创建、加入或权限调整变化 |
 
-- **`isReadonlyView`**（首页计算属性）：`loginUser.role === 'child' || loginUser.userId !== currentUser.userId`。只要在孩子视角下（无论哪种原因），管理类入口均隐藏。
-- **任务创建归属**：家长在孩子视角创建任务时，任务通过 `targetUserId` 正确归属到孩子。
+- `isSwitchedChildView` 与 `isViewerReadonly` 已拆开建模：
+  - 切到孩子视角不再等价于“全局只读”
+  - `viewer` 家长在自己视角下只读，但切到孩子视角后仍可执行孩子自己的任务打卡链路
+- 任务创建归属仍沿用 `targetUserId` 语义：家长在孩子视角创建任务时，任务归属到目标孩子
+- 家庭治理与页面入口可见性应优先读取 `permissionContext`，而不是只看 `loginUser.role`
 
 ### 核心功能
 - 登录用户（loginUser）初始化与维护
 - 家庭成员缓存（userCache）加载与刷新
 - 用户视角切换（currentUser）及会话恢复
 - 基于角色的用户列表过滤
+- 家庭内 `manager / viewer` 权限刷新与缓存收口
 
 ### API 方法
 
@@ -1221,13 +1253,17 @@ const taskTemplateService = serviceManager.get('taskTemplateService');
 创建家庭（M6新增）
 - **参数**: `name` (string) - 家庭名称
 - **返回**: `Promise<{ success: boolean, familyId?: string, message?: string }>`
-- **说明**：创建成功后若后端返回新 token，自动保存并重新初始化 UserService
+- **说明**：
+  - 创建成功后若后端返回新 token，自动保存并重新初始化 UserService
+  - 创建者在家庭内会自动获得 `familyPermissionRole='manager'`
 
 ##### `joinFamily(inviteCode)`
 通过邀请码加入家庭（M6新增）
 - **参数**: `inviteCode` (string) - 邀请码
 - **返回**: `Promise<{ success: boolean, message?: string }>`
-- **说明**：加入成功后若后端返回新 token，自动保存并重新初始化 UserService
+- **说明**：
+  - 加入成功后若后端返回新 token，自动保存并重新初始化 UserService
+  - 使用家长邀请码加入后，当前用户会落为 `role='parent' + familyPermissionRole='viewer'`
 
 ##### `getFamilyInfo()`
 获取当前家庭信息（M6新增）
@@ -1238,7 +1274,9 @@ const taskTemplateService = serviceManager.get('taskTemplateService');
 刷新家庭邀请码（M6新增）
 - **参数**: `role` ('parent' | 'child') - 目标角色
 - **返回**: `Promise<Object>` - 包含新邀请码的响应对象
-- **说明**：失败时直接抛出异常，调用方需自行捕获
+- **说明**：
+  - 失败时直接抛出异常，调用方需自行捕获
+  - 当前接口由家庭内 `manager` 家长使用；`role='parent'` 生成的是“默认 viewer 家长”邀请码
 
 ##### `createVirtualMember(name)`
 创建虚拟成员（场景A共享设备，无独立微信账号的孩子）（M6新增）
@@ -1251,6 +1289,17 @@ const taskTemplateService = serviceManager.get('taskTemplateService');
 - **参数**: `userId` (string) - 目标用户ID
 - **返回**: `Promise<{ success: boolean, message?: string }>`
 - **说明**：删除成功后自动调用 `loadFamilyMembers()` 刷新缓存
+
+##### `updateFamilyMemberPermissionRole(userId, familyPermissionRole)`
+调整家庭内家长权限。
+- **参数**:
+  - `userId` (string) - 目标家长用户 ID
+  - `familyPermissionRole` ('manager' | 'viewer')
+- **返回**: `Promise<{ success: boolean, message?: string, token?: string }>`
+- **说明**：
+  - 仅云端模式支持
+  - 成功后会自动 `initialize()`，刷新 `loginUser / currentUser / userCache`
+  - 当操作者修改的是自己时，后端会回发新 token，本方法会先保存 token 再刷新上下文
 
 ##### `updateNickname(userId, nickname)`
 更新成员昵称（M6新增）
@@ -1668,5 +1717,5 @@ const taskService = new TaskService({
 
 ---
 
-**最后更新**：2026-04-16
+**最后更新**：2026-04-21
 **维护者**：项目维护团队

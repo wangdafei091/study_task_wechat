@@ -14,6 +14,11 @@ const UserRole = {
   CHILD: 'child'     // 孩子
 };
 
+const FamilyPermissionRole = {
+  MANAGER: 'manager',
+  VIEWER: 'viewer'
+};
+
 /**
  * 用户状态枚举
  */
@@ -39,6 +44,7 @@ class User {
 
     // 家庭相关字段（M6新增）
     this.familyId = data.familyId || null;
+    this.familyPermissionRole = data.familyPermissionRole || null;
     this.isVirtual = Boolean(data.isVirtual);
     this.createdByUserId = data.createdByUserId || null;
 
@@ -106,6 +112,14 @@ class User {
    */
   isChild() {
     return this.role === UserRole.CHILD;
+  }
+
+  isFamilyManager() {
+    return this.familyPermissionRole === FamilyPermissionRole.MANAGER;
+  }
+
+  isFamilyViewer() {
+    return this.familyPermissionRole === FamilyPermissionRole.VIEWER;
   }
   
   /**
@@ -187,6 +201,7 @@ class User {
       avatar: this.avatar,
       status: this.status,
       familyId: this.familyId,
+      familyPermissionRole: this.familyPermissionRole,
       isVirtual: this.isVirtual,
       createdByUserId: this.createdByUserId,
       createTime: this.createTime,
@@ -206,6 +221,7 @@ class User {
 }
 
 module.exports = {
+  FamilyPermissionRole,
   User,
   UserRole,
   UserStatus

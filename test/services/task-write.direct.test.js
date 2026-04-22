@@ -21,6 +21,59 @@ const taskWrite = require('../../services/task-service/task-write');
 const { Task } = require('../../models/task');
 
 describe('task-write direct behavior', () => {
+  it('updateTask 应允许历史超长表现项只改标题，但不允许继续扩张', async () => {
+    const legacyTask = new Task({
+      id: 'occ_cfg_legacy',
+      userId: 'child_1',
+      title: '听写全对',
+      type: 'study',
+      executionMode: 'occurrence',
+      date: '2026-01-01',
+      activeRange: {
+        startDate: '2026-01-01',
+        endDate: '2026-08-01',
+        hasNoEndDate: false
+      }
+    });
+    const service = {
+      enableCloudStorage: false,
+      taskRepository: {
+        getById: jest.fn(async () => legacyTask.clone({}, false)),
+        save: jest.fn(async (task) => task)
+      },
+      _buildTaskPendingSyncMeta: jest.fn((task, action, overrides = {}) => ({
+        action,
+        operationKey: String(overrides.operationKey || task.modifyTime || Date.now()),
+        modifyTime: Number(overrides.modifyTime || task.modifyTime || Date.now()),
+        targetUserId: overrides.targetUserId || task.userId || null
+      })),
+      eventBus: {
+        emit: jest.fn()
+      },
+      _buildTaskServiceMutationResult: jest.fn((mutation, options = {}) => ({
+        success: true,
+        task: options.task
+      }))
+    };
+
+    const titleOnly = await taskWrite.updateTask(service, 'occ_cfg_legacy', {
+      title: '只改标题'
+    }, 'child_1');
+    expect(titleOnly.success).toBe(true);
+
+    const expandResult = await taskWrite.updateTask(service, 'occ_cfg_legacy', {
+      activeRange: {
+        startDate: '2026-01-01',
+        endDate: '2026-08-15',
+        hasNoEndDate: false
+      }
+    }, 'child_1');
+    expect(expandResult).toEqual(expect.objectContaining({
+      success: false,
+      code: 'TASK_ACTIVE_RANGE_TOO_LARGE'
+    }));
+  });
+
   it('recordOccurrenceResult 应拒绝未来日期记录', async () => {
     const service = {
       enableCloudStorage: false,
@@ -324,6 +377,101 @@ describe('task-write direct behavior', () => {
     }));
   });
 
+  it('recordOccurrenceResult 在 viewer 家长下应直接拒绝，不执行本地星星和记录写入', async () => {
+    const service = {
+      enableCloudStorage: true,
+      userService: {
+        getLoginUser: jest.fn(() => ({
+          userId: 'parent_viewer',
+          role: 'parent',
+          familyId: 'family_1',
+          familyPermissionRole: 'viewer'
+        }))
+      },
+      taskRepository: {
+        getById: jest.fn(),
+        getOccurrenceRecord: jest.fn(),
+        save: jest.fn()
+      },
+      starService: {
+        addStars: jest.fn(),
+        consumeStarsFromSpecificType: jest.fn()
+      }
+    };
+
+    const result = await taskWrite.recordOccurrenceResult(service, 'occ_cfg_viewer', {
+      userId: 'child_1',
+      date: '2026-04-17',
+      outcome: 'success'
+    });
+
+    expect(result).toEqual({
+      success: false,
+      message: '当前为查看者，不能记录表现',
+      code: 'FAMILY_MANAGER_REQUIRED'
+    });
+    expect(service.taskRepository.getById).not.toHaveBeenCalled();
+    expect(service.starService.addStars).not.toHaveBeenCalled();
+    expect(service.taskRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('viewer 家长切到孩子视角时，updateTaskStatus 不应被误拦截', async () => {
+    const task = new Task({
+      id: 'task_child_exec_1',
+      userId: 'child_1',
+      title: '数学',
+      type: 'study',
+      date: '2026-04-17',
+      status: 0,
+      points: 0,
+      reminder: { enabled: false }
+    });
+    const service = {
+      enableCloudStorage: false,
+      userService: {
+        getLoginUser: jest.fn(() => ({
+          userId: 'parent_viewer',
+          role: 'parent',
+          familyId: 'family_1',
+          familyPermissionRole: 'viewer'
+        })),
+        getCurrentUser: jest.fn(() => ({
+          userId: 'child_1',
+          role: 'child',
+          familyId: 'family_1'
+        }))
+      },
+      taskRepository: {
+        getById: jest.fn(async () => task.clone({}, false)),
+        save: jest.fn(async (savedTask) => savedTask)
+      },
+      _buildTaskPendingSyncMeta: jest.fn((currentTask, action, overrides = {}) => ({
+        action,
+        operationKey: String(overrides.operationKey || currentTask.modifyTime || Date.now()),
+        modifyTime: Number(overrides.modifyTime || currentTask.modifyTime || Date.now()),
+        targetUserId: overrides.targetUserId || currentTask.userId || null
+      })),
+      eventBus: {
+        emit: jest.fn()
+      },
+      _buildTaskServiceMutationResult: jest.fn((mutation, options = {}) => ({
+        success: mutation !== null,
+        task: options.task
+      }))
+    };
+
+    const result = await taskWrite.updateTaskStatus(service, 'task_child_exec_1', 1, 'child_1');
+
+    expect(result.code).not.toBe('FAMILY_MANAGER_REQUIRED');
+    expect(result.message).not.toBe('当前为查看者，不能修改任务状态');
+    expect(result.task).toEqual(expect.objectContaining({
+      id: 'task_child_exec_1',
+      status: 1
+    }));
+    expect(service.taskRepository.getById).toHaveBeenCalledWith('task_child_exec_1');
+    expect(service.taskRepository.save).toHaveBeenCalled();
+  });
+
   it('disableOccurrenceTask 应在本地模式下更新有效期并标记待同步', async () => {
     const configTask = new Task({
       id: 'occ_cfg_disable',
@@ -587,6 +735,16 @@ describe('task-write direct behavior', () => {
     }));
     expect(cloudService._syncDisableOccurrenceToCloud).toHaveBeenCalled();
     expect(cloudService.taskRepository.save).not.toHaveBeenCalled();
+    expect(cloudService._syncDisableOccurrenceToCloud).toHaveBeenCalledWith(expect.objectContaining({
+      hasNoEndDate: false,
+      activeRange: expect.objectContaining({
+        startDate: '2026-04-01',
+        endDate: '2026-04-16',
+        hasNoEndDate: false
+      })
+    }), expect.objectContaining({
+      disableFromDate: '2026-04-17'
+    }));
 
     const convertResult = await taskWrite.convertTaskToOccurrenceMode(cloudService, 'planned_cloud', {
       effectiveFromDate: '2026-04-17'
@@ -779,5 +937,61 @@ describe('task-write direct behavior', () => {
       expect.objectContaining({ id: 'required_cloud', isRequired: false }),
       expect.any(Error)
     );
+  });
+
+  it('updateTaskStatus 遇到 403 权限拒绝时不应降级为本地待同步', async () => {
+    const task = new Task({
+      id: 'task_viewer_1',
+      userId: 'child_1',
+      title: '数学',
+      type: 'study',
+      date: '2026-04-17',
+      status: 0,
+      points: 1,
+      reminder: { enabled: false }
+    });
+    const service = {
+      enableCloudStorage: true,
+      taskRepository: {
+        getById: jest.fn(async () => task.clone({}, false)),
+        save: jest.fn(async (savedTask) => savedTask)
+      },
+      starService: {
+        addStars: jest.fn(async () => ({ success: true })),
+        calculateExpiryDate: jest.fn(() => ({ expiryDateStr: '2026-04-24' }))
+      },
+      _buildTaskPendingSyncMeta: jest.fn((currentTask, action, overrides = {}) => ({
+        action,
+        operationKey: String(overrides.operationKey || currentTask.modifyTime || Date.now()),
+        modifyTime: Number(overrides.modifyTime || currentTask.modifyTime || Date.now()),
+        targetUserId: overrides.targetUserId || currentTask.userId || null
+      })),
+      _syncStatusToCloud: jest.fn(async () => {
+        const error = new Error('当前为查看者，不能修改任务状态');
+        error.code = 'FAMILY_MANAGER_REQUIRED';
+        error.statusCode = 403;
+        throw error;
+      }),
+      _applyAuthoritativeTaskMutation: jest.fn(),
+      _emitTaskCloudSyncFailure: jest.fn(),
+      _buildTaskServiceMutationResult: jest.fn((mutation, options = {}) => ({
+        success: mutation !== null,
+        task: options.task,
+        fallback: options.fallback === true
+      })),
+      eventBus: {
+        emit: jest.fn()
+      }
+    };
+
+    const result = await taskWrite.updateTaskStatus(service, 'task_viewer_1', 1, 'child_1');
+
+    expect(result).toEqual({
+      success: false,
+      message: '当前为查看者，不能修改任务状态',
+      code: 'FAMILY_MANAGER_REQUIRED'
+    });
+    expect(service.taskRepository.save).not.toHaveBeenCalled();
+    expect(service._emitTaskCloudSyncFailure).not.toHaveBeenCalled();
   });
 });

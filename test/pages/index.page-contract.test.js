@@ -191,7 +191,7 @@ describe('pages/index page contract', () => {
 
     await page.initializeMultiUserSystem();
 
-    expect(permissionUtils.getUserPermissions).toHaveBeenCalledWith('parent');
+    expect(permissionUtils.getUserPermissions).toHaveBeenCalledWith('child', null);
     expect(page.updateMenuItemsWithPermissions).toHaveBeenCalledTimes(1);
     expect(page.data.currentUser).toEqual(expect.objectContaining({
       userId: 'child-1',
@@ -201,16 +201,19 @@ describe('pages/index page contract', () => {
     expect(page.data.loginUserId).toBe('parent-1');
     expect(page.data.canManageMembers).toBe(true);
     expect(page.data.isReadonlyView).toBe(true);
+    expect(page.data.isViewerReadonly).toBe(false);
   });
 
-  it('首页任务项只应在未来日期下只读，孩子视角不应阻止打卡', () => {
+  it('首页任务项应仅在查看者或未来日期下只读，不能误伤孩子视角打卡', () => {
     const wxml = fs.readFileSync(
       path.join(__dirname, '../../pages/index/index.wxml'),
       'utf8'
     );
 
-    expect(wxml).toContain('readonly="{{isViewingFuture}}"');
-    expect(wxml).toContain('readonlyReason="{{isViewingFuture ? \'future-date\' : \'\'}}"');
+    expect(wxml).toContain('readonly="{{isViewerReadonly}}"');
+    expect(wxml).toContain('readonlyReason="{{isViewerReadonly ? \'viewer-readonly\' : \'\'}}"');
+    expect(wxml).toContain('readonly="{{isViewerReadonly || isViewingFuture}}"');
+    expect(wxml).toContain('readonlyReason="{{isViewingFuture ? \'future-date\' : (isViewerReadonly ? \'viewer-readonly\' : \'\')}}"');
     expect(wxml).not.toContain('readonly="{{isReadonlyView || isViewingFuture}}"');
   });
 

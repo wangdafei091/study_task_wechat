@@ -2,7 +2,9 @@
  * 认证控制器
  */
 
+const { getPool } = require('../config/database');
 const { generateToken } = require('../config/jwt');
+const appAccessService = require('../services/appAccessService');
 const userService = require('../services/userService');
 const { code2Session } = require('../utils/wechat');
 const { createLogger } = require('../utils/logger');
@@ -13,6 +15,46 @@ const logger = createLogger('AuthController');
  * 认证控制器类
  */
 class AuthController {
+  async _createInvitedUser(wechatData, accessCode) {
+    const pool = getPool();
+    const connection = await pool.getConnection();
+
+    try {
+      await connection.beginTransaction();
+      const accessRecord = await appAccessService.validateAccessCodeForNewUser(accessCode, {
+        connection,
+        forUpdate: true
+      });
+
+      const user = await userService.createUser({
+        openid: wechatData.openid,
+        unionid: wechatData.unionid,
+        name: '用户',
+        avatar: '',
+        role: 'parent',
+      }, {
+        connection
+      });
+
+      const consumed = await appAccessService.consumeAccessCode(accessRecord.accessCodeId, user.userId, {
+        connection
+      });
+      if (!consumed) {
+        throw Object.assign(new Error('邀请码无效，请检查后重试'), {
+          code: 'AUTH_APP_ACCESS_CODE_INVALID'
+        });
+      }
+
+      await connection.commit();
+      return user;
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+  }
+
   /**
    * 微信小程序登录
    * @param {Object} req - Express请求对象
@@ -20,7 +62,7 @@ class AuthController {
    */
   async login(req, res) {
     try {
-      const { code } = req.body;
+      const { code, accessCode } = req.body;
 
       // 参数验证
       if (!code) {
@@ -37,10 +79,20 @@ class AuthController {
       logger.info('微信登录成功', { openid: wechatData.openid });
 
       // 2. 查询或创建用户
-      const user = await userService.getOrCreateUser({
-        openid: wechatData.openid,
-        unionid: wechatData.unionid,
-      });
+      let user = await userService.findByOpenid(wechatData.openid);
+      if (!user) {
+        if (appAccessService.isInviteOnlyMode()) {
+          user = await this._createInvitedUser(wechatData, accessCode);
+        } else {
+          user = await userService.createUser({
+            openid: wechatData.openid,
+            unionid: wechatData.unionid,
+            name: '用户',
+            avatar: '',
+            role: 'parent',
+          });
+        }
+      }
 
       // 3. 生成JWT token（包含 familyId，支持家庭数据隔离）
       const token = generateToken({
@@ -48,6 +100,7 @@ class AuthController {
         openid: user.openid,
         role: user.role,
         familyId: user.familyId || null,
+        familyPermissionRole: user.familyPermissionRole || null,
       });
 
       logger.info('登录成功，生成token', {
@@ -72,6 +125,16 @@ class AuthController {
       if (err.message.includes('微信API错误')) {
         return res.status(400).json(
           error('微信登录失败，请重试', 'AUTH_WECHAT_LOGIN_FAILED')
+        );
+      }
+
+      if (
+        err.code === 'AUTH_APP_ACCESS_CODE_REQUIRED' ||
+        err.code === 'AUTH_APP_ACCESS_CODE_INVALID' ||
+        err.code === 'AUTH_APP_ACCESS_CODE_EXPIRED'
+      ) {
+        return res.status(400).json(
+          error(err.message, err.code)
         );
       }
 
