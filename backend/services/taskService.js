@@ -1579,13 +1579,22 @@ class TaskService {
           ? (currentEndDate < nextEndDateCandidate ? currentEndDate : nextEndDateCandidate)
           : nextEndDateCandidate;
 
+        const updateClauses = [
+          `${columnMap.activeEndDate} = ?`,
+          `${columnMap.activeHasNoEndDate} = 0`,
+          `${columnMap.modifyTime} = ?`
+        ];
+        const updateParams = [nextEndDate, modifyTime];
+
+        if (columnMap.hasNoEndDate) {
+          updateClauses.splice(2, 0, `${columnMap.hasNoEndDate} = 0`);
+        }
+
         const [result] = await connection.execute(
           `UPDATE tasks
-           SET ${columnMap.activeEndDate} = ?,
-               ${columnMap.activeHasNoEndDate} = 0,
-               ${columnMap.modifyTime} = ?
+           SET ${updateClauses.join(', ')}
            WHERE task_id = ? AND deleted_at IS NULL`,
-          [nextEndDate, modifyTime, taskId]
+          [...updateParams, taskId]
         );
 
         if (result.affectedRows === 0) {

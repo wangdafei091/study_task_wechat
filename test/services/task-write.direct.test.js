@@ -735,6 +735,16 @@ describe('task-write direct behavior', () => {
     }));
     expect(cloudService._syncDisableOccurrenceToCloud).toHaveBeenCalled();
     expect(cloudService.taskRepository.save).not.toHaveBeenCalled();
+    expect(cloudService._syncDisableOccurrenceToCloud).toHaveBeenCalledWith(expect.objectContaining({
+      hasNoEndDate: false,
+      activeRange: expect.objectContaining({
+        startDate: '2026-04-01',
+        endDate: '2026-04-16',
+        hasNoEndDate: false
+      })
+    }), expect.objectContaining({
+      disableFromDate: '2026-04-17'
+    }));
 
     const convertResult = await taskWrite.convertTaskToOccurrenceMode(cloudService, 'planned_cloud', {
       effectiveFromDate: '2026-04-17'

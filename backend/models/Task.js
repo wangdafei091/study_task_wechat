@@ -45,6 +45,32 @@ function normalizeReminder(reminder) {
   };
 }
 
+function normalizeBooleanFlag(value) {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+
+  if (typeof value === 'number') {
+    return value === 1;
+  }
+
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (!normalized || normalized === '0' || normalized === 'false' || normalized === 'null') {
+      return false;
+    }
+    if (normalized === '1' || normalized === 'true') {
+      return true;
+    }
+  }
+
+  if (value === null || value === undefined) {
+    return false;
+  }
+
+  return Boolean(value);
+}
+
 const TASK_TYPES = ['study', 'habit', 'interest'];
 const TASK_STATUSES = [0, 1];
 const STAR_EXPIRY_TYPES = ['permanent', 'week', 'month', 'quarter'];
@@ -57,7 +83,7 @@ function normalizeActiveRange(activeRange, fallbackDate = '') {
   }
 
   const startDate = String(activeRange.startDate || fallbackDate || '').trim();
-  const hasNoEndDate = activeRange.hasNoEndDate === true;
+  const hasNoEndDate = normalizeBooleanFlag(activeRange.hasNoEndDate);
   const endDate = hasNoEndDate ? '' : String(activeRange.endDate || '').trim();
 
   if (!startDate) {
@@ -119,27 +145,27 @@ class Task {
     this.reminder = normalizeReminder(reminder);
     this.points = points;
     this.pointsExpiry = pointsExpiry;
-    this.isRequired = isRequired;
+    this.isRequired = normalizeBooleanFlag(isRequired);
     this.status = status;
     this.repeat = repeat;
-    this.isAllDay = isAllDay;
-    this.penaltyApplied = penaltyApplied;
+    this.isAllDay = normalizeBooleanFlag(isAllDay);
+    this.penaltyApplied = normalizeBooleanFlag(penaltyApplied);
     this.penaltyDeductedPoints = Number(penaltyDeductedPoints || 0);
-    this.penaltyRefunded = Boolean(penaltyRefunded);
+    this.penaltyRefunded = normalizeBooleanFlag(penaltyRefunded);
     this.penaltyRefundTime = penaltyRefundTime || null;
     this.createdAt = createdAt;
     this.updatedAt = updatedAt;
     this.deletedAt = deletedAt;
     this.completionTime = completionTime;
-    this.starAwarded = Boolean(starAwarded);
+    this.starAwarded = normalizeBooleanFlag(starAwarded);
     this.modifyTime = modifyTime;
     this.duration = duration || 0;
-    this.hasNoEndDate = Boolean(hasNoEndDate);
+    this.hasNoEndDate = normalizeBooleanFlag(hasNoEndDate);
     this.tags = tags;
     this.parentTaskId = parentTaskId || null;
     this.executionMode = TASK_EXECUTION_MODES.includes(executionMode) ? executionMode : 'planned';
     this.activeRange = normalizeActiveRange(activeRange, date);
-    this.isOccurrenceRecord = Boolean(isOccurrenceRecord);
+    this.isOccurrenceRecord = normalizeBooleanFlag(isOccurrenceRecord);
     this.occurrenceOutcome = TASK_RECORD_OUTCOMES.includes(occurrenceOutcome)
       ? occurrenceOutcome
       : 'none';
@@ -202,7 +228,7 @@ class Task {
     const activeRange = normalizeActiveRange({
       startDate: readField('active_start_date', 'activeStartDate'),
       endDate: readField('active_end_date', 'activeEndDate'),
-      hasNoEndDate: Boolean(readField('active_has_no_end_date', 'activeHasNoEndDate'))
+      hasNoEndDate: normalizeBooleanFlag(readField('active_has_no_end_date', 'activeHasNoEndDate'))
     }, readField('date'));
 
     return new Task({
@@ -217,27 +243,27 @@ class Task {
       reminder,
       points: readField('points'),
       pointsExpiry: readField('points_expiry', 'pointsExpiry'),
-      isRequired: Boolean(readField('is_required', 'isRequired')),
+      isRequired: normalizeBooleanFlag(readField('is_required', 'isRequired')),
       status: readField('status'),
       repeat: repeat,
-      isAllDay: Boolean(readField('is_all_day', 'isAllDay')),
-      penaltyApplied: Boolean(readField('penalty_applied', 'penaltyApplied')),
+      isAllDay: normalizeBooleanFlag(readField('is_all_day', 'isAllDay')),
+      penaltyApplied: normalizeBooleanFlag(readField('penalty_applied', 'penaltyApplied')),
       penaltyDeductedPoints: Number(readField('penalty_deducted_points', 'penaltyDeductedPoints') || 0),
-      penaltyRefunded: Boolean(readField('penalty_refunded', 'penaltyRefunded')),
+      penaltyRefunded: normalizeBooleanFlag(readField('penalty_refunded', 'penaltyRefunded')),
       penaltyRefundTime: readField('penalty_refund_time', 'penaltyRefundTime') || null,
       createdAt: readField('created_at', 'createdAt'),
       updatedAt: readField('updated_at', 'updatedAt'),
       deletedAt: readField('deleted_at', 'deletedAt') || null,
       completionTime: readField('completion_time', 'completionTime') || null,
-      starAwarded: Boolean(readField('star_awarded', 'starAwarded')),
+      starAwarded: normalizeBooleanFlag(readField('star_awarded', 'starAwarded')),
       modifyTime: readField('modify_time', 'modifyTime') || null,
       duration: readField('duration') || 0,
-      hasNoEndDate: Boolean(readField('has_no_end_date', 'hasNoEndDate')),
+      hasNoEndDate: normalizeBooleanFlag(readField('has_no_end_date', 'hasNoEndDate')),
       tags,
       parentTaskId: readField('parent_task_id', 'parentTaskId') || null,
       executionMode: readField('execution_mode', 'executionMode') || 'planned',
       activeRange,
-      isOccurrenceRecord: Boolean(readField('is_occurrence_record', 'isOccurrenceRecord')),
+      isOccurrenceRecord: normalizeBooleanFlag(readField('is_occurrence_record', 'isOccurrenceRecord')),
       occurrenceOutcome: readField('occurrence_outcome', 'occurrenceOutcome') || 'none',
       recordedAt: readField('recorded_at', 'recordedAt') || null,
     });

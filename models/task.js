@@ -130,8 +130,10 @@ class Task {
    * @private
    */
   _initDefaults() {
+    const isOccurrenceTask = this.isOccurrenceMode();
+
     // 为学习类任务设置必要的时间字段（仅对非全天任务）
-    if (this.type === TaskType.STUDY && !this.isAllDay) {
+    if (this.type === TaskType.STUDY && !this.isAllDay && !isOccurrenceTask) {
       // 如果没有开始时间，设置默认值
       if (!this.startTime) {
         this.startTime = '08:00';
@@ -160,7 +162,7 @@ class Task {
       this.occurrenceOutcome = TaskRecordOutcome.NONE;
     }
 
-    if (this.isOccurrenceMode()) {
+    if (isOccurrenceTask) {
       this.repeat = { type: RepeatType.NONE };
       this.isRequired = false;
 
@@ -192,7 +194,8 @@ class Task {
     }
 
     const normalizedStartDate = activeRange.startDate || data.date || '';
-    const normalizedHasNoEndDate = activeRange.hasNoEndDate === true || data.hasNoEndDate === true;
+    // activeRange.hasNoEndDate 只表示表现项有效期，不应回退到任务重复链路的 hasNoEndDate。
+    const normalizedHasNoEndDate = activeRange.hasNoEndDate === true;
 
     return {
       startDate: normalizedStartDate,
