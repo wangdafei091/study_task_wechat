@@ -1238,27 +1238,54 @@
   min-width: 0;
 }
 
+.occurrence-item-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
 .occurrence-name {
+  flex: 1;
+  min-width: 0;
   display: block;
   font-size: 26rpx;
   color: #24324d;
-  font-weight: 500;
+  font-weight: 600;
   line-height: 1.45;
   word-break: break-all;
 }
 
-.occurrence-state-row {
-  margin-top: 8rpx;
+.occurrence-reward-row {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6rpx;
+  margin-top: 6rpx;
+}
+
+.occurrence-reward-accent {
+  font-size: 22rpx;
+  line-height: 1.4;
+  font-weight: 500;
+  color: #c79a46;
+}
+
+.occurrence-reward-meta {
+  font-size: 20rpx;
+  line-height: 1.5;
+  color: #7d8899;
 }
 
 .occurrence-state-pill {
+  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
-  min-height: 36rpx;
-  padding: 0 14rpx;
+  min-height: 40rpx;
+  padding: 0 16rpx;
   border-radius: 999rpx;
-  font-size: 21rpx;
-  line-height: 36rpx;
+  font-size: 20rpx;
+  line-height: 40rpx;
   font-weight: 500;
   letter-spacing: 0.1rpx;
   background: #f4f6f9;

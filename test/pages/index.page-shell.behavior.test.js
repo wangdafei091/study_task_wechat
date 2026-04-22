@@ -330,12 +330,16 @@ describe('pages/index/index shell behavior', () => {
       {
         id: 'occ_success',
         title: '听写全对',
-        executionMode: 'occurrence'
+        executionMode: 'occurrence',
+        points: 2,
+        pointsExpiry: 'week'
       },
       {
         id: 'occ_failure',
         title: '考试全对',
-        executionMode: 'occurrence'
+        executionMode: 'occurrence',
+        points: 3,
+        pointsExpiry: 'permanent'
       }
     ]);
     taskService.getOccurrenceRecordsByDateRange.mockResolvedValueOnce([
@@ -378,6 +382,22 @@ describe('pages/index/index shell behavior', () => {
     expect(page.data.occurrenceTasks.map((item) => item.isPendingSync)).toEqual([
       true,
       false
+    ]);
+    expect(page.data.occurrenceTasks.map((item) => ({
+      rewardAccentText: item.rewardAccentText,
+      rewardExpiryMetaText: item.rewardExpiryMetaText,
+      rewardSummaryText: item.rewardSummaryText
+    }))).toEqual([
+      {
+        rewardAccentText: '2⭐',
+        rewardExpiryMetaText: '有效期：本周结束',
+        rewardSummaryText: '奖励 2⭐ · 本周结束'
+      },
+      {
+        rewardAccentText: '3⭐',
+        rewardExpiryMetaText: '有效期：永久',
+        rewardSummaryText: '奖励 3⭐ · 永久'
+      }
     ]);
 
     taskService.isOccurrenceEnabled.mockResolvedValueOnce(false);

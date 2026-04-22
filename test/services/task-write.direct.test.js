@@ -74,6 +74,60 @@ describe('task-write direct behavior', () => {
     }));
   });
 
+  it('历史表现项应在前端服务层拒绝 update / disable / delete', async () => {
+    const historyTask = new Task({
+      id: 'occ_cfg_history',
+      userId: 'child_1',
+      title: '旧表现项',
+      type: 'study',
+      executionMode: 'occurrence',
+      date: '2026-04-01',
+      activeRange: {
+        startDate: '2026-04-01',
+        endDate: '2026-04-10',
+        hasNoEndDate: false
+      }
+    });
+
+    const service = {
+      enableCloudStorage: false,
+      taskRepository: {
+        getById: jest.fn(async () => historyTask),
+        save: jest.fn(),
+        delete: jest.fn()
+      },
+      eventBus: {
+        emit: jest.fn()
+      },
+      _buildTaskServiceMutationResult: jest.fn()
+    };
+
+    await expect(taskWrite.updateTask(service, 'occ_cfg_history', {
+      title: '改标题'
+    }, 'child_1')).resolves.toEqual({
+      success: false,
+      message: '历史项仅保留查看，不支持继续修改',
+      code: 'TASK_OCCURRENCE_HISTORY_READONLY'
+    });
+
+    await expect(taskWrite.disableOccurrenceTask(service, 'occ_cfg_history', {
+      disableFromDate: '2026-04-17'
+    }, 'child_1')).resolves.toEqual({
+      success: false,
+      message: '历史项仅保留查看，不支持继续修改',
+      code: 'TASK_OCCURRENCE_HISTORY_READONLY'
+    });
+
+    await expect(taskWrite.deleteTask(service, 'occ_cfg_history', 'child_1')).resolves.toEqual({
+      success: false,
+      message: '历史项仅保留查看，不支持继续修改',
+      code: 'TASK_OCCURRENCE_HISTORY_READONLY'
+    });
+
+    expect(service.taskRepository.save).not.toHaveBeenCalled();
+    expect(service.taskRepository.delete).not.toHaveBeenCalled();
+  });
+
   it('recordOccurrenceResult 应拒绝未来日期记录', async () => {
     const service = {
       enableCloudStorage: false,
@@ -189,9 +243,110 @@ describe('task-write direct behavior', () => {
       outcome: 'success'
     });
 
+    expect(service.starService.addStars).not.toHaveBeenCalled();
     expect(service._syncOccurrenceRecordToCloud).toHaveBeenCalled();
     expect(service._createTaskViaCloud).not.toHaveBeenCalled();
     expect(service._syncUpdateToCloud).not.toHaveBeenCalled();
+  });
+
+  it('recordOccurrenceResult 应按表现项配置的 pointsExpiry 入桶并在撤销时从原桶扣回', async () => {
+    const configTask = new Task({
+      id: 'occ_cfg_expiry',
+      userId: 'child_1',
+      title: '课堂表现',
+      type: 'habit',
+      points: 3,
+      pointsExpiry: 'quarter',
+      executionMode: 'occurrence',
+      date: '2026-04-01',
+      activeRange: {
+        startDate: '2026-04-01',
+        endDate: '',
+        hasNoEndDate: true
+      }
+    });
+
+    const service = {
+      enableCloudStorage: false,
+      taskRepository: {
+        getById: jest.fn(async () => configTask),
+        getOccurrenceRecord: jest.fn()
+          .mockResolvedValueOnce(null)
+          .mockResolvedValueOnce(new Task({
+            id: 'task_occ_occ_cfg_expiry_child_1_20260417',
+            userId: 'child_1',
+            parentTaskId: 'occ_cfg_expiry',
+            title: '课堂表现',
+            type: 'habit',
+            points: 3,
+            pointsExpiry: 'quarter',
+            executionMode: 'occurrence',
+            isOccurrenceRecord: true,
+            occurrenceOutcome: 'success',
+            date: '2026-04-17',
+            status: 1,
+            starAwarded: true
+          })),
+        save: jest.fn(async (task) => task)
+      },
+      starService: {
+        addStars: jest.fn(async () => ({ success: true })),
+        consumeStarsFromSpecificType: jest.fn(async () => ({ success: true }))
+      },
+      _buildTaskPendingSyncMeta: jest.fn((task, action, overrides = {}) => ({
+        action,
+        operationKey: String(overrides.operationKey || task.modifyTime || Date.now()),
+        modifyTime: Number(overrides.modifyTime || task.modifyTime || Date.now()),
+        targetUserId: overrides.targetUserId || task.userId || null
+      })),
+      eventBus: {
+        emit: jest.fn()
+      },
+      _buildTaskServiceMutationResult: jest.fn((mutation, options = {}) => ({
+        success: true,
+        task: options.task
+      }))
+    };
+
+    const successResult = await taskWrite.recordOccurrenceResult(service, 'occ_cfg_expiry', {
+      userId: 'child_1',
+      date: '2026-04-17',
+      outcome: 'success'
+    });
+    expect(successResult.record).toEqual(expect.objectContaining({
+      pointsExpiry: 'quarter',
+      starAwarded: true
+    }));
+    expect(service.starService.addStars).toHaveBeenCalledWith(
+      3,
+      'quarter',
+      '记录表现达成: 课堂表现',
+      expect.objectContaining({
+        sourceType: 'task_occurrence_success',
+        userId: 'child_1'
+      })
+    );
+
+    const revokeResult = await taskWrite.recordOccurrenceResult(service, 'occ_cfg_expiry', {
+      userId: 'child_1',
+      date: '2026-04-17',
+      outcome: 'failure'
+    });
+    expect(revokeResult.record).toEqual(expect.objectContaining({
+      pointsExpiry: 'quarter',
+      starAwarded: false,
+      occurrenceOutcome: 'failure'
+    }));
+    expect(service.starService.consumeStarsFromSpecificType).toHaveBeenCalledWith(
+      3,
+      'quarter',
+      '撤销表现达成: 课堂表现',
+      expect.objectContaining({
+        sourceType: 'task_occurrence_revoke',
+        userId: 'child_1',
+        originalTaskDate: '2026-04-17'
+      })
+    );
   });
 
   it('recordOccurrenceResult 对相同结果应返回 unchanged，对撤销失败应显式返回错误', async () => {
@@ -373,6 +528,87 @@ describe('task-write direct behavior', () => {
         parentTaskId: 'occ_cfg_fallback',
         occurrenceOutcome: 'failure',
         starAwarded: false
+      })
+    }));
+  });
+
+  it('recordOccurrenceResult 在云端失败时应回退到本地发放表现奖励，避免成功结果丢星', async () => {
+    const configTask = new Task({
+      id: 'occ_cfg_fallback_success',
+      userId: 'child_1',
+      title: '数学老师表扬',
+      type: 'study',
+      points: 2,
+      pointsExpiry: 'week',
+      executionMode: 'occurrence',
+      date: '2026-04-17',
+      activeRange: {
+        startDate: '2026-04-17',
+        endDate: '',
+        hasNoEndDate: true
+      }
+    });
+    const service = {
+      enableCloudStorage: true,
+      eventBus: {
+        emit: jest.fn()
+      },
+      taskRepository: {
+        getById: jest.fn(async () => configTask),
+        getOccurrenceRecord: jest.fn(async () => null),
+        save: jest.fn(async (task) => task)
+      },
+      starService: {
+        consumeStarsFromSpecificType: jest.fn(async () => ({ success: true })),
+        addStars: jest.fn(async () => ({ success: true }))
+      },
+      _buildTaskPendingSyncMeta: jest.fn((task, action, overrides = {}) => ({
+        action,
+        operationKey: String(overrides.operationKey || task.modifyTime || Date.now()),
+        modifyTime: Number(overrides.modifyTime || task.modifyTime || Date.now()),
+        targetUserId: overrides.targetUserId || task.userId || null,
+        configTaskId: overrides.extraMeta?.configTaskId || null
+      })),
+      _syncOccurrenceRecordToCloud: jest.fn(async () => {
+        throw new Error('occurrence cloud fail');
+      }),
+      _emitTaskCloudSyncFailure: jest.fn(async () => true),
+      _buildTaskServiceMutationResult: jest.fn((mutation, options = {}) => ({
+        success: true,
+        task: options.task,
+        fallback: options.fallback
+      }))
+    };
+
+    const result = await taskWrite.recordOccurrenceResult(service, 'occ_cfg_fallback_success', {
+      userId: 'child_1',
+      date: '2026-04-17',
+      outcome: 'success'
+    });
+
+    expect(service.starService.addStars).toHaveBeenCalledWith(
+      2,
+      'week',
+      '记录表现达成: 数学老师表扬',
+      expect.objectContaining({
+        sourceType: 'task_occurrence_success',
+        userId: 'child_1'
+      })
+    );
+    expect(service.taskRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+      parentTaskId: 'occ_cfg_fallback_success',
+      occurrenceOutcome: 'success',
+      starAwarded: true
+    }));
+    expect(result).toEqual(expect.objectContaining({
+      success: true,
+      fallback: true,
+      starsAwarded: true,
+      record: expect.objectContaining({
+        parentTaskId: 'occ_cfg_fallback_success',
+        occurrenceOutcome: 'success',
+        starAwarded: true,
+        pointsExpiry: 'week'
       })
     }));
   });

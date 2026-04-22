@@ -209,6 +209,39 @@ class TaskService {
     return `${year}-${month}-${day}`;
   }
 
+  _buildOccurrenceHistoryReadonlyError() {
+    const error = new Error('历史项仅保留查看，不支持继续修改');
+    error.code = 'TASK_OCCURRENCE_HISTORY_READONLY';
+    return error;
+  }
+
+  _resolveOccurrenceStatusKey(task, today) {
+    if (!task || typeof task.isOccurrenceConfigTask !== 'function' || !task.isOccurrenceConfigTask() || !today) {
+      return null;
+    }
+
+    const startDate = task.activeRange?.startDate || task.date || '';
+    const hasNoEndDate = task.activeRange?.hasNoEndDate === true;
+    const endDate = hasNoEndDate ? '' : (task.activeRange?.endDate || '');
+
+    if (startDate && startDate > today) {
+      return 'upcoming';
+    }
+
+    if (!hasNoEndDate && endDate && endDate < today) {
+      return 'history';
+    }
+
+    return 'active';
+  }
+
+  _assertOccurrenceHistoryWritable(task) {
+    const today = this._formatDate(new Date());
+    if (this._resolveOccurrenceStatusKey(task, today) === 'history') {
+      throw this._buildOccurrenceHistoryReadonlyError();
+    }
+  }
+
   _shiftDate(dateString, dayDelta) {
     if (!dateString) {
       return null;
@@ -1039,6 +1072,7 @@ class TaskService {
         }
 
         const existingTask = Task.fromDB(existingRaw);
+        this._assertOccurrenceHistoryWritable(existingTask);
         const mergedValidation = Task.validate({
           ...existingTask.toJSON(),
           ...changes
@@ -1098,6 +1132,9 @@ class TaskService {
           await connection.rollback();
           return false;
         }
+
+        const existingTask = Task.fromDB(existingRaw);
+        this._assertOccurrenceHistoryWritable(existingTask);
 
         const [result] = await connection.execute(
           `UPDATE tasks SET deleted_at = NOW()${columnMap.modifyTime ? `, ${columnMap.modifyTime} = ?` : ''} WHERE task_id = ? AND deleted_at IS NULL`,
@@ -1570,6 +1607,7 @@ class TaskService {
           error.code = 'TASK_OCCURRENCE_INVALID_TASK';
           throw error;
         }
+        this._assertOccurrenceHistoryWritable(existingTask);
 
         const nextEndDateCandidate = this._shiftDate(disableFromDate, -1);
         const currentEndDate = existingTask.activeRange?.hasNoEndDate

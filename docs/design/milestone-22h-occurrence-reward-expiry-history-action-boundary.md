@@ -62,6 +62,16 @@
    - 还要验证：`配置 -> 记录成功 -> 星星入桶 -> 撤销成功 -> 原桶扣回`
    - 避免出现“页面能选有效期，但真实奖励仍按永久有效结算”的假闭环
 
+3. **表现项奖励有效期需要在关键使用场景中可见**
+   - 不只在编辑页可配置
+   - 首页表现打卡入口与表现项管理页的生效中卡片，也要直接展示奖励有效期
+   - 用户不应在“要不要记录这次表现”时还需要回忆或进入编辑页确认奖励是永久还是短期
+
+4. **表现记录卡片的奖励信息需要完成视觉收口**
+   - 不能继续呈现为普通说明句
+   - 不能出现左侧信息拥挤、右侧明显发空的失衡版式
+   - 不能在同一张卡片里重复表达同一个“星星奖励”信息
+
 ### 业务价值
 
 - [x] 用户价值：表现项奖励规则与普通任务统一，用户不再困惑“为什么这个有时效，那个没有”
@@ -73,7 +83,9 @@
 **包含**：
 - ✅ 为表现项配置补齐 `pointsExpiry` 编辑能力
 - ✅ 表现项创建 / 更新链路补齐 `pointsExpiry` 读写
-- ✅ 表现项列表卡片继续展示星星数量，但不额外新增复杂时效文案
+- ✅ 首页表现打卡入口展示奖励星星有效期
+- ✅ 表现项管理页生效中卡片展示奖励星星有效期
+- ✅ 表现项列表卡片继续展示星星数量，并补充轻量时效文案
 - ✅ 历史项卡片移除 `编辑` 主动作
 - ✅ 历史项卡片移除 `更多` 入口及其派生写操作
 - ✅ 按状态收口表现项动作矩阵，并补齐对应自动化测试
@@ -100,8 +112,9 @@
 
 1. 表现项编辑页补入 `pointsExpiry`，复用普通任务现有星星有效期枚举和默认值
 2. 表现项创建 / 更新 payload 把 `pointsExpiry` 正式纳入 authoritative 字段
-3. 历史项卡片按状态降为纯只读卡片，不再暴露任何写操作
-4. `生效中 / 待生效 / 历史项` 三组卡片采用明确动作矩阵，而不是全状态共用同一套按钮
+3. 首页表现打卡入口与表现项管理页卡片补充轻量的奖励时效摘要
+4. 历史项卡片按状态降为纯只读卡片，不再暴露任何写操作
+5. `生效中 / 待生效 / 历史项` 三组卡片采用明确动作矩阵，而不是全状态共用同一套按钮
 
 本期不扩后端新接口，不改数据库字段结构，只复用任务模型中已存在的 `pointsExpiry` 能力和现有表现项数据结构。
 
@@ -158,6 +171,14 @@ interface OccurrenceDraft {
   hasNoEndDate: boolean;
 }
 
+interface OccurrenceRewardSummary {
+  rewardAccentText: string;
+  rewardExpiryMetaText: string;
+  pointsText: string;
+  pointsExpiryText: string;
+  rewardSummaryText: string;
+}
+
 interface OccurrenceCardActionState {
   canEdit: boolean;
   canOpenMore: boolean;
@@ -191,7 +212,8 @@ interface OccurrenceCardActionState {
 
 | 方法 | 说明 | 参数 | 返回值 |
 |------|------|------|--------|
-| `buildOccurrenceCardViewModel` | 输出状态相关动作矩阵 | `(item, today)` | `cardViewModel.canEdit / canOpenMore` |
+| `buildOccurrenceCardViewModel` | 输出管理页卡片状态、奖励摘要结构与动作矩阵 | `(item, today)` | `cardViewModel.rewardAccentText / rewardExpiryMetaText / canEdit / canOpenMore` |
+| `buildOccurrenceDisplayItems` | 输出首页表现记录卡片的奖励摘要结构 | `(tasks, records)` | `item.rewardAccentText / item.rewardExpiryMetaText / item.rewardSummaryText` |
 
 ### 关键设计决策
 
@@ -239,6 +261,80 @@ interface OccurrenceCardActionState {
 - 用户在任务页已经形成“星星后面紧跟星星有效期”的使用心智
 - 若表现项改成另一套控件或换了字段顺序，会制造“同类奖励，两套表单”的割裂感
 - `M22G` 已经冻结了表现项编辑层必须与站内现有表单系统保持同一视觉语言，本期不能破坏这个前提
+
+#### 决策1B：奖励有效期在关键卡片中必须轻量可见
+
+本期正式冻结：
+
+- 首页“表现记录”区中的每条表现卡片，都要直接显示奖励摘要
+- 表现项管理页“生效中”卡片，也要直接显示奖励摘要
+- 摘要表达固定为一行轻量信息，不新增说明段落、不拆成多行提示
+- 首页与管理页必须复用同一套奖励摘要 helper，不允许各自拼接不同文案
+- 首页表现记录区与上方任务列表中的奖励信息，必须保持同源视觉语言，不允许出现“一边像标签、一边像说明文字”的割裂
+- 统一原则是“保留表现记录卡片自身布局，但奖励信息的视觉 token 与任务列表同源”：
+  - 保留单行摘要，不改成说明段落
+  - 保留卡片内左侧信息流，不强行搬到右侧
+  - 星星数必须是主要识别点，不能弱化成普通灰色说明句
+  - 有效期文本必须作为紧随星星数的次级元信息，与任务列表保持一致
+- 上方任务卡片当前已有的表达方式，例如 `1🌟（有效期：本周结束）`，只作为“视觉层级和语义拆分”的参考来源，不作为首页/管理页必须逐字照抄的固定模板
+- 本期统一的是“主信息 = 星数、次信息 = 有效期”的视觉语言，以及字号、色彩、间距和密度，不是强制统一 emoji、括号或整句句法
+- 最小展示结构必须冻结为两段式，而不是单个整句文本直接上屏：
+  - `rewardAccentText`：主强调信息，例如 `1 星`
+  - `rewardExpiryMetaText`：次级元信息，例如 `本周结束`
+  - `rewardSummaryText` 只作为共享数据摘要和兜底文案存在，不得作为首页/管理页最终视觉的唯一节点
+- 页面最终结构要求：
+  - 首页：奖励行至少拆成“星数强调节点 + 有效期次级节点”
+  - 管理页生效中卡片：奖励行至少拆成“星数强调节点 + 有效期次级节点”
+  - 不允许继续只渲染 `奖励 1 星 · 本周结束` 这一整句纯文本作为最终主视觉
+- 实现上优先复用任务列表同源的颜色、字号层级、间距密度和图标语义；若因卡片结构不同需要微调，只允许做对齐和留白级调整，不允许换成另一套表达范式
+- 推荐拆分效果：
+  - 主强调：`2 星`
+  - 次级元信息：`永久`
+  - 主强调：`2 星`
+  - 次级元信息：`本周结束`
+  - 主强调：`3 星`
+  - 次级元信息：`本月结束`
+  - 主强调：`1 星`
+  - 次级元信息：`本季度结束`
+- `待生效` 与 `历史项` 不强制新增该摘要，避免次级区域信息继续膨胀；若后续实现复用同一卡片模板需要带出，也必须保持同一行轻量呈现，不允许额外堆说明文本
+
+原因：
+
+- 用户真正做判断的时刻，不是在编辑页，而是在首页准备记录表现、或在管理页快速浏览生效配置时
+- 若有效期只能进编辑页看，实际等于“有配置但不可见”
+- 本期要解决的是“规则能被用户及时感知”，不是把卡片再次做重设计
+- 如果上方任务列表和下方表现记录使用两套奖励信息视觉语法，页面会显得像来自两个模块拼接，不符合当前产品追求的简洁、一致和精致感
+
+#### 决策1C：表现记录卡片的信息布局必须同步完成视觉平衡收口
+
+本期正式冻结：
+
+- 奖励信息不再以“奖励”二字作为视觉起点
+  - 最终视觉以 `1 星 / 2 星` 这类星数强调信息作为第一识别点
+  - `本周结束 / 本月结束 / 永久` 作为紧随其后的次级元信息
+- 若实现层为了结构复用保留 `rewardSummaryText` 或类似整句摘要字段，它们只能服务于数据组装、兜底渲染或测试断言，不能回流成首页/管理页主视觉上的“奖励 XX · YY”整句
+- 首页表现记录卡片必须重排为更稳定的上半区结构：
+  - 第一行：`标题` 左侧主信息 + `状态` 右侧状态锚点
+  - 第二行：`星数强调` + `有效期元信息`
+  - 第三行仅在必要时保留补充说明，不默认堆叠多行辅助文字
+- 表现项管理页生效中卡片必须去掉重复奖励表达：
+  - 当奖励行已经显示 `X 星 + 有效期` 时，不再在同一卡片重复显示另一份星数 pill
+  - 分组标题已表达状态时，卡片内不再重复堆一个等价的状态标签
+- “右侧偏空”的问题必须通过版式重组解决，而不是硬塞无价值内容：
+  - 优先通过右侧状态锚点、标题行对齐、信息组收紧来恢复平衡
+  - 不新增无业务价值的装饰标签、占位图标或解释文案来填空
+- 首页与管理页都允许因场景不同而位置略有差异，但必须满足同一套视觉原则：
+  - 星数是主强调
+  - 有效期是次级元信息
+  - 状态是右侧或上层锚点
+  - 不出现“说明句式奖励信息 + 另一份重复状态/星数”的混乱层级
+
+原因：
+
+- 用户首先要判断“这次值不值得记录”，所以星数比“奖励”字样更重要
+- 当前问题不是缺信息，而是信息主次不够准、重复表达和上半区重心失衡
+- 右侧发空本质是版式失衡，不应靠加内容掩盖
+- 这一步完成后，表现记录区才能真正和上方任务列表形成同页一致的品质感
 
 #### 决策2：历史项正式降为只读，不再保留任何写动作
 
@@ -314,18 +410,25 @@ interface OccurrenceCardActionState {
 
 **修改文件**：
 - `docs/design/milestone-22h-occurrence-reward-expiry-history-action-boundary.md` - 本设计文档
+- `pages/index/index.js` - 首页表现记录区奖励摘要展示模型
+- `pages/index/index.wxml` - 首页表现记录区补充奖励摘要文案
+- `pages/index/index.wxss` - 首页表现记录区奖励摘要样式
 - `pages/task-occurrence-edit/task-occurrence-edit.js` - 表现项草稿初始化/回填、保存 payload 与动作矩阵消费
 - `pages/task-occurrence-edit/task-occurrence-edit.wxml` - 按任务页同类结构补齐星星有效期摘要行/选项面板，并收口历史项动作
 - `pages/task-occurrence-edit/task-occurrence-edit.wxss` - 星星有效期控件样式与任务页同范式对齐，并收口历史项动作区
 - `services/task-service/task-write.js` - 历史项写保护与表现项奖励链路测试配合点
+- `backend/services/starService.js` - 后端表现奖励入桶/撤销的有效期落桶与记录写入保障
 - `backend/services/taskService.js` - 历史项 update / disable / softDelete authoritative 拒绝规则
 - `backend/controllers/taskController.js` - 历史项 update / disable / delete 错误映射口径
 - `utils/task-occurrence-display.js` - 输出动作矩阵展示字段
+- `test/services/task-write.direct.test.js` - 前端本地/降级路径下的表现奖励有效期链路测试
+- `test/pages/index.page-shell.behavior.test.js` - 首页表现记录区奖励摘要展示测试
 - `test/pages/task-occurrence-edit.page.test.js` - 页面状态、动作矩阵与 `pointsExpiry` 回填测试
 - `test/utils/task-occurrence-display.test.js` - 展示模型动作矩阵测试
 - `backend/test/unit/taskController-m07.test.js` - 历史项 update / disable / delete 返回 409 与错误码测试
+- `backend/test/unit/starService.test.js` - 后端表现奖励记录的有效期与撤销写库测试
 - `backend/test/integration/task-api-m21l-real.test.js` 或新增 occurrence 定向集成测试 - 历史项 REST 写接口正式拒绝
-- `test/services/task-service.test.js` 或 occurrence 相关定向测试 - 表现项奖励有效期链路测试
+- `backend/test/integration/task-api-m21l-real.test.js` - 表现项奖励有效期的后端真实库闭环测试
 
 ### 核心代码结构
 
@@ -365,10 +468,47 @@ function buildPointsExpirySummary(expiry) {
   return taskFormDisplay.buildPointsExpiryText(expiry || 'permanent');
 }
 
+function buildOccurrenceRewardSummary(item) {
+  const points = Number(item.points || 0);
+  const rewardAccentText = `${points} 星`;
+  const pointsExpiryText = buildPointsExpirySummary(item.pointsExpiry);
+  const rewardExpiryMetaText = pointsExpiryText;
+
+  return {
+    rewardAccentText,
+    rewardExpiryMetaText,
+    pointsText: rewardAccentText,
+    pointsExpiryText,
+    rewardSummaryText: `奖励 ${rewardAccentText} · ${pointsExpiryText}`
+  };
+}
+
+function buildOccurrenceHomeRewardSummary(task) {
+  return buildOccurrenceRewardSummary(task);
+}
+
+function buildOccurrenceDisplayItems(tasks, records) {
+  return tasks.map((task) => {
+    const rewardSummary = buildOccurrenceHomeRewardSummary(task);
+    return {
+      ...task,
+      rewardAccentText: rewardSummary.rewardAccentText,
+      rewardExpiryMetaText: rewardSummary.rewardExpiryMetaText,
+      rewardSummaryText: rewardSummary.rewardSummaryText
+    };
+  });
+}
+
 function buildOccurrenceCardViewModel(item, today) {
   const statusKey = resolveStatusKey(...);
+  const rewardSummary = buildOccurrenceRewardSummary(item);
   return {
     ...,
+    rewardAccentText: rewardSummary.rewardAccentText,
+    rewardExpiryMetaText: rewardSummary.rewardExpiryMetaText,
+    pointsText: rewardSummary.pointsText,
+    pointsExpiryText: rewardSummary.pointsExpiryText,
+    rewardSummaryText: rewardSummary.rewardSummaryText,
     canEdit: statusKey !== 'history',
     canOpenMore: statusKey !== 'history'
   };
@@ -406,10 +546,28 @@ function assertOccurrenceHistoryWritable(task, today) {
 **函数4**：`buildOccurrenceCardViewModel`
 - **输入**：`item, today`
 - **输出**：卡片展示模型
-- **职责**：统一输出状态文案和动作矩阵
+- **职责**：统一输出状态文案、奖励摘要和动作矩阵
 - **依赖**：`resolveStatusKey`
 
-**函数5**：`assertOccurrenceHistoryWritable`
+**函数5**：`buildOccurrenceRewardSummary`
+- **输入**：`item`
+- **输出**：`rewardAccentText / rewardExpiryMetaText / rewardSummaryText`
+- **职责**：输出共享奖励摘要数据，同时为页面提供“星数强调 + 有效期次级元信息”的结构化字段
+- **依赖**：任务页既有 `pointsExpiry` 文案映射
+
+**函数6**：`buildOccurrenceHomeRewardSummary`
+- **输入**：`task`
+- **输出**：首页表现记录区奖励摘要
+- **职责**：复用管理页同一摘要 helper，避免首页与管理页出现两套时效文案
+- **依赖**：`buildOccurrenceRewardSummary`
+
+**函数7**：`buildOccurrenceDisplayItems`
+- **输入**：`tasks, records`
+- **输出**：首页表现记录区展示模型
+- **职责**：把共享奖励摘要结构映射到首页项，确保最终页面能拿到 `rewardAccentText / rewardExpiryMetaText`
+- **依赖**：`buildOccurrenceHomeRewardSummary`
+
+**函数8**：`assertOccurrenceHistoryWritable`
 - **输入**：`task, today`
 - **输出**：允许继续写入 / 抛出只读错误
 - **职责**：把历史项只读规则落实到服务/后端 authoritative 兜底
@@ -453,16 +611,22 @@ function assertOccurrenceHistoryWritable(task, today) {
 
 ### 第3步：补齐页面交互、奖励链路与样式（预计3小时）
 
-- [ ] **任务**：为编辑层新增星星有效期控件，并验证记录成功/撤销时按同一有效期桶结算
-- [ ] **验证**：页面布局稳定，历史项动作区收口后不出现空洞或错位，表现项奖励按配置有效期入桶并原桶撤销
+- [ ] **任务**：为编辑层新增星星有效期控件，为首页/管理页补齐奖励摘要，并验证记录成功/撤销时按同一有效期桶结算
+- [ ] **验证**：页面布局稳定，历史项动作区收口后不出现空洞或错位，首页/管理页关键卡片能直接看见奖励有效期，表现项奖励按配置有效期入桶并原桶撤销
 - [ ] **依赖**：第1步、第2步完成
 
 **实施要点**：
 1. 复用现有任务页的有效期文案、选项顺序和面板交互
-2. 不新增多余解释文案
+2. 首页与管理页卡片只新增一行轻量奖励摘要，不新增多余解释文案
 3. 不为了“区别表现项”另造一套铺开式控件或不同字段顺序
-4. 历史项卡片动作区收口后保持视觉平衡
-5. 记录成功与撤销必须验证 `record.pointsExpiry` 真正参与星星加减
+4. 首页与管理页必须复用同一摘要 helper，文案口径与任务页 `buildPointsExpiryText` 保持一致
+5. 表现记录区的奖励摘要在视觉上必须向任务列表的奖励信息对齐，统一星星强调方式、有效期层级和信息密度
+6. 首页与管理页最终渲染时必须拆成“星数强调节点 + 有效期次级节点”，不能只渲染整句 `rewardSummaryText`
+7. 首页表现记录卡片上半区必须形成“左主右辅”的稳定结构，状态锚点用于平衡右侧留白
+8. 管理页生效中卡片必须移除重复的星数/状态表达，不保留与奖励行等价的冗余 pill
+9. 管理页卡片中的奖励摘要只要求生效中区块强制可见，不把次级区块做成信息墙
+10. 历史项卡片动作区收口后保持视觉平衡
+11. 记录成功与撤销必须验证 `record.pointsExpiry` 真正参与星星加减
 
 ---
 
@@ -494,16 +658,32 @@ function assertOccurrenceHistoryWritable(task, today) {
 | 表现项有效期展示模式 | 页面结构测试 | 使用任务页同类“摘要行 + 独立面板”交互，不直接平铺选项 |
 | 表现项表单顺序 | 页面结构测试 | `类别/星星` 后紧跟 `星星有效期`，再进入 `适用时间` |
 | 表现项有效期文案一致性 | 页面文案测试 | 摘要文案与任务页 `pointsExpiry` 文案完全一致 |
+| 首页/管理页摘要口径一致 | 展示模型测试 | 两处都复用同一摘要 helper，不出现“本周有效/本周结束”混用 |
+| 首页奖励摘要展示 | 首页展示模型/结构测试 | 每条表现记录展示 `rewardSummaryText`，可直接看见有效期 |
+| 管理页生效中卡片奖励摘要 | 管理页展示模型/结构测试 | 生效中卡片展示 `奖励 X 星 · 有效期` 单行摘要 |
+| 奖励摘要结构化输出 | 展示模型测试 | 输出 `rewardAccentText / rewardExpiryMetaText`，而不是只依赖单个整句 |
+| 奖励摘要视觉语言一致 | 页面结构/样式测试 | 表现记录区奖励信息与任务列表奖励信息使用同源视觉 token，不呈现为说明句样式 |
+| 页面奖励节点拆分 | 页面结构测试 | 首页与管理页奖励行都至少存在“星数强调节点 + 有效期节点”两个层级 |
+| 首页卡片上半区平衡 | 页面结构/样式测试 | 标题与状态形成左右锚点，不再出现明显右侧失衡 |
+| 管理页卡片去重 | 页面结构测试 | 生效中卡片不再重复显示与奖励行等价的星数/状态信息 |
 | 历史项动作矩阵 | 展示模型测试 | `history.canEdit === false` 且 `history.canOpenMore === false` |
 | 生效中/待生效动作保留 | 展示模型测试 | 两者仍保留可编辑/更多入口 |
 | 历史项系统级只读 | 前端服务、后端服务、控制器测试 | update / disable / delete 均返回 `TASK_OCCURRENCE_HISTORY_READONLY` |
 | 历史项接口状态码 | 控制器/API 测试 | update / disable / delete 均返回 HTTP 409 |
+| 后端表现奖励有效期落库 | 后端单元/集成测试 | success/revoke 两类 `star_records` 都使用正确 `expiry_type` |
 | 表现项奖励有效期闭环 | 服务层奖励链路测试 | `配置 -> 记录成功 -> 星星入桶 -> 撤销成功 -> 原桶扣回` 全链路成立 |
 
 ### 集成测试
 
 - [ ] 场景1：新建带 `pointsExpiry=week` 的表现项后，重新进入编辑页能正确回填
 - [ ] 场景1A：新建和编辑表现项时，`星星有效期` 在编辑层中的位置、摘要文案和弹出面板与任务页保持一致
+- [ ] 场景1B：首页“表现记录”区直接显示奖励有效期，不需要进入编辑页确认
+- [ ] 场景1C：表现项管理页“生效中”卡片直接显示奖励有效期，且保持单行轻量表达
+- [ ] 场景1D：首页与管理页都使用任务页同源文案，不出现“本周有效”等变体
+- [ ] 场景1E：首页表现记录区的奖励信息与上方任务列表视觉语言一致，不再出现明显割裂
+- [ ] 场景1F：首页与管理页的奖励信息都拆成“星数强调 + 有效期元信息”，不再是单句纯文本
+- [ ] 场景1G：首页表现记录卡片的上半区不再左重右轻，状态锚点和标题形成稳定平衡
+- [ ] 场景1H：管理页生效中卡片不再同时出现“奖励行 + 重复星数/状态 pill”
 - [ ] 场景2：历史项卡片不再出现任何写入口
 - [ ] 场景3：待生效项仍可编辑和停用
 - [ ] 场景4：历史项绕过页面直接调用 `PUT /tasks/:id`、停用接口、`DELETE /tasks/:id` 时均返回 409 + `TASK_OCCURRENCE_HISTORY_READONLY`
@@ -518,6 +698,13 @@ function assertOccurrenceHistoryWritable(task, today) {
    - [ ] 字段位置在 `星星` 后、`适用时间` 前
    - [ ] 交互为“摘要行 + 独立选项面板”，不在正文直接平铺
    - [ ] 摘要文案与任务页保持一致
+   - [ ] 首页表现记录区直接展示奖励有效期
+   - [ ] 管理页生效中卡片直接展示奖励有效期
+   - [ ] 首页与管理页不出现任务页之外的自定义时效文案
+   - [ ] 首页表现记录区的奖励信息不再像普通说明文字，和任务列表保持同源视觉层级
+   - [ ] 首页与管理页的奖励信息不是单个整句文本，而是清晰的“星数 + 有效期”两段式结构
+   - [ ] 首页表现记录卡片右侧不再显得明显发空，标题区和状态区达到稳定平衡
+   - [ ] 管理页生效中卡片不再重复表达同一份星数奖励信息
    - [ ] 记录成功后，星星进入所选有效期桶
    - [ ] 撤销成功后，从同一有效期桶正确扣回
 

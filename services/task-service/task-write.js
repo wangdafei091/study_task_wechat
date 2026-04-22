@@ -51,6 +51,13 @@ function buildOccurrenceUnavailableResult() {
   };
 }
 
+function buildOccurrenceHistoryReadonlyResult() {
+  return buildBusinessErrorResult(
+    '历史项仅保留查看，不支持继续修改',
+    'TASK_OCCURRENCE_HISTORY_READONLY'
+  );
+}
+
 function isPermissionDeniedSyncError(error) {
   if (!error) {
     return false;
@@ -122,6 +129,30 @@ function isOccurrenceConfigTask(task) {
 
 function isOccurrenceRecordTask(task) {
   return Boolean(task && typeof task.isOccurrenceRecordTask === 'function' && task.isOccurrenceRecordTask());
+}
+
+function resolveOccurrenceStatusKey(task, today) {
+  if (!isOccurrenceConfigTask(task) || !today) {
+    return null;
+  }
+
+  const startDate = task.activeRange?.startDate || task.date || '';
+  const hasNoEndDate = task.activeRange?.hasNoEndDate === true;
+  const endDate = hasNoEndDate ? '' : (task.activeRange?.endDate || '');
+
+  if (startDate && startDate > today) {
+    return 'upcoming';
+  }
+
+  if (!hasNoEndDate && endDate && endDate < today) {
+    return 'history';
+  }
+
+  return 'active';
+}
+
+function isReadonlyHistoryOccurrenceTask(task, today = dateUtils.getTodayString()) {
+  return resolveOccurrenceStatusKey(task, today) === 'history';
 }
 
 function buildOccurrenceRecordId(parentTaskId, userId, date) {
@@ -208,6 +239,37 @@ async function revokeOccurrenceStars(service, record) {
       originalTaskDate: record.date || null
     }
   );
+}
+
+async function applyOccurrenceStarMutationLocally(service, existingRecord, record, outcome) {
+  if (existingRecord?.occurrenceOutcome === TaskRecordOutcome.SUCCESS && existingRecord?.starAwarded) {
+    const revokeResult = await revokeOccurrenceStars(service, existingRecord);
+    if (!revokeResult.success) {
+      return {
+        success: false,
+        message: '撤销原表现奖励失败，请稍后重试'
+      };
+    }
+  }
+
+  if (outcome === TaskRecordOutcome.SUCCESS) {
+    const addResult = await addOccurrenceStars(service, record);
+    record.starAwarded = addResult.success === true;
+
+    if (!addResult.success) {
+      return {
+        success: false,
+        message: addResult.message || '表现奖励发放失败，请稍后重试'
+      };
+    }
+  } else {
+    record.starAwarded = false;
+  }
+
+  return {
+    success: true,
+    record
+  };
 }
 
 function emitOccurrenceRecordEvent(service, record, previousStatus, operationType, userId = null) {
@@ -587,6 +649,10 @@ async function updateTask(service, taskId, changes, userId = null) {
       return buildOccurrenceUnavailableResult();
     }
 
+    if (isReadonlyHistoryOccurrenceTask(task)) {
+      return buildOccurrenceHistoryReadonlyResult();
+    }
+
     const originalStatus = task.status;
     const cloudTask = cloneTaskForCloudWrite(task);
     cloudTask.update(changes);
@@ -664,6 +730,10 @@ async function deleteTask(service, taskId, userId = null, suppressMessage = fals
       return { success: false, message: '无权限操作此任务' };
     }
 
+    if (isReadonlyHistoryOccurrenceTask(taskInfo)) {
+      return buildOccurrenceHistoryReadonlyResult();
+    }
+
     const operatorContext = service._getOperatorContext(taskInfo.userId);
     const deleteMeta = {
       entityType: 'task',
@@ -735,6 +805,10 @@ async function disableOccurrenceTask(service, taskId, options = {}, userId = nul
 
     if (!isOccurrenceConfigTask(task)) {
       return { success: false, message: '当前任务不是表现项，无法停用' };
+    }
+
+    if (isReadonlyHistoryOccurrenceTask(task)) {
+      return buildOccurrenceHistoryReadonlyResult();
     }
 
     if (!(await ensureOccurrenceCapabilityEnabled(service))) {
@@ -1276,22 +1350,18 @@ async function recordOccurrenceResult(service, taskId, options = {}) {
       date
     });
 
-    if (previousOutcome === TaskRecordOutcome.SUCCESS && existingRecord?.starAwarded) {
-      const revokeResult = await revokeOccurrenceStars(service, existingRecord);
-      if (!revokeResult.success) {
-        return {
-          success: false,
-          message: '撤销原表现奖励失败，请稍后重试'
-        };
+    if (!service.enableCloudStorage) {
+      const localStarMutation = await applyOccurrenceStarMutationLocally(
+        service,
+        existingRecord,
+        record,
+        outcome
+      );
+      if (!localStarMutation.success) {
+        return localStarMutation;
       }
-      record.starAwarded = false;
-    }
-
-    if (outcome === TaskRecordOutcome.SUCCESS) {
-      const addResult = await addOccurrenceStars(service, record);
-      record.starAwarded = addResult.success === true;
     } else {
-      record.starAwarded = false;
+      record.starAwarded = outcome === TaskRecordOutcome.SUCCESS;
     }
 
     assignPendingSyncMeta(service, record, 'occurrence_record', {
@@ -1338,6 +1408,18 @@ async function recordOccurrenceResult(service, taskId, options = {}) {
     }
 
     if (!mutation) {
+      if (service.enableCloudStorage) {
+        const fallbackStarMutation = await applyOccurrenceStarMutationLocally(
+          service,
+          existingRecord,
+          record,
+          outcome
+        );
+        if (!fallbackStarMutation.success) {
+          return fallbackStarMutation;
+        }
+      }
+
       effectiveRecord = await service.taskRepository.save(record);
       if (service.enableCloudStorage) {
         await service._emitTaskCloudSyncFailure('occurrence_record', effectiveRecord, new Error('表现记录已降级为本地待同步'));

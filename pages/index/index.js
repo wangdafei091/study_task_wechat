@@ -2,6 +2,7 @@ const serviceManager = require('../../services/service-manager.js');
 const dateUtils = require('../../utils/dateUtils');
 const logger = require('../../utils/logger');
 const messageDisplay = require('../../utils/message-display');
+const occurrenceDisplay = require('../../utils/task-occurrence-display');
 const viewScopeUtils = require('../../utils/view-scope');
 const syncState = require('../../utils/sync-state');
 const { UserService } = require('../../services/user-service');
@@ -49,6 +50,7 @@ function buildOccurrenceDisplayItems(tasks = [], records = []) {
     const statusTone = outcome === 'success'
       ? (isPendingSync ? 'pending' : 'success')
       : (outcome === 'failure' ? (isPendingSync ? 'pending' : 'failure') : 'idle');
+    const rewardSummary = occurrenceDisplay.buildOccurrenceRewardSummary(task);
 
     return {
       ...task,
@@ -56,7 +58,10 @@ function buildOccurrenceDisplayItems(tasks = [], records = []) {
       outcome,
       isPendingSync,
       statusLabel,
-      statusTone
+      statusTone,
+      rewardAccentText: rewardSummary.rewardAccentText,
+      rewardExpiryMetaText: rewardSummary.rewardExpiryMetaText,
+      rewardSummaryText: rewardSummary.rewardSummaryText
     };
   });
 }

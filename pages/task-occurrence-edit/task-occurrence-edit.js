@@ -3,6 +3,8 @@ const logger = require('../../utils/logger');
 const serviceManager = require('../../services/service-manager');
 const occurrenceContext = require('../../utils/task-occurrence-context');
 const occurrenceDisplay = require('../../utils/task-occurrence-display');
+const taskFormDisplay = require('../../utils/task-form-display');
+const { StarExpiryType } = require('../../models/task');
 
 function getTodayString() {
   return dateUtils.getTodayString();
@@ -23,6 +25,7 @@ function getDefaultDraft() {
     title: '',
     type: 'study',
     points: 1,
+    pointsExpiry: StarExpiryType.PERMANENT,
     startDate: today,
     endDate: '',
     hasNoEndDate: true
@@ -35,6 +38,7 @@ function cloneDraft(draft) {
     title: draft.title || '',
     type: draft.type || 'study',
     points: normalizePointsValue(draft.points),
+    pointsExpiry: draft.pointsExpiry || StarExpiryType.PERMANENT,
     startDate: draft.startDate || getTodayString(),
     endDate: draft.endDate || '',
     hasNoEndDate: draft.hasNoEndDate === true
@@ -157,6 +161,7 @@ function buildOccurrenceTaskPayload(draft, targetUserId) {
     title: String(draft.title || '').trim(),
     type: draft.type || 'study',
     points: normalizePointsValue(draft.points),
+    pointsExpiry: draft.pointsExpiry || StarExpiryType.PERMANENT,
     date: draft.startDate,
     executionMode: 'occurrence',
     activeRange: {
@@ -182,10 +187,23 @@ function buildDraftFromItem(item) {
     title: item && item.title ? item.title : '',
     type: item && item.type ? item.type : 'study',
     points: normalizePointsValue(item && item.points !== undefined ? item.points : 1),
+    pointsExpiry: item && item.pointsExpiry ? item.pointsExpiry : StarExpiryType.PERMANENT,
     startDate: activeRange.startDate || (item && item.date ? item.date : getTodayString()),
     endDate: activeRange.endDate || '',
     hasNoEndDate: activeRange.hasNoEndDate === true
   };
+}
+
+function buildPointsExpirySummary(pointsExpiry) {
+  return taskFormDisplay.buildPointsExpiryText(pointsExpiry || StarExpiryType.PERMANENT);
+}
+
+function isHistoryOccurrenceItem(item) {
+  if (!item) {
+    return false;
+  }
+
+  return occurrenceDisplay.buildOccurrenceCardViewModel(item, getTodayString()).statusKey === 'history';
 }
 
 function resolveRuntimeMetrics() {
@@ -272,6 +290,8 @@ Page({
       totalCount: 0
     },
     draft: getDefaultDraft(),
+    pointsExpiryText: buildPointsExpirySummary(StarExpiryType.PERMANENT),
+    pointsExpiryPanel: false,
     editingId: '',
     editorState: getDefaultEditorState(),
     sectionUiStateByUser: {},
@@ -481,6 +501,8 @@ Page({
     this.setData({
       editingId: mode === 'edit' && item ? item.id : '',
       draft,
+      pointsExpiryText: buildPointsExpirySummary(draft.pointsExpiry),
+      pointsExpiryPanel: false,
       editorState: {
         visible: true,
         mode: mode === 'edit' ? 'edit' : 'create',
@@ -496,6 +518,8 @@ Page({
     this.setData({
       editingId: '',
       draft: nextDraft,
+      pointsExpiryText: buildPointsExpirySummary(nextDraft.pointsExpiry),
+      pointsExpiryPanel: false,
       editorState: getDefaultEditorState()
     });
   },
@@ -700,7 +724,7 @@ Page({
   onEditTap: function onEditTap(e) {
     const itemId = e.currentTarget.dataset.id;
     const item = this.findItemById(itemId);
-    if (!item) {
+    if (!item || isHistoryOccurrenceItem(item)) {
       return;
     }
     this.openEditor('edit', item);
@@ -708,7 +732,8 @@ Page({
 
   onMoreTap: async function onMoreTap(e) {
     const taskId = e.currentTarget.dataset.id || this.data.editingId;
-    if (!taskId || typeof wx.showActionSheet !== 'function') {
+    const item = this.findItemById(taskId);
+    if (!taskId || !item || isHistoryOccurrenceItem(item) || typeof wx.showActionSheet !== 'function') {
       return;
     }
 
@@ -726,7 +751,8 @@ Page({
 
   onDisableTap: async function onDisableTap(e) {
     const taskId = e.currentTarget.dataset.id;
-    if (!taskId) {
+    const item = this.findItemById(taskId);
+    if (!taskId || !item || isHistoryOccurrenceItem(item)) {
       return;
     }
 
@@ -774,7 +800,8 @@ Page({
 
   onDeleteTap: async function onDeleteTap(e) {
     const taskId = e.currentTarget.dataset.id;
-    if (!taskId) {
+    const item = this.findItemById(taskId);
+    if (!taskId || !item || isHistoryOccurrenceItem(item)) {
       return;
     }
 
@@ -890,5 +917,40 @@ Page({
     } finally {
       this.setData({ saving: false });
     }
+  },
+
+  togglePanel: function togglePanel(e) {
+    const panel = e.currentTarget.dataset.panel;
+    if (panel !== 'pointsExpiryPanel') {
+      return;
+    }
+
+    this.setData({
+      pointsExpiryPanel: !this.data.pointsExpiryPanel
+    });
+  },
+
+  closeAllPanels: function closeAllPanels() {
+    if (!this.data.pointsExpiryPanel) {
+      return;
+    }
+
+    this.setData({
+      pointsExpiryPanel: false
+    });
+  },
+
+  preventTouchMove: function preventTouchMove() {},
+
+  preventClose: function preventClose() {},
+
+  selectPointsExpiry: function selectPointsExpiry(e) {
+    const expiry = e.currentTarget.dataset.expiry || StarExpiryType.PERMANENT;
+    this.setData({
+      'draft.pointsExpiry': expiry,
+      pointsExpiryText: buildPointsExpirySummary(expiry),
+      pointsExpiryPanel: false
+    });
+    this.syncEditorDirtyState();
   }
 });

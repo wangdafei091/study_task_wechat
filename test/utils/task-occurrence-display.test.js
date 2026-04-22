@@ -1,10 +1,24 @@
 const {
   ACTIVE_VISIBLE_LIMIT,
+  buildOccurrenceRewardSummary,
   buildOccurrenceCardViewModel,
   buildOccurrenceManageSections
 } = require('../../utils/task-occurrence-display');
 
 describe('utils/task-occurrence-display', () => {
+  it('奖励摘要应复用任务页既有有效期文案', () => {
+    expect(buildOccurrenceRewardSummary({
+      points: 2,
+      pointsExpiry: 'week'
+    })).toEqual({
+      rewardAccentText: '2⭐',
+      rewardExpiryMetaText: '有效期：本周结束',
+      pointsText: '2⭐',
+      pointsExpiryText: '本周结束',
+      rewardSummaryText: '奖励 2⭐ · 本周结束'
+    });
+  });
+
   it('单条卡片模型应输出类型、时间范围和状态标签', () => {
     const card = buildOccurrenceCardViewModel({
       id: 'occ_1',
@@ -25,11 +39,17 @@ describe('utils/task-occurrence-display', () => {
       typeLabel: '学习',
       typeTone: 'study',
       groupKey: 'active',
-      pointsText: '2 颗星星',
+      rewardAccentText: '2⭐',
+      rewardExpiryMetaText: '有效期：永久',
+      pointsText: '2⭐',
+      rewardSummaryText: '奖励 2⭐ · 永久',
       rangeText: '2026-04-17 起长期有效',
-      statusText: '生效中',
-      statusTone: 'active'
+      statusTone: 'active',
+      canEdit: true,
+      canOpenMore: true
     }));
+    expect(card).not.toHaveProperty('pointsBadgeText');
+    expect(card).not.toHaveProperty('statusText');
   });
 
   it('应按生效中、待生效、历史项分组', () => {
@@ -81,9 +101,17 @@ describe('utils/task-occurrence-display', () => {
       ]
     });
     expect(result.activeSection.items.map((item) => item.id)).toEqual(['active_1']);
+    expect(result.activeSection.items[0]).toEqual(expect.objectContaining({
+      canEdit: true,
+      canOpenMore: true
+    }));
     expect(result.secondaryPanel.visible).toBe(true);
     expect(result.secondaryPanel.upcomingSection.items.map((item) => item.id)).toEqual(['upcoming_1']);
     expect(result.secondaryPanel.historySection.items.map((item) => item.id)).toEqual(['history_1']);
+    expect(result.secondaryPanel.historySection.items[0]).toEqual(expect.objectContaining({
+      canEdit: false,
+      canOpenMore: false
+    }));
   });
 
   it('生效中超过阈值时应默认只展示前六条，并支持展开状态', () => {
