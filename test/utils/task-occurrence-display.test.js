@@ -11,11 +11,11 @@ describe('utils/task-occurrence-display', () => {
       points: 2,
       pointsExpiry: 'week'
     })).toEqual({
-      rewardAccentText: '2⭐',
-      rewardExpiryMetaText: '有效期：本周结束',
-      pointsText: '2⭐',
+      rewardAccentText: '2 星',
+      rewardExpiryMetaText: '本周结束',
+      pointsText: '2 星',
       pointsExpiryText: '本周结束',
-      rewardSummaryText: '奖励 2⭐ · 本周结束'
+      rewardSummaryText: '奖励 2 星 · 本周结束'
     });
   });
 
@@ -39,14 +39,15 @@ describe('utils/task-occurrence-display', () => {
       typeLabel: '学习',
       typeTone: 'study',
       groupKey: 'active',
-      rewardAccentText: '2⭐',
-      rewardExpiryMetaText: '有效期：永久',
-      pointsText: '2⭐',
-      rewardSummaryText: '奖励 2⭐ · 永久',
+      rewardAccentText: '2 星',
+      rewardExpiryMetaText: '永久',
+      pointsText: '2 星',
+      rewardSummaryText: '奖励 2 星 · 永久',
       rangeText: '2026-04-17 起长期有效',
       statusTone: 'active',
-      canEdit: true,
-      canOpenMore: true
+      showInlineEdit: false,
+      canOpenMore: true,
+      moreActionKeys: ['edit', 'disable', 'delete']
     }));
     expect(card).not.toHaveProperty('pointsBadgeText');
     expect(card).not.toHaveProperty('statusText');
@@ -102,15 +103,17 @@ describe('utils/task-occurrence-display', () => {
     });
     expect(result.activeSection.items.map((item) => item.id)).toEqual(['active_1']);
     expect(result.activeSection.items[0]).toEqual(expect.objectContaining({
-      canEdit: true,
-      canOpenMore: true
+      showInlineEdit: false,
+      canOpenMore: true,
+      moreActionKeys: ['edit', 'disable', 'delete']
     }));
     expect(result.secondaryPanel.visible).toBe(true);
     expect(result.secondaryPanel.upcomingSection.items.map((item) => item.id)).toEqual(['upcoming_1']);
     expect(result.secondaryPanel.historySection.items.map((item) => item.id)).toEqual(['history_1']);
     expect(result.secondaryPanel.historySection.items[0]).toEqual(expect.objectContaining({
-      canEdit: false,
-      canOpenMore: false
+      showInlineEdit: false,
+      canOpenMore: false,
+      moreActionKeys: []
     }));
   });
 
