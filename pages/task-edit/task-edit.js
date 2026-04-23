@@ -10,6 +10,7 @@ const taskTemplateEntry = require('./modules/task-template-entry');
 
 let taskEditLoadingVisible = false;
 const TEMPLATE_RECOMMENDATION_CARD_LIMIT = 2;
+const TEMPLATE_RECOMMENDATION_QUERY_LIMIT = 5;
 
 function decorateTemplateRecommendation(candidate = {}) {
   const payload = candidate.taskPayload || {};
@@ -110,6 +111,8 @@ Page({
     selectedTemplateId: null,
     recommendedTemplates: [],
     templateRecommendationCount: 0,
+    templateRecommendationPreviewCount: 0,
+    templateRecommendationHasMore: false,
     templateFillUndoVisible: false,
     templateFillUndoText: '',
     occurrenceEntryVisible: false
@@ -294,7 +297,9 @@ Page({
         hasTemplates: false,
         recentTemplates: [],
         recommendedTemplates: [],
-        templateRecommendationCount: 0
+        templateRecommendationCount: 0,
+        templateRecommendationPreviewCount: 0,
+        templateRecommendationHasMore: false
       });
       return [];
     }
@@ -303,22 +308,27 @@ Page({
 
     try {
       const recommendationResult = await taskTemplateService.getRecommendedTemplateCandidates({
-        limit: 5
+        limit: TEMPLATE_RECOMMENDATION_QUERY_LIMIT
       });
       const candidates = Array.isArray(recommendationResult?.candidates)
         ? recommendationResult.candidates.map(decorateTemplateRecommendation)
         : [];
       const recommendationCount = Number(recommendationResult?.total || candidates.length);
+      const recommendationPreviewItems = candidates.slice(0, TEMPLATE_RECOMMENDATION_CARD_LIMIT);
 
       this.setData({
-        recommendedTemplates: candidates.slice(0, TEMPLATE_RECOMMENDATION_CARD_LIMIT),
-        templateRecommendationCount: recommendationCount
+        recommendedTemplates: recommendationPreviewItems,
+        templateRecommendationCount: recommendationCount,
+        templateRecommendationPreviewCount: recommendationPreviewItems.length,
+        templateRecommendationHasMore: recommendationCount > recommendationPreviewItems.length
       });
     } catch (error) {
       logger.warn('TaskEdit', '加载模板推荐失败，忽略推荐展示', error);
       this.setData({
         recommendedTemplates: [],
-        templateRecommendationCount: 0
+        templateRecommendationCount: 0,
+        templateRecommendationPreviewCount: 0,
+        templateRecommendationHasMore: false
       });
     }
 
@@ -343,9 +353,9 @@ Page({
     }
   },
 
-  openTemplateSelectPage: function() {
+  openTemplatePage: function(url) {
     wx.navigateTo({
-      url: '/packageManage/pages/task-template-manage/task-template-manage?mode=select',
+      url,
       success: (res) => {
         const eventChannel = res.eventChannel;
         if (eventChannel && typeof eventChannel.on === 'function') {
@@ -357,6 +367,14 @@ Page({
         }
       }
     });
+  },
+
+  openTemplateSelectPage: function() {
+    this.openTemplatePage('/packageManage/pages/task-template-manage/task-template-manage?mode=select');
+  },
+
+  openTemplateRecommendationPage: function() {
+    this.openTemplatePage('/packageManage/pages/task-template-manage/task-template-manage?mode=manage&focus=recommendations&source=task-edit');
   },
 
   openTemplateCreatePage: function() {

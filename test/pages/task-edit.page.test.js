@@ -195,6 +195,17 @@ describe('pages/task-edit/task-edit', () => {
     }));
   });
 
+  it('openTemplateRecommendationPage 应进入推荐承接页', () => {
+    const page = createPageInstance();
+
+    page.openTemplateRecommendationPage();
+
+    expect(global.wx.navigateTo).toHaveBeenCalledWith(expect.objectContaining({
+      url: '/packageManage/pages/task-template-manage/task-template-manage?mode=manage&focus=recommendations&source=task-edit',
+      success: expect.any(Function)
+    }));
+  });
+
   it('openTemplateCreatePage 应直接进入模板新建页', () => {
     const page = createPageInstance();
 
@@ -240,6 +251,53 @@ describe('pages/task-edit/task-edit', () => {
 
   it('loadRecentTaskTemplates 在无模板但有推荐时应回填推荐入口状态', async () => {
     const page = createPageInstance();
+    const getRecommendedTemplateCandidates = jest.fn().mockResolvedValue({
+      candidates: [
+        {
+          candidateKey: 'c1',
+          displayName: '晚间阅读',
+          reasonText: '近60天出现 4 次',
+          taskPayload: {
+            title: '晚间阅读',
+            type: 'study',
+            isAllDay: false,
+            startTime: '19:00',
+            endTime: '19:30',
+            repeat: { type: 'daily', days: [] },
+            reminder: { enabled: false, time: 0 }
+          }
+        },
+        {
+          candidateKey: 'c2',
+          displayName: '晨读',
+          reasonText: '近60天出现 3 次',
+          taskPayload: {
+            title: '晨读',
+            type: 'study',
+            isAllDay: false,
+            startTime: '07:30',
+            endTime: '08:00',
+            repeat: { type: 'daily', days: [] },
+            reminder: { enabled: false, time: 0 }
+          }
+        },
+        {
+          candidateKey: 'c3',
+          displayName: '口算',
+          reasonText: '近60天出现 2 次',
+          taskPayload: {
+            title: '口算',
+            type: 'study',
+            isAllDay: false,
+            startTime: '18:30',
+            endTime: '18:45',
+            repeat: { type: 'daily', days: [] },
+            reminder: { enabled: false, time: 0 }
+          }
+        }
+      ],
+      total: 3
+    });
 
     serviceManager.getService.mockImplementation((name) => {
       if (name === 'taskTemplate') {
@@ -247,25 +305,7 @@ describe('pages/task-edit/task-edit', () => {
           getRecentTemplates: jest.fn().mockResolvedValue({
             templates: []
           }),
-          getRecommendedTemplateCandidates: jest.fn().mockResolvedValue({
-            candidates: [
-              {
-                candidateKey: 'c1',
-                displayName: '晚间阅读',
-                reasonText: '近60天出现 4 次',
-                taskPayload: {
-                  title: '晚间阅读',
-                  type: 'study',
-                  isAllDay: false,
-                  startTime: '19:00',
-                  endTime: '19:30',
-                  repeat: { type: 'daily', days: [] },
-                  reminder: { enabled: false, time: 0 }
-                }
-              }
-            ],
-            total: 1
-          })
+          getRecommendedTemplateCandidates
         };
       }
       return null;
@@ -274,8 +314,11 @@ describe('pages/task-edit/task-edit', () => {
     await pageConfig.loadRecentTaskTemplates.call(page);
 
     expect(page.data.hasTemplates).toBe(false);
-    expect(page.data.templateRecommendationCount).toBe(1);
-    expect(page.data.recommendedTemplates).toHaveLength(1);
+    expect(getRecommendedTemplateCandidates).toHaveBeenCalledWith({ limit: 5 });
+    expect(page.data.templateRecommendationCount).toBe(3);
+    expect(page.data.templateRecommendationPreviewCount).toBe(2);
+    expect(page.data.templateRecommendationHasMore).toBe(true);
+    expect(page.data.recommendedTemplates).toHaveLength(2);
     expect(page.data.recommendedTemplates[0]).toEqual(expect.objectContaining({
       displayName: '晚间阅读',
       repeatLabel: '每天'
@@ -696,6 +739,9 @@ describe('pages/task-edit/task-edit', () => {
     expect(wxml).toContain('<block wx:if="{{hasTemplates}}">');
     expect(wxml).toContain('<block wx:elif="{{templateRecommendationCount > 0}}">');
     expect(wxml).toContain('<block wx:else>');
+    expect(wxml).toContain('bindtap="openTemplateRecommendationPage"');
+    expect(wxml).toContain('{{templateRecommendationCount}} 条推荐');
+    expect(wxml).toContain("{{templateRecommendationHasMore ? '查看全部推荐' : '查看推荐'}} {{templateRecommendationCount}} 条");
     expect(wxml).toContain('>更多模板<');
   });
 

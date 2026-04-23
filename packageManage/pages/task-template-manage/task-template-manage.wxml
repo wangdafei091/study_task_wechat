@@ -107,39 +107,18 @@
                 <button class="empty-btn" bindtap="onCreateTemplate">新建模板</button>
               </view>
 
-              <view class="recommendation-panel">
+              <view id="recommendation-section" class="recommendation-panel">
+                <view wx:if="{{showSavedRecommendationTemplateAction}}" class="recommendation-return-bar">
+                  <text class="recommendation-return-text">模板已保存，可直接回到任务页使用。</text>
+                  <view class="recommendation-return-action" bindtap="useSavedTemplateFromRecommendation">立即使用新模板</view>
+                </view>
                 <view class="recommendation-summary" bindtap="toggleRecommendationSection">
                   <text class="recommendation-summary-text">发现 {{recommendationCount}} 个可补充模板</text>
                   <text class="recommendation-summary-arrow">{{recommendationExpanded ? '收起' : '展开'}} ></text>
                 </view>
 
                 <view wx:if="{{recommendationExpanded}}" class="recommendation-block compact">
-                  <scroll-view wx:if="{{recommendationCount > 2}}" class="recommendation-scroll" scroll-y="{{true}}" enhanced="{{true}}" show-scrollbar="{{false}}">
-                    <view class="recommendation-list">
-                      <block wx:for="{{recommendedCandidates}}" wx:key="candidateKey">
-                        <view class="recommendation-card {{item.typeClass}}">
-                          <view class="recommendation-card-head">
-                            <text class="recommendation-card-name">{{item.displayName}}</text>
-                            <text class="recommendation-card-tag">推荐</text>
-                          </view>
-                          <text class="recommendation-card-reason">{{item.reasonText}}</text>
-                          <view class="recommendation-card-meta">
-                            <block wx:for="{{item.metaItems}}" wx:key="key" wx:for-item="meta">
-                              <view class="meta-item recommendation-meta-item">
-                                <text class="meta-item-label">{{meta.label}}</text>
-                                <text class="meta-item-divider">·</text>
-                                <text class="meta-item-value">{{meta.value}}</text>
-                              </view>
-                            </block>
-                          </view>
-                          <view class="recommendation-card-action-row">
-                            <view class="recommendation-card-action" bindtap="onSaveRecommendedCandidate" data-key="{{item.candidateKey}}">保存为模板</view>
-                          </view>
-                        </view>
-                      </block>
-                    </view>
-                  </scroll-view>
-                  <view wx:else class="recommendation-list">
+                  <view class="recommendation-list">
                     <block wx:for="{{recommendedCandidates}}" wx:key="candidateKey">
                       <view class="recommendation-card {{item.typeClass}}">
                         <view class="recommendation-card-head">
@@ -184,6 +163,43 @@
                 <view class="filter-segment {{typeFilter === 'habit' ? 'active' : ''}}" bindtap="selectTypeFilter" data-type="habit">习惯</view>
                 <view class="filter-segment {{typeFilter === 'study' ? 'active' : ''}}" bindtap="selectTypeFilter" data-type="study">学习</view>
                 <view class="filter-segment {{typeFilter === 'interest' ? 'active' : ''}}" bindtap="selectTypeFilter" data-type="interest">兴趣</view>
+              </view>
+            </view>
+
+            <view wx:if="{{showRecommendationFirst && !hasActiveFilters && recommendationCount > 0}}" id="recommendation-section" class="recommendation-panel">
+              <view wx:if="{{showSavedRecommendationTemplateAction}}" class="recommendation-return-bar">
+                <text class="recommendation-return-text">模板已保存，可直接回到任务页使用。</text>
+                <view class="recommendation-return-action" bindtap="useSavedTemplateFromRecommendation">立即使用新模板</view>
+              </view>
+              <view class="recommendation-summary" bindtap="toggleRecommendationSection">
+                <text class="recommendation-summary-text">发现 {{recommendationCount}} 个可补充模板</text>
+                <text class="recommendation-summary-arrow">{{recommendationExpanded ? '收起' : '展开'}} ></text>
+              </view>
+
+              <view wx:if="{{recommendationExpanded && recommendationCount > 0}}" class="recommendation-block compact">
+                <view class="recommendation-list">
+                  <block wx:for="{{recommendedCandidates}}" wx:key="candidateKey">
+                    <view class="recommendation-card {{item.typeClass}}">
+                      <view class="recommendation-card-head">
+                        <text class="recommendation-card-name">{{item.displayName}}</text>
+                        <text class="recommendation-card-tag">推荐</text>
+                      </view>
+                      <text class="recommendation-card-reason">{{item.reasonText}}</text>
+                      <view class="recommendation-card-meta">
+                        <block wx:for="{{item.metaItems}}" wx:key="key" wx:for-item="meta">
+                          <view class="meta-item recommendation-meta-item">
+                            <text class="meta-item-label">{{meta.label}}</text>
+                            <text class="meta-item-divider">·</text>
+                            <text class="meta-item-value">{{meta.value}}</text>
+                          </view>
+                        </block>
+                      </view>
+                      <view class="recommendation-card-action-row">
+                        <view class="recommendation-card-action" bindtap="onSaveRecommendedCandidate" data-key="{{item.candidateKey}}">保存为模板</view>
+                      </view>
+                    </view>
+                  </block>
+                </view>
               </view>
             </view>
 
@@ -235,39 +251,18 @@
               </view>
             </block>
 
-            <view wx:if="{{!hasActiveFilters && recommendationCount > 0}}" class="recommendation-panel">
+            <view wx:if="{{!showRecommendationFirst && !hasActiveFilters && recommendationCount > 0}}" id="recommendation-section" class="recommendation-panel">
+              <view wx:if="{{showSavedRecommendationTemplateAction}}" class="recommendation-return-bar">
+                <text class="recommendation-return-text">模板已保存，可直接回到任务页使用。</text>
+                <view class="recommendation-return-action" bindtap="useSavedTemplateFromRecommendation">立即使用新模板</view>
+              </view>
               <view class="recommendation-summary" bindtap="toggleRecommendationSection">
                 <text class="recommendation-summary-text">发现 {{recommendationCount}} 个可补充模板</text>
                 <text class="recommendation-summary-arrow">{{recommendationExpanded ? '收起' : '展开'}} ></text>
               </view>
 
               <view wx:if="{{recommendationExpanded && recommendationCount > 0}}" class="recommendation-block compact">
-                <scroll-view wx:if="{{recommendationCount > 2}}" class="recommendation-scroll" scroll-y="{{true}}" enhanced="{{true}}" show-scrollbar="{{false}}">
-                  <view class="recommendation-list">
-                    <block wx:for="{{recommendedCandidates}}" wx:key="candidateKey">
-                      <view class="recommendation-card {{item.typeClass}}">
-                        <view class="recommendation-card-head">
-                          <text class="recommendation-card-name">{{item.displayName}}</text>
-                          <text class="recommendation-card-tag">推荐</text>
-                        </view>
-                        <text class="recommendation-card-reason">{{item.reasonText}}</text>
-                        <view class="recommendation-card-meta">
-                          <block wx:for="{{item.metaItems}}" wx:key="key" wx:for-item="meta">
-                            <view class="meta-item recommendation-meta-item">
-                              <text class="meta-item-label">{{meta.label}}</text>
-                              <text class="meta-item-divider">·</text>
-                              <text class="meta-item-value">{{meta.value}}</text>
-                            </view>
-                          </block>
-                        </view>
-                        <view class="recommendation-card-action-row">
-                          <view class="recommendation-card-action" bindtap="onSaveRecommendedCandidate" data-key="{{item.candidateKey}}">保存为模板</view>
-                        </view>
-                      </view>
-                    </block>
-                  </view>
-                </scroll-view>
-                <view wx:else class="recommendation-list">
+                <view class="recommendation-list">
                   <block wx:for="{{recommendedCandidates}}" wx:key="candidateKey">
                     <view class="recommendation-card {{item.typeClass}}">
                       <view class="recommendation-card-head">

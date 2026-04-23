@@ -46,8 +46,14 @@
               <view class="template-fill-undo-slot">
                 <view class="template-fill-undo-inline {{templateFillUndoVisible ? 'visible' : ''}}" bindtap="undoTemplateFill">恢复原内容</view>
               </view>
-              <view wx:if="{{hasTemplates || templateRecommendationCount > 0}}" class="template-quick-fill-manage" bindtap="openTemplateSelectPage">
-                <text wx:if="{{templateRecommendationCount > 0}}" class="template-quick-fill-manage-badge">{{templateRecommendationCount}} 条推荐</text>
+              <view
+                wx:if="{{hasTemplates && templateRecommendationCount > 0}}"
+                class="template-quick-fill-manage-badge template-quick-fill-recommendation-entry"
+                bindtap="openTemplateRecommendationPage"
+              >
+                <text>{{templateRecommendationCount}} 条推荐</text>
+              </view>
+              <view wx:if="{{hasTemplates}}" class="template-quick-fill-manage" bindtap="openTemplateSelectPage">
                 <text class="template-quick-fill-manage-label">更多模板</text>
                 <text class="template-quick-fill-manage-arrow">></text>
               </view>
@@ -85,6 +91,12 @@
                   </view>
                 </view>
               </block>
+              <view class="template-recommendation-actions">
+                <view class="template-quick-fill-manage" bindtap="openTemplateRecommendationPage">
+                  <text class="template-quick-fill-manage-label">{{templateRecommendationHasMore ? '查看全部推荐' : '查看推荐'}} {{templateRecommendationCount}} 条</text>
+                  <text class="template-quick-fill-manage-arrow">></text>
+                </view>
+              </view>
               <view class="template-quick-fill-create-link" bindtap="openTemplateCreatePage">手动创建模板</view>
             </view>
           </block>
