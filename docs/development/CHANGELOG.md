@@ -4,6 +4,42 @@
 
 ---
 
+## [里程碑-22H] - 2026-04-23
+
+### ✅ 完成情况
+
+**表现项奖励时效与历史项动作边界收口**
+
+- **表现项奖励时效已形成正式闭环**：
+  - [`pages/task-occurrence-edit/task-occurrence-edit.js`](/Users/wangdafei/code/study_task_wechat/pages/task-occurrence-edit/task-occurrence-edit.js)、[`utils/task-occurrence-display.js`](/Users/wangdafei/code/study_task_wechat/utils/task-occurrence-display.js)、[`pages/index/index.wxml`](/Users/wangdafei/code/study_task_wechat/pages/index/index.wxml) 已统一表现项奖励的 `pointsExpiry` 配置、摘要组装与首页/管理页展示口径
+  - 表现项奖励信息已统一为“星数 + 有效期”两段式表达，不再继续以说明句作为最终主视觉
+- **历史项动作边界已完成系统级收口**：
+  - 历史项已不再显示 `编辑`、`更多` 及其派生写动作入口
+  - 生效中/待生效项仍保留维护能力，但已统一收口到 `更多` 动作面板，不再在卡面直出 `编辑`
+- **表现项管理页卡片布局已完成内容优先收口**：
+  - [`pages/task-occurrence-edit/task-occurrence-edit.wxml`](/Users/wangdafei/code/study_task_wechat/pages/task-occurrence-edit/task-occurrence-edit.wxml)、[`pages/task-occurrence-edit/task-occurrence-edit.wxss`](/Users/wangdafei/code/study_task_wechat/pages/task-occurrence-edit/task-occurrence-edit.wxss) 已将生效中卡片重排为“标题 / 元信息 / 奖励信息”三段式内容结构，并取消右侧竖向动作栏
+  - “生效中”与“其他表现项”区块头部已统一为标题加数量锚点模式，次级折叠行已收口为更简洁的一致表达
+- **展示模型与页面测试已同步更新**：
+  - [`test/utils/task-occurrence-display.test.js`](/Users/wangdafei/code/study_task_wechat/test/utils/task-occurrence-display.test.js)、[`test/pages/task-occurrence-edit.page.test.js`](/Users/wangdafei/code/study_task_wechat/test/pages/task-occurrence-edit.page.test.js)、[`test/pages/index.page-shell.behavior.test.js`](/Users/wangdafei/code/study_task_wechat/test/pages/index.page-shell.behavior.test.js) 已锁定新的奖励摘要结构、动作矩阵和页面展示语义
+
+### 🧪 验证结果
+
+- 后端/正式链路定向回归通过：
+  - `npm --prefix backend run test:unit`
+  - `npx jest backend/test/integration/task-api-m21l-real.test.js --runInBand`
+- 前端/共享层定向回归通过：
+  - `npx jest test/utils/task-occurrence-display.test.js --runInBand`
+  - `npx jest test/pages/task-occurrence-edit.page.test.js --runInBand`
+  - `npx jest test/pages/index.page-shell.behavior.test.js --runInBand`
+- 真机截图与交互复核通过：
+  - 已确认表现项管理页主区块、次级区块、卡片奖励信息和动作层级均符合本期收口目标
+
+### 📖 详细实施记录
+
+- [里程碑-22H：表现项奖励时效与历史项动作边界收口](../design/milestone-22h-occurrence-reward-expiry-history-action-boundary.md)
+
+---
+
 ## [里程碑-22G] - 2026-04-22
 
 ### ✅ 完成情况
