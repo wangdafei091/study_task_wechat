@@ -67,9 +67,9 @@ function getRangeText(range) {
 
 function buildOccurrenceRewardSummary(item = {}) {
   const points = Number(item.points || 0);
-  const rewardAccentText = `${points}⭐`;
+  const rewardAccentText = `${points} 星`;
   const pointsExpiryText = taskFormDisplay.buildPointsExpiryText(item.pointsExpiry || 'permanent');
-  const rewardExpiryMetaText = `有效期：${pointsExpiryText}`;
+  const rewardExpiryMetaText = pointsExpiryText;
 
   return {
     rewardAccentText,
@@ -160,8 +160,9 @@ function buildOccurrenceCardViewModel(item = {}, today = '') {
     statusKey,
     groupKey: statusKey,
     statusTone: statusKey,
-    canEdit: statusKey !== 'history',
+    showInlineEdit: false,
     canOpenMore: statusKey !== 'history',
+    moreActionKeys: statusKey === 'history' ? [] : ['edit', 'disable', 'delete'],
     modifyTime: Number(item.modifyTime || 0),
     isAnchorTarget: false
   };
@@ -223,6 +224,7 @@ function createSecondarySection(key, title, items, expanded) {
     key,
     title,
     count: items.length,
+    countText: `${items.length}项`,
     expanded: expanded === true,
     summaryText: `${title} ${items.length} 项`,
     emptyText: key === 'upcoming' ? '暂无待生效项' : '暂无历史项',
@@ -294,6 +296,7 @@ function buildOccurrenceManageSections(items = [], today = '', uiState = {}) {
     activeSection,
     secondaryPanel: {
       title: '其他表现项',
+      count: Number((upcomingSection ? upcomingSection.count : 0) + (historySection ? historySection.count : 0)),
       visible: Boolean(upcomingSection || historySection),
       upcomingSection,
       historySection

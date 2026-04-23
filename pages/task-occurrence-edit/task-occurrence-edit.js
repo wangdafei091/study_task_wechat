@@ -737,12 +737,31 @@ Page({
       return;
     }
 
+    const cardState = occurrenceDisplay.buildOccurrenceCardViewModel(item, getTodayString());
+    const actionKeys = Array.isArray(cardState.moreActionKeys) ? cardState.moreActionKeys : [];
+    if (!actionKeys.length) {
+      return;
+    }
+
+    const actionLabelMap = {
+      edit: '编辑表现项',
+      disable: '停用表现项',
+      delete: '删除表现项'
+    };
+    const itemList = actionKeys.map((key) => actionLabelMap[key]).filter(Boolean);
+    if (!itemList.length) {
+      return;
+    }
+
     wx.showActionSheet({
-      itemList: ['停用表现项', '删除表现项'],
+      itemList,
       success: async ({ tapIndex }) => {
-        if (tapIndex === 0) {
+        const actionKey = actionKeys[tapIndex];
+        if (actionKey === 'edit') {
+          this.openEditor('edit', item);
+        } else if (actionKey === 'disable') {
           await this.onDisableTap({ currentTarget: { dataset: { id: taskId } } });
-        } else if (tapIndex === 1) {
+        } else if (actionKey === 'delete') {
           await this.onDeleteTap({ currentTarget: { dataset: { id: taskId } } });
         }
       }

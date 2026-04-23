@@ -389,14 +389,14 @@ describe('pages/index/index shell behavior', () => {
       rewardSummaryText: item.rewardSummaryText
     }))).toEqual([
       {
-        rewardAccentText: '2⭐',
-        rewardExpiryMetaText: '有效期：本周结束',
-        rewardSummaryText: '奖励 2⭐ · 本周结束'
+        rewardAccentText: '2 星',
+        rewardExpiryMetaText: '本周结束',
+        rewardSummaryText: '奖励 2 星 · 本周结束'
       },
       {
-        rewardAccentText: '3⭐',
-        rewardExpiryMetaText: '有效期：永久',
-        rewardSummaryText: '奖励 3⭐ · 永久'
+        rewardAccentText: '3 星',
+        rewardExpiryMetaText: '永久',
+        rewardSummaryText: '奖励 3 星 · 永久'
       }
     ]);
 

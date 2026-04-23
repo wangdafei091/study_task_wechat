@@ -6,18 +6,19 @@
     <view class="occurrence-card__content">
       <view class="occurrence-card__title-row">
         <text class="occurrence-card__title">{{item.title}}</text>
-        <text class="type-chip type-chip--{{item.typeTone}}">{{item.typeLabel}}</text>
+        <view class="card-action-icon occurrence-card__more-trigger" wx:if="{{item.canOpenMore}}" data-id="{{item.id}}" bindtap="onMoreTap">
+          <text class="occurrence-card__more-icon">•••</text>
+        </view>
       </view>
-      <text class="occurrence-card__range">{{item.rangeText}}</text>
+      <view class="occurrence-card__meta-row">
+        <text class="type-chip type-chip--{{item.typeTone}}">{{item.typeLabel}}</text>
+        <view class="occurrence-card__range-wrap">
+          <text class="occurrence-card__range">{{item.rangeText}}</text>
+        </view>
+      </view>
       <view class="occurrence-card__reward-row" wx:if="{{item.statusKey === 'active' && item.rewardAccentText}}">
         <text class="occurrence-card__reward-accent">{{item.rewardAccentText}}</text>
         <text class="occurrence-card__reward-meta">{{item.rewardExpiryMetaText}}</text>
-      </view>
-    </view>
-    <view class="occurrence-card__action-rail" wx:if="{{item.canEdit || item.canOpenMore}}">
-      <view class="card-action-primary" wx:if="{{item.canEdit}}" data-id="{{item.id}}" bindtap="onEditTap">编辑</view>
-      <view class="card-action-icon" wx:if="{{item.canOpenMore}}" data-id="{{item.id}}" bindtap="onMoreTap">
-        <text class="occurrence-card__more-icon">•••</text>
       </view>
     </view>
   </view>
@@ -88,8 +89,8 @@
           <view class="section-shell__header">
             <view class="section-shell__copy">
               <text class="section-shell__title">{{activeSection.title}}</text>
-              <text class="section-shell__summary" wx:if="{{activeSection.summaryText}}">{{activeSection.summaryText}}</text>
             </view>
+            <text class="section-shell__count" wx:if="{{activeSection.count > 0 && !activeSection.hasToggle}}">{{activeSection.count}}项</text>
             <text
               class="section-shell__toggle"
               wx:if="{{activeSection.hasToggle}}"
@@ -114,16 +115,19 @@
 
         <view class="secondary-panel {{secondaryPanel.upcomingSection && secondaryPanel.historySection ? '' : 'secondary-panel--single'}}" wx:if="{{secondaryPanel && secondaryPanel.visible}}">
           <view class="secondary-panel__header">
-            <view>
+            <view class="section-shell__copy">
               <text class="secondary-panel__title">{{secondaryPanel.title}}</text>
             </view>
+            <text class="section-shell__count" wx:if="{{secondaryPanel.count > 0}}">{{secondaryPanel.count}}项</text>
           </view>
 
           <block wx:if="{{secondaryPanel.upcomingSection}}">
             <view class="secondary-entry">
               <view class="secondary-entry__summary" data-key="upcoming" bindtap="onToggleSection">
-                <text class="secondary-entry__title">{{secondaryPanel.upcomingSection.summaryText}}</text>
-                <text class="secondary-entry__icon">{{secondaryPanel.upcomingSection.expanded ? '⌃' : '⌄'}}</text>
+                <text class="secondary-entry__title">{{secondaryPanel.upcomingSection.title}}</text>
+                <view class="secondary-entry__tail">
+                  <text class="secondary-entry__icon">{{secondaryPanel.upcomingSection.expanded ? '⌃' : '⌄'}}</text>
+                </view>
               </view>
 
               <view class="secondary-entry__list" wx:if="{{secondaryPanel.upcomingSection.expanded}}">
@@ -137,8 +141,10 @@
           <block wx:if="{{secondaryPanel.historySection}}">
             <view class="secondary-entry">
               <view class="secondary-entry__summary" data-key="history" bindtap="onToggleSection">
-                <text class="secondary-entry__title">{{secondaryPanel.historySection.summaryText}}</text>
-                <text class="secondary-entry__icon">{{secondaryPanel.historySection.expanded ? '⌃' : '⌄'}}</text>
+                <text class="secondary-entry__title">{{secondaryPanel.historySection.title}}</text>
+                <view class="secondary-entry__tail">
+                  <text class="secondary-entry__icon">{{secondaryPanel.historySection.expanded ? '⌃' : '⌄'}}</text>
+                </view>
               </view>
 
               <view class="secondary-entry__list" wx:if="{{secondaryPanel.historySection.expanded}}">

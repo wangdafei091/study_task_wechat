@@ -223,7 +223,9 @@ describe('pages/task-occurrence-edit/task-occurrence-edit', () => {
     expect(page.data.activeSection.visibleItems[0]).toEqual(expect.objectContaining({
       rewardAccentText: expect.any(String),
       rewardExpiryMetaText: expect.any(String),
-      rewardSummaryText: expect.stringContaining('奖励')
+      canOpenMore: true,
+      showInlineEdit: false,
+      moreActionKeys: ['edit', 'disable', 'delete']
     }));
     expect(page.data.activeSection.visibleItems).toHaveLength(6);
     expect(page.data.secondaryPanel.upcomingSection.expanded).toBe(false);
@@ -556,6 +558,26 @@ describe('pages/task-occurrence-edit/task-occurrence-edit', () => {
       }
     });
     expect(global.wx.showActionSheet).not.toHaveBeenCalled();
+  });
+
+  it('生效中项的更多面板应包含编辑入口，并可直接拉起编辑层', async () => {
+    const page = createPageInstance();
+    await page.onLoad.call(page, {});
+
+    page.onMoreTap.call(page, {
+      currentTarget: {
+        dataset: {
+          id: 'active_1'
+        }
+      }
+    });
+
+    expect(global.wx.showActionSheet).toHaveBeenCalledWith(expect.objectContaining({
+      itemList: ['编辑表现项', '停用表现项', '删除表现项']
+    }));
+    expect(page.data.editorState.visible).toBe(true);
+    expect(page.data.editorState.mode).toBe('edit');
+    expect(page.data.editingId).toBe('active_1');
   });
 
   it('viewer 家长进入时应直接拦截并返回上一页', async () => {

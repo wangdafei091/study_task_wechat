@@ -72,6 +72,11 @@
    - 不能出现左侧信息拥挤、右侧明显发空的失衡版式
    - 不能在同一张卡片里重复表达同一个“星星奖励”信息
 
+5. **表现项管理页生效中卡片要改成内容优先版式**
+   - 卡片第一优先级是“看清当前生效配置”，不是“把编辑按钮直接摊在卡面上”
+   - 标题区不能再同时并列 `标题 / 类型 / 编辑 / 更多` 四个竞争焦点
+   - 右侧竖向动作栏要取消，避免继续呈现工具面板感
+
 ### 业务价值
 
 - [x] 用户价值：表现项奖励规则与普通任务统一，用户不再困惑“为什么这个有时效，那个没有”
@@ -86,6 +91,7 @@
 - ✅ 首页表现打卡入口展示奖励星星有效期
 - ✅ 表现项管理页生效中卡片展示奖励星星有效期
 - ✅ 表现项列表卡片继续展示星星数量，并补充轻量时效文案
+- ✅ 生效中卡片改为内容优先的三段式信息结构，取消右侧竖向动作栏
 - ✅ 历史项卡片移除 `编辑` 主动作
 - ✅ 历史项卡片移除 `更多` 入口及其派生写操作
 - ✅ 按状态收口表现项动作矩阵，并补齐对应自动化测试
@@ -113,8 +119,9 @@
 1. 表现项编辑页补入 `pointsExpiry`，复用普通任务现有星星有效期枚举和默认值
 2. 表现项创建 / 更新 payload 把 `pointsExpiry` 正式纳入 authoritative 字段
 3. 首页表现打卡入口与表现项管理页卡片补充轻量的奖励时效摘要
-4. 历史项卡片按状态降为纯只读卡片，不再暴露任何写操作
-5. `生效中 / 待生效 / 历史项` 三组卡片采用明确动作矩阵，而不是全状态共用同一套按钮
+4. 管理页卡片改为内容优先布局：标题区只保留核心信息与单一低强调动作入口，类型降为次级元信息
+5. 历史项卡片按状态降为纯只读卡片，不再暴露任何写操作
+6. `生效中 / 待生效 / 历史项` 三组卡片采用明确动作矩阵，而不是全状态共用同一套按钮
 
 本期不扩后端新接口，不改数据库字段结构，只复用任务模型中已存在的 `pointsExpiry` 能力和现有表现项数据结构。
 
@@ -180,8 +187,9 @@ interface OccurrenceRewardSummary {
 }
 
 interface OccurrenceCardActionState {
-  canEdit: boolean;
+  showInlineEdit: boolean;
   canOpenMore: boolean;
+  moreActionKeys: string[];
 }
 ```
 
@@ -212,7 +220,7 @@ interface OccurrenceCardActionState {
 
 | 方法 | 说明 | 参数 | 返回值 |
 |------|------|------|--------|
-| `buildOccurrenceCardViewModel` | 输出管理页卡片状态、奖励摘要结构与动作矩阵 | `(item, today)` | `cardViewModel.rewardAccentText / rewardExpiryMetaText / canEdit / canOpenMore` |
+| `buildOccurrenceCardViewModel` | 输出管理页卡片状态、奖励摘要结构与动作矩阵 | `(item, today)` | `cardViewModel.rewardAccentText / rewardExpiryMetaText / showInlineEdit / canOpenMore / moreActionKeys` |
 | `buildOccurrenceDisplayItems` | 输出首页表现记录卡片的奖励摘要结构 | `(tasks, records)` | `item.rewardAccentText / item.rewardExpiryMetaText / item.rewardSummaryText` |
 
 ### 关键设计决策
@@ -336,6 +344,40 @@ interface OccurrenceCardActionState {
 - 右侧发空本质是版式失衡，不应靠加内容掩盖
 - 这一步完成后，表现记录区才能真正和上方任务列表形成同页一致的品质感
 
+#### 决策1D：管理页生效中卡片改为“三段式内容卡”，取消右侧工具栏
+
+本期正式冻结：
+
+- 生效中卡片必须按“三段式内容流”组织，而不是“左侧内容 + 右侧工具栏”
+- 卡片结构固定为：
+  - 第一行：`标题` + 单一低强调 `更多` 入口
+  - 第二行：`类型标签` + `生效时间范围`
+  - 第三行：`星数强调` + `有效期元信息`
+- `类型标签` 从标题同行降级为次级元信息：
+  - 不再与标题并列竞争主视觉
+  - 与时间范围处于同一层级，用于辅助识别而不是主导阅读
+- 卡面不再直出 `编辑` 按钮：
+  - `编辑` 仍然保留为可用能力
+  - 但进入 `更多` 动作面板，不再与标题、类型、奖励信息同时抢焦点
+- 右侧竖向动作栏正式取消：
+  - 不再保留“编辑按钮 + 更多按钮”上下堆叠
+  - 不再为了动作区预留固定窄栏宽度
+- 卡面留白应优先服务内容平衡：
+  - 内容区扩满卡片主体宽度
+  - `更多` 入口仅作为右上角轻量锚点，不承担主按钮视觉角色
+- 待生效项沿用同一版式原则：
+  - 也不再直出 `编辑`
+  - 通过 `更多` 提供维护动作
+- 历史项继续只读：
+  - 沿用三段式内容流，但不显示任何动作入口
+
+原因：
+
+- 当前最明显的问题不是信息缺失，而是视觉焦点过多，导致读信息时不断被打断
+- `编辑` 是维护动作，不是管理页卡片上的主阅读任务，不应长期占据卡面一级视觉位
+- 取消右侧工具栏后，卡片才能恢复成移动端常见的内容优先阅读模型，减少“后台工具箱”感
+- 类型标签降级后，标题会重新成为真正的主识别点，卡片气质也会更稳、更精致
+
 #### 决策2：历史项正式降为只读，不再保留任何写动作
 
 本期正式冻结：
@@ -356,16 +398,17 @@ interface OccurrenceCardActionState {
 
 本期动作矩阵固定为：
 
-| 状态 | 编辑 | 更多 |
-|------|------|------|
-| 生效中 | ✅ 保留 | ✅ 保留 |
-| 待生效 | ✅ 保留 | ✅ 保留 |
-| 历史项 | ❌ 移除 | ❌ 移除 |
+| 状态 | 卡面直出编辑 | 卡面更多入口 | 更多面板内编辑 | 更多面板内其他写动作 |
+|------|-------------|-------------|----------------|--------------------|
+| 生效中 | ❌ 移除 | ✅ 保留 | ✅ 保留 | ✅ 保留 |
+| 待生效 | ❌ 移除 | ✅ 保留 | ✅ 保留 | ✅ 保留 |
+| 历史项 | ❌ 移除 | ❌ 移除 | ❌ 移除 | ❌ 移除 |
 
 说明：
 
 - `待生效` 仍属于未来将生效的配置，继续允许家长调整或提前停用
 - `历史项` 只读，不承载任何后续维护动作
+- `编辑` 的能力并未删除，只是从卡面一级视觉位收回到 `更多` 动作面板
 
 #### 决策3A：历史项只读规则必须前后端同时成立
 
@@ -414,8 +457,8 @@ interface OccurrenceCardActionState {
 - `pages/index/index.wxml` - 首页表现记录区补充奖励摘要文案
 - `pages/index/index.wxss` - 首页表现记录区奖励摘要样式
 - `pages/task-occurrence-edit/task-occurrence-edit.js` - 表现项草稿初始化/回填、保存 payload 与动作矩阵消费
-- `pages/task-occurrence-edit/task-occurrence-edit.wxml` - 按任务页同类结构补齐星星有效期摘要行/选项面板，并收口历史项动作
-- `pages/task-occurrence-edit/task-occurrence-edit.wxss` - 星星有效期控件样式与任务页同范式对齐，并收口历史项动作区
+- `pages/task-occurrence-edit/task-occurrence-edit.wxml` - 按任务页同类结构补齐星星有效期摘要行/选项面板，并把卡片改为三段式内容布局
+- `pages/task-occurrence-edit/task-occurrence-edit.wxss` - 星星有效期控件样式与任务页同范式对齐，取消右侧动作栏并重排卡片层级
 - `services/task-service/task-write.js` - 历史项写保护与表现项奖励链路测试配合点
 - `backend/services/starService.js` - 后端表现奖励入桶/撤销的有效期落桶与记录写入保障
 - `backend/services/taskService.js` - 历史项 update / disable / softDelete authoritative 拒绝规则
@@ -509,8 +552,9 @@ function buildOccurrenceCardViewModel(item, today) {
     pointsText: rewardSummary.pointsText,
     pointsExpiryText: rewardSummary.pointsExpiryText,
     rewardSummaryText: rewardSummary.rewardSummaryText,
-    canEdit: statusKey !== 'history',
-    canOpenMore: statusKey !== 'history'
+    showInlineEdit: false,
+    canOpenMore: statusKey !== 'history',
+    moreActionKeys: statusKey === 'history' ? [] : ['edit', 'disable', 'delete']
   };
 }
 
@@ -546,7 +590,7 @@ function assertOccurrenceHistoryWritable(task, today) {
 **函数4**：`buildOccurrenceCardViewModel`
 - **输入**：`item, today`
 - **输出**：卡片展示模型
-- **职责**：统一输出状态文案、奖励摘要和动作矩阵
+- **职责**：统一输出状态文案、奖励摘要、三段式元信息和动作矩阵
 - **依赖**：`resolveStatusKey`
 
 **函数5**：`buildOccurrenceRewardSummary`
@@ -596,13 +640,13 @@ function assertOccurrenceHistoryWritable(task, today) {
 ### 第2步：收口历史项动作矩阵与系统级只读规则（预计3小时）
 
 - [ ] **任务**：按 `statusKey` 裁剪卡片动作，并把历史项更新/停用/删除提升为系统级拒绝规则
-- [ ] **验证**：历史项卡片不再显示 `编辑 / 更多`，且绕过页面调用写接口也会被拒绝
+- [ ] **验证**：生效中/待生效卡片不再直出 `编辑`，历史项卡片不再显示 `编辑 / 更多`，且绕过页面调用写接口也会被拒绝
 - [ ] **依赖**：第1步无依赖，可并行
 
 **实施要点**：
 1. 动作矩阵下沉到展示模型
 2. 页面不再散落状态 if/else
-3. 保持生效中、待生效现有动作不受影响
+3. 生效中、待生效保留写能力，但统一收进 `更多` 动作面板
 4. 后端 authoritative 拦截点必须覆盖 `updateTask / disableOccurrenceTask / softDeleteTask`
 5. 控制器必须把 `TASK_OCCURRENCE_HISTORY_READONLY` 稳定映射为 409
 6. 前后端错误码和用户提示语义保持一致
@@ -624,9 +668,11 @@ function assertOccurrenceHistoryWritable(task, today) {
 6. 首页与管理页最终渲染时必须拆成“星数强调节点 + 有效期次级节点”，不能只渲染整句 `rewardSummaryText`
 7. 首页表现记录卡片上半区必须形成“左主右辅”的稳定结构，状态锚点用于平衡右侧留白
 8. 管理页生效中卡片必须移除重复的星数/状态表达，不保留与奖励行等价的冗余 pill
-9. 管理页卡片中的奖励摘要只要求生效中区块强制可见，不把次级区块做成信息墙
-10. 历史项卡片动作区收口后保持视觉平衡
-11. 记录成功与撤销必须验证 `record.pointsExpiry` 真正参与星星加减
+9. 管理页卡片取消右侧动作栏，标题区只保留单一低强调 `更多` 锚点
+10. 类型标签降级到第二行元信息，不再和标题同级抢焦点
+11. 管理页卡片中的奖励摘要只要求生效中区块强制可见，不把次级区块做成信息墙
+12. 历史项卡片动作区收口后保持视觉平衡
+13. 记录成功与撤销必须验证 `record.pointsExpiry` 真正参与星星加减
 
 ---
 
@@ -659,15 +705,18 @@ function assertOccurrenceHistoryWritable(task, today) {
 | 表现项表单顺序 | 页面结构测试 | `类别/星星` 后紧跟 `星星有效期`，再进入 `适用时间` |
 | 表现项有效期文案一致性 | 页面文案测试 | 摘要文案与任务页 `pointsExpiry` 文案完全一致 |
 | 首页/管理页摘要口径一致 | 展示模型测试 | 两处都复用同一摘要 helper，不出现“本周有效/本周结束”混用 |
-| 首页奖励摘要展示 | 首页展示模型/结构测试 | 每条表现记录展示 `rewardSummaryText`，可直接看见有效期 |
-| 管理页生效中卡片奖励摘要 | 管理页展示模型/结构测试 | 生效中卡片展示 `奖励 X 星 · 有效期` 单行摘要 |
+| 首页奖励摘要展示 | 首页展示模型/结构测试 | 每条表现记录都展示 `rewardAccentText + rewardExpiryMetaText` 两段式奖励节点，可直接看见有效期 |
+| 管理页生效中卡片奖励摘要 | 管理页展示模型/结构测试 | 生效中卡片展示 `rewardAccentText + rewardExpiryMetaText` 两段式奖励节点 |
 | 奖励摘要结构化输出 | 展示模型测试 | 输出 `rewardAccentText / rewardExpiryMetaText`，而不是只依赖单个整句 |
 | 奖励摘要视觉语言一致 | 页面结构/样式测试 | 表现记录区奖励信息与任务列表奖励信息使用同源视觉 token，不呈现为说明句样式 |
 | 页面奖励节点拆分 | 页面结构测试 | 首页与管理页奖励行都至少存在“星数强调节点 + 有效期节点”两个层级 |
 | 首页卡片上半区平衡 | 页面结构/样式测试 | 标题与状态形成左右锚点，不再出现明显右侧失衡 |
 | 管理页卡片去重 | 页面结构测试 | 生效中卡片不再重复显示与奖励行等价的星数/状态信息 |
-| 历史项动作矩阵 | 展示模型测试 | `history.canEdit === false` 且 `history.canOpenMore === false` |
-| 生效中/待生效动作保留 | 展示模型测试 | 两者仍保留可编辑/更多入口 |
+| 管理页卡片标题层级 | 页面结构/样式测试 | 标题行只保留标题与单一 `更多` 锚点，不再并列类型/编辑 |
+| 管理页卡片元信息降级 | 页面结构/样式测试 | 类型标签位于第二行元信息层，与时间范围同级 |
+| 管理页动作入口收口 | 页面结构测试 | 生效中/待生效卡片不再直出 `编辑`，改由 `更多` 面板承载 |
+| 历史项动作矩阵 | 展示模型测试 | `history.showInlineEdit === false` 且 `history.canOpenMore === false` 且 `history.moreActionKeys.length === 0` |
+| 生效中/待生效动作保留 | 展示模型测试 | 两者仍保留 `更多` 入口，并在动作面板内包含编辑能力 |
 | 历史项系统级只读 | 前端服务、后端服务、控制器测试 | update / disable / delete 均返回 `TASK_OCCURRENCE_HISTORY_READONLY` |
 | 历史项接口状态码 | 控制器/API 测试 | update / disable / delete 均返回 HTTP 409 |
 | 后端表现奖励有效期落库 | 后端单元/集成测试 | success/revoke 两类 `star_records` 都使用正确 `expiry_type` |
@@ -684,8 +733,10 @@ function assertOccurrenceHistoryWritable(task, today) {
 - [ ] 场景1F：首页与管理页的奖励信息都拆成“星数强调 + 有效期元信息”，不再是单句纯文本
 - [ ] 场景1G：首页表现记录卡片的上半区不再左重右轻，状态锚点和标题形成稳定平衡
 - [ ] 场景1H：管理页生效中卡片不再同时出现“奖励行 + 重复星数/状态 pill”
+- [ ] 场景1I：管理页生效中卡片标题行只剩标题与单一 `更多` 入口，不再出现 `类型 + 编辑 + 更多` 三方竞争
+- [ ] 场景1J：管理页类型标签移动到第二行，与日期处于同一元信息层
 - [ ] 场景2：历史项卡片不再出现任何写入口
-- [ ] 场景3：待生效项仍可编辑和停用
+- [ ] 场景3：待生效项仍可通过 `更多` 执行编辑和停用
 - [ ] 场景4：历史项绕过页面直接调用 `PUT /tasks/:id`、停用接口、`DELETE /tasks/:id` 时均返回 409 + `TASK_OCCURRENCE_HISTORY_READONLY`
 - [ ] 场景5：表现项记录成功后星星进入 `week/month/quarter` 对应桶，撤销时从同桶扣回
 
@@ -705,6 +756,9 @@ function assertOccurrenceHistoryWritable(task, today) {
    - [ ] 首页与管理页的奖励信息不是单个整句文本，而是清晰的“星数 + 有效期”两段式结构
    - [ ] 首页表现记录卡片右侧不再显得明显发空，标题区和状态区达到稳定平衡
    - [ ] 管理页生效中卡片不再重复表达同一份星数奖励信息
+   - [ ] 管理页生效中卡片标题区只保留标题与单一 `更多` 入口
+   - [ ] 管理页类型标签位于第二行元信息层，不再和标题并列
+   - [ ] 生效中和待生效卡片不再直出 `编辑` 按钮
    - [ ] 记录成功后，星星进入所选有效期桶
    - [ ] 撤销成功后，从同一有效期桶正确扣回
 
@@ -715,8 +769,8 @@ function assertOccurrenceHistoryWritable(task, today) {
    - [ ] 绕过页面直接请求历史项写接口时，被系统正式拒绝
 
 3. **状态矩阵稳定性**
-   - [ ] 生效中项仍可编辑和更多
-   - [ ] 待生效项仍可编辑和更多
+   - [ ] 生效中项仍可通过 `更多` 进入编辑和其他维护动作
+   - [ ] 待生效项仍可通过 `更多` 进入编辑和其他维护动作
    - [ ] 历史项仍保持只读展示，不影响分页/折叠交互
 
 ---
@@ -731,6 +785,7 @@ function assertOccurrenceHistoryWritable(task, today) {
 | 历史项只读若只改页面、不改 authoritative 规则，会继续被绕过 | 高 | 中 | 本期正式提升为系统级业务规则，并补前后端拒绝测试 |
 | 历史项若只拦更新/停用，漏掉后端 `softDeleteTask`，规则会出现缺口 | 高 | 中 | 设计中显式冻结 delete 收口到 `softDeleteTask`，并增加控制器/API 测试 |
 | 页面动作按状态裁剪后，卡片布局出现不平衡 | 低 | 中 | 在样式层同步收口动作区留白与对齐 |
+| 将 `编辑` 收回到 `更多` 后，可发现性下降 | 中 | 中 | 用稳定的右上角 `更多` 锚点承载维护动作，并保持动作面板顺序一致 |
 | 页面能选有效期，但真实记录发星星仍沿用旧默认桶 | 高 | 中 | 把奖励链路测试提升为本期最小验收标准，锁定入桶与撤销行为 |
 
 ---
