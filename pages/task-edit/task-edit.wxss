@@ -221,12 +221,18 @@
 .template-quick-fill-manage-badge {
   display: inline-flex;
   align-items: center;
-  padding: 4rpx 10rpx;
+  min-height: 44rpx;
+  padding: 0 12rpx;
   border-radius: 999rpx;
   background: #e9f1ff;
   color: #5f6b77;
   font-size: 20rpx;
   line-height: 1.4;
+  box-sizing: border-box;
+}
+
+.template-quick-fill-recommendation-entry {
+  flex-shrink: 0;
 }
 
 .template-quick-fill-manage-label {
@@ -323,6 +329,11 @@
   flex-direction: column;
   gap: 12rpx;
   margin-top: 14rpx;
+}
+
+.template-recommendation-actions {
+  display: flex;
+  justify-content: flex-start;
 }
 
 .template-recommendation-card {

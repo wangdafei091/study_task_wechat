@@ -139,6 +139,19 @@ describe('packageManage/pages/task-template-manage/task-template-manage', () => 
     });
   });
 
+  it('onLoad 携带推荐聚焦参数时应记录路由上下文', () => {
+    const page = createPageInstance();
+
+    page.onLoad.call(page, {
+      mode: 'manage',
+      focus: 'recommendations',
+      source: 'task-edit'
+    });
+
+    expect(page._focusRecommendationsOnLoad).toBe(true);
+    expect(page._entrySource).toBe('task-edit');
+  });
+
   it('viewer 家长进入时应在前端直接拦截，不再进入管理页加载态', () => {
     serviceManager.getUserService.mockReturnValue({
       getLoginUser: jest.fn(() => ({
@@ -260,6 +273,28 @@ describe('packageManage/pages/task-template-manage/task-template-manage', () => 
         { key: 'validity', label: '有效期', value: '持续7天' }
       ]
     }));
+  });
+
+  it('loadTemplates 在管理模板 tab 应请求全部推荐候选，不再传 limit', async () => {
+    const getRecommendedTemplateCandidates = jest.fn().mockResolvedValue({
+      candidates: [],
+      total: 0
+    });
+    serviceManager.getService.mockReturnValue({
+      getTemplates: jest.fn().mockResolvedValue({
+        templates: [createTemplate()]
+      }),
+      getRecommendedTemplateCandidates
+    });
+
+    const page = createPageInstance();
+    page.data.activeTab = 'manage';
+
+    await page.loadTemplates();
+
+    expect(getRecommendedTemplateCandidates).toHaveBeenCalledWith({
+      force: false
+    });
   });
 
   it('loadTemplates 在管理模板 tab 只要存在正式模板就应显示搜索与筛选区', async () => {
@@ -385,6 +420,43 @@ describe('packageManage/pages/task-template-manage/task-template-manage', () => 
         expect.objectContaining({ key: 'repeat', value: '每天' })
       ])
     }));
+  });
+
+  it('loadTemplates 在带推荐聚焦参数时应自动展开推荐区并滚动到对应位置', async () => {
+    serviceManager.getService.mockReturnValue({
+      getTemplates: jest.fn().mockResolvedValue({
+        templates: [createTemplate({ id: 'tpl_1' })]
+      }),
+      getRecommendedTemplateCandidates: jest.fn().mockResolvedValue({
+        candidates: [
+          {
+            candidateKey: 'c1',
+            displayName: '晚间阅读',
+            reasonText: '近60天出现 4 次',
+            taskPayload: {
+              title: '晚间阅读',
+              type: 'study',
+              isAllDay: false,
+              startTime: '19:00',
+              endTime: '19:30',
+              repeat: { type: 'daily', days: [] },
+              reminder: { enabled: false, time: 0 }
+            }
+          }
+        ],
+        total: 1
+      })
+    });
+
+    const page = createPageInstance();
+    page.data.activeTab = 'manage';
+    page._focusRecommendationsOnLoad = true;
+
+    await page.loadTemplates();
+
+    expect(page.data.recommendationExpanded).toBe(true);
+    expect(page.data.showRecommendationFirst).toBe(true);
+    expect(page._focusRecommendationsOnLoad).toBe(false);
   });
 
   it('loadTemplates 在选择模板 tab 应优先展示模板说明，并隐藏零值使用统计', async () => {
@@ -812,6 +884,100 @@ describe('packageManage/pages/task-template-manage/task-template-manage', () => 
     expect(loadTemplatesSpy).toHaveBeenCalledWith({ force: true });
   });
 
+  it('从 task-edit 进入时，推荐草稿保存后应展示立即使用新模板动作', () => {
+    let savedHandler = null;
+    global.wx.navigateTo.mockImplementation(({ success }) => {
+      success({
+        eventChannel: {
+          on: jest.fn((eventName, handler) => {
+            if (eventName === 'templateSaved') {
+              savedHandler = handler;
+            }
+          }),
+          emit: jest.fn()
+        }
+      });
+    });
+    serviceManager.getService.mockReturnValue({
+      buildTemplateDraftFromCandidate: jest.fn(() => ({
+        draftInput: {
+          name: '晚间阅读',
+          taskPayload: {
+            title: '晚间阅读'
+          },
+          dateStrategy: {
+            mode: 'today',
+            endMode: 'same-day',
+            durationDays: 1
+          },
+          enabled: true
+        },
+        sourceMeta: {
+          sourceType: 'template-manage-candidate',
+          candidateKey: 'c1'
+        }
+      }))
+    });
+
+    const page = createPageInstance();
+    page._entrySource = 'task-edit';
+    page.data.recommendedCandidates = [
+      {
+        candidateKey: 'c1',
+        displayName: '晚间阅读',
+        taskPayload: {
+          title: '晚间阅读'
+        }
+      }
+    ];
+    page.data.recommendationCount = 1;
+    page.data.recommendationExpanded = true;
+
+    page.onSaveRecommendedCandidate({
+      currentTarget: {
+        dataset: {
+          key: 'c1'
+        }
+      }
+    });
+
+    savedHandler({
+      templateId: 'tpl_saved_1',
+      sourceMeta: {
+        candidateKey: 'c1'
+      }
+    });
+
+    expect(page.data.showSavedRecommendationTemplateAction).toBe(true);
+    expect(page.data.savedRecommendationTemplateId).toBe('tpl_saved_1');
+  });
+
+  it('useSavedTemplateFromRecommendation 应把新模板回填给任务编辑页并返回', async () => {
+    const emit = jest.fn();
+    serviceManager.getService.mockImplementation((name) => {
+      if (name === 'taskTemplate') {
+        return {
+          getTemplateById: jest.fn().mockResolvedValue(createTemplate({ id: 'tpl_saved_1' }))
+        };
+      }
+      return null;
+    });
+
+    const page = createPageInstance();
+    page.getOpenerEventChannel.mockReturnValue({ emit });
+    page.data.savedRecommendationTemplateId = 'tpl_saved_1';
+    page.data.showSavedRecommendationTemplateAction = true;
+
+    await page.useSavedTemplateFromRecommendation();
+
+    expect(emit).toHaveBeenCalledWith('templateSelected', {
+      template: expect.objectContaining({ id: 'tpl_saved_1' })
+    });
+    expect(page.data.showSavedRecommendationTemplateAction).toBe(false);
+    expect(page.data.savedRecommendationTemplateId).toBe('');
+    expect(global.wx.navigateBack).toHaveBeenCalledWith({ delta: 1 });
+  });
+
   it('force 刷新时应清空本地 suppress 集合，避免删除模板后推荐仍被隐藏', async () => {
     serviceManager.getService.mockReturnValue({
       getTemplates: jest.fn().mockResolvedValue({
@@ -876,7 +1042,9 @@ describe('packageManage/pages/task-template-manage/task-template-manage', () => 
     expect(wxml).toContain('点击模板即可回填到任务表单');
     expect(wxml).toContain('当前没有可用模板');
     expect(wxml).toContain('去管理模板');
-    expect(wxml).toContain('class="recommendation-scroll"');
+    expect(wxml).toContain('id="recommendation-section"');
+    expect(wxml).toContain('class="recommendation-return-bar"');
+    expect(wxml).toContain('立即使用新模板');
     expect(wxml).toContain('重新加载');
     expect(wxml).toContain('class="page-tools"');
     expect(wxml).toContain('class="page-tools manage-page-tools"');
@@ -887,12 +1055,13 @@ describe('packageManage/pages/task-template-manage/task-template-manage', () => 
     expect(wxml).toContain('class="template-list manage-template-list"');
     expect(wxml).toContain('!hasTemplates && recommendationCount === 0 && !loading && !hasActiveFilters');
     expect(wxml).toContain('!hasTemplates && recommendationCount > 0 && !hasActiveFilters');
-    expect(wxml).toContain('wx:if="{{!hasActiveFilters && recommendationCount > 0}}"');
+    expect(wxml).toContain('wx:if="{{!showRecommendationFirst && !hasActiveFilters && recommendationCount > 0}}"');
     expect(wxml).toContain('class="meta-item"');
     expect(wxml).toContain('class="card-meta-head"');
     expect(wxml).toContain('class="type-tag-light');
     expect(wxml).toContain('class="card-head-side"');
     expect(wxml).toContain('class="more-action-link head-more-action"');
+    expect(wxml).not.toContain('class="recommendation-scroll"');
     expect(wxml).not.toContain('title="{{pageTitle}}"');
     expect(wxml).not.toContain('全部状态');
     expect(wxml).not.toContain('最近使用</view>');

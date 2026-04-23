@@ -91,6 +91,39 @@
   gap: 12rpx;
 }
 
+.recommendation-return-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  padding: 18rpx 20rpx;
+  border-radius: 20rpx;
+  background: #eef4ff;
+  border: 1rpx solid rgba(47, 109, 216, 0.10);
+}
+
+.recommendation-return-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 24rpx;
+  color: #445566;
+  line-height: 1.6;
+}
+
+.recommendation-return-action {
+  flex-shrink: 0;
+  min-width: 168rpx;
+  height: 60rpx;
+  line-height: 60rpx;
+  padding: 0 18rpx;
+  border-radius: 999rpx;
+  background: #ffffff;
+  color: #2f6dd8;
+  font-size: 23rpx;
+  text-align: center;
+  box-sizing: border-box;
+}
+
 .recommendation-summary {
   display: flex;
   align-items: center;
@@ -125,10 +158,6 @@
 
 .recommendation-block.compact {
   padding-top: 18rpx;
-}
-
-.recommendation-scroll {
-  height: 560rpx;
 }
 
 .recommendation-block-head {

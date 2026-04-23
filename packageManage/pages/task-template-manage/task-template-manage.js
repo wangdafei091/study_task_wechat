@@ -298,12 +298,18 @@ Page({
     recommendedCandidates: [],
     recommendationCount: 0,
     recommendationExpanded: false,
-    showSearchTools: true
+    showSearchTools: true,
+    savedRecommendationTemplateId: '',
+    showSavedRecommendationTemplateAction: false,
+    showRecommendationFirst: false
   },
 
   onLoad(options = {}) {
     this._suppressedRecommendationCandidateKeys = new Set();
     this._forceReloadOnShow = false;
+    this._focusRecommendationsOnLoad = options.focus === 'recommendations';
+    this._preferRecommendationFirst = this._focusRecommendationsOnLoad === true;
+    this._entrySource = String(options.source || '').trim();
     const userService = serviceManager.getUserService();
     const loginUser = userService?.getLoginUser?.();
     const currentUser = userService?.getCurrentUser?.();
@@ -325,7 +331,10 @@ Page({
     this.setData({
       activeTab,
       loading: true,
-      showSearchTools: true
+      showSearchTools: true,
+      showSavedRecommendationTemplateAction: false,
+      savedRecommendationTemplateId: '',
+      showRecommendationFirst: false
     });
 
     if (typeof wx.setNavigationBarTitle === 'function') {
@@ -359,7 +368,6 @@ Page({
       clearTimeout(this._keywordTimer);
       this._keywordTimer = null;
     }
-
     this._loadRequestSeq = (this._loadRequestSeq || 0) + 1;
   },
 
@@ -410,14 +418,14 @@ Page({
       loadFailed: false,
       recommendedCandidates: [],
       recommendationCount: 0,
-      recommendationExpanded: false
+      recommendationExpanded: false,
+      showRecommendationFirst: false
     });
 
     try {
       const recommendationPromise = activeTab === TAB_MANAGE &&
         typeof taskTemplateService.getRecommendedTemplateCandidates === 'function'
         ? taskTemplateService.getRecommendedTemplateCandidates({
-            limit: 5,
             force: options.force === true
           })
         : Promise.resolve({
@@ -454,8 +462,17 @@ Page({
       );
       const recommendationCount = visibleRecommendedCandidates.length;
       const hasTemplates = templates.length > 0;
+      const shouldAutoExpandRecommendations = activeTab === TAB_MANAGE &&
+        this._focusRecommendationsOnLoad === true &&
+        recommendationCount > 0 &&
+        hasActiveFilters !== true;
+      const showRecommendationFirst = activeTab === TAB_MANAGE &&
+        (this._preferRecommendationFirst === true || this._focusRecommendationsOnLoad === true) &&
+        recommendationCount > 0 &&
+        hasActiveFilters !== true;
       const recommendationExpanded = activeTab === TAB_MANAGE && recommendationCount > 0
         ? (
+            shouldAutoExpandRecommendations ||
             this.data.recommendationExpanded === true
           )
         : false;
@@ -468,12 +485,17 @@ Page({
         recommendedCandidates: visibleRecommendedCandidates,
         recommendationCount,
         recommendationExpanded,
+        showRecommendationFirst,
         showSearchTools: activeTab === TAB_SELECT
           ? true
           : (hasTemplates || hasActiveFilters),
         loadFailed: false,
         loading: false
       });
+
+      if (shouldAutoExpandRecommendations) {
+        this._focusRecommendationsOnLoad = false;
+      }
     } catch (error) {
       if (requestId !== this._loadRequestSeq) {
         return;
@@ -502,7 +524,6 @@ Page({
       clearTimeout(this._keywordTimer);
       this._keywordTimer = null;
     }
-
     this.setData({
       activeTab: nextTab,
       loading: true,
@@ -514,6 +535,7 @@ Page({
       recommendedCandidates: [],
       recommendationCount: 0,
       recommendationExpanded: false,
+      showRecommendationFirst: false,
       showSearchTools: true,
       hasActiveFilters: false,
       loadFailed: false
@@ -611,6 +633,12 @@ Page({
 
               this.suppressRecommendationCandidate(savedCandidateKey);
               this._forceReloadOnShow = true;
+              if (this._entrySource === 'task-edit' && payload?.templateId) {
+                this.setData({
+                  savedRecommendationTemplateId: String(payload.templateId),
+                  showSavedRecommendationTemplateAction: true
+                });
+              }
             });
           }
           if (eventChannel && typeof eventChannel.emit === 'function') {
@@ -649,6 +677,56 @@ Page({
       recommendationCount,
       recommendationExpanded: recommendationCount > 0 && this.data.recommendationExpanded === true
     });
+  },
+
+  async useSavedTemplateFromRecommendation() {
+    const templateId = String(this.data.savedRecommendationTemplateId || '').trim();
+    if (!templateId) {
+      return;
+    }
+
+    const taskTemplateService = serviceManager.getService('taskTemplate');
+    if (!taskTemplateService || typeof taskTemplateService.getTemplateById !== 'function') {
+      wx.showToast({
+        title: '模板服务未就绪',
+        icon: 'none'
+      });
+      return;
+    }
+
+    try {
+      const template = await taskTemplateService.getTemplateById(templateId, {
+        force: true
+      });
+      if (!template) {
+        wx.showToast({
+          title: '模板不存在',
+          icon: 'none'
+        });
+        return;
+      }
+
+      const eventChannel = this.getOpenerEventChannel && this.getOpenerEventChannel();
+      if (eventChannel && typeof eventChannel.emit === 'function') {
+        eventChannel.emit('templateSelected', {
+          template
+        });
+      }
+
+      this.setData({
+        showSavedRecommendationTemplateAction: false,
+        savedRecommendationTemplateId: ''
+      });
+      wx.navigateBack({
+        delta: 1
+      });
+    } catch (error) {
+      logger.warn('TaskTemplateManage', '回填新保存模板失败', error);
+      wx.showToast({
+        title: '读取模板失败',
+        icon: 'none'
+      });
+    }
   },
 
   onRetryLoad() {
