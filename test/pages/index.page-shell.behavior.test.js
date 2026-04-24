@@ -157,6 +157,11 @@ describe('pages/index/index shell behavior', () => {
       getOccurrenceRecordsByDateRange: jest.fn().mockResolvedValue([]),
       calculateTaskProgress: jest.fn().mockResolvedValue({
         taskProgress: { habit: 1, interest: 2, study: 3 },
+        taskProgressSummary: {
+          habit: { completed: 1, total: 2, percent: 50, centerText: '1/2', isEmpty: false },
+          interest: { completed: 0, total: 0, percent: 0, centerText: '—', isEmpty: true },
+          study: { completed: 2, total: 3, percent: 67, centerText: '2/3', isEmpty: false }
+        },
         stats: { totalTasks: 1, completedTasks: 1, completionRate: 100, streak: 1 }
       }),
       getTaskStatistics: jest.fn().mockResolvedValue({
@@ -293,7 +298,6 @@ describe('pages/index/index shell behavior', () => {
 
   it('loadTaskDataOnly 和 loadTaskData 应更新任务视图并处理失败', async () => {
     page.data.currentUser = { id: 'child-1', role: 'child' };
-    page.calculateProgress = jest.fn().mockResolvedValue();
     page.updateTaskStats = jest.fn().mockResolvedValue();
 
     await page.loadTaskDataOnly();
@@ -323,7 +327,6 @@ describe('pages/index/index shell behavior', () => {
 
   it('loadTaskDataOnly 应渲染表现记录区块并在能力关闭时隐藏', async () => {
     page.data.currentUser = { id: 'child-1', role: 'child' };
-    page.calculateProgress = jest.fn().mockResolvedValue();
     page.updateTaskStats = jest.fn().mockResolvedValue();
 
     taskService.getOccurrenceTasks.mockResolvedValueOnce([
@@ -428,7 +431,8 @@ describe('pages/index/index shell behavior', () => {
     expect(page.data.messages).toEqual([]);
 
     await page.calculateProgress([{ id: 'task-1' }]);
-    expect(page.data.taskProgress.habit).toBe(1);
+    expect(page.data.todayTaskProgress.habit).toBe(1);
+    expect(page.data.todayTaskProgressSummary.habit.centerText).toBe('1/2');
     await page.updateTaskStats();
     expect(page.data.stats.totalTasks).toBe(2);
 
@@ -614,6 +618,7 @@ describe('pages/index/index shell behavior', () => {
     page.data.currentUser = { id: 'child-1', role: 'child' };
     page.loadStarsAndRewards = jest.fn().mockResolvedValue();
     page.loadTaskDataOnly = jest.fn().mockResolvedValue();
+    page.loadTodayProgressSummary = jest.fn().mockResolvedValue();
     page.checkUpcomingTasks = jest.fn().mockResolvedValue();
     page.refreshTaskDataForCurrentView = jest.fn().mockResolvedValue();
     page.loadMessageData = jest.fn().mockResolvedValue();

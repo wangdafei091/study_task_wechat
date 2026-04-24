@@ -3,6 +3,22 @@ const dateUtils = require('../../../utils/dateUtils');
 const logger = require('../../../utils/logger');
 const messageDisplay = require('../../../utils/message-display');
 
+async function refreshTodayProgressSummary(page, targetDate) {
+  if (!page || typeof page.loadTodayProgressSummary !== 'function') {
+    return;
+  }
+
+  const todayString = dateUtils.getTodayString();
+  const shouldReuseCurrentViewData = !targetDate || targetDate === todayString;
+  await page.loadTodayProgressSummary({
+    reuseCurrentTodayData: shouldReuseCurrentViewData,
+    currentTasks: shouldReuseCurrentViewData ? page.data.tasks : null,
+    currentOccurrenceRecords: shouldReuseCurrentViewData
+      ? page.data.currentDateOccurrenceRecords
+      : null
+  });
+}
+
 async function handleRewardUpdated(page, data) {
   logger.debug('Index', '收到奖励更新事件', data);
   const app = getApp();
@@ -137,6 +153,7 @@ async function loadAllPageData(page, options = {}) {
     }
 
     if (tasksResult.status === 'fulfilled') {
+      await refreshTodayProgressSummary(page, targetDate);
       await page.checkUpcomingTasks();
     }
 
@@ -156,6 +173,7 @@ async function refreshTaskDataForCurrentView(page, options = {}) {
 
   try {
     await page.loadTaskDataOnly(targetDate);
+    await refreshTodayProgressSummary(page, targetDate);
     await page.checkUpcomingTasks();
 
     if (options.timestamp) {

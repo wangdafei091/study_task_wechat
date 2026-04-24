@@ -20,17 +20,16 @@
     width="{{canvasSizePx}}"
     height="{{canvasSizePx}}"
   ></canvas>
-  <view class="ring-mark"></view>
   <view class="ring-inner"></view>
   <view class="ring-content">
-    <block wx:if="{{isComplete}}">
+    <block wx:if="{{centerContent}}">
+      <text class="ring-custom-content">{{centerContent}}</text>
+    </block>
+    <block wx:elif="{{isComplete}}">
       <text class="ring-complete">✓</text>
     </block>
     <block wx:elif="{{showText}}">
       <text class="ring-value">{{progress}}%</text>
-    </block>
-    <block wx:elif="{{centerContent}}">
-      <text class="ring-custom-content">{{centerContent}}</text>
     </block>
     <slot></slot>
   </view>

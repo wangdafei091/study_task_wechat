@@ -126,7 +126,6 @@ function captureDateViewSnapshot(page) {
     pageTitleBadge: page.data.pageTitleBadge || '',
     tasks: page.data.tasks || [],
     hasTodayTasks: page.data.hasTodayTasks,
-    taskProgress: page.data.taskProgress || {},
     stats: page.data.stats || {},
     showUpcomingTask: page.data.showUpcomingTask,
     upcomingTask: page.data.upcomingTask || null,

@@ -1,6 +1,6 @@
 # 里程碑-22J：首页今日进度圆环语义与展示收口 详细设计文档
 
-> **设计状态**：🟢 审核通过
+> **设计状态**：✅ 已完成
 > **创建日期**：2026-04-24
 > **设计者**：GPT5 Codex
 > **审核者**：项目维护者
@@ -414,9 +414,9 @@ function buildBucketSummary(completed, total) {
 
 ### 第1步：收口统计契约（预计 2 小时）
 
-- [ ] **任务**：扩展 `taskService.calculateTaskProgress` 返回结构，增加每类任务 `completed / total / centerText / isEmpty`
-- [ ] **验证**：现有调用方不被破坏，新增结果可被首页消费
-- [ ] **依赖**：无
+- [x] **任务**：扩展 `taskService.calculateTaskProgress` 返回结构，增加每类任务 `completed / total / centerText / isEmpty`
+- [x] **验证**：现有调用方不被破坏，新增结果可被首页消费
+- [x] **依赖**：无
 
 **实施要点**：
 1. 保持现有 `taskProgress` 返回不变，降低回归风险
@@ -427,9 +427,9 @@ function buildBucketSummary(completed, total) {
 
 ### 第2步：拆分首页“今日摘要”和“日期浏览”数据链路（预计 3 小时）
 
-- [ ] **任务**：在 `pages/index/` 中新增今日摘要刷新方法，并改造现有加载流程
-- [ ] **验证**：切换日期后任务列表变化，但首页圆环继续展示今天数据
-- [ ] **依赖**：第1步完成
+- [x] **任务**：在 `pages/index/` 中新增今日摘要刷新方法，并改造现有加载流程
+- [x] **验证**：切换日期后任务列表变化，但首页圆环继续展示今天数据
+- [x] **依赖**：第1步完成
 
 **实施要点**：
 1. 默认首页首次进入时，任务列表和今日摘要都读取今天
@@ -442,9 +442,9 @@ function buildBucketSummary(completed, total) {
 
 ### 第3步：把今日摘要纳入真实刷新编排（预计 2 小时）
 
-- [ ] **任务**：修改 `index-refresh-coordinator.js`，补齐首页 onShow 批量刷新、任务事件刷新、用户切换刷新对今日摘要的正式更新
-- [ ] **验证**：切换孩子、收到 `task:changed` / `task:created`、首页重新显示后，今日摘要始终与今天数据保持一致
-- [ ] **依赖**：第2步完成
+- [x] **任务**：修改 `index-refresh-coordinator.js`，补齐首页 onShow 批量刷新、任务事件刷新、用户切换刷新对今日摘要的正式更新
+- [x] **验证**：切换孩子、收到 `task:changed` / `task:created`、首页重新显示后，今日摘要始终与今天数据保持一致
+- [x] **依赖**：第2步完成
 
 **实施要点**：
 1. `loadAllPageData` 不能只刷新当前视图任务列表，还要刷新今日摘要
@@ -456,9 +456,9 @@ function buildBucketSummary(completed, total) {
 
 ### 第4步：收口日期快照与回滚边界（预计 1 小时）
 
-- [ ] **任务**：修改 `index-date-navigation.js` 快照策略，确保今日摘要不再属于日期视图状态
-- [ ] **验证**：翻周/切日失败回滚后，任务列表回滚，但“今日进度”不被历史视图状态覆盖
-- [ ] **依赖**：第2步完成
+- [x] **任务**：修改 `index-date-navigation.js` 快照策略，确保今日摘要不再属于日期视图状态
+- [x] **验证**：翻周/切日失败回滚后，任务列表回滚，但“今日进度”不被历史视图状态覆盖
+- [x] **依赖**：第2步完成
 
 **实施要点**：
 1. `todayTaskProgress / todayTaskProgressSummary` 不进入 date snapshot
@@ -469,9 +469,9 @@ function buildBucketSummary(completed, total) {
 
 ### 第5步：重做圆环中心信息与轻量视觉收敛（预计 3 小时）
 
-- [ ] **任务**：修改首页模板和 `progressRing` 组件，完成标题、中心文本和装饰收敛
-- [ ] **验证**：首页首屏显示“今日进度”，中心为 `完成数/总数`，视觉较当前更克制统一
-- [ ] **依赖**：第2步完成
+- [x] **任务**：修改首页模板和 `progressRing` 组件，完成标题、中心文本和装饰收敛
+- [x] **验证**：首页首屏显示“今日进度”，中心为 `完成数/总数`，视觉较当前更克制统一
+- [x] **依赖**：第2步完成
 
 **实施要点**：
 1. 标题统一为 `今日进度`
@@ -483,9 +483,9 @@ function buildBucketSummary(completed, total) {
 
 ### 第6步：补齐测试与回归（预计 2 小时）
 
-- [ ] **任务**：补充首页行为测试和圆环组件测试
-- [ ] **验证**：定向测试全绿
-- [ ] **依赖**：前 3 步完成
+- [x] **任务**：补充首页行为测试和圆环组件测试
+- [x] **验证**：定向测试全绿
+- [x] **依赖**：前 3 步完成
 
 **实施要点**：
 1. 验证切换日期后今日摘要保持不变
@@ -534,6 +534,22 @@ function buildBucketSummary(completed, total) {
 - `npx jest test/pages/index.page-shell.behavior.test.js --runInBand`
 - `npx jest test/pages/index.modules.test.js --runInBand`
 - `npx jest test/components/progress-ring.test.js --runInBand`
+
+### 实施结果
+
+- 首页顶部圆环已正式收口为“今日进度”，不再跟随日期导航切换
+- 首页页面层已使用 `todayTaskProgress / todayTaskProgressSummary` 作为唯一圆环状态源，旧 `taskProgress` 已退出首页模板绑定与日期快照
+- `taskService.calculateTaskProgress` 已补齐每类任务 `completed / total / percent / centerText / isEmpty` 摘要契约
+- `progressRing` 组件已改为优先显示 `centerContent`，避免 `100%` 完成态用勾号覆盖 `完成数/总数`
+- 圆环视觉已完成轻量收敛：移除十字辅助线、降低内层高光、缩小大尺寸环并收敛兴趣类颜色
+
+### 实际验证结果
+
+- 定向自动化测试通过：
+  - `npx jest test/pages/index.page-shell.behavior.test.js test/pages/index.modules.test.js test/pages/index.refresh-coordinator.test.js test/components/progress-ring.test.js test/services/task-query.direct.test.js --runInBand`
+  - `npx jest test/services/task-service.test.js --runInBand`
+- 提交前静态检查通过：
+  - `git diff --check`
 
 ---
 

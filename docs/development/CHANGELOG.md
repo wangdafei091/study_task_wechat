@@ -4,6 +4,41 @@
 
 ---
 
+## [里程碑-22J] - 2026-04-24
+
+### ✅ 完成情况
+
+**首页今日进度圆环语义与展示收口**
+
+- **首页圆环已正式收口为今日口径**：
+  - [`pages/index/index.js`](/Users/wangdafei/code/study_task_wechat/pages/index/index.js)、[`pages/index/index.wxml`](/Users/wangdafei/code/study_task_wechat/pages/index/index.wxml)、[`pages/index/modules/index-refresh-coordinator.js`](/Users/wangdafei/code/study_task_wechat/pages/index/modules/index-refresh-coordinator.js) 已将首页顶部圆环统一改为“今日进度”，并从日期浏览任务列表中彻底解耦
+  - 切换历史/未来日期时，仅任务列表和表现记录区块跟随变化，首页圆环继续稳定展示今天摘要，不再出现“标题写当前、数据跟着选中日期变”的口径混杂
+- **圆环中心信息已从百分比收口为更高价值摘要**：
+  - [`services/task-service/task-query.js`](/Users/wangdafei/code/study_task_wechat/services/task-service/task-query.js) 已扩展 `calculateTaskProgress` 返回结构，补齐每类任务的 `completed / total / percent / centerText / isEmpty`
+  - 首页三枚圆环已改为展示 `完成数/总数`，无任务类型显示 `—`，不再用中心百分比重复表达外圈弧线信息
+- **首页刷新编排与日期快照边界已完成治理**：
+  - [`pages/index/modules/index-date-navigation.js`](/Users/wangdafei/code/study_task_wechat/pages/index/modules/index-date-navigation.js) 已把首页今日摘要从日期快照中剥离，避免翻周/切日失败回滚时误覆盖今日圆环
+  - 首页批量刷新、当前视图刷新和任务变更刷新路径，已统一补入今日摘要更新
+- **圆环视觉已完成轻量收敛**：
+  - [`components/progressRing/progressRing.wxml`](/Users/wangdafei/code/study_task_wechat/components/progressRing/progressRing.wxml)、[`components/progressRing/progressRing.wxss`](/Users/wangdafei/code/study_task_wechat/components/progressRing/progressRing.wxss)、[`components/progressRing/progressRing.js`](/Users/wangdafei/code/study_task_wechat/components/progressRing/progressRing.js) 已移除十字辅助线、降低内层高光、收紧大尺寸圆环并柔化兴趣类颜色
+  - `centerContent` 现在优先于完成勾号渲染，`100%` 时仍可稳定显示 `完成数/总数`
+- **定向回归测试已补齐**：
+  - [`test/pages/index.page-shell.behavior.test.js`](/Users/wangdafei/code/study_task_wechat/test/pages/index.page-shell.behavior.test.js)、[`test/pages/index.modules.test.js`](/Users/wangdafei/code/study_task_wechat/test/pages/index.modules.test.js)、[`test/pages/index.refresh-coordinator.test.js`](/Users/wangdafei/code/study_task_wechat/test/pages/index.refresh-coordinator.test.js)、[`test/components/progress-ring.test.js`](/Users/wangdafei/code/study_task_wechat/test/components/progress-ring.test.js)、[`test/services/task-query.direct.test.js`](/Users/wangdafei/code/study_task_wechat/test/services/task-query.direct.test.js) 已锁定今日口径、刷新边界、中心文本优先级和新的服务契约
+
+### 🧪 验证结果
+
+- 定向自动化测试通过：
+  - `npx jest test/pages/index.page-shell.behavior.test.js test/pages/index.modules.test.js test/pages/index.refresh-coordinator.test.js test/components/progress-ring.test.js test/services/task-query.direct.test.js --runInBand`
+  - `npx jest test/services/task-service.test.js --runInBand`
+- 提交前静态检查通过：
+  - `git diff --check`
+
+### 📖 详细实施记录
+
+- [里程碑-22J：首页今日进度圆环语义与展示收口](../design/milestone-22j-home-today-progress-ring-convergence.md)
+
+---
+
 ## [里程碑-22D] - 2026-04-23
 
 ### ✅ 完成情况

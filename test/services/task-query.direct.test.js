@@ -424,6 +424,11 @@ describe('task-query direct behavior', () => {
 
     expect(result).toEqual({
       taskProgress: { habit: 0, study: 0, interest: 0 },
+      taskProgressSummary: {
+        habit: { completed: 0, total: 0, percent: 0, centerText: '—', isEmpty: true },
+        study: { completed: 0, total: 0, percent: 0, centerText: '—', isEmpty: true },
+        interest: { completed: 0, total: 0, percent: 0, centerText: '—', isEmpty: true }
+      },
       stats: {
         totalTasks: 0,
         completedTasks: 0,
@@ -469,6 +474,8 @@ describe('task-query direct behavior', () => {
     expect(result.stats.completedTasks).toBe(1);
     expect(result.taskProgress.habit).toBe(100);
     expect(result.taskProgress.study).toBe(0);
+    expect(result.taskProgressSummary.habit.centerText).toBe('1/1');
+    expect(result.taskProgressSummary.study.centerText).toBe('0/1');
   });
 
   it('checkUpcomingTasks 应覆盖全天提醒、普通提醒和跳过分支', async () => {

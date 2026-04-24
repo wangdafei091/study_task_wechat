@@ -1587,7 +1587,7 @@
 /* 进度圆环部分 */
 .progress-rings-container {
   margin: 10rpx 30rpx;
-  padding: 20rpx 15rpx;
+  padding: 18rpx 18rpx 16rpx;
   background: linear-gradient(to bottom, #ffffff, #fafbfd);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-light);
@@ -1606,7 +1606,7 @@
   font-size: var(--font-size-md);
   font-weight: var(--font-weight-semibold);
   color: var(--text-primary);
-  margin-bottom: 16rpx;
+  margin-bottom: 12rpx;
   letter-spacing: 0.5rpx;
 }
 
@@ -1614,7 +1614,7 @@
   display: flex;
   justify-content: space-around;
   width: 100%;
-  margin-top: 10rpx;
+  margin-top: 6rpx;
 }
 
 .ring-item {
@@ -1628,7 +1628,7 @@
 .ring-item-label {
   font-size: 24rpx;
   color: var(--text-secondary);
-  margin-top: 8rpx;
+  margin-top: 6rpx;
   font-weight: 500;
   letter-spacing: 0.3rpx;
 }

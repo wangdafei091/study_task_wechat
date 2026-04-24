@@ -386,6 +386,11 @@ async function calculateTaskProgress(service, tasks = null) {
       interest: Number(progress.interest || 0),
       study: Number(progress.study || 0)
     };
+    const taskProgressSummary = {
+      habit: buildTaskProgressBucketSummary(typeCounts.completed.habit, typeCounts.total.habit),
+      study: buildTaskProgressBucketSummary(typeCounts.completed.study, typeCounts.total.study),
+      interest: buildTaskProgressBucketSummary(typeCounts.completed.interest, typeCounts.total.interest)
+    };
 
     const countableTasks = tasksToProcess.filter((task) => (
       !isOccurrenceConfigTask(task) && shouldIncludeInProgressSummary(task)
@@ -396,6 +401,7 @@ async function calculateTaskProgress(service, tasks = null) {
 
     const result = {
       taskProgress,
+      taskProgressSummary,
       stats: {
         totalTasks,
         completedTasks,
@@ -414,6 +420,11 @@ async function calculateTaskProgress(service, tasks = null) {
     logger.error('TaskService', '计算任务进度失败', error);
     return {
       taskProgress: { habit: 0, study: 0, interest: 0 },
+      taskProgressSummary: {
+        habit: buildTaskProgressBucketSummary(0, 0),
+        study: buildTaskProgressBucketSummary(0, 0),
+        interest: buildTaskProgressBucketSummary(0, 0)
+      },
       stats: {
         totalTasks: 0,
         completedTasks: 0,
@@ -422,6 +433,22 @@ async function calculateTaskProgress(service, tasks = null) {
       }
     };
   }
+}
+
+function buildTaskProgressBucketSummary(completed, total) {
+  const normalizedCompleted = Number(completed || 0);
+  const normalizedTotal = Number(total || 0);
+  const percent = normalizedTotal > 0
+    ? Math.round(normalizedCompleted / normalizedTotal * 100)
+    : 0;
+
+  return {
+    completed: normalizedCompleted,
+    total: normalizedTotal,
+    percent,
+    centerText: normalizedTotal > 0 ? `${normalizedCompleted}/${normalizedTotal}` : '—',
+    isEmpty: normalizedTotal === 0
+  };
 }
 
 async function checkUpcomingTasks(service, userId = null) {

@@ -3,6 +3,7 @@ jest.mock('../../services/service-manager.js', () => ({
 }));
 
 jest.mock('../../utils/dateUtils', () => ({
+  getTodayString: jest.fn(() => '2026-03-26'),
   formatRelativeTime: jest.fn(() => '刚刚')
 }));
 
@@ -71,9 +72,12 @@ describe('pages/index/modules/index-refresh-coordinator', () => {
     const heatmap = { refreshTaskList: jest.fn() };
     const page = {
       data: {
-        currentViewDate: '2026-03-26'
+        currentViewDate: '2026-03-26',
+        tasks: [{ id: 'task-1' }],
+        currentDateOccurrenceRecords: [{ id: 'occ-1' }]
       },
       loadTaskDataOnly: jest.fn().mockResolvedValue(),
+      loadTodayProgressSummary: jest.fn().mockResolvedValue(),
       checkUpcomingTasks: jest.fn().mockResolvedValue(),
       loadMessageData: jest.fn().mockResolvedValue(),
       selectComponent: jest.fn(() => heatmap),
@@ -92,6 +96,11 @@ describe('pages/index/modules/index-refresh-coordinator', () => {
     ]);
 
     expect(page.loadTaskDataOnly).toHaveBeenCalledWith('2026-03-26');
+    expect(page.loadTodayProgressSummary).toHaveBeenCalledWith({
+      reuseCurrentTodayData: true,
+      currentTasks: [{ id: 'task-1' }],
+      currentOccurrenceRecords: [{ id: 'occ-1' }]
+    });
     expect(heatmap.refreshTaskList).toHaveBeenCalled();
     expect(page.setData).toHaveBeenLastCalledWith({
       messages: [
@@ -130,6 +139,7 @@ describe('pages/index/modules/index-refresh-coordinator', () => {
         currentViewDate: '2026-03-26'
       },
       loadTaskDataOnly: jest.fn().mockResolvedValue(),
+      loadTodayProgressSummary: jest.fn().mockResolvedValue(),
       checkUpcomingTasks: jest.fn().mockResolvedValue(),
       refreshTaskDataForCurrentView: jest.fn().mockResolvedValue(),
       setData: jest.fn()
@@ -156,6 +166,7 @@ describe('pages/index/modules/index-refresh-coordinator', () => {
         currentViewDate: '2026-03-26'
       },
       loadTaskDataOnly: jest.fn().mockResolvedValue(),
+      loadTodayProgressSummary: jest.fn().mockResolvedValue(),
       checkUpcomingTasks: jest.fn().mockResolvedValue(),
       setData: jest.fn()
     };
@@ -191,9 +202,15 @@ describe('pages/index/modules/index-refresh-coordinator', () => {
     });
 
     const page = {
-      data: { currentUser: { name: '小明' }, currentViewDate: '2026-03-20' },
+      data: {
+        currentUser: { name: '小明' },
+        currentViewDate: '2026-03-20',
+        tasks: [{ id: 'task-view' }],
+        currentDateOccurrenceRecords: [{ id: 'occ-view' }]
+      },
       getEffectiveTaskUserId: jest.fn(() => 'child-1'),
       loadTaskDataOnly: jest.fn().mockResolvedValue(),
+      loadTodayProgressSummary: jest.fn().mockResolvedValue(),
       loadMessageData: jest.fn().mockResolvedValue(),
       loadStarsAndRewards: jest.fn().mockResolvedValue(),
       checkUpcomingTasks: jest.fn().mockResolvedValue(),
@@ -212,6 +229,11 @@ describe('pages/index/modules/index-refresh-coordinator', () => {
       userId: 'child-1'
     });
     expect(page.loadTaskDataOnly).toHaveBeenCalledWith('2026-03-20');
+    expect(page.loadTodayProgressSummary).toHaveBeenCalledWith({
+      reuseCurrentTodayData: false,
+      currentTasks: null,
+      currentOccurrenceRecords: null
+    });
     expect(page.checkUpcomingTasks).toHaveBeenCalled();
     expect(page.loadMessageData).toHaveBeenCalledWith({
       skipExpiryAuthoritySyncBeforeFormalReminders: true
@@ -260,6 +282,7 @@ describe('pages/index/modules/index-refresh-coordinator', () => {
       loadTaskDataOnly: jest.fn(() => {
         throw new Error('sync task error');
       }),
+      loadTodayProgressSummary: jest.fn().mockResolvedValue(),
       loadMessageData: jest.fn().mockResolvedValue(),
       loadStarsAndRewards: jest.fn().mockResolvedValue(),
       checkUpcomingTasks: jest.fn().mockResolvedValue()
@@ -276,6 +299,7 @@ describe('pages/index/modules/index-refresh-coordinator', () => {
     const page = {
       data: { currentViewDate: '2026-03-26', currentUser: { name: '小明' } },
       loadTaskDataOnly: jest.fn().mockRejectedValue(new Error('task fail')),
+      loadTodayProgressSummary: jest.fn().mockResolvedValue(),
       loadMessageData: jest.fn().mockRejectedValue(new Error('message fail')),
       loadStarsAndRewards: jest.fn().mockRejectedValue(new Error('star fail')),
       checkUpcomingTasks: jest.fn().mockResolvedValue(),
