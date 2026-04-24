@@ -39,24 +39,21 @@
     <view class="days">
       <block wx:for="{{days}}" wx:key="date">
         <view 
-          class="day {{item.isCurrentMonth ? 'current-month' : 'other-month'}} level-{{item.level}} {{item.isToday ? 'today' : ''}} {{item.date === selectedDate ? 'selected' : ''}}"
+          class="day {{item.isCurrentMonth ? 'current-month' : 'other-month'}} level-{{item.level}} {{item.isToday ? 'today' : ''}} {{item.date === selectedDate ? 'selected' : ''}} {{item.visualState.hasTasks ? 'has-tasks' : ''}} {{item.visualState.hasOverflowMarker ? 'has-overflow' : ''}}"
           data-day="{{item}}" 
           data-date="{{item.date}}"
           data-index="{{index}}"
-          bindtap="{{(item.isCurrentMonth || item.count > 0) ? 'onDayTap' : ''}}"
-          bindlongpress="{{item.count > 0 ? 'onDayLongPress' : ''}}"
+          bindtap="{{item.visualState.isInteractive ? 'onDayTap' : ''}}"
           id="day-{{index}}">
           <view class="day-content">
             <text class="day-number">{{item.day}}</text>
-            <!-- 任务类型点显示（智能显示：≤4个任务仅显示圆点，>4个任务显示数字+圆点） -->
-            <view wx:if="{{item.taskDots && item.taskDots.length > 0}}" class="task-dots-row">
-              <!-- 当任务数大于4时，显示任务数字 -->
-              <text wx:if="{{item.showTaskCount}}" class="task-count-number">{{item.taskCount}}·</text>
-              <!-- 任务类型点 -->
+            <view wx:if="{{item.taskMarkerMode === 'dots' && item.taskDots && item.taskDots.length > 0}}" class="task-dots-row">
               <block wx:for="{{item.taskDots}}" wx:key="index" wx:for-item="dot">
-                <view wx:if="{{dot.type !== 'more'}}" class="task-dot" style="background-color: {{dot.color}}"></view>
-                <text wx:else class="more-indicator">{{dot.display}}</text>
+                <view class="task-dot" style="background-color: {{dot.color}}"></view>
               </block>
+            </view>
+            <view wx:elif="{{item.taskMarkerMode === 'count'}}" class="task-count-badge">
+              <text class="task-count-badge-text">{{item.taskCountLabel}}</text>
             </view>
           </view>
         </view>
@@ -70,17 +67,15 @@
       <view class="day-date">
         <view class="date-row">
           <text class="date-text">{{selectedDateText}}</text>
-          <!-- 改为标签式压力指示 -->
-          <view class="pressure-tag pressure-level-{{selectedDayPressure.levelNum}}" wx:if="{{dayTasks.length > 0}}">
+          <text class="task-count-text">{{taskCountText}}</text>
+          <view class="pressure-tag pressure-level-{{selectedDayPressure.levelNum}}" wx:if="{{selectedDayPressure.showTag}}">
             <text>{{selectedDayPressure.levelText}}</text>
           </view>
         </view>
-        <!-- 任务摘要文本移到第二行 -->
-        <view class="summary-row" wx:if="{{dayTasks.length > 0}}">
+        <view class="summary-row" wx:if="{{taskSummaryText}}">
           <text class="task-summary-text">{{taskSummaryText}}</text>
         </view>
       </view>
-      <!-- 关闭按钮改为圆形X图标 -->
       <view class="close-btn-circle" bindtap="closeDayTasks">×</view>
     </view>
     <scroll-view class="tasks-list" scroll-y="true" scroll-with-animation="true" scroll-top="{{taskListScrollTop}}" enhanced="true" scroll-anchoring="true" show-scrollbar="true" id="tasks-scroll-view">
@@ -301,11 +296,11 @@
       </view>
       <view class="pressure-info-body">
         <view class="formula-section">
-          <text class="formula-title">计算公式</text>
-          <text class="formula-text">压力指数 = 习惯/全天任务压力 + 时长压力</text>
+          <text class="formula-title">先看颜色</text>
+          <text class="formula-text">颜色越浅越轻松，颜色越深越忙。</text>
         </view>
         <view class="factors-section">
-          <text class="factors-title">影响因素</text>
+          <text class="factors-title">怎么算</text>
           <view class="factor-item">
             <text class="factor-name">习惯任务:</text>
             <text class="factor-desc">每个习惯任务2点压力</text>
@@ -322,27 +317,27 @@
         
         <!-- 计算示例区域 -->
         <view class="example-section">
-          <text class="example-title">计算示例</text>
+          <text class="example-title">举个例子</text>
           <view class="example-content">
             <view class="example-task">
-              <text class="example-text">例子:</text>
+              <text class="example-text">这一天有:</text>
               <view class="example-item">1个习惯任务: 1×2=2点</view>
               <view class="example-item">1个全天任务: 1×2=2点</view>
               <view class="example-item">学习任务60分钟: 60÷10=6点</view>
             </view>
             <view class="example-calc">
-              <text class="example-text">计算过程:</text>
+              <text class="example-text">合起来:</text>
               <view class="example-item">习惯/全天任务压力: 4点</view>
               <view class="example-item">时长压力: 6点</view>
             </view>
             <view class="example-result">
-              <text class="example-item">总压力值: 10点</text>
+              <text class="example-item">总共 10 点，属于轻松</text>
             </view>
           </view>
         </view>
         
         <view class="levels-section">
-          <text class="levels-title">压力级别（小学低年级标准）</text>
+          <text class="levels-title">分数对应</text>
           <view class="level-items">
             <view class="level-item level-1">轻松<text class="level-range">0-15分</text></view>
             <view class="level-item level-2">适中<text class="level-range">16-30分</text></view>
@@ -367,41 +362,5 @@
         <view class="action-text">删除</view>
       </view>
     </view>
-  </view>
-
-  <!-- 长按悬浮提示 -->
-  <view class="task-tooltip {{showTooltip ? 'visible' : ''}}" style="{{tooltipStyle}}" wx:if="{{tooltipData}}" catchtap="hideTooltip">
-    <view class="tooltip-content">
-      <view class="tooltip-header">
-        <text class="tooltip-date">{{tooltipData.date}}</text>
-        <text class="tooltip-weekday">{{tooltipData.weekday}}</text>
-      </view>
-      
-      <view class="tooltip-tasks">
-        <view class="task-summary">
-          <text class="summary-icon">📋</text>
-          <text class="summary-text">{{tooltipData.totalTasks}}个任务</text>
-        </view>
-        
-        <block wx:for="{{tooltipData.typeDetails}}" wx:key="type">
-          <view class="type-detail">
-            <text class="type-icon">{{item.icon}}</text>
-            <text class="type-text">{{item.name}} {{item.count}}个</text>
-          </view>
-        </block>
-      </view>
-      
-      <view class="tooltip-stats">
-        <view class="stars-info">
-          <text class="stars-icon">⭐</text>
-          <text class="stars-text">{{tooltipData.totalStars}}颗星星</text>
-        </view>
-        <view class="pressure-info">
-          <text class="pressure-icon">{{tooltipData.pressureIcon}}</text>
-          <text class="pressure-text">{{tooltipData.pressureLevel}}</text>
-        </view>
-      </view>
-    </view>
-    <view class="tooltip-arrow"></view>
   </view>
 </view> 

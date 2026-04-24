@@ -4,6 +4,39 @@
 
 ---
 
+## [里程碑-22D] - 2026-04-23
+
+### ✅ 完成情况
+
+**任务分布热力日历视觉与信息表达重设计**
+
+- **热力日历视觉基线已完成正式重做**：
+  - [`packageComponents/components/task-heatmap/task-heatmap.wxss`](/Users/wangdafei/code/study_task_wechat/packageComponents/components/task-heatmap/task-heatmap.wxss) 已将旧的硬方格和跳色风格收口为软圆角轻网格、蓝白灰同色系热力色阶，并把 `today / selected / pressure` 三层状态改成稳定分层表达
+  - 当前任务管理页中的“任务分布”模块已从功能控件感较重的旧样式，提升为与整页风格更一致的主视觉概览模块
+- **单格信息密度已完成收口**：
+  - [`packageComponents/components/task-heatmap/task-heatmap.wxml`](/Users/wangdafei/code/study_task_wechat/packageComponents/components/task-heatmap/task-heatmap.wxml)、[`packageComponents/components/task-heatmap/task-heatmap.js`](/Users/wangdafei/code/study_task_wechat/packageComponents/components/task-heatmap/task-heatmap.js) 已移除格子内任务数强展示与长按提示通路
+  - 任务标记已收口为“低密度看类型点、高密度看轻量数字”的最终规则，不再使用“点 + 多”的高解释成本表达
+- **详情承接链路已保持清晰**：
+  - 热力格点击后仍由详情头部统一承接日期、任务数量、压力标签和摘要文案
+  - 下方任务列表主体、编辑区和删除区未被扩散改造，本期范围保持在热力图体验本身
+- **展示契约测试已补齐**：
+  - [`test/pages/task-heatmap.component.test.js`](/Users/wangdafei/code/study_task_wechat/test/pages/task-heatmap.component.test.js) 已锁定轻量标记规则、详情头部摘要状态，以及“无长按提示 / 无格子内任务数字”的结构契约
+
+### 🧪 验证结果
+
+- 定向自动化测试通过：
+  - `npx jest test/pages/task-heatmap.component.test.js --runInBand`
+- 模拟器截图与交互复核通过：
+  - 已确认热力日历格子比例回到合理区间
+  - 已确认“低密度点 / 高密度数字”方案优于此前的“点 + 多”表达
+  - 已确认选中日期后的详情承接链路保持稳定，无需继续大改
+
+### 📖 详细实施记录
+
+- [里程碑-22D：任务分布热力日历视觉与信息表达重设计](../design/milestone-22d-task-heatmap-calendar-redesign.md)
+
+---
+
 ## [里程碑-22H] - 2026-04-23
 
 ### ✅ 完成情况

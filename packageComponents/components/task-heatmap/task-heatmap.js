@@ -45,7 +45,7 @@ Component({
           
           if (hasChanged) {
             logger.debug('task-heatmap', '检测到任务数据变化，重新计算热力图');
-            this.calculateHeatMap();
+            const updatedDays = this.calculateHeatMap();
             
             // 修复：如果当前正在显示某个日期的任务列表，则刷新该列表
             if (this.data.showDayTasks && this.data.selectedDate) {
@@ -62,19 +62,15 @@ Component({
               
               // 应用与首页今日任务列表相同的排序逻辑
               const sortedTasks = this._sortTasksByHabitAndTime(tasks);
-              
-              // 重新生成任务汇总文案
-              const taskSummaryText = this.generateTaskSummaryText(dayTasks);
-              logger.info('task-heatmap', '重新生成任务汇总文案', {
-                selectedDate: this.data.selectedDate,
-                taskCount: dayTasks.length,
-                summaryText: taskSummaryText
-              });
+              const selectedDay = this.findDayByDate(this.data.selectedDate, updatedDays);
+              const selectedDaySummary = this.buildSelectedDaySummaryState(dayTasks, selectedDay);
               
               // 更新任务列表显示
               this.setData({
                 dayTasks: sortedTasks,
-                taskSummaryText: taskSummaryText  // 添加任务汇总文案的更新
+                selectedDayPressure: selectedDaySummary.selectedDayPressure,
+                taskCountText: selectedDaySummary.taskCountText,
+                taskSummaryText: selectedDaySummary.taskSummaryText
               });
               
               logger.info('task-heatmap', '任务列表已刷新', {
@@ -158,11 +154,8 @@ Component({
     actionMenuStyle: '', // 操作菜单样式
     todayString: new Date().toISOString().split('T')[0], // 今天日期字符串，格式YYYY-MM-DD
     pointsReadOnly: false, // 积分是否为只读状态（已完成任务或历史任务）
-    
-    // 长按悬浮提示相关
-    showTooltip: false, // 显示悬浮提示
-    tooltipData: null, // 悬浮提示数据
-    tooltipStyle: '', // 悬浮提示样式
+    taskCountText: '', // 选中日期任务数量文案
+    taskSummaryText: '' // 选中日期摘要文案
   },
   
   /**
@@ -172,69 +165,13 @@ Component({
     attached: function() {
       logger.debug('TaskHeatmap', '组件挂载');
       
-      // 记录热力图优化方案实施
-      logger.info('TaskHeatmap', '热力图单行4个点优化方案已启用', {
+      logger.info('TaskHeatmap', '热力日历重设计已启用', {
         features: [
-          '完全方形设计',
-          '与现有压力色阶一致',
-          '单行4个任务类型点',
-          '智能分配算法',
-          '长按悬浮提示功能'
-        ]
-      });
-      
-      // 记录布局优化修复
-      logger.info('TaskHeatmap', '日历布局优化修复完成', {
-        fixes: [
-          '修复日期星期对应错位：使用calc(100% / 7)精确计算宽度',
-          '优化信息密度：格子高度从aspect-ratio改为80rpx固定高度',
-          '提升任务点视觉权重：尺寸从6rpx增加到8rpx',
-          '改善间距布局：点间距4rpx，与日期间距4rpx',
-          '字体优化：日期数字从36rpx调整为32rpx'
-        ]
-      });
-      
-      // 记录气泡优化修复
-      logger.info('TaskHeatmap', '长按气泡提示优化完成', {
-        improvements: [
-          '修复箭头定位：基于日期格子中心精确计算位置',
-          '色彩主题协调：白色背景+淡蓝边框替代深蓝渐变',
-          '视觉层次优化：深色文字+轻微阴影提升可读性',
-          '动态箭头位置：支持边界检测和自适应偏移',
-          '柔和设计风格：与整体应用保持一致的视觉感受'
-        ]
-      });
-      
-      // 记录压力图标更新
-      logger.info('TaskHeatmap', '压力等级图标更新为表情系列', {
-        iconMapping: [
-          '轻松/无任务: 😌 - 表示放松愉悦状态',
-          '适中压力: 😐 - 表示平静适度状态', 
-          '繁忙压力: 😅 - 表示开始感到压力',
-          '紧张压力: 😰 - 表示压力很大状态'
-        ],
-        benefits: [
-          '更直观的情感表达，符合小学生认知习惯',
-          '替代通用的📊图标，提升用户体验',
-          '表情化设计增强亲和力'
-        ]
-      });
-      
-      // 记录智能任务数显示功能
-      logger.info('TaskHeatmap', '智能任务数显示功能已启用', {
-        displayLogic: [
-          '1-4个任务：仅显示圆点，保持简洁设计',
-          '5+个任务：显示数字+圆点组合，解决信息获取痛点'
-        ],
-        visualDesign: [
-          '任务数字：18rpx字体，#666颜色，opacity 0.9',
-          '与圆点间距2rpx，不影响现有视觉层级',
-          '格式：{数字}·●●●+ 清晰直观'
-        ],
-        userBenefits: [
-          '快速获知确切任务数量，无需通过圆点推算',
-          '保持界面简洁，只在必要时显示额外信息',
-          '响应用户调研反馈，提升实用性'
+          '软圆角轻网格',
+          '蓝白灰同色系热力色阶',
+          '单格最多3个轻量标记',
+          'today / selected / level 状态分层',
+          '移除长按气泡，统一为点击详情单通路'
         ]
       });
       
@@ -321,11 +258,6 @@ Component({
 
     // 生成日历数据
     generateCalendar() {
-      const logger = require('../../../utils/logger');
-      logger.info('task-heatmap', '统一日历样式：应用与分析页面星星日历一致的样式');
-      logger.info('task-heatmap', '样式变更：日期格子改为正方形比例，字体大小调整为32rpx，今天标识改为背景高亮');
-      logger.info('task-heatmap', '信息层级优化：任务信息字体从20rpx减小到14rpx，透明度降至0.7，建立清晰的主次关系');
-      
       const days = [];
       const currentYear = this.properties.currentYear;
       const currentMonth = this.properties.currentMonth;
@@ -354,7 +286,15 @@ Component({
           isCurrentMonth: false,
           day: prevMonthDay,
           completed: 0,
-          pending: 0
+          pending: 0,
+          taskDots: [],
+          taskCount: 0,
+          visualState: {
+            isInteractive: false,
+            hasTasks: false,
+            markerCount: 0,
+            hasOverflowMarker: false
+          }
         });
       }
       
@@ -368,7 +308,15 @@ Component({
           day: i,
           isToday: this.isToday(currentYear, currentMonth, i),
           completed: 0,
-          pending: 0
+          pending: 0,
+          taskDots: [],
+          taskCount: 0,
+          visualState: {
+            isInteractive: true,
+            hasTasks: false,
+            markerCount: 0,
+            hasOverflowMarker: false
+          }
         });
       }
       
@@ -397,7 +345,15 @@ Component({
           isCurrentMonth: false,
           day: i,
           completed: 0,
-          pending: 0
+          pending: 0,
+          taskDots: [],
+          taskCount: 0,
+          visualState: {
+            isInteractive: false,
+            hasTasks: false,
+            markerCount: 0,
+            hasOverflowMarker: false
+          }
         });
       }
       
@@ -579,14 +535,15 @@ Component({
         day.completed = 0;
         day.pending = 0;
         day.pressure = null;
-        // 修复：清除任务类型点相关数据，确保删除任务后圆点正确消失
         day.taskDots = [];
-        day.showTaskCount = false;
         day.taskCount = 0;
+        day.taskCountLabel = '';
+        day.taskMarkerMode = 'none';
         day.starsEarned = 0;
         day.starsPending = 0;
         day.starsTotal = 0;
         day.typeCounts = { study: 0, habit: 0, interest: 0 };
+        day.visualState = this.buildDayCellVisualState(day, { dots: [], hasOverflow: false });
       });
       
       // 使用传入的强制任务数据或组件属性中的任务
@@ -599,7 +556,6 @@ Component({
       if (!tasks || tasks.length === 0) {
         logger.debug('[TaskHeatmap] 任务列表为空，重置热力图所有日期块');
         
-        // 确保更新UI，重置所有日期的热力值
         this.setData({ 
           days: days,
           "__dataTimestamp": Date.now() // 添加时间戳确保视图刷新
@@ -607,7 +563,7 @@ Component({
           logger.info('TaskHeatmap', '热力图已重置完成');
         });
         
-        return;
+        return days;
       }
       
       // 按日期分组任务
@@ -633,7 +589,16 @@ Component({
         const count = dateTasks.length;
         
         if (count === 0) {
-          return { ...day, count: 0, level: 0 };
+          return {
+            ...day,
+            count: 0,
+            level: 0,
+            taskDots: [],
+            taskCount: 0,
+            taskCountLabel: '',
+            taskMarkerMode: 'none',
+            visualState: this.buildDayCellVisualState({ ...day, count: 0, level: 0 }, { dots: [], hasOverflow: false })
+          };
         }
         
         // 计算完成和待完成任务数
@@ -688,11 +653,14 @@ Component({
         // 生成任务类型点数据
         const taskDotsData = this.generateTaskDots(typeCounts);
         
-        // 不再计算必做任务的扣除星星，因为必做任务不参与星星奖励系统
         const starsTotal = starsEarned + starsPending;  // 总可获得星星（只含非必做任务）
         
-        // 计算日期热力等级 (1-4)
         const level = this.calculatePressureLevel(pressureIndex);
+        const visualState = this.buildDayCellVisualState({
+          ...day,
+          count,
+          level: level.levelNum
+        }, taskDotsData);
         
         logger.debug(`[TaskHeatmap] 日期:${day.date} 任务数:${count} 压力指数:${pressureIndex.toFixed(1)} 色阶等级:${level.levelText} 星星:${starsTotal}（已获得:${starsEarned} 待获得:${starsPending}）`);
         
@@ -706,11 +674,12 @@ Component({
           starsEarned,     // 已获得星星（仅非必做任务）
           starsPending,    // 待获得星星（仅非必做任务）
           starsTotal,      // 总可获得星星（仅非必做任务）
-          // 新增：任务类型点数据和智能显示信息
-          taskDots: taskDotsData.dots,        // 任务类型点数组
-          showTaskCount: taskDotsData.showCount,  // 是否显示任务数字
-          taskCount: taskDotsData.taskCount,      // 任务总数
+          taskDots: taskDotsData.dots,
+          taskCount: taskDotsData.taskCount,
+          taskCountLabel: taskDotsData.taskCountLabel,
+          taskMarkerMode: taskDotsData.markerMode,
           typeCounts,      // 任务类型统计
+          visualState,
           pressure: {
             total: pressureIndex,
             tasks: tasksPressure
@@ -728,6 +697,8 @@ Component({
       }, () => {
         logger.info('TaskHeatmap', '热力图视图更新完成');
       });
+
+      return updatedDays;
     },
     
     // 上个月
@@ -773,6 +744,48 @@ Component({
       
       this.generateCalendar();
     },
+
+    buildDayCellVisualState(day, taskDotsData) {
+      const dots = taskDotsData && Array.isArray(taskDotsData.dots) ? taskDotsData.dots : [];
+      return {
+        isInteractive: !!(day.isCurrentMonth || day.count > 0),
+        hasTasks: day.count > 0,
+        markerCount: dots.length,
+        hasOverflowMarker: !!(taskDotsData && taskDotsData.markerMode === 'count')
+      };
+    },
+
+    findDayByDate(date, days) {
+      if (!date || !Array.isArray(days)) {
+        return null;
+      }
+
+      return days.find(day => day.date === date) || null;
+    },
+
+    buildSelectedDaySummaryState(tasks, dayData) {
+      const dayTasks = Array.isArray(tasks) ? tasks : [];
+      const totalCount = dayTasks.length;
+      const totalPressure = dayData && dayData.pressure && dayData.pressure.total !== undefined
+        ? Number(dayData.pressure.total) || 0
+        : 0;
+      const pressureLevel = totalCount > 0
+        ? this.calculatePressureLevel(totalPressure)
+        : { levelText: '轻松', levelNum: 1, isHigh: false };
+
+      return {
+        taskCountText: totalCount > 0 ? `${totalCount}个任务` : '暂无任务安排',
+        taskSummaryText: this.generateTaskSummaryText(dayTasks),
+        selectedDayPressure: {
+          total: totalPressure.toFixed(1),
+          levelText: pressureLevel.levelText,
+          levelNum: pressureLevel.levelNum,
+          isHigh: pressureLevel.isHigh,
+          showWarning: pressureLevel.isHigh && totalPressure > 90,
+          showTag: totalCount > 0
+        }
+      };
+    },
     
     // 更新日期任务列表和压力显示
     onDayTap(e) {
@@ -789,48 +802,6 @@ Component({
       // 获取当前日期的任务
       const dayTasks = this.properties.tasks.filter(task => task.date === date);
       
-      // 统计已完成任务数
-      const completedTasksCount = dayTasks.filter(
-        t => t.status === 1 || t.status === 'completed'
-      ).length;
-      
-      logger.debug(`[TaskHeatmap] 处理积分有效期：${completedTasksCount}个已完成任务，${dayTasks.length - completedTasksCount}个待完成任务`);
-      
-      // 统计星星信息
-      let starsEarned = 0;    // 已获得的星星
-      let starsPending = 0;   // 待获得的星星  
-      let starsAtRisk = 0;    // 风险扣除的星星
-      
-      dayTasks.forEach(task => {
-        if (task.status === 1 || task.status === 'completed') {
-          // 已完成任务
-          if (!task.isRequired && task.points > 0) {
-            starsEarned += Number(task.points) || 0;
-          }
-        } else {
-          // 未完成任务
-          if (task.isRequired && task.points > 0) {
-            starsAtRisk += Number(task.points) || 0;  // 必做任务未完成会扣除
-          } else if (!task.isRequired && task.points > 0) {
-            starsPending += Number(task.points) || 0;  // 非必做任务待获得
-          }
-        }
-      });
-      
-      const starsTotal = starsEarned + starsPending;  // 可获得的星星总数
-      const starsNet = starsTotal - starsAtRisk;     // 净收益
-      
-      logger.debug('[TaskHeatmap] 星星统计 - 已获得:', starsEarned, '待获得:', starsPending, '风险扣除:', starsAtRisk, '总计:', starsTotal, '净收益:', starsNet);
-      
-      // 使用预先计算好的压力值，避免重复计算
-      let totalPressure = 0;
-      if (dayData && dayData.pressure && dayData.pressure.total !== undefined) {
-        logger.debug(`[TaskHeatmap] 使用预计算的压力值: ${dayData.pressure.total}`);
-        totalPressure = dayData.pressure.total;
-      } else {
-        logger.debug(`[TaskHeatmap] 日期没有预计算的压力值，使用默认值0`);
-      }
-      
       // 使用统一的enhanceTaskData方法增强任务信息
       const tasks = dayTasks.map(task => {
         // 记录任务是否为必做任务
@@ -844,11 +815,6 @@ Component({
       const sortedTasks = this._sortTasksByHabitAndTime(tasks);
       logger.info('task-heatmap', `任务排序完成，排序前: ${tasks.length}个，排序后: ${sortedTasks.length}个`);
       
-      // 使用预计算好的压力级别
-      const pressureLevel = dayData && dayData.level ? 
-        this.calculatePressureLevel(totalPressure) : 
-        { levelText: '轻松', levelNum: 1, isHigh: false };
-      
       // 转换日期为友好显示格式，例如"5月23日 周一"
       const selectedDate = new Date(date);
       const day = selectedDate.getDate();
@@ -856,36 +822,27 @@ Component({
       const weekDays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
       const weekDay = weekDays[selectedDate.getDay()];
       const dateText = `${month}月${day}日 ${weekDay}`;
-      
-      // 新增：生成任务汇总文案
-      const taskSummaryText = this.generateTaskSummaryText(dayTasks);
-      
-      logger.debug('[TaskHeatmap] 任务汇总文案：', taskSummaryText);
+      const summaryState = this.buildSelectedDaySummaryState(dayTasks, dayData);
       
       this.setData({
         selectedDate: date,
         selectedDateText: dateText,
         dayTasks: sortedTasks,
         showDayTasks: true,
-        selectedDayPressure: {
-          total: totalPressure.toFixed(1),
-          levelText: pressureLevel.levelText,
-          levelNum: pressureLevel.levelNum,
-          isHigh: pressureLevel.isHigh,
-          showWarning: pressureLevel.isHigh && totalPressure > 90
-        },
-        // 新增任务汇总文案
-        taskSummaryText: taskSummaryText
+        selectedDayPressure: summaryState.selectedDayPressure,
+        taskCountText: summaryState.taskCountText,
+        taskSummaryText: summaryState.taskSummaryText
       });
       
-      logger.debug(`[TaskHeatmap] 显示日期任务, 总数:${dayTasks.length}, 总压力: ${totalPressure.toFixed(1)}, 级别: ${pressureLevel.levelText}`);
+      logger.debug(`[TaskHeatmap] 显示日期任务, 总数:${dayTasks.length}, 压力标签:${summaryState.selectedDayPressure.levelText}`);
     },
     
     // 生成任务汇总文案
     generateTaskSummaryText(tasks) {
-      if (!tasks || tasks.length === 0) return '';
+      if (!tasks || tasks.length === 0) {
+        return '这一天还没有任务安排';
+      }
       
-      const totalCount = tasks.length;
       let requiredCount = 0;
       let requiredStars = 0;
       let optionalCount = 0;
@@ -903,26 +860,29 @@ Component({
         }
       });
       
-      // 构建文案
-      let parts = [`${totalCount}个任务:`];
-      let details = [];
-      
-      // 必做任务部分 - 现在也显示星星数量
+      const summaryParts = [];
+      const rewardParts = [];
+
       if (requiredCount > 0) {
-        details.push(`必做: ${requiredCount}/${requiredStars}🌟`);
+        summaryParts.push(`必做${requiredCount}项`);
+        if (requiredStars > 0) {
+          rewardParts.push(`风险${requiredStars}🌟`);
+        }
       }
       
-      // 非必做任务部分
       if (optionalCount > 0) {
-        details.push(`非必做: ${optionalCount}/${optionalStars}🌟`);
+        summaryParts.push(`选做${optionalCount}项`);
+        if (optionalStars > 0) {
+          rewardParts.push(`可得${optionalStars}🌟`);
+        }
       }
       
-      // 组合文案
-      if (details.length > 0) {
-        return parts[0] + '（' + details.join('；') + '）';
-      } else {
-        return parts[0];
+      let summaryText = summaryParts.join(' · ');
+
+      if (rewardParts.length > 0) {
+        summaryText += `，${rewardParts.join('，')}`;
       }
+      return summaryText;
     },
     
     // 关闭任务列表
@@ -936,221 +896,9 @@ Component({
         editingTaskIndex: -1,
         showDeleteConfirm: false,
         deleteScope: '',
-        activeTaskForDelete: null
-      });
-    },
-
-    /**
-     * 长按日期处理
-     */
-    onDayLongPress(e) {
-      const dayData = e.currentTarget.dataset.day;
-      const date = e.currentTarget.dataset.date;
-      
-      logger.info('task-heatmap', '长按日期', { date: date, taskCount: dayData.count });
-      
-      // 触觉反馈
-      wx.vibrateShort({ type: 'light' });
-      
-      // 显示悬浮提示
-      this.showTaskTooltip(dayData, e);
-    },
-
-    /**
-     * 显示任务悬浮提示
-     */
-    showTaskTooltip(dayData, event) {
-      if (!dayData || dayData.count === 0) return;
-      
-      // 获取当前日期的任务
-      const dayTasks = this.properties.tasks.filter(task => task.date === dayData.date);
-      
-      // 生成悬浮提示数据
-      const tooltipData = this.generateTooltipData(dayData, dayTasks);
-      
-      // 获取被点击的日期格子精确位置
-      const dayIndex = event.currentTarget.dataset.index;
-      const query = this.createSelectorQuery();
-      
-      // 获取日期格子和容器的位置信息
-      query.select(`#day-${dayIndex}`).boundingClientRect();
-      query.selectViewport().boundingClientRect();
-      query.exec((res) => {
-        if (!res || !res[0]) {
-          // 回退到简单定位
-          const tooltipStyle = `
-            position: fixed;
-            left: 50%;
-            top: 30%;
-            transform: translateX(-50%);
-            z-index: 1000;
-          `;
-          this.setData({
-            showTooltip: true,
-            tooltipData: tooltipData,
-            tooltipStyle: tooltipStyle
-          });
-          return;
-        }
-        
-        const dayRect = res[0];
-        const viewport = res[1];
-        
-        // 计算日期格子中心点
-        const dayCenterX = dayRect.left + dayRect.width / 2;
-        const dayCenterY = dayRect.top + dayRect.height / 2;
-        
-        // 气泡预估尺寸（需要根据实际内容调整）
-        const tooltipWidth = 140; // 约280rpx转换为px
-        const tooltipHeight = 100; // 约200rpx转换为px
-        
-        // 计算气泡位置，优先显示在日期格子上方
-        let tooltipLeft = dayCenterX - tooltipWidth / 2;
-        let tooltipTop = dayRect.top - tooltipHeight - 12; // 12px是箭头高度+间距
-        
-        // 边界检测和调整
-        const padding = 20; // 边距
-        
-        // 水平边界检测
-        if (tooltipLeft < padding) {
-          tooltipLeft = padding;
-        } else if (tooltipLeft + tooltipWidth > viewport.width - padding) {
-          tooltipLeft = viewport.width - tooltipWidth - padding;
-        }
-        
-        // 垂直边界检测，如果上方空间不足，显示在下方
-        if (tooltipTop < padding) {
-          tooltipTop = dayRect.bottom + 12; // 显示在日期格子下方，保持与上方一致的间距
-        }
-        
-        // 计算箭头相对于气泡的偏移量
-        const arrowOffset = dayCenterX - tooltipLeft;
-        const arrowOffsetPercent = (arrowOffset / tooltipWidth) * 100;
-        
-        // 限制箭头位置在合理范围内（10%-90%）
-        const clampedArrowPercent = Math.max(10, Math.min(90, arrowOffsetPercent));
-        
-        const tooltipStyle = `
-          position: fixed;
-          left: ${tooltipLeft}px;
-          top: ${tooltipTop}px;
-          z-index: 1000;
-          --arrow-offset: ${clampedArrowPercent}%;
-        `;
-        
-        this.setData({
-          showTooltip: true,
-          tooltipData: tooltipData,
-          tooltipStyle: tooltipStyle
-        });
-        
-        logger.info('task-heatmap', '气泡定位计算完成', {
-          dayCenter: `(${dayCenterX.toFixed(1)}, ${dayCenterY.toFixed(1)})`,
-          tooltipPos: `(${tooltipLeft.toFixed(1)}, ${tooltipTop.toFixed(1)})`,
-          arrowOffset: `${clampedArrowPercent.toFixed(1)}%`
-        });
-      });
-      
-      // 3秒后自动隐藏
-      setTimeout(() => {
-        this.hideTooltip();
-      }, 3000);
-      
-      logger.info('task-heatmap', '显示悬浮提示', tooltipData);
-    },
-
-    /**
-     * 生成悬浮提示数据
-     */
-    generateTooltipData(dayData, tasks) {
-      const date = new Date(dayData.date);
-      const month = date.getMonth() + 1;
-      const day = date.getDate();
-      const weekDays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
-      const weekday = weekDays[date.getDay()];
-      
-      // 统计任务类型和星星
-      const typeDetails = [];
-      const typeMap = {
-        study: { name: '学习', icon: '🟢' },
-        habit: { name: '习惯', icon: '🔵' },
-        interest: { name: '兴趣', icon: '🟡' }
-      };
-      
-      let totalStars = 0;
-      
-      // 使用已计算的类型统计
-      if (dayData.typeCounts) {
-        Object.entries(dayData.typeCounts).forEach(([type, count]) => {
-          if (count > 0 && typeMap[type]) {
-            typeDetails.push({
-              type,
-              name: typeMap[type].name,
-              icon: typeMap[type].icon,
-              count
-            });
-          }
-        });
-      }
-      
-      // 计算星星总数（只计算非必做任务）
-      tasks.forEach(task => {
-        if (!task.isRequired && task.points > 0) {
-          totalStars += Number(task.points) || 0;
-        }
-      });
-      
-      // 获取压力等级文本和对应的表情图标
-      const pressureLevelText = this.getPressureLevelText(dayData.level);
-      const pressureIcon = this.getPressureIcon(dayData.level);
-      
-      return {
-        date: `${month}月${day}日`,
-        weekday: weekday,
-        totalTasks: tasks.length,
-        typeDetails: typeDetails,
-        totalStars: totalStars,
-        pressureLevel: pressureLevelText,
-        pressureIcon: pressureIcon
-      };
-    },
-
-    /**
-     * 获取压力等级图标（表情系列）
-     */
-    getPressureIcon(level) {
-      const iconMap = {
-        0: '😌', // 无任务/轻松
-        1: '😌', // 轻松
-        2: '😐', // 适中
-        3: '😅', // 繁忙
-        4: '😰'  // 紧张
-      };
-      return iconMap[level] || '😌';
-    },
-
-    /**
-     * 获取压力等级文本
-     */
-    getPressureLevelText(level) {
-      const levelMap = {
-        0: '无任务',
-        1: '轻松',
-        2: '适中', 
-        3: '繁忙',
-        4: '紧张'
-      };
-      return levelMap[level] || '轻松';
-    },
-
-    /**
-     * 隐藏悬浮提示
-     */
-    hideTooltip() {
-      this.setData({
-        showTooltip: false,
-        tooltipData: null,
-        tooltipStyle: ''
+        activeTaskForDelete: null,
+        taskCountText: '',
+        taskSummaryText: ''
       });
     },
     
@@ -2589,92 +2337,58 @@ Component({
     },
 
     /**
-     * 生成任务类型点数据（单行4个点）
+     * 生成任务类型点数据（最多 3 个轻量标记）
      * @param {Object} typeCounts 任务类型统计 {study: 数量, habit: 数量, interest: 数量}
-     * @returns {Object} 包含dots数组和任务数量显示信息的对象
+     * @returns {Object} 轻量标记数据
      */
     generateTaskDots(typeCounts) {
       const { study, habit, interest } = typeCounts;
       const total = study + habit + interest;
       
       if (total === 0) {
-        return { dots: [], showCount: false, taskCount: 0 };
+        return {
+          dots: [],
+          taskCount: 0,
+          taskCountLabel: '',
+          markerMode: 'none',
+          hasOverflow: false
+        };
       }
       
-      // 任务类型颜色映射（与现有压力色阶不冲突）
       const typeColors = {
-        study: '#4CAF50',    // 绿色
-        habit: '#607D8B',    // 蓝灰色
-        interest: '#FF9800'  // 橙色
+        study: '#71A971',
+        habit: '#7E8FA8',
+        interest: '#D2A265'
       };
       
-      const maxDots = 4;
-      const dots = [];
-      
-      // 情况1：任务总数 ≤ 4，仅显示圆点，不显示数字
+      const rawDots = [];
+      const pushDots = (type, count) => {
+        for (let index = 0; index < count; index += 1) {
+          rawDots.push({ type, color: typeColors[type] });
+        }
+      };
+
+      pushDots('study', study);
+      pushDots('habit', habit);
+      pushDots('interest', interest);
+
+      const maxDots = 2;
       if (total <= maxDots) {
-        // 按类型添加点，顺序：学习→习惯→兴趣
-        for (let i = 0; i < study; i++) {
-          dots.push({ type: 'study', color: typeColors.study });
-        }
-        for (let i = 0; i < habit; i++) {
-          dots.push({ type: 'habit', color: typeColors.habit });
-        }
-        for (let i = 0; i < interest; i++) {
-          dots.push({ type: 'interest', color: typeColors.interest });
-        }
-        
-        logger.info('task-heatmap', `直接显示模式：${total}个任务生成${dots.length}个点，不显示数字`);
-        return { dots, showCount: false, taskCount: total };
+        return {
+          dots: rawDots.slice(0, maxDots),
+          taskCount: total,
+          taskCountLabel: '',
+          markerMode: 'dots',
+          hasOverflow: false
+        };
       }
-      
-      // 情况2：任务总数 > 4，显示数字 + 圆点组合
-      const availableDots = maxDots - 1; // 留1个位置给"+"号
-      
-      // 获取存在的任务类型
-      const existingTypes = [];
-      if (study > 0) existingTypes.push({ type: 'study', count: study, color: typeColors.study });
-      if (habit > 0) existingTypes.push({ type: 'habit', count: habit, color: typeColors.habit });
-      if (interest > 0) existingTypes.push({ type: 'interest', count: interest, color: typeColors.interest });
-      
-      // 确保每种存在的类型至少有1个点
-      existingTypes.forEach(type => {
-        dots.push({ type: type.type, color: type.color });
-      });
-      
-      // 剩余位置按比例分配给数量多的类型
-      let remaining = availableDots - existingTypes.length;
-      
-      if (remaining > 0) {
-        // 按数量排序，优先分配给任务多的类型
-        const sortedTypes = [...existingTypes].sort((a, b) => b.count - a.count);
-        
-        for (const type of sortedTypes) {
-          if (remaining <= 0) break;
-          
-          const proportion = type.count / total;
-          const extraDots = Math.floor(remaining * proportion);
-          
-          for (let i = 0; i < extraDots && dots.length < availableDots; i++) {
-            dots.push({ type: type.type, color: type.color });
-          }
-        }
-      }
-      
-      // 添加"+"号表示更多任务
-      let moreIndicator = '+';
-      if (total >= 15) {
-        moreIndicator = '++'; // 特别多的任务用双加号
-      }
-      
-      dots.push({ type: 'more', display: moreIndicator });
-      
-      logger.info('task-heatmap', `智能显示模式：${total}个任务（学习${study}+习惯${habit}+兴趣${interest}）显示数字+${dots.length}个点，包含${moreIndicator}`);
       
       return { 
-        dots, 
-        showCount: true, 
-        taskCount: total 
+        dots: [],
+        taskCount: total,
+        taskCountLabel: String(total),
+        markerMode: 'count',
+        hasOverflow: true
       };
     }
   }

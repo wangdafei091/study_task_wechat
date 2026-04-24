@@ -1,3 +1,6 @@
+const fs = require('fs');
+const path = require('path');
+
 const mockGetService = jest.fn();
 const mockGetUserService = jest.fn();
 
@@ -8,7 +11,20 @@ jest.mock('../../utils/logger', () => ({
   debug: jest.fn()
 }));
 
-jest.mock('../../utils/uiUtils', () => ({}));
+jest.mock('../../utils/uiUtils', () => ({
+  getPressureLevelText: (pressure) => {
+    if (pressure <= 15) {
+      return { levelText: '轻松', levelNum: 1, isHigh: false };
+    }
+    if (pressure <= 30) {
+      return { levelText: '适中', levelNum: 2, isHigh: false };
+    }
+    if (pressure <= 45) {
+      return { levelText: '繁忙', levelNum: 3, isHigh: true };
+    }
+    return { levelText: '紧张', levelNum: 4, isHigh: true };
+  }
+}));
 
 jest.mock('../../services/service-manager.js', () => ({
   getService: (...args) => mockGetService(...args),
@@ -17,6 +33,7 @@ jest.mock('../../services/service-manager.js', () => ({
 
 describe('packageComponents/components/task-heatmap/task-heatmap', () => {
   let componentConfig;
+  const heatmapWxmlPath = path.join(__dirname, '../../packageComponents/components/task-heatmap/task-heatmap.wxml');
 
   function loadComponentModule() {
     componentConfig = null;
@@ -148,5 +165,104 @@ describe('packageComponents/components/task-heatmap/task-heatmap', () => {
     expect(taskService.getAllTasks).toHaveBeenCalledWith('child_current', {
       requireFreshStars: true
     });
+  });
+
+  it('应为 1 到 3 个任务生成对应数量的轻量标记', () => {
+    const component = createComponentInstance();
+
+    expect(component.generateTaskDots({
+      study: 1,
+      habit: 1,
+      interest: 0
+    })).toEqual({
+      dots: [
+        { type: 'study', color: '#71A971' },
+        { type: 'habit', color: '#7E8FA8' }
+      ],
+      taskCount: 2,
+      taskCountLabel: '',
+      markerMode: 'dots',
+      hasOverflow: false
+    });
+  });
+
+  it('应在 3 个及以上任务时切换为轻量数字提示', () => {
+    const component = createComponentInstance();
+
+    expect(component.generateTaskDots({
+      study: 2,
+      habit: 1,
+      interest: 1
+    })).toEqual({
+      dots: [],
+      taskCount: 4,
+      taskCountLabel: '4',
+      markerMode: 'count',
+      hasOverflow: true
+    });
+  });
+
+  it('应根据单格状态生成交互视觉辅助信息', () => {
+    const component = createComponentInstance();
+
+    expect(component.buildDayCellVisualState({
+      isCurrentMonth: false,
+      count: 0
+    }, {
+      dots: [],
+      hasOverflow: false
+    })).toEqual({
+      isInteractive: false,
+      hasTasks: false,
+      markerCount: 0,
+      hasOverflowMarker: false
+    });
+
+    expect(component.buildDayCellVisualState({
+      isCurrentMonth: false,
+      count: 4
+    }, {
+      dots: [],
+      markerMode: 'count',
+      hasOverflow: true
+    })).toEqual({
+      isInteractive: true,
+      hasTasks: true,
+      markerCount: 0,
+      hasOverflowMarker: true
+    });
+  });
+
+  it('应将数量和摘要收口到详情头部状态', () => {
+    const component = createComponentInstance();
+
+    expect(component.buildSelectedDaySummaryState([
+      { isRequired: true, points: 2 },
+      { isRequired: false, points: 3 }
+    ], {
+      pressure: {
+        total: 18
+      }
+    })).toEqual({
+      taskCountText: '2个任务',
+      taskSummaryText: '必做1项 · 选做1项，风险2🌟，可得3🌟',
+      selectedDayPressure: {
+        total: '18.0',
+        levelText: '适中',
+        levelNum: 2,
+        isHigh: false,
+        showWarning: false,
+        showTag: true
+      }
+    });
+  });
+
+  it('热力图模板不应再保留长按提示和格子内任务数字', () => {
+    const wxml = fs.readFileSync(heatmapWxmlPath, 'utf8');
+
+    expect(wxml).not.toContain('bindlongpress');
+    expect(wxml).not.toContain('task-tooltip');
+    expect(wxml).not.toContain('task-count-number');
+    expect(wxml).toContain('task-count-text');
   });
 });
