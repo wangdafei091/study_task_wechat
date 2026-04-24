@@ -178,7 +178,9 @@ describe('User 领域模型', () => {
       expect(pages).toContain('pages/index/index');
       expect(pages).toContain('pages/rewards/rewards');
       expect(pages).toContain('packageChart/pages/analysis/analysis');
-      expect(pages).toContain('pages/task-edit/task-edit');
+      expect(pages).toContain('packageTask/pages/task-edit/task-edit');
+      expect(pages).toContain('packageTask/pages/task-occurrence-edit/task-occurrence-edit');
+      expect(pages).toContain('packageChart/pages/task-record/task-record');
       expect(pages).toContain('pages/reward-manage/reward-manage');
       expect(pages.length).toBeGreaterThan(0);
     });
@@ -195,7 +197,8 @@ describe('User 领域模型', () => {
       expect(pages).toContain('pages/my-exchanges/my-exchanges');
       expect(pages).toContain('pages/message/message');
       expect(pages).toContain('packageChart/pages/analysis/analysis');
-      expect(pages).not.toContain('pages/task-edit/task-edit');
+      expect(pages).toContain('packageChart/pages/task-record/task-record');
+      expect(pages).not.toContain('packageTask/pages/task-edit/task-edit');
       expect(pages).not.toContain('pages/reward-manage/reward-manage');
     });
 
@@ -217,12 +220,12 @@ describe('User 领域模型', () => {
   describe('hasPageAccess', () => {
     it('家长应该有权访问任务编辑页', () => {
       const user = new User({ role: UserRole.PARENT });
-      expect(user.hasPageAccess('pages/task-edit/task-edit')).toBe(true);
+      expect(user.hasPageAccess('packageTask/pages/task-edit/task-edit')).toBe(true);
     });
 
     it('孩子应该无权访问任务编辑页', () => {
       const user = new User({ role: UserRole.CHILD });
-      expect(user.hasPageAccess('pages/task-edit/task-edit')).toBe(false);
+      expect(user.hasPageAccess('packageTask/pages/task-edit/task-edit')).toBe(false);
     });
 
     it('家长和孩子都应该有权访问首页', () => {

@@ -27,8 +27,16 @@
         "value": "backend"
       },
       {
+        "type": "folder",
+        "value": "coverage"
+      },
+      {
         "type": "file",
         "value": "jest.config.js"
+      },
+      {
+        "type": "file",
+        "value": "jest.quality.config.js"
       },
       {
         "type": "file",
@@ -52,6 +60,30 @@
       },
       {
         "type": "file",
+        "value": "CLAUDE.md"
+      },
+      {
+        "type": "file",
+        "value": "AGENTS.md"
+      },
+      {
+        "type": "file",
+        "value": "eslint.config.js"
+      },
+      {
+        "type": "file",
+        "value": "task_plan.md"
+      },
+      {
+        "type": "file",
+        "value": "findings.md"
+      },
+      {
+        "type": "file",
+        "value": "progress.md"
+      },
+      {
+        "type": "file",
         "value": ".cursorrules"
       },
       {
@@ -61,6 +93,10 @@
       {
         "type": "file",
         "value": "optimization_summary.txt"
+      },
+      {
+        "type": "file",
+        "value": "backend.tar.gz"
       }
     ],
     "include": []

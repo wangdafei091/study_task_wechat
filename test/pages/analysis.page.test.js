@@ -282,7 +282,7 @@ describe('packageChart/pages/analysis/analysis', () => {
     });
 
     expect(global.wx.navigateTo).toHaveBeenCalledWith({
-      url: '/pages/task-record/task-record?taskId=occ_cfg_1&date=2026-04-10&targetUserId=child-2'
+      url: '/packageChart/pages/task-record/task-record?taskId=occ_cfg_1&date=2026-04-10&targetUserId=child-2'
     });
 
     global.wx.navigateTo.mockClear();

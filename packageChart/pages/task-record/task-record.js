@@ -1,8 +1,8 @@
-const dateUtils = require('../../utils/dateUtils');
-const logger = require('../../utils/logger');
-const serviceManager = require('../../services/service-manager');
-const occurrenceContext = require('../../utils/task-occurrence-context');
-const syncState = require('../../utils/sync-state');
+const dateUtils = require('../../../utils/dateUtils');
+const logger = require('../../../utils/logger');
+const serviceManager = require('../../../services/service-manager');
+const occurrenceContext = require('../../utils/occurrence-context');
+const syncState = require('../../../utils/sync-state');
 
 function getTodayString() {
   return dateUtils.getTodayString();

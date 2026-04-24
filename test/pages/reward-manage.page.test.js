@@ -10,8 +10,6 @@ jest.mock('../../utils/logger', () => ({
   debug: jest.fn()
 }));
 
-jest.mock('../../utils/uiUtils', () => ({}));
-
 describe('packageManage/pages/reward-manage/reward-manage', () => {
   let pageConfig;
   let serviceManager;

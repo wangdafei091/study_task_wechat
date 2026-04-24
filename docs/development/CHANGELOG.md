@@ -4,6 +4,44 @@
 
 ---
 
+## [里程碑-22K] - 2026-04-24
+
+### ✅ 完成情况
+
+**前端包体与主包治理优化**
+
+- **主包边界已正式重排**：
+  - [`app.json`](/Users/wangdafei/code/study_task_wechat/app.json) 已将 `task-edit`、`task-occurrence-edit` 迁入 `packageTask`，将 `task-record` 迁入 `packageChart`，并同步将首页 `preloadRule` 扩展为预下载 `packageTask + packageChart`
+  - [`packageTask/pages/task-edit/task-edit.js`](/Users/wangdafei/code/study_task_wechat/packageTask/pages/task-edit/task-edit.js)、[`packageTask/pages/task-occurrence-edit/task-occurrence-edit.js`](/Users/wangdafei/code/study_task_wechat/packageTask/pages/task-occurrence-edit/task-occurrence-edit.js)、[`packageChart/pages/task-record/task-record.js`](/Users/wangdafei/code/study_task_wechat/packageChart/pages/task-record/task-record.js)、[`packageTask/components/task-heatmap/task-heatmap.js`](/Users/wangdafei/code/study_task_wechat/packageTask/components/task-heatmap/task-heatmap.js) 已完成分包承接，不再继续滞留主包
+- **启动链依赖已完成减重**：
+  - [`services/service-manager.js`](/Users/wangdafei/code/study_task_wechat/services/service-manager.js) 已移除对 `services/index.js` 的冷启动全量依赖，`TaskTemplateService` 与 `ValidationService` 已改为首次访问时懒初始化
+- **打包卫生与主包残留锚点已收口**：
+  - [`project.config.json`](/Users/wangdafei/code/study_task_wechat/project.config.json) 已补齐非运行文件忽略规则
+  - [`packageTask/utils/ui-utils.js`](/Users/wangdafei/code/study_task_wechat/packageTask/utils/ui-utils.js)、[`packageTask/utils/occurrence-context.js`](/Users/wangdafei/code/study_task_wechat/packageTask/utils/occurrence-context.js)、[`packageChart/utils/occurrence-context.js`](/Users/wangdafei/code/study_task_wechat/packageChart/utils/occurrence-context.js) 已接管原根目录残留 helper，`utils/uiUtils.js` 与 `utils/task-occurrence-context.js` 已删除，微信开发者工具“主包未使用 JS”告警已消失
+- **页面入口与权限路径已同步**：
+  - [`pages/index/index.js`](/Users/wangdafei/code/study_task_wechat/pages/index/index.js)、[`packageChart/pages/analysis/analysis.js`](/Users/wangdafei/code/study_task_wechat/packageChart/pages/analysis/analysis.js)、[`models/user.js`](/Users/wangdafei/code/study_task_wechat/models/user.js)、[`utils/permission-utils.js`](/Users/wangdafei/code/study_task_wechat/utils/permission-utils.js) 已同步切到分包路径，避免入口与权限仍指向旧主包页面
+
+### 🧪 验证结果
+
+- 定向自动化测试通过：
+  - `npx jest test/services/service-manager.test.js test/models/user.test.js test/services/user-service.test.js test/pages/index.page-shell.behavior.test.js test/pages/analysis.page.test.js test/pages/task-edit.page.test.js test/pages/task-occurrence-edit.page.test.js test/pages/task-record.page.test.js test/pages/task-heatmap.component.test.js test/pages/task-template-entry.test.js test/pages/task-template-manage.page.test.js --runInBand`
+  - `npx jest test/pages/reward-manage.page.test.js test/services/validation-service.test.js --runInBand`
+  - `npx jest test/pages/task-edit.page.test.js test/pages/task-heatmap.component.test.js test/pages/task-occurrence-edit.page.test.js test/pages/task-record.page.test.js test/pages/reward-manage.page.test.js --runInBand`
+  - `npx jest test/pages/rewards.page-contract.test.js test/pages/rewards.behavior.test.js --runInBand`
+- 提交前静态检查通过：
+  - `git diff --check`
+- 微信开发者工具包分析与质量检查通过：
+  - 主包 `1.34MB`
+  - 总包 `1.90MB`
+  - `JS文件`：已通过
+  - `组件`：已通过
+
+### 📖 详细实施记录
+
+- [里程碑-22K：前端包体与主包治理优化](../design/milestone-22k-frontend-package-main-bundle-governance.md)
+
+---
+
 ## [里程碑-22J] - 2026-04-24
 
 ### ✅ 完成情况

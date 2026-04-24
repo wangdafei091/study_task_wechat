@@ -1,11 +1,11 @@
-const uiUtils = require('../../utils/uiUtils.js');
-const dateUtils = require('../../utils/dateUtils.js');
-const logger = require('../../utils/logger');
-const serviceManager = require('../../services/service-manager.js');
-const pageStorageHelper = require('../../utils/page-storage-helper');
-const taskFormDisplay = require('../../utils/task-form-display');
-const taskFormCore = require('../../utils/task-form-core');
-const taskFormAdapter = require('../../utils/task-form-adapter');
+const uiUtils = require('../../utils/ui-utils.js');
+const dateUtils = require('../../../utils/dateUtils.js');
+const logger = require('../../../utils/logger');
+const serviceManager = require('../../../services/service-manager.js');
+const pageStorageHelper = require('../../../utils/page-storage-helper');
+const taskFormDisplay = require('../../../utils/task-form-display');
+const taskFormCore = require('../../../utils/task-form-core');
+const taskFormAdapter = require('../../../utils/task-form-adapter');
 const taskTemplateEntry = require('./modules/task-template-entry');
 
 let taskEditLoadingVisible = false;
@@ -395,7 +395,7 @@ Page({
     const targetUserId = this.data.targetUserId || '';
     const targetParam = targetUserId ? `?targetUserId=${targetUserId}` : '';
     wx.navigateTo({
-      url: `/pages/task-occurrence-edit/task-occurrence-edit${targetParam}`
+      url: `/packageTask/pages/task-occurrence-edit/task-occurrence-edit${targetParam}`
     });
   },
 
@@ -692,7 +692,7 @@ Page({
    */
   onDescriptionInput: function(e) {
     this.markTemplateFillUndoDirty();
-    const logger = require('../../utils/logger');
+    const logger = require('../../../utils/logger');
     logger.info('TaskEdit', '描述输入', `长度: ${e.detail.value.length}/${this.data.descMaxLength}`);
     
     this.setData({

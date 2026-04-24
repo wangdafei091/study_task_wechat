@@ -15,8 +15,10 @@ const PAGE_PERMISSIONS = {
   // 家长权限页面（完整权限）
   [UserRole.PARENT]: [
     '/pages/index/index',           // 首页
-    '/pages/task-edit/task-edit',   // 任务编辑
+    '/packageTask/pages/task-edit/task-edit',   // 任务编辑
+    '/packageTask/pages/task-occurrence-edit/task-occurrence-edit', // 表现项编辑
     '/pages/rewards/rewards',       // 奖池页面
+    '/packageChart/pages/task-record/task-record', // 表现记录
     '/packageManage/pages/reward-manage/reward-manage', // 奖励管理
     '/packageManage/pages/my-exchanges/my-exchanges',   // 我的兑换
     '/packageMessage/pages/star-records/star-records',   // 星星记录
@@ -28,6 +30,7 @@ const PAGE_PERMISSIONS = {
   [UserRole.CHILD]: [
     '/pages/index/index',           // 首页
     '/pages/rewards/rewards',       // 奖池页面
+    '/packageChart/pages/task-record/task-record', // 表现记录
     '/packageManage/pages/my-exchanges/my-exchanges',   // 我的兑换
     '/packageMessage/pages/star-records/star-records',   // 星星记录
     '/packageMessage/pages/message/message',             // 消息中心

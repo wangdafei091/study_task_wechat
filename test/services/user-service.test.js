@@ -623,7 +623,7 @@ describe('UserService', () => {
   describe('权限检查', () => {
     it('hasPageAccess应该检查页面访问权限', () => {
       expect(userService.hasPageAccess('pages/index/index')).toBe(true);
-      expect(userService.hasPageAccess('pages/task-edit/task-edit')).toBe(true);
+      expect(userService.hasPageAccess('packageTask/pages/task-edit/task-edit')).toBe(true);
     });
 
     it('getAccessiblePages应该返回可访问的页面', () => {
@@ -631,7 +631,7 @@ describe('UserService', () => {
 
       expect(pages).toContain('pages/index/index');
       expect(pages).toContain('pages/rewards/rewards');
-      expect(pages).toContain('pages/task-edit/task-edit');
+      expect(pages).toContain('packageTask/pages/task-edit/task-edit');
       expect(pages.length).toBeGreaterThan(0);
     });
   });
