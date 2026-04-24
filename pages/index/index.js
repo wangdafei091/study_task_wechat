@@ -66,6 +66,32 @@ function buildOccurrenceDisplayItems(tasks = [], records = []) {
   });
 }
 
+function createEmptyTaskProgress() {
+  return {
+    habit: 0,
+    interest: 0,
+    study: 0
+  };
+}
+
+function createEmptyTaskProgressBucket() {
+  return {
+    completed: 0,
+    total: 0,
+    percent: 0,
+    centerText: '—',
+    isEmpty: true
+  };
+}
+
+function createEmptyTaskProgressSummary() {
+  return {
+    habit: createEmptyTaskProgressBucket(),
+    interest: createEmptyTaskProgressBucket(),
+    study: createEmptyTaskProgressBucket()
+  };
+}
+
 Page({
   data: {
     userInfo: {},
@@ -121,13 +147,11 @@ Page({
     searchClosing: false,
     filterAnimation: {}, // 用于存储筛选器动画数据
     
-    // 任务进度
-    taskProgress: {
-      habit: 0,
-      interest: 0,
-      study: 0
-    },
+    // 首页今日进度摘要
+    todayTaskProgress: createEmptyTaskProgress(),
+    todayTaskProgressSummary: createEmptyTaskProgressSummary(),
     occurrenceTasks: [],
+    currentDateOccurrenceRecords: [],
     occurrenceDateLabel: '今天',
     occurrenceHelperText: '有结果再记录，没发生就留空',
     showOccurrenceSection: false,
@@ -460,13 +484,11 @@ Page({
       });
       
       // 更新当前查看的日期
-      const todayString = dateUtils.getTodayString();
-      const isToday = targetDate === todayString;
-      
       // 更新页面数据
       this.setData({
         tasks: tasks,
         occurrenceTasks: buildOccurrenceDisplayItems(occurrenceTasks, occurrenceRecords),
+        currentDateOccurrenceRecords: occurrenceRecords,
         showOccurrenceSection: occurrenceEnabled && occurrenceTasks.length > 0,
         occurrenceDateLabel: formatOccurrenceDateLabel(targetDate),
         hasTodayTasks: (tasks && tasks.length > 0),
@@ -476,10 +498,7 @@ Page({
       });
 
       this._updateViewState(targetDate);
-      
-      // 检查任务进度
-      await this.calculateProgress(tasks.concat(occurrenceRecords));
-      
+
       // 更新任务统计信息
       await this.updateTaskStats();
       
@@ -495,7 +514,12 @@ Page({
    */
   loadTaskData: async function() {
     try {
-      const tasks = await this.loadTaskDataOnly();
+      await this.loadTaskDataOnly();
+      await this.loadTodayProgressSummary({
+        reuseCurrentTodayData: true,
+        currentTasks: this.data.tasks,
+        currentOccurrenceRecords: this.data.currentDateOccurrenceRecords
+      });
       // 检查即将到期的任务
       await this.checkUpcomingTasks();
     } catch (error) {
@@ -564,31 +588,70 @@ Page({
   },
   
   /**
-   * 计算并更新任务进度
+   * 计算并更新首页今日进度摘要
    * @param {Array} tasks 任务列表
    */
-  calculateProgress: async function(tasks) {
+  calculateProgress: async function(tasks = []) {
     try {
-      logger.info('Index', '开始计算任务进度');
-      
-      // 获取任务服务
+      logger.info('Index', '开始计算首页今日进度摘要');
+
       const taskService = serviceManager.getService('task');
       if (!taskService) {
         logger.error('Index', '无法获取任务服务');
         return;
       }
-      
-      // 使用任务服务计算进度（服务层已处理数据类型转换）
+
       const result = await taskService.calculateTaskProgress(tasks);
-      logger.info('Index', '任务进度计算成功', result);
-      
-      // 直接使用服务层返回的结果，无需页面层数据转换
-      this.setData({ 
-        taskProgress: result.taskProgress,
-        stats: result.stats
-      });
+      logger.info('Index', '首页今日进度摘要计算成功', result);
+
+      this.applyTodayTaskProgressResult(result);
     } catch (error) {
-      logger.error('Index', '计算任务进度失败', error);
+      logger.error('Index', '计算首页今日进度摘要失败', error);
+    }
+  },
+
+  applyTodayTaskProgressResult: function(result = {}) {
+    this.setData({
+      todayTaskProgress: result.taskProgress || createEmptyTaskProgress(),
+      todayTaskProgressSummary: result.taskProgressSummary || createEmptyTaskProgressSummary()
+    });
+  },
+
+  loadTodayProgressSummary: async function(options = {}) {
+    try {
+      const taskService = serviceManager.getService('task');
+      if (!taskService) {
+        logger.error('Index', '无法获取任务服务');
+        return;
+      }
+
+      const todayString = dateUtils.getTodayString();
+      const currentUserId = this.getEffectiveTaskUserId();
+      let todayTasks = Array.isArray(options.currentTasks) ? options.currentTasks : [];
+      let todayOccurrenceRecords = Array.isArray(options.currentOccurrenceRecords)
+        ? options.currentOccurrenceRecords
+        : [];
+
+      if (options.reuseCurrentTodayData !== true) {
+        const loadOccurrenceRecords = currentUserId
+          && typeof taskService.getOccurrenceRecordsByDateRange === 'function'
+          ? taskService.getOccurrenceRecordsByDateRange({
+            startDate: todayString,
+            endDate: todayString,
+            userId: currentUserId
+          })
+          : Promise.resolve([]);
+
+        [todayTasks, todayOccurrenceRecords] = await Promise.all([
+          taskService.getTodayTasks(currentUserId, { requireFreshStars: true }),
+          loadOccurrenceRecords
+        ]);
+      }
+
+      await this.calculateProgress((todayTasks || []).concat(todayOccurrenceRecords || []));
+    } catch (error) {
+      logger.error('Index', '加载首页今日进度摘要失败', error);
+      this.applyTodayTaskProgressResult();
     }
   },
 

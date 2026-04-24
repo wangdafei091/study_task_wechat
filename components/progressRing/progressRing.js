@@ -164,7 +164,7 @@ Component({
     },
 
     _resolveSizeRpx(sizeClass, rawSize) {
-      if (sizeClass === 'large') return 160;
+      if (sizeClass === 'large') return 148;
       if (sizeClass === 'small') return 110;
       if (sizeClass === 'medium') return 130;
 
@@ -193,7 +193,7 @@ Component({
       const colorMap = {
         habit: '#4285F4',
         study: '#34A853',
-        interest: '#FBBC05'
+        interest: '#D39B2F'
       };
       return colorMap[this.properties.type] || '#4285F4';
     },
@@ -203,7 +203,7 @@ Component({
         default: 'rgba(66, 133, 244, 0.12)',
         habit: 'rgba(66, 133, 244, 0.12)',
         study: 'rgba(52, 168, 83, 0.12)',
-        interest: 'rgba(251, 188, 5, 0.14)'
+        interest: 'rgba(211, 155, 47, 0.14)'
       };
       return colorMap[this.properties.type] || colorMap.default;
     },

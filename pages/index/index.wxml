@@ -27,7 +27,7 @@
   <!-- 进度圆环区域 -->
   <view class="progress-rings-container">
     <!-- 共享标题区域 -->
-    <view class="rings-title">当前进度</view>
+    <view class="rings-title">今日进度</view>
     
     <!-- 横向排列的圆环区域 -->
     <view class="rings-row">
@@ -35,7 +35,9 @@
       <view class="ring-item">
         <progress-ring 
           type="habit"
-          percent="{{taskProgress.habit}}"
+          percent="{{todayTaskProgress.habit}}"
+          centerContent="{{todayTaskProgressSummary.habit.centerText}}"
+          showText="{{false}}"
           size="large"
           enableHover="{{false}}"
           bind:tap="onRingTap">
@@ -47,7 +49,9 @@
       <view class="ring-item">
         <progress-ring 
           type="study"
-          percent="{{taskProgress.study}}"
+          percent="{{todayTaskProgress.study}}"
+          centerContent="{{todayTaskProgressSummary.study.centerText}}"
+          showText="{{false}}"
           size="large"
           enableHover="{{false}}"
           bind:tap="onRingTap">
@@ -59,7 +63,9 @@
       <view class="ring-item">
         <progress-ring 
           type="interest"
-          percent="{{taskProgress.interest}}"
+          percent="{{todayTaskProgress.interest}}"
+          centerContent="{{todayTaskProgressSummary.interest.centerText}}"
+          showText="{{false}}"
           size="large"
           enableHover="{{false}}"
           bind:tap="onRingTap">

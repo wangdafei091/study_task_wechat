@@ -375,7 +375,10 @@ describe('pages/index helper modules', () => {
         pageTitleBadge: '',
         tasks: [{ id: 'task-old' }],
         hasTodayTasks: true,
-        taskProgress: { habit: 1 },
+        todayTaskProgress: { habit: 88, study: 10, interest: 0 },
+        todayTaskProgressSummary: {
+          habit: { completed: 7, total: 8, percent: 88, centerText: '7/8', isEmpty: false }
+        },
         stats: { totalTasks: 1 },
         showUpcomingTask: true,
         upcomingTask: { id: 'task-upcoming' },
@@ -394,6 +397,7 @@ describe('pages/index helper modules', () => {
     expect(page.data.currentViewDate).toBe('2026-03-26');
     expect(page.data.pageTitle).toBe('今日任务');
     expect(page.data.pageTitleBadge).toBe('');
+    expect(page.data.todayTaskProgress.habit).toBe(88);
     expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({
       title: '加载失败'
     }));

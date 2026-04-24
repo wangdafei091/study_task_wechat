@@ -5,6 +5,9 @@ jest.mock('../../utils/logger', () => ({
   debug: jest.fn()
 }));
 
+const fs = require('fs');
+const path = require('path');
+
 describe('components/progressRing/progressRing', () => {
   let componentConfig;
   let canvasContext;
@@ -107,5 +110,26 @@ describe('components/progressRing/progressRing', () => {
 
     componentConfig.properties.percent.observer.call(component, -20);
     expect(component.data.progress).toBe(0);
+  });
+
+  it('wxml 应优先显示 centerContent，避免 100% 时被完成勾号覆盖', () => {
+    const wxml = fs.readFileSync(
+      path.join(__dirname, '../../components/progressRing/progressRing.wxml'),
+      'utf8'
+    );
+
+    const centerIndex = wxml.indexOf('wx:if="{{centerContent}}"');
+    const completeIndex = wxml.indexOf('wx:elif="{{isComplete}}"');
+    expect(centerIndex).toBeGreaterThan(-1);
+    expect(completeIndex).toBeGreaterThan(centerIndex);
+  });
+
+  it('wxml 不应继续渲染十字辅助线 ring-mark', () => {
+    const wxml = fs.readFileSync(
+      path.join(__dirname, '../../components/progressRing/progressRing.wxml'),
+      'utf8'
+    );
+
+    expect(wxml).not.toContain('ring-mark');
   });
 });

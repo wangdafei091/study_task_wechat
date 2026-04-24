@@ -15,7 +15,9 @@ jest.mock('../../utils/formatUtils', () => ({
   formatPoints: jest.fn((points) => `fmt:${points}`)
 }));
 
-jest.mock('../../utils/dateUtils', () => ({}));
+jest.mock('../../utils/dateUtils', () => ({
+  getTodayString: jest.fn(() => '2026-03-26')
+}));
 jest.mock('../../utils/permission-utils', () => ({}));
 jest.mock('../../utils/view-scope', () => ({}));
 jest.mock('../../services/message-service', () => ({}));
@@ -430,11 +432,17 @@ describe('pages/index reward flow', () => {
     const page = createPageInstance();
     page.data.currentViewDate = '2026-03-20';
     page.loadTaskDataOnly = jest.fn().mockResolvedValue([]);
+    page.loadTodayProgressSummary = jest.fn().mockResolvedValue();
     page.checkUpcomingTasks = jest.fn().mockResolvedValue();
 
     await page.refreshTaskDataForCurrentView();
 
     expect(page.loadTaskDataOnly).toHaveBeenCalledWith('2026-03-20');
+    expect(page.loadTodayProgressSummary).toHaveBeenCalledWith({
+      reuseCurrentTodayData: false,
+      currentTasks: null,
+      currentOccurrenceRecords: null
+    });
     expect(page.checkUpcomingTasks).toHaveBeenCalledTimes(1);
   });
 
