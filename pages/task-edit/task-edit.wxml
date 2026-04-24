@@ -20,7 +20,7 @@
           </view>
         </view>
       </view>
-      <view class="card-subtitle">颜色深浅表示学习压力：浅色(轻松) → 深色(繁忙)</view>
+      <view class="card-subtitle">颜色越深，这天越忙；点日期看详情</view>
       <task-heatmap 
         id="taskHeatmap"
         tasks="{{allTasks}}" 
