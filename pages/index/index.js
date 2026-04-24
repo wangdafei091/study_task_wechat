@@ -907,7 +907,7 @@ Page({
     const effectiveUserId = this.getEffectiveTaskUserId();
     const targetParam = effectiveUserId ? `&targetUserId=${effectiveUserId}` : '';
     wx.navigateTo({
-      url: `/pages/task-edit/task-edit?mode=create&taskType=${type}${targetParam}`
+      url: `/packageTask/pages/task-edit/task-edit?mode=create&taskType=${type}${targetParam}`
     });
   },
   
@@ -1072,7 +1072,7 @@ Page({
       const effectiveUserId = this.getEffectiveTaskUserId();
       const targetParam = effectiveUserId ? `&targetUserId=${effectiveUserId}` : '';
       wx.navigateTo({
-        url: `/pages/task-edit/task-edit?mode=create${targetParam}`
+        url: `/packageTask/pages/task-edit/task-edit?mode=create${targetParam}`
       });
     } else if (item && item.id === 'study') {
       this.navigateToAnalysisPage();

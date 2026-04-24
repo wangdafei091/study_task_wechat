@@ -1,6 +1,6 @@
-const taskTemplateEntry = require('../../pages/task-edit/modules/task-template-entry');
+const taskTemplateEntry = require('../../packageTask/pages/task-edit/modules/task-template-entry');
 
-describe('pages/task-edit/modules/task-template-entry', () => {
+describe('packageTask/pages/task-edit/modules/task-template-entry', () => {
   it('getTemplateDisplayName 在别名与任务名不同时应返回别名', () => {
     expect(taskTemplateEntry.getTemplateDisplayName({
       name: '晚间阅读',

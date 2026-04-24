@@ -1,10 +1,10 @@
-const dateUtils = require('../../utils/dateUtils');
-const logger = require('../../utils/logger');
-const serviceManager = require('../../services/service-manager');
-const occurrenceContext = require('../../utils/task-occurrence-context');
-const occurrenceDisplay = require('../../utils/task-occurrence-display');
-const taskFormDisplay = require('../../utils/task-form-display');
-const { StarExpiryType } = require('../../models/task');
+const dateUtils = require('../../../utils/dateUtils');
+const logger = require('../../../utils/logger');
+const serviceManager = require('../../../services/service-manager');
+const occurrenceContext = require('../../utils/occurrence-context');
+const occurrenceDisplay = require('../../../utils/task-occurrence-display');
+const taskFormDisplay = require('../../../utils/task-form-display');
+const { StarExpiryType } = require('../../../models/task');
 
 function getTodayString() {
   return dateUtils.getTodayString();

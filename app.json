@@ -1,9 +1,6 @@
 {
   "pages": [
     "pages/index/index",
-    "pages/task-edit/task-edit",
-    "pages/task-occurrence-edit/task-occurrence-edit",
-    "pages/task-record/task-record",
     "pages/rewards/rewards",
     "pages/access-gate/access-gate"
   ],
@@ -11,7 +8,15 @@
     {
       "root": "packageChart",
       "pages": [
-        "pages/analysis/analysis"
+        "pages/analysis/analysis",
+        "pages/task-record/task-record"
+      ]
+    },
+    {
+      "root": "packageTask",
+      "pages": [
+        "pages/task-edit/task-edit",
+        "pages/task-occurrence-edit/task-occurrence-edit"
       ]
     },
     {
@@ -35,7 +40,7 @@
   "preloadRule": {
     "pages/index/index": {
       "network": "all",
-      "packages": ["packageChart"]
+      "packages": ["packageChart", "packageTask"]
     }
   },
   "window": {

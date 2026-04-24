@@ -14,7 +14,7 @@ jest.mock('../../utils/dateUtils', () => ({
   getTodayString: jest.fn(() => '2026-04-17')
 }));
 
-describe('pages/task-record/task-record', () => {
+describe('packageChart/pages/task-record/task-record', () => {
   let pageConfig;
   let serviceManager;
   let taskService;
@@ -26,7 +26,7 @@ describe('pages/task-record/task-record', () => {
     });
 
     jest.isolateModules(() => {
-      require('../../pages/task-record/task-record.js');
+      require('../../packageChart/pages/task-record/task-record.js');
     });
   }
 

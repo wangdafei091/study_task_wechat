@@ -1,5 +1,5 @@
-const dateUtils = require('../../../utils/dateUtils');
-const logger = require('../../../utils/logger');
+const dateUtils = require('../../../../utils/dateUtils');
+const logger = require('../../../../utils/logger');
 
 function getTemplateDisplayName(template) {
   if (!template) {

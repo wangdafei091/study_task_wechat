@@ -1,5 +1,5 @@
 const Constants = require('../../../utils/constants.js');
-const uiUtils = require('../../../utils/uiUtils.js');
+const uiUtils = require('../../utils/ui-utils.js');
 const serviceManager = require('../../../services/service-manager.js');
 const logger = require('../../../utils/logger.js');
 const { formatDisplayTime } = require('../../../utils/formatUtils');

@@ -11,7 +11,7 @@ jest.mock('../../utils/logger', () => ({
   debug: jest.fn()
 }));
 
-jest.mock('../../utils/uiUtils', () => ({
+jest.mock('../../packageTask/utils/ui-utils', () => ({
   getPressureLevelText: (pressure) => {
     if (pressure <= 15) {
       return { levelText: '轻松', levelNum: 1, isHigh: false };
@@ -31,9 +31,9 @@ jest.mock('../../services/service-manager.js', () => ({
   getUserService: (...args) => mockGetUserService(...args)
 }));
 
-describe('packageComponents/components/task-heatmap/task-heatmap', () => {
+describe('packageTask/components/task-heatmap/task-heatmap', () => {
   let componentConfig;
-  const heatmapWxmlPath = path.join(__dirname, '../../packageComponents/components/task-heatmap/task-heatmap.wxml');
+  const heatmapWxmlPath = path.join(__dirname, '../../packageTask/components/task-heatmap/task-heatmap.wxml');
 
   function loadComponentModule() {
     componentConfig = null;
@@ -42,7 +42,7 @@ describe('packageComponents/components/task-heatmap/task-heatmap', () => {
     });
 
     jest.isolateModules(() => {
-      require('../../packageComponents/components/task-heatmap/task-heatmap.js');
+      require('../../packageTask/components/task-heatmap/task-heatmap.js');
     });
   }
 

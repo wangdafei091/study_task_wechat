@@ -289,7 +289,7 @@ Page({
     }
 
     wx.navigateTo({
-      url: `/pages/task-record/task-record?taskId=${taskId}&date=${date}&targetUserId=${this.data.focusUserId}`
+      url: `/packageChart/pages/task-record/task-record?taskId=${taskId}&date=${date}&targetUserId=${this.data.focusUserId}`
     });
   }
 });

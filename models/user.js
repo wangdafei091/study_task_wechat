@@ -146,13 +146,15 @@ class User {
       'pages/star-records/star-records',
       'pages/my-exchanges/my-exchanges',
       'pages/message/message',
-      'packageChart/pages/analysis/analysis'
+      'packageChart/pages/analysis/analysis',
+      'packageChart/pages/task-record/task-record'
     ];
 
     if (effectiveRole === UserRole.PARENT) {
       return [
         ...commonPages,
-        'pages/task-edit/task-edit',
+        'packageTask/pages/task-edit/task-edit',
+        'packageTask/pages/task-occurrence-edit/task-occurrence-edit',
         'pages/reward-manage/reward-manage',
         'packageManage/pages/family-settings/family-settings'
       ];

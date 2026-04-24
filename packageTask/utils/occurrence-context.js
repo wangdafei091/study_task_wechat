@@ -1,4 +1,4 @@
-const userContextUtils = require('./user-context');
+const userContextUtils = require('../../utils/user-context');
 
 function getChildDisplayName(user) {
   if (!user || typeof user !== 'object') {

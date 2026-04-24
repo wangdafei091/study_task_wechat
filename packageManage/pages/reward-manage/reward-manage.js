@@ -5,7 +5,6 @@ const serviceManager = require('../../../services/service-manager');
 const logger = require('../../../utils/logger');
 const rewardIdentity = require('../../../utils/reward-identity');
 const rewardStatus = require('../../../utils/reward-status');
-const uiUtils = require('../../../utils/uiUtils');
 const rewardsUserContextModule = require('../../../pages/rewards/modules/rewards-user-context');
 
 const MANAGE_ACTION_SPECS = [

@@ -785,13 +785,13 @@ describe('pages/index/index shell behavior', () => {
 
     page.onMenuItemTap({ detail: { item: { id: 'habit' } } });
     expect(global.wx.navigateTo).toHaveBeenCalledWith(expect.objectContaining({
-      url: '/pages/task-edit/task-edit?mode=create'
+      url: '/packageTask/pages/task-edit/task-edit?mode=create'
     }));
 
     page.data.isViewingToday = false;
     page.onMenuItemTap({ detail: { item: { id: 'habit' } } });
     expect(global.wx.navigateTo).toHaveBeenCalledWith(expect.objectContaining({
-      url: '/pages/task-edit/task-edit?mode=create'
+      url: '/packageTask/pages/task-edit/task-edit?mode=create'
     }));
 
     page.onMenuItemTap({ detail: { item: { id: 'reward-manage' } } });

@@ -14,7 +14,7 @@ jest.mock('../../utils/dateUtils', () => ({
   getTodayString: jest.fn(() => '2026-04-17')
 }));
 
-describe('pages/task-occurrence-edit/task-occurrence-edit', () => {
+describe('packageTask/pages/task-occurrence-edit/task-occurrence-edit', () => {
   let pageConfig;
   let serviceManager;
   let taskService;
@@ -26,7 +26,7 @@ describe('pages/task-occurrence-edit/task-occurrence-edit', () => {
     });
 
     jest.isolateModules(() => {
-      require('../../pages/task-occurrence-edit/task-occurrence-edit.js');
+      require('../../packageTask/pages/task-occurrence-edit/task-occurrence-edit.js');
     });
   }
 
@@ -648,10 +648,10 @@ describe('pages/task-occurrence-edit/task-occurrence-edit', () => {
   it('相关页面文件不应再引入 optional chaining，并应切为 custom navigation', () => {
     const fs = require('fs');
     const path = require('path');
-    const pageJs = fs.readFileSync(path.join(process.cwd(), 'pages/task-occurrence-edit/task-occurrence-edit.js'), 'utf8');
-    const pageJson = fs.readFileSync(path.join(process.cwd(), 'pages/task-occurrence-edit/task-occurrence-edit.json'), 'utf8');
-    const pageWxml = fs.readFileSync(path.join(process.cwd(), 'pages/task-occurrence-edit/task-occurrence-edit.wxml'), 'utf8');
-    const pageWxss = fs.readFileSync(path.join(process.cwd(), 'pages/task-occurrence-edit/task-occurrence-edit.wxss'), 'utf8');
+    const pageJs = fs.readFileSync(path.join(process.cwd(), 'packageTask/pages/task-occurrence-edit/task-occurrence-edit.js'), 'utf8');
+    const pageJson = fs.readFileSync(path.join(process.cwd(), 'packageTask/pages/task-occurrence-edit/task-occurrence-edit.json'), 'utf8');
+    const pageWxml = fs.readFileSync(path.join(process.cwd(), 'packageTask/pages/task-occurrence-edit/task-occurrence-edit.wxml'), 'utf8');
+    const pageWxss = fs.readFileSync(path.join(process.cwd(), 'packageTask/pages/task-occurrence-edit/task-occurrence-edit.wxss'), 'utf8');
 
     expect(pageJs).not.toContain('?.');
     expect(pageJs).not.toContain('??');

@@ -5,7 +5,7 @@ jest.mock('../../utils/logger', () => ({
   debug: jest.fn()
 }));
 
-jest.mock('../../utils/uiUtils', () => ({
+jest.mock('../../packageTask/utils/ui-utils', () => ({
   logUIOptimization: jest.fn(),
   logButtonLayoutOptimization: jest.fn(),
   logStyleConsistency: jest.fn()
@@ -19,7 +19,7 @@ jest.mock('../../services/service-manager.js', () => ({
 jest.mock('../../utils/page-storage-helper', () => ({}));
 jest.mock('../../utils/permission-utils', () => ({}));
 
-describe('pages/task-edit/task-edit', () => {
+describe('packageTask/pages/task-edit/task-edit', () => {
   let pageConfig;
   let serviceManager;
   let taskTemplateEntry;
@@ -46,7 +46,7 @@ describe('pages/task-edit/task-edit', () => {
     });
 
     jest.isolateModules(() => {
-      require('../../pages/task-edit/task-edit.js');
+      require('../../packageTask/pages/task-edit/task-edit.js');
     });
   }
 
@@ -75,7 +75,7 @@ describe('pages/task-edit/task-edit', () => {
     jest.resetModules();
     jest.clearAllMocks();
     serviceManager = require('../../services/service-manager.js');
-    taskTemplateEntry = require('../../pages/task-edit/modules/task-template-entry');
+    taskTemplateEntry = require('../../packageTask/pages/task-edit/modules/task-template-entry');
 
     global.getApp = jest.fn(() => ({
       globalData: {}
@@ -732,7 +732,7 @@ describe('pages/task-edit/task-edit', () => {
     const fs = require('fs');
     const path = require('path');
     const wxml = fs.readFileSync(
-      path.join(process.cwd(), 'pages/task-edit/task-edit.wxml'),
+      path.join(process.cwd(), 'packageTask/pages/task-edit/task-edit.wxml'),
       'utf8'
     );
 
@@ -749,7 +749,7 @@ describe('pages/task-edit/task-edit', () => {
     const fs = require('fs');
     const path = require('path');
     const taskEditWxml = fs.readFileSync(
-      path.join(process.cwd(), 'pages/task-edit/task-edit.wxml'),
+      path.join(process.cwd(), 'packageTask/pages/task-edit/task-edit.wxml'),
       'utf8'
     );
     const cardJs = fs.readFileSync(

@@ -14,8 +14,6 @@ jest.mock('../../utils/logger', () => ({
   debug: jest.fn()
 }));
 
-jest.mock('../../utils/uiUtils', () => ({}));
-
 describe('pages/rewards/rewards contract', () => {
   let pageConfig;
   let appMock;
