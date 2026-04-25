@@ -81,7 +81,7 @@ class AuthController {
       // 2. 查询或创建用户
       let user = await userService.findByOpenid(wechatData.openid);
       if (!user) {
-        if (appAccessService.isInviteOnlyMode()) {
+        if (await appAccessService.isInviteOnlyMode()) {
           user = await this._createInvitedUser(wechatData, accessCode);
         } else {
           user = await userService.createUser({
@@ -135,6 +135,12 @@ class AuthController {
       ) {
         return res.status(400).json(
           error(err.message, err.code)
+        );
+      }
+
+      if (err.code === 'SYSTEM_SETTING_CORRUPTED') {
+        return res.status(503).json(
+          error('系统准入配置异常，请联系管理员处理', err.code)
         );
       }
 

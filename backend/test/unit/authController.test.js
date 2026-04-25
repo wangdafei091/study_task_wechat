@@ -227,4 +227,21 @@ describe('POST /api/auth/login', () => {
       userId: 'user_open'
     }));
   });
+
+  it('系统准入配置损坏时应返回明确错误码，而不是泛化登录失败', async () => {
+    userService.findByOpenid.mockResolvedValue(null);
+    appAccessService.isInviteOnlyMode.mockRejectedValue(
+      Object.assign(new Error('系统准入配置无效'), {
+        code: 'SYSTEM_SETTING_CORRUPTED'
+      })
+    );
+
+    const res = await request(app)
+      .post('/api/auth/login')
+      .send({ code: 'wx-code' });
+
+    expect(res.status).toBe(503);
+    expect(res.body.error_code).toBe('SYSTEM_SETTING_CORRUPTED');
+    expect(res.body.message).toBe('系统准入配置异常，请联系管理员处理');
+  });
 });

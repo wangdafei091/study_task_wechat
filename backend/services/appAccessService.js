@@ -1,13 +1,6 @@
 const { query, execute } = require('../config/database');
 const { AppAccessCode, APP_ACCESS_STATUS } = require('../models/AppAccessCode');
-
-function getAccessMode() {
-  return process.env.APP_ACCESS_MODE === 'invite_only' ? 'invite_only' : 'open';
-}
-
-function isInviteOnlyMode() {
-  return getAccessMode() === 'invite_only';
-}
+const systemSettingService = require('./systemSettingService');
 
 function normalizeCode(code) {
   return String(code || '').trim().toUpperCase();
@@ -48,12 +41,13 @@ class AppAccessService {
     return execute;
   }
 
-  getAccessMode() {
-    return getAccessMode();
+  async getAccessMode() {
+    const summary = await systemSettingService.getAppAccessMode();
+    return summary.mode;
   }
 
-  isInviteOnlyMode() {
-    return isInviteOnlyMode();
+  async isInviteOnlyMode() {
+    return (await this.getAccessMode()) === 'invite_only';
   }
 
   async getByCode(code, options = {}) {

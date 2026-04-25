@@ -90,8 +90,8 @@ class UserService {
       const dbData = user.toDB();
       const executeRunner = getExecuteRunner(options.connection);
       await executeRunner(
-        `INSERT INTO users (user_id, openid, unionid, nickname, avatar, role, status, family_permission_role)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO users (user_id, openid, unionid, nickname, avatar, role, status, family_permission_role, is_system_admin)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           dbData.user_id,
           dbData.openid,
@@ -101,6 +101,7 @@ class UserService {
           dbData.role,
           dbData.status,
           dbData.family_permission_role,
+          dbData.is_system_admin ? 1 : 0,
         ]
       );
 
@@ -142,6 +143,10 @@ class UserService {
       if (updateData.familyPermissionRole !== undefined) {
         updates.push('family_permission_role = ?');
         values.push(updateData.familyPermissionRole);
+      }
+      if (updateData.isSystemAdmin !== undefined) {
+        updates.push('is_system_admin = ?');
+        values.push(updateData.isSystemAdmin ? 1 : 0);
       }
 
       if (updates.length === 0) {

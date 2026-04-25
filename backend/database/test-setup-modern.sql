@@ -7,6 +7,7 @@ USE task_wechat_test;
 SET FOREIGN_KEY_CHECKS = 0;
 DROP TABLE IF EXISTS messages;
 DROP TABLE IF EXISTS rewards;
+DROP TABLE IF EXISTS system_settings;
 DROP TABLE IF EXISTS app_access_codes;
 DROP TABLE IF EXISTS star_groups;
 DROP TABLE IF EXISTS star_records;
@@ -24,6 +25,7 @@ CREATE TABLE IF NOT EXISTS users (
   avatar VARCHAR(255) DEFAULT NULL COMMENT '头像URL',
   role VARCHAR(20) DEFAULT 'parent' COMMENT '角色：parent/child',
   status VARCHAR(20) DEFAULT 'active' COMMENT '状态：active/inactive',
+  is_system_admin TINYINT(1) DEFAULT 0 COMMENT '是否系统管理员',
   family_id VARCHAR(36) DEFAULT NULL COMMENT '所属家庭ID，NULL表示未加入家庭',
   family_permission_role VARCHAR(20) DEFAULT NULL COMMENT '家庭内权限：manager/viewer，非家庭家长和孩子为NULL',
   is_virtual TINYINT(1) DEFAULT 0 COMMENT '是否虚拟成员（无独立微信号，由家长创建）',
@@ -176,6 +178,15 @@ CREATE TABLE IF NOT EXISTS app_access_codes (
   INDEX idx_app_access_codes_expires_at (expires_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS system_settings (
+  setting_key VARCHAR(64) PRIMARY KEY,
+  setting_value VARCHAR(255) NOT NULL,
+  updated_by_user_id VARCHAR(36) DEFAULT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_system_settings_updated_by_user_id (updated_by_user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS messages (
   message_id VARCHAR(100) PRIMARY KEY,
   family_id VARCHAR(100) DEFAULT NULL,
@@ -210,9 +221,9 @@ CREATE TABLE IF NOT EXISTS messages (
 
 -- 插入测试数据
 -- 先创建家长，再创建家庭，最后回填 family_id，避免循环外键插入失败
-INSERT INTO users (user_id, openid, nickname, avatar, role, status, family_id, family_permission_role, is_virtual, created_by_user_id) VALUES
-('parent_001', 'parent_openid_001', '测试家长', NULL, 'parent', 'active', NULL, NULL, 0, NULL),
-('parent_002', 'parent_openid_002', '测试家长2', NULL, 'parent', 'active', NULL, NULL, 0, NULL);
+INSERT INTO users (user_id, openid, nickname, avatar, role, status, is_system_admin, family_id, family_permission_role, is_virtual, created_by_user_id) VALUES
+('parent_001', 'parent_openid_001', '测试家长', NULL, 'parent', 'active', 1, NULL, NULL, 0, NULL),
+('parent_002', 'parent_openid_002', '测试家长2', NULL, 'parent', 'active', 0, NULL, NULL, 0, NULL);
 
 -- 家庭1：包含家长和孩子
 INSERT INTO families (family_id, name, invite_code, invite_code_role, created_by, status) VALUES

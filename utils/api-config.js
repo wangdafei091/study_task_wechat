@@ -114,6 +114,11 @@ const API_CONFIG = {
     FAMILIES_DELETE_MEMBER: '/api/families/members/{userId}',
     FAMILIES_MEMBER_PERMISSION_ROLE: '/api/families/members/{userId}/permission-role',
 
+    // 系统管理相关API
+    SYSTEM_ADMIN_BOOTSTRAP: '/api/system/admin/bootstrap',
+    SYSTEM_ADMIN_OVERVIEW: '/api/system/admin/overview',
+    SYSTEM_ADMIN_APP_ACCESS_MODE: '/api/system/admin/app-access-mode',
+
     // 健康检查
     HEALTH: '/health'
   },

@@ -4,6 +4,7 @@
   padding: 24rpx;
   background: #f5f6fa;
   min-height: 100vh;
+  box-sizing: border-box;
 }
 
 /* 未加入家庭 */
@@ -393,6 +394,17 @@
 .loading-text {
   font-size: 28rpx;
   color: #999;
+}
+
+.page-footer {
+  display: flex;
+  justify-content: center;
+  padding: 24rpx 0 8rpx;
+}
+
+.page-footer-link {
+  font-size: 24rpx;
+  color: #8a97a8;
 }
 
 /* 对话框 */
