@@ -121,6 +121,6 @@ describe('app.js 自动登录环境配置', () => {
     require('../app.js');
 
     expect(global.wx.setStorageSync).toHaveBeenCalledWith('ENABLE_API', 'true');
-    expect(global.wx.setStorageSync).toHaveBeenCalledWith('API_BASE_URL', 'https://api.todoceo.xyz/test');
+    expect(global.wx.setStorageSync).toHaveBeenCalledWith('API_BASE_URL', 'https://api.todoceo.xyz');
   });
 });
