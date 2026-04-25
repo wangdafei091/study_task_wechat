@@ -97,6 +97,8 @@ Component({
   lifetimes: {
     attached() {
       this._systemInfo = wx.getSystemInfoSync();
+      this._drawTimers = [];
+      this._isFallbackPending = false;
       const use2dCanvas = this._shouldUse2dCanvas();
       this.setData({ use2dCanvas });
       this._refreshLayout();
@@ -105,10 +107,17 @@ Component({
       this._initCanvas();
     },
     detached() {
+      this._clearDrawTimers();
       this._canvasNode = null;
       this._ctx2d = null;
       this._legacyCanvasContext = null;
       this._isCanvasReady = false;
+    }
+  },
+
+  pageLifetimes: {
+    show() {
+      this._recoverCanvasAfterShow();
     }
   },
   
@@ -145,6 +154,16 @@ Component({
       this._drawRing();
     },
 
+    _clearDrawTimers() {
+      if (!Array.isArray(this._drawTimers)) {
+        this._drawTimers = [];
+        return;
+      }
+
+      this._drawTimers.forEach((timerId) => clearTimeout(timerId));
+      this._drawTimers = [];
+    },
+
     _refreshLayout() {
       const sizeRpx = this._resolveSizeRpx(this.data.sizeClass, this.properties.size);
       const canvasSizePx = Math.max(1, Math.round(this._rpxToPx(sizeRpx)));
@@ -158,7 +177,7 @@ Component({
         },
         () => {
           this._syncCanvasViewport();
-          this._scheduleDraw();
+          this._scheduleDrawBurst();
         }
       );
     },
@@ -208,20 +227,15 @@ Component({
       return colorMap[this.properties.type] || colorMap.default;
     },
 
-    _initCanvas() {
-      if (!this.data.use2dCanvas || typeof this.createSelectorQuery !== 'function') {
-        this._legacyCanvasContext = wx.createCanvasContext('progress-ring-canvas', this);
-        this._ctx2d = null;
-        this._canvasNode = null;
-        this._isCanvasReady = true;
-        this._drawRing();
+    _bind2dCanvas(onReady, onFail) {
+      if (typeof this.createSelectorQuery !== 'function') {
+        if (typeof onFail === 'function') {
+          onFail();
+        }
         return;
       }
 
-      const query = typeof this.createSelectorQuery === 'function'
-        ? this.createSelectorQuery()
-        : wx.createSelectorQuery().in(this);
-
+      const query = this.createSelectorQuery();
       query.select('.ring-canvas').fields({ node: true, size: true }, (res) => {
         if (res && res.node && typeof res.node.getContext === 'function') {
           this._canvasNode = res.node;
@@ -229,17 +243,65 @@ Component({
           this._legacyCanvasContext = null;
           this._isCanvasReady = true;
           this._syncCanvasViewport(res.width, res.height);
-          this._drawRing();
+          if (typeof onReady === 'function') {
+            onReady(res);
+          }
           return;
         }
 
-        // 在测试环境或旧环境中退回旧式 canvas，上层行为仍可继续运行。
+        if (typeof onFail === 'function') {
+          onFail();
+        }
+      }).exec();
+    },
+
+    _fallbackToLegacyCanvas() {
+      if (this._isFallbackPending) {
+        return;
+      }
+
+      this._isFallbackPending = true;
+      const finalizeFallback = () => {
         this._legacyCanvasContext = wx.createCanvasContext('progress-ring-canvas', this);
         this._ctx2d = null;
         this._canvasNode = null;
         this._isCanvasReady = true;
-        this._drawRing();
-      }).exec();
+        this._isFallbackPending = false;
+        this._scheduleDrawBurst();
+      };
+
+      if (!this.data.use2dCanvas) {
+        finalizeFallback();
+        return;
+      }
+
+      this.setData({ use2dCanvas: false }, () => {
+        if (typeof wx.nextTick === 'function') {
+          wx.nextTick(finalizeFallback);
+          return;
+        }
+        setTimeout(finalizeFallback, 0);
+      });
+    },
+
+    _initCanvas() {
+      if (!this.data.use2dCanvas || typeof this.createSelectorQuery !== 'function') {
+        this._legacyCanvasContext = wx.createCanvasContext('progress-ring-canvas', this);
+        this._ctx2d = null;
+        this._canvasNode = null;
+        this._isCanvasReady = true;
+        this._scheduleDrawBurst();
+        return;
+      }
+
+      this._bind2dCanvas(
+        () => {
+          this._scheduleDrawBurst();
+        },
+        () => {
+          this._fallbackToLegacyCanvas();
+        }
+      );
     },
 
     _syncCanvasViewport(viewportWidth, viewportHeight) {
@@ -263,14 +325,47 @@ Component({
       }
     },
 
-    _scheduleDraw() {
+    _scheduleDraw(delay = 0) {
       const drawTask = () => this._drawRing();
+      if (delay > 0) {
+        const timerId = setTimeout(drawTask, delay);
+        this._drawTimers.push(timerId);
+        return;
+      }
+
       if (typeof wx.nextTick === 'function') {
         wx.nextTick(drawTask);
         return;
       }
 
       setTimeout(drawTask, 0);
+    },
+
+    _scheduleDrawBurst() {
+      this._clearDrawTimers();
+      this._scheduleDraw();
+      this._scheduleDraw(80);
+      this._scheduleDraw(180);
+    },
+
+    _recoverCanvasAfterShow() {
+      if (this.data.use2dCanvas) {
+        this._bind2dCanvas(
+          () => {
+            this._scheduleDrawBurst();
+          },
+          () => {
+            this._fallbackToLegacyCanvas();
+          }
+        );
+        return;
+      }
+
+      if (!this._legacyCanvasContext) {
+        this._legacyCanvasContext = wx.createCanvasContext('progress-ring-canvas', this);
+        this._isCanvasReady = true;
+      }
+      this._scheduleDrawBurst();
     },
 
     _drawRing() {
@@ -287,25 +382,31 @@ Component({
       const endAngle = startAngle + ratio * Math.PI * 2;
 
       if (this._ctx2d) {
-        const ctx = this._ctx2d;
-        ctx.clearRect(0, 0, canvasSizePx, canvasSizePx);
+        try {
+          const ctx = this._ctx2d;
+          ctx.clearRect(0, 0, canvasSizePx, canvasSizePx);
 
-        ctx.beginPath();
-        ctx.lineWidth = strokeWidthPx;
-        ctx.strokeStyle = this._resolveTrackColor();
-        ctx.lineCap = 'round';
-        ctx.arc(center, center, radius, 0, Math.PI * 2, false);
-        ctx.stroke();
-
-        if (ratio > 0) {
           ctx.beginPath();
           ctx.lineWidth = strokeWidthPx;
-          ctx.strokeStyle = this._resolveRingColor();
+          ctx.strokeStyle = this._resolveTrackColor();
           ctx.lineCap = 'round';
-          ctx.arc(center, center, radius, startAngle, endAngle, false);
+          ctx.arc(center, center, radius, 0, Math.PI * 2, false);
           ctx.stroke();
+
+          if (ratio > 0) {
+            ctx.beginPath();
+            ctx.lineWidth = strokeWidthPx;
+            ctx.strokeStyle = this._resolveRingColor();
+            ctx.lineCap = 'round';
+            ctx.arc(center, center, radius, startAngle, endAngle, false);
+            ctx.stroke();
+          }
+          return;
+        } catch (error) {
+          logger.warn('progressRing', '2D canvas 绘制失败，回退旧 canvas', error);
+          this._fallbackToLegacyCanvas();
+          return;
         }
-        return;
       }
 
       const ctx = this._legacyCanvasContext;
