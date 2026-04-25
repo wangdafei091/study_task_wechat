@@ -23,7 +23,8 @@ const PAGE_PERMISSIONS = {
     '/packageManage/pages/my-exchanges/my-exchanges',   // 我的兑换
     '/packageMessage/pages/star-records/star-records',   // 星星记录
     '/packageMessage/pages/message/message',             // 消息中心
-    '/packageManage/pages/family-settings/family-settings' // 家庭设置（家长专属）
+    '/packageManage/pages/family-settings/family-settings', // 家庭设置（家长专属）
+    '/packageManage/pages/about/about'
   ],
   
   // 孩子权限页面（受限权限）
@@ -34,7 +35,8 @@ const PAGE_PERMISSIONS = {
     '/packageManage/pages/my-exchanges/my-exchanges',   // 我的兑换
     '/packageMessage/pages/star-records/star-records',   // 星星记录
     '/packageMessage/pages/message/message',             // 消息中心
-    '/packageManage/pages/family-settings/family-settings' // 未加入家庭时可访问（输入邀请码加入）
+    '/packageManage/pages/family-settings/family-settings', // 未加入家庭时可访问（输入邀请码加入）
+    '/packageManage/pages/about/about'
   ]
 };
 

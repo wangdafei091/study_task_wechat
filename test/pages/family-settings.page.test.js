@@ -63,7 +63,8 @@ describe('packageManage/pages/family-settings/family-settings', () => {
     global.wx = {
       showToast: jest.fn(),
       navigateBack: jest.fn(),
-      showModal: jest.fn()
+      showModal: jest.fn(),
+      navigateTo: jest.fn()
     };
 
     loadPageModule();
@@ -178,6 +179,16 @@ describe('packageManage/pages/family-settings/family-settings', () => {
       icon: 'none'
     });
     expect(appMock.globalData.userService.updateFamilyMemberPermissionRole).not.toHaveBeenCalled();
+  });
+
+  it('点击关于入口应跳转到关于页', () => {
+    const page = createPage();
+
+    page.navigateToAboutPage.call(page);
+
+    expect(global.wx.navigateTo).toHaveBeenCalledWith({
+      url: '/packageManage/pages/about/about'
+    });
   });
 
   it('viewer 加载家庭数据时应展示禁用态和解释文案', async () => {

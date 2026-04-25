@@ -1,10 +1,10 @@
 # 里程碑-22B：系统管理员与动态准入底座 详细设计文档
 
-> **设计状态**：🟢 审核通过
+> **设计状态**：✅ 已完成
 > **创建日期**：2026-04-25
 > **设计者**：GPT5 Codex
 > **审核者**：项目维护者
-> **预计工期**：2-3天
+> **完成日期**：2026-04-25
 
 ---
 
@@ -199,19 +199,21 @@ CREATE TABLE IF NOT EXISTS system_settings (
 2. 后续 `M22M`、`M22L` 可能继续有全局治理开关，可复用同一套读写基础。
 3. 首期只用一个 key，可以保持实现简单，不会带来抽象过度。
 
-#### 决策3：应用准入模式采用“数据库优先、环境变量兜底”的兼容迁移策略
+#### 决策3：应用准入模式采用“数据库优先；非法 DB 配置显式报错；仅无记录时才回退”的兼容迁移策略
 
 新的读取顺序：
 
 1. 优先读取 `system_settings.app_access_mode`
-2. 若数据库无记录，再回退到 `process.env.APP_ACCESS_MODE`
-3. 若环境变量也缺失，则按现有默认行为落为 `open`
+2. 若数据库已有记录但值非法，直接返回 `SYSTEM_SETTING_CORRUPTED`
+3. 若数据库无记录，再回退到 `process.env.APP_ACCESS_MODE`
+4. 若环境变量也缺失，则按现有默认行为落为 `open`
 
 这意味着：
 
 1. 旧环境可以平滑升级，不会因为还没手工插入配置就改变线上行为。
 2. 一旦系统管理员在小程序里保存过模式，数据库就成为新的正式权威来源。
-3. 切换后下一次登录立即生效，不依赖服务重启。
+3. 如果数据库配置被误写脏值，系统会明确进入“配置异常待修复”状态，而不是悄悄回退到旧值。
+4. 切换后下一次登录立即生效，不依赖服务重启。
 
 #### 决策4：系统管理员鉴权一律回库，不把管理员资格写入 JWT
 
@@ -446,6 +448,7 @@ interface SystemAdminOverview {
 |--------|------|
 | `SYSTEM_ADMIN_REQUIRED` | 当前用户不是系统管理员 |
 | `SYSTEM_SETTING_INVALID` | 提交了非法模式值 |
+| `SYSTEM_SETTING_CORRUPTED` | 数据库中的系统准入配置已损坏，需要管理员重新修复 |
 | `SYSTEM_SETTING_UPDATE_FAILED` | 系统配置更新失败 |
 
 ---
@@ -472,6 +475,7 @@ interface SystemAdminOverview {
 - `test/pages/system-admin.page.test.js` - 系统管理页行为测试
 - `backend/test/unit/systemSettingService.test.js` - 后端系统配置服务测试
 - `backend/test/unit/systemAdminController.test.js` - 后端系统控制器测试
+- `backend/test/unit/systemAdminMiddleware.test.js` - 后端系统管理员中间件测试
 - `backend/test/integration/auth-api-m22b-real.test.js` - 动态准入真实集成测试
 
 **修改文件**：
@@ -559,11 +563,11 @@ Page({
 
 ## 实施步骤
 
-### 第1步：补系统管理员字段与系统配置表（预计4小时）
+### 第1步：补系统管理员字段与系统配置表（已完成）
 
-- [ ] **任务**：新增数据库迁移，给 `users` 增加 `is_system_admin`，新增 `system_settings`
-- [ ] **验证**：测试库可正常迁移；`users` 老数据默认 `is_system_admin=0`
-- [ ] **依赖**：无
+- [x] **任务**：已新增数据库迁移，给 `users` 增加 `is_system_admin`，新增 `system_settings`
+- [x] **验证**：测试库结构已补齐；`users` 老数据默认 `is_system_admin=0`
+- [x] **依赖**：无
 
 **实施要点**：
 
@@ -571,35 +575,37 @@ Page({
 2. `system_settings` 不强制插入初始 `app_access_mode` 记录，避免部署时与现有 env 配置冲突。
 3. 文档中明确“首位管理员需手工在 DB 标记”。
 
-### 第2步：完成后端系统配置读写与系统管理员鉴权（预计6小时）
+### 第2步：完成后端系统配置读写与系统管理员鉴权（已完成）
 
-- [ ] **任务**：补 `systemSettingService`、`systemAdminService`、`systemAdminMiddleware` 和系统接口
-- [ ] **验证**：模式切换后，无需重启，下一次新用户登录按新模式执行
-- [ ] **依赖**：第1步
+- [x] **任务**：已补 `systemSettingService`、`systemAdminService`、`systemAdminMiddleware` 和系统接口
+- [x] **验证**：模式切换后，无需重启，下一次新用户登录按新模式执行
+- [x] **依赖**：第1步
 
 **实施要点**：
 
 1. `appAccessService` 不再直接读环境变量作为唯一来源。
 2. 所有系统管理写接口必须经过 `systemAdminMiddleware`。
 3. `bootstrap` 接口只返回最小权限探测结果，不返回系统治理摘要，也不返回重复状态字段。
+4. 当数据库存在非法 `app_access_mode` 时，`auth/login` 返回 `503 + SYSTEM_SETTING_CORRUPTED`，系统管理页进入“修复态”，不再静默回退。
 
-### 第3步：补关于页、隐藏入口与系统管理页（预计6小时）
+### 第3步：补关于页、隐藏入口与系统管理页（已完成）
 
-- [ ] **任务**：新增关于页、二维码展示与预览、隐藏多击入口、系统管理页和家庭设置页跳转
-- [ ] **验证**：普通用户可查看关于页与二维码；系统管理员连击后可进入系统页并切模式
-- [ ] **依赖**：第2步
+- [x] **任务**：已新增关于页、二维码展示与预览、隐藏多击入口、系统管理页和家庭设置页跳转
+- [x] **验证**：普通用户可查看关于页与二维码；系统管理员连击后可进入系统页并切模式
+- [x] **依赖**：第2步
 
 **实施要点**：
 
 1. 关于页视觉保持轻量，不做复杂运营信息堆叠；二维码作为公开信息块独立展示，且仅在正式环境展示实图。
 2. 系统管理页首期只保留一个主动作，避免“伪后台感”。
 3. 非系统管理员直达系统页时，要有明确拦截和回退。
+4. 系统管理页已补齐三态：正常态、概览失败错误态、`SYSTEM_SETTING_CORRUPTED` 修复态。
 
-### 第4步：补测试与回归（预计4小时）
+### 第4步：补测试与回归（已完成）
 
-- [ ] **任务**：补齐后端单测、真实集成测试、前端页面/服务测试
-- [ ] **验证**：核心自动化通过，并完成手工准入切换回归
-- [ ] **依赖**：第2步、第3步
+- [x] **任务**：已补齐后端单测、真实集成测试、前端页面/服务测试
+- [x] **验证**：核心自动化通过，并完成手工准入切换回归
+- [x] **依赖**：第2步、第3步
 
 **实施要点**：
 
@@ -619,6 +625,7 @@ Page({
   - 无 DB 配置时应回退 env
   - DB 有值时应覆盖 env
   - 非法值应拒绝写入
+  - DB 存在非法值时应抛出 `SYSTEM_SETTING_CORRUPTED`
 - `systemAdminMiddleware`
   - `is_system_admin=1` 时放行
   - 非管理员返回 `SYSTEM_ADMIN_REQUIRED`
@@ -637,6 +644,7 @@ Page({
   - 正确展示当前模式
   - 切换成功后刷新展示
   - 非法模式或接口失败时提示清晰
+  - `SYSTEM_SETTING_CORRUPTED` 时进入修复态而不是展示默认开放态
 
 ### 集成测试
 
@@ -667,6 +675,19 @@ Page({
 - 家庭邀请码加入链路
 - 家庭设置页已有权限逻辑
 - access-gate 页面缓存邀请码与重试逻辑
+
+### 实际验证结果
+
+- 前端页面/服务回归已通过：
+  - `npm test -- --runInBand test/pages/about.page.test.js test/pages/system-admin.page.test.js test/pages/family-settings.page.test.js test/services/system-service.test.js test/models/user.test.js test/services/user-service.test.js`
+- 后端单元回归已通过：
+  - `npm run test:backend:unit -- authController.test.js systemAdminController.test.js systemSettingService.test.js`
+- 真实数据库集成回归已通过：
+  - `npm --prefix backend run test -- --runInBand test/integration/auth-api-m22b-real.test.js`
+- 模拟器日志与数据库抽检已通过：
+  - 已确认系统管理员在关于页进入系统管理页后，可成功把 `app_access_mode` 改为 `invite_only`
+  - `system_settings` 中已落库 `setting_key=app_access_mode`、`setting_value=invite_only`
+  - `updated_by_user_id` 与操作日志中的管理员用户一致
 
 ---
 
@@ -766,4 +787,5 @@ Page({
 - [x] 已基于真实代码现状说明为什么必须做 DB 配置与新入口
 - [x] 已给出数据模型、接口、页面入口、迁移策略和兼容策略
 - [x] 已明确系统管理员接口以后端回库校验为准，不依赖 JWT 旧声明
-- [x] 已覆盖自动化测试、手工回归和主要风险
+- [x] 已覆盖自动化测试、手工回归、日志/数据库抽检和主要风险
+- [x] 已同步最终落地口径：数据库脏值显式报错，系统管理页存在错误态与修复态

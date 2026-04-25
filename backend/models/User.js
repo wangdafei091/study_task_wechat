@@ -13,6 +13,7 @@ class User {
     status = 'active',
     familyId = null,
     familyPermissionRole = null,
+    isSystemAdmin = false,
     isVirtual = false,
     createdByUserId = null,
     createdAt = null,
@@ -27,6 +28,7 @@ class User {
     this.status = status;
     this.familyId = familyId;
     this.familyPermissionRole = familyPermissionRole;
+    this.isSystemAdmin = Boolean(isSystemAdmin);
     this.isVirtual = isVirtual;
     this.createdByUserId = createdByUserId;
     this.createdAt = createdAt;
@@ -49,6 +51,7 @@ class User {
       status: dbRecord.status,
       familyId: dbRecord.family_id || null,
       familyPermissionRole: dbRecord.family_permission_role || null,
+      isSystemAdmin: Boolean(dbRecord.is_system_admin),
       isVirtual: Boolean(dbRecord.is_virtual),
       createdByUserId: dbRecord.created_by_user_id || null,
       createdAt: dbRecord.created_at,
@@ -71,6 +74,7 @@ class User {
       status: this.status,
       family_id: this.familyId,
       family_permission_role: this.familyPermissionRole,
+      is_system_admin: this.isSystemAdmin,
       is_virtual: this.isVirtual,
       created_by_user_id: this.createdByUserId,
     };
@@ -90,6 +94,7 @@ class User {
       status: this.status,
       familyId: this.familyId,
       familyPermissionRole: this.familyPermissionRole,
+      isSystemAdmin: this.isSystemAdmin,
       isVirtual: this.isVirtual,
       createdByUserId: this.createdByUserId,
       createdAt: this.createdAt,

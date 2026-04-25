@@ -339,6 +339,12 @@ Page({
     this.setData({ showJoinDialog: false });
   },
 
+  navigateToAboutPage() {
+    wx.navigateTo({
+      url: '/packageManage/pages/about/about'
+    });
+  },
+
   noop() {},
 
   // ===== 邀请码刷新 =====

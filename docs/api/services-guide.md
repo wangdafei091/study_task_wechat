@@ -2,6 +2,8 @@
 
 本文档介绍了学习任务微信小程序服务层API，包括所有核心服务的功能、方法签名和使用说明。
 
+> **最后更新**：2026-04-25
+
 ---
 
 ## 服务架构概览
@@ -34,6 +36,65 @@ const taskTemplateService = serviceManager.get('taskTemplateService');
 - `offlineQueueService` 为 M19E 引入的统一待同步队列服务，负责承接任务域与奖励域的离线待同步动作。
 - `ENABLE_API / API_BASE_URL` 不属于 `ConfigService` 管辖范围，而是由 `utils/runtime-config.js` 与 `utils/api-config.js` 统一解析为启动时运行模式快照。
 - `taskTemplateService` 同时支持别名 `taskTemplate` / `TaskTemplateService`，由 `ServiceManager` 统一映射。
+- `services/system-service.js` 为系统管理相关页面的轻量 HTTP 服务，不通过 `ServiceManager` 注册，当前由关于页和系统管理页直接 `require` 使用。
+
+---
+
+## SystemService - 系统管理接口服务
+
+系统管理接口服务负责前端关于页隐藏入口探测、系统管理概览加载与应用准入模式更新。
+
+### 核心功能
+- 获取当前用户是否具备进入系统管理页的资格
+- 获取当前应用准入模式、来源和最后更新时间
+- 更新 `open / invite_only` 准入模式
+- 在系统配置损坏时承接前端“修复态”链路
+
+### API 方法
+
+##### `getBootstrap()`
+获取关于页隐藏入口探测信息。
+- **返回**:
+  ```javascript
+  {
+    canEnterSystemAdmin: boolean
+  }
+  ```
+- **说明**：
+  - 仅返回最小权限布尔值，不返回当前准入模式
+  - 当前由 `packageManage/pages/about/about.js` 在版本区连续点击 7 次后触发
+
+##### `getOverview()`
+获取系统管理页概览信息。
+- **返回**:
+  ```javascript
+  {
+    appAccessMode: 'open' | 'invite_only',
+    modeSource: 'db' | 'env' | 'default',
+    updatedAt: string | null,
+    updatedByUserId: string | null
+  }
+  ```
+- **说明**：
+  - 仅系统管理员可访问
+  - 当后端返回 `SYSTEM_SETTING_CORRUPTED` 时，页面应进入修复态，而不是展示默认假值
+
+##### `updateAppAccessMode(mode)`
+更新应用准入模式。
+- **参数**:
+  - `mode` - `'open' | 'invite_only'`
+- **返回**:
+  ```javascript
+  {
+    appAccessMode: 'open' | 'invite_only',
+    modeSource: 'db',
+    updatedAt: string | null,
+    updatedByUserId: string | null
+  }
+  ```
+- **说明**：
+  - 成功后数据库立即成为权威来源
+  - 该更新只影响新用户登录是否需要邀请码，不影响已有用户登录
 
 ---
 

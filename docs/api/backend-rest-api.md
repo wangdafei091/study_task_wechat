@@ -1,7 +1,7 @@
 # 后端 REST API 契约
 
 > 项目后端 HTTP/REST 接口的权威说明文档
-> **最后更新**：2026-04-21
+> **最后更新**：2026-04-25
 > **维护者**：项目维护团队
 
 ---
@@ -142,7 +142,7 @@ Authorization: Bearer <token>
 - Query: 无
 - Body：
   - `code` - 微信登录 code
-  - `accessCode` - 可选；当 `APP_ACCESS_MODE=invite_only` 且当前为新用户创建时必填
+  - `accessCode` - 可选；当当前权威准入模式为 `invite_only` 且当前为新用户创建时必填
 
 成功响应：
 - Status: `200`
@@ -151,10 +151,12 @@ Authorization: Bearer <token>
 常见错误：
 - `400` - `AUTH_INVALID_PARAMS` / `AUTH_WECHAT_LOGIN_FAILED`
 - `400` - `AUTH_APP_ACCESS_CODE_REQUIRED` / `AUTH_APP_ACCESS_CODE_INVALID` / `AUTH_APP_ACCESS_CODE_EXPIRED`
+- `503` - `SYSTEM_SETTING_CORRUPTED`
 - `500` - `AUTH_LOGIN_FAILED`
 
 说明：
 - 邀请制只拦截“新用户创建”，已有用户在 `invite_only` 模式下仍可正常登录
+- 准入模式读取口径为“数据库优先；仅在无数据库记录时回退环境变量”；若数据库已有非法值，登录接口会返回 `503 + SYSTEM_SETTING_CORRUPTED`
 - `data.user` 在家长已加入家庭时会包含 `familyPermissionRole`
 
 ### 3.2 验证 Token
@@ -191,6 +193,108 @@ Authorization: Bearer <token>
 常见错误：
 - `404` - `USER_NOT_FOUND`
 - `500` - `USER_GET_FAILED`
+
+---
+
+## 3.4 系统管理接口
+
+### 3.4.1 获取系统入口探测信息
+
+- Method: `GET`
+- Path: `/api/system/admin/bootstrap`
+- Auth: `Bearer Token`
+- Query: 无
+- Body: 无
+
+成功响应：
+- Status: `200`
+- Body：
+  ```json
+  {
+    "success": true,
+    "data": {
+      "canEnterSystemAdmin": true
+    },
+    "message": "获取成功"
+  }
+  ```
+
+说明：
+- 该接口只返回最小布尔结果，用于关于页隐藏入口探测
+- 只要已登录即可访问；不会返回系统管理摘要，也不会暴露当前准入模式
+
+常见错误：
+- `401` - `AUTH_INVALID_TOKEN`
+- `500` - `SYSTEM_BOOTSTRAP_FAILED`
+
+### 3.4.2 获取系统管理概览
+
+- Method: `GET`
+- Path: `/api/system/admin/overview`
+- Auth: `Bearer Token + System Admin`
+- Query: 无
+- Body: 无
+
+成功响应：
+- Status: `200`
+- Body：
+  ```json
+  {
+    "success": true,
+    "data": {
+      "appAccessMode": "invite_only",
+      "modeSource": "db",
+      "updatedAt": "2026-04-25T15:09:45.000Z",
+      "updatedByUserId": "user_xxx"
+    },
+    "message": "获取成功"
+  }
+  ```
+
+常见错误：
+- `401` - `AUTH_INVALID_TOKEN`
+- `403` - `SYSTEM_ADMIN_REQUIRED`
+- `500` - `SYSTEM_OVERVIEW_FAILED`
+- `500` - `SYSTEM_SETTING_CORRUPTED`
+
+说明：
+- `modeSource` 取值为 `db | env | default`
+- 若数据库存在非法 `app_access_mode`，接口会返回 `SYSTEM_SETTING_CORRUPTED`，前端应进入“修复态”而不是假装展示默认开放态
+
+### 3.4.3 更新应用准入模式
+
+- Method: `PATCH`
+- Path: `/api/system/admin/app-access-mode`
+- Auth: `Bearer Token + System Admin`
+- Query: 无
+- Body：
+  - `mode` - `open | invite_only`
+
+成功响应：
+- Status: `200`
+- Body：
+  ```json
+  {
+    "success": true,
+    "data": {
+      "appAccessMode": "open",
+      "modeSource": "db",
+      "updatedAt": "2026-04-25T15:09:45.000Z",
+      "updatedByUserId": "user_xxx"
+    },
+    "message": "更新成功"
+  }
+  ```
+
+常见错误：
+- `401` - `AUTH_INVALID_TOKEN`
+- `403` - `SYSTEM_ADMIN_REQUIRED`
+- `400` - `SYSTEM_SETTING_INVALID`
+- `500` - `SYSTEM_SETTING_UPDATE_FAILED`
+
+说明：
+- 写入成功后，数据库立即成为权威来源；后续新用户登录无需重启服务即可按新模式执行
+- 该接口只影响“新用户是否需要邀请码”；已有用户登录不受影响
 
 ---
 

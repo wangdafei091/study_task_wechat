@@ -1,0 +1,117 @@
+.admin-page {
+  min-height: 100vh;
+  padding: 24rpx;
+  background: #f5f6fa;
+}
+
+.admin-card,
+.loading-card {
+  background: #ffffff;
+  border-radius: 20rpx;
+  padding: 32rpx;
+  margin-bottom: 24rpx;
+  box-shadow: 0 14rpx 34rpx rgba(42, 76, 145, 0.06);
+}
+
+.admin-title {
+  font-size: 34rpx;
+  font-weight: 600;
+  color: #22324a;
+}
+
+.admin-subtitle {
+  margin-top: 12rpx;
+  font-size: 24rpx;
+  line-height: 1.6;
+  color: #69788d;
+}
+
+.error-card {
+  border: 2rpx solid #f0d7d2;
+  background: #fffaf8;
+}
+
+.repair-hint {
+  margin-top: 20rpx;
+  font-size: 24rpx;
+  color: #8a5a4b;
+}
+
+.retry-button {
+  margin-top: 24rpx;
+  padding: 18rpx 0;
+  border-radius: 16rpx;
+  background: #22324a;
+  text-align: center;
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.mode-list {
+  margin-top: 28rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+
+.mode-item {
+  border-radius: 18rpx;
+  border: 2rpx solid #dfe8f2;
+  padding: 24rpx;
+  background: #fafcff;
+}
+
+.mode-item.active {
+  border-color: #4285f4;
+  background: #edf4ff;
+}
+
+.mode-item.disabled {
+  opacity: 0.6;
+}
+
+.mode-name {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #22324a;
+}
+
+.mode-desc {
+  margin-top: 10rpx;
+  font-size: 24rpx;
+  color: #69788d;
+}
+
+.meta-card {
+  padding-top: 20rpx;
+}
+
+.meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18rpx 0;
+  border-bottom: 1rpx solid #edf2f7;
+}
+
+.meta-row:last-child {
+  border-bottom: none;
+}
+
+.meta-label {
+  font-size: 24rpx;
+  color: #69788d;
+}
+
+.meta-value {
+  font-size: 24rpx;
+  color: #22324a;
+  text-align: right;
+}
+
+.loading-text {
+  text-align: center;
+  font-size: 26rpx;
+  color: #69788d;
+}

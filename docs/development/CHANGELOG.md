@@ -4,6 +4,42 @@
 
 ---
 
+## [里程碑-22B] - 2026-04-25
+
+### ✅ 完成情况
+
+**系统管理员与动态准入底座**
+
+- **系统级治理入口已正式建立**：
+  - [`backend/models/User.js`](/Users/wangdafei/code/study_task_wechat/backend/models/User.js)、[`backend/services/userService.js`](/Users/wangdafei/code/study_task_wechat/backend/services/userService.js)、[`models/user.js`](/Users/wangdafei/code/study_task_wechat/models/user.js) 已补齐 `isSystemAdmin / is_system_admin` 字段读写，系统管理员身份不再依赖临时脚本外部约定
+  - [`packageManage/pages/family-settings/family-settings.wxml`](/Users/wangdafei/code/study_task_wechat/packageManage/pages/family-settings/family-settings.wxml)、[`packageManage/pages/about/about.js`](/Users/wangdafei/code/study_task_wechat/packageManage/pages/about/about.js)、[`packageManage/pages/about/about.wxml`](/Users/wangdafei/code/study_task_wechat/packageManage/pages/about/about.wxml) 已落地关于页、版本区 7 次连击隐藏入口和正式环境二维码展示
+- **应用准入模式已从“环境变量 + 重启”切到“数据库动态生效”**：
+  - [`backend/models/SystemSetting.js`](/Users/wangdafei/code/study_task_wechat/backend/models/SystemSetting.js)、[`backend/services/systemSettingService.js`](/Users/wangdafei/code/study_task_wechat/backend/services/systemSettingService.js)、[`backend/services/appAccessService.js`](/Users/wangdafei/code/study_task_wechat/backend/services/appAccessService.js) 已把 `app_access_mode` 收口到 `system_settings`，保存后下一次登录立即生效
+  - 读取口径已明确为：数据库优先；若数据库记录存在但值非法，则显式返回 `SYSTEM_SETTING_CORRUPTED`；仅当数据库无记录时才回退 `APP_ACCESS_MODE`
+- **系统管理页与后端鉴权已形成闭环**：
+  - [`backend/middleware/systemAdmin.js`](/Users/wangdafei/code/study_task_wechat/backend/middleware/systemAdmin.js)、[`backend/controllers/systemAdminController.js`](/Users/wangdafei/code/study_task_wechat/backend/controllers/systemAdminController.js)、[`backend/routes/system.js`](/Users/wangdafei/code/study_task_wechat/backend/routes/system.js)、[`services/system-service.js`](/Users/wangdafei/code/study_task_wechat/services/system-service.js) 已建立 `bootstrap / overview / app-access-mode` 三个正式接口与前端服务承接
+  - [`packageManage/pages/system-admin/system-admin.js`](/Users/wangdafei/code/study_task_wechat/packageManage/pages/system-admin/system-admin.js)、[`packageManage/pages/system-admin/system-admin.wxml`](/Users/wangdafei/code/study_task_wechat/packageManage/pages/system-admin/system-admin.wxml) 已补齐正常态、概览错误态和配置损坏修复态
+- **实施中发现的真实缺陷已同步修复**：
+  - [`backend/services/userService.js`](/Users/wangdafei/code/study_task_wechat/backend/services/userService.js) 已修复 `createUser()` 未写入 `is_system_admin` 的问题
+  - [`backend/controllers/authController.js`](/Users/wangdafei/code/study_task_wechat/backend/controllers/authController.js) 已补齐 `SYSTEM_SETTING_CORRUPTED` 透传，登录接口在配置损坏时返回 `503`
+  - [`packageManage/pages/family-settings/family-settings.js`](/Users/wangdafei/code/study_task_wechat/packageManage/pages/family-settings/family-settings.js)、[`utils/permission-utils.js`](/Users/wangdafei/code/study_task_wechat/utils/permission-utils.js) 已修复普通家长误见系统入口、系统管理页动态失权与错误态默认值误导问题
+
+### 🧪 验证结果
+
+- 前端定向回归通过：
+  - `npm test -- --runInBand test/pages/about.page.test.js test/pages/system-admin.page.test.js test/pages/family-settings.page.test.js test/services/system-service.test.js test/models/user.test.js test/services/user-service.test.js`
+- 后端单元回归通过：
+  - `npm run test:backend:unit -- authController.test.js systemAdminController.test.js systemSettingService.test.js`
+- 真实数据库集成回归通过：
+  - `npm --prefix backend run test -- --runInBand test/integration/auth-api-m22b-real.test.js`
+- 模拟器日志与数据库抽检通过：
+  - 已确认系统管理员可在小程序内将 `app_access_mode` 切换到 `invite_only`
+  - 已确认 `system_settings.updated_by_user_id` 与实际操作者一致
+
+### 📖 详细实施记录
+
+- [里程碑-22B：系统管理员与动态准入底座](../design/milestone-22b-system-admin-dynamic-admission-foundation.md)
+
 ## [里程碑-22K] - 2026-04-24
 
 ### ✅ 完成情况

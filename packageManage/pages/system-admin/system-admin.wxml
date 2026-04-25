@@ -1,0 +1,72 @@
+<view class="admin-page">
+  <view class="loading-card" wx:if="{{loading}}">
+    <view class="loading-text">加载中...</view>
+  </view>
+
+  <view class="admin-card error-card" wx:elif="{{loadErrorCode === 'SYSTEM_SETTING_CORRUPTED'}}">
+    <view class="admin-title">系统配置需要修复</view>
+    <view class="admin-subtitle">{{loadErrorMessage}}</view>
+    <view class="repair-hint">请重新选择一种准入模式，保存后会立即恢复正常。</view>
+
+    <view class="mode-list">
+      <view
+        class="mode-item {{appAccessMode === 'open' ? 'active' : ''}} {{saving ? 'disabled' : ''}}"
+        data-mode="open"
+        bindtap="onModeChange">
+        <view class="mode-name">恢复为开放制</view>
+        <view class="mode-desc">新用户可直接进入小程序</view>
+      </view>
+      <view
+        class="mode-item {{appAccessMode === 'invite_only' ? 'active' : ''}} {{saving ? 'disabled' : ''}}"
+        data-mode="invite_only"
+        bindtap="onModeChange">
+        <view class="mode-name">恢复为邀请制</view>
+        <view class="mode-desc">新用户需先输入应用邀请码</view>
+      </view>
+    </view>
+  </view>
+
+  <view class="admin-card error-card" wx:elif="{{loadErrorCode}}">
+    <view class="admin-title">系统概览暂时不可用</view>
+    <view class="admin-subtitle">{{loadErrorMessage}}</view>
+    <view class="retry-button" bindtap="onRetryTap">重新加载</view>
+  </view>
+
+  <view class="admin-card" wx:else>
+    <view class="admin-title">应用准入模式</view>
+    <view class="admin-subtitle">切换后对新用户登录立即生效，已有用户不受影响。</view>
+
+    <view class="mode-list">
+      <view
+        class="mode-item {{appAccessMode === 'open' ? 'active' : ''}} {{saving ? 'disabled' : ''}}"
+        data-mode="open"
+        bindtap="onModeChange">
+        <view class="mode-name">开放制</view>
+        <view class="mode-desc">新用户可直接进入小程序</view>
+      </view>
+      <view
+        class="mode-item {{appAccessMode === 'invite_only' ? 'active' : ''}} {{saving ? 'disabled' : ''}}"
+        data-mode="invite_only"
+        bindtap="onModeChange">
+        <view class="mode-name">邀请制</view>
+        <view class="mode-desc">新用户需先输入应用邀请码</view>
+      </view>
+    </view>
+  </view>
+
+  <view class="admin-card meta-card" wx:if="{{!loading && !loadErrorCode}}">
+    <view class="meta-row">
+      <text class="meta-label">当前来源</text>
+      <text class="meta-value">{{modeSource}}</text>
+    </view>
+    <view class="meta-row">
+      <text class="meta-label">最后更新时间</text>
+      <text class="meta-value">{{updatedAt}}</text>
+    </view>
+    <view class="meta-row">
+      <text class="meta-label">最后更新人</text>
+      <text class="meta-value">{{updatedByUserId}}</text>
+    </view>
+  </view>
+
+</view>

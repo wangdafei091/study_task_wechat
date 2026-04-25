@@ -1,0 +1,29 @@
+<view class="about-page">
+  <view class="about-card hero-card">
+    <view class="about-title">{{appName}}</view>
+    <view class="about-desc">{{description}}</view>
+  </view>
+
+  <view class="about-card">
+    <view class="section-title">版本信息</view>
+    <view class="info-row" bindtap="onVersionTap">
+      <text class="info-label">当前版本</text>
+      <text class="info-value">{{version}}</text>
+    </view>
+    <view class="info-row">
+      <text class="info-label">运行环境</text>
+      <text class="info-value">{{envVersionLabel}}</text>
+    </view>
+  </view>
+
+  <view class="about-card">
+    <view class="section-title">小程序二维码</view>
+    <view class="qrcode-wrap" wx:if="{{showQrCode}}" bindtap="onQrcodeTap">
+      <image class="qrcode-image" src="{{qrCodeImage}}" mode="aspectFit"></image>
+    </view>
+    <view class="qrcode-placeholder" wx:else>
+      <view class="qrcode-placeholder-icon">口</view>
+    </view>
+    <view class="qrcode-hint">{{qrCodeHint}}</view>
+  </view>
+</view>

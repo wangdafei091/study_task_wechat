@@ -41,6 +41,7 @@ class User {
     this.role = data.role || UserRole.PARENT;
     this.avatar = data.avatar || '';
     this.status = data.status || UserStatus.ACTIVE;
+    this.isSystemAdmin = Boolean(data.isSystemAdmin);
 
     // 家庭相关字段（M6新增）
     this.familyId = data.familyId || null;
@@ -147,7 +148,8 @@ class User {
       'pages/my-exchanges/my-exchanges',
       'pages/message/message',
       'packageChart/pages/analysis/analysis',
-      'packageChart/pages/task-record/task-record'
+      'packageChart/pages/task-record/task-record',
+      'packageManage/pages/about/about'
     ];
 
     if (effectiveRole === UserRole.PARENT) {
@@ -156,7 +158,8 @@ class User {
         'packageTask/pages/task-edit/task-edit',
         'packageTask/pages/task-occurrence-edit/task-occurrence-edit',
         'pages/reward-manage/reward-manage',
-        'packageManage/pages/family-settings/family-settings'
+        'packageManage/pages/family-settings/family-settings',
+        'packageManage/pages/about/about'
       ];
     }
 
@@ -204,6 +207,7 @@ class User {
       status: this.status,
       familyId: this.familyId,
       familyPermissionRole: this.familyPermissionRole,
+      isSystemAdmin: this.isSystemAdmin,
       isVirtual: this.isVirtual,
       createdByUserId: this.createdByUserId,
       createTime: this.createTime,

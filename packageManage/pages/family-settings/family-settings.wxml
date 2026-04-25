@@ -112,6 +112,10 @@
     <view class="loading-text">加载中...</view>
   </view>
 
+  <view class="page-footer" wx:if="{{!loading}}" bindtap="navigateToAboutPage">
+    <text class="page-footer-link">关于小CEO日程表</text>
+  </view>
+
   <!-- 创建家庭对话框 -->
   <view class="dialog-mask" wx:if="{{showCreateDialog}}" bindtap="cancelCreateFamily"></view>
   <view class="dialog" wx:if="{{showCreateDialog}}" catchtap="noop">
