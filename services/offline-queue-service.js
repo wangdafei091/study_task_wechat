@@ -8,6 +8,12 @@ const DRAIN_REASON_LIMITS = {
   before_reward_read: 10
 };
 
+const SYSTEM_ACCESS_LEVEL = {
+  NORMAL: 'normal',
+  READONLY: 'readonly',
+  BLOCKED: 'blocked'
+};
+
 class OfflineQueueService {
   constructor(options = {}) {
     this.repository = options.repository || new OfflineQueueRepository(options.storageAdapter, options.repositoryOptions);
@@ -89,6 +95,25 @@ class OfflineQueueService {
       ? Number(options.limit)
       : (DRAIN_REASON_LIMITS[reason] || 10);
     const now = Date.now();
+
+    if (currentContext.systemAccessLevel === SYSTEM_ACCESS_LEVEL.READONLY) {
+      const skipped = items.filter((item) => {
+        if (domains && !domains.has(item.domain)) {
+          return false;
+        }
+        return this._matchesContext(item, currentContext);
+      }).length;
+
+      return {
+        success: true,
+        processed: 0,
+        skipped,
+        failed: 0,
+        partial: false,
+        remaining: 0,
+        reason: 'system_readonly'
+      };
+    }
 
     let processed = 0;
     let skipped = 0;
@@ -334,6 +359,7 @@ class OfflineQueueService {
     return {
       familyId: context.familyId || null,
       loginUserId: context.loginUserId || null,
+      systemAccessLevel: context.systemAccessLevel || SYSTEM_ACCESS_LEVEL.NORMAL,
       actorUserId: context.actorUserId || null,
       actorRole: context.actorRole || 'system',
       targetUserId: context.targetUserId || null,

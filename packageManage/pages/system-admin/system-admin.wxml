@@ -7,17 +7,18 @@
     <view class="admin-title">系统配置需要修复</view>
     <view class="admin-subtitle">{{loadErrorMessage}}</view>
     <view class="repair-hint">请重新选择一种准入模式，保存后会立即恢复正常。</view>
+    <view class="readonly-tip" wx:if="{{isSystemReadonly}}">当前账号为只读，仅可查看</view>
 
     <view class="mode-list">
       <view
-        class="mode-item {{appAccessMode === 'open' ? 'active' : ''}} {{saving ? 'disabled' : ''}}"
+        class="mode-item {{appAccessMode === 'open' ? 'active' : ''}} {{saving || isSystemReadonly ? 'disabled' : ''}}"
         data-mode="open"
         bindtap="onModeChange">
         <view class="mode-name">恢复为开放制</view>
         <view class="mode-desc">新用户可直接进入小程序</view>
       </view>
       <view
-        class="mode-item {{appAccessMode === 'invite_only' ? 'active' : ''}} {{saving ? 'disabled' : ''}}"
+        class="mode-item {{appAccessMode === 'invite_only' ? 'active' : ''}} {{saving || isSystemReadonly ? 'disabled' : ''}}"
         data-mode="invite_only"
         bindtap="onModeChange">
         <view class="mode-name">恢复为邀请制</view>
@@ -35,17 +36,18 @@
   <view class="admin-card" wx:else>
     <view class="admin-title">应用准入模式</view>
     <view class="admin-subtitle">切换后对新用户登录立即生效，已有用户不受影响。</view>
+    <view class="readonly-tip" wx:if="{{isSystemReadonly}}">当前账号为只读，仅可查看</view>
 
     <view class="mode-list">
       <view
-        class="mode-item {{appAccessMode === 'open' ? 'active' : ''}} {{saving ? 'disabled' : ''}}"
+        class="mode-item {{appAccessMode === 'open' ? 'active' : ''}} {{saving || isSystemReadonly ? 'disabled' : ''}}"
         data-mode="open"
         bindtap="onModeChange">
         <view class="mode-name">开放制</view>
         <view class="mode-desc">新用户可直接进入小程序</view>
       </view>
       <view
-        class="mode-item {{appAccessMode === 'invite_only' ? 'active' : ''}} {{saving ? 'disabled' : ''}}"
+        class="mode-item {{appAccessMode === 'invite_only' ? 'active' : ''}} {{saving || isSystemReadonly ? 'disabled' : ''}}"
         data-mode="invite_only"
         bindtap="onModeChange">
         <view class="mode-name">邀请制</view>
@@ -66,6 +68,22 @@
     <view class="meta-row">
       <text class="meta-label">最后更新人</text>
       <text class="meta-value">{{updatedByUserId}}</text>
+    </view>
+  </view>
+
+  <view class="admin-card entry-card" wx:if="{{!loading && !loadErrorCode}}">
+    <view class="entry-main">
+      <view>
+        <view class="admin-title">用户权限治理</view>
+        <view class="admin-subtitle">管理谁可正常使用、只读查看或暂停使用。</view>
+      </view>
+      <view class="entry-chevron">›</view>
+    </view>
+    <view
+      class="entry-button {{!governanceEnabled ? 'disabled' : ''}}"
+      bindtap="onUserGovernanceTap"
+    >
+      {{governanceEnabled ? '进入治理页' : '仅云端模式可用'}}
     </view>
   </view>
 

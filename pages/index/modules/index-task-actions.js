@@ -2,13 +2,22 @@ const { Task } = require('../../../models/task');
 const serviceManager = require('../../../services/service-manager.js');
 const logger = require('../../../utils/logger');
 
-function isViewerReadonly(page) {
-  return page?.data?.isViewerReadonly === true;
+function isReadonlyView(page) {
+  return page?.data?.isReadonlyView === true || page?.data?.isViewerReadonly === true;
 }
 
-function showViewerReadonlyToast() {
+function showReadonlyToast(page) {
+  const readonlyReason = page?.data?.readonlyReason || '';
+  let title = '当前视角不可修改任务';
+
+  if (readonlyReason === 'viewer-readonly') {
+    title = '当前为查看者，不能修改任务';
+  } else if (readonlyReason === 'system-readonly') {
+    title = '当前账号为只读，不能修改任务';
+  }
+
   wx.showToast({
-    title: '当前为查看者，不能修改任务',
+    title,
     icon: 'none',
     duration: 2000
   });
@@ -218,8 +227,8 @@ async function completeTask(page, e) {
     return;
   }
 
-  if (isViewerReadonly(page)) {
-    showViewerReadonlyToast();
+  if (isReadonlyView(page)) {
+    showReadonlyToast(page);
     return;
   }
 
@@ -306,8 +315,8 @@ async function taskItemStatusToggle(page, e) {
       return;
     }
 
-    if (isViewerReadonly(page)) {
-      showViewerReadonlyToast();
+    if (isReadonlyView(page)) {
+      showReadonlyToast(page);
       return;
     }
 

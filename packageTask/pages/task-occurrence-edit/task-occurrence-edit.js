@@ -139,6 +139,19 @@ function getPageAccessGuard(userService) {
 
   if (
     loginUser &&
+    (
+      (typeof loginUser.isSystemReadonly === 'function' && loginUser.isSystemReadonly()) ||
+      loginUser.systemAccessLevel === 'readonly'
+    )
+  ) {
+    return {
+      blocked: true,
+      message: '当前账号为只读，不能管理表现项'
+    };
+  }
+
+  if (
+    loginUser &&
     loginUser.role === 'parent' &&
     loginUser.familyId &&
     loginUser.familyPermissionRole === 'viewer'

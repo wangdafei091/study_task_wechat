@@ -5,6 +5,7 @@ const logger = require('../../utils/logger');
 const API_CONFIG = require('../../utils/api-config');
 const TokenManager = require('../../utils/token-manager');
 const appAccessState = require('./app-access-state');
+const systemUserAccessState = require('./system-user-access-state');
 
 function createUserService(useCloudStorage) {
   const userStorageAdapter = new StorageAdapter({ namespace: 'user_' });
@@ -17,8 +18,42 @@ function createUserService(useCloudStorage) {
 async function initializeAndBindUserService(app, useCloudStorage) {
   app.globalData.userService = createUserService(useCloudStorage);
   const initialized = await app.globalData.userService.initialize();
+
+  if (initialized !== true && app.globalData.userService?.initializationBlocked === true) {
+    app.globalData.userService = null;
+    serviceManager.setUserService(null);
+    return false;
+  }
+
   serviceManager.setUserService(app.globalData.userService);
   return initialized;
+}
+
+function hasUsableUserService(app) {
+  return Boolean(app?.globalData?.userService);
+}
+
+async function recoverUserServiceFromToken(app, options = {}) {
+  if (!API_CONFIG.ENABLE_API) {
+    return false;
+  }
+
+  const token = TokenManager.getToken();
+  if (!token || !TokenManager.isAuthenticated()) {
+    return false;
+  }
+
+  const initialized = await initializeAndBindUserService(app, true);
+  if (!initialized && !hasUsableUserService(app)) {
+    logger.warn('App', '检测到 token 存在，但用户服务恢复失败');
+    return false;
+  }
+
+  if (options.runPostLoginInitialization !== false && typeof app.postLoginInitialization === 'function') {
+    await app.postLoginInitialization();
+  }
+
+  return true;
 }
 
 async function prepareUserService(app) {
@@ -54,9 +89,7 @@ async function prepareUserService(app) {
     try {
       const loginSuccess = await autoLogin(app);
       if (loginSuccess) {
-        logger.info('App', '自动登录成功，初始化UserService');
-        await initializeAndBindUserService(app, true);
-        logger.info('App', 'UserService自动初始化完成（云端模式）');
+        logger.info('App', '自动登录成功，用户服务已自动恢复（云端模式）');
       } else {
         logger.warn('App', '自动登录失败，等待用户手动登录');
         app.globalData.userService = null;
@@ -104,6 +137,20 @@ function isAlreadyOnAccessGate() {
   return currentPage && currentPage.route === 'pages/access-gate/access-gate';
 }
 
+function isOnBlockedPage() {
+  if (typeof getCurrentPages !== 'function') {
+    return false;
+  }
+
+  const pages = getCurrentPages();
+  if (!Array.isArray(pages) || pages.length === 0) {
+    return false;
+  }
+
+  const currentPage = pages[pages.length - 1];
+  return currentPage?.route === 'pages/system-blocked/system-blocked';
+}
+
 function redirectToAccessGate(error) {
   if (isAlreadyOnAccessGate() || typeof wx === 'undefined' || typeof wx.reLaunch !== 'function') {
     return;
@@ -130,6 +177,10 @@ function handleAppAccessFailure(error, options = {}) {
   return true;
 }
 
+function handleSystemUserBlockedFailure(error) {
+  return systemUserAccessState.handleBlockedError(error);
+}
+
 function persistLoginSession(loginResult) {
   if (!loginResult || !loginResult.token) {
     return false;
@@ -142,6 +193,25 @@ function persistLoginSession(loginResult) {
   }
 
   appAccessState.clearPendingAppAccessCode();
+  systemUserAccessState.clearBlockedSessionFlag();
+
+  return true;
+}
+
+async function completeAuthenticatedSession(app, loginResult, options = {}) {
+  if (!persistLoginSession(loginResult)) {
+    return false;
+  }
+
+  const initialized = await initializeAndBindUserService(app, true);
+  if (!initialized && !hasUsableUserService(app)) {
+    logger.warn('App', '认证成功，但用户服务未就绪');
+    return false;
+  }
+
+  if (options.runPostLoginInitialization !== false && typeof app.postLoginInitialization === 'function') {
+    await app.postLoginInitialization();
+  }
 
   return true;
 }
@@ -162,16 +232,12 @@ async function runWxLogin(app) {
               user: loginResult.user
             });
 
-            persistLoginSession(loginResult);
-            const initialized = await initializeAndBindUserService(app, true);
-
-            if (initialized) {
+            const completed = await completeAuthenticatedSession(app, loginResult);
+            if (completed) {
               logger.info('App', 'UserService初始化完成（云端模式）');
             } else {
               logger.warn('App', 'UserService初始化降级（云端模式），继续使用默认用户态');
             }
-
-            await app.postLoginInitialization();
           }
           return;
         }
@@ -187,7 +253,7 @@ async function runWxLogin(app) {
         logger.error('App', '登录处理失败:', error);
 
         if (API_CONFIG.ENABLE_API) {
-          if (!handleAppAccessFailure(error)) {
+          if (!handleSystemUserBlockedFailure(error) && !handleAppAccessFailure(error)) {
             wx.showModal({
               title: '登录失败',
               content: '网络错误，请检查连接',
@@ -226,23 +292,26 @@ async function doCloudLogin(app, options = {}) {
       user: loginResult.user
     });
 
-    persistLoginSession(loginResult);
-    const initialized = await initializeAndBindUserService(app, true);
-    if (!initialized) {
+    const completed = await completeAuthenticatedSession(app, loginResult, {
+      runPostLoginInitialization: options.runPostLoginInitialization !== false
+    });
+    if (!completed) {
       logger.warn('App', '云端登录后UserService初始化降级，继续使用默认用户态');
     }
 
-    return true;
+    return completed;
   } catch (error) {
     logger.error('App', '云端登录失败:', error);
-    if (handleAppAccessFailure(error, options)) {
+    if (handleSystemUserBlockedFailure(error) || handleAppAccessFailure(error, options)) {
       return false;
     }
-    wx.showModal({
-      title: '登录失败',
-      content: error.message || '网络错误，请稍后重试',
-      showCancel: false
-    });
+    if (options.suppressFailureModal !== true) {
+      wx.showModal({
+        title: '登录失败',
+        content: error.message || '网络错误，请稍后重试',
+        showCancel: false
+      });
+    }
     return false;
   }
 }
@@ -256,6 +325,9 @@ function doCloudLogout(app) {
   logger.info('App', '开始云端登出');
   try {
     TokenManager.clearToken();
+    if (typeof wx !== 'undefined' && wx && typeof wx.removeStorageSync === 'function') {
+      wx.removeStorageSync('lastUserInfo');
+    }
     app.globalData.userService = null;
     serviceManager.setUserService(null);
 
@@ -281,9 +353,9 @@ async function autoLogin(app) {
     const loginResult = await loginWithCode(loginCode);
     logger.info('App', '后端登录响应:', loginResult);
 
-    if (persistLoginSession(loginResult)) {
-      logger.info('App', 'Token已保存');
-      logger.info('App', '用户信息已保存');
+    if (await completeAuthenticatedSession(app, loginResult, {
+      runPostLoginInitialization: true
+    })) {
       logger.info('App', '自动登录成功');
       return true;
     }
@@ -292,9 +364,112 @@ async function autoLogin(app) {
     return false;
   } catch (error) {
     logger.error('App', '自动登录异常:', error);
+    handleSystemUserBlockedFailure(error);
     handleAppAccessFailure(error);
     return false;
   }
+}
+
+async function refreshForegroundSystemAccess(app, activeUserService) {
+  if (!activeUserService || typeof activeUserService.getLoginUserId !== 'function') {
+    return false;
+  }
+
+  const loginUserId = activeUserService.getLoginUserId();
+  if (!loginUserId) {
+    return false;
+  }
+
+  try {
+    const HttpClient = require('../../utils/http-client');
+    const latestUser = await HttpClient.get(API_CONFIG.ENDPOINTS.AUTH_CURRENT);
+
+    if (!latestUser || !latestUser.userId) {
+      return false;
+    }
+
+    if (typeof activeUserService.applySystemAccessLevelSnapshot === 'function') {
+      activeUserService.applySystemAccessLevelSnapshot(latestUser.userId, {
+        systemAccessLevel: latestUser.systemAccessLevel,
+        systemAccessUpdatedAt: latestUser.systemAccessUpdatedAt,
+        systemAccessUpdatedByUserId: latestUser.systemAccessUpdatedByUserId
+      });
+    }
+
+    return true;
+  } catch (error) {
+    if (handleSystemUserBlockedFailure(error)) {
+      return false;
+    }
+
+    logger.warn('App', '前台系统访问态刷新失败，继续沿用本地快照', error);
+    return false;
+  }
+}
+
+async function handleAppShow(app) {
+  if (!API_CONFIG.ENABLE_API) {
+    return false;
+  }
+
+  const blockedSession = systemUserAccessState.hasBlockedSessionFlag();
+  const token = TokenManager.getToken();
+  const hasAuthenticatedToken = Boolean(token && TokenManager.isAuthenticated());
+  const serviceFromManager = typeof serviceManager.getUserService === 'function'
+    ? serviceManager.getUserService()
+    : null;
+  const activeUserService = app?.globalData?.userService || serviceFromManager || null;
+  const hasReadyUserService = Boolean(activeUserService && activeUserService.initialized);
+
+  if (blockedSession) {
+    logger.info('App', '检测到禁入恢复态，开始校正前台页面');
+
+    if (!isOnBlockedPage()) {
+      systemUserAccessState.resetBlockedRedirectState();
+    }
+
+    if (hasAuthenticatedToken && hasReadyUserService) {
+      systemUserAccessState.clearBlockedSessionFlag();
+      if (isOnBlockedPage()) {
+        wx.reLaunch({
+          url: '/pages/index/index'
+        });
+      }
+      return true;
+    }
+
+    const loginSuccess = await doCloudLogin(app, {
+      suppressFailureModal: true
+    });
+    if (loginSuccess) {
+      if (isOnBlockedPage()) {
+        wx.reLaunch({
+          url: '/pages/index/index'
+        });
+      }
+      return true;
+    }
+
+    if (systemUserAccessState.hasBlockedSessionFlag()) {
+      systemUserAccessState.resetBlockedRedirectState();
+      systemUserAccessState.redirectToBlockedPage();
+    }
+    return false;
+  }
+
+  if (hasAuthenticatedToken && hasReadyUserService) {
+    await refreshForegroundSystemAccess(app, activeUserService);
+    return true;
+  }
+
+  if (hasAuthenticatedToken && !hasReadyUserService) {
+    logger.info('App', '检测到 token 存在但用户服务缺失，尝试恢复会话');
+    return recoverUserServiceFromToken(app, {
+      runPostLoginInitialization: true
+    });
+  }
+
+  return false;
 }
 
 function getWxLoginCode() {
@@ -318,5 +493,6 @@ module.exports = {
   doCloudLogin,
   doCloudLogout,
   autoLogin,
-  getWxLoginCode
+  getWxLoginCode,
+  handleAppShow
 };

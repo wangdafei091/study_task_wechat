@@ -2,10 +2,11 @@ const express = require('express');
 
 const messageController = require('../controllers/messageController');
 const { authMiddleware } = require('../middleware/auth');
+const { systemUserAccessMiddleware } = require('../middleware/systemUserAccess');
 
 const router = express.Router();
 
-router.use(authMiddleware);
+router.use(authMiddleware, systemUserAccessMiddleware);
 
 router.get('/', messageController.getMessages.bind(messageController));
 router.patch('/read-all', messageController.markAllAsRead.bind(messageController));

@@ -21,6 +21,7 @@ describe('pages/index/modules/index-lifecycle', () => {
     jest.clearAllMocks();
     serviceManager = require('../../services/service-manager.js');
     app = {
+      waitForSystemAccessRefresh: jest.fn().mockResolvedValue(true),
       globalData: {
         userInfo: null,
         fromRewardCompletion: false
@@ -120,12 +121,16 @@ describe('pages/index/modules/index-lifecycle', () => {
 
     await lifecycle.onShow(page);
 
+    expect(app.waitForSystemAccessRefresh).toHaveBeenCalled();
     expect(page.waitForServicesReady).toHaveBeenCalled();
     expect(page.initializeMultiUserSystemDelayed).toHaveBeenCalled();
     expect(page.checkExpiredTasksAndStars).toHaveBeenCalled();
     expect(page.loadAllPageData).toHaveBeenCalledWith({
       skipExpiryAuthoritySyncBeforeFormalReminders: true
     });
+    expect(app.waitForSystemAccessRefresh.mock.invocationCallOrder[0]).toBeLessThan(
+      page.waitForServicesReady.mock.invocationCallOrder[0]
+    );
   });
 
   it('waitForServicesReady 初始化超时时应提示用户', async () => {
@@ -162,6 +167,24 @@ describe('pages/index/modules/index-lifecycle', () => {
       skipExpiryAuthoritySyncBeforeFormalReminders: true
     });
     expect(app.globalData.fromRewardCompletion).toBe(false);
+  });
+
+  it('onShow 在禁入跳转期间应直接停止后续业务逻辑', async () => {
+    app.waitForSystemAccessRefresh.mockResolvedValue(false);
+
+    const page = {
+      waitForServicesReady: jest.fn().mockResolvedValue(),
+      initializeMultiUserSystemDelayed: jest.fn().mockResolvedValue(),
+      checkExpiredTasksAndStars: jest.fn().mockResolvedValue(),
+      loadAllPageData: jest.fn().mockResolvedValue()
+    };
+
+    await lifecycle.onShow(page);
+
+    expect(page.waitForServicesReady).not.toHaveBeenCalled();
+    expect(page.initializeMultiUserSystemDelayed).not.toHaveBeenCalled();
+    expect(page.checkExpiredTasksAndStars).not.toHaveBeenCalled();
+    expect(page.loadAllPageData).not.toHaveBeenCalled();
   });
 
   it('waitForServicesReady 异常时不应抛错', async () => {

@@ -39,4 +39,24 @@ describe('system-service', () => {
     });
     expect(result).toEqual({ appAccessMode: 'invite_only' });
   });
+
+  it('应请求系统用户治理列表接口', async () => {
+    HttpClient.get.mockResolvedValue({ users: [] });
+
+    const result = await systemService.listUserGovernance();
+
+    expect(HttpClient.get).toHaveBeenCalledWith('/api/system/admin/users/governance');
+    expect(result).toEqual({ users: [] });
+  });
+
+  it('应请求更新系统用户访问级别接口', async () => {
+    HttpClient.patch.mockResolvedValue({ userId: 'user_1', systemAccessLevel: 'readonly' });
+
+    const result = await systemService.updateUserAccessLevel('user_1', 'readonly');
+
+    expect(HttpClient.patch).toHaveBeenCalledWith('/api/system/admin/users/user_1/access-level', {
+      accessLevel: 'readonly'
+    });
+    expect(result).toEqual({ userId: 'user_1', systemAccessLevel: 'readonly' });
+  });
 });

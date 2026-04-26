@@ -1,4 +1,5 @@
 const systemService = require('../../../services/system-service');
+const API_CONFIG = require('../../../utils/api-config');
 
 Page({
   data: {
@@ -8,12 +9,27 @@ Page({
     updatedAt: '',
     updatedByUserId: '',
     saving: false,
+    governanceEnabled: API_CONFIG.ENABLE_API === true,
+    isSystemReadonly: false,
     loadErrorCode: '',
     loadErrorMessage: ''
   },
 
   onLoad() {
+    this.refreshReadonlyState();
     this.loadOverview();
+  },
+
+  async onShow() {
+    const app = typeof getApp === 'function' ? getApp() : null;
+    if (typeof app?.waitForSystemAccessRefresh === 'function') {
+      const canContinue = await app.waitForSystemAccessRefresh();
+      if (canContinue === false) {
+        return;
+      }
+    }
+
+    this.refreshReadonlyState();
   },
 
   handleSystemAdminRequired() {
@@ -37,7 +53,19 @@ Page({
   },
 
   onRetryTap() {
+    this.refreshReadonlyState();
     this.loadOverview();
+  },
+
+  refreshReadonlyState() {
+    const userService = getApp()?.globalData?.userService;
+    const loginUser = userService?.getLoginUser?.() || null;
+    const isSystemReadonly = Boolean(loginUser && (
+      (typeof loginUser.isSystemReadonly === 'function' && loginUser.isSystemReadonly()) ||
+      loginUser.systemAccessLevel === 'readonly'
+    ));
+
+    this.setData({ isSystemReadonly });
   },
 
   async loadOverview() {
@@ -92,6 +120,14 @@ Page({
       return;
     }
 
+    if (this.data.isSystemReadonly) {
+      wx.showToast({
+        title: '当前账号为只读，仅可查看',
+        icon: 'none'
+      });
+      return;
+    }
+
     this.setData({ saving: true });
     try {
       const result = await systemService.updateAppAccessMode(nextMode);
@@ -113,5 +149,19 @@ Page({
       }
       wx.showToast({ title: error?.message || '更新失败', icon: 'none' });
     }
+  },
+
+  onUserGovernanceTap() {
+    if (!this.data.governanceEnabled) {
+      wx.showToast({
+        title: '仅云端模式可用',
+        icon: 'none'
+      });
+      return;
+    }
+
+    wx.navigateTo({
+      url: '/packageManage/pages/system-user-governance/system-user-governance'
+    });
   }
 });

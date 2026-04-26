@@ -166,6 +166,14 @@ Page({
   onShow: async function () {
     logger.info('RewardManage', '页面显示');
 
+    const appInstance = typeof getApp === 'function' ? getApp() : null;
+    if (typeof appInstance?.waitForSystemAccessRefresh === 'function') {
+      const canContinue = await appInstance.waitForSystemAccessRefresh();
+      if (canContinue === false) {
+        return;
+      }
+    }
+
     if (this._guardManageAccess({ redirectOnReadonly: true, silent: true })) {
       return;
     }

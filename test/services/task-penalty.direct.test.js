@@ -111,6 +111,34 @@ describe('task-penalty direct behavior', () => {
     });
   });
 
+  it('云端模式下系统只读应跳过任务惩罚同步，不发起后端请求', async () => {
+    const service = {
+      enableCloudStorage: true,
+      userService: {
+        getLoginUser: jest.fn(() => ({
+          userId: 'parent_readonly',
+          role: 'parent',
+          familyPermissionRole: 'manager',
+          systemAccessLevel: 'readonly'
+        }))
+      }
+    };
+
+    const result = await taskPenalty.checkTasksStatus(service);
+
+    expect(mockHttpClient.post).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      success: true,
+      skipped: true,
+      reason: 'system_readonly',
+      expiredTasks: [],
+      requiredTasks: [],
+      penaltyResults: [],
+      penaltyCount: 0,
+      affectedTaskIds: []
+    });
+  });
+
   it('handleRequiredTaskPenalty 应覆盖无 starService、零积分和异常路径', async () => {
     const service = {
       starService: null,

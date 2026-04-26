@@ -75,6 +75,7 @@ describe('app.js launch behavior', () => {
     jest.doMock('../../utils/app/bootstrap-auth', () => ({
       prepareUserService: jest.fn(),
       runWxLogin: jest.fn(),
+      handleAppShow: jest.fn().mockResolvedValue(true),
       doCloudLogin: jest.fn().mockResolvedValue(true),
       doCloudLogout: jest.fn(),
       autoLogin: jest.fn().mockResolvedValue(true),

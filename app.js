@@ -17,6 +17,7 @@ const bootstrapAuth = require('./utils/app/bootstrap-auth');
 const bootstrapServices = require('./utils/app/bootstrap-services');
 const postLoginBootstrap = require('./utils/app/post-login-bootstrap');
 const runtimeObservers = require('./utils/app/runtime-observers');
+const systemUserAccessState = require('./utils/app/system-user-access-state');
 
 App({
   onLaunch: async function () {
@@ -67,7 +68,7 @@ App({
    * 小程序显示时的处理
    * 修复清理缓存后重新进入的连接问题
    */
-  onShow: function(options) {
+  onShow: async function(options) {
     logger.info('App', 'onShow触发，检查API配置');
 
     const runtimeApiConfig = resolveRuntimeApiConfig();
@@ -77,6 +78,12 @@ App({
       enabled: runtimeApiConfig.enabled,
       source: runtimeApiConfig.source
     });
+
+    try {
+      await this.startSystemAccessRefresh(options);
+    } catch (error) {
+      logger.error('App', '等待前台系统访问态刷新失败', error);
+    }
   },
 
   /**
@@ -245,6 +252,49 @@ App({
     return runtimeObservers.setTheme(this);
   },
 
+  startSystemAccessRefresh(options = {}) {
+    const existingRefresh = this.globalData.systemAccessRefreshPromise;
+    if (existingRefresh && typeof existingRefresh.then === 'function') {
+      return existingRefresh;
+    }
+
+    const refreshPromise = (async () => {
+      try {
+        return await bootstrapAuth.handleAppShow(this, options);
+      } catch (error) {
+        logger.error('App', '系统访问态刷新失败', error);
+        return false;
+      }
+    })();
+
+    this.globalData.systemAccessRefreshPromise = refreshPromise;
+
+    refreshPromise.finally(() => {
+      if (this.globalData.systemAccessRefreshPromise === refreshPromise) {
+        this.globalData.systemAccessRefreshPromise = null;
+      }
+    });
+
+    return refreshPromise;
+  },
+
+  async waitForSystemAccessRefresh(options = {}) {
+    const pendingRefresh = this.globalData.systemAccessRefreshPromise
+      || (options.ensureFresh !== false ? this.startSystemAccessRefresh({
+        source: options.source || 'page_on_show'
+      }) : null);
+
+    if (pendingRefresh && typeof pendingRefresh.then === 'function') {
+      try {
+        await pendingRefresh;
+      } catch (error) {
+        logger.warn('App', '页面等待系统访问态刷新时收到异常，继续走兜底判定', error);
+      }
+    }
+
+    return !systemUserAccessState.hasBlockedSessionFlag();
+  },
+
   // 全局数据
   globalData: {
     userInfo: null,
@@ -261,6 +311,7 @@ App({
     theme: 'light',
     themeColors: {},
     eventCallbacks: {},
+    systemAccessRefreshPromise: null,
     needRefreshReward: false,
     rewardClaimedInfo: null,
     hasRedirectedToReward: false,

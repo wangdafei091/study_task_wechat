@@ -46,11 +46,18 @@ async function onLoad(page, options) {
 async function onShow(page) {
   logger.info('Index', '页面显示');
 
+  const app = typeof getApp === 'function' ? getApp() : null;
+  if (typeof app?.waitForSystemAccessRefresh === 'function') {
+    const canContinue = await app.waitForSystemAccessRefresh();
+    if (canContinue === false) {
+      return;
+    }
+  }
+
   await page.waitForServicesReady();
   await page.initializeMultiUserSystemDelayed();
 
-  const app = getApp();
-  if (app.globalData.fromRewardCompletion) {
+  if (app?.globalData?.fromRewardCompletion) {
     app.globalData.fromRewardCompletion = false;
     logger.info('Index', '从奖励完成页面返回，跳过过期检查');
     await page.loadAllPageData({

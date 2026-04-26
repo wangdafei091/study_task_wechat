@@ -108,6 +108,7 @@ describe('app.js contract', () => {
     jest.doMock('../../utils/app/bootstrap-auth', () => ({
       prepareUserService: prepareUserServiceMock,
       runWxLogin: runWxLoginMock,
+      handleAppShow: jest.fn(),
       doCloudLogin: jest.fn(),
       doCloudLogout: jest.fn(),
       autoLogin: jest.fn(),
@@ -135,6 +136,10 @@ describe('app.js contract', () => {
       updateHeightParams: jest.fn(),
       setTheme: jest.fn()
     }));
+
+    jest.doMock('../../utils/app/system-user-access-state', () => ({
+      hasBlockedSessionFlag: jest.fn(() => false)
+    }));
   });
 
   afterEach(() => {
@@ -151,6 +156,7 @@ describe('app.js contract', () => {
     expect(typeof appConfig.autoLogin).toBe('function');
     expect(typeof appConfig.getWxLoginCode).toBe('function');
     expect(typeof appConfig.globalEvent).toBe('function');
+    expect(typeof appConfig.waitForSystemAccessRefresh).toBe('function');
   });
 
   it('onLaunch 后应保留 globalData 的事件契约', async () => {

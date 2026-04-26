@@ -10,6 +10,10 @@ jest.mock('../../services/system-service', () => ({
   updateAppAccessMode: jest.fn()
 }));
 
+jest.mock('../../utils/api-config', () => ({
+  ENABLE_API: true
+}));
+
 describe('packageManage/pages/system-admin/system-admin', () => {
   let pageConfig;
   let systemService;
@@ -42,8 +46,20 @@ describe('packageManage/pages/system-admin/system-admin', () => {
     systemService = require('../../services/system-service');
     global.wx = {
       showToast: jest.fn(),
-      navigateBack: jest.fn()
+      navigateBack: jest.fn(),
+      navigateTo: jest.fn()
     };
+    global.getApp = jest.fn(() => ({
+      globalData: {
+        userService: {
+          getLoginUser: jest.fn(() => ({
+            userId: 'admin_1',
+            isSystemReadonly: jest.fn(() => false),
+            systemAccessLevel: 'normal'
+          }))
+        }
+      }
+    }));
     loadPageModule();
   });
 
@@ -51,6 +67,7 @@ describe('packageManage/pages/system-admin/system-admin', () => {
     jest.useRealTimers();
     delete global.Page;
     delete global.wx;
+    delete global.getApp;
   });
 
   it('加载成功后应展示系统概览', async () => {
@@ -180,5 +197,35 @@ describe('packageManage/pages/system-admin/system-admin', () => {
     });
     jest.runAllTimers();
     expect(global.wx.navigateBack).toHaveBeenCalledWith({ delta: 1 });
+  });
+
+  it('点击用户治理入口应进入治理页', () => {
+    const page = createPage();
+
+    page.onUserGovernanceTap.call(page);
+
+    expect(global.wx.navigateTo).toHaveBeenCalledWith({
+      url: '/packageManage/pages/system-user-governance/system-user-governance'
+    });
+  });
+
+  it('系统只读时不应允许切换准入模式', async () => {
+    const page = createPage();
+    page.data.appAccessMode = 'open';
+    page.data.isSystemReadonly = true;
+
+    await page.onModeChange.call(page, {
+      currentTarget: {
+        dataset: {
+          mode: 'invite_only'
+        }
+      }
+    });
+
+    expect(systemService.updateAppAccessMode).not.toHaveBeenCalled();
+    expect(global.wx.showToast).toHaveBeenCalledWith({
+      title: '当前账号为只读，仅可查看',
+      icon: 'none'
+    });
   });
 });

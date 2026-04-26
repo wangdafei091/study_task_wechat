@@ -529,6 +529,46 @@ describe('pages/rewards/rewards behavior', () => {
     }));
   });
 
+  it('claimReward 在系统只读时应前置拦截兑换确认', async () => {
+    const page = createPageInstance();
+    page.data.selectedReward = {
+      id: 'reward-readonly',
+      name: '只读奖励',
+      points: 10,
+      enabled: true,
+      claimed: false
+    };
+    page._performClaimReward = jest.fn();
+
+    serviceManager.getUserService.mockReturnValue({
+      getLoginUser: jest.fn(() => ({
+        userId: 'parent-1',
+        role: 'parent',
+        familyId: 'family-1',
+        familyPermissionRole: 'manager',
+        systemAccessLevel: 'readonly'
+      })),
+      getCurrentUser: jest.fn(() => ({
+        userId: 'parent-1',
+        role: 'parent',
+        familyId: 'family-1'
+      })),
+      getAllUsers: jest.fn(() => [
+        { userId: 'parent-1', role: 'parent', familyId: 'family-1' },
+        { userId: 'child-1', role: 'child', familyId: 'family-1' }
+      ])
+    });
+
+    await page.claimReward({});
+
+    expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({
+      title: '当前账号为只读，不能兑换奖励',
+      icon: 'none'
+    }));
+    expect(global.wx.showModal).not.toHaveBeenCalled();
+    expect(page._performClaimReward).not.toHaveBeenCalled();
+  });
+
   it('页面导航与星星快照查询应覆盖真实跳转和空态 CTA 分支', async () => {
     const page = createPageInstance();
     const starService = {

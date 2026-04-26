@@ -27,6 +27,12 @@ const UserStatus = {
   INACTIVE: 'inactive' // 非活跃
 };
 
+const SystemAccessLevel = {
+  NORMAL: 'normal',
+  READONLY: 'readonly',
+  BLOCKED: 'blocked'
+};
+
 class User {
   /**
    * 构造函数
@@ -42,6 +48,9 @@ class User {
     this.avatar = data.avatar || '';
     this.status = data.status || UserStatus.ACTIVE;
     this.isSystemAdmin = Boolean(data.isSystemAdmin);
+    this.systemAccessLevel = data.systemAccessLevel || SystemAccessLevel.NORMAL;
+    this.systemAccessUpdatedAt = data.systemAccessUpdatedAt || null;
+    this.systemAccessUpdatedByUserId = data.systemAccessUpdatedByUserId || null;
 
     // 家庭相关字段（M6新增）
     this.familyId = data.familyId || null;
@@ -95,6 +104,10 @@ class User {
     if (!Object.values(UserStatus).includes(this.status)) {
       errors.push('用户状态无效');
     }
+
+    if (!Object.values(SystemAccessLevel).includes(this.systemAccessLevel)) {
+      errors.push('系统访问级别无效');
+    }
     
     return errors;
   }
@@ -130,6 +143,14 @@ class User {
   isActive() {
     return this.status === UserStatus.ACTIVE;
   }
+
+  isSystemReadonly() {
+    return this.systemAccessLevel === SystemAccessLevel.READONLY;
+  }
+
+  isSystemBlocked() {
+    return this.systemAccessLevel === SystemAccessLevel.BLOCKED;
+  }
   
   /**
    * 获取页面访问权限
@@ -153,7 +174,7 @@ class User {
     ];
 
     if (effectiveRole === UserRole.PARENT) {
-      return [
+      const pages = [
         ...commonPages,
         'packageTask/pages/task-edit/task-edit',
         'packageTask/pages/task-occurrence-edit/task-occurrence-edit',
@@ -161,6 +182,14 @@ class User {
         'packageManage/pages/family-settings/family-settings',
         'packageManage/pages/about/about'
       ];
+
+      const effectiveUser = loginUser || this;
+      if (effectiveUser?.isSystemAdmin) {
+        pages.push('packageManage/pages/system-admin/system-admin');
+        pages.push('packageManage/pages/system-user-governance/system-user-governance');
+      }
+
+      return pages;
     }
 
     return commonPages;
@@ -187,6 +216,11 @@ class User {
     if (data.displayName !== undefined) this.displayName = data.displayName;
     if (data.avatar !== undefined) this.avatar = data.avatar;
     if (data.status !== undefined) this.status = data.status;
+    if (data.systemAccessLevel !== undefined) this.systemAccessLevel = data.systemAccessLevel;
+    if (data.systemAccessUpdatedAt !== undefined) this.systemAccessUpdatedAt = data.systemAccessUpdatedAt;
+    if (data.systemAccessUpdatedByUserId !== undefined) {
+      this.systemAccessUpdatedByUserId = data.systemAccessUpdatedByUserId;
+    }
     
     this.modifyTime = Date.now();
     
@@ -208,6 +242,9 @@ class User {
       familyId: this.familyId,
       familyPermissionRole: this.familyPermissionRole,
       isSystemAdmin: this.isSystemAdmin,
+      systemAccessLevel: this.systemAccessLevel,
+      systemAccessUpdatedAt: this.systemAccessUpdatedAt,
+      systemAccessUpdatedByUserId: this.systemAccessUpdatedByUserId,
       isVirtual: this.isVirtual,
       createdByUserId: this.createdByUserId,
       createTime: this.createTime,
@@ -228,6 +265,7 @@ class User {
 
 module.exports = {
   FamilyPermissionRole,
+  SystemAccessLevel,
   User,
   UserRole,
   UserStatus

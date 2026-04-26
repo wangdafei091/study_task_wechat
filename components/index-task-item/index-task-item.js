@@ -165,6 +165,8 @@ Component({
           title = '未来日期仅支持查看';
         } else if (this.properties.readonlyReason === 'viewer-readonly') {
           title = '当前为查看者，不能修改任务';
+        } else if (this.properties.readonlyReason === 'system-readonly') {
+          title = '当前账号为只读，不能修改任务';
         }
         wx.showToast({ title, icon: 'none', duration: 1500 });
         return;

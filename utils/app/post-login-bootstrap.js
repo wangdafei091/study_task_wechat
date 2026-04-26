@@ -1,5 +1,11 @@
 const serviceManager = require('../../services/service-manager.js');
 const logger = require('../../utils/logger');
+const { isSystemReadonlyUser } = require('../../utils/system-access');
+
+function isSystemReadonlyAccount() {
+  const loginUser = serviceManager.getUserService()?.getLoginUser?.() || null;
+  return isSystemReadonlyUser(loginUser);
+}
 
 async function run(app) {
   try {
@@ -21,19 +27,25 @@ async function run(app) {
       await offlineQueueService.initialize();
     }
 
-    if (offlineQueueService?.drain) {
+    if (offlineQueueService?.drain && !isSystemReadonlyAccount()) {
       await offlineQueueService.drain({
         reason: 'post_login_bootstrap',
         force: true
       });
       logger.info('App', '登录后离线队列补偿完成');
+    } else if (offlineQueueService?.drain) {
+      logger.info('App', '系统只读，跳过登录后离线队列补偿');
     }
 
     if (taskService) {
       await fixLegacyTaskData(taskService);
-      logger.info('App', '开始检查任务状态和处理必做任务惩罚');
-      await taskService.checkTasksStatus();
-      await taskService.checkUpcomingTasks();
+      if (!isSystemReadonlyAccount()) {
+        logger.info('App', '开始检查任务状态和处理必做任务惩罚');
+        await taskService.checkTasksStatus();
+        await taskService.checkUpcomingTasks();
+      } else {
+        logger.info('App', '系统只读，跳过启动期任务写链路');
+      }
     }
 
     if (starService) {
@@ -43,8 +55,10 @@ async function run(app) {
     if (messageService) {
       logger.info('App', '初始化消息服务');
       await messageService.initialize();
-      if (typeof messageService.syncFormalRemindersIfNeeded === 'function') {
+      if (!isSystemReadonlyAccount() && typeof messageService.syncFormalRemindersIfNeeded === 'function') {
         await messageService.syncFormalRemindersIfNeeded();
+      } else if (typeof messageService.syncFormalRemindersIfNeeded === 'function') {
+        logger.info('App', '系统只读，跳过正式提醒同步');
       }
       const messages = await messageService.getAllMessages();
       logger.info('App', `消息服务初始化完成，共${messages.length}条消息`);
@@ -76,11 +90,15 @@ async function bootstrapStarService(starService) {
 
     if (starService.enableCloudStorage && loginUserId && typeof starService.syncExpiryAuthorityIfNeeded === 'function') {
       logger.info('App', '云端模式执行星星到期权威同步');
-      await starService.syncExpiryAuthorityIfNeeded({
-        scope: 'user',
-        userId: loginUserId,
-        force: true
-      });
+      if (!isSystemReadonlyAccount()) {
+        await starService.syncExpiryAuthorityIfNeeded({
+          scope: 'user',
+          userId: loginUserId,
+          force: true
+        });
+      } else {
+        logger.info('App', '系统只读，跳过星星到期权威同步');
+      }
       if (typeof starService.refreshStarsFromCloud === 'function') {
         // 启动链路是正式 user-scope 顺序：authority -> stars -> rewards。
         await starService.refreshStarsFromCloud(loginUserId, {

@@ -4,7 +4,7 @@
  * 测试 User 领域模型的数据结构和业务方法
  */
 
-const { User, UserRole, UserStatus } = require('../../models/user');
+const { SystemAccessLevel, User, UserRole, UserStatus } = require('../../models/user');
 
 describe('User 领域模型', () => {
 
@@ -17,6 +17,7 @@ describe('User 领域模型', () => {
       expect(user.role).toBe(UserRole.PARENT);
       expect(user.avatar).toBe('');
       expect(user.status).toBe(UserStatus.ACTIVE);
+      expect(user.systemAccessLevel).toBe(SystemAccessLevel.NORMAL);
       expect(user.createTime).toBeGreaterThan(0);
       expect(user.modifyTime).toBeGreaterThan(0);
     });
@@ -270,6 +271,12 @@ describe('User 领域模型', () => {
       expect(user.status).toBe(UserStatus.INACTIVE);
     });
 
+    it('应该更新systemAccessLevel', () => {
+      const user = new User({ systemAccessLevel: SystemAccessLevel.NORMAL });
+      user.update({ systemAccessLevel: SystemAccessLevel.READONLY });
+      expect(user.systemAccessLevel).toBe(SystemAccessLevel.READONLY);
+    });
+
     it('应该更新多个字段', () => {
       const user = new User({
         name: '旧名称',
@@ -454,6 +461,33 @@ describe('User 领域模型', () => {
       expect(UserStatus.INACTIVE).toBe('inactive');
       expect(Object.values(UserStatus)).toContain('active');
       expect(Object.values(UserStatus)).toContain('inactive');
+    });
+  });
+
+  describe('system access helpers', () => {
+    it('只读用户应返回 true', () => {
+      const user = new User({ systemAccessLevel: SystemAccessLevel.READONLY });
+      expect(user.isSystemReadonly()).toBe(true);
+      expect(user.isSystemBlocked()).toBe(false);
+    });
+
+    it('禁入用户应返回 true', () => {
+      const user = new User({ systemAccessLevel: SystemAccessLevel.BLOCKED });
+      expect(user.isSystemBlocked()).toBe(true);
+      expect(user.isSystemReadonly()).toBe(false);
+    });
+  });
+
+  describe('system admin pages', () => {
+    it('系统管理员应可访问系统管理页与治理页', () => {
+      const user = new User({
+        role: UserRole.PARENT,
+        isSystemAdmin: true
+      });
+
+      const pages = user.getAccessiblePages();
+      expect(pages).toContain('packageManage/pages/system-admin/system-admin');
+      expect(pages).toContain('packageManage/pages/system-user-governance/system-user-governance');
     });
   });
 });

@@ -8,6 +8,10 @@ jest.mock('../../services/systemAdminService', () => ({
 jest.mock('../../services/systemSettingService', () => ({
   updateAppAccessMode: jest.fn()
 }));
+jest.mock('../../services/systemUserGovernanceService', () => ({
+  listGovernableUsers: jest.fn(),
+  updateAccessLevel: jest.fn()
+}));
 jest.mock('../../middleware/auth', () => ({
   authMiddleware: jest.fn((req, res, next) => {
     req.user = { userId: 'user_1' };
@@ -18,12 +22,16 @@ jest.mock('../../middleware/systemAdmin', () => jest.fn((req, res, next) => {
   req.systemAdmin = { userId: 'admin_1' };
   next();
 }));
+jest.mock('../../middleware/systemUserAccess', () => ({
+  systemUserAccessMiddleware: jest.fn((req, res, next) => next())
+}));
 jest.mock('../../utils/logger', () => ({
   createLogger: () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() })
 }));
 
 const systemAdminService = require('../../services/systemAdminService');
 const systemSettingService = require('../../services/systemSettingService');
+const systemUserGovernanceService = require('../../services/systemUserGovernanceService');
 
 function buildApp() {
   const app = express();
@@ -114,5 +122,53 @@ describe('system admin controller routes', () => {
 
     expect(res.status).toBe(400);
     expect(res.body.error_code).toBe('SYSTEM_SETTING_INVALID');
+  });
+
+  it('应返回系统用户治理列表', async () => {
+    systemUserGovernanceService.listGovernableUsers.mockResolvedValue([
+      { userId: 'user_1', systemAccessLevel: 'normal' }
+    ]);
+
+    const res = await request(app).get('/api/system/admin/users/governance');
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.users).toEqual([
+      expect.objectContaining({ userId: 'user_1' })
+    ]);
+  });
+
+  it('更新用户访问级别成功后应返回最新摘要', async () => {
+    systemUserGovernanceService.updateAccessLevel.mockResolvedValue({
+      userId: 'user_2',
+      systemAccessLevel: 'readonly',
+      systemAccessUpdatedAt: '2026-04-26 12:00:00',
+      systemAccessUpdatedByUserId: 'admin_1'
+    });
+
+    const res = await request(app)
+      .patch('/api/system/admin/users/user_2/access-level')
+      .send({ accessLevel: 'readonly' });
+
+    expect(res.status).toBe(200);
+    expect(systemUserGovernanceService.updateAccessLevel).toHaveBeenCalledWith('user_2', 'readonly', 'admin_1');
+    expect(res.body.data).toEqual(expect.objectContaining({
+      userId: 'user_2',
+      systemAccessLevel: 'readonly'
+    }));
+  });
+
+  it('更新用户访问级别命中最后管理员保护时应返回 409', async () => {
+    systemUserGovernanceService.updateAccessLevel.mockRejectedValue(
+      Object.assign(new Error('至少保留一位可正常使用的系统管理员'), {
+        code: 'SYSTEM_USER_LAST_ADMIN_NORMAL_REQUIRED'
+      })
+    );
+
+    const res = await request(app)
+      .patch('/api/system/admin/users/admin_1/access-level')
+      .send({ accessLevel: 'blocked' });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error_code).toBe('SYSTEM_USER_LAST_ADMIN_NORMAL_REQUIRED');
   });
 });

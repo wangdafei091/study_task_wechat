@@ -16,6 +16,10 @@ function getPermissionRoleLabel(role) {
 }
 
 function getPermissionRoleDescription(permissionContext = {}) {
+  if (permissionContext.isSystemReadonly) {
+    return '当前账号为只读，仅可查看家庭信息';
+  }
+
   if (permissionContext.canManageFamilyGovernance) {
     return '可管理任务、奖励和家庭设置';
   }
@@ -121,6 +125,7 @@ Page({
     familyPermissionRole: '',
     currentIdentityLabel: '',
     currentIdentityDescription: '',
+    isSystemReadonly: false,
     canManageFamilyGovernance: false,
     governanceDisabledReason: '',
     canManageInviteCode: false,
@@ -165,7 +170,15 @@ Page({
     this._loadFamilyData();
   },
 
-  onShow() {
+  async onShow() {
+    const app = typeof getApp === 'function' ? getApp() : null;
+    if (typeof app?.waitForSystemAccessRefresh === 'function') {
+      const canContinue = await app.waitForSystemAccessRefresh();
+      if (canContinue === false) {
+        return;
+      }
+    }
+
     // 仅在非首次加载（已有数据）时刷新，首次加载由 onLoad 负责
     if (!this.data.loading) {
       this._loadFamilyData();
@@ -204,14 +217,21 @@ Page({
           familyPermissionRole: permissionContext.familyPermissionRole || '',
           currentIdentityLabel: getPermissionRoleLabel(permissionContext.familyPermissionRole),
           currentIdentityDescription: getPermissionRoleDescription(permissionContext),
+          isSystemReadonly: permissionContext.isSystemReadonly,
           canManageFamilyGovernance: permissionContext.canManageFamilyGovernance,
           governanceDisabledReason: permissionContext.canManageFamilyGovernance
             ? ''
-            : '只有管理员可以邀请成员或调整权限',
+            : (permissionContext.isSystemReadonly
+              ? '当前账号为只读，仅可查看家庭信息'
+              : '只有管理员可以邀请成员或调整权限'),
           canManageInviteCode,
           inviteManagementDisabledReason: canManageInviteCode
             ? ''
-            : (localMode ? '本地模式下不提供邀请码' : '只有管理员可以刷新邀请码'),
+            : (localMode
+              ? '本地模式下不提供邀请码'
+              : (permissionContext.isSystemReadonly
+                ? '当前账号为只读，不能刷新邀请码'
+                : '只有管理员可以刷新邀请码')),
           supportsParentPermissionManagement,
           inviteCode: family.inviteCode || '',
           inviteCodeExpiresAt: family.inviteCodeExpiresAt,
@@ -227,6 +247,7 @@ Page({
           familyPermissionRole: '',
           currentIdentityLabel: '',
           currentIdentityDescription: '',
+          isSystemReadonly: false,
           canManageFamilyGovernance: false,
           governanceDisabledReason: '',
           canManageInviteCode: false,
@@ -387,7 +408,10 @@ Page({
   // ===== 添加虚拟成员 =====
   async addVirtualMember() {
     if (!this.data.canManageFamilyGovernance) {
-      wx.showToast({ title: '当前为查看者，不能修改家庭设置', icon: 'none' });
+      wx.showToast({
+        title: this.data.isSystemReadonly ? '当前账号为只读，不能修改家庭设置' : '当前为查看者，不能修改家庭设置',
+        icon: 'none'
+      });
       return;
     }
     wx.showModal({
@@ -432,7 +456,10 @@ Page({
   // ===== 删除虚拟成员 =====
   async deleteMember(e) {
     if (!this.data.canManageFamilyGovernance) {
-      wx.showToast({ title: '当前为查看者，不能修改家庭设置', icon: 'none' });
+      wx.showToast({
+        title: this.data.isSystemReadonly ? '当前账号为只读，不能修改家庭设置' : '当前为查看者，不能修改家庭设置',
+        icon: 'none'
+      });
       return;
     }
     const { userId, name } = e.currentTarget.dataset;
@@ -510,7 +537,10 @@ Page({
     }
 
     if (!this.data.canManageFamilyGovernance) {
-      wx.showToast({ title: '当前为查看者，不能修改家庭设置', icon: 'none' });
+      wx.showToast({
+        title: this.data.isSystemReadonly ? '当前账号为只读，不能修改家庭设置' : '当前为查看者，不能修改家庭设置',
+        icon: 'none'
+      });
       return;
     }
 

@@ -11,6 +11,7 @@ const EventBus = require('../utils/core/event-bus');
 const HttpClient = require('../utils/http-client');
 const TokenManager = require('../utils/token-manager');
 const API_CONFIG = require('../utils/api-config');
+const systemUserAccessState = require('../utils/app/system-user-access-state');
 
 class UserService {
   /**
@@ -46,6 +47,7 @@ class UserService {
     
     // 初始化标记
     this.initialized = false;
+    this.initializationBlocked = false;
     
     logger.info('UserService', '初始化用户服务（API模式）', { defaultUserId: this.currentUser.id });
   }
@@ -56,12 +58,32 @@ class UserService {
    */
   async initialize() {
     try {
+      this.initializationBlocked = false;
+
       // 1. 从 JWT 解析 loginUser（设备登录者，生命周期内不变）
       const tokenInfo = TokenManager.getUserInfo();
       if (tokenInfo && tokenInfo.userId) {
-        const userDataFromAPI = await HttpClient.get(
-          API_CONFIG.ENDPOINTS.AUTH_CURRENT
-        ).catch(() => null);
+        let userDataFromAPI = null;
+        try {
+          userDataFromAPI = await HttpClient.get(API_CONFIG.ENDPOINTS.AUTH_CURRENT);
+        } catch (error) {
+          if (systemUserAccessState.isBlockedError(error)) {
+            systemUserAccessState.handleBlockedError(error);
+            this.userCache.clear();
+            this.loginUser = null;
+            this.initializationBlocked = true;
+            this.currentUser = new User({
+              userId: 'parent',
+              name: '家长',
+              displayName: '家长模式',
+              role: UserRole.PARENT,
+              avatar: '👩‍💼',
+              status: UserStatus.ACTIVE
+            });
+            this.initialized = true;
+            return false;
+          }
+        }
         if (userDataFromAPI) {
           this.loginUser = new User(userDataFromAPI);
         } else {
@@ -159,6 +181,30 @@ class UserService {
    */
   getLoginUserId() {
     return this.loginUser ? this.loginUser.userId : null;
+  }
+
+  applySystemAccessLevelSnapshot(userId, snapshot = {}) {
+    const targets = [];
+
+    if (this.loginUser?.userId === userId) {
+      targets.push(this.loginUser);
+    }
+    if (this.currentUser?.userId === userId && this.currentUser !== this.loginUser) {
+      targets.push(this.currentUser);
+    }
+
+    const cached = this.userCache.get(userId);
+    if (cached && !targets.includes(cached)) {
+      targets.push(cached);
+    }
+
+    targets.forEach((user) => {
+      user.update({
+        systemAccessLevel: snapshot.systemAccessLevel,
+        systemAccessUpdatedAt: snapshot.systemAccessUpdatedAt,
+        systemAccessUpdatedByUserId: snapshot.systemAccessUpdatedByUserId
+      });
+    });
   }
 
   /**
@@ -402,6 +448,13 @@ class UserService {
       }
       members.forEach(u => this.userCache.set(u.userId, u));
       logger.info('UserService', `家庭成员加载: ${members.length}人`);
+
+      if (this.loginUser && this.userCache.has(this.loginUser.userId)) {
+        this.loginUser = this.userCache.get(this.loginUser.userId);
+      }
+      if (this.currentUser && this.userCache.has(this.currentUser.userId)) {
+        this.currentUser = this.userCache.get(this.currentUser.userId);
+      }
 
       if (this.currentUser && !this.userCache.has(this.currentUser.userId)) {
         const isPlaceholderUser = this._isLegacyPlaceholderUserId(this.currentUser.userId);

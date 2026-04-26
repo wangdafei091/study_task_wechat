@@ -6,6 +6,7 @@
 const API_CONFIG = require('./api-config');
 const logger = require('./logger');
 const TokenManager = require('./token-manager');
+const systemUserAccessState = require('./app/system-user-access-state');
 
 function buildHttpError(message, options = {}) {
   const error = new Error(message || '请求失败');
@@ -25,11 +26,14 @@ function rejectWithResponseError(reject, res, fallbackMessage) {
   const responseData = res?.data || {};
   const message = responseData.message || fallbackMessage || '请求失败';
   const code = responseData.error_code || responseData.errorCode || null;
-  reject(buildHttpError(message, {
+  const requestError = buildHttpError(message, {
     code,
     statusCode: res?.statusCode || null,
     responseData
-  }));
+  });
+
+  systemUserAccessState.handleBlockedError(requestError);
+  reject(requestError);
 }
 
 function buildRequestHeaders() {

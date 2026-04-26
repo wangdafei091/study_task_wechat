@@ -29,6 +29,25 @@ class SystemService {
       throw error;
     }
   }
+
+  async listUserGovernance() {
+    try {
+      return await HttpClient.get(API_CONFIG.ENDPOINTS.SYSTEM_ADMIN_USERS_GOVERNANCE);
+    } catch (error) {
+      logger.error('SystemService', '获取系统用户治理列表失败', error);
+      throw error;
+    }
+  }
+
+  async updateUserAccessLevel(userId, accessLevel) {
+    try {
+      const url = API_CONFIG.ENDPOINTS.SYSTEM_ADMIN_USER_ACCESS_LEVEL.replace('{userId}', userId);
+      return await HttpClient.patch(url, { accessLevel });
+    } catch (error) {
+      logger.error('SystemService', '更新系统用户访问级别失败', error);
+      throw error;
+    }
+  }
 }
 
 module.exports = new SystemService();

@@ -233,6 +233,48 @@ describe('packageManage/pages/family-settings/family-settings', () => {
     expect(page.data.inviteManagementDisabledReason).toBe('只有管理员可以刷新邀请码');
   });
 
+  it('系统只读家长加载家庭数据时应展示系统级禁用原因', async () => {
+    jest.resetModules();
+    loadPageModule({ apiEnabled: true });
+    const page = createPage();
+    appMock.globalData.userService.getFamilyInfo = jest.fn().mockResolvedValue({
+      data: {
+        familyId: 'fam_1',
+        name: '测试家庭',
+        inviteCode: 'INV12345',
+        inviteCodeRole: 'parent',
+        inviteCodeExpiresAt: '2099-01-01T00:00:00.000Z'
+      }
+    });
+    appMock.globalData.userService.getLoginUser = jest.fn(() => ({
+      userId: 'parent_manager',
+      name: '管理员家长',
+      role: 'parent',
+      familyId: 'fam_1',
+      familyPermissionRole: 'manager',
+      systemAccessLevel: 'readonly'
+    }));
+    appMock.globalData.userService.getCurrentUser = jest.fn(() => ({
+      userId: 'parent_manager',
+      name: '管理员家长',
+      role: 'parent',
+      familyId: 'fam_1',
+      familyPermissionRole: 'manager',
+      systemAccessLevel: 'readonly'
+    }));
+    page._loadMembers = jest.fn().mockResolvedValue([
+      { userId: 'parent_manager', nickname: '管理员家长', role: 'parent', familyPermissionRole: 'manager', isVirtual: false },
+      { userId: 'child_1', nickname: '孩子', role: 'child', isVirtual: true }
+    ]);
+
+    await page._loadFamilyData.call(page);
+
+    expect(page.data.isSystemReadonly).toBe(true);
+    expect(page.data.currentIdentityDescription).toBe('当前账号为只读，仅可查看家庭信息');
+    expect(page.data.governanceDisabledReason).toBe('当前账号为只读，仅可查看家庭信息');
+    expect(page.data.inviteManagementDisabledReason).toBe('当前账号为只读，不能刷新邀请码');
+  });
+
   it('加载家庭数据时应兼容数据库时间格式的邀请码有效期', async () => {
     jest.useFakeTimers();
     jest.setSystemTime(new Date('2026-04-10T10:00:00+08:00'));

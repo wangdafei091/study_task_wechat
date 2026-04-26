@@ -138,10 +138,24 @@ Page({
         loginUser.familyId &&
         loginUser.familyPermissionRole === 'viewer'
       );
-      if (isChildView || isViewerReadonly) {
-        logger.warn('TaskEdit', '无权限访问任务编辑页，已拦截', { loginRole, isChildView, isViewerReadonly });
+      const isSystemReadonly = Boolean(
+        loginUser &&
+        (
+          (typeof loginUser.isSystemReadonly === 'function' && loginUser.isSystemReadonly()) ||
+          loginUser.systemAccessLevel === 'readonly'
+        )
+      );
+      if (isChildView || isViewerReadonly || isSystemReadonly) {
+        logger.warn('TaskEdit', '无权限访问任务编辑页，已拦截', {
+          loginRole,
+          isChildView,
+          isViewerReadonly,
+          isSystemReadonly
+        });
         wx.showToast({
-          title: isViewerReadonly ? '当前为查看者，不能创建任务' : '暂无操作权限',
+          title: isSystemReadonly
+            ? '当前账号为只读，不能创建任务'
+            : (isViewerReadonly ? '当前为查看者，不能创建任务' : '暂无操作权限'),
           icon: 'none',
           duration: 1500
         });

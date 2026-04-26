@@ -14,6 +14,7 @@ const ConfigService = require('./config-service');
 const logger = require('../utils/logger');
 const EventBus = require('../utils/core/event-bus');
 const StorageAdapter = require('../adapters/storage-adapter');
+const { getSystemAccessLevel } = require('../utils/system-access');
 const userContextUtils = require('../utils/user-context');
 
 class ServiceManager {
@@ -29,8 +30,9 @@ class ServiceManager {
   }
 
   _resolveOfflineQueueContext() {
+    const loginUser = this.userService?.getLoginUser?.() || null;
     const mutationContext = userContextUtils.resolveMutationContext({
-      loginUser: this.userService?.getLoginUser?.() || null,
+      loginUser,
       currentUser: this.userService?.getCurrentUser?.() || null,
       currentUserId: this.userService?.getCurrentUserId?.() || null,
       availableUsers: this.userService?.getAllUsers?.() || []
@@ -41,6 +43,7 @@ class ServiceManager {
     return {
       familyId: mutationContext.familyId || null,
       loginUserId: mutationContext.loginUserId || null,
+      systemAccessLevel: getSystemAccessLevel(loginUser),
       actorUserId: mutationContext.executionActorUserId || null,
       actorRole: mutationContext.executionActorRole || 'system',
       targetUserId: mutationContext.targetUserId || null
