@@ -37,6 +37,12 @@
   color: #8a5a4b;
 }
 
+.readonly-tip {
+  margin-top: 20rpx;
+  font-size: 24rpx;
+  color: #9b6a1d;
+}
+
 .retry-button {
   margin-top: 24rpx;
   padding: 18rpx 0;
@@ -114,4 +120,38 @@
   text-align: center;
   font-size: 26rpx;
   color: #69788d;
+}
+
+.entry-card {
+  display: flex;
+  flex-direction: column;
+  gap: 24rpx;
+}
+
+.entry-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+}
+
+.entry-chevron {
+  font-size: 42rpx;
+  line-height: 1;
+  color: #9aa8ba;
+}
+
+.entry-button {
+  padding: 20rpx 0;
+  border-radius: 16rpx;
+  background: #edf4ff;
+  text-align: center;
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #2f6fd6;
+}
+
+.entry-button.disabled {
+  background: #f3f5f9;
+  color: #9aa8ba;
 }

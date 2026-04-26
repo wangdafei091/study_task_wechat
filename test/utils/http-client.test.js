@@ -1,5 +1,6 @@
 describe('utils/http-client', () => {
   let HttpClient;
+  let systemUserAccessState;
 
   beforeEach(() => {
     jest.resetModules();
@@ -35,9 +36,13 @@ describe('utils/http-client', () => {
     jest.doMock('../../utils/token-manager', () => ({
       getToken: jest.fn(() => null)
     }));
+    jest.doMock('../../utils/app/system-user-access-state', () => ({
+      handleBlockedError: jest.fn()
+    }));
 
     jest.isolateModules(() => {
       HttpClient = require('../../utils/http-client');
+      systemUserAccessState = require('../../utils/app/system-user-access-state');
     });
   });
 
@@ -71,6 +76,27 @@ describe('utils/http-client', () => {
 
     expect(global.wx.request).toHaveBeenCalledWith(expect.objectContaining({
       url: 'https://api.todoceo.xyz/test/health'
+    }));
+  });
+
+  it('命中 SYSTEM_USER_BLOCKED 时应交给统一禁入处理', async () => {
+    global.wx.request.mockImplementationOnce(({ success }) => {
+      success({
+        statusCode: 403,
+        data: {
+          success: false,
+          error_code: 'SYSTEM_USER_BLOCKED',
+          message: '当前账号已被管理员暂停使用'
+        }
+      });
+    });
+
+    await expect(HttpClient.get('/api/tasks')).rejects.toMatchObject({
+      code: 'SYSTEM_USER_BLOCKED'
+    });
+
+    expect(systemUserAccessState.handleBlockedError).toHaveBeenCalledWith(expect.objectContaining({
+      code: 'SYSTEM_USER_BLOCKED'
     }));
   });
 });

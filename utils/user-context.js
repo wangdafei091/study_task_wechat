@@ -186,28 +186,33 @@ function resolveMutationContext(input = {}, options = {}) {
 function resolvePermissionContext(input = {}, options = {}) {
   const snapshot = normalizeSnapshot(input);
   const familyPermissionRole = snapshot.loginUserFamilyPermissionRole || snapshot.familyPermissionRole || null;
+  const systemAccessLevel = snapshot.loginUser?.systemAccessLevel || 'normal';
   const isExecutingChildView = Boolean(snapshot.isChildView && snapshot.viewUserRole === 'child');
   const isSwitchedChildView = snapshot.loginUserRole === 'child' || (
     Boolean(snapshot.loginUserId) &&
     Boolean(snapshot.viewUserId) &&
     snapshot.loginUserId !== snapshot.viewUserId
   );
+  const isSystemReadonly = systemAccessLevel === 'readonly';
+  const isSystemBlocked = systemAccessLevel === 'blocked';
   const isViewerReadonly = Boolean(
     snapshot.loginUserRole === 'parent' &&
     snapshot.familyId &&
     familyPermissionRole === 'viewer' &&
     !isExecutingChildView
   );
-  const isReadonlyView = isSwitchedChildView || isViewerReadonly;
+  const isReadonlyView = isSystemReadonly || isSwitchedChildView || isViewerReadonly;
   const canManageFamilyGovernance = Boolean(
     snapshot.loginUserRole === 'parent' &&
     snapshot.familyId &&
     familyPermissionRole === 'manager' &&
+    !isSystemReadonly &&
     !isSwitchedChildView
   );
   const canManageBusinessData = Boolean(
     snapshot.loginUserRole === 'parent' &&
     (!snapshot.familyId || familyPermissionRole === 'manager') &&
+    !isSystemReadonly &&
     !isSwitchedChildView
   );
   const permissionRole = isExecutingChildView ? null : familyPermissionRole;
@@ -219,10 +224,14 @@ function resolvePermissionContext(input = {}, options = {}) {
     loginUserId: snapshot.loginUserId,
     loginUserRole: snapshot.loginUserRole,
     familyPermissionRole,
+    systemAccessLevel,
+    isSystemReadonly,
+    isSystemBlocked,
     viewUserId: snapshot.viewUserId,
     viewUserRole: snapshot.viewUserRole,
     isSwitchedChildView,
     isViewerReadonly,
+    readonlyReason: isSystemReadonly ? 'system-readonly' : (isViewerReadonly ? 'viewer-readonly' : ''),
     canManageMembers: snapshot.loginUserRole === 'parent',
     isReadonlyView,
     canManageFamilyGovernance,

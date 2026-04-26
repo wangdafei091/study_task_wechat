@@ -6,10 +6,11 @@ const express = require('express');
 
 const rewardController = require('../controllers/rewardController');
 const { authMiddleware } = require('../middleware/auth');
+const { systemUserAccessMiddleware } = require('../middleware/systemUserAccess');
 
 const router = express.Router();
 
-router.use(authMiddleware);
+router.use(authMiddleware, systemUserAccessMiddleware);
 
 router.get('/', rewardController.getRewards.bind(rewardController));
 router.post('/', rewardController.createReward.bind(rewardController));

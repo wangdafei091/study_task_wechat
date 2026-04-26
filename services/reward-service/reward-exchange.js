@@ -2,6 +2,7 @@ const logger = require('../../utils/logger');
 const { EVENTS } = require('../../utils/constants');
 const rewardStatus = require('../../utils/reward-status');
 const rewardDisplay = require('../../utils/reward-display');
+const systemUserAccessState = require('../../utils/app/system-user-access-state');
 
 async function previewRewardExchangeCost(service, rewardOrId, userId = null) {
   const reward = typeof rewardOrId === 'string'
@@ -527,6 +528,15 @@ async function exchangeReward(service, rewardId, userId = null) {
     }
   } catch (error) {
     logger.error('RewardService', '兑换奖励失败', error);
+
+    if (systemUserAccessState.isReadonlyError(error)) {
+      return {
+        success: false,
+        message: error?.message || '当前账号为只读，仅可查看',
+        code: systemUserAccessState.SYSTEM_USER_ERROR_CODE.READONLY
+      };
+    }
+
     return { success: false, message: '兑换过程中发生错误' };
   }
 }

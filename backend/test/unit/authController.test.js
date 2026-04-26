@@ -91,6 +91,21 @@ describe('POST /api/auth/login', () => {
     }));
   });
 
+  it('已有用户若被系统管理员禁入应返回 SYSTEM_USER_BLOCKED', async () => {
+    const blockedUser = makeUser({
+      userId: 'user_blocked',
+      systemAccessLevel: 'blocked'
+    });
+    userService.findByOpenid.mockResolvedValue(blockedUser);
+
+    const res = await request(app)
+      .post('/api/auth/login')
+      .send({ code: 'wx-code' });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error_code).toBe('SYSTEM_USER_BLOCKED');
+  });
+
   it('新用户在 invite_only 模式下未提供邀请码时应返回 required', async () => {
     userService.findByOpenid.mockResolvedValue(null);
     appAccessService.isInviteOnlyMode.mockReturnValue(true);

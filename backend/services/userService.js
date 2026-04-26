@@ -69,6 +69,36 @@ class UserService {
   }
 
   /**
+   * 根据 userId 查找活跃用户，并包含系统治理字段
+   * @param {string} userId - 用户ID
+   * @returns {Promise<User|null>}
+   */
+  async findActiveById(userId) {
+    return this.findById(userId);
+  }
+
+  /**
+   * 获取所有可做系统治理的真实登录用户
+   * @returns {Promise<User[]>}
+   */
+  async listGovernableUsers() {
+    try {
+      const results = await query(
+        `SELECT *
+           FROM users
+          WHERE status = ?
+            AND is_virtual = 0`,
+        ['active']
+      );
+
+      return results.map((row) => User.fromDB(row));
+    } catch (error) {
+      logger.error('获取可治理用户列表失败', error);
+      throw error;
+    }
+  }
+
+  /**
    * 创建新用户
    * @param {Object} userData - 用户数据
    * @param {string} userData.openid - 微信openid
@@ -90,8 +120,8 @@ class UserService {
       const dbData = user.toDB();
       const executeRunner = getExecuteRunner(options.connection);
       await executeRunner(
-        `INSERT INTO users (user_id, openid, unionid, nickname, avatar, role, status, family_permission_role, is_system_admin)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO users (user_id, openid, unionid, nickname, avatar, role, status, family_permission_role, is_system_admin, system_access_level, system_access_updated_by_user_id, system_access_updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           dbData.user_id,
           dbData.openid,
@@ -102,6 +132,9 @@ class UserService {
           dbData.status,
           dbData.family_permission_role,
           dbData.is_system_admin ? 1 : 0,
+          dbData.system_access_level,
+          dbData.system_access_updated_by_user_id,
+          dbData.system_access_updated_at,
         ]
       );
 
@@ -147,6 +180,18 @@ class UserService {
       if (updateData.isSystemAdmin !== undefined) {
         updates.push('is_system_admin = ?');
         values.push(updateData.isSystemAdmin ? 1 : 0);
+      }
+      if (updateData.systemAccessLevel !== undefined) {
+        updates.push('system_access_level = ?');
+        values.push(updateData.systemAccessLevel);
+      }
+      if (updateData.systemAccessUpdatedByUserId !== undefined) {
+        updates.push('system_access_updated_by_user_id = ?');
+        values.push(updateData.systemAccessUpdatedByUserId);
+      }
+      if (updateData.systemAccessUpdatedAt !== undefined) {
+        updates.push('system_access_updated_at = ?');
+        values.push(updateData.systemAccessUpdatedAt);
       }
 
       if (updates.length === 0) {
@@ -224,6 +269,36 @@ class UserService {
       return deleted;
     } catch (error) {
       logger.error('删除用户失败', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 统计正常可用的系统管理员数量
+   * @param {Object} options
+   * @param {string|null} options.excludeUserId
+   * @returns {Promise<number>}
+   */
+  async countNormalSystemAdmins(options = {}) {
+    const params = ['active', 1, User.SYSTEM_ACCESS_LEVEL.NORMAL];
+    let sql = `
+      SELECT COUNT(*) AS total
+        FROM users
+       WHERE status = ?
+         AND is_system_admin = ?
+         AND system_access_level = ?
+    `;
+
+    if (options.excludeUserId) {
+      sql += ' AND user_id != ?';
+      params.push(options.excludeUserId);
+    }
+
+    try {
+      const results = await query(sql, params);
+      return Number(results[0]?.total || 0);
+    } catch (error) {
+      logger.error('统计正常系统管理员数量失败', error);
       throw error;
     }
   }

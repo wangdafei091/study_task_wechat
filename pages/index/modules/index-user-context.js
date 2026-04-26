@@ -46,6 +46,8 @@ async function initializeMultiUserSystem(page) {
       canManageMembers: permissionContext.canManageMembers,
       isReadonlyView: permissionContext.isReadonlyView,
       isViewerReadonly: permissionContext.isViewerReadonly,
+      isSystemReadonly: permissionContext.isSystemReadonly,
+      readonlyReason: permissionContext.readonlyReason || '',
       canManageFamilyGovernance: permissionContext.canManageFamilyGovernance,
       canManageBusinessData: permissionContext.canManageBusinessData,
       lastActiveChildId: permissionContext.lastActiveChildId

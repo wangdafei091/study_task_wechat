@@ -3,6 +3,12 @@
  */
 
 class User {
+  static SYSTEM_ACCESS_LEVEL = {
+    NORMAL: 'normal',
+    READONLY: 'readonly',
+    BLOCKED: 'blocked'
+  };
+
   constructor({
     userId,
     openid = null,
@@ -14,6 +20,9 @@ class User {
     familyId = null,
     familyPermissionRole = null,
     isSystemAdmin = false,
+    systemAccessLevel = User.SYSTEM_ACCESS_LEVEL.NORMAL,
+    systemAccessUpdatedByUserId = null,
+    systemAccessUpdatedAt = null,
     isVirtual = false,
     createdByUserId = null,
     createdAt = null,
@@ -29,6 +38,9 @@ class User {
     this.familyId = familyId;
     this.familyPermissionRole = familyPermissionRole;
     this.isSystemAdmin = Boolean(isSystemAdmin);
+    this.systemAccessLevel = systemAccessLevel || User.SYSTEM_ACCESS_LEVEL.NORMAL;
+    this.systemAccessUpdatedByUserId = systemAccessUpdatedByUserId;
+    this.systemAccessUpdatedAt = systemAccessUpdatedAt;
     this.isVirtual = isVirtual;
     this.createdByUserId = createdByUserId;
     this.createdAt = createdAt;
@@ -52,6 +64,9 @@ class User {
       familyId: dbRecord.family_id || null,
       familyPermissionRole: dbRecord.family_permission_role || null,
       isSystemAdmin: Boolean(dbRecord.is_system_admin),
+      systemAccessLevel: dbRecord.system_access_level || User.SYSTEM_ACCESS_LEVEL.NORMAL,
+      systemAccessUpdatedByUserId: dbRecord.system_access_updated_by_user_id || null,
+      systemAccessUpdatedAt: dbRecord.system_access_updated_at || null,
       isVirtual: Boolean(dbRecord.is_virtual),
       createdByUserId: dbRecord.created_by_user_id || null,
       createdAt: dbRecord.created_at,
@@ -75,6 +90,9 @@ class User {
       family_id: this.familyId,
       family_permission_role: this.familyPermissionRole,
       is_system_admin: this.isSystemAdmin,
+      system_access_level: this.systemAccessLevel,
+      system_access_updated_by_user_id: this.systemAccessUpdatedByUserId,
+      system_access_updated_at: this.systemAccessUpdatedAt,
       is_virtual: this.isVirtual,
       created_by_user_id: this.createdByUserId,
     };
@@ -95,10 +113,21 @@ class User {
       familyId: this.familyId,
       familyPermissionRole: this.familyPermissionRole,
       isSystemAdmin: this.isSystemAdmin,
+      systemAccessLevel: this.systemAccessLevel,
+      systemAccessUpdatedByUserId: this.systemAccessUpdatedByUserId,
+      systemAccessUpdatedAt: this.systemAccessUpdatedAt,
       isVirtual: this.isVirtual,
       createdByUserId: this.createdByUserId,
       createdAt: this.createdAt,
     };
+  }
+
+  isSystemReadonly() {
+    return this.systemAccessLevel === User.SYSTEM_ACCESS_LEVEL.READONLY;
+  }
+
+  isSystemBlocked() {
+    return this.systemAccessLevel === User.SYSTEM_ACCESS_LEVEL.BLOCKED;
   }
 
   /**

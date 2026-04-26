@@ -4,6 +4,44 @@
 
 ---
 
+## [里程碑-22M] - 2026-04-26
+
+### ✅ 完成情况
+
+**系统级用户权限与禁入治理**
+
+- **系统级用户治理模型已正式落地**：
+  - [`backend/database/migrations/018_add_user_system_access_governance.sql`](/Users/wangdafei/code/study_task_wechat/backend/database/migrations/018_add_user_system_access_governance.sql)、[`backend/models/User.js`](/Users/wangdafei/code/study_task_wechat/backend/models/User.js)、[`models/user.js`](/Users/wangdafei/code/study_task_wechat/models/user.js)、[`services/user-service.js`](/Users/wangdafei/code/study_task_wechat/services/user-service.js) 已补齐 `systemAccessLevel / systemAccessUpdatedAt / systemAccessUpdatedByUserId` 字段读写与前后端模型承接
+  - [`backend/services/systemUserGovernanceService.js`](/Users/wangdafei/code/study_task_wechat/backend/services/systemUserGovernanceService.js)、[`backend/controllers/systemAdminController.js`](/Users/wangdafei/code/study_task_wechat/backend/controllers/systemAdminController.js)、[`backend/routes/system.js`](/Users/wangdafei/code/study_task_wechat/backend/routes/system.js)、[`services/system-service.js`](/Users/wangdafei/code/study_task_wechat/services/system-service.js) 已建立系统用户治理列表与访问级别更新正式接口
+- **后端 authoritative 守卫已完成收口**：
+  - [`backend/middleware/systemUserAccess.js`](/Users/wangdafei/code/study_task_wechat/backend/middleware/systemUserAccess.js)、[`backend/routes/tasks.js`](/Users/wangdafei/code/study_task_wechat/backend/routes/tasks.js)、[`backend/routes/rewards.js`](/Users/wangdafei/code/study_task_wechat/backend/routes/rewards.js)、[`backend/routes/stars.js`](/Users/wangdafei/code/study_task_wechat/backend/routes/stars.js)、[`backend/routes/messages.js`](/Users/wangdafei/code/study_task_wechat/backend/routes/messages.js)、[`backend/routes/taskTemplates.js`](/Users/wangdafei/code/study_task_wechat/backend/routes/taskTemplates.js)、[`backend/routes/families.js`](/Users/wangdafei/code/study_task_wechat/backend/routes/families.js)、[`backend/routes/users.js`](/Users/wangdafei/code/study_task_wechat/backend/routes/users.js) 已统一接入系统级 `blocked / readonly` 守卫
+  - `blocked` 已在下一次受保护请求时 authoritative 拦截；`readonly` 已按接口语义阻断写操作，同时保留查询能力
+- **前端治理页、阻断页和只读体验已闭环**：
+  - [`packageManage/pages/system-user-governance/system-user-governance.js`](/Users/wangdafei/code/study_task_wechat/packageManage/pages/system-user-governance/system-user-governance.js)、[`packageManage/pages/system-admin/system-admin.js`](/Users/wangdafei/code/study_task_wechat/packageManage/pages/system-admin/system-admin.js)、[`pages/system-blocked/system-blocked.js`](/Users/wangdafei/code/study_task_wechat/pages/system-blocked/system-blocked.js) 已形成系统治理入口、治理列表和 blocked 阻断页主链路
+  - [`packageManage/pages/family-settings/family-settings.js`](/Users/wangdafei/code/study_task_wechat/packageManage/pages/family-settings/family-settings.js)、[`packageManage/pages/reward-manage/reward-manage.js`](/Users/wangdafei/code/study_task_wechat/packageManage/pages/reward-manage/reward-manage.js)、[`packageManage/pages/task-template-manage/task-template-manage.js`](/Users/wangdafei/code/study_task_wechat/packageManage/pages/task-template-manage/task-template-manage.js)、[`pages/rewards/modules/rewards-exchange-flow.js`](/Users/wangdafei/code/study_task_wechat/pages/rewards/modules/rewards-exchange-flow.js) 已补齐系统只读场景下的高频入口前置收口
+- **前台权限态刷新链路已补齐两类真实场景**：
+  - [`utils/app/bootstrap-auth.js`](/Users/wangdafei/code/study_task_wechat/utils/app/bootstrap-auth.js)、[`utils/app/system-user-access-state.js`](/Users/wangdafei/code/study_task_wechat/utils/app/system-user-access-state.js)、[`utils/http-client.js`](/Users/wangdafei/code/study_task_wechat/utils/http-client.js) 已统一 blocked 错误承接、禁入清会话和自动登录恢复边界
+  - [`app.js`](/Users/wangdafei/code/study_task_wechat/app.js)、[`pages/index/modules/index-lifecycle.js`](/Users/wangdafei/code/study_task_wechat/pages/index/modules/index-lifecycle.js)、[`pages/rewards/modules/rewards-sync.js`](/Users/wangdafei/code/study_task_wechat/pages/rewards/modules/rewards-sync.js) 已同时覆盖：
+    - 小程序回前台时等待系统访问态刷新
+    - 用户停留在小程序内、管理员远程改权限后，页面 `onShow` 主动补刷系统访问态
+  - 这两条链路已消除“先发业务写请求，再被 `SYSTEM_USER_READONLY / SYSTEM_USER_BLOCKED` 打回”的前台竞态
+
+### 🧪 验证结果
+
+- 前端定向回归通过：
+  - `npx jest --runInBand --runTestsByPath test/app/app-shell.behavior.test.js test/app/app-contract.test.js test/pages/index.lifecycle.test.js test/pages/rewards.page-contract.test.js test/pages/rewards.behavior.test.js test/pages/reward-manage.page.test.js test/pages/family-settings.page.test.js test/pages/system-admin.page.test.js test/pages/task-template-manage.page.test.js`
+- 前后端权限链路相关回归通过：
+  - `npx jest --runInBand --runTestsByPath test/app/bootstrap-auth.behavior.test.js test/services/user-service.test.js`
+- 模拟器日志复核通过：
+  - 已确认 `readonly` 场景会先执行 `GET /api/auth/current`，随后首页跳过 `tasks/penalties/sync`，奖励页不再发起不该有的写请求
+  - 已确认 `blocked` 场景会先在 `GET /api/auth/current` 阶段被拦截，再统一清理 token 与会话，不再先进入业务写链路
+
+### 📖 详细实施记录
+
+- [里程碑-22M：系统级用户权限与禁入治理](../design/milestone-22m-system-user-governance-readonly-blocked.md)
+
+---
+
 ## [里程碑-22B] - 2026-04-25
 
 ### ✅ 完成情况

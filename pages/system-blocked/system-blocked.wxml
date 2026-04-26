@@ -1,0 +1,17 @@
+<view class="blocked-page">
+  <view class="blocked-shell">
+    <view class="blocked-badge">暂停使用</view>
+    <view class="blocked-title">当前账号已被管理员暂停使用</view>
+    <view class="blocked-desc">如已恢复权限，可点击下方按钮重新检查。</view>
+
+    <button
+      class="blocked-button"
+      type="primary"
+      loading="{{checking}}"
+      disabled="{{checking}}"
+      bindtap="onRetryTap"
+    >
+      重新检查
+    </button>
+  </view>
+</view>

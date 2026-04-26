@@ -3,10 +3,13 @@ describe('app.js shell behavior', () => {
   let storageInitMock;
   let prepareUserServiceMock;
   let runWxLoginMock;
+  let handleAppShowMock;
   let bootstrapServicesMock;
   let runtimeObserversMock;
   let postLoginBootstrapMock;
   let serviceManagerMock;
+  let hasBlockedSessionFlagMock;
+  let blockedSessionActive;
 
   beforeEach(() => {
     jest.resetModules();
@@ -14,6 +17,9 @@ describe('app.js shell behavior', () => {
     storageInitMock = jest.fn();
     prepareUserServiceMock = jest.fn().mockResolvedValue();
     runWxLoginMock = jest.fn().mockResolvedValue();
+    handleAppShowMock = jest.fn().mockResolvedValue('handled-show');
+    blockedSessionActive = false;
+    hasBlockedSessionFlagMock = jest.fn(() => blockedSessionActive);
     bootstrapServicesMock = jest.fn().mockResolvedValue(true);
     runtimeObserversMock = {
       install: jest.fn(),
@@ -95,6 +101,7 @@ describe('app.js shell behavior', () => {
     jest.doMock('../../utils/app/bootstrap-auth', () => ({
       prepareUserService: prepareUserServiceMock,
       runWxLogin: runWxLoginMock,
+      handleAppShow: handleAppShowMock,
       doCloudLogin: jest.fn().mockResolvedValue('cloud-login'),
       doCloudLogout: jest.fn(() => 'cloud-logout'),
       autoLogin: jest.fn().mockResolvedValue('auto-login'),
@@ -107,6 +114,9 @@ describe('app.js shell behavior', () => {
 
     jest.doMock('../../utils/app/post-login-bootstrap', () => postLoginBootstrapMock);
     jest.doMock('../../utils/app/runtime-observers', () => runtimeObserversMock);
+    jest.doMock('../../utils/app/system-user-access-state', () => ({
+      hasBlockedSessionFlag: hasBlockedSessionFlagMock
+    }));
   });
 
   afterEach(() => {
@@ -119,16 +129,52 @@ describe('app.js shell behavior', () => {
     require('../../app.js');
 
     await appConfig.onLaunch.call(appConfig);
-    appConfig.onShow.call(appConfig, {});
+    await appConfig.onShow.call(appConfig, {});
 
     expect(storageInitMock).toHaveBeenCalled();
     expect(prepareUserServiceMock).toHaveBeenCalledWith(appConfig);
     expect(bootstrapServicesMock).toHaveBeenCalledWith(appConfig, { isDevEnv: true });
     expect(runWxLoginMock).toHaveBeenCalledWith(appConfig);
+    expect(handleAppShowMock).toHaveBeenCalledWith(appConfig, {});
     expect(runtimeObserversMock.install).toHaveBeenCalledWith(appConfig);
     expect(global.wx.setStorageSync).toHaveBeenCalledWith('logs', expect.any(Array));
     expect(appConfig.globalData.appReady).toBe(false);
     expect(appConfig.globalData.servicesInitialized).toBe(false);
+  });
+
+  it('waitForSystemAccessRefresh 应等待当前前台刷新完成，并在禁入态返回 false', async () => {
+    let resolveShow;
+    handleAppShowMock.mockImplementation(() => new Promise((resolve) => {
+      resolveShow = resolve;
+    }));
+
+    require('../../app.js');
+
+    const onShowPromise = appConfig.onShow.call(appConfig, {});
+    const waitPromise = appConfig.waitForSystemAccessRefresh();
+    let waitSettled = false;
+    waitPromise.then(() => {
+      waitSettled = true;
+    });
+
+    await Promise.resolve();
+    expect(waitSettled).toBe(false);
+
+    resolveShow(true);
+    await waitPromise;
+    await onShowPromise;
+
+    expect(appConfig.globalData.systemAccessRefreshPromise).toBeNull();
+
+    handleAppShowMock.mockResolvedValue('handled-show');
+    handleAppShowMock.mockClear();
+    await expect(appConfig.waitForSystemAccessRefresh()).resolves.toBe(true);
+    expect(handleAppShowMock).toHaveBeenCalledWith(appConfig, {
+      source: 'page_on_show'
+    });
+
+    blockedSessionActive = true;
+    await expect(appConfig.waitForSystemAccessRefresh()).resolves.toBe(false);
   });
 
   it('壳层委托方法应继续转发到对应模块', async () => {

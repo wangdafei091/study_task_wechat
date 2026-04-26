@@ -1278,6 +1278,31 @@ describe('StarService', () => {
       });
     });
 
+    it('syncExpiryAuthorityIfNeeded 在系统只读下应直接跳过，不调用后端结算接口', async () => {
+      starService.enableCloudStorage = true;
+      starService.userService = {
+        getLoginUser: jest.fn(() => ({
+          userId: 'parent_readonly',
+          role: 'parent',
+          familyPermissionRole: 'manager',
+          systemAccessLevel: 'readonly'
+        }))
+      };
+
+      const result = await starService.syncExpiryAuthorityIfNeeded({
+        scope: 'user',
+        userId: 'user_123'
+      });
+
+      expect(HttpClient.post).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        success: true,
+        skipped: true,
+        reason: 'system_readonly',
+        settledGroupCount: 0
+      });
+    });
+
     it('同一用户并发刷新星星时应复用进行中的云请求', async () => {
       starService.enableCloudStorage = true;
 

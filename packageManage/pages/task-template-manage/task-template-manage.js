@@ -17,6 +17,16 @@ function isViewerReadonly(loginUser) {
   );
 }
 
+function isSystemReadonly(loginUser) {
+  return Boolean(
+    loginUser &&
+    (
+      (typeof loginUser.isSystemReadonly === 'function' && loginUser.isSystemReadonly()) ||
+      loginUser.systemAccessLevel === 'readonly'
+    )
+  );
+}
+
 function normalizeTimestamp(value) {
   const timestamp = Number(value || 0);
   return Number.isFinite(timestamp) ? timestamp : 0;
@@ -315,10 +325,13 @@ Page({
     const currentUser = userService?.getCurrentUser?.();
     const isChildView = viewScope.isChildView(loginUser, currentUser);
     const isViewerReadonlyUser = isViewerReadonly(loginUser);
+    const isSystemReadonlyUser = isSystemReadonly(loginUser);
 
-    if (!loginUser || loginUser.role !== 'parent' || isChildView || isViewerReadonlyUser) {
+    if (!loginUser || loginUser.role !== 'parent' || isChildView || isViewerReadonlyUser || isSystemReadonlyUser) {
       wx.showToast({
-        title: isViewerReadonlyUser ? '当前为查看者，不能管理任务模板' : '暂无操作权限',
+        title: isSystemReadonlyUser
+          ? '当前账号为只读，不能管理任务模板'
+          : (isViewerReadonlyUser ? '当前为查看者，不能管理任务模板' : '暂无操作权限'),
         icon: 'none'
       });
       wx.navigateBack({
@@ -344,9 +357,25 @@ Page({
     }
   },
 
-  onShow() {
+  async onShow() {
+    const app = typeof getApp === 'function' ? getApp() : null;
+    if (typeof app?.waitForSystemAccessRefresh === 'function') {
+      const canContinue = await app.waitForSystemAccessRefresh();
+      if (canContinue === false) {
+        return;
+      }
+    }
+
     const userService = serviceManager.getUserService();
     const loginUser = userService?.getLoginUser?.();
+    if (isSystemReadonly(loginUser)) {
+      wx.showToast({
+        title: '当前账号为只读，不能管理任务模板',
+        icon: 'none'
+      });
+      return;
+    }
+
     if (isViewerReadonly(loginUser)) {
       wx.showToast({
         title: '当前为查看者，不能管理任务模板',

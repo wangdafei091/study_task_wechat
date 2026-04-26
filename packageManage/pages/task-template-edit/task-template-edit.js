@@ -147,10 +147,19 @@ Page({
       loginUser.familyId &&
       loginUser.familyPermissionRole === 'viewer'
     );
+    const isSystemReadonly = Boolean(
+      loginUser &&
+      (
+        (typeof loginUser.isSystemReadonly === 'function' && loginUser.isSystemReadonly()) ||
+        loginUser.systemAccessLevel === 'readonly'
+      )
+    );
 
-    if (!loginUser || loginUser.role !== 'parent' || isChildView || isViewerReadonly) {
+    if (!loginUser || loginUser.role !== 'parent' || isChildView || isViewerReadonly || isSystemReadonly) {
       wx.showToast({
-        title: isViewerReadonly ? '当前为查看者，不能管理任务模板' : '暂无操作权限',
+        title: isSystemReadonly
+          ? '当前账号为只读，不能管理任务模板'
+          : (isViewerReadonly ? '当前为查看者，不能管理任务模板' : '暂无操作权限'),
         icon: 'none'
       });
       wx.navigateBack({

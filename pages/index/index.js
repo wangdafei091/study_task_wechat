@@ -666,9 +666,11 @@ Page({
       return;
     }
 
-    if (this.data.isViewerReadonly) {
+    if (this.data.isReadonlyView || this.data.isViewerReadonly) {
       wx.showToast({
-        title: '当前为查看者，不能记录表现',
+        title: this.data.readonlyReason === 'system-readonly'
+          ? '当前账号为只读，不能记录表现'
+          : '当前为查看者，不能记录表现',
         icon: 'none'
       });
       return;

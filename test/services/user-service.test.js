@@ -16,6 +16,10 @@ jest.mock('../../utils/logger');
 jest.mock('../../utils/http-client');
 jest.mock('../../adapters/storage-adapter');
 jest.mock('../../utils/token-manager');
+jest.mock('../../utils/app/system-user-access-state', () => ({
+  isBlockedError: jest.fn(() => false),
+  handleBlockedError: jest.fn()
+}));
 jest.mock('../../utils/api-config', () => ({
   ENABLE_API: true,
   ENDPOINTS: {
@@ -37,6 +41,7 @@ const StorageAdapter = require('../../adapters/storage-adapter');
 const TokenManager = require('../../utils/token-manager');
 const logger = require('../../utils/logger');
 const API_CONFIG = require('../../utils/api-config');
+const systemUserAccessState = require('../../utils/app/system-user-access-state');
 
 describe('UserService', () => {
   let userService;
@@ -151,6 +156,20 @@ describe('UserService', () => {
       expect(userService.currentUser.id).toBe('parent');
     });
 
+    it('AUTH_CURRENT 命中 SYSTEM_USER_BLOCKED 时不应回退到 token 用户态', async () => {
+      const blockedError = Object.assign(new Error('当前账号已被管理员暂停使用'), {
+        code: 'SYSTEM_USER_BLOCKED'
+      });
+      systemUserAccessState.isBlockedError.mockReturnValueOnce(true);
+      mockHttpClient.get.mockRejectedValueOnce(blockedError);
+
+      const initialized = await userService.initialize();
+
+      expect(initialized).toBe(false);
+      expect(systemUserAccessState.handleBlockedError).toHaveBeenCalledWith(blockedError);
+      expect(userService.getLoginUser()).toBeNull();
+    });
+
 
     it('本地会话为空时，家长设备应默认选第一个孩子', async () => {
       const mockUsers = [
@@ -257,6 +276,73 @@ describe('UserService', () => {
         })
       };
       expect(userService._persistCurrentUserId('child_3')).toBe(false);
+    });
+
+    it('applySystemAccessLevelSnapshot 应同步更新 loginUser、currentUser 与缓存', () => {
+      const targetUser = new User({
+        userId: 'parent',
+        name: '家长',
+        role: 'parent',
+        systemAccessLevel: 'normal'
+      });
+      userService.loginUser = targetUser;
+      userService.currentUser = targetUser;
+      userService.userCache.set(targetUser.userId, targetUser);
+
+      userService.applySystemAccessLevelSnapshot('parent', {
+        systemAccessLevel: 'readonly',
+        systemAccessUpdatedAt: '2026-04-26 12:00:00',
+        systemAccessUpdatedByUserId: 'admin_1'
+      });
+
+      expect(userService.loginUser.systemAccessLevel).toBe('readonly');
+      expect(userService.currentUser.systemAccessLevel).toBe('readonly');
+      expect(userService.userCache.get('parent').systemAccessUpdatedByUserId).toBe('admin_1');
+    });
+
+    it('loadFamilyMembers 应将 loginUser 与 currentUser 回绑到最新缓存对象', async () => {
+      userService.loginUser = new User({
+        userId: 'parent',
+        name: '旧家长',
+        role: 'parent',
+        familyId: 'family_1',
+        systemAccessLevel: 'normal'
+      });
+      userService.currentUser = new User({
+        userId: 'parent',
+        name: '旧家长',
+        role: 'parent',
+        familyId: 'family_1',
+        systemAccessLevel: 'normal'
+      });
+
+      mockHttpClient.get.mockResolvedValue({
+        members: [
+          {
+            userId: 'parent',
+            name: '新家长',
+            role: 'parent',
+            familyId: 'family_1',
+            familyPermissionRole: 'manager',
+            systemAccessLevel: 'readonly'
+          },
+          {
+            userId: 'child_1',
+            name: '孩子1',
+            role: 'child',
+            familyId: 'family_1',
+            systemAccessLevel: 'normal'
+          }
+        ]
+      });
+
+      const loaded = await userService.loadFamilyMembers();
+
+      expect(loaded).toBe(true);
+      expect(userService.loginUser.name).toBe('新家长');
+      expect(userService.loginUser.systemAccessLevel).toBe('readonly');
+      expect(userService.currentUser).toBe(userService.loginUser);
+      expect(userService.userCache.get('parent')).toBe(userService.loginUser);
     });
   });
 

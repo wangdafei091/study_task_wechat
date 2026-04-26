@@ -118,6 +118,8 @@ const API_CONFIG = {
     SYSTEM_ADMIN_BOOTSTRAP: '/api/system/admin/bootstrap',
     SYSTEM_ADMIN_OVERVIEW: '/api/system/admin/overview',
     SYSTEM_ADMIN_APP_ACCESS_MODE: '/api/system/admin/app-access-mode',
+    SYSTEM_ADMIN_USERS_GOVERNANCE: '/api/system/admin/users/governance',
+    SYSTEM_ADMIN_USER_ACCESS_LEVEL: '/api/system/admin/users/{userId}/access-level',
 
     // 健康检查
     HEALTH: '/health'

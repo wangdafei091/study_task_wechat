@@ -20,6 +20,7 @@ const { EVENTS } = require('../utils/constants');
 const HttpClient = require('../utils/http-client');
 const API_CONFIG = require('../utils/api-config');
 const messageDisplay = require('../utils/message-display');
+const { isSystemReadonlyUser } = require('../utils/system-access');
 const messageProvisional = require('./message-service/message-provisional');
 const messageHandlers = require('./message-service/message-handlers');
 const messageDomain = require('./message-service/message-domain');
@@ -413,7 +414,7 @@ class MessageService {
       return this._compactMessagesForDisplay(await this._getScopedMessagesForDisplay(resolved));
     }
 
-    if (!this._isViewerReadonlyUser()) {
+    if (!this._getReadonlyReason()) {
       await this.syncFormalRemindersIfNeeded(resolved);
     }
     await this._refreshFormalMessagesFromCloud(resolved);
@@ -426,13 +427,21 @@ class MessageService {
     return `${resolved.scope}:${resolved.userId || resolved.familyId || 'all'}`;
   }
 
-  _isViewerReadonlyUser() {
+  _getReadonlyReason() {
     const loginUser = this._getLoginUser();
-    return Boolean(
+    if (isSystemReadonlyUser(loginUser)) {
+      return 'system_readonly';
+    }
+
+    if (Boolean(
       loginUser &&
       loginUser.role === 'parent' &&
       loginUser.familyPermissionRole === 'viewer'
-    );
+    )) {
+      return 'viewer_readonly';
+    }
+
+    return '';
   }
 
   async syncFormalRemindersIfNeeded(options = {}) {
@@ -441,8 +450,9 @@ class MessageService {
       return { success: false, skipped: true };
     }
 
-    if (this._isViewerReadonlyUser()) {
-      return { success: true, skipped: true, reason: 'viewer_readonly' };
+    const readonlyReason = this._getReadonlyReason();
+    if (readonlyReason) {
+      return { success: true, skipped: true, reason: readonlyReason };
     }
 
     const now = Date.now();

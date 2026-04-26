@@ -164,6 +164,68 @@ describe('OfflineQueueService', () => {
     });
   });
 
+  it('系统只读时 drain 应跳过所有匹配写队列，不执行 adapter', async () => {
+    const repository = createMemoryRepository([
+      {
+        id: 'item_1',
+        domain: 'task',
+        entityId: 'task_1',
+        operation: 'update',
+        context: {
+          familyId: 'family_1',
+          loginUserId: 'parent_1',
+          systemAccessLevel: 'readonly',
+          actorUserId: 'parent_1',
+          actorRole: 'parent'
+        },
+        createdAt: 1
+      },
+      {
+        id: 'item_2',
+        domain: 'reward',
+        entityId: 'reward_1',
+        operation: 'delete',
+        context: {
+          familyId: 'family_1',
+          loginUserId: 'parent_1',
+          systemAccessLevel: 'readonly',
+          actorUserId: 'parent_1',
+          actorRole: 'parent'
+        },
+        createdAt: 2
+      }
+    ]);
+    const adapter = jest.fn().mockResolvedValue(true);
+    const service = new OfflineQueueService({
+      repository,
+      contextResolver: () => ({
+        familyId: 'family_1',
+        loginUserId: 'parent_1',
+        systemAccessLevel: 'readonly',
+        actorUserId: 'parent_1',
+        actorRole: 'parent'
+      })
+    });
+    service.registerAdapter('task', adapter);
+    service.registerAdapter('reward', adapter);
+
+    const result = await service.drain({
+      reason: 'post_login_bootstrap',
+      force: true
+    });
+
+    expect(adapter).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      success: true,
+      processed: 0,
+      skipped: 2,
+      failed: 0,
+      partial: false,
+      remaining: 0,
+      reason: 'system_readonly'
+    });
+  });
+
   it('legacy item 缺少 loginUserId 时应退化为 familyId + actorUserId 匹配', async () => {
     const repository = createMemoryRepository([
       {

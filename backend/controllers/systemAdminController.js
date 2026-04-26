@@ -1,5 +1,6 @@
 const systemAdminService = require('../services/systemAdminService');
 const systemSettingService = require('../services/systemSettingService');
+const systemUserGovernanceService = require('../services/systemUserGovernanceService');
 const { success, error } = require('../utils/response');
 const { createLogger } = require('../utils/logger');
 
@@ -51,6 +52,40 @@ class SystemAdminController {
 
       logger.error('更新应用准入模式失败', err);
       res.status(500).json(error('更新应用准入模式失败', 'SYSTEM_SETTING_UPDATE_FAILED'));
+    }
+  }
+
+  async listUserGovernance(req, res) {
+    try {
+      const users = await systemUserGovernanceService.listGovernableUsers();
+      res.json(success({ users }, '获取成功'));
+    } catch (err) {
+      logger.error('获取系统用户治理列表失败', err);
+      res.status(500).json(error('获取系统用户治理列表失败', 'SYSTEM_USER_GOVERNANCE_LIST_FAILED'));
+    }
+  }
+
+  async updateUserAccessLevel(req, res) {
+    try {
+      const result = await systemUserGovernanceService.updateAccessLevel(
+        req.params.userId,
+        req.body?.accessLevel,
+        req.systemAdmin?.userId || req.user.userId
+      );
+      res.json(success(result, '更新成功'));
+    } catch (err) {
+      if (
+        err.code === 'SYSTEM_USER_GOVERNANCE_INVALID' ||
+        err.code === 'SYSTEM_USER_GOVERNANCE_TARGET_INVALID'
+      ) {
+        return res.status(400).json(error(err.message, err.code));
+      }
+      if (err.code === 'SYSTEM_USER_LAST_ADMIN_NORMAL_REQUIRED') {
+        return res.status(409).json(error(err.message, err.code));
+      }
+
+      logger.error('更新系统用户访问级别失败', err);
+      res.status(500).json(error('更新系统用户访问级别失败', 'SYSTEM_USER_GOVERNANCE_UPDATE_FAILED'));
     }
   }
 }

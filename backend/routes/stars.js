@@ -6,10 +6,11 @@ const express = require('express');
 
 const starController = require('../controllers/starController');
 const { authMiddleware } = require('../middleware/auth');
+const { systemUserAccessMiddleware } = require('../middleware/systemUserAccess');
 
 const router = express.Router();
 
-router.use(authMiddleware);
+router.use(authMiddleware, systemUserAccessMiddleware);
 
 router.get('/', starController.getStars.bind(starController));
 router.get('/family-summary', starController.getFamilySummary.bind(starController));

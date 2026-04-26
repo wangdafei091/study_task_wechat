@@ -221,6 +221,7 @@ describe('ServiceManager', () => {
     expect(contextResolver()).toEqual({
       familyId: 'family-1',
       loginUserId: 'parent-1',
+      systemAccessLevel: 'normal',
       actorUserId: 'child-1',
       actorRole: 'child',
       targetUserId: 'child-1'

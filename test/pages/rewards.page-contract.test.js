@@ -47,6 +47,7 @@ describe('pages/rewards/rewards contract', () => {
     serviceManager = require('../../services/service-manager');
 
     appMock = {
+      waitForSystemAccessRefresh: jest.fn().mockResolvedValue(true),
       globalData: {
         needRefreshReward: false,
         hasRedirectedToReward: true,
@@ -366,6 +367,7 @@ describe('pages/rewards/rewards contract', () => {
 
     await page.onShow();
 
+    expect(appMock.waitForSystemAccessRefresh).toHaveBeenCalled();
     expect(starService.syncExpiryAuthorityIfNeeded).toHaveBeenCalledWith({
       scope: 'user',
       userId: 'child-2'
@@ -378,6 +380,33 @@ describe('pages/rewards/rewards contract', () => {
     });
     expect(page.loadRewardsData).toHaveBeenCalledWith(true);
     expect(appMock.globalData.needRefreshReward).toBe(false);
+  });
+
+  it('onShow 在禁入跳转期间应停止云同步与数据加载', async () => {
+    appMock.waitForSystemAccessRefresh.mockResolvedValue(false);
+    const rewardService = {
+      refreshRewardsFromCloud: jest.fn().mockResolvedValue({ success: true })
+    };
+    const starService = {
+      syncExpiryAuthorityIfNeeded: jest.fn().mockResolvedValue({ success: true }),
+      refreshStarsFromCloud: jest.fn().mockResolvedValue({ success: true })
+    };
+
+    serviceManager.getService.mockImplementation((name) => {
+      if (name === 'rewardService') return rewardService;
+      if (name === 'starService') return starService;
+      return null;
+    });
+
+    const page = createPageInstance();
+    page.loadRewardsData = jest.fn().mockResolvedValue();
+
+    await page.onShow();
+
+    expect(starService.syncExpiryAuthorityIfNeeded).not.toHaveBeenCalled();
+    expect(starService.refreshStarsFromCloud).not.toHaveBeenCalled();
+    expect(rewardService.refreshRewardsFromCloud).not.toHaveBeenCalled();
+    expect(page.loadRewardsData).not.toHaveBeenCalled();
   });
 
   it('下拉刷新应强制拉取最新奖励并停止刷新动画', async () => {

@@ -179,13 +179,19 @@ async function decorateRewardForDisplay(page, rewardService, reward, displayCont
 async function onShow(page) {
   logger.info('rewards', '页面显示');
 
+  const app = typeof getApp === 'function' ? getApp() : null;
+  if (typeof app?.waitForSystemAccessRefresh === 'function') {
+    const canContinue = await app.waitForSystemAccessRefresh();
+    if (canContinue === false) {
+      return;
+    }
+  }
+
   if (page._skipNextOnShowRefresh) {
     page._skipNextOnShowRefresh = false;
     logger.info('rewards', '跳过本轮 onShow 刷新，避免兑换成功后的重复回刷');
     return;
   }
-
-  const app = getApp();
 
   try {
     const starService = serviceManager.getService('starService');

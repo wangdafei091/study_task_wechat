@@ -6,6 +6,7 @@ const express = require('express');
 const router = express.Router();
 const authController = require('../controllers/authController');
 const { authMiddleware } = require('../middleware/auth');
+const { systemUserAccessMiddleware } = require('../middleware/systemUserAccess');
 
 /**
  * @route   POST /api/auth/login
@@ -19,13 +20,13 @@ router.post('/login', authController.login.bind(authController));
  * @desc    验证JWT token
  * @access  Private
  */
-router.get('/validate', authMiddleware, authController.validateToken.bind(authController));
+router.get('/validate', authMiddleware, systemUserAccessMiddleware, authController.validateToken.bind(authController));
 
 /**
  * @route   GET /api/auth/current
  * @desc    获取当前用户信息
  * @access  Private
  */
-router.get('/current', authMiddleware, authController.getCurrentUser.bind(authController));
+router.get('/current', authMiddleware, systemUserAccessMiddleware, authController.getCurrentUser.bind(authController));
 
 module.exports = router;

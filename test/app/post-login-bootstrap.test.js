@@ -245,6 +245,73 @@ describe('utils/app/post-login-bootstrap', () => {
     expect(messageService.syncFormalRemindersIfNeeded).toHaveBeenCalledTimes(1);
   });
 
+  it('系统只读时应跳过启动期自动写链路，但保留读取型初始化', async () => {
+    const offlineQueueService = {
+      initialize: jest.fn().mockResolvedValue(true),
+      drain: jest.fn().mockResolvedValue({ success: true })
+    };
+    const taskService = {
+      enableCloudStorage: true,
+      getAllTasks: jest.fn().mockResolvedValue([]),
+      taskRepository: { save: jest.fn() },
+      checkTasksStatus: jest.fn().mockResolvedValue({ penaltyResults: [] }),
+      checkUpcomingTasks: jest.fn().mockResolvedValue()
+    };
+    const starService = {
+      syncExpiryAuthorityIfNeeded: jest.fn().mockResolvedValue({ success: true }),
+      refreshStarsFromCloud: jest.fn().mockResolvedValue({ success: true }),
+      initialize: jest.fn().mockResolvedValue(),
+      checkAndRepairDataConsistency: jest.fn().mockResolvedValue({
+        success: true,
+        repairResult: { repairedCount: 0 }
+      }),
+      enableCloudStorage: true
+    };
+    const rewardService = {
+      refreshRewardsFromCloud: jest.fn().mockResolvedValue({ success: true })
+    };
+    const messageService = {
+      initialize: jest.fn().mockResolvedValue(),
+      syncFormalRemindersIfNeeded: jest.fn().mockResolvedValue({ success: true }),
+      getAllMessages: jest.fn().mockResolvedValue([])
+    };
+
+    serviceManager.getOfflineQueueService.mockReturnValue(offlineQueueService);
+    serviceManager.getTaskService.mockReturnValue(taskService);
+    serviceManager.getStarService.mockReturnValue(starService);
+    serviceManager.getRewardService.mockReturnValue(rewardService);
+    serviceManager.getMessageService.mockReturnValue(messageService);
+    serviceManager.getUserService.mockReturnValue({
+      getLoginUser: jest.fn(() => ({
+        userId: 'parent_readonly',
+        role: 'parent',
+        systemAccessLevel: 'readonly'
+      })),
+      getLoginUserId: jest.fn(() => 'parent_readonly')
+    });
+    serviceManager.getService.mockReturnValue({
+      isFirstLaunch: jest.fn(() => false)
+    });
+
+    const app = {
+      globalData: {},
+      setTheme: jest.fn()
+    };
+
+    await postLoginBootstrap.run(app);
+
+    expect(offlineQueueService.initialize).toHaveBeenCalledTimes(1);
+    expect(offlineQueueService.drain).not.toHaveBeenCalled();
+    expect(taskService.checkTasksStatus).not.toHaveBeenCalled();
+    expect(taskService.checkUpcomingTasks).not.toHaveBeenCalled();
+    expect(starService.syncExpiryAuthorityIfNeeded).not.toHaveBeenCalled();
+    expect(starService.refreshStarsFromCloud).toHaveBeenCalledTimes(1);
+    expect(rewardService.refreshRewardsFromCloud).toHaveBeenCalledTimes(1);
+    expect(messageService.initialize).toHaveBeenCalledTimes(1);
+    expect(messageService.syncFormalRemindersIfNeeded).not.toHaveBeenCalled();
+    expect(messageService.getAllMessages).toHaveBeenCalledTimes(1);
+  });
+
   it('viewer 家长登录后初始化应走短路后的星星同步链路', async () => {
     const offlineQueueService = {
       initialize: jest.fn().mockResolvedValue(true),

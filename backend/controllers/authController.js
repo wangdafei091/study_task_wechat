@@ -6,6 +6,7 @@ const { getPool } = require('../config/database');
 const { generateToken } = require('../config/jwt');
 const appAccessService = require('../services/appAccessService');
 const userService = require('../services/userService');
+const User = require('../models/User');
 const { code2Session } = require('../utils/wechat');
 const { createLogger } = require('../utils/logger');
 const { success, error } = require('../utils/response');
@@ -92,6 +93,12 @@ class AuthController {
             role: 'parent',
           });
         }
+      }
+
+      if (user.systemAccessLevel === User.SYSTEM_ACCESS_LEVEL.BLOCKED) {
+        return res.status(403).json(
+          error('当前账号已被管理员暂停使用', 'SYSTEM_USER_BLOCKED')
+        );
       }
 
       // 3. 生成JWT token（包含 familyId，支持家庭数据隔离）

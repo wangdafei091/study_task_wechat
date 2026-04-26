@@ -43,6 +43,20 @@ function isViewerReadonly(userService) {
   );
 }
 
+function isSystemReadonly(userService) {
+  const loginUser = userService && typeof userService.getLoginUser === 'function'
+    ? userService.getLoginUser()
+    : null;
+
+  if (!loginUser) {
+    return false;
+  }
+
+  return typeof loginUser.isSystemReadonly === 'function'
+    ? loginUser.isSystemReadonly()
+    : loginUser.systemAccessLevel === 'readonly';
+}
+
 function resolvePageContext(explicitTargetUserId = '') {
   const userService = getUserService();
   const loginUser = userService && typeof userService.getLoginUser === 'function'
@@ -130,6 +144,17 @@ Page({
 
   async onLoad(options = {}) {
     const userService = getUserService();
+    if (isSystemReadonly(userService)) {
+      wx.showToast({
+        title: '当前账号为只读，不能记录表现',
+        icon: 'none'
+      });
+      if (typeof wx.navigateBack === 'function') {
+        wx.navigateBack({ delta: 1 });
+      }
+      return;
+    }
+
     if (isViewerReadonly(userService)) {
       wx.showToast({
         title: '当前为查看者，不能记录表现',

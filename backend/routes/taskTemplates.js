@@ -1,10 +1,11 @@
 const express = require('express');
 const { authMiddleware } = require('../middleware/auth');
+const { systemUserAccessMiddleware } = require('../middleware/systemUserAccess');
 const taskTemplateController = require('../controllers/taskTemplateController');
 
 const router = express.Router();
 
-router.use(authMiddleware);
+router.use(authMiddleware, systemUserAccessMiddleware);
 
 router.get('/', taskTemplateController.getTemplates.bind(taskTemplateController));
 router.post('/recommendations/query', taskTemplateController.queryRecommendations.bind(taskTemplateController));

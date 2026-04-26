@@ -2,6 +2,7 @@ const serviceManager = require('../../../services/service-manager');
 const logger = require('../../../utils/logger');
 const rewardStatus = require('../../../utils/reward-status');
 const rewardDisplay = require('../../../utils/reward-display');
+const userContextUtils = require('../../../utils/user-context');
 
 function getRewardService() {
   return serviceManager.getService('rewardService');
@@ -9,6 +10,39 @@ function getRewardService() {
 
 function getStarService() {
   return serviceManager.getService('starService');
+}
+
+function resolveSystemReadonlyExchangeGuard() {
+  const userService = typeof serviceManager.getUserService === 'function'
+    ? serviceManager.getUserService()
+    : null;
+
+  if (!userService) {
+    return {
+      blocked: false,
+      title: ''
+    };
+  }
+
+  const permissionContext = userContextUtils.resolvePermissionContext({
+    loginUser: userService.getLoginUser ? userService.getLoginUser() : null,
+    currentUser: userService.getCurrentUser ? userService.getCurrentUser() : null,
+    availableUsers: userService.getAllUsers ? userService.getAllUsers() : []
+  }, {
+    lastActiveChildId: getApp()?.globalData?.lastActiveChildId || null
+  });
+
+  if (!permissionContext.isSystemReadonly) {
+    return {
+      blocked: false,
+      title: ''
+    };
+  }
+
+  return {
+    blocked: true,
+    title: '当前账号为只读，不能兑换奖励'
+  };
 }
 
 function buildExchangeMeta(source = {}, fallbackPoints = null) {
@@ -110,6 +144,15 @@ async function buildDisplayModelForClaim(page, reward, subject) {
 async function claimReward(page) {
   const reward = page.data.selectedReward;
   if (!reward) {
+    return;
+  }
+
+  const readonlyGuard = resolveSystemReadonlyExchangeGuard();
+  if (readonlyGuard.blocked) {
+    wx.showToast({
+      title: readonlyGuard.title,
+      icon: 'none'
+    });
     return;
   }
 

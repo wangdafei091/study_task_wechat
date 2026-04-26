@@ -1,0 +1,85 @@
+<view class="governance-page">
+  <view class="loading-card" wx:if="{{loading}}">
+    <view class="loading-text">加载中...</view>
+  </view>
+
+  <view class="governance-card error-card" wx:elif="{{loadErrorCode}}">
+    <view class="governance-title">用户列表暂时不可用</view>
+    <view class="governance-subtitle">{{loadErrorMessage}}</view>
+    <view class="retry-button" bindtap="onRetryTap">重新加载</view>
+  </view>
+
+  <block wx:else>
+    <view class="governance-card intro-card">
+      <view class="governance-title">用户权限治理</view>
+      <view class="governance-subtitle">可把真实登录用户设为正常使用、只读或暂停使用。</view>
+      <view class="governance-tip">家庭角色不变，系统级限制优先生效。</view>
+      <view class="readonly-notice" wx:if="{{isSelfReadonly}}">当前账号为只读，仅可查看</view>
+    </view>
+
+    <view class="governance-card summary-card">
+      <view class="summary-item">
+        <text class="summary-value">{{summary.normal}}</text>
+        <text class="summary-label">正常</text>
+      </view>
+      <view class="summary-item">
+        <text class="summary-value">{{summary.readonly}}</text>
+        <text class="summary-label">只读</text>
+      </view>
+      <view class="summary-item">
+        <text class="summary-value">{{summary.blocked}}</text>
+        <text class="summary-label">已禁入</text>
+      </view>
+    </view>
+
+    <view class="governance-card empty-card" wx:if="{{users.length === 0}}">
+      <view class="governance-title">还没有可治理用户</view>
+      <view class="governance-subtitle">当前没有真实登录用户进入过系统。</view>
+    </view>
+
+    <block wx:for="{{users}}" wx:key="userId">
+      <view class="governance-card user-card">
+        <view class="user-header">
+          <view class="user-main">
+            <view class="user-title-row">
+              <text class="user-name">{{item.nicknameDisplay}}</text>
+              <text class="self-tag" wx:if="{{item.isSelf}}">我</text>
+            </view>
+            <view class="user-meta">{{item.roleDisplay}} · ID后缀 {{item.userIdSuffix}}</view>
+          </view>
+          <view class="access-badge {{item.accessTone}}">{{item.accessLabel}}</view>
+        </view>
+
+        <view class="user-tags">
+          <text class="user-tag" wx:if="{{item.isSystemAdmin}}">系统管理员</text>
+          <text class="user-tag">{{item.familyRoleLabel}}</text>
+        </view>
+
+        <view class="user-updated">最近调整：{{item.updatedAtLabel}}</view>
+
+        <view class="action-row">
+          <view
+            class="action-chip {{item.isNormal ? 'active normal' : ''}} {{(!item.canUpdate || savingUserId === item.userId) ? 'disabled' : ''}}"
+            data-user-id="{{item.userId}}"
+            data-access-level="normal"
+            bindtap="onAccessLevelTap"
+          >正常</view>
+          <view
+            class="action-chip {{item.isReadonly ? 'active readonly' : ''}} {{(!item.canUpdate || savingUserId === item.userId) ? 'disabled' : ''}}"
+            data-user-id="{{item.userId}}"
+            data-access-level="readonly"
+            bindtap="onAccessLevelTap"
+          >只读</view>
+          <view
+            class="action-chip {{item.isBlocked ? 'active blocked' : ''}} {{(!item.canUpdate || savingUserId === item.userId) ? 'disabled' : ''}}"
+            data-user-id="{{item.userId}}"
+            data-access-level="blocked"
+            bindtap="onAccessLevelTap"
+          >禁入</view>
+        </view>
+
+        <view class="user-disabled-reason" wx:if="{{item.disabledReason}}">{{item.disabledReason}}</view>
+      </view>
+    </block>
+  </block>
+</view>

@@ -3,6 +3,7 @@ const HttpClient = require('../../utils/http-client');
 const API_CONFIG = require('../../utils/api-config');
 const { StarRecord } = require('../../models/star-record');
 const { StarGroup } = require('../../models/star-group');
+const { isSystemReadonlyUser } = require('../../utils/system-access');
 
 async function hasPendingLocalStarRecords(service, userId = null, options = {}) {
   try {
@@ -160,13 +161,21 @@ function buildExpiryAuthorityScopeKey(service, options = {}) {
   return `user:${options.userId || 'missing'}`;
 }
 
-function isViewerReadonlyUser(service) {
+function resolveReadonlyReason(service) {
   const loginUser = service?.userService?.getLoginUser?.() || null;
-  return Boolean(
+  if (isSystemReadonlyUser(loginUser)) {
+    return 'system_readonly';
+  }
+
+  if (Boolean(
     loginUser &&
     loginUser.role === 'parent' &&
     loginUser.familyPermissionRole === 'viewer'
-  );
+  )) {
+    return 'viewer_readonly';
+  }
+
+  return '';
 }
 
 async function syncExpiryAuthorityIfNeeded(service, options = {}) {
@@ -174,8 +183,9 @@ async function syncExpiryAuthorityIfNeeded(service, options = {}) {
     return { success: false, skipped: true, reason: 'local_mode' };
   }
 
-  if (isViewerReadonlyUser(service)) {
-    return { success: true, skipped: true, reason: 'viewer_readonly', settledGroupCount: 0 };
+  const readonlyReason = resolveReadonlyReason(service);
+  if (readonlyReason) {
+    return { success: true, skipped: true, reason: readonlyReason, settledGroupCount: 0 };
   }
 
   const scope = options.scope === 'family' ? 'family' : 'user';

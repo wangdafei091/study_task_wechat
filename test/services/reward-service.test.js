@@ -1278,6 +1278,36 @@ describe('RewardService', () => {
       mockEventBus.verifyEmitCount(EVENTS.REWARD_CLAIMED, 1);
     });
 
+    it('云端模式下兑换奖励遇到系统只读应保留明确错误文案', async () => {
+      const reward = new Reward({
+        id: 'reward_readonly',
+        name: '云端只读奖励',
+        points: 10,
+        enabled: true,
+        claimed: false
+      });
+
+      rewardService.enableCloudStorage = true;
+      mockRewardRepository.getById.mockResolvedValue(reward);
+      HttpClient.patch.mockRejectedValue(Object.assign(new Error('当前账号为只读，仅可查看'), {
+        code: 'SYSTEM_USER_READONLY',
+        statusCode: 403,
+        responseData: {
+          error_code: 'SYSTEM_USER_READONLY',
+          message: '当前账号为只读，仅可查看'
+        }
+      }));
+
+      const result = await rewardService.exchangeReward('reward_readonly', 'user_123');
+
+      expect(result).toEqual(expect.objectContaining({
+        success: false,
+        message: '当前账号为只读，仅可查看',
+        code: 'SYSTEM_USER_READONLY'
+      }));
+      expect(mockStarGroupRepository.deductStars).not.toHaveBeenCalled();
+    });
+
     it('云端模式下取消兑换应透传当前视角操作者上下文', async () => {
       rewardService.enableCloudStorage = true;
       mockUserService.getLoginUser = jest.fn().mockReturnValue({

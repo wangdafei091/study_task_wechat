@@ -3,25 +3,37 @@ const { TaskStatus } = require('../../models/task');
 const { EVENTS } = require('../../utils/constants');
 const HttpClient = require('../../utils/http-client');
 const API_CONFIG = require('../../utils/api-config');
+const { isSystemReadonlyUser } = require('../../utils/system-access');
 
-function isViewerReadonlyUser(service) {
+function resolveReadonlyReason(service) {
   const loginUser = service?.userService?.getLoginUser?.() || null;
-  return Boolean(
+  if (isSystemReadonlyUser(loginUser)) {
+    return 'system_readonly';
+  }
+
+  if (Boolean(
     loginUser &&
     loginUser.role === 'parent' &&
     loginUser.familyPermissionRole === 'viewer'
-  );
+  )) {
+    return 'viewer_readonly';
+  }
+
+  return '';
 }
 
 async function checkTasksStatus(service) {
   try {
     if (service.enableCloudStorage) {
-      if (isViewerReadonlyUser(service)) {
-        logger.info('TaskService', '查看者跳过任务惩罚云同步');
+      const readonlyReason = resolveReadonlyReason(service);
+      if (readonlyReason) {
+        logger.info('TaskService', '只读账号跳过任务惩罚云同步', {
+          reason: readonlyReason
+        });
         return {
           success: true,
           skipped: true,
-          reason: 'viewer_readonly',
+          reason: readonlyReason,
           expiredTasks: [],
           requiredTasks: [],
           penaltyResults: [],
