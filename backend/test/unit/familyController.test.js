@@ -3,12 +3,20 @@ const express = require('express');
 const { generateToken } = require('../../config/jwt');
 
 jest.mock('../../services/familyService');
+jest.mock('../../services/inviteCodeService', () => ({
+  issueFamilyInviteCode: jest.fn(),
+  consumeForExistingUser: jest.fn()
+}));
 jest.mock('../../services/userService');
+jest.mock('../../middleware/systemUserAccess', () => ({
+  systemUserAccessMiddleware: jest.fn((req, res, next) => next())
+}));
 jest.mock('../../utils/logger', () => ({
   createLogger: () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }),
 }));
 
 const familyService = require('../../services/familyService');
+const inviteCodeService = require('../../services/inviteCodeService');
 const userService = require('../../services/userService');
 
 function buildApp() {
@@ -94,7 +102,59 @@ describe('familyController governance routes', () => {
 
     expect(res.status).toBe(403);
     expect(res.body.error_code).toBe('FAMILY_MANAGER_REQUIRED');
-    expect(familyService.refreshInviteCode).not.toHaveBeenCalled();
+    expect(inviteCodeService.issueFamilyInviteCode).not.toHaveBeenCalled();
+  });
+
+  it('已失效的邀请码加入家庭时应返回明确业务错误，而不是 500', async () => {
+    inviteCodeService.consumeForExistingUser.mockRejectedValue(Object.assign(
+      new Error('邀请码已失效，请联系邀请人重新获取'),
+      { code: 'INVITE_CODE_DISABLED' }
+    ));
+
+    const res = await request(app)
+      .post('/api/families/join')
+      .set('Authorization', token({
+        userId: 'child_1',
+        role: 'child',
+        familyId: null,
+        familyPermissionRole: null
+      }))
+      .send({ inviteCode: 'F123456789' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error_code).toBe('INVITE_CODE_DISABLED');
+    expect(res.body.message).toBe('邀请码已失效，请联系邀请人重新获取');
+  });
+
+  it('旧家庭邀请码刷新接口应统一走新邀请码服务并返回兼容结构', async () => {
+    familyService.getUserFamilyRoleProfile.mockResolvedValue({
+      userId: 'parent_manager',
+      familyId: 'fam_1',
+      role: 'parent',
+      familyPermissionRole: 'manager'
+    });
+    inviteCodeService.issueFamilyInviteCode.mockResolvedValue({
+      code: 'F123456789',
+      targetRole: 'child',
+      expiresAt: '2099-01-01T00:00:00.000Z'
+    });
+
+    const res = await request(app)
+      .post('/api/families/current/invite-code')
+      .set('Authorization', token(MANAGER))
+      .send({ role: 'child' });
+
+    expect(res.status).toBe(200);
+    expect(inviteCodeService.issueFamilyInviteCode).toHaveBeenCalledWith({
+      issuerUserId: 'parent_manager',
+      familyId: 'fam_1',
+      targetRole: 'child'
+    });
+    expect(res.body.data).toEqual({
+      inviteCode: 'F123456789',
+      inviteCodeRole: 'child',
+      inviteCodeExpiresAt: '2099-01-01T00:00:00.000Z'
+    });
   });
 
   it('最后一个管理员不能降级', async () => {

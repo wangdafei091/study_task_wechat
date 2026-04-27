@@ -1,5 +1,6 @@
 const userService = require('./userService');
 const systemSettingService = require('./systemSettingService');
+const inviteCodeService = require('./inviteCodeService');
 
 class SystemAdminService {
   async getBootstrapContext(userId) {
@@ -16,11 +17,13 @@ class SystemAdminService {
 
   async getOverview() {
     const summary = await systemSettingService.getAppAccessMode();
+    const inviteGovernance = await inviteCodeService.getAdmissionGovernanceOverview();
     return {
       appAccessMode: summary.mode,
       modeSource: summary.source,
       updatedAt: summary.updatedAt,
-      updatedByUserId: summary.updatedByUserId
+      updatedByUserId: summary.updatedByUserId,
+      admissionInviteGovernance: inviteGovernance
     };
   }
 }

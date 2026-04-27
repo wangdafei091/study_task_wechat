@@ -11,9 +11,10 @@
 
   <block wx:else>
     <view class="governance-card intro-card">
+      <view class="section-label">系统用户</view>
       <view class="governance-title">用户权限治理</view>
-      <view class="governance-subtitle">可把真实登录用户设为正常使用、只读或暂停使用。</view>
-      <view class="governance-tip">家庭角色不变，系统级限制优先生效。</view>
+      <view class="governance-subtitle">先定位用户，再进入单用户治理面板调整权限与发码能力，降低长列表下的查找和回跳成本。</view>
+      <view class="governance-tip">系统级限制优先生效，不改变家庭内的角色关系。</view>
       <view class="readonly-notice" wx:if="{{isSelfReadonly}}">当前账号为只读，仅可查看</view>
     </view>
 
@@ -28,58 +29,215 @@
       </view>
       <view class="summary-item">
         <text class="summary-value">{{summary.blocked}}</text>
-        <text class="summary-label">已禁入</text>
+        <text class="summary-label">禁入</text>
+      </view>
+    </view>
+
+    <view class="governance-card filter-card">
+      <view class="filter-header">
+        <view>
+          <view class="section-label">快速筛选</view>
+          <view class="filter-title">先缩小范围，再治理单个用户</view>
+        </view>
+        <view class="filter-reset" wx:if="{{hasActiveFilters}}" bindtap="onResetFiltersTap">重置</view>
+      </view>
+
+      <view class="search-row">
+        <input
+          class="search-input"
+          placeholder="搜索昵称或 ID 后缀"
+          value="{{keywordInput}}"
+          bindinput="onKeywordInput"
+          bindconfirm="onSearchTap"
+          confirm-type="search"
+        />
+        <view class="search-btn" bindtap="onSearchTap">搜索</view>
+        <view class="search-clear" wx:if="{{keywordInput}}" bindtap="onClearKeywordTap">清空</view>
+      </view>
+
+      <view class="filter-group">
+        <view class="filter-label">访问级别</view>
+        <view class="filter-chip-row">
+          <block wx:for="{{accessFilterOptions}}" wx:key="value">
+            <view
+              class="filter-chip {{filters.accessLevel === item.value ? 'active' : ''}}"
+              data-group="accessLevel"
+              data-value="{{item.value}}"
+              bindtap="onFilterTap"
+            >{{item.label}}</view>
+          </block>
+        </view>
+      </view>
+
+      <view class="filter-group">
+        <view class="filter-label">角色</view>
+        <view class="filter-chip-row">
+          <block wx:for="{{roleFilterOptions}}" wx:key="value">
+            <view
+              class="filter-chip {{filters.role === item.value ? 'active' : ''}}"
+              data-group="role"
+              data-value="{{item.value}}"
+              bindtap="onFilterTap"
+            >{{item.label}}</view>
+          </block>
+        </view>
+      </view>
+
+      <view class="filter-group">
+        <view class="filter-label">发码状态</view>
+        <view class="filter-chip-row">
+          <block wx:for="{{issuerFilterOptions}}" wx:key="value">
+            <view
+              class="filter-chip {{filters.canIssueAdmissionCode === item.value ? 'active' : ''}}"
+              data-group="canIssueAdmissionCode"
+              data-value="{{item.value}}"
+              bindtap="onFilterTap"
+            >{{item.label}}</view>
+          </block>
+        </view>
       </view>
     </view>
 
     <view class="governance-card empty-card" wx:if="{{users.length === 0}}">
-      <view class="governance-title">还没有可治理用户</view>
-      <view class="governance-subtitle">当前没有真实登录用户进入过系统。</view>
+      <view class="governance-title">没有匹配用户</view>
+      <view class="governance-subtitle">{{emptyStateSubtitle}}</view>
     </view>
 
-    <block wx:for="{{users}}" wx:key="userId">
-      <view class="governance-card user-card">
-        <view class="user-header">
-          <view class="user-main">
-            <view class="user-title-row">
-              <text class="user-name">{{item.nicknameDisplay}}</text>
-              <text class="self-tag" wx:if="{{item.isSelf}}">我</text>
-            </view>
-            <view class="user-meta">{{item.roleDisplay}} · ID后缀 {{item.userIdSuffix}}</view>
+    <block wx:else>
+      <view class="governance-card list-card">
+        <view class="list-header">
+          <view>
+            <view class="section-label">用户列表</view>
+            <view class="list-title">轻量列表只负责定位目标用户</view>
           </view>
-          <view class="access-badge {{item.accessTone}}">{{item.accessLabel}}</view>
+          <view class="list-count">{{users.length}} 人</view>
         </view>
 
-        <view class="user-tags">
-          <text class="user-tag" wx:if="{{item.isSystemAdmin}}">系统管理员</text>
-          <text class="user-tag">{{item.familyRoleLabel}}</text>
+        <block wx:for="{{users}}" wx:key="userId">
+          <view class="user-row {{selectedUserId === item.userId ? 'selected' : ''}}" data-user-id="{{item.userId}}" bindtap="onSelectUserTap">
+            <view class="user-row-main">
+              <view class="user-row-title">
+                <text class="user-row-name">{{item.nicknameDisplay}}</text>
+                <text class="self-tag" wx:if="{{item.isSelf}}">我</text>
+              </view>
+              <view class="user-row-meta">{{item.roleDisplay}} · {{item.familyRoleLabel}} · ID后缀 {{item.userIdSuffix}}</view>
+            </view>
+            <view class="user-row-side">
+              <view class="access-badge {{item.accessTone}}">{{item.accessShortLabel}}</view>
+              <view class="issuer-badge {{item.inviteAbilityTone}}">{{item.inviteAbilityLabel}}</view>
+            </view>
+          </view>
+        </block>
+      </view>
+
+      <view class="governance-card detail-card" wx:if="{{selectedUser}}">
+        <view class="detail-header">
+          <view>
+            <view class="section-label">单用户治理</view>
+            <view class="detail-title">{{selectedUser.nicknameDisplay}}</view>
+            <view class="detail-subtitle">{{selectedUser.roleDisplay}} · {{selectedUser.familyRoleLabel}} · 最近调整 {{selectedUser.updatedAtLabel}}</view>
+          </view>
+          <view class="detail-badges">
+            <text class="user-tag" wx:if="{{selectedUser.isSystemAdmin}}">系统管理员</text>
+            <text class="user-tag">{{selectedUser.inviteAbilityLabel}}</text>
+          </view>
         </view>
 
-        <view class="user-updated">最近调整：{{item.updatedAtLabel}}</view>
-
-        <view class="action-row">
-          <view
-            class="action-chip {{item.isNormal ? 'active normal' : ''}} {{(!item.canUpdate || savingUserId === item.userId) ? 'disabled' : ''}}"
-            data-user-id="{{item.userId}}"
-            data-access-level="normal"
-            bindtap="onAccessLevelTap"
-          >正常</view>
-          <view
-            class="action-chip {{item.isReadonly ? 'active readonly' : ''}} {{(!item.canUpdate || savingUserId === item.userId) ? 'disabled' : ''}}"
-            data-user-id="{{item.userId}}"
-            data-access-level="readonly"
-            bindtap="onAccessLevelTap"
-          >只读</view>
-          <view
-            class="action-chip {{item.isBlocked ? 'active blocked' : ''}} {{(!item.canUpdate || savingUserId === item.userId) ? 'disabled' : ''}}"
-            data-user-id="{{item.userId}}"
-            data-access-level="blocked"
-            bindtap="onAccessLevelTap"
-          >禁入</view>
+        <view class="detail-section">
+          <view class="detail-section-title">系统访问级别</view>
+          <view class="action-row">
+            <view
+              class="action-chip {{selectedUser.isNormal ? 'active normal' : ''}} {{(!selectedUser.canUpdate || savingUserId === selectedUser.userId) ? 'disabled' : ''}}"
+              data-user-id="{{selectedUser.userId}}"
+              data-access-level="normal"
+              bindtap="onAccessLevelTap"
+            >正常</view>
+            <view
+              class="action-chip {{selectedUser.isReadonly ? 'active readonly' : ''}} {{(!selectedUser.canUpdate || savingUserId === selectedUser.userId) ? 'disabled' : ''}}"
+              data-user-id="{{selectedUser.userId}}"
+              data-access-level="readonly"
+              bindtap="onAccessLevelTap"
+            >只读</view>
+            <view
+              class="action-chip {{selectedUser.isBlocked ? 'active blocked' : ''}} {{(!selectedUser.canUpdate || savingUserId === selectedUser.userId) ? 'disabled' : ''}}"
+              data-user-id="{{selectedUser.userId}}"
+              data-access-level="blocked"
+              bindtap="onAccessLevelTap"
+            >禁入</view>
+          </view>
+          <view class="user-disabled-reason" wx:if="{{selectedUser.disabledReason}}">{{selectedUser.disabledReason}}</view>
         </view>
 
-        <view class="user-disabled-reason" wx:if="{{item.disabledReason}}">{{item.disabledReason}}</view>
+        <view class="detail-section" wx:if="{{selectedUser.showAdmissionIssuerSection}}">
+          <view class="detail-section-title">新用户邀请码权限</view>
+          <block wx:if="{{selectedUser.canGovernAdmissionIssuer}}">
+            <view class="invite-governance-grid">
+              <view class="invite-governance-cell">
+                <text class="invite-governance-label">权限</text>
+                <text class="invite-governance-value">{{selectedUser.canIssueAdmissionCodeEffective ? '已允许' : '未允许'}}</text>
+              </view>
+              <view class="invite-governance-cell">
+                <text class="invite-governance-label">总量</text>
+                <text class="invite-governance-value">{{selectedUser.admissionCodeQuotaTotal === null ? '未配置' : selectedUser.admissionCodeQuotaTotal}}</text>
+              </view>
+            </view>
+            <view class="invite-governance-grid secondary">
+              <view class="invite-governance-cell">
+                <text class="invite-governance-label">已使用</text>
+                <text class="invite-governance-value">{{selectedUser.admissionCodeQuotaUsed === null ? '未配置' : selectedUser.admissionCodeQuotaUsed}}</text>
+              </view>
+              <view class="invite-governance-cell">
+                <text class="invite-governance-label">剩余</text>
+                <text class="invite-governance-value">{{selectedUser.admissionCodeQuotaRemaining === null ? '未配置' : selectedUser.admissionCodeQuotaRemaining}}</text>
+              </view>
+            </view>
+            <view class="invite-governance-actions">
+              <view
+                class="invite-governance-chip {{selectedUser.canIssueAdmissionCodeEffective ? 'active' : ''}} {{(!selectedUser.canUpdate || savingUserId === selectedUser.userId) ? 'disabled' : ''}}"
+                data-user-id="{{selectedUser.userId}}"
+                bindtap="onEnableAdmissionIssuerTap"
+              >设置发码额度</view>
+              <view
+                class="invite-governance-chip {{!selectedUser.canIssueAdmissionCodeEffective ? 'active muted' : ''}} {{(!selectedUser.canUpdate || savingUserId === selectedUser.userId) ? 'disabled' : ''}}"
+                data-user-id="{{selectedUser.userId}}"
+                bindtap="onDisableAdmissionIssuerTap"
+              >停用发码</view>
+            </view>
+          </block>
+          <view class="user-disabled-reason" wx:else>{{selectedUser.admissionIssuerDisabledReason}}</view>
+        </view>
+
+        <view class="detail-section" wx:else>
+          <view class="detail-section-title">新用户邀请码权限</view>
+          <view class="user-disabled-reason">{{selectedUser.admissionIssuerDisabledReason}}</view>
+        </view>
       </view>
     </block>
   </block>
+
+  <view class="dialog-mask" wx:if="{{showQuotaDialog}}" bindtap="closeQuotaDialog"></view>
+  <view class="dialog bottom-sheet quota-dialog" wx:if="{{showQuotaDialog}}" catchtap="noop" style="{{quotaDialogStyle}}">
+    <view class="dialog-title">设置邀请码额度</view>
+    <view class="dialog-subtitle">{{quotaDialogTargetUserName}} 最多还能成功邀请多少个新用户？请输入大于等于 0 的整数。</view>
+    <input
+      class="dialog-input"
+      type="number"
+      placeholder="例如 3"
+      value="{{quotaInput}}"
+      bindinput="onQuotaInput"
+      bindkeyboardheightchange="onQuotaKeyboardHeightChange"
+      bindblur="onQuotaInputBlur"
+      maxlength="9"
+      adjust-position="{{false}}"
+      focus
+    />
+    <view class="dialog-error" wx:if="{{quotaDialogError}}">{{quotaDialogError}}</view>
+    <view class="dialog-hint">建议结合该账号当前已使用和剩余一起调整，避免额度过低影响发码。</view>
+    <view class="dialog-actions">
+      <view class="dialog-btn cancel {{savingUserId ? 'disabled' : ''}}" bindtap="closeQuotaDialog">取消</view>
+      <view class="dialog-btn confirm {{savingUserId ? 'disabled' : ''}}" bindtap="onQuotaDialogConfirm">
+        {{savingUserId ? '保存中...' : '保存额度'}}
+      </view>
+    </view>
+  </view>
 </view>

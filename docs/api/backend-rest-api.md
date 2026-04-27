@@ -296,6 +296,120 @@ Authorization: Bearer <token>
 - 写入成功后，数据库立即成为权威来源；后续新用户登录无需重启服务即可按新模式执行
 - 该接口只影响“新用户是否需要邀请码”；已有用户登录不受影响
 
+### 3.4.4 获取新用户邀请码全局治理概览
+
+- Method: `GET`
+- Path: `/api/system/admin/invite-governance`
+- Auth: `Bearer Token + System Admin`
+- Query: 无
+- Body: 无
+
+成功响应：
+- Status: `200`
+- Body：`data.quotaTotal`、`data.quotaUsed`、`data.quotaRemaining`
+
+常见错误：
+- `401` - `AUTH_INVALID_TOKEN`
+- `403` - `SYSTEM_ADMIN_REQUIRED`
+- `500` - `SYSTEM_INVITE_GOVERNANCE_GET_FAILED`
+
+说明：
+- 该接口只统计第一类邀请码 `admission_only` 的全局成功消费量
+
+### 3.4.5 更新新用户邀请码全局治理概览
+
+- Method: `PATCH`
+- Path: `/api/system/admin/invite-governance`
+- Auth: `Bearer Token + System Admin`
+- Query: 无
+- Body：
+  - `quotaTotal` - `number | null`
+
+成功响应：
+- Status: `200`
+- Body：`data.quotaTotal`、`data.quotaUsed`、`data.quotaRemaining`
+
+常见错误：
+- `401` - `AUTH_INVALID_TOKEN`
+- `403` - `SYSTEM_ADMIN_REQUIRED`
+- `400` - `INVITE_CODE_GLOBAL_QUOTA_INVALID`
+- `500` - `SYSTEM_INVITE_GOVERNANCE_UPDATE_FAILED`
+
+说明：
+- `quotaTotal=null` 表示未配置全局上限
+
+### 3.4.6 获取系统用户治理列表
+
+- Method: `GET`
+- Path: `/api/system/admin/users/governance`
+- Auth: `Bearer Token + System Admin`
+- Query：
+  - `keyword` - 按昵称或 `userId` 后 4 位模糊筛选
+  - `accessLevel` - `all | normal | readonly | blocked`
+  - `role` - `all | parent | child`
+  - `canIssueAdmissionCode` - `all | true | false`
+- Body: 无
+
+成功响应：
+- Status: `200`
+- Body：`data.users`、`data.summary`、`data.nextCursor`、`data.hasMore`
+
+常见错误：
+- `401` - `AUTH_INVALID_TOKEN`
+- `403` - `SYSTEM_ADMIN_REQUIRED`
+- `500` - `SYSTEM_USER_GOVERNANCE_LIST_FAILED`
+
+说明：
+- 当前返回仍为单页全量结果，`nextCursor=''`、`hasMore=false`
+- `canIssueAdmissionCode` 筛选按“当前有效发码能力”判断，而不是只看原始字段
+
+### 3.4.7 更新用户系统访问级别
+
+- Method: `PATCH`
+- Path: `/api/system/admin/users/:userId/access-level`
+- Auth: `Bearer Token + System Admin`
+- Query: 无
+- Body：
+  - `accessLevel` - `normal | readonly | blocked`
+
+成功响应：
+- Status: `200`
+- Body：`data.userId`、`data.systemAccessLevel`、`data.systemAccessUpdatedAt`、`data.systemAccessUpdatedByUserId`
+
+常见错误：
+- `401` - `AUTH_INVALID_TOKEN`
+- `403` - `SYSTEM_ADMIN_REQUIRED`
+- `400` - `SYSTEM_USER_GOVERNANCE_INVALID` / `SYSTEM_USER_GOVERNANCE_TARGET_INVALID`
+- `409` - `SYSTEM_USER_LAST_ADMIN_NORMAL_REQUIRED`
+- `500` - `SYSTEM_USER_GOVERNANCE_UPDATE_FAILED`
+
+说明：
+- 当用户被降为 `readonly / blocked` 时，后端会同时失效该用户已生成的有效邀请码
+
+### 3.4.8 更新用户新用户发码能力
+
+- Method: `PATCH`
+- Path: `/api/system/admin/users/:userId/admission-issuer`
+- Auth: `Bearer Token + System Admin`
+- Query: 无
+- Body：
+  - `canIssueAdmissionCode` - `boolean`
+  - `admissionCodeQuotaTotal` - `number | null`
+
+成功响应：
+- Status: `200`
+- Body：`data.userId`、`data.canIssueAdmissionCode`、`data.admissionCodeQuotaTotal`
+
+常见错误：
+- `401` - `AUTH_INVALID_TOKEN`
+- `403` - `SYSTEM_ADMIN_REQUIRED`
+- `400` - `SYSTEM_USER_GOVERNANCE_INVALID` / `SYSTEM_USER_GOVERNANCE_TARGET_INVALID`
+- `500` - `SYSTEM_USER_INVITE_GOVERNANCE_UPDATE_FAILED`
+
+说明：
+- 仅正常状态的家长可配置该能力
+- 当 `canIssueAdmissionCode=false` 时，后端会同步失效该用户已有的有效第一类邀请码
+
 ---
 
 ## 4. 用户接口
@@ -423,6 +537,28 @@ Authorization: Bearer <token>
 - `404` - `USER_NOT_FOUND`
 - `500` - `USER_UPDATE_FAILED`
 
+### 4.7A 修改当前登录用户资料
+
+- Method: `PATCH`
+- Path: `/api/users/current/profile`
+- Auth: `Bearer Token`
+- Query: 无
+- Body：
+  - `nickname` - 可选
+  - `avatarUrl` - 可选
+
+成功响应：
+- Status: `200`
+- Body：更新后的当前用户对象
+
+常见错误：
+- `401` - `AUTH_INVALID_TOKEN`
+- `500` - `USER_PROFILE_UPDATE_FAILED`
+
+说明：
+- 允许只更新昵称、只更新头像，或同时更新两者
+- 若请求体未提供有效字段，后端会直接返回当前用户最新快照
+
 ### 4.8 删除用户
 
 - Method: `DELETE`
@@ -534,6 +670,7 @@ Authorization: Bearer <token>
 说明：
 - 当前接口由家庭内 `manager` 家长执行；`viewer` 家长会收到 `FAMILY_MANAGER_REQUIRED`
 - `role=parent` 生成的是“加入家庭的家长邀请码”，加入后默认只拥有 `viewer` 权限，不等于直接授予管理权
+- 当前接口保留兼容旧家庭邀请码链路；邀请码中心主链路已迁移到 `/api/invites/family-code`
 
 ### 5.6 创建虚拟成员
 
@@ -592,6 +729,110 @@ Authorization: Bearer <token>
 说明：
 - 仅家庭内 `manager` 家长可调整其他家长权限
 - 当操作者修改的是自己时，后端会回发新 token，前端应立即刷新当前用户上下文
+
+### 5.9 预览邀请码摘要
+
+- Method: `POST`
+- Path: `/api/invites/preview`
+- Auth: 可选
+- Query: 无
+- Body：
+  - `inviteCode`
+
+成功响应：
+- Status: `200`
+- Body：`data.inviteCode`、`data.purpose`、`data.status`、`data.targetRole`、`data.familyId`、`data.familyName`、`data.currentAction`、`data.currentActionMessage`、`data.requiresProfileAuthorization`
+
+常见错误：
+- `400` - `INVITE_CODE_REQUIRED`
+- `500` - `INVITE_PREVIEW_FAILED`
+
+说明：
+- 该接口绝不消费邀请码，只返回摘要与当前用户下一步可执行动作
+- 未登录时会根据邀请码用途返回 `enter_app / join_family`
+- 已登录时可能返回 `already_has_access / already_in_family / has_other_family / system_readonly / system_blocked / invalid`
+
+### 5.10 获取邀请码能力摘要
+
+- Method: `GET`
+- Path: `/api/invites/bootstrap`
+- Auth: `Bearer Token`
+- Query: 无
+- Body: 无
+
+成功响应：
+- Status: `200`
+- Body：`data.canIssueAdmissionCode`、`data.admissionCodeQuotaTotal`、`data.admissionCodeQuotaUsed`、`data.admissionCodeQuotaRemaining`、`data.admissionGlobalQuotaTotal`、`data.admissionGlobalQuotaUsed`、`data.admissionGlobalQuotaRemaining`、`data.canIssueFamilyInviteCode`、`data.familyId`、`data.availableFamilyInviteRoles`
+
+常见错误：
+- `401` - `AUTH_INVALID_TOKEN`
+- `500` - `INVITE_BOOTSTRAP_FAILED`
+
+说明：
+- 第一类邀请码能力由系统管理员身份或“家长 + 正常状态 + 被授权 + 额度有效”共同决定
+
+### 5.11 获取当前有效邀请码摘要
+
+- Method: `GET`
+- Path: `/api/invites/current`
+- Auth: `Bearer Token`
+- Query: 无
+- Body: 无
+
+成功响应：
+- Status: `200`
+- Body：`data.admissionCode`、`data.familyInviteCodes`
+
+常见错误：
+- `401` - `AUTH_INVALID_TOKEN`
+- `500` - `INVITE_CURRENT_FAILED`
+
+说明：
+- `admissionCode` 最多只有 1 个当前有效邀请码
+- `familyInviteCodes` 可能同时包含邀请孩子、邀请家长两种当前有效家庭邀请码
+
+### 5.12 生成或刷新新用户邀请码
+
+- Method: `POST`
+- Path: `/api/invites/admission-code`
+- Auth: `Bearer Token`
+- Query: 无
+- Body: 无
+
+成功响应：
+- Status: `200`
+- Body：当前有效第一类邀请码对象
+
+常见错误：
+- `401` - `AUTH_INVALID_TOKEN`
+- `403` - `INVITE_CODE_ISSUER_FORBIDDEN` / `INVITE_CODE_QUOTA_EXCEEDED` / `INVITE_CODE_GLOBAL_QUOTA_EXCEEDED`
+- `500` - `INVITE_ADMISSION_ISSUE_FAILED`
+
+说明：
+- 同一发码人当前只保留 1 个有效 `admission_only` 邀请码；刷新时旧码会先失效
+
+### 5.13 生成或刷新家庭邀请码
+
+- Method: `POST`
+- Path: `/api/invites/family-code`
+- Auth: `Bearer Token`
+- Query: 无
+- Body：
+  - `targetRole` - `parent | child`
+
+成功响应：
+- Status: `200`
+- Body：当前角色对应的有效家庭邀请码对象
+
+常见错误：
+- `401` - `AUTH_INVALID_TOKEN`
+- `403` - `INVITE_CODE_FAMILY_MANAGER_REQUIRED` / `INVITE_CODE_ISSUER_FORBIDDEN`
+- `400` - `INVITE_CODE_TARGET_ROLE_INVALID`
+- `500` - `INVITE_FAMILY_ISSUE_FAILED`
+
+说明：
+- 同一家庭同一角色槽位当前只保留 1 个有效邀请码
+- `targetRole=parent` 生成的是默认 `viewer` 家长邀请码
 
 ---
 

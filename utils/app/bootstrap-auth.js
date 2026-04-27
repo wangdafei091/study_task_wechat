@@ -109,18 +109,24 @@ async function prepareUserService(app) {
   }
 }
 
-function buildLoginPayload(code) {
+function buildLoginPayload(code, options = {}) {
   const payload = { code };
-  const accessCode = appAccessState.loadPendingAppAccessCode();
-  if (accessCode) {
-    payload.accessCode = accessCode;
+  const inviteCode = appAccessState.normalizeInviteCode(
+    options.inviteCode || appAccessState.loadPendingInviteCode()
+  );
+  if (inviteCode) {
+    payload.inviteCode = inviteCode;
+  }
+
+  if (options.profile && typeof options.profile === 'object') {
+    payload.profile = options.profile;
   }
   return payload;
 }
 
-async function loginWithCode(code) {
+async function loginWithCode(code, options = {}) {
   const HttpClient = require('../../utils/http-client');
-  return HttpClient.post(API_CONFIG.ENDPOINTS.AUTH_LOGIN, buildLoginPayload(code));
+  return HttpClient.post(API_CONFIG.ENDPOINTS.AUTH_LOGIN, buildLoginPayload(code, options));
 }
 
 function isAlreadyOnAccessGate() {
@@ -165,7 +171,7 @@ function redirectToAccessGate(error) {
 }
 
 function handleAppAccessFailure(error, options = {}) {
-  if (!appAccessState.isAppAccessError(error)) {
+  if (!appAccessState.isInviteError(error)) {
     return false;
   }
 
@@ -192,7 +198,7 @@ function persistLoginSession(loginResult) {
     wx.setStorageSync('lastUserInfo', loginResult.user);
   }
 
-  appAccessState.clearPendingAppAccessCode();
+  appAccessState.clearPendingInviteCode();
   systemUserAccessState.clearBlockedSessionFlag();
 
   return true;
@@ -282,7 +288,7 @@ async function doCloudLogin(app, options = {}) {
       throw new Error('获取微信登录code失败');
     }
 
-    const loginResult = await loginWithCode(code);
+    const loginResult = await loginWithCode(code, options);
     if (!loginResult) {
       return false;
     }

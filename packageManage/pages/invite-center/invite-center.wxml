@@ -1,0 +1,129 @@
+<view class="invite-center-page">
+  <view class="invite-card loading-card" wx:if="{{loading}}">
+    <view class="invite-desc">正在整理当前邀请码...</view>
+  </view>
+
+  <view class="invite-card error-card" wx:elif="{{loadErrorMessage}}">
+    <view class="invite-title">加载失败</view>
+    <view class="invite-desc">{{loadErrorMessage}}</view>
+    <view class="primary-action" bindtap="loadPageData">重新加载</view>
+  </view>
+
+  <block wx:else>
+    <view class="invite-card feature-card">
+      <view class="invite-title">邀请码中心</view>
+      <view class="panel-intro">先生成邀请码，再发给对方即可。新朋友和家人都在这里处理。</view>
+      <view class="status-note" wx:if="{{isSystemReadonly}}">当前账号为只读，只能查看现有邀请码。</view>
+      <view class="status-note" wx:if="{{!governanceEnabled}}">当前是本地模式，云端邀请码暂不可用。</view>
+
+      <view class="invite-section-title section-gap">邀请新朋友使用</view>
+      <view class="invite-desc">发给第一次进入小程序的人，对方打开后会自动进入注册或加入流程。</view>
+      <view class="subtle-note" wx:if="{{!bootstrap.canIssueAdmissionCode}}">
+        当前身份暂不能生成新的新用户邀请码。
+      </view>
+
+      <view class="code-panel {{admissionInvite ? '' : 'empty'}}">
+        <view class="code-head">
+          <view class="code-label">当前邀请码</view>
+        </view>
+        <view class="code-main">
+          <view class="ticket-code">{{admissionInvite.code || '暂未生成'}}</view>
+          <view wx:if="{{admissionInvite && admissionInvite.code}}" class="code-share-wrap">
+            <button
+              class="code-share-icon {{submittingAdmission ? 'disabled' : ''}}"
+              open-type="share"
+              hover-class="none"
+              disabled="{{submittingAdmission}}"
+              data-kind="admission"
+            >
+              <view class="share-glyph">
+                <view class="share-arrow-diagonal"></view>
+                <view class="share-arrow-head share-arrow-head-top"></view>
+                <view class="share-arrow-head share-arrow-head-right"></view>
+              </view>
+            </button>
+          </view>
+        </view>
+        <view class="code-badge" wx:if="{{admissionInvite}}">{{admissionInvite.expiresText}}</view>
+        <view class="ticket-meta">{{admissionInvite ? '可以直接发给微信好友，也可以复制后自行发送。' : '生成后会显示在这里。'}}</view>
+        <view class="card-actions" wx:if="{{admissionInvite && admissionInvite.code}}">
+          <view class="minor-action action-chip" data-code="{{admissionInvite.code}}" bindtap="onCopyTap">复制邀请码</view>
+          <view class="minor-action action-chip {{submittingAdmission ? 'disabled' : ''}}" bindtap="onIssueAdmissionTap">
+            {{submittingAdmission ? '刷新中...' : '刷新邀请码'}}
+          </view>
+        </view>
+      </view>
+
+      <view wx:if="{{!admissionInvite || !admissionInvite.code}}" class="primary-action {{(!bootstrap.canIssueAdmissionCode || isSystemReadonly || submittingAdmission) ? 'disabled' : ''}}" bindtap="onIssueAdmissionTap">
+        {{submittingAdmission ? '生成中...' : '生成邀请码'}}
+      </view>
+      <view class="helper-text" wx:if="{{admissionInvite && admissionInvite.code}}">刷新后，之前发出的同类邀请码会立刻失效。</view>
+      <view class="helper-text" wx:if="{{!admissionInvite || !admissionInvite.code}}">生成后即可分享给好友或复制发送。</view>
+    </view>
+
+    <view class="invite-card section-card" wx:if="{{showFamilyInviteSection}}">
+      <view class="invite-section-title">邀请家人加入</view>
+      <view class="invite-desc">选择要邀请的对象后，生成对应的邀请码发给对方即可。</view>
+      <view class="family-role-tabs">
+        <view
+          wx:for="{{familyRoleTabs}}"
+          wx:key="role"
+          class="family-role-tab {{activeFamilyInviteRole === item.role ? 'active' : ''}}"
+          data-role="{{item.role}}"
+          bindtap="onFamilyRoleTabTap"
+        >
+          {{item.role === 'child' ? '邀请孩子' : '邀请家长'}}
+        </view>
+      </view>
+      <view class="subtle-note" wx:if="{{!currentFamilyRoleCanIssue}}">
+        当前身份暂不能生成这一类新邀请码。
+      </view>
+
+      <view class="code-panel {{currentFamilyInvite ? '' : 'empty'}}">
+        <view class="role-brief">
+          <view class="role-brief-title">{{currentFamilyRoleLabel}}</view>
+          <view class="family-role-desc">{{currentFamilyRoleDescription}}</view>
+        </view>
+        <view class="code-head">
+          <view class="code-label">当前邀请码</view>
+        </view>
+        <view class="code-main">
+          <view class="ticket-code">{{currentFamilyInvite.code || '暂未生成'}}</view>
+          <view wx:if="{{currentFamilyInvite && currentFamilyInvite.code}}" class="code-share-wrap">
+            <button
+              class="code-share-icon {{submittingFamilyRole === activeFamilyInviteRole ? 'disabled' : ''}}"
+              open-type="share"
+              hover-class="none"
+              disabled="{{submittingFamilyRole === activeFamilyInviteRole}}"
+              data-kind="family"
+              data-role="{{activeFamilyInviteRole}}"
+            >
+              <view class="share-glyph">
+                <view class="share-arrow-diagonal"></view>
+                <view class="share-arrow-head share-arrow-head-top"></view>
+                <view class="share-arrow-head share-arrow-head-right"></view>
+              </view>
+            </button>
+          </view>
+        </view>
+        <view class="code-badge" wx:if="{{currentFamilyInvite}}">{{currentFamilyInvite.expiresText}}</view>
+        <view class="ticket-meta">{{currentFamilyInvite ? '生成后可直接发给对方，对方会按身份加入当前家庭。' : '生成后会显示在这里。'}}</view>
+        <view class="family-action-slot">
+          <view class="card-actions" wx:if="{{currentFamilyInvite && currentFamilyInvite.code}}">
+            <view class="minor-action action-chip" data-code="{{currentFamilyInvite.code}}" bindtap="onCopyTap">复制邀请码</view>
+            <view class="minor-action action-chip {{submittingFamilyRole === activeFamilyInviteRole ? 'disabled' : ''}}" data-role="{{activeFamilyInviteRole}}" bindtap="onIssueFamilyTap">
+              {{submittingFamilyRole === activeFamilyInviteRole ? '刷新中...' : '刷新邀请码'}}
+            </view>
+          </view>
+          <view
+            wx:else
+            class="panel-primary-action {{(!currentFamilyRoleCanIssue || isSystemReadonly || submittingFamilyRole === activeFamilyInviteRole) ? 'disabled' : ''}}"
+            data-role="{{activeFamilyInviteRole}}"
+            bindtap="onIssueFamilyTap"
+          >{{submittingFamilyRole === activeFamilyInviteRole ? '生成中...' : '生成邀请码'}}</view>
+        </view>
+      </view>
+      <view class="helper-text">{{currentFamilyInvite && currentFamilyInvite.code ? '刷新后，之前发出的同类邀请码会立刻失效。' : '生成后即可发给对应家庭成员。'}}</view>
+    </view>
+  </block>
+</view>

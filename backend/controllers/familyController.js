@@ -3,6 +3,7 @@
  */
 
 const familyService = require('../services/familyService');
+const inviteCodeService = require('../services/inviteCodeService');
 const userService = require('../services/userService');
 const { generateToken } = require('../config/jwt');
 const { createLogger } = require('../utils/logger');
@@ -91,30 +92,37 @@ class FamilyController {
    */
   async joinFamily(req, res) {
     try {
-      const { userId, familyId: existingFamilyId } = req.user;
+      const { userId } = req.user;
       const { inviteCode } = req.body;
 
       if (!inviteCode) {
         return res.status(400).json(error('邀请码不能为空', 'INVALID_PARAMS'));
       }
 
-      if (existingFamilyId) {
-        return res.status(400).json(error('您已加入家庭', 'FAMILY_ALREADY_JOINED'));
-      }
-
       logger.info('加入家庭', { userId, inviteCode });
-      const result = await familyService.joinFamily(userId, inviteCode);
+      await inviteCodeService.consumeForExistingUser({ code: inviteCode, userId });
 
       const user = await this._loadLatestUser(userId);
       const token = this._issueToken(user);
 
       res.json(success({ token }, '加入家庭成功'));
     } catch (err) {
-      if (err.code === 'FAMILY_INVITE_CODE_INVALID') {
+      if (err.code === 'FAMILY_INVITE_CODE_INVALID' || err.code === 'INVITE_CODE_INVALID') {
         return res.status(400).json(error('邀请码无效或已使用', err.code));
       }
-      if (err.code === 'FAMILY_INVITE_CODE_EXPIRED') {
+      if (err.code === 'FAMILY_INVITE_CODE_EXPIRED' || err.code === 'INVITE_CODE_EXPIRED') {
         return res.status(400).json(error('邀请码已过期', err.code));
+      }
+      if (err.code === 'INVITE_CODE_DISABLED') {
+        return res.status(400).json(error(err.message, err.code));
+      }
+      if (
+        err.code === 'INVITE_CODE_PURPOSE_MISMATCH' ||
+        err.code === 'INVITE_CODE_TARGET_ROLE_MISMATCH' ||
+        err.code === 'INVITE_CODE_ALREADY_IN_TARGET_FAMILY' ||
+        err.code === 'INVITE_CODE_EXISTING_USER_HAS_FAMILY'
+      ) {
+        return res.status(400).json(error(err.message, err.code));
       }
       logger.error('加入家庭失败', err);
       res.status(500).json(error('加入家庭失败', 'FAMILY_JOIN_FAILED'));
@@ -172,9 +180,26 @@ class FamilyController {
       }
 
       logger.info('刷新邀请码', { familyId: operator.familyId, targetRole });
-      const result = await familyService.refreshInviteCode(operator.familyId, targetRole);
-      res.json(success(result, '邀请码已刷新'));
+      const result = await inviteCodeService.issueFamilyInviteCode({
+        issuerUserId: operator.userId,
+        familyId: operator.familyId,
+        targetRole
+      });
+      res.json(success({
+        inviteCode: result.code,
+        inviteCodeRole: result.targetRole,
+        inviteCodeExpiresAt: result.expiresAt
+      }, '邀请码已刷新'));
     } catch (err) {
+      if (
+        err.code === 'INVITE_CODE_FAMILY_MANAGER_REQUIRED' ||
+        err.code === 'INVITE_CODE_ISSUER_FORBIDDEN'
+      ) {
+        return res.status(403).json(error(err.message, err.code));
+      }
+      if (err.code === 'INVITE_CODE_TARGET_ROLE_INVALID') {
+        return res.status(400).json(error(err.message, err.code));
+      }
       logger.error('刷新邀请码失败', err);
       res.status(500).json(error('刷新邀请码失败', 'FAMILY_INVITE_CODE_REFRESH_FAILED'));
     }

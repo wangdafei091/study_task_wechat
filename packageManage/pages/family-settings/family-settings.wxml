@@ -18,7 +18,8 @@
     <view class="no-family-desc">创建家庭或通过邀请码加入</view>
     <view class="action-group">
       <view wx:if="{{isParent}}" class="btn-primary" bindtap="showCreateFamily">创建家庭</view>
-      <view class="btn-secondary" bindtap="showJoinFamily">输入邀请码加入</view>
+      <view class="btn-secondary" bindtap="navigateToAccessGate">输入邀请码加入</view>
+      <view wx:if="{{canEnterInviteCenter}}" class="btn-secondary" bindtap="navigateToInviteCenter">邀请码中心</view>
     </view>
   </view>
 
@@ -39,26 +40,11 @@
       <view class="identity-desc">{{currentIdentityDescription}}</view>
     </view>
 
-    <!-- 邀请码区域 -->
     <view class="card">
-      <view class="section-title">邀请码</view>
-      <view class="invite-code-row">
-        <view class="invite-code">{{inviteCode || '暂无邀请码'}}</view>
-        <view class="copy-btn" bindtap="copyInviteCode">复制</view>
-      </view>
-      <view class="invite-code-meta" wx:if="{{inviteCode}}">
-        <text>{{inviteCodeRole === 'parent' ? '家长邀请码' : '孩子邀请码'}} · {{inviteCodeExpiryText}}</text>
-      </view>
-      <view class="section-desc invite-role-hint">{{inviteRoleHint}}</view>
-      <view class="role-selector">
-        <text class="selector-label">邀请类型：</text>
-        <radio-group bindchange="onInviteCodeRoleChange">
-          <label class="role-label"><radio value="child" checked="{{inviteCodeRole === 'child'}}"/>孩子</label>
-          <label class="role-label"><radio value="parent" checked="{{inviteCodeRole === 'parent'}}"/>家长</label>
-        </radio-group>
-      </view>
-      <view class="btn-outline {{!canManageInviteCode ? 'btn-disabled' : ''}}" bindtap="refreshInviteCode">刷新邀请码</view>
-      <view class="governance-tip" wx:if="{{!canManageInviteCode}}">{{inviteManagementDisabledReason}}</view>
+      <view class="section-title">邀请与邀请码</view>
+      <view class="section-desc">统一在邀请码中心生成、刷新、复制和分享邀请码。</view>
+      <view class="btn-outline {{!canEnterInviteCenter ? 'btn-disabled' : ''}}" bindtap="navigateToInviteCenter">进入邀请码中心</view>
+      <view class="governance-tip" wx:if="{{!canEnterInviteCenter}}">当前身份不可进入邀请码中心</view>
     </view>
 
     <!-- 成员列表 -->
@@ -124,17 +110,6 @@
     <view class="dialog-actions">
       <view class="dialog-btn cancel" bindtap="cancelCreateFamily">取消</view>
       <view class="dialog-btn confirm" bindtap="confirmCreateFamily">创建</view>
-    </view>
-  </view>
-
-  <!-- 加入家庭对话框 -->
-  <view class="dialog-mask" wx:if="{{showJoinDialog}}" bindtap="cancelJoinFamily"></view>
-  <view class="dialog" wx:if="{{showJoinDialog}}" catchtap="noop">
-    <view class="dialog-title">加入家庭</view>
-    <input class="dialog-input" placeholder="请输入8位邀请码" value="{{joinCodeInput}}" bindinput="onJoinCodeInput" maxlength="8"/>
-    <view class="dialog-actions">
-      <view class="dialog-btn cancel" bindtap="cancelJoinFamily">取消</view>
-      <view class="dialog-btn confirm" bindtap="confirmJoinFamily">加入</view>
     </view>
   </view>
 

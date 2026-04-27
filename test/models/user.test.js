@@ -183,6 +183,7 @@ describe('User 领域模型', () => {
       expect(pages).toContain('packageTask/pages/task-occurrence-edit/task-occurrence-edit');
       expect(pages).toContain('packageChart/pages/task-record/task-record');
       expect(pages).toContain('pages/reward-manage/reward-manage');
+      expect(pages).toContain('packageManage/pages/invite-center/invite-center');
       expect(pages).toContain('packageManage/pages/about/about');
       expect(pages).not.toContain('packageManage/pages/system-admin/system-admin');
       expect(pages.length).toBeGreaterThan(0);

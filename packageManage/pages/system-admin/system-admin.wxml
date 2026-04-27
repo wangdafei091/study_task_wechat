@@ -33,58 +33,115 @@
     <view class="retry-button" bindtap="onRetryTap">重新加载</view>
   </view>
 
-  <view class="admin-card" wx:else>
-    <view class="admin-title">应用准入模式</view>
-    <view class="admin-subtitle">切换后对新用户登录立即生效，已有用户不受影响。</view>
-    <view class="readonly-tip" wx:if="{{isSystemReadonly}}">当前账号为只读，仅可查看</view>
+  <block wx:else>
+    <view class="admin-card intro-card">
+      <view class="section-label">系统管理</view>
+      <view class="admin-title">准入与邀请码治理</view>
+      <view class="admin-subtitle">在这里统一管理新用户进入方式、邀请码全局总量，以及系统用户权限。</view>
+      <view class="readonly-tip" wx:if="{{isSystemReadonly}}">当前账号为只读，仅可查看</view>
+    </view>
 
-    <view class="mode-list">
-      <view
-        class="mode-item {{appAccessMode === 'open' ? 'active' : ''}} {{saving || isSystemReadonly ? 'disabled' : ''}}"
-        data-mode="open"
-        bindtap="onModeChange">
-        <view class="mode-name">开放制</view>
-        <view class="mode-desc">新用户可直接进入小程序</view>
+    <view class="admin-card">
+      <view class="section-label">准入方式</view>
+      <view class="admin-title">应用准入模式</view>
+      <view class="admin-subtitle">切换后对新用户登录立即生效，已有用户不受影响。</view>
+
+      <view class="mode-list">
+        <view
+          class="mode-item {{appAccessMode === 'open' ? 'active' : ''}} {{saving || isSystemReadonly ? 'disabled' : ''}}"
+          data-mode="open"
+          bindtap="onModeChange">
+          <view class="mode-name">开放制</view>
+          <view class="mode-desc">新用户可直接进入小程序</view>
+        </view>
+        <view
+          class="mode-item {{appAccessMode === 'invite_only' ? 'active' : ''}} {{saving || isSystemReadonly ? 'disabled' : ''}}"
+          data-mode="invite_only"
+          bindtap="onModeChange">
+          <view class="mode-name">邀请制</view>
+          <view class="mode-desc">新用户需先输入应用邀请码</view>
+        </view>
+      </view>
+    </view>
+
+    <view class="admin-card meta-card">
+      <view class="meta-title">最近变更</view>
+      <view class="meta-row">
+        <text class="meta-label">配置来源</text>
+        <text class="meta-value">{{modeSource}}</text>
+      </view>
+      <view class="meta-row">
+        <text class="meta-label">更新时间</text>
+        <text class="meta-value">{{updatedAt}}</text>
+      </view>
+      <view class="meta-row">
+        <text class="meta-label">更新人</text>
+        <text class="meta-value">{{updatedByUserId}}</text>
+      </view>
+    </view>
+
+    <view class="admin-card meta-card" wx:if="{{inviteGovernance}}">
+      <view class="section-label">邀请码治理</view>
+      <view class="admin-title">新用户邀请码治理</view>
+      <view class="admin-subtitle">控制全局还能成功邀请多少个新用户，便于逐步开放使用范围。</view>
+      <view class="quota-grid">
+        <view class="quota-cell">
+          <text class="quota-label">全局总量</text>
+          <text class="quota-value">{{inviteGovernance.quotaTotal === null ? '未配置' : inviteGovernance.quotaTotal}}</text>
+        </view>
+        <view class="quota-cell">
+          <text class="quota-label">已使用</text>
+          <text class="quota-value">{{inviteGovernance.quotaUsed === null ? '未配置' : inviteGovernance.quotaUsed}}</text>
+        </view>
+        <view class="quota-cell">
+          <text class="quota-label">剩余</text>
+          <text class="quota-value">{{inviteGovernance.quotaRemaining === null ? '未配置' : inviteGovernance.quotaRemaining}}</text>
+        </view>
+      </view>
+      <view class="governance-note">调整总量后，建议结合已使用和剩余一起复核。</view>
+      <view class="entry-button {{saving || isSystemReadonly ? 'disabled' : ''}}" bindtap="onInviteGovernanceTap">
+        {{isSystemReadonly ? '当前仅可查看' : '设置全局总量'}}
+      </view>
+    </view>
+
+    <view class="admin-card entry-card">
+      <view class="entry-main">
+        <view class="entry-copy">
+          <view class="section-label">系统用户</view>
+          <view class="admin-title">用户权限治理</view>
+          <view class="admin-subtitle">管理谁可正常使用、只读查看或暂停使用，也可治理谁能发新用户邀请码。</view>
+        </view>
       </view>
       <view
-        class="mode-item {{appAccessMode === 'invite_only' ? 'active' : ''}} {{saving || isSystemReadonly ? 'disabled' : ''}}"
-        data-mode="invite_only"
-        bindtap="onModeChange">
-        <view class="mode-name">邀请制</view>
-        <view class="mode-desc">新用户需先输入应用邀请码</view>
+        class="entry-button {{!governanceEnabled ? 'disabled' : ''}}"
+        bindtap="onUserGovernanceTap"
+      >
+        {{governanceEnabled ? '进入治理页' : '仅云端模式可用'}}
       </view>
     </view>
-  </view>
+  </block>
 
-  <view class="admin-card meta-card" wx:if="{{!loading && !loadErrorCode}}">
-    <view class="meta-row">
-      <text class="meta-label">当前来源</text>
-      <text class="meta-value">{{modeSource}}</text>
-    </view>
-    <view class="meta-row">
-      <text class="meta-label">最后更新时间</text>
-      <text class="meta-value">{{updatedAt}}</text>
-    </view>
-    <view class="meta-row">
-      <text class="meta-label">最后更新人</text>
-      <text class="meta-value">{{updatedByUserId}}</text>
-    </view>
-  </view>
-
-  <view class="admin-card entry-card" wx:if="{{!loading && !loadErrorCode}}">
-    <view class="entry-main">
-      <view>
-        <view class="admin-title">用户权限治理</view>
-        <view class="admin-subtitle">管理谁可正常使用、只读查看或暂停使用。</view>
-      </view>
-      <view class="entry-chevron">›</view>
-    </view>
-    <view
-      class="entry-button {{!governanceEnabled ? 'disabled' : ''}}"
-      bindtap="onUserGovernanceTap"
-    >
-      {{governanceEnabled ? '进入治理页' : '仅云端模式可用'}}
+  <view class="dialog-mask" wx:if="{{showQuotaDialog}}" bindtap="closeInviteQuotaDialog"></view>
+  <view class="dialog bottom-sheet quota-dialog" wx:if="{{showQuotaDialog}}" catchtap="noop" style="{{quotaDialogStyle}}">
+    <view class="dialog-title">设置全局总量</view>
+    <view class="dialog-subtitle">请输入新用户邀请码在全局范围内还能成功邀请的总人数，留空表示未配置。</view>
+    <input
+      class="dialog-input"
+      type="number"
+      placeholder="留空为未配置"
+      value="{{quotaInput}}"
+      bindinput="onQuotaInput"
+      bindkeyboardheightchange="onQuotaKeyboardHeightChange"
+      bindblur="onQuotaInputBlur"
+      maxlength="9"
+      adjust-position="{{false}}"
+      focus
+    />
+    <view class="dialog-error" wx:if="{{quotaDialogError}}">{{quotaDialogError}}</view>
+    <view class="dialog-hint">建议在调整后结合已使用与剩余一起复核。</view>
+    <view class="dialog-actions">
+      <view class="dialog-btn cancel {{saving ? 'disabled' : ''}}" bindtap="closeInviteQuotaDialog">取消</view>
+      <view class="dialog-btn confirm {{saving ? 'disabled' : ''}}" bindtap="onQuotaDialogConfirm">{{saving ? '保存中...' : '保存设置'}}</view>
     </view>
   </view>
-
 </view>

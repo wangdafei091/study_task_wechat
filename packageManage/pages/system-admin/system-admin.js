@@ -1,6 +1,35 @@
 const systemService = require('../../../services/system-service');
 const API_CONFIG = require('../../../utils/api-config');
 
+function buildQuotaDialogStyle(keyboardHeight) {
+  const normalizedHeight = Number(keyboardHeight) || 0;
+  if (normalizedHeight <= 0) {
+    return '';
+  }
+
+  return `bottom: ${normalizedHeight}px;`;
+}
+
+function normalizeQuotaInput(value) {
+  const rawValue = String(value || '').trim();
+  if (!rawValue) {
+    return { ok: true, value: null };
+  }
+
+  const normalizedValue = Number(rawValue);
+  if (!Number.isInteger(normalizedValue) || normalizedValue < 0) {
+    return {
+      ok: false,
+      message: '请输入大于等于 0 的整数'
+    };
+  }
+
+  return {
+    ok: true,
+    value: normalizedValue
+  };
+}
+
 Page({
   data: {
     loading: true,
@@ -8,9 +37,15 @@ Page({
     modeSource: '',
     updatedAt: '',
     updatedByUserId: '',
+    inviteGovernance: null,
     saving: false,
     governanceEnabled: API_CONFIG.ENABLE_API === true,
     isSystemReadonly: false,
+    showQuotaDialog: false,
+    quotaInput: '',
+    quotaDialogError: '',
+    quotaDialogKeyboardHeight: 0,
+    quotaDialogStyle: '',
     loadErrorCode: '',
     loadErrorMessage: ''
   },
@@ -47,6 +82,12 @@ Page({
       modeSource: '',
       updatedAt: '',
       updatedByUserId: '',
+      inviteGovernance: null,
+      showQuotaDialog: false,
+      quotaInput: '',
+      quotaDialogError: '',
+      quotaDialogKeyboardHeight: 0,
+      quotaDialogStyle: '',
       loadErrorCode: error.code || 'SYSTEM_OVERVIEW_FAILED',
       loadErrorMessage: error.message || '加载失败'
     });
@@ -55,6 +96,89 @@ Page({
   onRetryTap() {
     this.refreshReadonlyState();
     this.loadOverview();
+  },
+
+  noop() {},
+
+  openInviteQuotaDialog() {
+    this.setData({
+      showQuotaDialog: true,
+      quotaInput: this.data.inviteGovernance?.quotaTotal === null
+        ? ''
+        : String(this.data.inviteGovernance?.quotaTotal || ''),
+      quotaDialogError: '',
+      quotaDialogKeyboardHeight: 0,
+      quotaDialogStyle: ''
+    });
+  },
+
+  closeInviteQuotaDialog() {
+    if (this.data.saving) {
+      return;
+    }
+
+    this.setData({
+      showQuotaDialog: false,
+      quotaInput: '',
+      quotaDialogError: '',
+      quotaDialogKeyboardHeight: 0,
+      quotaDialogStyle: ''
+    });
+  },
+
+  onQuotaInput(e) {
+    this.setData({
+      quotaInput: e.detail?.value || '',
+      quotaDialogError: ''
+    });
+  },
+
+  onQuotaKeyboardHeightChange(e) {
+    const keyboardHeight = Math.max(0, Number(e?.detail?.height) || 0);
+    this.setData({
+      quotaDialogKeyboardHeight: keyboardHeight,
+      quotaDialogStyle: buildQuotaDialogStyle(keyboardHeight)
+    });
+  },
+
+  onQuotaInputBlur() {
+    this.setData({
+      quotaDialogKeyboardHeight: 0,
+      quotaDialogStyle: ''
+    });
+  },
+
+  async onQuotaDialogConfirm() {
+    if (this.data.saving) {
+      return;
+    }
+
+    const normalized = normalizeQuotaInput(this.data.quotaInput);
+    if (!normalized.ok) {
+      this.setData({ quotaDialogError: normalized.message });
+      return;
+    }
+
+    this.setData({ saving: true });
+    try {
+      const result = await systemService.updateInviteGovernance(normalized.value);
+      this.setData({
+        saving: false,
+        inviteGovernance: result,
+        showQuotaDialog: false,
+        quotaDialogError: '',
+        quotaDialogKeyboardHeight: 0,
+        quotaDialogStyle: ''
+      });
+      wx.showToast({ title: '已更新', icon: 'success' });
+    } catch (error) {
+      this.setData({ saving: false });
+      if (error?.code === 'SYSTEM_ADMIN_REQUIRED') {
+        this.handleSystemAdminRequired();
+        return;
+      }
+      wx.showToast({ title: error?.message || '更新失败', icon: 'none' });
+    }
   },
 
   refreshReadonlyState() {
@@ -82,6 +206,7 @@ Page({
         modeSource: this.formatModeSource(result?.modeSource),
         updatedAt: this.formatUpdatedAt(result?.updatedAt),
         updatedByUserId: result?.updatedByUserId || '系统默认',
+        inviteGovernance: result?.admissionInviteGovernance || null,
         loadErrorCode: '',
         loadErrorMessage: ''
       });
@@ -137,6 +262,7 @@ Page({
         modeSource: this.formatModeSource(result?.modeSource),
         updatedAt: this.formatUpdatedAt(result?.updatedAt),
         updatedByUserId: result?.updatedByUserId || '当前管理员',
+        inviteGovernance: this.data.inviteGovernance,
         loadErrorCode: '',
         loadErrorMessage: ''
       });
@@ -149,6 +275,18 @@ Page({
       }
       wx.showToast({ title: error?.message || '更新失败', icon: 'none' });
     }
+  },
+
+  async onInviteGovernanceTap() {
+    if (this.data.isSystemReadonly) {
+      wx.showToast({
+        title: '当前账号为只读，仅可查看',
+        icon: 'none'
+      });
+      return;
+    }
+
+    this.openInviteQuotaDialog();
   },
 
   onUserGovernanceTap() {

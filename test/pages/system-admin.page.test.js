@@ -7,7 +7,8 @@ jest.mock('../../utils/logger', () => ({
 
 jest.mock('../../services/system-service', () => ({
   getOverview: jest.fn(),
-  updateAppAccessMode: jest.fn()
+  updateAppAccessMode: jest.fn(),
+  updateInviteGovernance: jest.fn()
 }));
 
 jest.mock('../../utils/api-config', () => ({
@@ -227,5 +228,77 @@ describe('packageManage/pages/system-admin/system-admin', () => {
       title: '当前账号为只读，仅可查看',
       icon: 'none'
     });
+  });
+
+  it('应允许在系统页更新新用户邀请码全局总量', async () => {
+    const page = createPage();
+    page.data.inviteGovernance = {
+      quotaTotal: 10,
+      quotaUsed: 2,
+      quotaRemaining: 8
+    };
+    systemService.updateInviteGovernance.mockResolvedValue({
+      quotaTotal: 20,
+      quotaUsed: 2,
+      quotaRemaining: 18
+    });
+
+    await page.onInviteGovernanceTap.call(page);
+    expect(page.data.showQuotaDialog).toBe(true);
+    expect(page.data.quotaInput).toBe('10');
+
+    page.onQuotaInput.call(page, {
+      detail: {
+        value: '20'
+      }
+    });
+    await page.onQuotaDialogConfirm.call(page);
+
+    expect(systemService.updateInviteGovernance).toHaveBeenCalledWith(20);
+    expect(page.data.inviteGovernance).toEqual({
+      quotaTotal: 20,
+      quotaUsed: 2,
+      quotaRemaining: 18
+    });
+    expect(page.data.showQuotaDialog).toBe(false);
+  });
+
+  it('全局总量输入非法时应停留在弹层内提示错误', async () => {
+    const page = createPage();
+    page.data.inviteGovernance = {
+      quotaTotal: 10,
+      quotaUsed: 2,
+      quotaRemaining: 8
+    };
+
+    await page.onInviteGovernanceTap.call(page);
+    page.onQuotaInput.call(page, {
+      detail: {
+        value: '-1'
+      }
+    });
+    await page.onQuotaDialogConfirm.call(page);
+
+    expect(systemService.updateInviteGovernance).not.toHaveBeenCalled();
+    expect(page.data.quotaDialogError).toBe('请输入大于等于 0 的整数');
+    expect(page.data.showQuotaDialog).toBe(true);
+  });
+
+  it('额度弹层应随键盘高度抬升，并在失焦后复位', () => {
+    const page = createPage();
+
+    page.onQuotaKeyboardHeightChange.call(page, {
+      detail: {
+        height: 216
+      }
+    });
+
+    expect(page.data.quotaDialogKeyboardHeight).toBe(216);
+    expect(page.data.quotaDialogStyle).toBe('bottom: 216px;');
+
+    page.onQuotaInputBlur.call(page);
+
+    expect(page.data.quotaDialogKeyboardHeight).toBe(0);
+    expect(page.data.quotaDialogStyle).toBe('');
   });
 });

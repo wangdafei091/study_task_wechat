@@ -23,6 +23,7 @@ router.get('/', protectedMiddlewares, userController.getUsers.bind(userControlle
  * @access  Private
  */
 router.get('/current', protectedMiddlewares, userController.getCurrentUser.bind(userController));
+router.patch('/current/profile', protectedMiddlewares, userController.updateCurrentProfile.bind(userController));
 
 /**
  * @route   GET /api/users/session/validate

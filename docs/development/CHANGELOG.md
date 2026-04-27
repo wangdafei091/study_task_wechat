@@ -4,6 +4,42 @@
 
 ---
 
+## [里程碑-22L] - 2026-04-27
+
+### ✅ 完成情况
+
+**统一邀请码与新用户直入家庭**
+
+- **统一邀请码后端模型与正式接口已落地**：
+  - [`backend/database/migrations/019_create_invite_codes_and_user_admission_quota.sql`](/Users/wangdafei/code/study_task_wechat/backend/database/migrations/019_create_invite_codes_and_user_admission_quota.sql)、[`backend/database/migrations/020_add_invite_code_active_slot_unique_guard.sql`](/Users/wangdafei/code/study_task_wechat/backend/database/migrations/020_add_invite_code_active_slot_unique_guard.sql)、[`backend/models/InviteCode.js`](/Users/wangdafei/code/study_task_wechat/backend/models/InviteCode.js)、[`backend/services/inviteCodeService.js`](/Users/wangdafei/code/study_task_wechat/backend/services/inviteCodeService.js)、[`backend/controllers/inviteController.js`](/Users/wangdafei/code/study_task_wechat/backend/controllers/inviteController.js)、[`backend/routes/invites.js`](/Users/wangdafei/code/study_task_wechat/backend/routes/invites.js) 已建立统一邀请码表、双轨兼容解析、预览接口与两类发码接口
+  - [`backend/controllers/authController.js`](/Users/wangdafei/code/study_task_wechat/backend/controllers/authController.js)、[`backend/controllers/familyController.js`](/Users/wangdafei/code/study_task_wechat/backend/controllers/familyController.js)、[`backend/services/familyService.js`](/Users/wangdafei/code/study_task_wechat/backend/services/familyService.js) 已打通新用户登录建号、已有用户加入家庭、失效码映射与事务收口链路
+- **邀请码治理闭环已形成**：
+  - [`backend/controllers/systemAdminController.js`](/Users/wangdafei/code/study_task_wechat/backend/controllers/systemAdminController.js)、[`backend/services/systemUserGovernanceService.js`](/Users/wangdafei/code/study_task_wechat/backend/services/systemUserGovernanceService.js)、[`backend/routes/system.js`](/Users/wangdafei/code/study_task_wechat/backend/routes/system.js) 已补齐全局额度、用户发码能力和系统访问级别对邀请码的 authoritative 治理
+  - 当用户被降级为 `readonly / blocked` 或关闭第一类发码能力时，已有有效邀请码会被同步失效，消费阶段也会再次复核资格与额度
+- **前端邀请码中心与承接页主链路已正式上线**：
+  - [`packageManage/pages/invite-center/`](/Users/wangdafei/code/study_task_wechat/packageManage/pages/invite-center/) 已形成邀请码中心主页面，支持新用户邀请码、家庭邀请码、二维码、复制、刷新与轻量分享入口
+  - [`pages/access-gate/access-gate.js`](/Users/wangdafei/code/study_task_wechat/pages/access-gate/access-gate.js)、[`app.js`](/Users/wangdafei/code/study_task_wechat/app.js)、[`services/invite-service.js`](/Users/wangdafei/code/study_task_wechat/services/invite-service.js)、[`utils/app/app-access-state.js`](/Users/wangdafei/code/study_task_wechat/utils/app/app-access-state.js) 已补齐分享承接、显式确认态、空码降级、错误码映射和已登录用户无动作态
+- **治理页与资料缓存链路在本期一起收口**：
+  - [`packageManage/pages/system-user-governance/system-user-governance.js`](/Users/wangdafei/code/study_task_wechat/packageManage/pages/system-user-governance/system-user-governance.js)、[`services/system-service.js`](/Users/wangdafei/code/study_task_wechat/services/system-service.js) 已将系统用户治理页升级为筛选栏 + 轻量列表 + 单用户治理面板，并支持用户发码治理
+  - [`services/user-service.js`](/Users/wangdafei/code/study_task_wechat/services/user-service.js)、[`backend/controllers/userController.js`](/Users/wangdafei/code/study_task_wechat/backend/controllers/userController.js)、[`backend/routes/users.js`](/Users/wangdafei/code/study_task_wechat/backend/routes/users.js) 已新增当前登录用户资料更新接口，并让前端缓存用户的 `modifyTime` 正常刷新
+
+### 🧪 验证结果
+
+- 前端全量回归通过：
+  - `npm test -- --runInBand`
+- 后端单元回归通过：
+  - `npm run test:backend:unit`
+- 后端内存集成回归通过：
+  - `npm run test:backend:integration:memory`
+- 邀请码与治理链路定向回归通过：
+  - [`test/pages/invite-center.page.test.js`](/Users/wangdafei/code/study_task_wechat/test/pages/invite-center.page.test.js)、[`test/pages/access-gate.page.test.js`](/Users/wangdafei/code/study_task_wechat/test/pages/access-gate.page.test.js)、[`test/pages/system-user-governance.page.test.js`](/Users/wangdafei/code/study_task_wechat/test/pages/system-user-governance.page.test.js)、[`backend/test/unit/inviteCodeService.test.js`](/Users/wangdafei/code/study_task_wechat/backend/test/unit/inviteCodeService.test.js)、[`backend/test/unit/systemUserGovernanceService.test.js`](/Users/wangdafei/code/study_task_wechat/backend/test/unit/systemUserGovernanceService.test.js)、[`backend/test/unit/systemAdminController.test.js`](/Users/wangdafei/code/study_task_wechat/backend/test/unit/systemAdminController.test.js) 已覆盖本期主链路
+
+### 📖 详细实施记录
+
+- [里程碑-22L：统一邀请码与新用户直入家庭](../design/milestone-22l-invite-code-unification-and-new-user-direct-family.md)
+
+---
+
 ## [里程碑-22M] - 2026-04-26
 
 ### ✅ 完成情况

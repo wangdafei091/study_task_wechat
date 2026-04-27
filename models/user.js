@@ -180,6 +180,7 @@ class User {
         'packageTask/pages/task-occurrence-edit/task-occurrence-edit',
         'pages/reward-manage/reward-manage',
         'packageManage/pages/family-settings/family-settings',
+        'packageManage/pages/invite-center/invite-center',
         'packageManage/pages/about/about'
       ];
 

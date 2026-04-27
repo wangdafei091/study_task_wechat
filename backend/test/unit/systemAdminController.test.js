@@ -10,7 +10,12 @@ jest.mock('../../services/systemSettingService', () => ({
 }));
 jest.mock('../../services/systemUserGovernanceService', () => ({
   listGovernableUsers: jest.fn(),
-  updateAccessLevel: jest.fn()
+  updateAccessLevel: jest.fn(),
+  updateAdmissionIssuer: jest.fn()
+}));
+jest.mock('../../services/inviteCodeService', () => ({
+  getAdmissionGovernanceOverview: jest.fn(),
+  updateAdmissionGlobalQuota: jest.fn()
 }));
 jest.mock('../../middleware/auth', () => ({
   authMiddleware: jest.fn((req, res, next) => {
@@ -32,6 +37,7 @@ jest.mock('../../utils/logger', () => ({
 const systemAdminService = require('../../services/systemAdminService');
 const systemSettingService = require('../../services/systemSettingService');
 const systemUserGovernanceService = require('../../services/systemUserGovernanceService');
+const inviteCodeService = require('../../services/inviteCodeService');
 
 function buildApp() {
   const app = express();
@@ -125,16 +131,63 @@ describe('system admin controller routes', () => {
   });
 
   it('应返回系统用户治理列表', async () => {
-    systemUserGovernanceService.listGovernableUsers.mockResolvedValue([
-      { userId: 'user_1', systemAccessLevel: 'normal' }
-    ]);
+    systemUserGovernanceService.listGovernableUsers.mockResolvedValue({
+      users: [{ userId: 'user_1', systemAccessLevel: 'normal' }],
+      summary: { normal: 1, readonly: 0, blocked: 0 },
+      nextCursor: '',
+      hasMore: false
+    });
 
-    const res = await request(app).get('/api/system/admin/users/governance');
+    const res = await request(app)
+      .get('/api/system/admin/users/governance')
+      .query({ keyword: '家长', role: 'parent' });
 
     expect(res.status).toBe(200);
+    expect(systemUserGovernanceService.listGovernableUsers).toHaveBeenCalledWith({
+      keyword: '家长',
+      role: 'parent'
+    });
     expect(res.body.data.users).toEqual([
       expect.objectContaining({ userId: 'user_1' })
     ]);
+    expect(res.body.data.summary).toEqual({ normal: 1, readonly: 0, blocked: 0 });
+  });
+
+  it('应返回邀请码治理概览', async () => {
+    inviteCodeService.getAdmissionGovernanceOverview.mockResolvedValue({
+      quotaTotal: 12,
+      quotaUsed: 4,
+      quotaRemaining: 8
+    });
+
+    const res = await request(app).get('/api/system/admin/invite-governance');
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toEqual({
+      quotaTotal: 12,
+      quotaUsed: 4,
+      quotaRemaining: 8
+    });
+  });
+
+  it('更新邀请码治理概览成功后应返回最新摘要', async () => {
+    inviteCodeService.updateAdmissionGlobalQuota.mockResolvedValue({
+      quotaTotal: 20,
+      quotaUsed: 5,
+      quotaRemaining: 15
+    });
+
+    const res = await request(app)
+      .patch('/api/system/admin/invite-governance')
+      .send({ quotaTotal: 20 });
+
+    expect(res.status).toBe(200);
+    expect(inviteCodeService.updateAdmissionGlobalQuota).toHaveBeenCalledWith(20, 'admin_1');
+    expect(res.body.data).toEqual({
+      quotaTotal: 20,
+      quotaUsed: 5,
+      quotaRemaining: 15
+    });
   });
 
   it('更新用户访问级别成功后应返回最新摘要', async () => {
@@ -170,5 +223,50 @@ describe('system admin controller routes', () => {
 
     expect(res.status).toBe(409);
     expect(res.body.error_code).toBe('SYSTEM_USER_LAST_ADMIN_NORMAL_REQUIRED');
+  });
+
+  it('更新用户新用户邀请码治理成功后应返回最新摘要', async () => {
+    systemUserGovernanceService.updateAdmissionIssuer.mockResolvedValue({
+      userId: 'user_2',
+      canIssueAdmissionCode: true,
+      admissionCodeQuotaTotal: 3
+    });
+
+    const res = await request(app)
+      .patch('/api/system/admin/users/user_2/admission-issuer')
+      .send({
+        canIssueAdmissionCode: true,
+        admissionCodeQuotaTotal: 3
+      });
+
+    expect(res.status).toBe(200);
+    expect(systemUserGovernanceService.updateAdmissionIssuer).toHaveBeenCalledWith('user_2', {
+      canIssueAdmissionCode: true,
+      admissionCodeQuotaTotal: 3
+    }, 'admin_1');
+    expect(res.body.data).toEqual({
+      userId: 'user_2',
+      canIssueAdmissionCode: true,
+      admissionCodeQuotaTotal: 3
+    });
+  });
+
+  it('更新只读或禁入家长的新用户邀请码治理时应返回 400', async () => {
+    systemUserGovernanceService.updateAdmissionIssuer.mockRejectedValue(
+      Object.assign(new Error('只允许为正常状态的家长配置新用户邀请码能力'), {
+        code: 'SYSTEM_USER_GOVERNANCE_INVALID'
+      })
+    );
+
+    const res = await request(app)
+      .patch('/api/system/admin/users/user_2/admission-issuer')
+      .send({
+        canIssueAdmissionCode: true,
+        admissionCodeQuotaTotal: 3
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error_code).toBe('SYSTEM_USER_GOVERNANCE_INVALID');
+    expect(res.body.message).toBe('只允许为正常状态的家长配置新用户邀请码能力');
   });
 });

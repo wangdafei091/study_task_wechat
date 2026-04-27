@@ -346,6 +346,47 @@ describe('UserService', () => {
     });
   });
 
+  describe('updateCurrentProfile', () => {
+    it('云端模式更新资料后应通过模型 update 刷新缓存用户的 modifyTime', async () => {
+      const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(1700000005000);
+      const loginUser = new User({
+        userId: 'parent',
+        name: '旧昵称',
+        role: 'parent',
+        avatar: 'old-avatar'
+      });
+      loginUser.modifyTime = 1700000000000;
+      userService.loginUser = loginUser;
+      userService.currentUser = loginUser;
+      userService.userCache.set(loginUser.userId, loginUser);
+      mockHttpClient.patch.mockResolvedValue({
+        userId: 'parent',
+        nickname: '新昵称',
+        avatar: 'new-avatar'
+      });
+
+      const result = await userService.updateCurrentProfile({
+        nickname: '新昵称',
+        avatarUrl: 'new-avatar'
+      });
+
+      expect(result).toEqual({
+        success: true,
+        user: {
+          userId: 'parent',
+          nickname: '新昵称',
+          avatar: 'new-avatar'
+        }
+      });
+      expect(userService.loginUser.name).toBe('新昵称');
+      expect(userService.loginUser.avatar).toBe('new-avatar');
+      expect(userService.loginUser.modifyTime).toBe(1700000005000);
+      expect(userService.userCache.get('parent').modifyTime).toBe(1700000005000);
+
+      nowSpy.mockRestore();
+    });
+  });
+
   describe('获取当前用户', () => {
     it('getCurrentUser应该返回当前用户', () => {
       const currentUser = userService.getCurrentUser();
