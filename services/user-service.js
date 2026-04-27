@@ -6,11 +6,12 @@
  */
 
 const logger = require('../utils/logger');
-const { User, UserRole, UserStatus } = require('../models/user');
+const { FamilyPermissionRole, User, UserRole, UserStatus } = require('../models/user');
 const EventBus = require('../utils/core/event-bus');
 const HttpClient = require('../utils/http-client');
 const TokenManager = require('../utils/token-manager');
 const API_CONFIG = require('../utils/api-config');
+const systemUserAccessState = require('../utils/app/system-user-access-state');
 
 class UserService {
   /**
@@ -46,6 +47,7 @@ class UserService {
     
     // 初始化标记
     this.initialized = false;
+    this.initializationBlocked = false;
     
     logger.info('UserService', '初始化用户服务（API模式）', { defaultUserId: this.currentUser.id });
   }
@@ -56,12 +58,32 @@ class UserService {
    */
   async initialize() {
     try {
+      this.initializationBlocked = false;
+
       // 1. 从 JWT 解析 loginUser（设备登录者，生命周期内不变）
       const tokenInfo = TokenManager.getUserInfo();
       if (tokenInfo && tokenInfo.userId) {
-        const userDataFromAPI = await HttpClient.get(
-          API_CONFIG.ENDPOINTS.AUTH_CURRENT
-        ).catch(() => null);
+        let userDataFromAPI = null;
+        try {
+          userDataFromAPI = await HttpClient.get(API_CONFIG.ENDPOINTS.AUTH_CURRENT);
+        } catch (error) {
+          if (systemUserAccessState.isBlockedError(error)) {
+            systemUserAccessState.handleBlockedError(error);
+            this.userCache.clear();
+            this.loginUser = null;
+            this.initializationBlocked = true;
+            this.currentUser = new User({
+              userId: 'parent',
+              name: '家长',
+              displayName: '家长模式',
+              role: UserRole.PARENT,
+              avatar: '👩‍💼',
+              status: UserStatus.ACTIVE
+            });
+            this.initialized = true;
+            return false;
+          }
+        }
         if (userDataFromAPI) {
           this.loginUser = new User(userDataFromAPI);
         } else {
@@ -70,6 +92,7 @@ class UserService {
             userId: tokenInfo.userId,
             role: tokenInfo.role || UserRole.PARENT,
             familyId: tokenInfo.familyId || null,
+            familyPermissionRole: tokenInfo.familyPermissionRole || null,
           });
         }
       }
@@ -82,13 +105,19 @@ class UserService {
         this.userCache.set(this.loginUser.userId, this.loginUser);
       }
 
-      // 3. 恢复会话，应用非法会话回正规则
+      // 3. 本地模式：加载本地持久化的家庭和成员数据
+      if (!this.loginUser) {
+        this._loadLocalFamilyData();
+      }
+
+      // 4. 恢复会话，应用非法会话回正规则
       await this._restoreSession();
 
       this.initialized = true;
       logger.info('UserService', '用户服务初始化完成', {
         loginUserId: this.loginUser?.userId,
         currentUserId: this.currentUser.id,
+        localMode: !API_CONFIG.ENABLE_API,
       });
       return true;
     } catch (error) {
@@ -154,15 +183,63 @@ class UserService {
     return this.loginUser ? this.loginUser.userId : null;
   }
 
-  /**
-   * 获取小朋友用户ID（兼容性方法，已弃用：多孩子场景下请使用 task.userId）
-   * @returns {String} 小朋友用户ID
-   */
-  getChildUserId() {
-    const childUser = this.getUserByRole('child');
-    return childUser ? childUser.id : 'child';
+  applySystemAccessLevelSnapshot(userId, snapshot = {}) {
+    const targets = [];
+
+    if (this.loginUser?.userId === userId) {
+      targets.push(this.loginUser);
+    }
+    if (this.currentUser?.userId === userId && this.currentUser !== this.loginUser) {
+      targets.push(this.currentUser);
+    }
+
+    const cached = this.userCache.get(userId);
+    if (cached && !targets.includes(cached)) {
+      targets.push(cached);
+    }
+
+    targets.forEach((user) => {
+      user.update({
+        systemAccessLevel: snapshot.systemAccessLevel,
+        systemAccessUpdatedAt: snapshot.systemAccessUpdatedAt,
+        systemAccessUpdatedByUserId: snapshot.systemAccessUpdatedByUserId
+      });
+    });
   }
-  
+
+  _applyProfileSnapshotToUser(user, profile = {}) {
+    if (!user) {
+      return;
+    }
+
+    const nickname = String(profile.nickname || profile.nickName || '').trim();
+    const avatar = String(profile.avatarUrl || profile.avatar || '').trim();
+    const patch = {};
+
+    if (nickname) {
+      patch.name = nickname;
+    }
+    if (avatar) {
+      patch.avatar = avatar;
+    }
+
+    if (Object.keys(patch).length === 0) {
+      return;
+    }
+
+    if (typeof user.update === 'function') {
+      user.update(patch);
+      return;
+    }
+
+    if (patch.name !== undefined) {
+      user.name = patch.name;
+    }
+    if (patch.avatar !== undefined) {
+      user.avatar = patch.avatar;
+    }
+  }
+
   /**
    * 获取所有可用用户
    * @returns {Array} 用户列表
@@ -405,11 +482,25 @@ class UserService {
       members.forEach(u => this.userCache.set(u.userId, u));
       logger.info('UserService', `家庭成员加载: ${members.length}人`);
 
-      // 软删除回退：currentUser 已被删除时仅在内存中回退到 loginUser
-      // 不写存储——_restoreSession() 会根据存储值与缓存的对比做最终处理
+      if (this.loginUser && this.userCache.has(this.loginUser.userId)) {
+        this.loginUser = this.userCache.get(this.loginUser.userId);
+      }
+      if (this.currentUser && this.userCache.has(this.currentUser.userId)) {
+        this.currentUser = this.userCache.get(this.currentUser.userId);
+      }
+
       if (this.currentUser && !this.userCache.has(this.currentUser.userId)) {
-        logger.warn('UserService', '当前视角成员已被删除，内存回退到 loginUser', { userId: this.currentUser.userId });
+        const isPlaceholderUser = this._isLegacyPlaceholderUserId(this.currentUser.userId);
+        const logMethod = isPlaceholderUser ? 'info' : 'warn';
+        logger[logMethod](
+          'UserService',
+          isPlaceholderUser
+            ? '检测到初始化占位视角，自动回正到 loginUser'
+            : '当前视角成员已被删除，内存回退到 loginUser',
+          { userId: this.currentUser.userId }
+        );
         this.currentUser = this.loginUser;
+        this._persistCurrentUserId(this.loginUser?.userId || null);
       }
       return true;
     } catch (error) {
@@ -432,23 +523,15 @@ class UserService {
     try {
       savedUserId = this.storageAdapter
         ? this.storageAdapter.get('currentUserId')
-        : wx.getStorageSync('currentUserId');
+        : null;
     } catch (e) {
       logger.warn('UserService', '读取本地会话失败', e);
     }
 
     const forceReset = (reason) => {
       this.currentUser = this.loginUser || this.currentUser;
-      const uid = this.loginUser?.userId;
-      if (uid) {
-        try {
-          if (this.storageAdapter) {
-            this.storageAdapter.set('currentUserId', uid);
-          } else {
-            wx.setStorageSync('currentUserId', uid);
-          }
-        } catch (e) { /* ignore */ }
-      }
+      const uid = this.loginUser?.userId || null;
+      this._persistCurrentUserId(uid);
       logger.info('UserService', `会话回正到 loginUser：${reason}`, { userId: uid });
     };
 
@@ -474,14 +557,11 @@ class UserService {
         this.currentUser = children.length > 0 ? children[0] : this.loginUser;
         if (children.length > 0) {
           logger.info('UserService', '家长首次启动，默认选第一个孩子', { childId: children[0].userId });
-          if (this.storageAdapter) {
-            this.storageAdapter.set('currentUserId', children[0].userId);
-          } else {
-            wx.setStorageSync('currentUserId', children[0].userId);
-          }
+          this._persistCurrentUserId(children[0].userId);
         }
       } else if (this.loginUser) {
         this.currentUser = this.loginUser;
+        this._persistCurrentUserId(this.loginUser.userId);
       }
     }
 
@@ -496,14 +576,31 @@ class UserService {
       const fallback = validUsers[0] || this.loginUser;
       logger.info('UserService', '家长currentUser不在有效列表，重定向', { to: fallback.userId });
       this.currentUser = fallback;
-      try {
-        if (this.storageAdapter) {
-          this.storageAdapter.set('currentUserId', fallback.userId);
-        } else {
-          wx.setStorageSync('currentUserId', fallback.userId);
-        }
-      } catch (e) { /* ignore */ }
+      this._persistCurrentUserId(fallback.userId);
     }
+  }
+
+  _persistCurrentUserId(userId) {
+    if (!userId) {
+      return false;
+    }
+
+    if (!this.storageAdapter || typeof this.storageAdapter.set !== 'function') {
+      logger.warn('UserService', 'StorageAdapter不可用，无法持久化 currentUserId', { userId });
+      return false;
+    }
+
+    try {
+      this.storageAdapter.set('currentUserId', userId);
+      return true;
+    } catch (error) {
+      logger.warn('UserService', '持久化 currentUserId 失败', { userId, error: error.message });
+      return false;
+    }
+  }
+
+  _isLegacyPlaceholderUserId(userId) {
+    return userId === 'parent' || userId === 'child';
   }
 
   /**
@@ -542,6 +639,29 @@ class UserService {
    * @param {String} name 家庭名称
    */
   async createFamily(name) {
+    // 本地模式：在本地存储创建虚拟家庭
+    if (this._isLocalMode()) {
+      const familyId = 'local_' + Date.now();
+      const localFamily = { familyId, name, createdAt: new Date().toISOString() };
+      this.storageAdapter?.set('localFamily', localFamily);
+      this.storageAdapter?.set('localFamilyMembers', []);
+
+      // 以 currentUser 为基础设置 loginUser
+      this.loginUser = new User({
+        userId: this.currentUser.userId || 'parent',
+        name: this.currentUser.name || '家长',
+        displayName: this.currentUser.displayName || '家长模式',
+        role: UserRole.PARENT,
+        avatar: this.currentUser.avatar || '👩‍💼',
+        familyId,
+        familyPermissionRole: FamilyPermissionRole.MANAGER,
+      });
+      this.userCache.set(this.loginUser.userId, this.loginUser);
+
+      logger.info('UserService', '本地模式创建家庭成功', { familyId, name });
+      return { success: true, familyId };
+    }
+
     try {
       const result = await HttpClient.post(API_CONFIG.ENDPOINTS.FAMILIES, { name });
       // 保存新 token（包含 familyId）
@@ -577,10 +697,49 @@ class UserService {
     }
   }
 
+  async updateCurrentProfile(profile = {}) {
+    if (this._isLocalMode()) {
+      this._applyProfileSnapshotToUser(this.loginUser, profile);
+      if (this.currentUser?.userId === this.loginUser?.userId) {
+        this._applyProfileSnapshotToUser(this.currentUser, profile);
+      }
+      return { success: true };
+    }
+
+    try {
+      const result = await HttpClient.patch(API_CONFIG.ENDPOINTS.USER_CURRENT_PROFILE, profile);
+      const normalizedProfile = {
+        nickname: result?.nickname || result?.name || '',
+        avatarUrl: result?.avatar || ''
+      };
+
+      if (this.loginUser?.userId === result?.userId) {
+        this._applyProfileSnapshotToUser(this.loginUser, normalizedProfile);
+      }
+      if (this.currentUser?.userId === result?.userId) {
+        this._applyProfileSnapshotToUser(this.currentUser, normalizedProfile);
+      }
+      const cached = result?.userId ? this.userCache.get(result.userId) : null;
+      if (cached) {
+        this._applyProfileSnapshotToUser(cached, normalizedProfile);
+      }
+      return { success: true, user: result };
+    } catch (error) {
+      logger.error('UserService', '更新当前用户资料失败', error);
+      return { success: false, message: error.message };
+    }
+  }
+
   /**
    * 获取家庭信息
    */
   async getFamilyInfo() {
+    // 本地模式：从本地存储读取
+    if (this._isLocalMode()) {
+      const localFamily = this.storageAdapter?.get('localFamily');
+      return localFamily ? { data: localFamily } : null;
+    }
+
     try {
       return await HttpClient.get(API_CONFIG.ENDPOINTS.FAMILIES_CURRENT);
     } catch (error) {
@@ -594,6 +753,10 @@ class UserService {
    * @param {String} role 目标角色 parent|child
    */
   async refreshInviteCode(role) {
+    if (this._isLocalMode()) {
+      throw new Error('本地模式暂不支持刷新邀请码');
+    }
+
     try {
       return await HttpClient.post(API_CONFIG.ENDPOINTS.FAMILIES_INVITE_CODE, { role });
     } catch (error) {
@@ -607,6 +770,32 @@ class UserService {
    * @param {String} name 成员名称
    */
   async createVirtualMember(name) {
+    // 本地模式：在本地存储创建虚拟成员
+    if (this._isLocalMode()) {
+      const userId = 'child_' + Date.now();
+      const childData = {
+        userId,
+        name,
+        nickname: name,
+        displayName: name,
+        role: UserRole.CHILD,
+        isVirtual: true,
+        familyId: this.loginUser?.familyId || null,
+        avatar: '👶',
+        status: UserStatus.ACTIVE,
+      };
+      const childUser = new User(childData);
+      this.userCache.set(userId, childUser);
+
+      // 持久化到本地存储
+      const members = this.storageAdapter?.get('localFamilyMembers') || [];
+      members.push(childData);
+      this.storageAdapter?.set('localFamilyMembers', members);
+
+      logger.info('UserService', '本地模式创建虚拟成员成功', { name, userId });
+      return { success: true, member: childUser };
+    }
+
     try {
       const member = await HttpClient.post(API_CONFIG.ENDPOINTS.FAMILIES_ADD_MEMBER, { name });
       await this.loadFamilyMembers();
@@ -623,6 +812,23 @@ class UserService {
    * @param {String} userId 目标用户ID
    */
   async deleteFamilyMember(userId) {
+    // 本地模式：从本地存储删除成员
+    if (this._isLocalMode()) {
+      this.userCache.delete(userId);
+      const members = this.storageAdapter?.get('localFamilyMembers') || [];
+      const filtered = members.filter(m => m.userId !== userId);
+      this.storageAdapter?.set('localFamilyMembers', filtered);
+
+      // 如果删除的是 currentUser，回退到 loginUser
+      if (this.currentUser?.userId === userId && this.loginUser) {
+        this.currentUser = this.loginUser;
+        this.storageAdapter?.set('currentUserId', this.loginUser.userId);
+      }
+
+      logger.info('UserService', '本地模式删除家庭成员成功', { userId });
+      return { success: true };
+    }
+
     try {
       const url = API_CONFIG.ENDPOINTS.FAMILIES_DELETE_MEMBER.replace('{userId}', userId);
       await HttpClient.delete(url);
@@ -636,54 +842,76 @@ class UserService {
   }
 
   /**
-   * 从API加载用户状态和数据（旧方法保留以兼容，M6后不推荐直接调用）
-   * @private
+   * 调整家庭内家长权限
+   * @param {String} userId 目标用户ID
+   * @param {String} familyPermissionRole manager|viewer
+   * @returns {Promise<Object>}
    */
-  async _loadUserState() {
+  async updateFamilyMemberPermissionRole(userId, familyPermissionRole) {
+    if (this._isLocalMode()) {
+      return { success: false, message: '本地模式暂不支持调整家长权限' };
+    }
+
     try {
-      // 1. 从API加载所有用户到缓存
-      const response = await HttpClient.getAllUsers();
-      const users = response.users || response; // 兼容后端返回 { users, total } 或直接返回数组
-      this.userCache.clear();
-      users.forEach(userData => {
-        const user = new User(userData);
-        this.userCache.set(user.userId, user);
-      });
-      
-      logger.info('UserService', `加载用户列表成功: ${users.length}个用户`);
-      
-      // 2. 恢复会话用户（仅从本地获取会话ID，用户数据从API缓存获取）
-      let savedUserId = null;
-      try {
-        if (this.storageAdapter) {
-          savedUserId = this.storageAdapter.get('currentUserId');
-        } else {
-          savedUserId = wx.getStorageSync('currentUserId');
-        }
-      } catch (error) {
-        logger.warn('UserService', '读取本地会话失败，使用默认用户', error);
+      const url = API_CONFIG.ENDPOINTS.FAMILIES_MEMBER_PERMISSION_ROLE.replace('{userId}', userId);
+      const result = await HttpClient.patch(url, { familyPermissionRole });
+      if (result.token) {
+        TokenManager.setToken(result.token);
       }
-      
-      // 3. 设置当前用户（优先使用API数据）
-      if (savedUserId && this.userCache.has(savedUserId)) {
-        this.currentUser = this.userCache.get(savedUserId);
-        logger.info('UserService', '恢复用户会话成功', { userId: savedUserId });
-      } else {
-        // 默认使用parent用户（从API缓存获取）
-        const parentUser = this.userCache.get('parent');
-        if (parentUser) {
-          this.currentUser = parentUser;
-          logger.info('UserService', '使用默认用户: parent（从API获取）');
-        } else {
-          logger.warn('UserService', 'API中未找到parent用户，保持构造函数默认用户');
-        }
-      }
+      await this.initialize();
+      logger.info('UserService', '更新家长权限成功', { userId, familyPermissionRole });
+      return { success: true, ...result };
     } catch (error) {
-      logger.error('UserService', 'API加载用户失败，使用默认用户', error);
-      // API失败时保持构造函数中的默认用户，确保系统可用
+      logger.error('UserService', '更新家长权限失败', error);
+      return { success: false, message: error.message };
     }
   }
-  
+
+  /**
+   * 判断是否为本地存储模式
+   * @returns {Boolean}
+   * @private
+   */
+  _isLocalMode() {
+    return !API_CONFIG.ENABLE_API;
+  }
+
+  /**
+   * 本地模式：从 StorageAdapter 加载持久化的家庭和成员数据
+   * @private
+   */
+  _loadLocalFamilyData() {
+    if (!this.storageAdapter) return;
+
+    const localFamily = this.storageAdapter.get('localFamily');
+    if (localFamily) {
+      // 从 currentUser 构建 loginUser（补充 familyId）
+      this.loginUser = new User({
+        userId: this.currentUser.userId || 'parent',
+        name: this.currentUser.name || '家长',
+        displayName: this.currentUser.displayName || '家长模式',
+        role: UserRole.PARENT,
+        avatar: this.currentUser.avatar || '👩‍💼',
+        familyId: localFamily.familyId,
+        familyPermissionRole: FamilyPermissionRole.MANAGER,
+      });
+      this.userCache.set(this.loginUser.userId, this.loginUser);
+    }
+
+    // 加载本地虚拟成员
+    const members = this.storageAdapter.get('localFamilyMembers') || [];
+    members.forEach(m => {
+      this.userCache.set(m.userId, new User(m));
+    });
+
+    if (localFamily || members.length > 0) {
+      logger.info('UserService', '本地模式加载家庭数据', {
+        familyId: localFamily?.familyId,
+        membersCount: members.length,
+      });
+    }
+  }
+
   /**
    * 保存会话状态到本地存储（仅保存用户ID，用户数据从API获取）
    * @private
@@ -691,13 +919,11 @@ class UserService {
   async _saveUserState() {
     try {
       const userId = this.currentUser.id;
-      
-      if (this.storageAdapter) {
-        this.storageAdapter.set('currentUserId', userId);
-      } else {
-        wx.setStorageSync('currentUserId', userId);
+      const persisted = this._persistCurrentUserId(userId);
+      if (!persisted) {
+        return;
       }
-      
+
       logger.debug('UserService', '保存用户会话成功', { userId });
     } catch (error) {
       logger.error('UserService', '保存用户会话失败', error);

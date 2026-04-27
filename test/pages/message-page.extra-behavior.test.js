@@ -52,6 +52,7 @@ describe('packageMessage/pages/message/message extra behavior', () => {
     jest.resetModules();
     jest.clearAllMocks();
     jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-03-24T06:49:04+08:00'));
 
     serviceManager = require('../../services/service-manager.js');
     dateUtils = require('../../utils/dateUtils');
@@ -145,7 +146,7 @@ describe('packageMessage/pages/message/message extra behavior', () => {
 
   it('markMessageAsRead 在已读、失败和异常场景下应正确处理', async () => {
     const page = createPageInstance();
-    page.loadMessageData = jest.fn();
+    page.processMessages = jest.fn();
     page.data.messages = [
       { id: 'm1', isRead: true, type: 'task', createTime: 1 },
       { id: 'm2', isRead: false, type: 'task', createTime: 2 }
@@ -169,7 +170,7 @@ describe('packageMessage/pages/message/message extra behavior', () => {
     }));
   });
 
-  it('loadMoreMessages、formatMessageTime、formatDate 和 viewMessageDetail 应覆盖边界分支', () => {
+  it('loadMoreMessages、formatMessageTime、formatDate 和 viewMessageDetail 应覆盖边界分支', async () => {
     const page = createPageInstance();
     page.data.messages = [
       { id: 'm1', title: '消息1', isRead: false, type: 'task', createTime: 1, content: '详情' }
@@ -189,20 +190,40 @@ describe('packageMessage/pages/message/message extra behavior', () => {
     expect(page.formatMessageTime(1)).toBe('时间未知');
     expect(page.formatDate(null)).toBe('今天');
 
-    dateUtils.getDaysBetween.mockReturnValueOnce(2);
     expect(page.formatDate(Date.now() - 2 * 86400000)).toBe('前天');
 
-    dateUtils.getDaysBetween.mockReturnValueOnce(3);
-    expect(page.formatDate(new Date('2026-03-23').getTime())).toContain('星期');
+    expect(page.formatDate(new Date('2026-03-21T10:00:00+08:00').getTime())).toContain('星期');
 
-    dateUtils.getDaysBetween.mockReturnValueOnce(10);
     expect(page.formatDate(new Date('2025-03-01').getTime())).toContain('2025年');
 
     page.showMessageDetail = jest.fn();
-    page.loadMessageData = jest.fn();
-    page.viewMessageDetail({ currentTarget: { dataset: { id: 'm1' } } });
-    jest.runAllTimers();
+    page.processMessages = jest.fn();
+    messageService.markMessageAsRead.mockResolvedValueOnce(true);
+    await page.viewMessageDetail({ currentTarget: { dataset: { id: 'm1' } } });
     expect(page.showMessageDetail).toHaveBeenCalled();
-    expect(page.loadMessageData).toHaveBeenCalled();
+    expect(page.processMessages).toHaveBeenCalled();
+  });
+
+  it('loadMoreMessages 后应按扩展后的当前展示序列重新计算日期分隔', () => {
+    const page = createPageInstance();
+    page.data.pageSize = 1;
+    page.data.activeTab = 'task';
+    page.formatDate = jest.fn((createTime) => (createTime >= 300 ? '今天' : '昨天'));
+    page.formatMessageTime = jest.fn(() => '刚刚');
+
+    page.processMessages([
+      { id: 'm1', type: 'reward', isRead: false, createTime: 400 },
+      { id: 'm2', type: 'task', isRead: false, createTime: 350 },
+      { id: 'm3', type: 'task', isRead: false, createTime: 100 }
+    ]);
+
+    expect(page.data.filteredMessages.map((message) => message.id)).toEqual(['m2']);
+    expect(page.data.filteredMessages[0].showDateDivider).toBe(true);
+
+    page.loadMoreMessages();
+
+    expect(page.data.filteredMessages.map((message) => message.id)).toEqual(['m2', 'm3']);
+    expect(page.data.filteredMessages.map((message) => message.showDateDivider)).toEqual([true, true]);
+    expect(page.data.filteredMessages.map((message) => message.dateDivider)).toEqual(['今天', '昨天']);
   });
 });

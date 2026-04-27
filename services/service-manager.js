@@ -4,18 +4,18 @@
  * 管理所有服务的实例和依赖关系
  */
 
-const { 
-  TaskService, 
-  RewardService, 
-  StarService, 
-  MessageService
-} = require('./index');
-const ValidationService = require('./validation-service');
+const TaskService = require('./task-service');
+const RewardService = require('./reward-service');
+const StarService = require('./star-service');
+const MessageService = require('./message-service');
+const OfflineQueueService = require('./offline-queue-service');
 const ConfigService = require('./config-service');
 
 const logger = require('../utils/logger');
 const EventBus = require('../utils/core/event-bus');
 const StorageAdapter = require('../adapters/storage-adapter');
+const { getSystemAccessLevel } = require('../utils/system-access');
+const userContextUtils = require('../utils/user-context');
 
 class ServiceManager {
   constructor() {
@@ -27,6 +27,27 @@ class ServiceManager {
     this.initializationPromise = null; // 初始化Promise，避免重复初始化
     
     logger.info('ServiceManager', '服务管理器初始化');
+  }
+
+  _resolveOfflineQueueContext() {
+    const loginUser = this.userService?.getLoginUser?.() || null;
+    const mutationContext = userContextUtils.resolveMutationContext({
+      loginUser,
+      currentUser: this.userService?.getCurrentUser?.() || null,
+      currentUserId: this.userService?.getCurrentUserId?.() || null,
+      availableUsers: this.userService?.getAllUsers?.() || []
+    }, {
+      operationMode: 'execute'
+    });
+
+    return {
+      familyId: mutationContext.familyId || null,
+      loginUserId: mutationContext.loginUserId || null,
+      systemAccessLevel: getSystemAccessLevel(loginUser),
+      actorUserId: mutationContext.executionActorUserId || null,
+      actorRole: mutationContext.executionActorRole || 'system',
+      targetUserId: mutationContext.targetUserId || null
+    };
   }
   
   /**
@@ -67,6 +88,11 @@ class ServiceManager {
       logger.info('ServiceManager', 'RewardService已更新StarService');
     }
 
+    if (this.services.starService && this.services.starService.updateUserService) {
+      this.services.starService.updateUserService(this.userService);
+      logger.info('ServiceManager', 'StarService已更新UserService');
+    }
+
     // 检查MessageService（使用正确的this.services路径）
     if (this.services.messageService && this.services.messageService.updateUserService) {
       this.services.messageService.updateUserService(this.userService);
@@ -75,6 +101,48 @@ class ServiceManager {
 
     // 检查其他可能需要UserService更新的服务
     // 如果需要，可以在这里添加更多的检查和更新逻辑
+    if (this.services.taskTemplateService && this.services.taskTemplateService.updateUserService) {
+      this.services.taskTemplateService.updateUserService(this.userService);
+      logger.info('ServiceManager', 'TaskTemplateService已更新UserService');
+    }
+
+    if (this.services.taskTemplateService && this.services.taskTemplateService.updateTaskService) {
+      this.services.taskTemplateService.updateTaskService(this.services.taskService || null);
+      logger.info('ServiceManager', 'TaskTemplateService已更新TaskService');
+    }
+  }
+
+  _ensureValidationService() {
+    if (!this.services.validationService) {
+      const ValidationService = require('./validation-service');
+      this.services.validationService = new ValidationService();
+      logger.info('ServiceManager', 'ValidationService 已按需初始化');
+    }
+
+    return this.services.validationService;
+  }
+
+  _ensureTaskTemplateService() {
+    if (!this.services.taskTemplateService) {
+      const TaskTemplateService = require('./task-template-service');
+      this.services.taskTemplateService = new TaskTemplateService({
+        eventBus: this.eventBus,
+        userService: this.userService,
+        storageAdapter: this.storageAdapter,
+        taskService: this.services.taskService || null
+      });
+      logger.info('ServiceManager', 'TaskTemplateService 已按需初始化');
+    }
+
+    if (this.services.taskTemplateService.updateUserService) {
+      this.services.taskTemplateService.updateUserService(this.userService);
+    }
+
+    if (this.services.taskTemplateService.updateTaskService) {
+      this.services.taskTemplateService.updateTaskService(this.services.taskService || null);
+    }
+
+    return this.services.taskTemplateService;
   }
   
   /**
@@ -162,13 +230,15 @@ class ServiceManager {
     try {
       // 第一步：初始化不依赖其他服务的基础服务
       this.services.starService = new StarService({
-        eventBus: this.eventBus
+        eventBus: this.eventBus,
+        userService: this.userService
       });
       
       // 初始化MessageService，注入UserService依赖
       this.services.messageService = new MessageService({
         eventBus: this.eventBus,
-        userService: this.userService // 注入用户服务
+        userService: this.userService, // 注入用户服务
+        starService: this.services.starService
       });
       
       this.services.rewardService = new RewardService({
@@ -186,13 +256,33 @@ class ServiceManager {
         userService: this.userService // 注入用户服务
       });
       
-      // 第三步：初始化表单验证服务（无依赖）
-      this.services.validationService = new ValidationService();
-      
-      // 第四步：初始化配置服务
+      // 第三步：初始化配置服务
       this.services.configService = new ConfigService({
         eventBus: this.eventBus
       });
+
+      if (this.services.rewardService.updateConfigService) {
+        this.services.rewardService.updateConfigService(this.services.configService);
+      }
+      if (this.services.starService.updateRewardService) {
+        this.services.starService.updateRewardService(this.services.rewardService);
+      }
+      if (this.services.messageService.updateStarService) {
+        this.services.messageService.updateStarService(this.services.starService);
+      }
+
+      this.services.offlineQueueService = new OfflineQueueService({
+        eventBus: this.eventBus,
+        storageAdapter: this.storageAdapter,
+        contextResolver: () => this._resolveOfflineQueueContext(),
+        migrators: [
+          () => this.services.taskService.buildLegacyQueueCandidates(),
+          () => this.services.rewardService.buildLegacyQueueCandidates()
+        ]
+      });
+
+      this.services.taskService.updateOfflineQueueService(this.services.offlineQueueService);
+      this.services.rewardService.updateOfflineQueueService(this.services.offlineQueueService);
       
       logger.info('ServiceManager', '所有服务初始化完成');
     } catch (error) {
@@ -238,6 +328,14 @@ class ServiceManager {
       'config': 'configService',
       'configService': 'configService',
       'ConfigService': 'configService',
+
+      'offlineQueue': 'offlineQueueService',
+      'offlineQueueService': 'offlineQueueService',
+      'OfflineQueueService': 'offlineQueueService',
+
+      'taskTemplate': 'taskTemplateService',
+      'taskTemplateService': 'taskTemplateService',
+      'TaskTemplateService': 'taskTemplateService',
       
       'eventBus': 'eventBus'
     };
@@ -247,8 +345,14 @@ class ServiceManager {
     if (mappedServiceName === 'eventBus') {
       return this.eventBus;
     }
-    
-    const service = this.services[mappedServiceName];
+
+    let service = this.services[mappedServiceName];
+    if (mappedServiceName === 'validationService') {
+      service = this._ensureValidationService();
+    } else if (mappedServiceName === 'taskTemplateService') {
+      service = this._ensureTaskTemplateService();
+    }
+
     if (!service) {
       logger.warn('ServiceManager', `尝试获取不存在的服务: ${serviceName} (映射为: ${mappedServiceName})`);
     }
@@ -286,6 +390,19 @@ class ServiceManager {
   getMessageService() {
     return this.services.messageService;
   }
+
+  getOfflineQueueService() {
+    return this.services.offlineQueueService;
+  }
+
+  getTaskTemplateService() {
+    if (!this.isInitialized) {
+      logger.warn('ServiceManager', '服务管理器未初始化，尝试获取服务: taskTemplate');
+      return null;
+    }
+
+    return this._ensureTaskTemplateService();
+  }
   
   /**
    * 获取用户服务
@@ -303,34 +420,6 @@ class ServiceManager {
     return this.eventBus;
   }
   
-  /**
-   * 获取分析服务（动态加载分包中的服务）
-   * @returns {AnalyticsService} 分析服务实例
-   */
-  getAnalyticsService() {
-    // 如果已经加载过，直接返回
-    if (this.services.analyticsService) {
-      return this.services.analyticsService;
-    }
-    
-    try {
-      // 动态加载分包中的AnalyticsService
-      const AnalyticsService = require('../packageChart/services/analytics-service');
-      
-      // 初始化分析服务
-      this.services.analyticsService = new AnalyticsService({
-        eventBus: this.eventBus,
-        starService: this.services.starService,
-        taskService: this.services.taskService
-      });
-      
-      logger.info('ServiceManager', '动态加载分包AnalyticsService成功');
-      return this.services.analyticsService;
-    } catch (error) {
-      logger.error('ServiceManager', '动态加载分包AnalyticsService失败', error);
-      return null;
-    }
-  }
 }
 
 // 导出单例

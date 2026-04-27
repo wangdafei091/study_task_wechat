@@ -2,7 +2,25 @@
 const serviceManager = require('../../../services/service-manager.js');
 const dateUtils = require('../../../utils/dateUtils');
 const logger = require('../../../utils/logger');
+const messageDisplay = require('../../../utils/message-display');
 const viewScopeUtils = require('../../../utils/view-scope');
+
+const SHANGHAI_OFFSET_MS = 8 * 60 * 60 * 1000;
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+const WEEKDAYS = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+
+function normalizeTimestamp(dateLike) {
+  const date = dateLike instanceof Date ? dateLike : new Date(dateLike);
+  return Number.isNaN(date.getTime()) ? NaN : date.getTime();
+}
+
+function getShanghaiDayIndex(timestamp) {
+  return Math.floor((timestamp + SHANGHAI_OFFSET_MS) / MS_PER_DAY);
+}
+
+function getShanghaiDate(timestamp) {
+  return new Date(timestamp + SHANGHAI_OFFSET_MS);
+}
 
 Page({
   /**
@@ -37,17 +55,24 @@ Page({
         activeTab: options.tab
       });
     }
-    
+
+    this._skipNextOnShowRefresh = true;
+
     // 加载消息数据
-    this.loadMessageData();
+    return this.loadMessageData();
   },
 
   /**
    * 生命周期函数--监听页面显示
    */
   onShow: function () {
+    if (this._skipNextOnShowRefresh) {
+      this._skipNextOnShowRefresh = false;
+      return Promise.resolve();
+    }
+
     // 刷新消息数据
-    this.loadMessageData();
+    return this.loadMessageData();
   },
 
   /**
@@ -58,7 +83,7 @@ Page({
     const messageService = serviceManager.getMessageService();
     const scopeOptions = this.getMessageScopeOptions();
 
-    messageService.getMessagesByScope({
+    return messageService.getMessagesByScope({
       ...scopeOptions,
       requireFresh: true
     })
@@ -73,6 +98,18 @@ Page({
       });
   },
 
+  applyReadStateLocally: function(messageId) {
+    if (!messageId) {
+      return;
+    }
+
+    const nextMessages = this.data.messages.map((message) => (
+      message.id === messageId ? { ...message, isRead: true } : message
+    ));
+
+    this.processMessages(nextMessages);
+  },
+
   getMessageScopeOptions: function() {
     const userService = getApp().globalData.userService;
     const loginUser = userService?.getLoginUser?.() || null;
@@ -84,22 +121,8 @@ Page({
    * 处理消息数据，添加日期分隔符和计算未读数量
    */
   processMessages: function(messages) {
-    // 按时间降序排序 - 统一使用createTime
-    const sortedMessages = [...messages].sort((a, b) => b.createTime - a.createTime);
-    
-    // 添加日期分隔符
-    let lastDate = '';
-    const processedMessages = sortedMessages.map(msg => {
-      const date = this.formatDate(msg.createTime);
-      const showDateDivider = date !== lastDate;
-      lastDate = date;
-      
-      return {
-        ...msg,
-        timeDisplay: this.formatMessageTime(msg.createTime),
-        showDateDivider,
-        dateDivider: date
-      };
+    const processedMessages = messageDisplay.buildTimelineMessages(messages, {
+      formatMessageTime: (createTime) => this.formatMessageTime(createTime)
     });
     
     // 计算各类型未读消息数量
@@ -137,6 +160,10 @@ Page({
     
     // 分页加载
     const paged = filtered.slice(0, pageSize * currentPage);
+    const displayMessages = messageDisplay.recomputeDateDividers(
+      paged,
+      (createTime) => this.formatDate(createTime)
+    );
     
     let tabName = '';
     switch(activeTab) {
@@ -147,7 +174,7 @@ Page({
     }
     
     this.setData({
-      filteredMessages: paged,
+      filteredMessages: displayMessages,
       activeTabName: tabName,
       hasMoreMessages: filtered.length > paged.length
     });
@@ -176,23 +203,33 @@ viewMessageDetail: function(e) {
   const messageService = serviceManager.getMessageService();
   const message = this.data.messages.find(m => m.id === messageId);
   
-  if (message) {
-    // 1. 标记该消息为已读（保持现有逻辑）
-    messageService.markMessageAsRead(messageId, this.getMessageScopeOptions());
-    
-    // 记录日志
-    logger.info('MessagePage', `标记消息已读: ${message.title}`);
-    
-    // 2. 如果消息有详细内容，显示详情面板
-    if (message.content && message.content.trim()) {
-      this.showMessageDetail(message);
-    }
-    
-    // 3. 重新加载消息数据（保持现有逻辑）
-    setTimeout(() => {
-      this.loadMessageData();
-    }, 300);
+  if (!message) {
+    return Promise.resolve(false);
   }
+
+  let markReadPromise = Promise.resolve(false);
+  if (!message.isRead && messageService && typeof messageService.markMessageAsRead === 'function') {
+    markReadPromise = Promise.resolve()
+      .then(() => messageService.markMessageAsRead(messageId, this.getMessageScopeOptions()))
+      .then((success) => {
+        if (success) {
+          this.applyReadStateLocally(messageId);
+        }
+        return success;
+      })
+      .catch(error => {
+        logger.error('MessagePage', `标记消息已读出错: ${messageId}`, error);
+        return false;
+      });
+  }
+
+  logger.info('MessagePage', `标记消息已读: ${message.title}`);
+
+  if (message.content && message.content.trim()) {
+    this.showMessageDetail(message);
+  }
+
+  return markReadPromise;
 },
 
   /**
@@ -352,9 +389,7 @@ viewMessageDetail: function(e) {
           return;
         }
 
-        setTimeout(() => {
-          this.loadMessageData();
-        }, 300);
+        this.applyReadStateLocally(messageId);
 
         wx.showToast({
           title: '已标记为已读',
@@ -408,26 +443,32 @@ viewMessageDetail: function(e) {
       logger.warn('MessagePage', 'formatDate: createTime参数为空');
       return '今天';
     }
-    
-    const date = new Date(createTime);
-    const now = new Date();
-    const diffDays = dateUtils.getDaysBetween(date, now);
-    
-    if (dateUtils.isToday(date)) {
+
+    const timestamp = normalizeTimestamp(createTime);
+    const nowTimestamp = Date.now();
+    if (Number.isNaN(timestamp)) {
+      logger.warn('MessagePage', 'formatDate: createTime参数无效', { createTime });
       return '今天';
-    } else if (dateUtils.isYesterday(date)) {
+    }
+
+    const date = getShanghaiDate(timestamp);
+    const now = getShanghaiDate(nowTimestamp);
+    const diffDays = getShanghaiDayIndex(nowTimestamp) - getShanghaiDayIndex(timestamp);
+
+    if (diffDays === 0) {
+      return '今天';
+    } else if (diffDays === 1) {
       return '昨天';
     } else if (diffDays === 2) {
       return '前天';
     } else if (diffDays < 7) {
-      const weekdays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
-      return weekdays[date.getDay()];
+      return WEEKDAYS[date.getUTCDay()];
     } else {
-      const year = date.getFullYear();
-      const month = (date.getMonth() + 1).toString().padStart(2, '0');
-      const day = date.getDate().toString().padStart(2, '0');
+      const year = date.getUTCFullYear();
+      const month = (date.getUTCMonth() + 1).toString().padStart(2, '0');
+      const day = date.getUTCDate().toString().padStart(2, '0');
       
-      if (year === now.getFullYear()) {
+      if (year === now.getUTCFullYear()) {
         return `${month}月${day}日`;
       } else {
         return `${year}年${month}月${day}日`;

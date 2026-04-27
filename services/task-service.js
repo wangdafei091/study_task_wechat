@@ -6,11 +6,12 @@
 
 const logger = require('../utils/logger');
 const { TaskRepository } = require('../repositories/index');
-const { StarService } = require('./index');
 const EventBus = require('../utils/core/event-bus');
-const { TaskStatus } = require('../models/task');
+const { Task, TaskStatus } = require('../models/task');
 const { EVENTS } = require('../utils/constants');
 const API_CONFIG = require('../utils/api-config'); // 新增：API配置
+const HttpClient = require('../utils/http-client');
+const userContextUtils = require('../utils/user-context');
 const taskQuery = require('./task-service/task-query');
 const taskRepeat = require('./task-service/task-repeat');
 const taskSync = require('./task-service/task-sync');
@@ -22,7 +23,7 @@ class TaskService {
    * 构造函数
    * @param {Object} options 选项
    * @param {TaskRepository} options.taskRepository 任务仓储
-   * @param {StarService} options.starService 星星服务
+   * @param {Object} options.starService 星星服务
    * @param {RewardService} options.rewardService 奖励服务
    * @param {UserService} options.userService 用户服务
    * @param {EventBus} options.eventBus 事件总线
@@ -35,12 +36,17 @@ class TaskService {
     this.starService = options.starService;
     this.rewardService = options.rewardService;
     this.userService = options.userService; // 新增：注入用户服务
+    this.offlineQueueService = options.offlineQueueService || null;
 
     // 事件总线
     this.eventBus = options.eventBus || new EventBus();
 
     // 检查是否启用云端API
     this.enableCloudStorage = API_CONFIG.ENABLE_API;
+    this._occurrenceCapabilityCache = {
+      value: this.enableCloudStorage ? null : true,
+      fetchedAt: 0
+    };
 
     logger.info('TaskService', '初始化任务服务', {
       enableCloudStorage: this.enableCloudStorage
@@ -74,24 +80,51 @@ class TaskService {
     }
   }
 
+  updateOfflineQueueService(offlineQueueService) {
+    this.offlineQueueService = offlineQueueService || null;
+    if (this.offlineQueueService) {
+      this.offlineQueueService.registerAdapter('task', this._executeTaskQueueItem.bind(this));
+    }
+  }
+
   _createOperationKey(seed = null) {
     return String(seed || Date.now());
   }
 
-  _getOperatorContext(targetUserId = null, mode = 'execute') {
-    const loginUser = this.userService?.getLoginUser?.();
-    const currentUser = this.userService?.getCurrentUser?.();
-    const preferCurrentUser = mode === 'execute';
+  _getUserContextInput() {
+    const loginUser = this.userService?.getLoginUser?.() || null;
+    const currentUser = this.userService?.getCurrentUser?.() || null;
+    const currentUserId = this.userService?.getCurrentUserId?.() || null;
+    const availableUsers = this.userService?.getAllUsers?.() || [];
 
     return {
-      actorUserId: preferCurrentUser
-        ? (currentUser?.userId || currentUser?.id || loginUser?.userId || loginUser?.id || null)
-        : (loginUser?.userId || loginUser?.id || currentUser?.userId || currentUser?.id || null),
-      actorRole: preferCurrentUser
-        ? (currentUser?.role || loginUser?.role || 'system')
-        : (loginUser?.role || currentUser?.role || 'system'),
-      familyId: loginUser?.familyId || currentUser?.familyId || null,
-      targetUserId: targetUserId || null
+      loginUser,
+      currentUser,
+      currentUserId,
+      availableUsers
+    };
+  }
+
+  _getOperatorContext(targetUserId = null, mode = 'execute') {
+    const mutationContext = userContextUtils.resolveMutationContext(
+      this._getUserContextInput(),
+      {
+        targetUserId,
+        operationMode: mode
+      }
+    );
+    const isManageMode = mutationContext.operationMode === 'manage';
+
+    return {
+      actorUserId: isManageMode
+        ? mutationContext.managementActorUserId
+        : mutationContext.executionActorUserId,
+      actorRole: isManageMode
+        ? mutationContext.managementActorRole
+        : mutationContext.executionActorRole,
+      familyId: mutationContext.familyId || null,
+      loginUserId: mutationContext.loginUserId || null,
+      targetUserId: mutationContext.targetUserId || null
     };
   }
 
@@ -110,10 +143,193 @@ class TaskService {
       operatorUserId: overrides.operatorUserId || operatorContext.actorUserId || null,
       operatorRole: overrides.operatorRole || operatorContext.actorRole || 'system',
       familyId: overrides.familyId || operatorContext.familyId || null,
+      loginUserId: overrides.loginUserId || operatorContext.loginUserId || null,
       targetUserId: overrides.targetUserId || operatorContext.targetUserId || task?.userId || null,
       notificationType: overrides.notificationType || `task_${action}`,
       modifyTime: Number(overrides.modifyTime || task?.modifyTime || Date.now())
     };
+  }
+
+  _buildOfflineQueueContextFromPendingSyncMeta(pendingSyncMeta = {}) {
+    return {
+      familyId: pendingSyncMeta.familyId || null,
+      loginUserId: pendingSyncMeta.loginUserId || this.userService?.getLoginUserId?.() || null,
+      actorUserId: pendingSyncMeta.operatorUserId || null,
+      actorRole: pendingSyncMeta.operatorRole || 'system',
+      targetUserId: pendingSyncMeta.targetUserId || null
+    };
+  }
+
+  async _enqueueTaskMutation(action, task, extra = {}) {
+    if (!this.offlineQueueService) {
+      return null;
+    }
+
+    const pendingSyncMeta = extra.pendingSyncMeta || task?.pendingSyncMeta || this._buildTaskPendingSyncMeta(task, action, extra);
+    const snapshot = extra.taskSnapshot || (task ? { ...task } : null);
+
+    return this.offlineQueueService.enqueueMutation({
+      domain: 'task',
+      entityId: task?.id || extra.taskId || null,
+      operation: action,
+      operationKey: pendingSyncMeta.operationKey,
+      payload: {
+        pendingSyncMeta,
+        taskId: task?.id || extra.taskId || null,
+        deleteMeta: extra.deleteMeta || null
+      },
+      snapshot,
+      context: this._buildOfflineQueueContextFromPendingSyncMeta(pendingSyncMeta)
+    });
+  }
+
+  async _executeTaskQueueItem(item) {
+    const snapshot = item.snapshot ? new Task(item.snapshot) : null;
+    const storedTask = item.entityId ? await this.taskRepository.getById(item.entityId) : null;
+    const task = storedTask || snapshot;
+
+    if (task && item.payload?.pendingSyncMeta) {
+      task.pendingSyncMeta = { ...item.payload.pendingSyncMeta };
+    }
+
+    try {
+      switch (item.operation) {
+        case 'create':
+          return await this._syncTaskToCloud(task);
+        case 'update':
+          return await this._syncUpdateToCloud(task);
+        case 'delete':
+          return await this._syncDeleteToCloud(
+            item.entityId,
+            item.payload?.deleteMeta || item.payload?.pendingSyncMeta || item.snapshot?.pendingSyncMeta || null
+          );
+        case 'complete':
+        case 'reset':
+          return await this._syncStatusToCloud(task);
+        case 'required':
+        case 'unrequired':
+          return await this._syncRequiredStateToCloud(task);
+        case 'occurrence_record':
+          return await this._syncOccurrenceRecordToCloud(task);
+        case 'disable_occurrence':
+          return await this._syncDisableOccurrenceToCloud(task, {
+            disableFromDate: task?.pendingSyncMeta?.disableFromDate || null
+          });
+        case 'convert_occurrence':
+          return await this._syncConvertOccurrenceToCloud(task, {
+            effectiveFromDate: task?.pendingSyncMeta?.effectiveFromDate || null
+          });
+        default:
+          return await this._syncUpdateToCloud(task);
+      }
+    } catch (error) {
+      if (this._isPermissionDeniedSyncError(error)) {
+        await this._cleanupPermissionDeniedQueueItem(item, task);
+        logger.warn('TaskService', '离线任务写操作因权限拒绝被丢弃，不再重试', {
+          taskId: item.entityId || task?.id || null,
+          operation: item.operation,
+          error: error.message,
+          code: error.code || null
+        });
+        return {
+          success: false,
+          discarded: true,
+          reason: 'permission_denied'
+        };
+      }
+      throw error;
+    }
+  }
+
+  _isPermissionDeniedSyncError(error) {
+    if (!error) {
+      return false;
+    }
+
+    return error.statusCode === 403
+      || error.code === 'FAMILY_MANAGER_REQUIRED'
+      || error.code === 'PERMISSION_DENIED';
+  }
+
+  async _cleanupPermissionDeniedQueueItem(item, task) {
+    if (!item) {
+      return;
+    }
+
+    if (item.operation === 'occurrence_record') {
+      const recordId = item.entityId || task?.id || null;
+      if (recordId) {
+        await this.taskRepository.delete(recordId).catch(() => null);
+      }
+      return;
+    }
+
+    const taskId = item.entityId || task?.id || null;
+    if (!taskId) {
+      return;
+    }
+
+    try {
+      const authoritativeTask = await this._fetchSingleTaskFromCloud(taskId);
+      if (authoritativeTask) {
+        authoritativeTask.syncedToCloud = true;
+        authoritativeTask.pendingSyncMeta = null;
+        await this.taskRepository.save(authoritativeTask);
+        return;
+      }
+    } catch (error) {
+      logger.warn('TaskService', '清理权限拒绝的离线任务时拉取云端权威数据失败，回退清理本地待同步标记', {
+        taskId,
+        operation: item.operation,
+        error: error.message
+      });
+    }
+
+    if (task) {
+      task.syncedToCloud = true;
+      task.pendingSyncMeta = null;
+      await this.taskRepository.save(task).catch(() => null);
+    }
+  }
+
+  async buildLegacyQueueCandidates() {
+    const [tasks, tombstones] = await Promise.all([
+      this.taskRepository.getAll(),
+      this._getDeleteTombstones()
+    ]);
+
+    const taskItems = (tasks || [])
+      .filter((task) => task?.pendingSyncMeta)
+      .map((task) => {
+        const pendingSyncMeta = task.pendingSyncMeta || {};
+        const operation = pendingSyncMeta.action || (task.syncedToCloud ? 'update' : 'create');
+        return {
+          domain: 'task',
+          entityId: task.id,
+          operation,
+          operationKey: pendingSyncMeta.operationKey || `${task.id}:${operation}`,
+          payload: { pendingSyncMeta },
+          snapshot: { ...task },
+          context: this._buildOfflineQueueContextFromPendingSyncMeta(pendingSyncMeta),
+          legacyMigrationKey: `task:pending:${task.id}:${operation}`
+        };
+      });
+
+    const tombstoneItems = (tombstones || []).map((tombstone) => ({
+      domain: 'task',
+      entityId: tombstone.entityId,
+      operation: 'delete',
+      operationKey: tombstone.operationKey || `${tombstone.entityId}:delete`,
+      payload: {
+        deleteMeta: tombstone,
+        pendingSyncMeta: tombstone
+      },
+      snapshot: null,
+      context: this._buildOfflineQueueContextFromPendingSyncMeta(tombstone),
+      legacyMigrationKey: `task:tombstone:${tombstone.entityId}:delete`
+    }));
+
+    return [...taskItems, ...tombstoneItems];
   }
 
   async _markTaskSynced(task, overrides = {}) {
@@ -129,6 +345,236 @@ class TaskService {
     return this.taskRepository.save(task);
   }
 
+  _normalizeTaskMutationResponse(rawMutation, fallbackOperation = 'update') {
+    if (!rawMutation || typeof rawMutation !== 'object') {
+      return null;
+    }
+
+    const looksLikeMutation =
+      rawMutation.primaryTask !== undefined ||
+      rawMutation.affectedTasks !== undefined ||
+      rawMutation.operation !== undefined;
+
+    const looksLikeCompatEnvelope =
+      rawMutation.task !== undefined ||
+      rawMutation.tasks !== undefined ||
+      rawMutation.taskId !== undefined;
+
+    const looksLikeTask =
+      rawMutation.id !== undefined ||
+      rawMutation.taskId !== undefined ||
+      (rawMutation.title !== undefined && rawMutation.date !== undefined && rawMutation.type !== undefined);
+
+    if (!looksLikeMutation && !looksLikeCompatEnvelope && !looksLikeTask) {
+      return null;
+    }
+
+    const primaryTask = looksLikeMutation
+      ? (rawMutation.primaryTask ?? rawMutation.task ?? null)
+      : (looksLikeCompatEnvelope ? (rawMutation.task ?? null) : rawMutation);
+
+    const affectedTasks = Array.isArray(rawMutation.affectedTasks)
+      ? rawMutation.affectedTasks
+      : Array.isArray(rawMutation.tasks)
+        ? rawMutation.tasks
+        : (primaryTask ? [primaryTask] : []);
+
+    return {
+      primaryTask,
+      affectedTasks,
+      operation: rawMutation.operation || fallbackOperation,
+      idempotent: rawMutation.idempotent === true,
+      task: rawMutation.task !== undefined ? rawMutation.task : primaryTask,
+      tasks: Array.isArray(rawMutation.tasks) ? rawMutation.tasks : affectedTasks,
+      taskId: rawMutation.taskId || primaryTask?.taskId || primaryTask?.id || null
+    };
+  }
+
+  _toAuthoritativeTask(rawTask, overrides = {}) {
+    if (!rawTask) {
+      return null;
+    }
+
+    const taskData = rawTask instanceof Task
+      ? { ...rawTask, ...overrides }
+      : {
+          ...rawTask,
+          id: rawTask.id || rawTask.taskId,
+          ...overrides
+        };
+
+    return new Task(taskData);
+  }
+
+  _isOccurrenceRecordTaskLike(task = {}) {
+    if (!task || typeof task !== 'object') {
+      return false;
+    }
+
+    if (typeof task.isOccurrenceRecordTask === 'function') {
+      return task.isOccurrenceRecordTask();
+    }
+
+    return task.isOccurrenceRecord === true && task.executionMode === 'occurrence';
+  }
+
+  _buildOccurrenceRecordSemanticKey(task = {}) {
+    const parentTaskId = task.parentTaskId || task.pendingSyncMeta?.configTaskId || '';
+    const userId = task.userId || task.pendingSyncMeta?.targetUserId || '';
+    const date = task.date || '';
+
+    if (!parentTaskId || !userId || !date) {
+      return '';
+    }
+
+    return `${parentTaskId}::${userId}::${date}`;
+  }
+
+  async _cleanupDuplicateOccurrenceRecords(tasks = []) {
+    if (
+      !this.taskRepository
+      || typeof this.taskRepository.getOccurrenceRecordsByDateRange !== 'function'
+      || typeof this.taskRepository.delete !== 'function'
+    ) {
+      return;
+    }
+
+    const processedKeys = new Set();
+    for (const task of tasks || []) {
+      if (!this._isOccurrenceRecordTaskLike(task) || task.syncedToCloud !== true) {
+        continue;
+      }
+
+      const semanticKey = this._buildOccurrenceRecordSemanticKey(task);
+      if (!semanticKey || processedKeys.has(semanticKey)) {
+        continue;
+      }
+      processedKeys.add(semanticKey);
+
+      try {
+        const sameDayRecords = await this.taskRepository.getOccurrenceRecordsByDateRange(
+          task.date,
+          task.date,
+          task.userId
+        );
+
+        for (const candidate of sameDayRecords || []) {
+          if (!candidate || candidate.id === task.id) {
+            continue;
+          }
+
+          if (this._buildOccurrenceRecordSemanticKey(candidate) === semanticKey) {
+            await this.taskRepository.delete(candidate.id);
+          }
+        }
+      } catch (error) {
+        logger.warn('TaskService', '清理重复表现记录失败，保留当前权威记录', {
+          taskId: task.id,
+          parentTaskId: task.parentTaskId || null,
+          userId: task.userId || null,
+          date: task.date || null,
+          error: error.message
+        });
+      }
+    }
+  }
+
+  async _applyAuthoritativeTaskMutation(rawMutation, options = {}) {
+    const mutation = this._normalizeTaskMutationResponse(rawMutation, options.fallbackOperation);
+    if (!mutation) {
+      return {
+        mutation: null,
+        task: null,
+        tasks: [],
+        taskId: null
+      };
+    }
+
+    const uniqueTasks = [];
+    const seenTaskIds = new Set();
+
+    (mutation.tasks || mutation.affectedTasks || []).forEach((rawTask) => {
+      const task = this._toAuthoritativeTask(rawTask, {
+        syncedToCloud: true,
+        pendingSyncMeta: null
+      });
+
+      if (!task || !task.id || seenTaskIds.has(task.id)) {
+        return;
+      }
+
+      seenTaskIds.add(task.id);
+      uniqueTasks.push(task);
+    });
+
+    const savedTasks = uniqueTasks.length > 0
+      ? await this.taskRepository.saveAll(uniqueTasks)
+      : [];
+
+    if (savedTasks.length > 0) {
+      await this._cleanupDuplicateOccurrenceRecords(savedTasks);
+    }
+
+    const primaryTaskId = mutation.primaryTask?.taskId || mutation.primaryTask?.id || mutation.taskId || null;
+    const primaryTask = primaryTaskId
+      ? (savedTasks.find(task => task.id === primaryTaskId) || this._toAuthoritativeTask(mutation.primaryTask, {
+          syncedToCloud: true,
+          pendingSyncMeta: null
+        }))
+      : null;
+
+    return {
+      mutation,
+      task: primaryTask,
+      tasks: savedTasks,
+      taskId: mutation.taskId || primaryTask?.id || null
+    };
+  }
+
+  _buildTaskServiceMutationResult(rawMutation, options = {}) {
+    const mutation = rawMutation
+      ? this._normalizeTaskMutationResponse(rawMutation, options.fallbackOperation)
+      : null;
+
+    const result = {
+      success: options.success !== false
+    };
+
+    const task = options.task !== undefined
+      ? options.task
+      : (options.primaryTask !== undefined
+        ? options.primaryTask
+        : null);
+    const tasks = options.tasks !== undefined ? options.tasks : undefined;
+    const taskId = options.taskId !== undefined
+      ? options.taskId
+      : (mutation?.taskId || task?.id || null);
+
+    if (task !== undefined) {
+      result.task = task;
+    }
+    if (tasks !== undefined) {
+      result.tasks = tasks;
+    }
+    if (options.createdTasks !== undefined) {
+      result.createdTasks = options.createdTasks;
+    }
+    if (taskId) {
+      result.taskId = taskId;
+    }
+    if (options.message) {
+      result.message = options.message;
+    }
+    if (options.fallback) {
+      result.fallback = true;
+    }
+    if (mutation) {
+      result.mutation = mutation;
+    }
+
+    return result;
+  }
+
   async _emitTaskCloudSyncFailure(action, task, error, extra = {}) {
     const pendingSyncMeta = extra.pendingSyncMeta || task?.pendingSyncMeta || this._buildTaskPendingSyncMeta(task, action, extra);
     if (task) {
@@ -136,6 +582,12 @@ class TaskService {
       task.syncedToCloud = false;
       await this.taskRepository.save(task).catch(() => null);
     }
+
+    await this._enqueueTaskMutation(action, task, {
+      ...extra,
+      pendingSyncMeta,
+      taskSnapshot: extra.taskSnapshot || (task ? { ...task } : null)
+    }).catch(() => null);
 
     this.eventBus.emit(EVENTS.TASK_CLOUD_SYNC_FAILED, {
       action,
@@ -169,6 +621,17 @@ class TaskService {
   }
 
   async _flushPendingTaskSyncs() {
+    if (this.offlineQueueService) {
+      if (typeof this.offlineQueueService.initialize === 'function') {
+        await this.offlineQueueService.initialize();
+      }
+      await this.offlineQueueService.drain({
+        domains: ['task'],
+        reason: 'before_task_read'
+      });
+      return;
+    }
+
     if (!this.enableCloudStorage) {
       return;
     }
@@ -180,22 +643,48 @@ class TaskService {
       }
 
       try {
-        if (!task.syncedToCloud) {
-          await this._syncTaskToCloud(task);
-          continue;
-        }
-
+        let mutation = null;
         switch (task.pendingSyncMeta.action) {
+          case 'create':
+            mutation = await this._syncTaskToCloud(task);
+            break;
           case 'update':
-            await this._syncUpdateToCloud(task);
+            mutation = await this._syncUpdateToCloud(task);
             break;
           case 'complete':
           case 'reset':
-            await this._syncStatusToCloud(task);
+            mutation = await this._syncStatusToCloud(task);
+            break;
+          case 'required':
+          case 'unrequired':
+            mutation = await this._syncRequiredStateToCloud(task);
+            break;
+          case 'occurrence_record':
+            mutation = await this._syncOccurrenceRecordToCloud(task);
+            break;
+          case 'disable_occurrence':
+            mutation = await this._syncDisableOccurrenceToCloud(task, {
+              disableFromDate: task?.pendingSyncMeta?.disableFromDate || null
+            });
+            break;
+          case 'convert_occurrence':
+            mutation = await this._syncConvertOccurrenceToCloud(task, {
+              effectiveFromDate: task?.pendingSyncMeta?.effectiveFromDate || null
+            });
             break;
           default:
-            await this._syncUpdateToCloud(task);
+            if (!task.syncedToCloud) {
+              mutation = await this._syncTaskToCloud(task);
+            } else {
+              mutation = await this._syncUpdateToCloud(task);
+            }
             break;
+        }
+
+        if (mutation) {
+          await this._applyAuthoritativeTaskMutation(mutation, {
+            fallbackOperation: task.pendingSyncMeta.action || (task.syncedToCloud ? 'update' : 'create')
+          });
         }
       } catch (error) {
         logger.warn('TaskService', '补云任务同步失败，保留待同步状态', {
@@ -266,6 +755,14 @@ class TaskService {
    */
   async getTasksByDateRange(startDate, endDate, userId = null, options = {}) {
     return taskQuery.getTasksByDateRange(this, startDate, endDate, userId, options);
+  }
+
+  async getOccurrenceTasks(scope = {}) {
+    return taskQuery.getOccurrenceTasks(this, scope);
+  }
+
+  async getOccurrenceRecordsByDateRange(scope = {}) {
+    return taskQuery.getOccurrenceRecordsByDateRange(this, scope);
   }
   
   /**
@@ -368,6 +865,18 @@ class TaskService {
    */
   async resetTask(taskId, userId = null) {
     return taskWrite.resetTask(this, taskId, userId);
+  }
+
+  async recordOccurrenceResult(taskId, options = {}) {
+    return taskWrite.recordOccurrenceResult(this, taskId, options);
+  }
+
+  async convertTaskToOccurrenceMode(taskId, options = {}, userId = null) {
+    return taskWrite.convertTaskToOccurrenceMode(this, taskId, options, userId);
+  }
+
+  async disableOccurrenceTask(taskId, options = {}, userId = null) {
+    return taskWrite.disableOccurrenceTask(this, taskId, options, userId);
   }
   
   /**
@@ -529,38 +1038,6 @@ class TaskService {
     return taskQuery.calculateStreak(tasks);
   }
 
-
-
-  /**
-   * 获取小朋友用户ID（统一方法）
-   * @returns {String} 小朋友用户ID
-   * @private
-   */
-  _getChildUserId() {
-    let childUserId = 'child'; // 默认用户ID
-    
-    if (this.serviceManager) {
-      const userService = this.serviceManager.getUserService();
-      if (userService) {
-        const childUser = userService.getUserByRole('child');
-        if (childUser) {
-          childUserId = childUser.id;
-          logger.info('TaskService', `获取小朋友用户ID成功: ${childUserId}`);
-        } else {
-          logger.warn('TaskService', '未找到小朋友用户，使用默认child用户ID');
-          childUserId = 'child'; // 使用默认ID
-        }
-      }
-    }
-    
-    if (!childUserId) {
-      logger.warn('TaskService', '无法获取小朋友用户ID，使用默认child用户ID');
-      childUserId = 'child'; // 兜底方案
-    }
-
-    return childUserId;
-  }
-
   /**
    * 将家长名下的任务迁移到指定孩子（M08b：前置任务归属迁移）
    * 顺序：云端先行，云端成功后再更新本地；syncedToCloud 保持不变
@@ -592,6 +1069,10 @@ class TaskService {
    */
   async _fetchSingleTaskFromCloud(taskId) {
     return taskSync.fetchSingleTaskFromCloud(this, taskId);
+  }
+
+  async _createTaskViaCloud(task) {
+    return taskSync.createTaskViaCloud(this, task);
   }
 
   async _syncTaskToCloud(task) {
@@ -634,12 +1115,80 @@ class TaskService {
   }
 
   /**
+   * 同步任务必做状态到云端
+   */
+  async _syncRequiredStateToCloud(task) {
+    return taskSync.syncRequiredStateToCloud(this, task);
+  }
+
+  async _syncOccurrenceRecordToCloud(task) {
+    return taskSync.syncOccurrenceRecordToCloud(this, task);
+  }
+
+  async _syncDisableOccurrenceToCloud(task, options = {}) {
+    return taskSync.syncDisableOccurrenceToCloud(this, task, options);
+  }
+
+  async _syncConvertOccurrenceToCloud(task, options = {}) {
+    return taskSync.syncConvertOccurrenceToCloud(this, task, options);
+  }
+
+  async isOccurrenceEnabled(options = {}) {
+    if (!this.enableCloudStorage) {
+      return true;
+    }
+
+    const cacheTtl = Number(options.cacheTtlMs || 30000);
+    const forceRefresh = options.forceRefresh === true;
+    const now = Date.now();
+
+    if (
+      !forceRefresh &&
+      this._occurrenceCapabilityCache.value !== null &&
+      (now - this._occurrenceCapabilityCache.fetchedAt) < cacheTtl
+    ) {
+      return this._occurrenceCapabilityCache.value;
+    }
+
+    try {
+      const health = await HttpClient.healthCheck();
+      const enabled = health?.taskOccurrenceEnabled === true;
+      this._occurrenceCapabilityCache = {
+        value: enabled,
+        fetchedAt: now
+      };
+      return enabled;
+    } catch (error) {
+      logger.warn('TaskService', '获取 occurrence 能力失败，按未开启处理', {
+        error: error.message
+      });
+      this._occurrenceCapabilityCache = {
+        value: false,
+        fetchedAt: now
+      };
+      return false;
+    }
+  }
+
+  /**
    * 分析页专用：按 scope 或 userId 获取任务
    * 不改变 getAllTasks 原有语义
    * @param {Object} options - { userId } 或 { scope: 'family' }
    */
   async getTasksByScope(options = {}) {
     return taskQuery.getTasksByScope(this, options);
+  }
+
+  async getChildTasksByScope(options = {}) {
+    return taskQuery.getChildTasksByScope(this, options);
+  }
+
+  async getPendingLocalTasksByScope(options = {}) {
+    return taskQuery.getPendingLocalTasksByScope(this, options);
+  }
+
+  async getPendingLocalChildTasksByScope(options = {}) {
+    return taskQuery.getPendingLocalChildTasksByScope(this, options);
   }
 }
 

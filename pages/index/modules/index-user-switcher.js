@@ -1,0 +1,282 @@
+const logger = require('../../../utils/logger');
+const permissionUtils = require('../../../utils/permission-utils');
+const userContextUtils = require('../../../utils/user-context');
+
+function showUserSwitcher(page) {
+  logger.info('Index', '显示用户切换界面');
+
+  const userService = getApp().globalData.userService;
+  if (!userService) {
+    return;
+  }
+
+  page.setData({
+    availableUsers: userService.getAllUsers(),
+    currentUser: userService.getCurrentUser(),
+    showUserSwitcher: true
+  });
+}
+
+function hideUserSwitcher(page) {
+  logger.info('Index', '隐藏用户切换界面');
+  page.setData({
+    showUserSwitcher: false
+  });
+}
+
+async function handleUserSwitch(page, e) {
+  try {
+    const { userId } = e.detail;
+    logger.info('Index', `用户切换: 切换到用户ID=${userId}`);
+
+    const userService = getApp().globalData.userService;
+    if (!userService) {
+      logger.error('Index', '用户服务不可用');
+      return;
+    }
+
+    const result = await userService.switchToUser(userId);
+    if (!result.success) {
+      wx.showToast({
+        title: result.message || '用户切换失败',
+        icon: 'none'
+      });
+      return;
+    }
+
+    const currentUser = userService.getCurrentUser();
+    const loginUser = userService.getLoginUser ? userService.getLoginUser() : null;
+    const availableUsers = userService.getAllUsers();
+    const lastActiveChildId = currentUser.role === 'child'
+      ? userContextUtils.getUserIdentifier(currentUser)
+      : page.data.lastActiveChildId;
+    const permissionContext = userContextUtils.resolvePermissionContext({
+      loginUser,
+      currentUser,
+      availableUsers
+    }, {
+      lastActiveChildId
+    });
+
+    const app = getApp();
+    if (app && app.globalData) {
+      app.globalData.lastActiveChildId = permissionContext.lastActiveChildId;
+    }
+
+    page.setData({
+      currentUser,
+      availableUsers,
+      userPermissions: permissionContext.userPermissions,
+      loginUserId: permissionContext.loginUserId || '',
+      familyPermissionRole: permissionContext.familyPermissionRole || '',
+      canManageMembers: permissionContext.canManageMembers,
+      isReadonlyView: permissionContext.isReadonlyView,
+      isViewerReadonly: permissionContext.isViewerReadonly,
+      canManageFamilyGovernance: permissionContext.canManageFamilyGovernance,
+      canManageBusinessData: permissionContext.canManageBusinessData,
+      lastActiveChildId: permissionContext.lastActiveChildId,
+      showUserSwitcher: false
+    });
+
+    page.updateMenuItemsWithPermissions();
+    await page.refreshDataForCurrentUser();
+
+    wx.showToast({
+      title: `已切换到 ${currentUser.name}`,
+      icon: 'success'
+    });
+
+    logger.info('Index', `用户切换完成: ${currentUser.name}(${currentUser.role})`);
+  } catch (error) {
+    logger.error('Index', '处理用户切换失败', error);
+    wx.showToast({
+      title: '用户切换失败',
+      icon: 'none'
+    });
+  }
+}
+
+async function handleUserAdd() {
+  logger.info('Index', '跳转到家庭设置页添加成员');
+  wx.navigateTo({
+    url: '/packageManage/pages/family-settings/family-settings'
+  });
+}
+
+async function handleNicknameEdit(page, e) {
+  try {
+    const { userId, nickname } = e.detail;
+    const userService = getApp().globalData.userService;
+    if (!userService) {
+      return;
+    }
+
+    const result = await userService.updateNickname(userId, nickname);
+    if (result.success) {
+      page.setData({
+        availableUsers: userService.getAllUsers(),
+        currentUser: userService.getCurrentUser()
+      });
+      wx.showToast({ title: '昵称已更新', icon: 'success' });
+      return;
+    }
+
+    wx.showToast({ title: result.message || '修改失败', icon: 'none' });
+  } catch (error) {
+    logger.error('Index', '处理昵称编辑失败', error);
+  }
+}
+
+async function handleUserDelete(page, e) {
+  try {
+    const { userId } = e.detail;
+    logger.info('Index', `删除家庭成员: ${userId}`);
+
+    const userService = getApp().globalData.userService;
+    if (!userService) {
+      return;
+    }
+
+    const result = await userService.deleteFamilyMember(userId);
+    if (!result.success) {
+      wx.showToast({
+        title: result.message || '删除用户失败',
+        icon: 'none'
+      });
+      return;
+    }
+
+    const availableUsers = userService.getAllUsers();
+    const currentUser = userService.getCurrentUser();
+
+    page.setData({
+      availableUsers,
+      currentUser
+    });
+
+    if (currentUser.id !== page.data.currentUser.id) {
+      await page.refreshDataForCurrentUser();
+    }
+
+    wx.showToast({
+      title: '成员已删除',
+      icon: 'success'
+    });
+
+    logger.info('Index', '家庭成员删除成功');
+  } catch (error) {
+    logger.error('Index', '处理删除用户失败', error);
+    wx.showToast({
+      title: '删除用户失败',
+      icon: 'none'
+    });
+  }
+}
+
+function updateMenuItemsWithPermissions(page) {
+  const { currentUser, isReadonlyView, isViewingToday } = page.data;
+  logger.debug('Index', `根据用户权限更新菜单: ${currentUser.role}`);
+
+  const originalMenuItems = [
+    {
+      id: 'study',
+      type: 'study-task',
+      icon: '📈',
+      label: '分析',
+      ariaLabel: '查看统计分析',
+      feature: 'analytics',
+      action: 'view'
+    },
+    {
+      id: 'habit',
+      type: 'habit-task',
+      icon: '⏰',
+      label: '任务',
+      ariaLabel: '创建任务',
+      feature: 'task',
+      action: 'create'
+    },
+    {
+      id: 'reward-manage',
+      type: 'reward-manage',
+      icon: '🏆',
+      label: '奖励',
+      ariaLabel: '管理奖励',
+      feature: 'reward',
+      action: 'create'
+    }
+  ];
+
+  const app = getApp();
+  const loginUser = app.globalData?.userService?.getLoginUser() || currentUser;
+  const filteredMenuItems = permissionUtils.filterMenuItems(
+    originalMenuItems,
+    loginUser.role,
+    loginUser.familyPermissionRole || null
+  );
+  const finalMenuItems = filteredMenuItems.filter((item) => {
+    if (item.id === 'study') {
+      return true;
+    }
+
+    if (!isViewingToday && (item.id === 'habit' || item.id === 'reward-manage')) {
+      return !isReadonlyView;
+    }
+
+    if (!isViewingToday) {
+      return false;
+    }
+
+    if (isReadonlyView && (item.id === 'habit' || item.id === 'reward-manage')) {
+      return false;
+    }
+
+    return true;
+  });
+
+  page.setData({
+    menuItems: finalMenuItems
+  });
+
+  logger.info('Index', `菜单项更新完成: ${originalMenuItems.length} -> ${finalMenuItems.length}`);
+}
+
+function navigateToUserProfile(page) {
+  logger.info('Index', '点击用户头像，显示用户切换界面');
+  page.showUserSwitcher();
+}
+
+async function validateUserModule() {
+  try {
+    logger.info('Index', '开始验证用户模块功能');
+
+    const userService = getApp().globalData.userService;
+    if (!userService) {
+      logger.error('Index', '用户服务不可用');
+      return false;
+    }
+
+    const validation = await userService.validateService();
+    if (validation.success) {
+      logger.info('Index', '用户模块验证通过');
+    } else {
+      logger.warn('Index', '用户模块验证失败', validation);
+    }
+    return validation.success;
+  } catch (error) {
+    logger.error('Index', '验证用户模块功能失败', error);
+    return false;
+  }
+}
+
+module.exports = {
+  showUserSwitcher,
+  hideUserSwitcher,
+  handleUserSwitch,
+  handleUserAdd,
+  handleNicknameEdit,
+  handleUserDelete,
+  updateMenuItemsWithPermissions,
+  navigateToUserProfile,
+  validateUserModule
+};

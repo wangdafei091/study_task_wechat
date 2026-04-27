@@ -1,16 +1,96 @@
 const serviceManager = require('../../services/service-manager.js');
 const dateUtils = require('../../utils/dateUtils');
 const logger = require('../../utils/logger');
-const permissionUtils = require('../../utils/permission-utils');
+const messageDisplay = require('../../utils/message-display');
+const occurrenceDisplay = require('../../utils/task-occurrence-display');
 const viewScopeUtils = require('../../utils/view-scope');
+const syncState = require('../../utils/sync-state');
 const { UserService } = require('../../services/user-service');
 const MessageService = require('../../services/message-service');
-const pageStorageHelper = require('../../utils/page-storage-helper');
 const lifecycleModule = require('./modules/index-lifecycle');
 const refreshCoordinator = require('./modules/index-refresh-coordinator');
 const userContextModule = require('./modules/index-user-context');
 const taskActionsModule = require('./modules/index-task-actions');
 const rewardFlowModule = require('./modules/index-reward-flow');
+const searchPanelModule = require('./modules/index-search-panel');
+const userSwitcherModule = require('./modules/index-user-switcher');
+const dateNavigationModule = require('./modules/index-date-navigation');
+const messagePreviewModule = require('./modules/index-message-preview');
+
+function formatOccurrenceDateLabel(dateString) {
+  const todayString = dateUtils.getTodayString();
+  if (!dateString || dateString === todayString) {
+    return '今天';
+  }
+
+  const yesterday = new Date(todayString);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (dateUtils.formatDate(yesterday) === dateString) {
+    return '昨天';
+  }
+
+  const date = new Date(dateString);
+  return `${date.getMonth() + 1}月${date.getDate()}日`;
+}
+
+function buildOccurrenceDisplayItems(tasks = [], records = []) {
+  const recordMap = (records || []).reduce((result, record) => {
+    result[record.parentTaskId] = record;
+    return result;
+  }, {});
+
+  return (tasks || []).map((task) => {
+    const record = recordMap[task.id] || null;
+    const outcome = record?.occurrenceOutcome || 'none';
+    const isPendingSync = syncState.isPendingSyncOccurrenceRecord(record);
+    const statusPrefix = isPendingSync ? '待同步' : '已记录';
+    const statusLabel = outcome === 'success'
+      ? `${statusPrefix} · 达成`
+      : (outcome === 'failure' ? `${statusPrefix} · 未达成` : '未记录');
+    const statusTone = outcome === 'success'
+      ? (isPendingSync ? 'pending' : 'success')
+      : (outcome === 'failure' ? (isPendingSync ? 'pending' : 'failure') : 'idle');
+    const rewardSummary = occurrenceDisplay.buildOccurrenceRewardSummary(task);
+
+    return {
+      ...task,
+      record,
+      outcome,
+      isPendingSync,
+      statusLabel,
+      statusTone,
+      rewardAccentText: rewardSummary.rewardAccentText,
+      rewardExpiryMetaText: rewardSummary.rewardExpiryMetaText,
+      rewardSummaryText: rewardSummary.rewardSummaryText
+    };
+  });
+}
+
+function createEmptyTaskProgress() {
+  return {
+    habit: 0,
+    interest: 0,
+    study: 0
+  };
+}
+
+function createEmptyTaskProgressBucket() {
+  return {
+    completed: 0,
+    total: 0,
+    percent: 0,
+    centerText: '—',
+    isEmpty: true
+  };
+}
+
+function createEmptyTaskProgressSummary() {
+  return {
+    habit: createEmptyTaskProgressBucket(),
+    interest: createEmptyTaskProgressBucket(),
+    study: createEmptyTaskProgressBucket()
+  };
+}
 
 Page({
   data: {
@@ -67,12 +147,14 @@ Page({
     searchClosing: false,
     filterAnimation: {}, // 用于存储筛选器动画数据
     
-    // 任务进度
-    taskProgress: {
-      habit: 0,
-      interest: 0,
-      study: 0
-    },
+    // 首页今日进度摘要
+    todayTaskProgress: createEmptyTaskProgress(),
+    todayTaskProgressSummary: createEmptyTaskProgressSummary(),
+    occurrenceTasks: [],
+    currentDateOccurrenceRecords: [],
+    occurrenceDateLabel: '今天',
+    occurrenceHelperText: '有结果再记录，没发生就留空',
+    showOccurrenceSection: false,
 
     // 消息中心相关
     showMessagePreview: false, // 是否显示消息预览
@@ -150,15 +232,23 @@ Page({
     availableUsers: [], // 可用用户列表
     showUserSwitcher: false, // 是否显示用户切换界面
     userPermissions: {}, // 当前用户权限
-    loginUserId: null,         // 设备拥有者ID（权限依据）
+    loginUserId: '',           // 设备拥有者ID（权限依据）
     canManageMembers: false,   // 是否可管理家庭成员（家长专属）
-    isReadonlyView: false,     // 孩子视角只读：孩子设备（loginUser.role==='child'）或家长切到孩子视角（loginUser.userId !== currentUser.userId）
+    isReadonlyView: false,     // 管理入口只读：孩子设备或家长切到孩子视角时不可创建/编辑/删除，但今日/历史任务仍可打卡
     lastActiveChildId: null,   // 家长最近查看的孩子ID（家长视角时任务仍显示该孩子）
 
     // 日期导航相关
+    weekOffset: 0, // 0=本周, -1=上周
+    weekLabel: '本周',
+    canGoPrevWeek: true,
+    canGoNextWeek: false,
+    isViewingToday: true,
+    isViewingPast: false,
+    isViewingFuture: false,
     currentViewDate: null, // 当前查看的日期（YYYY-MM-DD格式）
     dateNavigation: [], // 日期导航数据数组
     pageTitle: '今日任务', // 页面标题，根据选择的日期动态更新
+    pageTitleBadge: '', // 页面标题旁的轻量状态徽标，如“预览”
     hasTodayTasks: false // 是否有今日任务（用于显示空状态）
   },
   
@@ -317,8 +407,8 @@ Page({
    * 批量加载页面所有数据
    * 统一处理所有数据加载，避免重复调用和多次UI更新
    */
-  loadAllPageData: async function() {
-    return refreshCoordinator.loadAllPageData(this);
+  loadAllPageData: async function(options = {}) {
+    return refreshCoordinator.loadAllPageData(this, options);
   },
 
   /**
@@ -338,17 +428,43 @@ Page({
       // 根据日期参数决定加载方式
       let tasks;
       let targetDate;
+      let occurrenceTasks = [];
+      let occurrenceRecords = [];
+      const occurrenceEnabled = typeof taskService.isOccurrenceEnabled === 'function'
+        ? await taskService.isOccurrenceEnabled()
+        : true;
       
       const currentUserId = this.getEffectiveTaskUserId();
+      const loadOccurrenceTasks = occurrenceEnabled && currentUserId && typeof taskService.getOccurrenceTasks === 'function'
+        ? (targetDateValue) => taskService.getOccurrenceTasks({
+          date: targetDateValue,
+          userId: currentUserId
+        })
+        : () => Promise.resolve([]);
+      const loadOccurrenceRecords = occurrenceEnabled && currentUserId && typeof taskService.getOccurrenceRecordsByDateRange === 'function'
+        ? (targetDateValue) => taskService.getOccurrenceRecordsByDateRange({
+          startDate: targetDateValue,
+          endDate: targetDateValue,
+          userId: currentUserId
+        })
+        : () => Promise.resolve([]);
       if (date) {
         // 加载指定日期的任务
         targetDate = date;
-        tasks = await taskService.getTasksByDate(date, currentUserId, { requireFreshStars: true });
+        [tasks, occurrenceTasks, occurrenceRecords] = await Promise.all([
+          taskService.getTasksByDate(date, currentUserId, { requireFreshStars: true }),
+          loadOccurrenceTasks(date),
+          loadOccurrenceRecords(date)
+        ]);
         logger.info('Index', `指定日期任务加载成功（共享模式）, 日期=${date}, 任务数量: ${tasks.length}`);
       } else {
         // 加载今日任务
         targetDate = dateUtils.getTodayString();
-        tasks = await taskService.getTodayTasks(currentUserId, { requireFreshStars: true });
+        [tasks, occurrenceTasks, occurrenceRecords] = await Promise.all([
+          taskService.getTodayTasks(currentUserId, { requireFreshStars: true }),
+          loadOccurrenceTasks(targetDate),
+          loadOccurrenceRecords(targetDate)
+        ]);
         logger.info('Index', `今日任务加载成功（共享模式）, 任务数量: ${tasks.length}`);
       }
       
@@ -368,20 +484,21 @@ Page({
       });
       
       // 更新当前查看的日期
-      const todayString = dateUtils.getTodayString();
-      const isToday = targetDate === todayString;
-      
       // 更新页面数据
       this.setData({
         tasks: tasks,
+        occurrenceTasks: buildOccurrenceDisplayItems(occurrenceTasks, occurrenceRecords),
+        currentDateOccurrenceRecords: occurrenceRecords,
+        showOccurrenceSection: occurrenceEnabled && occurrenceTasks.length > 0,
+        occurrenceDateLabel: formatOccurrenceDateLabel(targetDate),
         hasTodayTasks: (tasks && tasks.length > 0),
         currentViewDate: targetDate,
-        pageTitle: isToday ? '今日任务' : `${this.formatDateTitle(targetDate)}任务`
+        pageTitle: this.getPageTitleForDate(targetDate),
+        pageTitleBadge: dateNavigationModule.getPageTitleBadgeForDate(this, targetDate)
       });
-      
-      // 检查任务进度
-      await this.calculateProgress(tasks);
-      
+
+      this._updateViewState(targetDate);
+
       // 更新任务统计信息
       await this.updateTaskStats();
       
@@ -397,7 +514,12 @@ Page({
    */
   loadTaskData: async function() {
     try {
-      const tasks = await this.loadTaskDataOnly();
+      await this.loadTaskDataOnly();
+      await this.loadTodayProgressSummary({
+        reuseCurrentTodayData: true,
+        currentTasks: this.data.tasks,
+        currentOccurrenceRecords: this.data.currentDateOccurrenceRecords
+      });
       // 检查即将到期的任务
       await this.checkUpcomingTasks();
     } catch (error) {
@@ -417,34 +539,27 @@ Page({
     return refreshCoordinator.refreshTaskDataForCurrentView(this, options);
   },
   
-  // 从消息管理器加载消息数据（按用户分别显示）
-  // 注意：消息设计为按用户分别显示，每个用户只看到自己的消息和共享消息
-  loadMessageData: async function() {
+  // 从消息管理器加载消息数据
+  // 孩子视角读取个人流，家长视角优先读取家庭动态流
+  loadMessageData: async function(options = {}) {
     try {
       const messageService = serviceManager.getMessageService();
       const scopeOptions = this.getMessageScopeOptions();
       const messages = await messageService.getMessagesByScope({
         ...scopeOptions,
-        requireFresh: true
+        requireFresh: true,
+        skipExpiryAuthoritySyncBeforeFormalReminders:
+          options.skipExpiryAuthoritySyncBeforeFormalReminders === true
+      });
+      const normalizedMessages = messageDisplay.dedupeMessagesByEventKey(messages);
+      
+      const processedMessages = messageDisplay.buildPreviewMessages(normalizedMessages, {
+        limit: 3,
+        formatMessageTime: (createTime) => dateUtils.formatRelativeTime(createTime)
       });
       
-      // 为消息添加时间显示字段，统一使用createTime
-      const processedMessages = [...messages]
-        .sort((a, b) => {
-          // 未读消息优先，相同状态按时间倒序
-          if (a.isRead !== b.isRead) return a.isRead ? 1 : -1;
-          return b.createTime - a.createTime;
-        })
-        .slice(0, 3) // 只显示最新3条消息
-        .map(msg => {
-          return {
-            ...msg,
-            timeDisplay: dateUtils.formatRelativeTime(msg.createTime)
-          };
-        });
-      
-      // 计算未读消息数量（基于过滤后的消息）
-      const unreadCount = messages.filter(msg => !msg.isRead).length;
+      // 计算未读消息数量（基于完整 scope 消息集合）
+      const unreadCount = normalizedMessages.filter(msg => !msg.isRead).length;
       
       this.setData({
         messages: processedMessages,
@@ -452,7 +567,7 @@ Page({
       });
       
       logger.info('Index', `消息数据加载成功, scope=${scopeOptions.scope}`, {
-        消息总数: messages.length,
+        消息总数: normalizedMessages.length,
         显示数量: processedMessages.length,
         未读数量: unreadCount
       });
@@ -473,32 +588,118 @@ Page({
   },
   
   /**
-   * 计算并更新任务进度
+   * 计算并更新首页今日进度摘要
    * @param {Array} tasks 任务列表
    */
-  calculateProgress: async function(tasks) {
+  calculateProgress: async function(tasks = []) {
     try {
-      logger.info('Index', '开始计算任务进度');
-      
-      // 获取任务服务
+      logger.info('Index', '开始计算首页今日进度摘要');
+
       const taskService = serviceManager.getService('task');
       if (!taskService) {
         logger.error('Index', '无法获取任务服务');
         return;
       }
-      
-      // 使用任务服务计算进度（服务层已处理数据类型转换）
+
       const result = await taskService.calculateTaskProgress(tasks);
-      logger.info('Index', '任务进度计算成功', result);
-      
-      // 直接使用服务层返回的结果，无需页面层数据转换
-      this.setData({ 
-        taskProgress: result.taskProgress,
-        stats: result.stats
-      });
+      logger.info('Index', '首页今日进度摘要计算成功', result);
+
+      this.applyTodayTaskProgressResult(result);
     } catch (error) {
-      logger.error('Index', '计算任务进度失败', error);
+      logger.error('Index', '计算首页今日进度摘要失败', error);
     }
+  },
+
+  applyTodayTaskProgressResult: function(result = {}) {
+    this.setData({
+      todayTaskProgress: result.taskProgress || createEmptyTaskProgress(),
+      todayTaskProgressSummary: result.taskProgressSummary || createEmptyTaskProgressSummary()
+    });
+  },
+
+  loadTodayProgressSummary: async function(options = {}) {
+    try {
+      const taskService = serviceManager.getService('task');
+      if (!taskService) {
+        logger.error('Index', '无法获取任务服务');
+        return;
+      }
+
+      const todayString = dateUtils.getTodayString();
+      const currentUserId = this.getEffectiveTaskUserId();
+      let todayTasks = Array.isArray(options.currentTasks) ? options.currentTasks : [];
+      let todayOccurrenceRecords = Array.isArray(options.currentOccurrenceRecords)
+        ? options.currentOccurrenceRecords
+        : [];
+
+      if (options.reuseCurrentTodayData !== true) {
+        const loadOccurrenceRecords = currentUserId
+          && typeof taskService.getOccurrenceRecordsByDateRange === 'function'
+          ? taskService.getOccurrenceRecordsByDateRange({
+            startDate: todayString,
+            endDate: todayString,
+            userId: currentUserId
+          })
+          : Promise.resolve([]);
+
+        [todayTasks, todayOccurrenceRecords] = await Promise.all([
+          taskService.getTodayTasks(currentUserId, { requireFreshStars: true }),
+          loadOccurrenceRecords
+        ]);
+      }
+
+      await this.calculateProgress((todayTasks || []).concat(todayOccurrenceRecords || []));
+    } catch (error) {
+      logger.error('Index', '加载首页今日进度摘要失败', error);
+      this.applyTodayTaskProgressResult();
+    }
+  },
+
+  async recordOccurrenceFromHome(e) {
+    const taskId = e.currentTarget.dataset.taskId;
+    const outcome = e.currentTarget.dataset.outcome;
+    const taskService = serviceManager.getService('task');
+    const targetUserId = this.getEffectiveTaskUserId();
+    const targetDate = this.data.currentViewDate || dateUtils.getTodayString();
+
+    if (!taskService || !taskId || !outcome || !targetUserId) {
+      return;
+    }
+
+    if (this.data.isReadonlyView || this.data.isViewerReadonly) {
+      wx.showToast({
+        title: this.data.readonlyReason === 'system-readonly'
+          ? '当前账号为只读，不能记录表现'
+          : '当前为查看者，不能记录表现',
+        icon: 'none'
+      });
+      return;
+    }
+
+    const result = await taskService.recordOccurrenceResult(taskId, {
+      userId: targetUserId,
+      date: targetDate,
+      outcome
+    });
+
+    if (!result.success) {
+      wx.showToast({
+        title: result.message || '记录失败',
+        icon: 'none'
+      });
+      return;
+    }
+
+    wx.showToast(result.fallback
+      ? {
+        title: syncState.getPendingSyncToastCopy(),
+        icon: 'none'
+      }
+      : {
+        title: outcome === 'success' ? '已记为达成' : '已记为未达成',
+        icon: 'success'
+      });
+    await this.refreshTaskDataForCurrentView();
   },
   
   /**
@@ -549,6 +750,17 @@ Page({
       logger.info('Index', '开始检查即将到期任务');
       logger.info('Index', '当前upcomingTask状态', this.data.upcomingTask);
       logger.info('Index', '当前showUpcomingTask状态', this.data.showUpcomingTask);
+
+      const todayString = dateUtils.getTodayString();
+      if (this.data.currentViewDate && this.data.currentViewDate !== todayString) {
+        logger.info('Index', '当前不是今天视图，隐藏即将到期任务提醒', {
+          currentViewDate: this.data.currentViewDate
+        });
+        this.setData({
+          showUpcomingTask: false
+        });
+        return;
+      }
       
       // 获取任务服务
       const taskService = serviceManager.getService('task');
@@ -607,10 +819,11 @@ Page({
    * @returns {String} 格式化后的日期标题
    */
   formatDateTitle: function(dateString) {
-    const date = new Date(dateString);
-    const month = date.getMonth() + 1;
-    const day = date.getDate();
-    return `${month}月${day}日`;
+    return dateNavigationModule.formatDateTitle(this, dateString);
+  },
+
+  getPageTitleForDate: function(dateString) {
+    return dateNavigationModule.getPageTitleForDate(this, dateString);
   },
 
   /**
@@ -618,45 +831,54 @@ Page({
    * @returns {Array} 日期导航数组
    */
   generateDateNavigation: function() {
-    const dates = [];
-    const today = new Date();
-    const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
-    
-    // 生成7天：今天往前推6天到今天
-    for (let i = -6; i <= 0; i++) {
-      const date = new Date(today);
-      date.setDate(date.getDate() + i);
-      const dateString = dateUtils.formatDate(date);
-      const weekday = weekdays[date.getDay()];
-      
-      dates.push({
-        dateString: dateString,
-        label: i === 0 ? '今天' : weekday,
-        isToday: i === 0,
-        isHistorical: i < 0
-      });
-    }
-    
-    return dates;
+    return dateNavigationModule.generateDateNavigation(this);
+  },
+
+  getDefaultSelectedDateForCurrentWeek: function() {
+    return dateNavigationModule.getDefaultSelectedDateForCurrentWeek(this);
+  },
+
+  _updateViewState: function(selectedDate) {
+    return dateNavigationModule.updateViewState(this, selectedDate);
   },
 
   /**
    * 初始化日期导航
    */
   initializeDateNavigation: function() {
-    const dateNavigation = this.generateDateNavigation();
-    const todayString = dateUtils.getTodayString();
-    
-    this.setData({
-      dateNavigation: dateNavigation,
-      currentViewDate: todayString,
-      pageTitle: '今日任务'
-    });
-    
-    logger.info('Index', '日期导航初始化完成', {
-      dateCount: dateNavigation.length,
-      currentDate: todayString
-    });
+    return dateNavigationModule.initializeDateNavigation(this);
+  },
+
+  _captureDateViewSnapshot: function() {
+    return dateNavigationModule.captureDateViewSnapshot(this);
+  },
+
+  _refreshUpcomingTasksAfterDateChange: async function() {
+    return dateNavigationModule.refreshUpcomingTasksAfterDateChange(this);
+  },
+
+  onDateNavTouchStart: function(e) {
+    return dateNavigationModule.onDateNavTouchStart(this, e);
+  },
+
+  onDateNavTouchEnd: function(e) {
+    return dateNavigationModule.onDateNavTouchEnd(this, e);
+  },
+
+  _refreshAfterWeekChange: async function(targetWeekOffset) {
+    return dateNavigationModule.refreshAfterWeekChange(this, targetWeekOffset);
+  },
+
+  onPrevWeek: function() {
+    return dateNavigationModule.onPrevWeek(this);
+  },
+
+  onNextWeek: function() {
+    return dateNavigationModule.onNextWeek(this);
+  },
+
+  onBackToToday: async function() {
+    return dateNavigationModule.onBackToToday(this);
   },
 
   /**
@@ -664,44 +886,7 @@ Page({
    * @param {Object} e 事件对象
    */
   onDateButtonTap: async function(e) {
-    const { date } = e.currentTarget.dataset;
-    
-    if (!date) {
-      logger.warn('Index', '日期按钮点击事件缺少日期数据');
-      return;
-    }
-    
-    const { currentViewDate } = this.data;
-    
-    // 如果点击的是当前已选中的日期，无需操作
-    if (date === currentViewDate) {
-      logger.info('Index', `重复点击相同日期: ${date}`);
-      return;
-    }
-    
-    logger.info('Index', `切换日期: ${currentViewDate} -> ${date}`);
-    
-    try {
-      // 显示加载状态
-      wx.showLoading({
-        title: '加载中...',
-        mask: true
-      });
-      
-      // 加载指定日期的任务
-      await this.loadTaskDataOnly(date);
-      
-      logger.info('Index', `日期切换成功: ${date}`);
-    } catch (error) {
-      logger.error('Index', `日期切换失败: ${date}`, error);
-      wx.showToast({
-        title: '加载失败',
-        icon: 'none',
-        duration: 2000
-      });
-    } finally {
-      wx.hideLoading();
-    }
+    return dateNavigationModule.onDateButtonTap(this, e);
   },
 
   // 完成任务
@@ -724,149 +909,33 @@ Page({
     const effectiveUserId = this.getEffectiveTaskUserId();
     const targetParam = effectiveUserId ? `&targetUserId=${effectiveUserId}` : '';
     wx.navigateTo({
-      url: `/pages/task-edit/task-edit?mode=create&taskType=${type}${targetParam}`
+      url: `/packageTask/pages/task-edit/task-edit?mode=create&taskType=${type}${targetParam}`
     });
   },
-  
-  // 跳转到编辑特定任务
-  editTask: function(e) {
-    const taskId = e.detail.taskId;
-    wx.navigateTo({
-      url: `/pages/task-edit/task-edit?mode=edit&taskId=${taskId}`
-    });
-  },
-  
-
   
   // 跳转到消息中心
   navigateToMessageCenter: function(e) {
-    logger.debug('Index', '准备跳转到消息中心页面');
-    
-    // 阻止事件冒泡，避免同时触发toggleMessagePreview
-    if (e && typeof e.stopPropagation === 'function') {
-      e.stopPropagation();
-    }
-    
-    // 先跳转到消息中心页面
-    wx.navigateTo({
-      url: '/packageMessage/pages/message/message',
-      success: () => {
-        logger.debug('Index', '成功跳转到消息中心页面');
-        
-        // 成功跳转后再关闭消息预览
-        setTimeout(() => {
-          this.setData({
-            showMessagePreview: false
-          });
-        }, 300);
-      }
-    });
+    return messagePreviewModule.navigateToMessageCenter(this, e);
   },
   
   // 显示/隐藏消息预览
   toggleMessagePreview: function() {
-    logger.debug('Index', (this.data.showMessagePreview ? '关闭' : '打开') + '消息面板');
-    const currentState = this.data.showMessagePreview;
-    
-    // 每次都创建新的动画实例，避免复用旧的动画状态
-    this.messageAnimation = wx.createAnimation({
-      duration: 250,
-      timingFunction: 'ease-out',
-      delay: 0
-    });
-    
-    if (currentState) {
-      logger.debug('Index', '创建关闭动画');
-      // 关闭动画
-      this.messageAnimation.opacity(0).scale(0.8).step();
-      
-      this.setData({
-        messageAnimation: this.messageAnimation.export()
-      });
-      
-      // 动画结束后再隐藏元素
-      setTimeout(() => {
-        logger.debug('Index', '动画结束，隐藏面板');
-        this.setData({
-          showMessagePreview: false
-        });
-      }, 250);
-    } else {
-      logger.debug('Index', '准备显示面板');
-      // 轻微振动反馈
-      if (wx.vibrateShort) {
-        wx.vibrateShort({ type: 'light' });
-      }
-      
-      // 设置初始状态
-      this.messageAnimation.opacity(0).scale(0.8).step({ duration: 0 });
-      logger.debug('Index', '初始化动画');
-      
-      this.setData({
-        showMessagePreview: true,
-        messageAnimation: this.messageAnimation.export(),
-        showSearch: false, // 确保搜索面板关闭
-        showStats: false   // 确保统计面板关闭
-      });
-      
-      // 添加一个短暂延时，确保视图更新后再开始动画
-      setTimeout(() => {
-        logger.debug('Index', '执行显示动画');
-        this.messageAnimation.opacity(1).scale(1).step();
-        
-        this.setData({
-          messageAnimation: this.messageAnimation.export()
-        });
-      }, 50);
-    }
+    return messagePreviewModule.toggleMessagePreview(this);
   },
   
   // 防止点击事件冒泡
   preventBubble: function(e) {
-    logger.debug('Index', '阻止事件冒泡');
-    // 检查事件对象是否存在且有stopPropagation方法
-    if (e && typeof e.stopPropagation === 'function') {
-      e.stopPropagation();
-    } else {
-      logger.debug('Index', '事件对象不包含stopPropagation方法');
-    }
-    return false;
+    return messagePreviewModule.preventBubble(this, e);
   },
   
   // 防止蒙层触摸滑动
   preventTouchMove: function(e) {
-    logger.debug('Index', '阻止蒙层触摸滑动');
-    // 检查事件对象是否存在
-    if (e) {
-      // 检查并调用stopPropagation方法
-      if (typeof e.stopPropagation === 'function') {
-        e.stopPropagation();
-      } else {
-        logger.debug('Index', '事件对象不包含stopPropagation方法');
-      }
-      
-      // 检查并调用preventDefault方法
-      if (typeof e.preventDefault === 'function') {
-        e.preventDefault();
-      } else {
-        logger.debug('Index', '事件对象不包含preventDefault方法');
-      }
-    }
-    return false;
+    return messagePreviewModule.preventTouchMove(this, e);
   },
   
   // 查看消息详情
   viewMessageDetail: function(e) {
-    const messageId = e.currentTarget.dataset.id;
-    const message = this.data.messages.find(m => m.id === messageId);
-    
-    if (message) {
-      // 标记该消息为已读
-      this.markMessageAsRead(e);
-      
-      // 记录日志
-      logger.debug('Index', `标记消息已读: ${message.title}`);
-    }
+    return messagePreviewModule.viewMessageDetail(this, e);
   },
   
   /**
@@ -874,88 +943,21 @@ Page({
    * @param {Object} e 事件对象 
    */
   markMessageAsRead: function(e) {
-    const messageId = e.currentTarget.dataset.id;
-    if (!messageId) {
-      logger.warn('Index', '标记消息已读失败：消息ID为空');
-      return;
-    }
-    
-    const messageService = serviceManager.getMessageService();
-    
-    messageService.markMessageAsRead(messageId, this.getMessageScopeOptions())
-      .then(success => {
-        logger.info('Index', `标记消息已读${success ? '成功' : '失败'}: ${messageId}`);
-        if (success) {
-          this.getUnreadMessageCount();
-        }
-      })
-      .catch(error => {
-        logger.error('Index', '标记消息已读出错', error);
-      });
+    return messagePreviewModule.markMessageAsRead(this, e);
   },
   
   /**
    * 标记所有消息为已读
    */
   markAllMessagesAsRead: function() {
-    const messageService = serviceManager.getMessageService();
-    const unreadCount = this.data.messages.filter(msg => !msg.isRead).length;
-
-    if (unreadCount === 0) {
-      wx.showToast({
-        title: '暂无未读消息',
-        icon: 'none',
-        duration: 1500
-      });
-      return;
-    }
-    
-    messageService.markAllMessagesAsRead(this.getMessageScopeOptions())
-      .then(count => {
-        if (count <= 0) {
-          logger.warn('Index', '标记全部消息已读未成功写入');
-          wx.showToast({
-            title: '操作失败',
-            icon: 'none',
-            duration: 1500
-          });
-          return;
-        }
-
-        logger.info('Index', `标记全部消息已读成功, 数量: ${count}`);
-        this.getUnreadMessageCount();
-        
-        // 更新UI
-        this.setData({
-          'messages': this.data.messages.map(msg => {
-            return {
-              ...msg,
-              isRead: true
-            }
-          })
-        });
-      })
-      .catch(error => {
-        logger.error('Index', '标记全部消息已读出错', error);
-      });
+    return messagePreviewModule.markAllMessagesAsRead(this);
   },
 
   /**
    * 获取未读消息数量
    */
   getUnreadMessageCount: function() {
-    const messageService = serviceManager.getMessageService();
-    
-    messageService.getUnreadCount(this.getMessageScopeOptions())
-      .then(count => {
-        this.setData({
-          unreadCount: count
-        });
-        logger.info('Index', `更新未读消息数量: ${count}`);
-      })
-      .catch(error => {
-        logger.error('Index', '获取未读消息数量出错', error);
-      });
+    return messagePreviewModule.getUnreadMessageCount(this);
   },
 
   /**
@@ -1051,6 +1053,12 @@ Page({
       showFloatMenu: !this.data.showFloatMenu
     });
   },
+
+  navigateToAnalysisPage: function() {
+    wx.navigateTo({
+      url: '/packageChart/pages/analysis/analysis'
+    });
+  },
   
   onMenuItemTap: function(e) {
     const item = e.detail.item;
@@ -1066,28 +1074,10 @@ Page({
       const effectiveUserId = this.getEffectiveTaskUserId();
       const targetParam = effectiveUserId ? `&targetUserId=${effectiveUserId}` : '';
       wx.navigateTo({
-        url: `/pages/task-edit/task-edit?mode=create${targetParam}`
+        url: `/packageTask/pages/task-edit/task-edit?mode=create${targetParam}`
       });
     } else if (item && item.id === 'study') {
-      logger.debug('Index', '点击分析菜单项，跳转到分析页面');
-      wx.showLoading({
-        title: '加载中...',
-        mask: true
-      });
-      wx.navigateTo({
-        url: '/packageChart/pages/analysis/analysis',
-        success: () => {
-          setTimeout(() => wx.hideLoading(), 500);
-        },
-        fail: (err) => {
-          wx.hideLoading();
-          wx.showToast({
-            title: '加载失败，请重试',
-            icon: 'none'
-          });
-          logger.error('Index', '跳转到分析页面失败', err);
-        }
-      });
+      this.navigateToAnalysisPage();
     } else if (item && item.id === 'reward-manage') {
       logger.debug('Index', '点击奖励管理菜单项，跳转到奖励管理页面');
       wx.navigateTo({
@@ -1102,16 +1092,8 @@ Page({
   },
   
   // 触发进度圆环点击
-  // 分析页暂时对所有视角禁用（内部无 userId 过滤，M10 补齐后开放）
   onRingTap: function(e) {
-    // M07：分析页已支持按角色隔离，直接跳转，analysis.js 内部决定数据范围
-    wx.navigateTo({
-      url: '/packageChart/pages/analysis/analysis',
-      fail: (err) => {
-        logger.error('Index', '跳转到分析页面失败', err);
-        wx.showToast({ title: '加载失败，请重试', icon: 'none' });
-      }
-    });
+    this.navigateToAnalysisPage();
   },
   
   // 处理进度条完成事件
@@ -1121,122 +1103,33 @@ Page({
   
   // 显示/隐藏搜索面板
   toggleSearch: function() {
-    if (this.data.showSearch) {
-      this.setData({ searchClosing: true });
-      
-      // 动画结束后隐藏
-      setTimeout(() => {
-        this.setData({
-          showSearch: false,
-          searchClosing: false
-        });
-      }, 300);
-      
-    } else {
-      this.setData({
-        showSearch: true,
-        showStats: false, // 确保统计面板关闭
-        showMessagePreview: false // 确保消息预览关闭
-      });
-    }
+    return searchPanelModule.toggleSearch(this);
   },
   
   // 获取任务查询时应使用的用户ID
   // 家长在自己视角时，仍显示最后查看的孩子的任务；孩子视角始终用 currentUser.id
   getEffectiveTaskUserId: function() {
-    const { currentUser, loginUserId, canManageMembers, lastActiveChildId, availableUsers } = this.data;
-    if (canManageMembers && currentUser && currentUser.role === 'parent') {
-      // 家长在自己的视角：优先用最后查看的孩子，否则用第一个孩子
-      if (lastActiveChildId) return lastActiveChildId;
-      const firstChild = availableUsers && availableUsers.find(u => u.role === 'child');
-      return firstChild ? firstChild.id : null;
-    }
-    return currentUser ? currentUser.id : null;
+    return searchPanelModule.getEffectiveTaskUserId(this);
   },
 
   // 更新搜索输入并实时触发搜索
   updateSearchQuery: function(e) {
-    this.setData({
-      searchQuery: e.detail.value
-    }, () => {
-      this.performSearch();
-    });
+    return searchPanelModule.updateSearchQuery(this, e);
   },
   
   // 执行搜索
   performSearch: function() {
-    const query = this.data.searchQuery.toLowerCase().trim();
-    const filters = this.data.searchFilters;
-    
-    // 从全局获取所有任务，按有效目标用户过滤（与主任务列表保持一致）
-    const taskService = serviceManager.getTaskService();
-    const effectiveUserId = this.getEffectiveTaskUserId();
-    taskService.getAllTasks().then(allTasksRaw => {
-      // 按有效目标用户过滤（家长视角时用 getEffectiveTaskUserId，孩子视角时用 currentUser.id）
-      const allTasks = effectiveUserId
-        ? allTasksRaw.filter(t => !t.userId || t.userId === effectiveUserId)
-        : allTasksRaw;
-
-      // 基于关键词搜索
-      let results = [];
-      
-      if (query) {
-        results = allTasks.filter(task => 
-          task.title.toLowerCase().includes(query) || 
-          (task.description && task.description.toLowerCase().includes(query))
-        );
-      } else {
-        // 如果没有查询词但有过滤条件，则搜索所有任务
-        results = [...allTasks];
-      }
-      
-      // 应用类型过滤
-      if (filters.type) {
-        results = results.filter(task => task.type === filters.type);
-      }
-      
-      // 应用状态过滤
-      if (filters.status !== '') {
-        const statusValue = parseInt(filters.status);
-        results = results.filter(task => task.status === statusValue);
-      }
-      
-      // 应用日期范围过滤
-      if (filters.dateRange) {
-        // 处理日期范围过滤逻辑...
-      }
-      
-      // 显示结果
-      this.setData({
-        searchResults: results
-      });
-    });
+    return searchPanelModule.performSearch(this);
   },
   
   // 更新搜索过滤器
   updateSearchFilter: function(e) {
-    const { type, value } = e.currentTarget.dataset;
-    
-    this.setData({
-      [`searchFilters.${type}`]: value
-    });
-    
-    // 实时更新搜索结果
-    this.performSearch();
+    return searchPanelModule.updateSearchFilter(this, e);
   },
   
   // 清除搜索过滤器
   clearSearchFilters: function() {
-    this.setData({
-      searchFilters: {
-        type: '',
-        status: '',
-        dateRange: ''
-      }
-    });
-    
-    // 实时更新搜索结果
-    this.performSearch();
+    return searchPanelModule.clearSearchFilters(this);
   },
 
   // 处理菜单项点击事件
@@ -1263,8 +1156,8 @@ Page({
   /**
    * 加载用户星星和奖励信息（冻结展示 loginUser 自己的数据，不随视角切换变化）
    */
-  loadStarsAndRewards: async function() {
-    return rewardFlowModule.loadStarsAndRewards(this);
+  loadStarsAndRewards: async function(options = {}) {
+    return rewardFlowModule.loadStarsAndRewards(this, options);
   },
   
   /**
@@ -1298,98 +1191,22 @@ Page({
   
   // 点击查看奖池
   viewRewardPool: function() {
-    logger.debug('Index', '用户选择查看奖池');
-    
-    // 保存更多状态信息
-    const app = getApp();
-    app.globalData.hasRedirectedToReward = true;
-    app.globalData.completedRewardInfo = {
-      reward: this.data.completedReward,
-      total: this.data.completedRewardTotal
-    };
-    
-    // 使用Storage备份标记(更可靠)
-    pageStorageHelper.setPageState('fromRewardCompletion', true);
-    pageStorageHelper.setPageState('completedRewardInfo', {
-      reward: this.data.completedReward,
-      total: this.data.completedRewardTotal
-    });
-    
-    // 隐藏对话框
-    this.setData({
-      showRewardChoice: false
-    });
-    
-    // 跳转到奖池页面
-    setTimeout(() => {
-      wx.switchTab({
-        url: '/pages/rewards/rewards'
-      });
-    }, 300);
+    return rewardFlowModule.viewRewardPool(this);
   },
   
   // 点击奖励指示器
   onRewardIndicatorTap: function(e) {
-    const rewardId = e.currentTarget.dataset.id;
-    const reward = this.data.visibleRewards.find(r => r.id === rewardId);
-    
-    if (!reward) return;
-    
-    logger.debug('Index', `点击奖励指示器: ${reward.name}, 状态: ${reward.status}`);
-    
-    // 家庭视角（isReadonlyView）下奖池页暂不支持多用户隔离，禁止进入
-    if (this.data.isReadonlyView) {
-      wx.showToast({ title: '请切换回家长视角查看奖励', icon: 'none' });
-      return;
-    }
-
-    // 已解锁或已领取状态，跳转到奖池
-    if (reward.status === 'unlocked' || reward.status === 'claimed') {
-      wx.switchTab({
-        url: '/pages/rewards/rewards'
-      });
-    } else if (reward.status === 'current') {
-      // 如果是当前目标，显示提示
-      wx.showToast({
-        title: `目标: ${reward.name}`,
-        icon: 'none'
-      });
-    }
+    return rewardFlowModule.onRewardIndicatorTap(this, e);
   },
   
   // 显示所有奖励
   showAllRewards: function() {
-    // 家庭视角（isReadonlyView）下奖池页暂不支持多用户隔离，禁止进入
-    if (this.data.isReadonlyView) {
-      wx.showToast({ title: '请切换回家长视角查看奖励', icon: 'none' });
-      return;
-    }
-    logger.debug('Index', '查看所有奖励');
-    wx.switchTab({
-      url: '/pages/rewards/rewards'
-    });
+    return rewardFlowModule.showAllRewards(this);
   },
   
   // 生成奖励提示文本
   generateRewardHintText: function(userPoints, allRewards) {
-    // 找到所有已解锁的奖励
-    const unlockedRewards = allRewards.filter(r => userPoints >= r.points);
-    const unlockedCount = unlockedRewards.length;
-    
-    let hintText = '';
-    
-    if (unlockedCount > 1) {
-      hintText = `恭喜！您已达成${unlockedCount}个奖品，可前往奖池查看`;
-    } else if (unlockedCount === 1) {
-      hintText = `恭喜！已达成${unlockedRewards[0].name}，可前往奖池查看`;
-    } else {
-      // 保持原有提示
-      hintText = null;
-    }
-    
-    this.setData({
-      rewardHintText: hintText
-    });
+    return rewardFlowModule.generateRewardHintText(this, userPoints, allRewards);
   },
   
   /**
@@ -1397,125 +1214,33 @@ Page({
    * @return {Boolean} 是否只有示例奖励
    */
   hasOnlyExampleRewards: function() {
-    logger.debug('Index', '检查是否只有示例奖励可用');
-    
-    // 使用RewardService获取信息
-    const rewardService = serviceManager.getRewardService();
-    const result = rewardService.hasOnlyExampleRewardsSync();
-    
-    logger.debug('Index', `是否只有示例奖励: ${result}`);
-    return result;
+    return rewardFlowModule.hasOnlyExampleRewards(this);
   },
   
   /**
    * 显示设置奖励提示对话框
    */
   showSetupRewardTip: function() {
-    logger.debug('Index', '显示设置奖励提示');
-    
-    // 创建动画实例
-    const animation = wx.createAnimation({
-      duration: 300,
-      timingFunction: 'ease',
-    });
-    
-    // 设置初始状态（缩小并透明）
-    animation.scale(0.8).opacity(0).step({ duration: 0 });
-    
-    // 设置数据并显示对话框
-    this.setData({
-      showSetupRewardTip: true,
-      setupRewardTipAnimation: animation.export()
-    });
-    
-    // 执行显示动画
-    setTimeout(() => {
-      animation.scale(1).opacity(1).step();
-      this.setData({
-        setupRewardTipAnimation: animation.export()
-      });
-    }, 50);
+    return rewardFlowModule.showSetupRewardTip(this);
   },
   
   /**
    * 关闭设置奖励提示对话框
    */
   closeSetupRewardTip: function() {
-    logger.debug('Index', '关闭设置奖励提示');
-    
-    // 创建动画实例
-    const animation = wx.createAnimation({
-      duration: 300,
-      timingFunction: 'ease-out',
-    });
-    
-    // 设置隐藏动画
-    animation.scale(0.8).opacity(0).step();
-    
-    this.setData({
-      setupRewardTipAnimation: animation.export()
-    });
-    
-    // 延迟关闭对话框
-    setTimeout(() => {
-      this.setData({
-        showSetupRewardTip: false
-      });
-    }, 300);
+    return rewardFlowModule.closeSetupRewardTip(this);
   },
   
   /**
    * 跳转到奖励管理页面
    */
   navigateToRewardManage: function() {
-    logger.debug('Index', '跳转到奖励管理页面');
-    
-    // 先关闭提示对话框
-    this.closeSetupRewardTip();
-    
-    // 延迟跳转，等动画完成
-    setTimeout(() => {
-      wx.navigateTo({
-        url: '/packageManage/pages/reward-manage/reward-manage'
-      });
-    }, 300);
+    return rewardFlowModule.navigateToRewardManage(this);
   },
   
   // 准备奖励指示器数据
   _prepareRewardIndicators: function() {
-    logger.debug('Index', `准备显示奖品指示器: ${this.data.visibleRewards.length}个, 状态分布: ${this.data.visibleRewards.map(r => r.status).join(',')}`);
-    
-    // 获取奖励服务
-    const rewardService = serviceManager.getRewardService();
-    
-    // 处理奖品指示器
-    const processedRewards = this.data.visibleRewards.map(reward => {
-      let status = 'locked'; // 默认状态：未解锁
-      
-      // 先检查是否已领取
-      if (reward.claimed) {
-        status = 'claimed'; // 已领取状态
-      } else if (this.data.userPoints >= reward.points) {
-        status = 'unlocked'; // 已解锁状态
-      } else if (this.data.nextReward && this.data.nextReward.id === reward.id) {
-        status = 'current'; // 当前目标状态
-      }
-      
-      return {
-        ...reward,
-        status,
-        isExample: rewardService._isExampleReward(reward) // 使用服务层方法判断是否为示例奖励
-      };
-    });
-    
-    // 最多显示5个，如果更多设置标记
-    const hasMoreRewards = processedRewards.length > 5;
-    const visibleRewards = processedRewards.slice(0, 5);
-    
-    this.setData({
-      visibleRewards,
-      hasMoreRewards
-    });
+    return rewardFlowModule.prepareRewardIndicators(this);
   },
 
   // 任务状态切换处理函数
@@ -1525,44 +1250,7 @@ Page({
 
   // 搜索任务
   searchTasks: async function() {
-    try {
-      const query = this.data.searchQuery;
-      if (!query || query.trim() === '') {
-        return;
-      }
-      
-      logger.info('Index', `执行任务搜索: 关键词=${query}`);
-      
-      // 获取任务服务
-      const taskService = serviceManager.getTaskService();
-      
-      // 从全局获取所有任务
-      const allTasks = await taskService.getAllTasks();
-      
-      // 基于关键词搜索
-      let results = [];
-      
-      // 搜索逻辑：标题包含、描述包含、标签包含
-      results = allTasks.filter(task => {
-        const titleMatch = task.title && task.title.toLowerCase().includes(query.toLowerCase());
-        const descMatch = task.description && task.description.toLowerCase().includes(query.toLowerCase());
-        const tagMatch = task.tags && task.tags.some(tag => tag.toLowerCase().includes(query.toLowerCase()));
-        
-        return titleMatch || descMatch || tagMatch;
-      });
-      
-      logger.info('Index', `搜索结果: ${results.length}个匹配任务`);
-      
-      // 更新搜索结果到UI
-      this.setData({
-        searchResults: results
-      });
-    } catch (error) {
-      logger.error('Index', '搜索任务失败', error);
-      this.setData({
-        searchResults: []
-      });
-    }
+    return searchPanelModule.searchTasks(this);
   },
 
 
@@ -1600,255 +1288,56 @@ Page({
    * 显示用户切换界面
    */
   showUserSwitcher() {
-    logger.info('Index', '显示用户切换界面');
-    
-    // 刷新用户列表
-    const userService = getApp().globalData.userService;
-    if (userService) {
-      const availableUsers = userService.getAllUsers();
-      const currentUser = userService.getCurrentUser(); // 添加这行
-      this.setData({
-        availableUsers,
-        currentUser, // 添加这行，确保数据同步
-        showUserSwitcher: true
-      });
-    }
+    return userSwitcherModule.showUserSwitcher(this);
   },
 
   /**
    * 隐藏用户切换界面
    */
   hideUserSwitcher() {
-    logger.info('Index', '隐藏用户切换界面');
-    
-    this.setData({
-      showUserSwitcher: false
-    });
+    return userSwitcherModule.hideUserSwitcher(this);
   },
 
   /**
    * 处理用户切换事件
    */
   async handleUserSwitch(e) {
-    try {
-      const { userId } = e.detail;
-      logger.info('Index', `用户切换: 切换到用户ID=${userId}`);
-      
-      const userService = getApp().globalData.userService;
-      if (!userService) {
-        logger.error('Index', '用户服务不可用');
-        return;
-      }
-      
-      // 执行用户切换
-      const result = await userService.switchToUser(userId);
-      if (!result.success) {
-        wx.showToast({
-          title: result.message || '用户切换失败',
-          icon: 'none'
-        });
-        return;
-      }
-      
-      // 获取新的当前用户
-      const currentUser = userService.getCurrentUser();
-      const availableUsers = userService.getAllUsers();
-      const userPermissions = permissionUtils.getUserPermissions(currentUser.role);
-      const loginUser = userService.getLoginUser ? userService.getLoginUser() : null;
-      // 只读视角：孩子设备或家长切到孩子视角均为只读
-      const isReadonlyView = loginUser
-        ? (loginUser.role === 'child' || loginUser.userId !== currentUser.userId)
-        : false;
-
-      // 切换到孩子视角时记录，供家长回到自己视角时继续显示该孩子的任务
-      const lastActiveChildId = currentUser.role === 'child'
-        ? currentUser.id
-        : this.data.lastActiveChildId;
-
-      // 同步到 globalData，供其他页面（如奖池）获取最近操作的孩子
-      const app = getApp();
-      if (app && app.globalData) {
-        app.globalData.lastActiveChildId = lastActiveChildId;
-      }
-      
-      // 更新页面状态
-      this.setData({
-        currentUser,
-        availableUsers,
-        userPermissions,
-        isReadonlyView,
-        lastActiveChildId,
-        showUserSwitcher: false
-      });
-      
-      // 根据新用户权限更新菜单
-      this.updateMenuItemsWithPermissions();
-      
-      // 重新加载数据（按新用户筛选）
-      await this.refreshDataForCurrentUser();
-      
-      wx.showToast({
-        title: `已切换到 ${currentUser.name}`,
-        icon: 'success'
-      });
-      
-      logger.info('Index', `用户切换完成: ${currentUser.name}(${currentUser.role})`);
-      
-    } catch (error) {
-      logger.error('Index', '处理用户切换失败', error);
-      wx.showToast({
-        title: '用户切换失败',
-        icon: 'none'
-      });
-    }
+    return userSwitcherModule.handleUserSwitch(this, e);
   },
 
   /**
    * 处理添加成员事件（M6：跳转到家庭设置页）
    */
   async handleUserAdd(e) {
-    logger.info('Index', '跳转到家庭设置页添加成员');
-    wx.navigateTo({
-      url: '/packageManage/pages/family-settings/family-settings'
-    });
+    return userSwitcherModule.handleUserAdd(this, e);
   },
 
   /**
    * 处理昵称编辑事件
    */
   async handleNicknameEdit(e) {
-    try {
-      const { userId, nickname } = e.detail;
-      const userService = getApp().globalData.userService;
-      if (!userService) return;
-
-      const result = await userService.updateNickname(userId, nickname);
-      if (result.success) {
-        // 刷新用户列表显示
-        const availableUsers = userService.getAllUsers();
-        const currentUser = userService.getCurrentUser();
-        this.setData({ availableUsers, currentUser });
-        wx.showToast({ title: '昵称已更新', icon: 'success' });
-      } else {
-        wx.showToast({ title: result.message || '修改失败', icon: 'none' });
-      }
-    } catch (error) {
-      logger.error('Index', '处理昵称编辑失败', error);
-    }
+    return userSwitcherModule.handleNicknameEdit(this, e);
   },
 
   /**
    * 处理删除成员事件（M6：软删除虚拟成员）
    */
   async handleUserDelete(e) {
-    try {
-      const { userId } = e.detail;
-      logger.info('Index', `删除家庭成员: ${userId}`);
-
-      const userService = getApp().globalData.userService;
-      if (!userService) return;
-
-      const result = await userService.deleteFamilyMember(userId);
-      if (!result.success) {
-        wx.showToast({
-          title: result.message || '删除用户失败',
-          icon: 'none'
-        });
-        return;
-      }
-      
-      // 刷新用户列表
-      const availableUsers = userService.getAllUsers();
-      const currentUser = userService.getCurrentUser();
-      
-      this.setData({
-        availableUsers,
-        currentUser
-      });
-      
-      // 如果删除的是当前用户，重新加载数据
-      if (currentUser.id !== this.data.currentUser.id) {
-        await this.refreshDataForCurrentUser();
-      }
-      
-      wx.showToast({
-        title: '成员已删除',
-        icon: 'success'
-      });
-
-      logger.info('Index', '家庭成员删除成功');
-      
-    } catch (error) {
-      logger.error('Index', '处理删除用户失败', error);
-      wx.showToast({
-        title: '删除用户失败',
-        icon: 'none'
-      });
-    }
+    return userSwitcherModule.handleUserDelete(this, e);
   },
 
   /**
    * 根据权限更新菜单项
    */
   updateMenuItemsWithPermissions() {
-    const { currentUser } = this.data;
-    logger.debug('Index', `根据用户权限更新菜单: ${currentUser.role}`);
-    
-    // 原始菜单项（家庭设置不放在加号菜单，应通过其他入口访问）
-    const originalMenuItems = [
-      {
-        id: 'study',
-        type: 'study-task',
-        icon: '📈',
-        label: '分析',
-        ariaLabel: '查看统计分析',
-        feature: 'analytics',
-        action: 'view'
-      },
-      {
-        id: 'habit',
-        type: 'habit-task',
-        icon: '⏰',
-        label: '任务',
-        ariaLabel: '创建任务',
-        feature: 'task',
-        action: 'create'
-      },
-      {
-        id: 'reward-manage',
-        type: 'reward-manage',
-        icon: '🏆',
-        label: '奖励',
-        ariaLabel: '管理奖励',
-        feature: 'reward',
-        action: 'create'
-      }
-    ];
-    
-    // 权限由 loginUser 决定（不随视角切换变化）
-    const app = getApp();
-    const loginUser = app.globalData?.userService?.getLoginUser() || currentUser;
-    const filteredMenuItems = permissionUtils.filterMenuItems(originalMenuItems, loginUser.role);
-
-    // 只读视角（孩子视角）下额外过滤掉任务创建和奖励管理入口
-    // M07：分析页已支持按角色隔离数据，全面开放所有视角均可进入
-    const { isReadonlyView } = this.data;
-    const finalMenuItems = filteredMenuItems
-      .filter(item => !isReadonlyView || (item.id !== 'habit' && item.id !== 'reward-manage'));
-    
-    this.setData({
-      menuItems: finalMenuItems
-    });
-    
-    logger.info('Index', `菜单项更新完成: ${originalMenuItems.length} -> ${finalMenuItems.length}`);
+    return userSwitcherModule.updateMenuItemsWithPermissions(this);
   },
 
   /**
    * 导航到用户资料（头像点击事件处理）
    */
   navigateToUserProfile() {
-    logger.info('Index', '点击用户头像，显示用户切换界面');
-    this.showUserSwitcher();
+    return userSwitcherModule.navigateToUserProfile(this);
   },
 
   /**
@@ -1856,28 +1345,6 @@ Page({
    * 可以在开发者工具控制台调用：getCurrentPages().pop().validateUserModule()
    */
   async validateUserModule() {
-    try {
-      logger.info('Index', '开始验证用户模块功能');
-      
-      const userService = getApp().globalData.userService;
-      if (!userService) {
-        logger.error('Index', '用户服务不可用');
-        return false;
-      }
-
-      // 执行完整验证
-      const validation = await userService.validateService();
-
-      if (validation.success) {
-        logger.info('Index', '用户模块验证通过');
-      } else {
-        logger.warn('Index', '用户模块验证失败', { errors: validation.errors, tests: validation.tests });
-      }
-
-      return validation.success;
-    } catch (error) {
-      logger.error('Index', '验证用户模块失败', error);
-      return false;
-    }
+    return userSwitcherModule.validateUserModule(this);
   }
 }) 

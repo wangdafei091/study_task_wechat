@@ -47,4 +47,19 @@ describe('formatUtils', () => {
     });
   });
 
+  describe('formatDisplayTime', () => {
+    it('应该将 HH:mm:ss 收敛为 HH:mm', () => {
+      expect(formatUtils.formatDisplayTime('07:30:00')).toBe('07:30');
+    });
+
+    it('应该保留已是 HH:mm 的时间', () => {
+      expect(formatUtils.formatDisplayTime('18:45')).toBe('18:45');
+    });
+
+    it('应该正确处理空值', () => {
+      expect(formatUtils.formatDisplayTime('')).toBe('');
+      expect(formatUtils.formatDisplayTime(null)).toBe('');
+    });
+  });
+
 });

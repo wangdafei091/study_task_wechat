@@ -3,7 +3,7 @@
  */
 
 const loadServiceManager = (options = {}) => {
-  const { throwTaskCtor = false, throwAnalyticsRequire = false } = options;
+  const { throwTaskCtor = false } = options;
 
   jest.resetModules();
 
@@ -26,17 +26,41 @@ const loadServiceManager = (options = {}) => {
   const StorageAdapter = jest.fn(() => storageAdapterInstance);
   jest.doMock('../../adapters/storage-adapter', () => StorageAdapter);
 
-  const starServiceInstance = { name: 'starService' };
-  const messageServiceInstance = { name: 'messageService' };
+  const starServiceInstance = {
+    name: 'starService',
+    updateRewardService: jest.fn(),
+    updateUserService: jest.fn()
+  };
+  const messageServiceInstance = {
+    name: 'messageService',
+    updateUserService: jest.fn(),
+    updateStarService: jest.fn()
+  };
   const rewardServiceInstance = { name: 'rewardService' };
-  const taskServiceInstance = { name: 'taskService' };
+  const taskServiceInstance = {
+    name: 'taskService',
+    buildLegacyQueueCandidates: jest.fn(async () => []),
+    updateOfflineQueueService: jest.fn(),
+    updateUserService: jest.fn()
+  };
+  rewardServiceInstance.buildLegacyQueueCandidates = jest.fn(async () => []);
+  rewardServiceInstance.updateOfflineQueueService = jest.fn();
+  rewardServiceInstance.updateUserService = jest.fn();
+  rewardServiceInstance.updateStarService = jest.fn();
+  rewardServiceInstance.updateConfigService = jest.fn();
   const validationServiceInstance = { name: 'validationService' };
   const configServiceInstance = { name: 'configService' };
-  const analyticsServiceInstance = { name: 'analyticsService' };
+  const offlineQueueServiceInstance = { name: 'offlineQueueService' };
+  const taskTemplateServiceInstance = {
+    name: 'taskTemplateService',
+    updateUserService: jest.fn(),
+    updateTaskService: jest.fn()
+  };
 
   const StarService = jest.fn(() => starServiceInstance);
   const MessageService = jest.fn(() => messageServiceInstance);
   const RewardService = jest.fn(() => rewardServiceInstance);
+  const TaskTemplateService = jest.fn(() => taskTemplateServiceInstance);
   const TaskService = jest.fn(() => {
     if (throwTaskCtor) {
       throw new Error('task ctor failed');
@@ -45,24 +69,15 @@ const loadServiceManager = (options = {}) => {
   });
   const ValidationService = jest.fn(() => validationServiceInstance);
   const ConfigService = jest.fn(() => configServiceInstance);
-  const AnalyticsService = jest.fn(() => analyticsServiceInstance);
-
-  jest.doMock('../../services/index', () => ({
-    TaskService,
-    RewardService,
-    StarService,
-    MessageService
-  }));
+  const OfflineQueueService = jest.fn(() => offlineQueueServiceInstance);
+  jest.doMock('../../services/task-service', () => TaskService);
+  jest.doMock('../../services/reward-service', () => RewardService);
+  jest.doMock('../../services/star-service', () => StarService);
+  jest.doMock('../../services/message-service', () => MessageService);
+  jest.doMock('../../services/offline-queue-service', () => OfflineQueueService);
+  jest.doMock('../../services/task-template-service', () => TaskTemplateService);
   jest.doMock('../../services/validation-service', () => ValidationService);
   jest.doMock('../../services/config-service', () => ConfigService);
-
-  if (throwAnalyticsRequire) {
-    jest.doMock('../../packageChart/services/analytics-service', () => {
-      throw new Error('analytics require failed');
-    });
-  } else {
-    jest.doMock('../../packageChart/services/analytics-service', () => AnalyticsService);
-  }
 
   const serviceManager = require('../../services/service-manager');
 
@@ -78,15 +93,17 @@ const loadServiceManager = (options = {}) => {
       TaskService,
       ValidationService,
       ConfigService,
-      AnalyticsService,
+      OfflineQueueService,
+      TaskTemplateService,
       instances: {
         starServiceInstance,
         messageServiceInstance,
         rewardServiceInstance,
         taskServiceInstance,
+        taskTemplateServiceInstance,
         validationServiceInstance,
         configServiceInstance,
-        analyticsServiceInstance
+        offlineQueueServiceInstance
       }
     }
   };
@@ -118,11 +135,13 @@ describe('ServiceManager', () => {
     expect(mocks.eventBusInstance.setOptimization).toHaveBeenCalledWith(false);
 
     expect(mocks.StarService).toHaveBeenCalledWith({
-      eventBus: mocks.eventBusInstance
+      eventBus: mocks.eventBusInstance,
+      userService
     });
     expect(mocks.MessageService).toHaveBeenCalledWith({
       eventBus: mocks.eventBusInstance,
-      userService
+      userService,
+      starService: mocks.instances.starServiceInstance
     });
     expect(mocks.RewardService).toHaveBeenCalledWith({
       eventBus: mocks.eventBusInstance,
@@ -136,9 +155,76 @@ describe('ServiceManager', () => {
       rewardService: mocks.instances.rewardServiceInstance,
       userService
     });
-    expect(mocks.ValidationService).toHaveBeenCalledTimes(1);
     expect(mocks.ConfigService).toHaveBeenCalledWith({
       eventBus: mocks.eventBusInstance
+    });
+    expect(mocks.ValidationService).not.toHaveBeenCalled();
+    expect(mocks.TaskTemplateService).not.toHaveBeenCalled();
+    expect(mocks.OfflineQueueService).toHaveBeenCalledWith(expect.objectContaining({
+      eventBus: mocks.eventBusInstance,
+      storageAdapter: expect.any(Object),
+      contextResolver: expect.any(Function),
+      migrators: expect.any(Array)
+    }));
+    expect(mocks.instances.taskServiceInstance.updateOfflineQueueService).toHaveBeenCalledWith(
+      mocks.instances.offlineQueueServiceInstance
+    );
+    expect(mocks.instances.rewardServiceInstance.updateOfflineQueueService).toHaveBeenCalledWith(
+      mocks.instances.offlineQueueServiceInstance
+    );
+    expect(mocks.instances.rewardServiceInstance.updateConfigService).toHaveBeenCalledWith(
+      mocks.instances.configServiceInstance
+    );
+    expect(mocks.instances.starServiceInstance.updateRewardService).toHaveBeenCalledWith(
+      mocks.instances.rewardServiceInstance
+    );
+    expect(mocks.instances.starServiceInstance.updateUserService).not.toHaveBeenCalled();
+    expect(mocks.instances.messageServiceInstance.updateStarService).toHaveBeenCalledWith(
+      mocks.instances.starServiceInstance
+    );
+  });
+
+  it('初始化后重新注入 userService 时应刷新 StarService 的 userService 引用', async () => {
+    const { serviceManager, mocks } = loadServiceManager();
+    await serviceManager.initialize();
+
+    const userService = { name: 'userService_v2' };
+    serviceManager.setUserService(userService);
+
+    expect(mocks.instances.starServiceInstance.updateUserService).toHaveBeenCalledWith(userService);
+  });
+
+  it('离线队列默认上下文应复用统一执行态语义', async () => {
+    const { serviceManager, mocks } = loadServiceManager();
+    const userService = {
+      getLoginUser: jest.fn(() => ({
+        userId: 'parent-1',
+        role: 'parent',
+        familyId: 'family-1'
+      })),
+      getCurrentUser: jest.fn(() => ({
+        userId: 'child-1',
+        role: 'child',
+        familyId: 'family-1'
+      })),
+      getCurrentUserId: jest.fn(() => 'child-1'),
+      getAllUsers: jest.fn(() => [
+        { userId: 'parent-1', role: 'parent', familyId: 'family-1' },
+        { userId: 'child-1', role: 'child', familyId: 'family-1' }
+      ])
+    };
+
+    serviceManager.setUserService(userService);
+    await serviceManager.initialize();
+
+    const contextResolver = mocks.OfflineQueueService.mock.calls[0][0].contextResolver;
+    expect(contextResolver()).toEqual({
+      familyId: 'family-1',
+      loginUserId: 'parent-1',
+      systemAccessLevel: 'normal',
+      actorUserId: 'child-1',
+      actorRole: 'child',
+      targetUserId: 'child-1'
     });
   });
 
@@ -166,8 +252,33 @@ describe('ServiceManager', () => {
     expect(serviceManager.getService('TaskService')).toBe(mocks.instances.taskServiceInstance);
     expect(serviceManager.getService('message')).toBe(mocks.instances.messageServiceInstance);
     expect(serviceManager.getService('config')).toBe(mocks.instances.configServiceInstance);
+    expect(serviceManager.getService('offlineQueue')).toBe(mocks.instances.offlineQueueServiceInstance);
+    expect(serviceManager.getService('taskTemplate')).toBe(mocks.instances.taskTemplateServiceInstance);
+    expect(serviceManager.getService('validation')).toBe(mocks.instances.validationServiceInstance);
     expect(serviceManager.getService('eventBus')).toBe(mocks.eventBusInstance);
     expect(serviceManager.getService('not-exist')).toBeNull();
+  });
+
+  it('初始化后应在首次访问时按需创建 TaskTemplateService 和 ValidationService', async () => {
+    const { serviceManager, mocks } = loadServiceManager();
+    const userService = { name: 'userService' };
+
+    serviceManager.setUserService(userService);
+    await serviceManager.initialize();
+
+    expect(mocks.TaskTemplateService).not.toHaveBeenCalled();
+    expect(mocks.ValidationService).not.toHaveBeenCalled();
+
+    expect(serviceManager.getTaskTemplateService()).toBe(mocks.instances.taskTemplateServiceInstance);
+    expect(mocks.TaskTemplateService).toHaveBeenCalledWith({
+      eventBus: mocks.eventBusInstance,
+      userService,
+      storageAdapter: expect.any(Object),
+      taskService: mocks.instances.taskServiceInstance
+    });
+
+    expect(serviceManager.getService('validation')).toBe(mocks.instances.validationServiceInstance);
+    expect(mocks.ValidationService).toHaveBeenCalledTimes(1);
   });
 
   it('waitForInitialization 在已初始化时应立即返回 true', async () => {
@@ -179,28 +290,5 @@ describe('ServiceManager', () => {
   it('waitForInitialization 超时应返回 false', async () => {
     const { serviceManager } = loadServiceManager();
     await expect(serviceManager.waitForInitialization(20)).resolves.toBe(false);
-  });
-
-  it('getAnalyticsService 应支持延迟加载和缓存复用', async () => {
-    const { serviceManager, mocks } = loadServiceManager();
-    await serviceManager.initialize();
-
-    const first = serviceManager.getAnalyticsService();
-    const second = serviceManager.getAnalyticsService();
-
-    expect(first).toBe(mocks.instances.analyticsServiceInstance);
-    expect(second).toBe(first);
-    expect(mocks.AnalyticsService).toHaveBeenCalledTimes(1);
-    expect(mocks.AnalyticsService).toHaveBeenCalledWith({
-      eventBus: mocks.eventBusInstance,
-      starService: mocks.instances.starServiceInstance,
-      taskService: mocks.instances.taskServiceInstance
-    });
-  });
-
-  it('getAnalyticsService 加载失败时应返回 null', async () => {
-    const { serviceManager } = loadServiceManager({ throwAnalyticsRequire: true });
-    await serviceManager.initialize();
-    expect(serviceManager.getAnalyticsService()).toBeNull();
   });
 });

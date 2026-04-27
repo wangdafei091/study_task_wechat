@@ -7,6 +7,17 @@ const User = require('../models/User');
 const { createLogger } = require('../utils/logger');
 const logger = createLogger('UserService');
 
+function getExecuteRunner(connection = null) {
+  if (connection && typeof connection.execute === 'function') {
+    return async (sql, params = []) => {
+      const [result] = await connection.execute(sql, params);
+      return result;
+    };
+  }
+
+  return execute;
+}
+
 /**
  * 用户服务类
  */
@@ -17,9 +28,16 @@ class UserService {
    * @returns {Promise<User|null>} 用户实例，如果不存在返回null
    */
   async findByOpenid(openid) {
+    const options = arguments[1] || {};
     try {
-      const results = await query(
-        'SELECT * FROM users WHERE openid = ? AND status = ? LIMIT 1',
+      const queryRunner = options.connection && typeof options.connection.execute === 'function'
+        ? async (sql, params = []) => {
+          const [rows] = await options.connection.execute(sql, params);
+          return rows;
+        }
+        : query;
+      const results = await queryRunner(
+        `SELECT * FROM users WHERE openid = ? AND status = ? LIMIT 1${options.forUpdate ? ' FOR UPDATE' : ''}`,
         [openid, 'active']
       );
 
@@ -40,9 +58,16 @@ class UserService {
    * @returns {Promise<User|null>} 用户实例，如果不存在返回null
    */
   async findById(userId) {
+    const options = arguments[1] || {};
     try {
-      const results = await query(
-        'SELECT * FROM users WHERE user_id = ? AND status = ? LIMIT 1',
+      const queryRunner = options.connection && typeof options.connection.execute === 'function'
+        ? async (sql, params = []) => {
+          const [rows] = await options.connection.execute(sql, params);
+          return rows;
+        }
+        : query;
+      const results = await queryRunner(
+        `SELECT * FROM users WHERE user_id = ? AND status = ? LIMIT 1${options.forUpdate ? ' FOR UPDATE' : ''}`,
         [userId, 'active']
       );
 
@@ -58,6 +83,36 @@ class UserService {
   }
 
   /**
+   * 根据 userId 查找活跃用户，并包含系统治理字段
+   * @param {string} userId - 用户ID
+   * @returns {Promise<User|null>}
+   */
+  async findActiveById(userId) {
+    return this.findById(userId);
+  }
+
+  /**
+   * 获取所有可做系统治理的真实登录用户
+   * @returns {Promise<User[]>}
+   */
+  async listGovernableUsers() {
+    try {
+      const results = await query(
+        `SELECT *
+           FROM users
+          WHERE status = ?
+            AND is_virtual = 0`,
+        ['active']
+      );
+
+      return results.map((row) => User.fromDB(row));
+    } catch (error) {
+      logger.error('获取可治理用户列表失败', error);
+      throw error;
+    }
+  }
+
+  /**
    * 创建新用户
    * @param {Object} userData - 用户数据
    * @param {string} userData.openid - 微信openid
@@ -67,7 +122,7 @@ class UserService {
    * @param {string} userData.role - 用户角色（parent/child）
    * @returns {Promise<User>} 创建的用户实例
    */
-  async createUser(userData) {
+  async createUser(userData, options = {}) {
     try {
       const userId = User.generateId();
       const user = new User({
@@ -77,9 +132,10 @@ class UserService {
       });
 
       const dbData = user.toDB();
-      await execute(
-        `INSERT INTO users (user_id, openid, unionid, nickname, avatar, role, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      const executeRunner = getExecuteRunner(options.connection);
+      await executeRunner(
+        `INSERT INTO users (user_id, openid, unionid, nickname, avatar, role, status, family_id, family_permission_role, is_system_admin, system_access_level, system_access_updated_by_user_id, system_access_updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           dbData.user_id,
           dbData.openid,
@@ -88,6 +144,12 @@ class UserService {
           dbData.avatar,
           dbData.role,
           dbData.status,
+          dbData.family_id,
+          dbData.family_permission_role,
+          dbData.is_system_admin ? 1 : 0,
+          dbData.system_access_level,
+          dbData.system_access_updated_by_user_id,
+          dbData.system_access_updated_at,
         ]
       );
 
@@ -106,9 +168,11 @@ class UserService {
    * @returns {Promise<boolean>} 是否更新成功
    */
   async updateUser(userId, updateData) {
+    const options = arguments[2] || {};
     try {
       const updates = [];
       const values = [];
+      const executeRunner = getExecuteRunner(options.connection);
 
       if (updateData.name !== undefined) {
         updates.push('nickname = ?');
@@ -126,6 +190,38 @@ class UserService {
         updates.push('status = ?');
         values.push(updateData.status);
       }
+      if (updateData.familyPermissionRole !== undefined) {
+        updates.push('family_permission_role = ?');
+        values.push(updateData.familyPermissionRole);
+      }
+      if (updateData.familyId !== undefined) {
+        updates.push('family_id = ?');
+        values.push(updateData.familyId);
+      }
+      if (updateData.isSystemAdmin !== undefined) {
+        updates.push('is_system_admin = ?');
+        values.push(updateData.isSystemAdmin ? 1 : 0);
+      }
+      if (updateData.systemAccessLevel !== undefined) {
+        updates.push('system_access_level = ?');
+        values.push(updateData.systemAccessLevel);
+      }
+      if (updateData.systemAccessUpdatedByUserId !== undefined) {
+        updates.push('system_access_updated_by_user_id = ?');
+        values.push(updateData.systemAccessUpdatedByUserId);
+      }
+      if (updateData.systemAccessUpdatedAt !== undefined) {
+        updates.push('system_access_updated_at = ?');
+        values.push(updateData.systemAccessUpdatedAt);
+      }
+      if (updateData.canIssueAdmissionCode !== undefined) {
+        updates.push('can_issue_admission_code = ?');
+        values.push(updateData.canIssueAdmissionCode ? 1 : 0);
+      }
+      if (updateData.admissionCodeQuotaTotal !== undefined) {
+        updates.push('admission_code_quota_total = ?');
+        values.push(updateData.admissionCodeQuotaTotal);
+      }
 
       if (updates.length === 0) {
         return false;
@@ -135,7 +231,7 @@ class UserService {
       updates.push('updated_at = CURRENT_TIMESTAMP');
 
       const sql = `UPDATE users SET ${updates.join(', ')} WHERE user_id = ?`;
-      await execute(sql, values);
+      await executeRunner(sql, values);
 
       logger.info('更新用户成功', { userId, updateData });
       return true;
@@ -204,6 +300,52 @@ class UserService {
       logger.error('删除用户失败', error);
       throw error;
     }
+  }
+
+  /**
+   * 统计正常可用的系统管理员数量
+   * @param {Object} options
+   * @param {string|null} options.excludeUserId
+   * @returns {Promise<number>}
+   */
+  async countNormalSystemAdmins(options = {}) {
+    const params = ['active', 1, User.SYSTEM_ACCESS_LEVEL.NORMAL];
+    let sql = `
+      SELECT COUNT(*) AS total
+        FROM users
+       WHERE status = ?
+         AND is_system_admin = ?
+         AND system_access_level = ?
+    `;
+
+    if (options.excludeUserId) {
+      sql += ' AND user_id != ?';
+      params.push(options.excludeUserId);
+    }
+
+    try {
+      const results = await query(sql, params);
+      return Number(results[0]?.total || 0);
+    } catch (error) {
+      logger.error('统计正常系统管理员数量失败', error);
+      throw error;
+    }
+  }
+
+  async updateCurrentProfile(userId, profile = {}, options = {}) {
+    const nickname = String(profile.nickname || profile.nickName || '').trim();
+    const avatar = String(profile.avatarUrl || profile.avatar || '').trim();
+
+    if (!nickname && !avatar) {
+      return this.findById(userId, options);
+    }
+
+    await this.updateUser(userId, {
+      ...(nickname ? { name: nickname } : {}),
+      ...(avatar ? { avatar } : {})
+    }, options);
+
+    return this.findById(userId, options);
   }
 }
 

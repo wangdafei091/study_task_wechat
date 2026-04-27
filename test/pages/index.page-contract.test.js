@@ -1,3 +1,6 @@
+const fs = require('fs');
+const path = require('path');
+
 jest.mock('../../utils/logger', () => ({
   info: jest.fn(),
   warn: jest.fn(),
@@ -188,7 +191,7 @@ describe('pages/index page contract', () => {
 
     await page.initializeMultiUserSystem();
 
-    expect(permissionUtils.getUserPermissions).toHaveBeenCalledWith('parent');
+    expect(permissionUtils.getUserPermissions).toHaveBeenCalledWith('child', null);
     expect(page.updateMenuItemsWithPermissions).toHaveBeenCalledTimes(1);
     expect(page.data.currentUser).toEqual(expect.objectContaining({
       userId: 'child-1',
@@ -198,6 +201,35 @@ describe('pages/index page contract', () => {
     expect(page.data.loginUserId).toBe('parent-1');
     expect(page.data.canManageMembers).toBe(true);
     expect(page.data.isReadonlyView).toBe(true);
+    expect(page.data.isViewerReadonly).toBe(false);
+  });
+
+  it('首页任务项应仅在查看者或未来日期下只读，不能误伤孩子视角打卡', () => {
+    const wxml = fs.readFileSync(
+      path.join(__dirname, '../../pages/index/index.wxml'),
+      'utf8'
+    );
+
+    expect(wxml).toContain('readonly="{{isReadonlyView}}"');
+    expect(wxml).toContain('readonlyReason="{{readonlyReason}}"');
+    expect(wxml).toContain('readonly="{{isReadonlyView || isViewingFuture}}"');
+    expect(wxml).toContain('readonlyReason="{{isViewingFuture ? \'future-date\' : readonlyReason}}"');
+  });
+
+  it('普通任务为空但存在表现项时，不应继续显示任务空态', () => {
+    const wxml = fs.readFileSync(
+      path.join(__dirname, '../../pages/index/index.wxml'),
+      'utf8'
+    );
+
+    expect(wxml).toContain('task-list-container {{showOccurrenceSection ? \'has-occurrence-section\' : \'\'}} {{tasks.length === 0 && showOccurrenceSection ? \'occurrence-only\' : \'\'}}');
+    expect(wxml).toContain('task-list-count" wx:if="{{tasks.length > 0 || !showOccurrenceSection}}"');
+    expect(wxml).toContain('task-list {{tasks.length === 0 && showOccurrenceSection ? \'occurrence-only\' : \'\'}}');
+    expect(wxml).toContain('bottomOffset="{{showOccurrenceSection ? 150 : 0}}"');
+    expect(wxml).toContain('tasks.length === 0 && !showOccurrenceSection && canManageMembers && currentUser && currentUser.role === \'child\'');
+    expect(wxml).toContain('tasks.length === 0 && !showOccurrenceSection && canManageMembers && currentUser && currentUser.role === \'parent\' && availableUsers.length > 1');
+    expect(wxml).toContain('tasks.length === 0 && !showOccurrenceSection && canManageMembers && availableUsers.length <= 1');
+    expect(wxml).toContain('tasks.length === 0 && !showOccurrenceSection && !canManageMembers');
   });
 
   it('onLoad 不应直接触发多用户初始化，避免与 onShow 双入口竞争', async () => {

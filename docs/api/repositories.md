@@ -185,6 +185,54 @@ BaseRepository提供通用的CRUD操作和缓存机制，所有具体仓储都�
 
 ```
 
+## TaskTemplateRepository - 任务模板仓储
+
+管理任务模板的本地镜像，提供模板搜索、筛选、排序与最近模板查询能力。
+
+### 继承结构
+
+- 继承 `BaseRepository`
+- 存储键默认值：`taskTemplates`
+- 聚合模型：`TaskTemplate`
+
+### 专用方法
+
+##### `replaceAll(templates = [])`
+用新的模板集合整体替换本地镜像。
+- **参数**: `templates` (Array)
+- **返回**: `Promise<Array>` - 替换后的模板列表
+
+##### `getTemplates(options = {})`
+按条件获取模板列表。
+- **参数**:
+  ```javascript
+  {
+    keyword?: string,
+    type?: 'all' | 'study' | 'habit' | 'interest',
+    status?: 'all' | 'enabled' | 'disabled',
+    enabledOnly?: boolean,
+    sortBy?: 'recent' | 'usage'
+  }
+  ```
+- **返回**: `Promise<Array>` - 过滤并排序后的模板列表
+
+说明：
+- `keyword` 会同时匹配模板名称、模板说明和模板内任务标题
+- `enabledOnly=true` 会先过滤停用模板，常用于任务编辑页快捷填充入口
+- `sortBy='recent'` 以 `lastUsedAt`、`updatedAt` 作为主排序键
+- `sortBy='usage'` 以 `usageCount`、`lastUsedAt` 作为主排序键
+
+##### `getRecentTemplates(limit = 5)`
+获取最近使用的启用模板。
+- **参数**: `limit` (Number)
+- **返回**: `Promise<Array>` - 最近模板列表
+
+##### `_compareTemplates(left, right, sortBy)`
+模板排序内部比较器。
+- **说明**:
+  - `recent` 模式优先比较 `lastUsedAt`
+  - `usage` 模式优先比较 `usageCount`
+
 ## StarGroupRepository - 星星分组仓储
 
 管理星星分组数据，支持按有效期分组存储和FIFO消费策略。
@@ -537,4 +585,3 @@ BaseRepository提供通用的CRUD操作和缓存机制，所有具体仓储都�
 
 **最后更新**：2026-03-11
 **维护者**：项目维护团队
-

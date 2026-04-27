@@ -1,22 +1,37 @@
 {
   "pages": [
     "pages/index/index",
-    "pages/task-edit/task-edit",
-    "pages/rewards/rewards"
+    "pages/rewards/rewards",
+    "pages/access-gate/access-gate",
+    "pages/system-blocked/system-blocked"
   ],
   "subPackages": [
     {
       "root": "packageChart",
       "pages": [
-        "pages/analysis/analysis"
+        "pages/analysis/analysis",
+        "pages/task-record/task-record"
+      ]
+    },
+    {
+      "root": "packageTask",
+      "pages": [
+        "pages/task-edit/task-edit",
+        "pages/task-occurrence-edit/task-occurrence-edit"
       ]
     },
     {
       "root": "packageManage",
       "pages": [
+        "pages/about/about",
+        "pages/invite-center/invite-center",
+        "pages/system-admin/system-admin",
+        "pages/system-user-governance/system-user-governance",
         "pages/reward-manage/reward-manage",
         "pages/my-exchanges/my-exchanges",
-        "pages/family-settings/family-settings"
+        "pages/family-settings/family-settings",
+        "pages/task-template-manage/task-template-manage",
+        "pages/task-template-edit/task-template-edit"
       ]
     },
     {
@@ -30,7 +45,7 @@
   "preloadRule": {
     "pages/index/index": {
       "network": "all",
-      "packages": ["packageChart"]
+      "packages": ["packageChart", "packageTask"]
     }
   },
   "window": {

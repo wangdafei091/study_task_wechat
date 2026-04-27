@@ -4,6 +4,7 @@
   padding: 24rpx;
   background: #f5f6fa;
   min-height: 100vh;
+  box-sizing: border-box;
 }
 
 /* 未加入家庭 */
@@ -14,9 +15,72 @@
   padding-top: 120rpx;
 }
 
-.no-family-icon {
-  font-size: 80rpx;
-  margin-bottom: 24rpx;
+.no-family-illustration {
+  position: relative;
+  width: 180rpx;
+  height: 156rpx;
+  margin-bottom: 28rpx;
+}
+
+.no-family-roof {
+  position: absolute;
+  top: 16rpx;
+  left: 34rpx;
+  width: 112rpx;
+  height: 44rpx;
+  background: #8fb4ff;
+  border-radius: 18rpx 18rpx 10rpx 10rpx;
+  transform: rotate(-12deg);
+}
+
+.no-family-home {
+  position: absolute;
+  left: 42rpx;
+  top: 46rpx;
+  width: 96rpx;
+  height: 72rpx;
+  background: #ffffff;
+  border: 2rpx solid #d8e2ee;
+  border-radius: 18rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10rpx;
+  box-shadow: 0 10rpx 24rpx rgba(66, 133, 244, 0.08);
+}
+
+.no-family-window {
+  width: 18rpx;
+  height: 26rpx;
+  border-radius: 8rpx;
+  background: #e8f0ff;
+}
+
+.no-family-people {
+  position: absolute;
+  left: 24rpx;
+  right: 24rpx;
+  bottom: 6rpx;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 12rpx;
+}
+
+.no-family-person {
+  background: linear-gradient(180deg, #5f8df6 0%, #3f74ec 100%);
+  border-radius: 999rpx;
+  box-shadow: 0 8rpx 18rpx rgba(63, 116, 236, 0.16);
+}
+
+.no-family-person.large {
+  width: 34rpx;
+  height: 54rpx;
+}
+
+.no-family-person.small {
+  width: 24rpx;
+  height: 40rpx;
 }
 
 .no-family-title {
@@ -83,6 +147,12 @@
 .card-sub {
   font-size: 24rpx;
   color: #999;
+}
+
+.card-meta {
+  margin-top: 10rpx;
+  font-size: 22rpx;
+  color: #b0b7c3;
 }
 
 .section-title {
@@ -164,6 +234,16 @@
   font-size: 28rpx;
 }
 
+.btn-disabled {
+  border-color: #d6dce8;
+  color: #a2acbb;
+  background: #f5f7fb;
+}
+
+.text-disabled {
+  color: #b6bdc9;
+}
+
 /* 成员 */
 .add-member-btn {
   font-size: 26rpx;
@@ -189,9 +269,16 @@
 }
 
 .member-icon {
-  font-size: 44rpx;
-  width: 60rpx;
-  text-align: center;
+  font-size: 24rpx;
+  font-weight: 600;
+  color: #5a677d;
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 20rpx;
+  background: #eef2f8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .member-info {
@@ -210,10 +297,79 @@
   margin-top: 4rpx;
 }
 
+.permission-switch {
+  display: flex;
+  gap: 12rpx;
+  margin-top: 14rpx;
+}
+
+.permission-chip {
+  padding: 8rpx 18rpx;
+  border-radius: 999rpx;
+  border: 2rpx solid #d9e1ee;
+  color: #7b8797;
+  font-size: 22rpx;
+  line-height: 1;
+}
+
+.permission-chip.active.manager {
+  border-color: #3d5b85;
+  background: #eef3fb;
+  color: #314a6d;
+}
+
+.permission-chip.active.viewer {
+  border-color: #d7dee8;
+  background: #f5f7fa;
+  color: #5f6c7e;
+}
+
+.permission-chip.disabled {
+  border-color: #e5eaf1;
+  color: #b0b7c3;
+  background: #fafbfc;
+}
+
 .delete-btn {
   font-size: 26rpx;
   color: #FF4444;
   padding: 8rpx 16rpx;
+}
+
+.identity-card {
+  background: linear-gradient(180deg, #ffffff 0%, #fafbfd 100%);
+}
+
+.identity-badge {
+  padding: 10rpx 20rpx;
+  border-radius: 999rpx;
+  font-size: 22rpx;
+  line-height: 1;
+}
+
+.identity-badge.manager {
+  background: #eef3fb;
+  color: #314a6d;
+}
+
+.identity-badge.viewer {
+  background: #f1f4f8;
+  color: #647181;
+}
+
+.identity-desc {
+  font-size: 26rpx;
+  color: #4f5c6f;
+}
+
+.invite-role-hint {
+  margin-bottom: 20rpx;
+}
+
+.governance-tip {
+  margin-top: 18rpx;
+  font-size: 24rpx;
+  color: #8a95a5;
 }
 
 /* PIN 按钮组 */
@@ -238,6 +394,17 @@
 .loading-text {
   font-size: 28rpx;
   color: #999;
+}
+
+.page-footer {
+  display: flex;
+  justify-content: center;
+  padding: 24rpx 0 8rpx;
+}
+
+.page-footer-link {
+  font-size: 24rpx;
+  color: #8a97a8;
 }
 
 /* 对话框 */

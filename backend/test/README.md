@@ -1,7 +1,7 @@
 # 后端测试说明
 
 > 项目级后端测试入口已在根 `package.json` 暴露，真实数据库集成仅是其中一类
-> **最后更新**：2026-03-26
+> **最后更新**：2026-04-17
 
 ---
 
@@ -119,6 +119,9 @@ npm test -- test/integration/reward-api-m09-real.test.js -t "PATCH /api/rewards/
 
 # 只测试消息路由与已读同步
 npm test -- test/integration/message-api-m10-real.test.js -t "read-all"
+
+# 只测试 M21L 表现项真实链路
+npm test -- --runInBand test/integration/task-api-m21l-real.test.js
 ```
 
 ### 查看测试覆盖率
@@ -170,6 +173,13 @@ npm test -- test/integration/message-api-m10-real.test.js --coverage
 ### 5. deleted_at / soft delete 过滤验证
 - ✅ 所有读接口正确过滤软删除任务
 - ✅ 软删除任务不在普通查询中出现
+
+### 6. M21L 表现项链路
+- ✅ `occurrenceMode=config` 月范围 overlap 查询可返回月中生效表现项
+- ✅ 同日表现记录覆盖时复用同一记录，并正确处理发星/退星
+- ✅ 停用表现项后退出未来查询，但 `includeInactive=true` 仍可维护
+- ✅ 计划任务转换为表现项时只归档未来未完成实例
+- ✅ 跨家庭孩子无法越权记录他人表现项
 
 ## 🛠️ 故障排查
 

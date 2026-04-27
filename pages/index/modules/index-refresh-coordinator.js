@@ -1,6 +1,23 @@
 const serviceManager = require('../../../services/service-manager.js');
 const dateUtils = require('../../../utils/dateUtils');
 const logger = require('../../../utils/logger');
+const messageDisplay = require('../../../utils/message-display');
+
+async function refreshTodayProgressSummary(page, targetDate) {
+  if (!page || typeof page.loadTodayProgressSummary !== 'function') {
+    return;
+  }
+
+  const todayString = dateUtils.getTodayString();
+  const shouldReuseCurrentViewData = !targetDate || targetDate === todayString;
+  await page.loadTodayProgressSummary({
+    reuseCurrentTodayData: shouldReuseCurrentViewData,
+    currentTasks: shouldReuseCurrentViewData ? page.data.tasks : null,
+    currentOccurrenceRecords: shouldReuseCurrentViewData
+      ? page.data.currentDateOccurrenceRecords
+      : null
+  });
+}
 
 async function handleRewardUpdated(page, data) {
   logger.debug('Index', '收到奖励更新事件', data);
@@ -22,6 +39,12 @@ function handleRewardClaimed(page, eventData) {
 }
 
 async function handleTaskDataChanged(page, eventData = {}) {
+  if (page._skipNextTaskChangedRefresh) {
+    logger.info('Index', '跳过当前轮 task:changed 刷新，避免与页面显式刷新重复');
+    page._skipNextTaskChangedRefresh = false;
+    return;
+  }
+
   const allTasks = eventData.tasks || [];
   const changeType = eventData.changeType || 'unknown';
   const timestamp = eventData.timestamp || Date.now();
@@ -48,18 +71,13 @@ async function handleMessageDataChanged(page, eventData) {
   logger.info('Index', '收到消息数据变更事件');
 
   if (Array.isArray(eventData)) {
-    const processedMessages = [...eventData]
-      .sort((a, b) => {
-        if (a.isRead !== b.isRead) return a.isRead ? 1 : -1;
-        return b.createTime - a.createTime;
-      })
-      .slice(0, 3)
-      .map((msg) => ({
-        ...msg,
-        timeDisplay: dateUtils.formatRelativeTime(msg.createTime)
-      }));
+    const normalizedMessages = messageDisplay.dedupeMessagesByEventKey(eventData);
+    const processedMessages = messageDisplay.buildPreviewMessages(normalizedMessages, {
+      limit: 3,
+      formatMessageTime: (createTime) => dateUtils.formatRelativeTime(createTime)
+    });
 
-    const unreadCount = eventData.filter((msg) => !msg.isRead).length;
+    const unreadCount = normalizedMessages.filter((msg) => !msg.isRead).length;
     page.setData({
       messages: processedMessages,
       unreadCount
@@ -72,38 +90,22 @@ async function handleMessageDataChanged(page, eventData) {
 
 async function checkExpiredTasksAndStars(page) {
   try {
-    const configService = serviceManager.getService('config');
-    const now = Date.now();
-    const checkInterval = 5 * 60 * 1000;
-
-    let lastCheckTime = 0;
-    if (configService) {
-      lastCheckTime = configService.getLastExpiryCheckTime();
-    } else {
-      lastCheckTime = wx.getStorageSync('last_expiry_check_time') || 0;
-      logger.warn('Index', '配置服务不可用，使用降级存储访问');
-    }
-
-    if (now - lastCheckTime < checkInterval) {
-      logger.debug('Index', '距离上次检查时间过短，跳过检查');
-      return;
-    }
-
     logger.info('Index', '开始检查过期任务和星星');
     const taskService = serviceManager.getService('task');
-    const starService = serviceManager.getService('star');
+    const starService = serviceManager.getService('starService') || serviceManager.getService('star');
+    const effectiveUserId = typeof page.getEffectiveTaskUserId === 'function'
+      ? page.getEffectiveTaskUserId()
+      : null;
 
     const [taskResult, starResult] = await Promise.allSettled([
       taskService ? taskService.checkTasksStatus() : Promise.resolve(),
-      starService ? starService.cleanupExpiredStars() : Promise.resolve()
+      (starService && typeof starService.syncExpiryAuthorityIfNeeded === 'function' && effectiveUserId)
+        ? starService.syncExpiryAuthorityIfNeeded({
+          scope: 'user',
+          userId: effectiveUserId
+        })
+        : Promise.resolve()
     ]);
-
-    if (configService) {
-      configService.setLastExpiryCheckTime(now);
-    } else {
-      wx.setStorageSync('last_expiry_check_time', now);
-      logger.warn('Index', '配置服务不可用，使用降级存储访问');
-    }
 
     let needRefresh = false;
     if (taskResult.status === 'fulfilled' && taskResult.value?.penaltyResults?.length > 0) {
@@ -111,8 +113,8 @@ async function checkExpiredTasksAndStars(page) {
       needRefresh = true;
     }
 
-    if (starResult.status === 'fulfilled' && starResult.value?.expiredCount > 0) {
-      logger.info('Index', `清理了${starResult.value.expiredCount}个过期星星分组`);
+    if (starResult.status === 'fulfilled' && Number(starResult.value?.settledGroupCount || 0) > 0) {
+      logger.info('Index', `结算了${starResult.value.settledGroupCount}个过期星星分组`);
       needRefresh = true;
     }
 
@@ -124,13 +126,20 @@ async function checkExpiredTasksAndStars(page) {
   }
 }
 
-async function loadAllPageData(page) {
+async function loadAllPageData(page, options = {}) {
   try {
     logger.info('Index', '开始批量加载页面数据');
+    const targetDate = page.data.currentViewDate || null;
     const [tasksResult, messagesResult, starsResult] = await Promise.allSettled([
-      page.loadTaskDataOnly(),
-      page.loadMessageData(),
-      page.loadStarsAndRewards()
+      page.loadTaskDataOnly(targetDate),
+      page.loadMessageData({
+        skipExpiryAuthoritySyncBeforeFormalReminders:
+          options.skipExpiryAuthoritySyncBeforeFormalReminders === true
+      }),
+      // authority 可能已在前序过期检查中完成；这里必须跳过重复 authority，只做后续 stars/rewards 刷新。
+      page.loadStarsAndRewards({
+        skipAuthoritySync: true
+      })
     ]);
 
     if (tasksResult.status === 'rejected') {
@@ -144,6 +153,7 @@ async function loadAllPageData(page) {
     }
 
     if (tasksResult.status === 'fulfilled') {
+      await refreshTodayProgressSummary(page, targetDate);
       await page.checkUpcomingTasks();
     }
 
@@ -163,6 +173,7 @@ async function refreshTaskDataForCurrentView(page, options = {}) {
 
   try {
     await page.loadTaskDataOnly(targetDate);
+    await refreshTodayProgressSummary(page, targetDate);
     await page.checkUpcomingTasks();
 
     if (options.timestamp) {

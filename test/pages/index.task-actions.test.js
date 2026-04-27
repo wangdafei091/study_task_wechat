@@ -49,6 +49,7 @@ describe('pages/index/modules/index-task-actions', () => {
       data: {
         processingTaskId: null,
         currentUser: { id: 'child-1' },
+        isViewingFuture: false,
         tasks: [{
           id: 'task-1',
           title: '任务1',
@@ -65,6 +66,7 @@ describe('pages/index/modules/index-task-actions', () => {
         Object.assign(this.data, update);
       }),
       refreshTaskDataForCurrentView: jest.fn().mockResolvedValue(),
+      loadMessageData: jest.fn().mockResolvedValue(),
       loadStarsAndRewards: jest.fn().mockResolvedValue(),
       checkRewardUnlock: jest.fn().mockResolvedValue(),
       transitionToNewTarget: jest.fn(),
@@ -89,6 +91,7 @@ describe('pages/index/modules/index-task-actions', () => {
     expect(page.data.processingTaskId).toBe(null);
     expect(taskService.completeTask).toHaveBeenCalledWith('task-1', 'child-1');
     expect(page.refreshTaskDataForCurrentView).toHaveBeenCalled();
+    expect(page.loadMessageData).not.toHaveBeenCalled();
     expect(page.checkRewardUnlock).toHaveBeenCalled();
     expect(global.wx.showModal).not.toHaveBeenCalledWith(expect.objectContaining({
       title: '需要设置奖励'
@@ -137,13 +140,14 @@ describe('pages/index/modules/index-task-actions', () => {
 
     expect(taskService.completeTask).toHaveBeenCalledWith('task-1', 'child-1');
     expect(page.refreshTaskDataForCurrentView).toHaveBeenCalled();
+    expect(page.loadMessageData).not.toHaveBeenCalled();
     expect(page.checkRewardUnlock).toHaveBeenCalled();
     expect(page._progressBar.playAnimation).toHaveBeenCalledWith('complete');
   });
 
   it('taskItemStatusToggle 应调用 taskService 并在失败时提示', async () => {
     const taskService = {
-      updateTaskStatus: jest.fn().mockResolvedValue()
+      updateTaskStatus: jest.fn().mockResolvedValue({ success: true })
     };
     serviceManager.getTaskService.mockReturnValue(taskService);
 
@@ -162,6 +166,94 @@ describe('pages/index/modules/index-task-actions', () => {
     });
     expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({
       title: '操作失败'
+    }));
+  });
+
+  it('taskItemStatusToggle 在查看者模式下应直接拦截，在失败结果时应透传 reset 操作', async () => {
+    const taskService = {
+      updateTaskStatus: jest.fn().mockResolvedValue({
+        success: false,
+        message: '重置失败'
+      })
+    };
+    serviceManager.getTaskService.mockReturnValue(taskService);
+
+    const readonlyPage = createPage();
+    readonlyPage.data.isViewerReadonly = true;
+    readonlyPage.data.readonlyReason = 'viewer-readonly';
+
+    await taskActions.taskItemStatusToggle(readonlyPage, {
+      detail: { id: 'task-1', newStatus: 0 }
+    });
+
+    expect(taskService.updateTaskStatus).not.toHaveBeenCalled();
+    expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({
+      title: '当前为查看者，不能修改任务'
+    }));
+
+    global.wx.showToast.mockClear();
+
+    const page = createPage();
+    await taskActions.taskItemStatusToggle(page, {
+      detail: { id: 'task-1', newStatus: 0 }
+    });
+
+    expect(taskService.updateTaskStatus).toHaveBeenCalledWith('task-1', 0);
+    expect(page._skipNextTaskChangedRefresh).toBe(false);
+    expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({
+      title: '重置失败'
+    }));
+  });
+
+  it('未来日期下应阻止完成和切换任务状态', async () => {
+    const taskService = {
+      completeTask: jest.fn(),
+      resetTask: jest.fn(),
+      updateTaskStatus: jest.fn()
+    };
+    serviceManager.getService.mockImplementation((name) => {
+      if (name === 'task') return taskService;
+      return null;
+    });
+    serviceManager.getTaskService.mockReturnValue(taskService);
+
+    const page = createPage();
+    page.data.isViewingFuture = true;
+
+    await taskActions.completeTask(page, { detail: { taskId: 'task-1' } });
+    expect(taskService.completeTask).not.toHaveBeenCalled();
+    expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({
+      title: '未来日期仅支持查看'
+    }));
+
+    global.wx.showToast.mockClear();
+    await taskActions.taskItemStatusToggle(page, {
+      detail: { id: 'task-1', newStatus: 1 }
+    });
+    expect(taskService.updateTaskStatus).not.toHaveBeenCalled();
+    expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({
+      title: '未来日期仅支持查看'
+    }));
+  });
+
+  it('孩子或家长切到孩子视角时，今日与历史任务仍允许打卡', async () => {
+    const taskService = {
+      completeTask: jest.fn().mockResolvedValue({ success: true }),
+      resetTask: jest.fn()
+    };
+    serviceManager.getService.mockImplementation((name) => {
+      if (name === 'task') return taskService;
+      return null;
+    });
+
+    const page = createPage();
+    page.data.isReadonlyView = true;
+
+    await taskActions.completeTask(page, { detail: { taskId: 'task-1' } });
+
+    expect(taskService.completeTask).toHaveBeenCalledWith('task-1', 'child-1');
+    expect(global.wx.showToast).not.toHaveBeenCalledWith(expect.objectContaining({
+      title: '请在自己设备上操作'
     }));
   });
 
@@ -222,12 +314,41 @@ describe('pages/index/modules/index-task-actions', () => {
 
     const requiredPage = createPage({ isRequired: true });
     await taskActions.completeTask(requiredPage, { detail: { taskId: 'task-1' } });
+    expect(requiredPage.loadMessageData).not.toHaveBeenCalled();
     expect(requiredPage.loadStarsAndRewards).toHaveBeenCalled();
 
     const awardedPage = createPage({ starAwarded: true });
     await taskActions.completeTask(awardedPage, { detail: { taskId: 'task-1' } });
+    expect(awardedPage.loadMessageData).not.toHaveBeenCalled();
     expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({
       title: '已获得过星星'
+    }));
+  });
+
+  it('补打卡期限过期时应使用弹窗展示完整提示', async () => {
+    const taskService = {
+      completeTask: jest.fn().mockResolvedValue({
+        success: false,
+        code: 'TASK_BACKFILL_WINDOW_EXPIRED',
+        backfillWindowExpired: true,
+        message: '该任务补打卡期限已于2026-04-12（本周结束）结束，无法再补打卡'
+      })
+    };
+    serviceManager.getService.mockImplementation((name) => {
+      if (name === 'task') return taskService;
+      return null;
+    });
+
+    const page = createPage();
+    await taskActions.completeTask(page, { detail: { taskId: 'task-1' } });
+
+    expect(global.wx.showModal).toHaveBeenCalledWith(expect.objectContaining({
+      title: '补打卡期限已结束',
+      content: '该任务补打卡期限已于2026-04-12（本周结束）结束，无法再补打卡',
+      showCancel: false
+    }));
+    expect(global.wx.showToast).not.toHaveBeenCalledWith(expect.objectContaining({
+      title: '该任务补打卡期限已于2026-04-12（本周结束）结束，无法再补打卡'
     }));
   });
 });

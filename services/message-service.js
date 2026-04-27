@@ -2,7 +2,7 @@
  * services/message-service.js - 消息服务
  * 
  * 处理系统消息相关的业务逻辑，包括任务消息、系统通知等
- * 采用适配器模式，内部仍调用现有messageManager
+ * 基于 MessageRepository、领域模型 helper 与云端同步能力协作完成消息读写
  */
 
 const logger = require('../utils/logger');
@@ -19,6 +19,13 @@ const batchUtils = require('../utils/batchUtils');
 const { EVENTS } = require('../utils/constants');
 const HttpClient = require('../utils/http-client');
 const API_CONFIG = require('../utils/api-config');
+const messageDisplay = require('../utils/message-display');
+const { isSystemReadonlyUser } = require('../utils/system-access');
+const messageProvisional = require('./message-service/message-provisional');
+const messageHandlers = require('./message-service/message-handlers');
+const messageDomain = require('./message-service/message-domain');
+
+const FORMAL_REMINDER_SYNC_MIN_INTERVAL_MS = 10 * 1000;
 const viewScopeUtils = require('../utils/view-scope');
 
 class MessageService {
@@ -38,7 +45,11 @@ class MessageService {
     
     // 用户服务
     this.userService = options.userService || null;
+    this.starService = options.starService || null;
     this.enableCloudStorage = API_CONFIG.ENABLE_API;
+    this._formalReminderSyncTimestamps = new Map();
+    this._formalReminderSyncInFlight = new Map();
+    this._listenerMap = this._createListenerMap();
     
     logger.info('MessageService', '初始化消息服务');
     
@@ -80,35 +91,49 @@ class MessageService {
    * @private
    */
   _registerEventListeners() {
-    // 任务相关事件
-    this.eventBus.on(EVENTS.TASK_CREATED, this._handleTaskCreated.bind(this));
-    this.eventBus.on(EVENTS.TASK_COMPLETED, this._handleTaskCompleted.bind(this));
-    this.eventBus.on(EVENTS.TASK_UPDATED, this._handleTaskUpdated.bind(this));
-    this.eventBus.on(EVENTS.TASK_DELETED, this._handleTaskDeleted.bind(this));
-    this.eventBus.on(EVENTS.TASK_STATUS_UPDATED, this._handleTaskStatusUpdated.bind(this));
-    this.eventBus.on(EVENTS.TASK_UPCOMING, this._handleUpcomingTask.bind(this));
-    this.eventBus.on(EVENTS.TASK_PENALTY_APPLIED, this._handleTaskPenalty.bind(this));
-    this.eventBus.on(EVENTS.TASK_MARKED_REQUIRED, this._handleTaskMarkedRequired.bind(this));
-    this.eventBus.on(EVENTS.TASK_UNMARKED_REQUIRED, this._handleTaskUnmarkedRequired.bind(this));
-    this.eventBus.on(EVENTS.TASK_CLOUD_SYNC_FAILED, this._handleTaskCloudSyncFailed.bind(this));
-    
-    // 奖励相关事件
-    this.eventBus.on(EVENTS.REWARD_CREATED, this._handleRewardCreated.bind(this));
-    this.eventBus.on(EVENTS.REWARD_CLAIMED, this._handleRewardClaimed.bind(this));
-    this.eventBus.on(EVENTS.REWARD_DELIVERED, this._handleRewardDelivered.bind(this));
-    this.eventBus.on(EVENTS.REWARD_UNCLAIMED, this._handleRewardUnclaimed.bind(this));
-    this.eventBus.on(EVENTS.REWARD_DELETED_BATCH, this._handleRewardDeletedBatch.bind(this));
-    this.eventBus.on(EVENTS.REWARD_EXAMPLES_CLEARED, this._handleRewardExamplesCleared.bind(this));
-    this.eventBus.on(EVENTS.REWARD_CLOUD_SYNC_FAILED, this._handleRewardCloudSyncFailed.bind(this));
-    
-    // 领域模型事件
-    this.eventBus.on(EVENTS.DOMAIN_MESSAGE_CREATED, this._handleDomainMessageCreated.bind(this));
-    this.eventBus.on(EVENTS.DOMAIN_MESSAGE_UPDATED, this._handleDomainMessageUpdated.bind(this));
-    this.eventBus.on(EVENTS.DOMAIN_MESSAGE_DELETED, this._handleDomainMessageDeleted.bind(this));
-    this.eventBus.on(EVENTS.DOMAIN_MESSAGE_READ, this._handleDomainMessageRead.bind(this));
-    this.eventBus.on(EVENTS.DOMAIN_MESSAGE_ALL_READ, this._handleDomainMessageAllRead.bind(this));
-    
+    this._registerLocalModeListeners();
+    this._registerCloudFallbackListeners();
+    this._registerDomainObservers();
+
     logger.info('MessageService', '已注册事件监听器');
+  }
+
+  _createListenerMap() {
+    return messageHandlers.createListenerMap(this);
+  }
+
+  _registerLocalModeListeners() {
+    // 任务相关事件
+    this.eventBus.on(EVENTS.TASK_CREATED, this._listenerMap.taskCreated);
+    this.eventBus.on(EVENTS.TASK_COMPLETED, this._listenerMap.taskCompleted);
+    this.eventBus.on(EVENTS.TASK_UPDATED, this._listenerMap.taskUpdated);
+    this.eventBus.on(EVENTS.TASK_DELETED, this._listenerMap.taskDeleted);
+    this.eventBus.on(EVENTS.TASK_STATUS_UPDATED, this._listenerMap.taskStatusUpdated);
+    this.eventBus.on(EVENTS.TASK_UPCOMING, this._listenerMap.taskUpcoming);
+    this.eventBus.on(EVENTS.TASK_PENALTY_APPLIED, this._listenerMap.taskPenaltyApplied);
+    this.eventBus.on(EVENTS.TASK_MARKED_REQUIRED, this._listenerMap.taskMarkedRequired);
+    this.eventBus.on(EVENTS.TASK_UNMARKED_REQUIRED, this._listenerMap.taskUnmarkedRequired);
+
+    // 奖励相关事件
+    this.eventBus.on(EVENTS.REWARD_CREATED, this._listenerMap.rewardCreated);
+    this.eventBus.on(EVENTS.REWARD_CLAIMED, this._listenerMap.rewardClaimed);
+    this.eventBus.on(EVENTS.REWARD_DELIVERED, this._listenerMap.rewardDelivered);
+    this.eventBus.on(EVENTS.REWARD_UNCLAIMED, this._listenerMap.rewardUnclaimed);
+    this.eventBus.on(EVENTS.REWARD_DELETED_BATCH, this._listenerMap.rewardDeletedBatch);
+    this.eventBus.on(EVENTS.REWARD_EXAMPLES_CLEARED, this._listenerMap.rewardExamplesCleared);
+  }
+
+  _registerCloudFallbackListeners() {
+    this.eventBus.on(EVENTS.TASK_CLOUD_SYNC_FAILED, this._listenerMap.taskCloudSyncFailed);
+    this.eventBus.on(EVENTS.REWARD_CLOUD_SYNC_FAILED, this._listenerMap.rewardCloudSyncFailed);
+  }
+
+  _registerDomainObservers() {
+    this.eventBus.on(EVENTS.DOMAIN_MESSAGE_CREATED, this._listenerMap.domainMessageCreated);
+    this.eventBus.on(EVENTS.DOMAIN_MESSAGE_UPDATED, this._listenerMap.domainMessageUpdated);
+    this.eventBus.on(EVENTS.DOMAIN_MESSAGE_DELETED, this._listenerMap.domainMessageDeleted);
+    this.eventBus.on(EVENTS.DOMAIN_MESSAGE_READ, this._listenerMap.domainMessageRead);
+    this.eventBus.on(EVENTS.DOMAIN_MESSAGE_ALL_READ, this._listenerMap.domainMessageAllRead);
   }
 
   _getLoginUser() {
@@ -119,9 +144,76 @@ class MessageService {
     return this.userService?.getCurrentUser?.() || null;
   }
 
+  _getAvailableUsers() {
+    return this.userService?.getAllUsers?.() || [];
+  }
+
+  _getUserIdentifier(user) {
+    return viewScopeUtils.getUserIdentifier(user) || null;
+  }
+
+  _resolveOperatorIdentity(operatorUserId = null) {
+    const fallbackUserId = operatorUserId || this.userService?.getCurrentUserId?.() || 'parent';
+
+    if (fallbackUserId === 'parent' || fallbackUserId === 'child') {
+      return {
+        userId: fallbackUserId,
+        role: fallbackUserId
+      };
+    }
+
+    const currentUser = this._getCurrentUser();
+    if (this._getUserIdentifier(currentUser) === fallbackUserId) {
+      return {
+        userId: fallbackUserId,
+        role: currentUser?.role || null
+      };
+    }
+
+    const loginUser = this._getLoginUser();
+    if (this._getUserIdentifier(loginUser) === fallbackUserId) {
+      return {
+        userId: fallbackUserId,
+        role: loginUser?.role || null
+      };
+    }
+
+    const cachedUser = this.userService?.getUserById?.(fallbackUserId) || null;
+    return {
+      userId: fallbackUserId,
+      role: cachedUser?.role || null
+    };
+  }
+
+  _getUserIdByRole(role) {
+    const currentUser = this._getCurrentUser();
+    if (currentUser?.role === role) {
+      return this._getUserIdentifier(currentUser) || role;
+    }
+
+    const loginUser = this._getLoginUser();
+    if (loginUser?.role === role) {
+      return this._getUserIdentifier(loginUser) || role;
+    }
+
+    const roleUser = this.userService?.getUserByRole?.(role) || null;
+    if (roleUser) {
+      return this._getUserIdentifier(roleUser) || role;
+    }
+
+    const allUsers = this.userService?.getAllUsers?.() || [];
+    const matchedUser = allUsers.find(user => user?.role === role);
+    return this._getUserIdentifier(matchedUser) || role;
+  }
+
+  _buildTaskLocalMessageMeta(task, notificationType, options = {}) {
+    return messageDomain.buildTaskLocalMessageMeta(this, task, notificationType, options);
+  }
+
   _resolveScopeOptions(options = {}) {
     const loginUser = this._getLoginUser();
     const currentUser = this._getCurrentUser();
+    const availableUsers = this._getAvailableUsers();
     if (!options.scope && !loginUser && !currentUser) {
       return {
         scope: 'all',
@@ -133,7 +225,7 @@ class MessageService {
     }
     const currentUserId = options.userId || viewScopeUtils.getUserIdentifier(currentUser) || viewScopeUtils.getUserIdentifier(loginUser);
     const familyId = loginUser?.familyId || currentUser?.familyId || null;
-    const defaultScope = viewScopeUtils.resolveMessageScopeOptions(loginUser, currentUser).scope || MessageVisibilityScope.USER;
+    const defaultScope = viewScopeUtils.resolveMessageScopeOptions(loginUser, currentUser, availableUsers).scope || MessageVisibilityScope.USER;
     const scope = options.scope || defaultScope;
 
     return {
@@ -141,12 +233,56 @@ class MessageService {
       userId: scope === MessageVisibilityScope.USER ? currentUserId : null,
       familyId,
       requireFresh: options.requireFresh === true,
-      preferScope: options.preferScope || null
+      preferScope: options.preferScope || null,
+      skipExpiryAuthoritySyncBeforeFormalReminders:
+        options.skipExpiryAuthoritySyncBeforeFormalReminders === true
     };
   }
 
   _sortMessages(messages = []) {
     return [...messages].sort((a, b) => b.createTime - a.createTime);
+  }
+
+  _getDisplayCompactGroup(notificationType) {
+    const compactGroups = [
+      ['task_upcoming'],
+      ['task_create', 'task_update', 'task_required', 'task_unrequired'],
+      ['reward_create', 'reward_update']
+    ];
+
+    return compactGroups.find((group) => group.includes(notificationType)) || null;
+  }
+
+  _compactMessagesForDisplay(messages = []) {
+    const sortedMessages = this._sortMessages(messageDisplay.dedupeMessagesByEventKey(messages));
+    const compactedMessages = [];
+    const seenKeys = new Set();
+
+    sortedMessages.forEach((message) => {
+      const compactGroup = this._getDisplayCompactGroup(message.notificationType);
+      if (!compactGroup || !message.relatedId) {
+        compactedMessages.push(message);
+        return;
+      }
+
+      const compactKey = [
+        message.visibilityScope || 'unknown',
+        message.userId || '',
+        message.familyId || '',
+        message.relatedType || '',
+        message.relatedId,
+        compactGroup.join(',')
+      ].join('|');
+
+      if (seenKeys.has(compactKey)) {
+        return;
+      }
+
+      seenKeys.add(compactKey);
+      compactedMessages.push(message);
+    });
+
+    return compactedMessages;
   }
 
   _getRoleDisplayName(role) {
@@ -170,81 +306,16 @@ class MessageService {
   }
 
   _buildTaskMessageCopy({ action, taskTitle, actorUserId = null, actorRole = null, subjectUserId = null, actorName = null, subjectName = null, pending = false }) {
-    const safeActorName = actorName || this._normalizeDisplayName(null, actorRole);
-    const safeSubjectName = subjectName || this._normalizeDisplayName(null, 'child');
-    const isSelfAction = Boolean(actorUserId && subjectUserId && actorUserId === subjectUserId);
-    const suffix = pending ? '，等待同步' : '';
-
-    switch (action) {
-      case 'create':
-        return {
-          userTitle: pending ? '新任务待同步' : '新任务已创建',
-          userSummary: isSelfAction
-            ? `你给自己安排了任务“${taskTitle}”${suffix}`
-            : `${safeActorName}给你安排了任务“${taskTitle}”${suffix}`,
-          familyTitle: pending ? '新任务待同步' : '任务已创建',
-          familySummary: isSelfAction
-            ? `${safeSubjectName}创建了任务“${taskTitle}”${suffix}`
-            : `${safeActorName}给${safeSubjectName}创建了任务“${taskTitle}”${suffix}`,
-          icon: '📝'
-        };
-      case 'update':
-        return {
-          userTitle: pending ? '任务更新待同步' : '任务已更新',
-          userSummary: isSelfAction
-            ? `你的任务“${taskTitle}”已更新${suffix}`
-            : `${safeActorName}更新了你的任务“${taskTitle}”${suffix}`,
-          familyTitle: pending ? '任务更新待同步' : '任务已更新',
-          familySummary: isSelfAction
-            ? `${safeSubjectName}更新了任务“${taskTitle}”${suffix}`
-            : `${safeActorName}更新了${safeSubjectName}的任务“${taskTitle}”${suffix}`,
-          icon: '✏️'
-        };
-      case 'delete':
-        return {
-          userTitle: pending ? '任务删除待同步' : '任务已删除',
-          userSummary: isSelfAction
-            ? `你的任务“${taskTitle}”已删除${suffix}`
-            : `${safeActorName}删除了你的任务“${taskTitle}”${suffix}`,
-          familyTitle: pending ? '任务删除待同步' : '任务已删除',
-          familySummary: isSelfAction
-            ? `${safeSubjectName}删除了任务“${taskTitle}”${suffix}`
-            : `${safeActorName}删除了${safeSubjectName}的任务“${taskTitle}”${suffix}`,
-          icon: '🗑️'
-        };
-      case 'complete':
-        return {
-          userTitle: pending ? '任务完成待同步' : '任务已完成',
-          userSummary: isSelfAction
-            ? `你完成了任务“${taskTitle}”${suffix}`
-            : `${safeActorName}代你完成了任务“${taskTitle}”${suffix}`,
-          familyTitle: pending ? '任务完成待同步' : '任务已完成',
-          familySummary: isSelfAction
-            ? `${safeSubjectName}完成了任务“${taskTitle}”${suffix}`
-            : `${safeActorName}代${safeSubjectName}完成了任务“${taskTitle}”${suffix}`,
-          icon: '✅'
-        };
-      case 'reset':
-        return {
-          userTitle: pending ? '任务重置待同步' : '任务已重置',
-          userSummary: isSelfAction
-            ? `你的任务“${taskTitle}”已重置为未完成${suffix}`
-            : `${safeActorName}将你的任务“${taskTitle}”重置为未完成${suffix}`,
-          familyTitle: pending ? '任务重置待同步' : '任务已重置',
-          familySummary: isSelfAction
-            ? `${safeSubjectName}将任务“${taskTitle}”重置为未完成${suffix}`
-            : `${safeActorName}将${safeSubjectName}的任务“${taskTitle}”重置为未完成${suffix}`,
-          icon: '↩️'
-        };
-      default:
-        return {
-          userTitle: pending ? '任务待同步' : '任务通知',
-          userSummary: `任务“${taskTitle}”有新的状态变更${suffix}`,
-          familyTitle: pending ? '任务待同步' : '任务通知',
-          familySummary: `任务“${taskTitle}”有新的状态变更${suffix}`,
-          icon: '📝'
-        };
-    }
+    return messageProvisional.buildTaskMessageCopy(this, {
+      action,
+      taskTitle,
+      actorUserId,
+      actorRole,
+      subjectUserId,
+      actorName,
+      subjectName,
+      pending
+    });
   }
 
   _mapCloudMessage(item) {
@@ -276,20 +347,41 @@ class MessageService {
     });
   }
 
-  async refreshMessagesFromCloud(userId = null, options = {}) {
-    const resolved = this._resolveScopeOptions({ ...options, userId });
+  _isFormalMessage(message) {
+    return Boolean(message && message.syncedToCloud === true && message.isProvisional !== true && message.isLegacy !== true);
+  }
 
-    if (!this.enableCloudStorage) {
-      const localMessages = resolved.scope === 'all'
-        ? await this.messageRepository.getAll()
-        : await this.messageRepository.getMessagesByScope(resolved);
-      return this._sortMessages(localMessages);
+  _isProvisionalMessage(message) {
+    return Boolean(message && message.isProvisional === true && message.syncedToCloud !== true);
+  }
+
+  _isLegacyMessage(message) {
+    return Boolean(message && message.isLegacy === true);
+  }
+
+  _isCurrentScopeCompatibleMessage(message) {
+    return Boolean(message && !this._isFormalMessage(message) && !this._isProvisionalMessage(message) && !this._isLegacyMessage(message));
+  }
+
+  async _getRawMessagesByScope(resolved) {
+    return resolved.scope === 'all'
+      ? this.messageRepository.getAll()
+      : this.messageRepository.getMessagesByScope(resolved);
+  }
+
+  async _getScopedMessagesForDisplay(resolved) {
+    const rawMessages = await this._getRawMessagesByScope(resolved);
+
+    if (!this.enableCloudStorage || resolved.scope === 'all') {
+      return rawMessages;
     }
 
-    if (resolved.scope === 'all') {
-      return this._sortMessages(await this.messageRepository.getAll());
-    }
+    return rawMessages.filter((message) => (
+      this._isFormalMessage(message) || this._isProvisionalMessage(message)
+    ));
+  }
 
+  async _refreshFormalMessagesFromCloud(resolved) {
     const params = {
       scope: resolved.scope
     };
@@ -307,8 +399,153 @@ class MessageService {
       cloudMessages.map(message => message.id)
     );
 
+    return cloudMessages;
+  }
+
+  async refreshMessagesFromCloud(userId = null, options = {}) {
+    const resolved = this._resolveScopeOptions({ ...options, userId });
+
+    if (!this.enableCloudStorage) {
+      const localMessages = await this._getScopedMessagesForDisplay(resolved);
+      return this._compactMessagesForDisplay(localMessages);
+    }
+
+    if (resolved.scope === 'all') {
+      return this._compactMessagesForDisplay(await this._getScopedMessagesForDisplay(resolved));
+    }
+
+    if (!this._getReadonlyReason()) {
+      await this.syncFormalRemindersIfNeeded(resolved);
+    }
+    await this._refreshFormalMessagesFromCloud(resolved);
+
     await this._emitMessageChangedEvent();
-    return this._sortMessages(cloudMessages);
+    return this._compactMessagesForDisplay(await this._getScopedMessagesForDisplay(resolved));
+  }
+
+  _buildFormalReminderSyncScopeKey(resolved) {
+    return `${resolved.scope}:${resolved.userId || resolved.familyId || 'all'}`;
+  }
+
+  _getReadonlyReason() {
+    const loginUser = this._getLoginUser();
+    if (isSystemReadonlyUser(loginUser)) {
+      return 'system_readonly';
+    }
+
+    if (Boolean(
+      loginUser &&
+      loginUser.role === 'parent' &&
+      loginUser.familyPermissionRole === 'viewer'
+    )) {
+      return 'viewer_readonly';
+    }
+
+    return '';
+  }
+
+  async syncFormalRemindersIfNeeded(options = {}) {
+    const resolved = this._resolveScopeOptions(options);
+    if (!this.enableCloudStorage || !resolved || resolved.scope === 'all') {
+      return { success: false, skipped: true };
+    }
+
+    const readonlyReason = this._getReadonlyReason();
+    if (readonlyReason) {
+      return { success: true, skipped: true, reason: readonlyReason };
+    }
+
+    const now = Date.now();
+    const scopeKey = this._buildFormalReminderSyncScopeKey(resolved);
+    const lastSyncTime = this._formalReminderSyncTimestamps.get(scopeKey) || 0;
+    if (now - lastSyncTime < FORMAL_REMINDER_SYNC_MIN_INTERVAL_MS) {
+      return { success: true, skipped: true, reason: 'throttled' };
+    }
+
+    const inFlightSync = this._formalReminderSyncInFlight.get(scopeKey);
+    if (inFlightSync) {
+      return inFlightSync;
+    }
+
+    const syncPromise = (async () => {
+      const payload = {
+        scope: resolved.scope,
+        targetUserId: resolved.scope === MessageVisibilityScope.USER ? resolved.userId : undefined,
+        modifyTime: now,
+        operationKey: `message_refresh:${scopeKey}:${now}`
+      };
+
+      try {
+        if (!resolved.skipExpiryAuthoritySyncBeforeFormalReminders) {
+          await this._syncExpiryAuthorityBeforeFormalReminders(resolved);
+        }
+        const [upcomingResult, starsResult] = await Promise.allSettled([
+          HttpClient.post(API_CONFIG.ENDPOINTS.TASK_UPCOMING_SYNC, payload),
+          HttpClient.post(API_CONFIG.ENDPOINTS.STAR_EXPIRING_REMINDERS_SYNC, payload)
+        ]);
+        this._formalReminderSyncTimestamps.set(scopeKey, Date.now());
+
+        if (upcomingResult.status === 'rejected') {
+          logger.warn('MessageService', 'upcoming 正式提醒同步失败，继续读取现有正式消息', {
+            scope: resolved.scope,
+            userId: resolved.userId || null,
+            error: upcomingResult.reason?.message || 'unknown'
+          });
+        }
+
+        if (starsResult.status === 'rejected') {
+          logger.warn('MessageService', 'star_expiring 正式提醒同步失败，继续读取现有正式消息', {
+            scope: resolved.scope,
+            userId: resolved.userId || null,
+            error: starsResult.reason?.message || 'unknown'
+          });
+        }
+
+        return {
+          success: upcomingResult.status === 'fulfilled' || starsResult.status === 'fulfilled',
+          skipped: false,
+          upcoming: upcomingResult.status === 'fulfilled',
+          stars: starsResult.status === 'fulfilled',
+        };
+      } catch (error) {
+        logger.warn('MessageService', '正式提醒同步失败，继续读取现有正式消息', {
+          scope: resolved.scope,
+          userId: resolved.userId || null,
+          error: error.message
+        });
+        return { success: false, skipped: false, error: error.message };
+      } finally {
+        this._formalReminderSyncInFlight.delete(scopeKey);
+      }
+    })();
+
+    this._formalReminderSyncInFlight.set(scopeKey, syncPromise);
+
+    return syncPromise;
+  }
+
+  async _syncExpiryAuthorityBeforeFormalReminders(resolved) {
+    try {
+      if (!this.starService || typeof this.starService.syncExpiryAuthorityIfNeeded !== 'function') {
+        return;
+      }
+
+      await this.starService.syncExpiryAuthorityIfNeeded({
+        scope: resolved.scope,
+        userId: resolved.userId || null,
+        familyId: resolved.familyId || null
+      });
+    } catch (error) {
+      logger.warn('MessageService', '正式提醒前的星星到期权威同步失败，继续执行提醒同步', {
+        scope: resolved.scope,
+        userId: resolved.userId || null,
+        error: error.message
+      });
+    }
+  }
+
+  async _syncUpcomingMessagesIfNeeded(resolved) {
+    return this.syncFormalRemindersIfNeeded(resolved);
   }
 
   async getMessagesByScope(options = {}) {
@@ -317,10 +554,8 @@ class MessageService {
       await this.refreshMessagesFromCloud(resolved.userId, resolved);
     }
 
-    const messages = resolved.scope === 'all'
-      ? await this.messageRepository.getAll()
-      : await this.messageRepository.getMessagesByScope(resolved);
-    return this._sortMessages(messages);
+    const messages = await this._getScopedMessagesForDisplay(resolved);
+    return this._compactMessagesForDisplay(messages);
   }
 
   async _syncReadToCloud(message) {
@@ -356,189 +591,11 @@ class MessageService {
     });
   }
 
-  async _createProvisionalMessages(eventType, payload = {}) {
-    if (!payload || !payload.pendingSyncMeta) {
-      return [];
-    }
-
-    const pendingSyncMeta = payload.pendingSyncMeta;
-    if (eventType === 'task') {
-      return this._createTaskProvisionalMessages(payload.taskSnapshot || payload.task, pendingSyncMeta);
-    }
-    if (eventType === 'reward') {
-      return this._createRewardProvisionalMessages(payload.rewardSnapshot || payload.reward, pendingSyncMeta);
-    }
-    return [];
-  }
-
-  async _createTaskProvisionalMessages(task, pendingSyncMeta) {
-    if (!task || !pendingSyncMeta) {
-      return [];
-    }
-
-    const createTime = pendingSyncMeta.modifyTime || pendingSyncMeta.createTime || Date.now();
-    const familyId = pendingSyncMeta.familyId || null;
-    const subjectUserId = pendingSyncMeta.targetUserId || task.userId || null;
-    const action = pendingSyncMeta.action || 'create';
-    const messages = [];
-    const eventKey = ['task', task.id || task.taskId, `task_${action}`, subjectUserId || 'none', pendingSyncMeta.operatorUserId || 'none', pendingSyncMeta.operationKey].join(':');
-    const actorUserId = pendingSyncMeta.operatorUserId || null;
-    const actorRole = pendingSyncMeta.operatorRole || null;
-    const actorName = this._getLocalUserDisplayName(actorUserId, actorRole);
-    const subjectName = this._getLocalUserDisplayName(subjectUserId, 'child');
-    const actionCopy = this._buildTaskMessageCopy({
-      action,
-      taskTitle: task.title,
-      actorUserId,
-      actorRole,
-      subjectUserId,
-      actorName,
-      subjectName,
-      pending: true
-    });
-
-    if (subjectUserId) {
-      messages.push(new Message({
-        userId: subjectUserId,
-        familyId,
-        subjectUserId,
-        actorUserId: pendingSyncMeta.operatorUserId || null,
-        operationKey: pendingSyncMeta.operationKey,
-        messageEventKey: eventKey,
-        visibilityScope: MessageVisibilityScope.USER,
-        type: MessageType.TASK,
-        notificationType: pendingSyncMeta.notificationType || `task_${action}`,
-        title: actionCopy.userTitle,
-        summary: actionCopy.userSummary,
-        relatedId: task.id || task.taskId || '',
-        relatedType: 'task',
-        icon: actionCopy.icon,
-        priority: MessagePriority.MEDIUM,
-        createTime,
-        isProvisional: true,
-        syncedToCloud: false
-      }));
-    }
-
-    if (familyId) {
-      messages.push(new Message({
-        familyId,
-        subjectUserId,
-        actorUserId: pendingSyncMeta.operatorUserId || null,
-        operationKey: pendingSyncMeta.operationKey,
-        messageEventKey: eventKey,
-        visibilityScope: MessageVisibilityScope.FAMILY,
-        type: MessageType.TASK,
-        notificationType: pendingSyncMeta.notificationType || `task_${action}`,
-        title: actionCopy.familyTitle,
-        summary: actionCopy.familySummary,
-        relatedId: task.id || task.taskId || '',
-        relatedType: 'task',
-        icon: actionCopy.icon,
-        priority: MessagePriority.MEDIUM,
-        createTime,
-        isProvisional: true,
-        syncedToCloud: false
-      }));
-    }
-
-    if (messages.length > 0) {
-      await this.messageRepository.batchAddMessages(messages);
-      await this._emitMessageChangedEvent();
-    }
-
-    return messages;
-  }
-
-  async _createRewardProvisionalMessages(reward, pendingSyncMeta) {
-    if (!reward || !pendingSyncMeta) {
-      return [];
-    }
-
-    const createTime = pendingSyncMeta.modifyTime || pendingSyncMeta.createTime || Date.now();
-    const familyId = pendingSyncMeta.familyId || reward.familyId || null;
-    const action = pendingSyncMeta.action || 'create';
-    const subjectUserId = pendingSyncMeta.exchangeUserId || reward.exchangeUserId || null;
-    const messages = [];
-    const eventKey = ['reward', reward.id || reward.rewardId, `reward_${action}`, subjectUserId || 'none', pendingSyncMeta.operatorUserId || 'none', pendingSyncMeta.operationKey].join(':');
-
-    const actionCopy = {
-      create: { title: '奖励创建待同步', summary: `奖励“${reward.name}”已保存在本机，等待同步`, icon: '🎁' },
-      update: { title: '奖励更新待同步', summary: `奖励“${reward.name}”更新已保存在本机，等待同步`, icon: '🎁' },
-      delete: { title: '奖励删除待同步', summary: `奖励“${reward.name}”删除已保存在本机，等待同步`, icon: '🗑️' },
-      exchange: { title: '奖励兑换待同步', summary: `奖励“${reward.name}”兑换已保存在本机，等待同步`, icon: '⭐' }
-    }[action] || { title: '奖励待同步', summary: `奖励“${reward.name}”变更已保存在本机，等待同步`, icon: '🎁' };
-
-    if (action === 'exchange' && subjectUserId) {
-      messages.push(new Message({
-        userId: subjectUserId,
-        familyId,
-        subjectUserId,
-        actorUserId: pendingSyncMeta.operatorUserId || null,
-        operationKey: pendingSyncMeta.operationKey,
-        messageEventKey: eventKey,
-        visibilityScope: MessageVisibilityScope.USER,
-        type: MessageType.REWARD,
-        notificationType: pendingSyncMeta.notificationType || 'reward_exchange',
-        title: actionCopy.title,
-        summary: actionCopy.summary,
-        relatedId: reward.id || reward.rewardId || '',
-        relatedType: 'reward',
-        icon: actionCopy.icon,
-        priority: MessagePriority.MEDIUM,
-        createTime,
-        isProvisional: true,
-        syncedToCloud: false
-      }));
-    }
-
-    if (familyId) {
-      messages.push(new Message({
-        familyId,
-        subjectUserId,
-        actorUserId: pendingSyncMeta.operatorUserId || null,
-        operationKey: pendingSyncMeta.operationKey,
-        messageEventKey: eventKey,
-        visibilityScope: MessageVisibilityScope.FAMILY,
-        type: MessageType.REWARD,
-        notificationType: pendingSyncMeta.notificationType || `reward_${action}`,
-        title: actionCopy.title,
-        summary: actionCopy.summary,
-        relatedId: reward.id || reward.rewardId || '',
-        relatedType: 'reward',
-        icon: actionCopy.icon,
-        priority: MessagePriority.MEDIUM,
-        createTime,
-        isProvisional: true,
-        syncedToCloud: false
-      }));
-    }
-
-    if (messages.length > 0) {
-      await this.messageRepository.batchAddMessages(messages);
-      await this._emitMessageChangedEvent();
-    }
-
-    return messages;
-  }
-
-  _handleTaskCloudSyncFailed(payload) {
-    if (!this.enableCloudStorage) {
-      return;
-    }
-    this._createProvisionalMessages('task', payload).catch(error => {
-      logger.warn('MessageService', '创建任务 provisional 消息失败', error);
-    });
-  }
-
-  _handleRewardCloudSyncFailed(payload) {
-    if (!this.enableCloudStorage) {
-      return;
-    }
-    this._createProvisionalMessages('reward', payload).catch(error => {
-      logger.warn('MessageService', '创建奖励 provisional 消息失败', error);
-    });
-  }
+  async _createProvisionalMessages(eventType, payload = {}) { return messageProvisional.createProvisionalMessages(this, eventType, payload); }
+  async _createTaskProvisionalMessages(task, pendingSyncMeta) { return messageProvisional.createTaskProvisionalMessages(this, task, pendingSyncMeta); }
+  async _createRewardProvisionalMessages(reward, pendingSyncMeta) { return messageProvisional.createRewardProvisionalMessages(this, reward, pendingSyncMeta); }
+  _handleTaskCloudSyncFailed(payload) { messageProvisional.handleTaskCloudSyncFailed(this, payload); }
+  _handleRewardCloudSyncFailed(payload) { messageProvisional.handleRewardCloudSyncFailed(this, payload); }
   
   /**
    * 处理任务创建事件
@@ -596,13 +653,18 @@ class MessageService {
     }
     const { task, previousStatus, operationType, operatorUserId } = data;
     
-    if (operationType === 'complete') {
+    if (['complete', 'history_complete', 'makeup_complete'].includes(operationType)) {
       logger.info('MessageService', `处理任务完成事件: ${task.title}, 操作者=${operatorUserId || '未指定'}`);
-      
-      // 直接创建领域模型消息，传递操作者信息
-      this._createTaskMessageWithDomainModel(task, NotificationType.COMPLETED, {
+
+      const notificationType = operationType === 'makeup_complete'
+        ? NotificationType.MAKEUP_COMPLETED
+        : operationType === 'history_complete'
+          ? NotificationType.HISTORY_COMPLETED
+          : NotificationType.COMPLETED;
+
+      this._createTaskMessageWithDomainModel(task, notificationType, {
         priority: MessagePriority.HIGH,
-        operatorUserId: operatorUserId // 传递操作者信息
+        operatorUserId: operatorUserId
       });
     }
   }
@@ -683,6 +745,9 @@ class MessageService {
    * @private
    */
   _handleUpcomingTask(data) {
+    if (this.enableCloudStorage) {
+      return;
+    }
     const { task, timeRemaining } = data;
     
     logger.info('MessageService', `处理即将到期任务: ${task.title}, 剩余时间: ${timeRemaining}分钟`);
@@ -704,6 +769,9 @@ class MessageService {
    * @private
    */
   _handleTaskPenalty(data) {
+    if (this.enableCloudStorage) {
+      return;
+    }
     const { task, penaltyPoints } = data;
     
     logger.info('MessageService', `处理任务惩罚事件: ${task.title}, 扣除星星: ${penaltyPoints}`);
@@ -718,6 +786,9 @@ class MessageService {
    * @private
    */
   _handleTaskMarkedRequired(data) {
+    if (this.enableCloudStorage) {
+      return;
+    }
     const { task } = data;
     
     logger.info('MessageService', `处理任务标记为必做事件: ${task.title}`);
@@ -734,6 +805,9 @@ class MessageService {
    * @private
    */
   _handleTaskUnmarkedRequired(data) {
+    if (this.enableCloudStorage) {
+      return;
+    }
     const { task } = data;
     
     logger.info('MessageService', `处理任务取消必做标记事件: ${task.title}`);
@@ -757,14 +831,21 @@ class MessageService {
     
     if (data.reward) {
       // 新格式：直接包含reward对象
-      reward = data.reward;
+      reward = {
+        ...data.reward,
+        exchangeUserId: data.reward.exchangeUserId || data.exchangeUserId || data.userId || null,
+        actualCost: data.actualCost ?? data.reward.actualCost ?? data.points ?? data.reward.points ?? 0
+      };
       logger.info('MessageService', '使用新格式事件数据（包含reward对象）');
     } else if (data.rewardId && data.rewardName) {
       // 兼容格式：从rewardId和rewardName构造reward对象
       reward = {
         id: data.rewardId,
         name: data.rewardName,
-        points: data.points || 0
+        points: data.originalPoints ?? data.points ?? 0,
+        actualCost: data.actualCost ?? data.points ?? 0,
+        fulfillmentMode: data.fulfillmentMode || null,
+        exchangeUserId: data.exchangeUserId || data.userId || null
       };
       logger.info('MessageService', '使用兼容格式事件数据（rewardId + rewardName）');
     } else {
@@ -780,7 +861,8 @@ class MessageService {
     // 创建奖励领取消息，传递操作者信息
     try {
       this._createRewardMessageWithDomainModel(reward, 'claimed', {
-        operatorUserId: operatorUserId // 传递操作者信息
+        operatorUserId: operatorUserId,
+        actualCost: data.actualCost ?? reward.actualCost ?? reward.points ?? 0
       });
     } catch (error) {
       logger.error('MessageService', '创建奖励领取消息失败', error);
@@ -814,11 +896,15 @@ class MessageService {
       return;
     }
     const { reward } = data;
+    const operatorUserId = data.operatorUserId || data.userId || null;
     
     logger.info('MessageService', `处理奖励取消领取事件: ${reward.name}`);
     
     // 创建奖励取消领取消息
-    this._createRewardMessageWithDomainModel(reward, 'unclaimed');
+    this._createRewardMessageWithDomainModel(reward, 'unclaimed', {
+      operatorUserId,
+      pointsRefunded: data.pointsRefunded ?? reward.pointsRefunded ?? reward.points ?? 0
+    });
   }
   
   /**
@@ -1086,10 +1172,10 @@ class MessageService {
         return Promise.resolve(count);
       }
       const resolved = this._resolveScopeOptions(options);
-      const scopedMessages = await this.messageRepository.getMessagesByScope(resolved);
+      const scopedMessages = await this._getScopedMessagesForDisplay(resolved);
       const unreadMessages = scopedMessages.filter(message => !message.isRead);
       const hasFormalCloudMessages = unreadMessages.some(
-        message => message.isProvisional !== true && message.syncedToCloud === true
+        message => this._isFormalMessage(message)
       );
 
       if (hasFormalCloudMessages) {
@@ -1101,7 +1187,7 @@ class MessageService {
         }
       }
 
-      const count = await this._markAllMessagesAsReadWithDomainModel(resolved);
+      const count = await this._markAllMessagesAsReadWithDomainModel(resolved, scopedMessages);
       return Promise.resolve(count);
     } catch (error) {
       logger.error('MessageService', '标记所有消息为已读失败', error);
@@ -1134,35 +1220,6 @@ class MessageService {
       logger.error('MessageService', '删除消息失败', error);
       return Promise.resolve(false); // 出错时返回false而非拒绝
     }
-  }
-  
-  /**
-   * 获取即将到期任务的通知
-   * @param {Array} upcomingTasks 即将到期的任务
-   * @returns {Promise<Object>} 通知信息
-   */
-  async getUpcomingTaskNotifications(upcomingTasks) {
-    // 生成即将到期任务的通知
-    const notifications = [];
-    
-    upcomingTasks.forEach(task => {
-      const remainingTime = this._calculateRemainingTime(task);
-      
-      if (!remainingTime) return;
-      
-      const isRequired = task.isRequired === true;
-      const messageType = isRequired ? 'required' : 'upcoming';
-      
-      notifications.push({
-        taskId: task.id,
-        title: task.title,
-        remainingTime,
-        messageType,
-        priority: isRequired ? 'high' : 'medium'
-      });
-    });
-    
-    return notifications;
   }
   
   /**
@@ -1204,630 +1261,19 @@ class MessageService {
     }
   }
   
-  /**
-   * 以下是与新领域模型交互的方法，但不影响现有功能
-   * 这些方法目前不会被外部调用，仅为后续迁移做准备
-   */
-  
-  /**
-   * 使用领域模型创建消息
-   * @param {Object} messageData 消息数据
-   * @returns {Promise<Message>} 创建的消息
-   * @private
-   */
-  async _createMessageWithDomainModel(messageData) {
-    try {
-      const message = new Message(messageData);
-      
-      // 验证消息
-      const errors = message.validate();
-      if (errors.length > 0) {
-        logger.warn('MessageService', `消息验证失败: ${errors.join(', ')}`, messageData);
-        return null;
-      }
-      
-      // 使用addMessage方法支持去重
-      const savedMessage = await this.messageRepository.addMessage(message);
-      
-      logger.info('MessageService', `使用领域模型创建消息成功: ${savedMessage.id}`);
-      
-      // 触发领域消息事件
-      this.eventBus.emit(EVENTS.DOMAIN_MESSAGE_CREATED, { message: savedMessage });
-      
-      return savedMessage;
-    } catch (error) {
-      logger.error('MessageService', '使用领域模型创建消息失败', error);
-      throw error;
-    }
-  }
-  
-  /**
-   * 使用领域模型创建任务消息
-   * @param {Object} task 任务对象
-   * @param {String} notificationType 通知类型
-   * @param {Object} options 选项
-   * @returns {Promise<Message>} 创建的消息
-   * @private
-   */
-  async _createTaskMessageWithDomainModel(task, notificationType, options = {}) {
-    const { isBatchOperation, batchCount, priority, operatorUserId } = options;
-    
-    // 获取当前操作者，优先使用传入的operatorUserId
-    const currentOperatorId = operatorUserId || (this.userService ? this.userService.getCurrentUserId() : 'parent');
-    
-    // 对于特定消息类型，如果是家长操作则不创建消息
-    const skipMessagesForParentOperator = [
-      NotificationType.COMPLETED,
-      NotificationType.UPDATED
-    ];
-    
-    if (skipMessagesForParentOperator.includes(notificationType) && currentOperatorId === 'parent') {
-      logger.info('MessageService', `家长操作，跳过消息创建: ${task.title}, 操作类型=${notificationType}, 操作者=${currentOperatorId}`);
-      return null; // 不创建消息
-    }
-    
-    let title, summary, icon;
-    
-    switch(notificationType) {
-      case NotificationType.NEW:
-        title = '新任务提醒';
-        summary = isBatchOperation 
-          ? `您有${batchCount}个"${task.title}"循环任务已添加到计划中` 
-          : `您有新的任务"${task.title}"已添加到计划中`;
-        icon = '📝';
-        break;
-      case NotificationType.UPCOMING:
-        title = '任务即将到期';
-        summary = `您的任务"${task.title}"将在不久后到期，请及时完成`;
-        icon = '⏰';
-        break;
-      case NotificationType.UPDATED:
-        title = '任务已更新';
-        summary = isBatchOperation 
-          ? `已更新${batchCount}个"${task.title}"循环任务` 
-          : `任务"${task.title}"的内容已被更新`;
-        icon = '✏️';
-        break;
-      case NotificationType.COMPLETED:
-        title = '任务已完成';
-        // 根据操作者调整文本：小朋友完成发给家长的消息
-        if (currentOperatorId === 'child') {
-          summary = `您的孩子完成了任务"${task.title}"`;
-        } else {
-          summary = `恭喜您完成了任务"${task.title}"`;
-        }
-        icon = '✅';
-        break;
-      case NotificationType.REQUIRED:
-        title = '必做任务提醒';
-        summary = `请务必完成任务"${task.title}"，否则将扣除星星`;
-        icon = '⚠️';
-        break;
-      case NotificationType.DELETED:
-        title = '任务已删除';
-        summary = isBatchOperation 
-          ? `已删除${batchCount}个"${task.title}"循环任务` 
-          : `任务"${task.title}"已被删除`;
-        icon = '🗑️';
-        break;
-      default:
-        title = '任务通知';
-        summary = `任务"${task.title}"有新的状态变更`;
-        icon = '🔔';
-    }
-    
-    // 确定消息接收者：小朋友操作发给家长，家长创建任务发给小朋友
-    let targetUserId;
-    if (currentOperatorId === 'child') {
-      // 小朋友操作：消息发给家长
-      targetUserId = 'parent';
-      logger.info('MessageService', `小朋友操作，任务消息发给家长: ${task.title}, 操作类型=${notificationType}`);
-    } else if (currentOperatorId === 'parent' && notificationType === NotificationType.NEW) {
-      // 家长创建任务：消息发给小朋友
-      targetUserId = 'child';
-      logger.info('MessageService', `家长创建任务，消息发给小朋友: ${task.title}`);
-    } else {
-      // 其他情况：使用任务的userId或默认为parent
-      targetUserId = task.userId || 'parent';
-    }
-    
-    const messageData = {
-      userId: targetUserId,
-      type: MessageType.TASK,
-      notificationType,
-      relatedId: task.id,
-      title,
-      summary,
-      icon,
-      isBatchOperation,
-      batchCount,
-      priority: priority || MessagePriority.MEDIUM
-    };
-    
-    return this._createMessageWithDomainModel(messageData);
-  }
-  
-  /**
-   * 使用领域模型创建系统消息
-   * @param {String} content 消息内容
-   * @param {String} type 消息类型
-   * @param {Object} options 选项
-   * @returns {Promise<Message>} 创建的消息
-   * @private
-   */
-  async _createSystemMessageWithDomainModel(content, type = 'system', options = {}) {
-    let title, icon;
-    const { priority, title: customTitle, summary: customSummary } = options;
-    
-    switch(type) {
-      case 'reward':
-        title = '星星奖励';
-        icon = '⭐';
-        break;
-      case 'penalty':
-        title = '星星扣除';
-        icon = '⚠️';
-        break;
-      case 'achievement':
-        title = '成就达成';
-        icon = '🏆';
-        break;
-      case 'welcome':
-        title = '欢迎使用小CEO日程表';
-        icon = '🎉';
-        break;
-      default:
-        title = '系统通知';
-        icon = '🔔';
-    }
-    
-    // 支持自定义标题
-    if (customTitle) {
-      title = customTitle;
-    }
-    
-    const messageData = {
-      userId: 'shared', // 系统消息设为共享，所有用户都能看到
-      type: MessageType.SYSTEM,
-      notificationType: type,
-      title,
-      summary: customSummary || content, // 优先使用自定义摘要
-      content,
-      icon,
-      priority: priority || MessagePriority.MEDIUM
-    };
-    
-    return this._createMessageWithDomainModel(messageData);
-  }
-  
-  /**
-   * 使用领域模型创建惩罚消息
-   * @param {Object} task 任务对象
-   * @param {Number} points 扣除的积分
-   * @returns {Promise<Message>} 创建的消息
-   * @private
-   */
-  async _createPenaltyMessageWithDomainModel(task, points) {
-    const messageData = {
-      userId: this.userService ? this.userService.getCurrentUserId() : 'parent', // 获取当前用户ID，默认为parent
-      type: MessageType.PENALTY,
-      relatedId: task.id,
-      title: '星星扣除提醒',
-      summary: `必做任务"${task.title}"未完成，已扣除${points}颗星星`,
-      content: `您的必做任务"${task.title}"未能按时完成，系统已扣除${points}颗星星。请继续努力，按时完成任务！`,
-      icon: '⚠️',
-      priority: MessagePriority.HIGH
-    };
-    
-    return this._createMessageWithDomainModel(messageData);
-  }
-  
-  /**
-   * 使用领域模型获取所有消息
-   * @returns {Promise<Array>} 消息列表
-   * @private
-   */
-  async _getAllMessagesWithDomainModel(options = {}) {
-    try {
-      const resolved = this._resolveScopeOptions(options);
-      const messages = await this.messageRepository.getMessagesByScope(resolved);
-      logger.info('MessageService', `使用领域模型获取所有消息成功: ${messages.length}条`);
-      return this._sortMessages(messages);
-    } catch (error) {
-      logger.error('MessageService', '使用领域模型获取所有消息失败', error);
-      return [];
-    }
-  }
-  
-  /**
-   * 使用领域模型获取未读消息数量
-   * @returns {Promise<Number>} 未读消息数量
-   * @private
-   */
-  async _getUnreadCountWithDomainModel(options = {}) {
-    try {
-      const messages = await this._getAllMessagesWithDomainModel(options);
-      const count = messages.filter(message => !message.isRead).length;
-      logger.info('MessageService', `使用领域模型获取未读消息数量成功: ${count}条`);
-      return count;
-    } catch (error) {
-      logger.error('MessageService', '使用领域模型获取未读消息数量失败', error);
-      return 0;
-    }
-  }
-  
-  /**
-   * 使用领域模型标记消息为已读
-   * @param {String} messageId 消息ID
-   * @returns {Promise<Boolean>} 操作结果
-   * @private
-   */
-  async _markMessageAsReadWithDomainModel(messageId) {
-    try {
-      const result = await this.messageRepository.markAsRead(messageId);
-      
-      if (result) {
-        // 触发领域消息已读事件
-        this.eventBus.emit(EVENTS.DOMAIN_MESSAGE_READ, { messageId });
-        logger.info('MessageService', `使用领域模型标记消息${messageId}为已读成功`);
-        return true;
-      } else {
-        logger.warn('MessageService', `使用领域模型标记消息${messageId}为已读失败`);
-        return false;
-      }
-    } catch (error) {
-      logger.error('MessageService', `使用领域模型标记消息为已读失败, ID=${messageId}`, error);
-      return false;
-    }
-  }
-  
-  /**
-   * 使用领域模型标记所有消息为已读
-   * @returns {Promise<Number>} 标记为已读的消息数量
-   * @private
-   */
-  async _markAllMessagesAsReadWithDomainModel(options = {}) {
-    try {
-      const resolved = this._resolveScopeOptions(options);
-      const messages = await this.messageRepository.getMessagesByScope(resolved);
-      const unreadMessages = messages.filter(message => !message.isRead);
-      const count = unreadMessages.length;
-
-      if (count === 0) {
-        return 0;
-      }
-
-      await this.messageRepository.batchMarkAsRead(unreadMessages.map(message => message.markAsRead()));
-      
-      if (count > 0) {
-        // 触发领域消息全部已读事件
-        this.eventBus.emit(EVENTS.DOMAIN_MESSAGE_ALL_READ, { count });
-      }
-      
-      logger.info('MessageService', `使用领域模型标记所有消息为已读成功: ${count}条`);
-      return count;
-    } catch (error) {
-      logger.error('MessageService', '使用领域模型标记所有消息为已读失败', error);
-      return 0;
-    }
-  }
-  
-  /**
-   * 使用领域模型删除消息
-   * @param {String} messageId 消息ID
-   * @returns {Promise<Boolean>} 操作结果
-   * @private
-   */
-  async _deleteMessageWithDomainModel(messageId) {
-    try {
-      const result = await this.messageRepository.delete(messageId);
-      
-      if (result) {
-        // 触发领域消息删除事件
-        this.eventBus.emit(EVENTS.DOMAIN_MESSAGE_DELETED, { messageId });
-        logger.info('MessageService', `使用领域模型删除消息${messageId}成功`);
-        return true;
-      } else {
-        logger.warn('MessageService', `使用领域模型删除消息${messageId}失败`);
-        return false;
-      }
-    } catch (error) {
-      logger.error('MessageService', `使用领域模型删除消息失败, ID=${messageId}`, error);
-      return false;
-    }
-  }
-  
-  /**
-   * 使用领域模型删除相关消息
-   * @param {String} entityId 实体ID
-   * @returns {Promise<Number>} 删除的消息数量
-   * @private
-   */
-  async _deleteRelatedMessagesWithDomainModel(entityId) {
-    try {
-      const count = await this.messageRepository.deleteRelatedMessages(entityId);
-      
-      if (count > 0) {
-        // 触发领域相关消息删除事件
-        this.eventBus.emit(EVENTS.DOMAIN_MESSAGE_RELATED_DELETED, { entityId, count });
-      }
-      
-      logger.info('MessageService', `使用领域模型删除与实体${entityId}相关的消息成功: ${count}条`);
-      return count;
-    } catch (error) {
-      logger.error('MessageService', `使用领域模型删除相关消息失败, 实体ID=${entityId}`, error);
-      return 0;
-    }
-  }
-  
-  /**
-   * 使用领域模型更新任务消息
-   * @param {Object} task 任务对象
-   * @returns {Promise<Number>} 更新的消息数量
-   * @private
-   */
-  async _updateTaskMessagesWithDomainModel(task) {
-    try {
-      const count = await this.messageRepository.updateTaskMessages(task);
-      
-      if (count > 0) {
-        // 触发领域消息更新事件
-        this.eventBus.emit(EVENTS.DOMAIN_MESSAGE_TASK_UPDATED, { taskId: task.id, count });
-      }
-      
-      logger.info('MessageService', `使用领域模型更新任务消息成功: ${count}条`);
-      return count;
-    } catch (error) {
-      logger.error('MessageService', `使用领域模型更新任务消息失败, 任务ID=${task.id}`, error);
-      return 0;
-    }
-  }
-  
-  /**
-   * 使用领域模型获取消息统计信息
-   * @returns {Promise<Object>} 统计信息
-   * @private
-   */
-  async _getMessageStatsWithDomainModel() {
-    try {
-      const stats = await this.messageRepository.getMessageStats();
-      logger.info('MessageService', `使用领域模型获取消息统计信息成功`);
-      return stats;
-    } catch (error) {
-      logger.error('MessageService', '使用领域模型获取消息统计信息失败', error);
-      return {
-        total: 0,
-        unread: 0,
-        today: 0,
-        highPriority: 0,
-        byType: {}
-      };
-    }
-  }
-  
-  /**
-   * 使用领域模型清理过期消息
-   * @param {Number} expiryDays 过期天数，默认30天
-   * @returns {Promise<Number>} 清理的消息数量
-   * @private
-   */
-  async _cleanExpiredMessagesWithDomainModel(expiryDays = 30) {
-    try {
-      const count = await this.messageRepository.cleanExpiredMessages(expiryDays);
-      
-      if (count > 0) {
-        // 触发领域消息清理事件
-        this.eventBus.emit(EVENTS.DOMAIN_MESSAGE_CLEANED, { count, expiryDays });
-      }
-      
-      logger.info('MessageService', `使用领域模型清理过期消息成功: ${count}条`);
-      return count;
-    } catch (error) {
-      logger.error('MessageService', '使用领域模型清理过期消息失败', error);
-      return 0;
-    }
-  }
-  
-  /**
-   * 使用领域模型获取高优先级未读消息
-   * @returns {Promise<Array>} 高优先级未读消息列表
-   * @private
-   */
-  async _getHighPriorityMessagesWithDomainModel() {
-    try {
-      // 获取所有未读消息
-      const unreadMessages = await this.messageRepository.getUnreadMessages();
-      
-      // 过滤出高优先级消息
-      const highPriorityMessages = unreadMessages.filter(msg => msg.isHighPriority());
-      
-      logger.info('MessageService', `使用领域模型获取高优先级未读消息成功: ${highPriorityMessages.length}条`);
-      return highPriorityMessages;
-    } catch (error) {
-      logger.error('MessageService', '使用领域模型获取高优先级未读消息失败', error);
-      return [];
-    }
-  }
-  
-  /**
-   * 迁移消息数据（从旧格式到新模型）
-   * @returns {Promise<Object>} 迁移结果
-   * @private
-   */
-  async _migrateMessageData() {
-    try {
-      logger.info('MessageService', '开始迁移消息数据到领域模型');
-      
-      // 获取所有现有消息
-      const oldMessages = await new Promise((resolve) => {
-        this.messageManager.getAllMessages(messages => resolve(messages || []));
-      });
-      
-      if (oldMessages.length === 0) {
-        logger.info('MessageService', '没有消息需要迁移');
-        return { migrated: 0, total: 0 };
-      }
-      
-      // 将旧消息转换为新模型
-      const newMessages = oldMessages.map(old => new Message(old));
-      
-      // 批量保存到仓储
-      await this.messageRepository.saveAll(newMessages);
-      
-      logger.info('MessageService', `成功迁移${newMessages.length}条消息数据到领域模型`);
-      return { migrated: newMessages.length, total: oldMessages.length };
-    } catch (error) {
-      logger.error('MessageService', '迁移消息数据到领域模型失败', error);
-      return { migrated: 0, total: 0, error: error.message };
-    }
-  }
-  
-  /**
-   * 创建奖励消息（使用领域模型）
-   * @param {Object} reward 奖励对象
-   * @param {String} action 操作类型
-   * @param {Object} options 选项参数
-   * @returns {Promise<Message>} 创建的消息
-   * @private
-   */
-  async _createRewardMessageWithDomainModel(reward, action, options = {}) {
-    const { operatorUserId } = options;
-    
-    // 获取当前操作者，优先使用传入的operatorUserId
-    const currentOperatorId = operatorUserId || (this.userService ? this.userService.getCurrentUserId() : 'parent');
-    
-    // 对于特定消息类型，如果是家长操作则不创建消息
-    const skipMessagesForParentOperator = ['claimed'];
-    
-    if (skipMessagesForParentOperator.includes(action) && currentOperatorId === 'parent') {
-      logger.info('MessageService', `家长操作，跳过奖励消息创建: ${reward.name}, 操作类型=${action}, 操作者=${currentOperatorId}`);
-      return null; // 不创建消息
-    }
-    
-    let title, summary, icon;
-    
-    switch(action) {
-      case 'created':
-        title = '新奖励已添加';
-        summary = `您已成功添加新奖励"${reward.name}"，需要${reward.points}颗星星兑换`;
-        icon = '✨';
-        break;
-      case 'claimed':
-        title = '奖励已兑换';
-        summary = `您已成功兑换奖励"${reward.name}"，花费了${reward.points}颗星星`;
-        icon = '🎁';
-        break;
-      case 'delivered':
-        title = '奖励已领取';
-        summary = `您已成功领取奖励"${reward.name}"`;
-        icon = '🎉';
-        break;
-      case 'unclaimed':
-        title = '奖励兑换已取消';
-        summary = `您已取消兑换奖励"${reward.name}"，退回${reward.points}颗星星`;
-        icon = '↩️';
-        break;
-      default:
-        title = '奖励通知';
-        summary = `您的奖励"${reward.name}"有新的状态变更`;
-        icon = '🔔';
-    }
-    
-    // 确定消息接收者：小朋友操作发给家长，家长创建奖励发给小朋友
-    let targetUserId;
-    if (currentOperatorId === 'child') {
-      // 小朋友操作：消息发给家长
-      targetUserId = 'parent';
-      logger.info('MessageService', `小朋友操作，奖励消息发给家长: ${reward.name}, 操作类型=${action}`);
-    } else if (currentOperatorId === 'parent' && action === 'created') {
-      // 家长创建奖励：消息发给小朋友
-      targetUserId = 'child';
-      logger.info('MessageService', `家长创建奖励，消息发给小朋友: ${reward.name}`);
-    } else {
-      // 其他情况：使用原逻辑
-      targetUserId = this.userService ? this.userService.getCurrentUserId() : 'parent';
-    }
-    
-    const messageData = {
-      userId: targetUserId,
-      type: MessageType.REWARD,
-      notificationType: action,
-      relatedId: reward.id,
-      title,
-      summary,
-      icon,
-      priority: MessagePriority.MEDIUM
-    };
-    
-    return this._createMessageWithDomainModel(messageData);
-  }
-  
-  /**
-   * 批量创建任务消息
-   * @param {Array} tasks 任务数组
-   * @param {String} type 消息类型
-   * @param {Object} options 附加选项
-   * @returns {Promise<Number>} 创建的消息数量
-   */
-  async batchCreateTaskMessages(tasks, type, options = {}) {
-    if (!Array.isArray(tasks) || tasks.length === 0) {
-      logger.warn('MessageService', '批量创建任务消息失败: 任务数组为空');
-      return 0;
-    }
-    
-    logger.info('MessageService', `批量创建任务消息开始: 数量=${tasks.length}, 类型=${type}`);
-    
-    let createdCount = 0;
-    const isBatchOperation = options.isBatchOperation !== false;
-    
-    // 调用现有逻辑
-    for (const task of tasks) {
-      try {
-        const message = this.messageManager.createTaskMessage(task, type, {
-          ...options,
-          isBatchOperation: true,
-          batchCount: tasks.length
-        });
-        
-        if (message) {
-          createdCount++;
-        }
-      } catch (error) {
-        logger.error('MessageService', `批量创建任务消息失败, 任务ID=${task.id}`, error);
-      }
-    }
-    
-    // 同时使用领域模型批量创建
-    try {
-      const domainMessages = [];
-      
-      // 准备领域消息数据
-      tasks.forEach(task => {
-        const notificationType = this._mapMessageTypeToNotificationType(type);
-        
-        // 创建消息数据
-        const messageData = this._prepareTaskMessageData(task, notificationType, {
-          ...options,
-          isBatchOperation: true,
-          batchCount: tasks.length
-        });
-        
-        if (messageData) {
-          domainMessages.push(new Message(messageData));
-        }
-      });
-      
-      // 批量添加消息到仓储
-      if (domainMessages.length > 0) {
-        await this.messageRepository.batchAddMessages(domainMessages);
-      }
-    } catch (error) {
-      logger.error('MessageService', '使用领域模型批量创建任务消息失败', error);
-    }
-    
-    logger.info('MessageService', `批量创建任务消息完成: 成功=${createdCount}/${tasks.length}`);
-    return createdCount;
-  }
+  // 领域模型壳层保留给现有测试与调用点，具体实现已迁入 helper。
+  async _createMessageWithDomainModel(messageData) { return messageDomain.createMessageWithDomainModel(this, messageData); }
+  async _createTaskMessageWithDomainModel(task, notificationType, options = {}) { return messageDomain.createTaskMessageWithDomainModel(this, task, notificationType, options); }
+  async _createSystemMessageWithDomainModel(content, type = 'system', options = {}) { return messageDomain.createSystemMessageWithDomainModel(this, content, type, options); }
+  async _createPenaltyMessageWithDomainModel(task, points) { return messageDomain.createPenaltyMessageWithDomainModel(this, task, points); }
+  async _getAllMessagesWithDomainModel(options = {}) { return messageDomain.getAllMessagesWithDomainModel(this, options); }
+  async _getUnreadCountWithDomainModel(options = {}) { return messageDomain.getUnreadCountWithDomainModel(this, options); }
+  async _markMessageAsReadWithDomainModel(messageId) { return messageDomain.markMessageAsReadWithDomainModel(this, messageId); }
+  async _markAllMessagesAsReadWithDomainModel(options = {}, visibleMessages = null) { return messageDomain.markAllMessagesAsReadWithDomainModel(this, options, visibleMessages); }
+  async _deleteMessageWithDomainModel(messageId) { return messageDomain.deleteMessageWithDomainModel(this, messageId); }
+  async _deleteRelatedMessagesWithDomainModel(entityId) { return messageDomain.deleteRelatedMessagesWithDomainModel(this, entityId); }
+  async _updateTaskMessagesWithDomainModel(task) { return messageDomain.updateTaskMessagesWithDomainModel(this, task); }
+  async _createRewardMessageWithDomainModel(reward, action, options = {}) { return messageDomain.createRewardMessageWithDomainModel(this, reward, action, options); }
   
   /**
    * 批量标记消息为已读
@@ -1841,14 +1287,21 @@ class MessageService {
     }
     
     logger.info('MessageService', `批量标记消息为已读开始: 数量=${messageIds.length}`);
-    
-    // 调用现有逻辑
-    return new Promise((resolve) => {
-      this.messageManager.markManyAsRead(messageIds, (count) => {
-        logger.info('MessageService', `批量标记消息为已读完成: 成功=${count}/${messageIds.length}`);
-        resolve(count);
-      });
-    });
+
+    try {
+      const count = typeof this.messageRepository.markManyAsRead === 'function'
+        ? await this.messageRepository.markManyAsRead(messageIds)
+        : await this.messageRepository.batchMarkAsRead(
+          (await Promise.all(messageIds.map((id) => this.messageRepository.getById(id))))
+            .filter((message) => message && !message.isRead)
+        );
+
+      logger.info('MessageService', `批量标记消息为已读完成: 成功=${count}/${messageIds.length}`);
+      return count;
+    } catch (error) {
+      logger.error('MessageService', '批量标记消息为已读失败', error);
+      return 0;
+    }
   }
   
   /**
@@ -1891,103 +1344,6 @@ class MessageService {
         }
       );
     });
-  }
-  
-  /**
-   * 将消息类型映射到通知类型
-   * @param {String} messageType 消息类型
-   * @returns {String} 通知类型
-   * @private
-   */
-  _mapMessageTypeToNotificationType(messageType) {
-    const mapping = {
-      'new': NotificationType.NEW,
-      'upcoming': NotificationType.UPCOMING,
-      'edited': NotificationType.UPDATED,
-      'completed': NotificationType.COMPLETED,
-      'required': NotificationType.REQUIRED,
-      'deleted': NotificationType.DELETED
-    };
-    
-    return mapping[messageType] || messageType;
-  }
-  
-  /**
-   * 准备任务消息数据
-   * @param {Object} task 任务对象
-   * @param {String} notificationType 通知类型
-   * @param {Object} options 选项
-   * @returns {Object} 消息数据
-   * @private
-   */
-  _prepareTaskMessageData(task, notificationType, options = {}) {
-    const { isBatchOperation, batchCount, priority, operatorUserId } = options;
-    
-    // 获取操作者信息
-    const currentOperatorId = operatorUserId || (this.userService ? this.userService.getCurrentUserId() : 'parent');
-    
-    let title, summary, icon;
-    
-    switch(notificationType) {
-      case NotificationType.NEW:
-        title = '新任务提醒';
-        summary = isBatchOperation 
-          ? `您有${batchCount}个"${task.title}"循环任务已添加到计划中` 
-          : `您有新的任务"${task.title}"已添加到计划中`;
-        icon = '📝';
-        break;
-      case NotificationType.UPCOMING:
-        title = '任务即将到期';
-        summary = `您的任务"${task.title}"将在不久后到期，请及时完成`;
-        icon = '⏰';
-        break;
-      case NotificationType.UPDATED:
-        title = '任务已更新';
-        summary = isBatchOperation 
-          ? `已更新${batchCount}个"${task.title}"循环任务` 
-          : `任务"${task.title}"的内容已被更新`;
-        icon = '✏️';
-        break;
-      case NotificationType.COMPLETED:
-        title = '任务已完成';
-        // 根据操作者调整文本：小朋友完成发给家长的消息
-        if (currentOperatorId === 'child') {
-          summary = `您的孩子完成了任务"${task.title}"`;
-        } else {
-          summary = `恭喜您完成了任务"${task.title}"`;
-        }
-        icon = '✅';
-        break;
-      case NotificationType.REQUIRED:
-        title = '必做任务提醒';
-        summary = `请务必完成任务"${task.title}"，否则将扣除星星`;
-        icon = '⚠️';
-        break;
-      case NotificationType.DELETED:
-        title = '任务已删除';
-        summary = isBatchOperation 
-          ? `已删除${batchCount}个"${task.title}"循环任务` 
-          : `任务"${task.title}"已被删除`;
-        icon = '🗑️';
-        break;
-      default:
-        title = '任务通知';
-        summary = `任务"${task.title}"有新的状态变更`;
-        icon = '🔔';
-    }
-    
-    return {
-      userId: this.userService ? this.userService.getCurrentUserId() : 'parent', // 获取当前用户ID，默认为parent
-      type: MessageType.TASK,
-      notificationType,
-      relatedId: task.id,
-      title,
-      summary,
-      icon,
-      isBatchOperation,
-      batchCount,
-      priority: priority || MessagePriority.MEDIUM
-    };
   }
   
   /**
@@ -2065,6 +1421,13 @@ class MessageService {
     if (this.userService !== userService) {
       this.userService = userService;
       logger.info('MessageService', 'UserService已更新');
+    }
+  }
+
+  updateStarService(starService) {
+    if (this.starService !== starService) {
+      this.starService = starService || null;
+      logger.info('MessageService', 'StarService已更新');
     }
   }
 }

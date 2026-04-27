@@ -1,7 +1,139 @@
 const logger = require('../../utils/logger');
 const dateUtils = require('../../utils/dateUtils');
+const userContextUtils = require('../../utils/user-context');
 const { TaskStatus, TaskType } = require('../../models/task');
 const { EVENTS } = require('../../utils/constants');
+
+function isOccurrenceConfigTask(task) {
+  return Boolean(task && typeof task.isOccurrenceConfigTask === 'function' && task.isOccurrenceConfigTask());
+}
+
+function isOccurrenceRecordTask(task) {
+  return Boolean(task && typeof task.isOccurrenceRecordTask === 'function' && task.isOccurrenceRecordTask());
+}
+
+function isOccurrenceTask(task) {
+  return isOccurrenceConfigTask(task) || isOccurrenceRecordTask(task);
+}
+
+function isRegularPlannedTask(task) {
+  return Boolean(task) && !isOccurrenceTask(task);
+}
+
+function shouldIncludeTask(task, options = {}) {
+  if (!task) {
+    return false;
+  }
+
+  if (options.occurrenceOnly === true) {
+    return isOccurrenceTask(task);
+  }
+
+  if (options.includeOccurrence === true) {
+    return true;
+  }
+
+  return isRegularPlannedTask(task);
+}
+
+function shouldCountTaskAsCompleted(task) {
+  if (isOccurrenceRecordTask(task)) {
+    return task.occurrenceOutcome === 'success';
+  }
+
+  return Number(task?.status) === TaskStatus.COMPLETED;
+}
+
+function isPendingSyncOccurrenceRecord(task) {
+  if (!isOccurrenceRecordTask(task)) {
+    return false;
+  }
+
+  return Boolean(task.pendingSyncMeta || task.syncedToCloud === false);
+}
+
+function buildOccurrenceRecordSemanticKey(task = {}) {
+  const parentTaskId = task.parentTaskId || task.pendingSyncMeta?.configTaskId || '';
+  const userId = task.userId || task.pendingSyncMeta?.targetUserId || '';
+  const date = task.date || '';
+
+  if (parentTaskId && userId && date) {
+    return `${parentTaskId}::${userId}::${date}`;
+  }
+
+  return task.id ? `id:${task.id}` : '';
+}
+
+function getOccurrenceRecordPriority(task = {}) {
+  if (!task || typeof task !== 'object') {
+    return -1;
+  }
+
+  const hasPendingMeta = Boolean(task.pendingSyncMeta);
+  if (task.syncedToCloud === true && !hasPendingMeta) {
+    return 3;
+  }
+
+  if (!hasPendingMeta && task.syncedToCloud !== false) {
+    return 2;
+  }
+
+  return 1;
+}
+
+function shouldReplaceOccurrenceRecord(existingRecord, candidateRecord) {
+  if (!existingRecord) {
+    return true;
+  }
+
+  const existingPriority = getOccurrenceRecordPriority(existingRecord);
+  const candidatePriority = getOccurrenceRecordPriority(candidateRecord);
+  if (candidatePriority !== existingPriority) {
+    return candidatePriority > existingPriority;
+  }
+
+  const existingModifyTime = Number(existingRecord.modifyTime || existingRecord.recordedAt || 0);
+  const candidateModifyTime = Number(candidateRecord.modifyTime || candidateRecord.recordedAt || 0);
+  if (candidateModifyTime !== existingModifyTime) {
+    return candidateModifyTime > existingModifyTime;
+  }
+
+  return false;
+}
+
+function mergeOccurrenceRecords(cloudTasks = [], localTasks = []) {
+  const mergedMap = new Map();
+
+  (cloudTasks || []).concat(localTasks || []).forEach((task) => {
+    if (!isOccurrenceRecordTask(task)) {
+      return;
+    }
+
+    const semanticKey = buildOccurrenceRecordSemanticKey(task);
+    if (!semanticKey) {
+      return;
+    }
+
+    const existingRecord = mergedMap.get(semanticKey);
+    if (shouldReplaceOccurrenceRecord(existingRecord, task)) {
+      mergedMap.set(semanticKey, task);
+    }
+  });
+
+  return Array.from(mergedMap.values());
+}
+
+function shouldIncludeInProgressSummary(task) {
+  return !isPendingSyncOccurrenceRecord(task);
+}
+
+function filterTasksByOptions(tasks = [], options = {}) {
+  return (Array.isArray(tasks) ? tasks : []).filter((task) => shouldIncludeTask(task, options));
+}
+
+function hasQueryOptions(options = {}) {
+  return Object.keys(options || {}).length > 0;
+}
 
 async function getAllTasks(service, userId = null, options = {}) {
   try {
@@ -10,6 +142,7 @@ async function getAllTasks(service, userId = null, options = {}) {
     if (service.enableCloudStorage) {
       if (userId && options.requireFreshStars === true && service.starService?.refreshStarsFromCloud) {
         try {
+          // M09 既有契约：允许 resetTask 等可写任务页面在云读取前显式对齐星星余额。
           await service.starService.refreshStarsFromCloud(userId);
         } catch (refreshError) {
           logger.warn('TaskService', '任务读取前刷新星星失败，继续按现有数据读取任务', {
@@ -76,7 +209,7 @@ async function getAllTasks(service, userId = null, options = {}) {
       });
     }
 
-    return tasks;
+    return filterTasksByOptions(tasks, options);
   } catch (error) {
     logger.error('TaskService', '获取所有任务失败', error);
     return [];
@@ -107,10 +240,16 @@ async function getTodayTasks(service, userId = null, options = {}) {
 async function getTasksByDate(service, date, userId = null, options = {}) {
   try {
     let tasks;
+    const repoGetTasksByDate = (targetDate, targetUserId) => (
+      hasQueryOptions(options)
+        ? service.taskRepository.getTasksByDate(targetDate, targetUserId, options)
+        : service.taskRepository.getTasksByDate(targetDate, targetUserId)
+    );
 
     if (service.enableCloudStorage) {
       if (userId && options.requireFreshStars === true && service.starService?.refreshStarsFromCloud) {
         try {
+          // 该路径属于任务域读前余额对齐，不并入页面层的统一刷新 orchestration。
           await service.starService.refreshStarsFromCloud(userId);
         } catch (refreshError) {
           logger.warn('TaskService', '按日期读取任务前刷新星星失败，继续按现有数据读取任务', {
@@ -127,7 +266,7 @@ async function getTasksByDate(service, date, userId = null, options = {}) {
         tasks = await service._mergeLocalTasksIntoCloudResult(
           tasks,
           userId,
-          (targetId) => service.taskRepository.getTasksByDate(date, targetId),
+          (targetId) => repoGetTasksByDate(date, targetId),
           `${date}任务`
         );
         logger.info('TaskService', `从云端获取${date}任务成功: ${tasks.length}个`);
@@ -135,14 +274,14 @@ async function getTasksByDate(service, date, userId = null, options = {}) {
         logger.warn('TaskService', `云端获取${date}任务失败，降级到本地`, {
           error: cloudError.message
         });
-        tasks = await service.taskRepository.getTasksByDate(date, userId);
+        tasks = await repoGetTasksByDate(date, userId);
       }
     } else {
-      tasks = await service.taskRepository.getTasksByDate(date, userId);
+      tasks = await repoGetTasksByDate(date, userId);
     }
 
     logger.info('TaskService', `获取${date}任务成功${userId ? `, 用户=${userId}` : ''}, 数量=${tasks.length}`);
-    return tasks;
+    return filterTasksByOptions(tasks, options);
   } catch (error) {
     logger.error('TaskService', `获取${date}任务失败`, error);
     return [];
@@ -152,24 +291,29 @@ async function getTasksByDate(service, date, userId = null, options = {}) {
 async function getTasksByDateRange(service, startDate, endDate, userId = null, options = {}) {
   try {
     let tasks;
+    const repoGetTasksByDateRange = (targetStartDate, targetEndDate, targetUserId) => (
+      hasQueryOptions(options)
+        ? service.taskRepository.getTasksByDateRange(targetStartDate, targetEndDate, targetUserId, options)
+        : service.taskRepository.getTasksByDateRange(targetStartDate, targetEndDate, targetUserId)
+    );
     if (service.enableCloudStorage) {
       try {
         tasks = await service._fetchTasksFromCloud(userId, { startDate, endDate, ...options });
         tasks = await service._mergeLocalTasksIntoCloudResult(
           tasks,
           userId,
-          (targetId) => service.taskRepository.getTasksByDateRange(startDate, endDate, targetId),
+          (targetId) => repoGetTasksByDateRange(startDate, endDate, targetId),
           `${startDate}至${endDate}任务`
         );
       } catch (cloudError) {
         logger.warn('TaskService', '云端日期范围查询失败，降级本地', { error: cloudError.message });
-        tasks = await service.taskRepository.getTasksByDateRange(startDate, endDate, userId);
+        tasks = await repoGetTasksByDateRange(startDate, endDate, userId);
       }
     } else {
-      tasks = await service.taskRepository.getTasksByDateRange(startDate, endDate, userId);
+      tasks = await repoGetTasksByDateRange(startDate, endDate, userId);
     }
     logger.info('TaskService', `获取${startDate}至${endDate}的任务成功${userId ? `, 用户=${userId}` : ''}, 数量=${tasks.length}`);
-    return tasks;
+    return filterTasksByOptions(tasks, options);
   } catch (error) {
     logger.error('TaskService', `获取${startDate}至${endDate}的任务失败`, error);
     return [];
@@ -202,16 +346,30 @@ async function calculateTaskProgress(service, tasks = null) {
   try {
     logger.info('TaskService', '开始计算任务进度', { tasksProvided: !!tasks });
 
-    const tasksToProcess = tasks || await service.getTodayTasks();
+    const tasksToProcess = tasks || await (async () => {
+      const today = dateUtils.getTodayString();
+      const regularTasks = await service.getTasksByDate(today);
+      const occurrenceRecords = await service.getOccurrenceRecordsByDateRange({
+        startDate: today,
+        endDate: today
+      });
+      return regularTasks.concat(occurrenceRecords);
+    })();
     const typeCounts = {
       total: { habit: 0, study: 0, interest: 0 },
       completed: { habit: 0, study: 0, interest: 0 }
     };
 
-    tasksToProcess.forEach((task) => {
+    tasksToProcess
+      .filter(shouldIncludeInProgressSummary)
+      .forEach((task) => {
+      if (isOccurrenceConfigTask(task)) {
+        return;
+      }
+
       if (typeCounts.total.hasOwnProperty(task.type)) {
         typeCounts.total[task.type] += 1;
-        if (task.status === TaskStatus.COMPLETED) {
+        if (shouldCountTaskAsCompleted(task)) {
           typeCounts.completed[task.type] += 1;
         }
       }
@@ -228,13 +386,22 @@ async function calculateTaskProgress(service, tasks = null) {
       interest: Number(progress.interest || 0),
       study: Number(progress.study || 0)
     };
+    const taskProgressSummary = {
+      habit: buildTaskProgressBucketSummary(typeCounts.completed.habit, typeCounts.total.habit),
+      study: buildTaskProgressBucketSummary(typeCounts.completed.study, typeCounts.total.study),
+      interest: buildTaskProgressBucketSummary(typeCounts.completed.interest, typeCounts.total.interest)
+    };
 
-    const totalTasks = tasksToProcess.length;
-    const completedTasks = tasksToProcess.filter((task) => task.status === TaskStatus.COMPLETED).length;
+    const countableTasks = tasksToProcess.filter((task) => (
+      !isOccurrenceConfigTask(task) && shouldIncludeInProgressSummary(task)
+    ));
+    const totalTasks = countableTasks.length;
+    const completedTasks = countableTasks.filter((task) => shouldCountTaskAsCompleted(task)).length;
     const completionRate = totalTasks > 0 ? Math.round(completedTasks / totalTasks * 100) : 0;
 
     const result = {
       taskProgress,
+      taskProgressSummary,
       stats: {
         totalTasks,
         completedTasks,
@@ -253,6 +420,11 @@ async function calculateTaskProgress(service, tasks = null) {
     logger.error('TaskService', '计算任务进度失败', error);
     return {
       taskProgress: { habit: 0, study: 0, interest: 0 },
+      taskProgressSummary: {
+        habit: buildTaskProgressBucketSummary(0, 0),
+        study: buildTaskProgressBucketSummary(0, 0),
+        interest: buildTaskProgressBucketSummary(0, 0)
+      },
       stats: {
         totalTasks: 0,
         completedTasks: 0,
@@ -263,17 +435,41 @@ async function calculateTaskProgress(service, tasks = null) {
   }
 }
 
+function buildTaskProgressBucketSummary(completed, total) {
+  const normalizedCompleted = Number(completed || 0);
+  const normalizedTotal = Number(total || 0);
+  const percent = normalizedTotal > 0
+    ? Math.round(normalizedCompleted / normalizedTotal * 100)
+    : 0;
+
+  return {
+    completed: normalizedCompleted,
+    total: normalizedTotal,
+    percent,
+    centerText: normalizedTotal > 0 ? `${normalizedCompleted}/${normalizedTotal}` : '—',
+    isEmpty: normalizedTotal === 0
+  };
+}
+
 async function checkUpcomingTasks(service, userId = null) {
   try {
     logger.info('TaskService', '开始检查即将到期任务');
 
-    let tasks = await service.taskRepository.getTodayTasks();
-    if (userId) {
-      tasks = tasks.filter((task) => !task.userId || task.userId === userId);
+    const today = dateUtils.getTodayString();
+    const tomorrow = dateUtils.getTomorrowString();
+
+    let tasks;
+    if (typeof service.taskRepository.getTasksByDateRange === 'function') {
+      tasks = await service.taskRepository.getTasksByDateRange(today, tomorrow, userId);
+    } else {
+      tasks = await service.taskRepository.getTodayTasks();
+      if (userId) {
+        tasks = tasks.filter((task) => !task.userId || task.userId === userId);
+      }
     }
 
     if (!tasks || tasks.length === 0) {
-      logger.info('TaskService', '今天没有任务');
+      logger.info('TaskService', '今天至明天没有需要检查的任务');
       return { success: true, count: 0, tasks: [] };
     }
 
@@ -384,17 +580,22 @@ async function getTaskStatistics(service, dateRange = {}, scopeOptions = {}) {
         dateRange.startDate,
         dateRange.endDate,
         scopeOptions.userId || null,
-        scopeOptions.scope ? { scope: scopeOptions.scope } : {}
+        {
+          ...(scopeOptions.scope ? { scope: scopeOptions.scope } : {}),
+          includeOccurrence: scopeOptions.includeOccurrence === true
+        }
       );
     } else if (scopeOptions.userId || scopeOptions.scope) {
       tasks = await service.getTasksByScope(scopeOptions);
     } else {
-      tasks = await service.getAllTasks();
+      tasks = await service.getAllTasks(null, {
+        includeOccurrence: scopeOptions.includeOccurrence === true
+      });
     }
 
     const stats = {
       totalTasks: tasks.length,
-      completedTasks: tasks.filter((task) => task.status === TaskStatus.COMPLETED).length,
+      completedTasks: tasks.filter((task) => shouldCountTaskAsCompleted(task)).length,
       completionRate: 0,
       typeCounts: {
         habit: tasks.filter((task) => task.type === TaskType.HABIT).length,
@@ -402,9 +603,9 @@ async function getTaskStatistics(service, dateRange = {}, scopeOptions = {}) {
         interest: tasks.filter((task) => task.type === TaskType.INTEREST).length
       },
       typeCompletion: {
-        habit: tasks.filter((task) => task.type === TaskType.HABIT && task.status === TaskStatus.COMPLETED).length,
-        study: tasks.filter((task) => task.type === TaskType.STUDY && task.status === TaskStatus.COMPLETED).length,
-        interest: tasks.filter((task) => task.type === TaskType.INTEREST && task.status === TaskStatus.COMPLETED).length
+        habit: tasks.filter((task) => task.type === TaskType.HABIT && shouldCountTaskAsCompleted(task)).length,
+        study: tasks.filter((task) => task.type === TaskType.STUDY && shouldCountTaskAsCompleted(task)).length,
+        interest: tasks.filter((task) => task.type === TaskType.INTEREST && shouldCountTaskAsCompleted(task)).length
       },
       overdueCount: tasks.filter((task) => task.status === TaskStatus.OVERDUE).length,
       streak: await service._calculateStreak(tasks)
@@ -449,6 +650,7 @@ function calculateDailyStats(tasks) {
 
   tasks.forEach((task) => {
     if (!task.date) return;
+    if (isOccurrenceConfigTask(task)) return;
     if (!tasksByDate[task.date]) {
       tasksByDate[task.date] = [];
     }
@@ -458,7 +660,7 @@ function calculateDailyStats(tasks) {
   const dailyStats = [];
   for (const date in tasksByDate) {
     const dayTasks = tasksByDate[date];
-    const completed = dayTasks.filter((task) => task.status === TaskStatus.COMPLETED).length;
+    const completed = dayTasks.filter((task) => shouldCountTaskAsCompleted(task)).length;
 
     dailyStats.push({
       date,
@@ -483,13 +685,14 @@ async function calculateStreak(tasks) {
 
     tasks.forEach((task) => {
       if (!task.date) return;
+      if (isOccurrenceConfigTask(task)) return;
       if (!tasksByDate[task.date]) {
         tasksByDate[task.date] = {
           hasTasks: true,
           hasCompleted: false
         };
       }
-      if (task.status === TaskStatus.COMPLETED) {
+      if (shouldCountTaskAsCompleted(task)) {
         tasksByDate[task.date].hasCompleted = true;
       }
     });
@@ -525,13 +728,245 @@ async function getTasksByScope(service, options = {}) {
     }
     if (options.scope === 'family') {
       if (service.enableCloudStorage) {
-        return service._fetchTasksFromCloud(null, { scope: 'family' });
+        const cloudTasks = await service._fetchTasksFromCloud(null, { scope: 'family' });
+        const localTasks = await service.taskRepository.getAll();
+        const cloudIds = new Set((cloudTasks || []).map((task) => task.id).filter(Boolean));
+        const localOnlyTasks = (localTasks || []).filter((task) => !cloudIds.has(task.id));
+        const mergedTasks = localOnlyTasks.length > 0
+          ? [...cloudTasks, ...localOnlyTasks]
+          : cloudTasks;
+        return filterTasksByOptions(mergedTasks, options);
       }
-      return service.taskRepository.getAll();
+      return filterTasksByOptions(await service.taskRepository.getAll(), options);
     }
     return service.getAllTasks(null, options);
   } catch (error) {
     logger.error('TaskService', 'getTasksByScope 失败', error);
+    return [];
+  }
+}
+
+function getTaskOwnerUserId(task = {}) {
+  return task.userId || task.pendingSyncMeta?.targetUserId || null;
+}
+
+function isPendingLocalTask(task) {
+  return Boolean(task && (task.pendingSyncMeta || task.syncedToCloud !== true));
+}
+
+function getFamilyChildUserIds(service) {
+  const availableUsers = service.userService?.getAllUsers?.() || [];
+  return availableUsers
+    .filter((user) => user?.role === 'child' && user?.status !== 'inactive')
+    .map((user) => userContextUtils.getUserIdentifier(user))
+    .filter(Boolean);
+}
+
+function filterFamilyChildTasks(service, tasks = []) {
+  const childUserIds = getFamilyChildUserIds(service);
+  if (childUserIds.length === 0) {
+    return [];
+  }
+
+  const childUserIdSet = new Set(childUserIds);
+  return (Array.isArray(tasks) ? tasks : []).filter((task) => childUserIdSet.has(getTaskOwnerUserId(task)));
+}
+
+async function getChildTasksByScope(service, options = {}) {
+  try {
+    if (options.userId || options.scope !== 'family') {
+      return getTasksByScope(service, options);
+    }
+
+    return filterFamilyChildTasks(service, await getTasksByScope(service, options));
+  } catch (error) {
+    logger.error('TaskService', 'getChildTasksByScope 失败', error);
+    return [];
+  }
+}
+
+async function getPendingLocalTasksByScope(service, options = {}) {
+  try {
+    const localTasks = await service.taskRepository.getAll();
+    const pendingTasks = (Array.isArray(localTasks) ? localTasks : []).filter(isPendingLocalTask);
+
+    if (options.userId) {
+      return pendingTasks.filter((task) => getTaskOwnerUserId(task) === options.userId);
+    }
+
+    if (options.scope === 'family') {
+      return pendingTasks;
+    }
+
+    const currentUserId = userContextUtils.getUserIdentifier(service.userService?.getCurrentUser?.())
+      || service.userService?.getCurrentUserId?.()
+      || null;
+
+    if (currentUserId) {
+      return pendingTasks.filter((task) => getTaskOwnerUserId(task) === currentUserId);
+    }
+
+    return pendingTasks;
+  } catch (error) {
+    logger.error('TaskService', 'getPendingLocalTasksByScope 失败', error);
+    return [];
+  }
+}
+
+async function getPendingLocalChildTasksByScope(service, options = {}) {
+  try {
+    if (options.userId || options.scope !== 'family') {
+      return getPendingLocalTasksByScope(service, options);
+    }
+
+    return filterFamilyChildTasks(service, await getPendingLocalTasksByScope(service, options));
+  } catch (error) {
+    logger.error('TaskService', 'getPendingLocalChildTasksByScope 失败', error);
+    return [];
+  }
+}
+
+async function getOccurrenceTasks(service, scope = {}) {
+  try {
+    const date = scope.date || dateUtils.getTodayString();
+    const startDate = scope.startDate || '';
+    const endDate = scope.endDate || '';
+    const userId = scope.userId || null;
+    const includeInactive = scope.includeInactive === true;
+    const hasRange = Boolean(startDate && endDate);
+
+    if (service.enableCloudStorage && typeof service.isOccurrenceEnabled === 'function') {
+      const enabled = await service.isOccurrenceEnabled();
+      if (!enabled) {
+        return [];
+      }
+    }
+
+    if (service.enableCloudStorage) {
+      try {
+        const cloudParams = {
+          includeOccurrence: true,
+          occurrenceMode: 'config',
+          includeInactive
+        };
+        if (hasRange) {
+          cloudParams.startDate = startDate;
+          cloudParams.endDate = endDate;
+        } else if (!includeInactive) {
+          cloudParams.date = date;
+        }
+        const cloudTasks = await service._fetchTasksFromCloud(userId, {
+          ...cloudParams
+        });
+        const localTasks = hasRange
+          ? await service.taskRepository.getAll()
+          : await service.taskRepository.getOccurrenceTasks(date, userId, { includeInactive });
+        const cloudIds = new Set((cloudTasks || []).map((task) => task.id));
+        const mergedTasks = (cloudTasks || []).concat(
+          (localTasks || []).filter((task) => {
+            if (cloudIds.has(task.id)) {
+              return false;
+            }
+            if (userId && task.userId !== userId) {
+              return false;
+            }
+            return true;
+          })
+        );
+
+        return mergedTasks.filter((task) => {
+          if (!isOccurrenceConfigTask(task)) {
+            return false;
+          }
+
+          if (includeInactive && !hasRange) {
+            return true;
+          }
+
+          if (hasRange) {
+            const taskStartDate = task.activeRange?.startDate || task.date;
+            const taskEndDate = task.activeRange?.hasNoEndDate ? '' : (task.activeRange?.endDate || '');
+            const overlapsStart = !taskEndDate || taskEndDate >= startDate;
+            return Boolean(taskStartDate && taskStartDate <= endDate && overlapsStart);
+          }
+
+          return includeInactive || task.canRecordOccurrenceOn(date);
+        });
+      } catch (cloudError) {
+        logger.warn('TaskService', '云端获取表现项失败，降级到本地', {
+          date,
+          userId,
+          error: cloudError.message
+        });
+      }
+    }
+
+    if (hasRange) {
+      const localTasks = await service.taskRepository.getAll();
+      return (localTasks || []).filter((task) => {
+        if (userId && task.userId !== userId) {
+          return false;
+        }
+        if (!isOccurrenceConfigTask(task)) {
+          return false;
+        }
+        if (includeInactive) {
+          return true;
+        }
+        const taskStartDate = task.activeRange?.startDate || task.date;
+        const taskEndDate = task.activeRange?.hasNoEndDate ? '' : (task.activeRange?.endDate || '');
+        const overlapsStart = !taskEndDate || taskEndDate >= startDate;
+        return Boolean(taskStartDate && taskStartDate <= endDate && overlapsStart);
+      });
+    }
+
+    return service.taskRepository.getOccurrenceTasks(date, userId, { includeInactive });
+  } catch (error) {
+    logger.error('TaskService', '获取表现项失败', error);
+    return [];
+  }
+}
+
+async function getOccurrenceRecordsByDateRange(service, scope = {}) {
+  try {
+    const startDate = scope.startDate;
+    const endDate = scope.endDate;
+    const userId = scope.userId || null;
+
+    if (!startDate || !endDate) {
+      return [];
+    }
+
+    if (service.enableCloudStorage && typeof service.isOccurrenceEnabled === 'function') {
+      const enabled = await service.isOccurrenceEnabled();
+      if (!enabled) {
+        return [];
+      }
+    }
+
+    if (service.enableCloudStorage) {
+      try {
+        const cloudTasks = await service._fetchTasksFromCloud(userId, {
+          startDate,
+          endDate,
+          includeOccurrence: true,
+          occurrenceMode: 'record'
+        });
+        const localTasks = await service.taskRepository.getOccurrenceRecordsByDateRange(startDate, endDate, userId);
+        return mergeOccurrenceRecords(cloudTasks, localTasks);
+      } catch (cloudError) {
+        logger.warn('TaskService', '云端获取表现记录失败，降级到本地', {
+          startDate,
+          endDate,
+          userId,
+          error: cloudError.message
+        });
+      }
+    }
+
+    return service.taskRepository.getOccurrenceRecordsByDateRange(startDate, endDate, userId);
+  } catch (error) {
+    logger.error('TaskService', '获取表现记录失败', error);
     return [];
   }
 }
@@ -549,5 +984,14 @@ module.exports = {
   getTaskStatistics,
   calculateDailyStats,
   calculateStreak,
-  getTasksByScope
+  getTasksByScope,
+  getChildTasksByScope,
+  getPendingLocalTasksByScope,
+  getPendingLocalChildTasksByScope,
+  getOccurrenceTasks,
+  getOccurrenceRecordsByDateRange,
+  isOccurrenceConfigTask,
+  isOccurrenceRecordTask,
+  isRegularPlannedTask,
+  shouldCountTaskAsCompleted
 };

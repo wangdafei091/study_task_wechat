@@ -1,9 +1,18 @@
 const serviceManager = require('../../services/service-manager.js');
 const logger = require('../../utils/logger');
+const { isSystemReadonlyUser } = require('../../utils/system-access');
+
+function isSystemReadonlyAccount() {
+  const loginUser = serviceManager.getUserService()?.getLoginUser?.() || null;
+  return isSystemReadonlyUser(loginUser);
+}
 
 async function run(app) {
   try {
     logger.info('App', '开始登录成功后的初始化');
+
+    const offlineQueueService = serviceManager.getOfflineQueueService();
+    logger.info('App', '获取离线队列服务:', offlineQueueService ? '成功' : '失败');
 
     const taskService = serviceManager.getTaskService();
     logger.info('App', '获取任务服务:', taskService ? '成功' : '失败');
@@ -14,11 +23,29 @@ async function run(app) {
     const starService = serviceManager.getStarService();
     logger.info('App', '获取星星服务:', starService ? '成功' : '失败');
 
+    if (offlineQueueService?.initialize) {
+      await offlineQueueService.initialize();
+    }
+
+    if (offlineQueueService?.drain && !isSystemReadonlyAccount()) {
+      await offlineQueueService.drain({
+        reason: 'post_login_bootstrap',
+        force: true
+      });
+      logger.info('App', '登录后离线队列补偿完成');
+    } else if (offlineQueueService?.drain) {
+      logger.info('App', '系统只读，跳过登录后离线队列补偿');
+    }
+
     if (taskService) {
       await fixLegacyTaskData(taskService);
-      logger.info('App', '开始检查任务状态和处理必做任务惩罚');
-      await taskService.checkTasksStatus();
-      await taskService.checkUpcomingTasks();
+      if (!isSystemReadonlyAccount()) {
+        logger.info('App', '开始检查任务状态和处理必做任务惩罚');
+        await taskService.checkTasksStatus();
+        await taskService.checkUpcomingTasks();
+      } else {
+        logger.info('App', '系统只读，跳过启动期任务写链路');
+      }
     }
 
     if (starService) {
@@ -28,6 +55,11 @@ async function run(app) {
     if (messageService) {
       logger.info('App', '初始化消息服务');
       await messageService.initialize();
+      if (!isSystemReadonlyAccount() && typeof messageService.syncFormalRemindersIfNeeded === 'function') {
+        await messageService.syncFormalRemindersIfNeeded();
+      } else if (typeof messageService.syncFormalRemindersIfNeeded === 'function') {
+        logger.info('App', '系统只读，跳过正式提醒同步');
+      }
       const messages = await messageService.getAllMessages();
       logger.info('App', `消息服务初始化完成，共${messages.length}条消息`);
     }
@@ -52,22 +84,54 @@ async function run(app) {
 
 async function bootstrapStarService(starService) {
   try {
-    logger.info('App', '检查即将过期的星星并进行奖励保护');
     const userService = serviceManager.getUserService();
     const loginUserId = userService ? userService.getLoginUserId() : null;
-    const expiredStars = await starService.calculatePendingExpiry(loginUserId);
+    const rewardService = serviceManager.getRewardService();
 
-    if (expiredStars > 0 && loginUserId) {
-      logger.info('App', `发现${expiredStars}颗即将过期的星星，为登录用户${loginUserId}进行奖励保护`);
-      const protectionResult = await starService.protectRewardsByExpiry(expiredStars, loginUserId);
+    if (starService.enableCloudStorage && loginUserId && typeof starService.syncExpiryAuthorityIfNeeded === 'function') {
+      logger.info('App', '云端模式执行星星到期权威同步');
+      if (!isSystemReadonlyAccount()) {
+        await starService.syncExpiryAuthorityIfNeeded({
+          scope: 'user',
+          userId: loginUserId,
+          force: true
+        });
+      } else {
+        logger.info('App', '系统只读，跳过星星到期权威同步');
+      }
+      if (typeof starService.refreshStarsFromCloud === 'function') {
+        // 启动链路是正式 user-scope 顺序：authority -> stars -> rewards。
+        await starService.refreshStarsFromCloud(loginUserId, {
+          forceCloudAfterAuthority: true
+        });
+      }
+      if (rewardService?.refreshRewardsFromCloud) {
+        await rewardService.refreshRewardsFromCloud({
+          force: true,
+          userId: loginUserId
+        });
+      }
+    } else {
+      logger.info('App', '本地模式检查即将过期的星星并评估奖励抵扣预览');
+      const expiredStars = await starService.calculatePendingExpiry(loginUserId);
 
-      if (protectionResult.success && protectionResult.protectedCount > 0) {
-        logger.info('App', `奖励保护成功，保护了${protectionResult.protectedCount}个奖励`);
+      if (expiredStars > 0 && loginUserId) {
+        logger.info('App', `发现${expiredStars}颗即将过期的星星，为登录用户${loginUserId}评估可抵扣奖励`);
+        const protectionResult = await starService.protectRewardsByExpiry(expiredStars, loginUserId);
+
+        if (protectionResult.success && protectionResult.protectedCount > 0) {
+          logger.info('App', `奖励抵扣预览评估完成，共识别${protectionResult.protectedCount}个可抵扣奖励`);
+        }
       }
     }
 
     logger.info('App', '初始化星星服务并清理过期星星');
     await starService.initialize();
+
+    if (starService.enableCloudStorage) {
+      logger.info('App', '云端模式跳过本地星星一致性检查和修复');
+      return;
+    }
 
     logger.info('App', '开始检查并修复星星数据一致性');
     const repairResult = await starService.checkAndRepairDataConsistency();

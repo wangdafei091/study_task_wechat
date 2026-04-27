@@ -76,7 +76,11 @@ async function setupTestData() {
 
   await db.query(
     `UPDATE users
-     SET family_id = 'm10_msg_family_001'
+     SET family_id = 'm10_msg_family_001',
+         family_permission_role = CASE
+           WHEN role = 'parent' THEN 'manager'
+           ELSE family_permission_role
+         END
      WHERE user_id IN ('m10_msg_parent_001', 'm10_msg_child_001', 'm10_msg_child_002')`
   );
 }
@@ -345,7 +349,7 @@ describe('M10 messages API 真实数据库集成测试', () => {
     ]);
   });
 
-  it('奖励创建只进家庭流，兑换后进入孩子个人流和家庭流，并支持批量已读', async () => {
+  it('奖励创建应进入家庭流和孩子个人流，兑换后进入孩子个人流和家庭流，并支持批量已读', async () => {
     const createRewardRes = await request(app)
       .post('/api/rewards')
       .set('Authorization', `Bearer ${parentToken}`)
@@ -381,11 +385,16 @@ describe('M10 messages API 真实数据库集成测试', () => {
       .get('/api/messages?scope=user')
       .set('Authorization', `Bearer ${childToken}`);
 
-    expect(
-      childMessagesAfterCreate.body.data.messages.some(message =>
-        message.relatedId === 'm10_msg_reward_001' && message.notificationType === 'reward_create'
-      )
-    ).toBe(false);
+    expect(childMessagesAfterCreate.body.data.messages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          relatedId: 'm10_msg_reward_001',
+          notificationType: 'reward_create',
+          visibilityScope: 'user',
+          userId: 'm10_msg_child_001',
+        })
+      ])
+    );
 
     await db.query(
       `INSERT INTO star_groups (group_id, user_id, type, stars, expiry_date, modify_time) VALUES

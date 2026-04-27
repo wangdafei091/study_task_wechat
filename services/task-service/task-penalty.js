@@ -1,9 +1,59 @@
 const logger = require('../../utils/logger');
 const { TaskStatus } = require('../../models/task');
 const { EVENTS } = require('../../utils/constants');
+const HttpClient = require('../../utils/http-client');
+const API_CONFIG = require('../../utils/api-config');
+const { isSystemReadonlyUser } = require('../../utils/system-access');
+
+function resolveReadonlyReason(service) {
+  const loginUser = service?.userService?.getLoginUser?.() || null;
+  if (isSystemReadonlyUser(loginUser)) {
+    return 'system_readonly';
+  }
+
+  if (Boolean(
+    loginUser &&
+    loginUser.role === 'parent' &&
+    loginUser.familyPermissionRole === 'viewer'
+  )) {
+    return 'viewer_readonly';
+  }
+
+  return '';
+}
 
 async function checkTasksStatus(service) {
   try {
+    if (service.enableCloudStorage) {
+      const readonlyReason = resolveReadonlyReason(service);
+      if (readonlyReason) {
+        logger.info('TaskService', '只读账号跳过任务惩罚云同步', {
+          reason: readonlyReason
+        });
+        return {
+          success: true,
+          skipped: true,
+          reason: readonlyReason,
+          expiredTasks: [],
+          requiredTasks: [],
+          penaltyResults: [],
+          penaltyCount: 0,
+          affectedTaskIds: []
+        };
+      }
+
+      const response = await HttpClient.post(API_CONFIG.ENDPOINTS.TASK_PENALTIES_SYNC, {});
+      const payload = response || {};
+      return {
+        success: true,
+        expiredTasks: [],
+        requiredTasks: [],
+        penaltyResults: Array.isArray(payload.penaltyResults) ? payload.penaltyResults : [],
+        penaltyCount: Number(payload.penaltyCount || 0),
+        affectedTaskIds: payload.affectedTaskIds || []
+      };
+    }
+
     const loginUserId = service.userService ? service.userService.getLoginUserId() : null;
 
     let scanUserIds = null;
@@ -97,11 +147,14 @@ async function handleRequiredTaskPenalty(service, task) {
       logger.info('TaskService', message);
     }
 
+    const actualDeducted = consumeResult ? consumeResult.consumed : 0;
     task.penaltyApplied = true;
+    task.penaltyDeductedPoints = actualDeducted;
+    task.penaltyRefunded = false;
+    task.penaltyRefundTime = 0;
     task.modifyTime = Date.now();
 
     const updatedTask = await service.taskRepository.save(task);
-    const actualDeducted = consumeResult ? consumeResult.consumed : 0;
 
     logger.info('TaskService', `已对必做任务应用惩罚: "${task.title}", 扣除${actualDeducted}颗星, 目标用户=${taskUserId}`);
 

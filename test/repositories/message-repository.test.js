@@ -171,6 +171,21 @@ describe('Message Repository', () => {
 
       expect(unreadMessages).toEqual([]);
     });
+
+    it('应该排除已归档的未读消息', async () => {
+      const mockMessages = [
+        createMessage({ id: 'msg_1', isRead: false, isArchived: false }),
+        createMessage({ id: 'msg_2', isRead: false, isArchived: true }),
+        createMessage({ id: 'msg_3', isRead: true, isArchived: false })
+      ];
+
+      mockStorageAdapter.getAsync.mockResolvedValue(mockMessages);
+
+      const unreadMessages = await repository.getUnreadMessages();
+
+      expect(unreadMessages).toHaveLength(1);
+      expect(unreadMessages[0].id).toBe('msg_1');
+    });
   });
 
   describe('getUnreadCount', () => {
@@ -202,6 +217,125 @@ describe('Message Repository', () => {
       const count = await repository.getUnreadCount(userId);
 
       expect(count).toBe(1);
+    });
+
+    it('统计未读数量时应该排除已归档消息', async () => {
+      const mockMessages = [
+        createMessage({ id: 'msg_1', isRead: false, isArchived: false }),
+        createMessage({ id: 'msg_2', isRead: false, isArchived: true })
+      ];
+
+      mockStorageAdapter.getAsync.mockResolvedValue(mockMessages);
+
+      const count = await repository.getUnreadCount();
+
+      expect(count).toBe(1);
+    });
+  });
+
+  describe('replaceSyncedMessagesByScope', () => {
+    it('应移除同 eventKey 的 provisional，并保留未匹配的本地消息', async () => {
+      const existingMessages = [
+        createMessage({
+          id: 'prov_match',
+          userId: 'child_1',
+          visibilityScope: 'user',
+          messageEventKey: 'task:1:complete',
+          isProvisional: true
+        }),
+        createMessage({
+          id: 'prov_keep',
+          userId: 'child_1',
+          visibilityScope: 'user',
+          messageEventKey: 'task:2:update',
+          isProvisional: true
+        }),
+        createMessage({
+          id: 'local_keep',
+          userId: 'child_1',
+          visibilityScope: 'user',
+          syncedToCloud: false
+        }),
+        createMessage({
+          id: 'cloud_old',
+          userId: 'child_1',
+          visibilityScope: 'user',
+          syncedToCloud: true
+        }),
+        createMessage({
+          id: 'other_scope',
+          userId: 'child_2',
+          visibilityScope: 'user',
+          isProvisional: true,
+          messageEventKey: 'task:1:complete'
+        })
+      ];
+
+      mockStorageAdapter.getAsync.mockResolvedValue(existingMessages);
+      mockStorageAdapter.setAsync.mockResolvedValue({});
+
+      const result = await repository.replaceSyncedMessagesByScope('user', 'child_1', [
+        createMessage({
+          id: 'cloud_new',
+          userId: 'child_1',
+          visibilityScope: 'user',
+          messageEventKey: 'task:1:complete'
+        })
+      ]);
+
+      expect(result).toHaveLength(1);
+      const savedMessages = mockStorageAdapter.setAsync.mock.calls.at(-1)[1];
+      expect(savedMessages.map((message) => message.id)).toEqual([
+        'prov_keep',
+        'local_keep',
+        'other_scope',
+        'cloud_new'
+      ]);
+      expect(savedMessages.find((message) => message.id === 'cloud_new').syncedToCloud).toBe(true);
+      expect(savedMessages.find((message) => message.id === 'cloud_new').isProvisional).toBe(false);
+    });
+  });
+
+  describe('cleanupStaleMessages', () => {
+    it('应清理当前 scope 下不在有效集合中的正式云消息', async () => {
+      const existingMessages = [
+        createMessage({
+          id: 'cloud_keep',
+          userId: 'child_1',
+          visibilityScope: 'user',
+          syncedToCloud: true
+        }),
+        createMessage({
+          id: 'cloud_remove',
+          userId: 'child_1',
+          visibilityScope: 'user',
+          syncedToCloud: true
+        }),
+        createMessage({
+          id: 'prov_keep',
+          userId: 'child_1',
+          visibilityScope: 'user',
+          isProvisional: true
+        }),
+        createMessage({
+          id: 'other_scope',
+          userId: 'child_2',
+          visibilityScope: 'user',
+          syncedToCloud: true
+        })
+      ];
+
+      mockStorageAdapter.getAsync.mockResolvedValue(existingMessages);
+      mockStorageAdapter.setAsync.mockResolvedValue({});
+
+      await repository.cleanupStaleMessages('user', 'child_1', ['cloud_keep']);
+
+      const savedMessages = mockStorageAdapter.setAsync.mock.calls.at(-1)[1];
+      expect(savedMessages.map((message) => message.id)).toEqual([
+        'cloud_keep',
+        'prov_keep',
+        'other_scope'
+      ]);
     });
   });
 
@@ -385,6 +519,21 @@ describe('Message Repository', () => {
       const messages = await repository.getHighPriorityMessages();
 
       expect(messages.length).toBe(2);
+    });
+
+    it('获取高优先级消息时应该排除已归档消息', async () => {
+      const mockMessages = [
+        createMessage({ id: 'msg_1', priority: MessagePriority.HIGH, isArchived: false }),
+        createMessage({ id: 'msg_2', priority: MessagePriority.HIGH, isArchived: true }),
+        createMessage({ id: 'msg_3', priority: MessagePriority.LOW, isArchived: false })
+      ];
+
+      mockStorageAdapter.getAsync.mockResolvedValue(mockMessages);
+
+      const messages = await repository.getHighPriorityMessages();
+
+      expect(messages).toHaveLength(1);
+      expect(messages[0].id).toBe('msg_1');
     });
   });
 

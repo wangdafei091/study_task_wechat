@@ -1,71 +1,65 @@
 <!-- 星星记录页面 -->
 <view class="container">
-  <!-- 筛选区 - 优化布局，标题与按钮同行 -->
-  <view class="filter-tabs-container">
-    <view class="filter-tabs">
-      <view class="filter-section">
-        <view class="section-header">
-          <text class="section-title">类型</text>
-          <view class="filter-options">
-            <view class="filter-tab {{selectedType === 'all' ? 'active' : ''}}" 
-                  data-type="all" bindtap="quickSelectType">全部</view>
-            <view class="filter-tab {{selectedType === 'income' ? 'active' : ''}}" 
-                  data-type="income" bindtap="quickSelectType">星星获取</view>
-            <view class="filter-tab {{selectedType === 'expense' ? 'active' : ''}}" 
-                  data-type="expense" bindtap="quickSelectType">星星使用</view>
+  <view class="filters-card">
+    <view class="filter-section">
+      <view class="filter-label">时间</view>
+      <view class="filter-options">
+        <block wx:for="{{timeFilters}}" wx:key="value">
+          <view
+            class="filter-chip {{selectedTime === item.value ? 'active' : ''}}"
+            data-time="{{item.value}}"
+            bindtap="quickSelectTime"
+          >
+            {{item.label}}
           </view>
-        </view>
+        </block>
       </view>
+    </view>
 
-      <view class="filter-section">
-        <view class="section-header">
-          <text class="section-title">时间</text>
-          <view class="filter-options">
-            <view class="filter-tab {{selectedTime === 'all' ? 'active' : ''}}" 
-                  data-time="all" bindtap="quickSelectTime">全部时间</view>
-            <view class="filter-tab {{selectedTime === 'week' ? 'active' : ''}}" 
-                  data-time="week" bindtap="quickSelectTime">近一周</view>
-            <view class="filter-tab {{selectedTime === 'month' ? 'active' : ''}}" 
-                  data-time="month" bindtap="quickSelectTime">近一个月</view>
-            <view class="filter-tab {{selectedTime === '3months' ? 'active' : ''}}" 
-                  data-time="3months" bindtap="quickSelectTime">近三个月</view>
+    <view class="filter-section">
+      <view class="filter-label">类型</view>
+      <view class="filter-options">
+        <block wx:for="{{typeFilters}}" wx:key="value">
+          <view
+            class="filter-chip {{selectedType === item.value ? 'active' : ''}}"
+            data-type="{{item.value}}"
+            bindtap="quickSelectType"
+          >
+            {{item.label}}
           </view>
-        </view>
+        </block>
       </view>
     </view>
   </view>
 
-  <!-- 记录列表 -->
-  <view class="star-records-container">
-    <block wx:if="{{records.length > 0}}">
+  <block wx:if="{{!emptyState}}">
+    <block wx:if="{{isGroupedView}}">
       <block wx:for="{{groupedRecords}}" wx:key="month">
-        <!-- 月份标题 -->
-        <view class="month-section">
-          <view class="month-title">
-            <view class="month-text">{{item.month}}</view>
-            <view class="month-summary">{{item.monthSummary}}</view>
+        <view class="month-card">
+          <view class="month-header">
+            <view class="month-title">{{item.monthText}}</view>
           </view>
-          
-          <!-- 月份记录列表 -->
-          <view class="star-records-list">
-            <view class="timeline-connector"></view>
-            <block wx:for="{{item.records}}" wx:key="id" wx:for-item="record" wx:for-index="recordIndex">
-              <view class="record-item {{record.recordClass}}">
-                <view class="record-dot"></view>
-                <view class="record-info">
+
+          <view class="record-list">
+            <block wx:for="{{item.records}}" wx:key="id" wx:for-item="record">
+              <view class="record-card">
+                <view class="record-header">
                   <view class="record-title">{{record.title}}</view>
-                  <!-- 双时间显示：惩罚记录显示主要时间和次要时间 -->
-                  <view class="record-time-container">
-                    <view class="record-time primary">{{record.time}}</view>
-                    <view wx:if="{{record.hasDualTime}}" class="record-time secondary">{{record.subTime}}</view>
+                  <view class="record-amount {{record.amountValue > 0 ? 'positive' : 'negative'}}">
+                    {{record.amountText}}
                   </view>
                 </view>
-                <view class="record-points-container">
-                  <view class="record-points {{record.points > 0 ? 'positive' : 'negative'}}">
-                    <text class="star-icon">⭐</text>
-                    <text>{{record.points > 0 ? '+' : ''}}{{record.points}}</text>
+
+                <view class="record-meta">
+                  <view class="record-tag {{record.tagTone}}">{{record.tagText}}</view>
+                  <view class="record-subtitle" wx:if="{{record.subtitle}}">{{record.subtitle}}</view>
+                </view>
+
+                <view class="record-time-line">
+                  <view class="record-time primary">{{record.primaryTimeText}}</view>
+                  <view class="record-time secondary" wx:if="{{record.secondaryTimeText}}">
+                    {{record.secondaryTimeText}}
                   </view>
-                  <view class="record-balance">余额 {{record.balance}} 星星</view>
                 </view>
               </view>
             </block>
@@ -73,12 +67,47 @@
         </view>
       </block>
     </block>
-    
-    <!-- 无记录时的空状态 -->
-    <view class="empty-records" wx:if="{{records.length === 0}}">
-      <view class="empty-title">还没有星星记录</view>
-      <view class="empty-text">完成任务即可获得闪亮星星奖励哦！</view>
-      <view class="empty-action" bindtap="navigateToTasks">去完成任务</view>
+
+    <view class="record-list" wx:else>
+      <block wx:for="{{records}}" wx:key="id">
+        <view class="record-card">
+          <view class="record-header">
+            <view class="record-title">{{item.title}}</view>
+            <view class="record-amount {{item.amountValue > 0 ? 'positive' : 'negative'}}">
+              {{item.amountText}}
+            </view>
+          </view>
+
+          <view class="record-meta">
+            <view class="record-tag {{item.tagTone}}">{{item.tagText}}</view>
+            <view class="record-subtitle" wx:if="{{item.subtitle}}">{{item.subtitle}}</view>
+          </view>
+
+          <view class="record-time-line">
+            <view class="record-time primary">{{item.primaryTimeText}}</view>
+            <view class="record-time secondary" wx:if="{{item.secondaryTimeText}}">
+              {{item.secondaryTimeText}}
+            </view>
+          </view>
+        </view>
+      </block>
+    </view>
+  </block>
+
+  <view class="empty-card" wx:if="{{emptyState}}">
+    <view class="empty-title">{{emptyState.title}}</view>
+    <view class="empty-text">{{emptyState.text}}</view>
+    <view class="empty-actions" wx:if="{{emptyState.actions.length > 0}}">
+      <block wx:for="{{emptyState.actions}}" wx:key="label">
+        <view
+          class="empty-action"
+          data-action="{{item.action}}"
+          data-value="{{item.value}}"
+          bindtap="handleEmptyAction"
+        >
+          {{item.label}}
+        </view>
+      </block>
     </view>
   </view>
-</view> 
+</view>

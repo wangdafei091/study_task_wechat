@@ -6,6 +6,64 @@
 const API_CONFIG = require('./api-config');
 const logger = require('./logger');
 const TokenManager = require('./token-manager');
+const systemUserAccessState = require('./app/system-user-access-state');
+
+function buildHttpError(message, options = {}) {
+  const error = new Error(message || '请求失败');
+  if (options.code) {
+    error.code = options.code;
+  }
+  if (options.statusCode) {
+    error.statusCode = options.statusCode;
+  }
+  if (options.responseData) {
+    error.responseData = options.responseData;
+  }
+  return error;
+}
+
+function rejectWithResponseError(reject, res, fallbackMessage) {
+  const responseData = res?.data || {};
+  const message = responseData.message || fallbackMessage || '请求失败';
+  const code = responseData.error_code || responseData.errorCode || null;
+  const requestError = buildHttpError(message, {
+    code,
+    statusCode: res?.statusCode || null,
+    responseData
+  });
+
+  systemUserAccessState.handleBlockedError(requestError);
+  reject(requestError);
+}
+
+function buildRequestHeaders() {
+  const headers = { ...API_CONFIG.HEADERS };
+  const token = TokenManager.getToken();
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  return headers;
+}
+
+function buildRequestUrl(url, params) {
+  const isAbsoluteUrl = /^https?:\/\//.test(url);
+  const normalizedBaseUrl = (API_CONFIG.BASE_URL || '').replace(/\/+$/, '');
+  const normalizedPath = `/${String(url || '').replace(/^\/+/, '')}`;
+  let fullUrl = isAbsoluteUrl
+    ? url
+    : `${normalizedBaseUrl}${normalizedPath}`;
+
+  if (params && Object.keys(params).length > 0) {
+    const queryString = Object.keys(params)
+      .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(params[key])}`)
+      .join('&');
+    fullUrl += `?${queryString}`;
+  }
+
+  return fullUrl;
+}
 
 class HttpClient {
   
@@ -28,24 +86,8 @@ class HttpClient {
       return Promise.reject(new Error(errorMsg));
     }
 
-    // 自动添加JWT token到Authorization头
-    const headers = { ...API_CONFIG.HEADERS };
-    const token = TokenManager.getToken();
-
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    // 构建完整URL
-    let fullUrl = API_CONFIG.BASE_URL + url;
-    
-    // 添加查询参数
-    if (params && Object.keys(params).length > 0) {
-      const queryString = Object.keys(params)
-        .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(params[key])}`)
-        .join('&');
-      fullUrl += `?${queryString}`;
-    }
+    const headers = buildRequestHeaders();
+    const fullUrl = buildRequestUrl(url, params);
     
     logger.info('HttpClient', `发起请求: ${method} ${fullUrl}`, { data, params });
     
@@ -89,23 +131,22 @@ class HttpClient {
                     if (res.statusCode === 200 && res.data && res.data.success) {
                       resolve(res.data.data);
                     } else {
-                      const errorMsg = res.data?.message || '重新请求失败';
-                      logger.error('HttpClient', '重新请求失败', errorMsg);
-                      reject(new Error(errorMsg));
+                      logger.error('HttpClient', '重新请求失败', res.data?.message || '重新请求失败');
+                      rejectWithResponseError(reject, res, '重新请求失败');
                     }
                   },
                   fail: (err) => {
                     logger.error('HttpClient', '重新请求失败', err);
-                    reject(new Error(`网络请求失败: ${err.errMsg || '未知错误'}`));
+                    reject(buildHttpError(`网络请求失败: ${err.errMsg || '未知错误'}`));
                   }
                 });
               } else {
                 logger.error('HttpClient', '自动重新登录失败');
-                reject(new Error('认证失败，请重新登录'));
+                reject(buildHttpError('认证失败，请重新登录', { statusCode: 401 }));
               }
             } catch (error) {
               logger.error('HttpClient', '自动重新登录异常', error);
-              reject(new Error('认证异常，请重新登录'));
+              reject(buildHttpError('认证异常，请重新登录', { statusCode: 401 }));
             }
             return;
           }
@@ -115,19 +156,18 @@ class HttpClient {
             if (res.data && res.data.success) {
               resolve(res.data.data);
             } else {
-              const errorMsg = res.data?.message || '请求失败';
-              logger.error('HttpClient', '业务错误', errorMsg);
-              reject(new Error(errorMsg));
+              logger.error('HttpClient', '业务错误', res.data?.message || '请求失败');
+              rejectWithResponseError(reject, res, '请求失败');
             }
           } else {
             const errorMsg = `HTTP错误: ${res.statusCode}`;
             logger.error('HttpClient', errorMsg, res);
-            reject(new Error(errorMsg));
+            rejectWithResponseError(reject, res, errorMsg);
           }
         },
         fail: (err) => {
           logger.error('HttpClient', '网络请求失败', err);
-          reject(new Error(`网络请求失败: ${err.errMsg || '未知错误'}`));
+          reject(buildHttpError(`网络请求失败: ${err.errMsg || '未知错误'}`));
         }
       });
     });
@@ -248,7 +288,54 @@ class HttpClient {
    * @returns {Promise<Object>} 健康状态
    */
   static async healthCheck() {
-    return this.get(API_CONFIG.ENDPOINTS.HEALTH);
+    if (!API_CONFIG.ENABLE_API) {
+      const errorMsg = 'API已禁用，使用本地存储模式';
+      logger.warn('HttpClient', errorMsg);
+      return Promise.reject(new Error(errorMsg));
+    }
+
+    const fullUrl = buildRequestUrl(API_CONFIG.ENDPOINTS.HEALTH);
+    const headers = buildRequestHeaders();
+
+    logger.info('HttpClient', `发起请求: GET ${fullUrl}`, { data: undefined, params: undefined });
+
+    return new Promise((resolve, reject) => {
+      wx.request({
+        url: fullUrl,
+        method: 'GET',
+        header: headers,
+        timeout: API_CONFIG.TIMEOUT,
+        success: (res) => {
+          logger.info('HttpClient', `请求成功: ${res.statusCode}`, res.data);
+
+          if (res.statusCode !== 200) {
+            const errorMsg = `HTTP错误: ${res.statusCode}`;
+            logger.error('HttpClient', errorMsg, res);
+            rejectWithResponseError(reject, res, errorMsg);
+            return;
+          }
+
+          // /health 兼容两种返回格式：
+          // 1. 通用 Result<T>：{ success: true, data: {...} }
+          // 2. 裸健康响应：{ status: 'ok', ... }
+          if (res.data && typeof res.data === 'object' && 'success' in res.data) {
+            if (res.data.success) {
+              resolve(res.data.data);
+            } else {
+              logger.error('HttpClient', '业务错误', res.data?.message || '请求失败');
+              rejectWithResponseError(reject, res, '请求失败');
+            }
+            return;
+          }
+
+          resolve(res.data || {});
+        },
+        fail: (err) => {
+          logger.error('HttpClient', '网络请求失败', err);
+          reject(buildHttpError(`网络请求失败: ${err.errMsg || '未知错误'}`));
+        }
+      });
+    });
   }
 }
 

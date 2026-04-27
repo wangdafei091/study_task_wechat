@@ -56,41 +56,47 @@ class TaskRepository extends BaseRepository {
     return this.storageAdapter.setAsync('taskDeleteTombstones', next);
   }
   
+  _shouldIncludeInRegularTaskQuery(task, options = {}) {
+    if (!task) {
+      return false;
+    }
+
+    if (options.includeOccurrence === true) {
+      return true;
+    }
+
+    if (typeof task.isOccurrenceMode === 'function' && task.isOccurrenceMode()) {
+      return false;
+    }
+
+    return true;
+  }
+
+  _shouldIncludeOccurrenceConfigTask(task, date, options = {}) {
+    if (!task || typeof task.isOccurrenceConfigTask !== 'function' || !task.isOccurrenceConfigTask()) {
+      return false;
+    }
+
+    if (options.includeInactive === true) {
+      return true;
+    }
+
+    if (!date || typeof task.canRecordOccurrenceOn !== 'function') {
+      return false;
+    }
+
+    return task.canRecordOccurrenceOn(date);
+  }
+
   /**
    * 获取今天的任务
    * @param {String} userId 可选的用户ID，不传则获取所有用户的任务
+   * @param {Object} options 查询选项
    * @returns {Promise<Array>} 今天的任务列表
    */
-  async getTodayTasks(userId = null) {
+  async getTodayTasks(userId = null, options = {}) {
     const today = this._formatDate(new Date());
-    
-    try {
-      const tasks = await this.query(task => {
-        // 用户过滤
-        if (userId && task.userId !== userId) {
-          return false;
-        }
-        
-        // 对于重复任务，检查是否匹配今天的日期
-        if (task.repeat && task.repeat.type !== 'none') {
-          // 检查今天是否在重复任务的有效期内
-          const taskDate = new Date(task.date);
-          const taskDateStr = this._formatDate(taskDate);
-          return taskDateStr === today;
-        }
-        
-        // 对于普通任务，直接比较日期
-        return task.date === today;
-      });
-      
-      logger.info('TaskRepository', `获取今天任务成功${userId ? `, 用户=${userId}` : ''}, 数量=${tasks.length}`);
-      
-      // 使用习惯优先+开始时间顺序排序
-      return this._sortTasksByHabitAndTime(tasks);
-    } catch (error) {
-      logger.error('TaskRepository', '获取今天任务失败', error);
-      return [];
-    }
+    return this.getTasksByDate(today, userId, options);
   }
   
   /**
@@ -99,7 +105,7 @@ class TaskRepository extends BaseRepository {
    * @param {String} userId 可选的用户ID，不传则获取所有用户的任务
    * @returns {Promise<Array>} 指定日期的任务列表
    */
-  async getTasksByDate(date, userId = null) {
+  async getTasksByDate(date, userId = null, options = {}) {
     if (!date) {
       logger.warn('TaskRepository', '尝试获取无效日期的任务');
       return [];
@@ -109,6 +115,10 @@ class TaskRepository extends BaseRepository {
       const tasks = await this.query(task => {
         // 用户过滤
         if (userId && task.userId !== userId) {
+          return false;
+        }
+
+        if (!this._shouldIncludeInRegularTaskQuery(task, options)) {
           return false;
         }
         
@@ -141,7 +151,7 @@ class TaskRepository extends BaseRepository {
    * @param {String} userId 可选的用户ID，不传则获取所有用户的任务
    * @returns {Promise<Array>} 指定日期范围的任务列表
    */
-  async getTasksByDateRange(startDate, endDate, userId = null) {
+  async getTasksByDateRange(startDate, endDate, userId = null, options = {}) {
     if (!startDate || !endDate) {
       logger.warn('TaskRepository', '尝试使用无效日期范围获取任务');
       return [];
@@ -151,6 +161,10 @@ class TaskRepository extends BaseRepository {
       const tasks = await this.query(task => {
         // 用户过滤
         if (userId && task.userId !== userId) {
+          return false;
+        }
+
+        if (!this._shouldIncludeInRegularTaskQuery(task, options)) {
           return false;
         }
         
@@ -209,8 +223,6 @@ class TaskRepository extends BaseRepository {
    * @returns {Promise<Array>} 过期未完成的任务列表
    */
   async getExpiredIncompleteTask(userId = null) {
-    const today = this._formatDate(new Date());
-    
     try {
       const tasks = await this.query(task => {
         // 用户过滤
@@ -342,6 +354,101 @@ class TaskRepository extends BaseRepository {
       return tasks;
     } catch (error) {
       logger.error('TaskRepository', `按用户ID查询任务失败, userId=${userId}`, error);
+      return [];
+    }
+  }
+
+  /**
+   * 获取指定日期可记录的表现项配置任务
+   * @param {String} date 日期
+   * @param {String} userId 用户ID
+   * @param {Object} options 查询选项
+   * @returns {Promise<Array>} 表现项配置任务
+   */
+  async getOccurrenceTasks(date, userId = null, options = {}) {
+    if (!date) {
+      logger.warn('TaskRepository', '尝试获取无效日期的表现项');
+      return [];
+    }
+
+    try {
+      const tasks = await this.query((task) => {
+        if (userId && task.userId !== userId) {
+          return false;
+        }
+
+        return this._shouldIncludeOccurrenceConfigTask(task, date, options);
+      });
+
+      return this._sortTasksByHabitAndTime(tasks);
+    } catch (error) {
+      logger.error('TaskRepository', `获取${date}表现项失败`, error);
+      return [];
+    }
+  }
+
+  /**
+   * 获取某个表现项某天的记录实例
+   * @param {String} parentTaskId 父任务ID
+   * @param {String} userId 用户ID
+   * @param {String} date 日期
+   * @returns {Promise<Task|null>} 记录实例
+   */
+  async getOccurrenceRecord(parentTaskId, userId, date) {
+    if (!parentTaskId || !userId || !date) {
+      logger.warn('TaskRepository', '尝试使用无效参数获取表现记录');
+      return null;
+    }
+
+    try {
+      const tasks = await this.query((task) => {
+        if (task.userId !== userId) {
+          return false;
+        }
+
+        if (task.parentTaskId !== parentTaskId || task.date !== date) {
+          return false;
+        }
+
+        return typeof task.isOccurrenceRecordTask === 'function' && task.isOccurrenceRecordTask();
+      });
+
+      return tasks[0] || null;
+    } catch (error) {
+      logger.error('TaskRepository', `获取表现记录失败: parentTaskId=${parentTaskId}, date=${date}`, error);
+      return null;
+    }
+  }
+
+  /**
+   * 获取日期范围内的表现记录实例
+   * @param {String} startDate 开始日期
+   * @param {String} endDate 结束日期
+   * @param {String} userId 用户ID
+   * @returns {Promise<Array>} 记录实例列表
+   */
+  async getOccurrenceRecordsByDateRange(startDate, endDate, userId = null) {
+    if (!startDate || !endDate) {
+      logger.warn('TaskRepository', '尝试使用无效日期范围获取表现记录');
+      return [];
+    }
+
+    try {
+      const tasks = await this.query((task) => {
+        if (userId && task.userId !== userId) {
+          return false;
+        }
+
+        if (task.date < startDate || task.date > endDate) {
+          return false;
+        }
+
+        return typeof task.isOccurrenceRecordTask === 'function' && task.isOccurrenceRecordTask();
+      });
+
+      return this._sortTasksByHabitAndTime(tasks);
+    } catch (error) {
+      logger.error('TaskRepository', `获取${startDate}至${endDate}表现记录失败`, error);
       return [];
     }
   }

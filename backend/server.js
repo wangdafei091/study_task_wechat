@@ -12,6 +12,7 @@ const { testConnection } = require('./config/database');
 const { createLogger } = require('./utils/logger');
 const corsMiddleware = require('./middleware/cors');
 const { errorHandler, notFoundHandler } = require('./middleware/error');
+const taskService = require('./services/taskService');
 
 const logger = createLogger('Server');
 
@@ -39,12 +40,20 @@ app.use((req, res, next) => {
 });
 
 // 健康检查接口
-app.get('/health', (req, res) => {
+app.get('/health', async (req, res) => {
+  let taskOccurrenceEnabled = false;
+  try {
+    taskOccurrenceEnabled = await taskService.hasOccurrenceCapability();
+  } catch (error) {
+    logger.warn('健康检查获取 occurrence 能力失败', { error: error.message });
+  }
+
   res.json({
     status: 'ok',
     timestamp: Date.now(),
     uptime: process.uptime(),
     environment: process.env.NODE_ENV || 'development',
+    taskOccurrenceEnabled,
   });
 });
 
@@ -61,7 +70,10 @@ app.get('/', (req, res) => {
       tasks: '/api/tasks',
       stars: '/api/stars',
       rewards: '/api/rewards',
+      taskTemplates: '/api/task-templates',
       messages: '/api/messages',
+      invites: '/api/invites',
+      system: '/api/system',
     },
   });
 });
@@ -73,7 +85,10 @@ app.use('/api/tasks', require('./routes/tasks'));
 app.use('/api/families', require('./routes/families'));
 app.use('/api/stars', require('./routes/stars'));
 app.use('/api/rewards', require('./routes/rewards'));
+app.use('/api/task-templates', require('./routes/taskTemplates'));
 app.use('/api/messages', require('./routes/messages'));
+app.use('/api/invites', require('./routes/invites'));
+app.use('/api/system', require('./routes/system'));
 
 // 404处理
 app.use(notFoundHandler);

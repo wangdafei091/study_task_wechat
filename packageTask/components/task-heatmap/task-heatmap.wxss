@@ -1,0 +1,1558 @@
+/* components/task-heatmap/task-heatmap.wxss */
+/* 引入共享样式 */
+@import "/styles/common-task.wxss";
+
+/* 热力图颜色变量定义 */
+:host {
+  --level-0-color: #f7fbff;
+  --level-1-color: #edf4ff;
+  --level-2-color: #dde9fb;
+  --level-3-color: #c6d8f3;
+  --level-4-color: #aebfdf;
+  --level-1-text: #5377b5;
+  --level-2-text: #4466a3;
+  --level-3-text: #36558b;
+  --level-4-text: #2a436c;
+  --calendar-outline: #dfe9f8;
+  --calendar-today-ring: rgba(109, 146, 214, 0.5);
+  --calendar-selected: #2e66d0;
+}
+
+/* 组件特定的样式调整 */
+.edit-field .task-description-field {
+  flex: 1;
+  margin-left: 10rpx;
+}
+
+.edit-field {
+  margin-bottom: 20rpx; /* 增加字段间距 */
+  padding: 4rpx 0; /* 添加上下内边距 */
+  display: flex;
+  align-items: center;
+}
+
+.edit-field:last-child {
+  margin-bottom: 10rpx;
+}
+
+.field-label {
+  font-size: 24rpx;
+  color: #666;
+  margin-right: 10rpx;
+  min-width: 50rpx; /* 确保标签宽度一致 */
+}
+
+.task-heatmap {
+  background-color: #ffffff;
+  border-radius: 20rpx;
+  box-shadow: 0 8rpx 24rpx rgba(39, 77, 141, 0.06);
+  padding: 20rpx 16rpx 16rpx;
+  overflow: hidden;
+}
+
+.month-selector {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10rpx;
+}
+
+.month-title {
+  font-size: 30rpx;
+  font-weight: 500;
+  color: #333;
+}
+
+.prev-month, .next-month {
+  width: 50rpx;
+  height: 50rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background-color: #F5F5F5;
+}
+
+.icon {
+  font-size: 22rpx;
+  color: #666;
+}
+
+.calendar {
+  width: 100%;
+}
+
+.weekdays {
+  display: flex;
+  margin-bottom: 8rpx;
+  padding: 0 4rpx 10rpx;
+  border-bottom: 1rpx solid rgba(223, 233, 248, 0.9);
+}
+
+.weekday {
+  flex: 1;
+  text-align: center;
+  font-size: 22rpx;
+  font-weight: 500;
+  color: #8a97ab;
+  padding: 6rpx 0;
+}
+
+.days {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 0 -2rpx 4rpx;
+}
+
+.day {
+  width: calc(100% / 7);
+  height: 94rpx;
+  display: flex;
+  padding: 3rpx 2rpx;
+  position: relative;
+  box-sizing: border-box;
+}
+
+.day-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  height: 100%;
+  padding: 10rpx 6rpx 8rpx;
+  border-radius: 16rpx;
+  border: 1rpx solid transparent;
+  box-sizing: border-box;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, background-color 0.18s ease, opacity 0.18s ease;
+}
+
+.day.current-month:active .day-content {
+  transform: scale(0.97);
+}
+
+.current-month .day-number {
+  color: #31425d;
+}
+
+.day-number {
+  font-size: 28rpx;
+  line-height: 1;
+  font-weight: 600;
+}
+
+.other-month .day-number {
+  color: rgba(120, 136, 160, 0.45);
+}
+
+.other-month .day-content {
+  opacity: 0.72;
+}
+
+.other-month.selected .day-content {
+  opacity: 0.9;
+}
+
+.task-dots-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 16rpx;
+  gap: 6rpx;
+  margin-top: auto;
+}
+
+.task-dot {
+  width: 8rpx;
+  height: 8rpx;
+  border-radius: 50%;
+  flex-shrink: 0;
+  opacity: 0.88;
+  box-shadow: 0 0 0 1rpx rgba(255, 255, 255, 0.72);
+}
+
+.task-count-badge {
+  min-width: 22rpx;
+  height: 18rpx;
+  padding: 0 6rpx;
+  border-radius: 999rpx;
+  background-color: rgba(112, 128, 153, 0.12);
+  border: 1rpx solid rgba(112, 128, 153, 0.14);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: auto;
+  box-sizing: border-box;
+}
+
+.task-count-badge-text {
+  font-size: 14rpx;
+  line-height: 1;
+  color: #7a889d;
+  font-weight: 600;
+}
+
+.day.today .day-content {
+  border-color: var(--calendar-today-ring);
+}
+
+.day.today .day-number {
+  font-weight: 700;
+  color: #2458b2;
+}
+
+.day.selected {
+  z-index: 2;
+}
+
+.day.selected .day-content {
+  box-shadow: 0 0 0 2rpx rgba(46, 102, 208, 0.9), 0 10rpx 22rpx rgba(55, 91, 153, 0.12);
+}
+
+.day.selected.today .day-content {
+  border-color: transparent;
+}
+
+.days .day.level-0 .day-content {
+  background-color: var(--level-0-color);
+}
+
+.days .day.level-1 .day-content {
+  background-color: var(--level-1-color);
+}
+
+.days .day.level-2 .day-content {
+  background-color: var(--level-2-color);
+}
+
+.days .day.level-3 .day-content {
+  background-color: var(--level-3-color);
+}
+
+.days .day.level-4 .day-content {
+  background-color: var(--level-4-color);
+}
+
+.day.level-3 .day-number,
+.day.level-4 .day-number {
+  color: #2d4466;
+}
+
+.day.level-3.today .day-number,
+.day.level-4.today .day-number {
+  color: #1f4f9c;
+}
+
+.day.has-overflow .task-count-badge {
+  min-width: 24rpx;
+}
+
+/* 任务列表相关样式 */
+.day-tasks-container {
+  width: 100%;
+  margin-top: 18rpx;
+  overflow: hidden;
+  max-height: 0;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border-top: 1rpx solid transparent;
+  opacity: 0;
+}
+
+.day-tasks-container.expanded {
+  max-height: 600rpx;
+  border-top: 1rpx solid rgba(223, 233, 248, 0.9);
+  opacity: 1;
+}
+
+.day-tasks-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 16rpx 10rpx 14rpx;
+  background: linear-gradient(180deg, rgba(246, 249, 255, 0.96) 0%, rgba(255, 255, 255, 0.92) 100%);
+}
+
+.day-date {
+  display: flex;
+  flex-direction: column;
+}
+
+/* 优化日期和任务数量的显示 */
+.date-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10rpx 12rpx;
+}
+
+.date-text {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #30415c;
+}
+
+.task-count-text {
+  font-size: 22rpx;
+  color: #70809a;
+  line-height: 1.4;
+}
+
+.pressure-tag {
+  border-radius: 999rpx;
+  padding: 4rpx 14rpx;
+  font-size: 20rpx;
+  color: white;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: none;
+}
+
+/* 标签容器 */
+.task-tags-container {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-right: 12rpx;
+}
+
+/* 统一标签基础样式 - 与首页保持一致 */
+.task-tag {
+  height: 28rpx;
+  padding: 2rpx 8rpx;
+  border-radius: 8rpx;
+  font-size: 18rpx;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 8rpx;
+  font-weight: 400;
+  line-height: 1;
+  box-shadow: 0 1rpx 4rpx rgba(0, 0, 0, 0.05);
+}
+
+/* 更多操作按钮 */
+.more-actions {
+  font-size: 30rpx;
+  color: #666;
+  height: 40rpx;
+  width: 40rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0; /* 防止按钮被挤压 */
+}
+
+.more-actions:active {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+/* 已完成任务样式 */
+.task-item-wrap.completed .task-title {
+  color: #666;
+}
+
+/* 空任务提示 */
+.empty-tasks {
+  padding: 20rpx 0;
+  text-align: center;
+  color: #999;
+  font-size: 28rpx;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+}
+
+.empty-icon {
+  font-size: 36rpx;
+  margin-right: 10rpx;
+  color: #c0c4cc;
+}
+
+/* 压力警告提示 */
+.pressure-warning {
+  margin-top: 16rpx;
+  padding: 10rpx 16rpx;
+  background-color: rgba(198, 40, 40, 0.05);
+  border-radius: 8rpx;
+  display: flex;
+  align-items: center;
+}
+
+.warning-icon {
+  margin-right: 8rpx;
+}
+
+.warning-text {
+  font-size: 24rpx;
+  color: #C62828;
+}
+
+/* 压力色块样式 */
+.pressure-color-block {
+  width: 24rpx;
+  height: 24rpx;
+  border-radius: 4rpx;
+  margin-right: 8rpx;
+}
+
+/* 修改压力色块的级别样式 */
+.pressure-color-block.pressure-level-1 {
+  background-color: rgba(83, 119, 181, 0.22);
+}
+
+.pressure-color-block.pressure-level-2 {
+  background-color: rgba(68, 102, 163, 0.34);
+}
+
+.pressure-color-block.pressure-level-3 {
+  background-color: rgba(54, 85, 139, 0.46);
+}
+
+.pressure-color-block.pressure-level-4 {
+  background-color: rgba(42, 67, 108, 0.58);
+}
+
+/* 任务时间样式 */
+.task-time {
+  font-size: 20rpx;
+  color: #999;
+  margin-left: 8rpx;
+  flex-shrink: 0;
+}
+
+/* 任务描述信息图标 */
+.info-icon {
+  width: 16rpx;
+  height: 16rpx;
+  font-size: 16rpx;
+  line-height: 16rpx;
+  text-align: center;
+  border-radius: 50%;
+  background-color: rgba(0, 0, 0, 0.1);
+  color: rgba(255, 255, 255, 0.9);
+  margin-left: 8rpx;
+  flex-shrink: 0;
+  font-style: italic;
+  font-family: serif;
+}
+
+/* 任务描述气泡 */
+.task-desc-bubble {
+  display: none;
+}
+
+/* 任务操作图标区 */
+.task-action-icons {
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+}
+
+/* 编辑链接样式 */
+.edit-link {
+  font-size: 22rpx;
+  color: #4285F4;
+  margin-left: 8rpx;
+  flex-shrink: 0;
+  padding: 2rpx 4rpx; /* 增加可点击区域 */
+}
+
+/* 任务项编辑状态高亮 */
+.task-item-wrap.editing {
+  border-left-width: 5rpx;
+  border-bottom: none;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.task-item-wrap.editing.type-study {
+  background-color: rgba(52, 168, 83, 0.1);
+}
+
+.task-item-wrap.editing.type-habit {
+  background-color: rgba(66, 133, 244, 0.1);
+}
+
+.task-item-wrap.editing.type-interest {
+  background-color: rgba(251, 188, 5, 0.1);
+}
+
+/* 任务编辑区 */
+.task-edit-container {
+  width: 100%;
+  max-height: 0;
+  overflow: hidden;
+  background-color: #f7f9fc; /* 改为浅色背景 */
+  border-left: 5rpx solid transparent;
+  border-bottom: 1rpx solid #e0e0e0; /* 添加底部边框 */
+  border-right: 1rpx solid #e0e0e0; /* 添加右侧边框 */
+  border-bottom-left-radius: 8rpx;
+  border-bottom-right-radius: 8rpx;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  opacity: 0;
+  margin: -4rpx 4rpx 12rpx 4rpx; /* 增加底部间距 */
+  box-sizing: border-box;
+  box-shadow: 0 0 6rpx rgba(0, 0, 0, 0.08); /* 修改为四周均匀阴影 */
+}
+
+.task-edit-container.expanded {
+  max-height: 300rpx;
+  opacity: 1;
+  padding-bottom: 8rpx; /* 添加底部内边距 */
+}
+
+/* 编辑区与下方任务的分界线 */
+.task-edit-container.expanded::after {
+  content: '';
+  display: block;
+  height: 6rpx;
+  background-color: #f5f5f5;
+  margin-top: 8rpx;
+}
+
+/* 类型对应的边框颜色 */
+.task-item-wrap.type-study + .task-edit-container {
+  border-left-color: #34A853;
+}
+
+.task-item-wrap.type-habit + .task-edit-container {
+  border-left-color: #4285F4;
+}
+
+.task-item-wrap.type-interest + .task-edit-container {
+  border-left-color: #FBBC05;
+}
+
+/* 删除确认区域样式 */
+.delete-confirm {
+  height: 0;
+  opacity: 0;
+  overflow: hidden;
+  background-color: #fff;
+  border-top: 1px solid rgba(0,0,0,0.03); /* 保持分隔线样式一致 */
+  transition: height 0.25s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  flex-wrap: wrap; /* 允许子元素换行 */
+  justify-content: space-between;
+  align-items: center;
+  padding: 0;
+  box-shadow: none; /* 移除内阴影 */
+}
+
+.delete-confirm.visible {
+  height: auto;
+  opacity: 1;
+  padding: 12rpx 0 4rpx; /* 调整下边距，为提示文本留出空间 */
+}
+
+/* 编辑范围选择区域样式 */
+.edit-scope-area {
+  height: 0;
+  opacity: 0;
+  overflow: hidden;
+  background-color: #fff;
+  border-top: 1px solid rgba(0,0,0,0.03); /* 保持分隔线样式一致 */
+  transition: height 0.25s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  justify-content: space-between; /* 与删除确认区域保持一致 */
+  align-items: center;
+  padding: 0;
+  box-shadow: none;
+  z-index: 2;
+}
+
+.edit-scope-area.visible {
+  height: auto;
+  opacity: 1;
+  padding: 12rpx 0 4rpx; /* 调整下边距，为提示文本留出空间 */
+}
+
+.scope-options {
+  display: flex;
+  flex-direction: column; /* 改为纵向排列 */
+  align-items: flex-start; /* 左对齐 */
+  padding-left: 24rpx; /* 与删除选项区域保持一致 */
+  flex: 1;
+  white-space: nowrap;
+  height: auto;
+  line-height: 1.4; /* 保持行高一致 */
+}
+
+.scope-options .options-row {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.scope-options .option {
+  display: flex;
+  align-items: center;
+  margin-right: 40rpx; /* 增加间距，防止选项被挤压 */
+  transition: transform 0.15s;
+  height: auto;
+}
+
+.scope-options .option.selected {
+  transform: scale(1.05);
+}
+
+.scope-options .radio-circle {
+  width: 24rpx;
+  height: 24rpx;
+  border-radius: 50%;
+  border: 2rpx solid #999;
+  margin-right: 8rpx;
+  position: relative;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+
+.scope-options .radio-circle.selected {
+  border-color: #4285F4;
+}
+
+.scope-options .radio-circle.selected:after {
+  content: '';
+  position: absolute;
+  width: 14rpx;
+  height: 14rpx;
+  background-color: #4285F4;
+  border-radius: 50%;
+  top: 5rpx;
+  left: 5rpx;
+}
+
+.scope-options .option-text {
+  font-size: 24rpx;
+  color: #333;
+  white-space: nowrap;
+  line-height: 1.4;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+/* 范围提示文本 */
+.scope-tip {
+  font-size: 22rpx;
+  color: #888;
+  margin: 8rpx 24rpx 4rpx; /* 调整外边距，与周围元素保持适当间距 */
+  padding: 0; /* 移除内边距 */ 
+  display: block;
+  width: 100%;
+  line-height: 1.3;
+  word-wrap: break-word;     /* 确保长文本换行 */
+  word-break: break-all;     /* 允许在单词内换行 */
+  white-space: normal;       /* 确保文本正常换行 */
+  box-sizing: border-box;    /* 确保padding不会导致宽度溢出 */
+  flex-basis: 100%;          /* 在flex布局中占据整行 */
+  order: 2;                  /* 确保显示在删除选项和操作区域之后 */
+}
+
+/* 压力指数说明弹窗 */
+.pressure-info-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s;
+}
+
+.pressure-info-modal.visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+.pressure-info-content {
+  width: 85%;
+  max-width: 650rpx;
+  background-color: #fff;
+  border-radius: 12rpx;
+  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+}
+
+.pressure-info-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20rpx 24rpx;
+  background-color: #f7f9fc;
+  border-bottom: 1rpx solid #eaeef3;
+}
+
+.pressure-info-title {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #333;
+}
+
+.pressure-info-close {
+  width: 40rpx;
+  height: 40rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 30rpx;
+  color: #666;
+  border-radius: 50%;
+}
+
+.pressure-info-body {
+  padding: 20rpx 24rpx 30rpx;
+}
+
+.formula-section, .factors-section, .levels-section {
+  margin-bottom: 20rpx;
+}
+
+.formula-title, .factors-title, .levels-title {
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 10rpx;
+  display: block;
+}
+
+.formula-text {
+  font-size: 24rpx;
+  color: #444;
+  line-height: 1.4;
+}
+
+.factor-item {
+  display: flex;
+  font-size: 24rpx;
+  line-height: 1.8;
+  color: #555;
+}
+
+.factor-name {
+  width: 130rpx;
+  flex-shrink: 0;
+}
+
+.factor-desc {
+  flex: 1;
+}
+
+/* 计算示例区域样式 */
+.example-section {
+  margin-bottom: 20rpx;
+}
+
+.example-title {
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 10rpx;
+  display: block;
+}
+
+.example-content {
+  font-size: 24rpx;
+  color: #555;
+  line-height: 1.4;
+}
+
+.example-task, .example-calc {
+  margin-bottom: 8rpx;
+}
+
+.example-text {
+  display: block;
+  margin-bottom: 4rpx;
+}
+
+.example-item {
+  padding-left: 20rpx;
+  line-height: 1.6;
+}
+
+.example-result {
+  margin-top: 8rpx;
+  font-weight: 500;
+}
+
+.level-items {
+  display: flex;
+  gap: 6rpx;
+  overflow-x: auto;
+}
+
+.level-item {
+  font-size: 20rpx;
+  padding: 4rpx 8rpx;
+  border-radius: 6rpx;
+  white-space: nowrap;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 100rpx;
+}
+
+.level-range {
+  font-size: 16rpx;
+  margin-top: 4rpx;
+  opacity: 0.9;
+}
+
+.level-item.level-1 {
+  background-color: rgba(92, 151, 247, 0.2);
+}
+
+.level-item.level-2 {
+  background-color: rgba(66, 133, 244, 0.4);
+}
+
+.level-item.level-3 {
+  background-color: rgba(83, 81, 186, 0.7);
+  color: #fff;
+}
+
+.level-item.level-4 {
+  background-color: rgba(198, 40, 40, 0.85);
+  color: #fff;
+}
+
+/* 任务类型样式 */
+.study-task {
+  border-left: 4rpx solid var(--success-color);
+}
+
+.habit-task {
+  border-left: 4rpx solid var(--primary-color);
+}
+
+.interest-task {
+  border-left: 4rpx solid var(--warning-color);
+}
+
+/* 添加卡片式操作菜单样式 */
+
+/* 操作菜单容器 */
+.action-menu-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1000;
+  background-color: rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fade-in 0.2s ease-out;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* 操作菜单卡片 */
+.action-menu {
+  position: absolute;
+  width: 240rpx;
+  background-color: white;
+  border-radius: 16rpx;
+  box-shadow: 0 6rpx 16rpx rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  animation: scale-in 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  transform-origin: top right;
+}
+
+@keyframes scale-in {
+  from { transform: scale(0.8); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+/* 菜单项 */
+.action-menu-item {
+  padding: 30rpx;
+  display: flex;
+  align-items: center;
+  transition: background-color 0.2s;
+}
+
+.action-menu-item:active {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.action-menu-item:not(:last-child) {
+  border-bottom: 1rpx solid rgba(0, 0, 0, 0.05);
+}
+
+/* 图标 */
+.action-icon {
+  margin-right: 20rpx;
+  font-size: 36rpx;
+}
+
+/* 文本 */
+.action-text {
+  font-size: 30rpx;
+  color: #333;
+}
+
+/* 编辑样式 */
+.action-menu-item.edit .action-text {
+  color: #4285F4;
+}
+
+/* 删除样式 */
+.action-menu-item.delete .action-text {
+  color: #C62828; /* 与压力级别4保持一致的深红色 */
+}
+
+/* 编辑按钮区域 */
+.edit-buttons {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16rpx; /* 与内容区域保持间距 */
+  padding: 0 24rpx 4rpx; /* 内边距与删除区域按钮保持一致 */
+}
+
+/* 删除选项区域 */
+.delete-options {
+  display: flex;
+  flex-direction: column; /* 改为纵向排列 */
+  align-items: flex-start; /* 左对齐 */
+  flex: 0.6;
+  white-space: nowrap;
+  height: auto;
+  line-height: 1.4; /* 保持行高一致 */
+  padding-left: 24rpx;
+}
+
+/* 选项容器 */
+.delete-options .options-row {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+/* 删除操作区域 */
+.delete-actions {
+  display: flex;
+  align-items: center;
+  flex: 0.4;
+  justify-content: flex-end;
+  position: relative;
+  height: auto;
+  line-height: 1.4; /* 保持行高一致 */
+  padding: 0 24rpx 0 0; /* 只保留右侧内边距，移除其他内边距 */
+}
+
+/* 选项样式 */
+.delete-confirm .option {
+  display: flex;
+  align-items: center;
+  margin-right: 20rpx;
+  transition: transform 0.15s;
+  height: auto; /* 改为自适应高度 */
+}
+
+.delete-confirm .option.selected {
+  transform: scale(1.05);
+}
+
+.delete-confirm .radio-circle {
+  width: 24rpx;
+  height: 24rpx;
+  border-radius: 50%;
+  border: 2rpx solid #999;
+  margin-right: 8rpx;
+  position: relative;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+
+.delete-confirm .radio-circle.selected {
+  border-color: #4285F4;
+}
+
+.delete-confirm .radio-circle.selected:after {
+  content: '';
+  position: absolute;
+  width: 14rpx;
+  height: 14rpx;
+  background-color: #4285F4;
+  border-radius: 50%;
+  top: 5rpx;
+  left: 5rpx;
+}
+
+/* 选项文本 */
+.delete-confirm .option .option-text {
+  font-size: 24rpx;
+  color: #333;
+  white-space: nowrap;
+  line-height: 1.4; /* 统一使用1.4的行高 */
+  display: inline-block;
+  vertical-align: middle;
+}
+
+/* 按钮通用样式 */
+.btn-cancel {
+  font-size: 24rpx;
+  color: #666;
+  padding: 0 12rpx;
+  line-height: 1.4; /* 统一使用1.4的行高 */
+  display: flex;
+  align-items: center;
+}
+
+.btn-confirm {
+  font-size: 24rpx;
+  color: #fff;
+  background-color: #4285F4;
+  border-radius: 24rpx;
+  padding: 6rpx 24rpx; /* 增加垂直内边距 */
+  margin-left: 20rpx;
+  box-shadow: 0 2rpx 4rpx rgba(66, 133, 244, 0.2);
+  line-height: 1.4; /* 统一使用1.4的行高 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: auto;
+  min-width: 72rpx; /* 确保按钮有最小宽度 */
+}
+
+.btn-confirm.disabled {
+  background-color: #e0e0e0;
+  color: #999;
+  box-shadow: none;
+}
+
+/* 修改级别样式，使用统一的颜色系统 */
+.levels-section {
+  margin-top: 20rpx;
+}
+
+.levels-title {
+  font-size: 26rpx;
+  font-weight: 500;
+  margin-bottom: 10rpx;
+}
+
+.level-items {
+  display: flex;
+  justify-content: space-between;
+}
+
+.level-item {
+  flex: 1;
+  padding: 8rpx 0;
+  font-size: 22rpx;
+  text-align: center;
+  border-radius: 8rpx;
+  margin: 0 4rpx;
+  color: #30415c;
+  border: 1rpx solid rgba(223, 233, 248, 0.9);
+}
+
+/* 与热力图和压力标签保持一致的颜色系统 */
+.level-item.level-1 {
+  background-color: var(--level-1-color);
+}
+
+.level-item.level-2 {
+  background-color: var(--level-2-color);
+}
+
+.level-item.level-3 {
+  background-color: var(--level-3-color);
+}
+
+.level-item.level-4 {
+  background-color: var(--level-4-color);
+}
+
+/* 编辑确认区域样式 */
+.edit-confirm {
+  height: 0;
+  opacity: 0;
+  overflow: hidden;
+  background-color: #fff;
+  border-top: 1px solid rgba(0,0,0,0.03); /* 保持分隔线样式一致 */
+  transition: height 0.25s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  flex-direction: column; /* 修改为纵向布局 */
+  justify-content: flex-start;
+  align-items: stretch; /* 修改为拉伸对齐 */
+  padding: 0;
+  box-shadow: none;
+  z-index: 2;
+}
+
+.edit-confirm.visible {
+  height: auto;
+  opacity: 1;
+  padding: 12rpx 0; /* 统一为上下12rpx的内边距 */
+}
+
+/* 编辑内容区域 */
+.edit-content {
+  display: flex;
+  flex-direction: column;
+  padding: 0 24rpx; /* 添加左右内边距，统一与其他区域 */
+}
+
+/* 编辑按钮区域 */
+.edit-buttons {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16rpx; /* 与内容区域保持间距 */
+  padding: 0 24rpx 4rpx; /* 内边距与删除区域按钮保持一致 */
+}
+
+/* 积分调整器 */
+.points-stepper {
+  display: inline-flex;
+  align-items: center;
+  height: 40rpx;
+  margin-left: 6rpx;
+}
+
+.stepper-btn {
+  width: 32rpx;
+  height: 32rpx;
+  line-height: 30rpx;
+  text-align: center;
+  font-size: 24rpx;
+  color: #666;
+  background-color: #f5f5f5;
+  border-radius: 4rpx;
+}
+
+.stepper-input {
+  width: 70rpx; /* 增加宽度 */
+  height: 36rpx;
+  text-align: center;
+  font-size: 24rpx;
+  margin: 0 4rpx;
+  color: #333;
+}
+
+/* 范围提示气泡 */
+.scope-info-bubble {
+  position: fixed;
+  z-index: 1000;
+  padding: 12rpx 16rpx;
+  background-color: rgba(0, 0, 0, 0.6);
+  color: #ffffff;
+  font-size: 22rpx;
+  border-radius: 6rpx;
+  max-width: 250rpx;
+  word-wrap: break-word;
+  box-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.1);
+  opacity: 0;
+  transform: scale(0.9) translateY(4rpx);
+  transition: all 0.2s ease;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.scope-info-bubble.visible {
+  opacity: 1;
+  transform: scale(1) translateY(0);
+  visibility: visible;
+}
+
+.scope-info-bubble::after {
+  content: '';
+  position: absolute;
+  bottom: -6rpx;
+  left: 10rpx;
+  border-left: 6rpx solid transparent;
+  border-right: 6rpx solid transparent;
+  border-top: 6rpx solid rgba(0, 0, 0, 0.6);
+}
+
+/* 添加积分区域只读状态的样式 */
+.stepper-btn.disabled {
+  color: #ccc;
+  background-color: #f5f5f5;
+  cursor: not-allowed;
+}
+
+.stepper-input.disabled {
+  background-color: #f5f5f5;
+  color: #999;
+}
+
+.readonly-tip {
+  font-size: 22rpx;
+  color: #ff9800;
+  margin-left: 20rpx;
+}
+
+/* 简化的编辑区域描述输入框样式 */
+.textarea-wrapper.heatmap {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  width: calc(100% - 80rpx);
+  margin-left: 6rpx;
+  background-color: #f8f8f8;
+  border-radius: 6rpx;
+  padding: 8rpx 12rpx;
+}
+
+/* 任务热力图中的描述（2行高度） */
+.task-description-textarea.heatmap {
+  height: 80rpx; /* 约2行高度 */
+  font-size: 24rpx;
+  resize: none;
+  color: #333;
+  line-height: 1.4;
+}
+
+.textarea-wrapper.heatmap .char-counter {
+  align-self: flex-end;
+  margin-top: 4rpx;
+  font-size: 20rpx;
+  color: #999;
+}
+
+/* 不同级别的压力标签样式 */
+.pressure-tag.pressure-level-1 {
+  background-color: var(--level-1-text);
+}
+
+.pressure-tag.pressure-level-2 {
+  background-color: var(--level-2-text);
+}
+
+.pressure-tag.pressure-level-3 {
+  background-color: var(--level-3-text);
+}
+
+.pressure-tag.pressure-level-4 {
+  background-color: var(--level-4-text);
+}
+
+/* 关闭按钮样式 */
+.close-btn-circle {
+  width: 44rpx;
+  height: 44rpx;
+  border-radius: 50%;
+  background-color: rgba(224, 232, 244, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26rpx;
+  color: #6e7f99;
+  cursor: pointer;
+}
+
+.close-btn-circle:active {
+  background-color: rgba(211, 223, 241, 0.96);
+}
+
+/* 任务列表样式 */
+.tasks-list {
+  max-height: 400rpx;
+  overflow-y: auto;
+  padding: 10rpx;
+  -webkit-overflow-scrolling: touch; /* 增强iOS滚动 */
+}
+
+/* 任务项容器 */
+.task-item-wrap {
+  display: flex;
+  margin-bottom: 16rpx;
+  padding: 15rpx 24rpx;  /* 减少上下内边距 */
+  background-color: white;
+  border-radius: 12rpx;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.05);
+  border: 1rpx solid #f0f0f0;
+  transition: all 0.2s ease;
+  position: relative; /* 添加定位上下文，用于必做标记定位 */
+}
+
+/* 任务项hover效果 */
+.task-item-wrap:active {
+  transform: translateY(2rpx);
+  box-shadow: 0 1rpx 4rpx rgba(0, 0, 0, 0.03);
+}
+
+/* 任务内容区域 */
+.task-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;  /* 减少元素之间的间距 */
+}
+
+/* 第一行：标题和操作区 */
+.task-item-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin-bottom: 5rpx; /* 减少与下方内容的间距 */
+}
+
+/* 标题区域 */
+.task-title-area {
+  display: flex;
+  align-items: center;
+  flex: 1; /* 使标题区域获得最大可用空间 */
+  min-width: 0; /* 允许内容收缩 */
+  overflow: hidden; /* 防止内容溢出 */
+  margin-right: 10rpx; /* 与右侧按钮区域保持距离 */
+}
+
+/* 任务类型圆点 */
+.task-type-dot {
+  width: 16rpx;
+  height: 16rpx;
+  border-radius: 50%;
+  margin-right: 10rpx;
+  flex-shrink: 0; /* 防止点标记被挤压 */
+}
+
+.study-dot {
+  background-color: var(--success-color); /* 学习：绿色 */
+}
+
+.habit-dot {
+  background-color: var(--primary-color); /* 习惯：蓝色 */
+}
+
+.interest-dot {
+  background-color: var(--warning-color); /* 兴趣：黄色 */
+}
+
+/* 任务标题 */
+.task-title {
+  font-size: 28rpx;
+  font-weight: 500;
+  color: #333;
+  white-space: nowrap; /* 标题单行显示 */
+  overflow: hidden; /* 超出隐藏 */
+  text-overflow: ellipsis; /* 显示省略号 */
+  flex: 1; /* 占用最大可用空间 */
+  margin-right: 8rpx; /* 与标记图标保持间距 */
+}
+
+/* 任务状态标记 */
+.task-complete-mark,
+.task-overdue-mark,
+.task-repeat-mark {
+  font-size: 24rpx;
+  margin-left: 6rpx;
+  flex-shrink: 0; /* 防止标记被挤压 */
+}
+
+.task-complete-mark {
+  color: #34A853;
+}
+
+.task-overdue-mark {
+  color: #C62828; /* 与压力级别4保持一致的深红色 */
+}
+
+.task-repeat-mark {
+  color: #9C27B0;
+}
+
+/* 操作按钮区 */
+.task-item-actions {
+  display: flex;
+  align-items: center;
+  margin-left: 10rpx;
+}
+
+/* 操作按钮通用样式 */
+.task-item-actions .action-btn {
+  font-size: 22rpx;
+  padding: 4rpx 6rpx;
+  text-align: center;
+  position: relative;
+  background-color: transparent;
+  opacity: 0.7;
+  width: auto;
+  height: auto;
+  border-radius: 0;
+  box-shadow: none;
+  margin-left: 0;
+}
+
+/* 添加按钮间分隔点 */
+.task-item-actions .edit-btn::after {
+  content: "·";
+  position: absolute;
+  right: -8rpx;
+  color: #999;
+}
+
+/* 编辑按钮样式 */
+.task-item-actions .edit-btn {
+  color: #4285F4;
+  margin-right: 12rpx;
+  text-decoration: none;
+  border-bottom: none;
+}
+
+/* 删除按钮样式 */
+.task-item-actions .delete-btn {
+  color: #666;
+  text-decoration: none;
+  border-bottom: none;
+}
+
+/* 按钮hover效果 */
+.task-item-actions .action-btn:active {
+  opacity: 1;
+  transform: none;
+}
+
+/* 第二行：描述信息 */
+.task-desc-row {
+  margin: 4rpx 0;  /* 减少上下外边距 */
+}
+
+/* 任务描述 */
+.task-description {
+  font-size: 26rpx;  /* 微调字体大小 */
+  color: #666;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.3;  /* 稍微减少行高 */
+}
+
+/* 第三行：时间信息 */
+.task-info-row {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  margin-top: 8rpx;  /* 减少上边距 */
+  padding: 8rpx 0;  /* 减少上下内边距 */
+  border-top: 1px solid rgba(0,0,0,0.03); /* 保持边框样式一致 */
+}
+
+/* 添加组合信息行样式 */
+.task-combined-info {
+  display: flex;
+  align-items: flex-start;
+  font-size: 22rpx;
+  color: #999;
+  margin-bottom: 8rpx;
+  line-height: 1.2;
+  flex-wrap: wrap;
+  width: 100%;
+  position: relative;
+}
+
+/* 时间信息样式 */
+.time-info {
+  flex: 0 1 auto;
+  overflow: visible; /* 改为visible以避免图标被截断 */
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-right: 10rpx;
+  min-width: 150rpx;
+  padding: 2rpx 0 4rpx; /* 添加上内边距确保图标有足够显示空间 */
+  position: relative;
+}
+
+/* 时钟图标样式 */
+.clock-icon {
+  display: inline-block;
+  font-size: 24rpx;
+  line-height: 1.2;
+  vertical-align: text-bottom; /* 使用更精确的垂直对齐方式 */
+  margin-right: 4rpx;
+  margin-top: 1rpx; /* 使用margin代替top偏移 */
+  position: relative;
+}
+
+/* 分隔符样式 - 仅在同行时显示 */
+.separator {
+  margin: 0 10rpx;
+  color: #ccc;
+  flex-shrink: 0;
+  display: inline-block;
+}
+
+/* 积分信息样式 */
+.points-info {
+  flex: 0 1 auto;
+  white-space: nowrap;
+  min-width: 190rpx;
+  font-size: 20rpx;
+  color: #aaa;
+}
+
+/* 自动换行适配 */
+@media (max-width: 520px) {
+  .task-combined-info {
+    flex-wrap: wrap;
+    line-height: 1.1;
+  }
+  
+  .separator {
+    display: none;
+  }
+  
+  .points-info {
+    flex-basis: 100%;
+    margin-top: 6rpx;
+  }
+}
+
+/* 右侧区域：积分和更多操作 */
+.task-header-right {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0; /* 防止右侧区域被挤压 */
+}
+
+/* 积分信息（迷你版） */
+.task-points-mini {
+  font-size: 22rpx;
+  color: #FFB800;
+  display: flex;
+  align-items: center;
+  margin-right: 12rpx;
+}
+
+/* 必做任务的星星样式 - 灰色表示可能扣除 */
+.task-points-mini.required-points {
+  color: #666666 !important; /* 添加!important确保优先级 */
+}
+
+/* 必做任务的惩罚星星样式 */
+.required-penalty {
+  font-size: 20rpx;
+  margin-left: 4rpx;
+  color: #EA4335;
+}
+
+/* 任务汇总文本样式 */
+.task-summary-text {
+  font-size: 22rpx;
+  color: #7c8aa0;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.summary-row {
+  margin-top: 6rpx;
+}
+
+/* 标签容器 */

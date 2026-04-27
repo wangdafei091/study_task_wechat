@@ -4,6 +4,1576 @@
 
 ---
 
+## [里程碑-22L] - 2026-04-27
+
+### ✅ 完成情况
+
+**统一邀请码与新用户直入家庭**
+
+- **统一邀请码后端模型与正式接口已落地**：
+  - [`backend/database/migrations/019_create_invite_codes_and_user_admission_quota.sql`](/Users/wangdafei/code/study_task_wechat/backend/database/migrations/019_create_invite_codes_and_user_admission_quota.sql)、[`backend/database/migrations/020_add_invite_code_active_slot_unique_guard.sql`](/Users/wangdafei/code/study_task_wechat/backend/database/migrations/020_add_invite_code_active_slot_unique_guard.sql)、[`backend/models/InviteCode.js`](/Users/wangdafei/code/study_task_wechat/backend/models/InviteCode.js)、[`backend/services/inviteCodeService.js`](/Users/wangdafei/code/study_task_wechat/backend/services/inviteCodeService.js)、[`backend/controllers/inviteController.js`](/Users/wangdafei/code/study_task_wechat/backend/controllers/inviteController.js)、[`backend/routes/invites.js`](/Users/wangdafei/code/study_task_wechat/backend/routes/invites.js) 已建立统一邀请码表、双轨兼容解析、预览接口与两类发码接口
+  - [`backend/controllers/authController.js`](/Users/wangdafei/code/study_task_wechat/backend/controllers/authController.js)、[`backend/controllers/familyController.js`](/Users/wangdafei/code/study_task_wechat/backend/controllers/familyController.js)、[`backend/services/familyService.js`](/Users/wangdafei/code/study_task_wechat/backend/services/familyService.js) 已打通新用户登录建号、已有用户加入家庭、失效码映射与事务收口链路
+- **邀请码治理闭环已形成**：
+  - [`backend/controllers/systemAdminController.js`](/Users/wangdafei/code/study_task_wechat/backend/controllers/systemAdminController.js)、[`backend/services/systemUserGovernanceService.js`](/Users/wangdafei/code/study_task_wechat/backend/services/systemUserGovernanceService.js)、[`backend/routes/system.js`](/Users/wangdafei/code/study_task_wechat/backend/routes/system.js) 已补齐全局额度、用户发码能力和系统访问级别对邀请码的 authoritative 治理
+  - 当用户被降级为 `readonly / blocked` 或关闭第一类发码能力时，已有有效邀请码会被同步失效，消费阶段也会再次复核资格与额度
+- **前端邀请码中心与承接页主链路已正式上线**：
+  - [`packageManage/pages/invite-center/`](/Users/wangdafei/code/study_task_wechat/packageManage/pages/invite-center/) 已形成邀请码中心主页面，支持新用户邀请码、家庭邀请码、二维码、复制、刷新与轻量分享入口
+  - [`pages/access-gate/access-gate.js`](/Users/wangdafei/code/study_task_wechat/pages/access-gate/access-gate.js)、[`app.js`](/Users/wangdafei/code/study_task_wechat/app.js)、[`services/invite-service.js`](/Users/wangdafei/code/study_task_wechat/services/invite-service.js)、[`utils/app/app-access-state.js`](/Users/wangdafei/code/study_task_wechat/utils/app/app-access-state.js) 已补齐分享承接、显式确认态、空码降级、错误码映射和已登录用户无动作态
+- **治理页与资料缓存链路在本期一起收口**：
+  - [`packageManage/pages/system-user-governance/system-user-governance.js`](/Users/wangdafei/code/study_task_wechat/packageManage/pages/system-user-governance/system-user-governance.js)、[`services/system-service.js`](/Users/wangdafei/code/study_task_wechat/services/system-service.js) 已将系统用户治理页升级为筛选栏 + 轻量列表 + 单用户治理面板，并支持用户发码治理
+  - [`services/user-service.js`](/Users/wangdafei/code/study_task_wechat/services/user-service.js)、[`backend/controllers/userController.js`](/Users/wangdafei/code/study_task_wechat/backend/controllers/userController.js)、[`backend/routes/users.js`](/Users/wangdafei/code/study_task_wechat/backend/routes/users.js) 已新增当前登录用户资料更新接口，并让前端缓存用户的 `modifyTime` 正常刷新
+
+### 🧪 验证结果
+
+- 前端全量回归通过：
+  - `npm test -- --runInBand`
+- 后端单元回归通过：
+  - `npm run test:backend:unit`
+- 后端内存集成回归通过：
+  - `npm run test:backend:integration:memory`
+- 邀请码与治理链路定向回归通过：
+  - [`test/pages/invite-center.page.test.js`](/Users/wangdafei/code/study_task_wechat/test/pages/invite-center.page.test.js)、[`test/pages/access-gate.page.test.js`](/Users/wangdafei/code/study_task_wechat/test/pages/access-gate.page.test.js)、[`test/pages/system-user-governance.page.test.js`](/Users/wangdafei/code/study_task_wechat/test/pages/system-user-governance.page.test.js)、[`backend/test/unit/inviteCodeService.test.js`](/Users/wangdafei/code/study_task_wechat/backend/test/unit/inviteCodeService.test.js)、[`backend/test/unit/systemUserGovernanceService.test.js`](/Users/wangdafei/code/study_task_wechat/backend/test/unit/systemUserGovernanceService.test.js)、[`backend/test/unit/systemAdminController.test.js`](/Users/wangdafei/code/study_task_wechat/backend/test/unit/systemAdminController.test.js) 已覆盖本期主链路
+
+### 📖 详细实施记录
+
+- [里程碑-22L：统一邀请码与新用户直入家庭](../design/milestone-22l-invite-code-unification-and-new-user-direct-family.md)
+
+---
+
+## [里程碑-22M] - 2026-04-26
+
+### ✅ 完成情况
+
+**系统级用户权限与禁入治理**
+
+- **系统级用户治理模型已正式落地**：
+  - [`backend/database/migrations/018_add_user_system_access_governance.sql`](/Users/wangdafei/code/study_task_wechat/backend/database/migrations/018_add_user_system_access_governance.sql)、[`backend/models/User.js`](/Users/wangdafei/code/study_task_wechat/backend/models/User.js)、[`models/user.js`](/Users/wangdafei/code/study_task_wechat/models/user.js)、[`services/user-service.js`](/Users/wangdafei/code/study_task_wechat/services/user-service.js) 已补齐 `systemAccessLevel / systemAccessUpdatedAt / systemAccessUpdatedByUserId` 字段读写与前后端模型承接
+  - [`backend/services/systemUserGovernanceService.js`](/Users/wangdafei/code/study_task_wechat/backend/services/systemUserGovernanceService.js)、[`backend/controllers/systemAdminController.js`](/Users/wangdafei/code/study_task_wechat/backend/controllers/systemAdminController.js)、[`backend/routes/system.js`](/Users/wangdafei/code/study_task_wechat/backend/routes/system.js)、[`services/system-service.js`](/Users/wangdafei/code/study_task_wechat/services/system-service.js) 已建立系统用户治理列表与访问级别更新正式接口
+- **后端 authoritative 守卫已完成收口**：
+  - [`backend/middleware/systemUserAccess.js`](/Users/wangdafei/code/study_task_wechat/backend/middleware/systemUserAccess.js)、[`backend/routes/tasks.js`](/Users/wangdafei/code/study_task_wechat/backend/routes/tasks.js)、[`backend/routes/rewards.js`](/Users/wangdafei/code/study_task_wechat/backend/routes/rewards.js)、[`backend/routes/stars.js`](/Users/wangdafei/code/study_task_wechat/backend/routes/stars.js)、[`backend/routes/messages.js`](/Users/wangdafei/code/study_task_wechat/backend/routes/messages.js)、[`backend/routes/taskTemplates.js`](/Users/wangdafei/code/study_task_wechat/backend/routes/taskTemplates.js)、[`backend/routes/families.js`](/Users/wangdafei/code/study_task_wechat/backend/routes/families.js)、[`backend/routes/users.js`](/Users/wangdafei/code/study_task_wechat/backend/routes/users.js) 已统一接入系统级 `blocked / readonly` 守卫
+  - `blocked` 已在下一次受保护请求时 authoritative 拦截；`readonly` 已按接口语义阻断写操作，同时保留查询能力
+- **前端治理页、阻断页和只读体验已闭环**：
+  - [`packageManage/pages/system-user-governance/system-user-governance.js`](/Users/wangdafei/code/study_task_wechat/packageManage/pages/system-user-governance/system-user-governance.js)、[`packageManage/pages/system-admin/system-admin.js`](/Users/wangdafei/code/study_task_wechat/packageManage/pages/system-admin/system-admin.js)、[`pages/system-blocked/system-blocked.js`](/Users/wangdafei/code/study_task_wechat/pages/system-blocked/system-blocked.js) 已形成系统治理入口、治理列表和 blocked 阻断页主链路
+  - [`packageManage/pages/family-settings/family-settings.js`](/Users/wangdafei/code/study_task_wechat/packageManage/pages/family-settings/family-settings.js)、[`packageManage/pages/reward-manage/reward-manage.js`](/Users/wangdafei/code/study_task_wechat/packageManage/pages/reward-manage/reward-manage.js)、[`packageManage/pages/task-template-manage/task-template-manage.js`](/Users/wangdafei/code/study_task_wechat/packageManage/pages/task-template-manage/task-template-manage.js)、[`pages/rewards/modules/rewards-exchange-flow.js`](/Users/wangdafei/code/study_task_wechat/pages/rewards/modules/rewards-exchange-flow.js) 已补齐系统只读场景下的高频入口前置收口
+- **前台权限态刷新链路已补齐两类真实场景**：
+  - [`utils/app/bootstrap-auth.js`](/Users/wangdafei/code/study_task_wechat/utils/app/bootstrap-auth.js)、[`utils/app/system-user-access-state.js`](/Users/wangdafei/code/study_task_wechat/utils/app/system-user-access-state.js)、[`utils/http-client.js`](/Users/wangdafei/code/study_task_wechat/utils/http-client.js) 已统一 blocked 错误承接、禁入清会话和自动登录恢复边界
+  - [`app.js`](/Users/wangdafei/code/study_task_wechat/app.js)、[`pages/index/modules/index-lifecycle.js`](/Users/wangdafei/code/study_task_wechat/pages/index/modules/index-lifecycle.js)、[`pages/rewards/modules/rewards-sync.js`](/Users/wangdafei/code/study_task_wechat/pages/rewards/modules/rewards-sync.js) 已同时覆盖：
+    - 小程序回前台时等待系统访问态刷新
+    - 用户停留在小程序内、管理员远程改权限后，页面 `onShow` 主动补刷系统访问态
+  - 这两条链路已消除“先发业务写请求，再被 `SYSTEM_USER_READONLY / SYSTEM_USER_BLOCKED` 打回”的前台竞态
+
+### 🧪 验证结果
+
+- 前端定向回归通过：
+  - `npx jest --runInBand --runTestsByPath test/app/app-shell.behavior.test.js test/app/app-contract.test.js test/pages/index.lifecycle.test.js test/pages/rewards.page-contract.test.js test/pages/rewards.behavior.test.js test/pages/reward-manage.page.test.js test/pages/family-settings.page.test.js test/pages/system-admin.page.test.js test/pages/task-template-manage.page.test.js`
+- 前后端权限链路相关回归通过：
+  - `npx jest --runInBand --runTestsByPath test/app/bootstrap-auth.behavior.test.js test/services/user-service.test.js`
+- 模拟器日志复核通过：
+  - 已确认 `readonly` 场景会先执行 `GET /api/auth/current`，随后首页跳过 `tasks/penalties/sync`，奖励页不再发起不该有的写请求
+  - 已确认 `blocked` 场景会先在 `GET /api/auth/current` 阶段被拦截，再统一清理 token 与会话，不再先进入业务写链路
+
+### 📖 详细实施记录
+
+- [里程碑-22M：系统级用户权限与禁入治理](../design/milestone-22m-system-user-governance-readonly-blocked.md)
+
+---
+
+## [里程碑-22B] - 2026-04-25
+
+### ✅ 完成情况
+
+**系统管理员与动态准入底座**
+
+- **系统级治理入口已正式建立**：
+  - [`backend/models/User.js`](/Users/wangdafei/code/study_task_wechat/backend/models/User.js)、[`backend/services/userService.js`](/Users/wangdafei/code/study_task_wechat/backend/services/userService.js)、[`models/user.js`](/Users/wangdafei/code/study_task_wechat/models/user.js) 已补齐 `isSystemAdmin / is_system_admin` 字段读写，系统管理员身份不再依赖临时脚本外部约定
+  - [`packageManage/pages/family-settings/family-settings.wxml`](/Users/wangdafei/code/study_task_wechat/packageManage/pages/family-settings/family-settings.wxml)、[`packageManage/pages/about/about.js`](/Users/wangdafei/code/study_task_wechat/packageManage/pages/about/about.js)、[`packageManage/pages/about/about.wxml`](/Users/wangdafei/code/study_task_wechat/packageManage/pages/about/about.wxml) 已落地关于页、版本区 7 次连击隐藏入口和正式环境二维码展示
+- **应用准入模式已从“环境变量 + 重启”切到“数据库动态生效”**：
+  - [`backend/models/SystemSetting.js`](/Users/wangdafei/code/study_task_wechat/backend/models/SystemSetting.js)、[`backend/services/systemSettingService.js`](/Users/wangdafei/code/study_task_wechat/backend/services/systemSettingService.js)、[`backend/services/appAccessService.js`](/Users/wangdafei/code/study_task_wechat/backend/services/appAccessService.js) 已把 `app_access_mode` 收口到 `system_settings`，保存后下一次登录立即生效
+  - 读取口径已明确为：数据库优先；若数据库记录存在但值非法，则显式返回 `SYSTEM_SETTING_CORRUPTED`；仅当数据库无记录时才回退 `APP_ACCESS_MODE`
+- **系统管理页与后端鉴权已形成闭环**：
+  - [`backend/middleware/systemAdmin.js`](/Users/wangdafei/code/study_task_wechat/backend/middleware/systemAdmin.js)、[`backend/controllers/systemAdminController.js`](/Users/wangdafei/code/study_task_wechat/backend/controllers/systemAdminController.js)、[`backend/routes/system.js`](/Users/wangdafei/code/study_task_wechat/backend/routes/system.js)、[`services/system-service.js`](/Users/wangdafei/code/study_task_wechat/services/system-service.js) 已建立 `bootstrap / overview / app-access-mode` 三个正式接口与前端服务承接
+  - [`packageManage/pages/system-admin/system-admin.js`](/Users/wangdafei/code/study_task_wechat/packageManage/pages/system-admin/system-admin.js)、[`packageManage/pages/system-admin/system-admin.wxml`](/Users/wangdafei/code/study_task_wechat/packageManage/pages/system-admin/system-admin.wxml) 已补齐正常态、概览错误态和配置损坏修复态
+- **实施中发现的真实缺陷已同步修复**：
+  - [`backend/services/userService.js`](/Users/wangdafei/code/study_task_wechat/backend/services/userService.js) 已修复 `createUser()` 未写入 `is_system_admin` 的问题
+  - [`backend/controllers/authController.js`](/Users/wangdafei/code/study_task_wechat/backend/controllers/authController.js) 已补齐 `SYSTEM_SETTING_CORRUPTED` 透传，登录接口在配置损坏时返回 `503`
+  - [`packageManage/pages/family-settings/family-settings.js`](/Users/wangdafei/code/study_task_wechat/packageManage/pages/family-settings/family-settings.js)、[`utils/permission-utils.js`](/Users/wangdafei/code/study_task_wechat/utils/permission-utils.js) 已修复普通家长误见系统入口、系统管理页动态失权与错误态默认值误导问题
+
+### 🧪 验证结果
+
+- 前端定向回归通过：
+  - `npm test -- --runInBand test/pages/about.page.test.js test/pages/system-admin.page.test.js test/pages/family-settings.page.test.js test/services/system-service.test.js test/models/user.test.js test/services/user-service.test.js`
+- 后端单元回归通过：
+  - `npm run test:backend:unit -- authController.test.js systemAdminController.test.js systemSettingService.test.js`
+- 真实数据库集成回归通过：
+  - `npm --prefix backend run test -- --runInBand test/integration/auth-api-m22b-real.test.js`
+- 模拟器日志与数据库抽检通过：
+  - 已确认系统管理员可在小程序内将 `app_access_mode` 切换到 `invite_only`
+  - 已确认 `system_settings.updated_by_user_id` 与实际操作者一致
+
+### 📖 详细实施记录
+
+- [里程碑-22B：系统管理员与动态准入底座](../design/milestone-22b-system-admin-dynamic-admission-foundation.md)
+
+## [里程碑-22K] - 2026-04-24
+
+### ✅ 完成情况
+
+**前端包体与主包治理优化**
+
+- **主包边界已正式重排**：
+  - [`app.json`](/Users/wangdafei/code/study_task_wechat/app.json) 已将 `task-edit`、`task-occurrence-edit` 迁入 `packageTask`，将 `task-record` 迁入 `packageChart`，并同步将首页 `preloadRule` 扩展为预下载 `packageTask + packageChart`
+  - [`packageTask/pages/task-edit/task-edit.js`](/Users/wangdafei/code/study_task_wechat/packageTask/pages/task-edit/task-edit.js)、[`packageTask/pages/task-occurrence-edit/task-occurrence-edit.js`](/Users/wangdafei/code/study_task_wechat/packageTask/pages/task-occurrence-edit/task-occurrence-edit.js)、[`packageChart/pages/task-record/task-record.js`](/Users/wangdafei/code/study_task_wechat/packageChart/pages/task-record/task-record.js)、[`packageTask/components/task-heatmap/task-heatmap.js`](/Users/wangdafei/code/study_task_wechat/packageTask/components/task-heatmap/task-heatmap.js) 已完成分包承接，不再继续滞留主包
+- **启动链依赖已完成减重**：
+  - [`services/service-manager.js`](/Users/wangdafei/code/study_task_wechat/services/service-manager.js) 已移除对 `services/index.js` 的冷启动全量依赖，`TaskTemplateService` 与 `ValidationService` 已改为首次访问时懒初始化
+- **打包卫生与主包残留锚点已收口**：
+  - [`project.config.json`](/Users/wangdafei/code/study_task_wechat/project.config.json) 已补齐非运行文件忽略规则
+  - [`packageTask/utils/ui-utils.js`](/Users/wangdafei/code/study_task_wechat/packageTask/utils/ui-utils.js)、[`packageTask/utils/occurrence-context.js`](/Users/wangdafei/code/study_task_wechat/packageTask/utils/occurrence-context.js)、[`packageChart/utils/occurrence-context.js`](/Users/wangdafei/code/study_task_wechat/packageChart/utils/occurrence-context.js) 已接管原根目录残留 helper，`utils/uiUtils.js` 与 `utils/task-occurrence-context.js` 已删除，微信开发者工具“主包未使用 JS”告警已消失
+- **页面入口与权限路径已同步**：
+  - [`pages/index/index.js`](/Users/wangdafei/code/study_task_wechat/pages/index/index.js)、[`packageChart/pages/analysis/analysis.js`](/Users/wangdafei/code/study_task_wechat/packageChart/pages/analysis/analysis.js)、[`models/user.js`](/Users/wangdafei/code/study_task_wechat/models/user.js)、[`utils/permission-utils.js`](/Users/wangdafei/code/study_task_wechat/utils/permission-utils.js) 已同步切到分包路径，避免入口与权限仍指向旧主包页面
+
+### 🧪 验证结果
+
+- 定向自动化测试通过：
+  - `npx jest test/services/service-manager.test.js test/models/user.test.js test/services/user-service.test.js test/pages/index.page-shell.behavior.test.js test/pages/analysis.page.test.js test/pages/task-edit.page.test.js test/pages/task-occurrence-edit.page.test.js test/pages/task-record.page.test.js test/pages/task-heatmap.component.test.js test/pages/task-template-entry.test.js test/pages/task-template-manage.page.test.js --runInBand`
+  - `npx jest test/pages/reward-manage.page.test.js test/services/validation-service.test.js --runInBand`
+  - `npx jest test/pages/task-edit.page.test.js test/pages/task-heatmap.component.test.js test/pages/task-occurrence-edit.page.test.js test/pages/task-record.page.test.js test/pages/reward-manage.page.test.js --runInBand`
+  - `npx jest test/pages/rewards.page-contract.test.js test/pages/rewards.behavior.test.js --runInBand`
+- 提交前静态检查通过：
+  - `git diff --check`
+- 微信开发者工具包分析与质量检查通过：
+  - 主包 `1.34MB`
+  - 总包 `1.90MB`
+  - `JS文件`：已通过
+  - `组件`：已通过
+
+### 📖 详细实施记录
+
+- [里程碑-22K：前端包体与主包治理优化](../design/milestone-22k-frontend-package-main-bundle-governance.md)
+
+---
+
+## [里程碑-22J] - 2026-04-24
+
+### ✅ 完成情况
+
+**首页今日进度圆环语义与展示收口**
+
+- **首页圆环已正式收口为今日口径**：
+  - [`pages/index/index.js`](/Users/wangdafei/code/study_task_wechat/pages/index/index.js)、[`pages/index/index.wxml`](/Users/wangdafei/code/study_task_wechat/pages/index/index.wxml)、[`pages/index/modules/index-refresh-coordinator.js`](/Users/wangdafei/code/study_task_wechat/pages/index/modules/index-refresh-coordinator.js) 已将首页顶部圆环统一改为“今日进度”，并从日期浏览任务列表中彻底解耦
+  - 切换历史/未来日期时，仅任务列表和表现记录区块跟随变化，首页圆环继续稳定展示今天摘要，不再出现“标题写当前、数据跟着选中日期变”的口径混杂
+- **圆环中心信息已从百分比收口为更高价值摘要**：
+  - [`services/task-service/task-query.js`](/Users/wangdafei/code/study_task_wechat/services/task-service/task-query.js) 已扩展 `calculateTaskProgress` 返回结构，补齐每类任务的 `completed / total / percent / centerText / isEmpty`
+  - 首页三枚圆环已改为展示 `完成数/总数`，无任务类型显示 `—`，不再用中心百分比重复表达外圈弧线信息
+- **首页刷新编排与日期快照边界已完成治理**：
+  - [`pages/index/modules/index-date-navigation.js`](/Users/wangdafei/code/study_task_wechat/pages/index/modules/index-date-navigation.js) 已把首页今日摘要从日期快照中剥离，避免翻周/切日失败回滚时误覆盖今日圆环
+  - 首页批量刷新、当前视图刷新和任务变更刷新路径，已统一补入今日摘要更新
+- **圆环视觉已完成轻量收敛**：
+  - [`components/progressRing/progressRing.wxml`](/Users/wangdafei/code/study_task_wechat/components/progressRing/progressRing.wxml)、[`components/progressRing/progressRing.wxss`](/Users/wangdafei/code/study_task_wechat/components/progressRing/progressRing.wxss)、[`components/progressRing/progressRing.js`](/Users/wangdafei/code/study_task_wechat/components/progressRing/progressRing.js) 已移除十字辅助线、降低内层高光、收紧大尺寸圆环并柔化兴趣类颜色
+  - `centerContent` 现在优先于完成勾号渲染，`100%` 时仍可稳定显示 `完成数/总数`
+- **定向回归测试已补齐**：
+  - [`test/pages/index.page-shell.behavior.test.js`](/Users/wangdafei/code/study_task_wechat/test/pages/index.page-shell.behavior.test.js)、[`test/pages/index.modules.test.js`](/Users/wangdafei/code/study_task_wechat/test/pages/index.modules.test.js)、[`test/pages/index.refresh-coordinator.test.js`](/Users/wangdafei/code/study_task_wechat/test/pages/index.refresh-coordinator.test.js)、[`test/components/progress-ring.test.js`](/Users/wangdafei/code/study_task_wechat/test/components/progress-ring.test.js)、[`test/services/task-query.direct.test.js`](/Users/wangdafei/code/study_task_wechat/test/services/task-query.direct.test.js) 已锁定今日口径、刷新边界、中心文本优先级和新的服务契约
+
+### 🧪 验证结果
+
+- 定向自动化测试通过：
+  - `npx jest test/pages/index.page-shell.behavior.test.js test/pages/index.modules.test.js test/pages/index.refresh-coordinator.test.js test/components/progress-ring.test.js test/services/task-query.direct.test.js --runInBand`
+  - `npx jest test/services/task-service.test.js --runInBand`
+- 提交前静态检查通过：
+  - `git diff --check`
+
+### 📖 详细实施记录
+
+- [里程碑-22J：首页今日进度圆环语义与展示收口](../design/milestone-22j-home-today-progress-ring-convergence.md)
+
+---
+
+## [里程碑-22D] - 2026-04-23
+
+### ✅ 完成情况
+
+**任务分布热力日历视觉与信息表达重设计**
+
+- **热力日历视觉基线已完成正式重做**：
+  - [`packageComponents/components/task-heatmap/task-heatmap.wxss`](/Users/wangdafei/code/study_task_wechat/packageComponents/components/task-heatmap/task-heatmap.wxss) 已将旧的硬方格和跳色风格收口为软圆角轻网格、蓝白灰同色系热力色阶，并把 `today / selected / pressure` 三层状态改成稳定分层表达
+  - 当前任务管理页中的“任务分布”模块已从功能控件感较重的旧样式，提升为与整页风格更一致的主视觉概览模块
+- **单格信息密度已完成收口**：
+  - [`packageComponents/components/task-heatmap/task-heatmap.wxml`](/Users/wangdafei/code/study_task_wechat/packageComponents/components/task-heatmap/task-heatmap.wxml)、[`packageComponents/components/task-heatmap/task-heatmap.js`](/Users/wangdafei/code/study_task_wechat/packageComponents/components/task-heatmap/task-heatmap.js) 已移除格子内任务数强展示与长按提示通路
+  - 任务标记已收口为“低密度看类型点、高密度看轻量数字”的最终规则，不再使用“点 + 多”的高解释成本表达
+- **详情承接链路已保持清晰**：
+  - 热力格点击后仍由详情头部统一承接日期、任务数量、压力标签和摘要文案
+  - 下方任务列表主体、编辑区和删除区未被扩散改造，本期范围保持在热力图体验本身
+- **展示契约测试已补齐**：
+  - [`test/pages/task-heatmap.component.test.js`](/Users/wangdafei/code/study_task_wechat/test/pages/task-heatmap.component.test.js) 已锁定轻量标记规则、详情头部摘要状态，以及“无长按提示 / 无格子内任务数字”的结构契约
+
+### 🧪 验证结果
+
+- 定向自动化测试通过：
+  - `npx jest test/pages/task-heatmap.component.test.js --runInBand`
+- 模拟器截图与交互复核通过：
+  - 已确认热力日历格子比例回到合理区间
+  - 已确认“低密度点 / 高密度数字”方案优于此前的“点 + 多”表达
+  - 已确认选中日期后的详情承接链路保持稳定，无需继续大改
+
+### 📖 详细实施记录
+
+- [里程碑-22D：任务分布热力日历视觉与信息表达重设计](../design/milestone-22d-task-heatmap-calendar-redesign.md)
+
+---
+
+## [里程碑-22H] - 2026-04-23
+
+### ✅ 完成情况
+
+**表现项奖励时效与历史项动作边界收口**
+
+- **表现项奖励时效已形成正式闭环**：
+  - [`pages/task-occurrence-edit/task-occurrence-edit.js`](/Users/wangdafei/code/study_task_wechat/pages/task-occurrence-edit/task-occurrence-edit.js)、[`utils/task-occurrence-display.js`](/Users/wangdafei/code/study_task_wechat/utils/task-occurrence-display.js)、[`pages/index/index.wxml`](/Users/wangdafei/code/study_task_wechat/pages/index/index.wxml) 已统一表现项奖励的 `pointsExpiry` 配置、摘要组装与首页/管理页展示口径
+  - 表现项奖励信息已统一为“星数 + 有效期”两段式表达，不再继续以说明句作为最终主视觉
+- **历史项动作边界已完成系统级收口**：
+  - 历史项已不再显示 `编辑`、`更多` 及其派生写动作入口
+  - 生效中/待生效项仍保留维护能力，但已统一收口到 `更多` 动作面板，不再在卡面直出 `编辑`
+- **表现项管理页卡片布局已完成内容优先收口**：
+  - [`pages/task-occurrence-edit/task-occurrence-edit.wxml`](/Users/wangdafei/code/study_task_wechat/pages/task-occurrence-edit/task-occurrence-edit.wxml)、[`pages/task-occurrence-edit/task-occurrence-edit.wxss`](/Users/wangdafei/code/study_task_wechat/pages/task-occurrence-edit/task-occurrence-edit.wxss) 已将生效中卡片重排为“标题 / 元信息 / 奖励信息”三段式内容结构，并取消右侧竖向动作栏
+  - “生效中”与“其他表现项”区块头部已统一为标题加数量锚点模式，次级折叠行已收口为更简洁的一致表达
+- **展示模型与页面测试已同步更新**：
+  - [`test/utils/task-occurrence-display.test.js`](/Users/wangdafei/code/study_task_wechat/test/utils/task-occurrence-display.test.js)、[`test/pages/task-occurrence-edit.page.test.js`](/Users/wangdafei/code/study_task_wechat/test/pages/task-occurrence-edit.page.test.js)、[`test/pages/index.page-shell.behavior.test.js`](/Users/wangdafei/code/study_task_wechat/test/pages/index.page-shell.behavior.test.js) 已锁定新的奖励摘要结构、动作矩阵和页面展示语义
+
+### 🧪 验证结果
+
+- 后端/正式链路定向回归通过：
+  - `npm --prefix backend run test:unit`
+  - `npx jest backend/test/integration/task-api-m21l-real.test.js --runInBand`
+- 前端/共享层定向回归通过：
+  - `npx jest test/utils/task-occurrence-display.test.js --runInBand`
+  - `npx jest test/pages/task-occurrence-edit.page.test.js --runInBand`
+  - `npx jest test/pages/index.page-shell.behavior.test.js --runInBand`
+- 真机截图与交互复核通过：
+  - 已确认表现项管理页主区块、次级区块、卡片奖励信息和动作层级均符合本期收口目标
+
+### 📖 详细实施记录
+
+- [里程碑-22H：表现项奖励时效与历史项动作边界收口](../design/milestone-22h-occurrence-reward-expiry-history-action-boundary.md)
+
+---
+
+## [里程碑-22G] - 2026-04-22
+
+### ✅ 完成情况
+
+**表现项管理页信息架构与交互重构**
+
+- **表现项管理页已完成主次重构**：
+  - [`pages/task-occurrence-edit/task-occurrence-edit.js`](/Users/wangdafei/code/study_task_wechat/pages/task-occurrence-edit/task-occurrence-edit.js)、[`pages/task-occurrence-edit/task-occurrence-edit.wxml`](/Users/wangdafei/code/study_task_wechat/pages/task-occurrence-edit/task-occurrence-edit.wxml)、[`pages/task-occurrence-edit/task-occurrence-edit.wxss`](/Users/wangdafei/code/study_task_wechat/pages/task-occurrence-edit/task-occurrence-edit.wxss) 已将页面收口为“生效中主区 + 其他表现项次级容器 + 覆盖式编辑层”的稳定结构
+  - 首屏不再长期直出新建/编辑表单，历史项与待生效项不再和生效中项目同权混排
+- **顶部导航与编辑层语义已完成统一**：
+  - 页面已切为自定义导航承接返回与脏数据确认，但视觉语义统一回主流程蓝色导航体系
+  - 编辑层已移除解释型 banner，表单改为更接近既有任务编辑页的轻量控件体系，并收口“长期有效 / 结束日期”重复语义
+- **展示逻辑已从页面层抽离**：
+  - [`utils/task-occurrence-display.js`](/Users/wangdafei/code/study_task_wechat/utils/task-occurrence-display.js) 已承接表现项卡片展示模型、分组、摘要统计、折叠阈值与锚点回位规则
+  - 页面私有展示拼装逻辑不再继续堆积在页面文件内部
+- **权限与体验边界已保持闭环**：
+  - `viewer` 家长与 `child` 角色继续被拦截在表现项管理页之外
+  - 新建、编辑、停用、删除后的分组刷新、回位和折叠状态保持已通过页面测试锁定
+
+### 🧪 验证结果
+
+- 定向自动化测试通过：
+  - `npx jest test/pages/task-occurrence-edit.page.test.js test/utils/task-occurrence-display.test.js test/pages/task-record.page.test.js --runInBand`
+  - 结果：`3 suites / 28 tests` 全绿
+- 真机截图复核通过：
+  - 已确认表现项管理页首屏主次结构、编辑层长期有效/结束日期两种状态、按钮主次与页面文案均符合当前设计收口目标
+
+### 📖 详细实施记录
+
+- [里程碑-22G：表现项管理页信息架构与交互重构](../design/milestone-22g-occurrence-page-redesign.md)
+
+---
+
+## [里程碑-22A] - 2026-04-21
+
+### ✅ 完成情况
+
+**治理与准入控制**
+
+- **多家长家庭治理边界已正式落地**：
+  - [`backend/models/User.js`](/Users/wangdafei/code/study_task_wechat/backend/models/User.js)、[`models/user.js`](/Users/wangdafei/code/study_task_wechat/models/user.js)、[`utils/user-context.js`](/Users/wangdafei/code/study_task_wechat/utils/user-context.js)、[`utils/permission-utils.js`](/Users/wangdafei/code/study_task_wechat/utils/permission-utils.js) 已引入并统一消费 `familyPermissionRole`
+  - [`backend/utils/family-permission.js`](/Users/wangdafei/code/study_task_wechat/backend/utils/family-permission.js)、[`backend/controllers/familyController.js`](/Users/wangdafei/code/study_task_wechat/backend/controllers/familyController.js)、[`packageManage/pages/family-settings/family-settings.js`](/Users/wangdafei/code/study_task_wechat/packageManage/pages/family-settings/family-settings.js) 已收口 `manager / viewer` 家庭治理与业务写权限
+  - 家庭创建者默认成为 `manager`，通过家庭邀请码加入的新家长默认落为 `viewer`
+- **应用级邀请制准入已形成闭环**：
+  - [`backend/services/appAccessService.js`](/Users/wangdafei/code/study_task_wechat/backend/services/appAccessService.js)、[`backend/controllers/authController.js`](/Users/wangdafei/code/study_task_wechat/backend/controllers/authController.js)、[`backend/models/AppAccessCode.js`](/Users/wangdafei/code/study_task_wechat/backend/models/AppAccessCode.js) 已落地 `open / invite_only` 双模式和应用邀请码消费逻辑
+  - [`pages/access-gate/access-gate.js`](/Users/wangdafei/code/study_task_wechat/pages/access-gate/access-gate.js)、[`utils/app/app-access-state.js`](/Users/wangdafei/code/study_task_wechat/utils/app/app-access-state.js)、[`utils/app/bootstrap-auth.js`](/Users/wangdafei/code/study_task_wechat/utils/app/bootstrap-auth.js) 已把 `pending_app_access_code` 收口为统一 source of truth，并把新用户拒绝场景导向邀请码输入页
+- **任务/表现项/模板周期护栏已完成前后端双端收口**：
+  - [`utils/task-range-guard.js`](/Users/wangdafei/code/study_task_wechat/utils/task-range-guard.js) 与 [`backend/utils/task-range-guard.js`](/Users/wangdafei/code/study_task_wechat/backend/utils/task-range-guard.js) 已统一重复任务 `93` 天、表现项有效期 `180` 天、模板重复周期 `93` 天的限制
+  - [`models/task.js`](/Users/wangdafei/code/study_task_wechat/models/task.js)、[`backend/models/Task.js`](/Users/wangdafei/code/study_task_wechat/backend/models/Task.js)、[`models/task-template.js`](/Users/wangdafei/code/study_task_wechat/models/task-template.js)、[`backend/models/TaskTemplate.js`](/Users/wangdafei/code/study_task_wechat/backend/models/TaskTemplate.js) 已统一 authoritative 校验
+  - 已支持“历史已超限但本次未继续扩张”兼容策略，避免老数据被新规则锁死
+- **实施期回归缺陷已顺手修复**：
+  - [`pages/task-edit/task-edit.js`](/Users/wangdafei/code/study_task_wechat/pages/task-edit/task-edit.js) 已修复“单次模板回填后改成多天任务，UI 显示正确但底层仍按单天提交”的真实缺陷
+  - [`test/pages/task-edit.page.test.js`](/Users/wangdafei/code/study_task_wechat/test/pages/task-edit.page.test.js) 已补 3 个回归用例锁定该问题
+
+### 🧪 验证结果
+
+- 前端/共享层 M22A 关键回归通过：
+  - `npx jest test/utils/user-context.test.js test/app/bootstrap-auth.behavior.test.js test/app/post-login-bootstrap.test.js test/pages/access-gate.page.test.js test/pages/family-settings.page.test.js test/pages/task-edit.page.test.js test/services/task-template-service.test.js test/services/task-write.direct.test.js test/utils/task-range-guard.test.js --runInBand`
+  - 结果：`9 suites / 113 tests` 全绿
+- 后端 M22A 关键单元通过：
+  - `cd backend && npx jest test/unit/appAccessService.test.js test/unit/authController.test.js test/unit/family-permission.test.js test/unit/familyController.test.js test/unit/familyService.test.js test/unit/taskModel.test.js test/unit/taskTemplateService.test.js test/unit/taskService-schema-compat.test.js --runInBand`
+  - 结果：`8 suites / 49 tests` 全绿
+- 模拟器与后台日志抽检通过：
+  - 已验证查看者只读、孩子视角执行、家庭权限切换、模板创建任务等主链路行为与预期一致
+
+### 📖 详细实施记录
+
+- [里程碑-22A：治理与准入控制](../design/milestone-22a-governance-admission-control.md)
+
+---
+
+## [里程碑-21O] - 2026-04-19
+
+### ✅ 完成情况
+
+**核心测试覆盖与质量闸门补强**
+
+- **正式质量门禁已完成扩面**：
+  - [`jest.quality.config.js`](/Users/wangdafei/code/study_task_wechat/jest.quality.config.js) 已将 [`repositories/task-repository.js`](/Users/wangdafei/code/study_task_wechat/repositories/task-repository.js)、消息子模块与奖励子模块纳入正式质量闸门
+  - 目标文件统一执行 `branches 70% / functions 75% / lines 75% / statements 75%` 的单文件门槛
+- **弱覆盖模块测试已补齐**：
+  - [`test/repositories/task-repository.test.js`](/Users/wangdafei/code/study_task_wechat/test/repositories/task-repository.test.js)、[`test/services/message-service.modules.test.js`](/Users/wangdafei/code/study_task_wechat/test/services/message-service.modules.test.js)、[`test/services/reward-service.test.js`](/Users/wangdafei/code/study_task_wechat/test/services/reward-service.test.js) 已补齐仓储、消息 helper 与奖励查询/队列边界分支
+  - 目标文件覆盖率已过线：`task-repository 87.02% branches`、`message-provisional 70.88% branches`、`message-domain 76.27% branches`、`message-handlers 100% branches`、`reward-query 73.68% branches`、`reward-queue 70.58% branches`
+- **最小静态检查与后端 CI 已形成闭环**：
+  - 根级已新增 [`eslint.config.js`](/Users/wangdafei/code/study_task_wechat/eslint.config.js) 与 [`lint:quality`](/Users/wangdafei/code/study_task_wechat/package.json) 白名单脚本
+  - [`test.yml`](/Users/wangdafei/code/study_task_wechat/.github/workflows/test.yml) 已纳入 `npm --prefix backend ci`、`npm run test:backend:unit` 与 `npm run lint:quality`
+- **CI 配置残口已顺手修复**：
+  - 已将 [`backend/package-lock.json`](/Users/wangdafei/code/study_task_wechat/backend/package-lock.json) 纳入版本控制，修复 GitHub Actions 中 `npm --prefix backend ci` 的失败
+  - 已将 GitHub Actions 运行时从 `actions/checkout@v4` / `actions/setup-node@v4` 升级到 `v5`，消除 Node 20 弃用告警
+
+### 🧪 验证结果
+
+- 前端主测试树通过：
+  - `npm test -- --runInBand`
+  - 结果：`93 suites / 2035 tests` 全绿
+- 前端质量闸门通过：
+  - `npm run test:quality`
+  - 结果：`93 suites / 2035 tests` 全绿
+- 后端单元测试通过：
+  - `npm run test:backend:unit`
+  - 结果：`15 suites / 127 tests` 全绿
+- 最小静态检查通过：
+  - `npm run lint:quality`
+- 合并后主线 CI 通过：
+  - GitHub Actions `test` workflow（run `24619274374`）在 `develop` 分支全绿
+
+### 📖 详细实施记录
+
+- [里程碑-21O：核心测试覆盖与质量闸门补强](../design/milestone-21o-core-test-quality-gate-hardening.md)
+
+---
+
+## [里程碑-21M] - 2026-04-19
+
+### ✅ 完成情况
+
+**全局同步状态体验收口（M21M-A）**
+
+- **表现记录同步语义已完成统一收口**：
+  - [`utils/sync-state.js`](/Users/wangdafei/code/study_task_wechat/utils/sync-state.js)、[`pages/index/index.js`](/Users/wangdafei/code/study_task_wechat/pages/index/index.js)、[`pages/task-record/task-record.js`](/Users/wangdafei/code/study_task_wechat/pages/task-record/task-record.js)、[`packageChart/services/analysis-board-service.js`](/Users/wangdafei/code/study_task_wechat/packageChart/services/analysis-board-service.js) 已统一表现记录待同步判定口径
+  - 首页、表现记录页与分析看板不再各自维护散落的 pending 条件判断
+- **待同步提示文案已统一**：
+  - 首页与表现记录页 fallback toast 已统一为“已暂存，联网后自动同步”
+  - 待同步表达从“等待同步”收口为“本机暂存，联网后自动同步”的同一产品语义
+- **消息中心 provisional/formal 展示语义已收口**：
+  - [`utils/message-display.js`](/Users/wangdafei/code/study_task_wechat/utils/message-display.js) 与 [`services/message-service.js`](/Users/wangdafei/code/study_task_wechat/services/message-service.js) 已实现同一消息流内 `formal > provisional` 的语义去重
+  - 已修复 `scope=all` 下 `user/family` 两条不同消息流被误折叠的问题
+  - [`packageMessage/pages/message/message.wxml`](/Users/wangdafei/code/study_task_wechat/packageMessage/pages/message/message.wxml) 与 [`packageMessage/pages/message/message.wxss`](/Users/wangdafei/code/study_task_wechat/packageMessage/pages/message/message.wxss) 已为 provisional 消息增加弱化样式与“本机暂存”标记，并修复长标题布局挤压
+
+### 🧪 验证结果
+
+- 前端质量闸门通过：
+  - `npm run test:quality`
+  - 结果：`93 suites / 1997 tests` 全绿
+- 定向同步状态回归通过：
+  - `npx jest test/utils/message-display.test.js test/utils/sync-state.test.js test/services/message-service.test.js test/services/analysis-board-service.test.js test/pages/index.page-shell.behavior.test.js test/pages/index.refresh-coordinator.test.js test/pages/message-page.behavior.test.js test/pages/task-record.page.test.js --runInBand`
+- 提交质量检查通过：
+  - `git diff --check`
+
+### 📖 详细实施记录
+
+- [里程碑-21M：全局同步状态体验收口](../design/milestone-21m-global-sync-state-experience-convergence.md)
+
+---
+
+## [里程碑-21N] - 2026-04-18
+
+### ✅ 完成情况
+
+**奖池余额心智简化与奖励兑换时效治理**
+
+- **奖池正式回到普通余额心智**：
+  - [`utils/reward-display.js`](/Users/wangdafei/code/study_task_wechat/utils/reward-display.js)、[`pages/rewards/modules/rewards-sync.js`](/Users/wangdafei/code/study_task_wechat/pages/rewards/modules/rewards-sync.js)、[`pages/rewards/modules/rewards-exchange-flow.js`](/Users/wangdafei/code/study_task_wechat/pages/rewards/modules/rewards-exchange-flow.js) 已统一奖励卡片与确认弹窗口径为“兑换需要 / 当前余额 / 兑换后剩余”
+  - 奖励卡片不再展示 `本次 0 颗`、`已抵扣 X 颗`、`保护奖励` 等动态定价语义
+- **前后端兑换正式按标价结算**：
+  - [`services/reward-service/reward-exchange.js`](/Users/wangdafei/code/study_task_wechat/services/reward-service/reward-exchange.js) 与 [`backend/services/rewardService.js`](/Users/wangdafei/code/study_task_wechat/backend/services/rewardService.js) 已统一为按奖励标价扣减余额
+  - 系统内部仍保留“先消耗临近到期星星”的结算顺序，但不再透传为用户主视图价格
+- **取消兑换时效与退款归桶已完成治理**：
+  - 本地与后端正式链路都已改为基于 `deductionBreakdown` 校验取消时效，并按原消费桶退款
+  - 本地取消兑换已补齐“退款成功但奖励状态回写失败时自动冲销退款”的补偿保护，避免半状态导致重复退款风险
+- **多孩子与奖池读数冗余问题已收口**：
+  - 领取确认在预览失败时会按当前目标孩子余额回退，不再错误复用页面上一个孩子的余额
+  - 奖励页列表在已有当前余额时，不再为每个奖励重复读取兑换预览
+
+### 🧪 验证结果
+
+- 前端质量闸门通过：
+  - `npm run test:quality`
+  - 结果：`92 suites / 1987 tests` 全绿
+- 后端单元测试通过：
+  - `npm --prefix backend run test:unit`
+  - 结果：`15 suites / 127 tests` 全绿
+- 奖励主链路定向回归通过：
+  - `npx jest test/services/reward-service.test.js test/pages/rewards.behavior.test.js test/utils/reward-display.test.js test/pages/rewards.page-contract.test.js --runInBand`
+  - `npx jest test/pages/rewards.behavior.test.js test/pages/rewards.page-contract.test.js test/pages/rewards.modules.test.js test/utils/reward-display.test.js --runInBand`
+
+### 📖 详细实施记录
+
+- [里程碑-21N：奖池余额心智简化与奖励兑换时效治理](../design/milestone-21n-reward-balance-mental-model.md)
+
+---
+
+## [里程碑-21L] - 2026-04-17
+
+### ✅ 完成情况
+
+**按发生记录任务与分析看板空白语义治理**
+
+- **表现项全栈能力已完成闭环**：
+  - [`models/task.js`](/Users/wangdafei/code/study_task_wechat/models/task.js)、[`services/task-service.js`](/Users/wangdafei/code/study_task_wechat/services/task-service.js)、[`repositories/task-repository.js`](/Users/wangdafei/code/study_task_wechat/repositories/task-repository.js) 已补齐 `executionMode / activeRange / isOccurrenceRecord / occurrenceOutcome / recordedAt` 客户端模型与查询写入链路
+  - [`backend/models/Task.js`](/Users/wangdafei/code/study_task_wechat/backend/models/Task.js)、[`backend/services/taskService.js`](/Users/wangdafei/code/study_task_wechat/backend/services/taskService.js)、[`backend/controllers/taskController.js`](/Users/wangdafei/code/study_task_wechat/backend/controllers/taskController.js)、[`backend/routes/tasks.js`](/Users/wangdafei/code/study_task_wechat/backend/routes/tasks.js) 已补齐 occurrence 字段映射、权限校验与正式领域接口
+  - [`backend/database/migrations/014_alter_tasks_add_occurrence_fields.sql`](/Users/wangdafei/code/study_task_wechat/backend/database/migrations/014_alter_tasks_add_occurrence_fields.sql) 已提供 `tasks` 表字段与索引迁移
+- **首页、任务页与分析看板语义已完成收口**：
+  - [`pages/task-edit/task-edit.js`](/Users/wangdafei/code/study_task_wechat/pages/task-edit/task-edit.js) 已在“添加任务”卡片标题行引入 `新建表现项 >` 轻入口
+  - [`pages/task-occurrence-edit/task-occurrence-edit.js`](/Users/wangdafei/code/study_task_wechat/pages/task-occurrence-edit/task-occurrence-edit.js) 已落地表现项设置页，统一配置、编辑、停用与删除维护动作
+  - [`pages/index/index.js`](/Users/wangdafei/code/study_task_wechat/pages/index/index.js) 已落地首页 `表现记录` 区块与 `当前进度` 口径
+  - [`packageChart/services/analysis-board-service.js`](/Users/wangdafei/code/study_task_wechat/packageChart/services/analysis-board-service.js) 与 [`packageChart/pages/analysis/analysis.js`](/Users/wangdafei/code/study_task_wechat/packageChart/pages/analysis/analysis.js) 已收口为 `达成 / 未达成 / 空白` 三态
+- **正式 occurrence 云端契约已上线**：
+  - `GET /api/tasks` 已支持 `includeOccurrence / occurrenceMode / includeInactive`
+  - 已新增 `POST /api/tasks/:taskId/occurrence-record`
+  - 已新增 `POST /api/tasks/:taskId/disable-occurrence`
+  - 已新增 `POST /api/tasks/:taskId/convert-occurrence`
+- **真实数据库口径问题已被提前修复**：
+  - [`backend/test/integration/task-api-m21l-real.test.js`](/Users/wangdafei/code/study_task_wechat/backend/test/integration/task-api-m21l-real.test.js) 已补齐 M21L 真实库集成测试
+  - [`backend/services/taskService.js`](/Users/wangdafei/code/study_task_wechat/backend/services/taskService.js) 已把 occurrence record `task_id` 与星星流水 `record_id` 收口为固定长度哈希 ID，避免真实表结构下长度溢出
+
+### 🧪 验证结果
+
+- 前端全量回归通过：
+  - `npm test -- --runInBand`
+- 后端单元测试通过：
+  - `npm run test:backend:unit`
+- 后端内存集成测试通过：
+  - `npm run test:backend:integration:memory`
+- 后端真实数据库集成测试通过：
+  - `npm --prefix backend test -- --runInBand test/integration/task-api-m21l-real.test.js`
+
+### 📖 详细实施记录
+
+- [里程碑-21L：按发生记录任务与分析看板空白语义治理](../design/milestone-21l-occurrence-task-mode.md)
+
+---
+
+## [里程碑-21K] - 2026-04-16
+
+### ✅ 完成情况
+
+**首页入口与奖励信息架构收口**
+
+- **首页加号入口已完成全局语义收口**：
+  - [`pages/index/modules/index-user-switcher.js`](/Users/wangdafei/code/study_task_wechat/pages/index/modules/index-user-switcher.js) 已拆分“日期上下文限制”和“全局入口能力”判断
+  - 首页切到非今天日期后，`分析 / 任务 / 奖励` 不再被日期标签误伤，只保留和当前任务列表直接相关的只读限制
+  - [`pages/task-edit/task-edit.js`](/Users/wangdafei/code/study_task_wechat/pages/task-edit/task-edit.js) 已接入首页非今天入口上下文，仅在对应场景显示一次性轻提示
+- **奖励三页职责已完成分离**：
+  - [`pages/rewards/rewards.js`](/Users/wangdafei/code/study_task_wechat/pages/rewards/rewards.js) 已收口为“家庭奖池当前可兑换奖励”页面，不再承载历史记录
+  - [`packageManage/pages/my-exchanges/my-exchanges.js`](/Users/wangdafei/code/study_task_wechat/packageManage/pages/my-exchanges/my-exchanges.js) 已只展示当前孩子自己的兑换记录
+  - [`packageManage/pages/reward-manage/reward-manage.js`](/Users/wangdafei/code/study_task_wechat/packageManage/pages/reward-manage/reward-manage.js) 已收口为“家庭奖励配置 + 家庭兑换记录 + 家长发放动作”
+- **奖励履约语义已正式落地**：
+  - [`models/reward.js`](/Users/wangdafei/code/study_task_wechat/models/reward.js) 已引入 `fulfillmentMode`
+  - [`utils/reward-status.js`](/Users/wangdafei/code/study_task_wechat/utils/reward-status.js) 与 [`utils/reward-display.js`](/Users/wangdafei/code/study_task_wechat/utils/reward-display.js) 已统一 `可兑换 / 已兑换 / 待发放 / 已发放` 文案和按钮语义
+  - `instant` 奖励兑换后直接进入终态；`manual` 奖励兑换后进入 `待发放`，并由家长在管理页标记 `已发放`
+- **快过期星星动态抵扣语义已替换旧保护语义**：
+  - [`services/star-service/star-expiry.js`](/Users/wangdafei/code/study_task_wechat/services/star-service/star-expiry.js) 已停止启动链路预写 `protectedByExpiry / partialProtection`
+  - [`services/reward-service/reward-exchange.js`](/Users/wangdafei/code/study_task_wechat/services/reward-service/reward-exchange.js) 已统一 `previewRewardExchangeCost` 与真实扣费逻辑
+  - 前台不再使用 `免费 / 保护奖励 / 盾牌` 作为主展示语义，只展示原价、抵扣和本次实付
+- **奖励取消兑换与消息桥接语义已完成补强**：
+  - 本地取消兑换已按真实兑换流水回查退款金额，并退回到正确孩子账户
+  - 奖励事件与消息域已补齐 `exchangeUserId / actualCost / pointsRefunded` 透传
+  - 奖励消息文案不再错误使用原价，已改为展示实际消耗或实际退款
+
+### 🧪 验证结果
+
+- 定向回归通过：
+  - `npm test -- --runTestsByPath test/services/reward-service.test.js test/services/message-service.test.js`
+  - `npm test -- --runTestsByPath test/app/post-login-bootstrap.test.js test/services/star-service.test.js test/pages/rewards.modules.test.js`
+- 全量前端测试通过：
+  - `npm test`
+  - 结果：`89 suites / 1937 tests` 全绿
+- 提交边界已确认：
+  - 已确认本轮奖励域与消息桥接修复提交后，仅剩用户手工维护中的 `ROADMAP.md` 本地改动未纳入前一轮代码提交
+
+### 📖 详细实施记录
+
+- [里程碑-21K：首页入口与奖励信息架构收口](../design/milestone-21k-home-entry-reward-ia-convergence.md)
+
+---
+
+## [里程碑-21J] - 2026-04-16
+
+### ✅ 完成情况
+
+**奖池星星明细语义澄清与信息架构重构**
+
+- **奖池页已成为唯一余额解释入口**：
+  - [`pages/rewards/modules/rewards-sync.js`](/Users/wangdafei/code/study_task_wechat/pages/rewards/modules/rewards-sync.js) 已接入统一的 `getAvailableStarSnapshot(...)`
+  - 顶部总星星、快过期提示和余额说明统一复用同一份“当前可用星星快照”口径
+  - 奖池页新增轻量的两行余额说明，明确“兑换时会先使用快到期的星星”，不再把余额解释挪到记录页重复展示
+- **星星记录页已收口为纯历史变动明细页**：
+  - [`packageMessage/pages/star-records/star-records.js`](/Users/wangdafei/code/study_task_wechat/packageMessage/pages/star-records/star-records.js) 已删除顶部余额卡与周期汇总链路
+  - 页面默认时间筛选切换为“最近7天”，保留 `全部 / 任务获得 / 兑换使用 / 星星减少` 类型筛选与 `最近7天 / 本月 / 全部` 时间筛选
+  - `全部` 视图仅按自然月分组浏览历史，不再渲染月度获得/减少/净变化汇总文案
+- **星星域已补齐统一可用快照能力**：
+  - [`services/star-service/star-expiry.js`](/Users/wangdafei/code/study_task_wechat/services/star-service/star-expiry.js) 新增“当前可用星星快照”权威计算
+  - 快照统一产出 `totalStars`、`buckets`、`expiringInfo`，保证奖池页三块余额相关信息来自同一批未过期有效分组
+- **记录展示语义已完成收敛**：
+  - [`services/star-service/star-records.js`](/Users/wangdafei/code/study_task_wechat/services/star-service/star-records.js) 继续承担历史记录视图模型构建，但不再输出 `scopeSummary`
+  - 获得记录保留有效期说明，减少记录继续突出原因、金额与时间，不把历史流水伪装成“按有效期桶的总账”
+
+### 🧪 验证结果
+
+- 定向回归通过：
+  - `npx jest --runInBand test/services/star-service.test.js test/services/star-records.service.test.js test/pages/rewards.modules.test.js test/pages/rewards.page-contract.test.js test/pages/rewards.behavior.test.js test/pages/star-records.page.test.js`
+- 全量前端测试通过：
+  - `npm test`
+  - 结果：`87 suites / 1912 tests` 全绿
+- GitHub Actions 自动化验证通过：
+  - PR #28 合并后主分支验证通过
+  - 后续 UTC/上海日期边界导致的 `task-service` 测试漂移已在 PR #29 修复并重新恢复绿灯
+
+### 📖 详细实施记录
+
+- [里程碑-21J：奖池余额解释与星星记录职责重构](../design/milestone-21j-star-records-clarity-redesign.md)
+
+---
+
+## [里程碑-21C] - 2026-04-15
+
+### ✅ 完成情况
+
+**执行文档与治理口径同步**
+
+- **架构入口事实已同步**：
+  - [`docs/architecture/architecture.md`](/Users/wangdafei/code/study_task_wechat/docs/architecture/architecture.md) 已补齐 `AnalysisBoardService`
+  - 明确其为分析页按需调用的聚合模块，不再与 `ServiceManager` 注册服务混淆
+- **高频协作文档口径已收敛**：
+  - [`CLAUDE.md`](/Users/wangdafei/code/study_task_wechat/CLAUDE.md) 不再使用固定任务类型 hex 作为全局唯一检查标准
+  - [`docs/development/GITHUB_WORKFLOW.md`](/Users/wangdafei/code/study_task_wechat/docs/development/GITHUB_WORKFLOW.md) 已将 UI 检查改为“主题 token / 页面语义一致性”口径
+- **性能检查表述已修正**：
+  - `CLAUDE.md` 与 `GITHUB_WORKFLOW.md` 不再把“多次 `setData`”直接视为错误
+  - 正式改为关注“同一热路径、同一数据域、可合并却未合并的无意义频繁更新”
+
+### 🧪 验证结果
+
+- 文档一致性复核通过：
+  - 已确认 `AnalysisBoardService` 在架构文档与 `services-guide` 的角色表述一致
+  - 已确认 `CLAUDE.md` / `GITHUB_WORKFLOW.md` 不再保留过时的固定颜色检查项与 `setData` 教条表述
+- 本期未修改业务代码，因此未新增自动化测试执行
+
+### 📖 详细实施记录
+
+- [里程碑-21C：执行文档与治理口径同步](../design/milestone-21c-governance-alignment.md)
+
+---
+
+## [里程碑-21I] - 2026-04-15
+
+### ✅ 完成情况
+
+**质量闸门与自动化收口**
+
+- **覆盖率闸门已恢复零告警**：
+  - 补齐 [`pages/index/modules/index-user-context.js`](/Users/wangdafei/code/study_task_wechat/pages/index/modules/index-user-context.js) 分支覆盖
+  - 补齐 [`pages/index/modules/index-search-panel.js`](/Users/wangdafei/code/study_task_wechat/pages/index/modules/index-search-panel.js) 分支覆盖
+  - 补齐 [`pages/index/modules/index-user-switcher.js`](/Users/wangdafei/code/study_task_wechat/pages/index/modules/index-user-switcher.js) 分支覆盖
+  - 补齐 [`pages/index/modules/index-message-preview.js`](/Users/wangdafei/code/study_task_wechat/pages/index/modules/index-message-preview.js) 分支覆盖
+  - 补齐 [`services/task-service.js`](/Users/wangdafei/code/study_task_wechat/services/task-service.js) 分支覆盖
+- **基础自动化闸门已落地**：
+  - 新增 [`.github/workflows/test.yml`](/Users/wangdafei/code/study_task_wechat/.github/workflows/test.yml)
+  - workflow 固定 `Node 20`，自动执行 `npm ci`、`npm test`、`npm run test:quality`
+- **平台访问残留已完成收口**：
+  - [`services/user-service.js`](/Users/wangdafei/code/study_task_wechat/services/user-service.js) 不再回退 `wx.setStorageSync('currentUserId', ...)`
+  - `_saveUserState()` 统一复用 `_persistCurrentUserId()`，并修正持久化成功日志语义
+
+### 🧪 验证结果
+
+- 定向回归通过：
+  - `npx jest --runInBand test/pages/index.user-context.test.js test/pages/index.modules.test.js test/services/task-service.helpers.test.js test/services/user-service.test.js`
+  - `npx jest --runInBand test/services/user-service.test.js`
+- 质量闸门通过：
+  - `npm run test:quality`
+  - 结果：`85 suites / 1899 tests` 全绿，覆盖率阈值零告警
+- 全量前端测试通过：
+  - `npm test`
+  - 结果：`85 suites / 1899 tests` 全绿
+- 代码差异检查通过：
+  - `git diff --check`
+
+### 📖 详细实施记录
+
+- [里程碑-21I：质量闸门与自动化收口](../design/milestone-21i-quality-gate-automation-convergence.md)
+
+---
+
+## [里程碑-21E] - 2026-04-15
+
+### ✅ 完成情况
+
+**星星域与奖励域前端服务内部模块化**
+
+- **`StarService` 已完成 facade + helper 切片**：
+  - `services/star-service.js` 从单体实现收口为 facade
+  - 新增 `services/star-service/star-utils.js`
+  - 新增 `services/star-service/star-records.js`
+  - 新增 `services/star-service/star-write.js`
+  - 新增 `services/star-service/star-cloud.js`
+  - 新增 `services/star-service/star-expiry.js`
+- **`RewardService` 已完成 facade + helper 切片**：
+  - `services/reward-service.js` 从单体实现收口为 facade
+  - 新增 `services/reward-service/reward-context.js`
+  - 新增 `services/reward-service/reward-queue.js`
+  - 新增 `services/reward-service/reward-query.js`
+  - 新增 `services/reward-service/reward-write.js`
+  - 新增 `services/reward-service/reward-cloud.js`
+  - 新增 `services/reward-service/reward-exchange.js`
+- **对外契约保持稳定**：
+  - `StarService / RewardService` 对外公开 API、`ServiceManager` 初始化顺序、页面调用方式均保持不变
+  - 清理 `RewardService` 本地兑换路径里已确认的 `serviceManager` 历史死分支
+
+### 🧪 验证结果
+
+- 定向回归通过：
+  - `npx jest --runInBand test/services/star-service.test.js`
+  - `npx jest --runInBand test/services/reward-service.test.js`
+  - `npx jest --runInBand test/services/star-service.test.js test/services/reward-service.test.js test/services/service-manager.test.js test/pages/index.reward-flow.test.js test/pages/rewards.modules.test.js test/app/bootstrap-services.test.js test/app/post-login-bootstrap.test.js`
+- 提交前复核通过：
+  - `npx jest --runInBand test/services/star-service.test.js test/services/reward-service.test.js`
+- 全量前端测试通过：
+  - `npm test`
+  - 结果：`85 suites / 1878 tests` 全绿
+
+### 📖 详细实施记录
+
+- [里程碑-21E：星星域与奖励域前端服务内部模块化](../design/milestone-21e-star-reward-service-modularization.md)
+
+---
+
+## [里程碑-21D] - 2026-04-15
+
+### ✅ 完成情况
+
+**服务层依赖边界收口**
+
+- **服务反向依赖已显式注入化**：
+  - `services/message-service.js` 不再运行时反查 `service-manager` 获取 `starService`，改为构造注入并补齐 `updateStarService()`
+  - `services/star-service.js` 不再运行时反查 `service-manager` 获取 `rewardService`，改为显式依赖注入并补齐 `updateRewardService()`
+  - `services/reward-service.js` 不再运行时反查 `service-manager` 获取 `configService`，改为显式依赖注入并补齐 `updateConfigService()`
+- **基础设施访问边界已统一收紧**：
+  - `services/user-service.js` 去除 `currentUserId` 的直接 `wx.getStorageSync / setStorageSync` 兜底，统一走 `StorageAdapter`
+  - `services/task-service.js` 删除仅用于 JSDoc 的运行时 `require('./index')`，去掉无业务价值的隐式索引依赖
+- **初始化与回归链路已同步补强**：
+  - `services/service-manager.js` 保持原有初始化顺序不变，并补齐 `starService / rewardService / configService` 的后续更新链路
+  - 补齐 `service-manager`、`message-service`、`reward-service`、`star-service` 边界治理相关测试
+  - 修复 `test/models/star-record.test.js` 中 `clone()` 时间戳断言不稳定问题，避免全量回归偶发红灯
+
+### 🧪 验证结果
+
+- 定向回归通过：
+  - `npx jest --runInBand test/services/service-manager.test.js test/services/reward-service.test.js test/services/star-service.test.js test/services/message-service.test.js test/services/message-service.modules.test.js test/services/user-service.test.js test/services/task-service.test.js test/app/bootstrap-services.test.js test/app/post-login-bootstrap.test.js`
+  - `npx jest --runInBand test/models/star-record.test.js`
+- 全量前端测试通过：
+  - `npm test`
+  - 结果：`85 suites / 1878 tests` 全绿
+
+### 📖 详细实施记录
+
+- [里程碑-21D：服务层依赖边界收口](../design/milestone-21d-service-layer-boundary-governance.md)
+
+---
+
+## [维护收口] - 2026-04-15
+
+### ✅ 完成情况
+
+**死代码与陈旧胶水清理完成**
+
+- 删除已无运行时引用的 analytics 遗留入口与工具：
+  - `packageChart/index.js`
+  - `packageChart/utils/analyticsUtils.js`
+  - `packageChart/ec-canvas/ec-canvas.json`
+  - `packageComponents/index.js`
+- 删除首页和任务编辑页中已无视图绑定或零调用的历史残留：
+  - `pages/index/index.js#editTask`
+  - `pages/task-edit/task-edit.js#doAddTask`
+  - `pages/task-edit/task-edit.js#onHeatmapDaySelect`
+  - `pages/task-edit/task-edit.js` 内未使用导入与零引用 helper
+- 收口星星记录页和热力图中的无消费状态与零引用方法：
+  - `packageMessage/pages/star-records/star-records.js` 的旧筛选弹窗状态残留
+  - `packageComponents/components/task-heatmap/task-heatmap.js` 中数个全仓库零引用 helper
+- 同步删除仅用于保活死代码的测试残留：
+  - `test/utils/analytics-utils.test.js`
+  - `test/pages/index.page-shell.behavior.test.js` 中对 dead homepage method 的直接调用
+
+### 📉 收益摘要
+
+- 当前清理分支相对合并前基线共净删除 `461` 行代码
+- 其中生产代码净减少约 `378` 行，源码体积约减少 `11.4 KB`
+- 死代码治理已完成第一阶段收口，后续不再作为独立 roadmap 里程碑继续深挖
+
+### 🧪 验证结果
+
+- `git diff --check`
+- `npx jest --runInBand test/pages/task-edit.page.test.js test/pages/task-heatmap.component.test.js test/pages/rewards.modules.test.js test/pages/rewards.page-contract.test.js test/pages/rewards.behavior.test.js`
+
+---
+
+## [里程碑-21G] - 2026-04-14
+
+### ✅ 完成情况
+
+**分析页重规划为横屏月度任务履约看板**
+
+- **分析页产品形态已正式切换**：
+  - `packageChart/pages/analysis/analysis.*` 改为横屏专用月度任务履约看板，统一承载 `loading / ready / empty / error` 页面状态
+  - 页面主视觉改为“自然月日期列 + 任务聚类行”的矩阵看板，支持月份切换、家长多孩子切换、今日定位线与单行焦点高亮
+  - 顶部结构收口为“返回 + 月份切换”，摘要与图例并入矩阵上沿，避免旧分析页卡片化报表布局
+- **旧分析链路已正式退役并清理完成**：
+  - 删除 `services/analytics-service.js` 与 `packageChart/services/analytics-service.js`
+  - 删除 `backend/services/analyticsReadModelService.js`、`backend/services/analytics-read-model/*`、`backend/routes/analytics.js`、`backend/controllers/analyticsController.js`
+  - 删除 `packageChart/components/star-calendar/*`、`packageChart/components/star-trend/*`
+  - 删除 `packageChart/ec-canvas/*` 与 `echarts.js`
+- **新的轻量聚合链路已落地**：
+  - 新增 `services/analysis-board-service.js`，统一负责自然月列生成、任务聚类、状态归并、未来纯空列弱化元数据与摘要统计
+  - 分析页只复用既有 `taskService.getTasksByDateRange(...)` 拉取任务事实，不再恢复任何 analytics 专用前后端聚合接口
+  - “今天未完成不打叉、显示为未开始态”的月看板规则已固化为正式口径
+
+### 🧪 验证结果
+
+- 定向自动化回归通过：
+  - `test/services/analysis-board-service.test.js`
+  - `test/pages/analysis.page.test.js`
+  - `test/app/app-launch-behavior.test.js`
+  - `test/app/app-shell.behavior.test.js`
+  - `test/pages/index.page-shell.behavior.test.js`
+  - `test/services/service-manager.test.js`
+  - `test/models/user.test.js`
+- 手工验收通过：
+  - 横屏进入分析页后整月矩阵可一屏阅读
+  - 月份切换、孩子切换、返回、今日定位线、未来纯空列弱化、相近标题中间省略、单行焦点高亮均已逐项确认符合预期
+  - 灵动岛/刘海遮挡、底部图例留空、空二级工具栏、图例尺寸不一致等视觉问题均已收口
+
+### 📖 详细实施记录
+
+- [里程碑-21G：分析页重规划为横屏月度任务履约看板](../design/milestone-21g-analytics-dashboard-redesign.md)
+
+---
+
+## [里程碑-21F3] - 2026-04-13
+
+### ✅ 完成情况
+
+**analytics 分析页 fallback 收口与 prepared snapshot 消费统一**
+
+- **页面与组件职责进一步收口**：
+  - `pages/analysis/analysis.js` 统一承担分析页刷新编排，按场景透传 `force`，不再让分析组件自行补拉正式数据
+  - `components/star-calendar/star-calendar.js` 收口为 prepared snapshot consumer，正式链路不再直连任务/星星查询
+- **前端 analytics 主路径继续变薄**：
+  - `services/analytics-service.js` 删除已无正式主路径调用价值的历史分支和死代码，进一步收紧 fallback 边界
+  - 保留本地模式和后端失败场景所需的最小必要 fallback，不再维持额外的 cloud 正式计算编排
+- **问题修复与契约同步**：
+  - 修复分析页 scope 切换时旧日历短暂残留的问题，等待新 snapshot 前先清空旧展示态
+  - 同步清理过时 API 文档描述，移除已不再存在的 analytics 旧接口事实
+
+### 🧪 验证结果
+
+- 前端定向测试通过：
+  - `test/pages/star-calendar.component.test.js`
+  - `test/pages/analysis.page.test.js`
+  - `test/pages/star-trend.component.test.js`
+  - `test/services/analytics-service.test.js`
+- 手工验收通过：
+  - user / family 两种分析视角切换、翻月、回到今天、任务变化后刷新均已确认符合预期
+  - 组件在 prepared snapshot 未就绪时不再自行走旧拉数主链路，页面刷新责任保持单点收口
+
+### 📖 详细实施记录
+
+- [里程碑-21F3：analytics fallback 收口与 prepared snapshot 消费统一](../design/milestone-21f3-analytics-fallback-convergence.md)
+
+---
+
+## [里程碑-21F2] - 2026-04-13
+
+### ✅ 完成情况
+
+**analytics 云端正式读模型后移与前端收口**
+
+- **后端 authoritative read model 落地**：
+  - 新增 `backend/services/analyticsReadModelService.js` 及 `analytics-read-model/` 内部模块，统一承接 `user / family` 两个 scope 的月度任务、星星流水、当前余额锚点、`historyData` 与 `forecastData`
+  - 新增 `backend/routes/analytics.js` 与 `backend/controllers/analyticsController.js`，正式暴露 4 个 analytics 查询接口
+  - `prepareReadModel`、任务完成统计、即将过期星星、任务星星日历的 cloud authoritative 口径全部由后端输出
+- **前端职责收口**：
+  - `services/analytics-service.js` 在 cloud 模式下改为优先消费后端 authoritative 结果，前端回到缓存、适配、展示分发和失败兜底职责
+  - 保留本地模式、后端失败和 `pending_local_overlay` 所需的最小必要 fallback，不再保留第二套 cloud 正式聚合主链路
+  - 删除已不再被主路径命中的 analytics cloud-only 冗余 helper，前端 analytics 主路径明显变薄
+- **契约与查询能力统一**：
+  - 新增 `read-model/query`、`task-completion-stats/query`、`upcoming-expiry/query`、`task-star-calendar/query` 四个 REST 契约
+  - `utils/api-config.js`、前端服务层和后端控制器/服务层的 scope、subject、返回结构已完成统一
+
+### 🧪 验证结果
+
+- 前端定向测试通过：
+  - `test/services/analytics-service.test.js`
+- 后端定向测试通过：
+  - `backend/test/unit/analyticsReadModelService.test.js`
+  - `backend/test/integration/analytics-read-model-api.test.js`
+- 手工验收通过：
+  - user / family 分析页月度事实、趋势图、任务完成统计、即将过期星星、任务星星日历主链路已逐项验证
+  - `pending_local_overlay`、后端失败 fallback、family 子集筛选等关键降级/边界场景已确认符合预期
+
+### 📖 详细实施记录
+
+- [里程碑-21F2：analytics 云端正式读模型后移与前端收口](../design/milestone-21f2-analytics-readmodel-backend-migration.md)
+
+---
+
+## [里程碑-21B4] - 2026-04-11
+
+### ✅ 完成情况
+
+**任务表单共享内核重构**
+
+- **共享草稿与适配层落地**：
+  - 新增 `utils/task-form-core.js` 与 `utils/task-form-adapter.js`，统一 `task-edit`、`task-template-edit`、模板实体回填与显示层消费的 canonical draft
+  - 前端时间解析、默认值、归一化、校验、日期策略解析、提醒选项生成与显示态输入契约正式收口到共享内核
+- **页面与服务层规则统一**：
+  - `pages/task-edit/task-edit.js` 与 `packageManage/pages/task-template-edit/task-template-edit.js` 改为先校验原始输入，再通过共享内核构建 payload / patch，避免无效输入被静默归一化
+  - `services/validation-service.js` 与 `services/task-template-service.js` 改为消费共享内核，不再各自维护独立的时间、重复和日期策略规则
+  - `utils/task-template-utils.js` 与 `utils/task-form-display.js` 完成兼容收口，既有调用点不需要整体改写
+- **重复逻辑清理与正确性补强**：
+  - 删除 `task-edit`、`validation-service`、`task-template-edit` 中多处重复默认值、时间校验、提醒选项与日期策略 helper
+  - 修复“原始无效输入先被默认值吞掉再校验”的风险，补强重复任务缺结束日期、非全天任务缺时间、模板 `durationDays` 非法值等拦截链路
+
+### 🧪 验证结果
+
+- M21B4 定向回归通过：
+  - `test/utils/task-form-core.test.js`
+  - `test/utils/task-form-adapter.test.js`
+  - `test/pages/task-edit.page.test.js`
+  - `test/pages/task-template-edit.page.test.js`
+  - `test/services/validation-service.test.js`
+- 全量前端测试通过：
+  - `npm test -- --runInBand`
+  - 结果：`88 suites / 1869 tests` 全绿
+- 手工验收通过：
+  - 全天任务创建、非全天任务创建、重复任务创建与实例展开正常
+  - 推荐模板转正式模板主链路正常
+  - 重复任务缺结束日期、非全天任务缺时间、模板 `durationDays=0/空值` 均已手工确认被拦截
+
+### 📖 详细实施记录
+
+- [里程碑-21B4：任务表单共享内核重构](../design/milestone-21b4-task-form-shared-core.md)
+
+---
+
+## [里程碑-21B3] - 2026-04-11
+
+### ✅ 完成情况
+
+**模板页视觉语义与信息理解优化**
+
+- **筛选器与工具区语义收口**：
+  - 模板页筛选器从模板胶囊式表现改为二级分段筛选条，降低与“可直接使用模板”的语义混淆
+  - `管理模板` 页顶部工具区结构稳定化，不再按模板数量切换两套入口布局
+  - 管理页工具区与结果区补齐轻分隔与统一留白，减少筛选器紧贴模板列表的视觉压迫感
+- **模板与推荐卡片信息层级重构**：
+  - 选择页移除低价值的 `0次使用 / 最近未使用` 统计噪音
+  - 管理页改为仅在有真实值时展示弱化后的使用摘要
+  - 模板说明统一为单行优先级展示，避免模板说明与任务说明双层堆叠
+  - 管理页 `更多` 入口上移到卡片头部，卡片底部不再拖尾独立动作行
+- **关键属性与推荐理由收口**：
+  - 模板卡片和推荐卡片统一为 `label · value` 属性表达
+  - 推荐理由改写为用户可直接理解的句式，如“近60天出现了 N 次”“这是一个长期重复任务”“近N周都出现了相同的重复安排”
+  - 管理页筛选态下不再误把“无匹配结果”展示成“还没有模板”，同时隐藏推荐区干扰
+
+### 🧪 验证结果
+
+- M21B3 定向回归通过：
+  - `test/pages/task-template-manage.page.test.js`
+  - `test/utils/task-template-source.test.js`
+  - `test/pages/task-edit.page.test.js`
+- 本次实施共验证：
+  - `3 suites / 52 tests` 全绿
+  - `git diff --check` 通过
+
+### 📖 详细实施记录
+
+- [里程碑-21B3：模板页视觉语义与信息理解优化](../design/milestone-21b3-template-page-clarity.md)
+
+---
+
+## [里程碑-21B2] - 2026-04-10
+
+### ✅ 完成情况
+
+**模板来源补齐**
+
+- **推荐候选与模板草稿链路**：
+  - 新增 `utils/task-template-source.js`，补齐真实任务到推荐候选、模板草稿和模板覆盖判定的纯函数链路
+  - 支持一次性高频任务与跨自然周重复任务的轻量聚类识别
+  - 显式排除一次性多天任务与 `monthly` 重复任务，避免模板语义降级
+- **任务主线推荐感知**：
+  - `task-edit` 快捷填充区接入推荐候选展示与推荐草稿入口
+  - 无正式模板时支持推荐卡片承接；有正式模板时推荐降为次级入口，不打断主填表节奏
+  - 模板填充后的“恢复原内容”状态与跨页面返回行为完成收口
+- **模板管理页推荐承接**：
+  - 模板页正式拆分 `选择模板 / 管理模板` 双 tab 语义
+  - `管理模板` tab 新增推荐候选区，支持从推荐直接进入预填好的模板编辑页
+  - 推荐保存为模板后，正式模板列表、推荐列表与返回链路状态保持一致
+- **服务层与缓存治理**：
+  - `TaskTemplateService` 正式接入推荐候选查询、缓存与任务事件失效机制
+  - 推荐缓存已按 `familyId / loginUserId / currentUserId` 做上下文隔离
+  - family 云端查询会合并本地未同步任务，避免推荐源遗漏本地数据
+
+### 🧪 验证结果
+
+- M21B2 合并后验收通过：
+  - 手工验收：任务编辑页、模板管理页、推荐保存为模板、删除模板后推荐恢复、模板回填与恢复原内容主链路均通过
+  - 自动化验收：
+    - `test/pages/task-template-manage.page.test.js`
+    - `test/services/task-template-service.test.js`
+    - `test/pages/task-edit.page.test.js`
+    - `test/utils/task-template-source.test.js`
+    - `test/services/service-manager.test.js`
+    - `test/services/task-query.direct.test.js`
+- 定向测试结果：
+  - `6 suites / 86 tests` 全绿
+
+### 📖 详细实施记录
+
+- [里程碑-21B2：模板来源补齐](../design/milestone-21b2-template-source-completion.md)
+
+---
+
+## [里程碑-21B1] - 2026-04-08
+
+### ✅ 完成情况
+
+**模板基础闭环**
+
+- **模板实体与同步主链路**：
+  - 新增 `TaskTemplate` 前后端模型、前端仓储与服务、后端 `task_templates` 表及 REST 接口
+  - `ServiceManager` 正式接入 `TaskTemplateService`，模板读写走统一服务入口
+  - 模板持久化采用独立实体，不再复用任务实例或历史任务临时复制
+- **管理与编辑页面**：
+  - 新增独立的任务模板管理页与模板编辑页
+  - 支持模板搜索、类型筛选、状态筛选、最近使用/使用次数排序、启用/停用、删除和手工创建/编辑
+  - 管理页在 `select` 模式下可直接回传模板给 `task-edit` 页面完成快速填表
+- **`task-edit` 模板快速填充**：
+  - 在“添加任务”卡片内新增“从模板快速填充”模块，支持 3-5 个最近模板胶囊项和“查看全部”入口
+  - 选择模板后自动填充现有任务表单，并同步更新 `repeatText / reminderText / pointsExpiryText / repeatPreviewText`
+  - 真实任务创建成功后，以 best-effort 方式回写模板使用次数，不影响任务创建成功结果
+- **兼容与显示层治理**：
+  - 新增共享 helper，统一任务模板应用后的重复文案、提醒文案、有效期文案与重复预览生成逻辑
+  - `task-edit` 重复面板补齐 `不重复 / 每周` 选项，并恢复“无结束日期”开关，保证模板填充后的字段可继续手工调整
+
+### 🧪 验证结果
+
+- M21B1 定向测试通过：
+  - `test/models/task-template.test.js`
+  - `test/repositories/task-template-repository.test.js`
+  - `test/services/task-template-service.test.js`
+  - `test/pages/task-template-manage.page.test.js`
+  - `test/pages/task-template-edit.page.test.js`
+  - `test/pages/task-edit.page.test.js`
+  - `test/services/service-manager.test.js`
+- 全量前端测试通过：
+  - `npm test -- --runInBand`
+  - 结果：`83 suites / 1735 tests` 全绿
+
+### 📖 详细实施记录
+
+- [里程碑-21B1：模板基础闭环](../design/milestone-21b1-task-template-foundation.md)
+
+---
+
+## [里程碑-20E] - 2026-04-07
+
+### ✅ 完成情况
+
+**前端职责收口与存量代码清理评估**
+
+- **服务层收口**：
+  - 修复 `MessageService.batchMarkMessagesAsRead()` 对旧 `messageManager` 的失效依赖，改为委托 `MessageRepository`
+  - 清理 `MessageService` 中无生产调用的历史接口与残链，包括 `batchCreateTaskMessages()`、`getUpcomingTaskNotifications()`、`_migrateMessageData()` 和一组无调用 domain facade 壳方法
+  - 清理 `UserService.getChildUserId()`、`UserService._loadUserState()`、`TaskService._getChildUserId()` 和 `RewardService.markRewardAsDelivered()`
+- **页面与工具层收口**：
+  - 奖励页兑换流统一改用 `_getEffectiveChildUserId()`，删除 `_getChildUserId()` 兼容壳与对应模块 helper
+  - 删除 `utils/log-analyzer.js` 及 `app.js` 中的 dev-only 入口
+  - 删除 `uiUtils` 中无调用的 `toggleComponent / toggleMask / setLoading` 兼容包装
+- **文档与契约同步**：
+  - 同步更新 `docs/api/services-guide.md`，移除已删除废弃接口说明
+  - 保留 `test/backend/message-service-copy.test.js` 作为根级后端契约测试事实，不在本期为历史命名做额外扰动
+
+### 🧪 验证结果
+
+- M20E 定向回归通过：
+  - `test/services/message-service.test.js`
+  - `test/services/message-service.modules.test.js`
+  - `test/services/user-service.test.js`
+  - `test/services/task-service.helpers.test.js`
+  - `test/services/reward-service.test.js`
+  - `test/pages/rewards.page-contract.test.js`
+  - `test/pages/rewards.modules.test.js`
+  - `test/pages/rewards.behavior.test.js`
+  - `test/app.test.js`
+  - `test/app/app-shell.behavior.test.js`
+  - `test/pages/index.page-shell.behavior.test.js`
+  - `test/pages/task-edit.page.test.js`
+- 本次实施共验证：
+  - `12 suites / 267 tests` 全绿
+
+### 📖 详细实施记录
+
+- [里程碑-20E：前端职责收口与存量代码清理评估](../design/milestone-20e-frontend-responsibility-convergence.md)
+
+---
+
+## [里程碑-20B] - 2026-04-06
+
+### ✅ 完成情况
+
+**星星域边界治理轻量收口**
+
+- **正式边界固化**：
+  - 明确 `syncExpiryAuthorityIfNeeded()` 仅代表 authority sync，不等于本地镜像已刷新
+  - 明确 `refreshStarsFromCloud()` 的 pending-local 保护与 `forceCloudAfterAuthority` 既有语义
+  - 明确 `getFamilyStarSummary()` 与 family records refresh 共同组成 family 双读模型
+- **跨域入口收口**：
+  - 固化登录后初始化、首页定时过期检查、奖励页刷新、任务查询读前补星等既有边界
+  - 保留 `task-query.js` 的 `requireFreshStars` 既有契约，不把星星域迁入统一离线队列
+- **测试与注释补齐**：
+  - 补齐 `star-service`、`analytics-service`、奖励页、星星日历组件等边界测试
+  - 补齐启动链路、奖励服务、首页刷新协调器等关键调用点的正式说明
+
+### 🧪 验证结果
+
+- M20B 定向测试通过：
+  - `test/services/star-service.test.js`
+  - `test/services/analytics-service.test.js`
+  - `test/pages/rewards.page-contract.test.js`
+  - `test/pages/star-calendar.component.test.js`
+- 本次实施以轻量治理为主：
+  - 未新增公开 wrapper
+  - 未调整存储模型
+  - 未将星星域接入 `OfflineQueueService`
+
+### 📖 详细实施记录
+
+- [里程碑-20B：星星域边界治理轻量收口](../design/milestone-20b-star-domain-boundary-governance.md)
+
+---
+
+## [里程碑-20C] - 2026-04-07
+
+### ✅ 完成情况
+
+**前端复杂度治理 2.0**
+
+- **首页 page shell 继续瘦身**：
+  - 新增 `index-date-navigation.js`、`index-message-preview.js`、`index-search-panel.js`、`index-user-switcher.js`
+  - 首页 reward UI 壳层进一步收口到 `index-reward-flow.js`
+  - `pages/index/index.js` 从 `2105` 行下降到 `1183` 行
+- **奖励页首次模块化**：
+  - 新增 `rewards-sync.js`、`rewards-exchange-flow.js`、`rewards-animation.js`、`rewards-user-context.js`
+  - `pages/rewards/rewards.js` 从 `1127` 行下降到 `412` 行
+  - 修复奖励页进度条完成监听生命周期不对称问题，改为显示期注册、隐藏期解绑
+- **MessageService 内部职责切片**：
+  - 新增 `message-provisional.js`、`message-domain.js`、`message-handlers.js`
+  - `services/message-service.js` 从 `2336` 行下降到 `1526` 行
+  - 保留 facade 对外接口不变，listener map 稳定化落地
+- **收尾修复**：
+  - 修复奖励兑换成功后 `nextReward` 为空时的安全分支
+  - 修复首页消息预览快速开关时的定时器竞争问题
+  - 清理奖励页用户上下文适配层中的死参数，统一参数签名
+
+### 🧪 验证结果
+
+- 页面大范围回归通过：
+  - `npm run test:pages -- --runInBand`
+  - 结果：`21 suites / 136 tests` 全绿
+- MessageService 定向回归通过：
+  - `npx jest test/services/message-service.test.js test/services/message-service.modules.test.js --runInBand`
+  - 结果：`2 suites / 83 tests` 全绿
+- 首页与奖励页模块级定向回归通过：
+  - `npx jest test/pages/index.modules.test.js test/pages/rewards.behavior.test.js test/pages/rewards.modules.test.js test/pages/rewards.page-contract.test.js --runInBand`
+  - 结果：相关新增边界与生命周期测试全部通过
+
+### 📖 详细实施记录
+
+- [里程碑-20C：前端复杂度治理 2.0](../design/milestone-20c-frontend-complexity-governance-2.md)
+
+---
+
+## [里程碑-20A] - 2026-04-05
+
+### ✅ 完成情况
+
+**用户上下文与权限边界治理**
+
+- **统一上下文解析入口落地**：
+  - 新增 `utils/user-context.js`，正式收口 `UserContextSnapshot / ReadContext / MutationContext / PermissionContext`
+  - `utils/view-scope.js` 改为兼容包装，统一委托正式上下文解析
+- **页面与服务语义收口**：
+  - 首页权限入口和最近活跃孩子记忆改为统一消费 `PermissionContext`
+  - 奖励页孩子主体、奖励归属与只读态改为复用统一上下文语义
+  - 任务域、奖励域、消息域和 `service-manager` 的 actor/target/scope 解析统一收口
+- **兼容契约保留**：
+  - 保留 `manage / execute` 双 actor 契约，不改变家长代孩子管理与执行动作的既有记述语义
+  - 保留页面层和服务层的兼容包装入口，避免一次性大爆炸式改名
+
+### 🧪 验证结果
+
+- M20A 关键定向测试通过：
+  - `npx jest test/pages/task-edit.page.test.js test/pages/rewards.page-contract.test.js test/utils/user-context.test.js test/services/service-manager.test.js test/services/task-service.test.js test/pages/index.user-context.test.js --runInBand`
+  - 结果：`6 suites / 174 tests` 全绿
+- M20A 扩展回归通过：
+  - `npx jest test/pages/index.page-contract.test.js test/pages/index.page-shell.behavior.test.js test/pages/index.task-actions.test.js test/pages/index.reward-flow.test.js test/pages/rewards.behavior.test.js test/pages/message-page.behavior.test.js test/pages/message-page.extra-behavior.test.js test/pages/analysis.page.test.js test/services/message-service.test.js test/services/reward-service.test.js test/utils/view-scope.test.js --runInBand`
+  - 结果：`11 suites / 224 tests` 全绿
+- 模拟器与日志复核说明：
+  - M20A 主链路已完成多轮日志复核
+  - 剩余未完全手工证实点由自动化测试补齐，不再阻塞本次交付
+
+### 📖 详细实施记录
+
+- [里程碑-20A：用户上下文与权限边界治理](../design/milestone-20a-user-context-boundary-governance.md)
+
+---
+
+## [里程碑-19E] - 2026-04-05
+
+### ✅ 完成情况
+
+**配置与离线队列治理**
+
+- **运行模式配置治理**：
+  - 新增 `utils/runtime-config.js`，统一收敛 `ENABLE_API / API_BASE_URL` 的原始配置解析、校验和落盘语义
+  - `utils/api-config.js` 改为只负责生成运行时快照，明确配置变更需下次启动生效
+- **统一离线队列落地**：
+  - 新增 `OfflineQueueItem / OfflineQueueRepository / OfflineQueueService`
+  - 任务域与奖励域写失败后改由统一 queue 承接待同步动作，不再继续扩散分散 flush 逻辑
+- **启动与读取链路收口**：
+  - `ServiceManager` 正式注入 `offlineQueueService`
+  - `bootstrap-services` / `post-login-bootstrap` 增加 queue 初始化与登录后补偿 drain
+  - 任务/奖励读取前补云改为统一委托 queue drain
+- **兼容边界固化**：
+  - 继续保留 `pendingSyncMeta + syncedToCloud + modifyTime` 作为过渡期兼容保护
+  - 消息域继续消费 `TASK_CLOUD_SYNC_FAILED / REWARD_CLOUD_SYNC_FAILED`，不改变 provisional 语义
+  - 星星域继续保留本地待同步流水保护，不强行纳入本期统一队列
+
+### 🧪 验证结果
+
+- 全量前端测试通过：
+  - `npm test`
+  - 结果：`73 suites / 1686 tests` 全绿
+- M19E 关键定向测试通过：
+  - `npx jest test/utils/runtime-config.test.js test/utils/api-config.test.js test/services/offline-queue-service.test.js`
+  - `npx jest test/app/bootstrap-services.test.js test/app/post-login-bootstrap.test.js`
+  - `npx jest test/services/task-service.test.js test/services/reward-service.test.js`
+- 模拟器手工回归与日志复核通过：
+  - 本地模式、云端模式、登录后补偿、首页/奖励页/消息页主链路已完成多轮日志复核
+
+### 📖 详细实施记录
+
+- [里程碑-19E：配置与离线队列治理](../design/milestone-19e-config-offline-queue-governance.md)
+
+---
+
+## [里程碑-19D] - 2026-04-04
+
+### ✅ 完成情况
+
+**消息语义与降级治理**
+
+- **消息读取主路径收口**：
+  - `MessageService` 在云端模式下已显式区分 `formal / provisional / legacy`
+  - 主消息流展示只保留 `formal + provisional`，历史本地兼容消息不再混入云端模式主流
+- **兼容入口语义固定**：
+  - `refreshMessagesFromCloud()` 继续保留公开兼容入口
+  - `getAllMessages()` / `getUnreadCount()` 继续沿用兼容接口，但默认代表“当前有效 scope”
+  - `getUnreadCount()` 保留了无用户上下文时直连仓储的早返回路径
+- **监听职责治理**：
+  - 监听注册按“本地模式业务监听 / 云端失败降级监听 / 领域观察者”拆分
+  - 云端模式下失败兜底仅通过 `TASK_CLOUD_SYNC_FAILED / REWARD_CLOUD_SYNC_FAILED` 生成 provisional
+- **事件语义固定**：
+  - `message:changed` 继续传递当前有效 scope 的消息快照
+  - 没有扩展为 all-scope 负载，避免首页预览和未读数串视角
+
+### 🧪 验证结果
+
+- 前端消息域定向测试通过：
+  - `npx jest test/services/message-service.test.js --runInBand`
+  - `npx jest test/repositories/message-repository.test.js --runInBand`
+  - `npx jest test/pages/message-page.behavior.test.js test/pages/message-page.extra-behavior.test.js --runInBand`
+- 启动与首页消息链路回归通过：
+  - `npx jest test/app/post-login-bootstrap.test.js --runInBand`
+  - `npx jest test/pages/index* -i`
+
+### 📖 详细实施记录
+
+- [里程碑-19D：消息语义与降级治理](../design/milestone-19d-message-degradation-governance.md)
+
+---
+
+## [里程碑-19C] - 2026-04-04
+
+### ✅ 完成情况
+
+**分析读模型治理**
+
+- **页面级统一读模型保鲜**：
+  - `analysis.js` 正式接管分析页主入口，持有 `visibleMonthKey`、`trendDays`、`readModelVersion`
+  - `AnalyticsService.prepareReadModel()` 负责统一准备分析页所需 scoped facts，并提供 30 秒 TTL 与 in-flight 复用
+- **family 当前余额锚定补齐**：
+  - 后端新增 `GET /api/stars/family-summary`
+  - family 模式下趋势图不再仅依赖流水净额，而是使用当前家庭活跃孩子分组快照锚定 `currentBalance`，同时恢复过期预测
+- **组件读链路收口**：
+  - `star-calendar` / `star-trend` 改为优先消费 `AnalyticsService` 已准备好的快照
+  - 翻月和 7/30 天切换由页面统一触发重新准备读模型，组件不再各自决定主刷新时机
+- **分析范围语义修正**：
+  - 家长视角进入分析页统一使用 `scope='family'`
+  - 单孩子家庭也走 family 视角，只是 `childUserIds` 仅包含一个活跃孩子
+
+### 🧪 验证结果
+
+- 前端定向测试通过：
+  - `npm test -- --runInBand test/pages/star-calendar.component.test.js test/pages/star-trend.component.test.js test/pages/analysis.page.test.js test/services/analytics-service.test.js test/utils/view-scope.test.js`
+- 后端定向测试通过：
+  - `cd backend && npx jest test/unit/starService.test.js --runInBand`
+  - `cd backend && npx jest test/unit/starController.test.js --runInBand`
+- 模拟器手工回归通过：
+  - 分析页首次进入、翻月、7/30 天切换、家长视角进入 family 分析链路已由多轮日志复核
+  - 最新 `l1.log` 已确认家长视角进入分析页时日志稳定为 `{ userId: null, scope: "family" }`
+
+### 📖 详细实施记录
+
+- [里程碑-19C：分析读模型治理](../design/milestone-19c-analysis-read-model-governance.md)
+
+## [里程碑-19B] - 2026-04-04
+
+### ✅ 完成情况
+
+**任务域边界收口**
+
+- **任务写接口统一返回**：
+  - 后端 `POST /api/tasks`、`PUT /api/tasks/:taskId`、`DELETE /api/tasks/:taskId`、`PATCH /api/tasks/:taskId/status`、`PATCH /api/tasks/:taskId/required`、`PATCH /api/tasks/:taskId/unrequired` 统一返回 `TaskMutationResponse`
+  - 过渡期继续保留 `task / tasks / taskId` 兼容字段，避免页面层和历史补云链路被一次性打断
+- **云端模式任务写路径收口**：
+  - 前端 `TaskService` 在云端模式下改为优先采用后端权威返回，再回写本地缓存
+  - 创建、编辑、删除、完成、重置、必做标记共用统一的权威结果适配与缓存回写能力
+- **重复任务实例治理**：
+  - 后端接管重复任务实例生成，`POST /api/tasks` 可返回主任务与受影响任务集合
+  - 新增后端重复任务单测，覆盖稳定子任务 ID、重复规则与兼容返回结构
+- **手工验收补修**：
+  - 修复家长代孩子视角下“删除循环任务 / 批量更新循环任务”错误读取家长任务全集的问题
+  - `task-edit` 页面向热力图组件透传 `targetUserId`，组件按目标孩子任务全集执行批量删改
+
+### 🧪 验证结果
+
+- 前端任务服务测试通过：
+  - `npm test -- --runInBand test/services/task-service.helpers.test.js test/services/task-service.test.js test/services/task-sync.direct.test.js`
+- 后端单元测试通过：
+  - `npm run test:backend:unit -- taskController-m07.test.js taskService-m19b-repeat.test.js`
+- 页面测试通过：
+  - `npm run test:pages`
+- 模拟器手工回归通过：
+  - 创建、编辑、完成、重置、删除链路已分别由 `B.log`、`C.log`、`E.log`、`F.log`、`l16.log` 复核
+
+### 📖 详细实施记录
+
+- [里程碑-19A：前后端权威边界审计](../design/milestone-19a-authority-boundary-audit.md)
+- [里程碑-19A：前后端权威边界审计结论](../design/milestone-19a-authority-boundary-audit-report.md)
+- [里程碑-19B：任务域边界收口](../design/milestone-19b-task-boundary-convergence.md)
+
+---
+
+## [专项修复：重复刷新治理] - 2026-04-04
+
+### ✅ 完成情况
+
+**首页 / 奖励页 / 消息页重复刷新治理**
+
+- **首页刷新入口收敛**：
+  - 首页 `onShow` 统一收口到批量加载主入口，减少奖励预刷新与批量刷新叠加
+  - `task:changed` 等事件只保留必要补刷新，不再放大为同域二次全量 reload
+- **奖励页首进双加载消除**：
+  - 首次进入奖励页不再出现 `onLoad + onShow` 双加载
+  - 兑换成功后的结果刷新与返回首页后的刷新职责拆开，避免链路叠加
+- **消息页已读链路去重**：
+  - 单条已读 / 已读详情后只保留一条消息刷新主链路
+  - 首页消息预览仍保持正确同步，但不再由消息页操作额外拉起重复 reload
+- **页面回归测试补齐**：
+  - 首页生命周期、刷新协调器、任务动作、奖励页与消息页相关契约测试同步补强
+
+### 🧪 验证结果
+
+- 页面测试通过：
+  - `npm run test:pages`
+- 手工日志复核通过：
+  - `A.log` 已证明首页返回后的刷新链路收敛为单条主批量加载路径
+
+### 📖 详细实施记录
+
+- [重复刷新治理设计文档](../design/fix-refresh-orchestration-dedup.md)
+
+---
+
+## [里程碑-16C] - 2026-04-02
+
+### ✅ 完成情况
+
+**必做任务逾期补做语义治理**
+
+- **任务事实补齐**：
+  - `tasks` 新增 `penalty_deducted_points`、`penalty_refunded`、`penalty_refund_time`
+  - 必做任务逾期惩罚时持久化“实际扣除星星数”，不再只保留 `penaltyApplied=true`
+- **补做退星正式化**：
+  - 继续复用 `PATCH /api/tasks/:taskId/status` 作为完成 / 重置入口
+  - 逾期后首次补做完成时，后端在同一事务内退回此前实际扣除的星星
+  - 已补做退星的任务重置时，要求全额回滚退星；当前永久星星不足时返回 `409 INSUFFICIENT_STARS`
+- **消息与分析口径统一**：
+  - 新增 `task_makeup_complete` / `makeup_completed` 语义，区分普通完成与“逾期后补做并退星”
+  - 分析页同时保留“逾期扣星”和“补做退回”两条事实，不再因后续取消必做或已补做而抹掉历史
+- **测试补齐**：
+  - 新增 `backend/test/unit/taskService-m16c-makeup.test.js`
+  - 新增 `backend/test/integration/task-api-m16c-real.test.js`
+  - 前端补齐任务写链路、消息服务、分析服务与首页任务操作相关测试
+
+### 🧪 验证结果
+
+- 前端定向回归通过：
+  - `npx jest test/services/message-service.test.js --runInBand`
+  - `npx jest test/services/task-service.test.js test/services/analytics-service.test.js test/pages/index.task-actions.test.js test/pages/index.page-contract.test.js --runInBand`
+- 后端单元测试通过：
+  - `npx jest test/unit/taskService-m16c-makeup.test.js test/unit/messageService.test.js --runInBand`
+- 后端真实集成测试通过：
+  - `npx jest test/integration/task-api-m16c-real.test.js --runInBand`
+- 模拟器手工回归通过：逾期惩罚、过去日期补做、家长/孩子消息视角、分析页双事实、reset 回滚退星链路均已复核
+
+### 📖 详细实施记录
+
+- [里程碑-16C：必做任务逾期补做语义治理](../design/milestone-16c-required-task-overdue-makeup-governance.md)
+
+---
+
+## [里程碑-17] - 2026-04-02
+
+### ✅ 完成情况
+
+**首页日期导航升级**
+
+- **自然周导航正式落地**：
+  - 首页日期导航由“最近 7 天滚动”升级为“周一到周日”的自然周视图
+  - 支持本周 / 上周切换，并补齐“回到今天”快捷入口
+- **日期操作边界收敛**：
+  - 未来日期任务保持只读，仅支持查看
+  - 过去日期允许补打卡，首页任务操作链路不再把历史日期误判为跨设备只读
+- **页面联动修复**：
+  - 日期切换后首页标题、任务列表、进度圆环与相关入口状态按当前选中日期联动刷新
+  - 补齐日期导航与首页容器层级问题，避免真机/模拟器下圆环和弹层层级异常
+- **测试补齐**：
+  - 新增 `test/components/index-task-item.test.js`
+  - 补强 `test/pages/index.page-shell.behavior.test.js`
+  - 补齐首页日期导航、只读提示、翻周与返回今天相关断言
+
+### 🧪 验证结果
+
+- 首页相关前端测试已补齐并通过，覆盖日期导航、未来日期只读、历史补打卡与任务操作提示
+- 模拟器与手工回归通过：自然周导航、上周/本周切换、回到今天、未来日期只读、过去日期补打卡均已确认正常
+
+### 📖 详细实施记录
+
+- [M17 首页日期导航升级](../design/m17-date-navigation-upgrade.md)
+
+---
+
+## [里程碑-16B] - 2026-04-01
+
+### ✅ 完成情况
+
+**星星到期后端权威结算**
+
+- **后端权威结算入口**：
+  - 新增 `POST /api/stars/expiry-authority/sync`，统一承接云端模式下的已到期星星结算
+  - 新增 `backend/services/starExpiryGovernanceService.js`，按用户独立事务执行到期结算汇总
+  - 到期结算正式落到 `star_records + star_groups`：创建负向结算流水并删除已到期分组
+- **奖励保护权威迁移**：
+  - 奖励保护改为后端在奖励读取/兑换时按 `exchangeUserId` 即时计算
+  - 共享 `rewards.protected_by_expiry / partial_protection` 不再作为多孩子家庭下的全局权威
+  - 修复保护分配误纳入禁用奖励的问题，避免不可见奖励吞掉保护额度
+- **前端云端模式迁移**：
+  - `services/star-service.js` 在云端模式下跳过本地 `cleanupExpiredStars()` / `calculatePendingExpiry()` / `protectRewardsByExpiry()`
+  - bootstrap、首页、奖池页、消息正式提醒链路统一改为：权威结算 sync → 强制刷新云端星星/奖励 → 继续读取
+  - 奖励撤销兑换后补齐强制星星刷新，避免退款成功后页面继续短暂显示旧余额
+- **测试补齐**：
+  - 新增 `backend/test/integration/star-expiry-authority-m16b-real.test.js`
+  - 覆盖单用户结算、重复调用幂等、家庭范围结算与 `scope=family` 权限拒绝
+
+### 🧪 验证结果
+
+- 前端全量测试通过：68 个 suite、1617 个测试全部通过
+- 后端单元测试通过：7 个 suite、65 个测试全部通过
+- 新增后端真实集成测试通过：
+  - `npx jest test/integration/star-expiry-authority-m16b-real.test.js --runInBand`
+  - 1 个 suite、3 个测试全部通过
+
+### 📖 详细实施记录
+
+- [里程碑-16B：星星到期后端权威结算](../design/milestone-16b-star-expiry-authority-settlement.md)
+
+---
+
+## [里程碑-16A] - 2026-03-31
+
+### ✅ 完成情况
+
+**主动提醒与星星时效治理**
+
+- **正式提醒能力补齐**：
+  - 新增 `POST /api/stars/expiring-reminders/sync`，把“星星即将过期”正式纳入云端消息体系
+  - `task_upcoming` 正式消息改为按任务实例聚合，同一实例只保留 1 条活跃提醒
+  - 活跃提醒统一走创建 / 去重 / 归档模型，避免旧提醒在消息中心长期堆积
+- **前端统一触发策略**：
+  - `services/message-service.js` 将 `upcoming + star_expiring` 收敛为共享正式提醒 sync helper
+  - 共享节流窗口收紧为 `10 秒`，并保留 in-flight 复用与“失败不阻塞读消息”语义
+  - 登录后 bootstrap、首页消息读取、消息中心、奖池页统一接入正式提醒保鲜链路
+- **星星时效口径统一**：
+  - 奖池页进入时先同步正式提醒，再读取即将过期信息
+  - 星星即将过期展示窗口统一为 `3 天`
+  - 保护窗口保持 `48 小时`，与展示/提醒口径完成收敛
+
+### 🧪 验证结果
+
+- 前端全量测试通过：68 个 suite、1615 个测试全部通过
+- 后端单元测试通过：7 个 suite、63 个测试全部通过
+- 后端轻量集成通过：2 个 suite、24 个测试全部通过
+- 后端真实集成通过：8 个 suite、57 个测试全部通过
+
+### 📖 详细实施记录
+
+- [里程碑-16A：主动提醒与星星时效治理](../design/milestone-16a-proactive-reminder-validity-governance.md)
+
+---
+
+## [里程碑-15B] - 2026-03-31
+
+### ✅ 完成情况
+
+**真实环境验证与交付级收口**
+
+- **后端真实集成补测**：
+  - 新增 `backend/test/integration/task-api-m15a-real.test.js`，补齐 `POST /api/tasks/penalties/sync`、`POST /api/tasks/upcoming/sync`、`PATCH /api/tasks/:taskId/required`、`PATCH /api/tasks/:taskId/unrequired`
+  - 新增 `backend/test/integration/reward-api-m15a-real.test.js`，补齐 `PATCH /api/rewards/:rewardId/cancel-exchange`
+- **真实闸门基线修复**：
+  - 修复 `star-api-m09-real.test.js`、`reward-api-m09-real.test.js` 中已过期的固定日期夹具，改为动态未来日期
+  - 修复 `message-api-m10-real.test.js` 对奖励维护 fan-out 语义的过时断言
+- **消息语义实现补强**：
+  - `reward_unclaim` 补齐孩子个人流 + 家庭流双记录，保证撤销兑换后本人和家庭都能感知
+- **文档收口**：
+  - `docs/api/backend-rest-api.md` 补齐 M15A 新增 5 个正式端点契约
+  - `ROADMAP.md`、M15B 设计文档同步为已完成状态
+
+### 🧪 验证结果
+
+- 前端全量测试通过：68 个 suite、1614 个测试全部通过
+- 后端单元测试通过：7 个 suite、58 个测试全部通过
+- 后端轻量集成通过：2 个 suite、24 个测试全部通过
+- 后端真实集成通过：8 个 suite、51 个测试全部通过
+
+### 📖 详细实施记录
+
+- [M15B：真实环境验证与交付级收口](../design/milestone-15b-real-env-verification.md)
+
+---
+
+## [里程碑-15A+] - 2026-03-30
+
+### ✅ 完成情况
+
+**主动行为审计修复**
+
+- **P5**：`StarService.initialize()` 改为复用 `cleanupExpiredStars()` 完整链路，补齐过期记录创建与 `STARS_EXPIRED` 事件通知
+- **P8**：`RewardService.refreshRewardsFromCloud()` 增加 3 秒共享节流 + in-flight 复用 + `force` 参数，首页/rewards/reward-manage 三入口共享同一窗口，页面下拉刷新支持 force 强刷
+- **P7**：`app.js` logs 数组添加 50 条上限
+
+### 🧪 验证结果
+
+- 前端全量测试通过：67 个 suite、1605 个测试全部通过
+- 新增 7 个测试覆盖：奖励云同步节流、force 绕过、并发 in-flight 复用、页面 force 信号
+
+### 📖 详细实施记录
+
+- [M15A+：主动行为审计结论与修复设计](../design/milestone-15a-proactive-behavior-audit.md)
+
+---
+
+## [里程碑-15A] - 2026-03-29
+
+### ✅ 完成情况
+
+**消息语义审计与通知体验治理**
+
+- **消息场景矩阵**：系统梳理任务/奖励/系统三类消息的触发时机、通知对象和阅读视角文案，形成完整矩阵基线
+- **后端正式消息能力补齐**：
+  - 新增 `POST /api/tasks/upcoming/sync`：任务即将到期提醒云端 materialize，支持幂等与活跃提醒替换
+  - 新增 `POST /api/tasks/penalties/sync`：必做任务惩罚云端事务执行，扣星/流水/状态/消息同事务完成
+  - 新增 `PATCH /api/tasks/:taskId/required` / `unrequired`：必做标记专用 command，避免与通用 task update 双发消息
+  - 新增 `PATCH /api/rewards/:rewardId/cancel-exchange`：奖励撤销兑换独立 command，退款/状态回退/消息同事务完成
+  - 奖励 create/update/delete 补齐活跃孩子个人流 fan-out，满足"家庭每个成员都能感知"
+- **消息展示语义统一**：
+  - 首页预览保持"未读优先 + 时间倒序，取前 3 条"的提醒预览职责
+  - 消息中心保持"完整历史，纯时间倒序"的职责
+  - 消息页日期分隔改为按最终展示序列重算，修复 Tab 过滤后分隔不准问题
+  - 新增 `utils/message-display.js` 统一消息排序、时间展示和日期分隔计算
+- **降级路径治理**：云端模式下为 upcoming/penalty/required 本地兼容处理增加显式 guard，避免与正式云端消息重复
+- **前端奖励/兑换链路优化**：
+  - 新增 `utils/reward-status.js` 统一奖励状态解析
+  - `my-exchanges`、`reward-manage`、`rewards` 页面简化状态判断和展示逻辑
+  - `analytics-service` 拆分为前端服务层 `services/analytics-service.js`，分析页接入正式服务
+- **API 配置**：`utils/api-config.js` 补齐 upcoming-sync、penalties-sync、cancel-exchange 等端点
+
+### 🧪 验证结果
+
+- 前端全量测试通过：67 个 suite、1594 个测试全部通过
+- 后端新增单元测试覆盖：
+  - `taskService-m15a-message-sync.test.js`：消息同步场景
+  - `messageService.test.js`：消息服务契约（429 行）
+  - `rewardService.test.js` / `rewardController.test.js`：奖励维护消息
+  - `taskController-m07.test.js`：任务控制器契约
+- 前端新增测试覆盖：
+  - 消息服务、消息仓库、消息页行为、首页预览行为
+  - 奖励状态、消息展示、事件总线、HTTP 客户端工具
+  - 奖励管理页、兑换记录页、分析页、星星趋势组件
+
+### 📖 详细实施记录
+
+- [里程碑-15A：消息语义审计与通知体验治理](../design/milestone-15a-message-semantics-audit.md)
+
+---
+
 ## [里程碑-14B] - 2026-03-27
 
 ### ✅ 完成情况
@@ -596,4 +2166,4 @@
 
 ---
 
-**最后更新**：2026-03-25
+**最后更新**：2026-04-21

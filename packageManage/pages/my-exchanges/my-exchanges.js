@@ -1,6 +1,22 @@
 // pages/my-exchanges/my-exchanges.js
 const logger = require('../../../utils/logger');
 const serviceManager = require('../../../services/service-manager');
+const rewardIdentity = require('../../../utils/reward-identity');
+const rewardStatus = require('../../../utils/reward-status');
+const rewardsUserContextModule = require('../../../pages/rewards/modules/rewards-user-context');
+
+function decorateExchangeRecord(page, reward) {
+  const recordTime = rewardStatus.getRewardPrimaryRecordTime(reward);
+
+  return {
+    ...reward,
+    claimDisplayStatus: rewardStatus.resolveRewardClaimStatus(reward),
+    statusLabel: rewardStatus.getRewardRecordStatusLabel(reward),
+    timeLabel: rewardStatus.getRewardRecordTimeLabel(reward),
+    recordTimestamp: recordTime,
+    claimTimeDisplay: page.formatTimeStamp(recordTime)
+  };
+}
 
 Page({
 
@@ -8,7 +24,7 @@ Page({
    * 页面的初始数据
    */
   data: {
-    claimedRewards: [] // 已领取的奖励
+    claimedRewards: [] // 兑换记录
   },
 
   /**
@@ -70,31 +86,30 @@ Page({
   },
 
   /**
-   * 加载已领取奖励数据
+   * 加载兑换记录
    */
   loadClaimedRewards: function() {
-    logger.debug('MyExchanges', '加载已领取奖励数据');
+    logger.debug('MyExchanges', '加载兑换记录');
+    const exchangeUserId = rewardsUserContextModule.getMyExchangeUserId(serviceManager);
+    const rewardFamilyScope = rewardsUserContextModule.getRewardFamilyScope(serviceManager);
     
-    // 通过奖励服务获取已领取的奖励
+    // 通过奖励服务获取已兑换的奖励
     const rewardService = serviceManager.getService('reward');
     
     if (rewardService) {
-      // 使用服务层获取已领取奖励
-      rewardService.getClaimedRewards()
+      // 使用服务层获取已兑换奖励
+      const loadPromise = typeof rewardService.getClaimedRewardsByExchangeUser === 'function'
+        ? rewardService.getClaimedRewardsByExchangeUser(exchangeUserId, rewardFamilyScope)
+        : rewardService.getClaimedRewards(exchangeUserId);
+
+      return loadPromise
         .then(claimedRewards => {
-          logger.info('MyExchanges', `通过奖励服务获取已领取奖励成功，数量=${claimedRewards.length}`);
+          logger.info('MyExchanges', `通过奖励服务获取兑换记录成功，数量=${claimedRewards.length}`);
           
-          // 处理记录，添加显示用的时间格式
-          const formattedRewards = claimedRewards.map(r => {
-            return {
-              ...r,
-              claimTimeDisplay: this.formatTimeStamp(r.claimTime || r.createTime)
-              // 所有兑换的奖励现在都是delivered状态，统一显示为已领取
-            };
-          });
+          const formattedRewards = claimedRewards.map((reward) => decorateExchangeRecord(this, reward));
           
-          // 按领取时间倒序排列
-          formattedRewards.sort((a, b) => b.claimTime - a.claimTime);
+          // 按最新兑换/领取时间倒序排列
+          formattedRewards.sort((a, b) => b.recordTimestamp - a.recordTimestamp);
           
           this.setData({
             claimedRewards: formattedRewards
@@ -102,61 +117,74 @@ Page({
           
           // 添加状态日志
           formattedRewards.forEach(r => {
-            logger.debug('MyExchanges', `奖励[${r.name}]的显示状态: 已领取, 原始claimed值: ${r.claimed}, claimStatus: ${r.claimStatus}`);
+            logger.debug('MyExchanges', `奖励[${r.name}]的显示状态: ${r.statusLabel}, 原始claimed值: ${r.claimed}, claimStatus: ${r.claimStatus}`);
           });
           
-          logger.debug('MyExchanges', `加载了 ${formattedRewards.length} 条已领取奖励记录`);
+          logger.debug('MyExchanges', `加载了 ${formattedRewards.length} 条兑换记录`);
         })
         .catch(error => {
-          logger.error('MyExchanges', '通过奖励服务获取已领取奖励失败', error);
+          logger.error('MyExchanges', '通过奖励服务获取兑换记录失败', error);
           
           // 降级处理：直接从存储获取
-          this.loadClaimedRewardsFromStorage();
+          return this.loadClaimedRewardsFromStorage(exchangeUserId, rewardFamilyScope);
         });
     } else {
       logger.warn('MyExchanges', '奖励服务不可用，使用降级存储访问');
       
       // 降级处理：直接从存储获取
-      this.loadClaimedRewardsFromStorage();
+      return Promise.resolve(this.loadClaimedRewardsFromStorage(exchangeUserId, rewardFamilyScope));
     }
   },
   
   /**
-   * 降级处理：从存储直接加载已领取奖励数据
+   * 降级处理：从存储直接加载兑换记录
    */
-  loadClaimedRewardsFromStorage: function() {
-    logger.warn('MyExchanges', '使用降级方式从存储加载已领取奖励数据');
+  loadClaimedRewardsFromStorage: function(exchangeUserId, rewardFamilyScope = {}) {
+    logger.warn('MyExchanges', '使用降级方式从存储加载兑换记录');
     
     try {
       // 从本地存储获取所有奖励
       const rewards = wx.getStorageSync('rewards') || [];
       
-      // 筛选出已领取的奖励
-      const claimedRewards = rewards.filter(r => r.claimed);
-      
-      // 处理记录，添加显示用的时间格式
-      const formattedRewards = claimedRewards.map(r => {
-        return {
-          ...r,
-          claimTimeDisplay: this.formatTimeStamp(r.claimTime || r.createTime)
-        };
+      // 筛选出已兑换的奖励
+      const familyMemberUserIds = Array.isArray(rewardFamilyScope.memberUserIds)
+        ? rewardFamilyScope.memberUserIds
+        : [];
+      const claimedRewards = rewards.filter((reward) => {
+        if (!reward || !reward.claimed) {
+          return false;
+        }
+
+        const belongsToFamily = reward.familyId
+          ? reward.familyId === rewardFamilyScope.familyId
+          : familyMemberUserIds.includes(reward.userId);
+
+        if (!belongsToFamily) {
+          return false;
+        }
+
+        return rewardIdentity.resolveRewardExchangeUserId(reward, rewardFamilyScope) === exchangeUserId;
       });
       
-      // 按领取时间倒序排列
-      formattedRewards.sort((a, b) => b.claimTime - a.claimTime);
+      const formattedRewards = claimedRewards.map((reward) => decorateExchangeRecord(this, reward));
+      
+      // 按最新兑换/领取时间倒序排列
+      formattedRewards.sort((a, b) => b.recordTimestamp - a.recordTimestamp);
       
       this.setData({
         claimedRewards: formattedRewards
       });
       
-      logger.info('MyExchanges', `降级方式加载了 ${formattedRewards.length} 条已领取奖励记录`);
+      logger.info('MyExchanges', `降级方式加载了 ${formattedRewards.length} 条兑换记录`);
+      return formattedRewards;
     } catch (error) {
-      logger.error('MyExchanges', '降级加载已领取奖励失败', error);
+      logger.error('MyExchanges', '降级加载兑换记录失败', error);
       
       // 设置空数据
       this.setData({
         claimedRewards: []
       });
+      return [];
     }
   },
   

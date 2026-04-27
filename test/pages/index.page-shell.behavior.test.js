@@ -18,7 +18,13 @@ jest.mock('../../services/service-manager.js', () => ({
 jest.mock('../../utils/dateUtils', () => ({
   formatRelativeTime: jest.fn(() => '刚刚'),
   getTodayString: jest.fn(() => '2026-03-26'),
-  formatDate: jest.fn(() => '2026-03-26')
+  formatDate: jest.fn((date) => {
+    const target = new Date(date);
+    const year = target.getFullYear();
+    const month = String(target.getMonth() + 1).padStart(2, '0');
+    const day = String(target.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  })
 }));
 
 jest.mock('../../utils/permission-utils', () => ({
@@ -146,8 +152,16 @@ describe('pages/index/index shell behavior', () => {
     taskService = {
       getTodayTasks: jest.fn().mockResolvedValue([{ id: 'task-1', title: '任务1', status: 0 }]),
       getTasksByDate: jest.fn().mockResolvedValue([{ id: 'task-2', title: '历史任务', status: 1 }]),
+      isOccurrenceEnabled: jest.fn().mockResolvedValue(true),
+      getOccurrenceTasks: jest.fn().mockResolvedValue([]),
+      getOccurrenceRecordsByDateRange: jest.fn().mockResolvedValue([]),
       calculateTaskProgress: jest.fn().mockResolvedValue({
         taskProgress: { habit: 1, interest: 2, study: 3 },
+        taskProgressSummary: {
+          habit: { completed: 1, total: 2, percent: 50, centerText: '1/2', isEmpty: false },
+          interest: { completed: 0, total: 0, percent: 0, centerText: '—', isEmpty: true },
+          study: { completed: 2, total: 3, percent: 67, centerText: '2/3', isEmpty: false }
+        },
         stats: { totalTasks: 1, completedTasks: 1, completionRate: 100, streak: 1 }
       }),
       getTaskStatistics: jest.fn().mockResolvedValue({
@@ -284,18 +298,25 @@ describe('pages/index/index shell behavior', () => {
 
   it('loadTaskDataOnly 和 loadTaskData 应更新任务视图并处理失败', async () => {
     page.data.currentUser = { id: 'child-1', role: 'child' };
-    page.calculateProgress = jest.fn().mockResolvedValue();
     page.updateTaskStats = jest.fn().mockResolvedValue();
-    page.checkUpcomingTasks = jest.fn().mockResolvedValue();
 
     await page.loadTaskDataOnly();
     expect(taskService.getTodayTasks).toHaveBeenCalledWith('child-1', { requireFreshStars: true });
     expect(page.data.currentViewDate).toBe('2026-03-26');
     expect(page.data.pageTitle).toBe('今日任务');
+    expect(page.data.pageTitleBadge).toBe('');
+    expect(page.data.isViewingToday).toBe(true);
 
     await page.loadTaskDataOnly('2026-03-20');
     expect(taskService.getTasksByDate).toHaveBeenCalledWith('2026-03-20', 'child-1', { requireFreshStars: true });
     expect(page.data.pageTitle).toBe('3月20日任务');
+    expect(page.data.isViewingPast).toBe(true);
+
+    taskService.getTasksByDate.mockResolvedValueOnce([{ id: 'task-3', title: '未来任务', status: 0 }]);
+    await page.loadTaskDataOnly('2026-03-28');
+    expect(page.data.pageTitle).toBe('3月28日任务');
+    expect(page.data.pageTitleBadge).toBe('预览');
+    expect(page.data.isViewingFuture).toBe(true);
 
     page.loadTaskDataOnly = jest.fn().mockRejectedValue(new Error('boom'));
     await page.loadTaskData();
@@ -304,25 +325,118 @@ describe('pages/index/index shell behavior', () => {
     }));
   });
 
+  it('loadTaskDataOnly 应渲染表现记录区块并在能力关闭时隐藏', async () => {
+    page.data.currentUser = { id: 'child-1', role: 'child' };
+    page.updateTaskStats = jest.fn().mockResolvedValue();
+
+    taskService.getOccurrenceTasks.mockResolvedValueOnce([
+      {
+        id: 'occ_success',
+        title: '听写全对',
+        executionMode: 'occurrence',
+        points: 2,
+        pointsExpiry: 'week'
+      },
+      {
+        id: 'occ_failure',
+        title: '考试全对',
+        executionMode: 'occurrence',
+        points: 3,
+        pointsExpiry: 'permanent'
+      }
+    ]);
+    taskService.getOccurrenceRecordsByDateRange.mockResolvedValueOnce([
+      {
+        id: 'occ_record_1',
+        parentTaskId: 'occ_success',
+        occurrenceOutcome: 'success',
+        pendingSyncMeta: {
+          action: 'occurrence_record'
+        },
+        syncedToCloud: false
+      },
+      {
+        id: 'occ_record_2',
+        parentTaskId: 'occ_failure',
+        occurrenceOutcome: 'failure'
+      }
+    ]);
+
+    await page.loadTaskDataOnly('2026-03-25');
+    expect(taskService.getOccurrenceTasks).toHaveBeenCalledWith({
+      date: '2026-03-25',
+      userId: 'child-1'
+    });
+    expect(taskService.getOccurrenceRecordsByDateRange).toHaveBeenCalledWith({
+      startDate: '2026-03-25',
+      endDate: '2026-03-25',
+      userId: 'child-1'
+    });
+    expect(page.data.showOccurrenceSection).toBe(true);
+    expect(page.data.occurrenceDateLabel).toBe('昨天');
+    expect(page.data.occurrenceTasks.map((item) => item.statusLabel)).toEqual([
+      '待同步 · 达成',
+      '已记录 · 未达成'
+    ]);
+    expect(page.data.occurrenceTasks.map((item) => item.statusTone)).toEqual([
+      'pending',
+      'failure'
+    ]);
+    expect(page.data.occurrenceTasks.map((item) => item.isPendingSync)).toEqual([
+      true,
+      false
+    ]);
+    expect(page.data.occurrenceTasks.map((item) => ({
+      rewardAccentText: item.rewardAccentText,
+      rewardExpiryMetaText: item.rewardExpiryMetaText,
+      rewardSummaryText: item.rewardSummaryText
+    }))).toEqual([
+      {
+        rewardAccentText: '2 星',
+        rewardExpiryMetaText: '本周结束',
+        rewardSummaryText: '奖励 2 星 · 本周结束'
+      },
+      {
+        rewardAccentText: '3 星',
+        rewardExpiryMetaText: '永久',
+        rewardSummaryText: '奖励 3 星 · 永久'
+      }
+    ]);
+
+    taskService.isOccurrenceEnabled.mockResolvedValueOnce(false);
+    taskService.getOccurrenceTasks.mockClear();
+    taskService.getOccurrenceRecordsByDateRange.mockClear();
+
+    await page.loadTaskDataOnly('2026-03-24');
+    expect(taskService.getOccurrenceTasks).not.toHaveBeenCalled();
+    expect(taskService.getOccurrenceRecordsByDateRange).not.toHaveBeenCalled();
+    expect(page.data.showOccurrenceSection).toBe(false);
+    expect(page.data.occurrenceDateLabel).toBe('3月24日');
+  });
+
   it('loadMessageData、calculateProgress、updateTaskStats 和 checkUpcomingTasks 应覆盖主路径与降级路径', async () => {
     await page.loadMessageData();
     expect(messageService.getMessagesByScope).toHaveBeenCalledWith({
       scope: 'user',
       userId: 'child-1',
-      requireFresh: true
+      requireFresh: true,
+      skipExpiryAuthoritySyncBeforeFormalReminders: false
     });
     expect(page.data.messages).toHaveLength(3);
     expect(page.data.unreadCount).toBe(3);
+    expect(page.data.messages.map((message) => message.id)).toEqual(['msg-4', 'msg-3', 'msg-1']);
 
     messageService.getMessagesByScope.mockRejectedValueOnce(new Error('fail'));
     await page.loadMessageData();
     expect(page.data.messages).toEqual([]);
 
     await page.calculateProgress([{ id: 'task-1' }]);
-    expect(page.data.taskProgress.habit).toBe(1);
+    expect(page.data.todayTaskProgress.habit).toBe(1);
+    expect(page.data.todayTaskProgressSummary.habit.centerText).toBe('1/2');
     await page.updateTaskStats();
     expect(page.data.stats.totalTasks).toBe(2);
 
+    page.data.currentViewDate = '2026-03-26';
     await page.checkUpcomingTasks();
     expect(page.data.showUpcomingTask).toBe(true);
     expect(page.data.upcomingTask.id).toBe('task-upcoming');
@@ -330,12 +444,84 @@ describe('pages/index/index shell behavior', () => {
     taskService.checkUpcomingTasks.mockResolvedValueOnce({ success: true, tasks: [] });
     await page.checkUpcomingTasks();
     expect(page.data.showUpcomingTask).toBe(false);
+
+    page.data.currentViewDate = '2026-03-27';
+    await page.checkUpcomingTasks();
+    expect(page.data.showUpcomingTask).toBe(false);
   });
 
-  it('日期导航与日期切换应处理缺参、重复点击、成功和失败分支', async () => {
+  it('首页消息预览应保持未读优先，但未读总数基于完整消息集合', async () => {
+    messageService.getMessagesByScope.mockResolvedValueOnce([
+      { id: 'msg-read-new', title: '已读新消息', type: 'system', isRead: true, createTime: 100 },
+      { id: 'msg-unread-old', title: '未读旧消息', type: 'task', isRead: false, createTime: 10 },
+      { id: 'msg-unread-mid', title: '未读中间消息', type: 'reward', isRead: false, createTime: 50 },
+      { id: 'msg-read-old', title: '已读旧消息', type: 'system', isRead: true, createTime: 5 }
+    ]);
+
+    await page.loadMessageData();
+
+    expect(page.data.messages.map((message) => message.id)).toEqual([
+      'msg-unread-mid',
+      'msg-unread-old',
+      'msg-read-new'
+    ]);
+    expect(page.data.unreadCount).toBe(2);
+  });
+
+  it('日期导航、翻周与日期切换应处理缺参、边界、手势、成功和失败分支', async () => {
     page.initializeDateNavigation();
     expect(page.data.currentViewDate).toBe('2026-03-26');
     expect(page.data.dateNavigation).toHaveLength(7);
+    expect(page.data.dateNavigation.map((item) => item.dateString)).toEqual([
+      '2026-03-23',
+      '2026-03-24',
+      '2026-03-25',
+      '2026-03-26',
+      '2026-03-27',
+      '2026-03-28',
+      '2026-03-29'
+    ]);
+
+    page.loadTaskDataOnly = jest.fn().mockResolvedValue();
+    page.checkUpcomingTasks = jest.fn().mockResolvedValue();
+    await page.onPrevWeek();
+    expect(page.loadTaskDataOnly).toHaveBeenCalledWith('2026-03-16');
+    expect(page.checkUpcomingTasks).toHaveBeenCalled();
+    expect(page.data.weekOffset).toBe(-1);
+    expect(page.data.canGoPrevWeek).toBe(false);
+    expect(page.data.canGoNextWeek).toBe(true);
+
+    page.loadTaskDataOnly.mockClear();
+    page.checkUpcomingTasks.mockClear();
+    await page.onPrevWeek();
+    expect(page.loadTaskDataOnly).not.toHaveBeenCalled();
+    expect(page.checkUpcomingTasks).not.toHaveBeenCalled();
+
+    page.checkUpcomingTasks.mockClear();
+    await page.onNextWeek();
+    expect(page.loadTaskDataOnly).toHaveBeenCalledWith('2026-03-26');
+    expect(page.checkUpcomingTasks).toHaveBeenCalled();
+    expect(page.data.weekOffset).toBe(0);
+    expect(page.data.canGoPrevWeek).toBe(true);
+    expect(page.data.canGoNextWeek).toBe(false);
+
+    page.onDateNavTouchStart({ touches: [{ clientX: 200, clientY: 10 }] });
+    page.onPrevWeek = jest.fn();
+    page.onDateNavTouchEnd({ changedTouches: [{ clientX: 120, clientY: 14 }] });
+    expect(page.onPrevWeek).toHaveBeenCalled();
+
+    page.onDateNavTouchStart({ touches: [{ clientX: 120, clientY: 10 }] });
+    page.onNextWeek = jest.fn();
+    page.onDateNavTouchEnd({ changedTouches: [{ clientX: 200, clientY: 16 }] });
+    expect(page.onNextWeek).toHaveBeenCalled();
+
+    page.onDateNavTouchStart({ touches: [{ pageX: 220, pageY: 10 }] });
+    page.onPrevWeek = jest.fn();
+    page.onDateNavTouchEnd({ changedTouches: [{ pageX: 120, pageY: 18 }] });
+    expect(page.onPrevWeek).toHaveBeenCalled();
+
+    global.wx.showLoading.mockClear();
+    global.wx.hideLoading.mockClear();
 
     await page.onDateButtonTap({ currentTarget: { dataset: {} } });
     expect(global.wx.showLoading).not.toHaveBeenCalled();
@@ -344,9 +530,11 @@ describe('pages/index/index shell behavior', () => {
     expect(global.wx.showLoading).not.toHaveBeenCalled();
 
     page.loadTaskDataOnly = jest.fn().mockResolvedValue();
-    await page.onDateButtonTap({ currentTarget: { dataset: { date: '2026-03-25' } } });
+    page.checkUpcomingTasks = jest.fn().mockResolvedValue();
+    await page.onDateButtonTap({ currentTarget: { dataset: { date: '2026-03-27' } } });
     expect(global.wx.showLoading).toHaveBeenCalled();
-    expect(page.loadTaskDataOnly).toHaveBeenCalledWith('2026-03-25');
+    expect(page.loadTaskDataOnly).toHaveBeenCalledWith('2026-03-27');
+    expect(page.checkUpcomingTasks).toHaveBeenCalled();
     expect(global.wx.hideLoading).toHaveBeenCalled();
 
     page.loadTaskDataOnly.mockRejectedValueOnce(new Error('boom'));
@@ -354,6 +542,50 @@ describe('pages/index/index shell behavior', () => {
     expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({
       title: '加载失败'
     }));
+
+    global.wx.showLoading.mockClear();
+    global.wx.hideLoading.mockClear();
+    page.loadTaskDataOnly = jest.fn().mockResolvedValue();
+    page.checkUpcomingTasks = jest.fn().mockResolvedValue();
+    page.setData({
+      weekOffset: -1,
+      currentViewDate: '2026-03-16',
+      isViewingToday: false
+    });
+
+    await page.onBackToToday();
+    expect(page.data.weekOffset).toBe(0);
+    expect(page.data.currentViewDate).toBe('2026-03-26');
+    expect(page.loadTaskDataOnly).toHaveBeenCalledWith('2026-03-26');
+    expect(page.checkUpcomingTasks).toHaveBeenCalled();
+    expect(global.wx.showLoading).toHaveBeenCalled();
+    expect(global.wx.hideLoading).toHaveBeenCalled();
+
+    global.wx.showLoading.mockClear();
+    page.loadTaskDataOnly.mockClear();
+    page.checkUpcomingTasks.mockClear();
+    await page.onBackToToday();
+    expect(global.wx.showLoading).not.toHaveBeenCalled();
+    expect(page.loadTaskDataOnly).not.toHaveBeenCalled();
+    expect(page.checkUpcomingTasks).not.toHaveBeenCalled();
+
+    page.initializeDateNavigation();
+    page.setData({
+      tasks: [{ id: 'task-old', title: '旧任务' }],
+      pageTitle: '今日任务',
+      weekOffset: 0,
+      currentViewDate: '2026-03-26',
+      isViewingToday: true
+    });
+    page.loadTaskDataOnly = jest.fn().mockRejectedValue(new Error('week-fail'));
+    page.checkUpcomingTasks = jest.fn();
+
+    await page.onPrevWeek();
+    expect(page.data.weekOffset).toBe(0);
+    expect(page.data.currentViewDate).toBe('2026-03-26');
+    expect(page.data.pageTitle).toBe('今日任务');
+    expect(page.data.tasks).toEqual([{ id: 'task-old', title: '旧任务' }]);
+    expect(page.checkUpcomingTasks).not.toHaveBeenCalled();
   });
 
   it('导航、消息预览和基础事件拦截应按预期工作', () => {
@@ -365,7 +597,6 @@ describe('pages/index/index shell behavior', () => {
       url: expect.stringContaining('taskType=habit')
     }));
 
-    page.editTask({ detail: { taskId: 'task-1' } });
     page.navigateToMessageCenter({ stopPropagation: jest.fn() });
     jest.runAllTimers();
     expect(page.data.showMessagePreview).toBe(false);
@@ -381,6 +612,132 @@ describe('pages/index/index shell behavior', () => {
     const preventDefault = jest.fn();
     expect(page.preventBubble({ stopPropagation })).toBe(false);
     expect(page.preventTouchMove({ stopPropagation, preventDefault })).toBe(false);
+  });
+
+  it('首页壳层事件代理和表现记录操作应覆盖剩余轻分支', async () => {
+    page.data.currentUser = { id: 'child-1', role: 'child' };
+    page.loadStarsAndRewards = jest.fn().mockResolvedValue();
+    page.loadTaskDataOnly = jest.fn().mockResolvedValue();
+    page.loadTodayProgressSummary = jest.fn().mockResolvedValue();
+    page.checkUpcomingTasks = jest.fn().mockResolvedValue();
+    page.refreshTaskDataForCurrentView = jest.fn().mockResolvedValue();
+    page.loadMessageData = jest.fn().mockResolvedValue();
+
+    await page.handleRewardUpdated({ source: 'test' });
+    expect(appMock.globalData.needRefreshReward).toBe(true);
+    expect(page.loadStarsAndRewards).toHaveBeenCalled();
+
+    page.handleRewardClaimed({ rewardId: 'reward-1', points: 10, newTotalPoints: 20 });
+    expect(appMock.globalData.rewardClaimedInfo).toEqual(expect.objectContaining({
+      rewardId: 'reward-1'
+    }));
+
+    await page.handleTaskDataChanged({
+      changeType: 'delete',
+      tasks: [{ id: 'task-1' }],
+      timestamp: 123
+    });
+    expect(page.loadTaskDataOnly).toHaveBeenCalled();
+    expect(page.checkUpcomingTasks).toHaveBeenCalled();
+
+    await page.handleMessageDataChanged([
+      { id: 'msg-inline-1', title: '内联消息', type: 'task', isRead: false, createTime: 2 },
+      { id: 'msg-inline-2', title: '已读消息', type: 'system', isRead: true, createTime: 1 }
+    ]);
+    expect(page.data.messages).toHaveLength(2);
+    expect(page.data.unreadCount).toBe(1);
+
+    await page.handleTaskCreated({ taskId: 'task-new' });
+    expect(page.refreshTaskDataForCurrentView).toHaveBeenCalled();
+
+    taskService.recordOccurrenceResult = jest.fn()
+      .mockResolvedValueOnce({ success: false, message: '记录失败' })
+      .mockResolvedValueOnce({ success: true, fallback: true })
+      .mockResolvedValueOnce({ success: true });
+    page.refreshTaskDataForCurrentView = jest.fn().mockResolvedValue();
+
+    await page.recordOccurrenceFromHome({ currentTarget: { dataset: {} } });
+    expect(taskService.recordOccurrenceResult).not.toHaveBeenCalled();
+
+    page.data.isViewerReadonly = true;
+    await page.recordOccurrenceFromHome({
+      currentTarget: { dataset: { taskId: 'occ_1', outcome: 'success' } }
+    });
+    expect(taskService.recordOccurrenceResult).not.toHaveBeenCalled();
+    expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({
+      title: '当前为查看者，不能记录表现'
+    }));
+    page.data.isViewerReadonly = false;
+
+    await page.recordOccurrenceFromHome({
+      currentTarget: { dataset: { taskId: 'occ_1', outcome: 'success' } }
+    });
+    expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({
+      title: '记录失败'
+    }));
+
+    await page.recordOccurrenceFromHome({
+      currentTarget: { dataset: { taskId: 'occ_1', outcome: 'success' } }
+    });
+    expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({
+      title: '已暂存，联网后自动同步',
+      icon: 'none'
+    }));
+
+    await page.recordOccurrenceFromHome({
+      currentTarget: { dataset: { taskId: 'occ_1', outcome: 'failure' } }
+    });
+    expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({
+      title: '已记为未达成'
+    }));
+    expect(page.refreshTaskDataForCurrentView).toHaveBeenCalled();
+
+    page.handleMenuStateChange({ detail: { isOpen: true } });
+    expect(page.data.showFloatMenu).toBe(true);
+    page.handleMenuItemTap({ detail: { item: { id: 'reward-manage' } } });
+    expect(global.wx.navigateTo).toHaveBeenCalledWith(expect.objectContaining({
+      url: '/packageManage/pages/reward-manage/reward-manage'
+    }));
+
+    page.dismissUpcomingTask({ currentTarget: { dataset: {} } });
+    page.markTaskMessagesAsRead({ currentTarget: { dataset: {} } });
+    expect(messageService.deleteRelatedTaskMessages).toHaveBeenCalledTimes(0);
+    expect(messageService.markRelatedMessagesAsRead).toHaveBeenCalledTimes(0);
+
+    page.handleUpcomingOption({ detail: { action: 'viewMessages' } });
+    jest.runAllTimers();
+    expect(global.wx.navigateTo).toHaveBeenCalledWith(expect.objectContaining({
+      url: '/pages/message/message?tab=task'
+    }));
+  });
+
+  it('首页消息预览在同一事件存在 formal 与 provisional 时应优先 formal 且未读只计一次', async () => {
+    messageService.getMessagesByScope.mockResolvedValueOnce([
+      {
+        id: 'msg_provisional',
+        title: '待同步任务',
+        type: 'task',
+        isRead: false,
+        createTime: 200,
+        isProvisional: true,
+        syncedToCloud: false,
+        messageEventKey: 'task:create:1'
+      },
+      {
+        id: 'msg_formal',
+        title: '正式任务',
+        type: 'task',
+        isRead: false,
+        createTime: 100,
+        syncedToCloud: true,
+        messageEventKey: 'task:create:1'
+      }
+    ]);
+
+    await page.loadMessageData();
+
+    expect(page.data.messages.map((message) => message.id)).toEqual(['msg_formal']);
+    expect(page.data.unreadCount).toBe(1);
   });
 
   it('消息相关交互应更新页面状态并处理提醒操作', async () => {
@@ -427,19 +784,27 @@ describe('pages/index/index shell behavior', () => {
     expect(page.data.showFloatMenu).toBe(true);
 
     page.onMenuItemTap({ detail: { item: { id: 'habit' } } });
+    expect(global.wx.navigateTo).toHaveBeenCalledWith(expect.objectContaining({
+      url: '/packageTask/pages/task-edit/task-edit?mode=create'
+    }));
+
+    page.data.isViewingToday = false;
+    page.onMenuItemTap({ detail: { item: { id: 'habit' } } });
+    expect(global.wx.navigateTo).toHaveBeenCalledWith(expect.objectContaining({
+      url: '/packageTask/pages/task-edit/task-edit?mode=create'
+    }));
+
     page.onMenuItemTap({ detail: { item: { id: 'reward-manage' } } });
     page.onMenuItemTap({ detail: { item: { id: 'family-settings' } } });
 
-    global.wx.navigateTo.mockImplementationOnce(({ fail }) => fail(new Error('analysis fail')));
     page.onMenuItemTap({ detail: { item: { id: 'study' } } });
-    expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({
-      title: '加载失败，请重试'
+    expect(global.wx.navigateTo).toHaveBeenCalledWith(expect.objectContaining({
+      url: '/packageChart/pages/analysis/analysis'
     }));
 
-    global.wx.navigateTo.mockImplementationOnce(({ fail }) => fail(new Error('analysis fail')));
     page.onRingTap();
-    expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({
-      title: '加载失败，请重试'
+    expect(global.wx.navigateTo).toHaveBeenLastCalledWith(expect.objectContaining({
+      url: '/packageChart/pages/analysis/analysis'
     }));
 
     page.toggleSearch();
@@ -581,10 +946,43 @@ describe('pages/index/index shell behavior', () => {
     expect(page.data.menuItems).toHaveLength(1);
     expect(page.data.menuItems[0]).toEqual(expect.objectContaining({ id: 'study' }));
 
+    permissionUtils.filterMenuItems.mockReturnValueOnce([
+      { id: 'study' },
+      { id: 'habit' },
+      { id: 'reward-manage' }
+    ]);
+    page.data.isReadonlyView = false;
+    page.data.isViewingToday = false;
+    page.updateMenuItemsWithPermissions();
+    expect(page.data.menuItems).toEqual([
+      { id: 'study' },
+      { id: 'habit' },
+      { id: 'reward-manage' }
+    ]);
+
     page.showUserSwitcher = jest.fn();
     page.navigateToUserProfile();
     expect(page.showUserSwitcher).toHaveBeenCalled();
 
     await expect(page.validateUserModule()).resolves.toBe(true);
+  });
+
+  it('getEffectiveTaskUserId 应统一使用标准用户标识', () => {
+    page.setData({
+      canManageMembers: false,
+      currentUser: { userId: 'child-user-only', role: 'child' }
+    });
+    expect(page.getEffectiveTaskUserId()).toBe('child-user-only');
+
+    page.setData({
+      canManageMembers: true,
+      currentUser: { userId: 'parent-1', role: 'parent' },
+      lastActiveChildId: null,
+      availableUsers: [
+        { userId: 'parent-1', role: 'parent' },
+        { userId: 'child-user-only', role: 'child' }
+      ]
+    });
+    expect(page.getEffectiveTaskUserId()).toBe('child-user-only');
   });
 });

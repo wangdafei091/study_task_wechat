@@ -17,6 +17,16 @@ const app = express();
 app.use(express.json());
 app.use('/api/stars', authMiddleware, starRoutes);
 
+function formatDateOffset(days) {
+  const date = new Date();
+  date.setHours(0, 0, 0, 0);
+  date.setDate(date.getDate() + days);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 function generateToken(user) {
   const secret = process.env.JWT_SECRET || 'test-secret-key-for-dev-testing-only';
   return jwt.sign(
@@ -35,6 +45,7 @@ async function ensureM09Tables() {
   const migrationFiles = [
     '../../database/migrations/007_create_star_records.sql',
     '../../database/migrations/008_create_star_groups.sql',
+    '../../database/migrations/010_create_messages.sql',
   ];
 
   for (const relativeFile of migrationFiles) {
@@ -44,6 +55,7 @@ async function ensureM09Tables() {
 }
 
 async function cleanupTestData() {
+  await db.query("DELETE FROM messages WHERE related_id LIKE 'm09_star_%' OR message_event_key LIKE 'star:summary:star_expiring:m09_star_%'");
   await db.query("DELETE FROM star_records WHERE record_id LIKE 'm09_star_%' OR idempotency_key LIKE 'm09_star_%' OR user_id LIKE 'm09_star_%'");
   await db.query("DELETE FROM star_groups WHERE group_id LIKE 'm09_star_%' OR user_id LIKE 'm09_star_%'");
   await db.query("DELETE FROM users WHERE user_id LIKE 'm09_star_%'");
@@ -70,6 +82,10 @@ async function setupTestData() {
       WHEN user_id = 'm09_star_parent_001' THEN 'm09_star_family_001'
       WHEN user_id = 'm09_star_parent_002' THEN 'm09_star_family_002'
       ELSE family_id
+    END,
+    family_permission_role = CASE
+      WHEN role = 'parent' THEN 'manager'
+      ELSE family_permission_role
     END
     WHERE user_id IN ('m09_star_parent_001', 'm09_star_parent_002')`
   );
@@ -78,6 +94,7 @@ async function setupTestData() {
     `INSERT INTO users (user_id, openid, nickname, avatar, role, status, family_id, is_virtual, created_by_user_id) VALUES
       ('m09_star_child_001', 'm09_star_child_openid_1', 'M09孩子1', NULL, 'child', 'active', 'm09_star_family_001', 0, NULL),
       ('m09_star_child_002', 'm09_star_child_openid_2', 'M09孩子2', NULL, 'child', 'active', 'm09_star_family_001', 0, NULL),
+      ('m09_star_child_004', 'm09_star_child_openid_4', 'M09停用孩子', NULL, 'child', 'inactive', 'm09_star_family_001', 0, NULL),
       ('m09_star_child_003', 'm09_star_child_openid_3', 'M09外部孩子', NULL, 'child', 'active', 'm09_star_family_002', 0, NULL)`
   );
 }
@@ -115,6 +132,7 @@ describe('M09 stars API 真实数据库集成测试', () => {
   }, 30000);
 
   afterEach(async () => {
+    await db.query("DELETE FROM messages WHERE related_id LIKE 'm09_star_%' OR message_event_key LIKE 'star:summary:star_expiring:m09_star_%'");
     await db.query("DELETE FROM star_records WHERE record_id LIKE 'm09_star_%' OR idempotency_key LIKE 'm09_star_%' OR user_id LIKE 'm09_star_%'");
     await db.query("DELETE FROM star_groups WHERE group_id LIKE 'm09_star_%' OR user_id LIKE 'm09_star_%'");
   });
@@ -125,6 +143,8 @@ describe('M09 stars API 真实数据库集成测试', () => {
   });
 
   it('POST /api/stars/records 应写入单分组流水并维护快照，重复请求幂等', async () => {
+    const nextWeek = formatDateOffset(7);
+
     const payload = {
       recordId: 'm09_star_record_income_001',
       userId: 'm09_star_child_001',
@@ -134,13 +154,13 @@ describe('M09 stars API 真实数据库集成测试', () => {
       points: 5,
       description: '完成任务获得5颗星星',
       expiryType: 'week',
-      expiryDate: '2026-03-28',
+      expiryDate: nextWeek,
       modifyTime: 1742400001000,
     };
 
     const first = await request(app)
       .post('/api/stars/records')
-      .set('Authorization', `Bearer ${childToken}`)
+      .set('Authorization', `Bearer ${parentToken}`)
       .send(payload);
 
     expect(first.status).toBe(200);
@@ -151,7 +171,7 @@ describe('M09 stars API 真实数据库集成测试', () => {
 
     const second = await request(app)
       .post('/api/stars/records')
-      .set('Authorization', `Bearer ${childToken}`)
+      .set('Authorization', `Bearer ${parentToken}`)
       .send(payload);
 
     expect(second.status).toBe(200);
@@ -172,10 +192,14 @@ describe('M09 stars API 真实数据库集成测试', () => {
   });
 
   it('POST /api/stars/consume 应支持部分扣减并返回分摊结果，同一幂等键不重复扣减', async () => {
+    const nextWeek = formatDateOffset(7);
+    const nextMonth = formatDateOffset(30);
+
     await db.query(
       `INSERT INTO star_groups (group_id, user_id, type, stars, expiry_date, modify_time) VALUES
-        ('m09_star_group_week_001', 'm09_star_child_001', 'week', 1, '2026-03-28', 1742400001001),
-        ('m09_star_group_month_001', 'm09_star_child_001', 'month', 2, '2026-03-31', 1742400001002)`
+        ('m09_star_group_week_001', 'm09_star_child_001', 'week', 1, ?, 1742400001001),
+        ('m09_star_group_month_001', 'm09_star_child_001', 'month', 2, ?, 1742400001002)`,
+      [nextWeek, nextMonth]
     );
 
     const payload = {
@@ -191,7 +215,7 @@ describe('M09 stars API 真实数据库集成测试', () => {
 
     const first = await request(app)
       .post('/api/stars/consume')
-      .set('Authorization', `Bearer ${childToken}`)
+      .set('Authorization', `Bearer ${parentToken}`)
       .send(payload);
 
     expect(first.status).toBe(200);
@@ -202,7 +226,7 @@ describe('M09 stars API 真实数据库集成测试', () => {
 
     const second = await request(app)
       .post('/api/stars/consume')
-      .set('Authorization', `Bearer ${childToken}`)
+      .set('Authorization', `Bearer ${parentToken}`)
       .send(payload);
 
     expect(second.status).toBe(200);
@@ -246,14 +270,93 @@ describe('M09 stars API 真实数据库集成测试', () => {
     expect(forbidden.status).toBe(403);
   });
 
-  it('GET /api/stars/records?scope=family 家长可获取全家流水，孩子返回 403', async () => {
+  it('POST /api/stars/expiring-reminders/sync 应生成孩子个人流和家庭流提醒，并在过窗后归档', async () => {
+    await db.query(
+      `INSERT INTO star_groups (group_id, user_id, type, stars, expiry_date, modify_time) VALUES
+        ('m09_star_group_expiring_001', 'm09_star_child_001', 'week', 3, ?, 1742400004001),
+        ('m09_star_group_expiring_002', 'm09_star_child_001', 'month', 5, ?, 1742400004002)`,
+      [formatDateOffset(1), formatDateOffset(1)]
+    );
+
+    const first = await request(app)
+      .post('/api/stars/expiring-reminders/sync')
+      .set('Authorization', `Bearer ${parentToken}`)
+      .send({
+        scope: 'user',
+        targetUserId: 'm09_star_child_001',
+        modifyTime: Date.now(),
+        operationKey: 'm09_star_expiring_sync_001'
+      });
+
+    expect(first.status).toBe(200);
+    expect(first.body.success).toBe(true);
+    expect(first.body.data.activeCount).toBe(2);
+
+    const messageRows = await db.query(
+      `SELECT notification_type, visibility_scope, type, subject_user_id, is_archived
+       FROM messages
+       WHERE message_event_key = 'star:summary:star_expiring:m09_star_child_001:none:${formatDateOffset(1)}'
+       ORDER BY visibility_scope ASC`
+    );
+
+    expect(messageRows).toEqual([
+      expect.objectContaining({
+        notification_type: 'star_expiring',
+        visibility_scope: 'family',
+        type: 'system',
+        subject_user_id: 'm09_star_child_001',
+        is_archived: 0
+      }),
+      expect.objectContaining({
+        notification_type: 'star_expiring',
+        visibility_scope: 'user',
+        type: 'system',
+        subject_user_id: 'm09_star_child_001',
+        is_archived: 0
+      })
+    ]);
+
+    await db.query("DELETE FROM star_groups WHERE group_id IN ('m09_star_group_expiring_001', 'm09_star_group_expiring_002')");
+
+    const second = await request(app)
+      .post('/api/stars/expiring-reminders/sync')
+      .set('Authorization', `Bearer ${parentToken}`)
+      .send({
+        scope: 'user',
+        targetUserId: 'm09_star_child_001',
+        modifyTime: Date.now() + 1000,
+        operationKey: 'm09_star_expiring_sync_002'
+      });
+
+    expect(second.status).toBe(200);
+    expect(second.body.data.archivedCount).toBe(2);
+
+    const archivedRows = await db.query(
+      `SELECT visibility_scope, is_archived
+       FROM messages
+       WHERE message_event_key = 'star:summary:star_expiring:m09_star_child_001:none:${formatDateOffset(1)}'
+       ORDER BY visibility_scope ASC`
+    );
+    expect(archivedRows).toEqual([
+      expect.objectContaining({ visibility_scope: 'family', is_archived: 1 }),
+      expect.objectContaining({ visibility_scope: 'user', is_archived: 1 })
+    ]);
+  });
+
+  it('GET /api/stars/records?scope=family 家长可获取全家活跃孩子流水，孩子返回 403', async () => {
+    const nextWeek = formatDateOffset(7);
+    const nextMonth = formatDateOffset(30);
+
     await db.query(
       `INSERT INTO star_records (
         record_id, user_id, type, source, source_id, points, description,
         expiry_type, expiry_date, balance, previous_balance, modify_time
       ) VALUES
-        ('m09_star_family_record_001', 'm09_star_child_001', 'income', 'task', 'task_a', 3, '孩子1得星', 'week', '2026-03-28', 3, 0, 1742400004000),
-        ('m09_star_family_record_002', 'm09_star_child_002', 'income', 'task', 'task_b', 4, '孩子2得星', 'month', '2026-03-31', 4, 0, 1742400004001)`
+        ('m09_star_family_record_parent', 'm09_star_parent_001', 'income', 'task', 'task_parent', 8, '家长得星', 'week', ?, 8, 0, 1742400003999),
+        ('m09_star_family_record_001', 'm09_star_child_001', 'income', 'task', 'task_a', 3, '孩子1得星', 'week', ?, 3, 0, 1742400004000),
+        ('m09_star_family_record_002', 'm09_star_child_002', 'income', 'task', 'task_b', 4, '孩子2得星', 'month', ?, 4, 0, 1742400004001),
+        ('m09_star_family_record_003', 'm09_star_child_004', 'income', 'task', 'task_c', 6, '停用孩子得星', 'month', ?, 6, 0, 1742400004002)`,
+      [nextWeek, nextWeek, nextMonth, nextMonth]
     );
 
     const parentRes = await request(app)
@@ -263,6 +366,11 @@ describe('M09 stars API 真实数据库集成测试', () => {
 
     expect(parentRes.status).toBe(200);
     expect(parentRes.body.data.records).toHaveLength(2);
+    const recordIds = parentRes.body.data.records.map(record => record.recordId);
+    expect(recordIds).toContain('m09_star_family_record_001');
+    expect(recordIds).toContain('m09_star_family_record_002');
+    expect(recordIds).not.toContain('m09_star_family_record_parent');
+    expect(recordIds).not.toContain('m09_star_family_record_003');
 
     const childRes = await request(app)
       .get('/api/stars/records')

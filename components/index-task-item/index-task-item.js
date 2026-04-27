@@ -13,6 +13,7 @@
  */
 const Constants = require('../../utils/constants.js');
 const logger = require('../../utils/logger');
+const { formatDisplayTime } = require('../../utils/formatUtils');
 
 Component({
   /**
@@ -83,6 +84,8 @@ Component({
           this.setData({
             expiryText: expiryText,
             isLocked: isLocked,
+            displayStartTime: formatDisplayTime(newVal.startTime),
+            displayEndTime: formatDisplayTime(newVal.endTime),
             // 强制更新任务数据，确保UI正确响应状态变化
             taskData: { ...newVal }
           });
@@ -116,6 +119,10 @@ Component({
     readonly: {
       type: Boolean,
       value: false
+    },
+    readonlyReason: {
+      type: String,
+      value: ''
     }
   },
 
@@ -138,6 +145,8 @@ Component({
     },
     showStarAnimation: false,     // 是否显示星星动画
     expiryText: '7天',            // 积分有效期默认文本
+    displayStartTime: '',         // 展示用开始时间，统一收敛到 HH:mm
+    displayEndTime: '',           // 展示用结束时间，统一收敛到 HH:mm
     isProcessing: false,          // 防止重复点击
     taskData: null,              // 任务数据副本，用于强制UI更新
     isLocked: false              // 任务是否被锁定
@@ -151,7 +160,15 @@ Component({
     onCheckboxTap: function(e) {
       // 家庭视角只读模式：禁用完成/重置操作
       if (this.properties.readonly) {
-        wx.showToast({ title: '请在自己设备上操作', icon: 'none', duration: 1500 });
+        let title = '请在自己设备上操作';
+        if (this.properties.readonlyReason === 'future-date') {
+          title = '未来日期仅支持查看';
+        } else if (this.properties.readonlyReason === 'viewer-readonly') {
+          title = '当前为查看者，不能修改任务';
+        } else if (this.properties.readonlyReason === 'system-readonly') {
+          title = '当前账号为只读，不能修改任务';
+        }
+        wx.showToast({ title, icon: 'none', duration: 1500 });
         return;
       }
 

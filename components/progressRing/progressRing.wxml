@@ -2,20 +2,34 @@
 <view class="progress-ring {{type}} {{sizeClass}} {{isComplete ? 'completed' : ''}} {{progressClass}}" 
       hover-class="{{enableHover ? 'ring-hover' : ''}}"
       bindtap="onRingTap"
-      style="{{size !== 'large' && size !== 'medium' && size !== 'small' ? 'width:' + size + 'rpx; height:' + size + 'rpx;' : ''}}; color: {{type === 'default' ? color : ''}}; --border-width: {{borderWidth}}rpx;">
-  <view class="ring-bg"></view>
-  <view class="ring-progress" style="transform: rotate({{progressAngle}}deg); transition: transform 1s cubic-bezier(0.34, 1.56, 0.64, 1);"></view>
-  <view class="ring-mark"></view>
+      style="width: {{sizeRpx}}rpx; height: {{sizeRpx}}rpx; color: {{type === 'default' ? color : ''}};">
+  <canvas
+    wx:if="{{use2dCanvas}}"
+    class="ring-canvas"
+    type="2d"
+    canvas-id="progress-ring-canvas"
+    style="width: {{sizeRpx}}rpx; height: {{sizeRpx}}rpx;"
+    width="{{canvasSizePx}}"
+    height="{{canvasSizePx}}"
+  ></canvas>
+  <canvas
+    wx:else
+    class="ring-canvas"
+    canvas-id="progress-ring-canvas"
+    style="width: {{sizeRpx}}rpx; height: {{sizeRpx}}rpx;"
+    width="{{canvasSizePx}}"
+    height="{{canvasSizePx}}"
+  ></canvas>
   <view class="ring-inner"></view>
   <view class="ring-content">
-    <block wx:if="{{isComplete}}">
+    <block wx:if="{{centerContent}}">
+      <text class="ring-custom-content">{{centerContent}}</text>
+    </block>
+    <block wx:elif="{{isComplete}}">
       <text class="ring-complete">✓</text>
     </block>
     <block wx:elif="{{showText}}">
       <text class="ring-value">{{progress}}%</text>
-    </block>
-    <block wx:elif="{{centerContent}}">
-      <text class="ring-custom-content">{{centerContent}}</text>
     </block>
     <slot></slot>
   </view>

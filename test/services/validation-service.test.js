@@ -153,6 +153,21 @@ describe('ValidationService', () => {
       expect(result.valid).toBe(true);
     });
 
+    it('应该拒绝结束时间早于或等于开始时间的非全天任务', () => {
+      const taskData = {
+        title: '测试任务',
+        startDate: '2026-03-04',
+        isAllDay: false,
+        startTime: '09:00',
+        endTime: '09:00'
+      };
+
+      const result = validationService.validateTaskForm(taskData);
+
+      expect(result.valid).toBe(false);
+      expect(result.errorMsg).toBe('结束时间不能早于开始时间');
+    });
+
     it('应该正确组装任务数据', () => {
       const taskData = {
         title: '  测试任务  ',
@@ -161,7 +176,7 @@ describe('ValidationService', () => {
         description: '任务描述',
         points: 10,
         pointsExpiry: 'week',
-        pointsExpiryText: '一周',
+        pointsExpiryText: '本周结束',
         isRequired: true,
         isAllDay: true
       };
@@ -175,11 +190,29 @@ describe('ValidationService', () => {
       expect(result.data.description).toBe('任务描述');
       expect(result.data.points).toBe(10);
       expect(result.data.pointsExpiry).toBe('week');
-      expect(result.data.pointsExpiryDate).toBe('一周');
+      expect(result.data.pointsExpiryDate).toBe('本周结束');
       expect(result.data.isRequired).toBe(true);
       expect(result.data.isAllDay).toBe(true);
       expect(result.data.startTime).toBe('');
       expect(result.data.endTime).toBe('');
+    });
+
+    it('未传 repeat 时应保持为不重复任务', () => {
+      const taskData = {
+        title: '测试任务',
+        startDate: '2026-03-04',
+        isAllDay: true
+      };
+
+      const result = validationService.validateTaskForm(taskData);
+
+      expect(result.valid).toBe(true);
+      expect(result.data.repeat).toEqual({
+        type: 'none',
+        days: [],
+        startDate: '2026-03-04',
+        endDate: '2026-03-04'
+      });
     });
 
     it('验证过程异常时应该返回错误', () => {

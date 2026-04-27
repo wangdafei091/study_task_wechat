@@ -12,6 +12,8 @@
 const request = require('supertest');
 const express = require('express');
 const jwt = require('jsonwebtoken');
+const fs = require('fs');
+const path = require('path');
 const db = require('../../config/database');
 
 const taskRoutes = require('../../routes/tasks');
@@ -31,9 +33,18 @@ function generateToken(user) {
 }
 
 async function cleanupTestData() {
+  await db.query("DELETE FROM messages WHERE related_id LIKE 'task%_m08b_test'");
   await db.query('DELETE FROM tasks WHERE task_id LIKE ?', ['%_m08b_test%']);
   await db.query('DELETE FROM users WHERE user_id LIKE ?', ['%_m08b_test%']);
   await db.query('DELETE FROM families WHERE family_id LIKE ?', ['%_m08b_test%']);
+}
+
+async function ensureM08bTables() {
+  const sql = fs.readFileSync(
+    path.join(__dirname, '../../database/migrations/010_create_messages.sql'),
+    'utf8'
+  ).trim();
+  await db.query(sql);
 }
 
 async function setupTestData() {
@@ -54,7 +65,13 @@ async function setupTestData() {
 
   // 建家庭后再关联用户到家庭，并插入孩子
   await db.query(
-    `UPDATE users SET family_id = 'family_m08b_test' WHERE user_id IN ('parent_m08b_test', 'parent2_m08b_test')`
+    `UPDATE users
+     SET family_id = 'family_m08b_test',
+         family_permission_role = CASE
+           WHEN role = 'parent' THEN 'manager'
+           ELSE family_permission_role
+         END
+     WHERE user_id IN ('parent_m08b_test', 'parent2_m08b_test')`
   );
 
   await db.query(
@@ -68,6 +85,7 @@ describe('M08b 真实数据库集成测试 - POST /api/tasks/transfer', () => {
 
   beforeAll(async () => {
     await db.testConnection();
+    await ensureM08bTables();
     await setupTestData();
 
     parentToken = generateToken({
@@ -108,6 +126,7 @@ describe('M08b 真实数据库集成测试 - POST /api/tasks/transfer', () => {
   });
 
   afterEach(async () => {
+    await db.query("DELETE FROM messages WHERE related_id LIKE 'task%_m08b_test'");
     await db.query("DELETE FROM tasks WHERE task_id LIKE '%_m08b_test%'");
   });
 
@@ -132,6 +151,55 @@ describe('M08b 真实数据库集成测试 - POST /api/tasks/transfer', () => {
       ['task1_m08b_test', 'task2_m08b_test', 'task3_m08b_test']
     );
     expect(rows.every(r => r.user_id === 'child_m08b_test')).toBe(true);
+
+    const messageRows = await db.query(
+      `SELECT related_id, notification_type, visibility_scope, user_id, subject_user_id, title, summary
+       FROM messages
+       WHERE related_id IN (?, ?, ?)
+       ORDER BY related_id ASC, visibility_scope ASC`,
+      ['task1_m08b_test', 'task2_m08b_test', 'task3_m08b_test']
+    );
+
+    expect(messageRows).toHaveLength(6);
+    expect(messageRows).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        related_id: 'task1_m08b_test',
+        notification_type: 'task_assign',
+        visibility_scope: 'family',
+        subject_user_id: 'child_m08b_test',
+        title: '任务已分配：任务1',
+        summary: 'M08b测试家长给M08b测试孩子分配了任务“任务1”'
+      }),
+      expect.objectContaining({
+        related_id: 'task1_m08b_test',
+        notification_type: 'task_assign',
+        visibility_scope: 'user',
+        user_id: 'child_m08b_test',
+        subject_user_id: 'child_m08b_test',
+        title: '任务已分配：任务1',
+        summary: 'M08b测试家长给你分配了任务“任务1”'
+      }),
+      expect.objectContaining({
+        related_id: 'task2_m08b_test',
+        notification_type: 'task_assign',
+        visibility_scope: 'family'
+      }),
+      expect.objectContaining({
+        related_id: 'task2_m08b_test',
+        notification_type: 'task_assign',
+        visibility_scope: 'user'
+      }),
+      expect.objectContaining({
+        related_id: 'task3_m08b_test',
+        notification_type: 'task_assign',
+        visibility_scope: 'family'
+      }),
+      expect.objectContaining({
+        related_id: 'task3_m08b_test',
+        notification_type: 'task_assign',
+        visibility_scope: 'user'
+      })
+    ]));
   });
 
   it('家长名下无任务时应返回 200 count=0', async () => {
@@ -144,14 +212,14 @@ describe('M08b 真实数据库集成测试 - POST /api/tasks/transfer', () => {
     expect(res.body.data.count).toBe(0);
   });
 
-  it('孩子身份调用应返回 403 TRANSFER_PARENT_REQUIRED', async () => {
+  it('孩子身份调用应返回 403 PERMISSION_DENIED', async () => {
     const res = await request(app)
       .post('/api/tasks/transfer')
       .set('Authorization', `Bearer ${childToken}`)
       .send({ toUserId: 'child_m08b_test' });
 
     expect(res.status).toBe(403);
-    expect(res.body.error_code).toBe('TRANSFER_PARENT_REQUIRED');
+    expect(res.body.error_code).toBe('PERMISSION_DENIED');
   });
 
   it('toUserId 不在同家庭应返回 400 TRANSFER_TARGET_INVALID', async () => {

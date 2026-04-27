@@ -5,6 +5,7 @@
  */
 
 const logger = require('../utils/logger');
+const taskFormCore = require('../utils/task-form-core');
 
 class ValidationService {
   /**
@@ -30,46 +31,17 @@ class ValidationService {
     };
 
     try {
-      // 验证标题
-      if (!taskData.title || !taskData.title.trim()) {
-        result.valid = false;
-        result.errorMsg = '请输入任务标题';
-        logger.warn('ValidationService', '任务标题验证失败');
-        return result;
-      }
+      const validation = taskFormCore.validateTaskFormDraft(taskData, {
+        scene: 'task',
+        today: taskData.startDate
+      });
 
-      // 验证日期
-      if (!taskData.startDate) {
+      if (!validation.valid) {
         result.valid = false;
-        result.errorMsg = '请选择开始日期';
-        logger.warn('ValidationService', '开始日期验证失败');
-        return result;
-      }
-
-      // 验证重复任务的结束日期
-      if (taskData.repeat && taskData.repeat.type !== 'none') {
-        // 如果是重复任务，且没有勾选"无结束日期"，必须设置结束日期
-        if (!taskData.hasNoEndDate && !taskData.endDate) {
-          result.valid = false;
-          result.errorMsg = '请设置重复任务的结束日期';
-          logger.warn('ValidationService', '重复任务结束日期验证失败');
-          return result;
-        }
-        
-        // 如果设置了结束日期，确保结束日期不早于开始日期
-        if (taskData.endDate && taskData.endDate < taskData.startDate) {
-          result.valid = false;
-          result.errorMsg = '结束日期不能早于开始日期';
-          logger.warn('ValidationService', '结束日期早于开始日期');
-          return result;
-        }
-      }
-
-      // 验证时间
-      if (!taskData.isAllDay && (!taskData.startTime || !taskData.endTime)) {
-        result.valid = false;
-        result.errorMsg = '请设置开始和结束时间';
-        logger.warn('ValidationService', '任务时间验证失败');
+        result.errorMsg = validation.errorMsg;
+        logger.warn('ValidationService', '共享任务表单验证失败', {
+          errorMsg: validation.errorMsg
+        });
         return result;
       }
 
@@ -305,37 +277,30 @@ class ValidationService {
    */
   _assembleTaskData(taskData) {
     logger.info('ValidationService', '组装完整任务数据');
-    
+    const normalizedPayload = taskFormCore.buildTaskPayloadFromDraft({
+      ...taskData,
+      repeatType: taskData.repeat?.type || 'none',
+      repeatDays: taskData.repeat?.days || [],
+      reminderEnabled: taskData.reminder?.enabled,
+      reminderTime: taskData.reminder?.time,
+      scene: 'task'
+    });
     const assembledData = {
-      title: taskData.title.trim(),
-      type: taskData.type,
-      date: taskData.startDate,
-      description: taskData.description || '',
+      title: normalizedPayload.title,
+      type: normalizedPayload.type,
+      date: normalizedPayload.startDate,
+      description: normalizedPayload.description || '',
       points: taskData.points || 0,
-      pointsExpiry: taskData.pointsExpiry,
+      pointsExpiry: normalizedPayload.pointsExpiry,
       pointsExpiryDate: taskData.pointsExpiryText || '',
-      isRequired: taskData.isRequired || false,
-      isAllDay: taskData.isAllDay || false,
-      startTime: taskData.isAllDay ? '' : (taskData.startTime || ''),
-      endTime: taskData.isAllDay ? '' : (taskData.endTime || ''),
-      hasNoEndDate: taskData.hasNoEndDate || false,
-      repeat: taskData.repeat || { type: 'none' },
-      reminder: taskData.reminder || { enabled: false }
+      isRequired: normalizedPayload.isRequired || false,
+      isAllDay: normalizedPayload.isAllDay || false,
+      startTime: normalizedPayload.startTime || '',
+      endTime: normalizedPayload.endTime || '',
+      hasNoEndDate: normalizedPayload.hasNoEndDate || false,
+      repeat: normalizedPayload.repeat || { type: 'none' },
+      reminder: normalizedPayload.reminder || { enabled: false }
     };
-
-    // 确保重复任务的开始和结束日期与主任务一致
-    if (assembledData.repeat.startDate !== assembledData.date) {
-      logger.info('ValidationService', '修正重复任务开始日期与主任务保持一致');
-      assembledData.repeat.startDate = assembledData.date;
-    }
-
-    // 确保endDate字段和repeat.endDate字段一致
-    if (!assembledData.hasNoEndDate && taskData.endDate) {
-      if (assembledData.repeat.endDate !== taskData.endDate) {
-        logger.info('ValidationService', '修正重复任务结束日期与主任务保持一致');
-        assembledData.repeat.endDate = taskData.endDate;
-      }
-    }
 
     logger.info('ValidationService', '任务数据组装完成');
     return assembledData;

@@ -1,63 +1,14 @@
 // pages/rewards/rewards.js
-const { EVENTS } = require('../../utils/constants');
-const app = getApp();
-// 新架构服务引入
 const serviceManager = require('../../services/service-manager');
 const formatUtils = require('../../utils/formatUtils');
 const logger = require('../../utils/logger');
-const uiUtils = require('../../utils/uiUtils');
+const rewardIdentity = require('../../utils/reward-identity');
+const rewardsAnimationModule = require('./modules/rewards-animation');
+const rewardsSyncModule = require('./modules/rewards-sync');
+const rewardsExchangeFlowModule = require('./modules/rewards-exchange-flow');
+const rewardsUserContextModule = require('./modules/rewards-user-context');
 
 const REWARD_MANAGE_URL = '/packageManage/pages/reward-manage/reward-manage';
-
-function resolveRewardPageViewMode(userService) {
-  const loginUser = userService?.getLoginUser ? userService.getLoginUser() : null;
-  const currentUser = userService?.getCurrentUser ? userService.getCurrentUser() : null;
-  const activeUser = currentUser || loginUser || null;
-  const activeUserId = activeUser ? (activeUser.userId || activeUser.id) : null;
-  const isReadonlyView = loginUser
-    ? (loginUser.role === 'child' || loginUser.userId !== activeUserId)
-    : !!(activeUser && activeUser.role === 'child');
-
-  return {
-    loginUser,
-    currentUser: activeUser,
-    isReadonlyView,
-    viewMode: activeUser && activeUser.role === 'parent' && !isReadonlyView
-      ? 'parent-manage'
-      : 'child-no-manage'
-  };
-}
-
-function buildRewardPageState({ rewards, hasRewardHistoryHint, viewMode }) {
-  if (Array.isArray(rewards) && rewards.length > 0) {
-    return {
-      emptyMode: 'none',
-      emptyTitle: '',
-      emptyDescription: '',
-      emptyHistoryHint: '',
-      ctaVisible: false,
-      ctaText: ''
-    };
-  }
-
-  const isParentManageView = viewMode === 'parent-manage';
-  const emptyTitle = isParentManageView
-    ? (hasRewardHistoryHint ? '目前还没有可用的正式奖励' : '还没有正式奖励')
-    : '现在还没有可用奖励';
-
-  return {
-    emptyMode: isParentManageView ? 'parent-setup' : 'child-explain',
-    emptyTitle,
-    emptyDescription: isParentManageView
-      ? '去设置一个正式奖励吧，孩子完成任务后就能看到努力目标了'
-      : '奖励由家长来设置，现在完成任务也会正常积累星星',
-    emptyHistoryHint: isParentManageView && hasRewardHistoryHint
-      ? '如果之前清理过奖励，也可以重新添加一个正式奖励'
-      : '',
-    ctaVisible: isParentManageView,
-    ctaText: '去设置第一个奖励'
-  };
-}
 
 Page({
 
@@ -74,6 +25,8 @@ Page({
     formattedPoints: '0',      // 格式化后的总积分
     expiringPoints: 0,         // 即将到期积分
     expiryDate: '',            // 到期日期
+    balanceSummaryPrimaryText: '',
+    balanceSummarySecondaryText: '',
     rewards: [], // 改为空数组，后续从存储加载真实奖励数据
     showModal: false,
     selectedReward: null,
@@ -84,7 +37,7 @@ Page({
     activeTab: 'available',    // 当前激活的Tab: 'available' | 'claimed'
     showTabs: false,           // 是否显示Tab切换
     availableRewards: [],      // 可获得的奖励
-    claimedRewards: [],        // 已领取的奖励
+    claimedRewards: [],        // 已兑换/已领取的奖励
     rewardEmptyMode: 'none',
     rewardEmptyTitle: '',
     rewardEmptyDescription: '',
@@ -102,7 +55,7 @@ Page({
    */
   onLoad: async function (options) {
     logger.info('rewards', '页面加载');
-    await this.loadRewardsData();
+    this._skipNextOnShowRefresh = false;
     
     // 清除已跳转标记
     const app = getApp();
@@ -114,8 +67,6 @@ Page({
     // 记录星星宝典展示
     logger.info('rewards', '展示星星宝典信息 - 精简儿童友好版');
     
-    // 注册进度条完成事件监听
-    this.setupProgressBarListener();
   },
 
   /**
@@ -129,38 +80,8 @@ Page({
    * 生命周期函数--监听页面显示
    */
   onShow: async function() {
-    // 记录页面显示
-    logger.info('rewards', '页面显示');
-
-    try {
-      const starService = serviceManager.getService('starService');
-      const rewardService = serviceManager.getService('rewardService');
-      const effectiveChildId = this._getEffectiveChildUserId();
-
-      if (starService?.refreshStarsFromCloud && effectiveChildId) {
-        await starService.refreshStarsFromCloud(effectiveChildId);
-      }
-      if (rewardService?.refreshRewardsFromCloud) {
-        await rewardService.refreshRewardsFromCloud();
-      }
-    } catch (syncError) {
-      logger.warn('rewards', '奖励页 onShow 云同步失败，继续使用本地数据', syncError);
-    }
-    
-    // 检查是否有奖励数据变更标记
-    if (app.globalData.needRefreshReward) {
-      logger.info('rewards', '检测到奖励数据变更标记，强制刷新');
-      app.globalData.needRefreshReward = false;
-      await this.loadRewardsData(true); // 强制刷新
-    } else {
-      await this.loadRewardsData();
-    }
-    
-    // 检查是否从其他页面跳转回来
-    if (app.globalData.hasRedirectedToReward) {
-      logger.info('rewards', '清除已跳转标记');
-      app.globalData.hasRedirectedToReward = false;
-    }
+    this.setupProgressBarListener();
+    return rewardsSyncModule.onShow(this);
   },
 
   /**
@@ -169,6 +90,7 @@ Page({
   onHide() {
     // 清理所有计时器
     this.clearAllTimers();
+    rewardsAnimationModule.teardownProgressBarListener(this);
   },
 
   /**
@@ -177,20 +99,14 @@ Page({
   onUnload() {
     // 清理所有计时器
     this.clearAllTimers();
-    
-    // 清理事件监听器
-    const app = getApp();
-    const eventBus = app.globalData.eventBus;
-    if (eventBus) {
-      eventBus.off(EVENTS.PROGRESS_BAR_COMPLETE, this.handleProgressBarComplete);
-    }
+    rewardsAnimationModule.teardownProgressBarListener(this);
   },
 
   /**
    * 页面相关事件处理函数--监听用户下拉动作
    */
-  onPullDownRefresh() {
-
+  onPullDownRefresh: async function() {
+    return rewardsSyncModule.onPullDownRefresh(this);
   },
 
   /**
@@ -211,83 +127,28 @@ Page({
    * 设置进度条完成事件监听
    */
   setupProgressBarListener: function() {
-    logger.info('rewards', '设置进度条完成事件监听');
-    
-    // 获取全局事件总线
-    const eventBus = app.globalData.eventBus;
-    if (eventBus) {
-      // 监听进度条完成事件
-      eventBus.on(EVENTS.PROGRESS_BAR_COMPLETE, this.handleProgressBarComplete.bind(this));
-    }
+    return rewardsAnimationModule.setupProgressBarListener(this);
   },
   
   /**
    * 处理进度条完成事件
    */
   handleProgressBarComplete: function() {
-    logger.info('rewards', '收到进度条完成事件，锁定用户操作');
-    
-    // 已经在动画中则不重复处理
-    if (this.data.isRewardAnimating) {
-      logger.warn('rewards', '已经在动画中，忽略重复事件');
-      return;
-    }
-    
-    // 设置动画标志和显示蒙层
-    this.setData({
-      isRewardAnimating: true,
-      showAnimationMask: true
-    });
-    
-    // 设置安全超时，确保不会永久锁定界面
-    this.animationSafetyTimer = setTimeout(() => {
-      logger.warn('rewards', '奖励动画安全超时触发');
-      this.releaseAnimationLock();
-    }, 2000); // 2秒后如果仍未释放锁定，则自动释放
+    return rewardsAnimationModule.handleProgressBarComplete(this);
   },
   
   /**
    * 释放动画锁定
    */
   releaseAnimationLock: function() {
-    logger.info('rewards', '释放动画锁定');
-    
-    // 清除安全超时计时器
-    if (this.animationSafetyTimer) {
-      clearTimeout(this.animationSafetyTimer);
-      this.animationSafetyTimer = null;
-    }
-    
-    // 隐藏蒙层，解除锁定
-    this.setData({
-      showAnimationMask: false,
-      isRewardAnimating: false
-    });
+    return rewardsAnimationModule.releaseAnimationLock(this);
   },
   
   /**
    * 清理所有计时器
    */
   clearAllTimers: function() {
-    logger.debug('rewards', '清理所有计时器');
-    
-    // 清除动画安全超时计时器
-    if (this.animationSafetyTimer) {
-      clearTimeout(this.animationSafetyTimer);
-      this.animationSafetyTimer = null;
-    }
-    
-    // 清除其他可能的计时器
-    if (this.rewardTimer) {
-      clearTimeout(this.rewardTimer);
-      this.rewardTimer = null;
-    }
-    
-    // 清除点击计数超时计时器
-    if (this.data.demoClickTimeout) {
-      clearTimeout(this.data.demoClickTimeout);
-      this.setData({ demoClickTimeout: null });
-    }
+    return rewardsAnimationModule.clearAllTimers(this);
   },
 
   /**
@@ -295,208 +156,14 @@ Page({
    * 通过ID格式或标记识别示例奖励
    */
   isExampleReward: function(reward) {
-    // 检查是否有明确的示例标记
-    if (reward.isExample === true) {
-      return true;
-    }
-    
-    // 使用ID前缀/后缀识别初始默认示例
-    // 初始三个示例奖励的ID结尾为_1, _2, _3
-    return /reward_\d+_(1|2|3)$/.test(reward.id);
+    return rewardIdentity.isExampleReward(reward);
   },
 
   /**
    * 加载奖励数据
    */
-  loadRewardsData: async function () {
-    logger.info('rewards', '开始加载奖励数据');
-    
-    try {
-      wx.showLoading({ title: '加载中' });
-      
-      // 获取服务实例
-      const starService = serviceManager.getService('starService');
-      const rewardService = serviceManager.getService('rewardService');
-      
-      if (!starService || !rewardService) {
-        logger.error('rewards', '无法获取服务实例');
-        wx.hideLoading();
-        return;
-      }
-      
-      // 强制清除所有相关缓存，确保获取最新数据
-      logger.info('rewards', '强制清除缓存以获取最新数据');
-      if (starService.clearCache) {
-        starService.clearCache();
-      }
-      if (rewardService.clearCache) {
-        rewardService.clearCache();
-      }
-      
-      // 使用有效孩子ID取星星数；奖励属于家长账号（家庭奖励池）
-      const effectiveChildId = this._getEffectiveChildUserId();
-      const rewardOwnerId = this._getRewardOwnerUserId();
-      logger.info('rewards', `有效孩子ID: ${effectiveChildId}, 奖励归属ID: ${rewardOwnerId}`);
-
-      // 使用新架构获取用户星星数
-      const totalPoints = await starService.getTotalStars(effectiveChildId);
-      logger.info('rewards', `获取到用户星星: ${totalPoints}`);
-      
-      // 格式化星星数量
-      const formattedPoints = formatUtils.formatPoints(totalPoints, true);
-      
-      // 获取即将到期积分信息
-      const expiringPointsInfo = await this.getExpiringPoints();
-      
-      const userService = serviceManager.getUserService();
-      const { viewMode } = resolveRewardPageViewMode(userService);
-
-      // 获取所有奖励（包括已领取的），按家庭奖励池查询
-      const allRewards = await rewardService.getAvailableRewards(true, false, rewardOwnerId);
-      logger.info('rewards', `获取到可用奖励: ${allRewards.length}个`);
-      
-      // 检查是否存在自定义奖励标记（通过服务层）
-      let hasCustomRewards = false;
-      try {
-        // 尝试通过配置服务检查
-        const configService = serviceManager.getService('config');
-        if (configService) {
-          hasCustomRewards = configService.hasCustomRewards();
-        } else if (rewardService && typeof rewardService.hasCustomRewards === 'function') {
-          // 通过奖励服务检查（向后兼容）
-          hasCustomRewards = await rewardService.hasCustomRewards();
-        } else {
-          // 降级处理：直接使用存储
-          hasCustomRewards = wx.getStorageSync('has_custom_rewards') === true;
-          logger.warn('rewards', '配置服务不可用，使用降级存储访问');
-        }
-        if (hasCustomRewards) {
-          logger.debug('rewards', '检测到自定义奖励标记');
-        }
-      } catch (e) {
-        logger.warn('rewards', '获取自定义奖励标记失败', e);
-      }
-      
-      const realRewards = allRewards.filter((reward) => !this.isExampleReward(reward));
-      const rewardPageState = buildRewardPageState({
-        rewards: realRewards,
-        hasRewardHistoryHint: hasCustomRewards,
-        viewMode
-      });
-
-      // 如果过滤示例奖励后没有正式奖励，展示空态而不是空白奖励网格
-      if (realRewards.length === 0) {
-        logger.info('rewards', '过滤示例奖励后无正式奖励，展示显式空态', {
-          hasRewardHistoryHint: hasCustomRewards,
-          viewMode
-        });
-        wx.hideLoading();
-
-        this.setData({
-          rewards: [],
-          availableRewards: [],
-          claimedRewards: [],
-          showTabs: false,
-          activeTab: 'available',
-          showClaimedRewards: true,
-          currentProgress: totalPoints,
-          totalPoints: totalPoints,
-          formattedPoints: formattedPoints,
-          expiringPoints: expiringPointsInfo.points,
-          expiryDate: expiringPointsInfo.date,
-          rewardsEarned: 0,
-          currentLevel: Math.floor(totalPoints / 20) + 1,
-          nextReward: null,
-          rewardEmptyMode: rewardPageState.emptyMode,
-          rewardEmptyTitle: rewardPageState.emptyTitle,
-          rewardEmptyDescription: rewardPageState.emptyDescription,
-          rewardEmptyHistoryHint: rewardPageState.emptyHistoryHint,
-          showManageRewardCTA: rewardPageState.ctaVisible,
-          manageRewardCTAText: rewardPageState.ctaText
-        });
-
-        return;
-      }
-      
-      // 计算解锁状态
-      const rewards = realRewards.map(r => ({
-        ...r,
-        unlocked: totalPoints >= r.points
-      }));
-      
-      // 区分可用和已领取的奖励
-      const availableRewards = rewards.filter(r => !r.claimed);
-      const claimedRewards = rewards.filter(r => r.claimed);
-      
-      logger.debug('rewards', `可用奖励: ${availableRewards.length}个, 已领取奖励: ${claimedRewards.length}个`);
-      
-      // 计算已解锁奖励数量
-      const unlockedRewards = rewards.filter(reward => reward.unlocked).length;
-      
-      // 计算下一个可达成的奖励（用孩子的星星数 vs 家长的奖励池）
-      const nextReward = await rewardService.calculateNextAvailableReward(totalPoints, rewardOwnerId);
-      const normalizedNextReward = nextReward && !nextReward.isDefault && !this.isExampleReward(nextReward)
-        ? nextReward
-        : null;
-      logger.debug('rewards', `下一个可达成奖励: ${nextReward ? nextReward.name : '无'}, 需要${nextReward ? nextReward.points : 0}颗星星`);
-      
-      // 添加即将设置到页面的数据日志
-      logger.info('rewards', `准备设置页面数据: 总星星=${totalPoints}, 即将过期星星=${expiringPointsInfo.points}, 过期日期=${expiringPointsInfo.date}`);
-      logger.info('rewards', `过期信息详细数据:`, expiringPointsInfo);
-      
-      // 计算Tab显示逻辑
-      const showTabs = availableRewards.length > 0 && claimedRewards.length > 0;
-      let activeTab = this.data.activeTab;
-      
-      // 智能默认Tab选择
-      if (showTabs) {
-        // 如果两种奖励都有，保持当前Tab或默认选择可获得
-        if (!activeTab || (activeTab === 'available' && availableRewards.length === 0)) {
-          activeTab = 'claimed';
-        } else if (activeTab === 'claimed' && claimedRewards.length === 0) {
-          activeTab = 'available';
-        }
-      } else {
-        // 如果只有一种奖励，设置对应的Tab
-        activeTab = availableRewards.length > 0 ? 'available' : 'claimed';
-      }
-      
-      logger.info('rewards', `Tab显示逻辑: showTabs=${showTabs}, activeTab=${activeTab}, 可获得=${availableRewards.length}, 已领取=${claimedRewards.length}`);
-
-      this.setData({
-        rewards: rewards,
-        availableRewards: availableRewards,
-        claimedRewards: claimedRewards,
-        showTabs: showTabs,
-        activeTab: activeTab,
-        showClaimedRewards: true, // 显示已领取的奖励
-        currentProgress: totalPoints,
-        totalPoints: totalPoints,
-        formattedPoints: formattedPoints,
-        expiringPoints: expiringPointsInfo.points,
-        expiryDate: expiringPointsInfo.date,
-        rewardsEarned: unlockedRewards,
-        currentLevel: Math.floor(totalPoints / 20) + 1, // 每20点升一级
-        nextReward: normalizedNextReward,
-        rewardEmptyMode: 'none',
-        rewardEmptyTitle: '',
-        rewardEmptyDescription: '',
-        rewardEmptyHistoryHint: '',
-        showManageRewardCTA: false,
-        manageRewardCTAText: ''
-      });
-      
-      logger.info('rewards', `设置总星星: ${totalPoints}, 即将过期总星星: ${expiringPointsInfo.points}, 最早到期日期: ${expiringPointsInfo.date}`);
-      
-      wx.hideLoading();
-    } catch (error) {
-      logger.error('rewards', '加载奖励数据失败', error);
-      wx.hideLoading();
-      wx.showToast({
-        title: '加载失败，请重试',
-        icon: 'none'
-      });
-    }
+  loadRewardsData: async function (forceRefresh = false) {
+    return rewardsSyncModule.loadRewardsData(this, forceRefresh);
   },
 
   /**
@@ -504,38 +171,11 @@ Page({
    * @returns {Promise<Object>} 包含过期星星数和最早过期日期的对象
    */
   getExpiringPoints: async function() {
-    logger.info('rewards', '获取即将过期的星星信息');
-    
-    try {
-      // 获取服务实例
-      const starService = serviceManager.getService('starService');
-      
-      if (!starService) {
-        logger.error('rewards', '无法获取星星服务实例');
-        return { points: 0, date: '' };
-      }
-      
-      logger.info('rewards', '星星服务实例获取成功，开始调用getExpiringStarsInfo');
-      
-      // 获取即将过期的星星信息
-      const expiringInfo = await starService.getExpiringStarsInfo();
-      
-      logger.info('rewards', `星星服务返回的原始数据:`, expiringInfo);
-      logger.info('rewards', `即将过期星星: ${expiringInfo.points}颗, 最早到期日期: ${expiringInfo.expiryDateText}, 过期时间戳: ${expiringInfo.expiryTimestamp}`);
-      
-      // 构建返回结果
-      const result = {
-        points: expiringInfo.points,
-        date: expiringInfo.expiryDateText
-      };
-      
-      logger.info('rewards', `奖池页面返回的过期信息:`, result);
-      
-      return result;
-    } catch (error) {
-      logger.error('rewards', '获取即将过期的星星信息失败', error);
-      return { points: 0, date: '' };
-    }
+    return rewardsSyncModule.getExpiringPoints(this);
+  },
+
+  getAvailableStarSnapshot: async function() {
+    return rewardsSyncModule.getAvailableStarSnapshot(this);
   },
 
   /**
@@ -613,188 +253,21 @@ Page({
    * 领取奖励
    */
   claimReward: function (e) {
-    const reward = this.data.selectedReward;
-    const rewardId = reward.id;
-    
-    if (!reward.unlocked) {
-      wx.showToast({
-        title: '奖励尚未解锁',
-        icon: 'none'
-      });
-      return;
-    }
-
-    if (reward.claimed) {
-      wx.showToast({
-        title: '奖励已领取',
-        icon: 'none'
-      });
-      return;
-    }
-
-    // 添加二次确认
-    let confirmTitle = '确认领取';
-    let confirmContent = '';
-    
-    if (reward.protectedByExpiry) {
-      confirmContent = `【${reward.name}】为星星过期保护奖励，兑换无需消耗星星！确定要领取吗？`;
-    } else {
-      confirmContent = `确定要用 ${reward.points} 颗星星兑换【${reward.name}】吗？领取后星星将不能退回哦！`;
-    }
-    
-    wx.showModal({
-      title: confirmTitle,
-      content: confirmContent,
-      success: (res) => {
-        if (res.confirm) {
-          logger.info('rewards', `用户确认领取奖励: ${reward.name}, ${reward.protectedByExpiry ? '保护奖励' : '消耗星星: ' + reward.points}`);
-          this._performClaimReward(reward);
-        } else {
-          logger.info('rewards', `用户取消领取奖励: ${reward.name}`);
-        }
-      }
-    });
+    return rewardsExchangeFlowModule.claimReward(this, e);
   },
 
   /**
    * 执行领取奖励操作
    */
-  _performClaimReward: async function(reward) {
-    try {
-      wx.showLoading({ title: '兑换中' });
-      
-      // 获取服务实例
-      const rewardService = serviceManager.getService('rewardService');
-      const starService = serviceManager.getService('starService');
-      
-      if (!rewardService || !starService) {
-        logger.error('rewards', '无法获取服务实例');
-        wx.hideLoading();
-        return;
-      }
-      
-      // 获取小朋友用户ID（统一使用小朋友账户进行星星操作）
-      const childUserId = this._getChildUserId();
-      logger.info('rewards', `使用小朋友用户ID进行奖励兑换: ${childUserId}`);
-      
-      // 保存原始星星数和目标星星数
-      const originalPoints = this.data.totalPoints;
-      const targetPoints = originalPoints - reward.points;
-      
-      logger.info('rewards', `领取奖励前星星数: ${originalPoints}, 用户: ${childUserId}`);
-      
-      // 使用新架构兑换奖励，传递小朋友用户ID
-      const result = await rewardService.exchangeReward(reward.id, childUserId);
-      
-      if (!result.success) {
-        logger.error('rewards', `兑换奖励失败: ${result.message}, 用户: ${childUserId}`);
-        wx.hideLoading();
-        wx.showToast({
-          title: result.message || '兑换失败',
-          icon: 'none'
-        });
-        return;
-      }
-      
-      logger.info('rewards', `兑换奖励成功: ${reward.name}, ID=${reward.id}, ${result.protectedByExpiry ? '保护奖励' : '消耗星星: ' + reward.points}, 用户: ${childUserId}`);
-      
-      // 隐藏加载提示
-      wx.hideLoading();
-      
-      // 如果是保护奖励，直接处理结果；否则播放动画
-      if (result.protectedByExpiry) {
-        logger.info('rewards', '保护奖励无需动画，直接处理结果');
-        await this._handleExchangeSuccess(result, reward, childUserId);
-        
-        // 显示保护奖励兑换成功提示
-        wx.showToast({
-          title: '保护奖励兑换成功',
-          icon: 'success',
-          duration: 2000
-        });
-      } else {
-        // 普通奖励播放星星减少动画
-        this.animateStarsCount(originalPoints, targetPoints, async () => {
-          await this._handleExchangeSuccess(result, reward, childUserId);
-          
-          // 显示普通兑换成功提示
-          wx.showToast({
-            title: '兑换成功',
-            icon: 'success',
-            duration: 2000
-          });
-        });
-      }
-    } catch (error) {
-      logger.error('rewards', '兑换奖励出错', error);
-      wx.hideLoading();
-      wx.showToast({
-        title: '操作失败，请重试',
-        icon: 'none'
-      });
-    }
+  _performClaimReward: async function(reward, exchangeContext = null) {
+    return rewardsExchangeFlowModule.performClaimReward(this, reward, exchangeContext);
   },
   
   /**
    * 处理兑换成功的共同逻辑
    */
   _handleExchangeSuccess: async function(result, reward, childUserId) {
-    // 获取服务实例
-    const rewardService = serviceManager.getService('rewardService');
-    const starService = serviceManager.getService('starService');
-    
-    // 强制清除所有缓存确保数据一致性
-    logger.info('rewards', '清除缓存确保数据一致性');
-    if (starService && starService.clearCache) {
-      starService.clearCache();
-    }
-    if (rewardService && rewardService.clearCache) {
-      rewardService.clearCache();
-    }
-    
-    // 计算下一个可用奖励（用孩子的星星 vs 家长的奖励池）
-    const rewardOwnerId = this._getRewardOwnerUserId();
-    const effectiveChildId = this._getEffectiveChildUserId();
-    const currentStars = await starService.getTotalStars(effectiveChildId);
-    const nextReward = await rewardService.calculateNextAvailableReward(currentStars, rewardOwnerId);
-    logger.info('rewards', `领取奖励后计算下一个可用奖励: ${nextReward.name}, 需要${nextReward.points}颗星星`);
-    
-    // 关闭弹窗并更新数据
-    this.setData({
-      showModal: false,
-      nextReward: nextReward
-    });
-    
-    // 重新加载奖励数据以更新UI
-    await this.loadRewardsData();
-    
-    // 通知首页更新星星和奖励进度
-    const app = getApp();
-    if (app && app.globalData && app.globalData.eventBus) {
-      logger.info('rewards', '发送奖励领取事件通知');
-      
-      const actualCost = result.actualCost !== undefined ? result.actualCost : 
-        (result.protectedByExpiry ? 0 : reward.points);
-      const exchangeType = result.protectedByExpiry ? 
-        (actualCost > 0 ? 'partial_protected' : 'fully_protected') : 'normal';
-      
-      app.globalData.eventBus.emit(EVENTS.REWARD_CLAIMED, {
-        rewardId: reward.id,
-        rewardName: reward.name,
-        points: actualCost, // 兼容字段
-        actualCost: actualCost, // 实际消耗数量
-        originalPoints: reward.points, // 原始奖励积分
-        displayPoints: actualCost, // 用于显示的消耗数量
-        protectedByExpiry: result.protectedByExpiry || false,
-        partialProtection: result.partialProtection || 0,
-        exchangeType: exchangeType,
-        userId: childUserId,
-        operatorUserId: childUserId,
-        newTotalPoints: this.data.totalPoints, // 使用当前最新的星星总数
-        nextReward: nextReward,
-        timestamp: Date.now()
-      });
-    }
+    return rewardsExchangeFlowModule.handleExchangeSuccess(this, result, reward, childUserId);
   },
   
   /**
@@ -918,53 +391,26 @@ Page({
    * 孩子视角（孩子设备）：取loginUser自身
    */
   _getEffectiveChildUserId: function() {
-    const userService = serviceManager.getUserService();
-    if (!userService) {
-      logger.warn('rewards', '无法获取用户服务');
-      return 'child';
-    }
-    const loginUser = userService.getLoginUser ? userService.getLoginUser() : null;
-    const currentUser = userService.getCurrentUser ? userService.getCurrentUser() : null;
-    // 孩子设备：loginUser 本身就是孩子
-    if (loginUser && loginUser.role === 'child') {
-      return loginUser.userId || loginUser.id;
-    }
-    // 家长切到孩子视角时，优先使用当前视角孩子
-    if (currentUser && currentUser.role === 'child') {
-      return currentUser.userId || currentUser.id;
-    }
-    // 家长设备：优先用最近操作的孩子
-    const app = getApp();
-    const lastActiveChildId = app && app.globalData && app.globalData.lastActiveChildId;
-    if (lastActiveChildId) {
-      logger.info('rewards', `使用最近活跃孩子ID: ${lastActiveChildId}`);
-      return lastActiveChildId;
-    }
-    // 兜底：取第一个孩子
-    const firstChild = userService.getUserByRole('child');
-    if (firstChild) {
-      logger.info('rewards', `使用第一个孩子ID: ${firstChild.id}`);
-      return firstChild.id;
-    }
-    logger.warn('rewards', '未找到孩子用户，使用默认child');
-    return 'child';
+    return rewardsUserContextModule.getEffectiveChildUserId(serviceManager);
+  },
+
+  _resolveRewardExecutionSubject: function() {
+    return rewardsUserContextModule.resolveRewardExecutionSubject(serviceManager);
+  },
+
+  _getRewardFamilyScope: function() {
+    return rewardsUserContextModule.getRewardFamilyScope(serviceManager);
+  },
+
+  _getMyExchangeUserId: function() {
+    return rewardsUserContextModule.getMyExchangeUserId(serviceManager);
   },
 
   /**
-   * 获取奖励归属userId（家庭奖励池，由家长账号管理）
-   * 家长设备：loginUserId（家长）
-   * 孩子设备：loginUserId（孩子本身，M07已知限制：奖励未云端同步时不可见）
+   * 兼容旧接口：返回当前奖励家庭范围的familyId
    */
   _getRewardOwnerUserId: function() {
-    const userService = serviceManager.getUserService();
-    if (userService && userService.getLoginUserId) {
-      return userService.getLoginUserId();
-    }
-    return null;
-  },
-
-  // 兼容旧调用，内部改为使用 _getEffectiveChildUserId
-  _getChildUserId: function() {
-    return this._getEffectiveChildUserId();
+    const rewardFamilyScope = this._getRewardFamilyScope();
+    return rewardFamilyScope.familyId || rewardFamilyScope.loginUserId || rewardFamilyScope.viewUserId || null;
   }
 })

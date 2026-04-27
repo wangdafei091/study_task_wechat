@@ -20,6 +20,12 @@ async function initialize(app, options = {}) {
     const initialized = await serviceManager.initialize(serviceOptions);
 
     if (initialized) {
+      const offlineQueueService = serviceManager.getOfflineQueueService();
+      if (offlineQueueService?.initialize) {
+        await offlineQueueService.initialize();
+        logger.info('App', '离线队列初始化完成');
+      }
+
       logger.info('App', '服务管理器初始化成功（基础服务）');
       app.globalData.servicesInitialized = true;
     } else {

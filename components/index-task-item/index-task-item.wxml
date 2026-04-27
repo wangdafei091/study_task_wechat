@@ -56,7 +56,7 @@
         <!-- 时间信息 - 对所有有起止时间且非全天的任务显示 -->
         <view class="task-time-info" wx:if="{{task.startTime && !task.isAllDay}}">
           <text class="time-icon">🕒</text>
-          <text>{{task.startTime}}{{task.endTime ? ' - ' + task.endTime : ''}}</text>
+          <text>{{displayStartTime}}{{displayEndTime ? ' - ' + displayEndTime : ''}}</text>
         </view>
         
         <!-- 星星信息 -->
@@ -77,4 +77,4 @@
       </view>
     </view>
   </view>
-</view> 
+</view>

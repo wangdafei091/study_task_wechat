@@ -15,7 +15,7 @@ class Reward {
     enabled = true,
     claimed = false,
     claimTime = null,
-    claimStatus = 'available',
+    claimStatus = null,
     deliveryTime = null,
     exchangeUserId = null,
     isExample = false,
@@ -39,7 +39,7 @@ class Reward {
     this.enabled = Boolean(enabled);
     this.claimed = Boolean(claimed);
     this.claimTime = claimTime || null;
-    this.claimStatus = claimStatus || (this.claimed ? 'delivered' : 'available');
+    this.claimStatus = claimStatus || (this.claimed ? 'claimed' : 'available');
     this.deliveryTime = deliveryTime || null;
     this.exchangeUserId = exchangeUserId || null;
     this.isExample = Boolean(isExample);

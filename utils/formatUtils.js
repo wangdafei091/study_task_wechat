@@ -32,6 +32,28 @@ function formatPoints(points, useThousandSeparator = false) {
   return numPoints.toString();
 }
 
+/**
+ * 将任务时间统一格式化为 HH:mm 展示，避免秒级噪音进入 UI。
+ * @param {String} time 时间字符串，兼容 HH:mm / HH:mm:ss
+ * @returns {String} 格式化后的时间字符串
+ */
+function formatDisplayTime(time) {
+  const value = String(time || '').trim();
+  if (!value) {
+    return '';
+  }
+
+  const matched = value.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+  if (!matched) {
+    return value;
+  }
+
+  const hours = matched[1].padStart(2, '0');
+  const minutes = matched[2];
+  return `${hours}:${minutes}`;
+}
+
 module.exports = {
-  formatPoints
-}; 
+  formatPoints,
+  formatDisplayTime
+};

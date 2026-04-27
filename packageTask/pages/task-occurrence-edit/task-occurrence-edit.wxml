@@ -1,0 +1,280 @@
+<template name="occurrenceCard">
+  <view
+    id="occ-card-{{item.id}}"
+    class="occurrence-card occurrence-card--{{item.statusTone}} {{item.isAnchorTarget ? 'anchored' : ''}}"
+  >
+    <view class="occurrence-card__content">
+      <view class="occurrence-card__title-row">
+        <text class="occurrence-card__title">{{item.title}}</text>
+        <view class="card-action-icon occurrence-card__more-trigger" wx:if="{{item.canOpenMore}}" data-id="{{item.id}}" bindtap="onMoreTap">
+          <text class="occurrence-card__more-icon">•••</text>
+        </view>
+      </view>
+      <view class="occurrence-card__meta-row">
+        <text class="type-chip type-chip--{{item.typeTone}}">{{item.typeLabel}}</text>
+        <view class="occurrence-card__range-wrap">
+          <text class="occurrence-card__range">{{item.rangeText}}</text>
+        </view>
+      </view>
+      <view class="occurrence-card__reward-row" wx:if="{{item.statusKey === 'active' && item.rewardAccentText}}">
+        <text class="occurrence-card__reward-accent">{{item.rewardAccentText}}</text>
+        <text class="occurrence-card__reward-meta">{{item.rewardExpiryMetaText}}</text>
+      </view>
+    </view>
+  </view>
+</template>
+
+<view class="occurrence-page">
+  <view class="custom-nav" style="padding-top: {{statusBarHeight}}px; height: {{navBarHeight}}px;">
+    <view class="custom-nav__bar" style="height: {{navContentHeight}}px;">
+      <view class="custom-nav__back" bindtap="onNavBack">
+        <text class="custom-nav__back-icon">‹</text>
+        <text class="custom-nav__back-text">{{editorState.visible ? '关闭' : '返回'}}</text>
+      </view>
+      <view class="custom-nav__copy">
+        <text class="custom-nav__title">{{editorState.visible ? (editorState.mode === 'edit' ? '编辑表现项' : '新建表现项') : '表现项管理'}}</text>
+      </view>
+      <view class="custom-nav__spacer"></view>
+    </view>
+  </view>
+
+  <scroll-view
+    class="page-scroll"
+    scroll-y
+    enable-flex
+    scroll-with-animation
+    scroll-into-view="{{scrollAnchorId}}"
+  >
+    <view class="page-content" style="padding-top: {{navBarHeight}}px; padding-bottom: {{safeAreaBottom + 32}}px;">
+      <view class="manage-header">
+        <view class="manage-header__copy">
+          <text class="manage-header__label">当前孩子</text>
+          <text class="manage-header__title">{{targetUserName || '请选择孩子'}}</text>
+          <view class="summary-strip summary-strip--embedded" wx:if="{{statsBar.visible}}">
+            <view class="summary-pill" wx:for="{{statsBar.items}}" wx:key="key">
+              <text class="summary-pill__label">{{item.label}}</text>
+              <text class="summary-pill__value">{{item.count}}</text>
+            </view>
+          </view>
+        </view>
+        <view class="manage-header__actions">
+          <view class="manage-header__cta {{!targetUserId ? 'disabled' : ''}}" bindtap="onCreateTap">新建表现项</view>
+        </view>
+      </view>
+
+      <view class="child-switcher" wx:if="{{childOptions.length > 1}}">
+        <block wx:for="{{childOptions}}" wx:key="userId">
+          <view
+            class="child-pill {{item.userId === targetUserId ? 'active' : ''}}"
+            data-user-id="{{item.userId}}"
+            bindtap="onChildTap"
+          >
+            {{item.label}}
+          </view>
+        </block>
+      </view>
+
+      <view class="state-card" wx:if="{{!targetUserId}}">
+        <text class="state-card__title">先选一个孩子</text>
+        <text class="state-card__note">表现项是按孩子单独维护的，选中后就能查看和管理。</text>
+      </view>
+
+      <view class="state-card" wx:elif="{{loading}}">
+        <text class="state-card__title">正在加载表现项</text>
+        <text class="state-card__note">请稍候，马上就好。</text>
+      </view>
+
+      <block wx:else>
+        <view class="section-shell section-shell--active" wx:if="{{activeSection}}">
+          <view class="section-shell__header">
+            <view class="section-shell__copy">
+              <text class="section-shell__title">{{activeSection.title}}</text>
+            </view>
+            <text class="section-shell__count" wx:if="{{activeSection.count > 0 && !activeSection.hasToggle}}">{{activeSection.count}}项</text>
+            <text
+              class="section-shell__toggle"
+              wx:if="{{activeSection.hasToggle}}"
+              data-key="active"
+              bindtap="onToggleSection"
+            >
+              {{activeSection.toggleText}}
+            </text>
+          </view>
+
+          <view class="state-card state-card--empty" wx:if="{{activeSection.count === 0}}">
+            <text class="state-card__title">{{activeSection.emptyText}}</text>
+            <text class="state-card__note">{{activeSection.emptyNote}}</text>
+          </view>
+
+          <block wx:else>
+            <block wx:for="{{activeSection.visibleItems}}" wx:key="id">
+              <template is="occurrenceCard" data="{{item: item}}" />
+            </block>
+          </block>
+        </view>
+
+        <view class="secondary-panel {{secondaryPanel.upcomingSection && secondaryPanel.historySection ? '' : 'secondary-panel--single'}}" wx:if="{{secondaryPanel && secondaryPanel.visible}}">
+          <view class="secondary-panel__header">
+            <view class="section-shell__copy">
+              <text class="secondary-panel__title">{{secondaryPanel.title}}</text>
+            </view>
+            <text class="section-shell__count" wx:if="{{secondaryPanel.count > 0}}">{{secondaryPanel.count}}项</text>
+          </view>
+
+          <block wx:if="{{secondaryPanel.upcomingSection}}">
+            <view class="secondary-entry">
+              <view class="secondary-entry__summary" data-key="upcoming" bindtap="onToggleSection">
+                <text class="secondary-entry__title">{{secondaryPanel.upcomingSection.title}}</text>
+                <view class="secondary-entry__tail">
+                  <text class="secondary-entry__icon">{{secondaryPanel.upcomingSection.expanded ? '⌃' : '⌄'}}</text>
+                </view>
+              </view>
+
+              <view class="secondary-entry__list" wx:if="{{secondaryPanel.upcomingSection.expanded}}">
+                <block wx:for="{{secondaryPanel.upcomingSection.visibleItems}}" wx:key="id">
+                  <template is="occurrenceCard" data="{{item: item}}" />
+                </block>
+              </view>
+            </view>
+          </block>
+
+          <block wx:if="{{secondaryPanel.historySection}}">
+            <view class="secondary-entry">
+              <view class="secondary-entry__summary" data-key="history" bindtap="onToggleSection">
+                <text class="secondary-entry__title">{{secondaryPanel.historySection.title}}</text>
+                <view class="secondary-entry__tail">
+                  <text class="secondary-entry__icon">{{secondaryPanel.historySection.expanded ? '⌃' : '⌄'}}</text>
+                </view>
+              </view>
+
+              <view class="secondary-entry__list" wx:if="{{secondaryPanel.historySection.expanded}}">
+                <block wx:for="{{secondaryPanel.historySection.visibleItems}}" wx:key="id">
+                  <template is="occurrenceCard" data="{{item: item}}" />
+                </block>
+              </view>
+            </view>
+          </block>
+        </view>
+      </block>
+    </view>
+  </scroll-view>
+
+  <view class="editor-layer" wx:if="{{editorState.visible}}">
+    <view class="editor-panel" style="padding-top: {{navBarHeight}}px; padding-bottom: {{safeAreaBottom + 24}}px;">
+      <scroll-view class="editor-scroll" scroll-y enable-flex>
+        <view class="editor-content">
+          <view class="editor-card">
+            <view class="form-item">
+              <text class="input-label">名称</text>
+              <input
+                class="form-input"
+                placeholder="例如：听写全对"
+                value="{{draft.title}}"
+                bindinput="onTitleInput"
+                maxlength="20"
+              />
+            </view>
+
+            <view class="form-grid">
+              <view class="form-item form-item--half">
+                <text class="input-label">类别</text>
+                <view class="type-row">
+                  <view class="type-pill {{draft.type === 'study' ? 'active study' : ''}}" data-type="study" bindtap="onTypeTap">学习</view>
+                  <view class="type-pill {{draft.type === 'habit' ? 'active habit' : ''}}" data-type="habit" bindtap="onTypeTap">习惯</view>
+                  <view class="type-pill {{draft.type === 'interest' ? 'active interest' : ''}}" data-type="interest" bindtap="onTypeTap">兴趣</view>
+                </view>
+              </view>
+
+              <view class="form-item form-item--half">
+                <text class="input-label">星星</text>
+                <view class="points-stepper">
+                  <view class="stepper-btn" data-action="minus" bindtap="onPointsStepTap">-</view>
+                  <input class="stepper-input" type="number" value="{{draft.points}}" bindinput="onPointsInput" />
+                  <view class="stepper-btn" data-action="plus" bindtap="onPointsStepTap">+</view>
+                </view>
+              </view>
+            </view>
+
+            <view class="form-item">
+              <view class="input-item-header" bindtap="togglePanel" data-panel="pointsExpiryPanel">
+                <text class="input-label">星星有效期</text>
+                <text class="points-expiry-value">{{pointsExpiryText}}</text>
+                <text class="arrow-icon">↓</text>
+              </view>
+            </view>
+
+            <view class="form-item">
+              <text class="input-label">适用时间</text>
+              <view class="date-panel">
+                <view class="date-field-group">
+                  <view class="date-field">
+                    <text class="date-field__label">开始日期</text>
+                    <picker mode="date" value="{{draft.startDate}}" bindchange="onStartDateChange">
+                      <view class="picker-value date-field__picker">{{draft.startDate}}</view>
+                    </picker>
+                  </view>
+                  <view class="date-field {{draft.hasNoEndDate ? 'date-field--disabled' : ''}}">
+                    <text class="date-field__label">结束日期</text>
+                    <picker
+                      mode="date"
+                      value="{{draft.endDate || draft.startDate}}"
+                      bindchange="onEndDateChange"
+                      disabled="{{draft.hasNoEndDate}}"
+                    >
+                      <view class="picker-value date-field__picker {{draft.hasNoEndDate ? 'date-field__picker--disabled' : ''}}">{{draft.hasNoEndDate ? '未设置' : (draft.endDate || '选择结束日期')}}</view>
+                    </picker>
+                  </view>
+                </view>
+                <view class="switch-row">
+                  <view class="switch-row__copy">
+                    <text class="switch-row__label">长期有效</text>
+                  </view>
+                  <view class="switch-row__control">
+                    <switch checked="{{draft.hasNoEndDate}}" bindchange="onToggleNoEndDate" color="#1f6fff" />
+                  </view>
+                </view>
+              </view>
+            </view>
+
+            <view class="editor-footer">
+              <view class="editor-actions">
+                <view
+                  class="editor-action editor-action--secondary"
+                  bindtap="onCloseEditorTap"
+                >
+                  取消
+                </view>
+                <view
+                  class="editor-action editor-action--primary {{saving ? 'editor-action--disabled' : ''}}"
+                  bindtap="onSaveTap"
+                >
+                  {{saving ? '保存中...' : (editorState.mode === 'edit' ? '保存修改' : '创建表现项')}}
+                </view>
+              </view>
+              <text class="editor-tips">如需停用或删除，可回到列表后继续处理。</text>
+            </view>
+          </view>
+        </view>
+      </scroll-view>
+    </view>
+  </view>
+
+  <view class="editor-picker-mask {{pointsExpiryPanel ? 'visible' : ''}}" bindtap="closeAllPanels" catchtouchmove="preventTouchMove"></view>
+
+  <view class="editor-picker-container {{pointsExpiryPanel ? 'expanded' : ''}}" catchtouchmove="preventTouchMove">
+    <view class="editor-picker-panel" catchtap="preventClose">
+      <view class="editor-picker-header">
+        <view class="editor-picker-header__placeholder"></view>
+        <text class="editor-picker-title">设置星星有效期</text>
+        <view class="editor-picker-close" bindtap="closeAllPanels">完成</view>
+      </view>
+
+      <view class="editor-option-list">
+        <view class="editor-option-item {{draft.pointsExpiry === 'permanent' ? 'selected' : ''}}" bindtap="selectPointsExpiry" data-expiry="permanent">永久</view>
+        <view class="editor-option-item {{draft.pointsExpiry === 'week' ? 'selected' : ''}}" bindtap="selectPointsExpiry" data-expiry="week">本周结束</view>
+        <view class="editor-option-item {{draft.pointsExpiry === 'month' ? 'selected' : ''}}" bindtap="selectPointsExpiry" data-expiry="month">本月结束</view>
+        <view class="editor-option-item {{draft.pointsExpiry === 'quarter' ? 'selected' : ''}}" bindtap="selectPointsExpiry" data-expiry="quarter">本季度结束</view>
+      </view>
+    </view>
+  </view>
+</view>

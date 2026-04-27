@@ -1,0 +1,366 @@
+<!--components/task-heatmap/task-heatmap.wxml-->
+<!--
+  任务热力图组件 (task-heatmap)
+  
+  用途: 展示任务分布热力图和任务详情，提供任务管理功能
+  使用场景: 任务编辑页面
+  注意: 组件内部实现了自己的任务项展示和操作，不依赖taskItem组件
+  
+  功能:
+  - 热力图显示任务分布密度
+  - 日期点击显示当日任务列表
+  - 支持任务编辑、删除操作
+  - 包含循环任务特殊处理逻辑
+  - 学习压力指数计算和展示
+  
+  属性:
+  - tasks: 任务数组
+  - currentYear: 当前年份
+  - currentMonth: 当前月份(0-11)
+  
+  事件:
+  - monthChange: 月份变更
+  - daySelect: 日期选择
+  - refreshTasks: 请求刷新任务数据
+  - editTask: 编辑任务
+-->
+<view class="task-heatmap">
+  <!-- 移除独立月份选择器，将在父组件中集成到标题 -->
+  
+  <!-- 移除浮层提示代码 -->
+  
+  <view class="calendar">
+    <view class="weekdays">
+      <block wx:for="{{weekDays}}" wx:key="index">
+        <view class="weekday">{{item}}</view>
+      </block>
+    </view>
+    
+    <view class="days">
+      <block wx:for="{{days}}" wx:key="date">
+        <view 
+          class="day {{item.isCurrentMonth ? 'current-month' : 'other-month'}} level-{{item.level}} {{item.isToday ? 'today' : ''}} {{item.date === selectedDate ? 'selected' : ''}} {{item.visualState.hasTasks ? 'has-tasks' : ''}} {{item.visualState.hasOverflowMarker ? 'has-overflow' : ''}}"
+          data-day="{{item}}" 
+          data-date="{{item.date}}"
+          data-index="{{index}}"
+          bindtap="{{item.visualState.isInteractive ? 'onDayTap' : ''}}"
+          id="day-{{index}}">
+          <view class="day-content">
+            <text class="day-number">{{item.day}}</text>
+            <view wx:if="{{item.taskMarkerMode === 'dots' && item.taskDots && item.taskDots.length > 0}}" class="task-dots-row">
+              <block wx:for="{{item.taskDots}}" wx:key="index" wx:for-item="dot">
+                <view class="task-dot" style="background-color: {{dot.color}}"></view>
+              </block>
+            </view>
+            <view wx:elif="{{item.taskMarkerMode === 'count'}}" class="task-count-badge">
+              <text class="task-count-badge-text">{{item.taskCountLabel}}</text>
+            </view>
+          </view>
+        </view>
+      </block>
+    </view>
+  </view>
+  
+  <!-- 当前选中日期的任务列表 -->
+  <view class="day-tasks-container {{showDayTasks ? 'expanded' : ''}}">
+    <view class="day-tasks-header">
+      <view class="day-date">
+        <view class="date-row">
+          <text class="date-text">{{selectedDateText}}</text>
+          <text class="task-count-text">{{taskCountText}}</text>
+          <view class="pressure-tag pressure-level-{{selectedDayPressure.levelNum}}" wx:if="{{selectedDayPressure.showTag}}">
+            <text>{{selectedDayPressure.levelText}}</text>
+          </view>
+        </view>
+        <view class="summary-row" wx:if="{{taskSummaryText}}">
+          <text class="task-summary-text">{{taskSummaryText}}</text>
+        </view>
+      </view>
+      <view class="close-btn-circle" bindtap="closeDayTasks">×</view>
+    </view>
+    <scroll-view class="tasks-list" scroll-y="true" scroll-with-animation="true" scroll-top="{{taskListScrollTop}}" enhanced="true" scroll-anchoring="true" show-scrollbar="true" id="tasks-scroll-view">
+      <block wx:if="{{dayTasks.length > 0}}">
+        <view 
+          wx:for="{{dayTasks}}" 
+          wx:key="id" 
+          class="task-item-wrap {{item.status === 1 || item.status === 'completed' ? 'completed' : ''}} {{item.type}}-task {{item.isRequired ? 'required-task' : ''}}"
+          id="task-{{item.id}}">
+          <!-- 任务内容区 -->
+          <view class="task-item">
+            <!-- 第一行：标题和操作按钮 -->
+            <view class="task-item-header">
+              <view class="task-title-area">
+                <view class="task-type-dot {{item.type}}-dot"></view>
+                <text class="task-title">{{item.title}}</text>
+                <!-- 已完成状态标记 -->
+                <text wx:if="{{item.status === 1 || item.status === 'completed'}}" class="task-complete-mark">✓</text>
+                <!-- 逾期状态标记 -->
+                <text wx:if="{{item.status === 'overdue'}}" class="task-overdue-mark">[逾期]</text>
+                <!-- 循环任务标记 -->
+                <text wx:if="{{item.repeat && item.repeat.type !== 'none' && item.repeat.startDate !== item.repeat.endDate}}" class="task-repeat-mark">↻</text>
+              </view>
+              
+              <!-- 右侧区域：必做标签或积分和操作 -->
+              <view class="task-header-right">
+                <!-- 标签区域：必做标签和任务类型 -->
+                <view class="task-tags-container">
+                  <view class="task-tag" style="background: linear-gradient(135deg, #FF8A80, #FFAB91); color: white; border: none; box-shadow: 0 1rpx 6rpx rgba(255, 138, 128, 0.15);" wx:if="{{item.isRequired}}">必做</view>
+                  <view class="task-tag" style="background: {{item.type == 'habit' ? 'linear-gradient(135deg, #64B5F6, #90CAF9)' : item.type == 'interest' ? 'linear-gradient(135deg, #FFB74D, #FFCC80)' : 'linear-gradient(135deg, #81C784, #A5D6A7)'}}; color: white; border: none; box-shadow: 0 1rpx 6rpx {{item.type == 'habit' ? 'rgba(100, 181, 246, 0.15)' : item.type == 'interest' ? 'rgba(255, 183, 77, 0.15)' : 'rgba(129, 199, 132, 0.15)'}};">
+                    <text wx:if="{{item.type == 'habit'}}">习惯</text>
+                    <text wx:elif="{{item.type == 'interest'}}">兴趣</text>
+                    <text wx:elif="{{item.type == 'study'}}">学习</text>
+                  </view>
+                </view>
+                
+                <!-- 星星数量 -->
+                <view class="task-points-mini {{item.isRequired ? 'required-points' : ''}}">
+                  <text>{{item.points || '0'}}⭐</text>
+                </view>
+                
+                <view class="more-actions" bindtap="showTaskActions" data-id="{{item.id}}" data-index="{{index}}">···</view>
+              </view>
+            </view>
+            
+            <!-- 第二行：任务描述 -->
+            <view class="task-desc-row" wx:if="{{item.description}}">
+              <text class="task-description">{{item.description}}</text>
+            </view>
+            
+            <!-- 第三行：时间和积分信息 -->
+            <view class="task-info-row">
+              <!-- 组合时间和积分有效期信息 -->
+              <view class="task-combined-info">
+                <!-- 时间信息 -->
+                <text class="time-info">
+                  <!-- 重复任务时间信息 -->
+                  <block wx:if="{{item.repeat && item.repeat.type !== 'none' && item.repeat.startDate !== item.repeat.endDate}}">
+                    <text class="clock-icon">🕒</text> {{item.repeatInfo}}
+                  </block>
+                  <!-- 单次任务时间信息 -->
+                  <block wx:else>
+                    <block wx:if="{{item.isAllDay}}">
+                      <text class="clock-icon">🕒</text> {{item.date}} 全天
+                    </block>
+                    <block wx:else>
+                      <text class="clock-icon">🕒</text> {{item.date}} {{item.startTime}}-{{item.endTime}}
+                    </block>
+                  </block>
+                </text>
+                
+                <!-- 分隔符 -->
+                <text class="separator">|</text>
+                
+                <!-- 积分有效期信息 - 非必做任务 -->
+                <block wx:if="{{!item.isRequired}}">
+                  <text class="points-info">
+                    <block wx:if="{{item.status === 1 || item.status === 'completed'}}">
+                      <!-- 星星改造：原"积分有效期"改为"星星有效期" -->
+                      星星有效期：{{item.pointsExpiryDate || (item.pointsExpiry === 'permanent' ? '永久' : '7天后')}}
+                    </block>
+                    <block wx:else>
+                      <!-- 星星改造：原"积分有效期"改为"星星有效期" -->
+                      星星有效期：{{item.pointsExpiryDate || (item.pointsExpiry === 'permanent' ? '永久' : '完成后保留7天')}}
+                    </block>
+                  </text>
+                </block>
+                
+                <!-- 必做任务状态提示 -->
+                <block wx:else>
+                  <text class="points-info">
+                    <!-- 必做任务不显示任何星星相关信息 -->
+                    必做任务
+                  </text>
+                </block>
+              </view>
+            </view>
+            
+            <!-- 编辑范围选择区域（仅循环任务显示） -->
+            <view class="edit-scope-area {{editingTaskId === item.id && item.repeat && item.repeat.type !== 'none' && item.repeat.startDate !== item.repeat.endDate ? 'visible' : ''}}" 
+                  wx:if="{{item.repeat && item.repeat.type !== 'none' && item.repeat.startDate !== item.repeat.endDate}}">
+              <view class="scope-options">
+                <view class="options-row">
+                  <view class="option {{editScope === 'single' ? 'selected' : ''}}" bindtap="selectEditScope" data-scope="single">
+                    <view class="radio-circle {{editScope === 'single' ? 'selected' : ''}}"></view>
+                    <text class="option-text">编辑当天</text>
+                  </view>
+                  <view class="option {{editScope === 'series' ? 'selected' : ''}}" bindtap="selectEditScope" data-scope="series">
+                    <view class="radio-circle {{editScope === 'series' ? 'selected' : ''}}"></view>
+                    <text class="option-text">编辑循环</text>
+                  </view>
+                </view>
+                <!-- 添加循环编辑提示文本 -->
+                <view class="scope-tip" wx:if="{{editScope === 'series'}}">
+                  <text>仅应用于今天({{todayString}})及之后的任务</text>
+                </view>
+              </view>
+            </view>
+            
+            <!-- 编辑确认区域 -->
+            <view class="edit-confirm {{editingTaskId === item.id ? 'visible' : ''}}" id="edit-{{item.id}}" style="z-index: 2;">
+              <!-- 内容区域 -->
+              <view class="edit-content">
+                <!-- 积分调整 - 仅非必做任务显示 -->
+                <view class="edit-field" wx:if="{{!dayTasks[editingTaskIndex].isRequired}}">
+                  <text class="field-label">积分:</text>
+                  <view class="points-stepper">
+                    <view class="stepper-btn {{pointsReadOnly ? 'disabled' : ''}}" bindtap="adjustEditPoints" data-action="reduce">-</view>
+                    <input class="stepper-input {{pointsReadOnly ? 'disabled' : ''}}" type="number" value="{{editPoints}}" bindinput="onEditPointsInput" disabled="{{pointsReadOnly}}" />
+                    <view class="stepper-btn {{pointsReadOnly ? 'disabled' : ''}}" bindtap="adjustEditPoints" data-action="add">+</view>
+                  </view>
+                  <text class="readonly-tip" wx:if="{{pointsReadOnly}}">已完成任务积分不可修改</text>
+                </view>
+                
+                <!-- 描述输入 -->
+                <view class="edit-field">
+                  <text class="field-label">描述:</text>
+                  <view class="textarea-wrapper heatmap">
+                    <textarea class="task-description-textarea heatmap" 
+                              value="{{editDescription}}" 
+                              bindinput="inputDescription" 
+                              maxlength="50"
+                              show-confirm-bar="{{false}}"
+                              auto-height="{{false}}"
+                              fixed="{{true}}" />
+                    <text class="char-counter">{{editDescription.length}}/50</text>
+                  </view>
+                </view>
+              </view>
+              
+              <!-- 按钮区域 -->
+              <view class="edit-buttons">
+                <view class="btn-cancel" bindtap="cancelEdit">取消</view>
+                <view class="btn-confirm" bindtap="saveEdit">确认</view>
+              </view>
+            </view>
+            
+            <!-- 删除确认区域 -->
+            <view class="delete-confirm {{showDeleteConfirm && item.id === activeTaskForDelete.id ? 'visible' : ''}}">
+              <view class="delete-options">
+                <!-- 循环任务显示选项 -->
+                <block wx:if="{{item.repeat && item.repeat.type !== 'none' && item.repeat.startDate !== item.repeat.endDate}}">
+                  <view class="options-row">
+                    <view class="option {{deleteScope === 'single' ? 'selected' : ''}}" bindtap="selectDeleteScope" data-scope="single">
+                      <view class="radio-circle {{deleteScope === 'single' ? 'selected' : ''}}"></view>
+                      <text class="option-text">删除当天</text>
+                    </view>
+                    <view class="option {{deleteScope === 'series' ? 'selected' : ''}}" bindtap="selectDeleteScope" data-scope="series">
+                      <view class="radio-circle {{deleteScope === 'series' ? 'selected' : ''}}"></view>
+                      <text class="option-text">删除循环</text>
+                    </view>
+                  </view>
+                </block>
+                <!-- 一次性任务显示单个选项 -->
+                <block wx:else>
+                  <view class="option selected">
+                    <view class="radio-circle selected"></view>
+                    <text class="option-text">删除此任务</text>
+                  </view>
+                </block>
+              </view>
+              <view class="delete-actions">
+                <view class="btn-cancel" bindtap="cancelDelete">取消</view>
+                <view class="btn-confirm {{item.repeat && item.repeat.type !== 'none' && item.repeat.startDate !== item.repeat.endDate && !deleteScope ? 'disabled' : ''}}" bindtap="confirmDelete">确认</view>
+              </view>
+              <!-- 添加循环删除提示文本 - 移到外部 -->
+              <view class="scope-tip" wx:if="{{deleteScope === 'series' && item.repeat && item.repeat.type !== 'none' && item.repeat.startDate !== item.repeat.endDate}}">
+                <text>仅删除今天({{todayString}})及之后的任务</text>
+              </view>
+            </view>
+          </view>
+        </view>
+        
+        <!-- 当日压力过高提示 -->
+        <view class="pressure-warning" wx:if="{{selectedDayPressure.showWarning}}">
+          <text class="warning-icon">⚠️</text>
+          <text class="warning-text">当日学习压力偏高，建议适当调整任务安排</text>
+        </view>
+      </block>
+      <view class="empty-tasks" wx:else>
+        <view class="empty-icon">📝</view>
+        <text>当日暂无任务</text>
+      </view>
+    </scroll-view>
+  </view>
+  
+  <!-- 循环任务范围提示气泡 -->
+  <view class="scope-info-bubble {{showScopeInfoBubble ? 'visible' : ''}}" style="{{scopeInfoStyle}}">
+    <text class="bubble-text">将修改此循环任务的所有未来实例</text>
+  </view>
+  
+  <!-- 压力指数说明弹窗 -->
+  <view class="pressure-info-modal {{showPressureInfo ? 'visible' : ''}}" catchtap="hidePressureInfo">
+    <view class="pressure-info-content" catchtap="preventClose">
+      <view class="pressure-info-header">
+        <text class="pressure-info-title">学习压力指数说明</text>
+        <view class="pressure-info-close" bindtap="hidePressureInfo">×</view>
+      </view>
+      <view class="pressure-info-body">
+        <view class="formula-section">
+          <text class="formula-title">先看颜色</text>
+          <text class="formula-text">颜色越浅越轻松，颜色越深越忙。</text>
+        </view>
+        <view class="factors-section">
+          <text class="factors-title">怎么算</text>
+          <view class="factor-item">
+            <text class="factor-name">习惯任务:</text>
+            <text class="factor-desc">每个习惯任务2点压力</text>
+          </view>
+          <view class="factor-item">
+            <text class="factor-name">全天任务:</text>
+            <text class="factor-desc">每个全天任务2点压力</text>
+          </view>
+          <view class="factor-item">
+            <text class="factor-name">时长影响:</text>
+            <text class="factor-desc">每10分钟增加1点压力</text>
+          </view>
+        </view>
+        
+        <!-- 计算示例区域 -->
+        <view class="example-section">
+          <text class="example-title">举个例子</text>
+          <view class="example-content">
+            <view class="example-task">
+              <text class="example-text">这一天有:</text>
+              <view class="example-item">1个习惯任务: 1×2=2点</view>
+              <view class="example-item">1个全天任务: 1×2=2点</view>
+              <view class="example-item">学习任务60分钟: 60÷10=6点</view>
+            </view>
+            <view class="example-calc">
+              <text class="example-text">合起来:</text>
+              <view class="example-item">习惯/全天任务压力: 4点</view>
+              <view class="example-item">时长压力: 6点</view>
+            </view>
+            <view class="example-result">
+              <text class="example-item">总共 10 点，属于轻松</text>
+            </view>
+          </view>
+        </view>
+        
+        <view class="levels-section">
+          <text class="levels-title">分数对应</text>
+          <view class="level-items">
+            <view class="level-item level-1">轻松<text class="level-range">0-15分</text></view>
+            <view class="level-item level-2">适中<text class="level-range">16-30分</text></view>
+            <view class="level-item level-3">繁忙<text class="level-range">31-45分</text></view>
+            <view class="level-item level-4">紧张<text class="level-range">46分以上</text></view>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+  
+  <!-- 卡片式操作菜单 -->
+  <view class="action-menu-container" wx:if="{{showActionMenu}}" catchtouchmove="preventTouchMove" catchtap="hideActionMenu">
+    <view class="action-menu" style="{{actionMenuStyle}}" catchtap="preventBubble">
+      <view class="action-menu-item edit" catchtap="handleEditTask" data-id="{{activeTaskId}}">
+        <view class="action-icon">✏️</view>
+        <view class="action-text">编辑</view>
+      </view>
+      <!-- 删除选项：只在非已完成且非历史任务时显示 -->
+      <view class="action-menu-item delete" catchtap="handleDeleteTask" data-id="{{activeTaskId}}" wx:if="{{!(dayTasks[activeTaskIndex].status === 'completed' || dayTasks[activeTaskIndex].status === 1 || dayTasks[activeTaskIndex].date < todayString)}}">
+        <view class="action-icon">🗑️</view>
+        <view class="action-text">删除</view>
+      </view>
+    </view>
+  </view>
+</view> 

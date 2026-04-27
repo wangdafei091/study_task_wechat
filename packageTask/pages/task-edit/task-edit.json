@@ -1,0 +1,8 @@
+{
+  "navigationBarTitleText": "任务管理",
+  "usingComponents": {
+    "card": "/components/card/card",
+    "task-heatmap": "/packageTask/components/task-heatmap/task-heatmap",
+    "date-picker": "/components/date-picker/date-picker"
+  }
+}

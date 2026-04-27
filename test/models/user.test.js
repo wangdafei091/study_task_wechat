@@ -4,7 +4,7 @@
  * 测试 User 领域模型的数据结构和业务方法
  */
 
-const { User, UserRole, UserStatus } = require('../../models/user');
+const { SystemAccessLevel, User, UserRole, UserStatus } = require('../../models/user');
 
 describe('User 领域模型', () => {
 
@@ -17,6 +17,7 @@ describe('User 领域模型', () => {
       expect(user.role).toBe(UserRole.PARENT);
       expect(user.avatar).toBe('');
       expect(user.status).toBe(UserStatus.ACTIVE);
+      expect(user.systemAccessLevel).toBe(SystemAccessLevel.NORMAL);
       expect(user.createTime).toBeGreaterThan(0);
       expect(user.modifyTime).toBeGreaterThan(0);
     });
@@ -177,8 +178,14 @@ describe('User 领域模型', () => {
       const pages = user.getAccessiblePages();
       expect(pages).toContain('pages/index/index');
       expect(pages).toContain('pages/rewards/rewards');
-      expect(pages).toContain('pages/task-edit/task-edit');
+      expect(pages).toContain('packageChart/pages/analysis/analysis');
+      expect(pages).toContain('packageTask/pages/task-edit/task-edit');
+      expect(pages).toContain('packageTask/pages/task-occurrence-edit/task-occurrence-edit');
+      expect(pages).toContain('packageChart/pages/task-record/task-record');
       expect(pages).toContain('pages/reward-manage/reward-manage');
+      expect(pages).toContain('packageManage/pages/invite-center/invite-center');
+      expect(pages).toContain('packageManage/pages/about/about');
+      expect(pages).not.toContain('packageManage/pages/system-admin/system-admin');
       expect(pages.length).toBeGreaterThan(0);
     });
 
@@ -194,7 +201,9 @@ describe('User 领域模型', () => {
       expect(pages).toContain('pages/my-exchanges/my-exchanges');
       expect(pages).toContain('pages/message/message');
       expect(pages).toContain('packageChart/pages/analysis/analysis');
-      expect(pages).not.toContain('pages/task-edit/task-edit');
+      expect(pages).toContain('packageChart/pages/task-record/task-record');
+      expect(pages).toContain('packageManage/pages/about/about');
+      expect(pages).not.toContain('packageTask/pages/task-edit/task-edit');
       expect(pages).not.toContain('pages/reward-manage/reward-manage');
     });
 
@@ -205,7 +214,7 @@ describe('User 领域模型', () => {
       const parentPages = parentUser.getAccessiblePages();
       const childPages = childUser.getAccessiblePages();
 
-      const commonPages = ['pages/index/index', 'pages/rewards/rewards'];
+      const commonPages = ['pages/index/index', 'pages/rewards/rewards', 'packageChart/pages/analysis/analysis'];
       commonPages.forEach(page => {
         expect(parentPages).toContain(page);
         expect(childPages).toContain(page);
@@ -216,12 +225,12 @@ describe('User 领域模型', () => {
   describe('hasPageAccess', () => {
     it('家长应该有权访问任务编辑页', () => {
       const user = new User({ role: UserRole.PARENT });
-      expect(user.hasPageAccess('pages/task-edit/task-edit')).toBe(true);
+      expect(user.hasPageAccess('packageTask/pages/task-edit/task-edit')).toBe(true);
     });
 
     it('孩子应该无权访问任务编辑页', () => {
       const user = new User({ role: UserRole.CHILD });
-      expect(user.hasPageAccess('pages/task-edit/task-edit')).toBe(false);
+      expect(user.hasPageAccess('packageTask/pages/task-edit/task-edit')).toBe(false);
     });
 
     it('家长和孩子都应该有权访问首页', () => {
@@ -261,6 +270,12 @@ describe('User 领域模型', () => {
       const user = new User({ status: UserStatus.ACTIVE });
       user.update({ status: UserStatus.INACTIVE });
       expect(user.status).toBe(UserStatus.INACTIVE);
+    });
+
+    it('应该更新systemAccessLevel', () => {
+      const user = new User({ systemAccessLevel: SystemAccessLevel.NORMAL });
+      user.update({ systemAccessLevel: SystemAccessLevel.READONLY });
+      expect(user.systemAccessLevel).toBe(SystemAccessLevel.READONLY);
     });
 
     it('应该更新多个字段', () => {
@@ -447,6 +462,33 @@ describe('User 领域模型', () => {
       expect(UserStatus.INACTIVE).toBe('inactive');
       expect(Object.values(UserStatus)).toContain('active');
       expect(Object.values(UserStatus)).toContain('inactive');
+    });
+  });
+
+  describe('system access helpers', () => {
+    it('只读用户应返回 true', () => {
+      const user = new User({ systemAccessLevel: SystemAccessLevel.READONLY });
+      expect(user.isSystemReadonly()).toBe(true);
+      expect(user.isSystemBlocked()).toBe(false);
+    });
+
+    it('禁入用户应返回 true', () => {
+      const user = new User({ systemAccessLevel: SystemAccessLevel.BLOCKED });
+      expect(user.isSystemBlocked()).toBe(true);
+      expect(user.isSystemReadonly()).toBe(false);
+    });
+  });
+
+  describe('system admin pages', () => {
+    it('系统管理员应可访问系统管理页与治理页', () => {
+      const user = new User({
+        role: UserRole.PARENT,
+        isSystemAdmin: true
+      });
+
+      const pages = user.getAccessiblePages();
+      expect(pages).toContain('packageManage/pages/system-admin/system-admin');
+      expect(pages).toContain('packageManage/pages/system-user-governance/system-user-governance');
     });
   });
 });

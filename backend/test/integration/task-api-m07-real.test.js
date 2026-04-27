@@ -39,7 +39,8 @@ function generateToken(user) {
       userId: user.user_id,
       openid: user.openid,
       role: user.role,
-      familyId: user.family_id
+      familyId: user.family_id,
+      familyPermissionRole: user.family_permission_role || null
     },
     secret,
     { expiresIn: '1h' }
@@ -61,7 +62,8 @@ async function setupTestData() {
   await db.query(
     `INSERT INTO users (user_id, openid, nickname, avatar, role, status, family_id, is_virtual, created_by_user_id) VALUES
       ('parent_test_001', 'parent_test_openid', '测试家长', NULL, 'parent', 'active', NULL, 0, NULL),
-      ('parent_test_002', 'parent_test_openid_2', '外部家长', NULL, 'parent', 'active', NULL, 0, NULL)`
+      ('parent_test_002', 'parent_test_openid_2', '外部家长', NULL, 'parent', 'active', NULL, 0, NULL),
+      ('parent_test_003', 'parent_test_openid_3', '查看者家长', NULL, 'parent', 'active', NULL, 0, NULL)`
   );
 
   await db.query(
@@ -74,21 +76,29 @@ async function setupTestData() {
     `UPDATE users SET family_id = CASE
       WHEN user_id = 'parent_test_001' THEN 'family_test_001'
       WHEN user_id = 'parent_test_002' THEN 'family_test_002'
+      WHEN user_id = 'parent_test_003' THEN 'family_test_001'
       ELSE family_id
+    END,
+    family_permission_role = CASE
+      WHEN user_id = 'parent_test_001' THEN 'manager'
+      WHEN user_id = 'parent_test_002' THEN 'manager'
+      WHEN user_id = 'parent_test_003' THEN 'viewer'
+      ELSE family_permission_role
     END
-    WHERE user_id IN ('parent_test_001', 'parent_test_002')`
+    WHERE user_id IN ('parent_test_001', 'parent_test_002', 'parent_test_003')`
   );
 
   await db.query(
     `INSERT INTO users (user_id, openid, nickname, avatar, role, status, family_id, is_virtual, created_by_user_id) VALUES
       ('child_test_001', 'child_test_openid', '测试孩子', NULL, 'child', 'active', 'family_test_001', 0, NULL),
       ('child_test_002', 'child_test_openid_2', '测试孩子2', NULL, 'child', 'active', 'family_test_001', 0, NULL),
+      ('child_test_004', 'child_test_openid_4', '停用孩子', NULL, 'child', 'inactive', 'family_test_001', 0, NULL),
       ('child_test_003', 'child_test_openid_3', '外部孩子', NULL, 'child', 'active', 'family_test_002', 0, NULL)`
   );
 }
 
 describe('M07 真实数据库集成测试', () => {
-  let parentToken, childToken, otherFamilyToken;
+  let parentToken, childToken, otherFamilyToken, viewerToken;
   let testTaskId;
 
   beforeAll(async () => {
@@ -118,6 +128,14 @@ describe('M07 真实数据库集成测试', () => {
       openid: 'child_test_openid_3',
       role: 'child',
       family_id: 'family_test_002'
+    });
+
+    viewerToken = generateToken({
+      user_id: 'parent_test_003',
+      openid: 'parent_test_openid_3',
+      role: 'parent',
+      family_id: 'family_test_001',
+      family_permission_role: 'viewer'
     });
 
     console.log('✅ 测试数据设置完成');
@@ -194,6 +212,16 @@ describe('M07 真实数据库集成测试', () => {
         .send({ title: '测试' });
 
       expect(response.status).toBe(404);
+    });
+
+    it('查看者家长更新任务应该返回 403 FAMILY_MANAGER_REQUIRED', async () => {
+      const response = await request(app)
+        .put(`/api/tasks/${testTaskId}`)
+        .set('Authorization', `Bearer ${viewerToken}`)
+        .send({ title: '查看者非法更新' });
+
+      expect(response.status).toBe(403);
+      expect(response.body.error_code).toBe('FAMILY_MANAGER_REQUIRED');
     });
   });
 
@@ -320,6 +348,7 @@ describe('M07 真实数据库集成测试', () => {
           ('family_task_1', 'child_test_001', '孩子1的任务', 'study', '2026-03-19', 5, 0),
           ('family_task_2', 'child_test_001', '孩子1的任务2', 'study', '2026-03-19', 3, 1),
           ('family_task_3', 'child_test_002', '孩子2的任务', 'habit', '2026-03-19', 2, 0),
+          ('family_task_inactive', 'child_test_004', '停用孩子任务', 'study', '2026-03-19', 1, 0),
           ('family_task_4', 'child_test_003', '外部孩子任务', 'study', '2026-03-19', 4, 0)`
       );
     });
@@ -341,6 +370,7 @@ describe('M07 真实数据库集成测试', () => {
       expect(taskIds).toContain('family_task_1');
       expect(taskIds).toContain('family_task_2');
       expect(taskIds).toContain('family_task_3');
+      expect(taskIds).not.toContain('family_task_inactive');
       expect(taskIds).not.toContain('family_task_4');
     });
 

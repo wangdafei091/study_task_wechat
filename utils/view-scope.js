@@ -1,62 +1,52 @@
+const userContextUtils = require('./user-context');
+
 const MessageVisibilityScope = {
   USER: 'user',
   FAMILY: 'family'
 };
 
 function getUserIdentifier(user) {
-  if (!user) {
-    return null;
-  }
-  return user.id || user.userId || null;
-}
-
-function getCurrentViewUser(loginUser, currentUser) {
-  return currentUser || loginUser || null;
+  return userContextUtils.getUserIdentifier(user);
 }
 
 function isChildView(loginUser, currentUser) {
-  const viewUser = getCurrentViewUser(loginUser, currentUser);
-  return viewUser?.role === 'child';
+  return userContextUtils.createUserContextSnapshot({
+    loginUser,
+    currentUser
+  }).isChildView;
 }
 
-function resolveMessageScopeOptions(loginUser, currentUser) {
-  const familyId = loginUser?.familyId || currentUser?.familyId || null;
-  const currentUserId = getUserIdentifier(currentUser) || getUserIdentifier(loginUser);
-
-  if (isChildView(loginUser, currentUser)) {
-    return {
-      scope: MessageVisibilityScope.USER,
-      userId: currentUserId
-    };
-  }
-
-  if (familyId) {
-    return {
-      scope: MessageVisibilityScope.FAMILY,
-      userId: null
-    };
-  }
+function resolveMessageScopeOptions(loginUser, currentUser, availableUsers = []) {
+  const readContext = userContextUtils.resolveReadContext({
+    loginUser,
+    currentUser,
+    availableUsers
+  });
 
   return {
-    scope: MessageVisibilityScope.USER,
-    userId: currentUserId
+    scope: readContext.scope || MessageVisibilityScope.USER,
+    userId: readContext.scope === MessageVisibilityScope.USER
+      ? readContext.subjectUserId || null
+      : null
   };
 }
 
-function resolveAnalysisOptions(loginUser, currentUser) {
-  if (isChildView(loginUser, currentUser)) {
+function resolveAnalysisOptions(loginUser, currentUser, availableUsers = []) {
+  const readContext = userContextUtils.resolveReadContext({
+    loginUser,
+    currentUser,
+    availableUsers
+  });
+
+  if (readContext.scope === MessageVisibilityScope.FAMILY) {
     return {
-      userId: getUserIdentifier(currentUser) || getUserIdentifier(loginUser)
+      scope: MessageVisibilityScope.FAMILY,
+      childUserIds: readContext.childUserIds || []
     };
   }
 
-  const familyId = loginUser?.familyId || currentUser?.familyId || null;
-  if (familyId) {
-    return { scope: MessageVisibilityScope.FAMILY };
-  }
-
   return {
-    userId: getUserIdentifier(currentUser) || getUserIdentifier(loginUser)
+    userId: readContext.subjectUserId || null
   };
 }
 

@@ -3,10 +3,15 @@ describe('app.js shell behavior', () => {
   let storageInitMock;
   let prepareUserServiceMock;
   let runWxLoginMock;
+  let handleAppShowMock;
   let bootstrapServicesMock;
   let runtimeObserversMock;
   let postLoginBootstrapMock;
   let serviceManagerMock;
+  let hasBlockedSessionFlagMock;
+  let blockedSessionActive;
+  let normalizeInviteCodeMock;
+  let savePendingInviteCodeMock;
 
   beforeEach(() => {
     jest.resetModules();
@@ -14,6 +19,11 @@ describe('app.js shell behavior', () => {
     storageInitMock = jest.fn();
     prepareUserServiceMock = jest.fn().mockResolvedValue();
     runWxLoginMock = jest.fn().mockResolvedValue();
+    handleAppShowMock = jest.fn().mockResolvedValue('handled-show');
+    blockedSessionActive = false;
+    hasBlockedSessionFlagMock = jest.fn(() => blockedSessionActive);
+    normalizeInviteCodeMock = jest.fn((value) => String(value || '').trim().toUpperCase());
+    savePendingInviteCodeMock = jest.fn();
     bootstrapServicesMock = jest.fn().mockResolvedValue(true);
     runtimeObserversMock = {
       install: jest.fn(),
@@ -33,7 +43,6 @@ describe('app.js shell behavior', () => {
     };
     serviceManagerMock = {
       getService: jest.fn(() => 'named-service'),
-      getAnalyticsService: jest.fn(() => 'analytics'),
       getTaskService: jest.fn(() => 'task-service'),
       getStarService: jest.fn(() => 'star-service'),
       getEventBus: jest.fn(() => 'event-bus'),
@@ -51,6 +60,7 @@ describe('app.js shell behavior', () => {
         return null;
       }),
       setStorageSync: jest.fn(),
+      reLaunch: jest.fn(),
       showModal: jest.fn(),
       canIUse: jest.fn(() => true),
       onDeviceOrientationChange: jest.fn(),
@@ -96,6 +106,7 @@ describe('app.js shell behavior', () => {
     jest.doMock('../../utils/app/bootstrap-auth', () => ({
       prepareUserService: prepareUserServiceMock,
       runWxLogin: runWxLoginMock,
+      handleAppShow: handleAppShowMock,
       doCloudLogin: jest.fn().mockResolvedValue('cloud-login'),
       doCloudLogout: jest.fn(() => 'cloud-logout'),
       autoLogin: jest.fn().mockResolvedValue('auto-login'),
@@ -108,6 +119,22 @@ describe('app.js shell behavior', () => {
 
     jest.doMock('../../utils/app/post-login-bootstrap', () => postLoginBootstrapMock);
     jest.doMock('../../utils/app/runtime-observers', () => runtimeObserversMock);
+    jest.doMock('../../utils/app/system-user-access-state', () => ({
+      hasBlockedSessionFlag: hasBlockedSessionFlagMock
+    }));
+    jest.doMock('../../utils/app/app-access-state', () => ({
+      normalizeInviteCode: normalizeInviteCodeMock,
+      savePendingInviteCode: savePendingInviteCodeMock
+    }));
+    jest.doMock('../../utils/runtime-config', () => ({
+      ensureDefaultRuntimeApiConfig: jest.fn(),
+      resolveRuntimeApiConfig: jest.fn(() => ({
+        enableApiRaw: 'true',
+        baseUrlRaw: 'https://api.todoceo.xyz',
+        enabled: true,
+        source: 'test'
+      }))
+    }));
   });
 
   afterEach(() => {
@@ -120,16 +147,52 @@ describe('app.js shell behavior', () => {
     require('../../app.js');
 
     await appConfig.onLaunch.call(appConfig);
-    appConfig.onShow.call(appConfig, {});
+    await appConfig.onShow.call(appConfig, {});
 
     expect(storageInitMock).toHaveBeenCalled();
     expect(prepareUserServiceMock).toHaveBeenCalledWith(appConfig);
     expect(bootstrapServicesMock).toHaveBeenCalledWith(appConfig, { isDevEnv: true });
     expect(runWxLoginMock).toHaveBeenCalledWith(appConfig);
+    expect(handleAppShowMock).toHaveBeenCalledWith(appConfig, {});
     expect(runtimeObserversMock.install).toHaveBeenCalledWith(appConfig);
     expect(global.wx.setStorageSync).toHaveBeenCalledWith('logs', expect.any(Array));
     expect(appConfig.globalData.appReady).toBe(false);
     expect(appConfig.globalData.servicesInitialized).toBe(false);
+  });
+
+  it('waitForSystemAccessRefresh 应等待当前前台刷新完成，并在禁入态返回 false', async () => {
+    let resolveShow;
+    handleAppShowMock.mockImplementation(() => new Promise((resolve) => {
+      resolveShow = resolve;
+    }));
+
+    require('../../app.js');
+
+    const onShowPromise = appConfig.onShow.call(appConfig, {});
+    const waitPromise = appConfig.waitForSystemAccessRefresh();
+    let waitSettled = false;
+    waitPromise.then(() => {
+      waitSettled = true;
+    });
+
+    await Promise.resolve();
+    expect(waitSettled).toBe(false);
+
+    resolveShow(true);
+    await waitPromise;
+    await onShowPromise;
+
+    expect(appConfig.globalData.systemAccessRefreshPromise).toBeNull();
+
+    handleAppShowMock.mockResolvedValue('handled-show');
+    handleAppShowMock.mockClear();
+    await expect(appConfig.waitForSystemAccessRefresh()).resolves.toBe(true);
+    expect(handleAppShowMock).toHaveBeenCalledWith(appConfig, {
+      source: 'page_on_show'
+    });
+
+    blockedSessionActive = true;
+    await expect(appConfig.waitForSystemAccessRefresh()).resolves.toBe(false);
   });
 
   it('壳层委托方法应继续转发到对应模块', async () => {
@@ -137,7 +200,6 @@ describe('app.js shell behavior', () => {
     appConfig.globalData.userService = 'user-service';
 
     expect(appConfig.getService('reward')).toBe('named-service');
-    expect(appConfig.getAnalyticsService()).toBe('analytics');
     expect(appConfig.getTaskService()).toBe('task-service');
     expect(appConfig.getStarService()).toBe('star-service');
     expect(appConfig.getUserService()).toBe('user-service');
@@ -217,5 +279,96 @@ describe('app.js shell behavior', () => {
     appConfig.initLogSystem.call(appConfig);
 
     expect(logger.warn).toHaveBeenCalledWith('App', '加载和解析用户日志配置失败', expect.any(Error));
+  });
+
+  it('邀请码入口应为未登录用户保存待处理邀请码并跳转到分享承接态', () => {
+    require('../../app.js');
+
+    expect(appConfig.extractInviteCode({
+      query: { invite_code: ' u10086 ' }
+    })).toBe('U10086');
+
+    expect(appConfig.captureInviteEntry.call(appConfig, {
+      query: { invite_code: ' u10086 ' },
+      path: 'pages/home/index',
+      scene: 1044
+    }, {
+      source: 'launch'
+    })).toBe(true);
+
+    expect(savePendingInviteCodeMock).toHaveBeenCalledWith('U10086');
+    expect(global.wx.reLaunch).toHaveBeenCalledWith({
+      url: '/pages/access-gate/access-gate?mode=share_pending_login&inviteCode=U10086&source=launch'
+    });
+  });
+
+  it('邀请码入口应在已登录时进入手工确认态，且短时间重复指纹不重复跳转', () => {
+    require('../../app.js');
+    appConfig.globalData.userService = {
+      getLoginUser: jest.fn(() => ({ userId: 'parent_1' }))
+    };
+
+    expect(appConfig.captureInviteEntry.call(appConfig, {
+      query: { inviteCode: 'f123456789' },
+      path: 'pages/home/index',
+      scene: 1044
+    }, {
+      source: 'show'
+    })).toBe(true);
+
+    expect(savePendingInviteCodeMock).not.toHaveBeenCalled();
+    expect(global.wx.reLaunch).toHaveBeenCalledWith({
+      url: '/pages/access-gate/access-gate?mode=manual_input&inviteCode=F123456789&source=show'
+    });
+
+    expect(appConfig.captureInviteEntry.call(appConfig, {
+      query: { inviteCode: 'f123456789' },
+      path: 'pages/home/index',
+      scene: 1044
+    }, {
+      source: 'show'
+    })).toBe(false);
+    expect(global.wx.reLaunch).toHaveBeenCalledTimes(1);
+  });
+
+  it('邀请码入口应支持 referrer extraData，并在缺失邀请码或缺少跳转能力时安全返回 false', () => {
+    require('../../app.js');
+
+    expect(appConfig.extractInviteCode({
+      referrerInfo: {
+        extraData: {
+          inviteCode: ' ref9988 '
+        }
+      }
+    })).toBe('REF9988');
+
+    expect(appConfig.captureInviteEntry.call(appConfig, {}, { source: 'launch' })).toBe(false);
+
+    delete global.wx.reLaunch;
+    expect(appConfig.captureInviteEntry.call(appConfig, {
+      referrerInfo: {
+        extraData: {
+          invite_code: 'ref9988'
+        }
+      }
+    }, {
+      source: 'launch'
+    })).toBe(false);
+  });
+
+  it('onLaunch 在已拦截邀请码冷启动且尚未建立 userService 时应跳过首轮微信登录', async () => {
+    require('../../app.js');
+    appConfig.captureInviteEntry = jest.fn(() => true);
+
+    await appConfig.onLaunch.call(appConfig, {
+      query: { inviteCode: 'skip001' }
+    });
+
+    expect(appConfig.captureInviteEntry).toHaveBeenCalledWith({
+      query: { inviteCode: 'skip001' }
+    }, {
+      source: 'launch'
+    });
+    expect(runWxLoginMock).not.toHaveBeenCalled();
   });
 });

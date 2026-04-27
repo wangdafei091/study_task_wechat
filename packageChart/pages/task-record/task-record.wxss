@@ -1,0 +1,168 @@
+.record-page {
+  min-height: 100vh;
+  padding: 24rpx;
+  box-sizing: border-box;
+  background: #f5f7fb;
+}
+
+.page-header {
+  margin-bottom: 20rpx;
+}
+
+.page-title {
+  display: block;
+  font-size: 40rpx;
+  font-weight: 600;
+  color: #1f2a44;
+}
+
+.page-subtitle {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  color: #7d889c;
+}
+
+.toolbar-card,
+.list-card {
+  margin-bottom: 20rpx;
+  padding: 24rpx;
+  border-radius: 24rpx;
+  background: #ffffff;
+  box-shadow: 0 8rpx 32rpx rgba(41, 60, 99, 0.08);
+}
+
+.toolbar-item + .toolbar-item {
+  margin-top: 20rpx;
+}
+
+.toolbar-label {
+  display: block;
+  margin-bottom: 10rpx;
+  font-size: 24rpx;
+  color: #51607a;
+}
+
+.picker-value {
+  min-height: 84rpx;
+  border-radius: 18rpx;
+  background: #f7f9fc;
+  color: #24324d;
+  padding: 0 24rpx;
+  display: flex;
+  align-items: center;
+}
+
+.child-switcher {
+  display: flex;
+  gap: 12rpx;
+  flex-wrap: wrap;
+}
+
+.child-pill {
+  padding: 12rpx 22rpx;
+  border-radius: 999rpx;
+  background: #f2f5fb;
+  color: #667085;
+  font-size: 24rpx;
+}
+
+.child-pill.active {
+  background: #e8f0ff;
+  color: #2d5bd1;
+}
+
+.record-item {
+  padding: 20rpx 0;
+  border-top: 1rpx solid #edf0f5;
+}
+
+.record-item:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.record-item.selected {
+  background: linear-gradient(180deg, rgba(232, 240, 255, 0.55), rgba(255, 255, 255, 0));
+}
+
+.record-head {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.record-title {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #24324d;
+}
+
+.record-type {
+  padding: 4rpx 12rpx;
+  border-radius: 999rpx;
+  background: #f1f4fa;
+  color: #6a7385;
+  font-size: 20rpx;
+}
+
+.record-meta,
+.record-status {
+  display: block;
+  margin-top: 6rpx;
+  font-size: 22rpx;
+  color: #8a94a6;
+}
+
+.record-status.success {
+  color: #228a58;
+}
+
+.record-status.failure {
+  color: #c76744;
+}
+
+.record-status.pending {
+  color: #9d7a2f;
+}
+
+.record-actions {
+  display: flex;
+  gap: 16rpx;
+  margin-top: 16rpx;
+}
+
+.result-btn {
+  flex: 1;
+  border-radius: 18rpx;
+  font-size: 28rpx;
+}
+
+.result-btn.success {
+  background: #edf7f1;
+  color: #228a58;
+}
+
+.result-btn.failure {
+  background: #fff4ef;
+  color: #c76744;
+}
+
+.result-btn.active.success {
+  background: #228a58;
+  color: #ffffff;
+}
+
+.result-btn.active.failure {
+  background: #d86b4b;
+  color: #ffffff;
+}
+
+.empty-panel {
+  padding: 24rpx 0 8rpx;
+}
+
+.empty-text {
+  font-size: 24rpx;
+  color: #8a94a6;
+}

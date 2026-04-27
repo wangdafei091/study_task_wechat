@@ -1,4 +1,5 @@
 <!--pages/index/index.wxml-->
+<page-meta page-style="{{showMessagePreview ? 'overflow: hidden; height: 100vh;' : ''}}"></page-meta>
 <view class="container">
   <!-- 顶部导航栏 -->
   <view class="header-container">
@@ -26,7 +27,7 @@
   <!-- 进度圆环区域 -->
   <view class="progress-rings-container">
     <!-- 共享标题区域 -->
-    <view class="rings-title">任务完成进度</view>
+    <view class="rings-title">今日进度</view>
     
     <!-- 横向排列的圆环区域 -->
     <view class="rings-row">
@@ -34,8 +35,11 @@
       <view class="ring-item">
         <progress-ring 
           type="habit"
-          percent="{{taskProgress.habit}}"
+          percent="{{todayTaskProgress.habit}}"
+          centerContent="{{todayTaskProgressSummary.habit.centerText}}"
+          showText="{{false}}"
           size="large"
+          enableHover="{{false}}"
           bind:tap="onRingTap">
         </progress-ring>
         <text class="ring-item-label">习惯</text>
@@ -45,8 +49,11 @@
       <view class="ring-item">
         <progress-ring 
           type="study"
-          percent="{{taskProgress.study}}"
+          percent="{{todayTaskProgress.study}}"
+          centerContent="{{todayTaskProgressSummary.study.centerText}}"
+          showText="{{false}}"
           size="large"
+          enableHover="{{false}}"
           bind:tap="onRingTap">
         </progress-ring>
         <text class="ring-item-label">学习</text>
@@ -56,8 +63,11 @@
       <view class="ring-item">
         <progress-ring 
           type="interest"
-          percent="{{taskProgress.interest}}"
+          percent="{{todayTaskProgress.interest}}"
+          centerContent="{{todayTaskProgressSummary.interest.centerText}}"
+          showText="{{false}}"
           size="large"
+          enableHover="{{false}}"
           bind:tap="onRingTap">
         </progress-ring>
         <text class="ring-item-label">兴趣</text>
@@ -140,7 +150,8 @@
           <index-task-item 
             task="{{item}}"
             lastExchangeTime="{{lastExchangeTime}}"
-            readonly="{{false}}"
+            readonly="{{isReadonlyView}}"
+            readonlyReason="{{readonlyReason}}"
             bind:complete="completeTask"
             style="--delay: {{item.animationDelay}}"
           />
@@ -175,7 +186,6 @@
           <view class="reward-icon">{{item.icon}}</view>
           <view class="reward-stars">{{item.points}}⭐</view>
           <view wx:if="{{item.status === 'unlocked'}}" class="indicator-status unlocked">可领</view>
-          <view wx:if="{{item.status === 'claimed'}}" class="indicator-status claimed">已领</view>
           <view wx:if="{{item.status === 'current'}}" class="indicator-arrow"></view>
           <view wx:if="{{item.isExample}}" class="indicator-example">示例</view>
         </view>
@@ -203,7 +213,7 @@
         <text class="reward-hint-secondary">可前往奖池查看</text>
       </block>
       <block wx:elif="{{nextReward.allClaimed}}">
-        <text class="reward-hint-primary status-success">恭喜！您已领取所有奖励，可以继续积累星星</text>
+        <text class="reward-hint-primary status-success">恭喜！当前奖励都已兑换，可以继续积累星星</text>
       </block>
       <block wx:elif="{{nextReward.showSetupTip}}">
         <text class="reward-hint-primary status-normal">{{rewardHintText}}</text>
@@ -238,15 +248,35 @@
   </upcoming-task>
   
   <!-- 今日任务列表 -->
-  <view class="task-list-container">
+  <view class="task-list-container {{showOccurrenceSection ? 'has-occurrence-section' : ''}} {{tasks.length === 0 && showOccurrenceSection ? 'occurrence-only' : ''}}">
     <view class="task-list-header">
-      <view class="task-list-title">{{pageTitle}} ({{tasks.length}}个任务)</view>
+      <view class="task-list-title-group">
+        <view class="task-list-title">{{pageTitle}}</view>
+        <view wx:if="{{pageTitleBadge}}" class="task-list-badge">{{pageTitleBadge}}</view>
+        <view class="task-list-count" wx:if="{{tasks.length > 0 || !showOccurrenceSection}}">{{tasks.length}}个任务</view>
+      </view>
+      <view class="week-switcher">
+        <view
+          wx:if="{{!isViewingToday}}"
+          class="back-today-btn"
+          bindtap="onBackToToday"
+        >回到今天</view>
+        <view
+          class="week-nav-btn {{canGoPrevWeek ? 'enabled' : 'disabled'}}"
+          bindtap="onPrevWeek"
+        >‹</view>
+        <view class="week-label {{weekOffset === 0 ? 'current' : 'history'}}">{{weekLabel}}</view>
+        <view
+          class="week-nav-btn {{canGoNextWeek ? 'enabled' : 'disabled'}}"
+          bindtap="onNextWeek"
+        >›</view>
+      </view>
     </view>
     
     <!-- 日期导航栏 -->
-    <view class="date-navigation">
+    <view class="date-navigation" bindtouchstart="onDateNavTouchStart" bindtouchend="onDateNavTouchEnd">
       <block wx:for="{{dateNavigation}}" wx:key="dateString">
-        <view class="date-button {{currentViewDate === item.dateString ? 'active' : ''}}" 
+        <view class="date-button {{currentViewDate === item.dateString ? 'active' : ''}} {{item.isPast ? 'past' : ''}} {{item.isFuture ? 'future' : ''}}" 
               data-date="{{item.dateString}}"
               bindtap="onDateButtonTap">
           {{item.label}}
@@ -254,35 +284,74 @@
       </block>
     </view>
     
-    <view class="task-list">
+    <view class="task-list {{tasks.length === 0 && showOccurrenceSection ? 'occurrence-only' : ''}}">
       <block wx:for="{{tasks}}" wx:key="id">
         <view class="task-wrapper">
           <index-task-item 
             task="{{item}}"
             lastExchangeTime="{{lastExchangeTime}}"
-            readonly="{{false}}"
+            readonly="{{isReadonlyView || isViewingFuture}}"
+            readonlyReason="{{isViewingFuture ? 'future-date' : readonlyReason}}"
             bind:complete="completeTask"
           />
         </view>
       </block>
       
       <!-- 家长在孩子视角：无任务 -->
-      <view class="empty-task-list" wx:if="{{tasks.length === 0 && canManageMembers && currentUser && currentUser.role === 'child'}}">
+      <view class="empty-task-list" wx:if="{{tasks.length === 0 && !showOccurrenceSection && canManageMembers && currentUser && currentUser.role === 'child'}}">
         暂无任务，请切换到家长视角后点击"+"添加任务
       </view>
       <!-- 家长在自己视角（管理模式）：无任务，可直接创建 -->
-      <view class="empty-task-list" wx:if="{{tasks.length === 0 && canManageMembers && currentUser && currentUser.role === 'parent' && availableUsers.length > 1}}">
+      <view class="empty-task-list" wx:if="{{tasks.length === 0 && !showOccurrenceSection && canManageMembers && currentUser && currentUser.role === 'parent' && availableUsers.length > 1}}">
         点击右下角"+"按钮添加任务
       </view>
       <!-- 家长尚无孩子成员 -->
-      <view class="empty-task-list" wx:if="{{tasks.length === 0 && canManageMembers && availableUsers.length <= 1}}">
+      <view class="empty-task-list" wx:if="{{tasks.length === 0 && !showOccurrenceSection && canManageMembers && availableUsers.length <= 1}}">
         还没有孩子成员，请前往家庭设置添加孩子
       </view>
       <!-- 孩子视角空态 -->
-      <view class="empty-task-list" wx:if="{{tasks.length === 0 && !canManageMembers}}">
+      <view class="empty-task-list" wx:if="{{tasks.length === 0 && !showOccurrenceSection && !canManageMembers}}">
         暂无任务
       </view>
     </view>
+  </view>
+
+  <view class="occurrence-section card" wx:if="{{showOccurrenceSection}}">
+    <view class="occurrence-header">
+      <view>
+        <view class="occurrence-title-row">
+          <text class="occurrence-title">表现记录</text>
+          <text class="occurrence-date-pill">{{occurrenceDateLabel}}</text>
+        </view>
+        <text class="occurrence-helper">{{occurrenceHelperText}}</text>
+      </view>
+    </view>
+
+    <block wx:for="{{occurrenceTasks}}" wx:key="id">
+      <view class="occurrence-item">
+        <view class="occurrence-main">
+          <view class="occurrence-item-header">
+            <text class="occurrence-name">{{item.title}}</text>
+            <text class="occurrence-state-pill {{item.statusTone}}" wx:if="{{!isViewingFuture}}">{{item.statusLabel}}</text>
+          </view>
+          <view class="occurrence-reward-row">
+            <text class="occurrence-reward-accent">{{item.rewardAccentText}}</text>
+            <text class="occurrence-reward-meta">{{item.rewardExpiryMetaText}}</text>
+          </view>
+          <text class="occurrence-result muted" wx:if="{{isViewingFuture && isReadonlyView}}">
+            {{readonlyReason === 'system-readonly' ? '当前账号为只读，未来日期也只能查看' : '当前为查看者，不能记录表现'}}
+          </text>
+          <text class="occurrence-result muted" wx:if="{{isViewingFuture && !isReadonlyView}}">未来日期不能记录表现</text>
+          <text class="occurrence-result muted" wx:if="{{!isViewingFuture && isReadonlyView}}">
+            {{readonlyReason === 'system-readonly' ? '当前账号为只读，仅可查看表现记录' : '当前为查看者，不能记录表现'}}
+          </text>
+        </view>
+        <view class="occurrence-actions" wx:if="{{!isViewingFuture && !isReadonlyView}}">
+          <button class="occurrence-btn success {{item.outcome === 'success' ? 'active' : ''}} {{item.outcome !== 'none' && item.outcome !== 'success' ? 'inactive' : ''}}" data-task-id="{{item.id}}" data-outcome="success" bindtap="recordOccurrenceFromHome">达成</button>
+          <button class="occurrence-btn failure {{item.outcome === 'failure' ? 'active' : ''}} {{item.outcome !== 'none' && item.outcome !== 'failure' ? 'inactive' : ''}}" data-task-id="{{item.id}}" data-outcome="failure" bindtap="recordOccurrenceFromHome">未达成</button>
+        </view>
+      </view>
+    </block>
   </view>
   
   <!-- 底部导航占位 -->
@@ -292,6 +361,7 @@
   <float-menu
     menuItems="{{menuItems}}"
     position="bottom-right"
+    bottomOffset="{{showOccurrenceSection ? 150 : 0}}"
     bind:itemtap="handleMenuItemTap"
     bind:statechange="handleMenuStateChange"
   />
@@ -299,10 +369,11 @@
 
 <!-- 消息中心组件（移到最外层） -->
 <view class="message-overlay" wx:if="{{showMessagePreview}}" bindtap="toggleMessagePreview" catchtouchmove="preventTouchMove"></view>
-<view class="message-center-container" wx:if="{{showMessagePreview}}">
+<view class="message-center-container" wx:if="{{showMessagePreview}}" catchtouchmove="preventBubble">
   <view class="message-preview-panel" 
         animation="{{messageAnimation}}"
-        catchtap="preventBubble">
+        catchtap="preventBubble"
+        catchtouchmove="preventBubble">
     <view class="message-preview-header">
       <view class="section-title">消息中心</view>
       <view class="message-preview-close" bindtap="toggleMessagePreview">×</view>

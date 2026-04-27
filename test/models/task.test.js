@@ -65,6 +65,51 @@ describe('Task 模型', () => {
 
       expect(task.pointsExpiry).toBe(StarExpiryType.WEEK);
     });
+
+    it('表现项 activeRange 不应回退复用任务级 hasNoEndDate', () => {
+      const task = new Task({
+        id: 'occ_task_1',
+        title: '听写全对',
+        type: TaskType.STUDY,
+        executionMode: 'occurrence',
+        date: '2026-04-17',
+        hasNoEndDate: true,
+        activeRange: {
+          startDate: '2026-04-17',
+          endDate: '2026-04-19',
+          hasNoEndDate: false
+        }
+      });
+
+      expect(task.hasNoEndDate).toBe(true);
+      expect(task.activeRange).toEqual({
+        startDate: '2026-04-17',
+        endDate: '2026-04-19',
+        hasNoEndDate: false
+      });
+    });
+
+    it('表现项任务不应补默认开始时间和结束时间', () => {
+      const task = new Task({
+        id: 'occ_task_2',
+        title: '课堂表现',
+        type: TaskType.STUDY,
+        executionMode: 'occurrence',
+        date: '2026-04-22',
+        startTime: '',
+        endTime: '',
+        duration: 0,
+        activeRange: {
+          startDate: '2026-04-22',
+          endDate: '',
+          hasNoEndDate: true
+        }
+      });
+
+      expect(task.startTime).toBe('');
+      expect(task.endTime).toBe('');
+      expect(task.duration).toBe(0);
+    });
   });
 
   describe('validate', () => {
@@ -123,6 +168,22 @@ describe('Task 模型', () => {
       });
       const errors = task.validate();
       expect(errors).toHaveLength(0);
+    });
+
+    it('应该拒绝超过 93 天的重复任务范围', () => {
+      const task = new Task({
+        title: '长期任务',
+        type: TaskType.HABIT,
+        date: '2026-04-01',
+        hasNoEndDate: false,
+        repeat: {
+          type: RepeatType.DAILY,
+          startDate: '2026-04-01',
+          endDate: '2026-07-05'
+        }
+      });
+
+      expect(task.validate()).toContain('时间范围过长，请缩短后再保存');
     });
   });
 

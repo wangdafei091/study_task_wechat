@@ -96,6 +96,9 @@ class TestDataFactory {
       pointsExpiry: options.pointsExpiry || 'week',
       isRequired: options.isRequired || false,
       penaltyApplied: options.penaltyApplied || false,
+      penaltyDeductedPoints: options.penaltyDeductedPoints !== undefined ? options.penaltyDeductedPoints : 0,
+      penaltyRefunded: options.penaltyRefunded || false,
+      penaltyRefundTime: options.penaltyRefundTime || 0,
       completedAt: options.completedAt || null,
       createTime: options.createTime || Date.now(),
       updateTime: options.updateTime || Date.now()

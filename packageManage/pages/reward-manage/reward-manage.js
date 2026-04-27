@@ -3,7 +3,87 @@ const { EVENTS } = require('../../../utils/constants');
 // 新架构服务引入
 const serviceManager = require('../../../services/service-manager');
 const logger = require('../../../utils/logger');
-const uiUtils = require('../../../utils/uiUtils');
+const rewardIdentity = require('../../../utils/reward-identity');
+const rewardStatus = require('../../../utils/reward-status');
+const rewardsUserContextModule = require('../../../pages/rewards/modules/rewards-user-context');
+
+const MANAGE_ACTION_SPECS = [
+  { key: 'edit', icon: '✏️', label: '编辑' },
+  { key: 'delete', icon: '🗑️', label: '删除' }
+];
+
+const HISTORY_ACTION_SPECS = [
+  { key: 'reactivate', icon: '🔄', label: '重新添加到奖池' }
+];
+
+function getFulfillmentModeLabel(reward) {
+  return rewardStatus.resolveRewardFulfillmentMode(reward) === rewardStatus.RewardFulfillmentMode.INSTANT
+    ? '立即生效'
+    : '家长发放';
+}
+
+function decorateRewardForManage(page, reward) {
+  const recordTime = rewardStatus.getRewardPrimaryRecordTime(reward);
+  const exchanged = rewardStatus.isRewardExchanged(reward);
+  const exchangeUserId = exchanged ? page.resolveExchangeUserId(reward) : null;
+  const exchangeUserLabel = exchanged
+    ? page.resolveExchangeUserLabel(exchangeUserId)
+    : '';
+
+  return {
+    ...reward,
+    claimDisplayStatus: rewardStatus.resolveRewardClaimStatus(reward),
+    fulfillmentModeLabel: getFulfillmentModeLabel(reward),
+    manageStatusLabel: exchanged ? rewardStatus.getRewardManageStatusLabel(reward) : '',
+    recordStatusLabel: exchanged ? rewardStatus.getRewardRecordStatusLabel(reward) : '',
+    recordTimeLabel: exchanged ? rewardStatus.getRewardRecordTimeLabel(reward) : '',
+    recordTimestamp: recordTime,
+    claimTimeDisplay: exchanged ? page.formatTimeStamp(recordTime) : '',
+    exchangeUserLabel,
+    canMarkDelivered: exchanged && rewardStatus.isRewardPendingFulfillment(reward)
+  };
+}
+
+function resolveRewardFamilyScope() {
+  return rewardsUserContextModule.getRewardFamilyScope(serviceManager);
+}
+
+function isReadonlyManageView() {
+  const userService = serviceManager.getUserService();
+  return rewardsUserContextModule.resolveRewardPageViewMode(userService).isReadonlyView === true;
+}
+
+function showReadonlyManageToast() {
+  wx.showToast({
+    title: '当前视角不可管理奖励',
+    icon: 'none',
+    duration: 2000
+  });
+}
+
+function buildActionSheetActions(reward, mode = 'manage') {
+  if (!reward) {
+    return [];
+  }
+
+  if (mode === 'claimed') {
+    const actions = [];
+    if (rewardStatus.isRewardPendingFulfillment(reward)) {
+      actions.push({ key: 'deliver', icon: '✅', label: '标记已发放' });
+    }
+    if (reward.claimed) {
+      actions.push(...HISTORY_ACTION_SPECS);
+    }
+    return actions;
+  }
+
+  return MANAGE_ACTION_SPECS.filter((action) => {
+    if (action.key === 'delete') {
+      return !reward.claimed;
+    }
+    return true;
+  });
+}
 
 Page({
   /**
@@ -11,13 +91,15 @@ Page({
    */
   data: {
     // 标签页状态
-    activeTab: 'manage', // 当前激活的标签页：manage(奖励设置) / claimed(领取记录)
+    activeTab: 'manage', // 当前激活的标签页：manage(奖励设置) / claimed(兑换记录)
     
     // 奖励数据
     rewards: [], // 所有奖励
+    rewardFamilyId: null,
+    exampleTemplates: [],
     
-    // 领取记录数据
-    claimedRecords: [], // 所有领取记录
+    // 兑换记录数据
+    claimedRecords: [], // 所有兑换记录
     
     // 添加/编辑奖励相关
     showRewardModal: false, // 是否显示奖励编辑模态框
@@ -47,6 +129,7 @@ Page({
     // 操作菜单相关
     showActionSheet: false, // 是否显示操作菜单
     selectedReward: null, // 当前选中的奖励
+    actionSheetActions: [],
     
     // 确认对话框相关
     showConfirmDialog: false, // 是否显示确认对话框
@@ -60,11 +143,15 @@ Page({
    */
   onLoad: async function (options) {
     logger.info('RewardManage', '页面加载');
+
+    if (this._guardManageAccess({ redirectOnReadonly: true })) {
+      return;
+    }
     
     // 加载奖励数据
     await this.loadRewardsData();
     
-    // 加载领取记录
+    // 加载兑换记录
     await this.loadClaimedRecords();
     
     // 初始化表情列表
@@ -79,10 +166,24 @@ Page({
   onShow: async function () {
     logger.info('RewardManage', '页面显示');
 
+    const appInstance = typeof getApp === 'function' ? getApp() : null;
+    if (typeof appInstance?.waitForSystemAccessRefresh === 'function') {
+      const canContinue = await appInstance.waitForSystemAccessRefresh();
+      if (canContinue === false) {
+        return;
+      }
+    }
+
+    if (this._guardManageAccess({ redirectOnReadonly: true, silent: true })) {
+      return;
+    }
+
     try {
       const rewardService = serviceManager.getService('rewardService');
       if (rewardService?.refreshRewardsFromCloud) {
-        await rewardService.refreshRewardsFromCloud();
+        await rewardService.refreshRewardsFromCloud({
+          force: app.globalData.needRefreshReward === true
+        });
       }
     } catch (syncError) {
       logger.warn('RewardManage', '奖励管理页 onShow 云同步失败，继续使用本地数据', syncError);
@@ -91,6 +192,35 @@ Page({
     // 重新加载数据，确保数据最新
     await this.loadRewardsData();
     await this.loadClaimedRecords();
+  },
+
+  onPullDownRefresh: async function() {
+    if (this._guardManageAccess({ redirectOnReadonly: true, silent: true })) {
+      if (typeof wx.stopPullDownRefresh === 'function') {
+        wx.stopPullDownRefresh();
+      }
+      return;
+    }
+
+    try {
+      const rewardService = serviceManager.getService('rewardService');
+      if (rewardService?.refreshRewardsFromCloud) {
+        await rewardService.refreshRewardsFromCloud({ force: true });
+      }
+
+      await this.loadRewardsData();
+      await this.loadClaimedRecords();
+    } catch (error) {
+      logger.warn('RewardManage', '奖励管理页下拉强制刷新失败，继续保留当前数据', error);
+      wx.showToast({
+        title: '刷新失败，请稍后重试',
+        icon: 'none'
+      });
+    } finally {
+      if (typeof wx.stopPullDownRefresh === 'function') {
+        wx.stopPullDownRefresh();
+      }
+    }
   },
   
   /**
@@ -105,7 +235,7 @@ Page({
         activeTab: tab
       });
       
-      // 如果切换到领取记录标签，刷新领取记录
+      // 如果切换到兑换记录标签，刷新兑换记录
       if (tab === 'claimed') {
         this.loadClaimedRecords();
       }
@@ -130,47 +260,25 @@ Page({
         return;
       }
       
-      // 获取所有奖励
-      let allRewards = await rewardService.getAllRewards();
-      logger.debug('RewardManage', `获取到 ${allRewards.length} 个奖励`);
-      
-      // 检查是否存在自定义奖励标记（这个逻辑应该由服务层处理）
-      let hasCustomRewards = false;
-      try {
-        // 通过配置服务检查，而不是直接访问存储
-        const configService = serviceManager.getService('config');
-        if (configService) {
-          hasCustomRewards = configService.hasCustomRewards();
-        } else {
-          // 通过奖励服务检查（向后兼容）
-          const rewardService = serviceManager.getService('rewardService');
-          if (rewardService && typeof rewardService.hasCustomRewards === 'function') {
-            hasCustomRewards = await rewardService.hasCustomRewards();
-          } else {
-            // 降级处理：直接使用存储
-            hasCustomRewards = wx.getStorageSync('has_custom_rewards') === true;
-            logger.warn('RewardManage', '配置服务不可用，使用降级存储访问');
-          }
-        }
-      } catch (e) {
-        logger.warn('RewardManage', '获取自定义奖励标记失败', e);
-      }
-      
-      // 如果没有奖励数据，且没有自定义奖励标记，尝试主动调用calculateNextAvailableReward来初始化示例奖励
-      if (allRewards.length === 0 && !hasCustomRewards) {
-        logger.info('RewardManage', '没有奖励数据且无自定义奖励标记，尝试初始化示例奖励');
-        const nextReward = await rewardService.calculateNextAvailableReward();
-        logger.debug('RewardManage', '示例奖励初始化结果:', nextReward);
-        
-        // 重新获取所有奖励
-        allRewards = await rewardService.getAllRewards();
-        logger.debug('RewardManage', `重新获取到 ${allRewards.length} 个奖励`);
-      } else if (allRewards.length === 0 && hasCustomRewards) {
-        logger.info('RewardManage', '检测到自定义奖励标记，但当前没有奖励数据，可能是用户已清理所有奖励');
-      }
-      
+      const rewardFamilyScope = resolveRewardFamilyScope();
+      const viewModel = typeof rewardService.getRewardManageFamilyViewModel === 'function'
+        ? await rewardService.getRewardManageFamilyViewModel(rewardFamilyScope)
+        : {
+            familyId: rewardFamilyScope.familyId,
+            manageableRewards: (await rewardService.getRewardsByFamily(rewardFamilyScope)).filter((reward) => {
+              return !rewardService._isExampleReward(reward) && !rewardStatus.isRewardExchanged(reward);
+            }),
+            exampleTemplates: []
+          };
+
+      const displayRewards = viewModel.manageableRewards.map((reward) => decorateRewardForManage(this, reward));
+
       // 直接设置奖励数据
-      this.setData({ rewards: allRewards });
+      this.setData({
+        rewards: displayRewards,
+        rewardFamilyId: viewModel.familyId || rewardFamilyScope.familyId || null,
+        exampleTemplates: viewModel.exampleTemplates || []
+      });
       
       wx.hideLoading();
     } catch (error) {
@@ -184,10 +292,10 @@ Page({
   },
   
   /**
-   * 加载领取记录
+   * 加载兑换记录
    */
   loadClaimedRecords: async function() {
-    logger.debug('RewardManage', `加载领取记录`);
+    logger.debug('RewardManage', `加载兑换记录`);
     
     try {
       // 获取服务实例
@@ -198,26 +306,27 @@ Page({
         return;
       }
       
-      // 获取已领取的奖励
-      const claimedRewards = await rewardService.getClaimedRewards();
-      logger.debug('RewardManage', `获取到 ${claimedRewards.length} 个已领取奖励`);
+      const rewardFamilyScope = resolveRewardFamilyScope();
+
+      // 获取已兑换的奖励
+      const claimedRewards = typeof rewardService.getFamilyClaimedRewards === 'function'
+        ? await rewardService.getFamilyClaimedRewards(rewardFamilyScope)
+        : await rewardService.getClaimedRewards();
+      logger.debug('RewardManage', `获取到 ${claimedRewards.length} 个已兑换奖励`);
       
-      // 处理记录，添加显示用的时间格式
-      const records = claimedRewards.map(r => ({
-        ...r,
-        claimTimeDisplay: this.formatTimeStamp(r.claimTime || r.createTime)
-      }));
+      const records = claimedRewards.map((reward) => decorateRewardForManage(this, reward));
       
-      // 按领取时间倒序排列
-      records.sort((a, b) => b.claimTime - a.claimTime);
+      // 按最新兑换/领取时间倒序排列
+      records.sort((a, b) => b.recordTimestamp - a.recordTimestamp);
       
       this.setData({
-        claimedRecords: records
+        claimedRecords: records,
+        rewardFamilyId: rewardFamilyScope.familyId || null
       });
       
-      logger.debug('RewardManage', `加载了 ${records.length} 条领取记录`);
+      logger.debug('RewardManage', `加载了 ${records.length} 条兑换记录`);
     } catch (error) {
-      logger.error('RewardManage', '加载领取记录失败', error);
+      logger.error('RewardManage', '加载兑换记录失败', error);
       wx.showToast({
         title: '加载记录失败',
         icon: 'none'
@@ -240,11 +349,66 @@ Page({
     
     return `${year}-${month}-${day} ${hour}:${minute}`;
   },
+
+  resolveExchangeUserLabel: function(userId) {
+    if (!userId) {
+      return '家庭成员';
+    }
+
+    const userService = serviceManager.getUserService();
+    if (!userService) {
+      return '家庭成员';
+    }
+
+    const user = typeof userService.getUserById === 'function'
+      ? userService.getUserById(userId)
+      : null;
+    if (user) {
+      return user.displayName || user.name || user.nickname || user.userId || userId;
+    }
+
+    const allUsers = typeof userService.getAllUsers === 'function'
+      ? userService.getAllUsers()
+      : [];
+    const matchedUser = Array.isArray(allUsers)
+      ? allUsers.find((item) => item && (item.userId === userId || item.id === userId))
+      : null;
+
+    if (matchedUser) {
+      return matchedUser.displayName || matchedUser.name || matchedUser.nickname || matchedUser.userId || userId;
+    }
+
+    return '家庭成员';
+  },
+
+  resolveExchangeUserId: function(reward) {
+    return rewardIdentity.resolveRewardExchangeUserId(reward, resolveRewardFamilyScope());
+  },
+
+  _guardManageAccess: function(options = {}) {
+    if (!isReadonlyManageView()) {
+      return false;
+    }
+
+    if (options.silent !== true) {
+      showReadonlyManageToast();
+    }
+
+    if (options.redirectOnReadonly && typeof wx.navigateBack === 'function') {
+      wx.navigateBack({ delta: 1 });
+    }
+
+    return true;
+  },
   
   /**
    * 显示添加奖励模态框
    */
   showAddRewardModal: function() {
+    if (this._guardManageAccess()) {
+      return;
+    }
+
     logger.info('RewardManage', '显示添加奖励模态框');
     
     // 创建一个新的奖励对象
@@ -253,6 +417,7 @@ Page({
       name: '',
       points: 10,
       icon: '🎁',
+      fulfillmentMode: 'manual',
       enabled: true,
       claimed: false,
       isExample: false, // 新创建奖励不是示例
@@ -271,6 +436,10 @@ Page({
    * 显示奖励操作菜单
    */
   showRewardOptions: function(e) {
+    if (this._guardManageAccess()) {
+      return;
+    }
+
     const id = e.currentTarget.dataset.id;
     const reward = this.data.rewards.find(r => r.id === id);
     
@@ -279,8 +448,50 @@ Page({
       
       this.setData({
         showActionSheet: true,
-        selectedReward: reward
+        selectedReward: reward,
+        actionSheetActions: buildActionSheetActions(reward)
       });
+    }
+  },
+
+  showClaimedRewardActions: function(e) {
+    if (this._guardManageAccess()) {
+      return;
+    }
+
+    const id = e.currentTarget.dataset.id;
+    const reward = this.data.claimedRecords.find(r => r.id === id);
+
+    if (reward) {
+      logger.debug('RewardManage', `显示兑换记录操作菜单: ${reward.name}`);
+      this.setData({
+        showActionSheet: true,
+        selectedReward: reward,
+        actionSheetActions: buildActionSheetActions(reward, 'claimed')
+      });
+    }
+  },
+
+  handleActionSheetAction: function(e) {
+    const actionKey = e.currentTarget.dataset.key;
+
+    if (actionKey === 'edit') {
+      this.editReward();
+      return;
+    }
+
+    if (actionKey === 'delete') {
+      this.confirmDeleteReward();
+      return;
+    }
+
+    if (actionKey === 'reactivate') {
+      this.confirmReactivateReward();
+      return;
+    }
+
+    if (actionKey === 'deliver') {
+      this.confirmMarkDelivered();
     }
   },
   
@@ -291,7 +502,8 @@ Page({
     logger.debug('RewardManage', '关闭操作菜单');
     
     this.setData({
-      showActionSheet: false
+      showActionSheet: false,
+      actionSheetActions: []
     });
   },
   
@@ -299,6 +511,10 @@ Page({
    * 编辑奖励
    */
   editReward: function() {
+    if (this._guardManageAccess()) {
+      return;
+    }
+
     const reward = this.data.selectedReward;
     
     if (reward) {
@@ -308,7 +524,10 @@ Page({
         showActionSheet: false,
         showRewardModal: true,
         isEditing: true,
-        editingReward: { ...reward },
+        editingReward: {
+          ...reward,
+          fulfillmentMode: reward.fulfillmentMode || 'manual'
+        },
         isFormValid: true // 编辑模式初始表单有效
       });
     }
@@ -318,6 +537,10 @@ Page({
    * 确认删除奖励
    */
   confirmDeleteReward: function() {
+    if (this._guardManageAccess()) {
+      return;
+    }
+
     const reward = this.data.selectedReward;
     
     if (reward && !reward.claimed) {
@@ -337,6 +560,10 @@ Page({
    * 删除奖励
    */
   deleteReward: async function() {
+    if (this._guardManageAccess()) {
+      return;
+    }
+
     const reward = this.data.selectedReward;
     
     if (reward && !reward.claimed) {
@@ -410,6 +637,10 @@ Page({
    * 确认重新添加奖励到奖池
    */
   confirmReactivateReward: function() {
+    if (this._guardManageAccess()) {
+      return;
+    }
+
     const reward = this.data.selectedReward;
     
     if (reward && reward.claimed) {
@@ -424,11 +655,97 @@ Page({
       });
     }
   },
+
+  confirmMarkDelivered: function() {
+    if (this._guardManageAccess()) {
+      return;
+    }
+
+    const reward = this.data.selectedReward;
+
+    if (!rewardStatus.isRewardPendingFulfillment(reward)) {
+      return;
+    }
+
+    this.setData({
+      showActionSheet: false,
+      showConfirmDialog: true,
+      confirmDialogTitle: '标记已发放',
+      confirmDialogMessage: `确定已将“${reward.name}”发放给${reward.exchangeUserLabel || '孩子'}吗？`,
+      confirmDialogAction: this.markRewardAsDelivered
+    });
+  },
+
+  markClaimedRewardDelivered: function(e) {
+    if (this._guardManageAccess()) {
+      return;
+    }
+
+    const id = e.currentTarget.dataset.id;
+    const reward = this.data.claimedRecords.find((item) => item.id === id);
+    if (!reward) {
+      return;
+    }
+
+    this.setData({
+      selectedReward: reward
+    });
+    this.confirmMarkDelivered();
+  },
+
+  markRewardAsDelivered: async function() {
+    if (this._guardManageAccess()) {
+      return;
+    }
+
+    const reward = this.data.selectedReward;
+    if (!rewardStatus.isRewardPendingFulfillment(reward)) {
+      return;
+    }
+
+    try {
+      wx.showLoading({ title: '处理中...' });
+      const rewardService = serviceManager.getService('rewardService');
+      if (!rewardService) {
+        throw new Error('无法获取奖励服务实例');
+      }
+
+      const result = await rewardService.markRewardAsDelivered(reward.id);
+      if (!result?.success) {
+        throw new Error(result?.message || '标记发放失败');
+      }
+
+      this.setData({
+        showConfirmDialog: false,
+        selectedReward: null
+      });
+
+      await this.loadClaimedRecords();
+      wx.hideLoading();
+      wx.showToast({
+        title: '已标记发放',
+        icon: 'success',
+        duration: 2000
+      });
+    } catch (error) {
+      logger.error('RewardManage', '标记奖励已发放失败', error);
+      wx.hideLoading();
+      wx.showToast({
+        title: '操作失败，请重试',
+        icon: 'none',
+        duration: 2000
+      });
+    }
+  },
   
   /**
    * 重新添加奖励到奖池
    */
   reactivateReward: async function() {
+    if (this._guardManageAccess()) {
+      return;
+    }
+
     const reward = this.data.selectedReward || this.data.editingReward;
     
     if (reward && reward.claimed) {
@@ -456,11 +773,12 @@ Page({
         logger.info('RewardManage', `通过服务成功添加奖励到奖池: ${reward.name}, 新ID=${result.reward?.id}`);
         
         // 更新UI状态
-        this.setData({
-          showConfirmDialog: false,
-          showRewardModal: false,
-          selectedReward: null
-        });
+      this.setData({
+        showConfirmDialog: false,
+        showRewardModal: false,
+        selectedReward: null,
+        actionSheetActions: []
+      });
         
         // 重新加载数据以确保数据同步
         await this.loadRewardsData();
@@ -622,11 +940,26 @@ Page({
       'editingReward.enabled': enabled
     });
   },
+
+  onFulfillmentModeChange: function(e) {
+    const fulfillmentMode = e.currentTarget.dataset.mode;
+    if (!fulfillmentMode) {
+      return;
+    }
+
+    this.setData({
+      'editingReward.fulfillmentMode': fulfillmentMode
+    });
+  },
   
   /**
    * 保存奖励
    */
   saveReward: async function() {
+    if (this._guardManageAccess()) {
+      return;
+    }
+
     const reward = this.data.editingReward;
     
     // 使用ValidationService验证奖励表单
@@ -810,7 +1143,10 @@ Page({
       }
       
       // 获取所有奖励
-      const allRewards = await rewardService.getAllRewards();
+      const rewardFamilyScope = resolveRewardFamilyScope();
+      const allRewards = typeof rewardService.getRewardsByFamily === 'function'
+        ? await rewardService.getRewardsByFamily(rewardFamilyScope)
+        : await rewardService.getAllRewards();
       
       // 检查是否存在自定义奖励
       const customRewards = allRewards.filter(r => r.isExample !== true);

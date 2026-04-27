@@ -7,6 +7,9 @@ USE task_wechat_test;
 SET FOREIGN_KEY_CHECKS = 0;
 DROP TABLE IF EXISTS messages;
 DROP TABLE IF EXISTS rewards;
+DROP TABLE IF EXISTS invite_codes;
+DROP TABLE IF EXISTS system_settings;
+DROP TABLE IF EXISTS app_access_codes;
 DROP TABLE IF EXISTS star_groups;
 DROP TABLE IF EXISTS star_records;
 DROP TABLE IF EXISTS tasks;
@@ -23,7 +26,14 @@ CREATE TABLE IF NOT EXISTS users (
   avatar VARCHAR(255) DEFAULT NULL COMMENT '头像URL',
   role VARCHAR(20) DEFAULT 'parent' COMMENT '角色：parent/child',
   status VARCHAR(20) DEFAULT 'active' COMMENT '状态：active/inactive',
+  is_system_admin TINYINT(1) DEFAULT 0 COMMENT '是否系统管理员',
+  system_access_level VARCHAR(16) NOT NULL DEFAULT 'normal' COMMENT '系统级访问级别 normal|readonly|blocked',
+  system_access_updated_by_user_id VARCHAR(36) DEFAULT NULL COMMENT '系统级访问级别最后更新人',
+  system_access_updated_at TIMESTAMP NULL DEFAULT NULL COMMENT '系统级访问级别最后更新时间',
+  can_issue_admission_code TINYINT(1) NOT NULL DEFAULT 0 COMMENT '普通用户是否允许发新用户邀请码',
+  admission_code_quota_total INT DEFAULT NULL COMMENT '普通用户可成功邀请新用户总额度',
   family_id VARCHAR(36) DEFAULT NULL COMMENT '所属家庭ID，NULL表示未加入家庭',
+  family_permission_role VARCHAR(20) DEFAULT NULL COMMENT '家庭内权限：manager/viewer，非家庭家长和孩子为NULL',
   is_virtual TINYINT(1) DEFAULT 0 COMMENT '是否虚拟成员（无独立微信号，由家长创建）',
   created_by_user_id VARCHAR(36) DEFAULT NULL COMMENT '虚拟成员的创建者user_id',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -62,10 +72,14 @@ CREATE TABLE IF NOT EXISTS tasks (
   date DATE NOT NULL,
   start_time TIME,
   end_time TIME,
+  reminder JSON COMMENT '提醒配置',
   duration INT DEFAULT 0 COMMENT '时长（分钟）',
   is_all_day TINYINT(1) DEFAULT 0,
   is_required TINYINT(1) DEFAULT 0,
   penalty_applied TINYINT(1) DEFAULT 0,
+  penalty_deducted_points INT NOT NULL DEFAULT 0 COMMENT '必做任务实际扣除星星数',
+  penalty_refunded TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否已执行逾期补做退星',
+  penalty_refund_time BIGINT DEFAULT NULL COMMENT '逾期补做退星时间（epoch ms）',
   points INT DEFAULT 0,
   points_expiry VARCHAR(20) DEFAULT 'permanent',
   status INT DEFAULT 0 COMMENT '0=未完成, 1=已完成',
@@ -154,6 +168,66 @@ CREATE TABLE IF NOT EXISTS rewards (
   FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS app_access_codes (
+  access_code_id VARCHAR(36) PRIMARY KEY,
+  code VARCHAR(16) NOT NULL UNIQUE,
+  status VARCHAR(20) NOT NULL DEFAULT 'active',
+  max_uses INT NOT NULL DEFAULT 1,
+  used_count INT NOT NULL DEFAULT 0,
+  expires_at TIMESTAMP NULL DEFAULT NULL,
+  bound_user_id VARCHAR(36) DEFAULT NULL,
+  note VARCHAR(255) DEFAULT '',
+  consumed_at TIMESTAMP NULL DEFAULT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_app_access_codes_status (status),
+  INDEX idx_app_access_codes_expires_at (expires_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS invite_codes (
+  invite_code_id VARCHAR(36) PRIMARY KEY,
+  code VARCHAR(16) NOT NULL UNIQUE,
+  purpose VARCHAR(32) NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'active',
+  issuer_user_id VARCHAR(36) DEFAULT NULL,
+  family_id VARCHAR(36) DEFAULT NULL,
+  target_role VARCHAR(20) DEFAULT NULL,
+  target_family_permission_role VARCHAR(20) DEFAULT NULL,
+  slot_key VARCHAR(100) DEFAULT NULL,
+  active_slot_key VARCHAR(100)
+    GENERATED ALWAYS AS (
+      CASE
+        WHEN status = 'active' THEN slot_key
+        ELSE NULL
+      END
+    ) STORED,
+  max_uses INT NOT NULL DEFAULT 1,
+  used_count INT NOT NULL DEFAULT 0,
+  expires_at TIMESTAMP NULL DEFAULT NULL,
+  consumed_by_user_id VARCHAR(36) DEFAULT NULL,
+  consumed_at TIMESTAMP NULL DEFAULT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_invite_codes_purpose_status (purpose, status),
+  INDEX idx_invite_codes_slot_key (slot_key),
+  UNIQUE KEY uk_invite_codes_active_slot_key (active_slot_key),
+  INDEX idx_invite_codes_issuer_user_id (issuer_user_id),
+  INDEX idx_invite_codes_family_id (family_id),
+  INDEX idx_invite_codes_expires_at (expires_at),
+  CONSTRAINT fk_invite_codes_issuer_user FOREIGN KEY (issuer_user_id) REFERENCES users(user_id) ON DELETE SET NULL,
+  CONSTRAINT fk_invite_codes_family FOREIGN KEY (family_id) REFERENCES families(family_id) ON DELETE CASCADE,
+  CONSTRAINT fk_invite_codes_consumed_by_user FOREIGN KEY (consumed_by_user_id) REFERENCES users(user_id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS system_settings (
+  setting_key VARCHAR(64) PRIMARY KEY,
+  setting_value VARCHAR(255) NOT NULL,
+  updated_by_user_id VARCHAR(36) DEFAULT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_system_settings_updated_by_user_id (updated_by_user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS messages (
   message_id VARCHAR(100) PRIMARY KEY,
   family_id VARCHAR(100) DEFAULT NULL,
@@ -188,9 +262,9 @@ CREATE TABLE IF NOT EXISTS messages (
 
 -- 插入测试数据
 -- 先创建家长，再创建家庭，最后回填 family_id，避免循环外键插入失败
-INSERT INTO users (user_id, openid, nickname, avatar, role, status, family_id, is_virtual, created_by_user_id) VALUES
-('parent_001', 'parent_openid_001', '测试家长', NULL, 'parent', 'active', NULL, 0, NULL),
-('parent_002', 'parent_openid_002', '测试家长2', NULL, 'parent', 'active', NULL, 0, NULL);
+INSERT INTO users (user_id, openid, nickname, avatar, role, status, is_system_admin, family_id, family_permission_role, is_virtual, created_by_user_id) VALUES
+('parent_001', 'parent_openid_001', '测试家长', NULL, 'parent', 'active', 1, NULL, NULL, 0, NULL),
+('parent_002', 'parent_openid_002', '测试家长2', NULL, 'parent', 'active', 0, NULL, NULL, 0, NULL);
 
 -- 家庭1：包含家长和孩子
 INSERT INTO families (family_id, name, invite_code, invite_code_role, created_by, status) VALUES
@@ -200,13 +274,13 @@ INSERT INTO families (family_id, name, invite_code, invite_code_role, created_by
 INSERT INTO families (family_id, name, invite_code, invite_code_role, created_by, status) VALUES
 ('family_002', '测试家庭B', 'TEST002', 'child', 'parent_002', 'active');
 
-UPDATE users SET family_id = 'family_001' WHERE user_id = 'parent_001';
-UPDATE users SET family_id = 'family_002' WHERE user_id = 'parent_002';
+UPDATE users SET family_id = 'family_001', family_permission_role = 'manager' WHERE user_id = 'parent_001';
+UPDATE users SET family_id = 'family_002', family_permission_role = 'manager' WHERE user_id = 'parent_002';
 
-INSERT INTO users (user_id, openid, nickname, avatar, role, status, family_id, is_virtual, created_by_user_id) VALUES
-('child_001', 'child_openid_001', '测试孩子', NULL, 'child', 'active', 'family_001', 0, NULL),
-('child_002', 'child_openid_002', '测试孩子2', NULL, 'child', 'active', 'family_001', 0, NULL),
-('child_003', 'child_openid_003', '测试孩子3', NULL, 'child', 'active', 'family_002', 0, NULL);
+INSERT INTO users (user_id, openid, nickname, avatar, role, status, family_id, family_permission_role, is_virtual, created_by_user_id) VALUES
+('child_001', 'child_openid_001', '测试孩子', NULL, 'child', 'active', 'family_001', NULL, 0, NULL),
+('child_002', 'child_openid_002', '测试孩子2', NULL, 'child', 'active', 'family_001', NULL, 0, NULL),
+('child_003', 'child_openid_003', '测试孩子3', NULL, 'child', 'active', 'family_002', NULL, 0, NULL);
 
 -- 任务测试数据
 INSERT INTO tasks (task_id, user_id, title, type, date, points, status, star_awarded) VALUES

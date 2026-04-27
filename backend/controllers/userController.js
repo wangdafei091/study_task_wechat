@@ -117,6 +117,17 @@ class UserController {
     }
   }
 
+  async updateCurrentProfile(req, res) {
+    try {
+      const userId = req.user.userId;
+      const updatedUser = await userService.updateCurrentProfile(userId, req.body || {});
+      res.json(success(updatedUser ? updatedUser.toJSON() : null, '资料更新成功'));
+    } catch (err) {
+      logger.error('更新当前用户资料失败', err);
+      res.status(500).json(error('更新当前用户资料失败', 'USER_PROFILE_UPDATE_FAILED'));
+    }
+  }
+
   /**
    * 获取当前用户信息
    * @param {Object} req - Express请求对象

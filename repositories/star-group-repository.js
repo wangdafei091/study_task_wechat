@@ -499,11 +499,11 @@ class StarGroupRepository extends BaseRepository {
     
     switch (expiryType) {
       case StarExpiryType.WEEK:
-        return `本周有效（${year}-${month}-${day}到期）`;
+        return `本周结束（${year}-${month}-${day}到期）`;
       case StarExpiryType.MONTH:
-        return `本月有效（${year}-${month}-${day}到期）`;
+        return `本月结束（${year}-${month}-${day}到期）`;
       case StarExpiryType.QUARTER:
-        return `三个月内有效（${year}-${month}-${day}到期）`;
+        return `本季度结束（${year}-${month}-${day}到期）`;
       default:
         return `${year}-${month}-${day}到期`;
     }
@@ -524,18 +524,21 @@ class StarGroupRepository extends BaseRepository {
    * 扣除星星
    * 按照星星过期时间顺序扣除（先扣除临近过期的）
    * @param {Number} amount 要扣除的星星数量
+   * @param {String} userId 可选用户ID；传入时仅扣减该用户分组
    * @returns {Promise<Object>} 扣除结果
    */
-  async deductStars(amount) {
+  async deductStars(amount, userId = null) {
     if (!amount || amount <= 0) {
       logger.warn('StarGroupRepository', `扣除星星失败：无效的数量 ${amount}`);
       return { success: false, message: '扣除数量无效' };
     }
     
     try {
-      // 获取所有星星分组
-      const groups = await this.getAll();
-      logger.info('StarGroupRepository', `开始扣除${amount}颗星星，当前有${groups.length}个分组`);
+      const allGroups = await this.getAll();
+      const groups = userId
+        ? allGroups.filter(group => group.userId === userId)
+        : allGroups;
+      logger.info('StarGroupRepository', `开始扣除${amount}颗星星${userId ? `, 用户=${userId}` : ''}，当前有${groups.length}个目标分组`);
       
       // 获取当前星星总数
       const totalStars = groups.reduce((sum, group) => {
@@ -550,7 +553,7 @@ class StarGroupRepository extends BaseRepository {
       }
       
       // 按到期时间排序（临近过期的排在前面）
-      const sortedGroups = [...groups].sort((a, b) => {
+      const sortedGroups = [...groups].map(group => this._cloneModel(group)).sort((a, b) => {
         // 永久有效的放在最后
         if (a.expiryType === 'permanent') return 1;
         if (b.expiryType === 'permanent') return -1;
@@ -603,15 +606,21 @@ class StarGroupRepository extends BaseRepository {
       // 保存更新后的分组 - 修复保存逻辑
       logger.info('StarGroupRepository', `准备保存${updatedGroups.length}个更新后的分组`);
       
-      // 直接使用_saveData保存最终分组数组，确保数据一致性
-      await this._saveData(updatedGroups);
+      const untouchedGroups = userId
+        ? allGroups.filter(group => group.userId !== userId)
+        : [];
+      const nextGroups = [...untouchedGroups, ...updatedGroups];
+      await this._saveData(nextGroups);
       
       // 强制清除缓存确保数据一致性
       this.invalidateCache();
       
       // 验证保存结果
       const verifyGroups = await this.getAll();
-      const verifyTotal = verifyGroups.reduce((sum, group) => sum + (group.stars || 0), 0);
+      const verifyTargetGroups = userId
+        ? verifyGroups.filter(group => group.userId === userId)
+        : verifyGroups;
+      const verifyTotal = verifyTargetGroups.reduce((sum, group) => sum + (group.stars || 0), 0);
       const expectedTotal = totalStars - amount;
       
       logger.info('StarGroupRepository', `分组保存完成，保存${updatedGroups.length}个分组`);
@@ -625,6 +634,13 @@ class StarGroupRepository extends BaseRepository {
       
       return {
         success: true,
+        consumedPoints: amount,
+        deductionBreakdown: deductedGroups.map(group => ({
+          groupId: group.groupId,
+          expiryType: group.expiryType,
+          expiryDate: group.expiryDate || null,
+          points: group.amount
+        })),
         deductedGroups,
         message: '扣除成功'
       };

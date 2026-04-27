@@ -15,17 +15,17 @@
     
     <view class="exchanges-list" wx:else>
       <block wx:for="{{claimedRewards}}" wx:key="id">
-        <view class="exchange-item delivered">
+        <view class="exchange-item {{item.claimDisplayStatus === 'delivered' ? 'delivered' : 'claimed'}}">
           <view class="exchange-icon">{{item.icon}}</view>
           <view class="exchange-info">
             <view class="exchange-name">{{item.name}}</view>
-            <view class="exchange-time">兑换时间: {{item.claimTimeDisplay}}</view>
+            <view class="exchange-time">{{item.timeLabel}}: {{item.claimTimeDisplay}}</view>
             <view class="exchange-points">
               <text class="points-label">花费星星:</text>
               <text class="points-value">{{item.points}}颗</text>
             </view>
-            <view class="exchange-status delivered">
-              已领取
+            <view class="exchange-status {{item.claimDisplayStatus === 'delivered' ? 'delivered' : 'claimed'}}">
+              {{item.statusLabel}}
             </view>
           </view>
         </view>

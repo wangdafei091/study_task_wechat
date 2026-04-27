@@ -86,14 +86,25 @@ describe('packageMessage/pages/message/message behavior', () => {
     delete global.wx;
   });
 
-  it('onLoad 和 onShow 应走统一数据加载入口', async () => {
+  it('onLoad 首次进入应加载一次，首次 onShow 不应重复拉取', async () => {
     const page = createPageInstance();
     page.loadMessageData = jest.fn();
 
     page.onLoad({ tab: 'reward' });
-    page.onShow();
+    await page.onShow();
 
     expect(page.data.activeTab).toBe('reward');
+    expect(page.loadMessageData).toHaveBeenCalledTimes(1);
+  });
+
+  it('首次进入后再次 onShow 应刷新消息数据', async () => {
+    const page = createPageInstance();
+    page.loadMessageData = jest.fn();
+
+    page.onLoad({});
+    await page.onShow();
+    await page.onShow();
+
     expect(page.loadMessageData).toHaveBeenCalledTimes(2);
   });
 
@@ -115,6 +126,51 @@ describe('packageMessage/pages/message/message behavior', () => {
     expect(page.data.unreadCount).toBe(1);
   });
 
+  it('同一事件存在 formal 与 provisional 时应优先保留 formal，并给剩余 provisional 打弱化标记', async () => {
+    const page = createPageInstance();
+
+    page.processMessages([
+      {
+        id: 'm_formal',
+        type: 'task',
+        isRead: false,
+        createTime: 10,
+        syncedToCloud: true,
+        messageEventKey: 'event:1'
+      },
+      {
+        id: 'm_provisional_same',
+        type: 'task',
+        isRead: false,
+        createTime: 20,
+        isProvisional: true,
+        syncedToCloud: false,
+        messageEventKey: 'event:1'
+      },
+      {
+        id: 'm_provisional_only',
+        type: 'reward',
+        isRead: false,
+        createTime: 30,
+        isProvisional: true,
+        syncedToCloud: false,
+        messageEventKey: 'event:2'
+      }
+    ]);
+
+    expect(page.data.messages.map((message) => message.id)).toEqual(['m_provisional_only', 'm_formal']);
+    expect(page.data.unreadCount).toBe(2);
+    expect(page.data.messages[0]).toEqual(expect.objectContaining({
+      id: 'm_provisional_only',
+      isWeakProvisional: true,
+      syncMetaText: '本机暂存'
+    }));
+    expect(page.data.messages[1]).toEqual(expect.objectContaining({
+      id: 'm_formal',
+      isWeakProvisional: false
+    }));
+  });
+
   it('markAllAsRead、markMessageAsRead 和 deleteMessage 应更新页面状态', async () => {
     const page = createPageInstance();
     page.data.messages = [
@@ -122,7 +178,6 @@ describe('packageMessage/pages/message/message behavior', () => {
       { id: 'm2', type: 'reward', isRead: false, createTime: 2 }
     ];
     page.processMessages = jest.fn();
-    page.loadMessageData = jest.fn();
 
     messageService.markAllMessagesAsRead.mockResolvedValue(2);
     page.markAllAsRead();
@@ -132,8 +187,7 @@ describe('packageMessage/pages/message/message behavior', () => {
     messageService.markMessageAsRead.mockResolvedValue(true);
     page.markMessageAsRead({ currentTarget: { dataset: { id: 'm1' } } });
     await Promise.resolve();
-    jest.runAllTimers();
-    expect(page.loadMessageData).toHaveBeenCalled();
+    expect(page.processMessages).toHaveBeenCalledTimes(2);
 
     messageService.deleteMessage.mockResolvedValue(true);
     page.processMessages.mockClear();
@@ -166,5 +220,23 @@ describe('packageMessage/pages/message/message behavior', () => {
     expect(page.preventBubble({ stopPropagation, preventDefault })).toBe(false);
     expect(stopPropagation).toHaveBeenCalled();
     expect(preventDefault).toHaveBeenCalled();
+  });
+
+  it('按 Tab 过滤后应基于最终展示序列重算日期分隔', () => {
+    const page = createPageInstance();
+    page.formatDate = jest.fn((createTime) => (createTime >= 300 ? '今天' : '昨天'));
+    page.formatMessageTime = jest.fn(() => '刚刚');
+
+    page.processMessages([
+      { id: 'm1', type: 'reward', isRead: false, createTime: 400 },
+      { id: 'm2', type: 'task', isRead: false, createTime: 350 },
+      { id: 'm3', type: 'task', isRead: true, createTime: 100 }
+    ]);
+
+    page.switchTab({ currentTarget: { dataset: { tab: 'task' } } });
+
+    expect(page.data.filteredMessages.map((message) => message.id)).toEqual(['m2', 'm3']);
+    expect(page.data.filteredMessages.map((message) => message.showDateDivider)).toEqual([true, true]);
+    expect(page.data.filteredMessages.map((message) => message.dateDivider)).toEqual(['今天', '昨天']);
   });
 });

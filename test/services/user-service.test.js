@@ -16,10 +16,32 @@ jest.mock('../../utils/logger');
 jest.mock('../../utils/http-client');
 jest.mock('../../adapters/storage-adapter');
 jest.mock('../../utils/token-manager');
+jest.mock('../../utils/app/system-user-access-state', () => ({
+  isBlockedError: jest.fn(() => false),
+  handleBlockedError: jest.fn()
+}));
+jest.mock('../../utils/api-config', () => ({
+  ENABLE_API: true,
+  ENDPOINTS: {
+    AUTH_CURRENT: '/api/auth/current',
+    FAMILIES: '/api/families',
+    FAMILIES_CURRENT: '/api/families/current',
+    FAMILIES_JOIN: '/api/families/join',
+    FAMILIES_INVITE_CODE: '/api/families/invite-code',
+    FAMILIES_MEMBERS: '/api/families/members',
+    FAMILIES_ADD_MEMBER: '/api/families/members',
+    FAMILIES_DELETE_MEMBER: '/api/families/members/{userId}',
+    FAMILIES_MEMBER_PERMISSION_ROLE: '/api/families/members/{userId}/permission-role',
+    USER_NICKNAME: '/api/users/{userId}/nickname',
+  },
+}));
 
 const HttpClient = require('../../utils/http-client');
 const StorageAdapter = require('../../adapters/storage-adapter');
 const TokenManager = require('../../utils/token-manager');
+const logger = require('../../utils/logger');
+const API_CONFIG = require('../../utils/api-config');
+const systemUserAccessState = require('../../utils/app/system-user-access-state');
 
 describe('UserService', () => {
   let userService;
@@ -30,6 +52,7 @@ describe('UserService', () => {
   beforeEach(() => {
     // 重置所有mock
     jest.clearAllMocks();
+    API_CONFIG.ENABLE_API = true;
 
     // Mock TokenManager：模拟已登录的家长用户（initialize() 依赖此信息设置 loginUser）
     TokenManager.getUserInfo = jest.fn().mockReturnValue({ userId: 'parent', role: 'parent', familyId: null });
@@ -133,6 +156,20 @@ describe('UserService', () => {
       expect(userService.currentUser.id).toBe('parent');
     });
 
+    it('AUTH_CURRENT 命中 SYSTEM_USER_BLOCKED 时不应回退到 token 用户态', async () => {
+      const blockedError = Object.assign(new Error('当前账号已被管理员暂停使用'), {
+        code: 'SYSTEM_USER_BLOCKED'
+      });
+      systemUserAccessState.isBlockedError.mockReturnValueOnce(true);
+      mockHttpClient.get.mockRejectedValueOnce(blockedError);
+
+      const initialized = await userService.initialize();
+
+      expect(initialized).toBe(false);
+      expect(systemUserAccessState.handleBlockedError).toHaveBeenCalledWith(blockedError);
+      expect(userService.getLoginUser()).toBeNull();
+    });
+
 
     it('本地会话为空时，家长设备应默认选第一个孩子', async () => {
       const mockUsers = [
@@ -150,6 +187,203 @@ describe('UserService', () => {
 
       // 家长设备 + 空会话 → currentUser 应为第一个孩子
       expect(userService.currentUser.id).toBe('child');
+    });
+
+    it('loadFamilyMembers 发现失效 currentUser 时应回退到 loginUser 并回正持久化会话', async () => {
+      const loginUser = new User({
+        userId: 'parent',
+        name: '家长',
+        role: 'parent',
+        status: 'active',
+        familyId: 'family_1'
+      });
+      userService.loginUser = loginUser;
+      userService.currentUser = new User({
+        userId: 'deleted_child',
+        name: '旧孩子',
+        role: 'child',
+        status: 'active',
+        familyId: 'family_1'
+      });
+
+      mockHttpClient.get.mockResolvedValue({
+        members: [
+          { userId: 'child_1', name: '孩子1', role: 'child', status: 'active', familyId: 'family_1' }
+        ]
+      });
+
+      const loaded = await userService.loadFamilyMembers();
+
+      expect(loaded).toBe(true);
+      expect(userService.currentUser.id).toBe('parent');
+      expect(mockStorageAdapter.set).toHaveBeenCalledWith('currentUserId', 'parent');
+    });
+
+    it('默认占位 currentUser 不应误报成员被删除 warning', async () => {
+      const loginUser = { userId: 'real_parent', name: '家长', role: 'parent', status: 'active', familyId: 'family_1' };
+      const onlyChild = { userId: 'child_1', name: '孩子1', role: 'child', status: 'active', familyId: 'family_1' };
+
+      mockHttpClient.get.mockImplementation(async (url) => {
+        if (url && url.includes('families')) {
+          return { members: [onlyChild] };
+        }
+        return loginUser;
+      });
+      mockStorageAdapter.get.mockReturnValue(null);
+
+      const initialized = await userService.initialize();
+
+      expect(initialized).toBe(true);
+      expect(logger.warn).not.toHaveBeenCalledWith(
+        'UserService',
+        '当前视角成员已被删除，内存回退到 loginUser',
+        expect.any(Object)
+      );
+      expect(logger.info).toHaveBeenCalledWith(
+        'UserService',
+        '检测到初始化占位视角，自动回正到 loginUser',
+        expect.objectContaining({ userId: 'parent' })
+      );
+    });
+
+    it('_saveUserState 应复用 _persistCurrentUserId 且不再回退 wx.setStorageSync', async () => {
+      userService.currentUser = new User({
+        userId: 'child_1',
+        name: '孩子1',
+        role: 'child'
+      });
+      userService._persistCurrentUserId = jest.fn().mockReturnValue(true);
+      global.wx = {
+        setStorageSync: jest.fn()
+      };
+
+      await userService._saveUserState();
+
+      expect(userService._persistCurrentUserId).toHaveBeenCalledWith('child_1');
+      expect(global.wx.setStorageSync).not.toHaveBeenCalled();
+      delete global.wx;
+    });
+
+    it('_persistCurrentUserId 在 StorageAdapter 缺失或异常时应返回 false', () => {
+      expect(userService._persistCurrentUserId('child_1')).toBe(true);
+
+      userService.storageAdapter = null;
+      expect(userService._persistCurrentUserId('child_2')).toBe(false);
+
+      userService.storageAdapter = {
+        set: jest.fn(() => {
+          throw new Error('storage-fail');
+        })
+      };
+      expect(userService._persistCurrentUserId('child_3')).toBe(false);
+    });
+
+    it('applySystemAccessLevelSnapshot 应同步更新 loginUser、currentUser 与缓存', () => {
+      const targetUser = new User({
+        userId: 'parent',
+        name: '家长',
+        role: 'parent',
+        systemAccessLevel: 'normal'
+      });
+      userService.loginUser = targetUser;
+      userService.currentUser = targetUser;
+      userService.userCache.set(targetUser.userId, targetUser);
+
+      userService.applySystemAccessLevelSnapshot('parent', {
+        systemAccessLevel: 'readonly',
+        systemAccessUpdatedAt: '2026-04-26 12:00:00',
+        systemAccessUpdatedByUserId: 'admin_1'
+      });
+
+      expect(userService.loginUser.systemAccessLevel).toBe('readonly');
+      expect(userService.currentUser.systemAccessLevel).toBe('readonly');
+      expect(userService.userCache.get('parent').systemAccessUpdatedByUserId).toBe('admin_1');
+    });
+
+    it('loadFamilyMembers 应将 loginUser 与 currentUser 回绑到最新缓存对象', async () => {
+      userService.loginUser = new User({
+        userId: 'parent',
+        name: '旧家长',
+        role: 'parent',
+        familyId: 'family_1',
+        systemAccessLevel: 'normal'
+      });
+      userService.currentUser = new User({
+        userId: 'parent',
+        name: '旧家长',
+        role: 'parent',
+        familyId: 'family_1',
+        systemAccessLevel: 'normal'
+      });
+
+      mockHttpClient.get.mockResolvedValue({
+        members: [
+          {
+            userId: 'parent',
+            name: '新家长',
+            role: 'parent',
+            familyId: 'family_1',
+            familyPermissionRole: 'manager',
+            systemAccessLevel: 'readonly'
+          },
+          {
+            userId: 'child_1',
+            name: '孩子1',
+            role: 'child',
+            familyId: 'family_1',
+            systemAccessLevel: 'normal'
+          }
+        ]
+      });
+
+      const loaded = await userService.loadFamilyMembers();
+
+      expect(loaded).toBe(true);
+      expect(userService.loginUser.name).toBe('新家长');
+      expect(userService.loginUser.systemAccessLevel).toBe('readonly');
+      expect(userService.currentUser).toBe(userService.loginUser);
+      expect(userService.userCache.get('parent')).toBe(userService.loginUser);
+    });
+  });
+
+  describe('updateCurrentProfile', () => {
+    it('云端模式更新资料后应通过模型 update 刷新缓存用户的 modifyTime', async () => {
+      const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(1700000005000);
+      const loginUser = new User({
+        userId: 'parent',
+        name: '旧昵称',
+        role: 'parent',
+        avatar: 'old-avatar'
+      });
+      loginUser.modifyTime = 1700000000000;
+      userService.loginUser = loginUser;
+      userService.currentUser = loginUser;
+      userService.userCache.set(loginUser.userId, loginUser);
+      mockHttpClient.patch.mockResolvedValue({
+        userId: 'parent',
+        nickname: '新昵称',
+        avatar: 'new-avatar'
+      });
+
+      const result = await userService.updateCurrentProfile({
+        nickname: '新昵称',
+        avatarUrl: 'new-avatar'
+      });
+
+      expect(result).toEqual({
+        success: true,
+        user: {
+          userId: 'parent',
+          nickname: '新昵称',
+          avatar: 'new-avatar'
+        }
+      });
+      expect(userService.loginUser.name).toBe('新昵称');
+      expect(userService.loginUser.avatar).toBe('new-avatar');
+      expect(userService.loginUser.modifyTime).toBe(1700000005000);
+      expect(userService.userCache.get('parent').modifyTime).toBe(1700000005000);
+
+      nowSpy.mockRestore();
     });
   });
 
@@ -190,21 +424,6 @@ describe('UserService', () => {
   });
 
   describe('用户查询', () => {
-    it('getChildUserId应该返回孩子用户ID', () => {
-      const mockUsers = [
-        { userId: 'parent', name: '家长', role: 'parent', status: 'active' },
-        { userId: 'child', name: '孩子', role: 'child', status: 'active' }
-      ];
-      mockHttpClient.getAllUsers.mockResolvedValue(mockUsers);
-
-      userService.userCache.set('parent', new User(mockUsers[0]));
-      userService.userCache.set('child', new User(mockUsers[1]));
-
-      const childUserId = userService.getChildUserId();
-
-      expect(childUserId).toBe('child');
-    });
-
     it('getAllUsers应该返回所有用户', () => {
       const parentUser = new User({ userId: 'parent', name: '家长', role: 'parent' });
       const childUser = new User({ userId: 'child', name: '孩子', role: 'child' });
@@ -531,7 +750,7 @@ describe('UserService', () => {
   describe('权限检查', () => {
     it('hasPageAccess应该检查页面访问权限', () => {
       expect(userService.hasPageAccess('pages/index/index')).toBe(true);
-      expect(userService.hasPageAccess('pages/task-edit/task-edit')).toBe(true);
+      expect(userService.hasPageAccess('packageTask/pages/task-edit/task-edit')).toBe(true);
     });
 
     it('getAccessiblePages应该返回可访问的页面', () => {
@@ -539,7 +758,7 @@ describe('UserService', () => {
 
       expect(pages).toContain('pages/index/index');
       expect(pages).toContain('pages/rewards/rewards');
-      expect(pages).toContain('pages/task-edit/task-edit');
+      expect(pages).toContain('packageTask/pages/task-edit/task-edit');
       expect(pages.length).toBeGreaterThan(0);
     });
   });
@@ -764,6 +983,44 @@ describe('UserService', () => {
       const result = await userService.deleteFamilyMember('child2');
 
       expect(result.success).toBe(false);
+    });
+
+    it('updateFamilyMemberPermissionRole 应成功更新家长权限并刷新上下文', async () => {
+      const initializeSpy = jest.spyOn(userService, 'initialize').mockResolvedValue(true);
+      mockHttpClient.patch.mockResolvedValue({
+        userId: 'parent_2',
+        familyPermissionRole: 'viewer',
+        token: 'jwt-next'
+      });
+
+      const result = await userService.updateFamilyMemberPermissionRole('parent_2', 'viewer');
+
+      expect(mockHttpClient.patch).toHaveBeenCalledWith(
+        '/api/families/members/parent_2/permission-role',
+        { familyPermissionRole: 'viewer' }
+      );
+      expect(TokenManager.setToken).toHaveBeenCalledWith('jwt-next');
+      expect(initializeSpy).toHaveBeenCalled();
+      expect(result.success).toBe(true);
+    });
+
+    it('本地模式下 refreshInviteCode 应直接报不支持', async () => {
+      API_CONFIG.ENABLE_API = false;
+
+      await expect(userService.refreshInviteCode('child')).rejects.toThrow('本地模式暂不支持刷新邀请码');
+      expect(mockHttpClient.post).not.toHaveBeenCalled();
+    });
+
+    it('本地模式下 updateFamilyMemberPermissionRole 不应发起云端请求', async () => {
+      API_CONFIG.ENABLE_API = false;
+
+      const result = await userService.updateFamilyMemberPermissionRole('parent_2', 'viewer');
+
+      expect(result).toEqual({
+        success: false,
+        message: '本地模式暂不支持调整家长权限'
+      });
+      expect(mockHttpClient.patch).not.toHaveBeenCalled();
     });
   });
 

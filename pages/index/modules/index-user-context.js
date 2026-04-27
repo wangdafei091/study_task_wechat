@@ -1,5 +1,14 @@
 const logger = require('../../../utils/logger');
-const permissionUtils = require('../../../utils/permission-utils');
+const userContextUtils = require('../../../utils/user-context');
+
+function resolveLastActiveChildId(loginUser, currentUser, page) {
+  if (currentUser && currentUser.role === 'child') {
+    return userContextUtils.getUserIdentifier(currentUser);
+  }
+
+  const app = getApp();
+  return app?.globalData?.lastActiveChildId || page?.data?.lastActiveChildId || null;
+}
 
 async function initializeMultiUserSystem(page) {
   try {
@@ -14,16 +23,34 @@ async function initializeMultiUserSystem(page) {
     const currentUser = userService.getCurrentUser();
     const loginUser = userService.getLoginUser() || currentUser;
     const availableUsers = userService.getAllUsers();
-    const userPermissions = permissionUtils.getUserPermissions(loginUser.role);
-    const isReadonlyView = loginUser.role === 'child' || loginUser.userId !== currentUser.userId;
+    const lastActiveChildId = resolveLastActiveChildId(loginUser, currentUser, page);
+    const permissionContext = userContextUtils.resolvePermissionContext({
+      loginUser,
+      currentUser,
+      availableUsers
+    }, {
+      lastActiveChildId
+    });
+
+    const app = getApp();
+    if (app && app.globalData) {
+      app.globalData.lastActiveChildId = permissionContext.lastActiveChildId;
+    }
 
     page.setData({
       currentUser,
       availableUsers,
-      userPermissions,
-      loginUserId: loginUser.userId,
-      canManageMembers: loginUser.role === 'parent',
-      isReadonlyView
+      userPermissions: permissionContext.userPermissions,
+      loginUserId: permissionContext.loginUserId || '',
+      familyPermissionRole: permissionContext.familyPermissionRole || '',
+      canManageMembers: permissionContext.canManageMembers,
+      isReadonlyView: permissionContext.isReadonlyView,
+      isViewerReadonly: permissionContext.isViewerReadonly,
+      isSystemReadonly: permissionContext.isSystemReadonly,
+      readonlyReason: permissionContext.readonlyReason || '',
+      canManageFamilyGovernance: permissionContext.canManageFamilyGovernance,
+      canManageBusinessData: permissionContext.canManageBusinessData,
+      lastActiveChildId: permissionContext.lastActiveChildId
     });
 
     page.updateMenuItemsWithPermissions();

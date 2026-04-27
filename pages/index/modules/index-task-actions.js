@@ -2,6 +2,32 @@ const { Task } = require('../../../models/task');
 const serviceManager = require('../../../services/service-manager.js');
 const logger = require('../../../utils/logger');
 
+function isTaskMutationBlocked(page) {
+  if (page?.data?.isViewerReadonly === true) {
+    return true;
+  }
+
+  const readonlyReason = page?.data?.readonlyReason || '';
+  return readonlyReason === 'viewer-readonly' || readonlyReason === 'system-readonly';
+}
+
+function showReadonlyToast(page) {
+  const readonlyReason = page?.data?.readonlyReason || '';
+  let title = '当前视角不可修改任务';
+
+  if (readonlyReason === 'viewer-readonly') {
+    title = '当前为查看者，不能修改任务';
+  } else if (readonlyReason === 'system-readonly') {
+    title = '当前账号为只读，不能修改任务';
+  }
+
+  wx.showToast({
+    title,
+    icon: 'none',
+    duration: 2000
+  });
+}
+
 function clearProcessing(page) {
   page.setData({
     processingTaskId: null
@@ -79,6 +105,8 @@ function handleSuccess(page, resultContext) {
   logger.info('Index', '任务状态变更，刷新任务列表');
 
   return page.refreshTaskDataForCurrentView().then(async () => {
+    const followUpLoads = [];
+
     if (newStatus === 1) {
       if (isRequired) {
         wx.showToast({
@@ -92,7 +120,9 @@ function handleSuccess(page, resultContext) {
         }
 
         logger.info('Index', `必做任务完成: ${currentTask.title}, 避免了扣除${taskPoints}颗星星的惩罚`);
-        page.loadStarsAndRewards();
+        if (typeof page.loadStarsAndRewards === 'function') {
+          followUpLoads.push(page.loadStarsAndRewards());
+        }
       } else if (!wasStarAwarded) {
         wx.showToast({
           title: `获得${taskPoints}颗星星！`,
@@ -105,7 +135,9 @@ function handleSuccess(page, resultContext) {
         }
 
         logger.info('Index', '立即检查奖励达成状态');
-        page.checkRewardUnlock();
+        if (typeof page.checkRewardUnlock === 'function') {
+          followUpLoads.push(page.checkRewardUnlock());
+        }
       } else {
         wx.showToast({
           title: '已获得过星星',
@@ -113,7 +145,13 @@ function handleSuccess(page, resultContext) {
           duration: 1500
         });
 
-        page.loadStarsAndRewards();
+        if (typeof page.loadStarsAndRewards === 'function') {
+          followUpLoads.push(page.loadStarsAndRewards());
+        }
+      }
+
+      if (followUpLoads.length > 0) {
+        await Promise.allSettled(followUpLoads);
       }
 
       setTimeout(() => {
@@ -131,7 +169,13 @@ function handleSuccess(page, resultContext) {
       duration: 1500
     });
 
-    page.loadStarsAndRewards();
+    if (typeof page.loadStarsAndRewards === 'function') {
+      followUpLoads.push(page.loadStarsAndRewards());
+    }
+
+    if (followUpLoads.length > 0) {
+      await Promise.allSettled(followUpLoads);
+    }
   });
 }
 
@@ -154,6 +198,16 @@ function handleFailure(result) {
     return;
   }
 
+  if (result?.code === 'TASK_BACKFILL_WINDOW_EXPIRED' || result?.backfillWindowExpired) {
+    wx.showModal({
+      title: '补打卡期限已结束',
+      content: result?.message || '该任务已超过补打卡期限，无法再补打卡',
+      showCancel: false,
+      confirmText: '我知道了'
+    });
+    return;
+  }
+
   wx.showToast({
     title: result?.message || '操作失败',
     icon: 'none',
@@ -166,6 +220,20 @@ async function completeTask(page, e) {
 
   if (!taskId) {
     logger.warn('Index', '完成任务失败: 任务ID为空');
+    return;
+  }
+
+  if (page.data.isViewingFuture) {
+    wx.showToast({
+      title: '未来日期仅支持查看',
+      icon: 'none',
+      duration: 2000
+    });
+    return;
+  }
+
+  if (isTaskMutationBlocked(page)) {
+    showReadonlyToast(page);
     return;
   }
 
@@ -209,6 +277,7 @@ async function completeTask(page, e) {
   try {
     const { currentUser } = page.data;
     const currentUserId = currentUser && currentUser.id ? currentUser.id : null;
+    page._skipNextTaskChangedRefresh = true;
     const result = await executeStatusChange(taskId, newStatus, currentUserId);
 
     clearProcessing(page);
@@ -231,6 +300,7 @@ async function completeTask(page, e) {
     });
   } catch (error) {
     logger.error('Index', '完成任务失败', error);
+    page._skipNextTaskChangedRefresh = false;
     wx.showToast({
       title: '操作失败，请重试',
       icon: 'none',
@@ -242,6 +312,19 @@ async function completeTask(page, e) {
 
 async function taskItemStatusToggle(page, e) {
   try {
+    if (page.data.isViewingFuture) {
+      wx.showToast({
+        title: '未来日期仅支持查看',
+        icon: 'none'
+      });
+      return;
+    }
+
+    if (isTaskMutationBlocked(page)) {
+      showReadonlyToast(page);
+      return;
+    }
+
     const { id, newStatus } = e.detail;
 
     page.setData({
@@ -251,14 +334,26 @@ async function taskItemStatusToggle(page, e) {
     logger.info('Index', `切换任务状态: 任务ID=${id}, 新状态=${newStatus}`);
 
     const taskService = serviceManager.getTaskService();
-    await taskService.updateTaskStatus(id, newStatus);
+    page._skipNextTaskChangedRefresh = true;
+    const result = await taskService.updateTaskStatus(id, newStatus);
 
     clearProcessing(page);
+
+    if (!result?.success) {
+      page._skipNextTaskChangedRefresh = false;
+      handleFailure({
+        ...result,
+        taskId: id,
+        operation: newStatus === 1 ? 'complete' : 'reset'
+      });
+      return;
+    }
 
     page.transitionToNewTarget();
     page.refreshTaskDataForCurrentView();
   } catch (error) {
     logger.error('Index', '更新任务状态失败', error);
+    page._skipNextTaskChangedRefresh = false;
     clearProcessing(page);
     wx.showToast({
       title: '操作失败',

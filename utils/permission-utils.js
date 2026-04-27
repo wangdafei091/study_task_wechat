@@ -5,7 +5,7 @@
  */
 
 const logger = require('./logger');
-const { UserRole } = require('../models/user');
+const { FamilyPermissionRole, UserRole } = require('../models/user');
 
 /**
  * 页面权限配置
@@ -15,23 +15,28 @@ const PAGE_PERMISSIONS = {
   // 家长权限页面（完整权限）
   [UserRole.PARENT]: [
     '/pages/index/index',           // 首页
-    '/pages/task-edit/task-edit',   // 任务编辑
+    '/packageTask/pages/task-edit/task-edit',   // 任务编辑
+    '/packageTask/pages/task-occurrence-edit/task-occurrence-edit', // 表现项编辑
     '/pages/rewards/rewards',       // 奖池页面
+    '/packageChart/pages/task-record/task-record', // 表现记录
     '/packageManage/pages/reward-manage/reward-manage', // 奖励管理
     '/packageManage/pages/my-exchanges/my-exchanges',   // 我的兑换
     '/packageMessage/pages/star-records/star-records',   // 星星记录
     '/packageMessage/pages/message/message',             // 消息中心
-    '/packageManage/pages/family-settings/family-settings' // 家庭设置（家长专属）
+    '/packageManage/pages/family-settings/family-settings', // 家庭设置（家长专属）
+    '/packageManage/pages/about/about'
   ],
   
   // 孩子权限页面（受限权限）
   [UserRole.CHILD]: [
     '/pages/index/index',           // 首页
     '/pages/rewards/rewards',       // 奖池页面
+    '/packageChart/pages/task-record/task-record', // 表现记录
     '/packageManage/pages/my-exchanges/my-exchanges',   // 我的兑换
     '/packageMessage/pages/star-records/star-records',   // 星星记录
     '/packageMessage/pages/message/message',             // 消息中心
-    '/packageManage/pages/family-settings/family-settings' // 未加入家庭时可访问（输入邀请码加入）
+    '/packageManage/pages/family-settings/family-settings', // 未加入家庭时可访问（输入邀请码加入）
+    '/packageManage/pages/about/about'
   ]
 };
 
@@ -123,6 +128,52 @@ const FEATURE_PERMISSIONS = {
   }
 };
 
+function clonePermissions(source = {}) {
+  return JSON.parse(JSON.stringify(source));
+}
+
+function buildViewerPermissions() {
+  return {
+    task: {
+      create: false,
+      edit: false,
+      delete: false,
+      complete: false,
+      reset: false,
+      markRequired: false
+    },
+    reward: {
+      create: false,
+      edit: false,
+      delete: false,
+      exchange: false,
+      manage: false
+    },
+    star: {
+      view: true,
+      records: true,
+      manual: false
+    },
+    analytics: {
+      view: true,
+      export: false
+    },
+    user: {
+      switch: true,
+      create: false,
+      delete: false
+    }
+  };
+}
+
+function resolveRolePermissions(userRole, familyPermissionRole = null) {
+  if (userRole === UserRole.PARENT && familyPermissionRole === FamilyPermissionRole.VIEWER) {
+    return buildViewerPermissions();
+  }
+
+  return clonePermissions(FEATURE_PERMISSIONS[userRole] || {});
+}
+
 /**
  * 检查用户是否有权限访问指定页面
  * @param {String} userRole 用户角色
@@ -154,13 +205,13 @@ function hasPagePermission(userRole, pagePath) {
  * @param {String} action 具体操作（create/edit/delete等）
  * @returns {Boolean} 是否有权限
  */
-function hasFeaturePermission(userRole, category, action) {
+function hasFeaturePermission(userRole, category, action, familyPermissionRole = null) {
   if (!userRole || !category || !action) {
     logger.warn('PermissionUtils', '检查功能权限失败: 参数不完整', { userRole, category, action });
     return false;
   }
   
-  const rolePermissions = FEATURE_PERMISSIONS[userRole];
+  const rolePermissions = resolveRolePermissions(userRole, familyPermissionRole);
   if (!rolePermissions) {
     logger.warn('PermissionUtils', `未知的用户角色: ${userRole}`);
     return false;
@@ -200,16 +251,16 @@ function getAllowedPages(userRole) {
  * @param {String} userRole 用户角色
  * @returns {Object} 功能权限对象
  */
-function getUserPermissions(userRole) {
+function getUserPermissions(userRole, familyPermissionRole = null) {
   if (!userRole) {
     logger.warn('PermissionUtils', '获取用户权限失败: 用户角色为空');
     return {};
   }
   
-  const permissions = FEATURE_PERMISSIONS[userRole] || {};
-  logger.info('PermissionUtils', `获取${userRole}角色的功能权限`);
+  const permissions = resolveRolePermissions(userRole, familyPermissionRole);
+  logger.info('PermissionUtils', `获取${userRole}角色的功能权限`, { familyPermissionRole });
   
-  return JSON.parse(JSON.stringify(permissions)); // 深拷贝避免修改原对象
+  return permissions;
 }
 
 /**
@@ -245,7 +296,7 @@ function redirectToAllowedPage(userRole, targetPath, fallbackPath = '/pages/inde
  * @param {String} userRole 用户角色
  * @returns {Array} 过滤后的菜单项
  */
-function filterMenuItems(menuItems, userRole) {
+function filterMenuItems(menuItems, userRole, familyPermissionRole = null) {
   if (!Array.isArray(menuItems) || !userRole) {
     logger.warn('PermissionUtils', '过滤菜单项失败: 参数无效');
     return [];
@@ -257,13 +308,15 @@ function filterMenuItems(menuItems, userRole) {
     }
     
     if (item.feature && item.action) {
-      return hasFeaturePermission(userRole, item.feature, item.action);
+      return hasFeaturePermission(userRole, item.feature, item.action, familyPermissionRole);
     }
     
     return true;
   });
   
-  logger.info('PermissionUtils', `为${userRole}角色过滤菜单项: ${menuItems.length} -> ${filteredItems.length}`);
+  logger.info('PermissionUtils', `为${userRole}角色过滤菜单项: ${menuItems.length} -> ${filteredItems.length}`, {
+    familyPermissionRole
+  });
   return filteredItems;
 }
 
@@ -317,4 +370,4 @@ module.exports = {
   // 常量导出
   PAGE_PERMISSIONS,
   FEATURE_PERMISSIONS
-}; 
+};

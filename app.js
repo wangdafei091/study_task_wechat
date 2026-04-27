@@ -1,4 +1,12 @@
 // app.js
+const { ensureDefaultRuntimeApiConfig, resolveRuntimeApiConfig } = require('./utils/runtime-config');
+
+// 在 require 其他依赖前补齐默认云端配置，避免冷启动时 api-config 过早读到空 storage。
+ensureDefaultRuntimeApiConfig({
+  enableApi: 'true',
+  baseUrl: 'https://api.todoceo.xyz'
+});
+
 const StorageAdapter = require('./adapters/storage-adapter'); // 引入存储适配器
 const serviceManager = require('./services/service-manager.js'); // 引入服务管理器
 const logger = require('./utils/logger');
@@ -9,21 +17,23 @@ const bootstrapAuth = require('./utils/app/bootstrap-auth');
 const bootstrapServices = require('./utils/app/bootstrap-services');
 const postLoginBootstrap = require('./utils/app/post-login-bootstrap');
 const runtimeObservers = require('./utils/app/runtime-observers');
+const systemUserAccessState = require('./utils/app/system-user-access-state');
+const appAccessState = require('./utils/app/app-access-state');
 
 App({
-  onLaunch: async function () {
+  onLaunch: async function (options = {}) {
     // 原地补齐启动状态，避免覆盖默认 globalData 契约和 getter。
     this.globalData.appReady = false;
     this.globalData.userServiceReady = false;
     this.globalData.servicesInitialized = false;
     this.globalData.eventCallbacks = this.globalData.eventCallbacks || {};
-    // 读取当前环境配置，但不再自动写入默认测试环境
-    if (typeof wx !== 'undefined') {
-      const enableApi = wx.getStorageSync('ENABLE_API');
-      const baseUrl = wx.getStorageSync('API_BASE_URL');
-
-      logger.info('App', 'onLaunch环境配置检查', { enableApi, baseUrl });
-    }
+    const runtimeApiConfig = resolveRuntimeApiConfig();
+    logger.info('App', 'onLaunch环境配置检查', {
+      enableApi: runtimeApiConfig.enableApiRaw,
+      baseUrl: runtimeApiConfig.baseUrlRaw,
+      enabled: runtimeApiConfig.enabled,
+      source: runtimeApiConfig.source
+    });
 
     // 初始化日志系统
     this.initLogSystem();
@@ -35,6 +45,7 @@ App({
     // 确定是否为开发环境，用于配置事件总线
     const isDevEnv = deviceInfo.isDevelopmentEnv();
     await bootstrapAuth.prepareUserService(this);
+    const inviteEntryHandled = this.captureInviteEntry(options, { source: 'launch' });
     await bootstrapServices.initialize(this, { isDevEnv });
     
     // 检查基础库版本兼容性
@@ -46,9 +57,12 @@ App({
     // 展示本地存储能力
     const logs = wx.getStorageSync('logs') || []
     logs.unshift(Date.now())
-    wx.setStorageSync('logs', logs)
+    wx.setStorageSync('logs', logs.slice(0, 50))
 
-    await bootstrapAuth.runWxLogin(this);
+    const shouldSkipInitialLogin = Boolean(inviteEntryHandled && !this.globalData.userService);
+    if (!shouldSkipInitialLogin) {
+      await bootstrapAuth.runWxLogin(this);
+    }
     
     runtimeObservers.install(this);
 
@@ -59,12 +73,24 @@ App({
    * 小程序显示时的处理
    * 修复清理缓存后重新进入的连接问题
    */
-  onShow: function(options) {
+  onShow: async function(options) {
     logger.info('App', 'onShow触发，检查API配置');
 
-    const baseUrl = wx.getStorageSync('API_BASE_URL');
-    const enableApi = wx.getStorageSync('ENABLE_API');
-    logger.info('App', 'onShow环境配置检查', { enableApi, baseUrl });
+    const runtimeApiConfig = resolveRuntimeApiConfig();
+    logger.info('App', 'onShow环境配置检查', {
+      enableApi: runtimeApiConfig.enableApiRaw,
+      baseUrl: runtimeApiConfig.baseUrlRaw,
+      enabled: runtimeApiConfig.enabled,
+      source: runtimeApiConfig.source
+    });
+
+    try {
+      await this.startSystemAccessRefresh(options);
+    } catch (error) {
+      logger.error('App', '等待前台系统访问态刷新失败', error);
+    }
+
+    this.captureInviteEntry(options, { source: 'show' });
   },
 
   /**
@@ -145,17 +171,6 @@ App({
       
       logger.info('App', '日志系统初始化完成');
       
-      // 开发环境下，尝试加载日志分析器
-      if (isDevEnv) {
-        try {
-          const logAnalyzer = require('./utils/log-analyzer');
-          setTimeout(() => {
-            logger.info('App', '初始化日志分析器');
-          }, 300);
-        } catch (e) {
-          logger.warn('App', '加载日志分析器失败', e);
-        }
-      }
     } catch (error) {
       console.error('初始化日志系统失败:', error);
     }
@@ -244,6 +259,49 @@ App({
     return runtimeObservers.setTheme(this);
   },
 
+  startSystemAccessRefresh(options = {}) {
+    const existingRefresh = this.globalData.systemAccessRefreshPromise;
+    if (existingRefresh && typeof existingRefresh.then === 'function') {
+      return existingRefresh;
+    }
+
+    const refreshPromise = (async () => {
+      try {
+        return await bootstrapAuth.handleAppShow(this, options);
+      } catch (error) {
+        logger.error('App', '系统访问态刷新失败', error);
+        return false;
+      }
+    })();
+
+    this.globalData.systemAccessRefreshPromise = refreshPromise;
+
+    refreshPromise.finally(() => {
+      if (this.globalData.systemAccessRefreshPromise === refreshPromise) {
+        this.globalData.systemAccessRefreshPromise = null;
+      }
+    });
+
+    return refreshPromise;
+  },
+
+  async waitForSystemAccessRefresh(options = {}) {
+    const pendingRefresh = this.globalData.systemAccessRefreshPromise
+      || (options.ensureFresh !== false ? this.startSystemAccessRefresh({
+        source: options.source || 'page_on_show'
+      }) : null);
+
+    if (pendingRefresh && typeof pendingRefresh.then === 'function') {
+      try {
+        await pendingRefresh;
+      } catch (error) {
+        logger.warn('App', '页面等待系统访问态刷新时收到异常，继续走兜底判定', error);
+      }
+    }
+
+    return !systemUserAccessState.hasBlockedSessionFlag();
+  },
+
   // 全局数据
   globalData: {
     userInfo: null,
@@ -260,6 +318,9 @@ App({
     theme: 'light',
     themeColors: {},
     eventCallbacks: {},
+    systemAccessRefreshPromise: null,
+    lastInviteEntryFingerprint: '',
+    lastInviteEntryHandledAt: 0,
     needRefreshReward: false,
     rewardClaimedInfo: null,
     hasRedirectedToReward: false,
@@ -277,14 +338,6 @@ App({
    */
   getService: function(serviceName) {
     return serviceManager.getService(serviceName);
-  },
-  
-  /**
-   * 获取分析服务（供分包使用）
-   * @returns {Object} 分析服务实例
-   */
-  getAnalyticsService: function() {
-    return serviceManager.getAnalyticsService();
   },
   
   /**
@@ -309,6 +362,55 @@ App({
    */
   getUserService: function() {
     return this.globalData.userService;
+  },
+
+  extractInviteCode(options = {}) {
+    const query = options?.query || {};
+    return appAccessState.normalizeInviteCode(
+      query.inviteCode ||
+      query.invite_code ||
+      options?.referrerInfo?.extraData?.inviteCode ||
+      options?.referrerInfo?.extraData?.invite_code ||
+      ''
+    );
+  },
+
+  buildInviteEntryFingerprint(inviteCode, options = {}) {
+    return [
+      inviteCode,
+      options?.path || '',
+      options?.scene || '',
+      options?.query?.inviteCode || options?.query?.invite_code || ''
+    ].join('::');
+  },
+
+  captureInviteEntry(options = {}, extra = {}) {
+    const inviteCode = this.extractInviteCode(options);
+    if (!inviteCode || typeof wx === 'undefined' || typeof wx.reLaunch !== 'function') {
+      return false;
+    }
+
+    const fingerprint = this.buildInviteEntryFingerprint(inviteCode, options);
+    const lastFingerprint = this.globalData.lastInviteEntryFingerprint || '';
+    const lastHandledAt = Number(this.globalData.lastInviteEntryHandledAt || 0);
+    if (fingerprint === lastFingerprint && (Date.now() - lastHandledAt) < 1500) {
+      return false;
+    }
+
+    this.globalData.lastInviteEntryFingerprint = fingerprint;
+    this.globalData.lastInviteEntryHandledAt = Date.now();
+
+    const userService = this.globalData.userService;
+    const loginUser = userService?.getLoginUser?.() || null;
+    const mode = loginUser ? 'manual_input' : 'share_pending_login';
+
+    if (!loginUser) {
+      appAccessState.savePendingInviteCode(inviteCode);
+    }
+
+    const url = `/pages/access-gate/access-gate?mode=${encodeURIComponent(mode)}&inviteCode=${encodeURIComponent(inviteCode)}&source=${encodeURIComponent(extra.source || '')}`;
+    wx.reLaunch({ url });
+    return true;
   },
   
   // 修复存量任务数据的penaltyApplied字段
@@ -335,8 +437,8 @@ App({
    * 供页面调用的云端登录方法
    * 用于需要重新登录的场景
    */
-  doCloudLogin: async function() {
-    return bootstrapAuth.doCloudLogin(this);
+  doCloudLogin: async function(options = {}) {
+    return bootstrapAuth.doCloudLogin(this, options);
   },
 
   /**

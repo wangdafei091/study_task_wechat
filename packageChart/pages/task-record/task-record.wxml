@@ -1,0 +1,53 @@
+<view class="record-page">
+  <view class="page-header">
+    <view>
+      <text class="page-title">记录表现</text>
+      <text class="page-subtitle">有结果时再记录，没有发生就留空</text>
+    </view>
+  </view>
+
+  <view class="toolbar-card">
+    <view class="toolbar-item">
+      <text class="toolbar-label">日期</text>
+      <picker mode="date" value="{{date}}" end="{{today}}" bindchange="onDateChange">
+        <view class="picker-value">{{date}}</view>
+      </picker>
+    </view>
+
+    <view class="toolbar-item" wx:if="{{childOptions.length > 1}}">
+      <text class="toolbar-label">孩子</text>
+      <view class="child-switcher">
+        <block wx:for="{{childOptions}}" wx:key="userId">
+          <view class="child-pill {{item.userId === targetUserId ? 'active' : ''}}" data-user-id="{{item.userId}}" bindtap="onChildTap">
+            {{item.label}}
+          </view>
+        </block>
+      </view>
+    </view>
+  </view>
+
+  <view class="list-card">
+    <block wx:if="{{!loading && items.length > 0}}">
+      <block wx:for="{{items}}" wx:key="id">
+        <view class="record-item {{selectedTaskId === item.id ? 'selected' : ''}}">
+          <view class="record-main">
+            <view class="record-head">
+              <text class="record-title">{{item.title}}</text>
+              <text class="record-type">{{item.typeLabel}}</text>
+            </view>
+            <text class="record-meta">{{item.points}} 颗星星</text>
+            <text class="record-status {{item.resultTone}}" wx:if="{{item.resultText}}">{{item.resultText}}</text>
+          </view>
+          <view class="record-actions">
+            <button class="result-btn success {{item.outcome === 'success' ? 'active' : ''}}" data-task-id="{{item.id}}" data-outcome="success" bindtap="onRecordTap">达成</button>
+            <button class="result-btn failure {{item.outcome === 'failure' ? 'active' : ''}}" data-task-id="{{item.id}}" data-outcome="failure" bindtap="onRecordTap">未达成</button>
+          </view>
+        </view>
+      </block>
+    </block>
+
+    <view class="empty-panel" wx:elif="{{!loading}}">
+      <text class="empty-text">这一天没有可记录的表现项。</text>
+    </view>
+  </view>
+</view>

@@ -2,6 +2,8 @@
 
 本文档介绍了学习任务微信小程序服务层API，包括所有核心服务的功能、方法签名和使用说明。
 
+> **最后更新**：2026-04-27
+
 ---
 
 ## 服务架构概览
@@ -26,7 +28,505 @@ const messageService = serviceManager.get('messageService');
 const userService = serviceManager.get('userService');
 const validationService = serviceManager.get('validationService');
 const configService = serviceManager.get('configService');
+const offlineQueueService = serviceManager.get('offlineQueueService');
+const taskTemplateService = serviceManager.get('taskTemplateService');
 ```
+
+补充说明：
+- `offlineQueueService` 为 M19E 引入的统一待同步队列服务，负责承接任务域与奖励域的离线待同步动作。
+- `ENABLE_API / API_BASE_URL` 不属于 `ConfigService` 管辖范围，而是由 `utils/runtime-config.js` 与 `utils/api-config.js` 统一解析为启动时运行模式快照。
+- `taskTemplateService` 同时支持别名 `taskTemplate` / `TaskTemplateService`，由 `ServiceManager` 统一映射。
+- `services/system-service.js` 与 `services/invite-service.js` 为轻量 HTTP 服务，不通过 `ServiceManager` 注册，当前由系统管理页、治理页、邀请码中心和承接页直接 `require` 使用。
+
+---
+
+## SystemService - 系统管理接口服务
+
+系统管理接口服务负责前端关于页隐藏入口探测、系统管理概览加载与应用准入模式更新。
+
+### 核心功能
+- 获取当前用户是否具备进入系统管理页的资格
+- 获取当前应用准入模式、来源和最后更新时间
+- 更新 `open / invite_only` 准入模式
+- 获取和更新新用户邀请码全局治理配置
+- 获取系统用户治理列表，并更新访问级别与发码能力
+- 在系统配置损坏时承接前端“修复态”链路
+
+### API 方法
+
+##### `getBootstrap()`
+获取关于页隐藏入口探测信息。
+- **返回**:
+  ```javascript
+  {
+    canEnterSystemAdmin: boolean
+  }
+  ```
+- **说明**：
+  - 仅返回最小权限布尔值，不返回当前准入模式
+  - 当前由 `packageManage/pages/about/about.js` 在版本区连续点击 7 次后触发
+
+##### `getOverview()`
+获取系统管理页概览信息。
+- **返回**:
+  ```javascript
+  {
+    appAccessMode: 'open' | 'invite_only',
+    modeSource: 'db' | 'env' | 'default',
+    updatedAt: string | null,
+    updatedByUserId: string | null
+  }
+  ```
+- **说明**：
+  - 仅系统管理员可访问
+  - 当后端返回 `SYSTEM_SETTING_CORRUPTED` 时，页面应进入修复态，而不是展示默认假值
+
+##### `updateAppAccessMode(mode)`
+更新应用准入模式。
+- **参数**:
+  - `mode` - `'open' | 'invite_only'`
+- **返回**:
+  ```javascript
+  {
+    appAccessMode: 'open' | 'invite_only',
+    modeSource: 'db',
+    updatedAt: string | null,
+    updatedByUserId: string | null
+  }
+  ```
+- **说明**：
+  - 成功后数据库立即成为权威来源
+  - 该更新只影响新用户登录是否需要邀请码，不影响已有用户登录
+
+##### `listUserGovernance(params = {})`
+获取系统用户治理列表。
+- **参数**:
+  ```javascript
+  {
+    keyword?: string,
+    accessLevel?: 'all' | 'normal' | 'readonly' | 'blocked',
+    role?: 'all' | 'parent' | 'child',
+    canIssueAdmissionCode?: 'all' | 'true' | 'false'
+  }
+  ```
+- **返回**:
+  ```javascript
+  {
+    users: Array<{
+      userId: string,
+      nickname: string,
+      role: 'parent' | 'child',
+      familyId: string | null,
+      familyPermissionRole: 'manager' | 'viewer' | null,
+      isSystemAdmin: boolean,
+      isVirtual: boolean,
+      systemAccessLevel: 'normal' | 'readonly' | 'blocked',
+      systemAccessUpdatedAt: string | null,
+      systemAccessUpdatedByUserId: string | null,
+      canIssueAdmissionCode: boolean,
+      admissionCodeQuotaTotal: number | null,
+      admissionCodeQuotaUsed: number,
+      admissionCodeQuotaRemaining: number | null
+    }>,
+    summary: {
+      normal: number,
+      readonly: number,
+      blocked: number
+    },
+    nextCursor: string,
+    hasMore: boolean
+  }
+  ```
+- **说明**：
+  - 当前返回仍为单页全量结果
+  - `canIssueAdmissionCode` 筛选按“当前有效发码能力”判断，而不是只看原始字段
+
+##### `updateUserAccessLevel(userId, accessLevel)`
+更新目标用户系统访问级别。
+- **参数**:
+  - `userId` - `string`
+  - `accessLevel` - `'normal' | 'readonly' | 'blocked'`
+- **返回**:
+  ```javascript
+  {
+    userId: string,
+    systemAccessLevel: 'normal' | 'readonly' | 'blocked',
+    systemAccessUpdatedAt: string | null,
+    systemAccessUpdatedByUserId: string | null
+  }
+  ```
+- **说明**：
+  - 当用户被降级到 `readonly / blocked` 时，后端会同步失效该用户已有的有效邀请码
+
+##### `getInviteGovernance()`
+获取第一类邀请码全局治理概览。
+- **返回**:
+  ```javascript
+  {
+    quotaTotal: number | null,
+    quotaUsed: number,
+    quotaRemaining: number | null
+  }
+  ```
+
+##### `updateInviteGovernance(quotaTotal)`
+更新第一类邀请码全局总量。
+- **参数**:
+  - `quotaTotal` - `number | null`
+- **返回**:
+  ```javascript
+  {
+    quotaTotal: number | null,
+    quotaUsed: number,
+    quotaRemaining: number | null
+  }
+  ```
+
+##### `updateUserAdmissionIssuer(userId, payload = {})`
+更新目标用户的新用户发码能力。
+- **参数**:
+  - `userId` - `string`
+  - `payload`
+    ```javascript
+    {
+      canIssueAdmissionCode: boolean,
+      admissionCodeQuotaTotal: number | null
+    }
+    ```
+- **返回**:
+  ```javascript
+  {
+    userId: string,
+    canIssueAdmissionCode: boolean,
+    admissionCodeQuotaTotal: number | null
+  }
+  ```
+- **说明**：
+  - 仅正常状态的家长可被授予该能力
+  - 当能力被关闭时，后端会同步失效该用户已有的有效第一类邀请码
+
+---
+
+## InviteService - 统一邀请码接口服务
+
+统一邀请码接口服务负责承接页摘要预览、邀请码中心能力摘要和两类邀请码的生成/刷新。
+
+### 核心功能
+- 预览邀请码摘要与当前用户下一步可执行动作
+- 获取当前登录用户的邀请码能力摘要
+- 获取当前有效的邀请码展示数据
+- 生成或刷新新用户邀请码
+- 生成或刷新家庭邀请码
+
+### API 方法
+
+##### `previewInviteCode(inviteCode)`
+预览邀请码摘要，不消费邀请码。
+- **参数**:
+  - `inviteCode` - `string`
+- **返回**:
+  ```javascript
+  {
+    inviteCode: string,
+    purpose: 'admission_only' | 'family_invite' | null,
+    status: 'active' | 'expired' | 'invalid',
+    targetRole: 'parent' | 'child' | null,
+    familyId: string | null,
+    familyName: string | null,
+    issuerDisplayName: string | null,
+    currentAction: string,
+    currentActionMessage: string,
+    requiresProfileAuthorization: boolean
+  }
+  ```
+- **说明**：
+  - 未登录时主要返回 `enter_app / join_family`
+  - 已登录时可能返回 `already_has_access / already_in_family / has_other_family / system_readonly / system_blocked / invalid`
+
+##### `getBootstrap()`
+获取当前登录用户的邀请码能力摘要。
+- **返回**:
+  ```javascript
+  {
+    canIssueAdmissionCode: boolean,
+    admissionCodeQuotaTotal: number | null,
+    admissionCodeQuotaUsed: number,
+    admissionCodeQuotaRemaining: number | null,
+    admissionGlobalQuotaTotal: number | null,
+    admissionGlobalQuotaUsed: number,
+    admissionGlobalQuotaRemaining: number | null,
+    canIssueFamilyInviteCode: boolean,
+    familyId: string | null,
+    availableFamilyInviteRoles: Array<'parent' | 'child'>
+  }
+  ```
+
+##### `getCurrentInviteSummary()`
+获取当前有效邀请码摘要。
+- **返回**:
+  ```javascript
+  {
+    admissionCode: Object | null,
+    familyInviteCodes: Array<Object>
+  }
+  ```
+- **说明**：
+  - `admissionCode` 最多只有 1 个
+  - `familyInviteCodes` 可能同时包含邀请家长和邀请孩子两种当前有效邀请码
+
+##### `issueAdmissionCode()`
+生成或刷新当前用户的新用户邀请码。
+- **返回**: `Promise<Object>`
+- **说明**：
+  - 同一发码人当前只保留 1 个有效第一类邀请码
+
+##### `issueFamilyCode(targetRole)`
+生成或刷新当前家庭邀请码。
+- **参数**:
+  - `targetRole` - `'parent' | 'child'`
+- **返回**: `Promise<Object>`
+- **说明**：
+  - 同一家庭同一角色槽位当前只保留 1 个有效邀请码
+  - `targetRole='parent'` 生成的是默认 `viewer` 家长邀请码
+
+---
+
+## OfflineQueueService - 统一离线队列服务
+
+离线队列服务负责统一承接任务域、奖励域在云端失败后的待同步动作，并在登录后补偿或读取前补偿阶段顺序 drain。
+
+### 核心功能
+- 统一入队任务域 / 奖励域 mutation
+- 队列项去重与冲突折叠
+- 按当前会话上下文过滤并执行 drain
+- 兼容历史 `pendingSyncMeta / tombstone` 迁移
+
+### API 方法
+
+##### `initialize()`
+初始化离线队列元数据与迁移状态。
+- **返回**: `Promise<boolean>`
+
+##### `enqueueMutation(input)`
+将待同步动作写入统一离线队列。
+- **参数**:
+  ```javascript
+  {
+    domain: 'task' | 'reward',
+    entityId: string,
+    operation: string,
+    operationKey?: string,
+    payload?: Object,
+    snapshot?: Object | null,
+    context?: {
+      familyId?: string | null,
+      loginUserId?: string | null,
+      actorUserId?: string | null,
+      actorRole?: 'parent' | 'child' | null,
+      targetUserId?: string | null
+    },
+    source?: 'live_write' | 'legacy_migration'
+  }
+  ```
+- **返回**: `Promise<OfflineQueueItem>`
+- **说明**:
+  - 对同一实体的连续 mutation 会按设计规则折叠
+  - 过渡期仍允许任务/奖励实体保留 `pendingSyncMeta` 兼容镜像
+
+##### `drain(options = {})`
+按当前登录上下文执行待同步项。
+- **参数**:
+  ```javascript
+  {
+    domains?: Array<'task' | 'reward'>,
+    reason?: string,
+    force?: boolean,
+    limit?: number
+  }
+  ```
+- **返回**:
+  ```javascript
+  {
+    success: boolean,
+    processed: number,
+    skipped: number,
+    failed: number,
+    partial: boolean,
+    remaining: number
+  }
+  ```
+- **说明**:
+  - 登录后补偿和任务/奖励读取前补偿都走该入口
+  - 上下文不匹配、未到退避窗口的项会被跳过，不会误回放
+
+##### `migrateLegacyPendingState()`
+把历史 `pendingSyncMeta / delete tombstone` 导入统一队列。
+- **返回**: `Promise<{ success: boolean, migratedCount: number, skippedCount: number }>`
+
+##### `getPendingSummary(filter = {})`
+返回当前待同步概览。
+- **返回**: `Promise<{ total: number, byDomain: Object }>`
+
+---
+
+## TaskTemplateService - 任务模板服务
+
+任务模板服务负责模板的 CRUD、云端同步、本地镜像、模板回填任务表单以及最近模板推荐。
+
+### 核心功能
+- 任务模板创建、编辑、删除、启停
+- 模板列表 / 最近模板查询
+- 模板应用到 `task-edit` 表单
+- 模板使用次数回写
+- 云端模板列表刷新与本地镜像替换
+- 模板日期策略与重复周期护栏校验
+
+### M22A 补充说明
+
+- 模板重复周期与任务周期共用同一套跨度护栏：模板重复范围最大 `93` 天。
+- 历史超长模板允许继续读取，并允许“不扩大跨度”的名称/描述类编辑；若继续拉长则会被拒绝。
+- 模板回填到 `task-edit` 后，页面仍会按当前表单日期重新推导重复语义，不再出现“UI 看起来是多天，但底层仍按单天提交”的回填残差。
+
+### API 方法
+
+##### `getTemplateById(templateId, options = {})`
+根据模板 ID 获取单个模板。
+- **参数**:
+  - `templateId` - 模板 ID
+  - `options.force` - `true` 时先强制云端刷新
+- **返回**: `Promise<TaskTemplate | null>`
+
+##### `getRecentTemplates(limit = 5, options = {})`
+获取最近使用的启用模板。
+- **参数**:
+  - `limit` - 返回数量上限
+  - `options.skipRefresh` - `true` 时跳过云端刷新
+- **返回**:
+  ```javascript
+  {
+    templates: TaskTemplate[]
+  }
+  ```
+
+##### `getTemplates(options = {})`
+获取模板列表。
+- **参数**:
+  ```javascript
+  {
+    keyword?: string,
+    type?: 'all' | 'study' | 'habit' | 'interest',
+    status?: 'all' | 'enabled' | 'disabled',
+    enabledOnly?: boolean,
+    sortBy?: 'recent' | 'usage',
+    skipRefresh?: boolean,
+    force?: boolean
+  }
+  ```
+- **返回**:
+  ```javascript
+  {
+    templates: TaskTemplate[]
+  }
+  ```
+
+##### `createTemplate(input = {})`
+创建任务模板。
+- **参数**:
+  ```javascript
+  {
+    name: string,
+    description?: string,
+    enabled?: boolean,
+    taskPayload: Object,
+    dateStrategy?: Object,
+    familyId?: string,
+    createdByUserId?: string
+  }
+  ```
+- **返回**:
+  ```javascript
+  {
+    success: true,
+    template: TaskTemplate
+  }
+  ```
+- **说明**：
+  - `dateStrategy.durationDays` 或模板重复结束日期超出 `93` 天时会拒绝保存
+  - 失败时会抛出带中文提示的校验错误，调用方应直接向用户展示
+
+##### `updateTemplate(templateId, input = {})`
+更新任务模板。
+- **返回**:
+  ```javascript
+  {
+    success: true,
+    template: TaskTemplate
+  }
+  ```
+- **说明**：
+  - 会以“旧模板 + 本次变更”合并后的结果做完整校验
+  - 历史超长模板若本次没有继续扩大跨度，允许保存；若继续拉长会被拒绝
+
+##### `setTemplateEnabled(templateId, enabled)`
+启用或停用模板。
+- **返回**:
+  ```javascript
+  {
+    success: true,
+    template: TaskTemplate
+  }
+  ```
+
+##### `deleteTemplate(templateId)`
+删除模板。
+- **返回**:
+  ```javascript
+  {
+    success: true
+  }
+  ```
+
+##### `recordTemplateUsage(templateId)`
+回写模板使用次数和最近使用时间。
+- **返回**:
+  ```javascript
+  {
+    success: boolean,
+    template?: TaskTemplate
+  }
+  ```
+
+##### `applyTemplateToTaskForm(template, context = {})`
+将模板映射为 `task-edit` 可直接 `setData` 的表单补丁。
+- **参数**:
+  - `template` - `TaskTemplate` 或普通模板对象
+  - `context.today` - 可选，指定回填参考日期
+- **返回**:
+  ```javascript
+  {
+    formPatch: {
+      newTask: Object,
+      repeatText: string,
+      reminderText: string,
+      pointsExpiryText: string,
+      repeatPreviewText: string,
+      repeatTypeWarning: boolean,
+      weekdaySelection: boolean[],
+      isRepeatOptionDisabled: boolean,
+      selectedTemplateId: string
+    }
+  }
+  ```
+
+##### `refreshTemplatesFromCloud(options = {})`
+主动从云端刷新模板列表并替换本地镜像。
+- **返回**:
+  ```javascript
+  {
+    success: boolean,
+    templates: TaskTemplate[]
+  }
+  ```
 
 ---
 
@@ -39,10 +539,49 @@ const configService = serviceManager.get('configService');
 - 任务状态管理和流转
 - 必做任务惩罚机制
 - 重复任务处理
+- 表现项（occurrence）配置、记录、停用与转换
 - 与星星系统的集成
 - 事件发布机制
+- 家庭治理权限与执行态上下文收口
+- 任务/表现项周期护栏与历史超长兼容
 
 ### API 方法
+
+#### M22A 治理补充说明
+
+- `loginUser.role='parent' && familyPermissionRole='viewer'` 时，默认不允许创建、编辑、删除、必做设置、表现项治理等管理型写操作。
+- 查看者家长切到孩子视角后，任务“执行型”操作保留例外链路：`completeTask / resetTask / updateTaskStatus` 会按孩子执行上下文透传 `operatorContext`，后端据此允许孩子自己的打卡/重置。
+- 表现项记录不属于查看者例外；`recordOccurrenceResult(...)` 仍要求孩子本人或 `manager` 家长链路。
+- 任务重复周期最大 `93` 天，表现项 `activeRange` 最大 `180` 天；历史已超限数据允许继续读取，并允许“不继续扩张”的更新。
+
+#### 结果结构补充说明（M19B）
+
+任务写方法对页面层继续保持兼容返回结构：
+
+```javascript
+{
+  success: boolean,
+  task?: Task | null,
+  tasks?: Task[],
+  taskId?: string | null,
+  message?: string,
+  fallback?: boolean,
+  mutation?: {
+    primaryTask: Object | null,
+    affectedTasks: Object[],
+    operation: 'create' | 'update' | 'delete' | 'complete' | 'reset' | 'required' | 'unrequired',
+    task?: Object | null,
+    tasks?: Object[],
+    taskId?: string | null
+  }
+}
+```
+
+说明：
+- 云端模式下，正常主路径采用 API 优先，成功后回写本地仓储
+- `fallback=true` 表示云端写入失败，已降级为本地保存 / 待同步路径
+- 页面层若只关心兼容契约，可继续读取 `success / task / taskId`
+- 新链路与测试可读取 `mutation` 查看权威写结果
 
 #### 基础操作
 
@@ -72,20 +611,41 @@ const configService = serviceManager.get('configService');
     points: number,          // 奖励星星数
     pointsExpiry: string,     // 有效期类型
     isRequired: boolean,      // 是否必做任务
-    repeat?: Object          // 重复配置
+    repeat?: Object,         // 重复配置
+    executionMode?: 'planned' | 'occurrence',
+    activeRange?: {
+      startDate: string,
+      endDate?: string,
+      hasNoEndDate?: boolean
+    },
+    targetUserId?: string,   // 家长代孩子创建时传入
+    operationKey?: string,
+    modifyTime?: number
   }
   ```
-- **返回**: `{ success: boolean, task?: Task, message?: string }`
+- **返回**: `Promise<{ success: boolean, task?: Task, tasks?: Task[], createdTasks?: Task[], fallback?: boolean, mutation?: Object, message?: string }>`
+- **说明**:
+  - 云端模式下先调用后端创建接口，再把权威结果回写到本地缓存
+  - 重复任务在云端模式下由后端展开，`tasks / createdTasks` 会包含主任务和受影响实例
+  - 若云端创建失败，降级时仅本地保存主任务；重复任务会标记 `pendingSyncMeta.repeatMaterializationPending=true`
+  - 当 `executionMode='occurrence'` 时，表示创建“表现项配置任务”；`occurrenceOutcome / isOccurrenceRecord / recordedAt` 不允许通过该通用创建接口直传
+  - 当重复周期或表现项有效期超出护栏时，返回 `{ success: false, code, message }`，其中 `code` 为 `TASK_REPEAT_RANGE_TOO_LARGE` 或 `TASK_ACTIVE_RANGE_TOO_LARGE`
 
 ##### `updateTask(taskId, changes, userId = null)`
 更新任务信息
 - **参数**: `taskId` - 任务ID, `changes` - 更新数据对象, `userId` - 可选的用户ID
-- **返回**: `{ success: boolean, task?: Task, message?: string }`
+- **返回**: `Promise<{ success: boolean, task?: Task, fallback?: boolean, mutation?: Object, message?: string }>`
+- **说明**:
+  - 云端模式下为 API 优先；失败时降级为本地保存并保留待同步元数据
+  - `occurrence` 配置任务允许通过通用更新接口维护 `title / type / points / activeRange`
+  - 普通任务切换到 `occurrence` 必须走 `convertTaskToOccurrenceMode(...)`
+  - 历史超长任务若本次没有继续扩大跨度，允许保存；继续拉长则返回范围错误
 
 ##### `deleteTask(taskId, userId = null, suppressMessage = false)`
 删除任务
 - **参数**: `taskId` - 任务ID, `userId` - 可选的用户ID, `suppressMessage` - 是否禁用消息推送，默认false
-- **返回**: `{ success: boolean, message?: string }`
+- **返回**: `Promise<{ success: boolean, taskId?: string, fallback?: boolean, mutation?: Object, message?: string }>`
+- **说明**: 云端模式下删除成功后直接删除本地缓存；失败时写入 delete tombstone 走待同步链路
 
 ---
 
@@ -94,13 +654,13 @@ const configService = serviceManager.get('configService');
 ##### `completeTask(taskId, userId = null)`
 完成任务（核心业务流程）
 - **参数**: `taskId` - 任务ID, `userId` - 可选的用户ID
-- **返回**: `{ success: boolean, task?: Task, starReward?: number, message?: string }`
+- **返回**: `Promise<{ success: boolean, task?: Task, fallback?: boolean, mutation?: Object, message?: string }>`
 - **内部流程**：验证状态 → 更新为完成 → 计算星星 → 发布事件 → 创建消息
 
 ##### `resetTask(taskId, userId = null)`
 重置任务状态
 - **参数**: `taskId` - 任务ID, `userId` - 可选的用户ID
-- **返回**: `{ success: boolean, task?: Task, starDeduction?: number, message?: string, locked?: boolean }`
+- **返回**: `Promise<{ success: boolean, task?: Task, fallback?: boolean, mutation?: Object, message?: string, locked?: boolean }>`
 - **说明**:
   - 奖励锁定判断按任务归属用户执行，而不是按全局最后兑换时间执行
   - 若任务在对应用户最近一次奖励兑换之前完成，则返回 `locked=true`，且不会执行状态回退或扣星
@@ -108,7 +668,10 @@ const configService = serviceManager.get('configService');
 ##### `updateTaskStatus(taskId, status, userId = null)`
 更新任务状态
 - **参数**: `taskId` - 任务ID, `status` - 状态(0=未完成, 1=已完成), `userId` - 可选的用户ID
-- **返回**: `{ success: boolean, task?: Task, message?: string }`
+- **返回**: `Promise<{ success: boolean, task?: Task, fallback?: boolean, mutation?: Object, message?: string }>`
+- **说明**:
+  - 云端模式下优先使用后端状态权威返回，本地模式仍保留原有本地写路径
+  - 查看者家长切到孩子视角后，该方法会按执行态构造 `operatorContext`，保证孩子自己的打卡链路可继续使用
 
 ---
 
@@ -117,12 +680,12 @@ const configService = serviceManager.get('configService');
 ##### `markTaskAsRequired(taskId, userId = null)`
 标记任务为必做
 - **参数**: `taskId` - 任务ID, `userId` - 可选的用户ID
-- **返回**: `{ success: boolean, task?: Task, message?: string }`
+- **返回**: `Promise<{ success: boolean, task?: Task, fallback?: boolean, mutation?: Object, message?: string }>`
 
 ##### `unmarkTaskAsRequired(taskId, userId = null)`
 取消必做任务标记
 - **参数**: `taskId` - 任务ID, `userId` - 可选的用户ID
-- **返回**: `{ success: boolean, task?: Task, message?: string }`
+- **返回**: `Promise<{ success: boolean, task?: Task, fallback?: boolean, mutation?: Object, message?: string }>`
 
 ##### `checkRequiredTasks()`
 检查必做任务惩罚状态（兼容方法，内部调用checkTasksStatus）
@@ -215,14 +778,110 @@ const configService = serviceManager.get('configService');
 - **参数**: `startDate`/`endDate` - `YYYY-MM-DD` 格式, `userId` - 可选用户 ID, `options` - 作用域选项（同 `getTasksByScope`）
 - **返回**: `Task[]`
 
+##### `getOccurrenceTasks(scope = {})`
+获取表现项配置任务。
+- **参数**:
+  ```javascript
+  {
+    userId?: string,
+    date?: string,
+    startDate?: string,
+    endDate?: string,
+    includeInactive?: boolean
+  }
+  ```
+- **返回**: `Promise<Task[]>`
+- **说明**:
+  - 默认按 `date` 返回当天有效的表现项配置任务
+  - 当同时传 `startDate/endDate` 时，按有效时间段 overlap 返回月看板所需骨架行
+  - `includeInactive=true` 时返回当前用户全部未删除表现项配置，供“表现项设置页”维护
+
+##### `getOccurrenceRecordsByDateRange(scope = {})`
+获取表现记录实例。
+- **参数**:
+  ```javascript
+  {
+    userId?: string,
+    startDate: string,
+    endDate: string
+  }
+  ```
+- **返回**: `Promise<Task[]>`
+- **说明**: 仅返回 `executionMode='occurrence' && isOccurrenceRecord=true` 的事实记录实例
+
 ##### `_syncUpdateToCloud(task)` *(私有)*
-任务编辑后异步同步到云端，接收完整 Task 对象，内部提取白名单字段发送 PUT，失败仅记 warn 日志，不影响本地结果
+任务编辑云端写入口，接收完整 Task 对象，发送 PUT 并返回标准化后的 `TaskMutationResponse`
 
 ##### `_syncDeleteToCloud(taskId)` *(私有)*
-任务删除后异步同步到云端；HTTP 404 视为成功（本地重复实例从未上云）
+任务删除云端写入口；HTTP `404` 视为成功，返回 `TaskMutationResponse`
 
 ##### `_syncStatusToCloud(task)` *(私有)*
-完成/重置状态异步同步到云端，接收完整 Task 对象，发送 `{ status, starAwarded }`，保证跨设备完成/重置后 `star_awarded` 状态一致
+完成/重置状态云端写入口，接收完整 Task 对象，发送 `{ status, starAwarded }` 并返回 `TaskMutationResponse`
+
+##### `_syncRequiredStateToCloud(task)` *(私有)*
+必做/取消必做云端写入口，返回 `TaskMutationResponse`
+
+##### `recordOccurrenceResult(taskId, options = {})`
+记录表现项某一天的结果。
+- **参数**:
+  ```javascript
+  {
+    userId: string,
+    date: string,
+    outcome: 'success' | 'failure'
+  }
+  ```
+- **返回**:
+  ```javascript
+  {
+    success: boolean,
+    task?: Task,
+    record?: Task,
+    starsAwarded?: boolean,
+    unchanged?: boolean,
+    fallback?: boolean,
+    mutation?: Object,
+    message?: string
+  }
+  ```
+- **说明**:
+  - 同一表现项/同一孩子/同一天只保留一条记录
+  - 重复记录相同结果时按幂等成功返回
+  - `success -> failure` 覆盖时会在同一事务内撤回此前已发星星
+  - 查看者家长不具备表现项记录权限；该接口只允许孩子本人或 `manager` 家长链路执行
+
+##### `disableOccurrenceTask(taskId, options = {}, userId = null)`
+停用表现项配置任务。
+- **参数**:
+  ```javascript
+  {
+    disableFromDate?: string
+  }
+  ```
+- **返回**: `Promise<{ success: boolean, task?: Task, disabledTask?: Task, fallback?: boolean, mutation?: Object, message?: string }>`
+- **说明**: 只让该表现项退出未来日期查询，不删除历史记录
+
+##### `convertTaskToOccurrenceMode(taskId, options = {}, userId = null)`
+把既有 planned 任务转换为表现项配置任务。
+- **参数**:
+  ```javascript
+  {
+    effectiveFromDate?: string
+  }
+  ```
+- **返回**:
+  ```javascript
+  {
+    success: boolean,
+    task?: Task,
+    convertedTask?: Task,
+    archivedFutureInstances?: string[],
+    fallback?: boolean,
+    mutation?: Object,
+    message?: string
+  }
+  ```
+- **说明**: 仅归档未来未完成实例，已完成历史实例与历史表现记录保持不动
 
 ---
 
@@ -289,6 +948,32 @@ const configService = serviceManager.get('configService');
   - `options.scope` - `'family'` 时拉取全家流水；该模式仅回灌 `starRecords`，不回灌全家 `starGroups`
 - **返回**: `Promise<{ success: boolean, groups?: StarGroup[], records?: StarRecord[], message?: string }>`
 - **说明**: 首页显式用户任务入口、奖励页、分析页都会复用此方法进行前置同步
+
+##### `getFamilyStarSummary(options = {})`
+获取家庭当前星星汇总与分组快照
+- **参数**:
+  - `options.force` - 为 `true` 时忽略前端内存缓存，重新请求后端 `GET /api/stars/family-summary`
+- **返回**:
+  ```javascript
+  Promise<{
+    success: boolean,
+    scope: 'family',
+    subjectUserIds: string[],
+    totalPoints: number,
+    groups: StarGroup[],
+    fetchedAt?: number
+  }>
+  ```
+- **说明**: 供分析页 family 模式读取当前余额锚点与分组快照；仅云端模式可用
+
+##### `syncExpiryAuthorityIfNeeded(options = {})`
+按需触发星星到期权威结算同步
+- **参数**:
+  - `options.scope` - `'user' | 'family'`
+  - `options.userId` - `scope='user'` 时的目标用户
+  - `options.force` - 是否忽略本地节流窗口
+- **返回**: `Promise<{ success: boolean, skipped?: boolean, reason?: string }>`
+- **说明**: 分析页、首页、奖励页等正式读取链路会先经过该方法，确保当前余额与过期预测基线一致
 
 ---
 
@@ -366,14 +1051,15 @@ const configService = serviceManager.get('configService');
 
 ## RewardService - 奖励管理服务
 
-奖励服务管理奖励系统，包括奖励创建、兑换、状态管理等功能。
+奖励服务负责家庭奖池读取、奖励创建/编辑/启停、兑换与取消兑换、手动发放，以及云端奖励镜像同步。
 
 ### 核心功能
-- 奖励CRUD操作
-- 奖励兑换流程
-- 库存管理
-- 星星过期保护机制
-- 兑换记录跟踪
+- 家庭奖池 / 家庭兑换记录 / 当前孩子个人兑换记录读取
+- 奖励 CRUD、启停和复制
+- 奖励兑换、取消兑换、手动发放
+- `instant / manual` 履约模式统一
+- 快过期星星动态抵扣成本预览
+- 云端奖励镜像刷新与待同步补偿
 
 ### API 方法
 
@@ -410,6 +1096,53 @@ const configService = serviceManager.get('configService');
 - **参数**: `rewardId` - 奖励ID
 - **返回**: `Promise<{ success: boolean, message?: string }>`
 
+##### `getRewardsByFamily(scope = {})`
+获取家庭范围奖励列表。
+- **参数**:
+  ```javascript
+  {
+    familyId?: string | null,
+    memberUserIds?: string[],
+    childUserIds?: string[],
+    loginUserId?: string | null,
+    viewUserId?: string | null
+  }
+  ```
+- **返回**: `Promise<Reward[]>`
+- **说明**:
+  - 奖励页、奖励管理页统一复用该入口
+  - 无家庭场景下退化为单用户奖励池，不因 `familyId=null` 直接返回空
+
+##### `getClaimedRewardsByExchangeUser(exchangeUserId, scope = {})`
+获取某个孩子自己的兑换记录。
+- **参数**:
+  - `exchangeUserId` - 兑换孩子 userId
+  - `scope` - 同 `getRewardsByFamily`
+- **返回**: `Promise<Reward[]>`
+
+##### `getFamilyClaimedRewards(scope = {})`
+获取家庭范围内所有已兑换奖励记录。
+- **参数**: `scope` - 同 `getRewardsByFamily`
+- **返回**: `Promise<Reward[]>`
+
+##### `getRewardManageFamilyViewModel(scope = {})`
+获取奖励管理页所需聚合视图。
+- **参数**: `scope` - 同 `getRewardsByFamily`
+- **返回**:
+  ```javascript
+  {
+    familyId: string | null,
+    memberUserIds: string[],
+    childUserIds: string[],
+    manageableRewards: Reward[],
+    exchangeRecords: Reward[],
+    exampleTemplates: Reward[]
+  }
+  ```
+- **说明**:
+  - `manageableRewards` 仅包含未兑换的正式奖励
+  - `exchangeRecords` 承担家庭兑换历史，不再让已兑换奖励回流到“奖励设置”主列表
+
 ---
 
 #### 奖励兑换
@@ -426,9 +1159,42 @@ const configService = serviceManager.get('configService');
 ##### `exchangeReward(rewardId, userId = null)`
 兑换奖励
 - **参数**: `rewardId` - 奖励ID, `userId` - 用户ID（可选，默认使用当前用户）
-- **返回**: `Promise<{ success: boolean, reward?: Reward, starCost?: number, actualCost?: number, message?: string }>`
-- **内部流程**：验证库存 → 消费星星 → 标记已兑换 → 发布事件 → 创建消息
-- **说明**: 云端模式下走独立 `_syncExchangeToCloud(rewardId, exchangeUserId, modifyTime)` 路径，不与通用奖励 upsert 混用
+- **返回**:
+  ```javascript
+  Promise<{
+    success: boolean,
+    reward?: Reward,
+    fulfillmentMode?: 'instant' | 'manual',
+    originalPoints?: number,
+    expiringStarDeduction?: number,
+    hasExpiringDeduction?: boolean,
+    actualCost?: number,
+    message?: string,
+    userId?: string
+  }>
+  ```
+- **内部流程**：验证奖励 → 预览动态抵扣成本 → 消费星星 → 推进奖励状态 → 发布事件/消息
+- **说明**:
+  - 云端模式下走独立 `_syncExchangeToCloud(rewardId, exchangeUserId, modifyTime)` 路径，不与通用奖励 upsert 混用
+  - `instant` 奖励兑换后直接进入终态；`manual` 奖励兑换后进入 `claimed`，前台展示为 `待发放`
+
+##### `previewRewardExchangeCost(rewardId, userId = null)`
+预览奖励当前兑换成本。
+- **参数**:
+  - `rewardId` - 奖励 ID
+  - `userId` - 目标孩子 userId
+- **返回**:
+  ```javascript
+  Promise<{
+    originalPoints: number,
+    expiringStarDeduction: number,
+    actualCost: number,
+    hasExpiringDeduction: boolean
+  }>
+  ```
+- **说明**:
+  - 只认“当前可用星星快照”计算出来的快过期抵扣
+  - 不再把 `protectedByExpiry / partialProtection` 作为正式展示语义来源
 
 ##### `refreshRewardsFromCloud()`
 从云端刷新奖励列表
@@ -439,13 +1205,20 @@ const configService = serviceManager.get('configService');
 ##### `cancelRewardExchange(rewardId)`
 取消兑换
 - **参数**: `rewardId` - 奖励ID
-- **返回**: `Promise<{ success: boolean, message?: string }>`
+- **返回**: `Promise<{ success: boolean, reward?: Reward, pointsRefunded?: number, message?: string }>`
+- **说明**:
+  - 本地模式下优先按真实兑换流水回查实际退款金额
+  - 退款按 `exchangeUserId` 归属正确退回，不再默认退给当前操作者
 
-##### `markRewardAsDelivered(rewardId)`
-标记奖励为已领取
-- **参数**: `rewardId` - 奖励ID
-- **返回**: `{ success: boolean, message?: string }`
-- **注意**: 此方法已废弃，用户兑换时直接设置为delivered状态
+##### `markRewardAsDelivered(rewardId, operatorUserId = null)`
+家长标记手动奖励已发放。
+- **参数**:
+  - `rewardId` - 奖励 ID
+  - `operatorUserId` - 可选；管理动作操作者
+- **返回**: `Promise<{ success: boolean, reward?: Reward, message?: string }>`
+- **说明**:
+  - 仅对 `manual + claimed` 生效
+  - 奖励管理页用该方法把 `待发放` 推进到 `已发放`
 
 ---
 
@@ -473,6 +1246,18 @@ const configService = serviceManager.get('configService');
   - `TaskService.resetTask()` 与首页取消完成前预检查都复用此方法，确保锁定语义一致
   - 不再用 `getLastExchangeTime()` 替代此用户级判断
 
+### 奖励模型补充说明
+
+- `Reward.fulfillmentMode`
+  - `instant`：兑换即完成，前台展示为 `已兑换`
+  - `manual`：兑换后待家长处理，前台展示为 `待发放 / 已发放`
+- `Reward.exchangeUserId`
+  - 标识具体是哪个孩子兑换了该奖励
+  - 家庭兑换记录与“我的兑换”均以此字段为主归属依据
+- 旧字段 `protectedByExpiry / partialProtection`
+  - 已进入兼容保留状态
+  - 不再作为前端主展示和新写路径 contract
+
 ---
 
 ## MessageService - 消息通知服务
@@ -484,6 +1269,7 @@ const configService = serviceManager.get('configService');
 - 云端消息全量刷新与本地 stale cleanup
 - 单条已读、全部已读、删除的云端同步
 - provisional 消息保留与 legacy 消息归档
+- 云端模式主流展示过滤（仅 `formal + provisional`）
 - 兼容旧接口 `getAllMessages()` / `getUnreadCount()`
 
 ### 作用域规则（M10）
@@ -525,7 +1311,10 @@ const configService = serviceManager.get('configService');
   - `userId` - `scope='user'` 时的目标用户 ID；家长家庭流可为空
   - `options.scope` - `'user' | 'family'`
 - **返回**: `Promise<Message[]>`
-- **说明**: 云端模式下会先读取 `/api/messages`，再执行 `archiveLegacyMessages`、`replaceSyncedMessagesByScope` 与 `cleanupStaleMessages`
+- **说明**:
+  - 云端模式下会先做正式提醒保鲜，再读取 `/api/messages`
+  - 随后执行 `archiveLegacyMessages`、`replaceSyncedMessagesByScope` 与 `cleanupStaleMessages`
+  - 返回值是当前 scope 下允许进入展示层的消息数组，而不是“未经筛选的仓储原始消息”
 
 ##### `getMessagesByScope(options = {})`
 按 scope 获取消息，必要时先刷新云端
@@ -534,17 +1323,23 @@ const configService = serviceManager.get('configService');
   - `options.userId` - 个人流目标用户 ID
   - `options.requireFresh` - 为 `true` 时先调用 `refreshMessagesFromCloud`
 - **返回**: `Promise<Message[]>`
+- **说明**:
+  - 云端模式下主流展示只保留 `formal + provisional`
+  - `scope='all'` 仅用于无登录上下文、初始化兼容或测试场景，不作为页面正式读取口径
 
 ##### `getAllMessages(options = {})`
 兼容接口，内部委托到 `getMessagesByScope`
 - **参数**: `options` - 同 `getMessagesByScope`
 - **返回**: `Promise<Message[]>`
+- **说明**: 默认继续代表“当前有效 scope”的消息快照
 
 ##### `getUnreadCount(options = {})`
 获取未读消息数量
 - **参数**: `options` - 同 `getMessagesByScope`
 - **返回**: `Promise<number>`
-- **说明**: 有登录上下文时按当前主消息流统计；无上下文时回退本地仓储 `getUnreadCount`
+- **说明**:
+  - 有登录上下文时按当前主消息流统计
+  - 无上下文且无显式 `scope` 时，回退本地仓储 `getUnreadCount`
 
 ---
 
@@ -574,7 +1369,6 @@ const configService = serviceManager.get('configService');
 - **返回**: `Promise<boolean>`
 - **说明**: 对正式云端消息会先调用 `DELETE /api/messages/:messageId`；若云端失败，本地不会先删除
 
----
 ---
 
 ## ValidationService - 表单验证服务
@@ -619,21 +1413,26 @@ const configService = serviceManager.get('configService');
 
 用户服务管理用户账户、角色切换、家庭成员缓存等功能。M6 起引入 `loginUser`（设备拥有者）与 `currentUser`（当前数据视角）双轨模型。
 
-### 核心概念（M6）
+### 核心概念（M22A 后）
 
 | 字段 | 含义 | 生命周期 |
 |------|------|---------|
 | `loginUser` | 设备登录者（JWT 持有者），决定权限和功能可见性 | 应用启动后不变 |
 | `currentUser` | 当前数据视角，家长可切换到孩子 | 随用户切换变化 |
+| `familyPermissionRole` | 家长在家庭内的治理权限，取值 `manager | viewer | null` | 随家庭创建、加入或权限调整变化 |
 
-- **`isReadonlyView`**（首页计算属性）：`loginUser.role === 'child' || loginUser.userId !== currentUser.userId`。只要在孩子视角下（无论哪种原因），管理类入口均隐藏。
-- **任务创建归属**：家长在孩子视角创建任务时，任务通过 `targetUserId` 正确归属到孩子。
+- `isSwitchedChildView` 与 `isViewerReadonly` 已拆开建模：
+  - 切到孩子视角不再等价于“全局只读”
+  - `viewer` 家长在自己视角下只读，但切到孩子视角后仍可执行孩子自己的任务打卡链路
+- 任务创建归属仍沿用 `targetUserId` 语义：家长在孩子视角创建任务时，任务归属到目标孩子
+- 家庭治理与页面入口可见性应优先读取 `permissionContext`，而不是只看 `loginUser.role`
 
 ### 核心功能
 - 登录用户（loginUser）初始化与维护
 - 家庭成员缓存（userCache）加载与刷新
 - 用户视角切换（currentUser）及会话恢复
 - 基于角色的用户列表过滤
+- 家庭内 `manager / viewer` 权限刷新与缓存收口
 
 ### API 方法
 
@@ -707,13 +1506,17 @@ const configService = serviceManager.get('configService');
 创建家庭（M6新增）
 - **参数**: `name` (string) - 家庭名称
 - **返回**: `Promise<{ success: boolean, familyId?: string, message?: string }>`
-- **说明**：创建成功后若后端返回新 token，自动保存并重新初始化 UserService
+- **说明**：
+  - 创建成功后若后端返回新 token，自动保存并重新初始化 UserService
+  - 创建者在家庭内会自动获得 `familyPermissionRole='manager'`
 
 ##### `joinFamily(inviteCode)`
 通过邀请码加入家庭（M6新增）
 - **参数**: `inviteCode` (string) - 邀请码
 - **返回**: `Promise<{ success: boolean, message?: string }>`
-- **说明**：加入成功后若后端返回新 token，自动保存并重新初始化 UserService
+- **说明**：
+  - 加入成功后若后端返回新 token，自动保存并重新初始化 UserService
+  - 使用家长邀请码加入后，当前用户会落为 `role='parent' + familyPermissionRole='viewer'`
 
 ##### `getFamilyInfo()`
 获取当前家庭信息（M6新增）
@@ -724,7 +1527,9 @@ const configService = serviceManager.get('configService');
 刷新家庭邀请码（M6新增）
 - **参数**: `role` ('parent' | 'child') - 目标角色
 - **返回**: `Promise<Object>` - 包含新邀请码的响应对象
-- **说明**：失败时直接抛出异常，调用方需自行捕获
+- **说明**：
+  - 失败时直接抛出异常，调用方需自行捕获
+  - 当前接口由家庭内 `manager` 家长使用；`role='parent'` 生成的是“默认 viewer 家长”邀请码
 
 ##### `createVirtualMember(name)`
 创建虚拟成员（场景A共享设备，无独立微信账号的孩子）（M6新增）
@@ -738,11 +1543,36 @@ const configService = serviceManager.get('configService');
 - **返回**: `Promise<{ success: boolean, message?: string }>`
 - **说明**：删除成功后自动调用 `loadFamilyMembers()` 刷新缓存
 
+##### `updateFamilyMemberPermissionRole(userId, familyPermissionRole)`
+调整家庭内家长权限。
+- **参数**:
+  - `userId` (string) - 目标家长用户 ID
+  - `familyPermissionRole` ('manager' | 'viewer')
+- **返回**: `Promise<{ success: boolean, message?: string, token?: string }>`
+- **说明**：
+  - 仅云端模式支持
+  - 成功后会自动 `initialize()`，刷新 `loginUser / currentUser / userCache`
+  - 当操作者修改的是自己时，后端会回发新 token，本方法会先保存 token 再刷新上下文
+
 ##### `updateNickname(userId, nickname)`
 更新成员昵称（M6新增）
 - **参数**: `userId` (string) - 目标用户ID, `nickname` (string) - 新昵称
 - **返回**: `Promise<{ success: boolean, message?: string }>`
 - **说明**：更新成功后直接同步 userCache 和 currentUser/loginUser，不重新拉取
+
+##### `updateCurrentProfile(profile = {})`
+更新当前登录用户资料。
+- **参数**:
+  ```javascript
+  {
+    nickname?: string,
+    avatarUrl?: string
+  }
+  ```
+- **返回**: `Promise<{ success: boolean, user?: User, message?: string }>`
+- **说明**：
+  - 云端模式下调用 `/api/users/current/profile` 并同步刷新 `loginUser / currentUser / userCache`
+  - 本地模式下只更新当前内存用户快照，不发网络请求
 
 ---
 
@@ -809,49 +1639,97 @@ const configService = serviceManager.get('configService');
 
 ---
 
-## AnalyticsService - 数据分析服务
+## AnalysisBoardService - 分析页月度看板聚合服务
 
-数据分析服务提供任务和星星数据的统计分析功能。
+`packageChart/services/analysis-board-service.js` 是分析页专用的轻量聚合模块，不通过 `ServiceManager` 注册实例，而是由页面直接按需调用。
 
 ### 核心功能
-- 任务统计分析
-- 星星趋势分析
-- 数据可视化支持
-- 报表生成
+- 自然月日期列生成
+- 基于 `focusUserId + task.type + normalizedTitle` 的任务聚类
+- 单元格状态归并：`done / missed / upcoming / blank`
+- 超限任务合并为 `其他任务`
+- 生成顶部摘要与未来纯空列弱化所需元数据
 
 ### API 方法
 
-##### `getTaskAnalytics(userId, dateRange)`
-获取任务分析数据
-- **参数**: `userId` - 用户ID, `dateRange` - `{ startDate, endDate }`
+##### `buildMonthlyBoard({ taskService, monthKey, focusUserId })`
+根据指定孩子与指定月份生成分析页月度矩阵看板。
+- **参数**:
+  ```javascript
+  {
+    taskService: {
+      getTasksByDateRange(startDate, endDate, userId, options): Promise<Array<Object>>
+    },
+    monthKey?: string, // YYYY-MM
+    focusUserId: string
+  }
+  ```
 - **返回**:
   ```javascript
   {
-    totalTasks: number,
-    completedTasks: number,
-    completionRate: number,
-    byType: { study: number, habit: number, interest: number },
-    byDate: Array<{date, completed, total}>
+    monthKey: '2026-04',
+    monthTitle: '2026年4月',
+    daysInMonth: 30,
+    columns: [
+      {
+        key: '2026-04-01',
+        day: 1,
+        date: '2026-04-01',
+        weekdayLabel: '二',
+        isToday: false,
+        isWeekend: false,
+        hasPlannedTasks: true,
+        isFutureEmpty: false
+      }
+    ],
+    rows: [
+      {
+        rowKey: 'child-1|study|数学',
+        title: '数学',
+        type: 'study',
+        cells: [
+          {
+            date: '2026-04-01',
+            state: 'done',
+            symbol: '✓',
+            cellClass: 'cell-done',
+            taskIds: ['task-1'],
+            isToday: false,
+            isWeekend: false,
+            isFutureEmpty: false
+          }
+        ]
+      }
+    ],
+    summary: {
+      displayedRowCount: 6,
+      completedCount: 32,
+      missedCount: 8,
+      upcomingCount: 5
+    },
+    todayColumnDate: '2026-04-14'
   }
   ```
+- **说明**:
+  - `monthKey` 非法或缺失时会回退到当前月
+  - `focusUserId` 为空时返回空看板 contract，不主动抛错
+  - “今天未完成”按正式产品口径归为 `upcoming`，不显示为 `missed`
+  - `isFutureEmpty` 仅用于页面弱化未来纯空列，不改变自然月完整日期轴
 
-##### `getStarAnalytics(userId, dateRange)`
-获取星星分析数据
-- **参数**: `userId` - 用户ID, `dateRange` - `{ startDate, endDate }`
-- **返回**:
-  ```javascript
-  {
-    totalEarned: number,
-    totalConsumed: number,
-    balanceChange: number,
-    dailyData: Array<{date, earned, consumed, balance}>
-  }
-  ```
+### 使用示例
 
-##### `getCompletionTrend(userId, days)`
-获取完成任务趋势
-- **参数**: `userId` - 用户ID, `days` - 统计天数
-- **返回**: `Array<{ date, completedRate, streak }>`
+```javascript
+const serviceManager = require('../../services/service-manager.js');
+const { buildMonthlyBoard } = require('../../packageChart/services/analysis-board-service.js');
+
+const taskService = serviceManager.getService('task');
+
+const board = await buildMonthlyBoard({
+  taskService,
+  monthKey: '2026-04',
+  focusUserId: 'child-1'
+});
+```
 
 ---
 
@@ -992,6 +1870,8 @@ async function complexBusinessFlow() {
 | **RewardService** | `test/services/reward-service.test.js` |
 | **MessageService** | `test/services/message-service.test.js` |
 | **UserService** | `test/services/user-service.test.js` |
+| **SystemService** | `test/services/system-service.test.js` |
+| **InviteService** | `test/services/invite-service.test.js` |
 | **ValidationService** | `test/services/validation-service.test.js` |
 
 ### 运行测试
@@ -1106,5 +1986,5 @@ const taskService = new TaskService({
 
 ---
 
-**最后更新**：2026-03-27
+**最后更新**：2026-04-21
 **维护者**：项目维护团队

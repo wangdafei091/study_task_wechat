@@ -1,0 +1,295 @@
+<view class="container">
+  <view class="content">
+    <card customClass="template-manage-card">
+      <view class="page-shell">
+        <view class="tab-header">
+          <view class="tab-item {{activeTab === 'select' ? 'active' : ''}}" bindtap="switchTab" data-tab="select">选择模板</view>
+          <view class="tab-item {{activeTab === 'manage' ? 'active' : ''}}" bindtap="switchTab" data-tab="manage">管理模板</view>
+        </view>
+
+        <view wx:if="{{activeTab === 'select'}}" class="manage-content">
+          <view class="page-tools">
+            <view class="search-row">
+              <input
+                class="search-input"
+                placeholder="搜索模板别名、任务名称、说明"
+                value="{{keyword}}"
+                bindinput="onKeywordInput"
+              />
+              <view wx:if="{{keyword}}" class="clear-search" bindtap="clearKeyword">清空</view>
+            </view>
+
+            <view class="filter-segment-row">
+              <view class="filter-segment {{typeFilter === 'habit' ? 'active' : ''}}" bindtap="selectTypeFilter" data-type="habit">习惯</view>
+              <view class="filter-segment {{typeFilter === 'study' ? 'active' : ''}}" bindtap="selectTypeFilter" data-type="study">学习</view>
+              <view class="filter-segment {{typeFilter === 'interest' ? 'active' : ''}}" bindtap="selectTypeFilter" data-type="interest">兴趣</view>
+            </view>
+          </view>
+
+          <view wx:if="{{loadFailed && !hasTemplates && !loading}}" class="empty-state empty-state-search">
+            <view class="empty-icon">!</view>
+            <view class="empty-title">模板加载失败</view>
+            <view class="empty-desc">请稍后重试，或下拉页面重新加载。</view>
+            <button class="empty-btn" bindtap="onRetryLoad">重新加载</button>
+          </view>
+
+          <view wx:elif="{{!hasTemplates && !loading && !hasActiveFilters}}" class="empty-state">
+            <view class="empty-icon">+</view>
+            <view class="empty-title">{{hasAnyTemplates ? '当前没有可用模板' : '还没有可用模板'}}</view>
+            <view class="empty-desc">{{hasAnyTemplates ? '当前模板都已停用，去管理模板中启用后即可选择使用。' : '先创建并启用一个模板，后续在添加任务时就能一键快速填充。'}}</view>
+            <button wx:if="{{hasAnyTemplates}}" class="empty-btn" bindtap="switchTab" data-tab="manage">去管理模板</button>
+            <button wx:else class="empty-btn" bindtap="onCreateTemplate">创建第一个模板</button>
+          </view>
+
+          <view wx:else>
+            <view wx:if="{{hasTemplates}}" class="selection-hint">点击模板即可回填到任务表单</view>
+
+            <view wx:if="{{loading}}" class="loading-state">模板加载中...</view>
+
+            <view wx:elif="{{hasTemplates}}" class="template-list">
+              <block wx:for="{{templates}}" wx:key="id">
+                <view class="template-card selectable {{item.typeClass}}" bindtap="onTapTemplateCard" data-id="{{item.id}}">
+                  <view class="card-head">
+                    <view class="head-main">
+                      <view class="template-name">{{item.displayName}}</view>
+                    </view>
+                    <view class="card-head-side">
+                      <view class="type-badge {{item.typeClass}}">{{item.typeLabel}}</view>
+                    </view>
+                  </view>
+
+                  <view wx:if="{{item.primaryDescription}}" class="card-description">{{item.primaryDescription}}</view>
+
+                  <view class="meta-row">
+                    <block wx:for="{{item.metaItems}}" wx:key="key" wx:for-item="meta">
+                      <view class="meta-item">
+                        <text class="meta-item-label">{{meta.label}}</text>
+                        <text class="meta-item-divider">·</text>
+                        <text class="meta-item-value">{{meta.value}}</text>
+                      </view>
+                    </block>
+                  </view>
+                </view>
+              </block>
+            </view>
+
+            <view wx:else class="empty-state empty-state-search">
+              <view class="empty-icon">⌕</view>
+              <view class="empty-title">没有找到匹配的模板</view>
+              <view class="empty-desc">试试清空搜索词，或切换任务分类。</view>
+            </view>
+          </view>
+        </view>
+
+        <view wx:else class="manage-content">
+          <view wx:if="{{loadFailed && !hasTemplates && recommendationCount === 0 && !loading}}" class="empty-state empty-state-search">
+            <view class="empty-icon">!</view>
+            <view class="empty-title">模板加载失败</view>
+            <view class="empty-desc">请稍后重试，或下拉页面重新加载。</view>
+            <button class="empty-btn" bindtap="onRetryLoad">重新加载</button>
+          </view>
+
+          <view wx:elif="{{!hasTemplates && recommendationCount === 0 && !loading && !hasActiveFilters}}" class="empty-state">
+            <view class="empty-icon">+</view>
+            <view class="empty-title">还没有任务模板</view>
+            <view class="empty-desc">先创建第一个模板，后续在添加任务时就能一键快速填充。</view>
+            <button class="empty-btn" bindtap="onCreateTemplate">创建第一个模板</button>
+          </view>
+
+          <view wx:elif="{{!hasTemplates && recommendationCount > 0 && !hasActiveFilters}}">
+            <view wx:if="{{loading}}" class="loading-state">模板加载中...</view>
+
+            <view wx:else>
+              <view class="empty-state">
+                <view class="empty-icon">+</view>
+                <view class="empty-title">还没有正式模板</view>
+                <view class="empty-desc">可以先手动新建，也可以看看下方系统整理出的可补充模板。</view>
+                <button class="empty-btn" bindtap="onCreateTemplate">新建模板</button>
+              </view>
+
+              <view id="recommendation-section" class="recommendation-panel">
+                <view wx:if="{{showSavedRecommendationTemplateAction}}" class="recommendation-return-bar">
+                  <text class="recommendation-return-text">模板已保存，可直接回到任务页使用。</text>
+                  <view class="recommendation-return-action" bindtap="useSavedTemplateFromRecommendation">立即使用新模板</view>
+                </view>
+                <view class="recommendation-summary" bindtap="toggleRecommendationSection">
+                  <text class="recommendation-summary-text">发现 {{recommendationCount}} 个可补充模板</text>
+                  <text class="recommendation-summary-arrow">{{recommendationExpanded ? '收起' : '展开'}} ></text>
+                </view>
+
+                <view wx:if="{{recommendationExpanded}}" class="recommendation-block compact">
+                  <view class="recommendation-list">
+                    <block wx:for="{{recommendedCandidates}}" wx:key="candidateKey">
+                      <view class="recommendation-card {{item.typeClass}}">
+                        <view class="recommendation-card-head">
+                          <text class="recommendation-card-name">{{item.displayName}}</text>
+                          <text class="recommendation-card-tag">推荐</text>
+                        </view>
+                        <text class="recommendation-card-reason">{{item.reasonText}}</text>
+                        <view class="recommendation-card-meta">
+                          <block wx:for="{{item.metaItems}}" wx:key="key" wx:for-item="meta">
+                            <view class="meta-item recommendation-meta-item">
+                              <text class="meta-item-label">{{meta.label}}</text>
+                              <text class="meta-item-divider">·</text>
+                              <text class="meta-item-value">{{meta.value}}</text>
+                            </view>
+                          </block>
+                        </view>
+                        <view class="recommendation-card-action-row">
+                          <view class="recommendation-card-action" bindtap="onSaveRecommendedCandidate" data-key="{{item.candidateKey}}">保存为模板</view>
+                        </view>
+                      </view>
+                    </block>
+                  </view>
+                </view>
+              </view>
+            </view>
+          </view>
+
+          <view wx:else>
+            <view wx:if="{{showSearchTools}}" class="page-tools manage-page-tools">
+              <view class="search-row manage-search-row">
+                <input
+                  class="search-input"
+                  placeholder="搜索模板别名、任务名称、说明"
+                  value="{{keyword}}"
+                  bindinput="onKeywordInput"
+                />
+                <view wx:if="{{keyword}}" class="clear-search" bindtap="clearKeyword">清空</view>
+                <view class="page-action-btn inline-create-btn" bindtap="onCreateTemplate">新建模板</view>
+              </view>
+
+              <view class="filter-segment-row">
+                <view class="filter-segment {{typeFilter === 'habit' ? 'active' : ''}}" bindtap="selectTypeFilter" data-type="habit">习惯</view>
+                <view class="filter-segment {{typeFilter === 'study' ? 'active' : ''}}" bindtap="selectTypeFilter" data-type="study">学习</view>
+                <view class="filter-segment {{typeFilter === 'interest' ? 'active' : ''}}" bindtap="selectTypeFilter" data-type="interest">兴趣</view>
+              </view>
+            </view>
+
+            <view wx:if="{{showRecommendationFirst && !hasActiveFilters && recommendationCount > 0}}" id="recommendation-section" class="recommendation-panel">
+              <view wx:if="{{showSavedRecommendationTemplateAction}}" class="recommendation-return-bar">
+                <text class="recommendation-return-text">模板已保存，可直接回到任务页使用。</text>
+                <view class="recommendation-return-action" bindtap="useSavedTemplateFromRecommendation">立即使用新模板</view>
+              </view>
+              <view class="recommendation-summary" bindtap="toggleRecommendationSection">
+                <text class="recommendation-summary-text">发现 {{recommendationCount}} 个可补充模板</text>
+                <text class="recommendation-summary-arrow">{{recommendationExpanded ? '收起' : '展开'}} ></text>
+              </view>
+
+              <view wx:if="{{recommendationExpanded && recommendationCount > 0}}" class="recommendation-block compact">
+                <view class="recommendation-list">
+                  <block wx:for="{{recommendedCandidates}}" wx:key="candidateKey">
+                    <view class="recommendation-card {{item.typeClass}}">
+                      <view class="recommendation-card-head">
+                        <text class="recommendation-card-name">{{item.displayName}}</text>
+                        <text class="recommendation-card-tag">推荐</text>
+                      </view>
+                      <text class="recommendation-card-reason">{{item.reasonText}}</text>
+                      <view class="recommendation-card-meta">
+                        <block wx:for="{{item.metaItems}}" wx:key="key" wx:for-item="meta">
+                          <view class="meta-item recommendation-meta-item">
+                            <text class="meta-item-label">{{meta.label}}</text>
+                            <text class="meta-item-divider">·</text>
+                            <text class="meta-item-value">{{meta.value}}</text>
+                          </view>
+                        </block>
+                      </view>
+                      <view class="recommendation-card-action-row">
+                        <view class="recommendation-card-action" bindtap="onSaveRecommendedCandidate" data-key="{{item.candidateKey}}">保存为模板</view>
+                      </view>
+                    </view>
+                  </block>
+                </view>
+              </view>
+            </view>
+
+            <block wx:if="{{loading}}">
+              <view class="loading-state">模板加载中...</view>
+            </block>
+
+            <block wx:elif="{{hasTemplates}}">
+              <view class="template-list manage-template-list">
+                <block wx:for="{{templates}}" wx:key="id">
+                  <view class="template-card editable" bindtap="onTapTemplateCard" data-id="{{item.id}}">
+                    <view class="card-head">
+                      <view class="head-main">
+                        <view class="template-name">{{item.displayName}}</view>
+                      </view>
+                      <view class="card-head-side">
+                        <view class="more-action-link head-more-action" catchtap="onOpenTemplateActions" data-id="{{item.id}}">更多</view>
+                      </view>
+                    </view>
+
+                    <view class="card-meta-head">
+                      <view class="template-status {{item.enabled ? 'enabled' : 'disabled'}}">{{item.statusLabel}}</view>
+                      <view class="type-tag-light {{item.typeClass}}">{{item.typeLabel}}</view>
+                    </view>
+
+                    <view wx:if="{{item.primaryDescription}}" class="card-description">{{item.primaryDescription}}</view>
+
+                    <view class="meta-row">
+                      <block wx:for="{{item.metaItems}}" wx:key="key" wx:for-item="meta">
+                        <view class="meta-item">
+                          <text class="meta-item-label">{{meta.label}}</text>
+                          <text class="meta-item-divider">·</text>
+                          <text class="meta-item-value">{{meta.value}}</text>
+                        </view>
+                      </block>
+                    </view>
+
+                    <view wx:if="{{item.usageSummary}}" class="usage-summary">{{item.usageSummary}}</view>
+                  </view>
+                </block>
+              </view>
+            </block>
+
+            <block wx:else>
+              <view class="empty-state empty-state-search">
+                <view class="empty-icon">⌕</view>
+                <view class="empty-title">没有找到匹配的模板</view>
+                <view class="empty-desc">试试清空搜索词，或切换任务分类。</view>
+              </view>
+            </block>
+
+            <view wx:if="{{!showRecommendationFirst && !hasActiveFilters && recommendationCount > 0}}" id="recommendation-section" class="recommendation-panel">
+              <view wx:if="{{showSavedRecommendationTemplateAction}}" class="recommendation-return-bar">
+                <text class="recommendation-return-text">模板已保存，可直接回到任务页使用。</text>
+                <view class="recommendation-return-action" bindtap="useSavedTemplateFromRecommendation">立即使用新模板</view>
+              </view>
+              <view class="recommendation-summary" bindtap="toggleRecommendationSection">
+                <text class="recommendation-summary-text">发现 {{recommendationCount}} 个可补充模板</text>
+                <text class="recommendation-summary-arrow">{{recommendationExpanded ? '收起' : '展开'}} ></text>
+              </view>
+
+              <view wx:if="{{recommendationExpanded && recommendationCount > 0}}" class="recommendation-block compact">
+                <view class="recommendation-list">
+                  <block wx:for="{{recommendedCandidates}}" wx:key="candidateKey">
+                    <view class="recommendation-card {{item.typeClass}}">
+                      <view class="recommendation-card-head">
+                        <text class="recommendation-card-name">{{item.displayName}}</text>
+                        <text class="recommendation-card-tag">推荐</text>
+                      </view>
+                      <text class="recommendation-card-reason">{{item.reasonText}}</text>
+                      <view class="recommendation-card-meta">
+                        <block wx:for="{{item.metaItems}}" wx:key="key" wx:for-item="meta">
+                          <view class="meta-item recommendation-meta-item">
+                            <text class="meta-item-label">{{meta.label}}</text>
+                            <text class="meta-item-divider">·</text>
+                            <text class="meta-item-value">{{meta.value}}</text>
+                          </view>
+                        </block>
+                      </view>
+                      <view class="recommendation-card-action-row">
+                        <view class="recommendation-card-action" bindtap="onSaveRecommendedCandidate" data-key="{{item.candidateKey}}">保存为模板</view>
+                      </view>
+                    </view>
+                  </block>
+                </view>
+              </view>
+            </view>
+          </view>
+        </view>
+      </view>
+    </card>
+  </view>
+</view>
