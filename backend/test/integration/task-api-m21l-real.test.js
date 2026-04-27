@@ -45,6 +45,12 @@ function formatDateOffset(days) {
   return formatDate(date);
 }
 
+function formatStableWeekExpiryRecordDate() {
+  const date = new Date();
+  date.setHours(0, 0, 0, 0);
+  return formatDate(date);
+}
+
 function buildModifyTime(dateString, hour = 12) {
   return new Date(`${dateString}T${String(hour).padStart(2, '0')}:00:00`).getTime();
 }
@@ -77,6 +83,22 @@ function buildRepeatPayload(startDate, endDate) {
   });
 }
 
+async function runMigrationSqlFile(relativeFile) {
+  const sql = fs.readFileSync(path.join(__dirname, relativeFile), 'utf8');
+  const statements = sql
+    .split(/;\s*(?:\n|$)/)
+    .map((statement) => statement
+      .split('\n')
+      .filter((line) => !line.trim().startsWith('--'))
+      .join('\n')
+      .trim())
+    .filter(Boolean);
+
+  for (const statement of statements) {
+    await db.query(statement);
+  }
+}
+
 async function ensureM21LTables() {
   const baseMigrations = [
     '../../database/migrations/007_create_star_records.sql',
@@ -85,26 +107,17 @@ async function ensureM21LTables() {
   ];
 
   for (const relativeFile of baseMigrations) {
-    const sql = fs.readFileSync(path.join(__dirname, relativeFile), 'utf8').trim();
-    await db.query(sql);
+    await runMigrationSqlFile(relativeFile);
   }
 
   const reminderColumn = await db.query("SHOW COLUMNS FROM tasks LIKE 'reminder'");
   if (!Array.isArray(reminderColumn) || reminderColumn.length === 0) {
-    const sql = fs.readFileSync(
-      path.join(__dirname, '../../database/migrations/011_alter_tasks_add_reminder.sql'),
-      'utf8'
-    ).trim();
-    await db.query(sql);
+    await runMigrationSqlFile('../../database/migrations/011_alter_tasks_add_reminder.sql');
   }
 
   const executionModeColumn = await db.query("SHOW COLUMNS FROM tasks LIKE 'execution_mode'");
   if (!Array.isArray(executionModeColumn) || executionModeColumn.length === 0) {
-    const sql = fs.readFileSync(
-      path.join(__dirname, '../../database/migrations/014_alter_tasks_add_occurrence_fields.sql'),
-      'utf8'
-    ).trim();
-    await db.query(sql);
+    await runMigrationSqlFile('../../database/migrations/014_alter_tasks_add_occurrence_fields.sql');
   }
 }
 
@@ -259,7 +272,7 @@ describe('M21L tasks API 真实数据库集成测试', () => {
   });
 
   it('POST /api/tasks/:taskId/occurrence-record 同日覆盖结果时应复用同一记录并撤回已发星星', async () => {
-    const recordDate = formatDateOffset(-1);
+    const recordDate = formatStableWeekExpiryRecordDate();
     const firstModifyTime = buildModifyTime(recordDate, 10);
     const secondModifyTime = buildModifyTime(recordDate, 11);
 
