@@ -129,4 +129,95 @@ describe('utils/app/system-user-access-state', () => {
     expect(tokenManager.clearToken).toHaveBeenCalledTimes(2);
     expect(serviceManager.setUserService).toHaveBeenCalledTimes(2);
   });
+
+  it('应识别 blocked/readonly 错误码，并只在 blocked 时触发跳转', () => {
+    expect(systemUserAccessState.getErrorCode({
+      responseData: { error_code: 'SYSTEM_USER_BLOCKED' }
+    })).toBe('SYSTEM_USER_BLOCKED');
+    expect(systemUserAccessState.getErrorCode({
+      responseData: { errorCode: 'SYSTEM_USER_READONLY' }
+    })).toBe('SYSTEM_USER_READONLY');
+    expect(systemUserAccessState.isBlockedError({
+      responseData: { error_code: 'SYSTEM_USER_BLOCKED' }
+    })).toBe(true);
+    expect(systemUserAccessState.isReadonlyError({
+      responseData: { errorCode: 'SYSTEM_USER_READONLY' }
+    })).toBe(true);
+    expect(systemUserAccessState.isReadonlyError({ code: 'OTHER' })).toBe(false);
+
+    expect(systemUserAccessState.handleBlockedError({ code: 'OTHER' })).toBe(false);
+    expect(global.wx.reLaunch).not.toHaveBeenCalled();
+
+    expect(systemUserAccessState.handleBlockedError({
+      code: systemUserAccessState.SYSTEM_USER_ERROR_CODE.BLOCKED
+    })).toBe(true);
+    expect(global.wx.reLaunch).toHaveBeenCalledTimes(1);
+  });
+
+  it('clearSessionState 遇到清理异常时应记录告警', () => {
+    tokenManager.clearToken.mockImplementation(() => {
+      throw new Error('token failed');
+    });
+    global.wx.removeStorageSync.mockImplementation(() => {
+      throw new Error('storage failed');
+    });
+    global.getApp.mockImplementation(() => {
+      throw new Error('app failed');
+    });
+    serviceManager.setUserService.mockImplementation(() => {
+      throw new Error('service failed');
+    });
+
+    systemUserAccessState.clearSessionState();
+
+    expect(logger.warn).toHaveBeenCalledWith(
+      'SystemUserAccessState',
+      '清理 token 失败',
+      expect.any(Error)
+    );
+    expect(logger.warn).toHaveBeenCalledWith(
+      'SystemUserAccessState',
+      '清理用户缓存失败',
+      expect.any(Error)
+    );
+    expect(logger.warn).toHaveBeenCalledWith(
+      'SystemUserAccessState',
+      '清理全局 userService 失败',
+      expect.any(Error)
+    );
+    expect(logger.warn).toHaveBeenCalledWith(
+      'SystemUserAccessState',
+      '清理服务管理器 userService 失败',
+      expect.any(Error)
+    );
+  });
+
+  it('禁入状态工具在存储或路由环境缺失时应安全降级', () => {
+    delete global.getCurrentPages;
+    expect(systemUserAccessState.redirectToBlockedPage()).toBe(true);
+    expect(global.wx.reLaunch).toHaveBeenCalledTimes(1);
+
+    systemUserAccessState.resetBlockedRedirectState();
+    global.getCurrentPages = jest.fn(() => [{ route: 'pages/system-blocked/system-blocked' }]);
+    expect(systemUserAccessState.redirectToBlockedPage()).toBe(false);
+
+    systemUserAccessState.resetBlockedRedirectState();
+    delete global.wx.reLaunch;
+    expect(systemUserAccessState.redirectToBlockedPage()).toBe(false);
+
+    global.wx.setStorageSync.mockImplementation(() => {
+      throw new Error('set failed');
+    });
+    expect(systemUserAccessState.setBlockedSessionFlag()).toBe(false);
+
+    global.wx.removeStorageSync = jest.fn(() => {
+      throw new Error('remove failed');
+    });
+    expect(systemUserAccessState.clearBlockedSessionFlag()).toBe(false);
+
+    global.wx.getStorageSync.mockImplementation(() => {
+      throw new Error('get failed');
+    });
+    expect(systemUserAccessState.hasBlockedSessionFlag()).toBe(false);
+  });
 });

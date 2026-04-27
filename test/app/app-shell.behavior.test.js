@@ -10,6 +10,8 @@ describe('app.js shell behavior', () => {
   let serviceManagerMock;
   let hasBlockedSessionFlagMock;
   let blockedSessionActive;
+  let normalizeInviteCodeMock;
+  let savePendingInviteCodeMock;
 
   beforeEach(() => {
     jest.resetModules();
@@ -20,6 +22,8 @@ describe('app.js shell behavior', () => {
     handleAppShowMock = jest.fn().mockResolvedValue('handled-show');
     blockedSessionActive = false;
     hasBlockedSessionFlagMock = jest.fn(() => blockedSessionActive);
+    normalizeInviteCodeMock = jest.fn((value) => String(value || '').trim().toUpperCase());
+    savePendingInviteCodeMock = jest.fn();
     bootstrapServicesMock = jest.fn().mockResolvedValue(true);
     runtimeObserversMock = {
       install: jest.fn(),
@@ -56,6 +60,7 @@ describe('app.js shell behavior', () => {
         return null;
       }),
       setStorageSync: jest.fn(),
+      reLaunch: jest.fn(),
       showModal: jest.fn(),
       canIUse: jest.fn(() => true),
       onDeviceOrientationChange: jest.fn(),
@@ -116,6 +121,19 @@ describe('app.js shell behavior', () => {
     jest.doMock('../../utils/app/runtime-observers', () => runtimeObserversMock);
     jest.doMock('../../utils/app/system-user-access-state', () => ({
       hasBlockedSessionFlag: hasBlockedSessionFlagMock
+    }));
+    jest.doMock('../../utils/app/app-access-state', () => ({
+      normalizeInviteCode: normalizeInviteCodeMock,
+      savePendingInviteCode: savePendingInviteCodeMock
+    }));
+    jest.doMock('../../utils/runtime-config', () => ({
+      ensureDefaultRuntimeApiConfig: jest.fn(),
+      resolveRuntimeApiConfig: jest.fn(() => ({
+        enableApiRaw: 'true',
+        baseUrlRaw: 'https://api.todoceo.xyz',
+        enabled: true,
+        source: 'test'
+      }))
     }));
   });
 
@@ -261,5 +279,96 @@ describe('app.js shell behavior', () => {
     appConfig.initLogSystem.call(appConfig);
 
     expect(logger.warn).toHaveBeenCalledWith('App', '加载和解析用户日志配置失败', expect.any(Error));
+  });
+
+  it('邀请码入口应为未登录用户保存待处理邀请码并跳转到分享承接态', () => {
+    require('../../app.js');
+
+    expect(appConfig.extractInviteCode({
+      query: { invite_code: ' u10086 ' }
+    })).toBe('U10086');
+
+    expect(appConfig.captureInviteEntry.call(appConfig, {
+      query: { invite_code: ' u10086 ' },
+      path: 'pages/home/index',
+      scene: 1044
+    }, {
+      source: 'launch'
+    })).toBe(true);
+
+    expect(savePendingInviteCodeMock).toHaveBeenCalledWith('U10086');
+    expect(global.wx.reLaunch).toHaveBeenCalledWith({
+      url: '/pages/access-gate/access-gate?mode=share_pending_login&inviteCode=U10086&source=launch'
+    });
+  });
+
+  it('邀请码入口应在已登录时进入手工确认态，且短时间重复指纹不重复跳转', () => {
+    require('../../app.js');
+    appConfig.globalData.userService = {
+      getLoginUser: jest.fn(() => ({ userId: 'parent_1' }))
+    };
+
+    expect(appConfig.captureInviteEntry.call(appConfig, {
+      query: { inviteCode: 'f123456789' },
+      path: 'pages/home/index',
+      scene: 1044
+    }, {
+      source: 'show'
+    })).toBe(true);
+
+    expect(savePendingInviteCodeMock).not.toHaveBeenCalled();
+    expect(global.wx.reLaunch).toHaveBeenCalledWith({
+      url: '/pages/access-gate/access-gate?mode=manual_input&inviteCode=F123456789&source=show'
+    });
+
+    expect(appConfig.captureInviteEntry.call(appConfig, {
+      query: { inviteCode: 'f123456789' },
+      path: 'pages/home/index',
+      scene: 1044
+    }, {
+      source: 'show'
+    })).toBe(false);
+    expect(global.wx.reLaunch).toHaveBeenCalledTimes(1);
+  });
+
+  it('邀请码入口应支持 referrer extraData，并在缺失邀请码或缺少跳转能力时安全返回 false', () => {
+    require('../../app.js');
+
+    expect(appConfig.extractInviteCode({
+      referrerInfo: {
+        extraData: {
+          inviteCode: ' ref9988 '
+        }
+      }
+    })).toBe('REF9988');
+
+    expect(appConfig.captureInviteEntry.call(appConfig, {}, { source: 'launch' })).toBe(false);
+
+    delete global.wx.reLaunch;
+    expect(appConfig.captureInviteEntry.call(appConfig, {
+      referrerInfo: {
+        extraData: {
+          invite_code: 'ref9988'
+        }
+      }
+    }, {
+      source: 'launch'
+    })).toBe(false);
+  });
+
+  it('onLaunch 在已拦截邀请码冷启动且尚未建立 userService 时应跳过首轮微信登录', async () => {
+    require('../../app.js');
+    appConfig.captureInviteEntry = jest.fn(() => true);
+
+    await appConfig.onLaunch.call(appConfig, {
+      query: { inviteCode: 'skip001' }
+    });
+
+    expect(appConfig.captureInviteEntry).toHaveBeenCalledWith({
+      query: { inviteCode: 'skip001' }
+    }, {
+      source: 'launch'
+    });
+    expect(runWxLoginMock).not.toHaveBeenCalled();
   });
 });

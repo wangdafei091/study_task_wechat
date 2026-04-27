@@ -92,6 +92,34 @@ describe('utils/app/app-access-state', () => {
     );
   });
 
+  it('应兼容 app access 别名方法，并在空邀请码时不清理旧 key', () => {
+    const setStorageSync = jest.fn();
+    const removeStorageSync = jest.fn();
+    global.wx = {
+      getStorageSync: jest.fn((key) => {
+        if (key === appAccessState.PENDING_INVITE_CODE_KEY) {
+          return '';
+        }
+        if (key === appAccessState.PENDING_APP_ACCESS_CODE_KEY) {
+          return ' legacy 77 ';
+        }
+        return '';
+      }),
+      setStorageSync,
+      removeStorageSync
+    };
+
+    loadModule();
+
+    expect(appAccessState.loadPendingAppAccessCode()).toBe('LEGACY77');
+    expect(appAccessState.savePendingAppAccessCode('   ')).toBe('');
+    expect(removeStorageSync).not.toHaveBeenCalled();
+
+    appAccessState.clearPendingAppAccessCode();
+    expect(removeStorageSync).toHaveBeenCalledWith(appAccessState.PENDING_INVITE_CODE_KEY);
+    expect(removeStorageSync).toHaveBeenCalledWith(appAccessState.PENDING_APP_ACCESS_CODE_KEY);
+  });
+
   it('应识别邀请码错误码并返回对应文案', () => {
     loadModule();
 
@@ -125,17 +153,41 @@ describe('utils/app/app-access-state', () => {
       code: appAccessState.INVITE_ERROR_CODE.FAMILY_MANAGER_REQUIRED
     })).toBe(true);
     expect(appAccessState.isInviteError({
+      code: appAccessState.INVITE_ERROR_CODE.PURPOSE_MISMATCH
+    })).toBe(true);
+    expect(appAccessState.isInviteError({
+      code: appAccessState.INVITE_ERROR_CODE.ALREADY_IN_TARGET_FAMILY
+    })).toBe(true);
+    expect(appAccessState.isInviteError({
+      code: appAccessState.INVITE_ERROR_CODE.HAS_OTHER_FAMILY
+    })).toBe(true);
+    expect(appAccessState.isInviteError({
       code: 'OTHER_ERROR'
     })).toBe(false);
+    expect(appAccessState.isAppAccessError({
+      code: appAccessState.INVITE_ERROR_CODE.INVALID
+    })).toBe(true);
 
     expect(appAccessState.getInviteErrorMessage(appAccessState.APP_ACCESS_ERROR_CODE.INVALID))
       .toBe('邀请码无效，请检查后重试');
     expect(appAccessState.getInviteErrorMessage({
+      code: appAccessState.INVITE_ERROR_CODE.INVALID
+    })).toBe('邀请码无效，请检查后重试');
+    expect(appAccessState.getInviteErrorMessage({
       code: appAccessState.APP_ACCESS_ERROR_CODE.EXPIRED
     })).toBe('邀请码已过期，请联系维护者重新获取');
     expect(appAccessState.getInviteErrorMessage({
+      code: appAccessState.INVITE_ERROR_CODE.EXPIRED
+    })).toBe('邀请码已过期，请联系邀请人重新获取');
+    expect(appAccessState.getInviteErrorMessage({
+      code: appAccessState.INVITE_ERROR_CODE.DISABLED
+    })).toBe('邀请码已失效，请联系邀请人重新获取');
+    expect(appAccessState.getInviteErrorMessage({
       code: appAccessState.APP_ACCESS_ERROR_CODE.REQUIRED
     })).toBe('当前为邀请制体验，请先输入邀请码');
+    expect(appAccessState.getInviteErrorMessage({
+      code: appAccessState.INVITE_ERROR_CODE.REQUIRED
+    })).toBe('请输入邀请码');
     expect(appAccessState.getInviteErrorMessage({
       code: appAccessState.INVITE_ERROR_CODE.TARGET_ROLE_MISMATCH
     })).toBe('当前账号身份与该邀请码不匹配');
@@ -152,7 +204,19 @@ describe('utils/app/app-access-state', () => {
       code: appAccessState.INVITE_ERROR_CODE.FAMILY_MANAGER_REQUIRED
     })).toBe('只有家庭管理员可以生成家庭邀请码');
     expect(appAccessState.getInviteErrorMessage({
+      code: appAccessState.INVITE_ERROR_CODE.PURPOSE_MISMATCH
+    })).toBe('当前邀请码不能用于这个操作');
+    expect(appAccessState.getInviteErrorMessage({
+      code: appAccessState.INVITE_ERROR_CODE.ALREADY_IN_TARGET_FAMILY
+    })).toBe('你已经在这个家庭里了，无需重复加入');
+    expect(appAccessState.getInviteErrorMessage({
+      code: appAccessState.INVITE_ERROR_CODE.HAS_OTHER_FAMILY
+    })).toBe('你已加入其他家庭，暂不支持直接切换');
+    expect(appAccessState.getInviteErrorMessage({
       code: 'OTHER_ERROR'
     })).toBe('网络异常，请稍后再试');
+    expect(appAccessState.getAppAccessErrorMessage({
+      code: appAccessState.INVITE_ERROR_CODE.HAS_OTHER_FAMILY
+    })).toBe('你已加入其他家庭，暂不支持直接切换');
   });
 });
