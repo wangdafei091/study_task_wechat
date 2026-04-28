@@ -131,6 +131,7 @@ Page({
     canManageInviteCode: false,
     inviteManagementDisabledReason: '',
     supportsParentPermissionManagement: false,
+    canEnterInviteCenter: false,
     // 邀请码相关
     inviteCode: '',
     inviteCodeExpiresAt: null,
@@ -139,9 +140,7 @@ Page({
     inviteRoleHint: formatInviteRoleHint('child'),
     // 创建/加入家庭
     showCreateDialog: false,
-    showJoinDialog: false,
     familyNameInput: '',
-    joinCodeInput: '',
     // PIN 设置
     showPinDialog: false,
     pinInput: '',
@@ -165,7 +164,10 @@ Page({
       return;
     }
     // 记录当前登录用户角色，供 WXML 控制按钮显示
-    this.setData({ isParent: effectiveUser.role === 'parent' });
+    this.setData({
+      isParent: effectiveUser.role === 'parent',
+      canEnterInviteCenter: effectiveUser.role === 'parent' && !effectiveUser.isVirtual
+    });
     // 未加入家庭的用户（包括 child 角色）允许访问，以便输入邀请码加入家庭
     this._loadFamilyData();
   },
@@ -238,6 +240,7 @@ Page({
           inviteCodeRole: family.inviteCodeRole || 'child',
           inviteCodeExpiryText: formatInviteExpiry(family.inviteCodeExpiresAt),
           inviteRoleHint: formatInviteRoleHint(family.inviteCodeRole || 'child'),
+          canEnterInviteCenter: Boolean(loginUser && loginUser.role === 'parent' && !loginUser.isVirtual),
           loading: false,
         });
       } else {
@@ -253,6 +256,7 @@ Page({
           canManageInviteCode: false,
           inviteManagementDisabledReason: '',
           supportsParentPermissionManagement: false,
+          canEnterInviteCenter: Boolean((userService.getLoginUser() || userService.getCurrentUser())?.role === 'parent'),
           loading: false
         });
       }
@@ -328,36 +332,24 @@ Page({
 
   // ===== 加入家庭 =====
   showJoinFamily() {
-    this.setData({ showJoinDialog: true, joinCodeInput: '' });
+    this.navigateToAccessGate();
   },
 
-  onJoinCodeInput(e) {
-    this.setData({ joinCodeInput: e.detail.value });
-  },
-
-  async confirmJoinFamily() {
-    const code = this.data.joinCodeInput.trim();
-    if (!code) {
-      wx.showToast({ title: '请输入邀请码', icon: 'none' });
+  navigateToInviteCenter() {
+    if (!this.data.canEnterInviteCenter) {
+      wx.showToast({ title: '当前身份不可用', icon: 'none' });
       return;
     }
-    try {
-      const userService = getApp().globalData?.userService;
-      const result = await userService.joinFamily(code);
-      if (result.success) {
-        wx.showToast({ title: '加入成功', icon: 'success' });
-        this.setData({ showJoinDialog: false });
-        await this._loadFamilyData();
-      } else {
-        wx.showToast({ title: result.message || '加入失败', icon: 'none' });
-      }
-    } catch (e) {
-      wx.showToast({ title: '加入失败', icon: 'none' });
-    }
+
+    wx.navigateTo({
+      url: '/packageManage/pages/invite-center/invite-center'
+    });
   },
 
-  cancelJoinFamily() {
-    this.setData({ showJoinDialog: false });
+  navigateToAccessGate() {
+    wx.navigateTo({
+      url: '/pages/access-gate/access-gate?mode=manual_input'
+    });
   },
 
   navigateToAboutPage() {

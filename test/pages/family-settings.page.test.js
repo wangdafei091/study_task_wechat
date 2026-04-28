@@ -191,6 +191,27 @@ describe('packageManage/pages/family-settings/family-settings', () => {
     });
   });
 
+  it('输入邀请码加入应跳转到统一 access-gate 页面', () => {
+    const page = createPage();
+
+    page.navigateToAccessGate.call(page);
+
+    expect(global.wx.navigateTo).toHaveBeenCalledWith({
+      url: '/pages/access-gate/access-gate?mode=manual_input'
+    });
+  });
+
+  it('点击邀请码中心入口应跳转到邀请码中心页', () => {
+    const page = createPage();
+    page.data.canEnterInviteCenter = true;
+
+    page.navigateToInviteCenter.call(page);
+
+    expect(global.wx.navigateTo).toHaveBeenCalledWith({
+      url: '/packageManage/pages/invite-center/invite-center'
+    });
+  });
+
   it('viewer 加载家庭数据时应展示禁用态和解释文案', async () => {
     jest.resetModules();
     loadPageModule({ apiEnabled: true });

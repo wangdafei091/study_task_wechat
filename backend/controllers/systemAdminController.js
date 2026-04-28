@@ -1,6 +1,7 @@
 const systemAdminService = require('../services/systemAdminService');
 const systemSettingService = require('../services/systemSettingService');
 const systemUserGovernanceService = require('../services/systemUserGovernanceService');
+const inviteCodeService = require('../services/inviteCodeService');
 const { success, error } = require('../utils/response');
 const { createLogger } = require('../utils/logger');
 
@@ -57,11 +58,37 @@ class SystemAdminController {
 
   async listUserGovernance(req, res) {
     try {
-      const users = await systemUserGovernanceService.listGovernableUsers();
-      res.json(success({ users }, '获取成功'));
+      const result = await systemUserGovernanceService.listGovernableUsers(req.query || {});
+      res.json(success(result, '获取成功'));
     } catch (err) {
       logger.error('获取系统用户治理列表失败', err);
       res.status(500).json(error('获取系统用户治理列表失败', 'SYSTEM_USER_GOVERNANCE_LIST_FAILED'));
+    }
+  }
+
+  async getInviteGovernance(req, res) {
+    try {
+      const result = await inviteCodeService.getAdmissionGovernanceOverview();
+      res.json(success(result, '获取成功'));
+    } catch (err) {
+      logger.error('获取邀请码治理概览失败', err);
+      res.status(500).json(error('获取邀请码治理概览失败', 'SYSTEM_INVITE_GOVERNANCE_GET_FAILED'));
+    }
+  }
+
+  async updateInviteGovernance(req, res) {
+    try {
+      const result = await inviteCodeService.updateAdmissionGlobalQuota(
+        req.body?.quotaTotal,
+        req.systemAdmin?.userId || req.user.userId
+      );
+      res.json(success(result, '更新成功'));
+    } catch (err) {
+      if (err.code === 'INVITE_CODE_GLOBAL_QUOTA_INVALID') {
+        return res.status(400).json(error(err.message, err.code));
+      }
+      logger.error('更新邀请码治理概览失败', err);
+      res.status(500).json(error('更新邀请码治理概览失败', 'SYSTEM_INVITE_GOVERNANCE_UPDATE_FAILED'));
     }
   }
 
@@ -86,6 +113,26 @@ class SystemAdminController {
 
       logger.error('更新系统用户访问级别失败', err);
       res.status(500).json(error('更新系统用户访问级别失败', 'SYSTEM_USER_GOVERNANCE_UPDATE_FAILED'));
+    }
+  }
+
+  async updateUserAdmissionIssuer(req, res) {
+    try {
+      const result = await systemUserGovernanceService.updateAdmissionIssuer(
+        req.params.userId,
+        req.body || {},
+        req.systemAdmin?.userId || req.user.userId
+      );
+      res.json(success(result, '更新成功'));
+    } catch (err) {
+      if (
+        err.code === 'SYSTEM_USER_GOVERNANCE_INVALID' ||
+        err.code === 'SYSTEM_USER_GOVERNANCE_TARGET_INVALID'
+      ) {
+        return res.status(400).json(error(err.message, err.code));
+      }
+      logger.error('更新用户邀请码治理失败', err);
+      res.status(500).json(error('更新用户邀请码治理失败', 'SYSTEM_USER_INVITE_GOVERNANCE_UPDATE_FAILED'));
     }
   }
 }

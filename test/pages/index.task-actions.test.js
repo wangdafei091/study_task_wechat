@@ -180,6 +180,7 @@ describe('pages/index/modules/index-task-actions', () => {
 
     const readonlyPage = createPage();
     readonlyPage.data.isViewerReadonly = true;
+    readonlyPage.data.readonlyReason = 'viewer-readonly';
 
     await taskActions.taskItemStatusToggle(readonlyPage, {
       detail: { id: 'task-1', newStatus: 0 }

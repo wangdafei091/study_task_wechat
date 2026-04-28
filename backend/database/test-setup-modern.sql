@@ -7,6 +7,7 @@ USE task_wechat_test;
 SET FOREIGN_KEY_CHECKS = 0;
 DROP TABLE IF EXISTS messages;
 DROP TABLE IF EXISTS rewards;
+DROP TABLE IF EXISTS invite_codes;
 DROP TABLE IF EXISTS system_settings;
 DROP TABLE IF EXISTS app_access_codes;
 DROP TABLE IF EXISTS star_groups;
@@ -29,6 +30,8 @@ CREATE TABLE IF NOT EXISTS users (
   system_access_level VARCHAR(16) NOT NULL DEFAULT 'normal' COMMENT '系统级访问级别 normal|readonly|blocked',
   system_access_updated_by_user_id VARCHAR(36) DEFAULT NULL COMMENT '系统级访问级别最后更新人',
   system_access_updated_at TIMESTAMP NULL DEFAULT NULL COMMENT '系统级访问级别最后更新时间',
+  can_issue_admission_code TINYINT(1) NOT NULL DEFAULT 0 COMMENT '普通用户是否允许发新用户邀请码',
+  admission_code_quota_total INT DEFAULT NULL COMMENT '普通用户可成功邀请新用户总额度',
   family_id VARCHAR(36) DEFAULT NULL COMMENT '所属家庭ID，NULL表示未加入家庭',
   family_permission_role VARCHAR(20) DEFAULT NULL COMMENT '家庭内权限：manager/viewer，非家庭家长和孩子为NULL',
   is_virtual TINYINT(1) DEFAULT 0 COMMENT '是否虚拟成员（无独立微信号，由家长创建）',
@@ -179,6 +182,41 @@ CREATE TABLE IF NOT EXISTS app_access_codes (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_app_access_codes_status (status),
   INDEX idx_app_access_codes_expires_at (expires_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS invite_codes (
+  invite_code_id VARCHAR(36) PRIMARY KEY,
+  code VARCHAR(16) NOT NULL UNIQUE,
+  purpose VARCHAR(32) NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'active',
+  issuer_user_id VARCHAR(36) DEFAULT NULL,
+  family_id VARCHAR(36) DEFAULT NULL,
+  target_role VARCHAR(20) DEFAULT NULL,
+  target_family_permission_role VARCHAR(20) DEFAULT NULL,
+  slot_key VARCHAR(100) DEFAULT NULL,
+  active_slot_key VARCHAR(100)
+    GENERATED ALWAYS AS (
+      CASE
+        WHEN status = 'active' THEN slot_key
+        ELSE NULL
+      END
+    ) STORED,
+  max_uses INT NOT NULL DEFAULT 1,
+  used_count INT NOT NULL DEFAULT 0,
+  expires_at TIMESTAMP NULL DEFAULT NULL,
+  consumed_by_user_id VARCHAR(36) DEFAULT NULL,
+  consumed_at TIMESTAMP NULL DEFAULT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_invite_codes_purpose_status (purpose, status),
+  INDEX idx_invite_codes_slot_key (slot_key),
+  UNIQUE KEY uk_invite_codes_active_slot_key (active_slot_key),
+  INDEX idx_invite_codes_issuer_user_id (issuer_user_id),
+  INDEX idx_invite_codes_family_id (family_id),
+  INDEX idx_invite_codes_expires_at (expires_at),
+  CONSTRAINT fk_invite_codes_issuer_user FOREIGN KEY (issuer_user_id) REFERENCES users(user_id) ON DELETE SET NULL,
+  CONSTRAINT fk_invite_codes_family FOREIGN KEY (family_id) REFERENCES families(family_id) ON DELETE CASCADE,
+  CONSTRAINT fk_invite_codes_consumed_by_user FOREIGN KEY (consumed_by_user_id) REFERENCES users(user_id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS system_settings (

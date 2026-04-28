@@ -60,6 +60,7 @@ const API_CONFIG = {
     USERS: '/api/users',
     USER_BY_ID: '/api/users/{userId}',
     USER_CURRENT: '/api/users/current',
+    USER_CURRENT_PROFILE: '/api/users/current/profile',
     USER_BY_ROLE: '/api/users/role/{role}',
     USER_SWITCH: '/api/users/switch',
     USER_EXISTS: '/api/users/{userId}/exists',
@@ -114,12 +115,21 @@ const API_CONFIG = {
     FAMILIES_DELETE_MEMBER: '/api/families/members/{userId}',
     FAMILIES_MEMBER_PERMISSION_ROLE: '/api/families/members/{userId}/permission-role',
 
+    // 邀请码相关 API
+    INVITES_PREVIEW: '/api/invites/preview',
+    INVITES_BOOTSTRAP: '/api/invites/bootstrap',
+    INVITES_CURRENT: '/api/invites/current',
+    INVITES_ADMISSION_CODE: '/api/invites/admission-code',
+    INVITES_FAMILY_CODE: '/api/invites/family-code',
+
     // 系统管理相关API
     SYSTEM_ADMIN_BOOTSTRAP: '/api/system/admin/bootstrap',
     SYSTEM_ADMIN_OVERVIEW: '/api/system/admin/overview',
     SYSTEM_ADMIN_APP_ACCESS_MODE: '/api/system/admin/app-access-mode',
+    SYSTEM_ADMIN_INVITE_GOVERNANCE: '/api/system/admin/invite-governance',
     SYSTEM_ADMIN_USERS_GOVERNANCE: '/api/system/admin/users/governance',
     SYSTEM_ADMIN_USER_ACCESS_LEVEL: '/api/system/admin/users/{userId}/access-level',
+    SYSTEM_ADMIN_USER_ADMISSION_ISSUER: '/api/system/admin/users/{userId}/admission-issuer',
 
     // 健康检查
     HEALTH: '/health'

@@ -1,29 +1,61 @@
 <view class="access-gate-page">
   <view class="access-gate-shell">
-    <view class="access-gate-title">请输入邀请码</view>
-    <view class="access-gate-subtitle">当前为邀请制体验，输入邀请码后即可进入</view>
+    <view class="access-gate-card">
+      <view class="access-gate-title">{{title}}</view>
+      <view class="access-gate-subtitle">{{subtitle}}</view>
 
-    <input
-      class="access-gate-input"
-      placeholder="请输入邀请码"
-      maxlength="24"
-      value="{{accessCode}}"
-      bindinput="onInput"
-      confirm-type="done"
-    />
+      <block wx:if="{{mode === 'manual_input'}}">
+        <input
+          class="access-gate-input"
+          placeholder="请输入邀请码"
+          maxlength="24"
+          value="{{inviteCode}}"
+          bindinput="onInput"
+          confirm-type="done"
+        />
+      </block>
 
-    <view class="access-gate-error" wx:if="{{errorMessage}}">{{errorMessage}}</view>
+      <block wx:else>
+        <view class="invite-summary-card">
+          <view class="invite-summary-label">{{previewResult.purpose === 'family_invite' ? '家庭邀请码' : '新用户邀请码'}}</view>
+          <view class="invite-summary-code">{{inviteCode}}</view>
+          <view class="invite-summary-meta" wx:if="{{previewResult.familyName}}">
+            目标家庭：{{previewResult.familyName}}
+          </view>
+          <view class="invite-summary-meta" wx:if="{{previewResult.targetRole}}">
+            目标身份：{{previewResult.targetRole === 'parent' ? '家长' : '孩子'}}
+          </view>
+        </view>
+      </block>
 
-    <button
-      class="access-gate-button"
-      type="primary"
-      loading="{{submitting}}"
-      disabled="{{submitting || !accessCode}}"
-      bindtap="onSubmit"
-    >
-      继续
-    </button>
+      <view class="access-gate-error" wx:if="{{errorMessage}}">{{errorMessage}}</view>
+      <view class="access-gate-note" wx:if="{{mode === 'share_pending_login' && showProfileHint}}">
+        继续时会尝试获取你的昵称和头像；如果你拒绝，也不会阻止进入。
+      </view>
+      <view class="access-gate-note" wx:if="{{mode === 'no_action_needed' && previewResult.currentActionMessage}}">
+        {{previewResult.currentActionMessage}}
+      </view>
 
-    <view class="access-gate-footnote">邀请码通常由项目维护者提供</view>
+      <button
+        class="access-gate-button"
+        type="primary"
+        loading="{{submitting || previewLoading}}"
+        disabled="{{submitting || previewLoading || (mode === 'manual_input' && !inviteCode)}}"
+        bindtap="onPrimaryTap"
+      >
+        {{primaryButtonText}}
+      </button>
+
+      <button
+        class="access-gate-secondary-button"
+        wx:if="{{secondaryButtonText}}"
+        disabled="{{submitting || previewLoading}}"
+        bindtap="onSecondaryTap"
+      >
+        {{secondaryButtonText}}
+      </button>
+
+      <view class="access-gate-footnote">邀请码可由系统管理员或已有用户提供。</view>
+    </view>
   </view>
 </view>

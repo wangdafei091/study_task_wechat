@@ -210,11 +210,10 @@ describe('pages/index page contract', () => {
       'utf8'
     );
 
-    expect(wxml).toContain('readonly="{{isViewerReadonly}}"');
-    expect(wxml).toContain('readonlyReason="{{isViewerReadonly ? \'viewer-readonly\' : \'\'}}"');
-    expect(wxml).toContain('readonly="{{isViewerReadonly || isViewingFuture}}"');
-    expect(wxml).toContain('readonlyReason="{{isViewingFuture ? \'future-date\' : (isViewerReadonly ? \'viewer-readonly\' : \'\')}}"');
-    expect(wxml).not.toContain('readonly="{{isReadonlyView || isViewingFuture}}"');
+    expect(wxml).toContain('readonly="{{isReadonlyView}}"');
+    expect(wxml).toContain('readonlyReason="{{readonlyReason}}"');
+    expect(wxml).toContain('readonly="{{isReadonlyView || isViewingFuture}}"');
+    expect(wxml).toContain('readonlyReason="{{isViewingFuture ? \'future-date\' : readonlyReason}}"');
   });
 
   it('普通任务为空但存在表现项时，不应继续显示任务空态', () => {

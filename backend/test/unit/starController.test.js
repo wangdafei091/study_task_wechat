@@ -4,6 +4,9 @@ const { generateToken } = require('../../config/jwt');
 
 jest.mock('../../services/starService');
 jest.mock('../../services/familyService');
+jest.mock('../../middleware/systemUserAccess', () => ({
+  systemUserAccessMiddleware: jest.fn((req, res, next) => next())
+}));
 jest.mock('../../utils/logger', () => ({
   createLogger: () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() })
 }));

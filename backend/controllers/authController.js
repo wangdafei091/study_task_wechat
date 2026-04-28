@@ -5,6 +5,7 @@
 const { getPool } = require('../config/database');
 const { generateToken } = require('../config/jwt');
 const appAccessService = require('../services/appAccessService');
+const inviteCodeService = require('../services/inviteCodeService');
 const userService = require('../services/userService');
 const User = require('../models/User');
 const { code2Session } = require('../utils/wechat');
@@ -16,7 +17,14 @@ const logger = createLogger('AuthController');
  * 认证控制器类
  */
 class AuthController {
-  async _createInvitedUser(wechatData, accessCode) {
+  _normalizeProfile(profile = {}) {
+    return {
+      nickname: String(profile.nickname || profile.nickName || '').trim(),
+      avatarUrl: String(profile.avatarUrl || profile.avatar || '').trim()
+    };
+  }
+
+  async _createInvitedUser(wechatData, accessCode, profileSnapshot = {}) {
     const pool = getPool();
     const connection = await pool.getConnection();
 
@@ -30,9 +38,9 @@ class AuthController {
       const user = await userService.createUser({
         openid: wechatData.openid,
         unionid: wechatData.unionid,
-        name: '用户',
-        avatar: '',
-        role: 'parent',
+        name: profileSnapshot.nickname || '用户',
+        avatar: profileSnapshot.avatarUrl || '',
+        role: 'parent'
       }, {
         connection
       });
@@ -56,6 +64,29 @@ class AuthController {
     }
   }
 
+  async _createUserByInvite(wechatData, inviteCode, profileSnapshot = {}) {
+    const pool = getPool();
+    const connection = await pool.getConnection();
+
+    try {
+      await connection.beginTransaction();
+      const user = await inviteCodeService.consumeForNewUser({
+        code: inviteCode,
+        wechatData,
+        profileSnapshot,
+        connection
+      });
+
+      await connection.commit();
+      return user;
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+  }
+
   /**
    * 微信小程序登录
    * @param {Object} req - Express请求对象
@@ -63,7 +94,10 @@ class AuthController {
    */
   async login(req, res) {
     try {
-      const { code, accessCode } = req.body;
+      const { code, accessCode, inviteCode, profile } = req.body;
+      const normalizedInviteCode = String(inviteCode || '').trim();
+      const normalizedAccessCode = String(accessCode || '').trim();
+      const profileSnapshot = this._normalizeProfile(profile);
 
       // 参数验证
       if (!code) {
@@ -82,14 +116,21 @@ class AuthController {
       // 2. 查询或创建用户
       let user = await userService.findByOpenid(wechatData.openid);
       if (!user) {
-        if (await appAccessService.isInviteOnlyMode()) {
-          user = await this._createInvitedUser(wechatData, accessCode);
+        const inviteOnlyMode = await appAccessService.isInviteOnlyMode();
+        if (normalizedInviteCode) {
+          user = await this._createUserByInvite(wechatData, normalizedInviteCode, profileSnapshot);
+        } else if (normalizedAccessCode) {
+          user = await this._createInvitedUser(wechatData, normalizedAccessCode, profileSnapshot);
+        } else if (inviteOnlyMode) {
+          throw Object.assign(new Error('当前为邀请制体验，请先输入邀请码'), {
+            code: 'AUTH_APP_ACCESS_CODE_REQUIRED'
+          });
         } else {
           user = await userService.createUser({
             openid: wechatData.openid,
             unionid: wechatData.unionid,
-            name: '用户',
-            avatar: '',
+            name: profileSnapshot.nickname || '用户',
+            avatar: profileSnapshot.avatarUrl || '',
             role: 'parent',
           });
         }
@@ -138,7 +179,19 @@ class AuthController {
       if (
         err.code === 'AUTH_APP_ACCESS_CODE_REQUIRED' ||
         err.code === 'AUTH_APP_ACCESS_CODE_INVALID' ||
-        err.code === 'AUTH_APP_ACCESS_CODE_EXPIRED'
+        err.code === 'AUTH_APP_ACCESS_CODE_EXPIRED' ||
+        err.code === 'INVITE_CODE_REQUIRED' ||
+        err.code === 'INVITE_CODE_INVALID' ||
+        err.code === 'INVITE_CODE_EXPIRED' ||
+        err.code === 'INVITE_CODE_DISABLED' ||
+        err.code === 'INVITE_CODE_PURPOSE_MISMATCH' ||
+        err.code === 'INVITE_CODE_TARGET_ROLE_MISMATCH' ||
+        err.code === 'INVITE_CODE_ALREADY_IN_TARGET_FAMILY' ||
+        err.code === 'INVITE_CODE_EXISTING_USER_HAS_FAMILY' ||
+        err.code === 'INVITE_CODE_QUOTA_EXCEEDED' ||
+        err.code === 'INVITE_CODE_GLOBAL_QUOTA_EXCEEDED' ||
+        err.code === 'INVITE_CODE_ISSUER_FORBIDDEN' ||
+        err.code === 'INVITE_CODE_FAMILY_MANAGER_REQUIRED'
       ) {
         return res.status(400).json(
           error(err.message, err.code)

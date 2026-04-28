@@ -204,6 +204,49 @@ class FamilyService {
     return { inviteCode, inviteCodeRole: role, inviteCodeExpiresAt: expiresAt };
   }
 
+  async clearLegacyInviteCode(familyId, options = {}) {
+    if (!familyId) {
+      return false;
+    }
+
+    const executeRunner = this._getExecuteRunner(options.connection);
+    const result = await executeRunner(
+      `UPDATE families
+          SET invite_code = NULL,
+              invite_code_role = NULL,
+              invite_code_expires_at = NULL,
+              invite_code_used_at = CURRENT_TIMESTAMP,
+              updated_at = CURRENT_TIMESTAMP
+        WHERE family_id = ?
+          AND status = ?`,
+      [familyId, 'active']
+    );
+
+    return Number(result?.affectedRows || 0) > 0;
+  }
+
+  async clearLegacyInviteCodeByIssuer(familyId, issuerUserId, options = {}) {
+    if (!familyId || !issuerUserId) {
+      return false;
+    }
+
+    const executeRunner = this._getExecuteRunner(options.connection);
+    const result = await executeRunner(
+      `UPDATE families
+          SET invite_code = NULL,
+              invite_code_role = NULL,
+              invite_code_expires_at = NULL,
+              invite_code_used_at = CURRENT_TIMESTAMP,
+              updated_at = CURRENT_TIMESTAMP
+        WHERE family_id = ?
+          AND created_by = ?
+          AND status = ?`,
+      [familyId, issuerUserId, 'active']
+    );
+
+    return Number(result?.affectedRows || 0) > 0;
+  }
+
   /**
    * 创建虚拟成员（is_virtual=true，role 强制为 child）
    */
