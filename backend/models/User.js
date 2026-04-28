@@ -23,6 +23,8 @@ class User {
     systemAccessLevel = User.SYSTEM_ACCESS_LEVEL.NORMAL,
     systemAccessUpdatedByUserId = null,
     systemAccessUpdatedAt = null,
+    canIssueAdmissionCode = false,
+    admissionCodeQuotaTotal = null,
     isVirtual = false,
     createdByUserId = null,
     createdAt = null,
@@ -41,6 +43,10 @@ class User {
     this.systemAccessLevel = systemAccessLevel || User.SYSTEM_ACCESS_LEVEL.NORMAL;
     this.systemAccessUpdatedByUserId = systemAccessUpdatedByUserId;
     this.systemAccessUpdatedAt = systemAccessUpdatedAt;
+    this.canIssueAdmissionCode = Boolean(canIssueAdmissionCode);
+    this.admissionCodeQuotaTotal = admissionCodeQuotaTotal === null || admissionCodeQuotaTotal === undefined
+      ? null
+      : Number(admissionCodeQuotaTotal);
     this.isVirtual = isVirtual;
     this.createdByUserId = createdByUserId;
     this.createdAt = createdAt;
@@ -67,6 +73,10 @@ class User {
       systemAccessLevel: dbRecord.system_access_level || User.SYSTEM_ACCESS_LEVEL.NORMAL,
       systemAccessUpdatedByUserId: dbRecord.system_access_updated_by_user_id || null,
       systemAccessUpdatedAt: dbRecord.system_access_updated_at || null,
+      canIssueAdmissionCode: Boolean(dbRecord.can_issue_admission_code),
+      admissionCodeQuotaTotal: dbRecord.admission_code_quota_total === null || dbRecord.admission_code_quota_total === undefined
+        ? null
+        : Number(dbRecord.admission_code_quota_total),
       isVirtual: Boolean(dbRecord.is_virtual),
       createdByUserId: dbRecord.created_by_user_id || null,
       createdAt: dbRecord.created_at,
@@ -93,6 +103,8 @@ class User {
       system_access_level: this.systemAccessLevel,
       system_access_updated_by_user_id: this.systemAccessUpdatedByUserId,
       system_access_updated_at: this.systemAccessUpdatedAt,
+      can_issue_admission_code: this.canIssueAdmissionCode,
+      admission_code_quota_total: this.admissionCodeQuotaTotal,
       is_virtual: this.isVirtual,
       created_by_user_id: this.createdByUserId,
     };
@@ -116,6 +128,8 @@ class User {
       systemAccessLevel: this.systemAccessLevel,
       systemAccessUpdatedByUserId: this.systemAccessUpdatedByUserId,
       systemAccessUpdatedAt: this.systemAccessUpdatedAt,
+      canIssueAdmissionCode: this.canIssueAdmissionCode,
+      admissionCodeQuotaTotal: this.admissionCodeQuotaTotal,
       isVirtual: this.isVirtual,
       createdByUserId: this.createdByUserId,
       createdAt: this.createdAt,

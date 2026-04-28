@@ -112,9 +112,9 @@ describe('utils/app/bootstrap-auth', () => {
       const actual = jest.requireActual('../../utils/app/app-access-state');
       return {
         ...actual,
-        loadPendingAppAccessCode: jest.fn(() => pendingAccessCode),
-        clearPendingAppAccessCode: jest.fn(),
-        savePendingAppAccessCode: jest.fn(actual.savePendingAppAccessCode)
+        loadPendingInviteCode: jest.fn(() => pendingAccessCode),
+        clearPendingInviteCode: jest.fn(),
+        savePendingInviteCode: jest.fn(actual.savePendingInviteCode)
       };
     });
     jest.doMock('../../utils/app/system-user-access-state', () => ({
@@ -196,9 +196,9 @@ describe('utils/app/bootstrap-auth', () => {
     };
 
     await expect(module.doCloudLogin(app)).resolves.toBe(true);
-    expect(httpPostMock).toHaveBeenCalledWith('/api/auth/login', { code: 'wx-code', accessCode: 'INVITE88' });
+    expect(httpPostMock).toHaveBeenCalledWith('/api/auth/login', { code: 'wx-code', inviteCode: 'INVITE88' });
     expect(setTokenMock).toHaveBeenCalledWith('token-1');
-    expect(appAccessState.clearPendingAppAccessCode).toHaveBeenCalled();
+    expect(appAccessState.clearPendingInviteCode).toHaveBeenCalled();
     expect(clearBlockedSessionFlagMock).toHaveBeenCalled();
     expect(setUserServiceMock).toHaveBeenCalled();
     expect(app.postLoginInitialization).toHaveBeenCalled();

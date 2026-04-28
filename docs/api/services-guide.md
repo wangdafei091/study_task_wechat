@@ -2,7 +2,7 @@
 
 本文档介绍了学习任务微信小程序服务层API，包括所有核心服务的功能、方法签名和使用说明。
 
-> **最后更新**：2026-04-25
+> **最后更新**：2026-04-27
 
 ---
 
@@ -36,7 +36,7 @@ const taskTemplateService = serviceManager.get('taskTemplateService');
 - `offlineQueueService` 为 M19E 引入的统一待同步队列服务，负责承接任务域与奖励域的离线待同步动作。
 - `ENABLE_API / API_BASE_URL` 不属于 `ConfigService` 管辖范围，而是由 `utils/runtime-config.js` 与 `utils/api-config.js` 统一解析为启动时运行模式快照。
 - `taskTemplateService` 同时支持别名 `taskTemplate` / `TaskTemplateService`，由 `ServiceManager` 统一映射。
-- `services/system-service.js` 为系统管理相关页面的轻量 HTTP 服务，不通过 `ServiceManager` 注册，当前由关于页和系统管理页直接 `require` 使用。
+- `services/system-service.js` 与 `services/invite-service.js` 为轻量 HTTP 服务，不通过 `ServiceManager` 注册，当前由系统管理页、治理页、邀请码中心和承接页直接 `require` 使用。
 
 ---
 
@@ -48,6 +48,8 @@ const taskTemplateService = serviceManager.get('taskTemplateService');
 - 获取当前用户是否具备进入系统管理页的资格
 - 获取当前应用准入模式、来源和最后更新时间
 - 更新 `open / invite_only` 准入模式
+- 获取和更新新用户邀请码全局治理配置
+- 获取系统用户治理列表，并更新访问级别与发码能力
 - 在系统配置损坏时承接前端“修复态”链路
 
 ### API 方法
@@ -95,6 +97,197 @@ const taskTemplateService = serviceManager.get('taskTemplateService');
 - **说明**：
   - 成功后数据库立即成为权威来源
   - 该更新只影响新用户登录是否需要邀请码，不影响已有用户登录
+
+##### `listUserGovernance(params = {})`
+获取系统用户治理列表。
+- **参数**:
+  ```javascript
+  {
+    keyword?: string,
+    accessLevel?: 'all' | 'normal' | 'readonly' | 'blocked',
+    role?: 'all' | 'parent' | 'child',
+    canIssueAdmissionCode?: 'all' | 'true' | 'false'
+  }
+  ```
+- **返回**:
+  ```javascript
+  {
+    users: Array<{
+      userId: string,
+      nickname: string,
+      role: 'parent' | 'child',
+      familyId: string | null,
+      familyPermissionRole: 'manager' | 'viewer' | null,
+      isSystemAdmin: boolean,
+      isVirtual: boolean,
+      systemAccessLevel: 'normal' | 'readonly' | 'blocked',
+      systemAccessUpdatedAt: string | null,
+      systemAccessUpdatedByUserId: string | null,
+      canIssueAdmissionCode: boolean,
+      admissionCodeQuotaTotal: number | null,
+      admissionCodeQuotaUsed: number,
+      admissionCodeQuotaRemaining: number | null
+    }>,
+    summary: {
+      normal: number,
+      readonly: number,
+      blocked: number
+    },
+    nextCursor: string,
+    hasMore: boolean
+  }
+  ```
+- **说明**：
+  - 当前返回仍为单页全量结果
+  - `canIssueAdmissionCode` 筛选按“当前有效发码能力”判断，而不是只看原始字段
+
+##### `updateUserAccessLevel(userId, accessLevel)`
+更新目标用户系统访问级别。
+- **参数**:
+  - `userId` - `string`
+  - `accessLevel` - `'normal' | 'readonly' | 'blocked'`
+- **返回**:
+  ```javascript
+  {
+    userId: string,
+    systemAccessLevel: 'normal' | 'readonly' | 'blocked',
+    systemAccessUpdatedAt: string | null,
+    systemAccessUpdatedByUserId: string | null
+  }
+  ```
+- **说明**：
+  - 当用户被降级到 `readonly / blocked` 时，后端会同步失效该用户已有的有效邀请码
+
+##### `getInviteGovernance()`
+获取第一类邀请码全局治理概览。
+- **返回**:
+  ```javascript
+  {
+    quotaTotal: number | null,
+    quotaUsed: number,
+    quotaRemaining: number | null
+  }
+  ```
+
+##### `updateInviteGovernance(quotaTotal)`
+更新第一类邀请码全局总量。
+- **参数**:
+  - `quotaTotal` - `number | null`
+- **返回**:
+  ```javascript
+  {
+    quotaTotal: number | null,
+    quotaUsed: number,
+    quotaRemaining: number | null
+  }
+  ```
+
+##### `updateUserAdmissionIssuer(userId, payload = {})`
+更新目标用户的新用户发码能力。
+- **参数**:
+  - `userId` - `string`
+  - `payload`
+    ```javascript
+    {
+      canIssueAdmissionCode: boolean,
+      admissionCodeQuotaTotal: number | null
+    }
+    ```
+- **返回**:
+  ```javascript
+  {
+    userId: string,
+    canIssueAdmissionCode: boolean,
+    admissionCodeQuotaTotal: number | null
+  }
+  ```
+- **说明**：
+  - 仅正常状态的家长可被授予该能力
+  - 当能力被关闭时，后端会同步失效该用户已有的有效第一类邀请码
+
+---
+
+## InviteService - 统一邀请码接口服务
+
+统一邀请码接口服务负责承接页摘要预览、邀请码中心能力摘要和两类邀请码的生成/刷新。
+
+### 核心功能
+- 预览邀请码摘要与当前用户下一步可执行动作
+- 获取当前登录用户的邀请码能力摘要
+- 获取当前有效的邀请码展示数据
+- 生成或刷新新用户邀请码
+- 生成或刷新家庭邀请码
+
+### API 方法
+
+##### `previewInviteCode(inviteCode)`
+预览邀请码摘要，不消费邀请码。
+- **参数**:
+  - `inviteCode` - `string`
+- **返回**:
+  ```javascript
+  {
+    inviteCode: string,
+    purpose: 'admission_only' | 'family_invite' | null,
+    status: 'active' | 'expired' | 'invalid',
+    targetRole: 'parent' | 'child' | null,
+    familyId: string | null,
+    familyName: string | null,
+    issuerDisplayName: string | null,
+    currentAction: string,
+    currentActionMessage: string,
+    requiresProfileAuthorization: boolean
+  }
+  ```
+- **说明**：
+  - 未登录时主要返回 `enter_app / join_family`
+  - 已登录时可能返回 `already_has_access / already_in_family / has_other_family / system_readonly / system_blocked / invalid`
+
+##### `getBootstrap()`
+获取当前登录用户的邀请码能力摘要。
+- **返回**:
+  ```javascript
+  {
+    canIssueAdmissionCode: boolean,
+    admissionCodeQuotaTotal: number | null,
+    admissionCodeQuotaUsed: number,
+    admissionCodeQuotaRemaining: number | null,
+    admissionGlobalQuotaTotal: number | null,
+    admissionGlobalQuotaUsed: number,
+    admissionGlobalQuotaRemaining: number | null,
+    canIssueFamilyInviteCode: boolean,
+    familyId: string | null,
+    availableFamilyInviteRoles: Array<'parent' | 'child'>
+  }
+  ```
+
+##### `getCurrentInviteSummary()`
+获取当前有效邀请码摘要。
+- **返回**:
+  ```javascript
+  {
+    admissionCode: Object | null,
+    familyInviteCodes: Array<Object>
+  }
+  ```
+- **说明**：
+  - `admissionCode` 最多只有 1 个
+  - `familyInviteCodes` 可能同时包含邀请家长和邀请孩子两种当前有效邀请码
+
+##### `issueAdmissionCode()`
+生成或刷新当前用户的新用户邀请码。
+- **返回**: `Promise<Object>`
+- **说明**：
+  - 同一发码人当前只保留 1 个有效第一类邀请码
+
+##### `issueFamilyCode(targetRole)`
+生成或刷新当前家庭邀请码。
+- **参数**:
+  - `targetRole` - `'parent' | 'child'`
+- **返回**: `Promise<Object>`
+- **说明**：
+  - 同一家庭同一角色槽位当前只保留 1 个有效邀请码
+  - `targetRole='parent'` 生成的是默认 `viewer` 家长邀请码
 
 ---
 
@@ -1177,7 +1370,6 @@ const taskTemplateService = serviceManager.get('taskTemplateService');
 - **说明**: 对正式云端消息会先调用 `DELETE /api/messages/:messageId`；若云端失败，本地不会先删除
 
 ---
----
 
 ## ValidationService - 表单验证服务
 
@@ -1367,6 +1559,20 @@ const taskTemplateService = serviceManager.get('taskTemplateService');
 - **参数**: `userId` (string) - 目标用户ID, `nickname` (string) - 新昵称
 - **返回**: `Promise<{ success: boolean, message?: string }>`
 - **说明**：更新成功后直接同步 userCache 和 currentUser/loginUser，不重新拉取
+
+##### `updateCurrentProfile(profile = {})`
+更新当前登录用户资料。
+- **参数**:
+  ```javascript
+  {
+    nickname?: string,
+    avatarUrl?: string
+  }
+  ```
+- **返回**: `Promise<{ success: boolean, user?: User, message?: string }>`
+- **说明**：
+  - 云端模式下调用 `/api/users/current/profile` 并同步刷新 `loginUser / currentUser / userCache`
+  - 本地模式下只更新当前内存用户快照，不发网络请求
 
 ---
 
@@ -1664,6 +1870,8 @@ async function complexBusinessFlow() {
 | **RewardService** | `test/services/reward-service.test.js` |
 | **MessageService** | `test/services/message-service.test.js` |
 | **UserService** | `test/services/user-service.test.js` |
+| **SystemService** | `test/services/system-service.test.js` |
+| **InviteService** | `test/services/invite-service.test.js` |
 | **ValidationService** | `test/services/validation-service.test.js` |
 
 ### 运行测试

@@ -207,6 +207,39 @@ class UserService {
     });
   }
 
+  _applyProfileSnapshotToUser(user, profile = {}) {
+    if (!user) {
+      return;
+    }
+
+    const nickname = String(profile.nickname || profile.nickName || '').trim();
+    const avatar = String(profile.avatarUrl || profile.avatar || '').trim();
+    const patch = {};
+
+    if (nickname) {
+      patch.name = nickname;
+    }
+    if (avatar) {
+      patch.avatar = avatar;
+    }
+
+    if (Object.keys(patch).length === 0) {
+      return;
+    }
+
+    if (typeof user.update === 'function') {
+      user.update(patch);
+      return;
+    }
+
+    if (patch.name !== undefined) {
+      user.name = patch.name;
+    }
+    if (patch.avatar !== undefined) {
+      user.avatar = patch.avatar;
+    }
+  }
+
   /**
    * 获取所有可用用户
    * @returns {Array} 用户列表
@@ -660,6 +693,39 @@ class UserService {
       return { success: true };
     } catch (error) {
       logger.error('UserService', '加入家庭失败', error);
+      return { success: false, message: error.message };
+    }
+  }
+
+  async updateCurrentProfile(profile = {}) {
+    if (this._isLocalMode()) {
+      this._applyProfileSnapshotToUser(this.loginUser, profile);
+      if (this.currentUser?.userId === this.loginUser?.userId) {
+        this._applyProfileSnapshotToUser(this.currentUser, profile);
+      }
+      return { success: true };
+    }
+
+    try {
+      const result = await HttpClient.patch(API_CONFIG.ENDPOINTS.USER_CURRENT_PROFILE, profile);
+      const normalizedProfile = {
+        nickname: result?.nickname || result?.name || '',
+        avatarUrl: result?.avatar || ''
+      };
+
+      if (this.loginUser?.userId === result?.userId) {
+        this._applyProfileSnapshotToUser(this.loginUser, normalizedProfile);
+      }
+      if (this.currentUser?.userId === result?.userId) {
+        this._applyProfileSnapshotToUser(this.currentUser, normalizedProfile);
+      }
+      const cached = result?.userId ? this.userCache.get(result.userId) : null;
+      if (cached) {
+        this._applyProfileSnapshotToUser(cached, normalizedProfile);
+      }
+      return { success: true, user: result };
+    } catch (error) {
+      logger.error('UserService', '更新当前用户资料失败', error);
       return { success: false, message: error.message };
     }
   }

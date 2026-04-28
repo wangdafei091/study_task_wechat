@@ -18,9 +18,10 @@ const bootstrapServices = require('./utils/app/bootstrap-services');
 const postLoginBootstrap = require('./utils/app/post-login-bootstrap');
 const runtimeObservers = require('./utils/app/runtime-observers');
 const systemUserAccessState = require('./utils/app/system-user-access-state');
+const appAccessState = require('./utils/app/app-access-state');
 
 App({
-  onLaunch: async function () {
+  onLaunch: async function (options = {}) {
     // 原地补齐启动状态，避免覆盖默认 globalData 契约和 getter。
     this.globalData.appReady = false;
     this.globalData.userServiceReady = false;
@@ -44,6 +45,7 @@ App({
     // 确定是否为开发环境，用于配置事件总线
     const isDevEnv = deviceInfo.isDevelopmentEnv();
     await bootstrapAuth.prepareUserService(this);
+    const inviteEntryHandled = this.captureInviteEntry(options, { source: 'launch' });
     await bootstrapServices.initialize(this, { isDevEnv });
     
     // 检查基础库版本兼容性
@@ -57,7 +59,10 @@ App({
     logs.unshift(Date.now())
     wx.setStorageSync('logs', logs.slice(0, 50))
 
-    await bootstrapAuth.runWxLogin(this);
+    const shouldSkipInitialLogin = Boolean(inviteEntryHandled && !this.globalData.userService);
+    if (!shouldSkipInitialLogin) {
+      await bootstrapAuth.runWxLogin(this);
+    }
     
     runtimeObservers.install(this);
 
@@ -84,6 +89,8 @@ App({
     } catch (error) {
       logger.error('App', '等待前台系统访问态刷新失败', error);
     }
+
+    this.captureInviteEntry(options, { source: 'show' });
   },
 
   /**
@@ -312,6 +319,8 @@ App({
     themeColors: {},
     eventCallbacks: {},
     systemAccessRefreshPromise: null,
+    lastInviteEntryFingerprint: '',
+    lastInviteEntryHandledAt: 0,
     needRefreshReward: false,
     rewardClaimedInfo: null,
     hasRedirectedToReward: false,
@@ -353,6 +362,55 @@ App({
    */
   getUserService: function() {
     return this.globalData.userService;
+  },
+
+  extractInviteCode(options = {}) {
+    const query = options?.query || {};
+    return appAccessState.normalizeInviteCode(
+      query.inviteCode ||
+      query.invite_code ||
+      options?.referrerInfo?.extraData?.inviteCode ||
+      options?.referrerInfo?.extraData?.invite_code ||
+      ''
+    );
+  },
+
+  buildInviteEntryFingerprint(inviteCode, options = {}) {
+    return [
+      inviteCode,
+      options?.path || '',
+      options?.scene || '',
+      options?.query?.inviteCode || options?.query?.invite_code || ''
+    ].join('::');
+  },
+
+  captureInviteEntry(options = {}, extra = {}) {
+    const inviteCode = this.extractInviteCode(options);
+    if (!inviteCode || typeof wx === 'undefined' || typeof wx.reLaunch !== 'function') {
+      return false;
+    }
+
+    const fingerprint = this.buildInviteEntryFingerprint(inviteCode, options);
+    const lastFingerprint = this.globalData.lastInviteEntryFingerprint || '';
+    const lastHandledAt = Number(this.globalData.lastInviteEntryHandledAt || 0);
+    if (fingerprint === lastFingerprint && (Date.now() - lastHandledAt) < 1500) {
+      return false;
+    }
+
+    this.globalData.lastInviteEntryFingerprint = fingerprint;
+    this.globalData.lastInviteEntryHandledAt = Date.now();
+
+    const userService = this.globalData.userService;
+    const loginUser = userService?.getLoginUser?.() || null;
+    const mode = loginUser ? 'manual_input' : 'share_pending_login';
+
+    if (!loginUser) {
+      appAccessState.savePendingInviteCode(inviteCode);
+    }
+
+    const url = `/pages/access-gate/access-gate?mode=${encodeURIComponent(mode)}&inviteCode=${encodeURIComponent(inviteCode)}&source=${encodeURIComponent(extra.source || '')}`;
+    wx.reLaunch({ url });
+    return true;
   },
   
   // 修复存量任务数据的penaltyApplied字段

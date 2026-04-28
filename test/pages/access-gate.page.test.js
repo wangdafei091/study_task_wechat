@@ -6,30 +6,37 @@ jest.mock('../../utils/logger', () => ({
 }));
 
 jest.mock('../../utils/app/app-access-state', () => ({
-  APP_ACCESS_ERROR_CODE: {
-    REQUIRED: 'AUTH_APP_ACCESS_CODE_REQUIRED',
-    INVALID: 'AUTH_APP_ACCESS_CODE_INVALID',
-    EXPIRED: 'AUTH_APP_ACCESS_CODE_EXPIRED'
+  INVITE_ERROR_CODE: {
+    REQUIRED: 'INVITE_CODE_REQUIRED'
   },
-  loadPendingAppAccessCode: jest.fn(() => 'ABC123'),
-  savePendingAppAccessCode: jest.fn((value) => value),
-  normalizeAppAccessCode: jest.fn((value) => String(value || '').trim().toUpperCase()),
-  isAppAccessError: jest.fn((error) => /^AUTH_APP_ACCESS_CODE_/.test(error.code || '')),
-  getAppAccessErrorMessage: jest.fn((input) => {
+  loadPendingInviteCode: jest.fn(() => 'UINVITE001'),
+  savePendingInviteCode: jest.fn((value) => value),
+  clearPendingInviteCode: jest.fn(),
+  normalizeInviteCode: jest.fn((value) => String(value || '').trim().toUpperCase()),
+  isInviteError: jest.fn((error) => /^AUTH_APP_ACCESS_CODE_|^INVITE_CODE_/.test(error.code || '')),
+  getInviteErrorMessage: jest.fn((input) => {
     const code = typeof input === 'string' ? input : input.code;
-    if (code === 'AUTH_APP_ACCESS_CODE_INVALID') {
+    if (code === 'AUTH_APP_ACCESS_CODE_INVALID' || code === 'INVITE_CODE_INVALID') {
       return '邀请码无效，请检查后重试';
     }
-    if (code === 'AUTH_APP_ACCESS_CODE_EXPIRED') {
+    if (code === 'AUTH_APP_ACCESS_CODE_EXPIRED' || code === 'INVITE_CODE_EXPIRED') {
       return '邀请码已过期，请联系维护者重新获取';
     }
-    return '当前为邀请制体验，请先输入邀请码';
+    if (code === 'INVITE_CODE_TARGET_ROLE_MISMATCH') {
+      return '当前账号身份与该邀请码不匹配';
+    }
+    return '请输入邀请码';
   })
+}));
+
+jest.mock('../../services/invite-service', () => ({
+  previewInviteCode: jest.fn()
 }));
 
 describe('pages/access-gate/access-gate', () => {
   let pageConfig;
   let appMock;
+  let inviteService;
 
   function loadPageModule() {
     pageConfig = null;
@@ -56,13 +63,26 @@ describe('pages/access-gate/access-gate', () => {
     jest.resetModules();
     jest.clearAllMocks();
 
+    inviteService = require('../../services/invite-service');
     appMock = {
-      doCloudLogin: jest.fn()
+      doCloudLogin: jest.fn(),
+      globalData: {
+        userService: null
+      }
     };
 
     global.getApp = jest.fn(() => appMock);
+    global.getCurrentPages = jest.fn(() => [{ route: 'pages/access-gate/access-gate' }]);
     global.wx = {
-      reLaunch: jest.fn()
+      reLaunch: jest.fn(),
+      navigateBack: jest.fn(),
+      showModal: jest.fn(({ success }) => success({ confirm: true })),
+      getUserProfile: jest.fn(({ success }) => success({
+        userInfo: {
+          nickName: '新用户',
+          avatarUrl: 'https://example.com/a.png'
+        }
+      }))
     };
 
     loadPageModule();
@@ -71,42 +91,117 @@ describe('pages/access-gate/access-gate', () => {
   afterEach(() => {
     delete global.Page;
     delete global.getApp;
+    delete global.getCurrentPages;
     delete global.wx;
   });
 
-  it('onLoad 应加载本地邀请码并展示初始错误文案', () => {
+  it('手工输入无效邀请码时应保留在输入态并展示错误', async () => {
     const page = createPage();
-    page.onLoad.call(page, {
-      reason: 'AUTH_APP_ACCESS_CODE_EXPIRED'
+    inviteService.previewInviteCode.mockResolvedValue({
+      inviteCode: 'BADCODE',
+      currentAction: 'invalid',
+      currentActionMessage: '邀请码无效，请检查后重试'
     });
 
-    expect(page.data.accessCode).toBe('ABC123');
-    expect(page.data.errorMessage).toBe('邀请码已过期，请联系维护者重新获取');
+    page.onLoad.call(page, {});
+    page.onInput.call(page, { detail: { value: ' badcode ' } });
+    await page.onPrimaryTap.call(page);
+
+    expect(page.data.mode).toBe('manual_input');
+    expect(page.data.errorMessage).toBe('邀请码无效，请检查后重试');
   });
 
-  it('提交成功后应回到首页，失败时展示内联错误', async () => {
+  it('非手工模式缺少邀请码时应降级回手工输入态', () => {
     const page = createPage();
-    page.onLoad.call(page, {});
-    page.onInput.call(page, {
-      detail: {
-        value: ' invite88 '
-      }
+
+    page.onLoad.call(page, {
+      mode: 'share_pending_login',
+      inviteCode: '   '
     });
 
-    appMock.doCloudLogin.mockResolvedValueOnce(true);
-    await page.onSubmit.call(page);
+    expect(page.data.mode).toBe('manual_input');
+    expect(inviteService.previewInviteCode).not.toHaveBeenCalled();
+  });
+
+  it('未登录用户输入家庭邀请码后应进入分享承接态，再确认登录', async () => {
+    const page = createPage();
+    let loginUser = null;
+    appMock.globalData.userService = {
+      getLoginUser: jest.fn(() => loginUser),
+      updateCurrentProfile: jest.fn().mockResolvedValue({ success: true })
+    };
+    global.wx.getUserProfile
+      .mockImplementationOnce(({ fail }) => fail({ errMsg: 'deny' }))
+      .mockImplementationOnce(({ success }) => success({
+        userInfo: {
+          nickName: '新用户',
+          avatarUrl: 'https://example.com/a.png'
+        }
+      }));
+    inviteService.previewInviteCode.mockResolvedValue({
+      inviteCode: 'F123456789',
+      purpose: 'family_invite',
+      familyName: '测试家庭',
+      targetRole: 'child',
+      currentAction: 'join_family',
+      currentActionMessage: '确认后即可进入并加入家庭',
+      requiresProfileAuthorization: true
+    });
+    appMock.doCloudLogin.mockImplementationOnce(async () => {
+      loginUser = {
+        userId: 'user_1',
+        name: '用户',
+        avatar: ''
+      };
+      return true;
+    });
+
+    page.onLoad.call(page, {});
+    page.onInput.call(page, { detail: { value: ' f123456789 ' } });
+    await page.onPrimaryTap.call(page);
+
+    expect(page.data.mode).toBe('share_pending_login');
+    await page.onPrimaryTap.call(page);
 
     expect(appMock.doCloudLogin).toHaveBeenCalledWith({
-      throwOnAdmissionError: true
+      throwOnAdmissionError: true,
+      suppressFailureModal: true,
+      inviteCode: 'F123456789',
+      profile: null
+    });
+    expect(appMock.globalData.userService.updateCurrentProfile).toHaveBeenCalledWith({
+      nickname: '新用户',
+      avatarUrl: 'https://example.com/a.png'
     });
     expect(global.wx.reLaunch).toHaveBeenCalledWith({
       url: '/pages/index/index'
     });
+  });
 
-    appMock.doCloudLogin.mockRejectedValueOnce(Object.assign(new Error('invalid'), {
-      code: 'AUTH_APP_ACCESS_CODE_INVALID'
-    }));
-    await page.onSubmit.call(page);
-    expect(page.data.errorMessage).toBe('邀请码无效，请检查后重试');
+  it('已登录用户打开家庭邀请码应进入确认加入态', async () => {
+    const page = createPage();
+    appMock.globalData.userService = {
+      getLoginUser: jest.fn(() => ({ userId: 'parent_1' })),
+      joinFamily: jest.fn().mockResolvedValue({ success: true })
+    };
+    inviteService.previewInviteCode.mockResolvedValue({
+      inviteCode: 'F123456789',
+      purpose: 'family_invite',
+      familyName: '测试家庭',
+      targetRole: 'parent',
+      currentAction: 'join_family',
+      currentActionMessage: '确认后即可加入该家庭'
+    });
+
+    page.onLoad.call(page, {
+      mode: 'confirm_join_family',
+      inviteCode: 'F123456789'
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(page.data.mode).toBe('confirm_join_family');
+    await page.onPrimaryTap.call(page);
+    expect(appMock.globalData.userService.joinFamily).toHaveBeenCalledWith('F123456789');
   });
 });

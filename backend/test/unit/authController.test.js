@@ -6,6 +6,7 @@ jest.mock('../../config/database', () => ({
   getPool: jest.fn()
 }));
 jest.mock('../../services/appAccessService');
+jest.mock('../../services/inviteCodeService');
 jest.mock('../../services/userService');
 jest.mock('../../utils/wechat');
 jest.mock('../../utils/logger', () => ({
@@ -13,6 +14,7 @@ jest.mock('../../utils/logger', () => ({
 }));
 
 const appAccessService = require('../../services/appAccessService');
+const inviteCodeService = require('../../services/inviteCodeService');
 const { getPool } = require('../../config/database');
 const userService = require('../../services/userService');
 const { code2Session } = require('../../utils/wechat');
@@ -240,6 +242,49 @@ describe('POST /api/auth/login', () => {
     expect(appAccessService.consumeAccessCode).not.toHaveBeenCalled();
     expect(res.body.data.user).toEqual(expect.objectContaining({
       userId: 'user_open'
+    }));
+  });
+
+  it('新用户使用统一 family_invite 登录成功后应走事务化消费链路，并透传资料快照', async () => {
+    const createdUser = makeUser({
+      userId: 'user_joined',
+      role: 'child',
+      familyId: 'family_1'
+    });
+    userService.findByOpenid.mockResolvedValue(null);
+    appAccessService.isInviteOnlyMode.mockReturnValue(true);
+    inviteCodeService.consumeForNewUser.mockResolvedValue(createdUser);
+
+    const res = await request(app)
+      .post('/api/auth/login')
+      .send({
+        code: 'wx-code',
+        inviteCode: 'F123456789',
+        profile: {
+          nickname: '新孩子',
+          avatarUrl: 'https://example.com/avatar.png'
+        }
+      });
+
+    expect(res.status).toBe(200);
+    expect(inviteCodeService.consumeForNewUser).toHaveBeenCalledWith({
+      code: 'F123456789',
+      wechatData: {
+        openid: 'openid_1',
+        unionid: 'union_1'
+      },
+      profileSnapshot: {
+        nickname: '新孩子',
+        avatarUrl: 'https://example.com/avatar.png'
+      },
+      connection: mockConnection
+    });
+    expect(mockConnection.commit).toHaveBeenCalled();
+    expect(mockConnection.rollback).not.toHaveBeenCalled();
+    expect(res.body.data.user).toEqual(expect.objectContaining({
+      userId: 'user_joined',
+      familyId: 'family_1',
+      role: 'child'
     }));
   });
 

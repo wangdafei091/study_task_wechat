@@ -28,9 +28,16 @@ class UserService {
    * @returns {Promise<User|null>} 用户实例，如果不存在返回null
    */
   async findByOpenid(openid) {
+    const options = arguments[1] || {};
     try {
-      const results = await query(
-        'SELECT * FROM users WHERE openid = ? AND status = ? LIMIT 1',
+      const queryRunner = options.connection && typeof options.connection.execute === 'function'
+        ? async (sql, params = []) => {
+          const [rows] = await options.connection.execute(sql, params);
+          return rows;
+        }
+        : query;
+      const results = await queryRunner(
+        `SELECT * FROM users WHERE openid = ? AND status = ? LIMIT 1${options.forUpdate ? ' FOR UPDATE' : ''}`,
         [openid, 'active']
       );
 
@@ -51,9 +58,16 @@ class UserService {
    * @returns {Promise<User|null>} 用户实例，如果不存在返回null
    */
   async findById(userId) {
+    const options = arguments[1] || {};
     try {
-      const results = await query(
-        'SELECT * FROM users WHERE user_id = ? AND status = ? LIMIT 1',
+      const queryRunner = options.connection && typeof options.connection.execute === 'function'
+        ? async (sql, params = []) => {
+          const [rows] = await options.connection.execute(sql, params);
+          return rows;
+        }
+        : query;
+      const results = await queryRunner(
+        `SELECT * FROM users WHERE user_id = ? AND status = ? LIMIT 1${options.forUpdate ? ' FOR UPDATE' : ''}`,
         [userId, 'active']
       );
 
@@ -120,8 +134,8 @@ class UserService {
       const dbData = user.toDB();
       const executeRunner = getExecuteRunner(options.connection);
       await executeRunner(
-        `INSERT INTO users (user_id, openid, unionid, nickname, avatar, role, status, family_permission_role, is_system_admin, system_access_level, system_access_updated_by_user_id, system_access_updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO users (user_id, openid, unionid, nickname, avatar, role, status, family_id, family_permission_role, is_system_admin, system_access_level, system_access_updated_by_user_id, system_access_updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           dbData.user_id,
           dbData.openid,
@@ -130,6 +144,7 @@ class UserService {
           dbData.avatar,
           dbData.role,
           dbData.status,
+          dbData.family_id,
           dbData.family_permission_role,
           dbData.is_system_admin ? 1 : 0,
           dbData.system_access_level,
@@ -153,9 +168,11 @@ class UserService {
    * @returns {Promise<boolean>} 是否更新成功
    */
   async updateUser(userId, updateData) {
+    const options = arguments[2] || {};
     try {
       const updates = [];
       const values = [];
+      const executeRunner = getExecuteRunner(options.connection);
 
       if (updateData.name !== undefined) {
         updates.push('nickname = ?');
@@ -177,6 +194,10 @@ class UserService {
         updates.push('family_permission_role = ?');
         values.push(updateData.familyPermissionRole);
       }
+      if (updateData.familyId !== undefined) {
+        updates.push('family_id = ?');
+        values.push(updateData.familyId);
+      }
       if (updateData.isSystemAdmin !== undefined) {
         updates.push('is_system_admin = ?');
         values.push(updateData.isSystemAdmin ? 1 : 0);
@@ -193,6 +214,14 @@ class UserService {
         updates.push('system_access_updated_at = ?');
         values.push(updateData.systemAccessUpdatedAt);
       }
+      if (updateData.canIssueAdmissionCode !== undefined) {
+        updates.push('can_issue_admission_code = ?');
+        values.push(updateData.canIssueAdmissionCode ? 1 : 0);
+      }
+      if (updateData.admissionCodeQuotaTotal !== undefined) {
+        updates.push('admission_code_quota_total = ?');
+        values.push(updateData.admissionCodeQuotaTotal);
+      }
 
       if (updates.length === 0) {
         return false;
@@ -202,7 +231,7 @@ class UserService {
       updates.push('updated_at = CURRENT_TIMESTAMP');
 
       const sql = `UPDATE users SET ${updates.join(', ')} WHERE user_id = ?`;
-      await execute(sql, values);
+      await executeRunner(sql, values);
 
       logger.info('更新用户成功', { userId, updateData });
       return true;
@@ -301,6 +330,22 @@ class UserService {
       logger.error('统计正常系统管理员数量失败', error);
       throw error;
     }
+  }
+
+  async updateCurrentProfile(userId, profile = {}, options = {}) {
+    const nickname = String(profile.nickname || profile.nickName || '').trim();
+    const avatar = String(profile.avatarUrl || profile.avatar || '').trim();
+
+    if (!nickname && !avatar) {
+      return this.findById(userId, options);
+    }
+
+    await this.updateUser(userId, {
+      ...(nickname ? { name: nickname } : {}),
+      ...(avatar ? { avatar } : {})
+    }, options);
+
+    return this.findById(userId, options);
   }
 }
 

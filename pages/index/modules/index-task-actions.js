@@ -2,8 +2,13 @@ const { Task } = require('../../../models/task');
 const serviceManager = require('../../../services/service-manager.js');
 const logger = require('../../../utils/logger');
 
-function isReadonlyView(page) {
-  return page?.data?.isReadonlyView === true || page?.data?.isViewerReadonly === true;
+function isTaskMutationBlocked(page) {
+  if (page?.data?.isViewerReadonly === true) {
+    return true;
+  }
+
+  const readonlyReason = page?.data?.readonlyReason || '';
+  return readonlyReason === 'viewer-readonly' || readonlyReason === 'system-readonly';
 }
 
 function showReadonlyToast(page) {
@@ -227,7 +232,7 @@ async function completeTask(page, e) {
     return;
   }
 
-  if (isReadonlyView(page)) {
+  if (isTaskMutationBlocked(page)) {
     showReadonlyToast(page);
     return;
   }
@@ -315,7 +320,7 @@ async function taskItemStatusToggle(page, e) {
       return;
     }
 
-    if (isReadonlyView(page)) {
+    if (isTaskMutationBlocked(page)) {
       showReadonlyToast(page);
       return;
     }

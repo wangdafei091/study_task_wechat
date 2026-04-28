@@ -15,6 +15,9 @@ const { generateToken } = require('../../config/jwt');
 // ---- mock 依赖 ----
 jest.mock('../../services/taskService');
 jest.mock('../../services/familyService');
+jest.mock('../../middleware/systemUserAccess', () => ({
+  systemUserAccessMiddleware: jest.fn((req, res, next) => next())
+}));
 jest.mock('../../utils/logger', () => ({
   createLogger: () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }),
 }));
@@ -27,7 +30,6 @@ const Task = require('../../models/Task');
 function buildApp() {
   const app = express();
   app.use(express.json());
-  const { authMiddleware } = require('../../middleware/auth');
   const router = require('../../routes/tasks');
   app.use('/api/tasks', router);
   return app;
