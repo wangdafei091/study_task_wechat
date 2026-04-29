@@ -33,10 +33,19 @@ jest.mock('../../services/invite-service', () => ({
   previewInviteCode: jest.fn()
 }));
 
+jest.mock('../../utils/app/onboarding-state', () => ({
+  ONBOARDING_SOURCE: {
+    INVITE_JOIN_FAMILY: 'invite_join_family',
+    GUEST_INVITE_ENTERED: 'guest_invite_entered'
+  },
+  setPendingOnboardingContext: jest.fn()
+}));
+
 describe('pages/access-gate/access-gate', () => {
   let pageConfig;
   let appMock;
   let inviteService;
+  let onboardingState;
 
   function loadPageModule() {
     pageConfig = null;
@@ -64,6 +73,7 @@ describe('pages/access-gate/access-gate', () => {
     jest.clearAllMocks();
 
     inviteService = require('../../services/invite-service');
+    onboardingState = require('../../utils/app/onboarding-state');
     appMock = {
       doCloudLogin: jest.fn(),
       globalData: {
@@ -173,6 +183,10 @@ describe('pages/access-gate/access-gate', () => {
       nickname: '新用户',
       avatarUrl: 'https://example.com/a.png'
     });
+    expect(onboardingState.setPendingOnboardingContext).toHaveBeenCalledWith(appMock, {
+      source: 'guest_invite_entered',
+      inviteCode: 'F123456789'
+    });
     expect(global.wx.reLaunch).toHaveBeenCalledWith({
       url: '/pages/index/index'
     });
@@ -203,5 +217,9 @@ describe('pages/access-gate/access-gate', () => {
     expect(page.data.mode).toBe('confirm_join_family');
     await page.onPrimaryTap.call(page);
     expect(appMock.globalData.userService.joinFamily).toHaveBeenCalledWith('F123456789');
+    expect(onboardingState.setPendingOnboardingContext).toHaveBeenCalledWith(appMock, {
+      source: 'invite_join_family',
+      inviteCode: 'F123456789'
+    });
   });
 });

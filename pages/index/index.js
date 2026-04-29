@@ -16,6 +16,7 @@ const searchPanelModule = require('./modules/index-search-panel');
 const userSwitcherModule = require('./modules/index-user-switcher');
 const dateNavigationModule = require('./modules/index-date-navigation');
 const messagePreviewModule = require('./modules/index-message-preview');
+const onboardingState = require('../../utils/app/onboarding-state');
 
 function formatOccurrenceDateLabel(dateString) {
   const todayString = dateUtils.getTodayString();
@@ -249,7 +250,9 @@ Page({
     dateNavigation: [], // 日期导航数据数组
     pageTitle: '今日任务', // 页面标题，根据选择的日期动态更新
     pageTitleBadge: '', // 页面标题旁的轻量状态徽标，如“预览”
-    hasTodayTasks: false // 是否有今日任务（用于显示空状态）
+    hasTodayTasks: false, // 是否有今日任务（用于显示空状态）
+    homeOnboardingCard: null,
+    showHomeOnboardingCard: false
   },
   
   /**
@@ -501,6 +504,7 @@ Page({
 
       // 更新任务统计信息
       await this.updateTaskStats();
+      this.refreshHomeOnboardingCard();
       
       return tasks;
     } catch (error) {
@@ -839,7 +843,120 @@ Page({
   },
 
   _updateViewState: function(selectedDate) {
-    return dateNavigationModule.updateViewState(this, selectedDate);
+    const result = dateNavigationModule.updateViewState(this, selectedDate);
+    this.syncHomeOnboardingVisibility();
+    return result;
+  },
+
+  syncHomeOnboardingVisibility: function() {
+    const canShow = onboardingState.shouldShowHomeOnboardingCard({
+      isViewingToday: this.data.isViewingToday,
+      isViewingFuture: this.data.isViewingFuture,
+      showSearch: this.data.showSearch,
+      showMessagePreview: this.data.showMessagePreview
+    });
+    const homeOnboardingCard = this.data.homeOnboardingCard || null;
+    const shouldRenderCard = canShow && Boolean(homeOnboardingCard);
+    const wasShowing = this.data.showHomeOnboardingCard === true;
+
+    if (canShow && homeOnboardingCard?.dismissAfterConsume) {
+      onboardingState.consumePendingOnboardingContext(getApp());
+    }
+
+    if (!shouldRenderCard && wasShowing && homeOnboardingCard?.dismissAfterConsume) {
+      this.refreshHomeOnboardingCard();
+      return;
+    }
+
+    this.setData({
+      showHomeOnboardingCard: shouldRenderCard
+    });
+  },
+
+  refreshHomeOnboardingCard: function() {
+    const app = getApp();
+    const userService = app?.globalData?.userService;
+    const loginUser = userService?.getLoginUser?.() || this.data.currentUser || null;
+    const currentUser = this.data.currentUser || userService?.getCurrentUser?.() || loginUser || null;
+    const pendingOnboardingContext = onboardingState.peekPendingOnboardingContext(app);
+    const homeOnboardingCard = onboardingState.resolveOnboardingStage({
+      loginUser,
+      currentUser,
+      availableUsers: this.data.availableUsers,
+      tasks: this.data.tasks,
+      showOccurrenceSection: this.data.showOccurrenceSection,
+      canManageMembers: this.data.canManageMembers,
+      isReadonlyView: this.data.isReadonlyView,
+      isViewerReadonly: this.data.isViewerReadonly,
+      isSystemReadonly: this.data.isSystemReadonly,
+      skipNoFamilyStages: true,
+      pendingOnboardingContext
+    });
+
+    const canShow = onboardingState.shouldShowHomeOnboardingCard({
+      isViewingToday: this.data.isViewingToday,
+      isViewingFuture: this.data.isViewingFuture,
+      showSearch: this.data.showSearch,
+      showMessagePreview: this.data.showMessagePreview
+    });
+
+    if (homeOnboardingCard.dismissAfterConsume && canShow) {
+      onboardingState.consumePendingOnboardingContext(app);
+    }
+
+    const resolvedCard = homeOnboardingCard.stage === 'stable_none' ? null : homeOnboardingCard;
+
+    this.setData({
+      homeOnboardingCard: resolvedCard,
+      showHomeOnboardingCard: canShow && Boolean(resolvedCard)
+    });
+  },
+
+  onHomeOnboardingPrimaryTap: function() {
+    const actionType = this.data.homeOnboardingCard?.primaryAction?.type || '';
+    if (actionType === 'create_family') {
+      wx.navigateTo({
+        url: '/packageManage/pages/family-settings/family-settings?action=create_family'
+      });
+      return;
+    }
+
+    if (actionType === 'join_with_code') {
+      wx.navigateTo({
+        url: '/pages/access-gate/access-gate?mode=manual_input'
+      });
+      return;
+    }
+
+    if (actionType === 'add_child') {
+      wx.navigateTo({
+        url: '/packageManage/pages/family-settings/family-settings'
+      });
+      return;
+    }
+
+    if (actionType === 'create_task') {
+      this.navigateToTaskManageCreate();
+      return;
+    }
+
+    if (actionType === 'go_reward_manage') {
+      this.navigateToRewardManage();
+    }
+  },
+
+  onHomeOnboardingSecondaryTap: function() {
+    const actionType = this.data.homeOnboardingCard?.secondaryAction?.type || '';
+    if (actionType === 'join_with_code') {
+      wx.navigateTo({
+        url: '/pages/access-gate/access-gate?mode=manual_input'
+      });
+      return;
+    }
+
+    if (actionType === 'go_reward_manage') {
+      this.navigateToRewardManage();
+    }
   },
 
   /**
@@ -910,6 +1027,15 @@ Page({
     const targetParam = effectiveUserId ? `&targetUserId=${effectiveUserId}` : '';
     wx.navigateTo({
       url: `/packageTask/pages/task-edit/task-edit?mode=create&taskType=${type}${targetParam}`
+    });
+  },
+
+  // 跳转到任务管理页创建模式
+  navigateToTaskManageCreate: function() {
+    const effectiveUserId = this.getEffectiveTaskUserId();
+    const targetParam = effectiveUserId ? `&targetUserId=${effectiveUserId}` : '';
+    wx.navigateTo({
+      url: `/packageTask/pages/task-edit/task-edit?mode=create${targetParam}`
     });
   },
   
@@ -1071,11 +1197,7 @@ Page({
     // 根据选项处理
     if (item && item.id === 'habit') {
       logger.debug('Index', '点击任务菜单项，跳转到任务编辑页面');
-      const effectiveUserId = this.getEffectiveTaskUserId();
-      const targetParam = effectiveUserId ? `&targetUserId=${effectiveUserId}` : '';
-      wx.navigateTo({
-        url: `/packageTask/pages/task-edit/task-edit?mode=create${targetParam}`
-      });
+      this.navigateToTaskManageCreate();
     } else if (item && item.id === 'study') {
       this.navigateToAnalysisPage();
     } else if (item && item.id === 'reward-manage') {

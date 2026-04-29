@@ -184,6 +184,10 @@ describe('pages/index page contract', () => {
     expect(typeof page.initializeMultiUserSystem).toBe('function');
     expect(typeof page.initializeMultiUserSystemDelayed).toBe('function');
     expect(typeof page.refreshDataForCurrentUser).toBe('function');
+    expect(typeof page.refreshHomeOnboardingCard).toBe('function');
+    expect(typeof page.syncHomeOnboardingVisibility).toBe('function');
+    expect(typeof page.onHomeOnboardingPrimaryTap).toBe('function');
+    expect(typeof page.onHomeOnboardingSecondaryTap).toBe('function');
   });
 
   it('initializeMultiUserSystem 应按登录用户权限和当前视角更新页面上下文', async () => {
@@ -224,12 +228,17 @@ describe('pages/index page contract', () => {
 
     expect(wxml).toContain('task-list-container {{showOccurrenceSection ? \'has-occurrence-section\' : \'\'}} {{tasks.length === 0 && showOccurrenceSection ? \'occurrence-only\' : \'\'}}');
     expect(wxml).toContain('task-list-count" wx:if="{{tasks.length > 0 || !showOccurrenceSection}}"');
+    expect(wxml).toContain('home-onboarding-card');
+    expect(wxml).toContain('wx:if="{{homeOnboardingCard && showHomeOnboardingCard}}"');
     expect(wxml).toContain('task-list {{tasks.length === 0 && showOccurrenceSection ? \'occurrence-only\' : \'\'}}');
     expect(wxml).toContain('bottomOffset="{{showOccurrenceSection ? 150 : 0}}"');
-    expect(wxml).toContain('tasks.length === 0 && !showOccurrenceSection && canManageMembers && currentUser && currentUser.role === \'child\'');
-    expect(wxml).toContain('tasks.length === 0 && !showOccurrenceSection && canManageMembers && currentUser && currentUser.role === \'parent\' && availableUsers.length > 1');
-    expect(wxml).toContain('tasks.length === 0 && !showOccurrenceSection && canManageMembers && availableUsers.length <= 1');
-    expect(wxml).toContain('tasks.length === 0 && !showOccurrenceSection && !canManageMembers');
+    expect(wxml).toContain('tasks.length === 0 && !showOccurrenceSection && canManageMembers && currentUser && currentUser.role === \'child\' && currentUser.familyId && !showHomeOnboardingCard');
+    expect(wxml).toContain('还没有加入家庭，请前往家庭设置创建家庭或输入邀请码加入');
+    expect(wxml).toContain('tasks.length === 0 && !showOccurrenceSection && canManageMembers && currentUser && currentUser.role === \'parent\' && !currentUser.familyId && !showHomeOnboardingCard');
+    expect(wxml).toContain('今天还没有任务安排，家长安排好后会显示在这里');
+    expect(wxml).toContain('tasks.length === 0 && !showOccurrenceSection && canManageMembers && currentUser && currentUser.role === \'parent\' && currentUser.familyId && availableUsers.length > 1 && !showHomeOnboardingCard');
+    expect(wxml).toContain('tasks.length === 0 && !showOccurrenceSection && canManageMembers && currentUser && currentUser.role === \'parent\' && currentUser.familyId && availableUsers.length <= 1 && !showHomeOnboardingCard');
+    expect(wxml).toContain('tasks.length === 0 && !showOccurrenceSection && !canManageMembers && !showHomeOnboardingCard');
   });
 
   it('onLoad 不应直接触发多用户初始化，避免与 onShow 双入口竞争', async () => {

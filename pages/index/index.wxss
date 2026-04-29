@@ -1154,6 +1154,82 @@
   opacity: 0.85;
 }
 
+.home-onboarding-card {
+  margin: 18rpx 0 22rpx;
+  padding: 28rpx 30rpx;
+  border-radius: 22rpx;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(247, 251, 255, 0.98) 100%);
+  border: 1rpx solid rgba(66, 133, 244, 0.08);
+  box-shadow: 0 10rpx 26rpx rgba(66, 133, 244, 0.08);
+  min-height: 188rpx;
+  box-sizing: border-box;
+}
+
+.home-onboarding-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 8rpx 18rpx;
+  border-radius: 999rpx;
+  background: rgba(66, 133, 244, 0.08);
+  color: #5d6d83;
+  font-size: 22rpx;
+  line-height: 1;
+}
+
+.home-onboarding-badge.emphasis {
+  background: rgba(66, 133, 244, 0.12);
+  color: #3d5afe;
+}
+
+.home-onboarding-title {
+  margin-top: 18rpx;
+  font-size: 34rpx;
+  line-height: 1.35;
+  font-weight: 600;
+  color: #2d3a4f;
+}
+
+.home-onboarding-desc {
+  margin-top: 12rpx;
+  font-size: 25rpx;
+  line-height: 1.6;
+  color: #6d7b90;
+}
+
+.home-onboarding-actions {
+  display: flex;
+  align-items: center;
+  gap: 18rpx;
+  margin-top: 24rpx;
+  flex-wrap: wrap;
+}
+
+.home-onboarding-primary,
+.home-onboarding-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 68rpx;
+  padding: 0 28rpx;
+  border-radius: 999rpx;
+  box-sizing: border-box;
+}
+
+.home-onboarding-primary {
+  background: #4285F4;
+  color: #fff;
+  font-size: 28rpx;
+  font-weight: 600;
+  box-shadow: 0 8rpx 18rpx rgba(66, 133, 244, 0.22);
+}
+
+.home-onboarding-secondary {
+  background: rgba(66, 133, 244, 0.08);
+  color: #4b6286;
+  font-size: 26rpx;
+  font-weight: 500;
+}
+
 .task-list-toggle {
   width: 40rpx;
   height: 40rpx;

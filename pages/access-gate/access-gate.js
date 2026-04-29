@@ -1,5 +1,6 @@
 const logger = require('../../utils/logger');
 const appAccessState = require('../../utils/app/app-access-state');
+const onboardingState = require('../../utils/app/onboarding-state');
 const inviteService = require('../../services/invite-service');
 
 const PAGE_MODE = {
@@ -240,6 +241,10 @@ Page({
       });
 
       if (loginSuccess) {
+        onboardingState.setPendingOnboardingContext(app, {
+          source: onboardingState.ONBOARDING_SOURCE.GUEST_INVITE_ENTERED,
+          inviteCode
+        });
         await this.tryPostLoginProfileSync(profile);
         wx.reLaunch({
           url: '/pages/index/index'
@@ -331,6 +336,10 @@ Page({
       const userService = getApp()?.globalData?.userService;
       const result = await userService?.joinFamily?.(inviteCode);
       if (result?.success) {
+        onboardingState.setPendingOnboardingContext(getApp(), {
+          source: onboardingState.ONBOARDING_SOURCE.INVITE_JOIN_FAMILY,
+          inviteCode
+        });
         appAccessState.clearPendingInviteCode();
         wx.reLaunch({
           url: '/pages/index/index'
