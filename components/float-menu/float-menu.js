@@ -97,6 +97,23 @@ Component({
    * 组件的方法列表
    */
   methods: {
+    setOpenState: function(isOpen) {
+      if (this.data.isOpen === isOpen) {
+        return;
+      }
+
+      this.setData({ isOpen });
+      this.triggerEvent('statechange', { isOpen });
+    },
+
+    openMenu: function() {
+      this.setOpenState(true);
+    },
+
+    closeMenu: function() {
+      this.setOpenState(false);
+    },
+
     /**
      * 更新组件样式
      */
@@ -129,12 +146,8 @@ Component({
       if (!this.data.disableVibrate && wx.vibrateShort) {
         wx.vibrateShort({ type: 'light' });
       }
-      
-      const isOpen = !this.data.isOpen;
-      this.setData({ isOpen });
-      
-      // 触发菜单状态变化事件
-      this.triggerEvent('statechange', { isOpen });
+
+      this.setOpenState(!this.data.isOpen);
     },
     
     /**
@@ -152,10 +165,7 @@ Component({
       this.triggerEvent('itemtap', { index, item });
       
       // 关闭菜单
-      this.setData({ isOpen: false });
-      
-      // 触发菜单状态变化事件
-      this.triggerEvent('statechange', { isOpen: false });
+      this.setOpenState(false);
     }
   }
 }) 

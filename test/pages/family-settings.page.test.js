@@ -5,9 +5,23 @@ jest.mock('../../utils/logger', () => ({
   debug: jest.fn()
 }));
 
+jest.mock('../../utils/app/onboarding-state', () => ({
+  ONBOARDING_SOURCE: {
+    CREATE_FAMILY: 'create_family'
+  },
+  peekPendingOnboardingContext: jest.fn(() => null),
+  consumePendingOnboardingContext: jest.fn(() => null),
+  resolveOnboardingStage: jest.fn(() => ({
+    stage: 'stable_none',
+    dismissAfterConsume: false
+  })),
+  setPendingOnboardingContext: jest.fn()
+}));
+
 describe('packageManage/pages/family-settings/family-settings', () => {
   let pageConfig;
   let appMock;
+  let onboardingState;
 
   function loadPageModule(options = {}) {
     pageConfig = null;
@@ -66,6 +80,8 @@ describe('packageManage/pages/family-settings/family-settings', () => {
       showModal: jest.fn(),
       navigateTo: jest.fn()
     };
+
+    onboardingState = require('../../utils/app/onboarding-state');
 
     loadPageModule();
   });
@@ -210,6 +226,23 @@ describe('packageManage/pages/family-settings/family-settings', () => {
     expect(global.wx.navigateTo).toHaveBeenCalledWith({
       url: '/packageManage/pages/invite-center/invite-center'
     });
+  });
+
+  it('创建家庭成功后应写入一次性 onboarding 上下文', async () => {
+    const page = createPage();
+    page.data.familyNameInput = '新家庭';
+    page._loadFamilyData = jest.fn().mockResolvedValue();
+
+    appMock.globalData.userService.createFamily = jest.fn().mockResolvedValue({
+      success: true
+    });
+
+    await page.confirmCreateFamily.call(page);
+
+    expect(onboardingState.setPendingOnboardingContext).toHaveBeenCalledWith(appMock, {
+      source: 'create_family'
+    });
+    expect(page._loadFamilyData).toHaveBeenCalled();
   });
 
   it('viewer 加载家庭数据时应展示禁用态和解释文案', async () => {

@@ -283,6 +283,26 @@
         </view>
       </block>
     </view>
+
+    <view class="home-onboarding-card" wx:if="{{homeOnboardingCard && showHomeOnboardingCard}}">
+      <view class="home-onboarding-badge {{homeOnboardingCard.emphasis === 'first-entry' ? 'emphasis' : ''}}">
+        {{homeOnboardingCard.emphasis === 'first-entry' ? '刚完成这一步' : '下一步推荐'}}
+      </view>
+      <view class="home-onboarding-title">{{homeOnboardingCard.title}}</view>
+      <view class="home-onboarding-desc">{{homeOnboardingCard.description}}</view>
+      <view class="home-onboarding-actions" wx:if="{{homeOnboardingCard.primaryAction || homeOnboardingCard.secondaryAction}}">
+        <view
+          wx:if="{{homeOnboardingCard.primaryAction}}"
+          class="home-onboarding-primary"
+          bindtap="onHomeOnboardingPrimaryTap"
+        >{{homeOnboardingCard.primaryAction.text}}</view>
+        <view
+          wx:if="{{homeOnboardingCard.secondaryAction}}"
+          class="home-onboarding-secondary"
+          bindtap="onHomeOnboardingSecondaryTap"
+        >{{homeOnboardingCard.secondaryAction.text}}</view>
+      </view>
+    </view>
     
     <view class="task-list {{tasks.length === 0 && showOccurrenceSection ? 'occurrence-only' : ''}}">
       <block wx:for="{{tasks}}" wx:key="id">
@@ -298,19 +318,23 @@
       </block>
       
       <!-- 家长在孩子视角：无任务 -->
-      <view class="empty-task-list" wx:if="{{tasks.length === 0 && !showOccurrenceSection && canManageMembers && currentUser && currentUser.role === 'child'}}">
-        暂无任务，请切换到家长视角后点击"+"添加任务
+      <view class="empty-task-list" wx:if="{{tasks.length === 0 && !showOccurrenceSection && canManageMembers && currentUser && currentUser.role === 'child' && currentUser.familyId && !showHomeOnboardingCard}}">
+        今天还没有任务安排，家长安排好后会显示在这里
+      </view>
+      <!-- 尚未加入家庭 -->
+      <view class="empty-task-list" wx:if="{{tasks.length === 0 && !showOccurrenceSection && canManageMembers && currentUser && currentUser.role === 'parent' && !currentUser.familyId && !showHomeOnboardingCard}}">
+        还没有加入家庭，请前往家庭设置创建家庭或输入邀请码加入
       </view>
       <!-- 家长在自己视角（管理模式）：无任务，可直接创建 -->
-      <view class="empty-task-list" wx:if="{{tasks.length === 0 && !showOccurrenceSection && canManageMembers && currentUser && currentUser.role === 'parent' && availableUsers.length > 1}}">
+      <view class="empty-task-list" wx:if="{{tasks.length === 0 && !showOccurrenceSection && canManageMembers && currentUser && currentUser.role === 'parent' && currentUser.familyId && availableUsers.length > 1 && !showHomeOnboardingCard}}">
         点击右下角"+"按钮添加任务
       </view>
       <!-- 家长尚无孩子成员 -->
-      <view class="empty-task-list" wx:if="{{tasks.length === 0 && !showOccurrenceSection && canManageMembers && availableUsers.length <= 1}}">
+      <view class="empty-task-list" wx:if="{{tasks.length === 0 && !showOccurrenceSection && canManageMembers && currentUser && currentUser.role === 'parent' && currentUser.familyId && availableUsers.length <= 1 && !showHomeOnboardingCard}}">
         还没有孩子成员，请前往家庭设置添加孩子
       </view>
       <!-- 孩子视角空态 -->
-      <view class="empty-task-list" wx:if="{{tasks.length === 0 && !showOccurrenceSection && !canManageMembers}}">
+      <view class="empty-task-list" wx:if="{{tasks.length === 0 && !showOccurrenceSection && !canManageMembers && !showHomeOnboardingCard}}">
         暂无任务
       </view>
     </view>
@@ -359,6 +383,7 @@
   
   <!-- 浮动菜单：任务创建项在只读视角下已从 menuItems 过滤掉 -->
   <float-menu
+    id="homeFloatMenu"
     menuItems="{{menuItems}}"
     position="bottom-right"
     bottomOffset="{{showOccurrenceSection ? 150 : 0}}"

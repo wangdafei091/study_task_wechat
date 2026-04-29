@@ -10,21 +10,47 @@
       </view>
       <view class="no-family-people">
         <view class="no-family-person large"></view>
-        <view class="no-family-person small"></view>
-        <view class="no-family-person small"></view>
-      </view>
+      <view class="no-family-person small"></view>
+      <view class="no-family-person small"></view>
     </view>
-    <view class="no-family-title">还没有家庭</view>
-    <view class="no-family-desc">创建家庭或通过邀请码加入</view>
+    </view>
+    <view class="no-family-title">{{noFamilyOnboardingCard.title || '还没有家庭'}}</view>
+    <view class="no-family-desc">{{noFamilyOnboardingCard.description || '创建家庭或通过邀请码加入'}}</view>
     <view class="action-group">
-      <view wx:if="{{isParent}}" class="btn-primary" bindtap="showCreateFamily">创建家庭</view>
-      <view class="btn-secondary" bindtap="navigateToAccessGate">输入邀请码加入</view>
+      <view
+        wx:if="{{noFamilyOnboardingCard.primaryAction}}"
+        class="btn-primary"
+        bindtap="onNoFamilyPrimaryTap"
+      >{{noFamilyOnboardingCard.primaryAction.text}}</view>
+      <view
+        wx:if="{{noFamilyOnboardingCard.secondaryAction}}"
+        class="btn-secondary"
+        bindtap="onNoFamilySecondaryTap"
+      >{{noFamilyOnboardingCard.secondaryAction.text}}</view>
+      <view
+        wx:if="{{!noFamilyOnboardingCard.secondaryAction && (!noFamilyOnboardingCard.primaryAction || noFamilyOnboardingCard.primaryAction.type !== 'join_with_code')}}"
+        class="btn-secondary"
+        bindtap="navigateToAccessGate"
+      >输入邀请码加入</view>
       <view wx:if="{{canEnterInviteCenter}}" class="btn-secondary" bindtap="navigateToInviteCenter">邀请码中心</view>
     </view>
   </view>
 
   <!-- 已加入家庭 -->
   <view wx:elif="{{!loading && family}}">
+    <view class="card onboarding-card" wx:if="{{familyOnboardingCard}}">
+      <view class="onboarding-badge {{familyOnboardingCard.emphasis === 'first-entry' ? 'emphasis' : ''}}">下一步</view>
+      <view class="onboarding-title">{{familyOnboardingCard.title}}</view>
+      <view class="onboarding-desc">{{familyOnboardingCard.description}}</view>
+      <view class="onboarding-actions">
+        <view
+          wx:if="{{familyOnboardingCard.primaryAction}}"
+          class="btn-outline onboarding-primary"
+          bindtap="onFamilyOnboardingPrimaryTap"
+        >{{familyOnboardingCard.primaryAction.text}}</view>
+      </view>
+    </view>
+
     <!-- 家庭信息卡片 -->
     <view class="card">
       <view class="card-title">{{family.name}}</view>

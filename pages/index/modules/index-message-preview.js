@@ -31,6 +31,9 @@ function navigateToMessageCenter(page, e) {
         page.setData({
           showMessagePreview: false
         });
+        if (typeof page.syncHomeOnboardingVisibility === 'function') {
+          page.syncHomeOnboardingVisibility();
+        }
         page._messagePreviewCloseTimer = null;
       }, 300);
     }
@@ -62,6 +65,9 @@ function toggleMessagePreview(page) {
       page.setData({
         showMessagePreview: false
       });
+      if (typeof page.syncHomeOnboardingVisibility === 'function') {
+        page.syncHomeOnboardingVisibility();
+      }
       page._messagePreviewCloseTimer = null;
     }, 250);
     return;
@@ -81,6 +87,9 @@ function toggleMessagePreview(page) {
     showSearch: false,
     showStats: false
   });
+  if (typeof page.syncHomeOnboardingVisibility === 'function') {
+    page.syncHomeOnboardingVisibility();
+  }
 
   page._messagePreviewOpenTimer = setTimeout(() => {
     logger.debug('Index', '执行显示动画');
