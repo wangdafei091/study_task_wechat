@@ -281,7 +281,11 @@ describe('utils/app/onboarding-state', () => {
       title: '已加入家庭',
       dismissAfterConsume: true
     }));
-    expect(readonlySkipTask.primaryAction).toBeNull();
+    expect(readonlySkipTask.primaryAction).toEqual({
+      type: 'go_home',
+      text: '返回首页'
+    });
+    expect(readonlySkipTask.description).toContain('协助管理');
   });
 
   it('只读家长加入家庭后的承接文案应覆盖只读阶段覆写分支', () => {

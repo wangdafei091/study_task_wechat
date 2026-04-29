@@ -295,6 +295,16 @@ function applyPendingContext(baseStage, context = {}) {
   }
 
   if (pending.source === ONBOARDING_SOURCE.INVITE_JOIN_FAMILY) {
+    if (baseStage.stage === 'stable_none'
+      && context.skipTaskStages === true
+      && (context.isViewerReadonly === true || context.isSystemReadonly === true)
+      && hasFamily(context)) {
+      return buildJoinedFromInviteStage({
+        description: '你现在可以先查看家庭进展；如需协助管理，可由管理员稍后调整权限。',
+        primaryAction: createAction('go_home', '返回首页')
+      });
+    }
+
     if (baseStage.stage === 'stable_none' && hasFamily(context)) {
       return buildJoinedFromInviteStage({
         description: currentRole === 'child'
@@ -344,15 +354,6 @@ function applyPendingContext(baseStage, context = {}) {
       };
     }
 
-    if (baseStage.stage === 'stable_none'
-      && context.skipTaskStages === true
-      && (context.isViewerReadonly === true || context.isSystemReadonly === true)
-      && hasFamily(context)) {
-      return buildJoinedFromInviteStage({
-        description: '你现在可以先查看家庭进展；如需协助管理，可由管理员稍后调整权限。',
-        primaryAction: createAction('go_home', '返回首页')
-      });
-    }
   }
 
   if (pending.source === ONBOARDING_SOURCE.CREATE_FAMILY

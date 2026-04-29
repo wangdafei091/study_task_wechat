@@ -184,11 +184,47 @@ describe('pages/access-gate/access-gate', () => {
       avatarUrl: 'https://example.com/a.png'
     });
     expect(onboardingState.setPendingOnboardingContext).toHaveBeenCalledWith(appMock, {
-      source: 'guest_invite_entered',
+      source: 'invite_join_family',
       inviteCode: 'F123456789'
     });
     expect(global.wx.reLaunch).toHaveBeenCalledWith({
       url: '/pages/index/index'
+    });
+  });
+
+  it('未登录用户通过新用户邀请码进入时应写入 guest_invite_entered 承接上下文', async () => {
+    const page = createPage();
+    let loginUser = null;
+    appMock.globalData.userService = {
+      getLoginUser: jest.fn(() => loginUser),
+      updateCurrentProfile: jest.fn().mockResolvedValue({ success: true })
+    };
+    inviteService.previewInviteCode.mockResolvedValue({
+      inviteCode: 'U123456789',
+      purpose: 'admission_only',
+      familyName: null,
+      targetRole: null,
+      currentAction: 'enter_app',
+      currentActionMessage: '确认后即可进入小程序',
+      requiresProfileAuthorization: false
+    });
+    appMock.doCloudLogin.mockImplementationOnce(async () => {
+      loginUser = {
+        userId: 'user_2',
+        name: '新用户',
+        avatar: ''
+      };
+      return true;
+    });
+
+    page.onLoad.call(page, {});
+    page.onInput.call(page, { detail: { value: ' u123456789 ' } });
+    await page.onPrimaryTap.call(page);
+    await page.onPrimaryTap.call(page);
+
+    expect(onboardingState.setPendingOnboardingContext).toHaveBeenCalledWith(appMock, {
+      source: 'guest_invite_entered',
+      inviteCode: 'U123456789'
     });
   });
 

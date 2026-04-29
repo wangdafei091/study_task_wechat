@@ -241,8 +241,11 @@ Page({
       });
 
       if (loginSuccess) {
+        const onboardingSource = this.data.previewResult?.purpose === 'family_invite'
+          ? onboardingState.ONBOARDING_SOURCE.INVITE_JOIN_FAMILY
+          : onboardingState.ONBOARDING_SOURCE.GUEST_INVITE_ENTERED;
         onboardingState.setPendingOnboardingContext(app, {
-          source: onboardingState.ONBOARDING_SOURCE.GUEST_INVITE_ENTERED,
+          source: onboardingSource,
           inviteCode
         });
         await this.tryPostLoginProfileSync(profile);
