@@ -62,6 +62,22 @@ describe('utils/task-form-adapter', () => {
     }));
   });
 
+  it('adaptTemplateEditFormToDraft 在模板说明存在时也应优先保留任务说明', () => {
+    const draft = adapter.adaptTemplateEditFormToDraft({
+      taskTitle: '晚间阅读',
+      taskDescription: '任务描述',
+      description: '模板说明',
+      type: 'study'
+    }, {
+      today: '2026-04-11'
+    });
+
+    expect(draft).toEqual(expect.objectContaining({
+      title: '晚间阅读',
+      description: '任务描述'
+    }));
+  });
+
   it('adaptTemplateEntityToDraft 应兼容模板实体结构', () => {
     const draft = adapter.adaptTemplateEntityToDraft({
       name: '晚间阅读模板',

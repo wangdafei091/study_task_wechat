@@ -4,6 +4,43 @@
 
 ---
 
+## [里程碑-22E] - 2026-04-29
+
+### ✅ 完成情况
+
+**新用户引导与空态上手闭环**
+
+- **首页阶段模型与一次性承接机制已正式落地**：
+  - [`utils/app/onboarding-state.js`](/Users/wangdafei/code/study_task_wechat/utils/app/onboarding-state.js)、[`pages/index/index.js`](/Users/wangdafei/code/study_task_wechat/pages/index/index.js)、[`pages/index/index.wxml`](/Users/wangdafei/code/study_task_wechat/pages/index/index.wxml)、[`test/utils/onboarding-state.test.js`](/Users/wangdafei/code/study_task_wechat/test/utils/onboarding-state.test.js) 已建立首页 onboarding 阶段判定、一次性承接上下文消费与首页阶段卡片展示收口
+  - 已完成“无家庭 / 已建家庭未加孩子 / 已加孩子但无任务 / 只读家长 / 查看者 / 邀请加入后一次性提示”等关键阶段的统一判断与文案承接
+- **邀请码承接页与登录后首次进入主链路已完成收口**：
+  - [`pages/access-gate/access-gate.js`](/Users/wangdafei/code/study_task_wechat/pages/access-gate/access-gate.js)、[`pages/access-gate/access-gate.wxml`](/Users/wangdafei/code/study_task_wechat/pages/access-gate/access-gate.wxml)、[`test/pages/access-gate.page.test.js`](/Users/wangdafei/code/study_task_wechat/test/pages/access-gate.page.test.js) 已补齐家庭邀请码 / 新用户邀请码的分流承接、显式确认态、访客进入与无动作态文案收口
+  - 已修正家庭邀请码登录后误写 `guest_invite_entered` 的问题，确保“直达加入家庭”与“普通访客进入”在首页走不同承接分支
+- **家庭设置页与关键空态入口已形成最小可用路径**：
+  - [`packageManage/pages/family-settings/family-settings.js`](/Users/wangdafei/code/study_task_wechat/packageManage/pages/family-settings/family-settings.js)、[`packageManage/pages/family-settings/family-settings.wxml`](/Users/wangdafei/code/study_task_wechat/packageManage/pages/family-settings/family-settings.wxml)、[`test/pages/family-settings.page.test.js`](/Users/wangdafei/code/study_task_wechat/test/pages/family-settings.page.test.js) 已收口无家庭、创建家庭、添加孩子与加入家庭相关空态与动作入口
+  - 首页与家庭设置之间的上手路径已统一为“先建立家庭边界，再引导最小任务闭环”，不再让新用户在多个页面各自猜下一步
+- **首页与任务主线空态动作已补齐收尾修复**：
+  - [`app.js`](/Users/wangdafei/code/study_task_wechat/app.js)、[`test/pages/index.page-shell.behavior.test.js`](/Users/wangdafei/code/study_task_wechat/test/pages/index.page-shell.behavior.test.js)、[`test/app/post-login-bootstrap.test.js`](/Users/wangdafei/code/study_task_wechat/test/app/post-login-bootstrap.test.js) 已同步冷启动、登录后引导、首页按钮动作与孩子视角空态文案收口
+  - “创建任务”已恢复为直接进入任务管理页；孩子视角空态不再出现让孩子“切回家长视角”的错位文案
+
+### 🧪 验证结果
+
+- 前端全量回归通过：
+  - `npm test`
+- 前端质量闸门通过：
+  - `npm run test:quality`
+- M22E 关键链路定向回归通过：
+  - [`test/pages/access-gate.page.test.js`](/Users/wangdafei/code/study_task_wechat/test/pages/access-gate.page.test.js)
+  - [`test/utils/onboarding-state.test.js`](/Users/wangdafei/code/study_task_wechat/test/utils/onboarding-state.test.js)
+  - [`test/pages/index.page-shell.behavior.test.js`](/Users/wangdafei/code/study_task_wechat/test/pages/index.page-shell.behavior.test.js)
+  - [`test/pages/family-settings.page.test.js`](/Users/wangdafei/code/study_task_wechat/test/pages/family-settings.page.test.js)
+
+### 📖 详细实施记录
+
+- [里程碑-22E：新用户引导与空态上手闭环](../design/milestone-22e-new-user-onboarding-empty-state-onramp.md)
+
+---
+
 ## [里程碑-22L] - 2026-04-27
 
 ### ✅ 完成情况

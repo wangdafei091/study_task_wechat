@@ -102,13 +102,17 @@ describe('packageManage/pages/task-template-edit/task-template-edit', () => {
     const page = createPageInstance();
     page.data.form.name = '';
     page.data.form.taskTitle = '任务A';
+    page.data.form.taskDescription = '任务说明A';
+    page.data.form.description = '模板说明A';
 
     await page.onSave();
 
     expect(createTemplate).toHaveBeenCalledWith(expect.objectContaining({
       name: '任务A',
+      description: '模板说明A',
       taskPayload: expect.objectContaining({
-        title: '任务A'
+        title: '任务A',
+        description: '任务说明A'
       }),
       dateStrategy: expect.objectContaining({
         mode: 'today',
@@ -335,7 +339,9 @@ describe('packageManage/pages/task-template-edit/task-template-edit', () => {
 
     expect(page.data.form).toEqual(expect.objectContaining({
       name: '模板A',
+      description: '说明',
       taskTitle: '任务A',
+      taskDescription: '任务说明',
       type: 'study',
       points: 3,
       endMode: 'duration',

@@ -113,6 +113,7 @@ describe('TaskTemplateService', () => {
     });
 
     expect(result.formPatch.newTask.title).toBe('晚间阅读');
+    expect(result.formPatch.newTask.description).toBe('阅读20分钟');
     expect(result.formPatch.newTask.startDate).toBe('2026-04-08');
     expect(result.formPatch.newTask.endDate).toBe('2026-04-14');
     expect(result.formPatch.repeatText).toBe('每周一、周三、周五');
