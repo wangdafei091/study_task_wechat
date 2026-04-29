@@ -1100,6 +1100,75 @@ describe('pages/index/index shell behavior', () => {
     }));
   });
 
+  it('首页 onboarding 的主次 CTA 应覆盖创建家庭、输入邀请码、添加孩子和奖励跳转分支', () => {
+    page.navigateToRewardManage = jest.fn();
+
+    page.data.homeOnboardingCard = {
+      primaryAction: {
+        type: 'create_family',
+        text: '创建家庭'
+      }
+    };
+    page.onHomeOnboardingPrimaryTap();
+    expect(global.wx.navigateTo).toHaveBeenCalledWith(expect.objectContaining({
+      url: '/packageManage/pages/family-settings/family-settings?action=create_family'
+    }));
+
+    global.wx.navigateTo.mockClear();
+    page.data.homeOnboardingCard = {
+      primaryAction: {
+        type: 'join_with_code',
+        text: '输入邀请码'
+      }
+    };
+    page.onHomeOnboardingPrimaryTap();
+    expect(global.wx.navigateTo).toHaveBeenCalledWith(expect.objectContaining({
+      url: '/pages/access-gate/access-gate?mode=manual_input'
+    }));
+
+    global.wx.navigateTo.mockClear();
+    page.data.homeOnboardingCard = {
+      primaryAction: {
+        type: 'add_child',
+        text: '去添加孩子'
+      }
+    };
+    page.onHomeOnboardingPrimaryTap();
+    expect(global.wx.navigateTo).toHaveBeenCalledWith(expect.objectContaining({
+      url: '/packageManage/pages/family-settings/family-settings'
+    }));
+
+    page.data.homeOnboardingCard = {
+      primaryAction: {
+        type: 'go_reward_manage',
+        text: '去看看奖励'
+      }
+    };
+    page.onHomeOnboardingPrimaryTap();
+    expect(page.navigateToRewardManage).toHaveBeenCalledTimes(1);
+
+    global.wx.navigateTo.mockClear();
+    page.data.homeOnboardingCard = {
+      secondaryAction: {
+        type: 'join_with_code',
+        text: '输入邀请码加入'
+      }
+    };
+    page.onHomeOnboardingSecondaryTap();
+    expect(global.wx.navigateTo).toHaveBeenCalledWith(expect.objectContaining({
+      url: '/pages/access-gate/access-gate?mode=manual_input'
+    }));
+
+    page.data.homeOnboardingCard = {
+      secondaryAction: {
+        type: 'go_reward_manage',
+        text: '去看看奖励'
+      }
+    };
+    page.onHomeOnboardingSecondaryTap();
+    expect(page.navigateToRewardManage).toHaveBeenCalledTimes(2);
+  });
+
   it('孩子视角空态应使用等待家长安排的口径', () => {
     const wxml = require('fs').readFileSync(
       require('path').join(process.cwd(), 'pages/index/index.wxml'),

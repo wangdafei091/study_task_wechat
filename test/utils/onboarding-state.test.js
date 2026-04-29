@@ -152,6 +152,163 @@ describe('utils/app/onboarding-state', () => {
     expect(result.description).toContain('今天的任务安排');
   });
 
+  it('孩子无家庭时应返回输入邀请码阶段，并支持访客进入后的子角色承接', () => {
+    const baseStage = onboardingState.resolveOnboardingStage({
+      loginUser: { role: 'child' },
+      currentUser: { role: 'child' }
+    });
+
+    expect(baseStage).toEqual(expect.objectContaining({
+      stage: 'no_family_child',
+      title: '输入邀请码加入家庭'
+    }));
+    expect(baseStage.primaryAction).toEqual({
+      type: 'join_with_code',
+      text: '输入邀请码'
+    });
+
+    const invitedStage = onboardingState.resolveOnboardingStage({
+      loginUser: { role: 'child' },
+      currentUser: { role: 'child' },
+      pendingOnboardingContext: {
+        source: onboardingState.ONBOARDING_SOURCE.GUEST_INVITE_ENTERED
+      }
+    });
+
+    expect(invitedStage).toEqual(expect.objectContaining({
+      stage: 'no_family_child',
+      title: '你已进入小程序',
+      dismissAfterConsume: true
+    }));
+    expect(invitedStage.description).toContain('输入邀请码加入家庭');
+  });
+
+  it('访客邀请码进入在 stable_none 且无家庭时应生成一次性承接卡', () => {
+    const result = onboardingState.resolveOnboardingStage({
+      loginUser: { role: 'child' },
+      currentUser: { role: 'child' },
+      skipNoFamilyStages: true,
+      pendingOnboardingContext: {
+        source: onboardingState.ONBOARDING_SOURCE.GUEST_INVITE_ENTERED
+      }
+    });
+
+    expect(result).toEqual(expect.objectContaining({
+      stage: 'joined_from_invite',
+      title: '你已进入小程序',
+      dismissAfterConsume: true
+    }));
+    expect(result.primaryAction).toEqual({
+      type: 'join_with_code',
+      text: '输入邀请码'
+    });
+  });
+
+  it('加入家庭后的承接阶段应覆盖无孩子、家长无任务、孩子无任务与只读跳过任务场景', () => {
+    const familyNoChild = onboardingState.resolveOnboardingStage({
+      family: { familyId: 'fam_1' },
+      loginUser: { role: 'parent', familyId: 'fam_1' },
+      currentUser: { role: 'parent', familyId: 'fam_1' },
+      canManageMembers: true,
+      members: [{ userId: 'parent_1', role: 'parent' }],
+      pendingOnboardingContext: {
+        source: onboardingState.ONBOARDING_SOURCE.INVITE_JOIN_FAMILY
+      }
+    });
+    expect(familyNoChild).toEqual(expect.objectContaining({
+      stage: 'family_no_child',
+      title: '已加入家庭',
+      dismissAfterConsume: true
+    }));
+
+    const parentNoTask = onboardingState.resolveOnboardingStage({
+      family: { familyId: 'fam_1' },
+      loginUser: { role: 'parent', familyId: 'fam_1' },
+      currentUser: { role: 'parent', familyId: 'fam_1' },
+      canManageMembers: true,
+      members: [
+        { userId: 'parent_1', role: 'parent' },
+        { userId: 'child_1', role: 'child' }
+      ],
+      tasks: [],
+      pendingOnboardingContext: {
+        source: onboardingState.ONBOARDING_SOURCE.INVITE_JOIN_FAMILY
+      }
+    });
+    expect(parentNoTask).toEqual(expect.objectContaining({
+      stage: 'child_no_task_parent_view',
+      title: '已加入家庭',
+      dismissAfterConsume: true
+    }));
+
+    const childNoTask = onboardingState.resolveOnboardingStage({
+      family: { familyId: 'fam_1' },
+      loginUser: { role: 'child', familyId: 'fam_1' },
+      currentUser: { role: 'child', familyId: 'fam_1' },
+      canManageMembers: false,
+      members: [
+        { userId: 'parent_1', role: 'parent' },
+        { userId: 'child_1', role: 'child' }
+      ],
+      tasks: [],
+      pendingOnboardingContext: {
+        source: onboardingState.ONBOARDING_SOURCE.INVITE_JOIN_FAMILY
+      }
+    });
+    expect(childNoTask).toEqual(expect.objectContaining({
+      stage: 'child_no_task_child_view',
+      title: '已加入家庭',
+      dismissAfterConsume: true
+    }));
+
+    const readonlySkipTask = onboardingState.resolveOnboardingStage({
+      family: { familyId: 'fam_1' },
+      loginUser: { role: 'parent', familyId: 'fam_1' },
+      currentUser: { role: 'parent', familyId: 'fam_1' },
+      canManageMembers: false,
+      isViewerReadonly: true,
+      skipTaskStages: true,
+      members: [
+        { userId: 'parent_1', role: 'parent' },
+        { userId: 'child_1', role: 'child' }
+      ],
+      pendingOnboardingContext: {
+        source: onboardingState.ONBOARDING_SOURCE.INVITE_JOIN_FAMILY
+      }
+    });
+    expect(readonlySkipTask).toEqual(expect.objectContaining({
+      stage: 'joined_from_invite',
+      title: '已加入家庭',
+      dismissAfterConsume: true
+    }));
+    expect(readonlySkipTask.primaryAction).toBeNull();
+  });
+
+  it('只读家长加入家庭后的承接文案应覆盖只读阶段覆写分支', () => {
+    const result = onboardingState.resolveOnboardingStage({
+      family: { familyId: 'fam_1' },
+      loginUser: { role: 'parent', familyId: 'fam_1', familyPermissionRole: 'viewer' },
+      currentUser: { role: 'parent', familyId: 'fam_1', familyPermissionRole: 'viewer' },
+      members: [
+        { userId: 'parent_1', role: 'parent' },
+        { userId: 'child_1', role: 'child' }
+      ],
+      canManageMembers: false,
+      isViewerReadonly: true,
+      tasks: [],
+      pendingOnboardingContext: {
+        source: onboardingState.ONBOARDING_SOURCE.INVITE_JOIN_FAMILY
+      }
+    });
+
+    expect(result).toEqual(expect.objectContaining({
+      stage: 'readonly_parent_no_task',
+      title: '已加入家庭',
+      dismissAfterConsume: true
+    }));
+    expect(result.description).toContain('管理员');
+  });
+
   it('查看者家长在首页无任务时应返回只读解释阶段，而不是孩子口径文案', () => {
     const result = onboardingState.resolveOnboardingStage({
       family: { familyId: 'fam_1' },
@@ -259,5 +416,14 @@ describe('utils/app/onboarding-state', () => {
       source: onboardingState.ONBOARDING_SOURCE.GUEST_INVITE_ENTERED
     }));
     expect(onboardingState.peekPendingOnboardingContext(app)).toBeNull();
+  });
+
+  it('一次性上下文工具在缺少 app、globalData 或 source 时应安全降级', () => {
+    expect(onboardingState.peekPendingOnboardingContext(null)).toBeNull();
+    expect(onboardingState.setPendingOnboardingContext(null, {
+      source: onboardingState.ONBOARDING_SOURCE.CREATE_FAMILY
+    })).toBeNull();
+    expect(onboardingState.setPendingOnboardingContext({ globalData: {} }, {})).toBeNull();
+    expect(() => onboardingState.clearPendingOnboardingContext(null)).not.toThrow();
   });
 });
