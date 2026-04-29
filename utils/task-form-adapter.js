@@ -9,7 +9,12 @@ function adaptTaskEditStateToDraft(newTask = {}, options = {}) {
 }
 
 function adaptTemplateEditFormToDraft(form = {}, options = {}) {
-  return taskFormCore.normalizeTaskFormDraft(form, {
+  return taskFormCore.normalizeTaskFormDraft({
+    ...form,
+    // 模板编辑页存在两套说明字段：taskDescription 是任务说明，description 是模板说明。
+    // 进入任务草稿归一化时，任务说明必须优先映射到 draft.description。
+    description: form.taskDescription !== undefined ? form.taskDescription : form.description
+  }, {
     scene: 'template',
     today: options.today,
     now: options.now
