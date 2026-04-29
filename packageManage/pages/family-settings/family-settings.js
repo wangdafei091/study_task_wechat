@@ -3,6 +3,7 @@
  */
 
 const logger = require('../../../utils/logger');
+const onboardingState = require('../../../utils/app/onboarding-state');
 const userContextUtils = require('../../../utils/user-context');
 
 function getPermissionRoleLabel(role) {
@@ -132,6 +133,8 @@ Page({
     inviteManagementDisabledReason: '',
     supportsParentPermissionManagement: false,
     canEnterInviteCenter: false,
+    noFamilyOnboardingCard: null,
+    familyOnboardingCard: null,
     // 邀请码相关
     inviteCode: '',
     inviteCodeExpiresAt: null,
@@ -147,7 +150,8 @@ Page({
     pinConfirmInput: '',
   },
 
-  onLoad() {
+  onLoad(options = {}) {
+    this._pendingEntryAction = options.action || '';
     const app = getApp();
     const userService = app.globalData?.userService;
     if (!userService) return;
@@ -213,6 +217,15 @@ Page({
           canAdjustParentPermission: supportsParentPermissionManagement,
           loginUserId: loginUser?.userId || null
         }));
+        const familyOnboardingCard = this._resolveFamilyOnboardingCard({
+          family,
+          members,
+          loginUser,
+          canManageMembers: permissionContext.canManageMembers,
+          isViewerReadonly: permissionContext.isViewerReadonly,
+          isSystemReadonly: permissionContext.isSystemReadonly
+        });
+
         this.setData({
           family,
           members,
@@ -241,9 +254,14 @@ Page({
           inviteCodeExpiryText: formatInviteExpiry(family.inviteCodeExpiresAt),
           inviteRoleHint: formatInviteRoleHint(family.inviteCodeRole || 'child'),
           canEnterInviteCenter: Boolean(loginUser && loginUser.role === 'parent' && !loginUser.isVirtual),
+          noFamilyOnboardingCard: null,
+          familyOnboardingCard,
           loading: false,
         });
       } else {
+        const fallbackUser = userService.getLoginUser() || userService.getCurrentUser() || null;
+        const noFamilyOnboardingCard = this._resolveNoFamilyOnboardingCard(fallbackUser);
+
         this.setData({
           family: null,
           members: [],
@@ -257,13 +275,64 @@ Page({
           inviteManagementDisabledReason: '',
           supportsParentPermissionManagement: false,
           canEnterInviteCenter: Boolean((userService.getLoginUser() || userService.getCurrentUser())?.role === 'parent'),
+          noFamilyOnboardingCard,
+          familyOnboardingCard: null,
           loading: false
         });
+
+        this._maybeOpenCreateFamilyDialog();
       }
     } catch (error) {
       logger.error('FamilySettings', '加载家庭数据失败', error);
       this.setData({ loading: false });
     }
+  },
+
+  _maybeOpenCreateFamilyDialog() {
+    if (this._pendingEntryAction !== 'create_family' || !this.data.isParent || this.data.family) {
+      return;
+    }
+
+    this._pendingEntryAction = '';
+    this.showCreateFamily();
+  },
+
+  _resolveNoFamilyOnboardingCard(currentUser) {
+    const app = getApp();
+    const pendingContext = onboardingState.peekPendingOnboardingContext(app);
+    const card = onboardingState.resolveOnboardingStage({
+      loginUser: currentUser,
+      currentUser,
+      pendingOnboardingContext: pendingContext
+    });
+
+    if (card.dismissAfterConsume) {
+      onboardingState.consumePendingOnboardingContext(app);
+    }
+
+    return card.stage === 'stable_none' ? null : card;
+  },
+
+  _resolveFamilyOnboardingCard(options = {}) {
+    const app = getApp();
+    const pendingContext = onboardingState.peekPendingOnboardingContext(app);
+    const card = onboardingState.resolveOnboardingStage({
+      family: options.family,
+      members: options.members,
+      loginUser: options.loginUser,
+      currentUser: options.loginUser,
+      canManageMembers: options.canManageMembers,
+      isViewerReadonly: options.isViewerReadonly,
+      isSystemReadonly: options.isSystemReadonly,
+      pendingOnboardingContext: pendingContext,
+      skipTaskStages: true
+    });
+
+    if (card.dismissAfterConsume) {
+      onboardingState.consumePendingOnboardingContext(app);
+    }
+
+    return card.stage === 'stable_none' ? null : card;
   },
 
   async _loadMembers() {
@@ -315,6 +384,9 @@ Page({
       const userService = getApp().globalData?.userService;
       const result = await userService.createFamily(name);
       if (result.success) {
+        onboardingState.setPendingOnboardingContext(getApp(), {
+          source: onboardingState.ONBOARDING_SOURCE.CREATE_FAMILY
+        });
         wx.showToast({ title: '家庭创建成功', icon: 'success' });
         this.setData({ showCreateDialog: false });
         await this._loadFamilyData();
@@ -349,6 +421,32 @@ Page({
   navigateToAccessGate() {
     wx.navigateTo({
       url: '/pages/access-gate/access-gate?mode=manual_input'
+    });
+  },
+
+  onNoFamilyPrimaryTap() {
+    const actionType = this.data.noFamilyOnboardingCard?.primaryAction?.type || '';
+    if (actionType === 'create_family') {
+      this.showCreateFamily();
+      return;
+    }
+
+    this.navigateToAccessGate();
+  },
+
+  onNoFamilySecondaryTap() {
+    this.navigateToAccessGate();
+  },
+
+  onFamilyOnboardingPrimaryTap() {
+    const actionType = this.data.familyOnboardingCard?.primaryAction?.type || '';
+    if (actionType === 'add_child') {
+      this.addVirtualMember();
+      return;
+    }
+
+    wx.reLaunch({
+      url: '/pages/index/index'
     });
   },
 

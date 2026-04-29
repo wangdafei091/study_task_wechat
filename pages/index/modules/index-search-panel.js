@@ -11,6 +11,9 @@ function toggleSearch(page) {
         showSearch: false,
         searchClosing: false
       });
+      if (typeof page.syncHomeOnboardingVisibility === 'function') {
+        page.syncHomeOnboardingVisibility();
+      }
     }, 300);
     return;
   }
@@ -20,6 +23,9 @@ function toggleSearch(page) {
     showStats: false,
     showMessagePreview: false
   });
+  if (typeof page.syncHomeOnboardingVisibility === 'function') {
+    page.syncHomeOnboardingVisibility();
+  }
 }
 
 function getEffectiveTaskUserId(page) {

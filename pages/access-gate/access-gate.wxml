@@ -32,10 +32,6 @@
       <view class="access-gate-note" wx:if="{{mode === 'share_pending_login' && showProfileHint}}">
         继续时会尝试获取你的昵称和头像；如果你拒绝，也不会阻止进入。
       </view>
-      <view class="access-gate-note" wx:if="{{mode === 'no_action_needed' && previewResult.currentActionMessage}}">
-        {{previewResult.currentActionMessage}}
-      </view>
-
       <button
         class="access-gate-button"
         type="primary"

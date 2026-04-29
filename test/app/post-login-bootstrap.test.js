@@ -128,6 +128,14 @@ describe('utils/app/post-login-bootstrap', () => {
     serviceManager.isInitialized = true;
   });
 
+  it('欢迎消息文案应改为先家庭后任务，不再要求先配置奖励', () => {
+    const content = postLoginBootstrap.getWelcomeContent();
+
+    expect(content).toContain('先创建家庭，或通过邀请码加入已有家庭');
+    expect(content).toContain('回到首页，给孩子安排第一个任务');
+    expect(content).not.toContain('先设置奖励，再创建任务');
+  });
+
   it('run 应覆盖奖励保护、修复失败和 messageService 缺失分支', async () => {
     const offlineQueueService = {
       initialize: jest.fn().mockResolvedValue(true),

@@ -105,6 +105,7 @@ describe('pages/index/index shell behavior', () => {
 
   function createPageInstance() {
     const progressBar = { playAnimation: jest.fn() };
+    const floatMenu = { openMenu: jest.fn() };
     const instance = {
       ...pageConfig,
       data: cloneData(pageConfig.data)
@@ -128,10 +129,14 @@ describe('pages/index/index shell behavior', () => {
       if (selector === '#progressBar') {
         return progressBar;
       }
+      if (selector === '#homeFloatMenu') {
+        return floatMenu;
+      }
       return null;
     });
 
     instance._progressBar = progressBar;
+    instance._floatMenu = floatMenu;
     return instance;
   }
 
@@ -448,6 +453,231 @@ describe('pages/index/index shell behavior', () => {
     page.data.currentViewDate = '2026-03-27';
     await page.checkUpcomingTasks();
     expect(page.data.showUpcomingTask).toBe(false);
+  });
+
+  it('refreshHomeOnboardingCard 应在今日主视图输出首页引导卡，并在搜索态降级隐藏', () => {
+    page.data.currentUser = { id: 'parent-1', userId: 'parent-1', name: '家长', role: 'parent', familyId: 'fam_1' };
+    page.data.availableUsers = [{ id: 'parent-1', userId: 'parent-1', name: '家长', role: 'parent' }];
+    page.data.canManageMembers = true;
+    page.data.tasks = [];
+    page.data.showOccurrenceSection = false;
+    page.data.isViewingToday = true;
+    page.data.isViewingFuture = false;
+    page.data.showSearch = false;
+    page.data.showMessagePreview = false;
+
+    page.refreshHomeOnboardingCard();
+
+    expect(page.data.homeOnboardingCard).toEqual(expect.objectContaining({
+      stage: 'family_no_child',
+      title: '先把孩子加进家庭'
+    }));
+    expect(page.data.showHomeOnboardingCard).toBe(true);
+
+    page.setData({
+      showSearch: true
+    });
+    page.syncHomeOnboardingVisibility();
+    expect(page.data.showHomeOnboardingCard).toBe(false);
+  });
+
+  it('首页不应为无家庭用户渲染 onboarding 卡，应交给 family-settings 承接', () => {
+    page.data.currentUser = { id: 'parent-1', userId: 'parent-1', name: '家长', role: 'parent' };
+    page.data.availableUsers = [{ id: 'parent-1', userId: 'parent-1', name: '家长', role: 'parent' }];
+    page.data.canManageMembers = false;
+    page.data.tasks = [];
+    page.data.showOccurrenceSection = false;
+    page.data.isViewingToday = true;
+    page.data.isViewingFuture = false;
+    page.data.showSearch = false;
+    page.data.showMessagePreview = false;
+
+    page.refreshHomeOnboardingCard();
+
+    expect(page.data.homeOnboardingCard).toBeNull();
+    expect(page.data.showHomeOnboardingCard).toBe(false);
+  });
+
+  it('无家庭家长首页空态应指向创建或加入家庭，而不是误显示为添加孩子', () => {
+    const wxml = require('fs').readFileSync(
+      require('path').join(process.cwd(), 'pages/index/index.wxml'),
+      'utf8'
+    );
+
+    expect(wxml).toContain('还没有加入家庭，请前往家庭设置创建家庭或输入邀请码加入');
+    expect(wxml).toContain('currentUser && currentUser.role === \'parent\' && !currentUser.familyId && !showHomeOnboardingCard');
+    expect(wxml).not.toContain('canManageMembers && availableUsers.length <= 1 && !showHomeOnboardingCard');
+  });
+
+  it('查看者家长在首页无任务时应展示只读解释卡，而不是孩子口径空态', () => {
+    page.data.currentUser = {
+      id: 'parent-viewer',
+      userId: 'parent-viewer',
+      name: '查看者家长',
+      role: 'parent',
+      familyId: 'fam_1',
+      familyPermissionRole: 'viewer'
+    };
+    page.data.availableUsers = [
+      { id: 'parent-viewer', userId: 'parent-viewer', name: '查看者家长', role: 'parent' },
+      { id: 'child-1', userId: 'child-1', name: '孩子', role: 'child' }
+    ];
+    page.data.canManageMembers = false;
+    page.data.isViewerReadonly = true;
+    page.data.tasks = [];
+    page.data.showOccurrenceSection = false;
+    page.data.isViewingToday = true;
+    page.data.isViewingFuture = false;
+    page.data.showSearch = false;
+    page.data.showMessagePreview = false;
+
+    page.refreshHomeOnboardingCard();
+
+    expect(page.data.homeOnboardingCard).toEqual(expect.objectContaining({
+      stage: 'readonly_parent_no_task',
+      title: '当前还没有任务安排',
+      primaryAction: null,
+      secondaryAction: null
+    }));
+  });
+
+  it('系统只读家长在首页无任务时应展示只读解释卡，而不是创建任务 CTA', () => {
+    page.data.currentUser = {
+      id: 'parent-manager',
+      userId: 'parent-manager',
+      name: '管理员家长',
+      role: 'parent',
+      familyId: 'fam_1',
+      familyPermissionRole: 'manager',
+      systemAccessLevel: 'readonly'
+    };
+    page.data.availableUsers = [
+      { id: 'parent-manager', userId: 'parent-manager', name: '管理员家长', role: 'parent' },
+      { id: 'child-1', userId: 'child-1', name: '孩子', role: 'child' }
+    ];
+    page.data.canManageMembers = true;
+    page.data.isSystemReadonly = true;
+    page.data.tasks = [];
+    page.data.showOccurrenceSection = false;
+    page.data.isViewingToday = true;
+    page.data.isViewingFuture = false;
+    page.data.showSearch = false;
+    page.data.showMessagePreview = false;
+
+    page.refreshHomeOnboardingCard();
+
+    expect(page.data.homeOnboardingCard).toEqual(expect.objectContaining({
+      stage: 'readonly_parent_no_task',
+      title: '当前还没有任务安排',
+      primaryAction: null,
+      secondaryAction: null
+    }));
+  });
+
+  it('一次性首页承接卡在首次展示后再次显示时应回落为常规阶段卡', () => {
+    appMock.globalData.pendingOnboardingContext = {
+      source: 'create_family',
+      createdAt: Date.now()
+    };
+    page.data.currentUser = { id: 'parent-1', userId: 'parent-1', name: '家长', role: 'parent', familyId: 'fam_1' };
+    page.data.availableUsers = [{ id: 'parent-1', userId: 'parent-1', name: '家长', role: 'parent' }];
+    page.data.canManageMembers = true;
+    page.data.tasks = [];
+    page.data.showOccurrenceSection = false;
+    page.data.isViewingToday = true;
+    page.data.isViewingFuture = false;
+    page.data.showSearch = false;
+    page.data.showMessagePreview = false;
+
+    page.refreshHomeOnboardingCard();
+
+    expect(page.data.homeOnboardingCard).toEqual(expect.objectContaining({
+      title: '家庭已创建',
+      dismissAfterConsume: true
+    }));
+    expect(appMock.globalData.pendingOnboardingContext).toBeNull();
+
+    page.setData({ showSearch: true });
+    page.syncHomeOnboardingVisibility();
+    expect(page.data.showHomeOnboardingCard).toBe(false);
+    expect(page.data.homeOnboardingCard).toEqual(expect.objectContaining({
+      title: '先把孩子加进家庭',
+      dismissAfterConsume: false
+    }));
+
+    page.setData({ showSearch: false });
+    page.syncHomeOnboardingVisibility();
+    expect(page.data.showHomeOnboardingCard).toBe(true);
+    expect(page.data.homeOnboardingCard).toEqual(expect.objectContaining({
+      title: '先把孩子加进家庭',
+      dismissAfterConsume: false
+    }));
+  });
+
+  it('首页应承接访客通过邀请码进入后的下一步提示，即使常规 no_family 卡被屏蔽', () => {
+    appMock.globalData.pendingOnboardingContext = {
+      source: 'guest_invite_entered',
+      inviteCode: 'F123456789',
+      createdAt: Date.now()
+    };
+    page.data.currentUser = { id: 'parent-1', userId: 'parent-1', name: '家长', role: 'parent' };
+    page.data.availableUsers = [{ id: 'parent-1', userId: 'parent-1', name: '家长', role: 'parent' }];
+    page.data.canManageMembers = false;
+    page.data.tasks = [];
+    page.data.showOccurrenceSection = false;
+    page.data.isViewingToday = true;
+    page.data.isViewingFuture = false;
+    page.data.showSearch = false;
+    page.data.showMessagePreview = false;
+
+    page.refreshHomeOnboardingCard();
+
+    expect(page.data.homeOnboardingCard).toEqual(expect.objectContaining({
+      stage: 'joined_from_invite',
+      title: '你已进入小程序',
+      dismissAfterConsume: true
+    }));
+    expect(page.data.homeOnboardingCard.primaryAction).toEqual({
+      type: 'create_family',
+      text: '创建家庭'
+    });
+    expect(appMock.globalData.pendingOnboardingContext).toBeNull();
+  });
+
+  it('已加入已有任务的家庭后，首页仍应展示一次性承接卡', () => {
+    appMock.globalData.pendingOnboardingContext = {
+      source: 'invite_join_family',
+      inviteCode: 'F123456789',
+      createdAt: Date.now()
+    };
+    page.data.currentUser = {
+      id: 'parent-1',
+      userId: 'parent-1',
+      name: '家长',
+      role: 'parent',
+      familyId: 'fam_1'
+    };
+    page.data.availableUsers = [
+      { id: 'parent-1', userId: 'parent-1', name: '家长', role: 'parent' },
+      { id: 'child-1', userId: 'child-1', name: '孩子', role: 'child' }
+    ];
+    page.data.canManageMembers = true;
+    page.data.tasks = [{ id: 'task-1', title: '语文作业', status: 0 }];
+    page.data.showOccurrenceSection = false;
+    page.data.isViewingToday = true;
+    page.data.isViewingFuture = false;
+    page.data.showSearch = false;
+    page.data.showMessagePreview = false;
+
+    page.refreshHomeOnboardingCard();
+
+    expect(page.data.homeOnboardingCard).toEqual(expect.objectContaining({
+      stage: 'joined_from_invite',
+      title: '已加入家庭',
+      dismissAfterConsume: true
+    }));
+    expect(page.data.homeOnboardingCard.description).toContain('今天的任务安排');
+    expect(appMock.globalData.pendingOnboardingContext).toBeNull();
   });
 
   it('首页消息预览应保持未读优先，但未读总数基于完整消息集合', async () => {
@@ -853,6 +1083,99 @@ describe('pages/index/index shell behavior', () => {
     expect(global.wx.navigateTo).toHaveBeenCalledWith(expect.objectContaining({
       url: '/packageManage/pages/reward-manage/reward-manage'
     }));
+  });
+
+  it('首页 onboarding 的创建任务 CTA 应直接跳转到任务管理页', () => {
+    page.data.homeOnboardingCard = {
+      primaryAction: {
+        type: 'create_task',
+        text: '创建任务'
+      }
+    };
+
+    page.onHomeOnboardingPrimaryTap();
+
+    expect(global.wx.navigateTo).toHaveBeenCalledWith(expect.objectContaining({
+      url: '/packageTask/pages/task-edit/task-edit?mode=create'
+    }));
+  });
+
+  it('首页 onboarding 的主次 CTA 应覆盖创建家庭、输入邀请码、添加孩子和奖励跳转分支', () => {
+    page.navigateToRewardManage = jest.fn();
+
+    page.data.homeOnboardingCard = {
+      primaryAction: {
+        type: 'create_family',
+        text: '创建家庭'
+      }
+    };
+    page.onHomeOnboardingPrimaryTap();
+    expect(global.wx.navigateTo).toHaveBeenCalledWith(expect.objectContaining({
+      url: '/packageManage/pages/family-settings/family-settings?action=create_family'
+    }));
+
+    global.wx.navigateTo.mockClear();
+    page.data.homeOnboardingCard = {
+      primaryAction: {
+        type: 'join_with_code',
+        text: '输入邀请码'
+      }
+    };
+    page.onHomeOnboardingPrimaryTap();
+    expect(global.wx.navigateTo).toHaveBeenCalledWith(expect.objectContaining({
+      url: '/pages/access-gate/access-gate?mode=manual_input'
+    }));
+
+    global.wx.navigateTo.mockClear();
+    page.data.homeOnboardingCard = {
+      primaryAction: {
+        type: 'add_child',
+        text: '去添加孩子'
+      }
+    };
+    page.onHomeOnboardingPrimaryTap();
+    expect(global.wx.navigateTo).toHaveBeenCalledWith(expect.objectContaining({
+      url: '/packageManage/pages/family-settings/family-settings'
+    }));
+
+    page.data.homeOnboardingCard = {
+      primaryAction: {
+        type: 'go_reward_manage',
+        text: '去看看奖励'
+      }
+    };
+    page.onHomeOnboardingPrimaryTap();
+    expect(page.navigateToRewardManage).toHaveBeenCalledTimes(1);
+
+    global.wx.navigateTo.mockClear();
+    page.data.homeOnboardingCard = {
+      secondaryAction: {
+        type: 'join_with_code',
+        text: '输入邀请码加入'
+      }
+    };
+    page.onHomeOnboardingSecondaryTap();
+    expect(global.wx.navigateTo).toHaveBeenCalledWith(expect.objectContaining({
+      url: '/pages/access-gate/access-gate?mode=manual_input'
+    }));
+
+    page.data.homeOnboardingCard = {
+      secondaryAction: {
+        type: 'go_reward_manage',
+        text: '去看看奖励'
+      }
+    };
+    page.onHomeOnboardingSecondaryTap();
+    expect(page.navigateToRewardManage).toHaveBeenCalledTimes(2);
+  });
+
+  it('孩子视角空态应使用等待家长安排的口径', () => {
+    const wxml = require('fs').readFileSync(
+      require('path').join(process.cwd(), 'pages/index/index.wxml'),
+      'utf8'
+    );
+
+    expect(wxml).toContain('今天还没有任务安排，家长安排好后会显示在这里');
   });
 
   it('奖池跳转、奖励指示器和搜索任务应覆盖视角与异常分支', async () => {

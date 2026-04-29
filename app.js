@@ -4,7 +4,7 @@ const { ensureDefaultRuntimeApiConfig, resolveRuntimeApiConfig } = require('./ut
 // 在 require 其他依赖前补齐默认云端配置，避免冷启动时 api-config 过早读到空 storage。
 ensureDefaultRuntimeApiConfig({
   enableApi: 'true',
-  baseUrl: 'https://api.todoceo.xyz'
+  baseUrl: 'https://api.todoceo.xyz/test/'
 });
 
 const StorageAdapter = require('./adapters/storage-adapter'); // 引入存储适配器
