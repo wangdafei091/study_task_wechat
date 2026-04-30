@@ -63,6 +63,13 @@ describe('packageManage/pages/about/about', () => {
     delete global.wx;
   });
 
+  it('关于页内置应用版本应与 package.json 保持一致', () => {
+    const appMeta = require('../../utils/app-meta');
+    const pkg = require('../../package.json');
+
+    expect(appMeta.version).toBe(pkg.version);
+  });
+
   it('正式环境应显示二维码', () => {
     const page = createPage();
 
@@ -70,6 +77,32 @@ describe('packageManage/pages/about/about', () => {
 
     expect(page.data.showQrCode).toBe(true);
     expect(page.data.version).toBe('1.2.3');
+  });
+
+  it('运行时版本为空时应回退到内置应用版本', () => {
+    global.wx.getAccountInfoSync.mockReturnValue({
+      miniProgram: {
+        version: ''
+      }
+    });
+    const page = createPage();
+
+    page.onLoad.call(page);
+
+    expect(page.data.version).toBe('3.9.0');
+  });
+
+  it('运行时版本为 0.0.0 时应回退到内置应用版本', () => {
+    global.wx.getAccountInfoSync.mockReturnValue({
+      miniProgram: {
+        version: '0.0.0'
+      }
+    });
+    const page = createPage();
+
+    page.onLoad.call(page);
+
+    expect(page.data.version).toBe('3.9.0');
   });
 
   it('非正式环境应隐藏二维码实图', () => {
