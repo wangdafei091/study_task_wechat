@@ -9,9 +9,14 @@ jest.mock('../../config/database', () => ({
 jest.mock('../../utils/logger', () => ({
   createLogger: () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() })
 }));
+jest.mock('../../services/userService', () => ({
+  findActiveById: jest.fn(),
+  findById: jest.fn()
+}));
 
 const db = require('../../config/database');
 const familyService = require('../../services/familyService');
+const userService = require('../../services/userService');
 
 describe('familyService.updateMemberPermissionRole', () => {
   let connection;
@@ -198,6 +203,121 @@ describe('familyService.joinFamily', () => {
       familyId: 'fam_child',
       role: 'child',
       familyPermissionRole: null
+    });
+  });
+});
+
+describe('familyService identity governance', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('家长管理员可修改同家庭独立孩子昵称', async () => {
+    userService.findActiveById.mockResolvedValue({
+      userId: 'parent_1',
+      role: 'parent',
+      familyId: 'fam_1',
+      familyPermissionRole: 'manager',
+      isSystemBlocked: jest.fn(() => false),
+      isSystemReadonly: jest.fn(() => false)
+    });
+    db.query.mockResolvedValueOnce([{
+      user_id: 'child_1',
+      nickname: '旧称呼',
+      role: 'child',
+      family_id: 'fam_1',
+      is_virtual: 0,
+      status: 'active'
+    }]);
+    db.execute.mockResolvedValue({ affectedRows: 1 });
+
+    await expect(familyService.updateNickname({
+      userId: 'parent_1'
+    }, 'child_1', '新称呼')).resolves.toBeUndefined();
+
+    expect(db.execute).toHaveBeenCalledWith(
+      'UPDATE users SET nickname = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?',
+      ['新称呼', 'child_1']
+    );
+  });
+
+  it('查看者不能修改成员昵称', async () => {
+    userService.findActiveById.mockResolvedValue({
+      userId: 'viewer_1',
+      role: 'parent',
+      familyId: 'fam_1',
+      familyPermissionRole: 'viewer',
+      isSystemBlocked: jest.fn(() => false),
+      isSystemReadonly: jest.fn(() => false)
+    });
+
+    await expect(familyService.updateNickname({
+      userId: 'viewer_1'
+    }, 'child_1', '新称呼')).rejects.toMatchObject({
+      code: 'FAMILY_MANAGER_REQUIRED'
+    });
+  });
+
+  it('blocked 用户会在写操作前被拒绝', async () => {
+    userService.findActiveById.mockResolvedValue({
+      userId: 'blocked_1',
+      role: 'parent',
+      familyId: 'fam_1',
+      familyPermissionRole: 'manager',
+      isSystemBlocked: jest.fn(() => true),
+      isSystemReadonly: jest.fn(() => false)
+    });
+
+    await expect(familyService.updateNickname({
+      userId: 'blocked_1'
+    }, 'child_1', '新称呼')).rejects.toMatchObject({
+      code: 'SYSTEM_USER_BLOCKED'
+    });
+  });
+
+  it('孩子本人可修改自己的 preset 头像', async () => {
+    userService.findActiveById.mockResolvedValue({
+      userId: 'child_1',
+      role: 'child',
+      familyId: 'fam_1',
+      familyPermissionRole: null,
+      isSystemBlocked: jest.fn(() => false),
+      isSystemReadonly: jest.fn(() => false)
+    });
+    userService.findById.mockResolvedValue({
+      userId: 'child_1',
+      role: 'child',
+      familyId: 'fam_1'
+    });
+    db.execute.mockResolvedValue({ affectedRows: 1 });
+
+    await expect(familyService.updateChildAvatarPreset({
+      userId: 'child_1'
+    }, 'child_1', 'fox')).resolves.toEqual({
+      userId: 'child_1',
+      avatar: 'preset:fox'
+    });
+  });
+
+  it('父母管理员不能给自己设置孩子 preset 头像', async () => {
+    userService.findActiveById.mockResolvedValue({
+      userId: 'parent_1',
+      role: 'parent',
+      familyId: 'fam_1',
+      familyPermissionRole: 'manager',
+      isSystemBlocked: jest.fn(() => false),
+      isSystemReadonly: jest.fn(() => false)
+    });
+    userService.findById.mockResolvedValue({
+      userId: 'parent_1',
+      role: 'parent',
+      familyId: 'fam_1'
+    });
+
+    await expect(familyService.updateChildAvatarPreset({
+      userId: 'parent_1'
+    }, 'parent_1', 'fox')).rejects.toMatchObject({
+      code: 'FAMILY_CHILD_ONLY'
     });
   });
 });

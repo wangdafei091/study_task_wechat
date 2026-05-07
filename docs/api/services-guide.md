@@ -1558,7 +1558,21 @@ const taskTemplateService = serviceManager.get('taskTemplateService');
 更新成员昵称（M6新增）
 - **参数**: `userId` (string) - 目标用户ID, `nickname` (string) - 新昵称
 - **返回**: `Promise<{ success: boolean, message?: string }>`
-- **说明**：更新成功后直接同步 userCache 和 currentUser/loginUser，不重新拉取
+- **说明**：
+  - 更新成功后直接同步 userCache 和 currentUser/loginUser，不重新拉取
+  - 权限边界为：家长可维护自己和同家庭任意孩子称呼；孩子可维护自己称呼；查看者 / 系统只读 / blocked / 跨家庭均拒绝
+
+##### `updateChildAvatarPreset(userId, presetId)`
+更新孩子的内置动物头像。
+- **参数**:
+  - `userId` (string) - 目标孩子用户 ID
+  - `presetId` (string) - 动物头像 preset 标识
+- **返回**: `Promise<{ success: boolean, userId?: string, avatar?: string, message?: string }>`
+- **说明**：
+  - 云端模式下调用 `/api/users/{userId}/avatar-preset`
+  - 本地模式下直接同步 `userCache / currentUser / loginUser / localFamilyMembers`
+  - 权限边界为：孩子可修改自己头像；具备成员管理权限的同家庭家长可修改孩子头像；查看者 / 系统只读 / blocked / 跨家庭 / 家长本人目标均拒绝
+  - 成功后统一返回 `avatar = preset:*`
 
 ##### `updateCurrentProfile(profile = {})`
 更新当前登录用户资料。

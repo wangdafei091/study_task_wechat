@@ -5,7 +5,12 @@
 const { pool, query, execute } = require('../config/database');
 const Family = require('../models/Family');
 const User = require('../models/User');
+const userService = require('./userService');
 const { createLogger } = require('../utils/logger');
+const {
+  buildAvatarPresetValue,
+  getAvatarPresetById
+} = require('../utils/user-avatar-presets');
 const logger = createLogger('FamilyService');
 const FAMILY_PERMISSION_ROLE = {
   MANAGER: 'manager',
@@ -304,9 +309,10 @@ class FamilyService {
 
   /**
    * 更新成员昵称
-   * 权限：修改自己，或家长修改同家庭虚拟成员
+   * 权限：家长可修改自己和同家庭任意孩子；孩子可修改自己
    */
-  async updateNickname(operatorUserId, operatorRole, operatorFamilyId, targetUserId, nickname) {
+  async updateNickname(operatorUser, targetUserId, nickname) {
+    const latestOperator = await this._ensureWriteOperator(operatorUser);
     const results = await query(
       'SELECT * FROM users WHERE user_id = ? AND status = ? LIMIT 1',
       [targetUserId, 'active']
@@ -318,13 +324,17 @@ class FamilyService {
 
     const target = User.fromDB(results[0]);
 
-    const isSelf = operatorUserId === targetUserId;
-    const isParentManagingVirtualChild =
-      operatorRole === 'parent' &&
-      target.isVirtual &&
-      target.familyId === operatorFamilyId;
+    const isSelf = latestOperator.userId === targetUserId;
+    const isParentSelf = latestOperator.role === 'parent' && isSelf;
+    const isChildSelf = latestOperator.role === 'child' && isSelf;
+    const isParentManagingChild =
+      latestOperator.role === 'parent' &&
+      latestOperator.familyPermissionRole === FAMILY_PERMISSION_ROLE.MANAGER &&
+      target.role === 'child' &&
+      target.familyId &&
+      target.familyId === latestOperator.familyId;
 
-    if (!isSelf && !isParentManagingVirtualChild) {
+    if (!isParentSelf && !isChildSelf && !isParentManagingChild) {
       throw Object.assign(new Error('无权修改该成员昵称'), { code: 'FAMILY_MEMBER_ACCESS_DENIED' });
     }
 
@@ -334,6 +344,53 @@ class FamilyService {
     );
 
     logger.info('更新昵称成功', { targetUserId, nickname });
+  }
+
+  async updateChildAvatarPreset(operatorUser, targetUserId, presetId) {
+    const latestOperator = await this._ensureWriteOperator(operatorUser);
+    const preset = getAvatarPresetById(presetId);
+    if (!preset) {
+      throw Object.assign(new Error('头像选项无效'), { code: 'INVALID_PARAMS' });
+    }
+
+    const target = await userService.findById(targetUserId);
+    if (!target) {
+      throw Object.assign(new Error('用户不存在'), { code: 'USER_NOT_FOUND' });
+    }
+
+    if (target.role !== 'child') {
+      throw Object.assign(new Error('只有孩子可以修改动物头像'), { code: 'FAMILY_CHILD_ONLY' });
+    }
+
+    const isSelf = latestOperator.userId === targetUserId;
+    const isChildSelf = latestOperator.role === 'child' && isSelf;
+    const isParentManagingChild = Boolean(
+      latestOperator.role === 'parent' &&
+      latestOperator.familyPermissionRole === FAMILY_PERMISSION_ROLE.MANAGER &&
+      latestOperator.familyId &&
+      latestOperator.familyId === target.familyId
+    );
+
+    if (!isChildSelf && !isParentManagingChild) {
+      throw Object.assign(new Error('无权修改该成员头像'), { code: 'FAMILY_MEMBER_ACCESS_DENIED' });
+    }
+
+    const avatar = buildAvatarPresetValue(presetId);
+    await execute(
+      'UPDATE users SET avatar = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?',
+      [avatar, targetUserId]
+    );
+
+    logger.info('更新孩子头像成功', {
+      operatorUserId: latestOperator.userId,
+      targetUserId,
+      presetId
+    });
+
+    return {
+      userId: targetUserId,
+      avatar
+    };
   }
 
   /**
@@ -524,6 +581,33 @@ class FamilyService {
     } finally {
       connection.release();
     }
+  }
+
+  async _ensureWriteOperator(operatorUser) {
+    const operatorUserId = typeof operatorUser === 'string'
+      ? operatorUser
+      : operatorUser?.userId;
+    const latestOperator = operatorUserId
+      ? await userService.findActiveById(operatorUserId)
+      : null;
+
+    if (!latestOperator) {
+      throw Object.assign(new Error('用户不存在'), { code: 'USER_NOT_FOUND' });
+    }
+
+    if (latestOperator.isSystemBlocked()) {
+      throw Object.assign(new Error('当前账号已被管理员暂停使用'), { code: 'SYSTEM_USER_BLOCKED' });
+    }
+
+    if (latestOperator.isSystemReadonly()) {
+      throw Object.assign(new Error('当前账号为只读，仅可查看'), { code: 'SYSTEM_USER_READONLY' });
+    }
+
+    if (latestOperator.role === 'parent' && latestOperator.familyPermissionRole === FAMILY_PERMISSION_ROLE.VIEWER) {
+      throw Object.assign(new Error('当前为查看者，不能修改成员信息'), { code: 'FAMILY_MANAGER_REQUIRED' });
+    }
+
+    return latestOperator;
   }
 }
 

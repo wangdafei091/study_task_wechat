@@ -86,13 +86,7 @@ describe('pages/access-gate/access-gate', () => {
     global.wx = {
       reLaunch: jest.fn(),
       navigateBack: jest.fn(),
-      showModal: jest.fn(({ success }) => success({ confirm: true })),
-      getUserProfile: jest.fn(({ success }) => success({
-        userInfo: {
-          nickName: '新用户',
-          avatarUrl: 'https://example.com/a.png'
-        }
-      }))
+      showModal: jest.fn(({ success }) => success({ confirm: true }))
     };
 
     loadPageModule();
@@ -137,17 +131,8 @@ describe('pages/access-gate/access-gate', () => {
     const page = createPage();
     let loginUser = null;
     appMock.globalData.userService = {
-      getLoginUser: jest.fn(() => loginUser),
-      updateCurrentProfile: jest.fn().mockResolvedValue({ success: true })
+      getLoginUser: jest.fn(() => loginUser)
     };
-    global.wx.getUserProfile
-      .mockImplementationOnce(({ fail }) => fail({ errMsg: 'deny' }))
-      .mockImplementationOnce(({ success }) => success({
-        userInfo: {
-          nickName: '新用户',
-          avatarUrl: 'https://example.com/a.png'
-        }
-      }));
     inviteService.previewInviteCode.mockResolvedValue({
       inviteCode: 'F123456789',
       purpose: 'family_invite',
@@ -176,12 +161,7 @@ describe('pages/access-gate/access-gate', () => {
     expect(appMock.doCloudLogin).toHaveBeenCalledWith({
       throwOnAdmissionError: true,
       suppressFailureModal: true,
-      inviteCode: 'F123456789',
-      profile: null
-    });
-    expect(appMock.globalData.userService.updateCurrentProfile).toHaveBeenCalledWith({
-      nickname: '新用户',
-      avatarUrl: 'https://example.com/a.png'
+      inviteCode: 'F123456789'
     });
     expect(onboardingState.setPendingOnboardingContext).toHaveBeenCalledWith(appMock, {
       source: 'invite_join_family',
@@ -196,8 +176,7 @@ describe('pages/access-gate/access-gate', () => {
     const page = createPage();
     let loginUser = null;
     appMock.globalData.userService = {
-      getLoginUser: jest.fn(() => loginUser),
-      updateCurrentProfile: jest.fn().mockResolvedValue({ success: true })
+      getLoginUser: jest.fn(() => loginUser)
     };
     inviteService.previewInviteCode.mockResolvedValue({
       inviteCode: 'U123456789',

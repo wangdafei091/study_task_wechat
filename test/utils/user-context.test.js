@@ -306,10 +306,12 @@ describe('utils/user-context', () => {
       expect(permissionContext).toEqual({
         loginUserId: null,
         loginUserRole: null,
+        familyId: null,
         familyPermissionRole: null,
         viewUserId: null,
         viewUserRole: null,
         canManageMembers: false,
+        hasFamilyManagerRole: false,
         isSwitchedChildView: false,
         isViewerReadonly: false,
         isSystemBlocked: false,

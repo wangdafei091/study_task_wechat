@@ -29,9 +29,6 @@
       </block>
 
       <view class="access-gate-error" wx:if="{{errorMessage}}">{{errorMessage}}</view>
-      <view class="access-gate-note" wx:if="{{mode === 'share_pending_login' && showProfileHint}}">
-        继续时会尝试获取你的昵称和头像；如果你拒绝，也不会阻止进入。
-      </view>
       <button
         class="access-gate-button"
         type="primary"

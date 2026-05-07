@@ -104,6 +104,7 @@ const API_CONFIG = {
 
     // 用户昵称修改
     USER_NICKNAME: '/api/users/{userId}/nickname',
+    USER_AVATAR_PRESET: '/api/users/{userId}/avatar-preset',
 
     // 家庭相关API
     FAMILIES: '/api/families',

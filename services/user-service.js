@@ -12,6 +12,22 @@ const HttpClient = require('../utils/http-client');
 const TokenManager = require('../utils/token-manager');
 const API_CONFIG = require('../utils/api-config');
 const systemUserAccessState = require('../utils/app/system-user-access-state');
+const userContextUtils = require('../utils/user-context');
+const {
+  buildAvatarPresetValue,
+  getAvatarPresetById
+} = require('../utils/user-avatar-presets');
+
+function resolveAvatarPresetUpdateErrorMessage(error) {
+  const statusCode = Number(error?.statusCode || 0);
+  const errorCode = String(error?.code || error?.responseData?.error_code || '').trim();
+
+  if (statusCode === 404 || errorCode === 'NOT_FOUND') {
+    return '当前环境还没有发布头像功能，请先更新后端服务';
+  }
+
+  return error?.message || '更新头像失败';
+}
 
 class UserService {
   /**
@@ -238,6 +254,93 @@ class UserService {
     if (patch.avatar !== undefined) {
       user.avatar = patch.avatar;
     }
+  }
+
+  _buildPermissionContextForCurrentState() {
+    return userContextUtils.resolvePermissionContext({
+      loginUser: this.loginUser,
+      currentUser: this.currentUser,
+      availableUsers: this.getAllUsers()
+    });
+  }
+
+  _canLocallyRenameUser(targetUser) {
+    if (!targetUser) {
+      return false;
+    }
+
+    const permissionContext = this._buildPermissionContextForCurrentState();
+    if (permissionContext.isSystemBlocked || permissionContext.isSystemReadonly || permissionContext.isViewerReadonly) {
+      return false;
+    }
+
+    const loginUserId = this.loginUser?.userId || '';
+    const isSelf = loginUserId && loginUserId === targetUser.userId;
+    const isParentSelf = this.loginUser?.role === UserRole.PARENT && isSelf;
+    const isChildSelf = this.loginUser?.role === UserRole.CHILD && isSelf && targetUser.role === UserRole.CHILD;
+    const isManagerParentEditingChild = Boolean(
+      permissionContext.familyPermissionRole === FamilyPermissionRole.MANAGER &&
+      this.loginUser?.role === UserRole.PARENT &&
+      targetUser.role === UserRole.CHILD &&
+      this.loginUser?.familyId &&
+      this.loginUser.familyId === targetUser.familyId
+    );
+
+    return isParentSelf || isChildSelf || isManagerParentEditingChild;
+  }
+
+  _canLocallyUpdateChildAvatar(targetUser) {
+    if (!targetUser || targetUser.role !== UserRole.CHILD) {
+      return false;
+    }
+
+    const permissionContext = this._buildPermissionContextForCurrentState();
+    if (permissionContext.isSystemBlocked || permissionContext.isSystemReadonly || permissionContext.isViewerReadonly) {
+      return false;
+    }
+
+    const loginUserId = this.loginUser?.userId || '';
+    const isChildSelf = this.loginUser?.role === UserRole.CHILD && loginUserId === targetUser.userId;
+    const isManagerParentEditingChild = Boolean(
+      permissionContext.familyPermissionRole === FamilyPermissionRole.MANAGER &&
+      this.loginUser?.role === UserRole.PARENT &&
+      this.loginUser?.familyId &&
+      this.loginUser.familyId === targetUser.familyId
+    );
+
+    return isChildSelf || isManagerParentEditingChild;
+  }
+
+  _updatePersistedLocalMember(userId, updater) {
+    if (!this.storageAdapter || typeof this.storageAdapter.get !== 'function' || typeof this.storageAdapter.set !== 'function') {
+      return;
+    }
+
+    const members = this.storageAdapter.get('localFamilyMembers') || [];
+    const nextMembers = members.map((member) => {
+      if (member.userId !== userId) {
+        return member;
+      }
+
+      return updater({ ...member });
+    });
+
+    this.storageAdapter.set('localFamilyMembers', nextMembers);
+  }
+
+  _persistLocalLoginUserProfile() {
+    if (!this.storageAdapter || typeof this.storageAdapter.set !== 'function' || !this.loginUser) {
+      return;
+    }
+
+    this.storageAdapter.set('localLoginUserProfile', {
+      userId: this.loginUser.userId,
+      name: this.loginUser.name,
+      avatar: this.loginUser.avatar || '',
+      role: this.loginUser.role,
+      familyId: this.loginUser.familyId || null,
+      familyPermissionRole: this.loginUser.familyPermissionRole || null
+    });
   }
 
   /**
@@ -610,6 +713,39 @@ class UserService {
    * @returns {Promise<Object>}
    */
   async updateNickname(userId, nickname) {
+    if (this._isLocalMode()) {
+      try {
+        const targetUser = this.userCache.get(userId);
+        if (!targetUser) {
+          return { success: false, message: '用户不存在' };
+        }
+
+        if (!this._canLocallyRenameUser(targetUser)) {
+          return { success: false, message: '无权修改该成员昵称' };
+        }
+
+        targetUser.name = nickname;
+        if (this.currentUser?.userId === userId) {
+          this.currentUser.name = nickname;
+        }
+        if (this.loginUser?.userId === userId) {
+          this.loginUser.name = nickname;
+          this._persistLocalLoginUserProfile();
+        }
+        this._updatePersistedLocalMember(userId, (member) => ({
+          ...member,
+          name: nickname,
+          nickname
+        }));
+
+        logger.info('UserService', '本地模式更新昵称成功', { userId, nickname });
+        return { success: true };
+      } catch (error) {
+        logger.error('UserService', '本地模式更新昵称失败', error);
+        return { success: false, message: error.message };
+      }
+    }
+
     try {
       const url = API_CONFIG.ENDPOINTS.USER_NICKNAME.replace('{userId}', userId);
       await HttpClient.patch(url, { nickname });
@@ -703,6 +839,7 @@ class UserService {
       if (this.currentUser?.userId === this.loginUser?.userId) {
         this._applyProfileSnapshotToUser(this.currentUser, profile);
       }
+      this._persistLocalLoginUserProfile();
       return { success: true };
     }
 
@@ -781,7 +918,7 @@ class UserService {
         role: UserRole.CHILD,
         isVirtual: true,
         familyId: this.loginUser?.familyId || null,
-        avatar: '👶',
+        avatar: '',
         status: UserStatus.ACTIVE,
       };
       const childUser = new User(childData);
@@ -804,6 +941,73 @@ class UserService {
     } catch (error) {
       logger.error('UserService', '创建虚拟成员失败', error);
       return { success: false, message: error.message };
+    }
+  }
+
+  async updateChildAvatarPreset(userId, presetId) {
+    const preset = getAvatarPresetById(presetId);
+    if (!preset) {
+      return { success: false, message: '头像选项无效' };
+    }
+
+    const avatar = buildAvatarPresetValue(presetId);
+    if (!avatar) {
+      return { success: false, message: '头像选项无效' };
+    }
+
+    if (this._isLocalMode()) {
+      try {
+        const targetUser = this.userCache.get(userId);
+        if (!targetUser) {
+          return { success: false, message: '用户不存在' };
+        }
+
+        if (!this._canLocallyUpdateChildAvatar(targetUser)) {
+          return { success: false, message: '无权修改该成员头像' };
+        }
+
+        targetUser.avatar = avatar;
+        if (this.currentUser?.userId === userId) {
+          this.currentUser.avatar = avatar;
+        }
+        if (this.loginUser?.userId === userId) {
+          this.loginUser.avatar = avatar;
+          this._persistLocalLoginUserProfile();
+        }
+        this._updatePersistedLocalMember(userId, (member) => ({
+          ...member,
+          avatar
+        }));
+
+        logger.info('UserService', '本地模式更新孩子头像成功', { userId, presetId });
+        return { success: true, userId, avatar };
+      } catch (error) {
+        logger.error('UserService', '本地模式更新孩子头像失败', error);
+        return { success: false, message: error.message };
+      }
+    }
+
+    try {
+      const url = API_CONFIG.ENDPOINTS.USER_AVATAR_PRESET.replace('{userId}', userId);
+      const result = await HttpClient.patch(url, { presetId });
+      const nextAvatar = String(result?.avatar || avatar).trim() || avatar;
+      const cached = this.userCache.get(userId);
+
+      if (cached) {
+        cached.avatar = nextAvatar;
+      }
+      if (this.currentUser?.userId === userId) {
+        this.currentUser.avatar = nextAvatar;
+      }
+      if (this.loginUser?.userId === userId) {
+        this.loginUser.avatar = nextAvatar;
+      }
+
+      logger.info('UserService', '更新孩子头像成功', { userId, presetId });
+      return { success: true, userId, avatar: nextAvatar };
+    } catch (error) {
+      logger.error('UserService', '更新孩子头像失败', error);
+      return { success: false, message: resolveAvatarPresetUpdateErrorMessage(error) };
     }
   }
 
@@ -884,16 +1088,17 @@ class UserService {
     if (!this.storageAdapter) return;
 
     const localFamily = this.storageAdapter.get('localFamily');
+    const localLoginUserProfile = this.storageAdapter.get('localLoginUserProfile') || {};
     if (localFamily) {
       // 从 currentUser 构建 loginUser（补充 familyId）
       this.loginUser = new User({
-        userId: this.currentUser.userId || 'parent',
-        name: this.currentUser.name || '家长',
+        userId: localLoginUserProfile.userId || this.currentUser.userId || 'parent',
+        name: localLoginUserProfile.name || this.currentUser.name || '家长',
         displayName: this.currentUser.displayName || '家长模式',
-        role: UserRole.PARENT,
-        avatar: this.currentUser.avatar || '👩‍💼',
+        role: localLoginUserProfile.role || UserRole.PARENT,
+        avatar: localLoginUserProfile.avatar || this.currentUser.avatar || '👩‍💼',
         familyId: localFamily.familyId,
-        familyPermissionRole: FamilyPermissionRole.MANAGER,
+        familyPermissionRole: localLoginUserProfile.familyPermissionRole || FamilyPermissionRole.MANAGER,
       });
       this.userCache.set(this.loginUser.userId, this.loginUser);
     }

@@ -201,17 +201,23 @@ function resolvePermissionContext(input = {}, options = {}) {
     familyPermissionRole === 'viewer' &&
     !isExecutingChildView
   );
-  const isReadonlyView = isSystemReadonly || isSwitchedChildView || isViewerReadonly;
-  const canManageFamilyGovernance = Boolean(
+  const isReadonlyView = isSystemBlocked || isSystemReadonly || isSwitchedChildView || isViewerReadonly;
+  const hasFamilyManagerRole = Boolean(
     snapshot.loginUserRole === 'parent' &&
     snapshot.familyId &&
     familyPermissionRole === 'manager' &&
+    !isSystemBlocked &&
     !isSystemReadonly &&
+    !isViewerReadonly
+  );
+  const canManageFamilyGovernance = Boolean(
+    hasFamilyManagerRole &&
     !isSwitchedChildView
   );
   const canManageBusinessData = Boolean(
     snapshot.loginUserRole === 'parent' &&
     (!snapshot.familyId || familyPermissionRole === 'manager') &&
+    !isSystemBlocked &&
     !isSystemReadonly &&
     !isSwitchedChildView
   );
@@ -223,6 +229,7 @@ function resolvePermissionContext(input = {}, options = {}) {
   return {
     loginUserId: snapshot.loginUserId,
     loginUserRole: snapshot.loginUserRole,
+    familyId: snapshot.familyId,
     familyPermissionRole,
     systemAccessLevel,
     isSystemReadonly,
@@ -231,8 +238,11 @@ function resolvePermissionContext(input = {}, options = {}) {
     viewUserRole: snapshot.viewUserRole,
     isSwitchedChildView,
     isViewerReadonly,
-    readonlyReason: isSystemReadonly ? 'system-readonly' : (isViewerReadonly ? 'viewer-readonly' : ''),
-    canManageMembers: snapshot.loginUserRole === 'parent',
+    readonlyReason: isSystemBlocked
+      ? 'system-blocked'
+      : (isSystemReadonly ? 'system-readonly' : (isViewerReadonly ? 'viewer-readonly' : '')),
+    canManageMembers: snapshot.loginUserRole === 'parent' && !isSystemBlocked,
+    hasFamilyManagerRole,
     isReadonlyView,
     canManageFamilyGovernance,
     canManageBusinessData,

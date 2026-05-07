@@ -574,6 +574,40 @@ describe('pages/index/index shell behavior', () => {
     }));
   });
 
+  it('系统封禁家长在首页无任务时应展示封禁解释卡，而不是孩子口径空态', () => {
+    page.data.currentUser = {
+      id: 'parent-blocked',
+      userId: 'parent-blocked',
+      name: '封禁家长',
+      role: 'parent',
+      familyId: 'fam_1',
+      familyPermissionRole: 'manager',
+      systemAccessLevel: 'blocked'
+    };
+    page.data.availableUsers = [
+      { id: 'parent-blocked', userId: 'parent-blocked', name: '封禁家长', role: 'parent' },
+      { id: 'child-1', userId: 'child-1', name: '孩子', role: 'child' }
+    ];
+    page.data.canManageMembers = false;
+    page.data.isSystemBlocked = true;
+    page.data.tasks = [];
+    page.data.showOccurrenceSection = false;
+    page.data.isViewingToday = true;
+    page.data.isViewingFuture = false;
+    page.data.showSearch = false;
+    page.data.showMessagePreview = false;
+
+    page.refreshHomeOnboardingCard();
+
+    expect(page.data.homeOnboardingCard).toEqual(expect.objectContaining({
+      stage: 'readonly_parent_no_task',
+      title: '当前还没有任务安排',
+      primaryAction: null,
+      secondaryAction: null
+    }));
+    expect(page.data.homeOnboardingCard.description).toContain('暂停使用');
+  });
+
   it('一次性首页承接卡在首次展示后再次显示时应回落为常规阶段卡', () => {
     appMock.globalData.pendingOnboardingContext = {
       source: 'create_family',
@@ -1224,7 +1258,7 @@ describe('pages/index/index shell behavior', () => {
     expect(page.data.searchResults).toEqual([]);
   });
 
-  it('多用户相关壳层方法应处理切换、编辑、删除和验证流程', async () => {
+  it('多用户相关壳层方法应处理切换、编辑和验证流程', async () => {
     page.showUserSwitcher();
     expect(page.data.showUserSwitcher).toBe(true);
     page.hideUserSwitcher();
@@ -1250,12 +1284,6 @@ describe('pages/index/index shell behavior', () => {
     await page.handleNicknameEdit({ detail: { userId: 'child-1', nickname: '新昵称' } });
     expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({
       title: '昵称已更新'
-    }));
-
-    appMock.globalData.userService.deleteFamilyMember.mockResolvedValueOnce({ success: false, message: '删除失败' });
-    await page.handleUserDelete({ detail: { userId: 'child-1' } });
-    expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({
-      title: '删除失败'
     }));
 
     page.updateMenuItemsWithPermissions = pageConfig.updateMenuItemsWithPermissions.bind(page);

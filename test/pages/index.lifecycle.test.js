@@ -41,7 +41,7 @@ describe('pages/index/modules/index-lifecycle', () => {
 
   it('onLoad 应注册事件处理器并初始化页面基础能力', async () => {
     const page = {
-      data: { canIUse: true },
+      data: {},
       handleTaskDataChanged: jest.fn(),
       handleTaskCreated: jest.fn(),
       handleMessageDataChanged: jest.fn(),
@@ -60,13 +60,12 @@ describe('pages/index/modules/index-lifecycle', () => {
     expect(page.setRandomMotivation).toHaveBeenCalled();
     expect(page.registerEventListeners).toHaveBeenCalled();
     expect(page.initializeDateNavigation).toHaveBeenCalled();
-    expect(typeof app.userInfoReadyCallback).toBe('function');
   });
 
-  it('onLoad 在已有 userInfo 时应直接写入页面', async () => {
+  it('onLoad 不再依赖 app.globalData.userInfo', async () => {
     app.globalData.userInfo = { nickName: '家长' };
     const page = {
-      data: { canIUse: false },
+      data: {},
       handleTaskDataChanged: jest.fn(),
       handleTaskCreated: jest.fn(),
       handleMessageDataChanged: jest.fn(),
@@ -81,15 +80,14 @@ describe('pages/index/modules/index-lifecycle', () => {
 
     await lifecycle.onLoad(page, {});
 
-    expect(page.setData).toHaveBeenCalledWith({
-      userInfo: { nickName: '家长' },
-      hasUserInfo: true
-    });
+    expect(page.setData).not.toHaveBeenCalledWith(expect.objectContaining({
+      userInfo: { nickName: '家长' }
+    }));
   });
 
-  it('onLoad 注册的 userInfoReadyCallback 应能回写页面数据', async () => {
+  it('onLoad 不再注册 userInfoReadyCallback', async () => {
     const page = {
-      data: { canIUse: true },
+      data: {},
       handleTaskDataChanged: jest.fn(),
       handleTaskCreated: jest.fn(),
       handleMessageDataChanged: jest.fn(),
@@ -103,12 +101,7 @@ describe('pages/index/modules/index-lifecycle', () => {
     };
 
     await lifecycle.onLoad(page, {});
-    app.userInfoReadyCallback({ userInfo: { nickName: '小朋友' } });
-
-    expect(page.setData).toHaveBeenCalledWith({
-      userInfo: { nickName: '小朋友' },
-      hasUserInfo: true
-    });
+    expect(app.userInfoReadyCallback).toBeUndefined();
   });
 
   it('onShow 应通过批量入口加载页面数据并在正常路径下检查过期数据', async () => {

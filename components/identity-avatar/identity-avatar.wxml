@@ -1,0 +1,13 @@
+<view class="identity-avatar size-{{size}} {{avatarMode}} {{customClass}}" style="{{resolvedStyle}}">
+  <image
+    wx:if="{{avatarMode === 'image'}}"
+    class="identity-avatar-image"
+    src="{{avatarUrl}}"
+    mode="aspectFill"
+  />
+  <text
+    wx:elif="{{avatarMode === 'preset'}}"
+    class="identity-avatar-emoji"
+  >{{avatarEmoji}}</text>
+  <text wx:else class="identity-avatar-text">{{avatarText}}</text>
+</view>

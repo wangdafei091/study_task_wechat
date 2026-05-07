@@ -25,8 +25,7 @@ function buildInitialState(reason, options = {}) {
     errorMessage: appAccessState.isInviteError({ code: reason })
       ? appAccessState.getInviteErrorMessage(reason)
       : '',
-    submitting: false,
-    showProfileHint: false
+    submitting: false
   };
 }
 
@@ -165,8 +164,7 @@ Page({
       previewResult,
       errorMessage: nextMode === PAGE_MODE.NO_ACTION_NEEDED && currentAction === 'invalid'
         ? previewResult.currentActionMessage || ''
-        : '',
-      showProfileHint: nextMode === PAGE_MODE.SHARE_PENDING_LOGIN && previewResult.requiresProfileAuthorization === true
+        : ''
     });
   },
 
@@ -195,29 +193,6 @@ Page({
     }
   },
 
-  async collectProfileSnapshot() {
-    if (typeof wx === 'undefined' || typeof wx.getUserProfile !== 'function') {
-      return null;
-    }
-
-    try {
-      const result = await new Promise((resolve, reject) => {
-        wx.getUserProfile({
-          desc: '用于补全你的昵称和头像',
-          success: resolve,
-          fail: reject
-        });
-      });
-
-      return {
-        nickname: result?.userInfo?.nickName || '',
-        avatarUrl: result?.userInfo?.avatarUrl || ''
-      };
-    } catch (error) {
-      return null;
-    }
-  },
-
   async confirmGuestInvite() {
     const inviteCode = appAccessState.normalizeInviteCode(this.data.inviteCode);
     if (!inviteCode) {
@@ -231,13 +206,11 @@ Page({
 
     try {
       const app = getApp();
-      const profile = this.data.showProfileHint ? await this.collectProfileSnapshot() : null;
       appAccessState.savePendingInviteCode(inviteCode);
       const loginSuccess = await app.doCloudLogin({
         throwOnAdmissionError: true,
         suppressFailureModal: true,
-        inviteCode,
-        profile
+        inviteCode
       });
 
       if (loginSuccess) {
@@ -248,7 +221,6 @@ Page({
           source: onboardingSource,
           inviteCode
         });
-        await this.tryPostLoginProfileSync(profile);
         wx.reLaunch({
           url: '/pages/index/index'
         });
@@ -273,54 +245,6 @@ Page({
       this.setData({
         submitting: false
       });
-    }
-  },
-
-  isProfileIncomplete(loginUser) {
-    if (!loginUser) {
-      return false;
-    }
-
-    const nickname = String(loginUser.name || loginUser.nickname || '').trim();
-    const avatar = String(loginUser.avatar || '').trim();
-    return !nickname || nickname === '用户' || !avatar;
-  },
-
-  async tryPostLoginProfileSync(initialProfile) {
-    if (initialProfile && (initialProfile.nickname || initialProfile.avatarUrl)) {
-      return;
-    }
-
-    const userService = getApp()?.globalData?.userService;
-    if (!userService || typeof userService.getLoginUser !== 'function') {
-      return;
-    }
-
-    const loginUser = userService.getLoginUser();
-    if (!this.isProfileIncomplete(loginUser)) {
-      return;
-    }
-
-    const shouldSync = await new Promise((resolve) => {
-      wx.showModal({
-        title: '补全昵称头像',
-        content: '你已经进入小程序，是否现在补全昵称和头像？',
-        success: (result) => resolve(Boolean(result.confirm)),
-        fail: () => resolve(false)
-      });
-    });
-
-    if (!shouldSync) {
-      return;
-    }
-
-    const profile = await this.collectProfileSnapshot();
-    if (!profile || (!profile.nickname && !profile.avatarUrl)) {
-      return;
-    }
-
-    if (typeof userService.updateCurrentProfile === 'function') {
-      await userService.updateCurrentProfile(profile);
     }
   },
 
@@ -394,8 +318,7 @@ Page({
     this.setData({
       ...this.buildModeView(PAGE_MODE.MANUAL_INPUT),
       previewResult: null,
-      errorMessage: '',
-      showProfileHint: false
+      errorMessage: ''
     });
   },
 

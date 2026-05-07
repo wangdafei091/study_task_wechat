@@ -1,7 +1,7 @@
 # 后端 REST API 契约
 
 > 项目后端 HTTP/REST 接口的权威说明文档
-> **最后更新**：2026-04-25
+> **最后更新**：2026-05-07
 > **维护者**：项目维护团队
 
 ---
@@ -533,11 +533,35 @@ Authorization: Bearer <token>
 
 常见错误：
 - `400` - `INVALID_PARAMS`
-- `403` - `FAMILY_MEMBER_ACCESS_DENIED`
+- `403` - `SYSTEM_USER_BLOCKED` / `SYSTEM_USER_READONLY` / `FAMILY_MANAGER_REQUIRED` / `FAMILY_MEMBER_ACCESS_DENIED`
 - `404` - `USER_NOT_FOUND`
 - `500` - `USER_UPDATE_FAILED`
 
-### 4.7A 修改当前登录用户资料
+### 4.7A 修改孩子头像 preset
+
+- Method: `PATCH`
+- Path: `/api/users/:userId/avatar-preset`
+- Auth: `Bearer Token`
+- Query: 无
+- Body：
+  - `presetId`
+
+成功响应：
+- Status: `200`
+- Body：`data.userId`、`data.avatar`
+
+常见错误：
+- `400` - `INVALID_PARAMS` / `FAMILY_CHILD_ONLY`
+- `403` - `SYSTEM_USER_BLOCKED` / `SYSTEM_USER_READONLY` / `FAMILY_MANAGER_REQUIRED` / `FAMILY_MEMBER_ACCESS_DENIED`
+- `404` - `USER_NOT_FOUND`
+- `500` - `USER_UPDATE_FAILED`
+
+说明：
+- 仅允许写入白名单动物头像 preset，成功后统一返回 `avatar = preset:*`
+- 允许孩子本人修改自己的动物头像，也允许具备成员管理权限的同家庭家长代孩子修改
+- 不允许给家长自己设置孩子动物头像，也不复用“当前登录用户资料更新”接口
+
+### 4.7B 修改当前登录用户资料
 
 - Method: `PATCH`
 - Path: `/api/users/current/profile`

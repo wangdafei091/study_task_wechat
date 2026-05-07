@@ -1,6 +1,8 @@
 const logger = require('../../../utils/logger');
 const permissionUtils = require('../../../utils/permission-utils');
 const userContextUtils = require('../../../utils/user-context');
+const { buildIdentityDisplayModel } = require('../../../utils/user-identity-display');
+const { buildIndexUserContextState } = require('./index-user-context');
 
 function showUserSwitcher(page) {
   logger.info('Index', '显示用户切换界面');
@@ -45,44 +47,31 @@ async function handleUserSwitch(page, e) {
     }
 
     const currentUser = userService.getCurrentUser();
-    const loginUser = userService.getLoginUser ? userService.getLoginUser() : null;
-    const availableUsers = userService.getAllUsers();
-    const lastActiveChildId = currentUser.role === 'child'
-      ? userContextUtils.getUserIdentifier(currentUser)
-      : page.data.lastActiveChildId;
-    const permissionContext = userContextUtils.resolvePermissionContext({
-      loginUser,
+    const state = buildIndexUserContextState(page, userService, {
       currentUser,
-      availableUsers
-    }, {
-      lastActiveChildId
+      availableUsers: userService.getAllUsers(),
+      lastActiveChildId: currentUser.role === 'child'
+        ? userContextUtils.getUserIdentifier(currentUser)
+        : page.data.lastActiveChildId
     });
 
-    const app = getApp();
-    if (app && app.globalData) {
-      app.globalData.lastActiveChildId = permissionContext.lastActiveChildId;
-    }
-
     page.setData({
-      currentUser,
-      availableUsers,
-      userPermissions: permissionContext.userPermissions,
-      loginUserId: permissionContext.loginUserId || '',
-      familyPermissionRole: permissionContext.familyPermissionRole || '',
-      canManageMembers: permissionContext.canManageMembers,
-      isReadonlyView: permissionContext.isReadonlyView,
-      isViewerReadonly: permissionContext.isViewerReadonly,
-      canManageFamilyGovernance: permissionContext.canManageFamilyGovernance,
-      canManageBusinessData: permissionContext.canManageBusinessData,
-      lastActiveChildId: permissionContext.lastActiveChildId,
+      ...state,
       showUserSwitcher: false
     });
 
     page.updateMenuItemsWithPermissions();
     await page.refreshDataForCurrentUser();
 
+    const displayModel = buildIdentityDisplayModel({
+      user: currentUser,
+      currentUserId: state.currentUser?.userId || state.currentUser?.id,
+      loginUserId: state.loginUserId,
+      permissionContext: state.userIdentityPermissionContext
+    });
+
     wx.showToast({
-      title: `已切换到 ${currentUser.name}`,
+      title: `已切换到 ${displayModel.primaryName}`,
       icon: 'success'
     });
 
@@ -105,71 +94,69 @@ async function handleUserAdd() {
 
 async function handleNicknameEdit(page, e) {
   try {
-    const { userId, nickname } = e.detail;
+    const { userId, nickname, onSuccess, onFailure } = e.detail;
     const userService = getApp().globalData.userService;
     if (!userService) {
+      if (typeof onFailure === 'function') {
+        onFailure();
+      }
       return;
     }
 
     const result = await userService.updateNickname(userId, nickname);
     if (result.success) {
-      page.setData({
-        availableUsers: userService.getAllUsers(),
-        currentUser: userService.getCurrentUser()
-      });
+      page.setData(buildIndexUserContextState(page, userService));
+      if (typeof onSuccess === 'function') {
+        onSuccess();
+      }
       wx.showToast({ title: '昵称已更新', icon: 'success' });
       return;
     }
 
+    if (typeof onFailure === 'function') {
+      onFailure();
+    }
     wx.showToast({ title: result.message || '修改失败', icon: 'none' });
   } catch (error) {
     logger.error('Index', '处理昵称编辑失败', error);
+    if (typeof e.detail?.onFailure === 'function') {
+      e.detail.onFailure();
+    }
+    wx.showToast({ title: '修改失败', icon: 'none' });
   }
 }
 
-async function handleUserDelete(page, e) {
+async function handleAvatarPresetUpdate(page, e) {
   try {
-    const { userId } = e.detail;
-    logger.info('Index', `删除家庭成员: ${userId}`);
-
+    const { userId, presetId, onSuccess, onFailure } = e.detail;
     const userService = getApp().globalData.userService;
     if (!userService) {
+      if (typeof onFailure === 'function') {
+        onFailure();
+      }
       return;
     }
 
-    const result = await userService.deleteFamilyMember(userId);
-    if (!result.success) {
-      wx.showToast({
-        title: result.message || '删除用户失败',
-        icon: 'none'
-      });
+    const result = await userService.updateChildAvatarPreset(userId, presetId);
+    if (result.success) {
+      page.setData(buildIndexUserContextState(page, userService));
+      if (typeof onSuccess === 'function') {
+        onSuccess();
+      }
+      wx.showToast({ title: '头像已更新', icon: 'success' });
       return;
     }
 
-    const availableUsers = userService.getAllUsers();
-    const currentUser = userService.getCurrentUser();
-
-    page.setData({
-      availableUsers,
-      currentUser
-    });
-
-    if (currentUser.id !== page.data.currentUser.id) {
-      await page.refreshDataForCurrentUser();
+    if (typeof onFailure === 'function') {
+      onFailure();
     }
-
-    wx.showToast({
-      title: '成员已删除',
-      icon: 'success'
-    });
-
-    logger.info('Index', '家庭成员删除成功');
+    wx.showToast({ title: result.message || '修改失败', icon: 'none' });
   } catch (error) {
-    logger.error('Index', '处理删除用户失败', error);
-    wx.showToast({
-      title: '删除用户失败',
-      icon: 'none'
-    });
+    logger.error('Index', '处理孩子头像更新失败', error);
+    if (typeof e.detail?.onFailure === 'function') {
+      e.detail.onFailure();
+    }
+    wx.showToast({ title: '修改失败', icon: 'none' });
   }
 }
 
@@ -275,7 +262,7 @@ module.exports = {
   handleUserSwitch,
   handleUserAdd,
   handleNicknameEdit,
-  handleUserDelete,
+  handleAvatarPresetUpdate,
   updateMenuItemsWithPermissions,
   navigateToUserProfile,
   validateUserModule

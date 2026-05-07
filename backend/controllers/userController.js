@@ -94,18 +94,27 @@ class UserController {
   async updateNickname(req, res) {
     try {
       const { userId: targetUserId } = req.params;
-      const { userId: operatorId, role: operatorRole, familyId: operatorFamilyId } = req.user;
+      const operator = req.systemUser || await userService.findActiveById(req.user.userId);
       const { nickname } = req.body;
 
       if (!nickname || !nickname.trim()) {
         return res.status(400).json(error('昵称不能为空', 'INVALID_PARAMS'));
       }
 
-      logger.info('修改昵称', { operatorId, targetUserId, nickname });
-      await familyService.updateNickname(operatorId, operatorRole, operatorFamilyId, targetUserId, nickname.trim());
+      logger.info('修改昵称', { operatorId: operator?.userId, targetUserId, nickname });
+      await familyService.updateNickname(operator, targetUserId, nickname.trim());
 
       res.json(success({ userId: targetUserId, nickname: nickname.trim() }, '昵称修改成功'));
     } catch (err) {
+      if (err.code === 'SYSTEM_USER_BLOCKED') {
+        return res.status(403).json(error('当前账号已被管理员暂停使用', err.code));
+      }
+      if (err.code === 'SYSTEM_USER_READONLY') {
+        return res.status(403).json(error('当前账号为只读，仅可查看', err.code));
+      }
+      if (err.code === 'FAMILY_MANAGER_REQUIRED') {
+        return res.status(403).json(error('当前为查看者，不能修改成员信息', err.code));
+      }
       if (err.code === 'FAMILY_MEMBER_ACCESS_DENIED') {
         return res.status(403).json(error('无权修改该成员昵称', err.code));
       }
@@ -114,6 +123,51 @@ class UserController {
       }
       logger.error('修改昵称失败', err);
       res.status(500).json(error('修改昵称失败', 'USER_UPDATE_FAILED'));
+    }
+  }
+
+  async updateAvatarPreset(req, res) {
+    try {
+      const { userId: targetUserId } = req.params;
+      const operator = req.systemUser || await userService.findActiveById(req.user.userId);
+      const { presetId } = req.body || {};
+
+      if (!presetId || !String(presetId).trim()) {
+        return res.status(400).json(error('头像选项不能为空', 'INVALID_PARAMS'));
+      }
+
+      logger.info('修改孩子头像 preset', {
+        operatorId: operator?.userId,
+        targetUserId,
+        presetId
+      });
+
+      const result = await familyService.updateChildAvatarPreset(operator, targetUserId, String(presetId).trim());
+      return res.json(success(result, '头像更新成功'));
+    } catch (err) {
+      if (err.code === 'SYSTEM_USER_BLOCKED') {
+        return res.status(403).json(error('当前账号已被管理员暂停使用', err.code));
+      }
+      if (err.code === 'SYSTEM_USER_READONLY') {
+        return res.status(403).json(error('当前账号为只读，仅可查看', err.code));
+      }
+      if (err.code === 'FAMILY_MANAGER_REQUIRED') {
+        return res.status(403).json(error('当前为查看者，不能修改成员信息', err.code));
+      }
+      if (err.code === 'FAMILY_MEMBER_ACCESS_DENIED') {
+        return res.status(403).json(error('无权修改该成员头像', err.code));
+      }
+      if (err.code === 'FAMILY_CHILD_ONLY') {
+        return res.status(400).json(error('只有孩子可以修改动物头像', err.code));
+      }
+      if (err.code === 'USER_NOT_FOUND') {
+        return res.status(404).json(error('用户不存在', err.code));
+      }
+      if (err.code === 'INVALID_PARAMS') {
+        return res.status(400).json(error('头像选项无效', err.code));
+      }
+      logger.error('修改孩子头像失败', err);
+      return res.status(500).json(error('修改孩子头像失败', 'USER_UPDATE_FAILED'));
     }
   }
 
