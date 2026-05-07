@@ -4,6 +4,13 @@ const dateUtils = require('../../../utils/dateUtils');
 const { buildMonthlyBoard } = require('../../services/analysis-board-service.js');
 
 function getTodayMonthKey() {
+  const todayString = String(dateUtils.getTodayString() || '').trim();
+  const [year, month] = todayString.split('-');
+
+  if (year && month) {
+    return `${year}-${month}`;
+  }
+
   const today = new Date();
   return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
 }
