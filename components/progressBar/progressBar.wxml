@@ -43,11 +43,11 @@
           style="left: {{chickPosition}}%;"
           bindtap="onTapChick">
       <view class="chick-wrapper">
-        <text class="chick-emoji">🐥</text>
+        <text class="chick-emoji">{{companionEmoji || '🐥'}}</text>
         <view class="speech-bubble {{chickSpeaking ? 'show' : ''}} {{bubblePosition}}" wx:if="{{chickSpeaking}}">
           <text>{{currentEncouragement}}</text>
         </view>
       </view>
     </view>
   </view>
-</view> 
+</view>

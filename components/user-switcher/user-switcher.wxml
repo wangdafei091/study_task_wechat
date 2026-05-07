@@ -1,136 +1,166 @@
-<!--components/user-switcher/user-switcher.wxml-->
+<view class="user-switcher-mask" wx:if="{{isRendered}}" bindtap="closeUserSwitcher"></view>
 
-<!-- 遮罩层 -->
-<view class="user-switcher-mask" wx:if="{{visible}}" bindtap="closeUserSwitcher"></view>
-
-<!-- 用户切换面板 -->
-<view class="user-switcher-panel" wx:if="{{visible}}" animation="{{switchAnimation}}" catchtap="preventBubble">
-  <!-- 头部 -->
+<view class="user-switcher-panel" wx:if="{{isRendered}}" animation="{{switchAnimation}}" catchtap="preventBubble">
   <view class="panel-header">
     <view class="panel-title">选择用户</view>
     <view class="panel-close" bindtap="closeUserSwitcher">×</view>
   </view>
 
-  <!-- 当前用户信息 -->
-  <view class="current-user-section" wx:if="{{currentUser}}">
-    <view class="section-title">当前用户</view>
-    <view class="user-item current">
-      <view class="user-avatar">
-        <text class="user-icon">{{currentUser.role === 'parent' ? '👩‍💼' : '👶'}}</text>
-      </view>
-      <view class="user-info">
-        <view class="user-name">{{currentUser.name}}</view>
-        <view class="user-role">{{currentUser.role === 'parent' ? '家长' : '孩子'}}</view>
-      </view>
-      <view class="user-status">
-        <text class="current-badge">当前</text>
-        <!-- 当前用户可编辑自己的昵称 -->
-        <view class="edit-icon" data-user-id="{{currentUser.userId}}" bindtap="showNicknameEdit">✎</view>
-      </view>
-    </view>
-  </view>
+  <view class="current-user-section" wx:if="{{switcherDisplayState.currentCard}}">
+    <view class="section-label">当前身份</view>
+    <view class="current-user-card">
+      <identity-avatar
+        size="card"
+        avatarMode="{{switcherDisplayState.currentCard.avatarMode}}"
+        avatarUrl="{{switcherDisplayState.currentCard.avatarUrl}}"
+        avatarEmoji="{{switcherDisplayState.currentCard.avatarEmoji}}"
+        avatarAccentColor="{{switcherDisplayState.currentCard.avatarAccentColor}}"
+        avatarText="{{switcherDisplayState.currentCard.avatarText}}"
+      />
 
-  <!-- 用户列表 -->
-  <view class="user-list-header">
-    <view class="section-title">{{canManageMembers ? '选择孩子' : '切换到'}}</view>
-  </view>
-  <scroll-view class="user-list-section" scroll-y>
-    <view class="user-list">
-      <block wx:for="{{availableUsers}}" wx:key="userId">
-        <view
-          class="user-item"
-          wx:if="{{!currentUser || item.userId !== currentUser.userId}}"
-          data-user-id="{{item.userId}}"
-          bindtap="switchToUser">
-          <view class="user-avatar">
-            <text class="user-icon">{{item.role === 'parent' ? '👩‍💼' : '👶'}}</text>
-          </view>
-          <view class="user-info">
-            <view class="user-name">{{item.name}}</view>
-            <view class="user-role">{{item.role === 'parent' ? '家长' : '孩子'}}</view>
-          </view>
-          <view class="user-actions">
-            <!-- 家长可编辑虚拟成员昵称 -->
-            <view class="edit-icon"
-                  wx:if="{{canManageMembers && item.isVirtual}}"
-                  data-user-id="{{item.userId}}"
-                  bindtap="showNicknameEdit"
-                  catchtap>✎</view>
-            <!-- 仅虚拟成员显示删除按钮（由 canManageMembers 控制，不依赖 currentUser.role）-->
-            <view class="delete-btn"
-                  wx:if="{{canManageMembers && item.isVirtual}}"
-                  data-user-id="{{item.userId}}"
-                  bindtap="deleteUser"
-                  catchtap>
-              <text class="delete-icon">×</text>
-            </view>
-            <view class="switch-icon" wx:else>→</view>
+      <view class="identity-content">
+        <view class="identity-name-row">
+          <view class="identity-name">{{switcherDisplayState.currentCard.primaryName}}</view>
+          <view class="identity-badge" wx:if="{{switcherDisplayState.currentCard.badgeText}}">
+            {{switcherDisplayState.currentCard.badgeText}}
           </view>
         </view>
-      </block>
+        <view class="identity-secondary">{{switcherDisplayState.currentCard.secondaryText}}</view>
+      </view>
 
-      <!-- 空状态 -->
-      <view class="empty-users" wx:if="{{availableUsers.length <= 1}}">
-        <view class="empty-icon">👥</view>
-        <view class="empty-text">还没有其他成员</view>
-        <view class="empty-tip" wx:if="{{canManageMembers}}">点击下方按钮添加孩子</view>
-        <view class="empty-tip" wx:else>请联系家长添加成员</view>
+      <view class="switchable-trailing" wx:if="{{switcherDisplayState.currentCard.managementActions.length > 0}}">
+        <view
+          class="identity-more"
+          data-user-id="{{switcherDisplayState.currentCard.userId}}"
+          bindtap="openManagementActions"
+        >•••</view>
       </view>
     </view>
-  </scroll-view>
+  </view>
 
-  <!-- 添加成员按钮（家长专属，由 canManageMembers 控制）-->
-  <view class="add-user-section" wx:if="{{showAddUser && canManageMembers}}">
-    <view class="add-user-btn" bindtap="showAddUserDialog">
-      <text class="add-icon">+</text>
-      <text class="add-text">添加成员</text>
+  <view class="switchable-section">
+    <view class="section-label">切换到</view>
+    <scroll-view class="switchable-scroll" scroll-y>
+      <view class="switchable-list" wx:if="{{switcherDisplayState.switchableUsers.length > 0}}">
+        <block wx:for="{{switcherDisplayState.switchableUsers}}" wx:key="userId">
+          <view class="switchable-item">
+            <identity-avatar
+              size="card"
+              avatarMode="{{item.avatarMode}}"
+              avatarUrl="{{item.avatarUrl}}"
+              avatarEmoji="{{item.avatarEmoji}}"
+              avatarAccentColor="{{item.avatarAccentColor}}"
+              avatarText="{{item.avatarText}}"
+            />
+
+            <view class="switchable-content" data-user-id="{{item.userId}}" bindtap="switchToUser">
+              <view class="switchable-name">{{item.primaryName}}</view>
+              <view class="switchable-secondary">{{item.secondaryText}}</view>
+            </view>
+
+            <view class="switchable-trailing">
+              <view
+                class="identity-more"
+                wx:if="{{item.managementActions.length > 0}}"
+                data-user-id="{{item.userId}}"
+                catchtap="openManagementActions"
+              >•••</view>
+              <view class="switch-arrow-hitbox" wx:else data-user-id="{{item.userId}}" bindtap="switchToUser">
+                <view class="switch-arrow">›</view>
+              </view>
+            </view>
+          </view>
+        </block>
+      </view>
+
+      <view class="empty-users" wx:else>
+        <view class="empty-icon">👥</view>
+        <view class="empty-title">还没有其他成员</view>
+        <view class="empty-tip" wx:if="{{switcherDisplayState.footerAction.visible}}">
+          你可以先添加孩子成员
+        </view>
+        <view class="empty-tip" wx:else>当前只有一个可用身份</view>
+      </view>
+    </scroll-view>
+  </view>
+
+  <view class="footer-actions" wx:if="{{showAddUser && switcherDisplayState.footerAction.visible}}">
+    <view class="footer-add-btn" bindtap="showAddUserDialog">
+      <text class="footer-add-icon">+</text>
+      <text>{{switcherDisplayState.footerAction.text}}</text>
     </view>
   </view>
 </view>
 
-<!-- PIN 验证对话框 -->
-<view class="add-user-mask" wx:if="{{showPinDialog}}" bindtap="cancelPin"></view>
-<view class="add-user-dialog" wx:if="{{showPinDialog}}" catchtap="preventBubble">
+<view class="dialog-mask" wx:if="{{showPinDialog}}" bindtap="cancelPin"></view>
+<view class="dialog-card" wx:if="{{showPinDialog}}" catchtap="preventBubble">
   <view class="dialog-header">
     <view class="dialog-title">请输入家长密码</view>
     <view class="dialog-close" bindtap="cancelPin">×</view>
   </view>
-  <view class="dialog-content">
-    <view class="input-group">
-      <input
-        class="user-name-input"
-        placeholder="请输入PIN码"
-        password
-        value="{{pinInput}}"
-        bindinput="onPinInput"
-        maxlength="6" />
-    </view>
+  <view class="dialog-body">
+    <input
+      class="dialog-input"
+      placeholder="请输入PIN码"
+      password
+      value="{{pinInput}}"
+      bindinput="onPinInput"
+      maxlength="6"
+    />
   </view>
   <view class="dialog-actions">
-    <view class="dialog-btn cancel" bindtap="cancelPin">取消</view>
-    <view class="dialog-btn confirm" bindtap="confirmPin">确认</view>
+    <view class="dialog-btn secondary" bindtap="cancelPin">取消</view>
+    <view class="dialog-btn primary" bindtap="confirmPin">确认</view>
   </view>
 </view>
 
-<!-- 昵称编辑对话框 -->
-<view class="add-user-mask" wx:if="{{showNicknameDialog}}" bindtap="cancelNicknameEdit"></view>
-<view class="add-user-dialog" wx:if="{{showNicknameDialog}}" catchtap="preventBubble">
+<view class="dialog-mask" wx:if="{{showNicknameDialog}}" bindtap="cancelNicknameEdit"></view>
+<view class="dialog-card" wx:if="{{showNicknameDialog}}" catchtap="preventBubble">
   <view class="dialog-header">
-    <view class="dialog-title">修改昵称</view>
+    <view class="dialog-title">修改称呼</view>
     <view class="dialog-close" bindtap="cancelNicknameEdit">×</view>
   </view>
-  <view class="dialog-content">
-    <view class="input-group">
-      <input
-        class="user-name-input"
-        placeholder="请输入新昵称"
-        value="{{nicknameInput}}"
-        bindinput="onNicknameInput"
-        maxlength="10" />
+  <view class="dialog-body">
+    <input
+      class="dialog-input"
+      placeholder="请输入新的家庭称呼"
+      value="{{nicknameInput}}"
+      bindinput="onNicknameInput"
+      maxlength="10"
+    />
+  </view>
+    <view class="dialog-actions">
+      <view class="dialog-btn secondary" bindtap="cancelNicknameEdit">取消</view>
+      <view class="dialog-btn primary" bindtap="confirmNicknameEdit">
+        {{isNicknameSubmitting ? '保存中...' : '确认'}}
+      </view>
+    </view>
+</view>
+
+<view class="dialog-mask" wx:if="{{showAvatarDialog}}" bindtap="cancelAvatarDialog"></view>
+<view class="dialog-card avatar-dialog" wx:if="{{showAvatarDialog}}" catchtap="preventBubble">
+  <view class="dialog-header">
+    <view class="dialog-title">选择头像</view>
+    <view class="dialog-close" bindtap="cancelAvatarDialog">×</view>
+  </view>
+  <view class="dialog-body avatar-dialog-body">
+    <view class="avatar-preset-grid">
+      <block wx:for="{{avatarPresetOptions}}" wx:key="presetId">
+        <view
+          class="avatar-preset-item {{item.selected ? 'selected' : ''}}"
+          data-preset-id="{{item.presetId}}"
+          bindtap="selectAvatarPreset"
+        >
+          <view class="avatar-preset-emoji">{{item.emoji}}</view>
+          <view class="avatar-preset-label">{{item.label}}</view>
+        </view>
+      </block>
     </view>
   </view>
   <view class="dialog-actions">
-    <view class="dialog-btn cancel" bindtap="cancelNicknameEdit">取消</view>
-    <view class="dialog-btn confirm" bindtap="confirmNicknameEdit">确认</view>
+    <view class="dialog-btn secondary" bindtap="cancelAvatarDialog">取消</view>
+    <view class="dialog-btn primary" bindtap="confirmAvatarPreset">
+      {{isAvatarSubmitting ? '保存中...' : '确认'}}
+    </view>
   </view>
 </view>

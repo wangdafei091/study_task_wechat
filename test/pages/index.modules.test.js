@@ -280,57 +280,67 @@ describe('pages/index helper modules', () => {
       detail: { userId: 'child-1', nickname: '新昵称' }
     })).resolves.toBeUndefined();
 
+    const baseUserService = {
+      getLoginUser: jest.fn(() => ({ id: 'parent-1', userId: 'parent-1', role: 'parent' })),
+      getCurrentUser: jest.fn(() => ({ id: 'child-1', userId: 'child-1', role: 'child', name: '小明' })),
+      getAllUsers: jest.fn(() => [
+        { id: 'parent-1', userId: 'parent-1', role: 'parent', name: '家长' },
+        { id: 'child-1', userId: 'child-1', role: 'child', name: '小明' }
+      ])
+    };
     appMock.globalData.userService = {
-      ...appMock.globalData.userService,
+      ...baseUserService,
       updateNickname: jest.fn().mockResolvedValueOnce({ success: false, message: '修改失败' }).mockResolvedValueOnce({ success: true }),
       getAllUsers: jest.fn(() => [{ userId: 'child-1' }]),
       getCurrentUser: jest.fn(() => ({ userId: 'child-1' }))
     };
     global.getApp = jest.fn(() => appMock);
+    const onFailure = jest.fn();
+    const onSuccess = jest.fn();
 
     await userSwitcherModule.handleNicknameEdit(page, {
-      detail: { userId: 'child-1', nickname: '新昵称' }
+      detail: { userId: 'child-1', nickname: '新昵称', onFailure }
     });
     await userSwitcherModule.handleNicknameEdit(page, {
-      detail: { userId: 'child-1', nickname: '新昵称' }
+      detail: { userId: 'child-1', nickname: '新昵称', onSuccess }
     });
 
+    expect(onFailure).toHaveBeenCalledTimes(1);
+    expect(onSuccess).toHaveBeenCalledTimes(1);
     expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({ title: '修改失败' }));
     expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({ title: '昵称已更新', icon: 'success' }));
   });
 
-  it('user-switcher handleUserDelete 应覆盖无服务、刷新和异常分支', async () => {
+  it('user-switcher handleAvatarPresetUpdate 应覆盖失败和成功分支', async () => {
     const page = {
-      data: {
-        currentUser: { id: 'parent-1' }
-      },
-      setData: jest.fn(),
-      refreshDataForCurrentUser: jest.fn().mockResolvedValue()
+      setData: jest.fn(function setData(update) {
+        Object.assign(this, update);
+      })
     };
-
-    appMock.globalData.userService = null;
-    await expect(userSwitcherModule.handleUserDelete(page, {
-      detail: { userId: 'child-1' }
-    })).resolves.toBeUndefined();
 
     appMock.globalData.userService = {
-      ...appMock.globalData.userService,
-      deleteFamilyMember: jest.fn().mockResolvedValueOnce({ success: true }).mockRejectedValueOnce(new Error('delete-fail')),
-      getAllUsers: jest.fn(() => [{ userId: 'child-1' }]),
-      getCurrentUser: jest.fn(() => ({ id: 'child-1', userId: 'child-1' }))
+      getLoginUser: jest.fn(() => ({ id: 'parent-1', userId: 'parent-1', role: 'parent' })),
+      getCurrentUser: jest.fn(() => ({ id: 'child-1', userId: 'child-1', role: 'child', name: '小明' })),
+      getAllUsers: jest.fn(() => [{ userId: 'child-1', role: 'child', name: '小明', avatar: 'preset:fox' }]),
+      updateChildAvatarPreset: jest.fn()
+        .mockResolvedValueOnce({ success: false, message: '修改失败' })
+        .mockResolvedValueOnce({ success: true })
     };
     global.getApp = jest.fn(() => appMock);
+    const onFailure = jest.fn();
+    const onSuccess = jest.fn();
 
-    await userSwitcherModule.handleUserDelete(page, {
-      detail: { userId: 'child-1' }
+    await userSwitcherModule.handleAvatarPresetUpdate(page, {
+      detail: { userId: 'child-1', presetId: 'fox', onFailure }
     });
-    await userSwitcherModule.handleUserDelete(page, {
-      detail: { userId: 'child-1' }
+    await userSwitcherModule.handleAvatarPresetUpdate(page, {
+      detail: { userId: 'child-1', presetId: 'fox', onSuccess }
     });
 
-    expect(page.refreshDataForCurrentUser).toHaveBeenCalled();
-    expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({ title: '成员已删除' }));
-    expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({ title: '删除用户失败' }));
+    expect(onFailure).toHaveBeenCalledTimes(1);
+    expect(onSuccess).toHaveBeenCalledTimes(1);
+    expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({ title: '修改失败' }));
+    expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({ title: '头像已更新', icon: 'success' }));
   });
 
   it('date-navigation initializeDateNavigation 与 onPrevWeek 应更新周视图并触发刷新', async () => {

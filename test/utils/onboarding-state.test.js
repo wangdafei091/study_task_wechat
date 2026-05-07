@@ -402,6 +402,58 @@ describe('utils/app/onboarding-state', () => {
     expect(result.description).toContain('只读');
   });
 
+  it('系统封禁家长在有孩子但无任务时应优先返回只读说明，而不是孩子口径空态', () => {
+    const result = onboardingState.resolveOnboardingStage({
+      family: { familyId: 'fam_1' },
+      loginUser: {
+        role: 'parent',
+        familyId: 'fam_1',
+        familyPermissionRole: 'manager',
+        systemAccessLevel: 'blocked'
+      },
+      currentUser: {
+        role: 'parent',
+        familyId: 'fam_1',
+        familyPermissionRole: 'manager',
+        systemAccessLevel: 'blocked'
+      },
+      members: [
+        { userId: 'parent_1', role: 'parent' },
+        { userId: 'child_1', role: 'child' }
+      ],
+      canManageMembers: false,
+      isSystemBlocked: true,
+      tasks: [],
+      showOccurrenceSection: false
+    });
+
+    expect(result).toEqual(expect.objectContaining({
+      stage: 'readonly_parent_no_task',
+      title: '当前还没有任务安排',
+      primaryAction: null,
+      secondaryAction: null
+    }));
+    expect(result.description).toContain('暂停使用');
+  });
+
+  it('显式业务权限为 false 时，不应再误回到家长创建任务阶段', () => {
+    const result = onboardingState.resolveOnboardingStage({
+      family: { familyId: 'fam_1' },
+      loginUser: { role: 'parent', familyId: 'fam_1' },
+      currentUser: { role: 'parent', familyId: 'fam_1' },
+      members: [
+        { userId: 'parent_1', role: 'parent' },
+        { userId: 'child_1', role: 'child' }
+      ],
+      canManageMembers: true,
+      canManageBusinessData: false,
+      tasks: [],
+      showOccurrenceSection: false
+    });
+
+    expect(result.stage).toBe('stable_none');
+  });
+
   it('一次性上下文应支持 peek、consume 与清空', () => {
     const app = { globalData: {} };
 

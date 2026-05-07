@@ -4,6 +4,41 @@
 
 ---
 
+## [里程碑-22N] - 2026-05-07
+
+### ✅ 完成情况
+
+**用户身份展示与切换体验收口**
+
+- **统一身份展示模型与共享头像组件已正式落地**：
+  - [`utils/user-identity-display.js`](/Users/wangdafei/code/study_task_wechat/utils/user-identity-display.js)、[`utils/user-avatar-presets.js`](/Users/wangdafei/code/study_task_wechat/utils/user-avatar-presets.js)、[`components/identity-avatar/identity-avatar.js`](/Users/wangdafei/code/study_task_wechat/components/identity-avatar/identity-avatar.js) 已建立统一的当前用户 / 可切换用户展示 helper、动物头像 preset 协议、历史占位归一化规则与共享头像容器
+  - 首页左上角头像、选择用户页头像和今日奖品进度条陪伴动物，现已统一按当前展示孩子或当前视角用户解析，不再各自走不同来源
+- **选择用户页视觉与交互已完成收口**：
+  - [`components/user-switcher/user-switcher.js`](/Users/wangdafei/code/study_task_wechat/components/user-switcher/user-switcher.js)、[`components/user-switcher/user-switcher.wxml`](/Users/wangdafei/code/study_task_wechat/components/user-switcher/user-switcher.wxml)、[`components/user-switcher/user-switcher.wxss`](/Users/wangdafei/code/study_task_wechat/components/user-switcher/user-switcher.wxss)、[`pages/index/index.wxml`](/Users/wangdafei/code/study_task_wechat/pages/index/index.wxml) 已完成“当前身份卡 + 可切换列表 + 次操作区”收口，并把管理动作统一为更多菜单入口
+  - 选择用户页中的危险删除入口已移除；删除成员只保留在家庭设置页，避免高频切换入口暴露危险操作
+- **家庭称呼与孩子头像写入链路已补齐前后端闭环**：
+  - [`services/user-service.js`](/Users/wangdafei/code/study_task_wechat/services/user-service.js)、[`backend/services/familyService.js`](/Users/wangdafei/code/study_task_wechat/backend/services/familyService.js)、[`backend/controllers/userController.js`](/Users/wangdafei/code/study_task_wechat/backend/controllers/userController.js)、[`backend/routes/users.js`](/Users/wangdafei/code/study_task_wechat/backend/routes/users.js) 已补齐“家长可维护同家庭任意孩子称呼、孩子可维护自己称呼”权限扩展，以及 `PATCH /api/users/:userId/avatar-preset` 正式接口
+  - 所有孩子都可选择内置动物头像；查看者、系统只读、blocked、跨家庭和错误目标对象都会被正确拒绝
+- **旧前台微信资料补写主链路已退出正式流程**：
+  - [`pages/access-gate/access-gate.js`](/Users/wangdafei/code/study_task_wechat/pages/access-gate/access-gate.js)、[`pages/access-gate/access-gate.wxml`](/Users/wangdafei/code/study_task_wechat/pages/access-gate/access-gate.wxml)、[`pages/index/modules/index-lifecycle.js`](/Users/wangdafei/code/study_task_wechat/pages/index/modules/index-lifecycle.js) 已移除前台对微信昵称/头像补写的主流程依赖
+  - 当前产品边界已正式收口为：微信登录只负责后台识别，前台主身份只展示家庭称呼、角色说明和系统内头像 fallback / preset
+
+### 🧪 验证结果
+
+- 前端定向回归通过：
+  - `npm test -- --runInBand test/utils/user-identity-display.test.js test/components/user-switcher.test.js test/pages/index.modules.test.js test/pages/index.page-shell.behavior.test.js`
+  - `npm test -- --runInBand test/pages/access-gate.page.test.js test/pages/index.lifecycle.test.js test/pages/index.page-contract.test.js test/services/user-service.test.js test/utils/onboarding-state.test.js test/utils/user-context.test.js`
+- 后端 M22N 定向单元回归通过：
+  - `./node_modules/.bin/jest --runInBand --runTestsByPath test/unit/familyService.test.js test/unit/userController.test.js`
+- 提交前静态检查通过：
+  - `git diff --check`
+
+### 📖 详细实施记录
+
+- [里程碑-22N：用户身份展示与切换体验收口](../design/milestone-22n-user-identity-and-switcher-experience-convergence.md)
+
+---
+
 ## [里程碑-22E] - 2026-04-29
 
 ### ✅ 完成情况

@@ -5,6 +5,7 @@
     "float-menu": "/components/float-menu/float-menu",
     "progress-ring": "/components/progressRing/progressRing",
     "upcoming-task": "/components/upcomingTask/upcomingTask",
-    "user-switcher": "/components/user-switcher/user-switcher"
+    "user-switcher": "/components/user-switcher/user-switcher",
+    "identity-avatar": "/components/identity-avatar/identity-avatar"
   }
-} 
+}

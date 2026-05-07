@@ -4,9 +4,15 @@
   <!-- 顶部导航栏 -->
   <view class="header-container">
     <view class="header-left">
-      <view class="user-avatar" bindtap="navigateToUserProfile">
-        <text wx:if="{{userInfo.nickName}}">{{userInfo.nickName[0]}}</text>
-        <text wx:else>小</text>
+      <view class="header-identity-avatar-trigger" bindtap="navigateToUserProfile">
+        <identity-avatar
+          size="compact"
+          avatarMode="{{headerIdentityDisplay.avatarMode}}"
+          avatarUrl="{{headerIdentityDisplay.avatarUrl}}"
+          avatarEmoji="{{headerIdentityDisplay.avatarEmoji}}"
+          avatarAccentColor="{{headerIdentityDisplay.avatarAccentColor}}"
+          avatarText="{{headerIdentityDisplay.avatarText || '家'}}"
+        />
       </view>
       <view class="header-title">{{currentMotivation}}</view>
     </view>
@@ -198,6 +204,7 @@
       current="{{rewardProgress.current}}"
       total="{{rewardProgress.total}}"
       showChick="{{true}}"
+      companionEmoji="{{progressCompanionDisplay.emoji}}"
       useGradient="{{true}}"
       barHeight="{{28}}"
       borderRadius="{{14}}"
@@ -326,15 +333,20 @@
         还没有加入家庭，请前往家庭设置创建家庭或输入邀请码加入
       </view>
       <!-- 家长在自己视角（管理模式）：无任务，可直接创建 -->
-      <view class="empty-task-list" wx:if="{{tasks.length === 0 && !showOccurrenceSection && canManageMembers && currentUser && currentUser.role === 'parent' && currentUser.familyId && availableUsers.length > 1 && !showHomeOnboardingCard}}">
+      <view class="empty-task-list" wx:if="{{tasks.length === 0 && !showOccurrenceSection && canManageBusinessData && currentUser && currentUser.role === 'parent' && currentUser.familyId && availableUsers.length > 1 && !showHomeOnboardingCard}}">
         点击右下角"+"按钮添加任务
       </view>
       <!-- 家长尚无孩子成员 -->
-      <view class="empty-task-list" wx:if="{{tasks.length === 0 && !showOccurrenceSection && canManageMembers && currentUser && currentUser.role === 'parent' && currentUser.familyId && availableUsers.length <= 1 && !showHomeOnboardingCard}}">
+      <view class="empty-task-list" wx:if="{{tasks.length === 0 && !showOccurrenceSection && canManageFamilyGovernance && currentUser && currentUser.role === 'parent' && currentUser.familyId && availableUsers.length <= 1 && !showHomeOnboardingCard}}">
         还没有孩子成员，请前往家庭设置添加孩子
       </view>
+      <!-- 只读/封禁家长自己视角空态 -->
+      <view class="empty-task-list" wx:if="{{tasks.length === 0 && !showOccurrenceSection && currentUser && currentUser.role === 'parent' && currentUser.familyId && (isViewerReadonly || isSystemReadonly || isSystemBlocked) && !showHomeOnboardingCard}}">
+        <block wx:if="{{isSystemBlocked}}">当前账号已被暂停使用，请联系管理员处理</block>
+        <block wx:else>当前先查看家庭进展，安排任务请使用可编辑账号</block>
+      </view>
       <!-- 孩子视角空态 -->
-      <view class="empty-task-list" wx:if="{{tasks.length === 0 && !showOccurrenceSection && !canManageMembers && !showHomeOnboardingCard}}">
+      <view class="empty-task-list" wx:if="{{tasks.length === 0 && !showOccurrenceSection && currentUser && currentUser.role === 'child' && !canManageMembers && !showHomeOnboardingCard}}">
         暂无任务
       </view>
     </view>
@@ -457,10 +469,10 @@
   availableUsers="{{availableUsers}}"
   showAddUser="{{true}}"
   loginUserId="{{loginUserId}}"
-  canManageMembers="{{canManageMembers}}"
+  permissionContext="{{userIdentityPermissionContext}}"
   bind:userSwitch="handleUserSwitch"
   bind:userAdd="handleUserAdd"
-  bind:userDelete="handleUserDelete"
   bind:nicknameEdit="handleNicknameEdit"
+  bind:avatarPresetUpdate="handleAvatarPresetUpdate"
   bind:close="hideUserSwitcher"
 />

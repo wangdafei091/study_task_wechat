@@ -1,5 +1,9 @@
 const logger = require('../../../utils/logger');
 const userContextUtils = require('../../../utils/user-context');
+const {
+  buildHeaderIdentityDisplay,
+  buildProgressCompanionDisplay
+} = require('../../../utils/user-identity-display');
 
 function resolveLastActiveChildId(loginUser, currentUser, page) {
   if (currentUser && currentUser.role === 'child') {
@@ -8,6 +12,54 @@ function resolveLastActiveChildId(loginUser, currentUser, page) {
 
   const app = getApp();
   return app?.globalData?.lastActiveChildId || page?.data?.lastActiveChildId || null;
+}
+
+function buildIndexUserContextState(page, userService, options = {}) {
+  const currentUser = options.currentUser || userService.getCurrentUser();
+  const loginUser = userService.getLoginUser() || currentUser;
+  const availableUsers = options.availableUsers || userService.getAllUsers();
+  const lastActiveChildId = options.lastActiveChildId || resolveLastActiveChildId(loginUser, currentUser, page);
+  const permissionContext = userContextUtils.resolvePermissionContext({
+    loginUser,
+    currentUser,
+    availableUsers
+  }, {
+    lastActiveChildId
+  });
+
+  const app = getApp();
+  if (app && app.globalData) {
+    app.globalData.lastActiveChildId = permissionContext.lastActiveChildId;
+  }
+
+  return {
+    currentUser,
+    availableUsers,
+    userPermissions: permissionContext.userPermissions,
+    loginUserId: permissionContext.loginUserId || '',
+    familyPermissionRole: permissionContext.familyPermissionRole || '',
+    canManageMembers: permissionContext.canManageMembers,
+    isReadonlyView: permissionContext.isReadonlyView,
+    isViewerReadonly: permissionContext.isViewerReadonly,
+    isSystemReadonly: permissionContext.isSystemReadonly,
+    isSystemBlocked: permissionContext.isSystemBlocked,
+    readonlyReason: permissionContext.readonlyReason || '',
+    canManageFamilyGovernance: permissionContext.canManageFamilyGovernance,
+    canManageBusinessData: permissionContext.canManageBusinessData,
+    lastActiveChildId: permissionContext.lastActiveChildId,
+    userIdentityPermissionContext: permissionContext,
+    progressCompanionDisplay: buildProgressCompanionDisplay({
+      currentUser,
+      availableUsers,
+      canManageMembers: permissionContext.canManageMembers,
+      lastActiveChildId: permissionContext.lastActiveChildId
+    }),
+    headerIdentityDisplay: buildHeaderIdentityDisplay({
+      currentUser,
+      loginUserId: permissionContext.loginUserId || '',
+      permissionContext
+    })
+  };
 }
 
 async function initializeMultiUserSystem(page) {
@@ -20,41 +72,12 @@ async function initializeMultiUserSystem(page) {
       return;
     }
 
-    const currentUser = userService.getCurrentUser();
-    const loginUser = userService.getLoginUser() || currentUser;
-    const availableUsers = userService.getAllUsers();
-    const lastActiveChildId = resolveLastActiveChildId(loginUser, currentUser, page);
-    const permissionContext = userContextUtils.resolvePermissionContext({
-      loginUser,
-      currentUser,
-      availableUsers
-    }, {
-      lastActiveChildId
-    });
+    const state = buildIndexUserContextState(page, userService);
 
-    const app = getApp();
-    if (app && app.globalData) {
-      app.globalData.lastActiveChildId = permissionContext.lastActiveChildId;
-    }
-
-    page.setData({
-      currentUser,
-      availableUsers,
-      userPermissions: permissionContext.userPermissions,
-      loginUserId: permissionContext.loginUserId || '',
-      familyPermissionRole: permissionContext.familyPermissionRole || '',
-      canManageMembers: permissionContext.canManageMembers,
-      isReadonlyView: permissionContext.isReadonlyView,
-      isViewerReadonly: permissionContext.isViewerReadonly,
-      isSystemReadonly: permissionContext.isSystemReadonly,
-      readonlyReason: permissionContext.readonlyReason || '',
-      canManageFamilyGovernance: permissionContext.canManageFamilyGovernance,
-      canManageBusinessData: permissionContext.canManageBusinessData,
-      lastActiveChildId: permissionContext.lastActiveChildId
-    });
+    page.setData(state);
 
     page.updateMenuItemsWithPermissions();
-    logger.info('Index', `多用户系统初始化完成，当前用户: ${currentUser.name}(${currentUser.role})`);
+    logger.info('Index', `多用户系统初始化完成，当前用户: ${state.currentUser.name}(${state.currentUser.role})`);
   } catch (error) {
     logger.error('Index', '初始化多用户系统失败', error);
   }
@@ -95,6 +118,7 @@ async function initializeMultiUserSystemDelayed(page) {
 }
 
 module.exports = {
+  buildIndexUserContextState,
   initializeMultiUserSystem,
   initializeMultiUserSystemDelayed
 };

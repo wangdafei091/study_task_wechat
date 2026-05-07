@@ -71,6 +71,22 @@ function hasTaskContent(context = {}) {
   return tasks.length > 0 || context.showOccurrenceSection === true;
 }
 
+function canManageFamilyGovernance(context = {}) {
+  if (typeof context.canManageFamilyGovernance === 'boolean') {
+    return context.canManageFamilyGovernance;
+  }
+
+  return context.canManageMembers === true;
+}
+
+function canManageBusinessData(context = {}) {
+  if (typeof context.canManageBusinessData === 'boolean') {
+    return context.canManageBusinessData;
+  }
+
+  return context.canManageMembers === true;
+}
+
 function buildNoFamilyStage(role) {
   if (role === 'child') {
     return {
@@ -133,14 +149,17 @@ function buildChildNoTaskStage() {
 
 function buildReadonlyParentStage(childCount, options = {}) {
   const isSystemReadonly = options.isSystemReadonly === true;
+  const isSystemBlocked = options.isSystemBlocked === true;
 
   if (childCount === 0) {
     return {
       stage: 'readonly_parent_no_child',
       title: '当前先查看家庭信息',
-      description: isSystemReadonly
+      description: isSystemBlocked
+        ? '当前账号已被暂停使用，请联系管理员处理；如需添加孩子或安排任务，请使用其他可用账号。'
+        : (isSystemReadonly
         ? '当前账号为只读，可先查看家庭信息；如需添加孩子或安排任务，请使用可编辑账号处理。'
-        : '你可以先查看家庭信息；如需添加孩子或安排任务，可由管理员继续处理。',
+        : '你可以先查看家庭信息；如需添加孩子或安排任务，可由管理员继续处理。'),
       primaryAction: null,
       secondaryAction: null,
       emphasis: 'normal',
@@ -151,9 +170,11 @@ function buildReadonlyParentStage(childCount, options = {}) {
   return {
     stage: 'readonly_parent_no_task',
     title: '当前还没有任务安排',
-    description: isSystemReadonly
+    description: isSystemBlocked
+      ? '当前账号已被暂停使用，请联系管理员处理；你现在只能先查看已有家庭进展。'
+      : (isSystemReadonly
       ? '当前账号为只读，你可以先查看家庭进展和历史记录；如需安排任务，请使用可编辑账号处理。'
-      : '你可以先查看家庭进展和历史记录；如需安排任务，可由管理员继续处理。',
+      : '你可以先查看家庭进展和历史记录；如需安排任务，可由管理员继续处理。'),
     primaryAction: null,
     secondaryAction: null,
     emphasis: 'normal',
@@ -216,7 +237,9 @@ function resolveBaseStage(context = {}) {
   const members = resolveMembers(context);
   const childCount = countChildren(members);
   const isReadonlyParent = currentRole === 'parent'
-    && (context.isViewerReadonly === true || context.isSystemReadonly === true);
+    && (context.isViewerReadonly === true || context.isSystemReadonly === true || context.isSystemBlocked === true);
+  const hasFamilyGovernanceCapability = canManageFamilyGovernance(context);
+  const hasBusinessDataCapability = canManageBusinessData(context);
 
   if (!hasFamily(context)) {
     if (context.skipNoFamilyStages === true) {
@@ -227,11 +250,12 @@ function resolveBaseStage(context = {}) {
 
   if (isReadonlyParent && childCount === 0) {
     return buildReadonlyParentStage(childCount, {
-      isSystemReadonly: context.isSystemReadonly
+      isSystemReadonly: context.isSystemReadonly,
+      isSystemBlocked: context.isSystemBlocked
     });
   }
 
-  if (context.canManageMembers === true && childCount === 0) {
+  if (hasFamilyGovernanceCapability && childCount === 0) {
     return buildFamilyNoChildStage();
   }
 
@@ -242,11 +266,12 @@ function resolveBaseStage(context = {}) {
   if (!hasTaskContent(context)) {
     if (isReadonlyParent) {
       return buildReadonlyParentStage(childCount, {
-        isSystemReadonly: context.isSystemReadonly
+        isSystemReadonly: context.isSystemReadonly,
+        isSystemBlocked: context.isSystemBlocked
       });
     }
 
-    if (context.canManageMembers === true && currentRole === 'parent' && childCount > 0) {
+    if (hasBusinessDataCapability && currentRole === 'parent' && childCount > 0) {
       return buildParentNoTaskStage();
     }
 

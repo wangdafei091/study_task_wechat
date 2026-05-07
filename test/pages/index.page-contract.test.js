@@ -184,6 +184,7 @@ describe('pages/index page contract', () => {
     expect(typeof page.initializeMultiUserSystem).toBe('function');
     expect(typeof page.initializeMultiUserSystemDelayed).toBe('function');
     expect(typeof page.refreshDataForCurrentUser).toBe('function');
+    expect(typeof page.handleAvatarPresetUpdate).toBe('function');
     expect(typeof page.refreshHomeOnboardingCard).toBe('function');
     expect(typeof page.syncHomeOnboardingVisibility).toBe('function');
     expect(typeof page.onHomeOnboardingPrimaryTap).toBe('function');
@@ -214,10 +215,34 @@ describe('pages/index page contract', () => {
       'utf8'
     );
 
+    expect(wxml).toContain('<identity-avatar');
+    expect(wxml).toContain('size="compact"');
+    expect(wxml).toContain('avatarMode="{{headerIdentityDisplay.avatarMode}}"');
+    expect(wxml).toContain('avatarAccentColor="{{headerIdentityDisplay.avatarAccentColor}}"');
+    expect(wxml).not.toContain('userInfo.nickName');
     expect(wxml).toContain('readonly="{{isReadonlyView}}"');
     expect(wxml).toContain('readonlyReason="{{readonlyReason}}"');
     expect(wxml).toContain('readonly="{{isReadonlyView || isViewingFuture}}"');
     expect(wxml).toContain('readonlyReason="{{isViewingFuture ? \'future-date\' : readonlyReason}}"');
+    expect(wxml).toContain('permissionContext="{{userIdentityPermissionContext}}"');
+    expect(wxml).toContain('bind:avatarPresetUpdate="handleAvatarPresetUpdate"');
+    expect(wxml).toContain('companionEmoji="{{progressCompanionDisplay.emoji}}"');
+
+    const json = fs.readFileSync(
+      path.join(__dirname, '../../pages/index/index.json'),
+      'utf8'
+    );
+    expect(json).toContain('"identity-avatar": "/components/identity-avatar/identity-avatar"');
+  });
+
+  it('首页头像样式应区分 preset 头像，避免与切换器视觉不一致', () => {
+    const wxss = fs.readFileSync(
+      path.join(__dirname, '../../pages/index/index.wxss'),
+      'utf8'
+    );
+
+    expect(wxss).toContain('.header-identity-avatar-trigger');
+    expect(wxss).not.toContain('.header-identity-avatar.preset');
   });
 
   it('普通任务为空但存在表现项时，不应继续显示任务空态', () => {
@@ -236,9 +261,12 @@ describe('pages/index page contract', () => {
     expect(wxml).toContain('还没有加入家庭，请前往家庭设置创建家庭或输入邀请码加入');
     expect(wxml).toContain('tasks.length === 0 && !showOccurrenceSection && canManageMembers && currentUser && currentUser.role === \'parent\' && !currentUser.familyId && !showHomeOnboardingCard');
     expect(wxml).toContain('今天还没有任务安排，家长安排好后会显示在这里');
-    expect(wxml).toContain('tasks.length === 0 && !showOccurrenceSection && canManageMembers && currentUser && currentUser.role === \'parent\' && currentUser.familyId && availableUsers.length > 1 && !showHomeOnboardingCard');
-    expect(wxml).toContain('tasks.length === 0 && !showOccurrenceSection && canManageMembers && currentUser && currentUser.role === \'parent\' && currentUser.familyId && availableUsers.length <= 1 && !showHomeOnboardingCard');
-    expect(wxml).toContain('tasks.length === 0 && !showOccurrenceSection && !canManageMembers && !showHomeOnboardingCard');
+    expect(wxml).toContain('tasks.length === 0 && !showOccurrenceSection && canManageBusinessData && currentUser && currentUser.role === \'parent\' && currentUser.familyId && availableUsers.length > 1 && !showHomeOnboardingCard');
+    expect(wxml).toContain('tasks.length === 0 && !showOccurrenceSection && canManageFamilyGovernance && currentUser && currentUser.role === \'parent\' && currentUser.familyId && availableUsers.length <= 1 && !showHomeOnboardingCard');
+    expect(wxml).toContain('tasks.length === 0 && !showOccurrenceSection && currentUser && currentUser.role === \'parent\' && currentUser.familyId && (isViewerReadonly || isSystemReadonly || isSystemBlocked) && !showHomeOnboardingCard');
+    expect(wxml).toContain('当前账号已被暂停使用，请联系管理员处理');
+    expect(wxml).toContain('当前先查看家庭进展，安排任务请使用可编辑账号');
+    expect(wxml).toContain('tasks.length === 0 && !showOccurrenceSection && currentUser && currentUser.role === \'child\' && !canManageMembers && !showHomeOnboardingCard');
   });
 
   it('onLoad 不应直接触发多用户初始化，避免与 onShow 双入口竞争', async () => {

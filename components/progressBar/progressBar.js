@@ -37,6 +37,10 @@ Component({
       type: Boolean,
       value: true
     },
+    companionEmoji: {
+      type: String,
+      value: '🐥'
+    },
     useGradient: {
       type: Boolean,
       value: true
@@ -531,4 +535,4 @@ Component({
     const { EVENTS } = require('../../utils/constants.js');
     this.EVENTS = EVENTS;
   }
-}) 
+})

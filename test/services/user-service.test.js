@@ -33,6 +33,7 @@ jest.mock('../../utils/api-config', () => ({
     FAMILIES_DELETE_MEMBER: '/api/families/members/{userId}',
     FAMILIES_MEMBER_PERMISSION_ROLE: '/api/families/members/{userId}/permission-role',
     USER_NICKNAME: '/api/users/{userId}/nickname',
+    USER_AVATAR_PRESET: '/api/users/{userId}/avatar-preset',
   },
 }));
 
@@ -897,6 +898,57 @@ describe('UserService', () => {
       expect(result.message).toContain('更新失败');
     });
 
+    it('本地模式下 updateChildAvatarPreset 应更新缓存与本地持久化', async () => {
+      API_CONFIG.ENABLE_API = false;
+      userService.loginUser = new User({
+        userId: 'parent_1',
+        name: '家长',
+        role: UserRole.PARENT,
+        familyId: 'family_1',
+        familyPermissionRole: 'manager'
+      });
+      const childUser = new User({
+        userId: 'child_1',
+        name: '孩子',
+        role: UserRole.CHILD,
+        familyId: 'family_1',
+        isVirtual: true,
+        avatar: ''
+      });
+      userService.currentUser = childUser;
+      userService.userCache.set('parent_1', userService.loginUser);
+      userService.userCache.set('child_1', childUser);
+      mockStorageAdapter.get.mockImplementation((key) => {
+        if (key === 'localFamilyMembers') {
+          return [{
+            userId: 'child_1',
+            name: '孩子',
+            role: UserRole.CHILD,
+            familyId: 'family_1',
+            isVirtual: true,
+            avatar: ''
+          }];
+        }
+        return null;
+      });
+
+      const result = await userService.updateChildAvatarPreset('child_1', 'fox');
+
+      expect(result).toEqual({
+        success: true,
+        userId: 'child_1',
+        avatar: 'preset:fox'
+      });
+      expect(userService.currentUser.avatar).toBe('preset:fox');
+      expect(userService.userCache.get('child_1').avatar).toBe('preset:fox');
+      expect(mockStorageAdapter.set).toHaveBeenCalledWith('localFamilyMembers', [
+        expect.objectContaining({
+          userId: 'child_1',
+          avatar: 'preset:fox'
+        })
+      ]);
+    });
+
     it('createFamily应该成功创建家庭', async () => {
       mockHttpClient.post.mockResolvedValue({ familyId: 'f1' });
 
@@ -1021,6 +1073,20 @@ describe('UserService', () => {
         message: '本地模式暂不支持调整家长权限'
       });
       expect(mockHttpClient.patch).not.toHaveBeenCalled();
+    });
+
+    it('updateChildAvatarPreset 在接口未发布时应返回可理解提示', async () => {
+      const notFoundError = new Error('请求的资源不存在');
+      notFoundError.statusCode = 404;
+      notFoundError.code = 'NOT_FOUND';
+      mockHttpClient.patch.mockRejectedValue(notFoundError);
+
+      const result = await userService.updateChildAvatarPreset('child_1', 'fox');
+
+      expect(result).toEqual({
+        success: false,
+        message: '当前环境还没有发布头像功能，请先更新后端服务'
+      });
     });
   });
 

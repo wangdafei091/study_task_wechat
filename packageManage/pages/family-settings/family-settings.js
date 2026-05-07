@@ -17,6 +17,10 @@ function getPermissionRoleLabel(role) {
 }
 
 function getPermissionRoleDescription(permissionContext = {}) {
+  if (permissionContext.isSystemBlocked) {
+    return '当前账号已被暂停使用，仅可查看当前家庭信息';
+  }
+
   if (permissionContext.isSystemReadonly) {
     return '当前账号为只读，仅可查看家庭信息';
   }
@@ -127,6 +131,7 @@ Page({
     currentIdentityLabel: '',
     currentIdentityDescription: '',
     isSystemReadonly: false,
+    isSystemBlocked: false,
     canManageFamilyGovernance: false,
     governanceDisabledReason: '',
     canManageInviteCode: false,
@@ -222,6 +227,7 @@ Page({
           members,
           loginUser,
           canManageMembers: permissionContext.canManageMembers,
+          canManageFamilyGovernance: permissionContext.canManageFamilyGovernance,
           isViewerReadonly: permissionContext.isViewerReadonly,
           isSystemReadonly: permissionContext.isSystemReadonly
         });
@@ -233,20 +239,25 @@ Page({
           currentIdentityLabel: getPermissionRoleLabel(permissionContext.familyPermissionRole),
           currentIdentityDescription: getPermissionRoleDescription(permissionContext),
           isSystemReadonly: permissionContext.isSystemReadonly,
+          isSystemBlocked: permissionContext.isSystemBlocked,
           canManageFamilyGovernance: permissionContext.canManageFamilyGovernance,
           governanceDisabledReason: permissionContext.canManageFamilyGovernance
             ? ''
-            : (permissionContext.isSystemReadonly
+            : (permissionContext.isSystemBlocked
+              ? '当前账号已被暂停使用，不能管理家庭设置'
+              : (permissionContext.isSystemReadonly
               ? '当前账号为只读，仅可查看家庭信息'
-              : '只有管理员可以邀请成员或调整权限'),
+              : '只有管理员可以邀请成员或调整权限')),
           canManageInviteCode,
           inviteManagementDisabledReason: canManageInviteCode
             ? ''
             : (localMode
               ? '本地模式下不提供邀请码'
-              : (permissionContext.isSystemReadonly
+              : (permissionContext.isSystemBlocked
+                ? '当前账号已被暂停使用，不能刷新邀请码'
+                : (permissionContext.isSystemReadonly
                 ? '当前账号为只读，不能刷新邀请码'
-                : '只有管理员可以刷新邀请码')),
+                : '只有管理员可以刷新邀请码'))),
           supportsParentPermissionManagement,
           inviteCode: family.inviteCode || '',
           inviteCodeExpiresAt: family.inviteCodeExpiresAt,
@@ -269,6 +280,7 @@ Page({
           currentIdentityLabel: '',
           currentIdentityDescription: '',
           isSystemReadonly: false,
+          isSystemBlocked: false,
           canManageFamilyGovernance: false,
           governanceDisabledReason: '',
           canManageInviteCode: false,
@@ -322,8 +334,10 @@ Page({
       loginUser: options.loginUser,
       currentUser: options.loginUser,
       canManageMembers: options.canManageMembers,
+      canManageFamilyGovernance: options.canManageFamilyGovernance,
       isViewerReadonly: options.isViewerReadonly,
       isSystemReadonly: options.isSystemReadonly,
+      isSystemBlocked: options.isSystemBlocked,
       pendingOnboardingContext: pendingContext,
       skipTaskStages: true
     });

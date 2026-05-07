@@ -60,6 +60,7 @@ router.post('/switch', protectedMiddlewares, userController.switchUser.bind(user
  * @access  Private
  */
 router.patch('/:userId/nickname', protectedMiddlewares, userController.updateNickname.bind(userController));
+router.patch('/:userId/avatar-preset', protectedMiddlewares, userController.updateAvatarPreset.bind(userController));
 
 /**
  * @route   DELETE /api/users/:userId

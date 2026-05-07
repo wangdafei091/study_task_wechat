@@ -25,20 +25,6 @@ async function onLoad(page, options) {
 
   page.setRandomMotivation();
 
-  if (app.globalData.userInfo) {
-    page.setData({
-      userInfo: app.globalData.userInfo,
-      hasUserInfo: true
-    });
-  } else if (page.data.canIUse) {
-    app.userInfoReadyCallback = (res) => {
-      page.setData({
-        userInfo: res.userInfo,
-        hasUserInfo: true
-      });
-    };
-  }
-
   page.registerEventListeners();
   page.initializeDateNavigation();
 }
