@@ -708,6 +708,75 @@ describe('task-write direct behavior', () => {
     expect(service.taskRepository.save).toHaveBeenCalled();
   });
 
+  it('viewer 家长切到孩子视角时，recordOccurrenceResult 不应被误拦截', async () => {
+    const configTask = new Task({
+      id: 'occ_cfg_child_exec_1',
+      userId: 'child_1',
+      title: '听写全对',
+      type: 'study',
+      date: '2026-04-17',
+      status: 0,
+      points: 2,
+      reminder: { enabled: false },
+      executionMode: 'occurrence',
+      activeRange: {
+        startDate: '2026-04-01',
+        endDate: '',
+        hasNoEndDate: true
+      },
+      isOccurrenceRecord: false,
+      occurrenceOutcome: 'none'
+    });
+    const service = {
+      enableCloudStorage: false,
+      userService: {
+        getLoginUser: jest.fn(() => ({
+          userId: 'parent_viewer',
+          role: 'parent',
+          familyId: 'family_1',
+          familyPermissionRole: 'viewer'
+        })),
+        getCurrentUser: jest.fn(() => ({
+          userId: 'child_1',
+          role: 'child',
+          familyId: 'family_1'
+        }))
+      },
+      taskRepository: {
+        getById: jest.fn(async () => configTask.clone({}, false)),
+        getOccurrenceRecord: jest.fn(async () => null),
+        save: jest.fn(async (savedTask) => savedTask)
+      },
+      starService: {
+        calculateExpiryDate: jest.fn(() => ({ expiryDateStr: '7天后到期' })),
+        addStars: jest.fn().mockResolvedValue({ success: true })
+      },
+      _buildTaskPendingSyncMeta: jest.fn((currentTask, action, overrides = {}) => ({
+        action,
+        operationKey: String(overrides.operationKey || currentTask.modifyTime || Date.now()),
+        modifyTime: Number(overrides.modifyTime || currentTask.modifyTime || Date.now()),
+        targetUserId: overrides.targetUserId || currentTask.userId || null
+      })),
+      _buildTaskServiceMutationResult: jest.fn((mutation, options = {}) => ({
+        success: true,
+        task: options.task
+      })),
+      eventBus: {
+        emit: jest.fn()
+      }
+    };
+
+    const result = await taskWrite.recordOccurrenceResult(service, 'occ_cfg_child_exec_1', {
+      userId: 'child_1',
+      date: '2026-04-17',
+      outcome: 'success'
+    });
+
+    expect(result.code).not.toBe('FAMILY_MANAGER_REQUIRED');
+    expect(service.taskRepository.getById).toHaveBeenCalledWith('occ_cfg_child_exec_1');
+    expect(service.taskRepository.save).toHaveBeenCalled();
+  });
+
   it('disableOccurrenceTask 应在本地模式下更新有效期并标记待同步', async () => {
     const configTask = new Task({
       id: 'occ_cfg_disable',

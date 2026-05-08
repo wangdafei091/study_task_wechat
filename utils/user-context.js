@@ -198,9 +198,10 @@ function resolvePermissionContext(input = {}, options = {}) {
   const isViewerReadonly = Boolean(
     snapshot.loginUserRole === 'parent' &&
     snapshot.familyId &&
-    familyPermissionRole === 'viewer' &&
-    !isExecutingChildView
+      familyPermissionRole === 'viewer' &&
+      !isExecutingChildView
   );
+  const isTaskExecutionReadonly = isSystemBlocked || isSystemReadonly || isViewerReadonly;
   const isReadonlyView = isSystemBlocked || isSystemReadonly || isSwitchedChildView || isViewerReadonly;
   const hasFamilyManagerRole = Boolean(
     snapshot.loginUserRole === 'parent' &&
@@ -238,6 +239,7 @@ function resolvePermissionContext(input = {}, options = {}) {
     viewUserRole: snapshot.viewUserRole,
     isSwitchedChildView,
     isViewerReadonly,
+    isTaskExecutionReadonly,
     readonlyReason: isSystemBlocked
       ? 'system-blocked'
       : (isSystemReadonly ? 'system-readonly' : (isViewerReadonly ? 'viewer-readonly' : '')),

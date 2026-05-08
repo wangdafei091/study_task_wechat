@@ -233,6 +233,7 @@ Page({
     loginUserId: '',           // 设备拥有者ID（权限依据）
     canManageMembers: false,   // 是否可管理家庭成员（家长专属）
     isReadonlyView: false,     // 管理入口只读：孩子设备或家长切到孩子视角时不可创建/编辑/删除，但今日/历史任务仍可打卡
+    isTaskExecutionReadonly: false, // 执行类只读：仅系统只读/封禁或查看者家长看自己时不可打卡/记录表现
     isSystemBlocked: false,
     lastActiveChildId: null,   // 家长最近查看的孩子ID（家长视角时任务仍显示该孩子）
     userIdentityPermissionContext: {},
@@ -686,9 +687,9 @@ Page({
       return;
     }
 
-    if (this.data.isReadonlyView || this.data.isViewerReadonly) {
+    if (this.data.isTaskExecutionReadonly) {
       wx.showToast({
-        title: this.data.readonlyReason === 'system-readonly'
+        title: (this.data.readonlyReason === 'system-readonly' || this.data.readonlyReason === 'system-blocked')
           ? '当前账号为只读，不能记录表现'
           : '当前为查看者，不能记录表现',
         icon: 'none'

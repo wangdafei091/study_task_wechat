@@ -382,6 +382,38 @@ describe('M21L occurrence endpoints', () => {
     );
   });
 
+  it('viewer 家长切到孩子视角时，POST /api/tasks/:taskId/occurrence-record 应允许执行', async () => {
+    taskService.getTaskById = jest.fn().mockResolvedValue(makeOccurrenceTask());
+    taskService.recordOccurrenceResult = jest.fn().mockResolvedValue({
+      operation: 'occurrence_record',
+      taskId: 'occ_cfg_001'
+    });
+    familyService.getUserFamilyAndRole = jest.fn().mockResolvedValue({ familyId: 'fam_1', role: 'child' });
+
+    const res = await request(app)
+      .post('/api/tasks/occ_cfg_001/occurrence-record')
+      .set('Authorization', token(VIEWER))
+      .send({
+        targetUserId: 'child_1',
+        date: '2026-04-17',
+        outcome: 'success',
+        operatorContext: {
+          actorUserId: 'child_1'
+        }
+      });
+
+    expect(res.status).toBe(200);
+    expect(taskService.recordOccurrenceResult).toHaveBeenCalledWith(
+      'occ_cfg_001',
+      expect.objectContaining({
+        targetUserId: 'child_1',
+        date: '2026-04-17',
+        outcome: 'success'
+      }),
+      expect.any(Object)
+    );
+  });
+
   it('POST /api/tasks/:taskId/disable-occurrence 应调用停用接口', async () => {
     familyService.getUserFamilyAndRole = jest.fn().mockResolvedValue({ familyId: 'fam_1', role: 'child' });
     taskService.getTaskById = jest.fn().mockResolvedValue(makeOccurrenceTask());

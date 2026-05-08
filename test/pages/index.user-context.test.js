@@ -49,7 +49,8 @@ describe('pages/index/modules/index-user-context', () => {
     expect(page.setData).toHaveBeenCalledWith(expect.objectContaining({
       loginUserId: 'parent-1',
       canManageMembers: true,
-      isReadonlyView: true
+      isReadonlyView: true,
+      isTaskExecutionReadonly: false
     }));
     expect(page.updateMenuItemsWithPermissions).toHaveBeenCalled();
     delete global.getApp;
@@ -88,7 +89,8 @@ describe('pages/index/modules/index-user-context', () => {
 
     expect(page.setData).toHaveBeenCalledWith(expect.objectContaining({
       isReadonlyView: true,
-      isViewerReadonly: false
+      isViewerReadonly: false,
+      isTaskExecutionReadonly: false
     }));
     delete global.getApp;
   });
