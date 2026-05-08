@@ -205,6 +205,37 @@ describe('pages/index/modules/index-task-actions', () => {
     }));
   });
 
+  it('执行类只读或系统封禁时应直接拦截任务修改', async () => {
+    const taskService = {
+      completeTask: jest.fn(),
+      updateTaskStatus: jest.fn()
+    };
+    serviceManager.getService.mockImplementation((name) => {
+      if (name === 'task') return taskService;
+      return null;
+    });
+    serviceManager.getTaskService.mockReturnValue(taskService);
+
+    const page = createPage();
+    page.data.isTaskExecutionReadonly = true;
+    page.data.readonlyReason = 'system-blocked';
+
+    await taskActions.completeTask(page, { detail: { taskId: 'task-1' } });
+    expect(taskService.completeTask).not.toHaveBeenCalled();
+    expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({
+      title: '当前账号为只读，不能修改任务'
+    }));
+
+    global.wx.showToast.mockClear();
+    await taskActions.taskItemStatusToggle(page, {
+      detail: { id: 'task-1', newStatus: 1 }
+    });
+    expect(taskService.updateTaskStatus).not.toHaveBeenCalled();
+    expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({
+      title: '当前账号为只读，不能修改任务'
+    }));
+  });
+
   it('未来日期下应阻止完成和切换任务状态', async () => {
     const taskService = {
       completeTask: jest.fn(),
@@ -322,6 +353,36 @@ describe('pages/index/modules/index-task-actions', () => {
     expect(awardedPage.loadMessageData).not.toHaveBeenCalled();
     expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({
       title: '已获得过星星'
+    }));
+  });
+
+  it('已完成任务重置成功后应刷新奖励并给出扣星反馈', async () => {
+    const rewardService = {
+      getLastExchangeTimeByUser: jest.fn().mockResolvedValue(null)
+    };
+    const taskService = {
+      completeTask: jest.fn(),
+      resetTask: jest.fn().mockResolvedValue({ success: true })
+    };
+    serviceManager.getService.mockImplementation((name) => {
+      if (name === 'rewardService') return rewardService;
+      if (name === 'task') return taskService;
+      return null;
+    });
+
+    const page = createPage({
+      status: 1,
+      starAwarded: true,
+      points: 5
+    });
+
+    await taskActions.completeTask(page, { detail: { taskId: 'task-1' } });
+
+    expect(taskService.resetTask).toHaveBeenCalledWith('task-1', 'child-1');
+    expect(page.refreshTaskDataForCurrentView).toHaveBeenCalled();
+    expect(page.loadStarsAndRewards).toHaveBeenCalled();
+    expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({
+      title: '已扣除5颗星星'
     }));
   });
 
