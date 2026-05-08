@@ -915,6 +915,7 @@ describe('pages/index/index shell behavior', () => {
     expect(page.refreshTaskDataForCurrentView).toHaveBeenCalled();
 
     taskService.recordOccurrenceResult = jest.fn()
+      .mockResolvedValueOnce({ success: true, unchanged: true })
       .mockResolvedValueOnce({ success: false, message: '记录失败' })
       .mockResolvedValueOnce({ success: true, fallback: true })
       .mockResolvedValueOnce({ success: true });
@@ -924,6 +925,7 @@ describe('pages/index/index shell behavior', () => {
     expect(taskService.recordOccurrenceResult).not.toHaveBeenCalled();
 
     page.data.isViewerReadonly = true;
+    page.data.isTaskExecutionReadonly = true;
     await page.recordOccurrenceFromHome({
       currentTarget: { dataset: { taskId: 'occ_1', outcome: 'success' } }
     });
@@ -932,6 +934,19 @@ describe('pages/index/index shell behavior', () => {
       title: '当前为查看者，不能记录表现'
     }));
     page.data.isViewerReadonly = false;
+    page.data.isTaskExecutionReadonly = false;
+
+    page.data.isReadonlyView = true;
+    page.data.isTaskExecutionReadonly = false;
+    await page.recordOccurrenceFromHome({
+      currentTarget: { dataset: { taskId: 'occ_1', outcome: 'success' } }
+    });
+    expect(taskService.recordOccurrenceResult).toHaveBeenCalledWith('occ_1', {
+      userId: expect.any(String),
+      date: expect.any(String),
+      outcome: 'success'
+    });
+    page.data.isReadonlyView = false;
 
     await page.recordOccurrenceFromHome({
       currentTarget: { dataset: { taskId: 'occ_1', outcome: 'success' } }

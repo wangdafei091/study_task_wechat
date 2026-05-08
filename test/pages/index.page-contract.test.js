@@ -220,9 +220,9 @@ describe('pages/index page contract', () => {
     expect(wxml).toContain('avatarMode="{{headerIdentityDisplay.avatarMode}}"');
     expect(wxml).toContain('avatarAccentColor="{{headerIdentityDisplay.avatarAccentColor}}"');
     expect(wxml).not.toContain('userInfo.nickName');
-    expect(wxml).toContain('readonly="{{isReadonlyView}}"');
+    expect(wxml).toContain('readonly="{{isTaskExecutionReadonly}}"');
     expect(wxml).toContain('readonlyReason="{{readonlyReason}}"');
-    expect(wxml).toContain('readonly="{{isReadonlyView || isViewingFuture}}"');
+    expect(wxml).toContain('readonly="{{isTaskExecutionReadonly || isViewingFuture}}"');
     expect(wxml).toContain('readonlyReason="{{isViewingFuture ? \'future-date\' : readonlyReason}}"');
     expect(wxml).toContain('permissionContext="{{userIdentityPermissionContext}}"');
     expect(wxml).toContain('bind:avatarPresetUpdate="handleAvatarPresetUpdate"');

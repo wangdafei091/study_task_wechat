@@ -471,16 +471,20 @@ class TaskController {
 
   async recordOccurrenceResult(req, res) {
     try {
-      if (!(await ensureManagerBusinessAccess(req, res, {
-        deniedMessage: '当前为查看者，不能记录表现'
-      }))) {
-        return;
-      }
-
       const { taskId } = req.params;
       const existing = await taskService.getTaskById(taskId);
       if (!existing) {
         return res.status(404).json(error('任务不存在', 'TASK_NOT_FOUND'));
+      }
+
+      const viewerChildExecution = await isViewerChildExecutionRequest(req, existing.userId);
+      const childSelfExecution = req.user.role === 'child' && existing.userId === req.user.userId;
+      if (!childSelfExecution && !viewerChildExecution) {
+        if (!(await ensureManagerBusinessAccess(req, res, {
+          deniedMessage: '当前为查看者，不能记录表现'
+        }))) {
+          return;
+        }
       }
 
       const permitted = await this._canManageTask(req.user, existing.userId);

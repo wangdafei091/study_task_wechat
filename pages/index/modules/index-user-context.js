@@ -41,6 +41,7 @@ function buildIndexUserContextState(page, userService, options = {}) {
     canManageMembers: permissionContext.canManageMembers,
     isReadonlyView: permissionContext.isReadonlyView,
     isViewerReadonly: permissionContext.isViewerReadonly,
+    isTaskExecutionReadonly: permissionContext.isTaskExecutionReadonly,
     isSystemReadonly: permissionContext.isSystemReadonly,
     isSystemBlocked: permissionContext.isSystemBlocked,
     readonlyReason: permissionContext.readonlyReason || '',

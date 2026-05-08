@@ -156,7 +156,7 @@
           <index-task-item 
             task="{{item}}"
             lastExchangeTime="{{lastExchangeTime}}"
-            readonly="{{isReadonlyView}}"
+            readonly="{{isTaskExecutionReadonly}}"
             readonlyReason="{{readonlyReason}}"
             bind:complete="completeTask"
             style="--delay: {{item.animationDelay}}"
@@ -317,7 +317,7 @@
           <index-task-item 
             task="{{item}}"
             lastExchangeTime="{{lastExchangeTime}}"
-            readonly="{{isReadonlyView || isViewingFuture}}"
+            readonly="{{isTaskExecutionReadonly || isViewingFuture}}"
             readonlyReason="{{isViewingFuture ? 'future-date' : readonlyReason}}"
             bind:complete="completeTask"
           />
@@ -374,15 +374,15 @@
             <text class="occurrence-reward-accent">{{item.rewardAccentText}}</text>
             <text class="occurrence-reward-meta">{{item.rewardExpiryMetaText}}</text>
           </view>
-          <text class="occurrence-result muted" wx:if="{{isViewingFuture && isReadonlyView}}">
-            {{readonlyReason === 'system-readonly' ? '当前账号为只读，未来日期也只能查看' : '当前为查看者，不能记录表现'}}
+          <text class="occurrence-result muted" wx:if="{{isViewingFuture && isTaskExecutionReadonly}}">
+            {{readonlyReason === 'system-readonly' || readonlyReason === 'system-blocked' ? '当前账号为只读，未来日期也只能查看' : '当前为查看者，不能记录表现'}}
           </text>
-          <text class="occurrence-result muted" wx:if="{{isViewingFuture && !isReadonlyView}}">未来日期不能记录表现</text>
-          <text class="occurrence-result muted" wx:if="{{!isViewingFuture && isReadonlyView}}">
-            {{readonlyReason === 'system-readonly' ? '当前账号为只读，仅可查看表现记录' : '当前为查看者，不能记录表现'}}
+          <text class="occurrence-result muted" wx:if="{{isViewingFuture && !isTaskExecutionReadonly}}">未来日期不能记录表现</text>
+          <text class="occurrence-result muted" wx:if="{{!isViewingFuture && isTaskExecutionReadonly}}">
+            {{readonlyReason === 'system-readonly' || readonlyReason === 'system-blocked' ? '当前账号为只读，仅可查看表现记录' : '当前为查看者，不能记录表现'}}
           </text>
         </view>
-        <view class="occurrence-actions" wx:if="{{!isViewingFuture && !isReadonlyView}}">
+        <view class="occurrence-actions" wx:if="{{!isViewingFuture && !isTaskExecutionReadonly}}">
           <button class="occurrence-btn success {{item.outcome === 'success' ? 'active' : ''}} {{item.outcome !== 'none' && item.outcome !== 'success' ? 'inactive' : ''}}" data-task-id="{{item.id}}" data-outcome="success" bindtap="recordOccurrenceFromHome">达成</button>
           <button class="occurrence-btn failure {{item.outcome === 'failure' ? 'active' : ''}} {{item.outcome !== 'none' && item.outcome !== 'failure' ? 'inactive' : ''}}" data-task-id="{{item.id}}" data-outcome="failure" bindtap="recordOccurrenceFromHome">未达成</button>
         </view>

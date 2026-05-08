@@ -3,12 +3,18 @@ const serviceManager = require('../../../services/service-manager.js');
 const logger = require('../../../utils/logger');
 
 function isTaskMutationBlocked(page) {
+  if (page?.data?.isTaskExecutionReadonly === true) {
+    return true;
+  }
+
   if (page?.data?.isViewerReadonly === true) {
     return true;
   }
 
   const readonlyReason = page?.data?.readonlyReason || '';
-  return readonlyReason === 'viewer-readonly' || readonlyReason === 'system-readonly';
+  return readonlyReason === 'viewer-readonly'
+    || readonlyReason === 'system-readonly'
+    || readonlyReason === 'system-blocked';
 }
 
 function showReadonlyToast(page) {
@@ -17,7 +23,7 @@ function showReadonlyToast(page) {
 
   if (readonlyReason === 'viewer-readonly') {
     title = '当前为查看者，不能修改任务';
-  } else if (readonlyReason === 'system-readonly') {
+  } else if (readonlyReason === 'system-readonly' || readonlyReason === 'system-blocked') {
     title = '当前账号为只读，不能修改任务';
   }
 
