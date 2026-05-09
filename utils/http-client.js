@@ -8,6 +8,11 @@ const logger = require('./logger');
 const TokenManager = require('./token-manager');
 const systemUserAccessState = require('./app/system-user-access-state');
 
+function isInviteOrAccessControlErrorCode(code) {
+  const normalizedCode = String(code || '').trim();
+  return normalizedCode === 'AUTH_APP_ACCESS_CODE_REQUIRED' || /^INVITE_CODE_/.test(normalizedCode);
+}
+
 function buildHttpError(message, options = {}) {
   const error = new Error(message || '请求失败');
   if (options.code) {
@@ -161,7 +166,16 @@ class HttpClient {
             }
           } else {
             const errorMsg = `HTTP错误: ${res.statusCode}`;
-            logger.error('HttpClient', errorMsg, res);
+            const responseCode = res?.data?.error_code || res?.data?.errorCode || null;
+            const responseMessage = res?.data?.message || errorMsg;
+            if (res.statusCode === 400 && isInviteOrAccessControlErrorCode(responseCode)) {
+              logger.warn('HttpClient', responseMessage, {
+                statusCode: res.statusCode,
+                code: responseCode
+              });
+            } else {
+              logger.error('HttpClient', errorMsg, res);
+            }
             rejectWithResponseError(reject, res, errorMsg);
           }
         },

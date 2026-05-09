@@ -96,6 +96,7 @@ function createEmptyTaskProgressSummary() {
 Page({
   data: {
     currentMotivation: '', // 当前显示的激励语
+    startupGuardReady: false,
     motivationalPhrases: [
       '坚持每一天，成就更好的自己！',
       '小习惯，大改变！',

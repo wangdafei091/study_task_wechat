@@ -66,6 +66,11 @@ function formatExpiresAt(expiresAt) {
   return `约 ${hours} 小时后失效`;
 }
 
+function isInviteExpired(expiresAt) {
+  const timestamp = parseExpiresAtTimestamp(expiresAt);
+  return Number.isFinite(timestamp) && timestamp <= Date.now();
+}
+
 function decorateInvite(invite, label) {
   if (!invite) {
     return null;
@@ -74,7 +79,8 @@ function decorateInvite(invite, label) {
   return {
     ...invite,
     label,
-    expiresText: formatExpiresAt(invite.expiresAt)
+    expiresText: formatExpiresAt(invite.expiresAt),
+    isExpired: isInviteExpired(invite.expiresAt)
   };
 }
 
@@ -129,6 +135,7 @@ Page({
   },
 
   onLoad() {
+    this._hasShownOnce = false;
     this.refreshReadonlyState();
     this.loadPageData();
   },
@@ -142,7 +149,14 @@ Page({
       }
     }
 
+    if (!this._hasShownOnce) {
+      this._hasShownOnce = true;
+      this.refreshReadonlyState();
+      return;
+    }
+
     this.refreshReadonlyState();
+    await this.loadPageData();
   },
 
   refreshReadonlyState() {
@@ -216,6 +230,22 @@ Page({
         loadErrorMessage: error?.message || '加载失败，请稍后再试'
       });
     }
+  },
+
+  async ensureFreshInvite(kind, targetRole) {
+    const invite = kind === 'admission'
+      ? this.data.admissionInvite
+      : this.data.familyInviteByRole?.[targetRole || this.data.activeFamilyInviteRole] || null;
+
+    if (invite && !invite.isExpired) {
+      return invite;
+    }
+
+    await this.loadPageData();
+
+    return kind === 'admission'
+      ? this.data.admissionInvite
+      : this.data.familyInviteByRole?.[targetRole || this.data.activeFamilyInviteRole] || null;
   },
 
   async confirmRefresh(message) {
@@ -339,40 +369,60 @@ Page({
     }
   },
 
-  onCopyTap(e) {
-    const code = e.currentTarget.dataset.code;
-    if (!code) {
+  async onCopyTap(e) {
+    const { kind = 'family', role = '' } = e.currentTarget.dataset || {};
+    const targetRole = role || this.data.activeFamilyInviteRole;
+    const invite = kind === 'admission'
+      ? this.data.admissionInvite
+      : this.data.familyInviteByRole?.[targetRole] || null;
+
+    if (!invite?.code) {
+      return;
+    }
+
+    if (!invite.isExpired) {
+      wx.setClipboardData({
+        data: invite.code,
+        success: () => wx.showToast({ title: '已复制', icon: 'success' })
+      });
+      return;
+    }
+
+    const freshInvite = await this.ensureFreshInvite(kind, targetRole);
+    if (!freshInvite?.code || freshInvite.isExpired) {
+      wx.showToast({ title: '邀请码已过期，请先刷新', icon: 'none' });
       return;
     }
 
     wx.setClipboardData({
-      data: code,
+      data: freshInvite.code,
       success: () => wx.showToast({ title: '已复制', icon: 'success' })
     });
   },
 
   buildSharePayload(kind, targetRole) {
-    const code = kind === 'admission'
-      ? this.data.admissionInvite?.code
-      : this.data.familyInviteByRole?.[targetRole || 'child']?.code;
+    const invite = kind === 'admission'
+      ? this.data.admissionInvite
+      : this.data.familyInviteByRole?.[targetRole || 'child'] || null;
+    const code = invite?.isExpired ? null : invite?.code;
 
     if (!code) {
       return {
         title: '小CEO日程表',
-        path: '/pages/index/index'
+        path: '/pages/launch/launch'
       };
     }
 
     if (kind === 'admission') {
       return {
         title: '邀请你进入小CEO日程表',
-        path: `/pages/index/index?inviteCode=${encodeURIComponent(code)}`
+        path: `/pages/launch/launch?inviteCode=${encodeURIComponent(code)}`
       };
     }
 
     return {
       title: targetRole === 'parent' ? '邀请你加入我的家庭（家长）' : '邀请你加入我的家庭（孩子）',
-      path: `/pages/index/index?inviteCode=${encodeURIComponent(code)}`
+      path: `/pages/launch/launch?inviteCode=${encodeURIComponent(code)}`
     };
   },
 

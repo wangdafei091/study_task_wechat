@@ -2,6 +2,7 @@ const logger = require('../../utils/logger');
 const appAccessState = require('../../utils/app/app-access-state');
 const onboardingState = require('../../utils/app/onboarding-state');
 const inviteService = require('../../services/invite-service');
+const sessionAuth = require('../../utils/app/session-auth');
 
 const PAGE_MODE = {
   MANUAL_INPUT: 'manual_input',
@@ -138,7 +139,7 @@ Page({
 
   applyPreviewResult(previewResult = {}, options = {}) {
     const currentAction = previewResult.currentAction || 'invalid';
-    const isLoggedIn = Boolean(getApp()?.globalData?.userService?.getLoginUser?.());
+    const isLoggedIn = sessionAuth.hasAuthenticatedSession(getApp()?.globalData?.userService);
     let nextMode = PAGE_MODE.NO_ACTION_NEEDED;
 
     if (currentAction === 'enter_app' || (!isLoggedIn && currentAction === 'join_family')) {

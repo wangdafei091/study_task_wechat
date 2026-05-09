@@ -79,6 +79,58 @@ describe('inviteCodeService', () => {
     expect(inviteCodeService.getCurrentFamilyInvites).not.toHaveBeenCalled();
   });
 
+  it('当前邀请码摘要应过滤已过期但状态仍为 active 的邀请码', async () => {
+    userService.findById.mockResolvedValue({
+      userId: 'parent_manager',
+      role: 'parent',
+      familyId: 'fam_1',
+      familyPermissionRole: 'manager',
+      systemAccessLevel: 'normal',
+      status: 'active',
+      isVirtual: false,
+      isSystemAdmin: false,
+      canIssueAdmissionCode: true,
+      admissionCodeQuotaTotal: 3
+    });
+
+    jest.spyOn(inviteCodeService, 'getCurrentAdmissionInvite').mockResolvedValue({
+      expiresAt: '2000-01-01T00:00:00.000Z',
+      toJSON: jest.fn(() => ({ code: 'UEXPIRED' }))
+    });
+    jest.spyOn(inviteCodeService, 'getCurrentFamilyInvites').mockResolvedValue([
+      InviteCode.fromDB({
+        invite_code_id: 'inv_expired',
+        code: 'FEXPIRED01',
+        purpose: INVITE_CODE_PURPOSE.FAMILY_INVITE,
+        status: INVITE_CODE_STATUS.ACTIVE,
+        family_id: 'fam_1',
+        target_role: 'child',
+        expires_at: '2000-01-01T00:00:00.000Z'
+      }),
+      InviteCode.fromDB({
+        invite_code_id: 'inv_active',
+        code: 'FACTIVE01',
+        purpose: INVITE_CODE_PURPOSE.FAMILY_INVITE,
+        status: INVITE_CODE_STATUS.ACTIVE,
+        family_id: 'fam_1',
+        target_role: 'parent',
+        expires_at: '2099-01-01T00:00:00.000Z'
+      })
+    ]);
+
+    const result = await inviteCodeService.getCurrentInviteSummary('parent_manager');
+
+    expect(result).toEqual({
+      admissionCode: null,
+      familyInviteCodes: [
+        expect.objectContaining({
+          code: 'FACTIVE01',
+          targetRole: 'parent'
+        })
+      ]
+    });
+  });
+
   it('统一家庭邀请码若发码人不再是正常管理员，应判定为失效', async () => {
     const activeInvite = {
       source: 'unified',

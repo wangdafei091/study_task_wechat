@@ -1,6 +1,7 @@
 describe('utils/http-client', () => {
   let HttpClient;
   let systemUserAccessState;
+  let logger;
 
   beforeEach(() => {
     jest.resetModules();
@@ -43,6 +44,7 @@ describe('utils/http-client', () => {
     jest.isolateModules(() => {
       HttpClient = require('../../utils/http-client');
       systemUserAccessState = require('../../utils/app/system-user-access-state');
+      logger = require('../../utils/logger');
     });
   });
 
@@ -98,5 +100,32 @@ describe('utils/http-client', () => {
     expect(systemUserAccessState.handleBlockedError).toHaveBeenCalledWith(expect.objectContaining({
       code: 'SYSTEM_USER_BLOCKED'
     }));
+  });
+
+  it('邀请制准入 400 应记录 warn 而不是 error', async () => {
+    global.wx.request.mockImplementationOnce(({ success }) => {
+      success({
+        statusCode: 400,
+        data: {
+          success: false,
+          error_code: 'AUTH_APP_ACCESS_CODE_REQUIRED',
+          message: '当前为邀请制体验，请先输入邀请码'
+        }
+      });
+    });
+
+    await expect(HttpClient.post('/api/auth/login', { code: 'wx-code' })).rejects.toMatchObject({
+      code: 'AUTH_APP_ACCESS_CODE_REQUIRED'
+    });
+
+    expect(logger.warn).toHaveBeenCalledWith('HttpClient', '当前为邀请制体验，请先输入邀请码', {
+      statusCode: 400,
+      code: 'AUTH_APP_ACCESS_CODE_REQUIRED'
+    });
+    expect(logger.error).not.toHaveBeenCalledWith(
+      'HttpClient',
+      'HTTP错误: 400',
+      expect.anything()
+    );
   });
 });

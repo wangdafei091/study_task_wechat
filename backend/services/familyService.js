@@ -17,6 +17,31 @@ const FAMILY_PERMISSION_ROLE = {
   VIEWER: 'viewer'
 };
 
+function isExpiredInviteTime(expiresAt) {
+  if (!expiresAt) {
+    return false;
+  }
+
+  const expiresTime = new Date(expiresAt).getTime();
+  return Number.isFinite(expiresTime) && expiresTime < Date.now();
+}
+
+function sanitizeLegacyInviteFields(family = {}) {
+  const inviteConsumed = Boolean(family.inviteCodeUsedAt);
+  const inviteExpired = isExpiredInviteTime(family.inviteCodeExpiresAt);
+
+  if (!inviteConsumed && !inviteExpired) {
+    return family;
+  }
+
+  return {
+    ...family,
+    inviteCode: null,
+    inviteCodeRole: null,
+    inviteCodeExpiresAt: null
+  };
+}
+
 class FamilyService {
   _getQueryRunner(connection = null) {
     if (connection && typeof connection.execute === 'function') {
@@ -174,7 +199,7 @@ class FamilyService {
     );
 
     if (results.length === 0) return null;
-    return Family.fromDB(results[0]).toJSON();
+    return sanitizeLegacyInviteFields(Family.fromDB(results[0]).toJSON());
   }
 
   /**
@@ -312,7 +337,10 @@ class FamilyService {
    * 权限：家长可修改自己和同家庭任意孩子；孩子可修改自己
    */
   async updateNickname(operatorUser, targetUserId, nickname) {
-    const latestOperator = await this._ensureWriteOperator(operatorUser);
+    const latestOperator = await this._ensureWriteOperator(operatorUser, {
+      allowViewerSelfRename: true,
+      targetUserId
+    });
     const results = await query(
       'SELECT * FROM users WHERE user_id = ? AND status = ? LIMIT 1',
       [targetUserId, 'active']
@@ -583,7 +611,7 @@ class FamilyService {
     }
   }
 
-  async _ensureWriteOperator(operatorUser) {
+  async _ensureWriteOperator(operatorUser, options = {}) {
     const operatorUserId = typeof operatorUser === 'string'
       ? operatorUser
       : operatorUser?.userId;
@@ -603,7 +631,15 @@ class FamilyService {
       throw Object.assign(new Error('当前账号为只读，仅可查看'), { code: 'SYSTEM_USER_READONLY' });
     }
 
-    if (latestOperator.role === 'parent' && latestOperator.familyPermissionRole === FAMILY_PERMISSION_ROLE.VIEWER) {
+    const allowViewerSelfRename = options.allowViewerSelfRename === true
+      && latestOperator.role === 'parent'
+      && latestOperator.userId === options.targetUserId;
+
+    if (
+      latestOperator.role === 'parent' &&
+      latestOperator.familyPermissionRole === FAMILY_PERMISSION_ROLE.VIEWER &&
+      !allowViewerSelfRename
+    ) {
       throw Object.assign(new Error('当前为查看者，不能修改成员信息'), { code: 'FAMILY_MANAGER_REQUIRED' });
     }
 

@@ -207,6 +207,34 @@ describe('familyService.joinFamily', () => {
   });
 });
 
+describe('familyService.getCurrentFamily', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('应隐藏已过期的 legacy 邀请码字段', async () => {
+    db.query.mockResolvedValueOnce([{
+      family_id: 'fam_1',
+      name: '测试家庭',
+      invite_code: 'LEGACY01',
+      invite_code_role: 'parent',
+      invite_code_expires_at: '2000-01-01 00:00:00',
+      invite_code_used_at: null,
+      created_by: 'parent_1',
+      status: 'active'
+    }]);
+
+    const result = await familyService.getCurrentFamily('fam_1');
+
+    expect(result).toEqual(expect.objectContaining({
+      familyId: 'fam_1',
+      inviteCode: null,
+      inviteCodeRole: null,
+      inviteCodeExpiresAt: null
+    }));
+  });
+});
+
 describe('familyService identity governance', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -256,6 +284,35 @@ describe('familyService identity governance', () => {
     }, 'child_1', '新称呼')).rejects.toMatchObject({
       code: 'FAMILY_MANAGER_REQUIRED'
     });
+  });
+
+  it('查看者家长可以修改自己的昵称', async () => {
+    userService.findActiveById.mockResolvedValue({
+      userId: 'viewer_1',
+      role: 'parent',
+      familyId: 'fam_1',
+      familyPermissionRole: 'viewer',
+      isSystemBlocked: jest.fn(() => false),
+      isSystemReadonly: jest.fn(() => false)
+    });
+    db.query.mockResolvedValueOnce([{
+      user_id: 'viewer_1',
+      nickname: '旧称呼',
+      role: 'parent',
+      family_id: 'fam_1',
+      is_virtual: 0,
+      status: 'active'
+    }]);
+    db.execute.mockResolvedValue({ affectedRows: 1 });
+
+    await expect(familyService.updateNickname({
+      userId: 'viewer_1'
+    }, 'viewer_1', '新称呼')).resolves.toBeUndefined();
+
+    expect(db.execute).toHaveBeenCalledWith(
+      'UPDATE users SET nickname = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?',
+      ['新称呼', 'viewer_1']
+    );
   });
 
   it('blocked 用户会在写操作前被拒绝', async () => {

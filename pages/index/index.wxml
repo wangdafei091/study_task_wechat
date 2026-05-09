@@ -1,6 +1,6 @@
 <!--pages/index/index.wxml-->
 <page-meta page-style="{{showMessagePreview ? 'overflow: hidden; height: 100vh;' : ''}}"></page-meta>
-<view class="container">
+<view class="container" wx:if="{{startupGuardReady}}">
   <!-- 顶部导航栏 -->
   <view class="header-container">
     <view class="header-left">

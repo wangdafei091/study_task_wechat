@@ -222,56 +222,109 @@ async function completeAuthenticatedSession(app, loginResult, options = {}) {
   return true;
 }
 
-async function runWxLogin(app) {
-  wx.login({
-    success: async (res) => {
-      logger.info('App', 'wx.login成功', { code: res.code });
+async function runWxLogin(app, options = {}) {
+  return new Promise((resolve) => {
+    wx.login({
+      success: async (res) => {
+        logger.info('App', 'wx.login成功', { code: res.code });
 
-      try {
-        if (API_CONFIG.ENABLE_API) {
-          logger.info('App', '使用云端登录模式');
-          const loginResult = await loginWithCode(res.code);
+        try {
+          if (API_CONFIG.ENABLE_API) {
+            logger.info('App', '使用云端登录模式');
+            const loginResult = await loginWithCode(res.code);
 
-          if (loginResult) {
-            logger.info('App', '云端登录成功', {
-              token: loginResult.token,
-              user: loginResult.user
-            });
+            if (loginResult) {
+              logger.info('App', '云端登录成功', {
+                token: loginResult.token,
+                user: loginResult.user
+              });
 
-            const completed = await completeAuthenticatedSession(app, loginResult);
-            if (completed) {
-              logger.info('App', 'UserService初始化完成（云端模式）');
-            } else {
-              logger.warn('App', 'UserService初始化降级（云端模式），继续使用默认用户态');
+              const completed = await completeAuthenticatedSession(app, loginResult);
+              if (completed) {
+                logger.info('App', 'UserService初始化完成（云端模式）');
+              } else {
+                logger.warn('App', 'UserService初始化降级（云端模式），继续使用默认用户态');
+              }
             }
+            resolve(options.startupMode === true
+              ? { success: true, url: '/pages/index/index' }
+              : true);
+            return;
           }
-          return;
-        }
 
-        logger.info('App', '使用本地存储模式');
-        app.globalData.canIUseGetUserProfile = false;
-        app.globalData.canIUseOpenData = wx.canIUse('open-data.type.userAvatarUrl') &&
-          wx.canIUse('open-data.type.userNickName');
+          logger.info('App', '使用本地存储模式');
+          app.globalData.canIUseGetUserProfile = false;
+          app.globalData.canIUseOpenData = wx.canIUse('open-data.type.userAvatarUrl') &&
+            wx.canIUse('open-data.type.userNickName');
 
-        logger.info('App', '用户登录处理完成，已添加防御性检查');
-        await app.postLoginInitialization();
-      } catch (error) {
-        logger.error('App', '登录处理失败:', error);
+          logger.info('App', '用户登录处理完成，已添加防御性检查');
+          await app.postLoginInitialization();
+          resolve(options.startupMode === true
+            ? { success: true, url: '/pages/index/index' }
+            : true);
+        } catch (error) {
+          if (appAccessState.isInviteError(error)) {
+            logger.warn('App', '登录处理失败:', error);
+          } else {
+            logger.error('App', '登录处理失败:', error);
+          }
 
-        if (API_CONFIG.ENABLE_API) {
-          if (!handleSystemUserBlockedFailure(error) && !handleAppAccessFailure(error)) {
+          if (API_CONFIG.ENABLE_API) {
+            if ((error?.code || '') === 'SYSTEM_USER_BLOCKED') {
+              if (options.startupMode === true) {
+                resolve({
+                  success: false,
+                  url: '/pages/system-blocked/system-blocked'
+                });
+                return;
+              }
+              handleSystemUserBlockedFailure(error);
+              resolve(false);
+              return;
+            }
+
+            if (appAccessState.isInviteError(error)) {
+              if (options.startupMode === true) {
+                resolve({
+                  success: false,
+                  url: `/pages/access-gate/access-gate?reason=${encodeURIComponent(appAccessState.getAppAccessErrorCode(error) || error.code || '')}`
+                });
+                return;
+              }
+
+              if (handleAppAccessFailure(error)) {
+                resolve(false);
+                return;
+              }
+            }
+
+            if (options.startupMode === true) {
+              resolve({
+                success: false,
+                url: '/pages/index/index'
+              });
+              return;
+            }
+
             wx.showModal({
               title: '登录失败',
               content: '网络错误，请检查连接',
               showCancel: false
             });
           }
+
+          resolve(options.startupMode === true
+            ? { success: false, url: '/pages/index/index' }
+            : true);
         }
+      },
+      fail: (error) => {
+        logger.error('App', 'wx.login失败:', error);
+        resolve(options.startupMode === true
+          ? { success: false, url: '/pages/index/index' }
+          : true);
       }
-    },
-    fail: (error) => {
-      logger.error('App', 'wx.login失败:', error);
-    }
+    });
   });
 }
 
@@ -307,7 +360,11 @@ async function doCloudLogin(app, options = {}) {
 
     return completed;
   } catch (error) {
-    logger.error('App', '云端登录失败:', error);
+    if (appAccessState.isInviteError(error)) {
+      logger.warn('App', '云端登录失败:', error);
+    } else {
+      logger.error('App', '云端登录失败:', error);
+    }
     if (handleSystemUserBlockedFailure(error) || handleAppAccessFailure(error, options)) {
       return false;
     }
@@ -384,6 +441,21 @@ async function refreshForegroundSystemAccess(app, activeUserService) {
   const loginUserId = activeUserService.getLoginUserId();
   if (!loginUserId) {
     return false;
+  }
+
+  try {
+    if (typeof activeUserService.refreshForegroundState === 'function') {
+      const refreshed = await activeUserService.refreshForegroundState();
+      if (refreshed) {
+        return true;
+      }
+    }
+  } catch (error) {
+    if (handleSystemUserBlockedFailure(error)) {
+      return false;
+    }
+
+    logger.warn('App', '前台用户上下文刷新失败，回退到系统访问态快照刷新', error);
   }
 
   try {

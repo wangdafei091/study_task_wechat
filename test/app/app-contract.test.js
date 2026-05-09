@@ -169,7 +169,10 @@ describe('app.js contract', () => {
 
     expect(prepareUserServiceMock).toHaveBeenCalledWith(appConfig);
     expect(initializeServicesMock).toHaveBeenCalledWith(appConfig, { isDevEnv: true });
-    expect(runWxLoginMock).toHaveBeenCalledWith(appConfig);
+    expect(runWxLoginMock).toHaveBeenCalledWith(appConfig, expect.objectContaining({
+      startupMode: true,
+      suppressFailureModal: true
+    }));
     expect(installObserversMock).toHaveBeenCalledWith(appConfig);
     expect(appConfig.globalData.eventCallbacks).toEqual({});
     expect(appConfig.globalData.eventBus).toBe(eventBus);

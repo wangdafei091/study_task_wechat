@@ -35,6 +35,11 @@ describe('utils/app/bootstrap-auth', () => {
       return true;
     });
     const hasBlockedSessionFlagMock = jest.fn(() => blockedSessionActive);
+    const loggerMock = {
+      info: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn()
+    };
 
     global.wx = {
       getStorageSync: jest.fn((key) => {
@@ -82,11 +87,7 @@ describe('utils/app/bootstrap-auth', () => {
       }
     }));
 
-    jest.doMock('../../utils/logger', () => ({
-      info: jest.fn(),
-      warn: jest.fn(),
-      error: jest.fn()
-    }));
+    jest.doMock('../../utils/logger', () => loggerMock);
 
     jest.doMock('../../utils/api-config', () => ({
       ENABLE_API: enableApi,
@@ -129,6 +130,7 @@ describe('utils/app/bootstrap-auth', () => {
     const appAccessState = require('../../utils/app/app-access-state');
     return {
       module,
+      loggerMock,
       setUserServiceMock,
       getUserServiceMock,
       initializeMock,
@@ -285,14 +287,29 @@ describe('utils/app/bootstrap-auth', () => {
       postLoginInitialization: jest.fn().mockResolvedValue()
     };
 
-    await module.runWxLogin(app);
-    await Promise.resolve();
-    await Promise.resolve();
+    await expect(module.runWxLogin(app)).resolves.toBe(false);
 
     expect(global.wx.reLaunch).toHaveBeenCalledWith({
       url: '/pages/access-gate/access-gate?reason=AUTH_APP_ACCESS_CODE_REQUIRED'
     });
     expect(global.wx.showModal).not.toHaveBeenCalled();
+  });
+
+  it('邀请制错误在云端登录失败路径应降级为 warn', async () => {
+    const admissionError = Object.assign(new Error('当前为邀请制体验，请先输入邀请码'), {
+      code: 'AUTH_APP_ACCESS_CODE_REQUIRED'
+    });
+    const { module, httpPostMock, loggerMock } = loadModule({
+      enableApi: true
+    });
+    httpPostMock.mockRejectedValueOnce(admissionError);
+
+    await expect(module.doCloudLogin({ globalData: {} }, {
+      suppressFailureModal: true
+    })).resolves.toBe(false);
+
+    expect(loggerMock.warn).toHaveBeenCalledWith('App', '云端登录失败:', admissionError);
+    expect(loggerMock.error).not.toHaveBeenCalledWith('App', '云端登录失败:', admissionError);
   });
 
   it('access-gate 主动登录时可抛出邀请制错误供页面内联展示', async () => {
@@ -485,6 +502,36 @@ describe('utils/app/bootstrap-auth', () => {
       systemAccessUpdatedAt: '2026-04-26 12:00:00',
       systemAccessUpdatedByUserId: 'admin-1'
     });
+  });
+
+  it('onShow 在 userService 支持完整上下文刷新时应优先走完整刷新', async () => {
+    const refreshForegroundStateMock = jest.fn().mockResolvedValue(true);
+    const readyUserService = {
+      initialized: true,
+      getLoginUserId: jest.fn(() => 'user-1'),
+      refreshForegroundState: refreshForegroundStateMock,
+      applySystemAccessLevelSnapshot: jest.fn()
+    };
+    const {
+      module,
+      getUserServiceMock,
+      httpGetMock
+    } = loadModule({
+      enableApi: true,
+      token: 'saved-token',
+      authenticated: true
+    });
+    getUserServiceMock.mockReturnValue(readyUserService);
+    const app = {
+      globalData: {
+        userService: readyUserService
+      }
+    };
+
+    await expect(module.handleAppShow(app)).resolves.toBe(true);
+
+    expect(refreshForegroundStateMock).toHaveBeenCalled();
+    expect(httpGetMock).not.toHaveBeenCalled();
   });
 
   it('onShow 前台刷新若命中 blocked，应走统一禁入分流', async () => {

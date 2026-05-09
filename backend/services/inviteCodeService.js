@@ -646,6 +646,7 @@ class InviteCodeService {
       `SELECT * FROM invite_codes
         WHERE slot_key = ?
           AND status = ?
+          AND (expires_at IS NULL OR expires_at >= CURRENT_TIMESTAMP)
         ORDER BY created_at DESC
         LIMIT 1`,
       [buildAdmissionSlotKey(issuerUserId), INVITE_CODE_STATUS.ACTIVE]
@@ -660,6 +661,7 @@ class InviteCodeService {
         WHERE purpose = ?
           AND family_id = ?
           AND status = ?
+          AND (expires_at IS NULL OR expires_at >= CURRENT_TIMESTAMP)
         ORDER BY target_role ASC, created_at DESC`,
       [INVITE_CODE_PURPOSE.FAMILY_INVITE, familyId, INVITE_CODE_STATUS.ACTIVE]
     );
@@ -1157,10 +1159,14 @@ class InviteCodeService {
     const familyInvites = canIssueFamilyInviteCode
       ? await this.getCurrentFamilyInvites(currentUser.familyId)
       : [];
+    const visibleAdmissionInvite = admissionInvite && !isExpired(admissionInvite.expiresAt)
+      ? admissionInvite
+      : null;
+    const visibleFamilyInvites = familyInvites.filter((invite) => !isExpired(invite.expiresAt));
 
     return {
-      admissionCode: admissionInvite ? admissionInvite.toJSON() : null,
-      familyInviteCodes: familyInvites.map((invite) => invite.toJSON())
+      admissionCode: visibleAdmissionInvite ? visibleAdmissionInvite.toJSON() : null,
+      familyInviteCodes: visibleFamilyInvites.map((invite) => invite.toJSON())
     };
   }
 }

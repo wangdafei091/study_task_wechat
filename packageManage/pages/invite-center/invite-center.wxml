@@ -30,10 +30,10 @@
           <view class="ticket-code">{{admissionInvite.code || '暂未生成'}}</view>
           <view wx:if="{{admissionInvite && admissionInvite.code}}" class="code-share-wrap">
             <button
-              class="code-share-icon {{submittingAdmission ? 'disabled' : ''}}"
+              class="code-share-icon {{submittingAdmission || admissionInvite.isExpired ? 'disabled' : ''}}"
               open-type="share"
               hover-class="none"
-              disabled="{{submittingAdmission}}"
+              disabled="{{submittingAdmission || admissionInvite.isExpired}}"
               data-kind="admission"
             >
               <view class="share-glyph">
@@ -45,9 +45,12 @@
           </view>
         </view>
         <view class="code-badge" wx:if="{{admissionInvite}}">{{admissionInvite.expiresText}}</view>
+        <view class="subtle-note" wx:if="{{admissionInvite && admissionInvite.isExpired}}">
+          当前邀请码已过期，点击复制会自动刷新后再复制。
+        </view>
         <view class="ticket-meta">{{admissionInvite ? '可以直接发给微信好友，也可以复制后自行发送。' : '生成后会显示在这里。'}}</view>
         <view class="card-actions" wx:if="{{admissionInvite && admissionInvite.code}}">
-          <view class="minor-action action-chip" data-code="{{admissionInvite.code}}" bindtap="onCopyTap">复制邀请码</view>
+          <view class="minor-action action-chip" data-kind="admission" bindtap="onCopyTap">复制邀请码</view>
           <view class="minor-action action-chip {{submittingAdmission ? 'disabled' : ''}}" bindtap="onIssueAdmissionTap">
             {{submittingAdmission ? '刷新中...' : '刷新邀请码'}}
           </view>
@@ -91,10 +94,10 @@
           <view class="ticket-code">{{currentFamilyInvite.code || '暂未生成'}}</view>
           <view wx:if="{{currentFamilyInvite && currentFamilyInvite.code}}" class="code-share-wrap">
             <button
-              class="code-share-icon {{submittingFamilyRole === activeFamilyInviteRole ? 'disabled' : ''}}"
+              class="code-share-icon {{submittingFamilyRole === activeFamilyInviteRole || currentFamilyInvite.isExpired ? 'disabled' : ''}}"
               open-type="share"
               hover-class="none"
-              disabled="{{submittingFamilyRole === activeFamilyInviteRole}}"
+              disabled="{{submittingFamilyRole === activeFamilyInviteRole || currentFamilyInvite.isExpired}}"
               data-kind="family"
               data-role="{{activeFamilyInviteRole}}"
             >
@@ -107,10 +110,13 @@
           </view>
         </view>
         <view class="code-badge" wx:if="{{currentFamilyInvite}}">{{currentFamilyInvite.expiresText}}</view>
+        <view class="subtle-note" wx:if="{{currentFamilyInvite && currentFamilyInvite.isExpired}}">
+          当前邀请码已过期，点击复制会自动刷新后再复制。
+        </view>
         <view class="ticket-meta">{{currentFamilyInvite ? '生成后可直接发给对方，对方会按身份加入当前家庭。' : '生成后会显示在这里。'}}</view>
         <view class="family-action-slot">
           <view class="card-actions" wx:if="{{currentFamilyInvite && currentFamilyInvite.code}}">
-            <view class="minor-action action-chip" data-code="{{currentFamilyInvite.code}}" bindtap="onCopyTap">复制邀请码</view>
+            <view class="minor-action action-chip" data-kind="family" data-role="{{activeFamilyInviteRole}}" bindtap="onCopyTap">复制邀请码</view>
             <view class="minor-action action-chip {{submittingFamilyRole === activeFamilyInviteRole ? 'disabled' : ''}}" data-role="{{activeFamilyInviteRole}}" bindtap="onIssueFamilyTap">
               {{submittingFamilyRole === activeFamilyInviteRole ? '刷新中...' : '刷新邀请码'}}
             </view>

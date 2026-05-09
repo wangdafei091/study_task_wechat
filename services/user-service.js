@@ -223,6 +223,39 @@ class UserService {
     });
   }
 
+  async refreshForegroundState() {
+    if (this._isLocalMode()) {
+      return false;
+    }
+
+    const latestUserData = await HttpClient.get(API_CONFIG.ENDPOINTS.AUTH_CURRENT);
+    if (!latestUserData || !latestUserData.userId) {
+      return false;
+    }
+
+    this.initializationBlocked = false;
+    this.loginUser = new User(latestUserData);
+
+    if (this.loginUser.familyId) {
+      const loaded = await this.loadFamilyMembers();
+      if (!loaded) {
+        return false;
+      }
+    } else {
+      this.userCache.clear();
+      this.userCache.set(this.loginUser.userId, this.loginUser);
+    }
+
+    await this._restoreSession();
+    this.initialized = true;
+    logger.info('UserService', '前台用户上下文刷新成功', {
+      loginUserId: this.loginUser.userId,
+      familyPermissionRole: this.loginUser.familyPermissionRole || null,
+      familyId: this.loginUser.familyId || null
+    });
+    return true;
+  }
+
   _applyProfileSnapshotToUser(user, profile = {}) {
     if (!user) {
       return;
@@ -270,14 +303,21 @@ class UserService {
     }
 
     const permissionContext = this._buildPermissionContextForCurrentState();
-    if (permissionContext.isSystemBlocked || permissionContext.isSystemReadonly || permissionContext.isViewerReadonly) {
-      return false;
-    }
-
     const loginUserId = this.loginUser?.userId || '';
     const isSelf = loginUserId && loginUserId === targetUser.userId;
     const isParentSelf = this.loginUser?.role === UserRole.PARENT && isSelf;
     const isChildSelf = this.loginUser?.role === UserRole.CHILD && isSelf && targetUser.role === UserRole.CHILD;
+    const canViewerRenameSelf = Boolean(
+      isParentSelf &&
+      !permissionContext.isSystemBlocked &&
+      !permissionContext.isSystemReadonly &&
+      !permissionContext.isSwitchedChildView
+    );
+
+    if (permissionContext.isSystemBlocked || permissionContext.isSystemReadonly) {
+      return false;
+    }
+
     const isManagerParentEditingChild = Boolean(
       permissionContext.familyPermissionRole === FamilyPermissionRole.MANAGER &&
       this.loginUser?.role === UserRole.PARENT &&
@@ -285,6 +325,10 @@ class UserService {
       this.loginUser?.familyId &&
       this.loginUser.familyId === targetUser.familyId
     );
+
+    if (permissionContext.isViewerReadonly) {
+      return canViewerRenameSelf;
+    }
 
     return isParentSelf || isChildSelf || isManagerParentEditingChild;
   }

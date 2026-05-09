@@ -19,6 +19,7 @@ const postLoginBootstrap = require('./utils/app/post-login-bootstrap');
 const runtimeObservers = require('./utils/app/runtime-observers');
 const systemUserAccessState = require('./utils/app/system-user-access-state');
 const appAccessState = require('./utils/app/app-access-state');
+const sessionAuth = require('./utils/app/session-auth');
 
 App({
   onLaunch: async function (options = {}) {
@@ -26,6 +27,8 @@ App({
     this.globalData.appReady = false;
     this.globalData.userServiceReady = false;
     this.globalData.servicesInitialized = false;
+    this.globalData.startupDecisionResolved = false;
+    this.globalData.startupDecisionUrl = '';
     this.globalData.eventCallbacks = this.globalData.eventCallbacks || {};
     const runtimeApiConfig = resolveRuntimeApiConfig();
     logger.info('App', 'onLaunch环境配置检查', {
@@ -42,28 +45,7 @@ App({
     logger.info('App', '初始化存储数据');
     StorageAdapter.initializeApplicationStorage();
 
-    // 确定是否为开发环境，用于配置事件总线
-    const isDevEnv = deviceInfo.isDevelopmentEnv();
-    await bootstrapAuth.prepareUserService(this);
-    const inviteEntryHandled = this.captureInviteEntry(options, { source: 'launch' });
-    await bootstrapServices.initialize(this, { isDevEnv });
-    
-    // 检查基础库版本兼容性
-    this.checkCompatibility()
-    
-    // 初始化单位统一
-    this.initUnitSystem()
-    
-    // 展示本地存储能力
-    const logs = wx.getStorageSync('logs') || []
-    logs.unshift(Date.now())
-    wx.setStorageSync('logs', logs.slice(0, 50))
-
-    const shouldSkipInitialLogin = Boolean(inviteEntryHandled && !this.globalData.userService);
-    if (!shouldSkipInitialLogin) {
-      await bootstrapAuth.runWxLogin(this);
-    }
-    
+    await this.startStartupDecision(options);
     runtimeObservers.install(this);
 
     // 必做任务扣分在启动时已处理，无需定时检查
@@ -84,13 +66,19 @@ App({
       source: runtimeApiConfig.source
     });
 
+    const pendingStartupDecision = this.globalData.startupDecisionPromise;
+    if (!pendingStartupDecision || this.globalData.startupDecisionResolved) {
+      const inviteEntryHandled = this.captureInviteEntry(options, { source: 'show' });
+      if (inviteEntryHandled) {
+        return;
+      }
+    }
+
     try {
       await this.startSystemAccessRefresh(options);
     } catch (error) {
       logger.error('App', '等待前台系统访问态刷新失败', error);
     }
-
-    this.captureInviteEntry(options, { source: 'show' });
   },
 
   /**
@@ -259,6 +247,115 @@ App({
     return runtimeObservers.setTheme(this);
   },
 
+  async startStartupDecision(options = {}) {
+    const existingDecision = this.globalData.startupDecisionPromise;
+    if (existingDecision && typeof existingDecision.then === 'function') {
+      return existingDecision;
+    }
+
+    const decisionPromise = (async () => {
+      const inviteCode = this.extractInviteCode(options);
+      const source = options?.source || 'launch';
+
+      if (inviteCode) {
+        const userService = this.globalData.userService;
+        const hasAuthenticatedSession = sessionAuth.hasAuthenticatedSession(userService);
+        const mode = hasAuthenticatedSession ? 'manual_input' : 'share_pending_login';
+
+        if (!hasAuthenticatedSession) {
+          appAccessState.savePendingInviteCode(inviteCode);
+        }
+
+        return this.buildAccessGateUrl({
+          mode,
+          inviteCode,
+          source
+        });
+      }
+
+      if (systemUserAccessState.hasBlockedSessionFlag()) {
+        return '/pages/system-blocked/system-blocked';
+      }
+
+      const isDevEnv = deviceInfo.isDevelopmentEnv();
+      await bootstrapAuth.prepareUserService(this);
+      await bootstrapServices.initialize(this, { isDevEnv });
+
+      this.checkCompatibility();
+      this.initUnitSystem();
+
+      const logs = wx.getStorageSync('logs') || [];
+      logs.unshift(Date.now());
+      wx.setStorageSync('logs', logs.slice(0, 50));
+
+      const hasAuthenticatedSession = sessionAuth.hasAuthenticatedSession(this.globalData.userService);
+      if (hasAuthenticatedSession && this.globalData.userService?.initialized) {
+        return '/pages/index/index';
+      }
+
+      const loginDecision = await bootstrapAuth.runWxLogin(this, {
+        startupMode: true,
+        suppressFailureModal: true
+      });
+      if (loginDecision?.url) {
+        return loginDecision.url;
+      }
+
+      return '/pages/index/index';
+    })();
+
+    this.globalData.startupDecisionPromise = decisionPromise;
+
+    try {
+      const url = await decisionPromise;
+      this.globalData.startupDecisionUrl = url;
+      this.globalData.startupDecisionResolved = true;
+      return url;
+    } finally {
+      if (this.globalData.startupDecisionPromise === decisionPromise) {
+        this.globalData.startupDecisionPromise = null;
+      }
+    }
+  },
+
+  async waitForStartupDecision(options = {}) {
+    const pendingDecision = this.globalData.startupDecisionPromise
+      || (this.globalData.startupDecisionResolved
+        ? Promise.resolve(this.globalData.startupDecisionUrl)
+        : (options.ensureFresh !== false
+          ? this.startStartupDecision({
+            source: options.source || 'launch'
+          })
+          : null));
+
+    if (!pendingDecision || typeof pendingDecision.then !== 'function') {
+      return this.globalData.startupDecisionUrl || '/pages/index/index';
+    }
+
+    try {
+      return await pendingDecision;
+    } catch (error) {
+      logger.warn('App', '等待启动路由决策失败，回退到首页', error);
+      return '/pages/index/index';
+    }
+  },
+
+  buildAccessGateUrl({ mode = 'manual_input', inviteCode = '', source = '', reason = '' } = {}) {
+    const params = [`mode=${encodeURIComponent(mode)}`];
+
+    if (inviteCode) {
+      params.push(`inviteCode=${encodeURIComponent(inviteCode)}`);
+    }
+    if (source) {
+      params.push(`source=${encodeURIComponent(source)}`);
+    }
+    if (reason) {
+      params.push(`reason=${encodeURIComponent(reason)}`);
+    }
+
+    return `/pages/access-gate/access-gate?${params.join('&')}`;
+  },
+
   startSystemAccessRefresh(options = {}) {
     const existingRefresh = this.globalData.systemAccessRefreshPromise;
     if (existingRefresh && typeof existingRefresh.then === 'function') {
@@ -286,6 +383,12 @@ App({
   },
 
   async waitForSystemAccessRefresh(options = {}) {
+    if (this.globalData.startupDecisionPromise) {
+      await this.waitForStartupDecision({
+        source: options.source || 'page_on_show'
+      });
+    }
+
     const pendingRefresh = this.globalData.systemAccessRefreshPromise
       || (options.ensureFresh !== false ? this.startSystemAccessRefresh({
         source: options.source || 'page_on_show'
@@ -318,6 +421,9 @@ App({
     theme: 'light',
     themeColors: {},
     eventCallbacks: {},
+    startupDecisionPromise: null,
+    startupDecisionResolved: false,
+    startupDecisionUrl: '',
     systemAccessRefreshPromise: null,
     lastInviteEntryFingerprint: '',
     lastInviteEntryHandledAt: 0,
@@ -402,13 +508,18 @@ App({
 
     const userService = this.globalData.userService;
     const loginUser = userService?.getLoginUser?.() || null;
-    const mode = loginUser ? 'manual_input' : 'share_pending_login';
+    const hasAuthenticatedSession = sessionAuth.hasAuthenticatedSession(userService);
+    const mode = hasAuthenticatedSession ? 'manual_input' : 'share_pending_login';
 
-    if (!loginUser) {
+    if (!hasAuthenticatedSession) {
       appAccessState.savePendingInviteCode(inviteCode);
     }
 
-    const url = `/pages/access-gate/access-gate?mode=${encodeURIComponent(mode)}&inviteCode=${encodeURIComponent(inviteCode)}&source=${encodeURIComponent(extra.source || '')}`;
+    const url = this.buildAccessGateUrl({
+      mode,
+      inviteCode,
+      source: extra.source || ''
+    });
     wx.reLaunch({ url });
     return true;
   },
