@@ -33,6 +33,13 @@ jest.mock('../../services/invite-service', () => ({
   previewInviteCode: jest.fn()
 }));
 
+let mockCurrentToken = null;
+
+jest.mock('../../utils/token-manager', () => ({
+  getToken: jest.fn(() => mockCurrentToken),
+  isAuthenticated: jest.fn(() => Boolean(mockCurrentToken))
+}));
+
 jest.mock('../../utils/app/onboarding-state', () => ({
   ONBOARDING_SOURCE: {
     INVITE_JOIN_FAMILY: 'invite_join_family',
@@ -80,6 +87,7 @@ describe('pages/access-gate/access-gate', () => {
         userService: null
       }
     };
+    mockCurrentToken = null;
 
     global.getApp = jest.fn(() => appMock);
     global.getCurrentPages = jest.fn(() => [{ route: 'pages/access-gate/access-gate' }]);
@@ -236,5 +244,28 @@ describe('pages/access-gate/access-gate', () => {
       source: 'invite_join_family',
       inviteCode: 'F123456789'
     });
+  });
+
+  it('token 已存在但 userService 尚未恢复时，家庭邀请码仍应进入确认加入态', async () => {
+    const page = createPage();
+    mockCurrentToken = 'saved-token';
+    inviteService.previewInviteCode.mockResolvedValue({
+      inviteCode: 'F123456789',
+      purpose: 'family_invite',
+      familyName: '测试家庭',
+      targetRole: 'parent',
+      currentAction: 'join_family',
+      currentActionMessage: '确认后即可加入该家庭',
+      requiresProfileAuthorization: false
+    });
+
+    page.onLoad.call(page, {
+      mode: 'share_pending_login',
+      inviteCode: 'F123456789'
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(page.data.mode).toBe('confirm_join_family');
   });
 });

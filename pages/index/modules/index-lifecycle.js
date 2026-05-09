@@ -2,6 +2,25 @@ const serviceManager = require('../../../services/service-manager.js');
 const logger = require('../../../utils/logger');
 
 async function onLoad(page, options) {
+  const app = typeof getApp === 'function' ? getApp() : null;
+  const inviteCode = typeof app?.extractInviteCode === 'function'
+    ? app.extractInviteCode({ query: options })
+    : '';
+
+  if (inviteCode && typeof app?.captureInviteEntry === 'function') {
+    app.captureInviteEntry({
+      query: options,
+      path: 'pages/index/index'
+    }, {
+      source: 'legacy_index_entry'
+    });
+    return;
+  }
+
+  page.setData({
+    startupGuardReady: true
+  });
+
   logger.info('Index', '首页加载');
   logger.info('Index', 'UI优化已实施：示例标识优化、移除箭头指示器、任务排序优化、任务条高度调整、标签背景色优化');
   logger.info('Index', '示例标识位置进一步优化：调整到 top: -18rpx, right: -18rpx，字体减小到 16rpx');
@@ -13,7 +32,6 @@ async function onLoad(page, options) {
   logger.info('Index', '🎯 标签视觉权重调和：缩小尺寸(36→28rpx)、柔化色彩、减少阴影，让标签回归辅助角色，突出任务内容主导地位');
   logger.info('Index', '🚀 页面初始化优化：合并重复数据加载逻辑，统一批量处理，减少重复调用和UI闪烁');
 
-  const app = getApp();
   page._eventHandlers = {
     taskChanged: page.handleTaskDataChanged.bind(page),
     taskCreated: page.handleTaskCreated.bind(page),

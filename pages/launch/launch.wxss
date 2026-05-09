@@ -1,0 +1,38 @@
+.launch-shell {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, #f7fbff 0%, #eef6ff 100%);
+}
+
+.launch-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24rpx;
+}
+
+.launch-spinner {
+  width: 72rpx;
+  height: 72rpx;
+  border-radius: 50%;
+  border: 8rpx solid rgba(66, 133, 244, 0.18);
+  border-top-color: #4285f4;
+  animation: launch-spin 0.9s linear infinite;
+}
+
+.launch-text {
+  color: #4b6584;
+  font-size: 28rpx;
+}
+
+@keyframes launch-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}

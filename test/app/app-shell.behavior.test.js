@@ -152,7 +152,10 @@ describe('app.js shell behavior', () => {
     expect(storageInitMock).toHaveBeenCalled();
     expect(prepareUserServiceMock).toHaveBeenCalledWith(appConfig);
     expect(bootstrapServicesMock).toHaveBeenCalledWith(appConfig, { isDevEnv: true });
-    expect(runWxLoginMock).toHaveBeenCalledWith(appConfig);
+    expect(runWxLoginMock).toHaveBeenCalledWith(appConfig, expect.objectContaining({
+      startupMode: true,
+      suppressFailureModal: true
+    }));
     expect(handleAppShowMock).toHaveBeenCalledWith(appConfig, {});
     expect(runtimeObserversMock.install).toHaveBeenCalledWith(appConfig);
     expect(global.wx.setStorageSync).toHaveBeenCalledWith('logs', expect.any(Array));
@@ -193,6 +196,39 @@ describe('app.js shell behavior', () => {
 
     blockedSessionActive = true;
     await expect(appConfig.waitForSystemAccessRefresh()).resolves.toBe(false);
+  });
+
+  it('waitForStartupDecision 在启动决策未完成前不应提前放行首页流程', async () => {
+    let resolveInitialLogin;
+    runWxLoginMock.mockImplementation(() => new Promise((resolve) => {
+      resolveInitialLogin = resolve;
+    }));
+
+    require('../../app.js');
+
+    const launchPromise = appConfig.onLaunch.call(appConfig, {});
+    const waitPromise = appConfig.waitForStartupDecision();
+    let waitSettled = false;
+    waitPromise.then(() => {
+      waitSettled = true;
+    });
+
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(waitSettled).toBe(false);
+    expect(runWxLoginMock).toHaveBeenCalledWith(appConfig, expect.objectContaining({
+      startupMode: true,
+      suppressFailureModal: true
+    }));
+
+    resolveInitialLogin({
+      success: false,
+      url: '/pages/access-gate/access-gate?reason=AUTH_APP_ACCESS_CODE_REQUIRED'
+    });
+
+    await expect(waitPromise).resolves.toBe('/pages/access-gate/access-gate?reason=AUTH_APP_ACCESS_CODE_REQUIRED');
+    await launchPromise;
+    expect(appConfig.globalData.startupDecisionUrl).toBe('/pages/access-gate/access-gate?reason=AUTH_APP_ACCESS_CODE_REQUIRED');
   });
 
   it('壳层委托方法应继续转发到对应模块', async () => {
@@ -331,6 +367,32 @@ describe('app.js shell behavior', () => {
     expect(global.wx.reLaunch).toHaveBeenCalledTimes(1);
   });
 
+  it('邀请码入口在 userService 未就绪但 token 已认证时也应直接进入手工确认态', () => {
+    global.wx.getStorageSync.mockImplementation((key) => {
+      if (key === 'jwt_token') {
+        return 'saved-token';
+      }
+      if (key === 'logs') {
+        return [1];
+      }
+      return null;
+    });
+    require('../../app.js');
+
+    expect(appConfig.captureInviteEntry.call(appConfig, {
+      query: { inviteCode: 'f123456789' },
+      path: 'pages/home/index',
+      scene: 1044
+    }, {
+      source: 'launch'
+    })).toBe(true);
+
+    expect(savePendingInviteCodeMock).not.toHaveBeenCalled();
+    expect(global.wx.reLaunch).toHaveBeenCalledWith({
+      url: '/pages/access-gate/access-gate?mode=manual_input&inviteCode=F123456789&source=launch'
+    });
+  });
+
   it('邀请码入口应支持 referrer extraData，并在缺失邀请码或缺少跳转能力时安全返回 false', () => {
     require('../../app.js');
 
@@ -358,17 +420,38 @@ describe('app.js shell behavior', () => {
 
   it('onLaunch 在已拦截邀请码冷启动且尚未建立 userService 时应跳过首轮微信登录', async () => {
     require('../../app.js');
-    appConfig.captureInviteEntry = jest.fn(() => true);
 
     await appConfig.onLaunch.call(appConfig, {
       query: { inviteCode: 'skip001' }
     });
 
-    expect(appConfig.captureInviteEntry).toHaveBeenCalledWith({
-      query: { inviteCode: 'skip001' }
-    }, {
-      source: 'launch'
-    });
     expect(runWxLoginMock).not.toHaveBeenCalled();
+    expect(appConfig.globalData.startupDecisionUrl).toBe('/pages/access-gate/access-gate?mode=share_pending_login&inviteCode=SKIP001&source=launch');
+    await expect(appConfig.waitForStartupDecision()).resolves.toBe('/pages/access-gate/access-gate?mode=share_pending_login&inviteCode=SKIP001&source=launch');
+  });
+
+  it('启动决策应在已登录时直接回到首页', async () => {
+    global.wx.getStorageSync.mockImplementation((key) => {
+      if (key === 'jwt_token') {
+        return 'saved-token';
+      }
+      if (key === 'logs') {
+        return [1];
+      }
+      return null;
+    });
+    prepareUserServiceMock.mockImplementation(async (app) => {
+      app.globalData.userService = {
+        initialized: true,
+        getLoginUser: jest.fn(() => ({ userId: 'parent_1' }))
+      };
+    });
+
+    require('../../app.js');
+
+    await appConfig.onLaunch.call(appConfig, {});
+
+    expect(runWxLoginMock).not.toHaveBeenCalled();
+    expect(appConfig.globalData.startupDecisionUrl).toBe('/pages/index/index');
   });
 });

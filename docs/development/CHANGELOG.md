@@ -4,6 +4,31 @@
 
 ---
 
+## [修复-2026-05-09] - 2026-05-09
+
+### ✅ 完成情况
+
+**邀请承接、查看者昵称与权限刷新修复**
+
+- **邀请码中心的过期码交互已收口**：
+  - [`packageManage/pages/invite-center/invite-center.js`](/Users/wangdafei/code/study_task_wechat/packageManage/pages/invite-center/invite-center.js)、[`packageManage/pages/invite-center/invite-center.wxml`](/Users/wangdafei/code/study_task_wechat/packageManage/pages/invite-center/invite-center.wxml) 已补齐邀请码有效期展示、过期状态识别与复制前自动刷新
+  - 家庭邀请码若已过期，分享按钮会直接禁用；复制动作会先重新拉取最新摘要，避免把过期码继续发给新用户
+- **查看者家长自改昵称已从成员管理链路中拆出**：
+  - [`pages/index/modules/index-user-switcher.js`](/Users/wangdafei/code/study_task_wechat/pages/index/modules/index-user-switcher.js)、[`services/user-service.js`](/Users/wangdafei/code/study_task_wechat/services/user-service.js)、[`backend/controllers/userController.js`](/Users/wangdafei/code/study_task_wechat/backend/controllers/userController.js) 已将“修改自己昵称”切到当前资料接口 `/api/users/current/profile`
+  - “修改别人昵称”仍走成员管理接口，保持管理员改孩子昵称与查看者自改昵称的语义分离，避免继续复用同一条权限链路
+- **管理员修改家庭权限后的前台刷新链路已复核**：
+  - 首页在重新进入或 `onShow` 时会重新拉取最新的认证与家庭成员状态，保证 `familyPermissionRole` 变更后前端菜单和权限上下文能够及时刷新
+
+### 🧪 验证结果
+
+- 定向回归通过：
+  - `npm test -- --runInBand test/pages/invite-center.page.test.js`
+  - `npm test -- --runInBand test/pages/index.modules.test.js test/pages/index.page-shell.behavior.test.js`
+- 全量回归通过：
+  - `npm test -- --runInBand`
+
+---
+
 ## [里程碑-22N] - 2026-05-07
 
 ### ✅ 完成情况

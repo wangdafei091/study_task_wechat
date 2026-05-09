@@ -185,4 +185,86 @@ describe('packageManage/pages/invite-center/invite-center', () => {
 
     expect(page.data.showFamilyInviteSection).toBe(false);
   });
+
+  it('onShow 应重新拉取邀请码摘要，避免常驻页面保留旧码', async () => {
+    const page = createPage();
+    inviteService.getBootstrap.mockResolvedValue({
+      canIssueAdmissionCode: true,
+      admissionCodeQuotaRemaining: 3,
+      admissionGlobalQuotaRemaining: 8,
+      availableFamilyInviteRoles: ['child']
+    });
+    inviteService.getCurrentInviteSummary
+      .mockResolvedValueOnce({
+        admissionCode: null,
+        familyInviteCodes: [{
+          code: 'FOLD000001',
+          targetRole: 'child',
+          expiresAt: '2099-01-01T00:00:00.000Z'
+        }]
+      })
+      .mockResolvedValueOnce({
+        admissionCode: null,
+        familyInviteCodes: []
+      });
+
+    await page.loadPageData.call(page);
+    expect(page.data.familyInviteByRole.child.code).toBe('FOLD000001');
+
+    await page.onShow.call(page);
+    expect(inviteService.getCurrentInviteSummary).toHaveBeenCalledTimes(1);
+
+    await page.onShow.call(page);
+
+    expect(inviteService.getCurrentInviteSummary).toHaveBeenCalledTimes(2);
+    expect(page.data.familyInviteByRole.child).toBeNull();
+  });
+
+  it('复制过期的家庭邀请码时应先刷新，再复制最新可用码', async () => {
+    const page = createPage();
+    page.data.activeFamilyInviteRole = 'child';
+    page.data.familyInviteByRole = {
+      child: {
+        code: 'FOLD000001',
+        isExpired: true
+      },
+      parent: null
+    };
+    page.loadPageData = jest.fn(function loadPageData() {
+      this.data.familyInviteByRole = {
+        child: {
+          code: 'FNEW000001',
+          isExpired: false
+        },
+        parent: null
+      };
+    });
+
+    await page.onCopyTap.call(page, {
+      currentTarget: {
+        dataset: {
+          kind: 'family',
+          role: 'child'
+        }
+      }
+    });
+
+    expect(page.loadPageData).toHaveBeenCalled();
+    expect(global.wx.setClipboardData).toHaveBeenCalledWith(
+      expect.objectContaining({ data: 'FNEW000001' })
+    );
+  });
+
+  it('过期的邀请码不应继续通过分享按钮散发', () => {
+    const page = createPage();
+    page.data.admissionInvite = {
+      code: 'UOLD000001',
+      isExpired: true
+    };
+
+    const payload = page.buildSharePayload('admission');
+
+    expect(payload.path).toBe('/pages/launch/launch');
+    expect(payload.title).toBe('小CEO日程表');
+  });
 });

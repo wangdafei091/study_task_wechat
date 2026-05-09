@@ -85,6 +85,41 @@ describe('pages/index/modules/index-lifecycle', () => {
     }));
   });
 
+  it('onLoad 命中旧分享的 inviteCode 时应直接转交 access-gate，而不是继续初始化首页', async () => {
+    app.extractInviteCode = jest.fn(() => 'F123456789');
+    app.captureInviteEntry = jest.fn(() => true);
+    const page = {
+      data: {},
+      handleTaskDataChanged: jest.fn(),
+      handleTaskCreated: jest.fn(),
+      handleMessageDataChanged: jest.fn(),
+      handleRewardClaimed: jest.fn(),
+      handleRewardUpdated: jest.fn(),
+      handleProgressBarComplete: jest.fn(),
+      setRandomMotivation: jest.fn(),
+      registerEventListeners: jest.fn(),
+      initializeDateNavigation: jest.fn(),
+      setData: jest.fn()
+    };
+
+    await lifecycle.onLoad(page, {
+      inviteCode: 'f123456789'
+    });
+
+    expect(app.captureInviteEntry).toHaveBeenCalledWith({
+      query: {
+        inviteCode: 'f123456789'
+      },
+      path: 'pages/index/index'
+    }, {
+      source: 'legacy_index_entry'
+    });
+    expect(page.setData).not.toHaveBeenCalledWith({
+      startupGuardReady: true
+    });
+    expect(page.registerEventListeners).not.toHaveBeenCalled();
+  });
+
   it('onLoad 不再注册 userInfoReadyCallback', async () => {
     const page = {
       data: {},

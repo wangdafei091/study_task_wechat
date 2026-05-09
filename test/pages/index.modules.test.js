@@ -268,7 +268,7 @@ describe('pages/index helper modules', () => {
     expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({ title: '用户切换失败' }));
   });
 
-  it('user-switcher handleNicknameEdit 应覆盖无服务、失败和成功分支', async () => {
+  it('user-switcher handleNicknameEdit 应覆盖无服务、成员修改失败和成功分支', async () => {
     const page = {
       setData: jest.fn(function setData(update) {
         Object.assign(this, update);
@@ -291,8 +291,12 @@ describe('pages/index helper modules', () => {
     appMock.globalData.userService = {
       ...baseUserService,
       updateNickname: jest.fn().mockResolvedValueOnce({ success: false, message: '修改失败' }).mockResolvedValueOnce({ success: true }),
-      getAllUsers: jest.fn(() => [{ userId: 'child-1' }]),
-      getCurrentUser: jest.fn(() => ({ userId: 'child-1' }))
+      updateCurrentProfile: jest.fn(),
+      getAllUsers: jest.fn(() => [
+        { userId: 'parent-1', role: 'parent', name: '家长' },
+        { userId: 'child-1', role: 'child', name: '小明' }
+      ]),
+      getCurrentUser: jest.fn(() => ({ userId: 'child-1', role: 'child', name: '小明' }))
     };
     global.getApp = jest.fn(() => appMock);
     const onFailure = jest.fn();
@@ -307,8 +311,46 @@ describe('pages/index helper modules', () => {
 
     expect(onFailure).toHaveBeenCalledTimes(1);
     expect(onSuccess).toHaveBeenCalledTimes(1);
+    expect(appMock.globalData.userService.updateNickname).toHaveBeenNthCalledWith(1, 'child-1', '新昵称');
+    expect(appMock.globalData.userService.updateNickname).toHaveBeenNthCalledWith(2, 'child-1', '新昵称');
+    expect(appMock.globalData.userService.updateCurrentProfile).not.toHaveBeenCalled();
     expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({ title: '修改失败' }));
     expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({ title: '昵称已更新', icon: 'success' }));
+  });
+
+  it('user-switcher handleNicknameEdit 在修改登录者自己昵称时应走 current profile 链路', async () => {
+    const page = {
+      setData: jest.fn(function setData(update) {
+        Object.assign(this, update);
+      })
+    };
+
+    appMock.globalData.userService = {
+      getLoginUser: jest.fn(() => ({ id: 'parent-1', userId: 'parent-1', role: 'parent', name: '家长' })),
+      getCurrentUser: jest.fn(() => ({ id: 'parent-1', userId: 'parent-1', role: 'parent', name: '家长' })),
+      getAllUsers: jest.fn(() => [
+        { id: 'parent-1', userId: 'parent-1', role: 'parent', name: '家长' },
+        { id: 'child-1', userId: 'child-1', role: 'child', name: '小明' }
+      ]),
+      updateNickname: jest.fn(),
+      updateCurrentProfile: jest.fn().mockResolvedValue({ success: true })
+    };
+    global.getApp = jest.fn(() => appMock);
+    const onSuccess = jest.fn();
+
+    await userSwitcherModule.handleNicknameEdit(page, {
+      detail: { userId: 'parent-1', nickname: '新家长昵称', onSuccess }
+    });
+
+    expect(appMock.globalData.userService.updateCurrentProfile).toHaveBeenCalledWith({
+      nickname: '新家长昵称'
+    });
+    expect(appMock.globalData.userService.updateNickname).not.toHaveBeenCalled();
+    expect(onSuccess).toHaveBeenCalledTimes(1);
+    expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({
+      title: '昵称已更新',
+      icon: 'success'
+    }));
   });
 
   it('user-switcher handleAvatarPresetUpdate 应覆盖失败和成功分支', async () => {

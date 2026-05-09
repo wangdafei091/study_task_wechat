@@ -150,9 +150,7 @@ function deriveManagementFlags(user = {}, context = {}) {
     isSelf &&
     !isSwitchedChildView &&
     !isSystemBlocked &&
-    !isSystemReadonly &&
-    !isViewerReadonly &&
-    familyPermissionRole !== FamilyPermissionRole.VIEWER
+    !isSystemReadonly
   );
 
   const canRename = Boolean(canRenameSelfParent || canParentManageChild || isChildSelf);

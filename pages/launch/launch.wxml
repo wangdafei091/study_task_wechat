@@ -1,0 +1,6 @@
+<view class="launch-shell">
+  <view class="launch-card">
+    <view class="launch-spinner"></view>
+    <view class="launch-text">{{loadingText}}</view>
+  </view>
+</view>

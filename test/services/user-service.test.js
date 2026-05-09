@@ -746,6 +746,64 @@ describe('UserService', () => {
 
       expect(result).toBe(false);
     });
+
+    it('refreshForegroundState 应刷新 loginUser、家庭权限和当前视角缓存', async () => {
+      userService.loginUser = new User({
+        userId: 'parent',
+        name: '旧家长',
+        role: 'parent',
+        familyId: 'family_1',
+        familyPermissionRole: 'viewer',
+        systemAccessLevel: 'normal'
+      });
+      userService.currentUser = new User({
+        userId: 'child_1',
+        name: '旧孩子',
+        role: 'child',
+        familyId: 'family_1'
+      });
+      mockStorageAdapter.get.mockReturnValue('child_1');
+      mockHttpClient.get.mockImplementation(async (url) => {
+        if (url === '/api/auth/current') {
+          return {
+            userId: 'parent',
+            name: '新家长',
+            role: 'parent',
+            familyId: 'family_1',
+            familyPermissionRole: 'manager',
+            systemAccessLevel: 'normal'
+          };
+        }
+
+        return {
+          members: [
+            {
+              userId: 'parent',
+              name: '新家长',
+              role: 'parent',
+              familyId: 'family_1',
+              familyPermissionRole: 'manager',
+              systemAccessLevel: 'normal'
+            },
+            {
+              userId: 'child_1',
+              name: '新孩子',
+              role: 'child',
+              familyId: 'family_1',
+              systemAccessLevel: 'normal'
+            }
+          ]
+        };
+      });
+
+      const result = await userService.refreshForegroundState();
+
+      expect(result).toBe(true);
+      expect(userService.loginUser.name).toBe('新家长');
+      expect(userService.loginUser.familyPermissionRole).toBe('manager');
+      expect(userService.currentUser.userId).toBe('child_1');
+      expect(userService.currentUser.name).toBe('新孩子');
+    });
   });
 
   describe('权限检查', () => {
@@ -896,6 +954,30 @@ describe('UserService', () => {
 
       expect(result.success).toBe(false);
       expect(result.message).toContain('更新失败');
+    });
+
+    it('本地模式下 viewer 家长应允许修改自己的昵称', async () => {
+      API_CONFIG.ENABLE_API = false;
+      userService.loginUser = new User({
+        userId: 'parent_viewer',
+        name: '旧昵称',
+        role: UserRole.PARENT,
+        familyId: 'family_1',
+        familyPermissionRole: 'viewer'
+      });
+      userService.currentUser = userService.loginUser;
+      userService.userCache.set('parent_viewer', userService.loginUser);
+      mockStorageAdapter.get.mockImplementation((key) => {
+        if (key === 'localFamilyMembers') {
+          return [];
+        }
+        return null;
+      });
+
+      const result = await userService.updateNickname('parent_viewer', '新昵称');
+
+      expect(result).toEqual({ success: true });
+      expect(userService.loginUser.name).toBe('新昵称');
     });
 
     it('本地模式下 updateChildAvatarPreset 应更新缓存与本地持久化', async () => {

@@ -99,7 +99,26 @@ describe('utils/user-identity-display', () => {
     expect(managedChild.managementActions).toEqual(['rename', 'pickAvatar']);
   });
 
-  it('viewer 和 blocked 不应导出任何管理动作', () => {
+  it('viewer 家长本人可改昵称，但 viewer 孩子视角和 blocked 仍不应导出管理动作', () => {
+    const viewerParentSelf = buildIdentityDisplayModel({
+      user: {
+        userId: 'parent_viewer',
+        role: 'parent',
+        name: '查看者家长',
+        familyId: 'family_1',
+        familyPermissionRole: 'viewer'
+      },
+      currentUserId: 'parent_viewer',
+      loginUserId: 'parent_viewer',
+      permissionContext: {
+        ...basePermissionContext,
+        loginUserId: 'parent_viewer',
+        familyPermissionRole: 'viewer',
+        isViewerReadonly: true,
+        canManageFamilyGovernance: false
+      }
+    });
+
     const viewerChild = buildIdentityDisplayModel({
       user: {
         userId: 'child_1',
@@ -136,6 +155,7 @@ describe('utils/user-identity-display', () => {
       }
     });
 
+    expect(viewerParentSelf.managementActions).toEqual(['rename']);
     expect(viewerChild.managementActions).toEqual([]);
     expect(blockedChild.managementActions).toEqual([]);
   });

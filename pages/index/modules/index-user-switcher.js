@@ -103,7 +103,15 @@ async function handleNicknameEdit(page, e) {
       return;
     }
 
-    const result = await userService.updateNickname(userId, nickname);
+    const loginUser = typeof userService.getLoginUser === 'function'
+      ? userService.getLoginUser()
+      : null;
+    const loginUserId = userContextUtils.getUserIdentifier(loginUser);
+    const isSelfRename = Boolean(userId && loginUserId && userId === loginUserId);
+    const result = isSelfRename
+      ? await userService.updateCurrentProfile({ nickname })
+      : await userService.updateNickname(userId, nickname);
+
     if (result.success) {
       page.setData(buildIndexUserContextState(page, userService));
       if (typeof onSuccess === 'function') {
