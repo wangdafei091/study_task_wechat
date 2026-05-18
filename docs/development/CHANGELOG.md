@@ -4,6 +4,36 @@
 
 ---
 
+## [功能-2026-05-18] - 2026-05-18
+
+### ✅ 完成情况
+
+**帮助与反馈入口与系统管理员联系方式上线**
+
+- **首页浅层帮助入口已正式落地**：
+  - [`components/user-switcher/user-switcher.js`](/Users/wangdafei/code/study_task_wechat/components/user-switcher/user-switcher.js)、[`components/user-switcher/user-switcher.wxml`](/Users/wangdafei/code/study_task_wechat/components/user-switcher/user-switcher.wxml)、[`components/user-switcher/user-switcher.wxss`](/Users/wangdafei/code/study_task_wechat/components/user-switcher/user-switcher.wxss)、[`pages/index/index.wxml`](/Users/wangdafei/code/study_task_wechat/pages/index/index.wxml)、[`pages/index/index.js`](/Users/wangdafei/code/study_task_wechat/pages/index/index.js)、[`pages/index/modules/index-user-switcher.js`](/Users/wangdafei/code/study_task_wechat/pages/index/modules/index-user-switcher.js) 已在首页头像打开的用户切换面板中新增“帮助与反馈”入口
+  - 新入口独立于“添加成员”权限显示，并由首页统一负责关闭弹层、等待 `220ms` 动画完成后跳转 About 页，避免遮罩或动画残留
+- **About 页已升级为系统管理员联系方式页**：
+  - [`packageManage/pages/about/about.js`](/Users/wangdafei/code/study_task_wechat/packageManage/pages/about/about.js)、[`packageManage/pages/about/about.wxml`](/Users/wangdafei/code/study_task_wechat/packageManage/pages/about/about.wxml)、[`packageManage/pages/about/about.wxss`](/Users/wangdafei/code/study_task_wechat/packageManage/pages/about/about.wxss)、[`utils/support-contact.js`](/Users/wangdafei/code/study_task_wechat/utils/support-contact.js) 已新增系统管理员微信二维码、微信号和邮箱展示与复制能力
+  - About 页保留原有应用信息卡、版本信息和版本区连续点击 7 次进入系统管理员页的能力，同时移除了旧的小程序传播二维码，页面语义收口为“帮助与反馈”
+- **帮助入口与联系方式视觉层级已同步精修**：
+  - 用户切换面板中的帮助入口已调整为更明确的功能卡片样式；About 页中的联系方式区已升级为带 badge、二维码卡片和分组联系行的支持卡片，提升识别度和正式产品感
+
+### 🧪 验证结果
+
+- 定向回归通过：
+  - `npm test -- --runInBand test/pages/about.page.test.js`
+  - `npm test -- --runInBand test/components/user-switcher.test.js`
+  - `npm test -- --runInBand test/pages/index.modules.test.js`
+  - `npm test -- --runInBand test/pages/index.page-contract.test.js`
+  - `npm test -- --runInBand test/pages/index.page-shell.behavior.test.js`
+
+### 📖 详细实施记录
+
+- [帮助与反馈入口设计文档](../design/help-feedback-contact-entry.md)
+
+---
+
 ## [修复-2026-05-09] - 2026-05-09
 
 ### ✅ 完成情况

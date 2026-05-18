@@ -158,6 +158,23 @@ describe('components/user-switcher', () => {
     }));
   });
 
+  it('帮助入口应触发独立事件，不依赖添加成员权限', () => {
+    const component = createComponentInstance({
+      permissionContext: {
+        canManageFamilyGovernance: false
+      },
+      switcherDisplayState: {
+        currentCard: null,
+        switchableUsers: [],
+        footerAction: { visible: false, text: '添加成员' }
+      }
+    });
+
+    component.navigateToHelpFeedback();
+
+    expect(component.triggerEvent).toHaveBeenCalledWith('helpFeedback', {});
+  });
+
   it('孩子候选项尾部更多按钮应直接拦截点击并打开管理菜单', () => {
     const wxml = fs.readFileSync(
       path.join(__dirname, '../../components/user-switcher/user-switcher.wxml'),
@@ -170,5 +187,7 @@ describe('components/user-switcher', () => {
     expect(wxml).toContain('<identity-avatar');
     expect(wxml).toContain('size="card"');
     expect(wxml).toContain('avatarAccentColor="{{item.avatarAccentColor}}"');
+    expect(wxml).toContain('bindtap="navigateToHelpFeedback"');
+    expect(wxml).toContain('帮助与反馈');
   });
 });

@@ -12,6 +12,7 @@ jest.mock('../../services/system-service', () => ({
 describe('packageManage/pages/about/about', () => {
   let pageConfig;
   let systemService;
+  let supportContact;
 
   function loadPageModule() {
     pageConfig = null;
@@ -38,8 +39,10 @@ describe('packageManage/pages/about/about', () => {
     jest.resetModules();
     jest.clearAllMocks();
     jest.useFakeTimers();
+    jest.unmock('../../utils/support-contact');
 
     systemService = require('../../services/system-service');
+    supportContact = require('../../utils/support-contact');
     global.wx = {
       getAccountInfoSync: jest.fn(() => ({
         miniProgram: {
@@ -51,7 +54,8 @@ describe('packageManage/pages/about/about', () => {
       })),
       navigateTo: jest.fn(),
       previewImage: jest.fn(),
-      showToast: jest.fn()
+      showToast: jest.fn(),
+      setClipboardData: jest.fn()
     };
 
     loadPageModule();
@@ -70,12 +74,14 @@ describe('packageManage/pages/about/about', () => {
     expect(appMeta.version).toBe(pkg.version);
   });
 
-  it('正式环境应显示二维码', () => {
+  it('应加载维护者联系方式并展示二维码', () => {
     const page = createPage();
 
     page.onLoad.call(page);
 
-    expect(page.data.showQrCode).toBe(true);
+    expect(page.data.showSupportWechatQr).toBe(true);
+    expect(page.data.supportWechatId).toBe(supportContact.wechatId);
+    expect(page.data.supportEmail).toBe(supportContact.email);
     expect(page.data.version).toBe('1.2.3');
   });
 
@@ -105,7 +111,7 @@ describe('packageManage/pages/about/about', () => {
     expect(page.data.version).toBe('3.9.0');
   });
 
-  it('非正式环境应隐藏二维码实图', () => {
+  it('非正式环境也应展示维护者二维码', () => {
     global.wx.getAppBaseInfo.mockReturnValue({
       envVersion: 'develop'
     });
@@ -113,19 +119,58 @@ describe('packageManage/pages/about/about', () => {
 
     page.onLoad.call(page);
 
-    expect(page.data.showQrCode).toBe(false);
-    expect(page.data.qrCodeHint).toBe('二维码仅在正式环境提供');
+    expect(page.data.envVersionLabel).toBe('开发版');
+    expect(page.data.showSupportWechatQr).toBe(true);
+  });
+
+  it('联系方式缺失时应按降级规则隐藏对应项', () => {
+    jest.resetModules();
+    jest.doMock('../../utils/support-contact', () => ({
+      supportTitle: '联系维护者',
+      supportHint: '',
+      supportResponseHint: '',
+      wechatId: '',
+      email: '',
+      wechatQrImage: '',
+      defaultSupportHint: '默认提示',
+      defaultSupportResponseHint: '默认说明'
+    }));
+    loadPageModule();
+    const page = createPage();
+
+    page.onLoad.call(page);
+
+    expect(page.data.showSupportWechatQr).toBe(false);
+    expect(page.data.showSupportWechatId).toBe(false);
+    expect(page.data.showSupportEmail).toBe(false);
+    expect(page.data.supportHint).toBe('默认提示');
+    expect(page.data.supportResponseHint).toBe('默认说明');
   });
 
   it('二维码点击应触发预览', () => {
     const page = createPage();
     page.onLoad.call(page);
 
-    page.onQrcodeTap.call(page);
+    page.onSupportQrcodeTap.call(page);
 
     expect(global.wx.previewImage).toHaveBeenCalledWith({
-      current: '/packageManage/assets/about/mini-program-qrcode.png',
-      urls: ['/packageManage/assets/about/mini-program-qrcode.png']
+      current: supportContact.wechatQrImage,
+      urls: [supportContact.wechatQrImage]
+    });
+  });
+
+  it('点击微信号和邮箱应触发复制', () => {
+    const page = createPage();
+    page.onLoad.call(page);
+
+    page.onSupportWechatIdTap.call(page);
+    page.onSupportEmailTap.call(page);
+
+    expect(global.wx.setClipboardData).toHaveBeenNthCalledWith(1, {
+      data: supportContact.wechatId
+    });
+    expect(global.wx.setClipboardData).toHaveBeenNthCalledWith(2, {
+      data: supportContact.email
     });
   });
 
