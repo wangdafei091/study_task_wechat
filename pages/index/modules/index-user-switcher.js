@@ -4,6 +4,8 @@ const userContextUtils = require('../../../utils/user-context');
 const { buildIdentityDisplayModel } = require('../../../utils/user-identity-display');
 const { buildIndexUserContextState } = require('./index-user-context');
 
+const USER_SWITCHER_CLOSE_DELAY = 220;
+
 function showUserSwitcher(page) {
   logger.info('Index', '显示用户切换界面');
 
@@ -90,6 +92,24 @@ async function handleUserAdd() {
   wx.navigateTo({
     url: '/packageManage/pages/family-settings/family-settings'
   });
+}
+
+function handleHelpFeedback(page) {
+  logger.info('Index', '从用户切换面板进入帮助与反馈页');
+  page.setData({
+    showUserSwitcher: false
+  });
+
+  if (page._helpFeedbackNavTimer) {
+    clearTimeout(page._helpFeedbackNavTimer);
+  }
+
+  page._helpFeedbackNavTimer = setTimeout(() => {
+    page._helpFeedbackNavTimer = null;
+    wx.navigateTo({
+      url: '/packageManage/pages/about/about'
+    });
+  }, USER_SWITCHER_CLOSE_DELAY);
 }
 
 async function handleNicknameEdit(page, e) {
@@ -269,9 +289,11 @@ module.exports = {
   hideUserSwitcher,
   handleUserSwitch,
   handleUserAdd,
+  handleHelpFeedback,
   handleNicknameEdit,
   handleAvatarPresetUpdate,
   updateMenuItemsWithPermissions,
   navigateToUserProfile,
-  validateUserModule
+  validateUserModule,
+  USER_SWITCHER_CLOSE_DELAY
 };

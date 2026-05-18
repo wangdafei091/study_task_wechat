@@ -222,6 +222,10 @@ Component({
       this.closeUserSwitcher();
     },
 
+    navigateToHelpFeedback() {
+      this.triggerEvent('helpFeedback', {});
+    },
+
     openManagementActions(e) {
       const { userId } = e.currentTarget.dataset;
       const displayUser = this.findDisplayUserById(userId);

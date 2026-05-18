@@ -268,6 +268,32 @@ describe('pages/index helper modules', () => {
     expect(global.wx.showToast).toHaveBeenCalledWith(expect.objectContaining({ title: '用户切换失败' }));
   });
 
+  it('user-switcher handleHelpFeedback 应先关闭面板并在延时后跳转', () => {
+    jest.useFakeTimers();
+
+    const page = {
+      data: {
+        showUserSwitcher: true
+      },
+      setData: jest.fn(function setData(update) {
+        Object.assign(this.data, update);
+      })
+    };
+
+    userSwitcherModule.handleHelpFeedback(page);
+
+    expect(page.data.showUserSwitcher).toBe(false);
+    expect(global.wx.navigateTo).not.toHaveBeenCalled();
+
+    jest.advanceTimersByTime(userSwitcherModule.USER_SWITCHER_CLOSE_DELAY - 1);
+    expect(global.wx.navigateTo).not.toHaveBeenCalled();
+
+    jest.advanceTimersByTime(1);
+    expect(global.wx.navigateTo).toHaveBeenCalledWith({
+      url: '/packageManage/pages/about/about'
+    });
+  });
+
   it('user-switcher handleNicknameEdit 应覆盖无服务、成员修改失败和成功分支', async () => {
     const page = {
       setData: jest.fn(function setData(update) {

@@ -4,6 +4,48 @@
     <view class="about-desc">{{description}}</view>
   </view>
 
+  <view class="about-card support-card">
+    <view class="section-head">
+      <view class="section-title">{{supportTitle}}</view>
+      <view class="support-badge">帮助入口</view>
+    </view>
+    <view class="support-hint" wx:if="{{supportHint}}">{{supportHint}}</view>
+
+    <view class="support-qrcode-block" wx:if="{{showSupportWechatQr}}">
+      <view class="support-qrcode-card" bindtap="onSupportQrcodeTap">
+        <view class="support-qrcode-label">微信二维码</view>
+        <view class="support-qrcode-wrap">
+          <image class="support-qrcode-image" src="{{supportWechatQrImage}}" mode="aspectFit"></image>
+        </view>
+        <view class="support-qrcode-hint">点击二维码可放大查看</view>
+      </view>
+    </view>
+
+    <view class="support-contact-list">
+      <view class="support-row" wx:if="{{showSupportWechatId}}" bindtap="onSupportWechatIdTap">
+        <view class="support-row-icon">W</view>
+        <view class="support-row-main">
+          <text class="support-row-label">微信号</text>
+          <text class="support-row-value">{{supportWechatId}}</text>
+        </view>
+        <text class="support-row-action">点击复制</text>
+      </view>
+
+      <view class="support-row" wx:if="{{showSupportEmail}}" bindtap="onSupportEmailTap">
+        <view class="support-row-icon">@</view>
+        <view class="support-row-main">
+          <text class="support-row-label">邮箱</text>
+          <text class="support-row-value">{{supportEmail}}</text>
+        </view>
+        <text class="support-row-action">点击复制</text>
+      </view>
+    </view>
+
+    <view class="support-response-hint" wx:if="{{supportResponseHint}}">
+      {{supportResponseHint}}
+    </view>
+  </view>
+
   <view class="about-card">
     <view class="section-title">版本信息</view>
     <view class="info-row" bindtap="onVersionTap">
@@ -14,16 +56,5 @@
       <text class="info-label">运行环境</text>
       <text class="info-value">{{envVersionLabel}}</text>
     </view>
-  </view>
-
-  <view class="about-card">
-    <view class="section-title">小程序二维码</view>
-    <view class="qrcode-wrap" wx:if="{{showQrCode}}" bindtap="onQrcodeTap">
-      <image class="qrcode-image" src="{{qrCodeImage}}" mode="aspectFit"></image>
-    </view>
-    <view class="qrcode-placeholder" wx:else>
-      <view class="qrcode-placeholder-icon">口</view>
-    </view>
-    <view class="qrcode-hint">{{qrCodeHint}}</view>
   </view>
 </view>

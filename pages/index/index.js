@@ -1455,6 +1455,10 @@ Page({
     return userSwitcherModule.handleUserAdd(this, e);
   },
 
+  handleHelpFeedback(e) {
+    return userSwitcherModule.handleHelpFeedback(this, e);
+  },
+
   /**
    * 处理昵称编辑事件
    */

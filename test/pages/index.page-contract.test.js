@@ -184,6 +184,7 @@ describe('pages/index page contract', () => {
     expect(typeof page.initializeMultiUserSystem).toBe('function');
     expect(typeof page.initializeMultiUserSystemDelayed).toBe('function');
     expect(typeof page.refreshDataForCurrentUser).toBe('function');
+    expect(typeof page.handleHelpFeedback).toBe('function');
     expect(typeof page.handleAvatarPresetUpdate).toBe('function');
     expect(typeof page.refreshHomeOnboardingCard).toBe('function');
     expect(typeof page.syncHomeOnboardingVisibility).toBe('function');
@@ -226,6 +227,7 @@ describe('pages/index page contract', () => {
     expect(wxml).toContain('readonlyReason="{{isViewingFuture ? \'future-date\' : readonlyReason}}"');
     expect(wxml).toContain('permissionContext="{{userIdentityPermissionContext}}"');
     expect(wxml).toContain('bind:avatarPresetUpdate="handleAvatarPresetUpdate"');
+    expect(wxml).toContain('bind:helpFeedback="handleHelpFeedback"');
     expect(wxml).toContain('companionEmoji="{{progressCompanionDisplay.emoji}}"');
 
     const json = fs.readFileSync(

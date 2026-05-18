@@ -472,6 +472,7 @@
   permissionContext="{{userIdentityPermissionContext}}"
   bind:userSwitch="handleUserSwitch"
   bind:userAdd="handleUserAdd"
+  bind:helpFeedback="handleHelpFeedback"
   bind:nicknameEdit="handleNicknameEdit"
   bind:avatarPresetUpdate="handleAvatarPresetUpdate"
   bind:close="hideUserSwitcher"

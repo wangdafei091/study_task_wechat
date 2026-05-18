@@ -1,8 +1,8 @@
 const systemService = require('../../../services/system-service');
 const miniProgramEnv = require('../../../utils/mini-program-env');
 const appMeta = require('../../../utils/app-meta');
+const supportContact = require('../../../utils/support-contact');
 
-const QR_CODE_IMAGE = '/packageManage/assets/about/mini-program-qrcode.png';
 const VERSION_TAP_THRESHOLD = 7;
 const VERSION_TAP_TIMEOUT = 2000;
 
@@ -12,9 +12,15 @@ Page({
     version: '',
     envVersionLabel: '',
     description: appMeta.description,
-    showQrCode: false,
-    qrCodeImage: QR_CODE_IMAGE,
-    qrCodeHint: '',
+    supportTitle: '',
+    supportHint: '',
+    supportResponseHint: '',
+    supportWechatId: '',
+    supportEmail: '',
+    supportWechatQrImage: '',
+    showSupportWechatId: false,
+    showSupportEmail: false,
+    showSupportWechatQr: false,
     versionTapCount: 0
   },
 
@@ -24,13 +30,29 @@ Page({
       : null;
     const miniProgramInfo = accountInfo?.miniProgram || {};
     const envVersion = miniProgramEnv.getEnvVersion();
-    const showQrCode = miniProgramEnv.isReleaseEnv();
+    const supportWechatId = String(supportContact.wechatId || '').trim();
+    const supportEmail = String(supportContact.email || '').trim();
+    const supportWechatQrImage = String(supportContact.wechatQrImage || '').trim();
+    const supportHint = String(
+      supportContact.supportHint || supportContact.defaultSupportHint || ''
+    ).trim();
+    const supportResponseHint = String(
+      supportContact.supportResponseHint || supportContact.defaultSupportResponseHint || ''
+    ).trim();
+    const supportTitle = String(supportContact.supportTitle || '联系维护者').trim() || '联系维护者';
 
     this.setData({
       version: this._resolveVersion(miniProgramInfo),
       envVersionLabel: this._formatEnvLabel(envVersion),
-      showQrCode,
-      qrCodeHint: showQrCode ? '点击二维码可放大查看' : '二维码仅在正式环境提供'
+      supportTitle,
+      supportHint,
+      supportResponseHint,
+      supportWechatId,
+      supportEmail,
+      supportWechatQrImage,
+      showSupportWechatId: Boolean(supportWechatId),
+      showSupportEmail: Boolean(supportEmail),
+      showSupportWechatQr: Boolean(supportWechatQrImage)
     });
   },
 
@@ -94,14 +116,41 @@ Page({
     }
   },
 
-  onQrcodeTap() {
-    if (!this.data.showQrCode) {
+  onSupportWechatIdTap() {
+    if (!this.data.showSupportWechatId) {
+      return;
+    }
+
+    this._copyToClipboard(this.data.supportWechatId);
+  },
+
+  onSupportEmailTap() {
+    if (!this.data.showSupportEmail) {
+      return;
+    }
+
+    this._copyToClipboard(this.data.supportEmail);
+  },
+
+  onSupportQrcodeTap() {
+    if (!this.data.showSupportWechatQr) {
       return;
     }
 
     wx.previewImage({
-      current: this.data.qrCodeImage,
-      urls: [this.data.qrCodeImage]
+      current: this.data.supportWechatQrImage,
+      urls: [this.data.supportWechatQrImage]
+    });
+  },
+
+  _copyToClipboard(value) {
+    const text = String(value || '').trim();
+    if (!text) {
+      return;
+    }
+
+    wx.setClipboardData({
+      data: text
     });
   },
 
