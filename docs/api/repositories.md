@@ -233,6 +233,67 @@ BaseRepository提供通用的CRUD操作和缓存机制，所有具体仓储都�
   - `recent` 模式优先比较 `lastUsedAt`
   - `usage` 模式优先比较 `usageCount`
 
+## ReleaseNoteRepository - 版本说明仓储
+
+管理前台静态版本说明注册表与按 `currentUser + version` 维度持久化的本地阅读状态。
+
+### 实现结构
+
+- 不继承 `BaseRepository`
+- 静态内容源：`utils/release-notes/index.js`
+- 本地状态存储键默认值：`releaseNoteReadStates`
+- 聚合模型：`ReleaseNote`
+
+### 专用方法
+
+##### `getAllNotes()`
+获取全部版本说明。
+- **返回**: `Promise<ReleaseNote[]>`
+
+说明：
+- 返回顺序按 `publishedAt` 从近到远排序
+- 当前版本说明唯一前台内容源固定为 `utils/release-notes/index.js`
+
+##### `findByVersion(version)`
+根据版本号查找单条版本说明。
+- **参数**:
+  - `version` (String)
+- **返回**: `Promise<ReleaseNote | null>`
+
+##### `getReadState(version, effectiveUserId)`
+获取指定视角用户在指定版本下的提示/阅读状态。
+- **参数**:
+  - `version` (String)
+  - `effectiveUserId` (String)
+- **返回**:
+  ```javascript
+  {
+    version: string,
+    effectiveUserId: string,
+    promptShownAt: number,
+    readAt: number
+  }
+  ```
+
+##### `saveReadState(version, effectiveUserId, patch = {})`
+更新指定视角用户在指定版本下的提示/阅读状态。
+- **参数**:
+  - `version` (String)
+  - `effectiveUserId` (String)
+  - `patch` (Object)
+- **返回**:
+  ```javascript
+  {
+    success: boolean,
+    state?: Object
+  }
+  ```
+
+说明：
+- 当前状态键格式为 `effectiveUserId::version`
+- 仅维护轻量本地状态，不做云端同步
+- `promptShownAt` 与 `readAt` 可独立存在，支持“稍后查看但保留未读 badge”的前台语义
+
 ## StarGroupRepository - 星星分组仓储
 
 管理星星分组数据，支持按有效期分组存储和FIFO消费策略。

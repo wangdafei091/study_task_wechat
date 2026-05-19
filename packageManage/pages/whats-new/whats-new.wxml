@@ -1,0 +1,57 @@
+<view class="whats-new-page">
+  <view class="whats-new-card hero-card" wx:if="{{currentReleaseNote}}">
+    <view class="hero-meta">
+      <view class="hero-badge">本次更新</view>
+      <view class="hero-version">v{{currentReleaseNote.version}}</view>
+    </view>
+    <view class="hero-title">{{currentReleaseNote.title}}</view>
+    <view class="hero-summary">{{currentReleaseNote.summary}}</view>
+  </view>
+
+  <view class="whats-new-card" wx:if="{{currentReleaseNote}}">
+    <view class="section-title">核心变化</view>
+    <view class="highlight-list">
+      <block wx:for="{{currentReleaseNote.highlights}}" wx:key="id">
+        <view class="highlight-item">
+          <view class="highlight-main">
+            <view class="highlight-kind {{item.kind}}">
+              <text wx:if="{{item.kind === 'new'}}">新增</text>
+              <text wx:elif="{{item.kind === 'fixed'}}">修复</text>
+              <text wx:else>优化</text>
+            </view>
+            <view class="highlight-copy">
+              <view class="highlight-title">{{item.title}}</view>
+              <view class="highlight-summary">{{item.summary}}</view>
+            </view>
+          </view>
+          <view
+            class="highlight-action"
+            wx:if="{{item.actionPath}}"
+            data-path="{{item.actionPath}}"
+            bindtap="onHighlightActionTap"
+          >{{item.actionLabel || '前往查看'}}</view>
+        </view>
+      </block>
+    </view>
+  </view>
+
+  <view class="whats-new-card" wx:if="{{recentReleaseNotes.length > 0}}">
+    <view class="section-title">近期变化</view>
+    <view class="history-list">
+      <block wx:for="{{recentReleaseNotes}}" wx:key="version">
+        <view class="history-item" data-version="{{item.version}}" bindtap="onRecentReleaseTap">
+          <view class="history-item-main">
+            <view class="history-version">v{{item.version}}</view>
+            <view class="history-summary">{{item.summary}}</view>
+          </view>
+          <view class="history-arrow">›</view>
+        </view>
+      </block>
+    </view>
+  </view>
+
+  <view class="whats-new-card empty-card" wx:if="{{emptyState}}">
+    <view class="empty-title">当前还没有可展示的版本变化</view>
+    <view class="empty-desc">后续有新的用户可感知更新时，会在这里持续沉淀。</view>
+  </view>
+</view>

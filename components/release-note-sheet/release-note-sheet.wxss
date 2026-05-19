@@ -1,0 +1,125 @@
+.release-note-sheet-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 1001;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 24rpx;
+  background: rgba(15, 23, 42, 0.16);
+}
+
+.release-note-sheet {
+  width: 100%;
+  border-radius: 28rpx;
+  padding: 28rpx 28rpx calc(28rpx + env(safe-area-inset-bottom));
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  box-shadow: 0 -12rpx 32rpx rgba(15, 23, 42, 0.12);
+}
+
+.sheet-badge {
+  display: inline-flex;
+  padding: 8rpx 16rpx;
+  border-radius: 999rpx;
+  background: rgba(37, 99, 235, 0.1);
+  color: #2563eb;
+  font-size: 20rpx;
+  line-height: 1.4;
+}
+
+.sheet-title {
+  margin-top: 16rpx;
+  font-size: 34rpx;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.sheet-summary {
+  margin-top: 12rpx;
+  font-size: 25rpx;
+  line-height: 1.7;
+  color: #5b6b81;
+}
+
+.sheet-highlight-list {
+  margin-top: 24rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 18rpx;
+}
+
+.sheet-highlight-item {
+  display: flex;
+  gap: 16rpx;
+  padding: 18rpx 20rpx;
+  border-radius: 20rpx;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1rpx solid rgba(226, 232, 240, 0.86);
+}
+
+.sheet-highlight-dot {
+  width: 16rpx;
+  height: 16rpx;
+  margin-top: 10rpx;
+  border-radius: 50%;
+  background: #60a5fa;
+  flex-shrink: 0;
+}
+
+.sheet-highlight-dot.new {
+  background: #2563eb;
+}
+
+.sheet-highlight-dot.improved {
+  background: #38bdf8;
+}
+
+.sheet-highlight-dot.fixed {
+  background: #0ea5a4;
+}
+
+.sheet-highlight-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.sheet-highlight-title {
+  font-size: 27rpx;
+  font-weight: 600;
+  color: #22324a;
+}
+
+.sheet-highlight-summary {
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  line-height: 1.7;
+  color: #63748a;
+}
+
+.sheet-actions {
+  display: flex;
+  gap: 16rpx;
+  margin-top: 28rpx;
+}
+
+.sheet-action {
+  flex: 1;
+  height: 84rpx;
+  border-radius: 22rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28rpx;
+  font-weight: 600;
+}
+
+.sheet-action.secondary {
+  background: rgba(241, 245, 249, 0.96);
+  color: #475569;
+}
+
+.sheet-action.primary {
+  background: linear-gradient(135deg, #2563eb 0%, #60a5fa 100%);
+  color: #ffffff;
+  box-shadow: 0 10rpx 22rpx rgba(37, 99, 235, 0.18);
+}

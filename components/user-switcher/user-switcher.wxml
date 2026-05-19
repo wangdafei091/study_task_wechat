@@ -97,7 +97,9 @@
       <view class="footer-help-copy">
         <view class="footer-help-title-row">
           <view class="footer-help-title">帮助与反馈</view>
-          <view class="footer-help-tag">随时咨询</view>
+          <view class="footer-help-tag {{helpEntryBadgeVisible ? 'is-badge' : ''}}">
+            {{helpEntryBadgeVisible ? helpEntryBadgeText : '随时咨询'}}
+          </view>
         </view>
         <view class="footer-help-desc">有疑问、权限异常或功能建议，都可以直接联系系统管理员</view>
       </view>

@@ -1,6 +1,8 @@
 const systemService = require('../../../services/system-service');
+const serviceManager = require('../../../services/service-manager');
 const miniProgramEnv = require('../../../utils/mini-program-env');
 const appMeta = require('../../../utils/app-meta');
+const runtimeVersionUtils = require('../../../utils/runtime-version');
 const supportContact = require('../../../utils/support-contact');
 
 const VERSION_TAP_THRESHOLD = 7;
@@ -21,7 +23,12 @@ Page({
     showSupportWechatId: false,
     showSupportEmail: false,
     showSupportWechatQr: false,
-    versionTapCount: 0
+    versionTapCount: 0,
+    showReleaseNotesEntry: false,
+    releaseNoteEntryTitle: '近期变化',
+    releaseNoteEntrySummary: '',
+    releaseNoteEntryVersion: '',
+    releaseNoteEntryBadgeText: ''
   },
 
   onLoad() {
@@ -41,8 +48,10 @@ Page({
     ).trim();
     const supportTitle = String(supportContact.supportTitle || '联系维护者').trim() || '联系维护者';
 
+    const resolvedVersion = runtimeVersionUtils.resolveRuntimeVersion(miniProgramInfo);
+
     this.setData({
-      version: this._resolveVersion(miniProgramInfo),
+      version: resolvedVersion,
       envVersionLabel: this._formatEnvLabel(envVersion),
       supportTitle,
       supportHint,
@@ -54,16 +63,12 @@ Page({
       showSupportEmail: Boolean(supportEmail),
       showSupportWechatQr: Boolean(supportWechatQrImage)
     });
+
+    this._loadReleaseNotesEntry();
   },
 
   _resolveVersion(miniProgramInfo = {}) {
-    const runtimeVersion = String(miniProgramInfo.version || '').trim();
-    if (runtimeVersion && runtimeVersion !== '0.0.0') {
-      return runtimeVersion;
-    }
-
-    const fallbackVersion = String(appMeta.version || '').trim();
-    return fallbackVersion || '未标记版本';
+    return runtimeVersionUtils.resolveRuntimeVersion(miniProgramInfo);
   },
 
   _formatEnvLabel(envVersion) {
@@ -96,6 +101,60 @@ Page({
     clearTimeout(this._versionTapTimer);
     this._versionTapTimer = null;
     this._tryEnterSystemAdmin();
+  },
+
+  onShow() {
+    this._loadReleaseNotesEntry();
+  },
+
+  async _loadReleaseNotesEntry() {
+    const releaseNoteService = serviceManager.getService('releaseNote');
+    const app = typeof getApp === 'function' ? getApp() : null;
+    const userService = app?.globalData?.userService || serviceManager.getUserService();
+
+    if (!releaseNoteService) {
+      this.setData({
+        showReleaseNotesEntry: false,
+        releaseNoteEntryTitle: '近期变化',
+        releaseNoteEntrySummary: '',
+        releaseNoteEntryVersion: '',
+        releaseNoteEntryBadgeText: ''
+      });
+      return;
+    }
+
+    const context = {
+      loginUser: userService?.getLoginUser?.() || null,
+      currentUser: userService?.getCurrentUser?.() || null,
+      runtimeVersion: this.data.version || runtimeVersionUtils.getRuntimeVersion()
+    };
+
+    const [currentReleaseNoteResult, visibleReleaseNotesResult] = await Promise.all([
+      releaseNoteService.getCurrentReleaseNote(context),
+      releaseNoteService.listVisibleReleaseNotes(context)
+    ]);
+
+    const currentReleaseNote = currentReleaseNoteResult.success
+      ? currentReleaseNoteResult.note
+      : null;
+    const visibleReleaseNotes = visibleReleaseNotesResult.success
+      ? visibleReleaseNotesResult.notes
+      : [];
+    const entryNote = currentReleaseNote || visibleReleaseNotes[0] || null;
+
+    this.setData({
+      showReleaseNotesEntry: Boolean(entryNote),
+      releaseNoteEntryTitle: currentReleaseNoteResult.unread ? '本次更新' : '近期变化',
+      releaseNoteEntrySummary: entryNote?.summary || '',
+      releaseNoteEntryVersion: entryNote?.version || '',
+      releaseNoteEntryBadgeText: currentReleaseNoteResult.unread ? '新变化' : ''
+    });
+  },
+
+  onReleaseNotesTap() {
+    wx.navigateTo({
+      url: '/packageManage/pages/whats-new/whats-new'
+    });
   },
 
   async _tryEnterSystemAdmin() {

@@ -1,0 +1,24 @@
+<view class="release-note-sheet-mask" wx:if="{{visible}}" catchtouchmove="preventBubble">
+  <view class="release-note-sheet" catchtap="preventBubble">
+    <view class="sheet-badge">本次更新</view>
+    <view class="sheet-title">{{note.title}}</view>
+    <view class="sheet-summary">{{note.summary}}</view>
+
+    <view class="sheet-highlight-list" wx:if="{{note && note.highlights && note.highlights.length > 0}}">
+      <block wx:for="{{note.highlights}}" wx:key="id">
+        <view class="sheet-highlight-item">
+          <view class="sheet-highlight-dot {{item.kind}}"></view>
+          <view class="sheet-highlight-copy">
+            <view class="sheet-highlight-title">{{item.title}}</view>
+            <view class="sheet-highlight-summary">{{item.summary}}</view>
+          </view>
+        </view>
+      </block>
+    </view>
+
+    <view class="sheet-actions">
+      <view class="sheet-action secondary" bindtap="onLaterTap">稍后查看</view>
+      <view class="sheet-action primary" bindtap="onDetailTap">查看详情</view>
+    </view>
+  </view>
+</view>

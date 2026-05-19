@@ -158,6 +158,9 @@ async function loadAllPageData(page, options = {}) {
     }
 
     logger.info('Index', '页面数据批量加载完成');
+    if (typeof page.refreshReleaseNoteAwareness === 'function') {
+      await page.refreshReleaseNoteAwareness();
+    }
   } catch (error) {
     logger.error('Index', '批量加载页面数据失败', error);
     wx.showToast({
@@ -214,6 +217,10 @@ async function refreshDataForCurrentUser(page) {
       page.loadStarsAndRewards(),
       page.loadMessageData()
     ]);
+
+    if (typeof page.refreshReleaseNoteAwareness === 'function') {
+      await page.refreshReleaseNoteAwareness();
+    }
 
     logger.info('Index', `用户数据刷新完成: ${currentUser.name}`);
   } catch (error) {

@@ -4,6 +4,41 @@
 
 ---
 
+## [里程碑-22P] - 2026-05-19
+
+### ✅ 完成情况
+
+**版本变化感知与更新说明体验上线**
+
+- **发布说明数据层与统一版本解析已正式落地**：
+  - [`utils/runtime-version.js`](/Users/wangdafei/code/study_task_wechat/utils/runtime-version.js)、[`utils/release-notes/index.js`](/Users/wangdafei/code/study_task_wechat/utils/release-notes/index.js)、[`models/release-note.js`](/Users/wangdafei/code/study_task_wechat/models/release-note.js)、[`repositories/release-note-repository.js`](/Users/wangdafei/code/study_task_wechat/repositories/release-note-repository.js)、[`services/release-note-service.js`](/Users/wangdafei/code/study_task_wechat/services/release-note-service.js)、[`services/service-manager.js`](/Users/wangdafei/code/study_task_wechat/services/service-manager.js) 已建立运行时版本统一回退口径、前台发布说明唯一内容源、按 `currentUser + version` 的提示/已读状态，以及 `ReleaseNoteService` 对外服务入口
+  - 当前版本说明已从工程日志中独立出来，不再依赖消息流或 About 页内联判断，后续版本只需维护 `utils/release-notes/index.js` 即可进入前台能力
+- **首页首次提醒、帮助入口 badge 与 About 承接页已形成闭环**：
+  - [`components/release-note-sheet/release-note-sheet.js`](/Users/wangdafei/code/study_task_wechat/components/release-note-sheet/release-note-sheet.js)、[`pages/index/modules/index-release-note.js`](/Users/wangdafei/code/study_task_wechat/pages/index/modules/index-release-note.js)、[`pages/index/modules/index-refresh-coordinator.js`](/Users/wangdafei/code/study_task_wechat/pages/index/modules/index-refresh-coordinator.js)、[`pages/index/modules/index-search-panel.js`](/Users/wangdafei/code/study_task_wechat/pages/index/modules/index-search-panel.js)、[`pages/index/modules/index-message-preview.js`](/Users/wangdafei/code/study_task_wechat/pages/index/modules/index-message-preview.js)、[`pages/index/index.js`](/Users/wangdafei/code/study_task_wechat/pages/index/index.js)、[`pages/index/index.wxml`](/Users/wangdafei/code/study_task_wechat/pages/index/index.wxml) 已完成首页轻提醒状态机、覆盖层占用后的待展示重试，以及“稍后查看 / 查看详情”分流
+  - [`components/user-switcher/user-switcher.js`](/Users/wangdafei/code/study_task_wechat/components/user-switcher/user-switcher.js)、[`components/user-switcher/user-switcher.wxml`](/Users/wangdafei/code/study_task_wechat/components/user-switcher/user-switcher.wxml)、[`components/user-switcher/user-switcher.wxss`](/Users/wangdafei/code/study_task_wechat/components/user-switcher/user-switcher.wxss)、[`packageManage/pages/about/about.js`](/Users/wangdafei/code/study_task_wechat/packageManage/pages/about/about.js)、[`packageManage/pages/about/about.wxml`](/Users/wangdafei/code/study_task_wechat/packageManage/pages/about/about.wxml)、[`packageManage/pages/about/about.wxss`](/Users/wangdafei/code/study_task_wechat/packageManage/pages/about/about.wxss) 已完成帮助入口 `有新变化` badge、About 页“本次更新 / 近期变化”稳定入口，并保持版本区 7 连击系统管理员入口不变
+- **`whats-new` 详情页与近期历史回看已正式上线**：
+  - [`packageManage/pages/whats-new/whats-new.js`](/Users/wangdafei/code/study_task_wechat/packageManage/pages/whats-new/whats-new.js)、[`packageManage/pages/whats-new/whats-new.wxml`](/Users/wangdafei/code/study_task_wechat/packageManage/pages/whats-new/whats-new.wxml)、[`packageManage/pages/whats-new/whats-new.wxss`](/Users/wangdafei/code/study_task_wechat/packageManage/pages/whats-new/whats-new.wxss)、[`app.json`](/Users/wangdafei/code/study_task_wechat/app.json) 已新增“本次更新 / 近期变化”详情页
+  - 进入 About 页本身不会标记已读；只有进入 `whats-new` 详情页后才会清除当前版本未读状态，符合设计阶段确定的阅读语义
+- **实施过程中发现的真实问题已同步修复**：
+  - 已修复微信运行时对 `require('../utils/release-notes')` 不自动解析目录 `index.js` 导致的启动期致命错误，当前模拟器启动链已恢复正常
+  - 已修正受众匹配边界：child 视角不再继承登录家长的 `manager / viewer` 标签，避免把家长专属说明误展示给孩子视角
+
+### 🧪 验证结果
+
+- 定向回归通过：
+  - `npx jest test/models/release-note.test.js test/repositories/release-note-repository.test.js test/services/release-note-service.test.js test/components/release-note-sheet.test.js test/pages/about.page.test.js test/pages/whats-new.page.test.js test/pages/index.page-shell.behavior.test.js --runInBand`
+- 提交前静态检查通过：
+  - `git diff --check`
+- 模拟器日志复核通过：
+  - `l1.log` 中的启动期模块解析错误已修复
+  - `l2.log` 已确认首页首次提醒、帮助入口跳转和版本说明状态读写主链路正常运行
+
+### 📖 详细实施记录
+
+- [里程碑-22P：版本变化感知与更新说明体验](../design/milestone-22p-version-update-awareness-and-whats-new-experience.md)
+
+---
+
 ## [功能-2026-05-18] - 2026-05-18
 
 ### ✅ 完成情况

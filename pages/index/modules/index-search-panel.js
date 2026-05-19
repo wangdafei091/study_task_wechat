@@ -14,6 +14,9 @@ function toggleSearch(page) {
       if (typeof page.syncHomeOnboardingVisibility === 'function') {
         page.syncHomeOnboardingVisibility();
       }
+      if (typeof page.evaluatePendingReleaseNotePrompt === 'function') {
+        page.evaluatePendingReleaseNotePrompt();
+      }
     }, 300);
     return;
   }

@@ -2,7 +2,7 @@
 
 本文档介绍了学习任务微信小程序服务层API，包括所有核心服务的功能、方法签名和使用说明。
 
-> **最后更新**：2026-04-27
+> **最后更新**：2026-05-19
 
 ---
 
@@ -30,12 +30,14 @@ const validationService = serviceManager.get('validationService');
 const configService = serviceManager.get('configService');
 const offlineQueueService = serviceManager.get('offlineQueueService');
 const taskTemplateService = serviceManager.get('taskTemplateService');
+const releaseNoteService = serviceManager.get('releaseNoteService');
 ```
 
 补充说明：
 - `offlineQueueService` 为 M19E 引入的统一待同步队列服务，负责承接任务域与奖励域的离线待同步动作。
 - `ENABLE_API / API_BASE_URL` 不属于 `ConfigService` 管辖范围，而是由 `utils/runtime-config.js` 与 `utils/api-config.js` 统一解析为启动时运行模式快照。
 - `taskTemplateService` 同时支持别名 `taskTemplate` / `TaskTemplateService`，由 `ServiceManager` 统一映射。
+- `releaseNoteService` 同时支持别名 `releaseNote` / `ReleaseNoteService`，当前由首页、About 页和 `whats-new` 页共同消费。
 - `services/system-service.js` 与 `services/invite-service.js` 为轻量 HTTP 服务，不通过 `ServiceManager` 注册，当前由系统管理页、治理页、邀请码中心和承接页直接 `require` 使用。
 
 ---
@@ -366,6 +368,119 @@ const taskTemplateService = serviceManager.get('taskTemplateService');
 ##### `getPendingSummary(filter = {})`
 返回当前待同步概览。
 - **返回**: `Promise<{ total: number, byDomain: Object }>`
+
+---
+
+## ReleaseNoteService - 版本变化说明服务
+
+版本变化说明服务负责前台发布说明内容解析、受众过滤、首页首次提醒资格判断，以及按 `currentUser + version` 维度维护提示/已读状态。
+
+### 核心功能
+- 解析当前运行版本对应的版本说明
+- 按当前视角用户过滤可见受众
+- 计算首页首次提醒与帮助入口 badge 状态
+- 维护 `promptShown / read` 本地轻状态
+- 为 About 页与 `whats-new` 页提供当前版本和近期历史版本说明
+
+### API 方法
+
+##### `getCurrentReleaseNote(context = {})`
+获取当前运行版本对当前视角用户可见的版本说明。
+- **参数**:
+  ```javascript
+  {
+    loginUser?: Object | null,
+    currentUser?: Object | null,
+    runtimeVersion?: string
+  }
+  ```
+- **返回**:
+  ```javascript
+  {
+    success: boolean,
+    note: Object | null,
+    unread: boolean,
+    promptEligible: boolean,
+    effectiveUserId: string
+  }
+  ```
+- **说明**：
+  - `unread` 仅表示当前版本说明尚未正式阅读
+  - `promptEligible` 仅在当前版本既未已读、也未展示过首页首次提醒时为 `true`
+
+##### `listVisibleReleaseNotes(context = {})`
+获取当前视角用户可见的近期版本说明列表。
+- **返回**:
+  ```javascript
+  {
+    success: boolean,
+    notes: Array<Object>
+  }
+  ```
+- **说明**：
+  - 当前返回顺序按 `publishedAt` 从近到远排序
+  - child 视角不会继承登录家长的 `manager / viewer` 受众标签
+
+##### `markPromptShown(version, effectiveUserId)`
+标记首页首次提醒已展示。
+- **参数**:
+  - `version` - `string`
+  - `effectiveUserId` - `string`
+- **返回**:
+  ```javascript
+  {
+    success: boolean
+  }
+  ```
+
+##### `markReleaseNoteRead(version, effectiveUserId)`
+标记当前版本说明已读。
+- **参数**:
+  - `version` - `string`
+  - `effectiveUserId` - `string`
+- **返回**:
+  ```javascript
+  {
+    success: boolean
+  }
+  ```
+- **说明**：
+  - 当前仅在进入 `packageManage/pages/whats-new/whats-new` 时标记已读
+  - 进入 About 页本身不会触发该标记
+
+##### `getHelpEntryBadgeState(context = {})`
+获取帮助入口 badge 展示态。
+- **返回**:
+  ```javascript
+  {
+    visible: boolean,
+    text: string
+  }
+  ```
+- **说明**：
+  - 当前默认文案为 `有新变化`
+  - 若当前版本无说明或已读，则返回 `visible=false`
+
+##### `evaluateReleaseNotePromptDisplay(pageState = {})`
+判断当前首页状态是否允许展示轻提醒。
+- **参数**:
+  ```javascript
+  {
+    showSearch?: boolean,
+    showMessagePreview?: boolean,
+    showHomeOnboardingCard?: boolean,
+    showUserSwitcher?: boolean
+  }
+  ```
+- **返回**:
+  ```javascript
+  {
+    shouldDisplay: boolean,
+    pending: boolean
+  }
+  ```
+- **说明**：
+  - 当搜索面板、消息预览、首页 onboarding 卡片或用户切换面板占用时，当前版本说明会进入待展示状态，而不是立即放弃本轮提醒
 
 ---
 

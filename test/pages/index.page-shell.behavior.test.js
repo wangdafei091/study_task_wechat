@@ -72,6 +72,7 @@ describe('pages/index/index shell behavior', () => {
   let taskService;
   let messageService;
   let rewardService;
+  let releaseNoteService;
 
   function cloneData(data) {
     return JSON.parse(JSON.stringify(data));
@@ -204,6 +205,45 @@ describe('pages/index/index shell behavior', () => {
       hasOnlyExampleRewardsSync: jest.fn(() => false),
       _isExampleReward: jest.fn((reward) => reward.id === 'example')
     };
+    releaseNoteService = {
+      getCurrentReleaseNote: jest.fn().mockResolvedValue({
+        success: true,
+        note: {
+          version: '3.9.0',
+          title: '本次更新',
+          summary: '现在可以更清楚地知道新增了什么',
+          highlights: [
+            {
+              id: 'h1',
+              kind: 'new',
+              title: '首页轻提醒',
+              summary: '首页会轻提醒'
+            }
+          ]
+        },
+        unread: true,
+        promptEligible: true,
+        effectiveUserId: 'child-1'
+      }),
+      getHelpEntryBadgeState: jest.fn().mockResolvedValue({
+        visible: true,
+        text: '有新变化'
+      }),
+      markPromptShown: jest.fn().mockResolvedValue({ success: true }),
+      markReleaseNoteRead: jest.fn().mockResolvedValue({ success: true }),
+      evaluateReleaseNotePromptDisplay: jest.fn((pageState = {}) => {
+        const blocked = Boolean(
+          pageState.showSearch
+          || pageState.showMessagePreview
+          || pageState.showHomeOnboardingCard
+          || pageState.showUserSwitcher
+        );
+        return {
+          shouldDisplay: !blocked,
+          pending: blocked
+        };
+      })
+    };
 
     serviceManager.getEventBus.mockReturnValue(eventBus);
     serviceManager.getTaskService.mockReturnValue(taskService);
@@ -211,6 +251,7 @@ describe('pages/index/index shell behavior', () => {
     serviceManager.getRewardService.mockReturnValue(rewardService);
     serviceManager.getService.mockImplementation((name) => {
       if (name === 'task') return taskService;
+      if (name === 'releaseNote') return releaseNoteService;
       return null;
     });
 
@@ -730,6 +771,60 @@ describe('pages/index/index shell behavior', () => {
       'msg-read-new'
     ]);
     expect(page.data.unreadCount).toBe(2);
+  });
+
+  it('首页数据稳定后应展示一次版本变化轻提醒并同步帮助入口 badge', async () => {
+    page.data.currentUser = { id: 'child-1', userId: 'child-1', name: '小明', role: 'child' };
+
+    await page.refreshReleaseNoteAwareness();
+
+    expect(page.data.releaseNoteHelpBadgeVisible).toBe(true);
+    expect(page.data.releaseNoteHelpBadgeText).toBe('有新变化');
+    expect(page.data.releaseNoteSheetVisible).toBe(true);
+    expect(page.data.releaseNoteSheetNote).toEqual(expect.objectContaining({
+      version: '3.9.0'
+    }));
+    expect(releaseNoteService.markPromptShown).toHaveBeenCalledWith('3.9.0', 'child-1');
+  });
+
+  it('存在覆盖层时应保留待展示状态，覆盖层关闭后再展示提醒', async () => {
+    page.data.currentUser = { id: 'child-1', userId: 'child-1', name: '小明', role: 'child' };
+    page.setData({
+      showSearch: true
+    });
+
+    await page.refreshReleaseNoteAwareness();
+
+    expect(page.data.releaseNoteSheetVisible).toBe(false);
+    expect(releaseNoteService.markPromptShown).not.toHaveBeenCalled();
+
+    page.setData({
+      showSearch: false
+    });
+    await page.evaluatePendingReleaseNotePrompt();
+
+    expect(page.data.releaseNoteSheetVisible).toBe(true);
+    expect(releaseNoteService.markPromptShown).toHaveBeenCalledWith('3.9.0', 'child-1');
+  });
+
+  it('查看详情应标记已读并跳转到 whats-new 页面', async () => {
+    page.data.currentUser = { id: 'child-1', userId: 'child-1', name: '小明', role: 'child' };
+    page.setData({
+      releaseNoteSheetVisible: true,
+      releaseNoteSheetNote: {
+        version: '3.9.0',
+        title: '本次更新',
+        summary: '现在可以更清楚地知道新增了什么'
+      }
+    });
+
+    await page.handleReleaseNotePromptDetail();
+
+    expect(releaseNoteService.markReleaseNoteRead).toHaveBeenCalledWith('3.9.0', 'child-1');
+    expect(page.data.releaseNoteHelpBadgeVisible).toBe(false);
+    expect(global.wx.navigateTo).toHaveBeenCalledWith({
+      url: '/packageManage/pages/whats-new/whats-new?version=3.9.0'
+    });
   });
 
   it('日期导航、翻周与日期切换应处理缺参、边界、手势、成功和失败分支', async () => {

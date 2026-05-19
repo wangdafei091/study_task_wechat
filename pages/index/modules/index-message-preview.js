@@ -34,6 +34,9 @@ function navigateToMessageCenter(page, e) {
         if (typeof page.syncHomeOnboardingVisibility === 'function') {
           page.syncHomeOnboardingVisibility();
         }
+        if (typeof page.evaluatePendingReleaseNotePrompt === 'function') {
+          page.evaluatePendingReleaseNotePrompt();
+        }
         page._messagePreviewCloseTimer = null;
       }, 300);
     }
@@ -67,6 +70,9 @@ function toggleMessagePreview(page) {
       });
       if (typeof page.syncHomeOnboardingVisibility === 'function') {
         page.syncHomeOnboardingVisibility();
+      }
+      if (typeof page.evaluatePendingReleaseNotePrompt === 'function') {
+        page.evaluatePendingReleaseNotePrompt();
       }
       page._messagePreviewCloseTimer = null;
     }, 250);

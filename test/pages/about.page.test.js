@@ -9,9 +9,15 @@ jest.mock('../../services/system-service', () => ({
   getBootstrap: jest.fn()
 }));
 
+jest.mock('../../services/service-manager', () => ({
+  getService: jest.fn(),
+  getUserService: jest.fn()
+}));
+
 describe('packageManage/pages/about/about', () => {
   let pageConfig;
   let systemService;
+  let serviceManager;
   let supportContact;
 
   function loadPageModule() {
@@ -42,7 +48,13 @@ describe('packageManage/pages/about/about', () => {
     jest.unmock('../../utils/support-contact');
 
     systemService = require('../../services/system-service');
+    serviceManager = require('../../services/service-manager');
     supportContact = require('../../utils/support-contact');
+    serviceManager.getService.mockReturnValue(null);
+    serviceManager.getUserService.mockReturnValue({
+      getLoginUser: jest.fn(() => ({ userId: 'parent-1', role: 'parent', familyPermissionRole: 'manager' })),
+      getCurrentUser: jest.fn(() => ({ userId: 'child-1', role: 'child' }))
+    });
     global.wx = {
       getAccountInfoSync: jest.fn(() => ({
         miniProgram: {
@@ -171,6 +183,47 @@ describe('packageManage/pages/about/about', () => {
     });
     expect(global.wx.setClipboardData).toHaveBeenNthCalledWith(2, {
       data: supportContact.email
+    });
+  });
+
+  it('存在未读版本说明时应展示入口并跳转到详情页', async () => {
+    serviceManager.getService.mockImplementation((name) => {
+      if (name === 'releaseNote') {
+        return {
+          getCurrentReleaseNote: jest.fn().mockResolvedValue({
+            success: true,
+            note: {
+              version: '3.9.0',
+              summary: '现在可以知道有哪些新变化'
+            },
+            unread: true
+          }),
+          listVisibleReleaseNotes: jest.fn().mockResolvedValue({
+            success: true,
+            notes: [
+              {
+                version: '3.9.0',
+                summary: '现在可以知道有哪些新变化'
+              }
+            ]
+          })
+        };
+      }
+      return null;
+    });
+    const page = createPage();
+
+    page.onLoad.call(page);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(page.data.showReleaseNotesEntry).toBe(true);
+    expect(page.data.releaseNoteEntryTitle).toBe('本次更新');
+    expect(page.data.releaseNoteEntryBadgeText).toBe('新变化');
+
+    page.onReleaseNotesTap.call(page);
+    expect(global.wx.navigateTo).toHaveBeenCalledWith({
+      url: '/packageManage/pages/whats-new/whats-new'
     });
   });
 

@@ -470,10 +470,19 @@
   showAddUser="{{true}}"
   loginUserId="{{loginUserId}}"
   permissionContext="{{userIdentityPermissionContext}}"
+  helpEntryBadgeVisible="{{releaseNoteHelpBadgeVisible}}"
+  helpEntryBadgeText="{{releaseNoteHelpBadgeText}}"
   bind:userSwitch="handleUserSwitch"
   bind:userAdd="handleUserAdd"
   bind:helpFeedback="handleHelpFeedback"
   bind:nicknameEdit="handleNicknameEdit"
   bind:avatarPresetUpdate="handleAvatarPresetUpdate"
   bind:close="hideUserSwitcher"
+/>
+
+<release-note-sheet
+  visible="{{releaseNoteSheetVisible}}"
+  note="{{releaseNoteSheetNote}}"
+  bind:later="handleReleaseNotePromptLater"
+  bind:detail="handleReleaseNotePromptDetail"
 />
