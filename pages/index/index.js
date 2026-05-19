@@ -16,6 +16,7 @@ const searchPanelModule = require('./modules/index-search-panel');
 const userSwitcherModule = require('./modules/index-user-switcher');
 const dateNavigationModule = require('./modules/index-date-navigation');
 const messagePreviewModule = require('./modules/index-message-preview');
+const releaseNoteModule = require('./modules/index-release-note');
 const onboardingState = require('../../utils/app/onboarding-state');
 
 function formatOccurrenceDateLabel(dateString) {
@@ -270,7 +271,11 @@ Page({
     pageTitleBadge: '', // 页面标题旁的轻量状态徽标，如“预览”
     hasTodayTasks: false, // 是否有今日任务（用于显示空状态）
     homeOnboardingCard: null,
-    showHomeOnboardingCard: false
+    showHomeOnboardingCard: false,
+    releaseNoteHelpBadgeVisible: false,
+    releaseNoteHelpBadgeText: '',
+    releaseNoteSheetVisible: false,
+    releaseNoteSheetNote: null
   },
   
   /**
@@ -888,6 +893,10 @@ Page({
 
     this.setData({
       showHomeOnboardingCard: shouldRenderCard
+    }, () => {
+      if (!shouldRenderCard && typeof this.evaluatePendingReleaseNotePrompt === 'function') {
+        this.evaluatePendingReleaseNotePrompt();
+      }
     });
   },
 
@@ -930,6 +939,10 @@ Page({
     this.setData({
       homeOnboardingCard: resolvedCard,
       showHomeOnboardingCard: canShow && Boolean(resolvedCard)
+    }, () => {
+      if (typeof this.evaluatePendingReleaseNotePrompt === 'function') {
+        this.evaluatePendingReleaseNotePrompt();
+      }
     });
   },
 
@@ -1425,6 +1438,22 @@ Page({
 
   async refreshDataForCurrentUser() {
     return refreshCoordinator.refreshDataForCurrentUser(this);
+  },
+
+  async refreshReleaseNoteAwareness() {
+    return releaseNoteModule.refreshReleaseNoteAwareness(this);
+  },
+
+  async evaluatePendingReleaseNotePrompt() {
+    return releaseNoteModule.evaluatePendingReleaseNotePrompt(this);
+  },
+
+  async handleReleaseNotePromptLater() {
+    return releaseNoteModule.handleReleaseNotePromptLater(this);
+  },
+
+  async handleReleaseNotePromptDetail() {
+    return releaseNoteModule.handleReleaseNotePromptDetail(this);
   },
 
   /**

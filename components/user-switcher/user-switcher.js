@@ -37,6 +37,14 @@ Component({
     permissionContext: {
       type: Object,
       value: {}
+    },
+    helpEntryBadgeVisible: {
+      type: Boolean,
+      value: false
+    },
+    helpEntryBadgeText: {
+      type: String,
+      value: ''
     }
   },
 

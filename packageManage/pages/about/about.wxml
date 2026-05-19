@@ -46,6 +46,18 @@
     </view>
   </view>
 
+  <view class="about-card release-note-card" wx:if="{{showReleaseNotesEntry}}" bindtap="onReleaseNotesTap">
+    <view class="section-head">
+      <view class="section-title">{{releaseNoteEntryTitle}}</view>
+      <view class="support-badge" wx:if="{{releaseNoteEntryBadgeText}}">{{releaseNoteEntryBadgeText}}</view>
+    </view>
+    <view class="release-note-summary">{{releaseNoteEntrySummary}}</view>
+    <view class="release-note-foot">
+      <text class="release-note-version" wx:if="{{releaseNoteEntryVersion}}">v{{releaseNoteEntryVersion}}</text>
+      <text class="release-note-action">查看近期变化 ›</text>
+    </view>
+  </view>
+
   <view class="about-card">
     <view class="section-title">版本信息</view>
     <view class="info-row" bindtap="onVersionTap">

@@ -238,6 +238,11 @@
   line-height: 1.4;
 }
 
+.footer-help-tag.is-badge {
+  background: rgba(14, 165, 233, 0.14);
+  color: #0369a1;
+}
+
 .footer-help-desc {
   margin-top: 8rpx;
   font-size: 24rpx;

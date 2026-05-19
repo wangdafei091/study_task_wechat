@@ -10,6 +10,7 @@ const StarService = require('./star-service');
 const MessageService = require('./message-service');
 const OfflineQueueService = require('./offline-queue-service');
 const ConfigService = require('./config-service');
+const ReleaseNoteService = require('./release-note-service');
 
 const logger = require('../utils/logger');
 const EventBus = require('../utils/core/event-bus');
@@ -97,6 +98,11 @@ class ServiceManager {
     if (this.services.messageService && this.services.messageService.updateUserService) {
       this.services.messageService.updateUserService(this.userService);
       logger.info('ServiceManager', 'MessageService已更新UserService');
+    }
+
+    if (this.services.releaseNoteService && this.services.releaseNoteService.updateUserService) {
+      this.services.releaseNoteService.updateUserService(this.userService);
+      logger.info('ServiceManager', 'ReleaseNoteService已更新UserService');
     }
 
     // 检查其他可能需要UserService更新的服务
@@ -261,6 +267,11 @@ class ServiceManager {
         eventBus: this.eventBus
       });
 
+      this.services.releaseNoteService = new ReleaseNoteService({
+        userService: this.userService,
+        storageAdapter: this.storageAdapter
+      });
+
       if (this.services.rewardService.updateConfigService) {
         this.services.rewardService.updateConfigService(this.services.configService);
       }
@@ -320,6 +331,10 @@ class ServiceManager {
       'message': 'messageService',
       'messageService': 'messageService',
       'MessageService': 'messageService',
+
+      'releaseNote': 'releaseNoteService',
+      'releaseNoteService': 'releaseNoteService',
+      'ReleaseNoteService': 'releaseNoteService',
       
       'validation': 'validationService',
       'validationService': 'validationService',
@@ -389,6 +404,10 @@ class ServiceManager {
    */
   getMessageService() {
     return this.services.messageService;
+  }
+
+  getReleaseNoteService() {
+    return this.services.releaseNoteService;
   }
 
   getOfflineQueueService() {

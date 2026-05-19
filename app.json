@@ -25,6 +25,7 @@
       "root": "packageManage",
       "pages": [
         "pages/about/about",
+        "pages/whats-new/whats-new",
         "pages/invite-center/invite-center",
         "pages/system-admin/system-admin",
         "pages/system-user-governance/system-user-governance",
