@@ -4,6 +4,7 @@ const { UserService } = require('../../services/user-service.js');
 const logger = require('../../utils/logger');
 const API_CONFIG = require('../../utils/api-config');
 const TokenManager = require('../../utils/token-manager');
+const runtimeVersionUtils = require('../runtime-version');
 const appAccessState = require('./app-access-state');
 const systemUserAccessState = require('./system-user-access-state');
 
@@ -110,7 +111,10 @@ async function prepareUserService(app) {
 }
 
 function buildLoginPayload(code, options = {}) {
-  const payload = { code };
+  const payload = {
+    code,
+    runtimeVersion: runtimeVersionUtils.getRuntimeVersion()
+  };
   const inviteCode = appAccessState.normalizeInviteCode(
     options.inviteCode || appAccessState.loadPendingInviteCode()
   );

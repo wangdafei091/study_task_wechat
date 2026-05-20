@@ -6,6 +6,7 @@ const { getPool } = require('../config/database');
 const { generateToken } = require('../config/jwt');
 const appAccessService = require('../services/appAccessService');
 const inviteCodeService = require('../services/inviteCodeService');
+const userProductStateService = require('../services/userProductStateService');
 const userService = require('../services/userService');
 const User = require('../models/User');
 const { code2Session } = require('../utils/wechat');
@@ -22,6 +23,23 @@ class AuthController {
       nickname: String(profile.nickname || profile.nickName || '').trim(),
       avatarUrl: String(profile.avatarUrl || profile.avatar || '').trim()
     };
+  }
+
+  _resolveRuntimeVersion(payload = {}) {
+    const candidates = [
+      payload.runtimeVersion,
+      payload.appVersion,
+      payload.version
+    ];
+
+    for (let index = 0; index < candidates.length; index += 1) {
+      const trimmed = String(candidates[index] || '').trim();
+      if (trimmed) {
+        return trimmed;
+      }
+    }
+
+    return null;
   }
 
   async _createInvitedUser(wechatData, accessCode, profileSnapshot = {}) {
@@ -98,6 +116,7 @@ class AuthController {
       const normalizedInviteCode = String(inviteCode || '').trim();
       const normalizedAccessCode = String(accessCode || '').trim();
       const profileSnapshot = this._normalizeProfile(profile);
+      const runtimeVersion = this._resolveRuntimeVersion(req.body || {});
 
       // 参数验证
       if (!code) {
@@ -140,6 +159,24 @@ class AuthController {
         return res.status(403).json(
           error('当前账号已被管理员暂停使用', 'SYSTEM_USER_BLOCKED')
         );
+      }
+
+      try {
+        await userProductStateService.ensureState(user.userId, {
+          runtimeVersion,
+          familyId: user.familyId || null,
+          sourcePage: 'auth_login',
+          clientPlatform: 'wechat-miniprogram',
+          payloadJson: {
+            loginRole: user.role
+          }
+        });
+      } catch (syncError) {
+        logger.warn('登录后用户产品状态初始化失败', {
+          userId: user.userId,
+          code: syncError.code,
+          message: syncError.message
+        });
       }
 
       // 3. 生成JWT token（包含 familyId，支持家庭数据隔离）

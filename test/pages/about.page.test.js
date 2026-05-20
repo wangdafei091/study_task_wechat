@@ -187,16 +187,19 @@ describe('packageManage/pages/about/about', () => {
   });
 
   it('存在未读版本说明时应展示入口并跳转到详情页', async () => {
+    let releaseNoteService;
     serviceManager.getService.mockImplementation((name) => {
       if (name === 'releaseNote') {
-        return {
+        releaseNoteService = {
           getCurrentReleaseNote: jest.fn().mockResolvedValue({
             success: true,
             note: {
               version: '3.9.0',
               summary: '现在可以知道有哪些新变化'
             },
-            unread: true
+            unread: true,
+            entryTitle: '本次更新',
+            badgeText: '新变化'
           }),
           listVisibleReleaseNotes: jest.fn().mockResolvedValue({
             success: true,
@@ -206,8 +209,12 @@ describe('packageManage/pages/about/about', () => {
                 summary: '现在可以知道有哪些新变化'
               }
             ]
+          }),
+          recordClientEvent: jest.fn().mockResolvedValue({
+            success: true
           })
         };
+        return releaseNoteService;
       }
       return null;
     });
@@ -225,6 +232,15 @@ describe('packageManage/pages/about/about', () => {
     expect(global.wx.navigateTo).toHaveBeenCalledWith({
       url: '/packageManage/pages/whats-new/whats-new'
     });
+    expect(releaseNoteService.recordClientEvent).toHaveBeenCalledWith(
+      'about_release_notes_opened',
+      expect.objectContaining({
+        sourcePage: 'about_page'
+      }),
+      expect.objectContaining({
+        entryVersion: '3.9.0'
+      })
+    );
   });
 
   it('连续点击版本达到阈值且有权限时应进入系统页', async () => {

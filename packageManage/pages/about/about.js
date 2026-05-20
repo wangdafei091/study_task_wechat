@@ -144,14 +144,28 @@ Page({
 
     this.setData({
       showReleaseNotesEntry: Boolean(entryNote),
-      releaseNoteEntryTitle: currentReleaseNoteResult.unread ? '本次更新' : '近期变化',
+      releaseNoteEntryTitle: currentReleaseNoteResult.entryTitle || '近期变化',
       releaseNoteEntrySummary: entryNote?.summary || '',
       releaseNoteEntryVersion: entryNote?.version || '',
-      releaseNoteEntryBadgeText: currentReleaseNoteResult.unread ? '新变化' : ''
+      releaseNoteEntryBadgeText: currentReleaseNoteResult.badgeText || ''
     });
   },
 
   onReleaseNotesTap() {
+    const releaseNoteService = serviceManager.getService('releaseNote');
+    const app = typeof getApp === 'function' ? getApp() : null;
+    const userService = app?.globalData?.userService || serviceManager.getUserService();
+    if (releaseNoteService?.recordClientEvent) {
+      releaseNoteService.recordClientEvent('about_release_notes_opened', {
+        loginUser: userService?.getLoginUser?.() || null,
+        currentUser: userService?.getCurrentUser?.() || null,
+        runtimeVersion: this.data.version || runtimeVersionUtils.getRuntimeVersion(),
+        sourcePage: 'about_page'
+      }, {
+        entryVersion: this.data.releaseNoteEntryVersion || null
+      }).catch(() => {});
+    }
+
     wx.navigateTo({
       url: '/packageManage/pages/whats-new/whats-new'
     });

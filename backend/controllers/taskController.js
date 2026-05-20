@@ -4,6 +4,7 @@
 
 const taskService = require('../services/taskService');
 const familyService = require('../services/familyService');
+const userProductStateService = require('../services/userProductStateService');
 const Task = require('../models/Task');
 const { createLogger } = require('../utils/logger');
 const {
@@ -40,6 +41,17 @@ function isHistoryOccurrenceConfigTask(task) {
  * 任务控制器类
  */
 class TaskController {
+  async _syncUserProductState(action, work) {
+    try {
+      await work();
+    } catch (syncError) {
+      logger.warn(`用户产品状态同步失败: ${action}`, {
+        code: syncError.code,
+        message: syncError.message
+      });
+    }
+  }
+
   async _ensureTaskManagePermission(req, res, options = {}) {
     return ensureParentManagerBusinessAccess(req, res, options);
   }
@@ -273,6 +285,28 @@ class TaskController {
         taskData,
         await this._buildOperatorContext(req, effectiveUserId, taskData.modifyTime)
       );
+
+      await this._syncUserProductState('task_create', async () => {
+        await userProductStateService.markActivated(effectiveUserId, {
+          runtimeVersion: req.body?.runtimeVersion || null,
+          familyId: req.user.familyId || null,
+          source: 'task_created',
+          sourcePage: 'task_create',
+          clientPlatform: 'wechat-miniprogram'
+        });
+        await userProductStateService.recordEvent({
+          userId: effectiveUserId,
+          familyId: req.user.familyId || null,
+          eventType: 'task_created',
+          eventTime: Date.now(),
+          appVersion: req.body?.runtimeVersion || null,
+          clientPlatform: 'wechat-miniprogram',
+          sourcePage: 'task_create',
+          payloadJson: {
+            taskId: mutationResult?.primaryTask?.taskId || mutationResult?.primaryTask?.id || null
+          }
+        });
+      });
 
       res.json(success(
         taskService.buildTaskMutationResponse({
@@ -917,6 +951,30 @@ class TaskController {
       );
       if (!updated) {
         return res.status(404).json(error('任务不存在或已删除', 'TASK_NOT_FOUND'));
+      }
+
+      if (status === 1) {
+        await this._syncUserProductState('task_status_update', async () => {
+          await userProductStateService.markActivated(existing.userId, {
+            runtimeVersion: req.body?.runtimeVersion || null,
+            familyId: req.user.familyId || null,
+            source: 'task_completed',
+            sourcePage: 'task_status_update',
+            clientPlatform: 'wechat-miniprogram'
+          });
+          await userProductStateService.recordEvent({
+            userId: existing.userId,
+            familyId: req.user.familyId || null,
+            eventType: 'task_completed',
+            eventTime: Date.now(),
+            appVersion: req.body?.runtimeVersion || null,
+            clientPlatform: 'wechat-miniprogram',
+            sourcePage: 'task_status_update',
+            payloadJson: {
+              taskId
+            }
+          });
+        });
       }
 
       logger.info('任务状态更新成功', { taskId, status, userId });

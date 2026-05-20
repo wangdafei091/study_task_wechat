@@ -4,6 +4,7 @@
 
 const rewardService = require('../services/rewardService');
 const familyService = require('../services/familyService');
+const userProductStateService = require('../services/userProductStateService');
 const {
   ensureManagerBusinessAccess,
   ensureParentManagerBusinessAccess
@@ -15,6 +16,17 @@ const { resolveTargetUserId } = require('../utils/resolveTargetUserId');
 const logger = createLogger('RewardController');
 
 class RewardController {
+  async _syncUserProductState(action, work) {
+    try {
+      await work();
+    } catch (syncError) {
+      logger.warn(`用户产品状态同步失败: ${action}`, {
+        code: syncError.code,
+        message: syncError.message
+      });
+    }
+  }
+
   async _buildOperatorContext(req, subjectUserId = null, fallbackOperationKey = null, options = {}) {
     const requestedActorUserId = req.body?.operatorContext?.actorUserId || req.user.userId;
     let actorUserId = req.user.userId;
@@ -88,12 +100,40 @@ class RewardController {
         return;
       }
 
+      const requestedTargetUserId = req.body?.userId || req.body?.targetUserId || req.user.userId;
+      const effectiveUserId = await resolveTargetUserId(req, requestedTargetUserId);
+      if (!effectiveUserId) {
+        return res.status(403).json(error('无权为该成员创建奖励', 'FAMILY_MEMBER_ACCESS_DENIED'));
+      }
+
       const reward = await rewardService.createReward(
-        req.user.userId,
+        effectiveUserId,
         req.user.familyId,
         req.body,
-        await this._buildOperatorContext(req, null, req.body.modifyTime)
+        await this._buildOperatorContext(req, effectiveUserId, req.body.modifyTime)
       );
+
+      await this._syncUserProductState('reward_create', async () => {
+        await userProductStateService.markActivated(effectiveUserId, {
+          runtimeVersion: req.body?.runtimeVersion || null,
+          familyId: req.user.familyId || null,
+          source: 'reward_created',
+          sourcePage: 'reward_create',
+          clientPlatform: 'wechat-miniprogram'
+        });
+        await userProductStateService.recordEvent({
+          userId: effectiveUserId,
+          familyId: req.user.familyId || null,
+          eventType: 'reward_created',
+          eventTime: Date.now(),
+          appVersion: req.body?.runtimeVersion || null,
+          clientPlatform: 'wechat-miniprogram',
+          sourcePage: 'reward_create',
+          payloadJson: {
+            rewardId: reward.rewardId || reward.id || null
+          }
+        });
+      });
       return res.json(success(reward.toJSON(), '创建成功'));
     } catch (err) {
       logger.error('创建奖励失败', err);

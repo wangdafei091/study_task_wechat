@@ -50,11 +50,8 @@ describe('pages/index/modules/index-release-note', () => {
         success: true,
         note: { version: '3.9.0', title: '本次更新' },
         promptEligible: true,
-        effectiveUserId: 'child-1'
-      }),
-      getHelpEntryBadgeState: jest.fn().mockResolvedValue({
-        visible: true,
-        text: '有新变化'
+        effectiveUserId: 'child-1',
+        canShowHelpBadge: true
       }),
       evaluateReleaseNotePromptDisplay: jest.fn(() => ({
         shouldDisplay: true,
@@ -168,11 +165,22 @@ describe('pages/index/modules/index-release-note', () => {
       success: true,
       note: { version: '3.9.0', title: '本次更新' },
       promptEligible: false,
-      effectiveUserId: 'child-1'
+      effectiveUserId: 'child-1',
+      canShowHelpBadge: true
     });
     await releaseNoteModule.refreshReleaseNoteAwareness(page);
     expect(page._pendingReleaseNotePrompt).toBeNull();
     expect(releaseNoteService.markPromptShown).not.toHaveBeenCalled();
+  });
+
+  it('refreshReleaseNoteAwareness 同一轮刷新只应读取一次版本感知状态', async () => {
+    const page = createPage();
+
+    await releaseNoteModule.refreshReleaseNoteAwareness(page);
+
+    expect(releaseNoteService.getCurrentReleaseNote).toHaveBeenCalledTimes(1);
+    expect(page.data.releaseNoteHelpBadgeVisible).toBe(true);
+    expect(page.data.releaseNoteHelpBadgeText).toBe('有新变化');
   });
 
   it('handleReleaseNotePromptLater 应先收起当前提醒，再刷新帮助入口状态', async () => {
@@ -191,7 +199,8 @@ describe('pages/index/modules/index-release-note', () => {
       success: true,
       note: { version: '3.9.0', title: '本次更新' },
       promptEligible: false,
-      effectiveUserId: 'child-1'
+      effectiveUserId: 'child-1',
+      canShowHelpBadge: true
     });
 
     await releaseNoteModule.handleReleaseNotePromptLater(page);
@@ -217,7 +226,9 @@ describe('pages/index/modules/index-release-note', () => {
     fallbackUserService.getCurrentUser.mockReturnValueOnce(null);
     await releaseNoteModule.handleReleaseNotePromptDetail(page);
 
-    expect(releaseNoteService.markReleaseNoteRead).toHaveBeenCalledWith('3.9.0', 'fallback-parent');
+    expect(releaseNoteService.markReleaseNoteRead).toHaveBeenCalledWith('3.9.0', 'fallback-parent', expect.objectContaining({
+      sourcePage: 'index_release_note_sheet'
+    }));
     expect(page.data.releaseNoteHelpBadgeVisible).toBe(false);
     expect(page.data.releaseNoteHelpBadgeText).toBe('');
     expect(global.wx.navigateTo).toHaveBeenCalledWith({

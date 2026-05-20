@@ -1,5 +1,6 @@
 const logger = require('../../../utils/logger');
 const permissionUtils = require('../../../utils/permission-utils');
+const serviceManager = require('../../../services/service-manager.js');
 const userContextUtils = require('../../../utils/user-context');
 const { buildIdentityDisplayModel } = require('../../../utils/user-identity-display');
 const { buildIndexUserContextState } = require('./index-user-context');
@@ -96,6 +97,9 @@ async function handleUserAdd() {
 
 function handleHelpFeedback(page) {
   logger.info('Index', '从用户切换面板进入帮助与反馈页');
+  const releaseNoteService = serviceManager.getService('releaseNote');
+  const userService = getApp()?.globalData?.userService || null;
+
   page.setData({
     showUserSwitcher: false
   });
@@ -106,6 +110,13 @@ function handleHelpFeedback(page) {
 
   page._helpFeedbackNavTimer = setTimeout(() => {
     page._helpFeedbackNavTimer = null;
+    if (releaseNoteService?.recordClientEvent) {
+      releaseNoteService.recordClientEvent('help_feedback_opened', {
+        loginUser: userService?.getLoginUser?.() || null,
+        currentUser: userService?.getCurrentUser?.() || page.data.currentUser || null,
+        sourcePage: 'index_user_switcher_help'
+      }).catch(() => {});
+    }
     wx.navigateTo({
       url: '/packageManage/pages/about/about'
     });

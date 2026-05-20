@@ -76,6 +76,9 @@ describe('app.js 自动登录环境配置', () => {
         AUTH_LOGIN: '/api/auth/login'
       }
     }));
+    jest.doMock('../utils/runtime-version', () => ({
+      getRuntimeVersion: jest.fn(() => '3.9.0')
+    }));
 
     jest.doMock('../utils/token-manager', () => ({
       getToken: jest.fn(() => null),
@@ -107,7 +110,10 @@ describe('app.js 自动登录环境配置', () => {
     const loginSuccess = await appConfig.autoLogin();
 
     expect(loginSuccess).toBe(true);
-    expect(httpPostMock).toHaveBeenCalledWith('/api/auth/login', { code: 'mock-code' });
+    expect(httpPostMock).toHaveBeenCalledWith('/api/auth/login', {
+      code: 'mock-code',
+      runtimeVersion: '3.9.0'
+    });
     expect(setTokenMock).toHaveBeenCalledWith('mock-token');
     expect(global.wx.setStorageSync).toHaveBeenCalledWith('lastUserInfo', {
       id: 'user-1',
