@@ -5,8 +5,11 @@
 
 const userService = require('../services/userService');
 const familyService = require('../services/familyService');
+const userProductStateService = require('../services/userProductStateService');
+const UserActivityEvent = require('../models/UserActivityEvent');
 const { success, error } = require('../utils/response');
 const { createLogger } = require('../utils/logger');
+const { resolveTargetUserId } = require('../utils/resolveTargetUserId');
 
 const logger = createLogger('UserController');
 
@@ -14,6 +17,23 @@ const logger = createLogger('UserController');
  * 用户控制器类
  */
 class UserController {
+  _resolveRuntimeVersion(source = {}) {
+    const candidates = [
+      source.runtimeVersion,
+      source.appVersion,
+      source.version
+    ];
+
+    for (let index = 0; index < candidates.length; index += 1) {
+      const trimmed = String(candidates[index] || '').trim();
+      if (trimmed) {
+        return trimmed;
+      }
+    }
+
+    return null;
+  }
+
   /**
    * 获取所有用户列表
    * @param {Object} req - Express请求对象
@@ -208,6 +228,79 @@ class UserController {
       res.status(500).json(
         error('获取当前用户信息失败', 'USER_GET_FAILED')
       );
+    }
+  }
+
+  async getProductState(req, res) {
+    try {
+      const targetUserId = req.query?.targetUserId || null;
+      const effectiveUserId = await resolveTargetUserId(req, targetUserId);
+      if (!effectiveUserId) {
+        return res.status(403).json(error('无权访问该成员数据', 'FAMILY_MEMBER_ACCESS_DENIED'));
+      }
+
+      const awarenessState = await userProductStateService.getReleaseNoteAwarenessState(effectiveUserId, {
+        runtimeVersion: this._resolveRuntimeVersion(req.query || {}),
+        familyId: req.user.familyId || null,
+        sourcePage: String(req.query?.sourcePage || 'user_product_state').trim(),
+        clientPlatform: 'wechat-miniprogram',
+        clientEnv: String(req.query?.clientEnv || '').trim() || null
+      });
+
+      return res.json(success(awarenessState, '获取成功'));
+    } catch (err) {
+      logger.error('获取用户产品状态失败', err);
+      return res.status(500).json(error('获取用户产品状态失败', 'USER_PRODUCT_STATE_GET_FAILED'));
+    }
+  }
+
+  async createActivityEvent(req, res) {
+    try {
+      const subjectUserId = req.body?.subjectUserId || null;
+      const effectiveUserId = await resolveTargetUserId(req, subjectUserId);
+      if (!effectiveUserId) {
+        return res.status(403).json(error('无权访问该成员数据', 'FAMILY_MEMBER_ACCESS_DENIED'));
+      }
+
+      const eventType = String(req.body?.eventType || '').trim();
+      if (!eventType) {
+        return res.status(400).json(error('事件类型不能为空', 'INVALID_PARAMS'));
+      }
+
+      if (!UserActivityEvent.CLIENT_EVENT_TYPES.has(eventType)) {
+        return res.status(400).json(error('事件类型不受支持', 'INVALID_PARAMS'));
+      }
+
+      const auxiliaryTargetUserId = req.body?.targetUserId || null;
+      if (auxiliaryTargetUserId) {
+        const resolvedAuxiliaryTargetUserId = await resolveTargetUserId(req, auxiliaryTargetUserId);
+        if (!resolvedAuxiliaryTargetUserId) {
+          return res.status(403).json(error('无权引用该成员数据', 'FAMILY_MEMBER_ACCESS_DENIED'));
+        }
+      }
+
+      const event = await userProductStateService.recordEvent({
+        userId: effectiveUserId,
+        familyId: req.user.familyId || null,
+        eventType,
+        eventTime: Number(req.body?.eventTime || Date.now()),
+        appVersion: this._resolveRuntimeVersion(req.body || {}),
+        clientPlatform: 'wechat-miniprogram',
+        clientEnv: String(req.body?.clientEnv || '').trim() || null,
+        sourcePage: String(req.body?.sourcePage || '').trim() || null,
+        targetUserId: auxiliaryTargetUserId,
+        payloadJson: req.body?.payload || null
+      });
+
+      return res.json(success({
+        eventId: event.eventId
+      }, '记录成功'));
+    } catch (err) {
+      if (err.code === 'INVALID_PARAMS') {
+        return res.status(400).json(error(err.message, err.code));
+      }
+      logger.error('记录用户行为事件失败', err);
+      return res.status(500).json(error('记录用户行为事件失败', 'USER_ACTIVITY_EVENT_CREATE_FAILED'));
     }
   }
 

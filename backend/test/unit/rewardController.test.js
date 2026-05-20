@@ -4,6 +4,10 @@ const { generateToken } = require('../../config/jwt');
 
 jest.mock('../../services/rewardService');
 jest.mock('../../services/familyService');
+jest.mock('../../services/userProductStateService', () => ({
+  markActivated: jest.fn().mockResolvedValue(null),
+  recordEvent: jest.fn().mockResolvedValue(null)
+}));
 jest.mock('../../middleware/systemUserAccess', () => ({
   systemUserAccessMiddleware: jest.fn((req, res, next) => next())
 }));
@@ -13,6 +17,7 @@ jest.mock('../../utils/logger', () => ({
 
 const rewardService = require('../../services/rewardService');
 const familyService = require('../../services/familyService');
+const userProductStateService = require('../../services/userProductStateService');
 
 function buildApp() {
   const app = express();
@@ -158,6 +163,15 @@ describe('PATCH /api/rewards/:rewardId/exchange', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    familyService.getUserFamilyRoleProfile = jest.fn().mockImplementation(async (userId) => {
+      if (userId === 'parent_1') {
+        return { userId, familyId: 'fam_1', role: 'parent', familyPermissionRole: 'manager' };
+      }
+      if (userId === 'parent_viewer') {
+        return { userId, familyId: 'fam_1', role: 'parent', familyPermissionRole: 'viewer' };
+      }
+      return null;
+    });
   });
 
   it('孩子可兑换自己的奖励', async () => {
@@ -287,5 +301,45 @@ describe('PATCH /api/rewards/:rewardId/exchange', () => {
     expect(res.status).toBe(403);
     expect(res.body.error_code).toBe('PERMISSION_DENIED');
     expect(rewardService.createReward).not.toHaveBeenCalled();
+  });
+
+  it('家长在孩子视角下创建奖励时应按目标业务用户归属', async () => {
+    const reward = makeReward({ claimed: false, userId: 'child_1' });
+    familyService.getUserFamilyAndRole = jest.fn().mockResolvedValue({ familyId: 'fam_1', role: 'child' });
+    rewardService.createReward = jest.fn().mockResolvedValue(reward);
+
+    const res = await request(app)
+      .post('/api/rewards')
+      .set('Authorization', token(PARENT))
+      .send({ name: '新奖励', points: 10, userId: 'child_1', runtimeVersion: '3.9.0' });
+
+    expect(res.status).toBe(200);
+    expect(rewardService.createReward).toHaveBeenCalledWith(
+      'child_1',
+      'fam_1',
+      expect.objectContaining({ userId: 'child_1' }),
+      expect.objectContaining({
+        actorUserId: 'parent_1',
+        actorRole: 'parent',
+        familyId: 'fam_1'
+      })
+    );
+    expect(userProductStateService.markActivated).toHaveBeenCalledWith('child_1', expect.objectContaining({
+      source: 'reward_created'
+    }));
+  });
+
+  it('创建奖励成功后即使状态同步失败也不应返回 500', async () => {
+    const reward = makeReward({ claimed: false, userId: 'parent_1' });
+    rewardService.createReward = jest.fn().mockResolvedValue(reward);
+    userProductStateService.markActivated.mockRejectedValueOnce(new Error('state failed'));
+
+    const res = await request(app)
+      .post('/api/rewards')
+      .set('Authorization', token(PARENT))
+      .send({ name: '新奖励', points: 10 });
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
   });
 });

@@ -57,7 +57,11 @@ Page({
     if (currentReleaseNote?.version && currentReleaseNoteResult.effectiveUserId) {
       await releaseNoteService.markReleaseNoteRead(
         currentReleaseNote.version,
-        currentReleaseNoteResult.effectiveUserId
+        currentReleaseNoteResult.effectiveUserId,
+        {
+          ...context,
+          sourcePage: 'whats_new_page'
+        }
       );
     }
 

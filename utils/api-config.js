@@ -61,6 +61,8 @@ const API_CONFIG = {
     USER_BY_ID: '/api/users/{userId}',
     USER_CURRENT: '/api/users/current',
     USER_CURRENT_PROFILE: '/api/users/current/profile',
+    USER_PRODUCT_STATE: '/api/users/product-state',
+    USER_ACTIVITY_EVENTS: '/api/users/activity-events',
     USER_BY_ROLE: '/api/users/role/{role}',
     USER_SWITCH: '/api/users/switch',
     USER_EXISTS: '/api/users/{userId}/exists',

@@ -26,7 +26,9 @@ describe('utils/http-client', () => {
         'Content-Type': 'application/json'
       },
       ENDPOINTS: {
-        HEALTH: '/health'
+        HEALTH: '/health',
+        USER_PRODUCT_STATE: '/api/users/product-state',
+        USER_ACTIVITY_EVENTS: '/api/users/activity-events'
       }
     }));
     jest.doMock('../../utils/logger', () => ({
@@ -127,5 +129,22 @@ describe('utils/http-client', () => {
       'HTTP错误: 400',
       expect.anything()
     );
+  });
+
+  it('用户产品状态与活动事件快捷方法应命中对应接口', async () => {
+    await HttpClient.getUserProductState({ runtimeVersion: '3.9.0' });
+    await HttpClient.createUserActivityEvent({ eventType: 'release_note_viewed' });
+
+    expect(global.wx.request).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      url: 'https://api.todoceo.xyz/test/api/users/product-state?runtimeVersion=3.9.0',
+      method: 'GET'
+    }));
+    expect(global.wx.request).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      url: 'https://api.todoceo.xyz/test/api/users/activity-events',
+      method: 'POST',
+      data: {
+        eventType: 'release_note_viewed'
+      }
+    }));
   });
 });

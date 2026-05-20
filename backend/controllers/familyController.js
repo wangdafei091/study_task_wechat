@@ -4,6 +4,7 @@
 
 const familyService = require('../services/familyService');
 const inviteCodeService = require('../services/inviteCodeService');
+const userProductStateService = require('../services/userProductStateService');
 const userService = require('../services/userService');
 const { generateToken } = require('../config/jwt');
 const { createLogger } = require('../utils/logger');
@@ -11,6 +12,17 @@ const { success, error } = require('../utils/response');
 const logger = createLogger('FamilyController');
 
 class FamilyController {
+  async _syncUserProductState(action, work) {
+    try {
+      await work();
+    } catch (syncError) {
+      logger.warn(`用户产品状态同步失败: ${action}`, {
+        code: syncError.code,
+        message: syncError.message
+      });
+    }
+  }
+
   _issueToken(user) {
     return generateToken({
       userId: user.userId,
@@ -70,6 +82,28 @@ class FamilyController {
       logger.info('创建家庭', { userId, name });
       const result = await familyService.createFamily(userId, name.trim());
 
+      await this._syncUserProductState('family_create', async () => {
+        await userProductStateService.markActivated(userId, {
+          runtimeVersion: req.body?.runtimeVersion || null,
+          familyId: result.familyId,
+          source: 'family_created',
+          sourcePage: 'family_create',
+          clientPlatform: 'wechat-miniprogram'
+        });
+        await userProductStateService.recordEvent({
+          userId,
+          familyId: result.familyId,
+          eventType: 'family_created',
+          eventTime: Date.now(),
+          appVersion: req.body?.runtimeVersion || null,
+          clientPlatform: 'wechat-miniprogram',
+          sourcePage: 'family_create',
+          payloadJson: {
+            familyId: result.familyId
+          }
+        });
+      });
+
       const user = await this._loadLatestUser(userId);
       const token = this._issueToken(user);
 
@@ -100,7 +134,29 @@ class FamilyController {
       }
 
       logger.info('加入家庭', { userId, inviteCode });
-      await inviteCodeService.consumeForExistingUser({ code: inviteCode, userId });
+      const joinResult = await inviteCodeService.consumeForExistingUser({ code: inviteCode, userId });
+
+      await this._syncUserProductState('family_join', async () => {
+        await userProductStateService.markActivated(userId, {
+          runtimeVersion: req.body?.runtimeVersion || null,
+          familyId: joinResult.familyId || null,
+          source: 'family_joined',
+          sourcePage: 'family_join',
+          clientPlatform: 'wechat-miniprogram'
+        });
+        await userProductStateService.recordEvent({
+          userId,
+          familyId: joinResult.familyId || null,
+          eventType: 'family_joined',
+          eventTime: Date.now(),
+          appVersion: req.body?.runtimeVersion || null,
+          clientPlatform: 'wechat-miniprogram',
+          sourcePage: 'family_join',
+          payloadJson: {
+            familyId: joinResult.familyId || null
+          }
+        });
+      });
 
       const user = await this._loadLatestUser(userId);
       const token = this._issueToken(user);

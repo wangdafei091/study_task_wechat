@@ -36,6 +36,9 @@ jest.mock('../../utils/api-config', () => ({
     USER_AVATAR_PRESET: '/api/users/{userId}/avatar-preset',
   },
 }));
+jest.mock('../../utils/runtime-version', () => ({
+  getRuntimeVersion: jest.fn(() => '3.9.0')
+}));
 
 const HttpClient = require('../../utils/http-client');
 const StorageAdapter = require('../../adapters/storage-adapter');
@@ -1038,6 +1041,10 @@ describe('UserService', () => {
 
       expect(result.success).toBe(true);
       expect(result.familyId).toBe('f1');
+      expect(mockHttpClient.post).toHaveBeenCalledWith('/api/families', {
+        name: '我的家庭',
+        runtimeVersion: '3.9.0'
+      });
     });
 
     it('createFamily失败时应该返回错误', async () => {
@@ -1055,6 +1062,10 @@ describe('UserService', () => {
       const result = await userService.joinFamily('INVITE123');
 
       expect(result.success).toBe(true);
+      expect(mockHttpClient.post).toHaveBeenCalledWith('/api/families/join', {
+        inviteCode: 'INVITE123',
+        runtimeVersion: '3.9.0'
+      });
     });
 
     it('joinFamily失败时应该返回错误', async () => {

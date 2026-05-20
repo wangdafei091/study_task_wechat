@@ -24,6 +24,8 @@ router.get('/', protectedMiddlewares, userController.getUsers.bind(userControlle
  */
 router.get('/current', protectedMiddlewares, userController.getCurrentUser.bind(userController));
 router.patch('/current/profile', protectedMiddlewares, userController.updateCurrentProfile.bind(userController));
+router.get('/product-state', protectedMiddlewares, userController.getProductState.bind(userController));
+router.post('/activity-events', protectedMiddlewares, userController.createActivityEvent.bind(userController));
 
 /**
  * @route   GET /api/users/session/validate

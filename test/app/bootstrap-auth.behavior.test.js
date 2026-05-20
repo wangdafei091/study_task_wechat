@@ -96,6 +96,9 @@ describe('utils/app/bootstrap-auth', () => {
         AUTH_CURRENT: '/api/auth/current'
       }
     }));
+    jest.doMock('../../utils/runtime-version', () => ({
+      getRuntimeVersion: jest.fn(() => '3.9.0')
+    }));
 
     jest.doMock('../../utils/token-manager', () => ({
       getToken: jest.fn(() => token),
@@ -198,7 +201,11 @@ describe('utils/app/bootstrap-auth', () => {
     };
 
     await expect(module.doCloudLogin(app)).resolves.toBe(true);
-    expect(httpPostMock).toHaveBeenCalledWith('/api/auth/login', { code: 'wx-code', inviteCode: 'INVITE88' });
+    expect(httpPostMock).toHaveBeenCalledWith('/api/auth/login', {
+      code: 'wx-code',
+      runtimeVersion: '3.9.0',
+      inviteCode: 'INVITE88'
+    });
     expect(setTokenMock).toHaveBeenCalledWith('token-1');
     expect(appAccessState.clearPendingInviteCode).toHaveBeenCalled();
     expect(clearBlockedSessionFlagMock).toHaveBeenCalled();

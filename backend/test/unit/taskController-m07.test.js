@@ -15,6 +15,10 @@ const { generateToken } = require('../../config/jwt');
 // ---- mock 依赖 ----
 jest.mock('../../services/taskService');
 jest.mock('../../services/familyService');
+jest.mock('../../services/userProductStateService', () => ({
+  markActivated: jest.fn().mockResolvedValue(null),
+  recordEvent: jest.fn().mockResolvedValue(null)
+}));
 jest.mock('../../middleware/systemUserAccess', () => ({
   systemUserAccessMiddleware: jest.fn((req, res, next) => next())
 }));
@@ -24,6 +28,7 @@ jest.mock('../../utils/logger', () => ({
 
 const taskService = require('../../services/taskService');
 const familyService = require('../../services/familyService');
+const userProductStateService = require('../../services/userProductStateService');
 const Task = require('../../models/Task');
 
 // 构造最小 express 应用，挂载真实 router
@@ -908,6 +913,21 @@ describe('PATCH /api/tasks/:taskId/status', () => {
         subjectUserId: 'child_1'
       })
     );
+  });
+
+  it('任务完成成功后即使状态同步失败也不应返回 500', async () => {
+    const task = makeTask();
+    taskService.getTaskById = jest.fn().mockResolvedValue(task);
+    taskService.updateTaskStatus = jest.fn().mockResolvedValue(task);
+    userProductStateService.markActivated.mockRejectedValueOnce(new Error('state failed'));
+
+    const res = await request(app)
+      .patch('/api/tasks/task_001/status')
+      .set('Authorization', token(CHILD))
+      .send({ status: 1, starAwarded: true });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.operation).toBe('complete');
   });
 
   it('补打卡资格窗口已过时应返回 409 和稳定业务错误码', async () => {

@@ -120,7 +120,9 @@ describe('packageManage/pages/whats-new/whats-new', () => {
     expect(page.data.recentReleaseNotes).toEqual([
       expect.objectContaining({ version: '3.8.0' })
     ]);
-    expect(releaseNoteService.markReleaseNoteRead).toHaveBeenCalledWith('3.9.0', 'child-1');
+    expect(releaseNoteService.markReleaseNoteRead).toHaveBeenCalledWith('3.9.0', 'child-1', expect.objectContaining({
+      sourcePage: 'whats_new_page'
+    }));
   });
 
   it('点击近期版本和高亮动作应更新当前卡片并跳转', async () => {

@@ -223,7 +223,8 @@ describe('pages/index/index shell behavior', () => {
         },
         unread: true,
         promptEligible: true,
-        effectiveUserId: 'child-1'
+        effectiveUserId: 'child-1',
+        canShowHelpBadge: true
       }),
       getHelpEntryBadgeState: jest.fn().mockResolvedValue({
         visible: true,
@@ -820,7 +821,9 @@ describe('pages/index/index shell behavior', () => {
 
     await page.handleReleaseNotePromptDetail();
 
-    expect(releaseNoteService.markReleaseNoteRead).toHaveBeenCalledWith('3.9.0', 'child-1');
+    expect(releaseNoteService.markReleaseNoteRead).toHaveBeenCalledWith('3.9.0', 'child-1', expect.objectContaining({
+      sourcePage: 'index_release_note_sheet'
+    }));
     expect(page.data.releaseNoteHelpBadgeVisible).toBe(false);
     expect(global.wx.navigateTo).toHaveBeenCalledWith({
       url: '/packageManage/pages/whats-new/whats-new?version=3.9.0'

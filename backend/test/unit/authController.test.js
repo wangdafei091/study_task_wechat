@@ -7,6 +7,9 @@ jest.mock('../../config/database', () => ({
 }));
 jest.mock('../../services/appAccessService');
 jest.mock('../../services/inviteCodeService');
+jest.mock('../../services/userProductStateService', () => ({
+  ensureState: jest.fn().mockResolvedValue(null)
+}));
 jest.mock('../../services/userService');
 jest.mock('../../utils/wechat');
 jest.mock('../../utils/logger', () => ({
@@ -16,6 +19,7 @@ jest.mock('../../utils/logger', () => ({
 const appAccessService = require('../../services/appAccessService');
 const inviteCodeService = require('../../services/inviteCodeService');
 const { getPool } = require('../../config/database');
+const userProductStateService = require('../../services/userProductStateService');
 const userService = require('../../services/userService');
 const { code2Session } = require('../../utils/wechat');
 
@@ -87,6 +91,10 @@ describe('POST /api/auth/login', () => {
     expect(res.status).toBe(200);
     expect(appAccessService.validateAccessCodeForNewUser).not.toHaveBeenCalled();
     expect(userService.createUser).not.toHaveBeenCalled();
+    expect(userProductStateService.ensureState).toHaveBeenCalledWith('user_existing', expect.objectContaining({
+      runtimeVersion: null,
+      sourcePage: 'auth_login'
+    }));
     expect(res.body.data.user).toEqual(expect.objectContaining({
       userId: 'user_existing',
       familyPermissionRole: 'manager'
@@ -173,7 +181,7 @@ describe('POST /api/auth/login', () => {
 
     const res = await request(app)
       .post('/api/auth/login')
-      .send({ code: 'wx-code', accessCode: 'INVITE88' });
+      .send({ code: 'wx-code', accessCode: 'INVITE88', runtimeVersion: '3.9.1' });
 
     expect(res.status).toBe(200);
     expect(userService.createUser).toHaveBeenCalledWith(expect.objectContaining({
@@ -190,6 +198,10 @@ describe('POST /api/auth/login', () => {
     expect(appAccessService.consumeAccessCode).toHaveBeenCalledWith('acc_1', 'user_new', {
       connection: mockConnection
     });
+    expect(userProductStateService.ensureState).toHaveBeenCalledWith('user_new', expect.objectContaining({
+      runtimeVersion: '3.9.1',
+      sourcePage: 'auth_login'
+    }));
     expect(mockConnection.commit).toHaveBeenCalled();
     expect(mockConnection.rollback).not.toHaveBeenCalled();
     expect(res.body.data.user).toEqual(expect.objectContaining({
@@ -240,8 +252,28 @@ describe('POST /api/auth/login', () => {
     }));
     expect(appAccessService.validateAccessCodeForNewUser).not.toHaveBeenCalled();
     expect(appAccessService.consumeAccessCode).not.toHaveBeenCalled();
+    expect(userProductStateService.ensureState).toHaveBeenCalledWith('user_open', expect.objectContaining({
+      runtimeVersion: null
+    }));
     expect(res.body.data.user).toEqual(expect.objectContaining({
       userId: 'user_open'
+    }));
+  });
+
+  it('登录后产品状态初始化失败时仍应返回登录成功', async () => {
+    const existingUser = makeUser({
+      userId: 'user_existing'
+    });
+    userService.findByOpenid.mockResolvedValue(existingUser);
+    userProductStateService.ensureState.mockRejectedValueOnce(new Error('state failed'));
+
+    const res = await request(app)
+      .post('/api/auth/login')
+      .send({ code: 'wx-code' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.user).toEqual(expect.objectContaining({
+      userId: 'user_existing'
     }));
   });
 

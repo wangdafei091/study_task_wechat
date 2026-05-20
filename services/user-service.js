@@ -11,6 +11,7 @@ const EventBus = require('../utils/core/event-bus');
 const HttpClient = require('../utils/http-client');
 const TokenManager = require('../utils/token-manager');
 const API_CONFIG = require('../utils/api-config');
+const runtimeVersionUtils = require('../utils/runtime-version');
 const systemUserAccessState = require('../utils/app/system-user-access-state');
 const userContextUtils = require('../utils/user-context');
 const {
@@ -843,7 +844,10 @@ class UserService {
     }
 
     try {
-      const result = await HttpClient.post(API_CONFIG.ENDPOINTS.FAMILIES, { name });
+      const result = await HttpClient.post(API_CONFIG.ENDPOINTS.FAMILIES, {
+        name,
+        runtimeVersion: runtimeVersionUtils.getRuntimeVersion()
+      });
       // 保存新 token（包含 familyId）
       if (result.token) {
         TokenManager.setToken(result.token);
@@ -864,7 +868,10 @@ class UserService {
    */
   async joinFamily(inviteCode) {
     try {
-      const result = await HttpClient.post(API_CONFIG.ENDPOINTS.FAMILIES_JOIN, { inviteCode });
+      const result = await HttpClient.post(API_CONFIG.ENDPOINTS.FAMILIES_JOIN, {
+        inviteCode,
+        runtimeVersion: runtimeVersionUtils.getRuntimeVersion()
+      });
       if (result.token) {
         TokenManager.setToken(result.token);
         await this.initialize();

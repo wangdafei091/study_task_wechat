@@ -2,6 +2,7 @@ const logger = require('../../utils/logger');
 const { Task, TaskStatus } = require('../../models/task');
 const HttpClient = require('../../utils/http-client');
 const API_CONFIG = require('../../utils/api-config');
+const runtimeVersionUtils = require('../../utils/runtime-version');
 
 const PLACEHOLDER_USER_IDS = new Set(['parent', 'child']);
 
@@ -185,6 +186,7 @@ function buildCreateTaskPayload(service, task) {
     hasNoEndDate: task.hasNoEndDate,
     tags: task.tags,
     penaltyApplied: task.penaltyApplied,
+    runtimeVersion: runtimeVersionUtils.getRuntimeVersion(),
     modifyTime: pendingSyncMeta.modifyTime || task.modifyTime,
     operationKey: pendingSyncMeta.operationKey,
     operatorContext: {
@@ -500,6 +502,7 @@ async function syncStatusToCloud(service, task) {
       const response = await HttpClient.patch(url, {
         status: task.status,
         starAwarded: task.starAwarded,
+        runtimeVersion: runtimeVersionUtils.getRuntimeVersion(),
         modifyTime: pendingSyncMeta.modifyTime || task.modifyTime,
         operationKey: pendingSyncMeta.operationKey,
         operatorContext: buildOperatorContextPayload(pendingSyncMeta)

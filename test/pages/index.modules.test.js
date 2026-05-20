@@ -1,6 +1,7 @@
 jest.mock('../../services/service-manager.js', () => ({
   getTaskService: jest.fn(),
-  getMessageService: jest.fn()
+  getMessageService: jest.fn(),
+  getService: jest.fn()
 }));
 
 jest.mock('../../utils/logger', () => ({
@@ -48,6 +49,9 @@ describe('pages/index helper modules', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    serviceManager.getService.mockReturnValue({
+      recordClientEvent: jest.fn().mockResolvedValue({ success: true })
+    });
 
     global.wx = {
       showToast: jest.fn(),

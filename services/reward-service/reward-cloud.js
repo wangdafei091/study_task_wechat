@@ -2,6 +2,7 @@ const logger = require('../../utils/logger');
 const HttpClient = require('../../utils/http-client');
 const API_CONFIG = require('../../utils/api-config');
 const { Reward } = require('../../models/reward');
+const runtimeVersionUtils = require('../../utils/runtime-version');
 
 const REWARD_CLOUD_REFRESH_MIN_INTERVAL_MS = 3 * 1000;
 
@@ -90,6 +91,7 @@ async function syncRewardToCloud(service, reward) {
     isExample: reward.isExample || false,
     tags: reward.tags || [],
     notes: reward.notes || '',
+    runtimeVersion: runtimeVersionUtils.getRuntimeVersion(),
     modifyTime: pendingSyncMeta.modifyTime || reward.modifyTime || Date.now(),
     operationKey: pendingSyncMeta.operationKey,
     operatorContext: {

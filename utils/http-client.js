@@ -287,6 +287,14 @@ class HttpClient {
   static async getActiveUsers() {
     return this.get(API_CONFIG.ENDPOINTS.USER_ACTIVE);
   }
+
+  static async getUserProductState(params = {}) {
+    return this.get(API_CONFIG.ENDPOINTS.USER_PRODUCT_STATE, params);
+  }
+
+  static async createUserActivityEvent(data = {}) {
+    return this.post(API_CONFIG.ENDPOINTS.USER_ACTIVITY_EVENTS, data);
+  }
   
   /**
    * 验证用户会话

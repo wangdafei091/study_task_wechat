@@ -28,6 +28,19 @@ function hideReleaseNotePrompt(page) {
   });
 }
 
+function buildHelpEntryBadgeState(currentReleaseNoteResult = {}) {
+  const visible = Boolean(
+    currentReleaseNoteResult.success === true
+    && currentReleaseNoteResult.note
+    && currentReleaseNoteResult.canShowHelpBadge === true
+  );
+
+  return {
+    visible,
+    text: visible ? '有新变化' : ''
+  };
+}
+
 async function evaluatePendingReleaseNotePrompt(page) {
   const pendingPrompt = page._pendingReleaseNotePrompt || null;
   if (!pendingPrompt) {
@@ -75,10 +88,8 @@ async function refreshReleaseNoteAwareness(page) {
   }
 
   const context = buildReleaseNoteContext(page);
-  const [currentReleaseNoteResult, helpEntryBadgeState] = await Promise.all([
-    releaseNoteService.getCurrentReleaseNote(context),
-    releaseNoteService.getHelpEntryBadgeState(context)
-  ]);
+  const currentReleaseNoteResult = await releaseNoteService.getCurrentReleaseNote(context);
+  const helpEntryBadgeState = buildHelpEntryBadgeState(currentReleaseNoteResult);
 
   page.setData({
     releaseNoteHelpBadgeVisible: helpEntryBadgeState.visible === true,
@@ -124,7 +135,10 @@ async function handleReleaseNotePromptDetail(page) {
   hideReleaseNotePrompt(page);
 
   if (releaseNoteService && note?.version) {
-    await releaseNoteService.markReleaseNoteRead(note.version, effectiveUserId);
+    await releaseNoteService.markReleaseNoteRead(note.version, effectiveUserId, {
+      ...context,
+      sourcePage: 'index_release_note_sheet'
+    });
   }
 
   page.setData({

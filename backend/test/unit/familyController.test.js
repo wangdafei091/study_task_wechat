@@ -7,6 +7,10 @@ jest.mock('../../services/inviteCodeService', () => ({
   issueFamilyInviteCode: jest.fn(),
   consumeForExistingUser: jest.fn()
 }));
+jest.mock('../../services/userProductStateService', () => ({
+  markActivated: jest.fn().mockResolvedValue(null),
+  recordEvent: jest.fn().mockResolvedValue(null)
+}));
 jest.mock('../../services/userService');
 jest.mock('../../middleware/systemUserAccess', () => ({
   systemUserAccessMiddleware: jest.fn((req, res, next) => next())
@@ -17,6 +21,7 @@ jest.mock('../../utils/logger', () => ({
 
 const familyService = require('../../services/familyService');
 const inviteCodeService = require('../../services/inviteCodeService');
+const userProductStateService = require('../../services/userProductStateService');
 const userService = require('../../services/userService');
 
 function buildApp() {
@@ -201,6 +206,33 @@ describe('familyController governance routes', () => {
       .patch('/api/families/members/parent_manager/permission-role')
       .set('Authorization', token(MANAGER))
       .send({ familyPermissionRole: 'viewer' });
+
+    expect(res.status).toBe(200);
+    expect(typeof res.body.data.token).toBe('string');
+  });
+
+  it('加入家庭成功后即使状态同步失败也不应返回 500', async () => {
+    inviteCodeService.consumeForExistingUser.mockResolvedValue({
+      familyId: 'fam_1'
+    });
+    userProductStateService.markActivated.mockRejectedValueOnce(new Error('state failed'));
+    userService.findById.mockResolvedValue({
+      userId: 'child_1',
+      openid: 'openid_1',
+      role: 'child',
+      familyId: 'fam_1',
+      familyPermissionRole: null
+    });
+
+    const res = await request(app)
+      .post('/api/families/join')
+      .set('Authorization', token({
+        userId: 'child_1',
+        role: 'child',
+        familyId: null,
+        familyPermissionRole: null
+      }))
+      .send({ inviteCode: 'F123456789' });
 
     expect(res.status).toBe(200);
     expect(typeof res.body.data.token).toBe('string');
