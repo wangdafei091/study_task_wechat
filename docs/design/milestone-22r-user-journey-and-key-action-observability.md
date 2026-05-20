@@ -1,6 +1,6 @@
 # 里程碑-22R：用户路径与关键行为埋点能力
 
-> **设计状态**：🔴 待审核
+> **设计状态**：🟢 审核通过
 > **创建日期**：2026-05-20
 > **设计者**：GPT5 Codex
 > **审核者**：项目维护者
@@ -26,7 +26,7 @@
 
 `M22Q` 已经建立了 `user_product_state` 与 `user_activity_events` 的基础能力，也能够记录少量关键业务事件，例如首次识别、版本说明查看、帮助入口进入等。但从真实业务使用视角看，这些事件仍不足以稳定回答下面几类问题：
 
-1. 这个用户有没有真正打开小程序？
+1. 这个用户在登录态恢复后，有没有真正进入可追踪会话？
 2. 他有没有真正到达首页？
 3. 首页版本提醒有没有曝光给他？
 4. 他是从首页提醒进入版本说明，还是从 About / 帮助入口进去的？
@@ -94,8 +94,8 @@
    - “看到了什么”：关键页面到达、关键提醒曝光、关键入口打开
 
 4. **以会话为主线解释路径**
-   - 同一轮打开小程序后的关键事件，统一挂到同一个 `sessionId`
-   - 后续分析优先按 `subjectUserId + sessionId + occurredAt` 解释路径
+   - 同一轮登录态恢复后的前台活跃周期内，关键事件统一挂到同一个 `sessionId`
+   - 后续分析优先按 `userId + sessionId + occurredAt` 解释路径
    - 若多个事件 `occurredAt` 相同，则再按 `receivedAt`、`eventId` 升序打破并列
 
 5. **数据库表是正式事实源，日志文件不是**
@@ -112,7 +112,7 @@
 
 `M22R` 首版必须能稳定回答：
 
-1. 用户有没有打开小程序？
+1. 用户在登录态恢复后，有没有进入可追踪会话？
 2. 用户有没有到达首页？
 3. 首页版本提醒有没有真正曝光？
 4. 用户是从哪里进入更新说明链路的？
@@ -133,12 +133,13 @@
 事件：`app_session_started`
 
 正式语义：
-- 前端创建一条新的业务会话
+- 前端在**登录态恢复完成后**创建一条新的业务会话
 - 代表用户完成了一次新的可追踪进入
 - 不等同于“已经看到首页”
+- 也不等同于“冷启动就一定已被记录”；若用户在鉴权恢复完成前离开，本期不会留下这条事实
 - `sessionId` 定义为**设备前台会话**，不是 `currentUser` 专属会话
-- 同一轮前台活跃周期内，允许一个 `sessionId` 下出现多个 `subjectUserId/currentUserId`，以支持家长切换孩子视角
-- `subjectUserId` 继续表示该条事件归属的业务主体用户；`sessionId` 只负责把同一次设备使用串起来
+- 同一轮前台活跃周期内，允许一个 `sessionId` 下出现多个 `userId/currentUserId`，以支持家长切换孩子视角
+- `userId` 继续表示该条事件归属的业务主体用户；`sessionId` 只负责把同一次设备使用串起来
 
 #### 2. 到达首页
 
@@ -148,7 +149,7 @@
 - 首页已进入可交互状态
 - 应晚于首页关键首屏数据稳定
 - 这是“看到首页”的正式判断依据
-- 记录规则采用“**每个 sessionId + 每个 subjectUserId + 每个自然日首页首达一次**”
+- 记录规则采用“**每个 sessionId + 每个 userId + 每个自然日首页首达一次**”
 - 同一会话内因为 `onShow`、数据刷新、搜索开关、消息面板收起等重复回到首页，不重复写入
 
 #### 3. 首页版本提醒曝光
@@ -159,7 +160,7 @@
 - 首页轻提醒已经真正展示给用户
 - 不等同于“具备展示资格”
 - 不等同于“用户点了详情”
-- 记录规则采用“**每个 sessionId + 每个 subjectUserId + 每个 version 最多一次真实曝光**”
+- 记录规则采用“**每个 sessionId + 每个 userId + 每个 version 最多一次真实曝光**”
 - 只有组件真正完成展示时才写入；仅具备资格、仅进入 pending、仅被覆盖层阻塞时都不写入
 
 #### 4. 进入更新说明链路
@@ -206,7 +207,7 @@
 **领域层（models/）**：
 - [x] 修改模型：`backend/models/UserActivityEvent.js`
 - [ ] 新建模型：无
-- 说明：扩展事件白名单、`clientEventId / sessionId / occurredAt / receivedAt` 字段，并统一 `subjectUserId` 业务口径，继续保持“关键事件模型”职责。
+- 说明：扩展事件白名单、`clientEventId / sessionId / occurredAt / receivedAt` 字段，并保持 `userId` 作为主业务主体口径，继续保持“关键事件模型”职责。
 
 **服务层（services/）**：
 - [x] 新建服务：`services/user-journey-service.js`（前端）
@@ -233,7 +234,7 @@
 
 ```mermaid
 graph LR
-    A[用户打开小程序] --> B[前端生成 sessionId]
+    A[登录态恢复完成] --> B[前端生成 sessionId]
     B --> C[app_session_started]
     C --> D[首页完成首屏稳定]
     D --> E[home_page_viewed]
@@ -258,7 +259,7 @@ graph LR
 ```typescript
 interface UserActivityEvent {
   eventId: string;
-  clientEventId: string;
+  clientEventId: string | null;
   userId: string;
   familyId: string | null;
   sessionId: string | null;
@@ -269,27 +270,27 @@ interface UserActivityEvent {
   clientPlatform: string | null;
   clientEnv: string | null;
   sourcePage: string | null;
-  subjectUserId: string | null;
+  relatedUserId: string | null;
   isDelayed: boolean;
   payloadJson: Record<string, unknown> | null;
 }
 ```
 
 字段语义约定：
-- `userId`：登录态下的操作者/账号主体，用于回答“是谁在这台设备上发起了本次使用”
-- `subjectUserId`：当前业务视角用户，用于回答“本条页面/提醒/动作是面向谁发生的”
-- 为兼容 `M22Q` 已有表结构，数据库物理列首版继续复用 `target_user_id`，但在设计、接口、代码变量和 SQL 查询约定中统一称为 `subjectUserId`
+- `userId`：主业务主体用户，用于回答“这条页面/提醒/动作是面向谁发生的”；该口径与 `M22Q` 现有落库事实保持一致
+- `relatedUserId`：可选的辅助关联用户，用于少量需要表达“还涉及另一个成员”的事件；首版不把它定义为统一路径主键
+- `operatorUserId`：本期不新增落库字段，仅作为后续扩展预留；若未来需要稳定回答“谁操作了谁”，再独立补入
+- 为兼容 `M22Q` 已有表结构，数据库物理列首版继续复用 `target_user_id` 承载可选 `relatedUserId`
 
 新增字段建议：
-- `client_event_id VARCHAR(64) NOT NULL` - 客户端单次事件幂等键
+- `client_event_id VARCHAR(64) DEFAULT NULL` - 客户端单次事件幂等键；对 `M22R` 客户端路径事件必填，对旧事件和服务端自产事件可为空
 - `session_id VARCHAR(64) DEFAULT NULL`
 - `occurred_at BIGINT NOT NULL` - 事件真实发生时间，优先用于路径解释
 - `received_at BIGINT NOT NULL` - 后端接收时间，用于排查延迟和重试
 - `is_delayed TINYINT(1) NOT NULL DEFAULT 0` - 是否离线补发或延迟上报
 
 新增索引建议：
-- `uk_user_activity_events_client_event (client_event_id)` - 保证同一事件重试不重复入库
-- `idx_user_activity_events_subject_session_time (target_user_id, session_id, occurred_at)`
+- `uk_user_activity_events_client_event (client_event_id)` - 对非空 `client_event_id` 保证同一事件重试不重复入库
 - `idx_user_activity_events_user_session_time (user_id, session_id, occurred_at)`
 - `idx_user_activity_events_received_at (received_at)`
 
@@ -305,10 +306,10 @@ interface JourneySession {
 ```
 
 规则建议：
-- 小程序冷启动创建新 `sessionId`
+- 登录态恢复后的冷启动创建新 `sessionId`
 - 前后台切换超过阈值（如 30 分钟）重新建会话
 - 同一次前台活跃周期内复用当前 `sessionId`
-- 切换 `currentUser` 不重新创建 `sessionId`；通过每条事件的 `subjectUserId` 区分当前业务视角
+- 切换 `currentUser` 不重新创建 `sessionId`；通过每条事件的 `userId` 区分当前业务视角
 
 #### 3. 客户端事件幂等模型
 
@@ -323,21 +324,22 @@ interface JourneyEventEnvelope {
 ```
 
 规则建议：
-- 每次前端准备写入事件时生成新的 `clientEventId`
+- 每次前端准备写入 `M22R` 客户端路径事件时生成新的 `clientEventId`
 - 同一事件因网络重试、前端补发、后台重复提交时，必须复用原始 `clientEventId`
-- 后端以 `clientEventId` 作为最终幂等键；重复上报返回成功语义，但不重复插入
+- 后端仅对**非空** `clientEventId` 做幂等去重；重复上报返回成功语义，但不重复插入
 - `home_page_viewed`、`release_note_prompt_exposed` 的“业务去重”继续由前端服务层控制，`clientEventId` 只解决技术重试带来的重复写库
+- 旧请求、兼容事件和服务端自产事件允许没有 `clientEventId`，这类事件不参与客户端幂等去重
 
 #### 4. 记录策略模型
 
 ```typescript
-interface JourneyTrackingPolicy {
+interface JourneyTrackingDecision {
   enabled: boolean;
   mode: 'off' | 'core_all' | 'core_sampled' | 'allowlist_only';
   sampleRate?: number;
-  allowlistedUserIds?: string[];
-  allowlistedFamilyIds?: string[];
   enabledEventTypes?: string[];
+  sampledIn?: boolean;
+  matchedBy?: 'core_all' | 'sampled' | 'allowlist' | null;
 }
 ```
 
@@ -348,13 +350,15 @@ interface JourneyTrackingPolicy {
 - `allowlist_only`：仅对指定用户/家庭开启；适合线上排障和重点跟踪
 - 抽样应采用稳定哈希，不可按请求随机，以避免同一用户会话一半被记录、一半丢失
 - `enabledEventTypes` 允许进一步只保留首页/版本提醒/关键业务动作中的一部分
+- 后端内部可以维护完整白名单和抽样规则，但前端只接收**当前用户当前会话的生效结果**，不下发完整 allowlist 明细
 - 策略由后端权威下发，前端只执行，不在客户端写死
+- 与 `journeyContext` 关联的后端关键业务事件也必须复用同一条策略决策，不允许前端路径事件已关闭/未命中，而后端 `family_created / task_created / task_completed / reward_created` 仍无条件写入
 
 ### 事件清单（首版）
 
 | 事件名 | 含义 | 典型页面 | 备注 |
 |--------|------|---------|------|
-| `app_session_started` | 新会话开始 | `app` | 代表用户进入可追踪会话 |
+| `app_session_started` | 新会话开始 | `app` | 代表用户在登录态恢复后进入可追踪会话 |
 | `home_page_viewed` | 首页到达 | `pages/index/` | 代表真正看到首页 |
 | `about_page_viewed` | About 到达 | `packageManage/pages/about/` | 代表看到帮助/关于主页面 |
 | `release_note_prompt_exposed` | 首页版本提醒曝光 | `pages/index/` | 代表提醒真的显示了 |
@@ -375,8 +379,8 @@ interface JourneyTrackingPolicy {
 
 | 方法 | 说明 | 关键参数 | 返回值 |
 |------|------|---------|--------|
-| `POST /api/users/activity-events` | 写入关键路径事件 | `clientEventId, sessionId, occurredAt, subjectUserId, eventType, sourcePage, payload` | `{ success, eventId }` |
-| `GET /api/users/activity-policy` | 获取当前记录策略 | `runtimeVersion` | `{ enabled, mode, sampleRate, enabledEventTypes, ... }` |
+| `POST /api/users/activity-events` | 写入关键路径事件 | `clientEventId?, sessionId, occurredAt, subjectUserId, eventType, sourcePage, payload` | `{ success, eventId }` |
+| `GET /api/users/activity-policy` | 获取当前记录策略生效结果 | `runtimeVersion` | `{ enabled, mode, sampleRate, enabledEventTypes, sampledIn, matchedBy }` |
 | `GET /api/users/product-state` | 继续返回版本感知状态 | `targetUserId, runtimeVersion` | `{ canAutoPrompt, ... }` |
 
 **前端新增服务接口**：
@@ -384,7 +388,7 @@ interface JourneyTrackingPolicy {
 | 方法 | 说明 | 参数 | 返回值 |
 |------|------|------|--------|
 | `startSession(context)` | 创建/复用会话 | `{ loginUser, currentUser, runtimeVersion }` | `{ sessionId }` |
-| `getTrackingPolicy(context)` | 获取并缓存记录策略 | `{ loginUser, runtimeVersion }` | `{ enabled, mode, ... }` |
+| `getTrackingPolicy(context)` | 获取并缓存当前记录策略生效结果 | `{ loginUser, runtimeVersion }` | `{ enabled, mode, sampledIn, ... }` |
 | `trackPageView(pageKey, context, payload)` | 记录页面到达 | `('home_page_viewed', context, payload)` | `{ success }` |
 | `trackExposure(eventType, context, payload)` | 记录曝光 | `('release_note_prompt_exposed', ...)` | `{ success }` |
 | `trackAction(eventType, context, payload)` | 记录关键动作/点击 | `('about_release_notes_opened', ...)` | `{ success }` |
@@ -392,8 +396,10 @@ interface JourneyTrackingPolicy {
 策略说明：
 - `user-journey-service` 在会话启动或鉴权完成后获取一次策略，并做短时本地缓存
 - 若策略为 `off`，直接跳过事件上报，不影响主业务
-- 若策略为 `core_sampled`，按稳定哈希决定当前 `loginUserId/familyId` 是否进入样本
+- 若策略为 `core_sampled`，后端返回当前用户是否命中稳定样本，前端不自行计算
 - 若策略收缩了 `enabledEventTypes`，前端在发送前先过滤；后端仍保留白名单校验做最终兜底
+- `subjectUserId` 在接口层仅作为“本条事件面向哪个业务主体用户”的请求别名存在；后端解析后仍写入 `user_id`
+- 后端业务控制器在消费 `journeyContext` 时，也必须基于同一条策略决策判断是否写入关键业务事件；策略为 `off` 时不写，策略为 `core_sampled / allowlist_only` 时按同一登录主体或同一会话的既有命中结果决定是否写入
 
 **需要同步补充 `journeyContext` 的既有业务接口**：
 
@@ -410,6 +416,7 @@ interface JourneyTrackingPolicy {
 - 在线即时动作至少要透传 `sessionId`
 - 离线待同步动作必须透传完整 `journeyContext`，以便后端写入正确的 `sessionId / occurredAt / isDelayed / clientEventId`
 - 旧请求未携带 `journeyContext` 时允许降级写入 `NULL` 或服务端当前时间，但这类历史或兼容事件不参与严格会话路径解释
+- 对 `M22R` 新增的客户端路径事件，`clientEventId` 为必填；对旧业务事件和服务端自产事件，`clientEventId` 可为空
 
 ---
 
@@ -422,7 +429,7 @@ interface JourneyTrackingPolicy {
 
 **修改文件**：
 - `utils/http-client.js` - 扩展事件上报参数
-- `backend/models/UserActivityEvent.js` - 扩展白名单、`clientEventId/sessionId/occurredAt/receivedAt` 与 `subjectUserId` 口径
+- `backend/models/UserActivityEvent.js` - 扩展白名单、`clientEventId/sessionId/occurredAt/receivedAt` 与 `userId/relatedUserId` 口径
 - `backend/services/userProductStateService.js` - 支持会话字段写入
 - `backend/services/*tracking-policy*` 或等价策略模块 - 提供记录策略读取与稳定抽样判定
 - `backend/controllers/userController.js` - 扩展事件参数校验
@@ -507,7 +514,7 @@ class UserJourneyService {
 2. 页面层只传“我现在发生了什么”，不处理底层 event 公共字段
 3. 对网络失败保持降级，不影响主业务流程
 4. 对 `home_page_viewed`、`release_note_prompt_exposed` 做每会话去重
-5. 每条事件生成后立即固化 `clientEventId`，重试时不可重新生成
+5. 每条 `M22R` 客户端路径事件生成后立即固化 `clientEventId`，重试时不可重新生成
 6. 策略判断必须集中，不能由页面自行决定“哪些用户记、哪些用户不记”
 
 ### 第3步：接线关键页面与关键业务动作（预计1天）
@@ -521,8 +528,9 @@ class UserJourneyService {
 2. About / 更新说明页只记关键页面到达，不做碎片点击全覆盖
 3. 后端业务动作应补上 `journeyContext` 关联，避免前后路径断开
 4. 离线补云事件应保留 `occurredAt`，并标记 `isDelayed = true`
-5. 本地待同步业务数据若触发关键动作埋点，必须一并保存 `clientEventId` 以支持服务端幂等
+5. 本地待同步业务数据若触发关键动作埋点，若该动作来自 `M22R` 客户端路径事件，必须一并保存 `clientEventId` 以支持服务端幂等
 6. 即使前端误发了策略关闭范围外的事件，后端也应按当前策略拒绝或丢弃，避免失控
+7. 即使关键业务动作由后端自产事件写入，也必须遵守同一策略，不允许绕过 `off / core_sampled / allowlist_only` 直接落库
 
 ### 第4步：测试与真实库验证（预计0.5-1天）
 
@@ -546,11 +554,11 @@ class UserJourneyService {
 | 会话创建 | 测 `startSession()` | 同一活跃周期复用 `sessionId`，超阈值重新创建 |
 | 策略关闭 | 测 `getTrackingPolicy()` + 上报入口 | `mode = off` 时不发事件且不影响主流程 |
 | 稳定抽样 | 测策略模块 | 同一用户/家庭在同一策略下样本命中结果稳定 |
-| 会话切换 | 测 `startSession()` + `currentUser` 切换 | 切换业务视角不重建 `sessionId`，但事件 `subjectUserId` 正确变化 |
+| 会话切换 | 测 `startSession()` + `currentUser` 切换 | 切换业务视角不重建 `sessionId`，但事件 `userId` 正确变化 |
 | 页面到达事件 | 测 `trackPageView()` | 自动补齐 `sessionId`、版本、用户上下文 |
 | 事件白名单 | 测后端 `createActivityEvent` | 非白名单事件拒绝写入 |
-| 事件写库 | 测 `recordEvent()` | `clientEventId`、`sessionId`、`occurredAt`、`receivedAt`、`sourcePage`、`payloadJson` 正确落库 |
-| 事件幂等 | 测后端 `createActivityEvent` + `recordEvent()` | 同一 `clientEventId` 重复提交不重复落库 |
+| 事件写库 | 测 `recordEvent()` | `clientEventId`、`sessionId`、`occurredAt`、`receivedAt`、`sourcePage`、`payloadJson` 正确落库；旧事件缺失 `clientEventId` 时也能兼容写入 |
+| 事件幂等 | 测后端 `createActivityEvent` + `recordEvent()` | 同一非空 `clientEventId` 重复提交不重复落库 |
 | 首页曝光 | 测首页模块 | 只有真正展示提醒时才发 `release_note_prompt_exposed` |
 | 业务动作路径透传 | 测家庭/任务/奖励控制器 | 关键业务事件能够写入 `journeyContext` 对应字段 |
 
@@ -560,19 +568,19 @@ class UserJourneyService {
 - [ ] About 入口、帮助入口与更新说明页之间的链路事件能用 `sessionId` 串起来
 - [ ] 家庭/任务/奖励关键动作与同一会话下的页面事件可按时间顺序解释
 - [ ] 离线补云业务动作保留原始 `sessionId + occurredAt`，并通过 `isDelayed` 与实时路径区分
-- [ ] 同一事件重复上报时，通过 `clientEventId` 保证最终只落一条正式事实
+- [ ] 同一 `M22R` 客户端路径事件重复上报时，通过 `clientEventId` 保证最终只落一条正式事实
 - [ ] 策略从 `core_all` 切到 `off` 或 `core_sampled` 时，不停服务即可生效
 
 ### 手动测试
 
 1. **功能测试**：
-   - [ ] 冷启动进入小程序，应生成 `app_session_started`
+   - [ ] 登录态恢复完成后进入小程序主链路，应生成 `app_session_started`
    - [ ] 首页首屏稳定后，应只记录一次 `home_page_viewed`
    - [ ] 首页提醒真正出现时，应只记录一次 `release_note_prompt_exposed`
    - [ ] 点“查看详情”后，应看到 `release_note_prompt_detail_clicked` 与 `release_note_viewed`
    - [ ] 点“稍后查看”后，应看到 `release_note_prompt_later_clicked`
    - [ ] 从帮助入口、About 入口进入更新说明页，应能区分入口来源
-   - [ ] 家长切换孩子视角后，同一 `sessionId` 下能看到不同 `subjectUserId` 的关键路径事件
+   - [ ] 家长切换孩子视角后，同一 `sessionId` 下能看到不同 `userId` 的关键路径事件
 
 2. **回归测试**：
    - [ ] 现有版本提醒资格判断不被破坏
@@ -596,17 +604,17 @@ class UserJourneyService {
 | 会话切分不稳，导致路径断裂 | 中 | 中 | 集中在 `user-journey-service` 管理 `sessionId` |
 | 网络失败拖慢主业务 | 高 | 中 | 事件上报必须非阻塞、失败只记录 warn |
 | 事件表增长过快 | 中 | 中 | 首版严格控范围，并建立索引与定期评估机制 |
-| 用户量增长导致存储/写入压力上升 | 高 | 中 | 通过后端权威策略支持 `off / core_all / core_sampled / allowlist_only` 动态切换 |
+| 用户量增长导致存储/写入压力上升 | 高 | 中 | 通过后端权威策略支持 `off / core_all / core_sampled / allowlist_only` 动态切换，并只向前端下发当前命中的生效结果 |
 | 时间口径不一致导致路径反序 | 高 | 中 | 明确 `occurredAt` 用于解释路径，`receivedAt` 用于排查延迟 |
 | 离线补云动作污染实时路径 | 高 | 中 | 增加 `isDelayed` 并在分析时与实时事件区分 |
-| 网络重试导致重复事件 | 高 | 中 | 引入 `clientEventId` 幂等键，后端唯一约束兜底 |
+| 网络重试导致重复事件 | 高 | 中 | 引入 `clientEventId` 幂等键，并明确只对非空 `clientEventId` 做唯一约束兜底 |
 
 ### 业务风险
 
 | 风险项 | 影响 | 概率 | 应对措施 |
 |--------|------|------|---------|
 | 业务误以为已具备“完整行为分析平台” | 高 | 高 | 在设计和交付说明中明确“能回答什么 / 不能回答什么” |
-| “看到首页”与“进入小程序”口径混淆 | 高 | 中 | 明确 `app_session_started` 与 `home_page_viewed` 为不同事件 |
+| “看到首页”与“进入小程序”口径混淆 | 高 | 中 | 明确 `app_session_started` 是“登录态恢复后的可追踪进入”，`home_page_viewed` 才是正式首页到达事实 |
 | 后续需求持续膨胀 | 中 | 高 | 把首版目标固定为关键路径可还原，不纳入停留时长、热图、BI 报表 |
 | “页面到达”和“内容被看到”双口径打架 | 中 | 中 | 首版合并 `whats_new_page_viewed` 到 `release_note_viewed`，避免重复事实 |
 | 团队误把该能力当“全量线上监控系统” | 中 | 中 | 明确首版目标是关键路径观测，不是所有用户所有细节的永久审计 |
