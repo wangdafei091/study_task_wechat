@@ -297,7 +297,13 @@ describe('pages/index/index shell behavior', () => {
           updateNickname: jest.fn().mockResolvedValue({ success: true }),
           deleteFamilyMember: jest.fn().mockResolvedValue({ success: true }),
           validateService: jest.fn().mockResolvedValue({ success: true }),
-          getLoginUserId: jest.fn(() => 'parent-1')
+          getLoginUserId: jest.fn(() => 'parent-1'),
+          getProductState: jest.fn().mockResolvedValue({
+            canShowNoFamilyHomeOnboarding: false,
+            hasShownNoFamilyHomeOnboardingInCurrentVersion: false,
+            noFamilyOnboardingMode: 'none'
+          }),
+          createUserActivityEvent: jest.fn().mockResolvedValue({ success: true })
         }
       }
     };
@@ -523,7 +529,7 @@ describe('pages/index/index shell behavior', () => {
     expect(page.data.showHomeOnboardingCard).toBe(false);
   });
 
-  it('首页不应为无家庭用户渲染 onboarding 卡，应交给 family-settings 承接', () => {
+  it('首页在未命中新用户资格且没有邀请码承接上下文时，不应为无家庭用户渲染 onboarding 卡', () => {
     page.data.currentUser = { id: 'parent-1', userId: 'parent-1', name: '家长', role: 'parent' };
     page.data.availableUsers = [{ id: 'parent-1', userId: 'parent-1', name: '家长', role: 'parent' }];
     page.data.canManageMembers = false;
@@ -533,6 +539,13 @@ describe('pages/index/index shell behavior', () => {
     page.data.isViewingFuture = false;
     page.data.showSearch = false;
     page.data.showMessagePreview = false;
+    page.data.noFamilyHomeOnboardingState = {
+      canShow: false,
+      mode: 'parent_create_or_join',
+      source: 'none',
+      shownEventRecorded: false,
+      hasLongTermEntry: true
+    };
 
     page.refreshHomeOnboardingCard();
 
@@ -540,13 +553,99 @@ describe('pages/index/index shell behavior', () => {
     expect(page.data.showHomeOnboardingCard).toBe(false);
   });
 
-  it('无家庭家长首页空态应指向创建或加入家庭，而不是误显示为添加孩子', () => {
+  it('首页应为普通无家庭新用户展示一次性 no-family onboarding，并记录展示事件', async () => {
+    page.data.currentUser = { id: 'parent-1', userId: 'parent-1', name: '家长', role: 'parent' };
+    page.data.availableUsers = [{ id: 'parent-1', userId: 'parent-1', name: '家长', role: 'parent' }];
+    page.data.canManageMembers = true;
+    page.data.tasks = [];
+    page.data.showOccurrenceSection = false;
+    page.data.isViewingToday = true;
+    page.data.isViewingFuture = false;
+    page.data.showSearch = false;
+    page.data.showMessagePreview = false;
+    appMock.globalData.userService.getCurrentUser.mockReturnValue(page.data.currentUser);
+    appMock.globalData.userService.getLoginUser.mockReturnValue(page.data.currentUser);
+    appMock.globalData.userService.getProductState.mockResolvedValueOnce({
+      canShowNoFamilyHomeOnboarding: true,
+      hasShownNoFamilyHomeOnboardingInCurrentVersion: false,
+      noFamilyOnboardingMode: 'parent_create_or_join'
+    });
+
+    await page.refreshNoFamilyHomeOnboardingState();
+    page.refreshHomeOnboardingCard();
+    await Promise.resolve();
+
+    expect(page.data.homeOnboardingCard).toEqual(expect.objectContaining({
+      stage: 'no_family_parent',
+      title: '先创建你的家庭',
+      source: 'product_state',
+      dismissAfterConsume: true
+    }));
+    expect(page.data.showHomeOnboardingCard).toBe(true);
+    expect(appMock.globalData.userService.createUserActivityEvent).toHaveBeenCalledWith(
+      'no_family_home_onboarding_shown',
+      expect.objectContaining({
+        sourcePage: 'index_home_onboarding',
+        payload: expect.objectContaining({
+          mode: 'parent_create_or_join'
+        })
+      })
+    );
+    expect(page.data.noFamilyHomeOnboardingState).toEqual(expect.objectContaining({
+      canShow: false,
+      shownEventRecorded: true
+    }));
+  });
+
+  it('普通 no-family onboarding 在覆盖层关闭后首次显示时也应记录展示事件', async () => {
+    page.data.currentUser = { id: 'parent-1', userId: 'parent-1', name: '家长', role: 'parent' };
+    page.data.availableUsers = [{ id: 'parent-1', userId: 'parent-1', name: '家长', role: 'parent' }];
+    page.data.canManageMembers = true;
+    page.data.tasks = [];
+    page.data.showOccurrenceSection = false;
+    page.data.isViewingToday = true;
+    page.data.isViewingFuture = false;
+    page.data.showSearch = true;
+    page.data.showMessagePreview = false;
+    appMock.globalData.userService.getCurrentUser.mockReturnValue(page.data.currentUser);
+    appMock.globalData.userService.getLoginUser.mockReturnValue(page.data.currentUser);
+    appMock.globalData.userService.getProductState.mockResolvedValueOnce({
+      canShowNoFamilyHomeOnboarding: true,
+      hasShownNoFamilyHomeOnboardingInCurrentVersion: false,
+      noFamilyOnboardingMode: 'parent_create_or_join'
+    });
+
+    await page.refreshNoFamilyHomeOnboardingState();
+    page.refreshHomeOnboardingCard();
+    await Promise.resolve();
+
+    expect(page.data.showHomeOnboardingCard).toBe(false);
+    expect(appMock.globalData.userService.createUserActivityEvent).not.toHaveBeenCalledWith(
+      'no_family_home_onboarding_shown',
+      expect.anything()
+    );
+
+    page.setData({ showSearch: false });
+    page.syncHomeOnboardingVisibility();
+    await Promise.resolve();
+
+    expect(page.data.showHomeOnboardingCard).toBe(true);
+    expect(appMock.globalData.userService.createUserActivityEvent).toHaveBeenCalledWith(
+      'no_family_home_onboarding_shown',
+      expect.objectContaining({
+        sourcePage: 'index_home_onboarding'
+      })
+    );
+  });
+
+  it('无家庭用户首页空态应指向家庭设置入口，而不是误显示为添加孩子或普通暂无任务', () => {
     const wxml = require('fs').readFileSync(
       require('path').join(process.cwd(), 'pages/index/index.wxml'),
       'utf8'
     );
 
-    expect(wxml).toContain('还没有加入家庭，请前往家庭设置创建家庭或输入邀请码加入');
+    expect(wxml).toContain('还没有加入家庭，请点击右下角“+”菜单中的“家庭”，进入家庭设置并创建家庭或输入邀请码加入');
+    expect(wxml).toContain('还没有加入家庭，请点击右下角“+”菜单中的“家庭”，进入家庭设置并输入邀请码加入');
     expect(wxml).toContain('currentUser && currentUser.role === \'parent\' && !currentUser.familyId && !showHomeOnboardingCard');
     expect(wxml).not.toContain('canManageMembers && availableUsers.length <= 1 && !showHomeOnboardingCard');
   });

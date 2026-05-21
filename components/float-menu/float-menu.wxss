@@ -171,67 +171,94 @@
   transition-delay: 0.15s;
 }
 
-/* 菜单项动画 - 右下角位置(默认) */
+.float-menu-item.family-settings {
+  background: linear-gradient(135deg, #43A047, #2E7D32);
+  transition-delay: 0.2s;
+}
+
+/* 菜单项动画 - 右下角位置(默认)
+   右侧锚点统一向屏幕内侧展开，避免第四项越出右边界。 */
 .float-menu.position-bottom-right.active .float-menu-item:nth-child(1) {
-  transform: scale(1) translate(-110rpx, -110rpx);
+  transform: scale(1) translate(-150rpx, -20rpx);
   opacity: 1;
 }
 
 .float-menu.position-bottom-right.active .float-menu-item:nth-child(2) {
-  transform: scale(1) translate(-40rpx, -150rpx);
+  transform: scale(1) translate(-135rpx, -95rpx);
   opacity: 1;
 }
 
 .float-menu.position-bottom-right.active .float-menu-item:nth-child(3) {
-  transform: scale(1) translate(40rpx, -150rpx);
+  transform: scale(1) translate(-85rpx, -165rpx);
+  opacity: 1;
+}
+
+.float-menu.position-bottom-right.active .float-menu-item:nth-child(4) {
+  transform: scale(1) translate(-10rpx, -220rpx);
   opacity: 1;
 }
 
 /* 菜单项动画 - 左下角位置 */
 .float-menu.position-bottom-left.active .float-menu-item:nth-child(1) {
-  transform: scale(1) translate(110rpx, -110rpx);
+  transform: scale(1) translate(150rpx, -20rpx);
   opacity: 1;
 }
 
 .float-menu.position-bottom-left.active .float-menu-item:nth-child(2) {
-  transform: scale(1) translate(40rpx, -150rpx);
+  transform: scale(1) translate(135rpx, -95rpx);
   opacity: 1;
 }
 
 .float-menu.position-bottom-left.active .float-menu-item:nth-child(3) {
-  transform: scale(1) translate(-40rpx, -150rpx);
+  transform: scale(1) translate(85rpx, -165rpx);
   opacity: 1;
 }
 
-/* 菜单项动画 - 右上角位置 */
+.float-menu.position-bottom-left.active .float-menu-item:nth-child(4) {
+  transform: scale(1) translate(10rpx, -220rpx);
+  opacity: 1;
+}
+
+/* 菜单项动画 - 右上角位置
+   与右下角同样只向左展开，避免贴边裁切。 */
 .float-menu.position-top-right.active .float-menu-item:nth-child(1) {
-  transform: scale(1) translate(-110rpx, 110rpx);
+  transform: scale(1) translate(-150rpx, 20rpx);
   opacity: 1;
 }
 
 .float-menu.position-top-right.active .float-menu-item:nth-child(2) {
-  transform: scale(1) translate(-40rpx, 150rpx);
+  transform: scale(1) translate(-135rpx, 95rpx);
   opacity: 1;
 }
 
 .float-menu.position-top-right.active .float-menu-item:nth-child(3) {
-  transform: scale(1) translate(40rpx, 150rpx);
+  transform: scale(1) translate(-85rpx, 165rpx);
+  opacity: 1;
+}
+
+.float-menu.position-top-right.active .float-menu-item:nth-child(4) {
+  transform: scale(1) translate(-10rpx, 220rpx);
   opacity: 1;
 }
 
 /* 菜单项动画 - 左上角位置 */
 .float-menu.position-top-left.active .float-menu-item:nth-child(1) {
-  transform: scale(1) translate(110rpx, 110rpx);
+  transform: scale(1) translate(150rpx, 20rpx);
   opacity: 1;
 }
 
 .float-menu.position-top-left.active .float-menu-item:nth-child(2) {
-  transform: scale(1) translate(40rpx, 150rpx);
+  transform: scale(1) translate(135rpx, 95rpx);
   opacity: 1;
 }
 
 .float-menu.position-top-left.active .float-menu-item:nth-child(3) {
-  transform: scale(1) translate(-40rpx, 150rpx);
+  transform: scale(1) translate(85rpx, 165rpx);
+  opacity: 1;
+}
+
+.float-menu.position-top-left.active .float-menu-item:nth-child(4) {
+  transform: scale(1) translate(10rpx, 220rpx);
   opacity: 1;
 }
 
@@ -273,4 +300,4 @@
     right: auto;
     left: 80rpx;
   }
-} 
+}

@@ -7,6 +7,32 @@ const { buildIndexUserContextState } = require('./index-user-context');
 
 const USER_SWITCHER_CLOSE_DELAY = 220;
 
+function getUserId(user = null) {
+  return user?.userId || user?.id || '';
+}
+
+function shouldShowFamilySettingsMenuItem(currentUser, loginUser, pageState = {}) {
+  if (!currentUser || pageState.isSystemBlocked === true) {
+    return false;
+  }
+
+  const currentRole = String(currentUser.role || '').trim();
+  const loginRole = String(loginUser?.role || currentUser.role || '').trim();
+  const currentUserId = getUserId(currentUser);
+  const loginUserId = getUserId(loginUser);
+  const isSelfView = !loginUserId || !currentUserId || currentUserId === loginUserId;
+
+  if (currentRole === 'parent') {
+    return isSelfView;
+  }
+
+  if (currentRole === 'child') {
+    return isSelfView && loginRole === 'child' && !currentUser.familyId;
+  }
+
+  return false;
+}
+
 function showUserSwitcher(page) {
   logger.info('Index', '显示用户切换界面');
 
@@ -230,6 +256,14 @@ function updateMenuItemsWithPermissions(page) {
       ariaLabel: '管理奖励',
       feature: 'reward',
       action: 'create'
+    },
+    {
+      id: 'family-settings',
+      type: 'family-settings',
+      icon: '🏠',
+      label: '家庭',
+      ariaLabel: '进入家庭设置',
+      path: '/packageManage/pages/family-settings/family-settings'
     }
   ];
 
@@ -243,6 +277,10 @@ function updateMenuItemsWithPermissions(page) {
   const finalMenuItems = filteredMenuItems.filter((item) => {
     if (item.id === 'study') {
       return true;
+    }
+
+    if (item.id === 'family-settings') {
+      return shouldShowFamilySettingsMenuItem(currentUser, loginUser, page.data);
     }
 
     if (!isViewingToday && (item.id === 'habit' || item.id === 'reward-manage')) {

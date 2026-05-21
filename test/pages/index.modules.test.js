@@ -84,7 +84,13 @@ describe('pages/index helper modules', () => {
           switchToUser: jest.fn().mockResolvedValue({ success: true }),
           updateNickname: jest.fn().mockResolvedValue({ success: true }),
           deleteFamilyMember: jest.fn().mockResolvedValue({ success: true }),
-          validateService: jest.fn().mockResolvedValue({ success: true })
+          validateService: jest.fn().mockResolvedValue({ success: true }),
+          getProductState: jest.fn().mockResolvedValue({
+            canShowNoFamilyHomeOnboarding: false,
+            hasShownNoFamilyHomeOnboardingInCurrentVersion: false,
+            noFamilyOnboardingMode: 'none'
+          }),
+          createUserActivityEvent: jest.fn().mockResolvedValue({ success: true })
         }
       }
     };
@@ -169,14 +175,15 @@ describe('pages/index helper modules', () => {
     expect(page.data.searchResults).toEqual([]);
   });
 
-  it('user-switcher updateMenuItemsWithPermissions 应在只读且非今日场景过滤管理入口', () => {
+  it('user-switcher updateMenuItemsWithPermissions 应在只读家长视角隐藏管理入口但保留家庭入口', () => {
     permissionUtils.filterMenuItems.mockImplementation((items) => items);
 
     const page = {
       data: {
         currentUser: { role: 'parent' },
         isReadonlyView: true,
-        isViewingToday: true
+        isViewingToday: true,
+        isSystemBlocked: false
       },
       setData: jest.fn(function setData(update) {
         Object.assign(this.data, update);
@@ -186,7 +193,8 @@ describe('pages/index helper modules', () => {
     userSwitcherModule.updateMenuItemsWithPermissions(page);
 
     expect(page.data.menuItems).toEqual([
-      expect.objectContaining({ id: 'study' })
+      expect.objectContaining({ id: 'study' }),
+      expect.objectContaining({ id: 'family-settings' })
     ]);
   });
 
@@ -197,7 +205,8 @@ describe('pages/index helper modules', () => {
       data: {
         currentUser: { role: 'parent' },
         isReadonlyView: false,
-        isViewingToday: false
+        isViewingToday: false,
+        isSystemBlocked: false
       },
       setData: jest.fn(function setData(update) {
         Object.assign(this.data, update);
@@ -209,7 +218,38 @@ describe('pages/index helper modules', () => {
     expect(page.data.menuItems.map((item) => item.id)).toEqual([
       'study',
       'habit',
-      'reward-manage'
+      'reward-manage',
+      'family-settings'
+    ]);
+  });
+
+  it('user-switcher updateMenuItemsWithPermissions 应为无家庭孩子自己视角保留家庭入口', () => {
+    permissionUtils.filterMenuItems.mockImplementation((items) => items.filter((item) => (
+      item.id === 'study' || item.id === 'family-settings'
+    )));
+    appMock.globalData.userService.getLoginUser.mockReturnValue({
+      id: 'child-1',
+      userId: 'child-1',
+      role: 'child'
+    });
+
+    const page = {
+      data: {
+        currentUser: { id: 'child-1', userId: 'child-1', role: 'child', familyId: null },
+        isReadonlyView: false,
+        isViewingToday: true,
+        isSystemBlocked: false
+      },
+      setData: jest.fn(function setData(update) {
+        Object.assign(this.data, update);
+      })
+    };
+
+    userSwitcherModule.updateMenuItemsWithPermissions(page);
+
+    expect(page.data.menuItems.map((item) => item.id)).toEqual([
+      'study',
+      'family-settings'
     ]);
   });
 

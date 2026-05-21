@@ -34,6 +34,8 @@ jest.mock('../../utils/api-config', () => ({
     FAMILIES_MEMBER_PERMISSION_ROLE: '/api/families/members/{userId}/permission-role',
     USER_NICKNAME: '/api/users/{userId}/nickname',
     USER_AVATAR_PRESET: '/api/users/{userId}/avatar-preset',
+    USER_PRODUCT_STATE: '/api/users/product-state',
+    USER_ACTIVITY_EVENTS: '/api/users/activity-events',
   },
 }));
 jest.mock('../../utils/runtime-version', () => ({
@@ -347,6 +349,68 @@ describe('UserService', () => {
       expect(userService.loginUser.systemAccessLevel).toBe('readonly');
       expect(userService.currentUser).toBe(userService.loginUser);
       expect(userService.userCache.get('parent')).toBe(userService.loginUser);
+    });
+  });
+
+  describe('产品状态与轻量事件', () => {
+    it('getProductState 应透传当前版本与目标用户参数', async () => {
+      HttpClient.getUserProductState = jest.fn().mockResolvedValue({
+        canShowNoFamilyHomeOnboarding: true
+      });
+      userService.loginUser = new User({
+        userId: 'parent',
+        role: 'parent',
+        familyId: 'fam_1'
+      });
+      userService.currentUser = new User({
+        userId: 'child_1',
+        role: 'child',
+        familyId: 'fam_1'
+      });
+
+      const result = await userService.getProductState({
+        sourcePage: 'index_home_onboarding'
+      });
+
+      expect(HttpClient.getUserProductState).toHaveBeenCalledWith({
+        runtimeVersion: '3.9.0',
+        sourcePage: 'index_home_onboarding',
+        targetUserId: 'child_1'
+      });
+      expect(result.canShowNoFamilyHomeOnboarding).toBe(true);
+    });
+
+    it('createUserActivityEvent 应透传事件与目标用户参数', async () => {
+      HttpClient.createUserActivityEvent = jest.fn().mockResolvedValue({
+        success: true
+      });
+      userService.loginUser = new User({
+        userId: 'parent',
+        role: 'parent',
+        familyId: 'fam_1'
+      });
+      userService.currentUser = new User({
+        userId: 'child_1',
+        role: 'child',
+        familyId: 'fam_1'
+      });
+
+      await userService.createUserActivityEvent('no_family_home_onboarding_shown', {
+        sourcePage: 'index_home_onboarding',
+        payload: {
+          mode: 'child_join_only'
+        }
+      });
+
+      expect(HttpClient.createUserActivityEvent).toHaveBeenCalledWith({
+        eventType: 'no_family_home_onboarding_shown',
+        runtimeVersion: '3.9.0',
+        sourcePage: 'index_home_onboarding',
+        payload: {
+          mode: 'child_join_only'
+        },
+        subjectUserId: 'child_1'
+      });
     });
   });
 

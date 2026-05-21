@@ -239,9 +239,10 @@ class UserController {
         return res.status(403).json(error('无权访问该成员数据', 'FAMILY_MEMBER_ACCESS_DENIED'));
       }
 
-      const awarenessState = await userProductStateService.getReleaseNoteAwarenessState(effectiveUserId, {
+      const awarenessState = await userProductStateService.getProductState(effectiveUserId, {
         runtimeVersion: this._resolveRuntimeVersion(req.query || {}),
         familyId: req.user.familyId || null,
+        userRole: req.user.role || '',
         sourcePage: String(req.query?.sourcePage || 'user_product_state').trim(),
         clientPlatform: 'wechat-miniprogram',
         clientEnv: String(req.query?.clientEnv || '').trim() || null

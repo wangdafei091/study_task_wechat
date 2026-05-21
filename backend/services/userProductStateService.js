@@ -8,6 +8,9 @@ const logger = createLogger('UserProductStateService');
 const DEFAULT_BASELINE_VERSION = 'm22q-baseline';
 const CURRENT_UPDATE = 'current_update';
 const RECENT_CHANGES = 'recent_changes';
+const NO_FAMILY_ONBOARDING_MODE_NONE = 'none';
+const NO_FAMILY_ONBOARDING_MODE_PARENT = 'parent_create_or_join';
+const NO_FAMILY_ONBOARDING_MODE_CHILD = 'child_join_only';
 
 function getQueryRunner(connection = null) {
   if (connection && typeof connection.execute === 'function') {
@@ -147,6 +150,25 @@ class UserProductStateService {
     return event;
   }
 
+  async hasCurrentVersionEvent(userId, eventType, appVersion, options = {}) {
+    if (!userId || !eventType || !appVersion) {
+      return false;
+    }
+
+    const queryRunner = getQueryRunner(options.connection);
+    const rows = await queryRunner(
+      `SELECT event_id
+         FROM user_activity_events
+        WHERE user_id = ?
+          AND event_type = ?
+          AND app_version = ?
+        LIMIT 1`,
+      [userId, eventType, normalizeVersion(appVersion)]
+    );
+
+    return Array.isArray(rows) && rows.length > 0;
+  }
+
   async ensureState(userId, options = {}) {
     if (!userId) {
       throw Object.assign(new Error('用户标识不能为空'), {
@@ -245,7 +267,7 @@ class UserProductStateService {
     });
   }
 
-  async getReleaseNoteAwarenessState(userId, options = {}) {
+  async getProductState(userId, options = {}) {
     const state = await this.ensureState(userId, {
       connection: options.connection,
       runtimeVersion: options.runtimeVersion,
@@ -261,6 +283,25 @@ class UserProductStateService {
     const isActivatedUser = Boolean(state.activatedAt);
     const isCurrentVersionBaseline = compareVersion(runtimeVersion, state.firstSeenAppVersion) === 0;
     const canAutoPrompt = isUpgradeUser && isActivatedUser;
+    const userRole = String(options.userRole || '').trim();
+    const familyId = options.familyId || null;
+    const noFamilyOnboardingMode = !familyId
+      ? (userRole === 'child' ? NO_FAMILY_ONBOARDING_MODE_CHILD : NO_FAMILY_ONBOARDING_MODE_PARENT)
+      : NO_FAMILY_ONBOARDING_MODE_NONE;
+    const hasShownNoFamilyHomeOnboardingInCurrentVersion = noFamilyOnboardingMode !== NO_FAMILY_ONBOARDING_MODE_NONE
+      ? await this.hasCurrentVersionEvent(
+        userId,
+        UserActivityEvent.EVENT_TYPES.NO_FAMILY_HOME_ONBOARDING_SHOWN,
+        runtimeVersion,
+        { connection: options.connection }
+      )
+      : false;
+    const canShowNoFamilyHomeOnboarding = Boolean(
+      noFamilyOnboardingMode !== NO_FAMILY_ONBOARDING_MODE_NONE
+      && isCurrentVersionBaseline
+      && !isActivatedUser
+      && !hasShownNoFamilyHomeOnboardingInCurrentVersion
+    );
 
     return {
       userId,
@@ -276,8 +317,15 @@ class UserProductStateService {
       isActivatedUser,
       canAutoPrompt,
       canShowHelpBadge: canAutoPrompt,
-      aboutEntryMode: canAutoPrompt ? CURRENT_UPDATE : RECENT_CHANGES
+      aboutEntryMode: canAutoPrompt ? CURRENT_UPDATE : RECENT_CHANGES,
+      canShowNoFamilyHomeOnboarding,
+      hasShownNoFamilyHomeOnboardingInCurrentVersion,
+      noFamilyOnboardingMode
     };
+  }
+
+  async getReleaseNoteAwarenessState(userId, options = {}) {
+    return this.getProductState(userId, options);
   }
 }
 
@@ -287,3 +335,6 @@ module.exports.normalizeVersion = normalizeVersion;
 module.exports.DEFAULT_BASELINE_VERSION = DEFAULT_BASELINE_VERSION;
 module.exports.CURRENT_UPDATE = CURRENT_UPDATE;
 module.exports.RECENT_CHANGES = RECENT_CHANGES;
+module.exports.NO_FAMILY_ONBOARDING_MODE_NONE = NO_FAMILY_ONBOARDING_MODE_NONE;
+module.exports.NO_FAMILY_ONBOARDING_MODE_PARENT = NO_FAMILY_ONBOARDING_MODE_PARENT;
+module.exports.NO_FAMILY_ONBOARDING_MODE_CHILD = NO_FAMILY_ONBOARDING_MODE_CHILD;

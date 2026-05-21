@@ -257,6 +257,76 @@ class UserService {
     return true;
   }
 
+  _resolveProductStateTargetUserId(options = {}) {
+    const targetUserId = String(options.targetUserId || '').trim();
+    if (targetUserId) {
+      return targetUserId;
+    }
+
+    const loginUserId = userContextUtils.getUserIdentifier(options.loginUser || this.loginUser);
+    const currentUserId = userContextUtils.getUserIdentifier(options.currentUser || this.currentUser);
+    if (!currentUserId || currentUserId === loginUserId) {
+      return '';
+    }
+
+    return currentUserId;
+  }
+
+  async getProductState(options = {}) {
+    if (this._isLocalMode()) {
+      return {
+        canAutoPrompt: false,
+        canShowHelpBadge: false,
+        aboutEntryMode: 'recent_changes',
+        canShowNoFamilyHomeOnboarding: false,
+        hasShownNoFamilyHomeOnboardingInCurrentVersion: false,
+        noFamilyOnboardingMode: 'none'
+      };
+    }
+
+    const runtimeVersion = String(
+      options.runtimeVersion
+      || runtimeVersionUtils.getRuntimeVersion()
+      || ''
+    ).trim();
+    const requestParams = {
+      runtimeVersion,
+      sourcePage: String(options.sourcePage || '').trim() || 'user_service_product_state'
+    };
+    const targetUserId = this._resolveProductStateTargetUserId(options);
+
+    if (targetUserId) {
+      requestParams.targetUserId = targetUserId;
+    }
+
+    return HttpClient.getUserProductState(requestParams);
+  }
+
+  async createUserActivityEvent(eventType, options = {}) {
+    if (this._isLocalMode()) {
+      return { success: false, skipped: true };
+    }
+
+    const runtimeVersion = String(
+      options.runtimeVersion
+      || runtimeVersionUtils.getRuntimeVersion()
+      || ''
+    ).trim();
+    const requestData = {
+      eventType: String(eventType || '').trim(),
+      runtimeVersion,
+      sourcePage: String(options.sourcePage || '').trim() || null,
+      payload: options.payload || null
+    };
+    const subjectUserId = this._resolveProductStateTargetUserId(options);
+
+    if (subjectUserId) {
+      requestData.subjectUserId = subjectUserId;
+    }
+
+    return HttpClient.createUserActivityEvent(requestData);
+  }
+
   _applyProfileSnapshotToUser(user, profile = {}) {
     if (!user) {
       return;

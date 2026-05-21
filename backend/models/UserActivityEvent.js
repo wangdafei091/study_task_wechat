@@ -8,12 +8,18 @@ class UserActivityEvent {
     TASK_CREATED: 'task_created',
     REWARD_CREATED: 'reward_created',
     TASK_COMPLETED: 'task_completed',
+    NO_FAMILY_HOME_ONBOARDING_SHOWN: 'no_family_home_onboarding_shown',
+    NO_FAMILY_HOME_ONBOARDING_PRIMARY_CLICKED: 'no_family_home_onboarding_primary_clicked',
+    NO_FAMILY_HOME_ONBOARDING_SECONDARY_CLICKED: 'no_family_home_onboarding_secondary_clicked',
     RELEASE_NOTE_VIEWED: 'release_note_viewed',
     ABOUT_RELEASE_NOTES_OPENED: 'about_release_notes_opened',
     HELP_FEEDBACK_OPENED: 'help_feedback_opened'
   };
 
   static CLIENT_EVENT_TYPES = new Set([
+    UserActivityEvent.EVENT_TYPES.NO_FAMILY_HOME_ONBOARDING_SHOWN,
+    UserActivityEvent.EVENT_TYPES.NO_FAMILY_HOME_ONBOARDING_PRIMARY_CLICKED,
+    UserActivityEvent.EVENT_TYPES.NO_FAMILY_HOME_ONBOARDING_SECONDARY_CLICKED,
     UserActivityEvent.EVENT_TYPES.RELEASE_NOTE_VIEWED,
     UserActivityEvent.EVENT_TYPES.ABOUT_RELEASE_NOTES_OPENED,
     UserActivityEvent.EVENT_TYPES.HELP_FEEDBACK_OPENED
