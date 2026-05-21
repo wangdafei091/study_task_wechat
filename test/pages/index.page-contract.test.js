@@ -260,15 +260,16 @@ describe('pages/index page contract', () => {
     expect(wxml).toContain('task-list {{tasks.length === 0 && showOccurrenceSection ? \'occurrence-only\' : \'\'}}');
     expect(wxml).toContain('bottomOffset="{{showOccurrenceSection ? 150 : 0}}"');
     expect(wxml).toContain('tasks.length === 0 && !showOccurrenceSection && canManageMembers && currentUser && currentUser.role === \'child\' && currentUser.familyId && !showHomeOnboardingCard');
-    expect(wxml).toContain('还没有加入家庭，请前往家庭设置创建家庭或输入邀请码加入');
+    expect(wxml).toContain('还没有加入家庭，请点击右下角“+”菜单中的“家庭”，进入家庭设置并创建家庭或输入邀请码加入');
     expect(wxml).toContain('tasks.length === 0 && !showOccurrenceSection && canManageMembers && currentUser && currentUser.role === \'parent\' && !currentUser.familyId && !showHomeOnboardingCard');
+    expect(wxml).toContain('还没有加入家庭，请点击右下角“+”菜单中的“家庭”，进入家庭设置并输入邀请码加入');
     expect(wxml).toContain('今天还没有任务安排，家长安排好后会显示在这里');
     expect(wxml).toContain('tasks.length === 0 && !showOccurrenceSection && canManageBusinessData && currentUser && currentUser.role === \'parent\' && currentUser.familyId && availableUsers.length > 1 && !showHomeOnboardingCard');
     expect(wxml).toContain('tasks.length === 0 && !showOccurrenceSection && canManageFamilyGovernance && currentUser && currentUser.role === \'parent\' && currentUser.familyId && availableUsers.length <= 1 && !showHomeOnboardingCard');
     expect(wxml).toContain('tasks.length === 0 && !showOccurrenceSection && currentUser && currentUser.role === \'parent\' && currentUser.familyId && (isViewerReadonly || isSystemReadonly || isSystemBlocked) && !showHomeOnboardingCard');
     expect(wxml).toContain('当前账号已被暂停使用，请联系管理员处理');
     expect(wxml).toContain('当前先查看家庭进展，安排任务请使用可编辑账号');
-    expect(wxml).toContain('tasks.length === 0 && !showOccurrenceSection && currentUser && currentUser.role === \'child\' && !canManageMembers && !showHomeOnboardingCard');
+    expect(wxml).toContain('tasks.length === 0 && !showOccurrenceSection && currentUser && currentUser.role === \'child\' && currentUser.familyId && !canManageMembers && !showHomeOnboardingCard');
   });
 
   it('onLoad 不应直接触发多用户初始化，避免与 onShow 双入口竞争', async () => {

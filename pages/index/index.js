@@ -94,6 +94,85 @@ function createEmptyTaskProgressSummary() {
   };
 }
 
+function createEmptyNoFamilyHomeOnboardingState() {
+  return {
+    canShow: false,
+    mode: 'none',
+    source: 'none',
+    shownEventRecorded: false,
+    hasLongTermEntry: false
+  };
+}
+
+function getUserId(user = null) {
+  return user?.userId || user?.id || '';
+}
+
+function shouldShowNoFamilyHomeLongTermEntry(loginUser, currentUser, pageState = {}) {
+  if (!currentUser || pageState.isSystemBlocked === true) {
+    return false;
+  }
+
+  const currentRole = String(currentUser.role || '').trim();
+  const loginRole = String(loginUser?.role || currentUser.role || '').trim();
+  const currentUserId = getUserId(currentUser);
+  const loginUserId = getUserId(loginUser);
+  const isSelfView = !loginUserId || !currentUserId || currentUserId === loginUserId;
+
+  if (currentRole === 'parent') {
+    return isSelfView;
+  }
+
+  if (currentRole === 'child') {
+    return isSelfView && loginRole === 'child' && !currentUser.familyId;
+  }
+
+  return false;
+}
+
+function buildNoFamilyHomeOnboardingCard(state = {}) {
+  if (state.canShow !== true) {
+    return null;
+  }
+
+  if (state.mode === 'parent_create_or_join') {
+    return {
+      stage: 'no_family_parent',
+      title: '先创建你的家庭',
+      description: '创建后才能添加孩子、安排任务和一起协作。',
+      primaryAction: {
+        type: 'create_family',
+        text: '创建家庭'
+      },
+      secondaryAction: {
+        type: 'join_with_code',
+        text: '输入邀请码加入'
+      },
+      emphasis: 'first-entry',
+      dismissAfterConsume: true,
+      source: 'product_state'
+    };
+  }
+
+  if (state.mode === 'child_join_only') {
+    return {
+      stage: 'no_family_child',
+      title: '输入邀请码加入家庭',
+      description: '加入家庭后，你就能查看任务安排和成长进展。',
+      primaryAction: {
+        type: 'join_with_code',
+        text: '输入邀请码'
+      },
+      secondaryAction: null,
+      emphasis: 'first-entry',
+      dismissAfterConsume: true,
+      source: 'product_state'
+    };
+  }
+
+  return null;
+}
+
 Page({
   data: {
     currentMotivation: '', // 当前显示的激励语
@@ -272,6 +351,7 @@ Page({
     hasTodayTasks: false, // 是否有今日任务（用于显示空状态）
     homeOnboardingCard: null,
     showHomeOnboardingCard: false,
+    noFamilyHomeOnboardingState: createEmptyNoFamilyHomeOnboardingState(),
     releaseNoteHelpBadgeVisible: false,
     releaseNoteHelpBadgeText: '',
     releaseNoteSheetVisible: false,
@@ -527,6 +607,7 @@ Page({
 
       // 更新任务统计信息
       await this.updateTaskStats();
+      await this.refreshNoFamilyHomeOnboardingState();
       this.refreshHomeOnboardingCard();
       
       return tasks;
@@ -882,8 +963,12 @@ Page({
     const shouldRenderCard = canShow && Boolean(homeOnboardingCard);
     const wasShowing = this.data.showHomeOnboardingCard === true;
 
-    if (canShow && homeOnboardingCard?.dismissAfterConsume) {
+    if (canShow && homeOnboardingCard?.dismissAfterConsume && homeOnboardingCard?.source === 'pending_context') {
       onboardingState.consumePendingOnboardingContext(getApp());
+    }
+
+    if (shouldRenderCard && homeOnboardingCard?.source === 'product_state') {
+      this.markNoFamilyHomeOnboardingShown(homeOnboardingCard).catch(() => {});
     }
 
     if (!shouldRenderCard && wasShowing && homeOnboardingCard?.dismissAfterConsume) {
@@ -906,7 +991,7 @@ Page({
     const loginUser = userService?.getLoginUser?.() || this.data.currentUser || null;
     const currentUser = this.data.currentUser || userService?.getCurrentUser?.() || loginUser || null;
     const pendingOnboardingContext = onboardingState.peekPendingOnboardingContext(app);
-    const homeOnboardingCard = onboardingState.resolveOnboardingStage({
+    const resolvedBaseCard = onboardingState.resolveOnboardingStage({
       loginUser,
       currentUser,
       availableUsers: this.data.availableUsers,
@@ -922,6 +1007,22 @@ Page({
       skipNoFamilyStages: true,
       pendingOnboardingContext
     });
+    let homeOnboardingCard = resolvedBaseCard.stage === 'stable_none' ? null : resolvedBaseCard;
+    if (homeOnboardingCard?.dismissAfterConsume) {
+      homeOnboardingCard = {
+        ...homeOnboardingCard,
+        source: 'pending_context'
+      };
+    }
+
+    if (!homeOnboardingCard) {
+      const noFamilyHomeOnboardingCard = buildNoFamilyHomeOnboardingCard(
+        this.data.noFamilyHomeOnboardingState || createEmptyNoFamilyHomeOnboardingState()
+      );
+      if (noFamilyHomeOnboardingCard) {
+        homeOnboardingCard = noFamilyHomeOnboardingCard;
+      }
+    }
 
     const canShow = onboardingState.shouldShowHomeOnboardingCard({
       isViewingToday: this.data.isViewingToday,
@@ -930,15 +1031,17 @@ Page({
       showMessagePreview: this.data.showMessagePreview
     });
 
-    if (homeOnboardingCard.dismissAfterConsume && canShow) {
+    if (homeOnboardingCard?.dismissAfterConsume && homeOnboardingCard?.source === 'pending_context' && canShow) {
       onboardingState.consumePendingOnboardingContext(app);
     }
 
-    const resolvedCard = homeOnboardingCard.stage === 'stable_none' ? null : homeOnboardingCard;
+    if (homeOnboardingCard?.source === 'product_state' && canShow) {
+      this.markNoFamilyHomeOnboardingShown(homeOnboardingCard).catch(() => {});
+    }
 
     this.setData({
-      homeOnboardingCard: resolvedCard,
-      showHomeOnboardingCard: canShow && Boolean(resolvedCard)
+      homeOnboardingCard,
+      showHomeOnboardingCard: canShow && Boolean(homeOnboardingCard)
     }, () => {
       if (typeof this.evaluatePendingReleaseNotePrompt === 'function') {
         this.evaluatePendingReleaseNotePrompt();
@@ -948,6 +1051,7 @@ Page({
 
   onHomeOnboardingPrimaryTap: function() {
     const actionType = this.data.homeOnboardingCard?.primaryAction?.type || '';
+    this.recordNoFamilyHomeOnboardingInteraction('primary', actionType);
     if (actionType === 'create_family') {
       wx.navigateTo({
         url: '/packageManage/pages/family-settings/family-settings?action=create_family'
@@ -981,6 +1085,7 @@ Page({
 
   onHomeOnboardingSecondaryTap: function() {
     const actionType = this.data.homeOnboardingCard?.secondaryAction?.type || '';
+    this.recordNoFamilyHomeOnboardingInteraction('secondary', actionType);
     if (actionType === 'join_with_code') {
       wx.navigateTo({
         url: '/pages/access-gate/access-gate?mode=manual_input'
@@ -1438,6 +1543,134 @@ Page({
 
   async refreshDataForCurrentUser() {
     return refreshCoordinator.refreshDataForCurrentUser(this);
+  },
+
+  async refreshNoFamilyHomeOnboardingState() {
+    const app = typeof getApp === 'function' ? getApp() : null;
+    const userService = app?.globalData?.userService || null;
+    const loginUser = userService?.getLoginUser?.() || null;
+    const currentUser = this.data.currentUser || userService?.getCurrentUser?.() || loginUser || null;
+    const defaultState = createEmptyNoFamilyHomeOnboardingState();
+    defaultState.hasLongTermEntry = shouldShowNoFamilyHomeLongTermEntry(loginUser, currentUser, this.data);
+
+    if (!userService || !currentUser || currentUser.familyId || !defaultState.hasLongTermEntry) {
+      this.setData({
+        noFamilyHomeOnboardingState: defaultState
+      });
+      return defaultState;
+    }
+
+    const pendingOnboardingContext = onboardingState.peekPendingOnboardingContext(app);
+    if (pendingOnboardingContext?.source === onboardingState.ONBOARDING_SOURCE.GUEST_INVITE_ENTERED) {
+      this.setData({
+        noFamilyHomeOnboardingState: defaultState
+      });
+      return defaultState;
+    }
+
+    if (this._hasShownNoFamilyHomeOnboardingInSession === true) {
+      const sessionState = {
+        ...defaultState,
+        shownEventRecorded: true
+      };
+      this.setData({
+        noFamilyHomeOnboardingState: sessionState
+      });
+      return sessionState;
+    }
+
+    try {
+      const productState = await userService.getProductState({
+        currentUser,
+        loginUser,
+        sourcePage: 'index_home_onboarding'
+      });
+      const resolvedState = {
+        canShow: productState?.canShowNoFamilyHomeOnboarding === true,
+        mode: String(productState?.noFamilyOnboardingMode || '').trim() || 'none',
+        source: productState?.canShowNoFamilyHomeOnboarding === true ? 'product_state' : 'none',
+        shownEventRecorded: productState?.hasShownNoFamilyHomeOnboardingInCurrentVersion === true,
+        hasLongTermEntry: defaultState.hasLongTermEntry
+      };
+
+      this.setData({
+        noFamilyHomeOnboardingState: resolvedState
+      });
+      return resolvedState;
+    } catch (error) {
+      logger.warn('Index', '获取首页无家庭引导资格失败，回退静态入口', {
+        message: error.message
+      });
+      this.setData({
+        noFamilyHomeOnboardingState: defaultState
+      });
+      return defaultState;
+    }
+  },
+
+  async markNoFamilyHomeOnboardingShown(homeOnboardingCard = null) {
+    const state = this.data.noFamilyHomeOnboardingState || createEmptyNoFamilyHomeOnboardingState();
+    if (
+      this._hasShownNoFamilyHomeOnboardingInSession === true
+      || state.source !== 'product_state'
+      || state.shownEventRecorded === true
+    ) {
+      return;
+    }
+
+    this._hasShownNoFamilyHomeOnboardingInSession = true;
+    const nextState = {
+      ...state,
+      canShow: false,
+      shownEventRecorded: true
+    };
+
+    this.setData({
+      noFamilyHomeOnboardingState: nextState
+    });
+
+    const app = typeof getApp === 'function' ? getApp() : null;
+    const userService = app?.globalData?.userService || null;
+    if (!userService?.createUserActivityEvent) {
+      return;
+    }
+
+    await userService.createUserActivityEvent('no_family_home_onboarding_shown', {
+      currentUser: this.data.currentUser || userService.getCurrentUser?.() || null,
+      loginUser: userService.getLoginUser?.() || null,
+      sourcePage: 'index_home_onboarding',
+      payload: {
+        mode: state.mode || 'none',
+        stage: homeOnboardingCard?.stage || ''
+      }
+    });
+  },
+
+  recordNoFamilyHomeOnboardingInteraction(kind, actionType) {
+    const state = this.data.noFamilyHomeOnboardingState || createEmptyNoFamilyHomeOnboardingState();
+    const card = this.data.homeOnboardingCard || null;
+    if (state.source !== 'product_state' || card?.source !== 'product_state') {
+      return;
+    }
+
+    const eventType = kind === 'secondary'
+      ? 'no_family_home_onboarding_secondary_clicked'
+      : 'no_family_home_onboarding_primary_clicked';
+    const app = typeof getApp === 'function' ? getApp() : null;
+    const userService = app?.globalData?.userService || null;
+    if (!userService?.createUserActivityEvent) {
+      return;
+    }
+
+    userService.createUserActivityEvent(eventType, {
+      currentUser: this.data.currentUser || userService.getCurrentUser?.() || null,
+      loginUser: userService.getLoginUser?.() || null,
+      sourcePage: 'index_home_onboarding',
+      payload: {
+        mode: state.mode || 'none',
+        actionType: String(actionType || '').trim()
+      }
+    }).catch(() => {});
   },
 
   async refreshReleaseNoteAwareness() {

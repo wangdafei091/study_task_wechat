@@ -7,7 +7,7 @@ jest.mock('../../services/familyService', () => ({
   getUserFamilyAndRole: jest.fn()
 }));
 jest.mock('../../services/userProductStateService', () => ({
-  getReleaseNoteAwarenessState: jest.fn(),
+  getProductState: jest.fn(),
   recordEvent: jest.fn()
 }));
 jest.mock('../../utils/logger', () => ({
@@ -122,7 +122,7 @@ describe('userController identity endpoints', () => {
   });
 
   it('getProductState 应返回当前业务视角用户的产品状态', async () => {
-    userProductStateService.getReleaseNoteAwarenessState.mockResolvedValue({
+    userProductStateService.getProductState.mockResolvedValue({
       userId: 'child_1',
       canAutoPrompt: true,
       canShowHelpBadge: true,
@@ -145,9 +145,10 @@ describe('userController identity endpoints', () => {
 
     await userController.getProductState(req, res);
 
-    expect(userProductStateService.getReleaseNoteAwarenessState).toHaveBeenCalledWith('child_1', expect.objectContaining({
+    expect(userProductStateService.getProductState).toHaveBeenCalledWith('child_1', expect.objectContaining({
       runtimeVersion: '3.9.0',
       familyId: 'fam_1',
+      userRole: 'parent',
       sourcePage: 'about_page'
     }));
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({

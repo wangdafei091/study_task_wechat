@@ -330,7 +330,11 @@
       </view>
       <!-- 尚未加入家庭 -->
       <view class="empty-task-list" wx:if="{{tasks.length === 0 && !showOccurrenceSection && canManageMembers && currentUser && currentUser.role === 'parent' && !currentUser.familyId && !showHomeOnboardingCard}}">
-        还没有加入家庭，请前往家庭设置创建家庭或输入邀请码加入
+        还没有加入家庭，请点击右下角“+”菜单中的“家庭”，进入家庭设置并创建家庭或输入邀请码加入
+      </view>
+      <!-- 孩子尚未加入家庭 -->
+      <view class="empty-task-list" wx:if="{{tasks.length === 0 && !showOccurrenceSection && currentUser && currentUser.role === 'child' && !currentUser.familyId && !canManageMembers && !showHomeOnboardingCard}}">
+        还没有加入家庭，请点击右下角“+”菜单中的“家庭”，进入家庭设置并输入邀请码加入
       </view>
       <!-- 家长在自己视角（管理模式）：无任务，可直接创建 -->
       <view class="empty-task-list" wx:if="{{tasks.length === 0 && !showOccurrenceSection && canManageBusinessData && currentUser && currentUser.role === 'parent' && currentUser.familyId && availableUsers.length > 1 && !showHomeOnboardingCard}}">
@@ -346,7 +350,7 @@
         <block wx:else>当前先查看家庭进展，安排任务请使用可编辑账号</block>
       </view>
       <!-- 孩子视角空态 -->
-      <view class="empty-task-list" wx:if="{{tasks.length === 0 && !showOccurrenceSection && currentUser && currentUser.role === 'child' && !canManageMembers && !showHomeOnboardingCard}}">
+      <view class="empty-task-list" wx:if="{{tasks.length === 0 && !showOccurrenceSection && currentUser && currentUser.role === 'child' && currentUser.familyId && !canManageMembers && !showHomeOnboardingCard}}">
         暂无任务
       </view>
     </view>

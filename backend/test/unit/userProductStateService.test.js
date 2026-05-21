@@ -161,4 +161,66 @@ describe('userProductStateService', () => {
 
     userProductStateService.ensureState.mockRestore();
   });
+
+  it('getProductState 应为无家庭基线用户返回普通 no-family onboarding 资格', async () => {
+    jest.spyOn(userProductStateService, 'ensureState').mockResolvedValue({
+      userId: 'user_1',
+      firstSeenAppVersion: '3.9.0',
+      firstSeenAt: 1000,
+      activatedAt: null,
+      activationVersion: null,
+      activationSource: null,
+      lastSeenAppVersion: '3.9.0',
+      lastSeenAt: 1000
+    });
+    jest.spyOn(userProductStateService, 'hasCurrentVersionEvent').mockResolvedValue(false);
+
+    const result = await userProductStateService.getProductState('user_1', {
+      runtimeVersion: '3.9.0',
+      userRole: 'parent',
+      familyId: null,
+      now: 1000
+    });
+
+    expect(result).toEqual(expect.objectContaining({
+      isCurrentVersionBaseline: true,
+      isActivatedUser: false,
+      canShowNoFamilyHomeOnboarding: true,
+      hasShownNoFamilyHomeOnboardingInCurrentVersion: false,
+      noFamilyOnboardingMode: 'parent_create_or_join'
+    }));
+
+    userProductStateService.ensureState.mockRestore();
+    userProductStateService.hasCurrentVersionEvent.mockRestore();
+  });
+
+  it('getProductState 在当前版本已展示过 no-family onboarding 时不应重复返回资格', async () => {
+    jest.spyOn(userProductStateService, 'ensureState').mockResolvedValue({
+      userId: 'user_1',
+      firstSeenAppVersion: '3.9.0',
+      firstSeenAt: 1000,
+      activatedAt: null,
+      activationVersion: null,
+      activationSource: null,
+      lastSeenAppVersion: '3.9.0',
+      lastSeenAt: 1100
+    });
+    jest.spyOn(userProductStateService, 'hasCurrentVersionEvent').mockResolvedValue(true);
+
+    const result = await userProductStateService.getProductState('user_1', {
+      runtimeVersion: '3.9.0',
+      userRole: 'child',
+      familyId: null,
+      now: 1100
+    });
+
+    expect(result).toEqual(expect.objectContaining({
+      canShowNoFamilyHomeOnboarding: false,
+      hasShownNoFamilyHomeOnboardingInCurrentVersion: true,
+      noFamilyOnboardingMode: 'child_join_only'
+    }));
+
+    userProductStateService.ensureState.mockRestore();
+    userProductStateService.hasCurrentVersionEvent.mockRestore();
+  });
 });
