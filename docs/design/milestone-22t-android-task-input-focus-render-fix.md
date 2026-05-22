@@ -2,9 +2,10 @@
 
 > **设计状态**：🟢 审核通过
 > **创建日期**：2026-05-21
+> **最近修订**：2026-05-22
 > **设计者**：GPT5 Codex
 > **审核者**：项目维护者
-> **预计工期**：1-2天
+> **预计工期**：2-3天
 
 ---
 
@@ -27,108 +28,104 @@
 
 当前 `task-edit` 页面在 iPhone 与微信开发者工具模拟器中表现正常，但在 Android 真机上出现高优先级兼容性问题：
 
-1. 用户点击“任务名称”输入框后，焦点态输入文字没有显示在输入框内。
-2. 用户感觉到输入光标和正在输入的内容跑到了页面上方其他区域。
-3. 当输入框失焦后，已输入的文字又会正确回填到输入框中。
+1. 用户点击“任务名称”输入框后，焦点态文字会跑到页面偏上区域，而不留在输入框内。
+2. 该现象在“输入框里原本已有文字，仅点击聚焦、不输入新字符”时也会立刻发生。
+3. 输入框失焦后，文字又会回到输入框中。
 
-这说明问题不在“值有没有保存”，而在“焦点态输入时 Android 原生输入层如何与当前页面结构配合渲染”。由于该问题直接影响“进入任务管理后新建任务”的主链路，而且只在真实 Android 设备上暴露，不能按普通样式小问题零散修补，必须作为独立里程碑处理。
+这说明问题不在“值有没有保存”，而在“聚焦瞬间 Android 原生输入层如何与当前页面结构协同渲染”。由于该问题直接影响“进入任务管理后新建任务”的主链路，而且只在 Android 真机暴露，不能继续在当前页结构上做低置信度微调，必须调整方案层级。
 
-本期目标是：基于现有代码事实，修复 Android 真机 `task-edit` 任务标题输入的焦点错位问题，恢复实时可见输入体验，并给出对同类结构风险的明确边界判断。
+本次修订后的目标是：**停止在 `task-edit` 当前页内继续做第三轮局部补丁，而是把“创建任务表单”从热力图管理页中隔离出去，改用独立创建页承载原生输入，恢复 Android 真机的稳定输入体验。**
 
 ### 业务价值
 
-- [x] 用户价值：Android 用户可以正常创建任务，不再出现“输入时看不到自己在写什么”的核心交互故障。
-- [x] 产品价值：恢复任务主链路在主流真机环境下的可靠可用性，避免因为平台兼容性导致核心功能不可用。
-- [x] 技术价值：厘清共享 `card` 结构在原生输入场景下的兼容边界，减少后续在输入密集页面重复踩坑。
+- [x] 用户价值：Android 用户可以稳定创建任务，不再出现“点击输入框后文字跑位”的核心故障。
+- [x] 产品价值：把高频主链路从平台兼容性高风险页面中剥离，提升任务创建成功率和可维护性。
+- [x] 技术价值：沉淀“输入密集表单不与复杂热力图管理视图强耦合”的页面边界，为后续同类页面提供稳定范式。
 
 ### 功能范围
 
 **包含**：
-- ✅ 修复 Android 真机 `task-edit` 页面“添加任务”表单区域内原生输入组件的焦点态错位问题，包括任务名称输入框、积分输入框与描述输入框
-- ✅ 基于实际代码确定问题结构边界，明确是否属于共享 `card` 容器兼容性问题
-- ✅ 为 `task-edit` 设计一个不依赖高风险共享结构的表单容器方案
-- ✅ 对当前已知同类页面做边界盘点，说明本期是否纳入，并明确哪些页面只做回归、不做同批改造
-- ✅ 补齐对应页面测试与 Android 真机手工验证要求
+- ✅ 修复 Android 真机 `task-edit` 页面内联“添加任务”表单的焦点错位问题
+- ✅ 将任务创建表单迁移为独立创建页，避免与热力图管理区域共页
+- ✅ 复用现有任务表单归一化、展示和校验能力，避免业务规则分叉
+- ✅ 保留模板快捷填充、推荐模板、表现项入口等现有能力，但按新页面边界重新落位
+- ✅ 对 `task-template-edit`、`task-template-manage` 做 Android 真机回归边界验证
 
 **不包含**：
+- ❌ 不在本期继续尝试通过 `adjust-position`、`flex`、隐藏输入清理等页面内微调解决问题
 - ❌ 不在本期重构整个共享 `card` 组件
-- ❌ 不在本期重做 `task-edit` 整页信息架构
-- ❌ 不把所有输入页面统一迁移到新壳层
-- ❌ 不把 Android 输入兼容问题扩展成全站 UI 治理专项
+- ❌ 不在本期重做热力图组件交互结构
+- ❌ 不把全站所有输入页统一迁移为独立编辑页
 
 ### 优先级
 
 - **优先级**：P0
-- **理由**：这是当前核心创建任务链路在 Android 真机上的真实可用性故障，影响用户是否能完成最基础的任务录入。
+- **理由**：这是当前核心创建任务链路在 Android 真机上的真实可用性故障，前两轮页面内微调已被真机证伪，必须提升方案层级。
 
 ---
 
 ## 现状问题复盘
 
-### 现象已经指向“焦点态渲染异常”，不是数据未保存
+### 已确认：这不是数据未保存问题
 
 当前用户反馈与代码事实一致：
 
-1. 点击输入框后，正在输入的文字不显示在输入框里。
-2. 失焦后，输入内容又正确显示在输入框里。
-
-若数据绑定有问题，常见结果会是：
-
-- 输入内容直接丢失
-- 失焦后仍然不显示
-- 页面数据与最终保存值不一致
-
-但当前并非如此。`task-edit` 中任务名称输入只是：
-
-- WXML：`value="{{newTask.title}}" bindinput="onTaskTitleInput"`
-- JS：`onTaskTitleInput` 内将 `e.detail.value` 写回 `newTask.title`
+1. 点击输入框后，文字跑位，但失焦后会回到输入框。
+2. 当前 `task-edit` 页的标题输入仍是标准受控写回：
+   - WXML：`value="{{newTask.title}}" bindinput="onTaskTitleInput"`
+   - JS：`onTaskTitleInput` 内将 `e.detail.value` 写回 `newTask.title`
 
 因此可以确认：
 
 - 数据写回主链路是通的
-- 问题集中在 Android 焦点态输入层的显示位置/裁剪行为
+- 问题集中在 Android 焦点态原生输入层的显示位置，而不是值同步
 
-### 当前页面结构存在 Android 焦点态输入的高风险组合
+### 已确认：前两轮主因判断都被真机否掉
 
-`task-edit` 的“添加任务”表单当前结构是：
+本里程碑已经发生过两轮实现尝试，但均未命中真机问题：
 
-1. 页面使用共享 `<card title="添加任务" customClass="add-task-card">`
-2. 表单内容通过 `slot` 落入 `card-content`
-3. `card` 根容器 `.card-component` 设置了 `overflow: hidden`
-4. `card-title` 通过负边距把头部背景向外回拉
+1. **第一轮判断**：共享 `card` 的 `overflow: hidden`、负边距标题和 slot 结构导致焦点态错位  
+   结果：将“添加任务”表单从共享 `card` 中迁出后，Android 真机问题依旧。
 
-当前相关事实如下：
+2. **第二轮判断**：热力图组件里隐藏但常驻的原生输入干扰了当前输入框  
+   结果：将热力图编辑输入改为按需挂载后，Android 真机问题依旧。
 
-- [packageTask/pages/task-edit/task-edit.wxml](/Users/wangdafei/code/study_task_wechat/packageTask/pages/task-edit/task-edit.wxml:36) 使用共享 `card` 包裹“添加任务”表单
-- [components/card/card.wxss](/Users/wangdafei/code/study_task_wechat/components/card/card.wxss:2) 的 `.card-component` 包含 `overflow: hidden`
-- [components/card/card.wxss](/Users/wangdafei/code/study_task_wechat/components/card/card.wxss:18) 的 `.card-title` 使用负边距布局
-- [packageTask/pages/task-edit/task-edit.wxml](/Users/wangdafei/code/study_task_wechat/packageTask/pages/task-edit/task-edit.wxml:117) 的任务名称输入位于这个共享容器内部
+3. **第三个关键事实**：用户明确反馈“输入框里已经有几个字，只是点击聚焦，不输入新字符，字就跑到了上面”  
+   这直接排除了 `bindinput`、`setData`、模板撤销状态等输入后才触发的逻辑链路。
 
-对微信小程序 Android 端而言，焦点态输入通常依赖原生输入层覆盖渲染。结合当前症状与代码结构，本期将“共享 slot 容器 + 根容器裁剪 + 头部负边距”的组合作为最可信的主因判断：它比普通静态布局更容易在 Android 真机上触发原生输入层位置计算或裁剪异常。最终验证标准不是口头推断，而是实施后在 Android 真机上是否恢复正常输入。
+因此，本次修订必须明确承认：
 
-### 为什么不采纳“是额外 setData 导致”的主因判断
+- 之前两套页面内结构判断已经被证伪
+- 继续在同一页面里微调 CSS、输入属性或隐藏输入结构，成功概率已经明显下降
+- 问题更接近 Android 真机对“复杂长页中的原生输入层”渲染不稳定，而不是某一个单独的局部样式属性
 
-代码里确实存在 `markTemplateFillUndoDirty()`，而它在某些条件下可能先于 `setData` 执行额外逻辑。但这条链路并不能解释当前主现象：
+### 当前高风险组合不是“单一属性”，而是“复杂管理页 + 内联原生表单”
 
-1. 当前用户反馈的是“输入文字显示跑位”，不是“输入有延迟但位置正常”。
-2. `markTemplateFillUndoDirty()` 只有在模板撤销态可见且快照存在时才会真正继续执行；默认场景下大概率直接返回。
-3. 即便出现额外 `setData`，它更可能放大性能抖动，而不是稳定制造几何位置错乱。
+当前 `task-edit` 页面同时承载了多类内容：
 
-因此，本期设计不把“优化 `bindinput` 内部 `setData` 次序”作为主方案，而把它保留为次级可选优化；只有当页面结构收口后 Android 真机仍能复现时，才回头评估这条逻辑链路。
+- 上方热力图和日期详情管理区  
+  参考：[packageTask/pages/task-edit/task-edit.wxml](/Users/wangdafei/code/study_task_wechat/packageTask/pages/task-edit/task-edit.wxml:6)
+- 中部模板快捷填充与推荐模板区  
+  参考：[packageTask/pages/task-edit/task-edit.wxml](/Users/wangdafei/code/study_task_wechat/packageTask/pages/task-edit/task-edit.wxml:38)
+- 下方完整任务创建表单，包含多个原生 `input` / `textarea`  
+  参考：[packageTask/pages/task-edit/task-edit.wxml](/Users/wangdafei/code/study_task_wechat/packageTask/pages/task-edit/task-edit.wxml:109)
+- 页面底部还挂有多个面板容器（重复、提醒、积分有效期等）  
+  参考：[packageTask/pages/task-edit/task-edit.wxml](/Users/wangdafei/code/study_task_wechat/packageTask/pages/task-edit/task-edit.wxml:275)
 
-### 同类结构风险盘点
+这意味着 `task-edit` 本质上已经不是“一个表单页”，而是“一个复杂管理页 + 一个完整表单页”的混合体。  
+在这种页面中继续追逐 Android 原生输入层的局部兼容细节，边际收益很低。
 
-当前代码复核发现：
+### 为什么本次不再把“继续猜 CSS / 参数组合”作为主方案
 
-- [packageManage/pages/task-template-edit/task-template-edit.wxml](/Users/wangdafei/code/study_task_wechat/packageManage/pages/task-template-edit/task-template-edit.wxml:8) 也把输入表单放在共享 `card` 里
-- [packageManage/pages/task-template-manage/task-template-manage.wxml](/Users/wangdafei/code/study_task_wechat/packageManage/pages/task-template-manage/task-template-manage.wxml:13) 和 [152]( /Users/wangdafei/code/study_task_wechat/packageManage/pages/task-template-manage/task-template-manage.wxml:152 ) 也在共享 `card` 结构里放了搜索输入框
+当前已经被真机否掉的微调方向包括：
 
-这说明共享 `card` + 输入表单的结构风险不是 `task-edit` 独有。但目前只有 `task-edit` 在真实 Android 路径上被确认出现问题。因此：
+- 去共享 `card`
+- 清理热力图隐藏输入
+- 关闭 `adjust-position`
+- 去页面根 `flex` 包装
 
-- 本期必须修复 `task-edit`
-- `task-template-edit` 需要做 Android 真机回归验证，因为它同样包含多组表单输入与 `textarea`
-- `task-template-manage` 需要做 Android 真机搜索输入回归，但它属于搜索场景，不纳入本期同批结构改造范围
-- 若这些页面验证未复现，不在本期主动扩写为共享组件全站改造
+这说明本问题至少对当前代码库来说，不适合继续依赖页面内局部参数试错。  
+更高置信度的工程决策应当是：**把输入密集型原生表单从复杂管理页中隔离出去，改到独立页面承载。**
 
 ---
 
@@ -136,91 +133,137 @@
 
 ### 方案概述
 
-`M22T` 采用“**保留页面视觉风格，但将 `task-edit` 的输入密集表单从共享 `card` 结构中抽离，改为页面局部表单壳层**”方案。
+`M22T` 修订后采用“**任务管理页保留热力图与概览，任务创建表单迁移到独立创建页**”方案。
 
 核心思路：
 
-1. 不把问题继续压在 Android 平台输入实现细节上猜测
-2. 直接消除当前已知高风险结构组合
-3. 只改 `task-edit` 的受影响表单区域，避免公共组件级回归面扩大
-4. 保持页面现有视觉语言一致，避免修 bug 顺手引入样式重设计
+1. 承认当前页内微调已被真机证伪，不再继续在同一页上叠补丁
+2. 将任务创建表单从 `task-edit` 页中物理隔离出去，避免与热力图管理区共页
+3. 复用现有任务表单业务逻辑，而不是重新发明一套创建规则
+4. 控制变更在任务域内，不扩散成全站输入治理专项
 
 ### 核心设计决策
 
-#### 决策1：首选修复路径是页面局部去 `card` 化，而不是修改共享 `card`
+#### 决策1：任务创建改为独立页面，而不是继续保留内联“添加任务”表单
 
 具体做法：
 
-- 把“添加任务”表单区域从 `<card title="添加任务">` 中移出
-- 在 `task-edit` 页面内新增局部结构，例如：
-  - `form-shell`
-  - `form-header`
-  - `form-body`
-- 视觉上继续保持白底、圆角、阴影、标题头部风格，确保整体页面观感不变
+- 保留 `task-edit` 作为“任务管理页”，并继续保持页面导航标题为 `任务管理`
+- 删除当前页内完整“添加任务”表单
+- 在 `task-edit` 中保留一张 `card title="添加任务"` 的轻量入口卡片，卡片内只放：
+  - 一段说明文案
+  - 一个主按钮 `新建任务`
+- 不在本里程碑给 `task-edit` 增加并列的“使用模板新建”入口按钮
+- 新增独立页面，例如：`packageTask/pages/task-create/task-create`
 
 这样做的理由：
 
-- 修改面只限于一个真实故障页面
-- 不会影响热力图卡片、模板页卡片、其他展示型卡片
-- 避免把 Android 输入兼容风险转移到所有 `card` 使用方
+- 直接切断“热力图复杂管理区 + 原生输入表单共页”的高风险组合
+- 不再要求 Android 在同一页里同时处理热力图管理和输入密集表单
+- 相比继续猜页面局部属性，这是一条更稳定、更可验证的修复路径
 
-#### 决策2：共享 `card` 组件本期只做“风险边界记录”，不做全站语义变更
+补充约束：
 
-本期不直接改 `components/card/` 的原因：
+- `task-edit` 的页面路由与导航栏文案不变，用户仍从“任务管理”进入这条业务链路
+- 模板选择、推荐模板、手动创建模板等能力统一收口到 `task-create` 页内，不再分散为 `task-edit` 上的平级创建入口
 
-- `card` 在项目中复用范围广，动公共样式需要大面积回归
-- 当前只确认了输入密集场景的兼容性风险，未证明展示型卡片也存在问题
-- 即使为 `card` 增加 `inputSafe` 变体，也仍需逐页替换使用方式，本质上并不比页面局部壳层更省事
+#### 决策2：独立创建页复用现有任务表单逻辑，不做业务规则重写
 
-因此，本期正式边界是：
+当前仓库已有可复用的任务表单基础能力：
 
-- `task-edit` 页面局部收口
-- 共享 `card` 继续保留
-- 将“输入密集表单不默认放在当前共享 `card` 结构内”作为经验结论沉淀
+- [utils/task-form-core.js](/Users/wangdafei/code/study_task_wechat/utils/task-form-core.js)  
+  负责草稿归一化、校验、payload 构建等规则
+- [utils/task-form-adapter.js](/Users/wangdafei/code/study_task_wechat/utils/task-form-adapter.js)  
+  负责页面状态与标准草稿之间的适配
+- [utils/task-form-display.js](/Users/wangdafei/code/study_task_wechat/utils/task-form-display.js)  
+  负责重复、提醒、有效期等文案展示
+- [packageTask/pages/task-edit/modules/task-template-entry.js](/Users/wangdafei/code/study_task_wechat/packageTask/pages/task-edit/modules/task-template-entry.js)  
+  已承载模板快捷填充加载逻辑
 
-#### 决策3：同类页面只做验证，不默认同批改造
+因此本期不应复制一份新规则，而应：
 
-`task-template-edit` 具有相似结构，但没有被用户报告为必现问题。本期策略是：
+- 复用已有 `taskFormCore` / `taskFormAdapter` / `taskFormDisplay`
+- 将当前 `task-edit.js` 中真正属于“创建表单”的逻辑迁出或复用到新页
+- 保证新页与旧页在任务校验、payload、模板回填上的行为一致
 
-- 实施后对 `task-template-edit` 做 Android 真机回归
-- 若验证正常，则记录为“存在结构相似风险，但暂不扩 scope”
-- 若验证中同样复现，则在实施评审阶段再决定是否并入同一修复批次
+模板来源约定必须在本期一次性定清：
+
+- `task-create` 打开模板选择页时，统一使用 `source=task-create`
+- `task-create` 打开模板推荐草稿时，统一使用 `sourceType=task-create-recommendation`
+- `task-template-manage` 对 `source=task-create` 的回传行为与现有 `task-edit` 路径保持同级能力
+- `task-template-edit` 对 `sourceType=task-create-recommendation` 的提示文案、保存后回传语义必须显式兼容
+- 本期不再保留“若必要再兼容新来源”的模糊表述，来源标识属于正式范围
+
+#### 决策3：`task-edit` 只保留管理视图与创建入口，不再承担输入密集表单职责
+
+`task-edit` 页面调整后职责应明确为：
+
+- 保留页面权限守卫与 `targetUserId` 透传
+- 展示热力图与日期任务分布
+- 保留热力图月份切换、任务刷新与 `onShow` 刷新任务数据
+- 保留表现项入口
+- 提供“新建任务”进入独立创建页的入口
+
+不再承担：
+
+- 原生输入表单的直接承载
+- 多字段即时编辑和提交
+- 模板快捷填充列表、推荐模板摘要与模板应用逻辑
+
+`task-create` 页面承担以下职责：
+
+- 持有 `newTask`、`errors` 等创建态页面数据
+- 承载标题、类型、星星、描述、日期、重复、提醒、积分有效期等表单区
+- 承载 `validateTaskForm` / `validateTaskFormLocal`、`addTask`、清空表单等创建动作
+- 承载模板快捷填充、推荐模板草稿应用、手动创建模板入口
+- 在创建成功后 `navigateBack` 返回 `task-edit`
+
+#### 决策4：同类页面本期只做边界回归，不扩 scope
+
+`task-template-edit` 和 `task-template-manage` 依然需要 Android 真机回归，但本期不强行改造，原因是：
+
+- 当前只有 `task-edit` 真机路径被确认必现
+- 当前更高置信度的结论是“复杂管理页内联创建表单”风险高，而不是“所有输入页都必须拆成独立页”
+- 若相似页面回归正常，本期不主动扩 scope
 
 ### 技术选型
 
 | 技术点 | 选择方案 | 替代方案 | 选择理由 |
 |--------|---------|---------|---------|
-| 表单容器 | 页面局部 `form-shell` | 继续复用共享 `card` | 最小影响面，最直接规避当前兼容风险 |
-| 共享组件策略 | 维持现状 | 给 `card` 增加 `inputSafe` 变体 | 公共组件回归成本更高，当前无必要立即放大 |
-| 输入逻辑 | 维持现有 `bindinput + setData` | 改为延迟同步/失焦同步 | 当前数据逻辑已正确，问题不在值同步 |
+| 任务创建承载页 | 新增独立 `task-create` 页面 | 继续保留 `task-edit` 内联表单 | 物理隔离输入表单，修复置信度最高 |
+| 任务创建返回刷新 | 复用 `task-edit onShow` 刷新 | 复杂 eventChannel 双向同步 | 当前页已有 `onShow` 刷新，成本更低 |
+| 模板能力接入 | 在新页复用当前模板快捷填充逻辑 | 在旧页保留模板、创建页不接模板 | 保持用户能力完整，不牺牲现有入口价值 |
+| 表单规则 | 复用 `taskFormCore` / `taskFormAdapter` / `taskFormDisplay` | 复制 `task-edit.js` 一份新逻辑 | 避免业务规则分叉 |
+| 旧页结构 | 保留热力图与管理区，仅替换表单为入口卡片 | 重写整个任务管理页 | 控制范围，专注修 bug |
 
 ### DDD分层设计
 
 **领域层（models/）**：
 - [ ] 新建模型：无
 - [ ] 修改模型：无
-- 说明：这是前端表现层兼容性修复，不涉及领域模型。
+- 说明：这是前端表现层与页面边界修复，不涉及领域模型。
 
 **服务层（services/）**：
 - [ ] 新建服务：无
 - [ ] 修改服务：无
-- 说明：不变更任务服务、模板服务或用户服务职责。
+- 说明：任务创建仍复用现有任务服务。
 
 **仓储层（repositories/）**：
 - [ ] 新建仓储：无
 - [ ] 修改仓储：无
-- 说明：不涉及数据访问。
+- 说明：不涉及数据访问层改造。
 
 **适配器层（adapters/）**：
 - [ ] 新建适配器：无
 - [ ] 修改适配器：无
-- 说明：不涉及平台适配器。
+- 说明：继续复用现有表单适配工具。
 
 **表现层（pages/、components/）**：
-- [ ] 新建页面：无
+- [x] 新建页面：`packageTask/pages/task-create/`
 - [x] 修改页面：`packageTask/pages/task-edit/`
 - [ ] 新建组件：无
-- 说明：主要变更集中在 `task-edit` 页面结构与样式，必要时补充对应页面测试。
+- [ ] 修改组件：无
+- 说明：本期核心是重画页面边界，而不是继续微调热力图组件本身。
 
 ### 数据模型
 
@@ -228,7 +271,7 @@
 
 ### 接口设计
 
-本期不新增服务接口。
+本期不新增后端接口。
 
 ---
 
@@ -237,140 +280,130 @@
 ### 文件变更清单
 
 **新增文件**：
-- 无
+- `packageTask/pages/task-create/task-create.js` - 任务创建页逻辑，承载原“添加任务”表单
+- `packageTask/pages/task-create/task-create.wxml` - 任务创建页视图
+- `packageTask/pages/task-create/task-create.wxss` - 任务创建页样式
+- `packageTask/pages/task-create/task-create.json` - 页面配置
 
 **修改文件**：
-- `packageTask/pages/task-edit/task-edit.wxml` - 将“添加任务”表单从共享 `card` 结构改为页面局部壳层
-- `packageTask/pages/task-edit/task-edit.wxss` - 新增局部表单壳层样式，保持现有视觉语言、规避裁剪/负边距结构，并显式保留当前底部 `safe-area` 补偿语义
-- `test/pages/task-edit.page.test.js` - 补齐结构渲染与主链路回归测试，并把现有“标题右侧 `card action slot`”断言改为“本地表单头部动作位”断言
-- `test/pages/task-template-edit.page.test.js` - 若本期决定加入自动化结构守卫，则补充相似输入页仍保留共享 `card` 结构的基线断言；若不补自动化，则至少维持手工回归记录
-- `test/pages/task-template-manage.page.test.js` - 若本期决定加入自动化结构守卫，则补充搜索输入仍保留共享 `card` 结构的基线断言；若不补自动化，则至少维持手工回归记录
-- `docs/development/CHANGELOG.md` - 实施完成后补记一条 Android 真机兼容性修复事实
+- `app.json` - 在 `packageTask` 分包中注册 `task-create` 页面
+- `utils/permission-utils.js` - 为家长角色新增 `task-create` 页面访问权限
+- `packageTask/pages/task-edit/task-edit.wxml` - 删除内联“添加任务”表单，改为创建入口卡片
+- `packageTask/pages/task-edit/task-edit.wxss` - 删除旧表单样式，补创建入口卡片样式
+- `packageTask/pages/task-edit/task-edit.js` - 调整为“任务管理页”，新增进入创建页逻辑，移除或迁出表单专属逻辑
+- `packageTask/pages/task-edit/modules/task-template-entry.js` - 提炼为可被 `task-create` 复用的模板入口/模板应用能力
+- `packageManage/pages/task-template-manage/task-template-manage.js` - 显式支持 `source=task-create` 的模板选择与推荐模板保存后回传
+- `packageManage/pages/task-template-edit/task-template-edit.js` - 显式支持 `sourceType=task-create-recommendation` 的草稿提示与保存回传语义
+- `test/pages/task-edit.page.test.js` - 改为断言管理页只保留创建入口，而不再存在完整内联表单
+- `test/pages/task-create.page.test.js` - 新增创建页测试
+- `test/pages/task-template-edit.page.test.js` - 补新来源页回传与推荐草稿回填测试
+- `test/pages/task-template-manage.page.test.js` - 补模板选择页对 `task-create` 打开来源的测试
+- `docs/development/CHANGELOG.md` - 实施完成后补记 Android 兼容性修复事实
 
 ### 核心代码结构
 
-```xml
-<view class="task-form-shell">
-  <view class="task-form-header">
-    <text class="task-form-title">添加任务</text>
-    <view wx:if="{{occurrenceEntryVisible}}" class="occurrence-entry-action">...</view>
-  </view>
+#### `task-edit` 管理页
 
-  <view class="task-form-body">
-    <view class="add-task-content">
-      <!-- 模板快捷填充 -->
-      <!-- 任务名称 / 类型 / 星星 / 描述 / 时间频率等 -->
-    </view>
+```xml
+<card customClass="task-heatmap-card">
+  <!-- 热力图与管理视图 -->
+</card>
+
+<card title="添加任务" customClass="task-create-entry-card">
+  <view class="task-create-entry-copy">
+    <text>在独立页面中创建任务，输入更稳定</text>
+  </view>
+  <view class="task-create-entry-actions">
+    <button bindtap="openTaskCreatePage">新建任务</button>
+  </view>
+</card>
+```
+
+#### `task-create` 创建页
+
+```xml
+<view class="container">
+  <view class="task-create-shell">
+    <!-- 模板快捷填充 -->
+    <!-- 模板选择 / 推荐模板入口 / 手动创建模板入口 -->
+    <!-- 标题 / 类型 / 星星 / 描述 -->
+    <!-- 时间 / 重复 / 提醒 -->
+    <!-- 提交 / 清空 -->
   </view>
 </view>
 ```
 
-```css
-.task-form-shell {
-  background: #fff;
-  border-radius: 16rpx;
-  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.08);
-  margin: 30rpx 30rpx 40rpx;
-  padding-bottom: env(safe-area-inset-bottom, 20rpx);
-}
+#### 页面跳转与返回
 
-.task-form-title {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 32rpx;
-  font-weight: 600;
-  color: #333333;
-}
-
-.task-form-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border-radius: 16rpx 16rpx 0 0;
-  padding: 24rpx 30rpx 20rpx;
-  border-bottom: 1rpx solid #f0f0f0;
-  background: #fbfbfb;
-}
-
-.task-form-body {
-  padding: 4rpx 24rpx 0;
-}
-
-.add-task-content {
-  padding: 24rpx 20rpx;
+```js
+openTaskCreatePage() {
+  const targetUserId = this.data.targetUserId || '';
+  const query = targetUserId ? `?targetUserId=${targetUserId}` : '';
+  wx.navigateTo({
+    url: `/packageTask/pages/task-create/task-create${query}`
+  });
 }
 ```
 
-补充约束：
+```js
+// task-create 提交成功后
+wx.navigateBack({ delta: 1 });
+```
 
-- 新壳层必须显式保留当前 `.add-task-card` 的底部 `safe-area` 补偿语义，避免 Android 修复后 iPhone 底部留白回退。
-- 若最终选择把 `safe-area` 放在 `task-form-body` 而不是 `task-form-shell`，也需要保证视觉结果与当前页面底部节奏等价。
-- 新壳层应尽量保留现有 `add-task-content` 包裹层，或以等效方式保留当前内容区水平间距；不能让内容区从当前约 `44rpx` 的有效左右内边距直接收窄到 `20rpx`。
-- 标题文字样式需要与当前共享 `card-title-text` 保持一致，避免热力图卡片与“添加任务”表单头部出现明显割裂。
-- 由于新方案不再依赖父容器 `overflow: hidden` 裁剪头部背景，`task-form-header` 需要显式声明顶部圆角，避免其浅灰背景在左右上角轻微顶入白色壳层圆角区域。
+由于 [packageTask/pages/task-edit/task-edit.js](/Users/wangdafei/code/study_task_wechat/packageTask/pages/task-edit/task-edit.js:241) 已在 `onShow` 中刷新任务数据，创建页成功返回后旧页可以自然刷新，无需先设计更重的同步机制。
 
-### 关键函数
+### 关键实现约束
 
-**函数1**：`onTaskTitleInput`
-- **输入**：`e.detail.value`
-- **输出**：更新 `newTask.title`
-- **职责**：继续负责值同步，不承担 Android 焦点态修复职责
-- **依赖**：`setData`
+- 新创建页必须完整承接当前任务创建能力，不能只迁标题输入
+- `task-edit` 侧只保留一个“新建任务”主入口，不再并列摆放“使用模板新建”
+- 模板快捷填充、推荐模板、手动创建模板入口必须全部迁入 `task-create`
+- `targetUserId` 透传必须保留，避免家长为孩子创建任务路径回退
+- 模板来源标识必须统一为：
+  - 模板选择页：`source=task-create`
+  - 推荐模板草稿：`sourceType=task-create-recommendation`
+- 视觉风格应与现有任务域保持一致，但不要求继续复用“内联卡片 + 热力图同页”的结构
 
 ---
 
 ## 实施步骤
 
-### 第1步：页面结构收口（预计2小时）
+### 第1步：重画页面职责边界（预计4小时）
 
-- [ ] **任务**：把 `task-edit` 的“添加任务”表单从共享 `card` 结构中迁出，改为页面局部壳层
-- [ ] **验证**：代码中不再存在 `<card title="添加任务"...>` 包裹任务标题输入的结构
+- [ ] **任务**：将 `task-edit` 从“管理页 + 创建表单混合页”改为纯管理页，并新增 `task-create` 独立创建页
+- [ ] **验证**：`task-edit` 页面中不再直接承载标题、星星、描述等原生输入组件
 - [ ] **依赖**：无
 
 **实施要点**：
-1. 不改热力图卡片等未受影响区域
-2. 保留现有标题文案、动作入口和内容顺序
-3. 不顺手调整业务交互逻辑
-4. 明确“新建表现项”入口从 `card action slot` 迁移到本地表单头部动作位，不改变其业务入口职责
-5. 迁移范围覆盖整块“添加任务”表单中的原生输入组件，而不是只围绕任务名称输入框做局部补丁
+1. `task-edit` 保留热力图、表现项入口和创建入口
+2. `task-create` 独立承载原完整表单
+3. 不在此阶段改业务规则，只先重画页面边界
 
 ---
 
-### 第2步：样式等价迁移（预计2小时）
+### 第2步：迁移并复用表单能力（预计6小时）
 
-- [ ] **任务**：新增页面局部表单壳层样式，保持当前整体风格一致
-- [ ] **验证**：iPhone、开发者工具视觉与当前版本关键指标等价；Android 焦点态不再错位
+- [ ] **任务**：将当前创建任务所需的表单逻辑迁移到 `task-create`
+- [ ] **验证**：标题、类型、星星、描述、时间、重复、提醒、模板快捷填充均可正常工作
 - [ ] **依赖**：第1步完成
 
 **实施要点**：
-1. 复用当前卡片视觉语言，而不是重新设计表单外观
-2. 避免使用可能继续影响原生输入层定位的裁剪/负边距组合
-3. 确保标题动作区和模板快捷填充区仍然正常布局
-4. 显式保留当前底部 `safe-area` 补偿，避免 iPhone/全面屏设备底部间距回退
-5. 建议实施时对比 before / after 截图，至少核对以下视觉项：
-   - 标题区字号、字重、颜色与背景一致
-   - 标题区顶部圆角与当前卡片观感一致，不出现头部背景顶入圆角的问题
-   - 标题区高度与上下节奏一致
-   - 内容区左右间距与现状等价
-   - 卡片圆角、阴影、上下外边距一致
+1. 优先复用 `taskFormCore` / `taskFormAdapter` / `taskFormDisplay`
+2. 尽量提炼 `task-edit.js` 中“表单相关”逻辑，而不是复制一份
+3. 确保模板页 eventChannel 回传仍能工作
+4. 确保 `targetUserId` 在新页中仍可生效
 
 ---
 
-### 第3步：测试补齐与相似页面回归（预计2小时）
+### 第3步：测试补齐与 Android 真机回归（预计4小时）
 
-- [ ] **任务**：补充页面测试，并对 `task-template-edit`、`task-template-manage` 做同类结构回归验证
-- [ ] **验证**：自动化测试通过，且形成明确的相似页面验证结论
+- [ ] **任务**：补齐新创建页测试、旧管理页入口测试与相似页面回归结论
+- [ ] **验证**：自动化测试通过，且 Android 真机主链路恢复
 - [ ] **依赖**：第1步、第2步完成
 
 **实施要点**：
-1. 自动化测试至少覆盖结构渲染与关键交互仍可用
-2. `task-edit` 现有依赖共享 `card action slot` 的断言需要同步改写，否则实施后会出现“设计已变、测试仍按旧结构检查”的假失败
-3. Android 真机需要列入强制手工回归项
-4. `task-template-edit` 至少做 Android 真机手工回归；若本期希望把“相似结构仍未扩改”也固化下来，可补一条自动化结构基线测试
-5. `task-template-manage` 至少做 Android 真机搜索输入回归；若本期希望把“搜索输入场景未受影响”也固化下来，可补一条自动化结构基线测试
-6. 若相似页面复现，再单独记录是否扩 scope
+1. `task-edit` 页面测试要从“表单存在”切换为“创建入口存在”
+2. `task-create` 页面测试要覆盖模板回填、表单校验、创建成功返回
+3. Android 真机必须作为发布前强制验证项
 
 ---
 
@@ -380,40 +413,41 @@
 
 | 测试项 | 测试方法 | 预期结果 |
 |--------|---------|---------|
-| `task-edit` 表单结构渲染 | 页面测试检查“添加任务”表单壳层存在 | 不再依赖共享 `card` 包裹标题输入 |
-| 任务标题输入值同步 | 触发 `onTaskTitleInput` | `newTask.title` 正常更新 |
-| 积分输入与描述输入主链路 | 页面测试/行为回归 | `stepper-input` 与 `textarea` 仍正常工作，且不因结构迁移被破坏 |
-| 模板快捷填充与表单头部动作 | 页面测试/事件触发 | 现有入口仍可见、仍可响应 |
-| “新建表现项”入口结构断言迁移 | 重写 `task-edit.page.test.js` 中旧 `card action slot` 断言 | 改为校验本地表单头部动作位，而不是继续绑定共享 `card` |
-| `task-template-edit` 相似页基线 | 手工回归，必要时补页面测试 | 明确其本期“未改结构但已验证未受影响”的结论 |
-| `task-template-manage` 搜索输入基线 | 手工回归，必要时补页面测试 | 明确其本期“搜索输入场景已验证未受影响”的结论 |
+| `task-edit` 创建入口结构 | 页面测试检查不再存在内联创建表单，而存在创建入口卡片 | 管理页职责收口完成 |
+| `task-create` 表单渲染 | 页面测试检查标题、类型、星星、描述、时间、重复、提醒完整存在 | 创建页能力完整迁移 |
+| `task-create` 模板快捷填充 | 事件与数据回填测试 | 模板选择、推荐模板与回填链路正常 |
+| `task-create` 表单校验 | 触发校验失败/通过路径 | 规则与旧页一致 |
+| `task-create` 创建成功返回 | 模拟创建成功后 `navigateBack` | 返回管理页并触发旧页刷新 |
+| 权限与路由接入 | 静态断言新路由已注册、权限已配置 | 新页可被家长访问 |
+| `task-template-edit` 新来源回传 | 页面测试 | 推荐草稿回填对新创建页仍可用 |
+| `task-template-manage` 新来源回传 | 页面测试 | 模板选择对新创建页仍可用 |
 
 ### 集成测试
 
-- [ ] 场景1：进入 `task-edit` 后正常加载模板快捷填充、任务基础表单和时间频率区域
-- [ ] 场景2：输入任务名称、积分值、描述等核心字段后仍能正常提交
-- [ ] 场景3：`task-template-edit` Android 回归验证不因本次改动被意外影响
-- [ ] 场景4：`task-template-manage` Android 搜索输入回归不因本次改动被意外影响
+- [ ] 场景1：从任务管理页点击“新建任务”进入独立创建页
+- [ ] 场景2：在创建页输入标题、星星、描述后成功提交并返回
+- [ ] 场景3：在创建页通过模板快捷填充后继续编辑并成功提交
+- [ ] 场景4：家长代孩子创建任务路径仍正常
+- [ ] 场景5：`task-template-edit`、`task-template-manage` Android 回归未被意外影响
 
 ### 手动测试
 
 1. **Android 真机重点验证**：
-   - [ ] 进入任务管理页并点击“任务名称”输入框
+   - [ ] 从任务管理页进入创建页
+   - [ ] 创建页标题输入框中已有文字时，仅点击聚焦，不输入新字符，文字不再跑位
    - [ ] 连续输入中文、英文、数字时，文字始终显示在输入框内
-   - [ ] 点击积分数字输入框并输入数字时，文字始终显示在输入框内
+   - [ ] 点击星星数字输入框并输入数字时，文字始终显示在输入框内
    - [ ] 点击描述输入框并输入多行文字时，文字始终显示在文本区域内
-   - [ ] 失焦后内容不丢失、位置不跳变
-   - [ ] 模板快捷填充后继续编辑标题、积分、描述，不出现焦点错位
+   - [ ] 模板快捷填充后继续编辑标题、星星、描述，不出现焦点错位
+   - [ ] 创建成功返回任务管理页后，热力图与任务数据已刷新
 
 2. **iPhone / 开发者工具回归**：
-   - [ ] 页面视觉风格与当前版本保持一致
-   - [ ] 标题样式、标题区背景、内容区左右间距、圆角阴影与当前版本等价
-   - [ ] 输入任务名称、描述、星星数等交互正常
-   - [ ] 热力图、模板快捷填充、表现项入口未被破坏
+   - [ ] 管理页热力图与创建入口展示正常
+   - [ ] 创建页整体视觉风格与任务域保持一致
+   - [ ] 创建页所有输入、面板、按钮交互正常
 
 3. **相似页面回归**：
-   - [ ] `task-template-edit` 在 Android 真机输入标题时未出现同类错位
-   - [ ] `task-template-edit` 在 Android 真机输入积分、描述、别名等字段时未出现同类错位
+   - [ ] `task-template-edit` 在 Android 真机输入标题、星星、描述、别名时未出现同类错位
    - [ ] `task-template-manage` 在 Android 真机搜索输入时未出现同类错位
 
 ### 测试覆盖率目标
@@ -429,57 +463,56 @@
 
 | 风险项 | 影响 | 概率 | 应对措施 |
 |--------|------|------|---------|
-| 页面局部壳层替换后出现视觉回归 | 中 | 中 | 严格复用现有卡片视觉语义，只移除高风险结构 |
-| Android 修复后 iPhone/开发者工具样式错位 | 中 | 低 | 补齐多端回归，优先保持现有 spacing 和标题布局 |
-| `task-template-edit` 也复现同类问题 | 中 | 中 | 将其列为强制验证项，若复现再单独决定是否扩 scope |
-| 误判根因为 `setData` 导致修复无效 | 高 | 低 | 首选直接移除高风险容器结构，以结果验证；不先做低置信度逻辑微调 |
+| 新建页迁移时复制了旧逻辑，导致规则分叉 | 高 | 中 | 强制复用 `taskFormCore` / `taskFormAdapter` / `taskFormDisplay`，避免复制业务规则 |
+| 模板选择/推荐草稿回传仍绑定 `task-edit` 旧来源 | 中 | 中 | 设计阶段即纳入 `task-template-*` 页来源兼容调整 |
+| 任务管理页去掉内联表单后，用户路径多一步 | 中 | 中 | 保持入口清晰直达，并以稳定输入体验换取额外一步 |
+| Android 真机即使独立页仍复现 | 高 | 低 | 若独立创建页仍复现，再单独进入平台级兼容专项；本期先用更高置信度隔离方案验证 |
 
 ### 业务风险
 
 | 风险项 | 影响 | 概率 | 应对措施 |
 |--------|------|------|---------|
-| 修 bug 时顺手改动太多页面体验 | 中 | 中 | 明确本期只修兼容性，不重做信息架构 |
-| Android 用户路径恢复但测试不足导致回归漏网 | 高 | 中 | 把 Android 真机验证列为发布前必做项 |
+| 用户对“原本在当前页直接创建，现在需要点一下进入新页”不适应 | 中 | 中 | 在入口卡片中明确提示“进入新建页”，并保持按钮显著 |
+| 修 bug 时顺手改动太多任务管理体验 | 中 | 中 | 明确本期只调整创建表单边界，不重做热力图管理信息架构 |
 
 ---
 
 ## 替代方案
 
-### 方案A：继续保留 `card`，只调整 `bindinput`/`setData` 时序
+### 方案A：继续在 `task-edit` 当前页里调 CSS / 输入属性
 
 **优点**：
 - 改动小
-- 不触碰页面结构
+- 不需要新增页面
 
 **缺点**：
-- 不能解释当前几何错位主现象
-- 即使缓解输入卡顿，也不一定能解决显示位置异常
-- 风险在于做了改动却没有真正命中根因
+- 前两轮已经被 Android 真机证伪
+- 继续试错成功率低
+- 风险是又做出一轮“模拟器正常、真机无效”的改动
 
-**结论**：不选。本期不把它作为主方案。
+**结论**：不选。已经不符合当前证据状态。
 
-### 方案B：修改共享 `card` 组件，增加 `inputSafe` 模式
+### 方案B：继续保留当前页结构，但把表单改成页内全屏 overlay
 
 **优点**：
-- 理论上可为后续其他输入页复用
-- 能从公共层解决一类问题
+- 不新增页面路由
+- 交互上仍停留在当前页上下文
 
 **缺点**：
-- 共享组件改动面广，回归成本高
-- 仍需逐页替换或新增属性接入
-- 当前没有足够证据证明应当立即放大为公共组件治理
+- 仍与当前复杂管理页同页，不能彻底切断原生输入层风险
+- 在平台兼容性问题上，隔离强度弱于独立页面
 
-**结论**：暂不选。保留为后续若多页复现时的二阶段方案。
+**结论**：暂不选。若后续用户强烈要求不跳页，可作为二选方案再评估。
 
-### 方案C：`task-edit` 页面局部去 `card` 化
+### 方案C：新增独立 `task-create` 页面
 
 **优点**：
-- 直接移除当前已知高风险结构组合
-- 影响面最小
-- 最容易在真实 Android 路径上验证结果
+- 对当前真机问题的隔离强度最高
+- 与已有 `task-occurrence-edit` 的“管理页/编辑态分离”思路一致
+- 便于后续继续复用任务表单能力
 
 **缺点**：
-- 页面会出现一个“视觉上像卡片但不是共享 `card` 组件”的局部壳层
-- 同类页面若未来复现，仍需再评估是否推广
+- 用户路径会多一步
+- 需要新增页面与测试接入
 
 **结论**：选用，作为本期正式实施方案。
