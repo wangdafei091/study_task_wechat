@@ -95,6 +95,28 @@ describe('userProductStateService', () => {
     expect(state.firstSeenAppVersion).toBe('3.8.0');
   });
 
+  it('recordEvent 应截断超长的 appVersion 和 sourcePage 后再入库', async () => {
+    const executeMock = database.execute;
+    executeMock.mockResolvedValueOnce({ affectedRows: 1 });
+
+    const longVersion = 'v'.repeat(80);
+    const longSourcePage = 'page/'.repeat(80);
+
+    await userProductStateService.recordEvent({
+      userId: 'user_1',
+      familyId: 'fam_1',
+      eventType: 'release_note_viewed',
+      eventTime: 1000,
+      appVersion: longVersion,
+      sourcePage: longSourcePage,
+      payloadJson: { version: '3.9.0' }
+    });
+
+    const [, params] = executeMock.mock.calls[0];
+    expect(params[5]).toHaveLength(64);
+    expect(params[8]).toHaveLength(255);
+  });
+
   it('markActivated 在已存在未激活状态时应补激活信息', async () => {
     jest.spyOn(userProductStateService, 'ensureState').mockResolvedValue({
       userId: 'user_1',

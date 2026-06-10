@@ -326,4 +326,106 @@ describe('backend TaskService schema compatibility', () => {
     expect(sql).toContain('occurrence_outcome');
     expect(sql).toContain('recorded_at');
   });
+
+  it('新版 schema 更新 activeRange 时应写入 occurrence 生效区间字段', async () => {
+    const { getPool, query } = require('../../config/database');
+    const connection = {
+      beginTransaction: jest.fn().mockResolvedValue(),
+      execute: jest.fn()
+        .mockResolvedValueOnce([[
+          {
+            task_id: 'task_001',
+            user_id: 'user_001',
+            title: '表现项任务',
+            description: '',
+            type: 'study',
+            date: '2026-03-21',
+            start_time: '09:00',
+            end_time: '10:00',
+            reminder: JSON.stringify({ enabled: false, time: 0 }),
+            points: 1,
+            points_expiry: 'week',
+            is_required: 0,
+            status: 0,
+            repeat: null,
+            is_all_day: 0,
+            penalty_applied: 0,
+            deleted_at: null,
+            modify_time: 100,
+            execution_mode: 'occurrence',
+            active_start_date: '2026-03-21',
+            active_end_date: null,
+            active_has_no_end_date: 1,
+            is_occurrence_record: 0,
+            occurrence_outcome: 'none',
+            recorded_at: null
+          }
+        ], undefined])
+        .mockResolvedValueOnce([{ affectedRows: 1 }, undefined])
+        .mockResolvedValueOnce([[
+          {
+            task_id: 'task_001',
+            user_id: 'user_001',
+            title: '表现项任务',
+            description: '',
+            type: 'study',
+            date: '2026-03-21',
+            start_time: '09:00',
+            end_time: '10:00',
+            reminder: JSON.stringify({ enabled: false, time: 0 }),
+            points: 1,
+            points_expiry: 'week',
+            is_required: 0,
+            status: 0,
+            repeat: null,
+            is_all_day: 0,
+            penalty_applied: 0,
+            deleted_at: null,
+            modify_time: 456,
+            execution_mode: 'occurrence',
+            active_start_date: '2026-03-22',
+            active_end_date: '2026-03-31',
+            active_has_no_end_date: 0,
+            is_occurrence_record: 0,
+            occurrence_outcome: 'none',
+            recorded_at: null
+          }
+        ], undefined]),
+      commit: jest.fn().mockResolvedValue(),
+      rollback: jest.fn().mockResolvedValue(),
+      release: jest.fn()
+    };
+    getPool.mockReturnValue({
+      getConnection: jest.fn().mockResolvedValue(connection)
+    });
+    query.mockResolvedValueOnce(createColumnRows([
+      'task_id', 'user_id', 'title', 'description', 'type', 'date',
+      'start_time', 'end_time', 'reminder', 'points', 'points_expiry', 'is_required',
+      'status', 'repeat', 'is_all_day', 'penalty_applied', 'deleted_at',
+      'completion_time', 'star_awarded', 'modify_time', 'duration',
+      'has_no_end_date', 'tags', 'parent_task_id',
+      'execution_mode', 'active_start_date', 'active_end_date', 'active_has_no_end_date',
+      'is_occurrence_record', 'occurrence_outcome', 'recorded_at'
+    ]));
+
+    const service = require('../../services/taskService');
+
+    await service.updateTask('task_001', {
+      activeRange: {
+        startDate: '2026-03-22',
+        endDate: '2026-03-31',
+        hasNoEndDate: false
+      },
+      modifyTime: 456
+    });
+
+    const updateCall = connection.execute.mock.calls.find(([sql]) => sql.includes('UPDATE tasks SET'));
+    expect(updateCall).toBeTruthy();
+
+    const [sql, params] = updateCall;
+    expect(sql).toContain('active_start_date = ?');
+    expect(sql).toContain('active_end_date = ?');
+    expect(sql).toContain('active_has_no_end_date = ?');
+    expect(params).toEqual(['2026-03-22', '2026-03-31', 0, 456, 'task_001']);
+  });
 });

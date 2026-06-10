@@ -1013,19 +1013,7 @@ class TaskService {
 
       for (const field of ALLOWED_FIELDS) {
         if (changes[field] !== undefined) {
-          const dbField = fieldToColumnMap[field];
-          if (!dbField) {
-            logger.warn('更新任务时跳过当前库结构不支持的字段', { taskId, field });
-            continue;
-          }
-          if (field === 'tags' || field === 'repeat' || field === 'reminder') {
-            setClauses.push(`${dbField} = ?`);
-            if (field === 'reminder') {
-              params.push(JSON.stringify(Task.normalizeReminder(changes[field])));
-            } else {
-              params.push(changes[field] !== null ? JSON.stringify(changes[field]) : null);
-            }
-          } else if (field === 'activeRange') {
+          if (field === 'activeRange') {
             if (columnMap.activeStartDate) {
               setClauses.push(`${columnMap.activeStartDate} = ?`);
               params.push(changes.activeRange?.startDate || null);
@@ -1037,6 +1025,21 @@ class TaskService {
             if (columnMap.activeHasNoEndDate) {
               setClauses.push(`${columnMap.activeHasNoEndDate} = ?`);
               params.push(changes.activeRange?.hasNoEndDate ? 1 : 0);
+            }
+            continue;
+          }
+
+          const dbField = fieldToColumnMap[field];
+          if (!dbField) {
+            logger.warn('更新任务时跳过当前库结构不支持的字段', { taskId, field });
+            continue;
+          }
+          if (field === 'tags' || field === 'repeat' || field === 'reminder') {
+            setClauses.push(`${dbField} = ?`);
+            if (field === 'reminder') {
+              params.push(JSON.stringify(Task.normalizeReminder(changes[field])));
+            } else {
+              params.push(changes[field] !== null ? JSON.stringify(changes[field]) : null);
             }
           } else {
             setClauses.push(`${dbField} = ?`);

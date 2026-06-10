@@ -1,5 +1,16 @@
 const crypto = require('crypto');
 
+const APP_VERSION_MAX_LENGTH = 64;
+const SOURCE_PAGE_MAX_LENGTH = 255;
+
+function normalizeBoundedString(value, maxLength) {
+  const trimmed = value ? String(value).trim() : '';
+  if (!trimmed) {
+    return null;
+  }
+  return trimmed.slice(0, maxLength);
+}
+
 class UserActivityEvent {
   static EVENT_TYPES = {
     APP_FIRST_SEEN: 'app_first_seen',
@@ -44,10 +55,10 @@ class UserActivityEvent {
     this.familyId = familyId || null;
     this.eventType = String(eventType || '').trim();
     this.eventTime = Number(eventTime || 0) || Date.now();
-    this.appVersion = appVersion ? String(appVersion).trim() : null;
+    this.appVersion = normalizeBoundedString(appVersion, APP_VERSION_MAX_LENGTH);
     this.clientPlatform = clientPlatform ? String(clientPlatform).trim() : null;
     this.clientEnv = clientEnv ? String(clientEnv).trim() : null;
-    this.sourcePage = sourcePage ? String(sourcePage).trim() : null;
+    this.sourcePage = normalizeBoundedString(sourcePage, SOURCE_PAGE_MAX_LENGTH);
     this.targetUserId = targetUserId || null;
     this.payloadJson = payloadJson && typeof payloadJson === 'object'
       ? payloadJson
